@@ -15,8 +15,7 @@ import {
   LayoutDashboard, Zap, Crosshair, Activity, FileSpreadsheet, Settings,
   ExternalLink, Bell, HelpCircle, User, Megaphone, ChevronLeft, ChevronRight, Menu,
   type LucideIcon,
-  BookOpen, PenTool, BarChart3, CheckSquare, Ban, Shield,
-  Download, Upload, History, Filter,
+  History,
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { amazonCampaignsHref, marketLabel } from './amazonLinks'
@@ -26,26 +25,18 @@ const LS_NAV = 'ads:nav-collapsed'
 const LS_SUB = 'ads:subnav-collapsed'
 
 interface NavItem { k: string; label: string; href: string; Icon: LucideIcon }
+// OC (2026-10-06) — the old console is retired except Rank Control (its product rank plans live only here for now).
+// Every other entry opens its Ad Manager page; the old addresses redirect there too (next.config.js).
 const NAV: NavItem[] = [
-  { k: 'overview',   label: 'Overview',     href: `${BASE}/overview`,   Icon: LayoutDashboard },
-  { k: 'automation', label: 'Automation',   href: `${BASE}/automation`, Icon: Zap             },
-  { k: 'rank',       label: 'Rank Control', href: `${BASE}/rank`,       Icon: Crosshair       },
-  { k: 'activity',   label: 'Activity',     href: `${BASE}/activity`,   Icon: Activity        },
-  { k: 'bulk',       label: 'Bulk',         href: `${BASE}/bulk`,       Icon: FileSpreadsheet },
-  { k: 'settings',   label: 'Settings',     href: `${BASE}/settings`,   Icon: Settings        },
+  { k: 'overview',   label: 'Overview',     href: '/marketing/ads/dashboard',                              Icon: LayoutDashboard },
+  { k: 'automation', label: 'Automation',   href: '/marketing/ads/rules-automation/automations',           Icon: Zap             },
+  { k: 'rank',       label: 'Rank Control', href: `${BASE}/rank`,                                         Icon: Crosshair       },
+  { k: 'activity',   label: 'Activity',     href: '/marketing/ads/rules-automation/control-room?tab=activity', Icon: Activity    },
+  { k: 'bulk',       label: 'Bulk',         href: '/marketing/ads/bulk',                                   Icon: FileSpreadsheet },
+  { k: 'settings',   label: 'Settings',     href: '/settings/advertising',                                 Icon: Settings        },
 ]
 
-interface SubItem { k: string; label: string; Icon?: LucideIcon; countKey?: string; sep?: boolean }
-// RC6.1 — the 18 tabs collapsed to a guided lifecycle. Old ?tab= keys still
-// deep-link (the hub maps them); Rank Control moved to /rank.
-const AUTOMATION_ITEMS: SubItem[] = [
-  { k: 'home',     label: 'Home',         Icon: LayoutDashboard },
-  { k: 'library',  label: 'Library',      Icon: BookOpen },
-  { k: 'builder',  label: 'Builder',      Icon: PenTool },
-  { k: 'active',   label: 'Active rules', Icon: CheckSquare, countKey: 'rules' },
-  { k: 'insights', label: 'Insights',     Icon: BarChart3 },
-  { k: 'safety',   label: 'Safety',       Icon: Shield },
-]
+interface SubItem { k: string; label: string; Icon?: LucideIcon; sep?: boolean }
 // RC5.1 — the keyword/strategy/conquest/tos modes are now absorbed into the one
 // cockpit, so the sub-nav is just Overview · Cockpit · Managed campaigns.
 const RANK_ITEMS: SubItem[] = [
@@ -53,36 +44,16 @@ const RANK_ITEMS: SubItem[] = [
   { k: 'cockpit',  label: 'Cockpit',           Icon: Crosshair },
   { k: 'managed',  label: 'Managed campaigns',  Icon: History },
 ]
-const ACTIVITY_ITEMS: SubItem[] = [
-  { k: 'all',    label: 'All executions',   Icon: Activity },
-  { k: 'live',   label: 'Live actions',     Icon: CheckSquare },
-  { k: 'dry',    label: 'Dry-run',         Icon: Filter },
-  { k: 'failed', label: 'Failed / capped', Icon: Ban },
-]
-const BULK_ITEMS: SubItem[] = [
-  { k: 'download', label: 'Download',        Icon: Download },
-  { k: 'upload',   label: 'Upload',          Icon: Upload },
-  { k: 'diff',     label: 'Automation diff', Icon: History },
-]
 
 interface SubNavDef { title: string; paramKey: string; items: SubItem[]; defaultKey: string }
 const SUB_NAVS: Record<string, SubNavDef> = {
-  [`${BASE}/automation`]: { title: 'Automation',   paramKey: 'tab',    items: AUTOMATION_ITEMS, defaultKey: 'home'      },
   [`${BASE}/rank`]:       { title: 'Rank Control', paramKey: 'mode',   items: RANK_ITEMS,       defaultKey: 'cockpit'   },
-  [`${BASE}/activity`]:   { title: 'Activity',     paramKey: 'filter', items: ACTIVITY_ITEMS,   defaultKey: 'all'       },
-  [`${BASE}/bulk`]:       { title: 'Bulk',         paramKey: 'tab',    items: BULK_ITEMS,       defaultKey: 'download'  },
 }
 
 interface Conn { profileId: string; marketplace: string; isActive: boolean; mode: string }
-interface Counts { rules: number; recs: number }
 
 function activeKey(p: string): string {
-  if (p.includes('/automation')) return 'automation'
-  if (p.includes('/rank'))       return 'rank'
-  if (p.includes('/activity'))   return 'activity'
-  if (p.includes('/bulk'))       return 'bulk'
-  if (p.includes('/settings'))   return 'settings'
-  return 'overview'
+  return p.includes('/rank') ? 'rank' : 'overview'
 }
 function readLS(key: string, def: boolean): boolean {
   if (typeof window === 'undefined') return def
@@ -98,7 +69,6 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
   const router = useRouter()
   const active = activeKey(pathname)
   const [conns, setConns] = useState<Conn[]>([])
-  const [counts, setCounts] = useState<Counts>({ rules: 0, recs: 0 })
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [subCollapsed, setSubCollapsed] = useState(false)
 
@@ -115,10 +85,6 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
     const base = getBackendUrl()
     void fetch(`${base}/api/advertising/connections`, { cache: 'no-store' })
       .then(r => r.json()).then(d => setConns((d.items ?? []).filter((c: Conn) => c.isActive))).catch(() => {})
-    void fetch(`${base}/api/advertising/automation-rules?limit=200`, { cache: 'no-store' })
-      .then(r => r.json()).then(d => setCounts(c => ({ ...c, rules: (d.rules ?? []).filter((r: { enabled: boolean }) => r.enabled).length }))).catch(() => {})
-    void fetch(`${base}/api/advertising/recommendations?limit=1`, { cache: 'no-store' })
-      .then(r => r.json()).then(d => setCounts(c => ({ ...c, recs: d.recommendations?.length ?? 0 }))).catch(() => {})
   }, [])
 
   const toggleNav = () => { const n = !navCollapsed; setNavCollapsed(n); writeLS(LS_NAV, n) }
@@ -130,7 +96,6 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
   const subNavDef = Object.entries(SUB_NAVS).find(([k]) => pathname.startsWith(k))?.[1] ?? null
   const activeParam = subNavDef ? (searchParams.get(subNavDef.paramKey) ?? subNavDef.defaultKey) : null
   const navigateSub = (def: SubNavDef, k: string) => router.replace(`${pathname}?${def.paramKey}=${k}`, { scroll: false })
-  const countFor = (item: SubItem) => item.countKey === 'rules' ? counts.rules : item.countKey === 'recs' ? counts.recs : 0
 
   const crumb = NAV.find(n => n.k === active)?.label ?? 'Overview'
 
@@ -145,7 +110,7 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
             <Menu size={19} />
           </button>
         )}
-        <Link href={`${BASE}/overview`} className="brand">
+        <Link href="/marketing/ads/dashboard" className="brand">
           <Megaphone size={18} />
           <span>Nexus<span className="mk"> ads</span></span>
         </Link>
@@ -207,7 +172,6 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
               {subNavDef.items.map(item => {
                 if (item.sep) return <div key={item.k} className="az-subnav-sep" />
                 const Icon = item.Icon
-                const count = item.countKey ? countFor(item) : 0
                 return (
                   <button key={item.k}
                     className={`az-subnav-item ${activeParam === item.k ? 'on' : ''}`}
@@ -216,7 +180,6 @@ export function ConsoleChrome({ children }: { children: ReactNode }) {
                   >
                     {Icon && <span className="ic"><Icon size={15} /></span>}
                     <span className="lbl">{item.label}</span>
-                    {count > 0 && <span className="badge">{count}</span>}
                   </button>
                 )
               })}

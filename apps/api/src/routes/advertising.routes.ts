@@ -1143,55 +1143,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return { ok: true, kind, campaigns: changes.length, created, removed, rulesRewritten: rulesRewritten.length }
   })
 
-  // CB.5 — guided Campaign Builder launch. dryRun=true returns the PLAN (what would be
-  // created) without writing; dryRun=false creates SP campaigns + ad groups + product ads
-  // + keywords through the gated create primitives (real only on a live+gate-open market,
-  // local/sandbox otherwise; new campaigns are NOT auto-allowlisted, so their bids can't
-  // change until the operator opts them in). Preview-then-create per operator choice.
-  fastify.post('/advertising/campaign-builder/launch', async (request, reply) => {
-    const b = request.body as {
-      market?: string; productGroupName?: string; bidStrategy?: string; defaultBidEur?: number; dailyBudgetEur?: number
-      asins?: string[]; includeProductTarget?: boolean; keywords?: Array<{ text: string; match?: string; bid?: number }>; dryRun?: boolean
-    }
-    const market = b.market || 'IT'
-    const grp = (b.productGroupName || 'Guided campaign').trim()
-    const asins = (b.asins ?? []).filter(Boolean)
-    if (!asins.length) { reply.status(400); return { error: 'no products selected' } }
-    const bid = b.defaultBidEur ?? 0.45
-    const budget = b.dailyBudgetEur ?? 25
-    const biddingStrategy: 'legacyForSales' | 'autoForSales' | 'manual' = b.bidStrategy === 'maxOrders' ? 'autoForSales' : 'legacyForSales'
-    const roles: Array<{ role: string; targeting: 'AUTO' | 'MANUAL'; keywords: boolean }> = [
-      { role: 'Auto', targeting: 'AUTO', keywords: false },
-      { role: 'Research', targeting: 'MANUAL', keywords: true },
-      { role: 'Performance', targeting: 'MANUAL', keywords: true },
-      ...(b.includeProductTarget ? [{ role: 'Product Target', targeting: 'MANUAL' as const, keywords: false }] : []),
-    ]
-    const kws = b.keywords ?? []
-    const plan = {
-      market,
-      campaigns: roles.map((r) => ({ name: `${grp} - SP - ${r.role}`, adGroup: `${grp} - SP - ${r.role} Ad Group`, targeting: r.targeting, productAds: asins.length, keywords: r.keywords ? kws.length : 0 })),
-      totalCampaigns: roles.length, totalProductAds: asins.length * roles.length, totalKeywords: kws.filter(() => true).length * roles.filter((r) => r.keywords).length,
-    }
-    if (b.dryRun) return { ok: true, dryRun: true, plan }
-
-    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal } = await import('../services/advertising/ads-create.service.js')
-    const created: Array<{ role: string; campaignId: string; externalCampaignId: string | null; mode: string }> = []
-    let mode = 'local'
-    for (const r of roles) {
-      try {
-        const camp = await createCampaignLocal({ name: `${grp} - SP - ${r.role}`, type: 'SP', marketplace: market, targetingType: r.targeting, dailyBudgetEur: budget, biddingStrategy })
-        mode = camp.mode
-        // CM-20 — `creationFlow`: these belong to the campaign this launch just created.
-        const ag = await createAdGroupLocal({ campaignId: camp.id, name: `${grp} - SP - ${r.role} Ad Group`, defaultBidEur: bid, creationFlow: true })
-        for (const asin of asins) { try { await createProductAdLocal({ adGroupId: ag.id, asin, creationFlow: true }) } catch (e) { logger.warn('[CB-launch] product ad failed', { asin, error: (e as Error).message }) } }
-        if (r.keywords) for (const k of kws) { try { await createKeywordLocal({ adGroupId: ag.id, keywordText: k.text, matchType: ((k.match || 'Broad').toUpperCase() as 'EXACT' | 'PHRASE' | 'BROAD'), bidEur: k.bid ?? bid, creationFlow: true }) } catch (e) { logger.warn('[CB-launch] keyword failed', { kw: k.text, error: (e as Error).message }) } }
-        created.push({ role: r.role, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, mode: camp.mode })
-      } catch (e) { logger.error('[CB-launch] campaign create failed', { role: r.role, market, error: (e as Error).message }) }
-    }
-    logger.warn('[CB-launch] guided builder created campaigns', { market, grp, created: created.length, mode, actor: actorFromHeaders(request.headers as Record<string, unknown>) })
-    return { ok: true, created, mode, plan }
-  })
-
   // ── SPW.7: SP Super Wizard launch ───────────────────────────────────────
   // Creates the wizard's generated campaigns + ad groups + product ads +
   // keyword/product targeting + negatives + placement bid multiplier, all via
@@ -2377,85 +2328,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return job
   })
 
-  // ── Phase 5b: per-campaign v1 metrics (last N days) ──────────────────
-  // Returns campaign-level aggregates from AmazonAdsDailyPerformance for
-  // the requested window. Keyed by externalCampaignId so the campaigns
-  // page server component can merge into its existing campaign list.
-  fastify.get('/advertising/campaigns/v1-metrics', async (request, reply) => {
-    const query = request.query as { windowDays?: string; marketplace?: string; preset?: string; startDate?: string; endDate?: string }
-    const { resolveRange } = await import('../services/ads-core/date-range.js')
-    const range = resolveRange(query)
-    const since = range.since
-    const windowDays = range.days
-
-    const { cached } = await import('../services/advertising/ads-cache.js')
-    const payload = await cached(`v1metrics:${range.sinceStr}:${range.untilStr}:${query.marketplace ?? ''}`, 300, async () => {
-    const rows = await prisma.amazonAdsDailyPerformance.groupBy({
-      by: ['entityId', 'adProduct', 'marketplace', 'currencyCode'],
-      where: {
-        date: { gte: since, lte: range.until },
-        entityType: 'CAMPAIGN',
-        ...(query.marketplace ? { marketplace: query.marketplace } : {}),
-      },
-      _sum: {
-        impressions: true,
-        clicks: true,
-        costMicros: true,
-        sales7dCents: true,
-        sales14dCents: true,
-        orders7d: true,
-        units7d: true,
-      },
-    })
-
-    // Shape: { [externalCampaignId]: { impressions, clicks, ... } }
-    const byCampaign: Record<string, {
-      impressions: number
-      clicks: number
-      costMicros: string
-      costUnits: number
-      salesCents: number
-      orders: number
-      units: number
-      currencyCode: string
-      adProduct: string
-      marketplace: string
-      acos: number | null
-      roas: number | null
-      ctr: number | null
-      cpc: number | null
-    }> = {}
-
-    for (const r of rows) {
-      const impressions = r._sum.impressions ?? 0
-      const clicks = r._sum.clicks ?? 0
-      const costMicros = r._sum.costMicros ?? 0n
-      const costUnits = Number(costMicros) / 1_000_000
-      const salesCents = adSalesCents(r._sum)
-      const orders = r._sum.orders7d ?? 0
-      const units = r._sum.units7d ?? 0
-      const acos = salesCents > 0 ? (costUnits * 100) / salesCents : null
-      const roas = costUnits > 0 ? salesCents / 100 / costUnits : null
-      const ctr = impressions > 0 ? clicks / impressions : null
-      const cpc = clicks > 0 ? costUnits / clicks : null
-      byCampaign[r.entityId] = {
-        impressions, clicks,
-        costMicros: costMicros.toString(),
-        costUnits,
-        salesCents, orders, units,
-        currencyCode: r.currencyCode,
-        adProduct: r.adProduct,
-        marketplace: r.marketplace,
-        acos, roas, ctr, cpc,
-      }
-    }
-
-    return { windowDays, count: Object.keys(byCampaign).length, byCampaign }
-    })
-    reply.header('Cache-Control', 'private, max-age=30')
-    return payload
-  })
-
   // GET /api/advertising/insights — rule-based insight engine (Phase 8)
   //
   // Four insight types derived from live aggregates:
@@ -3061,66 +2933,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     rows.sort((a, b) => b.adSpendCents - a.adSpendCents)
     reply.header('Cache-Control', 'private, max-age=60')
     return { rows }
-  })
-
-  // PCG.1 — a product's CAMPAIGNS (the expansion rows). Per-campaign the
-  // PRODUCT's own spend/sales/ACOS (from PRODUCT_AD, NOT the whole-campaign
-  // total which includes other products). If productId is a parent, includes
-  // all its children. Optional status filter.
-  // GET /advertising/by-product/campaigns?productId=&windowDays=&marketplace=&status=
-  fastify.get('/advertising/by-product/campaigns', async (request, reply) => {
-    const q = request.query as { productId?: string; windowDays?: string; marketplace?: string; status?: string; preset?: string; startDate?: string; endDate?: string }
-    if (!q.productId) { reply.status(400); return { error: 'productId required' } }
-    const { resolveRange } = await import('../services/ads-core/date-range.js')
-    const range = resolveRange(q)
-    const since = range.since
-    const dateFilterBPC = { gte: since, lte: range.until }
-    const mkt = q.marketplace || undefined
-
-    // Resolve the product + its children (parent rows roll up variants).
-    const childRows = await prisma.product.findMany({ where: { parentId: q.productId }, select: { id: true } })
-    const productIds = [...new Set([q.productId, ...childRows.map((c) => c.id)])]
-
-    // Each AdProductAd = this product advertised in one campaign. Group its
-    // PRODUCT_AD perf by campaign → the product's spend/sales in that campaign.
-    const ads = await prisma.adProductAd.findMany({
-      where: { productId: { in: productIds } },
-      select: { id: true, adGroup: { select: { campaign: { select: { id: true, name: true, marketplace: true, status: true, dailyBudget: true, adProduct: true } } } } },
-    })
-    const adToCampaign = new Map<string, { id: string; name: string; marketplace: string | null; status: string; dailyBudget: unknown; adProduct: string | null }>()
-    for (const a of ads) { const c = a.adGroup?.campaign; if (c?.id) adToCampaign.set(a.id, c) }
-    const adIds = [...adToCampaign.keys()]
-    const perAd = adIds.length ? await prisma.amazonAdsDailyPerformance.groupBy({
-      by: ['localEntityId'],
-      where: { entityType: 'PRODUCT_AD', localEntityId: { in: adIds }, date: dateFilterBPC, ...(mkt ? { marketplace: mkt } : {}) },
-      _sum: { costMicros: true, sales7dCents: true, impressions: true, clicks: true, orders7d: true },
-    }) : []
-
-    interface CampAgg { id: string; name: string; marketplace: string | null; status: string; adProduct: string | null; dailyBudgetCents: number; spendC: number; salesC: number; impr: number; clicks: number; orders: number }
-    const byCampaign = new Map<string, CampAgg>()
-    for (const r of perAd) {
-      const c = r.localEntityId ? adToCampaign.get(r.localEntityId) : null
-      if (!c) continue
-      let g = byCampaign.get(c.id)
-      if (!g) { g = { id: c.id, name: c.name, marketplace: c.marketplace, status: c.status, adProduct: c.adProduct, dailyBudgetCents: Math.round(parseFloat(String(c.dailyBudget ?? '0')) * 100), spendC: 0, salesC: 0, impr: 0, clicks: 0, orders: 0 }; byCampaign.set(c.id, g) }
-      g.spendC += microsToCents(r._sum.costMicros)
-      g.salesC += r._sum.sales7dCents ?? 0
-      g.impr += r._sum.impressions ?? 0
-      g.clicks += r._sum.clicks ?? 0
-      g.orders += r._sum.orders7d ?? 0
-    }
-    let rows = [...byCampaign.values()]
-    if (q.status) rows = rows.filter((c) => c.status === q.status)
-    if (mkt) rows = rows.filter((c) => c.marketplace === mkt)
-    const out = rows.map((c) => ({
-      id: c.id, name: c.name, marketplace: c.marketplace, status: c.status, adProduct: c.adProduct,
-      dailyBudgetCents: c.dailyBudgetCents,
-      adSpendCents: c.spendC, adSalesCents: c.salesC,
-      acos: c.salesC > 0 ? Math.round((c.spendC / c.salesC) * 1000) / 10 : null,
-      impressions: c.impr, clicks: c.clicks, orders: c.orders,
-    })).sort((a, b) => b.adSpendCents - a.adSpendCents)
-    reply.header('Cache-Control', 'private, max-age=60')
-    return { rows: out }
   })
 
   // PC.7 — bulk action on the campaigns behind selected products. Resolves
@@ -4841,19 +4653,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     })
     reply.header('Cache-Control', 'private, max-age=60')
     return { windowDays: range.days, count: rows.length, rows }
-  })
-
-  // ── POST /advertising/search-terms/promote — harvest a search term into a
-  // positive keyword. The search-term report carries EXTERNAL ad-group ids;
-  // resolve to the local AdGroup, then create the keyword (sandbox-safe).
-  fastify.post('/advertising/search-terms/promote', async (request, reply) => {
-    const b = request.body as { query?: string; externalAdGroupId?: string; matchType?: string; bidEur?: number }
-    if (!b?.query || !b?.externalAdGroupId || !b?.matchType || b?.bidEur == null) { reply.status(400); return { error: 'query, externalAdGroupId, matchType, bidEur required' } }
-    const ag = await prisma.adGroup.findFirst({ where: { externalAdGroupId: b.externalAdGroupId }, select: { id: true } })
-    if (!ag) { reply.status(404); return { error: 'ad_group_not_found_for_externalAdGroupId' } }
-    const { createKeywordLocal } = await import('../services/advertising/ads-create.service.js')
-    // CM-8 — a person's add (see personAddReply). 1e — and his own, so it passes a halt (isPersonCreate).
-    try { return personAddReply(reply, await createKeywordLocal({ adGroupId: ag.id, keywordText: b.query, matchType: b.matchType, bidEur: b.bidEur, requireAmazon: true, manual: true } as never)) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── GET /advertising/bulk/export — current state as an Amazon bulksheet (.xlsx)
@@ -7278,16 +7077,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     await setDefaultTargetAcosPct(b.pct ?? null, actorFromHeaders(request.headers as Record<string, unknown>))
     return getAutomationState()
   })
-  fastify.post('/advertising/automation/guard/run', async () => {
-    const { runAnomalyGuardOnce } = await import('../services/advertising/ads-anomaly-guard.service.js')
-    return runAnomalyGuardOnce()
-  })
-  // TD.1 — run the profit-native target-ACOS auto-bid pass on demand (respects
-  // the autonomy dial; SUGGEST = proposals only).
-  fastify.post('/advertising/automation/auto-bid/run', async () => {
-    const { runAutoBidOnce } = await import('../services/advertising/ads-auto-bid.service.js')
-    return runAutoBidOnce()
-  })
   fastify.get('/advertising/marketing-stream/subscriptions', async (request, reply) => {
     const prof = await firstActiveAdsProfile()
     if (!prof) { reply.status(400); return { error: 'no active Amazon Ads connection' } }
@@ -7776,12 +7565,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── AX3.2: Full-funnel Goal builder (branded + unbranded) ───────────
-  fastify.post('/advertising/goals/suggest-targets', async (request, reply) => {
-    const b = request.body as { brandTerms?: string[]; asins?: string[]; limit?: number }
-    if (!Array.isArray(b?.brandTerms)) { reply.status(400); return { error: 'brandTerms[] required' } }
-    const { suggestTargets } = await import('../services/advertising/ads-goal.service.js')
-    try { return await suggestTargets({ brandTerms: b.brandTerms, asins: b.asins, limit: b.limit }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
-  })
   fastify.post('/advertising/goals/apply', async (request, reply) => {
     const b = request.body as Record<string, unknown>
     if (!b?.goalName) { reply.status(400); return { error: 'goalName required' } }
@@ -7878,11 +7661,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { analyzeRetailReadiness } = await import('../services/advertising/ads-retail-readiness.service.js')
     reply.header('Cache-Control', 'private, max-age=120')
     return analyzeRetailReadiness({ marketplace: q.marketplace, campaignId: q.campaignId })
-  })
-  fastify.post('/advertising/retail-readiness/apply', async (request, reply) => {
-    const b = request.body as { campaignIds?: string[]; marketplace?: string }
-    const { applyRetailGuard } = await import('../services/advertising/ads-retail-readiness.service.js')
-    try { return await applyRetailGuard({ campaignIds: b?.campaignIds, marketplace: b?.marketplace }) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AX2.12: Ads alerts (anomaly watch) ──────────────────────────────
@@ -9945,10 +9723,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
-  fastify.post('/advertising/dayparting/run-now', async (_request, reply) => {
-    const { runDaypartingOnce } = await import('../jobs/ad-dayparting.job.js')
-    try { return await runDaypartingOnce() } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
-  })
   // ── AX2.11: Dayparting intelligence (day-of-week conversion) ────────
   fastify.get('/advertising/dayparting-intel', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
@@ -9984,10 +9758,6 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { previewHarvest } = await import('../services/advertising/ads-harvest.service.js')
     reply.header('Cache-Control', 'private, max-age=30')
     return previewHarvest({ windowDays: q.windowDays ? Number(q.windowDays) : undefined, minSpendCents: q.minSpendCents ? Number(q.minSpendCents) : undefined, minOrders: q.minOrders ? Number(q.minOrders) : undefined })
-  })
-  fastify.post('/advertising/harvest/apply', async (request, reply) => {
-    const { applyHarvest } = await import('../services/advertising/ads-harvest.service.js')
-    try { return await applyHarvest((request.body ?? {}) as never) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // ── AD.2: Mutation routes ───────────────────────────────────────────
