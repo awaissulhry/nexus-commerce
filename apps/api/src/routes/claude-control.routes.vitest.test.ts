@@ -232,7 +232,10 @@ describe('C8 — Undo on the activity page', () => {
     const done = await call('POST', '/api/claude/changes/chg-1/undo', 'token-viewer', {})
     expect(done.statusCode).toBe(200)
     expect(done.json()).toEqual({ ok: true, approvalId: 'apr-undo', tool: 'set-price', undoes: 'chg-1', executeAfter: '2026-10-01T12:00:20.000Z' })
-    expect(m.undo).toHaveBeenCalledWith(expect.objectContaining({ kind: 'user', userId: 'u-viewer', via: 'app' }), 'chg-1')
+    expect(m.undo).toHaveBeenCalledWith(expect.objectContaining({ kind: 'user', userId: 'u-viewer', via: 'app' }), 'chg-1', undefined)
+    // Ads autonomy W1-3 — an undo that raises takes the person's authenticator code: the route hands it on.
+    await call('POST', '/api/claude/changes/chg-1/undo', 'token-viewer', { code: '123456' })
+    expect(m.undo).toHaveBeenLastCalledWith(expect.objectContaining({ userId: 'u-viewer' }), 'chg-1', '123456')
     m.undo.mockResolvedValue({ ok: false, status: 409, error: 'Not undone: it has changed since.' })
     const refused = await call('POST', '/api/claude/changes/chg-1/undo', 'token-viewer', {})
     expect(refused.statusCode).toBe(409)

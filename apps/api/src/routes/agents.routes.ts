@@ -170,7 +170,7 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
   // (a stale request is handed back, not run). Calling decideApproval here ran the action at once, with none
   // of those checks, so two identical requests approved here both ran.
   const decide = async (
-    request: FastifyRequest<{ Params: { id: string }; Body: { reason?: string } }>,
+    request: FastifyRequest<{ Params: { id: string }; Body: { reason?: string; code?: string } }>,
     reply: FastifyReply,
     decision: 'approve' | 'reject',
   ) => {
@@ -179,19 +179,22 @@ const agentRoutes: FastifyPluginAsync = async (fastify) => {
       decision,
       reason: request.body?.reason?.trim() || undefined,
       actor: await requestPrincipal(request),
+      // ADS AUTONOMY W1-3 — a raise is approved only with the approver's authenticator code (as on the Approvals page).
+      code: request.body?.code,
     })
     if (!r.ok && r.error === 'approval not found')
       return reply.code(404).send(r)
     if (r.code === 'forbidden') return reply.code(403).send(r)
+    if (r.httpStatus) return reply.code(r.httpStatus).send(r)
     return r
   }
 
-  fastify.post<{ Params: { id: string }; Body: { reason?: string } }>(
+  fastify.post<{ Params: { id: string }; Body: { reason?: string; code?: string } }>(
     '/agent/approvals/:id/approve',
     (request, reply) => decide(request, reply, 'approve'),
   )
 
-  fastify.post<{ Params: { id: string }; Body: { reason?: string } }>(
+  fastify.post<{ Params: { id: string }; Body: { reason?: string; code?: string } }>(
     '/agent/approvals/:id/reject',
     (request, reply) => decide(request, reply, 'reject'),
   )
