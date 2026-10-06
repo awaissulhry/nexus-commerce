@@ -14,6 +14,7 @@ import prisma from '../../db.js'
 import { getSpec, buildFiltersFor } from './ads-report-runner.service.js'
 import { METRIC_DIRECTION, type BetterWhen, type ColumnFormat } from './ads-report-specs.js'
 import type { ReportQuery } from './ads-report-runner.service.js'
+import { lastCompleteDay } from '../ads-core/date-range.js'
 
 export type CompareMode = 'none' | 'previous' | 'yoy'
 export type Bucket = 'day' | 'week' | 'month'
@@ -35,6 +36,11 @@ export interface SummaryResult {
   compare: CompareMode
   window: { from: string | null; to: string | null }
   comparisonWindow: { from: string | null; to: string | null } | null
+  /**
+   * AM-16 — the CURRENT side of the change: `window`, or its complete days when it runs into today (today has no
+   * daily report yet and is never on one side only). null when there is no comparison.
+   */
+  comparedWindow: { from: string; to: string; todayLeftOut: boolean } | null
   metrics: KpiMetric[]
   /** Empty when the report has no meaningful timeline. */
   series: Array<Record<string, number | string | null>>
@@ -62,11 +68,25 @@ export function pickBucket(from: string | null, to: string | null): Bucket {
 }
 
 /**
+ * AM-16 — the current side of a comparison: COMPLETE DAYS ONLY. A window that runs past `lastComplete` (yesterday)
+ * is compared on its days through yesterday; a window of today alone has nothing to compare (null).
+ */
+export function comparedWindow(
+  mode: CompareMode, from: string | null, to: string | null, lastComplete: string,
+): { from: string; to: string; todayLeftOut: boolean } | null {
+  if (mode === 'none' || !from || !to) return null
+  if (to <= lastComplete) return { from, to, todayLeftOut: false }
+  if (from > lastComplete) return null
+  return { from, to: lastComplete, todayLeftOut: true }
+}
+
+/**
  * The comparison window.
  *
  * `previous` is the SAME NUMBER OF DAYS immediately before the current window —
  * not "last month", which would compare 31 days against 28 and report a fake 10%
- * drop every March.
+ * drop every March. Pass it the COMPARED window (`comparedWindow`), so both sides
+ * hold complete days.
  */
 export function comparisonWindow(
   mode: CompareMode, from: string | null, to: string | null,
@@ -126,9 +146,13 @@ export async function reportSummary(
     return rows[0] ?? {}
   }
 
-  const cmpWin = comparisonWindow(compare, q.from ?? null, q.to ?? null)
-  const [cur, prev] = await Promise.all([
+  // AM-16 — both sides of the change hold complete days. When the window runs into today, the change is taken on
+  // its days through yesterday (one more query); the tile still shows the whole window.
+  const compared = comparedWindow(compare, q.from ?? null, q.to ?? null, lastCompleteDay())
+  const cmpWin = compared ? comparisonWindow(compare, compared.from, compared.to) : null
+  const [cur, curCompared, prev] = await Promise.all([
     totalsFor(q.from ?? null, q.to ?? null),
+    compared?.todayLeftOut ? totalsFor(compared.from, compared.to) : Promise.resolve(null),
     cmpWin ? totalsFor(cmpWin.from, cmpWin.to) : Promise.resolve({} as Record<string, unknown>),
   ])
 
@@ -140,10 +164,11 @@ export async function reportSummary(
 
   const kpis: KpiMetric[] = metrics.map((m) => {
     const c = num(cur[m.id])
+    const cc = curCompared ? num(curCompared[m.id]) : c
     const p = cmpWin ? num(prev[m.id]) : null
     // A delta needs a real baseline. 0 → 5 is not "+∞%", it is "new", and
     // rendering infinity would be worse than rendering nothing.
-    const deltaPct = c != null && p != null && p !== 0 ? (c - p) / Math.abs(p) : null
+    const deltaPct = cc != null && p != null && p !== 0 ? (cc - p) / Math.abs(p) : null
     return {
       id: m.id, label: m.label, format: m.format,
       betterWhen: customDirection.get(m.id) ?? METRIC_DIRECTION[m.id] ?? null,
@@ -183,6 +208,7 @@ export async function reportSummary(
     compare,
     window: { from: q.from ?? null, to: q.to ?? null },
     comparisonWindow: cmpWin,
+    comparedWindow: cmpWin ? compared : null,
     metrics: kpis,
     series,
     bucket,

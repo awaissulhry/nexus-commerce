@@ -20,6 +20,7 @@ import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { Plus, Archive } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { lastCompleteDays } from '../_shell/DateRangePicker'
 import { useAdsMarketplace, ALL_MARKETS } from '../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'
 import { acosRank, acosFilterValue } from '../campaigns/_grid/format'
@@ -97,7 +98,7 @@ export function AiAdvertisingDashboard() {
     goal: sp.get('goal'),
   }).current
 
-  const [dateRange, setDateRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 29); return { start: s, end: e } })
+  const [dateRange, setDateRange] = useState(() => lastCompleteDays(30)) // AM-16 — complete days, ending yesterday
   const [goals, setGoals] = useState<Goal[]>([])
   const [goalsLoading, setGoalsLoading] = useState(true)
   const [summary, setSummary] = useState<Summary | null>(null)

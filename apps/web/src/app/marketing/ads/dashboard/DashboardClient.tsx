@@ -26,7 +26,10 @@ interface Summary {
 interface TrendSummary { impressions?: number; clicks?: number; orders?: number; spendCents?: number; salesCents?: number; acos?: number | null; roas?: number }
 /** `acos` is PERCENT POINTS, null on a day with no sales. */
 interface TrendRow { date: string; adSpendCents?: number; acos?: number | null }
-interface Trends { rows?: TrendRow[]; summary?: TrendSummary; previous?: TrendSummary }
+interface TrendWindow { startDate: string; endDate: string }
+// AM-16 — `range` is 30 complete days ending yesterday; `compare` names both sides of the ▲▼ change.
+interface Trends { rows?: TrendRow[]; summary?: TrendSummary; previous?: TrendSummary; range?: TrendWindow; compare?: { current: TrendWindow; previous: TrendWindow; todayLeftOut: boolean } | null }
+const shortDay = (ymd: string) => new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 interface Alert { id: string; campaignId?: string; campaignName?: string; type: string; severity: string; message: string }
 /** `acos` is a FRACTION (0.38 = 38 %), null when nothing sold. */
 interface MomRow { id?: string; label?: string; status?: string; spendCents?: number; salesCents?: number; acos?: number | null; orders?: number }
@@ -168,6 +171,15 @@ export function DashboardClient() {
           </div>
         ))}
       </div>
+
+      {/* AM-16 — say which days the tiles and their changes cover: complete days only, today is not in them. */}
+      {trends?.range && (
+        <p className="dash-window">
+          Last 30 complete days, {shortDay(trends.range.startDate)} – {shortDay(trends.range.endDate)}
+          {trends.compare ? <>; changes compare with {shortDay(trends.compare.previous.startDate)} – {shortDay(trends.compare.previous.endDate)}</> : null}.
+          {' '}Today is not included: Amazon reports a day the next morning.
+        </p>
+      )}
 
       {/* Trend chart */}
       <div className="dash-card">

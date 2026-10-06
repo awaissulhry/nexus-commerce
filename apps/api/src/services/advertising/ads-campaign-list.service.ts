@@ -9,10 +9,14 @@
  */
 import prisma from '../../db.js'
 import { Prisma } from '@prisma/client'
+import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 import { ntbIsPublishedFor } from '../ads-core/metrics-math.js'
 // ADM-P6/DC — THE definition of ad-attributed sales (see ads-core/ad-sales.ts).
 import { adSalesCents } from '../ads-core/ad-sales.js'
 import { campaignDailyWhere } from './ads-campaign-window.js'
+
+/** AM-14 — how far back the freshness read looks: a market silent for longer is stale, and says nothing here. */
+const FRESHNESS_LOOKBACK_DAYS = 60
 
 /** The query `GET /advertising/campaigns` accepts. All strings, as Fastify parses a query. */
 export interface AmazonCampaignListQuery {
@@ -298,14 +302,40 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
     ])
     const usageSinceIso = usageSince ? usageSince.toISOString() : null
 
+    /**
+     * AM-5 — today's spend. The daily report is T+1, so a range reaching today has no daily row for it and "Today"
+     * read €0.00 / 0 orders on every campaign while the campaign page showed the real spend. The list now adds the
+     * SAME hourly overlay the campaign page adds (`readIntradayOverlay`), so the two agree for any range ending today.
+     * Only the headline counters get today (impressions, clicks, spend, sales, orders): the stream carries no units,
+     * same-SKU, new-to-brand or budget columns, and those stay daily-report figures.
+     *
+     * AM-14 — and say when the numbers arrived. `lastSyncedAt` is stamped by every settings sync and every write
+     * push, so "Latest Report" showed a time that had nothing to do with the performance figures. `freshness` is the
+     * report itself, per market: the last day it covers and when Nexus received it.
+     */
+    const { readIntradayOverlay } = await import('./ads-detail-metrics.service.js')
+    const [overlay, freshRows] = await Promise.all([
+      readIntradayOverlay(campaigns.map((c) => ({ id: c.id, externalCampaignId: c.externalCampaignId })), range.until),
+      prisma.amazonAdsDailyPerformance.groupBy({
+        by: ['marketplace'],
+        where: { entityType: 'CAMPAIGN', ...EXCLUDE_AMS_DAILY, date: { gte: new Date(Date.now() - FRESHNESS_LOOKBACK_DAYS * 86_400_000) }, ...(q.marketplace ? { marketplace: q.marketplace } : {}) },
+        _max: { date: true, reportedAt: true },
+      }),
+    ])
+    const freshness = freshRows
+      .filter((r) => r._max.date)
+      .map((r) => ({ marketplace: r.marketplace, dataThrough: r._max.date!.toISOString().slice(0, 10), receivedAt: r._max.reportedAt ? r._max.reportedAt.toISOString() : null }))
+      .sort((x, y) => x.marketplace.localeCompare(y.marketplace))
+
     const items = base.map((it) => {
       const a = mapL.get(it.id)
       const b = it.externalCampaignId ? mapE.get(it.externalCampaignId) : undefined
       const au = avgUtilById.get(it.id)
       const cu = curUsage.get(it.id) ?? { state: 'unknown' as const, fraction: null, budgetCents: null, asOf: null }
       const uh = usageHours.get(it.id) ?? { observed: 0, outOfBudget: 0, actBid: 0, supported: false }
-      const spendCents = m2c(a?.costMicros) + m2c(b?.costMicros)
-      const salesCents = adSalesCents(a) + adSalesCents(b)
+      const t = overlay?.byCampaign.get(it.id)
+      const spendCents = m2c(a?.costMicros) + m2c(b?.costMicros) + (t?.spendCents ?? 0)
+      const salesCents = adSalesCents(a) + adSalesCents(b) + (t?.salesCents ?? 0)
       // ADM-H P3 — a nullable metric Amazon never reported is `unknown`, not 0. The count of
       // rows that actually carried a value decides; the sum alone cannot tell "reported zero"
       // from "never reported", and Prisma renders both as 0.
@@ -316,7 +346,7 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
       const summed = (f: keyof typeof _count) => (reported(f) ? n(a?.[f]) + n(b?.[f]) : null)
       const saleUnits = summed('units7d')
       const sameSkuCents = summed('salesSameSku7dCents')
-      const ppcOrders = n(a?.orders7d) + n(b?.orders7d)
+      const ppcOrders = n(a?.orders7d) + n(b?.orders7d) + (t?.orders ?? 0)
       // 🔴 ADM-A5 — gate NTB on the AD PRODUCT, not just on whether a row exists.
       //
       // `ntbOrders14d` and `ntbSalesCents14d` are the two legacy columns carrying `DEFAULT 0`, so
@@ -344,8 +374,8 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
       const otherCents = sameSkuCents == null ? null : Math.max(0, salesCents - sameSkuCents)
       return {
         ...it,
-        impressions: n(a?.impressions) + n(b?.impressions),
-        clicks: n(a?.clicks) + n(b?.clicks),
+        impressions: n(a?.impressions) + n(b?.impressions) + (t?.impressions ?? 0),
+        clicks: n(a?.clicks) + n(b?.clicks) + (t?.clicks ?? 0),
         spend: spendCents / 100,
         sales: salesCents / 100,
         // `acos` is a FRACTION (0.38 = 38 %), null when nothing sold; `roas` a plain ratio.
@@ -417,7 +447,13 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
         usageSince: usageSinceIso,
       }
     })
-    return { items, count: items.length, range: { startDate: range.sinceStr, endDate: range.untilStr, preset: range.preset } }
+    return {
+      items, count: items.length, range: { startDate: range.sinceStr, endDate: range.untilStr, preset: range.preset },
+      // AM-5 — present when the range reaches today: which UTC day the hourly figures cover and through which hour.
+      intraday: overlay ? { day: overlay.day, throughHour: overlay.throughHour, unavailable: overlay.unavailable } : null,
+      // AM-14 — per market: the last day the daily report covers, and when Nexus received it.
+      freshness,
+    }
   })
   return result
 }

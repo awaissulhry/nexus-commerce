@@ -66,6 +66,7 @@ import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, Check, Info, Pencil, RefreshCw, Search, Sliders, X } from 'lucide-react'
 import { Button, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { lastCompleteDays } from '../../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey, RULES_BASE } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -522,9 +523,7 @@ export function PlacementClient() {
     const iso = (v: string) => { const [y, m, d] = v.split('-').map(Number); return new Date(y!, (m ?? 1) - 1, d ?? 1) }
     if (data?.range) return { start: iso(data.range.start), end: iso(data.range.end) }
     if (start && end) return { start: iso(start), end: iso(end) }
-    const e = new Date(); e.setHours(0, 0, 0, 0)
-    const st = new Date(e); st.setDate(st.getDate() - 29)
-    return { start: st, end: e }
+    return lastCompleteDays(30) // AM-16 — the server's last30: complete days, ending yesterday
   }, [data?.range, start, end])
 
   /**

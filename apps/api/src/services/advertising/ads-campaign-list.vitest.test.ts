@@ -104,6 +104,57 @@ describe('listAmazonCampaigns — a date window', () => {
   })
 })
 
+// AM-5 / AM-14 — a range reaching today adds the hourly stream, exactly as the campaign page does, and the list says
+// when the daily report it shows arrived.
+describe('listAmazonCampaigns — today, and when the numbers arrived', () => {
+  const todayUtc = new Date().toISOString().slice(0, 10)
+  const yesterdayUtc = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+  const RECEIVED = new Date(`${todayUtc}T03:12:00Z`)
+  beforeAll(async () => {
+    const db = database.client
+    await inside(async () => {
+      const hour = (data: Record<string, unknown>) => db.amazonAdsHourlyPerformance.create({ data: {
+        profileId: 'P1', adProduct: 'SPONSORED_PRODUCTS', entityType: 'CAMPAIGN', currencyCode: 'EUR', date: day(todayUtc),
+        reportRunId: 'ams-stream', reportedAt: new Date(), ...data } as never })
+      // Alpha, linked by the stream: two hours today. Beta, never linked: counts by its Amazon id.
+      await hour({ marketplace: 'IT', hour: 6, entityId: 'EXT-A1-C1', localEntityId: 'a1-c1', impressions: 30, clicks: 3, costMicros: 450_000n, sales7dCents: 2000, orders7d: 1 })
+      await hour({ marketplace: 'IT', hour: 9, entityId: 'EXT-A1-C1', localEntityId: 'a1-c1', impressions: 20, clicks: 1, costMicros: 150_000n, sales7dCents: 0, orders7d: 0 })
+      await hour({ marketplace: 'DE', adProduct: 'SPONSORED_BRANDS', hour: 7, entityId: 'EXT-A1-C2', localEntityId: null, impressions: 10, clicks: 1, costMicros: 200_000n, sales7dCents: 500, orders7d: 1 })
+      // Yesterday's daily report for Alpha, received early this morning; the stream's own daily row is not a report.
+      await db.amazonAdsDailyPerformance.create({ data: { profileId: 'P1', currencyCode: 'EUR', entityType: 'CAMPAIGN', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS',
+        date: day(yesterdayUtc), entityId: 'EXT-A1-C1', localEntityId: 'a1-c1', reportRunId: 'RUN-Y', reportedAt: RECEIVED, impressions: 70, clicks: 5, costMicros: 1_000_000n, sales7dCents: 3000, orders7d: 1 } as never })
+      await db.amazonAdsDailyPerformance.create({ data: { profileId: 'ams', currencyCode: 'EUR', entityType: 'CAMPAIGN', marketplace: 'DE', adProduct: 'SPONSORED_BRANDS',
+        date: day(todayUtc), entityId: 'EXT-A1-C2', localEntityId: null, reportRunId: 'ams-stream', reportedAt: new Date(), impressions: 1, clicks: 1, costMicros: 1n } as never })
+    })
+  })
+
+  it('"Today" shows the hourly spend, not €0.00 — and the same figure the campaign page shows', async () => {
+    const out = (await inside(() => listAmazonCampaigns({ startDate: todayUtc, endDate: todayUtc }))) as unknown as { items: Item[]; intraday: { day: string; throughHour: number | null; unavailable: boolean } | null }
+    const byId = Object.fromEntries(out.items.map((c) => [c.id, c]))
+    expect(byId['a1-c1']).toMatchObject({ impressions: 50, clicks: 4, spend: 0.6, sales: 20, ppcOrders: 1 })
+    expect(byId['a1-c2']).toMatchObject({ impressions: 10, clicks: 1, spend: 0.2, sales: 5, ppcOrders: 1 })
+    expect(out.intraday).toEqual({ day: todayUtc, throughHour: 9, unavailable: false })
+    const { computeCampaignDetailMetrics } = await import('./ads-detail-metrics.service.js')
+    for (const [id, ext] of [['a1-c1', 'EXT-A1-C1'], ['a1-c2', 'EXT-A1-C2']] as const) {
+      const detail = await inside(() => computeCampaignDetailMetrics({ campaignId: id, externalCampaignId: ext, adGroups: [], windowDays: 1, since: day(todayUtc), until: day(todayUtc) }))
+      expect(detail.campaign.spendCents).toBe(Math.round(byId[id].spend * 100))
+      expect(detail.campaign.orders).toBe(byId[id].ppcOrders)
+    }
+  })
+
+  it('a range that ends before today gets no hourly figures', async () => {
+    const out = (await inside(() => listAmazonCampaigns({ startDate: yesterdayUtc, endDate: yesterdayUtc }))) as unknown as { items: Item[]; intraday: unknown }
+    expect(out.intraday).toBeNull()
+    expect(out.items.find((c) => c.id === 'a1-c1')).toMatchObject({ spend: 1, ppcOrders: 1 })
+  })
+
+  it('freshness is the daily report per market — the day it covers and when it arrived, never a stream row', async () => {
+    const out = (await inside(() => listAmazonCampaigns({ startDate: yesterdayUtc, endDate: yesterdayUtc }))) as unknown as { freshness: Array<{ marketplace: string; dataThrough: string; receivedAt: string | null }> }
+    expect(out.freshness.find((m) => m.marketplace === 'IT')).toEqual({ marketplace: 'IT', dataThrough: yesterdayUtc, receivedAt: RECEIVED.toISOString() })
+    expect(out.freshness.find((m) => m.marketplace === 'DE')?.dataThrough).not.toBe(todayUtc)
+  })
+})
+
 describe('GET /advertising/campaigns answers exactly the service', () => {
   for (const query of ['', '?marketplace=IT&status=ENABLED', '?search=test&limit=1', `?startDate=${SEPTEMBER.startDate}&endDate=${SEPTEMBER.endDate}`]) {
     it(`same body${query ? ` for ${query}` : ''}, with Cache-Control`, async () => {

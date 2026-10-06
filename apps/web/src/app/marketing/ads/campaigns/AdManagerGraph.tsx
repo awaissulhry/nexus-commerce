@@ -20,7 +20,6 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { rangeBounds } from '../_shell/AdsPageHeader'
 import { useChangeAnnotations, AnnotationToggle } from './ChangeAnnotations'
 import { MetricChart, MAX_PLOTTED, type ChartMetric } from '../_shared/MetricChart'
 
@@ -76,7 +75,11 @@ const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 
 const STORE = 'h10-am-graph-metrics'
 
-export function AdManagerGraph({ market, rangePreset }: { market: string; rangePreset: string }) {
+/**
+ * AM-10 — the graph draws the range the header's date picker holds, the same one the grid below it shows. It used to
+ * take `rangePreset`, a header prop nothing ever wrote, so it was "last 7 days" whatever the picker said.
+ */
+export function AdManagerGraph({ market, start, end }: { market: string; start: Date; end: Date }) {
   // The two persisted single choices become one persisted list. The defaults are the two the
   // dropdowns used to open on, so an operator who never touches the picker sees what they saw.
   const [selected, setSelected] = useState<string[]>(['spend', 'acos'])
@@ -103,7 +106,6 @@ export function AdManagerGraph({ market, rangePreset }: { market: string; rangeP
     try { localStorage.setItem(STORE, JSON.stringify(keys)) } catch { /* ignore */ }
   }
 
-  const { start, end } = useMemo(() => rangeBounds(rangePreset), [rangePreset])
   const startStr = ymd(start), endStr = ymd(end)
 
   useEffect(() => {
@@ -149,7 +151,8 @@ export function AdManagerGraph({ market, rangePreset }: { market: string; rangeP
   return (
     <MetricChart
       title="Campaign Performance"
-      subtitle={`${dayLong(startStr)} - ${dayLong(endStr)}`}
+      // The chart is the DAILY report, which has no row for today yet; the grid adds today from the hourly stream.
+      subtitle={`${dayLong(startStr)} - ${dayLong(endStr)}${endStr >= ymd(new Date()) ? ' · daily figures run to yesterday' : ''}`}
       data={data}
       metrics={METRICS}
       selected={selected}

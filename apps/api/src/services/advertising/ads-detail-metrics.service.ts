@@ -13,6 +13,7 @@ import prisma from '../../db.js'
 import { allocate, microsToCents } from '../ads-core/metrics-math.js'
 import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 import { adSalesCents } from '../ads-core/ad-sales.js'
+import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 
 export interface AllocatedMetrics {
   impressions: number
@@ -76,40 +77,15 @@ export async function computeCampaignDetailMetrics(opts: {
   // DR.3 — intraday overlay. Daily performance is T+1, so when the range
   // includes today its daily row is absent; layer in today's Amazon Marketing
   // Stream HOURLY rows (CAMPAIGN grain) so "Today"/MTD/YTD reflect live spend.
-  const todayUtc = new Date(); todayUtc.setUTCHours(0, 0, 0, 0)
-  const includesToday = !opts.until || opts.until.getTime() >= todayUtc.getTime()
-  if (includesToday) {
-    const hourly = await prisma.amazonAdsHourlyPerformance.aggregate({
-      where: {
-        entityType: 'CAMPAIGN',
-        date: todayUtc,
-        OR: [
-          { localEntityId: opts.campaignId },
-          ...(opts.externalCampaignId ? [{ entityId: opts.externalCampaignId }] : []),
-        ],
-        // 🔴 GX.5 — `EXCLUDE_AMS_DAILY` USED TO BE APPLIED HERE, AND IT EXCLUDED EVERYTHING.
-        //
-        // The marker means "a row the stream wrote to the DAILY table", where it is a duplicate of
-        // the report pipeline's own row. This is the stream's OWN table: measured 2026-08-26, all
-        // 33,099 rows carry `reportRunId = 'ams-stream'`, so the filter matched every one of them
-        // and the overlay summed nothing. Today's campaign spend read €23.78 in the table and
-        // €0.00 through the filter — the intraday overlay has never contributed a cent since it
-        // shipped, and "Today" on the campaign detail page showed no spend at all.
-        //
-        // The constant's name is the whole lesson: it is `EXCLUDE_AMS_DAILY`, not
-        // `EXCLUDE_AMS`. A guard that is correct on one table can be exactly inverted on another.
-      },
-      _sum: { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true },
-    }).catch(() => null)
-    if (hourly?._sum) {
-      campImpr += hourly._sum.impressions ?? 0
-      campClicks += hourly._sum.clicks ?? 0
-      campSpend += microsToCents(hourly._sum.costMicros)
-      // AmazonAdsHourlyPerformance only carries sales7dCents (no 14d like the
-      // daily model) — referencing sales14dCents here broke the build.
-      campSales += hourly._sum.sales7dCents ?? 0
-      campOrders += hourly._sum.orders7d ?? 0
-    }
+  // AM-5 — the Ad Manager list reads the SAME overlay (`readIntradayOverlay`), so list and detail agree.
+  const overlay = await readIntradayOverlay([{ id: opts.campaignId, externalCampaignId: opts.externalCampaignId }], opts.until)
+  const today = overlay?.byCampaign.get(opts.campaignId)
+  if (today) {
+    campImpr += today.impressions
+    campClicks += today.clicks
+    campSpend += today.spendCents
+    campSales += today.salesCents
+    campOrders += today.orders
   }
 
   const adIdToGroup = new Map<string, string>()
@@ -147,6 +123,70 @@ export async function computeCampaignDetailMetrics(opts: {
   gids.forEach((id, i) => byAdGroup.set(id, toMetrics(imprAlloc[i]!, clickAlloc[i]!, spendAlloc[i]!, salesAlloc[i]!, orderAlloc[i]!)))
 
   return { campaign: toMetrics(campImpr, campClicks, campSpend, campSales, campOrders), byAdGroup }
+}
+
+/** Today's hourly figures for one campaign (cents, counts). */
+export interface IntradaySums { impressions: number; clicks: number; spendCents: number; salesCents: number; orders: number }
+export interface IntradayOverlay {
+  /** The UTC day the hourly rows cover — the budget day (`@nexus/shared/ads-budget-day`), as the stream buckets it. */
+  day: string
+  /** The newest UTC hour with a row today; null when the stream has sent nothing yet today. */
+  throughHour: number | null
+  /** True when the hourly table could not be read: today's figures are missing, not zero. */
+  unavailable: boolean
+  byCampaign: Map<string, IntradaySums>
+}
+
+/**
+ * DR.3 + AM-5 — THE intraday source: today's Amazon Marketing Stream HOURLY rows at campaign grain, summed per
+ * campaign. The campaign detail page and the Ad Manager list both read it, so for any range that reaches today the
+ * two can never disagree. Null when the range ends before today (the daily report covers it).
+ *
+ * A row counts for a campaign by its Nexus id, or — when the stream never linked it — by its Amazon id, the same
+ * OR-match the detail page always used, without counting a row twice.
+ */
+export async function readIntradayOverlay(
+  campaigns: Array<{ id: string; externalCampaignId: string | null }>,
+  until?: Date | null,
+  now: Date = new Date(),
+): Promise<IntradayOverlay | null> {
+  const todayUtc = budgetDayStart(now)
+  if (until && until.getTime() < todayUtc.getTime()) return null
+  const overlay: IntradayOverlay = { day: todayUtc.toISOString().slice(0, 10), throughHour: null, unavailable: false, byCampaign: new Map() }
+  if (!campaigns.length) return overlay
+  const ids = campaigns.map((c) => c.id)
+  const localOf = new Map(campaigns.filter((c) => c.externalCampaignId).map((c) => [c.externalCampaignId as string, c.id]))
+  // 🔴 GX.5 — NEVER `EXCLUDE_AMS_DAILY` here. That marker means "a row the stream wrote to the DAILY table"; on
+  // this, the stream's OWN table, every row carries it (measured 2026-08-26: 33,099 of 33,099), so the filter
+  // excluded everything and "Today" on the campaign page showed no spend at all. `EXCLUDE_AMS_DAILY`, not
+  // `EXCLUDE_AMS`: a guard that is correct on one table can be exactly inverted on another.
+  const _sum = { impressions: true, clicks: true, costMicros: true, sales7dCents: true, orders7d: true } as const
+  try {
+    const [byLocal, byExt, newest] = await Promise.all([
+      prisma.amazonAdsHourlyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', date: todayUtc, localEntityId: { in: ids } }, _sum }),
+      localOf.size
+        ? prisma.amazonAdsHourlyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', date: todayUtc, localEntityId: null, entityId: { in: [...localOf.keys()] } }, _sum })
+        : Promise.resolve([]),
+      prisma.amazonAdsHourlyPerformance.aggregate({ where: { entityType: 'CAMPAIGN', date: todayUtc }, _max: { hour: true } }),
+    ])
+    const add = (cid: string | null | undefined, s: (typeof byLocal)[number]['_sum']) => {
+      if (!cid) return
+      const cur = overlay.byCampaign.get(cid) ?? { impressions: 0, clicks: 0, spendCents: 0, salesCents: 0, orders: 0 }
+      cur.impressions += s.impressions ?? 0
+      cur.clicks += s.clicks ?? 0
+      cur.spendCents += microsToCents(s.costMicros)
+      // The hourly table carries sales7dCents only (no 14d like the daily model).
+      cur.salesCents += s.sales7dCents ?? 0
+      cur.orders += s.orders7d ?? 0
+      overlay.byCampaign.set(cid, cur)
+    }
+    for (const r of byLocal) add(r.localEntityId, r._sum)
+    for (const r of byExt) add(localOf.get(r.entityId), r._sum)
+    overlay.throughHour = newest._max.hour ?? null
+  } catch {
+    overlay.unavailable = true
+  }
+  return overlay
 }
 
 /** Allocate a parent total across rows by their `shares`, returning per-row metrics. */

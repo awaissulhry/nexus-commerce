@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { CampaignDetailHeader, type DetailHeaderAction } from '../../../../../_shell/CampaignDetailHeader'
+import { lastCompleteDays } from '../../../../../_shell/DateRangePicker'
 import '../../../../ebay.css'
 import { useEbayAdsFetch, useWriteMode, SandboxBanner, FreshnessLine, type AdGroupDetailPayload } from '../../../../_lib'
 import { AgKeywordsTab } from './tabs/AgKeywordsTab'
@@ -29,7 +30,7 @@ const TABS = [
 ] as const
 type TabKey = (typeof TABS)[number]['key']
 
-const defaultRange = () => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 29); return { start: s, end: e } }
+const defaultRange = () => lastCompleteDays(30) // AM-16 — complete days, ending yesterday
 
 export function EbayAdGroupDetail({ campaignId, adGroupId }: { campaignId: string; adGroupId: string }) {
   const router = useRouter()
