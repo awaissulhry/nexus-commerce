@@ -96,6 +96,11 @@ export interface WatchVerdict {
   changes: number
   /** A change plan: each step's own verdict, in order. */
   steps?: WatchStepVerdict[]
+  /**
+   * W4-5 — the connection had no nexus.run when it asked: the verdict is judged as if it had (the watch week's
+   * question is what the rule would do), and this says the connection itself could not have run it. Absent otherwise.
+   */
+  scope?: 'no-run-by-rule'
 }
 
 /** Watched changes of one group, and what a person did with them. */

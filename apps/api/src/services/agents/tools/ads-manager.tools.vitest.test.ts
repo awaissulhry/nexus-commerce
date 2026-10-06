@@ -91,7 +91,7 @@ const TIMEOUT = 30_000
 const business = (workspaceId: string) => ({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] })
 const inside = <T>(work: () => Promise<T>, workspaceId = A) => withWorkspace(business(workspaceId), work)
 const EVERYTHING = new Set<string>([...Object.values(F), ...Object.values(FIELDS)])
-const ids = { approver: '', noMoney: '', bOnly: '', ranAuto: '', waiting: '', declined: '', watched: '', bApproval: '', bRun: '' }
+const ids = { approver: '', noMoney: '', bOnly: '', ranAuto: '', waiting: '', declined: '', watched: '', heldWatched: '', bApproval: '', bRun: '' }
 const names = { A: '', B: 'Bravo report business' }
 /** The scheduled run's connection in the watch week: it may read and write, never run by rule (no nexus.run). */
 const WATCH_WEEK = ['nexus.read', 'nexus.write']
@@ -293,7 +293,12 @@ describe('W4-1 — a run, start to finish, on a watch-week connection (no nexus.
     expect(run).toMatchObject({ status: 'done', mode: 'ask', counts: { ranByRule: 1 } })
     expect(run.approvals.find((a: { approvalId: string }) => a.approvalId === ids.waiting)).toMatchObject({ fate: 'expired', whenReported: 'waiting' })
     expect(data.fatesNow).toMatchObject({ ran: 1, expired: 1, declined: 1, waiting: 1 })
-    expect(data.watchWeek).toMatchObject({ comparison: null })
+    // W4-5 — the watch week: the request asked at watch is read back with its verdict (its preview names no entity).
+    expect(data.watchWeek).toMatchObject({
+      label: 'observed, not proof of cause', totalSteps: 1,
+      steps: [{ approvalId: ids.watched, tool: 'bulk-ad-bid-change', verdict: { wouldRun: true, meaning: 'would have run by rule' }, items: [] }],
+      table: [{ action: 'bid', steps: 1, wouldRun: 1 }],
+    })
     // A person without the money permissions reads the same runs without the figures.
     const without = new Set([...EVERYTHING].filter((p) => !p.startsWith('financials.')))
     const plain = ((await dryRun(person(without), 'ads-manager-runs', { days: 7 })).result as { data: Record<string, any> }).data
@@ -466,5 +471,26 @@ describe('W4-1 — the day\'s one e-mail, the bell\'s figures, other businesses'
     expect(runIds).not.toContain(ids.bRun)
     const inB = await inside(() => callTool(person(EVERYTHING, B), 'ads-manager-runs', { days: 30 }), B)
     expect(((inB.visible as { data: { runs: Array<{ runId: string }> } }).data.runs).map((r) => r.runId)).toEqual([ids.bRun])
+  })
+})
+
+describe('W4-5 — a named watched request\'s reason is ad money', { timeout: TIMEOUT }, () => {
+  it('ads-manager-runs: the rule\'s reason (it may state an amount) only for a person who may see the ad money; everyone reads its check', async () => {
+    const reason = 'the new bid EUR 9.87 is above the highest bid EUR 1.00'
+    ids.heldWatched = await approvalOf({ toolName: 'set-target-bid', status: 'pending', ruleVerdict: { wouldRun: false, check: 'limits', why: reason } })
+    // A run two days back that named it at watch (out of today's caps, inside the read's 7 days).
+    const runId = await inside(async () => (await db().agentRun.create({
+      data: {
+        agentKey: ADS_MANAGER_AGENT_KEY, trigger: 'schedule', status: 'done', ok: true, createdAt: new Date(Date.now() - 2 * 86_400_000),
+        output: { v: 1, op: 'finish', approvals: [{ approvalId: ids.heldWatched, listedAs: 'wouldDo', tool: 'set-target-bid', title: null, status: 'pending', fate: 'waiting', byRule: false, watch: { wouldRun: false, why: reason }, mismatch: null }] },
+      },
+    })).id)
+    const named = (who: UserPrincipal) => dryRun(who, 'ads-manager-runs', { days: 7 }).then((read) =>
+      (read.result as { data: Record<string, any> }).data.runs.find((r: { runId: string }) => r.runId === runId).approvals[0])
+    const meaning = 'would have waited for a person — outside the kind\'s limits'
+    expect((await named(person(EVERYTHING))).watch).toEqual({ wouldRun: false, check: 'limits', meaning, ruleWhy: reason })
+    const plain = await named(person(new Set([...EVERYTHING].filter((p) => p !== FIELDS.financialsAdspendView && p !== FIELDS.financialsView))))
+    expect(plain.watch).toEqual({ wouldRun: false, check: 'limits', meaning })
+    expect(JSON.stringify(plain)).not.toContain('9.87')
   })
 })
