@@ -452,6 +452,13 @@ function watchVerdictOf(ap: ApprovalRow): WatchVerdict | null {
   return verdict && typeof verdict.wouldRun === 'boolean' ? (verdict as unknown as WatchVerdict) : null
 }
 
+/** AA-W2-4 — a list row (polled) keeps a plan's verdict without its per-step list; the drawer has every step. */
+function rowVerdict(verdict: WatchVerdict | null, detail: boolean): WatchVerdict | null {
+  if (!verdict?.steps || detail) return verdict
+  const { steps: _steps, ...plan } = verdict
+  return plan
+}
+
 /**
  * AA-W2-4 — why a request waits while its kind is watched: what the rule said when it was asked (recorded, never acted
  * on), and who decides — as at confirm. Without a recorded verdict (asked before the kind was watched) only who decides.
@@ -718,7 +725,7 @@ async function buildRows(
       bulkBlockedWhy,
       needsCode,
       automation,
-      ruleVerdict: watchVerdictOf(ap),
+      ruleVerdict: rowVerdict(watchVerdictOf(ap), !!opts.allItems),
     }
     row.note = noteOf(ap, state, decider, automation, plan)
     built.push({ row, ap, run, tool, resolved, visiblePreview, ctx: joins.targetCtx })

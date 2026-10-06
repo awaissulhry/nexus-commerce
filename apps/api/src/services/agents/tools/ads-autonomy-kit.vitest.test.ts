@@ -25,6 +25,7 @@ import {
   STEP_POINT_LIMITS,
   adKitLimits,
   aloneRefusal,
+  asWatched,
   bidOutsideWhy,
   commonRefusal,
   dailyRefusal,
@@ -37,6 +38,7 @@ import {
   monthRefusal,
   outsideRefusal,
   perEntityRefusal,
+  planDailyRefusal,
   protectedRefusal,
   stepRefusal,
   strategyRefusal,
@@ -205,10 +207,12 @@ describe('the common checks', () => {
   })
 
   it('C2 — the strategy holds this kind below auto at a scope it lands on: refused, naming the row; auto or silent: inside', () => {
-    const held = (level: 'off' | 'ask' | 'confirm' | 'auto') => facts({ scopes: { 'IT|adGroup:g1': scope({ limits: { claudeLevel: level }, sources: { claudeLevel: source('TEST-P1 (IT)', 'product', 4, 'TEST-P1') } }) } })
+    const held = (level: 'off' | 'ask' | 'confirm' | 'watch' | 'auto') => facts({ scopes: { 'IT|adGroup:g1': scope({ limits: { claudeLevel: level }, sources: { claudeLevel: source('TEST-P1 (IT)', 'product', 4, 'TEST-P1') } }) } })
     expect(aloneRefusal(held('ask'))).toBe('the ads strategy lets Claude only ask for bid changes at ad group "Test group" (IT) (ads strategy: TEST-P1 (IT), product, v4, from TEST-P1); a person decides')
     expect(aloneRefusal(held('off'))).toMatch(/^the ads strategy turns bid changes off for Claude at/)
     expect(aloneRefusal(held('confirm'))).toMatch(/go no further than confirm in Claude for bid changes/)
+    // AA-W2-4 — watch never runs alone: the verdict is recorded and a person decides.
+    expect(aloneRefusal(held('watch'))).toMatch(/^the ads strategy only watches bid changes at ad group "Test group" \(IT\)/)
     expect(aloneRefusal(held('auto'))).toBeNull()
     expect(aloneRefusal(facts())).toBeNull() // the strategy says nothing about bids here: it does not narrow
     expect(aloneRefusal({ ...held('ask'), action: null })).toBeNull() // a kind the strategy has no level for
@@ -391,5 +395,38 @@ describe('the note — each limit, its value, this change\'s value and its sourc
     const note = limitsNote(facts({ markets: { IT: market({ strategy: null }) }, unplaced: [{ entity: 'target:x', why: 'target x was not found in this business' }] }))
     expect(note).toContain('IT: no ads strategy — nothing runs alone there.')
     expect(note).toContain('Not placed: target x was not found in this business.')
+  })
+})
+
+describe('AA-W2-4 — the watch level: a plan\'s ad steps together, and a preview as watch judges it', () => {
+  const src = source('Test market (IT)', 'market', 5)
+  const step = (writes: number, today = 0) => ({ limitFacts: facts({
+    thisOver: { writes, byMarket: { IT: { items: writes, writes, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } } },
+    today: { IT: { writes: today, raises: 0, budgetIncreaseCents: 0 } },
+    markets: { IT: market({ maxWritesPerDay: 10, sources: { maxWritesPerDay: src } }) },
+  }) })
+
+  it('a plan: each step alone inside the daily writes, together over them; one step or none with facts: nothing to add', () => {
+    expect(dailyRefusal(step(4, 3).limitFacts)).toBeNull()
+    expect(planDailyRefusal([step(4, 3), step(4, 3)])).toBe('the plan\'s ad steps together — IT: 3 writes ran by rule in the last 24 hours and this adds 8, more than the 10 a day the ads strategy allows (ads strategy: Test market (IT), market, v5); a person decides')
+    expect(planDailyRefusal([step(3, 3), step(4, 3)])).toBeNull()
+    expect(planDailyRefusal([step(9, 3)])).toBeNull()
+    expect(planDailyRefusal([step(6, 3), { summary: 'a price change' }, step(4, 3)])).toMatch(/this adds 10, more than the 10/)
+  })
+
+  it('asWatched: today counts the watched changes that would have run, and a watch the strategy set reads as auto; the input is unchanged', () => {
+    const preview = step(1, 2)
+    const watched = ledgerOf([step(5), step(3)])
+    const judged = asWatched(preview, { watched }) as typeof preview
+    expect(judged.limitFacts.today.IT).toEqual({ writes: 10, raises: 0, budgetIncreaseCents: 0 })
+    expect(dailyRefusal(judged.limitFacts)).toMatch(/^IT: 10 writes ran or would have run by rule in the last 24 hours and this adds 1/)
+    expect(preview.limitFacts.today.IT.writes).toBe(2)
+    // The entities the watched changes touched count toward "changed by rule today".
+    expect(judged.limitFacts.perEntityToday).toEqual({ maxChangesByRule: 2, entity: 'target:t1' })
+    const heldAtWatch = { limitFacts: facts({ scopes: { 'IT|adGroup:g1': scope({ limits: { claudeLevel: 'watch' }, sources: { claudeLevel: src } }) } }) }
+    expect(aloneRefusal(heldAtWatch.limitFacts)).toMatch(/only watches bid changes/)
+    expect(aloneRefusal((asWatched(heldAtWatch, { watched: ledgerOf([]), strategyWatchAsAuto: true }) as typeof heldAtWatch).limitFacts)).toBeNull()
+    expect(aloneRefusal((asWatched(heldAtWatch, { watched: ledgerOf([]) }) as typeof heldAtWatch).limitFacts)).toMatch(/only watches/)
+    expect(asWatched({ summary: 'no facts' }, { watched })).toEqual({ summary: 'no facts' })
   })
 })

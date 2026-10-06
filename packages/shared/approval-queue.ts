@@ -251,7 +251,8 @@ export interface QueueRow {
   automation: QueueAutomation
   /**
    * ADS AUTONOMY AA-W2-4 — asked at `watch`: what the business's rule said when it was asked ("would have run by itself"
-   * or why not). Null or absent on every other request.
+   * or why not). Null or absent on every other request. A plan's per-step verdicts (`steps`) come with the drawer
+   * (`QueueDetail`) only; the polled list keeps the plan's own verdict.
    */
   ruleVerdict?: WatchVerdict | null
 }

@@ -21,6 +21,9 @@
  *            rule a day, engine-owned) and the raise / cut steps (`STEP_PCT_LIMITS`, `STEP_POINT_LIMITS`). A limit that
  *            can add spend defaults to 0: until a person types a number, only lowering changes run alone.
  *   note     `limitsNote`: each limit, its value, this change's value, and where the limit comes from.
+ *   watch    AA-W2-4 — `asWatched`: a stored preview as the watch level judges it (today also counts the watched changes
+ *            that would have run; a watch the strategy set reads as auto when it is what holds the change). And for a
+ *            plan, at auto and at watch alike, `planDailyRefusal`: its ad steps together within the daily limits.
  *
  * Live and sandbox are judged the same. The existing brakes stay in front of every check here: nexus.run, Pause, the
  * business's cap of runs by rule and the write gate (a gate refusal is refused at preview and never queued).
@@ -205,6 +208,8 @@ export interface LimitFacts {
   protectedHit: Array<{ entity: string; why: string }>
   /** For a change that can add spend: each market's month. */
   monthProjection?: Record<string, MonthProjection>
+  /** AA-W2-4 — judged at watch (`asWatched`): "today" also counts the watched changes that would have run by rule. */
+  watchedToday?: true
 }
 
 /**
@@ -492,6 +497,8 @@ const ALLOWS: Record<Exclude<ClaudeTrust, 'auto'>, (what: string) => string> = {
   off: (what) => `turns ${what} off for Claude`,
   ask: (what) => `lets Claude only ask for ${what}`,
   confirm: (what) => `lets Claude go no further than confirm in Claude for ${what}`,
+  // AA-W2-4 — watch never runs alone: the rule's verdict is recorded and a person decides.
+  watch: (what) => `only watches ${what}`,
 }
 
 /** C1 — every entity is placed in a market, and a strategy covers every market it touches. */
@@ -538,6 +545,7 @@ export function engineOwnedRefusal(facts: LimitFacts, limits: Limits): string | 
 
 /** C5 — per market: what ran by rule today and this change, within Claude's daily limits in the strategy. */
 export function dailyRefusal(facts: LimitFacts): string | null {
+  const ran = facts.watchedToday ? 'ran or would have run by rule' : 'ran by rule'
   for (const market of facts.this.markets) {
     const mine = facts.this.byMarket[market]
     const today = facts.today[market] ?? { writes: 0, raises: 0, budgetIncreaseCents: 0 }
@@ -545,22 +553,76 @@ export function dailyRefusal(facts: LimitFacts): string | null {
     if (!mine || !m) continue
     const from = (key: keyof MarketFacts['sources']) => (m.sources[key] ? ` (${strategyWords(m.sources[key]!)})` : '')
     if (m.maxWritesPerDay != null && today.writes + mine.writes > m.maxWritesPerDay) {
-      return `${market}: ${plural(today.writes, 'write')} ran by rule in the last 24 hours and this adds ${mine.writes}, more than the ${m.maxWritesPerDay} a day the ads strategy allows${from('maxWritesPerDay')}; ${A_PERSON}`
+      return `${market}: ${plural(today.writes, 'write')} ${ran} in the last 24 hours and this adds ${mine.writes}, more than the ${m.maxWritesPerDay} a day the ads strategy allows${from('maxWritesPerDay')}; ${A_PERSON}`
     }
     if (mine.raises > 0) {
       if (m.maxRaisesPerDay == null) return `${market}: the ads strategy sets no number of raises Claude may run by rule in a day, so a raise waits for a person`
       if (today.raises + mine.raises > m.maxRaisesPerDay) {
-        return `${market}: ${plural(today.raises, 'raise')} ran by rule in the last 24 hours and this adds ${mine.raises}, more than the ${m.maxRaisesPerDay} a day the ads strategy allows${from('maxRaisesPerDay')}; ${A_PERSON}`
+        return `${market}: ${plural(today.raises, 'raise')} ${ran} in the last 24 hours and this adds ${mine.raises}, more than the ${m.maxRaisesPerDay} a day the ads strategy allows${from('maxRaisesPerDay')}; ${A_PERSON}`
       }
     }
     if (mine.budgetIncreaseCents > 0) {
       if (m.maxBudgetIncreasePerDayCents == null) return `${market}: the ads strategy sets no daily budget increase Claude may run by rule, so a budget increase waits for a person`
       if (today.budgetIncreaseCents + mine.budgetIncreaseCents > m.maxBudgetIncreasePerDayCents) {
-        return `${market}: budgets rose ${amountLabel(today.budgetIncreaseCents, m.currency)} by rule in the last 24 hours and this adds ${amountLabel(mine.budgetIncreaseCents, m.currency)}, more than the ${amountLabel(m.maxBudgetIncreasePerDayCents, m.currency)} a day the ads strategy allows${from('maxBudgetIncreasePerDayCents')}; ${A_PERSON}`
+        return `${market}: budgets rose ${amountLabel(today.budgetIncreaseCents, m.currency)} ${facts.watchedToday ? 'by rule (or would have, watched)' : 'by rule'} in the last 24 hours and this adds ${amountLabel(mine.budgetIncreaseCents, m.currency)}, more than the ${amountLabel(m.maxBudgetIncreasePerDayCents, m.currency)} a day the ads strategy allows${from('maxBudgetIncreasePerDayCents')}; ${A_PERSON}`
       }
     }
   }
   return null
+}
+
+/**
+ * AA-W2-4 — the ad steps of ONE change plan together, per market, within Claude's daily limits in the strategy: what ran
+ * by rule today (each step's stored `today`: one plan's steps are dry-run together, so the largest is taken) and every
+ * step's own counts, summed (`ledgerOf`). Each step alone passed `dailyRefusal`; together they may not. Null for a plan
+ * with fewer than two steps that carry limit facts. Pure.
+ */
+export function planDailyRefusal(previews: readonly unknown[]): string | null {
+  const all = previews.map(limitFactsOf).filter((facts): facts is LimitFacts => !!facts)
+  if (all.length < 2) return null
+  const together = ledgerOf(previews)
+  const markets: Record<string, MarketFacts> = {}
+  const today: Record<string, DayCounts> = {}
+  for (const facts of all) {
+    for (const market of facts.this.markets) {
+      markets[market] ??= facts.markets[market]
+      const day = facts.today[market]
+      const kept = today[market]
+      if (day && (!kept || day.writes + day.raises > kept.writes + kept.raises)) today[market] = day
+    }
+  }
+  const counts = Object.fromEntries(Object.entries(together.byMarket).map(([market, day]) => [market, { ...day, items: 0, addedDailyCents: 0 }]))
+  const watchedToday = all.some((facts) => facts.watchedToday) ? { watchedToday: true } : {}
+  const refusal = dailyRefusal({ this: { markets: Object.keys(together.byMarket), byMarket: counts }, today, markets, ...watchedToday } as unknown as LimitFacts)
+  return refusal ? `the plan's ad steps together — ${refusal}` : null
+}
+
+/**
+ * AA-W2-4 — a stored preview as the watch level judges it, as if the kinds it watches were at auto: "today" (per market,
+ * and per entity) also counts the watched changes the rule would have run (`watched`, their ledger), and — when the
+ * ads strategy is what holds this change at watch (`strategyWatchAsAuto`) — the strategy's watch reads as auto, so the
+ * verdict says what would happen once it is raised. The per-entity count is a floor: the facts name the runs of one
+ * entity only. Pure; the preview itself is not changed, and one without limit facts comes back as it is.
+ */
+export function asWatched(preview: unknown, opts: { watched: RuleRunLedger; strategyWatchAsAuto?: boolean }): unknown {
+  const facts = limitFactsOf(preview)
+  if (!facts || (!opts.watched.runs && !opts.strategyWatchAsAuto)) return preview
+  const today = { ...facts.today }
+  for (const market of facts.this.markets) {
+    const add = opts.watched.byMarket[market]
+    if (!add) continue
+    const day = today[market] ?? { writes: 0, raises: 0, budgetIncreaseCents: 0 }
+    today[market] = { writes: day.writes + add.writes, raises: day.raises + add.raises, budgetIncreaseCents: day.budgetIncreaseCents + add.budgetIncreaseCents }
+  }
+  let { maxChangesByRule, entity } = facts.perEntityToday
+  for (const key of facts.this.entities ?? []) {
+    const runs = (opts.watched.byEntity[key] ?? 0) + (key === facts.perEntityToday.entity ? facts.perEntityToday.maxChangesByRule : 0)
+    if (runs > maxChangesByRule) ({ maxChangesByRule, entity } = { maxChangesByRule: runs, entity: key })
+  }
+  const scopes = opts.strategyWatchAsAuto
+    ? Object.fromEntries(Object.entries(facts.scopes).map(([key, scope]) => [key, scope.limits.claudeLevel === 'watch' ? { ...scope, limits: { ...scope.limits, claudeLevel: 'auto' as const } } : scope]))
+    : facts.scopes
+  return { ...(preview as Record<string, unknown>), limitFacts: { ...facts, today, perEntityToday: { maxChangesByRule, entity }, scopes, ...(opts.watched.runs ? { watchedToday: true as const } : {}) } }
 }
 
 /** C6 — Claude changed none of its entities by rule as often as the tool's limits allow in 24 hours (no back and forth). */
@@ -570,7 +632,8 @@ export function perEntityRefusal(facts: LimitFacts, limits: Limits): string | nu
   if (maxChangesByRule < max) return null
   if (max === 0) return `this tool's limits let no entity be changed by rule (maxChangesPerEntityPerDay 0); ${A_PERSON}`
   const label = (entity && facts.labels[entity]) || 'an item'
-  return `Claude already changed ${label} ${plural(maxChangesByRule, 'time')} by rule in the last 24 hours, and this tool's limits allow ${max} a day; ${A_PERSON}`
+  const by = facts.watchedToday ? 'by rule (or would have, watched)' : 'by rule'
+  return `Claude already changed ${label} ${plural(maxChangesByRule, 'time')} ${by} in the last 24 hours, and this tool's limits allow ${max} a day; ${A_PERSON}`
 }
 
 /** C7 — items in this request: at most the tool's limit and each market's most actions per run in the strategy. */

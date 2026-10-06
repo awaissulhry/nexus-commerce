@@ -320,6 +320,7 @@ async function inWords(
       ...(note && !approval ? { note } : {}),
     }
     if (approval) {
+      const verdict = verdictOf(approval.ruleVerdict)
       row.approval = {
         id: approval.id,
         tool: approval.toolName,
@@ -331,7 +332,7 @@ async function inWords(
         runsAt: iso(approval.executeAfter),
         expiresAt: iso(approval.expiresAt),
         note: approval.reason,
-        ...(verdictOf(approval.ruleVerdict) ? { ruleVerdict: verdictOf(approval.ruleVerdict)! } : {}),
+        ...(verdict ? { ruleVerdict: verdict } : {}),
       }
       if (change) {
         row.change = {

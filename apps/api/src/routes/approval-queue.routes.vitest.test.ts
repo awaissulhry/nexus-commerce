@@ -423,7 +423,11 @@ describe('AA-W2-4 — a request asked at watch: its recorded verdict, and why it
       expect(before.ruleVerdict).toBeNull()
       expect(before.automation.whyWaits).toBe('Your rule for Set master price: Watch. The person who asked can confirm it in Claude with their code, or you approve it here')
       const watchedPlan = await rowOf('all', 'watchPlan')
-      expect(watchedPlan).toMatchObject({ ruleVerdict: plan, automation: { level: 'watch', whyWaits: 'Watching this plan: your rules would have run it by itself. The person who asked can confirm it in Claude with their code, or you approve it here' } })
+      const { steps, ...planOnly } = plan
+      expect(watchedPlan).toMatchObject({ ruleVerdict: planOnly, automation: { level: 'watch', whyWaits: 'Watching this plan: your rules would have run it by itself. The person who asked can confirm it in Claude with their code, or you approve it here' } })
+      // The polled list keeps the plan's own verdict; the drawer has every step.
+      expect(watchedPlan.ruleVerdict).not.toHaveProperty('steps')
+      expect((await get('all', `/agent/fleet/approvals/queue/${ids.watchPlan}`)).json()).toMatchObject({ ruleVerdict: { ...planOnly, steps } })
       // Not asked at watch: no verdict on the row.
       expect((await rowOf('all', 'priceOk')).ruleVerdict).toBeNull()
       // The drawer carries it too.

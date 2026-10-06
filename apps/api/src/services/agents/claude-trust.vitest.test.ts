@@ -52,6 +52,7 @@ import { runToolForClaude } from '../mcp/mcp-tool-call.js'
 import { getTool } from './tool-registry.js'
 import { z } from 'zod'
 import type { AgentTool } from './tool-types.js'
+import { dailyRefusal, LIMIT_FACTS_VERSION, limitFactsOf } from './tools/ads-autonomy-kit.js'
 import {
   AUTO_PAUSE_FAILURES,
   limitsTighten,
@@ -539,5 +540,67 @@ describe('AA-W2-4 — watch: the full check auto would make, recorded on the req
     expect(inB.answer).toMatchObject({ business: { id: B }, status: 'waiting_for_approval' })
     expect(inB.answer).not.toHaveProperty('trust')
     expect(await verdictOf(inB.answer.approvalId, B)).toBeNull()
+  })
+})
+
+describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched changes that would have run; a plan\'s ad steps count together', { timeout: TIMEOUT }, () => {
+  // set-price stands in for a strategy-bound ad tool: its preview carries the kit's limit facts (2 writes in IT; the
+  // strategy allows 5 a day) and its limits add the kit's daily check. No ad tool carries facts before AA-W2-6.
+  const facts = () => ({
+    v: LIMIT_FACTS_VERSION, tool: 'set-price', action: 'bid',
+    markets: { IT: { strategy: { version: 'test' }, currency: 'EUR', maxActionsPerRun: null, maxWritesPerDay: 5, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} } },
+    scopes: {}, entityScopes: {}, labels: {},
+    this: { markets: ['IT'], items: 2, writes: 2, raises: 0, cuts: 2, largestRaisePct: 0, largestCutPct: 1, largestRaisePoints: 0, largestCutPoints: 0, highestNewBidCents: null, budgetIncreaseCents: 0, byMarket: { IT: { items: 2, writes: 2, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } }, entities: [], rowsOutsideStrategy: 0, firstOutside: null },
+    today: { IT: { writes: 0, raises: 0, budgetIncreaseCents: 0 } },
+    perEntityToday: { maxChangesByRule: 0, entity: null }, unplaced: [], engineOwned: [], protectedHit: [],
+  })
+  async function asStrategyBound<T>(work: () => Promise<T>): Promise<T> {
+    const tool = getTool('set-price')!
+    const original = { handler: tool.handler, withinLimits: tool.withinLimits! }
+    tool.handler = async (args, ctx) => {
+      const out = await original.handler(args, ctx)
+      return out.ok ? { ...out, preview: { ...(out.preview as object), limitFacts: facts() } } : out
+    }
+    tool.withinLimits = (preview, limits) => original.withinLimits(preview, limits) ?? dailyRefusal(limitFactsOf(preview)!)
+    try {
+      return await work()
+    } finally {
+      Object.assign(tool, original)
+    }
+  }
+  const nextPrice = async () => (await priceOf(ids.productA)) + 1
+  const step = async () => ({ tool: 'set-price', args: { productId: ids.productA, price: await nextPrice() } })
+
+  it('watch: the second day\'s worth is outside; a plan whose steps pass alone but not together is outside, step by step', async () => {
+    await asStrategyBound(async () => {
+      await setLevel('set-price', 'watch')
+      const first = await call('set-price', { productId: ids.productA, price: await nextPrice() })
+      expect(first.answer.trust.watch).toMatchObject({ wouldRun: true })
+      // Each step alone: 2 watched + 2 ≤ 5; together: 2 + 4 > 5.
+      const plan = await call('submit-change-plan', { title: 'Two bid steps', steps: [await step(), await step()] })
+      expect(plan.answer.trust.watch).toEqual({
+        wouldRun: false, check: 'limits', steps: { total: 2, wouldRun: 0 },
+        why: 'the plan\'s ad steps together — IT: 2 writes ran or would have run by rule in the last 24 hours and this adds 4, more than the 5 a day the ads strategy allows; a person decides',
+      })
+      expect((await approvalOf(plan.answer.approvalId)).ruleVerdict).toMatchObject({ steps: [{ wouldRun: false, check: 'limits' }, { wouldRun: false, check: 'limits' }] })
+      // The plan would not have run, so it adds nothing; the next single change still fits, the one after does not.
+      expect((await call('set-price', { productId: ids.productA, price: await nextPrice() })).answer.trust.watch).toMatchObject({ wouldRun: true })
+      const third = await call('set-price', { productId: ids.productA, price: await nextPrice() })
+      expect(third.answer.trust.watch).toEqual({ wouldRun: false, check: 'limits', why: 'IT: 4 writes ran or would have run by rule in the last 24 hours and this adds 2, more than the 5 a day the ads strategy allows; a person decides' })
+    })
+  })
+
+  it('auto: a plan whose ad steps pass alone but not together waits for a person, and Claude is told why', async () => {
+    await asStrategyBound(async () => {
+      await setLevel('set-price', 'auto')
+      const plan = await call('submit-change-plan', { title: 'Three bid steps', steps: [await step(), await step(), await step()] })
+      expect(plan.answer).toMatchObject({
+        status: 'waiting_for_approval',
+        trust: { level: 'auto', why: 'the plan\'s ad steps together — IT: 0 writes ran by rule in the last 24 hours and this adds 6, more than the 5 a day the ads strategy allows; a person decides' },
+      })
+      expect(await approvalOf(plan.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, ruleVerdict: null })
+      const two = await call('submit-change-plan', { title: 'Two bid steps', steps: [await step(), await step()] })
+      expect(two.answer.status).toBe('runs_by_rule')
+    })
   })
 })
