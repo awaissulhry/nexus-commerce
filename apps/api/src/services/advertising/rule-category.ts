@@ -32,7 +32,7 @@ export const RULE_CATEGORY_META: Record<RuleCategory, { label: string; color: st
 const NON_WRITING_ACTIONS = new Set(['notify', 'alert_operator', 'log_only'])
 
 const CATEGORY_ACTIONS: Array<[RuleCategory, string[]]> = [
-  ['negative', ['harvest_and_negate', 'add_negative_exact', 'add_negative_phrase', 'sync_negatives_across_campaigns', 'archive_keyword']],
+  ['negative', ['harvest_and_negate', 'add_negative_exact', 'add_negative_phrase', 'sync_negatives_across_campaigns', 'isolate_product_terms', 'archive_keyword']],
   ['harvest', ['promote_to_exact']],
   ['budget', ['adjust_ad_budget', 'budget_apply', 'shift_budget']],
   // RA.2 — `refresh_dayparting` rewrites the dayparting plan the engine turns into

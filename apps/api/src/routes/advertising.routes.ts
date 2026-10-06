@@ -6892,10 +6892,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     return getFunnelState(q.productId)
   })
   fastify.post('/advertising/funnel/cross-match', async (request, reply) => {
-    const b = (request.body ?? {}) as { productId?: string; apply?: boolean; userId?: string }
-    if (!b.productId) { reply.status(400); return { error: 'productId required' } }
+    // PB-7 — one product's playbook in ONE market (the Owner's rule 3), written as the signed-in person: the market is
+    // required and the actor is never taken from the body.
+    const b = (request.body ?? {}) as { productId?: string; apply?: boolean; market?: string; marketplace?: string }
+    const market = (b.market ?? b.marketplace)?.trim()
+    if (!b.productId || !market) { reply.status(400); return { error: 'productId and market required: isolation keeps one product\'s own campaigns apart in one market' } }
     const { crossMatchNegations } = await import('../services/advertising/ads-keyword-funnel.service.js')
-    try { return await crossMatchNegations(b.productId, b.apply === true, b.userId) } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    try {
+      const out = await crossMatchNegations(b.productId, b.apply === true, personActor(request), market)
+      if ('refused' in out) { reply.status(409); return { error: out.refused } }
+      return out
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   fastify.post('/advertising/funnel/launch', async (request, reply) => {
     const b = (request.body ?? {}) as { productId?: string; marketplace?: string; dailyBudgetEur?: number; defaultBidEur?: number; keywords?: string[]; userId?: string }

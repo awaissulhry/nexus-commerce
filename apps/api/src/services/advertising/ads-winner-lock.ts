@@ -83,6 +83,15 @@ function containsInOrder(outer: readonly string[], inner: readonly string[]): bo
   return false
 }
 
+/**
+ * Pure — would this negative block a search for `term`? An exact negative blocks the same words; a phrase negative
+ * every search whose words hold its words, next to each other and in order.
+ */
+export function negativeBlocksTerm(neg: { text: string; match: 'EXACT' | 'PHRASE' }, term: string): boolean {
+  if (neg.match === 'EXACT') return !!normaliseNegTerm(neg.text) && normaliseNegTerm(neg.text) === normaliseNegTerm(term)
+  return containsInOrder(words(term), words(neg.text))
+}
+
 /** Pure — the positive a negative would block in the same ad group (L1), or null. */
 export function blockedPositive(neg: { text: string; match: NegativeMatch }, positives: readonly Positive[]): Positive | null {
   if (neg.match === 'PRODUCT') {
@@ -140,4 +149,36 @@ export async function sameProductHome(query: string, destAdGroupId: string, mark
   const home = homeOf(query, [...(await positivesIn(inMarket.map((g) => g.id))).values()].flat())
   const where = home ? inMarket.find((g) => g.id === home.adGroupId) : null
   return where ? { campaign: where.campaign?.name ?? '?', adGroup: where.name } : null
+}
+
+/**
+ * PB-7 (the Owner's rule 3) — the ad groups that advertise ONLY this product family, and the others with the reason.
+ * An ad group that also advertises another product is never kept apart: two products may buy the same keyword, and a
+ * negative there would stop the other one too. Fails closed: a product ad Nexus cannot place in the family (no product
+ * and an ASIN no family member has) counts as another product's; an ad group with no product ad advertises nothing of
+ * this product.
+ */
+export async function familyOnly(adGroupIds: readonly string[], familyProductIds: readonly string[]): Promise<{ ok: string[]; excluded: Array<{ adGroupId: string; why: string }> }> {
+  const ids = [...new Set(adGroupIds.filter(Boolean))]
+  if (!ids.length) return { ok: [], excluded: [] }
+  const family = new Set(familyProductIds)
+  const [ads, members] = await Promise.all([
+    prisma.adProductAd.findMany({ where: { adGroupId: { in: ids }, status: { not: 'ARCHIVED' } }, select: { adGroupId: true, productId: true, asin: true, sku: true, product: { select: { sku: true } } } }),
+    family.size ? prisma.product.findMany({ where: { id: { in: [...family] } }, select: { amazonAsin: true } }) : Promise.resolve([]),
+  ])
+  const asins = new Set(members.map((m) => m.amazonAsin?.trim()).filter((a): a is string => !!a).map(asinOf))
+  const byGroup = new Map<string, typeof ads>()
+  for (const a of ads) byGroup.set(a.adGroupId, [...(byGroup.get(a.adGroupId) ?? []), a])
+  const ok: string[] = []
+  const excluded: Array<{ adGroupId: string; why: string }> = []
+  for (const id of ids) {
+    const list = byGroup.get(id) ?? []
+    if (!list.length) { excluded.push({ adGroupId: id, why: 'it advertises no product, so nothing of this product runs there' }); continue }
+    const foreign = list.find((a) => (a.productId ? !family.has(a.productId) : !(a.asin && asins.has(asinOf(a.asin)))))
+    if (foreign) {
+      const name = foreign.product?.sku ?? foreign.sku ?? foreign.asin ?? 'a product Nexus cannot name'
+      excluded.push({ adGroupId: id, why: `it also advertises ${name}, which is not this product: a campaign that advertises another product is never kept apart (two products may buy the same keyword)` })
+    } else ok.push(id)
+  }
+  return { ok, excluded }
 }

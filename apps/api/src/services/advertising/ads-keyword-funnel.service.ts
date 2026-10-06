@@ -10,15 +10,19 @@
  * cannibalising each other — every Exact keyword becomes a negative-exact in the
  * Phrase / Broad / Auto ad groups, and every Phrase keyword a negative-phrase in
  * the Broad / Auto ad groups. Traffic flows to the most specific match that owns
- * the term (exactly the operator's ask).
+ * the term (exactly the operator's ask). PB-7: inside ONE product's playbook
+ * campaigns in one market only (crossMatchNegations below).
  *
  * State (AME.17): per-keyword journey across match types for the funnel UI.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { createCampaignLocal, createAdGroupLocal, createProductAdLocal, createKeywordLocal } from './ads-create.service.js'
-import { createNegative } from './ads-negative-kw.service.js'
-import type { AdsRegion } from './ads-api-client.js'
+import { PRODUCT_NOT_FOUND } from '../agents/tools/live-product.js'
+import { findLiveProduct } from './ads-strategy/load.js'
+import { strategyMarketOf } from './ads-strategy/terms.js'
+import { compileIsolationFor, isolateProduct } from './ads-playbook/isolation-run.js'
+import type { ScopeGroup } from './ads-playbook/isolation.js'
 
 type MatchRole = 'AUTO' | 'BROAD' | 'PHRASE' | 'EXACT'
 
@@ -82,68 +86,60 @@ export async function gatherProductAdGroups(productId: string) {
 
 export interface NegationProposal { keywordText: string; matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'; adGroupId: string; adGroupName: string; role: MatchRole; reason: string }
 
-/** Cross-match negation plan (AME.16). Returns proposals; apply=true writes them. */
-export async function crossMatchNegations(productId: string, apply = false, userId?: string): Promise<{ proposals: NegationProposal[]; applied: number; errors: string[] }> {
-  const adGroups = await gatherProductAdGroups(productId)
-  const classified = adGroups.map((ag) => ({ ag, role: roleOf(ag.name, ag.targets) }))
+/** The match role a playbook slot plays here: its own, never read from a name. */
+const SLOT_ROLE = (g: ScopeGroup | undefined): MatchRole => (g?.role === 'exact' ? 'EXACT' : g?.match === 'PHRASE' ? 'PHRASE' : g?.match === 'BROAD' ? 'BROAD' : 'AUTO')
 
-  const exactKws = new Set<string>()
-  const phraseKws = new Set<string>()
-  for (const { ag, role } of classified) {
-    for (const t of ag.targets) {
-      if (t.isNegative) continue
-      const v = t.expressionValue.toLowerCase()
-      const et = t.expressionType.toUpperCase()
-      if (et === 'EXACT' || role === 'EXACT') exactKws.add(v)
-      if (et === 'PHRASE' || role === 'PHRASE') phraseKws.add(v)
-    }
+/**
+ * Cross-match negation plan (AME.16). Returns proposals; apply=true writes them.
+ *
+ * PB-7 (the Owner's rule 3) — a thin caller of the playbook's isolation (ads-playbook/isolation-run.ts), the one
+ * planner and writer. The walk it replaces crossed products (every ad group holding one of the product's ads, campaigns
+ * that also advertise other products included) and markets, counted paused, archived and product targets as owners,
+ * read each ad group's role from its name, wrote through the push-only call with no Nexus row and counted a refusal as
+ * applied. Now: one market; only a product enrolled in a playbook there (refused by name otherwise); the playbook's
+ * slots, the planner's checks and the write service; `applied` = what reached Amazon.
+ */
+export async function crossMatchNegations(productId: string, apply: boolean, actor: string, market: string): Promise<{
+  proposals: NegationProposal[]; applied: number; errors: string[]; local: number; alreadyStanding: number
+  leftAlone: Array<{ text: string; adGroupId: string | null; why: string }>; excluded: Array<{ slot: string; campaignId: string; adGroupId: string | null; why: string }>
+} | { refused: string }> {
+  const code = strategyMarketOf(market)
+  if (!code) return { refused: 'Name the market: isolation keeps one product\'s campaigns apart in one market.' }
+  const product = await findLiveProduct({ productId })
+  if (!product) return { refused: PRODUCT_NOT_FOUND }
+  const rows = await prisma.adsPlaybook.findMany({
+    where: { channel: 'AMAZON', market: code, level: 'PRODUCT', scopeId: { in: [product.id, ...(product.parentId ? [product.parentId] : [])] } },
+    select: { id: true, scopeId: true, enrolled: true },
+  })
+  const own = rows.find((r) => r.scopeId === product.id)
+  const parent = rows.find((r) => r.scopeId === product.parentId)
+  if ((own?.enrolled ?? parent?.enrolled) !== true) {
+    return { refused: `${product.sku} is not in an ads playbook in ${code}. Isolation keeps one product's own playbook campaigns apart and nothing else, so nothing is planned.` }
   }
-  const existingNeg = new Map<string, Set<string>>()
-  for (const ag of adGroups) {
-    const s = new Set<string>()
-    for (const t of ag.targets) if (t.isNegative) s.add(`${t.expressionType.toUpperCase()}:${t.expressionValue.toLowerCase()}`)
-    existingNeg.set(ag.id, s)
+  const links = await prisma.adsPlaybookLink.findMany({ where: { playbookId: { in: rows.map((r) => r.id) }, kind: 'slot' }, select: { playbookId: true } })
+  const row = [own, parent].find((r) => r && links.some((l) => l.playbookId === r.id))
+  if (!row) return { refused: `${product.sku}'s playbook in ${code} holds no campaign yet: there is nothing to keep apart.` }
+  const compiled = await compileIsolationFor(row.id)
+  if ('problems' in compiled) return { refused: compiled.problems.join('; ') }
+  if (compiled.compiled.problems.length) return { refused: compiled.compiled.problems.join('; ') }
+  const run = await isolateProduct({ action: compiled.compiled.action, actor, dryRun: !apply })
+  if ('refused' in run) return run
+  const groupOf = new Map(run.scope.groups.map((g) => [g.adGroupId, g]))
+  const proposals = run.chosen.map((a): NegationProposal => ({
+    keywordText: a.text, matchType: a.match === 'PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT', adGroupId: a.adGroupId,
+    adGroupName: groupOf.get(a.adGroupId)?.name ?? a.slot, role: SLOT_ROLE(groupOf.get(a.adGroupId)), reason: a.why,
+  }))
+  const w = run.written
+  if (w) logger.info('[AME.16] cross-match negations applied', { productId, market: code, added: w.added, local: w.local, refused: w.refused.length, failed: w.failed.length })
+  return {
+    proposals,
+    applied: w?.added ?? 0,
+    errors: w ? [...w.refused.map((r) => `${r.text}: ${r.reason}`), ...w.failed.map((f) => `${f.text}: ${f.error}`)] : [],
+    local: w?.local ?? 0,
+    alreadyStanding: (w?.alreadyStanding ?? 0) + run.plan.alreadyStanding,
+    leftAlone: [...(w?.leftAlone ?? []), ...run.plan.leftAlone].map((l) => ({ text: l.text, adGroupId: l.adGroupId, why: l.why })),
+    excluded: run.scope.excluded,
   }
-
-  const proposals: NegationProposal[] = []
-  for (const { ag, role } of classified) {
-    if (!role) continue
-    const neg = existingNeg.get(ag.id)!
-    if (role !== 'EXACT') for (const kw of exactKws) {
-      if (!neg.has(`NEGATIVE_EXACT:${kw}`)) proposals.push({ keywordText: kw, matchType: 'NEGATIVE_EXACT', adGroupId: ag.id, adGroupName: ag.name, role, reason: `Exact keyword owned by the Exact ad group — negate in ${role}` })
-    }
-    if (role === 'AUTO' || role === 'BROAD') for (const kw of phraseKws) {
-      if (!neg.has(`NEGATIVE_PHRASE:${kw}`)) proposals.push({ keywordText: kw, matchType: 'NEGATIVE_PHRASE', adGroupId: ag.id, adGroupName: ag.name, role, reason: `Phrase keyword owned by the Phrase ad group — negate in ${role}` })
-    }
-  }
-
-  let applied = 0
-  const errors: string[] = []
-  if (apply && proposals.length) {
-    const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true, profileId: true, region: true } })
-    const connByMkt = new Map(conns.map((c) => [c.marketplace, c]))
-    const agById = new Map(adGroups.map((a) => [a.id, a]))
-    for (const p of proposals) {
-      const ag = agById.get(p.adGroupId)
-      const mkt = ag?.campaign?.marketplace
-      const conn = mkt ? connByMkt.get(mkt) : undefined
-      if (!ag?.externalAdGroupId || !ag.campaign?.externalCampaignId || !conn || !mkt) {
-        errors.push(`${p.keywordText}@${p.adGroupName}: not yet synced to Amazon (no external id)`) ; continue
-      }
-      try {
-        await createNegative({
-          profileId: conn.profileId,
-          region: (conn.region === 'NA' || conn.region === 'FE' ? conn.region : 'EU') as AdsRegion,
-          externalCampaignId: ag.campaign.externalCampaignId,
-          externalAdGroupId: ag.externalAdGroupId,
-          keywordText: p.keywordText, matchType: p.matchType, scope: 'AD_GROUP', marketplace: mkt,
-        })
-        applied += 1
-      } catch (e) { errors.push(`${p.keywordText}@${p.adGroupName}: ${(e as Error).message}`) }
-    }
-    logger.info('[AME.16] cross-match negations applied', { productId, applied, errors: errors.length })
-  }
-  return { proposals, applied, errors }
 }
 
 /** Per-keyword funnel journey across match types + ad-group breakdown (AME.17). */

@@ -90,6 +90,8 @@ const STRUCTURAL_ACTIONS = new Set([
   'add_negative_phrase',
   'sync_negatives_across_campaigns',
   'harvest_and_negate',
+  // PB-7 — a playbook's isolation negatives: one product's own campaigns only, still negatives (PROPOSE).
+  'isolate_product_terms',
   'archive_keyword',
   'pause_campaign',
   'pause_ad_group',
@@ -144,7 +146,7 @@ export function graduationCeiling(input: GraduationInput): GraduationVerdict {
     // The negation family is the one case with a precondition rather than a hard ceiling:
     // negating is reversible IF the terms you must never negate are written down first.
     const onlyNegations = structural.every((t) =>
-      t === 'harvest_and_negate' || t === 'add_negative_exact' || t === 'add_negative_phrase',
+      t === 'harvest_and_negate' || t === 'add_negative_exact' || t === 'add_negative_phrase' || t === 'isolate_product_terms',
     )
     if (onlyNegations && !input.hasKeywordProtections) {
       return {
