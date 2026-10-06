@@ -221,6 +221,8 @@ const AD_CHANGE_TOOLS = new Set([
   'create-ad-campaign',
   // AA-W2-12/13 — a pause, an enable and an archive: one status write per ad.
   'pause-ads', 'enable-ads', 'archive-ads',
+  // W3-3 — a stock lowering and its give-back: one bid write per bid moved.
+  'lower-ad-bids-for-stock', 'restore-ad-bids-after-stock',
 ])
 
 export interface AdDelivery {

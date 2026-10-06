@@ -66,6 +66,8 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   'pause-ads', 'enable-ads',
   // AA-W2-13 — an archive (irreversible: also on IRREVERSIBLE_AUTO), and a new campaign (D-W2-6: its own kind).
   'archive-ads', 'create-ad-campaign',
+  // W3-3 — giving an ad group's bids back once its stock returns (it adds spend).
+  'restore-ad-bids-after-stock',
 ]
 
 /**
@@ -393,6 +395,15 @@ describe('C1 — every registered tool keeps the contract', () => {
       'enable-ads': { before: { changeSetId: 'ap1', items: [{ level: 'target', id: 't1', status: 'PAUSED' }] }, after: { items: [{ level: 'target', id: 't1', status: 'ENABLED' }] } },
       // AA-W2-13 — a created campaign is put back (in part) by archiving it.
       'create-ad-campaign': { before: { campaignId: null }, after: { campaignId: 'c9', name: 'Test launch', market: 'IT' } },
+      // W3-3 — a stock lowering is undone by a give-back (even while stock is short), a give-back by a lowering.
+      'lower-ad-bids-for-stock': {
+        before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 50, toCents: 40 }] },
+        after: { adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], stepAdGroupIds: ['g2'], steps: [{ kind: 'target', id: 't1', cents: 40 }] },
+      },
+      'restore-ad-bids-after-stock': {
+        before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 40, toCents: 50 }] },
+        after: { adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ kind: 'target', id: 't1', cents: 50 }] },
+      },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },
@@ -452,6 +463,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       'resume-automation': { before: { area: 'amazon-ads', halted: true }, after: { area: 'amazon-ads', halted: false } },
       // R13 — a raised ceiling: undo sets it back.
       'set-ad-guardrail': { before: { kind: 'spend-ceiling', key: { grain: 'MARKET', scopeId: 'IT' }, row: { label: 'Italy', dailyCapCents: 5000, enabled: true, note: null } }, after: { kind: 'spend-ceiling', key: { grain: 'MARKET', scopeId: 'IT' }, row: { label: 'Italy', dailyCapCents: 9000, enabled: true, note: null } } },
+      // Ads autonomy W3-2 — a cancel of all of one Claude request: undo asks for that request again, through its own tool.
+      'cancel-queued-ad-write': {
+        before: { writes: [{ queueId: 'q1', label: 'keyword "test" (campaign "Test")' }], request: { approvalId: 'ap1', tool: 'set-target-bid', args: { targetId: 't1', proposedBidCents: 40, why: 'test' } } },
+        after: { cancelled: ['q1'] },
+      },
       // Ads autonomy W1-3 — a strategy change: undo writes the previous version back (with its terms and campaign targets).
       'set-ads-strategy': {
         before: { channel: 'AMAZON', market: 'IT', level: 'MARKET', scopeId: '*', version: 2, values: { maxBidCents: 150, targetKind: 'ACOS', targetPct: 30, claudeAutonomy: { bid: 'ask' } }, terms: { 'test term': false }, campaignTargets: { c1: 0.25 } },
@@ -484,6 +500,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       },
       // R11 — dismissed suggestions: undo restores them.
       'decide-automation-suggestions': { before: { kind: 'amazon-ads', items: [{ id: 's1', status: 'pending' }] }, after: { kind: 'amazon-ads', items: [{ id: 's1', status: 'dismissed' }] } },
+      // Ads autonomy W3-1 — a mute is put back by an unmute of the same recommendations.
+      'mute-ad-recommendations': { before: { op: 'mute', items: [{ id: 'bid:t1', state: 'shown' }] }, after: { op: 'mute', items: [{ id: 'bid:t1', state: 'muted' }] } },
       // R9 — an edit of a rule: undo saves the rule as it was.
       'save-ad-rule': {
         before: { kind: 'amazon-ads', ruleId: 'r1', name: 'Rule', description: null, trigger: 'KEYWORD_HIGH_ACOS', conditions: [{ field: 'adTarget.acos', op: 'gt', value: 0.6 }], actions: [{ type: 'bid_down', percent: 5 }], scope: { marketplace: 'IT' }, caps: { maxExecutionsPerDay: 5, maxWritesPerDay: 5, maxValueCentsEur: 100, maxDailyAdSpendCentsEur: null } },
