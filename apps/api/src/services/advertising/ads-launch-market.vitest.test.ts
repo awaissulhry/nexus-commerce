@@ -123,8 +123,8 @@ describe('CC-4 — the bid strategy becomes rules the engine runs', () => {
   it('🔴 Max Impressions / Max Orders / Custom create no rule at all (no more set_bid_strategy)', async () => {
     for (const strategy of ['maxImpressions', 'maxOrders', 'custom']) {
       const g = `NoEngine-${strategy}`
-      const res = await app.inject({ method: 'POST', url: SPW, payload: { market: 'DE', productGroupName: g, campaigns: spwCampaigns(g), automationMode: 'rule', bidConfig: { strategy, targetAcos: '30' } } })
-      expect(res.statusCode).toBe(200)
+      const res = await app.inject({ method: 'POST', url: SPW, payload: { market: 'DE', productGroupName: g, products: [{ sku: 'TEST-SKU-W2C' }], campaigns: spwCampaigns(g), automationMode: 'rule', bidConfig: { strategy, targetAcos: '30' } } })
+      expect(res.statusCode, res.payload).toBe(200)
       expect(await rulesNamed(g)).toHaveLength(0)
     }
     const stray = await inside(() => database.client.automationRule.findMany({ where: { description: { contains: 'Bid strategy from' } } }))
@@ -132,8 +132,8 @@ describe('CC-4 — the bid strategy becomes rules the engine runs', () => {
   })
 
   it('🔴 Single, Target ACoS 25 %: one rule for its campaign — 0.25 and the campaignId', async () => {
-    const res = await app.inject({ method: 'POST', url: SINGLE, payload: { market: 'IT', name: 'SingleAcos', budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }], bidConfig: { strategy: 'targetAcos', targetAcos: '25' }, autoBidAdjust: true } })
-    expect(res.statusCode).toBe(200)
+    const res = await app.inject({ method: 'POST', url: SINGLE, payload: { market: 'IT', name: 'SingleAcos', products: [{ sku: 'TEST-SKU-W2C' }], budgetEur: 5, defaultBidEur: 0.5, keywords: [{ text: 'gloves' }], bidConfig: { strategy: 'targetAcos', targetAcos: '25' }, autoBidAdjust: true } })
+    expect(res.statusCode, res.payload).toBe(200)
     const campaignId = JSON.parse(res.payload).campaignId
     const rules = await rulesNamed('SingleAcos — ')
     expect(rules).toHaveLength(1)
