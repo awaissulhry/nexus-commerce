@@ -257,6 +257,8 @@ export async function approveDecision(id: string): Promise<DecideResult> {
     res = await applyPlanActions({
       planId: plan.id, goal: plan.goal as Goal, marketplace: plan.marketplace,
       guardrails, actions: [act], signals,
+      // W0 — a target the plan stores itself is explicit (wins over the campaign's); the merged default is not.
+      planSetsTargetAcos: typeof ((plan.guardrails ?? {}) as Partial<Guardrails>).targetAcosPct === 'number',
     })
   } catch (e) {
     logger.warn('[ai-decisions] approve failed', { id, error: (e as Error).message })

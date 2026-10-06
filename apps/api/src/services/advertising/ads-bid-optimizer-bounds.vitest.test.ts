@@ -10,7 +10,7 @@ import { clampProposalsToRuleBounds, type BidProposal } from './ads-bid-optimize
 
 const p = (targetId: string, currentBidCents: number, proposedBidCents: number): BidProposal => ({
   targetId, expression: targetId, matchType: 'EXACT', currentBidCents, proposedBidCents, deltaCents: proposedBidCents - currentBidCents,
-  acos: 0.5, spendCents: 1000, salesCents: 2000, clicks: 10, reason: 'acos', targetAcosUsed: 0.3, targetBasis: 'flat',
+  acos: 0.5, spendCents: 1000, salesCents: 2000, clicks: 10, reason: 'acos', targetAcosUsed: 0.3, targetBasis: 'flat', targetSource: 'flat',
 })
 
 describe('CC-4 — clampProposalsToRuleBounds', () => {

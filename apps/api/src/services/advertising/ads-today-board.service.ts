@@ -466,8 +466,8 @@ export async function getTodayBoard(): Promise<TodayBoard> {
           ? `${onEstimate} are running on the interim estimate, so their profit figures are shown but labelled — an estimate is not a measurement and never sets a bid target. `
           : '') +
         // 7b — 30% is the Bid optimiser's fallback (ads-bid-optimizer.service.ts), not a setting, and the optimiser is the
-        // one that uses it: say so, and say whether it does anything at all.
-        'Without a real cost there is no break-even, so the Bid optimiser falls back to a flat 30% target ACOS for them — its default when no target can be worked out, not a setting. ' +
+        // one that uses it: say so, and say whether it does anything at all. W0 — a target the Owner set comes first.
+        'Without a real cost there is no break-even, so unless their campaign has its own target ACOS or the account has a default one, the Bid optimiser falls back to a flat 30% target ACOS for them — its default when no target can be worked out, not a setting. ' +
         `${optimiser} ` +
         'Loading costs is an operator action through the product cost grid — no engineering is waiting on it.',
       count: noCost,

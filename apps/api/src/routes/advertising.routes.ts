@@ -934,9 +934,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── CBN.2h.6: Bid Automation + Target ACoS (Ad Manager Bulk Actions) ────
-  // Local automation settings stored in dynamicBidding (NOT pushed to Amazon —
-  // these drive our own bid-optimizer, which reads dynamicBidding.targetAcos).
-  // targetAcos is a fraction (0.3 = 30%), matching the optimizer's read shape.
+  // Local automation settings stored in dynamicBidding (NOT pushed to Amazon).
+  // targetAcos is the campaign's target ACoS, a fraction (0.3 = 30%): our bid
+  // optimiser (auto-bid, autopilot, target-ACoS bid rules) moves this campaign's
+  // bids toward it — after a rule's or plan's own target, ahead of the account
+  // default and profit data — and skips a value outside 0–5 (ads-target-acos-resolver.ts). bidAutomation and
+  // bidAlgorithm are recorded only: no optimiser reads them yet.
   // Same read-modify-write pattern as /cpc-ceiling and /guardrails.
   fastify.patch('/advertising/campaigns/:id/automation', async (request, reply) => {
     const { id } = request.params as { id: string }
@@ -7262,8 +7265,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if ('error' in out) { reply.status(400); return { error: out.error } }
     return getAutomationState()
   })
-  // SG.5 — account default ACoS target (INTEGER percent; null clears). One reader:
-  // bid_apply's targetAcos ops, as fallback when the rule carries no target.
+  // SG.5 — account default ACoS target (INTEGER percent; null clears). Two readers:
+  // the bid optimiser, for every campaign without a target of its own and no
+  // rule or plan target (W0, ads-target-acos-resolver.ts), and bid_apply's
+  // targetAcos ops, as fallback when the rule carries no target.
   fastify.post('/advertising/automation/default-target-acos', async (request, reply) => {
     const b = (request.body ?? {}) as { pct?: number | null }
     if (b.pct !== null && (!Number.isFinite(b.pct) || (b.pct as number) < 1 || (b.pct as number) > 500 || !Number.isInteger(b.pct))) {
