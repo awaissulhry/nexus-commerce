@@ -31,7 +31,7 @@ const SD_CARD: TypeCard = { key: 'sd', title: 'Sponsored Display', Icon: IconDis
 const SB_CARD: TypeCard = { key: 'sb', title: 'Sponsored Brands', Icon: IconBanner, bestFor: 'Brand-registered sellers', desc: 'The headline banner above the organic results — logo, custom headline and up to three products. It is the only format that can occupy the top-of-page banner slot.' }
 // AX3.2 — replication is a way of creating campaigns, so it belongs with the
 // other ways of creating campaigns rather than off in the nav rail.
-const REPLICATE: TypeCard = { key: 'replicate', title: 'Replicate Structure', Icon: IconReplicate, bestFor: 'Sellers launching a product like one they already run', desc: 'Copy a portfolio, a set of campaigns or single ad groups onto another product — keywords, negatives, bids, budgets and placement modifiers included. Rename in bulk, edit anything before it is created, and resolve any keyword that would make your two products bid against each other.' }
+const REPLICATE: TypeCard = { key: 'replicate', title: 'Replicate Structure', Icon: IconReplicate, bestFor: 'Sellers launching a product like one they already run', desc: 'Copy a portfolio, a set of campaigns or single ad groups onto another product — keywords, negatives, bids, budgets and placement modifiers included. Rename in bulk, edit anything before it is created, and resolve any keyword the product already buys in its own campaigns. Your other products may share a keyword: it is listed, never blocked.' }
 
 /** The small Amazon "smile" mark shown in the profile chip. */
 function AmazonMark() {

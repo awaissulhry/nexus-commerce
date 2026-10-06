@@ -79,7 +79,8 @@ export interface ActorRow {
   claude?: { rule: ClaudeRule; watch?: WatchKind; autonomy?: Autonomy }
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+/** A count with its noun, with thousands separators ("10,474 changes"): a busy engine's week must still read at a glance. */
+const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-GB')} ${n === 1 ? one : many}`
 
 /** The rule actions people meet most, in plain words; any other code reads as its words ("bid_to_target_acos" → "Bid to target acos"). */
 const ACTION_WORD: Record<string, string> = {
@@ -177,8 +178,8 @@ export function ruleRow(r: Rule, g: AccountLevel, readiness?: Readiness): ActorR
   // A rule that only alerts (api ads-rule-list.service.ts `writes`) changes nothing, whatever its level.
   const bucket: NowBucket = r.writes === false ? 'quiet' : inForce === 'AUTO' ? 'alone' : inForce === 'PROPOSE' ? 'asks' : 'quiet'
   const week = [
-    `${r.week.acted} acted`,
-    `${r.week.proposed} asked`,
+    `${r.week.acted.toLocaleString('en-GB')} acted`,
+    `${r.week.proposed.toLocaleString('en-GB')} asked`,
     r.week.failed > 0 ? `${r.week.failed} failed` : null,
   ].filter(Boolean).join(' · ')
   const problem = r.week.failed > 0

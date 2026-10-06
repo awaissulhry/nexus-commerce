@@ -70,6 +70,8 @@ export interface WeeklyDigest {
     outboundEnabled: boolean
     /** Plain-language state, so the panel does not have to reimplement the logic. */
     state: 'off' | 'dry-run' | 'live'
+    /** CR — how many addresses a send goes to (NEXUS_ADS_DIGEST_RECIPIENTS); the count only, never the addresses. */
+    recipientCount: number
     explanation: string
   }
   totals: { acted: number; proposed: number; denied: number; applied: number; declined: number; failed: number }
@@ -181,6 +183,13 @@ export function digestWindow(mode: 'current' | 'previous', now = new Date()): { 
   }
 }
 
+/** Recipients, operator-controlled. No default: mailing someone who never asked is worse than
+ *  not mailing at all, and an empty list is a state the panel can show and fix. */
+export function digestRecipients(): string[] {
+  return (process.env.NEXUS_ADS_DIGEST_RECIPIENTS ?? '')
+    .split(',').map((s) => s.trim()).filter(Boolean)
+}
+
 function gateState(): WeeklyDigest['gates'] {
   const cronEnabled = process.env.NEXUS_ENABLE_ADS_REPORT_SCHEDULE_CRON === '1'
   const outboundEnabled = process.env.NEXUS_ENABLE_OUTBOUND_EMAILS === 'true'
@@ -191,6 +200,7 @@ function gateState(): WeeklyDigest['gates'] {
     outboundFlag: 'NEXUS_ENABLE_OUTBOUND_EMAILS',
     outboundEnabled,
     state,
+    recipientCount: digestRecipients().length,
     explanation: !cronEnabled
       ? 'No digest is scheduled. The dispatcher only starts when NEXUS_ENABLE_ADS_REPORT_SCHEDULE_CRON=1, so nothing is sent and nothing is queued — you can still build and read one here at any time.'
       : outboundEnabled

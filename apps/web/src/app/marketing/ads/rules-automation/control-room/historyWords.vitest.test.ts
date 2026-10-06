@@ -10,6 +10,7 @@ import {
   engineCanWords, enginesThatCan, evidenceWords, fieldWords, hourFlags, makersOf, plainNote, plainNotes, ruleLevelWord, schedulesWords,
   spendLimitWords, undoImpact, undoResult, weekTiles, whoMade, zoneWords,
   ALL_MAKERS, type Change, type Digest, type ForesightEngine, type ForesightHour,
+  controlChangeWords,
 } from './historyWords'
 
 const digest = (over: Partial<Digest> = {}): Digest => ({
@@ -240,3 +241,33 @@ describe('CR review — History in honest, plain words', () => {
     expect(accountHoldWords(auto, false)).toBeNull()
   })
 })
+
+describe('CR review — the weekly e-mail says how many people get it', () => {
+  const gates = (over: Partial<Parameters<typeof digestSendImpact>[0]> = {}) => ({
+    cronFlag: 'X', cronEnabled: true, outboundFlag: 'Y', outboundEnabled: true, state: 'live' as const, explanation: '', ...over,
+  })
+  it('a count in the question and the tick; an older API without the count still asks for every recipient', () => {
+    const three = digestSendImpact(gates({ recipientCount: 3 }))
+    expect(three.title).toBe('Send last week’s e-mail to 3 people now?')
+    expect(three.consequences).toContain('It e-mails last week’s ads summary to 3 people on the server’s list, now.')
+    expect(validateImpact(three)).toEqual([])
+    expect(canConfirmAction(three, '', false)).toBe(false)
+    expect(digestSendImpact(gates({ recipientCount: 1 })).title).toBe('Send last week’s e-mail to 1 person now?')
+    expect(digestSendImpact(gates()).title).toBe('Send last week’s e-mail to every recipient now?')
+  })
+  it('no recipients: a plain question, it says nothing is mailed', () => {
+    const none = digestSendImpact(gates({ recipientCount: 0 }))
+    expect(none.consequences).toEqual(['No recipients are set on the server, so nothing is mailed. Nexus says why.'])
+    expect(validateImpact(none)).toEqual([])
+    expect(canConfirmAction(none, '', false)).toBe(true)
+  })
+})
+
+describe('CR review — changes to the controls', () => {
+  it('from → to, or only the new value when the old one was not recorded', () => {
+    expect(controlChangeWords({ from: 'Ask me', to: 'Auto' })).toBe('Ask me → Auto')
+    expect(controlChangeWords({ from: null, to: 'Ask me' })).toBe('now Ask me')
+    expect(controlChangeWords({ from: null, to: null })).toBe('—')
+  })
+})
+

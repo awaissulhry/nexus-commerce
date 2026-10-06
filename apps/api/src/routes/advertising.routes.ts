@@ -852,7 +852,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as { enabled?: boolean }
     const { setLiveWrites } = await import('../services/advertising/campaign-settings.service.js')
-    const r = await setLiveWrites(id, !!b.enabled, actorFromHeaders(request.headers as Record<string, unknown>))
+    // CR — who flipped it: the signed-in person (the web never sends x-actor-id, so it was always "anonymous").
+    const r = await setLiveWrites(id, !!b.enabled, personActor(request as { authUser?: { id?: string }; headers: unknown }))
     if (r.error) { reply.status(r.status ?? 400); return { error: r.error } }
     return r.value
   })
@@ -866,7 +867,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { setLiveWritesBulk } = await import('../services/advertising/campaign-settings.service.js')
     const r = await setLiveWritesBulk(
       { marketplace: b.marketplace, campaignIds: b.campaignIds, enabled: !!b.enabled },
-      actorFromHeaders(request.headers as Record<string, unknown>),
+      personActor(request as { authUser?: { id?: string }; headers: unknown }),
     )
     if (r.error) { reply.status(r.status ?? 400); return { error: r.error } }
     return r.value
@@ -6077,6 +6078,17 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
    * act on; serving a two-minute-old "3 campaigns are not serving" after they fixed it is
    * how a board loses its credibility.
    */
+  /**
+   * CR (Control Room review) — "Changes to the controls": who moved the account level, Stop now, the breaker, a rule's,
+   * an automation's or an engine's level, or a campaign's "Automation may change it", in the last `days` (7). Read-only;
+   * both logs it reads are scoped to the business.
+   */
+  fastify.get('/advertising/control-room/control-changes', async (request) => {
+    const q = request.query as { days?: string; limit?: string }
+    const { listControlChanges } = await import('../services/advertising/ads-control-changes.service.js')
+    return listControlChanges({ days: q.days ? Number(q.days) : undefined, limit: q.limit ? Number(q.limit) : undefined })
+  })
+
   fastify.get('/advertising/control-room/today', async (_request, reply) => {
     const { getTodayBoard } = await import('../services/advertising/ads-today-board.service.js')
     reply.header('Cache-Control', 'no-store')
