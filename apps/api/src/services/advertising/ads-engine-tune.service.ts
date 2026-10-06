@@ -13,8 +13,9 @@
  *   breaker               A3          setGuardThresholds                       the business's ads state
  *
  * Every plan says whether the change can raise spend (part 06 §3: a higher target ACOS, budget, cap or breaker limit, a
- * pool shift, a looser harvest, a lowering window removed…) and why; those are outside tune-ad-engine's limits — a
- * person decides. Switching is not tuning: on / off and levels stay with turn-up / turn-down-automation. Not tunable here,
+ * pool shift, a looser harvest, a lowering window removed…) and why. AA-W2-11 — and by how many percent at most
+ * (`largestRaisePct`): only a raise of one value from a value above 0 has one; tune-ad-engine's limits let such a raise
+ * run by rule up to their `maxRaisePct` (0 by default), and any other raise waits for a person. Switching is not tuning: on / off and levels stay with turn-up / turn-down-automation. Not tunable here,
  * on purpose: dayparting windows (a closed window can hold a campaign paused — never pause), rank targets' pause /
  * lanes / base bid, a pool's on / dry-run flags. 2e — a rank target is tuned by what the hourly bid plan reads: its
  * Placement %, CPC ceiling and Min-bid floor (its goal, ACoS, step, ceiling and keep-climbing fields are not read).
@@ -61,8 +62,13 @@ export interface TunePlan {
   automation: { id: string; name: string }
   subject: { id: string | null; name: string }
   changes: Record<string, { from: unknown; to: unknown }>
-  /** Why this change can raise spend; empty when it cannot. Any reason puts it outside the limits. */
+  /** Why this change can raise spend; empty when it cannot. */
   raises: string[]
+  /**
+   * AA-W2-11 — the largest of those raises in percent of the value before (0: none); null when one of them has no
+   * percent — a cleared cap, a new strategy, a window, a looser harvest, a later breaker: a person decides it.
+   */
+  largestRaisePct: number | null
   spend: 'can-rise' | 'cannot-rise'
   basis: string | null
   effect: string
@@ -87,9 +93,20 @@ interface Spec {
   load(input: TuneInput): Promise<Loaded | string>
   /** The state after the change, or why it is refused. */
   next(loaded: Loaded, values: Values): State | string
-  raises(before: State, after: State, loaded: Loaded): string[]
+  raises(before: State, after: State, loaded: Loaded): Raise[]
   write(loaded: Loaded, before: State, after: State, actorUserId: string | null): Promise<string | null>
   effect(loaded: Loaded): string
+}
+
+/**
+ * AA-W2-11 — one way a change can raise spend: why, and — when it is one value rising from a value above 0 — by how
+ * many percent. A raise with no percent is never inside tune-ad-engine's limits.
+ */
+interface Raise { why: string; pct?: number }
+function raise(why: string, from?: unknown, to?: unknown): Raise {
+  const f = Number(from)
+  const t = Number(to)
+  return from != null && to != null && Number.isFinite(f) && Number.isFinite(t) && f > 0 && t > f ? { why, pct: Math.round(((t - f) / f) * 10_000) / 100 } : { why }
 }
 
 const euro = (cents: unknown) => (cents == null ? 'none' : `€${(Number(cents) / 100).toFixed(2)}`)
@@ -137,11 +154,11 @@ const budgetPool: Spec = {
     return merge(loaded.state, values, POOL_FIELDS)
   },
   raises(b, a) {
-    const out: string[] = []
-    if (Number(a.totalDailyBudgetCents) > Number(b.totalDailyBudgetCents)) out.push(`the pool's daily budget rises from ${euro(b.totalDailyBudgetCents)} to ${euro(a.totalDailyBudgetCents)}`)
-    if (a.strategy !== b.strategy) out.push(`a new strategy (${b.strategy} → ${a.strategy}) moves budget between the pool's campaigns`)
-    if (Number(a.maxShiftPerRebalancePct) > Number(b.maxShiftPerRebalancePct)) out.push(`one rebalance may move more of the pool (${b.maxShiftPerRebalancePct}% → ${a.maxShiftPerRebalancePct}%)`)
-    if (Number(a.coolDownMinutes) < Number(b.coolDownMinutes)) out.push(`the pool rebalances more often (every ${b.coolDownMinutes} → ${a.coolDownMinutes} minutes)`)
+    const out: Raise[] = []
+    if (Number(a.totalDailyBudgetCents) > Number(b.totalDailyBudgetCents)) out.push(raise(`the pool's daily budget rises from ${euro(b.totalDailyBudgetCents)} to ${euro(a.totalDailyBudgetCents)}`, b.totalDailyBudgetCents, a.totalDailyBudgetCents))
+    if (a.strategy !== b.strategy) out.push({ why: `a new strategy (${b.strategy} → ${a.strategy}) moves budget between the pool's campaigns` })
+    if (Number(a.maxShiftPerRebalancePct) > Number(b.maxShiftPerRebalancePct)) out.push(raise(`one rebalance may move more of the pool (${b.maxShiftPerRebalancePct}% → ${a.maxShiftPerRebalancePct}%)`, b.maxShiftPerRebalancePct, a.maxShiftPerRebalancePct))
+    if (Number(a.coolDownMinutes) < Number(b.coolDownMinutes)) out.push({ why: `the pool rebalances more often (every ${b.coolDownMinutes} → ${a.coolDownMinutes} minutes)` })
     return out
   },
   async write(loaded, before, after, actorUserId) {
@@ -170,9 +187,9 @@ const coverageSet: Spec = {
     return { ...out, acosCapPct: round2(out.acosCapPct) }
   },
   raises(b, a) {
-    const out: string[] = []
-    if (capRaised(b.dailySpendCapCents, a.dailySpendCapCents)) out.push(a.dailySpendCapCents == null ? `the set's daily spend cap (${euro(b.dailySpendCapCents)}) is cleared` : `the set's daily spend cap rises from ${euro(b.dailySpendCapCents)} to ${euro(a.dailySpendCapCents)}`)
-    if (capRaised(b.acosCapPct, a.acosCapPct)) out.push(a.acosCapPct == null ? `the set's ACOS cap (${b.acosCapPct}%) is cleared` : `the set's ACOS cap rises from ${b.acosCapPct}% to ${a.acosCapPct}%`)
+    const out: Raise[] = []
+    if (capRaised(b.dailySpendCapCents, a.dailySpendCapCents)) out.push(a.dailySpendCapCents == null ? { why: `the set's daily spend cap (${euro(b.dailySpendCapCents)}) is cleared` } : raise(`the set's daily spend cap rises from ${euro(b.dailySpendCapCents)} to ${euro(a.dailySpendCapCents)}`, b.dailySpendCapCents, a.dailySpendCapCents))
+    if (capRaised(b.acosCapPct, a.acosCapPct)) out.push(a.acosCapPct == null ? { why: `the set's ACOS cap (${b.acosCapPct}%) is cleared` } : raise(`the set's ACOS cap rises from ${b.acosCapPct}% to ${a.acosCapPct}%`, b.acosCapPct, a.acosCapPct))
     return out
   },
   async write(loaded, before, after, actorUserId) {
@@ -200,11 +217,11 @@ const rankTarget: Spec = {
     return merge(loaded.state, values, RANK_TARGET_TUNABLE)
   },
   raises(b, a) {
-    const out: string[] = []
-    const up = (field: string, words: string) => { if (Number(a[field] ?? 0) > Number(b[field] ?? 0)) out.push(`${words} rises (${show(b[field])} → ${show(a[field])})`) }
+    const out: Raise[] = []
+    const up = (field: string, words: string) => { if (Number(a[field] ?? 0) > Number(b[field] ?? 0)) out.push(raise(`${words} rises (${show(b[field])} → ${show(a[field])})`, b[field], a[field])) }
     const cleared = (field: string, words: string) => {
-      if (a[field] == null && b[field] != null) out.push(`${words} (${show(b[field])}) is cleared`)
-      else if (a[field] != null && b[field] != null && Number(a[field]) > Number(b[field])) out.push(`${words} rises (${show(b[field])} → ${show(a[field])})`)
+      if (a[field] == null && b[field] != null) out.push({ why: `${words} (${show(b[field])}) is cleared` })
+      else if (a[field] != null && b[field] != null && Number(a[field]) > Number(b[field])) out.push(raise(`${words} rises (${show(b[field])} → ${show(a[field])})`, b[field], a[field]))
     }
     up('biasPct', 'the placement percentage')
     cleared('maxCpcCents', 'the bid ceiling')
@@ -261,9 +278,9 @@ const budgetSchedule: Spec = {
     const after = (a.windows as BudgetWindow[]) ?? []
     const had = new Set(before.map(fingerprint))
     const has = new Set(after.map(fingerprint))
-    const out: string[] = []
-    for (const w of after) if (!had.has(fingerprint(w)) && !lowers(w, loaded.type)) out.push(`window ${windowText(w, loaded.type)} can raise a budget`)
-    for (const w of before) if (!has.has(fingerprint(w)) && lowers(w, loaded.type)) out.push(`the lowering window ${windowText(w, loaded.type)} goes: its budgets come back up`)
+    const out: Raise[] = []
+    for (const w of after) if (!had.has(fingerprint(w)) && !lowers(w, loaded.type)) out.push({ why: `window ${windowText(w, loaded.type)} can raise a budget` })
+    for (const w of before) if (!has.has(fingerprint(w)) && lowers(w, loaded.type)) out.push({ why: `the lowering window ${windowText(w, loaded.type)} goes: its budgets come back up` })
     return out
   },
   async write(loaded, _before, after, actorUserId) {
@@ -329,7 +346,7 @@ const harvestPolicy: Spec = {
     if (Number(a.windowDays) > Number(b.windowDays)) out.push(`a longer window qualifies more terms (${b.windowDays} → ${a.windowDays} days)`)
     if (a.excludeExactMatched === false && b.excludeExactMatched !== false) out.push('terms already matched exactly qualify again')
     if (b.own && !a.own) out.push('the scope falls back to the policy above it, which may be looser')
-    return out
+    return out.map((why) => ({ why })) // AA-W2-11 — a looser policy has no percent: a person decides it
   },
   async write(loaded, before, after, actorUserId) {
     const svc = await import('./harvest-policy.service.js')
@@ -373,7 +390,7 @@ const ebayCampaignPolicy: Spec = {
     if (Number(a.rateFloorPct ?? 0) > Number(b.rateFloorPct ?? 0)) out.push(`its ad-rate floor rises (${show(b.rateFloorPct)} → ${a.rateFloorPct}%), which holds rates up`)
     if (capRaised(b.bidCapCents, a.bidCapCents)) out.push(a.bidCapCents == null ? `its bid cap (${b.bidCapCents}¢) is cleared` : `its bid cap rises (${b.bidCapCents}¢ → ${a.bidCapCents}¢)`)
     if (Number(a.bidFloorCents ?? 0) > Number(b.bidFloorCents ?? 0)) out.push(`its bid floor rises (${show(b.bidFloorCents)} → ${a.bidFloorCents}¢), which holds bids up`)
-    return out
+    return out.map((why) => ({ why })) // AA-W2-11 — eBay is outside the ads strategy: a raise here has no percent, a person decides it
   },
   async write(loaded, before, after, actorUserId) {
     const { setEbayCampaignPolicy } = await import('../marketing/ebay-campaign-policy.service.js')
@@ -404,13 +421,13 @@ const accountTargetAcos: Spec = {
   },
   raises(b, a) {
     if (a.targetAcosPct == null) return []
-    const out: string[] = []
+    const out: Raise[] = []
     // W0 — the bid optimiser reads it too, for every campaign without a target of its own and no rule or plan target
     // (ads-target-acos-resolver.ts).
     if (b.targetAcosPct == null) {
-      out.push(`the bid optimiser (auto-bid, autopilot plans, "Optimise bids to target ACOS" rules) moves every campaign without a target ACOS of its own toward ${a.targetAcosPct}% (unless a rule or plan sets its own), instead of profit data or a flat 30%`)
-      out.push(`target-ACOS bid rules without a target of their own start bidding to ${a.targetAcosPct}%`)
-    } else if (Number(a.targetAcosPct) > Number(b.targetAcosPct)) out.push(`a higher target ACOS lets bids rise (${b.targetAcosPct}% → ${a.targetAcosPct}%)`)
+      out.push({ why: `the bid optimiser (auto-bid, autopilot plans, "Optimise bids to target ACOS" rules) moves every campaign without a target ACOS of its own toward ${a.targetAcosPct}% (unless a rule or plan sets its own), instead of profit data or a flat 30%` })
+      out.push({ why: `target-ACOS bid rules without a target of their own start bidding to ${a.targetAcosPct}%` })
+    } else if (Number(a.targetAcosPct) > Number(b.targetAcosPct)) out.push(raise(`a higher target ACOS lets bids rise (${b.targetAcosPct}% → ${a.targetAcosPct}%)`, b.targetAcosPct, a.targetAcosPct))
     return out
   },
   async write(_loaded, before, after, actorUserId) {
@@ -434,11 +451,12 @@ const breaker: Spec = {
     return merge(loaded.state, values, ['maxHourlySpendCentsEur', 'maxActionsPerHour'])
   },
   raises(b, a) {
-    const out: string[] = []
+    // AA-W2-11 — the breaker is the kill switch: a limit that trips later has no percent here, so a person decides it.
+    const out: Raise[] = []
     const spend = (s: State) => Number(s.maxHourlySpendCentsEur ?? BREAKER_DEFAULTS.maxHourlySpendCentsEur)
     const actions = (s: State) => Number(s.maxActionsPerHour ?? BREAKER_DEFAULTS.maxActionsPerHour)
-    if (spend(a) > spend(b)) out.push(`the breaker trips later: hourly spend ${euro(spend(b))} → ${euro(spend(a))}`)
-    if (actions(a) > actions(b)) out.push(`the breaker trips later: ${actions(b)} → ${actions(a)} actions an hour`)
+    if (spend(a) > spend(b)) out.push({ why: `the breaker trips later: hourly spend ${euro(spend(b))} → ${euro(spend(a))}` })
+    if (actions(a) > actions(b)) out.push({ why: `the breaker trips later: ${actions(b)} → ${actions(a)} actions an hour` })
     return out
   },
   async write(_loaded, before, after, actorUserId) {
@@ -485,12 +503,14 @@ export async function planTune(input: TuneInput): Promise<Planned> {
   for (const field of new Set([...Object.keys(before), ...Object.keys(after)])) if (!same(before[field], after[field])) changes[field] = { from: before[field] ?? null, to: after[field] ?? null }
   // A harvest scope saved with the criteria it already inherits still gets its own policy: that is a change.
   if (Object.keys(changes).length === 0) return { ok: false, error: `${loaded.name}: nothing to change — give the ${spec.label}'s new values.` }
-  const raises = spec.raises(before, after, loaded)
+  const found = spec.raises(before, after, loaded)
+  const raises = found.map((r) => r.why)
+  const largestRaisePct = found.every((r) => r.pct != null) ? Math.max(0, ...found.map((r) => r.pct!)) : null
   return {
     ok: true, loaded, before, after,
     plan: {
       action: 'tune-ad-engine', setting: input.setting, automation: spec.automation, subject: { id: loaded.id, name: loaded.name },
-      changes, raises, spend: raises.length ? 'can-rise' : 'cannot-rise', basis: loaded.basis,
+      changes, raises, largestRaisePct, spend: raises.length ? 'can-rise' : 'cannot-rise', basis: loaded.basis,
       effect: spec.effect(loaded),
     },
   }

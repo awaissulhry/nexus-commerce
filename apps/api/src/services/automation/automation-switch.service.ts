@@ -2,11 +2,13 @@
  * R10 (MCP full control, part 06 §3–§4) — one level service for every automation Claude may switch: up or down the
  * OFF · OBSERVE · PROPOSE · AUTO ladder, through each kind's own switch (its adapter's `levelSwitch`), with its audit.
  *
- *   · AUTO only through the graduation gate AND a person's click (D-R1): the gate is the kind's own `refusal` (Amazon
- *     ads rules: the level dial's ceiling, contested lane and gate — shared with the Control Room dial; other rules:
- *     14 days, 10 real runs, 1 match). A kind with no such refusal (the ads dial: only a halt; autopilot plans, budget
- *     pools, dayparting and budget schedules, coverage sets, repricing rules) has no gate: its AUTO is the click alone.
- *     The click is the approval every change from Claude waits for.
+ *   · AUTO through the graduation gate (D-R1): a person's click is held by the kind's own `refusal` (Amazon ads rules:
+ *     the level dial's ceiling, contested lane and gate — shared with the Control Room dial; other rules: 14 days, 10
+ *     real runs, 1 match). A kind with no such refusal (the ads dial: only a halt; autopilot plans, budget pools,
+ *     dayparting and budget schedules, coverage sets, repricing rules) does not hold his click. AA-W2-11 (D-W2-4 = A) —
+ *     a move to AUTO also carries the row's gate evidence (`gate`, LevelSwitch.gateEvidence): Claude's rule may take an
+ *     automation to AUTO only for automations the business lists and only once that gate is open; a kind with no
+ *     evidence (the ads dial, an env engine, a repricing rule) is AUTO by a person's click only.
  *   · brakes are not "down" (§3): turning a brake down — a bid-lowering or negating rule, a dayparting schedule, a budget
  *     schedule — can raise spend, so the plan says `brake` and turn-down-automation puts it outside its limits (a person
  *     decides it, always).
@@ -15,7 +17,7 @@
  *
  * `planSwitch` is the dry run (a pure read); `applySwitch` writes through the kind's switch.
  */
-import { LEVELS, type AutomationAdapter, type AutomationLevel, type LevelSwitch, type SwitchRow } from './automation-levels.js'
+import { LEVELS, type AutomationAdapter, type AutomationLevel, type GateEvidence, type LevelSwitch, type SwitchRow } from './automation-levels.js'
 import { ENGINES, engineLevelSwitch, type EngineKey } from './engine-switch.service.js'
 
 export type Direction = 'up' | 'down'
@@ -33,6 +35,8 @@ export interface SwitchPlan {
   effect: string
   /** R16 — an engine's per-business switch: what the env allows it. Null for a row's switch. */
   env: { ceiling: AutomationLevel; reason: string | null } | null
+  /** AA-W2-11 — a move up to AUTO: the row's graduation gate (null: no gate Nexus can check). Absent below AUTO. */
+  gate?: GateEvidence | null
 }
 
 const rank = (level: AutomationLevel) => LEVELS.indexOf(level)
@@ -80,6 +84,8 @@ export async function planSwitch(adapter: AutomationAdapter, rowId: string | und
   }
   const brake = direction === 'down' ? row.brake : null
   const env = engine ? adapter.env() : null
+  // AA-W2-11 — the gate's evidence, for the limits Claude's rule is judged on (a person's click is held by `refusal` above).
+  const gate = direction === 'up' && to === 'AUTO' ? (!engine && sw.gateEvidence ? await sw.gateEvidence(row) : null) : undefined
   const effect = (direction === 'up'
     ? `${row.name} goes from ${row.level} to ${to}.${to === 'AUTO' ? ' At AUTO it acts by itself, inside its caps and every guardrail.' : ''}`
     : `${row.name} goes from ${row.level} down to ${to}.${brake ? ` A brake: ${brake}.` : ''}`)
@@ -95,6 +101,7 @@ export async function planSwitch(adapter: AutomationAdapter, rowId: string | und
       changes: { level: { from: row.level, to } },
       brake, basis: row.basis, effect,
       env: env ? { ceiling: env.ceiling, reason: env.reason } : null,
+      ...(gate !== undefined ? { gate } : {}),
     },
   }
 }

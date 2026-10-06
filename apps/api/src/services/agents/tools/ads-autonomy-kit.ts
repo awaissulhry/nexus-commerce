@@ -73,6 +73,8 @@ export const MAX_KIT_ITEMS = 250
  *   dailyBudget  a campaign's daily budget.
  *   status       ENABLED / PAUSED / ARCHIVED; `dailyBudgetCents`: the campaign budget that starts (or stops) spending.
  *   negative     a new negative keyword or target (it only lowers spend).
+ *   rule         AA-W2-11 — an ads rule saved for this scope: Nexus only, it moves no value itself (it acts only once
+ *                it is turned up, as itself, inside its caps).
  */
 export type KitChange =
   | { field: 'bid'; fromCents: number | null; toCents: number; forced?: boolean }
@@ -80,6 +82,7 @@ export type KitChange =
   | { field: 'placementPct' | 'targetAcosPct'; fromPct: number | null; toPct: number }
   | { field: 'status'; from: string | null; to: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudgetCents?: number }
   | { field: 'negative'; term: string; matchType?: string | null }
+  | { field: 'rule' }
 
 export interface KitItem {
   entity: AdEntityRef
@@ -133,6 +136,8 @@ export function measure(change: KitChange): Measured {
     }
     case 'negative':
       return { ...none, direction: 'cut' }
+    case 'rule':
+      return { ...none, direction: 'same' }
   }
 }
 
@@ -330,6 +335,7 @@ const CUT_WORDS: Record<KitChange['field'], string> = {
   targetAcosPct: 'lowering its target ACoS',
   status: 'stopping it',
   negative: 'negating',
+  rule: 'changing what acts on it',
 }
 
 /**

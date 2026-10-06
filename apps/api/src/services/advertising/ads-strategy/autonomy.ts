@@ -43,7 +43,8 @@ import { strategyWords } from './source-words.js'
 export type AdEntityRef =
   | { kind: 'campaign' | 'adGroup' | 'target' | 'productAd'; id: string }
   | { kind: 'searchTerm'; query: string; externalCampaignId: string; externalAdGroupId?: string | null }
-  | { kind: 'products'; market: string; productIds: readonly string[] }
+  /** `label`: what a person calls it (default: a new campaign for its products); no products: the whole market. */
+  | { kind: 'products'; market: string; productIds: readonly string[]; label?: string }
 
 /** One key per entity, the same in every preview: `target:<id>`, `searchTerm:<campaign>:<ad group|*>:<query>`. */
 export function entityKey(ref: AdEntityRef): string {
@@ -152,7 +153,7 @@ export async function resolveEntityScopes(refs: readonly AdEntityRef[]): Promise
       case 'products': {
         const market = strategyMarket(ref.market)
         const ids = [...new Set(ref.productIds)].sort()
-        const label = `a new campaign for ${ids.length} product${ids.length === 1 ? '' : 's'}`
+        const label = ref.label ?? `a new campaign for ${ids.length} product${ids.length === 1 ? '' : 's'}`
         out.set(key, {
           key, kind: 'products', label, market, campaignId: null, adGroupId: null, currency: null,
           subject: market && ids.length ? `products:${ids.join(',')}` : market ? 'market' : null,

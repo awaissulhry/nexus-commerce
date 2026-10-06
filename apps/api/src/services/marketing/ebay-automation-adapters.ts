@@ -10,7 +10,7 @@ import { FEATURES } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
 import {
   envVerdict, flagOn, isOne, iso, lowest, summarise,
-  evidenceGate,
+  evidenceGate, gateOfCounts,
   type AutomationAdapter, type AutomationLevel, type EnvCheck, type ExplainOptions, type PreviewInput, type PreviewOutcome, type SwitchRow,
 } from '../automation/automation-levels.js'
 
@@ -130,6 +130,12 @@ export const E1: AutomationAdapter = {
       const runs = await prisma.ebayAdsRuleExecution.aggregate({ where: { ruleId: row.id }, _count: { _all: true }, _sum: { matched: true } })
       const failures = r ? evidenceGate({ createdAt: r.createdAt, evaluationCount: runs._count._all, matchCount: runs._sum.matched ?? 0 }) : ['not found']
       return failures.length ? `AUTO (AUTOPILOT) only after the graduation gate: ${failures.join(', ')}.` : null
+    },
+    // AA-W2-11 — the same counts, shown in turn-up-automation's preview.
+    async gateEvidence(row: SwitchRow) {
+      const r = await prisma.ebayAdsRule.findUnique({ where: { id: row.id }, select: { createdAt: true } })
+      const runs = await prisma.ebayAdsRuleExecution.aggregate({ where: { ruleId: row.id }, _count: { _all: true }, _sum: { matched: true } })
+      return gateOfCounts({ createdAt: r?.createdAt ?? new Date(), runs: runs._count._all, matches: runs._sum.matched ?? 0, runsAre: 'real runs', matchesAre: 'matches', from: "the rule's run record (EbayAdsRuleExecution)" })
     },
     async write(row: SwitchRow, level: AutomationLevel, actorUserId: string | null) {
       const { updateEbayAdsRule } = await import('./ebay-ads-rule-crud.service.js')
