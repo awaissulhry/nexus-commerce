@@ -395,7 +395,7 @@ export function captureTemplate(input: CaptureInput): CaptureResult {
       naming: { pattern, partSeparator },
       portfolio: { pattern: portfolioPattern, mode: portfolioName ? 'reuse-or-create' : 'none' },
       productAds: { fulfilment: 'FBA' },
-      sharedTerms: 'skip',
+      sharedTerms: 'accept',
       slots,
     },
     budget: { weights, minPerSlotCents: 100 },

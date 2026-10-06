@@ -7,9 +7,11 @@
  *                   the slots' budgets and start bids (the ladder clamped to the strategy's bid band at this product)
  *   what it ads     the product's children listed on Amazon in this market with an ASIN (a parent's own ASIN is not
  *                   advertised), and which seller SKU the template's fulfilment choice points at
- *   shared terms    a category or competitor keyword another of this business's live campaigns already buys in the
- *                   market (Owner decision D-PB5: one owner per term): skipped (template `skip`, the default) or
- *                   accepted on the record (`accept`) — each named
+ *   shared terms    Owner rule 3 (isolation is per product): a category or competitor keyword one of THIS product's
+ *                   own campaigns outside the playbook already buys in the market is skipped (template `skip`: it
+ *                   stays where it is) or built too, on the record (`accept`, the default) — each named. A keyword
+ *                   another product's campaigns buy is kept and only listed (`sharedWithOtherProducts`): different
+ *                   products may share a keyword, never blocked, never skipped
  *   money           at full spend, the slots' daily budgets over the month against every monthly cap of the strategy
  *                   in force here (each cap binds)
  *   the gate        names already used in the market, a market that cannot receive writes, empty campaigns, Amazon's
@@ -71,7 +73,7 @@ export async function previewBuild(args: { market: string; productId?: string; s
   const doc = resolved.doc
   const value = <T>(field: keyof NonNullable<typeof resolved.product>) => (resolved.product?.[field].value ?? null) as T | null
 
-  // The slots this product already holds (linked campaigns) stay as they are; their campaigns are not "another product".
+  // The slots this product already holds (linked campaigns) stay as they are: no clash, no name clash.
   const ownRows = [index.products.get(product.id), product.parentId ? index.products.get(product.parentId) : undefined].filter((r): r is NonNullable<typeof r> => !!r)
   const links = (await playbookLinks(ownRows.map((r) => r.id))).filter((l) => l.kind === 'slot')
   const linkedCampaigns = new Set(links.map((l) => l.refId))
@@ -103,13 +105,14 @@ export async function previewBuild(args: { market: string; productId?: string; s
   const clone = (cs: readonly PlannedCampaign[]): PlannedCampaign[] => JSON.parse(JSON.stringify(cs))
   let campaigns = clone(compiled.campaigns)
   let plan = evaluatePlan(campaigns, excluded, blueprintOf(campaigns, nameToken!, doc), target, existing, opts)
+  // The gate's conflicts are this product's own campaigns only (rule 3); other products' are in sharedWithOtherProducts.
   const shared = plan.conflicts.map((c) => c.expression)
   let skippedShared: Array<{ term: string; existing: Array<{ campaignName: string; campaignId: string }> }> = []
   if (shared.length) {
     const sharedKeys = new Set(shared.map(norm))
     skippedShared = plan.conflicts.map((c) => ({ term: c.expression, existing: c.existing.slice(0, 5) }))
     if (doc.structure.sharedTerms === 'skip') {
-      // D-PB5 — one owner per term per market: the term stays with the campaigns that already buy it.
+      // Rule 2 — a term the product already buys stays where it is: not built a second time.
       campaigns = clone(compiled.campaigns).map((c) => ({ ...c, adGroups: c.adGroups.map((g) => ({ ...g, targets: g.targets.filter((t) => t.isNegative || !t.gated || !sharedKeys.has(norm(t.expression))) })) }))
       plan = evaluatePlan(campaigns, excluded, blueprintOf(campaigns, nameToken!, doc), target, existing, opts)
     } else {
@@ -153,6 +156,7 @@ export async function previewBuild(args: { market: string; productId?: string; s
       },
       skippedShared: doc.structure.sharedTerms === 'skip' ? skippedShared : [],
       acceptedShared: doc.structure.sharedTerms === 'accept' ? skippedShared : [],
+      sharedWithOtherProducts: plan.sharedWithOtherProducts.map((c) => ({ term: c.expression, existing: c.existing.slice(0, 5) })),
       productAds: ads,
       portfolio: portfolioName ? { name: portfolioName, does: existingPortfolio ? 'reuse' : 'create', ...(existingPortfolio ? { portfolioId: existingPortfolio.externalPortfolioId } : {}) } : { does: 'none' },
       strategy: { minBidCents: strategy.minBidCents, maxBidCents: strategy.maxBidCents, caps, daysInMonth },
