@@ -120,6 +120,11 @@ describe('W1-8 — where each ad change lands', () => {
     expect(await level('apply-ads-playbook', { op: 'adopt', market: 'IT', productId: ids.p1 })).toBeNull()
   })
 
+  it('PB-10 — a sync is a create (slots, keywords, product ads); a sync of negatives alone is a negative', async () => {
+    expect(await level('apply-ads-playbook', { op: 'sync', market: 'IT', productId: ids.p1 })).toMatchObject({ action: 'create', level: 'ask', row: product })
+    expect(await level('apply-ads-playbook', { op: 'sync-negatives', market: 'IT', productId: ids.p1 })).toMatchObject({ action: 'negative', row: product })
+  })
+
   it('an ads rule: its scope; a whole account, or an edit keeping its scope, the strictest row of the business', async () => {
     expect(await level('save-ad-rule', { kind: 'amazon-ads', scope: { campaignId: 'c-off' } })).toMatchObject({ action: 'rule', level: 'confirm' })
     expect(await level('save-ad-rule', { kind: 'amazon-ads', scope: { marketplace: 'IT', productId: ids.p1 } })).toMatchObject({ level: 'ask', basis: 'scope' })

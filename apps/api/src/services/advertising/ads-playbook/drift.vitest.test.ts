@@ -18,7 +18,7 @@
 import { describe, expect, it } from 'vitest'
 import { templateDoc } from '../../../test-support/ads-playbook-fixtures.js'
 import { findDrift, type DriftCampaign, type DriftFacts, type DriftSlotFacts, type ExpectedSlot } from './drift.js'
-import type { PlannedNegative } from './isolation.js'
+import { planIsolation, type PlannedNegative } from './isolation.js'
 import type { Positive } from '../ads-winner-lock.js'
 
 const doc = templateDoc()
@@ -62,7 +62,7 @@ function facts(over: Partial<DriftFacts> = {}): DriftFacts {
     archived: { positives: new Map(), negatives: new Map(), productAds: new Map() },
     standing, winners: new Map(), protections: new Map(),
     productAds: new Map(keys.map((k) => [`g-${k}`, ads])), expectedAds: [{ asin: 'B0TESTXX01', skus: ['TEST-V1'] }, { asin: 'B0TESTXX02', skus: ['TEST-V2'] }],
-    expected, isolation: { adds: [] }, source: [], heldOutside: new Set(), outside: [], portfolioId: 'pf-1', personal: new Map(),
+    expected, isolation: { adds: [] }, source: [], heldOutside: new Set(), outside: [], portfolioId: 'pf-1', personal: new Map(), liftedElsewhere: new Map(), hourlyPlans: new Map(),
     artifacts: { expectations: [], notChecked: [], held: [] }, notChecked: [],
     ...over,
   }
@@ -82,7 +82,7 @@ describe('the slots and their campaigns', () => {
   it('a slot with no campaign is built by sync (adds spend); one a person archived is his: keep only for an optional slot', () => {
     const f = facts()
     f.slots = f.slots.map((s) => (s.slot.key === 'exact-brand' || s.slot.key === 'broad-category' ? { ...s, link: null, lost: { campaignId: `c-${s.slot.key}`, status: 'ARCHIVED' } } : s))
-    f.personal = new Map([['c-exact-brand', [{ userId: 'user:u-owner', at: '2026-10-01T00:00:00.000Z', action: 'AD_ENTITY_STATE_UPDATE' }]], ['c-broad-category', [{ userId: 'user:u-owner', at: '2026-10-01T00:00:00.000Z', action: 'AD_ENTITY_STATE_UPDATE' }]]])
+    f.personal = new Map([['c-exact-brand', [{ userId: 'user:u-owner', at: '2026-10-01T00:00:00.000Z', action: 'AD_ENTITY_STATE_UPDATE', changed: ['status'] }]], ['c-broad-category', [{ userId: 'user:u-owner', at: '2026-10-01T00:00:00.000Z', action: 'AD_ENTITY_STATE_UPDATE', changed: ['status'] }]]])
     const items = findDrift(f).items.filter((i) => i.kind === 'slot_missing')
     const brand = items.find((i) => i.slot === 'exact-brand')!
     expect(brand).toMatchObject({ fix: { by: 'sync', part: 'slots', addsSpend: true }, byPerson: { userId: 'user:u-owner' }, revert: { by: 'sync', part: 'slots' } })
@@ -154,16 +154,31 @@ describe('placements: only where the hourly plans do not own the slot', () => {
     const f = facts()
     f.campaigns.set('c-broad-category', camp('c-broad-category', 'TESTTOK | IT | Broad | Category', { placements: { top: 30, productPage: 0, restOfSearch: 0 } }))
     f.personal = new Map([
-      ['c-broad-category', [{ userId: 'user:u-owner', at: '2026-10-02T00:00:00.000Z', action: 'update_campaign', fields: ['dailyBudget'] }]],
-      ['r-iso', [{ userId: 'user:u-approver', at: '2026-10-02T00:00:00.000Z', action: 'update_rule', fields: ['enabled'] }]],
+      ['c-broad-category', [{ userId: 'user:u-owner', at: '2026-10-02T00:00:00.000Z', action: 'update_campaign', changed: ['dailyBudget'] }]],
+      ['r-iso', [{ userId: 'user:u-approver', at: '2026-10-02T00:00:00.000Z', action: 'update_rule', changed: ['enabled'] }]],
     ])
     f.artifacts = { expectations: [{ kind: 'isolationRule', key: 'isolation', refId: 'r-iso', parts: { action: { expected: { a: 1 }, actual: { a: 2 } } } }], notChecked: [], held: [] }
     const r = findDrift(f)
     expect(r.items.find((i) => i.kind === 'placement_differs')!.byPerson).toBeUndefined()
     expect(r.items.find((i) => i.kind === 'artifact_changed')).toMatchObject({ fix: { by: 'sync' } })
     expect(r.items.find((i) => i.kind === 'artifact_changed')!.byPerson).toBeUndefined()
-    f.personal = new Map([['r-iso', [{ userId: 'user:u-owner', at: '2026-10-03T00:00:00.000Z', action: 'update_rule', fields: ['actions'] }]]])
+    f.personal = new Map([['r-iso', [{ userId: 'user:u-owner', at: '2026-10-03T00:00:00.000Z', action: 'update_rule', changed: ['actions'] }]]])
     expect(one(f, 'artifact_changed')).toMatchObject({ byPerson: { userId: 'user:u-owner' }, revert: { by: 'sync' }, keep: { note: expect.stringMatching(/Nothing to write/) } })
+  })
+
+  it('a campaign an hourly plan holds (the Owner\'s or the playbook\'s) is never compared: listed as held', () => {
+    const f = facts({ hourlyPlans: new Map([['c-broad-category', 'the hourly plan "Owner plan"']]) })
+    f.campaigns.set('c-broad-category', camp('c-broad-category', 'TESTTOK | IT | Broad | Category', { placements: { top: 300, productPage: 0, restOfSearch: 0 } }))
+    const r = findDrift(f)
+    expect(r.items.filter((i) => i.kind === 'placement_differs')).toEqual([])
+    expect(r.heldBack).toContainEqual({ slot: 'broad-category', what: 'TESTTOK | IT | Broad | Category', why: expect.stringMatching(/held by the hourly plan "Owner plan"/) })
+  })
+
+  it('a full snapshot is a status change only when the status changed: a budget edit never explains an archive', () => {
+    const f = facts()
+    f.slots = f.slots.map((s) => (s.slot.key === 'exact-brand' ? { ...s, link: null, lost: { campaignId: 'c-exact-brand', status: 'ARCHIVED' } } : s))
+    f.personal = new Map([['c-exact-brand', [{ userId: 'user:u-owner', at: '2026-10-01T00:00:00.000Z', action: 'AD_ENTITY_STATE_UPDATE', changed: ['dailyBudget'] }]]])
+    expect(one(f, 'slot_missing')!.byPerson).toBeUndefined()
   })
 
   it('a built slot off the allowlist holds no placements until START: not checked, said', () => {
@@ -203,7 +218,7 @@ describe('product ads and the keywords the terms feed', () => {
     const f = facts()
     f.positives.set('g-exact-brand', [])
     f.archived = { ...f.archived, positives: new Map([['g-exact-brand', [{ id: 't-arch', text: 'testtok jacket', match: 'EXACT' }]]]) }
-    f.personal = new Map([['t-arch', [{ userId: 'user:u-owner', at: '2026-10-03T00:00:00.000Z', action: 'AD_ENTITY_STATE_UPDATE' }]]])
+    f.personal = new Map([['t-arch', [{ userId: 'user:u-owner', at: '2026-10-03T00:00:00.000Z', action: 'AD_ENTITY_STATE_UPDATE', changed: ['status'] }]]])
     const item = one(f, 'positive_archived')!
     expect(item).toMatchObject({ fix: { by: 'none' }, byPerson: { userId: 'user:u-owner' } })
     expect(item.keep).toMatchObject({ tool: 'set-ads-playbook', args: { values: { terms: { brand: [] } } } })
@@ -256,6 +271,29 @@ describe('negatives', () => {
     const item = one(f, 'negative_missing')!
     expect(item).toMatchObject({ slot: 'auto', byPerson: { userId: 'user:u-owner', action: 'retire_negative' }, revert: { by: 'sync', part: 'negatives' } })
     expect(item.keep).toMatchObject({ tool: 'set-ads-playbook', args: { values: { terms: { negatives: [] } } } })
+  })
+
+  it('lifted with no record of who (at Amazon, or a Nexus-only one deleted) is a person\'s change of unknown author', () => {
+    const f = facts()
+    f.standing = new Set([...f.standing].filter((k) => k !== 'g-auto|PHRASE|test kids' && k !== 'g-broad-category|PHRASE|test kids'))
+    f.archived = { ...f.archived, negatives: new Map([['g-auto|PHRASE|test kids', 'n-arch']]) }
+    const r = findDrift(f)
+    const auto = r.items.find((i) => i.kind === 'negative_missing' && i.slot === 'auto')!
+    expect(auto).toMatchObject({ byPerson: { unknownAuthor: true }, revert: { by: 'sync' }, keep: { tool: 'set-ads-playbook' }, says: expect.stringMatching(/by whom Nexus cannot tell/) })
+    expect(r.items.find((i) => i.kind === 'negative_missing' && i.slot === 'broad-category')!.byPerson).toBeUndefined()
+    f.liftedElsewhere = new Map([['PHRASE|test kids', null]])
+    expect(findDrift(f).items.filter((i) => i.kind === 'negative_missing').every((i) => i.byPerson?.unknownAuthor)).toBe(true)
+  })
+
+  it('a home at the 2-cent floor (added by a sync, waiting for START) sends no search anywhere: nothing is negated', () => {
+    const owner = (atFloor: boolean) => [{ adTargetId: 't-own', adGroupId: 'g-x', text: 'test jacket', match: 'EXACT' as const, live: true, ...(atFloor ? { atFloor: true } : {}) }]
+    const scope = [
+      { adGroupId: 'g-x', campaignId: 'c-x', slot: 'exact-category', role: 'exact' as const, match: 'EXACT' as const, intent: 'CATEGORY' as const },
+      { adGroupId: 'g-r', campaignId: 'c-r', slot: 'broad-category', role: 'research' as const, match: 'BROAD' as const, intent: 'CATEGORY' as const },
+    ]
+    const plan = (atFloor: boolean) => planIsolation({ action: { exactIntoResearch: true, phraseIntoBroadAndAuto: false, brandPhrase: null, handover: 'proven' }, scope, positives: new Map([['g-x', owner(atFloor)]]), winners: new Map(), standing: new Set(), protections: new Map() })
+    expect(plan(false).adds.map((a) => [a.adGroupId, a.text])).toEqual([['g-r', 'test jacket']])
+    expect(plan(true).adds).toEqual([])
   })
 
   it('rule 3: an ad group outside the product\'s own scope gets nothing — no keyword, no ad, no negative', () => {

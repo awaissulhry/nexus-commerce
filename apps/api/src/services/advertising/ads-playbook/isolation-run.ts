@@ -77,10 +77,11 @@ async function stillOwned(playbookId: string, add: PlannedNegative): Promise<str
   }
   const owner = await prisma.adTarget.findUnique({
     where: { id: add.owner.adTargetId },
-    select: { isNegative: true, status: true, externalTargetId: true, adGroup: { select: { campaign: { select: { status: true } } } } },
+    select: { isNegative: true, status: true, externalTargetId: true, bidCents: true, adGroup: { select: { campaign: { select: { status: true } } } } },
   })
-  const live = !!owner && !owner.isNegative && String(owner.status) === 'ENABLED' && owner.externalTargetId != null && String(owner.adGroup?.campaign?.status) !== 'ARCHIVED'
-  return live ? null : `Not written: its keyword "${add.owner.text}" is no longer live, so its searches would have nowhere to go.`
+  // PB-10 — a keyword at Amazon's 2¢ floor (added at the floor and waiting for START, or stopped) is no home either.
+  const live = !!owner && !owner.isNegative && String(owner.status) === 'ENABLED' && owner.externalTargetId != null && owner.bidCents > 2 && String(owner.adGroup?.campaign?.status) !== 'ARCHIVED'
+  return live ? null : `Not written: its keyword "${add.owner.text}" is no longer live above the 2-cent floor, so its searches would have nowhere to go.`
 }
 
 async function writeAll(playbookId: string, adds: readonly PlannedNegative[], actor: string, family: ProductFamily): Promise<IsolationWritten> {

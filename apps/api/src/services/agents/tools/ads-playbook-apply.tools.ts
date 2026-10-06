@@ -45,8 +45,8 @@ const ID = z.string().trim().min(1).max(64)
 const MAX_SLOTS = 30
 
 const input = z.object({
-  op: z.enum(['build', 'adopt', 'sync'])
-    .describe('build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); sync: fix its drift (ads-playbook view drift), adding only'),
+  op: z.enum(['build', 'adopt', 'sync', 'sync-negatives'])
+    .describe('build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); sync: fix its drift (ads-playbook view drift), adding only; sync-negatives: only its missing negatives (a kind of its own: it lowers spend)'),
   market: z.string().trim().toUpperCase().min(2).max(20).describe('ONE Amazon market code (IT, DE, FR, ES, UK; business-overview lists them)'),
   productId: ID.optional().describe('the product (a parent or a variation), its Nexus id; or sku'),
   sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
@@ -256,7 +256,7 @@ function applyRefusal(preview: unknown, limits: Record<string, unknown>): string
   if (p.market && markets.length && !markets.includes(p.market)) return `this business lets a playbook apply run by rule only in ${markets.join(', ')}`
   if (p.op === 'adopt') return null
   // PB-10 — a sync runs by rule only when it adds no spend (its negatives), inside the kit's limits.
-  if (p.op === 'sync') return syncRefusal(preview, limits)
+  if (p.op === 'sync' || p.op === 'sync-negatives') return syncRefusal(preview, limits)
   const common = commonRefusal(preview, limits)
   if (common) return common
   if (p.op !== 'build') return `op ${p.op} is not one this tool runs by rule; a person decides`
@@ -365,10 +365,12 @@ const applyAdsPlaybook: AgentTool = {
     + 'planned bid remembered), missing slots (built as op build builds them), and compiled rules or hourly plans saved '
     + 'again (Nexus only). A winning search term is never moved. A change a person made himself is never put back unless '
     + 'revert names it (keep it with set-ads-playbook instead). What adds spend waits for a person; a sync of negatives '
-    + 'only may run by the business\'s rule inside its limits. Undo retires the negatives it added (undo-ad-change).',
+    + 'only may run by the business\'s rule inside its limits — op sync-negatives (its negatives only; the strategy\'s '
+    + 'negative kind; op sync is its create kind); never one that puts back a person\'s own change. Undo retires the '
+    + 'negatives it added (undo-ad-change).',
   async handler(args, ctx) {
     const a = args as Args
-    if (a.op === 'sync') return (await syncPreview(a as SyncArgsIn, ctx)).result
+    if (a.op === 'sync' || a.op === 'sync-negatives') return (await syncPreview(a as SyncArgsIn, ctx)).result
     return a.op === 'adopt' ? (await adoptPreview(a)).result : (await buildPreview(a, ctx)).result
   },
   async execute(args, ctx) {
@@ -382,7 +384,7 @@ const applyAdsPlaybook: AgentTool = {
       approvalId: changeSetId,
       updatedBy: ctx.via === 'claude' ? `claude:${changeSetId}` : `user:${ctx.userId}`,
     })
-    if (a.op === 'sync') return executeSync(a as SyncArgsIn, ctx, writerOf)
+    if (a.op === 'sync' || a.op === 'sync-negatives') return executeSync(a as SyncArgsIn, ctx, writerOf)
 
     if (a.op === 'adopt') {
       const fresh = await adoptPreview(a)

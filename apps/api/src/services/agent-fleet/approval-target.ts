@@ -794,7 +794,7 @@ const READERS: Record<string, Reader> = {
       }
     }
     // PB-10 — a sync: what it adds, part by part (it never removes anything).
-    if (p.op === 'sync') {
+    if (p.op === 'sync' || p.op === 'sync-negatives') {
       const t = (p.totals ?? {}) as Record<string, unknown>
       const line = (label: string, n: unknown, what: string) => (num(n) ? [{ label, from: null, to: `${plural(num(n)!, what)}` }] : [])
       return {

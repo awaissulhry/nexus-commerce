@@ -49,8 +49,9 @@ const treatedAs = new Map<string, ClaudeActionType>()
  * op — an adopt only writes Nexus links). An op not listed, or no args, is the tool's kind in CLAUDE_ACTION_TOOLS.
  */
 export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeActionType | null>>>> = {
-  // PB-10 — a sync runs by rule only as the negatives it adds (what adds spend waits for a person: syncRefusal).
-  'apply-ads-playbook': { build: 'create', adopt: null, sync: 'negative' },
+  // PB-10 — a sync builds slots and adds keywords and product ads: the create kind; its negatives alone are a kind of their
+  // own (op sync-negatives).
+  'apply-ads-playbook': { build: 'create', adopt: null, sync: 'create', 'sync-negatives': 'negative' },
 }
 
 /** The kind of ad action a tool is (for these args: an op of OP_ACTIONS), or null: the strategy never narrows it. */

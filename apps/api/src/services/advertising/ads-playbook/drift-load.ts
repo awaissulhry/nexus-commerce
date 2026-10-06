@@ -12,7 +12,7 @@
  */
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import prisma from '../../../db.js'
-import { openStrategy } from '../ads-strategy/effective.js'
+import { openStrategy, type StrategyView } from '../ads-strategy/effective.js'
 import { strategyMarketOf } from '../ads-strategy/terms.js'
 import type { ProtectedTerm } from '../ads-negation-policy.js'
 import { normaliseNegTerm } from '../ads-protect-converting.js'
@@ -26,7 +26,8 @@ import { findDrift, type DriftCampaign, type DriftFacts, type DriftReport, type 
 import { compileIsolationRule, isolationItemKey, ISOLATION_HANDOVER, planIsolation, type PlannedNegative, type ScopeGroup } from './isolation.js'
 import { loadIsolation } from './isolation-load.js'
 import { loadPlaybookIndex, playbookLinks } from './load.js'
-import { isEnrolled } from './resolve.js'
+import { isEnrolled, type PlaybookIndex } from './resolve.js'
+import { canonical } from './rules.js'
 
 export const DRIFT_NOTE =
   'Drift: where what is live differs from what this product\'s playbook compiles to. Bids and budgets the engines, '
@@ -70,9 +71,15 @@ const placementsOf = (dynamicBidding: unknown): DriftCampaign['placements'] => {
 const negativeMatchOf = (kind: string, expressionType: string): NegativeMatch | null =>
   kind === 'PRODUCT' ? 'PRODUCT' : /PHRASE/.test(expressionType) ? 'PHRASE' : /EXACT/.test(expressionType) ? 'EXACT' : null
 
-/** One product's drift in one market: the report, and the facts it was judged on. */
-export async function loadDrift(args: { market: string; productId?: string; sku?: string; channel?: string }): Promise<{ data: LoadedDrift } | { status: 400 | 404; error: string }> {
-  const loaded = await loadProductPlaybook(args)
+/** What the market list reads once for every product (the playbook rows and templates, the strategy). */
+export interface MarketShared { index: PlaybookIndex; strategy: StrategyView }
+
+/**
+ * One product's drift in one market: the report, and the facts it was judged on. `light` (the market list): who changed
+ * what, the compiled artifacts and the negatives lifted without a row are left out — read one product for them.
+ */
+export async function loadDrift(args: { market: string; productId?: string; sku?: string; channel?: string }, opts: { light?: boolean; shared?: MarketShared } = {}): Promise<{ data: LoadedDrift } | { status: 400 | 404; error: string }> {
+  const loaded = await loadProductPlaybook(args, opts.shared ? { index: opts.shared.index } : {})
   if ('error' in loaded) return loaded
   const { channel, market, product, resolved, row, ownRows, links, linkedNames } = loaded
   const base: LoadedDrift = {
@@ -152,7 +159,7 @@ export async function loadDrift(args: { market: string; productId?: string; sku?
   }
 
   // What the playbook compiles to, every slot as if none were built: positives with their start bids.
-  const strategy = (await openStrategy(market, channel).then((v) => v.forProducts([product.id]))).values
+  const strategy = (await (opts.shared?.strategy ?? await openStrategy(market, channel)).forProducts([product.id])).values
   const { ads } = await productAdsOf(product.id, market, doc.structure.productAds.fulfilment)
   const compiled = compilePlaybook({
     market, doc,
@@ -209,7 +216,8 @@ export async function loadDrift(args: { market: string; productId?: string; sku?
         marketplace: market, status: { not: 'ARCHIVED' }, ...(linkedIds.length ? { id: { notIn: linkedIds } } : {}),
         adGroups: { some: { productAds: { some: { asin: { in: family.asins }, status: { not: 'ARCHIVED' } } } } },
       },
-      select: { id: true, name: true, status: true, type: true, adProduct: true, adGroups: { where: { status: { not: 'ARCHIVED' } }, select: { id: true } } },
+      // Rule 3 — only its ad groups that advertise this product hold this product's terms.
+      select: { id: true, name: true, status: true, type: true, adProduct: true, adGroups: { where: { status: { not: 'ARCHIVED' }, productAds: { some: { asin: { in: family.asins }, status: { not: 'ARCHIVED' } } } }, select: { id: true } } },
       orderBy: { name: 'asc' },
       take: MAX_OUTSIDE + 1,
     })
@@ -218,11 +226,23 @@ export async function loadDrift(args: { market: string; productId?: string; sku?
   if (sp.length > MAX_OUTSIDE) notChecked.push(`More than ${MAX_OUTSIDE} campaigns outside the playbook advertise this product: the first ${MAX_OUTSIDE} are listed`)
   const inOtherPlaybooks = new Set(sp.length ? (await prisma.adsPlaybookLink.findMany({ where: { kind: 'slot', refId: { in: sp.map((c) => c.id) } }, select: { refId: true } })).map((l) => l.refId) : [])
   const outside = sp.slice(0, MAX_OUTSIDE).map((c) => ({ campaignId: c.id, name: c.name, status: String(c.status), inPlaybook: inOtherPlaybooks.has(c.id) }))
+  // Rule 2 — a term this product's own campaign outside the playbook buys stays there; the template's `accept` builds it too.
   const heldOutside = new Set<string>()
-  const ownOutside = sp.filter((c) => !inOtherPlaybooks.has(c.id)).flatMap((c) => c.adGroups.map((g) => g.id))
-  for (const list of (await positivesIn(ownOutside)).values()) for (const p of list) if (p.match !== 'PRODUCT') heldOutside.add(normaliseNegTerm(p.text))
+  if (doc.structure.sharedTerms !== 'accept') {
+    const ownOutside = sp.filter((c) => !inOtherPlaybooks.has(c.id)).flatMap((c) => c.adGroups.map((g) => g.id))
+    for (const list of (await positivesIn(ownOutside)).values()) for (const p of list) if (p.match !== 'PRODUCT') heldOutside.add(normaliseNegTerm(p.text))
+  }
 
-  // The artifacts' compiled versions (artifacts.ts expected): a read, in the hook's conservative mode.
+  // Rank owns placements where an enabled hourly plan holds the campaign (the playbook's or the Owner's).
+  const hourlyPlans = new Map<string, string>()
+  if (linkedIds.length) {
+    for (const sch of await prisma.adSchedule.findMany({ where: { campaignId: { in: linkedIds }, enabled: true }, select: { campaignId: true, name: true, group: { select: { name: true, enabled: true } } } })) {
+      if (sch.group && !sch.group.enabled) continue
+      if (!hourlyPlans.has(sch.campaignId)) hourlyPlans.set(sch.campaignId, sch.group ? `the hourly plan "${sch.group.name}"` : `its own hourly plan "${sch.name}"`)
+    }
+  }
+
+  // The artifacts' compiled versions (artifacts.ts expected): a read, in the hook's conservative mode. Detail view only.
   const rankRole = (key: string) => doc.structure.slots.find((s) => s.key === key)?.rankRole ?? 'none'
   const ctx: ArtifactContext = {
     playbookId: row.id, market, productId: product.id, nameToken, doc,
@@ -230,31 +250,8 @@ export async function loadDrift(args: { market: string; productId?: string; sku?
     mode: 'adopt', actor: 'automation:ads-playbook-drift' as AdsActor, changeSetId: null, compiledVersion: row.version,
   }
   const artifactLinks = allLinks.filter((l) => l.kind !== 'slot' && l.kind !== 'portfolio').map((l) => ({ kind: l.kind, key: l.key, refId: l.refId }))
-  const artifacts = await expectArtifacts(ctx, artifactLinks)
+  const artifacts = opts.light ? { expectations: [], notChecked: [], held: [], errors: [] } : await expectArtifacts(ctx, artifactLinks)
   for (const e of artifacts.errors) notChecked.push(e)
-
-  // Who changed what himself: the ads audit's `user:` rows on these entities, the playbook's own applies left out.
-  const own = new Set((await prisma.adsPlaybookVersion.findMany({ where: { kind: 'playbook', refId: { in: ownRows.map((r) => r.id) }, approvalId: { not: null } }, select: { approvalId: true } })).map((v) => v.approvalId!))
-  const entityIds = [
-    ...new Set([
-      ...linkedIds, ...slots.map((s) => s.lost?.campaignId).filter((x): x is string => !!x),
-      ...[...archivedPositives.values()].flat().map((a) => a.id), ...archivedNegatives.values(),
-      ...artifacts.expectations.map((e) => e.refId).filter((x): x is string => !!x),
-    ]),
-  ]
-  const personal = new Map<string, PersonChange[]>()
-  if (entityIds.length) {
-    const logs = await prisma.advertisingActionLog.findMany({
-      where: { entityId: { in: entityIds }, userId: { startsWith: 'user:' } },
-      orderBy: { createdAt: 'desc' }, take: 1000,
-      select: { entityId: true, userId: true, actionType: true, executionId: true, createdAt: true, payloadAfter: true },
-    })
-    for (const l of logs) {
-      if (l.executionId && own.has(l.executionId)) continue
-      const after = l.payloadAfter && typeof l.payloadAfter === 'object' && !Array.isArray(l.payloadAfter) ? Object.keys(l.payloadAfter as object) : []
-      personal.set(l.entityId, [...(personal.get(l.entityId) ?? []), { userId: l.userId!, at: l.createdAt.toISOString(), action: l.actionType, ...(after.length ? { fields: after } : {}) }])
-    }
-  }
 
   const portfolioId = allLinks.find((l) => l.kind === 'portfolio' && l.playbookId === row.id)?.refId ?? null
   const facts: DriftFacts = {
@@ -267,16 +264,91 @@ export async function loadDrift(args: { market: string; productId?: string; sku?
     archived: { positives: archivedPositives, negatives: archivedNegatives, productAds: archivedAds },
     productAds, expectedAds: ads, expected,
     isolation: isolationPlan ? { adds: isolationPlan.adds } : null, source,
-    heldOutside, outside, portfolioId, personal,
+    heldOutside, outside, portfolioId, personal: new Map(), liftedElsewhere: new Map(), hourlyPlans,
     artifacts: { expectations: artifacts.expectations, notChecked: artifacts.notChecked, held: artifacts.held },
     notChecked,
   }
-  const report = findDrift(facts)
+  let report = findDrift(facts)
+  if (!opts.light) {
+    // Who changed what himself — read only for what drifts (a second pass): the ads audit's `user:` rows on exactly
+    // those entities. Rows of the playbook's own applies, and of every approved or by-rule request (Claude's, whose
+    // approver is named), are not a person's own; a full snapshot counts only the keys whose value changed.
+    const own = new Set((await prisma.adsPlaybookVersion.findMany({ where: { kind: 'playbook', refId: { in: ownRows.map((r) => r.id) }, approvalId: { not: null } }, select: { approvalId: true } })).map((v) => v.approvalId!))
+    const ids = new Set<string>()
+    for (const i of report.items) {
+      if ((i.kind === 'slot_missing' || i.kind === 'slot_paused' || i.kind === 'placement_differs') && i.campaignId) ids.add(i.campaignId)
+      if (i.kind === 'positive_archived' && i.adGroupId) for (const a of archivedPositives.get(i.adGroupId) ?? []) if (normaliseNegTerm(a.text) === normaliseNegTerm(i.term ?? '')) ids.add(a.id)
+      if (i.kind === 'negative_missing' && i.adGroupId && i.term) { const gone = archivedNegatives.get(negativeKey(i.adGroupId, i.match === 'PHRASE' ? 'PHRASE' : 'EXACT', i.term)); if (gone) ids.add(gone) }
+      if (i.kind === 'artifact_changed' && i.artifact?.refId) ids.add(i.artifact.refId)
+    }
+    facts.personal = await personalChanges([...ids], own)
+    facts.liftedElsewhere = await liftedWithoutRow(row.id, own, allLinks.filter((l) => l.kind === 'harvestRule' || l.kind === 'isolationRule').map((l) => l.refId))
+    report = findDrift(facts)
+  }
   for (const l of (isolationPlan?.leftAlone ?? []).slice(0, 20)) report.heldBack.push({ slot: l.slot, what: l.text, why: l.why })
   if (base.template && row.compiledTemplateVersion != null && base.template.version > row.compiledTemplateVersion) {
     base.warnings.push(`The template is at v${base.template.version}; this product was last applied with v${row.compiledTemplateVersion}. Drift compares with the template as it is now.`)
   }
   return { data: { ...base, excluded, report, facts } }
+}
+
+/** The keys whose value differs between an audit row's before and after (a full snapshot repeats the unchanged ones). */
+function changedKeys(before: unknown, after: unknown): string[] {
+  const obj = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {})
+  const b = obj(before)
+  const a = obj(after)
+  return [...new Set([...Object.keys(b), ...Object.keys(a)])].filter((k) => canonical(b[k]) !== canonical(a[k]))
+}
+
+/**
+ * The changes people made themselves to these entities, newest first: the ads audit's `user:` rows, minus the
+ * playbook's own applies (`own`) and every approved or by-rule request (an approval's id as the row's change set: those
+ * are Claude's, run as their approver).
+ */
+async function personalChanges(entityIds: readonly string[], own: ReadonlySet<string>): Promise<Map<string, PersonChange[]>> {
+  const out = new Map<string, PersonChange[]>()
+  if (!entityIds.length) return out
+  const logs = await prisma.advertisingActionLog.findMany({
+    where: { entityId: { in: [...entityIds] }, userId: { startsWith: 'user:' } },
+    orderBy: { createdAt: 'desc' }, take: 300,
+    select: { entityId: true, userId: true, actionType: true, executionId: true, createdAt: true, payloadBefore: true, payloadAfter: true },
+  })
+  const sets = [...new Set(logs.map((l) => l.executionId).filter((x): x is string => !!x && !own.has(x)))]
+  const approvals = new Set(sets.length ? (await prisma.agentApproval.findMany({ where: { id: { in: sets } }, select: { id: true } })).map((a) => a.id) : [])
+  for (const l of logs) {
+    if (l.executionId && (own.has(l.executionId) || approvals.has(l.executionId))) continue
+    out.set(l.entityId, [...(out.get(l.entityId) ?? []), { userId: l.userId!, at: l.createdAt.toISOString(), action: l.actionType, changed: changedKeys(l.payloadBefore, l.payloadAfter) }])
+  }
+  return out
+}
+
+/**
+ * Negatives the playbook made (its builds' and syncs' change sets, its compiled rules' runs) that were removed outright —
+ * a Nexus-only negative retired is deleted, not archived — by `MATCH|term`, with who retired it when the row names a
+ * person (else null: unknown author).
+ */
+async function liftedWithoutRow(playbookId: string, own: ReadonlySet<string>, ruleIds: readonly string[]): Promise<Map<string, PersonChange | null>> {
+  const out = new Map<string, PersonChange | null>()
+  if (!own.size && !ruleIds.length) return out
+  const made = await prisma.advertisingActionLog.findMany({
+    where: { actionType: 'create_negative_keyword', OR: [...(own.size ? [{ executionId: { in: [...own] } }] : []), ...(ruleIds.length ? [{ userId: { in: ruleIds.map((id) => `automation:${id}`) } }] : [])] },
+    select: { entityId: true, payloadAfter: true }, take: 2000,
+  })
+  if (!made.length) return out
+  const standing = new Set((await prisma.adTarget.findMany({ where: { id: { in: made.map((m) => m.entityId) } }, select: { id: true } })).map((t) => t.id))
+  const gone = made.filter((m) => !standing.has(m.entityId))
+  if (!gone.length) return out
+  const retired = await prisma.advertisingActionLog.findMany({ where: { actionType: 'retire_negative', entityId: { in: gone.map((g) => g.entityId) } }, select: { entityId: true, userId: true, createdAt: true } })
+  const by = new Map(retired.map((r) => [r.entityId, r]))
+  for (const g of gone) {
+    const after = (g.payloadAfter ?? {}) as { keywordText?: unknown; matchType?: unknown }
+    if (typeof after.keywordText !== 'string') continue
+    const key = `${/PHRASE/.test(String(after.matchType ?? '')) ? 'PHRASE' : 'EXACT'}|${normaliseNegTerm(after.keywordText)}`
+    const r = by.get(g.entityId)
+    const person = r?.userId?.startsWith('user:') ? { userId: r.userId, at: r.createdAt.toISOString(), action: 'retire_negative', changed: ['status'] } : null
+    if (!out.get(key)) out.set(key, person)
+  }
+  return out
 }
 
 /** A product's drift, as the market list shows it: counted, the first items named. */
@@ -293,11 +365,13 @@ function summaryOf(d: LoadedDrift) {
 
 /** Every enrolled product of one market (its own row says enrolled), each with its drift counted. */
 export async function marketDrift(market: string, channel = 'AMAZON'): Promise<{ market: string; products: Array<Record<string, unknown>>; more: number }> {
-  const { rows } = await loadPlaybookIndex(market, channel)
+  // Read once for every product: the playbook rows and templates, and the strategy.
+  const [{ rows, index }, strategy] = await Promise.all([loadPlaybookIndex(market, channel), openStrategy(market, channel)])
+  const shared: MarketShared = { index, strategy }
   const enrolled = rows.filter((r) => r.level === 'PRODUCT' && r.enrolled === true).sort((a, b) => a.label.localeCompare(b.label))
   const products: Array<Record<string, unknown>> = []
   for (const r of enrolled.slice(0, MAX_LIST)) {
-    const d = await loadDrift({ market, productId: r.scopeId, channel })
+    const d = await loadDrift({ market, productId: r.scopeId, channel }, { light: true, shared })
     products.push('error' in d ? { productId: r.scopeId, label: r.label, error: d.error } : summaryOf(d.data))
   }
   return { market, products, more: Math.max(0, enrolled.length - MAX_LIST) }

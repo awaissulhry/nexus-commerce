@@ -9,8 +9,10 @@
  *                negative whose own keyword is no longer live.
  *   positives    a missing keyword or competitor ASIN of the product's terms, or a misplaced keyword in its right slot,
  *                created at Amazon's 2¢ floor with its planned bid remembered (the SP Super Wizard's launch does the
- *                same, with the same create service) — adds spend. It starts at the floor; START gives it its bid: in a
- *                campaign still at the floor its own restore does, in one that runs `giveBackSyncedBids` below does. The misplaced one stays where it is: sync never
+ *                same, with the same create service) — adds spend. It starts at the floor; only START gives it its bid
+ *                (`giveBackSyncedBids` below): the planned bid is kept in the sync's own version row, not as a floor's
+ *                memory, so no other restore gives it back. At the floor it is no home: isolation never sends a
+ *                search to it (isolation.ts). The misplaced one stays where it is: sync never
  *                removes, and a winner is never moved at all (drift offers no fix for it: Owner rule 2).
  *   productAds   a child listed in the market but not advertised in a slot — adds spend.
  *   slots        a slot with no live campaign is built through the playbook's build (build.ts: the SP Super Wizard's own
@@ -40,6 +42,8 @@ export interface SyncArgs {
   fix?: readonly string[]
   /** The changes a person made himself to put back (their keys): sync never takes one unless it is named here. */
   revert?: readonly string[]
+  /** op sync-negatives: its negatives only (a kind of its own, `negative`); everything else is op sync's (`create`). */
+  negativesOnly?: boolean
 }
 
 export interface SyncPlan {
@@ -85,7 +89,13 @@ export async function planSync(args: SyncArgs): Promise<{ data: SyncPlan } | { s
     else if (i.fix.by !== 'sync') problems.push(`fix: "${k}" is not fixed by sync — ${i.fix.by === 'tool' ? `${i.fix.tool} does it` : i.fix.note}`)
     else if (i.byPerson && !reverts.has(k)) problems.push(`fix: "${k}" is a change ${i.byPerson.userId} made himself — name it in revert to put it back, or keep it (its keep request)`)
   }
-  const chosen = items.filter((i) => i.fix.by === 'sync' && (i.byPerson ? reverts.has(i.key) : !asked || asked.has(i.key)))
+  if (args.negativesOnly) {
+    for (const k of [...(asked ?? []), ...reverts]) {
+      const i = byKey.get(k)
+      if (i && !(i.fix.by === 'sync' && i.fix.part === 'negatives')) problems.push(`"${k}" is not a negative: op sync-negatives adds negatives only (op sync does the rest)`)
+    }
+  }
+  const chosen = items.filter((i) => i.fix.by === 'sync' && (!args.negativesOnly || i.fix.part === 'negatives') && (i.byPerson ? reverts.has(i.key) : !asked || asked.has(i.key)))
   if (chosen.length > MAX_SYNC_ITEMS) problems.push(`it would fix ${chosen.length} items, more than the ${MAX_SYNC_ITEMS} one sync holds: name the ones to fix first (fix)`)
   const parts = Object.fromEntries(SYNC_PARTS.map((p) => [p, chosen.filter((i) => i.fix.by === 'sync' && i.fix.part === p)])) as Record<SyncPart, DriftItem[]>
   const addsSpend = [...SPEND_PARTS].some((p) => parts[p].length > 0)
@@ -116,63 +126,68 @@ export async function planSync(args: SyncArgs): Promise<{ data: SyncPlan } | { s
   return { data: { drift: d as SyncPlan['drift'], chosen, parts, build, addsSpend, left, problems, basis } }
 }
 
-// ── START's hook: the bids a sync remembered ─────────────────────────────────────────────────────────────────────
+// ── START's hook: the bids a sync planned ────────────────────────────────────────────────────────────────────────
 
-/** A keyword or product target a sync added at the floor, its planned bid remembered, where nothing floors it now. */
-export interface SyncedBid { adTargetId: string; campaignId: string; adGroupId: string; text: string; bidCents: number; rememberedCents: number }
+/** A keyword or product target a sync added at the floor, with the bid planned for it, that still bids the floor. */
+export interface SyncedBid { adTargetId: string; campaignId: string; adGroupId: string; text: string; bidCents: number; plannedCents: number }
 
-/**
- * PB-10 — for START (PB-5b; a re-run of it is idempotent): the keywords and product targets a sync of this playbook
- * created (its change sets: the row's version rows op sync, their create audit rows) that still remember a planned bid
- * while neither their campaign nor their ad group is at a floor. A campaign still at the floor (built, not started) is
- * START's own restore (restoreCampaignBids), not this. Read only.
- */
-export async function syncedBidsToGiveBack(playbookId: string): Promise<SyncedBid[]> {
-  const sets = (await prisma.adsPlaybookVersion.findMany({ where: { kind: 'playbook', refId: playbookId, op: 'sync', approvalId: { not: null } }, select: { approvalId: true } })).map((v) => v.approvalId!)
-  if (!sets.length) return []
-  const made = await prisma.advertisingActionLog.findMany({ where: { executionId: { in: sets }, entityType: 'AD_TARGET', actionType: { in: ['create_keyword', 'create_target', 'push_target'] } }, select: { entityId: true } })
-  if (!made.length) return []
-  const rows = await prisma.adTarget.findMany({
-    where: {
-      id: { in: [...new Set(made.map((m) => m.entityId))] }, isNegative: false, status: { not: 'ARCHIVED' }, suppressedFromBidCents: { not: null },
-      adGroup: { bidsSuppressedAt: null, campaign: { bidsSuppressedAt: null, status: { not: 'ARCHIVED' } } },
-    },
-    select: { id: true, adGroupId: true, expressionValue: true, bidCents: true, suppressedFromBidCents: true, adGroup: { select: { campaignId: true } } },
-    orderBy: { id: 'asc' },
-  })
-  return rows.map((t) => ({ adTargetId: t.id, campaignId: t.adGroup.campaignId, adGroupId: t.adGroupId, text: t.expressionValue, bidCents: t.bidCents, rememberedCents: t.suppressedFromBidCents! }))
+/** Every bid a sync of this playbook planned (its version rows op sync), the newest plan for each target. */
+async function plannedBidsOf(playbookId: string): Promise<Map<string, number>> {
+  const rows = await prisma.adsPlaybookVersion.findMany({ where: { kind: 'playbook', refId: playbookId, op: 'sync' }, orderBy: { version: 'asc' }, select: { changes: true } })
+  const out = new Map<string, number>()
+  for (const r of rows) {
+    for (const c of (Array.isArray(r.changes) ? r.changes : []) as Array<{ field?: unknown; to?: unknown }>) {
+      if (c?.field !== 'sync.plannedBids' || !Array.isArray(c.to)) continue
+      for (const b of c.to as Array<{ adTargetId?: unknown; startBidCents?: unknown }>) if (typeof b?.adTargetId === 'string' && typeof b.startBidCents === 'number') out.set(b.adTargetId, b.startBidCents)
+    }
+  }
+  return out
 }
 
 /**
- * PB-10 — START gives back exactly those bids: each to the bid remembered, held inside the bounds that bind it today
+ * PB-10 — for START (PB-5b; a re-run of it is idempotent): the keywords and product targets a sync of this playbook added
+ * at the floor that still bid it, with no floor over them now (neither their campaign, nor their ad group, nor a memory
+ * of their own: those are a floor's, and its restore's). Read only.
+ */
+export async function syncedBidsToGiveBack(playbookId: string): Promise<SyncedBid[]> {
+  const { SUPPRESSION_FLOOR_CENTS } = await import('../ads-bid-suppression.service.js')
+  const planned = await plannedBidsOf(playbookId)
+  if (!planned.size) return []
+  const rows = await prisma.adTarget.findMany({
+    where: {
+      id: { in: [...planned.keys()] }, isNegative: false, status: { not: 'ARCHIVED' }, suppressedFromBidCents: null, bidCents: { lte: SUPPRESSION_FLOOR_CENTS },
+      adGroup: { bidsSuppressedAt: null, campaign: { bidsSuppressedAt: null, status: { not: 'ARCHIVED' } } },
+    },
+    select: { id: true, adGroupId: true, expressionValue: true, bidCents: true, adGroup: { select: { campaignId: true } } },
+    orderBy: { id: 'asc' },
+  })
+  return rows.map((t) => ({ adTargetId: t.id, campaignId: t.adGroup.campaignId, adGroupId: t.adGroupId, text: t.expressionValue, bidCents: t.bidCents, plannedCents: planned.get(t.id)! }))
+}
+
+/**
+ * PB-10 — START gives exactly those bids: each to the bid planned for it, held inside the bounds that bind it today
  * (giveBackBounds: the campaign's own bounds, bid policies, the strategy's band), as the approver, with the approval's
- * change set. A bid that left the floor since (an engine or a person moved it) stays where it is, named, and its memory is
- * cleared — so a re-run gives nothing again. It runs only inside an approved START (that needs the approver's code).
+ * change set. Only START calls it (with the approver's code): no other restore sees these bids. One moved off the floor
+ * since (an engine or a person) is no longer listed; a re-run gives nothing again.
  */
 export async function giveBackSyncedBids(playbookId: string, run: { actor: AdsActor; reason: string; changeSetId: string | null; manual?: boolean }): Promise<{
   given: Array<{ adTargetId: string; text: string; toCents: number; heldBy?: string }>
-  left: Array<{ adTargetId: string; text: string; bidCents: number; rememberedCents: number }>
   failed: Array<{ adTargetId: string; text: string; why: string }>
 }> {
-  const { SUPPRESSION_FLOOR_CENTS, giveBackBounds } = await import('../ads-bid-suppression.service.js')
+  const { giveBackBounds } = await import('../ads-bid-suppression.service.js')
   const { clampBid } = await import('../ads-strategy/bids.js')
   const { updateAdTargetWithSync } = await import('../ads-mutation.service.js')
-  const out: Awaited<ReturnType<typeof giveBackSyncedBids>> = { given: [], left: [], failed: [] }
-  const bids = await syncedBidsToGiveBack(playbookId)
+  const out: Awaited<ReturnType<typeof giveBackSyncedBids>> = { given: [], failed: [] }
   const byCampaign = new Map<string, SyncedBid[]>()
-  for (const b of bids) byCampaign.set(b.campaignId, [...(byCampaign.get(b.campaignId) ?? []), b])
-  const forget = (id: string) => prisma.adTarget.update({ where: { id }, data: { suppressedFromBidCents: null } })
+  for (const b of await syncedBidsToGiveBack(playbookId)) byCampaign.set(b.campaignId, [...(byCampaign.get(b.campaignId) ?? []), b])
   for (const [campaignId, list] of byCampaign) {
     const boundsOf = await giveBackBounds(campaignId, list.map((b) => b.adGroupId))
     for (const b of list) {
-      if (b.bidCents > SUPPRESSION_FLOOR_CENTS) { out.left.push({ adTargetId: b.adTargetId, text: b.text, bidCents: b.bidCents, rememberedCents: b.rememberedCents }); await forget(b.adTargetId); continue }
-      const c = clampBid(b.rememberedCents, boundsOf(b.adGroupId), { currentCents: b.bidCents, forced: true })
+      const c = clampBid(b.plannedCents, boundsOf(b.adGroupId), { currentCents: b.bidCents, forced: true })
       try {
         const r = await updateAdTargetWithSync({ adTargetId: b.adTargetId, patch: { bidCents: c.cents }, actor: run.actor, reason: run.reason, applyImmediately: true, force: true, changeSetId: run.changeSetId, manual: run.manual })
-        if (r.ok || r.error === 'not_found') {
-          await forget(b.adTargetId)
-          if (r.ok) out.given.push({ adTargetId: b.adTargetId, text: b.text, toCents: c.cents, ...(c.held ? { heldBy: c.held.limit.source } : {}) })
-        } else out.failed.push({ adTargetId: b.adTargetId, text: b.text, why: r.error ?? 'not accepted' })
+        if (r.ok) out.given.push({ adTargetId: b.adTargetId, text: b.text, toCents: c.cents, ...(c.held ? { heldBy: c.held.limit.source } : {}) })
+        else if (r.error !== 'not_found') out.failed.push({ adTargetId: b.adTargetId, text: b.text, why: r.error ?? 'not accepted' })
       } catch (e) { out.failed.push({ adTargetId: b.adTargetId, text: b.text, why: (e as Error).message.slice(0, 200) }) }
     }
   }
@@ -202,7 +217,7 @@ export interface SyncWriter {
 type Outcome = { key: string; why: string }
 export interface SyncResult {
   negatives: { added: number; local: number; alreadyStanding: number; refused: Outcome[]; failed: Outcome[]; leftAlone: Outcome[]; ids: string[] }
-  positives: { added: number; local: number; existed: number; refused: Outcome[]; failed: Outcome[]; leftAlone: Outcome[]; ids: string[] }
+  positives: { added: number; local: number; existed: number; refused: Outcome[]; failed: Outcome[]; leftAlone: Outcome[]; ids: string[]; planned: Array<{ adTargetId: string; startBidCents: number }> }
   productAds: { added: number; local: number; failed: Outcome[]; leftAlone: Outcome[]; ids: string[] }
   build: { applicationId: string; alreadyRunning?: boolean } | { refusal: string } | null
   artifacts: { resaved: string[]; errors: string[] }
@@ -219,7 +234,7 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
   const d = plan.drift
   const res: SyncResult = {
     negatives: { added: 0, local: 0, alreadyStanding: 0, refused: [], failed: [], leftAlone: [], ids: [] },
-    positives: { added: 0, local: 0, existed: 0, refused: [], failed: [], leftAlone: [], ids: [] },
+    positives: { added: 0, local: 0, existed: 0, refused: [], failed: [], leftAlone: [], ids: [], planned: [] },
     productAds: { added: 0, local: 0, failed: [], leftAlone: [], ids: [] },
     build: null,
     artifacts: { resaved: [], errors: [] },
@@ -250,9 +265,9 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
     const gone = goneWhy(i)
     if (gone) { res.negatives.leftAlone.push({ key: i.key, why: gone }); continue }
     if (i.negative?.ownerTargetId) {
-      const owner = await prisma.adTarget.findUnique({ where: { id: i.negative.ownerTargetId }, select: { isNegative: true, status: true, externalTargetId: true } })
-      if (!owner || owner.isNegative || String(owner.status) !== 'ENABLED' || owner.externalTargetId == null) {
-        res.negatives.leftAlone.push({ key: i.key, why: `Not written: its keyword "${i.negative.owner ?? '?'}" is no longer live, so its searches would have nowhere to go.` })
+      const owner = await prisma.adTarget.findUnique({ where: { id: i.negative.ownerTargetId }, select: { isNegative: true, status: true, externalTargetId: true, bidCents: true } })
+      if (!owner || owner.isNegative || String(owner.status) !== 'ENABLED' || owner.externalTargetId == null || owner.bidCents <= floor) {
+        res.negatives.leftAlone.push({ key: i.key, why: `Not written: its keyword "${i.negative.owner ?? '?'}" is no longer live${owner && owner.bidCents <= floor ? ' above the 2-cent floor' : ''}, so its searches would have nowhere to go.` })
         continue
       }
     }
@@ -279,8 +294,8 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
     try {
       if (i.targetKind === 'PRODUCT') {
         const t = await createTargetLocal({ adGroupId: at.adGroupId, kind: 'PRODUCT', value: i.term!, bidEur: floor / 100, userId: w.actor, manual: w.manual, confirmOwnLimits: w.confirmOwnLimits, changeSetId: w.changeSetId })
-        if (t.id && planned > floor) await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: planned } })
         if (t.id) res.positives.ids.push(t.id)
+        if (t.id && planned > floor) res.positives.planned.push({ adTargetId: t.id, startBidCents: planned })
         if (t.externalTargetId) res.positives.added++
         else if (t.notSent?.outcome === 'refused') res.positives.refused.push({ key: i.key, why: t.notSent.reason })
         else if (t.notSent) res.positives.failed.push({ key: i.key, why: t.notSent.reason })
@@ -291,8 +306,8 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
           userId: w.actor, evidence: evidence(i), manual: w.manual, confirmOwnLimits: w.confirmOwnLimits, changeSetId: w.changeSetId,
         })
         if (k.existed) { res.positives.existed++; continue }
-        if (k.id && planned > floor) await prisma.adTarget.update({ where: { id: k.id }, data: { suppressedFromBidCents: planned } })
         if (k.id) res.positives.ids.push(k.id)
+        if (k.id && planned > floor) res.positives.planned.push({ adTargetId: k.id, startBidCents: planned })
         if (k.externalTargetId) res.positives.added++
         else if (k.denied) res.positives.refused.push({ key: i.key, why: k.denied.reason })
         else if (k.pushError) res.positives.failed.push({ key: i.key, why: k.pushError })
@@ -346,7 +361,10 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
   const recorded = await recordPlaybookApply(d.playbook.id, {
     op: 'sync', state: current?.state ?? d.playbook.state ?? 'DRAFT', compiledVersion: d.playbook.version, compiledTemplateVersion: d.template?.version ?? null,
     reason: `sync: ${plan.parts.negatives.length} negative(s), ${plan.parts.positives.length} keyword(s) or target(s), ${plan.parts.productAds.length} product ad(s), ${plan.parts.slots.length} slot(s), ${kinds.size} artifact(s)`,
+    // The bids START gives the keywords and targets it added at the floor (giveBackSyncedBids reads them here).
+    ...(res.positives.planned.length ? { plannedBids: res.positives.planned } : {}),
   }, { ...w.writer, approvalId: w.changeSetId }).catch(() => null)
+  if (!recorded && res.positives.planned.length) res.artifacts.errors.push('the playbook row did not record this sync: START cannot give the keywords it added their planned bids (a person sets them)')
   if (plan.build) {
     const { startPlaybookBuild } = await import('./build.js')
     const build = recorded ? { ...plan.build, playbook: { ...plan.build.playbook!, version: recorded.version } } : plan.build

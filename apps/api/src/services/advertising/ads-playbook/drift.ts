@@ -60,13 +60,20 @@ export type DriftFix =
   | { by: 'tool'; tool: string; args: Record<string, unknown>; addsSpend: boolean; note: string }
   | { by: 'none'; note: string }
 
-/** A change a person made himself (the ads audit): who, when, its action, and the fields it wrote (when the row says). */
-export interface PersonChange { userId: string; at: string; action: string; fields?: string[] }
+/**
+ * A change a person made himself (the ads audit, never one of Claude's approved or by-rule requests): who, when, its
+ * action, and `changed` — the keys whose value differs between its before and after (a full snapshot that also holds an
+ * unchanged status is no status change). `unknownAuthor`: it was undone and no record says who (at Amazon, or in Nexus
+ * without a row) — treated as a person's, never put back by rule.
+ */
+export interface PersonChange { userId: string; at: string; action: string; changed?: string[]; unknownAuthor?: true }
+/** Someone lifted it and nothing says who. */
+export const UNKNOWN_AUTHOR: PersonChange = { userId: 'unknown', at: '', action: 'lifted', unknownAuthor: true }
 
 /** Which of a person's changes explains which drift: a status change, a placement, a rule's own settings (not its switch). */
-const STATUS_CHANGE = (c: PersonChange) => /archive|retire|pause|delete|state/i.test(c.action) || (c.fields ?? []).some((f) => f === 'status' || f === 'state')
+const STATUS_CHANGE = (c: PersonChange) => (c.changed ? c.changed.some((k) => k === 'status' || k === 'state') : /archive|retire|pause|delete/i.test(c.action))
 const PLACEMENT_CHANGE = (c: PersonChange) => c.action === 'update_placement_bidding'
-const RULE_EDIT = (c: PersonChange) => c.action === 'update_rule' && (c.fields ?? []).some((f) => f !== 'enabled' && f !== 'autonomyLevel')
+const RULE_EDIT = (c: PersonChange) => c.action === 'update_rule' && (c.changed ?? []).some((k) => k !== 'enabled' && k !== 'autonomyLevel')
 
 export interface DriftItem {
   /** Stable while the drift stands: what `fix` and `revert` of apply-ads-playbook op sync name. */
@@ -168,6 +175,13 @@ export interface DriftFacts {
   portfolioId: string | null
   /** The changes people made themselves, newest first, by entity id (not one of the playbook's own applies). */
   personal: ReadonlyMap<string, readonly PersonChange[]>
+  /**
+   * Negatives the playbook made that were removed outright (a Nexus-only one retired is deleted, not archived), by
+   * `MATCH|term`: who did it when a row says, else null (unknown author).
+   */
+  liftedElsewhere: ReadonlyMap<string, PersonChange | null>
+  /** Slot campaigns an enabled hourly plan holds (the playbook's or the Owner's), with its name: rank owns their placements. */
+  hourlyPlans: ReadonlyMap<string, string>
   artifacts: {
     expectations: readonly KindExpectation[]
     notChecked: ReadonlyArray<{ kind: string; why: string }>
@@ -275,8 +289,11 @@ export function findDrift(f: DriftFacts): DriftReport {
         fix: { by: 'none', note: 'Sync never moves a campaign between portfolios: assign it at Amazon (the Campaigns page) or adopt the portfolio it is in.' },
       })
     }
-    // Placements: a slot the hourly plans do not own. A built slot holds none until START puts them on.
-    if (slot.rankRole !== 'performance' && s.link.origin === 'built' && !c.liveWrites) placementsDeferred.add(slot.key)
+    // Placements: a slot the hourly plans do not own. A built slot holds none until START puts them on. A campaign an
+    // enabled hourly plan holds is that plan's (the Owner's own, or the playbook's): never compared, never set back.
+    const plan = f.hourlyPlans.get(c.id)
+    if (slot.rankRole !== 'performance' && plan) heldBack.push({ slot: slot.key, what: c.name, why: `Its placements are held by ${plan}: an hourly plan owns them, so they are never compared or set back here.` })
+    else if (slot.rankRole !== 'performance' && s.link.origin === 'built' && !c.liveWrites) placementsDeferred.add(slot.key)
     else if (slot.rankRole !== 'performance') {
       // A built slot is held to the playbook's placements; an adopted one to what its campaign held when adopted.
       const adopted = s.link.origin === 'adopted'
@@ -428,7 +445,10 @@ export function findDrift(f: DriftFacts): DriftReport {
     if (seen.has(k)) return
     seen.add(k)
     const goneId = f.archived.negatives.get(k)
-    const person = goneId ? latest(goneId, STATUS_CHANGE) : undefined
+    const elsewhere = f.liftedElsewhere.get(`${n.match}|${norm(n.text)}`)
+    const lifted = !!goneId || elsewhere !== undefined
+    // Lifted: by the person a record names, else by someone nothing names — his change either way, never put back by rule.
+    const person = lifted ? (goneId ? latest(goneId, STATUS_CHANGE) : undefined) ?? elsewhere ?? UNKNOWN_AUTHOR : undefined
     const fix: DriftFix = { by: 'sync', part: 'negatives', addsSpend: false }
     const keep: DriftItem['keep'] = of === 'product'
       ? keepArgs({ terms: { ...f.terms, negatives: f.terms.negatives.filter((x) => !(norm(x.text) === norm(n.text) && x.match === n.match)) } }, `Takes "${n.text}" (${n.match.toLowerCase()}) out of this product's negatives: no slot of it gets it again.`, `keep: negative ${n.text} lifted by a person`)
@@ -439,9 +459,9 @@ export function findDrift(f: DriftFacts): DriftReport {
       key: keyOf('negative_missing', n.slot, `${of}:${n.match}:${n.text}`), kind: 'negative_missing', slot: n.slot, campaignId: n.campaignId, adGroupId: n.adGroupId,
       term: n.text, match: n.match,
       negative: { of, ...(n.kind ? { kind: n.kind } : {}), ...(n.owner ? { ownerTargetId: n.owner.adTargetId, owner: n.owner.text } : {}) },
-      says: `${n.why}${goneId ? ' It was there and was lifted.' : ''}`,
+      says: `${n.why}${lifted ? ` It was there and was lifted${person?.unknownAuthor ? ' (by whom Nexus cannot tell: at Amazon, or in Nexus without a record)' : ''}.` : ''}`,
       fix,
-      ...(person ? { byPerson: person, keep, revert: fix } : goneId ? { keep } : {}),
+      ...(person ? { byPerson: person, keep, revert: fix } : {}),
     })
   }
   for (const a of f.isolation?.adds ?? []) negativeItem('isolation', { ...a, owner: a.owner })

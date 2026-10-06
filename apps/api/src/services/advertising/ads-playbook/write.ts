@@ -757,6 +757,8 @@ export interface PlaybookApplyRecord {
    * merged into the row's overrides.adoptedPlacements in the same write — drift's baseline for that campaign.
    */
   adoptedPlacements?: Record<string, { top: number; productPage: number; restOfSearch: number } | null>
+  /** PB-10 — a sync: the bids START gives the keywords and targets it added at the floor (kept in the version row). */
+  plannedBids?: Array<{ adTargetId: string; startBidCents: number }>
 }
 
 type Tx = Prisma.TransactionClient
@@ -797,6 +799,8 @@ export async function recordPlaybookApply(rowId: string, record: PlaybookApplyRe
       ...(row.state !== record.state ? [{ field: 'state', label: 'State', from: row.state, to: record.state, direction: 'same' as Direction }] : []),
       { field: 'compiledVersion', label: 'Compiled', from: row.compiledVersion, to: compiledVersion, direction: 'same' as Direction },
       ...(overrides && !same(adoptedWas, overrides.adoptedPlacements ?? {}) ? [{ field: 'overrides.adoptedPlacements', label: labelOf('overrides.adoptedPlacements'), from: overridesWas.adoptedPlacements ?? null, to: overrides.adoptedPlacements ?? null, direction: 'same' as Direction }] : []),
+      // Each entry's bid under `startBidCents`, a money key: the history hides it from who may not see ad spend.
+      ...(record.plannedBids?.length ? [{ field: 'sync.plannedBids', label: 'Bids START gives the keywords added at the floor', from: null, to: record.plannedBids, direction: 'same' as Direction }] : []),
     ]
     await db.adsPlaybookVersion.create({
       data: {

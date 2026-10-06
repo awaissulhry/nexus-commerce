@@ -5,9 +5,10 @@
  *
  *   preview   every drift item this sync fixes, by part, and the drift it leaves (a person's own changes not named in
  *             revert, with their keep and revert; what another tool fixes), where it lands, the strategy's facts
- *   by rule   only a sync that adds no spend (its negatives; nothing else) may run by the business's rule, inside the
- *             kit's limits and the strategy's narrowing of negatives; what adds spend (a keyword, a product ad, a slot)
- *             or re-saves a compiled part always waits for a person
+ *   by rule   op sync is the strategy's `create` kind, op sync-negatives (its negatives only) the `negative` kind
+ *             (OP_ACTIONS, ads-strategy/claude.ts). Only a sync that adds no spend may run by the business's rule, inside
+ *             the kit's limits and that kind's narrowing; what adds spend (a keyword, a product ad, a slot), re-saves a
+ *             compiled part, or puts back a change a person made (or one nothing names) always waits for a person
  *   undo      the negatives it added are retired (undo-ad-change of its change set); what it built is archived only
  *             through archive-ads (buildRunId), and the keywords and product ads it added at the floor stay (a person
  *             archives them with archive-ads)
@@ -25,7 +26,7 @@ const MAX_LISTED = 200
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export interface SyncArgsIn {
-  op: 'sync'
+  op: 'sync' | 'sync-negatives'
   market: string
   productId?: string
   sku?: string
@@ -51,7 +52,7 @@ const itemOut = (i: Item) => ({
 export async function syncPreview(a: SyncArgsIn, ctx: Pick<ToolContext, 'approvalId'>): Promise<{ result: ToolResult; plan?: SyncPlan }> {
   const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult })
   const { ownEngines, planSync } = await import('../../advertising/ads-playbook/sync.js')
-  const out = await planSync({ market: a.market, productId: a.productId, sku: a.sku, fix: a.fix, revert: a.revert })
+  const out = await planSync({ market: a.market, productId: a.productId, sku: a.sku, fix: a.fix, revert: a.revert, negativesOnly: a.op === 'sync-negatives' })
   if ('error' in out) return refuse(out.error)
   const p = out.data
   const d = p.drift
@@ -79,7 +80,8 @@ export async function syncPreview(a: SyncArgsIn, ctx: Pick<ToolContext, 'approva
     ...p.parts.positives.map((i) => ({ entity: { kind: 'adGroup' as const, id: (i.into?.adGroupId ?? i.adGroupId)! }, change: { field: 'bid' as const, fromCents: null, toCents: i.startBidCents ?? 2 } })),
     ...(build ? [{ entity: { kind: 'products' as const, market: d.market, productIds: [d.product.productId] }, change: { field: 'dailyBudget' as const, fromCents: null, toCents: build.dailyBudgetCents } }] : []),
   ]
-  const facts = await buildLimitFacts({ tool: TOOL, action: 'negative', items, exceptIds: await ownEngines(d.playbook.id), approvalId: ctx.approvalId ?? null })
+  const facts = await buildLimitFacts({ tool: TOOL, action: a.op === 'sync-negatives' ? 'negative' : 'create', items, exceptIds: await ownEngines(d.playbook.id), approvalId: ctx.approvalId ?? null })
+  const persons = p.chosen.filter((i) => i.byPerson).length
   const highest = Math.max(0, ...p.parts.positives.map((i) => i.startBidCents ?? 0), build?.highestPlannedBidCents ?? 0)
   const n = (part: keyof SyncPlan['parts']) => p.parts[part].length
   const effect = `Syncs ${d.product.sku}'s playbook in ${d.market}, adding only: `
@@ -98,12 +100,14 @@ export async function syncPreview(a: SyncArgsIn, ctx: Pick<ToolContext, 'approva
       ok: true,
       preview: {
         action: TOOL,
-        op: 'sync',
+        op: a.op,
         market: d.market,
         product: d.product,
         playbook: { id: d.playbook.id, version: d.playbook.version, state: d.playbook.state },
         currency,
         addsSpend: p.addsSpend,
+        // Changes a person made himself (or nothing names who) that this sync puts back: never by rule.
+        personsChanges: persons,
         negatives: p.parts.negatives.slice(0, MAX_LISTED).map(itemOut),
         positives: p.parts.positives.slice(0, MAX_LISTED).map(itemOut),
         productAds: p.parts.productAds.slice(0, MAX_LISTED).map(itemOut),
@@ -132,7 +136,8 @@ export async function syncPreview(a: SyncArgsIn, ctx: Pick<ToolContext, 'approva
 
 /** PB-10 — a sync's own check of a run by rule (pure, on its preview): only one that adds no spend, inside the kit's. */
 export function syncRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
-  const p = (preview ?? {}) as { addsSpend?: boolean; totals?: Record<string, number> }
+  const p = (preview ?? {}) as { addsSpend?: boolean; totals?: Record<string, number>; personsChanges?: number }
+  if (p.personsChanges !== 0) return `it puts back ${p.personsChanges ?? 'a'} change${p.personsChanges === 1 ? '' : 's'} a person made himself (or one nothing says who made): a person decides`
   if (p.addsSpend !== false) return 'it adds spend (a keyword, a product ad or a slot): a person decides'
   if ((p.totals?.artifacts ?? 0) > 0) return "it saves the playbook's compiled parts again: a person decides"
   return commonRefusal(preview, limits)

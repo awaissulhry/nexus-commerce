@@ -242,9 +242,30 @@ describe('by rule: what adds spend waits for a person', () => {
     expect(spend).toMatchObject({ op: 'sync', addsSpend: true, totals: { positives: 1 }, effect: expect.stringMatching(/It adds spend: a person decides\./) })
     expect(judge(spend, { maxItems: 10 })).toMatch(/^it adds spend/)
     const negKey = ((await read({ productId: A.parent })).data.items as Row[]).find((i) => i.kind === 'negative_missing' && !i.byPerson)!.key
-    const lowering = (await preview({ productId: A.parent, fix: [negKey] })).preview as Row
-    expect(lowering).toMatchObject({ addsSpend: false, totals: { negatives: 1, positives: 0 }, limitFacts: { tool: 'apply-ads-playbook', action: 'negative' } })
-    expect(judge(lowering, { maxItems: 10 }) ?? '').not.toMatch(/adds spend/)
+    // op sync is the strategy's create kind; its negatives alone are op sync-negatives, the negative kind.
+    expect(((await preview({ productId: A.parent, fix: [negKey] })).preview as Row).limitFacts).toMatchObject({ action: 'create' })
+    const lowering = (await preview({ op: 'sync-negatives', productId: A.parent, fix: [negKey] })).preview as Row
+    expect(lowering).toMatchObject({ op: 'sync-negatives', addsSpend: false, personsChanges: 0, totals: { negatives: 1, positives: 0 }, limitFacts: { tool: 'apply-ads-playbook', action: 'negative' } })
+    expect(judge(lowering, { maxItems: 10 }) ?? '').not.toMatch(/adds spend|puts back/)
+    expect((await preview({ op: 'sync-negatives', productId: A.parent, fix: [missing.key] })).error).toMatch(/is not a negative: op sync-negatives adds negatives only/)
+    // Putting back a change a person made himself never runs by rule.
+    const lifted = ((await read({ productId: A.parent })).data.items as Row[]).find((i) => i.kind === 'negative_missing' && i.byPerson)!
+    const revert = (await preview({ op: 'sync-negatives', productId: A.parent, fix: [lifted.key], revert: [lifted.key] })).preview as Row
+    expect(revert).toMatchObject({ personsChanges: 1, addsSpend: false })
+    expect(judge(revert, { maxItems: 10 })).toMatch(/^it puts back 1 change a person made himself/)
+  })
+
+  it("the strategy's create kind holds op sync: create off, Claude's door refuses it; its negatives alone (op sync-negatives) are not", async () => {
+    const { claudeRuleForChange } = await import('../claude-trust.service.js')
+    await inside(() => db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeAutonomy: { create: 'off' } } }))
+    try {
+      const sync = await inside(() => claudeRuleForChange('apply-ads-playbook', { op: 'sync', market: 'IT', productId: A.parent }))
+      expect(sync).toMatchObject({ level: 'off', narrowedBy: { action: 'create', level: 'off' } })
+      const negatives = await inside(() => claudeRuleForChange('apply-ads-playbook', { op: 'sync-negatives', market: 'IT', productId: A.parent }))
+      expect(negatives?.level).not.toBe('off')
+    } finally {
+      await inside(() => db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeAutonomy: {} } }))
+    }
   })
 })
 
@@ -270,7 +291,10 @@ describe('approved, a sync adds exactly what was approved — in A\'s own ad gro
     expect(spies.negatives).toContainEqual(expect.objectContaining({ adGroupId: groups.A.auto, keywordText: 'test kids', matchType: 'PHRASE' }))
     expect(spies.keywords).toEqual([expect.objectContaining({ adGroupId: groups.A['broad-category'], keywordText: 'test coat', matchType: 'BROAD', bidEur: 0.02, changeSetId: asked.approvalId })])
     const made = await inside(() => db().adTarget.findFirstOrThrow({ where: { adGroupId: groups.A['broad-category'], expressionValue: 'test coat', isNegative: false }, select: { bidCents: true, suppressedFromBidCents: true } }))
-    expect(made).toEqual({ bidCents: 2, suppressedFromBidCents: keyword.startBidCents })
+    // Its planned bid is the sync's own record, never a floor's memory: no restore but START's gives it back.
+    expect(made).toEqual({ bidCents: 2, suppressedFromBidCents: null })
+    const recordedSync = await inside(() => db().adsPlaybookVersion.findFirstOrThrow({ where: { refId: A.rowId, op: 'sync' }, select: { changes: true } }))
+    expect(recordedSync.changes).toContainEqual(expect.objectContaining({ field: 'sync.plannedBids', to: [expect.objectContaining({ startBidCents: keyword.startBidCents })] }))
     // B is untouched: its "test jacket" keywords stand, and it got no negative.
     expect(await inside(() => db().adTarget.count({ where: { adGroupId: { in: [...allB()] }, expressionValue: 'test jacket', isNegative: false, status: 'ENABLED' } }))).toBe(2)
     expect(await inside(() => db().adsPlaybookVersion.findFirst({ where: { refId: A.rowId, op: 'sync' }, select: { approvalId: true } }))).toEqual({ approvalId: asked.approvalId })
@@ -282,12 +306,18 @@ describe('approved, a sync adds exactly what was approved — in A\'s own ad gro
     // START's hook (PB-5b calls it): exactly that keyword's remembered bid comes back on its running campaign, once.
     const { giveBackSyncedBids, syncedBidsToGiveBack } = await import('../../advertising/ads-playbook/sync.js')
     const due = await inside(() => syncedBidsToGiveBack(A.rowId))
-    expect(due).toEqual([expect.objectContaining({ text: 'test coat', bidCents: 2, rememberedCents: keyword.startBidCents, adGroupId: groups.A['broad-category'] })])
+    expect(due).toEqual([expect.objectContaining({ text: 'test coat', bidCents: 2, plannedCents: keyword.startBidCents, adGroupId: groups.A['broad-category'] })])
+    // A restore of a floor never sees it (it is no floor's memory).
+    const { restoreCampaignBids } = await import('../../advertising/ads-bid-suppression.service.js')
+    const campaignA = (await inside(() => db().adGroup.findUniqueOrThrow({ where: { id: groups.A['broad-category'] } }))).campaignId
+    await inside(() => db().campaign.update({ where: { id: campaignA }, data: { bidsSuppressedAt: new Date(), bidsSuppressedBy: 'user:u-owner', bidsSuppressedFloorCents: 2 } }))
+    await inside(() => restoreCampaignBids(campaignA, { actor: 'user:u-owner' }))
+    expect(spies.bids.filter((b) => b.patch?.bidCents === keyword.startBidCents)).toEqual([])
     const given = await inside(() => giveBackSyncedBids(A.rowId, { actor: 'user:u-approver', reason: 'START', changeSetId: 'start-1', manual: true }))
-    expect(given).toMatchObject({ given: [{ text: 'test coat', toCents: keyword.startBidCents }], left: [], failed: [] })
+    expect(given).toMatchObject({ given: [{ text: 'test coat', toCents: keyword.startBidCents }], failed: [] })
     expect(spies.bids).toEqual([expect.objectContaining({ patch: { bidCents: keyword.startBidCents }, actor: 'user:u-approver', changeSetId: 'start-1', force: true })])
     expect(await inside(() => db().adTarget.findFirstOrThrow({ where: { adGroupId: groups.A['broad-category'], expressionValue: 'test coat', isNegative: false }, select: { bidCents: true, suppressedFromBidCents: true } }))).toEqual({ bidCents: keyword.startBidCents, suppressedFromBidCents: null })
-    expect(await inside(() => giveBackSyncedBids(A.rowId, { actor: 'user:u-approver', reason: 'START again', changeSetId: 'start-2' }))).toEqual({ given: [], left: [], failed: [] })
+    expect(await inside(() => giveBackSyncedBids(A.rowId, { actor: 'user:u-approver', reason: 'START again', changeSetId: 'start-2' }))).toEqual({ given: [], failed: [] })
   })
 
   it('a sync that moved since approval is not run', async () => {
@@ -334,5 +364,22 @@ describe('an adopt keeps what each adopted campaign holds as its placement basel
     const items = (await read({ productId: A.parent })).data.items as Row[]
     expect(items.filter((i) => i.kind === 'placement_baseline_missing')).toEqual([expect.objectContaining({ slot: null, keep: expect.objectContaining({ tool: 'set-ads-playbook' }) })])
     expect(items.filter((i) => i.kind === 'placement_differs')).toEqual([])
+  })
+})
+
+describe('rule 3 for terms held outside the playbook', () => {
+  it("only an outside ad group that advertises this product holds its term; another product's ad group never does", async () => {
+    await inside(async () => {
+      const c = await db().campaign.create({ data: { name: 'Outside B', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date(), externalCampaignId: 'EXT-OUT-B', targetingType: 'MANUAL' } })
+      const mine = await db().adGroup.create({ data: { campaignId: c.id, name: 'B group', externalAdGroupId: 'EXT-G-OUT-B1' } })
+      await db().adProductAd.create({ data: { adGroupId: mine.id, asin: 'B0TESTSB02', sku: B.skus.v2, productId: B.v2 } })
+      const theirs = await db().adGroup.create({ data: { campaignId: c.id, name: 'A group', externalAdGroupId: 'EXT-G-OUT-B2' } })
+      await db().adProductAd.create({ data: { adGroupId: theirs.id, asin: 'B0TESTSA02', sku: A.skus.v2, productId: A.v2 } })
+      await db().adTarget.create({ data: { adGroupId: theirs.id, kind: 'KEYWORD', expressionType: 'BROAD', expressionValue: 'test coat', bidCents: 40, status: 'ENABLED', externalTargetId: 'EXT-T-OUT-B2' } })
+      await db().adTarget.deleteMany({ where: { adGroupId: groups.B['broad-category'], expressionValue: 'test coat', isNegative: false } })
+    })
+    const items = (await read({ productId: B.parent })).data.items as Row[]
+    expect(items).toContainEqual(expect.objectContaining({ kind: 'positive_missing', slot: 'broad-category', term: 'test coat' }))
+    expect(items).toContainEqual(expect.objectContaining({ kind: 'outside_campaign', campaignId: expect.any(String) }))
   })
 })
