@@ -55,6 +55,7 @@ import type { AgentTool } from './tool-types.js'
 import { dailyRefusal, LIMIT_FACTS_VERSION, limitFactsOf } from './tools/ads-autonomy-kit.js'
 import {
   AUTO_PAUSE_FAILURES,
+  AUTO_PAUSE_NOTICE_TYPE,
   limitsTighten,
   claudeOffTools,
   claudeRuleOf,
@@ -423,6 +424,12 @@ describe('C5 — the brakes', { timeout: TIMEOUT }, () => {
     }
     const autonomy = (await inside(() => listClaudeRules())).autonomy
     expect(autonomy).toMatchObject({ paused: true, pausedBy: 'Nexus', reason: expect.stringContaining(`${AUTO_PAUSE_FAILURES}`) })
+    // W4-2 — the Owner hears it at once: a danger notice in the business's bell (its event alone tells no one).
+    const notices = await inside(() => database.client.notification.findMany({ where: { type: AUTO_PAUSE_NOTICE_TYPE } }))
+    expect(notices.length).toBeGreaterThan(0)
+    expect(notices.every((n) => n.severity === 'danger' && n.href === '/settings/ai/claude')).toBe(true)
+    expect(notices[0].body).toContain(`${AUTO_PAUSE_FAILURES} changes run by rule were stale or failed within an hour`)
+    expect(await inside(() => database.client.notification.count({ where: { type: AUTO_PAUSE_NOTICE_TYPE } }), B)).toBe(0)
     const next = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
     expect(next.answer.status).toBe('waiting_for_approval')
     // The other business is not paused.
