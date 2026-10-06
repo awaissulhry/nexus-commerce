@@ -16,7 +16,8 @@
  *                         intent (category into Broad | Category, never Broad | Brand) and its Auto slots
  *
  * A negative is planned into an ad group only when ALL hold: the ad group is in scope; it blocks no keyword of that ad
- * group (the lock, L1); its owner keyword is live and above Amazon's 2¢ floor (PB-10); it blocks no search term that WINS there (meets the ads strategy's
+ * group (the lock, L1); its owner keyword is live and not waiting for its bid (PB-10: one a sync added at the floor,
+ * before START); it blocks no search term that WINS there (meets the ads strategy's
  * harvest bar for that ad group) unless that term's LIVE exact home wins too — the Owner's handover choice "proven" (lead
  * decision B): a winner keeps running where it wins until its own exact keyword has proved itself; it does not hit a
  * protected term (a protected term is never isolated); Amazon accepts its text. The lock, the protected terms and the
@@ -192,10 +193,10 @@ function whyOf(kind: IsolationKind, text: string, owner: { slot: string; text: s
 }
 
 /**
- * PB-10 — a keyword a search can be sent to: live, and not at Amazon's 2¢ floor (one added at the floor waits for its
- * bid at START; one stopped serves next to nothing). Negating its term elsewhere would send the searches to 2¢.
+ * PB-10 — a keyword a search can be sent to: live, and not waiting for its bid (a sync added it at the floor and START
+ * has not given it its planned bid yet). Negating its term elsewhere would send the searches to 2¢.
  */
-const isHome = (p: { live: boolean; atFloor?: boolean }) => p.live && !p.atFloor
+const isHome = (p: { live: boolean; waiting?: boolean }) => p.live && !p.waiting
 
 export function planIsolation(input: IsolationPlanInput): IsolationPlan {
   const { action, scope } = input
@@ -206,7 +207,7 @@ export function planIsolation(input: IsolationPlanInput): IsolationPlan {
   const winnersIn = (adGroupId: string) => input.winners.get(adGroupId) ?? new Set<string>()
   /** A term's LIVE exact home in scope that meets the harvest bar there: it has proved itself where it belongs. */
   const proven = (term: string, notIn: string) => allPositives.some((p) =>
-    p.match === 'EXACT' && p.live && !p.atFloor && p.adGroupId !== notIn && normaliseNegTerm(p.text) === normaliseNegTerm(term) && winnersIn(p.adGroupId).has(normaliseNegTerm(term)))
+    p.match === 'EXACT' && isHome(p) && p.adGroupId !== notIn && normaliseNegTerm(p.text) === normaliseNegTerm(term) && winnersIn(p.adGroupId).has(normaliseNegTerm(term)))
 
   const consider = (kind: IsolationKind, text: string, match: 'EXACT' | 'PHRASE', g: ScopeGroup, owner: Positive & { slot: string }) => {
     const key = isolationItemKey({ match, text, adGroupId: g.adGroupId })

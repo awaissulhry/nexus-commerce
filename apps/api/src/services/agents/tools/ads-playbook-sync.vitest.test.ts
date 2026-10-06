@@ -394,3 +394,27 @@ describe('rule 3 for terms held outside the playbook', () => {
     expect(items).toContainEqual(expect.objectContaining({ kind: 'outside_campaign', campaignId: expect.any(String) }))
   })
 })
+
+describe('a keyword a sync adds at the floor is no home until START gives it its bid', () => {
+  it('its term is not negated toward it in the research slots; once it has its bid, it is', async () => {
+    // A new exact category term for B: sync adds it to B's Exact | Category at the floor.
+    await inside(async () => {
+      const row = await db().adsPlaybook.findUniqueOrThrow({ where: { id: B.rowId }, select: { terms: true } })
+      const terms = row.terms as Row
+      await db().adsPlaybook.update({ where: { id: B.rowId }, data: { terms: { ...terms, category: [...terms.category, { text: 'test parka', exactAtStart: true }] } } })
+    })
+    const missing = ((await read({ productId: B.parent })).data.items as Row[]).find((i) => i.kind === 'positive_missing' && i.term === 'test parka' && i.match === 'EXACT')!
+    expect(missing).toMatchObject({ slot: 'exact-category' })
+    const asked = await ask({ productId: B.parent, fix: [missing.key] })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    const made = await inside(() => db().adTarget.findFirstOrThrow({ where: { adGroupId: groups.B['exact-category'], expressionValue: 'test parka', isNegative: false } }))
+    // The run would give it an Amazon id; the spy stands in for it.
+    await inside(() => db().adTarget.update({ where: { id: made.id }, data: { status: 'ENABLED', externalTargetId: 'EXT-T-B-parka' } }))
+    const isolationOf = async () => ((await read({ productId: B.parent })).data.items as Row[])
+      .filter((i) => i.kind === 'negative_missing' && i.term === 'test parka' && i.negative?.of === 'isolation')
+    expect(await isolationOf()).toEqual([])
+    // START gives it its planned bid: now it is a home, and its searches are kept apart from the research slots.
+    await inside(() => db().adTarget.update({ where: { id: made.id }, data: { bidCents: missing.startBidCents } }))
+    expect((await isolationOf()).map((i) => i.slot).sort()).toEqual(['auto', 'broad-category'])
+  })
+})

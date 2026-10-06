@@ -31,6 +31,7 @@ import { ARTIFACT_COMPILERS, compileArtifacts, type ArtifactCompiler, type Artif
 import type { BuildPlan } from './build-preview.js'
 import { loadDrift, type LoadedDrift } from './drift-load.js'
 import { SPEND_PARTS, SYNC_PARTS, type DriftItem, type SyncPart } from './drift.js'
+import { plannedSyncBids, waitingSyncedTargets } from './load.js'
 import { recordPlaybookApply, type PlaybookApplyWriter } from './write.js'
 
 export interface SyncArgs {
@@ -134,19 +135,6 @@ export interface SyncedBid { adTargetId: string; campaignId: string; adGroupId: 
 /** Which of them: these campaigns only; `lifting` — campaigns START takes off their floor first (planned before it does). */
 export interface SyncedBidScope { campaignIds?: Iterable<string>; lifting?: Iterable<string> }
 
-/** Every bid a sync of this playbook planned (its version rows op sync), the newest plan for each target. */
-async function plannedBidsOf(playbookId: string): Promise<Map<string, number>> {
-  const rows = await prisma.adsPlaybookVersion.findMany({ where: { kind: 'playbook', refId: playbookId, op: 'sync' }, orderBy: { version: 'asc' }, select: { changes: true } })
-  const out = new Map<string, number>()
-  for (const r of rows) {
-    for (const c of (Array.isArray(r.changes) ? r.changes : []) as Array<{ field?: unknown; to?: unknown }>) {
-      if (c?.field !== 'sync.plannedBids' || !Array.isArray(c.to)) continue
-      for (const b of c.to as Array<{ adTargetId?: unknown; startBidCents?: unknown }>) if (typeof b?.adTargetId === 'string' && typeof b.startBidCents === 'number') out.set(b.adTargetId, b.startBidCents)
-    }
-  }
-  return out
-}
-
 /**
  * PB-10 — for START (PB-5b; a re-run of it is idempotent): the keywords and product targets a sync of this playbook added
  * at the floor that still bid it, with no floor over them now (neither their campaign, nor their ad group, nor a memory
@@ -154,7 +142,7 @@ async function plannedBidsOf(playbookId: string): Promise<Map<string, number>> {
  */
 export async function syncedBidsToGiveBack(playbookId: string, scope: SyncedBidScope = {}): Promise<SyncedBid[]> {
   const { SUPPRESSION_FLOOR_CENTS } = await import('../ads-bid-suppression.service.js')
-  const planned = await plannedBidsOf(playbookId)
+  const planned = await plannedSyncBids(playbookId)
   if (!planned.size) return []
   const only = scope.campaignIds ? new Set(scope.campaignIds) : null
   const lifting = new Set(scope.lifting ?? [])
@@ -267,14 +255,18 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
   }
   const evidence = (i: DriftItem) => ({ targetKey: `playbook-sync:${i.kind}`, note: i.says.slice(0, 300) })
 
-  // 1 — negatives (lower spend).
+  // 1 — negatives (lower spend). A keyword a sync added at the floor, not given its bid yet, is no home.
+  const waiting = plan.parts.negatives.some((i) => i.negative?.ownerTargetId) ? await waitingSyncedTargets(d.playbook.id, floor) : new Set<string>()
   for (const i of plan.parts.negatives) {
     const gone = goneWhy(i)
     if (gone) { res.negatives.leftAlone.push({ key: i.key, why: gone }); continue }
     if (i.negative?.ownerTargetId) {
-      const owner = await prisma.adTarget.findUnique({ where: { id: i.negative.ownerTargetId }, select: { isNegative: true, status: true, externalTargetId: true, bidCents: true } })
-      if (!owner || owner.isNegative || String(owner.status) !== 'ENABLED' || owner.externalTargetId == null || owner.bidCents <= floor) {
-        res.negatives.leftAlone.push({ key: i.key, why: `Not written: its keyword "${i.negative.owner ?? '?'}" is no longer live${owner && owner.bidCents <= floor ? ' above the 2-cent floor' : ''}, so its searches would have nowhere to go.` })
+      const owner = await prisma.adTarget.findUnique({ where: { id: i.negative.ownerTargetId }, select: { isNegative: true, status: true, externalTargetId: true } })
+      const unserved = waiting.has(i.negative.ownerTargetId)
+      if (!owner || owner.isNegative || String(owner.status) !== 'ENABLED' || owner.externalTargetId == null || unserved) {
+        res.negatives.leftAlone.push({ key: i.key, why: unserved
+          ? `Not written: its keyword "${i.negative.owner ?? '?'}" waits at the 2-cent floor for START to give it its bid, so its searches would go nowhere yet.`
+          : `Not written: its keyword "${i.negative.owner ?? '?'}" is no longer live, so its searches would have nowhere to go.` })
         continue
       }
     }

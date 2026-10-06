@@ -285,13 +285,13 @@ describe('negatives', () => {
     expect(findDrift(f).items.filter((i) => i.kind === 'negative_missing').every((i) => i.byPerson?.unknownAuthor)).toBe(true)
   })
 
-  it('a home at the 2-cent floor (added by a sync, waiting for START) sends no search anywhere: nothing is negated', () => {
-    const owner = (atFloor: boolean) => [{ adTargetId: 't-own', adGroupId: 'g-x', text: 'test jacket', match: 'EXACT' as const, live: true, ...(atFloor ? { atFloor: true } : {}) }]
+  it('a keyword a sync added at the floor, waiting for START to give its bid, is no home: nothing is negated toward it', () => {
+    const owner = (waiting: boolean) => [{ adTargetId: 't-own', adGroupId: 'g-x', text: 'test jacket', match: 'EXACT' as const, live: true, ...(waiting ? { waiting: true } : {}) }]
     const scope = [
       { adGroupId: 'g-x', campaignId: 'c-x', slot: 'exact-category', role: 'exact' as const, match: 'EXACT' as const, intent: 'CATEGORY' as const },
       { adGroupId: 'g-r', campaignId: 'c-r', slot: 'broad-category', role: 'research' as const, match: 'BROAD' as const, intent: 'CATEGORY' as const },
     ]
-    const plan = (atFloor: boolean) => planIsolation({ action: { exactIntoResearch: true, phraseIntoBroadAndAuto: false, brandPhrase: null, handover: 'proven' }, scope, positives: new Map([['g-x', owner(atFloor)]]), winners: new Map(), standing: new Set(), protections: new Map() })
+    const plan = (waiting: boolean) => planIsolation({ action: { exactIntoResearch: true, phraseIntoBroadAndAuto: false, brandPhrase: null, handover: 'proven' }, scope, positives: new Map([['g-x', owner(waiting)]]), winners: new Map(), standing: new Set(), protections: new Map() })
     expect(plan(false).adds.map((a) => [a.adGroupId, a.text])).toEqual([['g-r', 'test jacket']])
     expect(plan(true).adds).toEqual([])
   })

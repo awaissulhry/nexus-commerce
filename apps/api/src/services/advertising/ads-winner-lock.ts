@@ -16,17 +16,16 @@
  *
  * positive  an AdTarget with isNegative false, kind KEYWORD (EXACT, PHRASE, BROAD) or PRODUCT, neither it nor its
  *           campaign archived. live = ENABLED with an Amazon id (a floor-suppressed keyword is live: it is the
- *           "stopped with low bids" state). PB-10 — atFloor: its bid is Amazon's 2¢ floor (stopped, or added at the
- *           floor and not given its bid yet): still a keyword for the lock, but no home a search can be sent to.
+ *           "stopped with low bids" state).
  */
 import prisma from '../../db.js'
 import { normaliseNegTerm } from './ads-protect-converting.js'
 import { strategyMarketOf } from './ads-strategy/terms.js'
 
 export type PositiveMatch = 'EXACT' | 'PHRASE' | 'BROAD' | 'PRODUCT'
-export interface Positive { adTargetId: string; adGroupId: string; text: string; match: PositiveMatch; live: boolean; atFloor?: boolean }
-/** Amazon's least bid: a keyword bidding it serves next to nothing (ads-bid-suppression.service.ts SUPPRESSION_FLOOR_CENTS). */
-const FLOOR_BID_CENTS = 2
+/** PB-10 — `waiting`: a keyword a playbook sync added at the floor that START has not given its planned bid yet (set by the
+ *  playbook's isolation loader, never here): a keyword for the lock, but no home a search can be sent to. */
+export interface Positive { adTargetId: string; adGroupId: string; text: string; match: PositiveMatch; live: boolean; waiting?: boolean }
 export type NegativeMatch = 'EXACT' | 'PHRASE' | 'PRODUCT'
 
 const KEYWORD_MATCHES = new Set(['EXACT', 'PHRASE', 'BROAD'])
@@ -43,13 +42,13 @@ export async function positivesIn(adGroupIds: readonly string[]): Promise<Map<st
       adGroupId: { in: ids }, isNegative: false, kind: { in: ['KEYWORD', 'PRODUCT'] }, status: { not: 'ARCHIVED' },
       adGroup: { campaign: { status: { not: 'ARCHIVED' } } },
     },
-    select: { id: true, adGroupId: true, kind: true, expressionType: true, expressionValue: true, status: true, externalTargetId: true, bidCents: true },
+    select: { id: true, adGroupId: true, kind: true, expressionType: true, expressionValue: true, status: true, externalTargetId: true },
   })
   for (const r of rows) {
     const match: PositiveMatch | null = r.kind === 'PRODUCT' ? 'PRODUCT' : KEYWORD_MATCHES.has(r.expressionType) ? (r.expressionType as PositiveMatch) : null
     if (!match) continue
     const list = out.get(r.adGroupId) ?? []
-    list.push({ adTargetId: r.id, adGroupId: r.adGroupId, text: r.expressionValue, match, live: r.status === 'ENABLED' && r.externalTargetId != null, ...(r.bidCents <= FLOOR_BID_CENTS ? { atFloor: true } : {}) })
+    list.push({ adTargetId: r.id, adGroupId: r.adGroupId, text: r.expressionValue, match, live: r.status === 'ENABLED' && r.externalTargetId != null })
     out.set(r.adGroupId, list)
   }
   return out
