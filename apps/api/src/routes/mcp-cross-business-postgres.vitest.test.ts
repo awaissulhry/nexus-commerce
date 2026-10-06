@@ -114,6 +114,8 @@ interface Seeded {
   /** A10 — a recorded ad write and the change set it belongs to (what undo-ad-change puts back). */
   actionLogId: string
   changeSetId: string
+  /** W3-2 — an ad write still waiting in its grace window (what cancel-queued-ad-write cancels). */
+  outboundQueueId: string
   /** Every value that names one of the business's rows. None may reach the other business. */
   keys: string[]
   /** The AgentRun and AgentApproval rows written before the suite. */
@@ -441,6 +443,16 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         payloadBefore: { bidCents: 35, status: 'ENABLED' }, payloadAfter: { bidCents: 40, status: 'ENABLED' }, amazonResponseStatus: 'PENDING',
       },
     })
+    // W3-2 — a bid write Nexus queued and has not sent (its window is a day long here, so it stays cancellable).
+    const queuedWrite = await db.outboundSyncQueue.create({
+      data: {
+        targetChannel: 'AMAZON', targetRegion: market, syncStatus: 'PENDING', syncType: 'AD_BID_UPDATE', holdUntil: new Date(Date.now() + 86_400_000),
+        payload: { entityType: 'AD_TARGET', entityId: target.id, marketplace: market, fieldChanges: [{ field: 'bid', oldValue: '40', newValue: '45' }], actor: 'user:mcp8' },
+      },
+    })
+    await db.adMutation.create({
+      data: { entityType: 'AD_TARGET', entityId: target.id, marketplace: market, field: 'bid', previousValue: '40', intendedValue: '45', actor: 'user:mcp8', holdUntil: queuedWrite.holdUntil, outboundQueueId: queuedWrite.id, idempotencyKey: `${queuedWrite.id}:bid` },
+    })
     await db.adsRuleSuggestion.create({
       data: {
         ruleId: `rule-${mark}-${RUN}`, ruleName: `${canary}-RULE`, entityType: 'CAMPAIGN', entityId: campaign.id, entityName: `${canary}-CAMPAIGN`,
@@ -471,6 +483,8 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     const suggestion = await db.adsRuleSuggestion.create({
       data: { ruleId: automationRule.id, ruleName: `${canary}-AUTOMATION-RULE`, entityType: 'CAMPAIGN', entityId: campaign.id, entityName: `${canary}-SUGGESTION`, proposedAction: { type: 'bid_down', percent: 5 }, proposedKey: `${mark}-SUGGESTION` },
     })
+    // Ads autonomy W3-1 — a muted recommendation of its campaign: what mute-ad-recommendations unmutes.
+    await db.adsSuggestionMute.create({ data: { scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: `budget:${campaign.id}`, entityName: `${canary}-MUTED-RECOMMENDATION`, createdBy: 'user:mcp8' } })
     // R14 — a budget pool: what tune-ad-engine tunes.
     const budgetPool = await db.budgetPool.create({ data: { name: `${canary}-BUDGET-POOL`, totalDailyBudgetCents: 5000 } })
     // R15 — an assignment of a fleet worker: what steer-fleet runs or cancels.
@@ -648,6 +662,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       ebayItemId: listing.externalListingId!,
       actionLogId: actionLog.id,
       changeSetId,
+      outboundQueueId: queuedWrite.id,
       keys: [
         sku, market, product.id, order.id, order.channelOrderId, listing.id, listing.externalListingId!, first.id, spare.id,
         run.id, rule.id, campaign.id, campaign.externalCampaignId!, adGroup.id, adGroup.externalAdGroupId!, target.id,
@@ -668,6 +683,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         matrixOp.id, photo.id,
         sourcePreset.id,
         adsRun.id,
+        queuedWrite.id,
       ],
       agentRows: [run.id, first.id, spare.id, adsRun.id],
       changeId: change.id,
@@ -815,6 +831,8 @@ const B_VALUES: Record<string, () => unknown> = {
   parentCategoryId: () => seeded.b.parentCategoryId,
   // R11 — decide-automation-suggestions decides suggestions by id.
   suggestionId: () => seeded.b.suggestionId,
+  // Ads autonomy W3-1 — apply-ad-recommendations carries recommendations out by id: B's rule suggestion is one.
+  recommendationId: () => `rule:${seeded.b.suggestionId}`,
   // R13 — set-ad-guardrail binds a scope: a campaign (its first grain) by id.
   scopeId: () => seeded.b.campaignId,
   // R14 — tune-ad-engine names the row it tunes by `subjectId` (its first setting, a budget pool).
@@ -871,6 +889,8 @@ const B_VALUES: Record<string, () => unknown> = {
   // A10 — undo-ad-change names a recorded ad write, or its change set.
   actionLogId: () => seeded.b.actionLogId,
   changeSetId: () => seeded.b.changeSetId,
+  // W3-2 — cancel-queued-ad-write names a queued ad write.
+  outboundQueueId: () => seeded.b.outboundQueueId,
   // A14 — the eBay change tools name the eBay campaign, one of its ad groups and an eBay item id.
   ebayCampaignId: () => seeded.b.ebayCampaignId,
   ebayAdGroupId: () => seeded.b.ebayAdGroupId,
@@ -982,6 +1002,11 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'schedule-pickup': () => ({ date: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10) }),
   // A7 — a selection (the campaign, ad group and market the loop names) moves by a percent.
   'bulk-ad-bid-change': { percent: 10 },
+  // Ads autonomy W3-1 — unmute the recommendation of B's campaign that B muted (its label is B's).
+  'mute-ad-recommendations': () => ({ recommendationIds: [`budget:${seeded.b.campaignId}`], op: 'unmute' }),
+  // W3-1 — undo-ad-change names a recorded write (and its set); `changeId` (one step of a plan's set) is left out: the
+  // loop's changeId is another request's change.
+  'undo-ad-change': { changeId: undefined },
   // The loop's campaignId is the Amazon campaign: read the Amazon log and recommendations (1b aims the eBay ones).
   'ad-changes': { channel: 'amazon' },
   'ad-recommendations': { channel: 'amazon' },
@@ -1011,6 +1036,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'report-ads-run': { op: 'finish' },
   // T4 — the eBay ad details open an eBay campaign (the loop's campaignId and adGroupId are Amazon's).
   'ebay-ad-details': { get campaignId() { return seeded.b.ebayCampaignId }, adGroupId: undefined },
+  // W3-2 — a cancel names the queued write alone (the loop's changeSetId is a recorded write's, which waits for nothing).
+  'cancel-queued-ad-write': { changeSetId: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
   // P9 — a file naming B's product by its SKU (built once B is seeded); the saved mapping maps its Name column.
@@ -1170,9 +1197,15 @@ function probeArgs(tool: AgentTool): { probes: Probe[] } | { gaps: string[] } {
 }
 
 /** Every string the caller itself sent: an answer may repeat those. */
+/** Ads autonomy W3-1 — a recommendation id names its row after its prefix (`rule:<suggestionId>`): the caller sent that id. */
+const RECOMMENDATION_ID = /^(?:bid|budget|retail|rule):(.+)$/
+
 function sentStrings(value: unknown, into = new Set<string>()): Set<string> {
-  if (typeof value === 'string') into.add(value)
-  else if (Array.isArray(value)) value.forEach((item) => sentStrings(item, into))
+  if (typeof value === 'string') {
+    into.add(value)
+    const row = RECOMMENDATION_ID.exec(value)?.[1]
+    if (row) into.add(row)
+  } else if (Array.isArray(value)) value.forEach((item) => sentStrings(item, into))
   else if (value && typeof value === 'object') Object.values(value).forEach((item) => sentStrings(item, into))
   return into
 }
