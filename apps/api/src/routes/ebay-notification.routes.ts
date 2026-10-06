@@ -53,6 +53,7 @@ import { receiveEbayNotice, EbayAdmissionError } from '../services/cx/ingress/eb
  */
 async function auditEbayNotificationAction(req: FastifyRequest, action: 'ebay.notification.setup' | 'ebay.notification.test', environment: string, metadata: {
   outcome: string; topics: string[]; destinationId?: string | null; perTopic?: Array<{ topicId: string; status: string }>; subscriptionId?: string; error?: string
+  perSeller?: Array<{ connectionId: string; status: string }>; connectionId?: string
 }): Promise<void> {
   await auditLogService.write({
     userId: req.authUser?.id ?? null,
@@ -185,11 +186,15 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       // would arrive, be recorded and then dead-letter (P2.1) — visible, but noise.
       skipTopicsWithoutHandlers: true,
     })
-    const ok = ebayNotificationSetupSucceeded(result)
+    // GAP2 phase 2: each eBay account of THIS business, with its own sign-in (the nightly run visits every business).
+    const { reconcileEbaySellersForSetup, sellerReportFailed } = await import('../services/cx/connectors/ebay/seller-subscriptions.js')
+    const sellers = await reconcileEbaySellersForSetup(result, 'this_business')
+    const ok = ebayNotificationSetupSucceeded(result) && !sellerReportFailed(sellers)
     await auditEbayNotificationAction(req, 'ebay.notification.setup', environment, {
       outcome: !result.configured ? 'not_configured' : !result.armed ? 'refused_not_armed' : ok ? 'succeeded' : 'failed',
       topics: gate.topics, destinationId: result.destinationId,
       perTopic: result.perTopic.map(topic => ({ topicId: topic.topicId, status: topic.status })), error: result.error,
+      perSeller: sellers.accounts.map(account => ({ connectionId: account.connectionId, status: account.status })),
     })
     if (!result.configured) {
       return reply.status(400).send({ ok: false, ...result })
@@ -199,18 +204,21 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
     return reply.send({
       ok,
       ...result,
+      sellers,
       hint: result.notOffered.length
         ? `eBay's catalogue does not contain: ${result.notOffered.join(', ')}. Correct them in services/cx/ingress/ebay-topics.ts.`
         : undefined,
     })
   })
 
-  // ── POST /api/admin/ebay-notification-test?topicId=… ───────────────
+  // ── POST /api/admin/ebay-notification-test?topicId=…[&connectionId=…] ─
   // S1 — eBay's own test notice for our subscription (POST /subscription/{id}/test). It
   // arrives signed at the receiver like a real notice, so it proves the whole path.
+  // GAP2 phase 2: a per-seller topic (ORDER_CONFIRMATION) needs `connectionId`, one of THIS
+  // business's own eBay accounts; it is sent with that seller's own token, never the app token.
   app.post('/admin/ebay-notification-test', async (req, reply) => {
-    const { sendEbayTestNotice, ebayNotificationSetupGate, EbayNotificationNotArmedError } = await import('../services/cx/connectors/ebay/notifications.js')
-    const query = req.query as { environment?: string; topicId?: string }
+    const { sendEbayTestNotice, ebayNotificationSetupGate, EbayNotificationNotArmedError, armedSellerTopics } = await import('../services/cx/connectors/ebay/notifications.js')
+    const query = req.query as { environment?: string; topicId?: string; connectionId?: string }
     const environment = query.environment === 'sandbox' ? 'sandbox' : 'production'
     const topicId = typeof query.topicId === 'string' ? query.topicId : ''
     // Only a well-formed topic id is ever written to the audit row.
@@ -225,6 +233,21 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       const error = `topicId must name an armed topic: ${gate.topics.join(', ')}.`
       await auditEbayNotificationAction(req, 'ebay.notification.test', environment, { outcome: 'refused_topic_not_armed', topics: requested, error })
       return reply.status(400).send({ ok: false, error })
+    }
+    if (armedSellerTopics(gate).includes(topicId)) {
+      const connectionId = typeof query.connectionId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(query.connectionId) ? query.connectionId : ''
+      if (!connectionId) {
+        const error = `${topicId} is subscribed per seller: connectionId must name one of this business's eBay accounts. No eBay call was made.`
+        await auditEbayNotificationAction(req, 'ebay.notification.test', environment, { outcome: 'refused_no_account', topics: [topicId], error })
+        return reply.status(400).send({ ok: false, error })
+      }
+      const { sendEbaySellerTestNotice } = await import('../services/cx/connectors/ebay/seller-subscriptions.js')
+      const sellerResult = await sendEbaySellerTestNotice(connectionId, environment)
+      await auditEbayNotificationAction(req, 'ebay.notification.test', environment, {
+        outcome: sellerResult.ok ? 'sent' : sellerResult.refused ? `refused_${sellerResult.refused}` : 'failed',
+        topics: [topicId], connectionId, subscriptionId: sellerResult.subscriptionId, error: sellerResult.error,
+      })
+      return reply.status(sellerResult.refused === 'not_own_account' ? 400 : 200).send(sellerResult)
     }
     const result = await sendEbayTestNotice(environment, topicId)
     await auditEbayNotificationAction(req, 'ebay.notification.test', environment, {
@@ -295,6 +318,13 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
       ])
       const offered = new Set(topics.map((t) => t.topicId))
       const ours = endpoint ? destinations.find((d) => d.endpoint === endpoint) ?? null : null
+      // GAP2 phase 2: this business's eBay accounts — subscribed / reconnect needed / not armed. Read
+      // only; a seller's own token is used only while ORDER_CONFIRMATION is armed.
+      const { ebaySellerSubscriptionStatus, EBAY_ORDER_TOPIC } = await import('../services/cx/connectors/ebay/seller-subscriptions.js')
+      const sellers = await ebaySellerSubscriptionStatus({
+        environment, destinationId: ours && (ours.status ?? '').toUpperCase() === 'ENABLED' ? ours.destinationId : null,
+        topic: topics.find((t) => t.topicId === EBAY_ORDER_TOPIC),
+      }).catch((err: unknown) => ({ error: err instanceof Error ? err.message : String(err) }))
       return reply.send({
         environment,
         endpoint,
@@ -325,6 +355,7 @@ export default async function ebayNotificationRoutes(app: FastifyInstance): Prom
           offeredByEbay: offered.has(t.topicId),
           subscribed: subscriptions.some((s) => s.topicId === t.topicId && (!ours || s.destinationId === ours.destinationId)),
         })),
+        sellers,
       })
     } catch (err: any) {
       return reply.status(500).send({ ...local, error: err?.message ?? String(err) })

@@ -110,7 +110,8 @@ describe('eBay Notification API wire contract', () => {
     expect(m.transport).not.toHaveBeenCalled()
   })
 
-  it('never creates or enables a topic whose handler is missing', async () => {
+  it('never creates or enables the per-seller order topic with the application token', async () => {
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION,ORDER_CONFIRMATION')
     const unsupported = new Map([['ORDER_CONFIRMATION', { ...topics[0], topicId: 'ORDER_CONFIRMATION' }]])
     const existing = [{ topicId: 'ORDER_CONFIRMATION', destinationId: destination.destinationId, subscriptionId: 'disabled', status: 'DISABLED' }]
     expect(await subscribeEbayTopic('production', 'ORDER_CONFIRMATION', destination.destinationId, unsupported, existing)).toMatchObject({ status: 'refused' })
@@ -403,5 +404,46 @@ describe('S1: an application-level setup eBay accepts', () => {
   it.each(['ORDER_CONFIRMATION', 'MARKETPLACE_ACCOUNT_DELETION'])('refuses a test notice for the unarmed topic %s without a call', async topicId => {
     expect(await sendEbayTestNotice('production', topicId)).toMatchObject({ ok: false })
     expect(m.transport).not.toHaveBeenCalled()
+  })
+
+  it('refuses an application-level test notice for the armed per-seller topic, without a call', async () => {
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION,ORDER_CONFIRMATION')
+    expect(await sendEbayTestNotice('production', 'ORDER_CONFIRMATION')).toMatchObject({ ok: false, error: expect.stringMatching(/per seller/) })
+    expect(m.token).not.toHaveBeenCalled()
+    expect(m.transport).not.toHaveBeenCalled()
+  })
+})
+
+describe('GAP2 phase 2: ORDER_CONFIRMATION armed — the app token builds the destination, never the seller subscription', () => {
+  beforeEach(() => vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'ORDER_CONFIRMATION'))
+
+  it('creates the destination when only the per-seller topic is armed, and hands eBay\'s topic to the seller step', async () => {
+    const ebay = fakeEbay()
+    const result = await setupEbayNotifications()
+    // No application subscription is read or written: per-seller subscriptions are read per seller.
+    expect(ebay.requests).toEqual(['GET /topic?limit=100', 'GET /destination?limit=100', 'GET /config', 'PUT /config', 'POST /destination'])
+    expect(result).toMatchObject({ armed: true, destinationId: 'destination-created', perTopic: [], notOffered: [], sellerTopics: [{ topicId: 'ORDER_CONFIRMATION', scope: 'USER' }] })
+    expect(ebayNotificationSetupSucceeded(result)).toBe(true)
+    expect(ebay.subscriptions).toHaveLength(0)
+  })
+
+  it('both armed: the revocation subscription is created with the app token, the order topic is not', async () => {
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION,ORDER_CONFIRMATION')
+    const ebay = fakeEbay({ alertEmail })
+    const result = await setupEbayNotifications()
+    expect(result.perTopic).toEqual([{ topicId: 'AUTHORIZATION_REVOCATION', status: 'created', subscriptionId: 'subscription-AUTHORIZATION_REVOCATION' }])
+    expect(result.sellerTopics?.map(topic => topic.topicId)).toEqual(['ORDER_CONFIRMATION'])
+    expect(ebay.subscriptions.map(subscription => subscription.topicId)).toEqual(['AUTHORIZATION_REVOCATION'])
+    expect(ebayNotificationSetupSucceeded(result)).toBe(true)
+  })
+
+  it('reports the per-seller topic as not offered when eBay\'s catalogue lacks it, and does not succeed', async () => {
+    fakeEbay({ alertEmail, destinations: [destination] })
+    const inner = m.transport.getMockImplementation()!
+    m.transport.mockImplementation(async (url: string, request: RequestInit) =>
+      url === `${API}/topic?limit=100` ? jsonResponse({ topics, total: topics.length }) : inner(url, request))
+    const result = await setupEbayNotifications()
+    expect(result).toMatchObject({ destinationId: destination.destinationId, notOffered: ['ORDER_CONFIRMATION'], sellerTopics: [] })
+    expect(ebayNotificationSetupSucceeded(result)).toBe(false)
   })
 })
