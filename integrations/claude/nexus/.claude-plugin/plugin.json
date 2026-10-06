@@ -1,7 +1,7 @@
 {
   "name": "nexus",
   "displayName": "Nexus Commerce",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Connects Claude to Nexus Commerce (catalog, listings, content, ids, prices, stock, suppliers, orders, returns, ads, automations) for one business per connection, and adds 22 skills, from a weekly channel health check to change plans and undo. Claude reads and asks for changes; each change waits for a person's approval in Nexus unless the business set that change to run by its rule or to be confirmed with an authenticator code.",
   "author": {
     "name": "Nexus Commerce"
