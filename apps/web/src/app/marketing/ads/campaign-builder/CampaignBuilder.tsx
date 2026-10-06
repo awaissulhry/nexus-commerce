@@ -16,12 +16,12 @@ import { IconAtom, IconQuick, IconCubes, IconRocket, IconCube, IconReplicate, Ic
 
 type TypeCard = { key: string; title: string; Icon: typeof IconAtom; bestFor: string; desc: string }
 const TYPES: TypeCard[] = [
-  { key: 'ai-goal', title: 'AI Goal', Icon: IconAtom, bestFor: 'Starter or Experienced sellers', desc: 'Set your goal, and Product Goal AI will automatically manage and optimize your ads to achieve it. Save time and get better results—no manual work needed.' },
+  { key: 'ai-goal', title: 'AI Goal', Icon: IconAtom, bestFor: 'Starter or Experienced sellers', desc: 'Set your goal and Nexus builds the campaigns and a plan for them. The plan proposes bid, budget, keyword and negative changes for your approval; nothing changes on its own unless you switch the plan to Automate.' },
   { key: 'quick', title: 'Quick', Icon: IconQuick, bestFor: 'New Sellers', desc: 'Quickly create Sponsored Product campaigns leveraging the Auto campaign for targets.' },
   { key: 'guided', title: 'Guided', Icon: IconCubes, bestFor: 'Experienced Sellers', desc: 'Set up multiple campaign types at once with your specific goals in mind.' },
   { key: 'sp-super-wizard', title: 'SP Super Wizard', Icon: IconRocket, bestFor: 'Sellers with customized needs', desc: 'Quickly create multiple campaigns, customize naming rules, ie match types, keyword types ( Brand, Category, Competitor),structure templates.' },
 ]
-const SINGLE: TypeCard = { key: 'single', title: 'Single Campaign', Icon: IconCube, bestFor: 'Experienced Sellers', desc: 'Set up a single Sponsored Product, Sponsored Brand or Sponsored Display campaign that can be added to an existing Rule.' }
+const SINGLE: TypeCard = { key: 'single', title: 'Single Campaign', Icon: IconCube, bestFor: 'Experienced Sellers', desc: 'Set up a single Sponsored Products campaign that can be added to an existing Rule. Sponsored Brands and Sponsored Display have their own builders below.' }
 // ACR Stage 5 — the other two ad products. Every builder above this line creates Sponsored
 // Products; SB and SD win page-one slots SP cannot bid on at all, which is why they are the
 // largest untapped coverage lever. Both are dry-run-first and create PAUSED by default.

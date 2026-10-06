@@ -29,3 +29,13 @@ export function createdCampaignIds(answer: unknown): string[] {
   if (!Array.isArray(created)) return []
   return created.map((c) => (c as { campaignId?: unknown } | null)?.campaignId).filter((id): id is string => typeof id === 'string' && id.length > 0)
 }
+
+/**
+ * CC-9 — what a starting bid is, said plainly. Amazon has no bid recommendation for an ad group that does not exist yet
+ * (Nexus calls it only for existing ad groups), so a builder's starting bid is either the account's own CPCs in the
+ * launch market (`accountMedianCpcCents` measured) or a default. It was labelled "Suggested" either way, with a ±27 %
+ * range nobody computed.
+ */
+export function startingBidSource(measuredMedianCpcCents: number | null | undefined, market: string): string {
+  return typeof measuredMedianCpcCents === 'number' && measuredMedianCpcCents > 0 ? `From your ${market} CPCs` : 'Default'
+}

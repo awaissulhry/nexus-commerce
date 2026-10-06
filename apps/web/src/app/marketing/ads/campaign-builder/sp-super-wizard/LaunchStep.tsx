@@ -84,7 +84,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
       {/* Automation mode */}
       <div className="h10-spw-autom">
         <RadioCard name="spw-autom" title="Rule Setting" description="Manually add custom rules to these campaigns" selected={!ai} checked={!ai} onChange={() => setAutomationMode('rule')} />
-        <RadioCard name="spw-autom" title="AI Control" description="Let AI run these campaigns automatically — handling bid adjustments, budget allocation." selected={ai} checked={ai} onChange={() => setAutomationMode('ai')} />
+        <RadioCard name="spw-autom" title="AI Control" description="AI proposes bid and budget changes for these campaigns for your approval. Set it to Automate to let it apply them within your guardrails." selected={ai} checked={ai} onChange={() => setAutomationMode('ai')} />
       </div>
 
       {ai ? (
