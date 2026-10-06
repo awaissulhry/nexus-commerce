@@ -1,4 +1,3 @@
-import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AIAD — AI Advertising routes: goal materialization + the dashboard metrics rollup.
  * 🔴 A NEW FILE, not `advertising.routes.ts`, on purpose (same reason as
@@ -155,16 +154,9 @@ const advertisingAiRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/advertising/recommendation-mutes', async (request, reply) => {
     const b = (request.body ?? {}) as { id?: unknown; label?: unknown }
     if (typeof b.id !== 'string' || !b.id) { reply.status(400); return { error: 'id required' } }
-    const prisma = (await import('../db.js')).default
-    await prisma.adsSuggestionMute.upsert({
-      where: { scope_entityType_entityId: workspaceKey({ scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: b.id }) },
-      create: {
-        scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: b.id,
-        entityName: typeof b.label === 'string' ? b.label.slice(0, 300) : null,
-        reason: 'muted from the Recommendations tab', createdBy: 'operator',
-      },
-      update: {},
-    })
+    // W3-1 — a person's mute over a settle (a request carried it out) becomes a real mute: hidden until unmuted.
+    const { muteRecommendations } = await import('../services/advertising/ads-recommendation-mutes.service.js')
+    await muteRecommendations([{ id: b.id, label: typeof b.label === 'string' ? b.label : null }], 'operator', 'muted from the Recommendations tab')
     return { ok: true }
   })
 

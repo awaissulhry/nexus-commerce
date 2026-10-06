@@ -63,6 +63,13 @@ describe('an engine row', () => {
     expect(engineRow(held, g()).why).toBe('Lowered for this business')
   })
 
+  it('a busy week reads at a glance: thousands separators', () => {
+    // Failures are said once, in the Problem column; the week keeps them only when a warning takes that column.
+    expect(engineRow(engine({ runs7d: 670, writes7d: 10474, failures7d: 1 }), g())).toMatchObject({ week: '670 runs · 10,474 changes', problem: '1 run failed in 7 days' })
+    expect(engineRow(engine({ runs7d: 9, writes7d: 0, failures7d: 2, warning: 'Still evaluating while stopped' }), g()).week).toBe('9 runs · 0 changes · 2 failed')
+    expect(ruleRow(rule({ week: { acted: 1, proposed: 2, failed: 1 } }), g())).toMatchObject({ week: '1 acted · 2 asked', problem: '1 change failed this week' })
+  })
+
   it('a warning or a failed run is its problem', () => {
     expect(engineRow(engine({ failures7d: 2 }), g()).problem).toBe('2 runs failed in 7 days')
     expect(engineRow(engine({ warning: 'Still evaluating while stopped' }), g()).problem).toBe('Still evaluating while stopped')

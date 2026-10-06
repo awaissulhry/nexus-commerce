@@ -20,7 +20,11 @@ export interface DigestRule {
 }
 export interface Digest {
   window: { from: string; to: string; label: string; complete: boolean }
-  gates: { cronFlag: string; cronEnabled: boolean; outboundFlag: string; outboundEnabled: boolean; state: 'off' | 'dry-run' | 'live'; explanation: string }
+  gates: {
+    cronFlag: string; cronEnabled: boolean; outboundFlag: string; outboundEnabled: boolean; state: 'off' | 'dry-run' | 'live'; explanation: string
+    /** How many addresses a send goes to (absent from an older API). */
+    recipientCount?: number
+  }
   totals: { acted: number; proposed: number; denied: number; applied: number; declined: number; failed: number }
   rules: DigestRule[]
   effect: { budgetDeltaCents: number; budgetMoves: number; bidMoves: number; placementMoves: number; note: string }
@@ -141,19 +145,46 @@ export function digestSendImpact(g: Digest['gates']): ActionImpact {
       ],
     }
   }
+  const n = g.recipientCount
+  // No address on the server's list: nothing can be mailed, so it is a plain question about a send that will be refused.
+  if (n === 0) {
+    return {
+      level: 'confirm',
+      title: 'Send last week’s e-mail now?',
+      confirmLabel: 'Try to send',
+      consequences: ['No recipients are set on the server, so nothing is mailed. Nexus says why.'],
+    }
+  }
+  const who = n == null ? 'every recipient on the server’s list' : n === 1 ? '1 person on the server’s list' : `${n} people on the server’s list`
   return {
     level: 'confirm',
-    title: 'Send last week’s e-mail to every recipient now?',
+    title: n == null ? 'Send last week’s e-mail to every recipient now?' : `Send last week’s e-mail to ${n === 1 ? '1 person' : `${n} people`} now?`,
     confirmLabel: 'Send the e-mail now',
     consequences: [
-      'It e-mails last week’s ads summary to every recipient on the server’s list, now.',
+      `It e-mails last week’s ads summary to ${who}, now.`,
       'An e-mail cannot be called back.',
     ],
     reach: 'channel',
     reversal: { verb: 'Send a correction', fidelity: 'lossy' },
-    acknowledge: 'I understand it e-mails every recipient now, and an e-mail cannot be called back.',
+    acknowledge: `I understand it e-mails ${n == null ? 'every recipient' : who.replace(' on the server’s list', '')} now, and an e-mail cannot be called back.`,
   }
 }
+
+/** One row of "Changes to the controls" (GET /api/advertising/control-room/control-changes). */
+export interface ControlChange {
+  id: string
+  at: string
+  userId: string | null
+  by: string
+  kind: 'account-level' | 'stop' | 'start' | 'brakes' | 'rule-level' | 'automation-level' | 'engine-level' | 'campaign-allowed' | 'other'
+  what: string
+  from: string | null
+  to: string | null
+}
+
+/** "Ask me → Auto", or only the new value when the old one was not recorded (a rule's level). */
+export const controlChangeWords = (c: Pick<ControlChange, 'from' | 'to'>): string =>
+  c.from && c.to ? `${c.from} → ${c.to}` : c.to ? `now ${c.to}` : '—'
 
 /** What Send now did. A dry run is not a failure, and never reported as sent either. */
 export function digestSendResult(body: { status?: string; reason?: string; recipients?: string[] } | null, httpStatus: number): { ok: boolean; text: string } {

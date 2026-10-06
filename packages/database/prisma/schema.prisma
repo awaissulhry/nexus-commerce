@@ -20857,7 +20857,7 @@ model OAuthToken {
   resource  String
   scopes    String[]
   expiresAt DateTime
-  /// A refresh token: when it was exchanged.
+  /// A refresh token: when it was exchanged. An access token: its first call (W4-3, the refresh retry grace).
   usedAt    DateTime?
   revokedAt DateTime?
   createdAt DateTime   @default(now())

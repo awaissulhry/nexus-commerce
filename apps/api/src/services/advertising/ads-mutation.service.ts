@@ -2075,10 +2075,11 @@ export async function cancelPendingMutation(outboundQueueId: string): Promise<{
   if (row.holdUntil && row.holdUntil <= new Date()) {
     return { ok: false, error: 'grace_expired' }
   }
-  // Compare-and-set: only a row still PENDING is cancelled, so a row the worker took meanwhile is never marked
-  // cancelled (and put back) while it is being sent.
+  // Compare-and-set: only a row still PENDING (and still inside its window) is cancelled, so a row the worker took
+  // meanwhile is never marked cancelled (and put back) while it is being sent. W3-2 — the worker claims with the same
+  // compare-and-set (PENDING → IN_PROGRESS, ads-sync.worker.ts), so exactly one of the two wins.
   const cancelled = await prisma.outboundSyncQueue.updateMany({
-    where: { id: outboundQueueId, syncStatus: 'PENDING' },
+    where: { id: outboundQueueId, syncStatus: 'PENDING', OR: [{ holdUntil: null }, { holdUntil: { gt: new Date() } }] },
     data: { syncStatus: 'CANCELLED' },
   })
   if (cancelled.count === 0) return { ok: false, error: 'not_pending:CHANGED' }

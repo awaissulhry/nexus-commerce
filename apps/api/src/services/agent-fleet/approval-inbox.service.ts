@@ -916,11 +916,16 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // R11 — each suggestion's status, its proposed change and the bid / budget there now: decided by someone else, or
   // the bid moved, and the approved batch is a different one.
   'decide-automation-suggestions': ['items'],
+  // Ads autonomy W3-1 — each recommendation from the state it was in (shown, muted, settled) to the one it gets.
+  'mute-ad-recommendations': ['changes'],
   // R12 — what the stop or resume changes (the halt, or which rules), and the state row it was planned from.
   'stop-automation': ['changes', 'ruleIds', 'basis'],
   'resume-automation': ['changes', 'ruleIds', 'basis'],
   // R13 — what the guardrail changes, whether that tightens or loosens, and the row it was planned from.
   'set-ad-guardrail': ['changes', 'direction', 'basis'],
+  // Ads autonomy W3-2 — every write it cancels (from → to, who queued it, its window) and the rows it starts from: a
+  // write sent or moved since makes the approved cancel a different one.
+  'cancel-queued-ad-write': ['writes', 'basis'],
   // Ads autonomy W1-3 — every field from → to with the value in force before and after (an inherited value that moved
   // is a different decision), raise or lower, the row's version, and `basis` (the row, its terms and its campaigns).
   'set-ads-strategy': ['changes', 'direction', 'version', 'basis'],

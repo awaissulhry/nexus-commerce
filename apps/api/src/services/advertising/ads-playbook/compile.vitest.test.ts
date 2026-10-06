@@ -119,10 +119,10 @@ describe('the blueprint gate over a compiled playbook', () => {
     expect(plan.totals).toMatchObject({ campaigns: 5, adGroups: 5 })
   })
 
-  it('a gated term another campaign buys blocks until accepted; a brand term never does; a market without writes blocks', () => {
+  it('a gated term the product\'s own other campaign buys blocks until accepted; a brand term never does; a market without writes blocks', () => {
     const existing = [
-      { expression: 'test jacket', campaignName: 'Other product', campaignId: 'c-other' },
-      { expression: 'testtoken jacket', campaignName: 'Other product', campaignId: 'c-other' },
+      { expression: 'test jacket', campaignName: 'Own older campaign', campaignId: 'c-own', asins: ['B0TESTAAA1'] },
+      { expression: 'testtoken jacket', campaignName: 'Own older campaign', campaignId: 'c-own', asins: ['B0TESTAAA1'] },
     ]
     const doc = blueprintOf(out.campaigns, 'TESTTOKEN', templateDoc())
     const blocked = evaluatePlan(clone(), excluded, doc, target, existing, { market })
@@ -131,5 +131,12 @@ describe('the blueprint gate over a compiled playbook', () => {
     expect(evaluatePlan(clone(), excluded, doc, target, existing, { market, acceptSharedTargets: ['test jacket'] }).allowed).toBe(true)
     const closed = evaluatePlan(clone(), excluded, doc, target, [], { market: { ...market, writable: false } })
     expect(closed.blockers.join('\n')).toMatch(/no writable production Amazon Ads connection, so all 5 campaigns/)
+  })
+
+  it('the same gated term another product\'s campaign buys is allowed and only listed (Owner rule 3)', () => {
+    const existing = [{ expression: 'test jacket', campaignName: 'Other product', campaignId: 'c-other', asins: ['B0TESTOTH1'] }]
+    const plan = evaluatePlan(clone(), excluded, blueprintOf(out.campaigns, 'TESTTOKEN', templateDoc()), target, existing, { market })
+    expect(plan).toMatchObject({ allowed: true, blockers: [], conflicts: [] })
+    expect(plan.sharedWithOtherProducts).toEqual([{ expression: 'test jacket', existing: [{ campaignName: 'Other product', campaignId: 'c-other' }] }])
   })
 })

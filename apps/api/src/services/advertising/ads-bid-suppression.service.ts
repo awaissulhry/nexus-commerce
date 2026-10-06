@@ -29,6 +29,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { updateAdTargetWithSync, updateAdGroupWithSync, type AdsActor } from './ads-mutation.service.js'
+import type { AdWriteEvidence } from './ads-evidence.js'
 import { deltaBidCents } from './ads-placement-math.js'
 import { effectiveBidBounds, withStrategyBand, type BidBound } from './ads-write-gate.js'
 import { NO_LIMITS, bidSideWords, clampBid, clampToStrategy, limitWords, strategyBidReader, strategyWords, type BidHoldLog, type StrategyBidLimits } from './ads-strategy/bids.js'
@@ -106,8 +107,9 @@ export function refloorBidCents(floorCents: number, remembered: number | null): 
 export async function suppressCampaignBids(
   campaignId: string,
   // MCP full control A8 — `changeSetId` (optional) tags every write with an approved request's id; absent for every
-  // existing caller, which behaves exactly as before.
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null; changeSetId?: string | null },
+  // existing caller, which behaves exactly as before. ADS AUTONOMY W3-1 — `evidence` (optional) goes on every write's
+  // audit row (the recommendation the stop carries out); absent, nothing changes.
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null; changeSetId?: string | null; evidence?: AdWriteEvidence | null },
 ): Promise<number> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true } })
   if (!camp || camp.bidsSuppressedAt) return 0 // missing or already suppressed → no-op
@@ -125,7 +127,7 @@ export async function suppressCampaignBids(
     // A1 — save the prior BEFORE flooring (so the floor can never lose it) + isolate each entity.
     try {
       await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: g.defaultBidCents } })
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] suppress group threw — skipping', { adGroupId: g.id, error: (e as Error).message }) }
   }
@@ -138,7 +140,7 @@ export async function suppressCampaignBids(
   for (const t of targets) {
     try {
       await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: t.bidCents } })
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] suppress target threw — skipping', { adTargetId: t.id, error: (e as Error).message }) }
   }

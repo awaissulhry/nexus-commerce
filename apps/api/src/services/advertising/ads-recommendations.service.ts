@@ -17,7 +17,7 @@ import { previewHarvest, applyHarvest, type HarvestCandidate, type HarvestCriter
 import { previewPacing, applyPacing } from './ads-budget-pacing.service.js'
 import { analyzeShareOfVoice } from './ads-impression-share.service.js'
 import { analyzeRetailReadiness, applyRetailGuard } from './ads-retail-readiness.service.js'
-import { mutedKeys } from './ads-suggestions.service.js'
+import { recommendationMuteKeys } from './ads-recommendation-mutes.service.js'
 
 export type RecCategory = 'bid' | 'negative' | 'graduate' | 'budget' | 'sov' | 'retail'
 export type RecSeverity = 'high' | 'medium' | 'low'
@@ -236,9 +236,12 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
    * recommendation's own id, which is deterministic across reloads by construction. Dropped
    * here rather than in the route so the counts and the €/mo total describe what is actually
    * on screen. `opts.includeMuted` is how the Muted view lists them back.
+   * W3-1 — a recommendation a request carried out by its id is dropped the same way (settled), until the data the
+   * engines read is a day past the change (ads-recommendation-mutes.service.ts). A settle is not a mute: the Muted
+   * view and its count list the mutes alone.
    */
-  const muted = await mutedKeys('recommendations')
-  const visible = opts.includeMuted ? recs : recs.filter((r) => !muted.has(`RECOMMENDATION|${r.id}`))
+  const { hidden, muted } = await recommendationMuteKeys()
+  const visible = opts.includeMuted ? recs : recs.filter((r) => !hidden.has(`RECOMMENDATION|${r.id}`))
 
   const counts: Record<RecCategory, number> = { bid: 0, negative: 0, graduate: 0, budget: 0, sov: 0, retail: 0 }
   for (const r of visible) counts[r.category]++

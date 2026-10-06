@@ -108,6 +108,7 @@ const AD_MONEY = {
   maxBidCents: ADSPEND,
   minBudgetCents: ADSPEND,
   maxBudgetCents: ADSPEND,
+  budgetBaselineCents: ADSPEND,
   // D11 — a campaign's CPC ceiling (a multiple of each target's average cost per click) caps its bids: money.
   cpcCeiling: ADSPEND,
   targetAcos: ADSPEND,
@@ -538,7 +539,7 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
           where: { id: { in: ids } },
           select: {
             id: true, dailyBudgetCurrency: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true,
-            pinBids: true, pinBudget: true, pinPlacement: true, targetingType: true, dynamicBidding: true,
+            pinBids: true, pinBudget: true, pinPlacement: true, targetingType: true, dynamicBidding: true, budgetBaselineCents: true,
           },
         })
       : Promise.resolve([]),
@@ -575,6 +576,8 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
       maxBidCents: c.maxBidCents ?? null,
       minBudgetCents: c.minBudgetCents ?? null,
       maxBudgetCents: c.maxBudgetCents ?? null,
+      // W3-2 — the daily budget relative budget rules and a restore to baseline start from (set-ad-guardrail campaign-budget-bounds).
+      budgetBaselineCents: x?.budgetBaselineCents ?? null,
       portfolio: c.portfolioId ? { id: String(c.portfolioId), name: portfolioName.get(String(c.portfolioId)) ?? null } : null,
       maxBidChangePct: Number.isFinite(maxBidChangePct) && maxBidChangePct > 0 ? maxBidChangePct : null,
       // As the clamp reads it (ads-cpc-ceiling.ts): on only when enabled, 1.5 × when no multiple is stored.
@@ -628,7 +631,7 @@ const adCampaigns: AgentTool = {
   description:
     'The Amazon campaigns, by market and name. Per campaign: campaignId (the Nexus id the other ad tools take) and '
     + 'externalCampaignId (Amazon\'s), name, market, ad product, status and delivery, currency, daily budget, bidding '
-    + 'strategy, target ACoS, placement adjustments, bid and budget bounds, its portfolio (Amazon\'s id and name), the '
+    + 'strategy, target ACoS, placement adjustments, bid and budget bounds and the budget baseline, its portfolio (Amazon\'s id and name), the '
     + 'guards that move a bid asked for (maxBidChangePct: the most one bid change may move, in %; cpcCeiling: no bid above '
     + 'that multiple of a target\'s average cost per click), whether live writes are allowed for it '
     + '(liveWrites), whether its bids are suppressed and by whom, pins, and impressions, clicks, orders, spend, sales, '
@@ -1246,6 +1249,12 @@ const REC_CATEGORIES = ['bid', 'negative', 'graduate', 'budget', 'sov', 'retail'
 /** A rule's suggested action that would pause, enable, resume or archive: never done (the Owner's no-pause rule). */
 const PAUSING_ACTION = /(^|_)(pause|enable|resume|archive)(_|$)/i
 const NO_PAUSE = 'Nexus never pauses, enables or archives ads on its own: to stop delivery it lowers bids (suppression). This one is information only.'
+/** W3-1 — an unsellable campaign is carried out the Nexus way: its bids go to the stop bid, never a pause. */
+const RETAIL_STOP = 'Nexus never pauses it: carried out (suppress-campaign, or apply-ad-recommendations with this id), every bid of the campaign goes to the stop bid; restore-campaign puts them back.'
+/** W3-1 — the change tool each kind of engine recommendation is carried out with (apply-ad-recommendations does it by id). */
+const SUGGESTED_TOOL: Partial<Record<(typeof REC_CATEGORIES)[number], string>> = {
+  bid: 'set-target-bid', negative: 'create-negative-keyword', graduate: 'graduate-keyword', budget: 'set-campaign-budget', retail: 'suppress-campaign',
+}
 
 interface RecItem {
   recommendationId: string
@@ -1280,7 +1289,10 @@ const adRecommendations: AgentTool = {
     + 'pending suggestions. Per recommendation: id, category, severity, title, why (detail), estimated impact and what '
     + 'kind of number it is, the supporting metrics, the ids a change tool takes (targetId, campaignId, '
     + 'externalCampaignId, externalAdGroupId, query) and suggestedTool when one exists. Nothing pauses: a '
-    + 'recommendation to pause is shown as information (noPause). Filter by category, campaignId or market. The list '
+    + 'recommendation to pause is shown as information (noPause); an unsellable campaign is carried out by lowering its '
+    + 'bids to the stop bid. Carry recommendations out by id with apply-ad-recommendations (one change plan), or mute '
+    + 'them with mute-ad-recommendations; one already carried out is not offered again until the data shows what the '
+    + 'change did. Filter by category, campaignId or market. The list '
     + 'is computed live: a row that moves between two pages may repeat.'
     + ' eBay (channel ebay): the eBay rules\' pending proposals (rate, bid, budget, negatives), each with its campaign, '
     + 'listing or keyword, the change it proposes and the reasoning; a proposal to pause is information only.'
@@ -1356,8 +1368,8 @@ const adRecommendations: AgentTool = {
         ...(change?.targetId ? { targetId: change.targetId, adGroupId: target?.adGroup.id ?? null, externalAdGroupId: target?.adGroup.externalAdGroupId ?? null } : {}),
         ...(change?.proposedBidCents != null ? { proposedBidCents: change.proposedBidCents } : {}),
         ...(change?.proposedBudgetCents != null ? { proposedBudgetCents: change.proposedBudgetCents } : {}),
-        suggestedTool: r.category === 'bid' ? 'set-target-bid' : r.category === 'negative' ? 'create-negative-keyword' : r.category === 'graduate' ? 'graduate-keyword' : null,
-        ...(retail ? { noPause: NO_PAUSE } : {}),
+        suggestedTool: SUGGESTED_TOOL[r.category] ?? null,
+        ...(retail ? { noPause: RETAIL_STOP } : {}),
         _campaign: campaign,
       })
     }

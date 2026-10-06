@@ -149,13 +149,42 @@ export async function setLiveWrites(
 ): Promise<SettingsResult<{ ok: true; campaignId: string; liveBidWritesEnabled: boolean }>> {
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, liveBidWritesEnabled: true },
   })
   if (!campaign) return NOT_FOUND
 
   await prisma.campaign.update({ where: { id: campaignId }, data: { liveBidWritesEnabled: enabled } })
   logger.warn('[ADS-LIVE-ALLOWLIST]', { campaignId, name: campaign.name, enabled, actor })
+  if (campaign.liveBidWritesEnabled !== enabled) await auditLiveWrites([{ ...campaign, enabled }], actor)
   return { value: { ok: true, campaignId, liveBidWritesEnabled: enabled } }
+}
+
+/**
+ * CR (Control Room review) — the flip was written to a log line only, so no screen could say who opened or closed a
+ * campaign to automation, or when. One audit row per campaign whose flag really moved (a press that changes nothing
+ * writes none), in the audit log where the engine switches already go — NOT the ads action log, whose rows the
+ * engines, the breaker and the change feed count as ad changes. Never fails the flip it describes.
+ */
+async function auditLiveWrites(rows: Array<{ id: string; name: string; liveBidWritesEnabled: boolean; enabled: boolean }>, actor: string | undefined): Promise<void> {
+  if (!rows.length) return
+  const userId = liveWritesAuditUser(actor)
+  const { auditLogService } = await import('../audit-log.service.js')
+  await auditLogService.writeMany(rows.map((r) => ({
+    userId,
+    entityType: 'Campaign',
+    entityId: r.id,
+    action: 'set_live_writes',
+    before: { liveBidWritesEnabled: r.liveBidWritesEnabled },
+    after: { liveBidWritesEnabled: r.enabled },
+    metadata: { campaignName: r.name, actor: actor ?? null },
+  }))).catch(() => undefined)
+}
+
+/** The audit row's user: the person's id from a `user:<id>` actor; none for an anonymous or a non-person actor. */
+export function liveWritesAuditUser(actor: string | undefined): string | null {
+  if (!actor?.startsWith('user:')) return null
+  const id = actor.slice(5)
+  return id && id !== 'anonymous' ? id : null
 }
 
 /**
@@ -173,7 +202,13 @@ export async function setLiveWritesBulk(
     return { status: 400, error: 'marketplace or campaignIds required' }
   }
   const where = hasIds ? { id: { in: input.campaignIds as string[] } } : { marketplace: input.marketplace }
+  // The campaigns whose flag will really move, read before the update: their audit rows (CR).
+  const moving = await prisma.campaign.findMany({
+    where: { ...where, liveBidWritesEnabled: !input.enabled },
+    select: { id: true, name: true, liveBidWritesEnabled: true },
+  })
   const result = await prisma.campaign.updateMany({ where, data: { liveBidWritesEnabled: input.enabled } })
+  await auditLiveWrites(moving.map((c) => ({ ...c, enabled: input.enabled })), actor)
   logger.warn('[ADS-LIVE-ALLOWLIST-BULK]', {
     marketplace: input.marketplace,
     campaignIds: input.campaignIds?.length,

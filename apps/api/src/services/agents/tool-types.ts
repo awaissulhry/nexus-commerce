@@ -120,6 +120,11 @@ export interface PreviewConvention {
 export interface ToolChange {
   before: unknown
   after: unknown
+  /**
+   * ADS AUTONOMY W3-1 — the recorded change (AgentChange id), when an undo is built from one: an undo may name it to put
+   * back only what THAT change did (one step of a change plan, whose writes share the plan's change set).
+   */
+  id?: string
 }
 
 /** C2 — a call of a registered tool, e.g. the request that puts a change back. */
@@ -154,6 +159,12 @@ export interface ToolUndo {
   current: (change: ToolChange) => Promise<unknown>
   /** The request that puts `change.before` back, or why it cannot be put back. Pure: no reads, no writes. */
   request: (change: ToolChange) => ToolRequest | { refusal: string }
+  /**
+   * ADS AUTONOMY W3-1 — optional: after the change was put back (its undo ran), tidy what it left outside its own rows
+   * (the recommendations it settled come back at once). Called once per undone change; a failure is logged, never a
+   * failed undo.
+   */
+  undone?: (change: ToolChange) => Promise<void>
 }
 
 export interface ToolContext {
