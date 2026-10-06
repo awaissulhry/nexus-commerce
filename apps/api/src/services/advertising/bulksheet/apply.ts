@@ -140,8 +140,10 @@ async function createRow(
   // 5b — negatives go through the one negative write service. A refused or failed one wrote nothing, so it is FAILED
   // with the reason; one that already stands is SKIPPED rather than reported as made.
   const neg = await import('../ads-negative-kw.service.js')
-  const negativeNotMade = (r: NegativeWriteResult): { outcome: ApplyRowResult['outcome']; message: string; createdId: string | null } | null =>
-    r.outcome === 'refused' ? { outcome: 'FAILED', message: `Not created — refused at ${r.refusal!.deniedAt}: ${r.refusal!.reason}`.slice(0, 300), createdId: null }
+  const negativeNotMade = (r: NegativeWriteResult): { outcome: ApplyRowResult['outcome']; message: string; createdId: string | null; limits?: OwnLimit[] } | null =>
+    // W1-7 + 3A — a negative on a product his ads strategy protects waits for his "Send anyway", like his other limits.
+    r.outcome === 'refused' && r.refusal?.deniedAt === 'needs_confirmation' ? { outcome: 'NEEDS_CONFIRMATION', message: r.refusal.reason, createdId: null, limits: r.refusal.limits ?? [] }
+    : r.outcome === 'refused' ? { outcome: 'FAILED', message: `Not created — refused at ${r.refusal!.deniedAt}: ${r.refusal!.reason}`.slice(0, 300), createdId: null }
       : r.outcome === 'failed' ? { outcome: 'FAILED', message: `Not created — ${r.error ?? 'it did not reach Amazon'}`.slice(0, 300), createdId: null }
         : r.outcome === 'already_existed' ? { outcome: 'SKIPPED', message: 'That negative already exists', createdId: r.adTargetId }
           : null
@@ -214,7 +216,7 @@ async function createRow(
         if (!expr) return { outcome: 'FAILED', message: 'Product targeting expression is required', createdId: null }
         // The sheet writes the expression as asin="B0…"; Amazon takes the ASIN alone.
         const asin = /^asin\s*=\s*"?([^"]*)"?$/i.exec(expr)?.[1]?.trim() ?? expr
-        const r = await neg.writeNegativeProductTarget({ adGroupId: row.parentId, asin, userId: actorId, manual })
+        const r = await neg.writeNegativeProductTarget({ adGroupId: row.parentId, asin, userId: actorId, manual, confirmOwnLimits })
         const notMade = negativeNotMade(r)
         if (notMade) return notMade
         created = { id: r.adTargetId!, externalId: r.externalTargetId }

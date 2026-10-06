@@ -329,7 +329,7 @@ function noCriteria(action: Record<string, unknown> | null, trigger: string, tab
     const shown = defaultClauses(action, tabKey)
     return {
       text: shown.length ? `Defaults: ${shown.join(' · ')}` : 'Defaults — nothing set on this rule',
-      why: `This rule sets no thresholds of its own, so the harvest handler's defaults decide: at least ${d.minOrders} orders to graduate a term, and at least ${money(d.minSpendCents)} of spend with no orders to negate one, over ${d.windowDays} days. Those are fallbacks in automation-action-handlers.ts, not values anyone chose here — open the rule to set your own.`,
+      why: `This rule sets no thresholds of its own, so the ads strategy's harvest and negate thresholds decide wherever its market, a category or a product sets them, and the harvest handler's defaults everywhere else: at least ${d.minOrders} orders to graduate a term, and at least ${money(d.minSpendCents)} of spend with no orders to negate one, over ${d.windowDays} days. Those defaults are fallbacks in automation-action-handlers.ts, not values anyone chose here — open the rule to set your own.`,
     }
   }
   if (trigger === 'SCHEDULE') {
@@ -980,7 +980,7 @@ export function RulesGrid({ tabKey, noun, builderHref, emptyLine }: RulesGridPro
             return (
               <span
                 className="h10-rg-thr default"
-                title={`${spec.cell(t.value)} — but this rule sets no threshold of its own, so that is the handler's fallback rather than a value anyone chose. Open the rule to set your own.`}
+                title={`${spec.cell(t.value)} — but this rule sets no threshold of its own, so that is the handler's fallback rather than a value anyone chose, and the ads strategy's threshold replaces it wherever the rule's market, a category or a product sets one. Open the rule to set your own.`}
               >{spec.cell(t.value)} <i>default</i></span>
             )
           }

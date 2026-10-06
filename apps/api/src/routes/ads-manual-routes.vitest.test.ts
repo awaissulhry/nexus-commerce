@@ -200,6 +200,26 @@ describe('negatives from the campaign manager, while the account is halted', () 
   })
 })
 
+describe('W1-7 — a negative ASIN of a product his ads strategy protects (3A: his own setting warns, never blocks)', () => {
+  it('his add from the screen answers 409 with the warning and writes nothing; his "Send anyway" reaches Amazon', async () => {
+    await inside(async () => {
+      const own = await database.client.product.create({ data: { sku: 'NEG-PROT-1', name: 'Test protected', basePrice: '10.00', amazonAsin: 'B0NEGPROT1' } })
+      await database.client.adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: own.id, label: 'NEG-PROT-1 (IT)', protect: true, updatedBy: 'user:test' } })
+    })
+    const before = amazon.calls.length
+    const waits = await post('/advertising/negative-targets/create', { adGroupId: 'neg-c-g', asin: 'B0NEGPROT1' })
+    expect(waits.status).toBe(409)
+    expect(waits.body).toMatchObject({ id: null, needsConfirmation: { limits: [{ limit: 'product_protected' }] }, error: expect.stringMatching(/^This goes past a product your ads strategy protects: "B0NEGPROT1" is the ASIN of NEG-PROT-1/) })
+    expect(amazon.calls.length).toBe(before)
+    const sent = await post('/advertising/negative-targets/create', { adGroupId: 'neg-c-g', asin: 'B0NEGPROT1', confirmOwnLimits: true })
+    expect([sent.status, sent.manual]).toEqual([200, [true]])
+    expect(sent.body.externalTargetId).toMatch(/^EXT-NEW-/)
+    // An engine's same negative is refused before it reaches the gate.
+    const engine = await inside(() => neg.writeNegativeProductTarget({ adGroupId: 'neg-c-g', asin: 'B0NEGPROT1', userId: ENGINE, confirmOwnLimits: true }))
+    expect(engine).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'product_protected' } })
+  })
+})
+
 describe('the Undo button, while the account is halted', () => {
   it('his Undo reaches Amazon; the same reversal from an engine or a Claude request is refused', async () => {
     // Two edits that landed before the halt (a person's, applied now): one to undo by the button, one by a request.

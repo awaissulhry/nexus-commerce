@@ -76,6 +76,10 @@ import { adsReadMarkets } from './ads-markets.service.js'
 // HV.2 — the stored criteria. Kept in its own module because HV.4 (the write path) and any later
 // engine repair must resolve the SAME policy this page renders, and a copy would drift.
 import { resolveHarvestPolicy, type HarvestCriteria, type HvPolicyGrain } from './harvest-policy.service.js'
+// W1-7 — the ads strategy's harvest group, and the one order "stricter" follows everywhere.
+import { harvestStricter } from './ads-strategy/fields.js'
+import { harvestForScope } from './ads-strategy/terms.js'
+import { productFamily } from './ads-strategy/load.js'
 // HV.3 — where a graduated keyword would go, and the §4.1 coupling that follows from it.
 import {
   loadDestinationGraph, resolveStoredDestinations, resolveDestination,
@@ -393,6 +397,13 @@ export interface HvPayload {
       saveScopeId: string | null
       updatedAt: string | null
       updatedBy: string | null
+      /** W1-7 — the saved policy's own criteria: `criteria` is what is in force (the stricter of it and the strategy). */
+      stored: HarvestCriteria
+      /**
+       * W1-7 — the ads strategy's harvest group for this scope (one market in view), and whether it is the one in force
+       * (`binds`: it asks for at least as much evidence as the saved policy). Null: no market, or no group set here.
+       */
+      strategy: (Omit<HarvestCriteria, 'excludeExactMatched'> & { binds: boolean; source: { level: string; label: string; version: number; product?: string } }) | null
     }
     overridden: string[]
   }
@@ -471,6 +482,25 @@ const tally = <T, K extends string>(xs: T[], f: (x: T) => K | null): Array<{ val
   return [...m.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count)
 }
 
+/**
+ * W1-7 — the ads strategy's harvest group for the view: the most specific grain picked decides which subject it is
+ * resolved for (ad group → campaign → portfolio → line → the market's own row), as the saved policy's grains do. Null
+ * unless exactly one market is in view.
+ */
+async function strategyHarvestOf(req: HvScopeRequest, read: readonly string[]) {
+  const markets = parseMarketScope(req.market, read)
+  if (markets.kind !== 'list' || markets.codes.length !== 1) return null
+  const market = markets.codes[0]
+  if (req.adGroup) return harvestForScope(market, { adGroupId: req.adGroup })
+  if (req.campaign) return harvestForScope(market, { campaignIds: [req.campaign] })
+  if (req.portfolio) {
+    const inPortfolio = await prisma.campaign.findMany({ where: { portfolioId: req.portfolio, marketplace: market }, select: { id: true } })
+    return harvestForScope(market, { campaignIds: inPortfolio.map((c) => c.id) })
+  }
+  if (req.line) return harvestForScope(market, { productIds: await productFamily(req.line) })
+  return harvestForScope(market, {})
+}
+
 export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   // 30 / 60 / 90 only. An arbitrary window would make two links incomparable, and the account
   // produces 14 double-order terms in SIXTY days — a 7-day harvest window here is a random-number
@@ -482,7 +512,16 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   const policy = await resolveHarvestPolicy({
     market: req.market, line: req.line, portfolio: req.portfolio, campaign: req.campaign, adGroup: req.adGroup,
   })
-  const pc = policy.criteria
+  // ADS AUTONOMY W1-7 — the ads strategy's harvest group binds here too, and the STRICTER of it and the saved policy is
+  // in force (fields.ts harvestStricter: a tie goes to the strategy), each WHOLE, never mixed field by field. The
+  // strategy is set per market, so it applies when ONE market is in view — as a market's saved policy does not leak
+  // into the account-wide view. The URL still overrides on top, for this view only.
+  const readMarkets = await adsReadMarkets()
+  const strategy = await strategyHarvestOf(req, readMarkets)
+  const strategyBinds = !!strategy && !harvestStricter(policy.criteria, strategy.group)
+  const pc: HarvestCriteria = strategyBinds
+    ? { minOrders: strategy!.group.minOrders, minClicks: strategy!.group.minClicks, maxAcosPct: strategy!.group.maxAcosPct, windowDays: strategy!.group.windowDays, excludeExactMatched: policy.criteria.excludeExactMatched }
+    : policy.criteria
 
   const windowDays = [30, 60, 90].includes(Number(req.windowDays)) ? Number(req.windowDays) : pc.windowDays
   const minOrders = req.minOrders != null && Number(req.minOrders) >= 1 ? Math.floor(Number(req.minOrders)) : pc.minOrders
@@ -512,7 +551,6 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
 
   // The fifth picker's universe: ad groups that hold a term in the window. Two steps, because
   // AmazonAdsSearchTerm carries EXTERNAL ids and AdGroup is keyed locally.
-  const readMarkets = await adsReadMarkets()
   const termAdGroups = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['adGroupId'],
     where: { date: { gte: since }, ...marketWhere(req.market, readMarkets) },
@@ -970,6 +1008,12 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
         saveScopeId: req.adGroup || req.campaign || req.portfolio || req.line || (req.market !== HV_MARKET_ALL ? req.market : null),
         updatedAt: policy.updatedAt,
         updatedBy: policy.updatedBy,
+        // W1-7 — the saved policy's own criteria (`criteria` above is what is in force: the stricter of it and the
+        // strategy), and the strategy's group for this scope with whether it is the one in force.
+        stored: policy.criteria,
+        strategy: strategy
+          ? { ...strategy.group, binds: strategyBinds, source: { level: strategy.source.level, label: strategy.source.label, version: strategy.source.version, ...(strategy.source.product ? { product: strategy.source.product } : {}) } }
+          : null,
       },
       overridden,
     },

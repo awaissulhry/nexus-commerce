@@ -170,6 +170,8 @@ interface LiveCallOptions {
    * logged. Never set this to quieten a call that can fail meaningfully.
    */
   skipCallLog?: boolean
+  /** W1-7 — a person's negative he confirmed past a product his ads strategy protects (CreateNegativeTargetInput). */
+  personConfirmed?: boolean
   /**
    * CC-25 — do not send this request again on a 5xx. A create Amazon may have made before it answered 502 or 504 must
    * not go out blindly a second time (the second gets "duplicate" and the first stays live with no link to Nexus);
@@ -2285,7 +2287,14 @@ export async function createTarget(ctx: ClientContext, input: CreateTargetInput)
   return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
-export interface CreateNegativeTargetInput { externalCampaignId: string; externalAdGroupId: string; asin: string; state?: 'enabled' | 'paused' }
+export interface CreateNegativeTargetInput {
+  externalCampaignId: string; externalAdGroupId: string; asin: string; state?: 'enabled' | 'paused'
+  /**
+   * W1-7 — a person confirmed this add past a product his ads strategy protects (the write gate asked him: 3A). Set only
+   * by the negative write service after the gate let it through; the wire then lets that protection pass.
+   */
+  personConfirmed?: boolean
+}
 export async function createNegativeProductTarget(ctx: ClientContext, input: CreateNegativeTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
   // CC-18 — the v3 predicate type, as the positive /sp/targets path sends it. Amazon's SP 3.0 document
   // (`SponsoredProductsCreateOrUpdateNegativeTargetingExpressionPredicateType`) allows only `ASIN_SAME_AS` and
@@ -2293,12 +2302,12 @@ export async function createNegativeProductTarget(ctx: ClientContext, input: Cre
   const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: [{ type: 'ASIN_SAME_AS', value: input.asin }], state: (input.state ?? 'enabled').toUpperCase() }
   if (adsMode() === 'sandbox') {
     // 5a — sandbox refuses what liveCall would refuse.
-    await assertNegativeWriteAllowed({ method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [v3] } })
+    await assertNegativeWriteAllowed({ method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [v3] }, personConfirmed: input.personConfirmed === true })
     const externalId = `sb-ntgt-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createNegativeProductTarget', { input, externalId })
     return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
   }
-  const response = await liveCall<{ negativeTargetingClauses?: { success?: Array<{ targetId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [v3] }, contentType: 'application/vnd.spNegativeTargetingClause.v3+json', acceptHeader: 'application/vnd.spNegativeTargetingClause.v3+json' })
+  const response = await liveCall<{ negativeTargetingClauses?: { success?: Array<{ targetId: string }> } }>({ ...ctx, method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [v3] }, contentType: 'application/vnd.spNegativeTargetingClause.v3+json', acceptHeader: 'application/vnd.spNegativeTargetingClause.v3+json', personConfirmed: input.personConfirmed === true })
   return { ok: true, mode: 'live', externalId: response?.negativeTargetingClauses?.success?.[0]?.targetId ?? null, rawResponse: response }
 }
 

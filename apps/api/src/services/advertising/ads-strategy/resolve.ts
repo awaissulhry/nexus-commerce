@@ -30,6 +30,8 @@ import {
   STRATEGY_FIELDS,
   STRATEGY_LEVELS,
   STRATEGY_MONEY,
+  harvestStricter,
+  negateStricter,
   pctToFraction,
   requiredColumns,
   type ClaudeActionType,
@@ -290,6 +292,17 @@ function valueIn(index: StrategyIndex, row: StrategyRow, key: StrategyFieldKey):
 const rank = (level: unknown) => CLAUDE_LEVELS.indexOf(level as ClaudeTrust)
 const num = (value: unknown, fallback = Number.POSITIVE_INFINITY) => (typeof value === 'number' ? value : fallback)
 const field = (value: FieldValue | null, column: string) => (value as Record<string, unknown> | null)?.[column]
+/** A stored harvest or negate group (its columns) in the shape the one "stricter" order compares (fields.ts). */
+const harvestOf = (value: FieldValue | null) => ({
+  minOrders: num(field(value, 'harvestMinOrders'), 0),
+  minClicks: num(field(value, 'harvestMinClicks'), 0),
+  maxAcosPct: typeof field(value, 'harvestMaxAcosPct') === 'number' ? (field(value, 'harvestMaxAcosPct') as number) : null,
+})
+const negateOf = (value: FieldValue | null) => ({
+  minClicks: num(field(value, 'negateMinClicks'), 0),
+  minSpendCents: num(field(value, 'negateMinSpendCents'), 0),
+  maxOrders: num(field(value, 'negateMaxOrders'), 0),
+})
 
 /** The safer of several candidates for one field (fields.ts `safer`); for a descriptive field, null when they differ. */
 function safer(rule: StrategyField['safer'], candidates: Candidate[]): Candidate | null {
@@ -303,15 +316,9 @@ function safer(rule: StrategyField['safer'], candidates: Candidate[]): Candidate
     case 'lowerLevel':
       return best((a, b) => rank(a.value) < rank(b.value))
     case 'stricterHarvest':
-      return best((a, b) => {
-        const [ao, bo] = [num(field(a.value, 'harvestMinOrders'), 0), num(field(b.value, 'harvestMinOrders'), 0)]
-        return ao > bo || (ao === bo && num(field(a.value, 'harvestMinClicks'), 0) > num(field(b.value, 'harvestMinClicks'), 0))
-      })
+      return best((a, b) => harvestStricter(harvestOf(a.value), harvestOf(b.value)))
     case 'stricterNegate':
-      return best((a, b) => {
-        const [ac, bc] = [num(field(a.value, 'negateMinClicks'), 0), num(field(b.value, 'negateMinClicks'), 0)]
-        return ac > bc || (ac === bc && num(field(a.value, 'negateMinSpendCents'), 0) > num(field(b.value, 'negateMinSpendCents'), 0))
-      })
+      return best((a, b) => negateStricter(negateOf(a.value), negateOf(b.value)))
     case 'saferStop':
       return best((a, b) => {
         const lowBids = (c: Candidate) => field(c.value, 'stopMethod') === 'LOW_BIDS'

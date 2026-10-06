@@ -11,8 +11,8 @@
  *   history    the versions of a market's rows, or of one category's or product's, newest first
  *
  * Honest by construction: every field carries its `readBy` from the registry (fields.ts) — what acts on it today
- * (W1-8: Claude's door reads what Claude may do alone; no engine or rule reads a field yet). Until an engine reads a
- * field, only the older settings under `alsoInForce` bind.
+ * (W1-7: the search-term thresholds and protection; W1-8: Claude's door reads what Claude may do alone). Until an
+ * engine reads a field, only the older settings under `alsoInForce` bind.
  *
  * Money (targets, bids, caps, spend thresholds) sits ONLY under the keys in STRATEGY_MONEY, alone, so the money filter
  * removes exactly the money and keeps where it comes from. Free text written by people beside an older setting (a bid
@@ -31,6 +31,7 @@ import {
   STRATEGY_FIELDS,
   STRATEGY_LEVELS,
   fractionToPct,
+  harvestStricter,
   notReadYet,
   type StrategyField,
 } from './fields.js'
@@ -302,10 +303,11 @@ function fieldEntries(resolved: ResolvedStrategy, older: Older): Array<Record<st
     if (spec.key === 'harvest') {
       const h = older.harvest
       entry.alsoInForce = [{ setting: h.setting, harvestMinOrders: h.minOrders, harvestMinClicks: h.minClicks, harvestMaxAcosPct: h.maxAcosPct, harvestWindowDays: h.windowDays }]
-      const g = r.value as { harvestMinOrders: number; harvestMinClicks: number } | null
+      const g = r.value as { harvestMinOrders: number; harvestMinClicks: number; harvestMaxAcosPct: number | null } | null
       if (g) {
-        const strategyStricter = g.harvestMinOrders > h.minOrders || (g.harvestMinOrders === h.minOrders && g.harvestMinClicks >= h.minClicks)
-        entry.stricter = { from: strategyStricter ? 'the strategy' : h.setting }
+        // The one order (fields.ts harvestStricter), as the Keyword Harvest page applies it: a tie goes to the strategy.
+        const policyStricter = harvestStricter(h, { minOrders: g.harvestMinOrders, minClicks: g.harvestMinClicks, maxAcosPct: g.harvestMaxAcosPct })
+        entry.stricter = { from: policyStricter ? h.setting : 'the strategy' }
       }
     }
     if (spec.key === 'targetAcosPct') {
