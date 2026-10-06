@@ -81,10 +81,11 @@ export const STRUCTURE = z.object({
   productAds: z.object({ fulfilment: z.enum(['FBA', 'FBM', 'both']) }).strict(),
   /**
    * A category or competitor term one of THIS product's own campaigns outside the playbook already buys in the market:
-   * skip = it stays where it is, accept = built too, on the record. Owner rule 3: isolation is per product — another
-   * product's campaigns may buy the same term; that is only listed, never skipped (this setting does not apply to it).
+   * skip (the default) = it stays where it is — Owner rule 2, a term that works is not moved or bought twice; accept =
+   * built too, on the record. Owner rule 3: isolation is per product — another product's campaigns may buy the same
+   * term; that is only listed, never skipped (this setting does not apply to it).
    */
-  sharedTerms: z.enum(['skip', 'accept']).default('accept'),
+  sharedTerms: z.enum(['skip', 'accept']).default('skip'),
   slots: z.array(SLOT).min(1).max(30),
 }).strict()
 

@@ -9,7 +9,7 @@
  *                   advertised), and which seller SKU the template's fulfilment choice points at
  *   shared terms    Owner rule 3 (isolation is per product): a category or competitor keyword one of THIS product's
  *                   own campaigns outside the playbook already buys in the market is skipped (template `skip`: it
- *                   stays where it is) or built too, on the record (`accept`, the default) — each named. A keyword
+ *                   stays where it is, the default) or built too, on the record (`accept`) — each named. A keyword
  *                   another product's campaigns buy is kept and only listed (`sharedWithOtherProducts`): different
  *                   products may share a keyword, never blocked, never skipped
  *   money           at full spend, the slots' daily budgets over the month against every monthly cap of the strategy
