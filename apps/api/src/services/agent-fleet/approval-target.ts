@@ -783,6 +783,21 @@ const READERS: Record<string, Reader> = {
   },
   // PB-5a — a build's campaigns and their daily budget, or an adopt's bindings (Nexus only).
   'apply-ads-playbook': (p) => {
+    // PB-9 — a phase switch: the phase, then each slot it floors or gives back and each hourly plan it switches.
+    if (p.op === 'phase') {
+      const phase = rec(p.phase)
+      return {
+        channel: 'AMAZON',
+        market: marketOf(p.market),
+        changes: [
+          { label: 'Phase', from: text(phase?.from) ?? EMPTY, to: text(phase?.to) ?? EMPTY },
+          ...recs(p.slots).filter((s) => s.does === 'floor' || s.does === 'restore')
+            .map((s) => ({ label: `Slot ${plainValue(s.slot)}`, from: s.does === 'floor' ? 'Active' : 'At the floor', to: s.does === 'floor' ? 'At the floor' : 'Bids given back' })),
+          ...recs(p.rank).filter((r) => r.does === 'enable' || r.does === 'disable')
+            .map((r) => ({ label: `Hourly plan ${plainValue(r.role)}`, from: r.does === 'enable' ? 'Off' : 'On', to: r.does === 'enable' ? 'On' : 'Off' })),
+        ],
+      }
+    }
     if (p.op === 'adopt') {
       return {
         channel: 'AMAZON',

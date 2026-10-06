@@ -152,7 +152,7 @@ describe('the registry', () => {
   })
 
   it('W1-8 — each of those tools knows where its change lands; brakes are registered tools, none of them, never narrowed', () => {
-    const narrowed = Object.values(CLAUDE_ACTION_TOOLS).flat()
+    const narrowed = [...new Set(Object.values(CLAUDE_ACTION_TOOLS).flat())]
     expect(Object.keys(PLACES).sort()).toEqual([...narrowed].sort())
     const tools = new Set(listTools().map((t) => t.name))
     for (const brake of BRAKE_TOOLS) {
@@ -160,13 +160,24 @@ describe('the registry', () => {
       expect(narrowed, brake).not.toContain(brake)
       expect(actionOfTool(brake), brake).toBeNull()
     }
-    for (const [action, names] of Object.entries(CLAUDE_ACTION_TOOLS)) for (const name of names) expect(actionOfTool(name)).toBe(action)
+    // A tool is its first kind; one listed again under an op's kind (PB-9: apply-ads-playbook under phase) has that op.
+    const seen = new Set<string>()
+    for (const [action, names] of Object.entries(CLAUDE_ACTION_TOOLS)) {
+      for (const name of names) {
+        if (seen.has(name)) expect(Object.values(OP_ACTIONS[name] ?? {}), `${name} under ${action}`).toContain(action)
+        else expect(actionOfTool(name)).toBe(action)
+        seen.add(name)
+      }
+    }
     expect(actionOfTool('set-price')).toBeNull()
   })
 
   it('PB-5a — a tool of several ops: each op its own kind (null: never narrowed); an op not listed, or no args, the tool\'s kind', () => {
     expect(actionOfTool('apply-ads-playbook', { op: 'build' })).toBe('create')
     expect(actionOfTool('apply-ads-playbook', { op: 'adopt' })).toBeNull()
+    // PB-9 — a phase switch is its own kind; the tool stays create when no op says otherwise.
+    expect(actionOfTool('apply-ads-playbook', { op: 'phase' })).toBe('phase')
+    expect(CLAUDE_ACTION_TOOLS.phase).toContain('apply-ads-playbook')
     expect(actionOfTool('apply-ads-playbook', { op: 'something-else' })).toBe('create')
     expect(actionOfTool('apply-ads-playbook')).toBe('create')
     // Every tool with ops is a narrowed tool, and each op names a real kind (or null).

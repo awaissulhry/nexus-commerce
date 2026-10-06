@@ -295,8 +295,8 @@ function directionOf(field: string, effect: Effect): Direction {
 
 // ── Recipes at enrollment ─────────────────────────────────────────────────────────────────────────
 
-/** The facts a product's phase recipes are made absolute from, and where each came from. */
-async function recipeFacts(market: string, channel: string, productId: string, baseBidCents: number | null) {
+/** The facts a product's phase recipes are made absolute from, and where each came from (PB-9: its phase check shows them). */
+export async function recipeFacts(market: string, channel: string, productId: string, baseBidCents: number | null) {
   const family = await productFamily(productId)
   const results = await Promise.all(family.map((id) => computeProductTargetAcos({ productId: id, marketplace: market, windowDays: 90 })))
   const known = results.filter((r) => r.basis === 'profit-data' && r.breakevenAcos != null && r.grossRevenueCents > 0)
@@ -737,12 +737,17 @@ export interface PlaybookApplyWriter {
 
 /** What an apply op made of the row: its state, and the row and template versions it compiled. */
 export interface PlaybookApplyRecord {
-  op: 'build' | 'adopt' | 'start' | 'stop'
+  op: 'build' | 'adopt' | 'start' | 'stop' | 'phase'
   state: string
   /** The row version the op was planned (and approved) from. */
   compiledVersion: number
   compiledTemplateVersion: number | null
   reason?: string | null
+  /** PB-9 — what else the op changed, recorded with the version (a phase switch: the phase from → to, by its effect). */
+  changes?: PlaybookChange[]
+  /** PB-9 — the op's direction by its effect, and when its raise was confirmed with a code (default: same, none). */
+  direction?: Direction
+  stepUpAt?: Date | null
 }
 
 type Tx = Prisma.TransactionClient
@@ -767,6 +772,7 @@ export async function recordPlaybookApply(rowId: string, record: PlaybookApplyRe
     })
     if (updated.count !== 1) throw new Moved()
     const changes: PlaybookChange[] = [
+      ...(record.changes ?? []),
       ...(row.state !== record.state ? [{ field: 'state', label: 'State', from: row.state, to: record.state, direction: 'same' as Direction }] : []),
       { field: 'compiledVersion', label: 'Compiled', from: row.compiledVersion, to: compiledVersion, direction: 'same' as Direction },
     ]
@@ -774,8 +780,8 @@ export async function recordPlaybookApply(rowId: string, record: PlaybookApplyRe
       data: {
         kind: 'playbook', refId: row.id, version, market: row.market, level: row.level, scopeId: row.scopeId, op: record.op,
         values: rowValuesOf({ ...row, state: record.state }) as unknown as Prisma.InputJsonValue, changes: changes as unknown as Prisma.InputJsonValue,
-        direction: 'same', via: writer.via, approvalId: writer.approvalId ?? null, actor: writer.actor, actorUserId: writer.actorUserId ?? null,
-        stepUpAt: null, reason: record.reason ?? null,
+        direction: record.direction ?? 'same', via: writer.via, approvalId: writer.approvalId ?? null, actor: writer.actor, actorUserId: writer.actorUserId ?? null,
+        stepUpAt: record.direction === 'raise' ? record.stepUpAt ?? null : null, reason: record.reason ?? null,
       },
     })
     return { version, compiledVersion, moved }

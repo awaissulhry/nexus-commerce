@@ -6,7 +6,8 @@
  *              slot for ASIN search terms (negative product target in the source)
  *   isolation  exact keywords negated in Auto, Broad and Phrase; brand terms negated (phrase) in the category and
  *              competitor slots; phrase keywords NOT negated in Broad and Auto (Broad keeps discovering long tails)
- *   phases     LAUNCH → GROW → PROFIT, CLEAR_STOCK and DEFEND: the design's starting table, every number editable
+ *   phases     LAUNCH → GROW → PROFIT, CLEAR_STOCK and DEFEND: the design's starting table, every number editable;
+ *              each phase held at least 14 days before Nexus proposes leaving it (PB-9, the hysteresis)
  *
  * They are where a captured or hand-made template starts, never a rule an engine follows: a template is compiled only by
  * an approved apply, and every threshold an engine obeys is the strategy's.
@@ -60,11 +61,14 @@ export function defaultPhases(slots: readonly Slot[], weights: Readonly<Record<s
   const clearWeights = Object.fromEntries(Object.entries(weights).map(([key, w]) => [key, autos.has(key) ? Math.min(w * 2, 1000) : w]))
   const lenient = { minClicks: 25, maxOrders: 0, windowDays: 30 } as const
   const normal = { minClicks: 15, maxOrders: 0, windowDays: 30 } as const
+  /** The design's hold: at least 14 days in a phase unless a person switches by hand (§3.7). */
+  const hold = 14
   const phases: z.input<typeof PHASES_SECTION> = {
     LAUNCH: {
       recipe: { targetAcos: { from: 'breakEven', factor: 1.3, fallbackFactor: 1.5 }, harvest: { minOrders: 1, minClicks: 0, windowDays: 30 }, negate: lenient },
       rank: { performance: 'on', research: 'on' },
       harvestCadence: 'daily',
+      minDays: hold,
       claude: { budget: 'ask' },
       exit: [
         { to: 'GROW', when: [{ metric: 'daysInPhase', op: 'gte', value: 21 }, { metric: 'adOrders', op: 'gte', value: 10, windowDays: 14 }] },
@@ -75,6 +79,7 @@ export function defaultPhases(slots: readonly Slot[], weights: Readonly<Record<s
       recipe: { targetAcos: { from: 'marketTarget', factor: 1 }, harvest: { minOrders: 2, minClicks: 0, windowDays: 30 }, negate: normal },
       rank: { performance: 'on', research: 'on' },
       harvestCadence: 'daily',
+      minDays: hold,
       exit: [{ to: 'PROFIT', when: [
         { metric: 'daysInPhase', op: 'gte', value: 14 },
         { metric: 'acosToTargetPct', op: 'lte', value: 100, windowDays: 14 },
@@ -85,6 +90,7 @@ export function defaultPhases(slots: readonly Slot[], weights: Readonly<Record<s
       recipe: { targetAcos: { from: 'breakEven', factor: 0.8, fallbackFactor: 1 }, harvest: { minOrders: 3, minClicks: 0, maxAcosFactor: 1, windowDays: 60 }, negate: { minClicks: 10, maxOrders: 0, windowDays: 30 } },
       rank: { performance: 'off', research: 'on' },
       harvestCadence: 'weekly',
+      minDays: hold,
       exit: [{ to: 'GROW', when: [
         { metric: 'daysInPhase', op: 'gte', value: 14 },
         { metric: 'ordersChangePct', op: 'lte', value: -25, windowDays: 14 },
@@ -96,6 +102,7 @@ export function defaultPhases(slots: readonly Slot[], weights: Readonly<Record<s
       ...(autos.size && Object.keys(weights).length ? { weights: clearWeights } : {}),
       rank: { performance: 'off', research: 'off' },
       harvestCadence: 'off',
+      minDays: hold,
       claude: { harvest: 'ask' },
       exit: [{ to: 'ASK_OWNER', when: [{ metric: 'sellableUnits', op: 'lte', value: 5 }] }],
     },
@@ -104,6 +111,7 @@ export function defaultPhases(slots: readonly Slot[], weights: Readonly<Record<s
       slots: research,
       rank: { performance: 'on', research: 'off' },
       harvestCadence: 'weekly',
+      minDays: hold,
     },
   }
   return phases as TemplateDoc['phases']
