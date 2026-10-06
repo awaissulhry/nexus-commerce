@@ -30,7 +30,8 @@ import { adGroupCampaigns, adGroupExternalIds, adGroupsByExternalId } from '../.
 import { loadDestinationGraph, resolveDestination, resolveStoredDestinations } from '../../advertising/harvest-destination.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf } from './ads-tool-guards.js'
-import { alsoChangedBy, approvedRun, changeClampedBid, notRun, reachNote, reachRefusal, recheck, spOnlyRefusal, storedReach, type StoredReach } from './ads-change-kit.js'
+import { alsoChangedBy, approvedRun, notRun, reachNote, reachRefusal, recheck, spOnlyRefusal, stepClampWords, storedReach, type StoredReach } from './ads-change-kit.js'
+import { bidLimitsFor, stepClamp } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
 
 const BID_FLOOR_CENTS = 5
@@ -504,6 +505,7 @@ async function targetBidPreview(args: Record<string, unknown>): Promise<ToolResu
       bidCents: true,
       suppressedFromBidCents: true,
       isNegative: true,
+      adGroupId: true,
       adGroup: {
         select: {
           campaign: {
@@ -540,8 +542,12 @@ async function targetBidPreview(args: Record<string, unknown>): Promise<ToolResu
   }
   const currentBidCents = target.bidCents ?? 0
   // The bid that lands: the CPC ceiling first (as the bid routes apply it), then the campaign's max-change guardrail.
+  // W1-5 — the largest change is the lower of the campaign's and the ads strategy's for the target's ad group, the same
+  // step the write takes (stepClamp); the write gate below judges the band of the ad group's products.
   const { entries, clamps } = await clampBidsByCeiling([{ adTargetId: target.id, bidCents: proposedBidCents }])
-  const effectiveBidCents = changeClampedBid(currentBidCents, entries[0].bidCents, campaign.dynamicBidding)
+  const strategy = await bidLimitsFor({ marketplace: campaign.marketplace, adGroupId: target.adGroupId, campaignId: campaign.id })
+  const step = stepClamp(currentBidCents, entries[0].bidCents, campaign.dynamicBidding, strategy)
+  const effectiveBidCents = step.cents
   // No-pause: a suppressed bid is never raised here; only restore-campaign lifts a suppression.
   const verdict = suppressionOf({ id: target.id, bidCents: currentBidCents, suppressedFromBidCents: target.suppressedFromBidCents }, effectiveBidCents)
   if (verdict === 'suppressed') {
@@ -552,6 +558,7 @@ async function targetBidPreview(args: Record<string, unknown>): Promise<ToolResu
   }
   const reach = await checkLiveReach({
     campaignId: campaign.id,
+    adGroupId: target.adGroupId,
     marketplace: campaign.marketplace,
     changes: [{ field: 'bid', valueCents: effectiveBidCents }],
   })
@@ -568,7 +575,7 @@ async function targetBidPreview(args: Record<string, unknown>): Promise<ToolResu
       currency,
       currentBidCents,
       proposedBidCents,
-      ...(effectiveBidCents !== proposedBidCents ? { effectiveBidCents, clampedBy: clamps.length ? 'the campaign\'s CPC ceiling' : 'the campaign\'s max-change guardrail' } : {}),
+      ...(effectiveBidCents !== proposedBidCents ? { effectiveBidCents, clampedBy: clamps.length ? 'the campaign\'s CPC ceiling' : stepClampWords(step, strategy) } : {}),
       deltaCents: effectiveBidCents - currentBidCents,
       reach: stored,
       reachNote: reachNote(stored),

@@ -38,6 +38,9 @@ import { patchDynamicBidding } from './dynamic-bidding-write.js'
 import { KT6_SUPPRESSION_CENTS } from './kt6-bid-action.js'
 import { logger } from '../../utils/logger.js'
 import type { AdWriteEvidence } from './ads-evidence.js'
+import { configuredTargetAcos, readOwnerTargets } from './ads-target-acos-resolver.js'
+import { NO_LIMITS, limitSources, limitWords, strategyBidReader, strategySource, type BidSide, type WriteSources } from './ads-strategy/bids.js'
+import { fractionToPct } from './ads-strategy/fields.js'
 // P1 — the harvest thresholds this file falls back to, shared with the Rules grid that renders them.
 import { BID_WINDOW_MAX, BID_WINDOW_MIN, HARVEST_DEFAULTS, TRIGGER_WINDOW } from '@nexus/shared/ads-rule-window'
 import { settledWhere } from './ads-settled-window.js'
@@ -1997,7 +2000,7 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   if (!id) return { type: action.type, ok: false, error: 'No adTarget.id in context' }
   const t = await prisma.adTarget.findUnique({
     where: { id },
-    select: { bidCents: true, suppressedFromBidCents: true, adGroup: { select: { campaignId: true, campaign: { select: { bidsSuppressedAt: true } } } } },
+    select: { bidCents: true, suppressedFromBidCents: true, adGroupId: true, adGroup: { select: { campaignId: true, campaign: { select: { bidsSuppressedAt: true, marketplace: true } } } } },
   })
   if (!t) return { type: action.type, ok: false, error: 'AdTarget not found' }
   const allow = Array.isArray(action.campaignIds) ? (action.campaignIds as string[]) : []
@@ -2048,6 +2051,12 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   const currentEur = (t.bidCents ?? 0) / 100
   const floorEur = Math.max(0.05, action.minEur != null ? Number(action.minEur) : 0.05)
   const ceilEur = action.maxEur != null ? Number(action.maxEur) : null
+  // W1-5 — the ads strategy of this target's ad group (the safer value across its products): its ACoS target for the
+  // target-ACoS ops below, and its bid band, which binds beside the rule's own Min/Max (the stricter wins). A market
+  // without a strategy row gives nothing, and the rule works as before.
+  const strategy = (await strategyBidReader().forAdGroups([{ adGroupId: t.adGroupId, marketplace: t.adGroup?.campaign?.marketplace }])).get(t.adGroupId)
+  const limits = strategy?.limits ?? NO_LIMITS
+  const sources: WriteSources = limitSources(limits)
 
   /**
    * C1 — the two COMPUTED ops. Both need the target's own measured performance, so they resolve
@@ -2086,18 +2095,26 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
       // action): bid = CURRENT BID × (target / actual). Above target the factor is < 1 and the
       // bid comes down; below it, up. The clamp below is what stops a 5% actual ACoS from
       // multiplying a bid by twenty.
-      let targetPct = Number(action.value)
-      if (!Number.isFinite(targetPct) || targetPct <= 0) {
-        // SG.5 — the account default (Suggestions gear → AdsAutomationState.defaultTargetAcosPct,
-        // INTEGER percent). This is that column's ONE reader. Dynamic import: the state service
-        // is cycle-free but this file sits under half the engine — keep it that way.
-        const { getAutomationState } = await import('./ads-automation-state.service.js')
-        const st = await getAutomationState().catch(() => null)
-        if (st?.defaultTargetAcosPct != null && st.defaultTargetAcosPct > 0) targetPct = st.defaultTargetAcosPct
+      // W1-5 — whose target, in the order auto-bid uses (ads-target-acos-resolver.ts), without its profit and flat
+      // fallbacks: the rule's own (an INTEGER percent here), else the campaign's own target ACoS, else the ads strategy's
+      // for this ad group, else the account default (SG.5: Suggestions gear → AdsAutomationState.defaultTargetAcosPct).
+      const own = Number(action.value)
+      const owner = await readOwnerTargets(t.adGroup?.campaignId ? [t.adGroup.campaignId] : [])
+      const chosen = configuredTargetAcos(
+        { adGroupId: t.adGroupId, campaignTargetAcos: t.adGroup?.campaignId ? owner.byCampaign.get(t.adGroup.campaignId) : undefined },
+        {
+          explicitTargetAcos: Number.isFinite(own) && own > 0 ? own / 100 : undefined,
+          accountDefaultPct: owner.accountDefaultPct,
+          strategyByAdGroup: strategy?.target ? new Map([[t.adGroupId, strategy.target]]) : null,
+        },
+      )
+      if (!chosen) {
+        return { type: action.type, ok: false, error: `${String(action.op)} needs a positive target ACoS percentage — this rule stores ${JSON.stringify(action.value)}, and neither its campaign, the ads strategy nor the account default sets one (Suggestions → Bid Settings)`, output: { adTargetId: id } }
       }
-      if (!Number.isFinite(targetPct) || targetPct <= 0) {
-        return { type: action.type, ok: false, error: `${String(action.op)} needs a positive target ACoS percentage — this rule stores ${JSON.stringify(action.value)} and no account default is set (Suggestions → Bid Settings)`, output: { adTargetId: id } }
-      }
+      const targetPct = chosen.targetAcos * 100
+      sources.targetAcosPct = chosen.source === 'strategy' && chosen.strategy
+        ? strategySource(fractionToPct(chosen.targetAcos), chosen.strategy)
+        : { level: chosen.source, value: fractionToPct(chosen.targetAcos), ...(chosen.source === 'explicit' ? { from: "this rule's target" } : {}) }
       if (perf.acos == null) {
         return { type: action.type, ok: false, error: `this target has spend but no attributed sales in the rule's window, so its actual ACoS is undefined — a bid cannot be scaled by it`, output: { adTargetId: id, clicks: perf.clicks } }
       }
@@ -2107,8 +2124,16 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   }
 
   const rawEur = computedEur ?? applyBuilderOp(action.op as string, currentEur, Number(action.value) || 0)
-  const nextEur = Math.round(clampRange(rawEur, floorEur, ceilEur) * 100) / 100
+  // W1-5 — the rule's band and the strategy's both bind: the higher floor and the lower ceiling (where they cross, the
+  // ceiling wins — it spends less). The output names the strategy row when it is the one that held the bid.
+  const sMin = limits.minBidCents ? limits.minBidCents.value / 100 : null
+  const sMax = limits.maxBidCents ? limits.maxBidCents.value / 100 : null
+  const ruleOnly = Math.round(clampRange(rawEur, floorEur, ceilEur) * 100) / 100
+  const nextEur = Math.round(clampRange(rawEur, Math.max(floorEur, sMin ?? 0), ceilEur != null && sMax != null ? Math.min(ceilEur, sMax) : ceilEur ?? sMax) * 100) / 100
   const nextCents = Math.round(nextEur * 100)
+  const heldSide: BidSide | null = nextEur === ruleOnly ? null : nextEur < ruleOnly ? 'max' : 'min'
+  const heldLimit = heldSide === 'max' ? limits.maxBidCents : heldSide === 'min' ? limits.minBidCents : null
+  const strategyOut = heldSide && heldLimit ? { heldTo: limitWords(heldSide, heldLimit) } : {}
   // 4d (review 4.4) — the spend this write would ADD per day: (new − old) × the target's clicks per day in the rule's
   // window. Returned as `estimatedValueCentsEur`, so the engine's per-run `maxValueCentsEur` binds a bid rule too, and
   // a live raise draws on the rule's daily spend ceiling like a budget raise always has. Clicks are read only for a raise.
@@ -2118,15 +2143,20 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   const spendOut = { extraSpendPerDayCents: spend.extraCentsPerDay, spendEstimate: spend.basis }
   // 5.10 — a dry run that would change nothing says so (as placement and budget do), so a 5¢ → 5¢ card never reaches
   // the suggestion queue. `wouldChange` stays beside it for the preview.
-  if (meta.dryRun) return { type: action.type, ok: true, estimatedValueCentsEur: spend.extraCentsPerDay, output: { dryRun: true, adTargetId: id, wouldChange: `${t.bidCents}¢ → ${nextCents}¢`, ...spendOut, ...(nextCents === t.bidCents ? { noChange: true } : {}) } }
+  if (meta.dryRun) return { type: action.type, ok: true, estimatedValueCentsEur: spend.extraCentsPerDay, output: { dryRun: true, adTargetId: id, wouldChange: `${t.bidCents}¢ → ${nextCents}¢`, ...spendOut, ...strategyOut, ...(nextCents === t.bidCents ? { noChange: true } : {}) } }
   if (nextCents === t.bidCents) return { type: action.type, ok: true, output: { adTargetId: id, noChange: true } }
   // Only a raise can spend more; a cut is never stopped by the spend ceiling.
   if (spend.extraCentsPerDay > 0) {
     const cap = await checkDailySpendCap(meta.ruleId, spend.extraCentsPerDay)
     if (!cap.allowed) return { type: action.type, ok: false, error: cap.error, estimatedValueCentsEur: 0, output: { adTargetId: id, bidCents: t.bidCents, wouldBe: nextCents, ...spendOut } }
   }
-  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: nextCents }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string) ?? `bid_apply via rule ${meta.ruleId}` , evidence: ctxEvidence(context) })
-  return { type: action.type, ok: res.ok, error: res.error ?? undefined, estimatedValueCentsEur: spend.extraCentsPerDay, output: { adTargetId: id, newBidCents: nextCents, outboundQueueId: res.outboundQueueId, ...spendOut } }
+  const evidence = ctxEvidence(context)
+  const res = await updateAdTargetWithSync({
+    adTargetId: id, patch: { bidCents: nextCents }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string) ?? `bid_apply via rule ${meta.ruleId}`,
+    // W1-5 — which level supplied the target and the strategy limits this bid was held to.
+    evidence: Object.keys(sources).length ? { ...(evidence ?? {}), sources } : evidence,
+  })
+  return { type: action.type, ok: res.ok, error: res.error ?? undefined, estimatedValueCentsEur: spend.extraCentsPerDay, output: { adTargetId: id, newBidCents: nextCents, outboundQueueId: res.outboundQueueId, ...spendOut, ...strategyOut } }
 }
 
 /**

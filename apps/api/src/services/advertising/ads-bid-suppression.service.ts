@@ -17,8 +17,43 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { updateAdTargetWithSync, updateAdGroupWithSync, type AdsActor } from './ads-mutation.service.js'
+import { isPersonEdit, updateAdTargetWithSync, updateAdGroupWithSync, type AdsActor } from './ads-mutation.service.js'
 import { deltaBidCents } from './ads-placement-math.js'
+import { effectiveBidBounds, withStrategyBand, type BidBound } from './ads-write-gate.js'
+import { NO_LIMITS, bidSideWords, clampBid, clampToStrategy, limitWords, strategyBidReader, strategyWords, type BidHoldLog, type StrategyBidLimits } from './ads-strategy/bids.js'
+
+/**
+ * ADS AUTONOMY W1-5 — the bounds a give-back (a restore after a stop, a base-bid revert) is held to, per ad group: the
+ * campaign's own bid bounds and the bid policies, and — for an engine, not a person's own click — the ads strategy band
+ * of the ad group's products. Read once per campaign, only when there is something to give back.
+ */
+async function giveBackBounds(campaignId: string, adGroupIds: string[], person: boolean): Promise<(adGroupId: string) => { max: BidBound | null; min: BidBound | null }> {
+  const camp = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    select: { marketplace: true, portfolioId: true, minBidCents: true, maxBidCents: true, minBudgetCents: true, maxBudgetCents: true },
+  })
+  if (!camp) return () => ({ max: null, min: null })
+  const base = await effectiveBidBounds({ campaignId, campaign: camp, strategy: NO_LIMITS })
+  const strategy = person || !adGroupIds.length
+    ? new Map<string, { limits: StrategyBidLimits }>()
+    : await strategyBidReader().forAdGroups([...new Set(adGroupIds)].map((adGroupId) => ({ adGroupId, marketplace: camp.marketplace })))
+  return (adGroupId) => withStrategyBand(base, strategy.get(adGroupId)?.limits ?? NO_LIMITS)
+}
+
+/**
+ * W1-5 — the silent stop, fixed. A give-back is a forced RAISE, and the write gate refuses a raise above the highest bid
+ * (or below the lowest) that binds it: the bid then stayed at the stop's 2¢ and nobody was told. It now goes back to
+ * the remembered bid held inside those bounds — min(remembered, highest bid), and up to the lowest bid — and the
+ * reason (and the run's `holds`) says so.
+ */
+function heldGiveBack(
+  remembered: number, current: number, bounds: { max: BidBound | null; min: BidBound | null }, reason: string, holds: BidHoldLog | undefined,
+): { cents: number; reason: string } {
+  const c = clampBid(remembered, bounds, { currentCents: current, forced: true })
+  if (!c.held) return { cents: remembered, reason }
+  holds?.holds.push({ kind: 'restore', side: c.held.side, source: c.held.limit.source, wantedCents: remembered, writtenCents: c.cents })
+  return { cents: c.cents, reason: `${reason} — put back at ${c.cents}¢, not the remembered ${remembered}¢: the ${bidSideWords(c.held.side)} (${c.held.limit.source})` }
+}
 
 export const SUPPRESSION_FLOOR_CENTS = 2
 // MB.1 — Amazon's own SP minimum bid is 2¢, and a floor of €100 is past any plausible
@@ -168,6 +203,24 @@ export async function refloorCampaignBids(
   return touched
 }
 
+/**
+ * W1-5 — the bid each remembered target goes back to on a restore, read only and decided as restoreCampaignBids decides
+ * it (giveBackBounds + the same clamp): the restore-campaign preview shows these, so what is approved is what lands.
+ * `heldBy` names the limit when it is not the remembered bid.
+ */
+export async function restoreBidsFor(
+  campaignId: string,
+  targets: ReadonlyArray<{ id: string; adGroupId: string; bidCents: number; suppressedFromBidCents: number }>,
+  person = false,
+): Promise<Map<string, { cents: number; heldBy: string | null }>> {
+  if (!targets.length) return new Map()
+  const boundsOf = await giveBackBounds(campaignId, targets.map((t) => t.adGroupId), person)
+  return new Map(targets.map((t) => {
+    const c = clampBid(t.suppressedFromBidCents, boundsOf(t.adGroupId), { currentCents: t.bidCents, forced: true })
+    return [t.id, { cents: c.cents, heldBy: c.held ? `the ${bidSideWords(c.held.side)} (${c.held.limit.source})` : null }]
+  }))
+}
+
 /** Restore every remembered bid and clear the suppression flag. Idempotent (no-op if
  * not suppressed). Returns how many entities were restored.
  * 1e (CM-9) — "remembered" includes a bid a person set while the floor held: his edit replaces the
@@ -177,7 +230,8 @@ export async function restoreCampaignBids(
   // MCP full control A8 — `changeSetId` as in suppressCampaignBids: optional, additive.
   // 1e — `manual`: a person clicked Restore (the Budget Manager control plane): it passes the halt and autonomy OFF
   // like his other edits (isPersonEdit). Engines never set it, so their restores still wait for Resume (S1).
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; changeSetId?: string | null; manual?: boolean },
+  // W1-5 — `holds`: a run's collector for the restores a bound held below (or above) the remembered bid (its run line).
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; changeSetId?: string | null; manual?: boolean; holds?: BidHoldLog },
 ): Promise<number> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true } })
   if (!camp || !camp.bidsSuppressedAt) return 0 // not suppressed → no-op
@@ -190,19 +244,25 @@ export async function restoreCampaignBids(
   // one failure can't abort the rest, and clear the suppression flag ONLY when every entity is
   // restored. A failed entity keeps its suppressedFromBidCents AND bidsSuppressedAt stays set, so
   // the next serving tick retries it — the prior bid can never be silently lost (the old bug).
-  const groups = await prisma.adGroup.findMany({ where: { campaignId, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true } })
+  const groups = await prisma.adGroup.findMany({ where: { campaignId, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true, defaultBidCents: true } })
+  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true, bidCents: true, adGroupId: true } })
+  // W1-5 — held inside the bounds that bind this write (heldGiveBack): never refused into a silent stop.
+  const boundsOf = groups.length || targets.length
+    ? await giveBackBounds(campaignId, [...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)], isPersonEdit(opts.manual, opts.actor))
+    : null
   for (const g of groups) {
     try {
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: g.suppressedFromBidCents as number }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
+      const back = heldGiveBack(g.suppressedFromBidCents as number, g.defaultBidCents, boundsOf!(g.id), reason, opts.holds)
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
       if (r.ok || r.error === 'not_found') { await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore group not accepted — keeping prior for retry', { adGroupId: g.id, error: r.error }) }
     } catch (e) { failed++; logger.warn('[no-pause] restore group threw — keeping prior for retry', { adGroupId: g.id, error: (e as Error).message }) }
   }
 
-  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true } })
   for (const t of targets) {
     try {
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: t.suppressedFromBidCents as number }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
+      const back = heldGiveBack(t.suppressedFromBidCents as number, t.bidCents, boundsOf!(t.adGroupId), reason, opts.holds)
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
       if (r.ok || r.error === 'not_found') { await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore target not accepted — keeping prior for retry', { adTargetId: t.id, error: r.error }) }
     } catch (e) { failed++; logger.warn('[no-pause] restore target threw — keeping prior for retry', { adTargetId: t.id, error: (e as Error).message }) }
@@ -223,30 +283,43 @@ export async function restoreCampaignBids(
 // already floors at 2¢). Idempotent. Returns entities moved.
 export async function applyBaseBidDelta(
   campaignId: string, deltaPct: number,
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean },
+  // W1-5 — `holds`: a run's collector for the bids the ads strategy band held (its run line).
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; holds?: BidHoldLog },
 ): Promise<number> {
   const reason = opts.reason ?? `rank base-bid ${deltaPct >= 0 ? '+' : ''}${deltaPct}%`
   const applyImmediately = opts.applyImmediately ?? true
   let touched = 0
   const groups = await prisma.adGroup.findMany({ where: { campaignId }, select: { id: true, defaultBidCents: true, baseBidFromCents: true } })
+  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, isNegative: false }, select: { id: true, bidCents: true, baseBidFromCents: true, adGroupId: true } })
+  // W1-5 — every bid the delta sets is held inside the ads strategy band of its ad group first, so the write gate does
+  // not refuse it (a forced lowering is exempt from the lowest bid there, and here). The reason names the row.
+  const camp = groups.length || targets.length ? await prisma.campaign.findUnique({ where: { id: campaignId }, select: { marketplace: true } }) : null
+  const strategy = camp
+    ? await strategyBidReader().forAdGroups([...new Set([...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)])].map((adGroupId) => ({ adGroupId, marketplace: camp.marketplace })))
+    : new Map<string, { limits: StrategyBidLimits }>()
+  const held = (want: number, current: number, adGroupId: string): { cents: number; reason: string } => {
+    const c = clampToStrategy(want, strategy.get(adGroupId)?.limits ?? NO_LIMITS, { currentCents: current, forced: true })
+    if (!c.held) return { cents: want, reason }
+    opts.holds?.holds.push({ kind: 'base', side: c.held.side, source: strategyWords(c.held.limit.source), wantedCents: want, writtenCents: c.cents })
+    return { cents: c.cents, reason: `${reason} — held to ${limitWords(c.held.side, c.held.limit)}` }
+  }
   for (const g of groups) {
     const baseline = g.baseBidFromCents ?? g.defaultBidCents // stable baseline → no compounding
-    const want = deltaBidCents(baseline, deltaPct)
+    const { cents: want, reason: why } = held(deltaBidCents(baseline, deltaPct), g.defaultBidCents, g.id)
     if (g.baseBidFromCents != null && g.defaultBidCents === want) continue // already at target
     try {
       if (g.baseBidFromCents == null) await prisma.adGroup.update({ where: { id: g.id }, data: { baseBidFromCents: baseline } })
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: want }, actor: opts.actor, reason, applyImmediately, force: true })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: want }, actor: opts.actor, reason: why, applyImmediately, force: true })
       if (r.ok) touched++
     } catch (e) { logger.warn('[base-bid] delta group failed', { adGroupId: g.id, error: (e as Error).message }) }
   }
-  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, isNegative: false }, select: { id: true, bidCents: true, baseBidFromCents: true } })
   for (const t of targets) {
     const baseline = t.baseBidFromCents ?? t.bidCents
-    const want = deltaBidCents(baseline, deltaPct)
+    const { cents: want, reason: why } = held(deltaBidCents(baseline, deltaPct), t.bidCents, t.adGroupId)
     if (t.baseBidFromCents != null && t.bidCents === want) continue
     try {
       if (t.baseBidFromCents == null) await prisma.adTarget.update({ where: { id: t.id }, data: { baseBidFromCents: baseline } })
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: want }, actor: opts.actor, reason, applyImmediately, force: true })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: want }, actor: opts.actor, reason: why, applyImmediately, force: true })
       if (r.ok) touched++
     } catch (e) { logger.warn('[base-bid] delta target failed', { adTargetId: t.id, error: (e as Error).message }) }
   }
@@ -258,22 +331,28 @@ export async function applyBaseBidDelta(
 // Retry-safe like restoreCampaignBids (clears memory only on accepted push / not_found).
 export async function revertBaseBidDelta(
   campaignId: string,
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean },
+  // W1-5 — `holds` as in restoreCampaignBids: a give-back held inside the bounds that bind it is named in the run line.
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; holds?: BidHoldLog },
 ): Promise<number> {
   const reason = opts.reason ?? 'rank base-bid delta cleared → restore baseline'
   const applyImmediately = opts.applyImmediately ?? true
   let touched = 0
-  const groups = await prisma.adGroup.findMany({ where: { campaignId, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true } })
+  const groups = await prisma.adGroup.findMany({ where: { campaignId, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true, defaultBidCents: true } })
+  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true, bidCents: true, adGroupId: true } })
+  // W1-5 — the baseline held inside the bounds that bind this write, like a restore (heldGiveBack): a refused revert
+  // left the delta's bid in place and retried every run.
+  const boundsOf = groups.length || targets.length ? await giveBackBounds(campaignId, [...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)], false) : null
   for (const g of groups) {
     try {
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: g.baseBidFromCents as number }, actor: opts.actor, reason, applyImmediately, force: true })
+      const back = heldGiveBack(g.baseBidFromCents as number, g.defaultBidCents, boundsOf!(g.id), reason, opts.holds)
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true })
       if (r.ok || r.error === 'not_found') { await prisma.adGroup.update({ where: { id: g.id }, data: { baseBidFromCents: null } }); if (r.ok) touched++ }
     } catch (e) { logger.warn('[base-bid] revert group failed', { adGroupId: g.id, error: (e as Error).message }) }
   }
-  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true } })
   for (const t of targets) {
     try {
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: t.baseBidFromCents as number }, actor: opts.actor, reason, applyImmediately, force: true })
+      const back = heldGiveBack(t.baseBidFromCents as number, t.bidCents, boundsOf!(t.adGroupId), reason, opts.holds)
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true })
       if (r.ok || r.error === 'not_found') { await prisma.adTarget.update({ where: { id: t.id }, data: { baseBidFromCents: null } }); if (r.ok) touched++ }
     } catch (e) { logger.warn('[base-bid] revert target failed', { adTargetId: t.id, error: (e as Error).message }) }
   }

@@ -39,6 +39,7 @@ import type { AdsActor } from './ads-mutation.service.js'
 import { restoreCampaignBids, revertBaseBidDelta } from './ads-bid-suppression.service.js'
 import { nothingHeld, openEngineGuard, readEnginePosture, type EngineGuard } from './ads-engine-guard.js'
 import { engineForActor, engineLabel } from './ads-engine-actors.js'
+import type { BidHoldLog } from './ads-strategy/bids.js'
 
 /** The actor prefixes whose floors are Rank & Dayparting's own. */
 export const RANK_OWNER_PREFIXES = ['automation:rank-defend-', 'automation:rank-plan-', 'automation:dayparting-'] as const
@@ -161,7 +162,8 @@ function plan(s: CampaignState | undefined): 'restore' | 'kept-by-others' | 'not
  */
 export async function releaseCampaigns(
   targets: Array<{ campaignId: string; actor: AdsActor }>,
-  opts: { reason: string; guard: EngineGuard | null; waitWhy?: string | null },
+  // W1-5 — `holds`: the run's collector for a give-back a bound held below (or above) the remembered bid.
+  opts: { reason: string; guard: EngineGuard | null; waitWhy?: string | null; holds?: BidHoldLog },
 ): Promise<ReleaseReport> {
   const report = emptyRelease()
   const states = await readStates(targets.map((t) => t.campaignId))
@@ -187,9 +189,9 @@ export async function releaseCampaigns(
     }
     let writes = 0
     try {
-      if (s!.floored) writes += await restoreCampaignBids(t.campaignId, { actor: t.actor, reason: opts.reason })
+      if (s!.floored) writes += await restoreCampaignBids(t.campaignId, { actor: t.actor, reason: opts.reason, holds: opts.holds })
       const after = await prisma.campaign.findUnique({ where: { id: t.campaignId }, select: { bidsSuppressedAt: true } })
-      if (!after?.bidsSuppressedAt && s!.deltaBids > 0) writes += await revertBaseBidDelta(t.campaignId, { actor: t.actor, reason: opts.reason })
+      if (!after?.bidsSuppressedAt && s!.deltaBids > 0) writes += await revertBaseBidDelta(t.campaignId, { actor: t.actor, reason: opts.reason, holds: opts.holds })
     } catch (e) { logger.warn('[rank-release] give-back threw — kept for the next run', { campaignId: t.campaignId, error: (e as Error).message }) }
     opts.guard!.settle(permit, writes, nothingHeld())
     const left = (await readStates([t.campaignId])).get(t.campaignId)
@@ -291,7 +293,7 @@ export async function releaseGroupMembers(groupId: string, why: string): Promise
  * Paused and draft campaigns only (Owner, 2026-10-04): a live one is never changed by the sweep, only listed for a
  * person (`listEnabledOrphans`); archived ones are left out.
  */
-export async function sweepOrphanReleases(opts: { guard: EngineGuard; governed: Set<string>; limit?: number }): Promise<ReleaseReport & { orphans: number }> {
+export async function sweepOrphanReleases(opts: { guard: EngineGuard; governed: Set<string>; limit?: number; holds?: BidHoldLog }): Promise<ReleaseReport & { orphans: number }> {
   const limit = opts.limit ?? SWEEP_LIMIT
   const held = new Set<string>(opts.governed)
   for (const s of await prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true } })) held.add(s.campaignId)
@@ -301,7 +303,7 @@ export async function sweepOrphanReleases(opts: { guard: EngineGuard; governed: 
   const actorFor = (by: string | null): AdsActor =>
     by && (by.startsWith('automation:rank-defend-') || by.startsWith('automation:rank-plan-')) ? by as AdsActor : RELEASE_ACTOR
   const targets = [...picked].map(([campaignId, by]) => ({ campaignId, actor: actorFor(by) }))
-  const r = await releaseCampaigns(targets, { reason: 'rank release — no schedule or plan holds this campaign any more', guard: opts.guard })
+  const r = await releaseCampaigns(targets, { reason: 'rank release — no schedule or plan holds this campaign any more', guard: opts.guard, holds: opts.holds })
   return { ...r, orphans: picked.size }
 }
 

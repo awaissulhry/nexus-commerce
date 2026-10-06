@@ -31,6 +31,8 @@ export type LiveReach =
 export interface AdWriteIntent {
   /** Nexus Campaign.id — the allowlist, pins and bounds bind to it. */
   campaignId: string
+  /** W1-5 — the ad group a bid lands in: the ads strategy's bid band is its products' (the worker hands the gate the same). */
+  adGroupId?: string | null
   marketplace: string | null
   /** Bids in cents; `dailyBudget` in minor units of the campaign's currency (the gate's cents). */
   changes: Array<{ field: string; valueCents: number | null }>
@@ -56,6 +58,7 @@ export function gateContextFor(intent: AdWriteIntent): GateContext {
   return {
     marketplace: intent.marketplace,
     campaignId: intent.campaignId,
+    ...(intent.adGroupId ? { adGroupId: intent.adGroupId } : {}),
     field: judged?.field ?? null,
     fields: intent.changes.map((c) => c.field),
     intendedValueCents: finite(bid?.valueCents ?? budget?.valueCents ?? null),

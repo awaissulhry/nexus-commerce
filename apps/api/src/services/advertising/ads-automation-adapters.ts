@@ -420,7 +420,7 @@ const A5: AutomationAdapter = {
     if (!plan) return { refused: 'not found', notFound: true }
     const { backtestPlan } = await import('./autopilot/backtest.js')
     const campaignIds = Array.isArray(plan.campaignIds) ? (plan.campaignIds as string[]) : []
-    const result = await backtestPlan({ campaignIds, goal: plan.goal as never, guardrails: (plan.guardrails ?? {}) as never, modules: (plan.modules ?? {}) as never, days: 30 })
+    const result = await backtestPlan({ campaignIds, goal: plan.goal as never, guardrails: (plan.guardrails ?? {}) as never, modules: (plan.modules ?? {}) as never, days: 30, marketplace: plan.marketplace })
     return { kind: 'saved', subject: { id: plan.id, name: plan.name }, result, notes: ["A backtest over its campaigns' last 30 days."] }
   },
   levelSwitch: {

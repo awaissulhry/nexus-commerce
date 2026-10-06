@@ -4,7 +4,8 @@
  *   units      an integer percent becomes the engines' fraction (30 → 0.3) and back; a stored fraction (0.3) is never
  *              read as a percent, nor a percent (30) as 3,000 %
  *   schema     every registry column is an AdsStrategy column and every setting column is in the registry
- *   honest     no field has a reader yet: readBy is empty everywhere and notReadYet lists every field
+ *   honest     W1-5's bid engines read exactly the target, the lowest and highest bid and the largest bid change, and
+ *              say which engines; every other field has no reader yet and notReadYet lists them
  *   money      every money field's value keys are stripped for a person without ad-spend money
  *   names      every tool an action type narrows is a registered tool; the constants mirror their sources
  */
@@ -19,6 +20,7 @@ import {
   COLUMN_CHECKS,
   DEFAULT_STOP_BID_CENTS,
   MAX_TARGET_PCT,
+  READERS,
   STRATEGY_FIELDS,
   STRATEGY_MONEY,
   fractionToPct,
@@ -56,9 +58,18 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: no engine, rule or Claude door reads any field yet', () => {
-    expect(STRATEGY_FIELDS.filter((f) => f.readBy.length)).toEqual([])
-    expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key))
+  it('is honest: W1-5 reads the target, the bid band and the largest change, named by reader; nothing else is read yet', () => {
+    const target = [READERS.optimiser, READERS.bidRules, READERS.autopilot]
+    const band = [READERS.gate, READERS.optimiser, READERS.bidRules, READERS.hourly, READERS.restores, READERS.autopilot]
+    expect(Object.fromEntries(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => [f.key, f.readBy]))).toEqual({
+      target,
+      targetAcosPct: target,
+      minBidCents: band,
+      maxBidCents: band,
+      maxChangePct: [READERS.stepClamp, READERS.optimiser, READERS.claudePreview, READERS.autopilot],
+    })
+    // Spend caps (W1-6), search terms and protection (W1-7), Claude's autonomy (W1-8) and the rest: stored and shown only.
+    expect(notReadYet()).toEqual(['goal', 'goalNote', 'monthlySpendCapCents', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'claudeAutonomy', 'reviewEveryDays'])
   })
 
   it('every money field keeps its numbers under keys the money filter strips (ad-spend money)', () => {

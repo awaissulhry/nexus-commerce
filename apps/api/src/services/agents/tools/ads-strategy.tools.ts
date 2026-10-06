@@ -8,8 +8,9 @@
  *   rows       every strategy row of a market, and the older settings at the same grains
  *   history    the recorded changes, newest first
  *
- * Read only, Nexus only: no marketplace call. Honest about readers: no engine, rule or Claude door acts on the
- * strategy yet (every field's `readBy` is empty, `notReadYet` lists them all); W1 wires the readers one by one.
+ * Read only, Nexus only: no marketplace call. Honest about readers: every field's `readBy` names the engines and doors
+ * that act on it (W1-5: the bid engines read the target ACoS, the bid band and the largest change), and `notReadYet`
+ * lists the fields stored and shown only; W1 wires the readers one by one.
  * Money (targets, bids, caps, spend thresholds) sits only under the keys STRATEGY_MONEY names: a person without
  * financials.adspend.view gets the same answer minus exactly those keys.
  */
@@ -56,8 +57,10 @@ const adsStrategy: AgentTool = {
     + 'product row always belongs to one market. It also lists the older settings that still bind (campaign bid limits, '
     + 'bid and harvest policies, the budget plan), the campaigns whose own target ACoS wins over the strategy, and the '
     + "business's own Claude level per ad tool. view rows lists every strategy row of a market; view history the changes. "
-    + 'No engine, rule or Claude door acts on the strategy yet: readBy is empty on every field and notReadYet lists them, '
-    + 'so every engine works as before. Targets, bids, caps and spend thresholds are ad-spend money: hidden from a person '
+    + "Each field's readBy names the engines and doors that act on it: the bid engines steer by its target ACoS (after a "
+    + "campaign's own target) and keep its lowest and highest bid and largest bid change (engines, rules and Claude's "
+    + "requests are held to them; a person's own edit is only warned); notReadYet lists the fields that are stored and "
+    + 'shown only, where every engine works as before. Targets, bids, caps and spend thresholds are ad-spend money: hidden from a person '
     + 'without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {
     const out = await readStrategy(args as StrategyReadArgs)

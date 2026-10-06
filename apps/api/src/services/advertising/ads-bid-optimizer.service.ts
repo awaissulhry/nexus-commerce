@@ -18,7 +18,9 @@ import { bulkUpdateAdTargetBids, type AdsActor } from './ads-mutation.service.js
 import { adsActorOf } from './ads-actor.js'
 import { ACTION_HANDLERS, type ActionResult } from '../automation-rule.service.js'
 import { computeAdGroupTargetAcos, type AcosMode } from './ads-target-acos.service.js'
-import { MAX_TARGET_ACOS_FRACTION, readOwnerTargets, reachesSource, resolveTargetAcos, targetFraction, targetSourceNote, type TargetAcosInputs, type TargetAcosSource, type TargetAcosSubject } from './ads-target-acos-resolver.js'
+import { MAX_TARGET_ACOS_FRACTION, readOwnerTargets, reachesSource, resolveTargetAcos, targetFraction, targetSourceNote, type ResolvedTargetAcos, type TargetAcosInputs, type TargetAcosSource, type TargetAcosSubject } from './ads-target-acos-resolver.js'
+import { NO_LIMITS, clampToStrategy, limitSources, limitWords, strategyBidReader, strategySource, type StrategyBidLimits, type WriteSource, type WriteSources } from './ads-strategy/bids.js'
+import { fractionToPct } from './ads-strategy/fields.js'
 import { fitBetaPrior, shrunkConversionRate, dataConfidence } from './ads-bayesian-bidding.service.js'
 import { ACTION_WINDOW } from '@nexus/shared/ads-rule-window'
 import { settledWhere } from './ads-settled-window.js'
@@ -83,6 +85,43 @@ export interface BidProposal {
   targetAcosUsed: number; targetBasis: TargetAcosSource | 'bayesian'
   /** W0 — whose target it moved toward, on the Bayesian path too (where `targetBasis` says 'bayesian'). */
   targetSource: TargetAcosSource
+  /**
+   * W1-5 — which level supplied each number (the target, and the ads strategy's bid limits in force for its ad group),
+   * for the write's evidence (`AdWriteEvidence.sources`).
+   */
+  sources: WriteSources
+  /** W1-5 — the ads strategy's bid limits for its ad group, so a caller that clamps again stays inside them. */
+  limits: StrategyBidLimits
+}
+
+/** W1-5 — the target a proposal moved toward, as a write source (an integer percent, with its row for the strategy). */
+function targetWriteSource(r: ResolvedTargetAcos, explicitFrom?: string): WriteSource {
+  const pct = fractionToPct(r.targetAcos)
+  if (r.source === 'strategy' && r.strategy) return strategySource(pct, r.strategy)
+  return { level: r.source, value: pct, ...(r.source === 'explicit' && explicitFrom ? { from: explicitFrom } : {}) }
+}
+
+/**
+ * W1-5 — the largest step one pass may move a bid: MAX_DOWN / MAX_UP, or the ads strategy's largest change for the ad
+ * group when it is lower.
+ */
+function stepsFor(limits: StrategyBidLimits): { down: number; up: number } {
+  const pct = limits.maxChangePct?.value
+  return pct != null ? { down: Math.min(MAX_DOWN, pct / 100), up: Math.min(MAX_UP, pct / 100) } : { down: MAX_DOWN, up: MAX_UP }
+}
+
+/**
+ * W1-5 — a proposal a caller clamped again (a rule's or a plan's own Min/Max bid) held back inside the ads strategy's band
+ * of its ad group: every limit binds and the stricter wins, and where they cross the highest bid wins (it spends less).
+ * One that then equals the current bid is dropped.
+ */
+export function holdToStrategy(proposals: BidProposal[]): BidProposal[] {
+  return proposals
+    .map((p) => {
+      const c = clampToStrategy(p.proposedBidCents, p.limits, { currentCents: p.currentBidCents })
+      return c.held ? { ...p, proposedBidCents: c.cents, deltaCents: c.cents - p.currentBidCents, reason: `${p.reason} (held to ${limitWords(c.held.side, c.held.limit)})` } : p
+    })
+    .filter((p) => p.proposedBidCents !== p.currentBidCents)
 }
 
 /**
@@ -90,10 +129,15 @@ export interface BidProposal {
  *   `targetAcos`           the caller's EXPLICIT target, a fraction: a rule's own, an autopilot plan's own, a number a
  *                          person typed. Pass it only when someone configured it — never a default "just in case":
  *                          it would mask the campaign's target. `targetAcosFrom` names it in the reasons.
- *   the campaign's own target ACoS, then the account default, then profit data in profit mode;
+ *   the campaign's own target ACoS, then the ads strategy's for the keyword's ad group (W1-5), then the account default,
+ *   then profit data in profit mode;
  *   `fallbackTargetAcos`   the caller's fallback (an autopilot plan's goal default), else 30 %.
  * Callers without an explicit target get the same target for the same campaign. The returned `targetAcos` is the
  * explicit target when there is a valid one, else the fallback; each proposal says what it used and whose it is.
+ *
+ * W1-5 — and the ads strategy's bid limits for the keyword's ad group bind every proposal: a step per pass no larger
+ * than its largest change (when lower than 50 % down / 25 % up), and a bid inside its lowest and highest bid (the
+ * reason names the row that held it). Each proposal carries its `sources` for the write's evidence.
  */
 export async function previewBidOptimization(
   opts: { targetAcos?: number; targetAcosFrom?: string; fallbackTargetAcos?: number; campaignId?: string; profitMode?: boolean; mode?: AcosMode; bayesian?: boolean; source?: BidMetricSource } = {},
@@ -201,7 +245,15 @@ export async function previewBidOptimization(
     adGroupId: t.adGroupId,
     campaignTargetAcos: t.adGroup?.campaignId ? owner.byCampaign.get(t.adGroup.campaignId) : undefined,
   })
-  const inputs: TargetAcosInputs = { explicitTargetAcos: opts.targetAcos, accountDefaultPct: owner.accountDefaultPct, profitByAdGroup: null, flatTargetAcos }
+  // W1-5 — the ads strategy per ad group (each market opened once): its ACoS target, after the campaign's own and before
+  // the account default; and its bid limits, which hold every proposal below. A market without a strategy row gives
+  // nothing, so its keywords are proposed exactly as before.
+  const adGroupMarkets = new Map(targets.map((t) => [t.adGroupId, t.adGroup?.campaign?.marketplace ?? null]))
+  const strategy = targets.length
+    ? await strategyBidReader().forAdGroups([...adGroupMarkets].map(([adGroupId, marketplace]) => ({ adGroupId, marketplace })))
+    : new Map<string, { limits: StrategyBidLimits; target: null }>()
+  const strategyByAdGroup = new Map([...strategy].flatMap(([id, s]) => (s.target ? [[id, s.target] as const] : [])))
+  const inputs: TargetAcosInputs = { explicitTargetAcos: opts.targetAcos, accountDefaultPct: owner.accountDefaultPct, strategyByAdGroup, profitByAdGroup: null, flatTargetAcos }
 
   // Apex C.2 — when profitMode, resolve each ad group's profit-derived target
   // ACOS once (revenue-weighted across its advertised products) and use it
@@ -221,6 +273,10 @@ export async function previewBidOptimization(
   const proposals: BidProposal[] = []
   for (const t of targets) {
     if (t.clicks < clickFloor) continue
+    // W1-5 — the ad group's strategy limits: the step per pass (the lower of MAX_DOWN/MAX_UP and its largest change)
+    // and the band the proposal is held inside.
+    const limits = strategy.get(t.adGroupId)?.limits ?? NO_LIMITS
+    const step = stepsFor(limits)
     const resolved = resolveTargetAcos(subjectOf(t), inputs)
     const targetAcos = resolved.targetAcos
     const whose = targetSourceNote(resolved, opts.targetAcosFrom)
@@ -243,37 +299,45 @@ export async function previewBidOptimization(
       targetBasis = 'bayesian'
       const tag = `Bayesian CR ${(crS * 100).toFixed(1)}% · ${(conf * 100).toFixed(0)}% data-confidence`
       if (expAcos > targetAcos) {
-        const ratio = Math.max(1 - MAX_DOWN, targetAcos / expAcos)
+        const ratio = Math.max(1 - step.down, targetAcos / expAcos)
         proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * ratio))
         reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${whose} — lower (${tag})`
       } else if (expAcos < targetAcos) {
-        const ratio = Math.min(1 + MAX_UP, targetAcos / expAcos)
+        const ratio = Math.min(1 + step.up, targetAcos / expAcos)
         proposed = Math.round(t.bidCents * ratio)
         reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${whose} — raise (${tag})`
       } else continue
     } else if (t.salesCents === 0) {
       // Spending with no sales → cut hard toward the floor.
-      proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * (1 - MAX_DOWN)))
-      reason = `${t.clicks} clicks, 0 sales — cut ${Math.round(MAX_DOWN * 100)}%`
+      proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * (1 - step.down)))
+      reason = `${t.clicks} clicks, 0 sales — cut ${Math.round(step.down * 100)}%`
     } else if (observedAcos != null && observedAcos > targetAcos) {
-      const ratio = Math.max(1 - MAX_DOWN, targetAcos / observedAcos)
+      const ratio = Math.max(1 - step.down, targetAcos / observedAcos)
       proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * ratio))
       reason = `ACOS ${(observedAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${whose} — lower`
     } else if (observedAcos != null && observedAcos < targetAcos && t.ordersCount >= 1) {
-      const ratio = Math.min(1 + MAX_UP, targetAcos / observedAcos)
+      const ratio = Math.min(1 + step.up, targetAcos / observedAcos)
       proposed = Math.round(t.bidCents * ratio)
       reason = `ACOS ${(observedAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${whose} — raise to capture volume`
     } else continue
     const acos = observedAcos
+    // W1-5 — held inside the ads strategy's band before the write gate sees it (a refused write is noise, not a brake).
+    const held = clampToStrategy(proposed, limits, { currentCents: t.bidCents })
+    if (held.held) {
+      proposed = held.cents
+      reason = `${reason} (held to ${limitWords(held.held.side, held.held.limit)})`
+    }
     if (proposed === t.bidCents) continue
-    proposals.push({ targetId: t.id, expression: t.expressionValue, matchType: t.expressionType, currentBidCents: t.bidCents, proposedBidCents: proposed, deltaCents: proposed - t.bidCents, acos, spendCents: t.spendCents, salesCents: t.salesCents, clicks: t.clicks, reason, targetAcosUsed: targetAcos, targetBasis, targetSource: resolved.source })
+    const sources: WriteSources = { targetAcosPct: targetWriteSource(resolved, opts.targetAcosFrom), ...limitSources(limits) }
+    proposals.push({ targetId: t.id, expression: t.expressionValue, matchType: t.expressionType, currentBidCents: t.bidCents, proposedBidCents: proposed, deltaCents: proposed - t.bidCents, acos, spendCents: t.spendCents, salesCents: t.salesCents, clicks: t.clicks, reason, targetAcosUsed: targetAcos, targetBasis, targetSource: resolved.source, sources, limits })
   }
   proposals.sort((a, b) => Math.abs(b.deltaCents) - Math.abs(a.deltaCents))
   return { targetAcos: typeof explicit === 'number' ? explicit : flatTargetAcos, profitMode, bayesian, proposals }
 }
 
 export async function applyBidOptimization(args: {
-  changes: Array<{ targetId: string; proposedBidCents: number }>; actor?: string; dryRun?: boolean
+  /** W1-5 — `sources` (a proposal's): which level supplied each number, kept on the write's evidence. */
+  changes: Array<{ targetId: string; proposedBidCents: number; sources?: WriteSources }>; actor?: string; dryRun?: boolean
   /** SG.10 (additive) — group the batch into ONE reversible change set (see bulkUpdateAdTargetBids). */
   changeSetId?: string | null
 }): Promise<{
@@ -292,7 +356,7 @@ export async function applyBidOptimization(args: {
   // [{adTargetId, bidCents}]}`, silenced by `as never` — so every
   // non-dry-run apply crashed on `entries.length` before writing. The
   // engine's Off dial is why nobody hit it.
-  const entries = args.changes.map((c) => ({ adTargetId: c.targetId, bidCents: c.proposedBidCents }))
+  const entries = args.changes.map((c) => ({ adTargetId: c.targetId, bidCents: c.proposedBidCents, ...(c.sources ? { evidence: { sources: c.sources } } : {}) }))
   if (entries.length === 0) return { applied: 0, dryRun: false }
   // R2 — never `automation:automation:<x>`: auto-bid, a rule and an autopilot plan pass a namespaced actor.
   const actor: AdsActor = adsActorOf(args.actor, 'bid-optimizer')
@@ -377,9 +441,10 @@ ACTION_HANDLERS.bid_to_target_acos = async (action, _context, meta): Promise<Act
   // Apex C.3 — a rule can opt into Bayesian sparse-data handling.
   const bayesian = action.bayesian === true || action.bayesian === 'true'
   const preview = await previewBidOptimization({ targetAcos, targetAcosFrom: "this rule's target", campaignId, profitMode, mode, bayesian })
-  const proposals = clampProposalsToRuleBounds(preview.proposals, action.minBidEur, action.maxBidEur)
+  // W1-5 — the rule's own Min/Max and the ads strategy's band both bind: the stricter wins.
+  const proposals = holdToStrategy(clampProposalsToRuleBounds(preview.proposals, action.minBidEur, action.maxBidEur))
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, wouldChange: proposals.length, sample: proposals.slice(0, 5) } }
-  const r = await applyBidOptimization({ changes: proposals.map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents })), actor: `automation:${meta.ruleId}` })
+  const r = await applyBidOptimization({ changes: proposals.map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents, sources: p.sources })), actor: `automation:${meta.ruleId}` })
   return { type: action.type, ok: true, output: { applied: r.applied } }
 }
 

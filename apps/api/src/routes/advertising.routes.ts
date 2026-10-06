@@ -8326,10 +8326,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const plan = await prisma.autopilotPlan.findUnique({ where: { id } })
     if (!plan) { reply.status(404); return { error: 'not found' } }
-    const { gatherSignals } = await import('../jobs/ad-autopilot.job.js')
+    const { gatherSignals, strategyLimitsForPlan } = await import('../jobs/ad-autopilot.job.js')
     const { runConductorCycle } = await import('../services/advertising/autopilot/conductor.js')
     const signals = await gatherSignals(Array.isArray(plan.campaignIds) ? (plan.campaignIds as string[]) : [])
-    const result = runConductorCycle({ goal: plan.goal as never, guardrails: (plan.guardrails ?? {}) as never, modules: (plan.modules ?? {}) as never, signals })
+    // W1-5 — the same ads strategy limits a run reads, so the dry run shows what a run would do.
+    const result = runConductorCycle({ goal: plan.goal as never, guardrails: (plan.guardrails ?? {}) as never, modules: (plan.modules ?? {}) as never, signals, strategyByCampaign: await strategyLimitsForPlan(plan) })
     return { dryRun: true, signalsEvaluated: signals.length, ...result }
   })
   // Backtest / projection: what AUTO would do now + the last-N-day spend/ACoS trajectory (P-F.2).
@@ -8341,7 +8342,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { backtestPlan } = await import('../services/advertising/autopilot/backtest.js')
     const days = Math.min(90, Math.max(7, Number(q.days ?? 30)))
     reply.header('Cache-Control', 'private, max-age=120')
-    return backtestPlan({ campaignIds: Array.isArray(plan.campaignIds) ? (plan.campaignIds as string[]) : [], goal: plan.goal as never, guardrails: (plan.guardrails ?? {}) as never, modules: (plan.modules ?? {}) as never, days })
+    return backtestPlan({ campaignIds: Array.isArray(plan.campaignIds) ? (plan.campaignIds as string[]) : [], goal: plan.goal as never, guardrails: (plan.guardrails ?? {}) as never, modules: (plan.modules ?? {}) as never, days, marketplace: plan.marketplace })
   })
   // Real-time decision feed (SSE): emits new AutopilotDecision rows for the plan as they appear.
   fastify.get('/advertising/autopilot-plans/:id/decisions/stream', async (request, reply) => {

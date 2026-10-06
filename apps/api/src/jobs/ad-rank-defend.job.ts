@@ -39,6 +39,7 @@ import { addRelease, emptyRelease, floorOwnerWords, isRankOwnedFloor, releaseCam
 import { isOutOfBudget, outOfBudgetWords } from '../services/advertising/delivery-reasons.js'
 import { engineActorWhere } from '../services/advertising/ads-engine-actors.js'
 import { MAX_MIN_BID_ENTRIES_PER_DAY, noWrites, type RankWriteCounts } from '../services/advertising/rank-write-projection.js'
+import { NO_LIMITS, clampToStrategy, holdNote, limitWords, newHoldLog, strategyBidReader, strategyWords, type BidHoldLog } from '../services/advertising/ads-strategy/bids.js'
 
 // Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
 // clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
@@ -173,9 +174,10 @@ export interface RankPlanRunSummary { planId: string; productId: string; marketp
 export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: number }
 // 2c — `writes` (live runs only): the run's changes by kind, the give-backs of `release` included in `restore`;
 // `keptServing`: campaigns the anti-flap kept serving through a Min-bid hour.
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number }
+// W1-5 — `holds`: the bids a limit held this run (the ads strategy band on a base bid; a bound on a give-back), for the run line.
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog }
 
-interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[] }
+interface CampRow { id: string; name: string; status: string; marketplace?: string | null; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[] }
 interface RankCampaignResult { decision: RankDefendDecision; applied: number; held: HeldBack; writes: RankWriteCounts; keptServing: boolean }
 
 /**
@@ -245,14 +247,15 @@ function samePlacements(a: Array<{ placement: string; percentage: number }>, b: 
 // 1c — `permit` says which of these this campaign may write this run; what it may not is noted in `held`.
 // 2c — split in two so a campaign writes in the tick's order: the give-back half (revertBaseBidDirective) runs before
 // the placement write, the forward half (applyBaseBidDirective) after it. Each adds its writes to `writes` by kind.
-interface BaseBidCtx { write: boolean; actor: string; permit: CampaignPermit; entriesToday?: number }
+// W1-5 — `holds`: the run's collector for the bids a limit held (the run line names them).
+interface BaseBidCtx { write: boolean; actor: string; permit: CampaignPermit; entriesToday?: number; holds?: BidHoldLog }
 async function revertBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: BaseBidCtx, held: HeldBack, writes: RankWriteCounts): Promise<number> {
   if (!ctx.write || spec.bidMode === 'deltaPct') return 0
   // Leaving deltaPct (or never in it) → restore each entity's stable baseline + clear it.
   // 1c — a give-back: never capped, but it waits while stopped (the gate would refuse it after Nexus moved its bids).
   let n = 0
   if (ctx.permit.restore) {
-    try { n = await revertBaseBidDelta(camp.id, { actor: ctx.actor as AdsActor }) } catch (e) { logger.warn('[rank-defend] base-bid delta revert failed', { campaignId: camp.id, error: (e as Error).message }) }
+    try { n = await revertBaseBidDelta(camp.id, { actor: ctx.actor as AdsActor, holds: ctx.holds }) } catch (e) { logger.warn('[rank-defend] base-bid delta revert failed', { campaignId: camp.id, error: (e as Error).message }) }
   } else if (await hasBaseBidDelta(camp.id)) held.restore = true
   writes.restore += n
   return n
@@ -280,10 +283,24 @@ async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: B
   }
   if (mode === 'absolute' && spec.bidValueCents != null && spec.bidValueCents > 0) {
     const ags = await prisma.adGroup.findMany({ where: { campaignId: camp.id }, select: { id: true, defaultBidCents: true } })
-    const moves = ags.filter((g) => g.defaultBidCents !== spec.bidValueCents)
+    // W1-5 — the painted base bid held inside the ads strategy band of each ad group (the reason names the row), so the
+    // write gate does not refuse it. A market without a strategy bid limit leaves every painted value as it is.
+    const strategy = ags.length ? await strategyBidReader().forAdGroups(ags.map((g) => ({ adGroupId: g.id, marketplace: camp.marketplace }))) : new Map()
+    const wants = ags.map((g) => {
+      const c = clampToStrategy(spec.bidValueCents!, strategy.get(g.id)?.limits ?? NO_LIMITS, { currentCents: g.defaultBidCents })
+      return { g, cents: c.cents, held: c.held }
+    })
+    const moves = wants.filter((w) => w.g.defaultBidCents !== w.cents)
     if (!moves.length || !allow('forward')) return none
-    for (const g of moves) {
-      try { const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: spec.bidValueCents }, actor: ctx.actor as AdsActor, reason: 'rank base-bid (absolute)', applyImmediately: true }); if (r.ok) n++ } catch (e) { logger.warn('[rank-defend] base-bid absolute failed', { campaignId: camp.id, adGroupId: g.id, error: (e as Error).message }) }
+    for (const { g, cents, held: by } of moves) {
+      const reason = by ? `rank base-bid (absolute) — held to ${limitWords(by.side, by.limit)}` : 'rank base-bid (absolute)'
+      try {
+        const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: cents }, actor: ctx.actor as AdsActor, reason, applyImmediately: true })
+        if (r.ok) {
+          n++
+          if (by) ctx.holds?.holds.push({ kind: 'base', side: by.side, source: strategyWords(by.limit.source), wantedCents: spec.bidValueCents, writtenCents: cents })
+        }
+      } catch (e) { logger.warn('[rank-defend] base-bid absolute failed', { campaignId: camp.id, adGroupId: g.id, error: (e as Error).message }) }
     }
     writes.base += n
     return { applied: n, keptServing: false }
@@ -294,7 +311,7 @@ async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: B
       if (await baseBidDeltaWouldMove(camp.id, spec.bidDeltaPct)) held.forward = true
       return none
     }
-    try { n = await applyBaseBidDelta(camp.id, spec.bidDeltaPct, { actor: ctx.actor as AdsActor, reason: `rank base-bid ${spec.bidDeltaPct >= 0 ? '+' : ''}${spec.bidDeltaPct}%` }) } catch (e) { logger.warn('[rank-defend] base-bid delta failed', { campaignId: camp.id, error: (e as Error).message }) }
+    try { n = await applyBaseBidDelta(camp.id, spec.bidDeltaPct, { actor: ctx.actor as AdsActor, reason: `rank base-bid ${spec.bidDeltaPct >= 0 ? '+' : ''}${spec.bidDeltaPct}%`, holds: ctx.holds }) } catch (e) { logger.warn('[rank-defend] base-bid delta failed', { campaignId: camp.id, error: (e as Error).message }) }
     writes.base += n
     return { applied: n, keptServing: false }
   }
@@ -382,7 +399,7 @@ const keptServingWords = (entries: number): string =>
 
 async function decideAndMaybeApply(
   camp: CampRow, key: string, spec: RankTargetSpec, planId: string | null,
-  ctx: { write: boolean; permit: CampaignPermit; actor: string; suppressRaise?: boolean; maxBaseBidByCampaign?: Map<string, number>; entriesToday?: number },
+  ctx: { write: boolean; permit: CampaignPermit; actor: string; suppressRaise?: boolean; maxBaseBidByCampaign?: Map<string, number>; entriesToday?: number; holds?: BidHoldLog },
 ): Promise<RankCampaignResult> {
   // 1c — every write below asks the campaign's permit first (dial posture + caps, decided once per campaign by the
   // caller). What it may not write is noted in `held`; on a dry run (`write` false) nothing is written or noted.
@@ -480,7 +497,7 @@ async function decideAndMaybeApply(
   // 1c — a give-back, so a cap never refuses it; while stopped it is not attempted at all (bidsSuppressedAt stays set
   // and the first run after Resume restores), because the gate would refuse the raise after Nexus restored its copy.
   if (camp.bidsSuppressedAt && spec.bidMode !== 'suppress' && allow('restore')) {
-    try { const n = await restoreCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — serve target → restore prior bids' }); applied += n; writes.restore += n } catch (e) { logger.warn('[rank-defend] bid-restore failed', { campaignId: camp.id, error: (e as Error).message }) }
+    try { const n = await restoreCampaignBids(camp.id, { actor: ctx.actor as AdsActor, reason: 'rank — serve target → restore prior bids', holds: ctx.holds }); applied += n; writes.restore += n } catch (e) { logger.warn('[rank-defend] bid-restore failed', { campaignId: camp.id, error: (e as Error).message }) }
   }
   // 2c — the base-bid give-back (leaving a ±% base bid) goes with the restore, before any placement write.
   const reverted = await revertBaseBidDirective(camp, spec, ctx, held, writes)
@@ -862,7 +879,9 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   // 2a — a one-plan run does not know who else holds a campaign, nor does a run that could not resolve a plan's family:
   // neither sweeps. 2c — the give-backs run first, before any campaign's new writes.
   if (familyUnknown && !opts.onlyPlanId) logger.warn('[rank-defend] a plan family could not be resolved — orphan sweep skipped this run')
-  const release = guard ? await giveBack(guard, idle, opts.onlyPlanId || familyUnknown ? null : governed) : undefined
+  // W1-5 — what a limit held this run (a base bid at the ads strategy band, a give-back at a bound): the run line says so.
+  const holds = newHoldLog()
+  const release = guard ? await giveBack(guard, idle, opts.onlyPlanId || familyUnknown ? null : governed, holds) : undefined
 
   // 2c — then every campaign, in RANK_WRITE_ORDER (restore → suppress → placement → base), loop order within a kind.
   const entriesToday = await minBidEntriesToday([...new Set(work.map((w) => w.camp.id))], clockNow)
@@ -871,7 +890,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   let keptServing = 0
   for (const w of [...work].sort((a, b) => order.get(a)! - order.get(b)! || a.seq - b.seq)) {
     const permit = w.write && guard ? guard.permit() : DRY_RUN
-    const r = await decideAndMaybeApply(w.camp, w.key, w.spec, w.planId, { write: w.write, permit, actor: w.actor, maxBaseBidByCampaign, suppressRaise: w.suppressRaise, entriesToday: entriesToday.get(w.camp.id) ?? 0 })
+    const r = await decideAndMaybeApply(w.camp, w.key, w.spec, w.planId, { write: w.write, permit, actor: w.actor, maxBaseBidByCampaign, suppressRaise: w.suppressRaise, entriesToday: entriesToday.get(w.camp.id) ?? 0, holds })
     if (w.write) guard?.settle(permit, r.applied, r.held)
     applied += r.applied
     for (const k of Object.keys(writes) as Array<keyof RankWriteCounts>) writes[k] += r.writes[k]
@@ -898,7 +917,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   }
 
   if (release) writes.restore += release.writes
-  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}) }
+  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}), ...(holds.holds.length ? { holds } : {}) }
 }
 
 interface IdleCampaign { campaignId: string; actor: AdsActor; why: string }
@@ -911,12 +930,12 @@ interface RankWork { seq: number; camp: CampRow; key: string; spec: RankTargetSp
  * caps and never refused by one; while stopped they wait, and the sweep of the first run after Resume gives them back.
  * The sweep changes paused campaigns only; a live one is listed for a person (Owner, 2026-10-04 — rank-release.service.ts).
  */
-async function giveBack(guard: EngineGuard, idle: IdleCampaign[], sweepGoverned: Set<string> | null): Promise<RankReleaseSummary> {
+async function giveBack(guard: EngineGuard, idle: IdleCampaign[], sweepGoverned: Set<string> | null, holds?: BidHoldLog): Promise<RankReleaseSummary> {
   const out = emptyRelease()
-  for (const why of new Set(idle.map((i) => i.why))) addRelease(out, await releaseCampaigns(idle.filter((i) => i.why === why), { reason: `rank release — ${why}`, guard }))
+  for (const why of new Set(idle.map((i) => i.why))) addRelease(out, await releaseCampaigns(idle.filter((i) => i.why === why), { reason: `rank release — ${why}`, guard, holds }))
   let swept = 0
   if (sweepGoverned) {
-    try { const sw = await sweepOrphanReleases({ guard, governed: sweepGoverned }); swept = sw.orphans; addRelease(out, sw) }
+    try { const sw = await sweepOrphanReleases({ guard, governed: sweepGoverned, holds }); swept = sw.orphans; addRelease(out, sw) }
     catch (e) { logger.warn('[rank-defend] orphan sweep failed', { error: (e as Error).message }) }
   }
   const { campaigns: _detail, ...counts } = out
@@ -946,7 +965,7 @@ export function rankWritesNote(r: Pick<RankDefendSummary, 'writes' | 'keptServin
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function rankDefendSummaryLine(r: RankDefendSummary): string {
   if (r.skipped) return `skipped: ${r.skipped}`
-  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}`
+  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}`
 }
 
 export async function runRankDefendCron(): Promise<void> {

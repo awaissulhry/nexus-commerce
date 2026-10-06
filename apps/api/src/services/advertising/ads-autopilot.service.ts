@@ -144,7 +144,7 @@ export async function applyAutopilot(opts: {
       select: { id: true },
     })
     const allowed = new Set(rows.map((r) => r.id))
-    const changes = proposals.filter((p) => allowed.has(p.targetId)).map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents }))
+    const changes = proposals.filter((p) => allowed.has(p.targetId)).map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents, sources: p.sources }))
     bidApplied = changes.length
     bidSkipped = proposals.length - changes.length
     if (changes.length > 0) {

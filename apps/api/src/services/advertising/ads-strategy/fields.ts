@@ -13,9 +13,9 @@
  *                product each give one: the one that spends less (the Owner's rule for shared ad groups)
  *   raise        what counts as loosening, for the writer (W1-3): a raise needs the Owner's authenticator code
  *   money        ad-spend money: hidden from a person without financials.adspend.view
- *   readBy       the engines and doors that ACT on it. Empty for every field today: no engine, rule or Claude door
- *                reads the strategy yet. Each W1 engine PR adds itself here, so a screen never claims a reader
- *                that does not exist.
+ *   readBy       the engines and doors that ACT on it. Each W1 engine PR adds itself here, so a screen never claims a
+ *                reader that does not exist. W1-5 (bids): the target, the lowest and highest bid and the largest bid
+ *                change. Every other field is stored and shown only (`notReadYet`).
  *
  * 🔴 Units. `*Pct` is an INTEGER PERCENT (25 = 25 %), never a fraction — the AdsAutomationState.defaultTargetAcosPct
  * convention. The engines take fractions (Campaign.dynamicBidding.targetAcos = 0.25). The two meet ONLY through
@@ -172,16 +172,33 @@ export interface StrategyField {
 
 const ALL_LEVELS = STRATEGY_LEVELS
 
+/** The readers, named once, so every field one of them reads says it the same way (W1-5: the bid engines). */
+export const READERS = {
+  optimiser: 'the bid optimiser (auto-bid, bid recommendations, target-ACoS bid rules)',
+  bidRules: 'bid rules (bid_apply)',
+  autopilot: 'autopilot plans',
+  gate: "the write gate (refuses an engine's, a rule's or Claude's bid outside it; warns on a person's own edit)",
+  hourly: 'hourly bid plans (the base bid)',
+  restores: 'restores after a stop',
+  stepClamp: "the step clamp on engine, rule and Claude bid changes (not a person's own edit)",
+  claudePreview: "Claude's bid previews",
+} as const
+const TARGET_READERS = [READERS.optimiser, READERS.bidRules, READERS.autopilot]
+const BAND_READERS = [READERS.gate, READERS.optimiser, READERS.bidRules, READERS.hourly, READERS.restores, READERS.autopilot]
+const STEP_READERS = [READERS.stepClamp, READERS.optimiser, READERS.claudePreview, READERS.autopilot]
+
 export const STRATEGY_FIELDS: readonly StrategyField[] = [
   { key: 'goal', label: 'Goal', columns: ['goal'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'any', money: false, readBy: [] },
   { key: 'goalNote', label: 'Why', columns: ['goalNote'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'never', money: false, readBy: [] },
-  { key: 'target', label: 'Target', columns: ['targetKind', 'targetPct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: [] },
-  // The number Nexus's bid engines would steer by: the first ACoS target down the chain (a TACoS target is skipped).
-  { key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true, readBy: [] },
+  // Read as an ACoS target only: a TACoS target is stored and shown, and the engines take the next ACoS target down.
+  { key: 'target', label: 'Target', columns: ['targetKind', 'targetPct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: TARGET_READERS },
+  // The number Nexus's bid engines steer by: the first ACoS target down the chain (a TACoS target is skipped), after a
+  // rule's or plan's own number and the campaign's own target, before the account default.
+  { key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true, readBy: TARGET_READERS },
   { key: 'monthlySpendCapCents', label: 'Monthly spend cap', columns: ['monthlySpendCapCents'], levels: ALL_LEVELS, resolve: 'everyScope', safer: 'ownSpend', raise: 'up', money: true, readBy: [] },
-  { key: 'minBidCents', label: 'Lowest bid', columns: ['minBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'floor', money: true, readBy: [] },
-  { key: 'maxBidCents', label: 'Highest bid', columns: ['maxBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: true, readBy: [] },
-  { key: 'maxChangePct', label: 'Largest bid change per action', columns: ['maxChangePct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
+  { key: 'minBidCents', label: 'Lowest bid', columns: ['minBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'floor', money: true, readBy: BAND_READERS },
+  { key: 'maxBidCents', label: 'Highest bid', columns: ['maxBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: true, readBy: BAND_READERS },
+  { key: 'maxChangePct', label: 'Largest bid change per action', columns: ['maxChangePct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: STEP_READERS },
   { key: 'maxActionsPerRun', label: 'Most actions per run', columns: ['maxActionsPerRun'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
   { key: 'protect', label: 'Protected', columns: ['protect'], levels: ['CATEGORY', 'PRODUCT'], resolve: 'inherit', safer: 'anyProtected', raise: 'unprotect', money: false, readBy: [] },
   {
@@ -204,7 +221,7 @@ export const FIELD_BY_KEY: ReadonlyMap<StrategyFieldKey, StrategyField> = new Ma
 /** The columns of a field that must be set on a row for that row to set the field. */
 export const requiredColumns = (field: StrategyField): readonly StrategyColumn[] => field.required ?? field.columns
 
-/** The fields no engine or door acts on yet: today every one of them. Shrinks as the W1 engine PRs ship. */
+/** The fields no engine or door acts on yet. Shrinks as the W1 engine PRs ship (W1-5 took the bid fields). */
 export function notReadYet(): StrategyFieldKey[] {
   return STRATEGY_FIELDS.filter((f) => f.readBy.length === 0).map((f) => f.key)
 }

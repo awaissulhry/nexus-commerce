@@ -9,12 +9,15 @@ import prisma from '../../../db.js'
 import { runConductorCycle, type PlanModules } from './conductor.js'
 import { DEFAULT_GUARDRAILS, type Goal, type Guardrails } from './presets.js'
 import { gatherSignals } from '../../../jobs/ad-autopilot.job.js'
+import { bidLimitsByCampaign } from '../ads-strategy/bids.js'
 
-export async function backtestPlan(opts: { campaignIds: string[]; goal: Goal; guardrails: Partial<Guardrails>; modules: PlanModules; days: number }) {
+export async function backtestPlan(opts: { campaignIds: string[]; goal: Goal; guardrails: Partial<Guardrails>; modules: PlanModules; days: number; marketplace?: string | null }) {
   const { campaignIds, goal, modules, days } = opts
   const g: Guardrails = { ...DEFAULT_GUARDRAILS, ...opts.guardrails }
   const signals = await gatherSignals(campaignIds)
-  const result = runConductorCycle({ goal, guardrails: opts.guardrails, modules, signals })
+  // W1-5 — the ads strategy limits a run reads (in the plan's market), so the projection is what a run would do.
+  const strategyByCampaign = await bidLimitsByCampaign(opts.marketplace, campaignIds)
+  const result = runConductorCycle({ goal, guardrails: opts.guardrails, modules, signals, strategyByCampaign })
 
   // projected impact
   const byType: Record<string, number> = {}

@@ -32,6 +32,8 @@ vi.mock('../../db.js', () => ({
     advertisingActionLog: { get findMany() { return actionLogFindMany }, get findFirst() { return actionLogFindFirst } },
     adProductAd: { get findMany() { return productAdFindMany } },
     adWriteRefusal: { get create() { return refusalCreate } },
+    // W1-5 — no ads strategy row sets a bid field: the gate's strategy band adds nothing.
+    adsStrategy: { findFirst: async () => null },
   },
 }))
 vi.mock('./ads-api-client.js', () => ({ adsMode: () => 'live' }))

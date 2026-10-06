@@ -47,6 +47,12 @@ describe('applyBidOptimization', () => {
     expect(out).toEqual({ applied: 2, dryRun: false, actionLogIds: [], outboundQueueIds: [] })
   })
 
+  it('W1-5 — a proposal\'s sources ride on its entry as evidence (which level supplied each number)', async () => {
+    const sources = { targetAcosPct: { level: 'campaign', value: 25 }, maxBidCents: { level: 'market', value: 90, label: 'Test market (IT)', version: 2 } }
+    await applyBidOptimization({ changes: [{ targetId: 't1', proposedBidCents: 30, sources }, { targetId: 't2', proposedBidCents: 45 }] })
+    expect(bulk.mock.calls[0]![0]!.entries).toEqual([{ adTargetId: 't1', bidCents: 30, evidence: { sources } }, { adTargetId: 't2', bidCents: 45 }])
+  })
+
   it('passes a user: actor through untouched', async () => {
     await applyBidOptimization({
       changes: [{ targetId: 't1', proposedBidCents: 30 }],
