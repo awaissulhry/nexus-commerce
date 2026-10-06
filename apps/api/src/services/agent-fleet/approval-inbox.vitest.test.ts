@@ -25,7 +25,7 @@ vi.mock('../../db.js', () => ({
 vi.mock('../agents/approval-gate.service.js', () => ({ decideApproval: vi.fn() }))
 vi.mock('./control-audit.service.js', () => ({ recordControlChange: vi.fn() }))
 vi.mock('./exemplar.service.js', () => ({ mintExemplarFromDecision: vi.fn() }))
-vi.mock('../../utils/logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn() } }))
+vi.mock('../../utils/logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
 
 import prisma from '../../db.js'
 import { decideApproval } from '../agents/approval-gate.service.js'

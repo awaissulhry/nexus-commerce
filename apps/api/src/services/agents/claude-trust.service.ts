@@ -28,6 +28,10 @@
  * tool's level here and the strategy's applies (`claudeRuleForChange`) — to refuse it (off), to decide who takes it,
  * to confirm it in Claude and, at commit, to hand a change back that the strategy narrowed inside its window. Brakes
  * are never narrowed. What a change cannot be placed for exactly takes the strictest row (fail closed).
+ *
+ * ADS AUTONOMY AA-W2-3 — a strategy-bound change (tool-types.ts StrategyBound) that the rule scheduled is judged once
+ * more at commit, on the fresh dry run rather than the stored preview (`autoFreshRefusal`): its limits read the
+ * strategy's facts and the day's counts from the preview, and those may move inside the window.
  */
 
 import { z } from 'zod'
@@ -45,6 +49,7 @@ import { offeredOn } from './call-tool.js'
 import { bustPolicyCache } from './tool-policy.service.js'
 import { getTool, listTools } from './tool-registry.js'
 import { CLAUDE_TRUST_LEVELS, PLAN_TOOL, type AgentTool, type ClaudeTrust, type Reversibility } from './tool-types.js'
+import { dailyRefusal, ledgerOf, limitFactsOf, ruleRunLedger, type LimitFacts, type MarketFacts, type RuleRunLedger } from './tools/ads-autonomy-kit.js'
 
 /** The charter Claude's approvals are audited under (AgentRun.agentKey of every MCP call). */
 export const CLAUDE_CHARTER = 'claude'
@@ -279,6 +284,13 @@ const CONFIRM_HOW = 'the person who asked types their authenticator code to appr
 export const CONFIRM_IN_CLAUDE = `this business set it to "confirm in Claude": ${CONFIRM_HOW}`
 
 const A_PERSON = 'a person approves it in Nexus'
+/**
+ * AA-W2-3 — one ending, where the person decides: a limit's sentence that already ends "a person decides" (the ads kit's,
+ * and some tools' own) says it once, as "a person approves it in Nexus", instead of both one after the other.
+ */
+export function inNexusEnding(sentence: string): string {
+  return `${sentence.replace(/[;:] a person decides\.?$/, '')}; ${A_PERSON}`
+}
 
 /** W1-8 — why a change the strategy narrowed waits for a person: at ask (or off), or at confirm. */
 export function narrowedDecision(n: StrategyNarrowed): string {
@@ -308,7 +320,7 @@ function limitsRefusal(tool: AgentTool, preview: unknown, rule: ClaudeToolRule):
   if (!tool.withinLimits || !rule.limits) return `${tool.name} has no limits to run inside; ${A_PERSON}`
   if (rule.limitsInvalid) return `the limits saved for ${tool.name} no longer fit it (${rule.limitsInvalid}); set them again. Until then ${A_PERSON}`
   const outside = tool.withinLimits(preview, rule.limits)
-  return outside ? `${outside}; ${A_PERSON}` : null
+  return outside ? inNexusEnding(outside) : null
 }
 
 /**
@@ -352,6 +364,11 @@ export async function planRuleRefusal(
     const outside = limitsRefusal(step.tool, step.preview, rules[index]!)
     if (outside) return { level: 'auto', why: `step ${index + 1} (${step.tool.name}): ${outside}` }
   }
+  // AA-W2-3 — each ad step inside the strategy's daily limits alone is not enough: the steps count together.
+  if (steps.some((step) => step.tool.strategyBound)) {
+    const together = planDailyRefusal(steps, await ruleRunLedger())
+    if (together) return { level: 'auto', why: inNexusEnding(together) }
+  }
   const used = await autoRunsInLastDay()
   if (used + steps.length > autonomy.dailyAutoCap) {
     return {
@@ -364,7 +381,11 @@ export async function planRuleRefusal(
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-/** C6 — at commit, for a plan the rule scheduled: the Pause, and every step's level and limits, as for one change. */
+/**
+ * C6 — at commit, for a plan the rule scheduled: the Pause, and every step's level and limits, as for one change.
+ * AA-W2-3 — and its ad steps together inside the strategy's daily limits, against what ran by rule since it was asked
+ * for (this plan left out). Each step is judged again on its fresh dry run when the worker runs it.
+ */
 export async function autoPlanCommitRefusal(approvalId: string): Promise<string | null> {
   const autonomy = await autonomyOf()
   if (autonomy.paused) return 'changes that run by rule were paused in this business before it ran'
@@ -373,7 +394,57 @@ export async function autoPlanCommitRefusal(approvalId: string): Promise<string 
     const refusal = await autoPlanStepRefusal(step.toolName, step.preview, step.args)
     if (refusal) return `step ${step.position}: ${refusal}`
   }
+  const judged = steps.map((step) => ({ tool: getTool(step.toolName), preview: step.preview }))
+  if (judged.some((step) => step.tool?.strategyBound)) {
+    const together = planDailyRefusal(judged, await ruleRunLedger({ excludeApprovalId: approvalId }))
+    if (together) return `it is no longer inside the business's limits: ${inNexusEnding(together)}`
+  }
   return null
+}
+
+/** The tighter of two daily limits (null: not set); the source is the one that gave it. */
+function tighterDaily(a: MarketFacts, b: MarketFacts): MarketFacts {
+  const out: MarketFacts = { ...a, sources: { ...a.sources } }
+  for (const key of ['maxWritesPerDay', 'maxRaisesPerDay', 'maxBudgetIncreasePerDayCents'] as const) {
+    if (b[key] != null && (out[key] == null || b[key]! < out[key]!)) {
+      out[key] = b[key]
+      if (b.sources[key]) out.sources[key] = b.sources[key]
+      else delete out.sources[key]
+    }
+  }
+  if (!b.strategy) out.strategy = null
+  return out
+}
+
+/**
+ * AA-W2-3 — a plan's strategy-bound steps judged against the ads strategy's daily limits (C5) TOGETHER: what ran by
+ * rule in the last 24 hours (`ledger`, without this plan) plus every such step, summed per market from the `this` block
+ * each step's preview stored (the kit's `ledgerOf`), within the tightest daily limit any step's facts carry there. Each
+ * step may be inside alone while the plan is not. Null when inside, or when no step carries limit facts (each step's
+ * own limits refuse that). Pure.
+ */
+export function planDailyRefusal(steps: ReadonlyArray<{ tool?: Pick<AgentTool, 'strategyBound'> | null; preview: unknown }>, ledger: RuleRunLedger): string | null {
+  const bound = steps.filter((step) => step.tool?.strategyBound).map((step) => step.preview)
+  const facts = bound.map(limitFactsOf).filter((f): f is LimitFacts => !!f)
+  if (!facts.length) return null
+  const plan = ledgerOf(bound)
+  const markets = Object.keys(plan.byMarket).sort()
+  const limits: Record<string, MarketFacts> = {}
+  for (const f of facts) {
+    for (const market of markets) {
+      const m = f.markets[market]
+      if (m) limits[market] = limits[market] ? tighterDaily(limits[market], m) : m
+    }
+  }
+  const zero = { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 }
+  const together: LimitFacts = {
+    ...facts[0],
+    markets: limits,
+    this: { ...facts[0].this, markets, byMarket: Object.fromEntries(markets.map((m) => [m, { ...plan.byMarket[m], items: 0, addedDailyCents: 0 }])) },
+    today: Object.fromEntries(markets.map((m) => [m, ledger.byMarket[m] ?? zero])),
+  }
+  const why = dailyRefusal(together)
+  return why ? `the plan's ad steps together — ${why}` : null
 }
 
 /** C6 — one step of a plan run by rule, when it runs: still allowed by the rule (as `autoCommitRefusal`)? */
@@ -426,6 +497,20 @@ export async function autoCommitRefusal(toolName: string, preview: unknown, args
   if (!tool || !rule || rule.level !== 'auto') return `the business no longer lets Claude run ${toolName} by rule`
   const outside = limitsRefusal(tool, preview, rule)
   return outside ? `it is no longer inside the business's limits: ${outside}` : null
+}
+
+/**
+ * ADS AUTONOMY AA-W2-3 — at commit, for a strategy-bound change the rule scheduled (one change, or a step of a plan):
+ * the same check as `autoCommitRefusal`, on the FRESH dry run the staleness check just made instead of the preview
+ * stored when Claude asked — the ads strategy, its narrowing where the change lands (W1-8) and the day's counts as they
+ * are when it runs. Null when it may still run, and for a tool that is not strategy-bound (its stored preview was
+ * judged; the staleness check compares the rest). The strategy's version is deliberately not a material preview field:
+ * a strategy edit would then make every request a person approved stale, and count towards the automatic pause.
+ */
+export async function autoFreshRefusal(toolName: string, freshPreview: unknown, args?: unknown): Promise<string | null> {
+  if (!getTool(toolName)?.strategyBound) return null
+  const refusal = await autoCommitRefusal(toolName, freshPreview, args)
+  return refusal ? `judged again on a fresh dry run: ${refusal}` : null
 }
 
 /**

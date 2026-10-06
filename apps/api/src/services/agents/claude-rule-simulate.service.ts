@@ -9,6 +9,12 @@
  * (the gate stores `raw.preview ?? raw.data`, the very value the rule judged). Only `auto` runs by itself; at `confirm`
  * or below nothing would have, so `wouldRun` is 0.
  *
+ * ADS AUTONOMY (W1-8, honoured here since AA-W2-3) — an ad change is also held to the ads strategy where it lands, as
+ * the real rule holds it (`claudeRuleForChange`): the strategy narrows, never widens, so a request it holds below auto
+ * there would not have run. The strategy is read as it is NOW: the question is "with these limits and today's
+ * strategy". A strategy that cannot be read for a request counts as "would not have run" (the real rule's failure
+ * leaves a request with a person).
+ *
  * What it does NOT replay, because they are the business's brakes of the moment and not part of the kind's rule: the
  * connection's nexus.run scope, a Pause, and the daily cap. Requests from other doors (fleet agents, the in-app
  * assistant) are not counted: Claude's rule never applies to them.
@@ -20,6 +26,7 @@
 import type { RuleSimulation } from '@nexus/shared/approval-queue'
 import prisma from '../../db.js'
 import { offeredOn } from './call-tool.js'
+import { strategyLevelFor, strategyMemo } from '../advertising/ads-strategy/claude.js'
 import { CLAUDE_CHARTER, claudeRuleOf, levelsFor, trustCeiling } from './claude-trust.service.js'
 import { getTool } from './tool-registry.js'
 import { CLAUDE_TRUST_LEVELS, type ClaudeTrust } from './tool-types.js'
@@ -111,12 +118,23 @@ export async function simulateClaudeRule(
   }
 
   /** Would this stored preview have run by itself under the proposed rule? The tool's own check; a throw is a no. */
-  const wouldRunOne = (preview: unknown): boolean => {
+  const withinOne = (preview: unknown): boolean => {
     if (level !== 'auto' || !tool.withinLimits || !limits) return false
     try {
       return tool.withinLimits(preview, limits) === null
     } catch {
       return false // the real rule's failure leaves a request with a person (decideByRule)
+    }
+  }
+  /** W1-8 — and the ads strategy lets it run by rule where it lands (one read of the strategy for the whole window). */
+  const memo = strategyMemo()
+  const wouldRunOne = async (preview: unknown, args: unknown): Promise<boolean> => {
+    if (!withinOne(preview)) return false
+    try {
+      const narrowed = await strategyLevelFor(toolName, args ?? {}, preview, memo)
+      return !narrowed || narrowed.level === 'auto'
+    } catch {
+      return false
     }
   }
 
@@ -132,13 +150,13 @@ export async function simulateClaudeRule(
       orderBy: { id: 'desc' },
       take: PAGE,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      select: { id: true, status: true, preview: true, reason: true, operatorNote: true },
+      select: { id: true, status: true, args: true, preview: true, reason: true, operatorNote: true },
     })
     for (const ap of page) {
       // A duplicate undo Nexus withdrew is not a request anyone decided.
       if (ap.status === 'rejected' && ap.reason?.startsWith('withdrawn:')) continue
       considered++
-      if (!wouldRunOne(ap.preview)) continue
+      if (!(await wouldRunOne(ap.preview, ap.args))) continue
       wouldRun++
       if (ap.status !== 'rejected') continue
       rejectedAmongWouldRun++

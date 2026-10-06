@@ -30,7 +30,7 @@ import { deciderPrincipal, previewStaleness } from '../agent-fleet/approval-inbo
 import { decideByRule, EXPIRY_HOURS, requestDoor, type GateOutcome, type GateRule } from './approval-gate.service.js'
 import { callTool, executeTool, ToolAccessError, type ToolPrincipal, type UserPrincipal } from './call-tool.js'
 import { recordExecutedChangeSafely } from './change-record.service.js'
-import { autoPlanStepRefusal, noteAutoFailure } from './claude-trust.service.js'
+import { autoFreshRefusal, autoPlanStepRefusal, noteAutoFailure } from './claude-trust.service.js'
 import { mergedStepUp } from './step-up-approval.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { getTool } from './tool-registry.js'
@@ -280,13 +280,22 @@ async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
       return
     }
     const args = (step.args ?? {}) as Record<string, unknown>
-    const stale = await previewStaleness(step.toolName, args, step.preview, ap.id)
+    const stale = await previewStaleness(step.toolName, args, step.preview, ap.id, { withFresh: auto })
     if (stale.stale) {
       const why = stale.why ?? 'it is no longer a valid action'
       await end('skipped', { reason: `not run — ${why}` })
       await stepAudit(ap, step, 'stale_refused', why)
       if (auto) await noteAutoFailure()
       return
+    }
+    // AA-W2-3 — a strategy-bound step of a plan run by rule: judged again on that fresh dry run, as one change is.
+    if (auto) {
+      const freshNow = await autoFreshRefusal(step.toolName, stale.fresh, step.args)
+      if (freshNow) {
+        await end('skipped', { reason: `not run — ${freshNow}` })
+        await stepAudit(ap, step, 'rule_refused', freshNow)
+        return
+      }
     }
     const tool = getTool(step.toolName)!
     const { raw } = await executeTool(decider.principal, step.toolName, args, {

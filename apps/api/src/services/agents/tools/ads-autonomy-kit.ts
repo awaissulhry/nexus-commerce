@@ -267,7 +267,9 @@ export function ledgerOf(previews: readonly unknown[]): RuleRunLedger {
 /**
  * What ran by rule in this business in the last 24 hours: single requests and the steps of plans whose decision was
  * the business's rule (a step that was skipped never ran). `excludeApprovalId`: the request this dry run re-checks
- * (ToolContext.approvalId — at the commit's re-check and in `execute`), so it is not counted against itself.
+ * (ToolContext.approvalId — at the commit's re-check and in `execute`), so it is not counted against itself. AA-W2-3 —
+ * for a plan, only its steps that have not run are left out: a step re-checked when it runs counts the steps of its own
+ * plan that ran before it.
  */
 export async function ruleRunLedger(opts: { excludeApprovalId?: string | null; now?: Date } = {}): Promise<RuleRunLedger> {
   const since = new Date((opts.now ?? new Date()).getTime() - RULE_DAY_MS)
@@ -278,7 +280,11 @@ export async function ruleRunLedger(opts: { excludeApprovalId?: string | null; n
       select: { preview: true },
     }),
     prisma.agentPlanStep.findMany({
-      where: { approval: { decisionVia: 'auto', decidedAt: { gte: since } }, status: { not: 'skipped' }, ...(exclude ? { approvalId: { not: exclude } } : {}) },
+      where: {
+        approval: { decisionVia: 'auto', decidedAt: { gte: since } },
+        status: { not: 'skipped' },
+        ...(exclude ? { OR: [{ approvalId: { not: exclude } }, { approvalId: exclude, status: 'done' }] } : {}),
+      },
       select: { preview: true },
     }),
   ])

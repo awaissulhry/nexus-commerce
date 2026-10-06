@@ -29,7 +29,7 @@ vi.mock('../../db.js', () => ({
 vi.mock('../agents/approval-gate.service.js', () => ({ decideApproval: vi.fn(), EXPIRY_HOURS: 24 }))
 vi.mock('./control-audit.service.js', () => ({ recordControlChange: vi.fn() }))
 vi.mock('./exemplar.service.js', () => ({ mintExemplarFromDecision: vi.fn() }))
-vi.mock('../../utils/logger.js', () => ({ logger: { error: vi.fn(), info: vi.fn() } }))
+vi.mock('../../utils/logger.js', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
 /*
  * The bulk cases use the real tool registry. (Under S8.4 they needed a preview-only stand-in of `set-target-bid`, since
  * any executable row blocked a bulk approve; the Owner's decision 1 = A of 2026-10-05 replaced S8.4, so the real,
