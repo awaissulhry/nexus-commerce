@@ -29,6 +29,10 @@
  * to confirm it in Claude and, at commit, to hand a change back that the strategy narrowed inside its window. Brakes
  * are never narrowed. What a change cannot be placed for exactly takes the strictest row (fail closed).
  *
+ * ADS AUTONOMY AA-W2-3 — a strategy-bound change (tool-types.ts StrategyBound) that the rule scheduled is judged once
+ * more at commit, on the fresh dry run rather than the stored preview (`autoFreshRefusal`): its limits read the
+ * strategy's facts and the day's counts from the preview, and those may move inside the window.
+ *
  * ADS AUTONOMY AA-W2-4 — `watch`, between confirm and auto: a change Claude asks for at watch goes through the full
  * check auto would make (the level where it lands with the ads strategy, nexus.run, Pause, the tool's limits, the daily
  * cap — counting the watched changes that would have run, as if their kinds were at auto) and the verdict is recorded on
@@ -54,7 +58,7 @@ import { offeredOn } from './call-tool.js'
 import { bustPolicyCache } from './tool-policy.service.js'
 import { getTool, listTools } from './tool-registry.js'
 import { CLAUDE_TRUST_LEVELS, PLAN_TOOL, type AgentTool, type ClaudeTrust, type Reversibility } from './tool-types.js'
-import type { RuleRunLedger } from './tools/ads-autonomy-kit.js'
+import { asWatched, dailyRefusal, ledgerOf, limitFactsOf, ruleRunLedger, type LimitFacts, type MarketFacts, type RuleRunLedger } from './tools/ads-autonomy-kit.js'
 
 /** The charter Claude's approvals are audited under (AgentRun.agentKey of every MCP call). */
 export const CLAUDE_CHARTER = 'claude'
@@ -305,6 +309,13 @@ const CONFIRM_HOW = 'the person who asked types their authenticator code to appr
 export const CONFIRM_IN_CLAUDE = `this business set it to "confirm in Claude": ${CONFIRM_HOW}`
 
 const A_PERSON = 'a person approves it in Nexus'
+/**
+ * AA-W2-3 — one ending, where the person decides: a limit's sentence that already ends "a person decides" (the ads kit's,
+ * and some tools' own) says it once, as "a person approves it in Nexus", instead of both one after the other.
+ */
+export function inNexusEnding(sentence: string): string {
+  return `${sentence.replace(/[;:] a person decides\.?$/, '')}; ${A_PERSON}`
+}
 
 /** W1-8 — why a change the strategy narrowed waits for a person: at ask (or off), or at confirm (AA-W2-4: or watch). */
 export function narrowedDecision(n: StrategyNarrowed): string {
@@ -320,7 +331,9 @@ interface RuleHold {
   why: string
   then: string
 }
-const asRefusal = (hold: RuleHold) => `${hold.why}${hold.then}${A_PERSON}`
+const asRefusal = (hold: RuleHold) => (hold.then === '; ' ? inNexusEnding(hold.why) : `${hold.why}${hold.then}${A_PERSON}`)
+/** A limit's sentence for a watch verdict: what holds it, without who decides (at watch a person always does). */
+const bare = (why: string) => why.replace(/[;:] a person decides\.?$/, '')
 
 /** Why the tool's limits keep a change from running by rule, or null when it is inside them. */
 function limitsOutside(tool: AgentTool, preview: unknown, rule: ClaudeToolRule): RuleHold | null {
@@ -402,7 +415,6 @@ const hasLimitFacts = (preview: unknown) => !!preview && typeof preview === 'obj
  * whole plan would have): what the strategy's daily limits would also have counted, had their kinds been at auto.
  */
 async function watchedRunLedger(): Promise<RuleRunLedger> {
-  const { ledgerOf } = await import('./tools/ads-autonomy-kit.js')
   const since = new Date(Date.now() - AUTO_CAP_WINDOW_MS)
   const wouldRun = { path: ['wouldRun'], equals: true }
   const [single, steps] = await Promise.all([
@@ -419,18 +431,22 @@ async function watchedRunLedger(): Promise<RuleRunLedger> {
  */
 async function watchJudged(previews: unknown[], strategyWatchAsAuto: boolean): Promise<unknown[]> {
   if (!previews.some(hasLimitFacts)) return previews
-  const [{ asWatched }, watched] = await Promise.all([import('./tools/ads-autonomy-kit.js'), watchedRunLedger()])
+  const watched = await watchedRunLedger()
   return previews.map((preview) => asWatched(preview, { watched, strategyWatchAsAuto }))
 }
 
-/**
- * A plan's ad steps together within Claude's daily limits in the ads strategy (ads autonomy kit `planDailyRefusal`):
- * each step alone was judged by its own limits; together they may pass them. Null without two steps that carry facts.
- */
-async function planTogetherRefusal(previews: unknown[]): Promise<string | null> {
-  if (previews.filter(hasLimitFacts).length < 2) return null
-  const { planDailyRefusal } = await import('./tools/ads-autonomy-kit.js')
-  return planDailyRefusal(previews)
+/** Two ledgers of the same 24 hours added up: what ran by rule, and the watched changes that would have. */
+function addLedgers(a: RuleRunLedger, b: RuleRunLedger): RuleRunLedger {
+  const out: RuleRunLedger = { byMarket: {}, byEntity: { ...a.byEntity }, runs: a.runs + b.runs }
+  for (const [market, day] of [...Object.entries(a.byMarket), ...Object.entries(b.byMarket)]) {
+    const sum = (out.byMarket[market] ??= { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 })
+    sum.changes += day.changes
+    sum.writes += day.writes
+    sum.raises += day.raises
+    sum.budgetIncreaseCents += day.budgetIncreaseCents
+  }
+  for (const [entity, runs] of Object.entries(b.byEntity)) out.byEntity[entity] = (out.byEntity[entity] ?? 0) + runs
+  return out
 }
 
 /**
@@ -446,7 +462,7 @@ export async function watchVerdictOf(tool: AgentTool, preview: unknown, opts: { 
   try {
     const judged = await watchJudged([preview], rule.narrowedBy?.level === 'watch')
     const hold = await ruleHold(tool, judged[0], { runScope: opts.runScope, rule, watching: true })
-    return hold ? { ...base, wouldRun: false, check: hold.check, why: hold.why } : { ...base, wouldRun: true, check: null, why: null }
+    return hold ? { ...base, wouldRun: false, check: hold.check, why: bare(hold.why) } : { ...base, wouldRun: true, check: null, why: null }
   } catch (error) {
     logger.error('[claude-trust] the watch check failed', { tool: tool.name, error: error instanceof Error ? error.message : String(error) })
     return { ...base, wouldRun: false, check: 'error', why: RULE_COULD_NOT }
@@ -491,10 +507,14 @@ async function planWatchVerdict(
       if (level !== 'watch' && level !== 'auto') return { wouldRun: false, ...levelHold(rules[index]) }
       if (shared) return { wouldRun: false, check: shared.check, why: shared.why }
       const outside = limitsOutside(step.tool, judged[index], rules[index]!)
-      return outside ? { wouldRun: false, check: 'limits' as const, why: outside.why } : { wouldRun: true, check: null, why: null }
+      return outside ? { wouldRun: false, check: 'limits' as const, why: bare(outside.why) } : { wouldRun: true, check: null, why: null }
     })
-    // The ad steps together within the strategy's daily limits, as auto judges a plan: when they pass them, none runs.
-    const together = own.some((verdict) => verdict.wouldRun) ? await planTogetherRefusal(judged) : null
+    // The ad steps together within the strategy's daily limits, as auto judges a plan (AA-W2-3 `planDailyRefusal`), on
+    // what ran by rule plus the watched changes that would have: when they pass them, none runs.
+    const bound = steps.map((step, index) => ({ tool: step.tool, preview: judged[index] }))
+    const together = own.some((verdict) => verdict.wouldRun) && bound.some((step) => step.tool.strategyBound)
+      ? planDailyRefusal(bound, addLedgers(await ruleRunLedger(), await watchedRunLedger()))
+      : null
     // The cap counts every step of a plan: when the plan would pass it, no step runs.
     let capWhy: string | null = null
     if (own.some((verdict) => verdict.wouldRun)) {
@@ -504,14 +524,14 @@ async function planWatchVerdict(
       }
     }
     const verdicts = own.map((verdict, index) => stepOf(index, !verdict.wouldRun ? verdict
-      : together && hasLimitFacts(judged[index]) ? { wouldRun: false, check: 'limits', why: together }
+      : together && steps[index].tool.strategyBound ? { wouldRun: false, check: 'limits', why: bare(together) }
         : capWhy ? { wouldRun: false, check: 'cap', why: capWhy } : verdict))
     const firstOutside = own.findIndex((verdict) => verdict.check === 'limits')
     const plan: Pick<WatchVerdict, 'wouldRun' | 'check' | 'why'> = lowest && lowest.level !== 'watch'
       ? { wouldRun: false, ...planLevelHold(steps, rules, lowest) }
       : shared ? { wouldRun: false, check: shared.check, why: shared.why }
         : firstOutside >= 0 ? { wouldRun: false, check: 'limits', why: `step ${firstOutside + 1} (${steps[firstOutside].tool.name}): ${own[firstOutside].why}` }
-          : together ? { wouldRun: false, check: 'limits', why: together }
+          : together ? { wouldRun: false, check: 'limits', why: bare(together) }
             : capWhy ? { wouldRun: false, check: 'cap', why: capWhy }
               : { wouldRun: true, check: null, why: null }
     return { ...base, ...plan, steps: verdicts }
@@ -597,9 +617,11 @@ export async function planRuleRefusal(
     const outside = limitsRefusal(step.tool, step.preview, rules[index]!)
     if (outside) return { level: 'auto', why: `step ${index + 1} (${step.tool.name}): ${outside}` }
   }
-  // AA-W2-4 — the ad steps together within the strategy's daily limits (each alone passed its own).
-  const together = await planTogetherRefusal(steps.map((step) => step.preview))
-  if (together) return { level: 'auto', why: together }
+  // AA-W2-3 — each ad step inside the strategy's daily limits alone is not enough: the steps count together.
+  if (steps.some((step) => step.tool.strategyBound)) {
+    const together = planDailyRefusal(steps, await ruleRunLedger())
+    if (together) return { level: 'auto', why: inNexusEnding(together) }
+  }
   const used = await autoRunsInLastDay()
   if (used + steps.length > autonomy.dailyAutoCap) {
     return {
@@ -612,7 +634,11 @@ export async function planRuleRefusal(
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-/** C6 — at commit, for a plan the rule scheduled: the Pause, and every step's level and limits, as for one change. */
+/**
+ * C6 — at commit, for a plan the rule scheduled: the Pause, and every step's level and limits, as for one change.
+ * AA-W2-3 — and its ad steps together inside the strategy's daily limits, against what ran by rule since it was asked
+ * for (this plan left out). Each step is judged again on its fresh dry run when the worker runs it.
+ */
 export async function autoPlanCommitRefusal(approvalId: string): Promise<string | null> {
   const autonomy = await autonomyOf()
   if (autonomy.paused) return 'changes that run by rule were paused in this business before it ran'
@@ -621,7 +647,57 @@ export async function autoPlanCommitRefusal(approvalId: string): Promise<string 
     const refusal = await autoPlanStepRefusal(step.toolName, step.preview, step.args)
     if (refusal) return `step ${step.position}: ${refusal}`
   }
+  const judged = steps.map((step) => ({ tool: getTool(step.toolName), preview: step.preview }))
+  if (judged.some((step) => step.tool?.strategyBound)) {
+    const together = planDailyRefusal(judged, await ruleRunLedger({ excludeApprovalId: approvalId }))
+    if (together) return `it is no longer inside the business's limits: ${inNexusEnding(together)}`
+  }
   return null
+}
+
+/** The tighter of two daily limits (null: not set); the source is the one that gave it. */
+function tighterDaily(a: MarketFacts, b: MarketFacts): MarketFacts {
+  const out: MarketFacts = { ...a, sources: { ...a.sources } }
+  for (const key of ['maxChangesPerDay', 'maxRaisesPerDay', 'maxBudgetIncreasePerDayCents'] as const) {
+    if (b[key] != null && (out[key] == null || b[key]! < out[key]!)) {
+      out[key] = b[key]
+      if (b.sources[key]) out.sources[key] = b.sources[key]
+      else delete out.sources[key]
+    }
+  }
+  if (!b.strategy) out.strategy = null
+  return out
+}
+
+/**
+ * AA-W2-3 — a plan's strategy-bound steps judged against the ads strategy's daily limits (C5) TOGETHER: what ran by
+ * rule in the last 24 hours (`ledger`, without this plan) plus every such step, summed per market from the `this` block
+ * each step's preview stored (the kit's `ledgerOf`), within the tightest daily limit any step's facts carry there. Each
+ * step may be inside alone while the plan is not. Null when inside, or when no step carries limit facts (each step's
+ * own limits refuse that). Pure.
+ */
+export function planDailyRefusal(steps: ReadonlyArray<{ tool?: Pick<AgentTool, 'strategyBound'> | null; preview: unknown }>, ledger: RuleRunLedger): string | null {
+  const bound = steps.filter((step) => step.tool?.strategyBound).map((step) => step.preview)
+  const facts = bound.map(limitFactsOf).filter((f): f is LimitFacts => !!f)
+  if (!facts.length) return null
+  const plan = ledgerOf(bound)
+  const markets = Object.keys(plan.byMarket).sort()
+  const limits: Record<string, MarketFacts> = {}
+  for (const f of facts) {
+    for (const market of markets) {
+      const m = f.markets[market]
+      if (m) limits[market] = limits[market] ? tighterDaily(limits[market], m) : m
+    }
+  }
+  const zero = { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 }
+  const together: LimitFacts = {
+    ...facts[0],
+    markets: limits,
+    this: { ...facts[0].this, markets, byMarket: Object.fromEntries(markets.map((m) => [m, { ...plan.byMarket[m], items: 0, addedDailyCents: 0 }])) },
+    today: Object.fromEntries(markets.map((m) => [m, ledger.byMarket[m] ?? zero])),
+  }
+  const why = dailyRefusal(together)
+  return why ? `the plan's ad steps together — ${why}` : null
 }
 
 /** C6 — one step of a plan run by rule, when it runs: still allowed by the rule (as `autoCommitRefusal`)? */
@@ -674,6 +750,20 @@ export async function autoCommitRefusal(toolName: string, preview: unknown, args
   if (!tool || !rule || rule.level !== 'auto') return `the business no longer lets Claude run ${toolName} by rule`
   const outside = limitsRefusal(tool, preview, rule)
   return outside ? `it is no longer inside the business's limits: ${outside}` : null
+}
+
+/**
+ * ADS AUTONOMY AA-W2-3 — at commit, for a strategy-bound change the rule scheduled (one change, or a step of a plan):
+ * the same check as `autoCommitRefusal`, on the FRESH dry run the staleness check just made instead of the preview
+ * stored when Claude asked — the ads strategy, its narrowing where the change lands (W1-8) and the day's counts as they
+ * are when it runs. Null when it may still run, and for a tool that is not strategy-bound (its stored preview was
+ * judged; the staleness check compares the rest). The strategy's version is deliberately not a material preview field:
+ * a strategy edit would then make every request a person approved stale, and count towards the automatic pause.
+ */
+export async function autoFreshRefusal(toolName: string, freshPreview: unknown, args?: unknown): Promise<string | null> {
+  if (!getTool(toolName)?.strategyBound) return null
+  const refusal = await autoCommitRefusal(toolName, freshPreview, args)
+  return refusal ? `judged again on a fresh dry run: ${refusal}` : null
 }
 
 /**

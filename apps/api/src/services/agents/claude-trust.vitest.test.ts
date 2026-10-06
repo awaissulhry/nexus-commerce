@@ -556,7 +556,8 @@ describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched
   })
   async function asStrategyBound<T>(work: () => Promise<T>): Promise<T> {
     const tool = getTool('set-price')!
-    const original = { handler: tool.handler, withinLimits: tool.withinLimits! }
+    const original = { handler: tool.handler, withinLimits: tool.withinLimits!, strategyBound: tool.strategyBound }
+    tool.strategyBound = 'amazon-ads'
     tool.handler = async (args, ctx) => {
       const out = await original.handler(args, ctx)
       return out.ok ? { ...out, preview: { ...(out.preview as object), limitFacts: facts() } } : out
@@ -566,6 +567,7 @@ describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched
       return await work()
     } finally {
       Object.assign(tool, original)
+      if (!original.strategyBound) delete tool.strategyBound
     }
   }
   const nextPrice = async () => (await priceOf(ids.productA)) + 1
@@ -580,13 +582,13 @@ describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched
       const plan = await call('submit-change-plan', { title: 'Two bid steps', steps: [await step(), await step()] })
       expect(plan.answer.trust.watch).toEqual({
         wouldRun: false, check: 'limits', steps: { total: 2, wouldRun: 0 },
-        why: 'the plan\'s ad steps together — IT: 2 changes ran or would have run by rule in the last 24 hours and this adds 4 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day); a person decides',
+        why: 'the plan\'s ad steps together — IT: 2 changes ran or would have run by rule in the last 24 hours and this adds 4 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day)',
       })
       expect((await approvalOf(plan.answer.approvalId)).ruleVerdict).toMatchObject({ steps: [{ wouldRun: false, check: 'limits' }, { wouldRun: false, check: 'limits' }] })
       // The plan would not have run, so it adds nothing; the next single change still fits, the one after does not.
       expect((await call('set-price', { productId: ids.productA, price: await nextPrice() })).answer.trust.watch).toMatchObject({ wouldRun: true })
       const third = await call('set-price', { productId: ids.productA, price: await nextPrice() })
-      expect(third.answer.trust.watch).toEqual({ wouldRun: false, check: 'limits', why: 'IT: 4 changes ran or would have run by rule in the last 24 hours and this adds 2 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day); a person decides' })
+      expect(third.answer.trust.watch).toEqual({ wouldRun: false, check: 'limits', why: 'IT: 4 changes ran or would have run by rule in the last 24 hours and this adds 2 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day)' })
     })
   })
 
@@ -596,7 +598,7 @@ describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched
       const plan = await call('submit-change-plan', { title: 'Three bid steps', steps: [await step(), await step(), await step()] })
       expect(plan.answer).toMatchObject({
         status: 'waiting_for_approval',
-        trust: { level: 'auto', why: 'the plan\'s ad steps together — IT: 0 changes ran by rule in the last 24 hours and this adds 6 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day); a person decides' },
+        trust: { level: 'auto', why: 'the plan\'s ad steps together — IT: 0 changes ran by rule in the last 24 hours and this adds 6 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day); a person approves it in Nexus' },
       })
       expect(await approvalOf(plan.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, ruleVerdict: null })
       const two = await call('submit-change-plan', { title: 'Two bid steps', steps: [await step(), await step()] })

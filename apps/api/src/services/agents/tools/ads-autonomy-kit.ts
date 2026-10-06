@@ -23,8 +23,7 @@
  *            can add spend defaults to 0: until a person types a number, only lowering changes run alone.
  *   note     `limitsNote`: each limit, its value, this change's value, and where the limit comes from.
  *   watch    AA-W2-4 — `asWatched`: a stored preview as the watch level judges it (today also counts the watched changes
- *            that would have run; a watch the strategy set reads as auto when it is what holds the change). And for a
- *            plan, at auto and at watch alike, `planDailyRefusal`: its ad steps together within the daily limits.
+ *            that would have run; a watch the strategy set reads as auto when it is what holds the change).
  *
  * Live and sandbox are judged the same. The existing brakes stay in front of every check here: nexus.run, Pause, the
  * business's cap of runs by rule and the write gate (a gate refusal is refused at preview and never queued).
@@ -272,7 +271,9 @@ export function ledgerOf(previews: readonly unknown[]): RuleRunLedger {
 /**
  * What ran by rule in this business in the last 24 hours: single requests and the steps of plans whose decision was
  * the business's rule (a step that was skipped never ran). `excludeApprovalId`: the request this dry run re-checks
- * (ToolContext.approvalId — at the commit's re-check and in `execute`), so it is not counted against itself.
+ * (ToolContext.approvalId — at the commit's re-check and in `execute`), so it is not counted against itself. AA-W2-3 —
+ * for a plan, only its steps that have not run are left out: a step re-checked when it runs counts the steps of its own
+ * plan that ran before it.
  */
 export async function ruleRunLedger(opts: { excludeApprovalId?: string | null; now?: Date } = {}): Promise<RuleRunLedger> {
   const since = new Date((opts.now ?? new Date()).getTime() - RULE_DAY_MS)
@@ -283,7 +284,11 @@ export async function ruleRunLedger(opts: { excludeApprovalId?: string | null; n
       select: { preview: true },
     }),
     prisma.agentPlanStep.findMany({
-      where: { approval: { decisionVia: 'auto', decidedAt: { gte: since } }, status: { not: 'skipped' }, ...(exclude ? { approvalId: { not: exclude } } : {}) },
+      where: {
+        approval: { decisionVia: 'auto', decidedAt: { gte: since } },
+        status: { not: 'skipped' },
+        ...(exclude ? { OR: [{ approvalId: { not: exclude } }, { approvalId: exclude, status: 'done' }] } : {}),
+      },
       select: { preview: true },
     }),
   ])
@@ -586,32 +591,6 @@ export function dailyRefusal(facts: LimitFacts): string | null {
     }
   }
   return null
-}
-
-/**
- * AA-W2-4 — the ad steps of ONE change plan together, per market, within Claude's daily limits in the strategy: what ran
- * by rule today (each step's stored `today`: one plan's steps are dry-run together, so the largest is taken) and every
- * step's own counts, summed (`ledgerOf`). Each step alone passed `dailyRefusal`; together they may not. Null for a plan
- * with fewer than two steps that carry limit facts. Pure.
- */
-export function planDailyRefusal(previews: readonly unknown[]): string | null {
-  const all = previews.map(limitFactsOf).filter((facts): facts is LimitFacts => !!facts)
-  if (all.length < 2) return null
-  const together = ledgerOf(previews)
-  const markets: Record<string, MarketFacts> = {}
-  const today: Record<string, DayCounts> = {}
-  for (const facts of all) {
-    for (const market of facts.this.markets) {
-      markets[market] ??= facts.markets[market]
-      const day = facts.today[market]
-      const kept = today[market]
-      if (day && (!kept || day.changes + day.raises > kept.changes + kept.raises)) today[market] = day
-    }
-  }
-  const counts = Object.fromEntries(Object.entries(together.byMarket).map(([market, day]) => [market, { ...day, items: 0, addedDailyCents: 0 }]))
-  const watchedToday = all.some((facts) => facts.watchedToday) ? { watchedToday: true } : {}
-  const refusal = dailyRefusal({ this: { markets: Object.keys(together.byMarket), byMarket: counts }, today, markets, ...watchedToday } as unknown as LimitFacts)
-  return refusal ? `the plan's ad steps together — ${refusal}` : null
 }
 
 /**

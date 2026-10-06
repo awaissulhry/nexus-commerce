@@ -28,7 +28,9 @@
  * MCP full control C5: a decision says who took it (`decisionVia`): a person in Nexus, or the business's rule for a
  * change Claude asked for (auto: scheduled as the person who asked, through the same window and commit). At commit, a
  * rule-run goes back to a person if the business paused Claude's rule-runs or lowered the tool's level meanwhile; a
- * rule-run that is stale or fails counts towards the automatic pause (claude-trust.service.ts).
+ * rule-run that is stale or fails counts towards the automatic pause (claude-trust.service.ts). ADS AUTONOMY AA-W2-3:
+ * a strategy-bound one is also judged again on the fresh dry run the staleness check makes (the ads strategy and the
+ * day's counts as they are when it runs), and goes back to a person as `rule_refused` when that is outside.
  *
  * MCP full control C6: a change plan (toolName submit-change-plan) is approved once by a person who holds the
  * permissions of every step; after the window the commit hands it to the plan worker (change-plan.service.ts), which
@@ -64,7 +66,7 @@ import { logger } from '../../utils/logger.js'
 import { resolvePermissions, type ResolvedPermissions } from '../../lib/auth/rbac.js'
 import { WorkspaceError, type WorkspaceContext } from '../../lib/workspace-context.js'
 import { createWorkspaceService } from '../workspace.service.js'
-import { autoCommitRefusal, autoPlanCommitRefusal, mayRaise, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
+import { autoCommitRefusal, autoFreshRefusal, autoPlanCommitRefusal, mayRaise, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
 import { drainPlans, enqueuePlan } from '../agents/change-plan.service.js'
 import { approvalStepUp, stepUpOf, type StepUp } from '../agents/step-up-approval.js'
 import { PLAN_TOOL } from '../agents/tool-types.js'
@@ -656,8 +658,16 @@ export async function commitScheduledApproval(
   // AP.6 — the world may have moved while this sat parked. Re-validate
   // BEFORE releasing it: an approval describes a state of the world, and if
   // that state changed the approval no longer describes anything real.
-  const staleness = await checkStaleness(id)
+  const staleness = await checkStaleness(id, { withFresh: ap.decisionVia === 'auto' })
   if (staleness.stale) return handBack(id, ap.decidedBy, staleness.why ?? 'it is no longer a valid action', 'stale_refused', ap.decisionVia)
+
+  // AA-W2-3 — a strategy-bound change the rule scheduled is judged again on that fresh dry run, not on the stored
+  // preview: the strategy, or the day's counts, may have moved inside the window. A person decides it then; that is a
+  // refusal of the rule, not a failure, so it never counts towards the automatic pause.
+  if (ap.decisionVia === 'auto') {
+    const freshNow = await autoFreshRefusal(ap.toolName, staleness.fresh, ap.args)
+    if (freshNow) return handBack(id, ap.decidedBy, freshNow, 'rule_refused', ap.decisionVia)
+  }
 
   // Hand back to the gate, which owns execution. It expects `pending`, so
   // release the park atomically — if that loses a race, someone else has it.
@@ -1021,6 +1031,17 @@ export interface StalenessVerdict {
   stale: boolean
   /** Plain sentence naming what moved. Null when nothing did. */
   why: string | null
+  /**
+   * AA-W2-3 — asked for (`withFresh`) and nothing moved: the preview of the dry run it just made (as the gate stores one:
+   * `preview ?? data`), which a strategy-bound rule-run is judged again on. Never for a plan (its steps are checked when
+   * each runs).
+   */
+  fresh?: unknown
+}
+
+/** AA-W2-3 — `withFresh`: also hand back the fresh dry run when nothing moved (StalenessVerdict.fresh). */
+export interface StalenessOptions {
+  withFresh?: boolean
 }
 
 const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : String(c))
@@ -1055,7 +1076,7 @@ function canonicalJson(value: unknown): string | undefined {
  * they were shown. If the handler now refuses (the term is already negated,
  * a pin was added, the target vanished), that refusal is the answer.
  */
-export async function checkStaleness(approvalId: string): Promise<StalenessVerdict> {
+export async function checkStaleness(approvalId: string, opts: StalenessOptions = {}): Promise<StalenessVerdict> {
   const ap = await prisma.agentApproval.findUnique({
     where: { id: approvalId },
     select: { toolName: true, args: true, preview: true },
@@ -1063,7 +1084,7 @@ export async function checkStaleness(approvalId: string): Promise<StalenessVerdi
   if (!ap) return { stale: true, why: 'the request no longer exists' }
   // C6 — a plan is re-checked step by step, when each step runs (change-plan.service.ts).
   if (ap.toolName === PLAN_TOOL) return { stale: false, why: null }
-  return previewStaleness(ap.toolName, (ap.args ?? {}) as Record<string, unknown>, ap.preview, approvalId)
+  return previewStaleness(ap.toolName, (ap.args ?? {}) as Record<string, unknown>, ap.preview, approvalId, opts)
 }
 
 /**
@@ -1075,6 +1096,7 @@ export async function previewStaleness(
   args: Record<string, unknown>,
   preview: unknown,
   approvalId: string,
+  opts: StalenessOptions = {},
 ): Promise<StalenessVerdict> {
   const ap = { toolName, args, preview }
   const tool = getTool(ap.toolName)
@@ -1146,7 +1168,7 @@ export async function previewStaleness(
       why: `the facts moved since you approved it — ${moved.join('; ')}`,
     }
   }
-  return { stale: false, why: null }
+  return opts.withFresh ? { stale: false, why: null, fresh: fresh.preview ?? fresh.data } : { stale: false, why: null }
 }
 
 /* ── AP.7: the precedent a decision actually created ───────────────────── */

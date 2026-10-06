@@ -86,6 +86,12 @@ describe('AP.6 — checkStaleness', () => {
     expect(await checkStaleness('a1')).toEqual({ stale: false, why: null })
   })
 
+  it('AA-W2-3 — asked for, it hands back the fresh dry run it made (only when nothing moved)', async () => {
+    expect(await checkStaleness('a1', { withFresh: true })).toEqual({ stale: false, why: null, fresh: STORED })
+    tools.mockReturnValue(toolReturning({ ...STORED, currentBidCents: 60 }))
+    expect(await checkStaleness('a1', { withFresh: true })).not.toHaveProperty('fresh')
+  })
+
   it('catches the starting value moving under the decision', async () => {
     tools.mockReturnValue(toolReturning({ ...STORED, currentBidCents: 60 }))
     const v = await checkStaleness('a1')

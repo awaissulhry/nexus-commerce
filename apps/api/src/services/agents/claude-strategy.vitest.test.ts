@@ -19,7 +19,7 @@
  *               (no ad tool may run by rule before W2: set-price stands in as a bid change)
  *   businesses  one business's strategy never narrows in another
  *   watch       AA-W2-4 — the strategy may hold a kind at watch: checked as auto would, recorded with the strategy row;
- *               a kind at watch the strategy holds lower is recorded as held by the strategy; the history test reads it
+ *               a kind at watch the strategy holds lower is recorded as held by the strategy; the history test counts it
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -385,9 +385,11 @@ describe('AA-W2-4 — the strategy may hold a kind at watch (set-price stands in
     const stored = await approvalOf(answer.approvalId)
     expect(stored).toMatchObject({ status: 'pending', decisionVia: null, executeAfter: null })
     expect(stored.ruleVerdict).toMatchObject({ level: 'watch', wouldRun: true, strategy: { market: 'IT', scope: 'market', label: 'Test market (IT)', version: 1, level: 'watch' } })
-    // The history test reads it: inside the limits, but the strategy (not this kind's rule) held it, so it would not have run.
+    // The history test: inside the limits, but today's strategy (not this kind's rule) holds every such request here at
+    // watch, so none would have run by itself; each is counted as held by the strategy.
     const sim = await inside(() => simulateClaudeRule('set-price', { level: 'auto' }, (_tool, value) => value))
-    expect(sim).toMatchObject({ ok: true, simulation: { heldByStrategy: 1 } })
+    expect(sim).toMatchObject({ ok: true, simulation: { wouldRun: 0 } })
+    expect((sim as Extract<typeof sim, { ok: true }>).simulation.heldByStrategy).toBeGreaterThan(0)
   })
 
   it('the kind at watch, the strategy at ask where it lands: recorded as held by the strategy; it waits at ask', async () => {

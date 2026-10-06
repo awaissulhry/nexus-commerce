@@ -21,6 +21,7 @@ vi.mock('../../db.js', async () => {
   }
 })
 
+import { __claudeStrategyTest } from '../advertising/ads-strategy/claude.js'
 import { autoCommitRefusal } from './claude-trust.service.js'
 import { simulateClaudeRule } from './claude-rule-simulate.service.js'
 
@@ -111,6 +112,30 @@ describe('simulate — would the proposed rule have run these by themselves?', {
     expect(await at({ maxChangePercent: 10 }, 500)).toMatchObject({ days: 90 })
   })
 
+  it('W1-8 (AA-W2-3) — an ad change is held to the ads strategy where it lands, as the commit’s rule check holds it', async () => {
+    // No ad tool may run by rule before W2: set-price stands in as a bid change (it lands nowhere the strategy can
+    // place, so the strictest row of the business applies).
+    __claudeStrategyTest.treatAs('set-price', 'bid')
+    const row = await inside(() => database.client.adsStrategy.create({
+      data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', claudeAutonomy: { bid: 'ask' }, updatedBy: 'user:test' },
+    }))
+    try {
+      const held = await simulate('set-price', { level: 'auto' })
+      expect((held as Extract<typeof held, { ok: true }>).simulation).toMatchObject({ considered: 6, wouldRun: 0, rejectedAmongWouldRun: 0, examples: [] })
+      for (const key of ['ran', 'said-no', 'waiting', 'silent-no']) {
+        const r = ROWS.find((one) => one.key === key)!
+        expect(await inside(() => autoCommitRefusal('set-price', previewOf(r), {}))).toMatch(/^the ads strategy lets Claude only ask for bid changes here/)
+      }
+      // A strategy that lets Claude run bid changes alone narrows nothing: the limits decide again.
+      await inside(() => database.client.adsStrategy.update({ where: { id: row.id }, data: { claudeAutonomy: { bid: 'auto' } } }))
+      const free = await simulate('set-price', { level: 'auto' })
+      expect((free as Extract<typeof free, { ok: true }>).simulation).toMatchObject({ considered: 6, wouldRun: 4, rejectedAmongWouldRun: 2 })
+    } finally {
+      __claudeStrategyTest.reset()
+      await inside(() => database.client.adsStrategy.delete({ where: { id: row.id } }))
+    }
+  })
+
   it('only auto runs by itself: at confirm or ask nothing would have', async () => {
     for (const level of ['confirm', 'ask']) {
       const out = await simulate('set-price', { level })
@@ -146,29 +171,11 @@ describe('simulate — would the proposed rule have run these by themselves?', {
   })
 })
 
-describe('AA-W2-4 — the watch level, and the verdicts watched requests recorded', { timeout: 30_000 }, () => {
+describe('AA-W2-4 — the watch level', { timeout: 30_000 }, () => {
   it('watch runs nothing by itself, like confirm; a brake cannot be watched', async () => {
     const out = await simulate('set-price', { level: 'watch' })
     expect((out as Extract<typeof out, { ok: true }>).simulation).toMatchObject({ considered: 6, wouldRun: 0, rejectedAmongWouldRun: 0, heldByStrategy: 0 })
     expect(await simulate('stop-automation', { level: 'watch' }))
       .toEqual({ ok: false, status: 400, error: 'stop-automation cannot be watched: it is a brake, so it runs by rule or waits for a person.' })
-  })
-
-  it('one the ads strategy held below auto where it landed, as its verdict records, is not counted as would-run', async () => {
-    const verdict = { level: 'watch', wouldRun: true, check: null, why: null, checkedAt: new Date().toISOString(), changes: 1 }
-    await inside(async () => {
-      const db = database.client
-      for (const [key, deltaPct, status, ruleVerdict] of [
-        ['held', 2, 'pending', { ...verdict, strategy: { market: 'IT', scope: 'market', label: 'Test market', version: 1, level: 'watch' } }],
-        ['watched-no', 3, 'rejected', verdict],
-      ] as const) {
-        const run = await db.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'done', via: 'claude' } as never })
-        ids[key] = (await db.agentApproval.create({
-          data: { agentRunId: run.id, toolName: 'set-price', riskTier: 'high', args: {}, preview: { summary: `${key}: price moves ${deltaPct} %`, deltaPct }, status, requestedAt: new Date(Date.now() - DAY), ruleVerdict },
-        })).id
-      }
-    })
-    const out = await simulate('set-price', { level: 'auto' })
-    expect((out as Extract<typeof out, { ok: true }>).simulation).toMatchObject({ considered: 8, wouldRun: 5, rejectedAmongWouldRun: 3, heldByStrategy: 1 })
   })
 })

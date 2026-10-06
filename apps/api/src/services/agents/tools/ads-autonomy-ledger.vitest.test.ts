@@ -115,9 +115,34 @@ describe('today\'s ledger — what ran by rule in the last 24 hours', () => {
     expect((await inB(() => ruleRunLedger({ now: NOW }))).byMarket).toEqual({ IT: { changes: 100, writes: 100, raises: 100, budgetIncreaseCents: 0 } })
   })
 
-  it('leaves out the request a dry run re-checks (its own run, or its plan\'s steps)', async () => {
+  it('leaves out the request a dry run re-checks: its own run, or its plan\'s steps that have not run (AA-W2-3)', async () => {
     expect((await inA(() => ruleRunLedger({ now: NOW, excludeApprovalId: ids.thisRequest }))).byMarket.IT).toEqual({ changes: 5, writes: 5, raises: 1, budgetIncreaseCents: 0 })
-    expect((await inA(() => ruleRunLedger({ now: NOW, excludeApprovalId: ids.plan }))).byEntity).toEqual({ 'target:t-it': 1, 'campaign:c-off': 1 })
+    // The plan's one step that ran still counts when the plan is re-checked (its skipped step never counts).
+    expect((await inA(() => ruleRunLedger({ now: NOW, excludeApprovalId: ids.plan }))).byEntity).toEqual({ 'target:t-it': 2, 'campaign:c-off': 1 })
+    // A plan running now: step 1 ran, step 2 is being re-checked, step 3 waits. Re-checking it counts step 1 only.
+    const running = await inA(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'awaiting_approval' } })
+      const plan = await db().agentApproval.create({ data: { agentRunId: run.id, toolName: 'submit-change-plan', riskTier: 'high', args: {}, status: 'executing', decisionVia: 'auto', decidedAt: ago(0.2), preview: { steps: 3 } } })
+      const step = (position: number, status: string, writes: number, entity: string) => db().agentPlanStep.create({
+        data: { approvalId: plan.id, position, toolName: 'set-target-bid', args: {}, status, preview: stored({ IT: { writes, raises: 0, budgetIncreaseCents: 0 } }, [entity]) },
+      })
+      await step(1, 'done', 4, 'target:t-ran')
+      await step(2, 'executing', 6, 'target:t-now')
+      await step(3, 'pending', 8, 'target:t-next')
+      return plan.id
+    })
+    try {
+      const all = await inA(() => ruleRunLedger({ now: NOW }))
+      expect(all.byMarket.IT.writes).toBe(12 + 4 + 6 + 8)
+      const rechecked = await inA(() => ruleRunLedger({ now: NOW, excludeApprovalId: running }))
+      expect(rechecked.byMarket.IT.writes).toBe(12 + 4)
+      expect(rechecked.byEntity).toEqual({ 'target:t-it': 2, 'campaign:c-off': 1, 'target:t-ran': 1 })
+    } finally {
+      await inA(async () => {
+        await db().agentPlanStep.deleteMany({ where: { approvalId: running } })
+        await db().agentApproval.delete({ where: { id: running } })
+      })
+    }
   })
 
   it('the window is 24 hours back from now', async () => {

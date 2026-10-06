@@ -38,7 +38,6 @@ import {
   monthRefusal,
   outsideRefusal,
   perEntityRefusal,
-  planDailyRefusal,
   protectedRefusal,
   stepRefusal,
   strategyRefusal,
@@ -423,21 +422,13 @@ describe('the note — each limit, its value, this change\'s value and its sourc
   })
 })
 
-describe('AA-W2-4 — the watch level: a plan\'s ad steps together, and a preview as watch judges it', () => {
+describe('AA-W2-4 — a preview as the watch level judges it', () => {
   const src = source('Test market (IT)', 'market', 5)
   const step = (changes: number, today = 0) => ({ limitFacts: facts({
     thisOver: { items: changes, writes: changes, byMarket: { IT: { items: changes, changes, writes: changes, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } } },
     today: { IT: { changes: today, writes: today, raises: 0, budgetIncreaseCents: 0 } },
     markets: { IT: market({ maxChangesPerDay: 10, sources: { maxChangesPerDay: src } }) },
   }) })
-
-  it('a plan: each step alone inside the daily changes, together over them; one step or none with facts: nothing to add', () => {
-    expect(dailyRefusal(step(4, 3).limitFacts)).toBeNull()
-    expect(planDailyRefusal([step(4, 3), step(4, 3)])).toBe('the plan\'s ad steps together — IT: 3 changes ran by rule in the last 24 hours and this adds 8 changes, more than the 10 a day the ads strategy allows (most changes Claude may run by rule a day, ads strategy: Test market (IT), market, v5); a person decides')
-    expect(planDailyRefusal([step(3, 3), step(4, 3)])).toBeNull()
-    expect(planDailyRefusal([step(9, 3)])).toBeNull()
-    expect(planDailyRefusal([step(6, 3), { summary: 'a price change' }, step(4, 3)])).toMatch(/this adds 10 changes, more than the 10/)
-  })
 
   it('asWatched: today counts the watched changes that would have run, and a watch the strategy set reads as auto; the input is unchanged', () => {
     const preview = step(1, 2)
