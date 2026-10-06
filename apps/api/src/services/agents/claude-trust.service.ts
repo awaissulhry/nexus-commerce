@@ -239,8 +239,8 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   budget: 'budget changes',
   target: 'target ACoS changes',
   suggestion: 'decisions on rule suggestions',
-  stop: 'stopping a campaign with low bids',
-  restore: "restoring a campaign's bids",
+  stop: 'stopping ads with low bids',
+  restore: "restoring stopped ads' bids",
   create: 'new campaigns',
   rule: 'ads rules',
   undo: 'undoing ad changes',
@@ -1061,6 +1061,8 @@ export interface ClaudeRuleRow {
   title: string
   category: string
   readOnly: boolean
+  /** W4-1 — a journal tool (AgentTool.journal): no change of the business, it runs at once; its levels mean on or off. */
+  journal?: true
   /** Its preview or its change reaches a marketplace or a buyer. */
   openWorld: boolean
   reversibility: Reversibility | null
@@ -1110,6 +1112,7 @@ export async function listClaudeRules(): Promise<ClaudeRulesView> {
         title: tool.title,
         category: tool.category,
         readOnly: tool.readOnly,
+        ...(tool.journal ? { journal: true as const } : {}),
         openWorld: !!tool.openWorld,
         reversibility: tool.reversibility ?? null,
         ceiling: rule.ceiling,

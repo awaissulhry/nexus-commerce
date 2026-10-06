@@ -41,6 +41,13 @@ describe('the template doc', () => {
     for (const key of SECTIONS) expect(readSection(key, doc[key]), key).toHaveProperty('value')
   })
 
+  it('shared terms default to skip: a term the product already buys elsewhere stays there (Owner rule 2)', () => {
+    const doc = templateDoc() as unknown as { structure: Record<string, unknown> }
+    delete doc.structure.sharedTerms
+    const out = checkTemplateDoc(doc)
+    expect('doc' in out && out.doc.structure.sharedTerms).toBe('skip')
+  })
+
   it('a slot gets its defaults: no rank role, no feeds, down-only bidding, not optional', () => {
     expect(SLOT.parse({ key: 'phrase-category', targeting: 'KEYWORD', match: 'PHRASE', intent: 'CATEGORY', nameParts: ['Phrase', 'Category'] }))
       .toMatchObject({ rankRole: 'none', feeds: [], biddingStrategy: 'LEGACY_FOR_SALES', optional: false })

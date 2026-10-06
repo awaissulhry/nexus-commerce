@@ -5,7 +5,8 @@
  *
  *   built        every slot the product does not hold, named, budgeted, bid (the ladder clamped to the strategy's band)
  *   product ads  the children listed on Amazon in the market with an ASIN (never the parent's own ASIN)
- *   shared       a category term another campaign already buys is skipped (D-PB5) and named; a brand term is not
+ *   shared       Owner rule 3: a category term another product's campaign already buys is kept and listed (never
+ *                skipped); one of the SAME product's campaigns outside the playbook buying it is skipped (template skip)
  *   linked       a slot linked to a live campaign is not built, and that campaign is neither a conflict nor a name clash
  *   money        a monthly cap the full-spend month would pass blocks, naming the cap (no amount in the words)
  *   gate         a market with no writable Amazon connection blocks, as a replication is blocked
@@ -63,10 +64,11 @@ beforeAll(async () => {
     } })
     await c.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test strategy (IT)', maxBidCents: 45, monthlySpendCapCents: 1_000_000, updatedBy: 'user:test' } })
     await c.amazonAdsPortfolio.create({ data: { profileId: 'test-profile', externalPortfolioId: 'test-pf-1', name: 'Test TESTPB4 IT' } })
-    // Another product's live campaign buys "test coat" (a category term): the build skips it (D-PB5).
+    // Another product's live campaign buys "test coat" (a category term): kept and only listed (Owner rule 3).
     const other = await c.campaign.create({ data: { name: 'Other product | IT | Broad', type: 'SP', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date() } as never })
     ids.other = other.id
     const og = await c.adGroup.create({ data: { campaignId: other.id, name: 'Other group' } })
+    await c.adProductAd.create({ data: { adGroupId: og.id, asin: 'B0TESTOTH1', sku: 'TEST-OTHER-1' } })
     await c.adTarget.create({ data: { adGroupId: og.id, kind: 'KEYWORD', expressionType: 'BROAD', expressionValue: 'test coat', bidCents: 30 } })
     // The product's own Exact | Brand campaign, linked to its slot: not rebuilt, not a conflict, not a name clash.
     const linked = await c.campaign.create({ data: { name: 'TESTPB4 | IT | Exact | Brand', type: 'SP', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date() } as never })
@@ -106,10 +108,13 @@ describe('the build dry run', () => {
     expect(out.warnings.join('\n')).toMatch(/1 product\(s\) of the family have an ASIN but no Amazon listing in IT/)
   })
 
-  it('a category term another campaign buys is skipped and named; the linked campaign\'s terms are no conflict', () => {
-    expect(out.skippedShared).toEqual([{ term: 'test coat', existing: [{ campaignName: 'Other product | IT | Broad', campaignId: ids.other }] }])
+  it('a category term another product\'s campaign buys is kept and listed, never skipped; the linked campaign\'s terms are no conflict', () => {
+    expect(out.skippedShared).toEqual([])
+    expect(out.sharedWithOtherProducts).toEqual([{ term: 'test coat', existing: [{ campaignName: 'Other product | IT | Broad', campaignId: ids.other }] }])
     const broad = out.campaigns.find((c: Json) => c.role === 'broad-category').adGroups[0].targets.filter((t: Json) => !t.isNegative).map((t: Json) => t.expression)
-    expect(broad).toEqual(['test jacket'])
+    expect(broad).toEqual(['test jacket', 'test coat'])
+    expect(out.warnings.join('\n')).toMatch(/1 keyword\(s\) are also bought by your other products' campaigns \("test coat"\): allowed/)
+    expect(out.blockers.join('\n')).not.toMatch(/bid against/)
   })
 
   it('blocks: the monthly cap at full spend (named, no amount) and a market Amazon cannot be written in; the portfolio is reused', () => {
@@ -133,6 +138,31 @@ describe('the build dry run', () => {
     expect(await inA(() => readPlaybook({ view: 'compile', market: 'IT' }))).toMatchObject({ status: 400 })
     const de = await inA(() => readPlaybook({ view: 'compile', market: 'DE', productId: ids.parent }))
     expect(de).toMatchObject({ data: { compiles: false, problems: ['No playbook applies here: no row names a template'] } })
+  })
+})
+
+describe('one of the SAME product\'s campaigns outside the playbook buys a term', () => {
+  let own = ''
+  beforeAll(async () => {
+    own = await inA(async () => {
+      const c = db()
+      const camp = await c.campaign.create({ data: { name: 'TESTPB4 older | IT | Broad', type: 'SP', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date() } as never })
+      const g = await c.adGroup.create({ data: { campaignId: camp.id, name: 'TESTPB4 older group' } })
+      await c.adProductAd.create({ data: { adGroupId: g.id, asin: 'B0TESTV001', sku: 'TEST-PB4-V1' } })
+      await c.adTarget.create({ data: { adGroupId: g.id, kind: 'KEYWORD', expressionType: 'BROAD', expressionValue: 'test coat', bidCents: 30 } })
+      return camp.id
+    })
+  })
+  afterAll(async () => { await inA(() => db().campaign.delete({ where: { id: own } })) })
+
+  it('the template says skip: the term stays where the product already buys it, named — not listed as another product\'s', async () => {
+    const read = await inA(() => readPlaybook({ view: 'compile', market: 'IT', productId: ids.parent }))
+    if ('error' in read) throw new Error(read.error)
+    const data = read.data as Json
+    expect(data.skippedShared).toEqual([{ term: 'test coat', existing: [{ campaignName: 'TESTPB4 older | IT | Broad', campaignId: own }] }])
+    expect(data.sharedWithOtherProducts).toEqual([])
+    const broad = data.campaigns.find((c: Json) => c.role === 'broad-category').adGroups[0].targets.filter((t: Json) => !t.isNegative).map((t: Json) => t.expression)
+    expect(broad).toEqual(['test jacket'])
   })
 })
 

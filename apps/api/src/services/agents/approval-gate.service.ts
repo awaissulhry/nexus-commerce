@@ -155,7 +155,10 @@ export async function runOrQueueTool(
   const { tool, raw, visible } = call
   // C2 — a control tool (undo-change) is never queued itself: what it asks for is a NEW request through this gate.
   if (tool.control) return askedFor(name, raw, visible, principal, agentRunId, opts)
-  if (!requiresApproval) {
+  // W4-1 — a journal entry (AgentTool.journal; its dry run says so, ToolResult.journal) changes nothing of the business:
+  // it runs now. Any other call of a journal tool is a request, as any change: it goes on below to be stored.
+  if (!requiresApproval && tool.journal && raw.journal === true && tool.execute && raw.ok) return runJournal(principal, name, args)
+  if (!requiresApproval && !tool.journal) {
     return {
       ok: raw.ok,
       mode: 'executed',
@@ -191,6 +194,20 @@ export async function runOrQueueTool(
     expiresAt: ap.expiresAt,
     preview: visible.preview ?? visible.data,
     ...(rule ? { rule } : {}),
+  }
+}
+
+/**
+ * W4-1 — a journal tool runs as the caller right after its dry run, never queued: no approval, no AgentChange (it changes
+ * nothing of the business); the call's own AgentRun is its record, and the tool keeps its own (report-ads-run: the run).
+ */
+async function runJournal(principal: ToolPrincipal, name: string, args: Record<string, unknown>): Promise<GateOutcome> {
+  try {
+    const { raw, visible } = await executeTool(principal, name, args)
+    return { ok: raw.ok, mode: 'executed', data: visible.data, error: raw.error }
+  } catch (err) {
+    if (err instanceof ToolAccessError) return { ok: false, mode: 'error', error: err.message }
+    throw err
   }
 }
 

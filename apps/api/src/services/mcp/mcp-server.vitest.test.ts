@@ -29,14 +29,15 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // L8 — stock and price per listing reach the channels (the Matrix door queues the pushes); a revert sends the old values.
 // L9 — closing and reopening a listing changes it on the channel. Phase 3 (T1) — so do ending, relisting and deleting it.
 // Phase 3 T3 — ebay-categories reads eBay's category suggestions and a category's details live (it stores nothing).
+// Ads autonomy W3-1 — apply-ad-recommendations asks for a plan whose steps reach Amazon.
 const OPEN_WORLD = [
-  'add-photo-from-url', 'advance-purchase-order', 'archive-ads', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
+  'add-photo-from-url', 'advance-purchase-order', 'apply-ad-recommendations', 'archive-ads', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
   'cancel-order', 'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign',
   'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
   'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'fba-shipment-options', 'graduate-keyword', 'import-catalog', 'issue-refund',
-  'link-channel-id', 'listing-live-content', 'pause-ads', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
+  'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
   'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing', 'reopen-listing', 'reply-to-review', 'request-review', 'resend-prices',
-  'reserve-stock', 'restore-campaign', 'resume-automation', 'revert-listing-change', 'rollback-bulk-operation',
+  'reserve-stock', 'restore-ad-bids-after-stock', 'restore-campaign', 'resume-automation', 'revert-listing-change', 'rollback-bulk-operation',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
   'set-campaign-budget', 'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion',
   'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-placement-multipliers', 'set-price',
@@ -70,12 +71,14 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
   })
 
   it('a change needs a person by its own code: no policy can let it run unasked', () => {
-    // tool-policy.service.ts can loosen approval only for a change tool without one of these.
+    // tool-policy.service.ts can loosen approval only for a change tool without one of these. W4-1 — the journal tools
+    // (Claude's own record, no change of the business; an exact list in tool-contract.vitest.test.ts) run at once by design.
     const loose = listTools()
       .filter((tool) => !tool.readOnly && tool.execute)
       .filter((tool) => !tool.alwaysAsk && tool.riskTier !== 'high' && !tool.requiresApprovalDefault)
       .map((tool) => tool.name)
-    expect(loose).toEqual([])
+    expect(loose).toEqual(listTools().filter((tool) => tool.journal).map((tool) => tool.name))
+    expect(loose).toEqual(['report-ads-run'])
   })
 
   it('open world exactly where a marketplace or a buyer is reached', () => {
@@ -97,7 +100,8 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     const appOnly = listTools().filter((tool) => !offeredOn(tool, 'mcp')).map((tool) => tool.name).sort()
     expect(appOnly).toEqual(AI_DRAFTS)
     // C7 — and only confirm-change is Claude's alone: a person confirms in Claude with a code; in Nexus they approve.
-    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name)).toEqual(['confirm-change'])
+    // W4-1 — and report-ads-run: the scheduled Claude run's own report.
+    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'report-ads-run'])
   })
 })
 
