@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { MarketSelect } from './MarketSelect'
+import { DateRangePicker } from './DateRangePicker'
 
 const ADS = fileURLToPath(new URL('..', import.meta.url))
 const read = (rel: string) => readFileSync(join(ADS, rel), 'utf8')
@@ -129,3 +130,29 @@ describe('AM-26 — a market picker with nothing to filter says "not by market y
     expect(read('campaigns/CampaignsGrid.tsx')).not.toMatch(/<span className="lk">Learn More<\/span>/)
   })
 })
+
+describe('AM-26 — a date picker the page cannot use is kept, disabled, and says why', () => {
+  const range = { start: new Date(2026, 8, 28), end: new Date(2026, 9, 4) }
+
+  it('renders the range, does not act, and carries the reason for keyboard and screen readers', () => {
+    const html = renderToStaticMarkup(createElement(DateRangePicker, { value: range, onChange: () => {}, disabledReason: 'The week chips below choose the week.' }))
+    expect(html).toContain('09/28/2026 - 10/04/2026')
+    expect(html).toContain('aria-disabled="true"')
+    expect(html).toContain('aria-label="09/28/2026 - 10/04/2026. The week chips below choose the week."')
+    expect(html).toContain('h10-tipwrap') // the InfoTip shows the reason on hover AND on focus
+    expect(html).not.toContain(' disabled=""') // stays focusable
+  })
+
+  it('without a reason the picker is the ordinary one', () => {
+    const html = renderToStaticMarkup(createElement(DateRangePicker, { value: range, onChange: () => {} }))
+    expect(html).not.toContain('aria-disabled')
+  })
+
+  it('the eBay digest keeps its header date picker (placeholder) instead of hiding it', () => {
+    const [tag] = headerTags(read('ebay/digest/EbayDigestClient.tsx'))
+    expect(tag).not.toMatch(/showDateRange=\{false\}/)
+    expect(tag).toMatch(/dateRangeNotYet="The week chips below choose the week/)
+    expect(tag).toMatch(/dateRange=\{shownWeek \?\? undefined\}/)
+  })
+})
+

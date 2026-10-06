@@ -8,6 +8,10 @@ import { eur, eur2, pct, roas } from './format'
 import { eur as gridEur, pct as gridPct, roasText } from '../campaigns/_grid/format'
 import { formatCell } from '../reporting/report-api'
 import { money, pct as businessPct } from '../reporting/business-api'
+import { eurC, pctP } from '../ebay/_lib/format'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 describe('money', () => {
   it('is two decimals with thousands separated, everywhere', () => {
@@ -51,3 +55,33 @@ describe('ROAS', () => {
     expect(roasText('')).toBe('—')
   })
 })
+
+describe('eBay screens use the same rendering (AM-30)', () => {
+  it('money has the thousands separator; percent points read with 2 decimals', () => {
+    expect(eurC(123456)).toBe('€1,234.56')
+    expect(eurC(null)).toBe('—')
+    expect(pctP(38.5)).toBe('38.50%') // was "38.5%" (1 decimal)
+    expect(pctP(150)).toBe('150.00%')
+    expect(pctP(null)).toBe('—')
+  })
+})
+
+describe('no hand-built euro string without a thousands separator (AM-30)', () => {
+  const ADS = fileURLToPath(new URL('..', import.meta.url))
+  const walk = (dir: string, out: string[] = []): string[] => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (statSync(p).isDirectory()) walk(p, out)
+      else if (/\.tsx?$/.test(p) && !p.includes('.vitest.')) out.push(p)
+    }
+    return out
+  }
+  // "€" followed by cents ÷ 100 printed with toFixed(2): €1234.56 instead of €1,234.56.
+  const HAND_BUILT = /€\$?\{\(?[^}]*\/ 100\)?\.toFixed\(2\)\}/
+
+  it.each(['_shared', 'analytics', 'ebay', 'portfolios', 'suggestions'])('%s renders money through the shared formatter', (dir) => {
+    const offenders = walk(join(ADS, dir)).filter((f) => HAND_BUILT.test(readFileSync(f, 'utf8'))).map((f) => f.slice(ADS.length))
+    expect(offenders).toEqual([])
+  })
+})
+

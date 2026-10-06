@@ -33,7 +33,7 @@ export interface HeaderPrimary { label: string; icon?: ReactNode; href?: string;
 export function AdsPageHeader({
   title, subtitle, markets, market, onMarketChange, onDataSync, syncing, actions, onDateRange, dateRange,
   showDataSync = true, showDateRange = true, showMarket = true, showChangeLog = false, primaryAction, channel = 'amazon',
-  allowAllMarkets = true, marketValues, onMarketValuesChange, dataSyncLabel = 'Refresh view', dataSyncTip, marketNotYet,
+  allowAllMarkets = true, marketValues, onMarketValuesChange, dataSyncLabel = 'Refresh view', dataSyncTip, marketNotYet, dateRangeNotYet,
 }: {
   title: string; subtitle: string
   markets: string[]; market: string; onMarketChange: (m: string) => void
@@ -75,6 +75,11 @@ export function AdsPageHeader({
   // CBN — per-page header tailoring (Rules & Automation hides Learn/Data-Sync/Date
   // and swaps the Action ▾ dropdown for a single "+ Rule" primary button).
   showDataSync?: boolean; showDateRange?: boolean
+  /**
+   * AM-26 — the page cannot take a range from this picker (it has its own date control). The picker stays visible but
+   * does not open, shows `dateRange` (the range the page shows), and says this reason on hover and keyboard focus.
+   */
+  dateRangeNotYet?: string
   /**
    * RA.SPINE S5 (additive; defaults `true`, so every existing page is byte-identical).
    *
@@ -165,7 +170,7 @@ export function AdsPageHeader({
             a silently motionless "spinner". */}
         {showDataSync && <Button variant="ghost" onClick={onDataSync} disabled={syncing} title={dataSyncTip}>{syncing ? <Spinner size={14} /> : <RefreshCw size={14} />} {dataSyncLabel}</Button>}
 
-        {showDateRange && <DateRangePicker value={shownRange} onChange={(s, e) => { setOwnRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
+        {showDateRange && <DateRangePicker value={shownRange} disabledReason={dateRangeNotYet} onChange={(s, e) => { setOwnRange({ start: s, end: e }); onDateRange?.(s, e) }} />}
 
         {/* market / account selector — shared with the campaign builders (APS.2a).
             `showMarket` is off only for a page that owns the control elsewhere — see the prop. */}

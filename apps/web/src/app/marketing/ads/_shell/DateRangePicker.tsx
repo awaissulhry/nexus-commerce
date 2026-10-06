@@ -18,6 +18,7 @@
  */
 import { useState } from 'react'
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { InfoTip } from '@/design-system/primitives'
 
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 /** AM-36 — days since Monday (Mon 0 … Sun 6), the ISO week the server uses. */
@@ -77,7 +78,15 @@ function monthDays(year: number, month: number): Date[] {
   return Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d })
 }
 
-export function DateRangePicker({ value, onChange }: { value: { start: Date; end: Date }; onChange: (start: Date, end: Date) => void }) {
+export function DateRangePicker({ value, onChange, disabledReason }: {
+  value: { start: Date; end: Date }; onChange: (start: Date, end: Date) => void
+  /**
+   * AM-26 — the page cannot take a range from here yet. The control stays visible (placeholder controls are kept),
+   * shows the range the page is showing, does not open, and says why: on hover AND on keyboard focus (it stays
+   * focusable, `aria-disabled` rather than `disabled`, and the reason is part of its accessible name).
+   */
+  disabledReason?: string
+}) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(() => new Date(value.start.getFullYear(), value.start.getMonth(), 1))
   const [sel, setSel] = useState<{ start: Date; end: Date | null }>({ start: value.start, end: value.end })
@@ -97,12 +106,23 @@ export function DateRangePicker({ value, onChange }: { value: { start: Date; end
 
   const today = sod(new Date())
   const months = [view, addMonths(view, 1)]
+  const label = `${fmt(value.start)} - ${fmt(value.end)}`
+  // One trigger: with `disabledReason` it is focusable but inert (`aria-disabled`), its name carries the reason, and
+  // the InfoTip shows the reason on hover and keyboard focus.
+  const trigger = (
+    <button
+      type="button" className="h10-hbtn"
+      aria-disabled={disabledReason ? 'true' : undefined}
+      aria-label={disabledReason ? `${label}. ${disabledReason}` : undefined}
+      onClick={() => { if (!disabledReason) setOpen((o) => !o) }}
+    >
+      <Calendar size={14} /> {label} <ChevronDown size={13} />
+    </button>
+  )
   return (
     <div className="h10-hsel">
-      <button type="button" className="h10-hbtn" onClick={() => setOpen((o) => !o)}>
-        <Calendar size={14} /> {fmt(value.start)} - {fmt(value.end)} <ChevronDown size={13} />
-      </button>
-      {open && <>
+      {disabledReason ? <InfoTip tip={disabledReason}>{trigger}</InfoTip> : trigger}
+      {open && !disabledReason && <>
         <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setOpen(false)} />
         <div className="h10-dp" role="dialog" aria-label="Select date range">
           <div className="h10-dp-cal">

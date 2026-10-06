@@ -29,7 +29,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, Info, RefreshCw, Search } fro
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
-import { acosSortNumber } from '../campaigns/_grid/format'
+import { acosSortNumber, eur as eurMoney, pct as fractionPct } from '../campaigns/_grid/format'
 
 interface Contender {
   campaignId: string
@@ -76,8 +76,9 @@ interface Board {
   notes: string[]
 }
 
-const eur = (c: number) => `€${(c / 100).toFixed(2)}`
-const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v * 100)}%`)
+// AM-30 — the console's one money and ACoS rendering (€1,234.56 · 38.02%); these were €1234.56 and a whole percent.
+const eur = (c: number) => eurMoney(c / 100)
+const pct = (v: number | null) => fractionPct(v)
 const intl = (v: number) => v.toLocaleString('en-IE')
 
 /**
