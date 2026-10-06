@@ -77,7 +77,7 @@ import { mergeAxisValues } from '../variants/family/projections'
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
 import { matrixChip, matrixChips } from './chips'
-import { BASE_PRICE_COL, buildMatrixColumns, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, matrixColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
+import { BASE_PRICE_COL, buildMatrixColumns, FBA_COL, fbaUnitsOf, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, matrixColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
 import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
 import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixVerbTarget } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
@@ -401,6 +401,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
 
   const explainHeld = useCallback((e: { data?: StudioRow; colDef?: { colId?: string } }) => {
     const colId = e.colDef?.colId
+    /* The FBA qty column is locked on every row: an open gesture says why, as any held Matrix cell does. */
+    if (colId === FBA_COL && e.data) { sayReason(MATRIX_COPY.fbaLocked, 'info'); return true }
     const parsed = parseMatrixColId(colId)
     if (!parsed || !e.data || !colId) return false
     const marked = tracker.get(e.data.id, colId)
@@ -422,7 +424,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   /* ── views: presets + saved views on the Matrix surface ─────────────────────────────────── */
 
   const allColIds = useMemo(() => {
-    const ids: string[] = [IDENTITY_COL, BASE_PRICE_COL, STOCK_COL, STATUS_COL]
+    const ids: string[] = [IDENTITY_COL, BASE_PRICE_COL, STOCK_COL, FBA_COL, STATUS_COL]
     for (const c of visibleCoordinates) {
       if (!c.connected || c.cells.length === 0) ids.push(matrixColId(c.key, 'notListed'))
       else for (const k of c.cells) ids.push(matrixColId(c.key, k))
@@ -433,7 +435,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
     const byKind = (kinds: readonly MatrixCellKind[], shared: readonly string[]) => [IDENTITY_COL, ...shared, ...allColIds.filter((id) => { const p = parseMatrixColId(id); return !!p && kinds.includes(p.kind) })]
     return [
       { id: ALL_VIEW_ID, label: 'Everything', description: 'Every coordinate, every cell', columns: allColIds },
-      { id: 'inventory', label: 'Inventory', description: 'Stock and the inventory lane: Fulfilment · Mode · Qty · Buffer · Sync', columns: byKind(INVENTORY_KINDS, [STOCK_COL]) },
+      { id: 'inventory', label: 'Inventory', description: 'Stock, FBA qty and the inventory lane: Fulfilment · Mode · Qty · Buffer · Sync', columns: byKind(INVENTORY_KINDS, [STOCK_COL, FBA_COL]) },
       { id: 'pricing', label: 'Pricing', description: 'Base price and every coordinate\'s Price and Sale', columns: byKind(PRICING_KINDS, [BASE_PRICE_COL]) },
       { id: 'listings', label: 'Listings', description: 'Status and every coordinate\'s Listing state', columns: byKind(['listing'], [STATUS_COL]) },
     ]
@@ -488,6 +490,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
       { key: SCOPE_PROGRESS_COLUMN, label: 'Shared product (progress)', group: 'Product' },
       { key: BASE_PRICE_COL, label: 'Base price', group: 'Shared' },
       { key: STOCK_COL, label: 'Stock', group: 'Shared' },
+      { key: FBA_COL, label: 'FBA qty', group: 'Shared' },
       { key: STATUS_COL, label: 'Status', group: 'Shared' },
     ]
     for (const c of visibleCoordinates) {
@@ -537,7 +540,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
         keyOf: (colId) => (parseMatrixColId(colId) ? colId : colId === BASE_PRICE_COL ? 'basePrice' : colId === STATUS_COL ? 'status' : colId === STOCK_COL ? null : null),
         valueOf: (colId, row) => {
           const p = parseMatrixColId(colId)
-          if (!p) return colId === STOCK_COL ? matrix.rowOf(row.id)?.stock.available ?? null : undefined
+          if (!p) return colId === STOCK_COL ? matrix.rowOf(row.id)?.stock.available ?? null : colId === FBA_COL ? fbaUnitsOf(matrix.rowOf(row.id)) : undefined
           const coord = read.coordinates.find((c) => c.key === p.key)
           return coord ? matrixCellText(p.kind, matrix.cellsOf(row.id, p.key), coord, MATRIX_COPY) : null
         },

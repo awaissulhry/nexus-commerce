@@ -15,16 +15,17 @@
  * Variants page's shared `VariantIdentity`.
  *
  * What is genuinely this page's: the group shape, the strip tag, the `Not listed` column, the
- * `Stock` column (a read of `MatrixRowRead.stock`, never a number derived here) and the preview-mode
- * hold on the two master columns.
+ * `Stock` column (a read of `MatrixRowRead.stock`, never a number derived here), the locked `FBA qty`
+ * column (a read of `MatrixRowRead.fba`) and the preview-mode hold on the two master columns.
  */
 import type { MutableRefObject } from 'react'
 
 import type { MenuItemDef } from '@/design-system/components'
 import { Pill, Tag } from '@/design-system/primitives'
 import { poolSourceSentence } from '@/app/_shared/stock-pool/PoolSourceTag'
-import { matrixColumnDef, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
+import { lockedColumn, matrixColumnDef, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
 
+import { when } from '../drawer/format'
 import { buildMasterColumns } from '../sheet/master/columns'
 import type { SheetColumn, StudioRow } from '../sheet/master/types'
 import { VariantIdentity as SharedVariantIdentity } from '../variants/VariantIdentity'
@@ -67,6 +68,9 @@ export const BASE_PRICE_COL = 'basePrice'
  */
 export const BASE_PRICE_COL_W = 120
 export const STOCK_COL = 'shared.stock'
+/** The FBA qty column (Owner 2026-10-06): Amazon's FBA units, shown and LOCKED — nothing on this page can write it. */
+export const FBA_COL = 'shared.fba'
+export const FBA_COL_W = 96
 export const STATUS_COL = 'status'
 export const NOT_LISTED_W = 120
 
@@ -185,6 +189,30 @@ export function stockTooltip(s: MatrixRowRead['stock']): string {
   return `${poolSourceSentence({ lenderName: s.source.lenderName, available: s.available ?? 0 })} ${where}. This business's own stock is not used.`
 }
 
+/* ── the FBA qty cell ─────────────────────────────────────────────────────────────────────── */
+
+/** The FBA number a row shows: units, or null for "no FBA row" AND for "not read" (the tooltip tells them apart). */
+export function fbaUnitsOf(row: MatrixRowRead | null | undefined): number | null {
+  return row?.fba?.units ?? null
+}
+
+/**
+ * The FBA qty cell's tooltip: how many units and where, when Nexus last updated them, and — on every row, whatever the
+ * number — why the cell is locked. `null` (no FBA row) and `undefined` (not read) say different things: neither is `0`.
+ */
+export function fbaTooltip(row: MatrixRowRead | null | undefined): string {
+  const f = row?.fba
+  const lines: string[] = []
+  if (f === undefined) lines.push(MATRIX_COPY.fbaNotRead)
+  else if (f === null) lines.push(MATRIX_COPY.fbaNone)
+  else {
+    lines.push(`${row?.role === 'parent' ? 'Family total: ' : ''}${MATRIX_COPY.fbaUnits(f.units, f.locations.map((l) => `${l.code} ${l.units}`))}`)
+    if (f.updatedAt && Number.isFinite(Date.parse(f.updatedAt))) lines.push(`Last updated in Nexus ${when(f.updatedAt)}`)
+  }
+  lines.push(MATRIX_COPY.fbaLocked)
+  return lines.join(' · ')
+}
+
 function NotListedCell() {
   return <span className="nds-cell-value nds-cell-muted"><span className="nds-cell-value-text">{MATRIX_COPY.notListed}</span></span>
 }
@@ -281,12 +309,30 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     getQuickFilterText: (p) => { const s = p.data ? stockOf(rowOf(p.data.id)) : null; return s?.uncounted ? MATRIX_COPY.uncounted : `${s?.available ?? ''}${s?.source ? ` shared ${s.source.lenderName}` : ''}` },
   }
 
+  /* The DS locked column (`lockedColumn`, GRID.md rule 10: the lock is in the DEFINITION) — not editable, not movable, no
+     fill handle, the lock glyph in the cell and the locked tint on it. Its value is a READ of `MatrixRowRead.fba`, the
+     same way Stock reads `stock`: a copy, an export and a sort read the number; nothing can paste one back. */
+  const fba: ColDef<StudioRow> = {
+    ...lockedColumn<StudioRow>(FBA_COL, { kind: 'integer', reason: MATRIX_COPY.fbaLocked }),
+    field: undefined,
+    colId: FBA_COL,
+    headerName: 'FBA qty',
+    headerTooltip: `Units Amazon holds at its FBA warehouses for this SKU. ${MATRIX_COPY.fbaLocked}. Parent = the family total.`,
+    width: FBA_COL_W, minWidth: FBA_COL_W,
+    suppressHeaderMenuButton: true, suppressFillHandle: true, suppressPaste: true, sortable: true, resizable: true,
+    cellClassRules: { 'nds-cell-is-locked': () => true },
+    valueGetter: (p) => (p.data ? fbaUnitsOf(rowOf(p.data.id)) : null),
+    valueFormatter: (p) => (p.value == null ? '' : String(p.value)),
+    tooltipValueGetter: (p) => (p.data ? fbaTooltip(rowOf(p.data.id)) : undefined),
+    getQuickFilterText: (p) => { const n = p.data ? fbaUnitsOf(rowOf(p.data.id)) : null; return n == null ? '' : `${n} fba` },
+  }
+
   const groups: (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] = [
     { groupId: 'grp-product', headerName: 'Product', children: [identity] },
     /* The progress column has its OWN header group. Inside the Product group it split that group across the pinned
        boundary (Product is pinned, progress is not) and AG drew "PRODUCT" twice — measured on production 2026-09-27. */
     { groupId: 'grp-progress', headerName: 'Progress', children: [sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
-    { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, { ...status, headerName: 'Status', width: 104, minWidth: 104 }] },
+    { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, fba, { ...status, headerName: 'Status', width: 104, minWidth: 104 }] },
   ]
 
   for (const coord of coordinates) {

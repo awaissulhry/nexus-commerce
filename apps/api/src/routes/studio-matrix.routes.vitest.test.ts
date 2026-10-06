@@ -203,6 +203,14 @@ describe('PATCH /products/:id/studio/matrix — the door', () => {
   it('refuses a malformed body at the boundary', async () => {
     expect((await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells: [{ rowId: 'c1' }] } })).statusCode).toBe(400)
   })
+  it('🔴 the FBA qty column has no door: a write naming it (or any kind outside the writable six) is refused whole', async () => {
+    for (const cell of ['fba', 'shared.fba', 'fbaQty']) {
+      const res = await write([{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell, value: 5, expectedVersion: 3 }])
+      expect(res.statusCode).toBe(400)
+    }
+    expect(mocks.follow).not.toHaveBeenCalled()
+    expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
 })
 
 // Amazon sheet gaps (design-sync §1.B) — the write carries the account its read used and the listing each cell saw.
