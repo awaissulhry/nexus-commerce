@@ -66,7 +66,7 @@ vi.mock('../services/advertising/ads-api-client.js', () => {
 
 const { drainAdsSyncOnce } = await import('./ads-sync.worker.js')
 const { suppressCampaignBids, restoreCampaignBids, applyBaseBidDelta } = await import('../services/advertising/ads-bid-suppression.service.js')
-const { updateAdTargetWithSync } = await import('../services/advertising/ads-mutation.service.js')
+const { updateAdTargetWithSync, updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
 
 const inside = <T>(work: () => Promise<T>) =>
   withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -184,5 +184,40 @@ describe('while automation is stopped', () => {
     expect((await drain()).flags).toEqual([true])
     await inside(() => legacy('sup-legacy-up', '2', '35'))
     expect((await drain()).flags).toEqual([false])
+  })
+})
+
+/**
+ * AA-W2-12 — a deliberate pause (pause-ads, run by the business's rule: a `user:` actor without a person's mark) lets go
+ * of spend, so its queue row carries `letsGo` and the worker hands the halted gate a suppression. An enable, and a pause
+ * without the mark, stay refused while stopped.
+ */
+describe('while automation is stopped — a real pause lets go, an enable does not', () => {
+  const RULE_RUN = 'user:u-rule-approver' as const
+
+  it('a marked pause of a campaign and a keyword passes the halted gate and lands on Amazon', async () => {
+    await inside(() => updateCampaignWithSync({ campaignId: 'sup-c', patch: { status: 'PAUSED' }, actor: RULE_RUN, applyImmediately: true, letsGo: true }))
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'sup-t1', patch: { status: 'PAUSED' }, actor: RULE_RUN, applyImmediately: true, letsGo: true }))
+    const { out, rows, flags } = await drain()
+    expect(out.processed).toBe(2)
+    expect(flags).toEqual([true, true])
+    expect(rows.every((r) => r.syncStatus === 'SUCCESS')).toBe(true)
+    expect(amazon.calls).toHaveLength(2)
+  })
+
+  it('an enable is never letting go: refused by the halt, and Nexus shows what Amazon still has', async () => {
+    await inside(() => updateCampaignWithSync({ campaignId: 'sup-c', patch: { status: 'ENABLED' }, actor: RULE_RUN, applyImmediately: true, letsGo: true }))
+    const { rows, flags } = await drain()
+    expect(flags).toEqual([false])
+    expect(rows[0]!.syncStatus).toBe('SKIPPED')
+    expect(amazon.calls).toEqual([])
+    expect((await inside(() => database.client.campaign.findUniqueOrThrow({ where: { id: 'sup-c' }, select: { status: true } }))).status).toBe('PAUSED')
+  })
+
+  it('a pause without the mark (a rule\'s pause_target, say) is judged as before: refused while stopped', async () => {
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'sup-t2', patch: { status: 'PAUSED' }, actor: RULE_RUN, applyImmediately: true }))
+    const { rows, flags } = await drain()
+    expect(flags).toEqual([false])
+    expect(rows[0]!.syncStatus).toBe('SKIPPED')
   })
 })

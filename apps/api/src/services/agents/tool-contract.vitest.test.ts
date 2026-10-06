@@ -52,7 +52,10 @@ const UNDO_PENDING: Record<string, string> = {
  * ratchet: adding a name is a reviewed change, and an entry whose tool is no longer alwaysAsk, strategy-bound and above
  * `ask` must be removed (checked below). Empty until a W2 tool PR raises one.
  */
-const AD_STRATEGY_AUTO: readonly string[] = []
+const AD_STRATEGY_AUTO: readonly string[] = [
+  // AA-W2-12 — a real pause, and switching back on what a Claude request paused.
+  'pause-ads', 'enable-ads',
+]
 
 /**
  * AA-W2-1 — irreversible tools that may be set above `ask` (rule 7c), each with a sample preview that is inside the
@@ -331,6 +334,12 @@ describe('C1 — every registered tool keeps the contract', () => {
       // A8 — a suppression is undone by a restore, a restore by a suppression.
       'suppress-campaign': { before: { campaignId: 'c1', suppressed: false, by: null, changeSetId: 'ap1' }, after: { campaignId: 'c1', suppressed: true, by: 'user:u1' } },
       'restore-campaign': { before: { campaignId: 'c1', suppressed: true, by: 'user:u1', changeSetId: 'ap1' }, after: { campaignId: 'c1', suppressed: false, by: null } },
+      // AA-W2-12 — a pause is undone by enable-ads of the same ads (a product ad named by its ad group and SKU), an enable by pause-ads.
+      'pause-ads': {
+        before: { changeSetId: 'ap1', items: [{ level: 'campaign', id: 'c1', status: 'ENABLED' }, { level: 'productAd', id: 'pa1', adGroupId: 'g1', product: 'TEST-SKU-1', status: 'ENABLED' }] },
+        after: { items: [{ level: 'campaign', id: 'c1', status: 'PAUSED' }, { level: 'productAd', id: 'pa1', adGroupId: 'g1', product: 'TEST-SKU-1', status: 'PAUSED' }] },
+      },
+      'enable-ads': { before: { changeSetId: 'ap1', items: [{ level: 'target', id: 't1', status: 'PAUSED' }] }, after: { items: [{ level: 'target', id: 't1', status: 'ENABLED' }] } },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       // A6 — a budget or the placement adjustments are set back through the same tool.

@@ -219,6 +219,8 @@ const AD_CHANGE_TOOLS = new Set([
   'bulk-ad-bid-change', 'suppress-campaign', 'restore-campaign', 'undo-ad-change',
   // A11 — its creates are not queued: approval-status counts what it created and how much of it Amazon holds.
   'create-ad-campaign',
+  // AA-W2-12 — a pause and an enable: one status write per ad.
+  'pause-ads', 'enable-ads',
 ])
 
 export interface AdDelivery {

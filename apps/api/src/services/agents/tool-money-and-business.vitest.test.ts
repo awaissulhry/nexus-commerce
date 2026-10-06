@@ -275,6 +275,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'restore-campaign': (ids) => ({ campaignId: ids.campaignId }),
   // A12 — the live-write allowlist (no money in it).
   'set-campaign-live-writes': (ids) => ({ campaignId: ids.campaignId, enabled: true }),
+  // AA-W2-12 — a real pause and an enable name the budgets that stop or start spending (they need money).
+  'pause-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
+  'enable-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
   'set-campaign-target-acos': (ids) => ({ campaignIds: [ids.campaignId], targetAcosPct: 25 }),
   // Ads autonomy W1-2 — the strategy for the seeded campaign's market: its targets, bids and caps are money.
   'ads-strategy': (ids) => ({ market: 'IT', campaignId: ids.campaignId }),

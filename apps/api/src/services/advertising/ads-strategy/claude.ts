@@ -7,7 +7,8 @@
  *   where it lands   read from the change's arguments and, once its dry run has run, its preview — per tool (PLACES):
  *                    a target or a negative → its ad group; a budget, a placement, a stop → its campaign; a new
  *                    campaign → its products in its market; a suggestion → what it applies to; an ad undo → every
- *                    entity it puts back. An ad group or a campaign resolves through its products (the safer level
+ *                    entity it puts back; a pause or an enable (AA-W2-12) → each campaign, ad group and target it names
+ *                    (a product ad → its ad group). An ad group or a campaign resolves through its products (the safer level
  *                    across them, resolve.ts), a product through product → parent → primary category → market.
  *   fail closed      a change that reaches a whole market (a selection by market), or that Nexus cannot place more
  *                    exactly inside a market, takes the STRICTEST level any row of that market sets for its kind; one
@@ -204,6 +205,17 @@ async function adUndo(place: Place, args: Obj, preview: Obj | null) {
   if (logs.some((l) => !['AD_TARGET', 'AD_GROUP', 'CAMPAIGN'].includes(l.entityType))) place.notPlaced('it puts back a write that names no campaign, ad group or target')
 }
 
+/** AA-W2-12 — a status change: every campaign, ad group (a product ad's too) and target it names. */
+const byStatusArgs: PlaceReader = async (place, args) => {
+  const campaigns = strs(args.campaignIds)
+  const adGroups = [...strs(args.adGroupIds), ...list(args.productAds).map((ad) => str(obj(ad).adGroupId))].filter((id): id is string => !!id)
+  const targets = strs(args.targetIds)
+  if (campaigns.length) await place.campaignIds(campaigns)
+  if (adGroups.length) await place.adGroupIds(adGroups)
+  if (targets.length) await place.targets(targets)
+  if (!campaigns.length && !adGroups.length && !targets.length) place.notPlaced('it names no campaign, ad group, target or ad')
+}
+
 /** Where each ad change tool lands. Every tool of CLAUDE_ACTION_TOOLS has one (fields.vitest.test.ts). */
 export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'set-target-bid': (place, args) => place.targets([str(args.targetId)]),
@@ -253,6 +265,8 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
     place.notPlaced(args.scope ? 'a rule whose scope names no market, campaign or product' : 'an edit that keeps the rule\'s own scope')
   },
   'undo-ad-change': adUndo,
+  'pause-ads': byStatusArgs,
+  'enable-ads': byStatusArgs,
 }
 
 // ── The strategy's level where it lands ───────────────────────────────────────────────────────────

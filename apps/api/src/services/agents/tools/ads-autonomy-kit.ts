@@ -512,6 +512,8 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   create: 'new campaigns',
   rule: 'ads rules',
   undo: 'undoing ad changes',
+  pause: 'pausing ads (a real pause)',
+  enable: 'switching paused ads back on',
 }
 /** What a strategy level below auto allows, in W1-8's words (claude-trust.service.ts narrowedWhy). */
 const ALLOWS: Record<Exclude<ClaudeTrust, 'auto'>, (what: string) => string> = {

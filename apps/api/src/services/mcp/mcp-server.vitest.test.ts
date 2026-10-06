@@ -33,8 +33,8 @@ const OPEN_WORLD = [
   'add-photo-from-url', 'advance-purchase-order', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
   'cancel-order', 'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign',
   'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
-  'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'end-listing', 'fba-shipment-options', 'graduate-keyword', 'import-catalog', 'issue-refund',
-  'link-channel-id', 'listing-live-content', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
+  'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'fba-shipment-options', 'graduate-keyword', 'import-catalog', 'issue-refund',
+  'link-channel-id', 'listing-live-content', 'pause-ads', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
   'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing', 'reopen-listing', 'reply-to-review', 'request-review', 'resend-prices',
   'reserve-stock', 'restore-campaign', 'resume-automation', 'revert-listing-change', 'rollback-bulk-operation',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
@@ -111,7 +111,10 @@ describe('C3 — the server and every change tool name the business', () => {
     // N3 — the rules every skill used to repeat, once, here.
     for (const rule of ['submit-change-plan, undo-change and confirm-change', 'read it before naming a market or an account',
       'go on only after a clear yes', 'ONE submit-change-plan', 'approveAt; it expires at expiresAt', 'the approvalId, the planHash and the',
-      'Never say a change ran until approval-status says so', 'Never pause an ad', 'Never change an Amazon FBA quantity', 'old Amazon or eBay flat-file pages',
+      'Never say a change ran until approval-status says so', 'Never change an Amazon FBA quantity', 'old Amazon or eBay flat-file pages',
+      // AA-W2-12 (Owner 2026-10-06) — a temporary stop is low bids; a real pause only when meant; an archive is for good.
+      'To stop an ad for a while, lower its bids', 'Pause an ad (pause-ads) only when the person means a real pause',
+      'An archived ad never serves again',
       // W1-8 — where the ads strategy lives, and that it only narrows.
       'read it with ads-strategy, change', 'It only narrows what this business lets']) {
       expect(mcpInstructions(business), rule).toContain(rule)
