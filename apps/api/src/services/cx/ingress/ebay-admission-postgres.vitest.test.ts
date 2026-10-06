@@ -48,9 +48,9 @@ const orderPayload = (userId = randomUUID(), notificationId = randomUUID(), orde
     data: { user: { userId, username: 'synthetic-private-name' }, order: { orderId, orderLineItems: [{ orderLineItemId: '1', listingId: '101', quantity: 1 }] } } } })
 const receiptsOf = (notificationId: string) => database.pool.query('SELECT "workspaceId", "connectionId", "eventType", status, "nextAttemptAt" FROM "WebhookEvent" WHERE "externalId"=$1', [admission.ebayReceiptExternalId('production', notificationId)]).then(r => r.rows)
 const receive = (body: unknown, environment: 'production' | 'sandbox' = 'production') => admission.receiveEbayNotice({ rawBody: Buffer.from(JSON.stringify(body)), header: 'synthetic-signature', environment })
-async function seed(userId: string, workspaceId = OWNER, isActive = true, environment = 'production') {
+async function seed(userId: string, workspaceId = OWNER, isActive = true, environment = 'production', authStatus = 'disconnected') {
   const id = randomUUID()
-  await database.pool.query('INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","managedBy","authStatus","isActive","connectionMetadata","updatedAt") VALUES ($1,$2,\'EBAY\',$3,\'oauth\',\'disconnected\',$4,$5,now())', [id, workspaceId, userId, isActive, JSON.stringify({ environment })])
+  await database.pool.query('INSERT INTO "ChannelConnection" (id,"workspaceId","channelType","externalAccountId","managedBy","authStatus","isActive","connectionMetadata","updatedAt") VALUES ($1,$2,\'EBAY\',$3,\'oauth\',$6,$4,$5,now())', [id, workspaceId, userId, isActive, JSON.stringify({ environment }), authStatus])
   return id
 }
 async function quarantine(id: string) { return inOwner(() => database.client.ebayNoticeQuarantine.findUniqueOrThrow({ where: { id } })) }
@@ -509,7 +509,8 @@ describe.skipIf(!concurrentDatabaseUrl())('eBay admission, ownership and private
 
   it('routes a signed order notice for seller X to X\'s business and X\'s account, whatever the ambient profile', async () => {
     const x = orderPayload(), y = orderPayload()
-    const xAccount = await seed(x.notification.data.user.userId, OTHER), yAccount = await seed(y.notification.data.user.userId, OWNER)
+    const xAccount = await seed(x.notification.data.user.userId, OTHER, true, 'production', 'connected')
+    const yAccount = await seed(y.notification.data.user.userId, OWNER, true, 'production', 'connected')
     const first = await inProfile(OWNER, () => receive(x), 'a-owner')
     expect(first).toMatchObject({ kind: 'accepted', workspaceId: OTHER, duplicate: false })
     expect(await receiptsOf(x.notification.notificationId)).toEqual([{ workspaceId: OTHER, connectionId: xAccount, eventType: 'ORDER_CONFIRMATION', status: 'pending', nextAttemptAt: null }])
@@ -547,6 +548,27 @@ describe.skipIf(!concurrentDatabaseUrl())('eBay admission, ownership and private
     if (result.kind !== 'quarantined') throw new Error('Expected quarantine')
     expect(await quarantine(result.quarantineId)).toMatchObject({ topic: 'ORDER_CONFIRMATION', firstOwnerWorkspaceId: inactive, resolvedReceiptId: null })
     expect(await receiptsOf(body.notification.notificationId)).toEqual([])
+  })
+
+  it.each([
+    ['inactive (refresh failed or disconnected)', false, 'connected'],
+    ['active but needing Reconnect', true, 'needs_reauth'],
+    ['revoked', true, 'revoked'],
+  ])('quarantines an order notice for an account that is %s, and still routes its revocation', async (_label, isActive, authStatus) => {
+    const body = orderPayload(), userId = body.notification.data.user.userId
+    const connectionId = await seed(userId, OWNER, isActive as boolean, 'production', authStatus as string)
+    const result = await receive(body)
+    expect(result).toMatchObject({ kind: 'quarantined', reason: 'account_not_connected' })
+    if (result.kind !== 'quarantined') throw new Error('Expected quarantine')
+    expect(await quarantine(result.quarantineId)).toMatchObject({ topic: 'ORDER_CONFIRMATION', firstOwnerWorkspaceId: OWNER, resolvedReceiptId: null })
+    expect(crypto.isCredentialsBlob((await quarantine(result.quarantineId)).payloadEnc)).toBe(true)
+    expect(await receiptsOf(body.notification.notificationId)).toEqual([])
+    // eBay's retry of that notice stays where it is.
+    expect(await receive({ ...body, notification: { ...body.notification, publishAttemptCount: 2 } })).toMatchObject({ kind: 'quarantined', quarantineId: result.quarantineId })
+    // Revocation is exactly the notice an account that lost its sign-in gets: routed as before.
+    const revocation = payload(userId)
+    expect(await receive(revocation)).toMatchObject({ kind: 'accepted', workspaceId: OWNER })
+    expect(await receiptsOf(revocation.notification.notificationId)).toEqual([{ workspaceId: OWNER, connectionId, eventType: 'AUTHORIZATION_REVOCATION', status: 'pending', nextAttemptAt: null }])
   })
 
   it('quarantines an order notice that names its seller only in the account topics\' flat field', async () => {

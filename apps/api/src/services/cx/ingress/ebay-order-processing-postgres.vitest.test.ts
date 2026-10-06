@@ -61,11 +61,12 @@ const fulfillmentOrder = (orderId: string, lines: Array<{ sku: string; quantity:
 })
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 /** An order notice names its account's seller (account() makes the seller id the account id) unless a case gives `user`. */
-async function queued(connectionId: string, data: Record<string, unknown>, eventType = 'ORDER_CONFIRMATION') {
+async function queued(connectionId: string, data: Record<string, unknown>, eventType = 'ORDER_CONFIRMATION', options: { fresh?: boolean } = {}) {
   if (eventType === 'ORDER_CONFIRMATION' && !('user' in data)) data = { user: { userId: connectionId, username: 'notice-seller' }, ...data }
   const notificationId = randomUUID()
+  // `fresh`: stored as admission stores it (never scheduled, nextAttemptAt NULL); otherwise due now.
   const result = await inOwner(() => recordInbound({ channel: 'EBAY', eventType, externalId: `ebay:production:${notificationId}`, connectionId,
-    signatureOk: true, verifiedBy: 'ebay_ecdsa', queueForRetry: true,
+    signatureOk: true, verifiedBy: 'ebay_ecdsa', ...(options.fresh ? { queueForRetry: false as const } : { queueForRetry: true as const }),
     payload: { metadata: { topic: eventType, schemaVersion: '1.0' }, notification: { notificationId, publishDate: '2026-09-23T10:00:01.000Z', data } } }))
   return result.id!
 }
@@ -75,6 +76,9 @@ const receipt = async (id: string) => (await q('SELECT status, attempts, "isProc
 const due = (id: string) => q('UPDATE "WebhookEvent" SET "nextAttemptAt"=clock_timestamp()-interval \'1 second\',"leaseUntil"=CASE WHEN "leaseToken" IS NULL THEN NULL ELSE clock_timestamp()-interval \'1 second\' END WHERE id=$1', [id])
 const orders = (channelOrderId: string) => q(`SELECT id, status::text AS status, "channelConnectionId", "customerName" FROM "Order" WHERE channel='EBAY' AND "channelOrderId"=$1`, [channelOrderId])
 const movements = (channelOrderId: string) => q(`SELECT "productId", change FROM "StockMovement" WHERE "orderId" IN (SELECT id FROM "Order" WHERE "channelOrderId"=$1)`, [channelOrderId])
+const ledgerRows = async (connectionId: string) => (await q<{ n: number }>('SELECT count(*)::int AS n FROM "OutboundApiCallLog" WHERE "connectionId"=$1', [connectionId]))[0].n
+/** The gateway holds every call of an account that needs Reconnect (inactive here). */
+const needsReconnect = (connectionId: string) => q('UPDATE "ChannelConnection" SET "isActive"=false WHERE id=$1', [connectionId])
 const warnings = (id: string) => q(`SELECT id FROM "Notification" WHERE "entityId"=$1 AND type='channel-notification-unresolved'`, [id])
 
 describe.skipIf(!concurrentDatabaseUrl())('stored eBay ORDER_CONFIRMATION execution in PostgreSQL', () => {
@@ -289,6 +293,72 @@ describe.skipIf(!concurrentDatabaseUrl())('stored eBay ORDER_CONFIRMATION execut
     expect(await process(id)).toEqual({ kind: 'dead_letter' })
     expect(await orders('N-9')).toEqual(before)
     expect(await movements('N-9')).toEqual([{ productId: a.id, change: -1 }])
+  })
+
+  it('waits for sign-in only for a bounded time, then dead-letters with a plain Reconnect reason and makes no further call', async () => {
+    const seller = await account()
+    respond = () => json(fulfillmentOrder('N-SIGNIN', []))
+    await needsReconnect(seller)
+    const id = await queued(seller, { order: { orderId: 'N-SIGNIN' } })
+    expect(await process(id)).toEqual({ kind: 'deferred' })
+    expect(await receipt(id)).toMatchObject({ status: 'failed', attempts: 0, lastError: expect.stringMatching(/reconnected/) })
+    expect(calls).toEqual([])
+    expect(await ledgerRows(seller)).toBe(1)
+    // Still inside the wait (5 h since first receipt): deferred again, its attempt given back.
+    await q(`UPDATE "WebhookEvent" SET "createdAt"="createdAt"-interval '5 hours' WHERE id=$1`, [id]); await due(id)
+    expect(await process(id)).toEqual({ kind: 'deferred' })
+    expect(await receipt(id)).toMatchObject({ status: 'failed', attempts: 0 })
+    // Past EBAY_ORDER_NOTICE_SIGNIN_WAIT_MS (6 h): the end, with the owner warning.
+    await q(`UPDATE "WebhookEvent" SET "createdAt"="createdAt"-interval '2 hours' WHERE id=$1`, [id]); await due(id)
+    expect(await process(id)).toEqual({ kind: 'dead_letter' })
+    const ended = await receipt(id)
+    expect(ended).toMatchObject({ status: 'dlq', isProcessed: false, nextAttemptMs: null })
+    expect(ended.lastError).toMatch(/must be reconnected\. Nexus stopped waiting .* 5-minute eBay order check records the order\./)
+    expect(await warnings(id)).toHaveLength(1)
+    const after = await ledgerRows(seller)
+    expect(after).toBe(3)
+    expect((await inOwner(() => dueEbayInboundEvents())).map(row => row.id)).not.toContain(id)
+    expect(await process(id)).toEqual({ kind: 'not_claimed' })
+    expect(await ledgerRows(seller)).toBe(after)
+    expect(await orders('N-SIGNIN')).toEqual([])
+  })
+
+  it('on the last allowed attempt records a dead letter whose reason does not promise another read', async () => {
+    respond = () => json({ errors: [] }, 503)
+    const id = await queued(await account(), { order: { orderId: 'N-LAST' } })
+    expect(await process(id)).toEqual({ kind: 'retry' })
+    expect((await receipt(id)).lastError).toMatch(/will be read again/)
+    await q('UPDATE "WebhookEvent" SET attempts=4 WHERE id=$1', [id]); await due(id)
+    expect(await process(id)).toEqual({ kind: 'dead_letter' })
+    const ended = await receipt(id)
+    expect(ended).toMatchObject({ status: 'dlq', attempts: 5, nextAttemptMs: null })
+    expect(ended.lastError).toBe('Nexus stopped retrying this eBay order notice. The 5-minute eBay order check still reads this order.')
+    expect(ended.lastError).not.toMatch(/again/)
+    expect(await warnings(id)).toHaveLength(1)
+  })
+
+  it('picks new receipts before 24 stuck ones: a new revocation and a new order notice from another account both run in the next sweep', async () => {
+    const stuck = await account(), a = await product('FAIR', 5), other = await account()
+    respond = url => url === orderUrl('N-FAIR') ? json(fulfillmentOrder('N-FAIR', [{ sku: a.sku, quantity: 1 }])) : json({ errors: [] }, 500)
+    await needsReconnect(stuck)
+    const stuckIds: string[] = []
+    for (let i = 0; i < 24; i++) {
+      const id = await queued(stuck, { order: { orderId: `N-STUCK-${i}` } })
+      expect(await process(id)).toEqual({ kind: 'deferred' })
+      stuckIds.push(id)
+    }
+    // All 24 are due again (their 5-minute hold has passed), oldest first.
+    await q(`UPDATE "WebhookEvent" SET "nextAttemptAt"=clock_timestamp()-interval '1 hour' WHERE id=ANY($1::text[])`, [stuckIds])
+    const revocationAccount = await account('disconnected')
+    const revocation = await queued(revocationAccount, { userId: revocationAccount, revocationDate: '2026-09-23T01:02:03Z' }, 'AUTHORIZATION_REVOCATION', { fresh: true })
+    const order = await queued(other, { order: { orderId: 'N-FAIR' } }, 'ORDER_CONFIRMATION', { fresh: true })
+    const picked = (await inOwner(() => dueEbayInboundEvents())).map(row => row.id)
+    expect(picked).toHaveLength(4)
+    expect(picked).toEqual(expect.arrayContaining([revocation, order]))
+    const outcomes = Object.fromEntries(await Promise.all(picked.map(async id => [id, await process(id)] as const)))
+    expect(outcomes[revocation]).toEqual({ kind: 'done' })
+    expect(outcomes[order]).toEqual({ kind: 'done' })
+    expect(await orders('N-FAIR')).toHaveLength(1)
   })
 
   it('leaves authorization revocation exactly as it was: a terminal account completes without any read', async () => {
