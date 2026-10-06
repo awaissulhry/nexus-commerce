@@ -110,4 +110,14 @@ describe('PB-6a — ensureCompiledRule', () => {
     expect((await inB(() => db().automationRule.findUniqueOrThrow({ where: { id: theirs.ruleId } }))).workspaceId).toBe(B)
     expect(await inA(() => db().automationRule.count())).toBe(2)
   })
+
+  it('the rule is scoped to its market: set on the first save, kept by a re-sync that does not name it, moved by one that does', async () => {
+    const { ruleId } = await inA(() => save({ key: 'harvest-scope', scopeMarketplace: 'TEST-MKT-1' }))
+    const scopeOf = async () => (await inA(() => db().automationRule.findUniqueOrThrow({ where: { id: ruleId } }))).scopeMarketplace
+    expect(await scopeOf()).toBe('TEST-MKT-1')
+    expect(await inA(() => save({ key: 'harvest-scope' }))).toMatchObject({ ruleId, changed: false })
+    expect(await scopeOf()).toBe('TEST-MKT-1')
+    expect(await inA(() => save({ key: 'harvest-scope', scopeMarketplace: 'TEST-MKT-2' }))).toMatchObject({ ruleId, changed: true })
+    expect(await scopeOf()).toBe('TEST-MKT-2')
+  })
 })

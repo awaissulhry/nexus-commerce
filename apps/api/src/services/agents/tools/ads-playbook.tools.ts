@@ -90,11 +90,12 @@ const adsPlaybook: AgentTool = {
     + '(campaignIds, portfolioId or namePrefix, with productToken): slots, naming, budget shares, bid ladder, placements, '
     + "hourly plans by rank role and the product's terms — nothing is saved. view compile is a DRY RUN of building one "
     + "product's playbook in one market: every campaign, ad group, keyword, negative (the product's and the isolation "
-    + 'ones), product ad, budget and start bid (the ladder clamped to the strategy\'s bid band) it would create, the shared '
-    + 'terms another campaign already buys (skipped or accepted, as the template says), the monthly caps, the portfolio, '
-    + "and the blueprint gate's blockers — nothing is created, saved or sent. Nothing reads a playbook yet: no engine, rule "
-    + 'or Claude change follows it until an approved apply compiles it. Budgets, bids and targets are ad-spend money: '
-    + 'hidden from a person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
+    + 'ones), product ad, budget and start bid (the ladder clamped to the strategy\'s bid band) it would create, the '
+    + "terms the product's own other campaigns already buy (skipped or accepted, as the template says), the terms other "
+    + "products' campaigns also buy (kept and only listed: different products may share a keyword), the monthly caps, "
+    + "the portfolio, and the blueprint gate's blockers — nothing is created, saved or sent. Nothing reads a playbook yet: "
+    + 'no engine, rule or Claude change follows it until an approved apply compiles it. Budgets, bids and targets are '
+    + 'ad-spend money: hidden from a person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {
     const out = await readPlaybook(args as PlaybookReadArgs)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }

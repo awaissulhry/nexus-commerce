@@ -280,6 +280,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'enable-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
   // AA-W2-13 — an archive names the budgets that stop for good (it needs money).
   'archive-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
+  // W3-3 — stock-aware bids: the read shows units and days (no money); the two changes list bids (they need money).
+  'ad-stock-risk': (ids) => ({ campaignIds: [ids.campaignId], show: 'all' }),
+  'lower-ad-bids-for-stock': (ids) => ({ campaignIds: [ids.campaignId] }),
+  'restore-ad-bids-after-stock': (ids) => ({ campaignIds: [ids.campaignId] }),
   'set-campaign-target-acos': (ids) => ({ campaignIds: [ids.campaignId], targetAcosPct: 25 }),
   // Ads autonomy W1-2 — the strategy for the seeded campaign's market: its targets, bids and caps are money.
   'ads-strategy': (ids) => ({ market: 'IT', campaignId: ids.campaignId }),
@@ -299,6 +303,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'create-ebay-campaign': () => ({ market: 'EBAY_IT', name: 'Money launch' }),
   // A11 — a new campaign's plan names a budget and bids (it needs money: refused for a person without it).
   'create-ad-campaign': (ids) => ({ market: 'IT', name: 'Money launch', skus: [ids.productId], dailyBudgetCents: 1500, defaultBidCents: 50, keywords: [{ text: 'jacket', matchType: 'EXACT' }] }),
+  // Ads autonomy W4-1 — a run report states each market's spend and sales (it needs money: refused for a person
+  // without it); the run history shows them under the money keys only.
+  'report-ads-run': () => ({ op: 'finish', markets: [{ market: 'IT', lines: ['Money test run'] }] }),
+  'ads-manager-runs': () => ({ days: 7 }),
   'ads-overview': () => ({}),
   'ad-campaigns': () => ({}),
   'ad-targets': (ids) => ({ campaignId: ids.campaignId, status: 'all' }),
@@ -366,11 +374,16 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'turn-down-automation': (ids) => ({ automation: 'A1', rowId: ids.automationRuleId, level: 'OFF' }),
   // R11 — needs financials.adspend.view: a person without money is refused outright.
   'decide-automation-suggestions': (ids) => ({ kind: 'amazon-ads', decisions: [{ suggestionId: ids.automationRuleId, decide: 'dismiss' }] }),
+  // Ads autonomy W3-1 — need financials.adspend.view: a person without money is refused outright.
+  'apply-ad-recommendations': (ids) => ({ recommendationIds: [`budget:${ids.campaignId}`], why: 'money test apply' }),
+  'mute-ad-recommendations': (ids) => ({ recommendationIds: [`budget:${ids.campaignId}`], op: 'unmute', why: 'money test unmute' }),
   // R12 — stop the restock rule; resume the one switched off.
   'stop-automation': (ids) => ({ area: 'rules', domain: 'replenishment', ruleIds: [ids.replenishmentRuleId], reason: 'money test stop' }),
   'resume-automation': (ids) => ({ area: 'rules', domain: 'replenishment', ruleIds: [ids.pausedRuleId] }),
   // R13 — needs financials.adspend.view: a person without money is refused outright.
   'set-ad-guardrail': () => ({ kind: 'protected-term', op: 'set', term: 'money test term' }),
+  // Ads autonomy W3-2 — needs financials.adspend.view (the bids and budgets it names): a person without money is refused outright.
+  'cancel-queued-ad-write': (ids) => ({ changeSetId: ids.approvalId, why: 'money test cancel' }),
   // R14 — needs financials.adspend.view: a person without money is refused outright.
   'tune-ad-engine': () => ({ setting: 'breaker', breaker: { maxActionsPerHour: 100 } }),
   // R15 — a run now, previewed (no model call): no money in it.
@@ -968,8 +981,9 @@ describe('MCP.2 — coverage', () => {
 })
 
 describe('MCP.2 — money a person may not see never comes back', () => {
-  // C7 — confirm-change is Claude's door only and returns its own arguments: no stored money to filter.
-  const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change')
+  // C7 — confirm-change is Claude's door only and returns its own arguments: no stored money to filter. W4-1 —
+  // report-ads-run is Claude's door only too; it needs the ad-spend money permission (ads-manager.tools.vitest.test.ts).
+  const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change' && tool.name !== 'report-ads-run')
 
   it('the money-cleared run really reads the seeded money (positive control)', async () => {
     const analytics = await run(cleared(A), 'product-analytics', ARGS['product-analytics'](seeded[A]))

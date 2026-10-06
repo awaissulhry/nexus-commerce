@@ -23,6 +23,11 @@
  * converted, at a starting bid inside the destination's bid band and Claude's limit. Protected terms and protected
  * products' ASINs are never negated by rule.
  *
+ * ADS AUTONOMY W3-1 — all three take an optional `source` (ads-change-source.ts): the engine recommendation the change
+ * carries out (apply-ad-recommendations sets it). It must name this change's own recommendation; it is kept in the
+ * preview and on the ads audit row, and once the write ran the recommendation is settled (not offered again until the
+ * data shows what the change did).
+ *
  * The protected-terms check is the write gate's own matcher (ads-negation-policy.ts, 5a): EXACT / PREFIX / CONTAINS, and
  * a phrase negative that a protected term contains; it is not re-invented. Amazon's text limits are checked there too.
  */
@@ -45,6 +50,7 @@ import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
 import { DEFAULT_MIN_ORDERS, DEFAULT_WINDOW_DAYS, meetsHarvest } from '../../advertising/ads-harvest.service.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { sameProductHome } from '../../advertising/ads-winner-lock.js'
+import { notOfferedRefusal, recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource } from './ads-change-source.js'
 import type { AgentTool, FieldPermission, ToolResult, ToolUndo } from '../tool-types.js'
 
 const BID_FLOOR_CENTS = 5
@@ -197,6 +203,10 @@ async function negativePreview(args: Record<string, unknown>, opts: { rule?: { a
   if (scope !== 'AD_GROUP') return { ok: false, error: CAMPAIGN_SCOPE_REFUSAL }
   const externalAdGroupId = typeof args.externalAdGroupId === 'string' ? args.externalAdGroupId.trim() : ''
   if (!externalAdGroupId) return { ok: false, error: 'Name the ad group to add the negative to: externalAdGroupId (ad-search-terms gives it).' }
+  // W3-1 — a source names this negative's own recommendation (its ad group and term), or the request is refused.
+  const changeSource = sourceOf(args.source)
+  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.negative(externalAdGroupId, keywordText))
+  if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
   const adGroup = await adGroupInCampaign(externalAdGroupId, campaign.id)
   if (!adGroup) return { ok: false, error: `ad group ${externalAdGroupId} not found in ${campaign.name}` }
 
@@ -256,6 +266,7 @@ async function negativePreview(args: Record<string, unknown>, opts: { rule?: { a
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...(rule ?? {}),
+      ...sourcePreview(changeSource),
       effect: `Stops "${keywordText}" from matching in ${campaign.name} › ${adGroup.name}; spend on it (last ${metrics.windowDays}d) was ${amountLabel(metrics.costCents, currency)} with ${metrics.orders} orders.`,
     },
   }
@@ -341,7 +352,10 @@ function negativeRuleRefusal(preview: unknown, limits: Record<string, unknown>):
   return null
 }
 
-/** C2 — undo of a negative: undo-ad-change retires what the request created (its change set is the approval). */
+/**
+ * C2 — undo of a negative: undo-ad-change retires what the request created (its change set is the approval). W3-1 — named
+ * by its recorded change, so only THIS negative is retired (in a change plan every step shares the plan's set).
+ */
 export const CREATE_NEGATIVE_UNDO: ToolUndo = {
   async current(change) {
     const listed = ((change.after as { negatives?: Array<{ targetId?: unknown }> } | null)?.negatives ?? []).map((n) => String(n.targetId ?? ''))
@@ -355,8 +369,9 @@ export const CREATE_NEGATIVE_UNDO: ToolUndo = {
   request(change) {
     const changeSetId = (change.before as { changeSetId?: unknown } | null)?.changeSetId
     if (typeof changeSetId !== 'string' || !changeSetId) return { refusal: 'This change does not name the request that made it.' }
-    return { tool: 'undo-ad-change', args: { changeSetId, why: 'undo of a negative keyword' } }
+    return { tool: 'undo-ad-change', args: { changeSetId, ...(change.id ? { changeId: change.id } : {}), why: 'undo of a negative keyword' } }
   },
+  undone: unsettleChange,
 }
 
 const createNegativeKeyword: AgentTool = {
@@ -370,6 +385,7 @@ const createNegativeKeyword: AgentTool = {
     externalAdGroupId: z.string().optional().describe('Amazon ad group id to add it to (externalAdGroupId in ad-search-terms); required'),
     marketplace: z.string().optional().describe('ignored: the campaign\'s own market is used'),
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
+    source: sourceArg,
   }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
   restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
@@ -417,13 +433,15 @@ const createNegativeKeyword: AgentTool = {
       matchType: p.matchType,
       profileId,
       userId: run.actor,
-      // AA-W2-7 — the ads audit names the request, and whether a person or the business's rule decided it.
-      evidence: { metric: 'claudeRequest', note: run.reason },
+      // AA-W2-7 — the ads audit names the request, and whether a person or the business's rule decided it. W3-1 — and
+      // the recommendation it carries out.
+      evidence: withSource({ metric: 'claudeRequest', note: run.reason }, sourceOf(args.source)),
       manual: run.manual, // 4A — a person approved it: his own click
     })
     if (made.refusal) return notRun(`Not run: Amazon's write gate refused it — ${made.refusal.reason}. Nothing changed.`)
     if (made.outcome === 'failed') return notRun(`Not run: the negative keyword did not reach Amazon — ${made.error}. Nothing changed.`)
     if (made.outcome === 'already_existed' || !made.adTargetId) return notRun(`Not run: "${p.term}" is already negated in that ad group. Nothing changed.`)
+    await settleSources([sourceOf(args.source)], run.changeSetId)
     return {
       ok: true,
       data: {
@@ -435,7 +453,7 @@ const createNegativeKeyword: AgentTool = {
         note: made.mode === 'live' ? 'Created at Amazon.' : 'Sandbox: recorded in Nexus only; nothing reached Amazon.',
       },
       change: {
-        before: { changeSetId: run.changeSetId, negatives: [] },
+        before: { changeSetId: run.changeSetId, negatives: [], ...sourcesRecord([sourceOf(args.source)]) },
         after: { negatives: [{ targetId: made.adTargetId }] },
       },
     }
@@ -490,9 +508,22 @@ async function graduationPreview(args: Record<string, unknown>, opts: { rule?: {
   if (!query || !sourceExternalCampaignId) {
     return { ok: false, error: 'query and sourceExternalCampaignId are required' }
   }
+  // W3-1 — a source names this term's own graduation recommendation (the ad group it converted in), or it is refused.
+  const changeSource = sourceOf(args.source)
+  const sourceGroupId = typeof args.sourceExternalAdGroupId === 'string' ? args.sourceExternalAdGroupId.trim() : ''
+  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.graduate(sourceGroupId, query))
+  if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
   const destNamed = typeof args.destExternalCampaignId === 'string' && args.destExternalCampaignId.trim() !== ''
   const source = await campaignByExternalId(sourceExternalCampaignId)
   if (!source) return { ok: false, error: `campaign ${sourceExternalCampaignId} not found` }
+  // W3-1 — a graduation that carries a recommendation names the ad group it converted in, of that campaign, and the
+  // feed offers that recommendation now: the source cannot ride on a term it did not judge.
+  if (changeSource) {
+    if (!sourceGroupId) return { ok: false, error: 'Not queued: a graduation that carries a recommendation names the ad group the term converted in (sourceExternalAdGroupId).' }
+    if (!(await adGroupInCampaign(sourceGroupId, source.id))) return { ok: false, error: `Not queued: the source's ad group ${sourceGroupId} is not in campaign ${source.name}, where the term converted.` }
+    const notOffered = await notOfferedRefusal(changeSource)
+    if (notOffered) return { ok: false, error: `Not queued: ${notOffered}.` }
+  }
   const destExternalCampaignId = String(args.destExternalCampaignId ?? sourceExternalCampaignId)
   let campaign = destNamed ? await campaignByExternalId(destExternalCampaignId) : source
   if (!campaign) return { ok: false, error: `campaign ${destExternalCampaignId} not found` }
@@ -572,6 +603,7 @@ async function graduationPreview(args: Record<string, unknown>, opts: { rule?: {
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...(rule ?? {}),
+      ...sourcePreview(changeSource),
       effect: `Creates an EXACT keyword "${query}" at ${amountLabel(suggestedBidCents, currency)} in ${campaign.name} › ${group.name}; the term produced ${metrics.orders} orders on ${amountLabel(metrics.costCents, currency)} spend (last ${metrics.windowDays}d). The source ad group is not negated here.`,
     },
   }
@@ -663,6 +695,7 @@ export const GRADUATE_UNDO: ToolUndo = {
     if (typeof targetId !== 'string' || !targetId) return { refusal: 'This change does not name the keyword it created.' }
     return { tool: 'set-target-bid', args: { targetId, proposedBidCents: BID_FLOOR_CENTS, why: 'undo of a graduation: the keyword stays (Nexus never pauses or archives), its bid goes to the floor' } }
   },
+  undone: unsettleChange,
 }
 
 const graduateKeyword: AgentTool = {
@@ -676,6 +709,7 @@ const graduateKeyword: AgentTool = {
     destExternalAdGroupId: z.string().optional().describe('ad group to add it to (default: the harvest destination the account resolves)'),
     bidCents: z.coerce.number().positive().optional().describe('starting bid in minor units of the campaign\'s currency (default: its cost per click)'),
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
+    source: sourceArg,
   }),
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
   restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
@@ -719,11 +753,12 @@ const graduateKeyword: AgentTool = {
       matchType: 'EXACT',
       bidEur: p.suggestedBidCents / 100,
       userId: run.actor,
-      evidence: { metric: 'claudeRequest', note: run.reason },
+      evidence: withSource({ metric: 'claudeRequest', note: run.reason }, sourceOf(args.source)),
       manual: run.manual, // 4A
       confirmOwnLimits: run.confirmOwnLimits, // 4A
     })
     if (made.existed) return notRun(`Not run: an EXACT keyword for "${p.query}" appeared in that ad group meanwhile. Nothing changed.`)
+    await settleSources([sourceOf(args.source)], run.changeSetId)
     const live = p.reach.reach === 'live'
     const reachedAmazon = live && made.externalTargetId != null && !made.denied && !made.pushError
     return {
@@ -741,7 +776,7 @@ const graduateKeyword: AgentTool = {
             : `Created in Nexus only: ${made.denied ? `Amazon's write gate refused it (${made.denied.reason})` : made.pushError ? `Amazon's answer was an error (${made.pushError})` : 'Amazon returned no id for it'}.`,
       },
       change: {
-        before: { changeSetId: run.changeSetId, keyword: null },
+        before: { changeSetId: run.changeSetId, keyword: null, ...sourcesRecord([sourceOf(args.source)]) },
         after: { targetId: made.id, bidCents: p.suggestedBidCents },
       },
     }
@@ -767,6 +802,10 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
   if (proposedBidCents < BID_FLOOR_CENTS) {
     return { ok: false, error: `proposed bid ${proposedBidCents}c is below the ${BID_FLOOR_CENTS}c floor` }
   }
+  // W3-1 — a source names this target's own bid recommendation, or the request is refused.
+  const changeSource = sourceOf(args.source)
+  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.bid(targetId))
+  if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
   const target = await prisma.adTarget.findUnique({
     where: { id: targetId },
     select: {
@@ -858,6 +897,7 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...(rule ?? {}),
+      ...sourcePreview(changeSource),
       effect: `Moves "${target.expressionValue}" from ${amountLabel(currentBidCents, currency)} to ${amountLabel(effectiveBidCents, currency)} in ${campaign.name}.`,
     },
   }
@@ -884,6 +924,7 @@ export const SET_TARGET_BID_UNDO: ToolUndo = {
     }
     return { tool: 'set-target-bid', args: { targetId: before.targetId, proposedBidCents: before.bidCents, why: 'undo of an earlier bid change' } }
   },
+  undone: unsettleChange,
 }
 
 const setTargetBid: AgentTool = {
@@ -893,6 +934,7 @@ const setTargetBid: AgentTool = {
     targetId: z.string().min(1).describe('Nexus ad target id (targetId in ad-targets)'),
     proposedBidCents: z.coerce.number().describe('new bid in minor units (cents) of the campaign\'s currency, at least 5'),
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
+    source: sourceArg,
   }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
   restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
@@ -930,6 +972,7 @@ const setTargetBid: AgentTool = {
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const newBidCents = p.effectiveBidCents ?? p.proposedBidCents
+    const changeSource = sourceOf(args.source)
     const out = await updateAdTargetWithSync({
       adTargetId: p.target.id,
       patch: { bidCents: newBidCents },
@@ -938,8 +981,10 @@ const setTargetBid: AgentTool = {
       changeSetId: run.changeSetId,
       manual: run.manual, // 4A
       confirmOwnLimits: run.confirmOwnLimits, // 4A
+      ...(changeSource ? { evidence: withSource(null, changeSource) } : {}), // W3-1
     })
     if (!out.ok) return notRun(`Not run: the bid write was refused (${out.error ?? 'unknown'}). Nothing changed.`)
+    await settleSources([changeSource], run.changeSetId)
     const written = await prisma.adTarget.findFirst({ where: { id: p.target.id }, select: { bidCents: true } })
     const after = written?.bidCents ?? newBidCents
     return {
@@ -959,7 +1004,7 @@ const setTargetBid: AgentTool = {
         ? {}
         : {
             change: {
-              before: { targetId: p.target.id, bidCents: p.currentBidCents, changeSetId: run.changeSetId },
+              before: { targetId: p.target.id, bidCents: p.currentBidCents, changeSetId: run.changeSetId, ...sourcesRecord([changeSource]) },
               after: { targetId: p.target.id, bidCents: after },
             },
           }),

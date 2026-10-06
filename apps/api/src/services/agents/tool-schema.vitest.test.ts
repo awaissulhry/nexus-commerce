@@ -100,8 +100,8 @@ describe('MCP.3 — every tool describes its own arguments', () => {
     expect(described('apply-content')).toEqual(['productId', 'title', 'bulletPoints', 'description', 'keywords'])
     expect(described('create-negative-keyword')).toContain('keywordText')
     expect(described('graduate-keyword')).toContain('sourceExternalCampaignId')
-    // A4 — and why, which the approver reads and the ads audit keeps.
-    expect(described('set-target-bid')).toEqual(['targetId', 'proposedBidCents', 'why'])
+    // A4 — and why, which the approver reads and the ads audit keeps. W3-1 — and the recommendation it carries out.
+    expect(described('set-target-bid')).toEqual(['targetId', 'proposedBidCents', 'why', 'source'])
   })
 
   it('A2 / A13 — the ad reads describe their filters and paging (overview and campaigns also a channel), and none takes a required argument', () => {
@@ -120,7 +120,9 @@ describe('MCP.3 — every tool describes its own arguments', () => {
   it('the model is offered every tool the person may use, each with its generated schema', () => {
     const offered = anthropicTools(OWNER)
     // C7 — confirm-change is offered on Claude's door only (surfaces ['mcp']): the in-app assistant has the Approvals page.
-    expect(offered.map((t) => t.name).sort()).toEqual(listTools().filter((t) => t.name !== 'confirm-change').map((t) => t.name).sort())
+    // W4-1 — so is report-ads-run: the scheduled Claude run's own report.
+    const mcpOnly = new Set(['confirm-change', 'report-ads-run'])
+    expect(offered.map((t) => t.name).sort()).toEqual(listTools().filter((t) => !mcpOnly.has(t.name)).map((t) => t.name).sort())
     for (const tool of offered) expect(tool.input_schema).toBe(inputJsonSchema(listTools().find((t) => t.name === tool.name)!))
   })
 })

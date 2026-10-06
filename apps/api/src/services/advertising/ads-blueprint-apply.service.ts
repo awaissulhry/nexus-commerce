@@ -24,8 +24,10 @@ import type { LaunchVerification } from './ads-launch-verify.service.js'
 
 /**
  * Every positive keyword we currently target in this marketplace — the surface
- * a replication could collide with. Archived campaigns are excluded: they are
- * not in any auction.
+ * a replication could collide with — with the ASINs its ad group advertises, so
+ * the gate can tell the target product's own campaigns from other products'
+ * (rule 3: only the same product's clash blocks). Archived campaigns and
+ * archived product ads are excluded: they are not in any auction.
  */
 export async function loadExistingTargets(marketplace: string): Promise<ExistingTarget[]> {
   const rows = await prisma.adTarget.findMany({
@@ -35,11 +37,20 @@ export async function loadExistingTargets(marketplace: string): Promise<Existing
       orphanedAt: null,
       adGroup: { campaign: { marketplace, status: { not: 'ARCHIVED' } } },
     },
-    select: { expressionValue: true, adGroup: { select: { campaign: { select: { id: true, name: true } } } } },
+    select: {
+      expressionValue: true,
+      adGroup: { select: {
+        campaign: { select: { id: true, name: true } },
+        productAds: { where: { status: { not: 'ARCHIVED' }, asin: { not: null } }, select: { asin: true } },
+      } },
+    },
   })
   return rows
     .filter((r) => r.adGroup?.campaign)
-    .map((r) => ({ expression: r.expressionValue, campaignName: r.adGroup!.campaign!.name, campaignId: r.adGroup!.campaign!.id }))
+    .map((r) => ({
+      expression: r.expressionValue, campaignName: r.adGroup!.campaign!.name, campaignId: r.adGroup!.campaign!.id,
+      asins: r.adGroup!.productAds.map((a) => a.asin!),
+    }))
 }
 
 /**

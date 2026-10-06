@@ -411,6 +411,12 @@ export async function rollbackByActionLogId(args: {
   return noteNothingToUndo(out, r.reason)
 }
 
+/** ADS AUTONOMY W3-1 — the ids of every write a change set holds (read only), for a step to tell its own writes apart. */
+export async function writesOfChangeSet(changeSetId: string): Promise<string[]> {
+  const rows = await prisma.advertisingActionLog.findMany({ where: { executionId: changeSetId }, select: { id: true } })
+  return rows.map((r) => r.id)
+}
+
 export async function rollbackByChangeSetId(args: {
   changeSetId: string
   actor: AdsActor
@@ -419,10 +425,16 @@ export async function rollbackByChangeSetId(args: {
   manual?: boolean
   /** AA-W2-9 — the change set the reversal's own writes carry (see reverseOne); never the set it reverses. */
   stampChangeSetId?: string | null
+  /**
+   * ADS AUTONOMY W3-1 — only these writes of the set (one step of a change plan: its writes share the plan's set).
+   * Absent: every write of the set, as before.
+   */
+  actionLogIds?: string[] | null
 }): Promise<RollbackOutcome> {
   const logs = await prisma.advertisingActionLog.findMany({
     where: {
       executionId: args.changeSetId,
+      ...(args.actionLogIds ? { id: { in: args.actionLogIds } } : {}),
       rolledBackAt: null,
       // Same 24h horizon as the rule path: past that, Amazon's own state has
       // usually moved on and restoring a day-old snapshot does more harm than good.

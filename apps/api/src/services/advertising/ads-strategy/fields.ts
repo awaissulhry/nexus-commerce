@@ -58,8 +58,10 @@ export const CLAUDE_ACTION_TOOLS = {
   budget: ['set-campaign-budget'],
   target: ['set-campaign-target-acos'],
   suggestion: ['decide-automation-suggestions'],
-  stop: ['suppress-campaign'],
-  restore: ['restore-campaign'],
+  // ADS AUTONOMY W3-3 — a stock brake is a temporary stop with low bids too (an ad group short of stock), and giving
+  // its bids back a restore.
+  stop: ['suppress-campaign', 'lower-ad-bids-for-stock'],
+  restore: ['restore-campaign', 'restore-ad-bids-after-stock'],
   create: ['create-ad-campaign'],
   rule: ['save-ad-rule'],
   undo: ['undo-ad-change'],
@@ -316,6 +318,7 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
       'the budget engine: a market over its monthly cap drops to this stop bid until the 1st (low bids, never a pause)',
       'the retail guard: a campaign whose products cannot be sold drops to this stop bid',
       "Claude's suppress-campaign: the bid it lowers a campaign to (the 2-cent floor when none is set)",
+      "Claude's lower-ad-bids-for-stock: the bid it lowers an ad group out of stock to, and the floor a step down never passes (the 2-cent floor when none is set)",
     ],
   },
   { key: 'claudeAutonomy', label: 'What Claude may do alone', columns: ['claudeAutonomy'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lowerLevel', raise: 'autonomy', money: false, readBy: [CLAUDE_DOOR] },

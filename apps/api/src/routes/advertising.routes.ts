@@ -692,129 +692,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── Apex A.2a: per-campaign bid guardrails (max-change-% + writes/day) ──
-  // Stored in dynamicBidding JSON alongside cpcCeiling. maxBidChangePct clamps
-  // how far any single bid move (manual/bulk/automation) can swing from the
-  // current bid. maxWritesPerDay is stored and read back but NOT enforced: the
-  // write gate disabled that daily cap on purpose (ads-write-gate.ts, WC).
-  // Pass 0/null to clear a cap.
+  // ADX G2 absolute bid bounds and BUD.2 budget bounds + baseline ride the same body. W3-2 — the logic lives in
+  // campaign-guardrail.service.ts, shared with Claude's set-ad-guardrail; answers unchanged (route-parity test).
   fastify.patch('/advertising/campaigns/:id/guardrails', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as {
-      maxBidChangePct?: number | null; maxWritesPerDay?: number | null
-      // ADX G2 — absolute bid bounds. Real COLUMNS, not dynamicBidding JSON, because
-      // ads-write-gate.ts reads them on every write and a column cannot be missed by a
-      // future engine that forgets to look in the blob. Complementary to the two above:
-      // maxBidChangePct clamps how far one move may swing, cpcCeiling caps against the
-      // target's HISTORICAL CPC (useless for a keyword with no history), and these cap
-      // the absolute value. Extended onto this route rather than a new one — a second
-      // Fastify registration of the same path is a boot crash.
-      minBidCents?: number | null; maxBidCents?: number | null
-      // BUD.2 — the budget twin: bounds enforced at the gate, and the baseline every RELATIVE
-      // budget rule anchors to (which is what makes a −20% rule idempotent instead of a ratchet).
-      minBudgetCents?: number | null; maxBudgetCents?: number | null; budgetBaselineCents?: number | null
-    }
-    const c = await prisma.campaign.findUnique({
-      where: { id },
-      select: {
-        dynamicBidding: true, name: true, minBidCents: true, maxBidCents: true,
-        minBudgetCents: true, maxBudgetCents: true, budgetBaselineCents: true,
-      },
-    })
-    if (!c) { reply.status(404); return { error: 'campaign not found' } }
-    const db = (c.dynamicBidding ?? {}) as Record<string, unknown>
-
-    // BUD.2 — budget bounds + baseline. Validated here, enforced at the gate. €1 is Amazon's own
-    // hard floor, so anything below 100 cents is a value the gate could never honour.
-    let budgetData: Record<string, number | null> = {}
-    if (b.minBudgetCents !== undefined || b.maxBudgetCents !== undefined || b.budgetBaselineCents !== undefined) {
-      const norm = (v: number | null | undefined, cur: number | null): number | null =>
-        v === undefined ? cur : v == null ? null : Math.round(Number(v))
-      const minB = norm(b.minBudgetCents, c.minBudgetCents)
-      const maxB = norm(b.maxBudgetCents, c.maxBudgetCents)
-      const base = norm(b.budgetBaselineCents, c.budgetBaselineCents)
-      for (const [name, v] of [['minBudgetCents', minB], ['maxBudgetCents', maxB], ['budgetBaselineCents', base]] as const) {
-        if (v != null && (!Number.isFinite(v) || v < 100)) {
-          reply.status(400)
-          return { ok: false, error: `${name} must be ≥ 100 cents (Amazon's own floor is €1) or null` }
-        }
-      }
-      if (minB != null && maxB != null && minB > maxB) {
-        reply.status(400)
-        return { ok: false, error: `minBudgetCents (€${(minB / 100).toFixed(2)}) is above maxBudgetCents (€${(maxB / 100).toFixed(2)})` }
-      }
-      budgetData = { minBudgetCents: minB, maxBudgetCents: maxB, budgetBaselineCents: base }
-    }
-
-    let boundsData: Record<string, number | null> = {}
-    if (b.minBidCents !== undefined || b.maxBidCents !== undefined) {
-      const { validateGuardrails } = await import('../services/advertising/ads-guardrails.js')
-      const v = validateGuardrails(
-        { minBidCents: b.minBidCents, maxBidCents: b.maxBidCents },
-        [{ name: c.name, minBidCents: c.minBidCents, maxBidCents: c.maxBidCents }],
-      )
-      if (!v.ok) { reply.status(400); return { ok: false, error: v.error } }
-      boundsData = v.data
-    }
-    if (b.maxBidChangePct !== undefined) {
-      const pct = b.maxBidChangePct == null ? 0 : Math.max(0, Math.min(500, Number(b.maxBidChangePct)))
-      if (pct > 0) db.maxBidChangePct = pct
-      else delete db.maxBidChangePct
-    }
-    if (b.maxWritesPerDay !== undefined) {
-      const n = b.maxWritesPerDay == null ? 0 : Math.max(0, Math.min(10000, Math.round(Number(b.maxWritesPerDay))))
-      if (n > 0) db.maxWritesPerDay = n
-      else delete db.maxWritesPerDay
-    }
-    // CM-6 — only the guardrail keys this request names go into `dynamicBidding` (set, or removed when cleared), merged
-    // into the row as it is now: writing `db` whole put back a placement (or an automation / CPC ceiling edit) saved
-    // since the read above.
-    const guardKeys = (['maxBidChangePct', 'maxWritesPerDay'] as const).filter((k) => b[k] !== undefined)
-    const { patchDynamicBidding } = await import('../services/advertising/dynamic-bidding-write.js')
-    await patchDynamicBidding(id, {
-      set: Object.fromEntries(guardKeys.filter((k) => k in db).map((k) => [k, db[k]])),
-      remove: guardKeys.filter((k) => !(k in db)),
-    }, { ...boundsData, ...budgetData })
-
-    // BUD.2 — its own audit row, cents-keyed (this is OUR governance columns, distinct from
-    // AD_BUDGET_UPDATE whose payloads are euros).
-    if (Object.keys(budgetData).length > 0) {
-      // CM-30 — these columns are the one store the Budget Manager reads too; its old per-month copies are dropped.
-      const { forgetOldMonthLimits } = await import('../services/advertising/ads-budget-manager.service.js')
-      await forgetOldMonthLimits(id).catch(() => 0)
-      await prisma.advertisingActionLog.create({
-        data: {
-          userId: actorFromHeaders(request.headers as Record<string, unknown>),
-          actionType: 'set_campaign_budget_bounds', entityType: 'CAMPAIGN', entityId: id,
-          payloadBefore: { minBudgetCents: c.minBudgetCents, maxBudgetCents: c.maxBudgetCents, budgetBaselineCents: c.budgetBaselineCents },
-          payloadAfter: budgetData, amazonResponseStatus: 'SUCCESS',
-          evidence: { metric: 'operator_guardrail', note: 'Budget bounds + baseline; bounds enforced at the write gate, the baseline anchors relative budget rules. Never pushed to Amazon.' },
-        },
-      }).catch(() => { /* an audit row must never fail the write it describes */ })
-    }
-
-    // ADX A2 — record WHY, using the evidence column that phase added. Bid bounds are
-    // local governance: nothing is pushed to Amazon, which has no concept of them.
-    if (Object.keys(boundsData).length > 0) {
-      await prisma.advertisingActionLog.create({
-        data: {
-          userId: actorFromHeaders(request.headers as Record<string, unknown>),
-          actionType: 'set_campaign_bid_bounds', entityType: 'CAMPAIGN', entityId: id,
-          payloadBefore: { minBidCents: c.minBidCents, maxBidCents: c.maxBidCents },
-          payloadAfter: boundsData, amazonResponseStatus: 'SUCCESS',
-          evidence: { metric: 'operator_guardrail', note: 'Absolute bid bounds; enforced at the write gate, never pushed to Amazon.' },
-        },
-      }).catch(() => { /* an audit row must never fail the write it describes */ })
-    }
-    return {
-      ok: true,
-      maxBidChangePct: db.maxBidChangePct ?? null,
-      maxWritesPerDay: db.maxWritesPerDay ?? null,
-      minBidCents: boundsData.minBidCents !== undefined ? boundsData.minBidCents : c.minBidCents,
-      maxBidCents: boundsData.maxBidCents !== undefined ? boundsData.maxBidCents : c.maxBidCents,
-      minBudgetCents: budgetData.minBudgetCents !== undefined ? budgetData.minBudgetCents : c.minBudgetCents,
-      maxBudgetCents: budgetData.maxBudgetCents !== undefined ? budgetData.maxBudgetCents : c.maxBudgetCents,
-      budgetBaselineCents: budgetData.budgetBaselineCents !== undefined ? budgetData.budgetBaselineCents : c.budgetBaselineCents,
-    }
+    const { setCampaignGuardrails } = await import('../services/advertising/campaign-guardrail.service.js')
+    return answer(reply, await setCampaignGuardrails(id, request.body as never, actorFromHeaders(request.headers as Record<string, unknown>)))
   })
 
   /**
@@ -10743,73 +10626,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     })
   })
 
-  /**
-   * ACR.1.2b — set or clear a campaign's per-dimension authority pins.
-   *
-   * A separate route from /guardrails on purpose: that one validates a min/max PAIR through
-   * `validateGuardrails`, and pins have no such interdependence. Folding them in would put
-   * two unrelated validation shapes behind one body.
-   *
-   * The write is audited with the same evidence column the bounds use — a pin an operator
-   * finds later with no author is indistinguishable from a bug, which is why the columns
-   * carry pinnedBy/pinnedAt at all.
-   */
+  // ACR.1.2b — set or clear a campaign's per-dimension authority pins. W3-2 — the logic lives in
+  // campaign-guardrail.service.ts, shared with Claude's set-ad-guardrail; answers unchanged (route-parity test).
   fastify.patch('/advertising/campaigns/:id/pins', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const b = request.body as {
-      pinPlacement?: boolean; pinBids?: boolean; pinBudget?: boolean; pinNote?: string | null
-    }
-    const c = await prisma.campaign.findUnique({
-      where: { id },
-      select: { id: true, name: true, pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true },
-    })
-    if (!c) { reply.status(404); return { error: 'campaign not found' } }
-
-    const data: Record<string, unknown> = {}
-    if (b.pinPlacement !== undefined) data.pinPlacement = !!b.pinPlacement
-    if (b.pinBids !== undefined) data.pinBids = !!b.pinBids
-    if (b.pinBudget !== undefined) data.pinBudget = !!b.pinBudget
-    if (b.pinNote !== undefined) data.pinNote = b.pinNote?.trim() ? b.pinNote.trim().slice(0, 280) : null
-    if (Object.keys(data).length === 0) { reply.status(400); return { ok: false, error: 'no pin fields supplied' } }
-
-    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
-    const nextPlacement = (data.pinPlacement as boolean | undefined) ?? c.pinPlacement
-    const nextBids = (data.pinBids as boolean | undefined) ?? c.pinBids
-    const nextBudget = (data.pinBudget as boolean | undefined) ?? c.pinBudget
-    const anyPinned = nextPlacement || nextBids || nextBudget
-    // Stamp the author only while something is actually pinned. Keeping a pinnedBy on a
-    // fully-cleared campaign would leave the grid showing an owner for a pin that is gone.
-    data.pinnedBy = anyPinned ? actor : null
-    data.pinnedAt = anyPinned ? new Date() : null
-    if (!anyPinned) data.pinNote = null
-
-    await prisma.campaign.update({ where: { id }, data: data as never })
-
-    await prisma.advertisingActionLog.create({
-      data: {
-        userId: actor,
-        actionType: 'set_campaign_authority_pins', entityType: 'CAMPAIGN', entityId: id,
-        payloadBefore: { pinPlacement: c.pinPlacement, pinBids: c.pinBids, pinBudget: c.pinBudget, pinNote: c.pinNote },
-        payloadAfter: { pinPlacement: nextPlacement, pinBids: nextBids, pinBudget: nextBudget, pinNote: (data.pinNote as string | null) ?? null },
-        amazonResponseStatus: 'SUCCESS',
-        evidence: {
-          metric: 'operator_authority_pin',
-          note: 'Per-dimension hands-off pin; enforced at the write gate, never pushed to Amazon.',
-        },
-      },
-    }).catch(() => { /* an audit row must never fail the write it describes */ })
-
-    logger.warn('[ADS-AUTHORITY-PIN]', {
-      campaignId: id, name: c.name, actor,
-      pinPlacement: nextPlacement, pinBids: nextBids, pinBudget: nextBudget,
-    })
-
-    return {
-      ok: true, campaignId: id,
-      pinPlacement: nextPlacement, pinBids: nextBids, pinBudget: nextBudget,
-      pinNote: (data.pinNote as string | null) ?? null,
-      pinnedBy: data.pinnedBy as string | null, pinnedAt: data.pinnedAt as Date | null,
-    }
+    const { setCampaignPins } = await import('../services/advertising/campaign-guardrail.service.js')
+    return answer(reply, await setCampaignPins(id, request.body as never, actorFromHeaders(request.headers as Record<string, unknown>)))
   })
 
   /**

@@ -5,7 +5,9 @@
  *
  *   new       an AutomationRule { domain advertising, trigger SCHEDULE, dryRun, autonomyLevel PROPOSE, one run a day }
  *             and its link, in one transaction, born `enabled` as asked (off until the playbook starts).
- *   re-sync   changes the action and the name only. The rule's on/off and its autonomy level stay as they are: the
+ *             Its market scope (`scopeMarketplace`, the linked campaigns' own marketplace code) is set, so the rule
+ *             runs only on that market's context — never filed under another market, never "the whole account".
+ *   re-sync   changes the action, the name and the market scope only. The rule's on/off and its autonomy level stay as they are: the
  *             Owner's switches. Unchanged → nothing written. A link whose rule is gone gets a new one.
  *   start     (`start: true`, only from a playbook START) switches the rule on — never over a switch-off made after the
  *             last start. Detected two ways, either one enough: the rule carries the time of the start that last
@@ -56,6 +58,8 @@ export async function ensureCompiledRule(args: {
   enabled: boolean
   /** True only from a playbook START: switch the rule on (never over a switch-off made since the last start). */
   start?: boolean
+  /** The marketplace code of the product's linked campaigns in this market (Campaign.marketplace): the rule runs there only. */
+  scopeMarketplace?: string | null
   compiledVersion: number; actor: string
 }): Promise<CompiledRuleResult> {
   return prisma.$transaction(async (tx) => {
@@ -63,7 +67,7 @@ export async function ensureCompiledRule(args: {
       where: { playbookId_kind_key: workspaceKey({ playbookId: args.playbookId, kind: args.kind, key: args.key }) },
       select: { id: true, refId: true, compiledVersion: true },
     })
-    const rule = link ? await tx.automationRule.findUnique({ where: { id: link.refId }, select: { id: true, name: true, enabled: true, actions: true } }) : null
+    const rule = link ? await tx.automationRule.findUnique({ where: { id: link.refId }, select: { id: true, name: true, enabled: true, actions: true, scopeMarketplace: true } }) : null
     const now = new Date()
     if (link && rule) {
       const lastStart = startOf(rule.actions)
@@ -80,8 +84,10 @@ export async function ensureCompiledRule(args: {
       }
       const startedAt = enabled && !rule.enabled ? now.toISOString() : lastStart
       const actions = [{ ...args.action, ...(startedAt ? { startedAt } : {}) }]
-      const changed = rule.name !== args.name || enabled !== rule.enabled || canonical(compiledPart(rule.actions)) !== canonical([args.action])
-      if (changed) await tx.automationRule.update({ where: { id: rule.id }, data: { name: args.name, enabled, actions: actions as never } })
+      const scope = args.scopeMarketplace === undefined ? rule.scopeMarketplace : args.scopeMarketplace
+      const changed = rule.name !== args.name || enabled !== rule.enabled || scope !== rule.scopeMarketplace
+        || canonical(compiledPart(rule.actions)) !== canonical([args.action])
+      if (changed) await tx.automationRule.update({ where: { id: rule.id }, data: { name: args.name, enabled, actions: actions as never, scopeMarketplace: scope } })
       if (enabled && !rule.enabled) {
         await tx.advertisingActionLog.create({
           data: {
@@ -101,6 +107,7 @@ export async function ensureCompiledRule(args: {
         name: args.name, description: 'Compiled by the ads playbook', domain: 'advertising', trigger: 'SCHEDULE',
         conditions: [] as never, actions: [{ ...args.action, ...(enabled ? { startedAt: now.toISOString() } : {}) }] as never,
         enabled, dryRun: true, autonomyLevel: 'PROPOSE', maxExecutionsPerDay: 1, createdBy: args.actor,
+        scopeMarketplace: args.scopeMarketplace ?? null,
       },
       select: { id: true },
     })

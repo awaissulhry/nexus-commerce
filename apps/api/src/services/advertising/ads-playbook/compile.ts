@@ -1,8 +1,9 @@
 /**
  * ADS PLAYBOOK PB-4 — compile one product's playbook into the campaigns a build would create (design report 9 §5.2),
  * pure. The output is the blueprint engine's own plan shape (ads-core/ads-blueprint-apply.ts PlannedCampaign), so the
- * SAME gate decides whether it may run (`evaluatePlan`: shared terms already run elsewhere, name collisions, a market
- * that cannot receive writes, empty campaigns, Amazon's negative limits) and, later, the same executor creates it.
+ * SAME gate decides whether it may run (`evaluatePlan`: terms the product's own campaigns already run, name collisions,
+ * a market that cannot receive writes, empty campaigns, Amazon's negative limits) and, later, the same executor creates
+ * it.
  *
  *   names        the template's pattern: {product} = the product's name token, {market}, {parts} = the slot's words
  *   budgets      the product's daily budget × the slot's weight ÷ the weights of the slots built, at least the least
@@ -10,8 +11,9 @@
  *   bids         the product's base bid × the slot's ladder factor, clamped to the strategy's bid band at this product
  *                (and never under Amazon's 2¢); Auto groups at the slot bid × their factor
  *   terms        each slot's feeds: brand, category (or only the ones exact at start), competitor keywords at the slot's
- *                match type; competitor ASINs as product targets. Category and competitor keywords are gated (another
- *                product's live campaigns may already buy them; the template says skip or accept)
+ *                match type; competitor ASINs as product targets. Category and competitor keywords are gated (the
+ *                product's own other campaigns may already buy them: the template says skip or accept; another
+ *                product's campaigns buying them is allowed and only listed — Owner rule 3)
  *   negatives    the product's own negatives in every keyword and Auto slot, and the build-time isolation: the planned
  *                exact keywords negated (exact) in the Auto, Broad and Phrase slots; brand terms negated (phrase) in the
  *                category and competitor slots; phrase keywords negated (phrase) in Broad and Auto — as the template says

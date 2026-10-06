@@ -107,7 +107,7 @@ export async function recordExecutedChange(input: RecordInput): Promise<string |
       logger.warn('[agent-change] could not plan the undo of a change', { tool: tool.name, error: String(error) })
     }
   }
-  return prisma.$transaction(async (tx) => {
+  const recorded = await prisma.$transaction(async (tx) => {
     const row = await tx.agentChange.create({
       data: {
         approvalId: input.approvalId,
@@ -125,11 +125,12 @@ export async function recordExecutedChange(input: RecordInput): Promise<string |
     })
     // This approval may have been the undo of an earlier change: that one is undone now. A step of an undo plan undoes
     // only its own target; the plan's other targets wait for their own steps.
+    const pick = { id: true, toolName: true, before: true, after: true } as const
     const undone = input.planStepId
       ? input.undoesChangeId
-        ? await tx.agentChange.findMany({ where: { id: input.undoesChangeId, undoneAt: null }, select: { id: true } })
+        ? await tx.agentChange.findMany({ where: { id: input.undoesChangeId, undoneAt: null }, select: pick })
         : []
-      : await tx.agentChange.findMany({ where: { undoneByApprovalId: input.approvalId, undoneAt: null }, select: { id: true } })
+      : await tx.agentChange.findMany({ where: { undoneByApprovalId: input.approvalId, undoneAt: null }, select: pick })
     if (undone.length) {
       await tx.agentChange.updateMany({ where: { id: { in: undone.map((u) => u.id) }, undoneAt: null }, data: { undoneAt: new Date() } })
     }
@@ -143,8 +144,27 @@ export async function recordExecutedChange(input: RecordInput): Promise<string |
     for (const earlier of undone) {
       await publishEvent(tx, 'agent.change.undone', { changeId: earlier.id, undoneByApprovalId: input.approvalId })
     }
-    return row.id
+    return { id: row.id, undone }
   })
+  // W3-1 — once committed: what each undone change left outside its own rows is tidied by its tool.
+  await afterUndone(recorded.undone)
+  return recorded.id
+}
+
+/**
+ * ADS AUTONOMY W3-1 — the changes just marked undone: each tool's `undo.undone` tidies what its change left outside its
+ * own rows (the recommendations it settled). After the record is committed; a failure is logged, never thrown.
+ */
+export async function afterUndone(changes: ReadonlyArray<{ id: string; toolName: string; before: unknown; after: unknown }>): Promise<void> {
+  for (const change of changes) {
+    const hook = getTool(change.toolName)?.undo?.undone
+    if (!hook) continue
+    try {
+      await hook({ before: change.before, after: change.after, id: change.id })
+    } catch (error) {
+      logger.warn('[agent-change] could not tidy after an undone change', { changeId: change.id, tool: change.toolName, error: String(error) })
+    }
+  }
 }
 
 /** `recordExecutedChange`, never failing the decision that already ran. The change's id, or null when not recorded. */
@@ -224,7 +244,8 @@ export async function undoRequestFor(ref: { changeId?: string; approvalId?: stri
   if (row.before == null || row.after == null) {
     return { error: `This change kept no record of the value it replaced, so it cannot be undone here. ${NOTHING}` }
   }
-  const change: ToolChange = { before: row.before, after: row.after }
+  // W3-1 — the record's id rides along, so an undo can put back only what THIS change did (a step of a plan).
+  const change: ToolChange = { before: row.before, after: row.after, id: row.id }
 
   // Compare-and-swap, first half: undo only while what is stored is still what the change wrote. The second half is
   // the gate's own staleness check when the undo runs (the inverse preview's starting values must not move).
