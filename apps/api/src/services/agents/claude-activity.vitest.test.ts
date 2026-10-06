@@ -14,6 +14,8 @@
  *   business   another business's calls are never in the list
  *   events     agent.change.executed and agent.change.undone are written with the change, agent.autorun.paused with
  *              a Pause — ids, names and counts only
+ *   watch      AA-W2-4 — a watched request carries its recorded verdict; the first page reports the watched changes the
+ *              rule would have run and those it would not, against what a person did, in total and per kind
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -325,5 +327,60 @@ describe('C8 — Undo on the activity page: the person’s click is the approval
     expect(await inside(() => undoChangeByClick({ ...reader(EVERYTHING), workspace: business(B) }, executed.id), B)).toMatchObject({ ok: false, status: 404 })
     expect(await inside(() => undoChangeByClick(reader(EVERYTHING), 'no-such-change'))).toMatchObject({ ok: false, status: 404 })
     expect(await pending()).toBe(start)
+  })
+})
+
+describe('AA-W2-4 — the watch report: would-have-run against what a person decided', { timeout: TIMEOUT }, () => {
+  it('nothing watched, and no kind at watch: no report', async () => {
+    expect(await activity()).not.toHaveProperty('watch')
+  })
+
+  it('each watched request carries its verdict; the first page reports in total and per kind, plan steps one by one', async () => {
+    await inside(() => db().agentAutonomy.deleteMany({})) // the events test above left the business paused
+    __stepUpTest.reset()
+    expect(await inside(() => setClaudeRule({ userId: ids.person, label: 'Ada Audit', canManage: true }, 'set-price', { level: 'watch', code: generateSync({ secret }) }))).toMatchObject({ ok: true })
+    const base = await priceOf(ids.product)
+    const approved = await call('set-price', { productId: ids.product, price: base + 1 })
+    const rejected = await call('set-price', { productId: ids.product, price: base + 2 })
+    const far = await call('set-price', { productId: ids.product, price: base * 2 })
+    expect(await inside(() => decideFleetApproval({ id: approved.approvalId, decision: 'approve', actor: reader(EVERYTHING) }))).toMatchObject({ ok: true })
+    expect(await inside(() => decideFleetApproval({ id: rejected.approvalId, decision: 'reject', reason: 'not yet', actor: reader(EVERYTHING) }))).toMatchObject({ ok: true })
+    // A plan: its first step inside the limits, its second far outside; nobody decided it in time.
+    const plan = await call('submit-change-plan', { title: 'Watched plan', steps: [
+      { tool: 'set-price', args: { productId: ids.product, price: base + 3 } },
+      { tool: 'set-price', args: { productId: ids.stale, price: 300 } },
+    ] })
+    expect(plan.trust.watch).toMatchObject({ wouldRun: false, steps: { total: 2, wouldRun: 1 } })
+    await inside(() => db().agentApproval.update({ where: { id: plan.approvalId }, data: { status: 'expired' } }))
+
+    const page = await activity()
+    const rows = byRun(page.rows)
+    expect(rows.get(await runIdOf(far.approvalId))?.approval?.ruleVerdict).toMatchObject({ level: 'watch', wouldRun: false, check: 'limits' })
+    expect(rows.get(await runIdOf(approved.approvalId))?.approval?.ruleVerdict).toMatchObject({ wouldRun: true, check: null })
+    expect(rows.get(story.queued.runId)?.approval).not.toHaveProperty('ruleVerdict')
+    expect(page.watch).toMatchObject({
+      wouldRun: { changes: 3, approved: 1, rejected: 1, expired: 1, replaced: 0, waiting: 0 },
+      outside: { changes: 2, approved: 0, rejected: 0, expired: 1, replaced: 0, waiting: 1, byCheck: { limits: 2 } },
+      truncated: false,
+    })
+    expect(page.watch!.outside.topReasons).toHaveLength(2)
+    expect(page.watch!.outside.topReasons.every((reason) => reason.count === 1 && /more than the 10 % allowed without a person$/.test(reason.why))).toBe(true)
+    expect(page.watch!.kinds).toEqual([{
+      tool: 'set-price', title: getTool('set-price')!.title, level: 'watch', watchingSince: expect.any(String),
+      wouldRun: page.watch!.wouldRun, outside: page.watch!.outside,
+    }])
+    expect(new Date(page.watch!.to).getTime() - new Date(page.watch!.from).getTime()).toBe(7 * 24 * 3600_000)
+  })
+
+  it('only on the first page; a tool filter keeps its kind; the kind stays listed once it leaves watch, at its level today', async () => {
+    const first = await activity({ limit: 1 })
+    expect(first.watch).toBeDefined()
+    expect(await activity({ limit: 1, cursor: first.nextCursor })).not.toHaveProperty('watch')
+    expect(await activity({ tool: 'apply-content' })).not.toHaveProperty('watch')
+    expect((await activity({ tool: 'set-price' })).watch?.kinds.map((kind) => kind.tool)).toEqual(['set-price'])
+    expect(await inside(() => setClaudeRule({ userId: ids.person, label: 'Ada Audit', canManage: true }, 'set-price', { level: 'ask' }))).toMatchObject({ ok: true })
+    expect((await activity()).watch?.kinds).toEqual([expect.objectContaining({ tool: 'set-price', level: 'ask', watchingSince: expect.any(String) })])
+    // Another business: nothing of this one's.
+    expect(await activity({}, reader(EVERYTHING), B)).not.toHaveProperty('watch')
   })
 })

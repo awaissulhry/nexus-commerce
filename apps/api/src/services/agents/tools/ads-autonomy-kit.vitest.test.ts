@@ -15,8 +15,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import { AUTO_CAP_WINDOW_MS, limitsTighten } from '../claude-trust.service.js'
-import { indexStrategy, resolveProducts, valuesOf, type Catalog, type StrategyRow } from '../../advertising/ads-strategy/resolve.js'
-import { projectMonth, scopeLimitsOf, strategyVersionOf, type MonthProjection } from '../../advertising/ads-strategy/autonomy.js'
+import { indexStrategy, resolveMarket, resolveProducts, valuesOf, type Catalog, type StrategyRow } from '../../advertising/ads-strategy/resolve.js'
+import { dailyLimitsOf, monthSpendOf, projectMonth, scopeLimitsOf, strategyVersionOf, type MonthProjection } from '../../advertising/ads-strategy/autonomy.js'
 import {
   LIMIT_FACTS_MONEY,
   LIMIT_FACTS_VERSION,
@@ -25,6 +25,7 @@ import {
   STEP_POINT_LIMITS,
   adKitLimits,
   aloneRefusal,
+  asWatched,
   bidOutsideWhy,
   commonRefusal,
   dailyRefusal,
@@ -53,7 +54,7 @@ const row = (level: 'MARKET' | 'CATEGORY' | 'PRODUCT', scopeId: string, label: s
   goal: null, goalNote: null, targetKind: null, targetPct: null, monthlySpendCapCents: null, minBidCents: null, maxBidCents: null, maxChangePct: null,
   maxActionsPerRun: null, protect: null, harvestMinOrders: null, harvestMinClicks: null, harvestMaxAcosPct: null, harvestWindowDays: null,
   negateMinClicks: null, negateMinSpendCents: null, negateMaxOrders: null, negateWindowDays: null, stopMethod: null, stopBidCents: null,
-  claudeAutonomy: null, reviewEveryDays: null, ...values,
+  claudeAutonomy: null, reviewEveryDays: null, claudeMaxChangesPerDay: null, claudeMaxRaisesPerDay: null, claudeMaxBudgetIncreasePerDayCents: null, ...values,
 })
 const catalog: Catalog = {
   products: new Map([['p1', { id: 'p1', sku: 'TEST-P1', parentId: null }], ['p2', { id: 'p2', sku: 'TEST-P2', parentId: null }]]),
@@ -66,8 +67,8 @@ const source = (label: string, level: 'product' | 'category' | 'market' = 'marke
 // ── Facts builder for the checks ──────────────────────────────────────────────────────────────────
 
 const market = (over: Partial<MarketFacts> = {}): MarketFacts => ({
-  strategy: { version: 'abc123def456' }, currency: 'EUR', maxActionsPerRun: null, maxWritesPerDay: null, maxRaisesPerDay: null,
-  maxBudgetIncreasePerDayCents: null, sources: {}, ...over,
+  strategy: { version: 'abc123def456' }, currency: 'EUR', maxActionsPerRun: null, maxChangesPerDay: 100, maxRaisesPerDay: 10,
+  maxBudgetIncreasePerDayCents: 10_000, sources: {}, ...over,
 })
 const scope = (over: Partial<ScopeFacts> = {}): ScopeFacts => ({ market: 'IT', label: 'ad group "Test group" (IT)', limits: {}, sources: {}, ...over })
 
@@ -83,17 +84,17 @@ function facts(over: Partial<LimitFacts> & { thisOver?: Partial<LimitFacts['this
     labels: { 'target:t1': 'target "test jacket"' },
     this: {
       markets: ['IT'], items: 1, writes: 1, raises: 0, cuts: 1, largestRaisePct: 0, largestCutPct: 10, largestRaisePoints: 0, largestCutPoints: 0,
-      highestNewBidCents: 45, budgetIncreaseCents: 0, byMarket: { IT: { items: 1, writes: 1, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } },
+      highestNewBidCents: 45, budgetIncreaseCents: 0, byMarket: { IT: { changes: 1, writes: 1, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } },
       entities: ['target:t1'], rowsOutsideStrategy: 0, firstOutside: null, ...thisOver,
     },
-    today: { IT: { writes: 0, raises: 0, budgetIncreaseCents: 0 } },
+    today: { IT: { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 } },
     perEntityToday: { maxChangesByRule: 0, entity: null },
     unplaced: [], engineOwned: [], protectedHit: [],
     ...rest,
   }
 }
 const BASE = adKitLimits({ maxItems: 50 }, STEP_PCT_LIMITS).parse({}) as Record<string, unknown>
-const RAISE = { raises: 1, cuts: 0, largestRaisePct: 10, largestCutPct: 0, byMarket: { IT: { items: 1, writes: 1, raises: 1, budgetIncreaseCents: 0, addedDailyCents: 0 } } }
+const RAISE = { raises: 1, cuts: 0, largestRaisePct: 10, largestCutPct: 0, byMarket: { IT: { changes: 1, writes: 1, raises: 1, budgetIncreaseCents: 0, addedDailyCents: 0 } } }
 
 describe('measure — what one change does to spend', () => {
   it('a bid or a budget: up is a raise, down a cut, in percent of the value before; a new keyword is a raise', () => {
@@ -173,14 +174,14 @@ describe('today\'s ledger — one run per stored preview', () => {
 
   it('sums writes, raises and budget increases per market, and counts an entity once per run', () => {
     const ledger = ledgerOf([
-      stored({ IT: { writes: 3, raises: 1, budgetIncreaseCents: 0 } }, ['target:t1', 'target:t1', 'target:t2']),
-      stored({ IT: { writes: 2, raises: 0, budgetIncreaseCents: 500 }, DE: { writes: 1, raises: 1, budgetIncreaseCents: 0 } }, ['target:t1', 'campaign:c1']),
+      stored({ IT: { changes: 3, writes: 3, raises: 1, budgetIncreaseCents: 0 } }, ['target:t1', 'target:t1', 'target:t2']),
+      stored({ IT: { changes: 2, writes: 2, raises: 0, budgetIncreaseCents: 500 }, DE: { changes: 1, writes: 1, raises: 1, budgetIncreaseCents: 0 } }, ['target:t1', 'campaign:c1']),
       { price: 10 }, // another tool's preview: no facts
       null,
-      stored({ IT: { writes: 99, raises: 99, budgetIncreaseCents: 99 } }, ['target:t1'], 2), // another version: not read
+      stored({ IT: { changes: 99, writes: 99, raises: 99, budgetIncreaseCents: 99 } }, ['target:t1'], 2), // another version: not read
     ])
     expect(ledger.runs).toBe(2)
-    expect(ledger.byMarket).toEqual({ IT: { writes: 5, raises: 1, budgetIncreaseCents: 500 }, DE: { writes: 1, raises: 1, budgetIncreaseCents: 0 } })
+    expect(ledger.byMarket).toEqual({ IT: { changes: 5, writes: 5, raises: 1, budgetIncreaseCents: 500 }, DE: { changes: 1, writes: 1, raises: 1, budgetIncreaseCents: 0 } })
     expect(ledger.byEntity).toEqual({ 'target:t1': 2, 'target:t2': 1, 'campaign:c1': 1 })
   })
 
@@ -205,10 +206,12 @@ describe('the common checks', () => {
   })
 
   it('C2 — the strategy holds this kind below auto at a scope it lands on: refused, naming the row; auto or silent: inside', () => {
-    const held = (level: 'off' | 'ask' | 'confirm' | 'auto') => facts({ scopes: { 'IT|adGroup:g1': scope({ limits: { claudeLevel: level }, sources: { claudeLevel: source('TEST-P1 (IT)', 'product', 4, 'TEST-P1') } }) } })
+    const held = (level: 'off' | 'ask' | 'confirm' | 'watch' | 'auto') => facts({ scopes: { 'IT|adGroup:g1': scope({ limits: { claudeLevel: level }, sources: { claudeLevel: source('TEST-P1 (IT)', 'product', 4, 'TEST-P1') } }) } })
     expect(aloneRefusal(held('ask'))).toBe('the ads strategy lets Claude only ask for bid changes at ad group "Test group" (IT) (ads strategy: TEST-P1 (IT), product, v4, from TEST-P1); a person decides')
     expect(aloneRefusal(held('off'))).toMatch(/^the ads strategy turns bid changes off for Claude at/)
     expect(aloneRefusal(held('confirm'))).toMatch(/go no further than confirm in Claude for bid changes/)
+    // AA-W2-4 — watch never runs alone: the verdict is recorded and a person decides.
+    expect(aloneRefusal(held('watch'))).toMatch(/^the ads strategy only watches bid changes at ad group "Test group" \(IT\)/)
     expect(aloneRefusal(held('auto'))).toBeNull()
     expect(aloneRefusal(facts())).toBeNull() // the strategy says nothing about bids here: it does not narrow
     expect(aloneRefusal({ ...held('ask'), action: null })).toBeNull() // a kind the strategy has no level for
@@ -232,26 +235,37 @@ describe('the common checks', () => {
     expect(engineOwnedRefusal(f, { ...BASE, allowEngineOwned: true })).toBeNull()
   })
 
-  it('C5 — writes a day: today + this within the strategy\'s number; none set: no daily number for writes', () => {
+  it('C5 — changes a day: today + this within the strategy\'s number; not set is 0, so no change runs by rule', () => {
     const src = source('Test market (IT)', 'market', 5)
-    const f = (today: number, max: number | null) => facts({ today: { IT: { writes: today, raises: 0, budgetIncreaseCents: 0 } }, markets: { IT: market({ maxWritesPerDay: max, sources: { maxWritesPerDay: src } }) } })
+    const f = (today: number, max: number | null) => facts({ today: { IT: { changes: today, writes: today, raises: 0, budgetIncreaseCents: 0 } }, markets: { IT: market({ maxChangesPerDay: max, sources: { maxChangesPerDay: src } }) } })
     expect(dailyRefusal(f(9, 10))).toBeNull()
-    expect(dailyRefusal(f(10, 10))).toBe('IT: 10 writes ran by rule in the last 24 hours and this adds 1, more than the 10 a day the ads strategy allows (ads strategy: Test market (IT), market, v5); a person decides')
-    expect(dailyRefusal(f(500, null))).toBeNull()
+    expect(dailyRefusal(f(10, 10))).toBe('IT: 10 changes ran by rule in the last 24 hours and this adds 1 change, more than the 10 a day the ads strategy allows (most changes Claude may run by rule a day, ads strategy: Test market (IT), market, v5); a person decides')
+    expect(dailyRefusal(f(0, null))).toBe('IT: the ads strategy sets no daily limit for this (most changes Claude may run by rule a day) — empty is 0, so no change runs by rule here; a person decides')
+    expect(dailyRefusal(f(0, 0))).toMatch(/^IT: 0 changes ran by rule in the last 24 hours and this adds 1 change, more than the 0 a day/)
   })
 
-  it('C5 — raises and budget increases a day: not set in the strategy means a person decides each one', () => {
-    expect(dailyRefusal(facts({ thisOver: RAISE }))).toBe('IT: the ads strategy sets no number of raises Claude may run by rule in a day, so a raise waits for a person')
-    const raises = (today: number, max: number) => facts({ thisOver: RAISE, today: { IT: { writes: 0, raises: today, budgetIncreaseCents: 0 } }, markets: { IT: market({ maxRaisesPerDay: max }) } })
+  it('C5 — raises and budget increases a day: not set is 0, so a person decides each one; a lowering adds to neither', () => {
+    expect(dailyRefusal(facts({ thisOver: RAISE, markets: { IT: market({ maxRaisesPerDay: null }) } })))
+      .toBe('IT: the ads strategy sets no daily limit for this (most raises Claude may run by rule a day) — empty is 0, so no raise runs by rule here; a person decides')
+    const raises = (today: number, max: number) => facts({ thisOver: RAISE, today: { IT: { changes: 0, writes: 0, raises: today, budgetIncreaseCents: 0 } }, markets: { IT: market({ maxRaisesPerDay: max }) } })
     expect(dailyRefusal(raises(4, 5))).toBeNull()
-    expect(dailyRefusal(raises(5, 5))).toMatch(/^IT: 5 raises ran by rule in the last 24 hours and this adds 1, more than the 5 a day/)
-    const budget = { ...RAISE, budgetIncreaseCents: 500, byMarket: { IT: { items: 1, writes: 1, raises: 1, budgetIncreaseCents: 500, addedDailyCents: 500 } } }
-    expect(dailyRefusal(facts({ thisOver: budget, markets: { IT: market({ maxRaisesPerDay: 10 }) } }))).toBe('IT: the ads strategy sets no daily budget increase Claude may run by rule, so a budget increase waits for a person')
-    const increase = (today: number) => facts({ thisOver: budget, today: { IT: { writes: 0, raises: 0, budgetIncreaseCents: today } }, markets: { IT: market({ maxRaisesPerDay: 10, maxBudgetIncreasePerDayCents: 1000 }) } })
+    expect(dailyRefusal(raises(5, 5))).toMatch(/^IT: 5 raises ran by rule in the last 24 hours and this adds 1 raise, more than the 5 a day/)
+    const budget = { ...RAISE, budgetIncreaseCents: 500, byMarket: { IT: { changes: 1, writes: 1, raises: 1, budgetIncreaseCents: 500, addedDailyCents: 500 } } }
+    expect(dailyRefusal(facts({ thisOver: budget, markets: { IT: market({ maxBudgetIncreasePerDayCents: null }) } })))
+      .toBe('IT: the ads strategy sets no daily limit for this (most budget increase Claude may run by rule a day) — empty is 0, so no budget increase runs by rule here; a person decides')
+    const increase = (today: number) => facts({ thisOver: budget, today: { IT: { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: today } }, markets: { IT: market({ maxBudgetIncreasePerDayCents: 1000 }) } })
     expect(dailyRefusal(increase(500))).toBeNull()
-    expect(dailyRefusal(increase(501))).toBe('IT: budgets rose EUR 5.01 by rule in the last 24 hours and this adds EUR 5.00, more than the EUR 10.00 a day the ads strategy allows; a person decides')
-    // A lowering adds no raise and no budget: no daily number holds it.
-    expect(dailyRefusal(facts())).toBeNull()
+    expect(dailyRefusal(increase(501))).toBe('IT: EUR 5.01 of daily budget ran by rule in the last 24 hours and this adds EUR 5.00 of daily budget, more than the EUR 10.00 a day the ads strategy allows (most budget increase Claude may run by rule a day); a person decides')
+    // A lowering adds no raise and no budget: those two do not hold it, even when not set.
+    expect(dailyRefusal(facts({ markets: { IT: market({ maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null }) } }))).toBeNull()
+  })
+
+  it('C5 — the strategy\'s daily limits are read from the market row, each with its row (dailyLimitsOf)', () => {
+    const { index } = indexStrategy('IT', [row('MARKET', '*', 'Test market (IT)', { claudeMaxChangesPerDay: 40, claudeMaxBudgetIncreasePerDayCents: 0 }, 3)])
+    const resolved = resolveMarket(index)
+    const daily = dailyLimitsOf({ values: valuesOf(resolved), resolved })
+    expect(daily).toMatchObject({ maxChangesPerDay: 40, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: 0 })
+    expect(daily.sources).toEqual({ maxChangesPerDay: expect.objectContaining({ level: 'market', label: 'Test market (IT)', version: 3 }), maxBudgetIncreasePerDayCents: expect.objectContaining({ level: 'market' }) })
   })
 
   it('C6 — the same entity changed by rule as often as the tool allows in 24 hours (no back and forth)', () => {
@@ -263,9 +277,9 @@ describe('the common checks', () => {
   })
 
   it('C7 — items: the tool\'s limit and the market\'s most actions per run, the smaller binding', () => {
-    const many = { items: 51, byMarket: { IT: { items: 51, writes: 51, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } } }
+    const many = { items: 51, byMarket: { IT: { changes: 51, writes: 51, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } } }
     expect(itemsRefusal(facts({ thisOver: many }), BASE)).toBe('it changes 51 items, more than the 50 this tool\'s limits allow in one request run by rule; a person decides')
-    const run = facts({ thisOver: { ...many, items: 30, byMarket: { IT: { ...many.byMarket.IT, items: 30 } } }, markets: { IT: market({ maxActionsPerRun: 25, sources: { maxActionsPerRun: source('Test market (IT)', 'market', 2) } }) } })
+    const run = facts({ thisOver: { ...many, items: 30, byMarket: { IT: { ...many.byMarket.IT, changes: 30 } } }, markets: { IT: market({ maxActionsPerRun: 25, sources: { maxActionsPerRun: source('Test market (IT)', 'market', 2) } }) } })
     expect(itemsRefusal(run, BASE)).toBe('it changes 30 items in IT, more than the 25 actions per run the ads strategy allows (ads strategy: Test market (IT), market, v2); a person decides')
     expect(itemsRefusal(facts(), BASE)).toBeNull()
     expect(itemsRefusal(facts(), { ...BASE, maxItems: 0 })).toMatch(/more than the 0 this tool's limits allow/)
@@ -282,10 +296,9 @@ describe('the common checks', () => {
   it('month — a change that can add spend keeps the month under its cap, saying how the upper bound is made', () => {
     const p = projection({ afterCents: 100_100, capCents: 100_000, capFrom: 'ads strategy: Test market (IT), market, v2' })
     expect(monthRefusal(facts({ monthProjection: { IT: p } }))).toBe(
-      'IT: this month could reach EUR 1001.00 with this change — EUR 100.00 spent through 2026-10-04, every enabled campaign\'s daily budget (EUR 30.00 together) for the 27 days not reported yet, +EUR 5.00 a day from today for 26 days — above the monthly cap EUR 1000.00 (ads strategy: Test market (IT), market, v2); a person decides',
+      'IT: this month could reach EUR 1001.00 with this change — EUR 100.00 spent through 2026-10-04, EUR 10.00 a day (the average of the 7 reported days to 2026-10-04) + 25 % for the 27 days not reported yet, +EUR 5.00 a day from today for 26 days — above the monthly cap EUR 1000.00 (ads strategy: Test market (IT), market, v2); a person decides',
     )
     expect(monthRefusal(facts({ monthProjection: { IT: { ...p, afterCents: 100_000 } } }))).toBeNull()
-    expect(monthRefusal(facts({ monthProjection: { IT: { ...p, capCents: null, capFrom: null } } }))).toBeNull()
     expect(monthRefusal(facts())).toBeNull()
   })
 
@@ -305,29 +318,42 @@ const STEP_POINT_LIMITS_DEFAULTS = adKitLimits({ maxItems: 50 }, STEP_POINT_LIMI
 
 function projection(over: Partial<MonthProjection> = {}): MonthProjection {
   return {
-    month: '2026-10', currency: 'EUR', spentCents: 10_000, spendThrough: '2026-10-04', uncoveredDays: 27, daysLeft: 26, budgetsCents: 3_000,
-    projectedCents: 91_000, addedDailyCents: 500, afterCents: 104_000, capCents: null, capFrom: null, ...over,
+    month: '2026-10', currency: 'EUR', spentCents: 10_000, spendThrough: '2026-10-04', uncoveredDays: 27, daysLeft: 26, ratePerDayCents: 1_000,
+    rateThrough: '2026-10-04', marginPct: 25, projectedCents: 10_000 + 33_750, addedDailyCents: 500, afterCents: 10_000 + 33_750 + 13_000,
+    capCents: 100_000, capFrom: 'the budget plan 2026-10', ...over,
   }
 }
 
-describe('the month — an upper bound from budgets (spend data is a day or two late)', () => {
+describe('the month — a run-rate forecast against the cap (spend data is a day or two late)', () => {
   const today = new Date('2026-10-06T15:00:00Z')
+  const cap = { cents: 100_000, from: 'the budget plan 2026-10' }
 
-  it('report spend + every enabled budget for each day not reported yet, + what the change adds from today', () => {
-    const p = projectMonth({ today, spentCents: 10_000, spendThrough: '2026-10-04', budgetsCents: 3_000, addedDailyCents: 500, cap: { cents: 100_000, from: 'the budget plan 2026-10' }, currency: 'EUR' })
-    expect(p).toEqual(projection({ capCents: 100_000, capFrom: 'the budget plan 2026-10' }))
+  it('report spend + the last 7 reported days\' average + 25 % for each day not reported yet, + every cent the change adds from today', () => {
+    // 10.00 a day × 27 days × 1.25 = 337.50; +5.00 a day × 26 days = 130.00.
+    expect(projectMonth({ today, spentCents: 10_000, spendThrough: '2026-10-04', ratePerDayCents: 1_000, rateThrough: '2026-10-04', addedDailyCents: 500, cap, currency: 'EUR' })).toEqual(projection())
   })
 
-  it('no report this month yet: every day of the month counts a full budget; last month\'s report covers nothing of this one', () => {
-    expect(projectMonth({ today, spentCents: 0, spendThrough: null, budgetsCents: 1_000, addedDailyCents: 0, cap: null, currency: 'GBP' }))
-      .toMatchObject({ uncoveredDays: 31, projectedCents: 31_000, afterCents: 31_000, spendThrough: null, currency: 'GBP', capCents: null })
-    expect(projectMonth({ today, spentCents: 0, spendThrough: '2026-09-30', budgetsCents: 1_000, addedDailyCents: 0, cap: null, currency: 'EUR' }))
-      .toMatchObject({ uncoveredDays: 31, spendThrough: null })
+  it('no report this month yet: every day of the month at the rate of the last reported days, whichever month', () => {
+    expect(projectMonth({ today, spentCents: 0, spendThrough: null, ratePerDayCents: 2_000, rateThrough: '2026-09-30', addedDailyCents: 0, cap, currency: 'GBP' }))
+      .toMatchObject({ uncoveredDays: 31, projectedCents: 77_500, afterCents: 77_500, spendThrough: null, currency: 'GBP' })
+    expect(projectMonth({ today, spentCents: 0, spendThrough: '2026-09-30', ratePerDayCents: 0, rateThrough: null, addedDailyCents: 1_000, cap, currency: 'EUR' }))
+      .toMatchObject({ uncoveredDays: 31, spendThrough: null, projectedCents: 0, afterCents: 26_000 })
   })
 
-  it('a budget that stops spending lowers the bound, never below what is spent', () => {
-    expect(projectMonth({ today, spentCents: 10_000, spendThrough: '2026-10-04', budgetsCents: 3_000, addedDailyCents: -1_000, cap: null, currency: 'EUR' }).afterCents).toBe(91_000 - 26_000)
-    expect(projectMonth({ today, spentCents: 10_000, spendThrough: '2026-10-04', budgetsCents: 0, addedDailyCents: -1_000, cap: null, currency: 'EUR' }).afterCents).toBe(10_000)
+  it('a budget that stops spending lowers the forecast, never below what is spent', () => {
+    expect(projectMonth({ today, spentCents: 10_000, spendThrough: '2026-10-04', ratePerDayCents: 1_000, rateThrough: '2026-10-04', addedDailyCents: -1_000, cap, currency: 'EUR' }).afterCents).toBe(10_000 + 33_750 - 26_000)
+    expect(projectMonth({ today, spentCents: 10_000, spendThrough: '2026-10-04', ratePerDayCents: 0, rateThrough: '2026-10-04', addedDailyCents: -1_000, cap, currency: 'EUR' }).afterCents).toBe(10_000)
+  })
+
+  it('the spend so far and the rate from the reported days: this month\'s, never today\'s; the rate over the 7 days to the last report', () => {
+    const days = [
+      { day: '2026-09-20', cents: 99_900 }, // before the rate's 7 days
+      { day: '2026-09-30', cents: 1_000 }, { day: '2026-10-01', cents: 1_000 }, { day: '2026-10-02', cents: 2_000 }, { day: '2026-10-04', cents: 3_000 },
+      { day: '2026-10-06', cents: 5_000 }, // today: never in a report
+    ]
+    expect(monthSpendOf(days, today)).toEqual({ spentCents: 6_000, spendThrough: '2026-10-04', ratePerDayCents: 1_000, rateThrough: '2026-10-04' })
+    expect(monthSpendOf(days, new Date('2026-10-01T09:00:00Z'))).toEqual({ spentCents: 0, spendThrough: null, ratePerDayCents: Math.round(1_000 / 7), rateThrough: '2026-09-30' })
+    expect(monthSpendOf([], today)).toEqual({ spentCents: 0, spendThrough: null, ratePerDayCents: 0, rateThrough: null })
   })
 })
 
@@ -352,7 +378,7 @@ describe('the shared limits', () => {
   })
 
   it('every money number of the facts sits under a key the money filter strips', () => {
-    for (const key of ['minBidCents', 'maxBidCents', 'stopBidCents', 'negateMinSpendCents', 'highestNewBidCents', 'budgetIncreaseCents', 'addedDailyCents', 'maxBudgetIncreasePerDayCents', 'spentCents', 'budgetsCents', 'projectedCents', 'afterCents', 'capCents']) {
+    for (const key of ['minBidCents', 'maxBidCents', 'stopBidCents', 'negateMinSpendCents', 'highestNewBidCents', 'budgetIncreaseCents', 'addedDailyCents', 'maxBudgetIncreasePerDayCents', 'spentCents', 'ratePerDayCents', 'projectedCents', 'afterCents', 'capCents']) {
       expect(LIMIT_FACTS_MONEY[key], key).toBe('financials.adspend.view')
     }
   })
@@ -362,19 +388,19 @@ describe('the note — each limit, its value, this change\'s value and its sourc
   it('says the strategy where it lands, today against the daily limits, the items, the engines, the month', () => {
     const f = facts({
       thisOver: { ...RAISE, highestNewBidCents: 55, largestRaisePct: 10 },
-      markets: { IT: market({ maxActionsPerRun: 40, sources: { maxActionsPerRun: source('Test market (IT)', 'market', 2) } }) },
+      markets: { IT: market({ maxActionsPerRun: 40, maxChangesPerDay: null, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: { maxActionsPerRun: source('Test market (IT)', 'market', 2) } }) },
       scopes: {
         'IT|adGroup:g1': scope({ limits: { maxBidCents: 120, maxChangePct: 15, protect: true, claudeLevel: 'auto' }, sources: { maxBidCents: source('Helmets (IT)', 'category', 3, 'TEST-P2'), maxChangePct: source('Test market (IT)', 'market', 2), protect: source('Helmets (IT)', 'category', 3, 'TEST-P2'), claudeLevel: source('Test market (IT)', 'market', 2) } }),
         'IT|adGroup:g2': scope({ label: 'ad group "Second" (IT)', limits: { maxChangePct: 15 }, sources: { maxChangePct: source('Test market (IT)', 'market', 2) } }),
       },
-      today: { IT: { writes: 12, raises: 3, budgetIncreaseCents: 0 } },
+      today: { IT: { changes: 12, writes: 12, raises: 3, budgetIncreaseCents: 0 } },
       perEntityToday: { maxChangesByRule: 0, entity: null },
       engineOwned: [{ campaignId: 'c1', label: 'the campaign of target "test jacket"', by: ['rule "Night cut"'] }],
       monthProjection: { IT: projection({ capCents: 200_000, capFrom: 'the budget plan 2026-10' }) },
     })
     const note = limitsNote(f, BASE)
     expect(note).toContain('IT: ads strategy version abc123def456.')
-    expect(note).toContain('IT, run by rule in the last 24 hours: 12 writes, 3 raises, budgets +EUR 0.00; this change: 1 write, 1 raise, budgets +EUR 0.00. Daily limits: writes not set (the business\'s cap of runs by rule applies); raises not set in the ads strategy (a raise waits for a person); budget increase not set in the ads strategy (an increase waits for a person).')
+    expect(note).toContain('IT, run by rule in the last 24 hours: 12 changes, 3 raises, budgets +EUR 0.00; this change: 1 change, 1 raise, budgets +EUR 0.00. Daily limits: changes not set, so 0: no change runs by rule; raises not set, so 0: no raise runs by rule; budget increase not set, so 0: no budget increase runs by rule.')
     expect(note).toContain('IT: most actions per run 40 (ads strategy: Test market (IT), market, v2); this change: 1.')
     expect(note).toContain('Highest bid EUR 1.20 (ads strategy: Helmets (IT), category, v3, from TEST-P2) — at ad group "Test group" (IT).')
     expect(note).toContain('Largest bid change 15 % (ads strategy: Test market (IT), market, v2) — at ad group "Test group" (IT), ad group "Second" (IT).')
@@ -384,12 +410,39 @@ describe('the note — each limit, its value, this change\'s value and its sourc
     expect(note).toContain('Items: 1 (at most 50, Claude\'s limits for this tool); outside the ads strategy: 0.')
     expect(note).toContain('Changed by rule in the last 24 hours: none of these (at most 1 per item, Claude\'s limits for this tool).')
     expect(note).toContain('The campaign of target "test jacket" is also moved by rule "Night cut" (allowEngineOwned: off).')
-    expect(note.at(-1)).toBe('IT, this month at most EUR 1040.00 with this change (EUR 100.00 spent through 2026-10-04, every enabled campaign\'s daily budget (EUR 30.00 together) for the 27 days not reported yet, +EUR 5.00 a day from today for 26 days); cap EUR 2000.00 (the budget plan 2026-10).')
+    expect(note.at(-1)).toBe('IT, this month forecast EUR 567.50 with this change (EUR 100.00 spent through 2026-10-04, EUR 10.00 a day (the average of the 7 reported days to 2026-10-04) + 25 % for the 27 days not reported yet, +EUR 5.00 a day from today for 26 days); cap EUR 2000.00 (the budget plan 2026-10).')
+    const set = limitsNote(facts({ markets: { IT: market({ maxChangesPerDay: 100, maxBudgetIncreasePerDayCents: 2_000, sources: { maxChangesPerDay: source('Test market (IT)', 'market', 2) } }) } }), BASE)
+    expect(set.find((l) => l.startsWith('IT, run by rule'))).toMatch(/Daily limits: changes 100 a day \(ads strategy: Test market \(IT\), market, v2\); raises 10 a day \(ads strategy\); budget increase EUR 20\.00 a day \(ads strategy\)\.$/)
   })
 
   it('a market without a strategy, and an entity Nexus cannot place, are said plainly', () => {
     const note = limitsNote(facts({ markets: { IT: market({ strategy: null }) }, unplaced: [{ entity: 'target:x', why: 'target x was not found in this business' }] }))
     expect(note).toContain('IT: no ads strategy — nothing runs alone there.')
     expect(note).toContain('Not placed: target x was not found in this business.')
+  })
+})
+
+describe('AA-W2-4 — a preview as the watch level judges it', () => {
+  const src = source('Test market (IT)', 'market', 5)
+  const step = (changes: number, today = 0) => ({ limitFacts: facts({
+    thisOver: { items: changes, writes: changes, byMarket: { IT: { items: changes, changes, writes: changes, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } } },
+    today: { IT: { changes: today, writes: today, raises: 0, budgetIncreaseCents: 0 } },
+    markets: { IT: market({ maxChangesPerDay: 10, sources: { maxChangesPerDay: src } }) },
+  }) })
+
+  it('asWatched: today counts the watched changes that would have run, and a watch the strategy set reads as auto; the input is unchanged', () => {
+    const preview = step(1, 2)
+    const watched = ledgerOf([step(5), step(3)])
+    const judged = asWatched(preview, { watched }) as typeof preview
+    expect(judged.limitFacts.today.IT).toEqual({ changes: 10, writes: 10, raises: 0, budgetIncreaseCents: 0 })
+    expect(dailyRefusal(judged.limitFacts)).toMatch(/^IT: 10 changes ran or would have run by rule in the last 24 hours and this adds 1 change/)
+    expect(preview.limitFacts.today.IT.changes).toBe(2)
+    // The entities the watched changes touched count toward "changed by rule today".
+    expect(judged.limitFacts.perEntityToday).toEqual({ maxChangesByRule: 2, entity: 'target:t1' })
+    const heldAtWatch = { limitFacts: facts({ scopes: { 'IT|adGroup:g1': scope({ limits: { claudeLevel: 'watch' }, sources: { claudeLevel: src } }) } }) }
+    expect(aloneRefusal(heldAtWatch.limitFacts)).toMatch(/only watches bid changes/)
+    expect(aloneRefusal((asWatched(heldAtWatch, { watched: ledgerOf([]), strategyWatchAsAuto: true }) as typeof heldAtWatch).limitFacts)).toBeNull()
+    expect(aloneRefusal((asWatched(heldAtWatch, { watched: ledgerOf([]) }) as typeof heldAtWatch).limitFacts)).toMatch(/only watches/)
+    expect(asWatched({ summary: 'no facts' }, { watched })).toEqual({ summary: 'no facts' })
   })
 })

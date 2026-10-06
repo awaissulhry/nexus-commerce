@@ -384,3 +384,56 @@ describe('GET /agent/fleet/approvals/queue/:id', { timeout: 30_000 }, () => {
     expect((await get('all', '/agent/fleet/approvals/queue/nope')).statusCode).toBe(404)
   })
 })
+
+describe('AA-W2-4 — a request asked at watch: its recorded verdict, and why it waits', { timeout: 30_000 }, () => {
+  it('the row carries the verdict; with the kind at watch it says what the rule said and who decides', async () => {
+    const checkedAt = new Date().toISOString()
+    const would = { level: 'watch', wouldRun: true, check: null, why: null, checkedAt, changes: 1 }
+    const wouldNot = { level: 'watch', wouldRun: false, check: 'limits', why: 'the master price moves 30 %, more than the 10 % allowed without a person', checkedAt, changes: 1 }
+    const plan = { ...would, changes: 2, steps: [
+      { step: 1, tool: 'set-price', level: 'watch', watched: true, wouldRun: true, check: null, why: null },
+      { step: 2, tool: 'set-price', level: 'watch', watched: true, wouldRun: true, check: null, why: null },
+    ] }
+    await inside(async () => {
+      const db = database.client
+      const run = await db.agentRun.findFirstOrThrow({ where: { agentKey: 'claude', via: 'claude' } })
+      const raw = (key: string, data: Record<string, unknown>) =>
+        db.agentApproval.create({ data: { agentRunId: run.id, riskTier: 'high', status: 'pending', expiresAt: new Date(Date.now() + 24 * 3600_000), ...data } as never }).then((row) => { ids[key] = row.id })
+      const preview = (from: number, to: number) => ({ action: 'set-price', sku: 'AQ-GLOVE-M', scope: 'master', changes: { 'base price': { from, to } }, deltaPct: Math.round(((to - from) / from) * 1000) / 10 })
+      await raw('watchYes', { toolName: 'set-price', args: { productId: ids.p1, price: 51 }, preview: preview(50, 51), ruleVerdict: would })
+      await raw('watchNo', { toolName: 'set-price', args: { productId: ids.p1, price: 65 }, preview: preview(50, 65), ruleVerdict: wouldNot })
+      await raw('watchBefore', { toolName: 'set-price', args: { productId: ids.p1, price: 52 }, preview: preview(50, 52) })
+      await raw('watchPlan', {
+        toolName: 'submit-change-plan', args: { title: 'Watched', steps: 2 }, summary: '2 changes', planHash: 'h',
+        preview: { action: 'submit-change-plan', title: 'Watched', summary: '2 changes', kinds: [{ tool: 'set-price', count: 2 }], totals: { steps: 2, reachOutside: 2 } },
+        ruleVerdict: plan,
+      })
+      await db.agentTool.updateMany({ where: { name: 'set-price' }, data: { claudeTrust: 'watch' } })
+    })
+    try {
+      const yes = await rowOf('all', 'watchYes')
+      expect(yes).toMatchObject({ state: 'waiting', ruleVerdict: would, automation: { level: 'watch', max: 'auto' } })
+      expect(yes.automation.whyWaits).toBe('Watching Set master price: your rule would have run it by itself. The person who asked can confirm it in Claude with their code, or you approve it here')
+      expect(yes.note).toBe(yes.automation.whyWaits)
+      const no = await rowOf('all', 'watchNo')
+      expect(no).toMatchObject({ ruleVerdict: wouldNot })
+      expect(no.automation.whyWaits).toBe('Watching Set master price: your rule would not have run it — the master price moves 30 %, more than the 10 % allowed without a person. The person who asked can confirm it in Claude with their code, or you approve it here')
+      // Asked before the kind was watched: no verdict, and the row says only who decides.
+      const before = await rowOf('all', 'watchBefore')
+      expect(before.ruleVerdict).toBeNull()
+      expect(before.automation.whyWaits).toBe('Your rule for Set master price: Watch. The person who asked can confirm it in Claude with their code, or you approve it here')
+      const watchedPlan = await rowOf('all', 'watchPlan')
+      const { steps, ...planOnly } = plan
+      expect(watchedPlan).toMatchObject({ ruleVerdict: planOnly, automation: { level: 'watch', whyWaits: 'Watching this plan: your rules would have run it by itself. The person who asked can confirm it in Claude with their code, or you approve it here' } })
+      // The polled list keeps the plan's own verdict; the drawer has every step.
+      expect(watchedPlan.ruleVerdict).not.toHaveProperty('steps')
+      expect((await get('all', `/agent/fleet/approvals/queue/${ids.watchPlan}`)).json()).toMatchObject({ ruleVerdict: { ...planOnly, steps } })
+      // Not asked at watch: no verdict on the row.
+      expect((await rowOf('all', 'priceOk')).ruleVerdict).toBeNull()
+      // The drawer carries it too.
+      expect((await get('all', `/agent/fleet/approvals/queue/${ids.watchNo}`)).json()).toMatchObject({ ruleVerdict: wouldNot })
+    } finally {
+      await inside(() => database.client.agentTool.updateMany({ where: { name: 'set-price' }, data: { claudeTrust: 'auto' } }))
+    }
+  })
+})

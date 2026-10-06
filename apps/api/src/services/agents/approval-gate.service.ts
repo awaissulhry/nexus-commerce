@@ -23,10 +23,11 @@
  */
 
 import { Prisma } from '@nexus/database'
+import type { WatchVerdict } from '@nexus/shared/approval-queue'
 import prisma from '../../db.js'
 import { getTool } from './tool-registry.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
-import type { AgentTool, ClaudeTrust, ToolDoor } from './tool-types.js'
+import { decidedViaOf, type AgentTool, type ClaudeTrust, type ToolDoor } from './tool-types.js'
 import type { StrategyNarrowing } from '../advertising/ads-strategy/claude.js'
 import { logger } from '../../utils/logger.js'
 import { linkUndoRequest, recordExecutedChangeSafely } from './change-record.service.js'
@@ -74,7 +75,7 @@ export interface GateOutcome {
 /**
  * C5 — who decides a stored request. `rule`: the business's rule scheduled it (auto) as the person who asked; it runs
  * at `executeAfter` unless someone stops it. `person`: it waits for a person in Nexus; `why` says why the tool's level
- * (above ask) did not decide it.
+ * (above ask) did not decide it. AA-W2-4 — at `watch` it always waits for a person, with the rule's recorded verdict.
  */
 export type RuleVerdict =
   | { by: 'rule'; level: 'auto'; executeAfter: string }
@@ -85,6 +86,8 @@ export type RuleVerdict =
       confirm?: { summary: string; planHash: string }
       /** W1-8 — the ads strategy row that narrowed it below the business's level (`business`). */
       strategy?: StrategyNarrowing & { business: ClaudeTrust }
+      /** AA-W2-4 — asked at watch: what the business's full rule check said, as recorded on the request. */
+      watch?: WatchVerdict
     }
 
 /** C5 — a door's rule for the tools it asks for (Claude's: mcp-tool-call.ts, from claude-trust.service.ts). */
@@ -405,8 +408,14 @@ export async function decideApproval(
       decider,
       ap.toolName,
       ap.args as Record<string, unknown>,
-      // 4A — approved by a person (in Nexus or with his code in Claude), not by a standing rule.
-      { approvalId: id, approvedPreview: ap.preview ?? undefined, via: requestDoor(ap.agentRun), approvedByPerson: ap.decisionVia !== 'auto' },
+      // 4A — approved by a person (in Nexus or with his code in Claude), not by a standing rule. AA-W2-1 — and which.
+      {
+        approvalId: id,
+        approvedPreview: ap.preview ?? undefined,
+        via: requestDoor(ap.agentRun),
+        approvedByPerson: ap.decisionVia !== 'auto',
+        decidedVia: decidedViaOf(ap.decisionVia),
+      },
     )
     await prisma.agentApproval.update({
       where: { id },

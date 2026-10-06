@@ -17,7 +17,8 @@
  *                screen never claims a reader that does not exist (W1-5: the bid engines on the target, the lowest and
  *                highest bid and the largest bid change; W1-6: the monthly market cap, the stop bid and the actions per
  *                run; W1-6b: category and product caps too; W1-7: the search-term thresholds and protection; W1-8:
- *                Claude's door, what Claude may do alone); a field with no reader is stored and shown only (`notReadYet`).
+ *                Claude's door, what Claude may do alone; AA-W2-2b: Claude's door, what may run by rule in a market a
+ *                day); a field with no reader is stored and shown only (`notReadYet`).
  *
  * 🔴 Units. `*Pct` is an INTEGER PERCENT (25 = 25 %), never a fraction — the AdsAutomationState.defaultTargetAcosPct
  * convention. The engines take fractions (Campaign.dynamicBidding.targetAcos = 0.25). The two meet ONLY through
@@ -64,8 +65,8 @@ export const CLAUDE_ACTION_TOOLS = {
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]
-/** Lowest first; the lower of two levels is the safer one. */
-export const CLAUDE_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'auto']
+/** Lowest first; the lower of two levels is the safer one. AA-W2-4 — watch sits below auto: the strategy may hold a kind at watch. */
+export const CLAUDE_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'watch', 'auto']
 /** The reader of `claudeAutonomy` (W1-8): every ad change Claude asks for is held to the lower level. */
 export const CLAUDE_DOOR = "Claude's door (every ad change Claude asks for)"
 
@@ -125,6 +126,7 @@ export type StrategyColumn =
   | 'maxChangePct' | 'maxActionsPerRun' | 'protect' | 'harvestMinOrders' | 'harvestMinClicks' | 'harvestMaxAcosPct'
   | 'harvestWindowDays' | 'negateMinClicks' | 'negateMinSpendCents' | 'negateMaxOrders' | 'negateWindowDays'
   | 'stopMethod' | 'stopBidCents' | 'claudeAutonomy' | 'reviewEveryDays'
+  | 'claudeMaxChangesPerDay' | 'claudeMaxRaisesPerDay' | 'claudeMaxBudgetIncreasePerDayCents'
 
 /** How one stored value is checked when it is read: anything else is ignored and named in a warning. */
 export type ColumnCheck =
@@ -158,6 +160,10 @@ export const COLUMN_CHECKS: Readonly<Record<StrategyColumn, ColumnCheck>> = {
   stopBidCents: { kind: 'int', min: DEFAULT_STOP_BID_CENTS, max: 100 },
   claudeAutonomy: { kind: 'autonomy' },
   reviewEveryDays: { kind: 'int', min: 1, max: 90 },
+  // AA-W2-2b — at most the business's own cap of runs by rule can ever allow (claude-trust.service.ts MAX_DAILY_AUTO_CAP).
+  claudeMaxChangesPerDay: { kind: 'int', min: 0, max: 10_000 },
+  claudeMaxRaisesPerDay: { kind: 'int', min: 0, max: 10_000 },
+  claudeMaxBudgetIncreasePerDayCents: { kind: 'int', min: 0 },
 }
 
 export type SaferRule =
@@ -178,12 +184,14 @@ export type RaiseRule =
   | 'target'     // up, a kind switch, or cleared to a higher inherited value
   | 'pause'      // LOW_BIDS → PAUSE
   | 'autonomy'   // any action type's level up, or a key removed
+  | 'count'      // a limit where empty is 0 (Claude's daily limits): up loosens; down, or cleared, tightens
   | 'any'        // any change (no clear direction)
   | 'never'      // free to change
 
 export type StrategyFieldKey =
   | 'goal' | 'goalNote' | 'target' | 'targetAcosPct' | 'monthlySpendCapCents' | 'minBidCents' | 'maxBidCents'
   | 'maxChangePct' | 'maxActionsPerRun' | 'protect' | 'harvest' | 'negate' | 'stop' | 'claudeAutonomy' | 'reviewEveryDays'
+  | 'claudeMaxChangesPerDay' | 'claudeMaxRaisesPerDay' | 'claudeMaxBudgetIncreasePerDayCents'
 
 export interface StrategyField {
   key: StrategyFieldKey
@@ -214,6 +222,8 @@ export const READERS = {
   restores: 'restores after a stop (and base-bid give-backs)',
   stepClamp: "the step clamp on engine, rule and Claude bid changes (not a person's own edit)",
   claudePreview: "Claude's bid previews (the bid an approval writes)",
+  // AA-W2-2b — the strategy-bound ad tools' common checks (agents/tools/ads-autonomy-kit.ts, C5) in Claude's door.
+  claudeByRule: "Claude's door, for an ad change that may run by the business's rule in this market (an ad tool set to run by rule, where its code allows it)",
 } as const
 const TARGET_READERS = [READERS.optimiser, READERS.bidRules, READERS.autopilot]
 const BAND_READERS = [READERS.gate, READERS.optimiser, READERS.bidRules, READERS.hourly, READERS.restores, READERS.autopilot]
@@ -293,7 +303,25 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
   },
   { key: 'claudeAutonomy', label: 'What Claude may do alone', columns: ['claudeAutonomy'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lowerLevel', raise: 'autonomy', money: false, readBy: [CLAUDE_DOOR] },
   { key: 'reviewEveryDays', label: 'Review every (days)', columns: ['reviewEveryDays'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
+  // AA-W2-2b — what Claude's ad changes may add in one market in 24 hours when they run by rule (Owner decision
+  // D-W2-3). The market row only; empty is 0, so a market without a number runs nothing that adds to it by rule.
+  {
+    key: 'claudeMaxChangesPerDay', label: 'Most changes Claude may run by rule a day', columns: ['claudeMaxChangesPerDay'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'count', money: false,
+    readBy: [`${READERS.claudeByRule}: the changes run by rule there in the last 24 hours plus this one must fit (each entity changed counts one), or a person decides; empty is 0 — no change runs by rule`],
+  },
+  {
+    key: 'claudeMaxRaisesPerDay', label: 'Most raises Claude may run by rule a day', columns: ['claudeMaxRaisesPerDay'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'count', money: false,
+    readBy: [`${READERS.claudeByRule}: the changes that add spend (a higher bid, budget, placement or target, a restart, a new keyword) run by rule there in the last 24 hours plus this one's must fit, or a person decides; empty is 0 — no raise runs by rule`],
+  },
+  {
+    key: 'claudeMaxBudgetIncreasePerDayCents', label: 'Most budget increase Claude may run by rule a day', columns: ['claudeMaxBudgetIncreasePerDayCents'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'count', money: true,
+    readBy: [`${READERS.claudeByRule}: the daily budget added by rule there in the last 24 hours plus this change's must fit, or a person decides; empty is 0 — no budget increase runs by rule`],
+  },
 ]
+
+/** AA-W2-2b — Claude's daily limits per market: empty is 0 (nothing that adds to one runs by rule). */
+export const CLAUDE_DAILY_FIELDS = ['claudeMaxChangesPerDay', 'claudeMaxRaisesPerDay', 'claudeMaxBudgetIncreasePerDayCents'] as const satisfies readonly StrategyFieldKey[]
+export type ClaudeDailyField = (typeof CLAUDE_DAILY_FIELDS)[number]
 
 export const FIELD_BY_KEY: ReadonlyMap<StrategyFieldKey, StrategyField> = new Map(STRATEGY_FIELDS.map((f) => [f.key, f]))
 
@@ -315,6 +343,8 @@ export const STRATEGY_MONEY: Readonly<Record<string, string>> = Object.fromEntri
     // W1-6 — this month against a cap: spend so far, the forecast and the cap where bids drop.
     'spendCents', 'forecastSpendCents', 'stopCapCents',
     // W1-6b — spend of ads Nexus cannot tie to a product (counted on no category or product cap).
-    'unattributedCents']
+    'unattributedCents',
+    // AA-W2-2b — the most daily budget Claude's changes may add by rule in a day.
+    'claudeMaxBudgetIncreasePerDayCents']
     .map((key) => [key, FIELDS.financialsAdspendView]),
 )

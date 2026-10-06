@@ -6144,6 +6144,7 @@ CREATE TABLE "AgentApproval" (
     "decisionVia" TEXT,
     "summary" TEXT,
     "planHash" TEXT,
+    "ruleVerdict" JSONB,
 
     CONSTRAINT "AgentApproval_pkey" PRIMARY KEY ("id")
 );
@@ -9158,6 +9159,9 @@ CREATE TABLE "AdsStrategy" (
     "stopBidCents" INTEGER,
     "claudeAutonomy" JSONB,
     "reviewEveryDays" INTEGER,
+    "claudeMaxChangesPerDay" INTEGER,
+    "claudeMaxRaisesPerDay" INTEGER,
+    "claudeMaxBudgetIncreasePerDayCents" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "updatedBy" TEXT NOT NULL,

@@ -5,8 +5,12 @@
  *
  *   run as         an approved request only: `execute` needs the approval it carries out (`ToolContext.approvalId`),
  *                  writes as the person who approved it (`user:<approverId>`), names the request in the audit
- *                  (`Claude request <approvalId>: <why>`), and stamps every write with `changeSetId = approvalId` —
- *                  so delivery (approval-status) and undo find exactly its rows.
+ *                  (`Claude request <approvalId>: <why>`; `… (run by rule): …` when the business's rule decided it),
+ *                  and stamps every write with `changeSetId = approvalId` — so delivery (approval-status) and undo find
+ *                  exactly its rows.
+ *   by rule        AA-W2-6 — a strategy-bound tool also asks the write gate how it judges the change as a run by rule
+ *                  (a machine's write: the allowlist, pins and the person's own limits refuse it, #401), so a change the
+ *                  gate would refuse then is never let run by rule — it waits for a person instead of failing.
  *   live reach     the preview stores where the write would land (live, on which Amazon Ads profile, or sandbox); a
  *                  refusal is not queued. `execute` checks again and refuses when the answer changed (d2 = A: live
  *                  only on a campaign already on the live-write allowlist — the gate's own default-deny).
@@ -15,8 +19,11 @@
  *   stale          `execute` re-runs the dry run and refuses when a starting value the person approved has moved.
  *   SP only        phase 1 changes Sponsored Products campaigns only.
  */
+import type { z } from 'zod'
+import prisma from '../../../db.js'
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
-import { boundAutomationsFor, claudeActor, claudeReason, type BoundAutomation, type LiveReach } from './ads-tool-guards.js'
+import { boundAutomationsFor, checkLiveReach, claudeActor, claudeReason, type AdWriteIntent, type BoundAutomation, type LiveReach } from './ads-tool-guards.js'
+import { buildLimitFacts, commonRefusal, limitsNote, type KitItem, type LimitFacts } from './ads-autonomy-kit.js'
 import type { ToolContext, ToolResult } from '../tool-types.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import { stepClamp, strategyWords, limitWords, type StepClamp, type StrategyBidLimits } from '../../advertising/ads-strategy/bids.js'
@@ -43,9 +50,11 @@ export function approvedRun(ctx: ToolContext, why: string): ApprovedRun | { refu
   const approver = ctx.userId?.trim()
   if (!approver) return { refusal: 'an approved ad change runs as the person who approved it, and this run names no person' }
   const said = why.trim() || 'no reason given'
+  // AA-W2-6 — a run the business's rule decided says so in the audit, so the Change Log tells it from a person's approval.
+  const byRule = ctx.decidedVia === 'auto'
   const reason = ctx.via === 'claude'
-    ? claudeReason(approvalId, said)
-    : `${ctx.via === 'fleet' ? 'Fleet request' : 'Approved request'} ${approvalId}: ${said}`
+    ? claudeReason(approvalId, said, { byRule })
+    : `${ctx.via === 'fleet' ? 'Fleet request' : 'Approved request'} ${approvalId}${byRule ? ' (run by rule)' : ''}: ${said}`
   const person = ctx.approvedByPerson === true
   return { actor: claudeActor(approver), reason, changeSetId: approvalId, manual: person, confirmOwnLimits: person }
 }
@@ -199,3 +208,65 @@ export function stepClampWords(step: StepClamp, strategy?: StrategyBidLimits | n
 
 /** An approved run that could not run, as the gate expects it (ok:false; the request goes back to waiting). */
 export const notRun = (error: string): ToolResult => ({ ok: false, error })
+
+// ── By rule (AA-W2-6): what a strategy-bound tool's preview carries, and its limits check ────────
+
+/** One write as the gate judges it, with what a person calls where it lands (`campaign "…"`). */
+export type RuleWrite = AdWriteIntent & { label?: string }
+
+/** What a strategy-bound tool's dry run adds to its preview, beside its own fields. */
+export interface RuleFacts {
+  /** The facts its limits are judged on (ads-autonomy-kit.ts): the strategy where it lands, this change counted, today. */
+  limitFacts: LimitFacts
+  /** Each limit, its value, this change's value and its source, as the Approvals page and Claude read them. */
+  limitsNote: string[]
+  /**
+   * The write gate's refusal of these writes as a run by rule (a machine's write: the allowlist, pins and the
+   * person's own limits refuse it), or null when it lets them all through. `reach` is how it judges a person's
+   * approval (his own click, 4A): it does not say this.
+   */
+  ruleGate: string | null
+}
+
+/**
+ * The write gate's answer for these writes as a run by rule: null when it lets every one through, else the first
+ * refusal as a sentence. Read-only.
+ */
+export async function ruleGateRefusal(writes: readonly RuleWrite[]): Promise<string | null> {
+  for (const { label, ...intent } of writes) {
+    const reach = await checkLiveReach({ ...intent, byRule: true })
+    if (reach.reach === 'refused') return `${label ? `${label}: ` : ''}Amazon's write gate refuses it as a run by rule — ${reach.reason}`
+  }
+  return null
+}
+
+/** The limits this business set for a tool (Settings › AI › Claude), for the note; the defaults when none are stored. */
+async function toolLimitsHere(tool: string, limits: z.ZodObject): Promise<Record<string, unknown>> {
+  const row = await prisma.agentTool.findFirst({ where: { name: tool }, select: { claudeLimits: true } })
+  const parsed = row?.claudeLimits && typeof row.claudeLimits === 'object' ? limits.strict().safeParse(row.claudeLimits) : null
+  return (parsed?.success ? parsed.data : limits.parse({})) as Record<string, unknown>
+}
+
+/**
+ * A strategy-bound tool's dry run: the limit facts of every item it changes (a bulk change: every row, not only the
+ * lines its preview shows), the note, and the write gate's answer as a run by rule. `approvalId`: the request a dry run
+ * re-checks (ToolContext.approvalId), not counted in today's ledger.
+ */
+export async function ruleFactsFor(input: { tool: string; limits: z.ZodObject; items: readonly KitItem[]; writes: readonly RuleWrite[]; approvalId?: string | null }): Promise<RuleFacts> {
+  const limitFacts = await buildLimitFacts({ tool: input.tool, items: input.items, approvalId: input.approvalId })
+  const ruleGate = await ruleGateRefusal(input.writes)
+  return { limitFacts, limitsNote: limitsNote(limitFacts, await toolLimitsHere(input.tool, input.limits)), ruleGate }
+}
+
+/**
+ * Pure — a strategy-bound tool's `withinLimits`, before its own row checks: the common checks (C1–C7, every row inside
+ * its scope's strategy, the steps, the month), then the write gate as a run by rule. A preview without the gate's
+ * answer is never inside.
+ */
+export function ruleRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
+  const common = commonRefusal(preview, limits)
+  if (common) return common
+  const p = preview as { ruleGate?: unknown }
+  if (!('ruleGate' in p)) return 'the write gate was not asked how it judges this change as a run by rule; a person decides'
+  return typeof p.ruleGate === 'string' ? `${p.ruleGate}; a person decides` : null
+}

@@ -13611,6 +13611,11 @@ model AgentApproval {
   planHash     String?
   /// C6 — the plan's steps, one per change, run in order after the approval.
   planSteps    AgentPlanStep[]
+  /// ADS AUTONOMY AA-W2-4 — a request Claude asked for at the `watch` level: the verdict of the business's full rule
+  /// check when it was asked (would it have run by rule, or which check held it and why; the ads strategy row and
+  /// version that set the level; a plan's verdict per step). Recorded only, never acted on: a person decides the
+  /// request. Null on every other request. Shape: @nexus/shared/approval-queue `WatchVerdict`.
+  ruleVerdict  Json?
 
   @@index([status, requestedAt])
   /// NAF.AP.4/AP.5 — the maintenance sweep's two queries: commit what is due,
@@ -19298,6 +19303,14 @@ model AdsStrategy {
   /// trust levels only, never widens them.
   claudeAutonomy  Json?
   reviewEveryDays Int?
+
+  /// AA-W2-2b — MARKET rows only: the most Claude's ad changes may add in this market in 24 hours when they run by the
+  /// business's rule (not a person's approval). Empty is 0: nothing that adds to it runs by rule here (fail closed).
+  /// Changes (each entity changed counts one), raises (changes that add spend) and budget increase (minor units of the
+  /// market's currency).
+  claudeMaxChangesPerDay             Int?
+  claudeMaxRaisesPerDay              Int?
+  claudeMaxBudgetIncreasePerDayCents Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

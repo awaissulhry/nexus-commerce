@@ -819,7 +819,8 @@ const setTierPrices: AgentTool = {
   description:
     'Set a product\'s quantity (B2B) tier prices: from N units the unit price is X, for every customer or one customer '
     + 'group; a null price removes a tier. They price quotes and B2B orders in Nexus; nothing is sent to a marketplace. '
-    + 'Undo puts the old tiers back. Waits for a person to approve it in Nexus.',
+    + 'Undo puts the old tiers back. Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s '
+    + 'authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
     const plan = await planTiers(args)
     if (refused(plan)) return { ok: false, error: plan.error }

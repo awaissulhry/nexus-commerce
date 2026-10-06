@@ -30,11 +30,11 @@ import { deciderPrincipal, previewStaleness } from '../agent-fleet/approval-inbo
 import { decideByRule, EXPIRY_HOURS, requestDoor, type GateOutcome, type GateRule } from './approval-gate.service.js'
 import { callTool, executeTool, ToolAccessError, type ToolPrincipal, type UserPrincipal } from './call-tool.js'
 import { recordExecutedChangeSafely } from './change-record.service.js'
-import { autoPlanStepRefusal, noteAutoFailure } from './claude-trust.service.js'
+import { autoFreshRefusal, autoPlanStepRefusal, noteAutoFailure } from './claude-trust.service.js'
 import { mergedStepUp } from './step-up-approval.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { getTool } from './tool-registry.js'
-import { PLAN_MAX_STEPS, PLAN_TOOL, type AgentTool, type PlanRequest, type ToolRequest } from './tool-types.js'
+import { PLAN_MAX_STEPS, PLAN_TOOL, decidedViaOf, type AgentTool, type PlanRequest, type ToolRequest } from './tool-types.js'
 
 /** How many steps a preview lists in full; the rest are counted. */
 const PREVIEW_STEPS = 20
@@ -280,7 +280,7 @@ async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
       return
     }
     const args = (step.args ?? {}) as Record<string, unknown>
-    const stale = await previewStaleness(step.toolName, args, step.preview, ap.id)
+    const stale = await previewStaleness(step.toolName, args, step.preview, ap.id, { withFresh: auto })
     if (stale.stale) {
       const why = stale.why ?? 'it is no longer a valid action'
       await end('skipped', { reason: `not run — ${why}` })
@@ -288,12 +288,22 @@ async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
       if (auto) await noteAutoFailure()
       return
     }
+    // AA-W2-3 — a strategy-bound step of a plan run by rule: judged again on that fresh dry run, as one change is.
+    if (auto) {
+      const freshNow = await autoFreshRefusal(step.toolName, stale.fresh, step.args)
+      if (freshNow) {
+        await end('skipped', { reason: `not run — ${freshNow}` })
+        await stepAudit(ap, step, 'rule_refused', freshNow)
+        return
+      }
+    }
     const tool = getTool(step.toolName)!
     const { raw } = await executeTool(decider.principal, step.toolName, args, {
       approvalId: ap.id,
       approvedPreview: step.preview ?? undefined,
       via: requestDoor(ap.agentRun),
       approvedByPerson: !auto, // 4A — a plan a person approved; a plan run by his standing rule is not his click
+      decidedVia: decidedViaOf(ap.decisionVia), // AA-W2-1 — who decided the plan, for every step
     })
     if (!raw.ok) {
       const why = raw.error ?? 'the tool refused it'

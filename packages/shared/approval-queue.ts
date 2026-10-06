@@ -46,8 +46,105 @@ export const OPEN_QUEUE_STATES: readonly QueueState[] = ['waiting', 'starting', 
 /** Same values as the API's tool registry (`AgentTool.reversibility`). Unknown = `none`, the safe direction. */
 export type QueueReversibility = 'full' | 'partial' | 'none'
 
-/** Same values as the API's `ClaudeTrust`. */
-export type QueueTrustLevel = 'off' | 'ask' | 'confirm' | 'auto'
+/**
+ * Same values as the API's `ClaudeTrust`, lowest first. `watch` (ADS AUTONOMY AA-W2-4): the full check `auto` would make
+ * runs and its verdict is recorded on the request (`WatchVerdict`), but a person still decides it, as at `confirm`.
+ */
+export type QueueTrustLevel = 'off' | 'ask' | 'confirm' | 'watch' | 'auto'
+
+/**
+ * The check of the business's rule that held a watched request back, in the order `auto` makes them: `level` (a plan
+ * step below watch), `strategy` (the ads strategy narrowed it where it lands), `scope` (the Claude connection lacks
+ * nexus.run), `pause` (rule-runs are paused), `limits` (outside the kind's limits), `cap` (the daily cap of changes run by
+ * rule), `error` (Nexus could not apply the rule, so a person would have decided).
+ */
+export const RULE_CHECKS = ['level', 'strategy', 'scope', 'pause', 'limits', 'cap', 'error'] as const
+export type RuleCheck = (typeof RULE_CHECKS)[number]
+
+/** One step of a watched change plan: the step's own check (its level, the ads strategy, its limits) and the business's brakes. */
+export interface WatchStepVerdict {
+  /** 1-based, as the plan's steps are numbered. */
+  step: number
+  tool: string
+  /** The level that applied to the step where it lands. */
+  level: QueueTrustLevel
+  /** The business set this step's kind to watch (or the ads strategy held it at watch): it counts in the kind's report. */
+  watched: boolean
+  wouldRun: boolean
+  check: RuleCheck | null
+  why: string | null
+}
+
+/**
+ * ADS AUTONOMY AA-W2-4 — what the business's rule said about a request Claude asked for at `watch`, recorded when it was
+ * asked (`AgentApproval.ruleVerdict`) and never acted on: a person decides the request. Null on every other request.
+ */
+export interface WatchVerdict {
+  /** The level that applied where it lands: `watch`, or lower when the ads strategy narrowed it (check `strategy`). */
+  level: QueueTrustLevel
+  /** Had the kind been at auto, would the rule have run it by itself? (A plan: only when every step would.) */
+  wouldRun: boolean
+  /** The check that held it back; null when it would have run. */
+  check: RuleCheck | null
+  /** Why not, in a sentence a person reads; null when it would have run. */
+  why: string | null
+  /** When Nexus checked it (when it was asked). */
+  checkedAt: string
+  /** The ads strategy row that set the level where it lands (W1-8), with its version; absent when none did. */
+  strategy?: { market: string; scope: 'market' | 'category' | 'product'; label: string; version: number; level: QueueTrustLevel }
+  /** How many changes it holds (a plan: its steps), as the daily cap counts them. */
+  changes: number
+  /** A change plan: each step's own verdict, in order. */
+  steps?: WatchStepVerdict[]
+}
+
+/** Watched changes of one group, and what a person did with them. */
+export interface WatchTally {
+  changes: number
+  /** Approved by a person (in Nexus, or confirmed in Claude with their code), whether or not it ran yet. */
+  approved: number
+  rejected: number
+  expired: number
+  /** Replaced by a person's edit. */
+  replaced: number
+  /** Nobody decided yet (or it came back to a person). */
+  waiting: number
+}
+
+/** The watched changes the rule would NOT have run: the tally, how many each check held back, and the commonest reasons. */
+export interface WatchOutside extends WatchTally {
+  byCheck: Partial<Record<RuleCheck, number>>
+  /** Up to 5, most frequent first. */
+  topReasons: Array<{ why: string; count: number }>
+}
+
+/** One kind (tool) in the watch report. */
+export interface WatchKind {
+  tool: string
+  /** Registry title, e.g. "Set price". */
+  title: string
+  /** This business's level for the kind today: it may have left watch since. */
+  level: QueueTrustLevel
+  /** When the kind was last set to watch (Settings › AI › Claude audit), or null when not known. */
+  watchingSince: string | null
+  wouldRun: WatchTally
+  outside: WatchOutside
+}
+
+/**
+ * The watch report (`claude-activity` `watch`, GET /api/claude/activity): over a window (7 days unless named), Claude's
+ * watched changes — would-have-run against what a person decided — in total and per kind. A plan's watched steps count
+ * one by one, each by its own check.
+ */
+export interface WatchSummary {
+  from: string
+  to: string
+  wouldRun: WatchTally
+  outside: WatchOutside
+  kinds: WatchKind[]
+  /** True when the window held more watched requests than one report reads: the numbers cover the newest of them. */
+  truncated: boolean
+}
 
 /** What the request is about. `count` > 1 for a bulk tool or a plan: `sku`/`name` then describe the first item. */
 export interface QueueTarget {
@@ -152,6 +249,12 @@ export interface QueueRow {
    */
   needsCode?: string | null
   automation: QueueAutomation
+  /**
+   * ADS AUTONOMY AA-W2-4 — asked at `watch`: what the business's rule said when it was asked ("would have run by itself"
+   * or why not). Null or absent on every other request. A plan's per-step verdicts (`steps`) come with the drawer
+   * (`QueueDetail`) only; the polled list keeps the plan's own verdict.
+   */
+  ruleVerdict?: WatchVerdict | null
 }
 
 /** GET /api/agent/fleet/approvals/queue?show=&cursor=&limit= */
@@ -234,6 +337,11 @@ export interface RuleSimulation {
   wouldRun: number
   /** Of `wouldRun`, how many the person actually rejected — the number that should make them think. */
   rejectedAmongWouldRun: number
+  /**
+   * ADS AUTONOMY AA-W2-4 — requests inside the proposed limits that the ads strategy held below auto where they landed,
+   * as their recorded watch verdict says: not counted in `wouldRun` (the strategy, not this kind's rule, held them).
+   */
+  heldByStrategy?: number
   /** Up to 5 examples of rejected ones that would have run, for the modal. */
   examples: Array<{ id: string; summary: string; rejectedReason: string | null }>
 }

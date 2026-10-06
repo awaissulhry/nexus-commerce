@@ -37,6 +37,10 @@
  * ADS AUTONOMY W1-8 — an ad change is held to the lower of the business's level for its tool and the ads strategy's
  * level for its kind of action where it lands (claude-trust.service.ts `claudeRuleForChange`): off there refuses it
  * before anything runs; a narrowed request answers with `trust.strategy`, the strategy row that narrowed it.
+ *
+ * ADS AUTONOMY AA-W2-4 — at `watch` (the kind's level, or the ads strategy's where it lands) the request goes through
+ * every check auto makes and the verdict is recorded on it (AgentApproval.ruleVerdict; a plan per step), but it is never
+ * scheduled: it waits for a person as at confirm, and Claude reads `trust.watch` — would it have run by rule, or why not.
  */
 
 import { Prisma } from '@nexus/database'
@@ -55,13 +59,18 @@ import {
   autoRefusal,
   claudeRuleForChange,
   CONFIRM_IN_CLAUDE,
+  isWatched,
   narrowedDecision,
   narrowedWhy,
   overDailyCap,
   planRuleRefusal,
+  recordWatch,
+  watchVerdictOf,
+  watchWords,
   withdrawRuleSchedule,
   type StrategyNarrowed,
 } from '../agents/claude-trust.service.js'
+import type { WatchVerdict } from '@nexus/shared/approval-queue'
 import { confirmByCode, prepareConfirm } from '../agents/claude-confirm.service.js'
 import { scheduleApproval } from '../agent-fleet/approval-inbox.service.js'
 import { oauthIssuer } from '../oauth/oauth-config.js'
@@ -150,24 +159,34 @@ export function claudeGateRule(principal: McpPrincipal): GateRule {
       return confirmByCode(principal, input, { runScope })
     },
     async decide({ approvalId, tool, preview, args, steps }): Promise<RuleVerdict> {
-      // C7 — at confirm: the summary and planHash the person's code will be bound to (with nexus.run only).
-      const confirmable = async (why: string, strategy?: StrategyNarrowed): Promise<RuleVerdict> => {
+      // C7 — at confirm: the summary and planHash the person's code will be bound to (with nexus.run only). AA-W2-4 — at
+      // watch the same (watch allows all confirm allows); its words already say who decides with or without nexus.run.
+      const confirmable = async (level: 'confirm' | 'watch', why: string, extra: { strategy?: StrategyNarrowed; watch?: WatchVerdict } = {}): Promise<RuleVerdict> => {
+        const { strategy, watch } = extra
         const confirm = runScope ? await prepareConfirm(approvalId) : null
-        const noScope = `${strategy ? narrowedWhy(strategy) : 'this business set it to "confirm in Claude"'}, but this Claude connection may not confirm changes (it was connected without nexus.run); a person approves it in Nexus`
-        return { by: 'person', level: 'confirm', why: runScope ? why : noScope, ...(confirm ? { confirm } : {}), ...(strategy ? { strategy } : {}) }
+        const noScope = level === 'watch'
+          ? why
+          : `${strategy ? narrowedWhy(strategy) : 'this business set it to "confirm in Claude"'}, but this Claude connection may not confirm changes (it was connected without nexus.run); a person approves it in Nexus`
+        return { by: 'person', level, why: runScope ? why : noScope, ...(confirm ? { confirm } : {}), ...(strategy ? { strategy } : {}), ...(watch ? { watch } : {}) }
       }
       if (steps) {
-        // C6 — a plan: by rule only when every step may.
+        // C6 — a plan: by rule only when every step may. AA-W2-4 — a watched step: the verdict is recorded first.
         const refused = await planRuleRefusal(steps, { runScope })
-        if (refused?.level === 'confirm') return confirmable(refused.why ?? CONFIRM_IN_CLAUDE, refused.strategy)
+        if (refused?.watch) await recordWatch(approvalId, refused.watch)
+        if (refused?.level === 'confirm') return confirmable('confirm', refused.why ?? CONFIRM_IN_CLAUDE, refused)
+        if (refused?.level === 'watch') return confirmable('watch', refused.why!, refused)
         if (refused) return { by: 'person', ...refused }
       } else {
         const rule = await claudeRuleForChange(tool.name, args ?? {}, preview)
         const strategy = rule?.narrowedBy
+        // AA-W2-4 — watched (its kind at watch, or the ads strategy holds it there): the full check auto would make,
+        // recorded on the request. Never scheduled: a person decides it.
+        const watch = rule && isWatched(rule) ? await recordWatch(approvalId, await watchVerdictOf(tool, preview, { runScope, rule })) : undefined
         if (!rule || rule.level === 'ask' || rule.level === 'off') {
-          return strategy ? { by: 'person', level: 'ask', why: narrowedDecision(strategy), strategy } : { by: 'person', level: 'ask' }
+          return strategy ? { by: 'person', level: 'ask', why: narrowedDecision(strategy), strategy, ...(watch ? { watch } : {}) } : { by: 'person', level: 'ask' }
         }
-        if (rule.level === 'confirm') return confirmable(strategy ? narrowedDecision(strategy) : CONFIRM_IN_CLAUDE, strategy)
+        if (rule.level === 'confirm') return confirmable('confirm', strategy ? narrowedDecision(strategy) : CONFIRM_IN_CLAUDE, { strategy, watch })
+        if (rule.level === 'watch') return confirmable('watch', watchWords(watch!, { runScope }), { strategy, watch })
         const refusal = await autoRefusal(tool, preview, { runScope, rule })
         if (refusal) return { by: 'person', level: 'auto', why: refusal }
       }
@@ -201,6 +220,20 @@ export function consequencesOf(tool: Pick<AgentTool, 'control' | 'openWorld' | '
       : tool.undo
         ? `undo-change can ask to put it back${tool.reversibility === 'partial' ? ' (partly: the preview says what stays)' : ''}`
         : 'no undo tool: a person puts it back in Nexus',
+  }
+}
+
+/**
+ * AA-W2-4 — a watch verdict as Claude reads it: would it have run by rule, which check held it and why; a plan says how
+ * many of its steps would have run (its recorded verdict holds each step: claude-activity, the Approvals page).
+ */
+function watchShown(verdict: WatchVerdict) {
+  const steps = verdict.steps
+  return {
+    wouldRun: verdict.wouldRun,
+    check: verdict.check,
+    why: verdict.why,
+    ...(steps ? { steps: { total: steps.length, wouldRun: steps.filter((step) => step.wouldRun).length } } : {}),
   }
 }
 
@@ -238,9 +271,16 @@ function answer(outcome: GateOutcome, principal: McpPrincipal, tool?: Pick<Agent
         // C2 — an undo says which change it puts back.
         ...(outcome.undoes ? { undoes: { changeId: outcome.undoes } } : {}),
         // C5 — when a level above ask (or a plan's mixed levels) still leaves it to a person: why. W1-8 — and, when the
-        // ads strategy narrowed it, the strategy row that did.
+        // ads strategy narrowed it, the strategy row that did. AA-W2-4 — watched: what the rule would have done.
         ...(outcome.rule && outcome.rule.by === 'person' && (outcome.rule.level !== 'ask' || outcome.rule.why)
-          ? { trust: { level: outcome.rule.level, why: outcome.rule.why ?? null, ...(outcome.rule.strategy ? { strategy: outcome.rule.strategy } : {}) } }
+          ? {
+              trust: {
+                level: outcome.rule.level,
+                why: outcome.rule.why ?? null,
+                ...(outcome.rule.strategy ? { strategy: outcome.rule.strategy } : {}),
+                ...(outcome.rule.watch ? { watch: watchShown(outcome.rule.watch) } : {}),
+              },
+            }
           : {}),
         // C7 — set to confirm: what the person's code approves, and how.
         ...(outcome.rule?.by === 'person' && outcome.rule.confirm

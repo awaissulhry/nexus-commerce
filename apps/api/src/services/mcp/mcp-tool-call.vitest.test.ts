@@ -187,6 +187,21 @@ describe('N4 — what a single change does once it runs', () => {
     expect(answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' }))).not.toHaveProperty('consequences')
   })
 
+  it('AA-W2-4 — watched: Claude reads what the rule would have done (a plan: how many steps), and may still confirm', async () => {
+    const watch = { level: 'watch', wouldRun: false, check: 'limits', why: 'the price moves 14 %, more than the 10 % allowed without a person', checkedAt: '2026-10-06T00:00:00.000Z', changes: 1 }
+    gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-5', rule: { by: 'person', level: 'watch', why: 'watching: it would not — …', confirm: { summary: 's', planHash: 'h' }, watch } })
+    const single = answerOf(await runToolForClaude(principal, reaching, { business: principal.business.name }))
+    expect(single).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'watch', why: 'watching: it would not — …', watch: { wouldRun: false, check: 'limits', why: watch.why } }, confirm: { planHash: 'h' } })
+    expect(single.trust.watch).not.toHaveProperty('steps')
+    expect(single.next).toMatch(/^Nothing has changed yet\. The person who asked can approve it with their authenticator code/)
+    const steps = [
+      { step: 1, tool: 'set-price', level: 'watch', watched: true, wouldRun: true, check: null, why: null },
+      { step: 2, tool: 'set-price', level: 'watch', watched: true, wouldRun: false, check: 'limits', why: 'too far' },
+    ]
+    gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-6', plan: { steps: 2 }, rule: { by: 'person', level: 'watch', why: 'watching: it would not — …', watch: { ...watch, changes: 2, steps } } })
+    expect(answerOf(await runToolForClaude(principal, reaching, { business: principal.business.name })).trust.watch).toEqual({ wouldRun: false, check: 'limits', why: watch.why, steps: { total: 2, wouldRun: 1 } })
+  })
+
   it('set to confirm, the next step names the code as well as the Approvals page', async () => {
     gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-4', rule: { by: 'person', level: 'confirm', confirm: { summary: 's', planHash: 'h' } } })
     expect(answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' })).next)

@@ -239,7 +239,8 @@ const setAlertRule: AgentTool = {
     + 'an existing rule\'s name, description, threshold, window, channel or on/off (name it with ruleId, from '
     + 'alerts-inbox). A rule\'s metric and operator stay as they are. A new rule notifies the Nexus log only: where '
     + 'alerts are sent (e-mail, Slack, webhooks) is set by a person in Nexus and never shown here. A person approves '
-    + 'the change in Nexus before it is made; undo puts the old values back (a new rule is switched off).',
+    + 'the change in Nexus before it is made, unless the business lets Claude make it itself inside its limits; undo '
+    + 'puts the old values back (a new rule is switched off).',
   input: z.object({
     ruleId: ID.optional().describe('the rule to change (from alerts-inbox); omit to create a new rule'),
     name: z.string().trim().min(1).max(120).optional().describe('the rule\'s name; required for a new rule'),
@@ -467,7 +468,8 @@ const acknowledgeAlerts: AgentTool = {
   description:
     'Triage what alerts-inbox shows: acknowledge alert events (someone is on it) or resolve them (dealt with; the rule '
     + 'stops counting as fired), and mark your own notifications read. Up to 50 of each, with an optional note. Rows '
-    + 'already in that state are listed and left alone. A person approves it in Nexus first; undo puts every alert '
+    + 'already in that state are listed and left alone. A person approves it in Nexus first, unless the business lets '
+    + 'Claude triage alerts itself inside its limits; undo puts every alert '
     + 'and notification back exactly as it was.',
   input: z.object({
     alertEventIds: z.array(ID).max(50).optional().describe('alert events to acknowledge or resolve (from alerts-inbox)'),
@@ -681,7 +683,8 @@ const organizeImageLibrary: AgentTool = {
   description:
     'Organize library assets (ids from image-library): move them into a folder or out of any folder, add or remove '
     + 'tags, or give one asset a new label. Up to 100 assets; product photos are organized on their product. Nothing is '
-    + 'ever deleted, and no channel is touched. A person approves it in Nexus first; undo puts every asset back.',
+    + 'ever deleted, and no channel is touched. A person approves it in Nexus first, unless the business lets Claude '
+    + 'organize a few assets itself; undo puts every asset back.',
   input: z.object({
     assetIds: z.array(ID).min(1).max(100).describe('the library assets to organize (ids from image-library)'),
     label: z.string().trim().min(1).max(200).optional().describe('a new label, for one asset only'),

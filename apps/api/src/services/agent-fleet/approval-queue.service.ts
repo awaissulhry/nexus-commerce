@@ -20,7 +20,8 @@
  * business's AgentTool rules, one product lookup — and the trust brakes only when a waiting Claude request is set to
  * run by rule. No track records, no history, no per-row query. The counts are a handful of COUNT queries. W1-4 — a
  * waiting Claude ad request above Ask me also reads the ads strategy's rows once per call, and only when a row speaks
- * to its kind, where it lands (the rule the door applies to it: the strategy may narrow it).
+ * to its kind, where it lands (the rule the door applies to it: the strategy may narrow it). AA-W2-4 — a request Claude
+ * asked for at watch carries the verdict its rule recorded then (`ruleVerdict`), and a waiting one says it.
  */
 import { Prisma } from '@nexus/database'
 import {
@@ -38,6 +39,7 @@ import {
   type QueueState,
   type QueueTarget,
   type QueueTrustLevel,
+  type WatchVerdict,
 } from '@nexus/shared/approval-queue'
 import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
@@ -194,6 +196,7 @@ const APPROVAL_SELECT = {
   reason: true,
   operatorNote: true,
   agentRunId: true,
+  ruleVerdict: true,
 } satisfies Prisma.AgentApprovalSelect
 
 type ApprovalRow = Prisma.AgentApprovalGetPayload<{ select: typeof APPROVAL_SELECT }>
@@ -219,7 +222,7 @@ interface ToolRule {
   limitsInvalid: string | null
 }
 
-const RANK: Record<ClaudeTrust, number> = { off: 0, ask: 1, confirm: 2, auto: 3 }
+const RANK: Record<ClaudeTrust, number> = { off: 0, ask: 1, confirm: 2, watch: 3, auto: 4 }
 
 /** claude-trust.service.ts `ruleFrom` — the one reading of a stored rule — kept to the fields this page needs. */
 function ruleOf(tool: AgentTool, row: { claudeTrust: string; claudeLimits: unknown } | undefined): ToolRule {
@@ -227,7 +230,7 @@ function ruleOf(tool: AgentTool, row: { claudeTrust: string; claudeLimits: unkno
   return { level: rule.level, max: rule.ceiling, limits: rule.limits ?? null, limitsInvalid: rule.limitsInvalid ?? null }
 }
 
-const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'Off', ask: 'Ask me', confirm: 'Confirm in Claude', auto: 'Run by itself' }
+const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'Off', ask: 'Ask me', confirm: 'Confirm in Claude', watch: 'Watch', auto: 'Run by itself' }
 
 /** Everything one list (or detail) call joins, read once for all its rows. */
 interface Joins {
@@ -443,6 +446,35 @@ function confirmWords(title: string, runScope: boolean | null): string {
     : `Your rule for ${title}: Confirm in Claude — the person who asked can confirm it with their code, or you approve it here`
 }
 
+/** AA-W2-4 — the verdict recorded on a request asked at watch, or null (an older row, or one not asked at watch). */
+function watchVerdictOf(ap: ApprovalRow): WatchVerdict | null {
+  const verdict = rec(ap.ruleVerdict)
+  return verdict && typeof verdict.wouldRun === 'boolean' ? (verdict as unknown as WatchVerdict) : null
+}
+
+/** AA-W2-4 — a list row (polled) keeps a plan's verdict without its per-step list; the drawer has every step. */
+function rowVerdict(verdict: WatchVerdict | null, detail: boolean): WatchVerdict | null {
+  if (!verdict?.steps || detail) return verdict
+  const { steps: _steps, ...plan } = verdict
+  return plan
+}
+
+/**
+ * AA-W2-4 — why a request waits while its kind is watched: what the rule said when it was asked (recorded, never acted
+ * on), and who decides — as at confirm. Without a recorded verdict (asked before the kind was watched) only who decides.
+ */
+function watchWaits(title: string | null, verdict: WatchVerdict | null, runScope: boolean | null): string {
+  const what = title ? `Watching ${title}: your rule` : 'Watching this plan: your rules'
+  const said = verdict
+    ? verdict.wouldRun
+      ? `${what} would have run it by itself`
+      : `${what} would not have run it — ${verdict.why ?? 'outside your rule'}`
+    : title ? `Your rule for ${title}: Watch` : 'Your rules watch the kinds in this plan'
+  return runScope === false
+    ? `${said}. You approve it here`
+    : `${said}. The person who asked can confirm it in Claude with their code, or you approve it here`
+}
+
 /**
  * W1-4 — why a waiting Claude ad request waits when the ads strategy holds it below the kind's rule where it lands (W1-8:
  * claude-trust.service.ts narrows each change the same way, and confirm-change refuses it). Without this the row said
@@ -453,7 +485,8 @@ async function strategyWhy(tool: AgentTool, rule: ToolRule, ap: ApprovalRow, joi
   const narrowing = await strategyLevelFor(tool.name, ap.args, ap.preview, joins.strategy)
   if (!narrowing || RANK[narrowing.level] >= RANK[rule.level]) return null
   const why = capitalised(narrowedWhy({ ...narrowing, business: rule.level }))
-  if (narrowing.level !== 'confirm') return `${why}: you approve it here`
+  // AA-W2-4 — held at watch: the person who asked may confirm it too, as at confirm.
+  if (narrowing.level !== 'confirm' && narrowing.level !== 'watch') return `${why}: you approve it here`
   return runScope === false
     ? `${why}, but this Claude connection may not confirm changes (connected without nexus.run): you approve it here`
     : `${why}: the person who asked can confirm it in Claude with their code, or you approve it here`
@@ -492,6 +525,7 @@ async function automationOf(
     let whyWaits: string | null = null
     if (waits) {
       if (asker.kind !== 'claude') whyWaits = `${RULES_ONLY_FOR_CLAUDE}: a person approves every request from ${asker.label}`
+      else if (level === 'watch') whyWaits = watchWaits(null, watchVerdictOf(ap), runScope)
       else if (level !== 'auto') {
         const title = lowest?.tool?.title ?? lowest?.name ?? 'one of its kinds'
         whyWaits = !lowest?.rule || lowest.rule.max === 'ask'
@@ -528,6 +562,7 @@ async function automationOf(
       // W1-4 — the ads strategy may hold THIS change below the kind's rule where it lands: then that is why it waits.
       whyWaits = await strategyWhy(tool, rule, ap, joins, runScope)
       if (!whyWaits && rule.level === 'confirm') whyWaits = confirmWords(tool.title, runScope)
+      else if (!whyWaits && rule.level === 'watch') whyWaits = watchWaits(tool.title, watchVerdictOf(ap), runScope)
       else if (!whyWaits) {
         // The rule's verdict is told to Claude only and never stored (research/02 §3.3): worked out again, now.
         whyWaits = await ruleRunWhy(runScope, joins, () => limitsWords(tool, rule, ap.preview), 1)
@@ -690,6 +725,7 @@ async function buildRows(
       bulkBlockedWhy,
       needsCode,
       automation,
+      ruleVerdict: rowVerdict(watchVerdictOf(ap), !!opts.allItems),
     }
     row.note = noteOf(ap, state, decider, automation, plan)
     built.push({ row, ap, run, tool, resolved, visiblePreview, ctx: joins.targetCtx })

@@ -36,7 +36,7 @@ const ids = { p1: '', p2: '', thisRequest: '', plan: '' }
 const LIMITS = adKitLimits({ maxItems: 50 }).parse({}) as Record<string, unknown>
 
 /** A stored preview of an earlier request, as a strategy-bound tool stores it (only the parts the ledger reads). */
-const stored = (byMarket: Record<string, { writes: number; raises: number; budgetIncreaseCents: number }>, entities: string[]) =>
+const stored = (byMarket: Record<string, { changes: number; writes: number; raises: number; budgetIncreaseCents: number }>, entities: string[]) =>
   ({ action: 'test', limitFacts: { v: LIMIT_FACTS_VERSION, markets: {}, this: { byMarket, entities } } })
 
 const facts = (items: KitItem[], opts: { tool?: string; approvalId?: string } = {}) =>
@@ -59,20 +59,22 @@ beforeAll(async () => {
     await c.adProductAd.create({ data: { adGroupId: 'g-c-it', productId: ids.p1, asin: 'B0TESTAK01' } })
     await c.adProductAd.create({ data: { adGroupId: 'g-c-it', productId: ids.p2, asin: 'B0TESTAK02' } })
     await c.adProductAd.create({ data: { adGroupId: 'g-c-off', productId: ids.p2, asin: 'B0TESTAK03' } })
-    await c.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test market (IT)', maxActionsPerRun: 40, monthlySpendCapCents: 300_000, maxChangePct: 20, claudeAutonomy: { bid: 'auto', budget: 'auto' }, updatedBy: 'user:test' } })
+    await c.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test market (IT)', maxActionsPerRun: 40, monthlySpendCapCents: 300_000, maxChangePct: 20, claudeAutonomy: { bid: 'auto', budget: 'auto' }, claudeMaxChangesPerDay: 100, claudeMaxRaisesPerDay: 10, claudeMaxBudgetIncreasePerDayCents: 50_000, version: 6, updatedBy: 'user:test' } })
     await c.adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: ids.p1, label: 'TEST-AK-P1 (IT)', maxBidCents: 150, claudeAutonomy: { bid: 'ask' }, version: 3, updatedBy: 'user:test' } })
     await c.adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: ids.p2, label: 'TEST-AK-P2 (IT)', maxBidCents: 90, protect: true, version: 2, updatedBy: 'user:test' } })
     await c.adKeywordProtection.create({ data: { mode: 'WHITELIST', term: 'testbrand', matchType: 'CONTAINS', marketplace: 'IT' } })
     // An hourly bid plan moves c-it on its own.
     await c.adSchedule.create({ data: { campaignId: 'c-it', name: 'Test evening plan', windows: [] } })
-    // This month's report spend in IT: 60.00 through the 4th. Left out: September, a stream duplicate, another market.
+    // IT's reports: 60.00 this month through the 4th; the 7 reported days to the 4th spent 70.00 (10.00 a day). Left out
+    // of both: a stream duplicate, another market; of the rate: a day before those 7.
     const perf = (date: string, euros: number, extra: Record<string, unknown> = {}) => c.amazonAdsDailyPerformance.create({
       data: { profileId: 'P-IT-TEST', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: new Date(`${date}T00:00:00Z`), entityType: 'CAMPAIGN', entityId: 'EXT-c-it', localEntityId: 'c-it', costMicros: BigInt(euros * 1_000_000), currencyCode: 'EUR', reportedAt: new Date(`${date}T06:00:00Z`), reportRunId: `run-${date}`, ...extra },
     })
     await perf('2026-10-01', 10)
     await perf('2026-10-02', 20)
     await perf('2026-10-04', 30)
-    await perf('2026-09-30', 999)
+    await perf('2026-09-30', 10)
+    await perf('2026-09-20', 999)
     await perf('2026-10-03', 500, { reportRunId: 'ams-stream' })
     await perf('2026-10-03', 700, { marketplace: 'DE', profileId: 'P-DE-TEST' })
     // This month's budget plan for IT: 2,500.00, lower than the strategy's 3,000.00 cap.
@@ -81,21 +83,21 @@ beforeAll(async () => {
     // What ran by rule (and what did not) in the last 24 hours.
     const run = await c.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'awaiting_approval' } })
     const approval = (data: Record<string, unknown>) => c.agentApproval.create({ data: { agentRunId: run.id, toolName: 'set-target-bid', riskTier: 'high', args: {}, ...data } })
-    await approval({ status: 'executed', decisionVia: 'auto', decidedAt: ago(1), preview: stored({ IT: { writes: 3, raises: 1, budgetIncreaseCents: 0 } }, ['target:t-it']) })
-    await approval({ status: 'executed', decisionVia: 'auto', decidedAt: ago(30), preview: stored({ IT: { writes: 40, raises: 40, budgetIncreaseCents: 0 } }, ['target:t-it']) })
-    await approval({ status: 'executed', decisionVia: 'nexus', decidedAt: ago(1), preview: stored({ IT: { writes: 20, raises: 20, budgetIncreaseCents: 0 } }, ['target:t-it']) })
-    await approval({ status: 'pending', decisionVia: null, decidedAt: null, preview: stored({ IT: { writes: 30, raises: 30, budgetIncreaseCents: 0 } }, ['target:t-it']) })
+    await approval({ status: 'executed', decisionVia: 'auto', decidedAt: ago(1), preview: stored({ IT: { changes: 3, writes: 3, raises: 1, budgetIncreaseCents: 0 } }, ['target:t-it']) })
+    await approval({ status: 'executed', decisionVia: 'auto', decidedAt: ago(30), preview: stored({ IT: { changes: 40, writes: 40, raises: 40, budgetIncreaseCents: 0 } }, ['target:t-it']) })
+    await approval({ status: 'executed', decisionVia: 'nexus', decidedAt: ago(1), preview: stored({ IT: { changes: 20, writes: 20, raises: 20, budgetIncreaseCents: 0 } }, ['target:t-it']) })
+    await approval({ status: 'pending', decisionVia: null, decidedAt: null, preview: stored({ IT: { changes: 30, writes: 30, raises: 30, budgetIncreaseCents: 0 } }, ['target:t-it']) })
     await approval({ status: 'executed', decisionVia: 'auto', decidedAt: ago(1), toolName: 'set-price', preview: { priceCents: 1000 } }) // another tool: no facts
-    ids.thisRequest = (await approval({ status: 'scheduled', decisionVia: 'auto', decidedAt: ago(0.1), toolName: 'set-campaign-budget', preview: stored({ IT: { writes: 7, raises: 2, budgetIncreaseCents: 500 } }, ['campaign:c-off']) })).id
+    ids.thisRequest = (await approval({ status: 'scheduled', decisionVia: 'auto', decidedAt: ago(0.1), toolName: 'set-campaign-budget', preview: stored({ IT: { changes: 7, writes: 7, raises: 2, budgetIncreaseCents: 500 } }, ['campaign:c-off']) })).id
     const plan = await approval({ status: 'executed', decisionVia: 'auto', decidedAt: ago(2), toolName: 'submit-change-plan', preview: { steps: 2 } })
     ids.plan = plan.id
-    await c.agentPlanStep.create({ data: { approvalId: plan.id, position: 0, toolName: 'set-target-bid', args: {}, status: 'done', preview: stored({ IT: { writes: 2, raises: 0, budgetIncreaseCents: 0 } }, ['target:t-it']) } })
-    await c.agentPlanStep.create({ data: { approvalId: plan.id, position: 1, toolName: 'set-target-bid', args: {}, status: 'skipped', preview: stored({ IT: { writes: 50, raises: 50, budgetIncreaseCents: 0 } }, ['target:t-low']) } })
+    await c.agentPlanStep.create({ data: { approvalId: plan.id, position: 0, toolName: 'set-target-bid', args: {}, status: 'done', preview: stored({ IT: { changes: 2, writes: 2, raises: 0, budgetIncreaseCents: 0 } }, ['target:t-it']) } })
+    await c.agentPlanStep.create({ data: { approvalId: plan.id, position: 1, toolName: 'set-target-bid', args: {}, status: 'skipped', preview: stored({ IT: { changes: 50, writes: 50, raises: 50, budgetIncreaseCents: 0 } }, ['target:t-low']) } })
   })
   // Another business's rule-runs never count here.
   await inB(async () => {
     const run = await db().agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'awaiting_approval' } })
-    await db().agentApproval.create({ data: { agentRunId: run.id, toolName: 'set-target-bid', riskTier: 'high', args: {}, status: 'executed', decisionVia: 'auto', decidedAt: ago(1), preview: stored({ IT: { writes: 100, raises: 100, budgetIncreaseCents: 0 } }, ['target:t-it']) } })
+    await db().agentApproval.create({ data: { agentRunId: run.id, toolName: 'set-target-bid', riskTier: 'high', args: {}, status: 'executed', decisionVia: 'auto', decidedAt: ago(1), preview: stored({ IT: { changes: 100, writes: 100, raises: 100, budgetIncreaseCents: 0 } }, ['target:t-it']) } })
   })
 }, 180_000)
 
@@ -107,20 +109,45 @@ afterAll(async () => {
 describe('today\'s ledger — what ran by rule in the last 24 hours', () => {
   it('counts single requests and the steps of plans the rule decided; not a person\'s, a handed-back, an older one, a skipped step or another business\'s', async () => {
     const ledger = await inA(() => ruleRunLedger({ now: NOW }))
-    expect(ledger.byMarket).toEqual({ IT: { writes: 3 + 7 + 2, raises: 1 + 2, budgetIncreaseCents: 500 } })
+    expect(ledger.byMarket).toEqual({ IT: { changes: 3 + 7 + 2, writes: 3 + 7 + 2, raises: 1 + 2, budgetIncreaseCents: 500 } })
     expect(ledger.byEntity).toEqual({ 'target:t-it': 2, 'campaign:c-off': 1 })
     expect(ledger.runs).toBe(3)
-    expect((await inB(() => ruleRunLedger({ now: NOW }))).byMarket).toEqual({ IT: { writes: 100, raises: 100, budgetIncreaseCents: 0 } })
+    expect((await inB(() => ruleRunLedger({ now: NOW }))).byMarket).toEqual({ IT: { changes: 100, writes: 100, raises: 100, budgetIncreaseCents: 0 } })
   })
 
-  it('leaves out the request a dry run re-checks (its own run, or its plan\'s steps)', async () => {
-    expect((await inA(() => ruleRunLedger({ now: NOW, excludeApprovalId: ids.thisRequest }))).byMarket.IT).toEqual({ writes: 5, raises: 1, budgetIncreaseCents: 0 })
-    expect((await inA(() => ruleRunLedger({ now: NOW, excludeApprovalId: ids.plan }))).byEntity).toEqual({ 'target:t-it': 1, 'campaign:c-off': 1 })
+  it('leaves out the request a dry run re-checks: its own run, or its plan\'s steps that have not run (AA-W2-3)', async () => {
+    expect((await inA(() => ruleRunLedger({ now: NOW, excludeApprovalId: ids.thisRequest }))).byMarket.IT).toEqual({ changes: 5, writes: 5, raises: 1, budgetIncreaseCents: 0 })
+    // The plan's one step that ran still counts when the plan is re-checked (its skipped step never counts).
+    expect((await inA(() => ruleRunLedger({ now: NOW, excludeApprovalId: ids.plan }))).byEntity).toEqual({ 'target:t-it': 2, 'campaign:c-off': 1 })
+    // A plan running now: step 1 ran, step 2 is being re-checked, step 3 waits. Re-checking it counts step 1 only.
+    const running = await inA(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'awaiting_approval' } })
+      const plan = await db().agentApproval.create({ data: { agentRunId: run.id, toolName: 'submit-change-plan', riskTier: 'high', args: {}, status: 'executing', decisionVia: 'auto', decidedAt: ago(0.2), preview: { steps: 3 } } })
+      const step = (position: number, status: string, writes: number, entity: string) => db().agentPlanStep.create({
+        data: { approvalId: plan.id, position, toolName: 'set-target-bid', args: {}, status, preview: stored({ IT: { writes, raises: 0, budgetIncreaseCents: 0 } }, [entity]) },
+      })
+      await step(1, 'done', 4, 'target:t-ran')
+      await step(2, 'executing', 6, 'target:t-now')
+      await step(3, 'pending', 8, 'target:t-next')
+      return plan.id
+    })
+    try {
+      const all = await inA(() => ruleRunLedger({ now: NOW }))
+      expect(all.byMarket.IT.writes).toBe(12 + 4 + 6 + 8)
+      const rechecked = await inA(() => ruleRunLedger({ now: NOW, excludeApprovalId: running }))
+      expect(rechecked.byMarket.IT.writes).toBe(12 + 4)
+      expect(rechecked.byEntity).toEqual({ 'target:t-it': 2, 'campaign:c-off': 1, 'target:t-ran': 1 })
+    } finally {
+      await inA(async () => {
+        await db().agentPlanStep.deleteMany({ where: { approvalId: running } })
+        await db().agentApproval.delete({ where: { id: running } })
+      })
+    }
   })
 
   it('the window is 24 hours back from now', async () => {
     // 23.5 hours later only the request decided 6 minutes before NOW is still inside it.
-    expect((await inA(() => ruleRunLedger({ now: new Date(NOW.getTime() + 23.5 * 3600_000) }))).byMarket.IT).toEqual({ writes: 7, raises: 2, budgetIncreaseCents: 500 })
+    expect((await inA(() => ruleRunLedger({ now: new Date(NOW.getTime() + 23.5 * 3600_000) }))).byMarket.IT).toEqual({ changes: 7, writes: 7, raises: 2, budgetIncreaseCents: 500 })
   })
 })
 
@@ -128,7 +155,11 @@ describe('the facts of one change, end to end', () => {
   it('a bid raise in a mixed ad group: the safer number per limit with its row, today per market and per entity, the engine on its campaign', async () => {
     const f = await facts([bid('t-it', 45, 50)])
     expect(f).toMatchObject({ v: LIMIT_FACTS_VERSION, tool: 'set-target-bid', action: 'bid', unplaced: [], protectedHit: [] })
-    expect(f.markets.IT).toMatchObject({ currency: 'EUR', maxActionsPerRun: 40, maxRaisesPerDay: null, sources: { maxActionsPerRun: { level: 'market', label: 'Test market (IT)' } } })
+    // Claude's daily limits from the market row (AA-W2-2b), each with its row.
+    expect(f.markets.IT).toMatchObject({
+      currency: 'EUR', maxActionsPerRun: 40, maxChangesPerDay: 100, maxRaisesPerDay: 10, maxBudgetIncreasePerDayCents: 50_000,
+      sources: { maxActionsPerRun: { level: 'market', label: 'Test market (IT)' }, maxChangesPerDay: { level: 'market', label: 'Test market (IT)', version: 6 } },
+    })
     expect(f.markets.IT.strategy?.version).toMatch(/^[0-9a-f]{12}$/)
     expect(f.entityScopes).toEqual({ 'target:t-it': 'IT|adGroup:g-c-it' })
     const s = f.scopes['IT|adGroup:g-c-it']
@@ -137,7 +168,7 @@ describe('the facts of one change, end to end', () => {
     expect(s.sources.maxBidCents).toMatchObject({ level: 'product', label: 'TEST-AK-P2 (IT)', version: 2, product: 'TEST-AK-P2' })
     expect(s.sources.claudeLevel).toMatchObject({ level: 'product', label: 'TEST-AK-P1 (IT)', version: 3, product: 'TEST-AK-P1' })
     expect(f.this).toMatchObject({ markets: ['IT'], items: 1, writes: 1, raises: 1, largestRaisePct: 11.11, highestNewBidCents: 50, entities: ['target:t-it'], rowsOutsideStrategy: 0 })
-    expect(f.today).toEqual({ IT: { writes: 12, raises: 3, budgetIncreaseCents: 500 } })
+    expect(f.today).toEqual({ IT: { changes: 12, writes: 12, raises: 3, budgetIncreaseCents: 500 } })
     expect(f.perEntityToday).toEqual({ maxChangesByRule: 2, entity: 'target:t-it' })
     expect(f.engineOwned).toEqual([{ campaignId: 'c-it', label: 'the campaign of target "race jacket"', by: ['schedule "Test evening plan"'] }])
     expect(f.monthProjection).toBeUndefined()
@@ -157,21 +188,40 @@ describe('the facts of one change, end to end', () => {
     expect(commonRefusal({ limitFacts: negative }, LIMITS)).toMatch(/testbrand.*; a person decides$/)
   })
 
-  it('a budget raise: the month as an upper bound against the lower cap, and the request re-checked left out of today', async () => {
+  it('a budget raise: the month as a run-rate forecast against the lower cap, and the request re-checked left out of today', async () => {
     const f = await facts([{ entity: { kind: 'campaign', id: 'c-off' }, change: { field: 'dailyBudget', fromCents: 2000, toCents: 2500 } }], { tool: 'set-campaign-budget', approvalId: ids.thisRequest })
     expect(f.action).toBe('budget')
     expect(f.entityScopes).toEqual({ 'campaign:c-off': 'IT|campaign:c-off' })
-    expect(f.today.IT).toEqual({ writes: 5, raises: 1, budgetIncreaseCents: 0 })
-    expect(f.this).toMatchObject({ raises: 1, largestRaisePct: 25, budgetIncreaseCents: 500, byMarket: { IT: { addedDailyCents: 500, budgetIncreaseCents: 500 } } })
-    // 60.00 reported through the 4th + 4 enabled IT budgets of 20.00 for the 27 days not reported + 5.00 a day for the 26 days left.
+    expect(f.today.IT).toEqual({ changes: 5, writes: 5, raises: 1, budgetIncreaseCents: 0 })
+    expect(f.this).toMatchObject({ raises: 1, largestRaisePct: 25, budgetIncreaseCents: 500, byMarket: { IT: { changes: 1, addedDailyCents: 500, budgetIncreaseCents: 500 } } })
+    // 60.00 reported this month through the 4th; 10.00 a day (the 7 reported days to the 4th) + 25 % for the 27 days not
+    // reported; + 5.00 a day for the 26 days left. The stream duplicate, the other market and the 20th are not in it.
     expect(f.monthProjection?.IT).toEqual({
-      month: '2026-10', currency: 'EUR', spentCents: 6_000, spendThrough: '2026-10-04', uncoveredDays: 27, daysLeft: 26, budgetsCents: 8_000,
-      projectedCents: 6_000 + 8_000 * 27, addedDailyCents: 500, afterCents: 6_000 + 8_000 * 27 + 500 * 26, capCents: 250_000, capFrom: 'the budget plan 2026-10',
+      month: '2026-10', currency: 'EUR', spentCents: 6_000, spendThrough: '2026-10-04', uncoveredDays: 27, daysLeft: 26, ratePerDayCents: 1_000,
+      rateThrough: '2026-10-04', marginPct: 25, projectedCents: 6_000 + 33_750, addedDailyCents: 500, afterCents: 6_000 + 33_750 + 500 * 26,
+      capCents: 250_000, capFrom: 'the budget plan 2026-10',
     })
-    const over = await facts([{ entity: { kind: 'campaign', id: 'c-off' }, change: { field: 'dailyBudget', fromCents: 2000, toCents: 3400 } }], { tool: 'set-campaign-budget' })
-    expect(over.monthProjection?.IT.afterCents).toBe(6_000 + 8_000 * 27 + 1_400 * 26)
-    expect(commonRefusal({ limitFacts: { ...over, protectedHit: [], engineOwned: [], markets: { IT: { ...over.markets.IT, maxRaisesPerDay: 10, maxBudgetIncreasePerDayCents: 10_000 } } } }, { ...LIMITS, maxChangesPerEntityPerDay: 5 }))
-      .toMatch(/^IT: this month could reach EUR 2584\.00 with this change — .* above the monthly cap EUR 2500\.00 \(the budget plan 2026-10\); a person decides$/)
+    // Inside every common check: the strategy lets budgets run by rule, the daily limits hold it, the month stays under its cap.
+    expect(commonRefusal({ limitFacts: f }, LIMITS)).toBeNull()
+    const over = await facts([{ entity: { kind: 'campaign', id: 'c-off' }, change: { field: 'dailyBudget', fromCents: 2000, toCents: 11_000 } }], { tool: 'set-campaign-budget' })
+    expect(over.monthProjection?.IT.afterCents).toBe(6_000 + 33_750 + 9_000 * 26)
+    expect(commonRefusal({ limitFacts: over }, { ...LIMITS, maxChangesPerEntityPerDay: 5 })).toBe(
+      'IT: this month could reach EUR 2737.50 with this change — EUR 60.00 spent through 2026-10-04, EUR 10.00 a day (the average of the 7 reported days to 2026-10-04) + 25 % for the 27 days not reported yet, +EUR 90.00 a day from today for 26 days — above the monthly cap EUR 2500.00 (the budget plan 2026-10); a person decides',
+    )
+  })
+
+  it('daily limits: what ran by rule today counts, and a market whose strategy sets none runs nothing by rule', async () => {
+    // 12 changes ran by rule in IT today; a strategy allowing 12 a day refuses one more.
+    await inA(() => db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeMaxChangesPerDay: 12 } }))
+    const full = await facts([{ entity: { kind: 'campaign', id: 'c-off' }, change: { field: 'dailyBudget', fromCents: 2000, toCents: 2100 } }], { tool: 'set-campaign-budget' })
+    expect(commonRefusal({ limitFacts: full }, { ...LIMITS, maxChangesPerEntityPerDay: 5 })).toBe(
+      'IT: 12 changes ran by rule in the last 24 hours and this adds 1 change, more than the 12 a day the ads strategy allows (most changes Claude may run by rule a day, ads strategy: Test market (IT), market, v6); a person decides',
+    )
+    await inA(() => db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeMaxChangesPerDay: null } }))
+    const none = await facts([{ entity: { kind: 'campaign', id: 'c-off' }, change: { field: 'dailyBudget', fromCents: 2000, toCents: 2100 } }], { tool: 'set-campaign-budget' })
+    expect(none.markets.IT.maxChangesPerDay).toBeNull()
+    expect(commonRefusal({ limitFacts: none }, { ...LIMITS, maxChangesPerEntityPerDay: 5 })).toMatch(/^IT: the ads strategy sets no daily limit for this \(most changes Claude may run by rule a day\) — empty is 0, so no change runs by rule here/)
+    await inA(() => db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeMaxChangesPerDay: 100 } }))
   })
 
   it('an entity Nexus cannot find, and a market without a strategy: never inside', async () => {
@@ -181,6 +231,10 @@ describe('the facts of one change, end to end', () => {
     const uk = await facts([bid('t-uk', 60, 55)])
     expect(uk.markets.UK).toMatchObject({ strategy: null, currency: 'GBP' })
     expect(commonRefusal({ limitFacts: uk }, LIMITS)).toBe('there is no ads strategy for UK: nothing runs alone there; a person decides')
+    // No monthly cap in the UK (no strategy, no budget plan): no month to keep under.
+    const ukBudget = await facts([{ entity: { kind: 'campaign', id: 'c-uk' }, change: { field: 'dailyBudget', fromCents: 1500, toCents: 2000 } }], { tool: 'set-campaign-budget' })
+    expect(ukBudget.this.byMarket.UK).toMatchObject({ addedDailyCents: 500 })
+    expect(ukBudget.monthProjection).toBeUndefined()
   })
 
   it('another business sees none of this one\'s strategy, ledger or entities', async () => {
