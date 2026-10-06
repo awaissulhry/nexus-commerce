@@ -119,7 +119,7 @@ describe('R11 — decide-automation-suggestions', () => {
   it('never pause; never lift a suppressed target; never twice — refused before anything waits, each named', async () => {
     const out = await dry({ kind: 'amazon-ads', decisions: [{ suggestionId: ids.pause, decide: 'apply' }, { suggestionId: ids.suppressed, decide: 'apply' }, { suggestionId: ids.done, decide: 'dismiss' }] })
     expect(out.ok).toBe(false)
-    expect(out.error).toContain('pause_campaign refused — it pauses — never (Owner rule: lower bids, never pause); dismiss it and use lower_bid_to_floor')
+    expect(out.error).toContain('pause_campaign refused — it pauses — a rule never pauses (Owner rule: a temporary stop is lower bids); dismiss it and use lower_bid_to_floor')
     expect(out.error).toContain('TEST k-supp: its target is held at the floor bid by no-pause suppression')
     expect(out.error).toContain('TEST k-done: it is applied')
     // Dismissing the pausing suggestion is fine.

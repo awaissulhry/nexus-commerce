@@ -11,7 +11,7 @@ Inside a market the most specific row wins: the product (a variation, then its p
 
 ## Ground rules
 
-The Nexus server's instructions hold the rules for every change — say which business, read first and ask, one change plan for many changes, follow each change until approval-status says it ran, never pause an ad, never an FBA quantity, never the old flat-file pages. Follow them. Read `business-overview` for the exact market codes and account ids before you name one.
+The Nexus server's instructions hold the rules for every change — say which business, read first and ask, one change plan for many changes, follow each change until approval-status says it ran, a temporary ad stop is lower bids (a real pause only when the person means one), never an FBA quantity, never the old flat-file pages. Follow them. Read `business-overview` for the exact market codes and account ids before you name one.
 
 - **Raising needs the person's code.** A strategy change that loosens anything (a higher target, cap or bid ceiling, a lower bar to harvest, more for Claude to do alone) waits for the person's authenticator code, in Nexus or with `confirm-change`. A change that only tightens does not.
 
@@ -44,7 +44,7 @@ The goal in the person's words (for example launch, grow, profit, clear stock, d
 
 ## 4. What Claude may do alone
 
-The strategy's `claudeAutonomy` holds a level per kind of ad action — `bid`, `negative`, `harvest`, `placement`, `budget`, `target`, `suggestion`, `stop`, `restore`, `create`, `rule`, `undo` — each `off`, `ask`, `confirm` or `auto`.
+The strategy's `claudeAutonomy` holds a level per kind of ad action — `bid`, `negative`, `harvest`, `placement`, `budget`, `target`, `suggestion`, `stop`, `restore`, `create`, `rule`, `undo`, `pause`, `enable`, `archive` — each `off`, `ask`, `confirm` or `auto`. `stop` is the temporary stop with low bids (`suppress-campaign`); `pause` is a real pause (`pause-ads`) and `enable` switches back on what a Claude request paused (`enable-ads`); `archive` (`archive-ads`) is for good: Amazon cannot switch an archived ad on again, so advise keeping it at `ask`. `create` makes a campaign that is born at the floor and off the allowlist; switching it on is `set-campaign-live-writes` and starting it is `restore`, each its own kind.
 
 - It only narrows the level the business set for each tool (Nexus, Settings › AI › Claude): a change Claude asks for is held to the lower of the two where it lands. It never widens it.
 - Brakes are never narrowed: `stop-automation`, `turn-down-automation`, a guardrail.

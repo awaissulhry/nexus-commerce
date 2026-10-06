@@ -36,7 +36,7 @@ vi.mock('../outbound-api-call-log.service.js', async (original) => ({
 
 import { gatewayLedger } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from '../gateway/rate.js'
-import { createNegativeKeyword, createNegativeProductTarget, liveCall, v3BatchResult, updateCampaign, updatePortfolio, updateTarget } from './ads-api-client.js'
+import { archiveSpEntity, createNegativeKeyword, createNegativeProductTarget, liveCall, v3BatchResult, updateCampaign, updatePortfolio, updateTarget, type SpArchiveEntity } from './ads-api-client.js'
 import { NegativeRefusedError } from './ads-negation-policy.js'
 
 // A3 — the v3 batch-response parser must be CONSERVATIVE: flip to failure only on a recognized
@@ -362,5 +362,61 @@ describe('1a updateCampaign / updatePortfolio on the wire', () => {
   it('CM-23: a portfolio Amazon accepts is ok', async () => {
     h.answers.push(() => new Response(JSON.stringify({ portfolios: { success: [{ index: 0, portfolioId: 'pf-1' }], error: [] } }), { status: 207 }))
     expect(await updatePortfolio(ctx, { portfolioId: 'pf-1', name: 'Core' })).toMatchObject({ ok: true, mode: 'live', error: null })
+  })
+})
+
+// ── AA-W2-13 — an ARCHIVE of a campaign, ad group, keyword, target or product ad is SP v3 `POST {path}/delete` ──────
+//
+// Every value below is copied from Amazon's Sponsored Products 3.0 OpenAPI document (the file 5f read), read again
+// 2026-10-06: operationIds DeleteSponsoredProducts{Campaigns,AdGroups,Keywords,TargetingClauses,ProductAds}, `post` on
+// the paths below, requestBody content = the mime below with `{ <idFilter>: { include } }` required, a 207 answer
+// `{ <responseKey>: { success, error } }`; the PUTs' state is `["ENABLED","PAUSED","PROPOSED"]` — no ARCHIVED.
+const SP_V3_DELETE: Record<SpArchiveEntity, { path: string; mime: string; idFilter: string; responseKey: string }> = {
+  campaign: { path: '/sp/campaigns/delete', mime: 'application/vnd.spCampaign.v3+json', idFilter: 'campaignIdFilter', responseKey: 'campaigns' },
+  adGroup: { path: '/sp/adGroups/delete', mime: 'application/vnd.spAdGroup.v3+json', idFilter: 'adGroupIdFilter', responseKey: 'adGroups' },
+  keyword: { path: '/sp/keywords/delete', mime: 'application/vnd.spKeyword.v3+json', idFilter: 'keywordIdFilter', responseKey: 'keywords' },
+  target: { path: '/sp/targets/delete', mime: 'application/vnd.spTargetingClause.v3+json', idFilter: 'targetIdFilter', responseKey: 'targetingClauses' },
+  productAd: { path: '/sp/productAds/delete', mime: 'application/vnd.spProductAd.v3+json', idFilter: 'adIdFilter', responseKey: 'productAds' },
+}
+
+describe('AA-W2-13 archiveSpEntity — an archive is the SP v3 delete operation (live, through the gateway)', () => {
+  const ctx = { profileId: '123', region: 'EU' as const }
+  beforeEach(() => {
+    __rateTest.useMemory()
+    h.calls = []; h.answers = []; gatewayLedger.length = 0
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1'); vi.stubEnv('NEXUS_AMAZON_ADS_QUOTA_MODE', 'off')
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      h.calls.push({ url: String(url), init })
+      return h.answers.shift()?.() ?? new Response('{}', { status: 207 })
+    }))
+  })
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset() })
+
+  for (const [entity, spec] of Object.entries(SP_V3_DELETE) as Array<[SpArchiveEntity, (typeof SP_V3_DELETE)[SpArchiveEntity]]>) {
+    it(`🔴 ${entity}: archive → POST ${spec.path} with { ${spec.idFilter}: { include: [id] } }, through the gateway`, async () => {
+      h.answers.push(() => new Response(JSON.stringify({ [spec.responseKey]: { success: [{ index: 0 }], error: [] } }), { status: 207 }))
+      const r = await archiveSpEntity(ctx, entity, 'ext-7')
+      expect(r).toMatchObject({ ok: true, mode: 'live', error: null })
+      expect(h.calls).toHaveLength(1)
+      expect(h.calls[0].url).toBe(`https://advertising-api-eu.amazon.com${spec.path}`)
+      expect(h.calls[0].init.method).toBe('POST')
+      expect(JSON.parse(String(h.calls[0].init.body))).toEqual({ [spec.idFilter]: { include: ['ext-7'] } })
+      expect(h.calls[0].init.headers).toMatchObject({ 'Content-Type': spec.mime, Accept: spec.mime, 'Amazon-Advertising-API-Scope': '123' })
+      expect(gatewayLedger).toEqual([expect.objectContaining({ channel: 'AMAZON_ADS', connectionId: 'ads-1', outcome: 'sent', success: true })])
+    })
+
+    it(`${entity}: a 207 with an error item is a failure, read from the "${spec.responseKey}" block`, async () => {
+      h.answers.push(() => new Response(JSON.stringify({ [spec.responseKey]: { success: [], error: [{ index: 0, errors: [{ errorType: 'entityNotFoundError' }] }] } }), { status: 207 }))
+      const r = await archiveSpEntity(ctx, entity, 'ext-7')
+      expect(r.ok).toBe(false)
+      expect(r.error).toMatch(/amazon_rejected.*entityNotFoundError/)
+    })
+  }
+
+  it('sandbox: nothing is sent; it says it would be a delete', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'sandbox')
+    expect((await archiveSpEntity(ctx, 'campaign', 'ext-7')).rawResponse).toMatchObject({ sandbox: true, operation: 'delete', route: '/sp/campaigns/delete' })
+    expect(h.calls).toEqual([])
   })
 })

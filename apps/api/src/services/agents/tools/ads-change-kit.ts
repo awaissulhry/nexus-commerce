@@ -266,8 +266,12 @@ async function toolLimitsHere(tool: string, limits: z.ZodObject): Promise<Record
  * lines its preview shows), the note, and the write gate's answer as a run by rule. `approvalId`: the request a dry run
  * re-checks (ToolContext.approvalId), not counted in today's ledger.
  */
-export async function ruleFactsFor(input: { tool: string; limits: z.ZodObject; items: readonly KitItem[]; writes: readonly RuleWrite[]; approvalId?: string | null }): Promise<RuleFacts> {
-  const limitFacts = await buildLimitFacts({ tool: input.tool, items: input.items, approvalId: input.approvalId })
+export async function ruleFactsFor(input: {
+  tool: string; limits: z.ZodObject; items: readonly KitItem[]; writes: readonly RuleWrite[]; approvalId?: string | null
+  /** AA-W2-12 — the change can add spend without adding a budget (an enable restarts bids): its month is projected too. */
+  projectMonth?: boolean
+}): Promise<RuleFacts> {
+  const limitFacts = await buildLimitFacts({ tool: input.tool, items: input.items, approvalId: input.approvalId, projectMonth: input.projectMonth })
   const ruleGate = await ruleGateRefusal(input.writes)
   return { limitFacts, limitsNote: limitsNote(limitFacts, await toolLimitsHere(input.tool, input.limits)), ruleGate }
 }
