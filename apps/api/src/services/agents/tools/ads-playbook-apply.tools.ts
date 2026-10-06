@@ -193,7 +193,7 @@ async function adoptPreview(a: Args): Promise<{ result: ToolResult; plan?: Adopt
     + `${p.bindings.length ? ` (${p.bindings.map((b) => `${b.slot} ← "${b.name}"`).join(', ')})` : ''}`
     + `${p.unbinds.length ? `, and takes ${plural(p.unbinds.length, 'adopted slot')} off again (${p.unbinds.map((u) => u.slot).join(', ')})` : ''}. `
     + 'Nexus only: nothing is sent to Amazon by the links, and no bid, allowlist or rule of these campaigns changes. '
-    + "The playbook's own hourly plans follow its slots (artifacts): created switched off, nothing runs until START; an hourly plan the playbook did not make is never touched."
+    + "The playbook's own hourly plans follow its slots (artifacts): created switched off, nothing runs until START; a campaign taken off a plan that is on leaves it at STOP; an hourly plan the playbook did not make is never touched."
   return {
     plan: p,
     result: {

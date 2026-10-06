@@ -11,11 +11,20 @@
  *   Owner      a campaign in an hourly plan the playbook did not make (a group, its own schedule, a portfolio group, a
  *              product plan), a group with the name it would get, bids an earlier plan left: the role is refused by name,
  *              and the Owner's plan reads back exactly as before
- *   start      START switches on as the phase says (none: both on; PROFIT: performance stays off), STOP off; a plan that is
- *              on takes a new campaign only at START
+ *   start      START switches on as the phase says (none set: research only, performance needs a goal; DEFEND: performance
+ *              only), STOP off; a plan that is on takes a new campaign only at START
  *   one owner  auto-bid leaves a campaign whose playbook plan is on, and holds nothing on it once the plan is off
- *   phase      applyRankPhase: light writes the light hours; before START nothing is switched on; once running, on is on
+ *   nothing    STOP inside a Min-bid window: rank's floor stays (handed to the approver, remembered for START); a base-bid
+ *   rises      change rank made downward stays, one it made upward goes back down; top of search named as last set; the
+ *              classifier says the same, and calls a give-back a raise (a phase that gives back: bids come back)
+ *   plans      a campaign that also advertises another product an Owner's product rank plan governs (resolved as the engine
+ *              resolves it): refused; one the plan excludes: free
+ *   adopt      an unbind from a plan that is on saves nothing (it leaves at STOP); a build takes it out, nothing rises
+ *   race       a same-name group made between the plan and the save is never taken over
  *   hook       ARTIFACT_COMPILERS holds the compiler
+ *
+ * The give-back is the real one (rank-release.service.ts, the dial on AUTO, Rank & Dayparting on), its bid writes a
+ * recorder that applies each bid to the database — so a test that a bid did not rise is a test of the real give-back.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -40,8 +49,28 @@ vi.mock('../../../lib/queue.js', () => {
   }
 })
 
+vi.mock('../ads-cache.js', () => ({
+  cached: async (_key: string, _ttl: number, work: () => Promise<unknown>) => work(),
+  peekCached: async () => undefined, putCached: () => undefined, flushAdsCache: async () => undefined,
+}))
+// The give-back's bid writes: each lands on the row, as the real service does locally (no queue, no gate, no Amazon).
+const rec = vi.hoisted(() => ({ writes: [] as Array<{ id: string; bid: number; actor: string }> }))
+vi.mock('../ads-mutation.service.js', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  updateAdGroupWithSync: async (a: { adGroupId: string; patch: { defaultBidCents: number }; actor: string }) => {
+    rec.writes.push({ id: a.adGroupId, bid: a.patch.defaultBidCents, actor: a.actor })
+    await database.client.adGroup.update({ where: { id: a.adGroupId }, data: { defaultBidCents: a.patch.defaultBidCents } })
+    return { ok: true }
+  },
+  updateAdTargetWithSync: async (a: { adTargetId: string; patch: { bidCents: number }; actor: string }) => {
+    rec.writes.push({ id: a.adTargetId, bid: a.patch.bidCents, actor: a.actor })
+    await database.client.adTarget.update({ where: { id: a.adTargetId }, data: { bidCents: a.patch.bidCents } })
+    return { ok: true }
+  },
+}))
+
 import { ARTIFACT_COMPILERS, compileArtifacts, type ArtifactContext } from './artifacts.js'
-import { applyRankPhase, previewRankPhase, rankGroupCompiler, rankGroupName } from './rank.js'
+import { applyRankPhase, classifyRankOff, loadRankFacts, planCompile, previewRankPhase, rankGroupCompiler, rankGroupName, rankOffEffect, runRankSteps } from './rank.js'
 import type { TemplateDoc } from './doc.js'
 
 const A = 'pb8_rank_alpha'
@@ -118,6 +147,12 @@ beforeAll(async () => {
   database = await formulaDatabase()
   vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
   await database.db.query(`INSERT INTO "Workspace" (id, name, status, "createdByUserId", "creationKey", "updatedAt") VALUES ($1, $1, 'active', 'test', $1, CURRENT_TIMESTAMP)`, [A])
+  // Ads automation on AUTO and Rank & Dayparting switched on: a give-back runs (it is not deferred), as in production.
+  const { setEngineSwitch } = await import('../../automation/engine-switch.service.js')
+  await inA(async () => {
+    await db().adsAutomationState.create({ data: { id: 'singleton', autonomy: 'AUTO', halted: false } })
+    await setEngineSwitch('rank-defend', 'AUTO', 'user:test')
+  })
 }, 120_000)
 afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
 
@@ -196,24 +231,25 @@ describe('a build: one hourly plan per rank role, born off', () => {
   })
 
   describe('START and STOP, as the phase says; one owner per campaign', () => {
-    it('START with no phase switches both on, their schedules on; auto-bid then leaves those campaigns alone', async () => {
+    it('START with no phase set: research goes on alone (performance needs a goal, and the preview says so); auto-bid then leaves those campaigns alone', async () => {
       const { autoBidHolders } = await import('../ads-auto-bid.service.js')
-      const members = [p.campaigns['exact-category'], p.campaigns['exact-brand'], p.campaigns.auto, p.campaigns['broad-category']]
+      const research = [p.campaigns.auto, p.campaigns['broad-category']]
+      const performance = [p.campaigns['exact-category'], p.campaigns['exact-brand']]
       // Off: the plan holds nothing from auto-bid (and a campaign the playbook built is off the live-write allowlist anyway).
-      expect([...(await inA(() => autoBidHolders(members))).entries()]).toEqual([])
+      expect([...(await inA(() => autoBidHolders([...research, ...performance]))).entries()]).toEqual([])
       const preview = await inA(async () => rankGroupCompiler.preview(await ctxOf(p, 'start'), []))
-      expect(preview.map((l) => [l.key, l.does])).toEqual([['rank:performance', 'enable'], ['rank:research', 'enable']])
+      expect(preview.map((l) => [l.key, l.does])).toEqual([['rank:performance', 'keep'], ['rank:research', 'enable']])
+      expect(preview[0].summary).toBe('The playbook\'s hourly plan "TESTPB8 renamed on Hourly Bids" is off already: no phase is set for this product (its ads strategy\'s goal), and performance needs one: research goes on alone.')
       const on = await inA(async () => rankGroupCompiler.setEnabled(await ctxOf(p, 'start'), [], true))
       expect(on.errors).toEqual([])
-      expect(on.changed).toHaveLength(2)
-      for (const role of ['performance', 'research'] as const) {
-        const g = (await groupOf(p, role))!
-        expect(g.group.enabled).toBe(true)
-        expect(g.schedules.every((s: any) => s.enabled)).toBe(true)
-      }
-      const holders = await inA(() => autoBidHolders([...members, p.campaigns.pat]))
-      expect(members.map((id) => holders.get(id))).toEqual(['hourlyPlan', 'hourlyPlan', 'hourlyPlan', 'hourlyPlan'])
-      expect(holders.get(p.campaigns.pat)).toBeUndefined()
+      expect(on.changed).toHaveLength(1)
+      expect((await groupOf(p, 'performance'))!.group.enabled).toBe(false)
+      const g = (await groupOf(p, 'research'))!
+      expect(g.group.enabled).toBe(true)
+      expect(g.schedules.every((s: any) => s.enabled)).toBe(true)
+      const holders = await inA(() => autoBidHolders([...research, ...performance, p.campaigns.pat]))
+      expect(research.map((id) => holders.get(id))).toEqual(['hourlyPlan', 'hourlyPlan'])
+      expect([...performance, p.campaigns.pat].map((id) => holders.get(id))).toEqual([undefined, undefined, undefined])
     })
 
     it('a plan that is on takes a new campaign only at START; the one gone leaves at once', async () => {
@@ -224,7 +260,7 @@ describe('a build: one hourly plan per rank role, born off', () => {
       await inA(() => db().adsPlaybookLink.updateMany({ where: { playbookId: p.rowId, kind: 'slot', key: 'broad-category' }, data: { refId: fresh } }))
       p.campaigns['broad-category'] = fresh
       const lines = await inA(async () => rankGroupCompiler.preview(await ctxOf(p, 'build'), []))
-      expect(lines[1].summary).toMatch(/leaves it \(what it floored on them is given back\); "TESTPB8 \| IT \| Broad \| Category \(2\)" joins it at the next START \(it is on: joining now would start hourly bids on it\)/)
+      expect(lines[1].summary).toMatch(/leaves it \(top of search stays as last set\); "TESTPB8 \| IT \| Broad \| Category \(2\)" joins it at the next START \(it is on: joining now would start hourly bids on it\)/)
       expect(await compile(p)).toMatchObject({ errors: [] })
       expect((await groupOf(p, 'research'))!.members).toEqual([p.campaigns.auto])
       const on = await inA(async () => rankGroupCompiler.setEnabled(await ctxOf(p, 'start'), [], true))
@@ -246,14 +282,14 @@ describe('a build: one hourly plan per rank role, born off', () => {
       expect([...(await inA(() => autoBidHolders([p.campaigns['exact-category'], p.campaigns.auto]))).entries()]).toEqual([])
     })
 
-    it('START in PROFIT (performance off in that phase): performance stays off, research goes on', async () => {
-      await inA(() => db().adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: p.parent, label: 'Test product strategy', goal: 'PROFIT', updatedBy: 'user:test' } }))
+    it('START in DEFEND (research off in that phase): performance goes on, research stays off', async () => {
+      await inA(() => db().adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: p.parent, label: 'Test product strategy', goal: 'DEFEND', updatedBy: 'user:test' } }))
       const preview = await inA(async () => rankGroupCompiler.preview(await ctxOf(p, 'start'), []))
-      expect(preview.map((l) => [l.key, l.does])).toEqual([['rank:performance', 'keep'], ['rank:research', 'enable']])
+      expect(preview.map((l) => [l.key, l.does])).toEqual([['rank:performance', 'enable'], ['rank:research', 'keep']])
       const on = await inA(async () => rankGroupCompiler.setEnabled(await ctxOf(p, 'start'), [], true))
       expect(on.errors).toEqual([])
-      expect((await groupOf(p, 'performance'))!.group.enabled).toBe(false)
-      expect((await groupOf(p, 'research'))!.group.enabled).toBe(true)
+      expect((await groupOf(p, 'performance'))!.group.enabled).toBe(true)
+      expect((await groupOf(p, 'research'))!.group.enabled).toBe(false)
       await inA(() => rankGroupCompiler.setEnabled({ ...DOC_CTX(p) }, [], false))
     })
   })
@@ -328,19 +364,33 @@ describe("the Owner's hourly plans are his own: a role is refused by name, his p
     expect(await snapshotOf(ownerGroup)).toEqual(before)
   })
 
-  it('a schedule of its own (switched off) — and an enabled product rank plan of the product: refused, untouched', async () => {
+  it('a schedule of its own (switched off) — and a campaign that also advertises another product an Owner\'s product rank plan governs: refused, untouched', async () => {
     const p = await product('TESTPB8B', { adopted: ['auto', 'exact-category'] })
     const own = await inA(() => db().adSchedule.create({ data: { campaignId: p.campaigns.auto, name: 'Owner single plan', windows: [{ days: [2], startHour: 1, endHour: 3, targetKey: 'test-owner' }], enabled: false } }))
-    const plan = await inA(() => db().productRankPlan.create({ data: { productId: p.parent, marketplace: 'IT', enabled: true, excludeCampaignIds: [p.campaigns['broad-category']] } }))
+    // Another product of the Owner's, held by his product rank plan; two of the playbook's campaigns also advertise it.
+    // The engine resolves the plan's campaigns by the family's ASINs (resolveProductFamily): both are governed, but the
+    // one the plan excludes.
+    const plan = await inA(async () => {
+      const z = await db().product.create({ data: { sku: 'TEST-OWNERZ-PARENT', name: 'Owner test product', basePrice: '10.00', isParent: true, amazonAsin: 'B0TESTZZP0' } })
+      await db().product.create({ data: { sku: 'TEST-OWNERZ-V1', name: 'Owner test product v1', basePrice: '10.00', parentId: z.id, amazonAsin: 'B0TESTZZ01' } })
+      for (const slot of ['exact-category', 'exact-brand']) {
+        const g = await db().adGroup.findFirstOrThrow({ where: { campaignId: p.campaigns[slot] } })
+        await db().adProductAd.create({ data: { adGroupId: g.id, asin: 'B0TESTZZ01', sku: 'TEST-OWNERZ-V1' } })
+      }
+      return db().productRankPlan.create({ data: { productId: z.id, marketplace: 'IT', enabled: true, excludeCampaignIds: [p.campaigns['exact-brand']] } })
+    })
     const before = await inA(() => db().adSchedule.findUnique({ where: { id: own.id } }))
     const out = await compile(p)
     expect(out.errors).toEqual([
-      'rankGroup: The performance campaigns get no hourly plan: "TESTPB8B | IT | Exact | Category" is held by the product rank plan of this product — adopt it first; "TESTPB8B | IT | Exact | Brand" is held by the product rank plan of this product — adopt it first. That plan is not touched. Nothing of this role is written.',
+      'rankGroup: The performance campaigns get no hourly plan: "TESTPB8B | IT | Exact | Category" is held by the product rank plan of "Owner test product" — adopt it first. That plan is not touched. Nothing of this role is written.',
       'rankGroup: The research campaigns get no hourly plan: "TESTPB8B | IT | Auto" is held by its own hourly plan "Owner single plan" — adopt it first. That plan is not touched. Nothing of this role is written.',
     ])
     expect(await inA(() => db().adSchedule.findUnique({ where: { id: own.id } }))).toEqual(before)
     expect(await inA(() => db().adSchedule.count({ where: { campaignId: { in: Object.values(p.campaigns) } } }))).toBe(1)
-    await inA(() => db().productRankPlan.delete({ where: { id: plan.id } }))
+    // Switched off, the plan governs nothing: the performance role compiles.
+    await inA(() => db().productRankPlan.update({ where: { id: plan.id }, data: { enabled: false } }))
+    expect((await compile(p)).errors).toHaveLength(1)
+    expect((await groupOf(p, 'performance'))!.members).toEqual(sorted(p.campaigns['exact-category'], p.campaigns['exact-brand']))
   })
 
   it('a portfolio his group covers, a group with the name it would get, bids an earlier plan left: refused, untouched', async () => {
@@ -365,6 +415,134 @@ describe("the Owner's hourly plans are his own: a role is refused by name, his p
     expect(again.errors[1]).toBe('rankGroup: The research campaigns get no hourly plan: an hourly plan named "TESTPB8C | IT | Playbook Research" exists already and is not this playbook\'s — it is not touched (rename it, or adopt it first). Nothing of this role is written.')
     expect(await snapshotOf(twin.id)).toEqual(beforeTwin)
     expect(await inA(() => db().adSchedule.count({ where: { campaignId: { in: Object.values(p.campaigns) } } }))).toBe(0)
+  })
+})
+
+describe('switched off, nothing rises: what rank set is kept, not given back', () => {
+  let p: Seeded
+  let ids: { floored: string; floorGroup: string; down: string; up: string }
+  /** Rank holds the campaigns now, as a Min-bid window and a base-bid swatch leave them. */
+  const rankHolds = () => inA(async () => {
+    const exact = p.campaigns['exact-category']
+    const sid = (await db().adSchedule.findFirstOrThrow({ where: { campaignId: exact } })).id
+    await db().campaign.update({ where: { id: exact }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: 2, bidsSuppressedBy: `automation:rank-defend-${sid}`, dynamicBidding: { placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 300 }] } } })
+    await db().adGroup.update({ where: { id: ids.floorGroup }, data: { defaultBidCents: 2, suppressedFromBidCents: 30 } })
+    // On the auto slot: one bid rank lowered (24 from 30) and one it raised (36 from 30).
+    await db().adGroup.update({ where: { id: ids.down }, data: { defaultBidCents: 24, baseBidFromCents: 30 } })
+    await db().adTarget.update({ where: { id: ids.up }, data: { bidCents: 36, baseBidFromCents: 30 } })
+  })
+  const state = () => inA(async () => ({
+    campaign: await db().campaign.findUniqueOrThrow({ where: { id: p.campaigns['exact-category'] }, select: { bidsSuppressedAt: true, bidsSuppressedBy: true } }),
+    floorGroup: await db().adGroup.findUniqueOrThrow({ where: { id: ids.floorGroup }, select: { defaultBidCents: true, suppressedFromBidCents: true } }),
+    down: await db().adGroup.findUniqueOrThrow({ where: { id: ids.down }, select: { defaultBidCents: true, baseBidFromCents: true } }),
+    up: await db().adTarget.findUniqueOrThrow({ where: { id: ids.up }, select: { bidCents: true, baseBidFromCents: true } }),
+  }))
+
+  beforeAll(async () => {
+    p = await product('TESTPB8E', { adopted: DOC.structure.slots.map((x) => x.key) })
+    ids = await inA(async () => {
+      const floorGroup = (await db().adGroup.findFirstOrThrow({ where: { campaignId: p.campaigns['exact-category'] } })).id
+      const down = (await db().adGroup.findFirstOrThrow({ where: { campaignId: p.campaigns.auto } })).id
+      const up = (await db().adTarget.create({ data: { adGroupId: down, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test pb8 term', bidCents: 30 } })).id
+      return { floored: p.campaigns['exact-category'], floorGroup, down, up }
+    })
+    expect((await compile(p)).errors).toEqual([])
+    await inA(() => db().adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: p.parent, label: 'Test product strategy E', goal: 'LAUNCH', updatedBy: 'user:test' } }))
+    expect((await inA(async () => rankGroupCompiler.setEnabled(await ctxOf(p, 'start'), [], true))).errors).toEqual([])
+  })
+
+  it('the classifier: kept, the floor stays and only a bid rank raised goes down; given back, it is a raise', async () => {
+    await rankHolds()
+    const ctx = await ctxOf(p, 'stop')
+    const kept = await inA(() => rankOffEffect(ctx, ['performance', 'research']))
+    expect(kept).toMatchObject({ direction: 'lower', heldAtFloor: [{ campaignId: ids.floored, bids: 1 }], givenBack: [], keptDown: 1, raisedBack: 0, loweredBack: 1, topOfSearch: [{ campaignId: ids.floored, pct: 300 }] })
+    const given = await inA(() => rankOffEffect(ctx, ['performance', 'research'], 'giveBack'))
+    expect(given).toMatchObject({ direction: 'raise', heldAtFloor: [], givenBack: [{ campaignId: ids.floored, bids: 1 }], keptDown: 0, raisedBack: 1, loweredBack: 1 })
+    expect(given.words).toMatch(/gets the bids rank floored back \(a raise\)/)
+    // Pure: a floor another owner set keeps the campaign out of it altogether.
+    const facts = await inA(() => loadRankFacts(ctx))
+    facts.bids.get(ids.floored)!.floorBy = 'automation:retail-guard'
+    expect(classifyRankOff(facts, [ids.floored], 'giveBack')).toMatchObject({ direction: 'same', givenBack: [] })
+  })
+
+  it('STOP inside a Min-bid window: the floor stays at 2¢, handed to the approver and remembered; no bid rises; top of search named', async () => {
+    rec.writes = []
+    const lines = await inA(async () => rankGroupCompiler.preview(await ctxOf(p, 'stop'), []))
+    expect(lines.map((l) => [l.key, l.does])).toEqual([['rank:performance', 'disable'], ['rank:research', 'disable']])
+    expect(lines[0].summary).toMatch(/"TESTPB8E \| IT \| Exact \| Category" stays at the floor rank set \(kept as the approver's floor; START gives the bids back\); top of search stays as last set \("TESTPB8E \| IT \| Exact \| Category" 300%\)/)
+    expect(lines[1].summary).toMatch(/1 bid rank lowered stays where it is; 1 bid rank raised goes back down to its earlier bid/)
+    const off = await inA(async () => rankGroupCompiler.setEnabled(await ctxOf(p, 'stop'), [], false))
+    expect(off.errors).toEqual([])
+    const after = await state()
+    expect(after.campaign.bidsSuppressedAt).not.toBeNull()
+    expect(after.campaign.bidsSuppressedBy).toBe('user:u-approver')
+    expect(after.floorGroup).toEqual({ defaultBidCents: 2, suppressedFromBidCents: 30 })
+    expect(after.down).toEqual({ defaultBidCents: 24, baseBidFromCents: null })
+    expect(after.up).toEqual({ bidCents: 30, baseBidFromCents: null })
+    // The real give-back ran: the one bid it wrote went down.
+    expect(rec.writes.map((w) => [w.id, w.bid])).toEqual([[ids.up, 30]])
+  })
+
+  it('a phase that gives back (floors giveBack): the bids rank floored come back — the raise the classifier names', async () => {
+    await inA(() => db().adsPlaybook.update({ where: { id: p.rowId }, data: { state: 'RUNNING' } }))
+    expect((await inA(async () => rankGroupCompiler.setEnabled(await ctxOf(p, 'start'), [], true))).errors).toEqual([])
+    await inA(() => db().campaign.update({ where: { id: ids.floored }, data: { bidsSuppressedAt: null, bidsSuppressedBy: null } }))
+    await rankHolds()
+    rec.writes = []
+    const lines = await inA(async () => previewRankPhase(await ctxOf(p, 'start'), { performance: 'off' }, { floors: 'giveBack' }))
+    expect(lines[0].summary).toMatch(/gets the bids rank floored back \(a raise\)/)
+    expect((await inA(async () => applyRankPhase(await ctxOf(p, 'start'), { performance: 'off' }, { floors: 'giveBack' }))).errors).toEqual([])
+    expect((await state()).floorGroup).toEqual({ defaultBidCents: 30, suppressedFromBidCents: null })
+    expect(rec.writes.map((w) => [w.id, w.bid])).toEqual([[ids.floorGroup, 30]])
+    await inA(() => rankGroupCompiler.setEnabled(DOC_CTX(p), [], false))
+  })
+})
+
+describe('an adopt changes Nexus only; a build takes a campaign out', () => {
+  it('an unbind from a plan that is on saves nothing (it leaves at STOP); a build then takes it out and nothing rises', async () => {
+    const p = await product('TESTPB8F', { adopted: DOC.structure.slots.map((x) => x.key) })
+    expect((await compile(p)).errors).toEqual([])
+    expect((await inA(async () => rankGroupCompiler.setEnabled(await ctxOf(p, 'start'), [], true))).errors).toEqual([])
+    const research = (await groupOf(p, 'research'))!
+    expect(research.group.enabled).toBe(true)
+    // The auto slot is unbound (the undo of an adopt), while rank holds it at the floor.
+    const sid = (await inA(() => db().adSchedule.findFirstOrThrow({ where: { campaignId: p.campaigns.auto } }))).id
+    await inA(async () => {
+      await db().adsPlaybookLink.deleteMany({ where: { playbookId: p.rowId, kind: 'slot', key: 'auto' } })
+      await db().campaign.update({ where: { id: p.campaigns.auto }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: 2, bidsSuppressedBy: `automation:rank-defend-${sid}` } })
+      await db().adGroup.updateMany({ where: { campaignId: p.campaigns.auto }, data: { defaultBidCents: 2, suppressedFromBidCents: 30 } })
+    })
+    const versions = await inA(() => db().rankScheduleVersion.count({ where: { groupId: research.group.id } }))
+    const out = await compile(p, 'adopt')
+    expect(out.errors).toEqual([])
+    const lines = await inA(async () => rankGroupCompiler.preview(await ctxOf(p, 'adopt'), []))
+    expect(lines[1]).toMatchObject({ key: 'rank:research', does: 'report' })
+    expect(lines[1].summary).toBe('The playbook\'s hourly plan "TESTPB8F | IT | Playbook Research" is on: "TESTPB8F | IT | Auto" leaves it at STOP — taking it out now would change its bids at Amazon, and an adopt changes Nexus only. Nothing of this plan is saved.')
+    expect((await groupOf(p, 'research'))!.members).toEqual(research.members)
+    expect(await inA(() => db().rankScheduleVersion.count({ where: { groupId: research.group.id } }))).toBe(versions)
+    // A build takes it out: rank's floor stays, handed over; nothing written at Amazon.
+    rec.writes = []
+    expect((await compile(p, 'build')).errors).toEqual([])
+    expect((await groupOf(p, 'research'))!.members).toEqual([p.campaigns['broad-category']])
+    expect(await inA(() => db().campaign.findUniqueOrThrow({ where: { id: p.campaigns.auto }, select: { bidsSuppressedBy: true } }))).toEqual({ bidsSuppressedBy: 'user:u-approver' })
+    expect(rec.writes).toEqual([])
+    await inA(() => rankGroupCompiler.setEnabled(DOC_CTX(p), [], false))
+  })
+})
+
+describe('ownership checked again just before the save', () => {
+  it('a group of the same name made after the plan was read is never taken over: the role is refused, that group untouched', async () => {
+    const p = await product('TESTPB8G')
+    const ctx = await ctxOf(p, 'build')
+    const facts = await inA(() => loadRankFacts(ctx))
+    const steps = planCompile(ctx, facts)
+    expect(steps.map((x) => x.does)).toEqual(['create', 'create'])
+    const twin = await inA(() => db().rankScheduleGroup.create({ data: { name: 'TESTPB8G | IT | Playbook Research', marketplace: 'IT', enabled: true } }))
+    const before = await snapshotOf(twin.id)
+    const out = await inA(() => runRankSteps(ctx, facts, steps))
+    expect(out.errors).toEqual(['an hourly plan named "TESTPB8G | IT | Playbook Research" exists already and is not this playbook\'s — it is not touched, and the research campaigns get no plan'])
+    expect(out.links.map((l) => l.key)).toEqual(['rank:performance'])
+    expect(await snapshotOf(twin.id)).toEqual(before)
   })
 })
 
