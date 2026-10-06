@@ -24,6 +24,8 @@ function importInOrder(...files: string[]): Promise<string> {
 
 const RUN_SERVICE = 'src/services/agents/ads-manager-run.service.ts'
 const TOOLS = 'src/services/agents/tools/ads-manager.tools.ts'
+/** W4-5 — the watch-week comparison the ads-manager tools read. */
+const WATCH_WEEK = 'src/services/agents/ads-watch-week.service.ts'
 const REGISTRY = 'src/services/agents/tool-registry.ts'
 const WATCHDOG = 'src/services/agents/ads-manager-watchdog.service.ts'
 const WATCHDOG_JOB = 'src/jobs/claude-ads-run-watchdog.job.ts'
@@ -32,6 +34,7 @@ describe('W4 — the daily-run modules load whichever comes first (real Node ESM
   it.each([
     ['the run record first', [RUN_SERVICE, REGISTRY]],
     ['the ads-manager tools first', [TOOLS, REGISTRY]],
+    ['the watch-week comparison first', [WATCH_WEEK, REGISTRY]],
     ['the tool registry first (the API\'s order)', [REGISTRY, RUN_SERVICE]],
     ['the OAuth server first', ['src/services/oauth/oauth-server.ts', REGISTRY]],
     ['the scheduler first', ['src/runtime/scheduler.ts', REGISTRY]],

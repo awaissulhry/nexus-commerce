@@ -468,9 +468,21 @@ describe('AA-W2-4 — watch: the full check auto would make, recorded on the req
     expect(far.answer.trust.why).toMatch(/^watching: it would not — the master price moves [\d.]+ %, more than the 10 % allowed without a person; the person who asked types/)
     expect(await verdictOf(far.answer.approvalId)).toMatchObject({ level: 'watch', wouldRun: false, check: 'limits' })
 
+    // W4-5 (lead decision) — without nexus.run a watched change is judged as if the connection had it; the scope is
+    // recorded beside the verdict, not as its check.
     const noScope = await call('set-price', { productId: ids.productA, price: before + 1 }, claude(A, ['nexus.read', 'nexus.write']))
-    expect(noScope.answer).toMatchObject({ trust: { level: 'watch', why: expect.stringMatching(/nexus\.run.*; a person approves it in Nexus$/), watch: { wouldRun: false, check: 'scope' } } })
+    expect(noScope.answer).toMatchObject({
+      trust: {
+        level: 'watch',
+        why: expect.stringMatching(/^watching: it would have run by rule \(judged as if this connection may run changes by rule; it was connected without nexus\.run\); a person approves it in Nexus$/),
+        watch: { wouldRun: true, check: null, scope: 'no-run-by-rule' },
+      },
+    })
     expect(noScope.answer).not.toHaveProperty('confirm')
+    expect(await verdictOf(noScope.answer.approvalId)).toMatchObject({ wouldRun: true, check: null, scope: 'no-run-by-rule' })
+    // Far outside the limits, the same connection: the limits hold it, and the scope is still beside it.
+    const noScopeFar = await call('set-price', { productId: ids.productA, price: Math.round(before * 1.5) }, claude(A, ['nexus.read', 'nexus.write']))
+    expect(noScopeFar.answer.trust.watch).toMatchObject({ wouldRun: false, check: 'limits', scope: 'no-run-by-rule' })
 
     await inside(() => pauseAutoRuns(actor(), 'watch week'))
     const paused = await call('set-price', { productId: ids.productA, price: before + 1 })
@@ -478,6 +490,24 @@ describe('AA-W2-4 — watch: the full check auto would make, recorded on the req
     for (const id of [far.answer.approvalId, noScope.answer.approvalId, paused.answer.approvalId]) {
       expect(await approvalOf(id)).toMatchObject({ status: 'pending', decisionVia: null, executeAfter: null })
     }
+  })
+
+  it('W4-5: a watched plan without nexus.run is judged as if the connection had it; a real verdict (auto) still needs nexus.run', async () => {
+    await setLevel('set-price', 'watch')
+    const step = async () => ({ tool: 'set-price', args: { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 } })
+    const watched = await call('submit-change-plan', { title: 'A watched plan', steps: [await step()] }, claude(A, ['nexus.read', 'nexus.write']))
+    expect(watched.answer).toMatchObject({ trust: { level: 'watch', watch: { wouldRun: true, check: null, scope: 'no-run-by-rule' } } })
+    expect(await verdictOf(watched.answer.approvalId)).toMatchObject({
+      wouldRun: true, check: null, scope: 'no-run-by-rule', steps: [{ step: 1, tool: 'set-price', watched: true, wouldRun: true, check: null }],
+    })
+    // At auto nothing changed: without nexus.run the change waits for a person, a single request and a plan alike.
+    await setLevel('set-price', 'auto')
+    const single = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 }, claude(A, ['nexus.read', 'nexus.write']))
+    expect(single.answer).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'auto', why: expect.stringContaining('nexus.run') } })
+    expect(single.answer.trust).not.toHaveProperty('watch')
+    const plan = await call('submit-change-plan', { title: 'An auto plan', steps: [await step()] }, claude(A, ['nexus.read', 'nexus.write']))
+    expect(plan.answer).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'auto', why: expect.stringContaining('nexus.run') } })
+    for (const id of [single.answer.approvalId, plan.answer.approvalId]) expect(await verdictOf(id)).toBeNull()
   })
 
   it('the daily cap counts the watched changes that would have run, as if their kinds were at auto', async () => {

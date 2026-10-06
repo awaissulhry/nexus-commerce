@@ -36,8 +36,9 @@
  * when that list is empty, to this business's own active people who may see its ad money (ads.view and
  * financials.adspend.view, or its owners) — one e-mail per business, never two businesses in one.
  *
- * W4-5 (not built): the watch-week comparison — each watched step against what then happened to its entity — goes in
- * `ads-manager-runs` where WATCH_WEEK_SLOT stands, and in the daily e-mail.
+ * W4-5: the watch-week comparison — each watched step against what then happened to its entity — is
+ * ads-watch-week.service.ts: `ads-manager-runs` answers with it, and the daily e-mail carries its table while watch mode
+ * is on (`watchModeOn`).
  */
 
 import type { Prisma } from '@nexus/database'
@@ -59,11 +60,6 @@ const trust = () => import('./claude-trust.service.js')
 const registry = () => import('./tool-registry.js')
 
 export { ADS_MANAGER_AGENT_KEY, ADS_RUN_DAY_ZONE, ADS_RUN_NOTICE_TYPE }
-/** W4-5 slot: the watch-week comparison is not built yet; `ads-manager-runs` says so where it will stand. */
-export const WATCH_WEEK_SLOT = {
-  comparison: null,
-  note: 'The watch-week comparison (each watched step against what then happened to its entity) is not built yet (W4-5).',
-} as const
 
 export type RunStatus = 'running' | 'done' | 'failed' | 'cancelled'
 /** How a run's status reads to a person and to Claude. */
@@ -101,15 +97,11 @@ export interface StartFacts {
   readAt: string
 }
 
-export async function startFacts(now = new Date()): Promise<StartFacts> {
-  const [{ autonomyOf, autoRunsInLastDay, ruleFrom }, { getTool }] = await Promise.all([trust(), registry()])
+/** Each ad change tool by the business's level for it now (the ads strategy may hold a kind lower where a change lands). */
+export async function adToolLevels(): Promise<StartFacts['levels']> {
+  const [{ ruleFrom }, { getTool }] = await Promise.all([trust(), registry()])
   const names = adChangeTools()
-  const [rows, autonomy, used, markets] = await Promise.all([
-    prisma.agentTool.findMany({ where: { name: { in: names } }, select: { name: true, claudeTrust: true, claudeLimits: true } }),
-    autonomyOf(),
-    autoRunsInLastDay(),
-    campaignMarkets(),
-  ])
+  const rows = await prisma.agentTool.findMany({ where: { name: { in: names } }, select: { name: true, claudeTrust: true, claudeLimits: true } })
   const levels: StartFacts['levels'] = { auto: [], watch: [], confirm: [], ask: [], off: [] }
   for (const name of names) {
     const tool = getTool(name)
@@ -117,6 +109,12 @@ export async function startFacts(now = new Date()): Promise<StartFacts> {
     const level = ruleFrom(tool, rows.find((row) => row.name === name) ?? null).level as ClaudeTrust
     levels[level].push(name)
   }
+  return levels
+}
+
+export async function startFacts(now = new Date()): Promise<StartFacts> {
+  const { autonomyOf, autoRunsInLastDay } = await trust()
+  const [levels, autonomy, used, markets] = await Promise.all([adToolLevels(), autonomyOf(), autoRunsInLastDay(), campaignMarkets()])
   const versions = await Promise.all(markets.map(async (market) => ({ market, strategyVersion: strategyVersionOf((await loadIndex(market)).index) })))
   const mode: RunMode = autonomy.paused ? 'paused' : levels.auto.length ? 'act' : levels.watch.length ? 'watch' : 'ask'
   return {
