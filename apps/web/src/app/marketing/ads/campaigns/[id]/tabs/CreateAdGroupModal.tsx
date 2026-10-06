@@ -1,28 +1,28 @@
 'use client'
 
 /**
- * CBN.3.4 — "Create Ad Group: Settings" modal (H10 match). Name + default bid + targeting
- * type, POSTed to /advertising/adgroups/create ({ campaignId, name, defaultBidEur }). The
- * targeting choice is captured for parity; the local create service defaults it.
+ * CBN.3.4 — "Create Ad Group: Settings" modal (H10 match). Name + default bid, POSTed to /advertising/adgroups/create
+ * ({ campaignId, name, defaultBidEur }).
+ *
+ * CM-31 — the targeting is shown, not asked: on Sponsored Products it belongs to the campaign, and the Auto / Keyword /
+ * Product choice this modal offered was sent and never read (see adGroupTargeting.ts).
  */
 import { useState } from 'react'
-import { Button, Input, RadioCard } from '@/design-system/primitives'
+import { Button, Input } from '@/design-system/primitives'
 import { Field, Modal, useToast } from '@/design-system/components'
 import { adsAdd } from '../../../_shared/adsWrite'
+import { adGroupTargetingWords } from './adGroupTargeting'
 import '../../campaigns-ds.css'
 
-const TARGETING = [
-  { value: 'AUTO', title: 'Auto Targeting', desc: 'Amazon targets keywords and products that are similar to the product in your ad.' },
-  { value: 'KEYWORD', title: 'Keyword Targeting', desc: 'Choose keywords to help your products appear in shopper searches, and set custom bids.' },
-  { value: 'PRODUCT', title: 'Product Targeting', desc: 'Choose specific products, categories, or brands to target your ads.' },
-]
-
-export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCreated }: {
-  campaignId: string; currency?: string; onClose: () => void; onCreated: () => void
+export function CreateAdGroupModal({ campaignId, campaign, currency = '€', onClose, onCreated }: {
+  campaignId: string
+  /** The campaign the group joins: its targeting type is shown read-only (CM-31). */
+  campaign?: { adProduct?: string | null; type?: string | null; targetingType?: string | null } | null
+  currency?: string; onClose: () => void; onCreated: () => void
 }) {
   const [name, setName] = useState('')
   const [bid, setBid] = useState('0.50')
-  const [targeting, setTargeting] = useState('AUTO')
+  const targeting = adGroupTargetingWords(campaign)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const { toast } = useToast()
@@ -31,7 +31,7 @@ export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCr
   async function create() {
     setBusy(true); setErr(null)
     // CM-8 — created means Amazon holds the ad group; otherwise the write gate's or Amazon's reason is shown.
-    const r = await adsAdd('/api/advertising/adgroups/create', { campaignId, name: name.trim(), defaultBidEur: Number(bid), targetingType: targeting })
+    const r = await adsAdd('/api/advertising/adgroups/create', { campaignId, name: name.trim(), defaultBidEur: Number(bid) })
     setBusy(false)
     if (r.added || r.savedOnly) {
       if (r.savedOnly) toast(`Ad group saved in Nexus only: ${r.reason}`, 'warning', { duration: 9000 })
@@ -47,7 +47,7 @@ export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCr
       onClose={onClose}
       size="md"
       title="Create Ad Group: Settings"
-      subtitle="Set the name, default bid, and type of targeting"
+      subtitle="Set the name and default bid"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -62,20 +62,8 @@ export function CreateAdGroupModal({ campaignId, currency = '€', onClose, onCr
       <Field className="cd-field s" label="Default Bid">
         <Input inputMode="decimal" prefix={currency} value={bid} onChange={(e) => setBid(e.target.value)} fieldClassName="cd-money-field" />
       </Field>
-      <Field className="cd-field" label="Targeting" htmlFor="cag-targeting">
-        <div className="cd-radiocards" id="cag-targeting">
-          {TARGETING.map((t) => (
-            <RadioCard
-              key={t.value}
-              name="targeting"
-              title={t.title}
-              description={t.desc}
-              selected={targeting === t.value}
-              checked={targeting === t.value}
-              onChange={() => setTargeting(t.value)}
-            />
-          ))}
-        </div>
+      <Field className="cd-field" label="Targeting" hint={targeting.hint}>
+        <Input value={targeting.value} readOnly aria-readonly="true" fieldClassName="cd-field-full" />
       </Field>
       {err && <div className="h10-cd-modalerr">{err}</div>}
     </Modal>

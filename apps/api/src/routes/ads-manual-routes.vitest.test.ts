@@ -4,7 +4,7 @@
  *
  * Each person path is driven through its REAL route (so the test proves the route marks the click), the queued ones
  * through the real worker; each engine counterpart calls the same service the way an engine does. Covered: adding a
- * keyword, product target, ad group or product ad; "Add as keyword" from search terms; adding an ad-group negative
+ * keyword, product target, ad group or product ad; adding an ad-group negative
  * keyword or negative ASIN; the change log's Undo button; the Budget Manager control plane (budget, restore, bid,
  * placement). The bulk sheet upload is in workers/ads-manual-control.vitest.test.ts.
  *
@@ -158,10 +158,6 @@ describe('adds from the campaign manager, while the account is halted', () => {
     const ad = await post('/advertising/product-ads/create', { adGroupId: 'add-c-g', sku: 'SKU-TEST-1' })
     expect([ad.status, ad.manual]).toEqual([200, [true]])
     expect(ad.body.externalAdId).toMatch(/^EXT-NEW-/)
-
-    const promoted = await post('/advertising/search-terms/promote', { query: 'giacca promossa', externalAdGroupId: 'EXT-add-c-g', matchType: 'EXACT', bidEur: 0.3 })
-    expect([promoted.status, promoted.manual]).toEqual([200, [true]])
-    expect(promoted.body.externalTargetId).toMatch(/^EXT-NEW-/)
   })
 
   it('the same adds from an engine or rule are refused by the halt (and say so)', async () => {
@@ -240,7 +236,9 @@ describe('the Budget Manager control plane, while the account is halted', () => 
     })
     expect(commit.status).toBe(200)
     expect(commit.body).toMatchObject({ ok: true, applied: 3 })
-    expect(commit.manual).toEqual([true]) // the placement goes inline
+    // the budget asks the gate before writing (3A: past his own limits it would wait for "Send anyway"), and the
+    // placement goes inline — both as his
+    expect(commit.manual).toEqual([true, true])
     await endGraceHolds()
     const queued = await drain()
     expect(queued.manual).toEqual([true, true, true, true]) // budget + the restore of the ad group and both keywords

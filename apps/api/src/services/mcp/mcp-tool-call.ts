@@ -33,6 +33,10 @@
  * C7 — a change (or plan) at `confirm` answers with its summary, its planHash and "type your authenticator code"; the
  * person who asked approves it with confirm-change (claude-confirm.service.ts). A tool's secret arguments (the code)
  * are never written to the run.
+ *
+ * ADS AUTONOMY W1-8 — an ad change is held to the lower of the business's level for its tool and the ads strategy's
+ * level for its kind of action where it lands (claude-trust.service.ts `claudeRuleForChange`): off there refuses it
+ * before anything runs; a narrowed request answers with `trust.strategy`, the strategy row that narrowed it.
  */
 
 import { Prisma } from '@nexus/database'
@@ -47,7 +51,17 @@ import { runOrigin } from '../agents/call-tool.js'
 import type { AgentTool } from '../agents/tool-types.js'
 import { argumentsRefusal } from '../agents/tool-arguments.js'
 import { getTool } from '../agents/tool-registry.js'
-import { autoRefusal, claudeRuleOf, CONFIRM_IN_CLAUDE, overDailyCap, planRuleRefusal, withdrawRuleSchedule } from '../agents/claude-trust.service.js'
+import {
+  autoRefusal,
+  claudeRuleForChange,
+  CONFIRM_IN_CLAUDE,
+  narrowedDecision,
+  narrowedWhy,
+  overDailyCap,
+  planRuleRefusal,
+  withdrawRuleSchedule,
+  type StrategyNarrowed,
+} from '../agents/claude-trust.service.js'
 import { confirmByCode, prepareConfirm } from '../agents/claude-confirm.service.js'
 import { scheduleApproval } from '../agent-fleet/approval-inbox.service.js'
 import { oauthIssuer } from '../oauth/oauth-config.js'
@@ -115,37 +129,45 @@ export function businessRefusal(principal: McpPrincipal, tool: Pick<AgentTool, '
   return `This connection works in ${own}; you named ${shown}. ${nothing}`
 }
 
+const capitalised = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+
 /**
  * C5 — the business's rule for each tool Claude asks for (an undo's inverse tool included): off refuses before
  * anything runs; once the request is stored, auto schedules it as the person who asked when everything allows it.
+ * W1-8 — for an ad change, at the ads strategy's level where it lands when that is lower.
  */
 export function claudeGateRule(principal: McpPrincipal): GateRule {
   const runScope = principal.scopes?.includes('nexus.run') ?? false
   return {
-    async refusal(tool) {
-      const rule = await claudeRuleOf(tool.name)
+    async refusal(tool, args) {
+      const rule = await claudeRuleForChange(tool.name, args ?? {})
       if (rule?.level !== 'off') return null
-      return `${tool.name} is turned off for Claude in ${principal.business.name}. ${tool.readOnly ? 'Nothing ran.' : 'Nothing was queued.'}`
+      const nothing = tool.readOnly ? 'Nothing ran.' : 'Nothing was queued.'
+      if (rule.narrowedBy) return `${capitalised(narrowedWhy(rule.narrowedBy))}. ${nothing}`
+      return `${tool.name} is turned off for Claude in ${principal.business.name}. ${nothing}`
     },
     async confirm(input) {
       return confirmByCode(principal, input, { runScope })
     },
-    async decide({ approvalId, tool, preview, steps }): Promise<RuleVerdict> {
+    async decide({ approvalId, tool, preview, args, steps }): Promise<RuleVerdict> {
       // C7 — at confirm: the summary and planHash the person's code will be bound to (with nexus.run only).
-      const confirmable = async (why: string): Promise<RuleVerdict> => {
+      const confirmable = async (why: string, strategy?: StrategyNarrowed): Promise<RuleVerdict> => {
         const confirm = runScope ? await prepareConfirm(approvalId) : null
-        const noScope = 'this business set it to "confirm in Claude", but this Claude connection may not confirm changes (it was connected without nexus.run); a person approves it in Nexus'
-        return { by: 'person', level: 'confirm', why: runScope ? why : noScope, ...(confirm ? { confirm } : {}) }
+        const noScope = `${strategy ? narrowedWhy(strategy) : 'this business set it to "confirm in Claude"'}, but this Claude connection may not confirm changes (it was connected without nexus.run); a person approves it in Nexus`
+        return { by: 'person', level: 'confirm', why: runScope ? why : noScope, ...(confirm ? { confirm } : {}), ...(strategy ? { strategy } : {}) }
       }
       if (steps) {
         // C6 — a plan: by rule only when every step may.
         const refused = await planRuleRefusal(steps, { runScope })
-        if (refused?.level === 'confirm') return confirmable(refused.why ?? CONFIRM_IN_CLAUDE)
+        if (refused?.level === 'confirm') return confirmable(refused.why ?? CONFIRM_IN_CLAUDE, refused.strategy)
         if (refused) return { by: 'person', ...refused }
       } else {
-        const rule = await claudeRuleOf(tool.name)
-        if (!rule || rule.level === 'ask' || rule.level === 'off') return { by: 'person', level: 'ask' }
-        if (rule.level === 'confirm') return confirmable(CONFIRM_IN_CLAUDE)
+        const rule = await claudeRuleForChange(tool.name, args ?? {}, preview)
+        const strategy = rule?.narrowedBy
+        if (!rule || rule.level === 'ask' || rule.level === 'off') {
+          return strategy ? { by: 'person', level: 'ask', why: narrowedDecision(strategy), strategy } : { by: 'person', level: 'ask' }
+        }
+        if (rule.level === 'confirm') return confirmable(strategy ? narrowedDecision(strategy) : CONFIRM_IN_CLAUDE, strategy)
         const refusal = await autoRefusal(tool, preview, { runScope, rule })
         if (refusal) return { by: 'person', level: 'auto', why: refusal }
       }
@@ -215,9 +237,10 @@ function answer(outcome: GateOutcome, principal: McpPrincipal, tool?: Pick<Agent
         ...(outcome.plan ? { plan: outcome.plan } : {}),
         // C2 — an undo says which change it puts back.
         ...(outcome.undoes ? { undoes: { changeId: outcome.undoes } } : {}),
-        // C5 — when a level above ask (or a plan's mixed levels) still leaves it to a person: why.
+        // C5 — when a level above ask (or a plan's mixed levels) still leaves it to a person: why. W1-8 — and, when the
+        // ads strategy narrowed it, the strategy row that did.
         ...(outcome.rule && outcome.rule.by === 'person' && (outcome.rule.level !== 'ask' || outcome.rule.why)
-          ? { trust: { level: outcome.rule.level, why: outcome.rule.why ?? null } }
+          ? { trust: { level: outcome.rule.level, why: outcome.rule.why ?? null, ...(outcome.rule.strategy ? { strategy: outcome.rule.strategy } : {}) } }
           : {}),
         // C7 — set to confirm: what the person's code approves, and how.
         ...(outcome.rule?.by === 'person' && outcome.rule.confirm

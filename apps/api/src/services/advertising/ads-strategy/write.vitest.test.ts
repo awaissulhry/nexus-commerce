@@ -193,7 +193,8 @@ describe('a change planned and saved', () => {
       const { plan, out } = await saved(it_({ level: 'market', values: { maxBidCents: 150, maxChangePct: 20, monthlySpendCapCents: 900000 }, reason: 'test start' }))
       expect(plan.direction).toBe('lower')
       expect(plan.preview).toMatchObject({ version: { from: 0, to: 1 }, direction: 'lower', raises: [], stepUp: null, reachesAmazon: false, scope: { level: 'MARKET', scopeId: '*', label: 'IT market' } })
-      expect(plan.preview.liveEffect).toContain('no engine, rule or Claude door reads it yet')
+      expect(plan.preview.liveEffect).toContain('no engine or rule reads it yet')
+      expect(plan.preview.liveEffect).not.toContain('binds at once')
       expect(plan.preview.notReadYet).toEqual(expect.arrayContaining(['maxBidCents', 'target']))
       expect(out).toMatchObject({ ok: true, version: 1, direction: 'lower' })
       const row = (await rowOf('MARKET'))!
@@ -346,6 +347,9 @@ describe('undo, money and business', () => {
       if ('error' in second.out) throw new Error('not applied')
       // harvest cleared and an autonomy key dropped (negative is no longer narrowed): both raise.
       expect(second.plan.changes.map((c) => [c.field, c.direction])).toEqual([['harvest', 'raise'], ['claudeAutonomy', 'raise']])
+      // What Claude may do alone is read at once, by Claude's door (W1-8): the live effect says so.
+      expect(second.plan.preview.liveEffect).toContain("What Claude may do alone binds at once: read by Claude's door")
+      expect(second.plan.preview.readBy.claudeAutonomy).toEqual([expect.stringContaining("Claude's door")])
       const undo = await saved(undoArgsOf(second.out.before, second.out.after))
       expect(undo.plan.direction).toBe('lower')
       expect((await strategyStateNow(second.out.before)).values).toEqual(second.out.before.values)

@@ -38,7 +38,8 @@ const BASELINE = join(process.cwd(), 'scripts/ds-conformance-baseline.json')
 // are frozen, nothing is asked of the existing code, and the next file added cannot make them
 // worse. The two LEGACY consoles stay exempt — Wave 0 retires them wholesale, so ratcheting code
 // that is scheduled for deletion buys nothing.
-const ALLOW = ['marketing/ads-console/', 'marketing/advertising/',
+// 2026-10-06 — 'marketing/ads-console/' left this list: the old ads console is deleted (OC).
+const ALLOW = ['marketing/advertising/',
   // /r = the RV.6 public review-funnel (customer-facing, email-linked, server-rendered
   // without app CSS — its inline styles are load-bearing, not chrome). Investigated 2026-07-04.
   'r/']

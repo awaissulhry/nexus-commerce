@@ -24,8 +24,9 @@ vi.mock('../../lib/queue.js', () => {
     redis: null,
   }
 })
+const cacheRefresh: boolean[] = []
 vi.mock('./ads-cache.js', () => ({
-  cached: async (_key: string, _ttl: number, work: () => Promise<unknown>) => work(),
+  cached: async (_key: string, _ttl: number, work: () => Promise<unknown>, opts?: { refresh?: boolean }) => { cacheRefresh.push(opts?.refresh === true); return work() },
   peekCached: async () => undefined, putCached: () => undefined, flushAdsCache: async () => undefined,
 }))
 
@@ -165,4 +166,14 @@ describe('GET /advertising/campaigns answers exactly the service', () => {
       expect(response.payload).toBe(JSON.stringify(await list(q)))
     })
   }
+})
+
+describe('AM-34 — the Ad Manager\u2019s "Refresh view" reads past the 300-s cache', () => {
+  it('fresh=1 asks the cache to skip its stored answer; without it the cache answers as before', async () => {
+    cacheRefresh.length = 0
+    await list({})
+    await list({ fresh: '1' })
+    await list({ startDate: SEPTEMBER.startDate, endDate: SEPTEMBER.endDate, fresh: '1' })
+    expect(cacheRefresh).toEqual([false, true, true])
+  })
 })

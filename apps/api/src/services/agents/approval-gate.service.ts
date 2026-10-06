@@ -27,6 +27,7 @@ import prisma from '../../db.js'
 import { getTool } from './tool-registry.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import type { AgentTool, ClaudeTrust, ToolDoor } from './tool-types.js'
+import type { StrategyNarrowing } from '../advertising/ads-strategy/claude.js'
 import { logger } from '../../utils/logger.js'
 import { linkUndoRequest, recordExecutedChangeSafely } from './change-record.service.js'
 import { queuePlan } from './change-plan.service.js'
@@ -77,17 +78,33 @@ export interface GateOutcome {
  */
 export type RuleVerdict =
   | { by: 'rule'; level: 'auto'; executeAfter: string }
-  | { by: 'person'; level: ClaudeTrust; why?: string; confirm?: { summary: string; planHash: string } }
+  | {
+      by: 'person'
+      level: ClaudeTrust
+      why?: string
+      confirm?: { summary: string; planHash: string }
+      /** W1-8 — the ads strategy row that narrowed it below the business's level (`business`). */
+      strategy?: StrategyNarrowing & { business: ClaudeTrust }
+    }
 
 /** C5 — a door's rule for the tools it asks for (Claude's: mcp-tool-call.ts, from claude-trust.service.ts). */
 export interface GateRule {
-  /** Before anything runs: why this tool may not be used through this door at all (its level is off), or null. */
-  refusal(tool: AgentTool): Promise<string | null>
+  /**
+   * Before anything runs: why this tool may not be used through this door at all (its level is off), or null. W1-8 —
+   * with the arguments, an ad change is judged where it lands (the ads strategy may turn it off there).
+   */
+  refusal(tool: AgentTool, args?: Record<string, unknown>): Promise<string | null>
   /**
    * After the request is stored (raw preview): schedule it by the rule, or say why a person decides it. C6 — a plan
-   * brings its steps (each tool and raw preview): it runs by the rule only when every step may.
+   * brings its steps (each tool, its arguments and raw preview): it runs by the rule only when every step may.
    */
-  decide(queued: { approvalId: string; tool: AgentTool; preview: unknown; steps?: Array<{ tool: AgentTool; preview: unknown }> }): Promise<RuleVerdict>
+  decide(queued: {
+    approvalId: string
+    tool: AgentTool
+    preview: unknown
+    args?: Record<string, unknown>
+    steps?: Array<{ tool: AgentTool; preview: unknown; args?: Record<string, unknown> }>
+  }): Promise<RuleVerdict>
   /** C7 — confirm a waiting request with the person's code (confirm-change); a door without it cannot. */
   confirm?(input: { approvalId: string; planHash: string; code: string }): Promise<GateOutcome>
 }
@@ -118,7 +135,7 @@ export async function runOrQueueTool(
   if (!policy.enabled)
     return { ok: false, mode: 'error', error: `tool ${name} is disabled` }
   const listed = getTool(name)
-  const refusal = opts.rule && listed ? await opts.rule.refusal(listed) : null
+  const refusal = opts.rule && listed ? await opts.rule.refusal(listed, args) : null
   if (refusal) return { ok: false, mode: 'error', error: refusal }
 
   const requiresApproval = policy.requiresApproval || opts.forceAsk === true
@@ -163,7 +180,7 @@ export async function runOrQueueTool(
       expiresAt: new Date(Date.now() + EXPIRY_HOURS * 3600 * 1000),
     },
   })
-  const rule = opts.rule ? await decideByRule(opts.rule, { approvalId: ap.id, tool, preview: raw.preview ?? raw.data }) : undefined
+  const rule = opts.rule ? await decideByRule(opts.rule, { approvalId: ap.id, tool, preview: raw.preview ?? raw.data, args }) : undefined
   return {
     ok: true,
     mode: 'queued',
@@ -388,7 +405,8 @@ export async function decideApproval(
       decider,
       ap.toolName,
       ap.args as Record<string, unknown>,
-      { approvalId: id, approvedPreview: ap.preview ?? undefined, via: requestDoor(ap.agentRun) },
+      // 4A — approved by a person (in Nexus or with his code in Claude), not by a standing rule.
+      { approvalId: id, approvedPreview: ap.preview ?? undefined, via: requestDoor(ap.agentRun), approvedByPerson: ap.decisionVia !== 'auto' },
     )
     await prisma.agentApproval.update({
       where: { id },

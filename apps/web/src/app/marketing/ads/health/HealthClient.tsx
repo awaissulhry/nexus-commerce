@@ -10,6 +10,8 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Package, Bot, ChevronRight, ShieldCheck } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { orderMarketCodes } from '../_shell/adsMarkets'
+import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { ProbePanel } from './ProbePanel'
 import { getBackendUrl } from '@/lib/backend-url'
 import { FilterChip, SegmentedControl } from '@/design-system/primitives'
@@ -87,8 +89,13 @@ const band = (score: number) => (score >= 80 ? 'good' : score >= 50 ? 'fair' : '
 const bandLabel = (score: number) => (score >= 80 ? 'Healthy' : score >= 50 ? 'Needs attention' : 'At risk')
 
 export function HealthClient() {
-  const [market, setMarket] = useState('all')
-  const [markets, setMarkets] = useState<string[]>([])
+  // AM-28 — the viewer's shared market across the ads pages (each page used to start at "all" and forget the choice).
+  const [market, setMarket] = useSharedAdsMarket()
+  // Ads wave 4c — the markets Nexus reads, plus any market the campaigns name.
+  const { readMarkets, markets: adsMarkets } = useAdsMarketplace()
+  const [dataMarkets, setMarkets] = useState<string[]>([])
+  // The Owner's order: IT, DE, ES, FR first, then reading-only markets.
+  const markets = orderMarketCodes([...readMarkets, ...dataMarkets], adsMarkets)
   const [windowDays, setWindowDays] = useState(7)
   const [alerts, setAlerts] = useState<AlertsResult | null>(null)
   const [retail, setRetail] = useState<Retail | null>(null)
@@ -186,9 +193,12 @@ export function HealthClient() {
           <div className={`hl-tile-sub ${alerts == null ? 'muted' : (alerts.alerts ?? []).some((a) => a.severity === 'high') ? 'danger' : totalAlerts ? 'warn' : 'ok'}`}>{alerts == null ? 'not loaded' : `${alerts.alerts.filter((a) => a.severity === 'high').length} high · ${alerts.alerts.filter((a) => a.severity === 'medium').length} medium`}</div>
         </Card>
         <Card className="hl-tile" onClick={() => document.getElementById('hl-retail')?.scrollIntoView({ behavior: 'smooth' })}>
-          <div className="hl-tile-k">Wasted spend (retail)</div>
+          {/* AM-32 — titled "Wasted spend", this showed a COUNT of campaigns with no unit, so it read as money. The
+              retail check has no money in it (it counts campaigns whose products cannot sell), so the tile says what
+              it counts. */}
+          <div className="hl-tile-k">Campaigns on unsellable products</div>
           <div className="hl-tile-v">{loading ? '…' : retail == null ? '—' : retail.summary?.pause ?? 0}</div>
-          <div className={`hl-tile-sub ${retail == null ? 'muted' : (retail.summary?.pause ?? 0) ? 'danger' : 'ok'}`}>{retail == null ? 'not loaded' : `${retail.summary?.pause ?? 0} pause · ${retail.summary?.watch ?? 0} watch`}</div>
+          <div className={`hl-tile-sub ${retail == null ? 'muted' : (retail.summary?.pause ?? 0) ? 'danger' : 'ok'}`}>{retail == null ? 'not loaded' : `${retail.summary?.pause ?? 0} all unsellable · ${retail.summary?.watch ?? 0} partly`}</div>
         </Card>
         <Card className="hl-tile" onClick={() => document.getElementById('hl-auto')?.scrollIntoView({ behavior: 'smooth' })}>
           <div className="hl-tile-k">Automation</div>

@@ -24,16 +24,20 @@ import { Button, Input, SegmentedControl, Toggle, ToolbarButton } from '@/design
 import { Field } from '@/design-system/components/Field'
 import { Check, Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { orderMarketCodes } from '../_shell/adsMarkets'
+import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridPrefs, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
-import { Modal, Drawer, Menu } from '@/design-system/components'
+import { Banner, Modal, Drawer, Menu } from '@/design-system/components'
 import './budget-manager.css'
 import { ControlPlane } from './ControlPlane'
 import { BudgetPoolsDrawer } from './BudgetPoolsDrawer'
 import { NO_MONTHLY_CAP, readMonthlyBudgetCents } from '../_shared/budgetInput'
+import { budgetMonthOf } from './budgetMonth'
+import { initialLimitEdits } from './limitEdits'
 
 // ── types (mirror ads-budget-manager.service BudgetManagerResult) ──────────
 interface SpendSlice { month: string; budgetCents: number; spendCents: number | null; pct: number | null; daily: number[] }
@@ -72,7 +76,8 @@ const pctTxt = (p: number | null | undefined) => (p == null ? '—' : `${(p * 10
 const STATUS_COLOR: Record<Row['status'], string> = { 'on-track': '#1f9d5b', over: '#d9534f', under: '#1f6fde', 'no-budget': '#9aa3b0' }
 const STATUS_LABEL: Record<Row['status'], string> = { 'on-track': 'On track', over: 'Over pace', under: 'Under pace', 'no-budget': 'No budget' }
 
-const nowMonth = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}` }
+// AM-36 — the month of today's budget day (UTC), not the browser's local month; see budgetMonth.ts.
+const nowMonth = () => budgetMonthOf()
 const shiftM = (month: string, d: number) => { const [y, m] = month.split('-').map(Number); const x = new Date(Date.UTC(y, m - 1 + d, 1)); return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}` }
 const monthLabel = (month: string) => { const [y, m] = month.split('-').map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }) }
 const daysIn = (month: string) => { const [y, m] = month.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).getUTCDate() }
@@ -182,10 +187,20 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
 }
 
 // ── More drawer: per-campaign min/max budget limits ─────────────────────────
-interface BmCampaign { id: string; name: string; status: string; dailyBudgetCents: number; minCents: number | null; maxCents: number | null }
+// CM-30 — each campaign's OWN Min/Max Budget, the same numbers as the Campaigns grid (see limitEdits.ts).
+interface BmCampaign { id: string; name: string; status: string; dailyBudgetCents: number; minCents: number | null; maxCents: number | null; oldMonthLimit?: { minCents: number | null; maxCents: number | null } | null }
+/** POST, and the server's reason when it says no. */
+async function postWithReason(path: string, body: Record<string, unknown>): Promise<{ ok: boolean; reason: string | null }> {
+  try {
+    const r = await fetch(`${API()}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const j = await r.json().catch(() => ({})) as { ok?: boolean; error?: string }
+    return r.ok && j?.ok !== false && j?.error == null ? { ok: true, reason: null } : { ok: false, reason: j?.error ?? `The server answered ${r.status}.` }
+  } catch { return { ok: false, reason: 'No answer from the server.' } }
+}
 function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: string; onClose: () => void; onSaved: () => void; toast: (m: string) => void }) {
   const [camps, setCamps] = useState<BmCampaign[] | null>(null)
   const [edits, setEdits] = useState<Record<string, { min: string; max: string }>>({})
+  const [oldCount, setOldCount] = useState(0)
   const [saving, setSaving] = useState(false)
   const [statusFilter, setStatusFilter] = useState<'ENABLED' | 'PAUSED' | 'ALL'>('ENABLED')
   const [search, setSearch] = useState('')
@@ -198,7 +213,9 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
         if (!alive) return
         const list: BmCampaign[] = Array.isArray(j?.campaigns) ? j.campaigns : []
         setCamps(list)
-        setEdits(Object.fromEntries(list.map((c) => [c.id, { min: c.minCents != null ? (c.minCents / 100).toFixed(2) : '', max: c.maxCents != null ? (c.maxCents / 100).toFixed(2) : '' }])))
+        const init = initialLimitEdits(list)
+        setEdits(init.edits)
+        setOldCount(init.oldCount)
       } catch { if (alive) setCamps([]) }
     })()
     return () => { alive = false }
@@ -213,20 +230,28 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
   const saveAll = async () => {
     setSaving(true)
     let ok = 0
+    const reasons: string[] = []
     for (const c of dirty) {
       const e = edits[c.id]
-      const good = await postJson('/api/advertising/budget-manager/campaign-limit', { marketplace: row.marketplace, month, campaignId: c.id, minCents: e.min === '' ? null : parseEur(e.min), maxCents: e.max === '' ? null : parseEur(e.max) })
-      if (good) ok++
+      const r = await postWithReason('/api/advertising/budget-manager/campaign-limit', { marketplace: row.marketplace, month, campaignId: c.id, minCents: e.min === '' ? null : parseEur(e.min), maxCents: e.max === '' ? null : parseEur(e.max) })
+      if (r.ok) ok++
+      else reasons.push(`${c.name}: ${r.reason}`)
     }
     setSaving(false)
-    toast(ok ? `Saved limits for ${ok} campaign${ok === 1 ? '' : 's'}.` : 'Save failed.')
+    const failed = reasons.length ? `${reasons.length} not saved — ${reasons[0]}${reasons.length > 1 ? ` (and ${reasons.length - 1} more)` : ''}` : ''
+    toast(ok ? `Saved limits for ${ok} campaign${ok === 1 ? '' : 's'}.${failed ? ` ${failed}` : ''}` : (failed || 'Save failed.'))
     if (ok) { onSaved() }
   }
 
   return (
     <Drawer open onClose={onClose} title={`Campaign Budget Limits — ${mktName(row.marketplace)}`}
    footer={<><span className="bm-more-foot">{dirty.length ? `${dirty.length} change${dirty.length === 1 ? '' : 's'}` : 'No changes'}</span><Button variant="primary" disabled={saving || !dirty.length} onClick={saveAll}>{saving ? 'Saving…' : 'Save limits'}</Button></>}>
-      <p className="bm-more-intro">Set a minimum and maximum daily budget per campaign. Auto Pacing keeps each campaign within these bounds when it redistributes this market’s monthly budget.</p>
+      <p className="bm-more-intro">Set a minimum and maximum daily budget per campaign. These are the campaign’s own Min/Max Budget — the same numbers the Campaigns grid shows, kept for every month. Auto Pacing keeps each campaign within them, and Nexus refuses a daily budget outside them.</p>
+      {oldCount > 0 && (
+        <Banner tone="warning" title={`${oldCount} older limit${oldCount === 1 ? '' : 's'} not in use`}>
+          {oldCount === 1 ? 'One campaign has' : `${oldCount} campaigns have`} a limit saved only on {monthLabel(month)}’s plan by the earlier Budget Manager. Auto Pacing no longer reads it. It is filled in below: Save limits to keep it as the campaign’s own Min/Max Budget, or clear the boxes to drop it.
+        </Banner>
+      )}
       {camps == null ? <div className="bm-more-loading">Loading campaigns…</div>
         : camps.length === 0 ? <div className="bm-more-empty">No campaigns in {mktName(row.marketplace)}.</div>
         : (<>
@@ -294,7 +319,9 @@ export function BudgetManagerClient() {
   const [month, setMonth] = useState(nowMonth())
   const [result, setResult] = useState<Result | null>(null)
   const [loading, setLoading] = useState(true)
-  const [market, setMarket] = useState('all')
+  // AM-28 — the viewer's shared market across the ads pages (each page used to start at "all" and forget the choice).
+  const [market, setMarket] = useSharedAdsMarket()
+  const { readMarkets, markets: adsMarkets } = useAdsMarketplace()
   const [settingsFor, setSettingsFor] = useState<Row | null>(null)
   const [moreFor, setMoreFor] = useState<Row | null>(null)
   const [faqOpen, setFaqOpen] = useState(false)
@@ -312,7 +339,8 @@ export function BudgetManagerClient() {
   const load = useCallback(async (m: string) => {
     setLoading(true)
     try {
-      const r = await fetch(`${API()}/api/advertising/budget-manager?month=${m}`).then((x) => x.json())
+      // AM-34 — `no-store`: the route sends a 60-s browser cache header, so "Refresh view" could hand back the last answer.
+      const r = await fetch(`${API()}/api/advertising/budget-manager?month=${m}`, { cache: 'no-store' }).then((x) => x.json())
       if (!r || !Array.isArray(r.rows)) { setResult(null); return }
       // Normalise once so a transient pre-BM.B2 payload (deploy lag) can't crash a render.
       const rows: Row[] = r.rows.map((x: Partial<Row>) => ({
@@ -325,7 +353,7 @@ export function BudgetManagerClient() {
       }) as Row)
       setResult({ ...r, rows })
       // refresh the BM.B3 enforcement preview alongside (non-blocking)
-      fetch(`${API()}/api/advertising/budget-manager/enforcement?month=${m}`).then((x) => x.json()).then((e) => setEnforcement(e && Array.isArray(e.plans) ? e : null)).catch(() => setEnforcement(null))
+      fetch(`${API()}/api/advertising/budget-manager/enforcement?month=${m}`, { cache: 'no-store' }).then((x) => x.json()).then((e) => setEnforcement(e && Array.isArray(e.plans) ? e : null)).catch(() => setEnforcement(null))
     } catch { setResult(null) } finally { setLoading(false) }
   }, [])
   useEffect(() => { load(month) }, [month, load])
@@ -352,10 +380,10 @@ export function BudgetManagerClient() {
   const markets = useMemo(() => {
     // Header dropdown offers real country markets only; legacy account-id rows
     // (e.g. a pre-merge profile id) still appear in the "All markets" grid.
-    const set = new Set<string>((result?.rows ?? []).map((r) => r.marketplace).filter((m) => MARKET_NAME[m]))
-    if (set.size === 0) ['IT', 'DE', 'FR', 'ES'].forEach((m) => set.add(m))
-    return [...set].sort()
-  }, [result])
+    // Ads wave 4c — every market Nexus reads (from the connections), plus any market a row names; no fixed four.
+    // In the Owner's order: IT, DE, ES, FR first, then reading-only markets.
+    return orderMarketCodes([...readMarkets, ...(result?.rows ?? []).map((r) => r.marketplace).filter((m) => MARKET_NAME[m])], adsMarkets)
+  }, [result, readMarkets, adsMarkets])
 
   const shownRows = useMemo(() => (result?.rows ?? []).filter((r) => market === 'all' || r.marketplace === market), [result, market])
 
@@ -417,7 +445,7 @@ export function BudgetManagerClient() {
         <span className="bm-grow" />
     <Button onClick={() => setPoolsOpen(true)}><Wallet size={13} /> Budget Pools</Button>
     <Button onClick={() => { setCanvasMarket(enforcement?.plans[0]?.marketplace ?? markets[0] ?? ''); setCanvasOpen(true) }}><Network size={13} /> Allocation Map</Button>
-        {result && <span className="bm-mb-day" title={result.dayBoundary ? `A budget day runs ${result.dayBoundary}. Pace and the month-end forecast count complete days only${result.dataThrough ? `; the daily report covers up to ${result.dataThrough}` : ''}.` : undefined}>Day {result.dayOfMonth} of {result.daysInMonth}{result.elapsedDays != null ? ` · pace counts ${result.elapsedDays} complete day${result.elapsedDays === 1 ? '' : 's'}` : ''}</span>}
+        {result && <span className="bm-mb-day" title={result.dayBoundary ? `A budget day runs ${result.dayBoundary}. Pace and the month-end forecast count complete days only${result.dataThrough ? `; the daily report covers up to ${result.dataThrough}` : ''}.` : undefined}>Day {result.dayOfMonth} of {result.daysInMonth} (UTC days){result.elapsedDays != null ? ` · pace counts ${result.elapsedDays} complete day${result.elapsedDays === 1 ? '' : 's'}` : ''}</span>}
       </div>
 
       {/* AM-8 — the engine's real mode, said once it is read; it is the server's own reading of the engine's gate. */}

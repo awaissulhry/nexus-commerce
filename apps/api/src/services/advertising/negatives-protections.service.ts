@@ -42,10 +42,11 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 
 import prisma from '../../db.js'
+import { adsReadMarkets } from './ads-markets.service.js'
 import { normaliseTerm } from './ads-write-gate.js'
 import {
   normaliseMatchType, resolveNegScope,
-  NEG_MARKETS, NEG_MARKET_ALL,
+  NEG_MARKET_ALL,
   type NegScopeRequest, type NegGrain, type NegMatchType, type NegLevel,
 } from './negatives.service.js'
 
@@ -248,7 +249,7 @@ export async function getProtections(req: ProtectionsRequest): Promise<Protectio
     req.line ? prisma.adProductAd.findMany({ where: { productId: { not: null } }, select: { productId: true, adGroup: { select: { campaignId: true } } } }) : Promise.resolve([]),
   ])
   const scope = resolveNegScope(
-    { campaigns, adGroups: negAdGroups, products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
+    { readMarkets: await adsReadMarkets(), campaigns, adGroups: negAdGroups, products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
     req,
   )
   const scopeCampaigns = new Set(scope.campaignIds)
@@ -563,4 +564,4 @@ export async function unmarkReview(protectedTerm: string, campaignId: string): P
   return { ok: true, removed: res.count }
 }
 
-export { NEG_MARKETS, NEG_MARKET_ALL }
+export { NEG_MARKET_ALL }

@@ -47,6 +47,7 @@
  */
 
 import prisma from '../../db.js'
+import { adsReadMarkets } from './ads-markets.service.js'
 import { WASTING_FLOOR } from '@nexus/shared/ads-rule-window'
 // One normalisation for a term across the whole codebase — the same function NEG.0's protection
 // compares with, so "the term this page shows" and "the term the gate protects" cannot drift.
@@ -54,8 +55,8 @@ import { normaliseNegTerm } from './ads-protect-converting.js'
 
 export { normaliseNegTerm }
 
-/** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
-export const NEG_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
+// Ads wave 4c (F3) — the markets are no longer a list here: a market is in scope when Nexus reads its Amazon Ads account
+// (`adsReadMarkets`, ads-markets.service.ts). The graph carries that list, so this file stays pure.
 
 /**
  * `all` is a legitimate scope HERE, unlike on the Keyword Tracker.
@@ -66,8 +67,8 @@ export const NEG_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
  * row carries its own market so the merged view still reads.
  */
 export const NEG_MARKET_ALL = 'all'
-const inScopeMarket = (m: string | null | undefined, market: string): boolean =>
-  market === NEG_MARKET_ALL ? NEG_MARKETS.includes((m ?? '') as (typeof NEG_MARKETS)[number]) : m === market
+const inScopeMarket = (m: string | null | undefined, market: string, read: readonly string[]): boolean =>
+  market === NEG_MARKET_ALL ? read.includes(m ?? '') : m === market
 
 export type NegGrain = 'market' | 'line' | 'portfolio' | 'campaign' | 'adGroup'
 export type NegView = 'negations' | 'terms'
@@ -122,6 +123,8 @@ export function attributionOf(log: { userId: string | null } | null | undefined)
 // ── Scope ─────────────────────────────────────────────────────────────────────────────────────
 
 export interface NegScopeGraph {
+  /** The markets Nexus reads (`adsReadMarkets`): what "all" means, and the only markets a scope can name. */
+  readMarkets: readonly string[]
   campaigns: Array<{ id: string; name: string; marketplace: string | null; portfolioId: string | null }>
   /** one row per AdProductAd carrying a productId, joined up to its campaign */
   ads: Array<{ productId: string | null; campaignId: string }>
@@ -159,7 +162,7 @@ export interface NegResolvedScope {
  * preferring one is how a shared link shows a different thing to the person who opens it.
  */
 export function resolveNegScope(graph: NegScopeGraph, req: NegScopeRequest): NegResolvedScope {
-  const inMarket = graph.campaigns.filter((c) => inScopeMarket(c.marketplace, req.market))
+  const inMarket = graph.campaigns.filter((c) => inScopeMarket(c.marketplace, req.market, graph.readMarkets))
   const base = {
     campaignsInMarket: inMarket.length,
     campaignsWithoutPortfolio: inMarket.filter((c) => !c.portfolioId).length,
@@ -350,6 +353,7 @@ export async function getNegatives(req: NegRequest): Promise<NegPayload> {
   ])
 
   const graph: NegScopeGraph = {
+    readMarkets: await adsReadMarkets(),
     campaigns,
     ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId),
     products,
@@ -547,7 +551,7 @@ export async function getNegatives(req: NegRequest): Promise<NegPayload> {
   // portfolioId, so no portfolio-scoped view reaches them.
   let unreachable: NegPayload['scope']['unreachable'] = null
   if (scope.boundBy === 'portfolio') {
-    const marketCampaignIds = new Set(campaigns.filter((c) => inScopeMarket(c.marketplace, req.market)).map((c) => c.id))
+    const marketCampaignIds = new Set(campaigns.filter((c) => inScopeMarket(c.marketplace, req.market, graph.readMarkets)).map((c) => c.id))
     const noPfIds = new Set(campaigns.filter((c) => marketCampaignIds.has(c.id) && !c.portfolioId).map((c) => c.id))
     const [negativesWithoutPortfolio, negativesTotal] = await Promise.all([
       prisma.adTarget.count({ where: { isNegative: true, adGroup: { campaignId: { in: [...noPfIds] } } } }),
@@ -799,6 +803,7 @@ export async function getTermContext(req: TermContextRequest): Promise<TermConte
   ])
   const scope = resolveNegScope(
     {
+      readMarkets: await adsReadMarkets(),
       campaigns,
       adGroups: negAdGroups,
       products,

@@ -26,6 +26,7 @@ import { NegativeTargetsTab } from './tabs/NegativeTargetsTab'
 import { AdsTab } from './tabs/AdsTab'
 // HX.6b — the same change list the schedule drawer and builder render, scoped to this campaign.
 import { ChangeList } from '../../rules-automation/dayparting/ScheduleActivity'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 
 export interface CampaignDetailData {
   id: string
@@ -120,10 +121,14 @@ function CampaignDetailView({ id }: { id: string }) {
   })
   const [market, setMarket] = useState('all')
 
-  const load = useCallback(async () => {
+  /**
+   * CM-34 — `fresh` after this page's own write (and on "Refresh data"): the server skips its cached copy, which can
+   * still be the one from before the save, so the form shows what was saved instead of snapping back.
+   */
+  const load = useCallback(async (fresh = false) => {
     setLoading(true); setError(null)
     try {
-      const qs = `?startDate=${fmtISO(dateRange.start)}&endDate=${fmtISO(dateRange.end)}`
+      const qs = `?startDate=${fmtISO(dateRange.start)}&endDate=${fmtISO(dateRange.end)}${fresh ? '&fresh=1' : ''}`
       const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns/${id}${qs}`, { cache: 'no-store' })
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       const d = await r.json()
@@ -146,7 +151,9 @@ function CampaignDetailView({ id }: { id: string }) {
     router.replace(`/marketing/ads/campaigns/${id}${q ? `?${q}` : ''}`, { scroll: false })
   }
 
-  const markets = useMemo(() => (camp?.marketplace ? [camp.marketplace] : ['IT', 'DE', 'FR', 'ES']), [camp])
+  // Ads wave 4c — before the campaign loads, the markets Nexus reads (from the connections), not a fixed four.
+  const { readMarkets } = useAdsMarketplace()
+  const markets = useMemo(() => (camp?.marketplace ? [camp.marketplace] : readMarkets), [camp, readMarkets])
 
   return (
     <div className="h10-cd">
@@ -160,7 +167,7 @@ function CampaignDetailView({ id }: { id: string }) {
         dateRange={dateRange}
         onDateRange={(s, e) => setDateRange({ start: s, end: e })}
         actions={[
-          { label: 'Refresh data', onClick: () => void load() },
+          { label: 'Refresh data', onClick: () => void load(true) },
           { label: 'View in Ad Manager', href: '/marketing/ads/campaigns' },
         ]}
       />
@@ -182,9 +189,9 @@ function CampaignDetailView({ id }: { id: string }) {
             // row here and a row there can never disagree about what happened.
             ? <div className="h10-cd-hist"><ChangeList campaignId={id} showAllLink={false} /></div>
           : activeTab === 'details'
-            ? <DetailsTab campaign={camp} campaignId={id} onSaved={() => void load()} />
+            ? <DetailsTab campaign={camp} campaignId={id} onSaved={() => void load(true)} />
             : activeTab === 'ad-groups'
-              ? <AdGroupsTab campaign={camp} campaignId={id} onRefresh={() => void load()} />
+              ? <AdGroupsTab campaign={camp} campaignId={id} onRefresh={() => void load(true)} />
               : activeTab === 'search-terms'
                 ? <SearchTermsTab campaign={camp} dateRange={dateRange} />
                 : activeTab === 'negative-targets'

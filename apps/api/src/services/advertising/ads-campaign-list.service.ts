@@ -28,6 +28,8 @@ export interface AmazonCampaignListQuery {
   startDate?: string
   endDate?: string
   windowDays?: string
+  /** AM-34 — '1' = the Ad Manager's "Refresh view": answer from the database now, not from the 300-s read cache. */
+  fresh?: string
 }
 
 /** The Amazon campaign list (cached 300 s per business and query, as the route always was). */
@@ -454,6 +456,6 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
       // AM-14 — per market: the last day the daily report covers, and when Nexus received it.
       freshness,
     }
-  })
+  }, { refresh: q.fresh === '1' })
   return result
 }

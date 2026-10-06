@@ -8,8 +8,8 @@
  *   rows       every strategy row of a market, and the older settings at the same grains
  *   history    the recorded changes, newest first
  *
- * Read only, Nexus only: no marketplace call. Honest about readers: no engine, rule or Claude door acts on the
- * strategy yet (every field's `readBy` is empty, `notReadYet` lists them all); W1 wires the readers one by one.
+ * Read only, Nexus only: no marketplace call. Honest about readers: each field's `readBy` names what acts on it
+ * (W1-8: Claude's door reads what Claude may do alone) and `notReadYet` lists the rest; W1 wires the readers one by one.
  * Money (targets, bids, caps, spend thresholds) sits only under the keys STRATEGY_MONEY names: a person without
  * financials.adspend.view gets the same answer minus exactly those keys.
  *
@@ -74,9 +74,10 @@ const adsStrategy: AgentTool = {
     + 'several products in one ad group take the safer number per field and name the product it came from; a category or '
     + 'product row always belongs to one market. It also lists the older settings that still bind (campaign bid limits, '
     + 'bid and harvest policies, the budget plan), the campaigns whose own target ACoS wins over the strategy, and the '
-    + "business's own Claude level per ad tool. view rows lists every strategy row of a market; view history the changes. "
-    + 'No engine, rule or Claude door acts on the strategy yet: readBy is empty on every field and notReadYet lists them, '
-    + 'so every engine works as before. Targets, bids, caps and spend thresholds are ad-spend money: hidden from a person '
+    + "business's own Claude level per ad tool and the level that applies here (effective: the strategy only narrows it). "
+    + 'view rows lists every strategy row of a market; view history the changes. Each field\'s readBy names what acts on it '
+    + "(Claude's door reads what Claude may do alone); notReadYet lists the fields nothing reads yet, for which every engine "
+    + 'works as before. Targets, bids, caps and spend thresholds are ad-spend money: hidden from a person '
     + 'without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {
     const out = await readStrategy(args as StrategyReadArgs)
@@ -138,8 +139,9 @@ const setAdsStrategy: AgentTool = {
     + 'deletes the row. At market level it can also add or remove protected search terms (they bind Nexus\'s write gate at '
     + "once) and clear the own target ACoS of the market's campaigns that would shadow the strategy (clearCampaignTargets; "
     + 'their old values are kept for undo). The preview lists every field from → to with the level it is in force from, and '
-    + 'judges each RAISE or LOWER; it names the campaigns whose own target still wins. No engine, rule or Claude door reads '
-    + 'the strategy yet (notReadYet lists every field): it is stored, versioned and shown, and moves no bid or budget. Waits '
+    + 'judges each RAISE or LOWER; it names the campaigns whose own target still wins. No engine or rule reads the strategy '
+    + 'yet (notReadYet lists those fields): it moves no bid or budget. What Claude may do alone binds at once: Claude\'s '
+    + 'door holds every ad change Claude asks for there to the lower level (readBy says what reads each field). Waits '
     + 'for a person to approve it in Nexus. A change that only lowers may run by the business\'s rule when the business allows '
     + 'it; a RAISE never does: a person with settings.security.manage approves it in Nexus with their authenticator code, or '
     + 'the person who asked confirms it in Claude with theirs. Pass expectVersion (from ads-strategy view rows) to refuse a '

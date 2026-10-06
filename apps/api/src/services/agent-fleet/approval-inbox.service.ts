@@ -629,7 +629,7 @@ export async function commitScheduledApproval(
 ): Promise<{ ok: boolean; status?: string; error?: string }> {
   const ap = await prisma.agentApproval.findUnique({
     where: { id },
-    select: { status: true, executeAfter: true, decidedBy: true, decidedByUserId: true, toolName: true, workspaceId: true, decisionVia: true, preview: true },
+    select: { status: true, executeAfter: true, decidedBy: true, decidedByUserId: true, toolName: true, workspaceId: true, decisionVia: true, preview: true, args: true },
   })
   if (!ap) return { ok: false, error: 'approval not found' }
   if (ap.status !== 'scheduled') return { ok: false, error: `not scheduled (${ap.status})` }
@@ -638,9 +638,10 @@ export async function commitScheduledApproval(
   }
 
   // C5 — a change the business's rule scheduled runs by that rule only while the rule still allows it: a Pause, a
-  // lowered level or tightened limits inside the window hand it to a person instead.
+  // lowered level or tightened limits inside the window hand it to a person instead (W1-8: so does the ads strategy
+  // narrowing it where it lands).
   if (ap.decisionVia === 'auto') {
-    const ruleNow = ap.toolName === PLAN_TOOL ? await autoPlanCommitRefusal(id) : await autoCommitRefusal(ap.toolName, ap.preview)
+    const ruleNow = ap.toolName === PLAN_TOOL ? await autoPlanCommitRefusal(id) : await autoCommitRefusal(ap.toolName, ap.preview, ap.args)
     if (ruleNow) return handBack(id, ap.decidedBy, ruleNow, 'rule_refused', ap.decisionVia)
   }
 

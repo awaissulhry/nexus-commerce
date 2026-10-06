@@ -92,9 +92,11 @@ describe('parseOpen — a typed pair, or nothing', () => {
     expect(parseOpen('campaign:c1')).toEqual({ kind: 'campaign', id: 'c1' })
   })
 
-  it('refuses a plan for a market this account does not sell in', () => {
+  it('refuses a plan for something that is not an Amazon marketplace', () => {
     expect(parseOpen('plan:ZZ')).toBeNull()
-    expect(parseOpen('plan:US')).toBeNull()
+    // Ads wave 4c — no fixed four here any more: any Amazon marketplace code is a market a plan can name, and the
+    // rail reads that market's plan from the server (which knows the connections).
+    expect(parseOpen('plan:UK')).toEqual({ kind: 'plan', id: 'UK' })
   })
 
   it('keeps every character after the first colon, so an id containing one survives', () => {

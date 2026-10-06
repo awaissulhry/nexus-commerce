@@ -3,6 +3,7 @@
  * maps and sentence renderer that make rules glass-box on the hub (C8: UI
  * speaks Amazon-style metric names; payloads keep server ids).
  */
+import { money } from '../../../campaigns/_grid/format'
 
 export type RuleMetric = 'ad_fees_cents' | 'sales_cents' | 'clicks' | 'impressions' | 'sold_qty' | 'acos_pct' | 'ctr_pct' | 'fee_pct_of_sales' | 'rate_minus_breakeven'
 export type RuleOp = 'gt' | 'gte' | 'lt' | 'lte'
@@ -61,7 +62,7 @@ export function conditionValueLabel(c: RuleCondition): string {
     return m === 1 ? BENCH_LABELS[c.benchmark] : `${m}× ${BENCH_LABELS[c.benchmark]}`
   }
   const t = c.threshold ?? 0
-  if (CENTS_METRICS.includes(c.metric)) return `€${(t / 100).toFixed(2)}`
+  if (CENTS_METRICS.includes(c.metric)) return money(t) // AM-30 — €1,234.56, the console's one money rendering
   if (PCT_METRICS.includes(c.metric)) return `${t}%`
   if (c.metric === 'rate_minus_breakeven') return `${t} pts`
   return String(t)

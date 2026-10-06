@@ -898,7 +898,13 @@ export function resolveRequest(toolName: string, args: unknown, preview: unknown
   const changes = generic.changes
   const items = own.items ?? generic.items
   const where = genericWhere(toolName, a, p)
-  const summary = own.summary !== undefined ? own.summary : (text(p.summary) ?? text(p.effect))
+  const said = own.summary !== undefined ? own.summary : (text(p.summary) ?? text(p.effect))
+  // 4A + 3A (Owner decided 2026-10-06) — a request past his own limits says so on the card BEFORE he approves: his
+  // approval is his "Send anyway". First, so the 400-character card summary never cuts it off.
+  const pastReach = rec(p.reach)?.pastOwnLimits
+  const past = Array.isArray(pastReach) ? pastReach.map((l) => text(rec(l)?.reason)).filter((x): x is string => !!x) : []
+  const warning = past.length ? `Warning — this goes past your own limits: ${past.join('; ')}. Approving it sends it anyway.` : null
+  const summary = warning ? (said ? `${warning} ${said}` : warning) : said
   return {
     target: own.target !== undefined ? own.target : genericTarget(toolName, a, p, ctx),
     channel: own.channel !== undefined ? own.channel ?? where.channel : where.channel,

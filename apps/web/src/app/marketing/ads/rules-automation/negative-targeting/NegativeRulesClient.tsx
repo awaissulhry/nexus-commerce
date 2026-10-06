@@ -25,16 +25,18 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
 
 export function NegativeRulesClient() {
   const router = useRouter()
   const params = useSearchParams()
-  const market = params.get('market') || 'all'
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
   // NEG-P3 — the HP4-pattern strip: the account's negation posture from the server's own census
   // (never recomposed client-side). On a failed read the strip is ABSENT, never fabricated.
   const [strip, setStrip] = useState<{ negatives: number; blocking: number; candidates: number; wastedCents: number } | null>(null)
@@ -53,7 +55,7 @@ export function NegativeRulesClient() {
     <div className="h10-rules-page">
       <AdsPageHeader
         {...rulesTabHeader('negative-targeting')}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => {
           const next = new URLSearchParams(params.toString())

@@ -195,5 +195,4 @@ export const DELIVERY_LABEL: Record<string, string> = {
   DELIVERING: 'Delivering', NOT_DELIVERING: 'Not delivering',
 }
 
-/** The four production Amazon Ads markets. `all` is the account-wide view the header already offers. */
-export const MARKETS = ['IT', 'DE', 'FR', 'ES']
+// Ads wave 4c (F3) — no market list here: the page offers the provider's `readMarkets` (from the connections).

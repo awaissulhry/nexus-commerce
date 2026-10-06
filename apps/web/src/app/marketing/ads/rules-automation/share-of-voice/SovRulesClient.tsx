@@ -31,11 +31,11 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
 
 interface SovStripCounts {
   enabledKeywords: number
@@ -62,7 +62,9 @@ const sharePct = (f: number | null): string => {
 export function SovRulesClient() {
   const router = useRouter()
   const params = useSearchParams()
-  const market = params.get('market') || 'all'
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
   /**
    * SOV-P3 — the NEG-P3/HP4 strip idiom, from the server's own census. Never recomposed
    * client-side, and ABSENT rather than fabricated on a failed read.
@@ -99,7 +101,7 @@ export function SovRulesClient() {
     <div className="h10-rules-page">
       <AdsPageHeader
         {...rulesTabHeader('share-of-voice')}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => {
           const next = new URLSearchParams(params.toString())

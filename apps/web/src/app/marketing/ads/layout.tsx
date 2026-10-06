@@ -15,6 +15,7 @@ import './ads.css'
 import type { ReactNode } from 'react'
 import { AdsSidebar } from './_shell/AdsSidebar'
 import { AdsMarketplaceProvider } from './_shell/MarketplaceContext'
+import { SendAnywayHost } from './_shared/SendAnywayHost'
 
 export default function AdsLayout({ children }: { children: ReactNode }) {
   return (
@@ -26,6 +27,8 @@ export default function AdsLayout({ children }: { children: ReactNode }) {
         <AdsSidebar />
         <main className="h10-main">{children}</main>
       </div>
+      {/* 3A — the one "Send anyway" dialog for a person's write past his own limits. */}
+      <SendAnywayHost />
     </AdsMarketplaceProvider>
   )
 }

@@ -47,13 +47,16 @@
  */
 
 import {
-  ALL_MARKETS, MARKETS as SPINE_MARKETS, MARKET_ANY,
+  ALL_MARKETS, MARKET_ANY,
   adsScopeNeedsNormalising, parseAdsScope, patchAdsScope, writeAdsScope,
   type AdsScopePolicy,
 } from '../_shared/adsScope'
+import { isAmazonMarketCode } from '../../_shell/adsMarkets'
 
-/** The four production Amazon Ads markets. `all` is the account-wide view and the default. */
-export const MARKETS = SPINE_MARKETS
+/**
+ * `all` is the account-wide view and the default. Ads wave 4c (F3): no fixed market list — the page offers the
+ * provider's `readMarkets`; this pure module accepts any Amazon marketplace code and the server answers for it.
+ */
 export const DEFAULT_MARKET = ALL_MARKETS
 
 /**
@@ -199,7 +202,7 @@ export function parseOpen(raw: string | null): BspOpen | null {
   if (!id || !OPEN_KINDS.includes(kind)) return null
   // A `plan:` rail is addressed by marketplace, so its id has to BE one — `plan:ZZ` would open a
   // rail for a market this account does not sell in.
-  if (kind === 'plan' && !(MARKETS as readonly string[]).includes(id)) return null
+  if (kind === 'plan' && !isAmazonMarketCode(id)) return null
   return { kind, id }
 }
 

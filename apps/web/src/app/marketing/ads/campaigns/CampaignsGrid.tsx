@@ -18,10 +18,12 @@ import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../
 import { atMinimumNote, nextDailyBudget, readBudgetChange, readDailyBudget, readTargetAcosPercent, summariseBudgetChange } from '../_shared/budgetInput'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { orderMarketCodes } from '../_shell/adsMarkets'
+import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
 import { enabledRank } from './_grid/enabledRank'
-import { acosRank } from './_grid/format'
+import { acosRank, pct, roasText } from './_grid/format'
 import { AdsDataGrid, type GridColumn, type GridPrefs } from './_grid/AdsDataGrid'
 import { AdManagerGraph } from './AdManagerGraph'
 import { reportFreshnessText, type IntradayInfo, type MarketFreshness } from './reportFreshness'
@@ -33,6 +35,7 @@ import { pillTone } from '../_shared/pillTone'
 import { changedPlacementLanes } from '../_shared/placementLanes'
 import { assignablePortfolios, sharedMarket, type PortfolioOption } from '../_shared/portfolioPicker'
 import { readWrite, reasonText } from '../_shared/adsWrite'
+import { askSendAnyway, confirmed, notSentPastLimits, readNeedsConfirmation } from '../_shared/sendAnyway'
 import { matchesBidAutomation, matchesRuleFilter, ruleReach, type AccountWideRule, type RuleReach } from './_grid/campaignRules'
 import { amazonEditHold } from './_grid/amazonEditHold'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
@@ -183,6 +186,8 @@ function notApplicableFor(key: string, c: Camp): ReactNode | null {
 // ADM-P6 — `actBidHours` and `oobHours` used to live here, saying "not measured" because the
 // out-of-budget term had no source. It has one now (Amazon's budget-usage reading, sampled every
 // five minutes), so both are real cells below and neither is an N/A any more.
+/** AM-26 — what the footer's "Performance data" line means (it had a "Learn More" that linked nowhere). */
+const PERFORMANCE_DATA_TIP = 'Amazon sends each day\u2019s ad performance report the next morning; the date shown is the newest report Nexus has received. When the range includes today, today\u2019s figures come from Amazon\u2019s hourly stream and are not final. Amazon can still change attributed sales and orders for up to 60 days after a day, so recent days may move a little.'
 /**
  * Spend with no attributed sales — a real outcome, and not a number ACoS can express. Muted but
  * NOT italic, following the rule this stylesheet already states for "no owner": italic marks an
@@ -213,8 +218,16 @@ type WriteOutcome = 'applied' | 'queued' | 'refused' | 'error'
 // CM-26 — the one reader (_shared/adsWrite.ts): `error` is the server's own reason, in words.
 async function patchWrite(url: string, body: Record<string, unknown>): Promise<{ outcome: WriteOutcome; error?: string }> {
   try {
-    const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const w = readWrite(r.status, await r.json().catch(() => ({})))
+    let r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    let answer = await r.json().catch(() => ({}))
+    // 3A — past his own limits: "Send anyway" (SendAnywayHost), then the same edit again with his confirmation.
+    const waits = readNeedsConfirmation(r.status, answer)
+    if (waits) {
+      if (!(await askSendAnyway(waits))) return { outcome: 'refused', error: notSentPastLimits(waits) }
+      r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(confirmed(body)) })
+      answer = await r.json().catch(() => ({}))
+    }
+    const w = readWrite(r.status, answer)
     return w.ok ? { outcome: w.outcome } : { outcome: w.outcome, error: w.reason ?? undefined }
   } catch (e) { return { outcome: 'error', error: (e as Error).message } }
 }
@@ -492,12 +505,12 @@ function renderCol(c: Camp, key: string): ReactNode {
     case 'acos': {
       const frac = c.acos != null ? Number(c.acos) : (sales > 0 ? spend / sales : NaN)
       if (!Number.isFinite(frac)) return spend > 0 ? NO_SALES : '—'
-      return `${(frac * 100).toFixed(2)}%`
+      return pct(frac) // AM-30 — the console's one ACoS rendering (2 decimals), shared with every ads screen
     }
     case 'roas': {
       const r = c.roas != null ? Number(c.roas) : (spend ? sales / spend : NaN)
       if (!Number.isFinite(r)) return spend > 0 ? NO_SALES : '—'
-      return r.toFixed(2)
+      return roasText(r) // AM-30 — the console's one ROAS rendering
     }
     case 'impressions': return impr.toLocaleString()
     case 'clicks': return clicks.toLocaleString()
@@ -1124,12 +1137,16 @@ export function CampaignsGrid() {
   // `colOrder`/`colVisible` below) and, on the AG runtime, a resize — the width map kept here.
   const [colWidths, setColWidths] = useState<Record<string, number>>({})
   // CBN.2d — header controls
-  const [market, setMarket] = useState('all')
+  // AM-28 — the viewer's shared market across the ads pages (each page used to start at "all" and forget the choice).
+  const [market, setMarket] = useSharedAdsMarket()
+  const { readMarkets, markets: adsMarkets, writeAccess, currencyOf: currencyOfMarket } = useAdsMarketplace()
   // AM-16 — the 7 complete days ending yesterday, as the header shows. AM-10 — the graph reads this range too.
   const [dateRange, setDateRange] = useState(() => lastCompleteDays(7))
   // AM-14 — when the performance numbers arrived (per market), and how far today's hourly figures reach (AM-5).
   const [freshness, setFreshness] = useState<{ markets: MarketFreshness[]; intraday: IntradayInfo | null }>({ markets: [], intraday: null })
   const [syncing, setSyncing] = useState(false)
+  // AM-34 — bumped by "Refresh view" so the graph re-reads past the read cache together with the grid.
+  const [refreshKey, setRefreshKey] = useState(0)
   const [showGraph, setShowGraph] = useState(false)
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(100)
@@ -1200,7 +1217,8 @@ export function CampaignsGrid() {
     try {
       const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       const qs = opts?.range ? `&startDate=${ymd(opts.range.start)}&endDate=${ymd(opts.range.end)}` : ''
-      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500${qs}`, { cache: 'no-store' })
+      // AM-34 — "Refresh view" reads past the API's 300-s read cache (`fresh=1`); `no-store` alone skips only the browser's.
+      const r = await fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500${qs}${opts?.sync ? '&fresh=1' : ''}`, { cache: 'no-store' })
       const d = await r.json()
       // ADX G2 — Min/Max Bid is persisted, not UI-only: before it, the editor updated local
       // state, toasted "Amazon field pending", and threw the value away on refresh. The cells
@@ -1565,7 +1583,8 @@ export function CampaignsGrid() {
   const visKeySet = useMemo(() => new Set(colVisible), [colVisible])
   const metricCols = useMemo(() => colOrder.filter((k) => visKeySet.has(k)), [colOrder, visKeySet])
 
-  const markets = useMemo(() => Array.from(new Set(rows.map((r) => r.marketplace).filter(Boolean) as string[])).sort(), [rows])
+  // Ads wave 4c — every market Nexus reads, plus any market a loaded campaign names.
+  const markets = useMemo(() => orderMarketCodes([...readMarkets, ...(rows.map((r) => r.marketplace).filter(Boolean) as string[])], adsMarkets), [rows, readMarkets, adsMarkets])
   // Portfolio filter options — resolve real names from /advertising/portfolios (pfOptions,
   // the same v3-backed source Amazon shows + the bulk-assign picker uses). Fall back to a short
   // id only for a portfolio we have no name for; sort by name so the dropdown reads like Amazon.
@@ -1953,7 +1972,8 @@ export function CampaignsGrid() {
         markets={markets} market={market} onMarketChange={setMarket}
         dateRange={dateRange}
         onDateRange={(s, e) => { const r = { start: s, end: e }; setDateRange(r); void load({ range: r }) }}
-        onDataSync={() => void load({ sync: true, range: dateRange })} syncing={syncing}
+        onDataSync={() => { setRefreshKey((k) => k + 1); void load({ sync: true, range: dateRange }) }} syncing={syncing}
+        dataSyncTip="Reads these campaigns from Nexus again now, past the five-minute read cache. It does not ask Amazon: Amazon's reports arrive by themselves."
         actions={[
           { label: 'Create Campaign', href: '/marketing/ads/campaign-builder' },
           { label: 'Create Rule', href: '/marketing/ads/rules-automation/builder' },
@@ -1961,7 +1981,7 @@ export function CampaignsGrid() {
         ]}
       />
 
-      {showGraph && <AdManagerGraph market={market} start={dateRange.start} end={dateRange.end} />}
+      {showGraph && <AdManagerGraph market={market} start={dateRange.start} end={dateRange.end} refreshKey={refreshKey} />}
 
       {/* filter bar — Helium 10 Ad Manager match */}
       <div className={`h10-am-fpanel${filtersOpen ? '' : ' is-collapsed'}`}>
@@ -2152,7 +2172,7 @@ export function CampaignsGrid() {
           <Listbox width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(rowsPerPage)} onChange={(v) => { setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
         </div>
       </div>
-      <div className="h10-am-latest"><b>Performance data:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}<span className="lk">Learn More</span></div>
+      <div className="h10-am-latest"><b>Performance data:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}{/* AM-26 — was a "Learn More" styled as a link that went nowhere; the explanation it promised is here. */}<InfoTip tip={PERFORMANCE_DATA_TIP} /></div>
 
       {/* CBN.2c.2 — edit-mode Discard/Apply footer */}
       {mode === 'edit' && (diffs.length > 0 || budgetEditProblems.length > 0) && (
@@ -2241,11 +2261,12 @@ export function CampaignsGrid() {
         // wrote a target nobody chose — the editor half of the fabricated 30% removed from the
         // display cell on 2026-08-19. The fallback belongs in the placeholder, and now is.
         if (editPop.kind === 'targetAcos') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} kind="targetAcos" initial={c.targetAcos != null ? (c.targetAcos * 100).toFixed(2) : ''} anchor={editPop.anchor} onApply={(v) => void setCampaignTargetAcos(c, v)} onClose={close} />
-        if (editPop.kind === 'dailyBudget') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} kind="dailyBudget" initial={c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : ''} anchor={editPop.anchor} onApply={(v) => void setCampaignDailyBudget(c, v)} onClose={close} />
+        // CM-32 — the box in the campaign's own currency; 4c — off, with the reason, in a market Nexus only reads.
+        if (editPop.kind === 'dailyBudget') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} kind="dailyBudget" initial={c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : ''} currency={currencyOfMarket(c.marketplace)} blockedReason={writeAccess(c.marketplace).reason} anchor={editPop.anchor} onApply={(v) => void setCampaignDailyBudget(c, v)} onClose={close} />
         // Was `initial={c.minMaxBid}`, a euro pair derived at fetch time purely to feed this
         // popover and its cell — correct, but a second unit for one field. Both now read the
         // cents the endpoint itself takes, and the derived field is gone.
-        if (editPop.kind === 'minMaxBid') return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="bid" minCents={c.minBidCents ?? null} maxCents={c.maxBidCents ?? null} anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBid(c, mm)} onClose={close} />
+        if (editPop.kind === 'minMaxBid') return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="bid" minCents={c.minBidCents ?? null} maxCents={c.maxBidCents ?? null} currency={currencyOfMarket(c.marketplace)} anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBid(c, mm)} onClose={close} />
         return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="budget" minCents={c.minBudgetCents ?? null} maxCents={c.maxBudgetCents ?? null} anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBudget(c, mm)} onClose={close} />
       })()}
 

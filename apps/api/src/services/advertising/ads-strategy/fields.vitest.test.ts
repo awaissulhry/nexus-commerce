@@ -4,9 +4,11 @@
  *   units      an integer percent becomes the engines' fraction (30 → 0.3) and back; a stored fraction (0.3) is never
  *              read as a percent, nor a percent (30) as 3,000 %
  *   schema     every registry column is an AdsStrategy column and every setting column is in the registry
- *   honest     no field has a reader yet: readBy is empty everywhere and notReadYet lists every field
+ *   honest     only Claude's door reads the strategy yet (W1-8: what Claude may do alone); notReadYet lists every
+ *              other field
  *   money      every money field's value keys are stripped for a person without ad-spend money
- *   names      every tool an action type narrows is a registered tool; the constants mirror their sources
+ *   names      every tool an action type narrows is a registered tool and knows where its change lands; no brake is
+ *              among them; the constants mirror their sources
  */
 import { describe, expect, it } from 'vitest'
 import { Prisma } from '@prisma/client'
@@ -14,8 +16,10 @@ import { FIELDS } from '@nexus/shared/permissions'
 import { listTools } from '../../agents/tool-registry.js'
 import { SUPPRESSION_FLOOR_CENTS } from '../ads-bid-suppression.service.js'
 import { MAX_ACCOUNT_DEFAULT_PCT } from '../ads-target-acos-resolver.js'
+import { BRAKE_TOOLS, PLACES, actionOfTool } from './claude.js'
 import {
   CLAUDE_ACTION_TOOLS,
+  CLAUDE_DOOR,
   COLUMN_CHECKS,
   DEFAULT_STOP_BID_CENTS,
   MAX_TARGET_PCT,
@@ -56,9 +60,9 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: no engine, rule or Claude door reads any field yet', () => {
-    expect(STRATEGY_FIELDS.filter((f) => f.readBy.length)).toEqual([])
-    expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key))
+  it("is honest: only Claude's door reads the strategy yet (what Claude may do alone); no engine or rule reads a field", () => {
+    expect(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => [f.key, f.readBy])).toEqual([['claudeAutonomy', [CLAUDE_DOOR]]])
+    expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key).filter((key) => key !== 'claudeAutonomy'))
   })
 
   it('every money field keeps its numbers under keys the money filter strips (ad-spend money)', () => {
@@ -83,5 +87,18 @@ describe('the registry', () => {
   it('every tool an action type narrows is a registered tool', () => {
     const tools = new Set(listTools().map((t) => t.name))
     expect(Object.values(CLAUDE_ACTION_TOOLS).flat().filter((name) => !tools.has(name))).toEqual([])
+  })
+
+  it('W1-8 — each of those tools knows where its change lands; brakes are registered tools, none of them, never narrowed', () => {
+    const narrowed = Object.values(CLAUDE_ACTION_TOOLS).flat()
+    expect(Object.keys(PLACES).sort()).toEqual([...narrowed].sort())
+    const tools = new Set(listTools().map((t) => t.name))
+    for (const brake of BRAKE_TOOLS) {
+      expect(tools.has(brake), brake).toBe(true)
+      expect(narrowed, brake).not.toContain(brake)
+      expect(actionOfTool(brake), brake).toBeNull()
+    }
+    for (const [action, names] of Object.entries(CLAUDE_ACTION_TOOLS)) for (const name of names) expect(actionOfTool(name)).toBe(action)
+    expect(actionOfTool('set-price')).toBeNull()
   })
 })

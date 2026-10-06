@@ -38,7 +38,7 @@ export function launchability(c: ConnectionFacts): Launchability {
     return { launchable: false, short: 'writes off', whyNot: `Writes are not enabled for the ${c.code} Amazon Ads profile, so a campaign would be saved in Nexus only. Enable writes in Settings → Advertising first.` }
   }
   if (!marketLimitsOf(c.code)) {
-    return { launchable: false, short: 'no limits list', whyNot: `Nexus has no checked list of Amazon's currency, bid and budget limits for ${c.code}, so it sends nothing to Amazon there.` }
+    return { launchable: false, short: 'limits not known', whyNot: `Amazon's bid and budget limits for ${c.code} are not known yet, so Nexus sends nothing to Amazon there.` }
   }
   return { launchable: true, whyNot: null, short: null }
 }
