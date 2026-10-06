@@ -1,5 +1,6 @@
 /**
- * PB-5a — a playbook's build runs are the playbook's, not Replicate's: the Replicate runs list leaves them out, and its
+ * PB-5a — a playbook's build runs are the playbook's, not Replicate's (B-3: nor a one-off SP Super Wizard set's): the
+ * Replicate runs list leaves them out, and its
  * raise-bids and rollback refuse them (a playbook run starts with the playbook's START and is undone with archive-ads
  * buildRunId). A Replicate run is listed and raised as before (control). Through the real routes, on PGlite (production
  * schema). Values are made up.
@@ -41,6 +42,8 @@ beforeAll(async () => {
     ids.playbookCampaign = (await campaign('TEST playbook campaign')).id
     ids.replicate = (await db().adBlueprintApplication.create({ data: { productToken: 'TESTREP', marketplace: 'IT', status: 'APPLIED', plan: {}, launchMode: 'floor', createdCampaignIds: [ids.replicateCampaign] } })).id
     ids.playbook = (await db().adBlueprintApplication.create({ data: { productToken: 'TESTPBR', marketplace: 'IT', status: 'APPLIED', plan: {}, launchMode: 'floor', playbookId: 'pb-test-row', createdCampaignIds: [ids.playbookCampaign] } })).id
+    // B-3 — a one-off SP Super Wizard set Claude asked for keeps its run here too, and is not Replicate's either.
+    await db().adBlueprintApplication.create({ data: { productToken: 'TESTSPW', marketplace: 'IT', status: 'APPLIED', plan: {}, launchMode: 'floor', options: { source: 'sp-wizard', changeSetId: 'ap-test' } } })
   })
   app = Fastify()
   app.addHook('preHandler', (_request, _reply, done) => { withWorkspace(business, done) })

@@ -76,7 +76,7 @@ interface StatusArgs {
   adGroupIds?: string[]
   targetIds?: string[]
   productAds?: Array<{ adGroupId: string; product: string }>
-  /** archive-ads, PB-5a — every campaign a playbook build made (the undo of apply-ads-playbook op build). */
+  /** archive-ads, PB-5a — every campaign a playbook build made (the undo of apply-ads-playbook op build); B-3 — or a one-off SP Super Wizard set (build-sp-wizard-campaigns). */
   buildRunId?: string
 }
 
@@ -593,7 +593,7 @@ const STATUS_INPUT = z.object({
 /** archive-ads also names a playbook build's campaigns at once (PB-5a: the undo of apply-ads-playbook op build). */
 const ARCHIVE_INPUT = STATUS_INPUT.extend({
   buildRunId: z.string().trim().min(1).max(64).optional()
-    .describe('a playbook build (the applicationId apply-ads-playbook answered): every campaign it made that is not archived yet; refused while it runs'),
+    .describe('a build (the applicationId apply-ads-playbook or build-sp-wizard-campaigns answered): every campaign it made that is not archived yet; refused while it runs'),
 })
 
 const pauseAds: AgentTool = {
@@ -690,7 +690,7 @@ const archiveAds: AgentTool = {
     + 'archived by rule, and the advice is to keep it that way). The preview lists each ad, what a campaign or ad group '
     + 'holds that stops with it, the daily budget that stops, and where it lands. Refused, and not queued, when an ad is '
     + 'not found, a draft or not Sponsored Products, or when Amazon\'s write gate would refuse it (a halt does not block an '
-    + 'archive: it only lets go). buildRunId names every campaign a playbook build made (apply-ads-playbook). It cannot be undone.',
+    + 'archive: it only lets go). buildRunId names every campaign a build made (apply-ads-playbook, build-sp-wizard-campaigns). It cannot be undone.',
   async handler(args, ctx) {
     return (await decide('archive', args, ctx)).result
   },

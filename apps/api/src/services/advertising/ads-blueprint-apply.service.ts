@@ -701,6 +701,20 @@ export const PLAYBOOK_RUN =
   'This run built an ads playbook: it is started, stopped and undone only through the playbook (apply-ads-playbook; archive-ads with its buildRunId), not from Replicate.'
 
 /**
+ * B-3 — a run that built a one-off SP Super Wizard set for Claude (build-sp-wizard-campaigns, `options.source`
+ * 'sp-wizard') is refused here the same way: it goes live with set-campaign-live-writes and restore-campaign, each
+ * approved, and is undone with archive-ads buildRunId.
+ */
+export const WIZARD_RUN =
+  'This run built an SP Super Wizard set Claude asked for: it goes live with set-campaign-live-writes and restore-campaign and is undone with archive-ads (its buildRunId), not from Replicate.'
+
+/** The refusal of Replicate's raise and rollback for a run another builder owns; null for Replicate's own. */
+function ownedRunRefusal(app: { playbookId: string | null; options: unknown }): string | null {
+  if (app.playbookId) return PLAYBOOK_RUN
+  return (app.options as { source?: unknown } | null)?.source === 'sp-wizard' ? WIZARD_RUN : null
+}
+
+/**
  * AX3.5 — take a floored run up to the bids it was planned at.
  *
  * The counterpart to launching at the floor. Each entity remembered its planned
@@ -711,7 +725,8 @@ export const PLAYBOOK_RUN =
 export async function raiseApplicationBids(applicationId: string, actor?: string): Promise<{ raised: number; campaigns: number; errors: string[] }> {
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
-  if (app.playbookId) throw new Error(PLAYBOOK_RUN)
+  const owned = ownedRunRefusal(app)
+  if (owned) throw new Error(owned)
   if (app.status === 'ROLLED_BACK') return { raised: 0, campaigns: 0, errors: ['this run was rolled back'] }
 
   const { restoreCampaignBids } = await import('./ads-bid-suppression.service.js')
@@ -736,7 +751,8 @@ export async function raiseApplicationBids(applicationId: string, actor?: string
 export async function rollbackApplication(applicationId: string, actor?: string): Promise<{ archived: number; errors: string[] }> {
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
-  if (app.playbookId) throw new Error(PLAYBOOK_RUN)
+  const owned = ownedRunRefusal(app)
+  if (owned) throw new Error(owned)
   if (app.status === 'ROLLED_BACK') return { archived: 0, errors: ['already rolled back'] }
 
   const { updateCampaignWithSync } = await import('./ads-mutation.service.js')

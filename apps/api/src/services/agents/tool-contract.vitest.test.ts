@@ -412,8 +412,8 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 40, toCents: 50 }] },
         after: { adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ kind: 'target', id: 't1', cents: 50 }] },
       },
-      // B-3 — a one-off SP Super Wizard set is put back (in part) by archiving every campaign it made.
-      'build-sp-wizard-campaigns': { before: { campaignIds: [], market: 'IT', productGroupName: 'Test set' }, after: { campaignIds: ['c8', 'c9'], market: 'IT', productGroupName: 'Test set', structure: 'advanced' } },
+      // B-3 — a one-off SP Super Wizard set is put back (in part) by archiving every campaign its run made.
+      'build-sp-wizard-campaigns': { before: { applicationId: null, market: 'IT', productGroupName: 'Test set', structure: 'advanced' }, after: { applicationId: 'run2', market: 'IT', productGroupName: 'Test set', structure: 'advanced' } },
       // PB-5a — a playbook build is archived (every campaign it made); an adopt is put back by the opposite adopt.
       'apply-ads-playbook': { before: { op: 'build', playbookId: 'pb1', state: 'DRAFT', slots: [] }, after: { op: 'build', playbookId: 'pb1', applicationId: 'run1' } },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.

@@ -225,7 +225,7 @@ const AD_CHANGE_TOOLS = new Set([
   'lower-ad-bids-for-stock', 'restore-ad-bids-after-stock',
   // PB-5a — a playbook build: its creates run detached; approval-status reads its run (status, what Amazon holds).
   'apply-ads-playbook',
-  // B-3 — a one-off SP Super Wizard set: its creates are not queued; approval-status counts what each campaign holds.
+  // B-3 — a one-off SP Super Wizard set: its creates run detached too; approval-status reads its run the same way.
   'build-sp-wizard-campaigns',
 ])
 
@@ -243,7 +243,7 @@ export interface AdDelivery {
   /** Negatives and keywords the request created: how many exist at Amazon (they are created at once, not queued). */
   created?: { total: number; atAmazon: number }
   /** PB-5a — a playbook build's run: its status and how far it is (the creates run detached). */
-  build?: { applicationId: string; status: string; done: number | null; total: number | null; campaigns: number; errors: number }
+  build?: { applicationId: string; status: string; done: number | null; total: number | null; campaigns: number; errors: number; stopped?: true }
 }
 
 /** One queue row's (or an inline write's) outcome, in the five words a person uses. */
@@ -289,14 +289,15 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
   if (reasons.length) out.gateReasons = reasons
   const change = await prisma.agentChange.findFirst({ where: { approvalId }, orderBy: { executedAt: 'desc' }, select: { after: true } })
   const after = (change?.after ?? null) as { negatives?: Array<{ targetId?: unknown }>; targetId?: unknown; campaignId?: unknown } | null
-  if (toolName === 'apply-ads-playbook') {
-    // PB-5a — a build: its run row, and everything its campaigns hold ("at Amazon" only when it went live).
+  if (toolName === 'apply-ads-playbook' || toolName === 'build-sp-wizard-campaigns') {
+    // PB-5a — a build (B-3: a one-off SP Super Wizard set too): its run row, and everything its campaigns hold ("at Amazon"
+    // only when it went live).
     const applicationId = (after as { applicationId?: unknown } | null)?.applicationId
     if (typeof applicationId !== 'string') return out
     const { buildRunDelivery } = await import('../../advertising/ads-playbook/build.js')
     const run = await buildRunDelivery(applicationId)
     if (!run) return out
-    out.build = { applicationId, status: run.status, done: run.done, total: run.total, campaigns: run.createdCampaignIds.length, errors: run.errors }
+    out.build = { applicationId, status: run.status, done: run.done, total: run.total, campaigns: run.createdCampaignIds.length, errors: run.errors, ...(run.stopped ? { stopped: true as const } : {}) }
     let total = 0, atAmazon = 0
     for (const id of run.createdCampaignIds) {
       const counts = await campaignStructureCounts(id)
@@ -304,18 +305,6 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
       atAmazon += reach === 'live' ? counts.withAmazonId : 0
     }
     out.created = { total, atAmazon }
-    return out
-  }
-  if (toolName === 'build-sp-wizard-campaigns') {
-    // B-3 — every campaign of the set and everything under it; "at Amazon" only when it went live.
-    const ids = (after as { campaignIds?: unknown } | null)?.campaignIds
-    let total = 0, atAmazon = 0
-    for (const id of Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []) {
-      const counts = await campaignStructureCounts(id)
-      total += counts.total
-      atAmazon += reach === 'live' ? counts.withAmazonId : 0
-    }
-    if (total) out.created = { total, atAmazon }
     return out
   }
   if (toolName === 'create-ad-campaign') {
