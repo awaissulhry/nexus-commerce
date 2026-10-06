@@ -175,7 +175,7 @@ export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: num
 // `keptServing`: campaigns the anti-flap kept serving through a Min-bid hour.
 export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number }
 
-interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[] }
+interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[]; marketplace?: string | null }
 interface RankCampaignResult { decision: RankDefendDecision; applied: number; held: HeldBack; writes: RankWriteCounts; keptServing: boolean }
 
 /**
@@ -870,7 +870,8 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   const writes = noWrites()
   let keptServing = 0
   for (const w of [...work].sort((a, b) => order.get(a)! - order.get(b)! || a.seq - b.seq)) {
-    const permit = w.write && guard ? guard.permit() : DRY_RUN
+    // W1-6 — the campaign's market: that market's own "most actions per run" (the ads strategy) counts its changes too.
+    const permit = w.write && guard ? guard.permit({ market: w.camp.marketplace }) : DRY_RUN
     const r = await decideAndMaybeApply(w.camp, w.key, w.spec, w.planId, { write: w.write, permit, actor: w.actor, maxBaseBidByCampaign, suppressRaise: w.suppressRaise, entriesToday: entriesToday.get(w.camp.id) ?? 0 })
     if (w.write) guard?.settle(permit, r.applied, r.held)
     applied += r.applied

@@ -13,9 +13,10 @@
  *                product each give one: the one that spends less (the Owner's rule for shared ad groups)
  *   raise        what counts as loosening, for the writer (W1-3): a raise needs the Owner's authenticator code
  *   money        ad-spend money: hidden from a person without financials.adspend.view
- *   readBy       the engines and doors that ACT on it. Each W1 reader adds itself here, so a screen never claims a
- *                reader that does not exist (W1-7: the search-term thresholds and protection; W1-8: Claude's door, what
- *                Claude may do alone); a field with no reader is stored and shown only (`notReadYet`).
+ *   readBy       the engines and doors that ACT on it, each saying where it acts. Each W1 reader adds itself here, so a
+ *                screen never claims a reader that does not exist (W1-6: the monthly market cap, the stop bid and the
+ *                actions per run; W1-7: the search-term thresholds and protection; W1-8: Claude's door, what Claude may
+ *                do alone); a field with no reader is stored and shown only (`notReadYet`).
  *
  * 🔴 Units. `*Pct` is an INTEGER PERCENT (25 = 25 %), never a fraction — the AdsAutomationState.defaultTargetAcosPct
  * convention. The engines take fractions (Campaign.dynamicBidding.targetAcos = 0.25). The two meet ONLY through
@@ -208,11 +209,25 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
   { key: 'target', label: 'Target', columns: ['targetKind', 'targetPct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: [] },
   // The number Nexus's bid engines would steer by: the first ACoS target down the chain (a TACoS target is skipped).
   { key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true, readBy: [] },
-  { key: 'monthlySpendCapCents', label: 'Monthly spend cap', columns: ['monthlySpendCapCents'], levels: ALL_LEVELS, resolve: 'everyScope', safer: 'ownSpend', raise: 'up', money: true, readBy: [] },
+  // W1-6: the budget engine stops a market at its MARKET row's cap (low bids until the 1st). Category and product caps: W1-6b.
+  {
+    key: 'monthlySpendCapCents', label: 'Monthly spend cap', columns: ['monthlySpendCapCents'], levels: ALL_LEVELS, resolve: 'everyScope', safer: 'ownSpend', raise: 'up', money: true,
+    readBy: [
+      "the budget engine (every 30 minutes): when the market's spend this month reaches the market's cap, every campaign of the market drops to its stop bid until the 1st (a cap of 0 is no cap; category and product caps are not enforced yet)",
+    ],
+  },
   { key: 'minBidCents', label: 'Lowest bid', columns: ['minBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'floor', money: true, readBy: [] },
   { key: 'maxBidCents', label: 'Highest bid', columns: ['maxBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: true, readBy: [] },
   { key: 'maxChangePct', label: 'Largest bid change per action', columns: ['maxChangePct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
-  { key: 'maxActionsPerRun', label: 'Most actions per run', columns: ['maxActionsPerRun'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
+  // W1-6: the engines whose guard (ads-engine-guard.ts) is told each campaign's market.
+  {
+    key: 'maxActionsPerRun', label: 'Most actions per run', columns: ['maxActionsPerRun'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'up', money: false,
+    readBy: [
+      'the hourly bid plans (rank-defend): at most this many changes in the market per run; the rest wait for the next run',
+      'the budget engine (pacing and stop-over-spend floors): at most this many changes in the market per run; give-backs are never held',
+      'dayparting (windows and bid multipliers): at most this many changes in the market per run',
+    ],
+  },
   {
     key: 'protect', label: 'Protected', columns: ['protect'], levels: ['CATEGORY', 'PRODUCT'], resolve: 'inherit', safer: 'anyProtected', raise: 'unprotect', money: false,
     // W1-7 (ads-strategy/terms.ts). Safety stops (stock, Buy Box, spend caps, a halt) and the Owner's own painted plans
@@ -246,8 +261,16 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
       'the harvest preview and the fleet\'s negative observations, when they name no thresholds',
     ],
   },
-  // The stop bid may be empty inside a set group: the existing 2¢ floor.
-  { key: 'stop', label: 'Temporary stop', columns: ['stopMethod', 'stopBidCents'], required: ['stopMethod'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'saferStop', raise: 'pause', money: true, readBy: [] },
+  // The stop bid may be empty inside a set group: the existing 2¢ floor. W1-6: read as the stop BID only — every reader
+  // stops with low bids whatever the method says (a pause waits for W2/W3).
+  {
+    key: 'stop', label: 'Temporary stop', columns: ['stopMethod', 'stopBidCents'], required: ['stopMethod'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'saferStop', raise: 'pause', money: true,
+    readBy: [
+      'the budget engine: a market over its monthly cap drops to this stop bid until the 1st (low bids, never a pause)',
+      'the retail guard: a campaign whose products cannot be sold drops to this stop bid',
+      "Claude's suppress-campaign: the bid it lowers a campaign to (the 2-cent floor when none is set)",
+    ],
+  },
   { key: 'claudeAutonomy', label: 'What Claude may do alone', columns: ['claudeAutonomy'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lowerLevel', raise: 'autonomy', money: false, readBy: [CLAUDE_DOOR] },
   { key: 'reviewEveryDays', label: 'Review every (days)', columns: ['reviewEveryDays'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
 ]
@@ -268,6 +291,8 @@ export function notReadYet(): StrategyFieldKey[] {
  * where it comes from: the read tool's `restrictedFields`, and the strategy GET routes.
  */
 export const STRATEGY_MONEY: Readonly<Record<string, string>> = Object.fromEntries(
-  ['targetPct', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'harvestMaxAcosPct', 'negateMinSpendCents', 'stopBidCents', 'monthlyBudgetCents']
+  ['targetPct', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'harvestMaxAcosPct', 'negateMinSpendCents', 'stopBidCents', 'monthlyBudgetCents',
+    // W1-6 — this month against a cap: spend so far, the forecast and the cap where bids drop.
+    'spendCents', 'forecastSpendCents', 'stopCapCents']
     .map((key) => [key, FIELDS.financialsAdspendView]),
 )

@@ -32,6 +32,7 @@ import { createHash } from 'node:crypto'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
 import { adGroupCampaigns, adGroupSuppressionCounts } from '../../advertising/ads-entity-lookup.service.js'
 import { restoreCampaignBids, suppressCampaignBids, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
+import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
 import { alsoChangedBy, approvedRun, changeClampedBid, notRun, reachNote, reachRefusal, recheck, spOnlyRefusal, storedReach, type StoredReach } from './ads-change-kit.js'
 import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
@@ -800,7 +801,11 @@ async function suppressPreview(args: Record<string, unknown>): Promise<ToolResul
   if (campaign.bidsSuppressedAt) {
     return { ok: false, error: `${campaign.name}'s bids are already suppressed (by ${campaign.bidsSuppressedBy ?? 'an unrecorded actor'} since ${campaign.bidsSuppressedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC).` }
   }
-  const floor = SUPPRESSION_FLOOR_CENTS
+  // ADS AUTONOMY W1-6 — the stop bid: the ads strategy's for this campaign (its market, the lower across its products),
+  // else the 2-cent floor. A stop is low bids whatever stop method the strategy names.
+  const stop = (await stopBidsFor([{ id: campaign.id, marketplace: campaign.marketplace }])).get(campaign.id) ?? { cents: SUPPRESSION_FLOOR_CENTS, source: null }
+  const floor = stop.cents
+  const floorWords = stop.source ? `the stop bid of ${floor} cents (${strategySourceWords(stop.source)})` : 'the 2-cent floor'
   const [targets, groups] = await Promise.all([
     prisma.adTarget.count({ where: { adGroup: { campaignId }, isNegative: false, bidCents: { gt: floor }, suppressedFromBidCents: null } }),
     adGroupSuppressionCounts(campaignId, floor),
@@ -816,11 +821,13 @@ async function suppressPreview(args: Record<string, unknown>): Promise<ToolResul
       action: 'suppress-campaign',
       campaign: { id: campaign.id, name: campaign.name, marketplace: campaign.marketplace },
       moves: { targets, adGroups: groups.aboveFloor },
+      stopBidCents: floor,
+      stopBidFrom: stop.source ? strategySourceWords(stop.source) : 'the 2-cent floor (the ads strategy sets no stop bid here)',
       reach: stored,
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
-      effect: `Lowers every bid of ${campaign.name} to the 2-cent floor — ${targets} target${targets === 1 ? '' : 's'} and ${groups.aboveFloor} ad group default${groups.aboveFloor === 1 ? '' : 's'} — so it stops winning auctions without being paused. Each bid is remembered; restore-campaign puts them back.`,
+      effect: `Lowers every bid of ${campaign.name} to ${floorWords} — ${targets} target${targets === 1 ? '' : 's'} and ${groups.aboveFloor} ad group default${groups.aboveFloor === 1 ? '' : 's'} — so it stops winning auctions without being paused. Each bid is remembered; restore-campaign puts them back.`,
     },
   }
 }
@@ -846,7 +853,8 @@ const suppressCampaign: AgentTool = {
   },
   description:
     'Stop an Amazon Sponsored Products campaign the Nexus way: never paused — every keyword and target bid and every ad '
-    + 'group default bid goes to the 2-cent floor, and each bid is remembered. Nothing changes until a person approves '
+    + "group default bid goes to the stop bid the ads strategy sets for it (the 2-cent floor when it sets none; bids already "
+    + 'lower stay), and each bid is remembered. Nothing changes until a person approves '
     + 'it: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the business set '
     + 'it so. The preview counts what moves and where it lands (live at Amazon or sandbox). Refused, and not '
     + 'queued, when it is already suppressed or Amazon\'s write gate would refuse it (the live-write allowlist; a halt '
@@ -856,12 +864,13 @@ const suppressCampaign: AgentTool = {
   },
   async execute(args, ctx) {
     const fresh = await suppressPreview(args)
-    const refusal = recheck(ctx, fresh, ['moves', 'reach'])
+    // W1-6 — the stop bid is material: a strategy change since the approval stops the run.
+    const refusal = recheck(ctx, fresh, ['moves', 'reach', 'stopBidCents'])
     if (refusal) return notRun(refusal)
-    const p = fresh.preview as { campaign: { id: string }; reach: StoredReach; effect: string }
+    const p = fresh.preview as { campaign: { id: string }; reach: StoredReach; effect: string; stopBidCents: number }
     const run = approvedRun(ctx, String(args.why ?? '') || 'no-pause stop: bids floored instead of pausing')
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-    const moved = await suppressCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId })
+    const moved = await suppressCampaignBids(p.campaign.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, floorCents: p.stopBidCents })
     const now = await suppressionState(p.campaign.id)
     if (!now.suppressed) return notRun('Not run: the campaign was not suppressed (it changed meanwhile). Nothing changed.')
     return {

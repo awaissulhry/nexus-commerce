@@ -182,13 +182,49 @@ describe('effective', () => {
     expect(fieldOf(m, 'monthlySpendCapCents')).toMatchObject({
       caps: [{ level: 'market', monthlySpendCapCents: 515151 }],
       alsoInForce: [{ setting: `the budget plan ${month()}`, monthlyBudgetCents: 616161, stopOverSpend: true }], stricter: { from: 'the market strategy' },
+      // W1-6 — how this month stands against the cap where bids drop (the budget engine's rule), and who reads it.
+      thisMonth: { month: month(), spendCents: 0, spendThrough: null, forecastSpendCents: null, stopCapCents: 515151, stopBy: 'the market strategy', reached: false },
+      readBy: [expect.stringMatching(/^the budget engine \(every 30 minutes\): when the market's spend this month reaches the market's cap/)],
     })
+    expect(out.notReadYet).not.toEqual(expect.arrayContaining(['monthlySpendCapCents']))
     expect(m.shadowedBy).toEqual([{ campaignId: ids.c1, name: 'Test campaign one', targetAcosPct: 30 }])
     expect(m.claude.find((c: Data) => c.action === 'bid')).toEqual({
       action: 'bid', tools: [{ tool: 'set-target-bid', business: 'ask', effective: 'ask' }, { tool: 'bulk-ad-bid-change', business: 'ask', effective: 'ask' }],
       strategy: 'ask', source: expect.objectContaining({ level: 'market' }),
     })
     expect(m.orphans).toHaveLength(1)
+  })
+
+  it('W1-6 — a market cap says how this month stands: spend so far (whole days, never today) and whether bids drop', async () => {
+    const day1 = new Date(`${month()}-01T00:00:00Z`)
+    const row = await inA(() => db().amazonAdsDailyPerformance.create({ data: {
+      profileId: 'P-TEST', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: day1, entityType: 'CAMPAIGN', entityId: 'EXT-W1-READ',
+      localEntityId: ids.c1, costMicros: 6_000_000_000n, currencyCode: 'EUR', reportRunId: 'RUN-TEST', reportedAt: new Date(),
+    } as never }))
+    try {
+      const cap = fieldOf(data(await inA(() => readStrategy({ market: 'IT' }))).markets[0], 'monthlySpendCapCents')
+      expect(cap.thisMonth).toMatchObject({ spendCents: 600_000, spendThrough: `${month()}-01`, stopCapCents: 515151, stopBy: 'the market strategy', reached: true })
+      expect(cap.thisMonth.note).toMatch(/never today.*stop bid \(never a pause\) until the 1st/s)
+      // Another business reads its own month only: no cap of its own, no spend of this one.
+      const bravo = fieldOf(data(await inB(() => readStrategy({ market: 'IT' }))).markets[0], 'monthlySpendCapCents')
+      expect(bravo.thisMonth).toBeUndefined()
+    } finally {
+      await inA(() => db().amazonAdsDailyPerformance.delete({ where: { id: row.id } }))
+    }
+  })
+
+  it('W1-6 — a market cap of 0 is no cap (as in the Budget Manager): the plan\'s cap is the one that stops', async () => {
+    const row = await inA(() => db().adsStrategy.findFirstOrThrow({ where: { market: 'IT', level: 'MARKET' }, select: { id: true } }))
+    await inA(() => db().adsStrategy.update({ where: { id: row.id }, data: { monthlySpendCapCents: 0 } }))
+    try {
+      const cap = fieldOf(data(await inA(() => readStrategy({ market: 'IT' }))).markets[0], 'monthlySpendCapCents')
+      expect(cap.caps).toEqual([expect.objectContaining({ level: 'market', monthlySpendCapCents: 0, noCap: true })])
+      expect(cap.stricter).toBeUndefined()
+      expect(cap.thisMonth).toMatchObject({ stopCapCents: 616161, stopBy: `the budget plan ${month()}` })
+      expect(cap.note).toMatch(/A cap of 0 means no cap/)
+    } finally {
+      await inA(() => db().adsStrategy.update({ where: { id: row.id }, data: { monthlySpendCapCents: 515151 } }))
+    }
   })
 
   it('a campaign answers in its own market: its products, its own limits and target, which win today', async () => {

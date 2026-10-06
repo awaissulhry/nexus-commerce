@@ -247,9 +247,10 @@ export async function runDaypartingOnce(): Promise<DaypartingSummary> {
     const inWindow = shouldDeliver((s.windows as Window[]) ?? [], s.timezone, clockNow)
     const desired = inWindow ? 'ENABLED' : 'PAUSED'
     const multiplier = activeMultiplier((s.windows as Window[]) ?? [], s.timezone, clockNow)
-    const campaign = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { status: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
+    const campaign = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { status: true, bidsSuppressedAt: true, bidsSuppressedBy: true, marketplace: true } })
     if (!campaign) continue
-    const permit = guard!.permit()
+    // W1-6 — the campaign's market: that market's own "most actions per run" (the ads strategy) counts its changes too.
+    const permit = guard!.permit({ market: campaign.marketplace })
     const held = nothingHeld()
     const allow = (kind: 'forward' | 'floor' | 'restore') => allowChange(true, permit, held, kind)
     let writes = 0
