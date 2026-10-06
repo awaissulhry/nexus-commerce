@@ -234,7 +234,7 @@ function keywordTextRefusal(text: string, matchType: NegativeMatchType): Refusal
 
 async function protectedRefusal(text: string, matchType: NegativeMatchType | null, campaign: CampaignRow): Promise<Refusal | null> {
   const hit = await protectedNegativeRefusal({ text, matchType, marketplace: campaign.marketplace, campaignId: campaign.id })
-  return hit ? { deniedAt: 'keyword_protected', reason: hit.reason } : null
+  return hit ? { deniedAt: hit.protectedProduct ? 'product_protected' : 'keyword_protected', reason: hit.reason } : null
 }
 
 async function convertingRefusal(text: string, config: ProtectConvertingConfig | null | undefined): Promise<Refusal | null> {

@@ -41,6 +41,8 @@ export type GateDeniedAt =
   | 'entity_bounds'
   // ADX A1 — an operator-protected term may not be negated by any automation.
   | 'keyword_protected'
+  // ADS AUTONOMY W1-7 — the ASIN of a product the ads strategy protects may not be negated, by any writer.
+  | 'product_protected'
   // ACR.0.7 — the account is halted (anomaly breaker or operator) or autonomy is OFF.
   | 'automation_halted'
   // ACR.1.2b — the campaign's placement/bids/budget is pinned: held by hand.
@@ -200,6 +202,8 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   // 5a — before the sandbox return, so a sandbox run refuses what a live one would. The matcher (EXACT / PREFIX /
   // CONTAINS, and a phrase negative that a protected term contains) is ads-negation-policy.ts, the one the wire and
   // the MCP preview use too.
+  // W1-7 — the same policy refuses the ASIN of a product the ads strategy protects (a negative product target), for
+  // every writer, a person's own add included: a protection, like a protected term, not one of his limits to pass.
   if (ctx.isNegation && ctx.keywordText) {
     const refusal = await protectedNegativeRefusal({
       text: ctx.keywordText,
@@ -207,7 +211,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       marketplace: ctx.marketplace,
       campaignId: ctx.campaignId ?? null,
     })
-    if (refusal) return { allowed: false, reason: refusal.reason, deniedAt: 'keyword_protected' }
+    if (refusal) return { allowed: false, reason: refusal.reason, deniedAt: refusal.protectedProduct ? 'product_protected' : 'keyword_protected' }
   }
 
   // Sandbox path — env says we're not in live mode at all.

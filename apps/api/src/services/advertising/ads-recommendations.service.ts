@@ -13,7 +13,7 @@
  */
 
 import { previewBidOptimization, applyBidOptimization } from './ads-bid-optimizer.service.js'
-import { previewHarvest, applyHarvest, type HarvestCandidate } from './ads-harvest.service.js'
+import { previewHarvest, applyHarvest, type HarvestCandidate, type HarvestCriteriaUsed } from './ads-harvest.service.js'
 import { previewPacing, applyPacing } from './ads-budget-pacing.service.js'
 import { analyzeShareOfVoice } from './ads-impression-share.service.js'
 import { analyzeRetailReadiness, applyRetailGuard } from './ads-retail-readiness.service.js'
@@ -89,7 +89,16 @@ export interface RecommendationsResult {
   recommendations: Recommendation[]
   /** SG.9 — how many recommendations the operator has muted (the Muted view's pill) */
   mutedCount?: number
+  /**
+   * W1-7 — which numbers chose the search terms to negate and graduate: the ads strategy's groups where set (each row
+   * names it), `windowDays` and the harvest defaults elsewhere; and the protected products' ASINs left out.
+   */
+  searchTerms?: { criteria: HarvestCriteriaUsed; protectedAsins: number }
 }
+
+/** W1-7 — when the ads strategy's group chose a search term: over which window, and whose numbers (else nothing). */
+const chosenBy = (c: HarvestCandidate) =>
+  c.strategy ? ` Over ${c.strategy.windowDays} days, by the ads strategy's thresholds (${c.strategy.label}, version ${c.strategy.version}).` : ''
 
 /** SGX — `withDerived` is pure and load-bearing for what every metric column shows; exported
  *  under a test-only name so the suite can pin it without widening the service's real surface. */
@@ -99,7 +108,10 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
   const windowDays = opts.windowDays ?? 30
   const [bid, harvest, pacing, sov, retail] = await Promise.all([
     previewBidOptimization({ targetAcos: opts.targetAcos }),
-    previewHarvest({ windowDays }),
+    // ADS AUTONOMY W1-7 — the feed's window is a fallback for the search terms, not a threshold: the ads strategy's
+    // harvest and negate groups decide wherever the Owner set them (each over its own window, named in the detail),
+    // the feed's window and the harvest defaults everywhere else. A protected product's ASIN is never a negative here.
+    previewHarvest({ defaults: { windowDays } }),
     previewPacing(),
     analyzeShareOfVoice({ windowDays, limit: 500 }),
     analyzeRetailReadiness({}),
@@ -130,7 +142,8 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       category: 'negative',
       severity: n.costCents >= 3000 ? 'high' : 'medium',
       title: `Negate wasteful search term “${n.query}”`,
-      detail: `${n.clicks} clicks, ${n.orders} orders, €${(n.costCents / 100).toFixed(2)} spent with no return.`,
+      // W1-7 — a strategy's negate group may allow a few orders: then the spend did return something, and the line says so.
+      detail: `${n.clicks} clicks, ${n.orders} orders, €${(n.costCents / 100).toFixed(2)} spent${n.orders === 0 ? ' with no return' : ''}.${chosenBy(n)}`,
       estImpactCents: n.costCents,
       // spend on a term the harvester judged wasteful — the one genuinely recoverable case
       impactKind: n.salesCents > 0 ? 'redirect' : 'recoverable',
@@ -144,7 +157,7 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
       category: 'graduate',
       severity: 'medium',
       title: `Graduate converting term “${g.query}” to exact`,
-      detail: `${g.orders} orders, €${(g.salesCents / 100).toFixed(2)} sales — promote to a managed exact-match keyword.`,
+      detail: `${g.orders} orders, €${(g.salesCents / 100).toFixed(2)} sales — promote to a managed exact-match keyword.${chosenBy(g)}`,
       estImpactCents: g.salesCents,
       // 🔴 NOT an incremental gain: this revenue already exists in the auto campaign. Graduating
       // takes it over with a managed keyword — it does not add it.
@@ -233,6 +246,7 @@ export async function buildRecommendations(opts: { windowDays?: number; targetAc
 
   return {
     generatedAt: new Date().toISOString(), windowDays, counts, potentialMonthlyImpactCents,
+    searchTerms: { criteria: harvest.criteria, protectedAsins: harvest.protectedAsins.length },
     recommendations: opts.includeMuted ? visible.filter((r) => muted.has(`RECOMMENDATION|${r.id}`)) : visible,
     mutedCount: muted.size,
   }

@@ -809,7 +809,13 @@ async function resolveRuleSweepScope(ruleId: string): Promise<{
 // (€15) where every rule negates at €10. The gap stopped biting when HP5 (2026-08-21) retired
 // the nightly cron that called `previewHarvest({})` bare; the remaining bare-preview callers
 // are read-only surfaces.
+//
+// ADS AUTONOMY W1-7 — a rule that sets none of the three (windowDays, minSpendCents, minOrders) takes the ads
+// strategy's harvest and negate thresholds wherever its market, a category or a product sets them, and these
+// defaults elsewhere. A rule that sets any of them keeps its own numbers WHOLE, as before: a rule's own numbers win
+// over the strategy (the Owner's control rule).
 ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<ActionResult> => {
+  const ownNumbers = ['windowDays', 'minSpendCents', 'minOrders'].some((key) => typeof action[key] === 'number')
   const windowDays = typeof action.windowDays === 'number' ? action.windowDays : HARVEST_DEFAULTS.windowDays
   const minSpendCents = typeof action.minSpendCents === 'number' ? action.minSpendCents : HARVEST_DEFAULTS.minSpendCents
   const minOrders = typeof action.minOrders === 'number' ? action.minOrders : HARVEST_DEFAULTS.minOrders
@@ -848,7 +854,14 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
       : sweep.adGroupExternalIds
   }
 
-  const preview = await previewHarvest({ windowDays, minSpendCents, minOrders, adGroupExternalIds })
+  const preview = ownNumbers
+    ? await previewHarvest({ windowDays, minSpendCents, minOrders, adGroupExternalIds })
+    : await previewHarvest({ defaults: { ...HARVEST_DEFAULTS }, adGroupExternalIds })
+  // W1-7 — which numbers chose the candidates, and the protected products' ASINs left out, said on every run.
+  const criteria = { thresholdsFrom: ownNumbers ? 'rule' : 'strategy-and-defaults', ...(preview.criteria.strategy.length ? { strategy: preview.criteria.strategy } : {}) }
+  const protectedOut = preview.protectedAsins.length
+    ? { protectedProducts: preview.protectedAsins.length, topProtected: preview.protectedAsins.slice(0, 5).map((p) => ({ query: p.query, why: p.reason })) }
+    : {}
   if (meta.dryRun) {
     return {
       type: action.type,
@@ -865,6 +878,8 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
         wouldNegateProduct: preview.productNegatives.length,
         topNegatives: preview.negatives.slice(0, 5).map((n) => ({ query: n.query, costCents: n.costCents })),
         topGraduations: preview.graduations.slice(0, 5).map((g) => ({ query: g.query, orders: g.orders })),
+        ...criteria,
+        ...protectedOut,
       },
     }
   }
@@ -896,6 +911,8 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
       negativesProtected: result.negativesProtected,
       protectedTerms: result.protectedTerms.slice(0, 5),
       errors: result.errors.slice(0, 5),
+      ...criteria,
+      ...protectedOut,
     },
   }
 }
@@ -1633,11 +1650,28 @@ ACTION_HANDLERS.enable_campaign = async (action, context, meta): Promise<ActionR
   return { type: action.type, ok: res.ok, output: { campaignId: id, outboundQueueId: res.outboundQueueId } }
 }
 
+/**
+ * ADS AUTONOMY W1-7 — no optimiser stops a protected product. A rule that would pause, archive or floor a keyword or
+ * target of an ad group advertising a product the ads strategy protects (one protected product protects its ad group)
+ * skips it and says why: a skip, not a failure, asked BEFORE the dry-run return, so a PROPOSE rule offers no
+ * suggestion of it (the `rankOwnedSkip` pattern). The retail guard, the budget stop, a halt, dayparting and Hourly
+ * Bids are not stops of this kind and still apply.
+ */
+async function protectedStopSkip(type: string, adTargetId: string, target?: { adGroupId: string; adGroup: { campaign: { marketplace: string | null } | null } | null }): Promise<ActionResult | null> {
+  const t = target ?? await prisma.adTarget.findUnique({ where: { id: adTargetId }, select: { adGroupId: true, adGroup: { select: { campaign: { select: { marketplace: true } } } } } })
+  if (!t) return null
+  const { protectedAdGroups, protectedStopWhy } = await import('./ads-strategy/terms.js')
+  const source = (await protectedAdGroups([{ id: t.adGroupId, market: t.adGroup?.campaign?.marketplace ?? null }])).get(t.adGroupId)
+  return source ? { type, ok: true, output: { skipped: 'protected-product', adTargetId, why: protectedStopWhy(source) } } : null
+}
+
 // ── archive_keyword ───────────────────────────────────────────────────
 // Permanently archive a keyword (stronger than pause — Amazon ignores it).
 ACTION_HANDLERS.archive_keyword = async (action, context, meta): Promise<ActionResult> => {
   const id = (action.adTargetId as string | undefined) ?? ctxAdTargetId(action, context)
   if (!id) return { type: action.type, ok: false, error: 'No adTarget.id' }
+  const held = await protectedStopSkip(action.type, id)
+  if (held) return held
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id } }
   const res = await updateAdTargetWithSync({ adTargetId: id, patch: { status: 'ARCHIVED' }, actor: RULE_ACTOR(meta.ruleId), reason: 'archive_keyword via rule' })
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, outboundQueueId: res.outboundQueueId } }
@@ -1651,6 +1685,8 @@ ACTION_HANDLERS.lower_bid_to_floor = async (action, context, meta): Promise<Acti
   const id = (action.adTargetId as string | undefined) ?? ctxAdTargetId(action, context)
   const floorCents = Math.max(5, Number(action.floorCents ?? 5))
   if (!id) return { type: action.type, ok: false, error: 'No adTarget.id' }
+  const held = await protectedStopSkip(action.type, id)
+  if (held) return held
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id, bidCents: floorCents } }
   const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: floorCents }, actor: RULE_ACTOR(meta.ruleId), reason: 'lower_bid_to_floor via rule' , evidence: ctxEvidence(context) })
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, bidCents: floorCents, outboundQueueId: res.outboundQueueId } }
@@ -2165,7 +2201,7 @@ async function setTargetStatus(
   if (!id) return { type, ok: false, error: 'No adTarget.id in context' }
   const t = await prisma.adTarget.findUnique({
     where: { id },
-    select: { status: true, adGroup: { select: { campaignId: true } } },
+    select: { status: true, adGroupId: true, adGroup: { select: { campaignId: true, campaign: { select: { marketplace: true } } } } },
   })
   if (!t) return { type, ok: false, error: 'AdTarget not found' }
   const allow = Array.isArray(action.campaignIds) ? (action.campaignIds as string[]) : []
@@ -2175,6 +2211,11 @@ async function setTargetStatus(
   // Already there. Reported as a no-change rather than a success, so the action log does not fill
   // with writes that moved nothing — the same contract `bid_apply` uses.
   if (t.status === status) return { type, ok: true, output: { adTargetId: id, noChange: true, status } }
+  // W1-7 — a pause is a stop: a protected product's keyword is left alone (a re-enable is not held).
+  if (status === 'PAUSED') {
+    const held = await protectedStopSkip(type, id, t)
+    if (held) return held
+  }
   if (meta.dryRun) return { type, ok: true, output: { dryRun: true, adTargetId: id, wouldSet: status, from: t.status } }
   const res = await updateAdTargetWithSync({
     adTargetId: id,

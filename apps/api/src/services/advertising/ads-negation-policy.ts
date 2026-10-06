@@ -16,6 +16,9 @@
  * A NEGATIVE_PHRASE also blocks every search that contains its words in order, so it is refused when a
  * protected term contains it as a run of whole words: phrase "gale" would block "xavia gale" (review 7.9).
  *
+ * Protected products (ADS AUTONOMY W1-7): an ASIN is a product, and the ASIN of a product the ads strategy
+ * protects in the market is never negated (`protect` on a category or product row, ads-strategy/terms.ts).
+ *
  * Text limits (G.10): Amazon accepts a negative exact keyword of at most 10 words and 80 characters and
  * a negative phrase of at most 4 words and 80 characters — Amazon Ads, "A guide to targeting with
  * Sponsored Products" (advertising.amazon.com/library/guides/targeting-with-sponsored-products); the
@@ -149,16 +152,26 @@ export async function loadProtectedTerms(scope: { marketplace?: string | null; c
   })
 }
 
-/** The refusal for negating this text here, or null when no protected term is in the way. */
+/**
+ * The refusal for negating this text here, or null when nothing protected is in the way: a protected term, or — for an
+ * ASIN — a product the ads strategy protects in this market (ADS AUTONOMY W1-7, ads-strategy/terms.ts). Protected
+ * terms stay ONE list (AdKeywordProtection); a protected product is the strategy's `protect`, and `protectedProduct`
+ * names it. A market the caller does not know binds every market's protection, as for the terms.
+ */
 export async function protectedNegativeRefusal(args: {
   text: string
   matchType?: string | null
   marketplace?: string | null
   campaignId?: string | null
-}): Promise<{ reason: string; protectedTerm: string } | null> {
+}): Promise<{ reason: string; protectedTerm: string; protectedProduct?: string } | null> {
   if (!normaliseTerm(args.text)) return null
   const hit = protectedTermHit(args.text, args.matchType, await loadProtectedTerms(args))
-  return hit ? { reason: protectedTermRefusal(args.text, hit), protectedTerm: normaliseTerm(hit.protection.term) } : null
+  if (hit) return { reason: protectedTermRefusal(args.text, hit), protectedTerm: normaliseTerm(hit.protection.term) }
+  if (!isAsin(args.text)) return null
+  // Loaded here, not at the top: the strategy reads the database, and this module's top level stays free of it.
+  const { protectedAsinRefusal } = await import('./ads-strategy/terms.js')
+  const product = await protectedAsinRefusal(args.text, args.marketplace ?? null)
+  return product ? { reason: product.reason, protectedTerm: normaliseTerm(args.text), protectedProduct: product.sku } : null
 }
 
 // ── At the wire ──────────────────────────────────────────────────────────────────────────────────

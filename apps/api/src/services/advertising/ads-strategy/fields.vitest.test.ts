@@ -4,7 +4,9 @@
  *   units      an integer percent becomes the engines' fraction (30 → 0.3) and back; a stored fraction (0.3) is never
  *              read as a percent, nor a percent (30) as 3,000 %
  *   schema     every registry column is an AdsStrategy column and every setting column is in the registry
- *   honest     no field has a reader yet: readBy is empty everywhere and notReadYet lists every field
+ *   honest     only the fields an engine acts on have readers (W1-7: harvest, negate, protect), and notReadYet lists
+ *              every other field; a reader names where and how
+ *   stricter   the one order two harvest (or negate) groups are compared by, everywhere they meet
  *   money      every money field's value keys are stripped for a person without ad-spend money
  *   names      every tool an action type narrows is a registered tool; the constants mirror their sources
  */
@@ -22,6 +24,8 @@ import {
   STRATEGY_FIELDS,
   STRATEGY_MONEY,
   fractionToPct,
+  harvestStricter,
+  negateStricter,
   notReadYet,
   pctToFraction,
 } from './fields.js'
@@ -56,9 +60,14 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: no engine, rule or Claude door reads any field yet', () => {
-    expect(STRATEGY_FIELDS.filter((f) => f.readBy.length)).toEqual([])
-    expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key))
+  it('is honest: only the search-term thresholds and protection have readers (W1-7); every other field is stored and shown only', () => {
+    const read = ['harvest', 'negate', 'protect']
+    expect(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => f.key)).toEqual(['protect', 'harvest', 'negate'])
+    expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key).filter((key) => !read.includes(key)))
+    // Each reader says where it acts, in words a screen can show.
+    for (const f of STRATEGY_FIELDS.filter((x) => x.readBy.length)) for (const r of f.readBy) expect(r.length, f.key).toBeGreaterThan(20)
+    expect(STRATEGY_FIELDS.find((f) => f.key === 'harvest')!.readBy.join(' ')).toMatch(/Keyword Harvest page.*stricter/)
+    expect(STRATEGY_FIELDS.find((f) => f.key === 'protect')!.readBy.join(' ')).toMatch(/no ASIN negative of a protected product, from anyone/)
   })
 
   it('every money field keeps its numbers under keys the money filter strips (ad-spend money)', () => {
@@ -78,6 +87,21 @@ describe('the registry', () => {
     }
     expect(STRATEGY_FIELDS.find((f) => f.key === 'harvest')!.required).not.toContain('harvestMaxAcosPct')
     expect(STRATEGY_FIELDS.find((f) => f.key === 'stop')!.required).toEqual(['stopMethod'])
+  })
+
+  it('two groups are compared in one order: more orders (clicks), then more clicks (spend), then the tighter ceiling', () => {
+    const h = (minOrders: number, minClicks: number, maxAcosPct: number | null) => ({ minOrders, minClicks, maxAcosPct })
+    expect(harvestStricter(h(3, 0, null), h(2, 9, 10))).toBe(true)
+    expect(harvestStricter(h(2, 5, null), h(2, 4, 10))).toBe(true)
+    expect(harvestStricter(h(2, 5, 30), h(2, 5, 40))).toBe(true)
+    expect(harvestStricter(h(2, 5, 40), h(2, 5, null))).toBe(true)
+    expect(harvestStricter(h(2, 5, null), h(2, 5, 40))).toBe(false)
+    expect(harvestStricter(h(2, 5, 40), h(2, 5, 40))).toBe(false)
+    const n = (minClicks: number, minSpendCents: number, maxOrders: number) => ({ minClicks, minSpendCents, maxOrders })
+    expect(negateStricter(n(20, 0, 5), n(10, 9999, 0))).toBe(true)
+    expect(negateStricter(n(10, 600, 5), n(10, 500, 0))).toBe(true)
+    expect(negateStricter(n(10, 500, 0), n(10, 500, 1))).toBe(true)
+    expect(negateStricter(n(10, 500, 1), n(10, 500, 1))).toBe(false)
   })
 
   it('every tool an action type narrows is a registered tool', () => {

@@ -113,7 +113,10 @@ export const negativeCandidatesBuilder: ObservationBuilder = {
       payload: {
         scope: marketplace ? `marketplace:${marketplace}` : 'account',
         windowDays: preview.windowDays,
-        thresholds: { minSpendCents: 1500, minOrders: 2, ngramMinCostCents: 300 },
+        // W1-7 — the defaults where the ads strategy sets no negate group; the strategy's groups, where they chose.
+        thresholds: { minSpendCents: preview.criteria?.defaults.minSpendCents ?? 1500, minOrders: preview.criteria?.defaults.minOrders ?? 2, ngramMinCostCents: 300 },
+        ...(preview.criteria?.strategy.length ? { strategyThresholds: preview.criteria.strategy } : {}),
+        ...(preview.protectedAsins?.length ? { protectedProductAsinsLeftOut: preview.protectedAsins.length } : {}),
         counts: {
           negativesTotal: preview.negatives.length,
           negativesTrimmed: Math.max(0, preview.negatives.length - NEGATIVES_CAP),

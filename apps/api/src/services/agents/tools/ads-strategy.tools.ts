@@ -8,8 +8,8 @@
  *   rows       every strategy row of a market, and the older settings at the same grains
  *   history    the recorded changes, newest first
  *
- * Read only, Nexus only: no marketplace call. Honest about readers: no engine, rule or Claude door acts on the
- * strategy yet (every field's `readBy` is empty, `notReadYet` lists them all); W1 wires the readers one by one.
+ * Read only, Nexus only: no marketplace call. Honest about readers: every field's `readBy` names the engines, rules
+ * and doors that act on it, and `notReadYet` lists the fields stored and shown only; W1 wires the readers one by one.
  * Money (targets, bids, caps, spend thresholds) sits only under the keys STRATEGY_MONEY names: a person without
  * financials.adspend.view gets the same answer minus exactly those keys.
  */
@@ -56,9 +56,9 @@ const adsStrategy: AgentTool = {
     + 'product row always belongs to one market. It also lists the older settings that still bind (campaign bid limits, '
     + 'bid and harvest policies, the budget plan), the campaigns whose own target ACoS wins over the strategy, and the '
     + "business's own Claude level per ad tool. view rows lists every strategy row of a market; view history the changes. "
-    + 'No engine, rule or Claude door acts on the strategy yet: readBy is empty on every field and notReadYet lists them, '
-    + 'so every engine works as before. Targets, bids, caps and spend thresholds are ad-spend money: hidden from a person '
-    + 'without permission to see ad spend. Nexus only; reads nothing from Amazon.',
+    + 'Each field\'s readBy names the engines, rules and doors that act on it; the fields under notReadYet are stored and '
+    + 'shown only, and every engine works as before for them. Targets, bids, caps and spend thresholds are ad-spend money: '
+    + 'hidden from a person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {
     const out = await readStrategy(args as StrategyReadArgs)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
