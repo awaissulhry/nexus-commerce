@@ -166,4 +166,11 @@ describe('isolate_product_terms — cadence', () => {
     expect((await run(ACTION, { dryRun: true })).output).toMatchObject({ noChange: true, cadenceHeld: true })
     expect((await run(ACTION, { dryRun: true, preview: true })).output).toMatchObject({ noChange: false, planned: 4 })
   })
+
+  it('a run today that FAILED swept nothing: it does not hold the next one back', async () => {
+    db.automationRuleExecution.findMany.mockResolvedValue([{ actionResults: [{ type: 'isolate_product_terms', ok: false, error: 'a made-up failure' }] }] as never)
+    const r = await run(ACTION, { dryRun: true })
+    expect(r.output).toMatchObject({ noChange: false, planned: 4 })
+    expect(r.output).not.toHaveProperty('cadenceHeld')
+  })
 })

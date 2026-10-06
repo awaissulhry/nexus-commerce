@@ -1678,6 +1678,14 @@ export async function updateAdTargetWithSync(args: {
   confirmOwnLimits?: boolean
   /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Unlike `force`, nothing else is skipped. */
   letsGo?: boolean
+  /**
+   * D4 — a stop (bulk-ad-bid-change's stop row): a LOWERING to the ads strategy's stop bid, the Owner's temporary stop
+   * (low bids, never a pause). Not a step of the bid's pace: the largest change per action does not clamp it, and the
+   * gate judges it as the lowering-only stop it is (isSuppressionWrite: the lowest bid does not bind it, as it does
+   * not bind a floor). Never a raise: a stop that does not lower the bid is refused. Unlike `force`, nothing else is
+   * skipped (the orphan mark, the 5¢ floor, a person's floor memory).
+   */
+  stop?: boolean
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adTarget.findUnique({
@@ -1741,6 +1749,12 @@ export async function updateAdTargetWithSync(args: {
     : NO_LIMITS
   const sources: WriteSources = {}
   const warnings: string[] = []
+  // D4 — a stop only lowers (see `stop`); a lowering-only forced write at the gate.
+  const stop = args.stop === true && args.patch.bidCents != null
+  if (stop && !(args.patch.bidCents! < existing.bidCents)) {
+    return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: `a stop only lowers a bid: ${args.patch.bidCents}¢ is not below ${existing.bidCents}¢` }
+  }
+  const forcedLowering = args.force === true || stop
 
   // Apex A.2a — clamp the requested bid to the campaign's max-change-% guardrail
   // (when set). Caps how far a single bid move can swing from the current bid, so a
@@ -1751,7 +1765,7 @@ export async function updateAdTargetWithSync(args: {
   // W1-5 — the largest change is the LOWER of the campaign's and the ads strategy's (stepClamp, the same arithmetic as
   // Claude's preview, ads-change-kit.ts); a bid asked for inside the strategy band stays inside it. A person's own edit
   // past the strategy's largest change is sent, with a warning (never rewritten, never held for a confirmation).
-  if (!args.force && args.patch.bidCents != null && existing.bidCents > 0) {
+  if (!args.force && !stop && args.patch.bidCents != null && existing.bidCents > 0) {
     if (!person) {
       const step = stepClamp(existing.bidCents, args.patch.bidCents, campaignOfTarget?.dynamicBidding, strategy)
       if (step.by === 'strategy' && step.cents !== args.patch.bidCents) Object.assign(sources, limitSources({ ...NO_LIMITS, maxChangePct: strategy.maxChangePct }))
@@ -1807,14 +1821,14 @@ export async function updateAdTargetWithSync(args: {
   if (changes.some((c) => c.field === 'bid')) {
     const refused = await boundsRefused({
       entity: 'AD_TARGET', entityId: args.adTargetId, campaign: existing.adGroup?.campaign, field: 'bid',
-      intendedValueCents: args.patch.bidCents as number, isSuppression: isSuppressionWrite(args.force === true, changes),
+      intendedValueCents: args.patch.bidCents as number, isSuppression: isSuppressionWrite(forcedLowering, changes),
       person, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null, strategy,
     })
     if (refused) return refused
   }
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
-    campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: args.force,
+    campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: forcedLowering,
     manual: args.manual, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null,
   })
   if (atDispatch) return atDispatch
@@ -1845,7 +1859,8 @@ export async function updateAdTargetWithSync(args: {
     actor: args.actor,
     reason: args.reason ?? null,
     applyImmediately: args.applyImmediately ?? false,
-    force: args.force,
+    // D4 — a stop rides the queue row's lowering-only mark, so the worker's gate judges it as one (isSuppressionWrite).
+    force: forcedLowering,
     manual: person,
     confirmOwnLimits,
     letsGo: args.letsGo,
@@ -1889,6 +1904,8 @@ export interface BulkBidEntry {
   bidCents: number
   /** W1-5 — the measurement and the sources behind this bid (an engine's proposal); kept on its action log row. */
   evidence?: AdWriteEvidence | null
+  /** D4 — a stop: a lowering to the ads strategy's stop bid (updateAdTargetWithSync `stop`). */
+  stop?: boolean
 }
 
 export interface BulkBidOutcome {
@@ -1946,6 +1963,7 @@ export async function bulkUpdateAdTargetBids(args: {
         askGate: args.askGate,
         confirmOwnLimits: args.confirmOwnLimits,
         evidence: entry.evidence ?? null,
+        ...(entry.stop ? { stop: true } : {}),
       })
       out.outcomes.push(outcome)
       if (outcome.ok && outcome.outboundQueueId) out.applied += 1

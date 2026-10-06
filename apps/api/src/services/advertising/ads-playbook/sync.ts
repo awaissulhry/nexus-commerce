@@ -320,7 +320,7 @@ export async function runSync(plan: SyncPlan, w: SyncWriter, opts: { compilers?:
     const gone = goneWhy(i, true)
     if (gone) { res.productAds.leftAlone.push({ key: i.key, why: gone }); continue }
     try {
-      const a = await createProductAdLocal({ adGroupId: placeOf(i).adGroupId, asin: i.asin, ...(i.sku ? { sku: i.sku } : {}), userId: w.actor, manual: w.manual, confirmOwnLimits: w.confirmOwnLimits, changeSetId: w.changeSetId })
+      const a = await createProductAdLocal({ adGroupId: placeOf(i).adGroupId, asin: i.asin, ...(i.sku ? { sku: i.sku } : {}), ...(i.productId ? { productId: i.productId } : {}), userId: w.actor, manual: w.manual, confirmOwnLimits: w.confirmOwnLimits, changeSetId: w.changeSetId })
       if (a.id) res.productAds.ids.push(a.id)
       if (a.externalAdId) res.productAds.added++
       else if (a.notSent) res.productAds.failed.push({ key: i.key, why: a.notSent.reason })

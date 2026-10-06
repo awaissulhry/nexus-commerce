@@ -477,6 +477,19 @@ describe('PB-6a — harvest_and_negate keeps winners and runs only its own half'
     expect(swept.output).toMatchObject({ noChange: false })
   })
 
+  it('cadenceDays: a run that FAILED swept nothing — it does not hold the next one back; a run that succeeded does', async () => {
+    db.automationRuleExecution.findMany.mockResolvedValue([{ actionResults: [{ type: 'harvest_and_negate', ok: false, error: 'a made-up failure' }] }] as never)
+    const after = await harvest({ ...RULE, cadenceDays: 7 }, { ...meta, dryRun: true })
+    expect(after.output).toMatchObject({ noChange: false })
+    expect(after.output).not.toHaveProperty('cadenceHeld')
+    // The control: the same window with a run that succeeded holds it back.
+    db.automationRuleExecution.findMany.mockResolvedValue([
+      { actionResults: [{ type: 'harvest_and_negate', ok: false, error: 'a made-up failure' }] },
+      { actionResults: [{ type: 'harvest_and_negate', ok: true, output: { wouldNegate: 1 } }] },
+    ] as never)
+    expect((await harvest({ ...RULE, cadenceDays: 7 }, { ...meta, dryRun: true })).output).toMatchObject({ noChange: true, cadenceHeld: true })
+  })
+
   it('🔴 a Negative Targeting rule that names 0 orders still proposes its waste (the Single builder\'s and the wizard\'s stored shapes)', async () => {
     const source = { adGroupId: 'src1', campaignId: 'c1', harvestFrom: true, graduate: [], negate: ['EXACT'] }
     const single = { type: 'harvest_and_negate', control: 'manual', mode: 'negative', windowDays: 60, minSpendCents: 1000, minOrders: 0, sources: [source], destinations: {} }

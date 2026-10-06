@@ -16,7 +16,8 @@
  *   next step    first that applies —
  *                closeOldPlace  handover B: the term has its own campaign (a hero) and the hero itself meets the harvest
  *                             bar: its OLD exact keyword goes to low bids — the strategy's stop bid, at least the bid
- *                             tool's lowest (bulk-ad-bid-change): the Owner's temporary stop, undone in about a minute;
+ *                             tool's lowest (bulk-ad-bid-change, a stop row: in one move, D4): the Owner's temporary
+ *                             stop, undone in about a minute;
  *                             never a negative over his own keyword — a request a person decides; an old
  *                             research place is negated exact by the playbook's isolation rule (its card). Never where an
  *                             hourly plan or a performance slot holds the campaign (reported only), never over a floor
@@ -217,13 +218,15 @@ export interface WinnerEntry {
   /** The term's own campaign, when it has one (proven: it meets the harvest bar there). */
   heroOf?: { key: string; campaignId: string; campaignName: string; proven: boolean }
   /**
-   * closeOldPlace: how the old place closes — its exact keyword to the floor (the request that asks for it: one bid, a
-   * person decides; undo puts the bid back), or the isolation rule's negative exact in a research slot (its card).
+   * closeOldPlace: how the old place closes — its exact keyword to the floor (the request that asks for it: one STOP row,
+   * D4 — the strategy's stop bid in one move, never clamped to the largest bid change; a person decides; undo puts the
+   * bid back), or the isolation rule's negative exact in a research slot (its card). `stopBidCents`: the bid it goes to.
    */
   closeOldPlace?: {
     how: 'floor' | 'isolation'
     by: string
-    request: { tool: 'bulk-ad-bid-change'; args: { bids: Array<{ targetId: string; bidCents: number }>; why: string } } | null
+    stopBidCents?: number
+    request: { tool: 'bulk-ad-bid-change'; args: { bids: Array<{ targetId: string; stop: true }>; why: string } } | null
   }
 }
 
@@ -452,12 +455,12 @@ export async function winnerReview(args: { market: string; productId?: string; s
       : Promise.resolve(new Map<string, never>()),
     spentForAutoBid([...servingIds]),
   ])
-  // The low bid an old exact keyword is proposed at: the strategy's stop bid for its campaign, at least the lowest bid the
-  // bid tool sets (loaded when asked: a tool module).
-  const { BULK_FLOOR_CENTS } = await import('../../agents/tools/ads-change.tools.js')
+  // The low bid an old exact keyword is proposed at (a stop, D4): the strategy's stop bid for its campaign, at least the
+  // lowest stop bid the bid tool sets (loaded when asked: a tool module).
+  const { STOP_MIN_CENTS } = await import('../../agents/tools/ads-change-kit.js')
   const { stopBidsFor } = await import('../ads-strategy/effective.js')
   const stops = await stopBidsFor(campaignIds.map((id) => ({ id, marketplace: byId.get(id)?.marketplace ?? null })))
-  const lowBidOf = (campaignId: string) => Math.max(BULK_FLOOR_CENTS, stops.get(campaignId)?.cents ?? 0)
+  const lowBidOf = (campaignId: string) => Math.max(STOP_MIN_CENTS, stops.get(campaignId)?.cents ?? 0)
   // Terms with clicks per campaign (what a placement change there moves too).
   const clicked = new Map<string, Set<string>>()
   for (const [key, r] of current) {
@@ -546,8 +549,9 @@ export async function winnerReview(args: { market: string; productId?: string; s
         closeOldPlace: exact && t
           ? {
             how: 'floor' as const,
-            by: "a request a person decides (bulk-ad-bid-change: one bid, at the strategy's stop bid or the tool's lowest; its undo puts the bid back, about a minute to serve again)",
-            request: { tool: 'bulk-ad-bid-change' as const, args: { bids: [{ targetId: t.id, bidCents: lowBidOf(c.id) }], why: `"${p.term}" has its own campaign, which proved itself: its old exact keyword goes to low bids (not a pause, not a negative)` } },
+            by: "a request a person decides (bulk-ad-bid-change: one stop row — the bid goes to the strategy's stop bid, or the tool's lowest, in one move; the largest bid change per action does not apply to a stop; its undo puts the bid back, about a minute to serve again)",
+            stopBidCents: lowBidOf(c.id),
+            request: { tool: 'bulk-ad-bid-change' as const, args: { bids: [{ targetId: t.id, stop: true as const }], why: `"${p.term}" has its own campaign, which proved itself: its old exact keyword goes to low bids (not a pause, not a negative)` } },
           }
           : { how: 'isolation' as const, by: "the playbook's isolation rule: a negative exact here, on its card (a person decides)", request: null },
       } : {}),

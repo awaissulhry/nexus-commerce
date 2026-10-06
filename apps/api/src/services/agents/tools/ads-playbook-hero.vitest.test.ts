@@ -411,8 +411,8 @@ describe('handover B — once its own campaign proves itself, the term\'s old ex
     expect(floors).toHaveLength(1)
     expect(floors[0]).toMatchObject({
       term: 'test cape', adGroupId: exactA.adGroupId, nextStep: 'closeOldPlace', heroOf: { key: 'hero:test cape', proven: true },
-      // Low bids: the bid tool's lowest (the strategy sets no stop bid here).
-      closeOldPlace: { how: 'floor', request: { tool: 'bulk-ad-bid-change', args: { bids: [{ targetId: oldId, bidCents: 5 }] } } },
+      // Low bids: a stop row (D4), at the bid tool's lowest (the strategy sets no stop bid here).
+      closeOldPlace: { how: 'floor', stopBidCents: 5, request: { tool: 'bulk-ad-bid-change', args: { bids: [{ targetId: oldId, stop: true }] } } },
       nextWhy: expect.stringMatching(/^hero proven → old keyword to the floor: .*never a negative/),
     })
     // The research place where it also ran closes by the isolation rule's negative exact there (its card), never a floor.
@@ -420,6 +420,8 @@ describe('handover B — once its own campaign proves itself, the term\'s old ex
     // The request is one a person approves through the bid tool as it is.
     const preview = await call('bulk-ad-bid-change', floors[0].closeOldPlace.request.args)
     expect(preview.ok).toBe(true)
+    // D4 — in one move to the stop bid the view names, whatever the largest bid change: a stop, never a step.
+    expect((preview as Row).preview.changes).toEqual([expect.objectContaining({ targetId: oldId, fromCents: 45, toCents: floors[0].closeOldPlace.stopBidCents, stop: true })])
     // L1 holds: a negative over the old keyword is still refused, whoever asks; nothing was written by the view.
     expect(await lock(exactA)).toMatchObject({ deniedAt: 'own_keyword' })
     expect(await inside(() => db().adTarget.count({ where: { adGroupId: exactA.adGroupId, isNegative: true } }))).toBe(0)

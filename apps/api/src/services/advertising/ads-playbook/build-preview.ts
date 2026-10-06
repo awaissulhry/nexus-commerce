@@ -54,11 +54,14 @@ export async function productAdsOf(productId: string, market: string, fulfilment
   })).map((l) => l.productId))
   const hasChildren = products.some((p) => p.parentId)
   const ads = products.filter((p) => listed.has(p.id) && !(hasChildren && p.isParent))
-  const byAsin = new Map<string, Array<{ sku: string; fulfillment: string | null }>>()
-  for (const p of ads) byAsin.set(p.amazonAsin!, [...(byAsin.get(p.amazonAsin!) ?? []), { sku: p.sku, fulfillment: p.fulfillmentMethod ? String(p.fulfillmentMethod) : null }])
+  const byAsin = new Map<string, Array<{ sku: string; productId: string; fulfillment: string | null }>>()
+  for (const p of ads) byAsin.set(p.amazonAsin!, [...(byAsin.get(p.amazonAsin!) ?? []), { sku: p.sku, productId: p.id, fulfillment: p.fulfillmentMethod ? String(p.fulfillmentMethod) : null }])
   const out = [...byAsin.entries()].map(([asin, offers]) => {
     const pick = fulfilment === 'both' ? offers : offers.filter((o) => o.fulfillment === fulfilment)
-    return { asin, skus: (pick.length ? pick : offers).map((o) => o.sku), ...(pick.length ? {} : { note: `no ${fulfilment} offer: the ${offers[0].fulfillment ?? 'only'} one` }) }
+    const chosen = pick.length ? pick : offers
+    // productIds: the product behind each SKU, in the same order — the product ad names it (stock-aware bids and a
+    // product's or category's monthly cap tie an ad to its product by it).
+    return { asin, skus: chosen.map((o) => o.sku), productIds: chosen.map((o) => o.productId), ...(pick.length ? {} : { note: `no ${fulfilment} offer: the ${offers[0].fulfillment ?? 'only'} one` }) }
   })
   return { ads: out, unlisted: products.filter((p) => !listed.has(p.id) && !(hasChildren && p.isParent)).length }
 }
@@ -132,7 +135,8 @@ export interface BuildPlan {
   skippedShared: NamedTerm[]
   acceptedShared: NamedTerm[]
   sharedWithOtherProducts: NamedTerm[]
-  productAds: Array<{ asin: string; skus: string[]; note?: string }>
+  /** Per ASIN: its seller SKUs and, in the same order, the product behind each (the product ad names it). */
+  productAds: Array<{ asin: string; skus: string[]; productIds?: string[]; note?: string }>
   portfolio: { name?: string; does: 'reuse' | 'create' | 'none'; portfolioId?: string }
   strategy: { minBidCents: number | null; maxBidCents: number | null; caps: Array<{ monthlySpendCapCents: number; source: { level: string; label: string }; over: boolean }>; daysInMonth: number }
   reach: { writable: boolean; everWritten: boolean }

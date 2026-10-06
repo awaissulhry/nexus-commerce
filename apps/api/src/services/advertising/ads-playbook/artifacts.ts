@@ -19,7 +19,7 @@ import prisma from '../../../db.js'
 import type { AdsActor } from '../ads-mutation.service.js'
 import type { TemplateDoc } from './doc.js'
 import { compileHarvestFor, syncHarvestRule } from './harvest-rule.js'
-import { compileIsolationFor, syncIsolationRule } from './isolation-run.js'
+import { compileIsolationFor, ISOLATION_OFF, syncIsolationRule } from './isolation-run.js'
 import { rankGroupCompiler } from './rank.js'
 import { PLAYBOOK_STOP_METRIC, storedCompiledAction } from './rules.js'
 
@@ -117,22 +117,29 @@ async function switchRulesOff(links: readonly ArtifactLink[], actor: string): Pr
   return { changed: on.map((r) => r.id), errors: [] }
 }
 
-/** What START or STOP does to the playbook's own rules (a preview, no writes). */
-async function ruleSwitchLines(kind: 'harvestRule' | 'isolationRule', key: string, words: string, links: readonly ArtifactLink[], mode: 'start' | 'stop'): Promise<ArtifactPreviewLine[]> {
-  if (!links.length) return [{ kind, key, does: 'report', summary: `${words} is not compiled yet: ${mode === 'start' ? 'START compiles it and switches it on' : 'nothing to switch off'}` }]
+/**
+ * What START or STOP does to the playbook's own rules (a preview, no writes). `off` (D1): why the compile itself keeps
+ * the rule off at START (the template turns every isolation switch off) — then START never switches it on, and says so.
+ */
+async function ruleSwitchLines(kind: 'harvestRule' | 'isolationRule', key: string, words: string, links: readonly ArtifactLink[], mode: 'start' | 'stop', off?: string): Promise<ArtifactPreviewLine[]> {
+  const starts = off ? `START compiles it, and it stays off: ${off}` : 'START compiles it and switches it on'
+  if (!links.length) return [{ kind, key, does: 'report', summary: `${words} is not compiled yet: ${mode === 'start' ? starts : 'nothing to switch off'}` }]
   const rows = new Map((await prisma.automationRule.findMany({ where: { id: { in: links.map((l) => l.refId) } }, select: { id: true, enabled: true } })).map((r) => [r.id, r]))
   return links.map((l) => {
     const r = rows.get(l.refId)
-    if (!r) return { kind, key: l.key, does: 'report' as const, summary: `${words} is gone${mode === 'start' ? ': START compiles it again and switches it on' : ': nothing to switch off'}` }
+    if (!r) return { kind, key: l.key, does: 'report' as const, summary: `${words} is gone${mode === 'start' ? `: ${off ? `START compiles it again, and it stays off: ${off}` : 'START compiles it again and switches it on'}` : ': nothing to switch off'}` }
     if (mode === 'stop') return r.enabled ? { kind, key: l.key, does: 'disable' as const, summary: `${words} is switched off (the next START switches it on again)`, refId: r.id } : { kind, key: l.key, does: 'keep' as const, summary: `${words} is off already: left as it is`, refId: r.id }
-    return r.enabled
-      ? { kind, key: l.key, does: 'keep' as const, summary: `${words} is on already`, refId: r.id }
-      : { kind, key: l.key, does: 'enable' as const, summary: `${words} is compiled again and switched on — unless a person switched it off since the playbook last started or stopped it: then it stays off, said`, refId: r.id }
+    if (r.enabled) return { kind, key: l.key, does: 'keep' as const, summary: `${words} is on already`, refId: r.id }
+    if (off) return { kind, key: l.key, does: 'keep' as const, summary: `${words} stays off: ${off} (START does not switch it on)`, refId: r.id }
+    return { kind, key: l.key, does: 'enable' as const, summary: `${words} is compiled again and switched on — unless a person switched it off since the playbook last started or stopped it: then it stays off, said`, refId: r.id }
   })
 }
 
-/** A rule's compile without its save (PB-10): its name and action, or why it cannot be compiled now. */
-type RuleCompiled = { name: string; action: unknown } | { problems: string[] }
+/**
+ * A rule's compile without its save (PB-10): its name and action, or why it cannot be compiled now. `off` (D1): why the
+ * compile keeps the rule off at START, when it does.
+ */
+type RuleCompiled = { name: string; action: unknown; off?: string } | { problems: string[] }
 
 /**
  * A compiled rule as a compiler: `sync(playbookId, { enabled })` saves it once and writes its own link; `compiled`
@@ -145,7 +152,12 @@ function ruleCompiler(kind: 'harvestRule' | 'isolationRule', key: string, words:
   return {
     kind,
     async preview(ctx, links) {
-      if (ctx.mode === 'start' || ctx.mode === 'stop') return ruleSwitchLines(kind, key, words, links, ctx.mode)
+      if (ctx.mode === 'stop') return ruleSwitchLines(kind, key, words, links, ctx.mode)
+      if (ctx.mode === 'start') {
+        // D1 — what START does follows the compile: one that keeps the rule off is said, never promised on.
+        const now = await compiled(ctx.playbookId)
+        return ruleSwitchLines(kind, key, words, links, ctx.mode, 'off' in now ? now.off : undefined)
+      }
       return [{ kind, key: links[0]?.key ?? key, does: links.length ? 'update' : 'create', summary: `${words}, compiled from the product's linked slots: born off — START switches it on`, ...(links[0] ? { refId: links[0].refId } : {}) }]
     },
     async compile(ctx) {
@@ -155,6 +167,7 @@ function ruleCompiler(kind: 'harvestRule' | 'isolationRule', key: string, words:
     },
     async setEnabled(ctx, links, enabled) {
       if (!enabled) return switchRulesOff(links, ctx.actor)
+      // A rule START leaves off (a person switched it off since; D1: the compile keeps it off) is said with the errors.
       const r = await sync(ctx.playbookId, { enabled: true, actor: ctx.actor })
       const errors = errorsOf(r)
       return { changed: r.enabled && r.ruleId ? [r.ruleId] : [], errors: r.keptOff ? [...errors, r.keptOff] : errors }
@@ -185,7 +198,8 @@ const harvestCompiled = async (playbookId: string): Promise<RuleCompiled> => {
 const isolationCompiled = async (playbookId: string): Promise<RuleCompiled> => {
   const r = await compileIsolationFor(playbookId)
   if ('problems' in r) return { problems: r.problems }
-  return r.compiled.problems.length ? { problems: r.compiled.problems } : { name: r.compiled.name, action: r.compiled.action }
+  if (r.compiled.problems.length) return { problems: r.compiled.problems }
+  return { name: r.compiled.name, action: r.compiled.action, ...(r.compiled.enabled ? {} : { off: ISOLATION_OFF }) }
 }
 
 /** PB-6b: the harvest rule · PB-7: the isolation rule · PB-8: rankGroupCompiler. */

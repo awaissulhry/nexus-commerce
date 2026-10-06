@@ -232,6 +232,72 @@ describe('A7 — bulk-ad-bid-change', () => {
   })
 })
 
+/**
+ * D4 — a stop row: one bid to the ads strategy's stop bid in one move (the Owner's temporary stop: low bids, never a
+ * pause). It is not a step of the bid's pace, so the strategy's largest change per action does not clamp it — in the
+ * preview, in the approved run and in the mutation layer — and it is a lowering only: a raise can never use it.
+ */
+describe('D4 — bulk-ad-bid-change stop rows: the stop bid in one move, never a raise', () => {
+  let strategyId = ''
+  const bidOf = async (id: string) => (await sql<{ b: number }>('SELECT "bidCents" AS b FROM "AdTarget" WHERE id = $1', [id]))[0].b
+  beforeAll(async () => {
+    strategyId = await inside(async () => {
+      await database.client.campaign.create({ data: { id: 'c-d4', name: 'Italy stop rows', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-c-d4', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true } })
+      await database.client.adGroup.create({ data: { id: 'g-d4', campaignId: 'c-d4', name: 'stop rows group', externalAdGroupId: 'EXT-g-d4', defaultBidCents: 40 } })
+      for (const [id, bid] of [['d4-high', 48], ['d4-low', 8], ['d4-bot', 3], ['d4-eng', 48]] as const) {
+        await database.client.adTarget.create({ data: { id, adGroupId: 'g-d4', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `stop row ${id}`, bidCents: bid, externalTargetId: `EXT-${id}` } })
+      }
+      return (await database.client.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', updatedBy: 'user:test', maxChangePct: 20, stopMethod: 'LOW_BIDS', stopBidCents: 10 } })).id
+    })
+  })
+  afterAll(async () => { await inside(() => database.client.adsStrategy.delete({ where: { id: strategyId } })) })
+
+  it('the kit: the strategy\'s stop bid, at least 5¢, and only below the current bid (null: nothing to stop)', async () => {
+    const { stopBidOf } = await import('./ads-change-kit.js')
+    expect(stopBidOf(48, { cents: 10 })).toBe(10)
+    expect(stopBidOf(48, { cents: 2 })).toBe(5)
+    expect(stopBidOf(48, null)).toBe(5)
+    expect(stopBidOf(10, { cents: 10 })).toBeNull()
+    expect(stopBidOf(3, { cents: 2 })).toBeNull()
+  })
+
+  it('a stop row goes to the stop bid past the 20 % step; a bid row of the same bid is stepped; a raise is never a stop', async () => {
+    const r = await preview('bulk-ad-bid-change', { bids: [{ targetId: 'd4-high', stop: true }, { targetId: 'd4-low', stop: true }, { targetId: 'd4-bot', stop: true }] })
+    expect(r.ok, r.error).toBe(true)
+    expect(r.preview).toMatchObject({ totals: { asked: 3, changing: 1, excluded: { atStop: 2 } }, stopNote: expect.stringMatching(/never a pause.*does not apply to a stop, and a stop never raises a bid/) })
+    expect((r.preview as Row).changes).toEqual([expect.objectContaining({ targetId: 'd4-high', fromCents: 48, toCents: 10, stop: true })])
+    expect((r.preview as Row).excludedLines.map((e: Row) => e.why)).toEqual(['already at or below its stop bid (a stop never raises a bid)', 'already at or below its stop bid (a stop never raises a bid)'])
+    // The same move asked as a bid is a step of its pace: one 20 % step.
+    expect(((await preview('bulk-ad-bid-change', { bids: [{ targetId: 'd4-high', bidCents: 10 }] })).preview as Row).changes).toEqual([expect.objectContaining({ toCents: 38 })])
+    // Nothing but stops below the stop bid: nothing to do.
+    expect((await preview('bulk-ad-bid-change', { bids: [{ targetId: 'd4-bot', stop: true }] })).error).toMatch(/^Nothing would change: 1 already at or below its stop bid/)
+    // A row is a bid or a stop, never both, never neither.
+    expect((await preview('bulk-ad-bid-change', { bids: [{ targetId: 'd4-high', bidCents: 60, stop: true }] })).error).toMatch(/give its new bid \(bidCents\) or stop: true — one of the two/)
+    expect((await preview('bulk-ad-bid-change', { bids: [{ targetId: 'd4-high' }] })).error).toMatch(/one of the two/)
+  })
+
+  it('approved: it lands at the stop bid, the value previewed; undo puts the bid back', async () => {
+    const asked = await ask('bulk-ad-bid-change', { bids: [{ targetId: 'd4-high', stop: true }], why: 'test: a temporary stop' })
+    expect((asked.preview as Row).changes[0]).toMatchObject({ toCents: 10, stop: true })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { applied: 1, failed: 0 } })
+    expect(await bidOf('d4-high')).toBe(10)
+    const put = await ask('undo-ad-change', { changeSetId: asked.approvalId })
+    expect(await approve(put.approvalId!)).toMatchObject({ ok: true, result: { reversed: 1 } })
+    expect(await bidOf('d4-high')).toBe(48)
+  })
+
+  it('the mutation layer: an engine\'s stop is not stepped (its plain lowering is); a stop that raises is refused', async () => {
+    const { updateAdTargetWithSync } = await import('../../advertising/ads-mutation.service.js')
+    expect(await inside(() => updateAdTargetWithSync({ adTargetId: 'd4-eng', patch: { bidCents: 10 }, actor: 'automation:test', reason: 'test: a plain lowering' }))).toMatchObject({ ok: true })
+    expect(await bidOf('d4-eng')).toBe(38)
+    expect(await inside(() => updateAdTargetWithSync({ adTargetId: 'd4-eng', patch: { bidCents: 10 }, actor: 'automation:test', reason: 'test: a stop', stop: true }))).toMatchObject({ ok: true })
+    expect(await bidOf('d4-eng')).toBe(10)
+    expect(await inside(() => updateAdTargetWithSync({ adTargetId: 'd4-eng', patch: { bidCents: 30 }, actor: 'automation:test', reason: 'test: a raise as a stop', stop: true }))).toMatchObject({ ok: false, error: 'a stop only lowers a bid: 30¢ is not below 10¢' })
+    expect(await inside(() => updateAdTargetWithSync({ adTargetId: 'd4-eng', patch: { bidCents: 10 }, actor: 'automation:test', reason: 'test: no lowering', stop: true }))).toMatchObject({ ok: false })
+    expect(await bidOf('d4-eng')).toBe(10)
+  })
+})
+
 describe('A8 — suppress-campaign and restore-campaign (never a pause)', () => {
   beforeAll(async () => {
     await inside(async () => {

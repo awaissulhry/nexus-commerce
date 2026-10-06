@@ -128,14 +128,17 @@ export async function isolateProduct(args: { action: IsolationAction; actor: str
 
 const top = <T,>(key: string, list: readonly T[], n = 5) => (list.length ? { [key]: list.length, [`top${key[0].toUpperCase()}${key.slice(1)}`]: list.slice(0, n) } : {})
 
-/** A cadence of N days: one sweep per N UTC days (the rule's one run a day already holds a cadence of 1). */
+/**
+ * A cadence of N days: one sweep per N UTC days (the rule's one run a day already holds a cadence of 1). Only a sweep that
+ * ran counts: a run that failed swept nothing.
+ */
 async function sweptWithin(ruleId: string, cadenceDays: number): Promise<boolean> {
   const since = new Date()
   since.setUTCHours(0, 0, 0, 0)
   since.setUTCDate(since.getUTCDate() - (cadenceDays - 1))
   const recent = await prisma.automationRuleExecution.findMany({ where: { ruleId, startedAt: { gte: since } }, select: { actionResults: true }, take: 50 })
-  return recent.some((ex) => Array.isArray(ex.actionResults) && (ex.actionResults as Array<{ type?: string; output?: { cadenceHeld?: unknown } } | null>)
-    .some((r) => r?.type === 'isolate_product_terms' && r.output?.cadenceHeld == null))
+  return recent.some((ex) => Array.isArray(ex.actionResults) && (ex.actionResults as Array<{ type?: string; ok?: boolean; output?: { cadenceHeld?: unknown } } | null>)
+    .some((r) => r?.type === 'isolate_product_terms' && r.ok === true && r.output?.cadenceHeld == null))
 }
 
 /**
@@ -239,12 +242,15 @@ async function scopeMarketplaceOf(playbookId: string, market: string): Promise<s
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? market
 }
 
+/** D1 — why a START keeps the isolation rule off when the compile does (its preview and its answer say it). */
+export const ISOLATION_OFF = 'the template turns every isolation switch off'
+
 /**
  * PB-5's hook: compile the product's isolation rule and save it once (AdsPlaybookLink kind 'isolationRule', key
  * 'isolation'). `enabled: true` = a playbook START (rules.ts `start`: on, unless a person switched it off since the last
  * start — then it stays off and `keptOff` says who); `false` = build, adopt or a re-sync (the rule keeps its own on/off;
- * the playbook never switches a rule off). A template that turns every switch off is never started. Nothing is written
- * when the compile has problems.
+ * the playbook never switches a rule off). A template that turns every switch off is never started: D1 — a START says
+ * so (`keptOff`). Nothing is written when the compile has problems.
  */
 export async function syncIsolationRule(playbookId: string, opts: { enabled: boolean; actor?: string }): Promise<{ ruleId: string | null; created: boolean; changed: boolean; enabled: boolean; keptOff?: string; problems: string[]; warnings: string[] }> {
   const out = await compileIsolationFor(playbookId)
@@ -256,5 +262,6 @@ export async function syncIsolationRule(playbookId: string, opts: { enabled: boo
     enabled: false, start: opts.enabled && compiled.enabled, scopeMarketplace: await scopeMarketplaceOf(row.id, row.market),
     compiledVersion: row.version, actor: opts.actor ?? 'ads-playbook',
   })
-  return { ...saved, problems: [], warnings: compiled.warnings }
+  const keptOff = opts.enabled && !compiled.enabled && !saved.enabled ? `the product's isolation rule stays off: ${ISOLATION_OFF} (START does not switch it on)` : saved.keptOff
+  return { ...saved, ...(keptOff ? { keptOff } : {}), problems: [], warnings: compiled.warnings }
 }
