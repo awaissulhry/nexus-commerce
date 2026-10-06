@@ -108,6 +108,7 @@ const AD_MONEY = {
   maxBidCents: ADSPEND,
   minBudgetCents: ADSPEND,
   maxBudgetCents: ADSPEND,
+  budgetBaselineCents: ADSPEND,
   // D11 — a campaign's CPC ceiling (a multiple of each target's average cost per click) caps its bids: money.
   cpcCeiling: ADSPEND,
   targetAcos: ADSPEND,
@@ -538,7 +539,7 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
           where: { id: { in: ids } },
           select: {
             id: true, dailyBudgetCurrency: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true,
-            pinBids: true, pinBudget: true, pinPlacement: true, targetingType: true, dynamicBidding: true,
+            pinBids: true, pinBudget: true, pinPlacement: true, targetingType: true, dynamicBidding: true, budgetBaselineCents: true,
           },
         })
       : Promise.resolve([]),
@@ -575,6 +576,8 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
       maxBidCents: c.maxBidCents ?? null,
       minBudgetCents: c.minBudgetCents ?? null,
       maxBudgetCents: c.maxBudgetCents ?? null,
+      // W3-2 — the daily budget relative budget rules and a restore to baseline start from (set-ad-guardrail campaign-budget-bounds).
+      budgetBaselineCents: x?.budgetBaselineCents ?? null,
       portfolio: c.portfolioId ? { id: String(c.portfolioId), name: portfolioName.get(String(c.portfolioId)) ?? null } : null,
       maxBidChangePct: Number.isFinite(maxBidChangePct) && maxBidChangePct > 0 ? maxBidChangePct : null,
       // As the clamp reads it (ads-cpc-ceiling.ts): on only when enabled, 1.5 × when no multiple is stored.
@@ -628,7 +631,7 @@ const adCampaigns: AgentTool = {
   description:
     'The Amazon campaigns, by market and name. Per campaign: campaignId (the Nexus id the other ad tools take) and '
     + 'externalCampaignId (Amazon\'s), name, market, ad product, status and delivery, currency, daily budget, bidding '
-    + 'strategy, target ACoS, placement adjustments, bid and budget bounds, its portfolio (Amazon\'s id and name), the '
+    + 'strategy, target ACoS, placement adjustments, bid and budget bounds and the budget baseline, its portfolio (Amazon\'s id and name), the '
     + 'guards that move a bid asked for (maxBidChangePct: the most one bid change may move, in %; cpcCeiling: no bid above '
     + 'that multiple of a target\'s average cost per click), whether live writes are allowed for it '
     + '(liveWrites), whether its bids are suppressed and by whom, pins, and impressions, clicks, orders, spend, sales, '

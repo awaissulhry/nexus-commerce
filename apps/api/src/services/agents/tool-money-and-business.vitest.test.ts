@@ -371,6 +371,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'resume-automation': (ids) => ({ area: 'rules', domain: 'replenishment', ruleIds: [ids.pausedRuleId] }),
   // R13 — needs financials.adspend.view: a person without money is refused outright.
   'set-ad-guardrail': () => ({ kind: 'protected-term', op: 'set', term: 'money test term' }),
+  // Ads autonomy W3-2 — needs financials.adspend.view (the bids and budgets it names): a person without money is refused outright.
+  'cancel-queued-ad-write': (ids) => ({ changeSetId: ids.approvalId, why: 'money test cancel' }),
   // R14 — needs financials.adspend.view: a person without money is refused outright.
   'tune-ad-engine': () => ({ setting: 'breaker', breaker: { maxActionsPerHour: 100 } }),
   // R15 — a run now, previewed (no model call): no money in it.

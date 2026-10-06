@@ -32,6 +32,7 @@ import type { StoredReach } from './ads-change-kit.js'
 import { SUGGESTION_LIMITS, suggestionLimitFacts, suggestionRefusal } from './suggestion-limits.js'
 import { SAVE_RULE_LIMITS, TUNE_LIMITS, TURN_UP_LIMITS, automationFacts, ruleSaveFacts, ruleSaveRefusal, tuneRefusal, turnUpRefusal } from './automation-limits.js'
 import { automationScope, tuneScope } from '../../advertising/ads-strategy/automation-scope.js'
+import { CAMPAIGN_GUARDRAIL_KINDS, isCampaignKind } from '../../advertising/ads-guardrail-change.service.js'
 
 const ID = z.string().trim().min(1).max(64)
 const JSON_OBJECT = z.record(z.string().max(64), z.unknown())
@@ -607,9 +608,16 @@ export const GUARDRAIL_UNDO: ToolUndo = {
     const before = change.before as GuardrailChange
     const key = Object.fromEntries(Object.entries(before.key).filter(([, v]) => v != null))
     if (!before.row) return { tool: 'set-ad-guardrail', args: { kind: before.kind, op: 'remove', ...key } }
-    const row = Object.fromEntries(Object.entries(before.row).filter(([k, v]) => v != null || ['dailyCapCents', 'minBidCents', 'maxBidCents'].includes(k)))
+    // W3-2 — a campaign's own guardrail keeps every value, a cleared one (null) too: the undo sets the kind back whole.
+    const campaignKind = isCampaignKind(before.kind)
+    const row = Object.fromEntries(Object.entries(before.row).filter(([k, v]) => v != null || campaignKind || ['dailyCapCents', 'minBidCents', 'maxBidCents'].includes(k)))
     return { tool: 'set-ad-guardrail', args: { kind: before.kind, op: 'set', ...key, ...row } }
   },
+}
+
+/** W3-2 — a campaign's own guardrail is set where its screens set it: those routes need ads.campaigns.manage. */
+function campaignGuardrailPermitted(ctx: ToolContext, kind: unknown): string | null {
+  return isCampaignKind(String(kind)) && !ctx.can(F.adsCampaignsManage) ? `Setting a campaign's ${String(kind)} needs the ${F.adsCampaignsManage} permission.` : null
 }
 
 const setAdGuardrail: AgentTool = {
@@ -619,14 +627,24 @@ const setAdGuardrail: AgentTool = {
   description:
     'Set or remove a guardrail Nexus\'s Amazon ads write gate checks before a Nexus write reaches Amazon (the external ' +
     'bidding engine writes to Amazon itself and does not pass this gate): a spend ceiling (kind spend-ceiling, at campaign, ' +
-    'product line, portfolio or market grain), a bid policy (bid-policy: min / max bid at line, portfolio or market grain), or ' +
-    'a protected term no rule may negate (protected-term). A spend ceiling caps the daily budget INCREASES authorised in its ' +
-    'scope: a budget raise that would take today\'s raises past it is refused, a budget cut never trips it, and it does not ' +
-    'cap what Amazon actually spends, bid raises or placement raises. Waits for a person to approve it in Nexus, unless the ' +
-    'business lets Claude run it by its rule inside its limits. Each change is judged: tightening (a new or lower ceiling, ' +
-    'a new or lower bid ceiling, a new protected term) may run inside those limits; loosening (a higher cap, a cleared or ' +
-    'removed guardrail, a higher bid ceiling, a bid floor that forces bids up) waits for a person unless the business\'s ' +
-    'limits let Claude loosen guardrails (never by default). The write gate applies it at its next decision.',
+    'product line, portfolio or market grain), a bid policy (bid-policy: min / max bid at line, portfolio or market grain), ' +
+    'a protected term no rule may negate (protected-term), or one campaign\'s own guardrails (campaignId): its lowest and ' +
+    'highest bid (campaign-bid-bounds), its lowest and highest daily budget and the baseline relative budget rules start ' +
+    'from (campaign-budget-bounds), the most one bid change may move a bid (bid-change-cap), its CPC ceiling (cpc-ceiling: ' +
+    'a bid asked for on the bid screens or by Claude\'s bid tools held to a multiple of a target\'s average cost per click; ' +
+    'the engines do not read it), ' +
+    'or its pins (pin: bids, budget or placement adjustments no engine, rule or schedule may write). Nexus only: nothing is ' +
+    'sent to Amazon. The ads strategy stays the outer limit: where it and a campaign guardrail both set a number, the ' +
+    'stricter binds, so a campaign guardrail only narrows it (the preview says which number binds after the change). A ' +
+    'spend ceiling caps the daily budget INCREASES authorised in its scope: a budget raise that would take today\'s raises ' +
+    'past it is refused, a budget cut never trips it, and it does not cap what Amazon actually spends, bid raises or ' +
+    'placement raises. Waits for a person to approve it in Nexus, unless the business lets Claude run it by its rule inside ' +
+    'its limits. Each change is judged: tightening (a new or lower ceiling, a new or lower bid ceiling, a new protected ' +
+    'term, a lower largest bid change, a CPC ceiling switched on or lowered, a pin set) may run inside those limits; ' +
+    'loosening (a higher cap, a cleared or removed guardrail, a higher bid or budget ceiling, a bid or budget floor that ' +
+    'holds spend up, a baseline that anchors budget rules higher, a CPC ceiling raised or off, a pin lifted) can add spend ' +
+    'and waits for a person unless the business\'s limits let Claude loosen guardrails (never by default). The write gate ' +
+    'applies it at its next decision.',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -642,28 +660,41 @@ const setAdGuardrail: AgentTool = {
   },
   undo: GUARDRAIL_UNDO,
   input: z.object({
-    kind: z.enum(['spend-ceiling', 'bid-policy', 'protected-term']).describe('spend-ceiling, bid-policy or protected-term'),
-    op: z.enum(['set', 'remove']).describe('set (create or change) or remove'),
+    kind: z.enum(['spend-ceiling', 'bid-policy', 'protected-term', ...CAMPAIGN_GUARDRAIL_KINDS])
+      .describe('spend-ceiling, bid-policy or protected-term; or a campaign\'s own: campaign-bid-bounds, campaign-budget-bounds, bid-change-cap, cpc-ceiling or pin'),
+    op: z.enum(['set', 'remove']).describe('set (create or change) or remove (a campaign kind: clear it — no bounds, no largest change, CPC ceiling off, every pin lifted)'),
     grain: z.enum(['CAMPAIGN', 'LINE', 'PORTFOLIO', 'MARKET']).optional().describe('spend-ceiling / bid-policy: what it binds (a spend ceiling: CAMPAIGN unless named; a bid policy: LINE, PORTFOLIO or MARKET)'),
-    scopeId: ID.optional().describe('the campaign id, product line (parent product) id, portfolio id or market code it binds'),
-    label: z.string().trim().min(1).max(120).optional().describe('a name for it (default: the scope\'s name)'),
+    scopeId: ID.optional().describe('spend-ceiling / bid-policy: the campaign id, product line (parent product) id, portfolio id or market code it binds'),
+    label: z.string().trim().min(1).max(120).optional().describe('spend-ceiling / bid-policy: a name for it (default: the scope\'s name)'),
     dailyCapCents: COUNT.nullable().optional().describe('spend-ceiling: the daily cap in euro cents; null = opened but not set'),
-    minBidCents: COUNT.nullable().optional().describe('bid-policy: the lowest bid, in cents (at least 2), or null'),
-    maxBidCents: COUNT.nullable().optional().describe('bid-policy: the highest bid, in cents, or null'),
-    enabled: z.boolean().optional().describe('switch it on or off (off loosens)'),
-    note: z.string().max(300).nullable().optional().describe('why, kept on the row'),
+    minBidCents: COUNT.nullable().optional().describe('bid-policy (at least 2) or campaign-bid-bounds: the lowest bid, in cents of the campaign\'s currency; null clears it'),
+    maxBidCents: COUNT.nullable().optional().describe('bid-policy or campaign-bid-bounds: the highest bid, in cents of the campaign\'s currency; null clears it'),
+    minBudgetCents: COUNT.nullable().optional().describe('campaign-budget-bounds: the lowest daily budget, in cents of the campaign\'s currency (at least 100); null clears it'),
+    maxBudgetCents: COUNT.nullable().optional().describe('campaign-budget-bounds: the highest daily budget, in cents (at least 100); null clears it'),
+    budgetBaselineCents: COUNT.nullable().optional().describe('campaign-budget-bounds: the daily budget relative budget rules and a restore to baseline start from, in cents (at least 100); null clears it'),
+    maxBidChangePct: z.coerce.number().int().min(1).max(500).nullable().optional().describe('bid-change-cap: the most one bid change may move a bid, in % (1–500); null clears it'),
+    cpcMultiple: z.coerce.number().min(1).max(10).optional().describe('cpc-ceiling: the multiple of a target\'s average cost per click a bid may reach (1–10; kept as it is when not given, 1.5 at first)'),
+    enabled: z.boolean().optional().describe('spend-ceiling / bid-policy: switch it on or off (off loosens); cpc-ceiling: on (the default when set) or off'),
+    note: z.string().max(300).nullable().optional().describe('why, kept on the row (pin: on the campaign, at most 280 characters)'),
+    pinBids: z.boolean().optional().describe('pin: true pins the campaign\'s bids (no engine, rule or schedule writes them), false lifts the pin'),
+    pinBudget: z.boolean().optional().describe('pin: true pins its daily budget, false lifts the pin'),
+    pinPlacement: z.boolean().optional().describe('pin: true pins its placement adjustments, false lifts the pin'),
     term: z.string().trim().min(1).max(200).optional().describe('protected-term: the term no rule may negate'),
     matchType: z.enum(['EXACT', 'PREFIX', 'CONTAINS']).optional().describe('protected-term: how the term matches (default EXACT)'),
     marketplace: z.string().trim().min(1).max(20).optional().describe('protected-term: only in this market'),
-    campaignId: ID.optional().describe('protected-term: only in this campaign'),
+    campaignId: ID.optional().describe('a campaign kind: the campaign (its Nexus id, from ad-campaigns); protected-term: only in this campaign'),
   }),
-  async handler(args) {
+  async handler(args, ctx) {
+    const denied = campaignGuardrailPermitted(ctx, args.kind)
+    if (denied) return { ok: false, error: denied }
     const { planGuardrail } = await import('../../advertising/ads-guardrail-change.service.js')
     const planned = await planGuardrail(args as never)
     if ('error' in planned) return { ok: false, error: planned.error }
     return { ok: true, preview: planned.plan }
   },
   async execute(args, ctx) {
+    const denied = campaignGuardrailPermitted(ctx, args.kind)
+    if (denied) return { ok: false, error: denied }
     const { applyGuardrail } = await import('../../advertising/ads-guardrail-change.service.js')
     const out = await applyGuardrail(args as never, ctx.userId ?? null)
     if ('error' in out) return { ok: false, error: out.error }
