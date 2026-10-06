@@ -9,6 +9,12 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * The alwaysAsk flag (pricing/publishing/customer-comms/spend/fiscal) is a
  * HARD FLOOR — an operator can make a tool stricter but never downgrade an
  * always-ask tool below approval. Enforced here, not in config.
+ *
+ * It binds every door that runs a tool by this policy: the in-app assistant
+ * (tool-loop.service.ts) and the fleet queue it, never run it. AA-W2-1 — a
+ * strategy-bound ad tool keeps the flag, whatever its Claude ceiling, so ad
+ * spend never runs straight from the assistant; only Claude's door may let the
+ * business's rule decide it, inside its limits and the ads strategy.
  */
 
 import prisma from '../../db.js'

@@ -6,7 +6,8 @@
  *   tighten  a new ceiling or a lower cap; a new bid ceiling or a lower one, a lower floor; a new protected term
  *   loosen   a higher cap, a cap cleared, anything switched off or removed; a higher bid ceiling, a higher (or new)
  *            bid floor, which forces bids up
- * A tightening is inside set-ad-guardrail's limits; a loosening always needs a person. The write gate reads the rows
+ * A tightening is inside set-ad-guardrail's limits; a loosening needs a person unless the business's limits allow it
+ * (allowLoosen, off by default). The write gate reads the rows
  * at its next decision (ads-write-gate.ts): nothing else needs to move.
  */
 import type { AdBidPolicy, AdSpendCeiling } from '@prisma/client'

@@ -106,7 +106,8 @@ const setPrice: AgentTool = {
   withinLimits: setPriceWithinLimits,
   undo: SET_PRICE_UNDO,
   description:
-    'Change a product master price (cascades to channels per their pricing rules; channel push is gated). Requires approval.',
+    'Change a product master price (cascades to channels per their pricing rules; channel push is gated). Waits for a '
+    + 'person to approve it in Nexus, unless the business lets Claude make small moves itself (inside its limits).',
   async handler(args) {
     const id = String(args.productId ?? '')
     const proposed = Number(args.price)
@@ -380,7 +381,8 @@ const applyContent: AgentTool = {
   undo: APPLY_CONTENT_UNDO,
   description:
     'Apply a drafted title / bullet points / description / keywords to the master product, in its primary language '
-    + '(reversible; requires approval). Saved in Nexus only: listings that follow the master text take it, and the '
+    + '(reversible; a person approves it in Nexus, unless the business lets Claude apply it itself, for the fields its '
+    + 'limits allow). Saved in Nexus only: listings that follow the master text take it, and the '
     + 'channels change when the listing is published from Nexus.',
   async handler(args, ctx) {
     const id = String(args.productId ?? '')

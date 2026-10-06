@@ -103,7 +103,8 @@ const saveAdRule: AgentTool = {
   category: 'automation',
   description:
     'Create or edit an ads rule — Amazon ads (kind amazon-ads), eBay ads (ebay-ads) or a marketing campaign rule ' +
-    '(marketing). Waits for a person to approve it in Nexus. A new rule is born OBSERVE (it runs and records, proposes ' +
+    '(marketing). Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code ' +
+    'when the business set it so. A new rule is born OBSERVE (it runs and records, proposes ' +
     'and writes nothing; an eBay rule is saved OFF) and climbs with turn-up-automation. Refused, in words: any pause ' +
     '(never pause — use lower_bid_to_floor), an action outside the allowed ones, no scope (say wholeAccount: true for ' +
     'the whole account), a cap missing or 0, a percent where a fraction belongs (condition ratios such as acos are fractions: 0.3, not 30; ' +
@@ -215,9 +216,11 @@ function switchTool(direction: Direction): AgentTool {
         'their AUTO is the approving person\'s call alone. An engine the server env switches (rank-defend, budget enforcement, ' +
         'auto-bid, top-of-search defense, the coverage engine, the fleet sweep, the snapshot repricer) has a switch for this ' +
         'business — leave rowId out: it goes up only as far as the env allows, and always with a person.'
-      : 'Move an automation DOWN the ladder (to PROPOSE, OBSERVE or OFF). Waits for a person to approve it in Nexus. A brake — a ' +
-        'rule that lowers bids or negates, a dayparting or budget schedule, budget enforcement, rank-defend — is said to be one: ' +
-        'turning it down can raise spend, so it always needs a person. Nothing is deleted: OFF is how a rule is retired. An ' +
+      : 'Move an automation DOWN the ladder (to PROPOSE, OBSERVE or OFF). Waits for a person to approve it in Nexus, unless ' +
+        'the business lets Claude run it by its rule inside its limits. A brake — a rule that lowers bids or negates, a ' +
+        'dayparting or budget schedule, budget enforcement, rank-defend — is said to be one: turning it down can raise spend, ' +
+        'so it waits for a person unless the business\'s limits let Claude turn brakes down (never by default). Nothing is ' +
+        'deleted: OFF is how a rule is retired. An ' +
         'engine the server env switches is turned down for this business alone with rowId left out.',
     riskTier: 'medium',
     readOnly: false,
@@ -459,8 +462,8 @@ function stopTool(direction: 'stop' | 'resume'): AgentTool {
     description: stop
       ? 'Stop an area at once: Amazon ads automation (the account halt), eBay ads automation (its dial halt), the agent fleet, the ' +
         'review request mailer (pause), or every switched-on rule of one domain (area rules, with domain). Waits for a person to ' +
-        'approve it in Nexus — a business may let Claude run it by itself, since it only stops. Resumed only by resume-automation, ' +
-        'which a person always approves.'
+        'approve it in Nexus — a business may let Claude run it by itself, since it only stops. Resumed only by resume-automation: ' +
+        'a person approves every resume in Nexus.'
       : 'Resume an area stopped by stop-automation or the breaker: Amazon ads, eBay ads, the agent fleet, the review mailer, or ' +
         'the rules a stop switched off (area rules, with domain and ruleIds). Waits for a person to approve it in Nexus — always: ' +
         'a resume after a breaker trip is a person\'s decision.',
@@ -549,10 +552,11 @@ const setAdGuardrail: AgentTool = {
     'product line, portfolio or market grain), a bid policy (bid-policy: min / max bid at line, portfolio or market grain), or ' +
     'a protected term no rule may negate (protected-term). A spend ceiling caps the daily budget INCREASES authorised in its ' +
     'scope: a budget raise that would take today\'s raises past it is refused, a budget cut never trips it, and it does not ' +
-    'cap what Amazon actually spends, bid raises or placement raises. Waits for a person to approve it in Nexus. Each change ' +
-    'is judged: tightening (a new or lower ceiling, a new or lower bid ceiling, a new protected term) may run inside a ' +
-    'business\'s limits; loosening (a higher cap, a cleared or removed guardrail, a higher bid ceiling, a bid floor that ' +
-    'forces bids up) always needs a person. The write gate applies it at its next decision.',
+    'cap what Amazon actually spends, bid raises or placement raises. Waits for a person to approve it in Nexus, unless the ' +
+    'business lets Claude run it by its rule inside its limits. Each change is judged: tightening (a new or lower ceiling, ' +
+    'a new or lower bid ceiling, a new protected term) may run inside those limits; loosening (a higher cap, a cleared or ' +
+    'removed guardrail, a higher bid ceiling, a bid floor that forces bids up) waits for a person unless the business\'s ' +
+    'limits let Claude loosen guardrails (never by default). The write gate applies it at its next decision.',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -920,7 +924,8 @@ const saveOpsRule: AgentTool = {
   description:
     'Create or edit an operations rule — listings (price / stock sync, translation), replenishment (approve a recommendation, ' +
     'draft a purchase order), reviews (bullet and A+ ideas from a review spike) or bulk-operations (apply a template, create a ' +
-    'bulk job). Waits for a person to approve it in Nexus. A new rule is born OBSERVE — it records what it would do and does ' +
+    'bulk job). Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when ' +
+    'the business set it so. A new rule is born OBSERVE — it records what it would do and does ' +
     'nothing (a review rule is born OFF: its actions call the AI even in a dry run; listing rules are never scheduled). It climbs ' +
     'with turn-up-automation. Refused, in words: any pause (Claude never pauses), a trigger or action outside the domain\'s own, ' +
     'no conditions, no daily run cap, and for replenishment no value cap. Editing an AUTO rule drops it to PROPOSE. Each domain ' +

@@ -1043,7 +1043,8 @@ const updateInboundShipment: AgentTool = {
     'Keep an inbound shipment up to date: its reference, carrier, tracking, expected date and notes; its costs (freight, '
     + 'customs, duties, insurance, unit costs — they make the landed cost); its status (in transit, arrived, closed, '
     + 'cancelled); or open the receipt shipment of a sent purchase order. Nothing here moves stock: receive-stock does. '
-    + 'Amazon FBA shipments follow Amazon\'s plan. Waits for a person to approve it in Nexus.',
+    + 'Amazon FBA shipments follow Amazon\'s plan. Waits for a person: approved in Nexus, or confirmed in Claude with the '
+    + 'asker\'s authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
     const plan = await planInbound(args)
     if (refused(plan)) return { ok: false, error: plan.error }
@@ -1202,7 +1203,7 @@ const setProductCosts: AgentTool = {
     'Set what products cost (the cost price margins, profit and reorder value are worked out from), or copy the landed '
     + 'cost per unit measured on a received purchase order — goods plus its share of freight, customs, duties and '
     + 'insurance — to the supplier\'s catalogue. Prices are not changed. Undo puts the old cost prices back. Waits for a '
-    + 'person to approve it in Nexus.',
+    + 'person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
     const plan = await planCosts(args)
     if (refused(plan)) return { ok: false, error: plan.error }
