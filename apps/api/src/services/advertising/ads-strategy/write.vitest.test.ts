@@ -117,6 +117,7 @@ describe('judging a change (design §3.3)', () => {
       goal: 'any', goalNote: 'never', target: 'target', monthlySpendCapCents: 'up', minBidCents: 'floor', maxBidCents: 'up',
       maxChangePct: 'up', maxActionsPerRun: 'up', protect: 'unprotect', harvest: 'loosen', negate: 'loosen', stop: 'pause',
       claudeAutonomy: 'autonomy', reviewEveryDays: 'up',
+      claudeMaxChangesPerDay: 'count', claudeMaxRaisesPerDay: 'count', claudeMaxBudgetIncreasePerDayCents: 'count',
     })
   })
 
@@ -130,6 +131,9 @@ describe('judging a change (design §3.3)', () => {
     ['unprotect', 'protect', true, false, 'raise'], ['unprotect', 'protect', true, null, 'raise'], ['unprotect', 'protect', null, true, 'lower'], ['unprotect', 'protect', false, null, 'same'],
     // any change of a goal; never for the why
     ['any', 'goal', null, 'LAUNCH', 'raise'], ['any', 'goal', 'LAUNCH', 'PROFIT', 'raise'], ['never', 'goalNote', 'a', 'b', 'same'],
+    // AA-W2-2b — Claude's daily limits: empty is 0 — up (or a first number) loosens; down, 0 or cleared tightens
+    ['count', 'claudeMaxChangesPerDay', null, 40, 'raise'], ['count', 'claudeMaxChangesPerDay', 40, 60, 'raise'], ['count', 'claudeMaxChangesPerDay', 40, 10, 'lower'],
+    ['count', 'claudeMaxRaisesPerDay', 5, null, 'lower'], ['count', 'claudeMaxRaisesPerDay', null, 0, 'same'], ['count', 'claudeMaxBudgetIncreasePerDayCents', 2000, 0, 'lower'],
   ] as Array<[RaiseRule, StrategyFieldKey, unknown, unknown, string]>)('%s %s: %o → %o is %s', (rule, key, before, after, expected) => {
     expect(judge(rule, key, before, after)).toBe(expected)
   })
@@ -388,6 +392,66 @@ describe('undo, money and business', () => {
       expect(plan.preview.version).toEqual({ from: 1, to: 2 })
       expect(plan.changes).toEqual([expect.objectContaining({ field: 'maxBidCents', from: 777, to: 700, direction: 'lower' })])
       expect(plan.preview.shadowedCount).toBe(0)
+    })
+  })
+})
+
+describe("AA-W2-2b — Claude's daily limits of what runs by rule (the market row only; empty is 0)", () => {
+  const DAILY = ['Most changes Claude may run by rule a day', 'Most raises Claude may run by rule a day', 'Most budget increase Claude may run by rule a day (cents)']
+
+  it('set on the market row: a raise that needs the code, read by Claude\'s door at once', async () => {
+    await inA(async () => {
+      const up = await planned(it_({ level: 'market', values: { claudeMaxChangesPerDay: 40, claudeMaxRaisesPerDay: 5, claudeMaxBudgetIncreasePerDayCents: 2000 } }))
+      expect(up.changes.map((c) => [c.field, c.from, c.to, c.direction])).toEqual([
+        ['claudeMaxChangesPerDay', null, 40, 'raise'], ['claudeMaxRaisesPerDay', null, 5, 'raise'], ['claudeMaxBudgetIncreasePerDayCents', null, 2000, 'raise'],
+      ])
+      expect(up.preview).toMatchObject({ direction: 'raise', raises: DAILY, stepUp: { raises: DAILY } })
+      expect(up.preview.liveEffect).toContain("Most changes Claude may run by rule a day binds at once: read by Claude's door, for an ad change that may run by the business's rule in this market")
+      expect(up.preview.warnings ?? []).toEqual([])
+      await expect(applyStrategyPlan(up, SCREEN)).rejects.toThrow(/authenticator code/)
+      expect(await applyStrategyPlan(up, CODED)).toMatchObject({ ok: true, direction: 'raise' })
+      expect(await rowOf('MARKET')).toMatchObject({ claudeMaxChangesPerDay: 40, claudeMaxRaisesPerDay: 5, claudeMaxBudgetIncreasePerDayCents: 2000 })
+    })
+  })
+
+  it('down, cleared or 0: a lowering that needs no code, and the preview says nothing that adds to it runs by rule', async () => {
+    await inA(async () => {
+      const down = await planned(it_({ level: 'market', values: { claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: null, claudeMaxBudgetIncreasePerDayCents: 0 } }))
+      expect(down.changes.map((c) => [c.field, c.to, c.direction])).toEqual([
+        ['claudeMaxChangesPerDay', 10, 'lower'], ['claudeMaxRaisesPerDay', null, 'lower'], ['claudeMaxBudgetIncreasePerDayCents', 0, 'lower'],
+      ])
+      expect(down.preview).toMatchObject({ direction: 'lower', stepUp: null })
+      expect(down.preview.warnings).toEqual([
+        `${DAILY[1]}: empty or 0 means nothing that adds to it runs by rule in IT; a person decides each one.`,
+        `${DAILY[2]}: empty or 0 means nothing that adds to it runs by rule in IT; a person decides each one.`,
+      ])
+      expect(await applyStrategyPlan(down, SCREEN)).toMatchObject({ ok: true, direction: 'lower' })
+    })
+  })
+
+  it('never on a category or product row, and only whole numbers 0–10,000 (changes, raises) or from 0 (cents)', async () => {
+    await inA(async () => {
+      expect((await refusal(it_({ level: 'category', categoryId: ids.cat, values: { claudeMaxChangesPerDay: 5 } }))).error).toBe('claudeMaxChangesPerDay cannot be set on a category row (only on a market row).')
+      expect((await refusal(it_({ level: 'product', productId: ids.q, values: { claudeMaxBudgetIncreasePerDayCents: 100 } }))).error).toBe('claudeMaxBudgetIncreasePerDayCents cannot be set on a product row (only on a market row).')
+      expect((await refusal(it_({ level: 'market', values: { claudeMaxChangesPerDay: 10_001 } }))).status).toBe(400)
+      expect((await refusal(it_({ level: 'market', values: { claudeMaxRaisesPerDay: -1 } }))).status).toBe(400)
+      expect((await refusal(it_({ level: 'market', values: { claudeMaxBudgetIncreasePerDayCents: 1.5 } }))).status).toBe(400)
+    })
+  })
+
+  it('the read shows each with its row, says that empty is 0, and hides the budget from a person without ad-spend money', async () => {
+    await inA(async () => {
+      const read = await readStrategy({ market: 'IT' })
+      if ('error' in read) throw new Error(read.error)
+      const fields = ((read.data.markets as Json[])[0].fields as Json[])
+      const entry = (key: string) => fields.find((f) => f.field === key)!
+      expect(entry('claudeMaxChangesPerDay')).toMatchObject({ claudeMaxChangesPerDay: 10, source: { level: 'market' }, note: expect.stringMatching(/^What Claude's ad changes may add in this market in 24 hours .* Empty is 0/) })
+      expect(entry('claudeMaxRaisesPerDay')).toMatchObject({ claudeMaxRaisesPerDay: null, source: null, note: expect.stringMatching(/^Not set, so 0: nothing that adds to it runs by rule here\. /) })
+      expect(entry('claudeMaxBudgetIncreasePerDayCents').readBy[0]).toMatch(/^Claude's door/)
+      const hidden = financialPayloadCopy(read.data, { isOwner: false, permissions: new Set() }, STRATEGY_MONEY) as Json
+      const hiddenEntry = (hidden.markets[0].fields as Json[]).find((f) => f.field === 'claudeMaxBudgetIncreasePerDayCents')!
+      expect('claudeMaxBudgetIncreasePerDayCents' in hiddenEntry).toBe(false)
+      expect((hidden.markets[0].fields as Json[]).find((f) => f.field === 'claudeMaxChangesPerDay')!.claudeMaxChangesPerDay).toBe(10)
     })
   })
 })
