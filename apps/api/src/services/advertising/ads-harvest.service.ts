@@ -10,6 +10,9 @@
  *
  * preview() returns candidates; apply() executes the chosen actions via the
  * negative write service (writeNegativeKeyword) + AX.4 createKeywordLocal. Sandbox-safe + gated.
+ *
+ * ADS AUTONOMY W1-7 — a caller that names no numbers of its own gets the ads strategy's harvest and negate thresholds
+ * where the Owner set them, and the ASIN of a product the strategy protects is never a negative candidate.
  */
 
 import prisma from '../../db.js'
@@ -23,6 +26,9 @@ import { createKeywordLocal, createTargetLocal } from './ads-create.service.js'
 // ads-auto-harvest — which wrote the 22 engine-attributed rows — was retired in HP5, 2026-08-21).
 import { checkProtectConverting, normaliseNegTerm, type NegationDecision, type ProtectConvertingConfig } from './ads-protect-converting.js'
 import { adProductOf, SPONSORED_PRODUCTS } from '@nexus/shared/ads-ad-product'
+// W1-7 — the ads strategy's search-term thresholds and the products it protects.
+import type { HarvestThresholds, NegateThresholds } from './ads-strategy/fields.js'
+import { openTermsStrategy, protectedAsins, sourceLabel, strategyMarketOf, termsForAdGroups, type StrategyTerms } from './ads-strategy/terms.js'
 
 /**
  * 5d (review 7.4) — the source ad group is a fallback destination only when it can take a keyword or product
@@ -42,8 +48,43 @@ export interface HarvestCandidate {
   costCents: number
   orders: number
   salesCents: number
+  /** W1-7 — the market its search-term rows name ('IT'). */
+  market?: string | null
+  /**
+   * W1-7 — set when the ads strategy's group chose this candidate: the window its numbers cover and the row the group
+   * came from. Absent: the caller's numbers, or the defaults, chose it.
+   */
+  strategy?: { windowDays: number; level: string; label: string; version: number; product?: string }
 }
-export interface HarvestPreview { negatives: HarvestCandidate[]; graduations: HarvestCandidate[]; productNegatives: HarvestCandidate[]; productGraduations: HarvestCandidate[]; windowDays: number }
+
+/** W1-7 — the numbers that chose the candidates. */
+export interface HarvestCriteriaUsed {
+  /**
+   * `caller`: the caller named numbers of its own (a rule's, a person's, a tool's), and they chose every candidate.
+   * `strategy`: the caller named none: the ads strategy's harvest and negate groups chose wherever a market, a category
+   * or a product sets one (each such candidate names its row; `strategy` lists them), and `defaults` everywhere else.
+   */
+  from: 'caller' | 'strategy'
+  /** The numbers that chose every candidate the strategy did not. */
+  defaults: { windowDays: number; minSpendCents: number; minOrders: number }
+  /** The strategy groups that chose at least one candidate, each with its thresholds and how many it chose. */
+  strategy: Array<{ group: 'harvest' | 'negate'; source: { level: string; label: string; version: number; product?: string }; thresholds: HarvestThresholds | NegateThresholds; candidates: number }>
+}
+
+export interface HarvestPreview {
+  negatives: HarvestCandidate[]
+  graduations: HarvestCandidate[]
+  productNegatives: HarvestCandidate[]
+  productGraduations: HarvestCandidate[]
+  /** The window of every candidate the strategy did not choose (a strategy candidate carries its own). */
+  windowDays: number
+  criteria: HarvestCriteriaUsed
+  /**
+   * W1-7 — ASIN negatives left out: the ads strategy protects that product in its market, and every writer refuses its
+   * ASIN as a negative. Listed so the leaving-out is never silent.
+   */
+  protectedAsins: Array<HarvestCandidate & { reason: string }>
+}
 
 // H.5 — a search-term "query" that is an ASIN (B0 + 8 alnum) is a product-targeting match from an auto
 // campaign, not a keyword. Those become PRODUCT-target candidates instead of keyword candidates.
@@ -51,42 +92,151 @@ const isAsinQuery = (q: string): boolean => /^b0[a-z0-9]{8}$/i.test(q.trim())
 
 const DEFAULT_MIN_SPEND_CENTS = 1500 // €15 with zero orders → wasteful
 const DEFAULT_MIN_ORDERS = 2 // converting → worth graduating
+const DEFAULT_WINDOW_DAYS = 60
 
-export async function previewHarvest(opts: { windowDays?: number; minSpendCents?: number; minOrders?: number; adGroupExternalIds?: string[] } = {}): Promise<HarvestPreview> {
-  const windowDays = opts.windowDays ?? 60
-  const minSpend = opts.minSpendCents ?? DEFAULT_MIN_SPEND_CENTS
-  const minOrders = opts.minOrders ?? DEFAULT_MIN_ORDERS
+/**
+ * Every search term × campaign × ad group over a window, summed. Grouped by market too, then folded back: an ad group
+ * lives in one market, so the totals are exactly the three-key totals, and each carries its market.
+ */
+async function termTotals(windowDays: number, adGroupExternalIds?: string[]): Promise<Map<string, HarvestCandidate>> {
   const since = new Date(Date.now() - windowDays * 86400_000)
   // AT.4b — when a rule carries a source scope, only consider search terms from
   // those ad groups (by external id). Note: passing an EMPTY array intentionally
   // matches nothing — a wizard rule scoped to not-yet-live (gated) ad groups
   // harvests zero, never the whole account.
   const rows = await prisma.amazonAdsSearchTerm.groupBy({
-    by: ['query', 'campaignId', 'adGroupId'],
-    where: { date: { gte: since }, ...(opts.adGroupExternalIds ? { adGroupId: { in: opts.adGroupExternalIds } } : {}) },
+    by: ['query', 'campaignId', 'adGroupId', 'marketplace'],
+    where: { date: { gte: since }, ...(adGroupExternalIds ? { adGroupId: { in: adGroupExternalIds } } : {}) },
     _sum: { impressions: true, clicks: true, costMicros: true, orders7d: true, sales7dCents: true },
   })
+  const out = new Map<string, HarvestCandidate>()
+  const micros = new Map<string, bigint>()
+  for (const r of rows) {
+    const key = `${r.query}\u0000${r.campaignId}\u0000${r.adGroupId}`
+    const t = out.get(key) ?? {
+      query: r.query, externalCampaignId: r.campaignId, externalAdGroupId: r.adGroupId,
+      impressions: 0, clicks: 0, costCents: 0, orders: 0, salesCents: 0, market: strategyMarketOf(r.marketplace),
+    }
+    t.impressions += r._sum.impressions ?? 0
+    t.clicks += r._sum.clicks ?? 0
+    t.orders += r._sum.orders7d ?? 0
+    t.salesCents += r._sum.sales7dCents ?? 0
+    micros.set(key, (micros.get(key) ?? 0n) + BigInt(r._sum.costMicros ?? 0n))
+    out.set(key, t)
+  }
+  for (const [key, t] of out) t.costCents = Math.round(Number(micros.get(key) ?? 0n) / 10000)
+  return out
+}
+
+/** A strategy harvest group's bar: enough orders and clicks, and an ACoS under its ceiling (no sales = no ACoS: kept). */
+const meetsHarvest = (c: HarvestCandidate, h: HarvestThresholds) =>
+  c.orders >= h.minOrders && c.clicks >= h.minClicks && (h.maxAcosPct == null || c.salesCents <= 0 || (c.costCents / c.salesCents) * 100 <= h.maxAcosPct)
+/** A strategy negate group's bar: enough clicks and spend, and no more orders than it allows. */
+const meetsNegate = (c: HarvestCandidate, n: NegateThresholds) =>
+  c.orders <= n.maxOrders && c.clicks >= n.minClicks && c.costCents >= n.minSpendCents
+
+/**
+ * The search terms worth negating (spent, did not convert) and worth graduating (converted), per ad group.
+ *
+ * W1-7 — whose numbers decide. A caller that names its own (`windowDays`, `minSpendCents` or `minOrders`: a rule's, a
+ * person's, a tool's) decides every candidate with them WHOLE, as before: no strategy threshold is read (the Owner's
+ * control rule). A caller that names none gets the ads strategy's harvest and negate groups wherever a market, category
+ * or product sets one (per ad group, its products together: ads-strategy/terms.ts), each over its own window, and its
+ * `defaults` (else this service's: 60 days, €15, 2 orders) everywhere else. Where a group decides, the harvest bar is
+ * asked first: a term that meets it is never offered as a negative. Either way the ASIN of a product the strategy
+ * protects is never offered as a negative (`protectedAsins` lists them).
+ */
+export async function previewHarvest(opts: {
+  windowDays?: number; minSpendCents?: number; minOrders?: number
+  /** W1-7 — the caller's own fallbacks where the strategy sets no group (a rule's documented defaults, the recommendations' window). */
+  defaults?: { windowDays?: number; minSpendCents?: number; minOrders?: number }
+  adGroupExternalIds?: string[]
+} = {}): Promise<HarvestPreview> {
+  const own = opts.windowDays != null || opts.minSpendCents != null || opts.minOrders != null
+  const named = own ? opts : opts.defaults ?? {}
+  const defaults = {
+    windowDays: named.windowDays ?? DEFAULT_WINDOW_DAYS,
+    minSpendCents: named.minSpendCents ?? DEFAULT_MIN_SPEND_CENTS,
+    minOrders: named.minOrders ?? DEFAULT_MIN_ORDERS,
+  }
+  const strategy = own ? null : await openTermsStrategy()
+  const windows = [...new Set([defaults.windowDays, ...(strategy?.windows ?? [])])]
+  const totals = new Map<number, Map<string, HarvestCandidate>>()
+  for (const w of windows) totals.set(w, await termTotals(w, opts.adGroupExternalIds))
+  // The windows nest (each ends now), so the widest holds every term any of them holds.
+  const widest = totals.get(Math.max(...windows))!
+  const terms = strategy ? await termsForAdGroups(strategy, [...widest.values()].map((t) => ({ market: t.market ?? null, externalAdGroupId: t.externalAdGroupId }))) : new Map<string, StrategyTerms>()
+
   const negatives: HarvestCandidate[] = []
   const graduations: HarvestCandidate[] = []
   const productNegatives: HarvestCandidate[] = []
   const productGraduations: HarvestCandidate[] = []
-  for (const r of rows) {
-    const costCents = Math.round(Number(r._sum.costMicros ?? 0n) / 10000)
-    const orders = r._sum.orders7d ?? 0
-    const cand: HarvestCandidate = {
-      query: r.query, externalCampaignId: r.campaignId, externalAdGroupId: r.adGroupId,
-      impressions: r._sum.impressions ?? 0, clicks: r._sum.clicks ?? 0, costCents, orders, salesCents: r._sum.sales7dCents ?? 0,
+  // Which strategy group chose each candidate, to count them once the lists are final.
+  const groups = new Map<string, HarvestCriteriaUsed['strategy'][number]>()
+  const groupOf = new Map<HarvestCandidate, string>()
+  const add = (c: HarvestCandidate, kind: 'negate' | 'graduate', by: StrategyTerms['harvest'] | StrategyTerms['negate'] | null) => {
+    let cand = c
+    if (by) {
+      const s = by.source
+      const source = { level: s.level, label: s.label, version: s.version, ...(s.product ? { product: s.product } : {}) }
+      cand = { ...c, strategy: { windowDays: by.group.windowDays, ...source } }
+      const key = `${kind}|${s.strategyId}|${s.product ?? ''}`
+      if (!groups.has(key)) groups.set(key, { group: kind === 'graduate' ? 'harvest' : 'negate', source, thresholds: by.group, candidates: 0 })
+      groupOf.set(cand, key)
     }
     // H.5 — ASIN queries become PRODUCT-target candidates; everything else stays keyword candidates.
     const asin = isAsinQuery(cand.query)
-    if (orders === 0 && costCents >= minSpend) (asin ? productNegatives : negatives).push(cand)
-    else if (orders >= minOrders) (asin ? productGraduations : graduations).push(cand)
+    if (kind === 'negate') (asin ? productNegatives : negatives).push(cand)
+    else (asin ? productGraduations : graduations).push(cand)
   }
+  const base = totals.get(defaults.windowDays)!
+  for (const [key, any] of widest) {
+    const t = terms.get(`${any.market}|${any.externalAdGroupId}`)
+    if (!t) {
+      // The caller's numbers, or the defaults: no order and at least the spend → negate; at least the orders → graduate.
+      const c = base.get(key)
+      if (!c) continue
+      if (c.orders === 0 && c.costCents >= defaults.minSpendCents) add(c, 'negate', null)
+      else if (c.orders >= defaults.minOrders) add(c, 'graduate', null)
+      continue
+    }
+    // W1-7 — a strategy group decides; the defaults stand in for a group the strategy does not set here.
+    const h = t.harvest?.group ?? { minOrders: defaults.minOrders, minClicks: 0, maxAcosPct: null, windowDays: defaults.windowDays }
+    const n = t.negate?.group ?? { minClicks: 0, minSpendCents: defaults.minSpendCents, maxOrders: 0, windowDays: defaults.windowDays }
+    const g = totals.get(h.windowDays)!.get(key)
+    if (g && meetsHarvest(g, h)) { add(g, 'graduate', t.harvest); continue }
+    const x = totals.get(n.windowDays)!.get(key)
+    if (x && meetsNegate(x, n)) add(x, 'negate', t.negate)
+  }
+
+  // W1-7 — the ASIN of a protected product is never offered as a negative (every writer refuses it).
+  const held: Array<HarvestCandidate & { reason: string }> = []
+  const kept: HarvestCandidate[] = []
+  const byMarket = new Map<string | null, HarvestCandidate[]>()
+  for (const c of productNegatives) byMarket.set(c.market ?? null, [...(byMarket.get(c.market ?? null) ?? []), c])
+  for (const [market, list] of byMarket) {
+    const hits = await protectedAsins(market, list.map((c) => c.query))
+    for (const c of list) {
+      const hit = hits.get(c.query.trim().toUpperCase())
+      if (hit) held.push({ ...c, reason: `${hit.sku} is protected by the ads strategy in ${hit.market} (${sourceLabel(hit.source)}): its ASIN is never negated.` })
+      else kept.push(c)
+    }
+  }
+
   negatives.sort((a, b) => b.costCents - a.costCents)
   graduations.sort((a, b) => b.orders - a.orders)
-  productNegatives.sort((a, b) => b.costCents - a.costCents)
+  kept.sort((a, b) => b.costCents - a.costCents)
   productGraduations.sort((a, b) => b.orders - a.orders)
-  return { negatives, graduations, productNegatives, productGraduations, windowDays }
+  held.sort((a, b) => b.costCents - a.costCents)
+  for (const c of [...negatives, ...graduations, ...kept, ...productGraduations]) {
+    const key = groupOf.get(c)
+    if (key) groups.get(key)!.candidates += 1
+  }
+  return {
+    negatives, graduations, productNegatives: kept, productGraduations, windowDays: defaults.windowDays,
+    criteria: { from: own ? 'caller' : 'strategy', defaults, strategy: [...groups.values()].filter((g) => g.candidates > 0) },
+    protectedAsins: held,
+  }
 }
 
 /**

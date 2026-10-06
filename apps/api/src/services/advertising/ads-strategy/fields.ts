@@ -13,11 +13,11 @@
  *                product each give one: the one that spends less (the Owner's rule for shared ad groups)
  *   raise        what counts as loosening, for the writer (W1-3): a raise needs the Owner's authenticator code
  *   money        ad-spend money: hidden from a person without financials.adspend.view
- *   readBy       the engines and doors that ACT on it. Each W1 engine PR adds itself here, so a screen never claims a
- *                reader that does not exist (fields.vitest.test.ts holds the list). W1-6: the budget engine (the market
- *                cap and the stop bid; W1-6b: category and product caps too), the retail guard and suppress-campaign
- *                (the stop bid), and the engines whose guard counts a market's actions per run (hourly bid plans, the
- *                budget engine, dayparting).
+ *   readBy       the engines and doors that ACT on it, each saying where it acts. Each W1 reader adds itself here, so a
+ *                screen never claims a reader that does not exist (W1-6: the monthly market cap, the stop bid and the
+ *                actions per run; W1-6b: category and product caps too; W1-7: the search-term thresholds and protection;
+ *                W1-8: Claude's door, what Claude may do alone); a field with no reader is stored and shown only
+ *                (`notReadYet`).
  *
  * 🔴 Units. `*Pct` is an INTEGER PERCENT (25 = 25 %), never a fraction — the AdsAutomationState.defaultTargetAcosPct
  * convention. The engines take fractions (Campaign.dynamicBidding.targetAcos = 0.25). The two meet ONLY through
@@ -45,7 +45,8 @@ export const STOP_METHODS = ['LOW_BIDS', 'PAUSE'] as const
 
 /**
  * What Claude may do alone, per kind of ad action: the strategy NARROWS the business's trust level for these tools,
- * never widens it (W1-8). Brakes are never narrowed (stop-automation, turn-down-automation, a tightening guardrail).
+ * never widens it (W1-8, ads-strategy/claude.ts). Brakes are never narrowed (stop-automation, turn-down-automation, a
+ * tightening guardrail): none is listed here.
  */
 export const CLAUDE_ACTION_TOOLS = {
   bid: ['set-target-bid', 'bulk-ad-bid-change'],
@@ -65,6 +66,8 @@ export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]
 /** Lowest first; the lower of two levels is the safer one. */
 export const CLAUDE_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'auto']
+/** The reader of `claudeAutonomy` (W1-8): every ad change Claude asks for is held to the lower level. */
+export const CLAUDE_DOOR = "Claude's door (every ad change Claude asks for)"
 
 // ── Units ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -85,6 +88,33 @@ export function pctToFraction(pct: unknown): number | null {
 /** A fraction as an integer-percent reading, to 2 decimals: 0.25 → 25 (0.3 → 30, never 30.000000000000004). */
 export function fractionToPct(fraction: number): number {
   return Math.round(fraction * 10_000) / 100
+}
+
+// ── Search-term groups ────────────────────────────────────────────────────────────────────────────
+
+/** When a search term is harvested (graduated to its own keyword or product target), in the engines' shape. */
+export interface HarvestThresholds { minOrders: number; minClicks: number; maxAcosPct: number | null; windowDays: number }
+/** When a search term is negated, in the engines' shape. */
+export interface NegateThresholds { minClicks: number; minSpendCents: number; maxOrders: number; windowDays: number }
+
+/**
+ * W1-7 — the ONE order "stricter" follows for two harvest groups, wherever two meet: across the products of an ad
+ * group (the resolver), and the strategy against a stored harvest policy (the read tool, the Keyword Harvest page).
+ * More orders, then more clicks, then a lower ACoS ceiling (a ceiling beats none). True when `a` asks for MORE
+ * evidence than `b`; two equal groups are not stricter than each other. The window has no direction (a longer one
+ * sees more orders and more spend) and decides nothing here.
+ */
+export function harvestStricter(a: Omit<HarvestThresholds, 'windowDays'>, b: Omit<HarvestThresholds, 'windowDays'>): boolean {
+  if (a.minOrders !== b.minOrders) return a.minOrders > b.minOrders
+  if (a.minClicks !== b.minClicks) return a.minClicks > b.minClicks
+  return (a.maxAcosPct ?? Number.POSITIVE_INFINITY) < (b.maxAcosPct ?? Number.POSITIVE_INFINITY)
+}
+
+/** The same for two negate groups: more clicks, then more spend, then fewer orders allowed. */
+export function negateStricter(a: Omit<NegateThresholds, 'windowDays'>, b: Omit<NegateThresholds, 'windowDays'>): boolean {
+  if (a.minClicks !== b.minClicks) return a.minClicks > b.minClicks
+  if (a.minSpendCents !== b.minSpendCents) return a.minSpendCents > b.minSpendCents
+  return a.maxOrders < b.maxOrders
 }
 
 // ── The registry ──────────────────────────────────────────────────────────────────────────────────
@@ -133,8 +163,8 @@ export const COLUMN_CHECKS: Readonly<Record<StrategyColumn, ColumnCheck>> = {
 export type SaferRule =
   | 'lower'            // the lower number spends less
   | 'anyProtected'     // one protected product protects the ad group
-  | 'stricterHarvest'  // the group that needs more evidence: higher min orders, then higher min clicks
-  | 'stricterNegate'   // the group that needs more evidence: higher min clicks, then higher min spend
+  | 'stricterHarvest'  // the group that needs more evidence (harvestStricter)
+  | 'stricterNegate'   // the group that needs more evidence (negateStricter)
   | 'saferStop'        // low bids over a pause, then the lower stop bid
   | 'lowerLevel'       // Claude autonomy: the lower level per action type
   | 'mixed'            // descriptive (goal, why, the target as written): shown per product when they differ
@@ -182,26 +212,69 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
   { key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true, readBy: [] },
   // W1-6: the budget engine stops a market at its MARKET row's cap; W1-6b: a category's or product's cap floors every ad
   // group holding a product under it (low bids until the 1st, both).
-  { key: 'monthlySpendCapCents', label: 'Monthly spend cap', columns: ['monthlySpendCapCents'], levels: ALL_LEVELS, resolve: 'everyScope', safer: 'ownSpend', raise: 'up', money: true, readBy: ['budget engine (market, category and product caps)'] },
+  {
+    key: 'monthlySpendCapCents', label: 'Monthly spend cap', columns: ['monthlySpendCapCents'], levels: ALL_LEVELS, resolve: 'everyScope', safer: 'ownSpend', raise: 'up', money: true,
+    readBy: [
+      "the budget engine (every 30 minutes): when the market's spend this month reaches the market's cap, every campaign of the market drops to its stop bid until the 1st (a cap of 0 is no cap)",
+      "the budget engine: when a category's or product's Sponsored Products spend this month reaches its cap, every ad group holding a product under it drops to its stop bid until the 1st, the products sharing that ad group included (a cap of 0 is no cap)",
+    ],
+  },
   { key: 'minBidCents', label: 'Lowest bid', columns: ['minBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'floor', money: true, readBy: [] },
   { key: 'maxBidCents', label: 'Highest bid', columns: ['maxBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: true, readBy: [] },
   { key: 'maxChangePct', label: 'Largest bid change per action', columns: ['maxChangePct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
   // W1-6: the engines whose guard (ads-engine-guard.ts) is told each campaign's market.
-  { key: 'maxActionsPerRun', label: 'Most actions per run', columns: ['maxActionsPerRun'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: ['hourly bid plans (rank-defend)', 'budget engine', 'dayparting'] },
-  { key: 'protect', label: 'Protected', columns: ['protect'], levels: ['CATEGORY', 'PRODUCT'], resolve: 'inherit', safer: 'anyProtected', raise: 'unprotect', money: false, readBy: [] },
+  {
+    key: 'maxActionsPerRun', label: 'Most actions per run', columns: ['maxActionsPerRun'], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'up', money: false,
+    readBy: [
+      'the hourly bid plans (rank-defend): at most this many changes in the market per run; the rest wait for the next run',
+      'the budget engine (pacing and stop-over-spend floors): at most this many changes in the market per run; give-backs are never held',
+      'dayparting (windows and bid multipliers): at most this many changes in the market per run',
+    ],
+  },
+  {
+    key: 'protect', label: 'Protected', columns: ['protect'], levels: ['CATEGORY', 'PRODUCT'], resolve: 'inherit', safer: 'anyProtected', raise: 'unprotect', money: false,
+    // W1-7 (ads-strategy/terms.ts). Safety stops (stock, Buy Box, spend caps, a halt) and the Owner's own painted plans
+    // (dayparting, Hourly Bids) still apply to a protected product.
+    readBy: [
+      'every negative write (the write gate, the negative write service, the wire): no engine, rule or schedule negates a protected product\'s ASIN; a person\'s own add, or a Claude request he approved, is warned and may be sent anyway',
+      'search-term candidates (harvest rules, recommendations, the harvest preview): a protected product\'s ASIN is never offered as a negative',
+      'the bid optimiser (auto-bid, target-ACoS bid rules, autopilot plans, recommendations): no cut of a protected product\'s keyword or target without sales',
+      'rules: no pause, archive or floor bid of a protected product\'s keyword or target',
+    ],
+  },
   {
     key: 'harvest', label: 'Harvest a search term when', columns: ['harvestMinOrders', 'harvestMinClicks', 'harvestMaxAcosPct', 'harvestWindowDays'],
     // The ACoS ceiling may be empty inside a set group: no ceiling (as a stored harvest policy).
-    required: ['harvestMinOrders', 'harvestMinClicks', 'harvestWindowDays'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'stricterHarvest', raise: 'loosen', money: true, readBy: [],
+    required: ['harvestMinOrders', 'harvestMinClicks', 'harvestWindowDays'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'stricterHarvest', raise: 'loosen', money: true,
+    // W1-7. A rule's or a person's own numbers win over it whole; per ad group (its products together).
+    readBy: [
+      'harvest rules that set no thresholds of their own (harvest_and_negate)',
+      'recommendations (terms to graduate)',
+      'the harvest preview and the fleet\'s harvest observations, when they name no thresholds',
+      'the Keyword Harvest page, one market in view: the stricter of this and the saved harvest policy',
+    ],
   },
   {
     key: 'negate', label: 'Negate a search term when', columns: ['negateMinClicks', 'negateMinSpendCents', 'negateMaxOrders', 'negateWindowDays'],
-    levels: ALL_LEVELS, resolve: 'inherit', safer: 'stricterNegate', raise: 'loosen', money: true, readBy: [],
+    levels: ALL_LEVELS, resolve: 'inherit', safer: 'stricterNegate', raise: 'loosen', money: true,
+    // W1-7. A rule's or a person's own numbers win over it whole; per ad group (its products together).
+    readBy: [
+      'harvest rules that set no thresholds of their own (harvest_and_negate)',
+      'recommendations (wasteful terms to negate)',
+      'the harvest preview and the fleet\'s negative observations, when they name no thresholds',
+    ],
   },
   // The stop bid may be empty inside a set group: the existing 2¢ floor. W1-6: read as the stop BID only — every reader
   // stops with low bids whatever the method says (a pause waits for W2/W3).
-  { key: 'stop', label: 'Temporary stop', columns: ['stopMethod', 'stopBidCents'], required: ['stopMethod'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'saferStop', raise: 'pause', money: true, readBy: ['budget engine', 'retail guard', 'suppress-campaign'] },
-  { key: 'claudeAutonomy', label: 'What Claude may do alone', columns: ['claudeAutonomy'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lowerLevel', raise: 'autonomy', money: false, readBy: [] },
+  {
+    key: 'stop', label: 'Temporary stop', columns: ['stopMethod', 'stopBidCents'], required: ['stopMethod'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'saferStop', raise: 'pause', money: true,
+    readBy: [
+      'the budget engine: a market over its monthly cap drops to this stop bid until the 1st (low bids, never a pause)',
+      'the retail guard: a campaign whose products cannot be sold drops to this stop bid',
+      "Claude's suppress-campaign: the bid it lowers a campaign to (the 2-cent floor when none is set)",
+    ],
+  },
+  { key: 'claudeAutonomy', label: 'What Claude may do alone', columns: ['claudeAutonomy'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lowerLevel', raise: 'autonomy', money: false, readBy: [CLAUDE_DOOR] },
   { key: 'reviewEveryDays', label: 'Review every (days)', columns: ['reviewEveryDays'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
 ]
 
@@ -210,7 +283,7 @@ export const FIELD_BY_KEY: ReadonlyMap<StrategyFieldKey, StrategyField> = new Ma
 /** The columns of a field that must be set on a row for that row to set the field. */
 export const requiredColumns = (field: StrategyField): readonly StrategyColumn[] => field.required ?? field.columns
 
-/** The fields no engine or door acts on yet (stored and shown only). Shrinks as the W1 engine PRs ship. */
+/** The fields no engine or door acts on yet: stored and shown only. Shrinks as the W1 readers ship. */
 export function notReadYet(): StrategyFieldKey[] {
   return STRATEGY_FIELDS.filter((f) => f.readBy.length === 0).map((f) => f.key)
 }

@@ -106,6 +106,10 @@ export const BID_WINDOW_MAX = 90
  * Exported so the Rules grid can say what binds a rule that states nothing, instead of printing
  * "Always" — the fabricated-cell class this section has shipped three times
  * ([[reference_fleet_stale_constant_class]]).
+ *
+ * ADS AUTONOMY W1-7 — they are the fallback of the ADS STRATEGY now: a rule that sets none of its
+ * own takes the strategy's harvest and negate thresholds (and their windows) wherever its market,
+ * a category or a product sets them, and these everywhere else.
  */
 export const HARVEST_DEFAULTS = { windowDays: 60, minSpendCents: 1000, minOrders: 2 } as const
 
@@ -286,7 +290,7 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
     kind: 'window', days: HARVEST_DEFAULTS.windowDays, settled: false,
     source: 'automation-action-handlers.ts harvest_and_negate → ads-harvest.service.ts previewHarvest',
     tunable: {},
-    caveat: 'The other harvest path, `promote_to_exact` on SEARCH_TERM_CONVERTING, reads 30 settled days through settledWhere. Two engines, two windows, two latency policies — a rule carrying both harvests twice over different spans.',
+    caveat: 'The other harvest path, `promote_to_exact` on SEARCH_TERM_CONVERTING, reads 30 settled days through settledWhere. Two engines, two windows, two latency policies — a rule carrying both harvests twice over different spans. A rule that sets no thresholds of its own reads the ads strategy\'s window instead wherever its market, a category or a product sets one.',
   },
   /**
    * BP.P4 — a builder Bid rule's lookback is ITS OWN (`actions[0].windowDays`, the builder's

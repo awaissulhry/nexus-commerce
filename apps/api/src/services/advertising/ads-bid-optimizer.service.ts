@@ -22,6 +22,8 @@ import { MAX_TARGET_ACOS_FRACTION, readOwnerTargets, reachesSource, resolveTarge
 import { fitBetaPrior, shrunkConversionRate, dataConfidence } from './ads-bayesian-bidding.service.js'
 import { ACTION_WINDOW } from '@nexus/shared/ads-rule-window'
 import { settledWhere } from './ads-settled-window.js'
+import { protectedAdGroups, protectedStopWhy } from './ads-strategy/terms.js'
+import type { StrategySource } from './ads-strategy/resolve.js'
 
 const FLOOR_CENTS = 5
 const MAX_DOWN = 0.5 // never cut a bid by more than 50% in one pass
@@ -73,6 +75,9 @@ export function resolveSource(explicit?: BidMetricSource): BidMetricSource {
   return process.env.NEXUS_BID_OPTIMIZER_SOURCE === 'daily' ? 'daily' : 'legacy'
 }
 
+/** W1-7 — a cut the optimiser did not propose: the ads strategy protects a product of this target's ad group. */
+export interface HeldCut { targetId: string; expression: string; currentBidCents: number; wouldBeCents: number; why: string }
+
 export interface BidProposal {
   targetId: string; expression: string; matchType: string
   currentBidCents: number; proposedBidCents: number; deltaCents: number
@@ -97,7 +102,7 @@ export interface BidProposal {
  */
 export async function previewBidOptimization(
   opts: { targetAcos?: number; targetAcosFrom?: string; fallbackTargetAcos?: number; campaignId?: string; profitMode?: boolean; mode?: AcosMode; bayesian?: boolean; source?: BidMetricSource } = {},
-): Promise<{ targetAcos: number; profitMode: boolean; bayesian: boolean; proposals: BidProposal[] }> {
+): Promise<{ targetAcos: number; profitMode: boolean; bayesian: boolean; proposals: BidProposal[]; held: HeldCut[] }> {
   const flatTargetAcos = opts.fallbackTargetAcos ?? 0.3 // 30% default fallback
   const explicit = targetFraction(opts.targetAcos)
   const profitMode = opts.profitMode ?? false
@@ -218,6 +223,16 @@ export async function previewBidOptimization(
     inputs.profitByAdGroup = acosByAdGroup
   }
 
+  // ADS AUTONOMY W1-7 — no optimiser stops a protected product. The zero-sales cut is a stop by steps (halved each run
+  // down to the floor), so a keyword or target of an ad group advertising a product the ads strategy protects is not
+  // cut while it has no sales; with sales it steers to its target like any other, and raises are never held. Read
+  // once per run, only for ad groups holding such a target (a market without a protection costs one indexed read).
+  const zeroSales = targets.filter((t) => t.clicks >= clickFloor && t.salesCents === 0)
+  const protectedGroups = zeroSales.length
+    ? await protectedAdGroups([...new Map(zeroSales.map((t) => [t.adGroupId, { id: t.adGroupId, market: t.adGroup?.campaign?.marketplace ?? null }])).values()])
+    : new Map<string, StrategySource>()
+  const held: HeldCut[] = []
+
   const proposals: BidProposal[] = []
   for (const t of targets) {
     if (t.clicks < clickFloor) continue
@@ -266,10 +281,15 @@ export async function previewBidOptimization(
     } else continue
     const acos = observedAcos
     if (proposed === t.bidCents) continue
+    const protection = proposed < t.bidCents && t.salesCents === 0 ? protectedGroups.get(t.adGroupId) : undefined
+    if (protection) {
+      held.push({ targetId: t.id, expression: t.expressionValue, currentBidCents: t.bidCents, wouldBeCents: proposed, why: protectedStopWhy(protection) })
+      continue
+    }
     proposals.push({ targetId: t.id, expression: t.expressionValue, matchType: t.expressionType, currentBidCents: t.bidCents, proposedBidCents: proposed, deltaCents: proposed - t.bidCents, acos, spendCents: t.spendCents, salesCents: t.salesCents, clicks: t.clicks, reason, targetAcosUsed: targetAcos, targetBasis, targetSource: resolved.source })
   }
   proposals.sort((a, b) => Math.abs(b.deltaCents) - Math.abs(a.deltaCents))
-  return { targetAcos: typeof explicit === 'number' ? explicit : flatTargetAcos, profitMode, bayesian, proposals }
+  return { targetAcos: typeof explicit === 'number' ? explicit : flatTargetAcos, profitMode, bayesian, proposals, held }
 }
 
 export async function applyBidOptimization(args: {
@@ -378,9 +398,11 @@ ACTION_HANDLERS.bid_to_target_acos = async (action, _context, meta): Promise<Act
   const bayesian = action.bayesian === true || action.bayesian === 'true'
   const preview = await previewBidOptimization({ targetAcos, targetAcosFrom: "this rule's target", campaignId, profitMode, mode, bayesian })
   const proposals = clampProposalsToRuleBounds(preview.proposals, action.minBidEur, action.maxBidEur)
-  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, wouldChange: proposals.length, sample: proposals.slice(0, 5) } }
+  // W1-7 — the cuts left alone because the ads strategy protects the product, said rather than dropped silently.
+  const held = preview.held.length ? { protectedHeld: preview.held.length, protectedSample: preview.held.slice(0, 5) } : {}
+  if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, wouldChange: proposals.length, sample: proposals.slice(0, 5), ...held } }
   const r = await applyBidOptimization({ changes: proposals.map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents })), actor: `automation:${meta.ruleId}` })
-  return { type: action.type, ok: true, output: { applied: r.applied } }
+  return { type: action.type, ok: true, output: { applied: r.applied, ...held } }
 }
 
 logger.debug('[AX.8] bid_to_target_acos handler registered')

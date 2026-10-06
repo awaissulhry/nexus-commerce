@@ -10,9 +10,11 @@
  *              at the same grains (market and line bid policies and harvest policies, this month's budget plan)
  *   history    the versions of a market's rows, or of one category's or product's, newest first
  *
- * Honest by construction: every field carries its `readBy` from the registry (fields.ts) — the engines and doors that
- * act on it; `notReadYet` lists the rest, where only the older settings under `alsoInForce` bind. W1-6: a monthly cap
- * also says how this month stands against it (`thisMonth`: spend so far, the forecast, the cap where bids drop).
+ * Honest by construction: every field carries its `readBy` from the registry (fields.ts) — what acts on it today
+ * (W1-6: the monthly market cap, the stop bid and the actions per run; W1-6b: category and product caps; W1-7: the
+ * search-term thresholds and protection; W1-8: Claude's door reads what Claude may do alone). Until an engine reads a
+ * field, only the older settings under `alsoInForce` bind. W1-6: a monthly cap also says how this month stands against
+ * it (`thisMonth`: spend so far, the forecast, the cap where bids drop; W1-6b: a category's or product's own spend).
  *
  * Money (targets, bids, caps, spend thresholds) sits ONLY under the keys in STRATEGY_MONEY, alone, so the money filter
  * removes exactly the money and keeps where it comes from. Free text written by people beside an older setting (a bid
@@ -28,9 +30,11 @@ import { accountDefaultFraction, readOwnerTargets, targetFraction } from '../ads
 import {
   CLAUDE_ACTION_TOOLS,
   CLAUDE_ACTION_TYPES,
+  CLAUDE_LEVELS,
   STRATEGY_FIELDS,
   STRATEGY_LEVELS,
   fractionToPct,
+  harvestStricter,
   notReadYet,
   type StrategyField,
 } from './fields.js'
@@ -77,10 +81,13 @@ export interface StrategyReadFailure { status: 400 | 404; error: string }
 export type StrategyReadResult = { data: Record<string, unknown> } | StrategyReadFailure
 
 export const PRODUCT_NOT_FOUND = 'Product not found'
-const READ_BY_NOTE =
-  "Each field's readBy names the engines and doors that act on it; notReadYet lists the fields none acts on yet: those are "
-  + 'stored and shown only, and there only the older settings under alsoInForce bind. Where an engine reads a field, every limit '
-  + 'binds and the stricter one wins.'
+/** What acts on the strategy today, from the registry: true as each W1 reader adds itself to a field's readBy. */
+const READ_BY_NOTE = (() => {
+  const read = STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => `${f.key} (${f.readBy.join(', ')})`)
+  return `${read.length ? `Read today: ${read.join('; ')}.` : 'Nothing acts on the strategy yet.'} Every field in notReadYet is stored and shown `
+    + 'only: no engine or rule reads it, and every engine works as before. Until an engine reads a field, only the older '
+    + 'settings under alsoInForce bind; once it does, every limit binds and the stricter one wins.'
+})()
 const MONTH_NOTE =
   "Spend so far adds up Amazon's daily campaign reports: whole days up to spendThrough (yesterday's arrives early in the "
   + 'morning, UTC), never today. Once it reaches the cap where bids drop (stopCapCents), the budget engine, every 30 minutes '
@@ -101,8 +108,10 @@ const TARGET_ORDER =
   + 'the account default → profit data → 30 %'
 const SHADOW_NOTE = "A campaign's own target ACoS wins over the strategy (Owner decision 2026-10-06): these campaigns keep their own."
 const CLAUDE_NOTE =
-  "Claude's door does not read the strategy yet: each tool runs at the business's own level (`business`). The strategy can "
-  + 'only narrow that level, never widen it; stop-automation, turn-down-automation and other brakes are never narrowed.'
+  "Claude's door holds each ad change to the lower of the business's own level for its tool (`business`) and the strategy's "
+  + 'level for its kind of action where the change lands (`effective` here, for this scope). The strategy only narrows, never '
+  + 'widens; stop-automation, turn-down-automation and other brakes are never narrowed. A change Nexus cannot place exactly '
+  + '(a selection by market, an id not found) takes the strictest row of its market, or of the business.'
 const NOT_COMPARED = [
   "daily spend ceilings (they cap a day's budget increases: a different thing from a monthly cap)",
   'engine caps per run (code and server settings)',
@@ -352,10 +361,11 @@ function fieldEntries(resolved: ResolvedStrategy, older: Older, thisMonth: Recor
     if (spec.key === 'harvest') {
       const h = older.harvest
       entry.alsoInForce = [{ setting: h.setting, harvestMinOrders: h.minOrders, harvestMinClicks: h.minClicks, harvestMaxAcosPct: h.maxAcosPct, harvestWindowDays: h.windowDays }]
-      const g = r.value as { harvestMinOrders: number; harvestMinClicks: number } | null
+      const g = r.value as { harvestMinOrders: number; harvestMinClicks: number; harvestMaxAcosPct: number | null } | null
       if (g) {
-        const strategyStricter = g.harvestMinOrders > h.minOrders || (g.harvestMinOrders === h.minOrders && g.harvestMinClicks >= h.minClicks)
-        entry.stricter = { from: strategyStricter ? 'the strategy' : h.setting }
+        // The one order (fields.ts harvestStricter), as the Keyword Harvest page applies it: a tie goes to the strategy.
+        const policyStricter = harvestStricter(h, { minOrders: g.harvestMinOrders, minClicks: g.harvestMinClicks, maxAcosPct: g.harvestMaxAcosPct })
+        entry.stricter = { from: policyStricter ? h.setting : 'the strategy' }
       }
     }
     if (spec.key === 'targetAcosPct') {
@@ -427,7 +437,11 @@ async function effectiveIn(market: string, channel: string, scope: Scope, levels
     const r = resolved.autonomy.get(action) ?? { value: null, source: null }
     return {
       action,
-      tools: CLAUDE_ACTION_TOOLS[action].map((tool) => ({ tool, business: levels.get(tool) ?? 'ask' })),
+      tools: CLAUDE_ACTION_TOOLS[action].map((tool) => {
+        const business = levels.get(tool) ?? 'ask'
+        const strategy = CLAUDE_LEVELS.includes(r.value as ClaudeTrust) ? (r.value as ClaudeTrust) : null
+        return { tool, business, effective: strategy && CLAUDE_LEVELS.indexOf(strategy) < CLAUDE_LEVELS.indexOf(business) ? strategy : business }
+      }),
       strategy: r.value ?? null,
       source: r.source ? sourceOut(r.source) : null,
       ...(r.mixed ? { mixed: r.mixed.map((m) => ({ who: m.who, strategy: m.value, source: m.source ? sourceOut(m.source) : null })) } : {}),

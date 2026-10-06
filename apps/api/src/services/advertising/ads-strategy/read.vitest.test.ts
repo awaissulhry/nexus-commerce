@@ -184,12 +184,15 @@ describe('effective', () => {
       alsoInForce: [{ setting: `the budget plan ${month()}`, monthlyBudgetCents: 616161, stopOverSpend: true }], stricter: { from: 'the market strategy' },
       // W1-6 — how this month stands against the cap where bids drop (the budget engine's rule), and who reads it.
       thisMonth: { month: month(), spendCents: 0, spendThrough: null, forecastSpendCents: null, stopCapCents: 515151, stopBy: 'the market strategy', reached: false },
-      readBy: ['budget engine (market, category and product caps)'],
+      readBy: [
+        expect.stringMatching(/^the budget engine \(every 30 minutes\): when the market's spend this month reaches the market's cap/),
+        expect.stringMatching(/^the budget engine: when a category's or product's Sponsored Products spend this month reaches its cap/),
+      ],
     })
     expect(out.notReadYet).not.toEqual(expect.arrayContaining(['monthlySpendCapCents']))
     expect(m.shadowedBy).toEqual([{ campaignId: ids.c1, name: 'Test campaign one', targetAcosPct: 30 }])
     expect(m.claude.find((c: Data) => c.action === 'bid')).toEqual({
-      action: 'bid', tools: [{ tool: 'set-target-bid', business: 'ask' }, { tool: 'bulk-ad-bid-change', business: 'ask' }],
+      action: 'bid', tools: [{ tool: 'set-target-bid', business: 'ask', effective: 'ask' }, { tool: 'bulk-ad-bid-change', business: 'ask', effective: 'ask' }],
       strategy: 'ask', source: expect.objectContaining({ level: 'market' }),
     })
     expect(m.orphans).toHaveLength(1)

@@ -111,7 +111,9 @@ describe('C3 — the server and every change tool name the business', () => {
     // N3 — the rules every skill used to repeat, once, here.
     for (const rule of ['submit-change-plan, undo-change and confirm-change', 'read it before naming a market or an account',
       'go on only after a clear yes', 'ONE submit-change-plan', 'approveAt; it expires at expiresAt', 'the approvalId, the planHash and the',
-      'Never say a change ran until approval-status says so', 'Never pause an ad', 'Never change an Amazon FBA quantity', 'old Amazon or eBay flat-file pages']) {
+      'Never say a change ran until approval-status says so', 'Never pause an ad', 'Never change an Amazon FBA quantity', 'old Amazon or eBay flat-file pages',
+      // W1-8 — where the ads strategy lives, and that it only narrows.
+      'read it with ads-strategy, change', 'It only narrows what this business lets']) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
   })
