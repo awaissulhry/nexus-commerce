@@ -5,7 +5,7 @@
  * record (memory reference_four_inert_ads_rules): a cap of 0 refuses everything; `targetAcos: 30` instead of 0.3; a
  * condition on a field the trigger never hands the rule never matches; an empty condition list matches everything.
  * A rule Claude saves is refused, in words, for each of them, and for:
- *   · any action Claude may not automate — every pause above all (Owner rule: lower bids, never pause), with the
+ *   · any action Claude may not automate — every pause above all (a rule never pauses: a temporary stop is lower bids), with the
  *     substitute (no-pause.ts) — and any action outside the allowlist of its kind;
  *   · a missing scope: the whole account must be said (`wholeAccount: true`), never implied;
  *   · missing caps: runs per day, writes per day and value per run are required and above 0.

@@ -10,7 +10,7 @@
  *   suppression     a bid write never RAISES a suppressed target: one with `suppressedFromBidCents` set (the no-pause
  *                   floor's memory), or one at ≤ 3¢ without that flag (floored by another path). The two are counted
  *                   apart. Only a suppression a person set (`bidsSuppressedBy` `user:…`) may be lifted, never an
- *                   engine's. (The Owner's rule: never pause — low bids stop delivery.)
+ *                   engine's. (The Owner's rule: a temporary stop is low bids — a real pause is pause-ads.)
  *   currency        amounts are minor units of the campaign's own currency (`Campaign.dailyBudgetCurrency`), labelled
  *                   with it and never converted.
  *   actor / reason  `user:<approverId>`, `Claude request <approvalId>: <why>` (`… (run by rule): <why>` when the

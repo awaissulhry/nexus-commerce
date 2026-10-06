@@ -193,7 +193,7 @@ const previewAutomationTool: AgentTool = {
     'and top-of-search as dry runs, a coverage set, an autopilot backtest. Says "no preview" for kinds without one. ' +
     'No run row, no counter, no proposal, no notification, nothing sent anywhere. A rule that pauses (or carries ' +
     'another action Claude may not automate) is shown as it would run and marked as refused when saved, with the ' +
-    'substitute (lower bids, never pause).',
+    'substitute (lower bids: a rule never pauses).',
   riskTier: 'low',
   readOnly: true,
   openWorld: false,
