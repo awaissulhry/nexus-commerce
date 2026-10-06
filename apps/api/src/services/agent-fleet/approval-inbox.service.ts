@@ -918,6 +918,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'resume-automation': ['changes', 'ruleIds', 'basis'],
   // R13 — what the guardrail changes, whether that tightens or loosens, and the row it was planned from.
   'set-ad-guardrail': ['changes', 'direction', 'basis'],
+  // Ads autonomy W3-2 — every write it cancels (from → to, who queued it, its window) and the rows it starts from: a
+  // write sent or moved since makes the approved cancel a different one.
+  'cancel-queued-ad-write': ['writes', 'basis'],
   // Ads autonomy W1-3 — every field from → to with the value in force before and after (an inherited value that moved
   // is a different decision), raise or lower, the row's version, and `basis` (the row, its terms and its campaigns).
   'set-ads-strategy': ['changes', 'direction', 'version', 'basis'],

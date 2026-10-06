@@ -433,6 +433,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       'resume-automation': { before: { area: 'amazon-ads', halted: true }, after: { area: 'amazon-ads', halted: false } },
       // R13 — a raised ceiling: undo sets it back.
       'set-ad-guardrail': { before: { kind: 'spend-ceiling', key: { grain: 'MARKET', scopeId: 'IT' }, row: { label: 'Italy', dailyCapCents: 5000, enabled: true, note: null } }, after: { kind: 'spend-ceiling', key: { grain: 'MARKET', scopeId: 'IT' }, row: { label: 'Italy', dailyCapCents: 9000, enabled: true, note: null } } },
+      // Ads autonomy W3-2 — a cancel of all of one Claude request: undo asks for that request again, through its own tool.
+      'cancel-queued-ad-write': {
+        before: { writes: [{ queueId: 'q1', label: 'keyword "test" (campaign "Test")' }], request: { approvalId: 'ap1', tool: 'set-target-bid', args: { targetId: 't1', proposedBidCents: 40, why: 'test' } } },
+        after: { cancelled: ['q1'] },
+      },
       // Ads autonomy W1-3 — a strategy change: undo writes the previous version back (with its terms and campaign targets).
       'set-ads-strategy': {
         before: { channel: 'AMAZON', market: 'IT', level: 'MARKET', scopeId: '*', version: 2, values: { maxBidCents: 150, targetKind: 'ACOS', targetPct: 30, claudeAutonomy: { bid: 'ask' } }, terms: { 'test term': false }, campaignTargets: { c1: 0.25 } },
