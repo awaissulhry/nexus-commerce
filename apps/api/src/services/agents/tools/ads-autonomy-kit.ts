@@ -422,7 +422,7 @@ export async function buildLimitFacts(input: {
     // AA-W2-7 — a raise from 0 has no percent: held by the strategy's highest bid where it lands, else unbounded.
     if (m.direction === 'raise' && m.pct == null && (item.change.field === 'bid' || item.change.field === 'dailyBudget')) {
       t.raisesFromZero = (t.raisesFromZero ?? 0) + 1
-      const capped = item.change.field === 'bid' && scopeFacts.limits.maxBidCents != null && !!scopeFacts.sources.maxBidCents
+      const capped = item.change.field === 'bid' && scopeFacts.limits.maxBidCents != null && !!scopeFacts.sources.maxBid
       if (!capped) t.unboundedRaises = (t.unboundedRaises ?? 0) + 1
     }
     // Every row against its own scope's strategy (a bulk change too: not only the lines its preview shows).
