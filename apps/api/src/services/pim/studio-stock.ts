@@ -9,7 +9,10 @@
  *   write — the sheet sends the Matrix write cell (`sheetStockWriteCell`) to `PATCH /studio/matrix` →
  *           `writeMatrixCells`: the same route, door, CAS and sentences as the Matrix tab;
  *   raw quantity columns (eBay/Etsy `quantity`, Amazon `fulfillment_availability__quantity`) leave the SHEET only —
- *           the channel specs still declare them (`withoutRawQuantityColumns`, like VT.1's raw theme columns).
+ *           the channel specs still declare them (`withoutRawQuantityColumns`, like VT.1's raw theme columns);
+ *   FBA qty — the Matrix's locked `FBA qty` column (`MatrixRowRead.fba`, Owner 2026-10-07) beside Buffer, from the same
+ *           read, on the AMAZON sheet only: eBay, Shopify and Etsy sell from the pool, never from FBA stock (Owner
+ *           2026-10-07). Shown, never written: not a stock key, so no write path names it, and the bulk save refuses it.
  */
 import {
   MATRIX_CELL_LABELS,
@@ -18,6 +21,7 @@ import {
   type CoordinateKey,
   type MatrixCells,
   type MatrixCoordinate,
+  type MatrixFbaStock,
   type MatrixWriteCell,
 } from '@nexus/shared/matrix-contract'
 import type { SheetColumn, SheetGroup } from './sheet-columns.service.js'
@@ -36,6 +40,11 @@ export const LISTING_ASIN_KEY = 'listing_asin'
 export const LISTING_ITEM_ID_KEY = 'listing_item_id'
 /** Amazon's schema-walked quantity leaf — the raw column the Qty column replaces on the Amazon sheet. */
 export const AMAZON_QUANTITY_KEY = 'fulfillment_availability__quantity'
+/**
+ * The FBA qty column (Owner 2026-10-07): the units Amazon holds for the row's SKU, the Matrix's locked column. NOT one of
+ * `STUDIO_STOCK_KEYS` on purpose: those are written through the Matrix door; this one is written by nothing.
+ */
+export const STOCK_FBA_KEY = 'stock_fba'
 
 type StockCellKind = 'syncMode' | 'syncQty' | 'syncBuffer'
 const STOCK_CELL: Readonly<Record<StudioStockKey, StockCellKind>> = { stock_mode: 'syncMode', stock_qty: 'syncQty', stock_buffer: 'syncBuffer' }
@@ -54,6 +63,8 @@ export interface StudioRowStock {
   /** The Matrix's cells for `key`, unchanged; null when this row has no listing there (or the Matrix holds another one). */
   cells: MatrixCells | null
   coordinate: MatrixCoordinate | null
+  /** The Matrix row's FBA stock (`MatrixRowRead.fba`): null = no FBA stock row; absent = not read. Read-only. */
+  fba?: MatrixFbaStock | null
 }
 type StockRow = StudioRow & { stock?: StudioRowStock }
 
@@ -74,14 +85,26 @@ const STOCK_HELP: Readonly<Record<StudioStockKey, string>> = {
   stock_buffer: 'Units held back from the stock a following listing sends. A pinned listing ignores it.',
 }
 
-/** The three stock columns (never bulk-writable: their write is the Matrix door). Empty on a channel the Matrix does not cover. */
+/**
+ * The three stock columns (never bulk-writable: their write is the Matrix door), then, on Amazon only, the locked FBA qty
+ * column (never editable). Empty on a channel the Matrix does not cover.
+ */
 export function studioStockColumns(channel: string): SheetColumn[] {
   if (!STOCK_CHANNELS.has(upper(channel))) return []
-  return STUDIO_STOCK_KEYS.map((key) => ({
+  return [...STUDIO_STOCK_KEYS.map((key): SheetColumn => ({
     key, writeField: key, label: MATRIX_CELL_LABELS[STOCK_CELL[key]], width: MATRIX_CELL_WIDTHS[STOCK_CELL[key]],
     group: STUDIO_STOCK_GROUP.label, groupKey: STUDIO_STOCK_GROUP.key, kind: 'stockControl', storage: 'listing', scope: 'per_variant',
     requiredBy: [], editable: true, defaultVisible: true, formulaWritable: false, helpText: STOCK_HELP[key], matrixCell: STOCK_CELL[key],
-  }))
+  })), ...(upper(channel) === 'AMAZON' ? [fbaColumn()] : [])]
+}
+
+/** The FBA qty column: the Matrix's words, locked (`editable: false` routes it as not writable, with this reason). */
+function fbaColumn(): SheetColumn {
+  return {
+    key: STOCK_FBA_KEY, writeField: STOCK_FBA_KEY, label: 'FBA qty', width: 96,
+    group: STUDIO_STOCK_GROUP.label, groupKey: STUDIO_STOCK_GROUP.key, kind: 'number', storage: 'listing', scope: 'per_variant',
+    requiredBy: [], editable: false, defaultVisible: true, formulaWritable: false, helpText: MATRIX_COPY.fbaLocked,
+  }
 }
 
 /**
@@ -349,7 +372,9 @@ export async function attachStudioStock(input: {
       : !sameAccount ? MATRIX_COPY.accountMismatch
       : !cells[key] ? MATRIX_COPY.noListingYet : null
     const own = held ? null : cells[key]!
-    row.stock = { key, marketKey, cells: own, coordinate: coordinate.get(key) ?? null }
+    // Amazon only: FBA units belong to the SKU, not to a listing, so a held row shows them too. `undefined` (not read) stays absent.
+    const fba = ch === 'AMAZON' ? matrixRow.get(row.id)?.fba : undefined
+    row.stock = { key, marketKey, cells: own, coordinate: coordinate.get(key) ?? null, ...(fba !== undefined ? { fba } : {}) }
     const sync = own?.sync ?? null
     const valueOf: Record<StudioStockKey, unknown> = { stock_mode: sync?.mode ?? null, stock_qty: sync?.intended ?? null, stock_buffer: sync?.buffer ?? null }
     for (const k of STUDIO_STOCK_KEYS) {
@@ -357,6 +382,7 @@ export async function attachStudioStock(input: {
       const writable = !!own && own.writable[kind] === true
       row.values[k] = stockValue(k, valueOf[k], writable, held ?? own?.writeBlockedReason[kind] ?? 'This cell cannot be changed here', !!row.aliasId)
     }
+    if (ch === 'AMAZON') row.values[STOCK_FBA_KEY] = stockValue(STOCK_FBA_KEY, fba?.units ?? null, false, MATRIX_COPY.fbaLocked, !!row.aliasId)
     if (ch === 'AMAZON') row.values[LISTING_ASIN_KEY] = listingAsinValue(row, row.listing ? suggested.get(row.listing.id) ?? null : null)
     if (ITEM_ID_COLUMNS[ch]) {
       // A variation's main row is its parent's row in the same group (the primary listing, or the same alias).
