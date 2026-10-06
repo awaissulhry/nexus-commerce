@@ -1542,7 +1542,7 @@ export interface TargetPatch {
 }
 
 /**
- * The archive of a campaign, an ad group, a keyword, a product target or a product ad is SP v3
+ * ADS AUTONOMY AA-W2-13 — the archive of a campaign, an ad group, a keyword, a product target or a product ad is SP v3
  * `POST {path}/delete`, as 5f found for the negatives (below). Amazon's Sponsored Products 3.0 OpenAPI document (the same
  * file, read again 2026-10-06) gives every one of these PUTs `SponsoredProductsCreateOrUpdateEntityState` —
  * `["ENABLED","PAUSED","PROPOSED"]`, no ARCHIVED — and archives through a delete operation per entity, keyed by an id
@@ -1555,9 +1555,10 @@ export interface TargetPatch {
  *   target     DeleteSponsoredProductsTargetingClauses   POST /sp/targets/delete     { targetIdFilter: { include } }
  *   productAd  DeleteSponsoredProductsProductAds         POST /sp/productAds/delete  { adIdFilter: { include } }
  *
- * A person's own archive (the Archive actions on the campaign screens, `manual` on the queue row) is sent this way
- * (ads-sync.worker.ts); it used to be a PUT with state ARCHIVED, which Amazon does not accept. The update functions
- * above still PUT any state they are handed.
+ * Sent this way: a deliberate archive (archive-ads marks its writes `letsGo`) and a person's own archive (the Archive
+ * actions on the campaign screens, `manual` on the queue row), both in ads-sync.worker.ts. A person's archive used to go
+ * out as a PUT with state ARCHIVED, which Amazon does not accept. The update functions above still PUT any state they
+ * are handed.
  */
 export const SP_V3_ARCHIVE = {
   campaign: { path: '/sp/campaigns/delete', mime: 'application/vnd.spCampaign.v3+json', idFilter: 'campaignIdFilter', key: 'campaigns' },
@@ -1568,7 +1569,7 @@ export const SP_V3_ARCHIVE = {
 } as const
 export type SpArchiveEntity = keyof typeof SP_V3_ARCHIVE
 
-/** Archive one Sponsored Products entity at Amazon, for good (SP_V3_ARCHIVE). Through the gateway (liveCall). */
+/** AA-W2-13 — archive one Sponsored Products entity at Amazon, for good (SP_V3_ARCHIVE). Through the gateway (liveCall). */
 export async function archiveSpEntity(
   ctx: ClientContext,
   entity: SpArchiveEntity,

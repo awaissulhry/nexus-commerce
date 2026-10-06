@@ -200,11 +200,20 @@ export interface LevelSwitch {
   read(rowId?: string): Promise<SwitchRow | null>
   /** Why it may not go to `level` (a ceiling, the graduation gate, a contested lane); null when it may. No write. */
   refusal?(row: SwitchRow, level: AutomationLevel): Promise<string | null>
+  /**
+   * AA-W2-11 — the evidence of its graduation gate for one row (14 days watched, 10 runs, 1 match or decision), read for
+   * a move to AUTO and shown in the preview. It binds only Claude's AUTO (turn-up-automation's limits); a person's own
+   * click is held by `refusal` alone, as before. Absent: no gate Nexus can check — AUTO stays a person's click.
+   */
+  gateEvidence?(row: SwitchRow): Promise<GateEvidence>
   /** The move itself, with its own audit; returns why it failed, or null — or what else it did (`note`, e.g. a give-back). */
   write(row: SwitchRow, level: AutomationLevel, actorUserId: string | null): Promise<string | null | { note: string }>
 }
 
 const DAY_MS = 86_400_000
+
+/** The graduation gate's numbers: the same as the Amazon ads rules' (ads-rule-crud.service.ts GRADUATION_GATE). */
+export const GATE_NUMBERS = { days: 14, runs: 10, matches: 1 } as const
 
 /**
  * D-R1 for a rule outside Amazon ads: the same evidence the Amazon graduation gate asks for — 14 days watched, 10 real
@@ -213,11 +222,48 @@ const DAY_MS = 86_400_000
 export function evidenceGate(r: { createdAt: Date; evaluationCount: number; matchCount: number }): string[] {
   const days = Math.floor((Date.now() - r.createdAt.getTime()) / DAY_MS)
   const out: string[] = []
-  if (days < 14) out.push(`${days}/14 days watched`)
-  if (r.evaluationCount < 10) out.push(`${r.evaluationCount}/10 real runs`)
-  if (r.matchCount < 1) out.push('no match yet')
+  if (days < GATE_NUMBERS.days) out.push(`${days}/${GATE_NUMBERS.days} days watched`)
+  if (r.evaluationCount < GATE_NUMBERS.runs) out.push(`${r.evaluationCount}/${GATE_NUMBERS.runs} real runs`)
+  if (r.matchCount < GATE_NUMBERS.matches) out.push('no match yet')
   return out
 }
+
+/** AA-W2-11 — one row's graduation gate as turn-up-automation's preview shows it (LevelSwitch.gateEvidence). */
+export interface GateEvidence {
+  open: boolean
+  /** What the counts are read from, in a sentence. */
+  from: string
+  checks: Array<{ check: string; passed: boolean; detail: string }>
+  /** A rule's own caps: at AUTO it acts as itself, held by them. Absent when the row is not such a rule. */
+  caps?: { maxWritesPerDay: number | null; maxValueCentsEur: number | null }
+}
+
+/**
+ * AA-W2-11 — the gate from counts: days since the row was made, the runs it recorded, the runs that found something to
+ * do (a match, or a decision). Pure; `runs` and `matches` say what they count.
+ */
+export function gateOfCounts(input: {
+  createdAt: Date
+  runs: number
+  matches: number
+  runsAre: string
+  matchesAre: string
+  from: string
+  caps?: GateEvidence['caps']
+  now?: Date
+}): GateEvidence {
+  const days = Math.max(0, Math.floor(((input.now ?? new Date()).getTime() - input.createdAt.getTime()) / DAY_MS))
+  const checks = [
+    { check: `${GATE_NUMBERS.days} days watched`, passed: days >= GATE_NUMBERS.days, detail: `${days}/${GATE_NUMBERS.days} days since it was made` },
+    { check: `${GATE_NUMBERS.runs} runs`, passed: input.runs >= GATE_NUMBERS.runs, detail: `${input.runs}/${GATE_NUMBERS.runs} ${input.runsAre}` },
+    { check: `${GATE_NUMBERS.matches} match or decision`, passed: input.matches >= GATE_NUMBERS.matches, detail: `${input.matches} ${input.matchesAre}` },
+  ]
+  return { open: checks.every((c) => c.passed), from: input.from, checks, ...(input.caps !== undefined ? { caps: input.caps } : {}) }
+}
+
+/** A rule's caps as the gate evidence carries them. */
+export const capsOfRule = (r: { maxWritesPerDay: number | null; maxValueCentsEur: number | null }): NonNullable<GateEvidence['caps']> =>
+  ({ maxWritesPerDay: r.maxWritesPerDay, maxValueCentsEur: r.maxValueCentsEur })
 
 /** The switch of an AutomationRule domain outside Amazon ads (marketing, listings, replenishment, reviews, bulk). */
 export function ruleLevelSwitch(domain: string, manage: ToolPermission, brakeOf: (actions: unknown) => string | null = () => null): LevelSwitch {
@@ -234,6 +280,13 @@ export function ruleLevelSwitch(domain: string, manage: ToolPermission, brakeOf:
       const r = await prisma.automationRule.findUnique({ where: { id: row.id }, select: { createdAt: true, evaluationCount: true, matchCount: true } })
       const failures = r ? evidenceGate(r) : ['not found']
       return failures.length ? `AUTO only after the graduation gate: ${failures.join(', ')}.` : null
+    },
+    async gateEvidence(row) {
+      const r = await prisma.automationRule.findUnique({ where: { id: row.id }, select: { createdAt: true, evaluationCount: true, matchCount: true, maxWritesPerDay: true, maxValueCentsEur: true } })
+      return gateOfCounts({
+        createdAt: r?.createdAt ?? new Date(), runs: r?.evaluationCount ?? 0, matches: r?.matchCount ?? 0,
+        runsAre: 'real runs', matchesAre: 'matches', from: "the rule's own run counters", caps: r ? capsOfRule(r) : { maxWritesPerDay: null, maxValueCentsEur: null },
+      })
     },
     async write(row, level, actorUserId) {
       const before = await prisma.automationRule.findUnique({ where: { id: row.id }, select: { autonomyLevel: true, enabled: true, dryRun: true } })

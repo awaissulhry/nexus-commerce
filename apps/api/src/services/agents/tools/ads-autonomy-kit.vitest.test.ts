@@ -117,7 +117,7 @@ describe('measure — what one change does to spend', () => {
 })
 
 describe('every row against its own scope (W1-5 band and step)', () => {
-  const s = { limits: { minBidCents: 10, maxBidCents: 120, maxChangePct: 10 }, sources: { minBidCents: source('Test market (IT)'), maxBidCents: source('Helmets (IT)', 'category', 3), maxChangePct: source('Test market (IT)', 'market', 2) } }
+  const s = { limits: { minBidCents: 10, maxBidCents: 120, maxChangePct: 10 }, sources: { minBid: source('Test market (IT)'), maxBid: source('Helmets (IT)', 'category', 3), maxChangePct: source('Test market (IT)', 'market', 2) } }
 
   it('above the highest bid or below the lowest: outside, naming the value, the limit and its row', () => {
     expect(bidOutsideWhy({ field: 'bid', fromCents: 115, toCents: 125 }, s, 'EUR')).toBe('the new bid EUR 1.25 is above the highest bid EUR 1.20 (ads strategy: Helmets (IT), category, v3)')
@@ -149,7 +149,8 @@ describe('the safer number for a mixed ad group (W1\'s resolver)', () => {
     const resolved = resolveProducts(index, [...catalog.products.values()], catalog)
     const s = scopeLimitsOf({ values: valuesOf(resolved), resolved }, 'bid')
     expect(s.limits).toMatchObject({ maxBidCents: 90, maxChangePct: 20, protect: true, claudeLevel: 'confirm' })
-    expect(s.sources.maxBidCents).toMatchObject({ level: 'category', label: 'Helmets (IT)', version: 3, product: 'TEST-P2' })
+    // AA-W2-8 — a money limit's row under a name that is not money (the money filter strips a money key whole).
+    expect(s.sources.maxBid).toMatchObject({ level: 'category', label: 'Helmets (IT)', version: 3, product: 'TEST-P2' })
     expect(s.sources.protect).toMatchObject({ level: 'category', product: 'TEST-P2' })
     expect(s.sources.claudeLevel).toMatchObject({ level: 'product', label: 'TEST-P1 (IT)', version: 4, product: 'TEST-P1' })
     expect(s.sources.maxChangePct).toMatchObject({ level: 'market' })
@@ -265,7 +266,7 @@ describe('the common checks', () => {
     const resolved = resolveMarket(index)
     const daily = dailyLimitsOf({ values: valuesOf(resolved), resolved })
     expect(daily).toMatchObject({ maxChangesPerDay: 40, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: 0 })
-    expect(daily.sources).toEqual({ maxChangesPerDay: expect.objectContaining({ level: 'market', label: 'Test market (IT)', version: 3 }), maxBudgetIncreasePerDayCents: expect.objectContaining({ level: 'market' }) })
+    expect(daily.sources).toEqual({ maxChangesPerDay: expect.objectContaining({ level: 'market', label: 'Test market (IT)', version: 3 }), maxBudgetIncreasePerDay: expect.objectContaining({ level: 'market' }) })
   })
 
   it('C6 — the same entity changed by rule as often as the tool allows in 24 hours (no back and forth)', () => {
@@ -291,6 +292,16 @@ describe('the common checks', () => {
     expect(stepRefusal(facts(), { ...BASE, maxCutPct: 5 })).toMatch(/^its largest cut is 10 %, more than the 5 %/)
     expect(stepRefusal(facts({ thisOver: { largestRaisePoints: 12 } }), STEP_POINT_LIMITS_DEFAULTS)).toMatch(/largest raise is 12 points/)
     expect(stepRefusal(facts({ thisOver: RAISE }), { maxItems: 5 })).toBeNull() // a tool without step limits
+  })
+
+  it('AA-W2-7 — a raise from 0 (no percent measures it): unbounded unless the strategy\'s highest bid holds it, never inside a raise step of 0', () => {
+    const unbounded = { raises: 1, raisesFromZero: 1, unboundedRaises: 1 }
+    expect(stepRefusal(facts({ thisOver: unbounded }), { ...BASE, maxRaisePct: 100 })).toBe('it raises 1 bid or budget from 0, which no percent measures, and the ads strategy sets no highest bid that bounds it: an unbounded raise, more than the 100 % this tool\'s limits let run without a person')
+    const capped = { raises: 1, raisesFromZero: 1, unboundedRaises: 0 }
+    expect(stepRefusal(facts({ thisOver: capped }), { ...BASE, maxRaisePct: 20 })).toBeNull()
+    expect(stepRefusal(facts({ thisOver: capped }), BASE)).toBe('it raises 1 bid from 0, and this tool\'s limits let no raise run without a person (0: every raise waits for a person)')
+    // A tool without a raise step (graduate-keyword: its starting-bid limit holds a new keyword).
+    expect(stepRefusal(facts({ thisOver: unbounded }), { maxItems: 5 })).toBeNull()
   })
 
   it('month — a change that can add spend keeps the month under its cap, saying how the upper bound is made', () => {
@@ -390,7 +401,7 @@ describe('the note — each limit, its value, this change\'s value and its sourc
       thisOver: { ...RAISE, highestNewBidCents: 55, largestRaisePct: 10 },
       markets: { IT: market({ maxActionsPerRun: 40, maxChangesPerDay: null, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: { maxActionsPerRun: source('Test market (IT)', 'market', 2) } }) },
       scopes: {
-        'IT|adGroup:g1': scope({ limits: { maxBidCents: 120, maxChangePct: 15, protect: true, claudeLevel: 'auto' }, sources: { maxBidCents: source('Helmets (IT)', 'category', 3, 'TEST-P2'), maxChangePct: source('Test market (IT)', 'market', 2), protect: source('Helmets (IT)', 'category', 3, 'TEST-P2'), claudeLevel: source('Test market (IT)', 'market', 2) } }),
+        'IT|adGroup:g1': scope({ limits: { maxBidCents: 120, maxChangePct: 15, protect: true, claudeLevel: 'auto' }, sources: { maxBid: source('Helmets (IT)', 'category', 3, 'TEST-P2'), maxChangePct: source('Test market (IT)', 'market', 2), protect: source('Helmets (IT)', 'category', 3, 'TEST-P2'), claudeLevel: source('Test market (IT)', 'market', 2) } }),
         'IT|adGroup:g2': scope({ label: 'ad group "Second" (IT)', limits: { maxChangePct: 15 }, sources: { maxChangePct: source('Test market (IT)', 'market', 2) } }),
       },
       today: { IT: { changes: 12, writes: 12, raises: 3, budgetIncreaseCents: 0 } },

@@ -491,6 +491,8 @@ interface EnqueueArgs {
   manual?: boolean
   /** 3A — the person confirmed "Send anyway" past his own limits; on the queue row's JSON, honoured by the gate only with `manual`. */
   confirmOwnLimits?: boolean
+  /** AA-W2-12 — a deliberate pause or archive (see isLetGoWrite). Kept on the queue row's JSON, like `force`; the worker hands it to the gate (and sends a marked archive as Amazon's delete). */
+  letsGo?: boolean
 }
 
 async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
@@ -539,6 +541,8 @@ async function createQueueRow(tx: Tx, args: EnqueueArgs, holdUntil: Date): Promi
         ...(args.manual ? { manual: true } : {}),
         // 3A — and that he confirmed sending it past his own limits.
         ...(args.manual && args.confirmOwnLimits ? { confirmOwnLimits: true } : {}),
+        // AA-W2-12 — and that it is a deliberate pause (isLetGoWrite).
+        ...(args.letsGo ? { letsGo: true } : {}),
       } as object,
       holdUntil,
       externalListingId: args.externalId,
@@ -704,6 +708,25 @@ export function isSuppressionWrite(force: boolean, fieldChanges: FieldChange[]):
     const to = num(c.newValue)
     return from != null && to != null && to < from
   })
+}
+
+/**
+ * ADS AUTONOMY AA-W2-12 — the statuses a deliberate pause writes, each with the statuses it may leave: it lets go of the
+ * spend the entity had. AA-W2-13 — an archive lets go for good, from enabled or paused.
+ */
+const LET_GO_STATUSES: Readonly<Record<string, readonly string[]>> = { PAUSED: ['ENABLED'], ARCHIVED: ['ENABLED', 'PAUSED'] }
+
+/**
+ * AA-W2-12 — may the write gate treat this queued write as letting go, like a suppression (the halt never holds it)?
+ * Only a deliberate pause or archive marks it (`letsGo`: pause-ads, archive-ads; Owner 2026-10-06: a real pause when he
+ * allows that kind), and only when every field is a status that stops the entity serving (ENABLED → PAUSED; ENABLED or
+ * PAUSED → ARCHIVED, which the worker also sends as Amazon's delete operation). A halt stops the machine from
+ * reaching for more; it must never block it from letting go. An enable starts spend again and is never one, and a write
+ * without the mark — a rule's or an engine's — is judged as before (isSuppressionWrite). Fail closed.
+ */
+export function isLetGoWrite(letsGo: boolean, fieldChanges: FieldChange[]): boolean {
+  if (!letsGo || !fieldChanges?.length) return false
+  return fieldChanges.every((c) => c.field === 'status' && (LET_GO_STATUSES[String(c.newValue)] ?? []).includes(String(c.oldValue)))
 }
 
 /** 4k — a queued field's column on its entity, and how its typed value reads back (undefined = cannot be read). */
@@ -1148,6 +1171,8 @@ export async function updateCampaignWithSync(args: {
   askGate?: boolean
   /** 3A — the person's "Send anyway" past his own limits (honoured only for a person's own write). */
   confirmOwnLimits?: boolean
+  /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Nothing else is skipped. */
+  letsGo?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.campaign.findUnique({
     where: { id: args.campaignId },
@@ -1313,6 +1338,7 @@ export async function updateCampaignWithSync(args: {
     applyImmediately: args.applyImmediately ?? false,
     manual: person,
     confirmOwnLimits,
+    letsGo: args.letsGo,
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1381,6 +1407,8 @@ export async function updateAdGroupWithSync(args: {
   askGate?: boolean
   /** 3A — the person's "Send anyway" past his own limits (honoured only for a person's own write). */
   confirmOwnLimits?: boolean
+  /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Unlike `force`, nothing else is skipped. */
+  letsGo?: boolean
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adGroup.findUnique({
@@ -1512,6 +1540,7 @@ export async function updateAdGroupWithSync(args: {
     force: args.force,
     manual: person,
     confirmOwnLimits,
+    letsGo: args.letsGo,
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1561,6 +1590,8 @@ export async function updateProductAdWithSync(args: {
   askGate?: boolean
   /** 3A — the person's "Send anyway" past his own limits (honoured only for a person's own write). */
   confirmOwnLimits?: boolean
+  /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Nothing else is skipped. */
+  letsGo?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.adProductAd.findUnique({
     where: { id: args.productAdId },
@@ -1592,6 +1623,7 @@ export async function updateProductAdWithSync(args: {
     reason: args.reason ?? null,
     applyImmediately: args.applyImmediately ?? false,
     manual: isPersonEdit(args.manual, args.actor),
+    letsGo: args.letsGo,
   })
   const actionLogId = await writeAdvertisingActionLog({
     changeSetId: args.changeSetId ?? null,
@@ -1644,6 +1676,8 @@ export async function updateAdTargetWithSync(args: {
   askGate?: boolean
   /** 3A — the person's "Send anyway" past his own limits (honoured only for a person's own write). */
   confirmOwnLimits?: boolean
+  /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Unlike `force`, nothing else is skipped. */
+  letsGo?: boolean
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adTarget.findUnique({
@@ -1814,6 +1848,7 @@ export async function updateAdTargetWithSync(args: {
     force: args.force,
     manual: person,
     confirmOwnLimits,
+    letsGo: args.letsGo,
   })
 
   const bidHistoryIds = await writeBidHistory({

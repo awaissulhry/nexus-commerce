@@ -18,7 +18,7 @@
 import { type Job } from 'bullmq'
 import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import prisma from '../db.js'
-import { claimEntityWrite, dispatchPayloadFromMutations, isPersonEdit, isSuppressionWrite, putBackRefusedWrite, settleAdMutations, supersedeOlderWrites } from '../services/advertising/ads-mutation.service.js'
+import { claimEntityWrite, dispatchPayloadFromMutations, isLetGoWrite, isPersonEdit, isSuppressionWrite, putBackRefusedWrite, settleAdMutations, supersedeOlderWrites } from '../services/advertising/ads-mutation.service.js'
 import { isRetryableSyncError } from '../services/advertising/ads-write-reconcile.service.js'
 import { AD_SYNC_TYPES, ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
@@ -246,7 +246,7 @@ async function currentPlacementLanes(
   }
 }
 
-/** Which SP v3 delete operation archives this entity; null for a negative (updateTarget routes its own, 5f). */
+/** AA-W2-13 — which SP v3 delete operation archives this entity; null for a negative (updateTarget routes its own). */
 async function archiveEntityOf(payload: AdMutationPayload): Promise<SpArchiveEntity | null> {
   if (payload.entityType === 'CAMPAIGN') return 'campaign'
   if (payload.entityType === 'AD_GROUP') return 'adGroup'
@@ -261,8 +261,11 @@ async function archiveEntityOf(payload: AdMutationPayload): Promise<SpArchiveEnt
 async function dispatchToAmazon(
   payload: AdMutationPayload,
   ctx: ClientContext,
-  /** The queue row is a person's own edit (isPersonEdit off its JSON, as the gate is handed it). */
-  opts: { manual?: boolean } = {},
+  /**
+   * AA-W2-13 — the queue row is a deliberate stop (its JSON carries `letsGo`: pause-ads, archive-ads), or a person's own
+   * edit (isPersonEdit off its JSON, as the gate is handed it).
+   */
+  opts: { letsGo?: boolean; manual?: boolean } = {},
 ): Promise<{ ok: boolean; rawResponse: unknown; error: string | null }> {
   const patch = patchFromChanges(payload)
   if (!payload.externalId) {
@@ -272,11 +275,11 @@ async function dispatchToAmazon(
     return { ok: true, rawResponse: { skipped: 'no_external_id' }, error: null }
   }
   try {
-    // A person's own archive (the Archive actions on the campaign screens) is Amazon's delete operation: no PUT archives
-    // a campaign, an ad group, a keyword, a target or a product ad (ads-api-client.ts SP_V3_ARCHIVE). It went out as a
-    // PUT with state ARCHIVED, which Amazon's schema does not accept. A negative keeps updateTarget's own delete route
-    // (5f); every other write goes out as before.
-    if (opts.manual && patch.state === 'archived') {
+    // AA-W2-13 — an archive is Amazon's delete operation: no PUT archives a campaign, an ad group, a keyword, a target or
+    // a product ad (ads-api-client.ts SP_V3_ARCHIVE). Sent so for a deliberate archive (archive-ads) and a person's own
+    // (the Archive actions on the campaign screens, which went out as a PUT Amazon does not accept). A negative keeps
+    // updateTarget's own delete route (5f). Every other write, and an engine's archive, goes out as before.
+    if ((opts.letsGo || opts.manual) && patch.state === 'archived') {
       const entity = await archiveEntityOf(payload)
       if (entity) {
         const res = await archiveSpEntity(ctx, entity, payload.externalId)
@@ -525,7 +528,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // only record (the typed `payload` above has no such field, so this was always false),
     // and counts only when every value in the write goes down: restores and base-bid deltas
     // are forced too, and those can raise bids.
-    isSuppression: isSuppressionWrite((row.payload as { force?: unknown } | null)?.force === true, payload.fieldChanges),
+    // AA-W2-12 — and a deliberate pause lets go of spend the same way: the halt never holds it (isLetGoWrite). Read off
+    // the same JSON; an enable, or a pause without the mark (a rule's, an engine's), is judged as before.
+    isSuppression: isSuppressionWrite((row.payload as { force?: unknown } | null)?.force === true, payload.fieldChanges)
+      || isLetGoWrite((row.payload as { letsGo?: unknown } | null)?.letsGo === true, payload.fieldChanges),
     // 1e (CM-10) — a person's own edit passes the account halt and autonomy OFF (nothing else). Read off the queue
     // row's JSON like `force` (its only record), and only with a `user:` actor.
     manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor),
@@ -593,7 +599,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   }
 
   const ctx: ClientContext = { profileId, region: regionFor(marketplace) }
-  const result = await dispatchToAmazon(payload, ctx, { manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor) })
+  const result = await dispatchToAmazon(payload, ctx, {
+    letsGo: (row.payload as { letsGo?: unknown } | null)?.letsGo === true,
+    manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor),
+  })
   if (result.ok) {
     const localOnly = (result.rawResponse as { skipped?: string } | null)?.skipped // e.g. 'no_external_id' — NOTHING reached Amazon
     await prisma.outboundSyncQueue.update({

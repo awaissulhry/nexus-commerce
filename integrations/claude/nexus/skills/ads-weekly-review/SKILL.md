@@ -1,15 +1,15 @@
 ---
 name: ads-weekly-review
-description: Weekly advertising review in Nexus, market by market, for Amazon Sponsored Products and eBay Promoted Listings - read spend, sales and ACoS, wasteful and converting search terms, bids and the engines' recommendations, explain them in plain words, then offer the changes as one change plan (negatives, exact keywords, lower bids, budgets, eBay rates) that a person approves. Never pauses anything. Use when the person asks how their ads are doing, for a weekly ads or bid review, or what to change in their campaigns.
+description: Weekly advertising review in Nexus, market by market, for Amazon Sponsored Products and eBay Promoted Listings - read spend, sales and ACoS, wasteful and converting search terms, bids and the engines' recommendations, explain them in plain words, then offer the changes as one change plan (negatives, exact keywords, lower bids, budgets, eBay rates) that a person approves. A temporary stop is lower bids; it pauses an ad only when the person means a real pause. Use when the person asks how their ads are doing, for a weekly ads or bid review, or what to change in their campaigns.
 ---
 
 # Ads weekly review
 
-Reads first, then proposes. Nothing changes until a person approves the plan in Nexus (or the business lets a tool run by its rule). Ads in Nexus are **never paused**. To stop an Amazon campaign spending, `suppress-campaign` lowers its bids to the 2-cent floor (a suppressed bid is never raised); on eBay, lower the ad rates (2 % is eBay's minimum), the keyword bids or the daily budget. Targets per market (target ACoS, ceilings, bid limits) are set with the `ads-strategy` skill; this review measures against them.
+Reads first, then proposes. Nothing changes until a person approves the plan in Nexus (or the business lets a tool run by its rule). A temporary stop is **lower bids**, never a pause: an ad serves again about a minute after its bids go back, but only about an hour after a pause is lifted. To stop an Amazon campaign spending for a while, `suppress-campaign` lowers its bids to the 2-cent floor (a suppressed bid is never raised); on eBay, lower the ad rates (2 % is eBay's minimum), the keyword bids or the daily budget. Pause an Amazon ad (`pause-ads`) only when the person says they mean a real pause. Targets per market (target ACoS, ceilings, bid limits) are set with the `ads-strategy` skill; this review measures against them.
 
 ## Ground rules
 
-The Nexus server's instructions hold the rules for every change — say which business, read first and ask, one change plan for many changes, follow each change until approval-status says it ran, never pause an ad, never an FBA quantity, never the old flat-file pages. Follow them. Read `business-overview` for the exact market codes and account ids before you name one.
+The Nexus server's instructions hold the rules for every change — say which business, read first and ask, one change plan for many changes, follow each change until approval-status says it ran, a temporary ad stop is lower bids (a real pause only when the person means one), never an FBA quantity, never the old flat-file pages. Follow them. Read `business-overview` for the exact market codes and account ids before you name one.
 
 - **When something is missing.** If no Nexus tools are available, Nexus is not connected or its server is off (Claude Code: `/mcp`, choose Nexus, Authenticate; claude.ai: Customize › Connectors). If a tool is not offered, refuses, or says it is turned off for Claude, pass on the reason in plain words and carry on with the rest.
 
@@ -19,7 +19,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - The last 3 days are provisional (Amazon restates them for up to 72 hours). `dataAsOf` is the newest day of data.
 - A person without the ad-spend money permission sees the same answers without amounts: say so, and review by clicks, orders and ACoS only.
 - Live or sandbox is the server's switch: each change preview's `reach` says `live` or `sandbox` (sandbox = recorded in Nexus only). An Amazon sandbox preview skips the live checks (halt, connection, markets, allowlist, pins, spend ceiling, daily budget move, value cap), so it predicts nothing about live.
-- Amazon live ad writes happen only in IT, DE, FR and ES; any other Amazon market is refused at the live write gate. On Amazon, `liveWrites` in `ad-campaigns` is the campaign's live-write allowlist: a campaign off it takes no live change, and putting it on (`set-campaign-live-writes`) is the person's decision and always waits for a person. eBay has no allowlist: its live or sandbox is server-wide (`writes`).
+- Amazon live ad writes happen only in IT, DE, FR and ES; any other Amazon market is refused at the live write gate. On Amazon, `liveWrites` in `ad-campaigns` is the campaign's live-write allowlist: a campaign off it takes no live change, and putting it on (`set-campaign-live-writes`) waits for a person, unless the business lets it run by its rule for a campaign Claude itself created. eBay has no allowlist: its live or sandbox is server-wide (`writes`).
 
 ## 1. Per market: read
 
@@ -47,8 +47,10 @@ Per market, a few lines: spend and sales against last week, ACoS against the tar
 | Change one bid / many bids (Amazon) | `set-target-bid` (`targetId`, `proposedBidCents`, at least 5) / `bulk-ad-bid-change` (`bids` up to 250, or a selection and `percent`) |
 | Change a daily budget (Amazon) | `set-campaign-budget` — every budget change waits for a person; by default it may move at most 30 % down or 50 % up per UTC day, so plan larger cuts over several days |
 | Placement adjustments (Amazon) | `set-placement-multipliers` |
-| Stop a campaign spending, no pause (Amazon only) | `suppress-campaign`; `restore-campaign` puts the bids back |
-| Apply or dismiss what PROPOSE rules suggested | `decide-automation-suggestions` (`kind`: `amazon-ads` or `ebay-ads`; a pause suggestion is refused: dismiss it) |
+| Stop a campaign spending for a while, no pause (Amazon only) | `suppress-campaign`; `restore-campaign` puts the bids back |
+| A real pause, only when the person means one (Amazon only) | `pause-ads` (campaigns, ad groups, keywords and targets, product ads by ad group and SKU); `enable-ads` switches back on only what a Claude request paused, never what a person paused in Nexus or at Amazon |
+| Archive, only when the person means it for good (Amazon only) | `archive-ads`: PERMANENT — Amazon cannot switch an archived ad on again (its API calls this delete). Say so before asking; advise keeping archive at ask |
+| Apply or dismiss what PROPOSE rules suggested | `decide-automation-suggestions` (`kind`: `amazon-ads` or `ebay-ads`; a pause suggestion is refused: dismiss it, and ask for `pause-ads` if the person wants a real pause) |
 | eBay: rates, keywords, budgets, promote listings | `set-ebay-ad-rates` (General, fixed-rate campaigns; a rate above a listing's known break-even is refused, an unknown one only warns), `ebay-keywords-change` (manual Priority, keyword ids from `ebay-ad-details` or a proposal), `set-ebay-campaign-budget` (Priority; 15 changes per campaign per day), `promote-ebay-listings` |
 
 - Give `why` on every change: the approver reads it, and it stays in the ads audit.

@@ -65,7 +65,9 @@ beforeAll(async () => {
     ids.lowerer = (await rule('TEST bid lowerer', [{ type: 'bid_down', percent: 5 }], { autonomyLevel: 'PROPOSE' })).id
     ids.pauser = (await rule('TEST pauser', [{ type: 'pause_campaign' }], { autonomyLevel: 'PROPOSE' })).id
     // Watched 20 days, 12 real runs, 3 matches: its gate opens once the connection is live.
-    ids.graduate = (await rule('TEST graduate', [{ type: 'bid_up', percent: 5 }], { autonomyLevel: 'PROPOSE', createdAt: new Date(Date.now() - 20 * DAY), evaluationCount: 12, matchCount: 3 })).id
+    ids.graduate = (await rule('TEST graduate', [{ type: 'bid_up', percent: 5 }], { autonomyLevel: 'PROPOSE', createdAt: new Date(Date.now() - 20 * DAY), evaluationCount: 12, matchCount: 3, scopeMarketplace: 'IT' })).id
+    // AA-W2-11 — an ads strategy for IT that lets Claude's rule make 100 changes a day there.
+    ids.strategy = (await db.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test market (IT)', claudeMaxChangesPerDay: 100, version: 1, updatedBy: 'user:test' } })).id
     ids.ebay = (await db.ebayAdsRule.create({ data: { name: 'TEST eBay rule', enabled: true, mode: 'PROPOSE', trigger: { scope: 'CPS_AD', all: [] }, action: { type: 'adjust_ad_rate', deltaPct: 10 } } })).id
     ids.pool = (await db.budgetPool.create({ data: { name: 'TEST pool', totalDailyBudgetCents: 5000, enabled: true, dryRun: true } })).id
     ids.schedule = (await db.adSchedule.create({ data: { campaignId: campaign.id, name: 'TEST night', windows: [{ days: [1], startHour: 0, endHour: 6 }], enabled: true } })).id
@@ -93,7 +95,7 @@ describe('R10 — turn-up-automation / turn-down-automation', () => {
     expect(audit.map((a) => [a.actionType, a.userId])).toEqual([['set_rule_autonomy', 'user:u-r10']])
   })
 
-  it('AUTO only after the graduation gate (D-R1), and never inside the limits', async () => {
+  it('AUTO only after the graduation gate (D-R1); by rule only when listed, its gate open and its own caps inside the limits (AA-W2-11)', async () => {
     const refused = await up({ automation: 'A1', rowId: ids.raiser, level: 'AUTO' })
     expect(refused.ok).toBe(false)
     expect(refused.error).toContain('TEST bid raiser: AUTO only after the graduation gate')
@@ -104,8 +106,21 @@ describe('R10 — turn-up-automation / turn-down-automation', () => {
     const open = await up({ automation: 'A1', rowId: ids.graduate, level: 'AUTO' })
     expect(open.preview).toMatchObject({ from: 'PROPOSE', to: 'AUTO' })
     const tool = getTool('turn-up-automation')!
-    expect(tool.withinLimits!(open.preview, tool.limits!.parse({}))).toBe('AUTO is never inside the limits: after the graduation gate, a person clicks it')
-    expect(tool.withinLimits!({ to: 'PROPOSE' }, tool.limits!.parse({}))).toBeNull()
+    // The preview carries the gate's evidence (the Control Room's eight checks) and the rule's own caps.
+    expect(open.preview!.gate).toMatchObject({ open: true, caps: { maxWritesPerDay: null, maxValueCentsEur: null } })
+    const defaults = tool.limits!.parse({}) as Record<string, unknown>
+    expect(tool.withinLimits!(open.preview, defaults)).toBe('AUTO is above PROPOSE, the highest level allowed without a person')
+    const auto = { ...defaults, maxLevel: 'AUTO' }
+    expect(tool.withinLimits!(open.preview, auto)).toBe('Amazon ads rules is not on the automations Claude may take to AUTO without a person (automations): a person clicks it')
+    const listed = { ...auto, automations: ['A1'], maxRuleWritesPerDay: 50, maxRuleValueCentsEur: 2000 }
+    expect(tool.withinLimits!(open.preview, listed)).toContain('TEST graduate has no daily writes cap of its own')
+    await inside(() => database.client.automationRule.update({ where: { id: ids.graduate }, data: { maxWritesPerDay: 40, maxValueCentsEur: 3000 } }))
+    const capped = await up({ automation: 'ads-rules', rowId: ids.graduate, level: 'AUTO' })
+    expect(tool.withinLimits!(capped.preview, listed)).toContain('TEST graduate may make up to 3000 euro cents in one run, more than the 2000')
+    expect(tool.withinLimits!(capped.preview, { ...listed, maxRuleValueCentsEur: 3000 })).toBeNull()
+    expect(tool.withinLimits!({ ...capped.preview, gate: { ...capped.preview!.gate, open: false, checks: [{ check: 'Rule has matched at least once', passed: false, detail: 'Zero matches' }] } }, { ...listed, maxRuleValueCentsEur: 3000 }))
+      .toContain('the graduation gate of TEST graduate is not open (Rule has matched at least once: Zero matches')
+    expect(tool.withinLimits!({ ...open.preview, to: 'PROPOSE' }, defaults)).toBeNull()
     expect(await run('turn-up-automation', { automation: 'A1', rowId: ids.graduate, level: 'AUTO' })).toMatchObject({ ok: true, data: { level: 'AUTO' } })
     expect(await inside(() => database.client.automationRule.findUniqueOrThrow({ where: { id: ids.graduate } }))).toMatchObject({ autonomyLevel: 'AUTO', dryRun: false })
   })
@@ -189,5 +204,80 @@ describe('R10 — turn-up-automation / turn-down-automation', () => {
     expect((await up({ automation: 'A4', rowId: 'tst-any-row', level: 'AUTO' })).error).toBe('Auto-bid (the bid optimiser) switches as a whole: leave rowId out (its rows are set in Nexus).')
     expect((await up({ automation: 'A1', rowId: ids.lowerer, level: 'OBSERVE' })).error).toBe('TEST bid lowerer is PROPOSE: OBSERVE is down — use turn-down-automation.')
     expect((await up({ automation: 'A1', rowId: 'tst-r10-other', level: 'PROPOSE' })).error).toBe('Amazon ads rules has no row tst-r10-other in this business (not found).')
+  })
+})
+
+/**
+ * AA-W2-11 — the graduation gate of the automations that had none Claude's rule could read: an autopilot plan's decided
+ * proposals, a pool's rebalances, a classic dayparting schedule's writes while it was on, the coverage engine's records
+ * for a set. A person's own click is not held by them. The ads dial has no gate: its AUTO stays a person's click.
+ */
+describe('AA-W2-11 — gate evidence for plans, pools, schedules and coverage sets', () => {
+  const tool = () => getTool('turn-up-automation')!
+  const listed = (key: string) => ({ ...(tool().limits!.parse({}) as Record<string, unknown>), maxLevel: 'AUTO', automations: [key] })
+  const old = () => new Date(Date.now() - 20 * DAY)
+
+  it('a budget pool: closed until it has rebalanced 10 times over 14 days, once moving budget; then inside when listed', async () => {
+    const pool = (await inside(() => database.client.budgetPool.create({ data: { name: 'TEST observed pool', totalDailyBudgetCents: 4000, enabled: true, dryRun: true, allocations: { create: [{ marketplace: 'IT', campaignId: ids.boosted, targetSharePct: 1, minDailyBudgetCents: 100 }] } } }))).id
+    const closed = await up({ automation: 'A9', rowId: pool, level: 'AUTO' })
+    expect(closed.preview!.gate).toMatchObject({ open: false, from: "the pool's rebalances (BudgetPoolRebalance)" })
+    expect(closed.preview!.gate.checks.map((c: { detail: string }) => c.detail)).toEqual(['0/14 days since it was made', '0/10 rebalances (dry runs included)', '0 that would move budget'])
+    expect(tool().withinLimits!(closed.preview, listed('A9'))).toContain('the graduation gate of TEST observed pool is not open')
+    await inside(async () => {
+      const db = database.client
+      await db.budgetPool.update({ where: { id: pool }, data: { createdAt: old() } })
+      for (let i = 0; i < 10; i++) await db.budgetPoolRebalance.create({ data: { budgetPoolId: pool, triggeredBy: 'test', inputs: {}, outputs: {}, dryRun: true, totalShiftCents: i === 0 ? 300 : 0 } })
+    })
+    const open = await up({ automation: 'A9', rowId: pool, level: 'AUTO' })
+    expect(open.preview!.gate).toMatchObject({ open: true })
+    expect(tool().withinLimits!(open.preview, listed('ads-budget-pools'))).toBeNull()
+    expect(tool().withinLimits!(open.preview, listed('A12'))).toContain('is not on the automations Claude may take to AUTO')
+  })
+
+  it('an autopilot plan counts its decided proposals; a dayparting schedule its writes while on; a coverage set the engine\'s records', async () => {
+    const plan = await inside(() => database.client.autopilotPlan.create({ data: { name: 'TEST plan', marketplace: 'IT', autonomy: 'SUGGEST', createdAt: old() } }))
+    await inside(async () => {
+      for (let i = 0; i < 10; i++) await database.client.autopilotDecision.create({ data: { planId: plan.id, cycle: 'slow', module: 'bid', action: 'BID_LOWER', reason: 'TEST', status: i < 2 ? 'APPLIED' : 'SKIPPED' } })
+      await database.client.autopilotDecision.create({ data: { planId: plan.id, cycle: 'fast', module: 'bid', action: 'BID_RAISE', reason: 'TEST waiting', status: 'PROPOSED' } })
+    })
+    const autopilot = await up({ automation: 'A5', rowId: plan.id, level: 'AUTO' })
+    expect(autopilot.preview!.gate).toMatchObject({ open: true, checks: [{ passed: true }, { detail: '10/10 decisions with an outcome' }, { detail: '2 applied' }] })
+
+    const schedule = await inside(() => database.client.adSchedule.create({ data: { campaignId: ids.boosted, name: 'TEST off schedule', windows: [{ days: [1], startHour: 0, endHour: 6 }], enabled: false, createdAt: old() } }))
+    const daypartingClosed = await up({ automation: 'A6', rowId: schedule.id, level: 'AUTO' })
+    expect(daypartingClosed.preview!.gate).toMatchObject({ open: false, checks: [{ passed: true }, { detail: '0/10 writes' }, { detail: '0 writes' }] })
+    await inside(async () => {
+      for (let i = 0; i < 10; i++) await database.client.advertisingActionLog.create({ data: { userId: `automation:dayparting-${schedule.id}`, actionType: 'AD_BID_UPDATE', entityType: 'AD_TARGET', entityId: `TEST-T-${i}`, payloadBefore: {}, payloadAfter: {}, amazonResponseStatus: 'SUCCESS' } })
+    })
+    expect((await up({ automation: 'A6', rowId: schedule.id, level: 'AUTO' })).preview!.gate).toMatchObject({ open: true })
+
+    const set = (await inside(() => database.client.keywordCoverageSet.create({ data: { name: 'TEST observed coverage', portfolioId: 'TEST-PORTFOLIO-2', marketplace: 'IT', enabled: false } }))).id
+    const coverage = await up({ automation: 'A12', rowId: set, level: 'AUTO' })
+    expect(coverage.preview!.gate).toMatchObject({ open: false, from: "the coverage engine's records for the set's terms (a would-do in observe mode, a bid in auto)" })
+  })
+
+  it('the ads dial has no gate Nexus can check: AUTO stays a person\'s click, listed or not', async () => {
+    const dial = await up({ automation: 'A3', level: 'AUTO' })
+    expect(dial.ok).toBe(true)
+    expect(dial.preview!.gate).toBeNull()
+    expect(tool().withinLimits!(dial.preview, listed('A3'))).toBe("Ads dial, halt and anomaly breaker reaches the whole account, so Nexus cannot tell which market's ads strategy covers it; a person decides")
+    expect(tool().withinLimits!({ ...dial.preview, automationScope: { placed: true, outside: false, why: null } }, listed('A3'))).toBe("The account ads dial has no graduation gate Nexus can check (Ads dial, halt and anomaly breaker), so AUTO stays a person's click")
+  })
+
+  it('the ads strategy\'s `automation` kind narrows a move where the automation acts, at the door and in the limits', async () => {
+    const { strategyLevelFor } = await import('../../advertising/ads-strategy/claude.js')
+    const rule = await inside(() => database.client.automationRule.create({ data: { domain: 'advertising', name: 'TEST IT rule', trigger: 'KEYWORD_HIGH_ACOS', enabled: true, autonomyLevel: 'OBSERVE', scopeMarketplace: 'IT', conditions: [{ field: 'adTarget.acos', op: 'gt', value: 0.5 }], actions: [{ type: 'bid_down', percent: 5 }] } as never }))
+    const args = { automation: 'A1', rowId: rule.id, level: 'PROPOSE' }
+    expect(await inside(() => strategyLevelFor('turn-up-automation', args))).toBeNull() // no row speaks to the kind yet
+    await inside(() => database.client.adsStrategy.update({ where: { id: ids.strategy }, data: { claudeAutonomy: { automation: 'ask' } } }))
+    expect(await inside(() => strategyLevelFor('turn-up-automation', args))).toMatchObject({ action: 'automation', level: 'ask', market: 'IT', basis: 'market' })
+    const preview = (await up(args)).preview
+    expect(preview).toMatchObject({ automationScope: { placed: true }, limitFacts: { action: 'automation', this: { markets: ['IT'] } } })
+    expect(tool().withinLimits!(preview, listed('A1'))).toContain('the ads strategy lets Claude only ask for turning ads automations up and tuning their settings')
+    // A pool's move lands on its campaign; tune-ad-engine of the same pool is the same kind.
+    const campaign = await inside(() => database.client.campaign.create({ data: { name: 'TEST POOLED', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'IT', externalCampaignId: 'TEST-CMP-9' } }))
+    const pool = (await inside(() => database.client.budgetPool.create({ data: { name: 'TEST strategy pool', totalDailyBudgetCents: 4000, enabled: false, allocations: { create: [{ marketplace: 'IT', campaignId: campaign.id, targetSharePct: 1, minDailyBudgetCents: 100 }] } } }))).id
+    expect(await inside(() => strategyLevelFor('tune-ad-engine', { setting: 'budget-pool', subjectId: pool, budgetPool: { totalDailyBudgetCents: 3000 } }))).toMatchObject({ action: 'automation', level: 'ask' })
+    await inside(() => database.client.adsStrategy.update({ where: { id: ids.strategy }, data: { claudeAutonomy: {} } }))
   })
 })

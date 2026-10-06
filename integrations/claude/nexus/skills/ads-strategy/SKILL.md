@@ -11,7 +11,7 @@ Inside a market the most specific row wins: the product (a variation, then its p
 
 ## Ground rules
 
-The Nexus server's instructions hold the rules for every change — say which business, read first and ask, one change plan for many changes, follow each change until approval-status says it ran, never pause an ad, never an FBA quantity, never the old flat-file pages. Follow them. Read `business-overview` for the exact market codes and account ids before you name one.
+The Nexus server's instructions hold the rules for every change — say which business, read first and ask, one change plan for many changes, follow each change until approval-status says it ran, a temporary ad stop is lower bids (a real pause only when the person means one), never an FBA quantity, never the old flat-file pages. Follow them. Read `business-overview` for the exact market codes and account ids before you name one.
 
 - **Raising needs the person's code.** A strategy change that loosens anything (a higher target, cap or bid ceiling, a lower bar to harvest, more for Claude to do alone) waits for the person's authenticator code, in Nexus or with `confirm-change`. A change that only tightens does not.
 
@@ -44,7 +44,7 @@ The goal in the person's words (for example launch, grow, profit, clear stock, d
 
 ## 4. What Claude may do alone
 
-The strategy's `claudeAutonomy` holds a level per kind of ad action — `bid`, `negative`, `harvest`, `placement`, `budget`, `target`, `suggestion`, `stop`, `restore`, `create`, `rule`, `undo` — each `off`, `ask`, `confirm` or `auto`.
+The strategy's `claudeAutonomy` holds a level per kind of ad action — `bid`, `negative`, `harvest`, `placement`, `budget`, `target`, `suggestion`, `stop`, `restore`, `create`, `rule`, `undo`, `pause`, `enable`, `archive` — each `off`, `ask`, `confirm` or `auto`. `stop` is the temporary stop with low bids (`suppress-campaign`); `pause` is a real pause (`pause-ads`) and `enable` switches back on what a Claude request paused (`enable-ads`); `archive` (`archive-ads`) is for good: Amazon cannot switch an archived ad on again, so advise keeping it at `ask`. `create` makes a campaign that is born at the floor and off the allowlist; switching it on is `set-campaign-live-writes` and starting it is `restore`, each its own kind.
 
 - It only narrows the level the business set for each tool (Nexus, Settings › AI › Claude): a change Claude asks for is held to the lower of the two where it lands. It never widens it.
 - Brakes are never narrowed: `stop-automation`, `turn-down-automation`, a guardrail.
@@ -79,7 +79,7 @@ What reads which target: Nexus's bid optimiser (auto-bid, autopilot plans and `b
 |---|---|
 | A market's, a category's or a product's strategy (goal and why, target, monthly cap, bid limits, largest change, actions per run, protection, harvest and negate thresholds, stop, what Claude may do alone) | `set-ads-strategy`, one step per market, category or product (its own description gives the arguments). Its preview says what raises and what lowers; a raise needs the person's authenticator code |
 | Business default target ACoS | `tune-ad-engine` (`setting: "account-target-acos"`, `accountTargetAcos: { targetAcosPct }`) |
-| A campaign's own target ACoS (an exception that wins over the strategy) | `set-campaign-target-acos` (`campaignIds`, or `market` = every Amazon campaign there; `targetAcosPct`; `why`). Nexus only: nothing is sent to Amazon. A person approves it in Nexus, or the person who asked confirms it in Claude when the business allows that; it never runs by rule. Show the list: campaign, now → target. Campaigns that keep their own target are listed in `shadowedBy` |
+| A campaign's own target ACoS (an exception that wins over the strategy) | `set-campaign-target-acos` (`campaignIds`, or `market` = every Amazon campaign there; `targetAcosPct`; `why`). Nexus only: nothing is sent to Amazon. A person approves it in Nexus, or the person who asked confirms it in Claude when the business allows that, or it runs by the business's rule when the business allows that, inside its limits and the ads strategy (a raise never above the strategy's own target there). Show the list: campaign, now → target. Campaigns that keep their own target are listed in `shadowedBy` |
 | Market or campaign daily spend ceiling | `set-ad-guardrail` (`kind: "spend-ceiling"`, `op: "set"`, `grain: "MARKET"` + `scopeId` market code, or `"CAMPAIGN"` + campaign id, `dailyCapCents`) |
 | Market bid policy (an older bound; it keeps binding beside the strategy's bid limits, the stricter wins) | `set-ad-guardrail` (`kind: "bid-policy"`, `grain: "MARKET"`, `scopeId`, `minBidCents`, `maxBidCents`) |
 | Protect a brand term from negation | `set-ad-guardrail` (`kind: "protected-term"`, `op: "set"`, `term`, `matchType` EXACT · PREFIX · CONTAINS, optional `marketplace`) |
@@ -98,7 +98,7 @@ What reads which target: Nexus's bid optimiser (auto-bid, autopilot plans and `b
 
 - **Live or sandbox** is the server's, not the business's: each change preview says `live` or `sandbox`. An Amazon sandbox preview skips the live checks (halt, connection, markets, allowlist, pins, spend ceiling, daily budget move, value cap): a sandbox yes predicts nothing about live.
 - **Amazon live ad writes only in IT, DE, FR and ES.** Any other Amazon market is refused at the live write gate, with no way round from Claude.
-- **Allowlist:** an Amazon campaign takes a live write (approved change, rule or schedule) only when `liveWrites` is true; `set-campaign-live-writes` always waits for a person. eBay has no allowlist and no `suppress-campaign` (both Amazon-only).
+- **Allowlist:** an Amazon campaign takes a live write (approved change, rule or schedule) only when `liveWrites` is true; putting a campaign on with `set-campaign-live-writes` waits for a person, unless the business lets it run by its rule for a campaign Claude itself created (taking one off is a brake). eBay has no allowlist and no `suppress-campaign` (both Amazon-only).
 - **Daily budget move:** by default an Amazon campaign's budget may move at most 30 % down or 50 % up (more for very small budgets) from the day's opening value per UTC day, counting every writer; it resets at 00:00 UTC. Plan bigger moves over several days. eBay: 15 budget changes per campaign per day.
 - **Spend ceiling** caps the sum of today's Amazon budget increases, not spend; it never binds bids. One write above the server's value cap is refused.
 - **Dial and halt are business-wide:** Amazon dial OFF or a halt refuses every live Amazon write except a suppression's lowering, approved changes included; SUGGEST keeps every rule proposing. An eBay market at its monthly ceiling (checked by `ads-overview` with `channel: "ebay"` and by the rule run) halts every eBay ad write of the business, lowering included, until a person resumes it.

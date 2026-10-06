@@ -156,6 +156,12 @@ async function reverseOne(
    * reversal passes the account halt and autonomy OFF like his other edits (isPersonEdit). Every other check binds.
    */
   manual = false,
+  /**
+   * ADS AUTONOMY AA-W2-9 — the change set the reversal's own writes carry (an approved undo request's id), so the undo
+   * can itself be put back by change set (undo-ad-change of it re-applies). Not on the archive that inverts a create:
+   * an archive cannot be undone at Amazon.
+   */
+  changeSetId: string | null = null,
 ): Promise<{ ok: boolean; reason?: string; skipped?: boolean }> {
   // Refuse to invert anything that never made it past the gate / queue
   // — there's nothing to undo on the Amazon side, and re-applying the
@@ -178,7 +184,7 @@ async function reverseOne(
       const { updatePlacementBidding } = await import('./ads-create.service.js')
       // HX.1 — the 'Undo:' reason prefix is the same marker /campaigns/:id/history already uses to
       // flag a row as an undo, so a reversal reads as one everywhere rather than as a fresh change.
-      const r = await updatePlacementBidding({ campaignId: log.entityId, adjustments: beforeAdj, actor, reason: `Undo: ${log.actionType}${reason ? ` — ${reason}` : ''}`, manual })
+      const r = await updatePlacementBidding({ campaignId: log.entityId, adjustments: beforeAdj, actor, reason: `Undo: ${log.actionType}${reason ? ` — ${reason}` : ''}`, manual, changeSetId })
       return r.ok ? { ok: true } : { ok: false, reason: 'placement restore failed' }
     }
     // AX-IE.9 — inverting a CREATE.
@@ -236,6 +242,7 @@ async function reverseOne(
         reason: `rollback: ${reason}`,
         applyImmediately: true,
         manual,
+        changeSetId,
       })
       return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
     }
@@ -254,6 +261,7 @@ async function reverseOne(
         applyImmediately: true,
         manual,
         reversal: true,
+        changeSetId,
       })
       if (result.ok) await restoreFloorMemory(log, before)
       return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
@@ -272,6 +280,7 @@ async function reverseOne(
         applyImmediately: true,
         manual,
         reversal: true,
+        changeSetId,
       })
       if (result.ok) await restoreFloorMemory(log, before)
       return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
@@ -370,11 +379,13 @@ export async function rollbackByActionLogId(args: {
   reason: string
   /** 1e — the Undo button: a person's click (see reverseOne). Set only by the routes. */
   manual?: boolean
+  /** AA-W2-9 — the change set the reversal's own writes carry (see reverseOne). */
+  stampChangeSetId?: string | null
 }): Promise<RollbackOutcome> {
   const log = await prisma.advertisingActionLog.findUnique({ where: { id: args.actionLogId } })
   if (!log) return { ok: false, reversed: 0, skipped: 0, failed: 0, details: [], reason: 'That change no longer exists.' }
   // A grouped row reverses with its set, so the entity never lands in a state that never existed.
-  if (log.executionId) return rollbackByChangeSetId({ changeSetId: log.executionId, actor: args.actor, reason: args.reason, manual: args.manual })
+  if (log.executionId) return rollbackByChangeSetId({ changeSetId: log.executionId, actor: args.actor, reason: args.reason, manual: args.manual, stampChangeSetId: args.stampChangeSetId })
 
   const out: RollbackOutcome = { ok: true, reversed: 0, skipped: 0, failed: 0, details: [] }
   if (log.rolledBackAt) { out.skipped = 1; out.reason = 'Already undone.'; return out }
@@ -383,7 +394,7 @@ export async function rollbackByActionLogId(args: {
     out.reason = `Older than the ${rollbackWindowLabel(log.actionType)} undo window for this kind of change.`
     return out
   }
-  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true)
+  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true, args.stampChangeSetId ?? null)
   const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
   // CM-22 — a no-op (`ok` with `skipped`) is skipped, not reversed, and the row is not marked undone.
   if (r.ok && !r.skipped) {
@@ -406,6 +417,8 @@ export async function rollbackByChangeSetId(args: {
   reason: string
   /** 1e — an Undo a person clicked (see reverseOne). Set only by the routes. */
   manual?: boolean
+  /** AA-W2-9 — the change set the reversal's own writes carry (see reverseOne); never the set it reverses. */
+  stampChangeSetId?: string | null
 }): Promise<RollbackOutcome> {
   const logs = await prisma.advertisingActionLog.findMany({
     where: {
@@ -434,8 +447,9 @@ export async function rollbackByChangeSetId(args: {
       out.reason = `This change set is older than the ${ROLLBACK_WINDOW_HOURS}-hour undo window. Amazon's own state has usually moved on by then, so restoring a day-old snapshot can do more harm than the change it reverses.`
     }
   }
+  const stamp = args.stampChangeSetId && args.stampChangeSetId !== args.changeSetId ? args.stampChangeSetId : null
   for (const log of logs) {
-    const r = await reverseOne(log, args.actor, args.reason, args.manual === true)
+    const r = await reverseOne(log, args.actor, args.reason, args.manual === true, stamp)
     const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
     if (r.ok && !r.skipped) {
       out.reversed += 1

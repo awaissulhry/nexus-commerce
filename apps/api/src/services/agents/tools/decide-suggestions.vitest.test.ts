@@ -14,9 +14,13 @@ import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 
 let database: Awaited<ReturnType<typeof formulaDatabase>>
-vi.mock('../../../db.js', () => ({
-  default: new Proxy({}, { get: (_target, property) => Reflect.get(database.client, property) }),
-}))
+// Wrapped as db.ts wraps it (AA-W2-10): inside a transaction, `prisma.x` is that transaction's client — an ad write
+// opens one (the queue row and its typed rows), and on the raw client its inner queries waited for the only connection.
+vi.mock('../../../db.js', async () => {
+  const { contextualDatabase } = await import('../../../lib/database-context.js')
+  let wrapped: object | null = null
+  return { default: new Proxy({}, { get: (_target, property) => Reflect.get((wrapped ??= contextualDatabase(database.client as never)), property) }) }
+})
 vi.mock('../../../lib/queue.js', () => {
   const queue = { add: vi.fn(async () => ({})), addBulk: vi.fn(async () => []), getJob: vi.fn(async () => null), getJobCounts: vi.fn(async () => ({})) }
   return {
@@ -29,6 +33,12 @@ vi.mock('../../../lib/queue.js', () => {
     redis: { connection: null },
   }
 })
+// On PGlite's single connection the queue row's account lookup cannot run beside the open enqueue transaction; an ads
+// row names no listing account anyway (the ads worker resolves its Amazon Ads profile).
+vi.mock('../../outbound-destination.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  resolveDestinations: async (_db: unknown, rows: unknown[]) => rows.map(() => ({ connectionId: null, reason: 'NO_ACCOUNT' })),
+}))
 
 import { callTool, executeTool, type UserPrincipal } from '../call-tool.js'
 import { getTool } from '../tool-registry.js'
@@ -109,7 +119,7 @@ describe('R11 — decide-automation-suggestions', () => {
   it('never pause; never lift a suppressed target; never twice — refused before anything waits, each named', async () => {
     const out = await dry({ kind: 'amazon-ads', decisions: [{ suggestionId: ids.pause, decide: 'apply' }, { suggestionId: ids.suppressed, decide: 'apply' }, { suggestionId: ids.done, decide: 'dismiss' }] })
     expect(out.ok).toBe(false)
-    expect(out.error).toContain('pause_campaign refused — it pauses — never (Owner rule: lower bids, never pause); dismiss it and use lower_bid_to_floor')
+    expect(out.error).toContain('pause_campaign refused — it pauses — a rule never pauses (Owner rule: a temporary stop is lower bids); dismiss it and use lower_bid_to_floor')
     expect(out.error).toContain('TEST k-supp: its target is held at the floor bid by no-pause suppression')
     expect(out.error).toContain('TEST k-done: it is applied')
     // Dismissing the pausing suggestion is fine.
@@ -137,5 +147,117 @@ describe('R11 — decide-automation-suggestions', () => {
     expect((await dry({ kind: 'ebay-ads', decisions: [{ suggestionId: ids.ebayPause, decide: 'apply' }] })).error).toContain('pause_ad')
     expect((await dry({ kind: 'ebay-ads', decisions: [{ suggestionId: ids.ebayPause, decide: 'dismiss' }] })).ok).toBe(true)
     expect(await dry({ kind: 'amazon-ads', decisions: [{ suggestionId: ids.other, decide: 'dismiss' }] })).toEqual({ ok: false, error: `Suggestions not found in this business: ${ids.other} (not found).` })
+  })
+})
+
+/**
+ * AA-W2-10 — decided by the business's rule: inside the ads strategy where each apply lands and the tool's limits per
+ * family; an apply run by an approval writes as its rule, joins the approval's change set (undo-ad-change finds it) with
+ * an audit reason naming the request and who decided it; one decided by rule is not a person's write.
+ */
+describe('AA-W2-10 — decide-automation-suggestions by rule', () => {
+  const tool = () => getTool('decide-automation-suggestions')!
+  const defaults = () => tool().limits!.parse({}) as Record<string, unknown>
+  const seen: Array<Record<string, unknown>> = []
+  const w2: Record<string, string> = {}
+
+  beforeAll(async () => {
+    const { ACTION_HANDLERS } = await import('../../automation-rule.service.js')
+    // A handler that records how it was asked, and makes one negative as an approved apply would.
+    ACTION_HANDLERS.tst_meta = (async (action: { type: string }, _context: unknown, meta: Record<string, unknown> & { approval?: { negatives: string[] } }) => {
+      seen.push({ ...meta, approval: meta.approval ? { ...meta.approval } : undefined })
+      meta.approval?.negatives.push(w2.negative)
+      return { type: action.type, ok: true, output: {} }
+    }) as never
+    // A handler that passes an apply over and writes nothing, with its own sentence or with only its code.
+    ACTION_HANDLERS.tst_skip = (async (action: { type: string; why?: string }) => ({ type: action.type, ok: true, output: action.why ? { skipped: 'rank-owned', why: action.why } : { skipped: 'campaign-not-selected' } })) as never
+    await inside(async () => {
+      const db = database.client
+      await db.adsAutomationState.upsert({ where: { id: 'singleton' }, create: { id: 'singleton', halted: false }, update: { halted: false, haltReason: null } })
+      const campaign = await db.campaign.create({ data: { name: 'TEST W2 CAMPAIGN', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'IT', externalCampaignId: 'TEST-EXT-W2' } })
+      const adGroup = await db.adGroup.create({ data: { campaignId: campaign.id, name: 'TEST W2 AG', externalAdGroupId: 'TEST-EXT-AG-W2' } })
+      const target = await db.adTarget.create({ data: { adGroupId: adGroup.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test w2 term', bidCents: 50, externalTargetId: 'TEST-EXT-T-W2' } })
+      w2.negative = (await db.adTarget.create({ data: { adGroupId: adGroup.id, kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'test w2 negative', isNegative: true, bidCents: 0 } })).id
+      const sug = (key: string, entityType: string, entityId: string, action: object) => db.adsRuleSuggestion.create({
+        data: { ruleId: 'tst-rule', ruleName: 'TEST rule', marketplace: 'IT', entityType, entityId, entityName: `TEST ${key}`, proposedAction: action, proposedKey: key },
+      })
+      w2.cut = (await sug('w2-cut', 'AD_TARGET', target.id, { type: 'bid_down', percent: 10 })).id
+      w2.raise = (await sug('w2-raise', 'AD_TARGET', target.id, { type: 'bid_up', percent: 10 })).id
+      w2.sweep = (await sug('w2-sweep', 'ACCOUNT', 'account', { type: 'harvest_and_negate' })).id
+      w2.dismiss = (await sug('w2-dismiss', 'CAMPAIGN', campaign.id, { type: 'tst_ok' })).id
+      w2.metaByRule = (await sug('w2-meta-rule', 'CAMPAIGN', campaign.id, { type: 'tst_meta' })).id
+      w2.metaByPerson = (await sug('w2-meta-person', 'CAMPAIGN', campaign.id, { type: 'tst_meta' })).id
+      w2.write = (await sug('w2-write', 'AD_TARGET', target.id, { type: 'bid_down', percent: 20, adTargetId: target.id })).id
+      w2.skipWhy = (await sug('w2-skip-why', 'CAMPAIGN', campaign.id, { type: 'tst_skip', why: 'TEST the hourly plan holds it' })).id
+      w2.skipCode = (await sug('w2-skip-code', 'CAMPAIGN', campaign.id, { type: 'tst_skip' })).id
+      w2.applyToo = (await sug('w2-apply-too', 'CAMPAIGN', campaign.id, { type: 'tst_ok' })).id
+      w2.target = target.id
+    })
+  }, 60_000)
+
+  it('the preview carries the strategy\'s facts; without a strategy for the market nothing runs by rule', async () => {
+    const out = await dry({ kind: 'amazon-ads', decisions: [{ suggestionId: w2.cut, decide: 'apply' }] })
+    expect(out.ok).toBe(true)
+    expect(out.preview!.limitFacts).toMatchObject({ tool: 'decide-automation-suggestions', action: 'suggestion', this: { markets: ['IT'], items: 1, cuts: 1, largestCutPct: 10 } })
+    expect(out.preview!.suggestions).toMatchObject({ decisions: 1, applies: 1, unjudged: 0, bids: { largestCutPct: 10 } })
+    expect(out.preview!.limitsNote).toEqual(expect.arrayContaining([expect.stringContaining('IT: no ads strategy')]))
+    expect(tool().withinLimits!(out.preview, defaults())).toContain('there is no ads strategy for IT')
+  })
+
+  it('inside the strategy a bid cut runs by rule; a raise, a sweep and an eBay proposal wait for a person; dismissals run', async () => {
+    await inside(() => database.client.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test market (IT)', claudeMaxChangesPerDay: 10, version: 1, updatedBy: 'user:test' } }))
+    const cut = await dry({ kind: 'amazon-ads', decisions: [{ suggestionId: w2.cut, decide: 'apply' }] })
+    expect(tool().withinLimits!(cut.preview, defaults())).toBeNull()
+    const raise = await dry({ kind: 'amazon-ads', decisions: [{ suggestionId: w2.raise, decide: 'apply' }] })
+    expect(tool().withinLimits!(raise.preview, defaults())).toContain('raise')
+    expect(tool().withinLimits!(raise.preview, { ...defaults(), maxBidRaisePct: 10 })).toContain('most raises Claude may run by rule a day') // the strategy sets no raises a day: 0
+    const sweep = await dry({ kind: 'amazon-ads', decisions: [{ suggestionId: w2.sweep, decide: 'apply' }] })
+    expect(tool().withinLimits!(sweep.preview, defaults())).toContain('it acts across a market or the account')
+    const dismissals = await dry({ kind: 'amazon-ads', decisions: [{ suggestionId: w2.raise, decide: 'dismiss' }, { suggestionId: w2.sweep, decide: 'dismiss' }] })
+    expect(tool().withinLimits!(dismissals.preview, defaults())).toBeNull()
+    const ebay = await dry({ kind: 'ebay-ads', decisions: [{ suggestionId: ids.ebayPause, decide: 'dismiss' }] })
+    expect(tool().withinLimits!(ebay.preview, defaults())).toContain('an eBay proposal is not decided by rule')
+  })
+
+  it('decided by rule: not a person\'s write; the writes join the approval\'s change set; undo puts them back through undo-ad-change', async () => {
+    const args = { kind: 'amazon-ads', decisions: [{ suggestionId: w2.metaByRule, decide: 'apply' }] }
+    const out = (await executeTool(person, 'decide-automation-suggestions', args, { via: 'claude', approvalId: 'appr-w2-rule', decidedVia: 'auto' })).raw as Out
+    expect(out.ok).toBe(true)
+    expect(seen.at(-1)).toMatchObject({ operatorApproved: false, approval: { changeSetId: 'appr-w2-rule', reason: 'Claude request appr-w2-rule (run by rule)' } })
+    expect(out.change!.after).toEqual({ kind: 'amazon-ads', items: [{ id: w2.metaByRule, status: 'applied' }], changeSetId: 'appr-w2-rule', negatives: [{ targetId: w2.negative }] })
+    expect(await inside(() => tool().undo!.current(out.change!))).toEqual(out.change!.after)
+    expect(tool().undo!.request(out.change!)).toEqual({ tool: 'undo-ad-change', args: { changeSetId: 'appr-w2-rule', why: 'undo of applied rule suggestions' } })
+    // A person who decides (in Nexus) is still a person's write.
+    await executeTool(person, 'decide-automation-suggestions', { kind: 'amazon-ads', decisions: [{ suggestionId: w2.metaByPerson, decide: 'apply' }] }, { via: 'claude', approvalId: 'appr-w2-person', decidedVia: 'nexus', approvedByPerson: true })
+    expect(seen.at(-1)).toMatchObject({ operatorApproved: true, approval: { changeSetId: 'appr-w2-person', reason: 'Claude request appr-w2-person (approved by user:u-r11)' } })
+    // A batch that applied and dismissed names both ways back.
+    const mixed = { before: {}, after: { kind: 'amazon-ads', items: [{ id: 'a', status: 'applied' }, { id: 'b', status: 'dismissed' }], changeSetId: 'appr-x' } }
+    expect(tool().undo!.request(mixed)).toEqual({ refusal: '1 of these suggestions were applied and 1 dismissed: put the applied ones back with undo-ad-change (changeSetId appr-x), and restore the dismissed ones with decide-automation-suggestions (decide: restore).' })
+  })
+
+  it('an apply its rule passes over is said as skipped, with why, and keeps waiting — never "applied"', async () => {
+    const out = (await executeTool(person, 'decide-automation-suggestions', { kind: 'amazon-ads', decisions: [{ suggestionId: w2.skipWhy, decide: 'apply' }, { suggestionId: w2.skipCode, decide: 'apply' }, { suggestionId: w2.applyToo, decide: 'apply' }] }, { via: 'claude', approvalId: 'appr-w2-skip', decidedVia: 'nexus', approvedByPerson: true })).raw as Out
+    expect(out).toMatchObject({ ok: true, data: { decided: 1, refused: 0, skipped: 2 } })
+    expect(out.data!.results).toEqual([
+      { suggestionId: w2.skipWhy, decide: 'apply', ok: false, status: 'pending', detail: 'Skipped — nothing was written, and it stays waiting: TEST the hourly plan holds it.', skipped: true },
+      { suggestionId: w2.skipCode, decide: 'apply', ok: false, status: 'pending', detail: "Skipped — nothing was written, and it stays waiting: its campaign is not one the rule's campaign picker selects.", skipped: true },
+      { suggestionId: w2.applyToo, decide: 'apply', ok: true, status: 'applied', detail: null },
+    ])
+    // The Suggestions page's own apply says the same, as a refusal: the row keeps waiting with nothing stored as applied.
+    const { applySuggestion } = await import('../../advertising/ads-suggestion-decide.service.js')
+    expect(await inside(() => applySuggestion(w2.skipWhy))).toMatchObject({ ok: false, refused: true, skipped: true, error: expect.stringContaining('TEST the hourly plan holds it') })
+    expect(await inside(() => database.client.adsRuleSuggestion.findUniqueOrThrow({ where: { id: w2.skipWhy } }))).toMatchObject({ status: 'pending', decidedBy: null, appliedResult: null })
+  })
+
+  it('a real bid write of the rule carries the change set and the request; undo-ad-change by the approval id finds it', async () => {
+    const out = (await executeTool(person, 'decide-automation-suggestions', { kind: 'amazon-ads', decisions: [{ suggestionId: w2.write, decide: 'apply' }] }, { via: 'claude', approvalId: 'appr-w2-write', decidedVia: 'auto' })).raw as Out
+    expect(out, out.error).toMatchObject({ ok: true, data: { decided: 1, changeSetId: 'appr-w2-write' } })
+    const logs = await inside(() => database.client.advertisingActionLog.findMany({ where: { executionId: 'appr-w2-write' }, select: { userId: true, entityId: true, outboundQueueId: true } }))
+    expect(logs).toEqual([expect.objectContaining({ userId: 'automation:tst-rule', entityId: w2.target })]) // the rule stays the writer
+    const queued = await inside(() => database.client.outboundSyncQueue.findMany({ where: { id: { in: logs.map((l) => l.outboundQueueId).filter((id): id is string => !!id) } }, select: { payload: true } }))
+    expect(queued).toHaveLength(1)
+    for (const q of queued) expect((q.payload as { reason?: string }).reason).toBe('Claude request appr-w2-write (run by rule): bid_down -20% via rule tst-rule')
+    const undo = (await callTool(person, 'undo-ad-change', { changeSetId: 'appr-w2-write' })).raw as Out
+    expect(undo).toMatchObject({ ok: true, preview: { source: { mode: 'set', changeSetId: 'appr-w2-write' }, rows: [expect.objectContaining({ entityId: w2.target })] } })
   })
 })

@@ -10,10 +10,10 @@ import { FEATURES } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
 import { envEnabled } from '../../utils/env-flag.js'
 import {
-  cronRunsFact, envVerdict, flagOn, fromRows, isOne, iso, lowest, noEnv, on, outboundEmails, ruleDetail, ruleIdsFor,
+  capsOfRule, cronRunsFact, envVerdict, flagOn, fromRows, gateOfCounts, isOne, iso, lowest, noEnv, on, outboundEmails, ruleDetail, ruleIdsFor,
   ruleRefusalsFact, ruleRunsFact, summarise,
   type AutomationAdapter, type AutomationLevel, type AutomationRow, type BusinessState, type EnvCheck, type ExplainFacts,
-  type ExplainOptions, type LevelSwitch, type PreviewInput, type PreviewOutcome, type SwitchRow, type WritesFact,
+  type ExplainOptions, type GateEvidence, type LevelSwitch, type PreviewInput, type PreviewOutcome, type SwitchRow, type WritesFact,
 } from '../automation/automation-levels.js'
 import { isRefused } from '../automation/service-outcome.js'
 import { breakerLimits, breakerLimitsText, engineCaps, type EngineKey } from './ads-engine-actors.js'
@@ -201,9 +201,12 @@ function onOffSwitch(opts: {
   entityType: string
   /** A fixed sentence, or one read for the row now (2a: what switching it off would give back). */
   brake?: string | ((rowId: string) => Promise<string>)
+  /** AA-W2-11 — the row's graduation gate (LevelSwitch.gateEvidence). */
+  gateEvidence?: (row: SwitchRow) => Promise<GateEvidence>
 }): LevelSwitch {
   return {
     levels: ['OFF', 'AUTO'], needsRow: true, manage: FEATURES.adsAutomationManage,
+    ...(opts.gateEvidence ? { gateEvidence: opts.gateEvidence } : {}),
     async read(rowId) {
       const r = rowId ? await opts.read(rowId) : null
       const brake = typeof opts.brake === 'function' ? (r ? await opts.brake(r.id) : null) : opts.brake ?? null
@@ -215,6 +218,15 @@ function onOffSwitch(opts: {
       return written
     },
   }
+}
+
+/**
+ * AA-W2-11 — the gate of a kind that is on or off with no dry run (classic dayparting, budget schedules): the writes it
+ * made while it was on, by its exact actor. Each write is a run that found something to do.
+ */
+async function writesGate(made: Promise<{ createdAt: Date } | null>, actor: string, from: string): Promise<GateEvidence> {
+  const [row, writes] = await Promise.all([made, prisma.advertisingActionLog.count({ where: { userId: actor } })])
+  return gateOfCounts({ createdAt: row?.createdAt ?? new Date(), runs: writes, matches: writes, runsAre: 'writes', matchesAre: 'writes', from })
 }
 
 // ── A — Amazon ads ────────────────────────────────────────────────────────────────────────────────────
@@ -289,6 +301,17 @@ const A1: AutomationAdapter = {
       const { adsRuleLevelRefusal } = await import('./ads-rule-crud.service.js')
       const out = await adsRuleLevelRefusal(row.id, level)
       return out.ok ? null : String((out as { body: Record<string, unknown> }).body.message ?? (out as { body: Record<string, unknown> }).body.error)
+    },
+    // AA-W2-11 — the gate status the Control Room shows (its eight checks), and the rule's own caps.
+    async gateEvidence(row: SwitchRow): Promise<GateEvidence> {
+      const { adsRuleGateStatus } = await import('./ads-rule-crud.service.js')
+      const [status, rule] = await Promise.all([
+        adsRuleGateStatus(row.id),
+        prisma.automationRule.findUnique({ where: { id: row.id }, select: { maxWritesPerDay: true, maxValueCentsEur: true } }),
+      ])
+      const caps = rule ? capsOfRule(rule) : { maxWritesPerDay: null, maxValueCentsEur: null }
+      if (isRefused(status)) return { open: false, from: 'the rule\'s graduation gate', checks: [{ check: 'the rule', passed: false, detail: 'not found' }], caps }
+      return { open: status.value.gateOpen, from: 'the rule\'s graduation gate (the Control Room\'s gate status)', checks: status.value.checks.map((c) => ({ check: c.label, passed: c.passed, detail: c.detail })), caps }
     },
     async write(row: SwitchRow, level: AutomationLevel, actorUserId: string | null) {
       const { setAdsRuleLevel } = await import('./ads-rule-crud.service.js')
@@ -437,6 +460,16 @@ const A5: AutomationAdapter = {
       const p = rowId ? await prisma.autopilotPlan.findUnique({ where: { id: rowId } }) : null
       return p ? { id: p.id, name: p.name, level: (!p.enabled || p.autonomy === 'OFF' ? 'OFF' : p.autonomy === 'AUTO' ? 'AUTO' : 'PROPOSE') as AutomationLevel, basis: p.updatedAt.toISOString(), brake: null } : null
     },
+    // AA-W2-11 — what a plan at PROPOSE leaves behind: its decisions with an outcome (waiting ones are re-made every tick
+    // and not counted); one a person or the plan applied is a decision.
+    async gateEvidence(row: SwitchRow): Promise<GateEvidence> {
+      const [plan, decided, applied] = await Promise.all([
+        prisma.autopilotPlan.findUnique({ where: { id: row.id }, select: { createdAt: true } }),
+        prisma.autopilotDecision.count({ where: { planId: row.id, status: { not: 'PROPOSED' } } }),
+        prisma.autopilotDecision.count({ where: { planId: row.id, status: 'APPLIED' } }),
+      ])
+      return gateOfCounts({ createdAt: plan?.createdAt ?? new Date(), runs: decided, matches: applied, runsAre: 'decisions with an outcome', matchesAre: 'applied', from: "the plan's decisions (AutopilotDecision): a waiting proposal is re-made every tick and not counted" })
+    },
     async write(row: SwitchRow, level: AutomationLevel, actorUserId: string | null) {
       await prisma.autopilotPlan.update({ where: { id: row.id }, data: level === 'OFF' ? { enabled: false } : { enabled: true, autonomy: level === 'AUTO' ? 'AUTO' : 'SUGGEST' } })
       await auditSwitch(actorUserId, 'AUTOPILOT_PLAN', row.id, row.level, level, `${row.name} → ${level}`)
@@ -467,6 +500,8 @@ const A6: AutomationAdapter = {
   },
   levelSwitch: onOffSwitch({
     entityType: 'SCHEDULE',
+    // AA-W2-11 — on or off, with no dry run: its record is what it wrote while it was on.
+    gateEvidence: (row) => writesGate(prisma.adSchedule.findUnique({ where: { id: row.id }, select: { createdAt: true } }), `automation:dayparting-${row.id}`, 'the windows it applied while it was on (its writes as automation:dayparting-<id>): it has no level that only watches'),
     // 2a — read from the release preview: switching it off gives back what it floored; the campaign keeps its status
     // (the old resume that re-enabled a paused campaign is gone, review 3.3).
     brake: async (rowId) => (await import('./rank-release.service.js')).scheduleSwitchBrake(rowId),
@@ -503,6 +538,8 @@ const A7: AutomationAdapter = {
   },
   levelSwitch: onOffSwitch({
     entityType: 'BUDGET_SCHEDULE',
+    // AA-W2-11 — on or off, with no dry run: its record is what it wrote while it was on.
+    gateEvidence: (row) => writesGate(prisma.budgetSchedule.findUnique({ where: { id: row.id }, select: { createdAt: true } }), `automation:budget-schedule-${row.id}`, 'the budgets it set while it was on (its writes as automation:budget-schedule-<id>): it has no level that only watches'),
     brake: 'its windows may hold budgets down: switching it off gives each campaign it holds its base budget back',
     async read(rowId) {
       const s = await prisma.budgetSchedule.findFirst({ where: { id: rowId, kind: 'BUDGET' } })
@@ -602,6 +639,15 @@ const A9: AutomationAdapter = {
     async read(rowId) {
       const p = rowId ? await prisma.budgetPool.findUnique({ where: { id: rowId } }) : null
       return p ? { id: p.id, name: p.name, level: (!p.enabled ? 'OFF' : p.dryRun ? 'OBSERVE' : 'AUTO') as AutomationLevel, basis: p.updatedAt.toISOString(), brake: null } : null
+    },
+    // AA-W2-11 — its rebalances (an OBSERVE pool records them as dry runs); one that would move budget is a match.
+    async gateEvidence(row: SwitchRow): Promise<GateEvidence> {
+      const [pool, runs, moved] = await Promise.all([
+        prisma.budgetPool.findUnique({ where: { id: row.id }, select: { createdAt: true } }),
+        prisma.budgetPoolRebalance.count({ where: { budgetPoolId: row.id } }),
+        prisma.budgetPoolRebalance.count({ where: { budgetPoolId: row.id, totalShiftCents: { gt: 0 } } }),
+      ])
+      return gateOfCounts({ createdAt: pool?.createdAt ?? new Date(), runs, matches: moved, runsAre: 'rebalances (dry runs included)', matchesAre: 'that would move budget', from: "the pool's rebalances (BudgetPoolRebalance)" })
     },
     async write(row: SwitchRow, level: AutomationLevel, actorUserId: string | null) {
       await prisma.budgetPool.update({ where: { id: row.id }, data: { enabled: level !== 'OFF', dryRun: level !== 'AUTO' } })
@@ -721,6 +767,19 @@ const A12: AutomationAdapter = {
   engine: 'coverage-engine',
   levelSwitch: onOffSwitch({
     entityType: 'COVERAGE_SET',
+    // AA-W2-11 — what the engine recorded for the set's terms (a would-do in observe mode, a bid it set in auto); a run
+    // that holds records nothing and is not counted.
+    async gateEvidence(row) {
+      const set = await prisma.keywordCoverageSet.findUnique({ where: { id: row.id }, select: { createdAt: true, portfolioId: true, terms: { select: { term: true } } } })
+      const terms = set ? [...new Set(set.terms.map((t) => t.term))] : []
+      const targets = terms.length
+        ? await prisma.adTarget.findMany({ where: { isNegative: false, expressionValue: { in: terms, mode: 'insensitive' }, adGroup: { campaign: { portfolioId: set!.portfolioId } } }, select: { id: true } })
+        : []
+      const runs = targets.length
+        ? await prisma.advertisingActionLog.count({ where: { entityType: 'AD_TARGET', entityId: { in: targets.map((t) => t.id) }, OR: [{ actionType: 'coverage_engine_observe' }, { userId: 'automation:coverage-engine' }] } })
+        : 0
+      return gateOfCounts({ createdAt: set?.createdAt ?? new Date(), runs, matches: runs, runsAre: 'bids it would set or set for its terms', matchesAre: 'of them', from: "the coverage engine's records for the set's terms (a would-do in observe mode, a bid in auto)" })
+    },
     async read(rowId) {
       const s = await prisma.keywordCoverageSet.findUnique({ where: { id: rowId } })
       return s ? { id: s.id, name: s.name, on: s.enabled, updatedAt: s.updatedAt } : null
