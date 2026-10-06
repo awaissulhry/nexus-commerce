@@ -23,6 +23,8 @@ import { RULE_DOMAINS, STOP_AREAS, applyStop, planStop, stopPermission, stopStat
 import type { ToolContext } from '../tool-types.js'
 import { STEER_ACTIONS, STEER_LEVELS, applySteer, assignmentStateNow, charterStateNow, planSteer, steerUndoOf, type SteerInput, type SteerRecord } from '../../agent-fleet/fleet-steer-plan.service.js'
 import { ENGINE_SETTINGS, SETTING_ARG, applyTune, planTune, restoreArgsOf, tuneStateNow, type EngineSetting, type TuneInput, type TuneRecord } from '../../advertising/ads-engine-tune.service.js'
+import type { DecisionItem } from '../../advertising/ads-suggestion-decide.service.js'
+import type { StoredReach } from './ads-change-kit.js'
 
 const ID = z.string().trim().min(1).max(64)
 const JSON_OBJECT = z.record(z.string().max(64), z.unknown())
@@ -204,12 +206,15 @@ function switchTool(direction: Direction): AgentTool {
     category: 'automation',
     description: up
       ? 'Move an automation (an ads rule, an eBay or operations rule, the ads dial, a plan, a pool, a schedule, a coverage set, ' +
-        'an autonomous agent, a repricing rule) UP the OFF · OBSERVE · PROPOSE · AUTO ladder. Waits for a person to approve it in ' +
-        'Nexus. AUTO only after the graduation gate (14 days watched, 10 real runs, 1 match; Amazon also a live production ' +
-        'connection) — and a person\'s click: never inside limits. A rule\'s graduation ceiling and a contested placement lane ' +
-        'refuse too. An engine the server env switches (rank-defend, budget enforcement, auto-bid, top-of-search defense, the ' +
-        'coverage engine, the fleet sweep, the snapshot repricer) has a switch for this business — leave rowId out: it goes up ' +
-        'only as far as the env allows, and always with a person.'
+        'an autonomous agent, a repricing rule) UP the OFF · OBSERVE · PROPOSE · AUTO ladder. Every move waits for a person: ' +
+        'approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the business set it so — none runs ' +
+        'by rule. A rule (Amazon or eBay ads, marketing, listing, replenishment, review or bulk-operation) reaches AUTO only ' +
+        'after the graduation gate (14 days watched, 10 real runs, 1 match; an Amazon ads rule also a live production ' +
+        'connection); an Amazon ads rule\'s graduation ceiling and a contested placement lane refuse too. The ads dial, an ' +
+        'autopilot plan, a budget pool, a dayparting or budget schedule, a coverage set and a repricing rule have no such gate: ' +
+        'their AUTO is the approving person\'s call alone. An engine the server env switches (rank-defend, budget enforcement, ' +
+        'auto-bid, top-of-search defense, the coverage engine, the fleet sweep, the snapshot repricer) has a switch for this ' +
+        'business — leave rowId out: it goes up only as far as the env allows, and always with a person.'
       : 'Move an automation DOWN the ladder (to PROPOSE, OBSERVE or OFF). Waits for a person to approve it in Nexus. A brake — a ' +
         'rule that lowers bids or negates, a dayparting or budget schedule, budget enforcement, rank-defend — is said to be one: ' +
         'turning it down can raise spend, so it always needs a person. Nothing is deleted: OFF is how a rule is retired. An ' +
@@ -222,9 +227,11 @@ function switchTool(direction: Direction): AgentTool {
     // Seeing automations (ai.view, as list-automations) is the floor; each kind's own manage permission is checked per call.
     requires: [F.aiView],
     reversibility: 'full',
+    // Up is confirm at most, so its limits are never read today (claude-trust.service.ts reads them only at auto);
+    // they are kept for the day this tool may run by rule.
     maxClaudeTrust: up ? 'confirm' : 'auto',
     limits: up
-      ? z.object({ maxLevel: z.enum(['OBSERVE', 'PROPOSE']).default('PROPOSE').describe('the highest level Claude may turn an automation up to without a person; AUTO never') })
+      ? z.object({ maxLevel: z.enum(['OBSERVE', 'PROPOSE']).default('PROPOSE').describe('once this tool may run by rule: the highest level Claude may turn an automation up to without a person; AUTO never. Today every move up waits for a person') })
       : z.object({ allowBrakeDown: z.boolean().default(false).describe('let Claude turn a brake down without a person (it can raise spend); never by default') }),
     withinLimits(preview, limits) {
       const p = preview as { to?: AutomationLevel; brake?: string | null; env?: unknown } | null
@@ -308,10 +315,13 @@ const decideSuggestions: AgentTool = {
   category: 'automation',
   description:
     'Apply or dismiss what PROPOSE rules suggested (kind amazon-ads: the Suggestions queue; ebay-ads: eBay rule proposals), up to ' +
-    '100 at a time. Waits for a person to approve it in Nexus; an applied change reaches Amazon or eBay through their write ' +
-    'gates. Refused before anything waits: a suggestion that pauses, switches on or archives (never pause — dismiss it and use ' +
-    'lower bids), one whose target is held at the floor by no-pause suppression, one already decided, anything while ads ' +
-    'automation is halted. restore puts dismissed Amazon suggestions back to waiting.',
+    '100 at a time. Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the ' +
+    'business set it so. An applied change reaches Amazon or eBay through their write gates; for Amazon the preview says, ' +
+    'per suggestion, whether it lands live at Amazon or in sandbox. Refused before anything waits: a suggestion that pauses, ' +
+    'switches on or archives (never pause — dismiss it and use lower bids), one whose target is held at the floor by ' +
+    'no-pause suppression, one already decided, one Amazon\'s write gate would refuse, anything while ads automation is ' +
+    'halted. An applied Amazon suggestion is written as its rule (the approver is recorded on the suggestion) and is undone ' +
+    'from the Change Log in Nexus, not by undo-change. restore puts dismissed Amazon suggestions back to waiting.',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -319,6 +329,8 @@ const decideSuggestions: AgentTool = {
   requires: [F.adsAutomationManage, FIELDS.financialsAdspendView],
   // An applied bid or budget is rolled back from the Change Log, but it ran in between; a dismissal is restored.
   reversibility: 'partial',
+  // D7 — confirm at most: an apply passes `operatorApproved` (ads-suggestion-decide.service.ts), a person's write that
+  // takes a placement lane the rank engine holds. That must be revisited before this tool may run by rule.
   maxClaudeTrust: 'confirm',
   undo: DECIDE_UNDO,
   input: z.object({
@@ -339,7 +351,9 @@ const decideSuggestions: AgentTool = {
     const { planSuggestionDecisions } = await import('../../advertising/ads-suggestion-decide.service.js')
     const planned = await planSuggestionDecisions(decisions, familyPermission(ctx))
     if ('error' in planned) return { ok: false, error: planned.error }
-    return { ok: true, preview: decidePreview('amazon-ads', planned.items as unknown as Array<Record<string, unknown>>) }
+    const reached = await suggestionReach(planned.items)
+    if ('error' in reached) return { ok: false, error: reached.error }
+    return { ok: true, preview: decidePreview('amazon-ads', reached.items as unknown as Array<Record<string, unknown>>) }
   },
   async execute(args, ctx) {
     const decisions = args.decisions as Array<{ suggestionId: string; decide: 'apply' | 'dismiss' | 'restore' }>
@@ -354,7 +368,8 @@ const decideSuggestions: AgentTool = {
       const svc = await import('../../advertising/ads-suggestion-decide.service.js')
       const planned = await svc.planSuggestionDecisions(decisions, familyPermission(ctx))
       if ('error' in planned) return { ok: false, error: planned.error }
-      results = await svc.applySuggestionDecisions(decisions)
+      // D7 — each decision records the person who approved it, as the eBay path does.
+      results = await svc.applySuggestionDecisions(decisions, ctx.userId ?? null)
     }
     const before = kind === 'ebay-ads' ? 'PENDING' : 'pending'
     // A batch is recorded when any decision went through: those changed something, and undo must know them.
@@ -370,13 +385,65 @@ const decideSuggestions: AgentTool = {
   },
 }
 
+/** The write-gate field an applied suggestion of each family writes, as Claude's own ad tools hand it to the gate. */
+const GATE_FIELD: Record<string, string> = { bids: 'bid', 'new-keywords': 'bid', budget: 'dailyBudget', placement: 'placementBidding', negatives: 'negativeKeyword' }
+
+/**
+ * D7 — where each Amazon apply lands, asked of Amazon's write gate (read-only) as every other ad tool asks it: live or
+ * sandbox, kept on the item, so the person sees it and the approval's re-check (its `items`) refuses a change of it. A
+ * refusal is not queued. A market- or account-wide sweep names no single campaign: the gate answers for its market's
+ * connection, and each campaign's own checks (allowlist, pins, bounds) run as the rule writes to it.
+ */
+async function suggestionReach(items: DecisionItem[]): Promise<{ items: Array<DecisionItem & { reach?: StoredReach }> } | { error: string }> {
+  const { checkLiveReach, liveReachOf } = await import('./ads-tool-guards.js')
+  const { gateRefusal, storedReach } = await import('./ads-change-kit.js')
+  const { checkAdsWriteGate } = await import('../../advertising/ads-write-gate.js')
+  const problems: string[] = []
+  const out: Array<DecisionItem & { reach?: StoredReach }> = []
+  for (const item of items) {
+    const where = item.decide === 'apply' ? item.landsOn : undefined
+    if (!where) { out.push(item); continue }
+    const label = `${item.rule ?? 'a rule'} on ${item.entity}`
+    if (where.scope === 'campaign' && !where.campaignId) {
+      problems.push(`${label}: its campaign is not found in Nexus, so nothing can be written for it — dismiss it`)
+      continue
+    }
+    const field = GATE_FIELD[item.family]
+    const valueCents = item.family === 'bids' ? item.projected : item.family === 'budget' && item.projected != null ? Math.round(item.projected * 100) : null
+    const reach = where.campaignId
+      ? await checkLiveReach({
+          campaignId: where.campaignId,
+          marketplace: where.marketplace,
+          changes: field ? [{ field, valueCents }] : [],
+          ...(item.family === 'negatives' && where.term ? { isNegation: true, keywordText: where.term } : {}),
+        })
+      : liveReachOf(await checkAdsWriteGate({ marketplace: where.marketplace, payloadValueCents: 0 }))
+    if (reach.reach === 'refused') { problems.push(`${label}: ${gateRefusal(reach)}`); continue }
+    out.push({ ...item, reach: storedReach(reach) })
+  }
+  if (problems.length) return { error: `Not queued — ${problems.join('; ')}` }
+  return { items: out }
+}
+
 function decidePreview(kind: DecideKind, items: Array<Record<string, unknown>>) {
   const applies = items.filter((i) => i.decide === 'apply').length
   const changes: Record<string, { from: unknown; to: unknown }> = {}
   for (const i of items) changes[`${String(i.entity && typeof i.entity === 'object' ? JSON.stringify(i.entity) : i.entity)} (${String(i.suggestionId)})`] = { from: i.status, to: i.decide }
+  // D7 — Amazon: how many applies land live and how many in sandbox, as the gate answered for each.
+  const reached = items.map((i) => i.reach as StoredReach | undefined).filter((r): r is StoredReach => !!r)
+  const live = reached.filter((r) => r.reach === 'live')
+  const profiles = [...new Set(live.map((r) => (r as { profileId: string }).profileId))].sort().join(', ')
+  const amazon = ` at Amazon, through the write gate (${live.length} live, ${reached.length - live.length} in sandbox)`
   return {
     action: 'decide-automation-suggestions', kind, items, changes,
-    effect: `${applies} to apply${applies ? (kind === 'ebay-ads' ? ' at eBay' : ' at Amazon, through the write gate') : ''}, ${items.length - applies} to dismiss or restore.`,
+    effect: `${applies} to apply${applies ? (kind === 'ebay-ads' ? ' at eBay' : amazon) : ''}, ${items.length - applies} to dismiss or restore.`,
+    ...(kind === 'amazon-ads' && applies
+      ? {
+          reachNote: live.length
+            ? `live: after approval ${live.length} of them ${live.length === 1 ? 'is' : 'are'} sent to Amazon (Amazon Ads profile ${profiles})${reached.length > live.length ? `; ${reached.length - live.length} in sandbox are recorded in Nexus only` : ''}.`
+            : 'sandbox: after approval they are recorded in Nexus only. Amazon ads writes are not live, so nothing reaches Amazon.',
+        }
+      : {}),
   }
 }
 
@@ -476,12 +543,15 @@ const setAdGuardrail: AgentTool = {
   title: 'Set an ads guardrail',
   category: 'automation',
   description:
-    'Set or remove a guardrail every ads engine and rule is bound by: a daily spend ceiling (kind spend-ceiling, at campaign, ' +
+    'Set or remove a guardrail Nexus\'s Amazon ads write gate checks before a Nexus write reaches Amazon (the external ' +
+    'bidding engine writes to Amazon itself and does not pass this gate): a spend ceiling (kind spend-ceiling, at campaign, ' +
     'product line, portfolio or market grain), a bid policy (bid-policy: min / max bid at line, portfolio or market grain), or ' +
-    'a protected term no rule may negate (protected-term). Waits for a person to approve it in Nexus. Each change is judged: ' +
-    'tightening (a new or lower ceiling, a new or lower bid ceiling, a new protected term) may run inside a business\'s limits; ' +
-    'loosening (a higher cap, a cleared or removed guardrail, a higher bid ceiling, a bid floor that forces bids up) always ' +
-    'needs a person. The write gate applies it at its next decision.',
+    'a protected term no rule may negate (protected-term). A spend ceiling caps the daily budget INCREASES authorised in its ' +
+    'scope: a budget raise that would take today\'s raises past it is refused, a budget cut never trips it, and it does not ' +
+    'cap what Amazon actually spends, bid raises or placement raises. Waits for a person to approve it in Nexus. Each change ' +
+    'is judged: tightening (a new or lower ceiling, a new or lower bid ceiling, a new protected term) may run inside a ' +
+    'business\'s limits; loosening (a higher cap, a cleared or removed guardrail, a higher bid ceiling, a bid floor that ' +
+    'forces bids up) always needs a person. The write gate applies it at its next decision.',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -568,9 +638,11 @@ const tuneAdEngine: AgentTool = {
     'set\'s caps (coverage-set), a rank target of the hourly bid plans (rank-target: placement %, bid ceiling, Min-bid floor), a budget ' +
     'schedule\'s windows (budget-schedule), a harvest policy (harvest-policy: the criteria that qualify a search term, per scope), an eBay ' +
     'campaign\'s automation policy (ebay-campaign-policy), the account default target ACOS (account-target-acos) or the anomaly breaker\'s ' +
-    'limits (breaker). Waits for a person to approve it in Nexus. The preview shows every change and whether it can raise spend (a higher ' +
-    'budget, cap, target ACOS or breaker limit, a pool shift, a looser harvest, a lowering window removed): such a change is outside its ' +
-    'limits — a person decides. Switching on / off is turn-up / turn-down-automation; dayparting windows are not tuned here (never pause).',
+    'limits (breaker). Every change waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator ' +
+    'code when the business set it so — none runs by rule. The preview shows every change and whether it can raise spend (a higher ' +
+    'budget, cap, target ACOS or breaker limit, a pool shift, a looser harvest, a lowering window removed); once this tool may run by ' +
+    'rule, such a change stays outside its limits. Switching on / off is turn-up / turn-down-automation; dayparting windows are not ' +
+    'tuned here (never pause).',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -578,8 +650,10 @@ const tuneAdEngine: AgentTool = {
   openWorld: true,
   requires: [F.adsAutomationManage, FIELDS.financialsAdspendView],
   reversibility: 'full',
+  // Confirm at most, so its limits are never read today (claude-trust.service.ts reads them only at auto); they are kept
+  // for the day this tool may run by rule.
   maxClaudeTrust: 'confirm',
-  limits: z.object({ allowRaise: z.boolean().default(false).describe('let a change that can raise spend run without a person; never by default') }),
+  limits: z.object({ allowRaise: z.boolean().default(false).describe('once this tool may run by rule: let a change that can raise spend run without a person; never by default') }),
   withinLimits(preview, limits) {
     const p = preview as { raises?: string[] } | null
     if (!p || !Array.isArray(p.raises)) return 'there is no preview of this setting change to check'
@@ -668,9 +742,10 @@ const steerFleet: AgentTool = {
     'Steer the agent fleet\'s workers (charters, from list-automations F1): run one now (run-now, or one assignment by ' +
     'assignmentId), pause one until a time (pause, with until and reason), resume it, set its level (set-level: OFF, OBSERVE, ' +
     'PROPOSE, AUTO — up only to its charter\'s cap, AUTO only once earned), give it an assignment (assign: targetKind + ' +
-    'targetIds) or cancel one that never ran. Waits for a person to approve it in Nexus. A pause, a level down or a cancel may run ' +
-    'inside a business\'s limits; a run, a resume, a level up or an assignment spends AI money and needs a person. Never edits a ' +
-    'worker\'s prompt, revisions, tools, model or budget.',
+    'targetIds) or cancel one that never ran. Every move waits for a person: approved in Nexus, or confirmed in Claude with the ' +
+    'asker\'s authenticator code when the business set it so — none runs by rule. Once this tool may run by rule, a pause, a level ' +
+    'down or a cancel may run inside a business\'s limits; a run, a resume, a level up or an assignment spends AI money and stays ' +
+    'with a person. Never edits a worker\'s prompt, revisions, tools, model or budget.',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -679,8 +754,10 @@ const steerFleet: AgentTool = {
   requires: [F.aiRun, F.aiView],
   // A run cannot be taken back (its AI spend is spent); every other move can.
   reversibility: 'partial',
+  // Confirm at most, so its limits are never read today (claude-trust.service.ts reads them only at auto); they are kept
+  // for the day this tool may run by rule.
   maxClaudeTrust: 'confirm',
-  limits: z.object({ allowAiSpend: z.boolean().default(false).describe('let a run, a resume, a level up or an assignment go without a person; never by default') }),
+  limits: z.object({ allowAiSpend: z.boolean().default(false).describe('once this tool may run by rule: let a run, a resume, a level up or an assignment go without a person; never by default') }),
   withinLimits(preview, limits) {
     const p = preview as { steer?: string; needsPerson?: string | null } | null
     if (!p?.steer) return 'there is no preview of this fleet change to check'

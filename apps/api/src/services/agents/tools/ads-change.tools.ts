@@ -841,7 +841,8 @@ const suppressCampaign: AgentTool = {
   description:
     'Stop an Amazon Sponsored Products campaign the Nexus way: never paused — every keyword and target bid and every ad '
     + 'group default bid goes to the 2-cent floor, and each bid is remembered. Nothing changes until a person approves '
-    + 'it in Nexus. The preview counts what moves and where it lands (live at Amazon or sandbox). Refused, and not '
+    + 'it: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the business set '
+    + 'it so. The preview counts what moves and where it lands (live at Amazon or sandbox). Refused, and not '
     + 'queued, when it is already suppressed or Amazon\'s write gate would refuse it (the live-write allowlist; a halt '
     + 'does not block lowering). restore-campaign (or undo-change) puts the bids back.',
   async handler(args) {
@@ -1012,8 +1013,10 @@ const setCampaignLiveWrites: AgentTool = {
   },
   description:
     'Put an Amazon campaign on the live-write allowlist, or take it off. Only an allowlisted campaign takes a live '
-    + 'write from Nexus: an approved ad change, a rule or a schedule (d2). It is a Nexus switch and sends nothing to '
-    + 'Amazon itself. Nothing changes until a person approves it in Nexus; it always waits for a person. The preview '
+    + 'write from an approved ad change, a rule or a schedule (d2); a person\'s own edit on the Nexus screens passes it. '
+    + 'A campaign launched from the Nexus screens (the campaign wizards, a blueprint, an AI goal) is put on it the moment '
+    + 'it exists; one made by create-ad-campaign or found by a sync starts off it. It is a Nexus switch and sends nothing '
+    + 'to Amazon itself. Nothing changes until a person approves it in Nexus; it always waits for a person. The preview '
     + 'says whether its market\'s connection would let writes through today and which rules may then write to it.',
   async handler(args) {
     return liveWritesPreview(args)
