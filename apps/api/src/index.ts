@@ -131,6 +131,7 @@ import productStudioRoutes from "./routes/product-studio.routes.js";
 import publicationHistoryRoutes from "./routes/publication-history.routes.js";
 import publicationBatchRoutes from "./routes/publication-batches.routes.js";
 import listingActionRoutes from "./routes/listing-actions.routes.js";
+import sheetDeleteRowsRoutes from "./routes/sheet-delete-rows.routes.js";
 import channelIdRoutes from "./routes/channel-id.routes.js";
 import publishActionRoutes from "./routes/publish-actions.routes.js";
 import liveReadRoutes from "./routes/live-read.routes.js"; // PE — read what a channel holds live (read only)
@@ -699,6 +700,8 @@ app.register(publicationHistoryRoutes, { prefix: '/api' });
 app.register(publicationBatchRoutes, { prefix: '/api' });
 // Sheet publish parity, step 7 — the Status column: /api/products/:id/listing-actions (state: products.view; pause/resume/relist: products.publish; end: products.delete).
 app.register(listingActionRoutes, { prefix: '/api' });
+// Delete rows from the product sheet (Owner 2026-10-06): /api/products/:id/sheet-rows/{delete/preview,delete/run,restore} (preview: products.view; run, restore: products.delete).
+app.register(sheetDeleteRowsRoutes, { prefix: '/api' });
 // Item ID control (step I1) — the sheet's eBay Item ID cell: /api/listings/:id/channel-id/{check,link,unlink} (listings.recover).
 app.register(channelIdRoutes, { prefix: '/api' });
 // Build shape v2 — the waiting Action and Status values: /api/products/:id/studio/publish-actions (read: products.view; send/delete and status/ended: products.delete; the rest: products.publish).

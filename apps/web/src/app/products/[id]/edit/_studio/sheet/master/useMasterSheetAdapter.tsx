@@ -1,5 +1,6 @@
 'use client';
 import { useSheetPreferences } from '../useSheetPreferences';
+import { useDeleteRows } from '../deleteRows/useDeleteRows';
 import { useUnpinOnNarrowSheet } from '../useNarrowSheet';
 import { useSheetPublicationGuard } from '../useSheetPublicationGuard';
 import { buildCompareTargets } from '../compareTargets';
@@ -252,18 +253,22 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         openRecordId: record.rowId,
     }), [familyQuery.family, canPim, canSync, canEdit, authStatus, newVariation, record, familyProductPicker.pick]);
     const onFamilyChangedRef = useRef<() => void>(() => { });
+    /* Delete rows (Owner 2026-10-06) — the sheet's one delete, the same in every view: it replaces "Delete child…" (one
+       child, permanently) on the selection bar and in the row menus. A Shared row is a product. */
+    const deleteRows = useDeleteRows<StudioRow>({ productId, target: (row) => ({ productId: row.id, aliasId: null }), onChanged: () => onFamilyChangedRef.current(), hostReloads: true });
+    const sheetActions = useMemo(() => [...famActions.filter((action) => action.id !== 'delete-variant'), deleteRows], [famActions, deleteRows]);
     const rowPress = useActionPress<StudioRow>(() => onFamilyChangedRef.current());
     const rowMenuRef = useRef<(row: StudioRow) => MenuItemDef[]>(() => []);
     rowMenuRef.current = useMemo(() => actionMenuItems<StudioRow>({
-        actions: famActions,
+        actions: sheetActions,
         onSelect: (action, rows) => void rowPress.press(action, rows),
         isRecord: (r) => !!r?.id,
-    }), [famActions, rowPress.press]);
+    }), [sheetActions, rowPress.press]);
     const getContextMenuItems = useMemo(() => actionContextMenu<StudioRow>({
-        actions: famActions,
+        actions: sheetActions,
         onSelect: (action, rows) => void rowPress.press(action, rows),
         isRecord: (r) => !!r?.id,
-    }), [famActions, rowPress.press]);
+    }), [sheetActions, rowPress.press]);
     const contextMenuRef = useRef(getContextMenuItems);
     contextMenuRef.current = getContextMenuItems;
     const cellMenuRef = useRef<(p: Parameters<typeof getContextMenuItems>[0]) => ReturnType<typeof getContextMenuItems>>(() => []);
@@ -921,8 +926,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             total: rows.length,
             selected: selected,
             /* SHEET-VIEWS (2026-09-26): the selection verbs live in the toolbar while rows are selected. */
-            selectionActions: <FamilySelectionVerbs rows={selectedRows} actions={famActions} onDone={onFamilyChanged}>
-                {/* Build shape v2, P9 — Action ▾ after "Delete child…": fills Status or Action on every market of the ticked products. */}
+            selectionActions: <FamilySelectionVerbs rows={selectedRows} actions={sheetActions} onDone={onFamilyChanged}>
+                {/* Build shape v2, P9 — Action ▾ after "Delete…": fills Status or Action on every market of the ticked products. */}
                 <PublishActionMenu entries={actionEntries} selected={selected} onChoose={(change) => fillPublishCells(change, selectedRows)} disabled={publishActions.status !== 'ready'}/>
             </FamilySelectionVerbs>,
             onClearSelection: clearSelection,
