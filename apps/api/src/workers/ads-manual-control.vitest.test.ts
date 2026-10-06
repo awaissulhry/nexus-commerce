@@ -65,7 +65,12 @@ vi.mock('../services/advertising/ads-api-client.js', () => {
     q.campaignIds.map((campaignId) => ({ campaignId, dynamicBidding: { strategy: 'LEGACY_FOR_SALES', placementBidding: [] } }))
   // The bulk sheet's creates.
   const create = async () => ({ ok: true, mode: 'live', externalId: 'EXT-NEW-KW', rawResponse: {} })
-  return { adsMode: () => 'live', updateCampaign: record, updateAdGroup: record, updateTarget: record, updateProductAd: record, updatePortfolio: record, listCampaignsV3, createKeyword: create }
+  // An archive is Amazon's delete operation (SP_V3_ARCHIVE), recorded apart from the PUTs.
+  const archive = async (_ctx: unknown, entity: string, externalId: string) => {
+    amazon.calls.push({ externalId, patch: { deleteOf: entity } })
+    return { ok: true, mode: 'live', rawResponse: {} }
+  }
+  return { adsMode: () => 'live', updateCampaign: record, updateAdGroup: record, updateTarget: record, updateProductAd: record, updatePortfolio: record, listCampaignsV3, createKeyword: create, archiveSpEntity: archive }
 })
 
 const { drainAdsSyncOnce } = await import('./ads-sync.worker.js')
@@ -74,7 +79,7 @@ const { updateAdTargetWithSync, updateAdGroupWithSync, updateCampaignWithSync, b
   await import('../services/advertising/ads-mutation.service.js')
 const { updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
 const { applyPlan } = await import('../services/advertising/bulksheet/apply.js')
-const { rollbackByActionLogId } = await import('../services/advertising/rollback.service.js')
+const { rollbackByActionLogId, previewRollbackOfAction, ARCHIVE_IS_FINAL } = await import('../services/advertising/rollback.service.js')
 const { default: contextualDb } = await import('../db.js')
 
 const inside = <T>(work: () => Promise<T>) =>
@@ -132,6 +137,8 @@ beforeAll(async () => {
   await seedCampaign('bulk-c')
   await seedCampaign('bulk2-c')
   await seedCampaign('undo-c')
+  await seedCampaign('arch-c')
+  await seedCampaign('arch2-c')
   // The placement path resolves the market's Ads profile before it asks the gate.
   await inside(() => database.client.amazonAdsConnection.create({
     data: { profileId: 'P-IT-TEST', marketplace: 'IT', region: 'EU', mode: 'production', isActive: true, writesEnabledAt: new Date() } as never,
@@ -352,5 +359,46 @@ describe('1e (CM-9) — undoing a bid he set during the floor puts the floor\'s 
 
     await inside(() => restoreCampaignBids('undo-c', { actor: ENGINE, reason: 'test: morning restore' }))
     expect(await bidOf('undo-c-t1')).toEqual({ bidCents: 35, suppressedFromBidCents: null })
+  })
+})
+
+/**
+ * His Archive button — Amazon's SP v3 PUTs accept ENABLED, PAUSED and PROPOSED only, so a PUT with state ARCHIVED was
+ * never an archive. His own archive goes out as the delete operation of its entity (ads-api-client.ts SP_V3_ARCHIVE),
+ * and Undo never puts an archive back: Amazon cannot switch an archived ad on again.
+ */
+describe('his Archive: Amazon\'s archive call, and it is permanent', () => {
+  it('a campaign, an ad group and a keyword he archives each go out as their delete call, never a PUT', async () => {
+    const results = [
+      await inside(() => updateCampaignWithSync({ campaignId: 'arch-c', patch: { status: 'ARCHIVED' }, actor: OWNER, applyImmediately: true, manual: true })),
+      await inside(() => updateAdGroupWithSync({ adGroupId: 'arch2-c-g', patch: { status: 'ARCHIVED' }, actor: OWNER, applyImmediately: true, manual: true })),
+      await inside(() => updateAdTargetWithSync({ adTargetId: 'arch2-c-t1', patch: { status: 'ARCHIVED' }, actor: OWNER, applyImmediately: true, manual: true })),
+    ]
+    expect(results.map((r) => r.ok)).toEqual([true, true, true])
+    const { rows } = await drain()
+    const mine = new Set(results.map((r) => r.outboundQueueId))
+    expect(rows.filter((r) => mine.has(r.id)).map((r) => r.syncStatus)).toEqual(['SUCCESS', 'SUCCESS', 'SUCCESS'])
+    expect(amazon.calls.filter((c) => c.externalId.startsWith('EXT-arch')).map((c) => [c.externalId, c.patch]).sort()).toEqual([
+      ['EXT-arch-c', { deleteOf: 'campaign' }], ['EXT-arch2-c-g', { deleteOf: 'adGroup' }], ['EXT-arch2-c-t1', { deleteOf: 'keyword' }],
+    ])
+  })
+
+  it('his Pause and Enable stay the PUT they always were', async () => {
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'arch2-c-t2', patch: { status: 'PAUSED' }, actor: OWNER, applyImmediately: true, manual: true }))
+    await drain().then(() => undefined)
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'arch2-c-t2', patch: { status: 'ENABLED' }, actor: OWNER, applyImmediately: true, manual: true }))
+    await drain()
+    expect(amazon.calls.filter((c) => c.externalId.startsWith('EXT-arch'))).toEqual([{ externalId: 'EXT-arch2-c-t2', patch: { state: 'enabled' } }])
+  })
+
+  it('Undo of an archive is refused, says why, and queues nothing', async () => {
+    const log = await inside(() => contextualDb.advertisingActionLog.findFirstOrThrow({ where: { entityId: 'arch-c', entityType: 'CAMPAIGN' }, orderBy: { createdAt: 'desc' } }))
+    expect(await inside(() => previewRollbackOfAction(log.id))).toMatchObject({ found: true, eligible: false, reason: ARCHIVE_IS_FINAL })
+    const before = await inside(() => database.client.outboundSyncQueue.count())
+    const undone = await inside(() => rollbackByActionLogId({ actionLogId: log.id, actor: OWNER, reason: 'test undo', manual: true }))
+    expect(undone).toMatchObject({ reversed: 0 })
+    expect(JSON.stringify(undone)).toContain('An archive cannot be undone')
+    expect(await inside(() => database.client.outboundSyncQueue.count())).toBe(before)
+    expect((await inside(() => database.client.campaign.findUniqueOrThrow({ where: { id: 'arch-c' }, select: { status: true } }))).status).toBe('ARCHIVED')
   })
 })

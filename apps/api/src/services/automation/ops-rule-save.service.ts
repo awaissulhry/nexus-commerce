@@ -8,8 +8,8 @@
  *   reviews           N7          REVIEW_SPIKE_DETECTED            bullets / A+ ideas from reviews         OFF (its actions call the AI even dry)
  *   bulk-operations   N9          BULK_OPS_TRIGGERS                apply a template, create a bulk job     OBSERVE
  *
- * Every domain also allows notify and log_only. Refused, in words: a pausing action (Claude never pauses; a person sets
- * that in Nexus), an action or trigger outside the domain's own list, no conditions (an empty list matches everything),
+ * Every domain also allows notify and log_only. Refused, in words: a pausing action (a rule Claude saves never pauses; a
+ * person sets that in Nexus), an action or trigger outside the domain's own list, no conditions (an empty list matches everything),
  * no daily run cap, and — for replenishment, whose actions commit money — no value cap. An AUTO rule's edit drops it to
  * PROPOSE. No delete: OFF is how a rule is retired (turn-down-automation).
  */
@@ -117,7 +117,7 @@ export function guardOpsRule(domain: OpsDomain, draft: OpsRuleConfig): string[] 
   if (actions.length === 0) out.push('actions: at least one')
   for (const [i, a] of actions.entries()) {
     const type = String((a as { type?: unknown })?.type ?? '')
-    if (/(^|_)pause(_|$)/.test(type)) out.push(`${type}: refused — Claude never pauses (Owner rule); a person sets that in Nexus`)
+    if (/(^|_)pause(_|$)/.test(type)) out.push(`${type}: refused — a rule Claude saves never pauses (Owner rule); a person sets that in Nexus`)
     else if (!BUILTIN_ACTIONS.includes(type) && !spec.actions.includes(type)) out.push(`actions[${i}] ${type || '(no type)'}: not an action a ${spec.name} may carry — ${[...spec.actions, ...BUILTIN_ACTIONS].join(', ')}`)
   }
   if (!(Number.isInteger(draft.maxExecutionsPerDay) && (draft.maxExecutionsPerDay as number) > 0)) out.push('maxExecutionsPerDay: required, a whole number above 0 (runs per day it may act on)')
