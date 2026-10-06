@@ -11,10 +11,18 @@
  * the local-first create service — nothing hits Amazon unless a per-campaign
  * live-write gate is open (gated create, no live push). The UI redirects to
  * the Ad Manager grid on success. dryRun returns the plan without writing.
+ *
+ * PB-5a adds `SpwLaunchOptions`, used only by the ads playbook's build (ads-playbook/build.ts): born off the live-write
+ * allowlist, born at the no-pause floor with every planned bid remembered, the approval's change set on every log row,
+ * progress, and placements left for START. Without options the launch is the screens', unchanged — except that its
+ * negatives now pass `creationFlow` (as the Single launch's do): on a screen launch the campaign is already on the
+ * allowlist there, so nothing changes for them. The answer also gains `slots` (wizard campaign id → the campaign and
+ * ad group made).
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { AdsActor } from './ads-mutation.service.js'
+import { normaliseFloorCents } from './ads-bid-suppression.service.js'
 
 export type PRef = { asin?: string; sku?: string; productId?: string }
 export type SpwRule = { ruleName?: string; automate?: boolean; perf?: { conditions?: Array<{ metric?: string; op?: string; value?: string }>; lookback?: string; exclude?: string }; rows?: Record<string, { st?: boolean; tB?: boolean; tP?: boolean; tE?: boolean; tBox?: boolean; nP?: boolean; nE?: boolean; nBox?: boolean }> }
@@ -23,7 +31,9 @@ export type SpwRule = { ruleName?: string; automate?: boolean; perf?: { conditio
 export interface SpwLaunchBody {
   market?: string; productGroupName?: string
   products?: PRef[]
-  campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; adProduct?: 'SP' | 'SB' | 'SD'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: Array<string | { text: string; matchType?: 'BROAD' | 'PHRASE' | 'EXACT'; bidEur?: number }>; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }>; creative?: Record<string, unknown> }>
+  campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; adProduct?: 'SP' | 'SB' | 'SD'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: Array<string | { text: string; matchType?: 'BROAD' | 'PHRASE' | 'EXACT'; bidEur?: number }>; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }>; creative?: Record<string, unknown>
+    /** PB-5a — Amazon's bidding strategy for this campaign (the playbook slot's). Absent: legacyForSales, as the screens. */
+    biddingStrategy?: 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL' }>
   placementBids?: { tos?: string; pdp?: string; ros?: string }
   rules?: { harvest?: SpwRule; negative?: SpwRule }
   automationMode?: 'rule' | 'ai'
@@ -37,8 +47,34 @@ export interface SpwLaunchResult {
   body: Record<string, unknown>
 }
 
+/** Where a launch is: campaigns started so far, of how many, the one being made (null at the end), campaigns made. */
+export interface SpwProgress { done: number; total: number; campaign: string | null; created: number }
+
+/** PB-5a — the ads playbook's build. Absent: the screens' launch, unchanged. */
+export interface SpwLaunchOptions {
+  /**
+   * CC-7 — default TRUE (every screen): the campaign goes on the live-write allowlist the moment it exists. false = born
+   * off it (the playbook build): its parts still reach Amazon (every create of the launch passes `creationFlow`), but no
+   * engine, rule or later edit writes to it until a person puts it on the list (the playbook's START).
+   */
+  allowlistAtBirth?: boolean
+  /**
+   * The A11 pattern (ads-single-launch.service.ts): a bid above `floorCents` is created AT it, with the planned bid kept
+   * in `suppressedFromBidCents` (the ad group default, each keyword, product target and Auto group); the campaign is
+   * flagged `bidsSuppressedAt` / `bidsSuppressedFloorCents` / `bidsSuppressedBy = by` right after it is created. Born
+   * ENABLED, never paused: the floor is what keeps it from spending; `restoreCampaignBids` puts the planned bids back.
+   */
+  bornSuppressed?: { floorCents: number; by: AdsActor }
+  /** The approval it runs for: every AdvertisingActionLog row it writes carries it (executionId). */
+  changeSetId?: string | null
+  /** Before each campaign and once at the end; best-effort (a failed progress write never stops a launch). */
+  onProgress?: (p: SpwProgress) => Promise<void>
+  /** Write no placements (a campaign off the allowlist is refused them): they are returned as `deferredPlacements`. */
+  deferPlacements?: boolean
+}
+
 /** The launch, as the route ran it: `userId` is the actor the route takes from the signed-in person (CC-28). */
-export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor): Promise<SpwLaunchResult> {
+export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor, opts: SpwLaunchOptions = {}): Promise<SpwLaunchResult> {
   // CC-29 / CC-5 — one market per launch, never guessed (it used to become IT), and never a portfolio Amazon does not know.
   const { launchMarketRefusal, localPortfolioRefusal, bidStrategyRules } = await import('./ads-launch-guards.js')
   const refused = launchMarketRefusal(b.market) ?? localPortfolioRefusal(b.portfolioId)
@@ -72,6 +108,18 @@ export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor): Promis
   const adjustments = ([['PLACEMENT_TOP', pb.tos], ['PLACEMENT_PRODUCT_PAGE', pb.pdp], ['PLACEMENT_REST_OF_SEARCH', pb.ros]] as Array<[string, string | undefined]>)
     .flatMap(([placement, v]) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? [{ placement, percentage: n }] : [] })
 
+  // PB-5a — the options. Absent, every helper below is the identity and the launch is the screens'.
+  const allowlistAtBirth = opts.allowlistAtBirth !== false
+  const changeSetId = opts.changeSetId ?? null
+  const cs = changeSetId ? { changeSetId } : {}
+  const floor = opts.bornSuppressed ? normaliseFloorCents(opts.bornSuppressed.floorCents) : null
+  const cents = (eur: number) => Math.round(eur * 100)
+  const floored = (eur: number) => floor != null && cents(eur) > floor
+  const startEur = (eur: number) => (floored(eur) ? (floor as number) / 100 : eur)
+  const remember = (adTargetId: string, eur: number) => prisma.adTarget.update({ where: { id: adTargetId }, data: { suppressedFromBidCents: cents(eur) } })
+  const deferredPlacements: Array<{ campaignId: string; adjustments: typeof adjustments }> = []
+  const progress = async (p: SpwProgress) => { if (opts.onProgress) { try { await opts.onProgress(p) } catch { /* progress is not the work */ } } }
+
   const created: Array<{ name: string; campaignId: string; externalCampaignId: string | null; mode: string }> = []
   const idMap: Record<string, { campaignId: string; adGroupId: string }> = {} // wizard campaign id → created ids (for the harvest rule)
   // W2-A (CC-2) — every campaign asked for is answered: live, partly made (what failed and why) or not made (why).
@@ -79,13 +127,15 @@ export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor): Promis
   // from the answer, the rules and the read-back.
   const { CampaignLaunch, summariseLaunch, describeLaunch } = await import('./launch-outcome.js')
   const outcomes: import('./launch-outcome.js').LaunchCampaignResult[] = []
-  for (const c of campaigns) {
+  for (const [i, c] of campaigns.entries()) {
+    await progress({ done: i, total: campaigns.length, campaign: c.name, created: created.length })
     const rec = new CampaignLaunch(c.name)
     const bidEur = Number(c.bidEur) || 0.75
     const budgetEur = Number(c.budgetEur) || 10
+    const biddingStrategy = c.biddingStrategy === 'AUTO_FOR_SALES' ? 'autoForSales' : c.biddingStrategy === 'MANUAL' ? 'manual' : 'legacyForSales'
     let camp: Awaited<ReturnType<typeof createCampaignLocal>>
     try {
-      camp = await createCampaignLocal({ name: c.name, type: c.adProduct ?? 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy: 'legacyForSales', portfolioId: b.portfolioId, userId })
+      camp = await createCampaignLocal({ name: c.name, type: c.adProduct ?? 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy, portfolioId: b.portfolioId, userId, ...cs })
       rec.campaign(camp)
     } catch (e) {
       rec.campaignThrew(e)
@@ -100,13 +150,19 @@ export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor): Promis
     // LAUNCH-REPAIR: allowlist the campaign the instant it exists, BEFORE its sub-entities are
     // created — otherwise the per-campaign write-gate check skips every ad group/keyword/product-ad
     // and the campaign lands empty on Amazon ("not eligible, no keyword and no ad").
-    try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[SPW-launch] allowlist failed', { error: (e as Error).message }) }
+    // PB-5a — off it for the playbook's build (`allowlistAtBirth: false`).
+    if (allowlistAtBirth) { try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[SPW-launch] allowlist failed', { error: (e as Error).message }) } }
+    // PB-5a — born at the floor: flagged as suppressed by the person who asked, from the moment it exists.
+    if (floor != null) {
+      try { await prisma.campaign.update({ where: { id: camp.id }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.bornSuppressed!.by } }) }
+      catch (e) { rec.threw('campaign', 'Born at the floor', e); logger.error('[SPW-launch] floor flag failed', { campaignId: camp.id, error: (e as Error).message }) }
+    }
     // SB creative (brand · ad type · landing page · ASINs · headline · logo/custom image) → Campaign.creativeAssetJson (gated; pushed to Amazon when the SB write gate opens).
     if (c.creative && c.adProduct === 'SB') { try { await prisma.campaign.update({ where: { id: camp.id }, data: { creativeAssetJson: c.creative as never } }) } catch (e) { logger.warn('[SPW-launch] SB creative store failed', { error: (e as Error).message }) } }
     const adGroupName = c.adGroupName || `${c.name} Ad Group`
     let ag: Awaited<ReturnType<typeof createAdGroupLocal>>
     // CM-20 — `creationFlow`: everything below belongs to the campaign this launch just created.
-    try { ag = await createAdGroupLocal({ campaignId: camp.id, name: adGroupName, defaultBidEur: bidEur, userId, creationFlow: true }) } catch (e) {
+    try { ag = await createAdGroupLocal({ campaignId: camp.id, name: adGroupName, defaultBidEur: startEur(bidEur), userId, creationFlow: true, ...cs }) } catch (e) {
       rec.adGroup(adGroupName, null, e)
       outcomes.push(rec.result())
       logger.error('[SPW-launch] ad group create failed', { name: c.name, market, error: (e as Error).message })
@@ -115,10 +171,13 @@ export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor): Promis
     rec.adGroup(adGroupName, ag)
     const agId = ag.id as string
     if (c.id) idMap[c.id] = { campaignId: camp.id, adGroupId: agId }
+    if (floored(bidEur)) { try { await prisma.adGroup.update({ where: { id: agId }, data: { suppressedFromBidCents: cents(bidEur) } }) } catch (e) { rec.threw('ad_group', 'Remember the planned default bid', e) } }
     // W2-A (CC-17) — negatives FIRST, as Replicate does: a launch that fails part-way is then narrower, never wider.
-    for (const nk of c.negKeywords ?? []) { const text = (typeof nk === 'string' ? nk : nk?.text ?? '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = (typeof nk === 'object' && nk?.matchType === 'PHRASE') ? 'PHRASE' : 'EXACT'; try { rec.negative('negative_keyword', `${text} (${mt.toLowerCase()})`, await createNegativeKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, userId })) } catch (e) { rec.threw('negative_keyword', text, e) } }
-    for (const np of c.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { rec.negative('negative_product', asin, await createNegativeProductTargetLocal({ adGroupId: agId, asin, userId })) } catch (e) { rec.threw('negative_product', asin, e) } }
-    for (const p of products) { const item = p.sku || p.asin || p.productId || '?'; try { rec.productAd(item, await createProductAdLocal({ adGroupId: agId, asin: p.asin, sku: p.sku, productId: p.productId, userId, launch: true, creationFlow: true })) } catch (e) { rec.threw('product_ad', item, e) } }
+    // PB-5a — they are part of the launch, as its keywords and product ads are, so they pass `creationFlow` (as the
+    // Single launch's, 5b): a campaign born off the allowlist (the playbook build) is otherwise refused them.
+    for (const nk of c.negKeywords ?? []) { const text = (typeof nk === 'string' ? nk : nk?.text ?? '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = (typeof nk === 'object' && nk?.matchType === 'PHRASE') ? 'PHRASE' : 'EXACT'; try { rec.negative('negative_keyword', `${text} (${mt.toLowerCase()})`, await createNegativeKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, userId, creationFlow: true, ...cs })) } catch (e) { rec.threw('negative_keyword', text, e) } }
+    for (const np of c.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { rec.negative('negative_product', asin, await createNegativeProductTargetLocal({ adGroupId: agId, asin, userId, creationFlow: true, ...cs })) } catch (e) { rec.threw('negative_product', asin, e) } }
+    for (const p of products) { const item = p.sku || p.asin || p.productId || '?'; try { rec.productAd(item, await createProductAdLocal({ adGroupId: agId, asin: p.asin, sku: p.sku, productId: p.productId, userId, launch: true, creationFlow: true, ...cs })) } catch (e) { rec.threw('product_ad', item, e) } }
     if (c.kind === 'keyword') {
       // Per-keyword match type + bid when provided (Guided's Add-Keywords step); else fall back to
       // the campaign's match type(s) + default bid (SPW / Quick send plain strings — unchanged).
@@ -127,20 +186,32 @@ export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor): Promis
         if (!text) continue
         const kwBid = typeof kwRaw === 'object' && Number.isFinite(Number(kwRaw?.bidEur)) && Number(kwRaw?.bidEur) > 0 ? Number(kwRaw.bidEur) : bidEur
         const mts = typeof kwRaw === 'object' && kwRaw?.matchType ? [kwRaw.matchType] : matchTypesFor(c.matchType)
-        for (const mt of mts) { try { rec.keyword(`${text} (${mt.toLowerCase()})`, await createKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, bidEur: kwBid, userId, creationFlow: true })) } catch (e) { rec.threw('keyword', text, e) } }
+        for (const mt of mts) { try { const k = await createKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, bidEur: startEur(kwBid), userId, creationFlow: true, ...cs }); rec.keyword(`${text} (${mt.toLowerCase()})`, k); if (floored(kwBid) && !k.existed && k.id) await remember(k.id, kwBid) } catch (e) { rec.threw('keyword', text, e) } }
       }
     } else if (c.kind === 'pat') {
-      for (const pt of c.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { rec.productTarget(asin, await createTargetLocal({ adGroupId: agId, kind: 'PRODUCT', value: asin, bidEur, userId, creationFlow: true })) } catch (e) { rec.threw('product_target', asin, e) } }
+      for (const pt of c.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { const t = await createTargetLocal({ adGroupId: agId, kind: 'PRODUCT', value: asin, bidEur: startEur(bidEur), userId, creationFlow: true, ...cs }); rec.productTarget(asin, t); if (floored(bidEur) && t.id) await remember(t.id, bidEur) } catch (e) { rec.threw('product_target', asin, e) } }
     } else if (c.kind === 'auto') {
       // W2-A (CC-1) — Amazon makes the four auto groups itself: link them and set each one's on/off and bid as chosen
       // (AT.1). Posting them as new targets is refused by Amazon, which left these choices in Nexus only.
       const groups = (c.autoGroups ?? []).filter((g) => g?.key).map((g) => ({ key: g.key, enabled: g.enabled !== false, bidEur: Number(g.bidEur) || bidEur }))
-      if (groups.length) { try { rec.autoGroups(await linkAutoTargeting({ adGroupId: agId, groups, userId, creationFlow: true })) } catch (e) { rec.threw('auto_targeting', 'Auto groups', e) } }
+      if (groups.length) {
+        try {
+          const linked = await linkAutoTargeting({ adGroupId: agId, groups: groups.map((g) => ({ ...g, bidEur: startEur(g.bidEur) })), userId, creationFlow: true, ...cs })
+          rec.autoGroups(linked)
+          // PB-5a — each linked group remembers the bid planned for it (the wish it was linked from).
+          if (floor != null) {
+            const planned = new Map(groups.map((g) => [g.key, g.bidEur]))
+            for (const l of linked.links) { const eur = planned.get(l.key); if (l.adTargetId && eur != null && floored(eur)) await remember(l.adTargetId, eur) }
+          }
+        } catch (e) { rec.threw('auto_targeting', 'Auto groups', e) }
+      }
     }
-    if (adjustments.length) { try { rec.placement(await updatePlacementBidding({ campaignId: camp.id, adjustments, userId })) } catch (e) { rec.threw('placement', 'Placement bid adjustments', e) } }
+    if (adjustments.length && opts.deferPlacements) deferredPlacements.push({ campaignId: camp.id, adjustments })
+    else if (adjustments.length) { try { rec.placement(await updatePlacementBidding({ campaignId: camp.id, adjustments, userId, ...cs })) } catch (e) { rec.threw('placement', 'Placement bid adjustments', e) } }
     outcomes.push(rec.result())
   }
   const launch = summariseLaunch(outcomes)
+  await progress({ done: campaigns.length, total: campaigns.length, campaign: null, created: created.length })
   // AT.4a — persist the Step-3 harvesting rule as an AutomationRule (domain advertising)
   // so it survives launch instead of being thrown away. The matrix (which ad groups to
   // harvest from + which match types to graduate/negate, incl. the Auto campaign's groups)
@@ -249,5 +320,5 @@ export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor): Promis
   const verification = onAmazonIds.length ? await verifyLaunch(onAmazonIds).catch(() => null) : null
   // W2-A (CC-2) — `ok` only when every campaign asked for is live on Amazon; `launch` says, per campaign, what is.
   if (!launch.ok) logger.warn('[SPW-launch] launch did not fully reach Amazon', { market, summary: describeLaunch(launch) })
-  return { status: 200, body: { ok: launch.ok, created, totalCampaigns: created.length, rules: rulesCreated, portfolioCheck, verification, launch, ...(launch.ok ? {} : { error: describeLaunch(launch) }) } }
+  return { status: 200, body: { ok: launch.ok, created, totalCampaigns: created.length, rules: rulesCreated, portfolioCheck, verification, launch, slots: idMap, ...(opts.deferPlacements ? { deferredPlacements } : {}), ...(launch.ok ? {} : { error: describeLaunch(launch) }) } }
 }
