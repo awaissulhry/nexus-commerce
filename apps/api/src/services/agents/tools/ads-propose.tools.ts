@@ -527,8 +527,11 @@ async function graduationPreview(args: Record<string, unknown>, opts: { rule?: {
   }
   const notSp = spOnlyRefusal(campaign)
   if (notSp) return { ok: false, error: notSp }
-  // PB-6a (L2) — winners stay: a term already at home for this product is never created again elsewhere.
-  const home = await sameProductHome(query, group.id, campaign.marketplace)
+  // PB-6a (L2) — winners stay: a term already at home for its product (the products of the ad group it converted in that
+  // the destination advertises, with their sibling variants) is never created again elsewhere.
+  const sourceGroupExt = typeof args.sourceExternalAdGroupId === 'string' ? args.sourceExternalAdGroupId.trim() : ''
+  const sourceGroup = sourceGroupExt ? await adGroupInCampaign(sourceGroupExt, source.id) : null
+  const home = await sameProductHome(query, { destAdGroupId: group.id, source: { adGroupId: sourceGroup?.id ?? null, campaignId: source.id }, marketplace: campaign.marketplace })
   if (home) {
     return { ok: false, error: `"${query}" already lives as an exact keyword in ${home.campaign} › ${home.adGroup}, which advertises the same product, so it is not created again: a winner stays where it is.` }
   }

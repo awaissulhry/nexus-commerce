@@ -6,9 +6,19 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const findMany = vi.fn()
-vi.mock('../../db.js', () => ({ default: { adTarget: { findMany: (...a: unknown[]) => findMany(...a) } } }))
+const groups = { findMany: vi.fn(), findUnique: vi.fn() }
+const productAds = vi.fn()
+const products = vi.fn()
+vi.mock('../../db.js', () => ({
+  default: {
+    adTarget: { findMany: (...a: unknown[]) => findMany(...a) },
+    adGroup: { findMany: (...a: unknown[]) => groups.findMany(...a), findUnique: (...a: unknown[]) => groups.findUnique(...a) },
+    adProductAd: { findMany: (...a: unknown[]) => productAds(...a) },
+    product: { findMany: (...a: unknown[]) => products(...a) },
+  },
+}))
 
-const { blockedPositive, homeOf, negativeKey, positivesIn, standingNegativesIn } = await import('./ads-winner-lock.js')
+const { blockedPositive, familyAdGroups, homeOf, negativeKey, ownKeywordRefusal, positivesIn, productFamilyOf, standingNegativesIn } = await import('./ads-winner-lock.js')
 type P = Parameters<typeof blockedPositive>[1][number]
 
 const pos = (text: string, match: P['match'], over: Partial<P> = {}): P => ({ adTargetId: `t-${text}-${match}`, adGroupId: 'ag1', text, match, live: true, ...over })
@@ -81,3 +91,41 @@ describe('the reads', () => {
     expect(standing.has(negativeKey('ag1', 'PRODUCT', 'B0TEST0001'))).toBe(true)
   })
 })
+
+describe('the write service\'s refusal (L1 for every writer)', () => {
+  const row = (adGroupId: string, text: string, expressionType = 'EXACT') => ({ id: `t-${adGroupId}`, adGroupId, kind: 'KEYWORD', expressionType, expressionValue: text, status: 'ENABLED', externalTargetId: 'x' })
+  it('names the keyword it would block and where, and says what to do instead; campaign scope looks in every ad group', async () => {
+    findMany.mockResolvedValueOnce([row('ag1', 'test jacket')])
+    groups.findUnique.mockResolvedValueOnce({ name: 'Exact group' })
+    expect(await ownKeywordRefusal({ scope: 'AD_GROUP', adGroupId: 'ag1', campaignId: 'c1' }, 'Test Jacket', 'EXACT')).toEqual({
+      deniedAt: 'own_keyword',
+      reason: 'A negative exact "Test Jacket" was not added: it would block your own exact keyword "test jacket" in ad group "Exact group". Remove or lower that keyword instead.',
+    })
+    groups.findMany.mockResolvedValueOnce([{ id: 'ag1' }, { id: 'ag2' }])
+    findMany.mockResolvedValueOnce([row('ag2', 'warm test jacket', 'BROAD')])
+    groups.findUnique.mockResolvedValueOnce({ name: 'Broad group' })
+    const campaign = await ownKeywordRefusal({ scope: 'CAMPAIGN', adGroupId: 'ag1', campaignId: 'c1' }, 'test jacket', 'PHRASE')
+    expect(findMany.mock.calls.at(-1)![0].where.adGroupId).toEqual({ in: ['ag1', 'ag2'] })
+    expect(campaign?.reason).toMatch(/broad keyword "warm test jacket" in ad group "Broad group"/)
+    findMany.mockResolvedValueOnce([row('ag1', 'test jacket')])
+    expect(await ownKeywordRefusal({ scope: 'AD_GROUP', adGroupId: 'ag1', campaignId: 'c1' }, 'test', 'EXACT')).toBeNull()
+  })
+})
+
+describe('L2 scope — one product, its sibling variants, one market', () => {
+  it('the family of the ad groups\' products: each product, its parent and the parent\'s other children, with their ASINs', async () => {
+    productAds.mockResolvedValueOnce([{ productId: 'p-kid-1', asin: 'B0TESTKID1' }, { productId: null, asin: 'b0testlone' }])
+    products
+      .mockResolvedValueOnce([]) // no product holds the lone ASIN
+      .mockResolvedValueOnce([{ id: 'p-kid-1', parentId: 'p-parent' }])
+      .mockResolvedValueOnce([{ id: 'p-parent', amazonAsin: null }, { id: 'p-kid-1', amazonAsin: 'B0TESTKID1' }, { id: 'p-kid-2', amazonAsin: 'B0TESTKID2' }])
+    const family = await productFamilyOf(['ag1'])
+    expect(family.productIds.sort()).toEqual(['p-kid-1', 'p-kid-2', 'p-parent'])
+    expect(family.asins.sort()).toEqual(['B0TESTKID1', 'B0TESTKID2', 'B0TESTLONE'])
+    groups.findMany.mockResolvedValueOnce([{ id: 'ag-it', campaign: { marketplace: 'IT' } }, { id: 'ag-de', campaign: { marketplace: 'DE' } }])
+    expect(await familyAdGroups(family, 'IT')).toEqual(['ag-it'])
+    expect(groups.findMany.mock.calls.at(-1)![0].where).toMatchObject({ campaign: { status: { not: 'ARCHIVED' } }, productAds: { some: { status: { not: 'ARCHIVED' } } } })
+    expect(await familyAdGroups({ productIds: [], asins: [] }, 'IT')).toEqual([])
+  })
+})
+
