@@ -16,6 +16,7 @@ import { SkuRenameConflict, applySkuRenamePlan, planSkuRenames, productSkuRuleRe
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldValueError, nativeWriteValue, normalizeShopifyWeight, type NativeEdit } from '@nexus/shared/shopify-information'
+import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
 import { SHOPIFY_STATUS_FROM_STATUS_COLUMN } from '@nexus/shared/listing-actions'
 import { writeChannelOverrideMerge } from '../pim/channel-value-write.js'
 import { isReferenceField } from '@nexus/shared/reference-values'
@@ -46,7 +47,7 @@ import { setFulfillmentMethod } from '../pim/fulfillment-method.service.js'
 import { AMAZON_FULFILMENT_CHOICES, describeAmazonFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
 import { OFFER_VERSION_REQUIRED, isAmazonOfferSheetField, writeSheetOfferChanges } from '../pim/amazon-offer-writes.js'
 import { applySheetQuantityChanges, isSheetQuantityChange, type SheetQuantityOutcome } from '../pim/sheet-quantity-door.js'
-import { STUDIO_STOCK_KEYS } from '../pim/studio-stock.js'
+import { STOCK_FBA_KEY, STUDIO_STOCK_KEYS } from '../pim/studio-stock.js'
 import { UnsupportedPlatformBatch, settleWrittenPhotos, setsImageUrls, type PlatformBulkPlan } from './bulk-edit-platform-batch.js'
 import type { EbayFamilyClearOperation, EbayFamilyScope, EbayListingVersion } from './ebay-family-clear.js'
 
@@ -1023,6 +1024,11 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     // Amazon sheet gaps — Mode / Qty / Buffer ARE the Matrix's cells: written through `PATCH /studio/matrix`, never here.
     if ((STUDIO_STOCK_KEYS as readonly string[]).includes(String(c.field ?? '').replace(/^attr_/, ''))) {
       errors.push({ id: c.id, field: c.field, error: 'Mode, Qty and Buffer save through the Matrix door (the sheet\'s stock cells or the Matrix tab), not through this save.' })
+      continue
+    }
+    // The FBA qty column (Owner 2026-10-07): Amazon's FBA units, shown and locked. No save writes it.
+    if (String(c.field ?? '').replace(/^attr_/, '') === STOCK_FBA_KEY) {
+      errors.push({ id: c.id, field: c.field, error: MATRIX_COPY.fbaLocked })
       continue
     }
     const isCh = isChannelField(c.field ?? '')

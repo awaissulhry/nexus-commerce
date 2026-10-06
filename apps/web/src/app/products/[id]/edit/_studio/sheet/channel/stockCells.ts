@@ -44,6 +44,8 @@ export const STOCK_COLUMN_KEYS = ['stock_mode', 'stock_qty', 'stock_buffer'] as 
 export type StockColumnKey = (typeof STOCK_COLUMN_KEYS)[number]
 export const LISTING_ASIN_KEY = 'listing_asin'
 export const LISTING_ITEM_ID_KEY = 'listing_item_id'
+/** The Amazon sheet's locked FBA qty column (API `STOCK_FBA_KEY`): shown, never written — not a stock column. */
+export const STOCK_FBA_KEY = 'stock_fba'
 /** The Matrix listing states in which an eBay Item ID counts: selling (listed, paused) or ended. */
 const ITEM_ID_COUNTS: ReadonlySet<string> = new Set(['listed', 'closed', 'ended'])
 /** The cells a Matrix read refreshes on a sheet row. */
