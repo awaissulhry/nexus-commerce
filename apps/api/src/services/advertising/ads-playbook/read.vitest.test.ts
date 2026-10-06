@@ -68,10 +68,10 @@ beforeAll(async () => {
     } })).id
     ids.vRow = (await c.adsPlaybook.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: ids.v, label: 'TEST-PB2-V1 (IT)', overrides: { skipSlots: ['exact-brand'] }, updatedBy: 'user:test' } })).id
     await c.adsPlaybook.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: ids.gone, label: 'TEST-PB2-GONE (IT)', updatedBy: 'user:test' } })
-    await c.adsPlaybookVersion.create({ data: { kind: 'template', refId: ids.template, version: 2, op: 'set', changes: [{ section: 'budget', from: null, to: 'set' }], via: 'screen', actor: 'Test person' } })
+    await c.adsPlaybookVersion.create({ data: { kind: 'template', refId: ids.template, version: 2, op: 'set', changes: [{ section: 'budget', from: null, to: 'set' }], direction: 'same', via: 'screen', actor: 'Test person' } })
     await c.adsPlaybookVersion.create({ data: {
       kind: 'playbook', refId: ids.parentRow, version: 1, market: 'IT', level: 'PRODUCT', scopeId: ids.parent, op: 'enroll',
-      changes: [{ field: 'enrolled', from: null, to: true }], via: 'claude', approvalId: 'appr-test-1', actor: 'Test person',
+      changes: [{ field: 'enrolled', from: null, to: true }], direction: 'raise', via: 'claude', approvalId: 'appr-test-1', actor: 'Test person',
     } })
     await c.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test strategy (IT)', goal: 'LAUNCH', targetKind: 'ACOS', targetPct: 33, maxBidCents: 6161, updatedBy: 'user:test' } })
 
@@ -249,7 +249,7 @@ describe('money through the read tool', () => {
     await inA(() => db().adsPlaybook.update({ where: { id: ids.vRow }, data: { overrides: { skipSlots: ['exact-brand'], phases: templateDoc().phases, budget: templateDoc().budget } } }))
     await inA(() => db().adsPlaybookVersion.create({ data: {
       kind: 'playbook', refId: ids.vRow, version: 2, market: 'IT', level: 'PRODUCT', scopeId: ids.v, op: 'set',
-      values: { overrides: { phases: templateDoc().phases }, dailyBudgetCents: 515151 }, changes: [{ section: 'phases' }], via: 'screen', actor: 'Test person',
+      values: { overrides: { phases: templateDoc().phases }, dailyBudgetCents: 515151 }, changes: [{ section: 'phases' }], direction: 'same', via: 'screen', actor: 'Test person',
     } }))
     for (const args of [
       { market: 'IT', view: 'rows' }, { market: 'IT', view: 'history', productId: ids.v }, { view: 'templates', templateId: ids.template },
