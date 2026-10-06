@@ -278,6 +278,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-campaign-target-acos': (ids) => ({ campaignIds: [ids.campaignId], targetAcosPct: 25 }),
   // Ads autonomy W1-2 — the strategy for the seeded campaign's market: its targets, bids and caps are money.
   'ads-strategy': (ids) => ({ market: 'IT', campaignId: ids.campaignId }),
+  // Ads playbook PB-2 — the seeded product's playbook in IT: its daily budget and base bid are money, and so are the
+  // strategy's numbers shown beside it.
+  'ads-playbook': (ids) => ({ market: 'IT', productId: ids.productId }),
   // Ads autonomy W1-3 — needs financials.adspend.view (targets, bids and caps are ad-spend money): a person without
   // money is refused outright. The seeded market strategy's highest bid lowered: a preview, nothing written.
   'set-ads-strategy': () => ({ channel: 'AMAZON', market: 'IT', level: 'market', values: { maxBidCents: 4242 } }),
@@ -683,6 +686,8 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
     await db.adProductAd.create({ data: { adGroupId: adGroup.id, productId: product.id, asin: `${mark}-ASIN-1` } })
     await db.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: `${mark} strategy (IT)`, targetKind: 'ACOS', targetPct: 37, maxBidCents: 8181, monthlySpendCapCents: 727272, maxChangePct: 20, updatedBy: 'user:u-money' } })
     await db.adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: product.id, label: `${mark} product strategy (IT)`, minBidCents: 1919, harvestMinOrders: 2, harvestMinClicks: 4, harvestMaxAcosPct: 63, harvestWindowDays: 60, updatedBy: 'user:u-money' } })
+    // Ads playbook PB-2 — the product's playbook row: its daily budget and base bid are money (ads-playbook hides them).
+    await db.adsPlaybook.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: product.id, label: `${mark} playbook (IT)`, enrolled: true, dailyBudgetCents: 646464, baseBidCents: 5353, updatedBy: 'user:u-money' } })
     const target = await db.adTarget.create({ data: { adGroupId: adGroup.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `${mark} jacket`, bidCents: 4747 } })
     const yesterday = new Date(Date.now() - 86_400_000)
     await db.amazonAdsDailyPerformance.create({

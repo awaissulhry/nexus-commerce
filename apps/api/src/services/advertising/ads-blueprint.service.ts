@@ -30,6 +30,11 @@ export interface CampaignSelector {
    * the parents itself.
    */
   adGroupIds?: string[]
+  /**
+   * ADS PLAYBOOK PB-2 — leave out targets archived in Nexus (a capture reads what the campaigns run today). Off for the
+   * replication paths, which keep every target they always copied.
+   */
+  excludeArchivedTargets?: boolean
 }
 
 /** Resolve a selector to the live campaigns, in name order. */
@@ -74,7 +79,10 @@ export async function loadSourceCampaigns(sel: CampaignSelector): Promise<{ camp
           // IT-AIREON-SP-Auto — the template this whole feature was built from —
           // are orphaned, so excluding them would replicate an Auto campaign with
           // no targeting at all, which is precisely the defect AX3.0 fixed.
-          targets: { select: { kind: true, expressionType: true, expressionValue: true, bidCents: true, isNegative: true, negativeLevel: true, orphanedAt: true } },
+          targets: {
+            ...(sel.excludeArchivedTargets ? { where: { status: { not: 'ARCHIVED' } } } : {}),
+            select: { kind: true, expressionType: true, expressionValue: true, bidCents: true, isNegative: true, negativeLevel: true, orphanedAt: true },
+          },
           productAds: { select: { asin: true } },
         },
       },
