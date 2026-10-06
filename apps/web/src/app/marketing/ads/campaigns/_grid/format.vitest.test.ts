@@ -14,7 +14,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { filterRows } from '@/design-system/patterns/workspace-grid/filterRows'
 import { compareSortValues } from '@/design-system/grid/sortValues'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pct, acosRank, acosFilterValue, acosSortNumber, NO_SALES_ACOS, NO_ACOS_SORT } from './format'
@@ -131,13 +131,14 @@ describe('acosSortNumber — for grids that cannot sink blanks (DS DataGrid, han
 })
 
 /**
- * The sweep: no ads screen (the console and the old ads-console) may sort or filter a missing ACoS
+ * The sweep: no ads screen (the console and what is left of the old ads-console: Rank Control) may sort or filter a missing ACoS
  * as -1, 0 or -Infinity again — each of those ranks "no ACoS" as the best one on "lowest first".
  * Scans sort/filter accessors only; chart series and rule thresholds are not sort keys.
  */
 describe('no ads screen sorts or filters a missing ACoS as -1 / 0 / -Infinity', () => {
   const marketing = fileURLToPath(new URL('../../../', import.meta.url))
-  const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
+  // OC (2026-10-06): only Rank Control is left under ads-console, and it may go too; a missing folder is no files.
+  const walk = (dir: string): string[] => !existsSync(dir) ? [] : readdirSync(dir).flatMap((n) => {
     const p = join(dir, n)
     return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : []
   })

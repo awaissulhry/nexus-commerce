@@ -1915,50 +1915,8 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     return { items, count: items.length }
   })
 
-  // ── DP.1 — Orders-sourced dayparting demand heatmap ──────────────────────
-  // Weekday × hour (Europe/Rome) demand grid from Order ⨝ OrderItem, filterable
-  // by channel/market/product/sku and any date range. The real hour-of-day
-  // signal (the ad hourly stream is dormant) — drives the rebuilt Dayparting tab.
-  fastify.get('/advertising/orders-dayparting', async (request, reply) => {
-    const q = request.query as {
-      channel?: string; marketplace?: string; productId?: string; sku?: string
-      from?: string; to?: string; windowDays?: string; metric?: string
-    }
-    const { aggregateOrdersDayparting } = await import('../services/advertising/orders-dayparting.service.js')
-    const windowDays = q.windowDays ? Math.max(7, Math.min(365, Number(q.windowDays))) : undefined
-    const result = await aggregateOrdersDayparting({
-      channel: q.channel || 'AMAZON',
-      marketplace: q.marketplace ? q.marketplace.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
-      productId: q.productId || undefined,
-      sku: q.sku || undefined,
-      from: q.from ? new Date(q.from) : undefined,
-      to: q.to ? new Date(q.to) : undefined,
-      windowDays,
-      metric: q.metric === 'orders' || q.metric === 'units' ? q.metric : 'revenue',
-    })
-    reply.header('Cache-Control', 'private, max-age=300')
-    return result
-  })
-
-  // ── DP.2 — Amazon ad-spend-by-hour overlay ───────────────────────────────
-  // Reuses analyzeDayparting() (single source of truth for "is the hourly ad
-  // stream live"). Returns hasData:false + a connect-stream note until Amazon
-  // Marketing Stream is provisioned (true on prod today). When AMS lands, switch
-  // this to the CD.12 Rome-recast raw query for TZ-correct heatmap alignment.
-  fastify.get('/advertising/orders-dayparting/ad-overlay', async (request, reply) => {
-    const q = request.query as { windowDays?: string; campaignId?: string }
-    const { analyzeDayparting } = await import('../services/advertising/ads-dayparting-intel.service.js')
-    const intel = await analyzeDayparting({
-      windowDays: q.windowDays ? Math.max(7, Math.min(365, Number(q.windowDays))) : 60,
-      campaignId: q.campaignId || undefined,
-    })
-    reply.header('Cache-Control', 'private, max-age=300')
-    return {
-      hasData: intel.hourlyAvailable,
-      hours: intel.hours.map((h) => ({ hour: h.hour, costCents: h.costCents, salesCents: h.salesCents, orders: h.orders, acos: h.acos })),
-      note: intel.hourlyAvailable ? null : 'Connect Amazon Marketing Stream for an hourly ad-spend overlay.',
-    }
-  })
+  // DP.1 / DP.2 — GET /advertising/orders-dayparting (+ /ad-overlay) are gone with the old console's Dayparting tab,
+  // their only caller (OC, 2026-10-06). The Ad Manager's Dayparting page reads /advertising/dayparting/heatmap.
   // NB: GET /advertising/dayparting-intel already exists in advertising.routes.ts
   // (returns the same analyzeDayparting() full intel) — the cockpit "When" panel
   // (RC2.T1) consumes that one. Do NOT re-declare it here: a duplicate Fastify

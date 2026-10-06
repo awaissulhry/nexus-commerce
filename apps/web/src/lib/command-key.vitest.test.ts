@@ -224,9 +224,8 @@ describe('the API’s command receipts', () => {
       '/api/advertising/ai-goals/:id/materialize',
       // R16 — an engine's switch in the Control Room lever drawer.
       '/api/advertising/automation/engine-switch/:key',
-      // W2-B (CC-24) — Replicate's run, and the launch of every builder (sendLaunch; the older console's Guided page).
+      // W2-B (CC-24) — Replicate's run, and the launch of every builder (sendLaunch).
       '/api/advertising/blueprints/replicate',
-      '/api/advertising/campaign-builder/launch',
       '/api/advertising/campaign-builder/single/launch',
       '/api/advertising/campaign-builder/sp-super-wizard/launch',
       '/api/advertising/campaigns/create',
@@ -237,7 +236,6 @@ describe('the API’s command receipts', () => {
       '/api/advertising/negative-targets/create',
       '/api/advertising/product-ads/create',
       '/api/advertising/sb-creatives/create',
-      '/api/advertising/search-terms/promote',
       '/api/advertising/targets/create',
       // MCP full control C6 — "Keep only these N steps" on a plan, in the approvals drawer (grid/PlanSteps.tsx).
       '/api/agent/fleet/approvals/:id/plan-amend',
