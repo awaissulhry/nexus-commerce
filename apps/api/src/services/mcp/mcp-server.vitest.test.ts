@@ -122,7 +122,7 @@ describe('C3 — the server and every change tool name the business', () => {
       // W1-8 — where the ads strategy lives, and that it only narrows.
       'read it with ads-strategy, change', 'It only narrows what this business lets',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
-      'read it with ads-playbook, change it with', 'start or stop its campaigns with apply-ads-playbook',
+      'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
       "a start needs the approver's authenticator code"]) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
