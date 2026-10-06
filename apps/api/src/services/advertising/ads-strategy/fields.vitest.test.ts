@@ -77,7 +77,9 @@ describe('the registry', () => {
     const byKey = (key: string) => STRATEGY_FIELDS.find((f) => f.key === key)!.readBy
     const target = [READERS.optimiser, READERS.bidRules, READERS.autopilot]
     const band = [READERS.gate, READERS.optimiser, READERS.bidRules, READERS.hourly, READERS.restores, READERS.autopilot]
-    expect([byKey('target'), byKey('targetAcosPct'), byKey('minBidCents'), byKey('maxBidCents')]).toEqual([target, target, band, band])
+    expect([byKey('target'), byKey('minBidCents'), byKey('maxBidCents')]).toEqual([target, band, band])
+    // AA-W2-8 — the ACoS target the engines use also holds a campaign target Claude raises by rule.
+    expect(byKey('targetAcosPct')).toEqual([...target, expect.stringMatching(/^Claude's door, for an ad change that may run by the business's rule .*: a campaign's own target ACoS that Claude raises by rule stays at or below it/)])
     expect(byKey('maxChangePct')).toEqual([READERS.stepClamp, READERS.optimiser, READERS.claudePreview, READERS.autopilot])
     expect(byKey('claudeAutonomy')).toEqual([CLAUDE_DOOR])
     // Each reader says where it acts, in words a screen can show.

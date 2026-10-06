@@ -52,6 +52,7 @@ import { publishEvent } from '../../lib/events/publish.js'
 import { logger } from '../../utils/logger.js'
 import { recordControlChange } from '../agent-fleet/control-audit.service.js'
 import { BRAKE_TOOLS, strategyLevelFor, strategyMemo, type StrategyMemo, type StrategyNarrowing } from '../advertising/ads-strategy/claude.js'
+import { DAILY_SOURCE } from '../advertising/ads-strategy/autonomy.js'
 import type { ClaudeActionType } from '../advertising/ads-strategy/fields.js'
 import { EXPIRY_HOURS } from './approval-gate.service.js'
 import { offeredOn } from './call-tool.js'
@@ -663,8 +664,9 @@ function tighterDaily(a: MarketFacts, b: MarketFacts): MarketFacts {
   for (const key of ['maxChangesPerDay', 'maxRaisesPerDay', 'maxBudgetIncreasePerDayCents'] as const) {
     if (b[key] != null && (out[key] == null || b[key]! < out[key]!)) {
       out[key] = b[key]
-      if (b.sources[key]) out.sources[key] = b.sources[key]
-      else delete out.sources[key]
+      const source = DAILY_SOURCE[key]
+      if (b.sources[source]) out.sources[source] = b.sources[source]
+      else delete out.sources[source]
     }
   }
   if (!b.strategy) out.strategy = null

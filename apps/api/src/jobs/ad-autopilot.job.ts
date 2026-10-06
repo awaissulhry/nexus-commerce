@@ -108,8 +108,11 @@ function appliedChanges(decisions: AppliedDecision[]): number {
 // 1d — `guard`: the dial posture and the caps this run ran under, and what they held back (AUTO plans only).
 export interface AutopilotTick { plans: number; decisions: number; guard?: EngineGuardReport }
 
+/** The plans this cron runs: enabled and not OFF. Auto-bid leaves their campaigns' bids to them (ads-auto-bid.service.ts). */
+export const RUNNING_AUTOPILOT_PLANS = { enabled: true, autonomy: { not: 'OFF' } }
+
 export async function runAutopilotOnce(): Promise<AutopilotTick> {
-  const plans = await prisma.autopilotPlan.findMany({ where: { enabled: true, autonomy: { not: 'OFF' } } })
+  const plans = await prisma.autopilotPlan.findMany({ where: RUNNING_AUTOPILOT_PLANS })
   let decisions = 0
   // 1d — the account dial and this engine's caps, read once per run when an AUTO plan could write.
   const guard = plans.some((p) => p.autonomy === 'AUTO') ? await openEngineGuard('autopilot') : null

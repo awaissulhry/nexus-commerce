@@ -117,7 +117,7 @@ describe('measure — what one change does to spend', () => {
 })
 
 describe('every row against its own scope (W1-5 band and step)', () => {
-  const s = { limits: { minBidCents: 10, maxBidCents: 120, maxChangePct: 10 }, sources: { minBidCents: source('Test market (IT)'), maxBidCents: source('Helmets (IT)', 'category', 3), maxChangePct: source('Test market (IT)', 'market', 2) } }
+  const s = { limits: { minBidCents: 10, maxBidCents: 120, maxChangePct: 10 }, sources: { minBid: source('Test market (IT)'), maxBid: source('Helmets (IT)', 'category', 3), maxChangePct: source('Test market (IT)', 'market', 2) } }
 
   it('above the highest bid or below the lowest: outside, naming the value, the limit and its row', () => {
     expect(bidOutsideWhy({ field: 'bid', fromCents: 115, toCents: 125 }, s, 'EUR')).toBe('the new bid EUR 1.25 is above the highest bid EUR 1.20 (ads strategy: Helmets (IT), category, v3)')
@@ -149,7 +149,8 @@ describe('the safer number for a mixed ad group (W1\'s resolver)', () => {
     const resolved = resolveProducts(index, [...catalog.products.values()], catalog)
     const s = scopeLimitsOf({ values: valuesOf(resolved), resolved }, 'bid')
     expect(s.limits).toMatchObject({ maxBidCents: 90, maxChangePct: 20, protect: true, claudeLevel: 'confirm' })
-    expect(s.sources.maxBidCents).toMatchObject({ level: 'category', label: 'Helmets (IT)', version: 3, product: 'TEST-P2' })
+    // AA-W2-8 — a money limit's row under a name that is not money (the money filter strips a money key whole).
+    expect(s.sources.maxBid).toMatchObject({ level: 'category', label: 'Helmets (IT)', version: 3, product: 'TEST-P2' })
     expect(s.sources.protect).toMatchObject({ level: 'category', product: 'TEST-P2' })
     expect(s.sources.claudeLevel).toMatchObject({ level: 'product', label: 'TEST-P1 (IT)', version: 4, product: 'TEST-P1' })
     expect(s.sources.maxChangePct).toMatchObject({ level: 'market' })
@@ -265,7 +266,7 @@ describe('the common checks', () => {
     const resolved = resolveMarket(index)
     const daily = dailyLimitsOf({ values: valuesOf(resolved), resolved })
     expect(daily).toMatchObject({ maxChangesPerDay: 40, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: 0 })
-    expect(daily.sources).toEqual({ maxChangesPerDay: expect.objectContaining({ level: 'market', label: 'Test market (IT)', version: 3 }), maxBudgetIncreasePerDayCents: expect.objectContaining({ level: 'market' }) })
+    expect(daily.sources).toEqual({ maxChangesPerDay: expect.objectContaining({ level: 'market', label: 'Test market (IT)', version: 3 }), maxBudgetIncreasePerDay: expect.objectContaining({ level: 'market' }) })
   })
 
   it('C6 — the same entity changed by rule as often as the tool allows in 24 hours (no back and forth)', () => {
@@ -390,7 +391,7 @@ describe('the note — each limit, its value, this change\'s value and its sourc
       thisOver: { ...RAISE, highestNewBidCents: 55, largestRaisePct: 10 },
       markets: { IT: market({ maxActionsPerRun: 40, maxChangesPerDay: null, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: { maxActionsPerRun: source('Test market (IT)', 'market', 2) } }) },
       scopes: {
-        'IT|adGroup:g1': scope({ limits: { maxBidCents: 120, maxChangePct: 15, protect: true, claudeLevel: 'auto' }, sources: { maxBidCents: source('Helmets (IT)', 'category', 3, 'TEST-P2'), maxChangePct: source('Test market (IT)', 'market', 2), protect: source('Helmets (IT)', 'category', 3, 'TEST-P2'), claudeLevel: source('Test market (IT)', 'market', 2) } }),
+        'IT|adGroup:g1': scope({ limits: { maxBidCents: 120, maxChangePct: 15, protect: true, claudeLevel: 'auto' }, sources: { maxBid: source('Helmets (IT)', 'category', 3, 'TEST-P2'), maxChangePct: source('Test market (IT)', 'market', 2), protect: source('Helmets (IT)', 'category', 3, 'TEST-P2'), claudeLevel: source('Test market (IT)', 'market', 2) } }),
         'IT|adGroup:g2': scope({ label: 'ad group "Second" (IT)', limits: { maxChangePct: 15 }, sources: { maxChangePct: source('Test market (IT)', 'market', 2) } }),
       },
       today: { IT: { changes: 12, writes: 12, raises: 3, budgetIncreaseCents: 0 } },

@@ -683,8 +683,9 @@ export function startAnomalyGuardCron(): void {
   logger.info('ads-anomaly-guard cron: scheduled', { schedule })
 }
 
-// TD.1 — automatic profit-native target-ACOS bidding. Every 6h: optimize bids
-// toward each ad group's profit-derived target ACOS. Autonomy-gated (OFF/halt
+// TD.1 — automatic target-ACOS bidding. Every 6h: optimize bids toward the target
+// ACoS the Owner set (campaign, ads strategy or account default), leaving bids
+// another owner holds (ads-auto-bid.service.ts). Autonomy-gated (OFF/halt
 // skip, SUGGEST propose-only) + per-campaign write-gate allowlist downstream.
 export async function runAutoBidCron(): Promise<void> {
   await recordCronRun('ads-auto-bid', async () => {
@@ -703,9 +704,9 @@ export async function runAutoBidCron(): Promise<void> {
 export async function runAutoBidLiveOnce(): Promise<string> {
   const { guardLiveRun } = await import('../services/advertising/ads-engine-lock.js')
   const run = await guardLiveRun('auto-bid', async () => {
-    const { runAutoBidOnce } = await import('../services/advertising/ads-auto-bid.service.js')
-    const r = await runAutoBidOnce()
-    return r.skipped ? `skipped=${r.skipped}` : `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}`
+    const { runAutoBidOnce, autoBidSummaryLine } = await import('../services/advertising/ads-auto-bid.service.js')
+    // Owner targets only — the run's own summary line: what it left alone, and why, is recorded with the run.
+    return autoBidSummaryLine(await runAutoBidOnce())
   })
   return run.ran ? run.value : `skipped: ${run.reason}`
 }
