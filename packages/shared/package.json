@@ -154,6 +154,10 @@
       "types": "./dist/ads-campaign-name.d.ts",
       "default": "./dist/ads-campaign-name.js"
     },
+    "./ads-sp-wizard": {
+      "types": "./dist/ads-sp-wizard.d.ts",
+      "default": "./dist/ads-sp-wizard.js"
+    },
     "./agent-fleet": {
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"

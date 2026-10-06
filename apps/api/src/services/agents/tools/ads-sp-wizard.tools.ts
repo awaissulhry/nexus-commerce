@@ -2,7 +2,7 @@
  * B-3 (builders for Claude, Owner 10-07, option A) — build-sp-wizard-campaigns: Claude asks for a ONE-OFF campaign set
  * built by the SP Super Wizard, outside any playbook — structure Standard (5 campaigns), Advanced (11) or Custom, the
  * shapes the wizard's screens make (Quick and Guided post to the same launch: a Custom set of their roles). The
- * campaigns are the wizard's own (ads-sp-wizard-structure.ts: the screen's generator and negative funnel, server side)
+ * campaigns are the wizard's own (@nexus/shared/ads-sp-wizard: the structures and negative funnel its screen uses)
  * and the create path is the wizard's own launch (ads-sp-wizard-launch.service.ts, Owner rule 1) with the options the
  * ads playbook's build passes it (PB-5a, ads-playbook/build.ts). No new create path.
  *
@@ -40,9 +40,9 @@ import { normaliseNegTerm } from '../../advertising/ads-protect-converting.js'
 import { blockedPositive, type Positive } from '../../advertising/ads-winner-lock.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import {
-  applyWizardFunnel, autoGroupBidCents, dedupeKeywords, generateWizardCampaigns, WIZARD_AUTO_GROUPS,
-  type WizardCampaign, type WizardMatch, type WizardStructure,
-} from '../../advertising/ads-sp-wizard-structure.js'
+  applyAutoNegatives, AUTO_GROUP_MULT, dedupeCI, DEFAULT_CUSTOM_NAME_TOKENS, generateCampaignRows,
+  type AutoGroupKey, type NegKeyword, type SpwGeneratedCampaign, type SpwMatchType, type StructureMode,
+} from '@nexus/shared/ads-sp-wizard'
 import type { SpwLaunchBody } from '../../advertising/ads-sp-wizard-launch.service.js'
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
 import { marketCurrency } from '../../pim/market-currency.js'
@@ -121,14 +121,20 @@ interface WizardPlan {
   currency: string
 }
 
+/** A campaign of the set: the wizard's generated one, with the negatives it gets. */
+type WizardCampaign = SpwGeneratedCampaign & { negKeywords: NegKeyword[] }
+/** The four Auto groups, each on, at the default bid times the wizard's multiplier (the screen's order). */
+const AUTO_GROUPS: AutoGroupKey[] = ['CLOSE_MATCH', 'LOOSE_MATCH', 'SUBSTITUTES', 'COMPLEMENTS']
+const autoGroupBidCents = (defaultBidCents: number, key: AutoGroupKey) => Math.round(defaultBidCents * AUTO_GROUP_MULT[key])
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const hash = (value: unknown) => createHash('sha256').update(canonical(value)).digest('base64url').slice(0, 32)
-const STRUCTURE_WORDS: Record<WizardStructure, string> = { standard: 'Standard', advanced: 'Advanced', custom: 'Custom' }
+const STRUCTURE_WORDS: Record<StructureMode, string> = { standard: 'Standard', advanced: 'Advanced', custom: 'Custom' }
 const UNDO_WORDS = 'Undo archives every campaign it made (archive-ads): permanent at Amazon, an archived campaign never comes back.'
 const RULES_WORDS = 'none: it creates no harvest, negative-targeting or bid-strategy rule and no AI Control plan (the screen\'s step 3); ask for a rule with save-ad-rule'
 
 /** The match types a keyword campaign buys its keywords at (the launch's own reading of the wizard's label). */
-function matchTypesOf(label: string): WizardMatch[] {
+function matchTypesOf(label: string): SpwMatchType[] {
   const u = label.toLowerCase()
   if (u.includes('&')) return ['BROAD', 'PHRASE', 'EXACT']
   if (u.includes('phrase')) return ['PHRASE']
@@ -194,13 +200,11 @@ async function wizardPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
 
   // The wizard's campaigns: generated as its screen generates them; one with nothing to target is left out (it would
   // serve nothing at Amazon), and said.
-  const generated = generateWizardCampaigns({
-    productGroupName: a.productGroupName,
-    structure: a.structure,
-    keywords: { Brand: a.keywords?.brand, Competitor: a.keywords?.competitor, Category: a.keywords?.category },
-    customKeywordTypes: a.customKeywordTypes,
-    customTargeting: targeting,
-  })
+  // Standard and Advanced generate keyword campaigns per keyword type: each takes its type's keywords, as a person types
+  // them into the screen's step 2; Custom keyword types carry their own.
+  const byType: Record<string, string[]> = { Brand: dedupeCI(a.keywords?.brand ?? []), Competitor: dedupeCI(a.keywords?.competitor ?? []), Category: dedupeCI(a.keywords?.category ?? []) }
+  const generated = generateCampaignRows(a.productGroupName, a.structure, (a.customKeywordTypes ?? []).map((t) => ({ ...t, keywords: dedupeCI(t.keywords) })), targeting, [...DEFAULT_CUSTOM_NAME_TOKENS])
+    .map((c) => (a.structure !== 'custom' && c.kind === 'keyword' ? { ...c, keywords: byType[c.keywordType] ?? [] } : c))
   const productTargets = [...new Set(a.productTargets ?? [])]
   const leftOut = generated
     .filter((c) => (c.kind === 'keyword' && !c.keywords.length) || (c.kind === 'pat' && !productTargets.length))
@@ -213,8 +217,8 @@ async function wizardPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
   const unknown = (a.overrides ?? []).filter((o) => !byName.has(o.name.toLowerCase())).map((o) => o.name)
   if (unknown.length) return refuse(`No campaign of this set is named ${unknown.map((n) => `"${n}"`).join(', ')}. Its campaigns: ${kept.map((c) => `"${c.name}"`).join(', ')}.`)
   const override = new Map((a.overrides ?? []).map((o) => [o.name.toLowerCase(), o]))
-  const budgetOf = (c: WizardCampaign) => override.get(c.name.toLowerCase())?.dailyBudgetCents ?? a.dailyBudgetCents
-  const bidOf = (c: WizardCampaign) => override.get(c.name.toLowerCase())?.defaultBidCents ?? a.defaultBidCents
+  const budgetOf = (c: SpwGeneratedCampaign) => override.get(c.name.toLowerCase())?.dailyBudgetCents ?? a.dailyBudgetCents
+  const bidOf = (c: SpwGeneratedCampaign) => override.get(c.name.toLowerCase())?.defaultBidCents ?? a.defaultBidCents
   const budgets = kept.map(budgetOf)
   const largest = Math.max(...budgets)
   if (largest > ceiling.dailyCapCents) {
@@ -231,7 +235,7 @@ async function wizardPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
       if (hit) return refuse(`The negative ${n.matchType.toLowerCase()} "${n.text}" would stop the set's own keyword "${hit.text}" (${hit.match.toLowerCase()}) in "${c.name}": leave it out.`)
     }
   }
-  const campaigns = applyWizardFunnel(kept.map((c) => ({ ...c, negKeywords: [...own] })), a.funnelNegatives)
+  const campaigns: WizardCampaign[] = applyAutoNegatives(kept.map((c) => ({ ...c, negKeywords: [...own] })), a.funnelNegatives)
 
   // The wizard's launch body, as its screen sends it: plain keywords at the campaign's match label and bid, the four
   // Auto groups on at the smart multipliers, no rules, no bid configuration; the placements kept for later.
@@ -246,7 +250,7 @@ async function wizardPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
       bidEur: bidOf(c) / 100, budgetEur: budgetOf(c) / 100,
       keywords: c.keywords,
       productTargets: c.kind === 'pat' ? productTargets.map((asin) => ({ asin })) : [],
-      ...(c.kind === 'auto' ? { autoGroups: WIZARD_AUTO_GROUPS.map((g) => ({ key: g.key, enabled: true, bidEur: autoGroupBidCents(bidOf(c), g.multiplier) / 100 })) } : {}),
+      ...(c.kind === 'auto' ? { autoGroups: AUTO_GROUPS.map((key) => ({ key, enabled: true, bidEur: autoGroupBidCents(bidOf(c), key) / 100 })) } : {}),
       negKeywords: c.negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })),
       negProducts: [],
       ...(a.biddingStrategy === 'fixed' ? { biddingStrategy: 'MANUAL' as const } : {}),
@@ -257,7 +261,7 @@ async function wizardPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
 
   // How big one build is: every write it sends Amazon.
   const writes = campaigns.reduce((n, c) => n + 2 + products.length + c.negKeywords.length
-    + (c.kind === 'keyword' ? c.keywords.length * matchTypesOf(c.matchType).length : c.kind === 'pat' ? productTargets.length : WIZARD_AUTO_GROUPS.length), 0)
+    + (c.kind === 'keyword' ? c.keywords.length * matchTypesOf(c.matchType).length : c.kind === 'pat' ? productTargets.length : AUTO_GROUPS.length), 0)
   if (writes > MAX_WRITES) return refuse(`This set sends ${writes} writes to Amazon; one build sends at most ${MAX_WRITES}. Build it as two sets (fewer keywords, products or campaigns in each).`)
 
   // The portfolio: one Amazon holds in this market's ads profile.
@@ -285,7 +289,7 @@ async function wizardPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
   const stored = storedReach(reach)
 
   // Rule 3 — the keywords this product already buys elsewhere (said), and those other products buy (listed, allowed).
-  const setKeywords = dedupeKeywords(campaigns.flatMap((c) => c.keywords))
+  const setKeywords = dedupeCI(campaigns.flatMap((c) => c.keywords))
   const asins = products.map((p) => p.asin).filter((x): x is string => !!x)
   const clashes = setKeywords.length ? await keywordClashes(a.market, setKeywords, asins) : { sameProduct: [], sharedWithOtherProducts: [] }
   // A keyword under two keyword types: two campaigns of the set buy it (the funnel parts keyword types, not keywords).
@@ -299,19 +303,19 @@ async function wizardPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
     approvalId: ctx.approvalId ?? null,
   })
   const newMarket = !(await prisma.campaign.findFirst({ where: { marketplace: a.market }, select: { id: true } }))
-  const plannedBids = campaigns.flatMap((c) => [bidOf(c), ...(c.kind === 'auto' ? WIZARD_AUTO_GROUPS.map((g) => autoGroupBidCents(bidOf(c), g.multiplier)) : [])])
+  const plannedBids = campaigns.flatMap((c) => [bidOf(c), ...(c.kind === 'auto' ? AUTO_GROUPS.map((key) => autoGroupBidCents(bidOf(c), key)) : [])])
   const highestPlannedBidCents = Math.max(...plannedBids)
 
   const floor = SUPPRESSION_FLOOR_CENTS
   const lines = campaigns.map((c) => ({
     name: c.name, kind: c.kind, matchType: c.matchType, keywordType: c.keywordType,
-    keywords: c.keywords.length, productTargets: c.kind === 'pat' ? productTargets.length : 0, autoGroups: c.kind === 'auto' ? WIZARD_AUTO_GROUPS.length : 0,
-    negatives: { yours: c.negKeywords.filter((n) => !n.funnel).length, funnel: c.negKeywords.filter((n) => n.funnel).length },
+    keywords: c.keywords.length, productTargets: c.kind === 'pat' ? productTargets.length : 0, autoGroups: c.kind === 'auto' ? AUTO_GROUPS.length : 0,
+    negatives: { yours: c.negKeywords.filter((n) => !n.auto).length, funnel: c.negKeywords.filter((n) => n.auto).length },
     dailyBudgetCents: budgetOf(c), startBidCents: bidOf(c),
   }))
   const totals = {
     campaigns: campaigns.length, keywords: campaigns.reduce((n, c) => n + (c.kind === 'keyword' ? c.keywords.length * matchTypesOf(c.matchType).length : 0), 0),
-    productTargets: campaigns.some((c) => c.kind === 'pat') ? productTargets.length : 0, autoGroups: campaigns.filter((c) => c.kind === 'auto').length * WIZARD_AUTO_GROUPS.length,
+    productTargets: campaigns.some((c) => c.kind === 'pat') ? productTargets.length : 0, autoGroups: campaigns.filter((c) => c.kind === 'auto').length * AUTO_GROUPS.length,
     negatives: campaigns.reduce((n, c) => n + c.negKeywords.length, 0), productAds: products.length * campaigns.length, writes,
   }
   const warnings = [

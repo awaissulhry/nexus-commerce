@@ -13,25 +13,14 @@ import { Button, Toggle } from '@/design-system/primitives'
 import '../builder-ds.css'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
+import { standardRows, advancedRows, type StructureMode, type StructureRow } from '@nexus/shared/ads-sp-wizard'
 import { CustomScheme, type CustomKeywordType, type TargetingKind } from './CustomScheme'
 import { InfoTip } from '../../campaigns/InfoTip'
 
-export type StructureMode = 'standard' | 'advanced' | 'custom'
+// B-3 — the structures are the one shared copy (@nexus/shared/ads-sp-wizard), which Claude's one-off build uses too.
+export { standardRows, advancedRows }
+export type { StructureMode, StructureRow }
 export type AutomationMode = 'rule' | 'ai'
-export type StructureRow = { c: string; a: string; m: string; k: string }
-
-const KW = ['Brand', 'Competitor', 'Category']
-
-export function standardRows(): StructureRow[] {
-  const base = [{ m: 'Auto', k: '-' }, ...KW.map((k) => ({ m: 'Broad & Phrase & Exact', k })), { m: 'PAT', k: '-' }]
-  return base.map((r, i) => ({ ...r, c: `Campaign ${i + 1}`, a: `AdGroup ${i + 1}` }))
-}
-export function advancedRows(): StructureRow[] {
-  const rows: Array<{ m: string; k: string }> = [{ m: 'Auto', k: '-' }]
-  for (const m of ['Broad', 'Phrase', 'Exact']) for (const k of KW) rows.push({ m, k })
-  rows.push({ m: 'PAT', k: '-' })
-  return rows.map((r, i) => ({ ...r, c: `Campaign ${i + 1}`, a: `AdGroup ${i + 1}` }))
-}
 
 function StructureArrow() {
   return (

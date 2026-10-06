@@ -16,13 +16,13 @@ import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '../builder-ds.css'
-import { standardRows, advancedRows } from './StructureSelection'
+import { AUTO_GROUP_MULT, applyAutoNegatives as applyFunnel, dedupeCI, generateCampaignRows, singleMatch, type AutoGroupKey, type NegKeyword, type NegMatch } from '@nexus/shared/ads-sp-wizard'
 import { ProductSelection, type SpwProduct } from './ProductSelection'
-import type { CustomKeywordType, TargetingKind, MatchTypeKey } from './CustomScheme'
+import type { CustomKeywordType, TargetingKind } from './CustomScheme'
 
 // AT.1 — Amazon SP Auto-targeting groups. Each is independently enable/disable-able
 // and separately biddable (Amazon defaults all four on at the campaign bid).
-export type AutoGroupKey = 'CLOSE_MATCH' | 'LOOSE_MATCH' | 'SUBSTITUTES' | 'COMPLEMENTS'
+export type { AutoGroupKey }
 export type AutoGroup = { key: AutoGroupKey; enabled: boolean; bid: string }
 export const AUTO_GROUP_META: Array<{ key: AutoGroupKey; label: string; desc: string }> = [
   { key: 'CLOSE_MATCH', label: 'Close match', desc: 'Shoppers using search terms closely related to your product.' },
@@ -30,17 +30,12 @@ export const AUTO_GROUP_META: Array<{ key: AutoGroupKey; label: string; desc: st
   { key: 'SUBSTITUTES', label: 'Substitutes', desc: 'Shoppers viewing detail pages of products similar to yours.' },
   { key: 'COMPLEMENTS', label: 'Complements', desc: 'Shoppers viewing detail pages of products that complement yours.' },
 ]
-// AT.2 — intent-based smart default bids (× the campaign default): Close & Substitutes
-// lean higher (buy intent / conquesting), Loose & Complements lower (discovery / cross-sell).
-const AUTO_GROUP_MULT: Record<AutoGroupKey, number> = { CLOSE_MATCH: 1.0, SUBSTITUTES: 1.1, LOOSE_MATCH: 0.65, COMPLEMENTS: 0.6 }
+// AT.2 — intent-based smart default bids (× the campaign default, AUTO_GROUP_MULT in @nexus/shared/ads-sp-wizard).
 export const defaultAutoGroups = (defaultBid: number): AutoGroup[] =>
   AUTO_GROUP_META.map((g) => ({ key: g.key, enabled: true, bid: (defaultBid * AUTO_GROUP_MULT[g.key]).toFixed(2) }))
 
-export type NegMatch = 'EXACT' | 'PHRASE'
-/** A negative keyword carries its own match type (Amazon SP only supports
- *  negative-exact / negative-phrase). `auto` marks ones the funnel created — they
- *  show read-only + badged in the drawer and are recomputed, never hand-edited. */
-export type NegKeyword = { text: string; matchType: NegMatch; auto?: boolean }
+// B-3 — a negative keyword (NegKeyword: its own match type; `auto` marks the funnel's) is the shared one.
+export type { NegKeyword, NegMatch }
 
 export type SpwCampaign = {
   id: string; name: string; adGroupName: string
@@ -52,59 +47,14 @@ export type SpwCampaign = {
 
 const DEFAULT_BID = 0.75, DEFAULT_BUDGET = 10
 
-const matchTok = (m: string) => (m === 'Broad & Phrase & Exact' ? '' : m)
-function campaignName(grp: string, kind: SpwCampaign['kind'], m: string, k: string): string {
-  const g = grp.trim() || 'Campaign'
-  if (kind === 'auto') return `${g}-SP-Auto`
-  if (kind === 'pat') return `${g}-SP-PAT`
-  const tok = matchTok(m)
-  return `${g}-SP-Keyword-${k}${tok ? `-${tok}` : ''}`
-}
-
-const matchLabel = (m: MatchTypeKey): string => (m === 'PHRASE' ? 'Phrase' : m === 'EXACT' ? 'Exact' : 'Broad')
-/** Custom-scheme cross-product: Auto + PAT (if chosen) + each keyword type × each of its match types. */
-type GenRow = { m: string; k: string; keywords?: string[]; name?: string }
-type Kind = SpwCampaign['kind']
-const TARGETING_LABEL: Record<Kind, string> = { auto: 'Auto', keyword: 'Keyword', pat: 'PAT' }
-/** Token-driven custom name: walk the Campaign-Name tokens, resolve each to this
- *  campaign's value, then dash-join after the product-group prefix. */
-function tokenName(grp: string, tokens: string[], kind: Kind, match: string, keywordType: string, asin: string): string {
-  const g = grp.trim() || 'Campaign'
-  const resolve = (t: string): string =>
-    t === 'campaignType' ? 'SP'
-      : t === 'targetingType' ? TARGETING_LABEL[kind]
-        : t === 'matchType' ? (kind === 'keyword' ? match : '')
-          : t === 'keywordType' ? (kind === 'keyword' ? keywordType : '')
-            : t === 'asin' ? asin : '' // 'customize' free-text deferred
-  const parts = tokens.map(resolve).filter(Boolean)
-  return parts.length ? [g, ...parts].join('-') : g
-}
-function customRows(keywordTypes: CustomKeywordType[], targeting: TargetingKind[], tokens: string[], grp: string, asin: string): GenRow[] {
-  const rows: GenRow[] = []
-  const add = (kind: Kind, match: string, kwt: string, keywords: string[]) =>
-    rows.push({ m: kind === 'auto' ? 'Auto' : kind === 'pat' ? 'PAT' : match, k: kwt || '-', keywords, name: tokenName(grp, tokens, kind, match, kwt, asin) })
-  if (targeting.includes('auto')) add('auto', '', '', [])
-  if (targeting.includes('keyword')) for (const kt of keywordTypes) for (const mt of kt.matchTypes) add('keyword', matchLabel(mt), kt.name, kt.keywords)
-  if (targeting.includes('product')) add('pat', '', '', [])
-  return rows
-}
-
 export function generateCampaigns(grp: string, mode: 'standard' | 'advanced' | 'custom', customKeywordTypes: CustomKeywordType[], customTargetingTypes: TargetingKind[], customNameTokens: string[] = [], asin = ''): SpwCampaign[] {
-  const rows: GenRow[] =
-    mode === 'advanced' ? advancedRows()
-    : mode === 'custom' ? customRows(customKeywordTypes, customTargetingTypes, customNameTokens, grp, asin)
-    : standardRows()
-  return rows.map((r, i) => {
-    const kind: SpwCampaign['kind'] = r.m === 'Auto' ? 'auto' : r.m === 'PAT' ? 'pat' : 'keyword'
-    const name = r.name ?? campaignName(grp, kind, r.m, r.k)
-    return {
-      id: `cmp-${i}`, name, adGroupName: `${name} Ad Group`,
-      matchType: r.m, keywordType: r.k, kind,
-      bid: DEFAULT_BID.toFixed(2), budget: DEFAULT_BUDGET.toFixed(2), sugBid: DEFAULT_BID, sugBudget: DEFAULT_BUDGET,
-      keywords: r.keywords ?? [], productTargets: [], negKeywords: [], negProducts: [],
-      autoGroups: kind === 'auto' ? defaultAutoGroups(DEFAULT_BID) : [],
-    }
-  })
+  // B-3 — the rows and their names are the shared structure (@nexus/shared/ads-sp-wizard); the screen adds its defaults.
+  return generateCampaignRows(grp, mode, customKeywordTypes, customTargetingTypes, customNameTokens, asin).map((r) => ({
+    ...r,
+    bid: DEFAULT_BID.toFixed(2), budget: DEFAULT_BUDGET.toFixed(2), sugBid: DEFAULT_BID, sugBudget: DEFAULT_BUDGET,
+    productTargets: [], negKeywords: [], negProducts: [],
+    autoGroups: r.kind === 'auto' ? defaultAutoGroups(DEFAULT_BID) : [],
+  }))
 }
 
 /** Campaigns that won't run because they have no positive targeting (keyword campaigns
@@ -113,61 +63,9 @@ export function campaignsMissingTargeting(cs: SpwCampaign[]): number {
   return cs.filter((c) => (c.kind === 'keyword' && c.keywords.length === 0) || (c.kind === 'pat' && c.productTargets.length === 0)).length
 }
 
-// ── NT.1 — Negative-keyword funnel (campaign isolation) ──────────────────
-// Two mechanisms, both writing ad-group-level negatives that carry a match type:
-//  ① Match-type funnel — within a keyword group, a looser campaign ALWAYS negates the
-//     group's keyword set at every tighter match type so each search term serves from one
-//     campaign: Exact = none · Phrase = neg-exact · Broad = neg-exact + neg-phrase.
-//  ② Auto-isolation — the Auto campaign neg-exacts every manual keyword so it only
-//     discovers NEW search terms.
-// `auto:true` negatives are derived (recomputed here); manual ones are preserved.
-const RANK: Record<'BROAD' | 'PHRASE' | 'EXACT', number> = { BROAD: 1, PHRASE: 2, EXACT: 3 }
-/** Single match type for a keyword campaign, or null for combined (Standard's
- *  "Broad & Phrase & Exact") / Auto / PAT — those don't take part in the funnel. */
-function singleMatch(m: string): 'BROAD' | 'PHRASE' | 'EXACT' | null {
-  const u = (m || '').toLowerCase()
-  if (u.includes('&')) return null
-  if (u.includes('phrase')) return 'PHRASE'
-  if (u.includes('exact')) return 'EXACT'
-  if (u.includes('broad')) return 'BROAD'
-  return null
-}
-const dedupeCI = (xs: string[]): string[] => {
-  const seen = new Set<string>(), out: string[] = []
-  for (const x of xs) { const k = x.trim().toLowerCase(); if (x.trim() && !seen.has(k)) { seen.add(k); out.push(x.trim()) } }
-  return out
-}
-
+// ── NT.1 — Negative-keyword funnel (campaign isolation): the shared one (@nexus/shared/ads-sp-wizard, B-3) ──
 export function applyAutoNegatives(campaigns: SpwCampaign[], enabled: boolean): SpwCampaign[] {
-  // Always drop prior auto negatives first (so they never accumulate / go stale).
-  const base = campaigns.map((c) => ({ ...c, negKeywords: c.negKeywords.filter((n) => !n.auto) }))
-  if (!enabled) return base
-  const keywordCampaigns = base.filter((c) => c.kind === 'keyword')
-  const allKeywords = dedupeCI(keywordCampaigns.flatMap((c) => c.keywords))
-  return base.map((c) => {
-    let auto: NegKeyword[] = []
-    if (c.kind === 'auto') {
-      // ② Auto-isolation: neg-exact every manual keyword in the build.
-      auto = allKeywords.map((text) => ({ text, matchType: 'EXACT' as NegMatch, auto: true }))
-    } else if (c.kind === 'keyword') {
-      // ① Funnel: negate the GROUP's whole keyword set at every match type TIGHTER than this
-      // campaign's own — Broad → neg-exact + neg-phrase, Phrase → neg-exact, Exact → none — ALWAYS
-      // (not only when a tighter sibling campaign exists). So a Broad campaign always blocks the
-      // exact + in-order-phrase forms even when the group has no dedicated Phrase/Exact tier.
-      const my = singleMatch(c.matchType)
-      if (my) {
-        const sibs = keywordCampaigns.filter((s) => s.keywordType === c.keywordType && s.id !== c.id)
-        const groupKw = dedupeCI([...c.keywords, ...sibs.flatMap((s) => s.keywords)])
-        if (RANK.EXACT > RANK[my]) auto.push(...groupKw.map((text) => ({ text, matchType: 'EXACT' as NegMatch, auto: true })))
-        if (RANK.PHRASE > RANK[my]) auto.push(...groupKw.map((text) => ({ text, matchType: 'PHRASE' as NegMatch, auto: true })))
-      }
-    }
-    // Merge auto into manual; a manual negative for the same text+match wins (no dup).
-    const seen = new Set(c.negKeywords.filter((n) => !n.auto).map((n) => `${n.text.toLowerCase()}|${n.matchType}`))
-    const merged = [...c.negKeywords.filter((n) => !n.auto)]
-    for (const a of auto) { const k = `${a.text.toLowerCase()}|${a.matchType}`; if (!seen.has(k)) { seen.add(k); merged.push(a) } }
-    return { ...c, negKeywords: merged }
-  })
+  return applyFunnel(campaigns, enabled)
 }
 
 const money = (cur: string, n: number) => `${cur}${n.toFixed(2)}`
