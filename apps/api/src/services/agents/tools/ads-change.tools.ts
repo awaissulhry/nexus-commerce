@@ -52,6 +52,7 @@ import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
 import { adGroupCampaigns, adGroupDefaultBids, adGroupSuppressionCounts, highestAdGroupBidAbove } from '../../advertising/ads-entity-lookup.service.js'
 import { restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
+import { playbookHoldOf, playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
 import { alsoChangedBy, approvedRun, BY_RULE_WORDS, changeClampedBid, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, storedReach, strategyFactsMoney, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
@@ -164,7 +165,7 @@ async function undoItems(rows: UndoRow[], negatives: UndoNegative[]): Promise<{ 
       const now = ((campaign.get(r.entityId)?.dynamicBidding as { placementBidding?: Array<{ placement?: string; percentage?: number }> } | null)?.placementBidding) ?? []
       for (const a of back) {
         const from = now.find((n) => n.placement === a.placement)?.percentage ?? 0
-        if (typeof a.percentage === 'number' && a.percentage !== from) items.push({ entity: { kind: 'campaign', id: r.entityId }, change: { field: 'placementPct', fromPct: from, toPct: a.percentage } })
+        if (typeof a.percentage === 'number' && a.percentage !== from) items.push({ entity: { kind: 'campaign', id: r.entityId }, change: { field: 'placementPct', fromPct: from, toPct: a.percentage, ...(a.placement ? { placement: a.placement } : {}) } })
       }
       continue
     }
@@ -294,6 +295,19 @@ async function undoOneChange(changeSetId: string, changeId: string, ctx?: Pick<T
   return finish({ mode: 'change', changeSetId, changeId }, inWindow.map(rowOut), negatives, inWindow.length, ctx)
 }
 
+/**
+ * PB-5b — an undo that would raise a bid, a budget or a placement of a playbook's campaign (built, or at a floor its stop
+ * holds): refused — those go back only with the playbook's START (the approver's code). Lowering them stays an undo.
+ */
+async function playbookRaiseRefusal(items: readonly KitItem[]): Promise<string | null> {
+  const raises = items.filter((i) => (i.change.field === 'bid' || i.change.field === 'dailyBudget') ? i.change.toCents > (i.change.fromCents ?? 0)
+    : i.change.field === 'placementPct' ? i.change.toPct > (i.change.fromPct ?? 0) : false)
+  if (!raises.length) return null
+  const idOf = (kind: string) => [...new Set(raises.filter((i) => i.entity.kind === kind).map((i) => (i.entity as { id: string }).id))]
+  const held = await playbookHoldOf({ targetIds: idOf('target'), adGroupIds: idOf('adGroup'), campaignIds: idOf('campaign') })
+  return held ? `Not undone: it would raise the bids of "${held.name}" — ${startOnlyRefusal('that campaign', held.why)}.` : null
+}
+
 async function finish(source: Record<string, unknown>, rows: UndoRow[], negatives: UndoNegative[], total: number, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const writes = await restoreWrites(rows, negatives)
   const reach = await reachOfRestore(writes)
@@ -301,6 +315,8 @@ async function finish(source: Record<string, unknown>, rows: UndoRow[], negative
   // AA-W2-9 — what a run by rule is judged on: every row (not only the 50 shown) against the ads strategy where it lands
   // and the tool's limits, the gate as the rule's write, and what no run by rule judges.
   const { items, notJudged } = await undoItems(rows, negatives)
+  const playbook = await playbookRaiseRefusal(items)
+  if (playbook) return { ok: false, error: playbook }
   const rule = await ruleFactsFor({ tool: 'undo-ad-change', limits: UNDO_LIMITS, items, writes, approvalId: ctx?.approvalId })
   const parts = [
     rows.length ? `restores ${total} recorded write${total === 1 ? '' : 's'} to the values before them` : '',
@@ -672,7 +688,7 @@ async function placementPreview(args: Record<string, unknown>, ctx?: Pick<ToolCo
   const raises = PLACEMENTS.filter((p) => (proposed[p.key] ?? 0) > (current[p.key] ?? 0)).map((p) => p.label)
   // AA-W2-8 — each adjustment that moves is one item, in points: a raise raises every bid there.
   const items: KitItem[] = PLACEMENTS.filter((p) => (proposed[p.key] ?? 0) !== (current[p.key] ?? 0))
-    .map((p): KitItem => ({ entity: { kind: 'campaign', id: c.id }, change: { field: 'placementPct', fromPct: current[p.key] ?? 0, toPct: proposed[p.key] ?? 0 } }))
+    .map((p): KitItem => ({ entity: { kind: 'campaign', id: c.id }, change: { field: 'placementPct', fromPct: current[p.key] ?? 0, toPct: proposed[p.key] ?? 0, placement: p.placement } }))
   const rule = await ruleFactsFor({ tool: 'set-placement-multipliers', limits: PLACEMENT_LIMITS, items, writes: [{ ...intent, label: `campaign "${c.name}"` }], approvalId: ctx?.approvalId })
   return {
     ok: true,
@@ -1227,6 +1243,9 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
   if (notSp) return { ok: false, error: notSp }
   const refused = liftSuppressionRefusal(campaign)
   if (refused) return { ok: false, error: `${campaign.name} is not restored here: ${refused}.` }
+  // PB-5b — a playbook's campaign (built, or at a floor its stop holds) gets its bids back only with the playbook's START.
+  const playbookHeld = (await playbookHolds([campaign.id])).get(campaign.id)
+  if (playbookHeld) return { ok: false, error: `${campaign.name} is not restored here — ${startOnlyRefusal('it', playbookHeld)}.` }
   const [remembered, groups] = await Promise.all([
     // W1-6b — what the restore gives back: not the ad groups floored on their own (a product over its monthly cap).
     prisma.adTarget.findMany({

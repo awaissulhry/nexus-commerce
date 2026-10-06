@@ -13,8 +13,10 @@
  *   slots      each slot as the phase says: `floor` lowers its campaign to the strategy's stop bid (suppressCampaignBids,
  *              its bids remembered; never a pause); `active` gives back a floor the LAST phase set, only once the playbook
  *              runs (before START, START does) and only a floor a person's request set (an engine's floor — the budget
- *              engine, the retail guard, an hourly plan, a stock floor — is left, named). A slot the phase leaves active
- *              is never touched.
+ *              engine, the retail guard, an hourly plan, a stock floor — is left, named). A campaign the playbook BUILT, or
+ *              one at a floor a playbook STOP holds, gets its bids back only through START (PB-5b held.ts: it needs the
+ *              approver's code and starts the playbook's plans with it): the phase names it and leaves it. A slot the phase
+ *              leaves active is never touched.
  *   rank       the playbook's own hourly plans per role, off / on / light (PB-8 previewRankPhase / applyRankPhase): on
  *              only once the playbook runs; switched off, what rank set is kept (floors handed to the approver) unless
  *              the request asks to give it back (`rankFloors: giveBack` — a raise, rankOffEffect says so). The Owner's
@@ -318,6 +320,13 @@ export async function planPhase(args: { market: string; productId?: string; sku?
     doc, from: fromEntry, to: entry, links: new Map(slotLinks.map((l) => [l.key, l.refId])), campaigns, running,
     stopBids: new Map([...stops].map(([id, s]) => [id, s.cents])),
   })
+  // PB-5b — a built campaign's floor, and one a STOP holds, go back only through START (its own code gate).
+  const { playbookHolds, startOnlyRefusal } = await import('./held.js')
+  const held = await playbookHolds(slots.filter((s) => s.does === 'restore' && s.campaignId).map((s) => s.campaignId!))
+  slots = slots.map((s) => {
+    const why = s.does === 'restore' && s.campaignId ? held.get(s.campaignId) : undefined
+    return why ? { ...s, does: 'report' as const, direction: 'same' as const, summary: `"${s.name}" stays at the floor: ${startOnlyRefusal('it', why)}.` } : s
+  })
   // Each write as Amazon's write gate would judge it now: a refused one is named and left out.
   const { checkLiveReach } = await import('../../agents/tools/ads-tool-guards.js')
   slots = await Promise.all(slots.map(async (s) => {
@@ -410,7 +419,7 @@ export interface PhaseRun {
   changeSetId: string
   manual: boolean
   /** The writer of the strategy row and the playbook version. */
-  writer: Omit<StrategyWriter, 'stepUpAt' | 'raiseByRule'> & PlaybookApplyWriter
+  writer: Omit<StrategyWriter, 'stepUpAt' | 'raiseByRule'> & Omit<PlaybookApplyWriter, 'stepUpAt'>
   /** A raise: when its code was confirmed, or the sentence of the rule that let it run without one. */
   stepUpAt?: Date | null
   raiseByRule?: string | null
@@ -432,8 +441,8 @@ export interface PhaseOutcome {
  * rule, and one playbook version (op phase). A part that fails is named; the parts before it stand.
  */
 export async function runPhase(plan: PhasePlan, run: PhaseRun): Promise<PhaseOutcome | { error: string }> {
-  const [{ applyStrategyPlan }, { suppressCampaignBids, restoreCampaignBids }, { applyRankPhase }, { syncHarvestRule }, { recordPlaybookApply }] = await Promise.all([
-    import('../ads-strategy/write.js'), import('../ads-bid-suppression.service.js'), import('./rank.js'), import('./harvest-rule.js'), import('./write.js'),
+  const [{ applyStrategyPlan }, { suppressCampaignBids, restoreCampaignBids }, { applyRankPhase }, { syncHarvestRule }, { recordPlaybookApply }, { playbookHolds }] = await Promise.all([
+    import('../ads-strategy/write.js'), import('../ads-bid-suppression.service.js'), import('./rank.js'), import('./harvest-rule.js'), import('./write.js'), import('./held.js'),
   ])
   const raise = plan.strategy.direction === 'raise'
   const wrote = await applyStrategyPlan(plan.strategy, { ...run.writer, stepUpAt: raise ? run.stepUpAt ?? null : null, raiseByRule: raise ? run.raiseByRule ?? null : null })
@@ -453,6 +462,7 @@ export async function runPhase(plan: PhasePlan, run: PhaseRun): Promise<PhaseOut
         out.floored.push({ slot: s.slot, campaignId: s.campaignId, moved })
       } else {
         if (!now?.bidsSuppressedAt || !isPersonFloor(now.bidsSuppressedBy ?? null)) { out.errors.push(`"${s.name}" is no longer at a floor a person's request set: left as it is`); continue }
+        if ((await playbookHolds([s.campaignId])).has(s.campaignId)) { out.errors.push(`"${s.name}" is now held for a playbook START: left at the floor`); continue }
         const restored = await restoreCampaignBids(s.campaignId, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual })
         const after = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { bidsSuppressedAt: true } })
         if (after?.bidsSuppressedAt) out.errors.push(`"${s.name}": ${plural(restored, 'bid')} put back, some not; it stays at the floor until all are`)
@@ -486,9 +496,9 @@ export async function runPhase(plan: PhasePlan, run: PhaseRun): Promise<PhaseOut
   try {
     const recorded = await recordPlaybookApply(plan.playbook.id, {
       op: 'phase', state: plan.playbook.state ?? 'DRAFT', compiledVersion: plan.playbook.version, compiledTemplateVersion: plan.playbook.compiledTemplateVersion,
-      reason: run.reason, direction: plan.direction, stepUpAt: plan.direction === 'raise' ? run.stepUpAt ?? null : null,
+      reason: run.reason, direction: plan.direction,
       changes: [{ field: 'phase', label: 'Phase', from: plan.from, to: plan.to, direction: plan.direction }],
-    }, run.writer)
+    }, { ...run.writer, stepUpAt: plan.direction === 'raise' ? run.stepUpAt ?? null : null })
     out.recorded = recorded ? { version: recorded.version } : null
   } catch (e) {
     out.errors.push(`the playbook version was not recorded: ${(e as Error).message.slice(0, 200)}`)

@@ -53,19 +53,30 @@ const treatedAs = new Map<string, ClaudeActionType>()
 /**
  * PB-5a — a tool whose ops are different kinds of ad action: the kind of each op (null: the strategy never narrows that
  * op — an adopt only writes Nexus links). An op not listed, or no args, is the tool's kind in CLAUDE_ACTION_TOOLS.
+ * PB-5b — an op that is several kinds at once lists them, its own kind first: every one narrows it (the strictest wins).
+ * A playbook START puts campaigns on the allowlist and their planned bids back (restore and allowlist); its STOP is a stop.
  */
-export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeActionType | null>>>> = {
+export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeActionType | readonly ClaudeActionType[] | null>>>> = {
   // PB-9 — a phase switch is its own kind.
-  'apply-ads-playbook': { build: 'create', adopt: null, phase: 'phase' },
+  'apply-ads-playbook': { build: 'create', adopt: null, start: ['restore', 'allowlist'], stop: 'stop', phase: 'phase' },
 }
 
-/** The kind of ad action a tool is (for these args: an op of OP_ACTIONS), or null: the strategy never narrows it. */
-export function actionOfTool(toolName: string, args?: unknown): ClaudeActionType | null {
-  if ((BRAKE_TOOLS as readonly string[]).includes(toolName)) return null
+/** Every kind of ad action a tool is for these args (its own kind first); empty: the strategy never narrows it. */
+export function actionsOfTool(toolName: string, args?: unknown): ClaudeActionType[] {
+  if ((BRAKE_TOOLS as readonly string[]).includes(toolName)) return []
   const op = args && typeof args === 'object' ? (args as { op?: unknown }).op : undefined
   const ops = OP_ACTIONS[toolName]
-  if (ops && typeof op === 'string' && Object.prototype.hasOwnProperty.call(ops, op)) return ops[op]
-  return ACTION_OF.get(toolName) ?? treatedAs.get(toolName) ?? null
+  if (ops && typeof op === 'string' && Object.prototype.hasOwnProperty.call(ops, op)) {
+    const kinds = ops[op]
+    return kinds == null ? [] : typeof kinds === 'string' ? [kinds] : [...kinds]
+  }
+  const one = ACTION_OF.get(toolName) ?? treatedAs.get(toolName)
+  return one ? [one] : []
+}
+
+/** The kind of ad action a tool is (for these args: an op of OP_ACTIONS, its own kind), or null: the strategy never narrows it. */
+export function actionOfTool(toolName: string, args?: unknown): ClaudeActionType | null {
+  return actionsOfTool(toolName, args)[0] ?? null
 }
 
 /** Which strategy row set the level, as the door names it to Claude and to a person. */
@@ -363,20 +374,35 @@ function strictestIn(view: StrategyView, action: ClaudeActionType, basis: 'marke
  * business's level.
  */
 export async function strategyLevelFor(toolName: string, args: unknown, preview?: unknown, memo: StrategyMemo = strategyMemo()): Promise<StrategyNarrowing | null> {
-  const action = actionOfTool(toolName, args)
-  if (!action) return null
+  const actions = actionsOfTool(toolName, args)
+  if (!actions.length) return null
   memo.speaking ??= prisma.adsStrategy.findMany({ where: { channel: 'AMAZON' }, select: { market: true, claudeAutonomy: true } })
-  const speaking = new Map<string, string>()
-  for (const row of await memo.speaking) {
-    if (Object.prototype.hasOwnProperty.call(obj(row.claudeAutonomy), action)) speaking.set(row.market.toUpperCase(), row.market)
-  }
-  if (!speaking.size) return null
+  const rows = await memo.speaking
+  const speaks = (action: ClaudeActionType) => rows.some((row) => Object.prototype.hasOwnProperty.call(obj(row.claudeAutonomy), action))
+  if (!actions.some(speaks)) return null
 
   const place = new Place()
   const reader = PLACES[toolName]
   if (reader) await reader(place, obj(args), preview == null ? null : obj(preview))
   else place.notPlaced('Nexus cannot tell where this change lands')
   if (place.outside) return null
+
+  // PB-5b — an op of several kinds: each kind where it lands, the strictest of them (on a tie the op's own kind).
+  let kept: StrategyNarrowing | null = null
+  for (const action of actions) {
+    const next = await levelWhere(action, place, rows, memo)
+    if (next && (!kept || rank(next.level) < rank(kept.level))) kept = next
+  }
+  return kept
+}
+
+/** One kind's level where a change lands (strategyLevelFor): the strictest of every place, or null when no row speaks. */
+async function levelWhere(action: ClaudeActionType, place: Place, rows: ReadonlyArray<{ market: string; claudeAutonomy: unknown }>, memo: StrategyMemo): Promise<StrategyNarrowing | null> {
+  const speaking = new Map<string, string>()
+  for (const row of rows) {
+    if (Object.prototype.hasOwnProperty.call(obj(row.claudeAutonomy), action)) speaking.set(row.market.toUpperCase(), row.market)
+  }
+  if (!speaking.size) return null
 
   const view = (market: string) => {
     if (!memo.views.has(market)) memo.views.set(market, openStrategy(market))

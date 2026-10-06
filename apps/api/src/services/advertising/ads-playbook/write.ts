@@ -733,6 +733,8 @@ export interface PlaybookApplyWriter {
   actorUserId?: string | null
   approvalId?: string | null
   updatedBy: string
+  /** PB-5b — a START approved with the approver's authenticator code: when the code was typed (the version row keeps it). */
+  stepUpAt?: Date | null
 }
 
 /** What an apply op made of the row: its state, and the row and template versions it compiled. */
@@ -745,15 +747,14 @@ export interface PlaybookApplyRecord {
   reason?: string | null
   /** PB-9 — what else the op changed, recorded with the version (a phase switch: the phase from → to, by its effect). */
   changes?: PlaybookChange[]
-  /** PB-9 — the op's direction by its effect, and when its raise was confirmed with a code (default: same, none). */
+  /** PB-9 — the op's direction by its effect (default: same). */
   direction?: Direction
-  stepUpAt?: Date | null
 }
 
 type Tx = Prisma.TransactionClient
 
 /**
- * PB-5a — record an apply (build, adopt; start, stop in PB-5b) on the PRODUCT row: its state and what it compiled, with
+ * PB-5a — record an apply (build, adopt; PB-5b: start, stop) on the PRODUCT row: its state and what it compiled, with
  * one AdsPlaybookVersion row (op = the apply's op; no money moves in the row, so it is `same`). Optimistic on the row's
  * version: unmoved since the plan → `compiledVersion` = the new version; moved since → the new state only, and
  * `compiledVersion` stays what was compiled (so the row honestly reads as newer than what was built). `tx`: inside the
@@ -781,7 +782,7 @@ export async function recordPlaybookApply(rowId: string, record: PlaybookApplyRe
         kind: 'playbook', refId: row.id, version, market: row.market, level: row.level, scopeId: row.scopeId, op: record.op,
         values: rowValuesOf({ ...row, state: record.state }) as unknown as Prisma.InputJsonValue, changes: changes as unknown as Prisma.InputJsonValue,
         direction: record.direction ?? 'same', via: writer.via, approvalId: writer.approvalId ?? null, actor: writer.actor, actorUserId: writer.actorUserId ?? null,
-        stepUpAt: record.direction === 'raise' ? record.stepUpAt ?? null : null, reason: record.reason ?? null,
+        stepUpAt: writer.stepUpAt ?? null, reason: record.reason ?? null,
       },
     })
     return { version, compiledVersion, moved }

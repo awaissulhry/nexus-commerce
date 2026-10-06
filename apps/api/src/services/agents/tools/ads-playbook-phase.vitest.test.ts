@@ -11,7 +11,7 @@
  *   by rule   only the move the check proposes, outside the hold; a raise only with allowPhaseUp, written without a code
  *             and said so
  *   slots     DEFEND floors the research slots (low bids, remembered, never paused); leaving it in a running playbook gives
- *             back only the floor it set — a raise — never an engine's
+ *             back only the floor it set — a raise — never an engine's, and never a built campaign's (only START does)
  *   rank      a phase that switches an hourly plan off is a raise when the floors it set come back, a lowering when kept
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -260,6 +260,11 @@ describe('slots: a phase floors with low bids, and gives back only the floor it 
       // The budget engine took the Broad slot's floor over meanwhile.
       await db().campaign.update({ where: { id: campaigns['broad-category'] }, data: { bidsSuppressedBy: 'automation:budget-engine' } })
     })
+    // PB-5b — a campaign the playbook BUILT gets its bids back only through START (its own code gate): named, left.
+    await inside(() => db().adsPlaybookLink.updateMany({ where: { playbookId: pb.rowId, kind: 'slot', key: 'auto' }, data: { origin: 'built' } }))
+    const built = (await preview(phase('GROW'))).preview as Row
+    expect(built.slots.find((s: Row) => s.slot === 'auto')).toMatchObject({ does: 'report', direction: 'same', summary: expect.stringMatching(/stays at the floor: it was built by an ads playbook: its bids go back only with apply-ads-playbook op start/) })
+    await inside(() => db().adsPlaybookLink.updateMany({ where: { playbookId: pb.rowId, kind: 'slot', key: 'auto' }, data: { origin: 'adopted' } }))
     const p = (await preview(phase('GROW'))).preview as Row
     expect(p.slots.map((s: Row) => [s.slot, s.does, s.direction])).toEqual([['auto', 'restore', 'raise'], ['broad-category', 'report', 'same']])
     expect(p.slots[1].summary).toMatch(/held at the floor by automation:budget-engine: a floor an engine set is never lifted here/)

@@ -69,7 +69,9 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // W3-3 — giving an ad group's bids back once its stock returns (it adds spend).
   'restore-ad-bids-after-stock',
   // PB-5a — a playbook build, the create kind: only at the floor and off the allowlist (nothing spends until START),
-  // by default never by rule (maxCampaigns 0); an adopt writes Nexus links only.
+  // by default never by rule (maxCampaigns 0); an adopt writes Nexus links only. PB-5b — a start (restore and allowlist
+  // kinds) needs the approver's code, by rule only with allowStart (off by default: a loosening needs the code); a stop
+  // is a brake.
   'apply-ads-playbook',
 ]
 

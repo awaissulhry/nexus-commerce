@@ -12,6 +12,9 @@
  *             that moved after approval is not run
  *   undo      a build: archive-ads of every campaign it made (buildRunId; refused while the build runs); an adopt: the
  *             opposite adopt
+ *   start     PB-5b — the built campaigns go on the allowlist; it carries the approver's code (stepUp): a plain approve
+ *             does not run it, one with the code does; by rule only with allowStart; its undo is a stop
+ *   stop      PB-5b — no code: floored and off the allowlist, the row STOPPED; its undo is a start
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
@@ -58,6 +61,17 @@ vi.mock('../../advertising/ads-sp-wizard-launch.service.js', () => ({
     }
     return { status: 200, body: { ok: true, created, slots, deferredPlacements: [], launch: { ok: true, campaigns: created.map((c) => ({ name: c.name, status: 'live', reason: null })) }, verification: { ok: true, problems: [] } } }
   },
+}))
+/** PB-5b — the placement write and the portfolio repair a START makes, as stand-ins (start.vitest.test.ts proves the order). */
+const placements = vi.hoisted(() => ({ calls: [] as string[] }))
+vi.mock('../../advertising/ads-create.service.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  updatePlacementBidding: async (input: { campaignId: string; adjustments: unknown[] }) => {
+    placements.calls.push(input.campaignId)
+    await database.client.campaign.update({ where: { id: input.campaignId }, data: { dynamicBidding: { placementBidding: input.adjustments } as never } })
+    return { ok: true, adjustments: input.adjustments, mode: 'sandbox' }
+  },
+  settleLaunchPortfolios: async () => null,
 }))
 vi.mock('../../advertising/ads-portfolio.service.js', () => ({
   createPortfolio: async (input: { name: string }) => ({ portfolio: { portfolioId: 'pf-apply-test', name: input.name }, mode: 'live' }),
@@ -199,6 +213,74 @@ describe('approved, a build runs on its own', () => {
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/basis changed/) })
     expect(launches.calls).toBe(before)
     expect(await inside(() => db().adBlueprintApplication.count({ where: { playbookId: moved.rowId } }))).toBe(0)
+  })
+})
+
+describe('PB-5b — START and STOP of the built playbook', () => {
+  const start = (extra: Record<string, unknown> = {}) => ({ op: 'start', market: 'IT', productId: built.parent, ...extra })
+  const stop = (extra: Record<string, unknown> = {}) => ({ op: 'stop', market: 'IT', productId: built.parent, ...extra })
+  const liveWrites = () => inside(async () => (await db().campaign.findMany({ where: { name: { startsWith: 'TESTAPA |' } }, select: { liveBidWritesEnabled: true, bidsSuppressedAt: true } })))
+  let startApproval = ''
+
+  it('the start preview carries the approver\'s code (stepUp), what each campaign gets and the strategy\'s facts; by rule only with allowStart', async () => {
+    const r = await preview('apply-ads-playbook', start())
+    expect(r.ok, JSON.stringify(r)).toBe(true)
+    const p = r.preview as Row
+    expect(p).toMatchObject({
+      op: 'start', starts: { campaigns: 5 }, reach: { reach: 'sandbox' }, limitFacts: { tool: 'apply-ads-playbook', action: 'restore' },
+      stepUp: { what: expect.stringMatching(/^starts spending on 5 campaigns/), needs: expect.stringContaining('settings.security.manage') },
+      effect: expect.stringMatching(/^Starts TEST-TESTAPA-PARENT's playbook in IT: 5 campaigns it built go on the live-write allowlist/),
+    })
+    expect(p.campaigns.every((c: Row) => c.allowlist === 'on')).toBe(true)
+    expect(judge(p)).toMatch(/it starts spending: a person decides, with their authenticator code .*allowStart is off/)
+    expect(judge(p, { allowStart: true, maxBidCents: 100 })).toBeNull()
+    expect(judge({ op: 'stop', market: 'IT' })).toBeNull()
+    // A stop carries no code.
+    const s = (await preview('apply-ads-playbook', stop())).preview as Row
+    expect(s).toMatchObject({ op: 'stop', noCode: expect.any(String) })
+    expect(s).not.toHaveProperty('stepUp')
+  })
+
+  it('a plain approve does not start it; approved with the code it starts; its undo is a stop of the slots it started', async () => {
+    const asked = await ask('apply-ads-playbook', start({ why: 'start the test playbook' }))
+    expect(asked).toMatchObject({ ok: true, mode: 'queued' })
+    startApproval = asked.approvalId!
+    const plain = await approve(startApproval) as Row
+    expect(plain).toMatchObject({ ok: false, status: 'pending' })
+    expect(plain.error).toMatch(/it starts spending, and a start runs only when a person with settings\.security\.manage approved it with their authenticator code/)
+    expect((await liveWrites()).some((c) => c.liveBidWritesEnabled)).toBe(false)
+    // As the Approvals page records a decision taken with the approver's code.
+    await inside(() => db().agentApproval.update({ where: { id: startApproval }, data: { decisionVia: 'nexus-step-up' } }))
+    const coded = await approve(startApproval) as Row
+    expect(coded).toMatchObject({ ok: true, status: 'executed', result: { op: 'start', state: 'RUNNING', changeSetId: startApproval } })
+    expect(coded.result.started).toHaveLength(5)
+    expect((await liveWrites()).every((c) => c.liveBidWritesEnabled)).toBe(true)
+    expect(placements.calls.length).toBeGreaterThan(0)
+    expect(await inside(() => db().adsPlaybookVersion.findFirst({ where: { refId: built.rowId, op: 'start' } }))).toMatchObject({ approvalId: startApproval, stepUpAt: expect.any(Date) })
+    // A start of the whole playbook is undone whole: a stop of the playbook (its plans, their floors, its rules too).
+    const undo = await inside(() => undoRequestFor({ approvalId: startApproval })) as Row
+    expect(undo).toMatchObject({ request: { tool: 'apply-ads-playbook', args: { op: 'stop', market: 'IT', productId: built.parent } } })
+    expect(undo.request.args).not.toHaveProperty('slots')
+    expect((await preview('apply-ads-playbook', start())).error).toMatch(/^Nothing to start: every campaign the playbook built .* runs already/)
+  })
+
+  it('a stop needs no code: floored and off the allowlist, the row STOPPED; its undo is a start', async () => {
+    const asked = await ask('apply-ads-playbook', stop({ why: 'stop the test playbook' }))
+    const p = (await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId! } }))).preview as Row
+    expect(p).toMatchObject({ op: 'stop', stops: { campaigns: 5 }, noCode: expect.any(String) })
+    expect(p).not.toHaveProperty('stepUp')
+    const done = await approve(asked.approvalId!) as Row
+    expect(done).toMatchObject({ ok: true, status: 'executed', result: { op: 'stop', state: 'STOPPED' } })
+    expect((await liveWrites()).every((c) => !c.liveBidWritesEnabled && c.bidsSuppressedAt)).toBe(true)
+    expect((await inside(() => db().adsPlaybook.findUniqueOrThrow({ where: { id: built.rowId } }))).state).toBe('STOPPED')
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'apply-ads-playbook', args: { op: 'start', market: 'IT' } } })
+    // 🔴 No door around the code: restore-campaign refuses a campaign the playbook built, and the undo of the stop's
+    // change set would raise its bids — refused too; both name apply-ads-playbook op start.
+    const one = (await inside(() => db().campaign.findFirstOrThrow({ where: { name: 'TESTAPA | IT | Auto' }, select: { id: true } }))).id
+    expect((await preview('restore-campaign', { campaignId: one })).error).toMatch(/is not restored here — it was built by an ads playbook: its bids go back only with apply-ads-playbook op start/)
+    expect((await preview('undo-ad-change', { changeSetId: asked.approvalId })).error).toMatch(/^Not undone: it would raise the bids of "TESTAPA \| IT \| .*" — that campaign was built by an ads playbook: its bids go back only with apply-ads-playbook op start/)
+    // The start's undo is refused now: the playbook moved since (it is stopped already).
+    expect(await inside(() => undoRequestFor({ approvalId: startApproval }))).toMatchObject({ error: expect.stringMatching(/^Not undone: it has changed since this change ran/) })
   })
 })
 
