@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { templateDoc } from '../../../test-support/ads-playbook-fixtures.js'
-import { HERO_KEY, heroKey, heroPlan, modelSlotFor, type HeroInput } from './hero.js'
+import { HERO_KEY, heroKey, heroPlan, modelSlotFor, phaseSlotOf, type HeroInput } from './hero.js'
 import type { ProductTerms } from './doc.js'
 
 const terms: ProductTerms = {
@@ -105,6 +105,15 @@ describe('bid and budget: the term\'s own numbers, inside the playbook and the s
     const moved = heroPlan(input({ frozen: { bidCents: 44, dailyBudgetCents: 333 }, band: { minBidCents: null, maxBidCents: 40 } }))
     expect(moved.problems).toEqual(["the bid approved for it is outside the ads strategy's bid band at this product now, so it is not built as approved: ask again"])
     expect(moved.campaign).toBeNull()
+  })
+})
+
+describe('the phase table (PB-9): a hero plays the Exact slot it is modelled on', () => {
+  it('a brand term plays Exact | Brand, a category term Exact | Category; any other link its own key', () => {
+    const doc = templateDoc()
+    expect(phaseSlotOf('hero:testh jacket black', doc, 'TESTH', terms)).toBe('exact-brand')
+    expect(phaseSlotOf('hero:test coat', doc, 'TESTH', terms)).toBe('exact-category')
+    expect(phaseSlotOf('broad-category', doc, 'TESTH', terms)).toBe('broad-category')
   })
 })
 

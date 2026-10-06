@@ -250,6 +250,26 @@ describe('apply-ads-playbook op hero — the preview and what refuses it', () =>
     expect(p.nextSteps[1]).toMatch(/apply-ads-playbook op start, slots \["hero:test cape"\]/)
   })
 
+  it('every monthly cap WITH the spend already in it: a market that spent most of its cap refuses the hero at full spend', async () => {
+    const yesterday = new Date(Date.now() - DAY)
+    await inside(async () => {
+      await db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { monthlySpendCapCents: 5000 } })
+      await db().amazonAdsDailyPerformance.create({ data: { profileId: 'P-IT-PB', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: yesterday, entityType: 'CAMPAIGN', entityId: 'EXT-CAP-TEST', costMicros: BigInt(4900 * 10_000), currencyCode: 'EUR', reportRunId: 'test-run', reportedAt: new Date() } })
+    })
+    try {
+      const r = await call('apply-ads-playbook', hero(A.parent, 'test cape'))
+      // The 1st of a month has no "yesterday" in it: then only the hero's own budget counts, and the cap holds.
+      if (yesterday.getUTCMonth() === new Date().getUTCMonth()) {
+        expect(r.error).toMatch(/The blueprint gate refuses this campaign — With what .* has spent this month and its pace, this daily budget at full spend for the \d+ days left goes past its monthly cap/)
+      }
+    } finally {
+      await inside(async () => {
+        await db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { monthlySpendCapCents: 10_000_000 } })
+        await db().amazonAdsDailyPerformance.deleteMany({ where: { entityId: 'EXT-CAP-TEST' } })
+      })
+    }
+  })
+
   it('by rule: the default limits refuse it (maxCampaigns 0); inside the limits it may run', async () => {
     const p = (await call('apply-ads-playbook', hero(A.parent, 'test cape'))).preview as Row
     expect(judge(p)).toMatch(/it creates 1 campaign, more than the 0 this tool's limits let a build create by rule/)
@@ -312,6 +332,20 @@ describe('approved, a hero is built by the playbook\'s build; the term keeps run
     expect((start.preview as Row).campaigns.map((c: Row) => [c.slot, c.campaignId, c.allowlist])).toEqual([['hero:test cape', heroId, 'on']])
     expect(start.preview).toMatchObject({ op: 'start', stepUp: expect.any(Object) })
     expect((await call('restore-campaign', { campaignId: heroId })).error).toMatch(/was built by an ads playbook: its bids go back only with apply-ads-playbook op start/)
+    // PB-9 — a phase that floors the Exact slot the hero is modelled on keeps the hero at its floor at START, named.
+    const template = await inside(() => db().adsPlaybookTemplate.findUniqueOrThrow({ where: { id: A.templateId }, select: { doc: true } }))
+    const doc = JSON.parse(JSON.stringify(template.doc)) as Row
+    doc.phases.DEFEND.slots['exact-category'] = 'floor'
+    await inside(() => db().adsPlaybookTemplate.update({ where: { id: A.templateId }, data: { doc } }))
+    await inside(() => db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { goal: 'DEFEND' } }))
+    try {
+      const held = await call('apply-ads-playbook', { op: 'start', market: 'IT', productId: A.parent, slots: ['hero:test cape'] })
+      expect(held.ok).toBe(true)
+      expect((held.preview as Row).campaigns[0]).toMatchObject({ slot: 'hero:test cape', bids: { does: 'held', by: 'phase DEFEND' }, spends: false })
+    } finally {
+      await inside(() => db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { goal: null } }))
+      await inside(() => db().adsPlaybookTemplate.update({ where: { id: A.templateId }, data: { doc: template.doc as never } }))
+    }
   })
 
   it('one hero per term: a second is refused; the view names the term\'s own campaign and proposes no other', async () => {

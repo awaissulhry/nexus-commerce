@@ -69,6 +69,17 @@ export function modelSlotFor(doc: TemplateDoc, intent: Intent): { slot: Slot; ow
   return other ? { slot: other, own: false } : null
 }
 
+/**
+ * The slot a playbook link plays in the phase table (PB-9: a phase floors or runs slots by key). A hero plays the Exact
+ * slot it is modelled on — its term's intent, as the router picks it — so a phase that floors that slot floors the hero
+ * too, and START leaves it floored. Any other link plays its own key.
+ */
+export function phaseSlotOf(key: string, doc: TemplateDoc, nameToken: string | null, terms: Pick<ProductTerms, 'brand' | 'competitor'> | null): string {
+  if (!isHeroKey(key)) return key
+  const intent = routeIntent(key.slice(HERO_PREFIX.length), heroIntentLists(nameToken, terms ?? { brand: [], competitor: [] }))
+  return modelSlotFor(doc, intent)?.slot.key ?? key
+}
+
 /** Why a term cannot have a hero (pure), or null when it can. */
 export function heroRefusal(term: string, doc: TemplateDoc | null, heroKeys: ReadonlySet<string>): string | null {
   if (!normaliseNegTerm(term)) return 'name the term'
