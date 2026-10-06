@@ -978,6 +978,12 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   // Ads autonomy W1-2 — the strategy is read for ONE scope: the loop's campaign (in its own market, B's traceable one; the
   // answer names the campaign). The channel is Amazon's (the loop's is eBay); the other scopes are left out.
   'ads-strategy': { channel: undefined, productId: undefined, sku: undefined, categoryId: undefined, adGroupId: undefined },
+  // Ads autonomy W1-3 — a change of ONE strategy row: B's product's, in B's own Amazon market (the loop's channel is
+  // eBay's). One scope only (the loop would also name a SKU and a category), and a value to change; no lists.
+  'set-ads-strategy': {
+    channel: 'AMAZON', level: 'product', sku: undefined, categoryId: undefined, values: { goalNote: 'MCP.8 probe' },
+    protectedTerms: undefined, restoreCampaignTargets: undefined, clearCampaignTargets: undefined, expectVersion: undefined, reason: undefined,
+  },
   // T4 — the eBay ad details open an eBay campaign (the loop's campaignId and adGroupId are Amazon's).
   'ebay-ad-details': { get campaignId() { return seeded.b.ebayCampaignId }, adGroupId: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.

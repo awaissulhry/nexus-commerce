@@ -306,7 +306,7 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{
     Params: { id: string }
-    Body: { decision: 'approve' | 'reject'; reason?: string }
+    Body: { decision: 'approve' | 'reject'; reason?: string; code?: string }
   }>('/agent/fleet/approvals/:id/decide', async (request, reply) => {
     const decision = request.body?.decision
     const reason = (request.body?.reason ?? '').trim()
@@ -318,13 +318,16 @@ const agentFleetRoutes: FastifyPluginAsync = async (fastify) => {
     // without them the row says who rejected it (decideFleetApproval).
     // NAF.AP.1 — the signed-in user, not the literal string 'operator'.
     // MCP.1 — with their permissions: they approve only what they could do.
+    // ADS AUTONOMY W1-3 — a request that raises (its preview carries `stepUp`) is approved only with the approver's
+    // fresh authenticator code: without it 403 `mfa_required`, naming what it raises; a wrong code 400, too many 429.
     const out = await decideFleetApproval({
       id: request.params.id,
       decision,
       reason: reason || undefined,
       actor: await requestPrincipal(request),
+      code: request.body?.code,
     })
-    if (!out.ok) return reply.code(out.code === 'forbidden' ? 403 : 409).send(out)
+    if (!out.ok) return reply.code(out.httpStatus ?? (out.code === 'forbidden' ? 403 : 409)).send(out)
     return out
   })
 

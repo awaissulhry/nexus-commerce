@@ -278,6 +278,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-campaign-target-acos': (ids) => ({ campaignIds: [ids.campaignId], targetAcosPct: 25 }),
   // Ads autonomy W1-2 — the strategy for the seeded campaign's market: its targets, bids and caps are money.
   'ads-strategy': (ids) => ({ market: 'IT', campaignId: ids.campaignId }),
+  // Ads autonomy W1-3 — needs financials.adspend.view (targets, bids and caps are ad-spend money): a person without
+  // money is refused outright. The seeded market strategy's highest bid lowered: a preview, nothing written.
+  'set-ads-strategy': () => ({ channel: 'AMAZON', market: 'IT', level: 'market', values: { maxBidCents: 4242 } }),
   // A14/A15 — the eBay ad changes (they need money: refused for a person without it).
   'set-ebay-ad-rates': () => ({ ebayCampaignId: 'none', rates: [{ ebayItemId: '110000000001', ratePct: 5 }] }),
   'promote-ebay-listings': () => ({ ebayCampaignId: 'none', ads: [{ ebayItemId: '110000000001' }] }),
