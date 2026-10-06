@@ -35,6 +35,12 @@ export async function loadMarketRows(columns: readonly StrategyColumn[], channel
   return rows as unknown as StrategyRow[]
 }
 
+/** W1-6b — the markets with a monthly cap on any row (the market's, a category's or a product's). */
+export async function capMarkets(channel = 'AMAZON'): Promise<string[]> {
+  const rows = await prisma.adsStrategy.findMany({ where: { channel, monthlySpendCapCents: { not: null } }, distinct: ['market'], select: { market: true } })
+  return rows.map((r) => r.market).sort()
+}
+
 /** The markets that hold at least one strategy row, for a channel. */
 export async function strategyMarkets(channel = 'AMAZON'): Promise<string[]> {
   const rows = await prisma.adsStrategy.findMany({ where: { channel }, distinct: ['market'], select: { market: true } })

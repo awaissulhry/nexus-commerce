@@ -287,8 +287,9 @@ export async function runDaypartingOnce(): Promise<DaypartingSummary> {
     // base, and entering or moving would raise floored bids. Both wait until the floor is lifted.
     if (action === 'enter' && !floored) {
       // ENTER a multiplier window: snapshot base bids + apply scaled.
+      // W1-6b — not the targets of an ad group floored on its own (a product over its cap): scaling them would lift it.
       const targets = await prisma.adTarget.findMany({
-        where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: s.campaignId } },
+        where: { status: 'ENABLED', isNegative: false, adGroup: { campaignId: s.campaignId, bidsSuppressedAt: null } },
         select: { id: true, bidCents: true },
       })
       if (targets.length > 0 && allow('forward')) {

@@ -279,7 +279,8 @@ async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: B
     return { applied: n, keptServing: false }
   }
   if (mode === 'absolute' && spec.bidValueCents != null && spec.bidValueCents > 0) {
-    const ags = await prisma.adGroup.findMany({ where: { campaignId: camp.id }, select: { id: true, defaultBidCents: true } })
+    // W1-6b — never an ad group floored on its own (a product over its cap): only its owner lifts that floor.
+    const ags = await prisma.adGroup.findMany({ where: { campaignId: camp.id, bidsSuppressedAt: null }, select: { id: true, defaultBidCents: true } })
     const moves = ags.filter((g) => g.defaultBidCents !== spec.bidValueCents)
     if (!moves.length || !allow('forward')) return none
     for (const g of moves) {
@@ -305,15 +306,15 @@ async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: B
 // withholds them, so a held-back run reports a change it would really have made rather than every delta campaign.
 async function hasBaseBidDelta(campaignId: string): Promise<boolean> {
   const [g, t] = await Promise.all([
-    prisma.adGroup.count({ where: { campaignId, baseBidFromCents: { not: null } } }),
-    prisma.adTarget.count({ where: { adGroup: { campaignId }, baseBidFromCents: { not: null } } }),
+    prisma.adGroup.count({ where: { campaignId, bidsSuppressedAt: null, baseBidFromCents: { not: null } } }),
+    prisma.adTarget.count({ where: { adGroup: { campaignId, bidsSuppressedAt: null }, baseBidFromCents: { not: null } } }),
   ])
   return g + t > 0
 }
 async function baseBidDeltaWouldMove(campaignId: string, deltaPct: number): Promise<boolean> {
   const [groups, targets] = await Promise.all([
-    prisma.adGroup.findMany({ where: { campaignId }, select: { defaultBidCents: true, baseBidFromCents: true } }),
-    prisma.adTarget.findMany({ where: { adGroup: { campaignId }, isNegative: false }, select: { bidCents: true, baseBidFromCents: true } }),
+    prisma.adGroup.findMany({ where: { campaignId, bidsSuppressedAt: null }, select: { defaultBidCents: true, baseBidFromCents: true } }),
+    prisma.adTarget.findMany({ where: { adGroup: { campaignId, bidsSuppressedAt: null }, isNegative: false }, select: { bidCents: true, baseBidFromCents: true } }),
   ])
   const moves = (cur: number, from: number | null) => !(from != null && cur === deltaBidCents(from, deltaPct))
   return groups.some((g) => moves(g.defaultBidCents, g.baseBidFromCents)) || targets.some((t) => moves(t.bidCents, t.baseBidFromCents))

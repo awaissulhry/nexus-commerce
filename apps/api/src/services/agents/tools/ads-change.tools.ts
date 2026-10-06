@@ -890,8 +890,9 @@ async function restorePreview(args: Record<string, unknown>): Promise<ToolResult
   const refused = liftSuppressionRefusal(campaign)
   if (refused) return { ok: false, error: `${campaign.name} is not restored here: ${refused}.` }
   const [remembered, groups] = await Promise.all([
+    // W1-6b — what the restore gives back: not the ad groups floored on their own (a product over its monthly cap).
     prisma.adTarget.findMany({
-      where: { adGroup: { campaignId }, suppressedFromBidCents: { not: null } },
+      where: { adGroup: { campaignId, bidsSuppressedAt: null }, suppressedFromBidCents: { not: null } },
       select: { id: true, expressionValue: true, bidCents: true, suppressedFromBidCents: true },
       orderBy: { id: 'asc' },
     }),
@@ -918,7 +919,8 @@ async function restorePreview(args: Record<string, unknown>): Promise<ToolResult
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
-      effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}. The campaign serves again.`,
+      ...(groups.ownFloors ? { staysFloored: { adGroups: groups.ownFloors } } : {}),
+      effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}. The campaign serves again.${groups.ownFloors ? ` ${groups.ownFloors} ad group${groups.ownFloors === 1 ? ' stays' : 's stay'} at ${groups.ownFloors === 1 ? 'its' : 'their'} own floor (a product over its monthly cap in the ads strategy) until the 1st or until that cap is raised.` : ''}`,
     },
   }
 }

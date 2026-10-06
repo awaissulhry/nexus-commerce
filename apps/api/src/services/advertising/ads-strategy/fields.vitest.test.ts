@@ -73,11 +73,12 @@ describe('the registry', () => {
     for (const f of STRATEGY_FIELDS.filter((x) => x.readBy.length)) for (const r of f.readBy) expect(r.length, f.key).toBeGreaterThan(20)
     expect(STRATEGY_FIELDS.find((f) => f.key === 'harvest')!.readBy.join(' ')).toMatch(/Keyword Harvest page.*stricter/)
     expect(STRATEGY_FIELDS.find((f) => f.key === 'protect')!.readBy.join(' ')).toMatch(/no engine, rule or schedule negates a protected product's ASIN; a person's own add, or a Claude request he approved, is warned/)
-    // W1-6 — the budget engine stops a market at its cap with the stop bid (ads-budget-enforce.service.ts); the retail
+    // W1-6 — the budget engine stops a market at its cap with the stop bid (ads-budget-enforce.service.ts; W1-6b: a
+    // category's or product's cap floors the ad groups holding it, ads-strategy/spend.ts); the retail
     // guard (ads-retail-readiness.service.ts) and suppress-campaign (ads-change.tools.ts) floor at the stop bid; the
     // engine guard (ads-engine-guard.ts) counts a market's actions per run for the engines that name the market.
     const readers = (key: string) => STRATEGY_FIELDS.find((f) => f.key === key)!.readBy.join(' | ')
-    expect(readers('monthlySpendCapCents')).toMatch(/^the budget engine .*every campaign of the market drops to its stop bid until the 1st \(a cap of 0 is no cap; category and product caps are not enforced yet\)$/)
+    expect(readers('monthlySpendCapCents')).toMatch(/^the budget engine .*every campaign of the market drops to its stop bid until the 1st \(a cap of 0 is no cap\) \| the budget engine: when a category's or product's .* every ad group holding a product under it drops to its stop bid until the 1st/)
     expect(readers('stop')).toMatch(/^the budget engine: .* \| the retail guard: .* \| Claude's suppress-campaign: /)
     expect(readers('maxActionsPerRun')).toMatch(/^the hourly bid plans \(rank-defend\): .* \| the budget engine .* \| dayparting /)
   })

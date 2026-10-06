@@ -3354,6 +3354,14 @@ model AdGroup {
   defaultBidCents        Int            @default(50)
   suppressedFromBidCents Int? // NP — default bid before no-pause suppression; restored on resume
   baseBidFromCents       Int? // BL — default bid before a base-bid deltaPct mod; the STABLE baseline (no compounding); reverted when the directive clears
+  // ADS AUTONOMY W1-6b — an ad group floored ON ITS OWN (a product over its own monthly cap): the ad-group twin of the
+  // campaign's three floor columns — since when, at which floor, and WHICH engine (the actor that floored it). Its
+  // default bid and targets remember their bids in `suppressedFromBidCents`, as under a campaign floor. A campaign's
+  // restore, re-floor or base-bid move by any engine leaves such an ad group alone; only its owner lifts it.
+  // null = not floored on its own (a campaign floor, if any, is the campaign's).
+  bidsSuppressedAt         DateTime?
+  bidsSuppressedFloorCents Int?
+  bidsSuppressedBy         String?
   status                 CampaignStatus @default(ENABLED)
   targetingType          String         @default("MANUAL") // AUTO | MANUAL
   impressions            Int            @default(0)
