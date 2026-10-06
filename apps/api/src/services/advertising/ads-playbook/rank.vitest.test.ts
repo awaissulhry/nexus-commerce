@@ -88,7 +88,7 @@ async function ctxOf(p: Seeded, mode: ArtifactContext['mode'], doc: TemplateDoc 
 /** Compile through the hook as a build does, and store the links it returns (an upsert by key, as build.ts writeLink). */
 async function compile(p: Seeded, mode: 'build' | 'adopt' = 'build', doc: TemplateDoc = DOC) {
   return inA(async () => {
-    const out = await compileArtifacts(await ctxOf(p, mode, doc), [])
+    const out = await compileArtifacts(await ctxOf(p, mode, doc), [], [rankGroupCompiler])
     for (const l of out.links) {
       const mine = await db().adsPlaybookLink.findFirst({ where: { playbookId: p.rowId, kind: l.kind, key: l.key } })
       if (mine) await db().adsPlaybookLink.update({ where: { id: mine.id }, data: { refId: l.refId } })

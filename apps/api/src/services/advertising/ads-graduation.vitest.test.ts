@@ -60,6 +60,15 @@ describe('structural rules are capped at PROPOSE', () => {
   })
 })
 
+describe('PB-7 — a playbook\'s isolation rule', () => {
+  it('creates negatives, so it stays PROPOSE — whitelist gate and all', () => {
+    const bare = v(['isolate_product_terms'])
+    expect(bare.maxLevel).toBe('PROPOSE')
+    expect(bare.reason).toMatch(/no protected terms are configured/)
+    expect(v(['isolate_product_terms'], true)).toMatchObject({ maxLevel: 'PROPOSE', blockedBy: ['isolate_product_terms'], reason: expect.stringMatching(/Creates negatives/) })
+  })
+})
+
 describe('the negation gate', () => {
   it('names the missing whitelist as the reason, because that is the fixable part', () => {
     const r = v(['harvest_and_negate'], false)

@@ -177,7 +177,7 @@ async function perRowExplain(adapter: AutomationAdapter, opts: ExplainOptions, a
 // ── R10 — switches ────────────────────────────────────────────────────────────────────────────────────
 
 /** Actions that hold spend down: a rule carrying one is a brake — turning it down can raise spend (part 06 §3). */
-const SPEND_REDUCERS = new Set(['bid_down', 'lower_bid_to_floor', 'retail_guard', 'add_negative_exact', 'add_negative_phrase', 'sync_negatives_across_campaigns', 'harvest_and_negate', 'pace_budget'])
+const SPEND_REDUCERS = new Set(['bid_down', 'lower_bid_to_floor', 'retail_guard', 'add_negative_exact', 'add_negative_phrase', 'sync_negatives_across_campaigns', 'harvest_and_negate', 'isolate_product_terms', 'pace_budget'])
 export function adsRuleBrake(actions: unknown): string | null {
   const list = (Array.isArray(actions) ? actions : []) as Array<Record<string, unknown>>
   const reducers = list.filter((a) => SPEND_REDUCERS.has(String(a?.type)) || (['adjust_ad_budget', 'budget_apply'].includes(String(a?.type)) && Number(a?.percent ?? a?.value ?? 0) < 0)).map((a) => String(a.type))

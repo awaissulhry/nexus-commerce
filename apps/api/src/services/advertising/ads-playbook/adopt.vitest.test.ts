@@ -122,7 +122,7 @@ describe('a stale link and a portfolio another playbook holds', () => {
     expect(out.data.portfolioId).toBeNull()
     expect(out.data.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/share portfolio pf-held-elsewhere, which another product's playbook holds: it is not linked to this one/)]))
     expect(await inA(() => applyAdopt(out.data, writer))).toEqual({ bound: 1, unbound: 0, errors: [] })
-    expect(await inA(() => db().adsPlaybookLink.findMany({ where: { playbookId: second.rowId }, select: { kind: true, key: true, refId: true, origin: true } })))
+    expect(await inA(() => db().adsPlaybookLink.findMany({ where: { playbookId: second.rowId, kind: { in: ['slot', 'portfolio'] } }, select: { kind: true, key: true, refId: true, origin: true } })))
       .toEqual([{ kind: 'slot', key: 'pat', refId: made.pat, origin: 'adopted' }])
   })
 })
@@ -145,14 +145,17 @@ describe('plan and apply an adopt', () => {
     const r = await inA(() => applyAdopt(out.data, writer))
     expect(r).toEqual({ bound: 2, unbound: 0, errors: [] })
     const links = await inA(() => db().adsPlaybookLink.findMany({ where: { playbookId: seeded.rowId }, orderBy: [{ kind: 'asc' }, { key: 'asc' }], select: { kind: true, key: true, refId: true, origin: true } }))
-    expect(links).toEqual([
+    expect(links.filter((l) => l.kind === 'slot' || l.kind === 'portfolio')).toEqual([
       { kind: 'portfolio', key: 'portfolio', refId: 'pf-shared', origin: 'adopted' },
-      { kind: 'rankGroup', key: 'rank:performance', refId: expect.any(String), origin: 'built' },
-      { kind: 'rankGroup', key: 'rank:research', refId: expect.any(String), origin: 'built' },
       { kind: 'slot', key: 'auto', refId: ids.auto, origin: 'adopted' },
       { kind: 'slot', key: 'exact-category', refId: ids.exact, origin: 'adopted' },
     ])
+    // The artifacts hook compiled the product's harvest and isolation rules, each with its own link, born OFF.
+    const rules = links.filter((l) => l.kind === 'harvestRule' || l.kind === 'isolationRule')
+    expect(rules.map((l) => [l.kind, l.key])).toEqual([['harvestRule', 'harvest'], ['isolationRule', 'isolation']])
+    expect(await inA(() => db().automationRule.findMany({ where: { id: { in: rules.map((l) => l.refId) } }, select: { enabled: true } }))).toEqual([{ enabled: false }, { enabled: false }])
     // PB-8 — one hourly plan per rank role, switched off with its schedules, its members the adopted campaigns of the role.
+    expect(links.filter((l) => l.kind === 'rankGroup').map((l) => [l.key, l.origin])).toEqual([['rank:performance', 'built'], ['rank:research', 'built']])
     for (const [key, member] of [['rank:performance', ids.exact], ['rank:research', ids.auto]] as const) {
       const groupId = links.find((l) => l.key === key)!.refId
       expect(await inA(() => db().rankScheduleGroup.findUniqueOrThrow({ where: { id: groupId }, select: { enabled: true, portfolioId: true } }))).toEqual({ enabled: false, portfolioId: null })

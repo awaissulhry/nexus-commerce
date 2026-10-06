@@ -59,6 +59,7 @@ export const ACTION_WRITES_FIELD: Record<string, { field: ConflictField | null; 
   add_negative_exact: { field: 'negative', dir: 'create' },
   add_negative_phrase: { field: 'negative', dir: 'create' },
   sync_negatives_across_campaigns: { field: 'negative', dir: 'create' },
+  isolate_product_terms: { field: 'negative', dir: 'create' },
   archive_keyword: { field: 'keyword', dir: 'destroy' },
   pause_campaign: { field: 'state', dir: 'destroy' },
   pause_ad_group: { field: 'state', dir: 'destroy' },

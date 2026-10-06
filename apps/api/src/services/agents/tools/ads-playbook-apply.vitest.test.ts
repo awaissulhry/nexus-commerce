@@ -128,8 +128,9 @@ describe('the build preview, and what refuses it', () => {
     })
     expect((r.preview as Row).campaigns.map((c: Row) => [c.slot, c.placementsAtStart])).toEqual([['auto', 0], ['broad-category', 0], ['exact-category', 1], ['exact-brand', 0], ['pat', 2]])
     // PB-8 — one hourly plan per rank role for the campaigns it makes, switched off until START.
-    expect((r.preview as Row).artifacts.map((a: Row) => [a.kind, a.key, a.does])).toEqual([['rankGroup', 'rank:performance', 'create'], ['rankGroup', 'rank:research', 'create']])
-    expect((r.preview as Row).artifacts[0].summary).toMatch(/for the campaigns this build makes for exact-category, exact-brand .*switched OFF with its campaigns: nothing runs until START\.$/)
+    const plans = (r.preview as Row).artifacts.filter((a: Row) => a.kind === 'rankGroup')
+    expect(plans.map((a: Row) => [a.kind, a.key, a.does])).toEqual([['rankGroup', 'rank:performance', 'create'], ['rankGroup', 'rank:research', 'create']])
+    expect(plans[0].summary).toMatch(/for the campaigns this build makes for exact-category, exact-brand .*switched OFF with its campaigns: nothing runs until START\.$/)
     expect(getTool('apply-ads-playbook')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'auto', strategyBound: 'amazon-ads', reversibility: 'partial', openWorld: true, readOnly: false })
   })
 
@@ -213,7 +214,7 @@ describe('approved, an adopt writes Nexus links; its undo is the opposite adopt'
     const p = (await preview('apply-ads-playbook', { op: 'adopt', market: 'IT', productId: adopted.parent })).preview as Row
     expect(p).toMatchObject({ op: 'adopt', bindings: [{ slot: 'pat', campaignId: campaign, why: 'named' }], reachNote: expect.stringMatching(/^Nexus only/) })
     // PB-8 — the preview shows the playbook's own hourly plans; a slot with no rank role makes none.
-    expect(p.artifacts).toEqual([])
+    expect(p.artifacts.filter((a: Row) => a.kind === 'rankGroup')).toEqual([])
     const asked = await ask('apply-ads-playbook', { op: 'adopt', market: 'IT', productId: adopted.parent })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { bound: 1, unbound: 0 } })
     expect(await inside(() => db().adsPlaybookLink.findMany({ where: { playbookId: adopted.rowId, kind: 'slot' }, select: { key: true, refId: true, origin: true } }))).toEqual([{ key: 'pat', refId: campaign, origin: 'adopted' }])

@@ -90,9 +90,12 @@ async function buildPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
   if (!p.compiles) return refuse(`The playbook does not compile yet: ${p.problems.join('; ')}.`)
   if (!p.campaigns.length) return refuse(a.slots?.length ? `Nothing to build: ${a.slots.join(', ')} ${a.slots.length === 1 ? 'is' : 'are'} held by a live campaign already.` : 'Nothing to build: every slot of the playbook is held by a live campaign (ads-playbook view compile).')
   if (!p.allowed) return refuse(`The blueprint gate refuses this build — ${p.blockers.join(' ')}`)
+  // A dry run writes nothing: a build that stopped (no progress for 30 minutes) is only said here; the build marks it FAILED.
   const flying = await inFlightRefusal(p.market, p.nameToken!, p.playbook.id)
-  // A build that stopped (no progress for 30 minutes) was marked FAILED by the check itself: it does not hold this one.
-  if (flying) return refuse(`A build of this product is running (run ${flying.applicationId}): follow it with ads-playbook view build.`)
+  if (flying && !flying.stopped) return refuse(`A build of this product is running (run ${flying.applicationId}): follow it with ads-playbook view build.`)
+  const stoppedNote = flying?.stopped
+    ? `An earlier build of this product (run ${flying.applicationId}) stopped${flying.campaign ? ` at "${flying.campaign}"` : ''} without finishing: this build marks it FAILED. What it made can be archived (archive-ads buildRunId ${flying.applicationId}) or adopted.`
+    : null
   let currency: string
   try { currency = await marketCurrency('AMAZON', p.market) } catch (e) { return refuse((e as Error).message) }
 
@@ -146,7 +149,7 @@ async function buildPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         liveWrites: false,
         placements: 'deferred to START (a campaign off the allowlist is refused them)',
         ...(newMarket ? { newMarket: true, newMarketNote: `NEW MARKET: the first campaign in ${p.market}.` } : {}),
-        warnings: p.warnings,
+        warnings: [...p.warnings, ...(stoppedNote ? [stoppedNote] : [])],
         artifacts: artifacts.lines,
         ...(artifacts.errors.length ? { artifactErrors: artifacts.errors } : {}),
         basis: hash({ row: [p.playbook.id, p.playbook.version], template: p.template, campaigns: p.campaigns, productAds: p.productAds, portfolio: p.portfolio, linked: p.linked }),

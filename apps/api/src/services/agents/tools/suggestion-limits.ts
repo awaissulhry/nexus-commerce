@@ -236,6 +236,14 @@ export async function suggestionLimitFacts(items: readonly DecisionItem[], appro
       const term = str(action.keyword) ?? str(action.query) ?? query
       if (!term) { unjudged(item, 'it names no search term'); continue }
       kit.push({ entity: { kind: 'searchTerm', query: term, externalCampaignId: ext, externalAdGroupId: str(action.externalAdGroupId) }, change: { field: 'negative', term, matchType: NEGATIVE_ACTIONS[type] } })
+    } else if (family === 'negatives' && type === 'isolate_product_terms') {
+      // PB-7 — a card of one product's isolation negatives: each of its items is one negative into one of that product's
+      // own ad groups, judged like any negative (a protected term waits for a person).
+      const negatives = (Array.isArray(action.items) ? action.items : []).map(obj)
+        .map((i) => ({ term: str(i.text), adGroupId: str(i.adGroupId), matchType: i.match === 'PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT' }))
+        .filter((i): i is { term: string; adGroupId: string; matchType: string } => !!i.term && !!i.adGroupId)
+      if (!negatives.length) { unjudged(item, 'it lists no negative'); continue }
+      for (const n of negatives) kit.push({ entity: { kind: 'adGroup', id: n.adGroupId }, change: { field: 'negative', term: n.term, matchType: n.matchType } })
     } else if (family === 'new-keywords' && row.entityType === 'SEARCH_TERM' && type === 'promote_to_exact') {
       const { ext, query } = termOf(row.entityId)
       const cents = startBidCents(action)

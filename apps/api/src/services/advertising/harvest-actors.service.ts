@@ -61,6 +61,8 @@ const CREATING_ACTIONS = new Set([
   'add_negative_exact',
   'add_negative_phrase',
   'sync_negatives_across_campaigns',
+  // PB-7 — creates negatives, only inside one product's own playbook campaigns in one market.
+  'isolate_product_terms',
 ])
 
 /** Actions that only tell someone something — they never make an actor a participant. */
@@ -252,6 +254,13 @@ function executedFor(actionTypes: string[], actions: unknown[]): Array<{ text: s
   }
   if (actionTypes.includes('sync_negatives_across_campaigns')) {
     out.push({ text: 'one term negated in EVERY enabled campaign in the marketplace, from a single firing', source: 'automation-action-handlers.ts:1081' })
+  }
+  if (actionTypes.includes('isolate_product_terms')) {
+    out.push(
+      { text: 'negatives only inside one product\'s own playbook campaigns in one market — never in a campaign that also advertises another product', source: 'ads-playbook/isolation-load.ts loadIsolation (familyOnly)' },
+      { text: 'a search that wins where it runs (the ads strategy\'s harvest bar there) is not negated there until its live exact keyword wins too', source: 'ads-playbook/isolation.ts planIsolation (handover "proven")' },
+      { text: 'negatives written at ad-group scope, as the rule (no converting guard: each only sends a search to the product\'s own live keyword)', source: 'ads-playbook/isolation-run.ts writeAll' },
+    )
   }
   return out
 }

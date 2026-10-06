@@ -293,6 +293,17 @@ export const ACTION_WINDOW: Record<string, RuleWindowSpec> = {
     caveat: 'The other harvest path, `promote_to_exact` on SEARCH_TERM_CONVERTING, reads 30 settled days through settledWhere. Two engines, two windows, two latency policies — a rule carrying both harvests twice over different spans. A rule that sets no thresholds of its own reads the ads strategy\'s window instead wherever its market, a category or a product sets one.',
   },
   /**
+   * PB-7 — a playbook's isolation rule re-queries `AmazonAdsSearchTerm` for one reason: a search that wins where it runs
+   * (meets the harvest bar there) is not negated there. It reads the harvest's own bar and window (`homeWinners`, on
+   * its own dates like `previewHarvest`), so the same fallback and the same unsettled days. It has no thresholds of its
+   * own to tune.
+   */
+  isolate_product_terms: {
+    kind: 'window', days: HARVEST_DEFAULTS.windowDays, settled: false,
+    source: 'automation-action-handlers.ts isolate_product_terms → ads-playbook/isolation-load.ts scopeWinners → ads-harvest.service.ts homeWinners',
+    caveat: 'The window only decides which searches count as winners (never negated where they win); it reads the ads strategy\'s harvest window wherever its market, a category or a product sets one, and this default elsewhere.',
+  },
+  /**
    * BP.P4 — a builder Bid rule's lookback is ITS OWN (`actions[0].windowDays`, the builder's
    * "Lookback period" select), defaulting to its trigger's 14 settled days (TARGET_PERFORMANCE
    * since 4f; a Bid rule saved before 4f rides KEYWORD_HIGH_ACOS, also 14).

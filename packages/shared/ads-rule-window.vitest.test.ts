@@ -231,3 +231,13 @@ describe('ruleLookback', () => {
     expect(ruleLookback('TARGET_PERFORMANCE').label).toBe('14 days')
   })
 })
+
+describe('PB-7 — isolate_product_terms reads the harvest\'s window (winners stay)', () => {
+  it('a SCHEDULE isolation rule reports the harvest default it falls back to, unsettled, with nothing to tune', () => {
+    const r = ruleLookback('SCHEDULE', ['isolate_product_terms'])
+    expect(r).toMatchObject({ days: HARVEST_DEFAULTS.windowDays, settled: false, fromAction: true })
+    expect(ACTION_WINDOW.isolate_product_terms.tunable).toBeUndefined()
+    expect(r.why).toContain(`INCLUDES the last ${PROVISIONAL_DAYS} days`)
+    expect(ACTION_WINDOW.isolate_product_terms.caveat).toMatch(/never negated where they win/)
+  })
+})
