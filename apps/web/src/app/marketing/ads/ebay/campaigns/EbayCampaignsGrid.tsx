@@ -196,6 +196,8 @@ export function EbayCampaignsGrid() {
         onMarketChange={setMarket}
         showDateRange={false}
         onDataSync={() => void dataSync()} syncing={syncing}
+        dataSyncLabel="Sync from eBay now"
+        dataSyncTip="Reads your campaigns and ads from eBay now, then shows them."
       />
       <SandboxBanner mode={writeMode} />
       {error && <div className="h10-am-latest" role="alert"><b>Load failed:</b> {error} · <Button variant="link" onClick={reload}>Retry</Button></div>}

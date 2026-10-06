@@ -16,6 +16,7 @@ import { Toggle } from '@/design-system/primitives/Toggle'
 import { Spinner } from '@/design-system/primitives/Spinner'
 import { MetricChart, type ChartMetric } from '../_shared/MetricChart'
 import { getBackendUrl } from '@/lib/backend-url'
+import { pct } from '../campaigns/_grid/format' // AM-30 — acosPct is percent points; the console's one ACoS rendering
 
 const DRAWER_METRICS: ChartMetric[] = [
   { key: 'spend', label: 'Spend', unit: 'eur' },
@@ -196,7 +197,7 @@ export function GoalDrawer({ goalId, onClose, onMutated, onLaunch, launching }: 
                     <Link className="nm" href={`/marketing/ads/campaigns/${c.id}`} title={c.name}>{c.name}</Link>
                     <span className="perf">
                       {c.perf
-                        ? <>{eur(c.perf.spendCents)} spend · {eur(c.perf.salesCents)} sales · {c.perf.acosPct == null ? '— ACoS' : `${c.perf.acosPct.toFixed(1)}% ACoS`}</>
+                        ? <>{eur(c.perf.spendCents)} spend · {eur(c.perf.salesCents)} sales · {c.perf.acosPct == null ? '— ACoS' : `${pct(c.perf.acosPct / 100)} ACoS`}</>
                         : 'no data yet'}
                     </span>
                   </span>

@@ -57,14 +57,20 @@ function noteRedisResult(ok: boolean): void {
   if (consecutiveFailures >= 3) { skipUntil = Date.now() + 30_000; logger.warn('[ads-cache] Redis circuit OPEN — bypassing L2 30s (L1 memory still active)') }
 }
 
-export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>): Promise<T> {
+/**
+ * AM-34 — `refresh: true` is a screen's "Refresh view": it skips both tiers' READ, computes the answer now, and stores
+ * it, so the next ordinary read sees it too. Without it a refresh re-read a cached answer up to `ttlSec` old and
+ * looked like it had worked.
+ */
+export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>, opts?: { refresh?: boolean }): Promise<T> {
   const k = cachePrefix() + key
+  const refresh = opts?.refresh === true
   // L1 — instant, always available.
-  const m = memGet(k)
+  const m = refresh ? undefined : memGet(k)
   if (m !== undefined) return m as T
 
   // L2 — Redis, if reachable.
-  if (!redisDisabled()) {
+  if (!refresh && !redisDisabled()) {
     try {
       const hit = await withTimeout(redis.connection.get(k), REDIS_OP_TIMEOUT_MS)
       noteRedisResult(true)

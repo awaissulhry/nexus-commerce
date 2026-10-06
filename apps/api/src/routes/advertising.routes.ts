@@ -3369,6 +3369,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       preset?: string
       startDate?: string
       endDate?: string
+      /** AM-34 — '1' = the Ad Manager's "Refresh view": skip the 300-s read cache. */
+      fresh?: string
     }
     const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(query)
@@ -3491,8 +3493,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       roas: sp > 0 ? Math.round((sa / sp) * 100) / 100 : null,
       ctr:  im > 0 ? Math.round((cl / im) * 10000) / 100 : null,
     })
+    // AM-30 — the window's spend is its micros summed, then rounded ONCE (as the window before is, below, and as the
+    // campaign list rounds per campaign). Summing the per-day rounded cents drifted by up to half a cent per day.
     const curSummary = summarize(
-      rows.reduce((s, r) => s + r.adSpendCents, 0),
+      Math.round(perfByDay.reduce((s, p) => s + Number(p._sum.costMicros ?? 0n), 0) / 10_000),
       rows.reduce((s, r) => s + r.adSalesCents, 0),
       rows.reduce((s, r) => s + r.impressions, 0),
       rows.reduce((s, r) => s + r.clicks, 0),
@@ -3533,7 +3537,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return { windowDays, count: rows.length, rows, summary: curSummary, previous, compare: compareWindows, range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday } }
-    })
+    }, { refresh: query.fresh === '1' })
     reply.header('Cache-Control', 'private, max-age=60')
     return result
   })

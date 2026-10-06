@@ -33,10 +33,7 @@
    opinion about: the name, the state and source chips, the market tags. */
 .pf-name { display: flex; align-items: center; gap: 8px; }
 .pf-name-main { font-weight: 700; color: var(--nds-grey-900); }
-.pf-state { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--nds-grey-100); color: var(--nds-grey-600); }
-.pf-state--enabled { background: #e7f5ee; color: #067d62; }
-.pf-state--paused { background: #fff4e0; color: var(--nds-amber-600); }
-.pf-state--archived { background: var(--nds-grey-50); color: var(--nds-text-muted); }
+/* AM-31 — the state chip is the DS status pill the Ad Manager renders (StatusCell), not a local raw-hex chip. */
 .pf-src { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; background: var(--nds-blue-50); color: var(--nds-blue-700); }
 .pf-src--local { background: var(--nds-grey-50); color: var(--nds-grey-600); }
 .pf-mkts { display: inline-flex; flex-wrap: wrap; gap: 4px; }

@@ -34,6 +34,7 @@ import './budget-manager.css'
 import { ControlPlane } from './ControlPlane'
 import { BudgetPoolsDrawer } from './BudgetPoolsDrawer'
 import { NO_MONTHLY_CAP, readMonthlyBudgetCents } from '../_shared/budgetInput'
+import { budgetMonthOf } from './budgetMonth'
 
 // ── types (mirror ads-budget-manager.service BudgetManagerResult) ──────────
 interface SpendSlice { month: string; budgetCents: number; spendCents: number | null; pct: number | null; daily: number[] }
@@ -72,7 +73,8 @@ const pctTxt = (p: number | null | undefined) => (p == null ? '—' : `${(p * 10
 const STATUS_COLOR: Record<Row['status'], string> = { 'on-track': '#1f9d5b', over: '#d9534f', under: '#1f6fde', 'no-budget': '#9aa3b0' }
 const STATUS_LABEL: Record<Row['status'], string> = { 'on-track': 'On track', over: 'Over pace', under: 'Under pace', 'no-budget': 'No budget' }
 
-const nowMonth = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}` }
+// AM-36 — the month of today's budget day (UTC), not the browser's local month; see budgetMonth.ts.
+const nowMonth = () => budgetMonthOf()
 const shiftM = (month: string, d: number) => { const [y, m] = month.split('-').map(Number); const x = new Date(Date.UTC(y, m - 1 + d, 1)); return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}` }
 const monthLabel = (month: string) => { const [y, m] = month.split('-').map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }) }
 const daysIn = (month: string) => { const [y, m] = month.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).getUTCDate() }
@@ -312,7 +314,8 @@ export function BudgetManagerClient() {
   const load = useCallback(async (m: string) => {
     setLoading(true)
     try {
-      const r = await fetch(`${API()}/api/advertising/budget-manager?month=${m}`).then((x) => x.json())
+      // AM-34 — `no-store`: the route sends a 60-s browser cache header, so "Refresh view" could hand back the last answer.
+      const r = await fetch(`${API()}/api/advertising/budget-manager?month=${m}`, { cache: 'no-store' }).then((x) => x.json())
       if (!r || !Array.isArray(r.rows)) { setResult(null); return }
       // Normalise once so a transient pre-BM.B2 payload (deploy lag) can't crash a render.
       const rows: Row[] = r.rows.map((x: Partial<Row>) => ({
@@ -325,7 +328,7 @@ export function BudgetManagerClient() {
       }) as Row)
       setResult({ ...r, rows })
       // refresh the BM.B3 enforcement preview alongside (non-blocking)
-      fetch(`${API()}/api/advertising/budget-manager/enforcement?month=${m}`).then((x) => x.json()).then((e) => setEnforcement(e && Array.isArray(e.plans) ? e : null)).catch(() => setEnforcement(null))
+      fetch(`${API()}/api/advertising/budget-manager/enforcement?month=${m}`, { cache: 'no-store' }).then((x) => x.json()).then((e) => setEnforcement(e && Array.isArray(e.plans) ? e : null)).catch(() => setEnforcement(null))
     } catch { setResult(null) } finally { setLoading(false) }
   }, [])
   useEffect(() => { load(month) }, [month, load])
@@ -417,7 +420,7 @@ export function BudgetManagerClient() {
         <span className="bm-grow" />
     <Button onClick={() => setPoolsOpen(true)}><Wallet size={13} /> Budget Pools</Button>
     <Button onClick={() => { setCanvasMarket(enforcement?.plans[0]?.marketplace ?? markets[0] ?? ''); setCanvasOpen(true) }}><Network size={13} /> Allocation Map</Button>
-        {result && <span className="bm-mb-day" title={result.dayBoundary ? `A budget day runs ${result.dayBoundary}. Pace and the month-end forecast count complete days only${result.dataThrough ? `; the daily report covers up to ${result.dataThrough}` : ''}.` : undefined}>Day {result.dayOfMonth} of {result.daysInMonth}{result.elapsedDays != null ? ` · pace counts ${result.elapsedDays} complete day${result.elapsedDays === 1 ? '' : 's'}` : ''}</span>}
+        {result && <span className="bm-mb-day" title={result.dayBoundary ? `A budget day runs ${result.dayBoundary}. Pace and the month-end forecast count complete days only${result.dataThrough ? `; the daily report covers up to ${result.dataThrough}` : ''}.` : undefined}>Day {result.dayOfMonth} of {result.daysInMonth} (UTC days){result.elapsedDays != null ? ` · pace counts ${result.elapsedDays} complete day${result.elapsedDays === 1 ? '' : 's'}` : ''}</span>}
       </div>
 
       {/* AM-8 — the engine's real mode, said once it is read; it is the server's own reading of the engine's gate. */}

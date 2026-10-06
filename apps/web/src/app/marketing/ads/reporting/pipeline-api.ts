@@ -45,6 +45,8 @@ export interface PipelineHealth {
 export async function fetchPipelineHealth(signal?: AbortSignal): Promise<PipelineHealth> {
   const res = await fetch(`${getBackendUrl()}/api/advertising/reporting/pipeline`, {
     credentials: 'include', signal,
+    // AM-34 — the route sets a 60-s browser cache; without this "Refresh view" could hand back the last answer.
+    cache: 'no-store',
   })
   if (!res.ok) throw new Error(`Pipeline health unavailable (${res.status})`)
   return (await res.json()) as PipelineHealth

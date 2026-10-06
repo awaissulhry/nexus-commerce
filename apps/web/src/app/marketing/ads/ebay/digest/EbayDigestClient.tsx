@@ -95,9 +95,17 @@ export function EbayDigestClient() {
 
   return (
     <div className="eb-page h10-am eb-root">
+      {/* AM-26 / AM-34 — this header's three controls did nothing: "Data Sync" had no handler, the market picker no
+          markets and a no-op change, and the date picker a range nothing read. Now the button re-reads the digest
+          shown ("Refresh view"); the picker says the digest covers every eBay market; and the week chips below
+          are this page's one date control, so the header's second one is off (it never chose a week). */}
       <AdsPageHeader channel="ebay" title="eBay Weekly Digest"
         subtitle="The one weekly review: money, movers, what autopilot did, what needs your decision. Aggregated across every eBay marketplace."
-        markets={[]} market="all" onMarketChange={() => {}} />
+        markets={[]} market="all" onMarketChange={() => {}}
+        marketNotYet="Not by market yet: the digest covers every eBay market."
+        showDateRange={false}
+        onDataSync={() => void reload(digest?.id)} syncing={loading}
+        dataSyncTip="Reads the digest shown again. It does not build a new one: that is Generate now." />
       <div className="eb-controls">
         {weeks.length > 0 && (
           <span className="eb-week-chips" role="group" aria-label="Digest weeks">

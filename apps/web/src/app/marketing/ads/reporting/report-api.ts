@@ -106,6 +106,9 @@ export async function runReport(p: ReportParams, signal?: AbortSignal): Promise<
  * null is ALWAYS "—", never 0. An ACOS with no sales behind it is undefined, not
  * zero percent, and the whole console has been bitten before by `Number(null)`
  * quietly becoming a real 0.
+ *
+ * AM-30 — percents and ratios always carry 2 decimals, the Ad Manager's precision: "38.50%" and "2.30", where this
+ * printed "38.5%" and "2.3" beside the grid's "38.50%" / "2.30" for the same campaign.
  */
 export function formatCell(v: unknown, format: ColumnFormat, currency: string): string {
   if (v == null || v === '') return '—'
@@ -120,9 +123,9 @@ export function formatCell(v: unknown, format: ColumnFormat, currency: string): 
     case 'money':
       return n.toLocaleString('en-GB', { style: 'currency', currency, maximumFractionDigits: 2 })
     case 'pct':
-      return `${(n * 100).toLocaleString('en-GB', { maximumFractionDigits: 2 })}%`
+      return `${(n * 100).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
     case 'ratio':
-      return n.toLocaleString('en-GB', { maximumFractionDigits: 2 })
+      return n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     default:
       return String(v)
   }
@@ -151,10 +154,19 @@ export const isoDay = (d: Date): string => {
  * a day the next morning, so a window ending today held 29 days of data and was compared with 30).
  */
 export function defaultRange(): { from: string; to: string } {
-  const to = new Date()
+  return completeDaysWindow(30)
+}
+
+/**
+ * AM-36 — the last `days` COMPLETE local days, ending yesterday (the AM-16 rule), in the picker's local-day vocabulary
+ * (`isoDay`, R2). Business and Explorer built their windows with `toISOString()` (UTC) and ran them into today: for the
+ * two hours after midnight in Rome they ended on the PREVIOUS day, and otherwise on today, which has no daily report.
+ */
+export function completeDaysWindow(days: number, now: Date = new Date()): { from: string; to: string } {
+  const to = new Date(now)
   to.setDate(to.getDate() - 1)
   const from = new Date(to)
-  from.setDate(from.getDate() - 29)
+  from.setDate(from.getDate() - (days - 1))
   return { from: isoDay(from), to: isoDay(to) }
 }
 

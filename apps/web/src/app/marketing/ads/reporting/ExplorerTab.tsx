@@ -41,6 +41,7 @@ import {
 } from './hierarchy-api'
 import { fmtCount, fmtMoney, fmtShare } from './strategy-api'
 import { Caveats, ProvenanceStrip, TabState } from './StrategyBits'
+import { completeDaysWindow } from './report-api'
 
 /** The window the tree opens on. Wide enough to hold a trend, short enough to still be current. */
 const WINDOW_DAYS = 56
@@ -66,11 +67,8 @@ export function ExplorerTab({ market }: { market: string }) {
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
-  const win = useMemo(() => {
-    const to = new Date()
-    const from = new Date(to.getTime() - WINDOW_DAYS * 86_400_000)
-    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
-  }, [])
+  // AM-36 — complete local days ending yesterday, like every other ads window (was UTC days running into today).
+  const win = useMemo(() => completeDaysWindow(WINDOW_DAYS), [])
 
   // Root load. Changing market or the window collapses everything — a tree whose branches were
   // fetched under different filters is a tree whose children no longer belong to their parents.
