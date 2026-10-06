@@ -8,6 +8,8 @@
  *                     (`amazonOverview`, the read ads-overview answers from), reads what each approval became, and sends
  *                     one bell notice and at most one e-mail a day. A line with an amount or a percentage is refused.
  *   ads-manager-runs  the runs of the last days, each approval's fate read again now (approved, declined, expired …).
+ *   set-ads-report-time  W4-2 — by when the day's report is due (the watchdog, ads-manager-watchdog.service.ts). Ceiling
+ *                     ask: Claude never changes its own watchdog alone.
  *
  * The record lives in ads-manager-run.service.ts (one AgentRun per run, id = the start request's approvalId: the runId).
  * Ceiling auto: a business may let the report run by its rule, inside `allowEmail` (the e-mail may go without a
@@ -46,6 +48,7 @@ import {
   type RunStatus,
   type StartFacts,
 } from '../ads-manager-run.service.js'
+import { knownTimeZone, readExpectedReport, TIME, writeExpectedReport, type ExpectedReport } from '../ads-manager-watchdog.service.js'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { amazonOverview } from './ads-read.tools.js'
 
@@ -552,6 +555,8 @@ const adsManagerRuns: AgentTool = {
         total: runs.length,
         unfinished: runs.filter((r) => r.status === 'running').length,
         fatesNow: tally,
+        // W4-2 — by when the watchdog expects the day's report (null: the missing-report check is off).
+        expectedReport: await expectedNow(),
         // W4-5 — the watch-week comparison stands here once built.
         watchWeek: WATCH_WEEK_SLOT,
         ...(runs.length ? {} : { empty: `No daily Claude ads run reported in the last ${days} days.` }),
@@ -560,4 +565,81 @@ const adsManagerRuns: AgentTool = {
   },
 }
 
-export const ADS_MANAGER_TOOLS: AgentTool[] = [reportAdsRun, adsManagerRuns]
+// ── set-ads-report-time (W4-2) ─────────────────────────────────────────────────────────────────────
+
+const REPORT_TIME_TOOL = 'set-ads-report-time'
+
+async function expectedNow(): Promise<ExpectedReport | null> {
+  const now = await readExpectedReport()
+  return now ? { time: now.time, timeZone: now.timeZone } : null
+}
+
+const words = (e: ExpectedReport | null) => (e ? `${e.time} (${e.timeZone})` : 'off')
+
+async function planReportTime(args: Record<string, unknown>) {
+  const a = args as { time: string | null; timeZone?: string }
+  const timeZone = a.time === null ? null : knownTimeZone(a.timeZone ?? 'Europe/Rome')
+  if (a.time !== null && !timeZone) return { ok: false as const, error: `timeZone: "${a.timeZone}" is not a time zone Nexus knows (use an IANA name such as Europe/Rome). Nothing was queued.` }
+  const to: ExpectedReport | null = a.time === null ? null : { time: a.time, timeZone: timeZone! }
+  const from = await expectedNow()
+  return { ok: true as const, from, to }
+}
+
+/** C2 — undo: the time it replaced, set again (off, when there was none). */
+export const REPORT_TIME_UNDO: ToolUndo = {
+  async current() {
+    return { expected: await expectedNow() }
+  },
+  request(change) {
+    const before = (change.before as { expected: ExpectedReport | null } | null)?.expected ?? null
+    return { tool: REPORT_TIME_TOOL, args: before ? { time: before.time, timeZone: before.timeZone } : { time: null } }
+  },
+}
+
+const setAdsReportTime: AgentTool = {
+  name: REPORT_TIME_TOOL,
+  title: 'Set the daily report time',
+  category: 'advertising',
+  description:
+    'Set by when the daily Claude ads run reports its end (report-ads-run finish or fail), on the business\'s own clock: '
+    + 'a time (HH:MM, 24-hour) and a time zone. Nexus\'s watchdog checks every hour: no report by that time plus 30 '
+    + 'minutes sends one danger notice to the bell and one e-mail to the Monday ads digest\'s recipients (a run that '
+    + 'started and reports no end in 2 hours does too, with or without this time). time null switches the missing-report '
+    + 'check off. Nexus only. A person approves it in Nexus (Claude never changes its own watchdog alone); undo sets the '
+    + 'time it replaced again.',
+  input: z.object({
+    time: z.string().trim().regex(TIME, 'a time as HH:MM, 24-hour').nullable()
+      .describe('HH:MM, 24-hour, by which the day\'s report arrives (e.g. 08:30); null switches the missing-report check off'),
+    timeZone: z.string().trim().min(1).max(64).optional().describe('an IANA time zone for the time (default Europe/Rome)'),
+  }),
+  requires: [F.adsAutomationManage],
+  riskTier: 'low',
+  requiresApprovalDefault: true,
+  readOnly: false,
+  openWorld: false,
+  reversibility: 'full',
+  maxClaudeTrust: 'ask',
+  undo: REPORT_TIME_UNDO,
+  async handler(args): Promise<ToolResult> {
+    const p = await planReportTime(args)
+    if (p.ok === false) return p
+    return {
+      ok: true,
+      preview: {
+        action: REPORT_TIME_TOOL,
+        summary: p.to
+          ? `The daily Claude ads run reports by ${words(p.to)}; with no report by 30 minutes later, the watchdog alerts you. Nexus only.`
+          : 'Switches the missing-report check of the daily Claude ads run off (a started run with no end still alerts). Nexus only.',
+        changes: { 'expected report time': { from: words(p.from), to: words(p.to) } },
+      },
+    }
+  },
+  async execute(args, ctx): Promise<ToolResult> {
+    const p = await planReportTime(args)
+    if (p.ok === false) return p
+    await writeExpectedReport(p.to, ctx.userId ?? null)
+    return { ok: true, data: { expectedReport: p.to }, change: { before: { expected: p.from }, after: { expected: await expectedNow() } } }
+  },
+}
+
+export const ADS_MANAGER_TOOLS: AgentTool[] = [reportAdsRun, adsManagerRuns, setAdsReportTime]

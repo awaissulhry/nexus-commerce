@@ -70,6 +70,8 @@ export const AUTO_PAUSE_FAILURES = 5
 export const AUTO_PAUSE_WINDOW_MS = 3600_000
 /** Who an automatic pause is by. */
 export const AUTO_PAUSED_BY = 'Nexus'
+/** W4-2 — the danger notice (and e-mail) when Nexus pauses Claude's rule-runs by itself (claude-alerts.service.ts). */
+export const AUTO_PAUSE_NOTICE_TYPE = 'claude-autorun-paused'
 /** The audit actions of a rule-run that never ran or failed (approval-inbox.service.ts writes them). */
 const FAILED_RUN_ACTIONS = ['stale_refused', 'permission_refused', 'execution_failed']
 
@@ -789,11 +791,24 @@ export async function noteAutoFailure(): Promise<void> {
     })
     if (failures < AUTO_PAUSE_FAILURES) return
     if ((await autonomyOf()).paused) return
-    await pauseAutoRuns(
+    const paused = await pauseAutoRuns(
       { userId: '', label: AUTO_PAUSED_BY, canManage: false },
       `${failures} changes run by rule were stale or failed within an hour`,
       { automatic: true, failures },
     )
+    // W4-2 — its event (agent.autorun.paused) has no reader that tells anyone: the Owner hears it here, at once.
+    if (!paused.alreadyPaused) {
+      const { alertBusiness } = await import('./claude-alerts.service.js')
+      await alertBusiness({
+        type: AUTO_PAUSE_NOTICE_TYPE,
+        title: "Nexus paused Claude's changes that run by rule",
+        body: `${failures} changes run by rule were stale or failed within an hour, so Nexus paused every change that runs by rule in this business. `
+          + `${paused.handedBack} waiting ${paused.handedBack === 1 ? 'change went' : 'changes went'} back to a person.\n`
+          + 'Claude can still read and ask; what it asks for waits for a person. To resume, open Settings, AI, Claude (your authenticator code).',
+        href: '/settings/ai/claude',
+        meta: { automatic: true, failures, handedBack: paused.handedBack },
+      })
+    }
   } catch (error) {
     logger.error('[claude-trust] could not check for an automatic pause', { error: error instanceof Error ? error.message : String(error) })
   }

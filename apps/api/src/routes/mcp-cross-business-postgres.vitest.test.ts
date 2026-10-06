@@ -1009,6 +1009,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   },
   // W4-1 — the end of B's started run (start takes no runId; the loop names one).
   'report-ads-run': { op: 'finish' },
+  // W4-2 — the business's own expected report time (a time the schema cannot make up).
+  'set-ads-report-time': { time: '08:30', timeZone: 'Europe/Rome' },
   // T4 — the eBay ad details open an eBay campaign (the loop's campaignId and adGroupId are Amazon's).
   'ebay-ad-details': { get campaignId() { return seeded.b.ebayCampaignId }, adGroupId: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.
@@ -1042,7 +1044,11 @@ const LIVE_READS = new Set(['shopify-content', 'set-shopify-content', 'listing-l
  * control inside B), and from A the creation is legitimate (it queues A's own approval). They are held to "no trace of
  * B" like every tool.
  */
-const CREATES = new Set(['create-product'])
+const CREATES = new Set([
+  'create-product',
+  // W4-2 — the business's own expected report time names no row either: from A it is A's own setting, waiting in A.
+  'set-ads-report-time',
+])
 
 /** An argument named like an id. One with no B_VALUES entry fails the build: the loop would probe nothing. */
 const ID_NAME = /(^id$|Id$|Ids$|^skus?$)/

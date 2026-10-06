@@ -42,6 +42,7 @@ import {
 } from './oauth-config.js'
 import { clientRedirects, OAuthClientError, resolveClient, type OAuthClientRecord } from './oauth-clients.js'
 import { logger } from '../../utils/logger.js'
+import { noticeConnectionRevoked } from './oauth-revoke-notice.js'
 
 const workspaces = createWorkspaceService(prisma)
 const LAST_USED_EVERY_MS = 5 * 60_000
@@ -357,15 +358,20 @@ export async function exchangeCode(form: Record<string, string | undefined>): Pr
   return response
 }
 
-/** A stolen copy of a refresh token: every token of the connection ends and it is revoked (refresh_reuse), audited once. */
-async function revokeForReuse(tx: Tx, grant: { id: string; workspaceId: string }, detail: Record<string, unknown> = {}): Promise<void> {
+/**
+ * A stolen copy of a refresh token: every token of the connection ends and it is revoked (refresh_reuse), audited once.
+ * W4-2 — true when this call ended the connection: the caller then tells the person (noticeConnectionRevoked), after
+ * its transaction commits.
+ */
+async function revokeForReuse(tx: Tx, grant: { id: string; workspaceId: string }, detail: Record<string, unknown> = {}): Promise<boolean> {
   const now = new Date()
   await endTokens(tx, grant.id, now)
   const revoked = await tx.oAuthGrant.updateMany({ where: { id: grant.id, revokedAt: null }, data: { revokedAt: now, revokeReason: 'refresh_reuse' } })
-  if (revoked.count === 0) return
+  if (revoked.count === 0) return false
   await tx.workspaceAudit.create({
     data: { workspaceId: grant.workspaceId, actorUserId: null, action: 'oauth.revoked', targetId: grant.id, metadata: { reason: 'refresh_reuse', ...detail } },
   })
+  return true
 }
 
 /**
@@ -400,12 +406,14 @@ export async function refreshTokens(form: Record<string, string | undefined>): P
     // W4-3 — a refresh token a retry ended (only a retry gives one parent a second, newer refresh child), presented
     // later: whoever holds it lost the race to a copy, or is the copy. End the whole connection, as for any reuse.
     const parentId = row.parentId
+    let ended = false
     const reused = await prisma.$transaction(async (tx) => {
       const newer = await tx.oAuthToken.count({ where: { parentId, kind: 'refresh', id: { not: row.id }, createdAt: { gt: row.createdAt } } })
       if (newer === 0) return false
-      await revokeForReuse(tx, row.grant, { endedByRetry: true })
+      ended = await revokeForReuse(tx, row.grant, { endedByRetry: true })
       return true
     })
+    if (ended) await noticeConnectionRevoked(row.grant, { endedByRetry: true })
     if (reused) {
       logger.warn('[oauth] a refresh token a retry had ended was presented again: the connection was revoked', { grantId: row.grantId })
       throw invalidGrant('refresh token already used; the connection was revoked')
@@ -425,6 +433,7 @@ export async function refreshTokens(form: Record<string, string | undefined>): P
   const asked = named.length ? parseScopes(named.join(' ')) : row.scopes
   if (asked.length === 0) throw new OAuthError('invalid_scope', 'a refresh cannot widen what the person approved')
   if (!(await grantStillValid(row.grant))) throw invalidGrant('the person can no longer connect this business')
+  let ended = false
   return prisma.$transaction(async (tx) => {
     const claimed = await tx.oAuthToken.updateMany({ where: { id: row.id, usedAt: null, revokedAt: null }, data: { usedAt: new Date() } })
     if (claimed.count === 0) {
@@ -437,11 +446,12 @@ export async function refreshTokens(form: Record<string, string | undefined>): P
         return { tokens: await issueTokens(tx, row.grant, asked, row.resource, row.id), retry: metadata }
       }
       // Used before: only a stolen copy is presented twice. End the whole connection.
-      await revokeForReuse(tx, row.grant)
+      ended = await revokeForReuse(tx, row.grant)
       return null
     }
     return { tokens: await issueTokens(tx, row.grant, asked, row.resource, row.id), retry: null }
-  }).then((issued) => {
+  }).then(async (issued) => {
+    if (ended) await noticeConnectionRevoked(row.grant)
     if (!issued) throw invalidGrant('refresh token already used; the connection was revoked')
     if (issued.retry) {
       logger.warn('[oauth] a refresh token was presented again within the grace window: its unused tokens ended, a new pair was issued', {

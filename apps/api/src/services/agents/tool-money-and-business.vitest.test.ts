@@ -303,6 +303,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // without it); the run history shows them under the money keys only.
   'report-ads-run': () => ({ op: 'finish', markets: [{ market: 'IT', lines: ['Money test run'] }] }),
   'ads-manager-runs': () => ({ days: 7 }),
+  // W4-2 — the business's expected report time (no money; a preview, nothing written).
+  'set-ads-report-time': () => ({ time: '08:30', timeZone: 'Europe/Rome' }),
   'ads-overview': () => ({}),
   'ad-campaigns': () => ({}),
   'ad-targets': (ids) => ({ campaignId: ids.campaignId, status: 'all' }),
