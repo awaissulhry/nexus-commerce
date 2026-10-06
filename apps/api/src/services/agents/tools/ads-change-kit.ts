@@ -91,6 +91,9 @@ export function ownLimitsNote(reach: { pastOwnLimits?: Array<{ reason: string }>
   return past.length ? `Warning — this goes past your own limits: ${past.map((l) => l.reason).join('; ')}. Approving it sends it anyway.` : null
 }
 
+/** The words every strategy-bound ad tool says about who decides (N3: honest about the rule, never "always a person"). */
+export const BY_RULE_WORDS = 'A person approves it in Nexus — unless this business lets it run by its rule inside its limits and the ads strategy'
+
 /** What to do about a refusal, by the gate's own reason code. */
 const UNBLOCK: Record<string, string> = {
   campaign_allowlist: 'Only campaigns on the live-write allowlist take approved changes: ask for set-campaign-live-writes first.',
