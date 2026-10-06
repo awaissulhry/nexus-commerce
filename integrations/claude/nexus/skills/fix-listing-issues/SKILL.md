@@ -15,7 +15,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 
 ## Channel rules
 
-The `list-product` skill's folder holds one reference file per channel — `../list-product/amazon.md`, `../list-product/ebay.md`, `../list-product/shopify.md` (Etsy at its end) — with each channel's markets, what a publish needs, and every refusal with its fix; `../list-product/product-page.md` explains each status and action of the product page and which ones only a person can do. Read the channel's file before you explain or fix an issue.
+The `list-product` skill's folder holds one reference file per channel — `../list-product/amazon.md`, `../list-product/ebay.md`, `../list-product/shopify.md`, `../list-product/etsy.md` — with each channel's markets, what a publish needs, and every refusal with its fix; `../list-product/product-page.md` explains each status and action of the product page and which ones only a person can do. Read the channel's file before you explain or fix an issue.
 
 ## 1. Choose the scope
 
@@ -38,7 +38,7 @@ Group listings that share a problem (same `code` or message). For each group: wh
 
 | Problem | Tool |
 |---|---|
-| Title, bullets, description or keywords missing, too long or not allowed | `set-content` (one product, one language), `bulk-content-change` (up to 25 products, one language), or `set-listing-content` (one Amazon or eBay listing's own text). Follow the `listing-content` skill: read `content-guidelines` first, give `englishMeaning` unless the language is English. |
+| Title, bullets, description or keywords missing, too long or not allowed | `set-content` (one product, one language), `bulk-content-change` (up to 25 products, one language), or `set-listing-content` (one Amazon, eBay or Etsy listing's own text). Follow the `listing-content` skill: read `content-guidelines` first, give `englishMeaning` unless the language is English. |
 | Required attribute values missing or wrong | `set-listing-fields` (`values` on one listing, keys as `product-content` lists them for that coordinate), or `bulk-attribute-change` (the same master attribute on up to 250 products) |
 | Variation theme or which variations a listing includes (Amazon) | `set-listing-fields` (`variationTheme` or `variants`) |
 | Barcode invalid or missing, brand spelled wrongly | `set-gtin`, `set-brand` (see `identity-check`) |
@@ -56,7 +56,7 @@ Everything else has no tool here: category or product type mapping changes, ship
 Text, attributes and photos are saved in Nexus only; the channel changes when the listing is published. After the fixes ran (`approval-status` says executed, or each plan step says done):
 
 1. `publish-review` (`productId`, `channel`, `market`, and `accountId` or `listingId` from `listing-coordinates` when there are several): what would be sent, what it replaces on the channel (`changes`: SEND, DIFFERS, CANNOT_COMPARE, SAME), what blocks it (issues with severity error) and the channel's live mode. Fix blockers first.
-2. `publish-listing` with `fields` naming only the groups that changed — `title`, `description`, `bullets`, `keywords`, `photos`, `attributes` — or `"all"` for a draft's first publish. Stock, price and fulfilment never ride a publish. It refuses Etsy (no publisher yet), an existing Shopify product, anything the review blocks, an FBA quantity, and an Amazon EU first publish whose quantity differs from the SKU's other EU markets.
+2. `publish-listing` with `fields` naming only the groups that changed — `title`, `description`, `bullets`, `keywords`, `photos`, `attributes` — or `"all"` for a draft's first publish. Stock, price and fulfilment never ride a publish, except on Etsy: a variation Etsy does not hold yet goes with the price and stock Nexus holds for it. Etsy: a draft's first publish creates an Etsy draft (not for sale; going live comes with photos later); a re-publish sends its variations only with `"all"`; no photos yet (`../list-product/etsy.md`). It refuses an existing Shopify product, anything the review blocks, an FBA quantity, and an Amazon EU first publish whose quantity differs from the SKU's other EU markets.
 3. Several listings: ONE `submit-change-plan` with one `publish-listing` step per listing.
 
 Never put a publish in the same plan as the fix it should send: each step is checked now, so its review would not hold the fix and the publish step would be skipped as stale. Fix first, publish once the fix has run.
