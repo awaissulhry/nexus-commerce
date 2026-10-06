@@ -43,7 +43,8 @@ import { strategyWords } from './source-words.js'
 export type AdEntityRef =
   | { kind: 'campaign' | 'adGroup' | 'target' | 'productAd'; id: string }
   | { kind: 'searchTerm'; query: string; externalCampaignId: string; externalAdGroupId?: string | null }
-  | { kind: 'products'; market: string; productIds: readonly string[] }
+  /** `label`: what a person calls it (default: a new campaign for its products); no products: the whole market. */
+  | { kind: 'products'; market: string; productIds: readonly string[]; label?: string }
 
 /** One key per entity, the same in every preview: `target:<id>`, `searchTerm:<campaign>:<ad group|*>:<query>`. */
 export function entityKey(ref: AdEntityRef): string {
@@ -152,7 +153,7 @@ export async function resolveEntityScopes(refs: readonly AdEntityRef[]): Promise
       case 'products': {
         const market = strategyMarket(ref.market)
         const ids = [...new Set(ref.productIds)].sort()
-        const label = `a new campaign for ${ids.length} product${ids.length === 1 ? '' : 's'}`
+        const label = ref.label ?? `a new campaign for ${ids.length} product${ids.length === 1 ? '' : 's'}`
         out.set(key, {
           key, kind: 'products', label, market, campaignId: null, adGroupId: null, currency: null,
           subject: market && ids.length ? `products:${ids.join(',')}` : market ? 'market' : null,
@@ -342,12 +343,17 @@ export async function strategyForScopes(scopes: Iterable<EntityScope>, action: C
 
 // ── Engines and protection ───────────────────────────────────────────────────────────────────────
 
-/** The enabled rules and schedules (hourly bid plans, dayparting) bound to each campaign, by name; campaigns without any left out. */
-export async function enginesOnCampaigns(campaignIds: Iterable<string>): Promise<Map<string, string[]>> {
+/**
+ * The enabled rules and schedules (hourly bid plans, dayparting) bound to each campaign, by name; campaigns without any
+ * left out. `exceptIds` (AA-W2-10, AA-W2-11): rules or schedules that do not count here — the rule whose own suggestion
+ * is being applied, the automation being turned up.
+ */
+export async function enginesOnCampaigns(campaignIds: Iterable<string>, opts: { exceptIds?: readonly string[] } = {}): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>()
+  const except = new Set(opts.exceptIds ?? [])
   await Promise.all([...new Set(campaignIds)].map(async (id) => {
     const { rules, schedules } = await automationsBoundToCampaign(id)
-    const names = [...rules.map((r) => `rule "${r.name}"`), ...schedules.map((s) => `schedule "${s.name}"`)]
+    const names = [...rules.filter((r) => !except.has(r.id)).map((r) => `rule "${r.name}"`), ...schedules.filter((s) => !except.has(s.id)).map((s) => `schedule "${s.name}"`)]
     if (names.length) out.set(id, names)
   }))
   return out

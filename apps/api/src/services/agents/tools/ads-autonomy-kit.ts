@@ -79,6 +79,8 @@ export const MAX_KIT_ITEMS = 250
  *   negative     a new negative keyword or target (it only lowers spend).
  *   liveWrites   AA-W2-9 — a campaign on or off the live-write allowlist (a Nexus switch: it moves no bid or budget
  *                itself; every write it lets through is judged on its own).
+ *   automation   AA-W2-11 — an ads rule saved, or an automation turned up or tuned, for this scope: Nexus only, it moves
+ *                no value itself (the automation acts as itself, inside its own caps).
  */
 export type KitChange =
   | { field: 'bid'; fromCents: number | null; toCents: number; forced?: boolean }
@@ -87,6 +89,7 @@ export type KitChange =
   | { field: 'status'; from: string | null; to: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudgetCents?: number }
   | { field: 'negative'; term: string; matchType?: string | null }
   | { field: 'liveWrites'; from: boolean; to: boolean }
+  | { field: 'automation' }
 
 export interface KitItem {
   entity: AdEntityRef
@@ -141,6 +144,7 @@ export function measure(change: KitChange): Measured {
     case 'negative':
       return { ...none, direction: 'cut' }
     case 'liveWrites':
+    case 'automation':
       return { ...none, direction: 'same' }
   }
 }
@@ -349,6 +353,7 @@ const CUT_WORDS: Record<KitChange['field'], string> = {
   status: 'stopping it',
   negative: 'negating',
   liveWrites: 'taking it off the live-write allowlist',
+  automation: 'changing what acts on it',
 }
 
 /**
@@ -363,6 +368,9 @@ export async function buildLimitFacts(input: {
   items: readonly KitItem[]
   approvalId?: string | null
   projectMonth?: boolean
+  /** AA-W2-10, AA-W2-11 — rules or schedules C4 does not count as an engine that also moves it (a rule whose own
+   *  suggestion is applied, the automation being turned up or saved). */
+  exceptIds?: readonly string[]
   now?: Date
 }): Promise<LimitFacts> {
   const action = actionOfTool(input.tool)
@@ -455,7 +463,7 @@ export async function buildLimitFacts(input: {
     if (!s.campaignId || campaigns.has(s.campaignId)) continue
     campaigns.set(s.campaignId, s.kind === 'campaign' ? s.label : `the campaign of ${s.label}`)
   }
-  for (const [campaignId, by] of await enginesOnCampaigns(campaigns.keys())) facts.engineOwned.push({ campaignId, label: campaigns.get(campaignId)!, by })
+  for (const [campaignId, by] of await enginesOnCampaigns(campaigns.keys(), { exceptIds: input.exceptIds })) facts.engineOwned.push({ campaignId, label: campaigns.get(campaignId)!, by })
 
   // C5, C6 — what already ran by rule.
   const ledger = await ruleRunLedger({ excludeApprovalId: input.approvalId, now: input.now })
@@ -538,6 +546,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   rule: 'ads rules',
   undo: 'undoing ad changes',
   allowlist: 'putting a campaign on the live-write allowlist',
+  automation: 'turning ads automations up and tuning their settings',
   pause: 'pausing ads (a real pause)',
   enable: 'switching paused ads back on',
 }

@@ -7,10 +7,11 @@
  *   where it lands   read from the change's arguments and, once its dry run has run, its preview — per tool (PLACES):
  *                    a target or a negative → its ad group; a budget, a placement, a stop, the allowlist → its
  *                    campaign; a new campaign → its products in its market; a suggestion → what it applies to; an ad
- *                    undo → every entity it puts back; a pause or an enable (AA-W2-12) → each campaign, ad group and
- *                    target it names (a product ad → its ad group). An ad group or a campaign resolves through its
- *                    products (the safer level across them, resolve.ts), a product through product → parent → primary
- *                    category → market.
+ *                    undo → every entity it puts back; an ads automation turned up or tuned (AA-W2-11) → what it acts
+ *                    on, else its market (automation-scope.ts); a pause or an enable (AA-W2-12) → each campaign, ad
+ *                    group and target it names (a product ad → its ad group). An ad group or a campaign resolves through
+ *                    its products (the safer level across them, resolve.ts), a product through product → parent →
+ *                    primary category → market.
  *   fail closed      a change that reaches a whole market (a selection by market), or that Nexus cannot place more
  *                    exactly inside a market, takes the STRICTEST level any row of that market sets for its kind; one
  *                    it cannot place in any market (an id not found, a whole-account rule), the strictest of the
@@ -27,6 +28,7 @@ import prisma from '../../../db.js'
 import type { ClaudeTrust } from '../../agents/tool-types.js'
 import { CLAUDE_ACTION_TOOLS, CLAUDE_LEVELS, type ClaudeActionType } from './fields.js'
 import { openStrategy, type StrategyView } from './effective.js'
+import { automationScope, tuneScope, type AutomationScope } from './automation-scope.js'
 import type { ResolvedField, StrategyRow } from './resolve.js'
 
 /**
@@ -269,6 +271,23 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'undo-ad-change': adUndo,
   'pause-ads': byStatusArgs,
   'enable-ads': byStatusArgs,
+  // AA-W2-11 — an ads automation, where it acts: its products (through its campaigns), else its market.
+  'turn-up-automation': async (place, args) => placeAutomation(place, await automationScope(String(args.automation ?? ''), str(args.rowId))),
+  'tune-ad-engine': async (place, args) => {
+    const setting = String(args.setting ?? '')
+    const { SETTING_ARG } = await import('../ads-engine-tune.service.js')
+    const values = obj(args[(SETTING_ARG as Record<string, string>)[setting] ?? ''])
+    await placeAutomation(place, await tuneScope(setting, str(args.subjectId), values))
+  },
+}
+
+/** AA-W2-11 — an automation's scope, on the door's places. */
+async function placeAutomation(place: Place, scope: AutomationScope) {
+  if ('outside' in scope) { place.outside = true; return }
+  if ('unplaced' in scope) return place.notPlaced(scope.unplaced)
+  if (scope.campaignIds.length) return place.campaignIds(scope.campaignIds)
+  if (scope.productIds.length) return place.productIds(scope.market, scope.productIds)
+  place.market(scope.market, `${scope.label} reaches the whole of ${scope.market}`)
 }
 
 // ── The strategy's level where it lands ───────────────────────────────────────────────────────────
