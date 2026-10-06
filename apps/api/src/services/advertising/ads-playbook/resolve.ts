@@ -107,6 +107,8 @@ export interface ResolvedPlaybook {
   sections: Record<SectionKey, Resolved<unknown>>
   /** PRODUCT subjects: the optional slots this product leaves out. */
   skipSlots: Resolved<string[]> | null
+  /** PB-10 — PRODUCT subjects: each adopted slot's placements as adopted (drift's baseline for it; never compiled). */
+  adoptedPlacements: Resolved<NonNullable<Overrides['adoptedPlacements']>> | null
   /** PRODUCT subjects: the product's own fields. */
   product: Record<ProductField, Resolved<unknown>> | null
   /** The doc the subject would be built from (sections whole, skipped slots left out), when it is complete and consistent. */
@@ -154,6 +156,13 @@ function readOverrides(row: PlaybookRow, warnings: string[]): Overrides {
       const parsed = OVERRIDES.shape.skipSlots.safeParse(section)
       if (parsed.success) out.skipSlots = parsed.data
       else warnings.push(`${rowName(row)}: skipSlots is not a list of slot keys; ignored`)
+      continue
+    }
+    if (key === 'adoptedPlacements') {
+      if (row.level !== 'PRODUCT') { warnings.push(`${rowName(row)}: adoptedPlacements belongs on a product row; ignored`); continue }
+      const parsed = OVERRIDES.shape.adoptedPlacements.safeParse(section)
+      if (parsed.success) out.adoptedPlacements = parsed.data
+      else warnings.push(`${rowName(row)}: adoptedPlacements is not a map of slot placements; ignored`)
       continue
     }
     if (!(SECTIONS as readonly string[]).includes(key)) { warnings.push(`${rowName(row)}: overrides names an unknown section ${shown(key)}; ignored`); continue }
@@ -297,10 +306,13 @@ function resolveChain(index: PlaybookIndex, chain: Chain, productChain: Chain | 
   }
 
   let skipSlots: ResolvedPlaybook['skipSlots'] = null
+  let adoptedPlacements: ResolvedPlaybook['adoptedPlacements'] = null
   let product: ResolvedPlaybook['product'] = null
   if (productChain) {
     const hit = productChain.find(({ row }) => index.overrides.get(row.id)?.skipSlots !== undefined)
     skipSlots = hit ? { value: index.overrides.get(hit.row.id)!.skipSlots!, source: sourceOf(hit.row, hit.via) } : { value: [], source: null }
+    const adopted = productChain.find(({ row }) => index.overrides.get(row.id)?.adoptedPlacements !== undefined)
+    adoptedPlacements = adopted ? { value: index.overrides.get(adopted.row.id)!.adoptedPlacements!, source: sourceOf(adopted.row, adopted.via) } : { value: {}, source: null }
     product = {} as Record<ProductField, Resolved<unknown>>
     for (const field of PRODUCT_FIELDS) {
       let picked: Resolved<unknown> = { value: null, source: null }
@@ -333,6 +345,7 @@ function resolveChain(index: PlaybookIndex, chain: Chain, productChain: Chain | 
     template: template ? { value: { id: template.id, name: template.name, version: template.version, status: template.status }, source: sourceOf(named!.row, named!.via) } : { value: null, source: null },
     sections,
     skipSlots,
+    adoptedPlacements,
     product,
     doc,
     problems,

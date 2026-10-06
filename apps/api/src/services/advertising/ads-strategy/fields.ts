@@ -74,6 +74,10 @@ export const CLAUDE_ACTION_TOOLS = {
   pause: ['pause-ads'],
   enable: ['enable-ads'],
   archive: ['archive-ads'],
+  // PB-9 — a product's playbook phase switch (apply-ads-playbook op phase, OP_ACTIONS in claude.ts): its own kind, so the
+  // Owner decides per market, category or product whether a phase move may run alone. Listed after `create`: the tool's
+  // own kind stays create (claude.ts reads the first kind a tool is listed under).
+  phase: ['apply-ads-playbook'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]

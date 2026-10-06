@@ -443,6 +443,17 @@ describe('resolveRequest — honesty', () => {
     const elsewhere = resolveRequest('set-ads-strategy', {}, { ...preview, scope: { ...preview.scope, market: 'ZZ', label: 'ZZ market' } }, ctx)
     expect(elsewhere.changes[0]).toEqual({ label: 'Highest bid', from: '150 cents', to: '200 cents' })
   })
+
+  it('PB-6c — a term\'s own campaign (op hero): the card names the term, the product and the market', () => {
+    const preview = { op: 'hero', market: 'IT', currency: 'EUR', term: 'test cape', product: { productId: 'p-hero', sku: 'TEST-HERO-1' }, campaigns: [{ slot: 'hero:test cape' }], dailyBudgetCents: 150 }
+    const out = resolveRequest('apply-ads-playbook', { op: 'hero', market: 'IT', sku: 'TEST-HERO-1', term: 'test cape' }, preview, ctx)
+    expect(out).toMatchObject({ channel: 'AMAZON', market: 'IT', target: { kind: 'product', id: 'p-hero', sku: 'TEST-HERO-1' } })
+    expect(out.changes).toEqual([
+      { label: 'Own campaign for', from: null, to: '“test cape” · TEST-HERO-1 · Amazon IT' },
+      { label: 'Builds', from: null, to: '1 campaign, one exact keyword, at the 2-cent floor, off the allowlist' },
+      { label: 'Daily budget', from: null, to: '€1.50' },
+    ])
+  })
 })
 
 describe('Where — a change to Nexus’s own record', () => {

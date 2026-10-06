@@ -31,7 +31,7 @@ import { findLiveProduct, loadCatalog, productFamily } from '../ads-strategy/loa
 import prisma from '../../../db.js'
 import { blueprintOf, compilePlaybook, type CompiledSlot } from './compile.js'
 import { campaignNames, loadPlaybookIndex, playbookLinks } from './load.js'
-import { isEnrolled, resolveProduct, type PlaybookRow, type ResolvedPlaybook } from './resolve.js'
+import { isEnrolled, resolveProduct, type PlaybookIndex, type PlaybookRow, type ResolvedPlaybook } from './resolve.js'
 import type { ProductTerms, TemplateDoc } from './doc.js'
 
 export const BUILD_PREVIEW_NOTE =
@@ -80,12 +80,13 @@ export interface ProductPlaybook {
 }
 
 /** The product's resolved playbook in one market, with the row that holds it and the live slot links. */
-export async function loadProductPlaybook(args: { market: string; productId?: string; sku?: string; channel?: string }): Promise<ProductPlaybook | { status: 404; error: string }> {
+export async function loadProductPlaybook(args: { market: string; productId?: string; sku?: string; channel?: string }, pre: { index?: PlaybookIndex } = {}): Promise<ProductPlaybook | { status: 404; error: string }> {
   const channel = (args.channel ?? 'AMAZON').toUpperCase()
   const market = args.market.trim().toUpperCase()
   const product = await findLiveProduct({ productId: args.productId, sku: args.sku })
   if (!product) return { status: 404, error: PRODUCT_NOT_FOUND }
-  const [{ index }, { catalog }] = await Promise.all([loadPlaybookIndex(market, channel), loadCatalog([product.id])])
+  // PB-10 — the market's rows read once by a caller that reads many products (the drift list).
+  const [{ index }, { catalog }] = await Promise.all([pre.index ? { index: pre.index } : loadPlaybookIndex(market, channel), loadCatalog([product.id])])
   const resolved = resolveProduct(index, catalog.products.get(product.id) ?? product, catalog)
   const ownRows = [index.products.get(product.id), product.parentId ? index.products.get(product.parentId) : undefined].filter((r): r is NonNullable<typeof r> => !!r)
   const holder = resolved.product?.enrolled.source?.id

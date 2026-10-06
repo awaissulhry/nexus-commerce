@@ -18,6 +18,12 @@ import { settledEndPhrase, settledWindowBounds, type RuleWindow, type SettledLag
 // 🔴 A LEAF: nothing here may import an API module. `rule-conditions-text.ts` imports this file and
 // must never take part in an import cycle (see its header).
 
+/**
+ * PB-6c — how many days of search terms Nexus keeps (ads-reports.service.ts cleanupOldSearchTerms deletes older days):
+ * a window that reaches further back reads days that are gone, so it cannot be compared.
+ */
+export const SEARCH_TERM_DAYS_KEPT = 90
+
 /** The lag in force: the attribution window, unless the escape hatch is set. */
 export function settledLag(): SettledLag {
   return (process.env.NEXUS_ADS_SETTLED_LAG ?? '').trim().toLowerCase() === 'provisional' ? 'provisional' : 'attribution'

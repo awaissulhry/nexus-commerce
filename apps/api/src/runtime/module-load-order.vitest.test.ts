@@ -38,6 +38,9 @@ describe('W4 — the daily-run modules load whichever comes first (real Node ESM
     ['the tool registry first (the API\'s order)', [REGISTRY, RUN_SERVICE]],
     ['the OAuth server first', ['src/services/oauth/oauth-server.ts', REGISTRY]],
     ['the scheduler first', ['src/runtime/scheduler.ts', REGISTRY]],
+    // PB-6c — the winners view and a winner's own campaign reach the build, the harvest and auto-bid's readers.
+    ['the playbook winners view first', ['src/services/advertising/ads-playbook/winners.ts', REGISTRY]],
+    ['the playbook hero build first', ['src/services/advertising/ads-playbook/hero-build.ts', REGISTRY]],
     // W4-2 — the scheduler imports the watchdog job early; the job's tick loads the watchdog service.
     ['the watchdog job first, then the scheduler', [WATCHDOG_JOB, 'src/runtime/scheduler.ts', REGISTRY]],
     ['the watchdog service first (what the tick loads)', [WATCHDOG, REGISTRY]],

@@ -120,6 +120,11 @@ describe('W1-8 — where each ad change lands', () => {
     expect(await level('apply-ads-playbook', { op: 'adopt', market: 'IT', productId: ids.p1 })).toBeNull()
   })
 
+  it('PB-10 — a sync is a create (slots, keywords, product ads); a sync of negatives alone is a negative', async () => {
+    expect(await level('apply-ads-playbook', { op: 'sync', market: 'IT', productId: ids.p1 })).toMatchObject({ action: 'create', level: 'ask', row: product })
+    expect(await level('apply-ads-playbook', { op: 'sync-negatives', market: 'IT', productId: ids.p1 })).toMatchObject({ action: 'negative', row: product })
+  })
+
   it('PB-5b — a playbook start is a restore AND an allowlist: the stricter of the two where it lands; a stop is a stop', async () => {
     const row = await inA(() => db().adsStrategy.findFirstOrThrow({ where: { market: 'IT', level: 'MARKET' } }))
     const set = (autonomy: Record<string, string>) => inA(() => db().adsStrategy.update({ where: { id: row.id }, data: { claudeAutonomy: { ...CONFIRM_ALL, ...autonomy } } }))

@@ -41,7 +41,7 @@
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
-import { previewRollbackOfAction, rollbackByActionLogId, rollbackByChangeSetId } from '../../advertising/rollback.service.js'
+import { isPlainCreateLog, previewRollbackOfAction, rollbackByActionLogId, rollbackByChangeSetId } from '../../advertising/rollback.service.js'
 import { setLiveWrites } from '../../advertising/campaign-settings.service.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
 import { bulkUpdateAdTargetBids, updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
@@ -257,10 +257,11 @@ async function undoPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext
     }
     setId = single.changeSetId
   }
-  const logs = await prisma.advertisingActionLog.findMany({
+  // PB-10 — a create's row puts nothing back (its negatives are `negatives`; what else it made is archived): not a row.
+  const logs = (await prisma.advertisingActionLog.findMany({
     where: { executionId: setId, rolledBackAt: null },
     orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-  })
+  })).filter((l) => !isPlainCreateLog(l))
   const since = Date.now() - SET_WINDOW_MS
   const inWindow = logs.filter((l) => l.createdAt.getTime() >= since)
   const negatives = await negativesCreatedBy(setId)
@@ -284,7 +285,7 @@ async function undoOneChange(changeSetId: string, changeId: string, ctx?: Pick<T
   const recorded = (change.before as { actionLogIds?: unknown } | null)?.actionLogIds
   const ids = Array.isArray(recorded) ? recorded.filter((id): id is string => typeof id === 'string') : []
   const logs = ids.length
-    ? await prisma.advertisingActionLog.findMany({ where: { executionId: changeSetId, id: { in: ids }, rolledBackAt: null }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] })
+    ? (await prisma.advertisingActionLog.findMany({ where: { executionId: changeSetId, id: { in: ids }, rolledBackAt: null }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] })).filter((l) => !isPlainCreateLog(l))
     : []
   const inWindow = logs.filter((l) => l.createdAt.getTime() >= Date.now() - SET_WINDOW_MS)
   const negatives = await negativesCreatedBy(changeSetId, changeId)
@@ -787,7 +788,8 @@ const BULK_MAX = 500
 /** The most a written list may name (the tool contract bounds every list to 250). */
 const BULK_LIST_MAX = 250
 const LINES_SHOWN = 20
-const BULK_FLOOR_CENTS = 5
+/** The lowest bid this tool sets (PB-6c: the winners view proposes a superseded keyword at it, or the strategy's stop bid). */
+export const BULK_FLOOR_CENTS = 5
 
 type Exclusion = 'notFound' | 'notSponsoredProducts' | 'pinned' | 'belowFloor' | 'suppressed' | 'lowUnflagged' | 'unchanged' | 'outsideBounds' | 'refusedByGate'
 const EXCLUSION_WORDS: Record<Exclusion, string> = {

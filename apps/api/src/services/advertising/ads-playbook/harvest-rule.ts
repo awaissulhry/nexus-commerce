@@ -121,7 +121,8 @@ export function compileHarvestRule(input: HarvestRuleInput): CompiledHarvestRule
   const brand = [...new Map([input.nameToken, ...input.terms.brand].map((t) => t.trim()).filter(Boolean).map((t) => [t.toLowerCase(), t])).values()]
   const competitor = [...new Map(input.terms.competitor.map((t) => t.trim()).filter(Boolean).map((t) => [t.toLowerCase(), t])).values()]
   for (const key of input.links.keys()) {
-    if (!slots.has(key)) warnings.push(`The slot "${key}" is linked but no longer in the playbook: its campaign is a home for terms, never a source or a destination`)
+    // PB-6c — a term's own campaign (a hero, `hero:<term>`) is no slot of the doc: a home for its term, by design.
+    if (!slots.has(key) && !key.startsWith('hero:')) warnings.push(`The slot "${key}" is linked but no longer in the playbook: its campaign is a home for terms, never a source or a destination`)
   }
 
   // Edges → per source: what it graduates, where each match type lands, its start bids and its edges' negateSource.
@@ -244,26 +245,26 @@ export type SyncHarvestRuleResult =
   | { saved: true; ruleId: string; created: boolean; changed: boolean; enabled: boolean; cadenceDays: 1 | 7 | null; keptOff?: string; warnings: string[] }
   | { saved: false; problems: string[]; warnings: string[] }
 
+/** One product's harvest rule compiled from its playbook row as it stands now, or why it cannot be (nothing saved). */
+export type HarvestRuleFor =
+  | { compiled: CompiledHarvestRule; version: number; scopeMarketplace?: string | null; warnings: string[] }
+  | { problems: string[]; warnings: string[] }
+
 /**
- * Compile one product's harvest rule from its playbook row and save it once (link kind 'harvestRule', key 'harvest').
- * `enabled: true` is the playbook's START: the rule is switched on (born on), never over a switch-off a person made since
- * the last start — also in a phase that turns the harvest off, where its sources harvest nothing until the phase changes
- * (a re-sync then compiles them harvesting). `enabled: false` (build, adopt, a re-sync): a new rule is born off; an
- * existing one keeps its own switch — nothing here switches a rule off (rules.ts). A slot whose ad group also advertises
- * another product is left out, named. The playbook's build and start call this (PB-5's artifact hook); Nexus only.
+ * PB-10 — the compile `syncHarvestRule` saves, without the save: the playbook row resolved, its slots (this product's
+ * alone, rule 3) and its phase read, and the rule compiled. Drift compares it with the rule that stands.
  */
-export async function syncHarvestRule(playbookId: string, opts: { enabled: boolean; actor?: string }): Promise<SyncHarvestRuleResult> {
-  const actor = opts.actor ?? 'system:ads-playbook'
+export async function compileHarvestFor(playbookId: string): Promise<HarvestRuleFor> {
   const row = await prisma.adsPlaybook.findUnique({ where: { id: playbookId }, select: PLAYBOOK_ROW_SELECT })
-  if (!row || row.level !== 'PRODUCT') return { saved: false, problems: ['No product playbook row has this id'], warnings: [] }
+  if (!row || row.level !== 'PRODUCT') return { problems: ['No product playbook row has this id'], warnings: [] }
   const product = await findLiveProduct({ productId: row.scopeId })
-  if (!product) return { saved: false, problems: ['The playbook\'s product no longer exists or was deleted'], warnings: [] }
+  if (!product) return { problems: ['The playbook\'s product no longer exists or was deleted'], warnings: [] }
   const [{ index }, { catalog }] = await Promise.all([loadPlaybookIndex(row.market, row.channel), loadCatalog([product.id])])
   const resolved = resolveProduct(index, catalog.products.get(product.id) ?? product, catalog)
   const warnings = [...resolved.warnings]
-  if (!resolved.doc) return { saved: false, problems: resolved.problems, warnings }
+  if (!resolved.doc) return { problems: resolved.problems, warnings }
   const nameToken = typeof resolved.product?.nameToken.value === 'string' ? resolved.product.nameToken.value : null
-  if (!nameToken) return { saved: false, problems: ['The product row names no name token: the rule\'s name and its brand words need it'], warnings }
+  if (!nameToken) return { problems: ['The product row names no name token: the rule\'s name and its brand words need it'], warnings }
   const terms = (resolved.product?.terms.value as ProductTerms | null) ?? { brand: [], category: [], competitor: [], competitorAsins: [], negatives: [] }
 
   // The product's slots: their campaigns in this market, not archived, each with its ad group.
@@ -293,12 +294,33 @@ export async function syncHarvestRule(playbookId: string, opts: { enabled: boole
 
   const compiled = compileHarvestRule({ playbookId, market: row.market, nameToken, doc: resolved.doc, terms, links, phase, handover: HARVEST_HANDOVER })
   warnings.push(...compiled.warnings)
-  if (compiled.problems.length) return { saved: false, problems: compiled.problems, warnings: [...new Set(warnings)] }
-  const saved = await ensureCompiledRule({
-    playbookId, kind: 'harvestRule', key: 'harvest', name: compiled.name, action: compiled.action as unknown as Record<string, unknown>,
-    enabled: false, start: opts.enabled, compiledVersion: row.version, actor,
+  if (compiled.problems.length) return { problems: compiled.problems, warnings: [...new Set(warnings)] }
+  return {
+    compiled,
+    version: row.version,
     // The market the rule runs in: the kept slots' campaigns' own marketplace code (all of this market).
     ...(links.size ? { scopeMarketplace: campaigns.get([...links.values()][0].campaignId)?.marketplace ?? null } : {}),
+    warnings: [...new Set(warnings)],
+  }
+}
+
+/**
+ * Compile one product's harvest rule from its playbook row and save it once (link kind 'harvestRule', key 'harvest').
+ * `enabled: true` is the playbook's START: the rule is switched on (born on), never over a switch-off a person made since
+ * the last start — also in a phase that turns the harvest off, where its sources harvest nothing until the phase changes
+ * (a re-sync then compiles them harvesting). `enabled: false` (build, adopt, a re-sync): a new rule is born off; an
+ * existing one keeps its own switch — nothing here switches a rule off (rules.ts). A slot whose ad group also advertises
+ * another product is left out, named. The playbook's build and start call this (PB-5's artifact hook); Nexus only.
+ */
+export async function syncHarvestRule(playbookId: string, opts: { enabled: boolean; actor?: string }): Promise<SyncHarvestRuleResult> {
+  const actor = opts.actor ?? 'system:ads-playbook'
+  const out = await compileHarvestFor(playbookId)
+  if ('problems' in out) return { saved: false, problems: out.problems, warnings: out.warnings }
+  const { compiled } = out
+  const saved = await ensureCompiledRule({
+    playbookId, kind: 'harvestRule', key: 'harvest', name: compiled.name, action: compiled.action as unknown as Record<string, unknown>,
+    enabled: false, start: opts.enabled, compiledVersion: out.version, actor,
+    ...(out.scopeMarketplace !== undefined ? { scopeMarketplace: out.scopeMarketplace } : {}),
   })
-  return { saved: true, ...saved, cadenceDays: compiled.cadenceDays, warnings: [...new Set(warnings)] }
+  return { saved: true, ...saved, cadenceDays: compiled.cadenceDays, warnings: out.warnings }
 }

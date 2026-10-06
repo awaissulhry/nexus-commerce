@@ -782,7 +782,37 @@ const READERS: Record<string, Reader> = {
     }
   },
   // PB-5a — a build's campaigns and their daily budget, or an adopt's bindings (Nexus only).
-  'apply-ads-playbook': (p) => {
+  'apply-ads-playbook': (p, _a, ctx) => {
+    // PB-9 — a phase switch: the phase, then each slot it floors or gives back and each hourly plan it switches.
+    if (p.op === 'phase') {
+      const phase = rec(p.phase)
+      return {
+        channel: 'AMAZON',
+        market: marketOf(p.market),
+        changes: [
+          { label: 'Phase', from: text(phase?.from) ?? EMPTY, to: text(phase?.to) ?? EMPTY },
+          ...recs(p.slots).filter((s) => s.does === 'floor' || s.does === 'restore')
+            .map((s) => ({ label: `Slot ${plainValue(s.slot)}`, from: s.does === 'floor' ? 'Active' : 'At the floor', to: s.does === 'floor' ? 'At the floor' : 'Bids given back' })),
+          ...recs(p.rank).filter((r) => r.does === 'enable' || r.does === 'disable')
+            .map((r) => ({ label: `Hourly plan ${plainValue(r.role)}`, from: r.does === 'enable' ? 'Off' : 'On', to: r.does === 'enable' ? 'On' : 'Off' })),
+        ],
+      }
+    }
+    // PB-6c — a term's own campaign (a hero): the term, the product and the market, and what it builds.
+    if (p.op === 'hero') {
+      const product = rec(p.product)
+      const market = marketOf(p.market)
+      return {
+        channel: 'AMAZON',
+        market,
+        target: productTarget({ id: text(product?.productId), sku: text(product?.sku) }, 1, ctx),
+        changes: [
+          { label: 'Own campaign for', from: null, to: `“${text(p.term) ?? '?'}” · ${text(product?.sku) ?? '?'} · Amazon ${market ?? '?'}` },
+          { label: 'Builds', from: null, to: '1 campaign, one exact keyword, at the 2-cent floor, off the allowlist' },
+          { label: 'Daily budget', from: null, to: adMoney(p.dailyBudgetCents, p.currency) },
+        ],
+      }
+    }
     // PB-5b — a start or a stop: each built campaign it moves, from → to.
     if (p.op === 'start' || p.op === 'stop') {
       const start = p.op === 'start'
@@ -801,6 +831,22 @@ const READERS: Record<string, Reader> = {
         changes: [
           ...recs(p.bindings).map((b) => ({ label: `Slot ${plainValue(b.slot)}`, from: null, to: `“${text(b.name) ?? '?'}”` })),
           ...recs(p.unbinds).map((u) => ({ label: `Slot ${plainValue(u.slot)}`, from: 'Adopted', to: 'Not linked' })),
+        ],
+      }
+    }
+    // PB-10 — a sync: what it adds, part by part (it never removes anything).
+    if (p.op === 'sync' || p.op === 'sync-negatives') {
+      const t = (p.totals ?? {}) as Record<string, unknown>
+      const line = (label: string, n: unknown, what: string) => (num(n) ? [{ label, from: null, to: `${plural(num(n)!, what)}` }] : [])
+      return {
+        channel: 'AMAZON',
+        market: marketOf(p.market),
+        changes: [
+          ...line('Negatives', t.negatives, 'negative'),
+          ...line('Keywords and targets', t.positives, 'keyword or target at the 2-cent floor'),
+          ...line('Product ads', t.productAds, 'product ad'),
+          ...line('Slots built', t.slots, 'campaign at the 2-cent floor, off the allowlist'),
+          ...line('Compiled parts', t.artifacts, 'part saved again in Nexus'),
         ],
       }
     }

@@ -9,10 +9,13 @@
  *               actor) — an engine's floor (dayparting, budget, retail, an hourly plan's window) is named "held by"
  *               and left, and an ad group at its own floor (stock, a product's monthly cap) stays; each bid goes back
  *               never above the bid remembered, and one that left the floor since (an engine or a person moved it)
- *               stays where it is, named
+ *               stays where it is, named. PB-9 — a slot the product's CURRENT phase floors (the strategy's goal; e.g.
+ *               DEFEND's research slots) keeps its floor, named "held by phase …": a phase switch releases it
  *             3 the placements the build deferred (build run options `deferredPlacements`), only onto a campaign that
  *               holds none: placements set since the build are left, named
- *           then the portfolio read-back repair (settleLaunchPortfolios: it passes the allowlist now), the playbook's
+ *           then PB-10: the bids a playbook sync planned for the keywords and targets it added at the floor
+ *           (sync.ts giveBackSyncedBids), on every linked slot campaign — adopted ones too (a START of some slots: those
+ *           only) — after their floor is lifted, never in a slot the current phase floors (PB-9: named, left); then the portfolio read-back repair (settleLaunchPortfolios: it passes the allowlist now), the playbook's
  *           artifacts switched on (ARTIFACT_COMPILERS setEnabled: hourly plans, harvest and isolation rules — never
  *           over a person's switch-off), and the row's state RUNNING. A campaign PAUSED at Amazon is prepared but never
  *           enabled: a person enables it in Nexus. A campaign the playbook ADOPTED is the business's own: its
@@ -35,9 +38,10 @@ import type { AdsActor } from '../ads-mutation.service.js'
 import { ARTIFACT_COMPILERS, previewArtifacts, type ArtifactCompiler, type ArtifactContext, type ArtifactPreviewLine, type StoredArtifactLink } from './artifacts.js'
 import { loadProductPlaybook } from './build-preview.js'
 import type { BuildRunOptions } from './build.js'
-import type { RankRole, TemplateDoc } from './doc.js'
+import type { ProductTerms, RankRole, TemplateDoc } from './doc.js'
 import { STOP_FLOOR_KIND } from './held.js'
 import { rankOffEffect } from './rank.js'
+import { PHASE_FLOOR_KIND, phaseNow, recordPhaseFloor } from './phase.js'
 import { recordPlaybookApply, type PlaybookApplyWriter } from './write.js'
 
 export type ApplyOp = 'start' | 'stop'
@@ -71,6 +75,8 @@ export interface StartCampaign {
   placements: { does: 'apply'; adjustments: Placement[] } | { does: 'already' | 'left' | 'none'; why: string }
   /** START: PAUSED at Amazon — prepared, never enabled. */
   paused?: string
+  /** PB-9 — START: its floor stays, held by the product's current phase; the floor's holder (recorded as the phase's). */
+  phaseHeldBy?: string
   /** After the op: it serves at its planned bids (START), or at the floor (STOP). */
   spends: boolean
 }
@@ -97,6 +103,8 @@ export interface StartPlan {
   floorsTaken: Array<{ slot: string; campaignId: string; name: string; origin: 'built' | 'adopted' }>
   /** START: STOP_FLOOR_KIND links whose floor is gone or no longer the stop's: dropped. */
   staleFloorLinks: string[]
+  /** PB-10 — START: the keywords and targets a sync added at the floor that get their planned bid (`startBidCents`, money). */
+  syncedBids: Array<{ slot: string; campaignId: string; text: string; startBidCents: number }>
   /** Every linked slot (the artifacts' context). */
   slots: Array<{ key: string; campaignId: string; adGroupId: string | null; origin: 'built' | 'adopted' }>
   artifactLinks: StoredArtifactLink[]
@@ -217,6 +225,17 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
     ? new Map((await prisma.adGroup.groupBy({ by: ['campaignId'], where: { campaignId: { in: mine.map((l) => l.refId) }, bidsSuppressedAt: { not: null } }, _count: { _all: true } })).map((g) => [g.campaignId, g._count._all]))
     : new Map<string, number>()
 
+  // PB-9 — the slots the product's current phase floors (its strategy's goal): START leaves their floor in place.
+  const phase = args.op === 'start' && doc ? await phaseNow(market, row.scopeId) : null
+  const phaseFloors = new Set(Object.entries((phase && doc?.phases[phase]?.slots) || {}).filter(([, state]) => state === 'floor').map(([key]) => key))
+  // PB-6c — a term's own campaign (a hero) plays the Exact slot it is modelled on: the phase that floors it floors the hero.
+  if (phaseFloors.size && doc) {
+    const { isHeroKey, phaseSlotOf } = await import('./hero.js')
+    const terms = (resolved.product?.terms.value as ProductTerms | null) ?? null
+    for (const l of mine) if (isHeroKey(l.key) && phaseFloors.has(phaseSlotOf(l.key, doc, nameToken, terms))) phaseFloors.add(l.key)
+  }
+  const heldByPhase = `phase ${phase}`
+
   const campaigns: StartCampaign[] = []
   const untouched: StartPlan['untouched'] = []
   const heldFloors: StartPlan['heldFloors'] = []
@@ -228,6 +247,10 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
   for (const link of mine) {
     const c = rows.get(link.refId)
     if (!c) continue
+    if (link.origin !== 'built' && args.op === 'start' && c.bidsSuppressedAt && holderOf.get(c.id) === c.bidsSuppressedBy && (!asked || asked.has(link.key)) && phaseFloors.has(link.key)) {
+      untouched.push({ slot: link.key, campaignId: c.id, name: c.name, why: `held by ${heldByPhase}: the ${phase} phase floors this slot, so its floor stays (a phase switch releases it)` })
+      continue
+    }
     if (link.origin !== 'built' && args.op === 'start' && c.bidsSuppressedAt && holderOf.get(c.id) === c.bidsSuppressedBy && (!asked || asked.has(link.key))) {
       heldFloors.push({ slot: link.key, campaignId: c.id, name: c.name, origin: 'adopted', status: String(c.status), dailyBudgetCents: cents(c.dailyBudget), bids: await restoreOf(c.id, c.bidsSuppressedFloorCents ?? SUPPRESSION_FLOOR_CENTS) })
       warnings.push(`"${c.name}" (adopted) is at the floor its hourly plan set, which the playbook's stop holds: START gives its bids back (nothing else of it moves).`)
@@ -247,6 +270,7 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
       let bids: StartCampaign['bids']
       if (!c.bidsSuppressedAt) bids = { does: 'none', why: 'not at a floor: it serves at its bids' }
       else if (!isPersonFloor(c.bidsSuppressedBy)) bids = { does: 'held', by: c.bidsSuppressedBy || 'an unrecorded engine' }
+      else if (phaseFloors.has(link.key)) bids = { does: 'held', by: heldByPhase }
       else bids = await restoreOf(c.id, c.bidsSuppressedFloorCents ?? SUPPRESSION_FLOOR_CENTS)
       const planned = deferred.get(c.id) ?? []
       const now = placementsOf(c.dynamicBidding)
@@ -258,9 +282,11 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
       const changes = !c.liveBidWritesEnabled || bids.does === 'restore' || placements.does === 'apply'
       campaigns.push({
         ...base, allowlist: c.liveBidWritesEnabled ? 'already' : 'on', bids, placements, ...(paused ? { paused } : {}),
+        ...(bids.does === 'held' && bids.by === heldByPhase && c.bidsSuppressedBy ? { phaseHeldBy: c.bidsSuppressedBy } : {}),
         spends: status === 'ENABLED' && changes && bids.does !== 'held',
       })
-      if (bids.does === 'held') warnings.push(`"${c.name}" stays at the floor ${bids.by} set: START never lifts an engine's floor (it lifts it itself once its reason ends, now that the campaign is on the allowlist).`)
+      if (bids.does === 'held' && bids.by === heldByPhase) warnings.push(`"${c.name}" stays at the floor, held by ${heldByPhase}: the ${phase} phase floors slot "${link.key}" (low bids, never a pause). A phase switch to one that runs it gives its bids back.`)
+      else if (bids.does === 'held') warnings.push(`"${c.name}" stays at the floor ${bids.by} set: START never lifts an engine's floor (it lifts it itself once its reason ends, now that the campaign is on the allowlist).`)
       if (ownFloors) warnings.push(`"${c.name}": ${ownFloors} ad group${ownFloors === 1 ? ' stays' : 's stay'} at ${ownFloors === 1 ? 'its' : 'their'} own floor (stock, or a product's monthly cap): START never lifts it.`)
       if (bids.does === 'restore' && bids.left.length) warnings.push(`"${c.name}": ${bids.left.length} bid${bids.left.length === 1 ? '' : 's'} left the floor since the build (a person or an engine moved ${bids.left.length === 1 ? 'it' : 'them'}): left as ${bids.left.length === 1 ? 'it stands' : 'they stand'}.`)
       if (placements.does === 'left') warnings.push(`"${c.name}": ${placements.why}.`)
@@ -281,7 +307,27 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
       })
     }
   }
-  if (!campaigns.length && !heldFloors.length && !problems.length) {
+  // PB-10 — the bids a sync planned (sync.ts): only START gives them, on every linked slot campaign (adopted too; a START
+  // of some slots, on those only), each campaign taken off its floor first.
+  let syncedBids: StartPlan['syncedBids'] = []
+  if (args.op === 'start') {
+    const { syncedBidsToGiveBack } = await import('./sync.js')
+    const slotOf = new Map(mine.map((l) => [l.refId, l.key]))
+    const scope = asked ? campaigns.map((c) => c.campaignId) : mine.map((l) => l.refId)
+    const lifting = [...campaigns.filter((c) => c.bids.does === 'restore').map((c) => c.campaignId), ...heldFloors.map((h) => h.campaignId)]
+    syncedBids = (await syncedBidsToGiveBack(row.id, { campaignIds: scope, lifting }))
+      .map((b) => ({ slot: slotOf.get(b.campaignId) ?? '?', campaignId: b.campaignId, text: b.text, startBidCents: b.plannedCents }))
+    // PB-9 — a slot the current phase floors keeps a sync's keywords at the floor too (its campaign may not be floored).
+    const held = syncedBids.filter((b) => phaseFloors.has(b.slot))
+    if (held.length) {
+      syncedBids = syncedBids.filter((b) => !phaseFloors.has(b.slot))
+      for (const slot of new Set(held.map((b) => b.slot))) {
+        const n = held.filter((b) => b.slot === slot).length
+        warnings.push(`${plural(n, 'keyword bid')} a sync added in slot "${slot}" ${n === 1 ? 'stays' : 'stay'} at the floor, held by ${heldByPhase}: START gives ${n === 1 ? 'it' : 'them'} once the phase runs the slot.`)
+      }
+    }
+  }
+  if (!campaigns.length && !heldFloors.length && !syncedBids.length && !problems.length) {
     problems.push(mine.some((l) => l.origin === 'built')
       ? `no campaign the playbook built is at Amazon${asked ? ' among the slots asked' : ''}`
       : `the playbook built no campaign for ${product.sku} in ${market} yet (adopted campaigns are the business's own): build it first (apply-ads-playbook op build)`)
@@ -292,10 +338,10 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
     op: args.op, market, product: { productId: product.id, sku: product.sku },
     playbook: { id: row.id, version: row.version, state: row.state, label: row.label },
     compiledTemplateVersion: resolved.template.value?.version ?? null,
-    doc, nameToken, campaigns, untouched, heldFloors, floorsTaken: [], staleFloorLinks,
+    doc, nameToken, campaigns, untouched, heldFloors, floorsTaken: [], staleFloorLinks, syncedBids,
     slots: mine.map((l) => ({ key: l.key, campaignId: l.refId, adGroupId: l.adGroupId, origin: l.origin === 'adopted' ? 'adopted' as const : 'built' as const })),
     artifactLinks, artifacts: [], artifactErrors: [],
-    highestRestoredBidCents: Math.max(0, ...campaigns.map((c) => (c.bids.does === 'restore' ? c.bids.highestCents : 0)), ...heldFloors.map((h) => h.bids.highestCents)),
+    highestRestoredBidCents: Math.max(0, ...campaigns.map((c) => (c.bids.does === 'restore' ? c.bids.highestCents : 0)), ...heldFloors.map((h) => h.bids.highestCents), ...syncedBids.map((b) => b.startBidCents)),
     dailyBudgetCents: args.op === 'start'
       ? [...campaigns.filter((c) => c.spends), ...heldFloors.filter((h) => h.status === 'ENABLED')].reduce((sum, c) => sum + c.dailyBudgetCents, 0)
       : 0,
@@ -332,6 +378,8 @@ export interface ApplyOutcome {
   artifacts: string[]
   /** STOP: the slots whose hourly plan's floor it took over (START gives those bids back). */
   floorsHeld: string[]
+  /** PB-10 — START: the keywords and targets a sync added at the floor that got their planned bid. */
+  syncedBids?: number
   errors: string[]
   /** The row's state after the op. */
   state: string | null
@@ -404,6 +452,9 @@ export async function runStart(plan: StartPlan, run: ApplyRun, writer: PlaybookA
         if (!r.ok) { fail(`its placements were not set: ${r.reason ?? r.error ?? r.mode}`); continue }
         changed = true
       }
+      // PB-9 — a floor the current phase holds is the phase's from now on: a later phase switch gives it back (phase.ts).
+      if (c.phaseHeldBy) await recordPhaseFloor(plan.playbook.id, c.campaignId, c.phaseHeldBy, plan.playbook.version)
+      else if (c.bids.does === 'restore') await prisma.adsPlaybookLink.deleteMany({ where: { playbookId: plan.playbook.id, kind: PHASE_FLOOR_KIND, refId: c.campaignId } })
       if (changed) out.done.push(c.slot)
     } catch (e) {
       fail((e as Error).message.slice(0, 200))
@@ -419,6 +470,19 @@ export async function runStart(plan: StartPlan, run: ApplyRun, writer: PlaybookA
       if (after?.bidsSuppressedAt) out.failed.push({ slot: h.slot, campaignId: h.campaignId, why: 'some of its bids were not taken: it stays at the floor the stop holds until START runs again' })
       else out.done.push(h.slot)
     } catch (e) { out.failed.push({ slot: h.slot, campaignId: h.campaignId, why: (e as Error).message.slice(0, 200) }) }
+  }
+  // PB-10 — the bids a sync planned for what it added at the floor: one call per linked slot campaign, after its floor
+  // is lifted (one still at a floor gives none).
+  if (plan.syncedBids.length) {
+    const { giveBackSyncedBids } = await import('./sync.js')
+    out.syncedBids = 0
+    for (const campaignId of new Set(plan.syncedBids.map((b) => b.campaignId))) {
+      try {
+        const r = await giveBackSyncedBids(plan.playbook.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, campaignIds: [campaignId] })
+        out.syncedBids += r.given.length
+        for (const f of r.failed) out.errors.push(`"${f.text}": its planned bid was not taken (${f.why}); it stays at the floor until START runs again`)
+      } catch (e) { out.errors.push(`the planned bids of campaign ${campaignId}: ${(e as Error).message.slice(0, 160)}`) }
+    }
   }
   // A floor the stop held that is gone (given back) or no longer the stop's: its link is dropped.
   const given = [...plan.staleFloorLinks, ...[...plan.campaigns, ...plan.heldFloors].map((c) => c.campaignId)]
@@ -441,7 +505,7 @@ export async function runStart(plan: StartPlan, run: ApplyRun, writer: PlaybookA
   out.state = anyRuns
     ? await record(plan, 'RUNNING', writer, `start: ${out.done.length} campaign(s) started${out.failed.length ? `, ${out.failed.length} not` : ''}`, out.errors)
     : plan.playbook.state
-  if (!anyRuns) out.errors.push('no campaign the playbook built runs after this start: its hourly plans and rules stay off and the row\'s state is unchanged')
+  if (!anyRuns && plan.campaigns.length) out.errors.push('no campaign the playbook built runs after this start: its hourly plans and rules stay off and the row\'s state is unchanged')
   logger.info('[PB-5b] playbook start finished', { playbookId: plan.playbook.id, done: out.done.length, failed: out.failed.length, errors: out.errors.length })
   return out
 }

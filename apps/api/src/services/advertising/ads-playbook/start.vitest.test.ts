@@ -18,6 +18,9 @@
  *              floor the gate would refuse; START switches nothing on when no built campaign runs
  *   rules      the playbook's own rule compiler records its stop (PLAYBOOK_STOP_METRIC), so the next START switches the
  *              rule on again — a person's switch-off after it still holds
+ *   phase      PB-9 — a slot the product's current phase floors (DEFEND's research slots) keeps its floor at START, named
+ *              "held by phase DEFEND" and recorded as the phase's (a later phase switch releases it); the performance
+ *              slot gets its bids back
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -353,5 +356,60 @@ describe('the playbook\'s own rules', () => {
       await db().advertisingActionLog.create({ data: { userId: 'user:owner-test', actionType: 'update_rule', entityType: 'RULE', entityId: ruleId, payloadBefore: { enabled: true }, payloadAfter: { enabled: false }, amazonResponseStatus: 'SUCCESS' } })
     })
     expect(await save(true)).toMatchObject({ enabled: false, keptOff: expect.stringContaining('user:owner-test') })
+  })
+})
+
+describe('PB-9 — a floor the current phase holds', () => {
+  it('DEFEND floors the research slots: START gives back only the performance slot; research stays at the floor, named — a sync\'s keyword bids too', async () => {
+    const other = await inA(() => seedProductPlaybook(db(), { token: 'TESTPB5C', asinPrefix: 'B0TESTSC' }))
+    const slots: Record<string, { campaign: string; target: string; synced: string }> = {}
+    await inA(async () => {
+      for (const slot of ['auto', 'broad-category', 'exact-category']) {
+        // Broad: a person lifted its floor since the build; a sync then added a keyword there at the floor.
+        const floored = slot !== 'broad-category'
+        const c = await db().campaign.create({ data: {
+          name: `TESTPB5C | IT | ${slot}`, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date(), externalCampaignId: `AMZ-PB5C-${slot}`,
+          liveBidWritesEnabled: false, ...(floored ? { bidsSuppressedAt: new Date(), bidsSuppressedBy: 'user:u-asker', bidsSuppressedFloorCents: 2 } : {}),
+        } })
+        const g = await db().adGroup.create({ data: { campaignId: c.id, name: `PB5C ${slot} group`, externalAdGroupId: `AMZ-PB5C-G-${slot}`, defaultBidCents: floored ? 2 : 40, ...(floored ? { suppressedFromBidCents: 40 } : {}) } })
+        const t = await db().adTarget.create({ data: { adGroupId: g.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `pb5c ${slot} term`, externalTargetId: `AMZ-PB5C-T-${slot}`, bidCents: floored ? 2 : 50, ...(floored ? { suppressedFromBidCents: 50 } : {}) } })
+        const k = await db().adTarget.create({ data: { adGroupId: g.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `pb5c ${slot} synced`, externalTargetId: `AMZ-PB5C-K-${slot}`, bidCents: 2 } })
+        await db().adsPlaybookLink.create({ data: { playbookId: other.rowId, kind: 'slot', key: slot, refId: c.id, adGroupId: g.id, origin: 'built', compiledVersion: 1, updatedBy: 'user:test' } })
+        slots[slot] = { campaign: c.id, target: t.id, synced: k.id }
+      }
+      await db().adsPlaybook.update({ where: { id: other.rowId }, data: { state: 'BUILT' } })
+      // A sync planned the bids of the keywords it added at the floor (PB-10): START gives them.
+      await db().adsPlaybookVersion.create({ data: {
+        kind: 'playbook', refId: other.rowId, version: 2, market: 'IT', level: 'PRODUCT', scopeId: other.parent, op: 'sync',
+        changes: [{ field: 'sync.plannedBids', label: 'Bids START gives', from: null, to: ['broad-category', 'exact-category'].map((slot) => ({ adTargetId: slots[slot].synced, startBidCents: 45 })), direction: 'same' }],
+        direction: 'same', via: 'claude', actor: 'Test',
+      } as never })
+      // The product's phase: DEFEND (its research slots, Auto and Broad, at the floor).
+      await db().adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: other.parent, label: `${other.skus.parent} (IT)`, goal: 'DEFEND', updatedBy: 'user:test' } })
+    })
+    const out = await inA(() => planStart({ op: 'start', market: 'IT', productId: other.parent }, { compilers: [] }))
+    if ('error' in out) throw new Error(out.error)
+    const by = Object.fromEntries(out.data.campaigns.map((c) => [c.slot, c]))
+    expect(by.auto).toMatchObject({ allowlist: 'on', bids: { does: 'held', by: 'phase DEFEND' }, phaseHeldBy: 'user:u-asker', spends: false })
+    expect(by['broad-category']).toMatchObject({ bids: { does: 'none' } })
+    expect(by['exact-category']).toMatchObject({ bids: { does: 'restore', targets: 1 }, spends: true })
+    // The sync's keyword in Broad (a slot DEFEND floors) waits; the one in Exact is given.
+    expect(out.data.syncedBids.map((b) => b.slot)).toEqual(['exact-category'])
+    expect(out.data.warnings).toEqual(expect.arrayContaining([
+      expect.stringMatching(/"TESTPB5C \| IT \| auto" stays at the floor, held by phase DEFEND: the DEFEND phase floors slot "auto"/),
+      expect.stringMatching(/1 keyword bid a sync added in slot "broad-category" stays at the floor, held by phase DEFEND/),
+    ]))
+    await inA(() => runStart(out.data, run, writer, { compilers: [] }))
+    const now = (id: string) => inA(() => db().adTarget.findUniqueOrThrow({ where: { id } }))
+    const auto = await inA(() => db().campaign.findUniqueOrThrow({ where: { id: slots.auto.campaign } }))
+    expect(auto).toMatchObject({ liveBidWritesEnabled: true, bidsSuppressedBy: 'user:u-asker' })
+    expect(await now(slots.auto.target)).toMatchObject({ bidCents: 2, suppressedFromBidCents: 50 })
+    expect(await now(slots['broad-category'].synced)).toMatchObject({ bidCents: 2 })
+    expect(await now(slots['exact-category'].target)).toMatchObject({ bidCents: 50, suppressedFromBidCents: null })
+    expect(await now(slots['exact-category'].synced)).toMatchObject({ bidCents: 45 })
+    // The floor it left is the phase's from now on (held by its holder): the next phase switch that runs the slot gives
+    // it back (phase.ts); none for the slot START restored.
+    const links = await inA(() => db().adsPlaybookLink.findMany({ where: { playbookId: other.rowId, kind: 'phaseFloor' }, select: { refId: true, updatedBy: true } }))
+    expect(links.map((l) => [l.refId, l.updatedBy])).toEqual([[slots.auto.campaign, 'user:u-asker']])
   })
 })
