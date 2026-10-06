@@ -34,7 +34,7 @@ import { autoPlanStepRefusal, noteAutoFailure } from './claude-trust.service.js'
 import { mergedStepUp } from './step-up-approval.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { getTool } from './tool-registry.js'
-import { PLAN_MAX_STEPS, PLAN_TOOL, type AgentTool, type PlanRequest, type ToolRequest } from './tool-types.js'
+import { PLAN_MAX_STEPS, PLAN_TOOL, decidedViaOf, type AgentTool, type PlanRequest, type ToolRequest } from './tool-types.js'
 
 /** How many steps a preview lists in full; the rest are counted. */
 const PREVIEW_STEPS = 20
@@ -294,6 +294,7 @@ async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
       approvedPreview: step.preview ?? undefined,
       via: requestDoor(ap.agentRun),
       approvedByPerson: !auto, // 4A — a plan a person approved; a plan run by his standing rule is not his click
+      decidedVia: decidedViaOf(ap.decisionVia), // AA-W2-1 — who decided the plan, for every step
     })
     if (!raw.ok) {
       const why = raw.error ?? 'the tool refused it'

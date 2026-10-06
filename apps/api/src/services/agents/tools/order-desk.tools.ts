@@ -103,7 +103,8 @@ const updateOrder: AgentTool = {
   undo: UPDATE_ORDER_UNDO,
   description:
     'Change an order inside Nexus: add a note (or delete one), put on or take off existing tags, or mark it delivered. '
-    + 'The buyer and the channel are not told. Waits for a person to approve it in Nexus. Undo puts the note and the tags '
+    + 'The buyer and the channel are not told. Waits for a person: approved in Nexus, or confirmed in Claude where the '
+    + 'business allows it. Undo puts the note and the tags '
     + 'back; a delivered mark is not taken back from here.',
   handler: (args) => previewUpdateOrder(args as UpdateOrderArgs),
   async execute(args, ctx) {

@@ -928,7 +928,8 @@ const setStockLocation: AgentTool = {
   description:
     'Keep the list of own warehouses: create one, rename one, switch one off (only when it holds no units, and never '
     + 'the default warehouse) or back on. Amazon FBA and Shopify locations come from those channels and are refused. '
-    + 'Stock is moved with transfer-stock, not here. Waits for a person to approve it in Nexus.',
+    + 'Stock is moved with transfer-stock, not here. Waits for a person: approved in Nexus, or confirmed in Claude with '
+    + 'the asker\'s authenticator code when the business set it so.',
   async handler(args): Promise<ToolResult> {
     const plan = await planLocation(args)
     if (refused(plan)) return { ok: false, error: plan.error }

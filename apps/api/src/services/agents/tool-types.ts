@@ -62,6 +62,29 @@ export type ClaudeTrust = 'off' | 'ask' | 'confirm' | 'auto'
 export const CLAUDE_TRUST_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'auto']
 
 /**
+ * ADS AUTONOMY AA-W2-1 — a change whose limits are judged against the business's ads strategy as well as its own
+ * (`amazon-ads`: Amazon Sponsored Products, advertising/ads-strategy). Its dry run puts the strategy's facts in the
+ * preview (`limitFacts`: each limit, its value and the scope it comes from, and what this change does), so its
+ * `withinLimits` stays pure and refuses a preview without them; a change of it run by rule is judged again on a fresh
+ * dry run at commit (approval-inbox.service.ts). tool-contract.vitest.test.ts rules 7a–7c hold the class.
+ */
+export type StrategyBound = 'amazon-ads'
+
+/**
+ * AA-W2-1 — who decided the request an `execute` carries out (ToolContext.decidedVia): a person in Nexus (`nexus`, with
+ * their code for a raise), the person who asked, with their code in Claude (`claude`, confirm-change), or the
+ * business's rule (`auto`).
+ */
+export type DecidedVia = 'nexus' | 'claude' | 'auto'
+
+/** AA-W2-1 — ToolContext.decidedVia from AgentApproval.decisionVia (auto · claude-confirm · nexus · nexus-step-up · none). */
+export function decidedViaOf(decisionVia: string | null | undefined): DecidedVia {
+  if (decisionVia === 'auto') return 'auto'
+  if (decisionVia === 'claude-confirm') return 'claude'
+  return 'nexus'
+}
+
+/**
  * C9 — the preview convention: what the Approvals page reads from a change tool's dry-run preview when the tool has
  * no card of its own (most tools do not). Every key is OPTIONAL and a tool keeps its own shape beside them; adding
  * them is what makes a request approvable from the generic card, which never shows raw JSON:
@@ -157,6 +180,11 @@ export interface ToolContext {
    */
   approvedByPerson?: boolean
   /**
+   * AA-W2-1 — `execute` of an approval only: who decided it (DecidedVia). A strategy-bound ad tool says by it whether
+   * its write ran by the business's rule or by a person's decision. Absent when no approval is carried out.
+   */
+  decidedVia?: DecidedVia
+  /**
    * C1 — `execute` only: the preview the person approved, raw, as the approval stores it. A tool may compare its
    * fresh dry run with it and refuse on a difference (the gate's staleness check runs just before, on the
    * MATERIAL_PREVIEW_FIELDS of the tool).
@@ -234,9 +262,18 @@ export interface AgentTool {
    * permission that reveals it. Stripped for a person without it.
    */
   restrictedFields?: Readonly<Record<string, FieldPermission>>
-  /** Hard floor — can NEVER be auto-run (pricing/publish/customer comms/
-   *  spend/fiscal). Enforced in code; the policy layer cannot downgrade it. */
+  /**
+   * A floor for every door (pricing/publish/customer comms/spend/fiscal): a change of this tool is always stored as an
+   * approval, never run straight from a call. The policy layer holds it at tier high with approval on, and no AgentTool
+   * override can lower either (tool-policy.service.ts), so the in-app assistant and the fleet never run it directly.
+   * Claude's door stores every change as an approval anyway; what the business may then let Claude do with it is the
+   * tool's ceiling (`maxClaudeTrust`), which the contract holds to `ask` (tool-contract.vitest.test.ts rule 7a) unless
+   * the tool is on a reviewed list: a strategy-bound ad tool (AD_STRATEGY_AUTO), which may run by rule only inside its
+   * limits and the ads strategy, or one an earlier phase let a business confirm in Claude or run inside its limits.
+   */
   alwaysAsk?: boolean
+  /** AA-W2-1 — its limits are judged against the ads strategy too (StrategyBound). */
+  strategyBound?: StrategyBound
   /** Default-on approval for a mutating tool below high tier (e.g.
    *  apply-content). high / alwaysAsk already imply approval. */
   requiresApprovalDefault?: boolean
@@ -259,7 +296,8 @@ export interface AgentTool {
   control?: boolean
   /**
    * C1 — every change tool: the most Claude may ever do with it without a person in Nexus. Floors:
-   * `none` (irreversible) is `ask` at most; `auto` needs `withinLimits`.
+   * `none` (irreversible) is `ask` at most, unless it is a strategy-bound tool whose default limits run nothing alone
+   * (rule 7c); `alwaysAsk` is `ask` at most outside its reviewed lists (rule 7a); `auto` needs `withinLimits`.
    */
   maxClaudeTrust?: ClaudeTrust
   /**
