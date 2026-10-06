@@ -28,6 +28,19 @@ export type EbayOrderNoticeKick =
   | { kicked: true }
   | { kicked: false; reason: 'not_routed' | 'not_an_order_notice' | 'held' | 'workers_off' | 'enqueue_failed' }
 
+/**
+ * A fast path that is switched off must be visible, not only slower: the first kick held by each missing switch is
+ * logged once per process. Later kicks for the same switch stay silent (the minute sweep runs every one of them).
+ */
+const reportedOff = new Set<string>()
+function reportOffOnce(missing: string) {
+  if (reportedOff.has(missing)) return
+  reportedOff.add(missing)
+  logger.info(`[eBay order notice] the run-now path is off on this process (it needs ${missing}); stored order notices wait for the minute sweep`, { missing })
+}
+/** Test-only: forget which switches were already reported. */
+export function resetEbayOrderNoticeKickReportsForTests(): void { reportedOff.clear() }
+
 /** The body was verified by admission; an unreadable one is simply not an order notice. */
 function topicOf(rawBody: Buffer): string | null {
   try { return readEbayNoticeIdentity(JSON.parse(rawBody.toString('utf8'))).topic } catch { return null }
@@ -39,14 +52,18 @@ export async function kickStoredEbayOrderNotice(outcome: EbayAdmissionOutcome, r
     if (outcome.kind !== 'accepted') return { kicked: false, reason: 'not_routed' }
     if (topicOf(rawBody) !== EBAY_ORDER_NOTICE_TOPIC) return { kicked: false, reason: 'not_an_order_notice' }
     // Loaded only for an order notice, so the receiver's other paths load no queue and no token service.
-    const { ebayInboundProcessingReady, ebayOrderNoticesEnabled } = await import('./ingress/ebay-processing-policy.js')
-    if (!ebayInboundProcessingReady() || !ebayOrderNoticesEnabled()) return { kicked: false, reason: 'held' }
+    const { ebayInboundProcessingEnabled, ebayInboundProcessingReady, ebayOrderNoticesEnabled } = await import('./ingress/ebay-processing-policy.js')
+    if (!ebayInboundProcessingReady() || !ebayOrderNoticesEnabled()) {
+      reportOffOnce(!ebayInboundProcessingEnabled() ? 'NEXUS_ENABLE_EBAY_INBOUND_PROCESSING=1'
+        : !ebayInboundProcessingReady() ? 'the token service (NEXUS_CX_TOKEN_SERVICE is 0)' : 'NEXUS_ENABLE_EBAY_ORDER_NOTICES=1')
+      return { kicked: false, reason: 'held' }
+    }
     const { addJobSafely, ebayOrderNoticeQueue } = await import('../../lib/queue.js')
     // In the receipt's business: WorkspaceQueue stamps it on the job and prefixes the job id with it.
     const result = await withIngressWorkspace(outcome.workspaceId, () => addJobSafely(ebayOrderNoticeQueue, 'process-receipt',
       { receiptId: outcome.receiptId }, { jobId: ebayOrderNoticeJobId(outcome.receiptId) }))
     if (result.enqueued) return { kicked: true }
-    if (result.workersOff) return { kicked: false, reason: 'workers_off' }
+    if (result.workersOff) { reportOffOnce('ENABLE_QUEUE_WORKERS=1'); return { kicked: false, reason: 'workers_off' } }
     logger.warn('[eBay order notice] the worker was not asked to run it now; the minute sweep will', {
       receiptId: outcome.receiptId, timedOut: !!result.timedOut, circuitOpen: !!result.skipped })
     return { kicked: false, reason: 'enqueue_failed' }

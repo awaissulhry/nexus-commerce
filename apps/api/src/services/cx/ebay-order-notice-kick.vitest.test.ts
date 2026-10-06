@@ -12,7 +12,7 @@ const state = vi.hoisted(() => ({ add: vi.fn(), businesses: [] as string[] }))
 vi.mock('../../lib/queue.js', () => ({ ebayOrderNoticeQueue: { name: 'ebay-order-notice' }, addJobSafely: state.add }))
 vi.mock('../../db.js', () => ({ default: {} }))
 vi.mock('../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
-const { kickStoredEbayOrderNotice, ebayOrderNoticeJobId } = await import('./ebay-order-notice-kick.js')
+const { kickStoredEbayOrderNotice, ebayOrderNoticeJobId, resetEbayOrderNoticeKickReportsForTests } = await import('./ebay-order-notice-kick.js')
 const { logger } = await import('../../utils/logger.js')
 
 const notice = (topic: string, notificationId = 'synthetic-notice') => Buffer.from(JSON.stringify({
@@ -34,6 +34,7 @@ function bullmqRefusal(jobId: string): string | null {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  resetEbayOrderNoticeKickReportsForTests()
   state.businesses = []
   state.add.mockImplementation(async () => { state.businesses.push(workspaceIdForQuery()); return { enqueued: true } })
   vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
@@ -81,15 +82,28 @@ describe('kickStoredEbayOrderNotice', () => {
   })
 
   it.each([
-    ['eBay inbound processing unset', 'NEXUS_ENABLE_EBAY_INBOUND_PROCESSING', ''],
-    ['eBay inbound processing off', 'NEXUS_ENABLE_EBAY_INBOUND_PROCESSING', '0'],
-    ['order notices unset', 'NEXUS_ENABLE_EBAY_ORDER_NOTICES', ''],
-    ['order notices off', 'NEXUS_ENABLE_EBAY_ORDER_NOTICES', '0'],
-    ['the token service off', 'NEXUS_CX_TOKEN_SERVICE', '0'],
-  ])('asks for nothing while the notice is held: %s', async (_label, name, value) => {
+    ['eBay inbound processing unset', 'NEXUS_ENABLE_EBAY_INBOUND_PROCESSING', '', 'NEXUS_ENABLE_EBAY_INBOUND_PROCESSING=1'],
+    ['eBay inbound processing off', 'NEXUS_ENABLE_EBAY_INBOUND_PROCESSING', '0', 'NEXUS_ENABLE_EBAY_INBOUND_PROCESSING=1'],
+    ['order notices unset', 'NEXUS_ENABLE_EBAY_ORDER_NOTICES', '', 'NEXUS_ENABLE_EBAY_ORDER_NOTICES=1'],
+    ['order notices off', 'NEXUS_ENABLE_EBAY_ORDER_NOTICES', '0', 'NEXUS_ENABLE_EBAY_ORDER_NOTICES=1'],
+    ['the token service off', 'NEXUS_CX_TOKEN_SERVICE', '0', 'the token service (NEXUS_CX_TOKEN_SERVICE is 0)'],
+  ])('asks for nothing while the notice is held, and says once which switch is missing: %s', async (_label, name, value, missing) => {
     vi.stubEnv(name, value)
-    expect(await kickStoredEbayOrderNotice(accepted(), ORDER)).toEqual({ kicked: false, reason: 'held' })
+    for (let i = 0; i < 3; i++) expect(await kickStoredEbayOrderNotice(accepted(`receipt-held-${i}`), ORDER)).toEqual({ kicked: false, reason: 'held' })
     expect(state.add).not.toHaveBeenCalled()
+    expect(vi.mocked(logger.info)).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('run-now path is off'), { missing })
+    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled()
+  })
+
+  it('reports each missing switch once per process, not once per notice', async () => {
+    vi.stubEnv('NEXUS_ENABLE_EBAY_ORDER_NOTICES', '0')
+    await kickStoredEbayOrderNotice(accepted('receipt-a'), ORDER)
+    await kickStoredEbayOrderNotice(accepted('receipt-b'), ORDER)
+    vi.stubEnv('NEXUS_ENABLE_EBAY_ORDER_NOTICES', '1')
+    state.add.mockResolvedValue({ enqueued: false, skipped: true, workersOff: true })
+    await kickStoredEbayOrderNotice(accepted('receipt-c'), ORDER)
+    await kickStoredEbayOrderNotice(accepted('receipt-d'), ORDER)
+    expect(vi.mocked(logger.info).mock.calls.map(call => call[1])).toEqual([{ missing: 'NEXUS_ENABLE_EBAY_ORDER_NOTICES=1' }, { missing: 'ENABLE_QUEUE_WORKERS=1' }])
   })
 
   it('never throws when the queue fails, and logs no notice body', async () => {
@@ -107,9 +121,11 @@ describe('kickStoredEbayOrderNotice', () => {
     expect(logged).not.toContain('synthetic-order')
   })
 
-  it('reports workers switched off without a warning (the sweep runs it, by configuration)', async () => {
-    state.add.mockResolvedValueOnce({ enqueued: false, skipped: true, workersOff: true })
+  it('reports workers switched off once, as information, not a warning (the sweep runs it, by configuration)', async () => {
+    state.add.mockResolvedValue({ enqueued: false, skipped: true, workersOff: true })
     expect(await kickStoredEbayOrderNotice(accepted(), ORDER)).toEqual({ kicked: false, reason: 'workers_off' })
+    expect(await kickStoredEbayOrderNotice(accepted('receipt-2'), ORDER)).toEqual({ kicked: false, reason: 'workers_off' })
     expect(vi.mocked(logger.warn)).not.toHaveBeenCalled()
+    expect(vi.mocked(logger.info)).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('run-now path is off'), { missing: 'ENABLE_QUEUE_WORKERS=1' })
   })
 })
