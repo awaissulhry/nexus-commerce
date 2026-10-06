@@ -18,11 +18,11 @@
  *           enabled: a person enables it in Nexus. A campaign the playbook ADOPTED is the business's own: its
  *           allowlist, bids and placements are left as they are (named); the artifacts cover it.
  *   stop    for each built campaign: every bid to the 2¢ floor, remembered again (suppressCampaignBids; never a pause,
- *           never an archive) — a floor an engine set is taken over (its owner becomes the approver: no engine gives it
- *           back before the next START) —, then off the allowlist. Once no built campaign of the playbook runs (on the allowlist
- *           and not at a person's floor), its artifacts are switched off AFTER the floors (an hourly plan switched off
- *           gives back the floors it set) — each compiled rule recorded as the playbook's own stop, so the next START
- *           switches it on again (artifacts.ts, rules.ts) — and the row's state is STOPPED; while one still runs (a
+ *           never an archive; a floor already set stays its owner's), then off the allowlist. Once no built campaign of the playbook runs (on the allowlist
+ *           and not at a person's floor), its artifacts are switched off AFTER the floors — each hourly plan with its
+ *           floors handed to the stop's approver, never given back (rank.ts: the bids stay at 2¢ until START), each
+ *           compiled rule recorded as the playbook's own stop, so the next START switches it on again (artifacts.ts,
+ *           rules.ts) — and the row's state is STOPPED; while one still runs (a
  *           stop of some slots), they stay on and the row stays RUNNING, said.
  *
  * Idempotent: each step skips what is done (a re-run of START writes nothing new). The preview (`planStart`) reads
@@ -53,17 +53,13 @@ export interface StartCampaign {
   currency: string
   /** The live-write allowlist: what the op does. */
   allowlist: 'on' | 'off' | 'already'
-  /**
-   * The bids: START puts them back, STOP floors them; held: an engine's floor, left (START); takeOver: an engine's floor
-   * the STOP takes over, so no engine gives it back before the next START; none: nothing to do.
-   */
+  /** The bids: START puts them back, STOP floors them; held: an engine's floor, left (START); none: nothing to do. */
   bids:
     | { does: 'restore'; floorCents: number; adGroups: number; targets: number; highestCents: number
         held: Array<{ text: string; rememberedCents: number; toCents: number; heldBy: string }>
         left: Array<{ text: string; bidCents: number; rememberedCents: number }> }
     | { does: 'floor'; floorCents: number; adGroups: number; targets: number }
     | { does: 'held'; by: string }
-    | { does: 'takeOver'; by: string }
     | { does: 'none'; why: string }
   /** Ad groups at their own floor (stock, a product's monthly cap): neither op lifts them. */
   ownFloors: number
@@ -235,13 +231,12 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
       if (bids.does === 'restore' && bids.left.length) warnings.push(`"${c.name}": ${bids.left.length} bid${bids.left.length === 1 ? '' : 's'} left the floor since the build (a person or an engine moved ${bids.left.length === 1 ? 'it' : 'them'}): left as ${bids.left.length === 1 ? 'it stands' : 'they stand'}.`)
       if (placements.does === 'left') warnings.push(`"${c.name}": ${placements.why}.`)
     } else {
-      // An engine's floor (an hourly plan's window, dayparting, the budget) is taken over: the engine gives back only its
-      // own, so the campaign stays at the floor until START, whatever the engine decides meanwhile.
-      const bids: StartCampaign['bids'] = !c.bidsSuppressedAt ? await floorOf(c.id)
-        : isPersonFloor(c.bidsSuppressedBy) ? { does: 'none', why: `at a floor already (${c.bidsSuppressedBy})` }
-          : { does: 'takeOver', by: c.bidsSuppressedBy || 'an unrecorded engine' }
+      // A campaign at a floor already keeps it: a person's (START lifts it), or an engine's — an hourly plan's floor is
+      // handed to the stop when the plan is switched off (rank.ts), any other engine's stays its own (START never lifts it).
+      const bids: StartCampaign['bids'] = c.bidsSuppressedAt
+        ? { does: 'none', why: `at a floor already (${c.bidsSuppressedBy || 'an unrecorded actor'})` }
+        : await floorOf(c.id)
       const floors = bids.does === 'floor' && (bids.adGroups > 0 || bids.targets > 0)
-      if (bids.does === 'takeOver') warnings.push(`"${c.name}" is at the floor ${bids.by} set: the stop takes it over, so it stays at the floor until START (its bids stay remembered).`)
       campaigns.push({
         ...base, allowlist: c.liveBidWritesEnabled ? 'off' : 'already', bids, placements: { does: 'none', why: 'a stop leaves placements as they are (they multiply 2¢ bids)' },
         spends: status === 'ENABLED' && (floors || c.liveBidWritesEnabled),
@@ -400,10 +395,6 @@ export async function runStop(plan: StartPlan, run: ApplyRun, writer: PlaybookAp
         const after = await prisma.campaign.findUnique({ where: { id: c.campaignId }, select: { bidsSuppressedAt: true } })
         if (!after?.bidsSuppressedAt) { fail('its bids could not be floored'); continue }
         changed = true
-      } else if (c.bids.does === 'takeOver') {
-        // The engine's floor becomes the stop's: the same floor and memory, its owner the approver (START lifts it).
-        const taken = await prisma.campaign.updateMany({ where: { id: c.campaignId, bidsSuppressedAt: { not: null }, bidsSuppressedBy: c.bids.by }, data: { bidsSuppressedBy: run.actor } })
-        if (taken.count) { changed = true; logger.info('[PB-5b] stop took over an engine floor', { campaignId: c.campaignId, from: c.bids.by, to: run.actor }) }
       }
       // 2 — off the allowlist: no engine, rule or schedule writes to it until START.
       if (c.allowlist === 'off') {

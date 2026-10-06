@@ -90,8 +90,8 @@ async function switchRulesOff(links: readonly ArtifactLink[], actor: string): Pr
 }
 
 /** What START or STOP does to the playbook's own rules (a preview, no writes). */
-async function ruleSwitchLines(kind: 'harvestRule' | 'isolationRule', words: string, links: readonly ArtifactLink[], mode: 'start' | 'stop'): Promise<ArtifactPreviewLine[]> {
-  if (!links.length) return [{ kind, key: kind === 'harvestRule' ? 'harvest' : 'isolation', does: 'report', summary: `${words} is not compiled yet: ${mode === 'start' ? 'START compiles it and switches it on' : 'nothing to switch off'}` }]
+async function ruleSwitchLines(kind: 'harvestRule' | 'isolationRule', key: string, words: string, links: readonly ArtifactLink[], mode: 'start' | 'stop'): Promise<ArtifactPreviewLine[]> {
+  if (!links.length) return [{ kind, key, does: 'report', summary: `${words} is not compiled yet: ${mode === 'start' ? 'START compiles it and switches it on' : 'nothing to switch off'}` }]
   const rows = new Map((await prisma.automationRule.findMany({ where: { id: { in: links.map((l) => l.refId) } }, select: { id: true, enabled: true } })).map((r) => [r.id, r]))
   return links.map((l) => {
     const r = rows.get(l.refId)
@@ -111,7 +111,7 @@ function ruleCompiler(kind: 'harvestRule' | 'isolationRule', key: string, words:
   return {
     kind,
     async preview(ctx, links) {
-      if (ctx.mode === 'start' || ctx.mode === 'stop') return ruleSwitchLines(kind, words, links, ctx.mode)
+      if (ctx.mode === 'start' || ctx.mode === 'stop') return ruleSwitchLines(kind, key, words, links, ctx.mode)
       return [{ kind, key: links[0]?.key ?? key, does: links.length ? 'update' : 'create', summary: `${words}, compiled from the product's linked slots: born off — START switches it on`, ...(links[0] ? { refId: links[0].refId } : {}) }]
     },
     async compile(ctx) {

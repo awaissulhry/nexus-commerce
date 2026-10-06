@@ -11,8 +11,8 @@
  *   engines    a campaign an engine floored stays at its floor (named "held by"); an ad group at its own floor stays
  *   paused     a campaign paused at Amazon is prepared, never enabled; an adopted campaign is left as it is
  *   again      a second START writes nothing
- *   stop       every bid to the floor (remembered again) BEFORE the artifacts are switched off, off the allowlist; an
- *              engine's floor taken over; the row STOPPED; a START after it puts the same bids back
+ *   stop       every bid to the floor (remembered again) BEFORE the artifacts are switched off, off the allowlist; the
+ *              row STOPPED; a START after it puts the same bids back (an engine's floor is never lifted)
  *   rules      the playbook's own rule compiler records its stop (PLAYBOOK_STOP_METRIC), so the next START switches the
  *              rule on again — a person's switch-off after it still holds
  */
@@ -217,7 +217,7 @@ describe('STOP', () => {
     const p = await plan('stop')
     const by = Object.fromEntries(p.campaigns.map((c) => [c.slot, c]))
     expect(by['exact-category']).toMatchObject({ allowlist: 'off', bids: { does: 'floor', adGroups: 1, targets: 1 } })
-    expect(by.auto).toMatchObject({ allowlist: 'off', bids: { does: 'takeOver', by: 'automation:dayparting-test' } })
+    expect(by.auto).toMatchObject({ allowlist: 'off', bids: { does: 'none', why: expect.stringMatching(/automation:dayparting-test/) } })
     expect(p.artifacts).toEqual([expect.objectContaining({ does: 'disable' })])
     const out = await inA(() => runStop(p, { ...run, changeSetId: 'ap-stop' }, { ...writer, approvalId: 'ap-stop' }, { compilers }))
     expect(out).toMatchObject({ failed: [], errors: [], state: 'STOPPED' })
@@ -228,8 +228,8 @@ describe('STOP', () => {
     expect(whats).not.toContain('placements')
     expect(await bidsOf('exact-category')).toMatchObject({ group: [2, 40], target: [2, 100], liveWrites: false, floorBy: 'user:u-approver', status: 'ENABLED' })
     expect(await bidsOf('broad-category')).toMatchObject({ target: [2, 35], floorBy: 'user:u-approver' })
-    // The engine's floor is the stop's now (the same floor and memory): no engine gives it back before START.
-    expect(await bidsOf('auto')).toMatchObject({ group: [2, 40], target: [2, 55], liveWrites: false, floorBy: 'user:u-approver' })
+    // The engine's floor stays the engine's (the test compiler hands nothing over; rank.ts does for its own floors).
+    expect(await bidsOf('auto')).toMatchObject({ group: [2, 40], target: [2, 55], liveWrites: false, floorBy: 'automation:dayparting-test' })
     expect((await inA(() => db().adsPlaybook.findUniqueOrThrow({ where: { id: seeded.rowId } }))).state).toBe('STOPPED')
   })
 
@@ -240,8 +240,8 @@ describe('STOP', () => {
     expect(out.state).toBe('RUNNING')
     expect(await bidsOf('exact-category')).toMatchObject({ group: [40, null], target: [100, null], liveWrites: true })
     expect(await bidsOf('broad-category')).toMatchObject({ target: [35, null] })
-    // The floor the stop took over from the engine is the stop's: START gives its bids back.
-    expect(await bidsOf('auto')).toMatchObject({ group: [40, null], target: [55, null], floorBy: null })
+    // An engine's floor is never lifted by START.
+    expect(await bidsOf('auto')).toMatchObject({ group: [2, 40], target: [2, 55], floorBy: 'automation:dayparting-test' })
   })
 
   it('a stop of some slots leaves the artifacts on while another built campaign still runs; the row stays RUNNING', async () => {

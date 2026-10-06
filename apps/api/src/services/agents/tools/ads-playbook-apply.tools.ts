@@ -293,6 +293,8 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
       })
     : null
   const campaigns = p.campaigns.map((c) => campaignOpLine(op, c))
+  // The playbook's hourly plans a START switches on raise bids too (top of search): part of what the code approves.
+  const rankOn = p.artifacts.filter((l) => l.kind === 'rankGroup' && l.does === 'enable').length
   const paused = p.campaigns.filter((c) => c.paused).length
   const effect = op === 'start'
     ? `Starts ${p.product.sku}'s playbook in ${p.market}: ${plural(acting.length, 'campaign')} it built ${acting.length === 1 ? 'goes' : 'go'} on the live-write allowlist with ${acting.length === 1 ? 'its' : 'their'} planned bids and placements back — `
@@ -321,7 +323,7 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         ...(p.artifactErrors.length ? { artifactErrors: p.artifactErrors } : {}),
         warnings: p.warnings,
         ...(op === 'start'
-          ? { stepUp: { what: `starts spending on ${plural(p.spending, 'campaign')}`, raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS, how: START_HOW } }
+          ? { stepUp: { what: `starts spending on ${plural(p.spending, 'campaign')}${rankOn ? ` and switches on ${plural(rankOn, 'hourly bid plan')}` : ''}`, raises: ['Bids', 'Spend', ...(rankOn ? ['Hourly bid plans'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
           : { noCode: 'A stop lowers spend: it needs no authenticator code.' }),
         basis: hash({ op, row: [p.playbook.id, p.playbook.version], campaigns: p.campaigns, untouched: p.untouched, artifacts: p.artifacts }),
         reach: stored,

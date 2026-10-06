@@ -228,7 +228,7 @@ describe('PB-5b — START and STOP of the built playbook', () => {
     const p = r.preview as Row
     expect(p).toMatchObject({
       op: 'start', starts: { campaigns: 5 }, reach: { reach: 'sandbox' }, limitFacts: { tool: 'apply-ads-playbook', action: 'restore' },
-      stepUp: { what: 'starts spending on 5 campaigns', needs: expect.stringContaining('settings.security.manage') },
+      stepUp: { what: expect.stringMatching(/^starts spending on 5 campaigns/), needs: expect.stringContaining('settings.security.manage') },
       effect: expect.stringMatching(/^Starts TEST-TESTAPA-PARENT's playbook in IT: 5 campaigns it built go on the live-write allowlist/),
     })
     expect(p.campaigns.every((c: Row) => c.allowlist === 'on')).toBe(true)
