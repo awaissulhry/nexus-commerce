@@ -17,9 +17,12 @@
  * - eBay's catalogue offers the topic as a USER topic with a JSON/HTTPS payload version.
  *
  * Idempotent and never deleting: an enabled subscription on our destination is left alone, a
- * disabled one is enabled, a missing one is created. eBay's errorId 195011 (missing scope) stops
- * with "reconnect needed". A stored order notice stays held behind NEXUS_ENABLE_EBAY_ORDER_NOTICES;
- * the 5-minute order poll is unchanged.
+ * disabled one is enabled, a missing one is created. "Reconnect needed" is only what the account
+ * itself shows (a held sign-in, a missing recorded scope). eBay's errorId 195011 ("not authorized
+ * for this topic") arrives only AFTER that check passed, so it is `failed`, which turns the nightly
+ * run red: pressing Reconnect would not fix it. errorId 195012 / 409 ("subscription already
+ * exists") re-reads the seller's list. A stored order notice stays held behind
+ * NEXUS_ENABLE_EBAY_ORDER_NOTICES; the 5-minute order poll is unchanged.
  */
 import prisma from '../../../../db.js'
 import { logger } from '../../../../utils/logger.js'
@@ -31,14 +34,16 @@ import {
   EBAY_NOTIFICATION_ARMED_TOPICS, EbayNotificationHttpError, EbayNotificationNotArmedError,
   armedSellerTopics, createdResourceId, describeEbayNotificationError, ebayNotificationConfig, getEbayDestinations,
   getEbaySellerSubscriptions, getEbayTopics, sellerNotificationCall, subscriptionPayloadUsable, usableTopicPayloads,
-  type EbayEnvironment, type EbayNotificationSetupResult, type EbayTopic, type NotificationAnswer,
+  type EbayEnvironment, type EbayNotificationSetupResult, type EbaySubscription, type EbayTopic, type NotificationAnswer,
 } from './notifications.js'
 
 export const EBAY_ORDER_TOPIC = 'ORDER_CONFIRMATION'
 const SUBSCRIBE_SCOPE = `${EBAY_SCOPE_BASE}/commerce.notification.subscription`
 const FULFILLMENT_SCOPES = [`${EBAY_SCOPE_BASE}/sell.fulfillment`, `${EBAY_SCOPE_BASE}/sell.fulfillment.readonly`]
-/** eBay Notification API: the token lacks the scope the call needs (createSubscription et al.). */
+/** eBay Notification API 403 "Not authorized for this topic" (createSubscription et al.). */
 export const EBAY_MISSING_SCOPE_ERROR_ID = 195011
+/** eBay Notification API 409 "Subscription already exists" (createSubscription). */
+export const EBAY_SUBSCRIPTION_EXISTS_ERROR_ID = 195012
 const SIGN_IN_HELD = ['needs_reauth', 'revoked', 'disconnected']
 
 export type EbaySellerSubscriptionStatus = 'subscribed' | 'created' | 'enabled' | 'reconnect_needed' | 'not_armed' | 'not_offered' | 'failed'
@@ -109,12 +114,18 @@ function topicProblem(topic: EbayTopic | undefined, covered: Set<string>): Probl
   return null
 }
 
-/** eBay's answer or a thrown refusal, as a result. 195011 and a held sign-in mean "reconnect". */
-function problemOf(err: unknown): Problem | { status: 'not_armed'; reason: string } {
+/**
+ * eBay's 195011 always comes after `readAccount` found the needed scopes recorded on the sign-in,
+ * so it is eBay refusing the topic to this app or account: a failure to look at, not a Reconnect.
+ */
+function refusedTopic(operation: string): Problem {
+  return { status: 'failed', reason: `eBay refused this topic for the app/account (errorId ${EBAY_MISSING_SCOPE_ERROR_ID} on ${operation}) — not a sign-in problem: the sign-in records the permissions the topic needs, so Reconnect will not fix it. Check that the eBay application is allowed ${EBAY_ORDER_TOPIC}.` }
+}
+
+/** eBay's answer or a thrown refusal, as a result. Only a held sign-in means "reconnect". */
+function problemOf(err: unknown, operation = 'getSubscriptions'): Problem | { status: 'not_armed'; reason: string } {
   if (err instanceof EbayNotificationNotArmedError) return { status: 'not_armed', reason: err.message }
-  if (err instanceof EbayNotificationHttpError && err.errorIds.includes(EBAY_MISSING_SCOPE_ERROR_ID)) {
-    return { status: 'reconnect_needed', reason: `eBay answered errorId ${EBAY_MISSING_SCOPE_ERROR_ID}: this sign-in lacks the permission to subscribe. ${RECONNECT}` }
-  }
+  if (err instanceof EbayNotificationHttpError && err.errorIds.includes(EBAY_MISSING_SCOPE_ERROR_ID)) return refusedTopic(operation)
   // The gateway refuses an account that needs signing in before it fetches a token or sends anything.
   if ((err as { code?: unknown } | null)?.code === 'ACCOUNT_NEEDS_SIGNIN') {
     return { status: 'reconnect_needed', reason: `${err instanceof Error ? err.message : 'The account needs signing in.'} ${RECONNECT}` }
@@ -123,9 +134,7 @@ function problemOf(err: unknown): Problem | { status: 'not_armed'; reason: strin
 }
 
 function answerProblem(operation: string, answer: NotificationAnswer<unknown>): Problem {
-  if (answer.errorIds.includes(EBAY_MISSING_SCOPE_ERROR_ID)) {
-    return { status: 'reconnect_needed', reason: `eBay answered errorId ${EBAY_MISSING_SCOPE_ERROR_ID} to ${operation}: this sign-in lacks the permission to subscribe. ${RECONNECT}` }
-  }
+  if (answer.errorIds.includes(EBAY_MISSING_SCOPE_ERROR_ID)) return refusedTopic(operation)
   return { status: 'failed', reason: describeEbayNotificationError(operation, answer.status, answer.text) }
 }
 
@@ -168,9 +177,8 @@ export async function reconcileEbaySellerSubscriptions(
     if (!context.destinationId) return result('failed', { reason: NO_DESTINATION })
     const payloads = usableTopicPayloads(context.topic!)
 
-    const existing = (await getEbaySellerSubscriptions(connectionId, environment))
-      .find(s => s.topicId === topicId && s.destinationId === context.destinationId)
-    if (existing) {
+    /** An existing subscription on OUR destination: keep it, or enable it. */
+    const settle = async (existing: EbaySubscription): Promise<EbaySellerSubscriptionResult> => {
       if (!subscriptionPayloadUsable(existing, payloads)) {
         return result('failed', { subscriptionId: existing.subscriptionId, reason: 'The existing subscription payload is not one of the advertised JSON/HTTPS schemas; repair it before enabling.' })
       }
@@ -183,11 +191,27 @@ export async function reconcileEbaySellerSubscriptions(
       logger.warn('[ebay-seller-subscriptions] a disabled order subscription was enabled', { connectionId })
       return result('enabled', { subscriptionId: existing.subscriptionId })
     }
+    const ours = (list: EbaySubscription[]) => list.find(s => s.topicId === topicId && s.destinationId === context.destinationId)
+
+    const existing = ours(await getEbaySellerSubscriptions(connectionId, environment))
+    if (existing) return await settle(existing)
 
     const created = await sellerNotificationCall<{ subscriptionId?: string }>(connectionId, environment, 'POST', '/commerce/notification/v1/subscription', {
       topicId, destinationId: context.destinationId, status: 'ENABLED',
       payload: { format: 'JSON', schemaVersion: payloads[0]!.schemaVersion, deliveryProtocol: 'HTTPS' },
     })
+    if (created.status === 409 || created.errorIds.includes(EBAY_SUBSCRIPTION_EXISTS_ERROR_ID)) {
+      // "Subscription already exists": a concurrent run made it, or the seller holds the topic on
+      // another destination of this app. Read the list again instead of failing every night.
+      const again = await getEbaySellerSubscriptions(connectionId, environment)
+      const mine = ours(again)
+      if (mine) return await settle(mine)
+      const elsewhere = again.find(s => s.topicId === topicId)
+      if (elsewhere) {
+        return result('failed', { subscriptionId: elsewhere.subscriptionId, reason: `eBay already holds ${topicId} for this account on another destination (${elsewhere.destinationId ?? 'unknown'}), not on ours (${context.destinationId}); notices go there, not to Nexus. Disabling or deleting it at eBay needs a separate yes; then run the setup again.` })
+      }
+      return result('failed', { reason: `${describeEbayNotificationError('createSubscription', created.status, created.text)} — eBay says the subscription exists, but the account's list shows none for ${topicId}.` })
+    }
     if (created.status !== 201 && created.status !== 200) {
       const problem = answerProblem('createSubscription', created)
       return result(problem.status, { reason: problem.reason })
@@ -199,6 +223,49 @@ export async function reconcileEbaySellerSubscriptions(
   } catch (err) {
     const problem = problemOf(err)
     return result(problem.status, { reason: problem.reason })
+  }
+}
+
+export interface EbaySellerTestNoticeResult {
+  ok: boolean
+  topicId: string
+  connectionId: string
+  subscriptionId?: string
+  /** Why nothing was sent to eBay's test endpoint, when nothing was. */
+  refused?: 'not_armed' | 'not_own_account' | 'account' | 'no_subscription'
+  error?: string
+}
+
+/**
+ * Ask eBay to send its test notice for ONE seller's ORDER_CONFIRMATION subscription on our
+ * destination (`POST /subscription/{id}/test`, 202), with that seller's own token. The notice
+ * arrives signed at the receiver like a real one. Only an account of the business this runs in is
+ * tested; never the app token for the subscription calls.
+ */
+export async function sendEbaySellerTestNotice(connectionId: string, environment: EbayEnvironment = 'production'): Promise<EbaySellerTestNoticeResult> {
+  const topicId = EBAY_ORDER_TOPIC
+  const refuse = (refused: EbaySellerTestNoticeResult['refused'], error: string, subscriptionId?: string): EbaySellerTestNoticeResult =>
+    ({ ok: false, topicId, connectionId, refused, error, ...(subscriptionId ? { subscriptionId } : {}) })
+  if (!armedSellerTopics().includes(topicId)) return refuse('not_armed', `${EBAY_NOTIFICATION_ARMED_TOPICS} does not arm ${topicId}. No eBay call was made.`)
+  try {
+    if (!(await ownEbayAccounts()).some(account => account.id === connectionId)) {
+      return refuse('not_own_account', "connectionId is not one of this business's own active eBay accounts. No eBay call was made.")
+    }
+    const account = await readAccount(connectionId)
+    if ('problem' in account) return refuse('account', account.problem.reason)
+    const context = await ebaySellerSubscriptionContext(environment)
+    if (!context.destinationId) return refuse('no_subscription', NO_DESTINATION)
+    const subscription = (await getEbaySellerSubscriptions(connectionId, environment))
+      .find(s => s.topicId === topicId && s.destinationId === context.destinationId)
+    if (!subscription || (subscription.status ?? '').toUpperCase() !== 'ENABLED') {
+      return refuse('no_subscription', `This account has no ENABLED ${topicId} subscription on our destination${subscription ? ` (it is ${subscription.status ?? 'of unknown status'})` : ''}. Run the setup first. No test notice was requested.`, subscription?.subscriptionId)
+    }
+    const res = await sellerNotificationCall(connectionId, environment, 'POST', `/commerce/notification/v1/subscription/${encodeURIComponent(subscription.subscriptionId)}/test`)
+    if ([200, 202, 204].includes(res.status)) return { ok: true, topicId, connectionId, subscriptionId: subscription.subscriptionId }
+    return { ok: false, topicId, connectionId, subscriptionId: subscription.subscriptionId, error: answerProblem('testSubscription', res).reason }
+  } catch (err) {
+    const problem = problemOf(err)
+    return { ok: false, topicId, connectionId, ...(problem.status === 'not_armed' ? { refused: 'not_armed' as const } : {}), error: problem.reason }
   }
 }
 

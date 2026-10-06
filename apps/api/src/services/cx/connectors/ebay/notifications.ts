@@ -691,10 +691,10 @@ export async function sendEbayTestNotice(environment: EbayEnvironment, topicId: 
   if (!gate.topics.includes(topicId)) {
     return { ok: false, topicId, error: `eBay notification setup is not armed for this topic (armed: ${gate.topics.join(', ')}). No eBay call was made.` }
   }
-  // A per-seller subscription is not visible with the app token; testing it would need that
-  // seller's token, which this application-level test does not use.
+  // A per-seller subscription is not visible with the app token: it is tested with that seller's
+  // own token (`sendEbaySellerTestNotice`, the admin route's `connectionId`), never from here.
   if (!armedApplicationTopics(gate).includes(topicId)) {
-    return { ok: false, topicId, error: `${topicId} is subscribed per seller; this test covers application-level topics only. No eBay call was made.` }
+    return { ok: false, topicId, error: `${topicId} is subscribed per seller; test it with connectionId (one seller's own token). No eBay call was made.` }
   }
   const { endpoint } = ebayNotificationConfig()
   if (!endpoint) return { ok: false, topicId, error: 'EBAY_NOTIFICATION_ENDPOINT_URL is not set. No eBay call was made.' }
