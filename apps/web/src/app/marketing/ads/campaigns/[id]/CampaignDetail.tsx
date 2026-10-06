@@ -26,6 +26,7 @@ import { NegativeTargetsTab } from './tabs/NegativeTargetsTab'
 import { AdsTab } from './tabs/AdsTab'
 // HX.6b — the same change list the schedule drawer and builder render, scoped to this campaign.
 import { ChangeList } from '../../rules-automation/dayparting/ScheduleActivity'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 
 export interface CampaignDetailData {
   id: string
@@ -150,7 +151,9 @@ function CampaignDetailView({ id }: { id: string }) {
     router.replace(`/marketing/ads/campaigns/${id}${q ? `?${q}` : ''}`, { scroll: false })
   }
 
-  const markets = useMemo(() => (camp?.marketplace ? [camp.marketplace] : ['IT', 'DE', 'FR', 'ES']), [camp])
+  // Ads wave 4c — before the campaign loads, the markets Nexus reads (from the connections), not a fixed four.
+  const { readMarkets } = useAdsMarketplace()
+  const markets = useMemo(() => (camp?.marketplace ? [camp.marketplace] : readMarkets), [camp, readMarkets])
 
   return (
     <div className="h10-cd">

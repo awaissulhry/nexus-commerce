@@ -18,6 +18,8 @@ import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../
 import { atMinimumNote, nextDailyBudget, readBudgetChange, readDailyBudget, readTargetAcosPercent, summariseBudgetChange } from '../_shared/budgetInput'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { orderMarketCodes } from '../_shell/adsMarkets'
+import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
 import { enabledRank } from './_grid/enabledRank'
@@ -1126,7 +1128,9 @@ export function CampaignsGrid() {
   // `colOrder`/`colVisible` below) and, on the AG runtime, a resize — the width map kept here.
   const [colWidths, setColWidths] = useState<Record<string, number>>({})
   // CBN.2d — header controls
-  const [market, setMarket] = useState('all')
+  // AM-28 — the viewer's shared market across the ads pages (each page used to start at "all" and forget the choice).
+  const [market, setMarket] = useSharedAdsMarket()
+  const { readMarkets, markets: adsMarkets, writeAccess, currencyOf: currencyOfMarket } = useAdsMarketplace()
   // AM-16 — the 7 complete days ending yesterday, as the header shows. AM-10 — the graph reads this range too.
   const [dateRange, setDateRange] = useState(() => lastCompleteDays(7))
   // AM-14 — when the performance numbers arrived (per market), and how far today's hourly figures reach (AM-5).
@@ -1570,7 +1574,8 @@ export function CampaignsGrid() {
   const visKeySet = useMemo(() => new Set(colVisible), [colVisible])
   const metricCols = useMemo(() => colOrder.filter((k) => visKeySet.has(k)), [colOrder, visKeySet])
 
-  const markets = useMemo(() => Array.from(new Set(rows.map((r) => r.marketplace).filter(Boolean) as string[])).sort(), [rows])
+  // Ads wave 4c — every market Nexus reads, plus any market a loaded campaign names.
+  const markets = useMemo(() => orderMarketCodes([...readMarkets, ...(rows.map((r) => r.marketplace).filter(Boolean) as string[])], adsMarkets), [rows, readMarkets, adsMarkets])
   // Portfolio filter options — resolve real names from /advertising/portfolios (pfOptions,
   // the same v3-backed source Amazon shows + the bulk-assign picker uses). Fall back to a short
   // id only for a portfolio we have no name for; sort by name so the dropdown reads like Amazon.
@@ -2247,11 +2252,12 @@ export function CampaignsGrid() {
         // wrote a target nobody chose — the editor half of the fabricated 30% removed from the
         // display cell on 2026-08-19. The fallback belongs in the placeholder, and now is.
         if (editPop.kind === 'targetAcos') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} kind="targetAcos" initial={c.targetAcos != null ? (c.targetAcos * 100).toFixed(2) : ''} anchor={editPop.anchor} onApply={(v) => void setCampaignTargetAcos(c, v)} onClose={close} />
-        if (editPop.kind === 'dailyBudget') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} kind="dailyBudget" initial={c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : ''} anchor={editPop.anchor} onApply={(v) => void setCampaignDailyBudget(c, v)} onClose={close} />
+        // CM-32 — the box in the campaign's own currency; 4c — off, with the reason, in a market Nexus only reads.
+        if (editPop.kind === 'dailyBudget') return <ValuePopover key={`${editPop.id}:${editPop.kind}`} kind="dailyBudget" initial={c.dailyBudget != null && c.dailyBudget !== '' ? String(num(c.dailyBudget)) : ''} currency={currencyOfMarket(c.marketplace)} blockedReason={writeAccess(c.marketplace).reason} anchor={editPop.anchor} onApply={(v) => void setCampaignDailyBudget(c, v)} onClose={close} />
         // Was `initial={c.minMaxBid}`, a euro pair derived at fetch time purely to feed this
         // popover and its cell — correct, but a second unit for one field. Both now read the
         // cents the endpoint itself takes, and the derived field is gone.
-        if (editPop.kind === 'minMaxBid') return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="bid" minCents={c.minBidCents ?? null} maxCents={c.maxBidCents ?? null} anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBid(c, mm)} onClose={close} />
+        if (editPop.kind === 'minMaxBid') return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="bid" minCents={c.minBidCents ?? null} maxCents={c.maxBidCents ?? null} currency={currencyOfMarket(c.marketplace)} anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBid(c, mm)} onClose={close} />
         return <RangePopover key={`${editPop.id}:${editPop.kind}`} kind="budget" minCents={c.minBudgetCents ?? null} maxCents={c.maxBudgetCents ?? null} anchor={editPop.anchor} onApply={(mm) => void setCampaignMinMaxBudget(c, mm)} onClose={close} />
       })()}
 

@@ -29,16 +29,11 @@
 
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { AdsMarket } from './MarketplaceContext'
+import { FLAG, MARKET_NAME, type AdsMarket } from './adsMarkets'
 
-export const FLAG: Record<string, string> = {
-  IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱',
-  SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', TR: '🇹🇷', US: '🇺🇸',
-}
-export const MARKET_NAME: Record<string, string> = {
-  IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom',
-  NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', TR: 'Türkiye', US: 'United States',
-}
+// Ads wave 4c — the flag and name tables live in the pure `adsMarkets.ts` (with Canada, Mexico, Japan and Australia,
+// which an Ads account can also have); re-exported here for the files that import them from this control.
+export { FLAG, MARKET_NAME } from './adsMarkets'
 
 export function marketLabel(code: string): string {
   if (code === 'all') return 'All markets'
@@ -134,11 +129,11 @@ export function MarketSelect({
                 disabled={!m.launchable}
                 // A disabled row still explains itself — the operator should
                 // never have to guess why a connected market cannot be picked.
-                title={m.launchable ? m.label || m.code : (m.whyNot ?? `${m.code} is a ${m.mode} connection — campaigns cannot be launched there`)}
+                title={m.launchable ? (m.note && m.whyNot ? m.whyNot : m.label || m.code) : (m.whyNot ?? `${m.code} is a ${m.mode} connection — campaigns cannot be launched there`)}
                 onClick={() => { if (!m.launchable) return; if (multi) toggle(m.code); else { onChange(m.code); close() } }}
               >
                 <span>{multi && <span className="mk-box" aria-hidden>{draft.includes(m.code) ? '☑' : '☐'}</span>} {FLAG[m.code] ?? '🏳️'} {MARKET_NAME[m.code] ?? m.code}</span>
-                <span className="sub">{m.launchable ? m.code : `${m.code} · ${m.whyNotShort ?? m.mode}`}</span>
+                <span className="sub">{m.launchable ? (m.note ? `${m.code} · ${m.note}` : m.code) : `${m.code} · ${m.whyNotShort ?? m.mode}`}</span>
               </button>
             ))}
             {(notYet || markets.length === 0) && <button type="button" disabled>{notYet ?? 'No connected markets'}</button>}

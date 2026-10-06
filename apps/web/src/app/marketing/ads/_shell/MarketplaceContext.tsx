@@ -33,6 +33,12 @@ import {
 } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { launchability } from './launchability'
+import {
+  ALL_MARKETS as ALL, PREFERRED_MARKET, currencyOf, marketsFromWire, pageMarket, readMarketsOf, writeAccessOf,
+  writeMarketsOf, type AdsMarket, type WireConnection, type WireMarket,
+} from './adsMarkets'
+
+export type { AdsMarket } from './adsMarkets'
 
 const STORAGE_KEY = 'nexus.ads.marketplace'
 /**
@@ -46,27 +52,9 @@ const STORAGE_KEY = 'nexus.ads.marketplace'
  */
 const SCOPE_STORAGE_KEY = 'nexus.ads.scopeMarket'
 /** Only used to break a tie when nothing is persisted — never to fabricate a market. */
-const PREFERRED = 'IT'
+const PREFERRED = PREFERRED_MARKET
 /** The analytics sentinel. Mirrors `MarketSelect`'s `allowAll` and `marketLabel('all')`. */
-export const ALL_MARKETS = 'all'
-
-export interface AdsMarket {
-  code: string
-  label: string
-  /**
-   * CC-19 — a campaign launched here can reach Amazon: active + production + writes enabled + Amazon's limits known
-   * (`launchability.ts`, the write gate's own four checks). It used to be active + production only.
-   */
-  launchable: boolean
-  mode: string
-  writesEnabled: boolean
-  /** Why this market is not launchable, in a sentence (absent when it is). */
-  whyNot?: string | null
-  /** The same in two or three words, for a menu row. */
-  whyNotShort?: string | null
-  /** active + production: an analytics scope may still read it, whatever the launch checks say. */
-  readable?: boolean
-}
+export const ALL_MARKETS = ALL
 
 interface Ctx {
   /**
@@ -105,6 +93,17 @@ interface Ctx {
   markets: AdsMarket[]
   /** Just the codes that can receive a campaign. */
   launchable: string[]
+  /**
+   * Ads wave 4c (F3) — the markets whose ads data Nexus reads (the Owner's "Read this market's data" switch), from the
+   * connections. Every analytics screen offers these, and nothing else. Empty until `ready`.
+   */
+  readMarkets: string[]
+  /** The markets where Nexus may change ads (the write gate's market checks). Always within `readMarkets`. */
+  writeMarkets: string[]
+  /** Can Nexus change ads in this market, and if not, why (in a sentence). */
+  writeAccess: (code: string | null | undefined) => { canWrite: boolean; reason: string | null }
+  /** CM-32 — the currency Amazon bills this market's account in; null when unknown. */
+  currencyOf: (code: string | null | undefined) => string | null
   /** False until connections AND the persisted choice have resolved. */
   ready: boolean
   error: string | null
@@ -112,13 +111,6 @@ interface Ctx {
 
 const MarketplaceCtx = createContext<Ctx | null>(null)
 
-type RawConn = {
-  marketplace?: string
-  accountLabel?: string | null
-  mode?: string
-  isActive?: boolean
-  writesEnabledAt?: string | null
-}
 
 export function AdsMarketplaceProvider({ children }: { children: ReactNode }) {
   const [markets, setMarkets] = useState<AdsMarket[]>([])
@@ -135,26 +127,22 @@ export function AdsMarketplaceProvider({ children }: { children: ReactNode }) {
     // endpoint 401s silently for them.
     fetch(`${getBackendUrl()}/api/advertising/connections`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((j: { items?: RawConn[] }) => {
+      .then((j: { items?: WireConnection[]; markets?: { markets?: WireMarket[] } }) => {
         if (!alive) return
-        const list: AdsMarket[] = (j.items ?? [])
-          .filter((c) => c.marketplace)
-          .map((c) => {
-            const code = String(c.marketplace).toUpperCase()
-            const mode = c.mode ?? 'sandbox'
-            const writesEnabled = !!c.writesEnabledAt
-            const l = launchability({ code, isActive: !!c.isActive, mode, writesEnabled })
-            return {
-              code, label: c.accountLabel ?? '', mode, writesEnabled,
-              launchable: l.launchable, whyNot: l.whyNot, whyNotShort: l.short,
-              readable: !!c.isActive && mode === 'production',
-            }
-          })
-          // Launchable first, then alphabetical — the operator's real choices
-          // sit at the top of the menu rather than interleaved with sandboxes.
-          .sort((a, b) =>
-            a.launchable === b.launchable ? a.code.localeCompare(b.code) : a.launchable ? -1 : 1,
-          )
+        // Ads wave 4c (F3) — the API's own market list (read / write, from the connections and the write gate's
+        // resolver). Writable first, then reading only, each alphabetical. An older API without `markets` falls back to
+        // the rows: launchable by the gate's four checks, readable when the account is read (the Owner's rule — it was
+        // "active + production", which hid every reading-only account).
+        const list: AdsMarket[] = marketsFromWire(j.markets, j.items ?? [], (c) => {
+          const mode = c.mode ?? 'sandbox'
+          const writesEnabled = !!c.writesEnabledAt
+          const l = launchability({ code: c.code, isActive: !!c.isActive, mode, writesEnabled })
+          return {
+            code: c.code, label: c.accountLabel ?? '', mode, writesEnabled,
+            launchable: l.launchable, whyNot: l.whyNot, whyNotShort: l.short,
+            readable: !!c.isActive,
+          }
+        })
         setMarkets(list)
 
         const ok = list.filter((m) => m.launchable).map((m) => m.code)
@@ -175,8 +163,8 @@ export function AdsMarketplaceProvider({ children }: { children: ReactNode }) {
         // a launch target it would be a fabrication.
         let storedScope: string | null = null
         try { storedScope = window.localStorage.getItem(SCOPE_STORAGE_KEY) } catch { /* private mode */ }
-        // CC-19 — the scope keeps its old test (active + production): reading a market's numbers needs no write access.
-        const readable = list.filter((m) => m.readable).map((m) => m.code)
+        // 4c — the scope offers every market Nexus reads: reading a market's numbers needs no write access.
+        const readable = readMarketsOf(list)
         setScopeMarketState(storedScope === ALL_MARKETS || (storedScope && readable.includes(storedScope)) ? storedScope : ALL_MARKETS)
 
         setReady(true)
@@ -200,14 +188,17 @@ export function AdsMarketplaceProvider({ children }: { children: ReactNode }) {
     try { window.localStorage.setItem(SCOPE_STORAGE_KEY, m) } catch { /* private mode */ }
   }, [])
 
-  const launchable = useMemo(
-    () => markets.filter((m) => m.launchable).map((m) => m.code),
-    [markets],
-  )
+  const launchable = useMemo(() => writeMarketsOf(markets), [markets])
+  const readMarkets = useMemo(() => readMarketsOf(markets), [markets])
+  const writeAccess = useCallback((code: string | null | undefined) => writeAccessOf(markets, code), [markets])
+  const currencyOfMarket = useCallback((code: string | null | undefined) => currencyOf(markets, code), [markets])
 
   const value = useMemo<Ctx>(
-    () => ({ market, setMarket, scopeMarket, setScopeMarket, markets, launchable, ready, error }),
-    [market, setMarket, scopeMarket, setScopeMarket, markets, launchable, ready, error],
+    () => ({
+      market, setMarket, scopeMarket, setScopeMarket, markets, launchable, ready, error,
+      readMarkets, writeMarkets: launchable, writeAccess, currencyOf: currencyOfMarket,
+    }),
+    [market, setMarket, scopeMarket, setScopeMarket, markets, launchable, ready, error, readMarkets, writeAccess, currencyOfMarket],
   )
 
   return <MarketplaceCtx.Provider value={value}>{children}</MarketplaceCtx.Provider>
@@ -222,4 +213,25 @@ export function useAdsMarketplace(): Ctx {
   const ctx = useContext(MarketplaceCtx)
   if (!ctx) throw new Error('useAdsMarketplace must be used inside <AdsMarketplaceProvider>')
   return ctx
+}
+
+/** The same, or null outside the provider — for a shared control that also renders elsewhere. */
+export function useAdsMarketplaceOptional(): Ctx | null {
+  return useContext(MarketplaceCtx)
+}
+
+/**
+ * AM-28 — ONE market choice across the ads pages, remembered per viewer.
+ *
+ * Each page used to start at its own default (`useState('all')`, or Italy) and forget the choice on navigation. This
+ * returns the shared choice (`scopeMarket`, kept by the provider — which the ads layout keeps mounted across pages —
+ * and in this browser's storage), narrowed to what the page can serve: `allowAll: false` pages show one market. `raw`
+ * is the page's `?market=` when it has one: the URL wins, so a link opens on what it says. Setting it moves the shared
+ * choice too.
+ */
+export function useSharedAdsMarket(opts: { allowAll?: boolean; raw?: string | null } = {}): [string, (m: string) => void] {
+  const { scopeMarket, setScopeMarket, readMarkets } = useAdsMarketplace()
+  const allowAll = opts.allowAll ?? true
+  const market = pageMarket(opts.raw ?? null, { read: readMarkets, shared: scopeMarket, allowAll })
+  return [market, setScopeMarket]
 }

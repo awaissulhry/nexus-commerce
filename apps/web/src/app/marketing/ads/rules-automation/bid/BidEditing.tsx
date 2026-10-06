@@ -42,6 +42,7 @@ import { hasBidState } from './bidState'
 import { BID_STAGED_EVENT } from './BidStagedTray'
 import type { BidTargetRow } from './types'
 import { emitAdsChange } from '../_shared/adsBus'
+import { WriteBlockedTip, useWriteBlock } from '../../_shell/WriteBlocked'
 
 const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 
@@ -91,15 +92,18 @@ export function BidSelectionActions({ ids, clear, rows, reload }: {
     const want = new Set(ids)
     return rows.filter((r) => want.has(r.id))
   }, [ids, rows])
+  // Ads wave 4c — a selection that includes a market Nexus only reads cannot be sent: the buttons are off and say why.
+  const blocked = useWriteBlock(selected.map((r) => r.market))
 
   return (
     <>
       <span className="h10-bd4-bar">
         {(['set', 'boost', 'win'] as Mode[]).map((m) => (
-          <Button key={m} variant="tonal" size="xs" onClick={() => setMode(m)}>
+          <Button key={m} variant="tonal" size="xs" onClick={() => setMode(m)} disabled={!!blocked}>
             <Pencil size={12} aria-hidden /> {MODE_LABEL[m]}
           </Button>
         ))}
+        <WriteBlockedTip reason={blocked} />
       </span>
       {mode != null && (
         <BidEditDialog

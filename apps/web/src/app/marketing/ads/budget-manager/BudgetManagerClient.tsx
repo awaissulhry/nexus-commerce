@@ -24,6 +24,8 @@ import { Button, Input, SegmentedControl, Toggle, ToolbarButton } from '@/design
 import { Field } from '@/design-system/components/Field'
 import { Check, Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { orderMarketCodes } from '../_shell/adsMarkets'
+import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridPrefs, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
@@ -317,7 +319,9 @@ export function BudgetManagerClient() {
   const [month, setMonth] = useState(nowMonth())
   const [result, setResult] = useState<Result | null>(null)
   const [loading, setLoading] = useState(true)
-  const [market, setMarket] = useState('all')
+  // AM-28 — the viewer's shared market across the ads pages (each page used to start at "all" and forget the choice).
+  const [market, setMarket] = useSharedAdsMarket()
+  const { readMarkets, markets: adsMarkets } = useAdsMarketplace()
   const [settingsFor, setSettingsFor] = useState<Row | null>(null)
   const [moreFor, setMoreFor] = useState<Row | null>(null)
   const [faqOpen, setFaqOpen] = useState(false)
@@ -376,10 +380,10 @@ export function BudgetManagerClient() {
   const markets = useMemo(() => {
     // Header dropdown offers real country markets only; legacy account-id rows
     // (e.g. a pre-merge profile id) still appear in the "All markets" grid.
-    const set = new Set<string>((result?.rows ?? []).map((r) => r.marketplace).filter((m) => MARKET_NAME[m]))
-    if (set.size === 0) ['IT', 'DE', 'FR', 'ES'].forEach((m) => set.add(m))
-    return [...set].sort()
-  }, [result])
+    // Ads wave 4c — every market Nexus reads (from the connections), plus any market a row names; no fixed four.
+    // In the Owner's order: IT, DE, ES, FR first, then reading-only markets.
+    return orderMarketCodes([...readMarkets, ...(result?.rows ?? []).map((r) => r.marketplace).filter((m) => MARKET_NAME[m])], adsMarkets)
+  }, [result, readMarkets, adsMarkets])
 
   const shownRows = useMemo(() => (result?.rows ?? []).filter((r) => market === 'all' || r.marketplace === market), [result, market])
 

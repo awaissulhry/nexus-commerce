@@ -8,7 +8,7 @@
  *
  * Pure: `CampaignSection` and `RuleBuilder` render it; the tests read it without a DOM.
  */
-import { ALL_MARKETS, MARKETS } from './adsScope'
+import { ALL_MARKETS } from './adsScope'
 import { MARKET_NAME } from '../../_shell/MarketSelect'
 
 /** The fields a pick is judged on — `SchedCampaign`'s own (`adProduct` is 'SP' | 'SB' | 'SD'). */
@@ -32,14 +32,21 @@ const tally = (labels: string[]) => {
 }
 
 /**
- * The builder's market list: All markets plus the four live Amazon Ads markets — `adsScope.MARKETS`, the one list the
- * section's filters already use. The builder used to offer NL/BE/SE/PL (no campaigns there, so a rule saved and never
- * fired) and no UK. A stored market outside the list stays on screen, named as not connected, so the field never
- * reads blank over a value the rule really holds (4c refuses to save it).
+ * The builder's market list: All markets plus the markets where a rule can act — Ads wave 4c: the provider's
+ * `writeMarkets` (from the connections and the write gate's checks), no longer a fixed four. A rule in a market Nexus
+ * only reads is refused at save ("a rule there can never run"), so it is not offered. A stored market outside the list
+ * stays on screen, named for what it is (reading only, or not connected), so the field never reads blank over a value
+ * the rule really holds.
  */
-export function ruleMarketOptions(stored?: string | null): Array<{ value: string; label: string }> {
-  const out = [{ value: ALL_MARKETS, label: 'All markets' }, ...MARKETS.map((m) => ({ value: m as string, label: `${MARKET_NAME[m] ?? m} (${m})` }))]
-  if (stored && !out.some((o) => o.value === stored)) out.push({ value: stored, label: `${MARKET_NAME[stored] ?? stored} (${stored}) — not connected` })
+export function ruleMarketOptions(
+  stored: string | null | undefined,
+  writable: readonly string[],
+  read: readonly string[] = [],
+): Array<{ value: string; label: string }> {
+  const out = [{ value: ALL_MARKETS, label: 'All markets' }, ...writable.map((m) => ({ value: m, label: `${MARKET_NAME[m] ?? m} (${m})` }))]
+  if (stored && !out.some((o) => o.value === stored)) {
+    out.push({ value: stored, label: `${MARKET_NAME[stored] ?? stored} (${stored}) — ${read.includes(stored) ? 'reading only' : 'not connected'}` })
+  }
   return out
 }
 

@@ -52,6 +52,9 @@ import { AlertTriangle, Check, Info, Loader2, ShieldAlert, Trash2, X } from 'luc
 import { getBackendUrl } from '@/lib/backend-url'
 import type { NegSlotProps, NegationRow } from './slot-contract'
 import { emitAdsChange } from '../_shared/adsBus'
+import { useAdsMarketplaceOptional } from '../../_shell/MarketplaceContext'
+import { writeBlockFor } from '../../_shell/adsMarkets'
+import { WriteBlockedTip } from '../../_shell/WriteBlocked'
 
 type Delivery = 'not_applicable' | 'enqueued' | 'refused' | 'failed'
 type OutcomeKind = 'retired' | 'removed_local' | 'skipped' | 'refused' | 'failed'
@@ -172,6 +175,8 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
     return () => { alive = false }
   }, [open, retireId, retireTerm, scope.market, scope.line, scope.portfolio, scope.campaign, scope.adGroup])
 
+  // Ads wave 4c — the markets list, read before the early return (a hook); used for the write block below.
+  const adsCtx = useAdsMarketplaceOptional()
   if (!open) return null
 
   const single = ctx && retireId ? ctx.negations.find((n) => n.id === retireId) ?? null : null
@@ -187,9 +192,11 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
   const targets = single ? [single] : bulkSet
   const rowClass = single ? classOf(single) : null
   const writeCount = targets.length
+  // A removal that touches a market Nexus only reads is not sent: Archive is off and says why.
+  const blocked = writeBlockFor(adsCtx?.markets ?? [], targets.map((t) => t.market))
 
   const submit = async () => {
-    if (busy || targets.length === 0) return
+    if (busy || targets.length === 0 || blocked) return
     setBusy(true); setErr(null)
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/negatives/retire`, {
@@ -365,7 +372,8 @@ export function NegRemoval({ scope, push, reload }: NegSlotProps) {
 
                 <div className="h10-ngr-acts">
          <Button onClick={close} disabled={busy}>Keep {writeCount === 1 ? 'it' : 'them'}</Button>
-                  <Button variant="danger" onClick={submit} disabled={busy || writeCount === 0}>
+                  <WriteBlockedTip reason={blocked} />
+                  <Button variant="danger" onClick={submit} disabled={busy || writeCount === 0 || !!blocked}>
                     {busy ? <><Loader2 size={13} className="spin" /> Removing…</> : <><Trash2 size={13} /> {rowClass === 'local-only' ? 'Remove our record' : `Archive ${writeCount === 1 ? 'it' : `${num(writeCount)} negations`}`}</>}
                   </Button>
                 </div>

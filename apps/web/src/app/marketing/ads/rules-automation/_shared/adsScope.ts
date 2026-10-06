@@ -56,9 +56,12 @@
  * not already have — which is the whole of "extraction preserves behaviour".
  */
 
-/** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and cannot be a scope. */
-export const MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
-export type Market = (typeof MARKETS)[number]
+/**
+ * Ads wave 4c (F3) — there is no market list here any more. A page passes the markets it can serve (the provider's
+ * `readMarkets`, from the connections) in its policy; without one, any Amazon marketplace code is taken as a market and
+ * the server, which checks the connections, answers for it.
+ */
+import { PREFERRED_MARKET, isAmazonMarketCode } from '../../_shell/adsMarkets'
 
 /**
  * 🔴 The market sentinel, and the only place in the section this string is a legal value.
@@ -80,12 +83,14 @@ export interface MarketPolicy {
   allowAll: boolean
   /** Must itself satisfy `allowAll`. A page passing `{allowAll:false, fallback:'all'}` is a bug. */
   fallback: string
+  /** The markets this page can serve (`readMarkets`). Absent: any Amazon marketplace code. */
+  markets?: readonly string[]
 }
 
 /** Seven of the nine pages. An account-wide view is a legitimate answer here. */
 export const MARKET_ANY: MarketPolicy = { allowAll: true, fallback: ALL_MARKETS }
 /** Keyword Tracker and Share of Voice. A market must exist before the page has a subject. */
-export const marketOne = (fallback: string = 'IT'): MarketPolicy => ({ allowAll: false, fallback })
+export const marketOne = (fallback: string = PREFERRED_MARKET): MarketPolicy => ({ allowAll: false, fallback })
 
 export interface SortPolicy {
   /** The only keys `?sort=` may hold. Anything else falls back to `key`. */
@@ -155,7 +160,8 @@ export function parseAdsScope(params: URLSearchParams, policy: AdsScopePolicy): 
   const rawMarket = params.get('market')
   const marketOk =
     rawMarket != null
-    && ((policy.market.allowAll && rawMarket === ALL_MARKETS) || (MARKETS as readonly string[]).includes(rawMarket))
+    && ((policy.market.allowAll && rawMarket === ALL_MARKETS)
+      || (policy.market.markets ? policy.market.markets.includes(rawMarket) : isAmazonMarketCode(rawMarket)))
   const market = marketOk ? rawMarket! : policy.market.fallback
 
   const campaign = grain(params.get('campaign'))

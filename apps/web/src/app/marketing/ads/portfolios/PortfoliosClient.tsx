@@ -11,6 +11,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { RefreshCw, Plus, Pencil, Archive, Wallet, Search, X } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
+import { WriteBlockedTip } from '../_shell/WriteBlocked'
+import { orderMarketCodes, preferredMarket } from '../_shell/adsMarkets'
 import { Button } from '@/design-system/primitives/Button'
 import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
@@ -55,8 +58,13 @@ const ago = (iso: string | null) => {
 }
 
 function PortfoliosInner() {
-  const [market, setMarket] = useState('all')
-  const [markets, setMarkets] = useState<string[]>([])
+  // AM-28 — the viewer's shared market (each visit used to start at "all" and forget the choice).
+  const [market, setMarket] = useSharedAdsMarket()
+  // Ads wave 4c — the markets Nexus reads, plus any market this account's campaigns name; writes only where allowed.
+  const { readMarkets, writeMarkets, writeAccess, markets: adsMarkets } = useAdsMarketplace()
+  const [dataMarkets, setMarkets] = useState<string[]>([])
+  // The Owner's order: IT, DE, ES, FR first, then reading-only markets.
+  const markets = orderMarketCodes([...readMarkets, ...dataMarkets], adsMarkets)
   const [rows, setRows] = useState<PortfolioRow[]>([])
   const [lastSynced, setLastSynced] = useState<string | null>(null)
   // AM-6 — the window the money covers: the header's picker, opening on the Ad Manager's default.
@@ -70,7 +78,7 @@ function PortfoliosInner() {
   const [q, setQ] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newMarket, setNewMarket] = useState('IT')
+  const [newMarket, setNewMarket] = useState('')
   const [creating, setCreating] = useState(false)
   const [renameRow, setRenameRow] = useState<PortfolioRow | null>(null)
   const [renameName, setRenameName] = useState('')
@@ -89,10 +97,20 @@ function PortfoliosInner() {
     const base = getBackendUrl()
     fetch(`${base}/api/advertising/campaigns?limit=500`, { cache: 'no-store' }).then((r) => r.json()).then((d) => {
       const ms = Array.from(new Set((d.items ?? []).map((c: { marketplace?: string }) => c.marketplace).filter(Boolean))) as string[]
-      setMarkets(ms.sort()); if (ms.length && !ms.includes('IT')) setNewMarket(ms[0])
+      setMarkets(ms.sort())
     }).catch(() => {})
     fetch(`${base}/api/advertising/summary`, { cache: 'no-store' }).then((r) => r.json()).then((s) => setMode(s?.mode ?? 'sandbox')).catch(() => {})
   }, [])
+
+  // A portfolio is created in a market where Nexus may change ads. Default: the preferred one of those.
+  useEffect(() => {
+    if (!newMarket || !writeMarkets.includes(newMarket)) setNewMarket(writeMarkets.length ? preferredMarket(writeMarkets) : '')
+  }, [writeMarkets, newMarket])
+  /** Ads wave 4c — a portfolio in a market Nexus only reads cannot be changed from here; the reason, else null. */
+  const rowWriteBlock = (r: PortfolioRow): string | null => {
+    for (const m of r.marketplaces) { const a = writeAccess(m); if (!a.canWrite) return a.reason }
+    return null
+  }
 
   const loadOverview = useCallback(async (mk: string): Promise<number> => {
     const qs = new URLSearchParams()
@@ -288,11 +306,13 @@ function PortfoliosInner() {
               key: 'actions', label: 'Actions', align: 'right', width: 120,
               render: (r) => (
                 <span className="pf-actrow">
-                  <ToolbarButton variant="boxed" icon={<Wallet size={13} />} label="Set budget" disabled={rowBusy === r.portfolioId} onClick={() => openBudget(r)} />
-                  <ToolbarButton variant="boxed" icon={<Pencil size={13} />} label="Rename" disabled={rowBusy === r.portfolioId} onClick={() => { setRenameRow(r); setRenameName(r.name) }} />
+                  <ToolbarButton variant="boxed" icon={<Wallet size={13} />} label="Set budget" description={rowWriteBlock(r) ?? undefined} disabled={rowBusy === r.portfolioId || !!rowWriteBlock(r)} onClick={() => openBudget(r)} />
+                  <ToolbarButton variant="boxed" icon={<Pencil size={13} />} label="Rename" description={rowWriteBlock(r) ?? undefined} disabled={rowBusy === r.portfolioId || !!rowWriteBlock(r)} onClick={() => { setRenameRow(r); setRenameName(r.name) }} />
                   {(r.state ?? '').toUpperCase() !== 'ARCHIVED' && (
-                    <ToolbarButton variant="boxed" icon={<Archive size={13} />} label="Archive" disabled={rowBusy === r.portfolioId} onClick={() => setArchiveRow(r)} tooltipAlign="end" />
+                    <ToolbarButton variant="boxed" icon={<Archive size={13} />} label="Archive" description={rowWriteBlock(r) ?? undefined} disabled={rowBusy === r.portfolioId || !!rowWriteBlock(r)} onClick={() => setArchiveRow(r)} tooltipAlign="end" />
                   )}
+                  {/* A disabled button takes no focus: the reason is also on a focusable info icon. */}
+                  <WriteBlockedTip reason={rowWriteBlock(r)} />
                 </span>
               ),
             },
@@ -306,14 +326,19 @@ function PortfoliosInner() {
         title="Create portfolio"
         footer={<>
           <Button variant="secondary" size="sm" onClick={() => setCreateOpen(false)}>Cancel</Button>
-          <Button variant="primary" size="sm" disabled={creating || !newName.trim()} onClick={() => void create()}>{creating ? 'Creating…' : 'Create'}</Button>
+          <Button variant="primary" size="sm" disabled={creating || !newName.trim() || !writeAccess(newMarket).canWrite || !newMarket} onClick={() => void create()}>{creating ? 'Creating…' : 'Create'}</Button>
         </>}
       >
         <div className="pf-form">
           <label className="pf-fld"><span>Name</span><Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="e.g. Brand — Core" aria-label="Portfolio name" /></label>
           <label className="pf-fld"><span>Marketplace</span>
+            {/* Ads wave 4c — a portfolio is created on Amazon, so only markets where Nexus may change ads are offered;
+                a market Nexus only reads is listed, off, with the reason. */}
             <Select value={newMarket} onChange={(e) => setNewMarket(e.target.value)} aria-label="Marketplace">
-              {(markets.length ? markets : ['IT', 'DE', 'FR', 'ES']).map((m) => <option key={m} value={m}>{m}</option>)}
+              {markets.map((m) => {
+                const a = writeAccess(m)
+                return <option key={m} value={m} disabled={!a.canWrite} title={a.reason ?? undefined}>{a.canWrite ? m : `${m} — reading only`}</option>
+              })}
             </Select>
           </label>
           <div className={`pf-mode pf-mode--${mode === 'sandbox' ? 'sandbox' : 'live'}`}>

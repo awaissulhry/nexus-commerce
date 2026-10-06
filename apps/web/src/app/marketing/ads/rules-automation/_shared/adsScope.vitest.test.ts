@@ -12,9 +12,8 @@
  * `DATE_PRESETS` → `RangePreset` table, including every key with no equivalent.
  */
 import { describe, it, expect } from 'vitest'
-import { ADS_LIMIT_MARKETS } from '@nexus/shared/ads-market-limits'
 import {
-  ALL_MARKETS, MARKETS, MARKET_ANY, marketOne,
+  ALL_MARKETS, MARKET_ANY, marketOne,
   PICKER_TO_SERVER, adsScopeKeys, adsScopeNeedsNormalising, datePatchFromDays, datePatchFromPicker,
   grainAvailability, parseAdsScope, patchAdsScope, resolveScopeReach, writeAdsScope, ymdLocal,
   type AdsScopePolicy, type ScopeOptions,
@@ -47,7 +46,7 @@ describe('market — the hook owns the mechanism, the page owns the policy', () 
   })
 
   it('accepts the four production markets under either policy', () => {
-    for (const m of MARKETS) {
+    for (const m of ['IT', 'DE', 'ES', 'FR']) {
       expect(at(`market=${m}`).market).toBe(m)
       expect(at(`market=${m}`, ONE).market).toBe(m)
     }
@@ -65,12 +64,20 @@ describe('market — the hook owns the mechanism, the page owns the policy', () 
     expect(at(`market=${ALL_MARKETS}`).market).toBe(ALL_MARKETS)
   })
 
-  it('a sandbox marketplace is not a scope', () => {
-    for (const m of ['UK', 'NL', 'PL', 'SE', 'IE']) expect(at(`market=${m}`).market).toBe(ALL_MARKETS)
+  it('🔴 4c — with the page\'s read list, a market Nexus does not read is not a scope', () => {
+    const live: AdsScopePolicy = { market: { ...MARKET_ANY, markets: ['DE', 'ES', 'FR', 'IT'] } }
+    for (const m of ['UK', 'NL', 'PL', 'SE', 'IE']) expect(at(`market=${m}`, live).market).toBe(ALL_MARKETS)
   })
 
-  it('🔴 6b — the screens offer exactly the markets the write gate accepts (a checked Amazon limits row)', () => {
-    expect([...MARKETS].sort()).toEqual([...ADS_LIMIT_MARKETS].sort())
+  it('🔴 4c — a market Nexus READS (UK, reading only) is a scope; IT is unchanged', () => {
+    const withUk: AdsScopePolicy = { market: { ...MARKET_ANY, markets: ['DE', 'ES', 'FR', 'IT', 'UK'] } }
+    expect(at('market=UK', withUk).market).toBe('UK')
+    expect(at('market=IT', withUk).market).toBe('IT')
+  })
+
+  it('without a list (not loaded yet), any Amazon marketplace code is taken and anything else falls back', () => {
+    expect(at('market=UK').market).toBe('UK')
+    expect(at('market=ZZ').market).toBe(ALL_MARKETS)
   })
 })
 
