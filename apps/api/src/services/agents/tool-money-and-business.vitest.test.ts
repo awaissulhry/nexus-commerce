@@ -276,6 +276,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // A12 — the live-write allowlist (no money in it).
   'set-campaign-live-writes': (ids) => ({ campaignId: ids.campaignId, enabled: true }),
   'set-campaign-target-acos': (ids) => ({ campaignIds: [ids.campaignId], targetAcosPct: 25 }),
+  // Ads autonomy W1-2 — the strategy for the seeded campaign's market: its targets, bids and caps are money.
+  'ads-strategy': (ids) => ({ market: 'IT', campaignId: ids.campaignId }),
   // A14/A15 — the eBay ad changes (they need money: refused for a person without it).
   'set-ebay-ad-rates': () => ({ ebayCampaignId: 'none', rates: [{ ebayItemId: '110000000001', ratePct: 5 }] }),
   'promote-ebay-listings': () => ({ ebayCampaignId: 'none', ads: [{ ebayItemId: '110000000001' }] }),
@@ -673,6 +675,11 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       data: { name: `${mark} MONEY campaign`, type: 'SP', marketplace: 'IT', externalCampaignId: `${mark}-CMP`, dailyBudget: '31.41', startDate: new Date() } as never,
     })
     const adGroup = await db.adGroup.create({ data: { campaignId: campaign.id, name: `${mark} ad group`, externalAdGroupId: `${mark}-AG` } })
+    // Ads autonomy W1-2 — the product is advertised in that ad group, and the market and the product have a strategy whose
+    // target, bids and caps are money (ads-strategy hides them from a person without ad-spend money).
+    await db.adProductAd.create({ data: { adGroupId: adGroup.id, productId: product.id, asin: `${mark}-ASIN-1` } })
+    await db.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: `${mark} strategy (IT)`, targetKind: 'ACOS', targetPct: 37, maxBidCents: 8181, monthlySpendCapCents: 727272, maxChangePct: 20, updatedBy: 'user:u-money' } })
+    await db.adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: product.id, label: `${mark} product strategy (IT)`, minBidCents: 1919, harvestMinOrders: 2, harvestMinClicks: 4, harvestMaxAcosPct: 63, harvestWindowDays: 60, updatedBy: 'user:u-money' } })
     const target = await db.adTarget.create({ data: { adGroupId: adGroup.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `${mark} jacket`, bidCents: 4747 } })
     const yesterday = new Date(Date.now() - 86_400_000)
     await db.amazonAdsDailyPerformance.create({

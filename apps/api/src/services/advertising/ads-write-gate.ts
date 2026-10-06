@@ -646,8 +646,10 @@ export async function entityBoundsDenial(args: {
  * LINE ?? PORTFOLIO ?? MARKET. Cheapest-first like the spend ceilings: one indexed read for the
  * candidate rows; the LINE parents are resolved only if any LINE rows matched at all. Each side
  * resolves independently — a line ceiling and a market floor compose.
+ *
+ * Exported for the ads strategy read (ads-strategy/read.ts), which shows the bounds the gate holds a campaign to.
  */
-async function resolveBidPolicy(
+export async function resolveBidPolicy(
   campaignId: string,
   portfolioId: string | null,
   marketplace: string | null,
