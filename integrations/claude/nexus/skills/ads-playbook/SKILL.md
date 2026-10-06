@@ -21,7 +21,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - **Build only with Nexus's own builder.** A playbook's campaigns are built by `apply-ads-playbook`, through the SP Super Wizard's own launch: never piece by piece with `create-ad-campaign`. A build is born at Amazon's 2-cent floor (its planned bids remembered), off the live-write allowlist and without placements: it serves next to nothing until START.
 - **START is real spend.** It always needs the approver's authenticator code: in Nexus, or, where the business set it to confirm in Claude, the person who asked confirms it with `confirm-change`. Never guess, store or reuse a code. A campaign a playbook built, or one its STOP holds, gets its bids back only through START: `restore-campaign` refuses it.
 - **A stop is low bids.** STOP lowers bids to the floor and takes the campaigns off the allowlist. Never pause or archive as a tactic. The undo of a build archives its campaigns for good (`archive-ads`): to stop spending, STOP instead.
-- **Winning search terms stay where they win.** A term that converts where it runs is never negated there and never moved. When it declines: its bid first, then its campaign's placements, and only then a campaign of its own.
+- **Winning search terms stay where they win.** A term that converts where it runs is never negated there and never moved. When it declines: its bid first, then its campaign's placements, and only then a campaign of its own. Once that campaign proves itself, the term's old exact keyword is lowered to the floor bid by a proposal (`bulk-ad-bid-change`, a person approves it), never negated.
 - **Isolation is per product only.** The negatives that stop campaigns bidding against each other go only inside one product's own campaigns. Two products may buy the same keyword: never negate or skip a term because another product buys it.
 - **The Owner's own hourly bid plans are his.** The playbook's own hourly plans switch on and off only with its START, STOP and phase switch. An hourly plan the playbook did not make is never touched; a campaign it holds is reported, never changed.
 - **Never change an Amazon FBA quantity.** Stock problems lower bids.
@@ -100,7 +100,7 @@ The phase is the strategy's goal: LAUNCH, GROW, PROFIT, CLEAR_STOCK or DEFEND.
 2. The next step, in the Owner's order:
    - `bid`: auto-bid already moves its bid toward the target. Nothing to ask.
    - `placement`: `set-placement-multipliers` on its campaign. It is a campaign setting: the entry says how many other terms it touches.
-   - `ownCampaign`: `apply-ads-playbook` `op: "hero"`, `term` — one campaign with one exact keyword, born like a build (at the floor, off the allowlist). The term keeps running where it runs now. START with `slots: ["hero:<term>"]` makes it spend (the code). One per term, product and market.
+   - `ownCampaign`: `apply-ads-playbook` `op: "hero"`, `term` — one campaign with one exact keyword, born like a build (at the floor, off the allowlist). The term keeps running where it runs now. Once that campaign proves itself, the term's old exact keyword is lowered to the floor bid by a proposal (`bulk-ad-bid-change`, a person approves it), never negated. START with `slots: ["hero:<term>"]` makes it spend (the code). One per term, product and market.
    - `none`: an hourly plan or a performance slot holds its campaign: report it only.
 
 ## 9. After
