@@ -35,6 +35,7 @@ import { pillTone } from '../_shared/pillTone'
 import { changedPlacementLanes } from '../_shared/placementLanes'
 import { assignablePortfolios, sharedMarket, type PortfolioOption } from '../_shared/portfolioPicker'
 import { readWrite, reasonText } from '../_shared/adsWrite'
+import { askSendAnyway, confirmed, notSentPastLimits, readNeedsConfirmation } from '../_shared/sendAnyway'
 import { matchesBidAutomation, matchesRuleFilter, ruleReach, type AccountWideRule, type RuleReach } from './_grid/campaignRules'
 import { amazonEditHold } from './_grid/amazonEditHold'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
@@ -217,8 +218,16 @@ type WriteOutcome = 'applied' | 'queued' | 'refused' | 'error'
 // CM-26 — the one reader (_shared/adsWrite.ts): `error` is the server's own reason, in words.
 async function patchWrite(url: string, body: Record<string, unknown>): Promise<{ outcome: WriteOutcome; error?: string }> {
   try {
-    const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    const w = readWrite(r.status, await r.json().catch(() => ({})))
+    let r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    let answer = await r.json().catch(() => ({}))
+    // 3A — past his own limits: "Send anyway" (SendAnywayHost), then the same edit again with his confirmation.
+    const waits = readNeedsConfirmation(r.status, answer)
+    if (waits) {
+      if (!(await askSendAnyway(waits))) return { outcome: 'refused', error: notSentPastLimits(waits) }
+      r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(confirmed(body)) })
+      answer = await r.json().catch(() => ({}))
+    }
+    const w = readWrite(r.status, answer)
     return w.ok ? { outcome: w.outcome } : { outcome: w.outcome, error: w.reason ?? undefined }
   } catch (e) { return { outcome: 'error', error: (e as Error).message } }
 }

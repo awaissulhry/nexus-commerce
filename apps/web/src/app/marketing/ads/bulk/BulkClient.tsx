@@ -65,6 +65,8 @@ interface JobRow {
 }
 
 type Stage = 'idle' | 'uploading' | 'validating' | 'reviewing' | 'applying' | 'done'
+/** 3A — a row the apply left waiting for his "Send anyway" (past his own limits; nothing written). */
+interface WaitingRow { rowIndex: number; label: string; message: string }
 
 const api = (p: string) => `${getBackendUrl()}/api/advertising${p}`
 const eur = (n: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(n)
@@ -94,7 +96,8 @@ function BulkInner() {
   const [preview, setPreview] = useState<Preview | null>(null)
   const [applyLive, setApplyLive] = useState(false)
   const [conflictMode, setConflictMode] = useState<'skip' | 'mine'>('skip')
-  const [applyResult, setApplyResult] = useState<{ applied: number; skipped: number; failed: number } | null>(null)
+  // 3A — `needsConfirmationRows`: rows past his own limits, nothing written; the review step lists them.
+  const [applyResult, setApplyResult] = useState<{ applied: number; skipped: number; failed: number; needsConfirmationRows?: WaitingRow[] } | null>(null)
   const [busy, setBusy] = useState(false)
 
   // ── history ──
@@ -215,10 +218,38 @@ function BulkInner() {
         return
       }
       setApplyResult(body); setStage('done')
-      toast(`${body.applied} row${body.applied === 1 ? '' : 's'} applied — ${body.skipped} skipped · ${body.failed} failed`, body.failed ? 'warning' : 'success')
+      toast(`${body.applied} row${body.applied === 1 ? '' : 's'} applied — ${body.skipped} skipped · ${body.failed} failed${body.needsConfirmation ? ` · ${body.needsConfirmation} waiting for "Send anyway"` : ''}`, body.failed || body.needsConfirmation ? 'warning' : 'success')
       void loadJobs()
     } finally { setBusy(false) }
   }, [jobId, preview, applyLive, conflictMode, toast, runPreview, loadJobs])
+
+  /**
+   * 3A — "Send anyway for these rows": a fresh preview (the plan moved: the other rows were applied), then only the
+   * waiting rows, each with his confirmation. Every other row is left exactly as it is.
+   */
+  const sendAnywayRows = useCallback(async () => {
+    const rows = applyResult?.needsConfirmationRows ?? []
+    if (!jobId || !rows.length) return
+    setBusy(true)
+    try {
+      const pv = await fetch(api(`/bulk/import/${jobId}/preview?limit=300`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      const plan = await pv.json()
+      if (!pv.ok) { toast(`Could not check the file again — ${plan.message ?? plan.error}`, 'danger'); return }
+      const indexes = rows.map((r) => r.rowIndex)
+      const r = await fetch(api(`/bulk/import/${jobId}/apply`), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planToken: plan.planToken, applyImmediately: applyLive, conflicts: conflictMode, confirmOwnLimitsRows: indexes, onlyRows: indexes }),
+      })
+      const body = await r.json()
+      if (!r.ok) { toast(`Not sent — ${body.message ?? body.error}`, 'danger'); return }
+      setApplyResult((prev) => prev && ({
+        applied: prev.applied + (body.applied ?? 0), skipped: prev.skipped + (body.skipped ?? 0), failed: prev.failed + (body.failed ?? 0),
+        needsConfirmationRows: body.needsConfirmationRows ?? [],
+      }))
+      toast(`${body.applied} row${body.applied === 1 ? '' : 's'} sent past your own limits${body.failed ? ` · ${body.failed} failed` : ''}`, body.failed ? 'warning' : 'success')
+      void loadJobs()
+    } finally { setBusy(false) }
+  }, [jobId, applyResult, applyLive, conflictMode, toast, loadJobs])
 
   const doRollback = useCallback(async (id: string) => {
     setBusy(true)
@@ -465,6 +496,18 @@ function BulkInner() {
                     ? 'Changes were pushed to Amazon.'
                     : 'Changes are queued behind the write gate. They reach Amazon when the gate allows it.'}
                 </p>
+                {/* 3A — his own limits warn, never block: these rows wait for his "Send anyway". */}
+                {(applyResult.needsConfirmationRows?.length ?? 0) > 0 && (
+                  <Banner
+                    tone="warning"
+                    title={`${applyResult.needsConfirmationRows!.length} row${applyResult.needsConfirmationRows!.length === 1 ? '' : 's'} not sent — past your own limits`}
+                    action={<Button variant="primary" onClick={() => void sendAnywayRows()} disabled={busy}>Send anyway for these rows</Button>}
+                  >
+                    <ul className="bulk-warnlist">
+                      {applyResult.needsConfirmationRows!.map((w) => <li key={w.rowIndex}>Row {w.rowIndex} · {w.label}: {w.message}</li>)}
+                    </ul>
+                  </Banner>
+                )}
                 <div className="bulk-row">
                   <Button variant="secondary" onClick={() => void downloadAnnotated(jobId, fileName)}>
                     <Download size={14} />Download reviewed file

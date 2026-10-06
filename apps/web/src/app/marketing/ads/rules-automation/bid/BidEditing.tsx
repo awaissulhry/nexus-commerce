@@ -43,6 +43,7 @@ import { BID_STAGED_EVENT } from './BidStagedTray'
 import type { BidTargetRow } from './types'
 import { emitAdsChange } from '../_shared/adsBus'
 import { WriteBlockedTip, useWriteBlock } from '../../_shell/WriteBlocked'
+import { askSendAnyway, type OwnLimitLine } from '../../_shared/sendAnyway'
 
 const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 
@@ -127,7 +128,7 @@ function BidEditDialog({ mode, rows, onClose, onDone }: {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [result, setResult] = useState<{ applied: number; skipped: number; failed: number; clamps: number } | null>(null)
+  const [result, setResult] = useState<{ applied: number; skipped: number; failed: number; clamps: number; waiting: number } | null>(null)
 
   const num = Number(value)
   const valid = Number.isFinite(num) && (mode === 'set' ? num >= 0.02 && num <= 20 : mode === 'boost' ? num >= -90 && num <= 400 : num >= 10 && num <= 300)
@@ -137,17 +138,31 @@ function BidEditDialog({ mode, rows, onClose, onDone }: {
     if (!plan || plan.entries.length === 0 || busy) return
     setBusy(true); setErr(null)
     try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/bulk-bid`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entries: plan.entries.map((e) => ({ adTargetId: e.adTargetId, bidCents: e.bidCents })),
-          reason: note.trim() ? `BID.S4 ${MODE_LABEL[mode]} — ${note.trim()}` : `BID.S4 ${MODE_LABEL[mode]} from the Bid page`,
-        }),
-      })
-      const j = await r.json()
-      if (!r.ok || j?.ok === false) throw new Error(j?.error ?? `(${r.status})`)
-      setResult({ applied: j.applied ?? 0, skipped: j.skipped ?? 0, failed: j.failed ?? 0, clamps: Array.isArray(j.cpcClamps) ? j.cpcClamps.length : 0 })
+      const reason = note.trim() ? `BID.S4 ${MODE_LABEL[mode]} — ${note.trim()}` : `BID.S4 ${MODE_LABEL[mode]} from the Bid page`
+      const post = async (entries: Array<{ adTargetId: string; bidCents: number }>, confirmOwnLimits = false) => {
+        const r = await fetch(`${getBackendUrl()}/api/advertising/ad-targets/bulk-bid`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries, reason, ...(confirmOwnLimits ? { confirmOwnLimits: true } : {}) }),
+        })
+        const j = await r.json()
+        if (!r.ok || j?.ok === false) throw new Error(j?.error ?? `(${r.status})`)
+        return j as { applied?: number; skipped?: number; failed?: number; cpcClamps?: unknown[]; needsConfirmation?: Array<{ adTargetId: string; limits: OwnLimitLine[] }> }
+      }
+      const entries = plan.entries.map((e) => ({ adTargetId: e.adTargetId, bidCents: e.bidCents }))
+      const j = await post(entries)
+      let applied = j.applied ?? 0, skipped = j.skipped ?? 0, failed = j.failed ?? 0, waiting = 0
+      // 3A — rows past his own limits wait for "Send anyway"; with it, only those rows are sent again.
+      const waits = Array.isArray(j.needsConfirmation) ? j.needsConfirmation : []
+      if (waits.length) {
+        failed -= waits.filter((w) => !w.limits.some((l) => l.limit === 'cpc_ceiling')).length
+        if (await askSendAnyway(waits.flatMap((w) => w.limits), waits.length)) {
+          const ids = new Set(waits.map((w) => w.adTargetId))
+          const again = await post(entries.filter((e) => ids.has(e.adTargetId)), true)
+          applied += again.applied ?? 0; skipped += again.skipped ?? 0; failed += again.failed ?? 0
+        } else waiting = waits.length
+      }
+      setResult({ applied, skipped, failed: Math.max(0, failed), clamps: 0, waiting })
       window.dispatchEvent(new Event(BID_STAGED_EVENT))
       // RT.1 — staged bid writes: the tray is same-tab, this reaches every other tab.
       emitAdsChange('ads.bid.changed')
@@ -170,6 +185,7 @@ function BidEditDialog({ mode, rows, onClose, onDone }: {
               {result.skipped > 0 && <> {result.skipped} skipped (no change or refused by the gate).</>}
               {result.failed > 0 && <> <b>{result.failed} failed.</b></>}
               {result.clamps > 0 && <> {result.clamps} clamped to the CPC ceiling before staging.</>}
+              {result.waiting > 0 && <> {result.waiting} not sent: they go past your own limits and you chose not to send them anyway.</>}
             </p>
             <div className="h10-bd4-row"><Button variant="primary" size="sm" onClick={onDone}>Done</Button></div>
           </>
