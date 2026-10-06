@@ -190,22 +190,7 @@ export async function readStockAdGroups(q: { adGroupIds?: readonly string[]; cam
   ]
 
   const productIds = [...new Set(groups.flatMap((g) => g.productAds.map((a) => a.productId).filter((id): id is string => !!id)))]
-  const [readiness, paces] = await Promise.all([productReadinessReader(productIds), latestPaces(productIds)])
-  const products = new Map<string, Omit<StockProduct, 'hasBuyBox'> & { known: boolean }>()
-  for (const id of productIds) {
-    const r = readiness(id, null)
-    const pace = paces.get(id) ?? null
-    const lowBelowDays = q.lowBelowDays ?? pace?.leadTimeDays ?? null
-    const restoreAtDays = lowBelowDays == null ? null : lowBelowDays + (q.lowBelowDays != null ? 0 : pace?.safetyDays ?? 0)
-    const units = r.inStock ? r.availableQty : 0
-    const pooled = r.pooled === true
-    const judged = productStockRisk({ units, unitsPerDay: pace?.unitsPerDay ?? null, lowBelowDays, restoreAtDays, pooled })
-    products.set(id, {
-      known: r.sku != null, productId: id, sku: r.sku, name: r.name, units, warehouseUnits: r.warehouseQty ?? 0, amazonFbaUnits: r.amazonFbaQty ?? 0, pooled,
-      unitsPerDay: pace?.unitsPerDay ?? null, paceAsOf: pace?.asOf ?? null, leadTimeDays: pace?.leadTimeDays ?? null, safetyDays: pace?.safetyDays ?? null,
-      inboundUnits: pace?.inboundUnits ?? null, daysOfCover: judged.daysOfCover, lowBelowDays, restoreAtDays, risk: judged.risk, recovered: judged.recovered,
-    })
-  }
+  const { readiness, products } = await judgeProducts(productIds, q.lowBelowDays ?? null)
 
   const adGroups = groups.map((g): StockAdGroup => {
     const ids = [...new Set(g.productAds.map((a) => a.productId).filter((id): id is string => !!id))].sort()
@@ -231,6 +216,41 @@ export async function readStockAdGroups(q: { adGroupIds?: readonly string[]; cam
     }
   })
   return { adGroups, missing, capped }
+}
+
+type JudgedProduct = Omit<StockProduct, 'hasBuyBox'> & { known: boolean }
+
+/** Each product's units, pace, lines and verdict, as every read here judges them (`lowBelowDays`: a read's own line). */
+async function judgeProducts(productIds: string[], lowBelow: number | null): Promise<{ readiness: Awaited<ReturnType<typeof productReadinessReader>>; products: Map<string, JudgedProduct> }> {
+  const [readiness, paces] = await Promise.all([productReadinessReader(productIds), latestPaces(productIds)])
+  const products = new Map<string, JudgedProduct>()
+  for (const id of productIds) {
+    const r = readiness(id, null)
+    const pace = paces.get(id) ?? null
+    const lowBelowDays = lowBelow ?? pace?.leadTimeDays ?? null
+    const restoreAtDays = lowBelowDays == null ? null : lowBelowDays + (lowBelow != null ? 0 : pace?.safetyDays ?? 0)
+    const units = r.inStock ? r.availableQty : 0
+    const pooled = r.pooled === true
+    const judged = productStockRisk({ units, unitsPerDay: pace?.unitsPerDay ?? null, lowBelowDays, restoreAtDays, pooled })
+    products.set(id, {
+      known: r.sku != null, productId: id, sku: r.sku, name: r.name, units, warehouseUnits: r.warehouseQty ?? 0, amazonFbaUnits: r.amazonFbaQty ?? 0, pooled,
+      unitsPerDay: pace?.unitsPerDay ?? null, paceAsOf: pace?.asOf ?? null, leadTimeDays: pace?.leadTimeDays ?? null, safetyDays: pace?.safetyDays ?? null,
+      inboundUnits: pace?.inboundUnits ?? null, daysOfCover: judged.daysOfCover, lowBelowDays, restoreAtDays, risk: judged.risk, recovered: judged.recovered,
+    })
+  }
+  return { readiness, products }
+}
+
+/**
+ * PB-9 — products' own stock, judged as the ad-group read judges each (the playbook's phase check reads a product
+ * family's sellable units and cover here). Products Nexus does not know are left out. Read only; Amazon's FBA number is
+ * only ever read.
+ */
+export async function readProductStock(productIds: readonly string[]): Promise<Map<string, Omit<StockProduct, 'hasBuyBox'>>> {
+  const ids = [...new Set(productIds)]
+  if (!ids.length) return new Map()
+  const { products } = await judgeProducts(ids, null)
+  return new Map([...products].filter(([, p]) => p.known).map(([id, { known: _known, ...p }]) => [id, p]))
 }
 
 async function missingCampaigns(ids: string[]): Promise<string[]> {

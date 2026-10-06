@@ -192,6 +192,15 @@ describe('rows and enrollment', () => {
       // The captured template: nobody follows it.
       const captured = await db().adsPlaybookTemplate.findFirstOrThrow({ where: { name: 'Test captured' } })
       expect((await plan({ kind: 'template', templateId: captured.id, status: 'DRAFT' })).direction).toBe('same')
+      // PB-9 — the product's phase recipes, by what a switch would write: a higher target raises, a lower one lowers.
+      const row = await db().adsPlaybook.findFirstOrThrow({ where: { market: 'IT', level: 'PRODUCT', scopeId: ids.parent } })
+      const recipes = (row.phaseRecipes ?? {}) as Record<string, Record<string, number>>
+      const target = recipes.GROW?.targetAcosPct ?? 30
+      expect(dirOf(await plan(product(ids.parent, { values: { phaseRecipes: { ...recipes, GROW: { ...recipes.GROW, targetAcosPct: target + 5 } } } })), 'phaseRecipes')).toBe('raise')
+      expect(dirOf(await plan(product(ids.parent, { values: { phaseRecipes: { ...recipes, GROW: { ...recipes.GROW, targetAcosPct: target - 5 } } } })), 'phaseRecipes')).toBe('lower')
+      // And the template's phase table: Claude allowed more alone in a phase raises.
+      const phases = { ...templateDoc().phases, LAUNCH: { ...templateDoc().phases.LAUNCH!, claude: {} } }
+      expect((await plan({ kind: 'template', templateId: ids.template, sections: { phases } })).direction).toBe('raise')
     })
   })
 

@@ -82,7 +82,9 @@ export const MAX_KIT_ITEMS = 250
  *   liveWrites   AA-W2-9 — a campaign on or off the live-write allowlist (a Nexus switch: it moves no bid or budget
  *                itself; every write it lets through is judged on its own).
  *   automation   AA-W2-11 — an ads rule saved, or an automation turned up or tuned, for this scope: Nexus only, it moves
- *                no value itself (the automation acts as itself, inside its own caps).
+ *                no value itself (the automation acts as itself, inside its own caps). PB-9 — `raises`: a Nexus-side
+ *                change that adds spend by itself (a looser strategy number a phase switch writes, an hourly plan it
+ *                switches on): counted as a raise (Claude's daily raises, the month), with no amount.
  */
 export type KitChange =
   | { field: 'bid'; fromCents: number | null; toCents: number; forced?: boolean }
@@ -92,7 +94,7 @@ export type KitChange =
   | { field: 'status'; from: string | null; to: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudgetCents?: number }
   | { field: 'negative'; term: string; matchType?: string | null }
   | { field: 'liveWrites'; from: boolean; to: boolean }
-  | { field: 'automation' }
+  | { field: 'automation'; raises?: boolean }
 
 export interface KitItem {
   entity: AdEntityRef
@@ -147,8 +149,9 @@ export function measure(change: KitChange): Measured {
     case 'negative':
       return { ...none, direction: 'cut' }
     case 'liveWrites':
-    case 'automation':
       return { ...none, direction: 'same' }
+    case 'automation':
+      return { ...none, direction: change.raises ? 'raise' : 'same' }
   }
 }
 
@@ -608,6 +611,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   pause: 'pausing ads (a real pause)',
   enable: 'switching paused ads back on',
   archive: 'archiving ads (for good)',
+  phase: "switching a product's playbook phase",
 }
 /** What a strategy level below auto allows, in W1-8's words (claude-trust.service.ts narrowedWhy). */
 const ALLOWS: Record<Exclude<ClaudeTrust, 'auto'>, (what: string) => string> = {

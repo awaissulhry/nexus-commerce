@@ -40,7 +40,7 @@ describe('judgeDoc', () => {
     expect(judgeDoc(doc, changed((d) => { d.isolation.phraseIntoBroadAndAuto = true })).get('isolation')).toBe('lower')
   })
 
-  it('weights, names, flows, hourly plans and the phase table add no spend by themselves: same', () => {
+  it('weights, names, flows and hourly plans add no spend by themselves: same; PB-9 — the phase table by what a switch would write', () => {
     const d = changed((x) => {
       x.budget.weights.auto = 40
       x.structure.naming.pattern = '{product} - {market} - {parts}'
@@ -48,7 +48,10 @@ describe('judgeDoc', () => {
       x.rank.roles.performance!.windows[0].endHour = 23
       x.phases.LAUNCH!.recipe.targetAcos = { from: 'breakEven', factor: 3 }
     })
-    expect(Object.fromEntries(judgeDoc(doc, d))).toEqual({ structure: 'same', budget: 'same', harvest: 'same', rank: 'same', phases: 'same' })
+    // A higher target factor would write a higher target at the next switch to LAUNCH: a raise now.
+    expect(Object.fromEntries(judgeDoc(doc, d))).toEqual({ structure: 'same', budget: 'same', harvest: 'same', rank: 'same', phases: 'raise' })
+    const lower = changed((x) => { x.phases.LAUNCH!.recipe.targetAcos = { from: 'breakEven', factor: 1, fallbackFactor: 1.5 } })
+    expect(judgeDoc(doc, lower).get('phases')).toBe('lower')
   })
 
   it('a product that could not be built and now can: raise; one that now cannot: lower', () => {

@@ -252,6 +252,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   pause: 'pausing ads (a real pause)',
   enable: 'switching paused ads back on',
   archive: 'archiving ads (for good)',
+  phase: "switching a product's playbook phase",
 }
 const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'off', ask: 'ask', confirm: 'confirm in Claude', watch: 'watch', auto: 'run by rule' }
 

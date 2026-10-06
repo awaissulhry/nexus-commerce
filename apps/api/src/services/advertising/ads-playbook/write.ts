@@ -15,7 +15,8 @@
  *             compiles. Recipes the row already holds stay unless `recompute`.
  *   judge     each change is RAISE / LOWER / SAME by what it would make an ENROLLED product spend once applied
  *             (judge.ts): enrolling, a higher daily budget or base bid, more terms, slots, start-bid factors,
- *             placements, an isolation switch off. A raise needs settings.security.manage and a fresh authenticator
+ *             placements, an isolation switch off; PB-9 — the phase table and the product's phase recipes by what a
+ *             phase switch would then write. A raise needs settings.security.manage and a fresh authenticator
  *             code — on the screen with the code (the route), from Claude approved in Nexus with it or confirmed in
  *             Claude with it (set-ads-playbook) — and never runs by rule. Everything else a person approves, or the
  *             business's rule runs inside the tool's limits.
@@ -52,7 +53,7 @@ import {
   type SectionKey,
   type TemplateDoc,
 } from './doc.js'
-import { judgeDoc, judgeEnrolled, judgeMoney, judgeTerms, overall, same, type Direction } from './judge.js'
+import { judgeDoc, judgeEnrolled, judgeMoney, judgeRecipes, judgeTerms, overall, same, type Direction } from './judge.js'
 import { loadCaptureSource, loadPlaybookRows, loadTemplates, PLAYBOOK_ROW_SELECT, TEMPLATE_ROW_SELECT } from './load.js'
 import { absoluteRecipes } from './recipes.js'
 import { indexPlaybook, isEnrolled, resolveProduct, type PlaybookRow, type ResolvedPlaybook, type TemplateRow } from './resolve.js'
@@ -243,10 +244,12 @@ interface Effect {
   dailyBudgetCents: Direction
   baseBidCents: Direction
   terms: Direction
+  /** PB-9 — the product's phase recipes, by what they would write at a phase switch. */
+  phaseRecipes: Direction
   products: Array<{ productId: string; sku: string; market: string }>
 }
 
-const noEffect = (): Effect => ({ sections: new Map(), enrolled: 'same', dailyBudgetCents: 'same', baseBidCents: 'same', terms: 'same', products: [] })
+const noEffect = (): Effect => ({ sections: new Map(), enrolled: 'same', dailyBudgetCents: 'same', baseBidCents: 'same', terms: 'same', phaseRecipes: 'same', products: [] })
 const num = (v: unknown) => (typeof v === 'number' ? v : null)
 
 /**
@@ -281,6 +284,7 @@ async function effectIn(
     into.dailyBudgetCents = overall([into.dailyBudgetCents, judgeMoney(was ? num(b.product?.dailyBudgetCents.value) : null, num(a.product?.dailyBudgetCents.value))])
     into.baseBidCents = overall([into.baseBidCents, judgeMoney(was ? num(b.product?.baseBidCents.value) : null, num(a.product?.baseBidCents.value))])
     into.terms = overall([into.terms, judgeTerms(was ? (b.product?.terms.value as ProductTerms | null) : null, a.product?.terms.value as ProductTerms | null)])
+    into.phaseRecipes = overall([into.phaseRecipes, judgeRecipes(was ? (b.product?.phaseRecipes.value as PhaseRecipes | null) : null, a.product?.phaseRecipes.value as PhaseRecipes | null)])
   }
 }
 
@@ -289,14 +293,14 @@ function directionOf(field: string, effect: Effect): Direction {
   if (field === 'overrides.skipSlots') return effect.sections.get('structure') ?? 'same'
   if (field.startsWith('overrides.') || field.startsWith('section.')) return effect.sections.get(field.split('.')[1] as SectionKey) ?? 'same'
   if (field === 'enrolled') return effect.enrolled
-  if (field === 'dailyBudgetCents' || field === 'baseBidCents' || field === 'terms') return effect[field]
+  if (field === 'dailyBudgetCents' || field === 'baseBidCents' || field === 'terms' || field === 'phaseRecipes') return effect[field]
   return 'same'
 }
 
 // ── Recipes at enrollment ─────────────────────────────────────────────────────────────────────────
 
-/** The facts a product's phase recipes are made absolute from, and where each came from. */
-async function recipeFacts(market: string, channel: string, productId: string, baseBidCents: number | null) {
+/** The facts a product's phase recipes are made absolute from, and where each came from (PB-9: its phase check shows them). */
+export async function recipeFacts(market: string, channel: string, productId: string, baseBidCents: number | null) {
   const family = await productFamily(productId)
   const results = await Promise.all(family.map((id) => computeProductTargetAcos({ productId: id, marketplace: market, windowDays: 90 })))
   const known = results.filter((r) => r.basis === 'profit-data' && r.breakevenAcos != null && r.grossRevenueCents > 0)
@@ -747,8 +751,8 @@ export interface PlaybookApplyWriter {
 
 /** What an apply op made of the row: its state, and the row and template versions it compiled. */
 export interface PlaybookApplyRecord {
-  /** PB-10 — a sync records itself too (what it added, in the reason). */
-  op: 'build' | 'adopt' | 'start' | 'stop' | 'sync'
+  /** PB-10 — a sync records itself too (what it added, in the reason). PB-9 — a phase switch too. */
+  op: 'build' | 'adopt' | 'start' | 'stop' | 'sync' | 'phase'
   state: string
   /** The row version the op was planned (and approved) from. */
   compiledVersion: number
@@ -761,6 +765,10 @@ export interface PlaybookApplyRecord {
   adoptedPlacements?: Record<string, { top: number; productPage: number; restOfSearch: number } | null>
   /** PB-10 — a sync: the bids START gives the keywords and targets it added at the floor (kept in the version row). */
   plannedBids?: Array<{ adTargetId: string; startBidCents: number }>
+  /** PB-9 — what else the op changed, recorded with the version (a phase switch: the phase from → to, by its effect). */
+  changes?: PlaybookChange[]
+  /** PB-9 — the op's direction by its effect (default: same). */
+  direction?: Direction
 }
 
 type Tx = Prisma.TransactionClient
@@ -798,6 +806,7 @@ export async function recordPlaybookApply(rowId: string, record: PlaybookApplyRe
     })
     if (updated.count !== 1) throw new Moved()
     const changes: PlaybookChange[] = [
+      ...(record.changes ?? []),
       ...(row.state !== record.state ? [{ field: 'state', label: 'State', from: row.state, to: record.state, direction: 'same' as Direction }] : []),
       { field: 'compiledVersion', label: 'Compiled', from: row.compiledVersion, to: compiledVersion, direction: 'same' as Direction },
       ...(overrides && !same(adoptedWas, overrides.adoptedPlacements ?? {}) ? [{ field: 'overrides.adoptedPlacements', label: labelOf('overrides.adoptedPlacements'), from: overridesWas.adoptedPlacements ?? null, to: overrides.adoptedPlacements ?? null, direction: 'same' as Direction }] : []),
@@ -808,7 +817,7 @@ export async function recordPlaybookApply(rowId: string, record: PlaybookApplyRe
       data: {
         kind: 'playbook', refId: row.id, version, market: row.market, level: row.level, scopeId: row.scopeId, op: record.op,
         values: rowValuesOf({ ...row, state: record.state, ...(overrides ? { overrides: Object.keys(overrides).length ? overrides : null } : {}) } as typeof row) as unknown as Prisma.InputJsonValue, changes: changes as unknown as Prisma.InputJsonValue,
-        direction: 'same', via: writer.via, approvalId: writer.approvalId ?? null, actor: writer.actor, actorUserId: writer.actorUserId ?? null,
+        direction: record.direction ?? 'same', via: writer.via, approvalId: writer.approvalId ?? null, actor: writer.actor, actorUserId: writer.actorUserId ?? null,
         stepUpAt: writer.stepUpAt ?? null, reason: record.reason ?? null,
       },
     })

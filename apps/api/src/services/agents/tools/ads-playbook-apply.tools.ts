@@ -1,7 +1,7 @@
 /**
  * ADS PLAYBOOK PB-5a — apply-ads-playbook: Claude asks to apply ONE product's playbook in ONE market (the playbook is the
- * business's own: ads-playbook reads it, set-ads-playbook changes it). Five ops: build and adopt (PB-5a), start and stop
- * (PB-5b), hero (PB-6c).
+ * business's own: ads-playbook reads it, set-ads-playbook changes it). Six ops: build and adopt (PB-5a), start and stop
+ * (PB-5b), phase (PB-9), hero (PB-6c).
  *
  *   build   create the slots the product does not hold yet, through the SP Super Wizard's own launch (Owner rule 1;
  *           ads-playbook/build.ts) — each campaign ENABLED at Amazon's 2¢ floor with its planned bids remembered
@@ -23,6 +23,14 @@
  *   sync    PB-10 — fix the product's drift (ads-playbook view drift), adding only (ads-playbook/sync.ts; the preview,
  *           the check by rule and the undo in ads-playbook-sync.ts): never deletes, archives or pauses; what adds spend
  *           waits for a person, a sync of negatives only may run by rule; a person's own change only when revert names it.
+ *   phase   PB-9 — switch the product's phase (ads-playbook/phase.ts; Owner decision D-PB3 = A: the phase is the ads
+ *           strategy's goal): the phase's recipe numbers and Claude levels into the product's strategy row through the
+ *           strategy's one writer, each slot floored or given back as the phase says (never a floor only START gives
+ *           back: a stopped built slot's, a stop's), the playbook's own hourly plans off / on / light (on only once it runs),
+ *           and its harvest rule re-synced to the phase's cadence. Judged by EFFECT: anything that adds spend makes the
+ *           whole switch a raise — the same code gate as a start (spendGate) — and it runs by rule only when the Owner
+ *           allowed raising phase moves (allowPhaseUp). It runs by rule only when Nexus's phase check proposes exactly
+ *           this move outside the phase's hold (ads-playbook/phase-check.ts); a person may switch at any time.
  *   hero    PB-6c — a declining or lost term's own campaign (ads-playbook/hero.ts, hero-build.ts; a winning term is
  *           refused, rule 2): ONE campaign, ONE exact keyword, the product's own product ads and negatives, built by the
  *           same build (the SP Super Wizard's launch) and born the same way — at the 2¢ floor, off the allowlist,
@@ -41,8 +49,8 @@
  * only writes Nexus links: the strategy does not narrow it.
  *
  * Undo: a build (a hero too) — archive-ads of every campaign it made (buildRunId), permanent at Amazon; an adopt — the
- * inverse adopt; a start — a stop of the slots it started; a stop — a start of the slots it stopped (with the approver's
- * code again).
+ * inverse adopt; a start — a stop of the slots it started; a stop — a start of the slots it stopped (with the approver's code again);
+ * a phase switch — a switch back to the phase before (its own recipe, slots, hourly plans and cadence).
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -54,14 +62,15 @@ import { applyAdopt, planAdopt, type AdoptPlan } from '../../advertising/ads-pla
 import { previewArtifacts } from '../../advertising/ads-playbook/artifacts.js'
 import { buildRunCampaigns, inFlightRefusal, planBuild, startPlaybookBuild, type BuildPlan } from '../../advertising/ads-playbook/build.js'
 import { planStart, runStart, runStop, type ApplyOp, type StartPlan } from '../../advertising/ads-playbook/start.js'
-import { PLAYBOOK_MONEY, SLOT_KEY } from '../../advertising/ads-playbook/doc.js'
+import { PHASES, PLAYBOOK_MONEY, SLOT_KEY } from '../../advertising/ads-playbook/doc.js'
 import { HERO_KEY } from '../../advertising/ads-playbook/hero.js'
 import { planHero, type HeroBuildPlan } from '../../advertising/ads-playbook/hero-build.js'
+import { phaseNow, planPhase, runPhase, type PhasePlan } from '../../advertising/ads-playbook/phase.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { marketCurrency } from '../../pim/market-currency.js'
 import { amountLabel, liveReachOf } from './ads-tool-guards.js'
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, requesterOf, storedReach, strategyFactsMoney, type StoredReach } from './ads-change-kit.js'
-import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote } from './ads-autonomy-kit.js'
+import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote, type KitChange, type KitItem } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
 import { executeSync, syncPreview, syncRefusal, syncUndoCurrent, syncUndoRequest, type SyncAfter, type SyncArgsIn } from './ads-playbook-sync.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolDoor, ToolResult, ToolUndo } from '../tool-types.js'
@@ -71,8 +80,8 @@ const ID = z.string().trim().min(1).max(64)
 const MAX_SLOTS = 30
 
 const input = z.object({
-  op: z.enum(['build', 'adopt', 'start', 'stop', 'sync', 'sync-negatives', 'hero'])
-    .describe("build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); start: the built campaigns start spending (allowlist, planned bids, placements, then the playbook's hourly plans and rules; needs the approver's authenticator code); stop: the brake — built campaigns back to the 2¢ floor and off the allowlist, the hourly plans and rules off (never a pause); sync: fix its drift (ads-playbook view drift), adding only; sync-negatives: only its missing negatives (a kind of its own: it lowers spend); hero: a campaign of its own for a declining or lost term (one exact keyword, born like a build; the term keeps running where it is; a winning term is refused)"),
+  op: z.enum(['build', 'adopt', 'start', 'stop', 'sync', 'sync-negatives', 'phase', 'hero'])
+    .describe("build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); start: the built campaigns start spending (allowlist, planned bids, placements, then the playbook's hourly plans and rules; needs the approver's authenticator code); stop: the brake — built campaigns back to the 2¢ floor and off the allowlist, the hourly plans and rules off (never a pause); sync: fix its drift (ads-playbook view drift), adding only; sync-negatives: only its missing negatives (a kind of its own: it lowers spend); phase: switch the product's playbook phase (its strategy numbers, slots, hourly plans and harvest cadence); hero: a campaign of its own for a declining or lost term (one exact keyword, born like a build; the term keeps running where it is; a winning term is refused)"),
   market: z.string().trim().toUpperCase().min(2).max(20).describe('ONE Amazon market code (IT, DE, FR, ES, UK; business-overview lists them)'),
   productId: ID.optional().describe('the product (a parent or a variation), its Nexus id; or sku'),
   sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
@@ -82,9 +91,12 @@ const input = z.object({
     campaignId: ID.describe('the campaign that plays it, its Nexus id (campaignId in ad-campaigns)'),
   })).max(MAX_SLOTS).optional().describe('adopt: campaigns named for slots (the others are matched by name, then by shape)'),
   unbind: z.array(SLOT_KEY).max(MAX_SLOTS).optional().describe('adopt: slots whose adopted campaign is taken off the playbook again (the undo of an adopt)'),
+  term: z.string().trim().min(1).max(80).optional().describe('hero: the search term that gets a campaign of its own (one exact keyword); ads-playbook view winners names the ones whose next step it is'),
+  phase: z.enum(PHASES).optional().describe("phase: the phase to switch to — LAUNCH, GROW, PROFIT, CLEAR_STOCK or DEFEND (the ads strategy's goal); ads-playbook view effective shows the phase check: where the product stands and what Nexus proposes"),
+  rankFloors: z.enum(['keep', 'giveBack']).optional()
+    .describe("phase: what an hourly plan the phase switches off does with the floors it set — keep (default: they stay at the floor, held by the approver) or giveBack (the bids come back: a raise)"),
   fix: z.array(z.string().trim().min(1).max(200)).max(200).optional().describe('sync: only these drift items (their keys from ads-playbook view drift); default: every item sync fixes that no person made himself'),
   revert: z.array(z.string().trim().min(1).max(200)).max(200).optional().describe('sync: changes a person made himself to put back (their keys, byPerson in view drift); sync never puts one back unless it is named here'),
-  term: z.string().trim().min(1).max(80).optional().describe('hero: the search term that gets a campaign of its own (one exact keyword); ads-playbook view winners names the ones whose next step it is'),
   expectVersion: z.number().int().min(0).optional().describe('the product playbook row version you read (ads-playbook): refused when it moved since'),
   why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
 })
@@ -373,6 +385,163 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
   }
 }
 
+/** A strategy change as a preview line: from → to under the field's own key, so a money field's numbers are money to the filter. */
+const strategyLine = (c: { field: string; label: string; from: unknown; to: unknown; direction: string }) => {
+  const key = /^[A-Za-z][A-Za-z0-9]*$/.test(c.field) ? c.field : 'value'
+  return { field: c.field, label: c.label, direction: c.direction, [key]: { from: c.from ?? null, to: c.to ?? null } }
+}
+
+/**
+ * What a phase switch adds or takes from spend, as ONE item of the kit's facts (one product per request): a restart of
+ * the slots it gives back (their daily budgets), else the move of the target ACoS, else a stop's low bids from the
+ * highest bid they lower, else a Nexus-only change of the automation. Exported for the tests.
+ */
+export function phaseItem(p: Pick<PhasePlan, 'slots' | 'strategy'>): KitChange {
+  const restored = p.slots.filter((s) => s.does === 'restore')
+  if (restored.length) return { field: 'status', from: 'LOW_BIDS', to: 'ENABLED', dailyBudgetCents: restored.reduce((n, s) => n + (s.dailyBudgetCents ?? 0), 0) }
+  const target = p.strategy.changes.find((c) => c.field === 'target')
+  const pct = (v: unknown) => (typeof (v as { targetPct?: unknown } | null)?.targetPct === 'number' ? (v as { targetPct: number }).targetPct : null)
+  const toPct = pct(target?.effectiveTo)
+  if (target && toPct != null) return { field: 'targetAcosPct', fromPct: pct(target.effectiveFrom), toPct }
+  // A stop's low bids, from the highest bid they lower (as suppress-campaign counts a stop).
+  const floored = p.slots.filter((s) => s.does === 'floor')
+  if (floored.length) {
+    const top = floored.reduce((best, s) => ((s.highestBidCents ?? 0) > (best.highestBidCents ?? 0) ? s : best), floored[0])
+    const floor = top.floorCents ?? SUPPRESSION_FLOOR_CENTS
+    return { field: 'bid', fromCents: Math.max(top.highestBidCents ?? floor, floor), toCents: floor, forced: true }
+  }
+  return { field: 'automation' }
+}
+
+/**
+ * The items the kit judges a phase switch on. A switch that only lowers (or moves nothing) is ONE item, the product
+ * (phaseItem). A RAISE is one item per part that adds spend, so the kit counts every one (Claude's daily raises, the
+ * month): each slot that gets its bids back (its campaign, its daily budget spending again), the target up, every other
+ * strategy field that raises (the bid band, the largest change, a looser harvest or negate group, more Claude may do
+ * alone), each hourly plan that raises, the harvest more often. Exported for the tests.
+ */
+export function phaseItems(p: Pick<PhasePlan, 'slots' | 'strategy' | 'rank' | 'harvest' | 'direction' | 'market' | 'scopeProductId' | 'product'>, writes: boolean): KitItem[] {
+  const product = { kind: 'products' as const, market: p.market, productIds: [p.scopeProductId], label: `${p.product.sku}'s playbook phase` }
+  if (p.direction !== 'raise') return [{ entity: product, change: phaseItem(p), nexusOnly: !writes }]
+  const items: KitItem[] = []
+  for (const s of p.slots) {
+    if (s.does === 'restore' && s.campaignId) items.push({ entity: { kind: 'campaign', id: s.campaignId }, change: { field: 'status', from: 'LOW_BIDS', to: 'ENABLED', dailyBudgetCents: s.dailyBudgetCents ?? 0 } })
+  }
+  const pct = (v: unknown) => (typeof (v as { targetPct?: unknown } | null)?.targetPct === 'number' ? (v as { targetPct: number }).targetPct : null)
+  for (const c of p.strategy.changes.filter((x) => x.direction === 'raise' && x.field !== 'goal')) {
+    const toPct = c.field === 'target' ? pct(c.effectiveTo) : null
+    items.push({ entity: product, change: toPct != null ? { field: 'targetAcosPct', fromPct: pct(c.effectiveFrom), toPct } : { field: 'automation', raises: true }, nexusOnly: true })
+  }
+  for (const r of p.rank.filter((x) => x.direction === 'raise')) items.push({ entity: product, change: { field: 'automation', raises: true }, nexusOnly: r.does !== 'disable' })
+  if (p.harvest.direction === 'raise') items.push({ entity: product, change: { field: 'automation', raises: true }, nexusOnly: true })
+  return items.length ? items : [{ entity: product, change: { field: 'automation', raises: true }, nexusOnly: !writes }]
+}
+
+/** The phase switch, planned and judged: its preview, and the plan `execute` runs. */
+async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<{ result: ToolResult; plan?: PhasePlan }> {
+  const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult })
+  if (!a.phase) return refuse('Name the phase to switch to (phase: LAUNCH, GROW, PROFIT, CLEAR_STOCK or DEFEND).')
+  const out = await planPhase({ market: a.market, productId: a.productId, sku: a.sku, phase: a.phase, rankFloors: a.rankFloors })
+  if ('error' in out) return refuse(out.error)
+  const p = out.data
+  if (a.expectVersion != null && a.expectVersion !== p.playbook.version) return refuse(MOVED_ROW)
+  const writes = p.slots.some((s) => s.does === 'floor' || s.does === 'restore') || p.rank.some((r) => r.does !== 'keep' && r.does !== 'report')
+  const reach = liveReachOf(await checkAdsWriteGate({ marketplace: p.market, payloadValueCents: 0 }))
+  if (reach.reach === 'refused' && writes) return refuse(reachRefusal(reach))
+  const stored: StoredReach = reach.reach === 'refused' ? { reach: 'sandbox' } : storedReach(reach)
+  const raise = p.direction === 'raise'
+  let currency: string
+  try { currency = await marketCurrency('AMAZON', p.market) } catch (e) { return refuse((e as Error).message) }
+  const highestRestoredBidCents = Math.max(0, ...p.slots.filter((s) => s.does === 'restore').map((s) => s.highestBidCents ?? 0))
+  const facts = await buildLimitFacts({
+    tool: TOOL, action: 'phase', projectMonth: raise,
+    items: phaseItems(p, writes),
+    approvalId: ctx.approvalId ?? null,
+  })
+  const floored = p.slots.filter((s) => s.does === 'floor')
+  const restored = p.slots.filter((s) => s.does === 'restore')
+  const switched = p.rank.filter((r) => r.does === 'enable' || r.does === 'disable' || r.does === 'update')
+  const effect = `Switches ${p.product.sku}'s playbook in ${p.market} from ${p.from ?? 'no phase'} to ${p.to}: `
+    + `the ads strategy's product row takes the ${p.to} numbers (${plural(p.strategy.changes.length, 'field')}, goal included)`
+    + `${floored.length ? `; ${plural(floored.length, 'slot campaign')} to the floor (low bids, never paused)` : ''}`
+    + `${restored.length ? `; ${plural(restored.length, 'slot campaign')} get${restored.length === 1 ? 's its' : ' their'} remembered bids back` : ''}`
+    + `${switched.length ? `; ${plural(switched.length, 'hourly plan')} of the playbook switched (${switched.map((r) => `${r.role} ${r.does === 'enable' ? 'on' : r.does === 'disable' ? 'off' : 'rewritten'}`).join(', ')})` : ''}`
+    + `${p.harvest.does === 'update' ? '; the harvest rule re-synced to the phase\'s cadence' : ''}. `
+    + (raise ? `It ADDS SPEND (${p.raises.join('; ') || 'a raise'}): the approver's code is needed.` : p.direction === 'lower' ? 'It only lowers what the ads may spend.' : 'It moves no spend.')
+  const check = p.check
+  return {
+    plan: p,
+    result: {
+      ok: true,
+      preview: {
+        action: TOOL,
+        op: 'phase',
+        market: p.market,
+        product: p.product,
+        playbook: { id: p.playbook.id, version: p.playbook.version, state: p.playbook.state },
+        phase: { from: p.from, to: p.to },
+        direction: p.direction,
+        raises: p.raises,
+        // Claude allowed more alone: never by rule, always the approver's code (the Owner's rule).
+        raisesClaude: p.raisesClaude,
+        currency,
+        highestRestoredBidCents,
+        strategy: {
+          version: p.strategy.preview.version,
+          direction: p.strategy.direction,
+          changes: p.strategy.changes.map(strategyLine),
+          ...(p.strategyNotes.length ? { notes: p.strategyNotes } : {}),
+          liveEffect: p.strategy.preview.liveEffect,
+        },
+        slots: p.slots.map((s) => ({ slot: s.slot, campaignId: s.campaignId, name: s.name, from: s.from, to: s.to, does: s.does, direction: s.direction, summary: s.summary })),
+        rank: p.rank.map((r) => ({ key: r.key, role: r.role, does: r.does, direction: r.direction, summary: r.summary, ...(r.refId ? { refId: r.refId } : {}) })),
+        rankFloors: p.rankFloors,
+        harvest: { does: p.harvest.does, direction: p.harvest.direction, summary: p.harvest.summary, toCadenceDays: p.harvest.toCadenceDays },
+        phaseCheck: {
+          daysInPhase: check.daysInPhase, since: check.since, lastSwitch: check.lastSwitch, hold: check.hold,
+          proposal: check.proposal, ...(check.heldProposal ? { heldProposal: check.heldProposal } : {}), exits: check.exits,
+        },
+        proposed: check.proposal?.to === p.to && !check.hold.held,
+        warnings: p.warnings,
+        stepUp: raise
+          ? {
+            what: "switches a product's playbook phase in a way that adds spend",
+            raises: p.raises,
+            needs: STEP_UP_NEEDS,
+            how: 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in Claude with theirs. '
+              + (p.raisesClaude ? 'It lets Claude do more alone, so it never runs by rule.' : 'It runs by rule only where the business allowed raising phase moves (allowPhaseUp).'),
+          }
+          : null,
+        basis: hash({
+          row: [p.playbook.id, p.playbook.version], phase: [p.from, p.to], strategy: p.strategy.preview.basis,
+          slots: p.slots.map((s) => [s.slot, s.campaignId, s.does, s.highestBidCents ?? null]), rank: p.rank.map((r) => [r.key, r.does, r.direction]), floors: p.rankFloors,
+          harvest: [p.harvest.does, p.harvest.toCadenceDays, p.harvest.direction],
+        }),
+        reach: stored,
+        reachNote: writes ? reachNote(stored) : 'The slots and hourly plans stay as they are: the strategy row and the harvest rule are Nexus only.',
+        effect,
+        undoNote: p.from
+          ? `Undo switches back to ${p.from}: its own recipe numbers, slots, hourly plans and cadence (not a copy of what the strategy row holds now).`
+          : 'There was no phase before: an undo cannot switch back to none. Set the goal on the Strategy tab (set-ads-strategy) instead.',
+        limitFacts: facts,
+        limitsNote: limitsNote(facts),
+      },
+    },
+  }
+}
+
+/**
+ * PB-5b, PB-9 — the ONE gate of an op that adds spend (a start; a phase switch that raises): approved with the approver's
+ * fresh authenticator code, or run by the business's rule where this tool's limits let it (allowStart, allowPhaseUp —
+ * each a loosening that itself needed the code; withinLimits holds the rest). An op that adds nothing passes.
+ */
+async function spendGate(ctx: ToolContext, adds: boolean): Promise<{ stepUpAt: Date | null; byRule: boolean } | { refusal: string }> {
+  if (!adds) return { stepUpAt: null, byRule: false }
+  if (ctx.decidedVia === 'auto') return { stepUpAt: null, byRule: true }
+  const coded = await stepUpApproval(ctx)
+  return 'refusal' in coded ? { refusal: coded.refusal } : { stepUpAt: coded.at, byRule: false }
+}
+
 /** PB-6c — a hero's campaign without its bid and budget (the frozen values carry them), for the basis. */
 const moneyless = (campaigns: HeroBuildPlan['campaigns']) => campaigns.map((c) => ({
   ...c, dailyBudget: null, adGroups: c.adGroups.map((g) => ({ ...g, defaultBidCents: null, targets: g.targets.map((t) => ({ ...t, bidCents: null })) })),
@@ -502,6 +671,8 @@ const APPLY_LIMITS = adKitLimits({ maxItems: 1 }, {
   // PB-5b — a start adds spend: off by default, so every start waits for a person with their authenticator code.
   allowStart: z.boolean().default(false).describe('start: let a start run by rule (inside the other limits and the ads strategy); off by default — every start then waits for a person, who approves it with their authenticator code'),
   markets: z.array(z.string().trim().toUpperCase().min(2).max(20)).max(20).default([]).describe('the markets where it may run by rule (empty = every market)'),
+  // PB-9 — off by default: a phase switch that adds spend waits for a person with the code; on is a loosening (the code).
+  allowPhaseUp: z.boolean().default(false).describe('phase: let a phase switch that ADDS spend (a higher target, bids given back, an hourly plan on) run by rule when Nexus proposes it; off = every raising switch waits for a person with their code'),
 })
 
 /**
@@ -518,6 +689,7 @@ function applyRefusal(preview: unknown, limits: Record<string, unknown>): string
   const markets = (limits.markets as string[] | undefined) ?? []
   if (p.market && markets.length && !markets.includes(p.market)) return `this business lets a playbook apply run by rule only in ${markets.join(', ')}`
   if (p.op === 'adopt') return null
+  if (p.op === 'phase') return phaseRefusal(preview, limits)
   // PB-10 — a sync runs by rule only when it adds no spend (its negatives), inside the kit's limits.
   if (p.op === 'sync' || p.op === 'sync-negatives') return syncRefusal(preview, limits)
   if (p.op === 'start' && limits.allowStart !== true) return "it starts spending: a person decides, with their authenticator code (this business does not let a start run by rule: allowStart is off)"
@@ -548,17 +720,45 @@ function highestBidRefusal(preview: unknown, highest: number, words: string, lim
   return null
 }
 
+/**
+ * PB-9 — a phase switch by rule: only the move Nexus's phase check proposes, outside the phase's hold (a person's own
+ * switch is never held — a person approves it); a raise only where the Owner allowed raising moves; then the kit's
+ * checks (the strategy where it lands lets Claude switch phases alone, the day's limits, the month). Pure.
+ */
+function phaseRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
+  const p = (preview ?? {}) as {
+    phase?: { from?: string | null; to?: string }; direction?: string; raises?: string[]; raisesClaude?: boolean; highestRestoredBidCents?: number; currency?: string
+    phaseCheck?: { hold?: { held?: boolean; daysLeft?: number; minDays?: number | null }; proposal?: { to?: string } | null }
+  }
+  const to = p.phase?.to
+  if (!to || !p.phaseCheck) return 'there is no phase check in this preview; a person decides'
+  // The Owner's rule: more of what Claude may do alone is always raised with his code — allowPhaseUp or not.
+  if (p.raisesClaude !== false) return p.raisesClaude ? "it lets Claude do more alone (the phase's Claude levels): a raise of what Claude may do alone always needs a person with settings.security.manage and their authenticator code, never a rule" : 'the preview does not say whether it raises what Claude may do alone; a person decides'
+  const hold = p.phaseCheck.hold
+  if (hold?.held) return `${p.phase?.from ?? 'the phase'} is inside its ${hold.minDays ?? ''}-day hold (${hold.daysLeft ?? '?'} more days): only a person's own switch moves it now; a person decides`
+  const proposed = p.phaseCheck.proposal?.to
+  if (proposed !== to) return `Nexus's phase check ${proposed ? `proposes ${proposed}` : 'proposes no move'} now, not ${to}: a switch it does not propose is a person's own; a person decides`
+  if (p.direction === 'raise' && limits.allowPhaseUp !== true) {
+    return `it adds spend (${(p.raises ?? []).join('; ') || 'a raise'}), and this business lets no raising phase switch run by rule (allowPhaseUp is off): a person with settings.security.manage decides, with their authenticator code`
+  }
+  const common = commonRefusal(preview, limits)
+  if (common) return common
+  // Bids a phase gives back are held to START's own limit: this tool's maxBidCents and the strategy's highest bid.
+  const restored = p.highestRestoredBidCents ?? 0
+  return restored > 0 ? highestBidRefusal(preview, restored, 'highest restored bid', limits, p.currency ?? 'EUR') : null
+}
+
 /** What a change of this tool recorded: the op, and its run (build, hero: its key too), its links (adopt) or the slots it moved (start, stop). */
 type ApplyAfter =
   | { op: 'build' | 'hero'; playbookId: string; applicationId: string; key?: string }
   | { op: 'adopt'; playbookId: string; market: string; productId: string; bound: Array<{ slot: string; campaignId: string }>; unbound: Array<{ slot: string; campaignId: string }> }
   | { op: 'start' | 'stop'; playbookId: string; market: string; productId: string; slots: string[]; state: string | null; whole?: boolean }
+  | { op: 'phase'; playbookId: string; market: string; productId: string; phase: string; from: string | null }
   | SyncAfter
 
 /**
- * Undo: a build — a hero too — is archived (archive-ads buildRunId, permanent at Amazon); an adopt is the inverse adopt;
- * a start is a stop of the slots it started, a stop a start of the slots it stopped — while the row's state is still what
- * it left.
+ * Undo: a build — a hero too — is archived (archive-ads buildRunId, permanent at Amazon); an adopt is the inverse adopt; a start is a
+ * stop of the slots it started, a stop a start of the slots it stopped — while the row's state is still what it left.
  */
 export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
   async current(change) {
@@ -575,6 +775,8 @@ export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
       const has = (s: { slot: string; campaignId: string }) => links.some((l) => l.key === s.slot && l.refId === s.campaignId)
       return { ...after, bound: after.bound.filter(has), unbound: after.unbound.filter((u) => !has(u)) }
     }
+    // PB-9 — a phase switch stands while the product is still in the phase it switched to.
+    if (after.op === 'phase') return { ...after, phase: (await phaseNow(after.market, after.productId)) ?? null }
     if (after.op === 'start' || after.op === 'stop') {
       const row = await prisma.adsPlaybook.findUnique({ where: { id: after.playbookId }, select: { state: true } })
       return { ...after, state: row?.state ?? null }
@@ -600,6 +802,10 @@ export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
           why: 'undo of a playbook adopt',
         },
       }
+    }
+    if (after.op === 'phase') {
+      if (!after.from) return { refusal: 'There was no phase before this switch: an undo cannot switch back to none. Set the goal on the Strategy tab (set-ads-strategy).' }
+      return { tool: TOOL, args: { op: 'phase', market: after.market, productId: after.productId, phase: after.from, why: `undo of a playbook phase switch (${after.from} → ${after.phase})` } }
     }
     if (after.op === 'start' || after.op === 'stop') {
       if (!after.slots?.length) return { refusal: `This ${after.op} ${after.op === 'start' ? 'started' : 'stopped'} no campaign (each one was ${after.op === 'start' ? 'running' : 'stopped'} already): there is nothing of it to undo.` }
@@ -653,12 +859,20 @@ const applyAdsPlaybook: AgentTool = {
     + 'held back, then the playbook\'s hourly plans and rules switched on; a paused campaign is never enabled and an adopted '
     + 'one is left as it is. Starting to spend needs the approver\'s authenticator code (in Nexus, or the person who asked '
     + 'confirms it in Claude). op stop is the brake: the built campaigns\' bids to the 2-cent floor (remembered), off the '
-    + 'allowlist, the hourly plans and rules off — never a pause; it needs no code. A person approves it in Nexus, unless '
+    + 'allowlist, the hourly plans and rules off — never a pause; it needs no code. op phase '
+    + "switches the product's phase (phase: the ads strategy's goal): the phase's recipe numbers and Claude levels go into "
+    + "the product's strategy row, each slot is floored (low bids, never paused) or gets back a floor the last phase set "
+    + '(a built slot\'s floor only START gives back), the playbook\'s own hourly plans go off / on / light (on only once it '
+    + "runs), and its harvest rule takes the phase's cadence; read the phase check first (ads-playbook view effective: days "
+    + 'in phase, the hold, each exit rule with its numbers, the move Nexus proposes). It is judged by effect: if anything '
+    + "adds spend the whole switch is a raise and needs the approver's authenticator code. It runs by rule only when Nexus "
+    + 'proposes exactly this move outside the hold, inside the ads strategy, and — for a raise — only where the business '
+    + 'allowed it (allowPhaseUp); never a pause, an archive or the Owner\'s own hourly plans. A person approves it in Nexus, unless '
     + 'the business lets it run by its rule inside its limits and the ads strategy (by default a build does not: '
     + 'maxCampaigns 0; a start does not: allowStart off). Refused, and not queued, when the product is not enrolled, '
     + 'nothing is missing (or nothing to start or stop), the gate or Amazon\'s write gate refuses it, or a build of it is '
     + 'already running. Undo: a build is archived (archive-ads, permanent at Amazon); an adopt is reversed by the opposite '
-    + 'adopt; a start by a stop, a stop by a start. '
+    + 'adopt; a start by a stop, a stop by a start; a phase switch by a switch back. '
     + 'op sync fixes the drift ads-playbook view drift lists, ADDING ONLY (it never deletes, archives or pauses): missing '
     + 'isolation, source and product negatives (through the negative write service; only inside this product\'s own '
     + 'campaigns), missing or misplaced keywords and competitor ASINs and missing product ads (at the 2-cent floor, the '
@@ -672,6 +886,7 @@ const applyAdsPlaybook: AgentTool = {
     const a = args as Args
     if (a.op === 'start' || a.op === 'stop') return (await startPreview(a, ctx)).result
     if (a.op === 'sync' || a.op === 'sync-negatives') return (await syncPreview(a as SyncArgsIn, ctx)).result
+    if (a.op === 'phase') return (await phasePreview(a, ctx)).result
     if (a.op === 'hero') return (await heroPreview(a, ctx)).result
     return a.op === 'adopt' ? (await adoptPreview(a)).result : (await buildPreview(a, ctx)).result
   },
@@ -710,6 +925,39 @@ const applyAdsPlaybook: AgentTool = {
       }
     }
 
+    if (a.op === 'phase') {
+      const fresh = await phasePreview(a, ctx)
+      if (!fresh.result.ok || !fresh.plan) return notRun(`Not run: ${fresh.result.error ?? 'it is no longer a valid phase switch'}`)
+      const refusal = recheck(ctx, fresh.result, ['op', 'basis', 'reach'])
+      if (refusal) return notRun(refusal)
+      const p = fresh.plan
+      const preview = fresh.result.preview as { effect: string; reach: StoredReach }
+      const run = approvedRun(ctx, a.why ?? preview.effect)
+      if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
+      // A raise passes the same gate as a start; by rule only with allowPhaseUp (withinLimits) — and never one that lets
+      // Claude do more alone (the Owner's rule: that always needs his code).
+      if (ctx.decidedVia === 'auto' && p.raisesClaude) return notRun("Not run: it lets Claude do more alone, which always needs a person's authenticator code, never a rule. Ask for it again; a person approves it.")
+      const gate = await spendGate(ctx, p.direction === 'raise')
+      if ('refusal' in gate) return notRun(gate.refusal)
+      const stepUpAt = gate.stepUpAt
+      const raiseByRule = gate.byRule ? "run by the business's rule: this business lets raising playbook phase switches run so (apply-ads-playbook allowPhaseUp)" : null
+      const out = await runPhase(p, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, writer: writerOf(run.changeSetId), stepUpAt, raiseByRule })
+      if ('error' in out) return notRun(`Not run: ${out.error}`)
+      return {
+        ok: true,
+        data: {
+          phase: { from: p.from, to: p.to }, direction: p.direction, strategy: out.strategy,
+          floored: out.floored, restored: out.restored, hourlyPlans: out.rank.changed, harvest: out.harvest,
+          ...(out.errors.length ? { errors: out.errors } : {}), reach: preview.reach, changeSetId: run.changeSetId,
+          note: `${p.product.sku} is in ${p.to} in ${p.market}: the ads strategy holds its numbers now${out.floored.length || out.restored.length ? `; the slot bids ${preview.reach.reach === 'live' ? 'are sent to Amazon at once' : 'are recorded in Nexus only (sandbox: Amazon ads writes are not live)'}` : ''}.`,
+        },
+        change: {
+          before: { op: 'phase', playbookId: p.playbook.id, market: p.market, productId: p.scopeProductId, phase: p.from, strategy: p.strategy.before },
+          after: { op: 'phase', playbookId: p.playbook.id, market: p.market, productId: p.scopeProductId, phase: p.to, from: p.from },
+        },
+      }
+    }
+
     if (a.op === 'start' || a.op === 'stop') {
       const op = a.op
       const fresh = await startPreview(a, ctx)
@@ -721,12 +969,9 @@ const applyAdsPlaybook: AgentTool = {
       if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
       // A start adds spend: approved with the approver's fresh code, or run by the business's rule (allowStart, itself a
       // loosening that needed the code). A stop lowers spend: no code.
-      let stepUpAt: Date | null = null
-      if (op === 'start' && ctx.decidedVia !== 'auto') {
-        const coded = await stepUpApproval(ctx)
-        if ('refusal' in coded) return notRun(coded.refusal.replace('a raise runs', 'a start runs').replace('it raises', 'it starts spending').replace('a raise needs', 'a start needs'))
-        stepUpAt = coded.at
-      }
+      const gate = await spendGate(ctx, op === 'start')
+      if ('refusal' in gate) return notRun(gate.refusal.replace('a raise runs', 'a start runs').replace('it raises', 'it starts spending').replace('a raise needs', 'a start needs'))
+      const stepUpAt = gate.stepUpAt
       const p = fresh.plan
       const writer = { ...writerOf(run.changeSetId), stepUpAt }
       const out = op === 'start' ? await runStart(p, run, writer) : await runStop(p, run, writer)
