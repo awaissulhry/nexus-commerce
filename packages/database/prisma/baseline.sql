@@ -7614,6 +7614,7 @@ CREATE TABLE "AdBlueprintApplication" (
     "launchMode" TEXT,
     "progress" JSONB,
     "startedAt" TIMESTAMP(3),
+    "playbookId" TEXT,
 
     CONSTRAINT "AdBlueprintApplication_pkey" PRIMARY KEY ("id")
 );
@@ -9192,6 +9193,96 @@ CREATE TABLE "AdsStrategyVersion" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AdsStrategyVersion_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsPlaybookTemplate" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "channel" TEXT NOT NULL DEFAULT 'AMAZON',
+    "adProduct" TEXT NOT NULL DEFAULT 'SP',
+    "name" TEXT NOT NULL,
+    "version" INTEGER NOT NULL DEFAULT 1,
+    "doc" JSONB NOT NULL,
+    "capturedFrom" JSONB,
+    "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+
+    CONSTRAINT "AdsPlaybookTemplate_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsPlaybook" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "channel" TEXT NOT NULL DEFAULT 'AMAZON',
+    "market" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "scopeId" TEXT NOT NULL DEFAULT '*',
+    "label" TEXT NOT NULL,
+    "version" INTEGER NOT NULL DEFAULT 1,
+    "templateId" TEXT,
+    "overrides" JSONB,
+    "enrolled" BOOLEAN,
+    "state" TEXT,
+    "nameToken" TEXT,
+    "portfolioName" TEXT,
+    "dailyBudgetCents" INTEGER,
+    "baseBidCents" INTEGER,
+    "terms" JSONB,
+    "phaseRecipes" JSONB,
+    "compiledVersion" INTEGER,
+    "compiledTemplateVersion" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+
+    CONSTRAINT "AdsPlaybook_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsPlaybookVersion" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "refId" TEXT NOT NULL,
+    "version" INTEGER NOT NULL,
+    "market" TEXT,
+    "level" TEXT,
+    "scopeId" TEXT,
+    "op" TEXT NOT NULL,
+    "values" JSONB,
+    "changes" JSONB NOT NULL,
+    "direction" TEXT NOT NULL,
+    "via" TEXT NOT NULL,
+    "approvalId" TEXT,
+    "actor" TEXT NOT NULL,
+    "actorUserId" TEXT,
+    "stepUpAt" TIMESTAMP(3),
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdsPlaybookVersion_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsPlaybookLink" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "playbookId" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "refId" TEXT NOT NULL,
+    "adGroupId" TEXT,
+    "origin" TEXT NOT NULL,
+    "compiledVersion" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+
+    CONSTRAINT "AdsPlaybookLink_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -14082,6 +14173,9 @@ CREATE INDEX "AdMutation_workspaceId_idx" ON "AdMutation"("workspaceId");
 CREATE INDEX "AdBlueprintApplication_blueprintId_idx" ON "AdBlueprintApplication"("blueprintId");
 
 -- CreateIndex
+CREATE INDEX "AdBlueprintApplication_playbookId_idx" ON "AdBlueprintApplication"("playbookId");
+
+-- CreateIndex
 CREATE INDEX "AdBlueprintApplication_status_idx" ON "AdBlueprintApplication"("status");
 
 -- CreateIndex
@@ -14764,6 +14858,42 @@ CREATE INDEX "AdsStrategyVersion_workspaceId_idx" ON "AdsStrategyVersion"("works
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdsStrategyVersion_strategyId_version_key" ON "AdsStrategyVersion"("workspaceId", "strategyId", "version");
+
+-- CreateIndex
+CREATE INDEX "AdsPlaybookTemplate_workspaceId_idx" ON "AdsPlaybookTemplate"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsPlaybookTemplate_workspace_name_key" ON "AdsPlaybookTemplate"("workspaceId", "name");
+
+-- CreateIndex
+CREATE INDEX "AdsPlaybook_market_level_idx" ON "AdsPlaybook"("market", "level");
+
+-- CreateIndex
+CREATE INDEX "AdsPlaybook_templateId_idx" ON "AdsPlaybook"("templateId");
+
+-- CreateIndex
+CREATE INDEX "AdsPlaybook_workspaceId_idx" ON "AdsPlaybook"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsPlaybook_channel_market_level_scopeId_key" ON "AdsPlaybook"("workspaceId", "channel", "market", "level", "scopeId");
+
+-- CreateIndex
+CREATE INDEX "AdsPlaybookVersion_kind_market_level_scopeId_createdAt_idx" ON "AdsPlaybookVersion"("kind", "market", "level", "scopeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsPlaybookVersion_workspaceId_idx" ON "AdsPlaybookVersion"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsPlaybookVersion_kind_refId_version_key" ON "AdsPlaybookVersion"("workspaceId", "kind", "refId", "version");
+
+-- CreateIndex
+CREATE INDEX "AdsPlaybookLink_workspaceId_idx" ON "AdsPlaybookLink"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsPlaybookLink_kind_refId_key" ON "AdsPlaybookLink"("workspaceId", "kind", "refId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsPlaybookLink_playbookId_kind_key_key" ON "AdsPlaybookLink"("workspaceId", "playbookId", "kind", "key");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

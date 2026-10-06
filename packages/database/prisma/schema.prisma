@@ -16674,7 +16674,12 @@ model AdBlueprintApplication {
   /// can be told apart from one that never started.
   startedAt DateTime?
 
+  /// ADS PLAYBOOK — the AdsPlaybook PRODUCT row this run builds or syncs; null for a run started from the builder
+  /// (every run before the playbook). No foreign key: a run's record outlives a removed playbook row.
+  playbookId String?
+
   @@index([blueprintId])
+  @@index([playbookId])
   @@index([status])
   /// AX3.8 — "is a run already in flight for this product?" on every launch.
   @@index([marketplace, productToken, status])
@@ -19360,6 +19365,190 @@ model AdsStrategyVersion {
 
   @@unique([workspaceId, strategyId, version], name: "strategyId_version", map: "AdsStrategyVersion_strategyId_version_key")
   @@index([market, level, scopeId, createdAt])
+  @@index([workspaceId])
+}
+
+/// ADS PLAYBOOK — a reusable playbook: HOW a product's ads are built and run (the campaign set, names, budget split,
+/// start-bid ladder, placements, harvest and negation flows, rank roles, the phase table). Product-agnostic: the real
+/// terms (brand, category and competitor keywords, ASINs, negatives) live on AdsPlaybook PRODUCT rows, never here.
+///
+/// The playbook holds shape and recipe; every number an engine obeys stays in AdsStrategy (one home per kind of fact).
+/// No engine reads this table: a playbook is COMPILED into campaigns, rules, hourly plans and strategy numbers only by
+/// an approved apply. `doc` is validated by one zod schema (services/advertising/ads-playbook/doc.ts); a row's
+/// `overrides` replace a top-level section of it WHOLE.
+///
+/// Every change writes an AdsPlaybookVersion row (kind 'template') in the same transaction; `version` equals the newest.
+model AdsPlaybookTemplate {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// AMAZON only in v1.
+  channel      String @default("AMAZON")
+  /// SP only in v1.
+  adProduct    String @default("SP")
+  /// What screens and Claude call it: "Full funnel 11". Unique in a business.
+  name         String
+  /// +1 on every change; equals the newest AdsPlaybookVersion.version of this template.
+  version      Int    @default(1)
+  /// The PlaybookTemplateDoc: structure, budget, bids, placements, harvest, isolation, rank, phases.
+  doc          Json
+  /// When captured from live campaigns: { campaignIds, productToken, market, at }. Null when written by hand.
+  capturedFrom Json?
+  /// DRAFT | ACTIVE | RETIRED. A RETIRED template is kept for the rows and history that name it.
+  status       String @default("ACTIVE")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  /// 'user:<id>' or 'claude:<approvalId>'.
+  updatedBy String
+
+  @@unique([workspaceId, name], name: "workspace_name", map: "AdsPlaybookTemplate_workspace_name_key")
+  @@index([workspaceId])
+}
+
+/// ADS PLAYBOOK — one playbook row per scope in ONE market, scoped exactly like AdsStrategy: MARKET ('*'), CATEGORY
+/// (Category.id) or PRODUCT (Product.id, a parent or a variation). A MARKET or CATEGORY row says "products here use
+/// template X with these changes"; a PRODUCT row adds what only that product has.
+///
+/// Resolution, section by section, most specific first: PRODUCT (the variation, then its parent) → CATEGORY (the root
+/// product's primary category, deepest first) → MARKET → the template. Each section resolves WHOLE.
+///
+/// 🔴 A product is in only when its PRODUCT row says `enrolled` (Owner decision D-PB4): category and market rows are
+/// defaults, never an automatic build. `scopeId` is NOT nullable (the '*' sentinel; the AdsStrategy rule) and is
+/// polymorphic, so there is no foreign key: the writer checks the scope exists in this business.
+///
+/// Money is in minor units of the market's currency. Every change writes an AdsPlaybookVersion row (kind 'playbook') in
+/// the same transaction; `version` equals the newest.
+model AdsPlaybook {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// AMAZON only in v1.
+  channel String @default("AMAZON")
+  /// Short market code ('IT', 'DE', …).
+  market  String
+  /// MARKET | CATEGORY | PRODUCT
+  level   String
+  /// '*' for MARKET · Category.id for CATEGORY · Product.id for PRODUCT.
+  scopeId String @default("*")
+  /// What screens call it: "Jackets (IT)".
+  label   String
+  /// +1 on every change; equals the newest AdsPlaybookVersion.version of this row.
+  version Int    @default(1)
+
+  /// AdsPlaybookTemplate.id. Null = inherit the template from a broader row.
+  templateId String?
+  /// { "<section key>": <whole section> } — a section set here replaces the template's (and broader rows') WHOLE.
+  overrides  Json?
+
+  // ── PRODUCT rows only ──
+  /// The Owner's "include this product". Null on MARKET and CATEGORY rows.
+  enrolled                Boolean?
+  /// DRAFT | BUILDING | BUILT | RUNNING | STOPPED. No "paused": a stopped slot runs at low bids.
+  state                   String?
+  /// The product's token in campaign names.
+  nameToken               String?
+  portfolioName           String?
+  /// The product's daily ad budget, split across the slots by the template's weights.
+  dailyBudgetCents        Int?
+  /// The base bid the template's bid ladder multiplies.
+  baseBidCents            Int?
+  /// { brand[], category[{ text, exactAtStart }], competitor[], competitorAsins[], negatives[{ text, match }] }
+  terms                   Json?
+  /// The phase recipes made absolute for this product at enrollment (editable); written into AdsStrategy only by an
+  /// approved phase switch.
+  phaseRecipes            Json?
+  /// The row version / template version last applied (built, adopted or synced). Null = never applied.
+  compiledVersion         Int?
+  compiledTemplateVersion Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  /// 'user:<id>' or 'claude:<approvalId>'.
+  updatedBy String
+
+  @@unique([workspaceId, channel, market, level, scopeId], name: "channel_market_level_scopeId", map: "AdsPlaybook_channel_market_level_scopeId_key")
+  @@index([market, level])
+  @@index([templateId])
+  @@index([workspaceId])
+}
+
+/// ADS PLAYBOOK — one row per change of a template or a playbook row (`kind` says which); never updated or deleted.
+/// The audit and the history a screen restores from. A playbook row's scope is copied so its history still reads after
+/// the row was removed (the AdsStrategyVersion rule); a template's history leaves the scope empty.
+model AdsPlaybookVersion {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// template | playbook
+  kind    String
+  /// AdsPlaybookTemplate.id or AdsPlaybook.id. No foreign key: the history outlives a removed row.
+  refId   String
+  version Int
+
+  /// kind 'playbook' only: the row's scope.
+  market  String?
+  level   String?
+  scopeId String?
+
+  /// set | remove | capture | enroll | leave | adopt | build | sync | phase
+  op          String
+  /// The row's own values after the change; null after a remove.
+  values      Json?
+  /// [{ field | section, label, from, to, direction }]
+  changes     Json
+  /// raise | lower | same — raise when ANY change could add spend once the playbook is applied.
+  direction   String
+  /// screen | claude
+  via         String
+  /// The AgentApproval when the change came through Claude (or a change-plan step's approval).
+  approvalId  String?
+  /// The name shown.
+  actor       String
+  actorUserId String?
+  /// When a raise was confirmed with a fresh authenticator code; null for a change that does not raise.
+  stepUpAt    DateTime?
+  reason      String?   @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@unique([workspaceId, kind, refId, version], name: "kind_refId_version", map: "AdsPlaybookVersion_kind_refId_version_key")
+  @@index([kind, market, level, scopeId, createdAt])
+  @@index([workspaceId])
+}
+
+/// ADS PLAYBOOK — what a PRODUCT playbook row owns at Amazon and in Nexus: its slot campaigns, its compiled rules and
+/// hourly-plan groups, its portfolio. Written by apply (build / adopt / sync). One campaign plays ONE slot of ONE
+/// playbook; one slot (or artifact key) of a playbook has one link.
+model AdsPlaybookLink {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// AdsPlaybook.id of the PRODUCT row. No foreign key: the writer checks it, and a link outlives nothing it names.
+  playbookId      String
+  /// slot | harvestRule | isolationRule | rankGroup | portfolio
+  kind            String
+  /// The slot key ('exact-brand') or the artifact key ('rank:performance').
+  key             String
+  /// Campaign.id | AutomationRule.id | RankScheduleGroup.id | the Amazon portfolio id.
+  refId           String
+  /// Slot links: the slot's ad group (AdGroup.id).
+  adGroupId       String?
+  /// built (created by a playbook build) | adopted (an existing campaign bound to a slot; nothing written at Amazon)
+  origin          String
+  /// The playbook row version this link was written for.
+  compiledVersion Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  updatedBy String
+
+  @@unique([workspaceId, kind, refId], name: "kind_refId", map: "AdsPlaybookLink_kind_refId_key")
+  @@unique([workspaceId, playbookId, kind, key], name: "playbookId_kind_key", map: "AdsPlaybookLink_playbookId_kind_key_key")
   @@index([workspaceId])
 }
 
