@@ -167,6 +167,7 @@ async function reverseOne(
   if (!before || typeof before !== 'object') {
     return { ok: false, reason: 'payloadBefore missing or invalid' }
   }
+  if (isArchiveLog(log)) return { ok: false, skipped: true, reason: ARCHIVE_IS_FINAL }
 
   try {
     // D1 — placement-bias rollback (the rank engine's main lever). actionType-specific because the
@@ -320,6 +321,19 @@ async function reverseOne(
  * unpicking a quarter of it would leave the entity in a state that never existed. The caller is
  * told how many rows came with it so the confirm can say so BEFORE it happens.
  */
+/**
+ * An archive is final at Amazon: no write switches an archived campaign, ad group, keyword, target or product ad on
+ * again, so Undo never puts one back — re-enabling it in Nexus would show an ad Amazon no longer serves. While the
+ * archive still waits to be sent, cancel it instead (DELETE /advertising/mutations/:outboundQueueId).
+ */
+export const ARCHIVE_IS_FINAL = 'An archive cannot be undone: Amazon cannot switch an archived ad on again. While it still waits to be sent, cancel it instead.'
+
+/** The log row archived its entity (a status write to ARCHIVED from another status). */
+export function isArchiveLog(log: { payloadBefore: unknown; payloadAfter: unknown }): boolean {
+  const status = (p: unknown) => ((p as { status?: unknown } | null)?.status ?? null)
+  return status(log.payloadAfter) === 'ARCHIVED' && status(log.payloadBefore) !== 'ARCHIVED'
+}
+
 export async function previewRollbackOfAction(actionLogId: string): Promise<{
   found: boolean; eligible: boolean; reason?: string
   actionType?: string; entityType?: string; entityId?: string
@@ -329,6 +343,7 @@ export async function previewRollbackOfAction(actionLogId: string): Promise<{
   if (!log) return { found: false, eligible: false, reason: 'That change no longer exists.' }
   const base = { found: true, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId, changeSetId: log.executionId, at: log.createdAt }
   if (log.rolledBackAt) return { ...base, eligible: false, reason: 'Already undone.' }
+  if (isArchiveLog(log)) return { ...base, eligible: false, reason: ARCHIVE_IS_FINAL }
   if (log.amazonResponseStatus !== 'SUCCESS' && log.amazonResponseStatus !== 'PENDING') {
     // Nothing reached Amazon, so there is nothing to put back.
     return { ...base, eligible: false, reason: `This change never landed (${log.amazonResponseStatus ?? 'unknown'}) — there is nothing to reverse.` }

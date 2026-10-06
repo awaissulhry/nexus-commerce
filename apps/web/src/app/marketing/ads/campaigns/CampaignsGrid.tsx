@@ -2226,7 +2226,7 @@ export function CampaignsGrid() {
           open
           onClose={() => !applying && setBulkConfirm(null)}
           title={<>{bulkConfirm === 'ENABLED' ? 'Enable' : bulkConfirm === 'PAUSED' ? 'Pause' : 'Archive'} {sel.size} campaign{sel.size > 1 ? 's' : ''}</>}
-          subtitle="Live markets push to Amazon (write-gate enforced); non-live markets update locally only."
+          subtitle={`${bulkConfirm === 'ARCHIVED' ? 'Permanent: Amazon cannot switch an archived campaign on again, and Undo cannot put it back. ' : ''}Live markets push to Amazon (write-gate enforced); non-live markets update locally only.`}
           footer={
             <>
               <span className="grow" />

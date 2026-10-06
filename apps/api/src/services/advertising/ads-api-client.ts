@@ -1542,6 +1542,56 @@ export interface TargetPatch {
 }
 
 /**
+ * The archive of a campaign, an ad group, a keyword, a product target or a product ad is SP v3
+ * `POST {path}/delete`, as 5f found for the negatives (below). Amazon's Sponsored Products 3.0 OpenAPI document (the same
+ * file, read again 2026-10-06) gives every one of these PUTs `SponsoredProductsCreateOrUpdateEntityState` —
+ * `["ENABLED","PAUSED","PROPOSED"]`, no ARCHIVED — and archives through a delete operation per entity, keyed by an id
+ * filter, answered 207 with the PUT's own `{ <key>: { success, error } }` block. ARCHIVED is a state Amazon reports
+ * afterwards (`SponsoredProductsEntityState`), and it is final: no PUT switches it on again.
+ *
+ *   campaign   DeleteSponsoredProductsCampaigns          POST /sp/campaigns/delete   { campaignIdFilter: { include } }
+ *   adGroup    DeleteSponsoredProductsAdGroups           POST /sp/adGroups/delete    { adGroupIdFilter: { include } }
+ *   keyword    DeleteSponsoredProductsKeywords           POST /sp/keywords/delete    { keywordIdFilter: { include } }
+ *   target     DeleteSponsoredProductsTargetingClauses   POST /sp/targets/delete     { targetIdFilter: { include } }
+ *   productAd  DeleteSponsoredProductsProductAds         POST /sp/productAds/delete  { adIdFilter: { include } }
+ *
+ * A person's own archive (the Archive actions on the campaign screens, `manual` on the queue row) is sent this way
+ * (ads-sync.worker.ts); it used to be a PUT with state ARCHIVED, which Amazon does not accept. The update functions
+ * above still PUT any state they are handed.
+ */
+export const SP_V3_ARCHIVE = {
+  campaign: { path: '/sp/campaigns/delete', mime: 'application/vnd.spCampaign.v3+json', idFilter: 'campaignIdFilter', key: 'campaigns' },
+  adGroup: { path: '/sp/adGroups/delete', mime: 'application/vnd.spAdGroup.v3+json', idFilter: 'adGroupIdFilter', key: 'adGroups' },
+  keyword: { path: '/sp/keywords/delete', mime: 'application/vnd.spKeyword.v3+json', idFilter: 'keywordIdFilter', key: 'keywords' },
+  target: { path: '/sp/targets/delete', mime: 'application/vnd.spTargetingClause.v3+json', idFilter: 'targetIdFilter', key: 'targetingClauses' },
+  productAd: { path: '/sp/productAds/delete', mime: 'application/vnd.spProductAd.v3+json', idFilter: 'adIdFilter', key: 'productAds' },
+} as const
+export type SpArchiveEntity = keyof typeof SP_V3_ARCHIVE
+
+/** Archive one Sponsored Products entity at Amazon, for good (SP_V3_ARCHIVE). Through the gateway (liveCall). */
+export async function archiveSpEntity(
+  ctx: ClientContext,
+  entity: SpArchiveEntity,
+  externalId: string,
+): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown; error?: string | null }> {
+  const spec = SP_V3_ARCHIVE[entity]
+  if (adsMode() === 'sandbox') {
+    logger.info('[ADS-SANDBOX] archiveSpEntity', { profileId: ctx.profileId, entity, externalId, route: spec.path })
+    return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, operation: 'delete', route: spec.path } }
+  }
+  const response = await liveCall<unknown>({
+    ...ctx,
+    method: 'POST',
+    path: spec.path,
+    body: { [spec.idFilter]: { include: [externalId] } },
+    contentType: spec.mime,
+    acceptHeader: spec.mime,
+  })
+  const parsed = v3BatchResult(response, spec.key)
+  return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
+}
+
+/**
  * DL.1 — a target's bid/state update must go to the endpoint that owns its id.
  *
  * This function used to PUT /sp/keywords for EVERY AdTarget. That is correct only for keyword

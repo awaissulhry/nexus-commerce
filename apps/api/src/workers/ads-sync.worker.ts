@@ -30,10 +30,12 @@ import {
   updateTarget,
   updateProductAd,
   updatePortfolio,
+  archiveSpEntity,
   listCampaignsV3,
   adsMode,
   type CampaignPatch,
   type ClientContext,
+  type SpArchiveEntity,
   type AdsRegion,
 } from '../services/advertising/ads-api-client.js'
 import {
@@ -244,9 +246,23 @@ async function currentPlacementLanes(
   }
 }
 
+/** Which SP v3 delete operation archives this entity; null for a negative (updateTarget routes its own, 5f). */
+async function archiveEntityOf(payload: AdMutationPayload): Promise<SpArchiveEntity | null> {
+  if (payload.entityType === 'CAMPAIGN') return 'campaign'
+  if (payload.entityType === 'AD_GROUP') return 'adGroup'
+  if (payload.entityType === 'PRODUCT_AD') return 'productAd'
+  if (payload.entityType !== 'AD_TARGET') return null
+  const t = await prisma.adTarget.findUnique({ where: { id: payload.entityId }, select: { kind: true, isNegative: true } })
+  if (!t || t.isNegative) return null
+  // DL.1 — product and auto targets live under /sp/targets, keywords under /sp/keywords.
+  return t.kind === 'PRODUCT' || t.kind === 'AUTO' ? 'target' : 'keyword'
+}
+
 async function dispatchToAmazon(
   payload: AdMutationPayload,
   ctx: ClientContext,
+  /** The queue row is a person's own edit (isPersonEdit off its JSON, as the gate is handed it). */
+  opts: { manual?: boolean } = {},
 ): Promise<{ ok: boolean; rawResponse: unknown; error: string | null }> {
   const patch = patchFromChanges(payload)
   if (!payload.externalId) {
@@ -256,6 +272,17 @@ async function dispatchToAmazon(
     return { ok: true, rawResponse: { skipped: 'no_external_id' }, error: null }
   }
   try {
+    // A person's own archive (the Archive actions on the campaign screens) is Amazon's delete operation: no PUT archives
+    // a campaign, an ad group, a keyword, a target or a product ad (ads-api-client.ts SP_V3_ARCHIVE). It went out as a
+    // PUT with state ARCHIVED, which Amazon's schema does not accept. A negative keeps updateTarget's own delete route
+    // (5f); every other write goes out as before.
+    if (opts.manual && patch.state === 'archived') {
+      const entity = await archiveEntityOf(payload)
+      if (entity) {
+        const res = await archiveSpEntity(ctx, entity, payload.externalId)
+        return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
+      }
+    }
     if (payload.entityType === 'CAMPAIGN') {
       let campaignPatch: CampaignPatch = patch
       // 1a (CM-1) — see currentPlacementLanes. Sandbox has no Amazon to read and sends nothing.
@@ -566,7 +593,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   }
 
   const ctx: ClientContext = { profileId, region: regionFor(marketplace) }
-  const result = await dispatchToAmazon(payload, ctx)
+  const result = await dispatchToAmazon(payload, ctx, { manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor) })
   if (result.ok) {
     const localOnly = (result.rawResponse as { skipped?: string } | null)?.skipped // e.g. 'no_external_id' — NOTHING reached Amazon
     await prisma.outboundSyncQueue.update({
