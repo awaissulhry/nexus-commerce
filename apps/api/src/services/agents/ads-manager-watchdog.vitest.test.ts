@@ -2,9 +2,10 @@
  * ADS AUTONOMY W4-2 — the daily Claude ads run's watchdog, on PGlite with the production schema and business policies.
  *
  *   clock       the expected moment on the business's own clock (DST included) and the last deadline that passed
- *   missing     no report by the expected time + 30 min → one danger notice and one e-mail, once; a report that ran,
- *               or that waits for a person, is no miss; a setting newer than the deadline does not look back
- *   started     a run that started 2 hours ago and reported no end → one danger notice and one e-mail, once
+ *   missing     no report by the expected time + 30 min → one danger notice and one e-mail, once, naming the business;
+ *               a report that ran, or that waits for a person, is no miss; a late report of the day before or a
+ *               withdrawn one is no report; a setting newer than the deadline does not look back
+ *   started     runs that started 2 hours ago and reported no end → ONE danger notice and one e-mail naming them all
  *   recipients  the digest list, else this business's own people who may see its ads
  *   setting     set-ads-report-time: a person approves it (ceiling ask); a bad zone is refused; undo puts it back
  *   cron        registered through lib/cron/clustered.ts (the real wrapper; node-cron only records) at :40, off with
@@ -136,8 +137,9 @@ describe('W4-2 — the expected moment, on the business\'s own clock', () => {
   })
 
   it('the last deadline that passed: today\'s once 30 minutes are over, else yesterday\'s', () => {
+    // A report counts for its own day only: from 12 hours before the due time to its deadline.
     expect(lastDeadline(at('2026-10-06T06:20:00Z'), ROME)).toEqual({
-      due: at('2026-10-05T06:00:00Z'), previous: at('2026-10-04T06:00:00Z'), deadline: at('2026-10-05T06:30:00Z'), since: at('2026-10-04T06:30:00Z'),
+      due: at('2026-10-05T06:00:00Z'), previous: at('2026-10-04T06:00:00Z'), deadline: at('2026-10-05T06:30:00Z'), since: at('2026-10-04T18:00:00Z'),
     })
     expect(lastDeadline(at('2026-10-06T06:40:00Z'), ROME).due).toEqual(at('2026-10-06T06:00:00Z'))
     // Across the autumn change: 08:00 is 07:00 UTC again, the window is 25 hours long.
@@ -148,7 +150,7 @@ describe('W4-2 — the expected moment, on the business\'s own clock', () => {
 describe('W4-2 — one tick in one business', { timeout: TIMEOUT }, () => {
   it('no expected time and no started run: nothing at all', async () => {
     const tick = await inside(() => runWatchdogOnce(at('2026-10-06T06:40:00Z')))
-    expect(tick).toEqual({ expected: null, missing: null, stuck: [] })
+    expect(tick).toEqual({ expected: null, missing: null, stuck: null })
     expect(await watchdogNotices()).toEqual([])
     expect(mail.sent).toHaveLength(0)
   })
@@ -158,9 +160,11 @@ describe('W4-2 — one tick in one business', { timeout: TIMEOUT }, () => {
     const tick = await inside(() => runWatchdogOnce(at('2026-10-06T06:40:00Z')))
     expect(tick.missing).toMatchObject({ due: '2026-10-06T06:00:00.000Z', alert: { notices: 1, email: 'sent' } })
     const [notice] = await watchdogNotices()
-    expect(notice).toMatchObject({ severity: 'danger', title: 'Claude ads: the daily run did not report', userId: ids.person, meta: { check: 'no-report', due: '2026-10-06T06:00:00.000Z' } })
+    // The bell and the e-mail name the business.
+    const name = (await db().workspace.findUniqueOrThrow({ where: { id: A }, select: { name: true } })).name
+    expect(notice).toMatchObject({ severity: 'danger', title: `Claude ads: the daily run did not report — ${name}`, userId: ids.person, meta: { check: 'no-report', due: '2026-10-06T06:00:00.000Z' } })
     expect(notice.body).toContain('by 08:00 (Europe/Rome)')
-    expect(mail.sent).toEqual([expect.objectContaining({ to: ['owner@example.test'], subject: 'Claude ads: the daily run did not report' })])
+    expect(mail.sent).toEqual([expect.objectContaining({ to: ['owner@example.test'], subject: `Claude ads: the daily run did not report — ${name}` })])
     // The next tick, an hour later, says nothing again for the same day.
     expect((await inside(() => runWatchdogOnce(at('2026-10-06T07:40:00Z')))).missing).toBeNull()
     expect(await watchdogNotices()).toHaveLength(1)
@@ -194,20 +198,37 @@ describe('W4-2 — one tick in one business', { timeout: TIMEOUT }, () => {
     expect((await inside(() => runWatchdogOnce(at('2026-10-12T06:40:00Z')))).missing).toBeNull()
   })
 
-  it('a run that started 2 hours ago and reported no end: one alert, once; one started an hour ago is not late yet', async () => {
+  it('runs that started 2 hours ago and reported no end: ONE alert names them all, once; one started an hour ago is not late yet', async () => {
     const now = at('2026-10-13T09:00:00Z')
     const late = await runRow({ status: 'running', createdAt: at('2026-10-13T06:30:00Z') })
+    const later = await runRow({ status: 'running', createdAt: at('2026-10-13T06:45:00Z') })
     const fresh = await runRow({ status: 'running', createdAt: at('2026-10-13T08:00:00Z') })
     const sent = mail.sent.length
+    const before = (await watchdogNotices()).length
     const tick = await inside(() => runWatchdogOnce(now))
-    expect(tick.stuck).toEqual([{ runId: late.id, alert: { notices: 1, email: 'sent' } }])
-    const notice = (await watchdogNotices()).at(-1)!
-    expect(notice).toMatchObject({ severity: 'danger', title: 'Claude ads: a daily run started and did not finish', meta: { check: 'started-no-end', runId: late.id } })
-    expect(notice.body).toContain('started at 08:30 (Europe/Rome)')
+    expect(tick.stuck).toEqual({ runIds: [late.id, later.id], alert: { notices: 1, email: 'sent' } })
+    const notices = await watchdogNotices()
+    expect(notices).toHaveLength(before + 1)
+    expect(notices.at(-1)).toMatchObject({ severity: 'danger', title: expect.stringMatching(/^Claude ads: 2 daily runs started and did not finish — .+/), meta: { check: 'started-no-end', runIds: [late.id, later.id] } })
+    expect(notices.at(-1)!.body).toContain('started at 08:30 (Europe/Rome)')
+    expect(notices.at(-1)!.body).toContain(later.id)
     expect(mail.sent).toHaveLength(sent + 1)
-    expect((await inside(() => runWatchdogOnce(at('2026-10-13T09:30:00Z')))).stuck).toEqual([])
+    expect((await inside(() => runWatchdogOnce(at('2026-10-13T09:30:00Z')))).stuck).toBeNull()
     // Done: no run of this business is left started (the cron test below runs at today's real time).
-    await inside(() => db().agentRun.updateMany({ where: { id: { in: [late.id, fresh.id] } }, data: { status: 'done', endedAt: now } }))
+    await inside(() => db().agentRun.updateMany({ where: { id: { in: [late.id, later.id, fresh.id] } }, data: { status: 'done', endedAt: now } }))
+  })
+
+  it('a report that came late for the day before does not stand for today; a withdrawn report never counts', async () => {
+    await setLongAgo(ROME)
+    // Day 1: no report by the deadline → alerted. It arrives late, hours after.
+    expect((await inside(() => runWatchdogOnce(at('2026-10-15T06:40:00Z')))).missing).toMatchObject({ due: '2026-10-15T06:00:00.000Z' })
+    await runRow({ status: 'done', createdAt: at('2026-10-15T09:30:00Z'), endedAt: at('2026-10-15T10:00:00Z') })
+    // Day 2: no report of its own → alerted again.
+    expect((await inside(() => runWatchdogOnce(at('2026-10-16T06:40:00Z')))).missing).toMatchObject({ due: '2026-10-16T06:00:00.000Z' })
+    // Day 3: a report came in time, then was withdrawn → no report.
+    await runRow({ status: 'cancelled', createdAt: at('2026-10-17T04:30:00Z'), endedAt: at('2026-10-17T05:00:00Z') })
+    expect((await inside(() => runWatchdogOnce(at('2026-10-17T06:40:00Z')))).missing).toMatchObject({ due: '2026-10-17T06:00:00.000Z' })
+    await inside(() => writeExpectedReport(null, 'test'))
   })
 })
 
@@ -271,7 +292,7 @@ describe('W4-2 — the cron: clustered, hourly, inside each business', { timeout
       await clocks.armed[0].tick()
       const inB = await watchdogNotices(B)
       expect(inB).toHaveLength(before.b + 1)
-      expect(inB.at(-1)).toMatchObject({ workspaceId: B, userId: ids.person, meta: { check: 'started-no-end', runId: late.id } })
+      expect(inB.at(-1)).toMatchObject({ workspaceId: B, userId: ids.person, title: 'Claude ads: a daily run started and did not finish — Bravo watchdog business', meta: { check: 'started-no-end', runIds: [late.id] } })
       expect(await watchdogNotices(A)).toHaveLength(before.a)
       // Its CronRun row is B's (the check found something there).
       expect(await inside(() => db().cronRun.count({ where: { jobName: 'claude-ads-run-watchdog' } }), B)).toBe(1)

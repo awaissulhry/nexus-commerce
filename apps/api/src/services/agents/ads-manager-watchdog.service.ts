@@ -10,7 +10,8 @@
  *   missing report  no finish or fail of a run by the expected time + 30 minutes, since the day before's deadline → one
  *                   danger notice and one e-mail (claude-alerts.service.ts). A report that waits for a person in
  *                   Approvals counts as arrived: the run did report.
- *   started, no end a run that started 2 hours ago or more and reported no end → one danger notice and one e-mail.
+ *   started, no end the runs that started 2 hours ago or more and reported no end → one danger notice and one e-mail a
+ *                   tick, naming them all.
  *
  * Each alert is raised once (the alerted moments and runs are kept in AgentMemory key `watchdog`). The cron
  * (jobs/claude-ads-run-watchdog.job.ts) runs hourly through lib/cron/clustered.ts, which runs it inside EACH business's
@@ -112,9 +113,13 @@ const shift = (day: { y: number; m: number; d: number }, days: number) => {
   return { y: at.getUTCFullYear(), m: at.getUTCMonth() + 1, d: at.getUTCDate() }
 }
 
+/** How long before its due time a report counts for that day: a late report of the day before never does. */
+export const REPORT_LOOKBACK_MS = 12 * 3600_000
+
 /**
- * The newest expected moment whose deadline (+ 30 min) has passed at `now`, and the one the day before: the report of
- * `due` is the one that arrived after the day before's deadline and by its own.
+ * The newest expected moment whose deadline (+ 30 min) has passed at `now`, and the one the day before. The report of
+ * `due` is one that arrived in the 12 hours before it or by its deadline (`since` → `deadline`), so a report that came
+ * late for the day before — after that deadline, alerted already — does not stand for this one.
  */
 export function lastDeadline(now: Date, expected: ExpectedReport): { due: Date; previous: Date; deadline: Date; since: Date } {
   const today = dayIn(now, expected.timeZone)
@@ -125,7 +130,8 @@ export function lastDeadline(now: Date, expected: ExpectedReport): { due: Date; 
     due = zonedMoment(day, expected.time, expected.timeZone)
   }
   const previous = zonedMoment(shift(day, -1), expected.time, expected.timeZone)
-  return { due, previous, deadline: new Date(due.getTime() + REPORT_GRACE_MS), since: new Date(previous.getTime() + REPORT_GRACE_MS) }
+  const previousDeadline = previous.getTime() + REPORT_GRACE_MS
+  return { due, previous, deadline: new Date(due.getTime() + REPORT_GRACE_MS), since: new Date(Math.max(previousDeadline, due.getTime() - REPORT_LOOKBACK_MS)) }
 }
 
 const clock = (at: Date, timeZone: string) =>
@@ -141,14 +147,18 @@ async function stateOf(): Promise<WatchdogState> {
 }
 
 /**
- * Did a run report its end in this window? report-ads-run is a journal and records at once; a business whose own tool
- * policy makes it wait for a person leaves a request instead, which counts too (the run did report).
+ * Did a run report its end in this window? A finished or failed run does; a withdrawn one (cancelled) never does.
+ * report-ads-run records at once (a journal); where a business's own tool policy makes a report wait for a person, the
+ * request still waiting (or about to run) counts too — the run did report. Once it ran, its run record answers.
  */
 async function reportArrived(since: Date, deadline: Date): Promise<boolean> {
   const [ended, asked] = await Promise.all([
-    prisma.agentRun.count({ where: { agentKey: ADS_MANAGER_AGENT_KEY, endedAt: { gt: since, lte: deadline }, status: { in: ['done', 'failed', 'cancelled'] } } }),
+    prisma.agentRun.count({ where: { agentKey: ADS_MANAGER_AGENT_KEY, endedAt: { gt: since, lte: deadline }, status: { in: ['done', 'failed'] } } }),
     prisma.agentApproval.count({
-      where: { toolName: 'report-ads-run', requestedAt: { gt: since, lte: deadline }, OR: [{ args: { path: ['op'], equals: 'finish' } }, { args: { path: ['op'], equals: 'fail' } }] },
+      where: {
+        toolName: 'report-ads-run', status: { in: ['pending', 'scheduled', 'executing'] }, requestedAt: { gt: since, lte: deadline },
+        OR: [{ args: { path: ['op'], equals: 'finish' } }, { args: { path: ['op'], equals: 'fail' } }],
+      },
     }),
   ])
   return ended + asked > 0
@@ -157,13 +167,14 @@ async function reportArrived(since: Date, deadline: Date): Promise<boolean> {
 export interface WatchdogTick {
   expected: ExpectedReport | null
   missing: { due: string; alert: AlertOutcome } | null
-  stuck: Array<{ runId: string; alert: AlertOutcome }>
+  /** The runs found started without an end this tick: ONE alert names them all. */
+  stuck: { runIds: string[]; alert: AlertOutcome } | null
 }
 
 /** One watchdog tick in the business the caller is in. Idempotent: each alert is raised once. */
 export async function runWatchdogOnce(now = new Date()): Promise<WatchdogTick> {
   const [expected, state] = await Promise.all([readExpectedReport(), stateOf()])
-  const tick: WatchdogTick = { expected: expected ? { time: expected.time, timeZone: expected.timeZone } : null, missing: null, stuck: [] }
+  const tick: WatchdogTick = { expected: expected ? { time: expected.time, timeZone: expected.timeZone } : null, missing: null, stuck: null }
   const zone = expected?.timeZone ?? 'Europe/Rome'
 
   // A run that started 2 hours ago or more and reported no end.
@@ -172,17 +183,19 @@ export async function runWatchdogOnce(now = new Date()): Promise<WatchdogTick> {
     orderBy: { createdAt: 'asc' },
     select: { id: true, createdAt: true },
   })
-  for (const run of stuck.filter((r) => !state.stuck.includes(r.id))) {
+  const late = stuck.filter((r) => !state.stuck.includes(r.id))
+  if (late.length) {
+    const which = late.map((run) => `started at ${clock(run.createdAt, zone)} (${zone}), run ${run.id}`)
     const alert = await alertBusiness({
       type: WATCHDOG_NOTICE_TYPE,
-      title: 'Claude ads: a daily run started and did not finish',
-      body: `The daily Claude ads run that started at ${clock(run.createdAt, zone)} (${zone}) has reported no end in 2 hours (run ${run.id}).\n`
+      title: late.length === 1 ? 'Claude ads: a daily run started and did not finish' : `Claude ads: ${late.length} daily runs started and did not finish`,
+      body: `${late.length === 1 ? 'A daily Claude ads run has' : `${late.length} daily Claude ads runs have`} reported no end in 2 hours: ${which.slice(0, 10).join('; ')}.\n`
         + 'Open the run on claude.ai to read why. Anything it asked for that waits for a person is in Nexus Approvals.',
       href: HREF,
-      meta: { runId: run.id, check: 'started-no-end' },
+      meta: { runIds: late.map((run) => run.id), check: 'started-no-end' },
     })
-    tick.stuck.push({ runId: run.id, alert })
-    state.stuck.push(run.id)
+    tick.stuck = { runIds: late.map((run) => run.id), alert }
+    state.stuck.push(...late.map((run) => run.id))
   }
 
   // No report by the expected time + 30 minutes. A setting newer than that deadline does not look back at it.
@@ -203,7 +216,7 @@ export async function runWatchdogOnce(now = new Date()): Promise<WatchdogTick> {
     }
   }
 
-  if (tick.missing || tick.stuck.length) {
+  if (tick.missing || tick.stuck) {
     await writeMemory(STATE_KEY, { missed: state.missed.slice(-14), stuck: state.stuck.slice(-50) }, 'Nexus')
   }
   return tick

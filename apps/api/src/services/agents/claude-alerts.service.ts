@@ -12,6 +12,7 @@
  */
 
 import prisma from '../../db.js'
+import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
 import { sendEmail } from '../email/transport.js'
 import { notifyAutomationDetailed } from '../advertising/ads-automation-notify.service.js'
@@ -62,8 +63,16 @@ async function businessRecipients(): Promise<string[]> {
   return adsPeople({ money: false })
 }
 
-/** To the business: a danger notice to its people's bell, and the e-mail (businessRecipients). */
-export async function alertBusiness(m: AlertMessage): Promise<AlertOutcome> {
+/** The business the caller is in, by its own name, for a title (the bell and the e-mail say which business). */
+async function businessNameNow(): Promise<string | null> {
+  const row = await prisma.workspace.findUnique({ where: { id: workspaceIdForQuery() }, select: { name: true } }).catch(() => null)
+  return row?.name ?? null
+}
+
+/** To the business: a danger notice to its people's bell, and the e-mail (businessRecipients); both name the business. */
+export async function alertBusiness(alert: AlertMessage): Promise<AlertOutcome> {
+  const name = await businessNameNow()
+  const m = name ? { ...alert, title: `${alert.title} — ${name}` } : alert
   try {
     const notice = await notifyAutomationDetailed({ type: m.type, severity: 'danger', title: m.title, body: m.body, href: m.href, meta: m.meta })
     return { notices: notice.created, email: await mail(await businessRecipients(), m) }

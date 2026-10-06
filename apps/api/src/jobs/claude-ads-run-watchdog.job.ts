@@ -19,7 +19,7 @@ export const WATCHDOG_SCHEDULE = '40 * * * *'
 let task: ReturnType<typeof cron.schedule> | null = null
 
 const summaryOf = (tick: WatchdogTick) =>
-  `expected=${tick.expected ? `${tick.expected.time} ${tick.expected.timeZone}` : 'off'} missing=${tick.missing ? 1 : 0} stuck=${tick.stuck.length}`
+  `expected=${tick.expected ? `${tick.expected.time} ${tick.expected.timeZone}` : 'off'} missing=${tick.missing ? 1 : 0} stuck=${tick.stuck?.runIds.length ?? 0}`
 
 /** One tick in the business the caller is in. */
 export async function runAdsRunWatchdogTick(now = new Date()): Promise<WatchdogTick | null> {
@@ -28,10 +28,10 @@ export async function runAdsRunWatchdogTick(now = new Date()): Promise<WatchdogT
     // graph is no business of its boot (runtime/module-load-order.vitest.test.ts).
     const { runWatchdogOnce } = await import('../services/agents/ads-manager-watchdog.service.js')
     const tick = await runWatchdogOnce(now)
-    if (tick.expected || tick.missing || tick.stuck.length) {
+    if (tick.expected || tick.missing || tick.stuck) {
       await recordCronRun(JOB_NAME, async () => summaryOf(tick)).catch(() => { /* the run log never breaks the job */ })
     }
-    if (tick.missing || tick.stuck.length) logger.warn('[claude-ads-run-watchdog] alerted', { summary: summaryOf(tick) })
+    if (tick.missing || tick.stuck) logger.warn('[claude-ads-run-watchdog] alerted', { summary: summaryOf(tick) })
     return tick
   } catch (error) {
     logger.error('[claude-ads-run-watchdog] tick failed', { error: error instanceof Error ? error.message : String(error) })
