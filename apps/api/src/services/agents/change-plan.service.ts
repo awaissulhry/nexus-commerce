@@ -31,6 +31,7 @@ import { decideByRule, EXPIRY_HOURS, requestDoor, type GateOutcome, type GateRul
 import { callTool, executeTool, ToolAccessError, type ToolPrincipal, type UserPrincipal } from './call-tool.js'
 import { recordExecutedChangeSafely } from './change-record.service.js'
 import { autoPlanStepRefusal, noteAutoFailure } from './claude-trust.service.js'
+import { mergedStepUp } from './step-up-approval.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { getTool } from './tool-registry.js'
 import { PLAN_MAX_STEPS, PLAN_TOOL, type AgentTool, type PlanRequest, type ToolRequest } from './tool-types.js'
@@ -171,7 +172,10 @@ export async function queuePlan(
   const summary = planSummary(kinds)
   const planHash = planHashOf({ title, steps: plan.steps })
   const outbound = kinds.filter((kind) => kind.outbound).reduce((n, kind) => n + kind.count, 0)
-  const preview = { action: PLAN_TOOL, title, summary, kinds, totals: { steps: checked.length, reachOutside: outbound } }
+  // ADS AUTONOMY W1-3 — a step that raises (its preview's `stepUp`) makes the whole plan one a person approves with their
+  // authenticator code: said on the plan itself, where the Approvals page and the bulk approve read it.
+  const stepUp = mergedStepUp(checked.map((c) => c.raw))
+  const preview = { action: PLAN_TOOL, title, summary, kinds, totals: { steps: checked.length, reachOutside: outbound }, ...(stepUp ? { stepUp } : {}) }
   const approval = await prisma.$transaction(async (tx) => {
     const created = await tx.agentApproval.create({
       data: {
@@ -212,6 +216,7 @@ export async function queuePlan(
       kinds,
       steps: checked.slice(0, PREVIEW_STEPS).map((step, index) => ({ step: index + 1, tool: step.tool.name, preview: step.visible })),
       ...(checked.length > PREVIEW_STEPS ? { moreSteps: checked.length - PREVIEW_STEPS } : {}),
+      ...(stepUp ? { stepUp } : {}),
     },
     plan: { steps: checked.length, summary, planHash },
     ...(rule ? { rule } : {}),
