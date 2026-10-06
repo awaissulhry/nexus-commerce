@@ -9,6 +9,7 @@
  *              copy was stolen, so the whole connection is revoked (OAuth 2.1 §4.3.1). W4-3 — except
  *              the same app within 2 minutes, before anything the first answer bought was used (a
  *              lost answer, two refreshes at once): those unused tokens end and it gets a new pair.
+ *              One of those ended tokens presented later is reuse again: the connection is revoked.
  *   /mcp       verifyAccessToken finds the person, the business and their permissions — fresh
  *              on every call, so a removed member or a changed role takes effect at once.
  *
@@ -356,6 +357,17 @@ export async function exchangeCode(form: Record<string, string | undefined>): Pr
   return response
 }
 
+/** A stolen copy of a refresh token: every token of the connection ends and it is revoked (refresh_reuse), audited once. */
+async function revokeForReuse(tx: Tx, grant: { id: string; workspaceId: string }, detail: Record<string, unknown> = {}): Promise<void> {
+  const now = new Date()
+  await endTokens(tx, grant.id, now)
+  const revoked = await tx.oAuthGrant.updateMany({ where: { id: grant.id, revokedAt: null }, data: { revokedAt: now, revokeReason: 'refresh_reuse' } })
+  if (revoked.count === 0) return
+  await tx.workspaceAudit.create({
+    data: { workspaceId: grant.workspaceId, actorUserId: null, action: 'oauth.revoked', targetId: grant.id, metadata: { reason: 'refresh_reuse', ...detail } },
+  })
+}
+
 /**
  * W4-3 — a used refresh token presented again by its own app (client_id is checked before) within REFRESH_GRACE_SECONDS
  * of its first use, while nothing it bought has been used (no call with its access token, no refresh with its refresh
@@ -384,6 +396,21 @@ export async function refreshTokens(form: Record<string, string | undefined>): P
   })
   if (!row || row.kind !== 'refresh') throw invalidGrant('unknown refresh token')
   if (row.grant.client.clientId !== clientId) throw invalidGrant('refresh token was issued to another app')
+  if (row.revokedAt && !row.usedAt && row.parentId && !row.grant.revokedAt && !row.grant.client.disabledAt) {
+    // W4-3 — a refresh token a retry ended (only a retry gives one parent a second, newer refresh child), presented
+    // later: whoever holds it lost the race to a copy, or is the copy. End the whole connection, as for any reuse.
+    const parentId = row.parentId
+    const reused = await prisma.$transaction(async (tx) => {
+      const newer = await tx.oAuthToken.count({ where: { parentId, kind: 'refresh', id: { not: row.id }, createdAt: { gt: row.createdAt } } })
+      if (newer === 0) return false
+      await revokeForReuse(tx, row.grant, { endedByRetry: true })
+      return true
+    })
+    if (reused) {
+      logger.warn('[oauth] a refresh token a retry had ended was presented again: the connection was revoked', { grantId: row.grantId })
+      throw invalidGrant('refresh token already used; the connection was revoked')
+    }
+  }
   if (row.revokedAt || row.grant.revokedAt || row.grant.client.disabledAt) throw invalidGrant('connection revoked')
   if (row.expiresAt.getTime() <= Date.now()) throw invalidGrant('refresh token expired')
   if (form.resource && form.resource.replace(/\/+$/, '') !== row.resource) throw new OAuthError('invalid_target', 'resource does not match')
@@ -410,14 +437,7 @@ export async function refreshTokens(form: Record<string, string | undefined>): P
         return { tokens: await issueTokens(tx, row.grant, asked, row.resource, row.id), retry: metadata }
       }
       // Used before: only a stolen copy is presented twice. End the whole connection.
-      await endTokens(tx, row.grantId, new Date())
-      await tx.oAuthGrant.updateMany({
-        where: { id: row.grantId, revokedAt: null },
-        data: { revokedAt: new Date(), revokeReason: 'refresh_reuse' },
-      })
-      await tx.workspaceAudit.create({
-        data: { workspaceId: row.grant.workspaceId, actorUserId: null, action: 'oauth.revoked', targetId: row.grantId, metadata: { reason: 'refresh_reuse' } },
-      })
+      await revokeForReuse(tx, row.grant)
       return null
     }
     return { tokens: await issueTokens(tx, row.grant, asked, row.resource, row.id), retry: null }

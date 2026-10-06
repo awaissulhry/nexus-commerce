@@ -508,9 +508,8 @@ describe('W4-3 — a refresh presented again within seconds by the same app, bef
       expect(await verifyAccessToken(lost.access_token)).toBeNull()
       expect(await verifyAccessToken(retried.access_token)).not.toBeNull()
       expect((await grantRow()).revokedAt).toBeNull()
-      // The new pair goes on as usual; the ended one is refused.
+      // The new pair goes on as usual.
       expect(await verifyAccessToken((await refresh(retried.refresh_token)).access_token)).not.toBeNull()
-      await expectOAuthError(refresh(lost.refresh_token), 'invalid_grant')
 
       const grantId = (await grantRow()).id
       expect(await retries()).toBe(before + 1)
@@ -574,5 +573,54 @@ describe('W4-3 — a refresh presented again within seconds by the same app, bef
     // The first call is kept on the access token: that is what closes the retry for its parent.
     expect((await database.client.oAuthToken.findUniqueOrThrow({ where: { tokenHash: hashToken(next.access_token) } })).usedAt).not.toBeNull()
     expect(await retries()).toBe(before)
+  })
+
+  const reuseRevocations = async () =>
+    database.client.workspaceAudit.count({ where: { action: 'oauth.revoked', targetId: (await grantRow()).id, metadata: { path: ['reason'], equals: 'refresh_reuse' } } })
+
+  it('a refresh token the retry ended, presented later, is a stolen copy: the connection ends, the retried pair too', async () => {
+    const { tokens } = await connect()
+    const lost = await refresh(tokens.refresh_token)
+    const retried = await refresh(tokens.refresh_token)
+    const before = await reuseRevocations()
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+    try {
+      const late = refresh(lost.refresh_token)
+      await expect(late).rejects.toMatchObject({ error: 'invalid_grant', description: 'refresh token already used; the connection was revoked' })
+      expect((await grantRow()).revokeReason).toBe('refresh_reuse')
+      expect(await verifyAccessToken(retried.access_token)).toBeNull()
+      await expectOAuthError(refresh(retried.refresh_token), 'invalid_grant')
+      expect(await reuseRevocations()).toBe(before + 1)
+      const audit = await database.client.workspaceAudit.findFirst({ where: { action: 'oauth.revoked', targetId: (await grantRow()).id }, orderBy: { createdAt: 'desc' } })
+      expect(audit?.metadata).toEqual({ reason: 'refresh_reuse', endedByRetry: true })
+      expect(warn).toHaveBeenCalledWith('[oauth] a refresh token a retry had ended was presented again: the connection was revoked', { grantId: (await grantRow()).id })
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('a refresh token the app revoked (RFC 7009), presented again, is refused as before: no reuse revocation', async () => {
+    const { tokens } = await connect()
+    const next = await refresh(tokens.refresh_token)
+    await revokeToken({ token: next.refresh_token, client_id: clientId })
+    const before = await reuseRevocations()
+    await expect(refresh(next.refresh_token)).rejects.toMatchObject({ error: 'invalid_grant', description: 'connection revoked' })
+    expect((await grantRow()).revokeReason).toBe('client_revoked')
+    expect(await reuseRevocations()).toBe(before)
+  })
+
+  it('tokens a reconnect ended are refused as before ("connection revoked"); the new connection lives', async () => {
+    const unrefreshed = await connect() // a first pair: no parent, never used
+    const second = await connect()
+    await refresh(second.tokens.refresh_token)
+    const retried = await refresh(second.tokens.refresh_token) // the newest refresh child: only older siblings
+    const latest = await connect()
+    const before = await reuseRevocations()
+    for (const token of [unrefreshed.tokens.refresh_token, retried.refresh_token]) {
+      await expect(refresh(token)).rejects.toMatchObject({ error: 'invalid_grant', description: 'connection revoked' })
+    }
+    expect((await grantRow()).revokedAt).toBeNull()
+    expect(await reuseRevocations()).toBe(before)
+    expect(await verifyAccessToken(latest.tokens.access_token)).not.toBeNull()
   })
 })
