@@ -251,6 +251,10 @@ export const ENTRIES: Entry[] = [
   // /api/products prefix rule (products.view). Both rules precede that prefix rule.
   // Build shape v2 — Delete (remove the listing from the channel) is a delete too.
   P(F.productsDelete, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/listing-actions\/(end|delete)\/(preview|run)$/.test(p)),
+  // Delete rows from the product sheet (Owner 2026-10-06): the check reads (products.view); deleting and its Undo move products to
+  // and from the recycle bin and archive extra listings (products.delete). Both before the /api/products prefix rule.
+  P(F.productsView, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/sheet-rows\/delete\/preview$/.test(p)),
+  P(F.productsDelete, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/sheet-rows\/(delete\/run|restore)$/.test(p)),
   P(F.productsPublish, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/listing-actions\/[^/]+\/(preview|run)$/.test(p)),
   // Sheet publish parity, build shape v2 — the waiting Action and Status values of listing rows (publish-actions.routes.ts).
   // Setting a value sends nothing, but it is what Publish will send, so it needs what sending it needs: Delete (Action) and

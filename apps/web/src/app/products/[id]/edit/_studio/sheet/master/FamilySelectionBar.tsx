@@ -25,9 +25,9 @@ import { Button, InfoTip } from '@/design-system/primitives'
 
 import type { StudioRow } from './types'
 
-export interface FamilySelectionBarProps {
-  rows: StudioRow[]
-  actions: readonly GridAction<StudioRow>[]
+export interface FamilySelectionBarProps<R = StudioRow> {
+  rows: R[]
+  actions: readonly GridAction<R>[]
   onClear?: () => void
   onDone?: (result: ActionResult) => void
   /**
@@ -48,8 +48,8 @@ export interface FamilySelectionBarProps {
  * red fill) — it read as a broken control, not an unavailable one. Unavailable, it is a plain disabled
  * button like its neighbours; its label and its reason (the InfoTip) still say what it is.
  */
-export const FamilySelectionVerbs = memo(function FamilySelectionVerbs({ rows, actions, onDone, children }: Omit<FamilySelectionBarProps, 'onClear'>) {
-  const { press, busy, problem, confirmElement } = useActionPress<StudioRow>(onDone)
+function SelectionVerbs<R>({ rows, actions, onDone, children }: Omit<FamilySelectionBarProps<R>, 'onClear'>) {
+  const { press, busy, problem, confirmElement } = useActionPress<R>(onDone)
   const offered = useMemo(() => actionsFor(actions, SELECTION, rows), [actions, rows])
   if (rows.length === 0) return null
   return (
@@ -76,4 +76,7 @@ export const FamilySelectionVerbs = memo(function FamilySelectionVerbs({ rows, a
       {confirmElement}
     </>
   )
-})
+}
+
+/** Generic over the row: the channel sheet's rows carry their listing (Delete rows, 2026-10-06). */
+export const FamilySelectionVerbs = memo(SelectionVerbs) as <R = StudioRow>(props: Omit<FamilySelectionBarProps<R>, 'onClear'>) => ReturnType<typeof SelectionVerbs>
