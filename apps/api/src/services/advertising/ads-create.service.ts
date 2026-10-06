@@ -13,6 +13,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * the source of truth and a follow-up pause/archive handles unwind.
  */
 
+import { randomUUID } from 'node:crypto'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
@@ -25,9 +26,11 @@ import {
   createTarget, createSdTarget, createSbAd, updateCampaign,
   listNegativeKeywords, listAdGroupsV3, listCampaignsServing, listCampaignsV3,
   createSdCampaign, createSbCampaign, createSdAdGroup, createSdProductAd, createSbAdGroup, listSbAds, createSbKeyword,
-  listKeywords, listSbKeywords, adsMode, CREATE_NO_ID, sbAdCreateRequest,
+  listKeywords, listSbKeywords, adsMode, CREATE_NO_ID, sbAdCreateRequest, v3ErrorText, listTargets, updateTarget, ALL_STATES,
   type AdsRegion,
 } from './ads-api-client.js'
+import { CAMPAIGN_NOT_ON_AMAZON } from './launch-outcome.js'
+import { AUTO_CLAUSE_LABEL, autoClauseFromSpelling, autoClauseOf, type AutoClause } from '../ads-core/ads-blueprint.js'
 import { mergeOntoAmazonPlacements } from './ads-placement-math.js'
 import { sdExpressionValue, sdTargetExpression } from './sd-target-expression.js'
 import { patchDynamicBidding } from './dynamic-bidding-write.js'
@@ -66,6 +69,8 @@ async function newCampaignCurrency(marketplace: string): Promise<string | null> 
  */
 export type PersonAddOutcome = 'created' | 'already_existed' | 'local' | 'refused' | 'failed'
 export interface PersonAddResult { ok?: boolean; outcome?: PersonAddOutcome; reason?: string | null }
+/** W2-A — why a create did not reach Amazon: the gate / connection refused it, or Amazon (or the call) failed it. */
+export interface NotSent { outcome: 'refused' | 'failed'; reason: string }
 export const NOT_ON_AMAZON_YET = 'The campaign or ad group is not on Amazon yet, so this was saved in Nexus only. It is sent when the campaign structure is pushed to Amazon.'
 const gateReason = (gate: GateDecision): string => (gate as Extract<GateDecision, { allowed: false }>).reason ?? 'the write gate refused it'
 const personAdd = (outcome: PersonAddOutcome, reason: string | null = null): PersonAddResult => ({
@@ -170,7 +175,9 @@ export interface NewCampaign {
  * Same class of defect as the `/sp/*` verification trap in AX-VT.4: assuming one endpoint
  * family speaks for all three.
  */
-export async function createCampaignLocal(input: NewCampaign): Promise<{ id: string; externalCampaignId: string | null; mode: string; dryRun?: unknown }> {
+/** W2-A (CC-3) — `reason`: why the campaign is not on Amazon (Amazon's words, the gate's, or no connection); null when it is. */
+type CampaignCreateResult = { id: string; externalCampaignId: string | null; mode: string; dryRun?: unknown; reason?: string | null }
+export async function createCampaignLocal(input: NewCampaign): Promise<CampaignCreateResult> {
   if (input.dryRun) return createCampaignOnce(input)
   // CC-24 / CM-33 — one campaign per name and market. Amazon refuses a second campaign with a name already in use, so
   // a double click, a second tab or a retry used to leave a local row with no Amazon id beside the real one. The claim
@@ -195,7 +202,7 @@ export async function campaignNamedInMarket(marketplace: string, name: string): 
   return rows.find((r) => campaignNameKey(r.name) === campaignNameKey(wanted)) ?? null
 }
 
-async function createCampaignOnce(input: NewCampaign): Promise<{ id: string; externalCampaignId: string | null; mode: string; dryRun?: unknown }> {
+async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateResult> {
   const ctx = await resolveCtx(input.marketplace)
   // SP preserves its long-standing born-ENABLED behaviour; SB/SD are born PAUSED. See the
   // `startEnabled` docblock — this asymmetry is the point, not an oversight.
@@ -203,6 +210,9 @@ async function createCampaignOnce(input: NewCampaign): Promise<{ id: string; ext
   const state: 'enabled' | 'paused' = startEnabled ? 'enabled' : 'paused'
   let externalId: string | null = null, mode = 'local'
   let dryRunPayload: unknown
+  // W2-A (CC-3) — why nothing reached Amazon. It used to be thrown away: a refused create was stored ENABLED, PENDING and
+  // logged SUCCESS, and looked like a live campaign that nothing could push.
+  let notSent: string | null = ctx ? null : `No active Amazon Ads connection for ${input.marketplace}, so nothing was sent to Amazon.`
 
   // SB cannot be created without a Brand Registry binding. Rather than fail late inside
   // Amazon's error array, resolve it from an existing SB campaign and fail here if absent.
@@ -233,8 +243,11 @@ async function createCampaignOnce(input: NewCampaign): Promise<{ id: string; ext
           // every builder, stored on the local row below, and dropped right here.
           : await createCampaign(ctx, { ...common, targetingType: input.targetingType ?? 'MANUAL', biddingStrategy: input.biddingStrategy })
       if (r.mode === 'dry-run') dryRunPayload = r.rawResponse
-      else { externalId = r.externalId; mode = r.mode }
-    }
+      else {
+        externalId = r.externalId; mode = r.mode
+        if (!externalId) notSent = campaignRefusalText(r)
+      }
+    } else notSent = `Not sent to Amazon: ${gateReason(gate)}`
   }
 
   // A dry run must not leave a local row behind — that is the whole point of asking first.
@@ -255,12 +268,30 @@ async function createCampaignOnce(input: NewCampaign): Promise<{ id: string; ext
       ...(brandEntityId ? { brandEntityId } : {}),
       // CC-12 — an SD campaign keeps its tactic, so its ad group is created with the same one (see createAdGroupLocal).
       ...(input.type === 'SD' ? { tactic: input.sdTactic ?? 'T00020' } : {}),
-      startDate: new Date(), lastSyncStatus: externalId ? 'SUCCESS' : 'PENDING',
+      // W2-A (CC-3) — a campaign Amazon does not hold is marked FAILED with the reason (the delivery column shows it), not
+      // PENDING as if a push were on its way: no path pushes a campaign that has no Amazon id.
+      startDate: new Date(),
+      ...(externalId
+        ? { lastSyncStatus: 'SUCCESS' as const }
+        : { lastSyncStatus: 'FAILED' as const, lastSyncedAt: new Date(), lastSyncError: notSent ?? CAMPAIGN_NOT_ON_AMAZON }),
     },
   })
-  await audit('create_campaign', 'CAMPAIGN', campaign.id, { name: input.name, type: input.type, externalId, mode, state }, input.userId)
-  logger.info('[AX.4] createCampaignLocal', { id: campaign.id, type: input.type, externalId, mode, state })
-  return { id: campaign.id, externalCampaignId: externalId, mode }
+  await audit('create_campaign', 'CAMPAIGN', campaign.id, { name: input.name, type: input.type, externalId, mode, state, reachedAmazon: externalId != null, ...(externalId ? {} : { error: notSent ?? CAMPAIGN_NOT_ON_AMAZON }) }, input.userId, {}, externalId ? 'SUCCESS' : 'FAILED')
+  logger.info('[AX.4] createCampaignLocal', { id: campaign.id, type: input.type, externalId, mode, state, ...(externalId ? {} : { notSent }) })
+  return { id: campaign.id, externalCampaignId: externalId, mode, reason: externalId ? null : (notSent ?? CAMPAIGN_NOT_ON_AMAZON) }
+}
+
+/**
+ * W2-A (CC-3) — Amazon's words when a campaign create came back without an id: SP v3 / SB v4 carry a per-item error
+ * (`{ campaigns: { error: [...] } }`), SD answers a bare array whose item carries `code` + `description`.
+ */
+function campaignRefusalText(r: { rawResponse?: unknown; error?: string | null }): string {
+  if (r.error) return r.error
+  const v3 = v3ErrorText(r.rawResponse)
+  if (v3) return `Amazon refused it: ${v3}`
+  const first = Array.isArray(r.rawResponse) ? (r.rawResponse[0] as { code?: string; description?: string } | undefined) : undefined
+  if (first && first.code && first.code !== 'SUCCESS') return `Amazon refused it: ${first.description || first.code}`
+  return CAMPAIGN_NOT_ON_AMAZON
 }
 
 export interface NewAdGroup {
@@ -272,7 +303,7 @@ export interface NewAdGroup {
   /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
   creationFlow?: boolean
 }
-export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string | null; externalAdGroupId: string | null } & PersonAddResult> {
+export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string | null; externalAdGroupId: string | null; /** W2-A — why it did not reach Amazon (every caller; a launch lists it). */ notSent?: NotSent | null } & PersonAddResult> {
   const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true, tactic: true } })
   if (!campaign) throw new Error('campaign not found')
   let externalId: string | null = null
@@ -289,8 +320,8 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
    * Children are born ENABLED; the campaign is the gate.
    */
   const state: 'enabled' | 'paused' = (input.startEnabled ?? true) ? 'enabled' : 'paused'
-  // CM-8 — why nothing reached Amazon, for a person's add.
-  let notSent: { outcome: 'refused' | 'failed'; reason: string } | null = null
+  // CM-8 — why nothing reached Amazon, for a person's add (W2-A: and for a launch).
+  let notSent: NotSent | null = null
   if (campaign.externalCampaignId && campaign.marketplace) {
     const ctx = await resolveCtx(campaign.marketplace)
     if (ctx) {
@@ -321,7 +352,7 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
   const ag = await prisma.adGroup.create({ data: { campaignId: input.campaignId, name: input.name, defaultBidCents: Math.round(input.defaultBidEur * 100), status: 'ENABLED', externalAdGroupId: externalId } })
   await audit('create_ad_group', 'AD_GROUP', ag.id, { name: input.name, externalId }, input.userId)
   return {
-    id: ag.id, externalAdGroupId: externalId,
+    id: ag.id, externalAdGroupId: externalId, notSent,
     ...(input.requireAmazon ? personAdd(externalId ? 'created' : 'local', externalId ? null : NOT_ON_AMAZON_YET) : {}),
   }
 }
@@ -577,6 +608,12 @@ export interface NewProductAd {
   manual?: boolean
   /** CM-8 — a person's add: no row unless Amazon took it, and a row Amazon never took is sent (see PersonAddResult). */
   requireAmazon?: boolean
+  /**
+   * W2-A (CC-2) — a launch's ad: one Amazon (or the gate, or a missing SKU) refused keeps its row without Amazon's id and
+   * returns `notSent`, instead of throwing with nothing written — so the launch receipt and the read-back can see a
+   * campaign whose ads did not land, and the launch repair can send them later.
+   */
+  launch?: boolean
   /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
   creationFlow?: boolean
 }
@@ -701,7 +738,7 @@ async function amazonSkuInMarket(product: { id: string; sku: string }, market: s
   return { sku: [...skus][0] ?? null }
 }
 
-type ProductAdCreateResult = { id: string | null; externalAdId: string | null } & PersonAddResult
+type ProductAdCreateResult = { id: string | null; externalAdId: string | null; /** W2-A — why it did not reach Amazon. */ notSent?: NotSent | null } & PersonAddResult
 export async function createProductAdLocal(input: NewProductAd): Promise<ProductAdCreateResult> {
   // CM-33 — one create per product and ad group at a time (see createKeywordLocal).
   return withCreateClaim(createIdentity('product-ad', input.adGroupId, input.asin || input.sku || input.productId), () => createProductAdOnce(input), () => {
@@ -743,7 +780,9 @@ async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreate
       ?? await prisma.adProductAd.findFirst({ where: same, select: { id: true, externalAdId: true } })
     if (held?.externalAdId) return { id: held.id, externalAdId: held.externalAdId, ...personAdd('already_existed') }
   }
-  let notSent: { outcome: 'refused' | 'failed'; reason: string } | null = null
+  let notSent: NotSent | null = null
+  // W2-A — a launch keeps a refused ad's row (see NewProductAd.launch); a person's add keeps nothing; others throw.
+  const keepRefused = person || input.launch === true
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
@@ -752,9 +791,9 @@ async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreate
         // SD takes either identifier; SP genuinely needs the seller SKU, so only SP hard-fails.
         if (!resolved && !isSd) {
           const noSku = skuConflict ?? new Error(`no seller SKU for "${input.asin ?? input.sku ?? '?'}" — a Sponsored Products ad needs one`)
-          if (!person) throw noSku
+          if (!keepRefused) throw noSku
           notSent = { outcome: 'refused', reason: noSku.message }
-        } else {
+        } else try {
           const r = isSd
             // ENABLED like the SP path: the campaign is the delivery gate, not the ad. See the
             // `state` docblock in createAdGroupLocal.
@@ -769,9 +808,12 @@ async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreate
           // CM-8 — and with a per-item error when it refuses one: that is the reason given.
           if (!externalId) {
             const why = (r as { error?: string | null }).error ?? JSON.stringify(r.rawResponse).slice(0, 200)
-            if (!person) throw new Error(`Amazon did not create the ad for "${resolved?.sku ?? input.asin ?? '?'}": ${why}`)
+            if (!keepRefused) throw new Error(`Amazon did not create the ad for "${resolved?.sku ?? input.asin ?? '?'}": ${why}`)
             notSent = { outcome: 'failed', reason: why }
           }
+        } catch (e) {
+          if (!input.launch) throw e
+          notSent = { outcome: 'failed', reason: (e as Error).message }
         }
       } else notSent = { outcome: 'refused', reason: gateReason(gate) }
     } else notSent = { outcome: 'refused', reason: `No active Amazon Ads connection for ${ag.campaign.marketplace}.` }
@@ -784,9 +826,9 @@ async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreate
   const ad = held
     ? await prisma.adProductAd.update({ where: { id: held.id }, data: { externalAdId: externalId, status: 'ENABLED', ...(resolved ? { sku: resolved.sku, asin: resolved.asin ?? asinKey } : {}) } })
     : await prisma.adProductAd.create({ data: { adGroupId: input.adGroupId, asin: resolved?.asin ?? input.asin ?? null, sku: resolved?.sku ?? input.sku ?? null, productId: input.productId ?? null, status: 'ENABLED', externalAdId: externalId } })
-  await audit(held ? 'push_product_ad' : 'create_product_ad', 'PRODUCT_AD', ad.id, { sku: resolved?.sku ?? input.sku, asin: input.asin, externalId }, input.userId)
+  await audit(held ? 'push_product_ad' : 'create_product_ad', 'PRODUCT_AD', ad.id, { sku: resolved?.sku ?? input.sku, asin: input.asin, externalId, ...(notSent ? { reachedAmazon: false, error: notSent.reason } : {}) }, input.userId, {}, notSent ? 'FAILED' : 'SUCCESS')
   return {
-    id: ad.id, externalAdId: externalId,
+    id: ad.id, externalAdId: externalId, notSent,
     ...(person ? personAdd(externalId ? 'created' : 'local', externalId ? null : NOT_ON_AMAZON_YET) : {}),
   }
 }
@@ -1194,7 +1236,7 @@ export interface NewTarget {
   /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
   creationFlow?: boolean
 }
-type TargetCreateResult = { id: string | null; externalTargetId: string | null; mode: string } & PersonAddResult
+type TargetCreateResult = { id: string | null; externalTargetId: string | null; mode: string; /** W2-A — why it did not reach Amazon. */ notSent?: NotSent | null } & PersonAddResult
 export async function createTargetLocal(input: NewTarget): Promise<TargetCreateResult> {
   // CM-33 — the dedupe below and the create are one step (see createKeywordLocal).
   return withCreateClaim(createIdentity('target', input.adGroupId, input.kind, input.value), () => createTargetOnce(input), () => {
@@ -1232,8 +1274,8 @@ async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
       : [{ type: AUTO_EXPRESSION[input.value] ?? input.value }]
   const expressionType = input.kind === 'PRODUCT' ? 'ASIN' : input.kind === 'CATEGORY' ? 'CATEGORY' : isAudience ? audType : 'AUTO'
   let externalId: string | null = null, mode = 'local'
-  // CM-8 — why nothing reached Amazon, for a person's add.
-  let notSent: { outcome: 'refused' | 'failed'; reason: string } | null = null
+  // CM-8 — why nothing reached Amazon, for a person's add (W2-A: and for a launch).
+  let notSent: NotSent | null = null
   if (!input.skipAmazon && ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
@@ -1267,9 +1309,186 @@ async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
   await audit(dupe ? 'push_target' : 'create_target', 'AD_TARGET', t.id, { kind: input.kind, value, externalId, mode, reachedAmazon: externalId != null }, input.userId)
   logger.info('[AX2.1] createTargetLocal', { id: t.id, kind: input.kind, externalId, mode })
   return {
-    id: t.id, externalTargetId: externalId, mode,
+    id: t.id, externalTargetId: externalId, mode, notSent,
     ...(person ? personAdd(externalId ? 'created' : 'local', externalId ? null : NOT_ON_AMAZON_YET) : {}),
   }
+}
+
+// ── W2-A (CC-1) — Amazon's own four auto groups ──────────────────────────
+//
+// When an ad group is added to an AUTO campaign Amazon creates the four auto groups itself (Close match, Loose match,
+// Substitutes, Complements), ENABLED at the ad group's default bid. POST /sp/targets refuses them (Replicate learned
+// this: ads-blueprint-apply.service.ts `skipAmazon`), so the builders' create of each group never reached Amazon: the
+// screen said "Loose match paused, €0.49" while Amazon served it at the default bid, and the rows had no Amazon id for
+// any later edit to reach. Every builder now calls this once the ad group exists: read the ad group's groups through
+// the gateway (/sp/targets/list, ad-group filter), link each Nexus row to Amazon's group by its expression type, and
+// send the state and bid only where the person chose something other than what Amazon made.
+
+/** One auto group as a builder asks for it: the key (CLOSE_MATCH… or any spelling `autoClauseFromSpelling` reads). */
+export interface AutoGroupWish { key: string; enabled?: boolean; bidEur?: number }
+
+export interface AutoGroupLink {
+  key: string
+  clause: AutoClause | null
+  label: string
+  adTargetId: string | null
+  externalTargetId: string | null
+  /** What Nexus now holds for it — what Amazon has after this call (a refused change is not shown as made). */
+  status: 'ENABLED' | 'PAUSED' | 'ARCHIVED' | null
+  bidCents: number | null
+  /** The change sent to Amazon (only what differed from Amazon's group); null when nothing needed sending. */
+  sent: { state?: 'enabled' | 'paused'; bid?: number } | null
+  ok: boolean
+  reason: string | null
+}
+
+export interface AutoGroupsResult { ok: boolean; links: AutoGroupLink[] }
+
+/** Amazon's documented default for a group Nexus could not read: it makes each one ENABLED at the ad group's default bid. */
+const AUTO_NOT_LINKED = (label: string, why: string) =>
+  `${label} was not linked to Amazon's group (${why}), so your setting for it was not sent. Amazon creates it enabled at the ad group's default bid.`
+
+export async function linkAutoTargeting(input: {
+  adGroupId: string; groups: AutoGroupWish[]; userId?: string
+  /** 1e — a person's own launch (isPersonCreate). */
+  manual?: boolean
+  /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope): every builder passes it. */
+  creationFlow?: boolean
+  /** Amazon can take a moment to list the groups of a new ad group: one more read after this wait (default 2 s). */
+  retryDelayMs?: number
+}): Promise<AutoGroupsResult> {
+  const ag = await prisma.adGroup.findUnique({
+    where: { id: input.adGroupId },
+    select: { id: true, externalAdGroupId: true, defaultBidCents: true, campaign: { select: { id: true, externalCampaignId: true, marketplace: true, adProduct: true, type: true } } },
+  })
+  if (!ag) throw new Error('ad group not found')
+  const links: AutoGroupLink[] = []
+  const wishes = new Map<AutoClause, AutoGroupWish>()
+  for (const g of input.groups) {
+    const clause = autoClauseFromSpelling(g?.key)
+    if (!clause) {
+      links.push({ key: String(g?.key ?? ''), clause: null, label: String(g?.key ?? '?'), adTargetId: null, externalTargetId: null, status: null, bidCents: null, sent: null, ok: false, reason: `"${g?.key ?? ''}" is not one of Amazon's four auto groups (Close match, Loose match, Substitutes, Complements).` })
+      continue
+    }
+    if (!wishes.has(clause)) wishes.set(clause, g)
+  }
+  const wantStatus = (g: AutoGroupWish): 'ENABLED' | 'PAUSED' => (g.enabled === false ? 'PAUSED' : 'ENABLED')
+  const wantBidCents = (g: AutoGroupWish): number => (Number(g.bidEur) > 0 ? Math.round(Number(g.bidEur) * 100) : ag.defaultBidCents)
+
+  // The rows Nexus already holds for this ad group's auto groups (any spelling), one per group.
+  const held = await prisma.adTarget.findMany({ where: { adGroupId: ag.id, kind: 'AUTO', isNegative: false }, select: { id: true, kind: true, expressionType: true, expressionValue: true } })
+  const rowOf = new Map<AutoClause, string>()
+  for (const r of held) { const c = autoClauseOf(r); if (c && !rowOf.has(c)) rowOf.set(c, r.id) }
+  const save = async (clause: AutoClause, data: { externalTargetId: string | null; status: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; bidCents: number; error?: string | null; read: boolean }): Promise<string> => {
+    const fields = {
+      externalTargetId: data.externalTargetId, status: data.status, bidCents: data.bidCents,
+      ...(data.read ? { lastSyncedAt: new Date(), lastSyncStatus: (data.error ? 'FAILED' : 'SUCCESS') as 'FAILED' | 'SUCCESS', lastSyncError: data.error ?? null } : {}),
+    }
+    const id = rowOf.get(clause)
+    const row = id
+      ? await prisma.adTarget.update({ where: { id }, data: fields, select: { id: true } })
+      : await prisma.adTarget.create({ data: { adGroupId: ag.id, kind: 'AUTO', expressionType: 'AUTO', expressionValue: clause, ...fields }, select: { id: true } })
+    rowOf.set(clause, row.id)
+    return row.id
+  }
+  const link = (clause: AutoClause, wish: AutoGroupWish, rest: Omit<AutoGroupLink, 'key' | 'clause' | 'label'>): AutoGroupLink => {
+    const l = { key: wish.key, clause, label: AUTO_CLAUSE_LABEL[clause], ...rest }
+    links.push(l)
+    return l
+  }
+
+  // Not on Amazon (the campaign or ad group create did not land): nothing exists there to link. The rows keep what was
+  // asked for, without an id, like every other child of a campaign Amazon does not hold.
+  const ctx = ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace ? await resolveCtx(ag.campaign.marketplace) : null
+  if (!ctx || !ag.externalAdGroupId) {
+    const why = !ag.externalAdGroupId || !ag.campaign?.externalCampaignId
+      ? 'The ad group is not on Amazon, so its auto groups do not exist there yet.'
+      : `No active Amazon Ads connection for ${ag.campaign.marketplace}.`
+    for (const [clause, wish] of wishes) {
+      const id = await save(clause, { externalTargetId: null, status: wantStatus(wish), bidCents: wantBidCents(wish), read: false })
+      link(clause, wish, { adTargetId: id, externalTargetId: null, status: wantStatus(wish), bidCents: wantBidCents(wish), sent: null, ok: false, reason: why })
+    }
+    return { ok: false, links }
+  }
+  const extAg = ag.externalAdGroupId
+
+  // Sandbox has no Amazon to read: the groups are given sandbox ids with what was asked, like every sandbox create.
+  if (adsMode() === 'sandbox') {
+    for (const [clause, wish] of wishes) {
+      const ext = `sb-auto-${randomUUID().slice(0, 8)}`
+      const id = await save(clause, { externalTargetId: ext, status: wantStatus(wish), bidCents: wantBidCents(wish), read: false })
+      link(clause, wish, { adTargetId: id, externalTargetId: ext, status: wantStatus(wish), bidCents: wantBidCents(wish), sent: null, ok: true, reason: null })
+    }
+    return { ok: links.every((l) => l.ok), links }
+  }
+
+  type Clause = { targetId?: string; adGroupId?: string; expressionType?: string; state?: string; bid?: number; expression?: Array<{ type?: string }> }
+  const readGroups = async (): Promise<Map<AutoClause, Clause>> => {
+    const out = new Map<AutoClause, Clause>()
+    for (const t of await listTargets(ctx, { adGroupIds: [extAg], states: ALL_STATES }) as Clause[]) {
+      if (String(t.expressionType ?? '').toUpperCase() !== 'AUTO' || !t.targetId) continue
+      if (t.adGroupId != null && String(t.adGroupId) !== extAg) continue
+      const clause = autoClauseFromSpelling(t.expression?.[0]?.type)
+      if (clause && !out.has(clause)) out.set(clause, t)
+    }
+    return out
+  }
+  let found = new Map<AutoClause, Clause>()
+  let readError: string | null = null
+  try {
+    found = await readGroups()
+    if ([...wishes.keys()].some((c) => !found.has(c))) {
+      await new Promise((resolve) => setTimeout(resolve, input.retryDelayMs ?? 2000))
+      found = await readGroups()
+    }
+  } catch (e) { readError = (e as Error).message.slice(0, 200) }
+
+  const manual = isPersonCreate(input.manual, input.userId)
+  for (const clause of new Set<AutoClause>([...wishes.keys(), ...found.keys()])) {
+    const wish = wishes.get(clause)
+    const amazon = found.get(clause)
+    if (!amazon) {
+      if (!wish) continue
+      // Not linked: the row says what Amazon makes by itself (enabled at the default bid), never the setting it did not get.
+      const why = readError ? `Amazon's auto groups could not be read: ${readError}` : 'Amazon did not list it for this ad group'
+      const reason = AUTO_NOT_LINKED(AUTO_CLAUSE_LABEL[clause], why)
+      const id = await save(clause, { externalTargetId: null, status: 'ENABLED', bidCents: ag.defaultBidCents, error: reason, read: true })
+      link(clause, wish, { adTargetId: id, externalTargetId: null, status: 'ENABLED', bidCents: ag.defaultBidCents, sent: null, ok: false, reason })
+      continue
+    }
+    const ext = String(amazon.targetId)
+    const amazonStatus = (['ENABLED', 'PAUSED', 'ARCHIVED'].includes(String(amazon.state ?? '').toUpperCase()) ? String(amazon.state).toUpperCase() : 'ENABLED') as 'ENABLED' | 'PAUSED' | 'ARCHIVED'
+    const amazonBid = Number(amazon.bid) > 0 ? Math.round(Number(amazon.bid) * 100) : ag.defaultBidCents
+    // A group the builder did not mention is still Amazon's and serving: Nexus holds it as Amazon has it.
+    if (!wish) { await save(clause, { externalTargetId: ext, status: amazonStatus, bidCents: amazonBid, read: true }); continue }
+    const status = wantStatus(wish)
+    const bidCents = wantBidCents(wish)
+    const sent: { state?: 'enabled' | 'paused'; bid?: number } = {}
+    if (amazonStatus !== 'ARCHIVED' && status !== amazonStatus) sent.state = status === 'PAUSED' ? 'paused' : 'enabled'
+    if (bidCents !== amazonBid) sent.bid = bidCents / 100
+    if (!Object.keys(sent).length) {
+      const id = await save(clause, { externalTargetId: ext, status: amazonStatus, bidCents: amazonBid, read: true })
+      link(clause, wish, { adTargetId: id, externalTargetId: ext, status: amazonStatus, bidCents: amazonBid, sent: null, ok: true, reason: null })
+      continue
+    }
+    let error: string | null = null
+    // CM-20 — the same campaign rules a bid edit obeys (addGateScope); a launch's own groups pass the allowlist.
+    const gate = await checkAdsWriteGate({ marketplace: ag.campaign!.marketplace, payloadValueCents: bidCents, manual, ...addGateScope(ag.campaign!, input, { field: 'bid', cents: bidCents }) })
+    if (!gate.allowed) error = `Not sent to Amazon: ${gateReason(gate)}`
+    else {
+      try {
+        const r = await updateTarget(ctx, ext, sent, 'AUTO')
+        if (!r.ok) error = r.error ?? 'Amazon did not accept the change.'
+      } catch (e) { error = (e as Error).message.slice(0, 300) }
+    }
+    // A refused change is put back: Nexus shows what Amazon kept (CM-17), and the receipt says what was not set and why.
+    const kept = error ? { status: amazonStatus, bidCents: amazonBid } : { status, bidCents }
+    const id = await save(clause, { externalTargetId: ext, ...kept, error, read: true })
+    await audit('link_auto_target', 'AD_TARGET', id, { clause, externalId: ext, sent, reachedAmazon: !error, ...(error ? { error } : {}) }, input.userId, { status: amazonStatus, bidCents: amazonBid }, error ? 'FAILED' : 'SUCCESS')
+    link(clause, wish, { adTargetId: id, externalTargetId: ext, ...kept, sent, ok: !error, reason: error ? `${AUTO_CLAUSE_LABEL[clause]} stays ${amazonStatus.toLowerCase()} at ${(amazonBid / 100).toFixed(2)} on Amazon. ${error}` : null })
+  }
+  logger.info('[W2-A] linkAutoTargeting', { adGroupId: ag.id, asked: wishes.size, linked: links.filter((l) => l.externalTargetId).length, failed: links.filter((l) => !l.ok).length })
+  return { ok: links.every((l) => l.ok), links }
 }
 
 // ── AX2.9 — Sponsored Brands creative (brand headline + logo + ASINs +

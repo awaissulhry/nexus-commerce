@@ -21,8 +21,10 @@ import { logger } from '../../utils/logger.js'
 import {
   listCampaignsV3, listAdGroupsV3, listKeywords, listTargets, listProductAds,
   listSdCampaigns, listSdAdGroups, listSdProductAds, listSdTargets, listSbCampaigns, listSbAdGroups, listSbAds, listSbKeywords,
+  listNegativeKeywords, listNegativeTargets,
   ALL_STATES, type AdsRegion,
 } from './ads-api-client.js'
+import { AUTO_CLAUSE_LABEL, autoClauseFromSpelling, autoClauseOf, type AutoClause } from '../ads-core/ads-blueprint.js'
 import { sdExpressionValue } from './sd-target-expression.js'
 import {
   verifyEntity, summarise, describeVerdict,
@@ -35,6 +37,17 @@ async function resolveCtx(marketplace: string): Promise<{ profileId: string; reg
 }
 
 const centsToUnits = (c: number | null | undefined): number | null => (c == null ? null : c / 100)
+
+/** W2-A (CC-17) — the three SP placement lanes as numbers (a lane not set is 0), from a `dynamicBidding` object. */
+const PLACEMENT_LANES = ['PLACEMENT_TOP', 'PLACEMENT_PRODUCT_PAGE', 'PLACEMENT_REST_OF_SEARCH'] as const
+function placementsOf(dynamicBidding: unknown): Record<string, number> {
+  const list = (dynamicBidding as { placementBidding?: Array<{ placement?: string; percentage?: number }> } | null | undefined)?.placementBidding ?? []
+  const out: Record<string, number> = Object.fromEntries(PLACEMENT_LANES.map((lane) => [lane, 0]))
+  for (const p of Array.isArray(list) ? list : []) {
+    if (p?.placement && p.placement in out) out[p.placement] = Number(p.percentage) || 0
+  }
+  return out
+}
 
 /** Amazon's SP match types come back as EXACT/PHRASE/BROAD; negatives are NEGATIVE_-prefixed. */
 const stripNegative = (m: string | undefined): string | null => (m ? m.replace('NEGATIVE_', '') : null)
@@ -84,12 +97,15 @@ export async function verifyLaunch(campaignIds: string[], source: VerifySource =
   const entities: LaunchEntityResult[] = []
   let uncovered = 0
 
+  // W2-A (CC-1, CC-17) — a LAUNCH also checks its auto groups (by expression: Amazon makes them itself), its negatives and
+  // its placement bid adjustments. The structural reconcile keeps its own scope, unchanged.
+  const launchChecks = source === 'LAUNCH'
   const campaigns = await prisma.campaign.findMany({
     where: { id: { in: campaignIds } },
     select: {
       id: true, name: true, marketplace: true, externalCampaignId: true, status: true,
       dailyBudget: true, biddingStrategy: true, targetingType: true, portfolioId: true,
-      adProduct: true,
+      adProduct: true, dynamicBidding: true,
     },
   })
 
@@ -129,6 +145,13 @@ export async function verifyLaunch(campaignIds: string[], source: VerifySource =
       where: { adGroupId: { in: agIds } },
       select: { id: true, adGroupId: true, sku: true, asin: true, externalAdId: true, status: true },
     })
+    // W2-A (CC-17) — the launch's ad-group negatives (a retired one is not part of what it stands for).
+    const negatives = launchChecks
+      ? await prisma.adTarget.findMany({
+          where: { adGroupId: { in: agIds }, isNegative: true, status: { not: 'ARCHIVED' }, OR: [{ negativeLevel: 'AD_GROUP' }, { negativeLevel: null }] },
+          select: { id: true, adGroupId: true, kind: true, expressionType: true, expressionValue: true, externalTargetId: true, status: true },
+        })
+      : []
 
     // One read per entity kind for the whole launch. If a read fails we say so and skip that
     // kind rather than reporting its entities as broken — a failed READ is not a failed write,
@@ -151,6 +174,8 @@ export async function verifyLaunch(campaignIds: string[], source: VerifySource =
     const isCovered = (kind: string, family: Family) => covered.has(`${kind}:${family}`)
 
     let amzCampaigns, amzAdGroups, amzKeywords, amzTargets, amzProductAds
+    let amzNegKeywords: Map<string, { keywordText?: string; matchType?: string; state?: string }> | undefined
+    let amzNegTargets: Map<string, { state?: string; expression?: Array<{ value?: string }> }> | undefined
     let amzSdTargets: Map<string | undefined, { state?: string; bid?: number; expression?: Array<{ value?: string }> }> | undefined
 
     if (spExtIds.length) {
@@ -164,6 +189,15 @@ export async function verifyLaunch(campaignIds: string[], source: VerifySource =
       catch (e) { errors.push(`read targets ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
       try { amzProductAds = new Map((await listProductAds(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((a) => [a.adId, a])); mark('PRODUCT_AD', 'SP') }
       catch (e) { errors.push(`read productAds ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      // W2-A (CC-17) — one read per kind, only when the launch made that kind.
+      if (negatives.some((n) => n.kind === 'KEYWORD')) {
+        try { amzNegKeywords = new Map((await listNegativeKeywords(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((n) => [String(n.negativeKeywordId ?? n.keywordId ?? ''), n])); mark('NEGATIVE_KEYWORD', 'SP') }
+        catch (e) { errors.push(`read negative keywords ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      }
+      if (negatives.some((n) => n.kind === 'PRODUCT')) {
+        try { amzNegTargets = new Map((await listNegativeTargets(ctx, { campaignIds: spExtIds, states: ALL_STATES })).map((n) => [String(n.targetId ?? ''), n])); mark('NEGATIVE_TARGET', 'SP') }
+        catch (e) { errors.push(`read negative products ${marketplace}: ${(e as Error).message.slice(0, 120)}`) }
+      }
     }
 
     if (sdExtIds.length) {
@@ -237,6 +271,18 @@ export async function verifyLaunch(campaignIds: string[], source: VerifySource =
           },
         }
         entities.push(verifyEntity(pair, ['portfolioId']))
+        // W2-A (CC-17) — the placement bid adjustments Nexus holds for the campaign (what the launch set), lane by lane
+        // (a lane not set is 0). Only when Amazon reported its placement settings, as the placement write itself reads.
+        const held = placementsOf(c.dynamicBidding)
+        if (launchChecks && fam === 'SP' && Object.values(held).some((v) => v > 0)) {
+          const amazonDb = (a as { dynamicBidding?: { placementBidding?: Array<{ placement: string; percentage: number }> } } | undefined)?.dynamicBidding
+          if (a !== undefined && !amazonDb) { uncovered++; continue }
+          entities.push(verifyEntity({
+            entityType: 'PLACEMENT', localId: c.id, externalId: c.externalCampaignId, label: `${c.name} — placements`,
+            intended: held,
+            observed: a === undefined ? undefined : placementsOf(amazonDb),
+          }))
+        }
       }
     }
 
@@ -253,11 +299,36 @@ export async function verifyLaunch(campaignIds: string[], source: VerifySource =
       }
     }
 
+    // W2-A (CC-1) — Amazon's own auto groups in these ad groups, by (Amazon ad group id, group): a launch links its rows to
+    // them, and a row that could not be linked is still compared with the group Amazon made.
+    const amzAuto = new Map<string, { targetId?: string; state?: string; bid?: number }>()
+    for (const tg of amzTargets?.values() ?? []) {
+      if (String(tg.expressionType ?? '').toUpperCase() !== 'AUTO' || !tg.adGroupId) continue
+      const clause = autoClauseFromSpelling(tg.expression?.[0]?.type)
+      if (clause) amzAuto.set(`${tg.adGroupId}|${clause}`, tg)
+    }
+    const extAgOf = new Map(adGroups.map((g) => [g.id, g.externalAdGroupId]))
     for (const t of targets) {
-      // AUTO clauses are generated by Amazon when an AUTO ad group is created — we never push
-      // them and hold no external id, so verifying them would report a permanent NOT_PUSHED for
-      // something that is working correctly. Same reasoning as pushCampaignStructure skipping them.
-      if (t.kind === 'AUTO') continue
+      if (t.kind === 'AUTO') {
+        // The reconcile keeps skipping them (a synced auto row is checked by its own sync). A launch checks them by
+        // expression: state and the bid Amazon serves (the ad group's default when the group has no bid of its own).
+        const fam = familyOfCampaign.get(agToCampaign.get(t.adGroupId) ?? '') as Family
+        if (!launchChecks) continue
+        if (fam !== 'SP' || !isCovered('TARGET', 'SP')) { uncovered++; continue }
+        const clause: AutoClause | null = autoClauseOf(t)
+        const extAg = extAgOf.get(t.adGroupId) ?? null
+        const byExpression = clause && extAg ? amzAuto.get(`${extAg}|${clause}`) : undefined
+        const a = t.externalTargetId ? amzTargets?.get(t.externalTargetId) : byExpression
+        const agDefault = extAg ? (amzAdGroups?.get(extAg) as { defaultBid?: number } | undefined)?.defaultBid : undefined
+        const servedBid = a?.bid ?? agDefault
+        entities.push(verifyEntity({
+          entityType: 'TARGET', localId: t.id, externalId: t.externalTargetId ?? byExpression?.targetId ?? null,
+          label: clause ? `${AUTO_CLAUSE_LABEL[clause]} (auto)` : (t.expressionValue || t.kind),
+          intended: { state: t.status, bid: centsToUnits(t.bidCents) },
+          observed: a === undefined ? undefined : { state: a.state, ...(servedBid != null ? { bid: servedBid } : {}) },
+        }))
+        continue
+      }
       const isKeyword = t.kind === 'KEYWORD'
       const fam = familyOfCampaign.get(agToCampaign.get(t.adGroupId) ?? '') as Family
       const kind = isKeyword ? 'KEYWORD' : 'TARGET'
@@ -284,6 +355,29 @@ export async function verifyLaunch(campaignIds: string[], source: VerifySource =
           intended: { value: t.expressionValue, state: t.status, bid: centsToUnits(t.bidCents) },
           // CC-12 — an SD audience is nested (`views` → [exactProduct, lookback]); compare the text it names, as Nexus stores it.
           observed: tg === undefined ? undefined : { value: fam === 'SD' ? sdExpressionValue(tg.expression) : tg.expression?.[0]?.value, state: tg.state, bid: tg.bid },
+        }))
+      }
+    }
+
+    // W2-A (CC-17) — the launch's negatives, by Amazon id (one created without an id is NOT_PUSHED: never reached Amazon).
+    for (const n of negatives) {
+      const fam = familyOfCampaign.get(agToCampaign.get(n.adGroupId) ?? '') as Family
+      const isKeyword = n.kind === 'KEYWORD'
+      const kind = isKeyword ? 'NEGATIVE_KEYWORD' : 'NEGATIVE_TARGET'
+      if (!isCovered(kind, fam)) { uncovered++; continue }
+      if (isKeyword) {
+        const a = n.externalTargetId ? amzNegKeywords?.get(n.externalTargetId) : undefined
+        entities.push(verifyEntity({
+          entityType: 'NEGATIVE_KEYWORD', localId: n.id, externalId: n.externalTargetId, label: n.expressionValue,
+          intended: { keywordText: n.expressionValue, matchType: stripNegative(n.expressionType), state: n.status },
+          observed: a === undefined ? undefined : { keywordText: a.keywordText, matchType: stripNegative(a.matchType), state: a.state },
+        }))
+      } else {
+        const a = n.externalTargetId ? amzNegTargets?.get(n.externalTargetId) : undefined
+        entities.push(verifyEntity({
+          entityType: 'NEGATIVE_TARGET', localId: n.id, externalId: n.externalTargetId, label: n.expressionValue,
+          intended: { value: n.expressionValue, state: n.status },
+          observed: a === undefined ? undefined : { value: a.expression?.[0]?.value, state: a.state },
         }))
       }
     }

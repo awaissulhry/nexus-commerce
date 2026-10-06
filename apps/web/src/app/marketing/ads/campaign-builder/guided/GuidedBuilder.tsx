@@ -49,6 +49,9 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '../builder-ds.css'
 import './guided.css'
+import { HeldLaunchReceipt } from '../LaunchReceipt'
+import { useLaunchReceipt } from '../useLaunchReceipt'
+import '../launch-receipt.css'
 import { useCommandKey } from '@/lib/command-key'
 import { launchBlocked, sendLaunch, useLaunchChecks } from '../launchChecks'
 import { LaunchChecksPanel } from '../LaunchChecksPanel'
@@ -117,6 +120,9 @@ export function GuidedBuilder() {
   const [portfolioOpen, setPortfolioOpen] = useState(false)
   const [launching, setLaunching] = useState(false)
   const [launchErr, setLaunchErr] = useState('')
+  // W2-A (CC-16) — the launch receipt: held when anything asked for is not live on Amazon, or not read back as asked.
+  const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
+  const receipt = useLaunchReceipt(toCampaigns)
   // CC-6 — one market per launch: a market change drops the old market's products and says so.
   const [marketNote, setMarketNote] = useState('')
   useOnMarketChange(market, (prev, next) => {
@@ -264,9 +270,12 @@ export function GuidedBuilder() {
     try {
       const out = await sendLaunch(launchKey, launchUrl, payload)
       if (!out.ok) throw new Error(out.error)
+      // W2-A — the launch answers `launch` (each campaign: live / partly made / not made, and why). Anything not live, or
+      // not read back as asked, stays on this screen with the receipt.
+      if (receipt.hold(out.body)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, campaigns, launchKey, launchUrl, payload, router])
+  }, [launching, market, campaigns, launchKey, launchUrl, payload, router, receipt.hold])
 
   const typeCampaigns = (t: AdProduct) => campaigns.filter((c) => c.adProduct === t)
 
@@ -306,6 +315,7 @@ export function GuidedBuilder() {
 
       <div className="h10-spw-body">
         {marketNote && <Banner tone="warning" onDismiss={() => setMarketNote('')}>{marketNote}</Banner>}
+        <HeldLaunchReceipt state={receipt} onContinue={toCampaigns} continueLabel="Go to campaigns" />
         {/* Step 1 — Product Selection (= Quick's step 1) */}
         {step === 1 && (
           <div className="h10-gcb-col">
@@ -496,7 +506,7 @@ export function GuidedBuilder() {
         {step < 4 ? (
           <Button variant="primary" size="lg" onClick={goNext} disabled={nextDisabled}>Next</Button>
         ) : (
-          <Button variant="primary" size="lg" onClick={() => void launch()} disabled={launching || launchBlocked(checks)}>{launching ? 'Launching…' : 'Launch Campaigns'}</Button>
+          <Button variant="primary" size="lg" onClick={() => void launch()} disabled={launching || launchBlocked(checks) || !!receipt.held}>{launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch Campaigns'}</Button>
         )}
       </footer>
     </div>

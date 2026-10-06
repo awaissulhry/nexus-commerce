@@ -35,6 +35,9 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '../builder-ds.css'
 import './single.css'
+import { HeldLaunchReceipt } from '../LaunchReceipt'
+import { useLaunchReceipt } from '../useLaunchReceipt'
+import '../launch-receipt.css'
 import { useCommandKey } from '@/lib/command-key'
 import { launchBlocked, sendLaunch, useLaunchChecks } from '../launchChecks'
 import { LaunchChecksPanel } from '../LaunchChecksPanel'
@@ -162,6 +165,9 @@ export function SingleCampaignBuilder() {
   // SB.7 — Review & Launch
   const [launching, setLaunching] = useState(false)
   const [launchErr, setLaunchErr] = useState('')
+  // W2-A (CC-16) — the launch receipt: held when anything asked for is not live on Amazon, or not read back as asked.
+  const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
+  const receipt = useLaunchReceipt(toCampaigns)
   // CC-6 — one market per launch: a market change drops the products, product targets and portfolio chosen for the old
   // market, and says so.
   const [marketNote, setMarketNote] = useState('')
@@ -206,6 +212,9 @@ export function SingleCampaignBuilder() {
     try {
       const out = await sendLaunch<{ placement?: { sent?: boolean; reason?: string } | null }>(launchKey, launchUrl, payload)
       if (!out.ok) throw new Error(out.error)
+      // W2-A — the launch answers `launch` (each campaign: live / partly made / not made, and why). Anything not live, or
+      // not read back as asked, stays on this screen with the receipt.
+      if (receipt.hold(out.body)) { setLaunching(false); return }
       // CC-7 — a placement multiplier Amazon or Nexus refused is said here, not lost in a log.
       const placement = out.body.placement
       if (placement && placement.reason) {
@@ -215,7 +224,7 @@ export function SingleCampaignBuilder() {
       }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, name, budget, defaultBid, launchKey, launchUrl, payload, router])
+  }, [launching, market, name, budget, defaultBid, launchKey, launchUrl, payload, router, receipt.hold])
   const bidLabel = bidConfig.strategy === 'none' ? 'None' : `${(({ maxImpressions: 'Max Impressions', targetAcos: 'Target ACoS', maxOrders: 'Max Orders', custom: 'Custom' } as Record<string, string>)[bidConfig.strategy] ?? '—')}${bidStrategyRuns(bidConfig.strategy) ? '' : ' (not running yet)'}`
   const placementParts = [bidMult.tos && `ToS ${bidMult.tos}%`, bidMult.pdp && `PDP ${bidMult.pdp}%`, bidMult.ros && `RoS ${bidMult.ros}%`].filter(Boolean)
   const boostChips = [bidMult.videoBoost && 'Video', bidMult.abBoost && 'Amazon Business', bidMult.audienceMod && 'Audience'].filter(Boolean) as string[]
@@ -294,6 +303,7 @@ export function SingleCampaignBuilder() {
 
       <div className="h10-spw-body">
         {marketNote && <Banner tone="warning" onDismiss={() => setMarketNote('')}>{marketNote}</Banner>}
+        <HeldLaunchReceipt state={receipt} onContinue={toCampaigns} continueLabel="Go to campaigns" />
         {step === 1 && (
           <div className="h10-spw-s1">
             <aside className="cb-subnav" aria-label="Campaign Setup sections">
@@ -581,8 +591,8 @@ export function SingleCampaignBuilder() {
         {step > 1 && <Button size="lg" onClick={goBack}>Back</Button>}
         <span className="grow" />
         {/* CC-21 — the readiness list is a gate now: a campaign with no products, budget, bid or targeting cannot serve. */}
-        <Button variant="primary" size="lg" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching || (step === 2 && (readiness.length > 0 || launchBlocked(checks)))}>
-          {step < 2 ? 'Continue' : launching ? 'Launching…' : 'Launch Campaign'}
+        <Button variant="primary" size="lg" onClick={() => (step < 2 ? goNext() : void launch())} disabled={launching || (step === 2 && (readiness.length > 0 || launchBlocked(checks) || !!receipt.held))}>
+          {step < 2 ? 'Continue' : launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch Campaign'}
         </Button>
       </footer>
 

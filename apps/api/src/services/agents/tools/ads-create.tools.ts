@@ -246,7 +246,8 @@ const createAdCampaign: AgentTool = {
       select: { id: true, status: true, externalCampaignId: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true },
     })
     const change = made ? { before: { campaignId: null }, after: { campaignId: made.id, name: plan.name, market: plan.market } } : undefined
-    if (out.status !== 200 || !made) {
+    // W2-A (CC-2) — a launch that did not fully reach Amazon answers `ok: false` with what did and why (`launch`).
+    if (out.status !== 200 || !made || out.body.ok === false) {
       const why = String(out.body.error ?? 'unknown')
       return made
         ? { ok: false, error: `Created part-way, then stopped: ${why}. The campaign "${plan.name}" (${made.id}) exists with its bids at the floor; check it with ad-campaigns before asking for anything more.`, change }

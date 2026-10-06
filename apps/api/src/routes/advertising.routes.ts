@@ -1230,7 +1230,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (b.dryRun) return { ok: true, dryRun: true, plan: { market, totalCampaigns: campaigns.length, totalProductAds: products.length * campaigns.length }, checks }
     if (checks.refusals.length) { reply.status(400); return { ok: false, error: checks.refusals.join(' '), refusals: checks.refusals, warnings: checks.warnings } }
 
-    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding } = await import('../services/advertising/ads-create.service.js')
+    const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding, linkAutoTargeting } = await import('../services/advertising/ads-create.service.js')
     const userId = personActor(request) // CC-28
     const matchTypesFor = (m?: string): Array<'BROAD' | 'PHRASE' | 'EXACT'> => {
       const u = (m || '').toLowerCase()
@@ -1245,43 +1245,73 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const created: Array<{ name: string; campaignId: string; externalCampaignId: string | null; mode: string }> = []
     const idMap: Record<string, { campaignId: string; adGroupId: string }> = {} // wizard campaign id → created ids (for the harvest rule)
+    // W2-A (CC-2) — every campaign asked for is answered: live, partly made (what failed and why) or not made (why).
+    // Each step is caught on its own, so a failure no longer drops the campaign (and what it already made on Amazon)
+    // from the answer, the rules and the read-back.
+    const { CampaignLaunch, summariseLaunch, describeLaunch } = await import('../services/advertising/launch-outcome.js')
+    const outcomes: import('../services/advertising/launch-outcome.js').LaunchCampaignResult[] = []
     for (const c of campaigns) {
+      const rec = new CampaignLaunch(c.name)
+      const bidEur = Number(c.bidEur) || 0.75
+      const budgetEur = Number(c.budgetEur) || 10
+      let camp: Awaited<ReturnType<typeof createCampaignLocal>>
       try {
-        const bidEur = Number(c.bidEur) || 0.75
-        const budgetEur = Number(c.budgetEur) || 10
-        const camp = await createCampaignLocal({ name: c.name, type: c.adProduct ?? 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy: 'legacyForSales', portfolioId: b.portfolioId, userId })
-        // LAUNCH-REPAIR: allowlist the campaign the instant it exists, BEFORE its sub-entities are
-        // created — otherwise the per-campaign write-gate check skips every ad group/keyword/product-ad
-        // and the campaign lands empty on Amazon ("not eligible, no keyword and no ad").
-        try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[SPW-launch] allowlist failed', { error: (e as Error).message }) }
-        // SB creative (brand · ad type · landing page · ASINs · headline · logo/custom image) → Campaign.creativeAssetJson (gated; pushed to Amazon when the SB write gate opens).
-        if (c.creative && c.adProduct === 'SB') { try { await prisma.campaign.update({ where: { id: camp.id }, data: { creativeAssetJson: c.creative as never } }) } catch (e) { logger.warn('[SPW-launch] SB creative store failed', { error: (e as Error).message }) } }
-        // CM-20 — `creationFlow`: everything below belongs to the campaign this launch just created.
-        const ag = await createAdGroupLocal({ campaignId: camp.id, name: c.adGroupName || `${c.name} Ad Group`, defaultBidEur: bidEur, userId, creationFlow: true })
-        if (c.id) idMap[c.id] = { campaignId: camp.id, adGroupId: ag.id }
-        for (const p of products) { try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId, creationFlow: true }) } catch (e) { logger.warn('[SPW-launch] product ad failed', { error: (e as Error).message }) } }
-        if (c.kind === 'keyword') {
-          // Per-keyword match type + bid when provided (Guided's Add-Keywords step); else fall back to
-          // the campaign's match type(s) + default bid (SPW / Quick send plain strings — unchanged).
-          for (const kwRaw of c.keywords ?? []) {
-            const text = (typeof kwRaw === 'string' ? kwRaw : kwRaw?.text ?? '').trim()
-            if (!text) continue
-            const kwBid = typeof kwRaw === 'object' && Number.isFinite(Number(kwRaw?.bidEur)) && Number(kwRaw?.bidEur) > 0 ? Number(kwRaw.bidEur) : bidEur
-            const mts = typeof kwRaw === 'object' && kwRaw?.matchType ? [kwRaw.matchType] : matchTypesFor(c.matchType)
-            for (const mt of mts) { try { await createKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, bidEur: kwBid, userId, creationFlow: true }) } catch (e) { logger.warn('[SPW-launch] keyword failed', { text, error: (e as Error).message }) } }
-          }
-        } else if (c.kind === 'pat') {
-          for (const pt of c.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur, userId, creationFlow: true }) } catch (e) { logger.warn('[SPW-launch] product target failed', { error: (e as Error).message }) } }
-        } else if (c.kind === 'auto') {
-          // AT.1 — the 4 Amazon auto-targeting groups, each with its own bid + state.
-          for (const g of c.autoGroups ?? []) { if (!g?.key) continue; try { await createTargetLocal({ adGroupId: ag.id, kind: 'AUTO', value: g.key, bidEur: Number(g.bidEur) || bidEur, state: g.enabled === false ? 'paused' : 'enabled', userId, creationFlow: true }) } catch (e) { logger.warn('[SPW-launch] auto group failed', { key: g.key, error: (e as Error).message }) } }
+        camp = await createCampaignLocal({ name: c.name, type: c.adProduct ?? 'SP', marketplace: market, targetingType: c.kind === 'auto' ? 'AUTO' : 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy: 'legacyForSales', portfolioId: b.portfolioId, userId })
+        rec.campaign(camp)
+      } catch (e) {
+        rec.campaignThrew(e)
+        outcomes.push(rec.result())
+        logger.error('[SPW-launch] campaign create failed', { name: c.name, market, error: (e as Error).message })
+        continue
+      }
+      created.push({ name: c.name, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, mode: camp.mode })
+      // W2-A (CC-3) — Amazon (or the gate) did not take the campaign: it stays in Nexus as a FAILED record with the reason,
+      // and nothing is built under it (its parts could not reach Amazon either). The answer lists it as not made.
+      if (!camp.externalCampaignId) { outcomes.push(rec.result()); continue }
+      // LAUNCH-REPAIR: allowlist the campaign the instant it exists, BEFORE its sub-entities are
+      // created — otherwise the per-campaign write-gate check skips every ad group/keyword/product-ad
+      // and the campaign lands empty on Amazon ("not eligible, no keyword and no ad").
+      try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[SPW-launch] allowlist failed', { error: (e as Error).message }) }
+      // SB creative (brand · ad type · landing page · ASINs · headline · logo/custom image) → Campaign.creativeAssetJson (gated; pushed to Amazon when the SB write gate opens).
+      if (c.creative && c.adProduct === 'SB') { try { await prisma.campaign.update({ where: { id: camp.id }, data: { creativeAssetJson: c.creative as never } }) } catch (e) { logger.warn('[SPW-launch] SB creative store failed', { error: (e as Error).message }) } }
+      const adGroupName = c.adGroupName || `${c.name} Ad Group`
+      let ag: Awaited<ReturnType<typeof createAdGroupLocal>>
+      // CM-20 — `creationFlow`: everything below belongs to the campaign this launch just created.
+      try { ag = await createAdGroupLocal({ campaignId: camp.id, name: adGroupName, defaultBidEur: bidEur, userId, creationFlow: true }) } catch (e) {
+        rec.adGroup(adGroupName, null, e)
+        outcomes.push(rec.result())
+        logger.error('[SPW-launch] ad group create failed', { name: c.name, market, error: (e as Error).message })
+        continue
+      }
+      rec.adGroup(adGroupName, ag)
+      const agId = ag.id as string
+      if (c.id) idMap[c.id] = { campaignId: camp.id, adGroupId: agId }
+      // W2-A (CC-17) — negatives FIRST, as Replicate does: a launch that fails part-way is then narrower, never wider.
+      for (const nk of c.negKeywords ?? []) { const text = (typeof nk === 'string' ? nk : nk?.text ?? '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = (typeof nk === 'object' && nk?.matchType === 'PHRASE') ? 'PHRASE' : 'EXACT'; try { rec.negative('negative_keyword', `${text} (${mt.toLowerCase()})`, await createNegativeKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, userId })) } catch (e) { rec.threw('negative_keyword', text, e) } }
+      for (const np of c.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { rec.negative('negative_product', asin, await createNegativeProductTargetLocal({ adGroupId: agId, asin, userId })) } catch (e) { rec.threw('negative_product', asin, e) } }
+      for (const p of products) { const item = p.sku || p.asin || p.productId || '?'; try { rec.productAd(item, await createProductAdLocal({ adGroupId: agId, asin: p.asin, sku: p.sku, productId: p.productId, userId, launch: true, creationFlow: true })) } catch (e) { rec.threw('product_ad', item, e) } }
+      if (c.kind === 'keyword') {
+        // Per-keyword match type + bid when provided (Guided's Add-Keywords step); else fall back to
+        // the campaign's match type(s) + default bid (SPW / Quick send plain strings — unchanged).
+        for (const kwRaw of c.keywords ?? []) {
+          const text = (typeof kwRaw === 'string' ? kwRaw : kwRaw?.text ?? '').trim()
+          if (!text) continue
+          const kwBid = typeof kwRaw === 'object' && Number.isFinite(Number(kwRaw?.bidEur)) && Number(kwRaw?.bidEur) > 0 ? Number(kwRaw.bidEur) : bidEur
+          const mts = typeof kwRaw === 'object' && kwRaw?.matchType ? [kwRaw.matchType] : matchTypesFor(c.matchType)
+          for (const mt of mts) { try { rec.keyword(`${text} (${mt.toLowerCase()})`, await createKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, bidEur: kwBid, userId, creationFlow: true })) } catch (e) { rec.threw('keyword', text, e) } }
         }
-        for (const nk of c.negKeywords ?? []) { const text = (typeof nk === 'string' ? nk : nk?.text ?? '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = (typeof nk === 'object' && nk?.matchType === 'PHRASE') ? 'PHRASE' : 'EXACT'; try { await createNegativeKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, userId }) } catch (e) { logger.warn('[SPW-launch] neg keyword failed', { error: (e as Error).message }) } }
-        for (const np of c.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId }) } catch (e) { logger.warn('[SPW-launch] neg product failed', { error: (e as Error).message }) } }
-        if (adjustments.length) { try { await updatePlacementBidding({ campaignId: camp.id, adjustments, userId }) } catch (e) { logger.warn('[SPW-launch] placement failed', { error: (e as Error).message }) } }
-        created.push({ name: c.name, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, mode: camp.mode })
-      } catch (e) { logger.error('[SPW-launch] campaign create failed', { name: c.name, market, error: (e as Error).message }) }
+      } else if (c.kind === 'pat') {
+        for (const pt of c.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { rec.productTarget(asin, await createTargetLocal({ adGroupId: agId, kind: 'PRODUCT', value: asin, bidEur, userId, creationFlow: true })) } catch (e) { rec.threw('product_target', asin, e) } }
+      } else if (c.kind === 'auto') {
+        // W2-A (CC-1) — Amazon makes the four auto groups itself: link them and set each one's on/off and bid as chosen
+        // (AT.1). Posting them as new targets is refused by Amazon, which left these choices in Nexus only.
+        const groups = (c.autoGroups ?? []).filter((g) => g?.key).map((g) => ({ key: g.key, enabled: g.enabled !== false, bidEur: Number(g.bidEur) || bidEur }))
+        if (groups.length) { try { rec.autoGroups(await linkAutoTargeting({ adGroupId: agId, groups, userId, creationFlow: true })) } catch (e) { rec.threw('auto_targeting', 'Auto groups', e) } }
+      }
+      if (adjustments.length) { try { rec.placement(await updatePlacementBidding({ campaignId: camp.id, adjustments, userId })) } catch (e) { rec.threw('placement', 'Placement bid adjustments', e) } }
+      outcomes.push(rec.result())
     }
+    const launch = summariseLaunch(outcomes)
     // AT.4a — persist the Step-3 harvesting rule as an AutomationRule (domain advertising)
     // so it survives launch instead of being thrown away. The matrix (which ad groups to
     // harvest from + which match types to graduate/negate, incl. the Auto campaign's groups)
@@ -1384,9 +1414,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const portfolioCheck = await settleLaunchPortfolios(createdIds)
     // AX-VT.4 — then read the whole launch back and report intended vs observed. Runs AFTER the
     // portfolio repair so the receipt reflects the state the operator is actually left with.
+    // W2-A — the campaigns on Amazon; one that is not is already answered in `launch` with its reason.
     const { verifyLaunch } = await import('../services/advertising/ads-launch-verify.service.js')
-    const verification = await verifyLaunch(createdIds).catch(() => null)
-    return { ok: true, created, totalCampaigns: created.length, rules: rulesCreated, portfolioCheck, verification }
+    const onAmazonIds = created.filter((c) => c.externalCampaignId).map((c) => c.campaignId)
+    const verification = onAmazonIds.length ? await verifyLaunch(onAmazonIds).catch(() => null) : null
+    // W2-A (CC-2) — `ok` only when every campaign asked for is live on Amazon; `launch` says, per campaign, what is.
+    if (!launch.ok) logger.warn('[SPW-launch] launch did not fully reach Amazon', { market, summary: describeLaunch(launch) })
+    return { ok: launch.ok, created, totalCampaigns: created.length, rules: rulesCreated, portfolioCheck, verification, launch, ...(launch.ok ? {} : { error: describeLaunch(launch) }) }
   })
 
   // SB.7 — Single Campaign builder launch. Creates ONE SP campaign with PER-KEYWORD match
@@ -1919,7 +1953,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const campaigns = await prisma.campaign.findMany({
       select: {
-        id: true, marketplace: true, liveBidWritesEnabled: true, liveBidWritesToday: true,
+        id: true, marketplace: true, liveBidWritesEnabled: true, liveBidWritesToday: true, externalCampaignId: true,
         lastSyncedAt: true, lastSyncStatus: true, lastSyncError: true, settingsSyncedAt: true,
       },
     })
@@ -1983,6 +2017,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         const marketWritable = c.marketplace ? writableMarkets.has(c.marketplace) : false
         const state =
           mode !== 'live' ? 'sandbox'
+          // W2-A (CC-3) — a campaign whose create Amazon (or the gate) refused is not on Amazon: Failed, with the reason
+          // (lastSyncError), whatever its market or allowlist say.
+          : !c.externalCampaignId && c.lastSyncStatus === 'FAILED' ? 'failed'
           : !marketWritable ? 'market_blocked'
           : !c.liveBidWritesEnabled ? 'gated'
           : pending > 0 ? 'pending'

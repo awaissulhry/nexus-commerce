@@ -31,7 +31,8 @@ import { TargetingModal } from './TargetingModal'
 import { LaunchStep, defaultRulesConfig, rulesConfigured, defaultBidConfig, type RulesConfig, type BidConfig } from './LaunchStep'
 import { defaultAiControl, aiGuardrailsToCents, type AiControlConfig } from './AiControlPanel'
 import { defaultCustomKeywordTypes, defaultCustomTargeting, type CustomKeywordType, type TargetingKind } from './CustomScheme'
-import { LaunchReceipt, type LaunchVerification } from '../LaunchReceipt'
+import { HeldLaunchReceipt } from '../LaunchReceipt'
+import { useLaunchReceipt } from '../useLaunchReceipt'
 import { marketChangeNote, useOnMarketChange } from '../marketChange'
 import { createdCampaignIds, missingBidOrBudget, positiveAmount } from '../launchValues'
 import '../launch-receipt.css'
@@ -86,11 +87,10 @@ export function SpSuperWizard() {
   const [editTgt, setEditTgt] = useState<{ id: string; mode: 'targeting' | 'negative' } | null>(null)
   const [launching, setLaunching] = useState(false)
   const [launchErr, setLaunchErr] = useState('')
-  // AX-VT.4 — set only when the launch did NOT fully verify. A verified launch navigates away
-  // exactly as before; adding a "yes it worked" step to the happy path is how receipts get ignored.
-  const [receipt, setReceipt] = useState<LaunchVerification | null>(null)
-  const [rechecking, setRechecking] = useState(false)
-  const [launchedIds, setLaunchedIds] = useState<string[]>([])
+  // AX-VT.4 / W2-A — held only when the launch did NOT fully land or verify. A launch where everything is live and
+  // verified navigates away exactly as before; adding a "yes it worked" step to the happy path is how receipts get ignored.
+  const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
+  const receipt = useLaunchReceipt(toCampaigns)
   // CC-6 — one market per launch: a market change drops the old market's products (and with them the step-2 targeting
   // generated from them) and its portfolio, wherever the operator is, and says so.
   const [marketNote, setMarketNote] = useState('')
@@ -170,35 +170,14 @@ export function SpSuperWizard() {
           })
         } catch { /* plan creation best-effort — campaigns already launched */ }
       }
-      // AX-VT.4 — the launch now comes back with Amazon's own account of what it produced.
-      // If anything does not match, stop here and show it; the operator would otherwise find out
-      // days later in Amazon's console, which is exactly what happened on 2026-07-30.
-      const v: LaunchVerification | null = j?.verification ?? null
-      if (v && !v.ok) {
-        setLaunchedIds(createdCampaignIds(j))
-        setReceipt(v)
-        setLaunching(false)
-        return
-      }
+      // AX-VT.4 / W2-A — the launch comes back with what it made (`launch`: each campaign live / partly made / not made)
+      // and Amazon's own account of it. If anything is not live or does not match (or could not be read back), stop here
+      // and show it; the operator would otherwise find out days later in Amazon's console (2026-07-30).
+      if (receipt.hold(j)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, campaigns, launchKey, launchUrl, payload, automationMode, productGroupName, aiControl, router])
+  }, [launching, market, campaigns, launchKey, launchUrl, payload, automationMode, productGroupName, aiControl, router, receipt.hold])
 
-  /** Re-run verification for the campaigns this launch created (transient read failures are common). */
-  const recheck = useCallback(async () => {
-    if (!launchedIds.length || rechecking) return
-    setRechecking(true)
-    try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/launches/verify`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignIds: launchedIds }),
-      })
-      const j = (await r.json()) as LaunchVerification
-      if (j?.ok) router.push('/marketing/ads/campaigns')
-      else setReceipt(j)
-    } catch (e) { setLaunchErr((e as Error).message) }
-    finally { setRechecking(false) }
-  }, [launchedIds, rechecking, router])
 
 
   // Scroll-spy for the step-1 sub-nav. The scroll container is the .h10-main
@@ -313,14 +292,7 @@ export function SpSuperWizard() {
           <>
             {/* AX-VT.4 — above the step, so it is the first thing read after a launch that
                 did not land as specified. Absent entirely when everything verified. */}
-            {receipt && (
-              <LaunchReceipt
-                v={receipt}
-                rechecking={rechecking}
-                onRecheck={launchedIds.length ? recheck : undefined}
-                onContinue={() => router.push('/marketing/ads/campaigns')}
-              />
-            )}
+            <HeldLaunchReceipt state={receipt} onContinue={toCampaigns} continueLabel="Go to campaigns" />
             <LaunchChecksPanel checks={checks} checking={checking} />
             <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" market={market} automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} portfolioId={portfolioId} setPortfolioId={setPortfolioId} aiControl={aiControl} setAiControl={setAiControl} />
           </>
@@ -331,8 +303,8 @@ export function SpSuperWizard() {
         {step > 1 && <Button size="lg" onClick={goBack}>Back</Button>}
         <span className="grow" />
         {launchErr && <span className="h10-spw-err">{launchErr}</span>}
-        <Button variant="primary" size="lg" onClick={() => (step < 3 ? goNext() : void launch())} disabled={launching || (step === 3 && launchBlocked(checks))}>
-          {step < 3 ? 'Next' : launching ? 'Launching…' : 'Launch'}
+        <Button variant="primary" size="lg" onClick={() => (step < 3 ? goNext() : void launch())} disabled={launching || (step === 3 && (launchBlocked(checks) || !!receipt.held))}>
+          {step < 3 ? 'Next' : launching ? 'Launching…' : receipt.held ? 'Launched' : 'Launch'}
         </Button>
       </footer>
 

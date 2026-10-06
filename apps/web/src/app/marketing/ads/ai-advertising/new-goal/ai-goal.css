@@ -60,6 +60,8 @@
 .aig2-launch .sum { font-size: 12.5px; color: var(--nds-text-2); margin-bottom: 14px; line-height: 1.5; }
 .aig2-launch .errs { font-size: 12px; color: #9a6b00; background: var(--nds-note-warn-bg); border-radius: var(--nds-radius-lg); padding: 8px 11px; margin-bottom: 14px; max-height: 120px; overflow-y: auto; }
 .aig2-launch .btns { display: flex; gap: 10px; justify-content: flex-end; }
+/* W2-A — room for the launch receipt (a per-campaign table) when a launch did not fully reach Amazon. */
+.aig2-launch.wide { width: 880px; max-height: calc(100vh - 40px); overflow-y: auto; }
 
 /* AIAD DS alignment (2026-08-25) — the four guardrail money fields are the design system's
    `Input` with its shaded €/% adornment, which is what `.h10-aig-money` in ads.css was

@@ -397,7 +397,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 
   const {
     createCampaignLocal, createAdGroupLocal, createKeywordLocal, bulkNegativeKeywords, createProductAdLocal,
-    createTargetLocal, createNegativeProductTargetLocal, updatePlacementBidding,
+    createTargetLocal, createNegativeProductTargetLocal, updatePlacementBidding, linkAutoTargeting,
   } = await import('./ads-create.service.js')
   const created = { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 }
   let skippedNonKeyword = 0
@@ -512,6 +512,8 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
           } catch (e) { errors.push(`negative product "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
         }
 
+        // W2-A (CC-1) — the auto groups this ad group asks for, linked to Amazon's own once its ads exist (below).
+        const autoWishes: Array<{ key: string; bidEur: number; plannedCents: number }> = []
         for (const t of g.targets) {
           if (t.isNegative) continue // handled above
           const plannedCents = t.bidCents ?? g.defaultBidCents ?? 50
@@ -537,14 +539,10 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
             // added to an AUTO campaign, and POST /sp/targets rejects them
             // (INVALID_ARGUMENT on the clause value). Posting them anyway is what
             // put four failures on every replication of an Auto campaign and
-            // downgraded an otherwise clean run to PARTIAL. The local row is still
-            // written — bids and reporting hang off it — it just is not pushed;
-            // the structural reconcile links it to Amazon's own clause.
-            try {
-              const r = await createTargetLocal({ adGroupId: grp.id, kind: 'AUTO', value: t.autoClause, bidEur, userId: req.actor, skipAmazon: true, creationFlow: true })
-              await rememberTarget(r.id, plannedCents)
-              created.targets++
-            } catch (e) { errors.push(`auto clause ${t.autoClause}: ${(e as Error).message.slice(0, 120)}`) }
+            // downgraded an otherwise clean run to PARTIAL. W2-A (CC-1) — they are
+            // linked to Amazon's own groups after the product ads (linkAutoTargeting,
+            // the path every builder shares), and their bids are set there.
+            autoWishes.push({ key: t.autoClause, bidEur, plannedCents })
             continue
           }
           if (kind !== 'KEYWORD') { skippedNonKeyword++; continue }
@@ -570,6 +568,20 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
             if (ad.externalAdId) created.productAds++
             else notPushedAds.push(asin)
           } catch (e) { errors.push(`productAd ${asin}: ${(e as Error).message.slice(0, 160)}`) }
+        }
+
+        if (autoWishes.length) {
+          try {
+            const linked = await linkAutoTargeting({ adGroupId: grp.id, groups: autoWishes.map((w) => ({ key: w.key, enabled: true, bidEur: w.bidEur })), userId: req.actor, creationFlow: true })
+            for (const l of linked.links) {
+              if (l.adTargetId) {
+                created.targets++
+                await rememberTarget(l.adTargetId, autoWishes.find((w) => w.key === l.key)?.plannedCents)
+              }
+              // A campaign Amazon does not hold is already reported in `notOnAmazon`; its groups do not exist there yet.
+              if (!l.ok && camp.externalCampaignId) errors.push(`auto clause ${l.label}: ${(l.reason ?? 'not linked to Amazon').slice(0, 200)}`)
+            }
+          } catch (e) { errors.push(`auto clauses: ${(e as Error).message.slice(0, 120)}`) }
         }
       }
 

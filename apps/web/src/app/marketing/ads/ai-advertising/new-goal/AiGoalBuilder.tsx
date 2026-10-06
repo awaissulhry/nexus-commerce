@@ -19,7 +19,7 @@
  *  - Launch is a staged overlay with the real result (campaigns, rules, warnings) instead of
  *    a silent redirect.
  */
-import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives'
 import { Banner, Modal } from '@/design-system/components'
 import { DataGrid } from '@/design-system/grid/datagrid'
@@ -45,6 +45,9 @@ import { marketLabel } from '../../_shell/MarketSelect'
 import { ProductSelection, type SpwProduct } from '../../campaign-builder/sp-super-wizard/ProductSelection'
 import { PortfolioPicker } from '../../campaign-builder/sp-super-wizard/PortfolioPicker'
 import { AiGoalPreview } from './AiGoalPreview'
+import { HeldLaunchReceipt } from '../../campaign-builder/LaunchReceipt'
+import { useLaunchReceipt } from '../../campaign-builder/useLaunchReceipt'
+import '../../campaign-builder/launch-receipt.css'
 import { marketChangeNote, useOnMarketChange } from '../../campaign-builder/marketChange'
 import './ai-goal.css'
 import { commandKeyFor, useCommandKey } from '@/lib/command-key'
@@ -148,6 +151,9 @@ export function AiGoalBuilder() {
   const [launching, setLaunching] = useState(false)
   const [launchPhase, setLaunchPhase] = useState<null | 'create' | 'materialize' | 'done' | 'partial' | 'failed'>(null)
   const [launchResult, setLaunchResult] = useState<{ goalId?: string; campaigns?: number; rules?: number; errors?: string[]; message?: string }>({})
+  // W2-A (CC-16) — the same launch receipt as the builders: what each scaffold campaign made on Amazon and what Amazon
+  // reports, held whenever anything is not live or not read back as asked (counts alone used to read as success).
+  const receipt = useLaunchReceipt(() => undefined)
   const totalBudget = useMemo(() => products.reduce((a, p) => a + (Number(p.budget) || 0), 0), [products])
   const setBudget = (id: string, v: string) => setProducts((ps) => ps.map((p) => (p.id === id ? { ...p, budget: v } : p)))
   const removeProduct = (id: string) => setProducts((ps) => ps.filter((p) => p.id !== id))
@@ -207,12 +213,16 @@ export function AiGoalBuilder() {
         madeGoal.current = { id: goalId, payload: JSON.stringify(payload) }
       }
       setLaunchPhase('materialize'); setLaunchResult({ goalId })
-      const m = await sendLaunch<{ campaigns?: unknown[]; rules?: unknown[]; errors?: string[] }>(commandKeyFor(`ads-goal-materialize:${goalId}`), `${getBackendUrl()}/api/advertising/ai-goals/${goalId}/materialize`, {})
-      if (!m.ok) {
+      const m = await sendLaunch<{ ok?: boolean; error?: string; goal?: unknown; campaigns?: unknown[]; rules?: unknown[]; errors?: string[] }>(commandKeyFor(`ads-goal-materialize:${goalId}`), `${getBackendUrl()}/api/advertising/ai-goals/${goalId}/materialize`, {})
+      // W2-A — an answer without the goal is a launch that built nothing (it can be retried); it may still say, in
+      // `launch`, why each campaign was not made.
+      if (!m.ok || !m.body.goal) {
         setLaunchPhase('partial')
-        setLaunchResult({ goalId, message: m.error || 'The goal was saved, but building its campaigns failed. Retry from the dashboard — it shows as "Not launched".' })
+        setLaunchResult({ goalId, message: (m.ok ? m.body.error : m.error) || 'The goal was saved, but building its campaigns failed. Retry from the dashboard — it shows as "Not launched".' })
+        if (m.ok) receipt.hold(m.body)
       } else {
         const mj = m.body
+        receipt.hold(mj)
         setLaunchPhase('done')
         setLaunchResult({ goalId, campaigns: Array.isArray(mj?.campaigns) ? mj.campaigns.length : 0, rules: Array.isArray(mj?.rules) ? mj.rules.length : 0, errors: Array.isArray(mj?.errors) ? mj.errors : [] })
       }
@@ -434,6 +444,7 @@ export function AiGoalBuilder() {
         <LaunchOverlay
           phase={launchPhase}
           result={launchResult}
+          receipt={receipt.held ? <HeldLaunchReceipt state={receipt} onContinue={() => router.push(`/marketing/ads/ai-advertising${launchResult.goalId ? `?goal=${launchResult.goalId}` : ''}`)} continueLabel="View goal" /> : null}
           onViewGoal={() => router.push(`/marketing/ads/ai-advertising${launchResult.goalId ? `?goal=${launchResult.goalId}` : ''}`)}
           onDone={() => router.push('/marketing/ads/ai-advertising')}
         />
@@ -485,9 +496,11 @@ function ScaffoldPreview({ scaffold, loading, hasProducts }: { scaffold: Scaffol
 }
 
 /* ── Launch overlay: staged, with the real result — never a silent redirect. ── */
-function LaunchOverlay({ phase, result, onViewGoal, onDone }: {
+function LaunchOverlay({ phase, result, receipt, onViewGoal, onDone }: {
   phase: 'create' | 'materialize' | 'done' | 'partial'
   result: { goalId?: string; campaigns?: number; rules?: number; errors?: string[]; message?: string }
+  /** W2-A — the launch receipt, when anything did not reach Amazon or was not read back as asked. */
+  receipt?: ReactNode
   onViewGoal: () => void; onDone: () => void
 }) {
   const step = (k: 'create' | 'materialize' | 'verify') => {
@@ -499,19 +512,20 @@ function LaunchOverlay({ phase, result, onViewGoal, onDone }: {
   const busy = phase === 'create' || phase === 'materialize'
   return (
     <div className="aig2-launch-back" role="dialog" aria-label="Launching product goal">
-      <div className="aig2-launch">
-        <h3>{busy ? 'Launching your product goal…' : phase === 'partial' ? 'Goal saved — launch incomplete' : 'Goal launched'}</h3>
+      <div className={`aig2-launch${receipt ? ' wide' : ''}`}>
+        <h3>{busy ? 'Launching your product goal…' : phase === 'partial' ? 'Goal saved — launch incomplete' : receipt ? 'Goal launched — not everything is on Amazon as asked' : 'Goal launched'}</h3>
         <div className="aig2-steps">
           <div className={`aig2-step ${step('create')}`}><span className="dot" />Saving the goal</div>
           <div className={`aig2-step ${step('materialize')}`}><span className="dot" />Building the campaign scaffold</div>
           <div className={`aig2-step ${step('verify')}`}><span className="dot" />Linking the AI plan &amp; verifying</div>
         </div>
-        {phase === 'done' && (
+        {phase === 'done' && !receipt && (
           <div className="sum">
             Created <b>{result.campaigns ?? 0}</b> campaign{(result.campaigns ?? 0) === 1 ? '' : 's'} and <b>{result.rules ?? 0}</b> automation rule{(result.rules ?? 0) === 1 ? '' : 's'}.
             The AI evaluates every 15 minutes and proposes its first optimizations on the Suggestions page as click data arrives. The launch receipt is on the Trust page.
           </div>
         )}
+        {receipt}
         {phase === 'partial' && <div className="sum">{result.message}</div>}
         {phase === 'done' && (result.errors?.length ?? 0) > 0 && (
           <div className="errs">{result.errors!.map((e) => <div key={e}>{e}</div>)}</div>

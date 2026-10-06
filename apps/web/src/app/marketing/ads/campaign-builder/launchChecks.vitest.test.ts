@@ -50,6 +50,9 @@ describe('CC-24 — one launch press, one key', () => {
     expect(launchOutcome(200, { ok: false, error: 'no' }, null)).toEqual({ ok: false, error: 'no' })
     expect(launchOutcome(500, { ok: false }, null)).toEqual({ ok: false, error: 'Launch failed (the server answered 500).' })
     expect(launchOutcome(502, null, null)).toEqual({ ok: false, error: LAUNCH_UNANSWERED })
+    // W2-A — a launch that ran but did not fully reach Amazon is a result for the receipt, not an error.
+    const partly = { ok: false, error: '0 of 1 campaign live on Amazon', launch: { ok: false, asked: 1, live: 0, partial: 1, failed: 0, campaigns: [] } }
+    expect(launchOutcome(200, partly, null)).toEqual({ ok: true, body: partly })
   })
 })
 

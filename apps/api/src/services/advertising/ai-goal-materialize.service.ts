@@ -27,10 +27,15 @@ import { logger } from '../../utils/logger.js'
 import { GOAL_PRESETS, DEFAULT_GUARDRAILS, type Goal } from './autopilot/presets.js'
 import { safeCampaignName } from '@nexus/shared/ads-campaign-name'
 import type { GoalProduct } from './ai-product-goal.service.js'
+import { CampaignLaunch, summariseLaunch, describeLaunch, type LaunchCampaignResult, type LaunchResult } from './launch-outcome.js'
 
 export class MaterializeError extends Error {
   /** CC-24 — true when nothing was created, so the goal's launch claim is let go and the goal can be launched again. */
-  constructor(message: string, public statusCode = 400, public releaseClaim = false) { super(message) }
+  constructor(
+    message: string, public statusCode = 400, public releaseClaim = false,
+    /** W2-A — set when campaigns were attempted: what each one did (launch-outcome.ts). */
+    public launch?: LaunchResult,
+  ) { super(message) }
 }
 
 export type ScaffoldRole = 'AUTO' | 'RESEARCH' | 'PERF' | 'PAT'
@@ -235,67 +240,84 @@ async function materializeClaimed(goal: GoalRow, userId: string | undefined) {
 
   const {
     createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal,
-    createTargetLocal, createNegativeKeywordLocal, createNegativeProductTargetLocal,
-    settleLaunchPortfolios,
+    createTargetLocal, createNegativeKeywordLocal, createNegativeProductTargetLocal, linkAutoTargeting,
   } = await import('./ads-create.service.js')
 
   const refs: GoalCampaignRef[] = []
   const errors: string[] = [...scaffold.warnings]
   // setLabel → role → created ids (for the harvest rules' sources/destinations).
   const agBySet = new Map<string, Partial<Record<ScaffoldRole, { campaignId: string; adGroupId: string }>>>()
+  // W2-A (CC-2) — what each campaign made on Amazon, part by part (launch-outcome.ts). `errors` keeps its lines.
+  const outcomes: LaunchCampaignResult[] = []
 
   for (const pc of scaffold.campaigns) {
+    const rec = new CampaignLaunch(pc.name)
     try {
       const camp = await createCampaignLocal({
         name: pc.name, type: 'SP', marketplace: scaffold.marketplace,
         targetingType: pc.targetingType,
         dailyBudgetEur: pc.budgetCents / 100, biddingStrategy: 'legacyForSales',
         portfolioId: goal.portfolioId ?? undefined, userId,
-      })
+      }).catch((e: unknown) => { rec.campaignThrew(e); throw e })
+      rec.campaign(camp)
+      // The campaign exists in Nexus: from here it is in the goal, whatever its parts do (it was dropped when its ad
+      // group threw).
+      refs.push({ id: camp.id, role: pc.role, label: pc.name })
+      // W2-A (CC-3) — not on Amazon: a FAILED record with the reason, and nothing built under it.
+      if (!camp.externalCampaignId) { errors.push(`campaign ${pc.name}: ${camp.reason ?? 'not on Amazon'}`); outcomes.push(rec.result()); continue }
       // Same launch repair as SPW: allowlist BEFORE sub-entities, or the per-campaign gate
       // skips every keyword/product-ad and the campaign lands empty on Amazon.
       try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[AIAD] allowlist failed', { error: (e as Error).message }) }
       // CM-20 — `creationFlow`: everything below belongs to the campaign created a moment ago.
-      const ag = await createAdGroupLocal({ campaignId: camp.id, name: `${ROLE_LABEL[pc.role]} Ad Group`, defaultBidEur: BASE_BID_EUR, userId, creationFlow: true })
+      const agName = `${ROLE_LABEL[pc.role]} Ad Group`
+      const ag = await createAdGroupLocal({ campaignId: camp.id, name: agName, defaultBidEur: BASE_BID_EUR, userId, creationFlow: true })
+        .catch((e: unknown) => { rec.adGroup(agName, null, e); throw e })
+      rec.adGroup(agName, ag)
+      const agId = ag.id as string
       const set = agBySet.get(pc.setLabel) ?? {}
-      set[pc.role] = { campaignId: camp.id, adGroupId: ag.id }
+      set[pc.role] = { campaignId: camp.id, adGroupId: agId }
       agBySet.set(pc.setLabel, set)
 
-      for (const p of pc.products) {
-        try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId, creationFlow: true }) }
-        catch (e) { errors.push(`product ad ${p.asin ?? p.sku}: ${(e as Error).message}`) }
-      }
-      for (const g of pc.autoGroups) {
-        try { await createTargetLocal({ adGroupId: ag.id, kind: 'AUTO', value: g.key, bidEur: g.bidEur, userId, creationFlow: true }) }
-        catch (e) { errors.push(`auto group ${g.key}: ${(e as Error).message}`) }
-      }
-      for (const kw of pc.seeds) {
-        try { await createKeywordLocal({ adGroupId: ag.id, keywordText: kw.text, matchType: kw.matchType, bidEur: kw.bidCents / 100, userId, creationFlow: true }) }
-        catch (e) { errors.push(`${kw.matchType.toLowerCase()} "${kw.text}": ${(e as Error).message}`) }
-      }
-      for (const asin of pc.productTargets) {
-        try { await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur: BASE_BID_EUR, userId, creationFlow: true }) }
-        catch (e) { errors.push(`product target ${asin}: ${(e as Error).message}`) }
-      }
+      // W2-A (CC-17) — negatives FIRST, as Replicate does: a launch that fails part-way is then narrower, never wider.
       for (const nk of pc.negativeKeywords) {
-        try { await createNegativeKeywordLocal({ adGroupId: ag.id, keywordText: nk.text, matchType: nk.matchType, userId }) }
-        catch (e) { errors.push(`neg "${nk.text}": ${(e as Error).message}`) }
+        try { rec.negative('negative_keyword', `${nk.text} (${nk.matchType.toLowerCase()})`, await createNegativeKeywordLocal({ adGroupId: agId, keywordText: nk.text, matchType: nk.matchType, userId })) }
+        catch (e) { rec.threw('negative_keyword', nk.text, e); errors.push(`neg "${nk.text}": ${(e as Error).message}`) }
       }
       for (const asin of pc.negativeAsins) {
-        try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId }) }
-        catch (e) { errors.push(`neg ASIN ${asin}: ${(e as Error).message}`) }
+        try { rec.negative('negative_product', asin, await createNegativeProductTargetLocal({ adGroupId: agId, asin, userId })) }
+        catch (e) { rec.threw('negative_product', asin, e); errors.push(`neg ASIN ${asin}: ${(e as Error).message}`) }
       }
-      refs.push({ id: camp.id, role: pc.role, label: pc.name })
+      for (const p of pc.products) {
+        const item = p.sku ?? p.asin ?? '?'
+        try { rec.productAd(item, await createProductAdLocal({ adGroupId: agId, asin: p.asin, sku: p.sku, productId: p.productId, userId, launch: true, creationFlow: true })) }
+        catch (e) { rec.threw('product_ad', item, e); errors.push(`product ad ${p.asin ?? p.sku}: ${(e as Error).message}`) }
+      }
+      // W2-A (CC-1) — Amazon makes the four auto groups itself: link them and set each one's bid (the bid evidence).
+      if (pc.autoGroups.length) {
+        try { rec.autoGroups(await linkAutoTargeting({ adGroupId: agId, groups: pc.autoGroups.map((g) => ({ key: g.key, enabled: true, bidEur: g.bidEur })), userId, creationFlow: true })) }
+        catch (e) { rec.threw('auto_targeting', 'Auto groups', e); errors.push(`auto groups: ${(e as Error).message}`) }
+      }
+      for (const kw of pc.seeds) {
+        try { rec.keyword(`${kw.text} (${kw.matchType.toLowerCase()})`, await createKeywordLocal({ adGroupId: agId, keywordText: kw.text, matchType: kw.matchType, bidEur: kw.bidCents / 100, userId, creationFlow: true })) }
+        catch (e) { rec.threw('keyword', kw.text, e); errors.push(`${kw.matchType.toLowerCase()} "${kw.text}": ${(e as Error).message}`) }
+      }
+      for (const asin of pc.productTargets) {
+        try { rec.productTarget(asin, await createTargetLocal({ adGroupId: agId, kind: 'PRODUCT', value: asin, bidEur: BASE_BID_EUR, userId, creationFlow: true })) }
+        catch (e) { rec.threw('product_target', asin, e); errors.push(`product target ${asin}: ${(e as Error).message}`) }
+      }
     } catch (e) {
       errors.push(`campaign ${pc.name}: ${(e as Error).message}`)
       logger.error('[AIAD] campaign create failed', { goalId, name: pc.name, error: (e as Error).message })
     }
+    outcomes.push(rec.result())
   }
-  if (!refs.length) throw new MaterializeError(`no campaigns could be created: ${errors[0] ?? 'unknown error'}`, 500, true)
+  const launch = summariseLaunch(outcomes)
+  if (!refs.length) throw new MaterializeError(`no campaigns could be created: ${errors[0] ?? 'unknown error'}`, 500, true, launch)
+  if (!launch.ok) logger.warn('[AIAD] launch did not fully reach Amazon', { goalId, summary: describeLaunch(launch) })
   // CC-24 — from here campaigns exist: whatever happens next, the goal keeps its claim and names them, so a retry never
   // builds a second scaffold beside them.
   try {
-    return await finishMaterialize(goal, userId, scaffold, refs, agBySet, errors)
+    return await finishMaterialize(goal, userId, scaffold, refs, agBySet, errors, launch)
   } catch (e) {
     await prisma.adProductGoal.update({ where: { id: goal.id }, data: { campaignIds: refs as never } }).catch(() => {})
     throw e
@@ -305,6 +327,7 @@ async function materializeClaimed(goal: GoalRow, userId: string | undefined) {
 async function finishMaterialize(
   goal: GoalRow, userId: string | undefined, scaffold: GoalScaffold, refs: GoalCampaignRef[],
   agBySet: Map<string, Partial<Record<ScaffoldRole, { campaignId: string; adGroupId: string }>>>, errors: string[],
+  launch: LaunchResult,
 ) {
   const goalId = goal.id
   const { settleLaunchPortfolios } = await import('./ads-create.service.js')
@@ -347,9 +370,11 @@ async function finishMaterialize(
   let portfolioCheck: unknown = null
   try { portfolioCheck = await settleLaunchPortfolios(createdIds) } catch { /* non-fatal */ }
   let verification: unknown = null
+  // W2-A — the campaigns on Amazon; one that is not is already answered in `launch` with its reason.
+  const onAmazonIds = launch.campaigns.filter((o) => o.campaignId && o.externalCampaignId).map((o) => o.campaignId as string)
   try {
     const { verifyLaunch } = await import('./ads-launch-verify.service.js')
-    verification = await verifyLaunch(createdIds)
+    if (onAmazonIds.length) verification = await verifyLaunch(onAmazonIds)
   } catch { /* non-fatal */ }
 
   // ── The AutopilotPlan the ad-autopilot cron drives (SUGGEST: propose-only until graduated) ──
@@ -372,5 +397,5 @@ async function finishMaterialize(
     data: { campaignIds: refs as never, planId: plan.id, materializedAt: new Date() },
   })
   logger.info('[AIAD] goal materialized', { goalId: goal.id, planId: plan.id, campaigns: refs.length, rules: linkedRuleIds.length, errors: errors.length })
-  return { goal: updated, planId: plan.id, campaigns: refs, rules: linkedRuleIds, portfolioCheck, verification, errors }
+  return { goal: updated, planId: plan.id, campaigns: refs, rules: linkedRuleIds, portfolioCheck, verification, errors, launch }
 }

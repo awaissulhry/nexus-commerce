@@ -32,6 +32,9 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { commandKeyFor } from '@/lib/command-key'
 import { sendLaunch } from '../campaign-builder/launchChecks'
 import { GoalDrawer } from './GoalDrawer'
+import { HeldLaunchReceipt } from '../campaign-builder/LaunchReceipt'
+import { useLaunchReceipt } from '../campaign-builder/useLaunchReceipt'
+import '../campaign-builder/launch-receipt.css'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -115,6 +118,8 @@ export function AiAdvertisingDashboard() {
   const [drawerGoal, setDrawerGoal] = useState<string | null>(seed.goal)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<string | null>(null)
+  // W2-A (CC-16) — a Launch from here shows the same receipt as the builders when anything did not reach Amazon.
+  const receipt = useLaunchReceipt(() => undefined)
   const [urlBits, setUrlBits] = useState({ sort: seed.sort, dir: seed.dir, q: seed.q, page: seed.page, filters: seed.filters })
 
   // Write the view back to the address bar so a copied link reproduces it.
@@ -173,6 +178,7 @@ export function AiAdvertisingDashboard() {
       // CC-24 — one key per goal's launch: a press whose answer was lost waits for that run instead of building twice.
       const out = await sendLaunch(commandKeyFor(`ads-goal-materialize:${id}`), `${getBackendUrl()}/api/advertising/ai-goals/${id}/materialize`, {})
       if (!out.ok) throw new Error(out.error)
+      receipt.hold(out.body)
       setRefreshKey((k) => k + 1)
     } catch { /* surfaced by the still-unlaunched state */ } finally { setBusy(null) }
   }
@@ -299,6 +305,8 @@ export function AiAdvertisingDashboard() {
         dateRange={dateRange} onDateRange={(start, end) => setDateRange({ start, end })}
         primaryAction={{ label: 'Product Goal', icon: <Plus size={14} />, href: '/marketing/ads/ai-advertising/new-goal' }}
       />
+
+      <HeldLaunchReceipt state={receipt} onContinue={receipt.clear} continueLabel="Dismiss" />
 
       <MetricStrip metrics={stripMetrics} />
 

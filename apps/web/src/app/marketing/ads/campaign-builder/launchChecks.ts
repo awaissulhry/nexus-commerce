@@ -68,8 +68,11 @@ export const LAUNCH_UNANSWERED = 'No answer from the server, so the launch may s
 /** The answer to one launch press, in words. Pure (the builders' tests drive it). */
 export function launchOutcome<T>(status: number, body: unknown, conflict: 'running' | 'reused' | null): LaunchOutcome<T> {
   if (conflict) return { ok: false, error: commandConflictMessage(conflict, 'launch') }
-  const b = (body ?? {}) as { ok?: unknown; error?: unknown }
+  const b = (body ?? {}) as { ok?: unknown; error?: unknown; launch?: unknown }
   if (status >= 200 && status < 300 && b.ok !== false) return { ok: true, body: body as T }
+  // W2-A — a launch that ran answers `launch` (each campaign: live / partly made / not made, and why), also when its
+  // `ok` is false: that is the result the receipt shows, not an error.
+  if (b.launch && typeof b.launch === 'object') return { ok: true, body: body as T }
   if (keepsKey(status, body)) return { ok: false, error: LAUNCH_UNANSWERED }
   return { ok: false, error: typeof b.error === 'string' && b.error.trim() ? b.error : `Launch failed (the server answered ${status}).` }
 }

@@ -85,6 +85,9 @@ export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: 
   const { createCampaignLocal, createAdGroupLocal, createKeywordLocal, createProductAdLocal, createTargetLocal, createNegativeProductTargetLocal, createNegativeKeywordLocal, updatePlacementBidding } = await import('./ads-create.service.js')
   const biddingStrategy: 'legacyForSales' | 'autoForSales' | 'manual' = b.biddingStrategy === 'updown' ? 'autoForSales' : b.biddingStrategy === 'fixed' ? 'manual' : 'legacyForSales'
   const rulesCreated: Array<{ id: string; name: string }> = []
+  // W2-A (CC-2) — what reached Amazon, part by part (launch-outcome.ts); each step is caught on its own.
+  const { CampaignLaunch, summariseLaunch, describeLaunch } = await import('./launch-outcome.js')
+  const rec = new CampaignLaunch(name)
   // A11 — born suppressed (opts.bornSuppressed): a bid above the floor starts AT the floor and is remembered. With no
   // option every helper is the identity, so the route's launch is unchanged.
   const floor = opts.bornSuppressed ? normaliseFloorCents(opts.bornSuppressed.floorCents) : null
@@ -92,8 +95,25 @@ export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: 
   const floored = (eur: number) => floor != null && cents(eur) > floor
   const startEur = (eur: number) => (floored(eur) ? (floor as number) / 100 : eur)
   const remember = (adTargetId: string, eur: number) => prisma.adTarget.update({ where: { id: adTargetId }, data: { suppressedFromBidCents: cents(eur) } })
+  let camp: Awaited<ReturnType<typeof createCampaignLocal>>
   try {
-    const camp = await createCampaignLocal({ name, type: 'SP', marketplace: market, targetingType: 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy, portfolioId: b.portfolioId, userId })
+    camp = await createCampaignLocal({ name, type: 'SP', marketplace: market, targetingType: 'MANUAL', dailyBudgetEur: budgetEur, biddingStrategy, portfolioId: b.portfolioId, userId })
+    rec.campaign(camp)
+  } catch (e) {
+    // W2-A (CC-2) — nothing was written: the answer says so, with the reason, instead of a bare 500.
+    rec.campaignThrew(e)
+    const launch = summariseLaunch([rec.result()])
+    logger.error('[single-launch] campaign create failed', { name, market, error: (e as Error).message })
+    return { status: 200, body: { ok: false, error: (e as Error).message, launch } }
+  }
+  // W2-A (CC-3) — Amazon (or the gate) did not take the campaign: it stays in Nexus as a FAILED record with the reason,
+  // and nothing is built under it (its parts could not reach Amazon either).
+  if (!camp.externalCampaignId) {
+    const launch = summariseLaunch([rec.result()])
+    logger.warn('[single-launch] campaign not on Amazon', { market, name, campaignId: camp.id, reason: camp.reason })
+    return { status: 200, body: { ok: false, error: describeLaunch(launch), campaignId: camp.id, externalCampaignId: null, launch } }
+  }
+  try {
     if (floor != null || opts.currency || opts.allowlistAtBirth) {
       await prisma.campaign.update({ where: { id: camp.id }, data: {
         // CC-7 — on the allowlist before the placement write below, which the allowlist binds.
@@ -102,30 +122,40 @@ export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: 
         ...(floor != null ? { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.bornSuppressed!.by } : {}),
       } })
     }
+    const adGroupName = (b.adGroupName || '').trim() || `${name} Ad Group`
     // CM-20 — `creationFlow`: everything below belongs to the campaign created a moment ago.
-    const ag = await createAdGroupLocal({ campaignId: camp.id, name: (b.adGroupName || '').trim() || `${name} Ad Group`, defaultBidEur: startEur(defaultBidEur), userId, creationFlow: true })
-    if (floored(defaultBidEur)) await prisma.adGroup.update({ where: { id: ag.id }, data: { suppressedFromBidCents: cents(defaultBidEur) } })
-    for (const p of products) { try { await createProductAdLocal({ adGroupId: ag.id, asin: p.asin, sku: p.sku, productId: p.productId, userId, creationFlow: true }) } catch (e) { logger.warn('[single-launch] product ad failed', { error: (e as Error).message }) } }
-    if ((b.targetMode ?? 'keyword') === 'product') {
-      for (const pt of b.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { const t = await createTargetLocal({ adGroupId: ag.id, kind: 'PRODUCT', value: asin, bidEur: startEur(defaultBidEur), userId, creationFlow: true }); if (floored(defaultBidEur)) await remember(t.id, defaultBidEur) } catch (e) { logger.warn('[single-launch] product target failed', { error: (e as Error).message }) } }
-    } else {
-      for (const kw of b.keywords ?? []) { const text = (kw?.text || '').trim(); if (!text) continue; const mt: 'BROAD' | 'PHRASE' | 'EXACT' = kw.matchType === 'PHRASE' ? 'PHRASE' : kw.matchType === 'EXACT' ? 'EXACT' : 'BROAD'; try { const bid = Number(kw.bidEur) || defaultBidEur; const k = await createKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, bidEur: startEur(bid), userId, creationFlow: true }); if (floored(bid) && !k.existed) await remember(k.id, bid) } catch (e) { logger.warn('[single-launch] keyword failed', { error: (e as Error).message }) } }
-    }
+    const ag = await createAdGroupLocal({ campaignId: camp.id, name: adGroupName, defaultBidEur: startEur(defaultBidEur), userId, creationFlow: true })
+      .catch((e: unknown) => { rec.adGroup(adGroupName, null, e); throw e })
+    rec.adGroup(adGroupName, ag)
+    const agId = ag.id as string
+    if (floored(defaultBidEur)) await prisma.adGroup.update({ where: { id: agId }, data: { suppressedFromBidCents: cents(defaultBidEur) } })
+    // W2-A (CC-17) — negatives FIRST, as Replicate does: a launch that fails part-way is then narrower, never wider.
     // 5b — the campaign was created above and is born off the allowlist: its negatives are part of the launch, as its
     // keywords and product ads are, so they pass `creationFlow` (the allowlist binds every other negative).
-    for (const nk of b.negKeywords ?? []) { const text = (nk?.text || '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = nk.matchType === 'PHRASE' ? 'PHRASE' : 'EXACT'; try { await createNegativeKeywordLocal({ adGroupId: ag.id, keywordText: text, matchType: mt, userId, creationFlow: true }) } catch (e) { logger.warn('[single-launch] neg keyword failed', { error: (e as Error).message }) } }
-    for (const np of b.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { await createNegativeProductTargetLocal({ adGroupId: ag.id, asin, userId, creationFlow: true }) } catch (e) { logger.warn('[single-launch] neg product failed', { error: (e as Error).message }) } }
+    for (const nk of b.negKeywords ?? []) { const text = (nk?.text || '').trim(); if (!text) continue; const mt: 'EXACT' | 'PHRASE' = nk.matchType === 'PHRASE' ? 'PHRASE' : 'EXACT'; try { rec.negative('negative_keyword', `${text} (${mt.toLowerCase()})`, await createNegativeKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, userId, creationFlow: true })) } catch (e) { rec.threw('negative_keyword', text, e) } }
+    for (const np of b.negProducts ?? []) { const asin = np.asin || np.sku; if (!asin) continue; try { rec.negative('negative_product', asin, await createNegativeProductTargetLocal({ adGroupId: agId, asin, userId, creationFlow: true })) } catch (e) { rec.threw('negative_product', asin, e) } }
+    for (const p of products) { const item = p.sku || p.asin || p.productId || '?'; try { rec.productAd(item, await createProductAdLocal({ adGroupId: agId, asin: p.asin, sku: p.sku, productId: p.productId, userId, launch: true, creationFlow: true })) } catch (e) { rec.threw('product_ad', item, e) } }
+    if ((b.targetMode ?? 'keyword') === 'product') {
+      for (const pt of b.productTargets ?? []) { const asin = pt.asin || pt.sku; if (!asin) continue; try { const t = await createTargetLocal({ adGroupId: agId, kind: 'PRODUCT', value: asin, bidEur: startEur(defaultBidEur), userId, creationFlow: true }); rec.productTarget(asin, t); if (floored(defaultBidEur) && t.id) await remember(t.id, defaultBidEur) } catch (e) { rec.threw('product_target', asin, e) } }
+    } else {
+      for (const kw of b.keywords ?? []) { const text = (kw?.text || '').trim(); if (!text) continue; const mt: 'BROAD' | 'PHRASE' | 'EXACT' = kw.matchType === 'PHRASE' ? 'PHRASE' : kw.matchType === 'EXACT' ? 'EXACT' : 'BROAD'; try { const bid = Number(kw.bidEur) || defaultBidEur; const k = await createKeywordLocal({ adGroupId: agId, keywordText: text, matchType: mt, bidEur: startEur(bid), userId, creationFlow: true }); rec.keyword(`${text} (${mt.toLowerCase()})`, k); if (floored(bid) && !k.existed && k.id) await remember(k.id, bid) } catch (e) { rec.threw('keyword', text, e) } }
+    }
     const pb = b.placementBids ?? {}
     const adjustments = ([['PLACEMENT_TOP', pb.tos], ['PLACEMENT_PRODUCT_PAGE', pb.pdp], ['PLACEMENT_REST_OF_SEARCH', pb.ros]] as Array<[string, string | undefined]>)
       .flatMap(([placement, v]) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? [{ placement, percentage: n }] : [] })
     // CC-7 — what became of the placement multipliers is part of the answer, not only of the log.
     // `mode`: live = Amazon took it; sandbox / local = saved in Nexus (no live account, or the campaign is not on Amazon).
+    // W2-A — and the launch answer lists a refused placement with its reason.
     let placement: { mode: string; sent: boolean; reason?: string } | null = null
     if (adjustments.length) {
       try {
         const r = await updatePlacementBidding({ campaignId: camp.id, adjustments, userId })
+        rec.placement(r)
         placement = r.ok ? { mode: r.mode, sent: r.mode === 'live' } : { mode: r.mode, sent: false, reason: r.reason ?? r.error ?? 'not sent' }
-      } catch (e) { placement = { mode: 'failed', sent: false, reason: (e as Error).message }; logger.warn('[single-launch] placement failed', { error: (e as Error).message }) }
+      } catch (e) {
+        rec.threw('placement', 'Placement bid adjustments', e)
+        placement = { mode: 'failed', sent: false, reason: (e as Error).message }; logger.warn('[single-launch] placement failed', { error: (e as Error).message })
+      }
     }
 
     // #1/#3/#4 — persist Sponsored-Video opt-ins, Sites reach, and the video/AB/audience bid
@@ -189,9 +219,13 @@ export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: 
     // AX-VT.4 — full intended-vs-observed receipt for the campaign and everything under it.
     const { verifyLaunch } = await import('./ads-launch-verify.service.js')
     const verification = await verifyLaunch([camp.id]).catch(() => null)
-    return { status: 200, body: { ok: true, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount, portfolioCheck, verification, liveWrites: !!opts.allowlistAtBirth, placement } }
+    // W2-A (CC-2) — `ok` only when the campaign and every part asked for reached Amazon; `launch` says what did.
+    const launch = summariseLaunch([rec.result()])
+    if (!launch.ok) logger.warn('[single-launch] launch did not fully reach Amazon', { market, summary: describeLaunch(launch) })
+    return { status: 200, body: { ok: launch.ok, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, rules: rulesCreated, attached: attachedCount, portfolioCheck, verification, liveWrites: !!opts.allowlistAtBirth, placement, launch, ...(launch.ok ? {} : { error: describeLaunch(launch) }) } }
   } catch (e) {
+    // The campaign exists (a later step threw): the answer still names it and what reached Amazon.
     logger.error('[single-launch] failed', { name, market, error: (e as Error).message })
-    return { status: 500, body: { ok: false, error: (e as Error).message } }
+    return { status: 500, body: { ok: false, error: (e as Error).message, campaignId: camp.id, launch: summariseLaunch([rec.result()]) } }
   }
 }
