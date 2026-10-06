@@ -120,6 +120,25 @@ describe('W1-8 — where each ad change lands', () => {
     expect(await level('apply-ads-playbook', { op: 'adopt', market: 'IT', productId: ids.p1 })).toBeNull()
   })
 
+  it('PB-5b — a playbook start is a restore AND an allowlist: the stricter of the two where it lands; a stop is a stop', async () => {
+    const row = await inA(() => db().adsStrategy.findFirstOrThrow({ where: { market: 'IT', level: 'MARKET' } }))
+    const set = (autonomy: Record<string, string>) => inA(() => db().adsStrategy.update({ where: { id: row.id }, data: { claudeAutonomy: { ...CONFIRM_ALL, ...autonomy } } }))
+    try {
+      await set({ restore: 'auto', allowlist: 'watch', stop: 'auto' })
+      expect(await level('apply-ads-playbook', { op: 'start', market: 'IT', productId: ids.p2 })).toMatchObject({ action: 'allowlist', level: 'watch', row: market })
+      await set({ restore: 'ask', allowlist: 'auto' })
+      expect(await level('apply-ads-playbook', { op: 'start', market: 'IT', productId: ids.p2 })).toMatchObject({ action: 'restore', level: 'ask', row: market })
+      // Only one of the two kinds spoken to: that one.
+      await set({ allowlist: 'confirm' })
+      expect(await level('apply-ads-playbook', { op: 'start', market: 'IT', productId: ids.p2 })).toMatchObject({ action: 'allowlist', level: 'confirm' })
+      await set({ stop: 'auto' })
+      expect(await level('apply-ads-playbook', { op: 'stop', market: 'IT', sku: 'TEST-W18-P2' })).toMatchObject({ action: 'stop', level: 'auto' })
+      expect(await level('apply-ads-playbook', { op: 'start', market: 'IT', productId: ids.p2 })).toBeNull()
+    } finally {
+      await inA(() => db().adsStrategy.update({ where: { id: row.id }, data: { claudeAutonomy: CONFIRM_ALL } }))
+    }
+  })
+
   it('an ads rule: its scope; a whole account, or an edit keeping its scope, the strictest row of the business', async () => {
     expect(await level('save-ad-rule', { kind: 'amazon-ads', scope: { campaignId: 'c-off' } })).toMatchObject({ action: 'rule', level: 'confirm' })
     expect(await level('save-ad-rule', { kind: 'amazon-ads', scope: { marketplace: 'IT', productId: ids.p1 } })).toMatchObject({ level: 'ask', basis: 'scope' })
