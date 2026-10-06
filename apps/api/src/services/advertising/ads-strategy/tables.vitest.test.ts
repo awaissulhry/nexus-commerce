@@ -28,7 +28,7 @@ const STRATEGY_FIELDS = [
   'goal', 'goalNote', 'targetKind', 'targetPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'maxChangePct',
   'maxActionsPerRun', 'protect', 'harvestMinOrders', 'harvestMinClicks', 'harvestMaxAcosPct', 'harvestWindowDays',
   'negateMinClicks', 'negateMinSpendCents', 'negateMaxOrders', 'negateWindowDays', 'stopMethod', 'stopBidCents',
-  'claudeAutonomy', 'reviewEveryDays',
+  'claudeAutonomy', 'reviewEveryDays', 'claudeMaxChangesPerDay', 'claudeMaxRaisesPerDay', 'claudeMaxBudgetIncreasePerDayCents',
 ] as const
 
 beforeAll(async () => {

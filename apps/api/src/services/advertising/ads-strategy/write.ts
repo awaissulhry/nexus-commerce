@@ -39,6 +39,7 @@ import type { RaiseWords } from '../../agents/claude-trust.service.js'
 import { accountDefaultFraction, readOwnerTargets, targetFraction } from '../ads-target-acos-resolver.js'
 import {
   CLAUDE_ACTION_TYPES,
+  CLAUDE_DAILY_FIELDS,
   CLAUDE_DOOR,
   COLUMN_CHECKS,
   DEFAULT_STOP_BID_CENTS,
@@ -141,6 +142,13 @@ export const STRATEGY_VALUES_INPUT = z.object({
     z.enum(['off', 'ask', 'confirm', 'auto']).optional().describe(`the most Claude may do alone for ${action} actions here`)])) as Record<ClaudeActionType, z.ZodOptional<z.ZodEnum<{ off: 'off'; ask: 'ask'; confirm: 'confirm'; auto: 'auto' }>>>)
     .strict().nullable().optional().describe("what Claude may do alone here, per kind of ad action: off, ask, confirm or auto. It only ever NARROWS the business's own level"),
   reviewEveryDays: int('reviewEveryDays').nullable().optional().describe('how often Claude reviews this scope, in days (1–90)'),
+  // AA-W2-2b — what Claude's ad changes may add in this market in 24 hours when they run by the business's rule.
+  claudeMaxChangesPerDay: int('claudeMaxChangesPerDay').nullable().optional()
+    .describe("market only: the most ad changes Claude may run by the business's rule here in 24 hours (each entity changed counts one); empty or 0 = none runs by rule"),
+  claudeMaxRaisesPerDay: int('claudeMaxRaisesPerDay').nullable().optional()
+    .describe('market only: the most of those that add spend (a higher bid, budget, placement or target, a restart, a new keyword); empty or 0 = no raise runs by rule'),
+  claudeMaxBudgetIncreasePerDayCents: int('claudeMaxBudgetIncreasePerDayCents').nullable().optional()
+    .describe("market only: the most daily budget those may add in 24 hours, in cents of the market's currency; empty or 0 = no budget increase runs by rule"),
 }).strict()
 
 export type StrategyValuesInput = z.infer<typeof STRATEGY_VALUES_INPUT>
@@ -258,6 +266,12 @@ export function judgeChange(rule: RaiseRule, key: StrategyFieldKey, before: unkn
       const bid = (s: unknown) => numberOr((s as Group | null)?.stopBidCents, DEFAULT_STOP_BID_CENTS)
       if (method(b) !== method(a)) return method(a) === 'PAUSE' ? 'raise' : 'lower'
       return bid(a) > bid(b) ? 'raise' : bid(a) < bid(b) ? 'lower' : 'same'
+    }
+    case 'count': {
+      // AA-W2-2b — empty is 0 (nothing runs by rule): up loosens, down or cleared tightens; empty ↔ 0 is the same.
+      const from = numberOr(b, 0)
+      const to = numberOr(a, 0)
+      return to > from ? 'raise' : to < from ? 'lower' : 'same'
     }
     case 'autonomy': {
       // No level for an action = the strategy does not narrow it: as high as the business allows.
@@ -428,6 +442,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 /** The unit a field's number is in, for its label (labels carry no amount). */
 const UNIT: Partial<Record<StrategyFieldKey, string>> = {
   monthlySpendCapCents: 'cents', minBidCents: 'cents', maxBidCents: 'cents', maxChangePct: '%', maxActionsPerRun: 'actions', reviewEveryDays: 'days',
+  claudeMaxBudgetIncreasePerDayCents: 'cents',
 }
 const labelOf = (field: StrategyField) => `${field.label}${UNIT[field.key] ? ` (${UNIT[field.key]})` : ''}`
 const levelWord = (level: StrategyLevel) => level.toLowerCase()
@@ -707,6 +722,10 @@ function previewOf(p: {
     p.shadow.shadows.length && p.given.some((f) => f.key === 'target') && !p.campaignTargets.some((c) => c.toFraction == null)
       ? `${plural(p.shadow.shadows.length, 'campaign')} ${p.shadow.shadows.length === 1 ? 'has its' : 'have their'} own target ACoS, which keeps winning over the strategy${p.scope.level === 'MARKET' ? ' (clearCampaignTargets clears them in this change)' : ''}.`
       : null,
+    // AA-W2-2b — Claude's daily limits fail closed: empty (or 0) is nothing that adds to it runs by rule.
+    ...p.changes
+      .filter((c) => (CLAUDE_DAILY_FIELDS as readonly string[]).includes(c.field) && !c.to)
+      .map((c) => `${c.label}: empty or 0 means nothing that adds to it runs by rule in ${p.market}; a person decides each one.`),
   ].filter((w): w is string => !!w)
   // What it starts from (the row's version and values, the terms and campaign targets it touches) and every change with
   // the values in force: anything that moves between the approval and the run makes it a different decision.

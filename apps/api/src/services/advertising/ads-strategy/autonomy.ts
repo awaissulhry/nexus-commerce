@@ -12,9 +12,10 @@
  *              change's kind — each with the strategy row that gave it.
  *   engines    the enabled rules and schedules (hourly bid plans) bound to a campaign: they move it on their own.
  *   protected  a negative that meets a protected term or a protected product's ASIN (the one negation policy).
- *   month      an UPPER bound of a market's spend this month: what Amazon's daily reports hold (whole days, never today;
- *              they arrive about a day late) plus every enabled campaign's full daily budget for each day they do not
- *              cover yet — against the lower of the strategy's market cap and this month's budget plan.
+ *   month      where a cap is in force (the lower of the strategy's market cap and this month's budget plan), a forecast
+ *              of the market's spend this month: what Amazon's daily reports hold (whole days, never today; they arrive
+ *              about a day late), plus the average daily spend of the last 7 reported days + 25 % for each day they do
+ *              not cover yet, plus every cent of daily budget the change adds. The budget engine's cap stop stays behind.
  *
  * Every query goes through the business-scoped client: row-level security keeps each read in the business of the call.
  */
@@ -28,7 +29,7 @@ import { normaliseTerm, protectedNegativeRefusal } from '../ads-negation-policy.
 import { automationsBoundToCampaign } from '../rule-campaign-binding.service.js'
 import { limitsOf, strategyMarket, type StrategyBidLimits } from './bids.js'
 import { openStrategy, type EffectiveStrategy, type StrategyView } from './effective.js'
-import type { ClaudeActionType } from './fields.js'
+import type { ClaudeActionType, ClaudeDailyField } from './fields.js'
 import { marketBudgetPlan } from './load.js'
 import type { StrategyIndex, StrategySource } from './resolve.js'
 import { strategyWords } from './source-words.js'
@@ -237,21 +238,32 @@ export function bidLimitsOfScope(s: Pick<ScopeStrategy, 'limits' | 'sources'>): 
 }
 
 /**
- * Claude's daily limits of changes run by rule in one market (design §5, Owner decision D-W2-3): writes, raises and
- * budget increases a day, each under its own key (a money value never sits under a generic key: the money filter strips
- * it by name). 🔴 The ads strategy holds no field for them yet (W1 did not add one), so each reads as not set: a raise
- * or a budget increase waits for a person, and writes have no daily number beyond the business's cap of runs by rule.
- * When the strategy gains them, this reads them from the market's row, with its source.
+ * Claude's daily limits in one market (Owner decision D-W2-3, AA-W2-2b): the most changes, raises and budget increase
+ * its ad changes may add there in 24 hours when they run by rule — the market row's claudeMax… fields, each with its
+ * row. Each under its own key (a money value never sits under a generic key: the money filter strips it by name). A
+ * limit the strategy does not set is null here, and the checks read it as 0: nothing that adds to it runs by rule.
  */
 export interface DailyLimits {
-  maxWritesPerDay: number | null
+  maxChangesPerDay: number | null
   maxRaisesPerDay: number | null
   maxBudgetIncreasePerDayCents: number | null
-  sources: Partial<Record<'maxWritesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', StrategySource>>
+  sources: Partial<Record<'maxChangesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', StrategySource>>
 }
 
-export function dailyLimitsOf(_market: EffectiveStrategy): DailyLimits {
-  return { maxWritesPerDay: null, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} }
+const DAILY_FROM = {
+  maxChangesPerDay: 'claudeMaxChangesPerDay',
+  maxRaisesPerDay: 'claudeMaxRaisesPerDay',
+  maxBudgetIncreasePerDayCents: 'claudeMaxBudgetIncreasePerDayCents',
+} as const satisfies Record<Exclude<keyof DailyLimits, 'sources'>, ClaudeDailyField>
+
+/** Pure: the daily limits a market's own strategy sets (`market`: the market resolved, `view.forMarket()`). */
+export function dailyLimitsOf(market: EffectiveStrategy): DailyLimits {
+  const out: DailyLimits = { maxChangesPerDay: null, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} }
+  for (const [key, field] of Object.entries(DAILY_FROM) as Array<[keyof typeof DAILY_FROM, ClaudeDailyField]>) {
+    const f = market.resolved.fields.get(field)
+    if (typeof f?.value === 'number' && f.source) { out[key] = f.value; out.sources[key] = f.source }
+  }
+  return out
 }
 
 /** One market's strategy as W2 reads it. */
@@ -329,6 +341,13 @@ export async function protectedNegativeWhy(args: { term: string; matchType?: str
 
 // ── The month ────────────────────────────────────────────────────────────────────────────────────
 
+/** The run rate averages the last 7 days Amazon's daily reports cover (complete days: a day's report arrives whole). */
+export const RATE_DAYS = 7
+/** The safety margin on the run rate (spend can run above its recent average). */
+export const RATE_MARGIN_PCT = 25
+/** How far back the last reported day is looked for; older reports give no rate (0). */
+const RATE_LOOKBACK_DAYS = 35
+
 export interface MonthProjection {
   month: string
   currency: string
@@ -339,30 +358,53 @@ export interface MonthProjection {
   uncoveredDays: number
   /** Days from today to the month's last day, today included: what a new or higher daily budget can still spend. */
   daysLeft: number
-  /** The daily budgets of the market's enabled campaigns, together. */
-  budgetsCents: number
-  /** The upper bound now: spent + budgets × uncovered days. */
+  /** The average daily spend of the RATE_DAYS reported days ending at `rateThrough` (null: no report lately — 0). */
+  ratePerDayCents: number
+  rateThrough: string | null
+  marginPct: number
+  /** The forecast now: spent + the rate with its margin × the uncovered days. */
   projectedCents: number
   /** The daily budget this change adds (negative: removes). */
   addedDailyCents: number
-  /** The upper bound with this change: projected + added × days left (never below what is spent). */
+  /** The forecast with this change: + every cent of daily budget it adds for every day left (never below what is spent). */
   afterCents: number
-  /** The cap in force (the lower of the strategy's market cap and this month's budget plan; 0 is no cap), and which. */
-  capCents: number | null
-  capFrom: string | null
+  /** The cap in force: the lower of the strategy's market cap and this month's budget plan (0 is no cap), and which. */
+  capCents: number
+  capFrom: string
 }
 
 const MONTH = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+const DAY = (d: Date) => d.toISOString().slice(0, 10)
+const shiftDays = (day: string, days: number) => DAY(new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000))
 
-/** Pure: the month's upper bound from what the reports hold and the budgets that can still spend. */
-export function projectMonth(input: {
+/**
+ * Pure: this month's spend and the run rate, from the market's reported spend per day (a day without a report row
+ * spent nothing). The rate is the average of the RATE_DAYS days ending at the last reported day, whichever month.
+ */
+export function monthSpendOf(days: ReadonlyArray<{ day: string; cents: number }>, today: Date): Pick<MonthProjection, 'spentCents' | 'spendThrough' | 'ratePerDayCents' | 'rateThrough'> {
+  const month = MONTH(budgetDayStart(today))
+  const todayKey = DAY(budgetDayStart(today))
+  const reported = days.filter((d) => d.day < todayKey)
+  const inMonth = reported.filter((d) => d.day.slice(0, 7) === month)
+  const rateThrough = reported.reduce<string | null>((last, d) => (!last || d.day > last ? d.day : last), null)
+  const from = rateThrough ? shiftDays(rateThrough, -(RATE_DAYS - 1)) : null
+  const rateSum = from ? reported.filter((d) => d.day >= from && d.day <= rateThrough!).reduce((sum, d) => sum + d.cents, 0) : 0
+  return {
+    spentCents: inMonth.reduce((sum, d) => sum + d.cents, 0),
+    spendThrough: inMonth.reduce<string | null>((last, d) => (!last || d.day > last ? d.day : last), null),
+    ratePerDayCents: Math.round(rateSum / RATE_DAYS),
+    rateThrough,
+  }
+}
+
+/**
+ * Pure: the month's forecast — report spend so far, plus the run rate with its safety margin for each day the reports
+ * do not cover yet, plus every cent of daily budget the change adds for each day left. A forecast, not a bound: the
+ * budget engine's monthly cap stop (W1-6) stays behind it.
+ */
+export function projectMonth(input: Pick<MonthProjection, 'spentCents' | 'spendThrough' | 'ratePerDayCents' | 'rateThrough' | 'addedDailyCents' | 'currency'> & {
   today: Date
-  spentCents: number
-  spendThrough: string | null
-  budgetsCents: number
-  addedDailyCents: number
-  cap: { cents: number; from: string } | null
-  currency: string
+  cap: { cents: number; from: string }
 }): MonthProjection {
   const day = budgetDayStart(input.today)
   const month = MONTH(day)
@@ -370,7 +412,7 @@ export function projectMonth(input: {
   const through = input.spendThrough && input.spendThrough.slice(0, 7) === month ? Number(input.spendThrough.slice(8, 10)) : 0
   const uncoveredDays = Math.max(0, daysInMonth - through)
   const daysLeft = daysInMonth - day.getUTCDate() + 1
-  const projectedCents = input.spentCents + input.budgetsCents * uncoveredDays
+  const projectedCents = input.spentCents + Math.round(input.ratePerDayCents * uncoveredDays * (1 + RATE_MARGIN_PCT / 100))
   return {
     month,
     currency: input.currency,
@@ -378,12 +420,14 @@ export function projectMonth(input: {
     spendThrough: through ? input.spendThrough!.slice(0, 10) : null,
     uncoveredDays,
     daysLeft,
-    budgetsCents: input.budgetsCents,
+    ratePerDayCents: input.ratePerDayCents,
+    rateThrough: input.rateThrough,
+    marginPct: RATE_MARGIN_PCT,
     projectedCents,
     addedDailyCents: input.addedDailyCents,
     afterCents: Math.max(input.spentCents, projectedCents + input.addedDailyCents * daysLeft),
-    capCents: input.cap?.cents ?? null,
-    capFrom: input.cap?.from ?? null,
+    capCents: input.cap.cents,
+    capFrom: input.cap.from,
   }
 }
 
@@ -391,8 +435,9 @@ export function projectMonth(input: {
 const marketForms = (market: string) => [market, marketplaceCodeToId(market)].filter((m): m is string => !!m)
 
 /**
- * Each market's month (pure arithmetic in projectMonth): this month's report spend, the enabled campaigns' budgets, and
- * the cap — the strategy's market cap (the market row; a cap of 0 is no cap) and this month's budget plan, the lower.
+ * Each market's month, only where a cap is in force — the strategy's market cap (the market row; 0 is no cap) or this
+ * month's budget plan, the lower — read from the report spend of the last five weeks (the Budget Manager's own filter
+ * against the stream's duplicate rows). A market without a cap is left out: nothing to keep it under.
  */
 export async function monthProjections(
   markets: ReadonlyArray<{ market: string; view: StrategyView | null; addedDailyCents: number }>,
@@ -400,19 +445,9 @@ export async function monthProjections(
 ): Promise<Map<string, MonthProjection>> {
   const out = new Map<string, MonthProjection>()
   const day = budgetDayStart(now)
-  const start = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), 1))
-  const end = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 1))
+  const from = new Date(day.getTime() - RATE_LOOKBACK_DAYS * 86_400_000)
   for (const { market, view, addedDailyCents } of markets) {
-    const forms = marketForms(market)
-    const [spend, campaigns, plan] = await Promise.all([
-      prisma.amazonAdsDailyPerformance.aggregate({
-        where: { entityType: 'CAMPAIGN', marketplace: { in: forms }, date: { gte: start, lt: end }, ...EXCLUDE_AMS_DAILY },
-        _sum: { costMicros: true },
-        _max: { date: true },
-      }),
-      prisma.campaign.findMany({ where: { marketplace: { in: forms }, status: 'ENABLED' }, select: { dailyBudget: true, dailyBudgetCurrency: true } }),
-      marketBudgetPlan(market, MONTH(day)),
-    ])
+    const plan = await marketBudgetPlan(market, MONTH(day))
     const strategyCap = view && !view.empty
       ? view.forMarket().values.monthlyCaps.find((c) => c.source.level === 'market' && c.monthlySpendCapCents > 0) ?? null
       : null
@@ -420,15 +455,18 @@ export async function monthProjections(
     const cap = strategyCap && (planCap == null || strategyCap.monthlySpendCapCents <= planCap)
       ? { cents: strategyCap.monthlySpendCapCents, from: strategyWords(strategyCap.source) }
       : planCap != null ? { cents: planCap, from: `the budget plan ${plan!.month}` } : null
-    out.set(market, projectMonth({
-      today: now,
-      spentCents: Math.round(Number(spend._sum.costMicros ?? 0) / 10_000),
-      spendThrough: spend._max.date ? new Date(spend._max.date).toISOString().slice(0, 10) : null,
-      budgetsCents: campaigns.reduce((sum, c) => sum + Math.round(Number(c.dailyBudget ?? 0) * 100), 0),
-      addedDailyCents,
-      cap,
-      currency: campaigns[0]?.dailyBudgetCurrency?.trim() || 'EUR',
-    }))
+    if (!cap) continue
+    const forms = marketForms(market)
+    const [byDay, campaign] = await Promise.all([
+      prisma.amazonAdsDailyPerformance.groupBy({
+        by: ['date'],
+        where: { entityType: 'CAMPAIGN', marketplace: { in: forms }, date: { gte: from, lt: day }, ...EXCLUDE_AMS_DAILY },
+        _sum: { costMicros: true },
+      }),
+      prisma.campaign.findFirst({ where: { marketplace: { in: forms } }, select: { dailyBudgetCurrency: true }, orderBy: { id: 'asc' } }),
+    ])
+    const spend = monthSpendOf(byDay.map((r) => ({ day: DAY(new Date(r.date)), cents: Math.round(Number(r._sum.costMicros ?? 0) / 10_000) })), now)
+    out.set(market, projectMonth({ ...spend, today: now, addedDailyCents, cap, currency: campaign?.dailyBudgetCurrency?.trim() || 'EUR' }))
   }
   return out
 }

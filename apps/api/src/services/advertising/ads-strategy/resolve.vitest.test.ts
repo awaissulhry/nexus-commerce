@@ -31,7 +31,7 @@ const COLUMNS = [
   'goal', 'goalNote', 'targetKind', 'targetPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'maxChangePct',
   'maxActionsPerRun', 'protect', 'harvestMinOrders', 'harvestMinClicks', 'harvestMaxAcosPct', 'harvestWindowDays',
   'negateMinClicks', 'negateMinSpendCents', 'negateMaxOrders', 'negateWindowDays', 'stopMethod', 'stopBidCents',
-  'claudeAutonomy', 'reviewEveryDays',
+  'claudeAutonomy', 'reviewEveryDays', 'claudeMaxChangesPerDay', 'claudeMaxRaisesPerDay', 'claudeMaxBudgetIncreasePerDayCents',
 ] as const
 
 let n = 0
@@ -165,14 +165,21 @@ describe('rows the resolver does not apply', () => {
     expect(index.warnings).toContain('MARKET * (market, v1): target is only partly set (targetKind); a group counts only whole, so it is ignored')
   })
 
-  it('a field on a level that cannot hold it is ignored (most actions per run: the market only; protect: never the market)', () => {
-    const { index } = indexStrategy('IT', [row('MARKET', '*', { protect: true }), row('PRODUCT', 'v', { maxActionsPerRun: 5 })])
+  it('a field on a level that cannot hold it is ignored (most actions per run and Claude\'s daily limits: the market only; protect: never the market)', () => {
+    const { index } = indexStrategy('IT', [
+      row('MARKET', '*', { protect: true, claudeMaxRaisesPerDay: 4 }),
+      row('PRODUCT', 'v', { maxActionsPerRun: 5, claudeMaxChangesPerDay: 50 }),
+    ])
     const r = resolveProduct(index, product('v', 'p'), catalog())
     expect(field(r, 'protect').value).toBeNull()
     expect(field(r, 'maxActionsPerRun').value).toBeNull()
+    expect(field(r, 'claudeMaxChangesPerDay').value).toBeNull()
+    // The market's own daily limit reaches every product of the market.
+    expect(field(r, 'claudeMaxRaisesPerDay')).toMatchObject({ value: 4, source: { level: 'market' } })
     expect(index.warnings).toEqual([
       'MARKET * (market, v1): protect cannot be set on a market row; ignored',
       'PRODUCT v (product, v1): maxActionsPerRun cannot be set on a product row; ignored',
+      'PRODUCT v (product, v1): claudeMaxChangesPerDay cannot be set on a product row; ignored',
     ])
   })
 })

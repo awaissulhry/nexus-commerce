@@ -70,8 +70,9 @@ const adsStrategy: AgentTool = {
   description:
     "Read the business's Amazon Ads strategy: what the Owner set per market, and per category or product inside a market "
     + '(goal and why, target ACoS or TACoS, monthly spend cap, lowest and highest bid, largest bid change, most actions per '
-    + 'run, protection, harvest and negate thresholds, how a temporary stop works, and what Claude may do alone per kind of '
-    + 'ad action). view effective (default) gives every number in force for a market, a category, a product, a campaign '
+    + 'run, protection, harvest and negate thresholds, how a temporary stop works, what Claude may do alone per kind of '
+    + "ad action, and the most changes, raises and budget increase Claude's ad changes may run by rule in a market a day — "
+    + 'empty is 0). view effective (default) gives every number in force for a market, a category, a product, a campaign '
     + 'or an ad group, each with its source (product, its parent, the deepest primary category, or the market) and version; '
     + 'several products in one ad group take the safer number per field and name the product it came from; a category or '
     + 'product row always belongs to one market. It also lists the older settings that still bind (campaign bid limits, '
@@ -145,7 +146,9 @@ const setAdsStrategy: AgentTool = {
     + '(level market | category | product; a parent covers its variations). values sets fields: goal and why, target '
     + '(ACOS or TACOS, a whole percent), monthly spend cap, lowest and highest bid and stop bid (cents), largest bid change, '
     + 'most actions per run, protection, harvest and negate thresholds, how a temporary stop works (low bids), what Claude '
-    + 'may do alone per kind of ad action, review days; a value sets it, null clears it (inherit), absent leaves it; op remove '
+    + 'may do alone per kind of ad action, review days, and (market only) the most changes, raises and budget increase '
+    + "Claude's ad changes may run by the business's rule there in a day — empty or 0 means none runs by rule; a value "
+    + 'sets it, null clears it (inherit), absent leaves it; op remove '
     + 'deletes the row. At market level it can also add or remove protected search terms (they bind Nexus\'s write gate at '
     + "once) and clear the own target ACoS of the market's campaigns that would shadow the strategy (clearCampaignTargets; "
     + 'their old values are kept for undo). The preview lists every field from → to with the level it is in force from, and '
