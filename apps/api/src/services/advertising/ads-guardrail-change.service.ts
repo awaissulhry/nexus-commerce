@@ -12,20 +12,26 @@
  *
  * ADS AUTONOMY W3-2 — a campaign's OWN guardrails, through the code its screens use (campaign-guardrail.service.ts,
  * campaign-settings.service.ts setCpcCeiling), judged the same way:
- *   campaign-bid-bounds     tighten: a new or lower highest bid, a lower or cleared lowest bid
- *                           loosen:  a higher or cleared highest bid, a new or higher lowest bid (it forces bids up)
+ *   campaign-bid-bounds     judged on the bounds IN FORCE before and after (effectiveBidBounds) as well as the campaign's
+ *                           own values: loosen when either the highest bid rises or is lifted, or the lowest bid rises or
+ *                           appears (it forces bids up). A campaign's own column takes the place of the bid policies
+ *                           (line, portfolio, market) on its side, so a new campaign ceiling above a market policy's is a
+ *                           loosening, and so is clearing a campaign floor below a policy's.
  *   campaign-budget-bounds  tighten: a new or lower highest budget, a lower or cleared lowest budget, a baseline that
  *                           anchors lower; loosen: a higher or cleared highest budget, a new or higher lowest budget
  *                           (cut rules may not go below it), a baseline that anchors higher (relative budget rules and a
  *                           restore to baseline start from it; without one they start from today's budget)
  *   bid-change-cap          tighten: a new or lower largest bid change; loosen: a higher or cleared one
  *   cpc-ceiling             tighten: switched on, a lower multiple; loosen: switched off, a higher multiple
- *   pin                     tighten: a pin set (engines, rules and schedules may not write that part); loosen: lifted
- * The ads strategy (W1) stays the outer band: where it and the campaign both set a number, the stricter one binds — the
- * write gate takes the lower highest bid and the higher lowest bid (effectiveBidBounds), the step clamp the lower largest
- * change (ads-strategy/bids.ts stepClamp). So a campaign guardrail can only narrow the strategy, never widen it; the
- * preview says which number binds after the change (`inForce`). The strategy has no budget bounds, CPC ceiling or pins
- * of its own: those bind beside its monthly cap and bid band.
+ *   pin                     setting AND lifting a pin are loosenings (lead decision, W3-2 review): a pin stops every
+ *                           automatic write of its part, cuts included (ads-authority-pins.ts; only a stop with low bids
+ *                           passes a bids pin), so it can hold spend up; lifting lets engines write it again
+ * The ads strategy (W1) stays the outer band: the write gate adds its band to the campaign's bounds (or, on a side the
+ * campaign leaves empty, the bid policy's) and the stricter one binds — the lower highest bid, the higher lowest bid
+ * (effectiveBidBounds); the step clamp takes the lower largest change (ads-strategy/bids.ts stepClamp). So a campaign
+ * guardrail can only narrow the strategy, never widen it — while it CAN widen a bid policy, which it replaces on its side.
+ * The preview says which number binds after the change and whose it is (`inForce`). The strategy has no budget bounds,
+ * CPC ceiling or pins of its own: those bind beside its monthly cap and bid band.
  */
 import type { AdBidPolicy, AdSpendCeiling } from '@prisma/client'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -86,7 +92,8 @@ export interface GuardrailPlan {
   effect: string
   /** W3-2 (a campaign's own guardrail) — each way it loosens, in words; empty when it only tightens. */
   raises?: string[]
-  /** W3-2 — the campaign's market (Nexus only: nothing reaches Amazon). */
+  /** W3-2 — the campaign and its market (the limits `campaignIds` and `markets` read them; nothing reaches Amazon). */
+  campaignId?: string
   market?: string | null
   /** W3-2 — bid bounds and the largest change: the number that binds after the change, and whose it is. */
   inForce?: Record<string, { value: number | null; from: string | null }>
@@ -210,7 +217,7 @@ async function nextCampaignState(input: GuardrailInput, kind: CampaignGuardrailK
     }
     case 'bid-change-cap':
       if (remove) return { maxBidChangePct: null }
-      if (input.maxBidChangePct === undefined) return { ok: false, error: 'maxBidChangePct: the most one bid change may move a bid, in % (1–500), or null to clear it' }
+      if (input.maxBidChangePct === undefined) return { ok: false, error: 'maxBidChangePct: the most one change may move a keyword or target bid, in % (above 0, at most 500), or null to clear it' }
       return { maxBidChangePct: input.maxBidChangePct }
     case 'cpc-ceiling': {
       if (remove) return { enabled: false, cpcMultiple: prev.cpcMultiple }
@@ -232,15 +239,30 @@ async function nextCampaignState(input: GuardrailInput, kind: CampaignGuardrailK
   }
 }
 
+/** The bid bounds in force on a campaign (its own, else the bid policies; with the strategy's band), before and after. */
+interface BoundsInForce {
+  before: { max: { value: number; source: string } | null; min: { value: number; source: string } | null }
+  after: { max: { value: number; source: string } | null; min: { value: number; source: string } | null }
+}
+
 /** Each way the change loosens, in words (empty: it only tightens). */
-function campaignRaises(kind: CampaignGuardrailKind, prev: Record<string, unknown>, next: Record<string, unknown>, campaign: GuardedCampaign, currency: string): string[] {
+function campaignRaises(kind: CampaignGuardrailKind, prev: Record<string, unknown>, next: Record<string, unknown>, campaign: GuardedCampaign, currency: string, bounds?: BoundsInForce): string[] {
   const raises: string[] = []
   const n = (row: Record<string, unknown>, key: string) => (row[key] == null ? null : Number(row[key]))
   if (kind === 'campaign-bid-bounds') {
+    // In force first (a campaign value replaces a bid policy's on its side), then the campaign's own value, which binds
+    // the day the stricter number above it goes.
+    const was = bounds?.before ?? { max: null, min: null }, now = bounds?.after ?? { max: null, min: null }
+    const at = (b: { value: number; source: string }) => `${bidWords(b.value)} (${b.source})`
+    // The campaign's own value binds the day the stricter number in force goes: said when another number binds now.
+    const forNow = (own: number | null, side: { value: number; source: string } | null) => (side && side.value !== own ? `; ${at(side)} binds for now` : '')
     const wasMax = n(prev, 'maxBidCents'), nowMax = n(next, 'maxBidCents'), wasMin = n(prev, 'minBidCents'), nowMin = n(next, 'minBidCents')
-    if (wasMax != null && nowMax == null) raises.push(`the highest bid (${bidWords(wasMax)}) is cleared`)
-    else if (wasMax != null && nowMax != null && nowMax > wasMax) raises.push(`the highest bid rises from ${bidWords(wasMax)} to ${bidWords(nowMax)}`)
-    if (nowMin != null && (wasMin == null || nowMin > wasMin)) raises.push(wasMin == null ? `a lowest bid of ${bidWords(nowMin)} forces bids up` : `the lowest bid rises from ${bidWords(wasMin)} to ${bidWords(nowMin)} and forces bids up`)
+    if (was.max && !now.max) raises.push(`the highest bid in force, ${at(was.max)}, is lifted: no highest bid binds after the change`)
+    else if (was.max && now.max && now.max.value > was.max.value) raises.push(`the highest bid in force rises from ${at(was.max)} to ${at(now.max)}`)
+    else if (wasMax != null && nowMax == null) raises.push(`the campaign's own highest bid (${bidWords(wasMax)}) is cleared${forNow(null, now.max)}`)
+    else if (wasMax != null && nowMax != null && nowMax > wasMax) raises.push(`the campaign's own highest bid rises from ${bidWords(wasMax)} to ${bidWords(nowMax)}${forNow(nowMax, now.max)}`)
+    if (now.min && (!was.min || now.min.value > was.min.value)) raises.push(`the lowest bid in force ${was.min ? `rises from ${at(was.min)} to` : 'becomes'} ${at(now.min)} and forces bids up`)
+    else if (nowMin != null && (wasMin == null || nowMin > wasMin)) raises.push(`the campaign's own lowest bid ${wasMin == null ? 'becomes' : `rises from ${bidWords(wasMin)} to`} ${bidWords(nowMin)}${forNow(nowMin, now.min)}`)
   } else if (kind === 'campaign-budget-bounds') {
     const wasMax = n(prev, 'maxBudgetCents'), nowMax = n(next, 'maxBudgetCents'), wasMin = n(prev, 'minBudgetCents'), nowMin = n(next, 'minBudgetCents')
     if (wasMax != null && nowMax == null) raises.push(`the highest daily budget (${moneyWords(wasMax, currency)}) is cleared`)
@@ -258,7 +280,10 @@ function campaignRaises(kind: CampaignGuardrailKind, prev: Record<string, unknow
     const reach = (row: Record<string, unknown>) => (row.enabled ? Number(row.cpcMultiple) : Infinity)
     if (reach(next) > reach(prev)) raises.push(next.enabled ? `the CPC ceiling rises from ${prev.cpcMultiple}× to ${next.cpcMultiple}× the average cost per click` : `the CPC ceiling (${prev.cpcMultiple}×) is switched off`)
   } else {
-    for (const [key, part] of PIN_PARTS) if (prev[key] && !next[key]) raises.push(`the ${part} pin is lifted: engines, rules and schedules may write the campaign's ${part} again`)
+    for (const [key, part] of PIN_PARTS) {
+      if (prev[key] && !next[key]) raises.push(`the ${part} pin is lifted: engines, rules and schedules may write the campaign's ${part} again`)
+      if (!prev[key] && next[key]) raises.push(`a ${part} pin stops every automatic write of the campaign's ${part}, cuts included${key === 'pinBids' ? ' (only a stop with low bids passes it)' : ''}`)
+    }
   }
   return raises
 }
@@ -266,16 +291,24 @@ function campaignRaises(kind: CampaignGuardrailKind, prev: Record<string, unknow
 const TIGHTEN_WHY: Record<CampaignGuardrailKind, string> = {
   'campaign-bid-bounds': 'it holds the campaign\'s bids tighter',
   'campaign-budget-bounds': 'it holds the campaign\'s budget tighter',
-  'bid-change-cap': 'a bid moves by less in one change',
+  'bid-change-cap': 'a keyword or target bid moves by less in one change',
   'cpc-ceiling': 'bids asked for are held closer to a target\'s average cost per click',
-  pin: 'a pin stops engines, rules and schedules writing that part of the campaign',
+  pin: 'only the pin note changes',
 }
 
-/** What binds after the change, beside the strategy (W1): the stricter number wins, so a campaign guardrail only narrows it. */
-async function inForceAfter(kind: CampaignGuardrailKind, next: Record<string, unknown>, campaign: GuardedCampaign): Promise<GuardrailPlan['inForce']> {
-  if (kind === 'campaign-bid-bounds') {
-    const { effectiveBidBounds } = await import('./ads-write-gate.js')
-    const { max, min } = await effectiveBidBounds({ campaignId: campaign.id, campaign: { ...campaign, minBidCents: next.minBidCents as number | null, maxBidCents: next.maxBidCents as number | null } })
+/** The bid bounds the write gate holds the campaign to with its values now and with the change (one strategy read). */
+async function boundsInForce(campaign: GuardedCampaign, prev: Record<string, unknown>, next: Record<string, unknown>): Promise<BoundsInForce> {
+  const { effectiveBidBounds } = await import('./ads-write-gate.js')
+  const withValues = (row: Record<string, unknown>) => ({ ...campaign, minBidCents: row.minBidCents as number | null, maxBidCents: row.maxBidCents as number | null })
+  const before = await effectiveBidBounds({ campaignId: campaign.id, campaign: withValues(prev) })
+  const after = await effectiveBidBounds({ campaignId: campaign.id, campaign: withValues(next), strategy: before.strategy })
+  return { before: { max: before.max, min: before.min }, after: { max: after.max, min: after.min } }
+}
+
+/** What binds after the change, and whose number it is: the strategy narrows a campaign guardrail, never the other way round. */
+async function inForceAfter(kind: CampaignGuardrailKind, next: Record<string, unknown>, campaign: GuardedCampaign, bounds?: BoundsInForce): Promise<GuardrailPlan['inForce']> {
+  if (kind === 'campaign-bid-bounds' && bounds) {
+    const { max, min } = bounds.after
     return { minBidCents: { value: min?.value ?? null, from: min?.source ?? null }, maxBidCents: { value: max?.value ?? null, from: max?.source ?? null } }
   }
   if (kind === 'bid-change-cap') {
@@ -296,13 +329,14 @@ function campaignEffect(kind: CampaignGuardrailKind, label: string, next: Record
     case 'campaign-bid-bounds':
       return `Bid bounds of ${label}: lowest ${v('minBidCents', bidWords)}, highest ${v('maxBidCents', bidWords)}. The write gate refuses a bid outside them at its next decision `
         + '(an engine, a rule, a schedule or a change run by rule; a person\'s own edit past them, or a Claude request he approves after the warning, is sent when he confirms). '
-        + `The ads strategy\'s band and the bid policies bind beside them, the stricter number winning: after this change bids are held to lowest ${held(inForce?.minBidCents)}, highest ${held(inForce?.maxBidCents)}.${tail}`
+        + 'On the side it sets, the campaign\'s own bound takes the place of a bid policy (line, portfolio or market); the ads strategy\'s band binds beside it, the stricter number winning. '
+        + `After this change bids are held to lowest ${held(inForce?.minBidCents)}, highest ${held(inForce?.maxBidCents)}.${tail}`
     case 'campaign-budget-bounds':
       return `Budget bounds of ${label}: lowest ${v('minBudgetCents', (x) => moneyWords(x, currency))}, highest ${v('maxBudgetCents', (x) => moneyWords(x, currency))}, baseline ${v('budgetBaselineCents', (x) => moneyWords(x, currency))}. `
         + 'The write gate refuses a daily budget outside the bounds; relative budget rules and a restore to baseline start from the baseline. The ads strategy\'s monthly cap and the spend ceilings bind beside them.' + tail
     case 'bid-change-cap': {
       const side = inForce?.maxBidChangePct
-      return `Largest bid change of ${label}: ${v('maxBidChangePct', (x) => `${x} %`)}. Engines, rules and Claude's bid changes are stepped to it (never a person's own edit). `
+      return `Largest bid change of ${label}: ${v('maxBidChangePct', (x) => `${x} %`)}. A keyword or target bid an engine, a rule or Claude's bid tools move is stepped to it (never a person's own edit); an ad group's default bid is not stepped. `
         + `The ads strategy's largest change binds beside it, the lower one winning: after this change ${side?.value == null ? 'no largest change applies' : `${side.value} % (${side.from})`}.${tail}`
     }
     case 'cpc-ceiling':
@@ -311,7 +345,7 @@ function campaignEffect(kind: CampaignGuardrailKind, label: string, next: Record
         : `CPC ceiling of ${label}: off.${tail}`
     case 'pin': {
       const pinned = PIN_PARTS.filter(([key]) => next[key]).map(([, part]) => part)
-      return `Pins of ${label}: ${pinned.length ? pinned.join(', ') : 'none'}. The write gate refuses every automatic write of a pinned part (engines, rules, schedules, a change run by rule); a person's own edit, or a request a person approved, still goes.${tail}`
+      return `Pins of ${label}: ${pinned.length ? pinned.join(', ') : 'none'}. The write gate refuses every automatic write of a pinned part, cuts included (engines, rules, schedules, a change run by rule; only a stop with low bids passes a bids pin); a person's own edit, or a request a person approved, still goes.${tail}`
     }
   }
 }
@@ -330,8 +364,10 @@ async function planCampaignGuardrail(input: GuardrailInput, kind: CampaignGuardr
     return { ok: false, error: input.op === 'remove' ? `There is no ${kind} on ${label} (not found).` : `The ${kind} of ${label} already holds these values.` }
   }
   const currency = campaign.dailyBudgetCurrency?.trim() || 'EUR'
-  const raises = campaignRaises(kind, prev, next, campaign, currency)
-  const inForce = await inForceAfter(kind, next, campaign)
+  const bounds = kind === 'campaign-bid-bounds' ? await boundsInForce(campaign, prev, next) : undefined
+  const raises = campaignRaises(kind, prev, next, campaign, currency, bounds)
+  const inForce = await inForceAfter(kind, next, campaign, bounds)
+  const { strategyMarket } = await import('./ads-strategy/bids.js')
   const key = { campaignId: campaign.id }
   return {
     ok: true,
@@ -343,7 +379,7 @@ async function planCampaignGuardrail(input: GuardrailInput, kind: CampaignGuardr
       // The values it starts from: any of them moving makes the approved change a different one.
       basis: JSON.stringify(prev),
       effect: campaignEffect(kind, label, next, inForce, currency),
-      raises, market: campaign.marketplace ?? null,
+      raises, campaignId: campaign.id, market: strategyMarket(campaign.marketplace) ?? campaign.marketplace ?? null,
       ...(inForce ? { inForce } : {}),
     },
   }

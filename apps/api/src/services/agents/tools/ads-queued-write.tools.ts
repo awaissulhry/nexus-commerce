@@ -7,7 +7,9 @@
  *                whether that is a Claude request, when the window ends) and every one it cannot (sent, being sent,
  *                window over), with why; a lowering it cancels is said too (today's value stays)
  *   limits       allowCancelOthers (off by default): by the business's rule Claude cancels only writes a Claude request
- *                queued; a write a person, a rule or an engine queued waits for a person
+ *                queued; a write a person, a rule or an engine queued waits for a person. allowCancelLowering (off by
+ *                default): cancelling a LOWERING (a bid, budget or placement cut, a pause, an archive, a floor) keeps
+ *                spend up, so a cancel that touches one waits for a person
  *   re-check     execute re-runs the plan: a write that moved or left the queue since makes it stale (approval gate)
  *   undo         when it cancelled ALL of one request (not a change plan), undo asks for that request again, through its
  *                own tool and approval; otherwise the writes are asked for again with their own tools
@@ -46,10 +48,11 @@ const cancelQueuedAdWrite: AgentTool = {
     'outboundQueueId, or every write of one request still waiting by changeSetId (a Claude request\'s approval id, as ' +
     'approval-status names it). Nexus only: nothing reaches Amazon, and Nexus puts each field back where it still holds ' +
     'the cancelled value. The preview names every write it cancels (from → to, on what, who queued it, when its window ' +
-    'ends) and every one it cannot (sent, being sent, window over). Cancelling a lowering keeps today\'s bid, budget or ' +
-    'status, and the preview says so. Waits for a person to approve it in Nexus, unless the business lets Claude run it ' +
-    'by its rule inside its limits — by default only for writes a Claude request queued, never one a person, a rule or ' +
-    'an engine queued. Approved after the window, a write already sent is not cancelled.',
+    'ends) and every one it cannot (sent, being sent, window over). Cancelling a lowering (a cut, a pause, a floor) keeps ' +
+    'today\'s bid, budget or status — spend stays up — and the preview says so. Waits for a person to approve it in Nexus, ' +
+    'unless the business lets Claude run it by its rule inside its limits — by default only for a raise a Claude request ' +
+    'queued: never a write a person, a rule or an engine queued, and never a lowering. Approved after the window, a write ' +
+    'already sent is not cancelled; a write queued to go at once (no window) only while no worker has taken it.',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -59,13 +62,19 @@ const cancelQueuedAdWrite: AgentTool = {
   maxClaudeTrust: 'auto',
   limits: z.object({
     allowCancelOthers: z.boolean().default(false).describe('let Claude cancel, by rule, a write a person, a rule or an engine queued (not only its own requests); never by default'),
+    allowCancelLowering: z.boolean().default(false).describe('let Claude cancel, by rule, a write that lowers a bid, a budget or a placement, or pauses or archives (cancelling it keeps spend up); never by default'),
   }),
   withinLimits(preview, limits) {
-    const p = preview as { writes?: Array<{ label?: string; byClaude?: boolean; queuedBy?: string }> } | null
+    const p = preview as { writes?: Array<{ label?: string; byClaude?: boolean; queuedBy?: string; lowers?: boolean }> } | null
     if (!Array.isArray(p?.writes) || !p.writes.length) return 'there is no preview of the writes this cancels to check'
     const others = p.writes.filter((w) => w.byClaude !== true)
     if (others.length && !limits.allowCancelOthers) {
       return `it cancels ${others.length === 1 ? 'a write' : `${others.length} writes`} not queued by a Claude request (${others.slice(0, 3).map((w) => `${w.label}, by ${w.queuedBy}`).join('; ')}): a person decides`
+    }
+    // A preview without the flag is judged as a lowering: never run by rule on a guess.
+    const lowering = p.writes.filter((w) => w.lowers !== false)
+    if (lowering.length && !limits.allowCancelLowering) {
+      return `it cancels ${lowering.length === 1 ? 'a lowering' : `${lowering.length} lowerings`} (${lowering.slice(0, 3).map((w) => w.label).join('; ')}): the bid, budget or status stays where it is, so spend stays up — a person decides`
     }
     return null
   },

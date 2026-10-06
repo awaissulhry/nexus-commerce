@@ -2,11 +2,14 @@
  * ADS AUTONOMY W3-2 — set-ad-guardrail on one campaign's own guardrails, through the one door, on a real PostgreSQL
  * (PGlite): bid bounds, budget bounds and baseline, the largest bid change, the CPC ceiling and the pins.
  *
- * Proven: each kind's direction (tighten inside the default limits, loosen — anything that can add spend — a person
- * decides); a run writes the campaign through the code its screens use, with its audit row and the approver's name; the
- * write gate refuses a bid past the new bound; the ads strategy stays the outer band (the stricter number binds, so the
- * preview names the strategy's lower highest bid and largest change); undo sets each kind back whole; the screens'
- * permission (ads.campaigns.manage) is asked; another business's campaign is not found.
+ * Proven: each kind's direction (tighten inside the limits once its market or campaign is listed; loosen — anything that
+ * can add spend, a pin set or lifted too — a person decides); a bid bound is judged on the bounds IN FORCE before and
+ * after as well as the campaign's own value (a campaign bound replaces a bid policy on its side, so it can widen one); the
+ * `markets` / `campaignIds` limits (none listed: nothing runs by rule); a run writes the campaign through the code its
+ * screens use, with its audit row and the approver's name; the write gate refuses a bid past the new bound; the ads
+ * strategy stays the outer band (the preview names its lower highest bid and largest change); undo sets each kind back
+ * whole, a largest change the screens stored as a decimal too; the screens' permission (ads.campaigns.manage) is asked;
+ * another business's campaign is not found.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
@@ -43,7 +46,7 @@ type Out = { ok: boolean; error?: string; preview?: Record<string, any>; data?: 
 const dry = async (args: Record<string, unknown>, who = person) => (await callTool(who, 'set-ad-guardrail', args)).raw as Out
 const run = async (args: Record<string, unknown>) => (await executeTool(person, 'set-ad-guardrail', args, { via: 'claude' })).raw as Out
 const tool = () => getTool('set-ad-guardrail')!
-const inLimits = (preview: unknown, limits: Record<string, unknown> = {}) => tool().withinLimits!(preview, tool().limits!.parse(limits))
+const inLimits = (preview: unknown, limits: Record<string, unknown> = { markets: ['IT', 'DE'] }) => tool().withinLimits!(preview, tool().limits!.parse(limits))
 const ids: Record<string, string> = {}
 const campaignNow = () => inside(() => database.client.campaign.findUniqueOrThrow({ where: { id: ids.campaign } }))
 
@@ -54,6 +57,9 @@ beforeAll(async () => {
     ids.campaign = (await database.client.campaign.create({ data: { name: 'TEST W32 CAMPAIGN', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'IT', liveBidWritesEnabled: true, dynamicBidding: { placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 20 }] } } })).id
     // The market's ads strategy: a highest bid and a largest change (made-up numbers).
     await database.client.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', updatedBy: 'user:test', maxBidCents: 120, maxChangePct: 15 } })
+    // Another market with no strategy but a market bid policy (made-up numbers), and a campaign there without bounds.
+    ids.policyCampaign = (await database.client.campaign.create({ data: { name: 'TEST W32 POLICY', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'DE' } })).id
+    await database.client.adBidPolicy.create({ data: { grain: 'MARKET', scopeId: 'DE', label: 'Test DE policy', minBidCents: 80, maxBidCents: 100, enabled: true, createdBy: 'operator' } })
   })
   await inside(async () => { ids.otherCampaign = (await database.client.campaign.create({ data: { name: 'TEST W32 OTHER', type: 'SP', dailyBudget: '5.00', startDate: new Date(), marketplace: 'IT' } })).id }, OTHER)
 }, 180_000)
@@ -68,7 +74,7 @@ describe('W3-2 — set-ad-guardrail on a campaign\'s own guardrails', () => {
       expect(out.preview, JSON.stringify(args)).toMatchObject({ direction, ...(why ? { why } : {}) })
       expect(out.preview!.raises.length > 0, JSON.stringify(args)).toBe(direction === 'loosen')
       expect(inLimits(out.preview) === null, JSON.stringify(args)).toBe(direction === 'tighten')
-      if (direction === 'loosen') expect(inLimits(out.preview, { allowLoosen: true })).toBeNull()
+      if (direction === 'loosen') expect(inLimits(out.preview, { allowLoosen: true, markets: ['IT'] })).toBeNull()
       return out.preview!
     }
     const set = async (args: Record<string, unknown>) => expect((await run({ campaignId: c, op: 'set', ...args })).ok, JSON.stringify(args)).toBe(true)
@@ -77,9 +83,10 @@ describe('W3-2 — set-ad-guardrail on a campaign\'s own guardrails', () => {
     await expectDirection({ kind: 'campaign-bid-bounds', maxBidCents: 200 }, 'tighten')
     await set({ kind: 'campaign-bid-bounds', maxBidCents: 200 })
     await expectDirection({ kind: 'campaign-bid-bounds', maxBidCents: 150 }, 'tighten')
-    await expectDirection({ kind: 'campaign-bid-bounds', maxBidCents: 250 }, 'loosen', 'the highest bid rises from 200¢ to 250¢')
-    await expectDirection({ kind: 'campaign-bid-bounds', maxBidCents: null }, 'loosen', 'the highest bid (200¢) is cleared')
-    await expectDirection({ kind: 'campaign-bid-bounds', minBidCents: 10 }, 'loosen', 'a lowest bid of 10¢ forces bids up')
+    // The strategy's 120¢ binds above both: the campaign's own value still loosens (it binds the day the 120¢ goes).
+    expect((await expectDirection({ kind: 'campaign-bid-bounds', maxBidCents: 250 }, 'loosen')).why).toMatch(/^the campaign's own highest bid rises from 200¢ to 250¢; 120¢ \(.*strategy.*\) binds for now$/)
+    expect((await expectDirection({ kind: 'campaign-bid-bounds', maxBidCents: null }, 'loosen')).why).toMatch(/^the campaign's own highest bid \(200¢\) is cleared; 120¢ \(.*\) binds for now$/)
+    await expectDirection({ kind: 'campaign-bid-bounds', minBidCents: 10 }, 'loosen', `the lowest bid in force becomes 10¢ (Campaign.minBidCents on ${c}) and forces bids up`)
     await set({ kind: 'campaign-bid-bounds', minBidCents: 10 })
     await expectDirection({ kind: 'campaign-bid-bounds', minBidCents: 5 }, 'tighten')
     await expectDirection({ kind: 'campaign-bid-bounds', minBidCents: null }, 'tighten')
@@ -106,15 +113,64 @@ describe('W3-2 — set-ad-guardrail on a campaign\'s own guardrails', () => {
     await expectDirection({ kind: 'cpc-ceiling', cpcMultiple: 1.5 }, 'tighten')
     await expectDirection({ kind: 'cpc-ceiling', enabled: false }, 'loosen', 'the CPC ceiling (2×) is switched off')
 
-    // Pins.
-    await expectDirection({ kind: 'pin', pinBids: true }, 'tighten')
+    // Pins: setting one stops automatic cuts too, so setting and lifting both loosen; a note alone changes nothing.
+    await expectDirection({ kind: 'pin', pinBids: true }, 'loosen', 'a bids pin stops every automatic write of the campaign\'s bids, cuts included (only a stop with low bids passes it)')
     await set({ kind: 'pin', pinBids: true, note: 'test hold' })
-    await expectDirection({ kind: 'pin', pinBids: false }, 'loosen')
+    await expectDirection({ kind: 'pin', pinBids: false }, 'loosen', 'the bids pin is lifted: engines, rules and schedules may write the campaign\'s bids again')
+    await expectDirection({ kind: 'pin', note: 'held for a test' }, 'tighten', 'only the pin note changes')
     expect((await dry({ campaignId: c, op: 'remove', kind: 'pin' })).preview).toMatchObject({ direction: 'loosen', changes: { pinBids: { from: true, to: false }, note: { from: 'test hold', to: null } } })
 
     expect((await dry({ campaignId: c, op: 'set', kind: 'pin', pinBids: true, note: 'test hold' })).error).toBe('The pin of campaign "TEST W32 CAMPAIGN" already holds these values.')
     expect((await dry({ campaignId: c, op: 'set', kind: 'campaign-bid-bounds', minBidCents: 300 })).error).toBe('would leave "TEST W32 CAMPAIGN" with min 300¢ > max 200¢')
     expect((await dry({ campaignId: c, op: 'set', kind: 'campaign-budget-bounds', minBudgetCents: 50 })).error).toBe("minBudgetCents must be ≥ 100 cents (Amazon's own floor is €1) or null")
+  })
+
+  it('a campaign bound replaces a bid policy on its side: judged on the bounds in force (a policy in place)', async () => {
+    const c = ids.policyCampaign
+    // No campaign bound; the market policy's 100¢ binds. A campaign ceiling of 400¢ widens it: a loosening.
+    const wide = await dry({ campaignId: c, op: 'set', kind: 'campaign-bid-bounds', maxBidCents: 400 })
+    expect(wide.preview).toMatchObject({ direction: 'loosen', why: `the highest bid in force rises from 100¢ (Test DE policy) to 400¢ (Campaign.maxBidCents on ${c})` })
+    expect(wide.preview!.inForce.maxBidCents).toEqual({ value: 400, from: `Campaign.maxBidCents on ${c}` })
+    expect(inLimits(wide.preview)).toContain('loosening a guardrail can raise spend')
+    // 90¢ under it: tighter in force.
+    expect((await dry({ campaignId: c, op: 'set', kind: 'campaign-bid-bounds', maxBidCents: 90 })).preview).toMatchObject({ direction: 'tighten' })
+    // A campaign floor of 50¢ (below the policy's 80¢) is set; clearing it lets the policy's 80¢ bind: a higher floor in force.
+    expect((await run({ campaignId: c, op: 'set', kind: 'campaign-bid-bounds', minBidCents: 50, maxBidCents: 90 })).ok).toBe(true)
+    const cleared = await dry({ campaignId: c, op: 'set', kind: 'campaign-bid-bounds', minBidCents: null })
+    expect(cleared.preview).toMatchObject({ direction: 'loosen', why: `the lowest bid in force rises from 50¢ (Campaign.minBidCents on ${c}) to 80¢ (Test DE policy) and forces bids up` })
+    // Clearing the campaign ceiling of 90¢ lets the policy's 100¢ bind: a higher ceiling in force.
+    expect((await dry({ campaignId: c, op: 'set', kind: 'campaign-bid-bounds', maxBidCents: null })).preview!.why).toBe(`the highest bid in force rises from 90¢ (Campaign.maxBidCents on ${c}) to 100¢ (Test DE policy)`)
+    expect((await dry({ campaignId: c, op: 'remove', kind: 'campaign-bid-bounds' })).preview).toMatchObject({ direction: 'loosen' })
+  })
+
+  it('the markets and campaignIds limits: a campaign kind runs by rule only where listed (none by default)', async () => {
+    const tighten = await dry({ campaignId: ids.campaign, op: 'set', kind: 'bid-change-cap', maxBidChangePct: 5 })
+    expect(tighten.preview).toMatchObject({ direction: 'tighten', market: 'IT', campaignId: ids.campaign })
+    expect(inLimits(tighten.preview, {})).toBe("a campaign's own guardrail changes by rule only in the markets or campaigns this business lists (none listed); this one is in IT: a person decides")
+    expect(inLimits(tighten.preview, { markets: ['DE'] })).toContain('(DE); this one is in IT')
+    expect(inLimits(tighten.preview, { markets: ['IT'] })).toBeNull()
+    expect(inLimits(tighten.preview, { campaignIds: [ids.campaign] })).toBeNull()
+    // Listed, a loosening still waits unless allowLoosen; the other kinds do not read the lists.
+    const loose = await dry({ campaignId: ids.campaign, op: 'set', kind: 'bid-change-cap', maxBidChangePct: 200 })
+    expect(inLimits(loose.preview, { markets: ['IT'] })).toContain('loosening a guardrail can raise spend')
+    expect(inLimits(loose.preview, { markets: ['IT'], allowLoosen: true })).toBeNull()
+    const term = await dry({ kind: 'protected-term', op: 'set', term: 'w32 list test term' })
+    expect(inLimits(term.preview, {})).toBeNull()
+    // Fewer markets is tighter (a brake anyone may apply), more is a loosening (settings.security.manage and a code).
+    const { limitsTighten } = await import('../claude-trust.service.js')
+    expect(limitsTighten(tool(), tool().limits!.parse({ markets: ['IT', 'DE'] }), tool().limits!.parse({ markets: ['IT'] }))).toBe(true)
+    expect(limitsTighten(tool(), tool().limits!.parse({}), tool().limits!.parse({ markets: ['IT'] }))).toBe(false)
+  })
+
+  it('a largest change the screens stored as a decimal is set back exactly by the undo', async () => {
+    await inside(() => database.client.campaign.update({ where: { id: ids.policyCampaign }, data: { dynamicBidding: { maxBidChangePct: 12.5 } } }))
+    const out = await run({ campaignId: ids.policyCampaign, op: 'set', kind: 'bid-change-cap', maxBidChangePct: 10 })
+    expect(out.ok, out.error).toBe(true)
+    expect(out.change!.before.row).toEqual({ maxBidChangePct: 12.5 })
+    const back = tool().undo!.request(out.change!) as { tool: string; args: Record<string, unknown> }
+    expect(tool().input.safeParse(back.args).success).toBe(true)
+    expect((await run(back.args)).ok).toBe(true)
+    expect((await inside(() => database.client.campaign.findUniqueOrThrow({ where: { id: ids.policyCampaign } }))).dynamicBidding).toEqual({ maxBidChangePct: 12.5 })
   })
 
   it('the ads strategy stays the outer band: the preview names the stricter number that binds after the change', async () => {

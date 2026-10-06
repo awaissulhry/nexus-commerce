@@ -35,10 +35,13 @@ export interface QueuedWrite {
   /** Each field it changes, as Nexus queued it (a bid in cents of the campaign's currency, a daily budget in its units). */
   fields: Array<{ field: string; from: string | null; to: string | null }>
   effect: WriteEffect
+  /** It lowers a bid, a budget or a placement, or pauses or archives: cancelling it keeps today's value (spend stays up). */
+  lowers: boolean
   queuedBy: string
   changeSetId: string | null
   /** The change set is a request Claude asked for (an approval of a Claude call). */
   byClaude: boolean
+  /** Null: the write was queued to go at once (no grace window); it can be cancelled only while no worker has taken it. */
   graceEndsAt: string | null
 }
 
@@ -72,8 +75,11 @@ export interface CancelPlan {
 /** The fields whose value is money going out (as the mutation layer's SPEND_FIELDS): a higher value spends more. */
 const SPEND_FIELDS = new Set(['bid', 'defaultBid', 'dailyBudget', 'PLACEMENT_TOP', 'PLACEMENT_PRODUCT_PAGE', 'PLACEMENT_REST_OF_SEARCH'])
 
-/** Pure — what a write does to spend: a higher bid, budget or placement, or switching on, raises; lower, or a pause or archive, lowers. */
-export function writeEffect(fields: Array<{ field: string; from: string | null; to: string | null }>): WriteEffect {
+/**
+ * Pure — what a write does to spend: a higher bid, budget or placement, or switching on, raises; lower, or a pause or
+ * archive, lowers. `lowers`: any field of it lowers (a write that also raises something is a `change`, and still lowers).
+ */
+export function writeEffect(fields: Array<{ field: string; from: string | null; to: string | null }>): { effect: WriteEffect; lowers: boolean } {
   let raise = false
   let lower = false
   for (const f of fields) {
@@ -90,8 +96,8 @@ export function writeEffect(fields: Array<{ field: string; from: string | null; 
       raise = true // a portfolio, a bidding strategy, a name: judged as a change that can add spend
     }
   }
-  if (raise) return raise && !lower ? 'raise' : 'change'
-  return lower ? 'lowering' : 'change'
+  const effect: WriteEffect = raise ? (lower ? 'change' : 'raise') : lower ? 'lowering' : 'change'
+  return { effect, lowers: lower }
 }
 
 /** Names of the entities the writes change, as a person reads them. */
@@ -179,7 +185,7 @@ export async function planCancelQueuedWrites(input: QueuedWriteInput): Promise<{
     const approval = changeSetId ? approvalOf.get(changeSetId) : undefined
     writes.push({
       queueId: q.id, entityType: first.entityType, entityId: first.entityId, label: name.label, campaignId: name.campaignId,
-      market: first.marketplace ?? null, fields, effect: writeEffect(fields),
+      market: first.marketplace ?? null, fields, ...writeEffect(fields),
       queuedBy: first.actor || String((q.payload as { actor?: unknown } | null)?.actor ?? 'unrecorded'),
       changeSetId, byClaude: approval?.agentRun?.via === 'claude', graceEndsAt: q.holdUntil?.toISOString() ?? null,
     })
@@ -201,7 +207,7 @@ export async function planCancelQueuedWrites(input: QueuedWriteInput): Promise<{
   }
 
   const byClaude = writes.filter((w) => w.byClaude).length
-  const keepsSpend = writes.filter((w) => w.effect === 'lowering').map((w) => w.label)
+  const keepsSpend = writes.filter((w) => w.lowers).map((w) => w.label)
   const ends = writes.map((w) => w.graceEndsAt).filter((t): t is string => !!t).sort()[0] ?? null
   const summary = `Cancels ${plural(writes.length, 'queued Amazon ad write', 'queued Amazon ad writes')} before ${writes.length === 1 ? 'it is' : 'they are'} sent: `
     + writes.map((w) => `${w.label} (${w.fields.map((f) => `${f.field} ${f.from ?? '(empty)'} → ${f.to ?? '(empty)'}`).join(', ')})`).join('; ') + '.'
@@ -218,7 +224,8 @@ export async function planCancelQueuedWrites(input: QueuedWriteInput): Promise<{
       summary,
       effect: `${summary} Nothing reaches Amazon: Nexus puts each field back where it still holds the cancelled value. `
         + (keepsSpend.length ? `${plural(keepsSpend.length, 'write lowers', 'writes lower')} a bid, a budget or a status: cancelling keeps today's value (${keepsSpend.join('; ')}). ` : '')
-        + (ends ? `It works only while the write waits: the first grace window ends at ${ends}; approved after that, a write already sent is not cancelled.` : ''),
+        + (ends ? `It works only while the write waits: the first grace window ends at ${ends}; approved after that, a write already sent is not cancelled.` : '')
+        + (writes.some((w) => !w.graceEndsAt) ? ` ${plural(writes.filter((w) => !w.graceEndsAt).length, 'write was', 'writes were')} queued to go at once, with no grace window: cancellable only while still waiting and no worker has taken ${writes.length === 1 ? 'it' : 'them'}.` : ''),
     },
   }
 }

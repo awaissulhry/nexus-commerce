@@ -2,8 +2,10 @@
  * ADS AUTONOMY W3-2 — cancel-queued-ad-write, through the one door, on a real PostgreSQL (PGlite).
  *
  * Proven: the preview names exactly what it cancels (field from → to, on what, who queued it, the change set, whether
- * that is a Claude request, when the window ends) and what it cannot (window over); by the default limits only a
- * Claude request's own writes are inside, a person's write waits for a person; a cancel is the staged tray's own
+ * that is a Claude request, when the window ends) and what it cannot (window over); by the default limits only a raise
+ * a Claude request queued is inside — a person's write, and any lowering (cancelling it keeps spend up), wait for a
+ * person; a write queued with no grace window is cancellable while still waiting, and the preview says so; a cancel is
+ * the staged tray's own
  * (the queue row and its typed rows CANCELLED, Nexus's copy put back); undo asks for the whole request again; a listing
  * push is never touched; another business's write is not found.
  */
@@ -77,6 +79,12 @@ beforeAll(async () => {
     // A person's budget cut on the screens (no request), and a write whose window is over.
     ids.personWrite = await queueWrite({ entityType: 'CAMPAIGN', entityId: campaign.id, field: 'dailyBudget', from: '12', to: '8', actor: 'user:u-person' })
     ids.lateWrite = await queueWrite({ entityType: 'AD_TARGET', entityId: ids.target, field: 'bid', from: '60', to: '70', actor: 'automation:test-engine', holdUntil: new Date(Date.now() - 60_000) })
+    // A Claude request's own bid cut, queued to go at once (no grace window).
+    const cut = await c.agentApproval.create({ data: { agentRunId: run.id, toolName: 'set-target-bid', riskTier: 'high', status: 'executed', args: { targetId: ids.target, proposedBidCents: 30, why: 'test cut' } } })
+    ids.cutApproval = cut.id
+    ids.cutWrite = await queueWrite({ entityType: 'AD_GROUP', entityId: group.id, field: 'defaultBid', from: '40', to: '30', actor: 'user:u-approver', changeSetId: cut.id })
+    await c.outboundSyncQueue.update({ where: { id: ids.cutWrite }, data: { holdUntil: null } })
+    await c.adMutation.updateMany({ where: { outboundQueueId: ids.cutWrite }, data: { holdUntil: null } })
     // A listing price push: not an ad write.
     ids.listingPush = (await c.outboundSyncQueue.create({ data: { targetChannel: 'AMAZON', syncStatus: 'PENDING', syncType: 'PRICE_UPDATE', payload: { price: 9.99 }, holdUntil: soon() } })).id
   })
@@ -94,7 +102,7 @@ describe('W3-2 — cancel-queued-ad-write', () => {
       action: 'cancel-queued-ad-write',
       writes: [{
         queueId: ids.claudeWrite, entityType: 'AD_TARGET', entityId: ids.target, label: 'keyword "test keyword" (campaign "TEST W32C CAMPAIGN")',
-        campaignId: ids.campaign, market: 'IT', fields: [{ field: 'bid', from: '50', to: '60' }], effect: 'raise', queuedBy: 'user:u-approver',
+        campaignId: ids.campaign, market: 'IT', fields: [{ field: 'bid', from: '50', to: '60' }], effect: 'raise', lowers: false, queuedBy: 'user:u-approver',
         changeSetId: ids.approval, byClaude: true,
       }],
       notCancellable: [], keepsSpend: [], totals: { writes: 1, byClaude: 1, byOthers: 0 },
@@ -104,12 +112,25 @@ describe('W3-2 — cancel-queued-ad-write', () => {
     expect(inLimits(out.preview)).toBeNull()
   })
 
-  it('a write a person queued waits for a person (allowCancelOthers off); a cancelled lowering is said', async () => {
+  it('a write a person queued waits for a person (allowCancelOthers off); a cancelled lowering is said, and waits too', async () => {
     const out = await dry({ outboundQueueId: ids.personWrite })
-    expect(out.preview).toMatchObject({ writes: [{ label: 'campaign "TEST W32C CAMPAIGN"', effect: 'lowering', byClaude: false, changeSetId: null }], keepsSpend: ['campaign "TEST W32C CAMPAIGN"'] })
+    expect(out.preview).toMatchObject({ writes: [{ label: 'campaign "TEST W32C CAMPAIGN"', effect: 'lowering', lowers: true, byClaude: false, changeSetId: null }], keepsSpend: ['campaign "TEST W32C CAMPAIGN"'] })
     expect(out.preview!.effect).toContain("cancelling keeps today's value")
     expect(inLimits(out.preview)).toBe('it cancels a write not queued by a Claude request (campaign "TEST W32C CAMPAIGN", by user:u-person): a person decides')
-    expect(inLimits(out.preview, { allowCancelOthers: true })).toBeNull()
+    expect(inLimits(out.preview, { allowCancelOthers: true })).toBe('it cancels a lowering (campaign "TEST W32C CAMPAIGN"): the bid, budget or status stays where it is, so spend stays up — a person decides')
+    expect(inLimits(out.preview, { allowCancelOthers: true, allowCancelLowering: true })).toBeNull()
+  })
+
+  it('a Claude request\'s own lowering waits for a person too (allowCancelLowering off); with no grace window it says when it can be cancelled', async () => {
+    const out = await dry({ changeSetId: ids.cutApproval })
+    expect(out.preview).toMatchObject({ writes: [{ queueId: ids.cutWrite, label: 'ad group "TEST W32C GROUP" (campaign "TEST W32C CAMPAIGN")', effect: 'lowering', lowers: true, byClaude: true, graceEndsAt: null }] })
+    expect(out.preview!.effect).toContain('queued to go at once, with no grace window: cancellable only while still waiting and no worker has taken it')
+    expect(inLimits(out.preview)).toContain('it cancels a lowering')
+    expect(inLimits(out.preview, { allowCancelLowering: true })).toBeNull()
+    // A stored preview without the flag is never judged a raise.
+    expect(inLimits({ writes: [{ label: 'x', byClaude: true }] })).toContain('it cancels a lowering')
+    // Still waiting and untaken: it is cancelled.
+    expect((await run({ changeSetId: ids.cutApproval })).data!.cancelled.map((c: { queueId: string }) => c.queueId)).toEqual([ids.cutWrite])
   })
 
   it('refuses what it cannot cancel: a window over, a listing push, another business\'s write, no id, a write of another request', async () => {
