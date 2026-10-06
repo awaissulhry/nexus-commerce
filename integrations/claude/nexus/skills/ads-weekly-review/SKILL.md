@@ -49,6 +49,7 @@ Per market, a few lines: spend and sales against last week, ACoS against the tar
 | Placement adjustments (Amazon) | `set-placement-multipliers` |
 | Stop a campaign spending for a while, no pause (Amazon only) | `suppress-campaign`; `restore-campaign` puts the bids back |
 | A real pause, only when the person means one (Amazon only) | `pause-ads` (campaigns, ad groups, keywords and targets, product ads by ad group and SKU); `enable-ads` switches back on only what a Claude request paused, never what a person paused in Nexus or at Amazon |
+| Archive, only when the person means it for good (Amazon only) | `archive-ads`: PERMANENT — Amazon cannot switch an archived ad on again (its API calls this delete). Say so before asking; advise keeping archive at ask |
 | Apply or dismiss what PROPOSE rules suggested | `decide-automation-suggestions` (`kind`: `amazon-ads` or `ebay-ads`; a pause suggestion is refused: dismiss it, and ask for `pause-ads` if the person wants a real pause) |
 | eBay: rates, keywords, budgets, promote listings | `set-ebay-ad-rates` (General, fixed-rate campaigns; a rate above a listing's known break-even is refused, an unknown one only warns), `ebay-keywords-change` (manual Priority, keyword ids from `ebay-ad-details` or a proposal), `set-ebay-campaign-budget` (Priority; 15 changes per campaign per day), `promote-ebay-listings` |
 

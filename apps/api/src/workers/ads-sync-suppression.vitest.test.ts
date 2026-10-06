@@ -61,7 +61,11 @@ vi.mock('../services/advertising/ads-api-client.js', () => {
     amazon.calls.push({ externalId, patch })
     return { ok: true, rawResponse: {} }
   }
-  return { adsMode: () => 'live', updateCampaign: record, updateAdGroup: record, updateTarget: record, updateProductAd: record, updatePortfolio: record }
+  const archive = async (_ctx: unknown, entity: string, externalId: string) => {
+    amazon.calls.push({ externalId, patch: { archive: entity } })
+    return { ok: true, rawResponse: {} }
+  }
+  return { adsMode: () => 'live', updateCampaign: record, updateAdGroup: record, updateTarget: record, updateProductAd: record, updatePortfolio: record, archiveSpEntity: archive }
 })
 
 const { drainAdsSyncOnce } = await import('./ads-sync.worker.js')
@@ -219,5 +223,30 @@ describe('while automation is stopped — a real pause lets go, an enable does n
     const { rows, flags } = await drain()
     expect(flags).toEqual([false])
     expect(rows[0]!.syncStatus).toBe('SKIPPED')
+  })
+})
+
+/**
+ * AA-W2-13 — an archive archive-ads marks (`letsGo`) passes the halted gate like a pause, and goes out as Amazon's delete
+ * operation (archiveSpEntity), never a PUT Amazon does not accept. An unmarked archive is judged and sent as before.
+ */
+describe('while automation is stopped — a marked archive lets go, as Amazon\'s delete', () => {
+  const RULE_RUN = 'user:u-rule-approver' as const
+
+  it('a marked archive of a campaign and of a keyword: passes the halt, sent as the delete of each', async () => {
+    await inside(() => updateCampaignWithSync({ campaignId: 'sup-c', patch: { status: 'ARCHIVED' }, actor: RULE_RUN, applyImmediately: true, letsGo: true }))
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'sup-t2', patch: { status: 'ARCHIVED' }, actor: RULE_RUN, applyImmediately: true, letsGo: true }))
+    const { rows, flags } = await drain()
+    expect(flags).toEqual([true, true])
+    expect(rows.every((r) => r.syncStatus === 'SUCCESS')).toBe(true)
+    expect(amazon.calls.map((c) => c.patch).sort((a, b) => String(a.archive).localeCompare(String(b.archive)))).toEqual([{ archive: 'campaign' }, { archive: 'keyword' }])
+  })
+
+  it('an unmarked archive (a person\'s screen, say) is judged as before: refused while stopped, never sent as a delete', async () => {
+    await inside(() => updateAdTargetWithSync({ adTargetId: 'sup-t1', patch: { status: 'ARCHIVED' }, actor: RULE_RUN, applyImmediately: true }))
+    const { rows, flags } = await drain()
+    expect(flags).toEqual([false])
+    expect(rows[0]!.syncStatus).toBe('SKIPPED')
+    expect(amazon.calls).toEqual([])
   })
 })

@@ -55,6 +55,8 @@ const UNDO_PENDING: Record<string, string> = {
 const AD_STRATEGY_AUTO: readonly string[] = [
   // AA-W2-12 — a real pause, and switching back on what a Claude request paused.
   'pause-ads', 'enable-ads',
+  // AA-W2-13 — an archive (irreversible: also on IRREVERSIBLE_AUTO), and a new campaign (D-W2-6: its own kind).
+  'archive-ads', 'create-ad-campaign',
 ]
 
 /**
@@ -62,7 +64,26 @@ const AD_STRATEGY_AUTO: readonly string[] = [
  * ads strategy, which the tool's DEFAULT limits must still refuse: by default nothing permanent runs alone. Exact, as
  * above. Empty until archive-ads.
  */
-const IRREVERSIBLE_AUTO: Readonly<Record<string, unknown>> = {}
+const IRREVERSIBLE_AUTO: Readonly<Record<string, unknown>> = {
+  // AA-W2-13 — archive one enabled campaign in a market whose strategy lets Claude archive and allows the change today:
+  // inside the strategy (the lists test below shows it runs with a count above 0), refused at the default count 0.
+  'archive-ads': {
+    action: 'archive-ads',
+    limitFacts: {
+      v: 1, tool: 'archive-ads', action: 'archive',
+      markets: { IT: { strategy: { version: 'test-v1' }, currency: 'EUR', maxActionsPerRun: null, maxChangesPerDay: 10, maxRaisesPerDay: 10, maxBudgetIncreasePerDayCents: 0, sources: {} } },
+      scopes: { 'IT|campaign:c1': { market: 'IT', label: 'campaign "Test" (IT)', limits: {}, sources: {} } },
+      entityScopes: { 'campaign:c1': 'IT|campaign:c1' }, labels: { 'campaign:c1': 'campaign "Test"' },
+      this: {
+        markets: ['IT'], items: 1, writes: 1, raises: 0, cuts: 1, largestRaisePct: 0, largestCutPct: 0, largestRaisePoints: 0, largestCutPoints: 0,
+        highestNewBidCents: null, budgetIncreaseCents: 0, byMarket: { IT: { changes: 1, writes: 1, raises: 0, budgetIncreaseCents: 0, addedDailyCents: -1000 } },
+        entities: ['campaign:c1'], rowsOutsideStrategy: 0, firstOutside: null,
+      },
+      today: { IT: { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 } }, perEntityToday: { maxChangesByRule: 0, entity: null },
+      unplaced: [], engineOwned: [], protectedHit: [],
+    },
+  },
+}
 
 /**
  * AA-W2-1 — `alwaysAsk` tools an earlier, reviewed phase already let a business confirm in Claude or run by rule inside
@@ -340,6 +361,8 @@ describe('C1 — every registered tool keeps the contract', () => {
         after: { items: [{ level: 'campaign', id: 'c1', status: 'PAUSED' }, { level: 'productAd', id: 'pa1', adGroupId: 'g1', product: 'TEST-SKU-1', status: 'PAUSED' }] },
       },
       'enable-ads': { before: { changeSetId: 'ap1', items: [{ level: 'target', id: 't1', status: 'PAUSED' }] }, after: { items: [{ level: 'target', id: 't1', status: 'ENABLED' }] } },
+      // AA-W2-13 — a created campaign is put back (in part) by archiving it.
+      'create-ad-campaign': { before: { campaignId: null }, after: { campaignId: 'c9', name: 'Test launch', market: 'IT' } },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       // A6 — a budget or the placement adjustments are set back through the same tool.
@@ -529,7 +552,7 @@ describe('C1 — every registered tool keeps the contract', () => {
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
       'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-campaign-budget', 'set-placement-multipliers', 'bulk-ad-bid-change',
-      'restore-campaign', 'set-campaign-live-writes', 'create-ad-campaign']) {
+      'restore-campaign', 'set-campaign-live-writes']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })
@@ -544,6 +567,9 @@ describe('C1 — every registered tool keeps the contract', () => {
     for (const name of Object.keys(IRREVERSIBLE_AUTO)) {
       const tool = byName.get(name)
       expect(tool?.reversibility === 'none' && aboveAsk(tool), `${name}: irreversible and above ask, or off IRREVERSIBLE_AUTO`).toBe(true)
+      // The sample is inside the strategy: with a count above 0 the tool's own limits let it run (rule 7c's refusal is
+      // the default count, not a broken sample).
+      expect(tool!.withinLimits!(IRREVERSIBLE_AUTO[name], tool!.limits!.parse({ maxItems: 1 }) as Record<string, unknown>), name).toBeNull()
     }
     for (const name of Object.keys(ALWAYS_ASK_ABOVE_ASK)) {
       const tool = byName.get(name)

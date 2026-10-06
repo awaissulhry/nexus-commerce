@@ -7,7 +7,7 @@
  *   where it lands   read from the change's arguments and, once its dry run has run, its preview — per tool (PLACES):
  *                    a target or a negative → its ad group; a budget, a placement, a stop → its campaign; a new
  *                    campaign → its products in its market; a suggestion → what it applies to; an ad undo → every
- *                    entity it puts back; a pause or an enable (AA-W2-12) → each campaign, ad group and target it names
+ *                    entity it puts back; a pause, an enable or an archive (AA-W2-12/13) → each campaign, ad group and target it names
  *                    (a product ad → its ad group). An ad group or a campaign resolves through its products (the safer level
  *                    across them, resolve.ts), a product through product → parent → primary category → market.
  *   fail closed      a change that reaches a whole market (a selection by market), or that Nexus cannot place more
@@ -205,7 +205,7 @@ async function adUndo(place: Place, args: Obj, preview: Obj | null) {
   if (logs.some((l) => !['AD_TARGET', 'AD_GROUP', 'CAMPAIGN'].includes(l.entityType))) place.notPlaced('it puts back a write that names no campaign, ad group or target')
 }
 
-/** AA-W2-12 — a status change: every campaign, ad group (a product ad's too) and target it names. */
+/** AA-W2-12/13 — a status change: every campaign, ad group (a product ad's too) and target it names. */
 const byStatusArgs: PlaceReader = async (place, args) => {
   const campaigns = strs(args.campaignIds)
   const adGroups = [...strs(args.adGroupIds), ...list(args.productAds).map((ad) => str(obj(ad).adGroupId))].filter((id): id is string => !!id)
@@ -267,6 +267,7 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'undo-ad-change': adUndo,
   'pause-ads': byStatusArgs,
   'enable-ads': byStatusArgs,
+  'archive-ads': byStatusArgs,
 }
 
 // ── The strategy's level where it lands ───────────────────────────────────────────────────────────

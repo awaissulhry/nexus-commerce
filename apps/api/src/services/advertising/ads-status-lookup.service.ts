@@ -1,5 +1,5 @@
 /**
- * ADS AUTONOMY AA-W2-12 — what pause-ads and enable-ads (agents/tools/ads-status.tools.ts) read of the advertising
+ * ADS AUTONOMY AA-W2-12/13 — what pause-ads, enable-ads and archive-ads (agents/tools/ads-status.tools.ts) read of the advertising
  * context's own tables (ad groups, drift), so the tools stay outside them (scripts/check-context-boundary.mjs). Reads
  * only, in the business of the call.
  */
@@ -17,14 +17,18 @@ export async function adGroupsForStatus(ids: string[]) {
   })
 }
 
-/** What stops serving with the campaigns and ad groups paused: their enabled ad groups, keywords and targets, product ads. */
-export async function servingUnder(campaignIds: string[], adGroupIds: string[]): Promise<{ adGroups: number; targets: number; productAds: number }> {
+/**
+ * What stops with the campaigns and ad groups: their ad groups, keywords and targets, product ads — the enabled ones for
+ * a pause; for an archive (AA-W2-13, `paused` too) every one not archived already, since it stops for good with them.
+ */
+export async function servingUnder(campaignIds: string[], adGroupIds: string[], opts: { paused?: boolean } = {}): Promise<{ adGroups: number; targets: number; productAds: number }> {
   if (!campaignIds.length && !adGroupIds.length) return { adGroups: 0, targets: 0, productAds: 0 }
-  const ofCampaigns = campaignIds.length ? await prisma.adGroup.findMany({ where: { campaignId: { in: campaignIds }, status: 'ENABLED' }, select: { id: true } }) : []
+  const status = opts.paused ? { in: ['ENABLED' as const, 'PAUSED' as const] } : ('ENABLED' as const)
+  const ofCampaigns = campaignIds.length ? await prisma.adGroup.findMany({ where: { campaignId: { in: campaignIds }, status }, select: { id: true } }) : []
   const groups = [...new Set([...ofCampaigns.map((g) => g.id), ...adGroupIds])]
   const [targets, productAds] = await Promise.all([
-    prisma.adTarget.count({ where: { adGroupId: { in: groups }, status: 'ENABLED', isNegative: false } }),
-    prisma.adProductAd.count({ where: { adGroupId: { in: groups }, status: 'ENABLED' } }),
+    prisma.adTarget.count({ where: { adGroupId: { in: groups }, status, isNegative: false } }),
+    prisma.adProductAd.count({ where: { adGroupId: { in: groups }, status } }),
   ])
   return { adGroups: ofCampaigns.length, targets, productAds }
 }

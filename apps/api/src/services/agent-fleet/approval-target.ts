@@ -258,7 +258,7 @@ const EBAY_AD_TOOLS = new Set(['set-ebay-ad-rates', 'promote-ebay-listings', 'se
 const AMAZON_AD_TOOLS = new Set([
   'set-target-bid', 'create-negative-keyword', 'graduate-keyword', 'set-campaign-budget', 'set-placement-multipliers',
   'bulk-ad-bid-change', 'suppress-campaign', 'restore-campaign', 'set-campaign-live-writes', 'create-ad-campaign', 'undo-ad-change',
-  'set-campaign-target-acos', 'pause-ads', 'enable-ads',
+  'set-campaign-target-acos', 'pause-ads', 'enable-ads', 'archive-ads',
 ])
 
 /** A campaign page: Amazon's by its Nexus Campaign id, eBay's by its Nexus eBay campaign id. */

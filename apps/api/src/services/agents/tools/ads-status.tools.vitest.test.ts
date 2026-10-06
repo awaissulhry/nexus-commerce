@@ -44,6 +44,9 @@ import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
 import { ruleFrom } from '../claude-trust.service.js'
 import { updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
+import { setClaudeRule } from '../claude-trust.service.js'
+import { __stepUpTest } from '../../../lib/auth/step-up.js'
+import { generateSecret, generateSync } from 'otplib'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -87,7 +90,12 @@ beforeAll(async () => {
   database = await formulaDatabase()
   await inside(async () => {
     await seedAdsFixture(database.client)
-    for (const id of ['c-p1', 'c-p2', 'c-p3', 'c-p4', 'c-p5', 'c-h1', 'c-h2', 'c-lim']) await campaign(id)
+    for (const id of ['c-p1', 'c-p2', 'c-p3', 'c-p4', 'c-p5', 'c-h1', 'c-h2', 'c-lim', 'c-a1', 'c-a2', 'c-a3', 'c-h3']) await campaign(id)
+    // AA-W2-13 — a paused campaign whose keyword is paused too; a campaign advertising a product the strategy protects.
+    await database.client.campaign.update({ where: { id: 'c-a2' }, data: { status: 'PAUSED' } })
+    await database.client.adTarget.update({ where: { id: 't-c-a2' }, data: { status: 'PAUSED' } })
+    const guarded = await database.client.product.create({ data: { sku: 'TEST-GUARDED-1', name: 'Test guarded', basePrice: '10.00' } })
+    await database.client.adProductAd.update({ where: { id: 'pa-c-a3' }, data: { productId: guarded.id } })
     await campaign('c-arch', { status: 'ARCHIVED' })
     await campaign('c-draft', { status: 'DRAFT', externalCampaignId: null })
   })
@@ -96,6 +104,16 @@ afterAll(async () => { vi.unstubAllEnvs(); await halt(false); await database?.cl
 beforeEach(() => { vi.unstubAllEnvs() })
 
 describe('the tools as the contract holds them', () => {
+  it('AA-W2-13 — archive-ads: strategy-bound, alwaysAsk, ceiling auto through the irreversible exception, no undo; at ask by default', () => {
+    const tool = getTool('archive-ads')!
+    expect(tool).toMatchObject({ alwaysAsk: true, strategyBound: 'amazon-ads', maxClaudeTrust: 'auto', reversibility: 'none', openWorld: true, requires: ['ads.campaigns.manage', 'financials.adspend.view'] })
+    expect(tool.undo).toBeUndefined()
+    expect(ruleFrom(tool, null).level).toBe('ask')
+    expect(tool.limits!.parse({})).toMatchObject({ maxItems: 0 })
+    expect(tool.description).toMatch(/PERMANENT: Amazon cannot switch an archived ad on again \(its API calls this delete\)/)
+    expect(tool.description).toMatch(/the advice is to keep it that way/)
+  })
+
   it('strategy-bound, alwaysAsk, ceiling auto, fully undoable; offered to Claude at ask (no row = ask)', () => {
     for (const name of ['pause-ads', 'enable-ads']) {
       const tool = getTool(name)!
@@ -278,6 +296,88 @@ describe('the limits: nothing runs alone by default; inside the strategy and the
       expect(judge('enable-ads', (await preview('enable-ads', { campaignIds: ['c-lim'] })).preview, { maxItems: 5 })).toBeNull()
     } finally {
       await inside(() => database.client.adsStrategy.delete({ where: { id: row.id } }))
+    }
+  })
+})
+
+describe('AA-W2-13 — archive-ads: for good', () => {
+  it('previews each ad Enabled or Paused → Archived, everything a campaign holds stopping with it, and that it is permanent', async () => {
+    const r = await preview('archive-ads', { campaignIds: ['c-a1', 'c-a2'] })
+    expect(r.ok, r.error).toBe(true)
+    const p = r.preview as Row
+    expect(p).toMatchObject({
+      action: 'archive-ads', totals: { changing: 2, alreadyArchived: 0 },
+      // c-a2's paused keyword stops for good too; only c-a1 (enabled) has a budget that stops spending.
+      holds: { adGroups: 2, targets: 2, productAds: 2 }, budgetsStop: { EUR: 1200 },
+      permanent: 'PERMANENT: Amazon cannot switch an archived ad on again. Amazon\'s API calls this delete. Its reports keep its history. To advertise it again, a new one is created.',
+      warning: expect.stringMatching(/^PERMANENT: .* To stop an ad for a while, lower its bids \(suppress-campaign\) or pause it \(pause-ads\) instead\.$/),
+      limitFacts: { tool: 'archive-ads', action: 'archive' },
+    })
+    expect(p.changes.map((c: Row) => [c.label, c.fromLabel, c.toLabel])).toEqual([['campaign "Test c-a1"', 'Enabled', 'Archived'], ['campaign "Test c-a2"', 'Paused', 'Archived']])
+    expect(p.effect).toMatch(/^Archives 2 ads at Amazon, for good \(2 campaigns\)/)
+    expect((await preview('archive-ads', { campaignIds: ['c-arch'] })).error).toMatch(/^Nothing would change: campaign "Test c-arch" is already archived/)
+    expect((await preview('archive-ads', { campaignIds: ['c-draft'] })).error).toMatch(/never sent to Amazon/)
+  })
+
+  it('approved, archives as the approver, marked as letting go (the worker sends it as Amazon\'s delete); it cannot be undone', async () => {
+    const asked = await ask('archive-ads', { campaignIds: ['c-a1'], why: 'product discontinued' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { archived: 1, failed: 0 } })
+    expect(await statusOf('Campaign', 'c-a1')).toBe('ARCHIVED')
+    const [queued] = await sql<{ payload: Row }>(`SELECT payload FROM "OutboundSyncQueue" WHERE payload->>'entityId' = $1 ORDER BY "createdAt" DESC LIMIT 1`, ['c-a1'])
+    expect(queued.payload).toMatchObject({ letsGo: true, fieldChanges: [{ field: 'status', oldValue: 'ENABLED', newValue: 'ARCHIVED' }] })
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).not.toMatchObject({ request: expect.anything() })
+    // Amazon cannot switch it on again: enable-ads refuses it.
+    expect((await preview('enable-ads', { campaignIds: ['c-a1'] })).error).toMatch(/Amazon cannot switch an archived ad on again/)
+  })
+
+  it('by rule: never the ads of a protected product, paused or not; default count 0; inside the strategy with a count above 0', async () => {
+    const judge = (p: unknown, limits: Record<string, unknown> = {}) => getTool('archive-ads')!.withinLimits!(p, getTool('archive-ads')!.limits!.parse(limits) as Record<string, unknown>)
+    const guarded = await inside(() => database.client.product.findFirstOrThrow({ where: { sku: 'TEST-GUARDED-1' }, select: { id: true } }))
+    const rows = await inside(async () => [
+      await database.client.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', updatedBy: 'user:test', claudeMaxChangesPerDay: 10 } }),
+      await database.client.adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: guarded.id, label: 'Test guarded', updatedBy: 'user:test', protect: true } }),
+    ])
+    try {
+      const plain = (await preview('archive-ads', { campaignIds: ['c-a2'] })).preview
+      expect(judge(plain)).toMatch(/more than the 0 this tool's limits allow/)
+      expect(judge(plain, { maxItems: 5 })).toBeNull()
+      await inside(() => database.client.campaign.update({ where: { id: 'c-a3' }, data: { status: 'PAUSED' } }))
+      const guardedPreview = (await preview('archive-ads', { campaignIds: ['c-a3'] })).preview
+      expect(judge(guardedPreview, { maxItems: 5 })).toMatch(/the ads strategy protects a product it advertises \(ads strategy: Test guarded.*\), so archiving its ads waits for a person/)
+    } finally {
+      await inside(() => database.client.adsStrategy.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } }))
+    }
+  })
+
+  it('approved by the business\'s rule during a halt: an archive runs (it lets go)', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    await halt(true)
+    try {
+      const asked = await ask('archive-ads', { campaignIds: ['c-h3'] })
+      expect(await approveByRule(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { archived: 1 } })
+      expect(await statusOf('Campaign', 'c-h3')).toBe('ARCHIVED')
+    } finally {
+      await halt(false)
+    }
+  })
+
+  it('raising what it may archive alone takes two codes: its level and its limits one at a time (a code is single use)', async () => {
+    const secret = generateSecret()
+    const person = await database.client.userProfile.create({ data: { email: 'archive-trust@example.test', status: 'active', displayName: 'Test Trust', twoFactorEnabledAt: new Date(), twoFactorSecret: secret } })
+    const actor = { userId: person.id, label: 'Test Trust', canManage: true }
+    const code = () => { __stepUpTest.reset(); return generateSync({ secret }) }
+    try {
+      expect(await inside(() => setClaudeRule(actor, 'archive-ads', { level: 'auto', limits: { maxItems: 1 }, code: code() })))
+        .toMatchObject({ ok: false, status: 400, code: 'second_code_required', error: expect.stringMatching(/cannot be undone: raise its level and loosen its limits one at a time/) })
+      expect(await inside(() => setClaudeRule(actor, 'archive-ads', { level: 'auto', code: code() }))).toMatchObject({ ok: true, rule: { level: 'auto' } })
+      expect(await inside(() => setClaudeRule(actor, 'archive-ads', { limits: { maxItems: 1 } }))).toMatchObject({ ok: false, code: 'mfa_required' })
+      expect(await inside(() => setClaudeRule(actor, 'archive-ads', { limits: { maxItems: 1 }, code: code() }))).toMatchObject({ ok: true, rule: { level: 'auto', limits: { maxItems: 1 } } })
+      // Lowering is a free brake.
+      expect(await inside(() => setClaudeRule(actor, 'archive-ads', { level: 'ask' }))).toMatchObject({ ok: true, rule: { level: 'ask' } })
+      // A kind that can be undone raises both on one code, as before.
+      expect(await inside(() => setClaudeRule(actor, 'pause-ads', { level: 'auto', limits: { maxItems: 1 }, code: code() }))).toMatchObject({ ok: true })
+    } finally {
+      await inside(() => database.client.agentTool.deleteMany({ where: { name: { in: ['archive-ads', 'pause-ads'] } } }))
     }
   })
 })

@@ -15,6 +15,11 @@
  *                (pause-ads) and that Amazon has not reported changed since: never one a person paused, in Nexus or at
  *                Amazon (the SYNC.1 lesson, ads-mutation.service.ts). An archived ad cannot be enabled (Amazon's rule).
  *                Spend resumes, so a halt stops it. Undo: pause-ads.
+ *   archive-ads  AA-W2-13 — ENABLED or PAUSED → ARCHIVED, for good: Amazon cannot switch an archived ad on again (its
+ *                API calls this delete: ads-api-client.ts SP_V3_ARCHIVE; the write carries `letsGo`, so the worker sends
+ *                it as that delete, and a halt does not hold it — it lets go). The one irreversible tool the contract
+ *                lets above ask (IRREVERSIBLE_AUTO): by default it runs nothing alone, raising its level and its limits
+ *                takes two separate codes (claude-trust.service.ts), and the advice is to keep it at ask. No undo.
  *
  * One request names at most 100 ads. An ad already where it is asked to go is left as it is (counted); an ad Nexus cannot
  * change (not found, not Sponsored Products, archived, a draft, not at Amazon, gone at Amazon, a negative, or — for an
@@ -36,9 +41,17 @@ import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '.
 const MAX_ADS = 100
 /** At most this many lines are listed in a preview; the rest are counted. */
 const LINES_SHOWN = 20
-/** The pause and enable tools, by the kind of change. */
-const TOOL = { pause: 'pause-ads', enable: 'enable-ads' } as const
+/** The pause, enable and archive tools, by the kind of change. */
+const TOOL = { pause: 'pause-ads', enable: 'enable-ads', archive: 'archive-ads' } as const
 type Kind = keyof typeof TOOL
+/** The statuses each kind changes from, and the one it writes. */
+const MOVE: Record<Kind, { from: readonly string[]; to: 'PAUSED' | 'ENABLED' | 'ARCHIVED' }> = {
+  pause: { from: ['ENABLED'], to: 'PAUSED' },
+  enable: { from: ['PAUSED'], to: 'ENABLED' },
+  archive: { from: ['ENABLED', 'PAUSED'], to: 'ARCHIVED' },
+}
+/** What every archive preview says: it is for good. */
+const PERMANENT = 'PERMANENT: Amazon cannot switch an archived ad on again. Amazon\'s API calls this delete. Its reports keep its history. To advertise it again, a new one is created.'
 
 const LEVELS = ['campaign', 'adGroup', 'target', 'productAd'] as const
 type Level = (typeof LEVELS)[number]
@@ -181,8 +194,8 @@ function named(list: string[], shown = 3): string {
 interface Holds { adGroups: number; targets: number; productAds: number }
 
 /** The enabled ad groups, keywords and targets, and product ads that stop serving with each campaign and ad group paused. */
-const holdsOf = (ads: Ad[]): Promise<Holds> =>
-  servingUnder(ads.filter((a) => a.level === 'campaign').map((a) => a.id), ads.filter((a) => a.level === 'adGroup').map((a) => a.id))
+const holdsOf = (ads: Ad[], kind: Kind): Promise<Holds> =>
+  servingUnder(ads.filter((a) => a.level === 'campaign').map((a) => a.id), ads.filter((a) => a.level === 'adGroup').map((a) => a.id), { paused: kind === 'archive' })
 
 /** The highest bid that serves again with each ad switched back on (advertising/ads-status-lookup.service.ts). */
 const highestBids = (ads: Ad[]): Promise<Map<string, number | null>> => highestServingBids(ads.map((a) => ({ level: a.level, id: a.id, adGroupId: a.adGroupId })))
@@ -270,8 +283,9 @@ async function reachOf(ads: Ad[], kind: Kind): Promise<{ reach: StoredReach } | 
   for (const ad of ads) campaigns.set(ad.campaign.id, ad.campaign.marketplace)
   const profiles = new Set<string>()
   for (const [campaignId, marketplace] of [...campaigns].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    // A pause lets go of spend: like a suppression, the halt does not hold it. An enable starts spend: the halt binds.
-    const reach = await checkLiveReach({ campaignId, marketplace, changes: [{ field: 'status', valueCents: null }], isSuppression: kind === 'pause' })
+    // A pause or an archive lets go of spend: like a suppression, the halt does not hold it. An enable starts spend: the
+    // halt binds.
+    const reach = await checkLiveReach({ campaignId, marketplace, changes: [{ field: 'status', valueCents: null }], isSuppression: kind !== 'enable' })
     if (reach.reach === 'refused') return { refused: reach }
     if (reach.reach === 'live') profiles.add(reach.profileId)
   }
@@ -290,13 +304,12 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   if (missing.length) return refuse(`Not queued: ${named(missing)} ${missing.length === 1 ? 'was' : 'were'} not found in this business.`)
   const cannot = ads.filter((ad) => ad.cannot)
   if (cannot.length) return refuse(`Not queued: ${named(cannot.map((ad) => `${ad.label}: ${ad.cannot}`))}.`)
-  const from = kind === 'pause' ? 'ENABLED' : 'PAUSED'
-  const to = kind === 'pause' ? 'PAUSED' : 'ENABLED'
-  const archived = ads.filter((ad) => ad.status === 'ARCHIVED')
+  const { from, to } = MOVE[kind]
+  const archived = kind === 'archive' ? [] : ads.filter((ad) => ad.status === 'ARCHIVED')
   if (archived.length) {
     return refuse(`Not queued: ${named(archived.map((ad) => ad.label))} ${archived.length === 1 ? 'is' : 'are'} archived${kind === 'enable' ? ': Amazon cannot switch an archived ad on again; to advertise it again, a new one is created' : ' already: an archived ad serves no more'}.`)
   }
-  const changing = ads.filter((ad) => ad.status === from)
+  const changing = ads.filter((ad) => from.includes(ad.status))
   const already = ads.filter((ad) => ad.status === to)
   if (!changing.length) return refuse(`Nothing would change: ${named(already.map((ad) => ad.label))} ${already.length === 1 ? 'is' : 'are'} already ${STATUS_WORDS[to].toLowerCase()}.`)
 
@@ -311,19 +324,20 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   if ('refused' in reach) return refuse(reachRefusal(reach.refused))
   const stored = reach.reach
   const [holds, bids] = await Promise.all([
-    kind === 'pause' ? holdsOf(changing) : Promise.resolve(null),
+    kind !== 'enable' ? holdsOf(changing, kind) : Promise.resolve(null),
     kind === 'enable' ? highestBids(changing) : Promise.resolve(new Map<string, number | null>()),
   ])
 
   // The facts the business's rule is judged on (strategy-bound): a campaign's status starts or stops its daily budget.
   const items: KitItem[] = changing.map((ad) => ({
     entity: { kind: ad.level, id: ad.id },
-    change: { field: 'status', from, to, ...(ad.level === 'campaign' ? { dailyBudgetCents: ad.campaign.dailyBudgetCents } : {}) },
+    change: { field: 'status', from: ad.status, to, ...(ad.level === 'campaign' ? { dailyBudgetCents: ad.campaign.dailyBudgetCents } : {}) },
   }))
   const facts = await buildLimitFacts({ tool: TOOL[kind], items, approvalId: ctx.approvalId ?? null, projectMonth: kind === 'enable' })
 
   const budgets: Record<string, number> = {}
-  for (const ad of changing.filter((x) => x.level === 'campaign')) budgets[ad.campaign.currency] = (budgets[ad.campaign.currency] ?? 0) + ad.campaign.dailyBudgetCents
+  // The daily budgets that stop (a campaign that serves now) or start again.
+  for (const ad of changing.filter((x) => x.level === 'campaign' && (kind === 'enable' || x.status === 'ENABLED'))) budgets[ad.campaign.currency] = (budgets[ad.campaign.currency] ?? 0) + ad.campaign.dailyBudgetCents
   const budgetWords = Object.entries(budgets).map(([cur, cents]) => amountLabel(cents, cur)).join(' and ')
   const highest = kind === 'enable'
     ? changing.reduce<{ cents: number; currency: string } | null>((best, ad) => {
@@ -335,11 +349,17 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   const countWords = counts.map(([level, n]) => plural(n, LEVEL_WORDS[level])).join(', ')
   const one = new Set(changing.map((ad) => ad.campaign.id)).size === 1 ? changing[0].campaign : null
 
-  const effect = kind === 'pause'
+  const holdsWords = holds && (holds.adGroups || holds.targets || holds.productAds)
+    ? [holds.adGroups ? plural(holds.adGroups, LEVEL_WORDS.adGroup) : '', holds.targets ? plural(holds.targets, LEVEL_WORDS.target) : '', holds.productAds ? plural(holds.productAds, LEVEL_WORDS.productAd) : ''].filter(Boolean).join(', ')
+    : ''
+  const effect = kind === 'archive'
+    ? `Archives ${plural(changing.length, ['ad', 'ads'])} at Amazon, for good (${countWords}): ${named(changing.map((ad) => ad.label))}. ${PERMANENT}`
+      + (holdsWords ? ` With them, everything they hold stops for good: ${holdsWords}.` : '')
+      + (budgetWords ? ` ${budgetWords} of daily budget stops spending.` : '')
+      + (already.length ? ` ${plural(already.length, ['ad', 'ads'])} already archived ${already.length === 1 ? 'is' : 'are'} left as ${already.length === 1 ? 'it is' : 'they are'}.` : '')
+    : kind === 'pause'
     ? `Pauses ${plural(changing.length, ['ad', 'ads'])} at Amazon (${countWords}): ${named(changing.map((ad) => ad.label))}.`
-      + (holds && (holds.adGroups || holds.targets || holds.productAds)
-        ? ` With them stop ${[holds.adGroups ? plural(holds.adGroups, LEVEL_WORDS.adGroup) : '', holds.targets ? plural(holds.targets, LEVEL_WORDS.target) : '', holds.productAds ? plural(holds.productAds, LEVEL_WORDS.productAd) : ''].filter(Boolean).join(', ')} they hold (their own status stays).`
-        : '')
+      + (holdsWords ? ` With them stop ${holdsWords} they hold (their own status stays).` : '')
       + (budgetWords ? ` ${budgetWords} of daily budget stops spending.` : '')
       + ' enable-ads switches them back on; they serve again about an hour after that.'
       + (already.length ? ` ${plural(already.length, ['ad', 'ads'])} already paused ${already.length === 1 ? 'is' : 'are'} left as ${already.length === 1 ? 'it is' : 'they are'}.` : '')
@@ -352,7 +372,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   const lines = changing.map((ad) => ({
     label: ad.label,
     marketplace: ad.campaign.marketplace,
-    fromLabel: STATUS_WORDS[from],
+    fromLabel: STATUS_WORDS[ad.status] ?? ad.status,
     toLabel: STATUS_WORDS[to],
     ...(kind === 'enable' ? { pausedBy: pausedByWords(pausedBy.get(`${ad.level}:${ad.id}`)!) } : {}),
     ...(kind === 'enable' && bids.get(`${ad.level}:${ad.id}`) != null ? { highestBidCents: bids.get(`${ad.level}:${ad.id}`), currency: ad.campaign.currency } : {}),
@@ -361,7 +381,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   // after approval is caught, not only on the lines shown.
   const basis = createHash('sha256').update(ads.map((ad) => [
     ad.level, ad.id, ad.status,
-    ...(kind === 'enable' && ad.status === from ? [(pausedBy.get(`${ad.level}:${ad.id}`) as { approvalId?: string } | undefined)?.approvalId ?? '', ad.level === 'campaign' ? ad.campaign.dailyBudgetCents : '', bids.get(`${ad.level}:${ad.id}`) ?? ''] : []),
+    ...(kind === 'enable' && from.includes(ad.status) ? [(pausedBy.get(`${ad.level}:${ad.id}`) as { approvalId?: string } | undefined)?.approvalId ?? '', ad.level === 'campaign' ? ad.campaign.dailyBudgetCents : '', bids.get(`${ad.level}:${ad.id}`) ?? ''] : []),
   ].join(':')).join('|')).digest('base64url').slice(0, 32)
 
   return {
@@ -372,17 +392,20 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
         action: TOOL[kind],
         summary: effect,
         ...(one ? { campaign: { id: one.id, name: one.name, marketplace: one.marketplace } } : {}),
-        totals: { changing: changing.length, [kind === 'pause' ? 'alreadyPaused' : 'alreadyEnabled']: already.length },
+        totals: { changing: changing.length, [kind === 'pause' ? 'alreadyPaused' : kind === 'enable' ? 'alreadyEnabled' : 'alreadyArchived']: already.length },
         changes: lines.slice(0, LINES_SHOWN),
         ...(lines.length > LINES_SHOWN ? { moreChanges: lines.length - LINES_SHOWN } : {}),
         ...(holds ? { holds } : {}),
-        ...(budgetWords ? { [kind === 'pause' ? 'budgetsStop' : 'budgetsResume']: budgets } : {}),
+        ...(budgetWords ? { [kind === 'enable' ? 'budgetsResume' : 'budgetsStop']: budgets } : {}),
+        ...(kind === 'archive' ? { permanent: PERMANENT } : {}),
         // enable-ads — every ad's highest bid serving again, in its campaign's currency (not only the lines shown).
         ...(kind === 'enable' ? { restartBids: Object.fromEntries(changing.map((ad) => [`${ad.level}:${ad.id}`, { cents: bids.get(`${ad.level}:${ad.id}`) ?? null, currency: ad.campaign.currency }])) } : {}),
         basis,
         reach: stored,
         reachNote: reachNote(stored),
-        warning: kind === 'pause'
+        warning: kind === 'archive'
+          ? `${PERMANENT} To stop an ad for a while, lower its bids (suppress-campaign) or pause it (pause-ads) instead.`
+          : kind === 'pause'
           ? 'A real pause: a paused ad serves again only about an hour after enable-ads switches it on. To stop it for a while, lower its bids instead (suppress-campaign): it serves again about a minute after they go back.'
           : 'Spend resumes: these ads compete in auctions again with the bids and budgets shown.',
         limitFacts: facts,
@@ -413,6 +436,20 @@ function levelsRefusal(preview: unknown, limits: Record<string, unknown>): strin
   return kinds.length
     ? `it changes ${kinds.map((level) => LEVEL_WORDS[level as Level]?.[1] ?? level).join(' and ')}, which this tool's limits do not let change by rule (levels); a person decides`
     : null
+}
+
+/**
+ * archive-ads — C3 for every ad it archives, a paused one too (whose archive stops no spend today, so the kit does not
+ * count it as a cut): never a protected product's ads, by rule.
+ */
+function archiveProtectedRefusal(preview: unknown): string | null {
+  const facts = limitFactsOf(preview)
+  if (!facts) return null
+  for (const scope of Object.values(facts.scopes)) {
+    if (scope.limits.protect !== true || !scope.sources.protect) continue
+    return `${scope.label}: the ads strategy protects a product it advertises (${strategyWords(scope.sources.protect)}), so archiving its ads waits for a person`
+  }
+  return null
 }
 
 /**
@@ -485,12 +522,13 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
   if (refusal) return notRun(refusal)
   const p = fresh.preview as { reach: StoredReach; effect: string }
   // AA-W2-1 — a run the business's rule decided says so in the ads audit.
-  const said = String(args.why ?? '').trim() || (kind === 'pause' ? 'a real pause' : 'switching back on what Claude paused')
+  const said = String(args.why ?? '').trim() || (kind === 'pause' ? 'a real pause' : kind === 'archive' ? 'archived for good' : 'switching back on what Claude paused')
   const run = approvedRun(ctx, ctx.decidedVia === 'auto' ? `${said} (run by rule)` : said)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-  const to = kind === 'pause' ? 'PAUSED' : 'ENABLED'
-  // A pause carries `letsGo`: it lets go of spend, so a halt does not hold it at Amazon's door either (isLetGoWrite).
-  const common = { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, ...(kind === 'pause' ? { letsGo: true } : {}) }
+  const { to } = MOVE[kind]
+  // A pause or an archive carries `letsGo`: it lets go of spend, so a halt does not hold it at Amazon's door either
+  // (isLetGoWrite), and the worker sends an archive as Amazon's delete operation.
+  const common = { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, ...(kind !== 'enable' ? { letsGo: true } : {}) }
   const failed: string[] = []
   for (const ad of changing) {
     let out: MutationOutcome
@@ -504,14 +542,15 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
   const change = { before: { changeSetId: run.changeSetId, items }, after: await statusesNow({ before: null, after: { items } }) }
   const done = changing.length - failed.length
   const data = {
-    [kind === 'pause' ? 'paused' : 'enabled']: done,
+    [kind === 'pause' ? 'paused' : kind === 'enable' ? 'enabled' : 'archived']: done,
     failed: failed.length,
     reach: p.reach,
     changeSetId: run.changeSetId,
     note: 'Queued for Amazon: each change is sent after the 5-minute cancel window. approval-status follows them.',
   }
   if (failed.length) {
-    return { ok: false, data, change, error: `Partly run: ${done} ${kind === 'pause' ? 'paused' : 'switched on'}, ${failed.length} refused by the write — ${named(failed)}. The rest stays as it was; undo-change puts back what ran.` }
+    const what = kind === 'pause' ? 'paused' : kind === 'enable' ? 'switched on' : 'archived'
+    return { ok: false, data, change, error: `Partly run: ${done} ${what}, ${failed.length} refused by the write — ${named(failed)}. The rest stays as it was${kind === 'archive' ? '' : '; undo-change puts back what ran'}.` }
   }
   return { ok: true, data, change }
 }
@@ -599,4 +638,39 @@ const enableAds: AgentTool = {
   },
 }
 
-export const ADS_STATUS_TOOLS: AgentTool[] = [pauseAds, enableAds]
+const archiveAds: AgentTool = {
+  name: TOOL.archive,
+  title: 'Archive Amazon ads for good',
+  input: STATUS_INPUT,
+  requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
+  category: 'advertising',
+  riskTier: 'high',
+  readOnly: false,
+  alwaysAsk: true,
+  strategyBound: 'amazon-ads',
+  requiresApprovalDefault: true,
+  openWorld: true,
+  // Amazon cannot switch an archived ad on again: nothing puts it back.
+  reversibility: 'none',
+  maxClaudeTrust: 'auto',
+  limits: STATUS_LIMITS,
+  withinLimits: (preview, limits) => commonRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? archiveProtectedRefusal(preview),
+  description:
+    `Archive Amazon Sponsored Products ads for good: campaigns, ad groups, keywords and product targets, or product ads (up `
+    + `to ${MAX_ADS}), enabled or paused. PERMANENT: Amazon cannot switch an archived ad on again (its API calls this `
+    + 'delete); reports keep its history, and to advertise it again a new one is created. Only when it is meant for good: '
+    + 'to stop an ad for a while lower its bids (suppress-campaign), for a real pause use pause-ads. A person approves it in '
+    + 'Nexus, unless the business lets it run by its rule inside its limits and the ads strategy (by default nothing is '
+    + 'archived by rule, and the advice is to keep it that way). The preview lists each ad, what a campaign or ad group '
+    + 'holds that stops with it, the daily budget that stops, and where it lands. Refused, and not queued, when an ad is '
+    + 'not found, a draft or not Sponsored Products, or when Amazon\'s write gate would refuse it (a halt does not block an '
+    + 'archive: it only lets go). It cannot be undone.',
+  async handler(args, ctx) {
+    return (await decide('archive', args, ctx)).result
+  },
+  async execute(args, ctx) {
+    return runApproved('archive', args, ctx)
+  },
+}
+
+export const ADS_STATUS_TOOLS: AgentTool[] = [pauseAds, enableAds, archiveAds]

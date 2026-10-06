@@ -48,7 +48,7 @@ export const STOP_METHODS = ['LOW_BIDS', 'PAUSE'] as const
  * What Claude may do alone, per kind of ad action: the strategy NARROWS the business's trust level for these tools,
  * never widens it (W1-8, ads-strategy/claude.ts). Brakes are never narrowed (stop-automation, turn-down-automation, a
  * tightening guardrail): none is listed here. AA-W2-12 — a real pause and an enable are kinds of their own: a temporary
- * stop stays `stop` (low bids).
+ * stop stays `stop` (low bids). AA-W2-13 — and an archive (Owner D-W2-5: one kind; Amazon's delete is the same archive).
  */
 export const CLAUDE_ACTION_TOOLS = {
   bid: ['set-target-bid', 'bulk-ad-bid-change'],
@@ -65,6 +65,7 @@ export const CLAUDE_ACTION_TOOLS = {
   undo: ['undo-ad-change'],
   pause: ['pause-ads'],
   enable: ['enable-ads'],
+  archive: ['archive-ads'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]
