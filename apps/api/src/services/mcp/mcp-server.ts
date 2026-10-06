@@ -74,7 +74,10 @@ export function mcpInstructions(business: McpBusiness): string {
     'The Amazon ads strategy lives in Nexus, one place per market, category and product: read it with ads-strategy, change',
     'it with set-ads-strategy (a raise needs the person\'s authenticator code). It only narrows what this business lets',
     'Claude do alone per kind of ad action, never widens it; an answer it narrowed names the strategy row (trust.strategy).',
-    'Never pause an ad: lower its bids instead. Never change an Amazon FBA quantity (it is Amazon\'s number). Never send',
+    'To stop an ad for a while, lower its bids (suppress-campaign, or a lower bid): it serves again about a minute after',
+    'they go back. Pause an ad (pause-ads) only when the person means a real pause: it serves again only about an hour after',
+    'it is switched back on. An archived ad never serves again: Amazon cannot switch it on.',
+    'Never change an Amazon FBA quantity (it is Amazon\'s number). Never send',
     'anyone to the old Amazon or eBay flat-file pages: products are edited in the product sheet and published from the',
     'product studio. When a tool is refused or turned off for Claude, pass the reason on in plain words and carry on.',
   ].join(' ')

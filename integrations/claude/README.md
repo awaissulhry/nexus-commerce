@@ -125,7 +125,7 @@ Some new paths only act when the Owner turns them on in the server's environment
 | `order-desk` | What to ship today, late orders, labels, tracking, refunds due |
 | `handle-return` | A return from request to refund |
 | `buyer-message` | Write to a buyer, reply to eBay feedback, ask for an Amazon review |
-| `ads-weekly-review` | How the ads are doing, and what to change (never pauses) |
+| `ads-weekly-review` | How the ads are doing, and what to change (a stop is lower bids; a real pause only when you mean one) |
 | `ads-strategy` | Your ads strategy per market, category and product, kept in Nexus: read it, compare, and propose the changes as one plan |
 | `automation-review` | What is automated, why a rule did or did not act, rules and levels |
 | `platform-health` | Channel accounts, alerts, failed syncs and jobs |

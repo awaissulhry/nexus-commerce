@@ -18,7 +18,7 @@
 import { type Job } from 'bullmq'
 import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import prisma from '../db.js'
-import { claimEntityWrite, dispatchPayloadFromMutations, isPersonEdit, isSuppressionWrite, putBackRefusedWrite, settleAdMutations, supersedeOlderWrites } from '../services/advertising/ads-mutation.service.js'
+import { claimEntityWrite, dispatchPayloadFromMutations, isLetGoWrite, isPersonEdit, isSuppressionWrite, putBackRefusedWrite, settleAdMutations, supersedeOlderWrites } from '../services/advertising/ads-mutation.service.js'
 import { isRetryableSyncError } from '../services/advertising/ads-write-reconcile.service.js'
 import { AD_SYNC_TYPES, ADS_STALE_INTENT_MS, classifyCrashedWrite } from '../services/ads-core/ad-mutation-state.js'
 import { redis } from '../lib/queue.js'
@@ -498,7 +498,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     // only record (the typed `payload` above has no such field, so this was always false),
     // and counts only when every value in the write goes down: restores and base-bid deltas
     // are forced too, and those can raise bids.
-    isSuppression: isSuppressionWrite((row.payload as { force?: unknown } | null)?.force === true, payload.fieldChanges),
+    // AA-W2-12 — and a deliberate pause lets go of spend the same way: the halt never holds it (isLetGoWrite). Read off
+    // the same JSON; an enable, or a pause without the mark (a rule's, an engine's), is judged as before.
+    isSuppression: isSuppressionWrite((row.payload as { force?: unknown } | null)?.force === true, payload.fieldChanges)
+      || isLetGoWrite((row.payload as { letsGo?: unknown } | null)?.letsGo === true, payload.fieldChanges),
     // 1e (CM-10) — a person's own edit passes the account halt and autonomy OFF (nothing else). Read off the queue
     // row's JSON like `force` (its only record), and only with a `user:` actor.
     manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor),

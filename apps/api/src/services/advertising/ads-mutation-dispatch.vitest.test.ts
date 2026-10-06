@@ -7,7 +7,7 @@
  * These tests pin the two places they could drift apart.
  */
 import { describe, it, expect } from 'vitest'
-import { dedupeFieldChanges, isSuppressionWrite } from './ads-mutation.service.js'
+import { dedupeFieldChanges, isLetGoWrite, isSuppressionWrite } from './ads-mutation.service.js'
 
 type FieldChange = { field: string; oldValue: string | null; newValue: string | null }
 
@@ -134,5 +134,32 @@ describe('isSuppressionWrite — forced AND lowering-only', () => {
     expect(isSuppressionWrite(true, [ch('PLACEMENT_TOP', '50', '0')])).toBe(true)
     expect(isSuppressionWrite(true, [ch('defaultBid', '40', '2'), ch('dailyBudget', '10', '5')])).toBe(true)
     expect(isSuppressionWrite(true, [])).toBe(false)
+  })
+})
+
+/**
+ * AA-W2-12 — a deliberate pause (pause-ads marks it `letsGo`) lets go of spend: the gate treats it as a suppression, so a
+ * halt never holds it. Only with the mark, and only ENABLED → PAUSED: an enable starts spend, and an unmarked pause (a
+ * rule's, an engine's) is judged as before.
+ */
+describe('isLetGoWrite — a marked pause, and nothing else', () => {
+  const ch = (field: string, oldValue: string | null, newValue: string | null): FieldChange => ({ field, oldValue, newValue })
+
+  it('a marked ENABLED → PAUSED lets go', () => {
+    expect(isLetGoWrite(true, [ch('status', 'ENABLED', 'PAUSED')])).toBe(true)
+  })
+
+  it('without the mark it does not, nor does an enable, an archive, an unknown status or a write with any other field', () => {
+    expect(isLetGoWrite(false, [ch('status', 'ENABLED', 'PAUSED')])).toBe(false)
+    expect(isLetGoWrite(true, [ch('status', 'PAUSED', 'ENABLED')])).toBe(false)
+    expect(isLetGoWrite(true, [ch('status', 'PAUSED', 'PAUSED')])).toBe(false)
+    expect(isLetGoWrite(true, [ch('status', null, 'PAUSED')])).toBe(false)
+    expect(isLetGoWrite(true, [ch('status', 'ENABLED', 'PAUSED'), ch('dailyBudget', '10', '12')])).toBe(false)
+    expect(isLetGoWrite(true, [ch('bid', '40', '2')])).toBe(false)
+    expect(isLetGoWrite(true, [])).toBe(false)
+  })
+
+  it('the suppression rule is unchanged by it: a forced status write is still no suppression', () => {
+    expect(isSuppressionWrite(true, [ch('status', 'ENABLED', 'PAUSED')])).toBe(false)
   })
 })

@@ -246,6 +246,8 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   undo: 'undoing ad changes',
   allowlist: 'putting a campaign on the live-write allowlist',
   automation: 'turning ads automations up and tuning their settings',
+  pause: 'pausing ads (a real pause)',
+  enable: 'switching paused ads back on',
 }
 const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'off', ask: 'ask', confirm: 'confirm in Claude', watch: 'watch', auto: 'run by rule' }
 

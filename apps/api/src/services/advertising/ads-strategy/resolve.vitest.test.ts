@@ -290,13 +290,13 @@ describe('ads whose product Nexus does not know', () => {
 describe('Claude per action type, most specific first', () => {
   it('a product row narrows one action type; the market keeps the others; unknown keys and levels are ignored', () => {
     const { index } = indexStrategy('IT', [
-      row('MARKET', '*', { claudeAutonomy: { bid: 'confirm', negative: 'auto', pause: 'auto' } }),
+      row('MARKET', '*', { claudeAutonomy: { bid: 'confirm', negative: 'auto', teleport: 'auto' } }),
       row('PRODUCT', 'v', { claudeAutonomy: { bid: 'ask', harvest: 'always' } }),
     ])
     const r = resolveProduct(index, product('v', 'p'), catalog())
     expect(valuesOf(r).claude).toEqual({ bid: 'ask', negative: 'auto' })
     expect(index.warnings).toEqual([
-      'MARKET * (market, v1): claudeAutonomy has an unknown action type "pause"; ignored',
+      'MARKET * (market, v1): claudeAutonomy has an unknown action type "teleport"; ignored',
       'PRODUCT v (product, v1): claudeAutonomy.harvest "always" is not off, ask, confirm, watch or auto; ignored',
     ])
   })
