@@ -89,12 +89,28 @@ export interface SourceTarget {
    * SOURCE has drifted from Amazon.
    */
   orphaned?: boolean
+  /**
+   * ADS PLAYBOOK — the bid this target held before an engine's floor (AdTarget.suppressedFromBidCents). Read only for a
+   * capture (loadSourceCampaigns `withFloorMemory`); absent on the replication paths.
+   */
+  suppressedFromBidCents?: number | null
+}
+/**
+ * ADS PLAYBOOK — a floor an engine holds a campaign's (or one ad group's own) bids at: `bidsSuppressedAt` is set, `by`
+ * is `bidsSuppressedBy` (null: who floored it is not recorded). Read only for a capture.
+ */
+export interface SourceFloor {
+  by: string | null
 }
 export interface SourceAdGroup {
   name: string
   defaultBidCents: number | null
   targets: SourceTarget[]
   asins: string[]
+  /** ADS PLAYBOOK — the default bid held before a floor (AdGroup.suppressedFromBidCents); for a capture only. */
+  suppressedFromBidCents?: number | null
+  /** ADS PLAYBOOK — this ad group floored on its own (AdGroup.bidsSuppressedAt); for a capture only. */
+  floor?: SourceFloor | null
 }
 export interface SourceCampaign {
   name: string
@@ -108,6 +124,8 @@ export interface SourceCampaign {
    * campaign carries any auto clause, which is what an Auto campaign always has.
    */
   targetingType?: string | null
+  /** ADS PLAYBOOK — the campaign's bids held at the floor (Campaign.bidsSuppressedAt); for a capture only. */
+  floor?: SourceFloor | null
 }
 
 export interface BlueprintTarget {

@@ -35,6 +35,12 @@ export interface CampaignSelector {
    * replication paths, which keep every target they always copied.
    */
   excludeArchivedTargets?: boolean
+  /**
+   * ADS PLAYBOOK — also give the floors engines hold bids at (the campaign's and each ad group's own `bidsSuppressedAt`
+   * and `bidsSuppressedBy`) and the bids they remember (`suppressedFromBidCents`): a capture reads the bid held before
+   * the floor, not the floor. Off for the replication paths, whose shape stays as it was.
+   */
+  withFloorMemory?: boolean
 }
 
 /** Resolve a selector to the live campaigns, in name order. */
@@ -62,11 +68,13 @@ export async function loadSourceCampaigns(sel: CampaignSelector): Promise<{ camp
       // AX3.0 — Amazon's real targeting type. Without it every replica was created
       // MANUAL, so an Auto campaign came back as a manual campaign with no targets.
       targetingType: true,
+      // ADS PLAYBOOK — the floor memory (given only with `withFloorMemory`).
+      bidsSuppressedAt: true, bidsSuppressedBy: true,
       adGroups: {
         // AX3.1 — an ad-group selection narrows what each campaign carries.
         ...(sel.adGroupIds?.length ? { where: { id: { in: sel.adGroupIds } } } : {}),
         select: {
-          id: true, name: true, defaultBidCents: true,
+          id: true, name: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true, bidsSuppressedBy: true,
           // AX3.1 — orphaned targets are deliberately INCLUDED.
           //
           // `orphanedAt` means Amazon answered entityNotFoundError when we tried
@@ -81,7 +89,7 @@ export async function loadSourceCampaigns(sel: CampaignSelector): Promise<{ camp
           // no targeting at all, which is precisely the defect AX3.0 fixed.
           targets: {
             ...(sel.excludeArchivedTargets ? { where: { status: { not: 'ARCHIVED' } } } : {}),
-            select: { kind: true, expressionType: true, expressionValue: true, bidCents: true, isNegative: true, negativeLevel: true, orphanedAt: true },
+            select: { kind: true, expressionType: true, expressionValue: true, bidCents: true, isNegative: true, negativeLevel: true, orphanedAt: true, suppressedFromBidCents: true },
           },
           productAds: { select: { asin: true } },
         },
@@ -91,6 +99,8 @@ export async function loadSourceCampaigns(sel: CampaignSelector): Promise<{ camp
 
   // A campaign whose every ad group was filtered out is not part of the source.
   const kept = sel.adGroupIds?.length ? rows.filter((c) => c.adGroups.length > 0) : rows
+  const memory = !!sel.withFloorMemory
+  const floorOf = (row: { bidsSuppressedAt?: Date | null; bidsSuppressedBy?: string | null }) => (row.bidsSuppressedAt ? { by: row.bidsSuppressedBy ?? null } : null)
 
   const campaigns: SourceCampaign[] = kept.map((c) => ({
     name: c.name,
@@ -98,13 +108,16 @@ export async function loadSourceCampaigns(sel: CampaignSelector): Promise<{ camp
     biddingStrategy: c.biddingStrategy ?? null,
     targetingType: c.targetingType ?? null,
     placementBidding: (((c.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }).placementBidding) ?? [],
+    ...(memory ? { floor: floorOf(c) } : {}),
     adGroups: c.adGroups.map((g) => ({
       name: g.name,
       defaultBidCents: g.defaultBidCents ?? null,
+      ...(memory ? { suppressedFromBidCents: g.suppressedFromBidCents ?? null, floor: floorOf(g) } : {}),
       targets: g.targets.map((t) => ({
         kind: t.kind, expressionType: t.expressionType, expressionValue: t.expressionValue,
         bidCents: t.bidCents ?? null, isNegative: t.isNegative, negativeLevel: t.negativeLevel ?? null,
         orphaned: t.orphanedAt != null,
+        ...(memory ? { suppressedFromBidCents: t.suppressedFromBidCents ?? null } : {}),
       })),
       asins: g.productAds.map((a) => a.asin).filter((a): a is string => !!a),
     })),
