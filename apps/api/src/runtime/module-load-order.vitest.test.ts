@@ -40,6 +40,9 @@ describe('W4 — the daily-run modules load whichever comes first (real Node ESM
     ['the watchdog service first (what the tick loads)', [WATCHDOG, REGISTRY]],
     ['the tool registry first, then the watchdog', [REGISTRY, WATCHDOG]],
     ['the ads-manager tools first, then the watchdog', [TOOLS, WATCHDOG]],
+    // PB-5b — the playbook's start and its tool reach the artifacts hook, the bid floors and the registry.
+    ['the playbook start first', ['src/services/advertising/ads-playbook/start.ts', REGISTRY]],
+    ['the playbook apply tool first', ['src/services/agents/tools/ads-playbook-apply.tools.ts', REGISTRY]],
   ])('%s', async (_label, files) => {
     expect(await importInOrder(...files)).toBe('IMPORT-OK')
   }, 240_000)

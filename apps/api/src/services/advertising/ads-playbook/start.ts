@@ -18,10 +18,12 @@
  *           enabled: a person enables it in Nexus. A campaign the playbook ADOPTED is the business's own: its
  *           allowlist, bids and placements are left as they are (named); the artifacts cover it.
  *   stop    for each built campaign: every bid to the 2¢ floor, remembered again (suppressCampaignBids; never a pause,
- *           never an archive), then off the allowlist. Once no built campaign of the playbook runs (on the allowlist
- *           and not at a person's floor), its artifacts are switched off — the compiled rules by stopCompiledRule
- *           (rules.ts), whatever compiles now — and the row's state is STOPPED; while one still runs (a stop of some
- *           slots), they stay on and the row stays RUNNING, said.
+ *           never an archive) — a floor an engine set is taken over (its owner becomes the approver: no engine gives it
+ *           back before the next START) —, then off the allowlist. Once no built campaign of the playbook runs (on the allowlist
+ *           and not at a person's floor), its artifacts are switched off AFTER the floors (an hourly plan switched off
+ *           gives back the floors it set) — each compiled rule recorded as the playbook's own stop, so the next START
+ *           switches it on again (artifacts.ts, rules.ts) — and the row's state is STOPPED; while one still runs (a
+ *           stop of some slots), they stay on and the row stays RUNNING, said.
  *
  * Idempotent: each step skips what is done (a re-run of START writes nothing new). The preview (`planStart`) reads
  * everything and writes nothing; the tool (apply-ads-playbook op start | stop) re-plans it on approval and runs it.
@@ -34,7 +36,6 @@ import { ARTIFACT_COMPILERS, previewArtifacts, type ArtifactCompiler, type Artif
 import { loadProductPlaybook } from './build-preview.js'
 import type { BuildRunOptions } from './build.js'
 import type { TemplateDoc } from './doc.js'
-import { stopCompiledRule } from './rules.js'
 import { recordPlaybookApply, type PlaybookApplyWriter } from './write.js'
 
 export type ApplyOp = 'start' | 'stop'
@@ -52,13 +53,17 @@ export interface StartCampaign {
   currency: string
   /** The live-write allowlist: what the op does. */
   allowlist: 'on' | 'off' | 'already'
-  /** The bids: START puts them back, STOP floors them; held: an engine's floor, left; none: nothing to do. */
+  /**
+   * The bids: START puts them back, STOP floors them; held: an engine's floor, left (START); takeOver: an engine's floor
+   * the STOP takes over, so no engine gives it back before the next START; none: nothing to do.
+   */
   bids:
     | { does: 'restore'; floorCents: number; adGroups: number; targets: number; highestCents: number
         held: Array<{ text: string; rememberedCents: number; toCents: number; heldBy: string }>
         left: Array<{ text: string; bidCents: number; rememberedCents: number }> }
     | { does: 'floor'; floorCents: number; adGroups: number; targets: number }
     | { does: 'held'; by: string }
+    | { does: 'takeOver'; by: string }
     | { does: 'none'; why: string }
   /** Ad groups at their own floor (stock, a product's monthly cap): neither op lifts them. */
   ownFloors: number
@@ -165,26 +170,6 @@ function contextOf(plan: StartPlan, actor: AdsActor, changeSetId: string | null)
   }
 }
 
-/** The compiled rules a STOP switches off itself (rules.ts stopCompiledRule), whatever a compiler does on a stop. */
-const RULE_KINDS = ['harvestRule', 'isolationRule'] as const
-type RuleKind = (typeof RULE_KINDS)[number]
-const isRuleKind = (kind: string): kind is RuleKind => (RULE_KINDS as readonly string[]).includes(kind)
-
-/** A STOP's lines for the compiled rules: each one on is switched off. */
-async function ruleStopLines(links: readonly StoredArtifactLink[]): Promise<ArtifactPreviewLine[]> {
-  const rules = links.filter((l) => isRuleKind(l.kind))
-  if (!rules.length) return []
-  const rows = new Map((await prisma.automationRule.findMany({ where: { id: { in: rules.map((l) => l.refId) } }, select: { id: true, name: true, enabled: true } })).map((r) => [r.id, r]))
-  return rules.map((l) => {
-    const r = rows.get(l.refId)
-    const kind = l.kind as RuleKind
-    if (!r) return { kind, key: l.key, does: 'report' as const, summary: `Its ${kind === 'harvestRule' ? 'harvest' : 'isolation'} rule is gone: nothing to switch off.` }
-    return r.enabled
-      ? { kind, key: l.key, does: 'disable' as const, summary: `"${r.name}" is switched off (the next START switches it on again).`, refId: r.id }
-      : { kind, key: l.key, does: 'keep' as const, summary: `"${r.name}" is off already: left as it is.`, refId: r.id }
-  })
-}
-
 /**
  * START or STOP of one product's playbook in one market, planned: nothing is written. `slots`: only these built slots
  * (default: every built slot). Refusals (no row, nothing built) come back as `problems`.
@@ -250,10 +235,13 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
       if (bids.does === 'restore' && bids.left.length) warnings.push(`"${c.name}": ${bids.left.length} bid${bids.left.length === 1 ? '' : 's'} left the floor since the build (a person or an engine moved ${bids.left.length === 1 ? 'it' : 'them'}): left as ${bids.left.length === 1 ? 'it stands' : 'they stand'}.`)
       if (placements.does === 'left') warnings.push(`"${c.name}": ${placements.why}.`)
     } else {
-      const bids: StartCampaign['bids'] = c.bidsSuppressedAt
-        ? { does: 'none', why: `at a floor already (${c.bidsSuppressedBy || 'an unrecorded actor'})` }
-        : await floorOf(c.id)
+      // An engine's floor (an hourly plan's window, dayparting, the budget) is taken over: the engine gives back only its
+      // own, so the campaign stays at the floor until START, whatever the engine decides meanwhile.
+      const bids: StartCampaign['bids'] = !c.bidsSuppressedAt ? await floorOf(c.id)
+        : isPersonFloor(c.bidsSuppressedBy) ? { does: 'none', why: `at a floor already (${c.bidsSuppressedBy})` }
+          : { does: 'takeOver', by: c.bidsSuppressedBy || 'an unrecorded engine' }
       const floors = bids.does === 'floor' && (bids.adGroups > 0 || bids.targets > 0)
+      if (bids.does === 'takeOver') warnings.push(`"${c.name}" is at the floor ${bids.by} set: the stop takes it over, so it stays at the floor until START (its bids stay remembered).`)
       campaigns.push({
         ...base, allowlist: c.liveBidWritesEnabled ? 'off' : 'already', bids, placements: { does: 'none', why: 'a stop leaves placements as they are (they multiply 2¢ bids)' },
         spends: status === 'ENABLED' && (floors || c.liveBidWritesEnabled),
@@ -279,17 +267,13 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
     spending: campaigns.filter((c) => c.spends).length,
     warnings, problems,
   }
-  // The artifacts: what each compiler would do (no writes); on a STOP the compiled rules are switched off here.
+  // The artifacts: what each compiler would do (no writes).
   const ctx = contextOf(plan, 'user:preview', null)
   if (ctx) {
     const lines = await previewArtifacts(ctx, artifactLinks, opts.compilers ?? ARTIFACT_COMPILERS)
     plan.artifacts = lines.lines
     plan.artifactErrors = lines.errors
-  } else if (args.op === 'stop') plan.artifactErrors.push('the playbook does not compile, so its hourly plans are not switched by this stop (its campaigns are floored and off the allowlist: nothing writes to them)')
-  if (args.op === 'stop') {
-    const ruleLines = await ruleStopLines(artifactLinks)
-    plan.artifacts = [...plan.artifacts.filter((l) => !isRuleKind(l.kind)), ...ruleLines]
-  }
+  } else if (args.op === 'stop') plan.artifactErrors.push('the playbook does not compile, so its hourly plans and rules are not switched by this stop (its campaigns are floored and off the allowlist: nothing writes to them)')
   return { data: plan }
 }
 
@@ -416,6 +400,10 @@ export async function runStop(plan: StartPlan, run: ApplyRun, writer: PlaybookAp
         const after = await prisma.campaign.findUnique({ where: { id: c.campaignId }, select: { bidsSuppressedAt: true } })
         if (!after?.bidsSuppressedAt) { fail('its bids could not be floored'); continue }
         changed = true
+      } else if (c.bids.does === 'takeOver') {
+        // The engine's floor becomes the stop's: the same floor and memory, its owner the approver (START lifts it).
+        const taken = await prisma.campaign.updateMany({ where: { id: c.campaignId, bidsSuppressedAt: { not: null }, bidsSuppressedBy: c.bids.by }, data: { bidsSuppressedBy: run.actor } })
+        if (taken.count) { changed = true; logger.info('[PB-5b] stop took over an engine floor', { campaignId: c.campaignId, from: c.bids.by, to: run.actor }) }
       }
       // 2 — off the allowlist: no engine, rule or schedule writes to it until START.
       if (c.allowlist === 'off') {
@@ -428,7 +416,9 @@ export async function runStop(plan: StartPlan, run: ApplyRun, writer: PlaybookAp
       fail((e as Error).message.slice(0, 200))
     }
   }
-  // 3 — once no built campaign runs: the artifacts off, the compiled rules by their stored rule, the row STOPPED.
+  // 3 — once no built campaign runs, AFTER the floors (an hourly plan switched off gives back the floors it set: the
+  // campaigns are floored by the stop first): the artifacts off — hourly plans, harvest and isolation rules, each
+  // recorded as the playbook's stop — and the row STOPPED.
   const running = await stillRunning(plan.playbook.id)
   if (running.length) {
     out.errors.push(`${running.length} campaign(s) the playbook built still run (${running.join(', ')}): its hourly plans and rules stay on, and the row stays ${plan.playbook.state ?? 'as it is'}`)
@@ -436,16 +426,10 @@ export async function runStop(plan: StartPlan, run: ApplyRun, writer: PlaybookAp
   }
   const ctx = contextOf(plan, run.actor, run.changeSetId)
   if (ctx) {
-    const s = await switchArtifacts(ctx, plan.artifactLinks.filter((l) => !isRuleKind(l.kind)), false, (opts.compilers ?? ARTIFACT_COMPILERS).filter((c) => !isRuleKind(c.kind)))
+    const s = await switchArtifacts(ctx, plan.artifactLinks, false, opts.compilers ?? ARTIFACT_COMPILERS)
     out.artifacts.push(...s.changed)
     out.errors.push(...s.errors)
-  }
-  for (const l of plan.artifactLinks.filter((x) => isRuleKind(x.kind))) {
-    try {
-      const r = await stopCompiledRule({ playbookId: plan.playbook.id, kind: l.kind as RuleKind, key: l.key, actor: run.actor })
-      if (r?.changed && !r.enabled) out.artifacts.push(`${l.kind} ${l.key}: switched off`)
-    } catch (e) { out.errors.push(`${l.kind}: ${(e as Error).message.slice(0, 200)}`) }
-  }
+  } else out.errors.push('the playbook does not compile, so its hourly plans and rules were not switched off (its campaigns are floored and off the allowlist: nothing writes to them)')
   out.state = await record(plan, 'STOPPED', writer, `stop: ${out.done.length} campaign(s) floored and off the allowlist`, out.errors)
   logger.info('[PB-5b] playbook stop finished', { playbookId: plan.playbook.id, done: out.done.length, failed: out.failed.length, errors: out.errors.length })
   return out

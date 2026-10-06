@@ -17,6 +17,7 @@ import type { AdsActor } from '../ads-mutation.service.js'
 import type { TemplateDoc } from './doc.js'
 import { syncHarvestRule } from './harvest-rule.js'
 import { syncIsolationRule } from './isolation-run.js'
+import { PLAYBOOK_STOP_METRIC } from './rules.js'
 
 export type ArtifactKind = 'rankGroup' | 'harvestRule' | 'isolationRule'
 
@@ -66,14 +67,39 @@ export interface ArtifactCompiler {
 
 /**
  * A compiled rule's switch-off (STOP, PB-5b): the playbook's own rules, by their links. ensureCompiledRule never switches
- * a rule off, so STOP does it here.
+ * a rule off, so STOP does it here — each rule it switches off with one update_rule row by the STOP's approver, the
+ * metric PLAYBOOK_STOP_METRIC: the next START (rules.ts) knows it for the playbook's own stop and switches it on again,
+ * while a person's switch-off made after it still holds. A rule already off is left as it is (no row).
  */
-async function switchRulesOff(links: readonly ArtifactLink[]): Promise<{ changed: string[]; errors: string[] }> {
+async function switchRulesOff(links: readonly ArtifactLink[], actor: string): Promise<{ changed: string[]; errors: string[] }> {
   const ids = links.map((l) => l.refId)
   if (!ids.length) return { changed: [], errors: [] }
-  const on = await prisma.automationRule.findMany({ where: { id: { in: ids }, enabled: true }, select: { id: true } })
-  if (on.length) await prisma.automationRule.updateMany({ where: { id: { in: on.map((r) => r.id) } }, data: { enabled: false } })
+  const on = await prisma.automationRule.findMany({ where: { id: { in: ids }, enabled: true }, select: { id: true, name: true } })
+  if (!on.length) return { changed: [], errors: [] }
+  await prisma.$transaction(async (tx) => {
+    await tx.automationRule.updateMany({ where: { id: { in: on.map((r) => r.id) } }, data: { enabled: false } })
+    await tx.advertisingActionLog.createMany({
+      data: on.map((r) => ({
+        userId: actor, actionType: 'update_rule', entityType: 'RULE', entityId: r.id, payloadBefore: { enabled: true }, payloadAfter: { enabled: false },
+        amazonResponseStatus: 'SUCCESS', evidence: { metric: PLAYBOOK_STOP_METRIC, note: `${r.name} switched off by the playbook stop` },
+      })),
+    })
+  })
   return { changed: on.map((r) => r.id), errors: [] }
+}
+
+/** What START or STOP does to the playbook's own rules (a preview, no writes). */
+async function ruleSwitchLines(kind: 'harvestRule' | 'isolationRule', words: string, links: readonly ArtifactLink[], mode: 'start' | 'stop'): Promise<ArtifactPreviewLine[]> {
+  if (!links.length) return [{ kind, key: kind === 'harvestRule' ? 'harvest' : 'isolation', does: 'report', summary: `${words} is not compiled yet: ${mode === 'start' ? 'START compiles it and switches it on' : 'nothing to switch off'}` }]
+  const rows = new Map((await prisma.automationRule.findMany({ where: { id: { in: links.map((l) => l.refId) } }, select: { id: true, enabled: true } })).map((r) => [r.id, r]))
+  return links.map((l) => {
+    const r = rows.get(l.refId)
+    if (!r) return { kind, key: l.key, does: 'report' as const, summary: `${words} is gone${mode === 'start' ? ': START compiles it again and switches it on' : ': nothing to switch off'}` }
+    if (mode === 'stop') return r.enabled ? { kind, key: l.key, does: 'disable' as const, summary: `${words} is switched off (the next START switches it on again)`, refId: r.id } : { kind, key: l.key, does: 'keep' as const, summary: `${words} is off already: left as it is`, refId: r.id }
+    return r.enabled
+      ? { kind, key: l.key, does: 'keep' as const, summary: `${words} is on already`, refId: r.id }
+      : { kind, key: l.key, does: 'enable' as const, summary: `${words} is compiled again and switched on — unless a person switched it off since the playbook last started or stopped it: then it stays off, said`, refId: r.id }
+  })
 }
 
 /** A compiled rule as a compiler: `sync(playbookId, { enabled })` saves it once and writes its own link. */
@@ -83,7 +109,8 @@ function ruleCompiler(kind: 'harvestRule' | 'isolationRule', key: string, words:
   const errorsOf = (r: { saved?: boolean; ruleId?: string | null; problems?: string[] }) => (r.saved === false || (r.ruleId === null && r.problems?.length) ? r.problems ?? [] : [])
   return {
     kind,
-    async preview(_ctx, links) {
+    async preview(ctx, links) {
+      if (ctx.mode === 'start' || ctx.mode === 'stop') return ruleSwitchLines(kind, words, links, ctx.mode)
       return [{ kind, key: links[0]?.key ?? key, does: links.length ? 'update' : 'create', summary: `${words}, compiled from the product's linked slots: born off — START switches it on`, ...(links[0] ? { refId: links[0].refId } : {}) }]
     },
     async compile(ctx) {
@@ -92,7 +119,7 @@ function ruleCompiler(kind: 'harvestRule' | 'isolationRule', key: string, words:
       return { links: [], errors: errorsOf(r) }
     },
     async setEnabled(ctx, links, enabled) {
-      if (!enabled) return switchRulesOff(links)
+      if (!enabled) return switchRulesOff(links, ctx.actor)
       const r = await sync(ctx.playbookId, { enabled: true, actor: ctx.actor })
       const errors = errorsOf(r)
       return { changed: r.enabled && r.ruleId ? [r.ruleId] : [], errors: r.keptOff ? [...errors, r.keptOff] : errors }
