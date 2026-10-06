@@ -2,18 +2,21 @@
 
 Updated: 2026-10-06 00:45 local. Lane: ETSY-PUBLISHER (memory: project_etsy_publisher_2026_10_05.md).
 
-## Where we are (2026-10-06 ~01:55 local)
-- MERGED + LIVE: E1 #367 (f5b61c159), E2 #375 (a1393f12c), E5a #378 (1d207cf19; deploy 37388641505 OK).
-- E3 (create as draft): reviews 2 rounds (all MAJOR fixed), test sweeps 2 rounds (2 branch typecheck items fixed).
-  Squashed + rebased onto main 1d207cf19 as e333c0e8d in `/private/tmp/feat-etsy-e3-create` (backup branch
-  backup/etsy-e3-before-squash). Final checks PASS; PR opened (see the PR list).
-- E5b (Claude tools + skills): fix round RUNNING in `/private/tmp/feat-etsy-e5b-tools`. After E3 merges: rebase,
-  remove Claude's create guard (Claude may create drafts with a person's approval), update skills for E3 + E5a,
-  review again, PR.
+## Where we are (2026-10-06 ~02:20 local)
+- MERGED + LIVE: E1 #367 (f5b61c159), E2 #375 (a1393f12c), E5a #378 (1d207cf19). MERGED: E3 #379 (f263e1c59; deploy
+  run 37390609598 being watched).
+- E5b (Claude tools + skills): squashed + rebased onto main f263e1c59 as 8dc7cf5c1 in `/private/tmp/feat-etsy-e5b-tools`
+  (backup branch backup/etsy-e5b-wip). FINAL STEP RUNNING: remove Claude's create guard (Claude may create Etsy drafts
+  with a person's approval), skills true for E3 + E5a, plugin 0.3.3. Then review + test sweep round 2, final checks, PR.
 - E4 (photos + go live) waits for the PHOTO-CORE lane's shared photo PR.
-- Railway switches (the Owner sets them, never Claude): NEXUS_ENABLE_ETSY_PUBLISH=1 + ETSY_PUBLISH_MODE=live (sending);
-  NEXUS_ENABLE_ETSY_ORDER_INGEST=1 + the Motovento Etsy account's order-import activation (stock; not needed for drafts).
-- No live Etsy call has been made. A live test needs the Owner's yes (one draft, one Motovento product).
+- Railway: the Etsy SENDING switch is ON in production since 2026-10-06 ~02:30 local (NEXUS_ENABLE_ETSY_PUBLISH=1 +
+  ETSY_PUBLISH_MODE=live on @nexus/api, nexus-worker, nexus-scheduler; set by Claude on the Owner's explicit request,
+  after he allowed the Railway set-variables tool for this project). Read-only check: the review shows mode "live".
+  NOT set: NEXUS_ENABLE_ETSY_ORDER_INGEST (stock; not needed for drafts; needed before anything goes live with stock).
+- No Etsy write has been made yet. A first draft needs the product's own Etsy fields filled (description, category,
+  who/when made, craft supply, the variations included) and a person pressing Publish. Writes for a create: the create
+  POST, then the inventory PUT, plus one call per attribute and per translation if the sheet has them.
+  Undo: delete the draft on etsy.com, then clear the Listing ID in the sheet.
 - Known MAIN failures (not ours): 3 "delete and relist" tests; static gates shell pin freshness, dark ⇄ pin parity,
   DS api guard, token resolution; studio-publication-database profiles-ON; real-PG MCP.8 (3 tests).
 - Lesson: the API image compiles with tsc --noCheck — rebuild shared before typecheck after every rebase.

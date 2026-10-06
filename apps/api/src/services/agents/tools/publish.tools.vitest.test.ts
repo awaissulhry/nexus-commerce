@@ -20,6 +20,8 @@ const fixture = vi.hoisted(() => ({
   shopRead: vi.fn(),
   shopSave: vi.fn(),
   shopPreview: vi.fn(),
+  /** E5b — the Etsy listing id the stand-in review targets: null = a new Etsy listing (a create), else an update. */
+  etsyListingId: null as string | null,
 }))
 
 vi.mock('../../../db.js', async () => {
@@ -66,14 +68,16 @@ vi.mock('../../pim/studio-publication-ebay-changes.js', () => ({
     changes: publication.products.flatMap((p: any) => [change(p, 'title', 'DIFFERS'), change(p, 'pictures', 'SAME')]) }),
   compileEbayChanges: (plan: any) => plan.publication,
 }))
-// E1 — the Etsy adapter's own suites prove its payload; here a new Etsy listing is one create line, Etsy never read.
+// E1 — the Etsy adapter's own suites prove its payload; here a new Etsy listing is one create line, an existing one a
+// differing title (E5b), Etsy never read.
 vi.mock('../../pim/studio-publication-etsy.js', () => ({
-  prepareEtsyPublication: async (facts: any) => ({ kind: 'etsy', marketplace: 'GLOBAL', listingId: null, products: facts.products.map((p: any) => ({ productId: p.id, sku: p.sku })),
-    ownerProductId: facts.parent.id, create: { state: 'draft', price: 10, quantity: 1 }, live: null, liveRevision: null }),
+  prepareEtsyPublication: async (facts: any) => ({ kind: 'etsy', marketplace: 'GLOBAL', listingId: fixture.etsyListingId, products: facts.products.map((p: any) => ({ productId: p.id, sku: p.sku })),
+    ownerProductId: facts.parent.id, create: fixture.etsyListingId ? null : { state: 'draft', price: 10, quantity: 1 }, live: null, liveRevision: null }),
 }))
 vi.mock('../../pim/studio-publication-etsy-changes.js', () => ({
-  prepareEtsyChanges: (_facts: any, publication: any) => ({ kind: 'etsy-changes', publication, remoteRevision: 'new', products: publication.products,
-    ownerProductId: publication.ownerProductId, createWrites: {}, changes: [{ ...change(publication.products[0], '__create__', 'SEND'), channel: { state: 'absent' } }] }),
+  prepareEtsyChanges: (_facts: any, publication: any) => ({ kind: 'etsy-changes', publication, remoteRevision: publication.listingId ? 'remote-1' : 'new', products: publication.products,
+    ownerProductId: publication.ownerProductId, createWrites: {}, changes: publication.listingId ? [change(publication.products[0], 'title', 'DIFFERS')]
+      : [{ ...change(publication.products[0], '__create__', 'SEND'), channel: { state: 'absent' } }] }),
   compileEtsyChanges: vi.fn(),
   // The review's digest view of the plan: nothing live to leave out here (Etsy is never read).
   etsyRevisionView: (plan: unknown) => plan,
@@ -212,21 +216,35 @@ describe('publish-review', () => {
     expect((await call('publish-review', { productId: ids.product, channel: 'ETSY', market: 'GLOBAL' })).error).toBe('TEST-SKU-L3 on Etsy GLOBAL: This business has no active Etsy account. Connect one in Nexus first.')
   })
 
-  it('an Etsy review is never ready here (Claude cannot send to Etsy yet; the product studio can) and names the shop, never its login code', async () => {
+  it('E5b — an Etsy create review (one create line, an Etsy draft) and an update review with no errors are ready; both name the shop, never its login code', async () => {
     const identity = { username: 'a1b2c3d4e5f6g7h8', storeName: 'Test Etsy shop', extra: { shopName: 'Test Etsy shop' } }
     const etsy = await inside(A, () => fixture.database.client.channelConnection.create({ data: { channelType: 'ETSY', isActive: true, displayName: 'a1b2c3d4e5f6g7h8',
       externalAccountId: '90000001', identity } }))
     try {
-      fixture.facts.mockImplementation(async (_productId: string, scope: Json) => ({ ...factsFor(scope), account: { displayName: 'a1b2c3d4e5f6g7h8', accountLabel: null, identity } }))
+      const account = { displayName: 'a1b2c3d4e5f6g7h8', accountLabel: null, identity }
       const before = await counts()
-      const answer = await call('publish-review', { productId: ids.product, channel: 'ETSY', market: 'GLOBAL' })
-      expect(answer.ok, answer.error).toBe(true)
-      expect(answer.data).toMatchObject({ destination: { channel: 'ETSY', market: 'GLOBAL', accountId: etsy.id, accountLabel: 'Test Etsy shop' }, accountLabel: 'Test Etsy shop',
-        mode: 'live', action: 'create', ready: false, notReadyBecause: 'Claude cannot send to Etsy yet: publish this listing from the product studio in Nexus.',
-        issueCounts: { errors: 0 }, changeCounts: { SEND: 1 } })
-      expect(JSON.stringify(answer.data)).not.toContain('a1b2c3d4e5f6g7h8')
+      // A new Etsy listing (E3): one create line, created as an Etsy draft — ready when nothing blocks it.
+      fixture.facts.mockImplementation(async (_productId: string, scope: Json) => ({ ...factsFor(scope), account }))
+      const create = await call('publish-review', { productId: ids.product, channel: 'ETSY', market: 'GLOBAL' })
+      expect(create.ok, create.error).toBe(true)
+      expect(create.data).toMatchObject({ destination: { channel: 'ETSY', market: 'GLOBAL', accountId: etsy.id, accountLabel: 'Test Etsy shop' }, accountLabel: 'Test Etsy shop',
+        mode: 'live', action: 'create', ready: true, issueCounts: { errors: 0 }, changeCounts: { SEND: 1 } })
+      expect(create.data).not.toHaveProperty('notReadyBecause')
+      expect(create.data.changes[0]).toMatchObject({ field: '__create__', status: 'SEND' })
+      expect(JSON.stringify(create.data)).not.toContain('a1b2c3d4e5f6g7h8')
+      // A listing Etsy already holds (fake listing id): ready, its differing field first.
+      fixture.etsyListingId = '9000000001'
+      fixture.facts.mockImplementation(async (_productId: string, scope: Json) => ({ ...factsFor(scope), account,
+        listings: [{ id: 'listing-etsy-1', productId: ids.product, externalListingId: '9000000001', channelSku: null }] }))
+      const update = await call('publish-review', { productId: ids.product, channel: 'ETSY', market: 'GLOBAL' })
+      expect(update.ok, update.error).toBe(true)
+      expect(update.data).toMatchObject({ accountLabel: 'Test Etsy shop', mode: 'live', action: 'update', ready: true, issueCounts: { errors: 0 }, changeCounts: { DIFFERS: 1 } })
+      expect(update.data).not.toHaveProperty('notReadyBecause')
+      expect(update.data.changes[0]).toMatchObject({ field: 'title', status: 'DIFFERS', nexus: 'Nexus title', channel: 'Channel title' })
+      expect(JSON.stringify(update.data)).not.toContain('a1b2c3d4e5f6g7h8')
       expect(await counts()).toEqual(before)
     } finally {
+      fixture.etsyListingId = null
       await inside(A, () => fixture.database.client.channelConnection.delete({ where: { id: etsy.id } }))
     }
   })
@@ -268,6 +286,18 @@ describe('publication-status', () => {
     const settled = await call('publication-status', { publicationId: id })
     expect(settled.data).toMatchObject({ status: 'ACCEPTED', settled: true, results: [{ sku: 'TEST-SKU-L3', status: 'ACCEPTED' }, { sku: 'TEST-SKU-L3-M', status: 'ACCEPTED' }] })
     expect(settled.data).not.toHaveProperty('next')
+  })
+
+  it('E5b MINOR-3 — an Etsy UNVERIFIED result is not "checked again every 2 minutes": it waits for a person; an eBay one still is', async () => {
+    const stored = (channel: string, market: string): Promise<{ id: string }> => inside(A, () => fixture.database.client.bulkOperation.create({ data: { userId: null, status: 'UNVERIFIED', productCount: 1, changeCount: 1,
+      changes: { kind: 'studio-publication', productId: ids.product, scope: { channel, marketplace: market, accountId: 'account-1' }, startedAt: '2026-10-06T08:00:00.000Z',
+        result: { id: 'x', status: 'UNVERIFIED', message: 'Not confirmed.', results: [{ sku: 'TEST-SKU-L3', status: 'ACCEPTED', message: 'Sent; not confirmed' }] } } } }))
+    const etsy = await stored('ETSY', 'GLOBAL')
+    const answer = await call('publication-status', { publicationId: etsy.id })
+    expect(answer.data).toMatchObject({ status: 'UNVERIFIED', settled: false, next: expect.stringContaining('a person checks the listing on Etsy, then in Publish history opens this publish and chooses Mark as checked') })
+    expect(answer.data.next).not.toContain('2 minutes')
+    const ebay = await stored('EBAY', 'IT')
+    expect((await call('publication-status', { publicationId: ebay.id })).data).toMatchObject({ status: 'UNVERIFIED', settled: false, next: expect.stringContaining('every 2 minutes') })
   })
 
   it('another business\'s publication and an unknown id are not found', async () => {

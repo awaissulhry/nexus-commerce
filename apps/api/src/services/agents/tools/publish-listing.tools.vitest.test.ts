@@ -6,10 +6,14 @@
  *
  * Proven here: only the field groups named are sent (d4), never stock, price or fulfilment; a draft's first publish is
  * sent complete; the publish runs AS the approver; a review that changed since the approval sends nothing; FBA quantity
- * is never sent and an FBA listing's quantity fields are unchanged; the one Amazon EU quantity is guarded; Etsy, an
- * existing Shopify product and a blocked review are refused; approval-status says what the publish did.
+ * is never sent and an FBA listing's quantity fields are unchanged; the one Amazon EU quantity is guarded; an existing
+ * Shopify product and a blocked review are refused; approval-status says what the publish did. Etsy (E5b): a listing Etsy
+ * holds is sent through the studio's selection (its variations only with fields "all"; a variation Etsy does not hold is
+ * shown and bound with its price, currency and stock); a new one is created as an Etsy draft with fields "all", its whole
+ * create request bound by the approval; the studio's refusals (Active, an open create) are shown as they are; and the undo
+ * of a first Etsy publish is refused.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 
 const fixture = vi.hoisted(() => ({
@@ -24,6 +28,15 @@ const fixture = vi.hoisted(() => ({
   shopPreview: vi.fn(),
   amazonMessages: vi.fn(),
   trading: vi.fn(),
+  /** E5b — while set, the studio's Etsy review, selection and submit are this stand-in (the studio's Etsy suites prove them). */
+  etsyStudio: null as null | { review: (scope: any) => any; selection: Mock<(...args: any[]) => any>; submit: Mock<(...args: any[]) => any> },
+  /** E5b MAJOR-1 — what the studio's Etsy adapter holds for the variation Etsy does not hold (FAKE-SKU-2), and whether it fails. */
+  etsyOffer: { price: 25, quantity: 3, is_enabled: true },
+  etsyPrepareFails: false,
+  /** Review R2-4 — the adapter's inventory leaves out the variation Etsy does not hold. */
+  etsyOfferMissing: false,
+  /** Review NIT-R2-1 — the inventory carries this listing's own channel SKU for the new variation. */
+  etsyChannelSku: null as string | null,
 }))
 
 vi.mock('../../../db.js', async () => {
@@ -68,13 +81,38 @@ vi.mock('../../amazon/listing-asin-fill.service.js', () => ({ fillAmazonListingA
 // eBay's own check (VerifyAddFixedPriceItem) is the studio's real one; only its transport and the account token are stood in.
 vi.mock('../../ebay-trading-api.service.js', async (original) => ({ ...(await original<object>()), callTradingApi: fixture.trading }))
 vi.mock('../../ebay-auth.service.js', () => ({ ebayAuthService: { getValidToken: async () => 'test-token' }, EbayAuthService: class { async getValidToken() { return 'test-token' } } }))
+// E5b — the Etsy adapter on the same facts: what a variation Etsy does not hold is sent with (its price, stock and on/off).
+vi.mock('../../pim/studio-publication-etsy.js', async (original) => ({ ...(await original<Record<string, unknown>>()),
+  prepareEtsyPublication: async (_facts: unknown, options: { inactiveProductIds?: ReadonlySet<string> }) => {
+    if (fixture.etsyPrepareFails) throw new Error('Category is empty. Choose an Etsy category on the main row.')
+    // The studio's own option: a row set Inactive (by product) joins with its offering off.
+    const offer = { ...fixture.etsyOffer, ...(options?.inactiveProductIds?.has('variation-2') ? { is_enabled: false } : {}) }
+    return { kind: 'etsy', listingId: '9000000001', inventory: { products: [{ sku: 'FAKE-SKU-1', offerings: [{ price: 10, quantity: 1, is_enabled: true }] },
+      ...(fixture.etsyOfferMissing ? [] : [{ sku: fixture.etsyChannelSku ?? 'FAKE-SKU-2', offerings: [offer] }])] } }
+  },
+}))
+// E5b — the studio as it is, except while an Etsy test sets `fixture.etsyStudio`: then its review, selection and submit
+// answer for Etsy (what the tool hands the studio is what is asserted).
+vi.mock('../../pim/studio-publication.service.js', async (original) => {
+  const real = await original<Record<string, any>>()
+  return { ...real,
+    reviewStudioPublication: async (productId: string, scope: any, ...rest: any[]) =>
+      fixture.etsyStudio && scope.channel === 'ETSY' ? fixture.etsyStudio.review(scope) : real.reviewStudioPublication(productId, scope, ...rest),
+    previewStudioPublication: async (productId: string, scope: any, ...rest: any[]) =>
+      fixture.etsyStudio && scope.channel === 'ETSY' ? { ...fixture.etsyStudio.review(scope), id: 'review-etsy-1' } : real.previewStudioPublication(productId, scope, ...rest),
+    previewStudioPublicationSelection: async (...args: any[]) => fixture.etsyStudio ? fixture.etsyStudio.selection(...args) : real.previewStudioPublicationSelection(...args),
+    submitStudioPublication: async (...args: any[]) => fixture.etsyStudio ? fixture.etsyStudio.submit(...args) : real.submitStudioPublication(...args),
+  }
+})
 
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 import { planPublicationChanges, type PublicationChangeInput } from '../../pim/studio-publication-changes.js'
 import { callTool, executeTool, type UserPrincipal } from '../call-tool.js'
 import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
-import { groupOf, planPublish, publishStory } from './publish.tools.js'
+import { ETSY_NEW_ACTIVE_NEEDS_PHOTO } from '@nexus/shared/listing-actions'
+import { ETSY_CREATE_OPEN } from '../../pim/studio-publication-etsy-marker.js'
+import { ETSY_FIRST_PUBLISH_UNDO, ETSY_IN_DRAFT, ETSY_NO_BULLETS, ETSY_PHOTOS_NOT_SENT_YET, ETSY_VARIATIONS_ALL_ONLY, groupOf, groupsOf, planPublish, publishStory } from './publish.tools.js'
 import { getTool } from '../tool-registry.js'
 
 const A = LEGACY_WORKSPACE_ID
@@ -90,7 +128,7 @@ const approver = person('u-l5-approver', 'Approver')
 
 type Json = Record<string, any>
 const db = () => fixture.database.client
-const ids = { ebayProduct: '', amazonParent: '', amazonChild: '', fbaProduct: '', euProduct: '', ebay: '', amazon: '', shopify: '' }
+const ids = { ebayProduct: '', amazonParent: '', amazonChild: '', fbaProduct: '', euProduct: '', ebay: '', amazon: '', shopify: '', etsy: '', etsyProduct: '' }
 
 const known = (value: unknown) => ({ state: 'value' as const, value })
 const unknown = (reason: string) => ({ state: 'unknown' as const, reason })
@@ -136,7 +174,7 @@ const amazonMessage = (sku: string) => ({ messageId: 1, sku, operationType: 'UPD
 const factsFor = (productId: string) => async (_id: string, scope: Json) => {
   const rows = await inside(() => db().product.findMany({ where: { OR: [{ id: productId }, { parentId: productId }] }, orderBy: { sku: 'asc' } }))
   const listings = await inside(() => db().channelListing.findMany({ where: { productId: { in: rows.map((r: Json) => r.id) }, channel: scope.channel, marketplace: scope.marketplace, channelConnectionId: scope.accountId } }))
-  return { scope, destination: { familyId: productId, aliasKey: null }, account: { displayName: 'Test account' }, parent: { id: productId },
+  return { scope, destination: { familyId: productId, aliasKey: null, ...(scope.channel === 'ETSY' ? { currency: 'EUR' } : {}) }, account: { displayName: 'Test account' }, parent: { id: productId },
     products: rows.map((r: Json) => ({ id: r.id, sku: r.sku, name: r.name })), listings, resolved: [], issues: [], excluded: 0, aliasLabel: 'Primary listing', revision: `revision-${productId}` }
 }
 
@@ -146,7 +184,9 @@ beforeAll(async () => {
     ids.ebay = (await db().channelConnection.create({ data: { channelType: 'EBAY', isActive: true, accountLabel: 'Test eBay', externalAccountId: 'TEST-L5-EBAY' } })).id
     ids.amazon = (await db().channelConnection.create({ data: { channelType: 'AMAZON', isActive: true, accountLabel: 'Test Amazon', externalAccountId: 'TEST-L5-AMAZON' } })).id
     ids.shopify = (await db().channelConnection.create({ data: { channelType: 'SHOPIFY', isActive: true, accountLabel: 'Test store', externalAccountId: 'TEST-L5-SHOP' } })).id
-    for (const [channel, code] of [['EBAY', 'IT'], ['AMAZON', 'IT'], ['AMAZON', 'DE'], ['AMAZON', 'UK'], ['SHOPIFY', 'GLOBAL']]) {
+    // E5b — a fake Etsy shop and one listing Etsy holds (the repo is public: fake ids only).
+    ids.etsy = (await db().channelConnection.create({ data: { channelType: 'ETSY', isActive: true, accountLabel: 'Test Etsy shop', externalAccountId: '90000001' } })).id
+    for (const [channel, code] of [['EBAY', 'IT'], ['AMAZON', 'IT'], ['AMAZON', 'DE'], ['AMAZON', 'UK'], ['SHOPIFY', 'GLOBAL'], ['ETSY', 'GLOBAL']]) {
       await db().marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency: 'EUR', region: 'EU', language: 'it', languages: ['it'] } as never })
     }
     const product = (sku: string, data: Json = {}) => db().product.create({ data: { sku, name: sku, basePrice: 10, ...data } })
@@ -162,6 +202,9 @@ beforeAll(async () => {
     ids.fbaProduct = (await product('TEST-SKU-L5-FBA', { fulfillmentMethod: 'FBA' } as Json)).id
     await db().channelListing.create({ data: { productId: ids.fbaProduct, channel: 'AMAZON', marketplace: 'IT', region: 'IT', channelMarket: 'AMAZON_IT', channelConnectionId: ids.amazon,
       listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'TEST-ASIN-FBA', fulfillmentMethod: 'FBA', quantity: 7, quantityOverride: 7, followMasterQuantity: false } as never })
+    ids.etsyProduct = (await product('FAKE-SKU-1')).id
+    await db().channelListing.create({ data: { productId: ids.etsyProduct, channel: 'ETSY', marketplace: 'GLOBAL', region: 'GLOBAL', channelMarket: 'ETSY_GLOBAL', channelConnectionId: ids.etsy,
+      listingStatus: 'ACTIVE', isPublished: true, externalListingId: '9000000001', quantity: 2 } as never })
     ids.euProduct = (await product('TEST-SKU-L5-EU')).id
     await db().channelListing.create({ data: { productId: ids.euProduct, channel: 'AMAZON', marketplace: 'IT', region: 'IT', channelMarket: 'AMAZON_IT', channelConnectionId: ids.amazon,
       listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'TEST-ASIN-EU', quantity: 3 } as never })
@@ -210,6 +253,11 @@ describe('what a publish sends', () => {
       .toEqual(['photos', 'photos', 'photos', 'title', 'title', 'bullets', 'attributes'])
     // Etsy's tags are its search keywords (E1); its other listing fields are attributes.
     expect(['tags', 'materials', 'classification'].map(groupOf)).toEqual(['keywords', 'attributes', 'attributes'])
+    // E5b — an Etsy translation line holds its title, description and tags; Etsy's inventory is its variations. Other channels: one group.
+    expect(groupsOf('translation:de', 'ETSY')).toEqual(['title', 'description', 'keywords'])
+    expect(groupsOf('inventory', 'ETSY')).toEqual(['variations'])
+    expect(groupsOf('title', 'ETSY')).toEqual(['title'])
+    expect(['inventory', 'translation:de', 'item_name:["A1","it_IT"]'].map((field) => groupsOf(field, 'EBAY'))).toEqual([['attributes'], ['attributes'], ['title']])
     const review = { action: 'update', issues: [], rows: [], mode: 'live', changes: planPublicationChanges([
       change('p', 'TEST-SKU', 'title', 'New', 'Old', 'Old'),
       change('p', 'TEST-SKU', 'fulfillment_availability', [{ quantity: 2 }], [{ quantity: 1 }], [{ quantity: 1 }]),
@@ -320,8 +368,7 @@ describe('FBA quantity is untouchable', () => {
 })
 
 describe('refusals', () => {
-  it('Etsy: Claude cannot publish there yet (the product studio can); an existing Shopify product is change-only, which Shopify does not have; a blocked review', async () => {
-    expect(await dryRun({ productId: ids.ebayProduct, channel: 'ETSY', marketplace: 'GLOBAL' })).toMatchObject({ ok: false, error: expect.stringContaining('TEST-SKU-L5-EBAY: Claude cannot publish to Etsy yet; publish it from the product studio in Nexus. Nothing was sent.') })
+  it('an existing Shopify product is change-only, which Shopify does not have; a blocked review', async () => {
     fixture.shopPreview.mockResolvedValue({ errors: [], remote: { id: 'gid://shopify/Product/1' }, revision: 'r', remoteRevision: 'rr', initialized: true, draft: {},
       variants: [{ id: ids.ebayProduct, sku: 'TEST-SKU-L5-EBAY' }], changes: { newProductStatus: 'ACTIVE' }, locations: [{ id: 'gid://shopify/Location/1', name: 'Warehouse', isActive: true }] })
     expect(await dryRun({ productId: ids.ebayProduct, channel: 'SHOPIFY', marketplace: 'GLOBAL' })).toMatchObject({ ok: false, error: expect.stringContaining('Publish cannot update a product already on Shopify yet.') })
@@ -333,6 +380,231 @@ describe('refusals', () => {
     expect(await dryRun({ productId: ids.euProduct, channel: 'EBAY' })).toMatchObject({ ok: false, error: 'TEST-SKU-L5-EU has no eBay listing yet: name the market (marketplace).' })
     // IT is live; the EU test's publish started its DE draft.
     expect(await dryRun({ productId: ids.euProduct, channel: 'AMAZON' })).toMatchObject({ ok: false, error: 'TEST-SKU-L5-EU has Amazon listings in DE, IT: name the market (marketplace).' })
+  })
+})
+
+describe('E5b — Etsy through the studio', () => {
+  const NEW_ROW = { productId: 'variation-2', sku: 'FAKE-SKU-2', title: 'FAKE-SKU-2', existing: false, mode: 'partial', startsAs: 'active' }
+  /** The studio's Etsy review of the fake listing: a differing title, a German translation and the variations (FAKE-SKU-2 is new on Etsy). */
+  const etsyReview = (scope: Json, extra: Json = {}) => ({
+    id: null, productId: ids.etsyProduct, scope, accountLabel: 'Test Etsy shop', aliasLabel: 'Primary listing', mode: 'live', action: 'update', excluded: 0,
+    rows: [{ productId: ids.etsyProduct, sku: 'FAKE-SKU-1', title: 'FAKE-SKU-1', existing: true, mode: 'partial' }, NEW_ROW],
+    issues: [], expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+    // The studio's own overwrite evidence: a non-sparse channel would have to confirm it; Etsy's ticks are its confirmation.
+    overwrite: { requiresConfirmation: true, products: [] },
+    changes: planPublicationChanges([
+      change(ids.etsyProduct, 'FAKE-SKU-1', 'title', 'New title', 'Old title', 'Old title'),
+      change(ids.etsyProduct, 'FAKE-SKU-1', 'translation:de', { language: 'de', title: 'Neuer Titel', description: 'Text', tags: [] }, { language: 'de', title: 'Alter Titel', description: 'Text', tags: [] }),
+      change(ids.etsyProduct, 'FAKE-SKU-1', 'inventory', { products: [{ sku: 'FAKE-SKU-1' }, { sku: 'FAKE-SKU-2' }] }, { products: [{ sku: 'FAKE-SKU-1' }] }),
+    ]),
+    ...extra,
+  })
+  /**
+   * E3 — the studio's create line of a new Etsy listing: its value is the WHOLE create request (the draft's form, then the
+   * inventory with each variation's price, stock and on/off), as `etsyPublicationRequest` builds it.
+   */
+  const createRequest = () => ({ operation: 'createDraftListing', listingId: null, calls: [
+    { method: 'POST', path: '/shops/{shop_id}/listings', encoding: 'form', body: { title: 'Fake jacket', quantity: 4, price: 25, state: 'draft' }, fields: ['title'] },
+    { method: 'PUT', path: '/listings/{listing_id}/inventory', encoding: 'json', fields: ['inventory'], body: { products: [
+      { sku: 'FAKE-SKU-1', offerings: [{ price: 25, quantity: 1, is_enabled: true }] }, { sku: 'FAKE-SKU-2', offerings: [{ ...fixture.etsyOffer }] }] } },
+  ] })
+  const createLine = () => planPublicationChanges([{ productId: ids.etsyProduct, sku: 'FAKE-SKU-1', field: '__create__', label: 'Create Etsy listing (draft)',
+    current: known(createRequest()), lastAccepted: unknown('No listing exists.'), channel: { state: 'absent' as const }, newListing: true }])
+  /** A review of a listing not on Etsy yet: one create line, its rows to be created. */
+  const createReview = (scope: Json, extra: Json = {}) => etsyReview(scope, { action: 'create', changes: createLine(),
+    rows: [{ productId: ids.etsyProduct, sku: 'FAKE-SKU-1', title: 'FAKE-SKU-1', existing: false, mode: 'partial', startsAs: 'inactive' },
+      { ...NEW_ROW, startsAs: 'inactive' }], ...extra })
+  const base = { productId: '', channel: 'ETSY', marketplace: 'GLOBAL' }
+  const preview = (out: Json) => out.preview as Json
+  beforeEach(() => {
+    base.productId = ids.etsyProduct
+    fixture.etsyOffer = { price: 25, quantity: 3, is_enabled: true }
+    fixture.etsyPrepareFails = false
+    fixture.etsyOfferMissing = false
+    fixture.etsyChannelSku = null
+    fixture.etsyStudio = { review: (scope: Json) => etsyReview(scope),
+      selection: vi.fn(async () => ({ token: 'selection-etsy-1' })),
+      submit: vi.fn(async () => ({ id: 'review-etsy-1', status: 'VERIFIED', message: 'Etsy holds the values Nexus sent.', results: [{ sku: 'FAKE-SKU-1', status: 'VERIFIED', message: 'Updated on Etsy.' }] })) }
+  })
+  afterAll(() => { fixture.etsyStudio = null })
+
+  it('a re-publish of title sends the title and the translation line; the variations are said to go only with "all", and nothing is said to be added', async () => {
+    const title = await dryRun({ ...base, fields: ['title'] })
+    expect(title.ok, title.error).toBe(true)
+    expect(title.preview).toMatchObject({ publish: 're-publish', sendCount: 2, destination: { channel: 'ETSY', marketplace: 'GLOBAL', accountId: ids.etsy, accountLabel: 'Test Etsy shop' } })
+    expect(preview(title).send.map((s: Json) => s.field)).toEqual(['title', 'translation:de'])
+    expect(preview(title).notSent).toEqual([expect.objectContaining({ field: 'inventory', reason: ETSY_VARIATIONS_ALL_ONLY })])
+    // MINOR-1 — the new variation is not added by this send: no create, no price or stock claimed.
+    expect(preview(title).summary).toBe('FAKE-SKU-1: re-publish — sends 2 changed fields to Etsy GLOBAL.')
+    expect(title.preview).not.toHaveProperty('creates')
+    expect(title.preview).not.toHaveProperty('addsVariations')
+  })
+
+  it('MAJOR-1 — with "all", the variation Etsy does not hold is shown with the price and stock it goes with', async () => {
+    const all = await dryRun(base)
+    expect(all.ok, all.error).toBe(true)
+    expect(preview(all).send.map((s: Json) => s.field)).toEqual(['title', 'translation:de', 'inventory'])
+    expect(all.preview).not.toHaveProperty('notSent')
+    expect(preview(all).addsVariations).toEqual([{ sku: 'FAKE-SKU-2', price: { amount: 25, currency: 'EUR' }, quantity: 3, startsAs: 'for sale' }])
+    expect(preview(all).summary).toBe('FAKE-SKU-1: re-publish — adds 1 variation to the Etsy listing (1 for sale, 0 hidden) with the price and stock Nexus holds '
+      + 'for them (addsVariations); sends 3 changed fields to Etsy GLOBAL.')
+    expect(all.preview).not.toHaveProperty('creates')
+    // A new variation set Inactive joins hidden.
+    fixture.etsyStudio!.review = (scope: Json) => etsyReview(scope, { rows: [etsyReview(scope).rows[0], { ...NEW_ROW, startsAs: 'inactive' }] })
+    expect(preview(await dryRun(base)).addsVariations).toEqual([{ sku: 'FAKE-SKU-2', price: { amount: 25, currency: 'EUR' }, quantity: 3, startsAs: 'hidden' }])
+    // Not readable: refused, never sent unbound.
+    fixture.etsyPrepareFails = true
+    expect(await dryRun(base)).toEqual({ ok: false, error: 'FAKE-SKU-1 on Etsy GLOBAL: Nexus could not read the price and stock of the variations this publish would add to Etsy '
+      + '(Category is empty. Choose an Etsy category on the main row.). Review again. Nothing was queued.' })
+    // Review R2-4 — a variation the adapter cannot price is never left out of the binding: refused.
+    fixture.etsyPrepareFails = false
+    fixture.etsyOfferMissing = true
+    expect(await dryRun(base)).toEqual({ ok: false, error: 'FAKE-SKU-1 on Etsy GLOBAL: Nexus could not read the price and stock of the variations this publish would add to Etsy '
+      + '(FAKE-SKU-2 is not in the variations Nexus would send). Review again. Nothing was queued.' })
+  })
+
+  it('review R2-3 — a variation added to a listing that is an Etsy draft is never called "for sale"', async () => {
+    const etsyListing: { id: string } = await inside(() => db().channelListing.findFirstOrThrow({ where: { productId: ids.etsyProduct, channel: 'ETSY' }, select: { id: true } }))
+    await inside(() => db().channelListing.update({ where: { id: etsyListing.id }, data: { listingStatus: 'DRAFT' } }))
+    try {
+      const all = await dryRun(base)
+      expect(all.ok, all.error).toBe(true)
+      expect(preview(all).addsVariations).toEqual([{ sku: 'FAKE-SKU-2', price: { amount: 25, currency: 'EUR' }, quantity: 3, startsAs: ETSY_IN_DRAFT }])
+      expect(preview(all).summary).toBe('FAKE-SKU-1: re-publish — adds 1 variation to the Etsy draft listing (not for sale; it sells once the listing goes live) '
+        + 'with the price and stock Nexus holds for them (addsVariations); sends 3 changed fields to Etsy GLOBAL.')
+      expect(preview(all).summary).not.toContain('for sale,')
+    } finally {
+      await inside(() => db().channelListing.update({ where: { id: etsyListing.id }, data: { listingStatus: 'ACTIVE' } }))
+    }
+  })
+
+  it('review NIT-R2-1 — a row\'s Status follows its own channel SKU: a new variation set Inactive joins hidden even under another SKU on Etsy', async () => {
+    fixture.etsyChannelSku = 'FAKE-SKU-2-CH'
+    fixture.etsyStudio!.review = (scope: Json) => {
+      const review = etsyReview(scope, { rows: [etsyReview(scope).rows[0], { ...NEW_ROW, sendsSku: 'FAKE-SKU-2-CH', startsAs: 'inactive' }] })
+      return { ...review, changes: review.changes.map((c: Json) => c.field === 'inventory'
+        ? { ...c, current: { state: 'value', value: { products: [{ sku: 'FAKE-SKU-1' }, { sku: 'FAKE-SKU-2-CH' }] } } } : c) }
+    }
+    expect(preview(await dryRun(base)).addsVariations).toEqual([{ sku: 'FAKE-SKU-2-CH', price: { amount: 25, currency: 'EUR' }, quantity: 3, startsAs: 'hidden' }])
+  })
+
+  it('MAJOR-1 — the approval is bound to that price and stock: a price changed after the approval sends nothing', async () => {
+    const args = { ...base }
+    const before = await dryRun(args)
+    expect(before.ok, before.error).toBe(true)
+    fixture.etsyOffer = { price: 27.5, quantity: 3, is_enabled: true }
+    const ran = (await inside(() => executeTool(approver, 'publish-listing', args, { approvedPreview: JSON.parse(JSON.stringify(before.preview)), via: 'claude' }))).raw
+    expect(ran).toEqual({ ok: false, error: expect.stringContaining('changed since it was approved') })
+    expect(fixture.etsyStudio!.selection).not.toHaveBeenCalled()
+    expect(fixture.etsyStudio!.submit).not.toHaveBeenCalled()
+    // The same for the stock, and for a variation that would now join hidden.
+    fixture.etsyOffer = { price: 25, quantity: 4, is_enabled: true }
+    expect((await inside(() => executeTool(approver, 'publish-listing', args, { approvedPreview: JSON.parse(JSON.stringify(before.preview)), via: 'claude' }))).raw)
+      .toMatchObject({ ok: false, error: expect.stringContaining('changed since it was approved') })
+    fixture.etsyOffer = { price: 25, quantity: 3, is_enabled: false }
+    expect((await inside(() => executeTool(approver, 'publish-listing', args, { approvedPreview: JSON.parse(JSON.stringify(before.preview)), via: 'claude' }))).raw)
+      .toMatchObject({ ok: false, error: expect.stringContaining('changed since it was approved') })
+    // Unchanged: it runs.
+    fixture.etsyOffer = { price: 25, quantity: 3, is_enabled: true }
+    const sent = (await inside(() => executeTool(approver, 'publish-listing', args, { approvedPreview: JSON.parse(JSON.stringify(before.preview)), via: 'claude' }))).raw
+    expect(sent.ok, sent.error).toBe(true)
+    expect(fixture.etsyStudio!.submit).toHaveBeenCalledOnce()
+  })
+
+  it('the approved run hands the studio exactly the ticked changes (its selection token), no overwrite confirmation, and records the destination its undo reads', async () => {
+    const { preview: shown, ran } = await approveAndRun({ ...base, fields: ['title'] })
+    expect(ran.ok, ran.error).toBe(true)
+    expect(ran.data).toMatchObject({ publicationId: 'review-etsy-1', status: 'VERIFIED', publish: 're-publish' })
+    const selected = shown.send.map((s: Json) => JSON.stringify([ids.etsyProduct, s.field]))
+    expect(fixture.etsyStudio!.selection).toHaveBeenCalledWith(ids.etsyProduct, 'review-etsy-1', { selectedIds: expect.any(Array) }, 'u-l5-approver')
+    const ticked = (fixture.etsyStudio!.selection.mock.calls[0] as any[])[2].selectedIds as string[]
+    expect(ticked.map((id) => JSON.parse(id)[1])).toEqual(['title', 'translation:de'])
+    expect(ticked).toHaveLength(selected.length)
+    expect(fixture.etsyStudio!.submit).toHaveBeenCalledWith(ids.etsyProduct, 'review-etsy-1', { selectionToken: 'selection-etsy-1' }, 'u-l5-approver')
+    // eBay and Amazon transports untouched.
+    expect(fixture.sendEbay).not.toHaveBeenCalled()
+    expect(fixture.sendAmazon).not.toHaveBeenCalled()
+    // MINOR-6 — the change a real run records names its destination, which the undo reads: a re-publish keeps its refusal,
+    // and the same change as a first publish is refused for Etsy (a draft cannot be closed).
+    const change = ran.change as Json
+    expect(change.after.destination).toMatchObject({ channel: 'ETSY', marketplace: 'GLOBAL', accountId: ids.etsy })
+    const undo = getTool('publish-listing')!.undo!
+    expect(undo.request(change as never)).toMatchObject({ refusal: expect.stringContaining('re-publish') })
+    expect(undo.request({ ...change, after: { ...change.after, publish: 'first publish' } } as never)).toEqual({ refusal: ETSY_FIRST_PUBLISH_UNDO })
+  })
+
+  it('MINOR-2 — a variations line the studio refused says the studio\'s reason, never "name fields all"', async () => {
+    fixture.etsyStudio!.review = (scope: Json) => {
+      const review = etsyReview(scope)
+      return { ...review, changes: review.changes.map((c: Json) => c.field === 'inventory'
+        ? { ...c, selectable: false, reason: 'Etsy holds FAKE-SKU-9 that Nexus does not; sending the variations would delete it.' } : c) }
+    }
+    const title = await dryRun({ ...base, fields: ['title'] })
+    expect(preview(title).notSent).toEqual([expect.objectContaining({ field: 'inventory', reason: 'Etsy holds FAKE-SKU-9 that Nexus does not; sending the variations would delete it.' })])
+  })
+
+  it('photos and bullet points: refused in true words', async () => {
+    expect(await dryRun({ ...base, fields: 'photos' })).toMatchObject({ ok: false, error: `FAKE-SKU-1 on Etsy GLOBAL: ${ETSY_PHOTOS_NOT_SENT_YET} Nothing was queued.` })
+    expect(await dryRun({ ...base, fields: ['bullets'] })).toEqual({ ok: false, error: `FAKE-SKU-1 on Etsy GLOBAL: ${ETSY_NO_BULLETS} Nothing was queued.` })
+    expect(await dryRun({ ...base, fields: ['bullets', 'photos'] })).toEqual({ ok: false, error: `FAKE-SKU-1 on Etsy GLOBAL: ${ETSY_NO_BULLETS} ${ETSY_PHOTOS_NOT_SENT_YET} Nothing was queued.` })
+    // Bullets named with another group: the other group is sent.
+    expect(preview(await dryRun({ ...base, fields: ['bullets', 'title'] })).send.map((s: Json) => s.field)).toEqual(['title', 'translation:de'])
+  })
+
+  it('E3 — a new Etsy listing: one create line, created as an Etsy draft; approved, the studio gets exactly that selection', async () => {
+    fixture.etsyStudio!.review = (scope: Json) => createReview(scope)
+    // A first publish sends the whole listing: other fields are refused.
+    expect(await dryRun({ ...base, fields: ['title'] })).toEqual({ ok: false, error: 'FAKE-SKU-1 on Etsy GLOBAL: A first publish sends the complete listing: name fields "all". Nothing was queued.' })
+    const { preview: shown, ran } = await approveAndRun(base)
+    expect(shown).toMatchObject({ publish: 'first publish', sendCount: 1, send: [{ field: '__create__', status: 'SEND' }],
+      summary: 'FAKE-SKU-1: first publish — creates 1 Etsy draft listing with 2 variations (not for sale; going live comes with photos later), '
+        + 'with the price and stock Nexus holds for them (createsVariations).',
+      creates: [{ sku: 'FAKE-SKU-1', startsAs: 'draft' }, { sku: 'FAKE-SKU-2', startsAs: 'draft' }] })
+    // Review R2-2 — each variation with the price (and its currency) and stock the approval binds; none is "for sale".
+    expect(shown.createsVariations).toEqual([
+      { sku: 'FAKE-SKU-1', price: { amount: 25, currency: 'EUR' }, quantity: 1, startsAs: ETSY_IN_DRAFT },
+      { sku: 'FAKE-SKU-2', price: { amount: 25, currency: 'EUR' }, quantity: 3, startsAs: ETSY_IN_DRAFT }])
+    expect(shown).not.toHaveProperty('addsVariations')
+    expect(ran.ok, ran.error).toBe(true)
+    expect(ran.data).toMatchObject({ publicationId: 'review-etsy-1', publish: 'first publish' })
+    const ticked = (fixture.etsyStudio!.selection.mock.calls[0] as any[])[2].selectedIds as string[]
+    expect(ticked).toEqual([JSON.stringify([ids.etsyProduct, '__create__'])])
+    expect(fixture.etsyStudio!.submit).toHaveBeenCalledWith(ids.etsyProduct, 'review-etsy-1', { selectionToken: 'selection-etsy-1' }, 'u-l5-approver')
+    // Its undo is refused, with what the person can do instead.
+    expect(getTool('publish-listing')!.undo!.request(ran.change as never)).toEqual({ refusal: ETSY_FIRST_PUBLISH_UNDO })
+  })
+
+  it('E3 — the approval is bound to the whole create request: a price or stock changed after it sends nothing', async () => {
+    fixture.etsyStudio!.review = (scope: Json) => createReview(scope)
+    const before = await dryRun(base)
+    expect(before.ok, before.error).toBe(true)
+    const run = () => inside(() => executeTool(approver, 'publish-listing', base, { approvedPreview: JSON.parse(JSON.stringify(before.preview)), via: 'claude' }))
+    fixture.etsyOffer = { price: 27.5, quantity: 3, is_enabled: true }
+    expect((await run()).raw).toEqual({ ok: false, error: expect.stringContaining('changed since it was approved') })
+    fixture.etsyOffer = { price: 25, quantity: 0, is_enabled: true }
+    expect((await run()).raw).toEqual({ ok: false, error: expect.stringContaining('changed since it was approved') })
+    expect(fixture.etsyStudio!.selection).not.toHaveBeenCalled()
+    expect(fixture.etsyStudio!.submit).not.toHaveBeenCalled()
+  })
+
+  it('E3 — the studio\'s refusals of a create are shown plainly: Active needs photos; a create still open is never started twice', async () => {
+    // Active for a new listing: the studio's photo refusal (a blocking problem of the review).
+    fixture.etsyStudio!.review = (scope: Json) => createReview(scope, { issues: [{ severity: 'error', message: ETSY_NEW_ACTIVE_NEEDS_PHOTO }] })
+    expect(await dryRun(base)).toEqual({ ok: false, error: `FAKE-SKU-1 on Etsy GLOBAL: ${ETSY_NEW_ACTIVE_NEEDS_PHOTO} Nothing was queued.` })
+    // An open "creating" marker: the studio's own sentence (its plan is refused, so there is no change line).
+    const open = ETSY_CREATE_OPEN({ marker: { v: 1, state: 'creating', reviewId: 'review-earlier', startedAt: '2026-10-06T08:00:00.000Z', title: 'Fake jacket',
+      skus: ['FAKE-SKU-1', 'FAKE-SKU-2'], userId: null } as never, sending: false })
+    fixture.etsyStudio!.review = (scope: Json) => createReview(scope, { changes: undefined, issues: [{ severity: 'error', message: open }] })
+    expect(await dryRun(base)).toEqual({ ok: false, error: `FAKE-SKU-1 on Etsy GLOBAL: ${open} Nothing was queued.` })
+    expect(open).toContain('Mark as checked')
+    expect(await inside(() => db().bulkOperation.count({ where: { changes: { path: ['productId'], equals: ids.etsyProduct } } }))).toBe(0)
+  })
+
+  it('the undo of a first Etsy publish is refused (a draft cannot be closed, and Nexus cannot delete an Etsy listing); Amazon\'s still closes', () => {
+    const undo = getTool('publish-listing')!.undo!
+    expect(undo.request({ after: { publish: 'first publish', listingIds: ['listing-1'], destination: { channel: 'ETSY' } } } as never)).toEqual({ refusal: ETSY_FIRST_PUBLISH_UNDO })
+    expect(undo.request({ after: { publish: 'first publish', listingIds: ['listing-1'], destination: { channel: 'AMAZON' } } } as never))
+      .toEqual({ tool: 'close-listing', args: { listingIds: ['listing-1'], reason: 'undo of a publish' } })
   })
 })
 
