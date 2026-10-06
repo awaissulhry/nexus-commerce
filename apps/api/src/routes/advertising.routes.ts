@@ -202,12 +202,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // totals roll up PRODUCT_AD daily rows by ad group (no AD_GROUP daily grain).
   fastify.get('/advertising/campaigns/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string }
+    const q = request.query as { windowDays?: string; preset?: string; startDate?: string; endDate?: string; fresh?: string }
     // DR.1 — Rome-anchored range (preset/custom) with windowDays back-compat.
     const { resolveRange } = await import('../services/ads-core/date-range.js')
     const range = resolveRange(q)
     const since = range.since
     const windowDays = range.days
+    // CM-34 — `fresh=1`: the detail page re-reads right after its own save. The cached copy can be the one from before
+    // the save (another API instance's memory, or a flush still running), and the form then snapped back to old values.
+    const fresh = q.fresh === '1'
 
     const { cached } = await import('../services/advertising/ads-cache.js')
     const payload = await cached(`detail:${id}:${range.sinceStr}:${range.untilStr}`, 300, async () => {
@@ -282,9 +285,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           range: { preset: range.preset, startDate: range.sinceStr, endDate: range.untilStr, includesToday: range.includesToday },
         },
       }
-    })
+    }, { refresh: fresh })
     if (!payload) { reply.code(404); return { error: 'not_found' } }
-    reply.header('Cache-Control', 'private, max-age=20')
+    reply.header('Cache-Control', fresh ? 'no-store' : 'private, max-age=20')
     return payload
   })
 
@@ -770,6 +773,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // BUD.2 — its own audit row, cents-keyed (this is OUR governance columns, distinct from
     // AD_BUDGET_UPDATE whose payloads are euros).
     if (Object.keys(budgetData).length > 0) {
+      // CM-30 — these columns are the one store the Budget Manager reads too; its old per-month copies are dropped.
+      const { forgetOldMonthLimits } = await import('../services/advertising/ads-budget-manager.service.js')
+      await forgetOldMonthLimits(id).catch(() => 0)
       await prisma.advertisingActionLog.create({
         data: {
           userId: actorFromHeaders(request.headers as Record<string, unknown>),
@@ -7436,8 +7442,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as { marketplace?: string; month?: string; campaignId?: string; minCents?: number | null; maxCents?: number | null }
     if (!b?.marketplace || !b?.campaignId) { reply.status(400); return { error: 'marketplace + campaignId required' } }
     const { setCampaignLimit, currentMonth } = await import('../services/advertising/ads-budget-manager.service.js')
-    try { return await setCampaignLimit({ marketplace: b.marketplace, month: b.month || currentMonth(), campaignId: b.campaignId, minCents: b.minCents ?? null, maxCents: b.maxCents ?? null }) }
-    catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // CM-30 — the campaign's own Min/Max Budget (the grid's store); a value the gate could never honour is a 400 with why.
+    try {
+      const r = await setCampaignLimit({ marketplace: b.marketplace, month: b.month || currentMonth(), campaignId: b.campaignId, minCents: b.minCents ?? null, maxCents: b.maxCents ?? null, createdBy: personActor(request) })
+      if (!r.ok) reply.status(r.status)
+      return r
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
   // BM.B3 — enforcement preview: what Auto Pacing / Stop Over Spend do on the next run. AM-8 — `engine` says whether
   // that run applies (the engine's own gate + write mode + dial), so the Budget Manager never asserts it.
@@ -7543,7 +7553,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           }
           case 'limit': {
             if (!c.marketplace) { error = 'marketplace required'; break }
-            const r = await setCampaignLimit({ marketplace: c.marketplace, month, campaignId: id, minCents: c.minCents ?? null, maxCents: c.maxCents ?? null }); ok = !!r.ok; break
+            const r = await setCampaignLimit({ marketplace: c.marketplace, month, campaignId: id, minCents: c.minCents ?? null, maxCents: c.maxCents ?? null, createdBy: actor }); ok = r.ok; error = r.ok ? undefined : r.error; break
           }
           case 'suppress': { const n = await suppressCampaignBids(id, { actor, reason: 'control plane: stop over spend (bid floor, no pause)' }); ok = true; detail = `${n} entities floored`; break }
           case 'restore': { const n = await restoreCampaignBids(id, { actor, manual, reason: 'control plane: restore prior bids' }); ok = true; detail = `${n} entities restored`; break }
