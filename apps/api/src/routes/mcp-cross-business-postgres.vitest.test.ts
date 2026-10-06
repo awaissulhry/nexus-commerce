@@ -116,6 +116,8 @@ interface Seeded {
   changeSetId: string
   /** W3-2 — an ad write still waiting in its grace window (what cancel-queued-ad-write cancels). */
   outboundQueueId: string
+  /** PB-5a — a playbook build of the business's campaign (what archive-ads buildRunId and ads-playbook view build name). */
+  buildRunId: string
   /** Every value that names one of the business's rows. None may reach the other business. */
   keys: string[]
   /** The AgentRun and AgentApproval rows written before the suite. */
@@ -453,6 +455,10 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     await db.adMutation.create({
       data: { entityType: 'AD_TARGET', entityId: target.id, marketplace: market, field: 'bid', previousValue: '40', intendedValue: '45', actor: 'user:mcp8', holdUntil: queuedWrite.holdUntil, outboundQueueId: queuedWrite.id, idempotencyKey: `${queuedWrite.id}:bid` },
     })
+    // PB-5a — a playbook build that made the business's campaign.
+    const buildRun = await db.adBlueprintApplication.create({
+      data: { productToken: `${canary}-TOKEN`, marketplace: market, status: 'APPLIED', plan: {}, playbookId: `${mark}-PLAYBOOK-${RUN}`, createdCampaignIds: [campaign.id] },
+    })
     await db.adsRuleSuggestion.create({
       data: {
         ruleId: `rule-${mark}-${RUN}`, ruleName: `${canary}-RULE`, entityType: 'CAMPAIGN', entityId: campaign.id, entityName: `${canary}-CAMPAIGN`,
@@ -663,6 +669,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       actionLogId: actionLog.id,
       changeSetId,
       outboundQueueId: queuedWrite.id,
+      buildRunId: buildRun.id,
       keys: [
         sku, market, product.id, order.id, order.channelOrderId, listing.id, listing.externalListingId!, first.id, spare.id,
         run.id, rule.id, campaign.id, campaign.externalCampaignId!, adGroup.id, adGroup.externalAdGroupId!, target.id,
@@ -683,7 +690,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         matrixOp.id, photo.id,
         sourcePreset.id,
         adsRun.id,
-        queuedWrite.id,
+        queuedWrite.id, buildRun.id,
       ],
       agentRows: [run.id, first.id, spare.id, adsRun.id],
       changeId: change.id,
@@ -886,6 +893,9 @@ const B_VALUES: Record<string, () => unknown> = {
   destExternalAdGroupId: () => seeded.b.externalAdGroupId,
   externalAdGroupId: () => seeded.b.externalAdGroupId,
   sourceExternalAdGroupId: () => seeded.b.externalAdGroupId,
+  // PB-5a — archive-ads names a playbook build's campaigns by its run; ads-playbook view build reads one run.
+  buildRunId: () => seeded.b.buildRunId,
+  applicationId: () => seeded.b.buildRunId,
   // A10 — undo-ad-change names a recorded ad write, or its change set.
   actionLogId: () => seeded.b.actionLogId,
   changeSetId: () => seeded.b.changeSetId,
@@ -1048,6 +1058,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'ebay-ad-details': { get campaignId() { return seeded.b.ebayCampaignId }, adGroupId: undefined },
   // W3-2 — a cancel names the queued write alone (the loop's changeSetId is a recorded write's, which waits for nothing).
   'cancel-queued-ad-write': { changeSetId: undefined },
+  // PB-5a — one product's playbook, named by its id (its answer then names the product's SKU, which was not sent).
+  'apply-ads-playbook': { sku: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
   // P9 — a file naming B's product by its SKU (built once B is seeded); the saved mapping maps its Name column.

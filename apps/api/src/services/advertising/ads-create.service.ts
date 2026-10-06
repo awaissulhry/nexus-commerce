@@ -187,6 +187,8 @@ export interface NewCampaign {
   startEnabled?: boolean
   /** Return the exact payload without calling Amazon. Nothing local is written either. */
   dryRun?: boolean
+  /** PB-5 — the approval this create runs for: its AdvertisingActionLog row carries it (executionId). Absent: no change set. */
+  changeSetId?: string | null
 }
 
 /**
@@ -308,7 +310,7 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
         : { lastSyncStatus: 'FAILED' as const, lastSyncedAt: new Date(), lastSyncError: notSent ?? CAMPAIGN_NOT_ON_AMAZON }),
     },
   })
-  await audit('create_campaign', 'CAMPAIGN', campaign.id, { name: input.name, type: input.type, externalId, mode, state, reachedAmazon: externalId != null, ...(externalId ? {} : { error: notSent ?? CAMPAIGN_NOT_ON_AMAZON }) }, input.userId, {}, externalId ? 'SUCCESS' : 'FAILED')
+  await audit('create_campaign', 'CAMPAIGN', campaign.id, { name: input.name, type: input.type, externalId, mode, state, reachedAmazon: externalId != null, ...(externalId ? {} : { error: notSent ?? CAMPAIGN_NOT_ON_AMAZON }) }, input.userId, {}, externalId ? 'SUCCESS' : 'FAILED', null, input.changeSetId)
   logger.info('[AX.4] createCampaignLocal', { id: campaign.id, type: input.type, externalId, mode, state, ...(externalId ? {} : { notSent }) })
   return { id: campaign.id, externalCampaignId: externalId, mode, reason: externalId ? null : (notSent ?? CAMPAIGN_NOT_ON_AMAZON) }
 }
@@ -343,6 +345,8 @@ export interface NewAdGroup {
   creationFlow?: boolean
   /** 3A — a person's "Send anyway" past his own limits (honoured only for a person's own add). */
   confirmOwnLimits?: boolean
+  /** PB-5 — the approval this create runs for: its AdvertisingActionLog row carries it (executionId). Absent: no change set. */
+  changeSetId?: string | null
 }
 export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string | null; externalAdGroupId: string | null; /** W2-A — why it did not reach Amazon (every caller; a launch lists it). */ notSent?: NotSent | null } & PersonAddResult> {
   const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true, tactic: true } })
@@ -394,7 +398,7 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
     return { id: null, externalAdGroupId: null, ...personAdd(notSent.outcome, notSent.reason, notSent.limits) }
   }
   const ag = await prisma.adGroup.create({ data: { campaignId: input.campaignId, name: input.name, defaultBidCents: Math.round(input.defaultBidEur * 100), status: 'ENABLED', externalAdGroupId: externalId } })
-  await audit('create_ad_group', 'AD_GROUP', ag.id, { name: input.name, externalId }, input.userId, {}, 'SUCCESS', pastNote)
+  await audit('create_ad_group', 'AD_GROUP', ag.id, { name: input.name, externalId }, input.userId, {}, 'SUCCESS', pastNote, input.changeSetId)
   return {
     id: ag.id, externalAdGroupId: externalId, notSent,
     ...(input.requireAmazon ? personAdd(externalId ? 'created' : 'local', externalId ? null : NOT_ON_AMAZON_YET) : {}),
@@ -418,6 +422,8 @@ export interface NewKeyword {
   creationFlow?: boolean
   /** 3A — a person's "Send anyway" past his own limits (honoured only for a person's own add). */
   confirmOwnLimits?: boolean
+  /** PB-5 — the approval this create runs for: its AdvertisingActionLog row carries it (executionId). Absent: no change set. */
+  changeSetId?: string | null
 }
 /**
  * HP1 — the return says WHY a keyword did not reach Amazon, not just that it didn't.
@@ -464,7 +470,7 @@ async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult
     if (!ag.externalAdGroupId || !ag.campaign?.externalCampaignId) return { id: existing.id, externalTargetId: null, existed: true, ...personAdd('local', NOT_ON_AMAZON_YET) }
     // CM-8 — Nexus holds it but Amazon never took it: send that row now (with the bid asked for), never "added".
     await prisma.adTarget.update({ where: { id: existing.id }, data: { bidCents: Math.round(input.bidEur * 100), status: 'ENABLED' } })
-    const pushed = await pushExistingKeyword({ adTargetId: existing.id, userId: input.userId, evidence: input.evidence, manual: input.manual, creationFlow: input.creationFlow, confirmOwnLimits: input.confirmOwnLimits })
+    const pushed = await pushExistingKeyword({ adTargetId: existing.id, userId: input.userId, evidence: input.evidence, manual: input.manual, creationFlow: input.creationFlow, confirmOwnLimits: input.confirmOwnLimits, changeSetId: input.changeSetId })
     // 3A — past his own limits: waits for his "Send anyway".
     const waits = pushed.refusal?.deniedAt === 'needs_confirmation'
     return {
@@ -520,7 +526,7 @@ async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult
     // cohort needs the opening bid to answer "did it pay", and it must not be reconstructed from
     // whatever `ad-rank-defend` last moved it to.
     { keywordText: input.keywordText, matchType: input.matchType, externalId, reachedAmazon: externalId != null, bidCents: Math.round(input.bidEur * 100) },
-    input.userId, {}, 'SUCCESS', pastNote ? { ...(input.evidence ?? {}), ...pastNote } : (input.evidence ?? null))
+    input.userId, {}, 'SUCCESS', pastNote ? { ...(input.evidence ?? {}), ...pastNote } : (input.evidence ?? null), input.changeSetId)
   return {
     id: t.id, externalTargetId: externalId, denied, pushError,
     ...(input.requireAmazon ? personAdd(externalId ? 'created' : 'local', externalId ? null : NOT_ON_AMAZON_YET) : {}),
@@ -543,7 +549,7 @@ async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult
  * Everything else is reused: the same `resolveCtx`, the same write gate, the same `createKeyword`
  * client, the same audit path.
  */
-export async function pushExistingKeyword(input: { adTargetId: string; userId?: string; evidence?: AdWriteEvidence | null; /** 1e — a person's own add (isPersonCreate). */ manual?: boolean; /** CM-20 — see addGateScope. */ creationFlow?: boolean; /** 3A — see addGateScope. */ confirmOwnLimits?: boolean }): Promise<{
+export async function pushExistingKeyword(input: { adTargetId: string; userId?: string; evidence?: AdWriteEvidence | null; /** 1e — a person's own add (isPersonCreate). */ manual?: boolean; /** CM-20 — see addGateScope. */ creationFlow?: boolean; /** 3A — see addGateScope. */ confirmOwnLimits?: boolean; /** PB-5 — see NewKeyword.changeSetId. */ changeSetId?: string | null }): Promise<{
   ok: boolean; externalTargetId: string | null; outcome: 'acted' | 'refused' | 'failed'
   refusal?: { deniedAt: string; reason: string; /** 3A — with `needs_confirmation`. */ limits?: OwnLimit[] }; error?: string
 }> {
@@ -647,7 +653,7 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
     const r2 = { externalId }
     await prisma.adTarget.update({ where: { id: t.id }, data: { externalTargetId: r2.externalId, lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null } })
     const pastNote = sentPastEvidence(gate, input.userId) // 3A
-    await audit('push_keyword', 'AD_TARGET', t.id, { keywordText: t.expressionValue, matchType: t.expressionType, externalId: r2.externalId, reachedAmazon: true, bidCents: t.bidCents, recoveredByReadBack: !r.externalId }, input.userId, {}, 'SUCCESS', pastNote ? { ...(input.evidence ?? {}), ...pastNote } : (input.evidence ?? null))
+    await audit('push_keyword', 'AD_TARGET', t.id, { keywordText: t.expressionValue, matchType: t.expressionType, externalId: r2.externalId, reachedAmazon: true, bidCents: t.bidCents, recoveredByReadBack: !r.externalId }, input.userId, {}, 'SUCCESS', pastNote ? { ...(input.evidence ?? {}), ...pastNote } : (input.evidence ?? null), input.changeSetId)
     return { ok: true, externalTargetId: r2.externalId, outcome: 'acted' }
   } catch (e) {
     return { ok: false, externalTargetId: null, outcome: 'failed', error: (e as Error).message }
@@ -670,6 +676,8 @@ export interface NewProductAd {
   creationFlow?: boolean
   /** 3A — a person's "Send anyway" past his own limits (honoured only for a person's own add). */
   confirmOwnLimits?: boolean
+  /** PB-5 — the approval this create runs for: its AdvertisingActionLog row carries it (executionId). Absent: no change set. */
+  changeSetId?: string | null
 }
 
 /**
@@ -880,7 +888,7 @@ async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreate
   const ad = held
     ? await prisma.adProductAd.update({ where: { id: held.id }, data: { externalAdId: externalId, status: 'ENABLED', ...(resolved ? { sku: resolved.sku, asin: resolved.asin ?? asinKey } : {}) } })
     : await prisma.adProductAd.create({ data: { adGroupId: input.adGroupId, asin: resolved?.asin ?? input.asin ?? null, sku: resolved?.sku ?? input.sku ?? null, productId: input.productId ?? null, status: 'ENABLED', externalAdId: externalId } })
-  await audit(held ? 'push_product_ad' : 'create_product_ad', 'PRODUCT_AD', ad.id, { sku: resolved?.sku ?? input.sku, asin: input.asin, externalId, ...(notSent ? { reachedAmazon: false, error: notSent.reason } : {}) }, input.userId, {}, notSent ? 'FAILED' : 'SUCCESS')
+  await audit(held ? 'push_product_ad' : 'create_product_ad', 'PRODUCT_AD', ad.id, { sku: resolved?.sku ?? input.sku, asin: input.asin, externalId, ...(notSent ? { reachedAmazon: false, error: notSent.reason } : {}) }, input.userId, {}, notSent ? 'FAILED' : 'SUCCESS', null, input.changeSetId)
   return {
     id: ad.id, externalAdId: externalId, notSent,
     ...(person ? personAdd(externalId ? 'created' : 'local', externalId ? null : NOT_ON_AMAZON_YET) : {}),
@@ -1296,6 +1304,8 @@ export interface NewTarget {
   creationFlow?: boolean
   /** 3A — a person's "Send anyway" past his own limits (honoured only for a person's own add). */
   confirmOwnLimits?: boolean
+  /** PB-5 — the approval this create runs for: its AdvertisingActionLog row carries it (executionId). Absent: no change set. */
+  changeSetId?: string | null
 }
 type TargetCreateResult = { id: string | null; externalTargetId: string | null; mode: string; /** W2-A — why it did not reach Amazon. */ notSent?: NotSent | null } & PersonAddResult
 /** CC-31 — why a product, category or audience target is not added to a Sponsored Brands campaign. */
@@ -1382,7 +1392,7 @@ async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
   const t = dupe
     ? await prisma.adTarget.update({ where: { id: dupe.id }, data: { externalTargetId: externalId, bidCents, status, ...(externalId ? { lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null } : {}) } })
     : await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: input.kind, expressionType, expressionValue: value, bidCents, status, externalTargetId: externalId } })
-  await audit(dupe ? 'push_target' : 'create_target', 'AD_TARGET', t.id, { kind: input.kind, value, externalId, mode, reachedAmazon: externalId != null }, input.userId, {}, 'SUCCESS', pastNote)
+  await audit(dupe ? 'push_target' : 'create_target', 'AD_TARGET', t.id, { kind: input.kind, value, externalId, mode, reachedAmazon: externalId != null }, input.userId, {}, 'SUCCESS', pastNote, input.changeSetId)
   logger.info('[AX2.1] createTargetLocal', { id: t.id, kind: input.kind, externalId, mode })
   return {
     id: t.id, externalTargetId: externalId, mode, notSent,
@@ -1432,6 +1442,8 @@ export async function linkAutoTargeting(input: {
   creationFlow?: boolean
   /** Amazon can take a moment to list the groups of a new ad group: one more read after this wait (default 2 s). */
   retryDelayMs?: number
+  /** PB-5 — see NewCampaign.changeSetId. */
+  changeSetId?: string | null
 }): Promise<AutoGroupsResult> {
   const ag = await prisma.adGroup.findUnique({
     where: { id: input.adGroupId },
@@ -1560,7 +1572,7 @@ export async function linkAutoTargeting(input: {
     // A refused change is put back: Nexus shows what Amazon kept (CM-17), and the receipt says what was not set and why.
     const kept = error ? { status: amazonStatus, bidCents: amazonBid } : { status, bidCents }
     const id = await save(clause, { externalTargetId: ext, ...kept, error, read: true })
-    await audit('link_auto_target', 'AD_TARGET', id, { clause, externalId: ext, sent, reachedAmazon: !error, ...(error ? { error } : {}) }, input.userId, { status: amazonStatus, bidCents: amazonBid }, error ? 'FAILED' : 'SUCCESS')
+    await audit('link_auto_target', 'AD_TARGET', id, { clause, externalId: ext, sent, reachedAmazon: !error, ...(error ? { error } : {}) }, input.userId, { status: amazonStatus, bidCents: amazonBid }, error ? 'FAILED' : 'SUCCESS', null, input.changeSetId)
     link(clause, wish, { adTargetId: id, externalTargetId: ext, ...kept, sent, ok: !error, reason: error ? `${AUTO_CLAUSE_LABEL[clause]} stays ${amazonStatus.toLowerCase()} at ${(amazonBid / 100).toFixed(2)} on Amazon. ${error}` : null })
   }
   logger.info('[W2-A] linkAutoTargeting', { adGroupId: ag.id, asked: wishes.size, linked: links.filter((l) => l.externalTargetId).length, failed: links.filter((l) => !l.ok).length })
@@ -1977,13 +1989,15 @@ export interface NewNegativeProductTarget {
   adGroupId: string; asin: string; userId?: string; creationFlow?: boolean; /** 1e — see NewKeyword.manual. */ manual?: boolean
   /** W1-7 + 3A — his "Send anyway" past a product his ads strategy protects (honoured only with `manual`). */
   confirmOwnLimits?: boolean
+  /** PB-5 — see NewCampaign.changeSetId. */
+  changeSetId?: string | null
 }
 export async function createNegativeProductTargetLocal(input: NewNegativeProductTarget): Promise<LocalNegative> {
-  return asLocal(await writeNegativeProductTarget({ adGroupId: input.adGroupId, asin: input.asin, userId: input.userId, creationFlow: input.creationFlow, manual: input.manual, confirmOwnLimits: input.confirmOwnLimits === true }))
+  return asLocal(await writeNegativeProductTarget({ adGroupId: input.adGroupId, asin: input.asin, userId: input.userId, creationFlow: input.creationFlow, manual: input.manual, confirmOwnLimits: input.confirmOwnLimits === true, changeSetId: input.changeSetId }))
 }
 
 // NT.4 — ad-group-level negative keyword (the funnel + Auto-isolation writes), match-typed.
-export interface NewNegativeKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; userId?: string; creationFlow?: boolean; /** 1e — see NewKeyword.manual. */ manual?: boolean }
+export interface NewNegativeKeyword { adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE'; userId?: string; creationFlow?: boolean; /** 1e — see NewKeyword.manual. */ manual?: boolean; /** PB-5 — see NewCampaign.changeSetId. */ changeSetId?: string | null }
 /**
  * 🔴 HV.9a — mirror an AD_GROUP negative that has ALREADY been created at Amazon.
  *
@@ -2000,7 +2014,7 @@ export async function mirrorNegativeKeywordLocal(input: {
 }
 
 export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Promise<LocalNegative> {
-  return asLocal(await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: input.adGroupId, keywordText: input.keywordText, matchType: input.matchType, userId: input.userId, creationFlow: input.creationFlow, manual: input.manual }))
+  return asLocal(await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: input.adGroupId, keywordText: input.keywordText, matchType: input.matchType, userId: input.userId, creationFlow: input.creationFlow, manual: input.manual, changeSetId: input.changeSetId }))
 }
 
 // LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation). Idempotent: skips a negative

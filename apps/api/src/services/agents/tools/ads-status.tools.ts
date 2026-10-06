@@ -76,7 +76,11 @@ interface StatusArgs {
   adGroupIds?: string[]
   targetIds?: string[]
   productAds?: Array<{ adGroupId: string; product: string }>
+  /** archive-ads, PB-5a — every campaign a playbook build made (the undo of apply-ads-playbook op build). */
+  buildRunId?: string
 }
+
+
 
 /** One ad a request names, as Nexus holds it now. */
 interface Ad {
@@ -296,7 +300,15 @@ async function reachOf(ads: Ad[], kind: Kind): Promise<{ reach: StoredReach } | 
 /** A request decided: its preview, and every ad it changes (all of them, not only the lines shown). */
 async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'>): Promise<{ result: ToolResult; changing: Ad[] }> {
   const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult, changing: [] as Ad[] })
-  const a = args as StatusArgs
+  let a = args as StatusArgs
+  if (kind === 'archive' && a.buildRunId) {
+    // PB-5a — the campaigns a playbook build made that are not archived yet (refused while the build runs).
+    const { buildRunCampaigns } = await import('../../advertising/ads-playbook/build.js')
+    const run = await buildRunCampaigns(a.buildRunId)
+    if ('refusal' in run) return refuse(run.refusal)
+    if (!run.campaignIds.length && !unique(a.campaignIds).length) return refuse('Nothing would change: every campaign that build made is archived already (or it made none).')
+    a = { ...a, campaignIds: unique([...(a.campaignIds ?? []), ...run.campaignIds]) }
+  }
   const asked = unique(a.campaignIds).length + unique(a.adGroupIds).length + unique(a.targetIds).length + (a.productAds?.length ?? 0)
   if (!asked) return refuse('Name the ads: campaignIds, adGroupIds, targetIds (keywords and product targets) or productAds (each by its ad group and SKU or ASIN).')
   if (asked > MAX_ADS) return refuse(`${asked} ads named: at most ${MAX_ADS} change in one request. Split them.`)
@@ -520,6 +532,12 @@ function undoBy(tool: string, status: string, why: string): ToolUndo {
 }
 
 async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  // PB-5a — a playbook build that stopped is marked FAILED (with what it made) before its campaigns are archived: the
+  // dry run only names them.
+  if (kind === 'archive' && typeof args.buildRunId === 'string' && args.buildRunId) {
+    const { settleStoppedBuild } = await import('../../advertising/ads-playbook/build.js')
+    await settleStoppedBuild(args.buildRunId)
+  }
   const { result: fresh, changing } = await decide(kind, args, ctx)
   const refusal = recheck(ctx, fresh, ['totals', 'basis'])
   if (refusal) return notRun(refusal)
@@ -571,6 +589,11 @@ const STATUS_INPUT = z.object({
     product: z.string().trim().min(1).max(64).describe('the SKU or ASIN the ad advertises'),
   })).max(MAX_ADS).optional().describe('product ads, each named by its ad group and the SKU or ASIN it advertises'),
   why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
+})
+/** archive-ads also names a playbook build's campaigns at once (PB-5a: the undo of apply-ads-playbook op build). */
+const ARCHIVE_INPUT = STATUS_INPUT.extend({
+  buildRunId: z.string().trim().min(1).max(64).optional()
+    .describe('a playbook build (the applicationId apply-ads-playbook answered): every campaign it made that is not archived yet; refused while it runs'),
 })
 
 const pauseAds: AgentTool = {
@@ -644,7 +667,7 @@ const enableAds: AgentTool = {
 const archiveAds: AgentTool = {
   name: TOOL.archive,
   title: 'Archive Amazon ads for good',
-  input: STATUS_INPUT,
+  input: ARCHIVE_INPUT,
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
   category: 'advertising',
   riskTier: 'high',
@@ -667,7 +690,7 @@ const archiveAds: AgentTool = {
     + 'archived by rule, and the advice is to keep it that way). The preview lists each ad, what a campaign or ad group '
     + 'holds that stops with it, the daily budget that stops, and where it lands. Refused, and not queued, when an ad is '
     + 'not found, a draft or not Sponsored Products, or when Amazon\'s write gate would refuse it (a halt does not block an '
-    + 'archive: it only lets go). It cannot be undone.',
+    + 'archive: it only lets go). buildRunId names every campaign a playbook build made (apply-ads-playbook). It cannot be undone.',
   async handler(args, ctx) {
     return (await decide('archive', args, ctx)).result
   },

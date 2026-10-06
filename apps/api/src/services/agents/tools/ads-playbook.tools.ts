@@ -59,7 +59,7 @@ const adsPlaybook: AgentTool = {
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
       .describe('one Amazon market code (IT, DE, FR, ES, UK; business-overview lists them); omit for every market with a playbook or a campaign. capture needs one'),
     view: z.enum(PLAYBOOK_VIEWS).default('effective')
-      .describe('effective (default): the playbook one scope follows, each part with its source; rows: every playbook row of a market; templates: the templates (templateId: one with its doc); history: recorded changes; capture: what a template captured from live campaigns would hold (nothing saved); compile: a dry run of building one product\'s playbook in one market (market and productId or sku; nothing created)'),
+      .describe('effective (default): the playbook one scope follows, each part with its source; rows: every playbook row of a market; templates: the templates (templateId: one with its doc); history: recorded changes; capture: what a template captured from live campaigns would hold (nothing saved); compile: a dry run of building one product\'s playbook in one market (market and productId or sku; nothing created); build: the builds of a product\'s playbook (market and productId or sku), or one build (applicationId)'),
     productId: ID.optional().describe('effective or history: one product (a variation or a parent), its Nexus id'),
     sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
     categoryId: ID.optional().describe('effective or history: one category, its Nexus id (catalog-structure)'),
@@ -72,7 +72,8 @@ const adsPlaybook: AgentTool = {
       .describe("capture: the product's token in the campaign names (the word each campaign name of the set carries); it is taken out of the names, and a keyword holding it counts as brand"),
     competitorTokens: z.array(z.string().trim().min(1).max(60)).max(30).optional()
       .describe('capture: rival brand words, so a keyword holding one counts as competitor (a well-named campaign says it anyway)'),
-    limit: z.coerce.number().int().min(1).max(100).default(20).describe('history: how many changes (default 20, max 100)'),
+    applicationId: ID.optional().describe('build: one build run, the applicationId apply-ads-playbook answered'),
+    limit: z.coerce.number().int().min(1).max(100).default(20).describe('history: how many changes (default 20, max 100); build: how many builds (at most 50)'),
   }),
   description:
     "Read the business's Amazon Ads playbook: HOW a product's ads are built and run — the campaign set (slots: Auto, "
@@ -93,8 +94,9 @@ const adsPlaybook: AgentTool = {
     + 'ones), product ad, budget and start bid (the ladder clamped to the strategy\'s bid band) it would create, the '
     + "terms the product's own other campaigns already buy (skipped or accepted, as the template says), the terms other "
     + "products' campaigns also buy (kept and only listed: different products may share a keyword), the monthly caps, "
-    + "the portfolio, and the blueprint gate's blockers — nothing is created, saved or sent. Nothing reads a playbook yet: "
-    + 'no engine, rule or Claude change follows it until an approved apply compiles it. Budgets, bids and targets are '
+    + "the portfolio, and the blueprint gate's blockers — nothing is created, saved or sent. view build follows the builds "
+    + 'apply-ads-playbook started (status, progress, the campaigns each made, what failed, what START will apply). No engine, '
+    + 'rule or Claude change follows a playbook until an approved apply compiles it. Budgets, bids and targets are '
     + 'ad-spend money: hidden from a person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {
     const out = await readPlaybook(args as PlaybookReadArgs)

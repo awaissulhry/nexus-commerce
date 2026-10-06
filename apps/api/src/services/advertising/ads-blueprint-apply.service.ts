@@ -135,8 +135,11 @@ async function resolveDoc(req: ApplyRequest): Promise<{ doc: BlueprintDoc; name:
 /**
  * AX3.6 — the most recent replication of this product into this market that was
  * not rolled back. Feeds the "you have already done this" warning.
+ *
+ * PB-5a — `excludePlaybookId`: a playbook's own earlier build is not "a SECOND
+ * set": a re-build makes only the slots it is missing.
  */
-export async function priorRunFor(productToken: string, marketplace: string) {
+export async function priorRunFor(productToken: string, marketplace: string, opts: { excludePlaybookId?: string | null } = {}) {
   const row = await prisma.adBlueprintApplication.findFirst({
     where: {
       productToken: { equals: productToken, mode: 'insensitive' },
@@ -144,6 +147,7 @@ export async function priorRunFor(productToken: string, marketplace: string) {
       // PLANNED rows are dry runs — they created nothing, so they are not a
       // duplicate of anything.
       status: { in: ['APPLIED', 'PARTIAL'] },
+      ...(opts.excludePlaybookId ? { OR: [{ playbookId: null }, { playbookId: { not: opts.excludePlaybookId } }] } : {}),
     },
     orderBy: { createdAt: 'desc' },
     select: { createdAt: true, appliedAt: true, status: true, createdCampaignIds: true },
@@ -317,6 +321,10 @@ export async function startBlueprintRun(req: ApplyRequest): Promise<{
 
   // One run per product per market at a time. This is the guard that makes a
   // dropped connection safe: a browser that retries finds the run it lost.
+  // PB-5a — a playbook build of this product that stopped (a deploy killed it) is marked FAILED first, so it never holds
+  // this guard for ever.
+  const { settleStoppedBuilds } = await import('./ads-playbook/build.js')
+  await settleStoppedBuilds({ market: req.marketplace, productToken: req.target.productToken })
   const inFlight = await prisma.adBlueprintApplication.findFirst({
     where: { marketplace: req.marketplace, productToken: req.target.productToken, status: 'RUNNING' },
     orderBy: { createdAt: 'desc' },
@@ -685,6 +693,14 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 }
 
 /**
+ * PB-5a — a run that built an ads playbook (playbookId set) is the playbook's: it starts with the playbook's START (the
+ * allowlist first, then the planned bids and placements) and is undone with archive-ads buildRunId. Replicate's raise and
+ * rollback refuse it, so a raise here never puts bids back on campaigns off the allowlist behind the playbook's back.
+ */
+export const PLAYBOOK_RUN =
+  'This run built an ads playbook: it is started, stopped and undone only through the playbook (apply-ads-playbook; archive-ads with its buildRunId), not from Replicate.'
+
+/**
  * AX3.5 — take a floored run up to the bids it was planned at.
  *
  * The counterpart to launching at the floor. Each entity remembered its planned
@@ -695,6 +711,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 export async function raiseApplicationBids(applicationId: string, actor?: string): Promise<{ raised: number; campaigns: number; errors: string[] }> {
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
+  if (app.playbookId) throw new Error(PLAYBOOK_RUN)
   if (app.status === 'ROLLED_BACK') return { raised: 0, campaigns: 0, errors: ['this run was rolled back'] }
 
   const { restoreCampaignBids } = await import('./ads-bid-suppression.service.js')
@@ -719,6 +736,7 @@ export async function raiseApplicationBids(applicationId: string, actor?: string
 export async function rollbackApplication(applicationId: string, actor?: string): Promise<{ archived: number; errors: string[] }> {
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
+  if (app.playbookId) throw new Error(PLAYBOOK_RUN)
   if (app.status === 'ROLLED_BACK') return { archived: 0, errors: ['already rolled back'] }
 
   const { updateCampaignWithSync } = await import('./ads-mutation.service.js')

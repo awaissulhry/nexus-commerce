@@ -15,9 +15,12 @@
  *   compile    PB-4 — a DRY RUN of building one product's playbook in one market (build-preview.ts): the campaigns, ad
  *              groups, keywords, negatives, product ads, budgets and start bids it would create, judged by the blueprint
  *              engine's gate — nothing is created, saved or sent
+ *   build      PB-5a — the builds of a product's playbook (or one, by applicationId): status, progress, the campaigns
+ *              each made (at Amazon or not, off the allowlist, at the floor), what failed, what START will apply
  *
- * Honest by construction: no engine, rule or Claude change reads a playbook. It is compiled only by an approved apply,
- * which later steps add; until then it is stored and shown only, and nothing at Amazon moves because of it.
+ * Honest by construction: no engine, rule or Claude change reads a playbook. It is compiled only by an approved apply
+ * (PB-5a: apply-ads-playbook build and adopt; start, sync and phase come later); until then it is stored and shown only,
+ * and nothing at Amazon moves because of it.
  *
  * Money (the product's daily budget and base bid, the least budget per slot, the recipes' targets and bids, the
  * strategy's numbers) sits ONLY under the keys in PLAYBOOK_MONEY, alone, so the money filter removes exactly the money.
@@ -47,7 +50,7 @@ import {
   type TemplateRow,
 } from './resolve.js'
 
-export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture', 'compile'] as const
+export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture', 'compile', 'build'] as const
 export type PlaybookViewName = (typeof PLAYBOOK_VIEWS)[number]
 
 export interface PlaybookReadArgs {
@@ -65,6 +68,8 @@ export interface PlaybookReadArgs {
   /** capture: the product's token in the campaign names, and rival brand words. */
   productToken?: string
   competitorTokens?: string[]
+  /** build: one build run. */
+  applicationId?: string
   limit?: number
 }
 
@@ -72,9 +77,10 @@ export interface PlaybookReadFailure { status: 400 | 404; error: string }
 export type PlaybookReadResult = { data: Record<string, unknown> } | PlaybookReadFailure
 
 export const PLAYBOOK_NOTE =
-  'Nothing reads a playbook yet: no engine, rule or Claude change follows it, and nothing at Amazon moves because of it. '
-  + 'A playbook is compiled only by an approved apply (build, adopt, start, sync, phase), which later steps add; until then it '
-  + "is stored and shown only (set-ads-playbook changes it). The numbers the engines obey are the ads strategy's (strategy, read-only here)."
+  'No engine, rule or Claude change follows a playbook, and nothing at Amazon moves because of it, until an approved apply '
+  + 'compiles it: apply-ads-playbook builds a product\'s missing campaigns (at the floor, off the live-write allowlist) or '
+  + 'adopts the ones it runs; starting to spend comes later. Until then it is stored and shown only (set-ads-playbook '
+  + "changes it). The numbers the engines obey are the ads strategy's (strategy, read-only here)."
 const ENROLL_NOTE = 'A product is in only when its own row (or its parent\'s) says enrolled; a category or market playbook is a default for the products under it, never a build.'
 const CAPTURE_NOTE =
   'A preview: nothing is saved (set-ads-playbook op capture saves it as a template). Slots, naming, budget shares, the bid ladder, placements, Auto groups and the hourly plans '
@@ -328,6 +334,44 @@ async function captureIn(a: PlaybookReadArgs, channel: string): Promise<Playbook
   }
 }
 
+// ── PB-5a — the builds ────────────────────────────────────────────────────────────────────────────
+
+const BUILD_NOTE =
+  'A build creates the slots a product does not hold yet through the SP Super Wizard\'s own launch: each campaign at Amazon\'s '
+  + '2¢ floor with its planned bids remembered (suppressed, never paused), off the live-write allowlist, without placements. '
+  + 'It serves next to nothing (not nothing) until START puts it on the allowlist and its planned bids and placements back.'
+
+async function buildIn(a: PlaybookReadArgs, channel: string): Promise<PlaybookReadResult> {
+  const { buildRunsOf } = await import('./build.js')
+  if (a.applicationId) {
+    const [run] = await buildRunsOf({ applicationId: a.applicationId }, 1)
+    if (!run) return fail(404, 'Playbook build not found in this business (applicationId: the one apply-ads-playbook answered).')
+    const links = run.playbookId ? (await playbookLinks([run.playbookId])).map(linkOut) : []
+    return { data: { channel, view: 'build', run, links, note: BUILD_NOTE } }
+  }
+  if (!a.market) return fail(400, 'The builds are read for one product in one market: name the market (or an applicationId).')
+  if (!a.productId && !a.sku) return fail(400, 'The builds are read for one product: name it (productId or sku), or one build by applicationId.')
+  if (a.productId && a.sku) return fail(400, 'Name the product once: productId or sku, not both.')
+  const market = a.market.trim().toUpperCase()
+  const product = await findLiveProduct({ productId: a.productId, sku: a.sku })
+  if (!product) return fail(404, PRODUCT_NOT_FOUND)
+  const { index } = await loadPlaybookIndex(market, channel)
+  const rows = [index.products.get(product.id), product.parentId ? index.products.get(product.parentId) : undefined].filter((r): r is NonNullable<typeof r> => !!r)
+  const limit = Math.min(Math.max(Math.trunc(a.limit ?? 10), 1), 50)
+  const runs = rows.length ? await buildRunsOf({ playbookIds: rows.map((r) => r.id) }, limit) : []
+  const links = (await playbookLinks(rows.map((r) => r.id))).map(linkOut)
+  return {
+    data: {
+      channel, view: 'build', market, product: { productId: product.id, sku: product.sku }, runs, links, note: BUILD_NOTE,
+      ...(runs.length ? {} : { empty: rows.length ? 'No build of this playbook yet.' : `${product.sku} has no product playbook row in ${market}.` }),
+    },
+  }
+}
+
+const linkOut = (l: { playbookId: string; kind: string; key: string; refId: string; adGroupId: string | null; origin: string; compiledVersion: number }) => ({
+  playbookId: l.playbookId, kind: l.kind, key: l.key, refId: l.refId, adGroupId: l.adGroupId, origin: l.origin, compiledVersion: l.compiledVersion,
+})
+
 // ── The read ──────────────────────────────────────────────────────────────────────────────────────
 
 export async function readPlaybook(args: PlaybookReadArgs): Promise<PlaybookReadResult> {
@@ -343,6 +387,7 @@ export async function readPlaybook(args: PlaybookReadArgs): Promise<PlaybookRead
     const { previewBuild } = await import('./build-preview.js')
     return previewBuild({ market: args.market, productId: args.productId, sku: args.sku, channel })
   }
+  if (view === 'build') return buildIn(args, channel)
   const limit = Math.min(Math.max(Math.trunc(args.limit ?? 20), 1), 100)
   if (view === 'history' && args.templateId) {
     const versions = await playbookVersions({ kind: 'template', refId: args.templateId }, limit)
