@@ -7,7 +7,8 @@
  *   COMPETITOR  else, it holds one of the competitor terms as whole words
  *   CATEGORY    else — classifyTarget's conservative default (ads-core/ads-blueprint.ts)
  *
- * Word-bounded containment is the blueprint's own (`hasToken`), never a copy. The lists are compiled into the rule (a
+ * Word-bounded containment is the blueprint's own (`hasToken`), never a copy; both sides are folded first (`foldWords`:
+ * accents, case, a hyphen as a space), and an accented letter is a letter, never a word break. The lists are compiled into the rule (a
  * snapshot, ads-playbook/harvest-rule.ts): the harvest never reads a playbook row. An ASIN is a product: it never goes
  * through the router. A term that already has a home in the product's campaigns stays there whatever the router would
  * pick (L2, ads-harvest.service.ts): the router only places a term that has no home yet. Its three ad groups are the
@@ -23,8 +24,12 @@ export type HarvestDestination = string | IntentRouter
 
 const INTENTS: readonly Intent[] = ['BRAND', 'COMPETITOR', 'CATEGORY']
 const isAsin = (term: string) => /^b0[a-z0-9]{8}$/i.test(term.trim())
-/** Case and runs of spaces folded, so a brand term typed with two spaces still matches. */
-const fold = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+/**
+ * Both sides folded the same way: accents stripped (NFD, marks removed: "xavía" = "xavia"), case, and a hyphen or dash
+ * read as a space ("x-lite" = "x lite"), runs of spaces as one.
+ */
+export const foldWords = (s: string) => s.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase().replace(/[-\u2010-\u2015]+/g, ' ').replace(/\s+/g, ' ').trim()
+const fold = foldWords
 
 /** A stored destination that is a router: the three ad groups named, the lists lists of words. */
 export function isIntentRouter(d: unknown): d is IntentRouter {

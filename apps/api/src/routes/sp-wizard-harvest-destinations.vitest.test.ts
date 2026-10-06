@@ -106,7 +106,8 @@ describe('PB-6a — the wizard lands each winner in its own theme\'s campaign', 
     expect(sourceOf(`${g}-SP-Auto`).destinations.EXACT).toEqual({
       router: 'intent',
       BRAND: agOf(`${g}-SP-Keyword-Brand-Exact`), COMPETITOR: agOf(`${g}-SP-Keyword-Competitor-Exact`), CATEGORY: agOf(`${g}-SP-Keyword-Category-Exact`),
-      brand: ['test brand jacket'], competitor: ['test competitor jacket'],
+      // No product names a brand here: the Brand keywords, and the word they share that no other keyword uses.
+      brand: ['test brand jacket', 'brand'], competitor: ['test competitor jacket'],
     })
     expect(sourceOf(`${g}-SP-Auto`).destinations.PHRASE).toMatchObject({ router: 'intent', BRAND: agOf(`${g}-SP-Keyword-Brand-Phrase`) })
     expect(sourceOf(`${g}-SP-Auto`)).toMatchObject({ graduate: ['EXACT'], negate: ['EXACT'], harvestFrom: true })
@@ -117,6 +118,39 @@ describe('PB-6a — the wizard lands each winner in its own theme\'s campaign', 
     const { sourceOf, agOf } = await launch(g, advanced(g), harvestRows(['w-Broad-Competitor', 'w-Phrase-Brand']))
     expect(sourceOf(`${g}-SP-Keyword-Competitor-Broad`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Competitor-Exact`))
     expect(sourceOf(`${g}-SP-Keyword-Brand-Phrase`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Brand-Exact`))
+  })
+
+  it('PB-6b — the router\'s brand words: the product\'s brand, else the word every Brand keyword shares', async () => {
+    const { resolveDestination } = await import('../services/advertising/ads-harvest-route.js')
+    const shaped = (g: string, brandKeywords: string[]) => {
+      const campaigns: Json[] = [{ id: 'w-auto', name: `${g}-SP-Auto`, kind: 'auto', bidEur: 0.5, budgetEur: 8 }]
+      for (const [k, keywords] of [['Brand', brandKeywords], ['Competitor', ['rivalco jacket']], ['Category', ['leather jacket', 'motorbike jacket']]] as const) {
+        campaigns.push({ id: `w-Exact-${k}`, name: `${g}-SP-Keyword-${k}-Exact`, kind: 'keyword', matchType: 'Exact', bidEur: 0.5, budgetEur: 8, keywords })
+      }
+      return campaigns
+    }
+    // A product that names its brand: a bare brand search and a long one both go to the Brand campaign.
+    await inside(() => database.client.product.create({ data: { sku: 'TEST-SKU-PB6B-BR', name: 'Test branded jacket', basePrice: '99.00', brand: 'TestBrand' } }))
+    const g = 'TBRD'
+    const res = await app.inject({ method: 'POST', url: SPW, payload: {
+      market: 'IT', productGroupName: g, products: [{ sku: 'TEST-SKU-PB6B-BR' }], campaigns: shaped(g, ['testbrand leather jacket']),
+      rules: { harvest: { ruleName: `${g} harvest`, automate: false, rows: harvestRows(['w-auto']) } },
+    } })
+    expect(res.statusCode, res.payload).toBe(200)
+    const rule = await inside(() => database.client.automationRule.findFirstOrThrow({ where: { name: `${g} harvest` } }))
+    const router = ((rule.actions as Json[])[0].sources as Json[])[0].destinations.EXACT
+    expect(router.brand).toEqual(['TestBrand', 'testbrand leather jacket'])
+    expect(resolveDestination('testbrand', router)?.intent).toBe('BRAND')
+    expect(resolveDestination('testbrand leather jacket', router)?.intent).toBe('BRAND')
+    expect(resolveDestination('leather jacket', router)?.intent).toBe('CATEGORY')
+
+    // No product brand: the word every Brand keyword holds and no other keyword uses.
+    const t = 'TTOK'
+    const { sourceOf } = await launch(t, shaped(t, ['testbrand jacket', 'testbrand leather jacket']), harvestRows(['w-auto']))
+    const tokens = sourceOf(`${t}-SP-Auto`).destinations.EXACT
+    expect(tokens.brand).toEqual(['testbrand jacket', 'testbrand leather jacket', 'testbrand'])
+    expect(resolveDestination('testbrand', tokens)?.intent).toBe('BRAND')
+    expect(resolveDestination('waterproof jacket', tokens)?.intent).toBe('CATEGORY')
   })
 
   it('names without a theme word: no Exact destination; a `theme` in the payload tells it', async () => {

@@ -404,6 +404,12 @@ export interface HarvestRuleLock {
   homeScope?: string[]
   /** AdGroup.ids whose products are the rule's own (its sources). Absent: each term's own source ad group. */
   ownAdGroups?: string[]
+  /**
+   * PB-6b — a compiled playbook rule: a term's home is looked up ONLY in the rule's listed slots (`homeScope`) and the ad
+   * groups its routers may land in — never in a product family read from its ad groups. An adopted slot may advertise
+   * another product too, and that product's keyword must never count as this one's home (the Owner's rule 3).
+   */
+  listedOnly?: boolean
   criteria: HarvestCriteria
 }
 
@@ -550,12 +556,14 @@ async function readLock(args: {
   const own = args.rule.ownAdGroups?.length ? args.rule.ownAdGroups : null
   const families = new Map<string, Promise<string[]>>()
   for (const src of sources.values()) {
-    const market = src.campaign?.marketplace ?? null
-    const key = own ? `rule|${strategyMarketOf(market)}` : `source|${src.id}`
-    if (!families.has(key)) families.set(key, productFamilyOf(own ?? [src.id]).then((family) => familyAdGroups(family, market)))
     // PB-6b — and the ad groups this source's router may land in: a term at home in the product's Exact | Category stays
     // there even when the router would now pick Exact | Brand (L2 beats the router).
     const routed = src.externalAdGroupId ? routerAdGroupsOf(args.plan?.[src.externalAdGroupId]) : []
+    // PB-6b — a compiled playbook rule names its product's ad groups itself: no family is read (rule 3).
+    if (args.rule.listedOnly) { lock.scopes.set(src.id, [...new Set([...(args.rule.homeScope ?? []), ...routed])]); continue }
+    const market = src.campaign?.marketplace ?? null
+    const key = own ? `rule|${strategyMarketOf(market)}` : `source|${src.id}`
+    if (!families.has(key)) families.set(key, productFamilyOf(own ?? [src.id]).then((family) => familyAdGroups(family, market)))
     lock.scopes.set(src.id, [...new Set([...(await families.get(key)!), ...(args.rule.homeScope ?? []), ...routed])])
   }
   lock.positives = await positivesIn([...[...lock.scopes.values()].flat(), ...rows.map((r) => r.id), ...destinationsOf(args.plan, args.destinations)])

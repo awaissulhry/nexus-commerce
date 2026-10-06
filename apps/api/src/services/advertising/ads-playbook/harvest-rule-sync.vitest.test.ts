@@ -4,8 +4,8 @@
  *
  *   build    the product's resolved playbook, its slot links (an archived campaign left out, said) and the strategy's goal
  *            compile into ONE rule: born disabled, a dry run that proposes only, one run a day, linked to the row
- *   phase    a goal whose phase turns the harvest off: the start does not switch it on, and no source is harvested from
- *   start    in a harvesting phase, the same rule switched on; a later re-sync never switches it off (rules.ts)
+ *   start    a START switches the rule on — in a phase that turns the harvest off too, where no source is harvested from
+ *   phase    once the phase harvests again, a re-sync makes the rule harvest; a re-sync never switches it off (rules.ts)
  *   business another business cannot sync (or see) this product's playbook
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -89,22 +89,21 @@ describe('PB-6b — syncHarvestRule', () => {
     expect(await inA(() => db().adsPlaybookLink.findFirst({ where: { kind: 'harvestRule' } }))).toMatchObject({ playbookId: ids.row, key: 'harvest', refId: ruleId, origin: 'built' })
   })
 
-  it('a phase that turns the harvest off: the start does not switch the rule on, and no source is harvested from', async () => {
+  it('a START in a phase that turns the harvest off: the rule is switched on, and no source is harvested from', async () => {
     await inA(() => db().adsStrategy.update({ where: { id: ids.strategy }, data: { goal: 'CLEAR_STOCK' } }))
     const out = await inA(() => syncHarvestRule(ids.row, { enabled: true }))
-    expect(out).toMatchObject({ saved: true, ruleId, created: false, changed: true, enabled: false, cadenceDays: null })
+    expect(out).toMatchObject({ saved: true, ruleId, created: false, changed: true, enabled: true, cadenceDays: null })
     expect(out.warnings.join('\n')).toMatch(/CLEAR_STOCK phase turns the harvest off/)
     const rule = await inA(() => db().automationRule.findUniqueOrThrow({ where: { id: ruleId } }))
-    expect(rule.enabled).toBe(false)
+    expect(rule).toMatchObject({ enabled: true, dryRun: true, autonomyLevel: 'PROPOSE' })
     expect(((rule.actions as Json[])[0].sources as Json[]).every((s) => s.harvestFrom === false)).toBe(true)
   })
 
-  it('at start in a harvesting phase: the same rule switched on and harvesting; a later re-sync never switches it off', async () => {
+  it('the phase changes: a re-sync makes the started rule harvest, and never switches it off', async () => {
     await inA(() => db().adsStrategy.update({ where: { id: ids.strategy }, data: { goal: 'LAUNCH' } }))
-    const out = await inA(() => syncHarvestRule(ids.row, { enabled: true }))
+    const out = await inA(() => syncHarvestRule(ids.row, { enabled: false }))
     expect(out).toMatchObject({ saved: true, ruleId, created: false, changed: true, enabled: true, cadenceDays: 1 })
     const rule = await inA(() => db().automationRule.findUniqueOrThrow({ where: { id: ruleId } }))
-    expect(rule).toMatchObject({ enabled: true, dryRun: true, autonomyLevel: 'PROPOSE' })
     expect(((rule.actions as Json[])[0].sources as Json[]).every((s) => s.harvestFrom === true)).toBe(true)
     expect(await inA(() => syncHarvestRule(ids.row, { enabled: false }))).toMatchObject({ saved: true, ruleId, enabled: true, changed: false })
     expect(await inA(() => db().automationRule.count())).toBe(1)

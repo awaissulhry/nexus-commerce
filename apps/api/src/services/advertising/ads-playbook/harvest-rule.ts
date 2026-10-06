@@ -22,7 +22,8 @@
  * (W1-7), and the lock judges a home on the same bar. Never another product's campaigns: only this product's links (the
  * Owner's rule 3) — a term another product buys is never a reason to skip one. Saved born disabled, as a dry run that
  * proposes only (PROPOSE): a person, or Claude inside his limits, decides each card. The playbook's start switches it
- * on (never over a person's switch-off); a re-sync never touches its switch or its autonomy level (rules.ts).
+ * on (never over a person's switch-off); a re-sync never touches its switch or its autonomy level (rules.ts). At run
+ * time the rule looks a term's home up only in these slots (`homeScope`, the harvest's `listedOnly`).
  */
 import prisma from '../../../db.js'
 import { openStrategy } from '../ads-strategy/effective.js'
@@ -85,7 +86,7 @@ export interface HarvestRuleAction {
 
 export interface CompiledHarvestRule {
   name: string
-  /** False when the phase turns the harvest off (no source harvested from); otherwise the playbook's start decides. */
+  /** False when the phase turns the harvest off: no source is harvested from (the rule may be on, and stays idle). */
   enabled: boolean
   cadenceDays: 1 | 7 | null
   action: HarvestRuleAction
@@ -215,6 +216,30 @@ export function compileHarvestRule(input: HarvestRuleInput): CompiledHarvestRule
   }
 }
 
+/**
+ * The slots whose ad group advertises a product outside this product's family (the product, its parent and the parent's
+ * other children), by slot key, with what it advertises. Fails closed: a product ad Nexus cannot place in the family (no
+ * product, and an ASIN no member has) counts as another product's. (PB-7's familyOnly asks the same of its ad groups.)
+ */
+async function foreignSlots(links: ReadonlyMap<string, { adGroupId: string }>, productId: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (!links.size) return out
+  const self = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, parentId: true } })
+  const root = self?.parentId ?? productId
+  const members = await prisma.product.findMany({ where: { OR: [{ id: root }, { parentId: root }] }, select: { id: true, amazonAsin: true } })
+  const ids = new Set([productId, ...members.map((m) => m.id)])
+  const asins = new Set(members.map((m) => m.amazonAsin?.trim().toUpperCase()).filter((a): a is string => !!a))
+  const ads = await prisma.adProductAd.findMany({
+    where: { adGroupId: { in: [...links.values()].map((l) => l.adGroupId) }, status: { not: 'ARCHIVED' } },
+    select: { adGroupId: true, productId: true, asin: true, sku: true, product: { select: { sku: true } } },
+  })
+  for (const [key, link] of links) {
+    const foreign = ads.find((a) => a.adGroupId === link.adGroupId && (a.productId ? !ids.has(a.productId) : !(a.asin && asins.has(a.asin.trim().toUpperCase()))))
+    if (foreign) out.set(key, foreign.product?.sku ?? foreign.sku ?? foreign.asin ?? 'a product Nexus cannot name')
+  }
+  return out
+}
+
 export type SyncHarvestRuleResult =
   | { saved: true; ruleId: string; created: boolean; changed: boolean; enabled: boolean; cadenceDays: 1 | 7 | null; keptOff?: string; warnings: string[] }
   | { saved: false; problems: string[]; warnings: string[] }
@@ -222,9 +247,10 @@ export type SyncHarvestRuleResult =
 /**
  * Compile one product's harvest rule from its playbook row and save it once (link kind 'harvestRule', key 'harvest').
  * `enabled: true` is the playbook's START: the rule is switched on (born on), never over a switch-off a person made since
- * the last start. `enabled: false` (build, adopt, a re-sync): a new rule is born off; an existing one keeps its own
- * switch — nothing here switches a rule off (rules.ts). A phase that turns the harvest off never switches it on, and its
- * sources harvest nothing. The playbook's build and start call this (PB-5's artifact hook); it writes Nexus only.
+ * the last start — also in a phase that turns the harvest off, where its sources harvest nothing until the phase changes
+ * (a re-sync then compiles them harvesting). `enabled: false` (build, adopt, a re-sync): a new rule is born off; an
+ * existing one keeps its own switch — nothing here switches a rule off (rules.ts). A slot whose ad group also advertises
+ * another product is left out, named. The playbook's build and start call this (PB-5's artifact hook); Nexus only.
  */
 export async function syncHarvestRule(playbookId: string, opts: { enabled: boolean; actor?: string }): Promise<SyncHarvestRuleResult> {
   const actor = opts.actor ?? 'system:ads-playbook'
@@ -255,6 +281,11 @@ export async function syncHarvestRule(playbookId: string, opts: { enabled: boole
     if (!l.adGroupId) { warnings.push(`The slot "${l.key}" has no ad group linked yet: it is left out`); continue }
     links.set(l.key, { campaignId: l.refId, adGroupId: l.adGroupId })
   }
+  // Rule 3 — a slot whose ad group also advertises another product is not this product's alone: left out, said.
+  for (const [key, why] of await foreignSlots(links, product.id)) {
+    links.delete(key)
+    warnings.push(`The slot "${key}" is left out: its ad group also advertises ${why}, which is not this product. Its terms are never this product's harvest, and its keywords never this product's home`)
+  }
 
   // The phase: the strategy's goal at this product.
   const goal = (await (await openStrategy(row.market, row.channel)).forProducts([product.id])).resolved.fields.get('goal')?.value
@@ -265,7 +296,7 @@ export async function syncHarvestRule(playbookId: string, opts: { enabled: boole
   if (compiled.problems.length) return { saved: false, problems: compiled.problems, warnings: [...new Set(warnings)] }
   const saved = await ensureCompiledRule({
     playbookId, kind: 'harvestRule', key: 'harvest', name: compiled.name, action: compiled.action as unknown as Record<string, unknown>,
-    enabled: false, start: opts.enabled && compiled.enabled, compiledVersion: row.version, actor,
+    enabled: false, start: opts.enabled, compiledVersion: row.version, actor,
   })
   return { saved: true, ...saved, cadenceDays: compiled.cadenceDays, warnings: [...new Set(warnings)] }
 }

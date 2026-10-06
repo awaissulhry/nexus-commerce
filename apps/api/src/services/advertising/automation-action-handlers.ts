@@ -933,7 +933,8 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   let graduations: Array<(typeof preview.graduations)[number] & { step?: 'create' | 'handover' }> = mode === 'negative' ? [] : preview.graduations.filter((c) => wants(c.externalAdGroupId, 'graduate'))
   let productNegatives = mode === 'harvest' ? [] : preview.productNegatives.filter((c) => plan?.[c.externalAdGroupId]?.negateProduct === true)
   let productGraduations: Array<(typeof preview.productGraduations)[number] & { step?: 'create' | 'handover' }> = mode === 'negative' ? [] : preview.productGraduations.filter((c) => plan?.[c.externalAdGroupId]?.graduateProduct === true)
-  const rule = { homeScope, ownAdGroups, criteria: criteriaOpts }
+  // PB-6b — a compiled playbook rule (it names its playbook) looks a home up only in its own listed slots (rule 3).
+  const rule = { homeScope, ownAdGroups, criteria: criteriaOpts, ...(typeof action.playbookId === 'string' && homeScope ? { listedOnly: true } : {}) }
 
   // PB-6a — an accepted card: only its items, each planned again on today's data and applied only when its step is the
   // card's (a create never turns into a source negation, nor the reverse; a refused winner is never applied).

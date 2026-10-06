@@ -28,6 +28,27 @@ describe('routeIntent — brand beats competitor; else category', () => {
   })
 })
 
+describe('routeIntent — words: accents, case and hyphens folded on both sides; an accented letter is a letter', () => {
+  const lists = (brand: string[], competitor: string[] = []) => ({ brand, competitor })
+  it('a short brand is not inside a longer word that only differs by an accent', () => {
+    expect(routeIntent('più giacca', lists(['pi']))).toBe('CATEGORY')
+    expect(routeIntent('piu giacca', lists(['pi']))).toBe('CATEGORY')
+    expect(routeIntent('giacca piø', lists(['pi']))).toBe('CATEGORY') // a letter no accent fold reaches is a letter too
+    expect(routeIntent('pi giacca', lists(['pi']))).toBe('BRAND')
+  })
+  it('an accent or a capital on either side changes nothing', () => {
+    expect(routeIntent('xavia jacket', lists(['Xavía']))).toBe('BRAND')
+    expect(routeIntent('XAVÍA jacket', lists(['xavia']))).toBe('BRAND')
+    expect(routeIntent('casco rivalcó', lists([], ['RIVALCO']))).toBe('COMPETITOR')
+  })
+  it('a hyphen or a space inside a brand matches either form', () => {
+    expect(routeIntent('x lite helmet', lists(['x-lite']))).toBe('BRAND')
+    expect(routeIntent('x-lite helmet', lists(['x lite']))).toBe('BRAND')
+    expect(routeIntent('x–lite helmet', lists(['x-lite']))).toBe('BRAND') // an en dash
+    expect(routeIntent('xlite helmet', lists(['x-lite']))).toBe('CATEGORY')
+  })
+})
+
 describe('resolveDestination — a plain id, or the router\'s pick', () => {
   it('a plain ad group id is the landing, whatever the term', () => {
     expect(resolveDestination('testbrand jacket', 'ag-1')).toEqual({ adGroupId: 'ag-1' })
