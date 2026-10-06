@@ -30,21 +30,23 @@
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { SchedulesSection } from './SchedulesSection'
 
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
 
 export function BudgetSchedulesTabClient() {
   const router = useRouter()
   const params = useSearchParams()
-  const market = params.get('market') || 'all'
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
 
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
         {...rulesTabHeader('budget-schedules')}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => {
           const next = new URLSearchParams(params.toString())

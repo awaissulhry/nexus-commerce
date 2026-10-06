@@ -26,6 +26,7 @@ import { Button, Input, Select } from '@/design-system/primitives'
 import { Tabs } from '@/design-system/components'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { ConflictsTab } from './ConflictsTab'
 // Self-contained: this page borrows no class from the Control Room's stylesheet. Reusing
 // `.acr-*` here rendered banners and section heads unstyled on prod, because that sheet is
@@ -150,7 +151,8 @@ const barWidth = (share: number | null, max: number) =>
 
 export function CoverageClient() {
   const [board, setBoard] = useState<Board | null>(null)
-  const [market, setMarket] = useState('IT')
+  // AM-28 — the viewer's shared market (it was Italy on every visit). One market: a share of page one is per market.
+  const [market, setMarket] = useSharedAdsMarket({ allowAll: false })
   const [week, setWeek] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [tab, setTab] = useState<'coverage' | 'conflicts'>('coverage')
@@ -185,9 +187,13 @@ export function CoverageClient() {
       <AdsPageHeader
         title="Coverage"
         subtitle="How much of page one we hold, per keyword — market size, our share, and what we hold it with."
-        markets={board?.marketplaces ?? ['IT']}
-        market={market}
+        // AM-27 — offer only the markets this page can serve (those with search-query data), never "All markets", and
+        // show the market the board really is: the server answers for the first served market when the chosen one has
+        // no data, and the header used to keep naming the chosen one.
+        markets={board?.marketplaces ?? []}
+        market={board?.marketplace ?? market}
         onMarketChange={setMarket}
+        allowAllMarkets={false}
         showDateRange={false}
         showDataSync={false}
       />

@@ -55,7 +55,7 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, ArrowUpRight, Check, Copy, Info } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { acosRank, acosFilterValue } from '../../campaigns/_grid/format'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
@@ -89,7 +89,6 @@ import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
 import { StaleBanner } from '../_shared/StaleBanner'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
 const FALLBACK_MARKET = 'all'
 
 interface Payload {
@@ -148,9 +147,12 @@ export function KeywordHarvestClient() {
   // you work in, not a view of a dataset, so an absent `?market=` falls back to the console's
   // persisted choice. That makes the URL ambiguous for a reader, which is why Copy link writes the
   // resolved market in explicitly rather than sharing whatever the opener happens to have set.
-  const { market: ctxMarket, ready: marketReady } = useAdsMarketplace()
+  // AM-28 — that persisted choice is the console's SHARED analytics scope (the one every ads page reads), not the
+  // campaign builder's launch market. A comma list in the URL is passed through: the read validates it.
+  const { readMarkets, ready: marketReady } = useAdsMarketplace()
+  const [sharedMarket] = useSharedAdsMarket()
   const urlMarket = params.get('market')
-  const market = urlMarket ?? (marketReady ? (ctxMarket || FALLBACK_MARKET) : FALLBACK_MARKET)
+  const market = urlMarket ?? (marketReady ? sharedMarket : FALLBACK_MARKET)
 
   const scope: HvScope = {
     line: params.get('line') ?? '',
@@ -573,7 +575,7 @@ export function KeywordHarvestClient() {
       <AdsPageHeader
         title="Keyword Harvest"
         subtitle={activeTab?.subtitle ?? 'Which search terms have earned their own keyword'}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => push({ market: m, campaign: '', adGroup: '' })}
         /**

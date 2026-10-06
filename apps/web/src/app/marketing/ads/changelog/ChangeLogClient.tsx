@@ -30,6 +30,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, FilterChip, Pill, Select, Textarea, ToolbarButton } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { pillTone } from '../_shared/pillTone'
+import { useAdsMarketplace } from '../_shell/MarketplaceContext'
 import './changelog.css'
 
 interface Origin { kind: string; id: string | null; name: string }
@@ -43,6 +44,8 @@ interface ChangeRow {
   origin: Origin
   entity: { type: string; id: string; name: string | null }
   field: string; oldValue: string | null; newValue: string | null; reason: string | null
+  /** CM-32 — the campaign's market; its money is shown in that market's currency. */
+  marketplace?: string | null
   /** ADX G6 — the numbers behind the prose (AdvertisingActionLog.evidence). */
   evidence: Evidence | null
   delivery: Delivery | null; undoable: boolean
@@ -118,6 +121,8 @@ const WINDOWS = [
 ]
 
 export function ChangeLogClient() {
+  // CM-32 — each change's money in its campaign's market currency.
+  const { currencyOf: currencyOfMarket } = useAdsMarketplace()
   const [rows, setRows] = useState<ChangeRow[] | null>(null)
   const [days, setDays] = useState('7')
   const [error, setError] = useState<string | null>(null)
@@ -278,7 +283,7 @@ export function ChangeLogClient() {
       key: 'change', label: 'Change', metric: false, sortable: false,
       render: (r) => (
         <span className="h10-cl-change">
-          <b>{val(r.oldValue, r.field)}</b> → <b>{val(r.newValue, r.field)}</b>
+          <b>{val(r.oldValue, r.field, currencyOfMarket(r.marketplace))}</b> → <b>{val(r.newValue, r.field, currencyOfMarket(r.marketplace))}</b>
           {r.reason && <em title={r.reason}>{r.reason}</em>}
           {/* ADX G6 — the evidence behind the change. `reason` is prose an engine wrote
               for a human; this is the numbers it wrote it from. */}
@@ -320,7 +325,7 @@ export function ChangeLogClient() {
           : <span className="h10-cl-none" title="No delivery record for this change.">no record</span>
       ),
     },
-  ], [])
+  ], [currencyOfMarket])
 
   const filters: GridFilter[] = useMemo(() => [
     {

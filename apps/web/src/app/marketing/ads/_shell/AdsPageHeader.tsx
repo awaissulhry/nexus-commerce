@@ -20,7 +20,9 @@ import { Button, Spinner } from '@/design-system/primitives'
 import { DateRangePicker, lastCompleteDays } from './DateRangePicker'
 import { EbayMark } from './EbayMark'
 import { MarketSelect } from './MarketSelect'
-import type { AdsMarket } from './MarketplaceContext'
+import { useAdsMarketplaceOptional, type AdsMarket } from './MarketplaceContext'
+import { ALL_MARKETS, READING_ONLY, readingOnlyDetail } from './adsMarkets'
+import { Banner } from '@/design-system/components/Banner'
 
 // AM-10 — the preset path that fed the Ad Manager graph (`RANGE_PRESETS` / `rangeBounds`, always "last 7 days") is
 // gone: the graph now draws the range this header's picker holds.
@@ -123,11 +125,39 @@ export function AdsPageHeader({
   // data, and every one of those is selectable-as-a-filter. Widen to the shared
   // AdsMarket shape with launchable:true so the extracted control behaves
   // exactly as this header did before.
-  const marketOptions: AdsMarket[] = markets.map((m) => ({
-    code: m, label: '', mode: 'production', writesEnabled: true, launchable: true,
-  }))
+  //
+  // Ads wave 4c — every option stays selectable (this is a filter, and a market Nexus only reads has data to show), but
+  // a reading-only market says so in its row, from the connections list.
+  const ads = useAdsMarketplaceOptional()
+  const marketOptions: AdsMarket[] = markets.map((m) => {
+    const known = channel === 'amazon' ? ads?.markets.find((x) => x.code === m) : undefined
+    const readingOnly = !!known && !known.launchable
+    return {
+      code: m, label: known?.label ?? '', mode: known?.mode ?? 'production', writesEnabled: known?.writesEnabled ?? true, launchable: true,
+      note: readingOnly ? 'reading only' : null,
+      whyNot: readingOnly ? known?.whyNot ?? null : null,
+    }
+  })
+
+  /**
+   * AM-28 — the operator's market choice is SHARED across the Amazon ads pages and remembered for this viewer: moving
+   * this control also moves the provider's `scopeMarket`, which the next ads page starts from. Only the operator's own
+   * move does this (never a deep link), and only for an Amazon market the console reads or "all markets" — an eBay
+   * page's market is not an Amazon scope.
+   */
+  const changeMarket = (m: string) => {
+    if (channel === 'amazon' && ads && (m === ALL_MARKETS || ads.readMarkets.includes(m))) ads.setScopeMarket(m)
+    onMarketChange(m)
+  }
+
+  // Ads wave 4c — a market Nexus only reads shows its data on every page, and says once, under the header, that its
+  // ads are not changed from here (each write control there is off with the same reason).
+  const readOnly = channel === 'amazon' && showMarket && ads && market && market !== ALL_MARKETS && ads.readMarkets.includes(market)
+    ? ads.writeAccess(market)
+    : null
 
   return (
+    <>
     <div className="h10-hdr">
       <div className="h10-hdr-l">
         <div className="eyebrow">Nexus Ads</div>
@@ -159,7 +189,7 @@ export function AdsPageHeader({
           <MarketSelect
             markets={marketOptions}
             value={market}
-            onChange={onMarketChange}
+            onChange={changeMarket}
             values={marketValues}
             onValuesChange={onMarketValuesChange}
             allowAll={allowAllMarkets}
@@ -191,5 +221,9 @@ export function AdsPageHeader({
         ) : null}
       </div>
     </div>
+    {readOnly && !readOnly.canWrite && (
+      <Banner tone="info" title={READING_ONLY}>{readingOnlyDetail(readOnly.reason)}</Banner>
+    )}
+    </>
   )
 }

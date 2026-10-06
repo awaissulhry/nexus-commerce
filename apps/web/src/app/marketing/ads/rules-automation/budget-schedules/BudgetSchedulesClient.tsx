@@ -63,10 +63,11 @@ import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
-  MARKETS, SECTIONS, needsNormalising, parseUrlState, patchUrlState, serialiseOpen,
+  SECTIONS, needsNormalising, parseUrlState, patchUrlState, serialiseOpen,
   type BspOpen, type BspSection,
 } from './urlState'
 import { PlanEditor } from './PlanEditor'
@@ -147,6 +148,9 @@ export function BudgetSchedulesClient() {
   // Parsed once, in one module, and never mirrored into `useState`. That is what makes back and
   // forward restore a view exactly: there is no second copy of the state to fall out of step.
   const url = useMemo(() => parseUrlState(params), [params])
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [sharedMarket] = useSharedAdsMarket({ raw: params.get('market') })
 
   // RT.1 — your own writes, from any tab, applied silently. An ENGINE's write arrives on the
   // other rail (the cursor poll) and offers a banner instead; see `_shared/adsBus.ts`.
@@ -251,7 +255,7 @@ export function BudgetSchedulesClient() {
     return () => { alive = false }
   }, [limitsOpen, planMarket, url.month, reloadTick])
 
-  const reach = useMemo(() => resolveScope(options, url.market, scope), [options, url.market, scope.portfolio, scope.campaign, scope.line])
+  const reach = useMemo(() => resolveScope(options, sharedMarket, scope), [options, sharedMarket, scope.portfolio, scope.campaign, scope.line])
 
   // ── FB.2 — one bar. The three grains, plus the window this page has always owned.
   //
@@ -260,7 +264,7 @@ export function BudgetSchedulesClient() {
   //    resolve. It is weeks and not days because `/advertising/dayparting/heatmap` counts whole
   //    weeks so every weekday carries equal samples; a rolling day count reintroduces that bias.
   const scopeFilters = useMemo(() => [
-    ...buildScopeFilters({ options, market: url.market, value: { ...scope, line: scope.line } }),
+    ...buildScopeFilters({ options, market: sharedMarket, value: { ...scope, line: scope.line } }),
     {
       key: '__weeks', label: 'Window', kind: 'select' as const, placeholder: '8 weeks',
       options: [1, 2, 4, 8, 12, 26]
@@ -268,7 +272,7 @@ export function BudgetSchedulesClient() {
         .map((w) => ({ value: String(w), label: w === 1 ? '1 week' : `${w} weeks` })),
       tip: 'Whole weeks, so every weekday carries the same number of samples. A rolling day count would bias the weekday comparison this page is built on.',
     },
-  ], [options, url.market, scope.line, scope.portfolio, scope.campaign])
+  ], [options, sharedMarket, scope.line, scope.portfolio, scope.campaign])
 
   const urlValues = useMemo(
     () => ({ ...scopeToFilterState({ ...scope, line: scope.line }), __weeks: String(url.weeks) }),
@@ -311,8 +315,8 @@ export function BudgetSchedulesClient() {
       <AdsPageHeader
         title="Rules & Automation"
         subtitle={subtitle}
-        markets={[...MARKETS]}
-        market={url.market}
+        markets={readMarkets}
+        market={sharedMarket}
         // Changing market clears the campaign: a campaign belongs to one marketplace, so keeping the
         // selection would hold a scope that resolves to nothing and read as missing data.
         onMarketChange={(m) => push({ market: m, campaign: '' })}
@@ -339,7 +343,7 @@ export function BudgetSchedulesClient() {
           data={pacing}
           loading={pacingLoading}
           error={pacingErr}
-          market={url.market}
+          market={sharedMarket}
           month={url.month}
           onMarket={(m) => push({ market: m, campaign: '' })}
           onMonth={(m) => push({ month: m })}

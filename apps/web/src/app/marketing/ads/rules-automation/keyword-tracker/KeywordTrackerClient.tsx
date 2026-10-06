@@ -49,6 +49,8 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, Info, ListPlus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
+import { isReadMarket } from '../../_shell/adsMarkets'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -61,8 +63,6 @@ import { buildCsv } from './csv'
 import { emitAdsChange, useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
-const DEFAULT_MARKET = 'IT'
 
 /**
  * KT.1b — why a row is blank, as three states rather than one.
@@ -216,7 +216,10 @@ export function KeywordTrackerClient() {
   // Every view is linkable, and an absent param means the default — never a stored preference, so
   // a link renders the same view for whoever opens it. Market is in the URL too (it is the one
   // thing this page cannot be read without, and localStorage is invisible in a pasted link).
-  const market = params.get('market') ?? DEFAULT_MARKET
+  // Ads wave 4c / AM-28 — one market from the markets Nexus reads: the URL's, else the viewer's shared choice (one
+  // market, since a share cannot be summed across markets), else the preferred read market.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ allowAll: false, raw: params.get('market') })
   const scope: KtScope = {
     line: params.get('line') ?? '',
     portfolio: params.get('portfolio') ?? '',
@@ -247,7 +250,8 @@ export function KeywordTrackerClient() {
   const push = useCallback((patch: Record<string, string>) => {
     const next = new URLSearchParams(params.toString())
     for (const [k, v] of Object.entries(patch)) {
-      if (!v || v === 'all' || (k === 'branded' && v === '0') || (k === 'market' && v === DEFAULT_MARKET)) next.delete(k)
+      // AM-28 — the market stays in the URL whatever it is: an absent one means the viewer's own shared choice.
+      if (!v || v === 'all' || (k === 'branded' && v === '0')) next.delete(k)
       else next.set(k, v)
     }
     const qs = next.toString()
@@ -263,7 +267,7 @@ export function KeywordTrackerClient() {
     return () => { alive = false }
   }, [])
 
-  const isMarket = MARKETS.includes(market)
+  const isMarket = market !== 'all' && isReadMarket(market, readMarkets)
 
   useEffect(() => {
     if (!isMarket) { setLoading(false); return }
@@ -526,8 +530,10 @@ export function KeywordTrackerClient() {
       <AdsPageHeader
         title="Keyword Tracker"
         subtitle={activeTab?.subtitle ?? 'On the keywords you chose — are we on the page, and is it moving?'}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
+        // AM-27 — a share is per market: "All markets" is not offered on a page that cannot serve it.
+        allowAllMarkets={false}
         onMarketChange={(m) => push({ market: m })}
         showDataSync={false}
         /* SQP is weekly and paid data is daily. One range control over both would be two
@@ -550,7 +556,7 @@ export function KeywordTrackerClient() {
             market rather than “all”.
           </p>
           <div className="h10-kt-pickrow">
-            {MARKETS.map((m) => (
+            {readMarkets.map((m) => (
        <Button key={m} onClick={() => push({ market: m })}>{m}</Button>
             ))}
           </div>

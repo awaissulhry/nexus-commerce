@@ -36,6 +36,8 @@ import { acosRank } from '../campaigns/_grid/format'
 import { Caveats, ProvenanceStrip, StatCard, TabState } from './StrategyBits'
 import { SectionLayout, type SectionSpec } from '@/design-system/patterns/SectionLayout'
 import { useSections } from './useSections'
+import { useAdsMarketplace } from '../_shell/MarketplaceContext'
+import { preferredMarket } from '../_shell/adsMarkets'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 /** The axis: every third hour, or 24 labels collide into a smear. */
@@ -87,7 +89,10 @@ export function HourlyTab({ market }: { market: string }) {
   // No all-markets view: an hour-of-day pattern pooled across four markets is nobody's day, and
   // the stream's coverage is wildly uneven between them. Default to Italy, which holds 28,004 of
   // the rows, and let the header switch.
-  const chosen = market === 'all' ? 'IT' : market
+  // AM-27 — Reporting no longer hands this tab "all" (it shows one market and the header names it); if it ever does,
+  // the preferred market Nexus reads, never a silent hard-coded one.
+  const { readMarkets } = useAdsMarketplace()
+  const chosen = market === 'all' ? preferredMarket(readMarkets) : market
 
   useEffect(() => {
     const ac = new AbortController()

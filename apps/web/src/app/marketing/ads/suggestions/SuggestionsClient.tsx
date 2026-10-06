@@ -30,6 +30,7 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { Check, X, RefreshCw, Sparkles, ExternalLink, RotateCcw, Pause, Volume2, Settings } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'
 import { RecommendationsView } from './RecommendationsView'
 import { AdsBidSettingsModal } from '../_shared/AdsBidSettingsModal'
@@ -56,7 +57,7 @@ import { dash, eur, AcosCell, RoasCell, ACOS_DOT_TIP, ROAS_DOT_TIP } from './cel
  * the things that genuinely span the tabs and are the reason this is one route rather than seven.
  */
 import {
-  ACTION_LABEL, ENTITY_LABEL, FAMILY_RULE_ROUTE, MARKETS, VIEWS, ageDays, ago, srcOf,
+  ACTION_LABEL, ENTITY_LABEL, FAMILY_RULE_ROUTE, VIEWS, ageDays, ago, srcOf,
   type AiDecision, type BulkReport, type GroupKey, type Pricing, type Status, type Suggestion,
 } from './_shared/types'
 import { aiChangeText, aiHoverContent } from './_shared/aiText'
@@ -79,7 +80,9 @@ function SuggestionsInner() {
   // ── URL state — the source of truth for everything shareable ──────────────
   const viewParam = params.get('view')
   const status = (['pending', 'applied', 'dismissed', 'expired', 'muted'].includes(params.get('status') ?? '') ? params.get('status') : 'pending') as Status
-  const market = params.get('market') ?? 'all'
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
   const scope: ScopeValue = {
     line: params.get('line') ?? '',
     portfolio: params.get('portfolio') ?? '',
@@ -1238,7 +1241,7 @@ function SuggestionsInner() {
       <AdsPageHeader
         title="Suggestions"
         subtitle="The review queue — audit the math, approve the winners, dismiss the anomalies."
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => writeUrl({ market: m })}
         showDataSync={false}
@@ -1662,7 +1665,7 @@ function SuggestionsInner() {
 
       {detail && <SuggestionDrawer suggestion={detail} priced={pricing?.byId[detail.id]} busy={!!busy[detail.id]} onClose={() => writeUrl({ row: '' })} onAct={act} onPauseTarget={pauseTarget} />}
 
-      <AdsBidSettingsModal open={bidSettingsOpen} onClose={() => setBidSettingsOpen(false)} markets={MARKETS} />
+      <AdsBidSettingsModal open={bidSettingsOpen} onClose={() => setBidSettingsOpen(false)} markets={readMarkets} />
     </div>
   )
 }

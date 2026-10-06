@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Package, Bot, ChevronRight, ShieldCheck } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { ProbePanel } from './ProbePanel'
 import { getBackendUrl } from '@/lib/backend-url'
 import { FilterChip, SegmentedControl } from '@/design-system/primitives'
@@ -87,8 +88,12 @@ const band = (score: number) => (score >= 80 ? 'good' : score >= 50 ? 'fair' : '
 const bandLabel = (score: number) => (score >= 80 ? 'Healthy' : score >= 50 ? 'Needs attention' : 'At risk')
 
 export function HealthClient() {
-  const [market, setMarket] = useState('all')
-  const [markets, setMarkets] = useState<string[]>([])
+  // AM-28 — the viewer's shared market across the ads pages (each page used to start at "all" and forget the choice).
+  const [market, setMarket] = useSharedAdsMarket()
+  // Ads wave 4c — the markets Nexus reads, plus any market the campaigns name.
+  const { readMarkets } = useAdsMarketplace()
+  const [dataMarkets, setMarkets] = useState<string[]>([])
+  const markets = Array.from(new Set([...readMarkets, ...dataMarkets]))
   const [windowDays, setWindowDays] = useState(7)
   const [alerts, setAlerts] = useState<AlertsResult | null>(null)
   const [retail, setRetail] = useState<Retail | null>(null)

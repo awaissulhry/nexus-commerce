@@ -56,6 +56,7 @@ import { useRouter } from '@/lib/workspaces/navigation'
 import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Info, Plus, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { useCursorPoll } from '../_shared/useCursorPoll'
@@ -76,8 +77,6 @@ import { BudgetSections } from './BudgetSections'
 import { useAdsSync } from '../_shared/adsBus'
 import { Listbox } from '@/design-system/components'
 
-/** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
-const MARKETS = ['IT', 'DE', 'FR', 'ES']
 const DEFAULT_MARKET = 'all'
 const DEFAULT_STATUS = 'enabled'
 const DEFAULT_WINDOW = '7d'
@@ -106,8 +105,10 @@ export function BudgetClient() {
   // Every view is linkable and an absent param means the default, never a stored preference, so a
   // link renders the same view for whoever opens it. An unknown value falls back to the default and
   // never throws — `?view=abc`, `?market=ZZ`, `?state=garbage` all render the default view.
-  const rawMarket = params.get('market') ?? DEFAULT_MARKET
-  const market = rawMarket === 'all' || MARKETS.includes(rawMarket) ? rawMarket : DEFAULT_MARKET
+  // Ads wave 4c / AM-28 — the one exception is market: the markets Nexus reads (from the connections), and an absent
+  // `?market=` means the viewer's shared choice, so a market picked on one ads page is the market here too.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
 
   // 🔴 Portfolio and campaign are mutually exclusive and CAMPAIGN WINS. Resolved here for what the
   // page renders, normalised out of the address bar by the effect below, and enforced again on the
@@ -760,7 +761,7 @@ export function BudgetClient() {
       <AdsPageHeader
         title="Budget Rules"
         subtitle={activeTab?.subtitle ?? 'What may change a budget, by how much, and what it actually did'}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         /* 🔴 The header's picker is the ONLY market control on this page. `showMarket` does not
            exist; the scope bar below renders three grains and never a fourth for market. */

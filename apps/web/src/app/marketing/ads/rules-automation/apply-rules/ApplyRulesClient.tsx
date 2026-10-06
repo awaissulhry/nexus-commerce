@@ -69,6 +69,7 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
 import { useMergedFilters } from '../_shared/useMergedFilters'
@@ -77,7 +78,7 @@ import { useCursorBaseline, useCursorPoll } from '../_shared/useCursorPoll'
 import { getBackendUrl } from '@/lib/backend-url'
 import { NoDataIllus } from '../_shared/NoDataIllus'
 import {
-  DELIVERY_LABEL, MARKETS, STATUS_LABEL,
+  DELIVERY_LABEL, STATUS_LABEL,
   type CampaignRow, type GuardrailPayload, type RawCampaign, type RawGuardrailRow,
   type ScopeOptionsPayload,
 } from './types'
@@ -137,7 +138,9 @@ export function ApplyRulesClient() {
   // preference, so a link renders the same view for whoever opens it. The one deliberate exception
   // the substrate names is `market`, which falls back to the provider's persisted choice because a
   // market is a place you are working in rather than a view of a dataset.
-  const market = params.get('market') ?? DEFAULT_MARKET
+  // Ads wave 4c / AM-28 — that persisted choice is the provider's shared scope; the markets are the ones Nexus reads.
+  const { readMarkets, currencyOf: currencyOfMarket } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
   const grainParam = params.get('grain') ?? DEFAULT_GRAIN
   const grain: ApplyRulesGrain = (APPLY_RULES_GRAINS as readonly string[]).includes(grainParam)
     ? (grainParam as ApplyRulesGrain)
@@ -1185,7 +1188,7 @@ export function ApplyRulesClient() {
       <AdsPageHeader
         title="Apply Rules"
         subtitle={activeTab?.subtitle ?? 'Which campaigns automation may write to, and what it is allowed to change'}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => push({ market: m, campaign: '' })}
         showDataSync={false}
@@ -1428,6 +1431,7 @@ export function ApplyRulesClient() {
           kind="bid"
           minCents={editPop.row.minBidCents}
           maxCents={editPop.row.maxBidCents}
+          currency={currencyOfMarket(editPop.row.market)}
           anchor={editPop.anchor}
           busy={popBusy}
           error={popErr}

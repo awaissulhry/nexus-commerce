@@ -62,6 +62,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 import type { NegSlotProps } from './slot-contract'
 import { Listbox } from '@/design-system/components'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 
 type MatchType = 'CONTAINS' | 'PREFIX' | 'EXACT'
 type Classification = 'own-line-brand' | 'other-line-brand' | 'non-brand'
@@ -132,7 +133,6 @@ const CLASS_NOTE: Record<Classification, string> = {
   'non-brand': 'An Auto or Category campaign pushing brand traffic out of the catch-all so it lands in the dedicated brand campaign at a lower CPC. Standard funnel architecture, and probably correct.',
 }
 
-const MARKETS = ['', 'IT', 'DE', 'FR', 'ES']
 const MATCH_OPTIONS: Array<{ value: MatchType; label: string; blurb: (t: string) => string }> = [
   { value: 'CONTAINS', label: 'Contains', blurb: (t) => `Blocks any negation whose phrase contains “${t || 'xavia'}” anywhere — including “giacca moto ${t || 'xavia'}”. This is what the ten live protections use.` },
   { value: 'PREFIX', label: 'Starts with', blurb: (t) => `Blocks a negation whose phrase starts with “${t || 'xavia'}” — but NOT “giacca moto ${t || 'xavia'}”.` },
@@ -140,6 +140,8 @@ const MATCH_OPTIONS: Array<{ value: MatchType; label: string; blurb: (t: string)
 ]
 
 export function NegProtectedTerms({ scope, push }: NegSlotProps) {
+  // Ads wave 4c — a protection can name any market Nexus reads, not one of a fixed four.
+  const { readMarkets } = useAdsMarketplace()
   // 🔴 `useSearchParams`, never `window.location.search` — the latter is not reactive under soft
   // navigation, which is exactly how NEG.3b's confirm dialog silently never opened.
   const params = useSearchParams()
@@ -393,7 +395,7 @@ export function NegProtectedTerms({ scope, push }: NegSlotProps) {
           <Listbox
             ariaLabel="Marketplace" width={130} value={marketplace}
             onChange={(v) => setMarketplace(v)}
-            options={MARKETS.map((m) => ({ value: m, label: m || 'All markets' }))}
+            options={['', ...readMarkets].map((m) => ({ value: m, label: m || 'All markets' }))}
           />
           <Input
             size="sm" fieldClassName="h10-ngp-input reason" value={reason} placeholder="Why (optional)"

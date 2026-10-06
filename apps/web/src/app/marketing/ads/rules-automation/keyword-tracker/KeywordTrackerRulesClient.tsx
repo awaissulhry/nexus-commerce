@@ -29,10 +29,10 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
 
 interface FeedHealth {
   rows: number
@@ -99,13 +99,15 @@ function FeedStrip() {
 export function KeywordTrackerRulesClient() {
   const router = useRouter()
   const params = useSearchParams()
-  const market = params.get('market') || 'all'
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
 
   return (
     <div className="h10-rules-page">
       <AdsPageHeader
         {...rulesTabHeader('keyword-tracker')}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => {
           const next = new URLSearchParams(params.toString())
