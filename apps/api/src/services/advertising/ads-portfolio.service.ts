@@ -19,7 +19,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { resolveRange } from '../ads-core/date-range.js'
 import { campaignWindowMoney } from './ads-campaign-window.js'
-import { adsMode, listPortfolios, listCampaignsV3, updatePortfolio, type AdsRegion, type AdsPortfolioDTO, type PortfolioBudgetInput } from './ads-api-client.js'
+import { adsMode, createPortfolio as createAmazonPortfolio, listPortfolios, listCampaignsV3, updatePortfolio, type AdsRegion, type AdsPortfolioDTO, type PortfolioBudgetInput } from './ads-api-client.js'
 
 const regionOf = (r: string | null): AdsRegion => (r === 'NA' || r === 'FE' ? r : 'EU')
 
@@ -328,4 +328,32 @@ export async function updatePortfolioById(args: { portfolioId: string; name?: st
     },
   })
   return { ok: true, mode }
+}
+
+/**
+ * PA.2 — create a portfolio, the one place it is done (ADS PLAYBOOK PB-4 moved it here from POST /advertising/portfolios,
+ * behaviour unchanged; a playbook build reuses it). Gated-local: the portfolio is made at Amazon only when the write gate
+ * for its market is open, in the profile the gate approves (CM-29: the gate's own resolver), and is stored as an
+ * AmazonAdsPortfolio row either way — a local id (`local-pf-…`) when Amazon was not reached. A portfolio belongs to one
+ * market's profile (CC-5).
+ */
+export async function createPortfolio(input: { name: string; marketplace: string }): Promise<{ portfolio: { portfolioId: string; name: string }; mode: string }> {
+  const { name, marketplace } = input
+  let externalId: string | null = null, mode = 'local', profileId = `local-${marketplace}`
+  const { adsClientContextFor } = await import('./ads-profile-resolver.js')
+  const conn = await adsClientContextFor(marketplace)
+  if (conn) {
+    profileId = conn.profileId
+    const region: AdsRegion = conn.region
+    const { checkAdsWriteGate } = await import('./ads-write-gate.js')
+    const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0 })
+    if (gate.allowed) { const r = await createAmazonPortfolio({ profileId, region }, { name, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
+  }
+  if (!externalId) externalId = `local-pf-${profileId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24)}`
+  const pf = await prisma.amazonAdsPortfolio.upsert({
+    where: { profileId_externalPortfolioId: workspaceKey({ profileId, externalPortfolioId: externalId }) },
+    update: { name }, create: { profileId, externalPortfolioId: externalId, name, state: 'ENABLED' },
+  })
+  logger.warn('[ADS-PORTFOLIOS] created portfolio', { externalId, name, mode })
+  return { portfolio: { portfolioId: pf.externalPortfolioId, name: pf.name }, mode }
 }
