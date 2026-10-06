@@ -4,10 +4,11 @@
  *   units      an integer percent becomes the engines' fraction (30 → 0.3) and back; a stored fraction (0.3) is never
  *              read as a percent, nor a percent (30) as 3,000 %
  *   schema     every registry column is an AdsStrategy column and every setting column is in the registry
- *   honest     W1-5's bid engines read exactly the target, the lowest and highest bid and the largest bid change, and
- *              say which engines; every other field has no reader yet and notReadYet lists them
+ *   honest     the bid engines (W1-5) read the target, the lowest and highest bid and the largest bid change, Claude's
+ *              door (W1-8) what Claude may do alone, each named; notReadYet lists every other field
  *   money      every money field's value keys are stripped for a person without ad-spend money
- *   names      every tool an action type narrows is a registered tool; the constants mirror their sources
+ *   names      every tool an action type narrows is a registered tool and knows where its change lands; no brake is
+ *              among them; the constants mirror their sources
  */
 import { describe, expect, it } from 'vitest'
 import { Prisma } from '@prisma/client'
@@ -15,8 +16,10 @@ import { FIELDS } from '@nexus/shared/permissions'
 import { listTools } from '../../agents/tool-registry.js'
 import { SUPPRESSION_FLOOR_CENTS } from '../ads-bid-suppression.service.js'
 import { MAX_ACCOUNT_DEFAULT_PCT } from '../ads-target-acos-resolver.js'
+import { BRAKE_TOOLS, PLACES, actionOfTool } from './claude.js'
 import {
   CLAUDE_ACTION_TOOLS,
+  CLAUDE_DOOR,
   COLUMN_CHECKS,
   DEFAULT_STOP_BID_CENTS,
   MAX_TARGET_PCT,
@@ -58,7 +61,7 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: W1-5 reads the target, the bid band and the largest change, named by reader; nothing else is read yet', () => {
+  it("is honest: the bid engines (W1-5) and Claude's door (W1-8) read their fields, named by reader; nothing else is read yet", () => {
     const target = [READERS.optimiser, READERS.bidRules, READERS.autopilot]
     const band = [READERS.gate, READERS.optimiser, READERS.bidRules, READERS.hourly, READERS.restores, READERS.autopilot]
     expect(Object.fromEntries(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => [f.key, f.readBy]))).toEqual({
@@ -67,9 +70,10 @@ describe('the registry', () => {
       minBidCents: band,
       maxBidCents: band,
       maxChangePct: [READERS.stepClamp, READERS.optimiser, READERS.claudePreview, READERS.autopilot],
+      claudeAutonomy: [CLAUDE_DOOR],
     })
-    // Spend caps (W1-6), search terms and protection (W1-7), Claude's autonomy (W1-8) and the rest: stored and shown only.
-    expect(notReadYet()).toEqual(['goal', 'goalNote', 'monthlySpendCapCents', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'claudeAutonomy', 'reviewEveryDays'])
+    // Spend caps (W1-6), search terms and protection (W1-7) and the rest: stored and shown only.
+    expect(notReadYet()).toEqual(['goal', 'goalNote', 'monthlySpendCapCents', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'reviewEveryDays'])
   })
 
   it('every money field keeps its numbers under keys the money filter strips (ad-spend money)', () => {
@@ -94,5 +98,18 @@ describe('the registry', () => {
   it('every tool an action type narrows is a registered tool', () => {
     const tools = new Set(listTools().map((t) => t.name))
     expect(Object.values(CLAUDE_ACTION_TOOLS).flat().filter((name) => !tools.has(name))).toEqual([])
+  })
+
+  it('W1-8 — each of those tools knows where its change lands; brakes are registered tools, none of them, never narrowed', () => {
+    const narrowed = Object.values(CLAUDE_ACTION_TOOLS).flat()
+    expect(Object.keys(PLACES).sort()).toEqual([...narrowed].sort())
+    const tools = new Set(listTools().map((t) => t.name))
+    for (const brake of BRAKE_TOOLS) {
+      expect(tools.has(brake), brake).toBe(true)
+      expect(narrowed, brake).not.toContain(brake)
+      expect(actionOfTool(brake), brake).toBeNull()
+    }
+    for (const [action, names] of Object.entries(CLAUDE_ACTION_TOOLS)) for (const name of names) expect(actionOfTool(name)).toBe(action)
+    expect(actionOfTool('set-price')).toBeNull()
   })
 })

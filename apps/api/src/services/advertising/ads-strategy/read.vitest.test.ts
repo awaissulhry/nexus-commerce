@@ -188,7 +188,7 @@ describe('effective', () => {
     })
     expect(m.shadowedBy).toEqual([{ campaignId: ids.c1, name: 'Test campaign one', targetAcosPct: 30 }])
     expect(m.claude.find((c: Data) => c.action === 'bid')).toEqual({
-      action: 'bid', tools: [{ tool: 'set-target-bid', business: 'ask' }, { tool: 'bulk-ad-bid-change', business: 'ask' }],
+      action: 'bid', tools: [{ tool: 'set-target-bid', business: 'ask', effective: 'ask' }, { tool: 'bulk-ad-bid-change', business: 'ask', effective: 'ask' }],
       strategy: 'ask', source: expect.objectContaining({ level: 'market' }),
     })
     expect(m.orphans).toHaveLength(1)
