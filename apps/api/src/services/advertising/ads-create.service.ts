@@ -2020,13 +2020,15 @@ export async function createNegativeKeywordLocal(input: NewNegativeKeyword): Pro
 // LAUNCH-REPAIR — bulk ad-group negative keywords (funnel isolation). Idempotent: skips a negative
 // that already exists for (adGroup, matchType, text). Used to back-fill the funnel de-dup negatives
 // on campaigns launched via the API (which bypasses the wizard UI's applyAutoNegatives).
-export async function bulkNegativeKeywords(items: Array<{ adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' }>, userId?: string): Promise<{ created: number; pushed: number; skipped: number; failed: number; errors: string[] }> {
+// B-1 — `opts` (Claude's Replicate run only): the negatives of a campaign created in the same run, born off the live-write
+// allowlist (`creationFlow`, as its keywords and product ads), on the approval's change set. Absent for every other caller.
+export async function bulkNegativeKeywords(items: Array<{ adGroupId: string; keywordText: string; matchType: 'EXACT' | 'PHRASE' }>, userId?: string, opts: { creationFlow?: boolean; changeSetId?: string | null } = {}): Promise<{ created: number; pushed: number; skipped: number; failed: number; errors: string[] }> {
   const out = { created: 0, pushed: 0, skipped: 0, failed: 0, errors: [] as string[] }
   for (const it of items) {
     const text = (it.keywordText || '').trim()
     if (!text || (it.matchType !== 'EXACT' && it.matchType !== 'PHRASE')) { out.failed++; out.errors.push('bad item ' + JSON.stringify(it)); continue }
     try {
-      const r = await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: it.adGroupId, keywordText: text, matchType: it.matchType, userId })
+      const r = await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: it.adGroupId, keywordText: text, matchType: it.matchType, userId, ...(opts.creationFlow ? { creationFlow: true } : {}), ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}) })
       if (r.outcome === 'already_existed') { out.skipped++; continue }
       if (r.outcome === 'refused' || r.outcome === 'failed') { out.failed++; out.errors.push('"' + text + '" ' + it.matchType + ': ' + (r.refusal ? `refused at ${r.refusal.deniedAt}: ${r.refusal.reason}` : r.error)); continue }
       out.created++

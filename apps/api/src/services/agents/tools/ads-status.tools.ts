@@ -76,7 +76,7 @@ interface StatusArgs {
   adGroupIds?: string[]
   targetIds?: string[]
   productAds?: Array<{ adGroupId: string; product: string }>
-  /** archive-ads, PB-5a — every campaign a playbook build made (the undo of apply-ads-playbook op build). */
+  /** archive-ads, PB-5a — every campaign a playbook build made (the undo of apply-ads-playbook op build); B-1 — or a Replicate run (the undo of replicate-ad-structure). */
   buildRunId?: string
 }
 
@@ -302,9 +302,11 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult, changing: [] as Ad[] })
   let a = args as StatusArgs
   if (kind === 'archive' && a.buildRunId) {
-    // PB-5a — the campaigns a playbook build made that are not archived yet (refused while the build runs).
+    // PB-5a — the campaigns a playbook build made that are not archived yet (refused while the build runs). B-1 — or a
+    // Replicate run's (replicate-ad-structure), likewise.
     const { buildRunCampaigns } = await import('../../advertising/ads-playbook/build.js')
-    const run = await buildRunCampaigns(a.buildRunId)
+    const { replicateRunCampaigns } = await import('../../advertising/ads-blueprint-apply.service.js')
+    const run = (await replicateRunCampaigns(a.buildRunId)) ?? (await buildRunCampaigns(a.buildRunId))
     if ('refusal' in run) return refuse(run.refusal)
     if (!run.campaignIds.length && !unique(a.campaignIds).length) return refuse('Nothing would change: every campaign that build made is archived already (or it made none).')
     a = { ...a, campaignIds: unique([...(a.campaignIds ?? []), ...run.campaignIds]) }
@@ -537,6 +539,9 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
   if (kind === 'archive' && typeof args.buildRunId === 'string' && args.buildRunId) {
     const { settleStoppedBuild } = await import('../../advertising/ads-playbook/build.js')
     await settleStoppedBuild(args.buildRunId)
+    // B-1 — and so is a Replicate run Claude asked for that stopped.
+    const { settleStoppedReplicates } = await import('../../advertising/ads-blueprint-apply.service.js')
+    await settleStoppedReplicates({ applicationId: args.buildRunId })
   }
   const { result: fresh, changing } = await decide(kind, args, ctx)
   const refusal = recheck(ctx, fresh, ['totals', 'basis'])
@@ -593,7 +598,7 @@ const STATUS_INPUT = z.object({
 /** archive-ads also names a playbook build's campaigns at once (PB-5a: the undo of apply-ads-playbook op build). */
 const ARCHIVE_INPUT = STATUS_INPUT.extend({
   buildRunId: z.string().trim().min(1).max(64).optional()
-    .describe('a playbook build (the applicationId apply-ads-playbook answered): every campaign it made that is not archived yet; refused while it runs'),
+    .describe('a playbook build or a Replicate run (the applicationId apply-ads-playbook or replicate-ad-structure answered): every campaign it made that is not archived yet; refused while it runs'),
 })
 
 const pauseAds: AgentTool = {
@@ -690,7 +695,7 @@ const archiveAds: AgentTool = {
     + 'archived by rule, and the advice is to keep it that way). The preview lists each ad, what a campaign or ad group '
     + 'holds that stops with it, the daily budget that stops, and where it lands. Refused, and not queued, when an ad is '
     + 'not found, a draft or not Sponsored Products, or when Amazon\'s write gate would refuse it (a halt does not block an '
-    + 'archive: it only lets go). buildRunId names every campaign a playbook build made (apply-ads-playbook). It cannot be undone.',
+    + 'archive: it only lets go). buildRunId names every campaign a playbook build (apply-ads-playbook) or a Replicate run (replicate-ad-structure) made. It cannot be undone.',
   async handler(args, ctx) {
     return (await decide('archive', args, ctx)).result
   },

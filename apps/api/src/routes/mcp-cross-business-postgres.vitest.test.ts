@@ -1062,6 +1062,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'apply-ads-playbook': { sku: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
+  // B-1 — a copy reads its source campaign in the market it runs in (B's own); no portfolio (the loop would name an id).
+  'replicate-ad-structure': { get sourceMarket() { return seeded.b.market }, portfolioId: undefined },
   // P9 — a file naming B's product by its SKU (built once B is seeded); the saved mapping maps its Name column.
   'import-catalog': () => ({ text: `SKU,Name\n${seeded.b.sku},MCP8 probe name` }),
 }
