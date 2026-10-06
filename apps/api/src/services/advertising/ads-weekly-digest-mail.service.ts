@@ -27,7 +27,7 @@
 import prisma from '../../db.js'
 import { sendEmail } from '../email/transport.js'
 import { logger } from '../../utils/logger.js'
-import { getWeeklyDigest, digestWindow, type WeeklyDigest } from './ads-weekly-digest.service.js'
+import { getWeeklyDigest, digestWindow, digestRecipients, type WeeklyDigest } from './ads-weekly-digest.service.js'
 
 const JOB_NAME = 'ads-weekly-digest'
 /** Monday, 08:00 Europe/Rome — the digest is the week's opening move, not a Friday postscript. */
@@ -49,12 +49,8 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const RULE_NAME_MAX = 44
 const shortName = (s: string) => (s.length <= RULE_NAME_MAX ? s : `${s.slice(0, RULE_NAME_MAX - 1).trimEnd()}…`)
 
-/** Recipients, operator-controlled. No default: mailing someone who never asked is worse than
- *  not mailing at all, and an empty list is a state the panel can show and fix. */
-export function digestRecipients(): string[] {
-  return (process.env.NEXUS_ADS_DIGEST_RECIPIENTS ?? '')
-    .split(',').map((s) => s.trim()).filter(Boolean)
-}
+/** Recipients: defined beside the digest's gates (which count them), re-exported for the senders here. */
+export { digestRecipients } from './ads-weekly-digest.service.js'
 
 export function renderWeeklyDigest(d: WeeklyDigest): string {
   const t = d.totals
