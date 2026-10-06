@@ -32,6 +32,7 @@ import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { AdsDataGrid, type GridColumn } from '../campaigns/_grid/AdsDataGrid'
 import { fetchHourlyPulse, type HourlyCampaign, type HourlyPulse } from './hourly-api'
 import { fmtCount, fmtMoney, fmtShare } from './strategy-api'
+import { acosRank } from '../campaigns/_grid/format'
 import { Caveats, ProvenanceStrip, StatCard, TabState } from './StrategyBits'
 import { SectionLayout, type SectionSpec } from '@/design-system/patterns/SectionLayout'
 import { useSections } from './useSections'
@@ -159,7 +160,8 @@ export function HourlyTab({ market }: { market: string }) {
       key: 'acos',
       label: 'ACOS',
       tip: 'Undefined with no sales — shown as an em-dash, never 0%.',
-      sortValue: (r) => r.acos,
+      // AM-11 rule: spend with no sales sorts as the WORST ACoS; nothing spent sinks as a blank.
+      sortValue: (r) => acosRank(r.acos, r.cost, r.sales),
       render: (r) => (r.acos == null ? <span className="rpt-dash">—</span> : fmtShare(r.acos, 1)),
     },
   ], [])

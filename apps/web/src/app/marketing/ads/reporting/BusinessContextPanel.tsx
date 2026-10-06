@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Info, TrendingDown } from 'lucide-react'
 import { DataGrid } from '@/design-system/grid/datagrid'
 import { fetchBusinessContextDays, money, money2, pct, type BusinessContext, type MarketContext } from './business-api'
+import { acosSortNumber } from '../campaigns/_grid/format'
 
 export function BusinessContextPanel() {
   const [ctx, setCtx] = useState<BusinessContext | null>(null)
@@ -88,8 +89,8 @@ export function BusinessContextPanel() {
             { key: 'mkt', label: 'Market', sortable: true, sortValue: (m) => m.marketplace, render: (m) => <b>{m.marketplace}</b> },
             { key: 'spend', label: 'Ad spend', align: 'right', sortable: true, sortValue: (m) => m.adSpend, render: (m) => money2(m.adSpend, ctx.currency) },
             { key: 'sales', label: 'Total sales', align: 'right', sortable: true, sortValue: (m) => m.totalSales, render: (m) => money2(m.totalSales, ctx.currency) },
-            { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (m) => m.acos ?? -1, render: (m) => pct(m.acos) },
-            { key: 'tacos', label: 'TACoS', align: 'right', sortable: true, sortValue: (m) => m.tacos ?? -1, render: (m) => pct(m.tacos) },
+            { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (m) => acosSortNumber(m.acos, m.adSpend, m.adSales), render: (m) => pct(m.acos) },
+            { key: 'tacos', label: 'TACoS', align: 'right', sortable: true, sortValue: (m) => acosSortNumber(m.tacos, m.adSpend, m.totalSales), render: (m) => pct(m.tacos) },
             { key: 'adshare', label: 'Ad-driven', align: 'right', sortable: true, sortValue: (m) => m.adShare ?? -1, render: (m) => pct(m.adShare) },
           ]}
         />

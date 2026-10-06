@@ -43,6 +43,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Shuffle, Sparkles, User, Wallet } from 'lucide-react'
+import { pct as fractionPct } from '../campaigns/_grid/format'
 
 const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
@@ -188,9 +189,12 @@ export function BidAlgoMenu({ current, anchor, onPick, onClose }: {
 }
 
 /**
- * Target ACoS — stored as a FRACTION (0.3 = 30%).
- * 🔴 The 30-vs-0.3 trap: `PUT /campaigns/:id/goal` refuses the whole-number form, and one rule on
- * prod stores 30 where the rest store 0.3. A value above 1 is therefore already a percentage.
+ * Target ACoS — a FRACTION (0.3 = 30%, 1.5 = 150%).
+ * 🔴 The 30-vs-0.3 trap is refused where it is written (`PUT /campaigns/:id/goal`, and every editor
+ * reads a typed percent through `readTargetAcosPercent`, which sends the fraction). This cell used to
+ * GUESS "a value above 1 is already a percentage" — so a 150% target the editor accepts (it takes up
+ * to 500%) showed as "1.50%". The callers pass a fraction (Apply Rules divides its `targetAcosPct`
+ * by 100), so the cell multiplies, always (AM-4 family).
  */
 export function TargetAcosCell({ fraction }: { fraction?: number | null }) {
   // ADM-A1 — says **None**, not a dash. The vocabulary this file already documents on
@@ -199,8 +203,7 @@ export function TargetAcosCell({ fraction }: { fraction?: number | null }) {
   // is "nobody has set one" — and it was the only one of the four absence cells saying it
   // differently. Measured on prod 2026-08-26: '—' on 100 of 100 rows, null on 220 of 220.
   if (fraction == null) return <span className="h10-rc-none" title="No target ACoS is set on this campaign. Rules that bid to a target read the account default instead.">None</span>
-  const pct = fraction > 1 ? fraction : fraction * 100
-  return <span className="h10-rc-num">{pct.toFixed(2)}%</span>
+  return <span className="h10-rc-num">{fractionPct(fraction)}</span>
 }
 
 /** Min/Max Bid — the two enforced guardrails, in cents. */

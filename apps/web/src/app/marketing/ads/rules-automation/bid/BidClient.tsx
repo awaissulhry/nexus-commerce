@@ -58,6 +58,7 @@ import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
+import { acosRank, acosFilterValue } from '../../campaigns/_grid/format'
 import { ScopeNotes } from '../_shared/ScopeNotes'
 import { buildScopeFilters, scopeToFilterState, type ScopeOptionsPayload, type ScopeValue } from '../_shared/scopeFilters'
 import { useMergedFilters } from '../_shared/useMergedFilters'
@@ -434,7 +435,8 @@ export function BidClient() {
       key: 'acos', label: 'ACoS',
       tip: 'Spend ÷ sales over the window. Blank where there are no sales — an infinite ACoS is not 0% and must never sort as if it were.',
       render: (r) => (!r.measured ? NOT_SERVED : r.acos == null ? NO_VALUE : <span className={r.acos > 0.5 ? 'h10-bd-acos hi' : 'h10-bd-acos'}>{pct(r.acos)}</span>),
-      sortValue: (r) => r.acos ?? -1, filterValue: (r) => (r.acos ?? 0) * 100,
+      // AM-11 — one rule: spend with no sales sorts/filters as the WORST ACoS, never 0 %.
+      sortValue: (r) => acosRank(r.acos, r.spendCents, r.salesCents), filterValue: (r) => acosFilterValue(r.acos, r.spendCents, r.salesCents),
       total: (vis) => { const s = vis.reduce((a, r) => a + r.salesCents, 0); return s > 0 ? pct(vis.reduce((a, r) => a + r.spendCents, 0) / s) : '—' },
     },
   ], [data?.series])
@@ -521,7 +523,8 @@ export function BidClient() {
       key: 'acos', label: 'ACoS',
       tip: 'Recomputed from the campaign\'s summed spend and sales, never averaged from its targets\' own ratios. A mean of ratios is not a ratio of means, and on a page about money that difference is the point.',
       render: (r) => (r.acos == null ? NO_VALUE : <span className={r.acos > 0.5 ? 'h10-bd-acos hi' : 'h10-bd-acos'}>{pct(r.acos)}</span>),
-      sortValue: (r) => r.acos ?? -1, filterValue: (r) => (r.acos ?? 0) * 100,
+      // AM-11 — one rule: spend with no sales sorts/filters as the WORST ACoS, never 0 %.
+      sortValue: (r) => acosRank(r.acos, r.spendCents, r.salesCents), filterValue: (r) => acosFilterValue(r.acos, r.spendCents, r.salesCents),
       total: (vis) => { const s = vis.reduce((a, r) => a + r.salesCents, 0); return s > 0 ? pct(vis.reduce((a, r) => a + r.spendCents, 0) / s) : '—' },
     },
   ], [])

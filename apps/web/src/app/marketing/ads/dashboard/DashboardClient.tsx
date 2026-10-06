@@ -6,10 +6,14 @@ import { SegmentedControl } from '@/design-system/primitives'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { ProfitPanel } from './ProfitPanel'
 import { eur, intl, roas as roasFmt } from '../_canvas/format'
+import { marginText, acosText, placementSharePoints, chartPoint, chartAcosText, type ChartPoint } from './dashboardNumbers'
 import './dashboard.css'
 
+// Units: see ./dashboardNumbers — every percent field below says which one it is.
 interface Summary {
-  campaignCount?: number; adSpend30dCents?: number; trueProfitMargin30dPct?: number | null; mode?: string
+  campaignCount?: number; adSpend30dCents?: number
+  /** PERCENT POINTS (31.2 = 31.2 %), negative on a loss; null when no cost price is loaded. */
+  trueProfitMargin30dPct?: number | null; mode?: string
   // ACR.0.5 — why the margin is '—'. revenuePct is the share of 30d revenue the profit
   // figure covers, so a dash can distinguish "no cost data" from "we broke even".
   trueProfitCoverage?: {
@@ -18,11 +22,15 @@ interface Summary {
     estimatedRows?: number; allEstimated?: boolean
   }
 }
-interface TrendSummary { impressions?: number; clicks?: number; orders?: number; spendCents?: number; salesCents?: number; acos?: number; roas?: number }
-interface TrendRow { date: string; adSpendCents?: number; acos?: number }
+/** `acos` is PERCENT POINTS (38.02 = 38.02 %), null when nothing sold. */
+interface TrendSummary { impressions?: number; clicks?: number; orders?: number; spendCents?: number; salesCents?: number; acos?: number | null; roas?: number }
+/** `acos` is PERCENT POINTS, null on a day with no sales. */
+interface TrendRow { date: string; adSpendCents?: number; acos?: number | null }
 interface Trends { rows?: TrendRow[]; summary?: TrendSummary; previous?: TrendSummary }
 interface Alert { id: string; campaignId?: string; campaignName?: string; type: string; severity: string; message: string }
-interface MomRow { id?: string; label?: string; status?: string; salesCents?: number; acos?: number | null; orders?: number }
+/** `acos` is a FRACTION (0.38 = 38 %), null when nothing sold. */
+interface MomRow { id?: string; label?: string; status?: string; spendCents?: number; salesCents?: number; acos?: number | null; orders?: number }
+/** `placements[].sharePct` is a FRACTION (0.62 = 62 %) despite its name. */
 interface Momentum { campaigns?: MomRow[]; keywords?: MomRow[]; asins?: MomRow[]; placements?: { placement: string; salesCents?: number; sharePct?: number }[] }
 
 const n = (v: unknown): number | undefined => {
@@ -30,10 +38,6 @@ const n = (v: unknown): number | undefined => {
   const x = Number(v)
   return Number.isFinite(x) ? x : undefined
 }
-const marginPct = (v?: number | null) => (v == null ? '—' : `${(v <= 1 ? v * 100 : v).toFixed(0)}%`)
-// ACoS scale differs by endpoint (trends = percent like 38.02; campaign-list = fraction like 0.24).
-// Normalize: values > 1.5 are already a percent; smaller values are a fraction → ×100.
-const acosPct = (a?: number) => (a == null ? '—' : `${(Math.abs(a) > 1.5 ? a : a * 100).toFixed(0)}%`)
 
 function Delta({ cur, prev, goodUp, neutral }: { cur?: number; prev?: number; goodUp?: boolean; neutral?: boolean }) {
   if (cur == null || prev == null || prev === 0) return null
@@ -115,23 +119,23 @@ export function DashboardClient() {
           : undefined)
     : (cov?.reason ?? 'No cost price loaded, so true margin cannot be computed yet.')
   const kpis: { k: string; v: string; d: React.ReactNode; t?: string }[] = [
-    { k: 'Campaigns', v: intl(n(summary?.campaignCount)), d: null },
+    // AM-35 — say the counting rule: the same two states as the Ad Manager's default view.
+    { k: 'Campaigns', v: intl(n(summary?.campaignCount)), d: null, t: 'Enabled and paused campaigns. Archived campaigns are not counted, as in the Ad Manager’s default view.' },
     { k: 'Spend (30d)', v: eur(spend), d: <Delta cur={n(ts.spendCents)} prev={n(tp.spendCents)} neutral /> },
     { k: 'Sales (30d)', v: eur(sales), d: <Delta cur={n(ts.salesCents)} prev={n(tp.salesCents)} goodUp /> },
-    { k: 'ACoS', v: acosPct(n(ts.acos)), d: <Delta cur={n(ts.acos)} prev={n(tp.acos)} goodUp={false} /> },
+    // trends' ACoS is PERCENT POINTS → a fraction for the one formatter.
+    { k: 'ACoS', v: acosText(n(ts.acos) != null ? n(ts.acos)! / 100 : null, n(ts.spendCents)), d: <Delta cur={n(ts.acos)} prev={n(tp.acos)} goodUp={false} /> },
     { k: 'ROAS', v: roasFmt(n(ts.roas)), d: <Delta cur={n(ts.roas)} prev={n(tp.roas)} goodUp /> },
     { k: 'Orders', v: intl(n(ts.orders)), d: <Delta cur={n(ts.orders)} prev={n(tp.orders)} goodUp /> },
     {
       k: marginEstimated ? 'True margin (30d) · est.' : 'True margin (30d)',
-      v: marginPct(summary?.trueProfitMargin30dPct), d: null, t: marginNote,
+      v: marginText(summary?.trueProfitMargin30dPct), d: null, t: marginNote,
     },
   ]
 
-  const chartData = (trends?.rows ?? []).map((r) => ({
-    date: r.date?.slice(5),
-    spend: n(r.adSpendCents) != null ? n(r.adSpendCents)! / 100 : 0,
-    acos: n(r.acos) != null ? Math.round(n(r.acos)!) : 0,
-  }))
+  // AM-19 — a day with spend and no sales has NO ACoS: the line breaks there (null), and the
+  // tooltip says "no sales", instead of plotting the best possible value (0 %) on the worst day.
+  const chartData: ChartPoint[] = (trends?.rows ?? []).map(chartPoint)
 
   const momRows = (mom?.[momTab] ?? []).slice(0, 8)
   const topAlerts = [...alerts].sort((x, y) => (x.severity === 'high' ? -1 : 1) - (y.severity === 'high' ? -1 : 1)).slice(0, 6)
@@ -178,7 +182,7 @@ export function DashboardClient() {
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#8a93a1' }} tickLine={false} axisLine={{ stroke: '#e3e7ec' }} minTickGap={24} />
                 <YAxis yAxisId="l" tick={{ fontSize: 10, fill: '#8a93a1' }} tickLine={false} axisLine={false} width={48} tickFormatter={(v) => `€${v}`} />
                 <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10, fill: '#8a93a1' }} tickLine={false} axisLine={false} width={40} tickFormatter={(v) => `${v}%`} />
-                <Tooltip formatter={(v, name) => (name === 'spend' ? eur(Number(v)) : `${Number(v)}%`)} labelStyle={{ fontWeight: 700 }} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e3e7ec' }} />
+                <Tooltip filterNull={false} formatter={(v, name, item) => (name === 'spend' ? eur(Number(v)) : chartAcosText(v == null ? null : Number(v), (item?.payload as ChartPoint | undefined)?.noSales === true))} labelStyle={{ fontWeight: 700 }} contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e3e7ec' }} />
                 <Line yAxisId="l" type="monotone" dataKey="spend" stroke="#1f6fde" strokeWidth={2} dot={false} name="spend" />
                 <Line yAxisId="r" type="monotone" dataKey="acos" stroke="#e5484d" strokeWidth={2} dot={false} name="acos" />
               </ComposedChart>
@@ -227,7 +231,7 @@ export function DashboardClient() {
                 <div className="dash-momrow" key={(r.id ?? '') + i}>
                   <span className="dash-momname" title={r.label}>{r.label ?? '—'}</span>
                   <span className="dash-momv">{eur(n(r.salesCents) != null ? n(r.salesCents)! / 100 : undefined)}</span>
-                  <span className="dash-momv">{acosPct(n(r.acos))}</span>
+                  <span className="dash-momv">{acosText(n(r.acos), n(r.spendCents))}</span>
                   <span className="dash-momv">{intl(n(r.orders))} ord</span>
                 </div>
               ))}
@@ -238,8 +242,8 @@ export function DashboardClient() {
               {mom.placements.map((p) => (
                 <div className="dash-pl" key={p.placement}>
                   <span className="dash-pl-k">{p.placement.replace('PLACEMENT_', '').replace(/_/g, ' ')}</span>
-                  <span className="dash-pl-bar"><span style={{ width: `${Math.min(100, Math.round(p.sharePct ?? 0))}%` }} /></span>
-                  <span className="dash-pl-v">{Math.round(p.sharePct ?? 0)}%</span>
+                  <span className="dash-pl-bar"><span style={{ width: `${Math.min(100, placementSharePoints(p.sharePct))}%` }} /></span>
+                  <span className="dash-pl-v">{placementSharePoints(p.sharePct)}%</span>
                 </div>
               ))}
             </div>
