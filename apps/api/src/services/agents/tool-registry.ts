@@ -15,6 +15,7 @@ import { ADS_CHANGE_TOOLS } from './tools/ads-change.tools.js'
 import { ADS_TARGET_ACOS_TOOLS } from './tools/ads-target-acos.tools.js'
 import { ADS_STRATEGY_TOOLS } from './tools/ads-strategy.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
+import { ADS_STATUS_TOOLS } from './tools/ads-status.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
@@ -101,6 +102,8 @@ const ALL: AgentTool[] = [
   // Ads autonomy W1-2/W1-3 — the Owner's ads strategy per market, category and product: read, and set (raises need the code).
   ...ADS_STRATEGY_TOOLS,
   ...ADS_CREATE_TOOLS,
+  // Ads autonomy AA-W2-12 — a real pause of Amazon ads, and switching back on what a Claude request paused.
+  ...ADS_STATUS_TOOLS,
   ...EBAY_AD_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,

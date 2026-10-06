@@ -97,7 +97,7 @@ describe('R9 — save-ad-rule', () => {
   it('never pause: a pausing rule is refused before anything waits for a person, naming the substitute', async () => {
     const out = await dry({ ...amazonRule, actions: [{ type: 'pause_campaign' }] })
     expect(out.ok).toBe(false)
-    expect(out.error).toContain('pause_campaign: refused — it pauses — never (Owner rule: lower bids, never pause); use lower_bid_to_floor')
+    expect(out.error).toContain('pause_campaign: refused — it pauses — a rule never pauses (Owner rule: a temporary stop is lower bids); use lower_bid_to_floor')
   })
 
   it('an edit of an AUTO rule drops it to PROPOSE; its basis moves when someone else edits it; undo puts the rule back', async () => {

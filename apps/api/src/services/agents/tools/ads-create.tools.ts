@@ -15,8 +15,14 @@
  *
  * Like every ad change tool (ads-change-kit.ts): the preview states where it lands (live at Amazon on which profile,
  * or sandbox) and a refusal is not queued; it runs only as an approved request, as the approver, and refuses when
- * what was approved moved. A campaign is not deleted or archived by Nexus (d3), so it cannot be undone: it is always
- * asked (Q+A) and Claude may at most ask.
+ * what was approved moved.
+ *
+ * ADS AUTONOMY AA-W2-13 (Owner 2026-10-06; d3 "Nexus never archives" is superseded) — a created campaign can be put
+ * back in part: undo archives it (archive-ads), which is permanent at Amazon. So it is strategy-bound and may run by the
+ * business's rule (D-W2-6 = A: creating is its own kind; the allowlist — set-campaign-live-writes — and starting to spend
+ * — restore-campaign — are separate kinds, each allowed on its own): only inside the ads strategy where its products are
+ * (C1–C7, the month), with Claude's limits for a new campaign's daily budget (0 by default: every one waits for a person)
+ * and its products, every planned bid under the strategy's highest bid, and never the first campaign of a market.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -28,7 +34,9 @@ import { marketCurrency } from '../../pim/market-currency.js'
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
 import { amountLabel, claudeActor, liveReachOf } from './ads-tool-guards.js'
 import { approvedRun, notRun, reachNote, reachRefusal, recheck, storedReach, type StoredReach } from './ads-change-kit.js'
-import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
+import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote } from './ads-autonomy-kit.js'
+import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
+import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const LIST_MAX = 250
 const BID_MAX_CENTS = 10_000
@@ -84,7 +92,10 @@ function twice(values: string[]): string[] {
   return [...repeated]
 }
 
-async function createPreview(raw: Record<string, unknown>): Promise<ToolResult> {
+/** What every preview says about undoing it. */
+const UNDO_WORDS = 'Undo archives it (archive-ads), and that is permanent at Amazon: an archived campaign never comes back.'
+
+async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'> = {}): Promise<ToolResult> {
   const parsed = input.safeParse(raw)
   if (!parsed.success) return { ok: false, error: parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; ') }
   const a: Args = parsed.data
@@ -155,6 +166,14 @@ async function createPreview(raw: Record<string, unknown>): Promise<ToolResult> 
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
   const floor = SUPPRESSION_FLOOR_CENTS
+  // AA-W2-13 — the facts the business's rule is judged on: the new daily budget, where its products are in the strategy.
+  const facts = await buildLimitFacts({
+    tool: 'create-ad-campaign',
+    items: [{ entity: { kind: 'products', market: plan.market, productIds: plan.products.map((p) => p.productId) }, change: { field: 'dailyBudget', fromCents: null, toCents: plan.dailyBudgetCents } }],
+    approvalId: ctx.approvalId ?? null,
+  })
+  // The first campaign of a market is a person's (a new market needs its own strategy, ceiling and Amazon limits).
+  const newMarket = !(await prisma.campaign.findFirst({ where: { marketplace: plan.market }, select: { id: true } }))
   const targeting = plan.keywords.length ? plural(plan.keywords.length, 'keyword') : plural(plan.productTargets.length, 'product target')
   return {
     ok: true,
@@ -167,6 +186,9 @@ async function createPreview(raw: Record<string, unknown>): Promise<ToolResult> 
         note: `Every bid above ${floor} cents starts at the ${floor}-cent floor and the bid planned is remembered: the campaign serves (it is never paused) but spends next to nothing until a person approves restore-campaign, which puts the planned bids back.`,
       },
       liveWrites: false,
+      ...(newMarket ? { newMarket: true, newMarketNote: `NEW MARKET: the first campaign in ${plan.market}.` } : {}),
+      // The highest bid the plan restores at restore-campaign (it starts at the floor).
+      plannedHighestBidCents: highest,
       ceiling: { label: ceiling.label, dailyCapCents: cap },
       reach: stored,
       reachNote: reachNote(stored),
@@ -177,8 +199,57 @@ async function createPreview(raw: Record<string, unknown>): Promise<ToolResult> 
         'set-campaign-live-writes (enabled: true): only an allowlisted campaign takes an approved change live',
         'restore-campaign: puts the planned bids back — the campaign starts spending',
       ],
+      undoNote: UNDO_WORDS,
+      limitFacts: facts,
+      limitsNote: limitsNote(facts),
     },
   }
+}
+
+/**
+ * AA-W2-13 — Claude's limits for a new campaign run by rule: the kit's, the most daily budget it may start with (0 —
+ * every new campaign waits for a person until he types a number) and the most products it may advertise.
+ */
+const CREATE_LIMITS = adKitLimits({ maxItems: 1 }, {
+  maxDailyBudgetCents: z.number().int().min(0).default(0)
+    .describe('the largest daily budget, in minor units of the market\'s currency, a new campaign may start with by rule; 0 = every new campaign waits for a person'),
+  maxProducts: z.number().int().min(0).max(LIST_MAX).default(25).describe('the most products a new campaign may advertise when it is created by rule'),
+})
+
+/** AA-W2-13 — create-ad-campaign's own row checks, after the kit's (C1–C7, the month). Pure. */
+function createRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
+  const facts = limitFactsOf(preview)
+  if (!facts) return null
+  const p = preview as { plan?: Plan; newMarket?: boolean; plannedHighestBidCents?: number }
+  if (!p.plan) return 'the preview names no plan; a person decides'
+  if (p.newMarket) return `it is the first campaign in ${p.plan.market}: a person decides a new market`
+  const budget = typeof limits.maxDailyBudgetCents === 'number' ? limits.maxDailyBudgetCents : 0
+  if (p.plan.dailyBudgetCents > budget) {
+    return `its daily budget ${amountLabel(p.plan.dailyBudgetCents, p.plan.currency)} is more than the ${amountLabel(budget, p.plan.currency)} this tool's limits let a new campaign start with${budget === 0 ? ' (0: every new campaign waits for a person)' : ''}; a person decides`
+  }
+  const products = typeof limits.maxProducts === 'number' ? limits.maxProducts : 25
+  if (p.plan.products.length > products) return `it advertises ${plural(p.plan.products.length, 'product')}, more than the ${products} this tool's limits allow by rule; a person decides`
+  for (const scope of Object.values(facts.scopes)) {
+    const max = scope.limits.maxBidCents
+    if (max == null || !scope.sources.maxBid || (p.plannedHighestBidCents ?? 0) <= max) continue
+    return `its highest planned bid ${amountLabel(p.plannedHighestBidCents!, p.plan.currency)} is above the highest bid ${amountLabel(max, p.plan.currency)} (${strategyWords(scope.sources.maxBid)}); a person decides`
+  }
+  return null
+}
+
+/** C2 — undo of a created campaign: archive it (archive-ads), a new request a person approves. Permanent at Amazon. */
+export const CREATE_CAMPAIGN_UNDO: ToolUndo = {
+  async current(change) {
+    const after = (change.after ?? {}) as { campaignId?: string }
+    const c = after.campaignId ? await prisma.campaign.findFirst({ where: { id: after.campaignId }, select: { name: true, marketplace: true, status: true } }) : null
+    return c && String(c.status) !== 'ARCHIVED' ? { campaignId: after.campaignId, name: c.name, market: c.marketplace } : { campaignId: after.campaignId ?? null, archived: !!c }
+  },
+  request(change) {
+    const campaignId = (change.after as { campaignId?: unknown } | null)?.campaignId
+    return typeof campaignId === 'string' && campaignId
+      ? { tool: 'archive-ads', args: { campaignIds: [campaignId], why: 'undo of a campaign Claude created: archived for good' } }
+      : { refusal: 'This change does not name the campaign it created.' }
+  },
 }
 
 /** The person who asked (the request's run); the approver when the request names nobody (a fleet run). */
@@ -199,25 +270,31 @@ const createAdCampaign: AgentTool = {
   riskTier: 'high',
   readOnly: false,
   alwaysAsk: true,
+  strategyBound: 'amazon-ads',
   requiresApprovalDefault: true,
   openWorld: true,
-  // Nexus never deletes, archives or pauses a campaign (d3): what is created stays.
-  reversibility: 'none',
-  maxClaudeTrust: 'ask',
+  // AA-W2-13 — undo archives it: the campaign stops for good, what it spent stays spent.
+  reversibility: 'partial',
+  maxClaudeTrust: 'auto',
+  limits: CREATE_LIMITS,
+  withinLimits: (preview, limits) => commonRefusal(preview, limits) ?? createRefusal(preview, limits),
+  undo: CREATE_CAMPAIGN_UNDO,
   description:
     'Create a new Amazon Sponsored Products campaign: one manual campaign in one market, one ad group, its products '
-    + '(by SKU) and keywords or product targets, with a daily budget in the market\'s own currency. Nothing is created '
-    + 'until a person approves it in Nexus; it always waits for a person. It is born safe: every bid starts at the '
-    + '2-cent floor (suppressed, never paused) and the campaign is off the live-write allowlist, so it spends next to '
-    + 'nothing until a person approves set-campaign-live-writes and restore-campaign. Refused, and not queued, when the '
-    + 'market has no spend ceiling or the budget is above it, the name is taken, a SKU is not found, or Amazon\'s write '
-    + 'gate would refuse it. The preview shows the whole plan and where it lands (live at Amazon or sandbox). It cannot '
-    + 'be undone (Nexus never deletes or archives a campaign).',
-  async handler(args) {
-    return createPreview(args)
+    + '(by SKU) and keywords or product targets, with a daily budget in the market\'s own currency. A person approves it '
+    + 'in Nexus, unless the business lets it run by its rule inside its limits and the ads strategy (by default it does '
+    + 'not: the daily budget a new campaign may start with by rule is 0). It is born safe: every bid starts at the 2-cent '
+    + 'floor (suppressed, never paused) and the campaign is off the live-write allowlist, so it spends next to nothing '
+    + 'until set-campaign-live-writes and restore-campaign are approved, each a kind of its own. Refused, and not queued, '
+    + 'when the market has no spend ceiling or the budget is above it, the name is taken, a SKU is not found, or '
+    + 'Amazon\'s write gate would refuse it. The preview shows the whole plan, where it lands (live at Amazon or sandbox) '
+    + 'and each limit with where it comes from. Undo archives the campaign (archive-ads): permanent at Amazon, an archived '
+    + 'campaign never comes back.',
+  async handler(args, ctx) {
+    return createPreview(args, ctx)
   },
   async execute(args, ctx) {
-    const fresh = await createPreview(args)
+    const fresh = await createPreview(args, ctx)
     const refusal = recheck(ctx, fresh, ['plan', 'ceiling', 'reach'])
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { plan: Plan; reach: StoredReach; effect: string }

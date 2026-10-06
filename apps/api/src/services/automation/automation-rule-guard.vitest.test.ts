@@ -28,7 +28,7 @@ describe('R9 — the rule guard', () => {
   it('never pause: every pausing action is refused, with the substitute', () => {
     for (const type of ['pause_campaign', 'pause_ad_group', 'pause_target', 'pause_all_campaigns', 'pause_keyword_x']) {
       const out = problems({ actions: [{ type }] })
-      expect(out.join(' '), type).toContain(`${type}: refused — it pauses — never (Owner rule: lower bids, never pause); use lower_bid_to_floor`)
+      expect(out.join(' '), type).toContain(`${type}: refused — it pauses — a rule never pauses (Owner rule: a temporary stop is lower bids); use lower_bid_to_floor`)
     }
     // Switching on, archiving and the structural actions are refused too; eBay and marketing alike.
     expect(problems({ actions: [{ type: 'enable_target' }] }).join(' ')).toContain('enable_target: refused')

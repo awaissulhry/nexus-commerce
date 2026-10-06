@@ -17,6 +17,7 @@ import { bulkPatch } from '../../../../_grid/bulkActions'
 import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
 import type { AdGroupDetailData } from '../AdGroupDetail'
 import { pillTone } from '../../../../../_shared/pillTone'
+import { ArchiveConfirm } from '../../../../../_shared/ArchiveConfirm'
 import { Listbox, useToast } from '@/design-system/components'
 import { adsWriteMany, eachSummary, type EachResult, SEND_NOW } from '../../../../../_shared/adsWrite'
 
@@ -74,6 +75,8 @@ export function AgAdsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData | 
     },
   }), [onRefresh, report])
 
+  // An archive is permanent at Amazon: it waits for the person's confirm (ArchiveConfirm).
+  const [archiveAsk, setArchiveAsk] = useState<{ ids: string[]; clear: () => void } | null>(null)
   const patchEach = async (ids: string[], body: Record<string, unknown>, clear: () => void) => {
     if (bulkBusy) return
     setBulkBusy(true)
@@ -104,13 +107,15 @@ export function AgAdsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData | 
       selectionActions={(ids, clear) => (
         <span className="h10-bulkrow">
           <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ENABLED', reason: 'Bulk enable' }, clear)}>Enable</Button>
-          <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, clear)}>Archive</Button>
+          <Button variant="ghost" disabled={bulkBusy} onClick={() => setArchiveAsk({ ids, clear })}>Archive</Button>
           <Button variant="ghost" disabled={bulkBusy} onClick={() => void patchEach(ids, { status: 'PAUSED', reason: 'Bulk pause' }, clear)}>Pause</Button>
         </span>
       )}
    toolbarRight={<Button variant="primary" onClick={() => setShowAdd(true)}><Plus size={13} /> Add Product</Button>}
       emptyLabel="No ads on this ad group."
     />
+    {archiveAsk && <ArchiveConfirm count={archiveAsk.ids.length} noun={['product ad', 'product ads']} busy={bulkBusy} onCancel={() => setArchiveAsk(null)}
+      onConfirm={() => void patchEach(archiveAsk.ids, { status: 'ARCHIVED', reason: 'Bulk archive' }, archiveAsk.clear).then(() => setArchiveAsk(null))} />}
     {showAdd && adGroup && <AddProductsModal adGroupId={adGroup.id} onClose={() => setShowAdd(false)} onAdded={() => onRefresh?.()} />}
     </>
   )

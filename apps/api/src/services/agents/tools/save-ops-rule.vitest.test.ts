@@ -65,7 +65,7 @@ describe('R18 — the operations rule guard', () => {
   const draft = (patch: Record<string, unknown>) => ({ domain: 'replenishment' as const, opsRuleId: null, name: 'x', description: null, trigger: 'cron_tick', conditions: sku, actions: [{ type: 'notify' }], maxExecutionsPerDay: 5, maxValueCentsEur: 100, ...patch })
   it('refuses a pause, a foreign trigger or action, no conditions, no caps', () => {
     expect(guardOpsRule('bulk-operations', { ...draft({ trigger: 'bulk_cron_tick', actions: [{ type: 'pause_schedules_matching' }] }), domain: 'bulk-operations' }))
-      .toEqual(['pause_schedules_matching: refused — Claude never pauses (Owner rule); a person sets that in Nexus'])
+      .toEqual(['pause_schedules_matching: refused — a rule Claude saves never pauses (Owner rule); a person sets that in Nexus'])
     expect(guardOpsRule('replenishment', draft({ trigger: 'inventory_low' })).join(' ')).toContain('trigger: one of recommendation_generated')
     expect(guardOpsRule('replenishment', draft({ actions: [{ type: 'sync_price_to_marketplaces' }] })).join(' ')).toContain('sync_price_to_marketplaces: not an action a replenishment rule may carry')
     expect(guardOpsRule('replenishment', draft({ conditions: [] }))).toEqual(['conditions: at least one — an empty list matches everything'])
