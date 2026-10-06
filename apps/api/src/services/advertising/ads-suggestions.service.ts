@@ -47,7 +47,8 @@ const NON_PROPOSAL_ACTIONS = new Set(['notify', 'alert_operator', 'log_only'])
  * So these collapse to one card against a stable account-level entity, which is also the truthful
  * one: the proposal is not about NL.
  */
-const SWEEP_ACTIONS = new Set(['harvest_and_negate', 'sync_negatives_across_campaigns'])
+// PB-7 — `isolate_product_terms` sweeps one product's campaigns in one market: one card per rule (a rule is one product × market).
+const SWEEP_ACTIONS = new Set(['harvest_and_negate', 'sync_negatives_across_campaigns', 'isolate_product_terms'])
 
 /** The one entity an account-wide sweep is actually about. */
 const ACCOUNT_ENTITY = { type: 'ACCOUNT', id: 'account', name: 'the whole account' } as const
@@ -65,7 +66,7 @@ const FAMILY_BY_ACTION: Record<string, SuggestionFamily> = {
   raise_bids_for_rank_defense: 'bids', scale_bids_for_price_change: 'bids',
   pause_target: 'bids', enable_target: 'bids',
   promote_to_exact: 'new-keywords', harvest_and_negate: 'new-keywords',
-  add_negative_exact: 'negatives', add_negative_phrase: 'negatives', sync_negatives_across_campaigns: 'negatives',
+  add_negative_exact: 'negatives', add_negative_phrase: 'negatives', sync_negatives_across_campaigns: 'negatives', isolate_product_terms: 'negatives',
   budget_apply: 'budget', adjust_ad_budget: 'budget', set_daily_budget: 'budget', reroute_marketplace_budget: 'budget',
   placement_apply: 'placement', set_placement_multiplier: 'placement',
 }

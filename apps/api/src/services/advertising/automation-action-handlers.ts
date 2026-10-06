@@ -2505,3 +2505,13 @@ logger.debug('[advertising] action handlers registered', {
     'add_negative_exact(scope)',
   ],
 })
+
+// ── PB-7: isolate_product_terms ───────────────────────────────────────
+// Keeps ONE product's own playbook campaigns from bidding against each other (the Owner's rule 3): negatives only inside
+// that product's linked slot campaigns in one market, never in a campaign that also advertises another product, never
+// over a keyword or a winning search term of the ad group, never a protected term. Compiled per product × market by
+// the playbook (ads-playbook/isolation.ts), born off and PROPOSE-capped; the run lives in ads-playbook/isolation-run.ts.
+ACTION_HANDLERS.isolate_product_terms = async (action, _context, meta): Promise<ActionResult> => {
+  const { runIsolation } = await import('./ads-playbook/isolation-run.js')
+  return runIsolation({ action, ruleId: meta.ruleId, dryRun: meta.dryRun, preview: meta.preview, approval: meta.approval })
+}

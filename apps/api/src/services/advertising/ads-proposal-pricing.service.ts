@@ -80,6 +80,7 @@ function stakeFraction(proposedKey: string, action: Record<string, unknown>): { 
     case 'add_negative_exact':
     case 'add_negative_phrase':
     case 'sync_negatives_across_campaigns':
+    case 'isolate_product_terms':
     case 'harvest_and_negate':
       return { frac: 1, direction: 'structural' }
     case 'promote_to_exact':
