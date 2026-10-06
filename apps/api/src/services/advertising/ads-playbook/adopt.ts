@@ -1,7 +1,9 @@
 /**
  * ADS PLAYBOOK PB-5a — ADOPT: bind a product's existing campaigns to the slots of its playbook (Nexus only). Nothing is
- * sent to Amazon and nothing at a campaign changes — not its bids, its allowlist, its rank group or its rules: the
- * playbook learns which of the campaigns it already runs plays which slot, so a later build makes only what is missing.
+ * sent to Amazon and nothing at a campaign changes — not its bids, its allowlist or its rules: the playbook learns which
+ * of the campaigns it already runs plays which slot, so a later build makes only what is missing. The playbook's own
+ * hourly plans follow its slots (PB-8, rank.ts: created switched off; a campaign another hourly plan holds is never
+ * taken, its role is refused by name).
  *
  *   candidates  the market's non-archived Sponsored Products campaigns whose product ads advertise one of the product
  *               family's ASINs, linked to no playbook yet (one campaign plays one slot of one playbook)
@@ -267,10 +269,11 @@ export async function applyAdopt(plan: AdoptPlan, writer: PlaybookApplyWriter & 
     if ((error as { code?: string } | null)?.code === 'P2002') return { error: 'A campaign it binds was linked to a playbook since this adopt was planned: nothing was saved. Ask for it again.' }
     return { error: `Nothing was saved: ${(error as Error).message}` }
   }
-  // The artifacts hook, after the links (PB-8 reports an adopted campaign's rank group; it never moves it).
+  // The artifacts hook, after the links — on an unbind too, so a campaign taken off leaves the playbook's own artifacts
+  // (PB-8 never moves an adopted campaign out of an hourly plan the playbook did not make: it refuses its role).
   const errors: string[] = []
   const compilers = opts.compilers ?? ARTIFACT_COMPILERS
-  if (compilers.length && plan.bindings.length) {
+  if (compilers.length && (plan.bindings.length || plan.unbinds.length)) {
     const links = await prisma.adsPlaybookLink.findMany({ where: { playbookId: plan.playbook.id }, select: { kind: true, key: true, refId: true, adGroupId: true, origin: true } })
     const rankRole = (key: string) => plan.doc.structure.slots.find((s) => s.key === key)?.rankRole ?? 'none'
     const result = await compileArtifacts({
@@ -281,8 +284,13 @@ export async function applyAdopt(plan: AdoptPlan, writer: PlaybookApplyWriter & 
     }, links.filter((l) => l.kind !== 'slot' && l.kind !== 'portfolio'), compilers)
     errors.push(...result.errors)
     for (const l of result.links) {
-      try { await prisma.adsPlaybookLink.create({ data: { playbookId: plan.playbook.id, kind: l.kind, key: l.key, refId: l.refId, origin: 'built', compiledVersion: plan.playbook.version, updatedBy: writer.updatedBy } }) }
-      catch (e) { errors.push(`link ${l.kind} ${l.key}: ${(e as Error).message.slice(0, 160)}`) }
+      // An artifact the playbook holds already keeps its link (its refId follows a group made again).
+      try {
+        const mine = await prisma.adsPlaybookLink.findFirst({ where: { playbookId: plan.playbook.id, kind: l.kind, key: l.key }, select: { id: true } })
+        const data = { refId: l.refId, origin: 'built', compiledVersion: plan.playbook.version, updatedBy: writer.updatedBy }
+        if (mine) await prisma.adsPlaybookLink.update({ where: { id: mine.id }, data })
+        else await prisma.adsPlaybookLink.create({ data: { playbookId: plan.playbook.id, kind: l.kind, key: l.key, ...data } })
+      } catch (e) { errors.push(`link ${l.kind} ${l.key}: ${(e as Error).message.slice(0, 160)}`) }
     }
   }
   return { bound: plan.bindings.length, unbound: plan.unbinds.length, errors }

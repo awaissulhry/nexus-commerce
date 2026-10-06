@@ -1,7 +1,7 @@
 /**
  * ADS PLAYBOOK PB-5a — the hook the playbook's other parts plug into (PB-5 spec §4): the hourly-plan groups (PB-8), the
  * harvest rule (PB-6b) and the isolation rule (PB-7) are each an `ArtifactCompiler`, one import and one entry in
- * ARTIFACT_COMPILERS. EMPTY in PB-5a: a build or an adopt writes its slot links and nothing else.
+ * ARTIFACT_COMPILERS. In: the hourly-plan groups (PB-8, rank.ts).
  *
  *   preview     every op's preview shows what each compiler would do (no writes)
  *   compile     after the slot links of a build or an adopt: each compiler creates (or updates) its artifacts DISABLED and
@@ -12,6 +12,7 @@
  */
 import type { AdsActor } from '../ads-mutation.service.js'
 import type { TemplateDoc } from './doc.js'
+import { rankGroupCompiler } from './rank.js'
 
 export type ArtifactKind = 'rankGroup' | 'harvestRule' | 'isolationRule'
 
@@ -59,8 +60,8 @@ export interface ArtifactCompiler {
   setEnabled(ctx: ArtifactContext, links: readonly ArtifactLink[], enabled: boolean): Promise<{ changed: string[]; errors: string[] }>
 }
 
-/** PB-8: rankGroupCompiler · PB-6b: the harvest rule · PB-7: the isolation rule. */
-export const ARTIFACT_COMPILERS: readonly ArtifactCompiler[] = []
+/** PB-8: rankGroupCompiler (rank.ts) · PB-6b: the harvest rule · PB-7: the isolation rule. */
+export const ARTIFACT_COMPILERS: readonly ArtifactCompiler[] = [rankGroupCompiler]
 
 /** An artifact link as the playbook stores it (AdsPlaybookLink of its kind). */
 export interface StoredArtifactLink { kind: string; key: string; refId: string }

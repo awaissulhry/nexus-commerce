@@ -8,8 +8,8 @@
  *           serves next to nothing (not nothing) until START. The plan is the dry run's (ads-playbook view compile),
  *           judged by the blueprint gate (Owner rule 3: only the product's own campaigns are kept apart); `execute`
  *           re-plans it and runs exactly what was approved, detached: it answers the run's id at once (view build).
- *   adopt   bind existing campaigns to the product's slots (ads-playbook/adopt.ts): Nexus links only — nothing at Amazon,
- *           no allowlist, bid, rank group or rule moves.
+ *   adopt   bind existing campaigns to the product's slots (ads-playbook/adopt.ts): Nexus only — nothing at Amazon, no
+ *           allowlist, bid or rule moves; the playbook's own hourly plans follow the slots, switched off (PB-8, rank.ts).
  *
  * Like every ad change tool (ads-change-kit.ts): the preview says where it lands and a refusal is not queued; it runs only
  * as an approved request, as the approver, and refuses when what was approved moved. Strategy-bound (ads-autonomy-kit.ts):
@@ -174,10 +174,19 @@ async function adoptPreview(a: Args): Promise<{ result: ToolResult; plan?: Adopt
     ].filter(Boolean).join('; ')
     return refuse(`Nothing to adopt for ${p.product.sku} in ${p.market}${why ? `: ${why}` : ''}.`)
   }
+  // The playbook's own artifacts after the adopt (PB-8: its hourly plans follow the slots, created switched off).
+  const rankRole = (key: string) => p.doc.structure.slots.find((s) => s.key === key)?.rankRole ?? 'none'
+  const after = [...p.linked, ...p.bindings.map((b) => ({ slot: b.slot, campaignId: b.campaignId }))]
+  const artifacts = await previewArtifacts({
+    playbookId: p.playbook.id, market: p.market, productId: p.product.productId, nameToken: p.nameToken, doc: p.doc,
+    slots: after.map((l) => ({ key: l.slot, campaignId: l.campaignId, adGroupId: null, origin: 'adopted', rankRole: rankRole(l.slot) })),
+    mode: 'adopt', actor: 'user:preview', changeSetId: null, compiledVersion: p.playbook.version,
+  }, [])
   const effect = `Binds ${plural(p.bindings.length, 'campaign')} ${p.product.sku} already runs in ${p.market} to its playbook's slots`
     + `${p.bindings.length ? ` (${p.bindings.map((b) => `${b.slot} ← "${b.name}"`).join(', ')})` : ''}`
     + `${p.unbinds.length ? `, and takes ${plural(p.unbinds.length, 'adopted slot')} off again (${p.unbinds.map((u) => u.slot).join(', ')})` : ''}. `
-    + 'Nexus only: nothing is sent to Amazon, and no bid, allowlist, rank group or rule of these campaigns changes.'
+    + 'Nexus only: nothing is sent to Amazon by the links, and no bid, allowlist or rule of these campaigns changes. '
+    + "The playbook's own hourly plans follow its slots (artifacts): created switched off, nothing runs until START; an hourly plan the playbook did not make is never touched."
   return {
     plan: p,
     result: {
@@ -196,6 +205,8 @@ async function adoptPreview(a: Args): Promise<{ result: ToolResult; plan?: Adopt
         linked: p.linked,
         ...(p.portfolioId ? { portfolio: { portfolioId: p.portfolioId, does: 'link' } } : {}),
         warnings: p.warnings,
+        artifacts: artifacts.lines,
+        ...(artifacts.errors.length ? { artifactErrors: artifacts.errors } : {}),
         basis: p.basis,
         reachNote: 'Nexus only: nothing is sent to Amazon by this change.',
         effect,
@@ -322,7 +333,8 @@ const applyAdsPlaybook: AgentTool = {
     + 'to nothing until a later START. The plan is the dry run of ads-playbook view compile, held to the blueprint gate '
     + '(only the product\'s own campaigns are kept apart; another product may buy the same keyword). It runs on its own '
     + 'once approved: follow it with ads-playbook view build. op adopt binds campaigns the product already runs to its '
-    + 'slots (bind names some; the rest match by name, then by shape): Nexus links only, nothing at Amazon moves. A person '
+    + 'slots (bind names some; the rest match by name, then by shape): Nexus only, nothing at Amazon moves (the playbook\'s '
+    + 'own hourly plans follow the slots, switched off until START; one another plan holds is never taken). A person '
     + 'approves it in Nexus, unless the business lets it run by its rule inside its limits and the ads strategy (by '
     + 'default a build does not: maxCampaigns 0). Refused, and not queued, when the product is not enrolled, nothing is '
     + 'missing, the gate or Amazon\'s write gate refuses it, or a build of it is already running. Undo: a build is archived '
