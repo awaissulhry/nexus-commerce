@@ -4,7 +4,8 @@
  *   units      an integer percent becomes the engines' fraction (30 → 0.3) and back; a stored fraction (0.3) is never
  *              read as a percent, nor a percent (30) as 3,000 %
  *   schema     every registry column is an AdsStrategy column and every setting column is in the registry
- *   honest     no field has a reader yet: readBy is empty everywhere and notReadYet lists every field
+ *   honest     exactly the readers that exist (W1-6: the budget engine, the retail guard, suppress-campaign and the
+ *              engine guard's market caps); notReadYet lists every other field
  *   money      every money field's value keys are stripped for a person without ad-spend money
  *   names      every tool an action type narrows is a registered tool; the constants mirror their sources
  */
@@ -56,9 +57,17 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: no engine, rule or Claude door reads any field yet', () => {
-    expect(STRATEGY_FIELDS.filter((f) => f.readBy.length)).toEqual([])
-    expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key))
+  it('is honest: each field names exactly the engines and doors that act on it, and notReadYet the rest', () => {
+    // W1-6 — the budget engine stops a market at its cap with the stop bid (ads-budget-enforce.service.ts); the retail
+    // guard (ads-retail-readiness.service.ts) and suppress-campaign (ads-change.tools.ts) floor at the stop bid; the
+    // engine guard (ads-engine-guard.ts) counts a market's actions per run for the engines that name the market.
+    const readers = Object.fromEntries(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => [f.key, f.readBy]))
+    expect(readers).toEqual({
+      monthlySpendCapCents: ['budget engine (the market cap)'],
+      maxActionsPerRun: ['hourly bid plans (rank-defend)', 'budget engine', 'dayparting'],
+      stop: ['budget engine', 'retail guard', 'suppress-campaign'],
+    })
+    expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key).filter((k) => !(k in readers)))
   })
 
   it('every money field keeps its numbers under keys the money filter strips (ad-spend money)', () => {

@@ -20,6 +20,8 @@ const db = vi.hoisted(() => ({
   // 1d — a live pool reads the account dial and today's changes first (ads-engine-guard.ts): AUTO, none yet.
   adsAutomationState: { upsert: vi.fn(async () => ({ autonomy: 'AUTO', halted: false })) },
   advertisingActionLog: { count: vi.fn(async () => 0) },
+  // W1-6 — and each market's own cap per run from the ads strategy: none set.
+  adsStrategy: { findMany: vi.fn(async () => []) },
 }))
 vi.mock('../../db.js', () => ({ default: db }))
 vi.mock('./ads-mutation.service.js', async (importOriginal) => ({

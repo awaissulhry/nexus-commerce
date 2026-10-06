@@ -16,6 +16,22 @@
  * services. The cron runs DRY-RUN unless NEXUS_BUDGET_ENFORCE_APPLY=1, and
  * even then the ads-mutation layer short-circuits outside live mode — two
  * independent gates, honouring [[feedback_no_pause_use_low_bids]].
+ *
+ * ADS AUTONOMY W1-6 — the ads strategy's market cap (AdsStrategy, `monthlySpendCapCents` on the market row) is a
+ * STANDING monthly stop: it binds every month, with or without a budget plan (marketCaps below):
+ *   · the cap that stops a market is the lower of this month's plan (when its Stop Over Spend is on) and the strategy's;
+ *     pacing paces the plan's envelope, never above the strategy's cap;
+ *   · a floor lands at the strategy's stop bid for that campaign (the lower across its products), else the 2¢ floor;
+ *   · floors carry this engine's own `bidsSuppressedBy`, and only those are ever given back: rank's, dayparting's, the
+ *     retail guard's and a person's floors are never lifted here, and they never lift this engine's (they hold for
+ *     an owner that is not theirs);
+ *   · given back when the market is under its stop cap again: on the 1st (month-to-date spend starts again from 0),
+ *     or at once when the cap is raised or removed, or Stop Over Spend is switched off — a market whose cap is gone
+ *     still gets its floors back.
+ * Month-to-date spend is Amazon's daily campaign report (AmazonAdsDailyPerformance, entityType CAMPAIGN): whole days,
+ * yesterday's requested at 01:15 UTC (ads-report-create) and stored once Amazon has built it (polled every 10 minutes,
+ * ingested every 15). Today's spend is never in it, so a cap is seen as reached the morning after the spend that
+ * reached it, and the market can pass its cap by up to about a day of spend (`spendThrough` says which day it covers).
  */
 
 import prisma from '../../db.js'
@@ -28,6 +44,8 @@ import { allowChange, nothingHeld, openEngineGuard, readEnginePosture, type Engi
 import { adsMode } from './ads-api-client.js'
 import { envEnabled } from '../../utils/env-flag.js'
 import type { AutomationLevel } from '../automation/automation-levels.js'
+import { loadMarketRows } from './ads-strategy/load.js'
+import { openStrategy, stopBidsIn, strategySourceWords, type StrategyView } from './ads-strategy/effective.js'
 
 const FLOOR_CENTS = 100 // €1/day — Amazon's minimum campaign budget
 /** Actor prefix this engine stamps on Campaign.bidsSuppressedBy when it suppresses. */
@@ -44,14 +62,29 @@ export interface CampaignDecision {
   suppress: boolean // floor bids now (cap reached, not yet suppressed)
   restore: boolean // restore bids now (back under cap, currently suppressed)
   currentlySuppressed: boolean
+  /** W1-6 — when `suppress`: the bid the floor lands at (the ads strategy's stop bid, else 2¢) and where it comes from. */
+  stopBidCents?: number
+  stopBidFrom?: string
 }
 export interface PlanDecision {
   marketplace: string; month: string
+  /** The cap pacing paces and the screens show: the plan's, lowered to the ads strategy's when that is lower (W1-6). */
   capCents: number; mtdSpendCents: number; remainingBudgetCents: number
   remainingDays: number; dayOfMonth: number; daysInMonth: number
-  autoPacing: boolean; stopOverSpend: boolean; capReached: boolean
+  /** `stopOverSpend`: a stop is in force this month — the plan's switch, or the ads strategy's cap (always a stop). */
+  autoPacing: boolean; stopOverSpend: boolean
+  /** The cap where bids drop is reached (with no stop in force: the plan's cap). */
+  capReached: boolean
   todayTargetCents: number | null
   campaigns: CampaignDecision[]
+  /** W1-6 — this month's budget plan cap (null: no plan, or a cap of 0) and the ads strategy's market cap, each as set. */
+  planCapCents: number | null
+  strategyCap: { cents: number; from: string } | null
+  /** W1-6 — where bids drop (null: no stop in force) and which cap that is. */
+  stopCapCents: number | null
+  stopBy: 'plan' | 'strategy' | null
+  /** W1-6 — the last day the month-to-date spend covers ('YYYY-MM-DD'; null: no report this month yet). Never today. */
+  spendThrough: string | null
 }
 export interface EnforcementResult {
   month: string
@@ -68,16 +101,68 @@ function bounds(month: string) {
   return { daysInMonth, dayOfMonth, start: new Date(Date.UTC(y, m - 1, 1)), end: new Date(Date.UTC(y, m, 1)) }
 }
 
+/** W1-6 — the caps of ONE market this month (pure). */
+export interface MarketCaps {
+  /** What pacing paces and the screens call the cap: the plan's, lowered to the strategy's when that is lower; the strategy's alone without a plan. */
+  capCents: number | null
+  /** Where bids drop: the plan's cap while its Stop Over Spend is on, the strategy's always — the lower binds. Null: no stop. */
+  stopCapCents: number | null
+  stopBy: 'plan' | 'strategy' | null
+  /** The envelope Auto Pacing divides (Auto Pacing on only), never above the strategy's cap. */
+  pacingCapCents: number | null
+}
+
+/**
+ * W1-6 — which cap stops a market and which one pacing paces, from this month's plan and the ads strategy's market cap.
+ * A plan cap of 0 is "no budget set" (as the Budget Manager reads it); a strategy cap of 0 is a cap: spend nothing.
+ */
+export function marketCaps(
+  plan: { monthlyBudgetCents: number; autoPacing: boolean; stopOverSpend: boolean } | null,
+  strategyCapCents: number | null,
+): MarketCaps {
+  const planCap = plan && plan.monthlyBudgetCents > 0 ? plan.monthlyBudgetCents : null
+  const lower = (...caps: Array<number | null>) => {
+    const set = caps.filter((c): c is number => c != null)
+    return set.length ? Math.min(...set) : null
+  }
+  const planStop = plan?.stopOverSpend ? planCap : null
+  const stopCapCents = lower(planStop, strategyCapCents)
+  return {
+    capCents: lower(planCap, strategyCapCents),
+    stopCapCents,
+    stopBy: stopCapCents == null ? null : strategyCapCents != null && strategyCapCents <= (planStop ?? Number.POSITIVE_INFINITY) ? 'strategy' : 'plan',
+    pacingCapCents: plan?.autoPacing && planCap != null ? lower(planCap, strategyCapCents) : null,
+  }
+}
+
+const isBudgetFloor = (by: string | null | undefined) => (by ?? '').startsWith(BUDGET_ACTOR_PREFIX)
+
 export async function computeBudgetEnforcement(opts: { month?: string } = {}): Promise<EnforcementResult> {
   const month = opts.month ?? currentMonth()
   const { daysInMonth, dayOfMonth, start, end } = bounds(month)
   const remainingDays = Math.max(1, daysInMonth - dayOfMonth + 1)
+  const empty: EnforcementResult = { month, plans: [], totals: { plans: 0, budgetChanges: 0, suppressing: 0, restoring: 0, netDeltaCents: 0 } }
 
-  const plans = await prisma.adBudgetPlan.findMany({ where: { month, tag: null, OR: [{ autoPacing: true }, { stopOverSpend: true }] } })
-  if (plans.length === 0) return { month, plans: [], totals: { plans: 0, budgetChanges: 0, suppressing: 0, restoring: 0, netDeltaCents: 0 } }
+  // W1-6 — three things put a market in the run: a plan with Auto Pacing or Stop Over Spend, an ads strategy market
+  // cap (a standing stop, no plan needed), or floors this engine set where no cap is in force any more (given back).
+  const [plans, strategyRows, ownFloors] = await Promise.all([
+    prisma.adBudgetPlan.findMany({ where: { month, tag: null } }),
+    loadMarketRows(['monthlySpendCapCents']),
+    prisma.campaign.findMany({ where: { status: 'ENABLED', bidsSuppressedAt: { not: null }, bidsSuppressedBy: { startsWith: BUDGET_ACTOR_PREFIX }, marketplace: { not: null } }, select: { marketplace: true }, distinct: ['marketplace'] }),
+  ])
+  const planByMkt = new Map(plans.map((p) => [p.marketplace, p]))
+  const strategyMarkets = new Set(strategyRows.map((r) => r.market))
+  const markets = [...new Set([
+    ...plans.filter((p) => p.autoPacing || p.stopOverSpend).map((p) => p.marketplace),
+    ...strategyMarkets,
+    ...ownFloors.map((c) => c.marketplace as string),
+  ])].sort()
+  if (markets.length === 0) return empty
 
-  const spendRows = await prisma.amazonAdsDailyPerformance.groupBy({ by: ['marketplace'], where: { entityType: 'CAMPAIGN', date: { gte: start, lt: end } }, _sum: { costMicros: true } })
+  // W1-6 — `_max.date`: the last day the month-to-date spend covers (the daily report arrives the next morning).
+  const spendRows = await prisma.amazonAdsDailyPerformance.groupBy({ by: ['marketplace'], where: { entityType: 'CAMPAIGN', date: { gte: start, lt: end } }, _sum: { costMicros: true }, _max: { date: true } })
   const mtdByMkt = new Map(spendRows.map((r) => [r.marketplace, Math.round(Number(r._sum.costMicros ?? 0) / 10_000)]))
+  const throughByMkt = new Map(spendRows.map((r) => [r.marketplace, r._max.date ? new Date(r._max.date).toISOString().slice(0, 10) : null]))
 
   // Month-to-date spend PER CAMPAIGN. Pacing used to divide the envelope in proportion to
   // each campaign's nominal daily budget, which is not a measure of what it consumes: this
@@ -96,13 +181,19 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
   const planDecisions: PlanDecision[] = []
   let budgetChanges = 0, suppressing = 0, restoring = 0, netDelta = 0
 
-  for (const p of plans) {
-    const cap = p.monthlyBudgetCents
-    const mtd = mtdByMkt.get(p.marketplace) ?? 0
+  for (const marketplace of markets) {
+    const p = planByMkt.get(marketplace) ?? null
+    // The strategy is opened for a market with a cap, and for any market where a floor is due (its stop bid).
+    let view: StrategyView | null = strategyMarkets.has(marketplace) ? await openStrategy(marketplace) : null
+    const strategyCap = view?.forMarket().values.monthlyCaps.find((c) => c.source.level === 'market') ?? null
+    const caps = marketCaps(p, strategyCap?.monthlySpendCapCents ?? null)
+    const cap = caps.capCents ?? 0
+    const mtd = mtdByMkt.get(marketplace) ?? 0
     const remainingBudget = Math.max(0, cap - mtd)
-    const capReached = cap > 0 && mtd >= cap
-    const cal = ((p.calendar as unknown as Array<{ day: number; pct: number }>) ?? [])
-    const limByCamp = new Map(((p.campaignLimits as unknown as CampaignLimit[]) ?? []).map((l) => [l.campaignId, l]))
+    const stopNow = caps.stopCapCents != null && mtd >= caps.stopCapCents
+    const capReached = caps.stopCapCents != null ? stopNow : cap > 0 && mtd >= cap
+    const cal = ((p?.calendar as unknown as Array<{ day: number; pct: number }>) ?? [])
+    const limByCamp = new Map(((p?.campaignLimits as unknown as CampaignLimit[]) ?? []).map((l) => [l.campaignId, l]))
 
     // CORRECTIVE, not prescriptive. Pacing exists to stop a cap being breached, so it may
     // only act when the month is actually heading past it. Rewriting every daily budget to
@@ -115,7 +206,7 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
     // days it converts.
     const daysElapsed = Math.max(1, dayOfMonth)
     const projectedCents = cap > 0 ? Math.round(mtd + (mtd / daysElapsed) * remainingDays) : 0
-    const pacingNeeded = p.autoPacing && cap > 0 && projectedCents > cap
+    const pacingNeeded = caps.pacingCapCents != null && cap > 0 && projectedCents > cap
 
     // Today's whole-market target: calendar-weighted share of the remaining
     // envelope (so a tentpole day pulls forward), else an even daily split.
@@ -131,7 +222,7 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
       }
     }
 
-    const camps = await prisma.campaign.findMany({ where: { marketplace: p.marketplace, status: 'ENABLED' }, select: { id: true, name: true, dailyBudget: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
+    const camps = await prisma.campaign.findMany({ where: { marketplace, status: 'ENABLED' }, select: { id: true, name: true, dailyBudget: true, bidsSuppressedAt: true, bidsSuppressedBy: true } })
     const curById = new Map(camps.map((c) => [c.id, Math.round(Number(c.dailyBudget ?? 0) * 100)]))
     const curTotal = camps.reduce((s, c) => s + (curById.get(c.id) ?? 0), 0)
     const spendTotal = camps.reduce((s, c) => s + (mtdByCamp.get(c.id) ?? 0), 0)
@@ -164,18 +255,30 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
       // Without this the cron lifted 33 live Min-bid suppressions every time it ran, which
       // is the no-pause mechanism being fought by another engine on the same field. A null
       // owner predates the column and is read as NOT MINE, so legacy rows are left alone.
-      const suppressedByBudget = (c.bidsSuppressedBy ?? '').startsWith(BUDGET_ACTOR_PREFIX)
-      const suppress = p.stopOverSpend && capReached && !currentlySuppressed
-      const restore = p.stopOverSpend && !capReached && currentlySuppressed && suppressedByBudget
+      // W1-6 — given back whenever the market is under its stop cap: also when no stop is in force any more (the
+      // cap removed, Stop Over Spend switched off, last month's plan gone), so a floor never outlives its cap.
+      const suppress = stopNow && !currentlySuppressed
+      const restore = !stopNow && currentlySuppressed && isBudgetFloor(c.bidsSuppressedBy)
       return { id: c.id, name: c.name, currentDailyCents: cur, targetDailyCents: target, deltaCents: target != null ? target - cur : 0, clamp, suppress, restore, currentlySuppressed }
     })
 
+    const due = decisions.filter((d) => d.suppress).map((d) => d.id)
+    if (due.length && !view) view = await openStrategy(marketplace)
+    const floors = await stopBidsIn(view, due)
     for (const d of decisions) {
+      const stop = floors.get(d.id)
+      if (stop) { d.stopBidCents = stop.cents; if (stop.source) d.stopBidFrom = strategySourceWords(stop.source) }
       if (d.targetDailyCents != null && d.deltaCents !== 0) { budgetChanges++; netDelta += d.deltaCents }
       if (d.suppress) suppressing++
       if (d.restore) restoring++
     }
-    planDecisions.push({ marketplace: p.marketplace, month, capCents: cap, mtdSpendCents: mtd, remainingBudgetCents: remainingBudget, remainingDays, dayOfMonth, daysInMonth, autoPacing: p.autoPacing, stopOverSpend: p.stopOverSpend, capReached, todayTargetCents: todayTarget, campaigns: decisions })
+    planDecisions.push({
+      marketplace, month, capCents: cap, mtdSpendCents: mtd, remainingBudgetCents: remainingBudget, remainingDays, dayOfMonth, daysInMonth,
+      autoPacing: caps.pacingCapCents != null, stopOverSpend: caps.stopCapCents != null, capReached, todayTargetCents: todayTarget, campaigns: decisions,
+      planCapCents: p && p.monthlyBudgetCents > 0 ? p.monthlyBudgetCents : null,
+      strategyCap: strategyCap ? { cents: strategyCap.monthlySpendCapCents, from: strategySourceWords(strategyCap.source) } : null,
+      stopCapCents: caps.stopCapCents, stopBy: caps.stopBy, spendThrough: throughByMkt.get(marketplace) ?? null,
+    })
   }
 
   return { month, plans: planDecisions, totals: { plans: planDecisions.length, budgetChanges, suppressing, restoring, netDeltaCents: netDelta } }
@@ -203,7 +306,8 @@ export async function applyBudgetEnforcement(opts: { month?: string; actor?: Ads
       for (const d of plan.campaigns) {
         const paces = d.targetDailyCents != null && d.deltaCents !== 0
         if (!paces && !d.suppress && !d.restore) continue
-        const permit = guard.permit()
+        // W1-6 — the market's own "most actions per run" (the ads strategy) counts this campaign's changes too.
+        const permit = guard.permit({ market: plan.marketplace })
         const held = nothingHeld()
         let writes = 0
         try {
@@ -211,8 +315,8 @@ export async function applyBudgetEnforcement(opts: { month?: string; actor?: Ads
             const r = await updateCampaignWithSync({ campaignId: d.id, patch: { dailyBudget: d.targetDailyCents! / 100 }, actor, reason: `budget pacing: ${plan.marketplace} ${plan.month} → €${(d.targetDailyCents! / 100).toFixed(2)}/day` })
             if (r.ok) { budgetApplied++; writes++ } else failed++
           }
-          if (d.suppress && allowChange(true, permit, held, 'floor')) { writes += await suppressCampaignBids(d.id, { actor, reason: `stop over spend: ${plan.marketplace} cap €${(plan.capCents / 100).toFixed(2)} reached` }); suppressed++ }
-          else if (d.restore && allowChange(true, permit, held, 'restore')) { writes += await restoreCampaignBids(d.id, { actor, reason: `stop over spend: ${plan.marketplace} back under cap` }); restored++ }
+          if (d.suppress && allowChange(true, permit, held, 'floor')) { writes += await suppressCampaignBids(d.id, { actor, floorCents: d.stopBidCents ?? null, reason: stopReason(plan, d) }); suppressed++ }
+          else if (d.restore && allowChange(true, permit, held, 'restore')) { writes += await restoreCampaignBids(d.id, { actor, reason: plan.stopCapCents == null ? `stop over spend: ${plan.marketplace} has no monthly cap in force any more` : `stop over spend: ${plan.marketplace} back under cap` }); restored++ }
         } catch (e) { failed++; logger.warn('[budget-enforce] apply failed', { campaignId: d.id, error: (e as Error).message }) }
         guard.settle(permit, writes, held)
       }
@@ -221,6 +325,14 @@ export async function applyBudgetEnforcement(opts: { month?: string; actor?: Ads
 
   logger.info(`[budget-enforce] ${dryRun ? 'dry-run' : 'applied'}`, { month: result.month, plans: result.totals.plans, budgetApplied, suppressed, restored, failed })
   return { dryRun, budgetApplied, suppressed, restored, failed, result, ...(guard ? { guard: guard.report() } : {}) }
+}
+
+/** W1-6 — an action-log reason for a floor: which cap was reached, and the stop bid when the ads strategy set it. */
+function stopReason(plan: PlanDecision, d: CampaignDecision): string {
+  const cap = plan.stopBy === 'strategy' && plan.strategyCap
+    ? `${plan.marketplace} monthly cap reached (${plan.strategyCap.from})`
+    : `${plan.marketplace} cap €${((plan.stopCapCents ?? plan.capCents) / 100).toFixed(2)} reached`
+  return `stop over spend: ${cap}${d.stopBidFrom ? ` → bids to ${d.stopBidCents}¢ (${d.stopBidFrom})` : ''}`
 }
 
 /** 1d — what enforcement still does under the dial, for its run summary. */
@@ -272,8 +384,8 @@ export async function budgetEnforceMode(): Promise<BudgetEnforceMode> {
   const writeMode = adsMode()
   const base = { mode: gate.mode, switchNote: gate.note, scheduled, adsWriteMode: writeMode, posture: dial.posture }
   const off = (sentence: string): BudgetEnforceMode => ({ ...base, live: false, label: 'Off', sentence })
-  if (!scheduled) return off('Off: the Amazon ads crons are not scheduled on this server (NEXUS_ENABLE_AMAZON_ADS_CRON), so Auto Pacing and Stop Over Spend change nothing.')
-  if (gate.mode === 'OFF') return off(`Off for this business (${gate.note ?? 'switched off'}): Auto Pacing and Stop Over Spend change nothing.`)
+  if (!scheduled) return off('Off: the Amazon ads crons are not scheduled on this server (NEXUS_ENABLE_AMAZON_ADS_CRON), so Auto Pacing, Stop Over Spend and the ads strategy\'s monthly caps change nothing.')
+  if (gate.mode === 'OFF') return off(`Off for this business (${gate.note ?? 'switched off'}): Auto Pacing, Stop Over Spend and the ads strategy's monthly caps change nothing.`)
   if (gate.mode === 'OBSERVE') {
     const why = gate.note ?? 'NEXUS_BUDGET_ENFORCE_APPLY is not 1 on this server'
     return { ...base, live: false, label: 'Observe only', sentence: `Observe only (${why}): every 30 minutes the engine works out what it would change and applies nothing.` }
@@ -285,10 +397,10 @@ export async function budgetEnforceMode(): Promise<BudgetEnforceMode> {
     return { ...base, live: false, label: 'Suggest only', sentence: `Live, but ${dial.why}: it writes nothing new and only gives back bids it floored.` }
   }
   if (dial.posture === 'stopped') {
-    return { ...base, live: true, label: 'Stopped', sentence: `Live but stopped (${dial.why}): when a cap is reached bids still drop to about €0.02; budget pacing and restores wait for Resume.` }
+    return { ...base, live: true, label: 'Stopped', sentence: `Live but stopped (${dial.why}): when a cap is reached bids still drop to about €0.02 (or the ads strategy's stop bid); budget pacing and restores wait for Resume.` }
   }
   return {
     ...base, live: true, label: 'Live',
-    sentence: 'Live: every 30 minutes it changes campaign daily budgets on Amazon when a market is projected over its monthly cap, and drops bids to about €0.02 when the cap is reached. Nothing is paused.',
+    sentence: 'Live: every 30 minutes it changes campaign daily budgets on Amazon when a market is projected over its monthly cap, and drops bids to about €0.02 (or the ads strategy\'s stop bid) when a cap is reached — a budget plan\'s with Stop Over Spend on, or the ads strategy\'s monthly cap — until the 1st. Nothing is paused.',
   }
 }
