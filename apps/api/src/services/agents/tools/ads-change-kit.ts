@@ -225,6 +225,20 @@ export function changeClampedBid(currentBidCents: number, wantedCents: number, d
   return stepClamp(currentBidCents, wantedCents, dynamicBidding, strategy).cents
 }
 
+/** D4 — the lowest stop bid a bid tool sets (an engine's own floor, 5¢): a strategy's lower stop bid is held at it. */
+export const STOP_MIN_CENTS = 5
+
+/**
+ * D4 — a STOP: one bid lowered to the ads strategy's stop bid for its campaign (the Owner's temporary stop: low bids,
+ * never a pause), at least STOP_MIN_CENTS. A stop is not a step of the bid's pace, so the largest change per action
+ * (changeClampedBid) does not clamp it, here or in the mutation layer (`stop`), as it does not clamp a floor. Never a
+ * raise: null when the bid already sits at or below the stop bid — there is nothing to stop.
+ */
+export function stopBidOf(currentBidCents: number, stop: { cents: number } | null | undefined): number | null {
+  const cents = Math.max(STOP_MIN_CENTS, Math.round(stop?.cents ?? 0))
+  return currentBidCents > cents ? cents : null
+}
+
 /** W1-5 — what moved a previewed bid off the one asked for, in words (the step clamp's answer, `stepClamp`). */
 export function stepClampWords(step: StepClamp, strategy?: StrategyBidLimits | null): string {
   if (step.bandHeld) return limitWords(step.bandHeld.side, step.bandHeld.limit)

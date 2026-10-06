@@ -71,15 +71,17 @@ const STRATEGIES = ['LEGACY_FOR_SALES', 'AUTO_FOR_SALES', 'MANUAL'] as const
 
 /**
  * The wizard's body for a build (pure): one campaign per slot (its id is the slot key, so the launch's `slots` answer
- * maps each slot to its campaign and ad group), the products by seller SKU (the template's FBA / FBM choice), no
- * placements (START), no rules (the harvest rule is the playbook's own, PB-6), no bid strategy rules (the engines and the
+ * maps each slot to its campaign and ad group), the products by seller SKU (the template's FBA / FBM choice), each with
+ * the product it is (D3: as the wizard's screens send it, so the product ad names its product), no placements (START),
+ * no rules (the harvest rule is the playbook's own, PB-6), no bid strategy rules (the engines and the
  * ads strategy steer bids).
  */
 export function wizardBodyOf(plan: Pick<BuildPlan, 'market' | 'nameToken' | 'campaigns' | 'productAds'>, portfolioId: string | null): SpwLaunchBody {
   return {
     market: plan.market,
     productGroupName: plan.nameToken ?? undefined,
-    products: plan.productAds.flatMap((a) => a.skus.map((sku) => ({ sku, asin: a.asin }))),
+    // A run row written before productIds were kept: SKU and ASIN only.
+    products: plan.productAds.flatMap((a) => a.skus.map((sku, i) => ({ sku, asin: a.asin, ...(a.productIds?.[i] ? { productId: a.productIds[i] } : {}) }))),
     campaigns: plan.campaigns.map((c) => {
       const g = c.adGroups[0]
       const targets = g?.targets ?? []

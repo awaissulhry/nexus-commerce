@@ -4,7 +4,8 @@
  * proven in ads-sp-wizard-launch.vitest.test.ts; here it is a stand-in that records what it was asked and makes the
  * campaigns in Nexus. Values are made up (public repo).
  *
- *   body       one wizard campaign per slot built (its id the slot key), the products by SKU, no placements or rules
+ *   body       one wizard campaign per slot built (its id the slot key), the products by SKU with their product id (D3),
+ *              no placements or rules
  *   options    off the allowlist, born suppressed by the requester, the approval's change set, placements deferred
  *   guard      one build per product at a time: a running one is answered with its id; one that stopped (no progress
  *              for 30 minutes) is marked FAILED with every campaign it made (from its change set's audit rows), its
@@ -103,7 +104,11 @@ describe('the wizard body (pure)', () => {
   it('one campaign per slot, its id the slot key; keywords, product targets, Auto groups and negatives as planned; no placements or rules', async () => {
     const p = await plan(seeded.parent)
     const body = wizardBodyOf(p, 'pf-1')
-    expect(body).toMatchObject({ market: 'IT', productGroupName: 'TESTPB5', portfolioId: 'pf-1', products: [{ sku: 'TEST-TESTPB5-V1', asin: 'B0TESTPB01' }, { sku: 'TEST-TESTPB5-V2', asin: 'B0TESTPB02' }] })
+    // D3 — each product names its product, as the wizard's screens send it (the product ad stores it).
+    expect(body).toMatchObject({ market: 'IT', productGroupName: 'TESTPB5', portfolioId: 'pf-1' })
+    expect(body.products).toEqual([{ sku: 'TEST-TESTPB5-V1', asin: 'B0TESTPB01', productId: seeded.v1 }, { sku: 'TEST-TESTPB5-V2', asin: 'B0TESTPB02', productId: seeded.v2 }])
+    // A run row written before productIds were kept: SKU and ASIN only, as before.
+    expect(wizardBodyOf({ ...p, productAds: p.productAds.map(({ productIds: _, ...a }) => a) }, null).products).toEqual([{ sku: 'TEST-TESTPB5-V1', asin: 'B0TESTPB01' }, { sku: 'TEST-TESTPB5-V2', asin: 'B0TESTPB02' }])
     expect(body.campaigns!.map((c) => [c.id, c.kind])).toEqual([['auto', 'auto'], ['broad-category', 'keyword'], ['exact-category', 'keyword'], ['exact-brand', 'keyword'], ['pat', 'pat']])
     const exact = body.campaigns!.find((c) => c.id === 'exact-category')!
     expect(exact).toMatchObject({ name: 'TESTPB5 | IT | Exact | Category', keywords: [{ text: 'test jacket', matchType: 'EXACT' }], biddingStrategy: 'LEGACY_FOR_SALES' })

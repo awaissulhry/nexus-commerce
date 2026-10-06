@@ -17,8 +17,8 @@
  *      set on every audit row, the slot links, the compiled harvest / isolation rules and hourly plans born OFF
  *   3  product B buys the same category keyword: A's build neither skips nor blocks it (rule 3); no negative lands in B
  *   4  START: a plain approve does not run it; with the code: the allowlist, the planned bids back (at Amazon too), the
- *      placements, the rules and hourly plans on as the phase says — DEFECT D1 (it.fails): the preview promises the
- *      isolation rule goes on though the captured template turns isolation off, and the answer does not say it stayed off
+ *      placements, the rules and hourly plans on as the phase says — D1 (fixed): the captured template turns isolation off,
+ *      and START's preview and answer say the isolation rule stays off
  *   11 STOP: bids floored, off the allowlist, artifacts off; its undo (a start) needs the code; restore-campaign and
  *      undo-ad-change refuse a playbook's campaign
  *   14 business B's Claude sees none of A's rows (playbook, build, campaigns, approvals), and A's none of B's
@@ -314,15 +314,15 @@ describe('4 — START: it adds spend, so it runs only with the approver\'s code'
     expect(await door.inside(() => db().adsPlaybookVersion.findFirst({ where: { refId: ids.aRow, op: 'start' } }))).toMatchObject({ approvalId: startApproval, stepUpAt: expect.any(Date) })
   })
 
-  // 🔴 DEFECT D1 (honesty, low) — the template's isolation switches are all off, so syncIsolationRule keeps the rule off at
-  // START (isolation-run.ts:256 `start: opts.enabled && compiled.enabled`), yet START's preview line says it "is compiled
-  // again and switched on" (artifacts.ts:131, ruleSwitchLines never asks the compile) and START's answer says nothing of
-  // it (artifacts.ts:156-160 setEnabled drops the compile's warning: no `keptOff`, no error). The Approvals page tells the
-  // Owner a rule goes on that never does. Fails today; passes once the preview and the answer say it stays off.
-  it.fails('DEFECT D1 — START says the isolation rule goes on, but a template with isolation off keeps it off, unsaid', () => {
+  // D1 (fixed) — the template's isolation switches are all off, so syncIsolationRule keeps the rule off at START. START's
+  // preview line asks the compile and says it stays off (artifacts.ts ruleSwitchLines), and START's answer says it stayed
+  // off (isolation-run.ts syncIsolationRule `keptOff`): the Approvals page never promises a rule that does not go on.
+  it('D1 — a template with isolation off: START\'s preview and its answer say the isolation rule stays off', () => {
     const line = (startPreview.artifacts as Json[]).find((x) => x.kind === 'isolationRule')
-    expect(line.does).not.toBe('enable')
+    expect(line).toMatchObject({ does: 'keep', summary: expect.stringMatching(/isolation rule stays off: the template turns every isolation switch off \(START does not switch it on\)/) })
     expect(JSON.stringify(startResult)).toMatch(/isolation rule[^"]*(stays|kept) off/)
+    // The harvest rule, which the template does not turn off, is still promised on (and went on, above).
+    expect((startPreview.artifacts as Json[]).find((x) => x.kind === 'harvestRule')).toMatchObject({ does: 'enable' })
   })
 })
 

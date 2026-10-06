@@ -11,7 +11,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const upsert = vi.fn(async (_args: unknown) => ({}))
 const updateMany = vi.fn(async (_args: unknown) => ({ count: 0 }))
-vi.mock('../../db.js', () => ({ default: { adsRuleSuggestion: { get upsert() { return upsert }, get updateMany() { return updateMany } } } }))
+// D2 — a sweep looks for its applied card first (none here).
+const findFirst = vi.fn(async (_args: unknown) => null)
+vi.mock('../../db.js', () => ({ default: { adsRuleSuggestion: { get upsert() { return upsert }, get updateMany() { return updateMany }, get findFirst() { return findFirst } } } }))
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 
 const { generateSuggestionsFromExecution } = await import('./ads-suggestions.service.js')

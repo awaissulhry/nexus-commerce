@@ -853,6 +853,7 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   const items = Array.isArray(action.items) ? (action.items as Array<{ kind: string; query: string; externalAdGroupId: string; step?: string; why?: string }>) : null
 
   // PB-6a — the cadence: a sweep within `cadenceDays` (a run that was not itself held back by it) holds this one back.
+  // Only a sweep that ran counts: a run that failed swept nothing, so the next one is not held back by it.
   // An accepted card is never held back: a person decided it.
   const cadenceDays = typeof action.cadenceDays === 'number' && action.cadenceDays > 0 ? action.cadenceDays : null
   if (cadenceDays && !items) {
@@ -860,8 +861,8 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
       where: { ruleId: meta.ruleId, startedAt: { gte: new Date(Date.now() - cadenceDays * 86400_000) } },
       select: { actionResults: true }, take: 50,
     })
-    const swept = recent.some((ex) => Array.isArray(ex.actionResults) && (ex.actionResults as Array<{ type?: string; output?: { cadenceHeld?: unknown } } | null>)
-      .some((r) => r?.type === action.type && r.output?.cadenceHeld == null))
+    const swept = recent.some((ex) => Array.isArray(ex.actionResults) && (ex.actionResults as Array<{ type?: string; ok?: boolean; output?: { cadenceHeld?: unknown } } | null>)
+      .some((r) => r?.type === action.type && r.ok === true && r.output?.cadenceHeld == null))
     if (swept) return { type: action.type, ok: true, output: { noChange: true, cadenceHeld: true, why: `This rule sweeps once every ${cadenceDays} day${cadenceDays === 1 ? '' : 's'}, and it swept within that time.` } }
   }
 

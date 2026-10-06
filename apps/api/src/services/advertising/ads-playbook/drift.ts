@@ -89,6 +89,8 @@ export interface DriftItem {
   targetKind?: 'KEYWORD' | 'PRODUCT'
   asin?: string
   sku?: string
+  /** A missing product ad: the product its SKU is (the ad sync adds names it). */
+  productId?: string
   /** A positive's planned bid (born at the floor; this is the bid remembered for it). */
   startBidCents?: number
   /** A misplaced keyword: where sync adds it (its right slot); the item's own slot is where it was found. */
@@ -164,7 +166,7 @@ export interface DriftFacts {
   protections: ReadonlyMap<string, readonly ProtectedTerm[]>
   /** Ad group → the ASINs it advertises now (upper case). */
   productAds: ReadonlyMap<string, ReadonlySet<string>>
-  expectedAds: ReadonlyArray<{ asin: string; skus: string[] }>
+  expectedAds: ReadonlyArray<{ asin: string; skus: string[]; productIds?: string[] }>
   /** The compiled expectation per slot (compile.ts, every slot as if none were built); null when it does not compile. */
   expected: ReadonlyMap<string, ExpectedSlot> | null
   isolation: { adds: readonly PlannedNegative[] } | null
@@ -362,7 +364,7 @@ export function findDrift(f: DriftFacts): DriftReport {
         items.push({ key: keyOf('product_ad_archived', s.slot.key, asin), kind: 'product_ad_archived', ...base, asin, says: `${asin} is listed in ${f.market}, and its product ad in "${c.name}" is archived.`, fix: { by: 'none', note: 'An archived product ad never comes back at Amazon, and Nexus holds one ad per ASIN and ad group: it stays out of this slot.' } })
         continue
       }
-      items.push({ key: keyOf('product_ad_missing', s.slot.key, asin), kind: 'product_ad_missing', ...base, asin, ...(ad.skus[0] ? { sku: ad.skus[0] } : {}), says: `${asin} (${ad.skus[0] ?? 'no SKU'}) is listed in ${f.market} but not advertised in "${c.name}".`, fix: { by: 'sync', part: 'productAds', addsSpend: true } })
+      items.push({ key: keyOf('product_ad_missing', s.slot.key, asin), kind: 'product_ad_missing', ...base, asin, ...(ad.skus[0] ? { sku: ad.skus[0] } : {}), ...(ad.productIds?.[0] ? { productId: ad.productIds[0] } : {}), says: `${asin} (${ad.skus[0] ?? 'no SKU'}) is listed in ${f.market} but not advertised in "${c.name}".`, fix: { by: 'sync', part: 'productAds', addsSpend: true } })
     }
 
     if (!inScope(s)) continue

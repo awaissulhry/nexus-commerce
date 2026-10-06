@@ -213,6 +213,16 @@ export async function generateSuggestionsFromExecution(args: {
           await prisma.adsRuleSuggestion.updateMany({ where: { ruleId: args.ruleId, entityId: ent.id, proposedKey: legacyKey }, data: { proposedKey: key } })
         } catch { /* a row with the new key already exists: the old one ages out through the lifecycle sweep */ }
       }
+      // D2 — a sweep's card is its rule's ONE card. Once a person applied it, that row is the record of what was applied:
+      // a later proposal of the rule opens a new pending card instead of being folded into the applied row, where it
+      // reached no person again (a playbook harvest's handover, too). The applied row keeps its key with its own id
+      // after it (`<key>:applied=<id>`), so the action type still leads it. Dismissed and expired cards keep their rules
+      // (the lifecycle sweep re-opens them). A card of one change on one entity still folds into its applied row: the
+      // same change proposed again before its effect shows would apply it twice.
+      if (sweep) {
+        const done = await prisma.adsRuleSuggestion.findFirst({ where: { ruleId: args.ruleId, entityId: ent.id, proposedKey: key, status: 'applied' }, select: { id: true } })
+        if (done) await prisma.adsRuleSuggestion.update({ where: { id: done.id }, data: { proposedKey: `${key}:applied=${done.id}` } })
+      }
       // upsert on the dedupe key — keep one row per rule×entity×change. The update branch never
       // touches `status` (the operator's decision is not overwritten by a tick); resurrection is
       // the LIFECYCLE SWEEP's job, with its windows (see sweepSuggestionLifecycle below).

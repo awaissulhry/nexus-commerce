@@ -61,7 +61,7 @@ function facts(over: Partial<DriftFacts> = {}): DriftFacts {
     scope: new Set(keys.map((k) => `g-${k}`)), empty: new Set(), positives,
     archived: { positives: new Map(), negatives: new Map(), productAds: new Map() },
     standing, winners: new Map(), protections: new Map(),
-    productAds: new Map(keys.map((k) => [`g-${k}`, ads])), expectedAds: [{ asin: 'B0TESTXX01', skus: ['TEST-V1'] }, { asin: 'B0TESTXX02', skus: ['TEST-V2'] }],
+    productAds: new Map(keys.map((k) => [`g-${k}`, ads])), expectedAds: [{ asin: 'B0TESTXX01', skus: ['TEST-V1'], productIds: ['p-test-v1'] }, { asin: 'B0TESTXX02', skus: ['TEST-V2'], productIds: ['p-test-v2'] }],
     expected, isolation: { adds: [] }, source: [], heldOutside: new Set(), outside: [], portfolioId: 'pf-1', personal: new Map(), liftedElsewhere: new Map(), hourlyPlans: new Map(),
     artifacts: { expectations: [], notChecked: [], held: [] }, notChecked: [],
     ...over,
@@ -192,13 +192,13 @@ describe('placements: only where the hourly plans do not own the slot', () => {
 })
 
 describe('product ads and the keywords the terms feed', () => {
-  it('a child not advertised is added by sync; an archived product ad is not', () => {
+  it('a child not advertised is added by sync (naming its product, D3); an archived product ad is not', () => {
     const f = facts()
     f.productAds = new Map([...f.productAds].map(([g, s]) => [g, g === 'g-auto' ? new Set(['B0TESTXX01']) : s]))
     f.archived = { ...f.archived, productAds: new Map([['g-pat', new Set(['B0TESTXX02'])]]) }
     f.productAds.set('g-pat', new Set(['B0TESTXX01']))
     const r = findDrift(f)
-    expect(r.items.find((i) => i.kind === 'product_ad_missing')).toMatchObject({ slot: 'auto', asin: 'B0TESTXX02', sku: 'TEST-V2', fix: { by: 'sync', part: 'productAds', addsSpend: true } })
+    expect(r.items.find((i) => i.kind === 'product_ad_missing')).toMatchObject({ slot: 'auto', asin: 'B0TESTXX02', sku: 'TEST-V2', productId: 'p-test-v2', fix: { by: 'sync', part: 'productAds', addsSpend: true } })
     expect(r.items.find((i) => i.kind === 'product_ad_archived')).toMatchObject({ slot: 'pat', fix: { by: 'none' } })
   })
 

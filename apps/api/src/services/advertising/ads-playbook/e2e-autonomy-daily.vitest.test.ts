@@ -62,7 +62,14 @@ const ids: Record<string, string> = {}
 let pb: Awaited<ReturnType<typeof throughStart>>
 const TIMEOUT = 60_000
 const DAY = 86_400_000
-const dayAgo = (n: number) => { const d = new Date(Date.now() - n * DAY); return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())) }
+/**
+ * A report day n days back on the business's calendar (Europe/Rome), as ads-overview counts its days: a UTC day would
+ * fall a day short of its 7-day window between midnight in Rome and midnight UTC.
+ */
+const dayAgo = (n: number) => {
+  const [y, m, d] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d - n))
+}
 
 beforeAll(async () => {
   database = await formulaDatabase()

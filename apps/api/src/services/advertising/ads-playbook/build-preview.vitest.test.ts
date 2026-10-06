@@ -106,8 +106,8 @@ describe('the build dry run', () => {
     expect(out.campaigns.map((c: Json) => c.name)).toEqual(['TESTPB4 | IT | Auto', 'TESTPB4 | IT | Broad | Category', 'TESTPB4 | IT | Exact | Category', 'TESTPB4 | IT | PAT'])
   })
 
-  it('advertises the children listed in the market with an ASIN, never the parent\'s own', () => {
-    expect(out.productAds).toEqual([{ asin: 'B0TESTV001', skus: ['TEST-PB4-V1'] }, { asin: 'B0TESTV002', skus: ['TEST-PB4-V2'] }])
+  it('advertises the children listed in the market with an ASIN, never the parent\'s own; each SKU with its product', () => {
+    expect(out.productAds).toEqual([{ asin: 'B0TESTV001', skus: ['TEST-PB4-V1'], productIds: [ids.v1] }, { asin: 'B0TESTV002', skus: ['TEST-PB4-V2'], productIds: [ids.v2] }])
     expect(out.campaigns[0].adGroups[0].asins).toEqual(['B0TESTV001', 'B0TESTV002'])
     expect(out.warnings.join('\n')).toMatch(/1 product\(s\) of the family have an ASIN but no Amazon listing in IT/)
   })

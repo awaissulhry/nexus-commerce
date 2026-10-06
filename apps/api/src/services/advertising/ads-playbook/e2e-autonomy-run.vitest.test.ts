@@ -12,18 +12,18 @@
  *
  *   5  harvest: the scheduler's tick proposes ONE card; a term converting in A's Auto graduates to A's own Exact |
  *      Category (the intent router) at its CPC; its source keeps running it until the new home proves (handover B); a
- *      term winning where it runs is neither moved nor negated (rule 2). DEFECT D2: once applied, the card swallows
- *      every later proposal of its rule
+ *      term winning where it runs is neither moved nor negated (rule 2). D2 (fixed): once applied, the card keeps what
+ *      was applied, and a later proposal of its rule opens a new card for a person
  *   6  the isolation card negates only inside A's own ad groups; B, which buys the same keyword, gets nothing (rule 3)
  *   7  stock: short of stock, a product's bids step down by the strategy's largest change (a plain lowering, never a
  *      pause); the market's monthly cap still floors every campaign (the budget engine); the cap raised gives back only
- *      the engine's own floors; a give-back after cover returns waits for a person; no stock is ever written. DEFECT D3:
- *      a playbook-built product ad names no product, so A itself is never judged (product B is)
+ *      the engine's own floors; a give-back after cover returns waits for a person; no stock is ever written. D3 (fixed):
+ *      a playbook-built product ad names its product, so A is judged like B and a product cap of A counts its spend
  *   9  drift (run before step 8, in PROFIT): a person's placement change is his — keep or revert, never put back by
  *      sync; a revert of a lifted negative waits for a person even by rule; sync only adds
  *   10 winners (before step 8): a declining term → bid → placement → its own campaign (the REAL SP Super Wizard launch,
  *      born at 2¢, off the allowlist), START with the code; once it proves, its old exact keyword is PROPOSED at low
- *      bids — never a negative. DEFECT D4: that proposal is clamped to one step by the bid tool it names
+ *      bids — never a negative. D4 (fixed): that proposal is a stop row, so it lands at the stop bid in one move
  *   8  phase: PROFIT → LAUNCH adds spend (the code); a switch that lets Claude do more alone never runs by rule
  *   14 business B's Claude and engines see none of A's rows, and A's none of B's
  *
@@ -238,18 +238,19 @@ describe('5 — harvest: a winner graduates to A\'s own exact slot, its source k
     expect((run.actionResults as Json[])[0].output).toMatchObject({ wouldHandOver: 1, items: [{ kind: 'graduation', step: 'handover', query: 'test parka', externalAdGroupId: flow.slots.auto.externalAdGroupId }] })
   })
 
-  // 🔴 DEFECT D2 (medium) — a playbook's harvest card is a SWEEP card, one row per rule (entity "account", key
-  // harvest_and_negate; ads-suggestions.service.ts:199-201). Once a person applied it, every later proposal of that rule —
-  // here the handover that closes "test parka" in its Auto source — is written INTO the applied row (the upsert's update
-  // branch replaces proposedAction and lastSeenAt and keeps status "applied", ads-suggestions.service.ts:223-232), and the
-  // lifecycle sweep re-opens only expired or dismissed rows, never an applied one (ads-suggestions.service.ts:1130-1136).
-  // So after the first apply the harvest never reaches a person again (and the record of what was applied is
-  // overwritten). The isolation rule's card has the same shape. Fails today; passes once a new proposal opens a card.
-  it.fails('DEFECT D2 — after its first card was applied, the harvest\'s handover proposal reaches no person', async () => {
+  // D2 (fixed) — a playbook's harvest card is a SWEEP card, one row per rule (entity "account", key harvest_and_negate).
+  // Once a person applied it, a later proposal of that rule — here the handover that closes "test parka" in its Auto
+  // source — used to be written INTO the applied row and never reached a person. Now it opens a new pending card, and
+  // the applied card keeps what was applied (ads-suggestions.service.ts generateSuggestionsFromExecution). The isolation
+  // card is a sweep too (step 6 applies it).
+  it('D2 — after its first card was applied, the harvest\'s handover proposal is a new card for a person; the applied one keeps what was applied', async () => {
     const { sweepSuggestionLifecycle } = await import('../ads-suggestions.service.js')
     await door.inside(() => sweepSuggestionLifecycle())
     const pending = await door.inside(() => db().adsRuleSuggestion.findMany({ where: { proposedKey: 'harvest_and_negate', status: 'pending' } }))
     expect(pending.map((c) => (c.proposedAction as Json).items)).toEqual([[expect.objectContaining({ step: 'handover', query: 'test parka' })]])
+    expect(pending[0].id).not.toBe(card.id)
+    const applied = await door.inside(() => db().adsRuleSuggestion.findUniqueOrThrow({ where: { id: card.id } }))
+    expect(applied).toMatchObject({ status: 'applied', proposedKey: `harvest_and_negate:applied=${card.id}`, proposedAction: card.proposedAction })
   })
 })
 
@@ -331,17 +332,45 @@ describe('7 — stock: a short product\'s bids step down (never a pause, never a
     expect((risk.answer.products as Json[]).find((x) => x.sku === 'TEST-TESTE2EB-V1')).toMatchObject({ risk: 'low-stock', units: 4, amazonFbaUnits: 4, daysOfCover: 4, shortBelowDays: 10, backAtDays: 15 })
   })
 
-  // 🔴 DEFECT D3 (high) — a product ad the playbook builds names no product: the build hands the SP Super Wizard only SKU
-  // and ASIN (ads-playbook/build.ts:82 `products: … ({ sku, asin })`), the wizard passes `productId: p.productId`
-  // (undefined; ads-sp-wizard-launch.service.ts:183) and createProductAdLocal stores `productId: input.productId ?? null`
-  // (ads-create.service.ts:889). Everything that ties an ad to its product by AdProductAd.productId is then blind to a
-  // playbook product: stock-aware bids (ads-stock-risk.service.ts:167-199 — "an ad Nexus cannot tie to a product", risk
-  // unknown, never lowered) and a product's or category's own monthly cap (ads-strategy/spend.ts:105-115 — its spend is
-  // "unattributed", so the cap never floors it). Product B, whose ads name their products, is lowered below; product A,
-  // short of stock the same way, is not. Fails today; passes once a built product ad carries its productId.
-  it.fails('DEFECT D3 — A\'s built ad groups are short of stock like B\'s, but Nexus cannot tie their ads to A', async () => {
+  // D3 (fixed) — a product ad the playbook builds names its product: the build hands the SP Super Wizard each child's
+  // productId beside its SKU and ASIN, as the wizard's screens do (ads-playbook/build.ts wizardBodyOf), so everything that
+  // ties an ad to its product by AdProductAd.productId sees A: stock-aware bids (ads-stock-risk.service.ts) and a
+  // product's or category's own monthly cap (ads-strategy/spend.ts productSpendThisMonth).
+  it('D3 — A\'s built product ads name A\'s children: short of stock like B\'s, and a product cap of A counts their spend', async () => {
+    const aGroupIds = Object.values(flow.slots).map((x) => x.adGroupId)
+    const ads = await door.inside(() => db().adProductAd.findMany({ where: { adGroupId: { in: aGroupIds } }, select: { id: true, adGroupId: true, productId: true, sku: true } }))
+    expect(ads.length).toBe(aGroupIds.length * 2)
+    const childOf = new Map([['TEST-TESTE2EA-V1', ids.aV1], ['TEST-TESTE2EA-V2', ids.aV2]])
+    expect(ads.every((a) => !!a.productId && a.productId === childOf.get(a.sku ?? ''))).toBe(true)
     const risk = await door.call('ad-stock-risk', { campaignIds: Object.values(flow.slots).map((x) => x.campaignId) })
     expect((risk.answer.adGroups as Json[]).map((g) => g.risk)).toEqual(Object.values(flow.slots).map(() => 'low-stock'))
+    expect((risk.answer.adGroups as Json[]).every((g) => g.suggestedTool === 'lower-ad-bids-for-stock')).toBe(true)
+
+    // A product cap of A's parent, reached by its ads' own spend (Amazon's advertised-product report), is seen by the
+    // budget engine's plan (a dry run: nothing written): A's ad groups are due a floor, B's are not. Removed after.
+    const now = new Date()
+    const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+    const cap = await door.inside(() => db().adsStrategy.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: ids.aParent, label: 'TEST-TESTE2EA-PARENT (IT)', monthlySpendCapCents: 500, updatedBy: 'user:test' } }))
+    const reportRunId = 'TEST-REPORT-RUN-D3'
+    try {
+      await door.inside(async () => {
+        for (const a of ads) await db().amazonAdsDailyPerformance.create({ data: { profileId: 'P-IT-E2E-A', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: day, entityType: 'PRODUCT_AD', entityId: `EXT-AD-${a.id}`, localEntityId: a.id, costMicros: 1_000_000n, sales7dCents: 0, orders7d: 0, currencyCode: 'EUR', reportedAt: new Date(), reportRunId } })
+      })
+      const { productSpendThisMonth } = await import('../ads-strategy/spend.js')
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+      const spend = await door.inside(() => productSpendThisMonth('IT', day, end))
+      expect(spend.unattributedCents).toBe(0)
+      expect([...spend.byProduct.keys()].sort()).toEqual([ids.aV1, ids.aV2].sort())
+      const { computeBudgetEnforcement } = await import('../ads-budget-enforce.service.js')
+      const plan = (await door.inside(() => computeBudgetEnforcement())).plans.find((p) => p.marketplace === 'IT')!
+      expect(plan.scopeCaps).toEqual([expect.objectContaining({ level: 'product', scopeId: ids.aParent, capCents: 500, spendCents: ads.length * 100, reached: true })])
+      expect(plan.adGroups.filter((g) => g.suppress).map((g) => g.id).sort()).toEqual([...aGroupIds].sort())
+    } finally {
+      await door.inside(async () => {
+        await db().amazonAdsDailyPerformance.deleteMany({ where: { reportRunId } })
+        await db().adsStrategy.delete({ where: { id: cap.id } })
+      })
+    }
   })
 
   it('lower-ad-bids-for-stock: one step down by the strategy\'s largest change (20 %), a plain lowering — never paused, no floor marker', async () => {
@@ -564,6 +593,8 @@ describe('10 — winners (run in PROFIT, before step 8): a declining term → bi
     expect(c).toMatchObject({ liveBidWritesEnabled: false, bidsSuppressedFloorCents: 2, bidsSuppressedBy: `user:${door.people.owner.id}`, externalCampaignId: expect.stringMatching(/^AMZ-C-/) })
     expect(String(c.status)).toBe('ENABLED')
     hero = { campaignId: c.id, adGroupId: c.adGroups[0].id, externalCampaignId: c.externalCampaignId!, externalAdGroupId: c.adGroups[0].externalAdGroupId! }
+    // D3 — its product ads name A's children, as the build's do.
+    expect((await door.inside(() => db().adProductAd.findMany({ where: { adGroupId: hero.adGroupId }, select: { productId: true } }))).map((a) => a.productId).sort()).toEqual([ids.aV1, ids.aV2].sort())
     // Rule 2: where the term runs now, nothing moved — no negative, no lower bid, no pause.
     expect(await targetsIn(flow.slots['exact-category'].adGroupId)).toEqual(before)
     // The running playbook's rules stay as they were (a hero's build compiles them again, never switches them off).
@@ -588,15 +619,14 @@ describe('10 — winners (run in PROFIT, before step 8): a declining term → bi
     const old = entryOf(view, 'exact-category')
     expect(old).toMatchObject({
       nextStep: 'closeOldPlace', heroOf: { key: `hero:${TERM}`, proven: true },
-      closeOldPlace: { how: 'floor', request: { tool: 'bulk-ad-bid-change', args: { bids: [{ targetId: oldKeyword, bidCents: expect.any(Number) }] } } },
+      closeOldPlace: { how: 'floor', stopBidCents: expect.any(Number), request: { tool: 'bulk-ad-bid-change', args: { bids: [{ targetId: oldKeyword, stop: true }] } } },
       nextWhy: expect.stringMatching(/^hero proven → old keyword to the floor: .*never a negative/),
     })
-    const floorBid = old.closeOldPlace.request.args.bids[0].bidCents
-    expect(floorBid).toBeLessThanOrEqual(5)
-    // Claude asks for exactly that proposal; it waits for a person, and nothing moved yet.
-    // Claude asks for exactly that proposal; it waits for a person, and nothing moved yet.
+    const floorBid = old.closeOldPlace.stopBidCents
+    expect(floorBid).toBe(5)
+    // Claude asks for exactly that proposal (a stop row); it waits for a person, and nothing moved yet.
     const asked = await door.call('bulk-ad-bid-change', old.closeOldPlace.request.args)
-    expect(asked.answer).toMatchObject({ status: 'waiting_for_approval', preview: { totals: { changing: 1 } } })
+    expect(asked.answer).toMatchObject({ status: 'waiting_for_approval', preview: { totals: { changing: 1 }, changes: [{ targetId: oldKeyword, fromCents: 48, stop: true }], stopNote: expect.stringMatching(/never a pause/) } })
     floorAsked = { wanted: floorBid, previewed: asked.answer.preview.changes[0].toCents }
     expect(await targetsIn(flow.slots['exact-category'].adGroupId)).toEqual(before)
     // L1: a negative over the product's own old keyword is refused, whoever asks.
@@ -610,14 +640,14 @@ describe('10 — winners (run in PROFIT, before step 8): a declining term → bi
     await noWriteReachedB()
   })
 
-  // 🔴 DEFECT D4 (low-medium) — the winners view's handover proposal says the old exact keyword "goes to low bids (the
-  // strategy's stop bid or the tool's lowest)" and asks bulk-ad-bid-change for 5¢ (ads-playbook/winners.ts:545-550,
-  // lowBidOf), but that tool holds every bid to the strategy's largest change per action (stepClamp,
-  // agents/tools/ads-change-kit.ts:222-225): with a 20 % step the request lands at 38¢ from 48¢, not at the floor — the
-  // old place keeps spending. The Approvals preview says 38 (honest), the winners view's words and its request do not
-  // match it. Fails today; passes once the proposal is a stop the step does not clamp (as a stock floor is), or says so.
-  it.fails('DEFECT D4 — "old keyword to the floor" is clamped to one 20 % step by the bid tool it proposes', () => {
-    expect(floorAsked.previewed).toBe(floorAsked.wanted)
+  // D4 (fixed) — the winners view's handover proposal is a STOP row of bulk-ad-bid-change (ads-playbook/winners.ts
+  // closeOldPlace): the old exact keyword goes to the strategy's stop bid (at least 5¢) in one move. A stop is not a step
+  // of a bid's pace, so the strategy's largest change per action (20 % here) does not clamp it (ads-change-kit.ts
+  // stopBidOf; the mutation layer's `stop`): 48¢ → 5¢, not 48¢ → 38¢. The value previewed is the value that landed.
+  it('D4 — "old keyword to the floor" lands at the stop bid in one move, past the 20 % step (a stop, not a step)', async () => {
+    expect(floorAsked).toEqual({ wanted: 5, previewed: 5 })
+    await sendQueued()
+    expect(amazon.named('updateTarget').map((c) => Number(((c.args[2] ?? {}) as Json).bid))).toContain(0.05)
   })
 })
 
