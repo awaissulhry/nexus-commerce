@@ -104,7 +104,7 @@ import { __claudeStrategyTest } from '../advertising/ads-strategy/claude.js'
 import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { runToolForClaude } from '../mcp/mcp-tool-call.js'
 import { runPlan } from './change-plan.service.js'
-import { AUTO_PAUSE_FAILURES, autoFreshRefusal, autonomyOf, planDailyRefusal } from './claude-trust.service.js'
+import { AUTO_PAUSE_FAILURES, autoFreshRefusal, autonomyOf, inNexusEnding, planDailyRefusal } from './claude-trust.service.js'
 import { getTool } from './tool-registry.js'
 import { dailyRefusal, LIMIT_FACTS_VERSION, limitFactsOf, ruleRunLedger, type LimitFacts } from './tools/ads-autonomy-kit.js'
 
@@ -133,9 +133,11 @@ async function call(tool: string, args: Record<string, unknown>): Promise<Answer
 const windowClosed = (approvalId: string) =>
   inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
 const approvalOf = (id: string) => inside(() => db().agentApproval.findUniqueOrThrow({ where: { id } }))
-/** The kit's daily check, in a person's words. */
+/** The kit's daily check, in a person's words (ending as the kit ends it). */
 const OVER = (ran: number, adds: number, max: number) => `IT: ${ran} write${ran === 1 ? '' : 's'} ran by rule in the last 24 hours and this adds ${adds}, more than the ${max} a day the ads strategy allows; a person decides`
-const FRESH = `not run — judged again on a fresh dry run: it is no longer inside the business's limits: ${OVER(0, 2, 1)}`
+/** …and as Claude's door says it: one ending, where the person decides. */
+const IN_NEXUS = (sentence: string) => sentence.replace(/; a person decides$/, '; a person approves it in Nexus')
+const FRESH = `not run — judged again on a fresh dry run: it is no longer inside the business's limits: ${IN_NEXUS(OVER(0, 2, 1))}`
 
 beforeAll(async () => {
   registry.real = await vi.importActual<typeof import('./tool-registry.js')>('./tool-registry.js')
@@ -196,9 +198,9 @@ describe('AA-W2-3 — a strategy-bound rule-run is judged again on the fresh dry
     strategy.maxWritesPerDay = 1
     await windowClosed(asked.approvalId)
     const out = await inside(() => commitScheduledApproval(asked.approvalId))
-    expect(out).toMatchObject({ ok: false, error: expect.stringContaining(FRESH) })
+    expect(out).toEqual({ ok: false, error: FRESH })
     expect(executed).toEqual([])
-    expect(await approvalOf(asked.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, decidedBy: null, reason: expect.stringContaining(FRESH) })
+    expect(await approvalOf(asked.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, decidedBy: null, reason: FRESH })
     const audit = await inside(() => db().agentControlAudit.findFirst({ where: { action: 'rule_refused', toValue: { path: ['approvalId'], equals: asked.approvalId } } }))
     expect(audit).toMatchObject({ charterKey: 'claude', note: expect.stringContaining('judged again on a fresh dry run'), toValue: { decisionVia: 'auto' } })
   })
@@ -244,7 +246,7 @@ describe('AA-W2-3 — a plan’s ad steps count together against the strategy’
 
   it('when the rule decides it: each step inside alone, together over the limit — a person decides, and Claude is told why', async () => {
     const asked = await plan('Together over', [6, 6])
-    expect(asked).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'auto', why: `the plan's ad steps together — ${OVER(0, 12, 10)}` } })
+    expect(asked).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'auto', why: `the plan's ad steps together — ${IN_NEXUS(OVER(0, 12, 10))}` } })
     expect(await plan('Together inside', [4, 4])).toMatchObject({ status: 'runs_by_rule' })
   })
 
@@ -258,7 +260,7 @@ describe('AA-W2-3 — a plan’s ad steps count together against the strategy’
     })
     await windowClosed(asked.approvalId)
     const out = await inside(() => commitScheduledApproval(asked.approvalId))
-    const why = `it is no longer inside the business's limits: the plan's ad steps together — ${OVER(5, 8, 10)}`
+    const why = `it is no longer inside the business's limits: the plan's ad steps together — ${IN_NEXUS(OVER(5, 8, 10))}`
     expect(out).toMatchObject({ ok: false, error: `not run — ${why}` })
     expect(await approvalOf(asked.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, reason: `not run — ${why}` })
     expect((await stepsOf(asked.approvalId)).map((step) => step.status)).toEqual(['pending', 'pending'])
@@ -274,12 +276,19 @@ describe('AA-W2-3 — a plan’s ad steps count together against the strategy’
     await inside(() => runPlan(asked.approvalId))
     const [first, second] = await stepsOf(asked.approvalId)
     expect(first).toMatchObject({ status: 'done' })
-    const why = `judged again on a fresh dry run: it is no longer inside the business's limits: ${OVER(4, 4, 6)}`
-    expect(second).toMatchObject({ status: 'skipped', reason: expect.stringContaining(`not run — ${why}`) })
+    const why = `judged again on a fresh dry run: it is no longer inside the business's limits: ${IN_NEXUS(OVER(4, 4, 6))}`
+    expect(second).toMatchObject({ status: 'skipped', reason: `not run — ${why}` })
     expect(executed.map((run) => run.args.writes)).toEqual([4])
     expect(await inside(() => db().agentControlAudit.findFirst({ where: { action: 'rule_refused', toValue: { path: ['approvalId'], equals: asked.approvalId } } })))
       .toMatchObject({ toValue: { step: 2, tool: BOUND.name, decisionVia: 'auto' } })
     expect(await inside(() => autonomyOf())).toMatchObject({ paused: false })
+  })
+
+  it('one clear ending: a sentence that already says a person decides says it once, in Nexus', () => {
+    expect(inNexusEnding(OVER(1, 2, 2))).toBe(IN_NEXUS(OVER(1, 2, 2)))
+    expect(inNexusEnding('turning a brake down can raise spend (a test rule): a person decides')).toBe('turning a brake down can raise spend (a test rule); a person approves it in Nexus')
+    expect(inNexusEnding('the master price moves 14 %, more than the 10 % allowed')).toBe('the master price moves 14 %, more than the 10 % allowed; a person approves it in Nexus')
+    for (const sentence of [FRESH, IN_NEXUS(OVER(0, 12, 10))]) expect(sentence.match(/a person (decides|approves)/g)).toHaveLength(1)
   })
 
   it('planDailyRefusal: only strategy-bound steps count, under the tightest daily limit any of them carries; pure', () => {

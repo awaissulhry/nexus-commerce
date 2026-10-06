@@ -284,6 +284,13 @@ const CONFIRM_HOW = 'the person who asked types their authenticator code to appr
 export const CONFIRM_IN_CLAUDE = `this business set it to "confirm in Claude": ${CONFIRM_HOW}`
 
 const A_PERSON = 'a person approves it in Nexus'
+/**
+ * AA-W2-3 — one ending, where the person decides: a limit's sentence that already ends "a person decides" (the ads kit's,
+ * and some tools' own) says it once, as "a person approves it in Nexus", instead of both one after the other.
+ */
+export function inNexusEnding(sentence: string): string {
+  return `${sentence.replace(/[;:] a person decides\.?$/, '')}; ${A_PERSON}`
+}
 
 /** W1-8 — why a change the strategy narrowed waits for a person: at ask (or off), or at confirm. */
 export function narrowedDecision(n: StrategyNarrowed): string {
@@ -313,7 +320,7 @@ function limitsRefusal(tool: AgentTool, preview: unknown, rule: ClaudeToolRule):
   if (!tool.withinLimits || !rule.limits) return `${tool.name} has no limits to run inside; ${A_PERSON}`
   if (rule.limitsInvalid) return `the limits saved for ${tool.name} no longer fit it (${rule.limitsInvalid}); set them again. Until then ${A_PERSON}`
   const outside = tool.withinLimits(preview, rule.limits)
-  return outside ? `${outside}; ${A_PERSON}` : null
+  return outside ? inNexusEnding(outside) : null
 }
 
 /**
@@ -360,7 +367,7 @@ export async function planRuleRefusal(
   // AA-W2-3 — each ad step inside the strategy's daily limits alone is not enough: the steps count together.
   if (steps.some((step) => step.tool.strategyBound)) {
     const together = planDailyRefusal(steps, await ruleRunLedger())
-    if (together) return { level: 'auto', why: together }
+    if (together) return { level: 'auto', why: inNexusEnding(together) }
   }
   const used = await autoRunsInLastDay()
   if (used + steps.length > autonomy.dailyAutoCap) {
@@ -390,7 +397,7 @@ export async function autoPlanCommitRefusal(approvalId: string): Promise<string 
   const judged = steps.map((step) => ({ tool: getTool(step.toolName), preview: step.preview }))
   if (judged.some((step) => step.tool?.strategyBound)) {
     const together = planDailyRefusal(judged, await ruleRunLedger({ excludeApprovalId: approvalId }))
-    if (together) return `it is no longer inside the business's limits: ${together}`
+    if (together) return `it is no longer inside the business's limits: ${inNexusEnding(together)}`
   }
   return null
 }
