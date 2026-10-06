@@ -17,6 +17,11 @@
  * ADS AUTONOMY AA-W2-6 — `set-target-bid` is strategy-bound: its dry run carries the limit facts of the bid that lands
  * (the ads strategy of the target's ad group, Claude's limits, today's runs by rule) and the write gate's answer as a
  * run by rule, so the business may let it run by its rule inside them (ads-change-kit.ts `ruleFactsFor`, `ruleRefusal`).
+ * AA-W2-7 — `create-negative-keyword` and `graduate-keyword` too: a negative runs by rule only for a term whose record
+ * over the strategy's window meets its "Negate a search term when" group where it lands (exact negatives only, unless
+ * the business allows phrase); a graduation only for a term that meets the "Harvest a search term when" group where it
+ * converted, at a starting bid inside the destination's bid band and Claude's limit. Protected terms and protected
+ * products' ASINs are never negated by rule.
  *
  * The protected-terms check is the write gate's own matcher (ads-negation-policy.ts, 5a): EXACT / PREFIX / CONTAINS, and
  * a phrase negative that a protected term contains; it is not re-invented. Amazon's text limits are checked there too.
@@ -34,8 +39,10 @@ import { loadDestinationGraph, resolveDestination, resolveStoredDestinations } f
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf } from './ads-tool-guards.js'
 import { alsoChangedBy, approvedRun, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stepClampWords, storedReach, type StoredReach } from './ads-change-kit.js'
-import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS } from './ads-autonomy-kit.js'
+import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type LimitFacts, type ScopeFacts } from './ads-autonomy-kit.js'
 import { bidLimitsFor, stepClamp } from '../../advertising/ads-strategy/bids.js'
+import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
+import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import type { AgentTool, FieldPermission, ToolResult, ToolUndo } from '../tool-types.js'
 
 const BID_FLOOR_CENTS = 5
@@ -43,6 +50,7 @@ const METRIC_WINDOW_DAYS = 60
 
 interface CampaignRow {
   id: string
+  externalCampaignId: string | null
   name: string
   marketplace: string | null
   type: string
@@ -59,6 +67,7 @@ async function campaignByExternalId(externalCampaignId: string): Promise<Campaig
     where: { externalCampaignId },
     select: {
       id: true,
+      externalCampaignId: true,
       name: true,
       marketplace: true,
       type: true,
@@ -88,6 +97,36 @@ async function termMetrics(query: string, externalCampaignId: string) {
   }
 }
 
+/**
+ * AA-W2-7 — a search term's record over a window where it ran (its campaign, and its ad group when named), summed as
+ * the harvest engine sums it (ads-harvest.service.ts termTotals): what a negative or a graduation run by rule is judged on.
+ */
+interface TermRecord { windowDays: number; clicks: number; spendCents: number; orders: number; salesCents: number }
+
+async function termRecord(query: string, where: { externalCampaignId: string; externalAdGroupId?: string | null }, windowDays: number): Promise<TermRecord> {
+  const since = new Date(Date.now() - windowDays * 24 * 3600_000)
+  const agg = await prisma.amazonAdsSearchTerm.aggregate({
+    where: { query, campaignId: where.externalCampaignId, ...(where.externalAdGroupId ? { adGroupId: where.externalAdGroupId } : {}), date: { gte: since } },
+    _sum: { clicks: true, costMicros: true, orders7d: true, sales7dCents: true },
+  })
+  return {
+    windowDays,
+    clicks: agg._sum.clicks ?? 0,
+    spendCents: Math.round(Number(agg._sum.costMicros ?? 0n) / 10000),
+    orders: agg._sum.orders7d ?? 0,
+    salesCents: agg._sum.sales7dCents ?? 0,
+  }
+}
+
+/** AA-W2-7 — the one strategy scope a single-item change lands on, and its market's currency. */
+function onlyScope(facts: LimitFacts): { scope: ScopeFacts; currency: string } | null {
+  const scope = Object.values(facts.scopes)[0]
+  return scope ? { scope, currency: facts.markets[scope.market]?.currency ?? 'EUR' } : null
+}
+
+const recordWords = (r: TermRecord, currency: string) =>
+  `${r.clicks} click${r.clicks === 1 ? '' : 's'}, ${amountLabel(r.spendCents, currency)} spent, ${r.orders} order${r.orders === 1 ? '' : 's'} over the last ${r.windowDays} days`
+
 /** 5a — the write gate's protected-term refusal (ads-negation-policy.ts), as a sentence, or null. Only meaningful for negations. */
 async function protectedTermDenial(
   keywordText: string,
@@ -110,8 +149,20 @@ const CAMPAIGN_SCOPE_REFUSAL =
   'Campaign-level negatives are not offered: none of those asked for through the harvest path landed at Amazon. '
   + 'Ask for an ad-group negative instead (externalAdGroupId; ad-search-terms gives it).'
 
-/** A5 — the negative a create-negative-keyword request would add, and what the approver must see — or why not. */
-async function negativePreview(args: Record<string, unknown>): Promise<ToolResult> {
+/**
+ * AA-W2-7 — create-negative-keyword's Claude limits: the kit's, and whether a phrase negative may run by rule (it blocks
+ * every search that contains the term, not only the term whose record was judged): off by default.
+ */
+const NEGATIVE_LIMITS = adKitLimits({ maxItems: 1 }, {
+  allowPhrase: z.boolean().default(false)
+    .describe('let a phrase negative run by rule (it blocks every search that contains the term); off: only exact negatives run without a person'),
+})
+
+/**
+ * A5 — the negative a create-negative-keyword request would add, and what the approver must see — or why not. `rule`
+ * (the dry run, not `execute`): AA-W2-7 — also the facts its limits are judged on when it may run by rule.
+ */
+async function negativePreview(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null } } = {}): Promise<ToolResult> {
   const externalCampaignId = String(args.externalCampaignId ?? '')
   const keywordText = String(args.keywordText ?? '').trim()
   const matchType = String(args.matchType ?? 'NEGATIVE_EXACT')
@@ -165,6 +216,7 @@ async function negativePreview(args: Record<string, unknown>): Promise<ToolResul
   const currency = campaignCurrency(campaign)
   const metrics = await termMetrics(keywordText, externalCampaignId)
   const bound = await alsoChangedBy(campaign.id)
+  const rule = opts.rule ? await negativeRuleFacts({ keywordText, matchType, externalCampaignId, campaign, adGroup, approvalId: opts.rule.approvalId }) : null
   return {
     ok: true,
     preview: {
@@ -183,9 +235,70 @@ async function negativePreview(args: Record<string, unknown>): Promise<ToolResul
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
+      ...(rule ?? {}),
       effect: `Stops "${keywordText}" from matching in ${campaign.name} › ${adGroup.name}; spend on it (last ${metrics.windowDays}d) was ${amountLabel(metrics.costCents, currency)} with ${metrics.orders} orders.`,
     },
   }
+}
+
+/**
+ * AA-W2-7 — what a negative's dry run adds when it may run by rule: the kit's facts of the term in its ad group (the
+ * strategy there, protection, today), the write gate's answer as a run by rule, and the term's record over the window
+ * of the strategy's "Negate a search term when" group where it lands (none: no group set there).
+ */
+async function negativeRuleFacts(input: {
+  keywordText: string; matchType: string; externalCampaignId: string
+  campaign: { id: string; name: string; marketplace: string | null }; adGroup: { externalAdGroupId: string }
+  approvalId?: string | null
+}) {
+  const facts = await ruleFactsFor({
+    tool: 'create-negative-keyword',
+    limits: NEGATIVE_LIMITS,
+    items: [{
+      entity: { kind: 'searchTerm', query: input.keywordText, externalCampaignId: input.externalCampaignId, externalAdGroupId: input.adGroup.externalAdGroupId },
+      change: { field: 'negative', term: input.keywordText, matchType: input.matchType },
+    }],
+    writes: [{
+      label: `campaign "${input.campaign.name}"`, campaignId: input.campaign.id, marketplace: input.campaign.marketplace,
+      changes: [{ field: 'negativeKeyword', valueCents: null }], isNegation: true, keywordText: input.keywordText,
+    }],
+    approvalId: input.approvalId,
+  })
+  const at = onlyScope(facts.limitFacts)
+  const days = at?.scope.limits.negateWindowDays
+  const ruleRecord = days ? await termRecord(input.keywordText, { externalCampaignId: input.externalCampaignId, externalAdGroupId: input.adGroup.externalAdGroupId }, days) : null
+  const limitsNote = [...facts.limitsNote]
+  if (at && ruleRecord && at.scope.sources.negate) {
+    const l = at.scope.limits
+    limitsNote.push(`Negate a search term when: at least ${l.negateMinClicks} clicks and ${amountLabel(l.negateMinSpendCents ?? 0, at.currency)} spent, at most ${l.negateMaxOrders} orders, over ${days} days (${strategyWords(at.scope.sources.negate)}); this term in its ad group: ${recordWords(ruleRecord, at.currency)}.`)
+  }
+  return { ...facts, limitsNote, ruleRecord }
+}
+
+/**
+ * AA-W2-7 — create-negative-keyword's own check, after the common ones (pure): exact unless the limits allow phrase, and
+ * the term's record over the strategy's window meets its negate group where it lands. No group there: a person decides.
+ */
+function negativeRuleRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
+  const p = preview as { term?: string; matchType?: string; ruleRecord?: TermRecord | null }
+  if (p.matchType === 'NEGATIVE_PHRASE' && limits.allowPhrase !== true) {
+    return 'a phrase negative blocks every search that contains the term; this tool\'s limits let only exact negatives run by rule (allowPhrase is off); a person decides'
+  }
+  const at = onlyScope(limitFactsOf(preview)!)
+  const l = at?.scope.limits
+  const source = at?.scope.sources.negate
+  if (!at || !l || !source || l.negateMinClicks == null || l.negateMinSpendCents == null || l.negateMaxOrders == null || !l.negateWindowDays) {
+    return `the ads strategy sets no "Negate a search term when" group at ${at?.scope.label ?? 'the ad group it lands in'}: a negative runs by rule only for a term that meets one; a person decides`
+  }
+  const r = p.ruleRecord
+  if (!r || r.windowDays !== l.negateWindowDays) return `the term's record over the strategy's ${l.negateWindowDays} days was not read for this preview; a person decides`
+  const short = [
+    r.clicks < l.negateMinClicks ? `fewer than ${l.negateMinClicks} clicks` : null,
+    r.spendCents < l.negateMinSpendCents ? `less than ${amountLabel(l.negateMinSpendCents, at.currency)} spent` : null,
+    r.orders > l.negateMaxOrders ? `more than ${l.negateMaxOrders} orders` : null,
+  ].filter((x): x is string => !!x)
+  if (!short.length) return null
+  return `"${p.term}" has ${recordWords(r, at.currency)} in its ad group: ${short.join(', ')}, so it does not meet "Negate a search term when" at ${at.scope.label} (${strategyWords(source)}); a person decides`
 }
 
 /** C2 — undo of a negative: undo-ad-change retires what the request created (its change set is the approval). */
@@ -219,6 +332,7 @@ const createNegativeKeyword: AgentTool = {
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
   }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
+  restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
@@ -226,18 +340,25 @@ const createNegativeKeyword: AgentTool = {
   // A5 — an approved negative is created at Amazon at once (no cancel window): the approval is the brake.
   openWorld: true,
   reversibility: 'full',
-  maxClaudeTrust: 'confirm',
+  // AA-W2-7 — the business may let it run by its rule, only for a term that meets the ads strategy's negate group.
+  maxClaudeTrust: 'auto',
+  strategyBound: 'amazon-ads',
+  limits: NEGATIVE_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? negativeRuleRefusal(preview, limits),
   undo: CREATE_NEGATIVE_UNDO,
   description:
     'Add a negative keyword to one ad group of an Amazon Sponsored Products campaign, so a search term stops '
     + 'triggering its ads. Nothing changes until a person approves it: in Nexus, or the person who asked confirms it in '
-    + 'Claude with their authenticator code when the business set it so. The preview shows the term\'s recent '
-    + 'spend and orders, the ad group, and whether it lands live at Amazon or in sandbox. Refused, and not queued, '
+    + 'Claude with their authenticator code when the business set it so — unless the business lets it run by its rule: '
+    + 'only an exact negative of a term whose record meets the ads strategy\'s "Negate a search term when" group where '
+    + 'it lands, inside its limits. The preview shows the term\'s recent '
+    + 'spend and orders, the ad group, whether it lands live at Amazon or in sandbox, and each limit with where it comes '
+    + 'from. Refused, and not queued, '
     + 'for a protected term, a term already negated in the campaign, a campaign-level negative, or when Amazon\'s '
-    + 'write gate would refuse it (the campaign must be on the live-write allowlist). Once approved it is created at '
+    + 'write gate would refuse it. A protected product\'s ASIN is never negated by rule. Once approved it is created at '
     + 'once as the approver; undo-change retires it again.',
-  async handler(args) {
-    return negativePreview(args)
+  async handler(args, ctx) {
+    return negativePreview(args, { rule: { approvalId: ctx.approvalId } })
   },
   async execute(args, ctx) {
     const fresh = await negativePreview(args)
@@ -256,6 +377,8 @@ const createNegativeKeyword: AgentTool = {
       matchType: p.matchType,
       profileId,
       userId: run.actor,
+      // AA-W2-7 — the ads audit names the request, and whether a person or the business's rule decided it.
+      evidence: { metric: 'claudeRequest', note: run.reason },
       manual: run.manual, // 4A — a person approved it: his own click
     })
     if (made.refusal) return notRun(`Not run: Amazon's write gate refused it — ${made.refusal.reason}. Nothing changed.`)
@@ -308,8 +431,20 @@ async function destinationAdGroup(args: Record<string, unknown>, query: string, 
   return { id: resolved.chosen.adGroupId, name: resolved.chosen.adGroupName, externalAdGroupId: ext, campaignId: resolved.chosen.campaignId, why: resolved.source === 'stored' ? 'the harvest destination stored for this scope' : 'the only ad group the harvest resolver offers' }
 }
 
-/** A5 — the keyword a graduate-keyword request would create, and what the approver must see — or why not. */
-async function graduationPreview(args: Record<string, unknown>): Promise<ToolResult> {
+/**
+ * AA-W2-7 — graduate-keyword's Claude limits: the kit's, and the highest starting bid a new keyword may get by rule. A
+ * new keyword adds spend, so by default (0) every graduation waits for a person.
+ */
+const GRADUATE_LIMITS = adKitLimits({ maxItems: 1 }, {
+  maxStartBidCents: z.number().int().min(0).max(100_000).default(0)
+    .describe('the highest starting bid, in minor units of the campaign\'s currency, a new keyword may get without a person; 0 = every new keyword waits for a person'),
+})
+
+/**
+ * A5 — the keyword a graduate-keyword request would create, and what the approver must see — or why not. `rule` (the
+ * dry run, not `execute`): AA-W2-7 — also the facts its limits are judged on when it may run by rule.
+ */
+async function graduationPreview(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null } } = {}): Promise<ToolResult> {
   const query = String(args.query ?? '').trim()
   const sourceExternalCampaignId = String(args.sourceExternalCampaignId ?? '')
   if (!query || !sourceExternalCampaignId) {
@@ -370,6 +505,9 @@ async function graduationPreview(args: Record<string, unknown>): Promise<ToolRes
   const stored = storedReach(reach)
   const currency = campaignCurrency(campaign)
   const bound = await alsoChangedBy(campaign.id)
+  const rule = opts.rule
+    ? await graduationRuleFacts({ query, source, sourceExternalCampaignId, sourceExternalAdGroupId: typeof args.sourceExternalAdGroupId === 'string' ? args.sourceExternalAdGroupId.trim() : '', destination: campaign, group, suggestedBidCents, approvalId: opts.rule.approvalId })
+    : null
   return {
     ok: true,
     preview: {
@@ -385,9 +523,89 @@ async function graduationPreview(args: Record<string, unknown>): Promise<ToolRes
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
+      ...(rule ?? {}),
       effect: `Creates an EXACT keyword "${query}" at ${amountLabel(suggestedBidCents, currency)} in ${campaign.name} › ${group.name}; the term produced ${metrics.orders} orders on ${amountLabel(metrics.costCents, currency)} spend (last ${metrics.windowDays}d). The source ad group is not negated here.`,
     },
   }
+}
+
+/** AA-W2-7 — the strategy's harvest group where a term converted, as a graduation's preview stores it (money under its strategy key). */
+interface RuleHarvest {
+  harvestMinOrders: number
+  harvestMinClicks: number
+  harvestMaxAcosPct: number | null
+  harvestWindowDays: number
+  /** Where it was read (the ad group, or the campaign, the term converted in) and the row that gave it. */
+  at: string
+  from: string
+}
+
+/**
+ * AA-W2-7 — what a graduation's dry run adds when it may run by rule: the kit's facts of the new keyword where it lands
+ * (the destination ad group's strategy and bid band, today; a new keyword counts as a raise), the write gate's answer as
+ * a run by rule, and the term's record where it converted against the strategy's "Harvest a search term when" group
+ * there (its ad group when named, else its campaign: the stricter group across the campaign's ad groups).
+ */
+async function graduationRuleFacts(input: {
+  query: string; source: CampaignRow; sourceExternalCampaignId: string; sourceExternalAdGroupId: string
+  destination: CampaignRow; group: { id: string; externalAdGroupId: string | null }; suggestedBidCents: number
+  approvalId?: string | null
+}) {
+  const facts = await ruleFactsFor({
+    tool: 'graduate-keyword',
+    limits: GRADUATE_LIMITS,
+    // The new keyword is the term where it lands: its ad group's strategy and band, and one entity per term (C6).
+    items: [{
+      entity: { kind: 'searchTerm', query: input.query, externalCampaignId: input.destination.externalCampaignId ?? '', externalAdGroupId: input.group.externalAdGroupId },
+      change: { field: 'bid', fromCents: null, toCents: input.suggestedBidCents },
+    }],
+    writes: [{ label: `campaign "${input.destination.name}"`, campaignId: input.destination.id, adGroupId: input.group.id, marketplace: input.destination.marketplace, changes: [{ field: 'bid', valueCents: input.suggestedBidCents }] }],
+    approvalId: input.approvalId,
+  })
+  const sourceGroup = input.sourceExternalAdGroupId ? await adGroupInCampaign(input.sourceExternalAdGroupId, input.source.id) : null
+  const harvest = input.source.marketplace
+    ? await harvestForScope(input.source.marketplace, sourceGroup ? { adGroupId: sourceGroup.id } : { campaignIds: [input.source.id] })
+    : null
+  const where = sourceGroup ? `ad group "${sourceGroup.name}"` : `campaign "${input.source.name}"`
+  const ruleHarvest: RuleHarvest | null = harvest
+    ? { harvestMinOrders: harvest.group.minOrders, harvestMinClicks: harvest.group.minClicks, harvestMaxAcosPct: harvest.group.maxAcosPct, harvestWindowDays: harvest.group.windowDays, at: where, from: strategyWords(harvest.source) }
+    : null
+  const ruleRecord = harvest
+    ? await termRecord(input.query, { externalCampaignId: input.sourceExternalCampaignId, externalAdGroupId: sourceGroup ? input.sourceExternalAdGroupId : null }, harvest.group.windowDays)
+    : null
+  const limitsNote = [...facts.limitsNote]
+  if (ruleHarvest && ruleRecord) {
+    const currency = campaignCurrency(input.source)
+    limitsNote.push(`Harvest a search term when: at least ${ruleHarvest.harvestMinOrders} orders and ${ruleHarvest.harvestMinClicks} clicks${ruleHarvest.harvestMaxAcosPct != null ? `, ACoS at most ${ruleHarvest.harvestMaxAcosPct} %` : ''}, over ${ruleHarvest.harvestWindowDays} days (${ruleHarvest.from}); this term in its ${where}: ${recordWords(ruleRecord, currency)}.`)
+  }
+  return { ...facts, limitsNote, ruleHarvest, ruleRecord }
+}
+
+/**
+ * AA-W2-7 — graduate-keyword's own check, after the common ones (pure): the starting bid within Claude's limit, and the
+ * term's record where it converted meets the strategy's harvest group there (the harvest engine's bar, meetsHarvest: no
+ * sales is no ACoS). No group there: a person decides.
+ */
+function graduationRuleRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
+  const p = preview as { query?: string; suggestedBidCents?: number; currency?: string; ruleHarvest?: RuleHarvest | null; ruleRecord?: TermRecord | null }
+  const currency = p.currency ?? 'EUR'
+  const max = typeof limits.maxStartBidCents === 'number' ? limits.maxStartBidCents : 0
+  const bid = Number(p.suggestedBidCents)
+  if (!(bid <= max)) {
+    return `its starting bid ${amountLabel(bid, currency)} is above the ${amountLabel(max, currency)} this tool's limits let a new keyword start at without a person${max === 0 ? ' (0: every new keyword waits for a person)' : ''}; a person decides`
+  }
+  const h = p.ruleHarvest
+  if (!h) return `the ads strategy sets no "Harvest a search term when" group where "${p.query}" converted: a keyword is added by rule only for a term that meets one; a person decides`
+  const r = p.ruleRecord
+  if (!r || r.windowDays !== h.harvestWindowDays) return `the term's record over the strategy's ${h.harvestWindowDays} days was not read for this preview; a person decides`
+  const acos = r.salesCents > 0 ? Math.round((r.spendCents / r.salesCents) * 10_000) / 100 : null
+  const short = [
+    r.orders < h.harvestMinOrders ? `fewer than ${h.harvestMinOrders} orders` : null,
+    r.clicks < h.harvestMinClicks ? `fewer than ${h.harvestMinClicks} clicks` : null,
+    h.harvestMaxAcosPct != null && acos != null && acos > h.harvestMaxAcosPct ? `an ACoS of ${acos} %, above ${h.harvestMaxAcosPct} %` : null,
+  ].filter((x): x is string => !!x)
+  if (!short.length) return null
+  return `"${p.query}" has ${recordWords(r, currency)} in its ${h.at}: ${short.join(', ')}, so it does not meet "Harvest a search term when" (${h.from}); a person decides`
 }
 
 /** A5 — the starting facts an approved graduation must still find. */
@@ -423,6 +641,7 @@ const graduateKeyword: AgentTool = {
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
   }),
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
+  restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
@@ -430,18 +649,25 @@ const graduateKeyword: AgentTool = {
   // A5 — an approved keyword is created at Amazon at once (no cancel window).
   openWorld: true,
   reversibility: 'partial',
-  maxClaudeTrust: 'confirm',
+  // AA-W2-7 — the business may let it run by its rule, only for a term that meets the ads strategy's harvest group.
+  maxClaudeTrust: 'auto',
+  strategyBound: 'amazon-ads',
+  limits: GRADUATE_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? graduationRuleRefusal(preview, limits),
   undo: GRADUATE_UNDO,
   description:
     'Promote a converting search term to an EXACT keyword in an Amazon Sponsored Products ad group (the one named, or '
     + 'the harvest destination the account resolves). Nothing changes until a person approves it: in Nexus, or the '
-    + 'person who asked confirms it in Claude with their authenticator code when the business set it so. The preview '
+    + 'person who asked confirms it in Claude with their authenticator code when the business set it so — unless the '
+    + 'business lets it run by its rule: only for a term whose record meets the ads strategy\'s "Harvest a search term '
+    + 'when" group where it converted, at a starting bid inside its limits and the destination\'s bid band (by default '
+    + 'every new keyword waits for a person). The preview '
     + 'shows the starting bid in the campaign\'s currency (default: the term\'s cost per click), the term\'s record, '
-    + 'and whether it lands live at Amazon or in sandbox. Refused, and not queued, on a bids pin, when the exact '
-    + 'keyword exists, or when Amazon\'s write gate would refuse it. The source ad group is not negated. Undo lowers '
-    + 'the keyword to the 5-cent floor (it is never paused or archived).',
-  async handler(args) {
-    return graduationPreview(args)
+    + 'whether it lands live at Amazon or in sandbox, and each limit with where it comes from. Refused, and not queued, '
+    + 'when the exact keyword exists, or when Amazon\'s write gate would refuse it. The source ad group is not negated. '
+    + 'Undo lowers the keyword to the 5-cent floor (it is never paused or archived).',
+  async handler(args, ctx) {
+    return graduationPreview(args, { rule: { approvalId: ctx.approvalId } })
   },
   async execute(args, ctx) {
     const fresh = await graduationPreview(args)
