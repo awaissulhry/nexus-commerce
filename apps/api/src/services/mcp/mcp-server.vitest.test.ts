@@ -70,12 +70,14 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
   })
 
   it('a change needs a person by its own code: no policy can let it run unasked', () => {
-    // tool-policy.service.ts can loosen approval only for a change tool without one of these.
+    // tool-policy.service.ts can loosen approval only for a change tool without one of these. W4-1 — the journal tools
+    // (Claude's own record, no change of the business; an exact list in tool-contract.vitest.test.ts) run at once by design.
     const loose = listTools()
       .filter((tool) => !tool.readOnly && tool.execute)
       .filter((tool) => !tool.alwaysAsk && tool.riskTier !== 'high' && !tool.requiresApprovalDefault)
       .map((tool) => tool.name)
-    expect(loose).toEqual([])
+    expect(loose).toEqual(listTools().filter((tool) => tool.journal).map((tool) => tool.name))
+    expect(loose).toEqual(['report-ads-run'])
   })
 
   it('open world exactly where a marketplace or a buyer is reached', () => {

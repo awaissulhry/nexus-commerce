@@ -38,6 +38,10 @@
  * level for its kind of action where it lands (claude-trust.service.ts `claudeRuleForChange`): off there refuses it
  * before anything runs; a narrowed request answers with `trust.strategy`, the strategy row that narrowed it.
  *
+ * ADS AUTONOMY W4-1 — a journal tool (report-ads-run: the daily run's own record, bell notice and capped e-mail) is no
+ * change of the business: it is not stored as a request and runs at once, for any connection with nexus.write — also
+ * without nexus.run and during a Pause. Off for Claude, it is refused like any tool.
+ *
  * ADS AUTONOMY AA-W2-4 — at `watch` (the kind's level, or the ads strategy's where it lands) the request goes through
  * every check auto makes and the verdict is recorded on it (AgentApproval.ruleVerdict; a plan per step), but it is never
  * scheduled: it waits for a person as at confirm, and Claude reads `trust.watch` — would it have run by rule, or why not.
@@ -383,13 +387,14 @@ export async function runToolForClaude(
       try {
         // Every change from Claude is stored as a request, even when the tool's policy needs no approval (forceAsk
         // only ever tightens the gate). C5 — the business's rule then says who decides it: a person, or the rule.
+        // W4-1 — except a journal tool (AgentTool.journal: Claude's own record, no change of the business): it runs at once.
         // N1 — first: a market this business does not have is refused with the codes it has.
         const wrongMarket = await marketRefusal(tool, toolArgs)
         if (wrongMarket) {
           await finish({ status: 'failed', ok: false, errorMessage: wrongMarket })
           return refused(principal, wrongMarket)
         }
-        const outcome = await runOrQueueTool(tool.name, toolArgs, principal, run.id, { forceAsk: !tool.readOnly, rule: claudeGateRule(principal) })
+        const outcome = await runOrQueueTool(tool.name, toolArgs, principal, run.id, { forceAsk: !tool.readOnly && !tool.journal, rule: claudeGateRule(principal) })
         await finish(ending(outcome))
         return answer(outcome, principal, tool)
       } catch (error) {

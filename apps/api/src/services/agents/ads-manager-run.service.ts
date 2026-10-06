@@ -5,8 +5,8 @@
  * begins, `finish` (or `fail`) when it ends. Each run is ONE AgentRun row of its own:
  *
  *   agentKey 'claude-ads-manager' · trigger 'schedule' · mode null · via null · cost 0
- *   id       the approvalId of the run's `start` request — the runId Claude passes to finish — or a fresh id for a run
- *            that reports without a start
+ *   id       the runId start answers with (a fresh id; the start's approvalId if a business's own policy made it
+ *            wait for a person), or a fresh id for a run that reports without a start
  *   status   running (started) · done (finished) · failed (failed) · cancelled (withdrawn by an undo)
  *   input    what the start read: the mode, each ad tool's level, the Pause, the daily cap, the strategy per market
  *   output   the report: per market Claude's lines and Nexus's own numbers, each approval Claude named and what it is,
@@ -24,16 +24,23 @@
  * from); Claude writes only words and approval ids. What each approval Claude names became is read here too
  * (`namedApprovals`): the counts in the bell and the e-mail ("3 ran, 2 wait for you") are Nexus's, never Claude's lists.
  *
+ * report-ads-run is a journal tool (tool-types.ts AgentTool.journal): it changes nothing of the business, so Claude's door
+ * runs it at once — also without nexus.run, in the watch week and during a Pause.
+ *
  * One bell notice per finish or fail (danger when the run names a problem or failed: never deduped), and at most one
- * e-mail a day per business (the operator's day, Europe/Rome, as the Monday digest counts it) to the Monday ads digest's
- * recipients, through the shared e-mail transport (a dry run unless outbound e-mail is on).
+ * e-mail a day per business (the operator's day, Europe/Rome, as the Monday digest counts it), through the shared e-mail
+ * transport (a dry run unless outbound e-mail is on). To the Monday ads digest's recipients (NEXUS_ADS_DIGEST_RECIPIENTS);
+ * when that list is empty, to this business's own active people who may see its ad money (ads.view and
+ * financials.adspend.view, or its owners) — one e-mail per business, never two businesses in one.
  *
  * W4-5 (not built): the watch-week comparison — each watched step against what then happened to its entity — goes in
  * `ads-manager-runs` where WATCH_WEEK_SLOT stands, and in the daily e-mail.
  */
 
 import type { Prisma } from '@nexus/database'
+import { FEATURES as F, FIELDS, OWNER_ROLE_KEY, expandPermissions } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
+import { workspaceContext } from '../../lib/workspace-context.js'
 import { logger } from '../../utils/logger.js'
 import { sendEmail } from '../email/transport.js'
 import { AUTOMATION_HREF, notifyAutomationDetailed } from '../advertising/ads-automation-notify.service.js'
@@ -307,21 +314,25 @@ export function outputOf(row: Pick<RunRow, 'output'> | null): RunOutput | null {
   return out && typeof out === 'object' && !Array.isArray(out) && (out as { v?: unknown }).v === 1 ? (out as RunOutput) : null
 }
 
-/** A run begins (op start): its record, unless a finish of the same run got there first. */
-export async function recordStart(runId: string, facts: StartFacts, userId: string | null): Promise<{ created: boolean }> {
-  const existing = await runById(runId)
-  if (existing) return { created: false }
-  await prisma.agentRun.create({
+/**
+ * A run begins (op start): its record, under a fresh id (the runId), or under `runId` — the start request's approvalId
+ * when the business's own policy made the start wait for a person — unless a finish of that run got there first.
+ */
+export async function recordStart(runId: string | null, facts: StartFacts, userId: string | null): Promise<{ runId: string; created: boolean }> {
+  const existing = runId ? await runById(runId) : null
+  if (existing) return { runId: existing.id, created: false }
+  const row = await prisma.agentRun.create({
     data: {
-      id: runId,
+      ...(runId ? { id: runId } : {}),
       agentKey: ADS_MANAGER_AGENT_KEY,
       trigger: 'schedule',
       status: 'running',
       userId,
       input: { v: 1, start: facts } as unknown as Prisma.InputJsonValue,
     },
+    select: { id: true },
   })
-  return { created: true }
+  return { runId: row.id, created: true }
 }
 
 /** A run ends (finish or fail): its record — created when no start was recorded — set to done or failed. */
@@ -386,6 +397,39 @@ async function digestRecipients(): Promise<string[]> {
   return read()
 }
 
+const mayReadAds = (roles: Array<{ role: { key: string; permissions: string[] } }>, money: boolean) => {
+  if (roles.some(({ role }) => role.key === OWNER_ROLE_KEY)) return true
+  const held = expandPermissions(roles.flatMap(({ role }) => role.permissions))
+  return held.has(F.adsView) && (!money || held.has(FIELDS.financialsAdspendView))
+}
+
+/**
+ * This business's own active people who may see its ads (ads.view, or an owner) — `money`: and its ad money
+ * (financials.adspend.view), for an e-mail that states spend and sales. With business profiles on, the business's
+ * members by their roles in it; with them off (one business), every active login by its roles. Never anyone of another
+ * business.
+ */
+export async function adsPeople(opts: { money: boolean }): Promise<string[]> {
+  const roles = { select: { role: { select: { key: true, permissions: true } } } } as const
+  if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+    const workspaceId = workspaceContext()?.workspaceId
+    if (!workspaceId) return []
+    const members = await prisma.workspaceMembership.findMany({
+      where: { workspaceId, status: 'active', user: { status: 'active' } },
+      select: { user: { select: { email: true } }, roles },
+    })
+    return [...new Set(members.filter((m) => mayReadAds(m.roles, opts.money)).map((m) => m.user.email).filter(Boolean))]
+  }
+  const people = await prisma.userProfile.findMany({ where: { status: 'active' }, select: { email: true, roleAssignments: roles } })
+  return [...new Set(people.filter((p) => mayReadAds(p.roleAssignments, opts.money)).map((p) => p.email).filter(Boolean))]
+}
+
+/** Who the day's report e-mail goes to: the Monday digest's list, else this business's own people who may see ad money. */
+export async function reportRecipients(): Promise<{ to: string[]; source: 'digest' | 'business' }> {
+  const digest = await digestRecipients()
+  return digest.length ? { to: digest, source: 'digest' } : { to: await adsPeople({ money: true }), source: 'business' }
+}
+
 /** Whether a report e-mail already went (or was rehearsed) on this operator day, in this business. */
 export async function emailedOn(day: string, now = new Date()): Promise<boolean> {
   const recent = await runsSince(new Date(now.getTime() - 2 * 86_400_000), 100)
@@ -397,16 +441,16 @@ export async function emailedOn(day: string, now = new Date()): Promise<boolean>
 
 /** Whether today's e-mail would go, and to how many (the dry run's answer; never the addresses). */
 export async function emailPlan(wanted: boolean, now = new Date()): Promise<{ send: boolean; recipients: number; why: string | null }> {
-  const recipients = (await digestRecipients()).length
+  const recipients = (await reportRecipients()).to.length
   if (!wanted) return { send: false, recipients, why: 'the run asked for no e-mail' }
-  if (!recipients) return { send: false, recipients, why: 'no recipients are set for the Monday ads digest (NEXUS_ADS_DIGEST_RECIPIENTS)' }
+  if (!recipients) return { send: false, recipients, why: 'no one to send it to: the Monday ads digest has no recipients and no one in this business may see its ad money' }
   if (await emailedOn(operatorDay(now), now)) return { send: false, recipients, why: 'today\'s report e-mail already went (one a day)' }
   return { send: true, recipients, why: null }
 }
 
 export async function sendRunEmail(message: { subject: string; html: string; text: string }, now = new Date()): Promise<EmailOutcome> {
-  const to = await digestRecipients()
-  if (!to.length) return { status: 'skipped', on: null, recipients: 0, why: 'no recipients are set for the Monday ads digest' }
+  const { to } = await reportRecipients()
+  if (!to.length) return { status: 'skipped', on: null, recipients: 0, why: 'no one to send it to: the Monday ads digest has no recipients and no one in this business may see its ad money' }
   const day = operatorDay(now)
   if (await emailedOn(day, now)) return { status: 'skipped', on: null, recipients: to.length, why: 'today\'s report e-mail already went (one a day)' }
   try {
