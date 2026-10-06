@@ -47,8 +47,11 @@ export interface SpwLaunchResult {
   body: Record<string, unknown>
 }
 
-/** Where a launch is: campaigns started so far, of how many, the one being made (null at the end), campaigns made. */
-export interface SpwProgress { done: number; total: number; campaign: string | null; created: number }
+/**
+ * Where a launch is: campaigns started so far, of how many, the one being made (null at the end), campaigns made, and
+ * the Nexus ids of the campaigns made so far (a caller records them as they come).
+ */
+export interface SpwProgress { done: number; total: number; campaign: string | null; created: number; campaignIds: string[] }
 
 /** PB-5a — the ads playbook's build. Absent: the screens' launch, unchanged. */
 export interface SpwLaunchOptions {
@@ -128,7 +131,7 @@ export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor, opts: S
   const { CampaignLaunch, summariseLaunch, describeLaunch } = await import('./launch-outcome.js')
   const outcomes: import('./launch-outcome.js').LaunchCampaignResult[] = []
   for (const [i, c] of campaigns.entries()) {
-    await progress({ done: i, total: campaigns.length, campaign: c.name, created: created.length })
+    await progress({ done: i, total: campaigns.length, campaign: c.name, created: created.length, campaignIds: created.map((x) => x.campaignId) })
     const rec = new CampaignLaunch(c.name)
     const bidEur = Number(c.bidEur) || 0.75
     const budgetEur = Number(c.budgetEur) || 10
@@ -211,7 +214,7 @@ export async function spWizardLaunch(b: SpwLaunchBody, userId: AdsActor, opts: S
     outcomes.push(rec.result())
   }
   const launch = summariseLaunch(outcomes)
-  await progress({ done: campaigns.length, total: campaigns.length, campaign: null, created: created.length })
+  await progress({ done: campaigns.length, total: campaigns.length, campaign: null, created: created.length, campaignIds: created.map((x) => x.campaignId) })
   // AT.4a — persist the Step-3 harvesting rule as an AutomationRule (domain advertising)
   // so it survives launch instead of being thrown away. The matrix (which ad groups to
   // harvest from + which match types to graduate/negate, incl. the Auto campaign's groups)

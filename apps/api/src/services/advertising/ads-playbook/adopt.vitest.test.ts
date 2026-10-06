@@ -7,7 +7,8 @@
  *   candidates the market's SP campaigns advertising the product family's ASINs, in no playbook; another product's are not
  *   write      links only (origin adopted) and the shared portfolio, the row DRAFT → BUILT with a version row; nothing at a
  *              campaign changes (allowlist, bids, status); one campaign plays one slot of one playbook; unbind takes an
- *              adopted slot off again (never a built one)
+ *              adopted slot off again (never a built one); a slot whose built campaign was archived is adopted into (its
+ *              stale link replaced); a portfolio another playbook holds is named and not linked
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -91,6 +92,38 @@ beforeAll(async () => {
   })
 }, 120_000)
 afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
+
+describe('a stale link and a portfolio another playbook holds', () => {
+  let second: Awaited<ReturnType<typeof seedProductPlaybook>>
+  const made = { archived: '', pat: '' }
+  beforeAll(async () => {
+    await inA(async () => {
+      second = await seedProductPlaybook(db(), { token: 'TESTPBS', asinPrefix: 'B0TESTPS' })
+      const c = db()
+      // The slot pat was built, then undone: its campaign archived, its link left behind.
+      made.archived = (await c.campaign.create({ data: { name: 'TESTPBS | IT | PAT', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date(), externalCampaignId: 'EXT-TESTPBS-PAT-OLD', status: 'ARCHIVED' } })).id
+      await c.adsPlaybookLink.create({ data: { playbookId: second.rowId, kind: 'slot', key: 'pat', refId: made.archived, origin: 'built', compiledVersion: 1, updatedBy: 'user:test' } })
+      // A PAT campaign the product runs, in a portfolio another product's playbook holds.
+      const camp = await c.campaign.create({ data: { name: 'TESTPBS rival ASINs', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date(), externalCampaignId: 'EXT-TESTPBS-PAT-NEW', portfolioId: 'pf-held-elsewhere' } })
+      const g = await c.adGroup.create({ data: { campaignId: camp.id, name: 'TESTPBS PAT group' } })
+      await c.adProductAd.create({ data: { adGroupId: g.id, asin: 'B0TESTPS01', sku: 'TEST-TESTPBS-V1' } })
+      await c.adTarget.create({ data: { adGroupId: g.id, kind: 'PRODUCT', expressionType: 'ASIN_SAME_AS', expressionValue: 'B0TESTRIV1', bidCents: 30 } })
+      await c.adsPlaybookLink.create({ data: { playbookId: 'another-playbook', kind: 'portfolio', key: 'portfolio', refId: 'pf-held-elsewhere', origin: 'adopted', compiledVersion: 1, updatedBy: 'user:test' } })
+      made.pat = camp.id
+    })
+  })
+
+  it('adopts into a slot whose built campaign was archived (its link replaced); names, and does not link, the held portfolio', async () => {
+    const out = await inA(() => planAdopt({ market: 'IT', productId: second.parent }))
+    if ('error' in out) throw new Error(out.error)
+    expect(out.data.bindings.map((b) => [b.slot, b.campaignId])).toEqual([['pat', made.pat]])
+    expect(out.data.portfolioId).toBeNull()
+    expect(out.data.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/share portfolio pf-held-elsewhere, which another product's playbook holds: it is not linked to this one/)]))
+    expect(await inA(() => applyAdopt(out.data, writer))).toEqual({ bound: 1, unbound: 0, errors: [] })
+    expect(await inA(() => db().adsPlaybookLink.findMany({ where: { playbookId: second.rowId }, select: { kind: true, key: true, refId: true, origin: true } })))
+      .toEqual([{ kind: 'slot', key: 'pat', refId: made.pat, origin: 'adopted' }])
+  })
+})
 
 describe('plan and apply an adopt', () => {
   it('finds the product family\'s own campaigns only (never another product\'s, never one in another playbook), and matches them', async () => {

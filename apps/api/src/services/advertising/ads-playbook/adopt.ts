@@ -9,9 +9,10 @@
  *               campaign whose shape — targeting, match type, intent, as a capture reads it (capture.ts slotShape) —
  *               is the slot's (shape). Two for one slot: ambiguous, bound only when `bind` names one. A campaign that
  *               plays no free slot is listed outside, with why.
- *   writes      the slot links (origin adopted), the portfolio link when every bound campaign shares one, and the row's
- *               state DRAFT → BUILT (never lowered from RUNNING), with one version row (op adopt) — one transaction.
- *               `unbind` takes adopted links off again (the undo of an adopt).
+ *   writes      the slot links (origin adopted) — a slot whose campaign was archived has its stale link replaced — the
+ *               portfolio link when every bound campaign shares one and no other playbook holds it (named otherwise),
+ *               and the row's state DRAFT → BUILT (never lowered from RUNNING), with one version row (op adopt) — one
+ *               transaction. `unbind` takes adopted links off again (the undo of an adopt).
  */
 import { createHash } from 'node:crypto'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
@@ -218,7 +219,10 @@ export async function planAdopt(args: {
   const hasPortfolio = await prisma.adsPlaybookLink.count({ where: { playbookId: row.id, kind: 'portfolio' } })
   const portfolios = new Set(matched.bindings.map((b) => candidates.find((c) => c.campaignId === b.campaignId)?.portfolioId ?? null))
   const shared = portfolios.size === 1 ? [...portfolios][0] : null
-  const portfolioId = !hasPortfolio && shared && !shared.startsWith('local-pf-') ? shared : null
+  // A portfolio another playbook holds is that playbook's: named, not linked again (one portfolio, one playbook).
+  const heldBy = shared ? await prisma.adsPlaybookLink.findFirst({ where: { kind: 'portfolio', refId: shared, NOT: { playbookId: row.id } }, select: { playbookId: true } }) : null
+  if (heldBy) warnings.push(`The campaigns share portfolio ${shared}, which another product's playbook holds: it is not linked to this one.`)
+  const portfolioId = !hasPortfolio && !heldBy && shared && !shared.startsWith('local-pf-') ? shared : null
   const bindings = matched.bindings
   return {
     data: {
@@ -236,6 +240,10 @@ export async function planAdopt(args: {
   }
 }
 
+class SlotTaken extends Error {
+  constructor(readonly slot: string) { super(`slot ${slot} is taken`) }
+}
+
 /**
  * Write an adopt in ONE transaction: the links (a campaign another playbook took meanwhile refuses the whole adopt),
  * the unbinds, the portfolio link, the row's state and its version row. Then the artifacts hook (mode adopt).
@@ -248,9 +256,19 @@ export async function applyAdopt(plan: AdoptPlan, writer: PlaybookApplyWriter & 
         if (gone.count !== 1) throw new Error(`slot "${u.slot}" moved since this adopt was planned`)
       }
       for (const b of plan.bindings) {
-        await tx.adsPlaybookLink.create({ data: { playbookId: plan.playbook.id, kind: 'slot', key: b.slot, refId: b.campaignId, adGroupId: b.adGroupId, origin: 'adopted', compiledVersion: plan.playbook.version, updatedBy: writer.updatedBy } })
+        const data = { refId: b.campaignId, adGroupId: b.adGroupId, origin: 'adopted', compiledVersion: plan.playbook.version, updatedBy: writer.updatedBy }
+        // A slot whose campaign was archived (an undone build) still holds its link: replaced, as a build replaces it.
+        const stale = await tx.adsPlaybookLink.findFirst({ where: { playbookId: plan.playbook.id, kind: 'slot', key: b.slot }, select: { id: true, refId: true } })
+        if (stale) {
+          const held = await tx.campaign.findUnique({ where: { id: stale.refId }, select: { status: true } })
+          if (held && String(held.status) !== 'ARCHIVED') throw new SlotTaken(b.slot)
+          await tx.adsPlaybookLink.update({ where: { id: stale.id }, data })
+        } else {
+          await tx.adsPlaybookLink.create({ data: { playbookId: plan.playbook.id, kind: 'slot', key: b.slot, ...data } })
+        }
       }
-      if (plan.portfolioId) {
+      // The portfolio, unless another playbook took it since the plan (then it is left to that one).
+      if (plan.portfolioId && !(await tx.adsPlaybookLink.findFirst({ where: { kind: 'portfolio', refId: plan.portfolioId }, select: { id: true } }))) {
         await tx.adsPlaybookLink.create({ data: { playbookId: plan.playbook.id, kind: 'portfolio', key: 'portfolio', refId: plan.portfolioId, origin: 'adopted', compiledVersion: plan.playbook.version, updatedBy: writer.updatedBy } })
       }
       const slotsLeft = await tx.adsPlaybookLink.count({ where: { playbookId: plan.playbook.id, kind: 'slot' } })
@@ -264,6 +282,7 @@ export async function applyAdopt(plan: AdoptPlan, writer: PlaybookApplyWriter & 
       if (!recorded) throw new Error('the playbook row is gone')
     })
   } catch (error) {
+    if (error instanceof SlotTaken) return { error: `Slot "${error.slot}" is held by a live campaign since this adopt was planned: nothing was saved. Ask for it again.` }
     if ((error as { code?: string } | null)?.code === 'P2002') return { error: 'A campaign it binds was linked to a playbook since this adopt was planned: nothing was saved. Ask for it again.' }
     return { error: `Nothing was saved: ${(error as Error).message}` }
   }

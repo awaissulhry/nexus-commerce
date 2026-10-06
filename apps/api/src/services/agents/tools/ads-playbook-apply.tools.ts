@@ -27,7 +27,7 @@ import { checkAdsWriteGate } from '../../advertising/ads-write-gate.js'
 import { SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { applyAdopt, planAdopt, type AdoptPlan } from '../../advertising/ads-playbook/adopt.js'
 import { previewArtifacts } from '../../advertising/ads-playbook/artifacts.js'
-import { buildRunCampaigns, inFlightRefusal, planBuild, staleRunWords, startPlaybookBuild, type BuildPlan } from '../../advertising/ads-playbook/build.js'
+import { buildRunCampaigns, inFlightRefusal, planBuild, startPlaybookBuild, type BuildPlan } from '../../advertising/ads-playbook/build.js'
 import { PLAYBOOK_MONEY, SLOT_KEY } from '../../advertising/ads-playbook/doc.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { marketCurrency } from '../../pim/market-currency.js'
@@ -91,12 +91,16 @@ async function buildPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
   if (!p.campaigns.length) return refuse(a.slots?.length ? `Nothing to build: ${a.slots.join(', ')} ${a.slots.length === 1 ? 'is' : 'are'} held by a live campaign already.` : 'Nothing to build: every slot of the playbook is held by a live campaign (ads-playbook view compile).')
   if (!p.allowed) return refuse(`The blueprint gate refuses this build — ${p.blockers.join(' ')}`)
   const flying = await inFlightRefusal(p.market, p.nameToken!, p.playbook.id)
-  if (flying) return refuse(flying.stale ? staleRunWords(flying) : `A build of this product is running (run ${flying.applicationId}): follow it with ads-playbook view build.`)
+  // A build that stopped (no progress for 30 minutes) was marked FAILED by the check itself: it does not hold this one.
+  if (flying) return refuse(`A build of this product is running (run ${flying.applicationId}): follow it with ads-playbook view build.`)
   let currency: string
   try { currency = await marketCurrency('AMAZON', p.market) } catch (e) { return refuse((e as Error).message) }
 
-  // Where it lands: a creation names no campaign yet, so the gate is asked as the launch asks it (no allowlist).
-  const reach = liveReachOf(await checkAdsWriteGate({ marketplace: p.market, payloadValueCents: p.dailyBudgetCents }))
+  // Where it lands: a creation names no campaign yet, so the gate is asked as the launch asks it (no allowlist). Each
+  // campaign is its own write: the gate's value cap is held against the largest single budget (the whole set's daily
+  // budget is held by this tool's limits and the strategy's month, below).
+  const largestBudgetCents = Math.max(0, ...p.campaigns.map((c) => Math.round(Number(c.dailyBudget ?? 0) * 100)))
+  const reach = liveReachOf(await checkAdsWriteGate({ marketplace: p.market, payloadValueCents: largestBudgetCents }))
   if (reach.reach === 'refused') return refuse(reachRefusal(reach))
   const stored = storedReach(reach)
   // The facts the business's rule is judged on: a build adds its daily budgets where its product is in the strategy.

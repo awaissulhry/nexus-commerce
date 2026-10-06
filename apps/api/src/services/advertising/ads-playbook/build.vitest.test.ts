@@ -6,9 +6,12 @@
  *
  *   body       one wizard campaign per slot built (its id the slot key), the products by SKU, no placements or rules
  *   options    off the allowlist, born suppressed by the requester, the approval's change set, placements deferred
- *   guard      one build per product at a time: a running one is answered with its id; one that stopped is named
+ *   guard      one build per product at a time: a running one is answered with its id; one that stopped (no progress
+ *              for 30 minutes) is marked FAILED with every campaign it made (from its change set's audit rows), its
+ *              Nexus-only records archived, so archive-ads buildRunId and a new build work
  *   run        the slot links (built) and the portfolio link, the run row (playbookId, APPLIED), the row BUILT with what it
- *              compiled, the placements kept for START; a Nexus-only portfolio stops it before any campaign
+ *              compiled, the placements kept for START; a Nexus-only portfolio stops it before any campaign; a campaign
+ *              Amazon never took is archived in Nexus so its name is free
  *   slots      a slot linked to a live campaign is not built again; one whose campaign was archived is
  *   artifacts  a compiler on the hook is called after the slot links, and its link is stored
  */
@@ -33,7 +36,7 @@ vi.mock('../ads-sp-wizard-launch.service.js', () => ({
     const created: Array<{ name: string; campaignId: string; externalCampaignId: string | null; mode: string }> = []
     const slots: Record<string, { campaignId: string; adGroupId: string }> = {}
     for (const [i, c] of body.campaigns.entries()) {
-      await opts?.onProgress?.({ done: i, total: body.campaigns.length, campaign: c.name, created: created.length })
+      await opts?.onProgress?.({ done: i, total: body.campaigns.length, campaign: c.name, created: created.length, campaignIds: created.map((x) => x.campaignId) })
       const off = launches.offAmazon.has(c.id)
       const camp = await prisma.campaign.create({ data: { name: c.name, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: body.market, dailyBudget: String(c.budgetEur), startDate: new Date(), externalCampaignId: off ? null : `AMZ-${c.name}`, portfolioId: body.portfolioId ?? null } })
       created.push({ name: c.name, campaignId: camp.id, externalCampaignId: camp.externalCampaignId, mode: 'live' })
@@ -41,7 +44,7 @@ vi.mock('../ads-sp-wizard-launch.service.js', () => ({
       const g = await prisma.adGroup.create({ data: { campaignId: camp.id, name: c.adGroupName, externalAdGroupId: `AMZ-G-${c.name}` } })
       slots[c.id] = { campaignId: camp.id, adGroupId: g.id }
     }
-    await opts?.onProgress?.({ done: body.campaigns.length, total: body.campaigns.length, campaign: null, created: created.length })
+    await opts?.onProgress?.({ done: body.campaigns.length, total: body.campaigns.length, campaign: null, created: created.length, campaignIds: created.map((x) => x.campaignId) })
     const live = created.filter((c) => c.externalCampaignId)
     return {
       status: 200,
@@ -58,7 +61,7 @@ vi.mock('../ads-portfolio.service.js', () => ({
   createPortfolio: async (input: { name: string }) => ({ portfolio: { portfolioId: portfolios.next, name: input.name }, mode: portfolios.next.startsWith('local-pf-') ? 'local' : 'live' }),
 }))
 
-import { planBuild, runPlaybookBuild, startPlaybookBuild, wizardBodyOf, STALE_RUN_MS, type BuildPlan } from './build.js'
+import { buildRunCampaigns, planBuild, runPlaybookBuild, startPlaybookBuild, wizardBodyOf, STALE_RUN_MS, type BuildPlan } from './build.js'
 import type { ArtifactCompiler } from './artifacts.js'
 
 const A = 'pb5_build_alpha'
@@ -68,6 +71,7 @@ const db = () => database.client
 const writer = { via: 'claude', actor: 'user:u-approver', actorUserId: 'u-approver', updatedBy: 'claude:ap-1' }
 let seeded: Awaited<ReturnType<typeof seedProductPlaybook>>
 let other: Awaited<ReturnType<typeof seedProductPlaybook>>
+let dead: Awaited<ReturnType<typeof seedProductPlaybook>>
 
 beforeAll(async () => {
   database = await formulaDatabase()
@@ -76,6 +80,7 @@ beforeAll(async () => {
   await inA(async () => {
     seeded = await seedProductPlaybook(db(), { token: 'TESTPB5', asinPrefix: 'B0TESTPB' })
     other = await seedProductPlaybook(db(), { token: 'TESTPB5X', asinPrefix: 'B0TESTPX' })
+    dead = await seedProductPlaybook(db(), { token: 'TESTPB5D', asinPrefix: 'B0TESTPD' })
   })
 }, 120_000)
 afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
@@ -177,16 +182,13 @@ describe('the build run', () => {
 })
 
 describe('one build at a time; a Nexus-only portfolio stops it', () => {
-  it('a running build is answered with its id; one that stopped advancing is refused and named', async () => {
+  it('a running build is answered with its id', async () => {
     const p = await plan(other.parent)
     const row = await inA(() => db().adBlueprintApplication.create({ data: {
       productToken: 'TESTPB5X', marketplace: 'IT', status: 'RUNNING', plan: {}, playbookId: other.rowId, startedAt: new Date(),
       progress: { done: 1, total: 5, campaign: 'TESTPB5X | IT | Auto', at: new Date().toISOString() },
     } }))
     expect(await inA(() => startPlaybookBuild({ plan: p, actor: 'user:u-approver', requester: 'user:u-asker', changeSetId: 'ap-2', writer }))).toEqual({ applicationId: row.id, alreadyRunning: true })
-    await inA(() => db().adBlueprintApplication.update({ where: { id: row.id }, data: { progress: { done: 1, total: 5, campaign: 'TESTPB5X | IT | Auto', at: new Date(Date.now() - STALE_RUN_MS - 60_000).toISOString() } } }))
-    const stale = await inA(() => startPlaybookBuild({ plan: p, actor: 'user:u-approver', requester: 'user:u-asker', changeSetId: 'ap-2', writer }))
-    expect(stale).toEqual({ refusal: expect.stringMatching(new RegExp(`stopped at "TESTPB5X \\| IT \\| Auto" \\(run ${row.id}\\) and does not resume by itself`)) })
     await inA(() => db().adBlueprintApplication.update({ where: { id: row.id }, data: { status: 'FAILED' } }))
   })
 
@@ -215,8 +217,47 @@ describe('one build at a time; a Nexus-only portfolio stops it', () => {
     expect(run.status).toBe('PARTIAL')
     expect(run.notOnAmazon).toHaveLength(1)
     expect(run.errors.join('\n')).toMatch(/"TESTPB5X \| IT \| PAT": Amazon refused it: a made-up reason/)
+    // The record Amazon never took is archived in Nexus: its name is free for the next build of that slot.
+    expect((await inA(() => db().campaign.findUniqueOrThrow({ where: { id: run.notOnAmazon[0] }, select: { status: true } }))).status).toBe('ARCHIVED')
+    expect(run.errors.join('\n')).toMatch(/1 campaign record\(s\) Amazon never took were archived in Nexus, so their names are free/)
+    expect((await plan(other.parent)).campaigns.map((c) => c.role)).toEqual(['pat'])
     const keys = (await inA(() => db().adsPlaybookLink.findMany({ where: { playbookId: other.rowId, kind: 'slot' }, select: { key: true } }))).map((l) => l.key).sort()
     expect(keys).toEqual(['auto', 'broad-category', 'exact-brand', 'exact-category'])
+  })
+
+  it('a build killed mid-way: marked FAILED with what it made (from its audit rows), its Nexus-only record archived; archive-ads and a new build work', async () => {
+    // Killed after making two campaigns and recording none: one at Amazon, one Amazon never took.
+    const made = await inA(async () => {
+      const at = await db().campaign.create({ data: { name: 'TESTPB5D dead | IT | Auto', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', dailyBudget: '3.00', startDate: new Date(), externalCampaignId: 'AMZ-dead-1' } })
+      const local = await db().campaign.create({ data: { name: 'TESTPB5D dead | IT | PAT', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', dailyBudget: '3.00', startDate: new Date() } })
+      for (const c of [at, local]) await db().advertisingActionLog.create({ data: { executionId: 'ap-dead', userId: 'user:u-approver', actionType: 'create_campaign', entityType: 'CAMPAIGN', entityId: c.id, payloadBefore: {}, payloadAfter: {}, amazonResponseStatus: 'SUCCESS' } })
+      return { at: at.id, local: local.id }
+    })
+    const deadRun = await inA(() => db().adBlueprintApplication.create({ data: {
+      productToken: 'TESTPB5D', marketplace: 'IT', status: 'RUNNING', plan: {}, playbookId: dead.rowId, startedAt: new Date(Date.now() - 2 * STALE_RUN_MS),
+      options: { source: 'playbook', changeSetId: 'ap-dead' }, createdCampaignIds: [],
+      progress: { done: 2, total: 5, campaign: 'TESTPB5D dead | IT | Broad', at: new Date(Date.now() - STALE_RUN_MS - 60_000).toISOString() },
+    } }))
+    // Its undo (archive-ads buildRunId) names the campaign Amazon holds; the run is FAILED with both and why.
+    expect(await inA(() => buildRunCampaigns(deadRun.id))).toEqual({ campaignIds: [made.at], status: 'FAILED' })
+    const row = await inA(() => db().adBlueprintApplication.findUniqueOrThrow({ where: { id: deadRun.id } }))
+    expect(row.status).toBe('FAILED')
+    expect([...row.createdCampaignIds].sort()).toEqual([made.at, made.local].sort())
+    expect(row.errors.join('\n')).toMatch(/stopped without finishing at "TESTPB5D dead \| IT \| Broad": no progress for 30 minutes .*archive-ads buildRunId .* 1 campaign record\(s\) Amazon never took were archived in Nexus/)
+    expect((await inA(() => db().campaign.findUniqueOrThrow({ where: { id: made.local }, select: { status: true } }))).status).toBe('ARCHIVED')
+    // Another stopped build no longer holds the next one: it is marked FAILED and the new one starts.
+    const again = await inA(() => db().adBlueprintApplication.create({ data: {
+      productToken: 'TESTPB5D', marketplace: 'IT', status: 'RUNNING', plan: {}, playbookId: dead.rowId, options: { source: 'playbook', changeSetId: 'ap-dead-2' },
+      progress: { done: 0, total: 5, campaign: null, at: new Date(Date.now() - STALE_RUN_MS - 60_000).toISOString() },
+    } }))
+    portfolios.next = 'pf-test-dead'
+    const started = await inA(async () => startPlaybookBuild({ plan: await plan(dead.parent), actor: 'user:u-approver', requester: 'user:u-asker', changeSetId: 'ap-5', writer }))
+    if ('refusal' in started) throw new Error(started.refusal)
+    expect(started.alreadyRunning).toBeUndefined()
+    expect(started.applicationId).not.toBe(again.id)
+    expect((await inA(() => db().adBlueprintApplication.findUniqueOrThrow({ where: { id: again.id } }))).status).toBe('FAILED')
+    expect((await finished(started.applicationId)).status).toBe('APPLIED')
+    portfolios.next = 'pf-test-made'
   })
 
   it('the run is a no-op on a row that is not RUNNING', async () => {
