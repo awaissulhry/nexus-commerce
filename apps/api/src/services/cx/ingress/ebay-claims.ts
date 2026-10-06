@@ -5,7 +5,7 @@ import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
 import { activeDatabaseTransaction } from '../../../lib/database-context.js'
 import { lockOwnedEbayAccount } from '../ebay-identity.js'
 import { inboundBackoffMs, MAX_INBOUND_ATTEMPTS, type ReplayOutcome, type ReplayRequest } from './ledger.js'
-import { ebayInboundProcessingReady, heldEbayInboundWhere } from './ebay-processing-policy.js'
+import { ebayInboundProcessingReady, ebayOrderNoticesEnabled, heldEbayInboundWhere } from './ebay-processing-policy.js'
 
 export const EBAY_INBOUND_LEASE_MS = 180_000
 
@@ -70,6 +70,8 @@ export async function queueEbayReplay(request: ReplayRequest): Promise<ReplayOut
     if (row.signatureOk !== true || row.verifiedBy !== 'ebay_ecdsa') return { ok: false, reason: 'unverified' }
     if (row.archivedAt) return { ok: false, reason: 'archived' }
     if (!ebayInboundProcessingReady()) return { ok: false, reason: 'processing_held' }
+    // A held order notice keeps its row exactly as stored: no reset of attempts or schedule.
+    if (row.eventType === 'ORDER_CONFIRMATION' && !ebayOrderNoticesEnabled()) return { ok: false, reason: 'processing_held' }
     const now = await databaseTime(tx)
     if ((row.leaseToken && row.leaseUntil && row.leaseUntil > now) || (row.status === 'pending' && row.nextAttemptAt)) {
       return { ok: false, reason: 'already_pending' }

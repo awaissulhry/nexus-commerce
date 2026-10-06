@@ -37,7 +37,11 @@ export function readEbayNoticeIdentity(payload: unknown): Readonly<EbayNoticeIde
   const root = object(payload), metadata = object(root?.metadata), notification = object(root?.notification)
   const topic = identifier(metadata?.topic), notificationId = identifier(notification?.notificationId)
   if (!topic || !notificationId) throw new EbayNoticeInvalid('envelope_invalid')
-  const userId = identifier(object(notification?.data)?.userId)
+  // Each topic names its seller in its own documented place, and only there: ORDER_CONFIRMATION's
+  // OrderConfirmationData carries `user.userId`; the account topics carry a flat `userId`.
+  // No fallback from one shape to the other, and never the mutable username.
+  const data = object(notification?.data)
+  const userId = identifier(topic === 'ORDER_CONFIRMATION' ? object(data?.user)?.userId : data?.userId)
   return Object.freeze({ notificationId, topic, userId })
 }
 
