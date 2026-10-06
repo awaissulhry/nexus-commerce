@@ -280,6 +280,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'enable-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
   // AA-W2-13 — an archive names the budgets that stop for good (it needs money).
   'archive-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
+  // W3-3 — stock-aware bids: the read shows units and days (no money); the two changes list bids (they need money).
+  'ad-stock-risk': (ids) => ({ campaignIds: [ids.campaignId], show: 'all' }),
+  'lower-ad-bids-for-stock': (ids) => ({ campaignIds: [ids.campaignId] }),
+  'restore-ad-bids-after-stock': (ids) => ({ campaignIds: [ids.campaignId] }),
   'set-campaign-target-acos': (ids) => ({ campaignIds: [ids.campaignId], targetAcosPct: 25 }),
   // Ads autonomy W1-2 — the strategy for the seeded campaign's market: its targets, bids and caps are money.
   'ads-strategy': (ids) => ({ market: 'IT', campaignId: ids.campaignId }),

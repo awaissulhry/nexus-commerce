@@ -20,6 +20,9 @@
  * a campaign's restore, re-floor and base-bid move (any engine, or a person's restore) leave such an
  * ad group alone; and the ad group's owner, inside a campaign floored by anyone, only hands its
  * memory over to that campaign floor (whoever lifts the campaign floor puts the bids back).
+ *
+ * ADS AUTONOMY W3-3 — `lowerAdGroupBids` lowers ONE ad group for a stock problem (to the floor, or one step down) with
+ * the same memory and ownership; `restoreAdGroupBids` gives it back. Never a pause, never a stock quantity.
  */
 
 import prisma from '../../db.js'
@@ -336,8 +339,9 @@ export async function suppressAdGroupBids(
  */
 export async function restoreAdGroupBids(
   adGroupId: string,
-  // W1-5 — `holds` as in restoreCampaignBids.
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; holds?: BidHoldLog },
+  // W1-5 — `holds` as in restoreCampaignBids. ADS AUTONOMY W3-3 — `changeSetId` and `manual` as in restoreCampaignBids
+  // (an approved Claude request: its change set, and a person's approval as his own click); optional, additive.
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; holds?: BidHoldLog; changeSetId?: string | null; manual?: boolean },
 ): Promise<number> {
   const group = await prisma.adGroup.findUnique({ where: { id: adGroupId }, select: { id: true, campaignId: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true, campaign: { select: { bidsSuppressedAt: true } } } })
   if (!group?.bidsSuppressedAt) return 0
@@ -356,7 +360,7 @@ export async function restoreAdGroupBids(
   if (group.suppressedFromBidCents != null) {
     try {
       const back = heldGiveBack(group.suppressedFromBidCents, group.defaultBidCents, bounds, reason, opts.holds)
-      const r = await updateAdGroupWithSync({ adGroupId: group.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true })
+      const r = await updateAdGroupWithSync({ adGroupId: group.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
       if (r.ok || r.error === 'not_found') { await prisma.adGroup.update({ where: { id: group.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore ad group default not accepted — keeping prior for retry', { adGroupId, error: r.error }) }
     } catch (e) { failed++; logger.warn('[no-pause] restore ad group default threw — keeping prior for retry', { adGroupId, error: (e as Error).message }) }
@@ -364,7 +368,7 @@ export async function restoreAdGroupBids(
   for (const t of targets) {
     try {
       const back = heldGiveBack(t.suppressedFromBidCents as number, t.bidCents, bounds, reason, opts.holds)
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
       if (r.ok || r.error === 'not_found') { await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore ad group target not accepted — keeping prior for retry', { adTargetId: t.id, error: r.error }) }
     } catch (e) { failed++; logger.warn('[no-pause] restore ad group target threw — keeping prior for retry', { adTargetId: t.id, error: (e as Error).message }) }
@@ -373,6 +377,69 @@ export async function restoreAdGroupBids(
   else logger.warn('[no-pause] ad group restore incomplete — its floor stays owned; the next run retries', { adGroupId, failed, touched })
   logger.info('[no-pause] restored ad group bids', { adGroupId, targets: targets.length, touched, failed })
   return touched
+}
+
+/**
+ * ADS AUTONOMY W3-3 — where one bid goes when its ad group is lowered for stock: to the floor, or one step down
+ * (`stepPct`, rounded as the mutation layer's step clamp rounds) and never below the floor. Never up: a bid at or under
+ * the floor stays. Pure; the preview (ads-stock-risk.service.ts stockLoweringMoves) and the write decide with it.
+ */
+export function stockLoweredCents(currentCents: number, floorCents: number, stepPct: number | null): number {
+  if (currentCents <= floorCents) return currentCents
+  if (stepPct == null) return floorCents
+  return Math.max(floorCents, Math.round(currentCents * (1 - stepPct / 100)))
+}
+
+/**
+ * ADS AUTONOMY W3-3 — lower ONE ad group's bids for a stock problem (Claude's lower-ad-bids-for-stock, approved like
+ * every ad change): its default bid and every keyword and target bid above the floor go to the floor, or one step down
+ * towards it (`stepPct`), never paused. Each bid is remembered BEFORE it moves, as a floor remembers it, and a memory is
+ * never overwritten — a second step, or the floor after a step, keeps the bid it had before the first — so
+ * restoreAdGroupBids puts back exactly what was. The ad group carries its owner as an ad group floored on its own
+ * (W1-6b), so no engine's restore, re-floor or base-bid move lifts it, and the bid optimiser leaves remembered bids alone.
+ * Lowers further only under its own floor or a person's; inside a campaign floored by anyone, or under an engine's own
+ * floor, it writes nothing (the tool leaves those first). Returns how many bids moved and how many writes were refused.
+ */
+export async function lowerAdGroupBids(
+  adGroupId: string,
+  opts: { actor: AdsActor; reason: string; floorCents: number; stepPct: number | null; changeSetId?: string | null; manual?: boolean; applyImmediately?: boolean },
+): Promise<{ moved: number; failed: number }> {
+  const group = await prisma.adGroup.findUnique({
+    where: { id: adGroupId },
+    select: { id: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true, bidsSuppressedBy: true, campaign: { select: { bidsSuppressedAt: true } } },
+  })
+  if (!group || group.campaign?.bidsSuppressedAt) return { moved: 0, failed: 0 }
+  if (group.bidsSuppressedAt && group.bidsSuppressedBy !== opts.actor && !group.bidsSuppressedBy?.startsWith('user:')) return { moved: 0, failed: 0 }
+  const floor = normaliseFloorCents(opts.floorCents)
+  const write = { actor: opts.actor, reason: opts.reason, applyImmediately: opts.applyImmediately ?? true, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual }
+  let moved = 0, failed = 0
+  const own = stockLoweredCents(group.defaultBidCents, floor, opts.stepPct)
+  if (own < group.defaultBidCents) {
+    try {
+      if (group.suppressedFromBidCents == null) await prisma.adGroup.update({ where: { id: group.id }, data: { suppressedFromBidCents: group.defaultBidCents } })
+      const r = await updateAdGroupWithSync({ adGroupId: group.id, patch: { defaultBidCents: own }, ...write })
+      if (r.ok) moved++
+      else { failed++; logger.warn('[no-pause] stock lowering of ad group default not accepted', { adGroupId, error: r.error }) }
+    } catch (e) { failed++; logger.warn('[no-pause] stock lowering of ad group default threw', { adGroupId, error: (e as Error).message }) }
+  }
+  const targets = await prisma.adTarget.findMany({ where: { adGroupId, isNegative: false, bidCents: { gt: floor } }, select: { id: true, bidCents: true, suppressedFromBidCents: true } })
+  for (const t of targets) {
+    const to = stockLoweredCents(t.bidCents, floor, opts.stepPct)
+    if (to >= t.bidCents) continue
+    try {
+      if (t.suppressedFromBidCents == null) await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: t.bidCents } })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: to }, ...write })
+      if (r.ok) moved++
+      else { failed++; logger.warn('[no-pause] stock lowering of target not accepted', { adTargetId: t.id, error: r.error }) }
+    } catch (e) { failed++; logger.warn('[no-pause] stock lowering of target threw', { adTargetId: t.id, error: (e as Error).message }) }
+  }
+  // The floor's owner stays the one who first lowered it; a further step only moves its floor stamp.
+  await prisma.adGroup.update({
+    where: { id: group.id },
+    data: group.bidsSuppressedAt ? { bidsSuppressedFloorCents: floor } : { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.actor },
+  })
+  logger.info('[no-pause] lowered ad group bids for stock', { adGroupId, floor, stepPct: opts.stepPct, moved, failed })
+  return { moved, failed }
 }
 
 // BL.7 — base-bid deltaPct: scale every ad-group default + keyword bid by ±% from a STABLE
