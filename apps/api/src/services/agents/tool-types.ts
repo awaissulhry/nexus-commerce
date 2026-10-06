@@ -299,6 +299,15 @@ export interface AgentTool {
    */
   control?: boolean
   /**
+   * ADS AUTONOMY W4-1 (lead decision 2026-10-06) — a journal tool: Claude's own record in Nexus of work it did (a run
+   * record, a bell notice, at most a capped e-mail), never a change of the business — no product, listing, price, stock,
+   * ad, order or setting. After its dry run it runs at once (`execute`, approval-gate.service.ts `runJournal`), never
+   * stored as a request: for any connection with the write scope, also without nexus.run and during a Pause, as there is
+   * nothing for a person to approve. Turned off for Claude (level off) it is refused like any tool. An exact list holds
+   * the class (tool-contract.vitest.test.ts JOURNAL_TOOLS): closed world, ceiling ask (offered or not), never alwaysAsk.
+   */
+  journal?: true
+  /**
    * C1 — every change tool: the most Claude may ever do with it without a person in Nexus. Floors:
    * `none` (irreversible) is `ask` at most, unless it is a strategy-bound tool whose default limits run nothing alone
    * (rule 7c); `alwaysAsk` is `ask` at most outside its reviewed lists (rule 7a); `auto` needs `withinLimits`. Never

@@ -11,9 +11,13 @@
  *   set-ads-report-time  W4-2 — by when the day's report is due (the watchdog, ads-manager-watchdog.service.ts). Ceiling
  *                     ask: Claude never changes its own watchdog alone.
  *
- * The record lives in ads-manager-run.service.ts (one AgentRun per run, id = the start request's approvalId: the runId).
- * Ceiling auto: a business may let the report run by its rule, inside `allowEmail` (the e-mail may go without a
- * person). Reversibility partial: undo withdraws the bell notice and marks the run withdrawn; a sent e-mail stays sent.
+ * The record lives in ads-manager-run.service.ts (one AgentRun per run; start answers with its runId).
+ * report-ads-run is a journal tool (tool-types.ts AgentTool.journal, lead decision 2026-10-06): Claude's own record, no
+ * change of the business, so Claude's door runs it at once — for any connection that may write, also without nexus.run,
+ * in the watch week and during a Pause. Its ceiling is ask (offered or not); off, it is refused. The e-mail stays capped
+ * at one a day and every figure stays Nexus's. Reversibility partial: withdraw (op withdraw, at once, or undo-change of
+ * a report a business's own policy made wait) takes back the bell notice and marks the run withdrawn; a sent e-mail
+ * stays sent.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -87,11 +91,6 @@ const INPUT = z.object({
   email: z.boolean().optional().describe('finish, fail: false sends no e-mail with this report (default: the day\'s one e-mail goes if none went yet)'),
 })
 type Args = z.infer<typeof INPUT>
-
-/** The limits a business may set for letting a report run by its rule. */
-export const REPORT_LIMITS = z.object({
-  allowEmail: z.boolean().default(true).describe('the day\'s report e-mail (at most one a day, to the Monday ads digest\'s recipients) may go without a person'),
-})
 
 // ── Each market's figures (Nexus's own) ────────────────────────────────────────────────────────────
 
@@ -346,14 +345,14 @@ async function renderEmail(p: ReportPlan, business: string | null, runId: string
 
 // ── report-ads-run ─────────────────────────────────────────────────────────────────────────────────
 
-const START_NEXT = 'Keep the approvalId of this request: it is the runId that finish and fail take.'
+const START_NEXT = 'Pass the runId of this answer to finish (or fail) when the run ends.'
 
 async function startPreview() {
   const facts = await startFacts()
   return {
     action: TOOL,
     op: 'start' as const,
-    summary: `Records that the daily Claude ads run began (mode: ${facts.mode}). Nexus only; no notice, no e-mail.`,
+    summary: `Records that the daily Claude ads run began (mode: ${facts.mode}). Nexus only; no notice, no e-mail; the answer gives the runId.`,
     run: null,
     mode: facts.mode,
     facts,
@@ -388,13 +387,6 @@ async function plan(args: Record<string, unknown>): Promise<{ ok: true; preview:
   return { ok: true, preview: reportPreview(report), report }
 }
 
-export function reportWithinLimits(preview: unknown, limits: Record<string, unknown>): string | null {
-  const p = preview as { action?: unknown; op?: unknown; email?: { send?: unknown } } | null
-  if (!p || typeof p !== 'object' || p.action !== TOOL || typeof p.op !== 'string') return 'there is no preview to judge'
-  if (p.email?.send === true && limits.allowEmail !== true) return 'it sends the day\'s report e-mail, and your limits keep e-mails for a person'
-  return null
-}
-
 /** C2 — undo: the report's bell notice taken back and the run marked withdrawn (op withdraw). */
 export const REPORT_UNDO: ToolUndo = {
   async current(change) {
@@ -412,14 +404,13 @@ async function execute(args: Record<string, unknown>, ctx: ToolContext): Promise
   const a = args as Args
   const userId = ctx.userId ?? null
   if (a.op === 'start') {
-    if (!ctx.approvalId) return { ok: false, error: 'A start runs only as an approved request: its approvalId is the runId.' }
     const facts = await startFacts()
-    const before: RunState = { runId: ctx.approvalId, status: null, withdrawn: false }
-    const started = await recordStart(ctx.approvalId, facts, userId)
+    // A journal runs at once (no approval: a fresh runId); a business whose own policy made it wait keeps the approvalId.
+    const started = await recordStart(ctx.approvalId ?? null, facts, userId)
     return {
       ok: true,
-      data: { runId: ctx.approvalId, status: 'running', recorded: started.created, mode: facts.mode },
-      change: { before, after: await runStateOf(ctx.approvalId) },
+      data: { runId: started.runId, status: 'running', recorded: started.created, mode: facts.mode, facts, next: START_NEXT },
+      change: { before: { runId: started.runId, status: null, withdrawn: false } satisfies RunState, after: await runStateOf(started.runId) },
     }
   }
   if (a.op === 'withdraw') {
@@ -451,7 +442,7 @@ async function execute(args: Record<string, unknown>, ctx: ToolContext): Promise
   await storeRunOutput(recorded.runId, { ...output, notice, email })
   return {
     ok: true,
-    data: { runId: recorded.runId, status: report.op === 'finish' ? 'done' : 'failed', counts: report.counts, notice, email },
+    data: { runId: recorded.runId, status: report.op === 'finish' ? 'done' : 'failed', started: report.started, counts: report.counts, notice, email },
     change: { before: { runId: recorded.runId, status: recorded.before, withdrawn: false } satisfies RunState, after: await runStateOf(recorded.runId) },
   }
 }
@@ -462,27 +453,27 @@ const reportAdsRun: AgentTool = {
   category: 'advertising',
   description:
     'Report the daily Claude ads run to Nexus: the scheduled run\'s own record, Nexus only (nothing reaches Amazon). '
-    + 'op start when the run begins: Nexus records it and answers with what the business set — the run\'s mode (paused, '
-    + 'act, watch or ask), each ad tool\'s level, the Pause, the daily cap and each market\'s strategy version. Keep the '
-    + 'approvalId of the start request: it is the runId. op finish (or fail) when the run ends: per market up to 5 lines '
-    + 'in plain words — no amounts or percentages, Nexus adds each market\'s figures itself from the read ads-overview '
-    + 'answers from — the approval ids this run asked for (ranByRule, waiting, wouldDo), problems and the next focus. '
-    + 'Nexus reads what each approval became and states the counts itself, sends one notice to the business\'s bell (a '
-    + 'danger notice when there is a problem or the run failed) and at most one e-mail a day to the Monday ads digest\'s '
-    + 'recipients. It is a request: a person approves it in Nexus, unless the business lets it run by its rule (limits: '
-    + 'whether the e-mail may go without a person). Undo withdraws the bell notice and marks the run withdrawn; an e-mail '
-    + 'already sent stays in the inbox.',
+    + 'It is a journal, not a change of the business, so it needs no approval: it runs at once, also on a connection '
+    + 'without "run by rule" and during a Pause (it changes no product, listing, price, stock, ad or order). '
+    + 'op start when the run begins: Nexus records it and answers with the runId and what the business set — the run\'s '
+    + 'mode (paused, act, watch or ask), each ad tool\'s level, the Pause, the daily cap and each market\'s strategy '
+    + 'version. op finish (or fail) when the run ends, with that runId: per market up to 5 lines in plain words — no '
+    + 'amounts or percentages, Nexus adds each market\'s figures itself from the read ads-overview answers from — the '
+    + 'approval ids this run asked for (ranByRule, waiting, wouldDo), problems and the next focus. Nexus reads what each '
+    + 'approval became and states the counts itself, sends one notice to the business\'s bell (a danger notice when there '
+    + 'is a problem or the run failed) and at most one e-mail a day (to the Monday ads digest\'s recipients, else to this '
+    + 'business\'s own people who may see its ad money). op withdraw takes a report\'s bell notice back and marks the run '
+    + 'withdrawn; an e-mail already sent stays in the inbox.',
   surfaces: ['mcp'],
   input: INPUT,
   requires: [F.adsView, FIELDS.financialsAdspendView],
   riskTier: 'low',
-  requiresApprovalDefault: true,
   readOnly: false,
   openWorld: false,
+  // W4-1 — Claude's own record, no change of the business: it runs at once (AgentTool.journal); offered or not (ask).
+  journal: true,
   reversibility: 'partial',
-  maxClaudeTrust: 'auto',
-  limits: REPORT_LIMITS,
-  withinLimits: reportWithinLimits,
+  maxClaudeTrust: 'ask',
   undo: REPORT_UNDO,
   async handler(args): Promise<ToolResult> {
     const planned = await plan(args)

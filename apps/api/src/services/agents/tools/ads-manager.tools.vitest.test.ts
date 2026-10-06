@@ -1,16 +1,19 @@
 /**
- * ADS AUTONOMY W4-1 — report-ads-run and ads-manager-runs, through the doors Claude and a person use (runOrQueueTool,
- * then scheduleApproval + commitScheduledApproval as the Approvals page and the sweep run them), on PGlite with the
- * production schema and business policies. The ads-overview builder is a stand-in with made-up figures: a report's
- * numbers must be exactly the builder's, whatever Claude writes.
+ * ADS AUTONOMY W4-1 — report-ads-run and ads-manager-runs, through Claude's own door (runToolForClaude, the gate) on a
+ * watch-week connection (nexus.read + nexus.write, no nexus.run), on PGlite with the production schema and business
+ * policies. The ads-overview builder is a stand-in with made-up figures: a report's numbers must be exactly the
+ * builder's, whatever Claude writes.
  *
- *   contract   ceiling auto, limits allowEmail, partial (an e-mail stays sent), Nexus only, Claude's door only
- *   start      the record is one AgentRun (id = the start's approvalId, claude-ads-manager, schedule, mode and via null)
+ *   contract   a journal (runs at once, never a request), ceiling ask (offered or not), partial (an e-mail stays sent),
+ *              Nexus only, Claude's door only
+ *   start      at once, no nexus.run needed: one AgentRun (claude-ads-manager, schedule, mode and via null), its runId
  *   finish     Nexus's figures and Nexus's reading of each named approval; one bell notice; one e-mail
- *   words      a line with an amount or a percentage is refused; nothing is queued
+ *   door       runs during a Pause; off for Claude, refused
+ *   words      a line with an amount or a percentage is refused; nothing is recorded
  *   one a day  a second report the same day sends no second e-mail
  *   problems   a danger notice, never deduped
- *   undo       the notice taken back, the run withdrawn, no e-mail sent again
+ *   withdraw   the notice taken back, the run withdrawn, no e-mail sent again
+ *   recipients the digest list, else this business's own people who may see its ad money (never another business's)
  *   business   another business's run and approvals are not found; its runs are not listed
  *   history    ads-manager-runs reads each named approval's fate again now
  */
@@ -75,11 +78,11 @@ vi.mock('../../email/transport.js', async (importOriginal) => ({
   }),
 }))
 
-import { runOrQueueTool } from '../approval-gate.service.js'
 import { callTool, ToolAccessError, type UserPrincipal } from '../call-tool.js'
 import { getTool } from '../tool-registry.js'
-import { commitScheduledApproval, scheduleApproval } from '../../agent-fleet/approval-inbox.service.js'
-import { ADS_MANAGER_AGENT_KEY, ADS_RUN_NOTICE_TYPE } from '../ads-manager-run.service.js'
+import { runToolForClaude } from '../../mcp/mcp-tool-call.js'
+import type { McpPrincipal } from '../../mcp/mcp-auth.js'
+import { ADS_MANAGER_AGENT_KEY, ADS_RUN_NOTICE_TYPE, reportRecipients } from '../ads-manager-run.service.js'
 
 const A = LEGACY_WORKSPACE_ID
 const B = 'w4_ads_report_bravo'
@@ -87,32 +90,24 @@ const TIMEOUT = 30_000
 const business = (workspaceId: string) => ({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] })
 const inside = <T>(work: () => Promise<T>, workspaceId = A) => withWorkspace(business(workspaceId), work)
 const EVERYTHING = new Set<string>([...Object.values(F), ...Object.values(FIELDS)])
-const ids = { approver: '', ranAuto: '', waiting: '', declined: '', watched: '', bApproval: '', bRun: '' }
+const ids = { approver: '', noMoney: '', bOnly: '', ranAuto: '', waiting: '', declined: '', watched: '', bApproval: '', bRun: '' }
+const names = { A: '', B: 'Bravo report business' }
+/** The scheduled run's connection in the watch week: it may read and write, never run by rule (no nexus.run). */
+const WATCH_WEEK = ['nexus.read', 'nexus.write']
 
 const person = (permissions: Set<string>, workspaceId = A): UserPrincipal => ({
   kind: 'user', userId: ids.approver, label: 'Rita Report', permissions: { isOwner: false, permissions }, workspace: business(workspaceId), via: 'claude', oauthGrantId: 'grant-w4',
 })
+const claude = (workspaceId = A, scopes = WATCH_WEEK): McpPrincipal => ({
+  ...person(EVERYTHING, workspaceId), business: { id: workspaceId, name: workspaceId === A ? names.A : names.B }, scopes,
+}) as McpPrincipal
 const db = () => database.client
 
-async function ask(tool: string, args: Record<string, unknown>, workspaceId = A) {
-  const who = person(EVERYTHING, workspaceId)
-  const run = await inside(() => db().agentRun.create({
-    data: { agentKey: 'claude', trigger: 'manual', status: 'running', userId: ids.approver, via: 'claude', oauthGrantId: 'grant-w4' },
-  }), workspaceId)
-  return inside(() => runOrQueueTool(tool, args, who, run.id, { forceAsk: true }), workspaceId)
-}
-async function approveAndRun(approvalId: string, workspaceId = A) {
-  const parked = await inside(() => scheduleApproval({ id: approvalId, actor: { ...person(EVERYTHING, workspaceId), via: 'app' } }), workspaceId)
-  expect(parked, parked.error).toMatchObject({ ok: true, status: 'scheduled' })
-  await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }), workspaceId)
-  return inside(() => commitScheduledApproval(approvalId), workspaceId)
-}
-async function askAndRun(tool: string, args: Record<string, unknown>, workspaceId = A) {
-  const queued = await ask(tool, args, workspaceId)
-  expect(queued, queued.error).toMatchObject({ ok: true, mode: 'queued' })
-  const ran = await approveAndRun(queued.approvalId!, workspaceId)
-  expect(ran, ran.error).toMatchObject({ ok: true, status: 'executed' })
-  return queued
+/** One tools/call of report-ads-run as Claude makes it (the real door), and the JSON Claude reads. */
+async function report(args: Record<string, unknown>, who = claude()) {
+  const result = await runToolForClaude(who, getTool('report-ads-run')!, { ...args, business: who.business.name })
+  const answer = JSON.parse((result.content as Array<{ text: string }>).map((b) => b.text).join(''))
+  return { isError: !!result.isError, answer }
 }
 async function dryRun(who: UserPrincipal, tool: string, args: Record<string, unknown>) {
   try {
@@ -124,7 +119,8 @@ async function dryRun(who: UserPrincipal, tool: string, args: Record<string, unk
 }
 const record = (id: string, workspaceId = A) => inside(() => db().agentRun.findUnique({ where: { id } }), workspaceId)
 const notices = (runId: string) => inside(() => db().notification.findMany({ where: { type: ADS_RUN_NOTICE_TYPE, meta: { path: ['runId'], equals: runId } } }))
-const pendingCount = () => inside(() => db().agentApproval.count({ where: { status: 'pending' } }))
+/** No report ever waits as a request: it is a journal. */
+const reportRequests = () => inside(() => db().agentApproval.count({ where: { toolName: 'report-ads-run' } }))
 /** An approval of this business in a given state, hanging off a Claude call. */
 async function approvalOf(data: { toolName: string; status: string; decisionVia?: string; ruleVerdict?: unknown; reason?: string }, workspaceId = A) {
   return inside(async () => {
@@ -153,6 +149,18 @@ beforeAll(async () => {
     const membership = await client.workspaceMembership.create({ data: { workspaceId, userId: approver.id, status: 'active' } })
     await client.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   }
+  names.A = (await client.workspace.findUniqueOrThrow({ where: { id: A }, select: { name: true } })).name
+  // E-mail fallback: one who may see ads but not their money (in A), and one of B only (who may see both).
+  const adsOnly = await client.role.create({ data: { key: `W4_1_ADS_${randomUUID().slice(0, 8)}`, name: 'Ads only', description: 'test', isSystem: false, permissions: [F.adsView] } })
+  const noMoney = await client.userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active', displayName: 'No Money' } })
+  ids.noMoney = noMoney.id
+  await client.userRole.create({ data: { userId: noMoney.id, roleId: adsOnly.id } })
+  const noMoneyIn = await client.workspaceMembership.create({ data: { workspaceId: A, userId: noMoney.id, status: 'active' } })
+  await client.workspaceMemberRole.create({ data: { membershipId: noMoneyIn.id, roleId: adsOnly.id } })
+  const bOnly = await client.userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active', displayName: 'Bravo Only' } })
+  ids.bOnly = bOnly.id
+  const bOnlyIn = await client.workspaceMembership.create({ data: { workspaceId: B, userId: bOnly.id, status: 'active' } })
+  await client.workspaceMemberRole.create({ data: { membershipId: bOnlyIn.id, roleId: role.id } })
   ids.ranAuto = await approvalOf({ toolName: 'set-target-bid', status: 'executed', decisionVia: 'auto' })
   ids.waiting = await approvalOf({ toolName: 'submit-change-plan', status: 'pending' })
   ids.declined = await approvalOf({ toolName: 'set-campaign-budget', status: 'rejected', decisionVia: 'nexus' })
@@ -171,18 +179,13 @@ beforeEach(() => {
 })
 
 describe('W4-1 — the tool contract', () => {
-  it('report-ads-run: Claude\'s door only, Nexus only, ceiling auto inside allowEmail, partly undoable', () => {
+  it('report-ads-run: a journal (it runs at once, no request), Claude\'s door only, Nexus only, partly undoable', () => {
     const tool = getTool('report-ads-run')!
     expect(tool).toMatchObject({
-      readOnly: false, openWorld: false, reversibility: 'partial', maxClaudeTrust: 'auto', surfaces: ['mcp'],
+      readOnly: false, openWorld: false, journal: true, reversibility: 'partial', maxClaudeTrust: 'ask', surfaces: ['mcp'],
       requires: [F.adsView, FIELDS.financialsAdspendView],
     })
-    expect(tool.limits!.parse({})).toEqual({ allowEmail: true })
-    const withEmail = { action: 'report-ads-run', op: 'finish', email: { send: true } }
-    expect(tool.withinLimits!(withEmail, { allowEmail: true })).toBeNull()
-    expect(tool.withinLimits!(withEmail, { allowEmail: false })).toMatch(/e-mail/)
-    expect(tool.withinLimits!({ ...withEmail, email: { send: false } }, { allowEmail: false })).toBeNull()
-    expect(tool.withinLimits!(null, { allowEmail: true })).toMatch(/no preview/)
+    expect(tool.limits).toBeUndefined()
     expect(getTool('ads-manager-runs')).toMatchObject({ readOnly: true, requires: [F.adsView] })
   })
 
@@ -192,18 +195,19 @@ describe('W4-1 — the tool contract', () => {
   })
 })
 
-describe('W4-1 — a run, start to finish', { timeout: TIMEOUT }, () => {
+describe('W4-1 — a run, start to finish, on a watch-week connection (no nexus.run)', { timeout: TIMEOUT }, () => {
   let runId = ''
 
-  it('start: the dry run says what the business set and writes nothing; run, it is one AgentRun of its own', async () => {
-    const preview = await dryRun(person(EVERYTHING), 'report-ads-run', { op: 'start' })
-    expect(preview.result).toMatchObject({ ok: true, preview: { op: 'start', run: null, mode: 'ask', facts: { paused: false, levels: { ask: expect.arrayContaining(['set-target-bid']) } } } })
-    const queued = await askAndRun('report-ads-run', { op: 'start' })
-    runId = queued.approvalId!
+  it('start runs at once: one AgentRun of its own, its runId in the answer, no request waiting', async () => {
+    const { isError, answer } = await report({ op: 'start' })
+    expect(isError, JSON.stringify(answer)).toBe(false)
+    expect(answer).toMatchObject({ status: 'running', recorded: true, mode: 'ask', facts: { paused: false, levels: { ask: expect.arrayContaining(['set-target-bid']) } } })
+    runId = answer.runId
     const row = await record(runId)
     expect(row).toMatchObject({ id: runId, agentKey: ADS_MANAGER_AGENT_KEY, trigger: 'schedule', status: 'running', mode: null, via: null, userId: ids.approver })
     expect((row!.input as { start: { mode: string } }).start.mode).toBe('ask')
-    // A start sends nothing.
+    expect(await reportRequests()).toBe(0)
+    // The call itself is on record as every Claude call is; a start sends nothing.
     expect(await notices(runId)).toEqual([])
     expect(mail.sent).toHaveLength(0)
   })
@@ -230,7 +234,9 @@ describe('W4-1 — a run, start to finish', { timeout: TIMEOUT }, () => {
     expect(preview.notice).toEqual({ severity: 'info', title: 'Claude ads run · 1 ran by rule · 2 wait for you' })
     expect(await record(runId)).toMatchObject({ status: 'running' })
 
-    await askAndRun('report-ads-run', args)
+    const { isError, answer } = await report(args)
+    expect(isError, JSON.stringify(answer)).toBe(false)
+    expect(answer).toMatchObject({ runId, status: 'done', counts: { ranByRule: 1, waitingForYou: 2 }, email: { status: 'sent', recipients: 1 } })
     const row = await record(runId)
     expect(row).toMatchObject({ status: 'done', ok: true })
     const output = row!.output as Record<string, any>
@@ -249,12 +255,13 @@ describe('W4-1 — a run, start to finish', { timeout: TIMEOUT }, () => {
     expect(mail.sent[0].html).toMatch(new RegExp(`https://web\\.example\\.test/(w/[^/]+/)?fleet/approvals\\?item=${ids.waiting}`))
     // Every approval the report names is in the e-mail, the declined one too.
     expect(mail.sent[0].html).toContain('a person declined it')
+    expect(await reportRequests()).toBe(0)
   })
 
   it('a run reports its end once', async () => {
-    const again = await ask('report-ads-run', { op: 'finish', runId })
-    expect(again).toMatchObject({ ok: false })
-    expect(again.error).toMatch(/already finished/)
+    const again = await report({ op: 'finish', runId })
+    expect(again.isError).toBe(true)
+    expect(again.answer.error).toMatch(/already finished/)
   })
 
   it('history: ads-manager-runs reads each named approval again now', async () => {
@@ -274,65 +281,100 @@ describe('W4-1 — a run, start to finish', { timeout: TIMEOUT }, () => {
     expect(figures.last7Days.orders).toBe(7)
   })
 
-  it('undo: the notice is taken back and the run withdrawn; no e-mail goes again', async () => {
-    const finish = await inside(() => db().agentApproval.findFirstOrThrow({ where: { toolName: 'report-ads-run', status: 'executed', args: { path: ['op'], equals: 'finish' } } }))
-    const asked = await ask('undo-change', { approvalId: finish.id })
-    expect(asked, asked.error).toMatchObject({ ok: true, mode: 'queued' })
-    const ran = await approveAndRun(asked.approvalId!)
-    expect(ran, ran.error).toMatchObject({ ok: true, status: 'executed' })
+  it('withdraw (at once): the notice is taken back and the run marked withdrawn; no e-mail goes again', async () => {
+    const bell = (await notices(runId)).length
+    expect(bell).toBeGreaterThan(0)
+    const { isError, answer } = await report({ op: 'withdraw', runId })
+    expect(isError, JSON.stringify(answer)).toBe(false)
+    expect(answer).toMatchObject({ runId, status: 'cancelled', noticesRemoved: bell })
     expect(await notices(runId)).toEqual([])
     const row = await record(runId)
     expect(row).toMatchObject({ status: 'cancelled' })
     expect((row!.output as { withdrawnAt?: string }).withdrawnAt).toEqual(expect.any(String))
     expect(mail.sent).toHaveLength(1)
+    expect((await report({ op: 'withdraw', runId })).answer.error).toMatch(/already withdrawn/)
   })
 })
 
-describe('W4-1 — refusals, the day\'s one e-mail, problems', { timeout: TIMEOUT }, () => {
-  it('a line with an amount or a percentage is refused, and nothing is queued', async () => {
-    const before = await pendingCount()
+describe('W4-1 — the journal\'s door: Pause, off, refusals', { timeout: TIMEOUT }, () => {
+  it('it runs during a Pause (nothing of the business changes); turned off for Claude, it is refused', async () => {
+    await inside(() => db().agentAutonomy.create({ data: { autoPausedAt: new Date(), autoPausedBy: 'Rita Report', pauseReason: 'test' } }))
+    const paused = await report({ op: 'start' })
+    expect(paused.isError, JSON.stringify(paused.answer)).toBe(false)
+    expect(paused.answer).toMatchObject({ status: 'running', mode: 'paused' })
+    await inside(() => db().agentAutonomy.deleteMany({}))
+    await inside(() => db().agentRun.update({ where: { id: paused.answer.runId }, data: { status: 'done', endedAt: new Date() } }))
+    await inside(() => db().agentTool.create({ data: { name: 'report-ads-run', claudeTrust: 'off' } }))
+    const off = await report({ op: 'start' })
+    expect(off.isError).toBe(true)
+    expect(off.answer.error).toMatch(/turned off for Claude/)
+    await inside(() => db().agentTool.deleteMany({ where: { name: 'report-ads-run' } }))
+    expect(await reportRequests()).toBe(0)
+  })
+
+  it('a line with an amount or a percentage is refused; nothing is recorded', async () => {
+    const runs = await inside(() => db().agentRun.count({ where: { agentKey: ADS_MANAGER_AGENT_KEY } }))
     for (const line of ['Spend was €40 yesterday', 'ACoS moved to 31%', 'cut 12.50 EUR of waste']) {
-      const refused = await ask('report-ads-run', { op: 'finish', markets: [{ market: 'IT', lines: [line] }] })
-      expect(refused, line).toMatchObject({ ok: false })
-      expect(refused.error).toMatch(/amount or a percentage/)
+      const refused = await report({ op: 'finish', markets: [{ market: 'IT', lines: [line] }] })
+      expect(refused.isError, line).toBe(true)
+      expect(refused.answer.error).toMatch(/amount or a percentage/)
     }
-    expect((await ask('report-ads-run', { op: 'finish', problems: ['ACoS above 40 % in IT'] })).error).toMatch(/amount or a percentage/)
-    expect(await pendingCount()).toBe(before)
+    expect((await report({ op: 'finish', problems: ['ACoS above 40 % in IT'] })).answer.error).toMatch(/amount or a percentage/)
+    expect(await inside(() => db().agentRun.count({ where: { agentKey: ADS_MANAGER_AGENT_KEY } }))).toBe(runs)
   })
 
   it('a market, a run or an approval this business does not have is not found', async () => {
-    expect((await ask('report-ads-run', { op: 'finish', markets: [{ market: 'SE', lines: [] }] })).error).toMatch(/Amazon market SE not found in this business \(its Amazon ad markets: IT\)/)
-    expect((await ask('report-ads-run', { op: 'finish', runId: ids.bRun })).error).toMatch(/not found in this business/)
-    expect((await ask('report-ads-run', { op: 'finish', waiting: [ids.bApproval] })).error).toMatch(/not found in this business/)
-    expect((await ask('report-ads-run', { op: 'withdraw', runId: ids.bRun })).error).toMatch(/not found in this business/)
-    expect((await ask('report-ads-run', { op: 'start', runId: 'x' })).error).toMatch(/start takes no runId/)
+    expect((await report({ op: 'finish', markets: [{ market: 'SE', lines: [] }] })).answer.error).toMatch(/Amazon market SE not found in this business \(its Amazon ad markets: IT\)/)
+    expect((await report({ op: 'finish', runId: ids.bRun })).answer.error).toMatch(/not found in this business/)
+    expect((await report({ op: 'finish', waiting: [ids.bApproval] })).answer.error).toMatch(/not found in this business/)
+    expect((await report({ op: 'withdraw', runId: ids.bRun })).answer.error).toMatch(/not found in this business/)
+    expect((await report({ op: 'start', runId: 'x' })).answer.error).toMatch(/start takes no runId/)
+    // B's run is untouched.
+    expect(await record(ids.bRun, B)).toMatchObject({ status: 'running' })
   })
+})
 
+describe('W4-1 — the day\'s one e-mail, problems, other businesses', { timeout: TIMEOUT }, () => {
   it('a report without a start is recorded too; the day\'s e-mail went already, so this one sends none', async () => {
     const sent = mail.sent.length
     const dry = await dryRun(person(EVERYTHING), 'report-ads-run', { op: 'finish', markets: [{ market: 'IT', lines: ['Nothing to change'] }] })
     expect((dry.result as { preview: { email: unknown } }).preview.email).toEqual({ send: false, recipients: 1, why: 'today\'s report e-mail already went (one a day)' })
-    const queued = await askAndRun('report-ads-run', { op: 'finish', markets: [{ market: 'IT', lines: ['Nothing to change'] }] })
-    const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId: queued.approvalId! } }))
-    const runId = (change.after as { runId: string }).runId
-    expect(runId).not.toBe(queued.approvalId)
-    const row = await record(runId)
-    expect(row).toMatchObject({ agentKey: ADS_MANAGER_AGENT_KEY, status: 'done' })
-    expect((row!.output as { email: { status: string } }).email.status).toBe('skipped')
+    const { answer } = await report({ op: 'finish', markets: [{ market: 'IT', lines: ['Nothing to change'] }] })
+    expect(answer).toMatchObject({ status: 'done', email: { status: 'skipped' } })
+    expect(await record(answer.runId)).toMatchObject({ agentKey: ADS_MANAGER_AGENT_KEY, status: 'done' })
     expect(mail.sent).toHaveLength(sent)
   })
 
   it('a problem makes it a danger notice, and a danger notice is never deduped', async () => {
     const args = { op: 'fail', problems: ['The search-term report was too old to judge'] }
-    const first = await askAndRun('report-ads-run', args)
-    const second = await askAndRun('report-ads-run', args)
+    const first = await report(args)
+    const second = await report(args)
+    expect(first.answer.runId).not.toBe(second.answer.runId)
     const rows = await inside(() => db().notification.findMany({ where: { type: ADS_RUN_NOTICE_TYPE, severity: 'danger', userId: ids.approver } }))
     expect(rows).toHaveLength(2)
     expect(rows[0]).toMatchObject({ title: 'Claude ads run failed · 1 problem · 0 ran by rule · 0 wait for you' })
-    expect(first.approvalId).not.toBe(second.approvalId)
     const failed = await inside(() => db().agentRun.findMany({ where: { agentKey: ADS_MANAGER_AGENT_KEY, status: 'failed' } }))
     expect(failed).toHaveLength(2)
     expect(failed[0]).toMatchObject({ ok: false, errorMessage: 'The search-term report was too old to judge' })
+  })
+
+  it('no digest list: the e-mail goes to this business\'s own people who may see its ad money, never another business\'s', async () => {
+    vi.stubEnv('NEXUS_ADS_DIGEST_RECIPIENTS', '')
+    try {
+      const emails = async (userId: string) => (await db().userProfile.findUniqueOrThrow({ where: { id: userId } })).email
+      const inA = await inside(() => reportRecipients())
+      expect(inA.source).toBe('business')
+      expect(inA.to).toContain(await emails(ids.approver))
+      expect(inA.to).not.toContain(await emails(ids.noMoney))
+      const inB = await inside(() => reportRecipients(), B)
+      if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+        // With business profiles on, each business's own members: B's person never gets A's report, nor A's B's.
+        expect(inA.to).not.toContain(await emails(ids.bOnly))
+        expect(inB.to.sort()).toEqual([await emails(ids.approver), await emails(ids.bOnly)].sort())
+      }
+    } finally {
+      vi.stubEnv('NEXUS_ADS_DIGEST_RECIPIENTS', 'owner@example.test')
+    }
   })
 
   it('another business\'s runs are not listed', async () => {
