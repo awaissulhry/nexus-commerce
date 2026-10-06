@@ -306,8 +306,14 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
     // Replicate run's (replicate-ad-structure), likewise.
     const { buildRunCampaigns } = await import('../../advertising/ads-playbook/build.js')
     const { replicateRunCampaigns } = await import('../../advertising/ads-blueprint-apply.service.js')
-    const run = (await replicateRunCampaigns(a.buildRunId)) ?? (await buildRunCampaigns(a.buildRunId))
-    if ('refusal' in run) return refuse(run.refusal)
+    const replicate = await replicateRunCampaigns(a.buildRunId)
+    const run = replicate ?? (await buildRunCampaigns(a.buildRunId))
+    // Neither a Replicate run nor a playbook build of this business: say so for both.
+    if ('refusal' in run) {
+      return refuse(!replicate && /not found/.test(run.refusal)
+        ? `Build run ${a.buildRunId} not found in this business (buildRunId: the applicationId apply-ads-playbook or replicate-ad-structure answered).`
+        : run.refusal)
+    }
     if (!run.campaignIds.length && !unique(a.campaignIds).length) return refuse('Nothing would change: every campaign that build made is archived already (or it made none).')
     a = { ...a, campaignIds: unique([...(a.campaignIds ?? []), ...run.campaignIds]) }
   }

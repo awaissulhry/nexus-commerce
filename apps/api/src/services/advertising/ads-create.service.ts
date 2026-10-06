@@ -1129,6 +1129,12 @@ export async function verifyCampaignPortfolios(opts: {
   campaignIds?: string[]
   marketplace?: string
   dryRun?: boolean
+  /**
+   * B-1 — the campaigns were created a moment ago in this same run (Claude's Replicate run, born off the live-write
+   * allowlist): the repair finishes their create, so the gate is asked as the create asked it (no campaign named), as
+   * `creationFlow` does for every part of a launch. Absent for every other caller.
+   */
+  creationFlow?: boolean
 } = {}): Promise<PortfolioVerifyResult> {
   const dryRun = opts.dryRun !== false // default SAFE: report unless explicitly told to write
   const out: PortfolioVerifyResult = {
@@ -1208,7 +1214,7 @@ export async function verifyCampaignPortfolios(opts: {
         intended, amazon: null, verdict: 'MISSING_ON_AMAZON',
       }
       if (!dryRun) {
-        const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0, campaignId: c.id })
+        const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0, ...(opts.creationFlow ? {} : { campaignId: c.id }) })
         if (!gate.allowed) {
           row.repaired = false
           row.error = 'write-gate closed: ' + ('reason' in gate ? String(gate.reason) : 'denied')
@@ -1247,10 +1253,10 @@ export async function verifyCampaignPortfolios(opts: {
  * Best-effort by construction: a launch that created campaigns must never be reported as
  * failed because the confirmation step could not run.
  */
-export async function settleLaunchPortfolios(campaignIds: string[]): Promise<PortfolioVerifyResult | null> {
+export async function settleLaunchPortfolios(campaignIds: string[], opts: { creationFlow?: boolean } = {}): Promise<PortfolioVerifyResult | null> {
   if (!campaignIds.length) return null
   try {
-    const r = await verifyCampaignPortfolios({ campaignIds, dryRun: false })
+    const r = await verifyCampaignPortfolios({ campaignIds, dryRun: false, ...(opts.creationFlow ? { creationFlow: true } : {}) })
     if (r.checked === 0) return null // no portfolio was requested for this launch
     if (r.missingOnAmazon > 0) {
       // Worth a loud line: it means the create did NOT carry portfolioId through, and the

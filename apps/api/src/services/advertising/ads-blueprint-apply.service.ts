@@ -506,8 +506,18 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     where: { id: application.id },
     data: { status: 'RUNNING', startedAt: new Date(), progress: { done: 0, total: plan.campaigns.length, campaign: null, created, ...(safe ? { at: new Date().toISOString() } : {}) } as object },
   }).catch(() => {})
+  // B-1 — a safe run's heartbeat: its progress stamp moves at least once a minute while it creates, so a campaign with
+  // hundreds of keywords never reads as a run a deploy killed (no progress for 30 minutes: settleStoppedReplicates).
+  let current = ''
+  let beatAt = Date.now()
+  const beat = async () => {
+    if (!safe || Date.now() - beatAt < 60_000) return
+    beatAt = Date.now()
+    await report(current)
+  }
 
   for (const c of plan.campaigns) {
+    current = c.name
     await report(c.name)
     try {
       const camp = await createCampaignLocal({
@@ -634,6 +644,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
             await rememberTarget(r.id, plannedCents)
             created.targets++
           } catch (e) { errors.push(`keyword "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
+          await beat()
         }
 
         for (const asin of g.asins) {
@@ -645,6 +656,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
             if (ad.externalAdId) created.productAds++
             else notPushedAds.push(asin)
           } catch (e) { errors.push(`productAd ${asin}: ${(e as Error).message.slice(0, 160)}`) }
+          await beat()
         }
 
         if (autoWishes.length) {
@@ -702,8 +714,10 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   // so every replica landed outside every portfolio anyway. The field now travels with the
   // create AND is read back here, because a create response cannot prove membership landed.
   // Any repair it had to perform is surfaced as an error so a PARTIAL run says why.
+  // B-1 — Claude's run has no START to repair it later: the repair is part of the creation (`creationFlow`), as its
+  // negatives are, so the allowlist it was born off does not refuse it.
   const { settleLaunchPortfolios } = await import('./ads-create.service.js')
-  const portfolioCheck = await settleLaunchPortfolios(createdCampaignIds)
+  const portfolioCheck = await settleLaunchPortfolios(createdCampaignIds, safe ? { creationFlow: true } : {})
   if (portfolioCheck?.repairFailed) {
     errors.push(`portfolio membership could not be set for ${portfolioCheck.repairFailed} campaign(s)`)
   }
@@ -720,7 +734,10 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     errors.push(
       `${notPushedAds.length} product ad(s) were not accepted by Amazon, so those products are not `
       + `being advertised (${notPushedAds.slice(0, 3).join(', ')}${notPushedAds.length > 3 ? ', …' : ''}). `
-      + 'Use "Push the missing pieces" to retry them.',
+      // B-1 — off the allowlist, "Push the missing pieces" is refused: it works once a person put the campaign on it.
+      + (safe
+        ? 'Their campaigns are off the live-write allowlist: once a person puts one on it (set-campaign-live-writes), "Push the missing pieces" retries them.'
+        : 'Use "Push the missing pieces" to retry them.'),
     )
   }
   if (verification && !verification.ok) {
@@ -742,14 +759,31 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     : (errors.length || notOnAmazon.length) ? 'PARTIAL'
     : 'APPLIED'
 
-  await prisma.adBlueprintApplication.update({
-    where: { id: application.id },
-    data: {
-      status, createdCampaignIds, errors, appliedAt: new Date(), notOnAmazon,
-      progress: { done: plan.campaigns.length, total: plan.campaigns.length, campaign: null, created, ...(safe ? { at: new Date().toISOString() } : {}) } as object,
-      ...(safe ? { options: { ...((application.options ?? {}) as object), deferredPlacements } } : {}),
-    },
-  })
+  const progress = { done: plan.campaigns.length, total: plan.campaigns.length, campaign: null, created, ...(safe ? { at: new Date().toISOString() } : {}) } as object
+  if (!safe) {
+    await prisma.adBlueprintApplication.update({
+      where: { id: application.id },
+      data: { status, createdCampaignIds, errors, appliedAt: new Date(), notOnAmazon, progress },
+    })
+  } else {
+    // B-1 — guarded: a run marked stopped meanwhile (FAILED by settleStoppedReplicates) keeps that verdict — the next
+    // run may already be going — and records that it did finish, with everything it made.
+    const options = { ...((application.options ?? {}) as object), deferredPlacements } as object
+    const landed = await prisma.adBlueprintApplication.updateMany({
+      where: { id: application.id, status: 'RUNNING' },
+      data: { status, createdCampaignIds, errors, appliedAt: new Date(), notOnAmazon, progress, options },
+    })
+    if (!landed.count) {
+      const row = await prisma.adBlueprintApplication.findUnique({ where: { id: application.id }, select: { createdCampaignIds: true, errors: true } })
+      await prisma.adBlueprintApplication.update({
+        where: { id: application.id },
+        data: {
+          createdCampaignIds: [...new Set([...(row?.createdCampaignIds ?? []), ...createdCampaignIds])], notOnAmazon, options,
+          errors: [...(row?.errors ?? []), `it finished after it was marked stopped: ${status.toLowerCase()}, ${created.campaigns} campaign(s) made`, ...errors],
+        },
+      })
+    }
+  }
   logger.info('[AX2.5] blueprint applied', { applicationId: application.id, status, created, errors: errors.length })
 
   return { applicationId: application.id, status, plan, created, skippedNonKeyword, notOnAmazon, errors, portfolioCheck, verification }
@@ -795,11 +829,19 @@ export async function settleStoppedReplicates(where: { market: string; productTo
     const made = await replicateMadeBy(row)
     const campaign = (row.progress as { campaign?: unknown } | null)?.campaign
     const { STALE_RUN_MS } = await import('./ads-playbook/build.js')
+    // Campaigns Amazon never took (no Amazon id) are archived in Nexus only — nothing is sent — so their names are free.
+    const local = made.length
+      ? (await prisma.campaign.updateMany({ where: { id: { in: made }, externalCampaignId: null, status: { not: 'ARCHIVED' } }, data: { status: 'ARCHIVED' } })).count
+      : 0
     const r = await prisma.adBlueprintApplication.updateMany({
       where: { id: row.id, status: 'RUNNING' },
       data: {
         status: 'FAILED', appliedAt: new Date(), createdCampaignIds: made,
-        errors: [...row.errors, `the run stopped without finishing${typeof campaign === 'string' ? ` at "${campaign}"` : ''}: no progress for ${STALE_RUN_MS / 60_000} minutes (a deploy or a restart). It does not resume: archive what it made (archive-ads buildRunId ${row.id}), or keep it.`],
+        errors: [
+          ...row.errors,
+          `the run stopped without finishing${typeof campaign === 'string' ? ` at "${campaign}"` : ''}: no progress for ${STALE_RUN_MS / 60_000} minutes (a deploy or a restart). It does not resume: archive what it made (archive-ads buildRunId ${row.id}), or keep it.`
+            + (local ? ` ${local} campaign record(s) Amazon never took were archived in Nexus.` : ''),
+        ],
       },
     })
     settled += r.count
@@ -853,12 +895,15 @@ export async function replicateRunCreated(applicationId: string): Promise<string
 }
 
 /** A Replicate run as approval-status follows it: its status, how far it is, the campaigns it made, how many errors, the placements it left for later. */
-export async function replicateRunDelivery(applicationId: string): Promise<{ status: string; done: number | null; total: number | null; createdCampaignIds: string[]; errors: number; deferredPlacements: number } | null> {
+export async function replicateRunDelivery(applicationId: string): Promise<{ status: string; stopped?: true; done: number | null; total: number | null; createdCampaignIds: string[]; errors: number; deferredPlacements: number } | null> {
   const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: null }, select: REPLICATE_RUN_SELECT })
   if (!run) return null
   const progress = (run.progress ?? {}) as { done?: unknown; total?: unknown }
+  // A run a deploy killed reads as what it is: stopped (FAILED once the next run or an archive settles it), never RUNNING.
+  const stopped = await safeRunStopped(run, Date.now())
   return {
-    status: run.status, done: typeof progress.done === 'number' ? progress.done : null, total: typeof progress.total === 'number' ? progress.total : null,
+    status: stopped ? 'FAILED' : run.status, ...(stopped ? { stopped: true as const } : {}),
+    done: typeof progress.done === 'number' ? progress.done : null, total: typeof progress.total === 'number' ? progress.total : null,
     createdCampaignIds: await replicateMadeBy(run), errors: run.errors.length, deferredPlacements: bornSafeOf(run)?.deferredPlacements?.length ?? 0,
   }
 }
@@ -870,6 +915,10 @@ export async function replicateRunDelivery(applicationId: string): Promise<{ sta
  */
 export const CLAUDE_RUN =
   'Claude asked for this run: it was born off the live-write allowlist and goes live with set-campaign-live-writes, then restore-campaign (each a request a person approves), not with Replicate\'s raise.'
+
+/** B-1 — why Replicate's rollback refuses a run Claude asked for, and what archives it instead. */
+export const claudeRunRollback = (applicationId: string) =>
+  `Claude asked for this run: its campaigns are off the live-write allowlist, so a rollback from here would be refused at Amazon and leave them running. Archive them with archive-ads buildRunId ${applicationId} (a request a person approves: it is sent as that person's own change and reaches Amazon).`
 
 /**
  * PB-5a — a run that built an ads playbook (playbookId set) is the playbook's: it starts with the playbook's START (the
@@ -917,6 +966,9 @@ export async function rollbackApplication(applicationId: string, actor?: string)
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
   if (app.playbookId) throw new Error(PLAYBOOK_RUN)
+  // B-1 — its campaigns are off the live-write allowlist: this rollback's archives (an automation's, not a person's own)
+  // would be refused at Amazon's door and put back, while the run read ROLLED_BACK.
+  if (bornSafeOf(app)) throw new Error(claudeRunRollback(applicationId))
   if (app.status === 'ROLLED_BACK') return { archived: 0, errors: ['already rolled back'] }
 
   const { updateCampaignWithSync } = await import('./ads-mutation.service.js')

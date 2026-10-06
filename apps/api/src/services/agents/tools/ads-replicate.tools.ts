@@ -31,7 +31,7 @@ import prisma from '../../../db.js'
 import { checkAdsWriteGate } from '../../advertising/ads-write-gate.js'
 import { SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { adGroupsOutside, planFromSource, replicateInFlight, replicateRunCampaigns, startBlueprintRun, type ApplyRequest } from '../../advertising/ads-blueprint-apply.service.js'
-import type { ApplyPlan, CopyScope, PlannedCampaign, ValuePolicy } from '../../ads-core/ads-blueprint-apply.js'
+import type { ApplyPlan, CopyScope, PlannedCampaign, PlannedTarget, ValuePolicy } from '../../ads-core/ads-blueprint-apply.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { marketCurrency } from '../../pim/market-currency.js'
 import { amountLabel, liveReachOf } from './ads-tool-guards.js'
@@ -77,7 +77,7 @@ const input = z.object({
     negatives: z.boolean().optional().describe('copy the negative keywords and products (default yes)'),
     productTargets: z.boolean().optional().describe('copy the product and category targets (default yes)'),
     autoClauses: z.boolean().optional().describe('copy the auto groups of an Auto campaign (default yes)'),
-    bids: z.boolean().optional().describe("copy each keyword's own bid (default yes; no: the ad group's default bid)"),
+    bids: z.boolean().optional().describe("copy each keyword's own bid (default yes; no: each keyword takes its ad group's default bid as the source has it, and no bidPolicy applies)"),
     budgets: z.boolean().optional().describe('copy the daily budgets (default yes; no: budgetPolicy fixed gives them)'),
     placements: z.boolean().optional().describe('copy the placement adjustments (default yes): never set at birth, listed for once the copy is live'),
   }).optional().describe('what comes across; default everything'),
@@ -127,6 +127,33 @@ function campaignLines(plan: ApplyPlan, renames: Array<{ from: string }>) {
   })
 }
 
+/**
+ * The basis a person approves: the source, the products and every campaign the copy makes, in an order the rows' order
+ * cannot move. The plan's ids are positions in the source as it was read (its ad groups and targets come back in no fixed
+ * order), so they are left out and every list is sorted: a sync that reorders rows changes nothing here; a bid, a budget,
+ * a name, a keyword or a clash that changes does. Exported for the tests.
+ */
+export function planBasis(input: {
+  campaignIds: readonly string[]; adGroupIds: readonly string[]; plan: Pick<ApplyPlan, 'campaigns' | 'conflicts'>
+  asins: readonly string[]; portfolioId: string | null; currency: string
+}): string {
+  const sorted = (items: readonly unknown[]) => items.map((x) => canonical(x)).sort()
+  const target = (t: PlannedTarget) => ({
+    expression: t.expression.toLowerCase(), expressionType: (t.expressionType ?? '').toUpperCase(), kind: (t.kind ?? '').toUpperCase(),
+    bidCents: t.bidCents ?? null, isNegative: t.isNegative, negativeLevel: t.negativeLevel ?? null, autoClause: t.autoClause ?? null,
+  })
+  const campaigns = input.plan.campaigns.map((c) => ({
+    name: c.name, role: c.role, targetingType: c.targetingType, dailyBudget: c.dailyBudget, biddingStrategy: c.biddingStrategy,
+    placementBidding: sorted(c.placementBidding.map((p) => ({ placement: p.placement, percentage: p.percentage }))),
+    adGroups: sorted(c.adGroups.map((g) => ({ name: g.name, defaultBidCents: g.defaultBidCents, asins: [...g.asins].sort(), targets: sorted(g.targets.map(target)) }))),
+  }))
+  const conflicts = input.plan.conflicts.map((c) => ({ expression: c.expression.toLowerCase(), resolution: c.resolution, existing: c.existing.map((e) => e.campaignId).sort() }))
+  return hash({
+    source: [[...input.campaignIds].sort(), [...input.adGroupIds].sort()], campaigns: sorted(campaigns), conflicts: sorted(conflicts),
+    asins: [...input.asins].sort(), portfolio: input.portfolioId, currency: input.currency,
+  })
+}
+
 /** A value policy as the run takes it: a scaled one in percent, a fixed bid in cents, a fixed budget in major units; or why not. */
 function policyOf(p: Args['bidPolicy'], kind: 'bid' | 'budget'): ValuePolicy | { refusal: string } | undefined {
   if (!p || p.mode === 'copy') return p ? { mode: 'copy' } : undefined
@@ -153,14 +180,18 @@ async function replicatePreview(raw: Record<string, unknown>, ctx: Pick<ToolCont
   const a: Args = parsed.data
 
   // The source first: a campaign of another business reads as not found, before anything else is said.
-  const ids = unique(a.campaignIds)
-  const sources = await prisma.campaign.findMany({
-    where: { id: { in: ids } },
+  const named = await prisma.campaign.findMany({
+    where: { id: { in: unique(a.campaignIds) } },
     orderBy: { name: 'asc' },
-    select: { id: true, name: true, marketplace: true, adProduct: true, bidsSuppressedAt: true },
+    select: { id: true, name: true, marketplace: true, adProduct: true, status: true, bidsSuppressedAt: true },
   })
-  const missing = ids.filter((id) => !sources.some((s) => s.id === id))
+  const missing = unique(a.campaignIds).filter((id) => !named.some((s) => s.id === id))
   if (missing.length) return refuse(`Source campaign${missing.length === 1 ? '' : 's'} not found in this business: ${missing.slice(0, 10).join(', ')}.`)
+  // An archived campaign serves nothing: it is left out of the copy (said), as its archived keywords and targets are.
+  const archived = named.filter((s) => String(s.status) === 'ARCHIVED').map((s) => s.name)
+  const sources = named.filter((s) => String(s.status) !== 'ARCHIVED')
+  if (!sources.length) return refuse(`Not queued: ${quoted(archived)} ${archived.length === 1 ? 'is' : 'are'} archived: name campaigns that run (an archived campaign's structure is not copied).`)
+  const ids = sources.map((s) => s.id)
   const names = sources.map((s) => s.name)
   const elsewhere = sources.filter((s) => s.marketplace !== a.sourceMarket)
   if (elsewhere.length) return refuse(`Not queued: ${quoted(elsewhere.map((s) => `${s.name} (${s.marketplace ?? 'no market'})`))} ${elsewhere.length === 1 ? 'does' : 'do'} not run in ${a.sourceMarket} (sourceMarket): name campaigns of one market.`)
@@ -194,8 +225,16 @@ async function replicatePreview(raw: Record<string, unknown>, ctx: Pick<ToolCont
   const bidPolicy = policyOf(a.bidPolicy, 'bid')
   const budgetPolicy = policyOf(a.budgetPolicy, 'budget')
   for (const p of [bidPolicy, budgetPolicy]) if (p && 'refusal' in p) return refuse(p.refusal)
-  if (currency !== sourceCurrency && (a.bidPolicy?.mode !== 'fixed' || a.budgetPolicy?.mode !== 'fixed')) {
-    return refuse(`Not queued: the source campaigns are in ${sourceCurrency} (${a.sourceMarket}) and the copy would be in ${currency} (${a.market}): bids and budgets are never converted. Give the copy its own in ${currency} (bidPolicy and budgetPolicy fixed).`)
+  // Replicate's own rule: with copy.bids off every keyword takes its ad group's default AS THE SOURCE HAS IT — a bid
+  // policy is not applied — so the two are never asked together (one of them would be silently ignored).
+  if (a.copy?.bids === false && a.bidPolicy && a.bidPolicy.mode !== 'copy') {
+    return refuse('Not queued: copy.bids false keeps each ad group\'s default bid as the source has it and applies no bidPolicy: give one or the other.')
+  }
+  if (a.copy?.budgets === false && a.budgetPolicy?.mode !== 'fixed') {
+    return refuse('Not queued: copy.budgets false needs budgetPolicy fixed (each campaign\'s own daily budget); without it the source\'s budgets would be copied anyway.')
+  }
+  if (currency !== sourceCurrency && (a.bidPolicy?.mode !== 'fixed' || a.budgetPolicy?.mode !== 'fixed' || a.copy?.bids === false)) {
+    return refuse(`Not queued: the source campaigns are in ${sourceCurrency} (${a.sourceMarket}) and the copy would be in ${currency} (${a.market}): bids and budgets are never converted. Give the copy its own in ${currency} (bidPolicy and budgetPolicy fixed, copy.bids not off).`)
   }
   const ceiling = await prisma.adSpendCeiling.findFirst({
     where: { grain: 'MARKET', scopeId: a.market, enabled: true, dailyCapCents: { not: null } },
@@ -215,7 +254,8 @@ async function replicatePreview(raw: Record<string, unknown>, ctx: Pick<ToolCont
 
   // The plan: Replicate's own, from the source as it is now, judged by its gate (rule 3: only the product's own campaigns block).
   const request: ApplyRequest = {
-    source: { campaignIds: ids, ...(adGroupIds.length ? { adGroupIds } : {}), marketplace: a.sourceMarket },
+    // Archived keywords and targets of the source serve nothing: they are not copied.
+    source: { campaignIds: ids, ...(adGroupIds.length ? { adGroupIds } : {}), marketplace: a.sourceMarket, excludeArchivedTargets: true },
     sourceProductToken: a.sourceProductToken,
     ...(a.competitorTokens?.length ? { competitorTokens: a.competitorTokens } : {}),
     target: { productToken: a.productToken, asins },
@@ -287,6 +327,7 @@ async function replicatePreview(raw: Record<string, unknown>, ctx: Pick<ToolCont
     + `${placements ? `, without its placements (${plural(placements, 'campaign')} ${placements === 1 ? 'has' : 'have'} some: set once it is live)` : ''} and with no rules: `
     + 'it serves next to nothing (not nothing) until a person approves set-campaign-live-writes and restore-campaign for it, each a request of its own.'
   const warnings = [
+    ...(archived.length ? [`${quoted(archived)} ${archived.length === 1 ? 'is' : 'are'} archived: left out of the copy.`] : []),
     ...plan.warnings,
     ...checks.warnings,
     ...(floored.length ? [`${quoted(floored)} ${floored.length === 1 ? 'is' : 'are'} at the floor now: the copy plans the bids ${floored.length === 1 ? 'it holds' : 'they hold'} (the floor), not the ones ${floored.length === 1 ? 'it' : 'they'} had before; bidPolicy fixed plans others.`] : []),
@@ -320,7 +361,7 @@ async function replicatePreview(raw: Record<string, unknown>, ctx: Pick<ToolCont
         ceiling: { label: ceiling.label, dailyCapCents: cap },
         ...(newMarket ? { newMarket: true, newMarketNote: `NEW MARKET: the first campaign in ${a.market}.` } : {}),
         warnings,
-        basis: hash({ source: [ids, adGroupIds], plan: plan.campaigns, conflicts: plan.conflicts, asins, portfolio: portfolio?.portfolioId ?? null, currency }),
+        basis: planBasis({ campaignIds: ids, adGroupIds, plan, asins, portfolioId: portfolio?.portfolioId ?? null, currency }),
         reach: stored,
         reachNote: reachNote(stored),
         effect,
@@ -462,7 +503,7 @@ const replicateAdStructure: AgentTool = {
         status: 'RUNNING',
         reach: preview.reach,
         changeSetId: run.changeSetId,
-        note: `Runs on its own; approval-status follows it (run ${started.applicationId}). Born at the ${SUPPRESSION_FLOOR_CENTS}-cent floor and off the live-write allowlist — nothing spends until set-campaign-live-writes and restore-campaign are approved for it.`,
+        note: `Runs on its own; approval-status follows it (run ${started.applicationId}). Born at the ${SUPPRESSION_FLOOR_CENTS}-cent floor and off the live-write allowlist: it serves next to nothing (not nothing) until set-campaign-live-writes and restore-campaign are approved for it.`,
       },
       change: {
         before: { applicationId: null, market: preview.market, productToken: preview.productToken },

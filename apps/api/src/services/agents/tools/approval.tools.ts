@@ -243,7 +243,7 @@ export interface AdDelivery {
   /** Negatives and keywords the request created: how many exist at Amazon (they are created at once, not queued). */
   created?: { total: number; atAmazon: number }
   /** PB-5a — a playbook build's run (B-1: or a Replicate run's): its status and how far it is (the creates run detached). */
-  build?: { applicationId: string; status: string; done: number | null; total: number | null; campaigns: number; errors: number }
+  build?: { applicationId: string; status: string; done: number | null; total: number | null; campaigns: number; errors: number; stopped?: boolean }
 }
 
 /** One queue row's (or an inline write's) outcome, in the five words a person uses. */
@@ -298,7 +298,7 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
       ? await (await import('../../advertising/ads-playbook/build.js')).buildRunDelivery(applicationId)
       : await (await import('../../advertising/ads-blueprint-apply.service.js')).replicateRunDelivery(applicationId)
     if (!run) return out
-    out.build = { applicationId, status: run.status, done: run.done, total: run.total, campaigns: run.createdCampaignIds.length, errors: run.errors }
+    out.build = { applicationId, status: run.status, done: run.done, total: run.total, campaigns: run.createdCampaignIds.length, errors: run.errors, ...(run.stopped ? { stopped: true } : {}) }
     let total = 0, atAmazon = 0
     for (const id of run.createdCampaignIds) {
       const counts = await campaignStructureCounts(id)
@@ -375,8 +375,28 @@ export function ebayMeaning(d: EbayDelivery | null): string {
   return `Approved and written in Nexus.${parts.length ? ` eBay: ${parts.join(', ')} (of ${plural(d.writes, 'write')}).` : ''}${sandbox}`
 }
 
+/** PB-5a / B-1 — where a detached run (a playbook build, a Replicate run) is, in a sentence. */
+function runWords(b: NonNullable<AdDelivery['build']>): string {
+  const of = b.total != null ? ` (${b.done ?? 0} of ${plural(b.total, 'campaign')} done)` : ''
+  if (b.stopped) {
+    return `The run stopped without finishing${of}: a deploy or a restart stopped it and it does not resume; archive-ads buildRunId ${b.applicationId} archives what it made.`
+  }
+  if (b.status === 'RUNNING') return `The run is still going${of}: ask again to follow it.`
+  if (b.status === 'APPLIED') return `The run finished: ${plural(b.campaigns, 'campaign')} made.`
+  if (b.status === 'PARTIAL') return `The run finished in part: ${plural(b.campaigns, 'campaign')} made, ${plural(b.errors, 'problem')} recorded.`
+  if (b.status === 'FAILED') return `The run failed: ${plural(b.campaigns, 'campaign')} made, ${plural(b.errors, 'error')} recorded.`
+  if (b.status === 'ROLLED_BACK') return 'The run was rolled back: its campaigns were archived.'
+  return `The run is ${b.status.toLowerCase()}.`
+}
+
 /** A9 — what an executed ad change did, in a sentence: in Nexus, then at Amazon. */
 export function adMeaning(d: AdDelivery): string {
+  // PB-5a / B-1 — a build or a Replicate run runs on its own after approval: say where the run is, never only "run".
+  if (d.build) {
+    const created = d.created ? ` In Nexus: ${d.created.total} created${d.reach === 'sandbox' ? '' : `, ${d.created.atAmazon} of them confirmed at Amazon`}.` : ''
+    const sandbox = d.reach === 'sandbox' ? ' Sandbox: Amazon ads writes are not live, so nothing was sent to Amazon.' : ''
+    return `Approved. ${runWords(d.build)}${created}${sandbox}`
+  }
   if (d.reach === 'sandbox') {
     const what = !d.writes && d.created ? `${d.created.total} created` : plural(d.writes, 'write')
     return `Approved and written in Nexus (${what}). Sandbox: Amazon ads writes are not live, so nothing was sent to Amazon.`

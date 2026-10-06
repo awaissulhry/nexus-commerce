@@ -45,19 +45,32 @@ vi.mock('../../outbound-destination.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   resolveDestinations: async (_db: unknown, rows: unknown[]) => rows.map(() => ({ connectionId: null, reason: 'NO_ACCOUNT' })),
 }))
-/** The placement write (a recorder) and the portfolio read-back: both would reach Amazon. */
-const placements = vi.hoisted(() => ({ calls: [] as string[] }))
+/** The placement write (a recorder) and the end-of-run portfolio read-back (a recorder of how it was asked). */
+const placements = vi.hoisted(() => ({ calls: [] as string[], portfolio: [] as Array<{ ids: string[]; opts: unknown }> }))
 vi.mock('../../advertising/ads-create.service.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   updatePlacementBidding: async (input: { campaignId: string; adjustments: unknown[] }) => {
     placements.calls.push(input.campaignId)
     return { ok: true, adjustments: input.adjustments, mode: 'sandbox' }
   },
-  settleLaunchPortfolios: async () => null,
+  settleLaunchPortfolios: async (ids: string[], opts: unknown = {}) => { placements.portfolio.push({ ids, opts }); return null },
 }))
+/** The launch read-back; `stopMidRun` marks the named run FAILED as it reads back (a settle while the run was slow). */
+const verify = vi.hoisted(() => ({ stopMidRun: null as null | string }))
 vi.mock('../../advertising/ads-launch-verify.service.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  verifyLaunch: async () => ({ ok: true, problems: [], entities: [] }),
+  verifyLaunch: async () => {
+    if (verify.stopMidRun) await database.client.adBlueprintApplication.updateMany({ where: { productToken: verify.stopMidRun, status: 'RUNNING' }, data: { status: 'FAILED', errors: ['the run stopped without finishing (test)'] } })
+    return { ok: true, problems: [], entities: [] }
+  },
+}))
+/** Amazon, where a live test reaches it: an archive (Amazon's delete), a campaign read and a campaign update, recorded. */
+const amazon = vi.hoisted(() => ({ archived: [] as string[], updates: [] as Array<{ externalId: string; patch: Record<string, unknown> }>, campaignsV3: [] as Array<Record<string, unknown>> }))
+vi.mock('../../advertising/ads-api-client.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  archiveSpEntity: async (_ctx: unknown, _entity: unknown, externalId: string) => { amazon.archived.push(externalId); return { ok: true, mode: 'live', rawResponse: {}, error: null } },
+  listCampaignsV3: async () => amazon.campaignsV3,
+  updateCampaign: async (_ctx: unknown, externalId: string, patch: Record<string, unknown>) => { amazon.updates.push({ externalId, patch }); return { ok: true, mode: 'live', rawResponse: {}, error: null } },
 }))
 
 import { callTool, type UserPrincipal } from '../call-tool.js'
@@ -130,6 +143,9 @@ beforeAll(async () => {
     await target('race jacket', 'PHRASE', 45)
     await target('winter boots', 'BROAD', 30)
     await target('cheap', 'EXACT', 0, { isNegative: true, negativeLevel: 'AD_GROUP' })
+    // An archived keyword serves nothing: the tool's copy leaves it out.
+    await target('old jacket', 'EXACT', 70, { status: 'ARCHIVED' })
+    await db().campaign.create({ data: { id: 'c-old', name: 'TESTSRC Old IT', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-c-old', dailyBudget: '3.00', startDate: new Date('2025-01-01T00:00:00Z'), status: 'ARCHIVED' } })
     await db().adProductAd.create({ data: { adGroupId: 'g-src', asin: 'B0SRCASN01', externalAdId: 'EXT-pa-src' } })
     // The new product's own older campaign already buys "winter boots" (rule 3: a clash of its own).
     await db().campaign.create({ data: { id: 'c-own', name: 'TESTNEW own boots', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-c-own', dailyBudget: '5.00', startDate: new Date('2026-01-01T00:00:00Z') } })
@@ -189,6 +205,14 @@ describe('B-1 — the copy, and what refuses it', () => {
     expect(await error({ market: 'UK', skus: ['TEST-NEW-1'], bidPolicy: { mode: 'fixed', value: 50 }, budgetPolicy: { mode: 'fixed', value: 1000 } })).toMatch(/^Set a spend ceiling for this market first: UK/)
     expect(await error({ budgetPolicy: { mode: 'fixed', value: 6000 } })).toBe("Its daily budgets add up to EUR 60.00, above the IT market's spend ceiling of EUR 50.00 a day.")
     expect(await error({ bidPolicy: { mode: 'scale' } })).toBe('bidPolicy scale needs a value.')
+    // A policy Replicate would silently ignore is refused, never half-applied.
+    expect(await error({ copy: { bids: false }, bidPolicy: { mode: 'fixed', value: 30 } })).toMatch(/^Not queued: copy\.bids false keeps each ad group's default bid as the source has it and applies no bidPolicy/)
+    expect(await error({ copy: { budgets: false } })).toMatch(/^Not queued: copy\.budgets false needs budgetPolicy fixed/)
+    expect(await error({ market: 'UK', skus: ['TEST-NEW-1'], copy: { bids: false }, budgetPolicy: { mode: 'fixed', value: 1000 } })).toMatch(/never converted/)
+    // An archived source: left out (said); only archived ones: refused.
+    expect(await error({ campaignIds: ['c-old'] })).toMatch(/^Not queued: "TESTSRC Old IT" is archived: name campaigns that run/)
+    const mixed = (await preview(copy({ campaignIds: ['c-src', 'c-old'] }))).preview as Row
+    expect(mixed).toMatchObject({ source: { campaigns: [{ campaignId: 'c-src' }] }, totals: { campaigns: 1 }, warnings: expect.arrayContaining(['"TESTSRC Old IT" is archived: left out of the copy.']) })
     expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval"'))[0].n).toBe(0)
   })
 })
@@ -259,16 +283,116 @@ describe('B-1 — approved, it is born safe', () => {
 
   it('approval-status follows the run; undo is archive-ads of what it made; restore-campaign may give the bids back; Replicate\'s raise refuses it', async () => {
     const s = (await inside(() => callTool(claude, 'approval-status', { approvalId }))).visible.data as Row
-    expect(s).toMatchObject({ status: 'executed', ads: { reach: 'sandbox', build: { applicationId, campaigns: 1 } } })
+    expect(s).toMatchObject({ status: 'executed', ads: { reach: 'sandbox', build: { applicationId, campaigns: 1, status: 'APPLIED' } } })
     expect(s.ads.created.total).toBeGreaterThan(0)
+    // The meaning says where the run is, not only that it was approved.
+    expect(s.meaning).toMatch(/^Approved\. The run finished: 1 campaign made\. In Nexus: \d+ created\. Sandbox: /)
     expect(await inside(() => undoRequestFor({ approvalId }))).toMatchObject({ request: { tool: 'archive-ads', args: { buildRunId: applicationId } } })
     expect((await preview({ buildRunId: applicationId }, 'archive-ads')).preview).toMatchObject({ permanent: expect.stringMatching(/^PERMANENT/) })
     // The person who asked holds the floor: restore-campaign (its own request) may put the planned bids back.
     expect((await preview({ campaignId }, 'restore-campaign')).preview).toMatchObject({ suppressedBy: 'user:u-asker', restores: { targets: 2, adGroups: 1 } })
-    const { raiseApplicationBids, CLAUDE_RUN } = await import('../../advertising/ads-blueprint-apply.service.js')
+    const { raiseApplicationBids, rollbackApplication, CLAUDE_RUN, claudeRunRollback } = await import('../../advertising/ads-blueprint-apply.service.js')
     await expect(inside(() => raiseApplicationBids(applicationId, 'user:u-screen'))).rejects.toThrow(CLAUDE_RUN)
+    // Replicate's rollback would queue an automation's archives the allowlist refuses: it names archive-ads instead.
+    await expect(inside(() => rollbackApplication(applicationId, 'user:u-screen'))).rejects.toThrow(claudeRunRollback(applicationId))
+    expect((await inside(() => db().adBlueprintApplication.findUniqueOrThrow({ where: { id: applicationId } }))).status).not.toBe('ROLLED_BACK')
+    // The end-of-run portfolio repair was asked as part of the creation (off the allowlist it is not refused).
+    expect(placements.portfolio.at(-1)).toEqual({ ids: [campaignId], opts: { creationFlow: true } })
     // Asked again, the names are taken now: refused, not queued.
     expect((await preview(copy())).error).toMatch(/already exist in this marketplace|already has a campaign named/)
+  })
+
+  it('its undo, archive-ads buildRunId, reaches Amazon for these off-allowlist campaigns: the approver\'s own change passes the allowlist', async () => {
+    const asked = await inside(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
+      return runOrQueueTool('archive-ads', { buildRunId: applicationId, why: 'undo of the copy' }, claude, run.id, { forceAsk: true })
+    })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { archived: 1 } })
+    const { checkAdsWriteGate } = await import('../../advertising/ads-write-gate.js')
+    const { drainAdsSyncOnce } = await import('../../../workers/ads-sync.worker.js')
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    try {
+      // The control: an automation's archive (no person's own change: Replicate's rollback) is refused off the allowlist.
+      expect(await inside(() => checkAdsWriteGate({ marketplace: 'IT', payloadValueCents: 0, campaignId, isSuppression: true })))
+        .toMatchObject({ allowed: false, deniedAt: 'campaign_allowlist' })
+      // The cancel window is waited out here, then the worker sends it.
+      await sql('UPDATE "OutboundSyncQueue" SET "holdUntil" = NULL WHERE "syncStatus" = $1 RETURNING id', ['PENDING'])
+      await inside(() => drainAdsSyncOnce())
+    } finally { vi.unstubAllEnvs() }
+    const [ext] = await sql('SELECT "externalCampaignId" AS ext, status FROM "Campaign" WHERE id = $1', [campaignId])
+    expect(amazon.archived).toContain(ext.ext)
+    expect(ext.status).toBe('ARCHIVED')
+    const rows = await sql('SELECT q."syncStatus" AS status FROM "OutboundSyncQueue" q JOIN "AdvertisingActionLog" l ON l."outboundQueueId" = q.id WHERE l."executionId" = $1', [asked.approvalId])
+    expect(rows).toEqual([{ status: 'SUCCESS' }])
+  })
+})
+
+describe('B-1 — the basis a person approves', () => {
+  it('does not move when the rows come back in another order; it moves when a bid does', async () => {
+    const { planBasis } = await import('./ads-replicate.tools.js')
+    const t = (id: string, expression: string, bidCents: number, isNegative = false) => ({ id, expression, expressionType: isNegative ? 'NEGATIVE_EXACT' : 'EXACT', kind: 'KEYWORD', bidCents, isNegative, negativeLevel: isNegative ? 'AD_GROUP' : null })
+    const plan = {
+      campaigns: [
+        { id: 'c0', role: 'Keyword-Exact', name: 'TESTA Exact', dailyBudget: 12, biddingStrategy: 'LEGACY_FOR_SALES', targetingType: 'MANUAL' as const, placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 50 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 10 }],
+          adGroups: [
+            { id: 'c0.g0', name: 'group one', defaultBidCents: 40, asins: ['B0TESTA001', 'B0TESTA002'], targets: [t('c0.g0.t0', 'alpha', 60), t('c0.g0.t1', 'beta', 45), t('c0.g0.t2', 'cheap', 0, true)] },
+            { id: 'c0.g1', name: 'group two', defaultBidCents: 30, asins: ['B0TESTA001'], targets: [t('c0.g1.t0', 'gamma', 35)] },
+          ] },
+        { id: 'c1', role: 'Keyword-Phrase', name: 'TESTA Phrase', dailyBudget: 8, biddingStrategy: 'LEGACY_FOR_SALES', targetingType: 'MANUAL' as const, placementBidding: [],
+          adGroups: [{ id: 'c1.g0', name: 'group three', defaultBidCents: 25, asins: ['B0TESTA001'], targets: [t('c1.g0.t0', 'delta', 20)] }] },
+      ],
+      conflicts: [{ expression: 'beta', resolution: 'ACCEPTED' as const, existing: [{ campaignName: 'A', campaignId: 'x1' }, { campaignName: 'B', campaignId: 'x2' }] }],
+    }
+    // The same plan read from rows in another order: campaigns, ad groups, targets, ASINs, placements and clashes reversed,
+    // and every positional id renumbered as the read would.
+    const shuffled = {
+      campaigns: [...plan.campaigns].reverse().map((c, ci) => ({
+        ...c, id: `c${ci}`, placementBidding: [...c.placementBidding].reverse(),
+        adGroups: [...c.adGroups].reverse().map((g, gi) => ({ ...g, id: `c${ci}.g${gi}`, asins: [...g.asins].reverse(), targets: [...g.targets].reverse().map((x, ti) => ({ ...x, id: `c${ci}.g${gi}.t${ti}` })) })),
+      })),
+      conflicts: plan.conflicts.map((c) => ({ ...c, existing: [...c.existing].reverse() })),
+    }
+    const base = { campaignIds: ['c-a', 'c-b'], adGroupIds: [], asins: ['B0TESTA001', 'B0TESTA002'], portfolioId: null, currency: 'EUR' }
+    const basis = planBasis({ ...base, plan: plan as never })
+    expect(planBasis({ ...base, campaignIds: ['c-b', 'c-a'], asins: ['B0TESTA002', 'B0TESTA001'], plan: shuffled as never })).toBe(basis)
+    const raised = structuredClone(plan)
+    raised.campaigns[0].adGroups[0].targets[1].bidCents = 46
+    expect(planBasis({ ...base, plan: raised as never })).not.toBe(basis)
+  })
+})
+
+describe('B-1 — the portfolio repair of a run born off the allowlist', () => {
+  it('is refused as an automation\'s write, and passes as part of the creation (creationFlow)', async () => {
+    const id = await inside(async () => (await db().campaign.create({ data: {
+      name: 'TESTPF copy', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-pf-1', portfolioId: 'PF-TEST-1', dailyBudget: '5.00', startDate: new Date(), liveBidWritesEnabled: false,
+    } })).id)
+    amazon.campaignsV3 = [{ campaignId: 'EXT-pf-1', portfolioId: null }]
+    const { verifyCampaignPortfolios } = await import('../../advertising/ads-create.service.js')
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    try {
+      expect(await inside(() => verifyCampaignPortfolios({ campaignIds: [id], dryRun: false }))).toMatchObject({ missingOnAmazon: 1, repaired: 0, repairFailed: 1 })
+      expect(amazon.updates).toEqual([])
+      expect(await inside(() => verifyCampaignPortfolios({ campaignIds: [id], dryRun: false, creationFlow: true }))).toMatchObject({ missingOnAmazon: 1, repaired: 1, repairFailed: 0 })
+      expect(amazon.updates).toEqual([{ externalId: 'EXT-pf-1', patch: { portfolioId: 'PF-TEST-1' } }])
+    } finally { vi.unstubAllEnvs(); amazon.campaignsV3 = [] }
+  })
+})
+
+describe('B-1 — a run marked stopped while it was only slow', () => {
+  it('keeps the FAILED verdict and records that it finished, with what it made', async () => {
+    verify.stopMidRun = 'TESTMID'
+    try {
+      const { applyBlueprint } = await import('../../advertising/ads-blueprint-apply.service.js')
+      const out = await inside(() => applyBlueprint({
+        source: { campaignIds: ['c-src'], marketplace: 'IT' }, sourceProductToken: 'TESTSRC', target: { productToken: 'TESTMID', asins: ['B0MIDASN01'] },
+        marketplace: 'IT', options: { skipSharedTargets: ['winter boots'] }, launchMode: 'floor', dryRun: false, actor: 'user:u-approver',
+        bornSafe: { by: 'user:u-asker', changeSetId: 'cs-mid' },
+      }))
+      const row = await inside(() => db().adBlueprintApplication.findUniqueOrThrow({ where: { id: out.applicationId } }))
+      expect(row.status).toBe('FAILED')
+      expect(row.createdCampaignIds).toHaveLength(1)
+      expect(row.errors).toEqual(expect.arrayContaining([expect.stringMatching(/^it finished after it was marked stopped: (applied|partial), 1 campaign\(s\) made$/)]))
+    } finally { verify.stopMidRun = null }
   })
 })
 
@@ -284,6 +408,7 @@ describe('B-1 — the screen\'s run is unchanged', () => {
     const [made] = await sql('SELECT id, "liveBidWritesEnabled" AS live, "bidsSuppressedBy" AS by, "bidsSuppressedAt" IS NOT NULL AS suppressed FROM "Campaign" WHERE name = $1', ['TESTSCR Exact IT'])
     expect(made).toMatchObject({ live: true, by: null, suppressed: true })
     expect(placements.calls).toEqual([made.id])
+    expect(placements.portfolio.at(-1)).toEqual({ ids: [made.id], opts: {} })
     const run = await inside(() => db().adBlueprintApplication.findUniqueOrThrow({ where: { id: out.applicationId } }))
     expect(run.options).toEqual({})
     expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "AdvertisingActionLog" WHERE "entityId" = $1 AND "executionId" IS NOT NULL', [made.id]))[0].n).toBe(0)
@@ -296,18 +421,27 @@ describe('B-1 — a run of Claude\'s that a deploy killed', () => {
     const ids = await inside(async () => {
       const camp = await db().campaign.create({ data: { name: 'TESTSTALE half made', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-stale', dailyBudget: '5.00', startDate: new Date() } })
       await db().advertisingActionLog.create({ data: { executionId: 'cs-stale', userId: 'user:u-approver', actionType: 'create_campaign', entityType: 'CAMPAIGN', entityId: camp.id, payloadBefore: {}, payloadAfter: {} } })
+      // A campaign Amazon never took (no Amazon id): archived in Nexus when the run is settled, so its name is free.
+      const local = await db().campaign.create({ data: { name: 'TESTSTALE never at Amazon', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', dailyBudget: '5.00', startDate: new Date() } })
+      await db().advertisingActionLog.create({ data: { executionId: 'cs-stale', userId: 'user:u-approver', actionType: 'create_campaign', entityType: 'CAMPAIGN', entityId: local.id, payloadBefore: {}, payloadAfter: {} } })
       const base = { productToken: 'TESTSTALE', marketplace: 'IT', asins: ['B0STALE001'], status: 'RUNNING', plan: {}, startedAt: old, createdAt: old }
       const claudeRun = await db().adBlueprintApplication.create({ data: { ...base, options: { source: 'claude', changeSetId: 'cs-stale', requester: 'user:u-asker' }, progress: { done: 0, total: 2, campaign: 'TESTSTALE half made', at: old.toISOString() } } })
       const screenRun = await db().adBlueprintApplication.create({ data: { ...base, progress: { done: 0, total: 2, campaign: null } } })
-      return { camp: camp.id, claudeRun: claudeRun.id, screenRun: screenRun.id }
+      return { camp: camp.id, local: local.id, claudeRun: claudeRun.id, screenRun: screenRun.id }
     })
     const svc = await import('../../advertising/ads-blueprint-apply.service.js')
+    // approval-status reads it as stopped, not as a run still going.
+    expect(await inside(() => svc.replicateRunDelivery(ids.claudeRun))).toMatchObject({ status: 'FAILED', stopped: true, total: 2 })
+    expect(await inside(() => svc.replicateRunDelivery(ids.screenRun))).toMatchObject({ status: 'RUNNING' })
+    // Only what Amazon holds is archived at Amazon: the record it never took is archived in Nexus by the settle.
     expect(await inside(() => svc.replicateRunCampaigns(ids.claudeRun))).toEqual({ campaignIds: [ids.camp], status: 'FAILED', stopped: true })
     expect(await inside(() => svc.replicateRunCampaigns(ids.screenRun))).toMatchObject({ refusal: expect.stringMatching(/still running/) })
     expect((await preview({ buildRunId: ids.claudeRun }, 'archive-ads')).ok).toBe(true)
     expect(await inside(() => svc.settleStoppedReplicates({ market: 'IT', productToken: 'TESTSTALE' }))).toBe(1)
     const rows = await inside(() => db().adBlueprintApplication.findMany({ where: { id: { in: [ids.claudeRun, ids.screenRun] } }, select: { id: true, status: true, createdCampaignIds: true, errors: true } }))
-    expect(rows.find((r) => r.id === ids.claudeRun)).toMatchObject({ status: 'FAILED', createdCampaignIds: [ids.camp], errors: [expect.stringMatching(/stopped without finishing at "TESTSTALE half made".*archive-ads buildRunId/)] })
+    expect(rows.find((r) => r.id === ids.claudeRun)).toMatchObject({ status: 'FAILED', errors: [expect.stringMatching(/stopped without finishing at "TESTSTALE half made".*archive-ads buildRunId.* 1 campaign record\(s\) Amazon never took were archived in Nexus\.$/)] })
+    expect([...rows.find((r) => r.id === ids.claudeRun)!.createdCampaignIds].sort()).toEqual([ids.camp, ids.local].sort())
+    expect((await sql('SELECT status FROM "Campaign" WHERE id = $1', [ids.local]))[0].status).toBe('ARCHIVED')
     expect(rows.find((r) => r.id === ids.screenRun)).toMatchObject({ status: 'RUNNING', createdCampaignIds: [] })
   })
 })
