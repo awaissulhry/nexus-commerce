@@ -77,7 +77,11 @@ interface ProductTool { tool: AgentTool; key: 'productId' | 'products' | 'produc
  * Tools whose productId is optional only because an EDIT names its own row instead (save-price-rule: priceRuleId).
  * Not lists: given a product they are about that product, so they are checked as if it were required.
  */
-const CREATE_OR_EDIT = new Set(['save-price-rule'])
+const CREATE_OR_EDIT = new Set([
+  'save-price-rule',
+  // Ads autonomy W1-3 — a strategy row's scope: given a product, the change is about that product's row.
+  'set-ads-strategy',
+])
 /** The tools whose input names a product, and how (`product`: one product by Nexus id or SKU). */
 function productTools(): ProductTool[] {
   return listTools().flatMap((tool): ProductTool[] => {

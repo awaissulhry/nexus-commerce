@@ -114,12 +114,13 @@ const claudeControlRoutes: FastifyPluginAsync = async (fastify) => {
     return answer(reply, await resumeAutoRuns(await actorOf(request), body(request).code))
   })
 
-  // C8 — the person's click is the approval: the inverse change, as them, parked for the same undo window.
+  // C8 — the person's click is the approval: the inverse change, as them, parked for the same undo window. W1-3 — an
+  // inverse that raises (the undo of an ads strategy lowering) takes the person's authenticator code (`code`).
   fastify.post<{ Params: { id: string } }>('/claude/changes/:id/undo', async (request, reply) => {
-    const out = await undoChangeByClick(await requestPrincipal(request), request.params.id)
+    const out = await undoChangeByClick(await requestPrincipal(request), request.params.id, body(request).code)
     if (out.ok !== false) return out
-    const { status, ...body } = out as Extract<typeof out, { ok: false }>
-    return reply.code(status).send(body)
+    const { status, ...refusal } = out as Extract<typeof out, { ok: false }>
+    return reply.code(status).send(refusal)
   })
 
   // C8 — the reader's own money filter: a preview of a tool they may not use is hidden, money they may not see stripped.

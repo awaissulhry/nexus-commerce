@@ -12,6 +12,7 @@
  * object) starts from `{}`. `columns` (ordinary Campaign columns) are written in the same transaction, with
  * `updatedAt`, as the whole-object update did.
  */
+import type { Prisma } from '@nexus/database'
 import prisma from '../../db.js'
 
 export async function patchDynamicBidding(
@@ -19,12 +20,20 @@ export async function patchDynamicBidding(
   change: { set?: Record<string, unknown>; remove?: string[] },
   columns: Record<string, unknown> = {},
 ): Promise<void> {
+  await prisma.$transaction((tx) => patchDynamicBiddingIn(tx, campaignId, change, columns))
+}
+
+/** The same write inside a transaction the caller holds (ads autonomy W1-3: the strategy clears campaign targets in its own). */
+export async function patchDynamicBiddingIn(
+  tx: Prisma.TransactionClient,
+  campaignId: string,
+  change: { set?: Record<string, unknown>; remove?: string[] },
+  columns: Record<string, unknown> = {},
+): Promise<void> {
   const set = change.set ?? {}
   const remove = change.remove ?? []
-  await prisma.$transaction(async (tx) => {
-    if (Object.keys(set).length > 0 || remove.length > 0) {
-      await tx.$executeRaw`UPDATE "Campaign" SET "dynamicBidding" = (CASE WHEN jsonb_typeof("dynamicBidding") = 'object' THEN "dynamicBidding" ELSE '{}'::jsonb END - ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(remove)}::jsonb))) || ${JSON.stringify(set)}::jsonb WHERE id = ${campaignId}`
-    }
-    await tx.campaign.update({ where: { id: campaignId }, data: { ...columns, updatedAt: new Date() } as never })
-  })
+  if (Object.keys(set).length > 0 || remove.length > 0) {
+    await tx.$executeRaw`UPDATE "Campaign" SET "dynamicBidding" = (CASE WHEN jsonb_typeof("dynamicBidding") = 'object' THEN "dynamicBidding" ELSE '{}'::jsonb END - ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(remove)}::jsonb))) || ${JSON.stringify(set)}::jsonb WHERE id = ${campaignId}`
+  }
+  await tx.campaign.update({ where: { id: campaignId }, data: { ...columns, updatedAt: new Date() } as never })
 }

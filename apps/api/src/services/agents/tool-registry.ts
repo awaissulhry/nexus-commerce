@@ -98,7 +98,7 @@ const ALL: AgentTool[] = [
   ...ADS_CHANGE_TOOLS,
   // Phase 3 T5 — campaign target ACoS (one target per market), Nexus only.
   ...ADS_TARGET_ACOS_TOOLS,
-  // Ads autonomy W1-2 — the Owner's ads strategy per market, category and product, read (set-ads-strategy comes with W1-3).
+  // Ads autonomy W1-2/W1-3 — the Owner's ads strategy per market, category and product: read, and set (raises need the code).
   ...ADS_STRATEGY_TOOLS,
   ...ADS_CREATE_TOOLS,
   ...EBAY_AD_TOOLS,
