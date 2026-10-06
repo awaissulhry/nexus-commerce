@@ -95,7 +95,11 @@ describe('T5 — set-campaign-target-acos: the preview', () => {
       // Lower than the 30 % fallback, but the campaign had no target: what it moved toward before may have been lower.
       warnings: ['1 campaign had no target ACoS: Nexus\'s bid optimiser moved its bids toward the business default or profit data (30% without either), so where that was lower, bids can still rise.'],
     })
-    expect(getTool(TOOL)).toMatchObject({ openWorld: false, reversibility: 'full', maxClaudeTrust: 'confirm', riskTier: 'high', requires: ['ads.automation.manage'] })
+    // AA-W2-8 — strategy-bound: it may run by rule, only inside its limits and the ads strategy (claude-strategy.vitest).
+    expect(getTool(TOOL)).toMatchObject({ openWorld: false, reversibility: 'full', maxClaudeTrust: 'auto', strategyBound: 'amazon-ads', riskTier: 'high', requires: ['ads.automation.manage'] })
+    expect(getTool(TOOL)!.limits!.parse({})).toEqual({ maxItems: 50, maxChangesPerEntityPerDay: 1, allowEngineOwned: false, maxRaisePoints: 0, maxCutPoints: 100 })
+    // Each campaign is one item, recorded in Nexus only (no Amazon write); no target before reads as 0, so a first one is a raise.
+    expect((r.preview as Row).limitFacts.this).toMatchObject({ items: 2, writes: 0, raises: 1, cuts: 1, largestRaisePoints: 25, largestCutPoints: 5 })
   })
 
   it('a market: every campaign of it, archived ones left out; a raise warns that spend can rise', async () => {

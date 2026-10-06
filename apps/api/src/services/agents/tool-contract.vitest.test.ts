@@ -50,10 +50,16 @@ const UNDO_PENDING: Record<string, string> = {
  * AA-W2-1 (Owner decision D-W2-1 = A, 2026-10-06) — the `alwaysAsk` tools that may be set above `ask`: strategy-bound
  * Amazon ad tools, each of which may run by rule only inside its own limits and the ads strategy (rule 7a). An exact
  * ratchet: adding a name is a reviewed change, and an entry whose tool is no longer alwaysAsk, strategy-bound and above
- * `ask` must be removed (checked below). Empty until a W2 tool PR raises one.
+ * `ask` must be removed (checked below).
  */
 const AD_STRATEGY_AUTO: readonly string[] = [
   'bulk-ad-bid-change', // AA-W2-6 — many bids, every row inside the ads strategy of its ad group
+  // AA-W2-8 — a campaign's daily budget and its placement adjustments.
+  'set-campaign-budget',
+  'set-placement-multipliers',
+  // AA-W2-9 — starting a stopped campaign again, and the live-write allowlist (on: only a campaign Claude created).
+  'restore-campaign',
+  'set-campaign-live-writes',
 ]
 
 /**
@@ -275,6 +281,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'end-listing': 'partial',
       'relist-listing': 'partial',
       'delete-listing': 'none',
+      // AA-W2-9 — its own writes are a change set: undone in turn, but retired negatives are not created again.
+      'undo-ad-change': 'partial',
     })
   })
 
@@ -335,6 +343,7 @@ describe('C1 — every registered tool keeps the contract', () => {
       'restore-campaign': { before: { campaignId: 'c1', suppressed: true, by: 'user:u1', changeSetId: 'ap1' }, after: { campaignId: 'c1', suppressed: false, by: null } },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
+      'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },
       // A6 — a budget or the placement adjustments are set back through the same tool.
       'set-campaign-budget': { before: { campaignId: 'c1', dailyBudgetCents: 2000, changeSetId: 'ap1' }, after: { campaignId: 'c1', dailyBudgetCents: 2500 } },
       'set-placement-multipliers': {
@@ -521,8 +530,7 @@ describe('C1 — every registered tool keeps the contract', () => {
     // Refunds, fiscal numbers, messages, publishing, eBay ads and Amazon spend: a person approves each in Nexus.
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
-      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-campaign-budget', 'set-placement-multipliers',
-      'restore-campaign', 'set-campaign-live-writes', 'create-ad-campaign']) {
+      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'create-ad-campaign']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
   })

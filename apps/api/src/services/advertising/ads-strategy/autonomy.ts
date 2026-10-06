@@ -8,8 +8,8 @@
  *              resolver); an ad group → itself; a campaign → every product of every ad group of it; a product ad → its
  *              own product; a new campaign → its products in its market. Each market is opened ONCE (openStrategy).
  *   limits     per subject, the strategy numbers a W2 tool is held to — the bid band and the largest change (W1-5's
- *              limitsOf), protection, the stop bid, the negate and harvest groups, and what Claude may do alone for the
- *              change's kind — each with the strategy row that gave it.
+ *              limitsOf), protection, the stop bid, the negate and harvest groups, the ACoS target the engines steer by
+ *              (AA-W2-8), and what Claude may do alone for the change's kind — each with the strategy row that gave it.
  *   engines    the enabled rules and schedules (hourly bid plans) bound to a campaign: they move it on their own.
  *   protected  a negative that meets a protected term or a protected product's ASIN (the one negation policy).
  *   month      where a cap is in force (the lower of the strategy's market cap and this month's budget plan), a forecast
@@ -184,12 +184,24 @@ export interface ScopeLimits {
   harvestMinClicks?: number
   harvestMaxAcosPct?: number | null
   harvestWindowDays?: number
+  /**
+   * AA-W2-8 — the ACoS target the engines steer by here (W1's `targetAcosPct`, an integer percent): a campaign's own
+   * target raised by rule stays at or below it. Named apart from a tool's own `targetAcosPct` (money: STRATEGY_MONEY).
+   */
+  strategyTargetAcosPct?: number
   /** What Claude may do alone for the change's kind of action here (W1-8): the strategy narrows, never widens. */
   claudeLevel?: ClaudeTrust
 }
 
 /** Which row gave a limit: per single limit, and per group (a stop, a negate and a harvest group come whole from one row). */
-export type ScopeLimitSource = 'minBidCents' | 'maxBidCents' | 'maxChangePct' | 'protect' | 'stop' | 'negate' | 'harvest' | 'claudeLevel'
+export type ScopeLimitSource = 'minBid' | 'maxBid' | 'maxChangePct' | 'protect' | 'stop' | 'negate' | 'harvest' | 'target' | 'claudeLevel'
+
+/**
+ * AA-W2-8 — the source of a money limit is kept under a name that is not money (the row it came from is not): the money
+ * filter strips a money key's whole value by name, and a source under it would hide the row's name, level and version
+ * with it. The read tool keeps them apart the same way ({ value, source }).
+ */
+export const BID_SOURCE = { minBidCents: 'minBid', maxBidCents: 'maxBid', maxChangePct: 'maxChangePct' } as const satisfies Record<'minBidCents' | 'maxBidCents' | 'maxChangePct', ScopeLimitSource>
 
 export interface ScopeStrategy {
   limits: ScopeLimits
@@ -206,7 +218,7 @@ export function scopeLimitsOf(e: EffectiveStrategy, action: ClaudeActionType | n
   const bids = limitsOf(e)
   for (const key of ['minBidCents', 'maxBidCents', 'maxChangePct'] as const) {
     const limit = bids[key]
-    if (limit) { limits[key] = limit.value; sources[key] = limit.source }
+    if (limit) { limits[key] = limit.value; sources[BID_SOURCE[key]] = limit.source }
   }
   const sourceOf = (key: 'protect' | 'stop' | 'negate' | 'harvest') => e.resolved.fields.get(key)?.source ?? null
   const protect = sourceOf('protect')
@@ -223,6 +235,8 @@ export function scopeLimitsOf(e: EffectiveStrategy, action: ClaudeActionType | n
     Object.assign(limits, { harvestMinOrders: e.values.harvest.minOrders, harvestMinClicks: e.values.harvest.minClicks, harvestMaxAcosPct: e.values.harvest.maxAcosPct, harvestWindowDays: e.values.harvest.windowDays })
     sources.harvest = harvest
   }
+  const target = e.resolved.fields.get('targetAcosPct')?.source
+  if (e.values.targetAcosPct != null && target) { limits.strategyTargetAcosPct = e.values.targetAcosPct; sources.target = target }
   const level = action ? e.resolved.autonomy.get(action) : undefined
   if (typeof level?.value === 'string' && level.source) { limits.claudeLevel = level.value as ClaudeTrust; sources.claudeLevel = level.source }
   return { limits, sources }
@@ -232,7 +246,7 @@ export function scopeLimitsOf(e: EffectiveStrategy, action: ClaudeActionType | n
 export function bidLimitsOfScope(s: Pick<ScopeStrategy, 'limits' | 'sources'>): StrategyBidLimits {
   const limit = (key: 'minBidCents' | 'maxBidCents' | 'maxChangePct') => {
     const value = s.limits[key]
-    const source = s.sources[key]
+    const source = s.sources[BID_SOURCE[key]]
     return value != null && source ? { value, source } : null
   }
   return { minBidCents: limit('minBidCents'), maxBidCents: limit('maxBidCents'), maxChangePct: limit('maxChangePct') }
@@ -248,8 +262,17 @@ export interface DailyLimits {
   maxChangesPerDay: number | null
   maxRaisesPerDay: number | null
   maxBudgetIncreasePerDayCents: number | null
-  sources: Partial<Record<'maxChangesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', StrategySource>>
+  /** AA-W2-8 — keyed by DAILY_SOURCE: the budget's row is not money (see BID_SOURCE). */
+  sources: Partial<Record<DailySource, StrategySource>>
 }
+
+/** The source key of each daily limit (a money limit's source under a name that is not money, as BID_SOURCE). */
+export const DAILY_SOURCE = {
+  maxChangesPerDay: 'maxChangesPerDay',
+  maxRaisesPerDay: 'maxRaisesPerDay',
+  maxBudgetIncreasePerDayCents: 'maxBudgetIncreasePerDay',
+} as const
+export type DailySource = (typeof DAILY_SOURCE)[keyof typeof DAILY_SOURCE]
 
 const DAILY_FROM = {
   maxChangesPerDay: 'claudeMaxChangesPerDay',
@@ -262,7 +285,7 @@ export function dailyLimitsOf(market: EffectiveStrategy): DailyLimits {
   const out: DailyLimits = { maxChangesPerDay: null, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} }
   for (const [key, field] of Object.entries(DAILY_FROM) as Array<[keyof typeof DAILY_FROM, ClaudeDailyField]>) {
     const f = market.resolved.fields.get(field)
-    if (typeof f?.value === 'number' && f.source) { out[key] = f.value; out.sources[key] = f.source }
+    if (typeof f?.value === 'number' && f.source) { out[key] = f.value; out.sources[DAILY_SOURCE[key]] = f.source }
   }
   return out
 }

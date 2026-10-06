@@ -32,6 +32,8 @@ import { z } from 'zod'
 import { FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import {
+  BID_SOURCE,
+  DAILY_SOURCE,
   RATE_DAYS,
   bidLimitsOfScope,
   enginesOnCampaigns,
@@ -41,6 +43,7 @@ import {
   resolveEntityScopes,
   strategyForScopes,
   type AdEntityRef,
+  type DailySource,
   type EntityScope,
   type MonthProjection,
   type ScopeLimits,
@@ -72,7 +75,10 @@ export const MAX_KIT_ITEMS = 250
  *                `forced`: a stop's low bid (no lowest bid and no step binds it, as at the write gate).
  *   dailyBudget  a campaign's daily budget.
  *   status       ENABLED / PAUSED / ARCHIVED; `dailyBudgetCents`: the campaign budget that starts (or stops) spending.
+ *                AA-W2-9 — `from` LOW_BIDS: a campaign stopped with low bids (a restore restarts it, its budget in full).
  *   negative     a new negative keyword or target (it only lowers spend).
+ *   liveWrites   AA-W2-9 — a campaign on or off the live-write allowlist (a Nexus switch: it moves no bid or budget
+ *                itself; every write it lets through is judged on its own).
  *   automation   AA-W2-11 — an ads rule saved, or an automation turned up or tuned, for this scope: Nexus only, it moves
  *                no value itself (the automation acts as itself, inside its own caps).
  */
@@ -82,6 +88,7 @@ export type KitChange =
   | { field: 'placementPct' | 'targetAcosPct'; fromPct: number | null; toPct: number }
   | { field: 'status'; from: string | null; to: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudgetCents?: number }
   | { field: 'negative'; term: string; matchType?: string | null }
+  | { field: 'liveWrites'; from: boolean; to: boolean }
   | { field: 'automation' }
 
 export interface KitItem {
@@ -136,6 +143,7 @@ export function measure(change: KitChange): Measured {
     }
     case 'negative':
       return { ...none, direction: 'cut' }
+    case 'liveWrites':
     case 'automation':
       return { ...none, direction: 'same' }
   }
@@ -167,6 +175,12 @@ export interface ThisChange {
   largestCutPoints: number
   highestNewBidCents: number | null
   budgetIncreaseCents: number
+  /**
+   * AA-W2-7 — raises of a bid or a budget from 0 (or from none): no percent measures them. `unboundedRaises`: those
+   * where the ads strategy sets no highest bid either (a budget has none), so nothing bounds them. Absent: none.
+   */
+  raisesFromZero?: number
+  unboundedRaises?: number
   byMarket: Record<string, DayCounts & { addedDailyCents: number }>
   /** Every entity it touches, once: the per-entity ledger counts runs by these keys. */
   entities: string[]
@@ -190,7 +204,8 @@ export interface MarketFacts {
   maxChangesPerDay: number | null
   maxRaisesPerDay: number | null
   maxBudgetIncreasePerDayCents: number | null
-  sources: Partial<Record<'maxActionsPerRun' | 'maxChangesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', StrategySource>>
+  /** Keyed by DAILY_SOURCE (a money limit's row under a name that is not money). */
+  sources: Partial<Record<'maxActionsPerRun' | DailySource, StrategySource>>
 }
 
 export interface LimitFacts {
@@ -228,7 +243,9 @@ export interface LimitFacts {
 export const LIMIT_FACTS_MONEY: Readonly<Record<string, string>> = {
   ...STRATEGY_MONEY,
   ...Object.fromEntries(
-    ['highestNewBidCents', 'budgetIncreaseCents', 'addedDailyCents', 'maxBudgetIncreasePerDayCents', 'spentCents', 'ratePerDayCents', 'projectedCents', 'afterCents', 'capCents']
+    ['highestNewBidCents', 'budgetIncreaseCents', 'addedDailyCents', 'maxBudgetIncreasePerDayCents', 'spentCents', 'ratePerDayCents', 'projectedCents', 'afterCents', 'capCents',
+      // AA-W2-8 — the strategy's ACoS target where a change lands.
+      'strategyTargetAcosPct']
       .map((key) => [key, FIELDS.financialsAdspendView]),
   ),
 }
@@ -335,6 +352,7 @@ const CUT_WORDS: Record<KitChange['field'], string> = {
   targetAcosPct: 'lowering its target ACoS',
   status: 'stopping it',
   negative: 'negating',
+  liveWrites: 'taking it off the live-write allowlist',
   automation: 'changing what acts on it',
 }
 
@@ -416,6 +434,12 @@ export async function buildLimitFacts(input: {
 
     const scopeFacts = facts.scopes[facts.entityScopes[key] ?? '']
     if (!scopeFacts) continue
+    // AA-W2-7 — a raise from 0 has no percent: held by the strategy's highest bid where it lands, else unbounded.
+    if (m.direction === 'raise' && m.pct == null && (item.change.field === 'bid' || item.change.field === 'dailyBudget')) {
+      t.raisesFromZero = (t.raisesFromZero ?? 0) + 1
+      const capped = item.change.field === 'bid' && scopeFacts.limits.maxBidCents != null && !!scopeFacts.sources.maxBid
+      if (!capped) t.unboundedRaises = (t.unboundedRaises ?? 0) + 1
+    }
     // Every row against its own scope's strategy (a bulk change too: not only the lines its preview shows).
     if (item.change.field === 'bid') {
       const why = bidOutsideWhy(item.change, scopeFacts, scope.currency ?? facts.markets[scopeFacts.market]?.currency ?? 'EUR')
@@ -499,7 +523,7 @@ export const STEP_POINT_LIMITS = {
 
 type Limits = Record<string, unknown>
 const numberIn = (limits: Limits, key: string, fallback: number) => (typeof limits[key] === 'number' ? (limits[key] as number) : fallback)
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`
 const A_PERSON = 'a person decides'
 /** The strategy's names of Claude's daily limits (fields.ts labels, lower-cased). */
 const DAILY_WORDS: Record<'maxChangesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', string> = {
@@ -521,6 +545,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   create: 'new campaigns',
   rule: 'ads rules',
   undo: 'undoing ad changes',
+  allowlist: 'putting a campaign on the live-write allowlist',
   automation: 'turning ads automations up and tuning their settings',
 }
 /** What a strategy level below auto allows, in W1-8's words (claude-trust.service.ts narrowedWhy). */
@@ -597,7 +622,8 @@ export function dailyRefusal(facts: LimitFacts): string | null {
       if (l.adds <= 0 || l.ran + l.adds <= (max ?? 0)) continue
       if (max == null) return `${market}: the ads strategy sets no daily limit for this (${DAILY_WORDS[l.key]}) — empty is 0, so ${l.none} runs by rule here; ${A_PERSON}`
       const allowed = l.key === 'maxBudgetIncreasePerDayCents' ? money(max) : String(max)
-      return `${market}: ${l.words(l.ran)} ${ran} in the last 24 hours and this adds ${l.words(l.adds)}, more than the ${allowed} a day the ads strategy allows (${DAILY_WORDS[l.key]}${m.sources[l.key] ? `, ${strategyWords(m.sources[l.key]!)}` : ''}); ${A_PERSON}`
+      const source = m.sources[DAILY_SOURCE[l.key]]
+      return `${market}: ${l.words(l.ran)} ${ran} in the last 24 hours and this adds ${l.words(l.adds)}, more than the ${allowed} a day the ads strategy allows (${DAILY_WORDS[l.key]}${source ? `, ${strategyWords(source)}` : ''}); ${A_PERSON}`
     }
   }
   return null
@@ -657,9 +683,20 @@ export function itemsRefusal(facts: LimitFacts, limits: Limits): string | null {
   return null
 }
 
-/** The tool's own raise and cut steps (STEP_PCT_LIMITS, STEP_POINT_LIMITS), when its limits hold them. */
+/**
+ * The tool's own raise and cut steps (STEP_PCT_LIMITS, STEP_POINT_LIMITS), when its limits hold them. AA-W2-7 — a raise
+ * from 0 (no percent measures it) is outside any raise step unless the ads strategy's highest bid bounds it where it
+ * lands, and outside a raise step of 0 either way.
+ */
 export function stepRefusal(facts: LimitFacts, limits: Limits): string | null {
   const t = facts.this
+  if (typeof limits.maxRaisePct === 'number') {
+    const max = limits.maxRaisePct
+    const unbounded = t.unboundedRaises ?? 0
+    const fromZero = t.raisesFromZero ?? 0
+    if (unbounded) return `it raises ${plural(unbounded, 'bid or budget', 'bids or budgets')} from 0, which no percent measures, and the ads strategy sets no highest bid that bounds it: an unbounded raise, more than the ${max} % this tool's limits let run without a person`
+    if (fromZero && max === 0) return `it raises ${plural(fromZero, 'bid', 'bids')} from 0, and this tool's limits let no raise run without a person (0: every raise waits for a person)`
+  }
   const over = (moved: number, key: string, unit: string, what: string) =>
     typeof limits[key] === 'number' && moved > (limits[key] as number)
       ? `its largest ${what} is ${moved}${unit}, more than the ${limits[key]}${unit} this tool's limits let run without a person${limits[key] === 0 ? ` (0: every ${what} waits for a person)` : ''}`
@@ -719,7 +756,7 @@ const LIMIT_WORDS: Array<[keyof ScopeLimits, string, 'cents' | 'pct']> = [
   ['maxChangePct', 'largest bid change', 'pct'],
   ['stopBidCents', 'stop bid', 'cents'],
 ]
-const SOURCE_OF: Partial<Record<keyof ScopeLimits, keyof ScopeStrategy['sources']>> = { stopBidCents: 'stop' }
+const SOURCE_OF: Partial<Record<keyof ScopeLimits, keyof ScopeStrategy['sources']>> = { ...BID_SOURCE, stopBidCents: 'stop' }
 
 /**
  * Each limit, its value, this change's value, and where the limit comes from (a strategy row, or "Claude's limits for
@@ -736,8 +773,8 @@ export function limitsNote(facts: LimitFacts, limits?: Limits): string[] {
     lines.push(m.strategy ? `${market}: ads strategy version ${m.strategy.version}.` : `${market}: no ads strategy — nothing runs alone there.`)
     const today = facts.today[market] ?? NO_RUNS
     const mine = t.byMarket[market]
-    const limit = (value: number | null, key: keyof MarketFacts['sources'], unset: string, money = false) =>
-      value == null ? unset : `${money ? amountLabel(value, m.currency) : value} a day (${m.sources[key] ? strategyWords(m.sources[key]!) : 'ads strategy'})`
+    const limit = (value: number | null, key: keyof typeof DAILY_SOURCE, unset: string, money = false) =>
+      value == null ? unset : `${money ? amountLabel(value, m.currency) : value} a day (${m.sources[DAILY_SOURCE[key]] ? strategyWords(m.sources[DAILY_SOURCE[key]]!) : 'ads strategy'})`
     lines.push(
       `${market}, run by rule in the last 24 hours: ${plural(today.changes, 'change')}, ${plural(today.raises, 'raise')}, budgets +${amountLabel(today.budgetIncreaseCents, m.currency)}; `
       + `this change: ${plural(mine?.changes ?? 0, 'change')}, ${plural(mine?.raises ?? 0, 'raise')}, budgets +${amountLabel(mine?.budgetIncreaseCents ?? 0, m.currency)}. `
@@ -759,6 +796,11 @@ export function limitsNote(facts: LimitFacts, limits?: Limits): string[] {
     }
     if (scope.limits.protect === true && scope.sources.protect) {
       const line = `protected (${strategyWords(scope.sources.protect)})`
+      said.set(line, [...(said.get(line) ?? []), scope.label])
+    }
+    // AA-W2-8 — a target ACoS change: the ACoS target the engines use there (a raise by rule stays at or below it).
+    if (facts.action === 'target' && scope.limits.strategyTargetAcosPct != null && scope.sources.target) {
+      const line = `target ACoS the engines use ${scope.limits.strategyTargetAcosPct} % (${strategyWords(scope.sources.target)})`
       said.set(line, [...(said.get(line) ?? []), scope.label])
     }
     if (facts.action && scope.limits.claudeLevel && scope.sources.claudeLevel) {
