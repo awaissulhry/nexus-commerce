@@ -7,7 +7,8 @@ import { ChannelCategoryEditor } from '../ChannelCategoryEditor'
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
 import { CascadeCell } from '../channel/CascadeCell'
 import { isListingIdKey, listingIdColumnDef } from '../channel/ListingIdCell'
-import { stockColumnDef } from '../channel/stockColumns'
+import { fbaColumnDef, stockColumnDef } from '../channel/stockColumns'
+import { STOCK_FBA_KEY } from '../channel/stockCells'
 import { isCellEditable } from '../channel/rows'
 import { channelCellDrawsRequired, channelCellMark, channelCellProvenance } from '../channel/channelCellProvenance'
 import { optimisticCell } from '../channel/savedCellPatch'
@@ -222,6 +223,8 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
      */
     ...(col.kind === 'stockControl' ? stockColumnDef(col, { tracker, scope: data.scope }) : {}),
     ...(isListingIdKey(col.key) ? listingIdColumnDef(col, data.scope) : {}),
+    /* The Amazon sheet's FBA qty (Owner 2026-10-07): the Matrix's locked column. LAST, for the same reason as the stock columns. */
+    ...(col.key === STOCK_FBA_KEY ? fbaColumnDef(col) : {}),
   }))
   const rank = new Map(orderColumnKeys(gridColumns as never, viewCtx).map((k, i) => [k, i]))
   const ordered = fields

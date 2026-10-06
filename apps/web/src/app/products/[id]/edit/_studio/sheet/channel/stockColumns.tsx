@@ -11,6 +11,7 @@
  * target. The write leaves through the Matrix door (`stockCells.ts`).
  */
 import {
+  lockedColumn,
   matrixColumnDef,
   SELECT_CELL_CLASS,
   type CellClassParams,
@@ -19,6 +20,7 @@ import {
   type MatrixCoordinate,
 } from '@/design-system/grid'
 
+import { fbaTooltip, FBA_COL_W } from '../../matrix/columns'
 import { MATRIX_COPY } from '../../matrix/contract'
 import { refusedTooltip } from '../../matrix/refusals'
 import { isCellEditable } from './rows'
@@ -91,5 +93,36 @@ export function stockColumnDef(col: SheetColumn, deps: StockColumnDeps): ColDef<
     cellEditorSelector: undefined,
     valueParser: undefined,
     suppressKeyboardEvent: undefined,
+  }
+}
+
+/** The FBA number a sheet row shows: Amazon's units, or null (no FBA row, or not read — the tooltip tells them apart). */
+export const sheetFbaUnits = (row: ChannelSheetRow | undefined): number | null => row?.stock?.fba?.units ?? null
+
+/**
+ * The FBA qty column (Owner 2026-10-07; the Amazon sheet only) — the Matrix page's locked column: the DS `lockedColumn`
+ * (GRID.md rule 10, the lock is in the DEFINITION: not editable, not movable, no fill handle, no paste), the Matrix's
+ * tooltip, and the row's `stock.fba` read. Spread LAST over the sheet's own column: it clears the editor selector, the
+ * setter, the parser and the formula keys. Nothing writes it; an open gesture says the server's reason (Amazon-managed).
+ */
+export function fbaColumnDef(col: SheetColumn): ColDef<ChannelSheetRow> {
+  return {
+    ...lockedColumn<ChannelSheetRow>(col.key, { kind: 'integer', reason: MATRIX_COPY.fbaLocked }),
+    field: undefined,
+    colId: col.key,
+    headerName: col.label || 'FBA qty',
+    headerTooltip: `Units Amazon holds at its FBA warehouses for this SKU. ${MATRIX_COPY.fbaLocked}. Parent = the family total.`,
+    width: FBA_COL_W, minWidth: FBA_COL_W,
+    editable: false,
+    suppressFillHandle: true, suppressPaste: true, sortable: true,
+    cellClassRules: { 'nds-cell-is-locked': () => true },
+    cellEditorSelector: undefined,
+    valueParser: undefined,
+    suppressKeyboardEvent: undefined,
+    valueGetter: (p) => sheetFbaUnits(p.data),
+    valueSetter: () => false,
+    valueFormatter: (p) => (p.value == null ? '' : String(p.value)),
+    tooltipValueGetter: (p) => (p.data ? fbaTooltip({ role: p.data.isParent ? 'parent' : 'variant', fba: p.data.stock?.fba }) : undefined),
+    getQuickFilterText: (p) => { const n = sheetFbaUnits(p.data); return n == null ? '' : `${n} fba` },
   }
 }

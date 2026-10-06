@@ -51,7 +51,8 @@ import { AMAZON_FULFILMENT_KEY } from './channel-specs/amazon.js'
 import { PARENT_REASON } from './matrix-cells.js'
 import { getSheetColumns } from './sheet-columns.service.js'
 import { getStudioSheet, resolveWriteRouting, type StudioSheet } from './studio-sheet.service.js'
-import { AMAZON_QUANTITY_KEY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, STUDIO_STOCK_KEYS, isRawQuantityColumn, isShopifyInventoryColumn, stockControlRouting } from './studio-stock.js'
+import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
+import { AMAZON_QUANTITY_KEY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, STOCK_FBA_KEY, STUDIO_STOCK_KEYS, isRawQuantityColumn, isShopifyInventoryColumn, stockControlRouting } from './studio-stock.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const acc: Record<string, string> = {}
@@ -167,9 +168,39 @@ describe('the channel sheet READ — the stock columns are the Matrix\'s cells',
     expect(row(sheet, ids.child).listing).toHaveProperty('contentDrift', null)
   })
 
+  // The FBA qty column (Owner 2026-10-07): the Matrix's locked column on the Amazon sheet, right after Buffer. Shown, never written.
+  it('Amazon: the locked FBA qty column after Buffer — Amazon\'s units (null without an FBA row, the parent the family total), never writable', () => scoped(async () => {
+    const before = await read('AMAZON', 'IT')
+    const col = before.columns.find((c) => c.key === STOCK_FBA_KEY)!
+    expect(col).toMatchObject({ label: 'FBA qty', kind: 'number', editable: false, writable: false, formulaWritable: false, writeBlockedReason: MATRIX_COPY.fbaLocked })
+    expect(col.groupKey).toBe(before.columns.find((c) => c.key === 'stock_buffer')!.groupKey)
+    expect(keys(before).indexOf(STOCK_FBA_KEY)).toBe(keys(before).indexOf('stock_buffer') + 1)
+    // 🔴 no FBA stock row: empty (null), never 0 — the 12 warehouse units are Stock, not FBA.
+    expect(row(before, ids.child).values[STOCK_FBA_KEY]).toMatchObject({ value: null, writable: false, editable: false, writeBlockedReason: MATRIX_COPY.fbaLocked })
+    expect(row(before, ids.child).stock!.fba).toBeNull()
+
+    const fba = await prisma.stockLocation.create({ data: { code: 'TEST-STOCK-SHEET-FBA', name: 'Amazon FBA', type: 'AMAZON_FBA' } })
+    await prisma.stockLevel.create({ data: { productId: ids.child, locationId: fba.id, quantity: 14, available: 14 } })
+    try {
+      const after = await read('AMAZON', 'IT')
+      expect(row(after, ids.child).values[STOCK_FBA_KEY]).toMatchObject({ value: 14, writable: false, editable: false, writeBlockedReason: MATRIX_COPY.fbaLocked })
+      expect(row(after, ids.child).stock!.fba).toMatchObject({ units: 14, locations: [{ code: fba.code, units: 14 }] })
+      expect(row(after, ids.parent).values[STOCK_FBA_KEY]).toMatchObject({ value: 14, writable: false })
+      // The pool channels never sell FBA stock: no FBA qty column, cell or number there, even with FBA units on hand.
+      for (const [channel, market] of [['EBAY', 'IT'], ['SHOPIFY', 'GLOBAL']] as const) {
+        const pool = await read(channel, market)
+        expect(keys(pool), channel).not.toContain(STOCK_FBA_KEY)
+        expect(pool.rows.every((r) => r.values[STOCK_FBA_KEY] === undefined && r.stock?.fba === undefined), channel).toBe(true)
+      }
+    } finally {
+      await prisma.stockLevel.deleteMany({ where: { locationId: fba.id } })
+      await prisma.stockLocation.delete({ where: { id: fba.id } })
+    }
+  }))
+
   it('the Shared sheet is unchanged: no stock or ASIN columns, no `stock` on the rows', async () => {
     const sheet = await read(null, 'IT')
-    expect(keys(sheet).filter((k) => (STUDIO_STOCK_KEYS as readonly string[]).includes(k) || k === LISTING_ASIN_KEY)).toEqual([])
+    expect(keys(sheet).filter((k) => (STUDIO_STOCK_KEYS as readonly string[]).includes(k) || k === LISTING_ASIN_KEY || k === STOCK_FBA_KEY)).toEqual([])
     expect(sheet.rows.every((r) => r.stock === undefined)).toBe(true)
     expect(sheet.meta.phases?.stock).toBeUndefined()
   })
@@ -225,6 +256,18 @@ describe('the bulk SAVE — a listing quantity goes through the Matrix door', ()
     expect(out.errors).toEqual([
       { id: ids.child, field: 'stock_qty', error: expect.stringContaining('Mode, Qty and Buffer save through the Matrix') },
       { id: ids.child, field: 'attr_stock_mode', error: expect.stringContaining('Mode, Qty and Buffer save through the Matrix') },
+    ])
+    expect(await raw(id)).toEqual(before)
+  })
+
+  it('🔴 the FBA qty column (`stock_fba`) is refused with the Amazon-managed sentence and never written', async () => {
+    const id = listing[`EBAY:${ids.child}`].id
+    const before = await raw(id)
+    const out = await save([{ id: ids.child, field: STOCK_FBA_KEY, value: 9, target: 'channel' }, { id: ids.child, field: `attr_${STOCK_FBA_KEY}`, value: 3, target: 'channel' }])
+    expect(out.status).toBe(400)
+    expect(out.errors).toEqual([
+      { id: ids.child, field: STOCK_FBA_KEY, error: MATRIX_COPY.fbaLocked },
+      { id: ids.child, field: `attr_${STOCK_FBA_KEY}`, error: MATRIX_COPY.fbaLocked },
     ])
     expect(await raw(id)).toEqual(before)
   })

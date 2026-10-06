@@ -199,8 +199,9 @@ export function fbaUnitsOf(row: MatrixRowRead | null | undefined): number | null
 /**
  * The FBA qty cell's tooltip: how many units and where, when Nexus last updated them, and — on every row, whatever the
  * number — why the cell is locked. `null` (no FBA row) and `undefined` (not read) say different things: neither is `0`.
+ * The product sheet's Amazon FBA qty column reads it too (`sheet/channel/stockColumns.tsx`).
  */
-export function fbaTooltip(row: MatrixRowRead | null | undefined): string {
+export function fbaTooltip(row: Pick<MatrixRowRead, 'role' | 'fba'> | null | undefined): string {
   const f = row?.fba
   const lines: string[] = []
   if (f === undefined) lines.push(MATRIX_COPY.fbaNotRead)

@@ -2,7 +2,7 @@ import type { ListingPresenceFields } from '../../presence/fields'
 import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
 import type { SheetTone } from '@nexus/shared/sheet-groups'
 import type { ContentWriteFacts as importContentWriteFacts } from '@nexus/shared/content-language'
-import type { CoordinateKey, MatrixCells, MatrixCoordinate, PriceCell } from '../../matrix/contract'
+import type { CoordinateKey, MatrixCells, MatrixCoordinate, MatrixFbaStock, PriceCell } from '../../matrix/contract'
 /**
  * PES.3 — the wire contract of a CHANNEL SCOPE of the Product Edit Studio sheet.
  *
@@ -481,6 +481,8 @@ export interface StudioRowStock {
   /** The Matrix's cells for `key`, unchanged; null when the row is held (no listing there, or another account's). */
   cells: MatrixCells | null
   coordinate: MatrixCoordinate | null
+  /** Amazon only: the units Amazon holds for this SKU (the Matrix's `row.fba`). null = no FBA stock row; absent = not read. */
+  fba?: MatrixFbaStock | null
 }
 
 /** PES.5's `SheetListing` — the row's own listing state on this coordinate. */
