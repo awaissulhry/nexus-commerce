@@ -76,10 +76,12 @@ CREATE TABLE "AdsPlaybookVersion" (
     "op" TEXT NOT NULL,
     "values" JSONB,
     "changes" JSONB NOT NULL,
+    "direction" TEXT NOT NULL,
     "via" TEXT NOT NULL,
     "approvalId" TEXT,
     "actor" TEXT NOT NULL,
     "actorUserId" TEXT,
+    "stepUpAt" TIMESTAMP(3),
     "reason" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 

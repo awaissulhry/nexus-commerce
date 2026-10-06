@@ -19498,8 +19498,10 @@ model AdsPlaybookVersion {
   op          String
   /// The row's own values after the change; null after a remove.
   values      Json?
-  /// [{ field | section, from, to }]
+  /// [{ field | section, label, from, to, direction }]
   changes     Json
+  /// raise | lower | same — raise when ANY change could add spend once the playbook is applied.
+  direction   String
   /// screen | claude
   via         String
   /// The AgentApproval when the change came through Claude (or a change-plan step's approval).
@@ -19507,7 +19509,9 @@ model AdsPlaybookVersion {
   /// The name shown.
   actor       String
   actorUserId String?
-  reason      String? @db.Text
+  /// When a raise was confirmed with a fresh authenticator code; null for a change that does not raise.
+  stepUpAt    DateTime?
+  reason      String?   @db.Text
 
   createdAt DateTime @default(now())
 

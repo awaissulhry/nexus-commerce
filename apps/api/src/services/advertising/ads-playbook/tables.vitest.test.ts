@@ -124,14 +124,15 @@ describe('PB-1 — the ads playbook tables', () => {
     }))
     const version = {
       kind: 'playbook', refId: playbook.id, version: 1, market: 'IT', level: 'PRODUCT', scopeId: 'prod_test_1',
-      op: 'enroll', values: { enrolled: true }, changes: [{ field: 'enrolled', from: null, to: true }], via: 'screen', actor: 'Test person',
+      op: 'enroll', values: { enrolled: true }, changes: [{ field: 'enrolled', from: null, to: true, direction: 'raise' }], direction: 'raise',
+      via: 'screen', actor: 'Test person', stepUpAt: new Date('2026-10-01T10:00:00Z'),
     }
     const written = await inA(() => db().adsPlaybookVersion.create({ data: version }))
-    expect(written).toMatchObject({ workspaceId: A, approvalId: null, actorUserId: null, reason: null })
+    expect(written).toMatchObject({ workspaceId: A, approvalId: null, actorUserId: null, reason: null, direction: 'raise', stepUpAt: new Date('2026-10-01T10:00:00Z') })
     await expect(inA(() => db().adsPlaybookVersion.create({ data: version }))).rejects.toMatchObject({ code: 'P2002' })
     // The same ref and version of the OTHER kind is its own row; a template's history has no scope.
     const template = await inA(() => db().adsPlaybookVersion.create({
-      data: { kind: 'template', refId: playbook.id, version: 1, op: 'set', changes: [], via: 'claude', actor: 'Claude', approvalId: 'appr_test_1' },
+      data: { kind: 'template', refId: playbook.id, version: 1, op: 'set', changes: [], direction: 'same', via: 'claude', actor: 'Claude', approvalId: 'appr_test_1' },
     }))
     expect(template).toMatchObject({ market: null, level: null, scopeId: null })
     expect(await inA(() => db().adsPlaybookVersion.findUnique({ where: { kind_refId_version: { kind: 'playbook', refId: playbook.id, version: 1 } } })))
