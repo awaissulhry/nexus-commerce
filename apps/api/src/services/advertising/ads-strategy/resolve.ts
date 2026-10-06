@@ -210,7 +210,7 @@ function readRow(row: StrategyRow, warnings: string[]): RowSettings {
   const map = clean.get('claudeAutonomy') as Record<string, unknown> | undefined
   for (const [action, level] of Object.entries(map ?? {})) {
     if (!(CLAUDE_ACTION_TYPES as string[]).includes(action)) warnings.push(`${rowName(row)}: claudeAutonomy has an unknown action type ${shown(action)}; ignored`)
-    else if (!(CLAUDE_LEVELS as readonly unknown[]).includes(level)) warnings.push(`${rowName(row)}: claudeAutonomy.${action} ${shown(level)} is not off, ask, confirm or auto; ignored`)
+    else if (!(CLAUDE_LEVELS as readonly unknown[]).includes(level)) warnings.push(`${rowName(row)}: claudeAutonomy.${action} ${shown(level)} is not off, ask, confirm, watch or auto; ignored`)
     else autonomy.set(action as ClaudeActionType, level as ClaudeTrust)
   }
   return { fields, autonomy }

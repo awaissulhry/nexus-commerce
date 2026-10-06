@@ -6,18 +6,20 @@
  * 2FA code before it is sent), the limits as a person reads them, and each activity outcome in words.
  */
 
-export type ClaudeTrust = 'off' | 'ask' | 'confirm' | 'auto'
-export const TRUST_ORDER: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'auto']
+/** Lowest first. `watch` (ADS AUTONOMY AA-W2-4): checked as Auto would and recorded, but a person still decides. */
+export type ClaudeTrust = 'off' | 'ask' | 'confirm' | 'watch' | 'auto'
+export const TRUST_ORDER: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'watch', 'auto']
 
 export const LEVEL_LABEL: Record<ClaudeTrust, string> = {
   off: 'Off — not offered to Claude',
   ask: 'Ask — a person approves each change in Nexus',
   confirm: 'Confirm — the person who asked types their authenticator code in Claude',
+  watch: 'Watch — checked as Auto would and recorded; a person still decides',
   auto: 'Auto — runs by your rule, inside its limits',
 }
 
 /** The short form, for a grid cell or a sentence. */
-export const LEVEL_SHORT: Record<ClaudeTrust, string> = { off: 'Off', ask: 'Ask', confirm: 'Confirm', auto: 'Auto' }
+export const LEVEL_SHORT: Record<ClaudeTrust, string> = { off: 'Off', ask: 'Ask', confirm: 'Confirm', watch: 'Watch', auto: 'Auto' }
 
 /** A read (or a control tool) is offered or not; "ask" reads as "On" for it. */
 export function levelLabel(level: ClaudeTrust, readOnly: boolean): string {

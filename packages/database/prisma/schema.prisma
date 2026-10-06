@@ -13611,6 +13611,11 @@ model AgentApproval {
   planHash     String?
   /// C6 — the plan's steps, one per change, run in order after the approval.
   planSteps    AgentPlanStep[]
+  /// ADS AUTONOMY AA-W2-4 — a request Claude asked for at the `watch` level: the verdict of the business's full rule
+  /// check when it was asked (would it have run by rule, or which check held it and why; the ads strategy row and
+  /// version that set the level; a plan's verdict per step). Recorded only, never acted on: a person decides the
+  /// request. Null on every other request. Shape: @nexus/shared/approval-queue `WatchVerdict`.
+  ruleVerdict  Json?
 
   @@index([status, requestedAt])
   /// NAF.AP.4/AP.5 — the maintenance sweep's two queries: commit what is due,

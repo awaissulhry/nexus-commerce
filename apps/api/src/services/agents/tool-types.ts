@@ -55,11 +55,15 @@ export type Reversibility = 'full' | 'partial' | 'none'
  *   off      not offered to Claude at all
  *   ask      a person approves it in Nexus (today, and the default for every tool)
  *   confirm  the person who asked confirms it in Claude with their authenticator code (C7)
+ *   watch    ADS AUTONOMY AA-W2-4 — the full check `auto` would make runs and its verdict is recorded on the request
+ *            (AgentApproval.ruleVerdict: would it have run by rule, or why not), but it never runs by rule: a person
+ *            decides it as at confirm. Only for a tool whose ceiling is auto, never for a brake (claude-trust.service.ts
+ *            `levelsFor`). It sits below auto, so auto → watch is a free lowering and watch → auto a raise.
  *   auto     runs after the undo window without a person, only inside its limits (C5)
  * A tool's `maxClaudeTrust` is the ceiling the business's own level (AgentTool row, C5) cannot exceed.
  */
-export type ClaudeTrust = 'off' | 'ask' | 'confirm' | 'auto'
-export const CLAUDE_TRUST_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'auto']
+export type ClaudeTrust = 'off' | 'ask' | 'confirm' | 'watch' | 'auto'
+export const CLAUDE_TRUST_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'watch', 'auto']
 
 /**
  * C9 — the preview convention: what the Approvals page reads from a change tool's dry-run preview when the tool has
@@ -259,9 +263,9 @@ export interface AgentTool {
   control?: boolean
   /**
    * C1 — every change tool: the most Claude may ever do with it without a person in Nexus. Floors:
-   * `none` (irreversible) is `ask` at most; `auto` needs `withinLimits`.
+   * `none` (irreversible) is `ask` at most; `auto` needs `withinLimits`. Never `watch`: it is offered only below an auto ceiling.
    */
-  maxClaudeTrust?: ClaudeTrust
+  maxClaudeTrust?: Exclude<ClaudeTrust, 'watch'>
   /**
    * C1 — the limits a business may set for running this tool without a person (C5 stores them per business).
    * A zod object whose every field has a default: `limits.parse({})` is the code default.

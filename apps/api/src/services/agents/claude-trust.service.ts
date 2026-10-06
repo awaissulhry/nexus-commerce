@@ -28,17 +28,26 @@
  * tool's level here and the strategy's applies (`claudeRuleForChange`) — to refuse it (off), to decide who takes it,
  * to confirm it in Claude and, at commit, to hand a change back that the strategy narrowed inside its window. Brakes
  * are never narrowed. What a change cannot be placed for exactly takes the strictest row (fail closed).
+ *
+ * ADS AUTONOMY AA-W2-4 — `watch`, between confirm and auto: a change Claude asks for at watch goes through the full
+ * check auto would make (the level where it lands with the ads strategy, nexus.run, Pause, the tool's limits, the daily
+ * cap — counting the watched changes that would have run, as if their kinds were at auto) and the verdict is recorded on
+ * the request (AgentApproval.ruleVerdict, `watchVerdictOf` / a plan's per step). It is never scheduled by the rule: a
+ * person decides it, as at confirm (watch allows all confirm allows, so lowering watch → confirm never lets Claude do
+ * more). Raising to watch is a raise (2FA); lowering auto → watch is a free brake. Offered only for a tool whose
+ * ceiling is auto, never for a brake (`levelsFor`).
  */
 
 import { z } from 'zod'
 import { Prisma } from '@nexus/database'
 import { workspaceIdForQuery, workspaceKey } from '@nexus/database/workspace-context'
+import type { RuleCheck, WatchStepVerdict, WatchVerdict } from '@nexus/shared/approval-queue'
 import prisma from '../../db.js'
 import { verifyStepUpCode } from '../../lib/auth/step-up.js'
 import { publishEvent } from '../../lib/events/publish.js'
 import { logger } from '../../utils/logger.js'
 import { recordControlChange } from '../agent-fleet/control-audit.service.js'
-import { strategyLevelFor, strategyMemo, type StrategyMemo, type StrategyNarrowing } from '../advertising/ads-strategy/claude.js'
+import { BRAKE_TOOLS, strategyLevelFor, strategyMemo, type StrategyMemo, type StrategyNarrowing } from '../advertising/ads-strategy/claude.js'
 import type { ClaudeActionType } from '../advertising/ads-strategy/fields.js'
 import { EXPIRY_HOURS } from './approval-gate.service.js'
 import { offeredOn } from './call-tool.js'
@@ -58,7 +67,7 @@ export const AUTO_PAUSED_BY = 'Nexus'
 /** The audit actions of a rule-run that never ran or failed (approval-inbox.service.ts writes them). */
 const FAILED_RUN_ACTIONS = ['stale_refused', 'permission_refused', 'execution_failed']
 
-const RANK: Record<ClaudeTrust, number> = { off: 0, ask: 1, confirm: 2, auto: 3 }
+const RANK: Record<ClaudeTrust, number> = { off: 0, ask: 1, confirm: 2, watch: 3, auto: 4 }
 const isLevel = (value: unknown): value is ClaudeTrust => typeof value === 'string' && (CLAUDE_TRUST_LEVELS as readonly string[]).includes(value)
 const lower = (a: ClaudeTrust, b: ClaudeTrust): ClaudeTrust => (RANK[a] <= RANK[b] ? a : b)
 
@@ -109,10 +118,24 @@ export function trustCeiling(tool: Pick<AgentTool, 'readOnly' | 'control' | 'max
   return tool.maxClaudeTrust ?? 'ask'
 }
 
+/**
+ * AA-W2-4 — may this tool be watched? Only below an auto ceiling (watch measures what auto would do), and never a brake
+ * (stop-automation, turn-down-automation, set-ad-guardrail): a brake runs by the rule or waits for a person, it is never
+ * only recorded.
+ */
+export function watchable(tool: Pick<AgentTool, 'name' | 'readOnly' | 'control' | 'maxClaudeTrust'>): boolean {
+  return trustCeiling(tool) === 'auto' && !(BRAKE_TOOLS as readonly string[]).includes(tool.name)
+}
+
 /** The levels a business may pick for this tool, lowest first. */
-export function levelsFor(tool: Pick<AgentTool, 'readOnly' | 'control' | 'maxClaudeTrust'>): ClaudeTrust[] {
+export function levelsFor(tool: Pick<AgentTool, 'name' | 'readOnly' | 'control' | 'maxClaudeTrust'>): ClaudeTrust[] {
   const ceiling = trustCeiling(tool)
-  return CLAUDE_TRUST_LEVELS.filter((level) => RANK[level] <= RANK[ceiling])
+  return CLAUDE_TRUST_LEVELS.filter((level) => RANK[level] <= RANK[ceiling] && (level !== 'watch' || watchable(tool)))
+}
+
+/** The highest level this tool allows that is not above `stored`: above the ceiling reads as the ceiling, a watch it does not allow as confirm. */
+function levelAllowed(tool: AgentTool, stored: ClaudeTrust): ClaudeTrust {
+  return levelsFor(tool).filter((level) => RANK[level] <= RANK[stored]).pop() ?? 'off'
 }
 
 const defaultsOf = (tool: AgentTool): Record<string, unknown> | null =>
@@ -121,7 +144,7 @@ const defaultsOf = (tool: AgentTool): Record<string, unknown> | null =>
 /** One tool's rule in the current business. `limits`: the stored limits on top of the defaults (null without any). */
 export interface ClaudeToolRule {
   tool: string
-  /** The level that applies: the stored one, never above the ceiling. */
+  /** The level that applies: the stored one, never above the ceiling (a watch the tool does not allow reads as confirm). */
   level: ClaudeTrust
   /** What the row says (the default `ask` without a row). */
   stored: ClaudeTrust
@@ -148,7 +171,7 @@ export function ruleFrom(tool: AgentTool, row: { claudeTrust: string; claudeLimi
   }
   return {
     tool: tool.name,
-    level: lower(stored, ceiling),
+    level: levelAllowed(tool, stored),
     stored,
     ceiling,
     limits,
@@ -216,7 +239,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   rule: 'ads rules',
   undo: 'undoing ad changes',
 }
-const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'off', ask: 'ask', confirm: 'confirm in Claude', auto: 'run by rule' }
+const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'off', ask: 'ask', confirm: 'confirm in Claude', watch: 'watch', auto: 'run by rule' }
 
 /**
  * W1-8 — which strategy row narrowed a change, in one clause: what it allows here, the row (market, scope, label,
@@ -229,7 +252,9 @@ export function narrowedWhy(n: StrategyNarrowed): string {
     ? `turns ${what} off for Claude here`
     : n.level === 'ask'
       ? `lets Claude only ask for ${what} here`
-      : `lets Claude go no further than confirm in Claude for ${what} here`
+      : n.level === 'watch'
+        ? `only watches ${what} here (Nexus records whether they would have run by rule; a person decides)`
+        : `lets Claude go no further than confirm in Claude for ${what} here`
   const row = `${n.market}: ${n.row.scope} "${n.row.label}", version ${n.row.version}${n.row.product ? `, from ${n.row.product}` : ''}`
   const basis = n.basis === 'scope' ? '' : `; ${n.unplaced}, so the strictest row of ${n.basis === 'market' ? n.market : 'the business'} applies`
   return `the ads strategy ${allows} (${row}${basis}; the business's own level is ${LEVEL_WORDS[n.business]})`
@@ -280,9 +305,46 @@ export const CONFIRM_IN_CLAUDE = `this business set it to "confirm in Claude": $
 
 const A_PERSON = 'a person approves it in Nexus'
 
-/** W1-8 — why a change the strategy narrowed waits for a person: at ask (or off), or at confirm. */
+/** W1-8 — why a change the strategy narrowed waits for a person: at ask (or off), or at confirm (AA-W2-4: or watch). */
 export function narrowedDecision(n: StrategyNarrowed): string {
-  return n.level === 'confirm' ? `${narrowedWhy(n)}, so ${CONFIRM_HOW}` : `${narrowedWhy(n)}; ${A_PERSON}`
+  return n.level === 'confirm' || n.level === 'watch' ? `${narrowedWhy(n)}, so ${CONFIRM_HOW}` : `${narrowedWhy(n)}; ${A_PERSON}`
+}
+
+const NO_RUN_SCOPE = 'this Claude connection may not run changes by rule (it was connected without nexus.run, "run the changes set to run by rule")'
+const pausedWhy = (autonomy: Autonomy) => `changes that run by rule are paused in this business${autonomy.reason ? ` (${autonomy.reason})` : ''}`
+
+/** What keeps a change from running by rule — which check, why — and the words that join who decides instead. */
+interface RuleHold {
+  check: RuleCheck
+  why: string
+  then: string
+}
+const asRefusal = (hold: RuleHold) => `${hold.why}${hold.then}${A_PERSON}`
+
+/** Why the tool's limits keep a change from running by rule, or null when it is inside them. */
+function limitsOutside(tool: AgentTool, preview: unknown, rule: ClaudeToolRule): RuleHold | null {
+  if (!tool.withinLimits || !rule.limits) return { check: 'limits', why: `${tool.name} has no limits to run inside`, then: '; ' }
+  if (rule.limitsInvalid) return { check: 'limits', why: `the limits saved for ${tool.name} no longer fit it (${rule.limitsInvalid}); set them again`, then: '. Until then ' }
+  const outside = tool.withinLimits(preview, rule.limits)
+  return outside ? { check: 'limits', why: outside, then: '; ' } : null
+}
+
+/**
+ * The first of auto's checks that keeps a change from running by the rule now, or null: the connection's nexus.run
+ * scope, the business's Pause, the tool's limits, the daily cap. AA-W2-4 — `watching`: the cap also counts the watched
+ * changes that would have run, as if their kinds were at auto.
+ */
+async function ruleHold(tool: AgentTool, preview: unknown, opts: { runScope: boolean; rule: ClaudeToolRule; watching?: boolean }): Promise<RuleHold | null> {
+  if (!opts.runScope) return { check: 'scope', why: NO_RUN_SCOPE, then: '; ' }
+  const autonomy = await autonomyOf()
+  if (autonomy.paused) return { check: 'pause', why: pausedWhy(autonomy), then: '; ' }
+  const outside = limitsOutside(tool, preview, opts.rule)
+  if (outside) return outside
+  const used = await autoRunsInLastDay() + (opts.watching ? await watchedRunsInLastDay() : 0)
+  if (used >= autonomy.dailyAutoCap) {
+    return { check: 'cap', why: `this business's limit of ${autonomy.dailyAutoCap} changes run by rule in 24 hours is reached`, then: '; ' }
+  }
+  return null
 }
 
 /**
@@ -290,25 +352,148 @@ export function narrowedDecision(n: StrategyNarrowed): string {
  * connection's nexus.run scope, the business's Pause, the tool's limits, the daily cap.
  */
 export async function autoRefusal(tool: AgentTool, preview: unknown, opts: { runScope: boolean; rule: ClaudeToolRule }): Promise<string | null> {
-  if (!opts.runScope) {
-    return `this Claude connection may not run changes by rule (it was connected without nexus.run, "run the changes set to run by rule"); ${A_PERSON}`
-  }
-  const autonomy = await autonomyOf()
-  if (autonomy.paused) return `changes that run by rule are paused in this business${autonomy.reason ? ` (${autonomy.reason})` : ''}; ${A_PERSON}`
-  const outside = limitsRefusal(tool, preview, opts.rule)
-  if (outside) return outside
-  const used = await autoRunsInLastDay()
-  if (used >= autonomy.dailyAutoCap) {
-    return `this business's limit of ${autonomy.dailyAutoCap} changes run by rule in 24 hours is reached; ${A_PERSON}`
-  }
-  return null
+  const hold = await ruleHold(tool, preview, opts)
+  return hold ? asRefusal(hold) : null
 }
 
 function limitsRefusal(tool: AgentTool, preview: unknown, rule: ClaudeToolRule): string | null {
-  if (!tool.withinLimits || !rule.limits) return `${tool.name} has no limits to run inside; ${A_PERSON}`
-  if (rule.limitsInvalid) return `the limits saved for ${tool.name} no longer fit it (${rule.limitsInvalid}); set them again. Until then ${A_PERSON}`
-  const outside = tool.withinLimits(preview, rule.limits)
-  return outside ? `${outside}; ${A_PERSON}` : null
+  const outside = limitsOutside(tool, preview, rule)
+  return outside ? asRefusal(outside) : null
+}
+
+// ── AA-W2-4 — the watch level ─────────────────────────────────────────────────────────────────────
+
+/** Is this change watched: the business set its kind to watch, or the ads strategy holds it at watch where it lands? */
+export function isWatched(rule: ClaudeChangeRule | null | undefined): boolean {
+  return !!rule && (rule.level === 'watch' || rule.narrowedBy?.business === 'watch')
+}
+
+/**
+ * The watched changes of the last 24 hours their verdict says would have run by rule (each step of a plan counts): what
+ * the daily cap would also have counted, had their kinds been at auto. Read only by a watch verdict.
+ */
+export async function watchedRunsInLastDay(): Promise<number> {
+  const since = new Date(Date.now() - AUTO_CAP_WINDOW_MS)
+  const wouldRun = { path: ['wouldRun'], equals: true }
+  const [single, steps] = await Promise.all([
+    prisma.agentApproval.count({ where: { requestedAt: { gte: since }, toolName: { not: PLAN_TOOL }, ruleVerdict: wouldRun } }),
+    prisma.agentPlanStep.count({ where: { approval: { requestedAt: { gte: since }, ruleVerdict: wouldRun } } }),
+  ])
+  return single + steps
+}
+
+const strategyOf = (n: StrategyNarrowed): NonNullable<WatchVerdict['strategy']> =>
+  ({ market: n.market, scope: n.row.scope, label: n.row.label, version: n.row.version, level: n.level })
+
+/** A step (or change) below watch where it lands: which check held it (the ads strategy, or its own level) and why. */
+function levelHold(rule: ClaudeChangeRule | null | undefined): Pick<WatchStepVerdict, 'check' | 'why'> {
+  if (rule?.narrowedBy) return { check: 'strategy', why: narrowedWhy(rule.narrowedBy) }
+  return { check: 'level', why: rule?.level === 'confirm' ? 'it is set to confirm in Claude' : 'it waits for a person (ask)' }
+}
+
+const RULE_COULD_NOT = 'Nexus could not apply the business’s rule to it'
+
+/**
+ * The verdict of the business's rule on one watched change, exactly as auto would judge it: the level where it lands
+ * (the ads strategy may hold it lower), then nexus.run, Pause, the tool's limits and the daily cap (counting the watched
+ * changes that would have run). Schedules nothing. A check that throws is held as `error`: auto leaves such a change
+ * with a person too.
+ */
+export async function watchVerdictOf(tool: AgentTool, preview: unknown, opts: { runScope: boolean; rule: ClaudeChangeRule }): Promise<WatchVerdict> {
+  const { rule } = opts
+  const base = { level: rule.level, checkedAt: new Date().toISOString(), changes: 1, ...(rule.narrowedBy ? { strategy: strategyOf(rule.narrowedBy) } : {}) }
+  if (rule.level !== 'watch') return { ...base, wouldRun: false, ...levelHold(rule) }
+  try {
+    const hold = await ruleHold(tool, preview, { runScope: opts.runScope, rule, watching: true })
+    return hold ? { ...base, wouldRun: false, check: hold.check, why: hold.why } : { ...base, wouldRun: true, check: null, why: null }
+  } catch (error) {
+    logger.error('[claude-trust] the watch check failed', { tool: tool.name, error: error instanceof Error ? error.message : String(error) })
+    return { ...base, wouldRun: false, check: 'error', why: RULE_COULD_NOT }
+  }
+}
+
+/**
+ * A watched plan: each step's own verdict — its level where it lands, its limits — and the business's brakes of the
+ * moment (nexus.run, Pause, the daily cap for all its steps); the plan would have run only when every step would. The
+ * plan's own check and words follow planRuleRefusal's order: a step's level, nexus.run, Pause, a step's limits, the cap.
+ */
+async function planWatchVerdict(
+  steps: Array<{ tool: AgentTool; preview: unknown }>,
+  rules: Array<ClaudeChangeRule | null>,
+  lowest: { level: ClaudeTrust; index: number } | null,
+  opts: { runScope: boolean },
+): Promise<WatchVerdict> {
+  const deciding = lowest ? rules[lowest.index] : null
+  const base = {
+    level: lowest?.level ?? 'auto',
+    checkedAt: new Date().toISOString(),
+    changes: steps.length,
+    ...(deciding?.narrowedBy ? { strategy: strategyOf(deciding.narrowedBy) } : {}),
+  }
+  const stepOf = (index: number, verdict: Pick<WatchStepVerdict, 'wouldRun' | 'check' | 'why'>): WatchStepVerdict => ({
+    step: index + 1,
+    tool: steps[index].tool.name,
+    level: rules[index]?.level ?? 'ask',
+    watched: isWatched(rules[index]),
+    ...verdict,
+  })
+  try {
+    const autonomy = await autonomyOf()
+    const shared: RuleHold | null = !opts.runScope
+      ? { check: 'scope', why: NO_RUN_SCOPE, then: '' }
+      : autonomy.paused ? { check: 'pause', why: pausedWhy(autonomy), then: '' } : null
+    const own = steps.map((step, index) => {
+      const level = rules[index]?.level ?? 'ask'
+      if (level !== 'watch' && level !== 'auto') return { wouldRun: false, ...levelHold(rules[index]) }
+      if (shared) return { wouldRun: false, check: shared.check, why: shared.why }
+      const outside = limitsOutside(step.tool, step.preview, rules[index]!)
+      return outside ? { wouldRun: false, check: 'limits' as const, why: outside.why } : { wouldRun: true, check: null, why: null }
+    })
+    // The cap counts every step of a plan: when the plan would pass it, no step runs.
+    let capWhy: string | null = null
+    if (own.some((verdict) => verdict.wouldRun)) {
+      const used = await autoRunsInLastDay() + await watchedRunsInLastDay()
+      if (used + steps.length > autonomy.dailyAutoCap) {
+        capWhy = `its ${plural(steps.length, 'change')} would pass this business's limit of ${autonomy.dailyAutoCap} changes run by rule in 24 hours (${used} already, counting the watched changes that would have run)`
+      }
+    }
+    const verdicts = own.map((verdict, index) => stepOf(index, verdict.wouldRun && capWhy ? { wouldRun: false, check: 'cap', why: capWhy } : verdict))
+    const firstOutside = verdicts.find((verdict) => verdict.check === 'limits')
+    const plan: Pick<WatchVerdict, 'wouldRun' | 'check' | 'why'> = lowest && lowest.level !== 'watch'
+      ? { wouldRun: false, ...planLevelHold(steps, rules, lowest) }
+      : shared ? { wouldRun: false, check: shared.check, why: shared.why }
+        : firstOutside ? { wouldRun: false, check: 'limits', why: `step ${firstOutside.step} (${firstOutside.tool}): ${firstOutside.why}` }
+          : capWhy ? { wouldRun: false, check: 'cap', why: capWhy }
+            : { wouldRun: true, check: null, why: null }
+    return { ...base, ...plan, steps: verdicts }
+  } catch (error) {
+    logger.error('[claude-trust] the watch check of a plan failed', { error: error instanceof Error ? error.message : String(error) })
+    return { ...base, wouldRun: false, check: 'error', why: RULE_COULD_NOT, steps: steps.map((_step, index) => stepOf(index, { wouldRun: false, check: 'error', why: RULE_COULD_NOT })) }
+  }
+}
+
+/** A plan held below watch by one step: the step that decides, in the words planRuleRefusal tells Claude (without who decides). */
+function planLevelHold(
+  steps: Array<{ tool: AgentTool }>,
+  rules: Array<ClaudeChangeRule | null>,
+  lowest: { level: ClaudeTrust; index: number },
+): Pick<WatchVerdict, 'check' | 'why'> {
+  const named = `step ${lowest.index + 1} (${steps[lowest.index].tool.name})`
+  const strategy = rules[lowest.index]?.narrowedBy
+  if (strategy) return { check: 'strategy', why: `a plan runs by rule only when every step may: ${named}: ${narrowedWhy(strategy)}` }
+  return { check: 'level', why: `a plan runs by rule only when every step may: ${named} ${lowest.level === 'confirm' ? 'is set to confirm in Claude' : 'waits for a person'}` }
+}
+
+/** What Claude is told about a watched change: what the rule would have done, then who decides (as at confirm). */
+export function watchWords(verdict: WatchVerdict, opts: { runScope: boolean }): string {
+  const would = verdict.wouldRun ? 'watching: it would have run by rule' : `watching: it would not — ${verdict.why}`
+  return `${would}; ${opts.runScope ? CONFIRM_HOW : A_PERSON}`
+}
+
+/** Record a watched request's verdict on it (AgentApproval.ruleVerdict). */
+export async function recordWatch(approvalId: string, verdict: WatchVerdict): Promise<WatchVerdict> {
+  await prisma.agentApproval.update({ where: { id: approvalId }, data: { ruleVerdict: verdict as unknown as Prisma.InputJsonValue } })
+  return verdict
 }
 
 /**
@@ -316,32 +501,42 @@ function limitsRefusal(tool: AgentTool, preview: unknown, rule: ClaudeToolRule):
  * nexus.run, no Pause, every step inside its tool's limits, and room under the daily cap for all its steps. `level` is
  * the lowest step's (ask when one waits for a person); `why` is absent only when every step is simply at ask. W1-8 —
  * each step at its own level where it lands (the ads strategy narrows an ad step); `strategy` names the row that
- * narrowed the step that decides.
+ * narrowed the step that decides. AA-W2-4 — a plan with a watched step carries `watch`, the verdict to record (per
+ * step and for the plan); with every step at watch or auto its level is `watch` and nothing runs by rule.
  */
 export async function planRuleRefusal(
   steps: Array<{ tool: AgentTool; preview: unknown; args?: Record<string, unknown> }>,
   opts: { runScope: boolean },
-): Promise<{ level: ClaudeTrust; why?: string; strategy?: StrategyNarrowed } | null> {
+): Promise<{ level: ClaudeTrust; why?: string; strategy?: StrategyNarrowed; watch?: WatchVerdict } | null> {
   const rules = await claudeRulesForSteps(steps.map((step) => ({ toolName: step.tool.name, args: step.args, preview: step.preview })))
   const levelOf = (index: number): ClaudeTrust => rules[index]?.level ?? 'ask'
-  let lowest: { level: ClaudeTrust; index: number } | null = null
+  let found: { level: ClaudeTrust; index: number } | null = null
   steps.forEach((_step, index) => {
     const level = levelOf(index)
-    if (level !== 'auto' && (!lowest || RANK[level] < RANK[lowest.level])) lowest = { level, index }
+    if (level !== 'auto' && (!found || RANK[level] < RANK[found.level])) found = { level, index }
   })
-  if (lowest) {
-    const { level, index } = lowest as { level: ClaudeTrust; index: number }
+  const lowest = found as { level: ClaudeTrust; index: number } | null
+  // AA-W2-4 — a plan with a watched step: the full check, per step and for the plan (the door records it).
+  const watch = steps.some((_step, index) => isWatched(rules[index])) ? await planWatchVerdict(steps, rules, lowest, opts) : undefined
+  const watched = watch ? { watch } : {}
+  if (lowest && lowest.level !== 'watch') {
+    const { level, index } = lowest
     const every = steps.every((_step, i) => levelOf(i) === level)
     const named = `step ${index + 1} (${steps[index].tool.name})`
     const strategy = rules[index]?.narrowedBy
     if (strategy) {
       const why = `${every ? '' : 'a plan runs by rule only when every step may: '}${named}: ${narrowedDecision(strategy)}`
-      return { level: level === 'confirm' ? 'confirm' : 'ask', why, strategy }
+      return { level: level === 'confirm' ? 'confirm' : 'ask', why, strategy, ...watched }
     }
     if (level === 'confirm') {
-      return { level, why: every ? CONFIRM_IN_CLAUDE : `a plan runs by rule only when every step may: ${named} is set to confirm in Claude, so ${CONFIRM_HOW}` }
+      return { level, why: every ? CONFIRM_IN_CLAUDE : `a plan runs by rule only when every step may: ${named} is set to confirm in Claude, so ${CONFIRM_HOW}`, ...watched }
     }
-    return every ? { level: 'ask' } : { level: 'ask', why: `a plan runs by rule only when every step may: ${named} waits for a person` }
+    return every ? { level: 'ask', ...watched } : { level: 'ask', why: `a plan runs by rule only when every step may: ${named} waits for a person`, ...watched }
+  }
+  if (lowest) {
+    // AA-W2-4 — every step at watch or auto: nothing runs by rule; the verdict says whether it would have.
+    const strategy = rules[lowest.index]?.narrowedBy
+    return { level: 'watch', why: watchWords(watch!, opts), ...(strategy ? { strategy } : {}), watch: watch! }
   }
   if (!opts.runScope) {
     return { level: 'auto', why: `this Claude connection may not run changes by rule (it was connected without nexus.run, "run the changes set to run by rule"); ${A_PERSON}` }
@@ -595,6 +790,16 @@ function canonical(value: unknown): string {
   return JSON.stringify(sorted(value ?? null))
 }
 
+/** Why this tool may not be set to `level` (one it does not list in `levelsFor`), in the words a person reads. */
+export function levelNotAllowed(tool: AgentTool, level: ClaudeTrust): string {
+  if (tool.readOnly || tool.control) return `${tool.name} can only be offered to Claude (ask) or not (off).`
+  const ceiling = trustCeiling(tool)
+  // AA-W2-4 — watch measures what auto would do: a kind that may never run by rule, or a brake, has nothing to watch.
+  if (level === 'watch' && RANK[ceiling] >= RANK.watch) return `${tool.name} cannot be watched: it is a brake, so it runs by rule or waits for a person.`
+  if (level === 'watch') return `${tool.name} cannot be watched: only a kind that may run by rule (auto) can be.`
+  return `${tool.name} can be set to ${ceiling} at most: ${ceiling === 'ask' ? 'a person always approves it' : 'that is the most it may do without a person'}.`
+}
+
 export interface RulePatch {
   level?: unknown
   /** The tool's limits, or null for its code defaults. */
@@ -616,16 +821,7 @@ export async function setClaudeRule(actor: TrustActor, toolName: string, patch: 
   let level = current.stored
   if (patch.level !== undefined) {
     if (!isLevel(patch.level)) return { ok: false, status: 400, error: `level must be one of ${CLAUDE_TRUST_LEVELS.join(', ')}.` }
-    if (!levels.includes(patch.level)) {
-      const ceiling = trustCeiling(tool)
-      return {
-        ok: false,
-        status: 400,
-        error: tool.readOnly || tool.control
-          ? `${toolName} can only be offered to Claude (ask) or not (off).`
-          : `${toolName} can be set to ${ceiling} at most: ${ceiling === 'ask' ? 'a person always approves it' : 'that is the most it may do without a person'}.`,
-      }
-    }
+    if (!levels.includes(patch.level)) return { ok: false, status: 400, error: levelNotAllowed(tool, patch.level) }
     level = patch.level
   }
 

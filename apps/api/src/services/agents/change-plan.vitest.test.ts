@@ -14,6 +14,8 @@
  *   status      approval-status shows the plan; undo of a plan is ONE plan of inverse steps, in reverse order.
  *   auto        a plan runs by the business's rule only when every step may (level, limits, scope, the daily cap).
  *   amend       unticking steps supersedes the plan with a smaller one.
+ *   watch       AA-W2-4 — a plan with a watched step: the full check runs per step and for the plan and is recorded on
+ *               it; it is never scheduled by the rule, and a person decides it.
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -46,7 +48,7 @@ import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { runToolForClaude } from '../mcp/mcp-tool-call.js'
 import type { UserPrincipal } from './call-tool.js'
 import { amendPlan, runPlan } from './change-plan.service.js'
-import { setClaudeRule, setDailyAutoCap } from './claude-trust.service.js'
+import { autoRunsInLastDay, setClaudeRule, setDailyAutoCap, watchedRunsInLastDay } from './claude-trust.service.js'
 import { getTool } from './tool-registry.js'
 
 const A = LEGACY_WORKSPACE_ID
@@ -314,5 +316,73 @@ describe('C6 — unticking steps supersedes the plan with a smaller one', { time
     const steps = await stepsOf(amended.approvalId)
     expect(steps.map((s) => [s.position, (s.args as { productId: string }).productId])).toEqual([[1, ids.f1], [2, ids.e3]])
     expect(await approvalOf(amended.approvalId)).toMatchObject({ status: 'pending', toolName: 'submit-change-plan', summary: expect.stringContaining('2 changes') })
+  })
+})
+
+describe('AA-W2-4 — a watched plan: the full check per step, recorded on it; a person decides', { timeout: TIMEOUT }, () => {
+  const code = () => {
+    __stepUpTest.reset()
+    return generateSync({ secret })
+  }
+  const setTo = async (tool: string, level: string) => {
+    expect(await inside(() => setClaudeRule(manager(), tool, { level, code: code() }))).toMatchObject({ ok: true })
+  }
+  beforeAll(async () => {
+    await inside(async () => {
+      for (const key of ['w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8']) {
+        ids[key] = (await database.client.product.create({ data: { sku: `TEST-PLAN-${key.toUpperCase()}`, name: `Watched jacket ${key}`, basePrice: '100.00' } })).id
+      }
+    })
+  })
+
+  it('every step at watch and inside its limits: never scheduled; recorded as would-run, step by step; a person approves it', async () => {
+    await setTo('set-price', 'watch')
+    const answer = await submit('Watched plan', [price('w1', 101), price('w2', 102)])
+    expect(answer).toMatchObject({
+      status: 'waiting_for_approval',
+      plan: { steps: 2 },
+      trust: { level: 'watch', why: expect.stringMatching(/^watching: it would have run by rule; the person who asked types/), watch: { wouldRun: true, check: null, steps: { total: 2, wouldRun: 2 } } },
+      confirm: { planHash: expect.any(String) },
+    })
+    const stored = await approvalOf(answer.approvalId)
+    expect(stored).toMatchObject({ status: 'pending', decisionVia: null, executeAfter: null })
+    expect(stored.ruleVerdict).toEqual({
+      level: 'watch', wouldRun: true, check: null, why: null, checkedAt: expect.any(String), changes: 2,
+      steps: [
+        { step: 1, tool: 'set-price', level: 'watch', watched: true, wouldRun: true, check: null, why: null },
+        { step: 2, tool: 'set-price', level: 'watch', watched: true, wouldRun: true, check: null, why: null },
+      ],
+    })
+    expect(await approveAndCommit(answer.approvalId)).toMatchObject({ ok: true, status: 'executing' })
+    expect(await inside(() => runPlan(answer.approvalId))).toMatchObject({ finished: true, counts: { done: 2 } })
+    expect([await priceOf('w1'), await priceOf('w2')]).toEqual([101, 102])
+  })
+
+  it('a step outside its limits, or a step below watch: recorded per step, and the plan names the step that holds it', async () => {
+    await setTo('set-price', 'watch')
+    const far = await submit('Watched, too far', [price('w3', 101), price('w4', 180)])
+    expect(far).toMatchObject({ trust: { level: 'watch', watch: { wouldRun: false, check: 'limits', why: expect.stringMatching(/^step 2 \(set-price\): the master price moves/), steps: { total: 2, wouldRun: 1 } } } })
+    expect((await approvalOf(far.approvalId)).ruleVerdict).toMatchObject({ steps: [{ step: 1, wouldRun: true, check: null }, { step: 2, wouldRun: false, check: 'limits' }] })
+    const mixed = await submit('Watched and asked', [price('w5', 101), { tool: 'apply-content', args: { productId: ids.w6, title: 'Watched title' } }])
+    expect(mixed).toMatchObject({
+      status: 'waiting_for_approval',
+      trust: { level: 'ask', why: expect.stringContaining('step 2 (apply-content) waits for a person'), watch: { wouldRun: false, check: 'level' } },
+    })
+    expect((await approvalOf(mixed.approvalId)).ruleVerdict).toMatchObject({
+      level: 'ask', wouldRun: false, check: 'level', why: 'a plan runs by rule only when every step may: step 2 (apply-content) waits for a person',
+      steps: [
+        { step: 1, tool: 'set-price', level: 'watch', watched: true, wouldRun: true, check: null },
+        { step: 2, tool: 'apply-content', level: 'ask', watched: false, wouldRun: false, check: 'level', why: 'it waits for a person (ask)' },
+      ],
+    })
+  })
+
+  it('the cap counts every step of a watched plan, with the watched changes that would have run', async () => {
+    await setTo('set-price', 'watch')
+    const used = await inside(async () => (await autoRunsInLastDay()) + (await watchedRunsInLastDay()))
+    expect(used).toBeGreaterThan(0) // the would-run plan above counts its 2 steps
+    expect(await inside(() => setDailyAutoCap(manager(), { dailyAutoCap: used + 1 }))).toMatchObject({ ok: true })
+    const two = await submit('Watched over the cap', [price('w7', 101), price('w8', 101)])
+    expect(two.trust.watch).toMatchObject({ wouldRun: false, check: 'cap', why: expect.stringContaining(`(${used} already, counting the watched changes that would have run)`), steps: { total: 2, wouldRun: 0 } })
   })
 })

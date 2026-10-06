@@ -127,7 +127,7 @@ describe('simulate — would the proposed rule have run these by themselves?', {
   it('refuses, in plain words: a level above the ceiling, limits outside the schema, a bad window, a tool Claude is not offered', async () => {
     expect(await simulate('publish-listing', { level: 'auto' })).toEqual({ ok: false, status: 400, error: 'publish-listing can be set to ask at most: a person always approves it.' })
     expect(await simulate('set-stock', { level: 'auto' })).toEqual({ ok: false, status: 400, error: 'set-stock can be set to confirm at most: that is the most it may do without a person.' })
-    expect(await simulate('set-price', { level: 'sometimes' })).toEqual({ ok: false, status: 400, error: 'level must be one of off, ask, confirm, auto.' })
+    expect(await simulate('set-price', { level: 'sometimes' })).toEqual({ ok: false, status: 400, error: 'level must be one of off, ask, confirm, watch, auto.' })
     const bad = await simulate('set-price', { limits: JSON.stringify({ maxChangePercent: 'ten' }) })
     expect(bad).toMatchObject({ ok: false, status: 400, error: expect.stringMatching(/^Limits for set-price: maxChangePercent — /) })
     const unknown = await simulate('set-price', { limits: JSON.stringify({ maxChangePercent: 5, anything: true }) })
@@ -143,5 +143,32 @@ describe('simulate — would the proposed rule have run these by themselves?', {
     const before = await inside(() => database.client.agentApproval.findMany({ orderBy: { id: 'asc' } }))
     await simulate('set-price', { level: 'auto', limits: JSON.stringify({ maxChangePercent: 50 }), days: '90' })
     expect(await inside(() => database.client.agentApproval.findMany({ orderBy: { id: 'asc' } }))).toEqual(before)
+  })
+})
+
+describe('AA-W2-4 — the watch level, and the verdicts watched requests recorded', { timeout: 30_000 }, () => {
+  it('watch runs nothing by itself, like confirm; a brake cannot be watched', async () => {
+    const out = await simulate('set-price', { level: 'watch' })
+    expect((out as Extract<typeof out, { ok: true }>).simulation).toMatchObject({ considered: 6, wouldRun: 0, rejectedAmongWouldRun: 0, heldByStrategy: 0 })
+    expect(await simulate('stop-automation', { level: 'watch' }))
+      .toEqual({ ok: false, status: 400, error: 'stop-automation cannot be watched: it is a brake, so it runs by rule or waits for a person.' })
+  })
+
+  it('one the ads strategy held below auto where it landed, as its verdict records, is not counted as would-run', async () => {
+    const verdict = { level: 'watch', wouldRun: true, check: null, why: null, checkedAt: new Date().toISOString(), changes: 1 }
+    await inside(async () => {
+      const db = database.client
+      for (const [key, deltaPct, status, ruleVerdict] of [
+        ['held', 2, 'pending', { ...verdict, strategy: { market: 'IT', scope: 'market', label: 'Test market', version: 1, level: 'watch' } }],
+        ['watched-no', 3, 'rejected', verdict],
+      ] as const) {
+        const run = await db.agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'done', via: 'claude' } as never })
+        ids[key] = (await db.agentApproval.create({
+          data: { agentRunId: run.id, toolName: 'set-price', riskTier: 'high', args: {}, preview: { summary: `${key}: price moves ${deltaPct} %`, deltaPct }, status, requestedAt: new Date(Date.now() - DAY), ruleVerdict },
+        })).id
+      }
+    })
+    const out = await simulate('set-price', { level: 'auto' })
+    expect((out as Extract<typeof out, { ok: true }>).simulation).toMatchObject({ considered: 8, wouldRun: 5, rejectedAmongWouldRun: 3, heldByStrategy: 1 })
   })
 })
