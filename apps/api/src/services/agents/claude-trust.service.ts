@@ -28,6 +28,10 @@
  * tool's level here and the strategy's applies (`claudeRuleForChange`) — to refuse it (off), to decide who takes it,
  * to confirm it in Claude and, at commit, to hand a change back that the strategy narrowed inside its window. Brakes
  * are never narrowed. What a change cannot be placed for exactly takes the strictest row (fail closed).
+ *
+ * ADS AUTONOMY AA-W2-3 — a strategy-bound change (tool-types.ts StrategyBound) that the rule scheduled is judged once
+ * more at commit, on the fresh dry run rather than the stored preview (`autoFreshRefusal`): its limits read the
+ * strategy's facts and the day's counts from the preview, and those may move inside the window.
  */
 
 import { z } from 'zod'
@@ -426,6 +430,20 @@ export async function autoCommitRefusal(toolName: string, preview: unknown, args
   if (!tool || !rule || rule.level !== 'auto') return `the business no longer lets Claude run ${toolName} by rule`
   const outside = limitsRefusal(tool, preview, rule)
   return outside ? `it is no longer inside the business's limits: ${outside}` : null
+}
+
+/**
+ * ADS AUTONOMY AA-W2-3 — at commit, for a strategy-bound change the rule scheduled (one change, or a step of a plan):
+ * the same check as `autoCommitRefusal`, on the FRESH dry run the staleness check just made instead of the preview
+ * stored when Claude asked — the ads strategy, its narrowing where the change lands (W1-8) and the day's counts as they
+ * are when it runs. Null when it may still run, and for a tool that is not strategy-bound (its stored preview was
+ * judged; the staleness check compares the rest). The strategy's version is deliberately not a material preview field:
+ * a strategy edit would then make every request a person approved stale, and count towards the automatic pause.
+ */
+export async function autoFreshRefusal(toolName: string, freshPreview: unknown, args?: unknown): Promise<string | null> {
+  if (!getTool(toolName)?.strategyBound) return null
+  const refusal = await autoCommitRefusal(toolName, freshPreview, args)
+  return refusal ? `judged again on a fresh dry run: ${refusal}` : null
 }
 
 /**

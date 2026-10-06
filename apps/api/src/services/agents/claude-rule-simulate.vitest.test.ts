@@ -21,6 +21,7 @@ vi.mock('../../db.js', async () => {
   }
 })
 
+import { __claudeStrategyTest } from '../advertising/ads-strategy/claude.js'
 import { autoCommitRefusal } from './claude-trust.service.js'
 import { simulateClaudeRule } from './claude-rule-simulate.service.js'
 
@@ -109,6 +110,30 @@ describe('simulate — would the proposed rule have run these by themselves?', {
     expect((out as Extract<typeof out, { ok: true }>).simulation).toMatchObject({ wouldRun: 4 })
     expect(await at({ maxChangePercent: 10 }, 60)).toMatchObject({ days: 60, considered: 7, wouldRun: 5 })
     expect(await at({ maxChangePercent: 10 }, 500)).toMatchObject({ days: 90 })
+  })
+
+  it('W1-8 (AA-W2-3) — an ad change is held to the ads strategy where it lands, as the commit’s rule check holds it', async () => {
+    // No ad tool may run by rule before W2: set-price stands in as a bid change (it lands nowhere the strategy can
+    // place, so the strictest row of the business applies).
+    __claudeStrategyTest.treatAs('set-price', 'bid')
+    const row = await inside(() => database.client.adsStrategy.create({
+      data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', claudeAutonomy: { bid: 'ask' }, updatedBy: 'user:test' },
+    }))
+    try {
+      const held = await simulate('set-price', { level: 'auto' })
+      expect((held as Extract<typeof held, { ok: true }>).simulation).toMatchObject({ considered: 6, wouldRun: 0, rejectedAmongWouldRun: 0, examples: [] })
+      for (const key of ['ran', 'said-no', 'waiting', 'silent-no']) {
+        const r = ROWS.find((one) => one.key === key)!
+        expect(await inside(() => autoCommitRefusal('set-price', previewOf(r), {}))).toMatch(/^the ads strategy lets Claude only ask for bid changes here/)
+      }
+      // A strategy that lets Claude run bid changes alone narrows nothing: the limits decide again.
+      await inside(() => database.client.adsStrategy.update({ where: { id: row.id }, data: { claudeAutonomy: { bid: 'auto' } } }))
+      const free = await simulate('set-price', { level: 'auto' })
+      expect((free as Extract<typeof free, { ok: true }>).simulation).toMatchObject({ considered: 6, wouldRun: 4, rejectedAmongWouldRun: 2 })
+    } finally {
+      __claudeStrategyTest.reset()
+      await inside(() => database.client.adsStrategy.delete({ where: { id: row.id } }))
+    }
   })
 
   it('only auto runs by itself: at confirm or ask nothing would have', async () => {
