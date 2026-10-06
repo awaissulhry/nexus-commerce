@@ -6,8 +6,8 @@
  * real PostgreSQL (PGlite) with a campaign to reach. The snapshot beside this file was WRITTEN BY THE ROUTE BEFORE THE
  * MOVE and is read unchanged after it; only generated ids, timestamps and timings are normalised.
  *
- * One deliberate change since (ads wave 4c, F3): the share-of-voice branch lists its markets from the connections,
- * alphabetically (DE, ES, FR, IT), where a fixed list said IT, DE, ES, FR. Same four markets, same answers.
+ * Ads wave 4c (F3): the share-of-voice branch now lists its markets from the connections (the live four first, in the
+ * order the fixed list had them), so the four accounts below are seeded; the snapshot is unchanged.
  */
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -57,7 +57,7 @@ beforeAll(async () => {
     data: { name: 'PARITY CAMPAIGN', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'IT', externalCampaignId: 'TEST-CMP-1' },
   }))
   // Ads wave 4c (F3) — the share-of-voice branch reads the markets from the connections now, not a fixed four. Today's
-  // four live accounts (ids made up), so the branch answers for the same four markets it always listed.
+  // four live accounts (ids made up), so the branch answers for the same four markets, in the same order, as before.
   for (const marketplace of ['IT', 'DE', 'ES', 'FR']) {
     await withWorkspace(business, () => database.client.amazonAdsConnection.create({
       data: { profileId: `TEST-PROFILE-${marketplace}`, marketplace, mode: 'production', isActive: true, writesEnabledAt: new Date('2026-01-01T00:00:00Z') },
