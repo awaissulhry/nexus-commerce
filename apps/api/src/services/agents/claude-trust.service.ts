@@ -244,6 +244,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   create: 'new campaigns',
   rule: 'ads rules',
   undo: 'undoing ad changes',
+  allowlist: 'putting a campaign on the live-write allowlist',
   pause: 'pausing ads (a real pause)',
   enable: 'switching paused ads back on',
 }

@@ -19,7 +19,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 - The last 3 days are provisional (Amazon restates them for up to 72 hours). `dataAsOf` is the newest day of data.
 - A person without the ad-spend money permission sees the same answers without amounts: say so, and review by clicks, orders and ACoS only.
 - Live or sandbox is the server's switch: each change preview's `reach` says `live` or `sandbox` (sandbox = recorded in Nexus only). An Amazon sandbox preview skips the live checks (halt, connection, markets, allowlist, pins, spend ceiling, daily budget move, value cap), so it predicts nothing about live.
-- Amazon live ad writes happen only in IT, DE, FR and ES; any other Amazon market is refused at the live write gate. On Amazon, `liveWrites` in `ad-campaigns` is the campaign's live-write allowlist: a campaign off it takes no live change, and putting it on (`set-campaign-live-writes`) is the person's decision and always waits for a person. eBay has no allowlist: its live or sandbox is server-wide (`writes`).
+- Amazon live ad writes happen only in IT, DE, FR and ES; any other Amazon market is refused at the live write gate. On Amazon, `liveWrites` in `ad-campaigns` is the campaign's live-write allowlist: a campaign off it takes no live change, and putting it on (`set-campaign-live-writes`) waits for a person, unless the business lets it run by its rule for a campaign Claude itself created. eBay has no allowlist: its live or sandbox is server-wide (`writes`).
 
 ## 1. Per market: read
 
