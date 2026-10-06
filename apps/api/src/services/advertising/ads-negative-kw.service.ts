@@ -43,7 +43,7 @@ import {
   createNegativeKeyword as sendNegativeKeyword, createNegativeProductTarget as sendNegativeProductTarget,
   type AdsRegion, type ClientContext,
 } from './ads-api-client.js'
-import { checkAdsWriteGate } from './ads-write-gate.js'
+import { checkAdsWriteGate, ownLimitsSentence, type OwnLimit } from './ads-write-gate.js'
 import { isPersonCreate } from './ads-mutation.service.js'
 import { assertNegativeWriteAllowed, isAsin, negativeKeywordTextProblem, protectedNegativeRefusal } from './ads-negation-policy.js'
 import { checkProtectConverting, normaliseNegTerm, type ProtectConvertingConfig } from './ads-protect-converting.js'
@@ -96,7 +96,8 @@ export interface NegativeWriteResult {
   reachedAmazon: boolean
   /** The local row: the new one, or the standing negative for `already_existed`; null when nothing was written. */
   adTargetId: string | null
-  refusal: { deniedAt: string; reason: string } | null
+  /** W1-7 + 3A — with `deniedAt: 'needs_confirmation'`: the person's own limits it goes past (his "Send anyway" sends it). */
+  refusal: { deniedAt: string; reason: string; limits?: OwnLimit[] } | null
   error: string | null
   rawResponse: unknown
 }
@@ -131,6 +132,11 @@ export interface WriteNegativeProductTargetArgs {
   evidence?: AdWriteEvidence | null
   /** 1e — a person's own add from a screen or an upload (isPersonCreate). Set only by the routes. */
   manual?: boolean
+  /**
+   * W1-7 + 3A — the person's "Send anyway": he saw that the ASIN belongs to a product his ads strategy protects and
+   * confirmed. Honoured only with `manual` (a person's own add); an engine's is refused whatever it passes.
+   */
+  confirmOwnLimits?: boolean
 }
 
 // ── Endpoint constants (legacy SP v3) ─────────────────────────────────
@@ -138,7 +144,7 @@ export interface WriteNegativeProductTargetArgs {
 const SP_CAMPAIGN_NEGATIVE_KW_PATH = '/sp/campaignNegativeKeywords'
 const SP_CAMPAIGN_NEGATIVE_KW_MIME = 'application/vnd.spCampaignNegativeKeyword.v3+json'
 
-type Refusal = { deniedAt: string; reason: string }
+type Refusal = { deniedAt: string; reason: string; /** 3A — with `needs_confirmation`. */ limits?: OwnLimit[] }
 interface CampaignRow { id: string; externalCampaignId: string | null; marketplace: string | null; adProduct: string | null; type: string | null }
 /** Where a negative lands. For CAMPAIGN scope `adGroup` is the ad group that holds Nexus's row (the legacy structure). */
 interface Placement { campaign: CampaignRow; adGroup: { id: string; externalAdGroupId: string | null } | null }
@@ -232,8 +238,19 @@ function keywordTextRefusal(text: string, matchType: NegativeMatchType): Refusal
   return problem ? { deniedAt: 'text_limits', reason: problem } : null
 }
 
-async function protectedRefusal(text: string, matchType: NegativeMatchType | null, campaign: CampaignRow): Promise<Refusal | null> {
+async function protectedRefusal(
+  text: string, matchType: NegativeMatchType | null, campaign: CampaignRow,
+  person: { manual?: boolean; confirmOwnLimits?: boolean } = {},
+): Promise<Refusal | null> {
   const hit = await protectedNegativeRefusal({ text, matchType, marketplace: campaign.marketplace, campaignId: campaign.id })
+  // W1-7 + 3A — a person's own add on a protected PRODUCT is his own setting meeting his own click: it waits for his
+  // "Send anyway" (here too, so an add Nexus keeps as a draft is asked as well), and once confirmed it goes; the write
+  // gate asks the same at dispatch. An engine's is refused. A protected term refuses everyone, as before.
+  if (hit?.protectedProduct && person.manual === true) {
+    if (person.confirmOwnLimits === true) return null
+    const limit: OwnLimit = { limit: 'product_protected', reason: hit.warning ?? hit.reason }
+    return { deniedAt: 'needs_confirmation', reason: ownLimitsSentence([limit]), limits: [limit] }
+  }
   return hit ? { deniedAt: hit.protectedProduct ? 'product_protected' : 'keyword_protected', reason: hit.reason } : null
 }
 
@@ -397,13 +414,14 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
   }
 }
 
-interface ProductJob { placement: Placement; asin: string; creationFlow?: boolean; pushing?: boolean; /** 1e — see KeywordJob.manual. */ manual?: boolean }
+interface ProductJob { placement: Placement; asin: string; creationFlow?: boolean; pushing?: boolean; /** 1e — see KeywordJob.manual. */ manual?: boolean; /** W1-7 — see WriteNegativeProductTargetArgs. */ confirmOwnLimits?: boolean }
 
 async function sendProductTarget(job: ProductJob): Promise<Sent> {
   const { placement: { campaign, adGroup }, asin } = job
   if (!adGroup) return { kind: 'refused', refusal: { deniedAt: 'ad_group_unknown', reason: 'A negative product target needs an ad group.' } }
   if (!isAsin(asin)) return { kind: 'refused', refusal: { deniedAt: 'not_an_asin', reason: `"${asin}" is not an ASIN (B0 and 8 letters or digits): a negative product target names one product.` } }
-  const invalid = await protectedRefusal(asin, null, campaign)
+  const confirmed = job.manual === true && job.confirmOwnLimits === true
+  const invalid = await protectedRefusal(asin, null, campaign, { manual: job.manual, confirmOwnLimits: job.confirmOwnLimits })
   if (invalid) return { kind: 'refused', refusal: invalid }
   let heal: string | null = null
   if (!job.pushing) {
@@ -423,11 +441,13 @@ async function sendProductTarget(job: ProductJob): Promise<Sent> {
     marketplace: campaign.marketplace, payloadValueCents: 0, isNegation: true, keywordText: asin, adProduct: adProductOf(campaign),
     ...(job.creationFlow ? {} : { campaignId: campaign.id }),
     manual: job.manual === true,
+    ...(confirmed ? { confirmOwnLimits: true } : {}),
   })
-  if (gate.allowed === false) return { kind: 'refused', refusal: { deniedAt: gate.deniedAt, reason: gate.reason } }
+  if (gate.allowed === false) return { kind: 'refused', refusal: { deniedAt: gate.deniedAt, reason: gate.reason, ...(gate.ownLimits ? { limits: gate.ownLimits } : {}) } }
   const ctx = await clientContext(campaign.marketplace, gate.mode === 'live' ? gate.profileId : null)
   try {
-    const r = await sendNegativeProductTarget(ctx, { externalCampaignId: campaign.externalCampaignId, externalAdGroupId: adGroup.externalAdGroupId, asin, state: 'enabled' })
+    // W1-7 — his confirmed add past a protected product: the wire lets that protection pass (the gate asked him).
+    const r = await sendNegativeProductTarget(ctx, { externalCampaignId: campaign.externalCampaignId, externalAdGroupId: adGroup.externalAdGroupId, asin, state: 'enabled', ...(confirmed ? { personConfirmed: true } : {}) })
     if (r.mode === 'sandbox') return { kind: 'sent', mode: 'sandbox', externalId: null, rawResponse: r.rawResponse, errors: [] }
     return { kind: 'sent', mode: 'live', externalId: await healNegativeRow(heal, r.externalId), rawResponse: r.rawResponse, errors: itemErrors(r.rawResponse, 'negativeTargetingClauses') }
   } catch (error) {
@@ -570,7 +590,7 @@ export async function writeNegativeProductTarget(args: WriteNegativeProductTarge
   const placement = await resolvePlacement({ scope: 'AD_GROUP', adGroupId: args.adGroupId })
   if (isRefusal(placement)) return done('negative product target', refusedResult(placement, mode))
   const asin = (args.asin ?? '').trim()
-  const sent = await sendProductTarget({ placement, asin, creationFlow: args.creationFlow, manual: isPersonCreate(args.manual, args.userId) })
+  const sent = await sendProductTarget({ placement, asin, creationFlow: args.creationFlow, manual: isPersonCreate(args.manual, args.userId), confirmOwnLimits: args.confirmOwnLimits })
   const early = settled(sent, sent.kind === 'draft' ? 'local' : mode)
   if (early) return done('negative product target', early)
 

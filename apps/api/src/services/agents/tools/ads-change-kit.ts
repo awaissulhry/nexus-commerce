@@ -90,7 +90,7 @@ const UNBLOCK: Record<string, string> = {
   connection: 'No production Amazon Ads connection with writes enabled serves this market.',
   connection_writes: 'Writes are not enabled for this Amazon Ads profile.',
   keyword_protected: 'The term is protected against negation.',
-  product_protected: 'The ads strategy protects this product, so its ASIN is never negated: only a change to the strategy lifts it.',
+  product_protected: 'The ads strategy protects this product: no engine, rule or schedule negates its ASIN. A person adding it himself is warned and may send it anyway.',
   spend_ceiling: 'A spend ceiling refuses a raise this large today.',
   budget_day_move: 'The budget has already moved as far as allowed today.',
   value_cap: 'The value is above the cap for one write.',

@@ -215,7 +215,7 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
     // W1-7 (ads-strategy/terms.ts). Safety stops (stock, Buy Box, spend caps, a halt) and the Owner's own painted plans
     // (dayparting, Hourly Bids) still apply to a protected product.
     readBy: [
-      'every negative write (the write gate, the negative write service, the wire, Claude\'s preview): no ASIN negative of a protected product, from anyone',
+      'every negative write (the write gate, the negative write service, the wire): no engine, rule or schedule negates a protected product\'s ASIN; a person\'s own add, or a Claude request he approved, is warned and may be sent anyway',
       'search-term candidates (harvest rules, recommendations, the harvest preview): a protected product\'s ASIN is never offered as a negative',
       'the bid optimiser (auto-bid, target-ACoS bid rules, autopilot plans, recommendations): no cut of a protected product\'s keyword or target without sales',
       'rules: no pause, archive or floor bid of a protected product\'s keyword or target',

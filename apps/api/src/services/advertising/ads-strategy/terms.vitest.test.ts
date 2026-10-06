@@ -7,9 +7,11 @@
  *                Nexus does not know); a market without a group is left out; the windows in play
  *   preview      a caller naming no numbers gets the strategy's groups, each over its own window, and the defaults
  *                elsewhere; a caller naming its own keeps them WHOLE; the harvest bar is asked first
- *   protect      a protected product's ASIN is never a negative candidate and is refused by every writer (the gate,
- *                the negative write service, the wire), a person's own add included; another business's protection
- *                does not leak; an unknown market binds every market's protection; an opt-out wins over a category
+ *   protect      a protected product's ASIN is never a negative candidate; an engine, a rule or a schedule is refused
+ *                by every door (the gate, the negative write service, the wire); a person's own add — or a Claude
+ *                request he approved — is warned and goes once he confirms (3A); a protected TERM still refuses him;
+ *                another business's protection does not leak; an unknown market binds every market's protection; an
+ *                opt-out wins over a category
  *   page         the Keyword Harvest read: the stricter of the saved policy and the strategy, whole; one market only
  *   rules        harvest_and_negate without its own numbers reads the strategy, with them keeps its own; the stop rules
  *                (pause, archive, floor) skip a protected product's keyword; the optimiser holds its zero-sales cut
@@ -232,14 +234,15 @@ describe('a protected product\'s ASIN is never negated', () => {
     expect([...(await inB(() => protectedAsins('IT', ['B0TESTR001']))).keys()]).toEqual(['B0TESTR001'])
   })
 
-  it('the write gate refuses it for every writer — sandbox, a person\'s own add, a write Nexus cannot place — and names the row', async () => {
+  it('the write gate refuses an engine, a rule or a schedule — sandbox, a write Nexus cannot place — and names the row', async () => {
     await inA(async () => {
       const base = { marketplace: 'IT', payloadValueCents: 0, isNegation: true }
       expect(await checkAdsWriteGate({ ...base, keywordText: 'B0TESTV001' })).toEqual({
         allowed: false, deniedAt: 'product_protected',
         reason: '"B0TESTV001" cannot be negated: it is the ASIN of TEST-T-V1, a product the ads strategy protects in IT (Test leaf (IT), version 1).',
       })
-      expect(await checkAdsWriteGate({ ...base, keywordText: 'b0testv001', manual: true })).toMatchObject({ allowed: false, deniedAt: 'product_protected' })
+      // An engine's "confirmation" is not his: refused all the same.
+      expect(await checkAdsWriteGate({ ...base, keywordText: 'b0testv001', confirmOwnLimits: true })).toMatchObject({ allowed: false, deniedAt: 'product_protected' })
       expect(await checkAdsWriteGate({ ...base, marketplace: null, keywordText: 'B0TESTV001' })).toMatchObject({ allowed: false, deniedAt: 'product_protected' })
       expect(await checkAdsWriteGate({ ...base, marketplace: 'DE', keywordText: 'B0TESTV001' })).toEqual({ allowed: true, mode: 'sandbox' })
       expect(await checkAdsWriteGate({ ...base, keywordText: 'B0TESTR001' })).toEqual({ allowed: true, mode: 'sandbox' })
@@ -247,13 +250,53 @@ describe('a protected product\'s ASIN is never negated', () => {
     expect(await inB(() => checkAdsWriteGate({ marketplace: 'IT', payloadValueCents: 0, isNegation: true, keywordText: 'B0TESTR001' }))).toMatchObject({ allowed: false, deniedAt: 'product_protected' })
   })
 
-  it('the negative write service and the wire refuse it too; nothing is written', async () => {
+  it('a person\'s own add — or a Claude request he approved, which carries his mark — is warned, and goes once he confirms; a protected term still refuses him', async () => {
     await inA(async () => {
-      const r = await writeNegativeProductTarget({ adGroupId: ids.g2, asin: 'B0TESTV001', userId: 'user:test' })
-      expect(r).toMatchObject({ outcome: 'refused', reachedAmazon: false, adTargetId: null, refusal: { deniedAt: 'product_protected' } })
+      const base = { marketplace: 'IT', payloadValueCents: 0, isNegation: true, manual: true }
+      const warning = '"b0testv001" is the ASIN of TEST-T-V1, which your ads strategy protects in IT (Test leaf (IT), version 1); a negative stops your ads showing on its page'
+      expect(await checkAdsWriteGate({ ...base, keywordText: 'b0testv001' })).toEqual({
+        allowed: false, deniedAt: 'needs_confirmation', ownLimits: [{ limit: 'product_protected', reason: warning }],
+        reason: `This goes past a product your ads strategy protects: ${warning}. It is your own limit, so you can send it anyway.`,
+      })
+      // His "Send anyway" (an approved Claude request: approvedRun sets manual and confirmOwnLimits).
+      expect(await checkAdsWriteGate({ ...base, keywordText: 'b0testv001', confirmOwnLimits: true })).toEqual({ allowed: true, mode: 'sandbox' })
+      // Out of scope, unchanged: a protected TERM refuses his own add too.
+      await db().adKeywordProtection.create({ data: { mode: 'WHITELIST', term: 'test brand', matchType: 'CONTAINS' } })
+      try {
+        expect(await checkAdsWriteGate({ ...base, keywordText: 'test brand jacket', confirmOwnLimits: true })).toMatchObject({ allowed: false, deniedAt: 'keyword_protected' })
+      } finally {
+        await db().adKeywordProtection.deleteMany({})
+      }
+    })
+  })
+
+  it('the negative write service and the wire refuse an engine\'s; nothing is written', async () => {
+    await inA(async () => {
+      for (const userId of ['automation:tstrule-w17', 'user:test']) {
+        // A user id without the person mark (`manual`) is not a person's own add (isPersonCreate).
+        const r = await writeNegativeProductTarget({ adGroupId: ids.g2, asin: 'B0TESTV001', userId, confirmOwnLimits: true })
+        expect(r, userId).toMatchObject({ outcome: 'refused', reachedAmazon: false, adTargetId: null, refusal: { deniedAt: 'product_protected' } })
+      }
       expect(await db().adTarget.count({ where: { isNegative: true } })).toBe(0)
-      const wire = await negativeWireRefusal({ method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [{ campaignId: 'TC1', expression: [{ type: 'asinSameAs', value: 'B0TESTV001' }] }] } })
-      expect(wire).toMatch(/TEST-T-V1, a product the ads strategy protects in IT/)
+      const body = { negativeTargetingClauses: [{ campaignId: 'TC1', expression: [{ type: 'ASIN_SAME_AS', value: 'B0TESTV001' }] }] }
+      expect(await negativeWireRefusal({ method: 'POST', path: '/sp/negativeTargets', body })).toMatch(/TEST-T-V1, a product the ads strategy protects in IT/)
+      // Only the negative write service says a person confirmed it, after the gate asked him.
+      expect(await negativeWireRefusal({ method: 'POST', path: '/sp/negativeTargets', body, personConfirmed: true })).toBeNull()
+    })
+  })
+
+  it('a person\'s own add through the negative write service waits for his "Send anyway", then is made', async () => {
+    await inA(async () => {
+      const ask = { adGroupId: ids.g2, asin: 'B0TESTV001', userId: 'user:test', manual: true }
+      const waits = await writeNegativeProductTarget(ask)
+      expect(waits).toMatchObject({ outcome: 'refused', adTargetId: null, refusal: { deniedAt: 'needs_confirmation', limits: [{ limit: 'product_protected' }] } })
+      expect(waits.refusal!.reason).toMatch(/^This goes past a product your ads strategy protects: "B0TESTV001" is the ASIN of TEST-T-V1/)
+      expect(await db().adTarget.count({ where: { isNegative: true } })).toBe(0)
+      const sent = await writeNegativeProductTarget({ ...ask, confirmOwnLimits: true })
+      expect(sent).toMatchObject({ outcome: 'created', mode: 'sandbox', refusal: null })
+      expect(await db().adTarget.findMany({ where: { isNegative: true }, select: { adGroupId: true, kind: true, expressionValue: true } }))
+        .toEqual([{ adGroupId: ids.g2, kind: 'PRODUCT', expressionValue: 'B0TESTV001' }])
+      await db().adTarget.deleteMany({ where: { isNegative: true } })
     })
   })
 })

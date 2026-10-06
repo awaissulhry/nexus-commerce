@@ -7,8 +7,9 @@
  *               not know. A group comes WHOLE from one row (a policy, not a patch: harvest-policy.service.ts). A caller
  *               with numbers of its own (a rule's, a person's) never asks here: its numbers win whole (the Owner's
  *               control rule).
- *   protect     the products the Owner protects in a market. Their ASIN is never negated, by any writer (the one
- *               negation policy asks here: ads-negation-policy.ts), and no optimiser stops them (the bid optimiser's
+ *   protect     the products the Owner protects in a market. No engine, rule or schedule negates their ASIN (the one
+ *               negation policy asks here: ads-negation-policy.ts; a person's own add is warned and may be sent
+ *               anyway, the write gate's 3A rule), and no optimiser stops them (the bid optimiser's
  *               zero-sales cut and the rules that pause, archive or floor a keyword ask here). Safety stops (stock, Buy
  *               Box, spend caps, a halt) and the Owner's own painted plans (dayparting, Hourly Bids) still apply.
  *
@@ -194,11 +195,19 @@ export async function protectedAsins(market: string | null, asins: readonly stri
   return out
 }
 
-/** The refusal for negating this ASIN here, or null: it names the product and the strategy row that protects it. */
-export async function protectedAsinRefusal(asin: string, market: string | null): Promise<{ reason: string; sku: string } | null> {
+/**
+ * Why negating this ASIN here meets a protected product, or null. `reason` is the refusal an engine, a rule or a
+ * schedule gets; `warning` is what a person reads when it is his own add (or a Claude request he approved): the
+ * protection is his own setting, so he is warned and may send it anyway (the write gate decides which).
+ */
+export async function protectedAsinRefusal(asin: string, market: string | null): Promise<{ reason: string; warning: string; sku: string } | null> {
   const hit = (await protectedAsins(market, [asin])).get(asin.trim().toUpperCase())
   return hit
-    ? { reason: `"${asin.trim()}" cannot be negated: it is the ASIN of ${hit.sku}, a product the ads strategy protects in ${hit.market} (${sourceLabel(hit.source)}).`, sku: hit.sku }
+    ? {
+      reason: `"${asin.trim()}" cannot be negated: it is the ASIN of ${hit.sku}, a product the ads strategy protects in ${hit.market} (${sourceLabel(hit.source)}).`,
+      warning: `"${asin.trim()}" is the ASIN of ${hit.sku}, which your ads strategy protects in ${hit.market} (${sourceLabel(hit.source)}); a negative stops your ads showing on its page`,
+      sku: hit.sku,
+    }
     : null
 }
 

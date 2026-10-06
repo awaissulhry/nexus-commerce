@@ -67,7 +67,7 @@ describe('the registry', () => {
     // Each reader says where it acts, in words a screen can show.
     for (const f of STRATEGY_FIELDS.filter((x) => x.readBy.length)) for (const r of f.readBy) expect(r.length, f.key).toBeGreaterThan(20)
     expect(STRATEGY_FIELDS.find((f) => f.key === 'harvest')!.readBy.join(' ')).toMatch(/Keyword Harvest page.*stricter/)
-    expect(STRATEGY_FIELDS.find((f) => f.key === 'protect')!.readBy.join(' ')).toMatch(/no ASIN negative of a protected product, from anyone/)
+    expect(STRATEGY_FIELDS.find((f) => f.key === 'protect')!.readBy.join(' ')).toMatch(/no engine, rule or schedule negates a protected product's ASIN; a person's own add, or a Claude request he approved, is warned/)
   })
 
   it('every money field keeps its numbers under keys the money filter strips (ad-spend money)', () => {
