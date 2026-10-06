@@ -13,9 +13,8 @@
  *                product each give one: the one that spends less (the Owner's rule for shared ad groups)
  *   raise        what counts as loosening, for the writer (W1-3): a raise needs the Owner's authenticator code
  *   money        ad-spend money: hidden from a person without financials.adspend.view
- *   readBy       the engines and doors that ACT on it. Empty for every field today: no engine, rule or Claude door
- *                reads the strategy yet. Each W1 engine PR adds itself here, so a screen never claims a reader
- *                that does not exist.
+ *   readBy       the engines and doors that ACT on it. Each W1 reader adds itself here, so a screen never claims a
+ *                reader that does not exist: W1-8 Claude's door (what Claude may do alone); no engine or rule yet.
  *
  * 🔴 Units. `*Pct` is an INTEGER PERCENT (25 = 25 %), never a fraction — the AdsAutomationState.defaultTargetAcosPct
  * convention. The engines take fractions (Campaign.dynamicBidding.targetAcos = 0.25). The two meet ONLY through
@@ -43,7 +42,8 @@ export const STOP_METHODS = ['LOW_BIDS', 'PAUSE'] as const
 
 /**
  * What Claude may do alone, per kind of ad action: the strategy NARROWS the business's trust level for these tools,
- * never widens it (W1-8). Brakes are never narrowed (stop-automation, turn-down-automation, a tightening guardrail).
+ * never widens it (W1-8, ads-strategy/claude.ts). Brakes are never narrowed (stop-automation, turn-down-automation, a
+ * tightening guardrail): none is listed here.
  */
 export const CLAUDE_ACTION_TOOLS = {
   bid: ['set-target-bid', 'bulk-ad-bid-change'],
@@ -63,6 +63,8 @@ export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]
 /** Lowest first; the lower of two levels is the safer one. */
 export const CLAUDE_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'auto']
+/** The reader of `claudeAutonomy` (W1-8): every ad change Claude asks for is held to the lower level. */
+export const CLAUDE_DOOR = "Claude's door (every ad change Claude asks for)"
 
 // ── Units ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -195,7 +197,7 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
   },
   // The stop bid may be empty inside a set group: the existing 2¢ floor.
   { key: 'stop', label: 'Temporary stop', columns: ['stopMethod', 'stopBidCents'], required: ['stopMethod'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'saferStop', raise: 'pause', money: true, readBy: [] },
-  { key: 'claudeAutonomy', label: 'What Claude may do alone', columns: ['claudeAutonomy'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lowerLevel', raise: 'autonomy', money: false, readBy: [] },
+  { key: 'claudeAutonomy', label: 'What Claude may do alone', columns: ['claudeAutonomy'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lowerLevel', raise: 'autonomy', money: false, readBy: [CLAUDE_DOOR] },
   { key: 'reviewEveryDays', label: 'Review every (days)', columns: ['reviewEveryDays'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
 ]
 
@@ -204,7 +206,7 @@ export const FIELD_BY_KEY: ReadonlyMap<StrategyFieldKey, StrategyField> = new Ma
 /** The columns of a field that must be set on a row for that row to set the field. */
 export const requiredColumns = (field: StrategyField): readonly StrategyColumn[] => field.required ?? field.columns
 
-/** The fields no engine or door acts on yet: today every one of them. Shrinks as the W1 engine PRs ship. */
+/** The fields no engine or door acts on yet. Shrinks as the W1 readers ship. */
 export function notReadYet(): StrategyFieldKey[] {
   return STRATEGY_FIELDS.filter((f) => f.readBy.length === 0).map((f) => f.key)
 }
