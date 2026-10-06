@@ -268,6 +268,17 @@ describe('approved, a hero is built by the playbook\'s build; the term keeps run
     expect(await inside(() => db().adTarget.findMany({ where: { adGroupId: exactB.adGroupId }, select: { expressionValue: true, isNegative: true, bidCents: true } }))).toEqual([{ expressionValue: 'test cape', isNegative: false, bidCents: 60 }])
   })
 
+  it('START is the playbook\'s own (op start, slots ["hero:<term>"]): the hero alone; restore-campaign refuses it', async () => {
+    const heroId = (await inside(() => db().adBlueprintApplication.findUniqueOrThrow({ where: { id: applicationId } }))).createdCampaignIds[0]
+    // As the wizard's launch leaves it (the stand-in does not): at the 2¢ floor, flagged by the person who asked.
+    await inside(() => db().campaign.update({ where: { id: heroId }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: 2, bidsSuppressedBy: 'user:u-asker' } }))
+    const start = await call('apply-ads-playbook', { op: 'start', market: 'IT', productId: A.parent, slots: ['hero:test cape'] })
+    expect(start.ok).toBe(true)
+    expect((start.preview as Row).campaigns.map((c: Row) => [c.slot, c.campaignId, c.allowlist])).toEqual([['hero:test cape', heroId, 'on']])
+    expect(start.preview).toMatchObject({ op: 'start', stepUp: expect.any(Object) })
+    expect((await call('restore-campaign', { campaignId: heroId })).error).toMatch(/was built by an ads playbook: its bids go back only with apply-ads-playbook op start/)
+  })
+
   it('one hero per term: a second is refused; the view names the term\'s own campaign and proposes no other', async () => {
     expect((await call('apply-ads-playbook', hero(A.parent, 'Test  Cape'))).error).toMatch(/it has its own campaign already \(one hero per term per product per market\)/)
     const cape = entry(await winners(A.parent), 'test cape')
