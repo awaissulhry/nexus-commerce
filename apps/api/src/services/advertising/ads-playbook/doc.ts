@@ -232,10 +232,15 @@ export const TEMPLATE_DOC = z.object(SECTION_SCHEMAS).strict()
 export type TemplateDoc = z.infer<typeof TEMPLATE_DOC>
 export type SectionValue<K extends SectionKey> = TemplateDoc[K]
 
-/** A playbook row's overrides: any whole section, and (PRODUCT rows) the optional slots the product leaves out. */
+/**
+ * A playbook row's overrides: any whole section, and (PRODUCT rows) the optional slots the product leaves out and, PB-10,
+ * `adoptedPlacements`: each ADOPTED slot's placements as its campaign held them when it was adopted (origin adopted). That
+ * is the adopted campaign's baseline in drift; nothing is compiled from it — a built slot keeps the placements section.
+ */
 export const OVERRIDES = z.object({
   ...Object.fromEntries(SECTIONS.map((k) => [k, SECTION_SCHEMAS[k].optional()])) as { [K in SectionKey]: z.ZodOptional<(typeof SECTION_SCHEMAS)[K]> },
   skipSlots: z.array(SLOT_KEY).max(30).optional(),
+  adoptedPlacements: PLACEMENTS_SECTION.optional(),
 }).strict()
 export type Overrides = z.infer<typeof OVERRIDES>
 

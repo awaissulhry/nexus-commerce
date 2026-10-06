@@ -17,13 +17,16 @@
  *              engine's gate — nothing is created, saved or sent
  *   build      PB-5a — the builds of a product's playbook (or one, by applicationId): status, progress, the campaigns
  *              each made (at Amazon or not, off the allowlist, at the floor), what failed, what START will apply
+ *   drift      PB-10 — where what is live differs from what a product's playbook compiles to in one market (drift.ts,
+ *              drift-load.ts): each item with what fixes it (apply-ads-playbook op sync, another tool, or nothing) and,
+ *              for a change a person made himself, keep or revert; or, for a market, every enrolled product counted
  *
  * PB-9 — `effective` for an enrolled product also carries its `phaseCheck` (phase-check.ts), computed by Nexus: the phase
  * (the strategy's goal) and since when, the hold, each exit rule with its numbers (ad orders, ACoS against the target,
  * the change in orders, sellable units, days in phase), the move Nexus proposes, stock cover and the break-even ACoS.
  *
  * Honest by construction: no engine, rule or Claude change reads a playbook. It is compiled only by an approved apply
- * (PB-5a: apply-ads-playbook build and adopt; start, sync and phase come later); until then it is stored and shown only,
+ * (PB-5a: apply-ads-playbook build and adopt; PB-10: sync; start and phase come later); until then it is stored and shown only,
  * and nothing at Amazon moves because of it.
  *
  * Money (the product's daily budget and base bid, the least budget per slot, the recipes' targets and bids, the
@@ -54,7 +57,7 @@ import {
   type TemplateRow,
 } from './resolve.js'
 
-export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture', 'compile', 'build'] as const
+export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture', 'compile', 'build', 'drift'] as const
 export type PlaybookViewName = (typeof PLAYBOOK_VIEWS)[number]
 
 export interface PlaybookReadArgs {
@@ -83,8 +86,8 @@ export type PlaybookReadResult = { data: Record<string, unknown> } | PlaybookRea
 export const PLAYBOOK_NOTE =
   'No engine, rule or Claude change follows a playbook, and nothing at Amazon moves because of it, until an approved apply '
   + 'compiles it: apply-ads-playbook builds a product\'s missing campaigns (at the floor, off the live-write allowlist) or '
-  + 'adopts the ones it runs, or switches its phase (op phase: the phase\'s numbers into the ads strategy, its slots, hourly '
-  + 'plans and harvest cadence); starting to spend comes later. Until then it is stored and shown only (set-ads-playbook '
+  + 'adopts the ones it runs, syncs its drift (adding only), or switches its phase (op phase: the phase\'s numbers into the '
+  + 'ads strategy, its slots, hourly plans and harvest cadence); starting to spend comes later. Until then it is stored and shown only (set-ads-playbook '
   + "changes it). The numbers the engines obey are the ads strategy's (strategy, read-only here)."
 const ENROLL_NOTE = 'A product is in only when its own row (or its parent\'s) says enrolled; a category or market playbook is a default for the products under it, never a build.'
 const CAPTURE_NOTE =
@@ -385,6 +388,43 @@ async function buildIn(a: PlaybookReadArgs, channel: string): Promise<PlaybookRe
   }
 }
 
+// ── PB-10 — drift ─────────────────────────────────────────────────────────────────────────────────
+
+async function driftIn(a: PlaybookReadArgs, channel: string): Promise<PlaybookReadResult> {
+  if (!a.market) return fail(400, 'Drift is read for one market: name it (market), and a product (productId or sku) for its items.')
+  if (a.productId && a.sku) return fail(400, 'Name the product once: productId or sku, not both.')
+  const market = a.market.trim().toUpperCase()
+  const { DRIFT_NOTE, loadDrift, marketDrift } = await import('./drift-load.js')
+  if (!a.productId && !a.sku) {
+    const list = await marketDrift(market, channel)
+    return {
+      data: {
+        channel, view: 'drift', market, products: list.products, ...(list.more ? { more: `${list.more} more enrolled product(s): read one by productId or sku` } : {}),
+        ...(list.products.length ? {} : { empty: `No product is enrolled in a playbook in ${market}.` }),
+        note: DRIFT_NOTE,
+      },
+    }
+  }
+  const out = await loadDrift({ market, productId: a.productId, sku: a.sku, channel })
+  if ('error' in out) return out
+  const d = out.data
+  const head = { channel, view: 'drift', market, product: d.product, playbook: d.playbook, enrolled: d.enrolled, compiles: d.compiles, note: DRIFT_NOTE }
+  if (!d.enrolled) return { data: { ...head, empty: `${d.product.sku} is not enrolled in its playbook in ${market}: nothing is held to it, so nothing drifts.` } }
+  if (!d.report) return { data: { ...head, problems: d.problems, warnings: d.warnings } }
+  return {
+    data: {
+      ...head,
+      counts: d.report.counts,
+      items: d.report.items,
+      heldBack: d.report.heldBack.slice(0, MAX_LISTED),
+      notChecked: d.report.notChecked,
+      ...(d.excluded.length ? { excluded: d.excluded } : {}),
+      warnings: d.warnings,
+      ...(d.report.items.length ? {} : { empty: 'No drift: what is live matches what this product\'s playbook compiles to (as far as it is checked — see notChecked).' }),
+    },
+  }
+}
+
 const linkOut = (l: { playbookId: string; kind: string; key: string; refId: string; adGroupId: string | null; origin: string; compiledVersion: number }) => ({
   playbookId: l.playbookId, kind: l.kind, key: l.key, refId: l.refId, adGroupId: l.adGroupId, origin: l.origin, compiledVersion: l.compiledVersion,
 })
@@ -405,6 +445,7 @@ export async function readPlaybook(args: PlaybookReadArgs): Promise<PlaybookRead
     return previewBuild({ market: args.market, productId: args.productId, sku: args.sku, channel })
   }
   if (view === 'build') return buildIn(args, channel)
+  if (view === 'drift') return driftIn(args, channel)
   const limit = Math.min(Math.max(Math.trunc(args.limit ?? 20), 1), 100)
   if (view === 'history' && args.templateId) {
     const versions = await playbookVersions({ kind: 'template', refId: args.templateId }, limit)

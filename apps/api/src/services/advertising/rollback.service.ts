@@ -174,6 +174,10 @@ async function reverseOne(
     return { ok: false, reason: 'payloadBefore missing or invalid' }
   }
   if (isArchiveLog(log)) return { ok: false, skipped: true, reason: ARCHIVE_IS_FINAL }
+  // PB-10 — a create (an import's is inverted below) has nothing before it to put back: what it made is archived
+  // (archive-ads) or, a negative, retired (undo-ad-change retires those apart). Putting back its empty before-state would
+  // write nonsense (a keyword's bid from `{}`).
+  if (isPlainCreateLog(log)) return { ok: true, skipped: true, reason: CREATE_NOT_PUT_BACK }
 
   try {
     // D1 — placement-bias rollback (the rank engine's main lever). actionType-specific because the
@@ -335,6 +339,9 @@ async function reverseOne(
  * again, so Undo never puts one back — re-enabling it in Nexus would show an ad Amazon no longer serves. While the
  * archive still waits to be sent, cancel it instead (DELETE /advertising/mutations/:outboundQueueId).
  */
+/** PB-10 — a create's audit row (create_keyword, create_negative_keyword, create_product_ad …), not an import's. */
+export const isPlainCreateLog = (log: { actionType: string }) => log.actionType.startsWith('create_')
+export const CREATE_NOT_PUT_BACK = 'A create has nothing before it to put back: archive what it made (archive-ads); a negative it made is retired.'
 export const ARCHIVE_IS_FINAL = 'An archive cannot be undone: Amazon cannot switch an archived ad on again. While it still waits to be sent, cancel it instead.'
 
 /** The log row archived its entity (a status write to ARCHIVED from another status). */

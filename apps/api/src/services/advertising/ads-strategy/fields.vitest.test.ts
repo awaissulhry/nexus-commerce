@@ -175,6 +175,8 @@ describe('the registry', () => {
   it('PB-5a — a tool of several ops: each op its own kind (null: never narrowed); an op not listed, or no args, the tool\'s kind', () => {
     expect(actionOfTool('apply-ads-playbook', { op: 'build' })).toBe('create')
     expect(actionOfTool('apply-ads-playbook', { op: 'adopt' })).toBeNull()
+    expect(actionOfTool('apply-ads-playbook', { op: 'sync' })).toBe('create')
+    expect(actionOfTool('apply-ads-playbook', { op: 'sync-negatives' })).toBe('negative')
     // PB-9 — a phase switch is its own kind; the tool stays create when no op says otherwise.
     expect(actionOfTool('apply-ads-playbook', { op: 'phase' })).toBe('phase')
     expect(CLAUDE_ACTION_TOOLS.phase).toContain('apply-ads-playbook')

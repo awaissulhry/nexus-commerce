@@ -437,6 +437,9 @@ const createNegativeKeyword: AgentTool = {
       // the recommendation it carries out.
       evidence: withSource({ metric: 'claudeRequest', note: run.reason }, sourceOf(args.source)),
       manual: run.manual, // 4A — a person approved it: his own click
+      // PB-10 — its audit row carries the approval's change set, so an undo of this request (or of its step in a plan)
+      // finds exactly the negative it made.
+      changeSetId: run.changeSetId,
     })
     if (made.refusal) return notRun(`Not run: Amazon's write gate refused it — ${made.refusal.reason}. Nothing changed.`)
     if (made.outcome === 'failed') return notRun(`Not run: the negative keyword did not reach Amazon — ${made.error}. Nothing changed.`)
