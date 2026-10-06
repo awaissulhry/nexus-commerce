@@ -121,4 +121,19 @@ describe('PUT /api/advertising/automation/strategy', () => {
     expect(version).toMatchObject({ via: 'screen', direction: 'raise' })
     expect(version.stepUpAt).toBeInstanceOf(Date)
   })
+
+  it('W1-4 — the answer carries the undo: sent back, it puts the previous version back (the code when that raises)', async () => {
+    const saved = await send('PUT', '/api/advertising/automation/strategy', change({ maxBidCents: 140 }, { expectVersion: 3 }))
+    expect(saved.statusCode, saved.body).toBe(200)
+    const { undo, version } = saved.json() as { undo: Record<string, unknown>; version: number }
+    expect(version).toBe(4)
+    expect(undo).toMatchObject({ channel: 'AMAZON', market: 'IT', level: 'market', op: 'set', expectVersion: 4, values: { maxBidCents: 160, goal: null } })
+    // Undoing a lowering puts a higher bid back: a raise, so it asks for the code like any other.
+    const noCode = await send('PUT', '/api/advertising/automation/strategy', undo)
+    expect(noCode.json()).toMatchObject({ code: 'mfa_required', raises: ['Highest bid (cents)'] })
+    const undone = await send('PUT', '/api/advertising/automation/strategy', { ...undo, code: generateSync({ secret }) })
+    expect(undone.statusCode, undone.body).toBe(200)
+    expect(undone.json()).toMatchObject({ version: 5, undo: { expectVersion: 5, values: { maxBidCents: 140 } } })
+    expect(await row()).toMatchObject({ maxBidCents: 160, version: 5 })
+  })
 })

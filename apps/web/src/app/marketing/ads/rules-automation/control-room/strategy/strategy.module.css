@@ -1,0 +1,95 @@
+/* ADS AUTONOMY W1-4 — the Control Room's Strategy tab. Layout only: every control keeps its design-system size and
+   colour; semantic --nds-* tokens only (the ads console pins them light, so the tab is dark-ready as it is). */
+
+.tab { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); }
+.tab > * { min-width: 0; }
+
+/* The head: title and what it is on the left, the market on the right; they stack on a phone. */
+.head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--nds-space-12); }
+.headText { display: grid; gap: var(--nds-space-4); min-width: 0; flex: 1 1 320px; }
+.title { margin: 0; font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.lead { margin: 0; color: var(--nds-text-2); max-width: 72ch; }
+.market { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+.marketLabel { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-medium); }
+
+/* Where (the market, its categories and products) beside the editor; above it below 1100 px. */
+.body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16); align-items: start; }
+@media (min-width: 1100px) {
+  .body { grid-template-columns: 280px minmax(0, 1fr); }
+  .where { position: sticky; top: var(--nds-space-12); }
+}
+
+.where { display: grid; gap: var(--nds-space-8); min-width: 0; }
+.whereGroup { display: grid; gap: var(--nds-space-6); }
+.whereHead { margin: var(--nds-space-6) 0 0; color: var(--nds-text-3); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); text-transform: uppercase; letter-spacing: 0.04em; }
+.whereSub { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.whereNone { margin: 0; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.whereAdd { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); margin-top: var(--nds-space-4); }
+
+.editor { display: grid; gap: var(--nds-space-16); min-width: 0; }
+.scopeHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--nds-space-8); }
+.scopeTitle { margin: 0; font-size: var(--nds-font-size-md); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.scopeMeta { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+
+/* The cards: two stacks side by side where they fit (goal and target · money and stop, near the same height), then the
+   wide cards; one column on a phone, in the same order (the keyboard's order too). */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--nds-space-16); align-items: start; }
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16); min-width: 0; }
+.wide { grid-column: 1 / -1; }
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: var(--nds-space-16) var(--nds-space-24); }
+.fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-14); min-width: 0; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: var(--nds-space-12); align-items: start; }
+.groupLabel { margin: 0; font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.group { display: grid; gap: var(--nds-space-8); min-width: 0; }
+.quad { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 100px), 1fr)); gap: var(--nds-space-10); align-items: start; }
+
+/* Under each field: what is in force and where it comes from, then who reads it. */
+.hint { display: grid; gap: var(--nds-space-3); }
+.reader { display: flex; align-items: baseline; gap: var(--nds-space-6); }
+.reader > :first-child { flex: none; }
+.readerText { min-width: 0; }
+.groupError { margin: 0; color: var(--nds-danger-text); font-size: var(--nds-font-size-sm); }
+.note { margin: 0; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+
+/* What Claude may do alone: one line per kind of action; the parts stack on a phone. */
+.claudeList { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); }
+.claudeRow {
+  display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.2fr);
+  gap: var(--nds-space-12); align-items: center; padding: var(--nds-space-8) var(--nds-space-12);
+}
+.claudeRow + .claudeRow { border-top: 1px solid var(--nds-border-subtle); }
+.claudeHeadRow { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-medium); }
+.claudeName { font-weight: var(--nds-font-weight-medium); color: var(--nds-text-strong); }
+.claudeNote { display: block; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+/* The small labels repeat the header row's words; they show only where the header row does not (a phone). */
+.claudeSub { display: none; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+@media (max-width: 720px) {
+  /* The kind on its own line, your rule and the result side by side, the choice full width under them. */
+  .claudeRow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'name name' 'rule result' 'choice choice'; row-gap: var(--nds-space-6); }
+  .claudeHeadRow { display: none; }
+  .claudeName { grid-area: name; }
+  .claudeRule { grid-area: rule; }
+  .claudeChoice { grid-area: choice; }
+  .claudeResult { grid-area: result; }
+  .claudeSub { display: block; }
+}
+
+.shadowList { margin: 0; padding-inline-start: var(--nds-space-18); display: grid; gap: var(--nds-space-4); }
+.historyList { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--nds-space-10); }
+.historyItem { display: grid; gap: var(--nds-space-3); }
+.historyHead { font-weight: var(--nds-font-weight-medium); color: var(--nds-text-strong); }
+.historyChanges { margin: 0; padding-inline-start: var(--nds-space-18); color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+
+.footerActions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
+
+/* The save dialog: one summary, one table, what happens. */
+.review { display: flex; flex-direction: column; gap: var(--nds-space-14); min-width: 0; overflow-wrap: anywhere; }
+/* One summary: the tiles where they fit, the same counts as one line on a phone (the tiles took most of the dialog). */
+.summaryLine { display: none; margin: 0; font-weight: var(--nds-font-weight-medium); color: var(--nds-text-strong); }
+@media (max-width: 600px) {
+  .summaryLine { display: block; }
+  .summaryTiles { display: none; }
+}
+.effects { margin: 0; padding-inline-start: var(--nds-space-18); display: grid; gap: var(--nds-space-4); color: var(--nds-text-2); }
+.tableWrap { overflow-x: auto; min-width: 0; }
+.addBody { display: grid; gap: var(--nds-space-12); min-width: 0; }

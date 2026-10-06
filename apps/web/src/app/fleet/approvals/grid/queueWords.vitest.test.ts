@@ -20,6 +20,7 @@ import {
   bulkOutcomeText,
   bulkRejectVerdict,
   changeHidesLabel,
+  codeSentence,
   countText,
   emptyWords,
   groupKey,
@@ -228,6 +229,27 @@ describe('bulk approve: one kind only (Decision 1 = A)', () => {
     const many = Array.from({ length: BULK_MAX + 1 }, (_, i) => row({ id: `r${i}` }))
     expect(bulkApproveVerdict(many).reason).toBe(`At most ${BULK_MAX} requests can be approved at once. You ticked ${BULK_MAX + 1}.`)
     expect(bulkApproveVerdict([]).enabled).toBe(false)
+  })
+
+  it('W1-4 — a request that raises is left out of a bulk approve, and the button says so; alone it is held with why', () => {
+    const strategy = (id: string, needsCode: string | null) => row({ id, toolName: 'set-ads-strategy', title: 'Set the ads strategy', needsCode, bulkApprovable: !needsCode, bulkBlockedWhy: needsCode ? 'A raise is approved on its own, with your authenticator code' : null })
+    const raise = strategy('r1', 'It raises the ads strategy (Highest bid (cents)): approving it needs your authenticator code.')
+    const lower = strategy('l1', null)
+    expect(bulkApproveVerdict([raise, lower])).toEqual({
+      enabled: true, label: 'Approve 1 of 2 · Set the ads strategy', reason: null,
+      note: '1 that raises is left out: it is approved on its own, with your authenticator code.',
+    })
+    expect(bulkApproveVerdict([raise])).toMatchObject({ enabled: false, label: 'Approve 1 · Set the ads strategy', reason: 'It raises, so it is approved on its own: open it and approve it with your authenticator code.' })
+    expect(bulkApproveVerdict([raise, strategy('r2', 'It raises the ads strategy (Goal): approving it needs your authenticator code.')]).reason)
+      .toBe('Each of these raises, so each is approved on its own: open one and approve it with your authenticator code.')
+  })
+
+  it('W1-4 — the code sentence in plain words, and the Why of a waiting raise says the approve asks for the code', () => {
+    const raise = row({ needsCode: 'It raises the ads strategy (Highest bid (cents), Most changes per engine run (actions)): approving it needs your authenticator code.' })
+    expect(codeSentence(raise)).toBe('It raises the ads strategy (Highest bid, Most changes per engine run): approving it needs your authenticator code.')
+    expect(codeSentence(row({}))).toBeNull()
+    expect(whyText(raise)).toBe('Your rule for Set master price: Ask me · Approving asks for your authenticator code')
+    expect(whyText({ ...raise, state: 'done', note: 'Ran', decider: null })).toBe('Ran')
   })
 
   it('rejects across kinds, but only rows that still wait', () => {

@@ -19,6 +19,7 @@
  * Money carries its currency when the preview (or, for master prices, the business's master currency) says it.
  */
 import type { QueueChange, QueueTarget } from '@nexus/shared/approval-queue'
+import { marketLimitsOf } from '@nexus/shared/ads-market-limits'
 import { PLAN_TOOL } from '../agents/tool-types.js'
 
 type Rec = Record<string, unknown>
@@ -479,6 +480,51 @@ function genericLines(p: Rec, currency: string | null): { changes: QueueChange[]
   return { changes: [], items: [] }
 }
 
+/* ── ADS AUTONOMY W1-4: a change of the ads strategy ─────────────────────────────────────────── */
+
+/** The strategy's columns that hold money, in cents of the market's currency (apps/api ads-strategy/fields.ts). */
+const STRATEGY_MONEY_COLUMNS = new Set(['monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'negateMinSpendCents', 'stopBidCents'])
+
+/**
+ * set-ads-strategy — each setting from → to in words, money in the market's currency (Amazon's checked limits table;
+ * a market it does not know shows cents, never a guessed currency), a group as one line, the scope as its target. The
+ * preview's labels carry their unit ("Highest bid (cents)"), which the amounts now say themselves.
+ */
+function strategyPart(p: Rec): Part {
+  const scope = rec(p.scope)
+  const market = marketOf(scope?.market)
+  const currency = marketLimitsOf(market)?.currency ?? null
+  const cents = (value: unknown) => (num(value) === null ? EMPTY : currency ? adMoney(value, currency) ?? EMPTY : `${num(value)} cents`)
+  const show = (field: string, value: unknown): string => {
+    if (value === null || value === undefined) return 'not set'
+    const v = rec(value)
+    if (STRATEGY_MONEY_COLUMNS.has(field)) return cents(value)
+    if (field === 'target' && v) return `${v.targetKind === 'TACOS' ? 'TACoS' : 'ACoS'} ${plainValue(v.targetPct)}%`
+    if (field === 'harvest' && v) return `${plainValue(v.harvestMinOrders)} orders, ${plainValue(v.harvestMinClicks)} clicks, ${num(v.harvestMaxAcosPct) === null ? 'any ACoS' : `ACoS at most ${v.harvestMaxAcosPct}%`}, ${plainValue(v.harvestWindowDays)} days`
+    if (field === 'negate' && v) return `${plainValue(v.negateMinClicks)} clicks, ${cents(v.negateMinSpendCents)} spent, at most ${plainValue(v.negateMaxOrders)} orders, ${plainValue(v.negateWindowDays)} days`
+    if (field === 'stop' && v) return v.stopMethod === 'PAUSE' ? 'pause' : `low bids at ${num(v.stopBidCents) === null ? 'the 2-cent floor' : cents(v.stopBidCents)}`
+    if (field === 'maxChangePct' || field === 'targetAcosPct') return `${plainValue(value)}%`
+    if (field === 'protect' || field === 'protectedTerms') return value === true ? 'protected' : 'not protected'
+    return plainValue(value)
+  }
+  const changes = recs(p.changes).map((c): QueueChange => {
+    const field = text(c.field) ?? ''
+    const label = text(c.campaign)
+      ? `Own target ACoS · ${text(c.campaign)}`
+      : text(c.term) ? `Protected term “${text(c.term)}”` : (text(c.label) ?? fieldLabel(field)).replace(/\s\((cents|%|actions|days)\)$/, '')
+    return { label, from: show(field, c.from), to: show(field, c.to) }
+  })
+  const label = text(scope?.label)
+  const said = text(p.summary)
+  return {
+    channel: 'AMAZON',
+    market,
+    changes,
+    ...(said ? { summary: said.replace(/\s\((cents|%|actions|days)\)/g, '') } : {}),
+    ...(label ? { target: target('other', { name: `Ads strategy · ${label}`, href: `/marketing/ads/rules-automation/control-room?tab=strategy${market ? `&market=${seg(market)}` : ''}` }) } : {}),
+  }
+}
+
 /* ── per tool: what the convention does not say ──────────────────────────────────────────────── */
 
 type Part = Partial<ResolvedRequest>
@@ -619,6 +665,7 @@ const READERS: Record<string, Reader> = {
   },
 
   /* Amazon ads: names and amounts in the campaign's currency (the web card's describe()). */
+  'set-ads-strategy': (p) => strategyPart(p),
   'set-target-bid': (p, _a, _ctx, tool) => {
     const from = adMoney(p.currentBidCents, p.currency)
     const to = adMoney(num(p.effectiveBidCents) ?? p.proposedBidCents, p.currency)

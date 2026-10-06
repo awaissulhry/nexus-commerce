@@ -945,12 +945,24 @@
   color: var(--nds-text-3);
 }
 
+/* ── StepUpModal (the authenticator code before a raise) ─────────── */
+.nds-stepup {
+  display: grid;
+  gap: var(--nds-space-12);
+}
+.nds-stepup-note {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
 /* ── Sticky action bar (BulkActionBar / EditModeBar) ─────────────── */
 .nds-actionbar {
   position: sticky;
   bottom: 12px;
   z-index: var(--nds-z-actionbar);
   display: flex;
+  /* A narrow bar (a phone) puts its buttons on a line under the sentence, never past the edge (W1-4, 390 px). */
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   background: var(--nds-surface);
@@ -960,6 +972,8 @@
   box-shadow: var(--nds-shadow-card);
 }
 .nds-actionbar .lbl {
+  flex: 1 1 14rem;
+  min-width: 0;
   font-size: var(--nds-font-size-base);
   color: var(--nds-text-strong);
 }
@@ -972,8 +986,10 @@
 }
 .nds-actionbar .acts {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 .nds-actionbar-clear {
   border: none;

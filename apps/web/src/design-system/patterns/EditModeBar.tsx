@@ -9,10 +9,12 @@ export interface EditModeBarProps {
   onApply?: () => void
   applyLabel?: ReactNode
   busy?: boolean
+  /** Hold Apply alone (a check still running, a problem to fix first); Discard stays available. */
+  applyDisabled?: boolean
 }
 
 /** Sticky discard/apply bar for unsaved edits (H10 `.h10-am-editbar`). */
-export function EditModeBar({ message, count, onDiscard, onApply, applyLabel = 'Apply changes', busy }: EditModeBarProps) {
+export function EditModeBar({ message, count, onDiscard, onApply, applyLabel = 'Apply changes', busy, applyDisabled }: EditModeBarProps) {
   const label =
     message ??
     (count != null ? (
@@ -33,7 +35,7 @@ export function EditModeBar({ message, count, onDiscard, onApply, applyLabel = '
           </Button>
         )}
         {onApply && (
-          <Button variant="primary" onClick={onApply} disabled={busy}>
+          <Button variant="primary" onClick={onApply} disabled={busy || applyDisabled}>
             {applyLabel}
           </Button>
         )}

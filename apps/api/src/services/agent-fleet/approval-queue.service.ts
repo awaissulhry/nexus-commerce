@@ -18,7 +18,9 @@
  * Cost (the Neon data-transfer note): the page is polled every 3–15 s. A list call is one page query with a lean
  * select and a count, then batched joins — runs, people, connections, plan step counts and first steps, this
  * business's AgentTool rules, one product lookup — and the trust brakes only when a waiting Claude request is set to
- * run by rule. No track records, no history, no per-row query. The counts are a handful of COUNT queries.
+ * run by rule. No track records, no history, no per-row query. The counts are a handful of COUNT queries. W1-4 — a
+ * waiting Claude ad request above Ask me also reads the ads strategy's rows once per call, and only when a row speaks
+ * to its kind, where it lands (the rule the door applies to it: the strategy may narrow it).
  */
 import { Prisma } from '@nexus/database'
 import {
@@ -43,7 +45,8 @@ import { actorLabel, missingPermissions, storedOutputOf, type ToolPrincipal } fr
 import { EXPIRY_HOURS } from '../agents/approval-gate.service.js'
 import { getTool } from '../agents/tool-registry.js'
 import { PLAN_TOOL, type AgentTool, type ClaudeTrust } from '../agents/tool-types.js'
-import { autonomyOf, autoRunsInLastDay, CLAUDE_CHARTER, ruleFrom, type Autonomy } from '../agents/claude-trust.service.js'
+import { autonomyOf, autoRunsInLastDay, CLAUDE_CHARTER, narrowedWhy, ruleFrom, type Autonomy } from '../agents/claude-trust.service.js'
+import { strategyLevelFor, strategyMemo, type StrategyMemo } from '../advertising/ads-strategy/claude.js'
 import { undoStateOf } from '../agents/claude-activity.service.js'
 import { getAutonomousAgent } from '../agents/autonomous-agent.service.js'
 import {
@@ -239,6 +242,8 @@ interface Joins {
   visible: (toolName: string, value: unknown) => unknown | null
   /** Read only when a waiting Claude request is set to run by rule (lazily, once per call). */
   brakes: () => Promise<{ autonomy: Autonomy; used: number }>
+  /** W1-4 — the ads strategy's rows, read once per call and only for a waiting Claude ad request above Ask me. */
+  strategy: StrategyMemo
 }
 
 /** What a built row carries besides the row itself, for the drawer. */
@@ -361,6 +366,7 @@ async function joinsFor(approvals: ApprovalRow[], viewer: ToolPrincipal | null, 
     targetCtx: { masterCurrency: masterCurrency(), products: productMap, ...(labels ? { labels } : {}) },
     visible,
     brakes: () => (brakes ??= Promise.all([autonomyOf(), autoRunsInLastDay()]).then(([autonomy, used]) => ({ autonomy, used }))),
+    strategy: strategyMemo(),
   }
 }
 
@@ -437,6 +443,22 @@ function confirmWords(title: string, runScope: boolean | null): string {
     : `Your rule for ${title}: Confirm in Claude — the person who asked can confirm it with their code, or you approve it here`
 }
 
+/**
+ * W1-4 — why a waiting Claude ad request waits when the ads strategy holds it below the kind's rule where it lands (W1-8:
+ * claude-trust.service.ts narrows each change the same way, and confirm-change refuses it). Without this the row said
+ * "Confirm in Claude" for a request Claude may no longer confirm. Null when the strategy does not narrow it: not an ad
+ * action, a brake, or no row speaks to its kind there (one query per call for the rows; the places only then).
+ */
+async function strategyWhy(tool: AgentTool, rule: ToolRule, ap: ApprovalRow, joins: Joins, runScope: boolean | null): Promise<string | null> {
+  const narrowing = await strategyLevelFor(tool.name, ap.args, ap.preview, joins.strategy)
+  if (!narrowing || RANK[narrowing.level] >= RANK[rule.level]) return null
+  const why = capitalised(narrowedWhy({ ...narrowing, business: rule.level }))
+  if (narrowing.level !== 'confirm') return `${why}: you approve it here`
+  return runScope === false
+    ? `${why}, but this Claude connection may not confirm changes (connected without nexus.run): you approve it here`
+    : `${why}: the person who asked can confirm it in Claude with their code, or you approve it here`
+}
+
 async function automationOf(
   ap: ApprovalRow,
   state: QueueState,
@@ -502,11 +524,15 @@ async function automationOf(
     else if (rule.max === 'ask') whyWaits = alwaysNeedsYou(tool)
     else if (rule.level === 'off') whyWaits = `Your rule for ${tool.title}: Off — Claude is no longer offered it`
     else if (rule.level === 'ask') whyWaits = `Your rule for ${tool.title}: Ask me`
-    else if (rule.level === 'confirm') whyWaits = confirmWords(tool.title, runScope)
     else {
-      // The rule's verdict is told to Claude only and never stored (research/02 §3.3): worked out again, now.
-      whyWaits = await ruleRunWhy(runScope, joins, () => limitsWords(tool, rule, ap.preview), 1)
-      whyWaits ??= `Your rule for ${tool.title} would run it by itself now; when it was asked, it did not`
+      // W1-4 — the ads strategy may hold THIS change below the kind's rule where it lands: then that is why it waits.
+      whyWaits = await strategyWhy(tool, rule, ap, joins, runScope)
+      if (!whyWaits && rule.level === 'confirm') whyWaits = confirmWords(tool.title, runScope)
+      else if (!whyWaits) {
+        // The rule's verdict is told to Claude only and never stored (research/02 §3.3): worked out again, now.
+        whyWaits = await ruleRunWhy(runScope, joins, () => limitsWords(tool, rule, ap.preview), 1)
+        whyWaits ??= `Your rule for ${tool.title} would run it by itself now; when it was asked, it did not`
+      }
     }
   }
   return { level: rule.level as QueueTrustLevel, max: rule.max as QueueTrustLevel, whyWaits }

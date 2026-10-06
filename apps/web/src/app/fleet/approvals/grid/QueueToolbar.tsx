@@ -47,6 +47,14 @@ const GROUP_OPTIONS: ListboxOption[] = (['none', 'kind', 'product', 'asker'] as 
 
 /** A bulk verb: enabled, or held with its reason (focusable, explained, does nothing). */
 function BulkButton({ verdict, variant, icon, onRun }: { verdict: BulkVerdict; variant: 'primary' | 'danger-outline'; icon: ReactNode; onRun(): void }) {
+  if (verdict.enabled && verdict.note) {
+    // W1-4 — it runs, and says which ticked rows it leaves out (a raise is approved on its own, with the code).
+    return (
+      <Tooltip label={verdict.note} portal>
+        <Button size="sm" variant={variant} aria-description={verdict.note} onClick={onRun}>{icon}{verdict.label}</Button>
+      </Tooltip>
+    )
+  }
   if (verdict.enabled) {
     return <Button size="sm" variant={variant} onClick={onRun}>{icon}{verdict.label}</Button>
   }

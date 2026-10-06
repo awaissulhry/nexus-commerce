@@ -20,7 +20,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { usePathname, useRouter, useSearchParams } from '@/lib/workspaces/navigation'
 import { Button, Kbd, Skeleton, Textarea } from '@/design-system/primitives'
 import { Banner, Field, Modal, ToastProvider } from '@/design-system/components'
-import { PreferencesModal, type PreferencesValue } from '@/design-system/patterns'
+import { PreferencesModal, StepUpModal, type PreferencesValue } from '@/design-system/patterns'
 import {
   AG_AUTO_COL,
   GridCard,
@@ -55,6 +55,7 @@ import {
   PHONE_MAX_PX,
   TILE_SHOW,
   clockText,
+  codeSentence,
   countText,
   emptyWords,
   isPending,
@@ -135,13 +136,16 @@ function ApprovalsGridPage() {
   const [search, setSearch] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
   const [automateRow, setAutomateRow] = useState<QueueRow | null>(null)
+  /** W1-4 — the request that raises, waiting for the approver's authenticator code. */
+  const [codeAsk, setCodeAsk] = useState<{ row: QueueRow; again: boolean; error: string | null; busy: boolean } | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulk, setBulk] = useState<BulkState | null>(null)
   const [gridApi, setGridApi] = useState<GridApi<QueueRow> | null>(null)
   const apiRef = useRef<GridApi<QueueRow> | null>(null)
 
   const queue = useApprovalQueue(show)
-  const actions = useApprovalActions({ refresh: queue.refresh, openAutomate: setAutomateRow })
+  const askCode = useCallback((row: QueueRow, again: boolean) => setCodeAsk({ row, again, error: null, busy: false }), [])
+  const actions = useApprovalActions({ refresh: queue.refresh, openAutomate: setAutomateRow, askCode })
   const rowsById = useMemo(() => new Map(queue.rows.map((r) => [r.id, r])), [queue.rows])
   // The clock of the last read: "Oldest waiting" and the tile filters age with the list, not with every render.
   const now = useMemo(() => Date.now(), [queue.readKey, queue.counts])
@@ -537,6 +541,23 @@ function ApprovalsGridPage() {
         onFollow={followDrawer}
       />
       <AutomateModal row={automateRow} onClose={() => setAutomateRow(null)} onSaved={onAutomateSaved} />
+      <StepUpModal
+        open={!!codeAsk}
+        title="Approve with your code"
+        sentence={codeAsk ? `${codeSentence(codeAsk.row) ?? 'It raises what can be spent.'} Rejecting it never asks for a code.` : ''}
+        confirmLabel={codeAsk?.again ? 'Approve again' : 'Approve'}
+        busy={!!codeAsk?.busy}
+        error={codeAsk?.error ?? null}
+        className="fleet-portal"
+        onClose={() => { if (!codeAsk?.busy) setCodeAsk(null) }}
+        onSubmit={(code) => {
+          const ask = codeAsk
+          if (!ask) return
+          setCodeAsk({ ...ask, busy: true, error: null })
+          void actions.approveWithCode(ask.row, code, ask.again).then(({ codeError }) =>
+            setCodeAsk(codeError ? { ...ask, busy: false, error: codeError } : null))
+        }}
+      />
 
       <Modal
         open={!!bulk}

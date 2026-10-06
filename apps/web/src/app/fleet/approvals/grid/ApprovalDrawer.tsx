@@ -32,7 +32,7 @@ import {
   TARGET_LABEL, askerSaysLabel, changesView, consequenceWords, drawerVerbs, shortId, statusWords, targetWords, timelineSteps, whereLine, whyView,
 } from './drawerWords'
 import { EditValue } from './EditValue'
-import { automateOffer } from './queueWords'
+import { automateOffer, codeSentence } from './queueWords'
 import { PlanSection } from './PlanSteps'
 import { NOT_FOUND_WORDS, useApprovalDetail } from './useApprovalDetail'
 import styles from './ApprovalDrawer.module.css'
@@ -224,7 +224,9 @@ function Verbs({ row, actions, busy, onReject }: { row: QueueRow; actions: Appro
   // Approve (and approve-again) is HELD, not disabled, when this person may not approve: it stays focusable and says why.
   const held = !row.canApprove
   const automate = automateOffer(row)
-  const approveLabel = row.plan ? `Approve ${plural(row.plan.steps, 'change')}` : 'Approve'
+  const approveLabel = `${row.plan ? `Approve ${plural(row.plan.steps, 'change')}` : 'Approve'}${row.needsCode ? ' with code…' : ''}`
+  // W1-4 — a request that raises: the approve asks for the approver's authenticator code first.
+  const code = codeSentence(row)
   return (
     <section className={styles.section} aria-label="Decide">
       {error && <Banner tone="danger" title="That did not work" onDismiss={() => actions.dismissError(row.id)}>{error}</Banner>}
@@ -261,6 +263,7 @@ function Verbs({ row, actions, busy, onReject }: { row: QueueRow; actions: Appro
       {held && (verbs.approve || verbs.retry) && (
         <p id={whyId} className={styles.muted}>You cannot approve this: {row.cannotApproveWhy ?? 'Nexus did not say why.'} You can still reject it.</p>
       )}
+      {code && !held && (verbs.approve || verbs.retry) && <p className={styles.muted}>{code}</p>}
       {row.state === 'starting' && <p className={styles.muted}>Approved. It waits a short stop window first: Undo takes the approve back.</p>}
     </section>
   )

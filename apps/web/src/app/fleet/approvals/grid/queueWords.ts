@@ -155,11 +155,26 @@ function decidedBy(row: Pick<QueueRow, 'state' | 'decider'>): { words: string; m
  * "Why / result": the API's own sentence, else why it waits under today's rule. A finished request also says who
  * decided ("Rejected: too low · by Ana"), unless the sentence already names them.
  */
-export function whyText(row: Pick<QueueRow, 'note' | 'automation' | 'state' | 'decider'>): string | null {
-  const said = row.note ?? row.automation.whyWaits ?? null
+export function whyText(row: Pick<QueueRow, 'note' | 'automation' | 'state' | 'decider' | 'needsCode'>): string | null {
+  const said = withCode(row, row.note ?? row.automation.whyWaits ?? null)
   const by = decidedBy(row)
   if (!by || (said && said.toLowerCase().includes(by.marker.toLowerCase()))) return said
   return said ? `${said} · ${by.words}` : by.words.charAt(0).toUpperCase() + by.words.slice(1)
+}
+
+/**
+ * ADS AUTONOMY W1-4 — what a request that raises asks of its approver, in plain words: the API's sentence without the
+ * units its labels carry ("Highest bid (cents)" → "Highest bid"). Null when approving it needs no code.
+ */
+export function codeSentence(row: Pick<QueueRow, 'needsCode'>): string | null {
+  const said = row.needsCode?.trim()
+  return said ? said.replace(/\s\((cents|%|actions|days)\)/g, '') : null
+}
+
+/** A waiting request that raises says so in its Why: the approve asks for the code. */
+function withCode(row: Pick<QueueRow, 'state' | 'needsCode'>, said: string | null): string | null {
+  if (!row.needsCode || !isPending(row.state)) return said
+  return said ? `${said} · Approving asks for your authenticator code` : 'Approving asks for your authenticator code'
 }
 
 /**
@@ -235,6 +250,8 @@ export interface BulkVerdict {
   label: string
   /** The plain reason the button is held, shown with it. Null when it can run. */
   reason: string | null
+  /** W1-4 — an approve that runs, but leaves some ticked rows out (a raise is approved on its own, with the code). */
+  note?: string
 }
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
@@ -243,7 +260,11 @@ const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
 export function bulkApproveVerdict(rows: readonly QueueRow[]): BulkVerdict {
   const n = rows.length
   const kinds = new Set(rows.map((r) => r.toolName))
-  const label = kinds.size === 1 && n > 0 ? `Approve ${n} · ${rows[0].title}` : `Approve ${n}`
+  // W1-4 — a request that raises is approved on its own, with the approver's code: the bulk approve leaves it out and
+  // says so (the API does the same, apps/api approval-inbox.service.ts bulkDecide).
+  const coded = rows.filter((r) => !!r.needsCode)
+  const acting = coded.length ? rows.filter((r) => !r.needsCode) : rows
+  const label = `Approve ${coded.length && acting.length ? `${acting.length} of ${n}` : n}${kinds.size === 1 && n > 0 ? ` · ${rows[0].title}` : ''}`
   const held = (reason: string): BulkVerdict => ({ enabled: false, label, reason })
   if (n === 0) return held('Tick the requests you want to approve.')
   if (n > BULK_MAX) return held(`At most ${BULK_MAX} requests can be approved at once. You ticked ${n}.`)
@@ -251,11 +272,20 @@ export function bulkApproveVerdict(rows: readonly QueueRow[]): BulkVerdict {
   if (notPending) return held(`${notPending} of these ${plural(notPending, 'is', 'are')} not waiting for you.`)
   if (kinds.size > 1) return held(`Only one kind of request can be approved at once. You ticked ${kinds.size} kinds.`)
   if (new Set(rows.map((r) => r.asker.kind)).size > 1) return held('Only requests from one asker can be approved at once.')
-  const blocked = rows.find((r) => !r.bulkApprovable)
+  if (!acting.length) {
+    return held(n === 1
+      ? 'It raises, so it is approved on its own: open it and approve it with your authenticator code.'
+      : 'Each of these raises, so each is approved on its own: open one and approve it with your authenticator code.')
+  }
+  const blocked = acting.find((r) => !r.bulkApprovable)
   if (blocked) return held(blocked.bulkBlockedWhy ?? 'This kind is never approved in bulk.')
-  const refused = rows.find((r) => !r.canApprove)
+  const refused = acting.find((r) => !r.canApprove)
   if (refused) return held(refused.cannotApproveWhy ?? 'You cannot approve some of these requests.')
-  return { enabled: true, label, reason: null }
+  if (!coded.length) return { enabled: true, label, reason: null }
+  return {
+    enabled: true, label, reason: null,
+    note: `${coded.length} that ${plural(coded.length, 'raises is', 'raise are')} left out: ${plural(coded.length, 'it is', 'each is')} approved on its own, with your authenticator code.`,
+  }
 }
 
 /** "Reject N": works across kinds; only rows that still wait for a person. */

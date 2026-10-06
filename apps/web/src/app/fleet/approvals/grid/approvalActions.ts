@@ -12,6 +12,8 @@
  *
  * Endpoints (apps/api `routes/agent-fleet.routes.ts`, `agent-fleet-approvals.routes.ts`):
  *   approve / reject / retry  POST /api/agent/fleet/approvals/:id/decide  { decision, reason? }
+ *                             ADS AUTONOMY W1-4 — a request that raises (`needsCode`) asks the page for the approver's
+ *                             authenticator code first (`askCode`); `approveWithCode` sends it as `code`
  *   undo                      POST …/:id/undo      (no body)
  *   hold                      POST …/:id/hold      (no body) — 10 more minutes
  *   commit                    POST …/:id/commit    (no body) — at the stop window's end; the server refuses an early
@@ -47,6 +49,11 @@ export interface QueueActions extends ApprovalActions {
   bulkPreview(ids: readonly string[], decision: 'approve' | 'reject'): Promise<BulkPreview>
   /** Decide many; resolves with what the server did (a refused bulk is `ok: false` with its reason). */
   bulkDecide(rows: readonly QueueRow[], decision: 'approve' | 'reject', reason?: string): Promise<QueueBulkResult>
+  /**
+   * W1-4 — approve a request that raises with the approver's authenticator code. A wrong, used or missing code comes back
+   * (`codeError`) for the code dialog to show; anything else lands on the row, as any approve.
+   */
+  approveWithCode(row: QueueRow, code: string, again: boolean): Promise<{ codeError: string | null }>
 }
 
 interface Answer {
@@ -77,7 +84,12 @@ export function rowName(row: Pick<QueueRow, 'title' | 'target'>): string {
   return product ? `${row.title} ${product}` : row.title
 }
 
-export function useApprovalActions(opts: { refresh(): void; openAutomate(row: QueueRow): void }): QueueActions {
+export function useApprovalActions(opts: {
+  refresh(): void
+  openAutomate(row: QueueRow): void
+  /** W1-4 — the row raises: the page asks for the approver's authenticator code, then calls `approveWithCode`. */
+  askCode(row: QueueRow, again: boolean): void
+}): QueueActions {
   const { toast } = useToast()
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
   const [errors, setErrors] = useState<ReadonlyMap<string, string>>(() => new Map())
@@ -130,17 +142,9 @@ export function useApprovalActions(opts: { refresh(): void; openAutomate(row: Qu
     [decideOne, toast],
   )
 
-  const approveWith = useCallback(
-    async (row: QueueRow, again: boolean) => {
-      const held = approveHeldWhy(row)
-      if (held) {
-        setError(row.id, `Cannot approve: ${held}`)
-        return
-      }
-      const answer = await decideOne(row, again ? 'Could not retry' : 'Could not approve', () =>
-        post<Answer>(`approvals/${encodeURIComponent(row.id)}/decide`, { decision: 'approve' }),
-      )
-      if (!answer) return
+  /** The approve landed: say when it runs, with Undo inside the toast for the stop window. */
+  const announce = useCallback(
+    (row: QueueRow, answer: Answer, again: boolean) => {
       const text = approvedText(answer.executeAfter, Date.now(), again)
       if (!answer.executeAfter) {
         toast(text, 'success')
@@ -159,7 +163,59 @@ export function useApprovalActions(opts: { refresh(): void; openAutomate(row: Qu
         { duration: STOP_WINDOW_MS },
       )
     },
-    [decideOne, setError, toast, undo],
+    [toast, undo],
+  )
+
+  const approveWith = useCallback(
+    async (row: QueueRow, again: boolean) => {
+      const held = approveHeldWhy(row)
+      if (held) {
+        setError(row.id, `Cannot approve: ${held}`)
+        return
+      }
+      // W1-4 — a raise is approved only with the approver's code: the page asks for it first.
+      if (row.needsCode) {
+        optsRef.current.askCode(row, again)
+        return
+      }
+      const answer = await decideOne(row, again ? 'Could not retry' : 'Could not approve', () =>
+        post<Answer>(`approvals/${encodeURIComponent(row.id)}/decide`, { decision: 'approve' }),
+      )
+      if (answer) announce(row, answer, again)
+    },
+    [decideOne, setError, announce],
+  )
+
+  const approveWithCode = useCallback(
+    async (row: QueueRow, code: string, again: boolean): Promise<{ codeError: string | null }> => {
+      if (busyRef.current.has(row.id)) return { codeError: null }
+      setBusy(row.id, true)
+      setError(row.id, null)
+      try {
+        const response = await fetch(`${getBackendUrl()}${FLEET}/approvals/${encodeURIComponent(row.id)}/decide`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ decision: 'approve', code }),
+        })
+        const answer = (await response.json().catch(() => null)) as (Answer & { code?: string }) | null
+        if (!response.ok || answer?.ok === false) {
+          const why = answer?.error ?? `the server answered ${response.status}`
+          // The code itself: wrong, used, missing or locked — the dialog says so and stays open.
+          if (answer?.code?.startsWith('mfa')) return { codeError: why }
+          setError(row.id, `${again ? 'Could not retry' : 'Could not approve'}: ${why}`)
+          return { codeError: null }
+        }
+        announce(row, answer ?? {}, again)
+        return { codeError: null }
+      } catch (e) {
+        setError(row.id, `${again ? 'Could not retry' : 'Could not approve'}: ${reasonOf(e)}`)
+        return { codeError: null }
+      } finally {
+        setBusy(row.id, false)
+        optsRef.current.refresh()
+      }
+    },
+    [setBusy, setError, announce],
   )
 
   const approve = useCallback((row: QueueRow) => approveWith(row, false), [approveWith])
@@ -257,7 +313,8 @@ export function useApprovalActions(opts: { refresh(): void; openAutomate(row: Qu
       commit,
       bulkPreview,
       bulkDecide,
+      approveWithCode,
     }),
-    [approve, reject, undo, hold, retry, openAutomate, refresh, busyIds, errors, dismissError, commit, bulkPreview, bulkDecide],
+    [approve, reject, undo, hold, retry, openAutomate, refresh, busyIds, errors, dismissError, commit, bulkPreview, bulkDecide, approveWithCode],
   )
 }

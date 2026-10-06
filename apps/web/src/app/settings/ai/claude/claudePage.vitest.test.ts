@@ -24,7 +24,7 @@ const HERE = import.meta.dirname
 const APPROVALS = join(HERE, '../../../fleet/approvals/grid')
 const source = (dir: string, name: string) => readFileSync(join(dir, name), 'utf8')
 const FILES: Array<[string, string]> = [
-  [HERE, 'ClaudeClient.tsx'], [HERE, 'RulesPanel.tsx'], [HERE, 'ActivityPanel.tsx'], [HERE, 'StepUpModal.tsx'], [APPROVALS, 'PlanSteps.tsx'],
+  [HERE, 'ClaudeClient.tsx'], [HERE, 'RulesPanel.tsx'], [HERE, 'ActivityPanel.tsx'], [APPROVALS, 'PlanSteps.tsx'],
 ]
 
 describe('C9 — reachable', () => {

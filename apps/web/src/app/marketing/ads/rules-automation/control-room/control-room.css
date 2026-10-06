@@ -140,6 +140,12 @@
 }
 .acr-tab:hover { color: var(--nds-grey-700); }
 .acr-tab.on { color: var(--nds-blue-700); border-bottom-color: var(--nds-blue-600); }
+/* W1-4 — at phone width the six tabs wrap to a second line instead of running off the side, and the room drops its
+   own side padding: the ads shell already pads the page, and the two together left a 216 px column at 390 px. */
+@media (max-width: 600px) {
+  .acr { padding-left: 0; padding-right: 0; }
+  .acr-tabs { flex-wrap: wrap; }
+}
 
 /* ── guardrails ──────────────────────────────────────────────────────────── */
 .acr-card { border: 1px solid var(--nds-grey-150); border-radius: 9px; background: var(--nds-white); padding: 15px 16px; }

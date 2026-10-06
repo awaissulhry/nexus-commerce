@@ -30,3 +30,11 @@ For related views, pass `views` and render the supplied menu through `header={ti
 Use `/design-system#workspace-subheader-example` in web for the interactive specimen, including 32 long sample collection labels, selection, keyboard use and internal scrolling. Product Studio is the first production consumer.
 
 WorkspaceSubheader secondary navigation uses `--nds-text` for readable group labels and links in both themes. Keep channel library links separate from the page scope controls; expanding navigation must not resize workspace content.
+
+## StepUpModal
+
+The one question before a person raises something (what Claude may do, a limit, the ads strategy, a request that
+raises): a sentence naming what rises, the 6-digit code from their authenticator app, and the API's answer. Lowering
+never opens it. The caller sends the code and passes back the API's refusal (`error`); the field then takes the focus
+again with the wrong code selected. Pass `confirmLabel` to say what happens ("Approve", "Save"), and a light-pinned
+surface's portal class in `className` (the fleet's `fleet-portal`). Specimen: `/design-system#step-up-modal-example`.
