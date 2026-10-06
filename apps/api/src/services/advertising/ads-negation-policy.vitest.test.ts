@@ -3,6 +3,9 @@
  *
  * The matcher is pure; the wire half reads the protected terms, the campaign behind an Amazon campaign id and the
  * text Nexus holds for a negative id, which are stubbed here.
+ *
+ * W1-7 — and for an ASIN, the products the ads strategy protects (ads-strategy/terms.ts, stubbed here; resolved on a
+ * real database in ads-strategy/terms.vitest.test.ts).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -17,6 +20,8 @@ vi.mock('../../db.js', () => ({
   },
 }))
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+const productRefusal = vi.fn(async (_asin: string, _market: string | null) => null as { reason: string; sku: string } | null)
+vi.mock('./ads-strategy/terms.js', () => ({ get protectedAsinRefusal() { return productRefusal } }))
 
 const {
   NegativeRefusedError, assertNegativeWriteAllowed, isAsin, loadProtectedTerms, negativeKeywordTextProblem,
@@ -30,6 +35,7 @@ beforeEach(() => {
   protectionFindMany.mockReset(); protectionFindMany.mockResolvedValue([])
   campaignFindFirst.mockReset(); campaignFindFirst.mockResolvedValue(null)
   targetFindFirst.mockReset(); targetFindFirst.mockResolvedValue(null)
+  productRefusal.mockReset(); productRefusal.mockResolvedValue(null)
 })
 
 describe('protectedTermHit — one matcher for EXACT / PREFIX / CONTAINS', () => {
@@ -147,6 +153,23 @@ describe('negativeWireRefusal — what liveCall refuses to send', () => {
     const body = (asin: string) => ({ negativeTargetingClauses: [{ campaignId: 'EXT-1', adGroupId: 'EXT-G', expression: [{ type: 'asinSameAs', value: asin }], state: 'ENABLED' }] })
     expect(await negativeWireRefusal({ method: 'POST', path: '/sp/negativeTargets', body: body('B07XJ8C8F5') })).toMatch(/protected term "b07xj8c8f5" \(own product\)/)
     expect(await negativeWireRefusal({ method: 'POST', path: '/sp/negativeTargets', body: body('B000000001') })).toBeNull()
+  })
+
+  it('W1-7 — the ASIN of a product the ads strategy protects is refused, in the market the campaign names; a protected term is asked first', async () => {
+    productRefusal.mockImplementation(async (asin) => (asin === 'B0PROTECT1' ? { reason: `"${asin}" cannot be negated: it is the ASIN of TEST-SKU, a product the ads strategy protects in IT (Test (IT), version 2).`, sku: 'TEST-SKU' } : null))
+    campaignFindFirst.mockResolvedValue({ id: 'c-1', marketplace: 'IT' })
+    const body = (asin: string) => ({ negativeTargetingClauses: [{ campaignId: 'EXT-1', adGroupId: 'EXT-G', expression: [{ type: 'asinSameAs', value: asin }], state: 'ENABLED' }] })
+    expect(await negativeWireRefusal({ method: 'POST', path: '/sp/negativeTargets', body: body('B0PROTECT1') })).toMatch(/ASIN of TEST-SKU, a product the ads strategy protects in IT/)
+    expect(productRefusal).toHaveBeenCalledWith('B0PROTECT1', 'IT')
+    expect(await protectedNegativeRefusal({ text: 'B0PROTECT1', marketplace: 'IT' })).toMatchObject({ protectedTerm: 'b0protect1', protectedProduct: 'TEST-SKU' })
+    expect(await negativeWireRefusal({ method: 'POST', path: '/sp/negativeTargets', body: body('B0OTHER001') })).toBeNull()
+
+    // A protected term answers first; a keyword is never looked up as a product.
+    productRefusal.mockClear()
+    protectionFindMany.mockResolvedValue([{ term: 'B0PROTECT1', matchType: 'EXACT', reason: 'own product' }])
+    expect(await protectedNegativeRefusal({ text: 'B0PROTECT1', marketplace: 'IT' })).toMatchObject({ protectedTerm: 'b0protect1' })
+    expect(await protectedNegativeRefusal({ text: 'giacca pelle', marketplace: 'IT' })).toBeNull()
+    expect(productRefusal).not.toHaveBeenCalled()
   })
 
   it('PUT state ENABLED: judged on the text Nexus holds for that id; an id Nexus does not hold is refused', async () => {

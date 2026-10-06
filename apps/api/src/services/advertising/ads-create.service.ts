@@ -1967,15 +1967,19 @@ export async function resolveSbTemplate(marketplace: string): Promise<SbTemplate
 // bulk routes, the rule handlers) and delegate to the one negative write service (ads-negative-kw.service.ts). What
 // changed for them: protected terms and Amazon's text limits bind, the live-write allowlist binds (a launch passes
 // `creationFlow`), a retired negative can be added again, and a refused negative writes NO local row (`id: null`).
-type LocalNegative = { id: string | null; externalTargetId: string | null; mode: string; refusal?: { deniedAt: string; reason: string }; error?: string }
+type LocalNegative = { id: string | null; externalTargetId: string | null; mode: string; refusal?: { deniedAt: string; reason: string; limits?: OwnLimit[] }; error?: string }
 const asLocal = (r: NegativeWriteResult): LocalNegative => ({
   id: r.adTargetId, externalTargetId: r.externalTargetId, mode: r.outcome === 'refused' || r.outcome === 'failed' ? r.outcome : r.mode,
   ...(r.refusal ? { refusal: r.refusal } : {}), ...(r.error ? { error: r.error } : {}),
 })
 
-export interface NewNegativeProductTarget { adGroupId: string; asin: string; userId?: string; creationFlow?: boolean; /** 1e — see NewKeyword.manual. */ manual?: boolean }
+export interface NewNegativeProductTarget {
+  adGroupId: string; asin: string; userId?: string; creationFlow?: boolean; /** 1e — see NewKeyword.manual. */ manual?: boolean
+  /** W1-7 + 3A — his "Send anyway" past a product his ads strategy protects (honoured only with `manual`). */
+  confirmOwnLimits?: boolean
+}
 export async function createNegativeProductTargetLocal(input: NewNegativeProductTarget): Promise<LocalNegative> {
-  return asLocal(await writeNegativeProductTarget({ adGroupId: input.adGroupId, asin: input.asin, userId: input.userId, creationFlow: input.creationFlow, manual: input.manual }))
+  return asLocal(await writeNegativeProductTarget({ adGroupId: input.adGroupId, asin: input.asin, userId: input.userId, creationFlow: input.creationFlow, manual: input.manual, confirmOwnLimits: input.confirmOwnLimits === true }))
 }
 
 // NT.4 — ad-group-level negative keyword (the funnel + Auto-isolation writes), match-typed.

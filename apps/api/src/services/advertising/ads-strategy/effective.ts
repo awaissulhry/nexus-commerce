@@ -1,8 +1,8 @@
 /**
  * ADS AUTONOMY W1-2 — the strategy as an engine reads it: open ONE market once per run, then ask for the market, a
  * category, products, ad groups or campaigns, in batches. Nothing here writes. The readers come one by one (W1-5 bids
- * and the target chain — through ads-strategy/bids.ts —, W1-6 spend, W1-7 search terms, W1-8 Claude's door), each
- * adding itself to the field's `readBy` (fields.ts).
+ * and the target chain — through ads-strategy/bids.ts —, W1-6 spend, W1-7 search terms and protection — terms.ts, W1-8
+ * Claude's door), each adding itself to the field's `readBy` (fields.ts).
  *
  * "No row → today's behaviour": with no usable strategy row in the market (`empty`), every answer is empty and no
  * catalog is read, so an engine that opens a market without a strategy pays one indexed query.

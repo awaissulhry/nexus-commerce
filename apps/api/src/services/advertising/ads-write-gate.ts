@@ -42,6 +42,9 @@ export type GateDeniedAt =
   | 'entity_bounds'
   // ADX A1 — an operator-protected term may not be negated by any automation.
   | 'keyword_protected'
+  // ADS AUTONOMY W1-7 — the ASIN of a product the ads strategy protects may not be negated by an engine, a rule or a
+  // schedule. A person's own add past it is warned instead (3A: `needs_confirmation`, limit `product_protected`).
+  | 'product_protected'
   // ACR.0.7 — the account is halted (anomaly breaker or operator) or autonomy is OFF.
   | 'automation_halted'
   // ACR.1.2b — the campaign's placement/bids/budget is pinned: held by hand.
@@ -67,8 +70,10 @@ export type GateDeniedAt =
  * `needs_confirmation` with every limit it passes, and the same write sent again with `confirmOwnLimits` goes through
  * (`pastOwnLimits` says which, for the action log). Amazon's own limits, the kill switch, the connection's mode and
  * writes switch are never his to pass.
+ * W1-7 — `product_protected`: a negative on the ASIN of a product his ads strategy protects. His own setting, so the same
+ * rule: his add is warned, an engine's is refused. (A protected TERM still refuses everyone: unchanged.)
  */
-export type OwnLimitKind = 'entity_bounds' | 'spend_ceiling' | 'budget_day_move' | 'value_cap' | 'cpc_ceiling'
+export type OwnLimitKind = 'entity_bounds' | 'spend_ceiling' | 'budget_day_move' | 'value_cap' | 'cpc_ceiling' | 'product_protected'
 export interface OwnLimit { limit: OwnLimitKind; reason: string }
 export const OWN_LIMIT_LABEL: Record<OwnLimitKind, string> = {
   entity_bounds: 'your bid or budget limit',
@@ -76,6 +81,7 @@ export const OWN_LIMIT_LABEL: Record<OwnLimitKind, string> = {
   budget_day_move: 'the daily budget-move limit',
   value_cap: 'the per-change value cap',
   cpc_ceiling: 'your CPC ceiling',
+  product_protected: 'a product your ads strategy protects',
 }
 
 /** The sentence a person reads when his own write goes past his limits. Pure. */
@@ -246,6 +252,12 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   // 5a — before the sandbox return, so a sandbox run refuses what a live one would. The matcher (EXACT / PREFIX /
   // CONTAINS, and a phrase negative that a protected term contains) is ads-negation-policy.ts, the one the wire and
   // the MCP preview use too.
+  // W1-7 — the same policy finds the ASIN of a product the ads strategy protects (a negative product target). An engine,
+  // a rule or a schedule is refused (`product_protected`). A person's own add — or a Claude request he approved, which
+  // carries his mark (approvedRun) — is his own setting meeting his own click (3A, 4A): it waits for his "Send anyway"
+  // (`needs_confirmation`), and once he has confirmed it goes, recorded under `pastOwnLimits`. Sandbox and live alike.
+  // A protected TERM still refuses everyone, as before.
+  let protectedProduct: OwnLimit | null = null
   if (ctx.isNegation && ctx.keywordText) {
     const refusal = await protectedNegativeRefusal({
       text: ctx.keywordText,
@@ -253,7 +265,12 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       marketplace: ctx.marketplace,
       campaignId: ctx.campaignId ?? null,
     })
-    if (refusal) return { allowed: false, reason: refusal.reason, deniedAt: 'keyword_protected' }
+    if (refusal?.protectedProduct && ctx.manual === true) {
+      protectedProduct = { limit: 'product_protected', reason: refusal.warning ?? refusal.reason }
+      if (ctx.confirmOwnLimits !== true) return { allowed: false, reason: ownLimitsSentence([protectedProduct]), deniedAt: 'needs_confirmation', ownLimits: [protectedProduct] }
+    } else if (refusal) {
+      return { allowed: false, reason: refusal.reason, deniedAt: refusal.protectedProduct ? 'product_protected' : 'keyword_protected' }
+    }
   }
 
   // Sandbox path — env says we're not in live mode at all.
@@ -290,7 +307,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   const state = await getAutomationState()
   const personPasses = ctx.manual === true && process.env.NEXUS_ADS_AUTOMATION_KILL !== '1'
   // 3A — a person's write past one of his own limits is collected here instead of refused (see OwnLimitKind).
-  const own: OwnLimit[] = []
+  const own: OwnLimit[] = protectedProduct ? [protectedProduct] : []
   const ownOrRefuse = (d: Extract<GateDecision, { allowed: false }>): Extract<GateDecision, { allowed: false }> | null => {
     if (ctx.manual !== true) return d
     own.push({ limit: d.deniedAt as OwnLimitKind, reason: d.reason })
