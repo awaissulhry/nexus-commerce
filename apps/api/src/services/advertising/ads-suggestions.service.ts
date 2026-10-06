@@ -1142,7 +1142,8 @@ export async function sweepSuggestionLifecycle(now = new Date()): Promise<{ expi
 
 // ── SG.9 — "stop suggesting for this one" ────────────────────────────────────
 /** Mirrors the routes file's DecideOutcome so the bulk endpoint can treat every verb alike. */
-export type DecideResult = { ok: boolean; httpStatus?: number; error?: string; refused?: boolean; result?: unknown }
+/** `skipped` (AA-W2-10): the rule's handler passed it over and wrote nothing — a refusal that says why, never "applied". */
+export type DecideResult = { ok: boolean; httpStatus?: number; error?: string; refused?: boolean; skipped?: boolean; result?: unknown }
 
 /**
  * H10's third verb, at its real meaning. Their KB: *"Pausing a Suggestion means you no longer

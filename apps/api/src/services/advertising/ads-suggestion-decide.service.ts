@@ -73,6 +73,28 @@ export async function staleRuleSentence(sug: { ruleId: string; ruleName: string 
   return null
 }
 
+/** What each handler's skip means, for one that says no sentence of its own (automation-action-handlers.ts). */
+const SKIP_WORDS: Record<string, string> = {
+  'campaign-not-selected': "its campaign is not one the rule's campaign picker selects",
+  'rank-owned': 'the hourly bid plans hold this campaign',
+  contested_by_rank_engine: 'the hourly bid plans hold this placement lane, and a change decided by rule leaves it to them',
+  'protected-product': 'the ads strategy protects a product this ad group advertises',
+  suppressed_flag: 'its target is held at the floor bid by no-pause suppression',
+  suppressed_by_bid: 'its target sits at the floor bid (suppressed)',
+  campaign_suppressed: "its campaign's bids are suppressed: the next restore would overwrite the change",
+  'source-ad-group-not-in-mappings': "the search term's ad group is not in the rule's mappings",
+  'term-filter': "the search term does not pass the rule's term filters",
+}
+
+/** AA-W2-10 — why the rule's handler passed an apply over, in a sentence; null when it did not. Pure. */
+export function skipSentence(result: unknown): string | null {
+  const output = (result as { output?: Record<string, unknown> } | null)?.output
+  const code = typeof output?.skipped === 'string' ? output.skipped : null
+  if (!code) return null
+  const said = [output!.why, output!.reason].find((v): v is string => typeof v === 'string' && !!v.trim())
+  return `Skipped — nothing was written, and it stays waiting: ${said ?? SKIP_WORDS[code] ?? `the rule passed it over (${code})`}.`
+}
+
 /**
  * AA-W2-10 — how an approval carries an apply out (Claude's decide-automation-suggestions). `operatorApproved`: a person
  * decided it (in Nexus, or with his code in Claude); false when the business's rule decided it — a rule's run is not a
@@ -144,6 +166,10 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}, decide
   if (result.ok === false) {
     return { ok: false, refused: true, error: result.error ?? 'refused', result, ...(approval?.negatives.length ? { negatives: approval.negatives } : {}) }
   }
+  // AA-W2-10 — a handler that passed it over wrote nothing: it is not applied. Said as a refusal, with the reason, and
+  // the row keeps waiting (SG.0's rule for a refusal), never "applied" with nothing behind it.
+  const skipped = skipSentence(result)
+  if (skipped) return { ok: false, refused: true, skipped: true, error: skipped, result }
   await prisma.adsRuleSuggestion.update({
     where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy, appliedResult: { ...(result as object), ...(overridden && overrideRecord ? { override: overrideRecord } : {}) } as object },
   })
@@ -370,7 +396,7 @@ export async function applySuggestionDecisions(
   decisions: Array<{ suggestionId: string; decide: ClaudeDecision }>,
   approverId: string | null = null,
   as: ApplyAs = {},
-): Promise<{ results: Array<{ suggestionId: string; decide: ClaudeDecision; ok: boolean; status: string; detail: string | null }>; negatives: string[] }> {
+): Promise<{ results: Array<{ suggestionId: string; decide: ClaudeDecision; ok: boolean; status: string; detail: string | null; skipped?: true }>; negatives: string[] }> {
   const decidedBy = approverId ? `user:${approverId}` : 'operator'
   const results = []
   const negatives: string[] = []
@@ -378,7 +404,7 @@ export async function applySuggestionDecisions(
     const result = d.decide === 'apply' ? await applySuggestion(d.suggestionId, {}, decidedBy, as) : d.decide === 'dismiss' ? await dismissSuggestion(d.suggestionId, decidedBy) : await restoreSuggestion(d.suggestionId)
     for (const id of (result as { negatives?: string[] }).negatives ?? []) if (!negatives.includes(id)) negatives.push(id)
     const now = await prisma.adsRuleSuggestion.findUnique({ where: { id: d.suggestionId }, select: { status: true } })
-    results.push({ suggestionId: d.suggestionId, decide: d.decide, ok: result.ok, status: now?.status ?? 'gone', detail: result.error ?? null })
+    results.push({ suggestionId: d.suggestionId, decide: d.decide, ok: result.ok, status: now?.status ?? 'gone', detail: result.error ?? null, ...(result.skipped ? { skipped: true as const } : {}) })
   }
   return { results, negatives }
 }

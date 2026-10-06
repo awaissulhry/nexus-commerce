@@ -169,6 +169,8 @@ describe('AA-W2-10 — decide-automation-suggestions by rule', () => {
       meta.approval?.negatives.push(w2.negative)
       return { type: action.type, ok: true, output: {} }
     }) as never
+    // A handler that passes an apply over and writes nothing, with its own sentence or with only its code.
+    ACTION_HANDLERS.tst_skip = (async (action: { type: string; why?: string }) => ({ type: action.type, ok: true, output: action.why ? { skipped: 'rank-owned', why: action.why } : { skipped: 'campaign-not-selected' } })) as never
     await inside(async () => {
       const db = database.client
       await db.adsAutomationState.upsert({ where: { id: 'singleton' }, create: { id: 'singleton', halted: false }, update: { halted: false, haltReason: null } })
@@ -186,6 +188,9 @@ describe('AA-W2-10 — decide-automation-suggestions by rule', () => {
       w2.metaByRule = (await sug('w2-meta-rule', 'CAMPAIGN', campaign.id, { type: 'tst_meta' })).id
       w2.metaByPerson = (await sug('w2-meta-person', 'CAMPAIGN', campaign.id, { type: 'tst_meta' })).id
       w2.write = (await sug('w2-write', 'AD_TARGET', target.id, { type: 'bid_down', percent: 20, adTargetId: target.id })).id
+      w2.skipWhy = (await sug('w2-skip-why', 'CAMPAIGN', campaign.id, { type: 'tst_skip', why: 'TEST the hourly plan holds it' })).id
+      w2.skipCode = (await sug('w2-skip-code', 'CAMPAIGN', campaign.id, { type: 'tst_skip' })).id
+      w2.applyToo = (await sug('w2-apply-too', 'CAMPAIGN', campaign.id, { type: 'tst_ok' })).id
       w2.target = target.id
     })
   }, 60_000)
@@ -228,6 +233,20 @@ describe('AA-W2-10 — decide-automation-suggestions by rule', () => {
     // A batch that applied and dismissed names both ways back.
     const mixed = { before: {}, after: { kind: 'amazon-ads', items: [{ id: 'a', status: 'applied' }, { id: 'b', status: 'dismissed' }], changeSetId: 'appr-x' } }
     expect(tool().undo!.request(mixed)).toEqual({ refusal: '1 of these suggestions were applied and 1 dismissed: put the applied ones back with undo-ad-change (changeSetId appr-x), and restore the dismissed ones with decide-automation-suggestions (decide: restore).' })
+  })
+
+  it('an apply its rule passes over is said as skipped, with why, and keeps waiting — never "applied"', async () => {
+    const out = (await executeTool(person, 'decide-automation-suggestions', { kind: 'amazon-ads', decisions: [{ suggestionId: w2.skipWhy, decide: 'apply' }, { suggestionId: w2.skipCode, decide: 'apply' }, { suggestionId: w2.applyToo, decide: 'apply' }] }, { via: 'claude', approvalId: 'appr-w2-skip', decidedVia: 'nexus', approvedByPerson: true })).raw as Out
+    expect(out).toMatchObject({ ok: true, data: { decided: 1, refused: 0, skipped: 2 } })
+    expect(out.data!.results).toEqual([
+      { suggestionId: w2.skipWhy, decide: 'apply', ok: false, status: 'pending', detail: 'Skipped — nothing was written, and it stays waiting: TEST the hourly plan holds it.', skipped: true },
+      { suggestionId: w2.skipCode, decide: 'apply', ok: false, status: 'pending', detail: "Skipped — nothing was written, and it stays waiting: its campaign is not one the rule's campaign picker selects.", skipped: true },
+      { suggestionId: w2.applyToo, decide: 'apply', ok: true, status: 'applied', detail: null },
+    ])
+    // The Suggestions page's own apply says the same, as a refusal: the row keeps waiting with nothing stored as applied.
+    const { applySuggestion } = await import('../../advertising/ads-suggestion-decide.service.js')
+    expect(await inside(() => applySuggestion(w2.skipWhy))).toMatchObject({ ok: false, refused: true, skipped: true, error: expect.stringContaining('TEST the hourly plan holds it') })
+    expect(await inside(() => database.client.adsRuleSuggestion.findUniqueOrThrow({ where: { id: w2.skipWhy } }))).toMatchObject({ status: 'pending', decidedBy: null, appliedResult: null })
   })
 
   it('a real bid write of the rule carries the change set and the request; undo-ad-change by the approval id finds it', async () => {

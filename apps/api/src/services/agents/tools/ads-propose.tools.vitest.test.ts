@@ -197,10 +197,10 @@ describe('A4 — an approved set-target-bid runs as the approver, once, and can 
     expect((await sql('SELECT status FROM "AgentApproval" WHERE id = $1', [fresh.approvalId]))[0]).toEqual({ status: 'pending' })
   })
 
-  it('declares the change contract: open world, reversible, at most confirm, material fields', () => {
+  it('declares the change contract: open world, reversible, at most run by rule inside the ads strategy (AA-W2-6), material fields', () => {
     const tool = getTool('set-target-bid')!
-    expect({ openWorld: tool.openWorld, reversibility: tool.reversibility, trust: tool.maxClaudeTrust, execute: typeof tool.execute, undo: !!tool.undo })
-      .toEqual({ openWorld: true, reversibility: 'full', trust: 'confirm', execute: 'function', undo: true })
+    expect({ openWorld: tool.openWorld, reversibility: tool.reversibility, trust: tool.maxClaudeTrust, bound: tool.strategyBound, execute: typeof tool.execute, undo: !!tool.undo })
+      .toEqual({ openWorld: true, reversibility: 'full', trust: 'auto', bound: 'amazon-ads', execute: 'function', undo: true })
   })
 })
 
