@@ -32,7 +32,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Ads autonomy W3-1 — apply-ad-recommendations asks for a plan whose steps reach Amazon.
 const OPEN_WORLD = [
   'add-photo-from-url', 'advance-purchase-order', 'apply-ad-recommendations', 'apply-ads-playbook', 'archive-ads', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
-  'cancel-order', 'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign',
+  'cancel-order', 'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ai-goal-campaigns',
   'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
   'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'fba-shipment-options', 'graduate-keyword', 'import-catalog', 'issue-refund',
   'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
