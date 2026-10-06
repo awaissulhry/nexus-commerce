@@ -151,7 +151,9 @@ export function engineRow(e: Engine, g: AccountLevel): ActorRow {
   const week = [
     plural(e.runs7d, 'run'),
     e.writes7d != null ? plural(e.writes7d, 'change') : null,
-    e.failures7d > 0 ? `${e.failures7d} failed` : null,
+    // The Problem column says the failed runs ("2 runs failed in 7 days"), so the week does not repeat them — unless a
+    // warning takes the Problem column, and the failures would otherwise be said nowhere on the row.
+    e.failures7d > 0 && e.warning ? `${e.failures7d} failed` : null,
   ].filter(Boolean).join(' · ')
   return {
     id: `engine:${e.key}`,
@@ -180,7 +182,7 @@ export function ruleRow(r: Rule, g: AccountLevel, readiness?: Readiness): ActorR
   const week = [
     `${r.week.acted.toLocaleString('en-GB')} acted`,
     `${r.week.proposed.toLocaleString('en-GB')} asked`,
-    r.week.failed > 0 ? `${r.week.failed} failed` : null,
+    // The Problem column says it ("1 change failed this week"): not repeated here.
   ].filter(Boolean).join(' · ')
   const problem = r.week.failed > 0
     ? `${plural(r.week.failed, 'change')} failed this week`
