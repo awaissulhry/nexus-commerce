@@ -287,11 +287,11 @@ const nextConfig = {
       { source: '/marketing/trading-desk/automation', destination: '/marketing/ads/rules-automation/control-room', permanent: true },
       { source: '/marketing/trading-desk/campaigns/:id', destination: '/marketing/ads/campaigns/:id', permanent: true },
 
-      // ── OC (2026-10-06) — the old /marketing/ads-console is retired, except its Rank Control page ──
-      // The Owner: "old ads console is legacy, we can remove it", once every job it does exists in the Ad Manager.
-      // Rank Control (/marketing/ads-console/rank) STAYS at its address: product rank plans are made and switched only
-      // there for now, and the rank-defend alert links to it. Every other page lands on the Ad Manager page that does
-      // the same job. Exact paths only, so nothing here can catch /rank.
+      // ── OC (2026-10-06) — the old /marketing/ads-console is retired, Rank Control included ──
+      // The Owner: "old ads console is legacy, we can remove it", once every job it does exists in the Ad Manager; and of
+      // Rank Control: "I think we have the replacement" — the Hourly Bids page (hourly bid plans). Every page lands on
+      // the Ad Manager page that does the same job. Rank Control lands on Hourly Bids at its "Product rank plans" section,
+      // where a plan made on the old page can still be switched off (the rank-defend alert links there too).
       { source: '/marketing/ads-console', destination: '/marketing/ads/dashboard', permanent: true },
       { source: '/marketing/ads-console/overview', destination: '/marketing/ads/dashboard', permanent: true },
       { source: '/marketing/ads-console/campaigns', destination: '/marketing/ads/campaigns', permanent: true },
@@ -299,11 +299,16 @@ const nextConfig = {
       { source: '/marketing/ads-console/targeting', destination: '/marketing/ads/reporting/targeting', permanent: true },
       { source: '/marketing/ads-console/activity', destination: '/marketing/ads/rules-automation/control-room?tab=activity', permanent: true },
       { source: '/marketing/ads-console/bulk', destination: '/marketing/ads/bulk', permanent: true },
-      // The old hub's ?tab=rank deep link (RC6.5) still opens Rank Control. Ahead of the plain rule, which would take it.
-      { source: '/marketing/ads-console/automation', has: [{ type: 'query', key: 'tab', value: 'rank' }], destination: '/marketing/ads-console/rank', permanent: true },
+      // The old hub's ?tab=rank deep link (RC6.5) lands where Rank Control does. Ahead of the plain rule, which would take it.
+      { source: '/marketing/ads-console/automation', has: [{ type: 'query', key: 'tab', value: 'rank' }], destination: '/marketing/ads/rules-automation/dayparting#rd-product-plans', permanent: true },
       { source: '/marketing/ads-console/automation', destination: '/marketing/ads/rules-automation/automations', permanent: true },
       { source: '/marketing/ads-console/campaign-builder/guided', destination: '/marketing/ads/campaign-builder/guided', permanent: true },
       { source: '/marketing/ads-console/settings', destination: '/settings/advertising', permanent: true },
+      // Rank Control. Stored rank-defend alerts link to `/rank?mode=plan`, and a request's query rides along to the
+      // destination, where `mode` is the Hourly Bids grid's Mode filter ("plan" matches no row). The destination's own
+      // empty `mode` wins (Next merges the destination's query over the request's), so the grid opens unfiltered.
+      { source: '/marketing/ads-console/rank', has: [{ type: 'query', key: 'mode' }], destination: '/marketing/ads/rules-automation/dayparting?mode=#rd-product-plans', permanent: true },
+      { source: '/marketing/ads-console/rank', destination: '/marketing/ads/rules-automation/dayparting#rd-product-plans', permanent: true },
     ];
     // Config redirects run before the workspace rewrite. Keep legacy bookmarks
     // and routed tabs working with their original business context.

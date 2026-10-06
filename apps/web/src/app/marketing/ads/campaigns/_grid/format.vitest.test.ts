@@ -14,7 +14,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { filterRows } from '@/design-system/patterns/workspace-grid/filterRows'
 import { compareSortValues } from '@/design-system/grid/sortValues'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pct, acosRank, acosFilterValue, acosSortNumber, NO_SALES_ACOS, NO_ACOS_SORT } from './format'
@@ -131,22 +131,22 @@ describe('acosSortNumber — for grids that cannot sink blanks (DS DataGrid, han
 })
 
 /**
- * The sweep: no ads screen (the console and what is left of the old ads-console: Rank Control) may sort or filter a missing ACoS
+ * The sweep: no ads screen may sort or filter a missing ACoS
  * as -1, 0 or -Infinity again — each of those ranks "no ACoS" as the best one on "lowest first".
  * Scans sort/filter accessors only; chart series and rule thresholds are not sort keys.
  */
 describe('no ads screen sorts or filters a missing ACoS as -1 / 0 / -Infinity', () => {
   const marketing = fileURLToPath(new URL('../../../', import.meta.url))
-  // OC (2026-10-06): only Rank Control is left under ads-console, and it may go too; a missing folder is no files.
-  const walk = (dir: string): string[] => !existsSync(dir) ? [] : readdirSync(dir).flatMap((n) => {
+  // The old ads-console it also swept is deleted (OC, 2026-10-06).
+  const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
     const p = join(dir, n)
     return statSync(p).isDirectory() ? walk(p) : /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [p] : []
   })
   const ACCESSOR = /sortValue|filterValue|case 'acos'|kind: 'range'/
   // A measured ACoS / TACoS only: a Target ACoS is a setting, and "none set" may sort low.
   const SENTINEL = /(?<!target)acos\w*\)?\s*\?\?\s*(-1|0)\b|(?<!target)acos\w*\s*==\s*null\s*\?\s*Number\.NEGATIVE_INFINITY/i
-  it('finds none in app/marketing/ads and app/marketing/ads-console', () => {
-    const files = [...walk(join(marketing, 'ads')), ...walk(join(marketing, 'ads-console'))]
+  it('finds none in app/marketing/ads', () => {
+    const files = walk(join(marketing, 'ads'))
     expect(files.length).toBeGreaterThan(100)
     const hits = files.flatMap((f) => readFileSync(f, 'utf8').split('\n')
       .map((line, i) => ({ line, at: `${f.slice(marketing.length)}:${i + 1}` }))
