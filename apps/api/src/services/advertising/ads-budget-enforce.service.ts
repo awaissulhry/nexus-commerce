@@ -44,6 +44,7 @@ import { logger } from '../../utils/logger.js'
 import { updateCampaignWithSync, type AdsActor } from './ads-mutation.service.js'
 import { suppressCampaignBids, restoreCampaignBids, suppressAdGroupBids, restoreAdGroupBids } from './ads-bid-suppression.service.js'
 import { currentMonth } from './ads-budget-manager.service.js'
+import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { allowChange, nothingHeld, openEngineGuard, readEnginePosture, type EngineGuardReport, type EngineGuardWords, type EnginePosture } from './ads-engine-guard.js'
 import { adsMode } from './ads-api-client.js'
@@ -232,7 +233,9 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
   if (markets.length === 0) return empty
 
   // W1-6 — `_max.date`: the last day the month-to-date spend covers (the daily report arrives the next morning).
-  const spendRows = await prisma.amazonAdsDailyPerformance.groupBy({ by: ['marketplace'], where: { entityType: 'CAMPAIGN', date: { gte: start, lt: end } }, _sum: { costMicros: true }, _max: { date: true } })
+  // AA-W2-2b — without the Marketing Stream's duplicate daily rows, as the Budget Manager reads it (AM-18): the two
+  // screens and the cap stop agree on what was spent.
+  const spendRows = await prisma.amazonAdsDailyPerformance.groupBy({ by: ['marketplace'], where: { entityType: 'CAMPAIGN', date: { gte: start, lt: end }, ...EXCLUDE_AMS_DAILY }, _sum: { costMicros: true }, _max: { date: true } })
   const mtdByMkt = new Map(spendRows.map((r) => [r.marketplace, Math.round(Number(r._sum.costMicros ?? 0) / 10_000)]))
   const throughByMkt = new Map(spendRows.map((r) => [r.marketplace, r._max.date ? new Date(r._max.date).toISOString().slice(0, 10) : null]))
 

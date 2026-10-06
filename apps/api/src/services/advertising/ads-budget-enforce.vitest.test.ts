@@ -88,6 +88,11 @@ beforeAll(async () => {
     } as never })
     await perf(ids.cA, 3_000)
     await perf(ids.cB, 2_500)
+    // AA-W2-2b — a Marketing Stream duplicate of a campaign-day (AM-18): never counted, as on the Budget Manager.
+    await c.amazonAdsDailyPerformance.create({ data: {
+      profileId: 'ams', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: firstDay, entityType: 'CAMPAIGN', entityId: `EXT-${ids.cA}`,
+      localEntityId: null, costMicros: 9_000n * 10_000n, currencyCode: 'EUR', reportRunId: 'ams-stream', reportedAt: new Date(),
+    } as never })
     await c.adsAutomationState.create({ data: { autonomy: 'AUTO' } as never })
   })
   await inB(async () => {
@@ -140,7 +145,7 @@ describe('the preview — what the engine would do now', () => {
     expect(r.plans.map((p) => p.marketplace)).toEqual(['DE', 'IT'])
     const it_ = market(r, 'IT')
     expect(it_).toMatchObject({
-      mtdSpendCents: 5_500,
+      mtdSpendCents: 5_500, // the stream's duplicate row is left out
       spendThrough: `${month}-01`,
       planCapCents: null, strategyCap: { cents: 5_000, from: MARKET_WORDS },
       capCents: 5_000, stopCapCents: 5_000, stopBy: 'strategy', stopOverSpend: true, autoPacing: false, capReached: true, todayTargetCents: null,

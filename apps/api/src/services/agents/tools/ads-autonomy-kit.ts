@@ -8,15 +8,16 @@
  *            with the row it comes from (ads-strategy/autonomy.ts, on W1's resolver: an ad group or a campaign takes the
  *            SAFER value across its products); this change counted (items, Amazon writes, raises, the largest move, the
  *            budget it adds); what already ran by rule in the last 24 hours, per market and per entity; the engines that
- *            also move it; the protected terms and products it meets; and, for a change that can add spend, the month's
- *            upper bound. The preview stores them as `limitFacts`, so `withinLimits` stays pure (it reads nothing) and a
+ *            also move it; the protected terms and products it meets; and, for a change that can add spend in a market
+ *            with a monthly cap, the month's forecast against it. The preview stores them as `limitFacts`, so `withinLimits` stays pure (it reads nothing) and a
  *            stored preview can be judged again (the commit's re-check, the watch week, the history test).
  *   ledger   no new table: the business's approvals run by rule (decisionVia auto) decided in the last 24 hours, and the
  *            steps of plans run by rule, each counted from the `this` block its own preview stored. A request handed
  *            back (stale, refused, failed) clears its decisionVia and no longer counts — the business cap's rows and
  *            window (claude-trust.service.ts autoRunsInLastDay). A bulk request is one run with many writes.
  *   checks   C1–C7 of the design (§2.4), plus every row inside its own scope's strategy and, for a change that can add
- *            spend, the month: pure, each null or the sentence a person reads. `commonRefusal` runs them in order.
+ *            spend, the month: pure, each null or the sentence a person reads. `commonRefusal` runs them in order. C5's
+ *            daily limits are the market row's (AA-W2-2b): empty is 0, so nothing that adds to one runs by rule.
  *   limits   the Claude limits every strategy-bound tool shares (`adKitLimits`: items per run, changes of one entity by
  *            rule a day, engine-owned) and the raise / cut steps (`STEP_PCT_LIMITS`, `STEP_POINT_LIMITS`). A limit that
  *            can add spend defaults to 0: until a person types a number, only lowering changes run alone.
@@ -29,6 +30,7 @@ import { z } from 'zod'
 import { FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import {
+  RATE_DAYS,
   bidLimitsOfScope,
   enginesOnCampaigns,
   entityKey,
@@ -135,6 +137,8 @@ export function measure(change: KitChange): Measured {
 // ── The facts a preview stores ────────────────────────────────────────────────────────────────────
 
 export interface DayCounts {
+  /** Changes: each entity changed counts one, in Nexus or at Amazon (Claude's daily limit of changes counts these). */
+  changes: number
   /** Changes that reach Amazon. */
   writes: number
   raises: number
@@ -156,7 +160,7 @@ export interface ThisChange {
   largestCutPoints: number
   highestNewBidCents: number | null
   budgetIncreaseCents: number
-  byMarket: Record<string, DayCounts & { items: number; addedDailyCents: number }>
+  byMarket: Record<string, DayCounts & { addedDailyCents: number }>
   /** Every entity it touches, once: the per-entity ledger counts runs by these keys. */
   entities: string[]
   /** Rows outside their own scope's strategy (a bid outside its band, or a larger step than it allows): every row is checked. */
@@ -175,10 +179,11 @@ export interface MarketFacts {
   strategy: { version: string } | null
   currency: string
   maxActionsPerRun: number | null
-  maxWritesPerDay: number | null
+  /** Claude's daily limits of what runs by rule here (the market row; null: not set — read as 0). */
+  maxChangesPerDay: number | null
   maxRaisesPerDay: number | null
   maxBudgetIncreasePerDayCents: number | null
-  sources: Partial<Record<'maxActionsPerRun' | 'maxWritesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', StrategySource>>
+  sources: Partial<Record<'maxActionsPerRun' | 'maxChangesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', StrategySource>>
 }
 
 export interface LimitFacts {
@@ -203,7 +208,7 @@ export interface LimitFacts {
   engineOwned: Array<{ campaignId: string; label: string; by: string[] }>
   /** Protected terms and protected products this change meets. */
   protectedHit: Array<{ entity: string; why: string }>
-  /** For a change that can add spend: each market's month. */
+  /** For a change that can add spend: each market's month, where a monthly cap is in force (none: no entry). */
   monthProjection?: Record<string, MonthProjection>
 }
 
@@ -214,7 +219,7 @@ export interface LimitFacts {
 export const LIMIT_FACTS_MONEY: Readonly<Record<string, string>> = {
   ...STRATEGY_MONEY,
   ...Object.fromEntries(
-    ['highestNewBidCents', 'budgetIncreaseCents', 'addedDailyCents', 'maxBudgetIncreasePerDayCents', 'spentCents', 'budgetsCents', 'projectedCents', 'afterCents', 'capCents']
+    ['highestNewBidCents', 'budgetIncreaseCents', 'addedDailyCents', 'maxBudgetIncreasePerDayCents', 'spentCents', 'ratePerDayCents', 'projectedCents', 'afterCents', 'capCents']
       .map((key) => [key, FIELDS.financialsAdspendView]),
   ),
 }
@@ -236,6 +241,7 @@ export interface RuleRunLedger {
 }
 
 const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
+const NO_RUNS: DayCounts = Object.freeze({ changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 })
 
 /** Pure: the ledger of stored previews, each one run; a preview without limit facts adds nothing. */
 export function ledgerOf(previews: readonly unknown[]): RuleRunLedger {
@@ -245,7 +251,8 @@ export function ledgerOf(previews: readonly unknown[]): RuleRunLedger {
     if (!facts) continue
     out.runs++
     for (const [market, c] of Object.entries(facts.this.byMarket ?? {})) {
-      const day = (out.byMarket[market] ??= { writes: 0, raises: 0, budgetIncreaseCents: 0 })
+      const day = (out.byMarket[market] ??= { ...NO_RUNS })
+      day.changes += count(c?.changes)
       day.writes += count(c?.writes)
       day.raises += count(c?.raises)
       day.budgetIncreaseCents += count(c?.budgetIncreaseCents)
@@ -324,7 +331,9 @@ const CUT_WORDS: Record<KitChange['field'], string> = {
 /**
  * The facts of one change, read in the business of the call, for its preview. `approvalId`: the request a dry run
  * re-checks (not counted in today's ledger). `projectMonth`: the change can add spend without adding a budget (a
- * restore puts bids back) — a change that adds a daily budget is always projected.
+ * restore puts bids back) — a change that adds a daily budget is always projected. Only a market with a monthly cap is
+ * projected. The run rate is the recent past: a change that restarts spend says what it restarts as an item's
+ * `dailyBudgetCents`, which counts in full.
  */
 export async function buildLimitFacts(input: {
   tool: string
@@ -361,7 +370,7 @@ export async function buildLimitFacts(input: {
       strategy: s.version ? { version: s.version } : null,
       currency: currencyIn(market) ?? 'EUR',
       maxActionsPerRun: s.maxActionsPerRun?.value ?? null,
-      maxWritesPerDay: s.daily.maxWritesPerDay,
+      maxChangesPerDay: s.daily.maxChangesPerDay,
       maxRaisesPerDay: s.daily.maxRaisesPerDay,
       maxBudgetIncreasePerDayCents: s.daily.maxBudgetIncreasePerDayCents,
       sources: { ...(s.maxActionsPerRun ? { maxActionsPerRun: s.maxActionsPerRun.source } : {}), ...s.daily.sources },
@@ -376,8 +385,8 @@ export async function buildLimitFacts(input: {
     const scope = scopes.get(key)!
     const m = measure(item.change)
     // An item Nexus cannot place counts in the totals only (C1 refuses it).
-    const day = scope.market ? (t.byMarket[scope.market] ??= { items: 0, writes: 0, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 }) : null
-    if (day) day.items++
+    const day = scope.market ? (t.byMarket[scope.market] ??= { ...NO_RUNS, addedDailyCents: 0 }) : null
+    if (day) day.changes++
     if (!item.nexusOnly) { t.writes++; if (day) day.writes++ }
     if (m.direction === 'raise') {
       t.raises++; if (day) day.raises++
@@ -421,7 +430,7 @@ export async function buildLimitFacts(input: {
 
   // C5, C6 — what already ran by rule.
   const ledger = await ruleRunLedger({ excludeApprovalId: input.approvalId, now: input.now })
-  for (const market of t.markets) facts.today[market] = ledger.byMarket[market] ?? { writes: 0, raises: 0, budgetIncreaseCents: 0 }
+  for (const market of t.markets) facts.today[market] = ledger.byMarket[market] ?? { ...NO_RUNS }
   for (const entity of t.entities) {
     const runs = ledger.byEntity[entity] ?? 0
     if (runs > facts.perEntityToday.maxChangesByRule) facts.perEntityToday = { maxChangesByRule: runs, entity }
@@ -431,7 +440,8 @@ export async function buildLimitFacts(input: {
   const projected = t.markets.filter((m) => t.byMarket[m].addedDailyCents > 0 || (input.projectMonth === true && t.byMarket[m].raises > 0))
   if (projected.length) {
     const months = await monthProjections(projected.map((market) => ({ market, view: strategies.get(market)?.view ?? null, addedDailyCents: t.byMarket[market].addedDailyCents })), input.now)
-    facts.monthProjection = Object.fromEntries(months)
+    // A market without a monthly cap has no month to keep under: left out.
+    if (months.size) facts.monthProjection = Object.fromEntries(months)
     for (const [market, p] of months) if (!currencyIn(market) && facts.markets[market]) facts.markets[market].currency = p.currency
   }
   return facts
@@ -478,6 +488,12 @@ type Limits = Record<string, unknown>
 const numberIn = (limits: Limits, key: string, fallback: number) => (typeof limits[key] === 'number' ? (limits[key] as number) : fallback)
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 const A_PERSON = 'a person decides'
+/** The strategy's names of Claude's daily limits (fields.ts labels, lower-cased). */
+const DAILY_WORDS: Record<'maxChangesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', string> = {
+  maxChangesPerDay: 'most changes Claude may run by rule a day',
+  maxRaisesPerDay: 'most raises Claude may run by rule a day',
+  maxBudgetIncreasePerDayCents: 'most budget increase Claude may run by rule a day',
+}
 
 const ACTION_WORDS: Record<ClaudeActionType, string> = {
   bid: 'bid changes',
@@ -542,28 +558,29 @@ export function engineOwnedRefusal(facts: LimitFacts, limits: Limits): string | 
   return `${owned.label} is also moved by ${owned.by.join(', ')}; Claude does not change what an engine moves without a person (allowEngineOwned is off)`
 }
 
-/** C5 — per market: what ran by rule today and this change, within Claude's daily limits in the strategy. */
+/**
+ * C5 — per market: what ran by rule in the last 24 hours plus this change, within Claude's daily limits on the market's
+ * strategy row — changes, raises and budget increase. A limit the strategy does not set is 0 (fail closed): nothing that
+ * adds to it runs by rule. A change that adds nothing to a limit is not held by it.
+ */
 export function dailyRefusal(facts: LimitFacts): string | null {
   for (const market of facts.this.markets) {
     const mine = facts.this.byMarket[market]
-    const today = facts.today[market] ?? { writes: 0, raises: 0, budgetIncreaseCents: 0 }
+    const today = facts.today[market] ?? NO_RUNS
     const m = facts.markets[market]
     if (!mine || !m) continue
-    const from = (key: keyof MarketFacts['sources']) => (m.sources[key] ? ` (${strategyWords(m.sources[key]!)})` : '')
-    if (m.maxWritesPerDay != null && today.writes + mine.writes > m.maxWritesPerDay) {
-      return `${market}: ${plural(today.writes, 'write')} ran by rule in the last 24 hours and this adds ${mine.writes}, more than the ${m.maxWritesPerDay} a day the ads strategy allows${from('maxWritesPerDay')}; ${A_PERSON}`
-    }
-    if (mine.raises > 0) {
-      if (m.maxRaisesPerDay == null) return `${market}: the ads strategy sets no number of raises Claude may run by rule in a day, so a raise waits for a person`
-      if (today.raises + mine.raises > m.maxRaisesPerDay) {
-        return `${market}: ${plural(today.raises, 'raise')} ran by rule in the last 24 hours and this adds ${mine.raises}, more than the ${m.maxRaisesPerDay} a day the ads strategy allows${from('maxRaisesPerDay')}; ${A_PERSON}`
-      }
-    }
-    if (mine.budgetIncreaseCents > 0) {
-      if (m.maxBudgetIncreasePerDayCents == null) return `${market}: the ads strategy sets no daily budget increase Claude may run by rule, so a budget increase waits for a person`
-      if (today.budgetIncreaseCents + mine.budgetIncreaseCents > m.maxBudgetIncreasePerDayCents) {
-        return `${market}: budgets rose ${amountLabel(today.budgetIncreaseCents, m.currency)} by rule in the last 24 hours and this adds ${amountLabel(mine.budgetIncreaseCents, m.currency)}, more than the ${amountLabel(m.maxBudgetIncreasePerDayCents, m.currency)} a day the ads strategy allows${from('maxBudgetIncreasePerDayCents')}; ${A_PERSON}`
-      }
+    const money = (cents: number) => amountLabel(cents, m.currency)
+    const limits: Array<{ key: 'maxChangesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents'; adds: number; ran: number; words: (n: number) => string; none: string }> = [
+      { key: 'maxChangesPerDay', adds: mine.changes, ran: today.changes, words: (n) => plural(n, 'change'), none: 'no change' },
+      { key: 'maxRaisesPerDay', adds: mine.raises, ran: today.raises, words: (n) => plural(n, 'raise'), none: 'no raise' },
+      { key: 'maxBudgetIncreasePerDayCents', adds: mine.budgetIncreaseCents, ran: today.budgetIncreaseCents, words: (n) => `${money(n)} of daily budget`, none: 'no budget increase' },
+    ]
+    for (const l of limits) {
+      const max = m[l.key]
+      if (l.adds <= 0 || l.ran + l.adds <= (max ?? 0)) continue
+      if (max == null) return `${market}: the ads strategy sets no daily limit for this (${DAILY_WORDS[l.key]}) — empty is 0, so ${l.none} runs by rule here; ${A_PERSON}`
+      const allowed = l.key === 'maxBudgetIncreasePerDayCents' ? money(max) : String(max)
+      return `${market}: ${l.words(l.ran)} ran by rule in the last 24 hours and this adds ${l.words(l.adds)}, more than the ${allowed} a day the ads strategy allows (${DAILY_WORDS[l.key]}${m.sources[l.key] ? `, ${strategyWords(m.sources[l.key]!)}` : ''}); ${A_PERSON}`
     }
   }
   return null
@@ -586,7 +603,7 @@ export function itemsRefusal(facts: LimitFacts, limits: Limits): string | null {
   if (t.items > max) return `it changes ${plural(t.items, 'item')}, more than the ${max} this tool's limits allow in one request run by rule; ${A_PERSON}`
   for (const market of t.markets) {
     const m = facts.markets[market]
-    const items = t.byMarket[market]?.items ?? 0
+    const items = t.byMarket[market]?.changes ?? 0
     if (m?.maxActionsPerRun != null && items > m.maxActionsPerRun) {
       return `it changes ${plural(items, 'item')} in ${market}, more than the ${m.maxActionsPerRun} actions per run the ads strategy allows${m.sources.maxActionsPerRun ? ` (${strategyWords(m.sources.maxActionsPerRun)})` : ''}; ${A_PERSON}`
     }
@@ -607,7 +624,11 @@ export function stepRefusal(facts: LimitFacts, limits: Limits): string | null {
     ?? over(t.largestCutPoints, 'maxCutPoints', ' points', 'cut')
 }
 
-/** A change that can add spend keeps each market's month under its cap (an upper bound: spend data is a day or two late). */
+/**
+ * A change that can add spend keeps each market's month under its cap: the forecast from the run rate with its margin,
+ * plus every cent of daily budget the change adds (spend data is a day or two late). The budget engine's cap stop stays
+ * behind it.
+ */
 export function monthRefusal(facts: LimitFacts): string | null {
   for (const [market, p] of Object.entries(facts.monthProjection ?? {})) {
     if (p.capCents == null || p.afterCents <= p.capCents) continue
@@ -618,9 +639,11 @@ export function monthRefusal(facts: LimitFacts): string | null {
 
 function monthWords(p: MonthProjection): string {
   const spent = `${amountLabel(p.spentCents, p.currency)} spent${p.spendThrough ? ` through ${p.spendThrough}` : ' (no report this month yet)'}`
-  const budgets = `every enabled campaign's daily budget (${amountLabel(p.budgetsCents, p.currency)} together) for the ${plural(p.uncoveredDays, 'day')} not reported yet`
+  const rate = p.rateThrough
+    ? `${amountLabel(p.ratePerDayCents, p.currency)} a day (the average of the ${RATE_DAYS} reported days to ${p.rateThrough}) + ${p.marginPct} % for the ${plural(p.uncoveredDays, 'day')} not reported yet`
+    : `no report in the last five weeks, so no run rate for the ${plural(p.uncoveredDays, 'day')} not reported yet`
   const added = p.addedDailyCents ? `, ${p.addedDailyCents > 0 ? '+' : '−'}${amountLabel(Math.abs(p.addedDailyCents), p.currency)} a day from today for ${plural(p.daysLeft, 'day')}` : ''
-  return `${spent}, ${budgets}${added}`
+  return `${spent}, ${rate}${added}`
 }
 
 /**
@@ -665,17 +688,17 @@ export function limitsNote(facts: LimitFacts, limits?: Limits): string[] {
     const m = facts.markets[market]
     if (!m) continue
     lines.push(m.strategy ? `${market}: ads strategy version ${m.strategy.version}.` : `${market}: no ads strategy — nothing runs alone there.`)
-    const today = facts.today[market] ?? { writes: 0, raises: 0, budgetIncreaseCents: 0 }
+    const today = facts.today[market] ?? NO_RUNS
     const mine = t.byMarket[market]
     const limit = (value: number | null, key: keyof MarketFacts['sources'], unset: string, money = false) =>
       value == null ? unset : `${money ? amountLabel(value, m.currency) : value} a day (${m.sources[key] ? strategyWords(m.sources[key]!) : 'ads strategy'})`
     lines.push(
-      `${market}, run by rule in the last 24 hours: ${plural(today.writes, 'write')}, ${plural(today.raises, 'raise')}, budgets +${amountLabel(today.budgetIncreaseCents, m.currency)}; `
-      + `this change: ${plural(mine?.writes ?? 0, 'write')}, ${plural(mine?.raises ?? 0, 'raise')}, budgets +${amountLabel(mine?.budgetIncreaseCents ?? 0, m.currency)}. `
-      + `Daily limits: writes ${limit(m.maxWritesPerDay, 'maxWritesPerDay', "not set (the business's cap of runs by rule applies)")}; raises ${limit(m.maxRaisesPerDay, 'maxRaisesPerDay', 'not set in the ads strategy (a raise waits for a person)')}; `
-      + `budget increase ${limit(m.maxBudgetIncreasePerDayCents, 'maxBudgetIncreasePerDayCents', 'not set in the ads strategy (an increase waits for a person)', true)}.`,
+      `${market}, run by rule in the last 24 hours: ${plural(today.changes, 'change')}, ${plural(today.raises, 'raise')}, budgets +${amountLabel(today.budgetIncreaseCents, m.currency)}; `
+      + `this change: ${plural(mine?.changes ?? 0, 'change')}, ${plural(mine?.raises ?? 0, 'raise')}, budgets +${amountLabel(mine?.budgetIncreaseCents ?? 0, m.currency)}. `
+      + `Daily limits: changes ${limit(m.maxChangesPerDay, 'maxChangesPerDay', 'not set, so 0: no change runs by rule')}; raises ${limit(m.maxRaisesPerDay, 'maxRaisesPerDay', 'not set, so 0: no raise runs by rule')}; `
+      + `budget increase ${limit(m.maxBudgetIncreasePerDayCents, 'maxBudgetIncreasePerDayCents', 'not set, so 0: no budget increase runs by rule', true)}.`,
     )
-    if (m.maxActionsPerRun != null) lines.push(`${market}: most actions per run ${m.maxActionsPerRun} (${strategyWords(m.sources.maxActionsPerRun!)}); this change: ${mine?.items ?? 0}.`)
+    if (m.maxActionsPerRun != null) lines.push(`${market}: most actions per run ${m.maxActionsPerRun} (${strategyWords(m.sources.maxActionsPerRun!)}); this change: ${mine?.changes ?? 0}.`)
   }
   // The strategy's limits where it lands, each value with its row, said once per row.
   const said = new Map<string, string[]>()
@@ -711,7 +734,7 @@ export function limitsNote(facts: LimitFacts, limits?: Limits): string[] {
   for (const hit of facts.protectedHit) lines.push(`Protected: ${hit.why}.`)
   for (const u of facts.unplaced) lines.push(`Not placed: ${u.why}.`)
   for (const [market, p] of Object.entries(facts.monthProjection ?? {})) {
-    lines.push(`${market}, this month at most ${amountLabel(p.afterCents, p.currency)} with this change (${monthWords(p)}); cap ${p.capCents == null ? 'none' : `${amountLabel(p.capCents, p.currency)} (${p.capFrom})`}.`)
+    lines.push(`${market}, this month forecast ${amountLabel(p.afterCents, p.currency)} with this change (${monthWords(p)}); cap ${amountLabel(p.capCents, p.currency)} (${p.capFrom}).`)
   }
   return lines
 }

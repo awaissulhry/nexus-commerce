@@ -22,7 +22,9 @@ import { MAX_ACCOUNT_DEFAULT_PCT } from '../ads-target-acos-resolver.js'
 import { BRAKE_TOOLS, PLACES, actionOfTool } from './claude.js'
 import {
   CLAUDE_ACTION_TOOLS,
+  CLAUDE_DAILY_FIELDS,
   CLAUDE_DOOR,
+  FIELD_BY_KEY,
   COLUMN_CHECKS,
   DEFAULT_STOP_BID_CENTS,
   MAX_TARGET_PCT,
@@ -66,8 +68,8 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: the bid fields (W1-5), the monthly cap, the stop bid and the actions per run (W1-6), the search-term thresholds and protection (W1-7) and what Claude may do alone (W1-8) have readers; every other field is stored and shown only', () => {
-    const read = ['target', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'maxChangePct', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'claudeAutonomy']
+  it('is honest: the bid fields (W1-5), the monthly cap, the stop bid and the actions per run (W1-6), the search-term thresholds and protection (W1-7), what Claude may do alone (W1-8) and what may run by rule a day (AA-W2-2b) have readers; every other field is stored and shown only', () => {
+    const read = ['target', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'maxChangePct', 'maxActionsPerRun', 'protect', 'harvest', 'negate', 'stop', 'claudeAutonomy', ...CLAUDE_DAILY_FIELDS]
     expect(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => f.key)).toEqual(read)
     expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key).filter((key) => !read.includes(key)))
     expect(notReadYet()).toEqual(['goal', 'goalNote', 'reviewEveryDays'])
@@ -90,6 +92,12 @@ describe('the registry', () => {
     expect(readers('monthlySpendCapCents')).toMatch(/^the budget engine .*every campaign of the market drops to its stop bid until the 1st \(a cap of 0 is no cap\) \| the budget engine: when a category's or product's .* every ad group holding a product under it drops to its stop bid until the 1st/)
     expect(readers('stop')).toMatch(/^the budget engine: .* \| the retail guard: .* \| Claude's suppress-campaign: /)
     expect(readers('maxActionsPerRun')).toMatch(/^the hourly bid plans \(rank-defend\): .* \| the budget engine .* \| dayparting /)
+    // AA-W2-2b — Claude's daily limits: read by Claude's door for a change that may run by rule (ads-autonomy-kit.ts C5),
+    // only where an ad tool is set to run by rule and its code allows it; empty is 0.
+    for (const key of CLAUDE_DAILY_FIELDS) {
+      expect(byKey(key), key).toHaveLength(1)
+      expect(readers(key), key).toMatch(new RegExp(`^${READERS.claudeByRule.replace(/[()]/g, '\\$&')}: .*; empty is 0 — no (change|raise|budget increase) runs by rule$`))
+    }
   })
 
   it('every money field keeps its numbers under keys the money filter strips (ad-spend money)', () => {
@@ -101,6 +109,16 @@ describe('the registry', () => {
     // A field that is not money carries no money key.
     for (const f of STRATEGY_FIELDS.filter((x) => !x.money)) expect(valueKeys(f).filter((k) => moneyKeys.has(k)), f.key).toEqual([])
     expect(new Set(Object.values(STRATEGY_MONEY))).toEqual(new Set([FIELDS.financialsAdspendView]))
+  })
+
+  it('AA-W2-2b — Claude\'s daily limits sit on the market row only, the lower one is safer, any increase is a raise, and the budget is money', () => {
+    for (const key of CLAUDE_DAILY_FIELDS) {
+      expect(FIELD_BY_KEY.get(key), key).toMatchObject({ columns: [key], levels: ['MARKET'], resolve: 'inherit', safer: 'lower', raise: 'count' })
+      expect(COLUMN_CHECKS[key], key).toMatchObject({ kind: 'int', min: 0 })
+    }
+    expect(STRATEGY_MONEY.claudeMaxBudgetIncreasePerDayCents).toBe(FIELDS.financialsAdspendView)
+    expect(FIELD_BY_KEY.get('claudeMaxChangesPerDay')!.money).toBe(false)
+    expect(FIELD_BY_KEY.get('claudeMaxRaisesPerDay')!.money).toBe(false)
   })
 
   it('a group names the columns that make it set; a single field is its own column', () => {
