@@ -19,7 +19,7 @@ import { FIELDS } from '@nexus/shared/permissions'
 import { listTools } from '../../agents/tool-registry.js'
 import { SUPPRESSION_FLOOR_CENTS } from '../ads-bid-suppression.service.js'
 import { MAX_ACCOUNT_DEFAULT_PCT } from '../ads-target-acos-resolver.js'
-import { BRAKE_TOOLS, OP_ACTIONS, PLACES, actionOfTool } from './claude.js'
+import { BRAKE_TOOLS, OP_ACTIONS, PLACES, actionOfTool, actionsOfTool } from './claude.js'
 import {
   CLAUDE_ACTION_TOOLS,
   CLAUDE_DAILY_FIELDS,
@@ -169,10 +169,15 @@ describe('the registry', () => {
     expect(actionOfTool('apply-ads-playbook', { op: 'adopt' })).toBeNull()
     expect(actionOfTool('apply-ads-playbook', { op: 'something-else' })).toBe('create')
     expect(actionOfTool('apply-ads-playbook')).toBe('create')
-    // Every tool with ops is a narrowed tool, and each op names a real kind (or null).
+    // PB-5b — a start is two kinds, its own (restore) first; a stop is a stop.
+    expect(actionsOfTool('apply-ads-playbook', { op: 'start' })).toEqual(['restore', 'allowlist'])
+    expect(actionOfTool('apply-ads-playbook', { op: 'start' })).toBe('restore')
+    expect(actionOfTool('apply-ads-playbook', { op: 'stop' })).toBe('stop')
+    expect(actionsOfTool('apply-ads-playbook', { op: 'adopt' })).toEqual([])
+    // Every tool with ops is a narrowed tool, and each op names real kinds (or null).
     for (const [tool, ops] of Object.entries(OP_ACTIONS)) {
       expect(Object.values(CLAUDE_ACTION_TOOLS).flat(), tool).toContain(tool)
-      for (const action of Object.values(ops)) if (action) expect(Object.keys(CLAUDE_ACTION_TOOLS)).toContain(action)
+      for (const kinds of Object.values(ops)) for (const action of kinds == null ? [] : [kinds].flat()) expect(Object.keys(CLAUDE_ACTION_TOOLS)).toContain(action)
     }
   })
 })

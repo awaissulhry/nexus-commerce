@@ -41,7 +41,7 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   admin: { excluded: 'admin repair, purge, restore, backfill, probes and dead connections have no undo (09 §2)', feature: 81 },
   'advertising-ai': { part: '06', feature: 20, also: 'the Recommendations tab\'s mute (ads autonomy W3-1): Claude asks with mute-ad-recommendations, and carries recommendations out by id with apply-ad-recommendations' },
   'advertising-intel': { part: '01', feature: 17 },
-  'advertising-playbook': { part: '01', feature: 17, also: 'the ads playbook (how a product\'s ads are built and run): Claude reads it with ads-playbook, asks to change it with set-ads-playbook (a raise needs the approver\'s authenticator code), and to build or adopt a product\'s campaigns with apply-ads-playbook' },
+  'advertising-playbook': { part: '01', feature: 17, also: 'the ads playbook (how a product\'s ads are built and run): Claude reads it with ads-playbook, asks to change it with set-ads-playbook (a raise needs the approver\'s authenticator code), and to build or adopt a product\'s campaigns, then start or stop them (a start needs the approver\'s authenticator code), with apply-ads-playbook' },
   'advertising-strategy': { part: '01', feature: 17, also: 'the ads strategy (ads autonomy W1): Claude reads it with ads-strategy and asks to change it with set-ads-strategy (a raise needs the approver\'s authenticator code)' },
   'automation-switch': { part: '06', feature: 20, also: "a person's engine switch in the Control Room; Claude moves it with turn-up / turn-down-automation (R16)" },
   advertising: { part: '01', feature: 17, also: 'its automation paths (rules, autopilot, dayparting) are the automation part, 06 (#20)' },

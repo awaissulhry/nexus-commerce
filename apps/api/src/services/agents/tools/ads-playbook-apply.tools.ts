@@ -1,7 +1,7 @@
 /**
  * ADS PLAYBOOK PB-5a — apply-ads-playbook: Claude asks to apply ONE product's playbook in ONE market (the playbook is the
- * business's own: ads-playbook reads it, set-ads-playbook changes it). Two ops in PB-5a, hero in PB-6c; start and stop
- * come in PB-5b.
+ * business's own: ads-playbook reads it, set-ads-playbook changes it). Five ops: build and adopt (PB-5a), start and stop
+ * (PB-5b), hero (PB-6c).
  *
  *   build   create the slots the product does not hold yet, through the SP Super Wizard's own launch (Owner rule 1;
  *           ads-playbook/build.ts) — each campaign ENABLED at Amazon's 2¢ floor with its planned bids remembered
@@ -11,13 +11,23 @@
  *           re-plans it and runs exactly what was approved, detached: it answers the run's id at once (view build).
  *   adopt   bind existing campaigns to the product's slots (ads-playbook/adopt.ts): Nexus only — nothing at Amazon, no
  *           allowlist, bid or rule moves; the playbook's own hourly plans follow the slots, switched off (PB-8, rank.ts).
+ *   start   PB-5b — the built campaigns start spending (ads-playbook/start.ts): on the live-write allowlist, their
+ *           planned bids back (never above what was remembered; a bid moved since stays; an engine's floor and an ad
+ *           group's own floor stay), the placements the build deferred, the portfolio repair, then the playbook's
+ *           hourly plans and rules switched on; a paused campaign is never enabled. It adds spend, so approving it needs
+ *           the approver's authenticator code (stepUp) — by rule only where the business let it (allowStart, a
+ *           loosening that itself needs the code) and the ads strategy runs both restore and allowlist alone.
+ *   stop    PB-5b — the brake and START's undo: the built campaigns' bids to the 2¢ floor (remembered again; an engine's
+ *           floor taken over), off the allowlist, then the playbook's hourly plans (their floors handed to the stop) and
+ *           rules off. Never a pause, never an archive; no code (it lowers spend).
  *   hero    PB-6c — a winning term's own campaign (ads-playbook/hero.ts, hero-build.ts): ONE campaign, ONE exact keyword,
  *           the product's own product ads and negatives, built by the same build (the SP Super Wizard's launch) and
  *           born the same way — at the 2¢ floor, off the allowlist, placements at START — linked as the slot
- *           `hero:<term>`. One per term per product per market. The term keeps running where it runs now: nothing is
- *           negated and no bid is lowered there; once the hero itself meets the harvest bar, the playbook's harvest and
- *           isolation rules close it in the research campaigns (handover B). Another product buying the term never
- *           refuses it (rule 3). Spend is added only at START, by the playbook's start.
+ *           `hero:<term>` (kind slot: START and STOP name it in `slots`, and the held-campaign guards cover it). One per
+ *           term per product per market. The term keeps running where it runs now: nothing is negated and no bid is
+ *           lowered there; once the hero itself meets the harvest bar, the playbook's harvest and isolation rules close
+ *           it in the research campaigns (handover B). Another product buying the term never refuses it (rule 3).
+ *           Spend is added only by the playbook's START (op start), as for every built slot.
  *
  * Like every ad change tool (ads-change-kit.ts): the preview says where it lands and a refusal is not queued; it runs only
  * as an approved request, as the approver, and refuses when what was approved moved. Strategy-bound (ads-autonomy-kit.ts):
@@ -26,7 +36,8 @@
  * only writes Nexus links: the strategy does not narrow it.
  *
  * Undo: a build (a hero too) — archive-ads of every campaign it made (buildRunId), permanent at Amazon; an adopt — the
- * inverse adopt.
+ * inverse adopt; a start — a stop of the slots it started; a stop — a start of the slots it stopped (with the approver's
+ * code again).
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -37,6 +48,7 @@ import { SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.s
 import { applyAdopt, planAdopt, type AdoptPlan } from '../../advertising/ads-playbook/adopt.js'
 import { previewArtifacts } from '../../advertising/ads-playbook/artifacts.js'
 import { buildRunCampaigns, inFlightRefusal, planBuild, startPlaybookBuild, type BuildPlan } from '../../advertising/ads-playbook/build.js'
+import { planStart, runStart, runStop, type ApplyOp, type StartPlan } from '../../advertising/ads-playbook/start.js'
 import { PLAYBOOK_MONEY, SLOT_KEY } from '../../advertising/ads-playbook/doc.js'
 import { HERO_KEY } from '../../advertising/ads-playbook/hero.js'
 import { planHero, type HeroBuildPlan } from '../../advertising/ads-playbook/hero-build.js'
@@ -45,6 +57,7 @@ import { marketCurrency } from '../../pim/market-currency.js'
 import { amountLabel, liveReachOf } from './ads-tool-guards.js'
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, requesterOf, storedReach, strategyFactsMoney, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote } from './ads-autonomy-kit.js'
+import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolDoor, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = 'apply-ads-playbook'
@@ -52,12 +65,12 @@ const ID = z.string().trim().min(1).max(64)
 const MAX_SLOTS = 30
 
 const input = z.object({
-  op: z.enum(['build', 'adopt', 'hero'])
-    .describe('build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); hero: a campaign of its own for one winning term (one exact keyword, born the same way; the term keeps running where it is)'),
+  op: z.enum(['build', 'adopt', 'start', 'stop', 'hero'])
+    .describe("build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); start: the built campaigns start spending (allowlist, planned bids, placements, then the playbook's hourly plans and rules; needs the approver's authenticator code); stop: the brake — built campaigns back to the 2¢ floor and off the allowlist, the hourly plans and rules off (never a pause); hero: a campaign of its own for one winning term (one exact keyword, born like a build; the term keeps running where it is)"),
   market: z.string().trim().toUpperCase().min(2).max(20).describe('ONE Amazon market code (IT, DE, FR, ES, UK; business-overview lists them)'),
   productId: ID.optional().describe('the product (a parent or a variation), its Nexus id; or sku'),
   sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
-  slots: z.array(z.union([SLOT_KEY, HERO_KEY])).max(MAX_SLOTS).optional().describe('build: only these missing slots (slot keys from ads-playbook view compile); default: every slot the product does not hold; a campaign of its own for a term is named by its key, hero:<term>'),
+  slots: z.array(z.union([SLOT_KEY, HERO_KEY])).max(MAX_SLOTS).optional().describe('build: only these missing slots (slot keys from ads-playbook view compile); default: every slot the product does not hold. start / stop: only these built slots; default: every slot the playbook built. A campaign of its own for a term is named by its key, hero:<term>'),
   bind: z.array(z.object({
     slot: SLOT_KEY.describe('the slot key'),
     campaignId: ID.describe('the campaign that plays it, its Nexus id (campaignId in ad-campaigns)'),
@@ -235,6 +248,118 @@ async function adoptPreview(a: Args): Promise<{ result: ToolResult; plan?: Adopt
   }
 }
 
+/** How a START is approved, in one sentence (its stepUp). */
+const START_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked '
+  + 'confirms it in Claude with theirs when the business set apply-ads-playbook to confirm in Claude. By rule only where the business '
+  + 'allows a start (allowStart) and the ads strategy lets both a restore and the allowlist run alone.'
+
+/** What a START or a STOP does to one campaign, as its preview lists it (each count, never a money total in words). */
+function campaignOpLine(op: ApplyOp, c: StartPlan['campaigns'][number]) {
+  const bids = c.bids.does === 'restore'
+    ? { does: 'restore', adGroups: c.bids.adGroups, targets: c.bids.targets, highestCents: c.bids.highestCents, ...(c.bids.held.length ? { held: c.bids.held.slice(0, 10) } : {}), ...(c.bids.left.length ? { left: c.bids.left.slice(0, 10), leftCount: c.bids.left.length } : {}) }
+    : c.bids.does === 'floor' || c.bids.does === 'refloor' ? { does: c.bids.does, floorCents: c.bids.floorCents, adGroups: c.bids.adGroups, targets: c.bids.targets }
+      : c.bids.does === 'held' ? { does: 'held', by: c.bids.by } : { does: 'none', why: c.bids.why }
+  return {
+    slot: c.slot, campaignId: c.campaignId, name: c.name, status: c.status, dailyBudgetCents: c.dailyBudgetCents,
+    allowlist: c.allowlist, bids,
+    ...(op === 'start' ? { placements: c.placements.does === 'apply' ? { does: 'apply', placements: c.placements.adjustments.length } : c.placements } : {}),
+    ...(c.ownFloors ? { ownFloors: c.ownFloors } : {}),
+    ...(c.paused ? { paused: c.paused } : {}),
+    spends: c.spends,
+  }
+}
+
+/** A START or a STOP, planned and judged: its preview, and the plan `execute` runs. */
+async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<{ result: ToolResult; plan?: StartPlan }> {
+  const op = a.op as ApplyOp
+  const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult })
+  const out = await planStart({ op, market: a.market, productId: a.productId, sku: a.sku, slots: a.slots })
+  if ('error' in out) return refuse(out.error)
+  const p = out.data
+  if (a.expectVersion != null && a.expectVersion !== p.playbook.version) return refuse(MOVED_ROW)
+  if (p.problems.length) return refuse(`Not queued: ${p.problems.join('; ')}.`)
+  const acting = op === 'start'
+    ? p.campaigns.filter((c) => c.allowlist === 'on' || c.bids.does === 'restore' || c.placements.does === 'apply')
+    : p.campaigns.filter((c) => c.allowlist === 'off' || c.bids.does === 'floor' || c.bids.does === 'refloor')
+  const switching = p.artifacts.some((l) => l.does === (op === 'start' ? 'enable' : 'disable'))
+  if (!acting.length && !switching && !p.heldFloors.length) {
+    return refuse(op === 'start'
+      ? `Nothing to start: every campaign the playbook built for ${p.product.sku} in ${p.market} runs already (on the allowlist, at its bids) and its hourly plans and rules are on.`
+      : `Nothing to stop: every campaign the playbook built for ${p.product.sku} in ${p.market} is at the floor and off the allowlist already, and its hourly plans and rules are off.`)
+  }
+  let currency: string
+  try { currency = await marketCurrency('AMAZON', p.market) } catch (e) { return refuse((e as Error).message) }
+
+  // Where it lands: the market's gate (the campaigns are off the allowlist before a START, so it is asked as a launch
+  // asks it); a STOP only lowers, so a halt does not refuse it.
+  const reach = liveReachOf(await checkAdsWriteGate({ marketplace: p.market, payloadValueCents: op === 'start' ? p.highestRestoredBidCents : 0, ...(op === 'stop' ? { isSuppression: true } : {}) }))
+  if (reach.reach === 'refused') return refuse(reachRefusal(reach))
+  const stored = storedReach(reach)
+  // START — the facts a run by rule is judged on: the product's campaigns spend again (their daily budgets in full, in
+  // the month's forecast), the restore kind (the strategy narrows it by the allowlist kind too: ads-strategy/claude.ts).
+  const facts = op === 'start'
+    ? await buildLimitFacts({
+        tool: TOOL, action: 'restore', projectMonth: true,
+        items: [{ entity: { kind: 'products', market: p.market, productIds: [p.product.productId], label: `${p.product.sku}'s playbook campaigns` }, change: { field: 'status', from: 'LOW_BIDS', to: 'ENABLED', dailyBudgetCents: p.dailyBudgetCents } }],
+        approvalId: ctx.approvalId ?? null,
+      })
+    : null
+  const campaigns = p.campaigns.map((c) => campaignOpLine(op, c))
+  // The playbook's hourly plans a START switches on raise bids too (top of search): part of what the code approves.
+  const rankOn = p.artifacts.filter((l) => l.kind === 'rankGroup' && l.does === 'enable').length
+  const paused = p.campaigns.filter((c) => c.paused).length
+  const effect = op === 'start'
+    ? `Starts ${p.product.sku}'s playbook in ${p.market}: ${plural(acting.length, 'campaign')} it built ${acting.length === 1 ? 'goes' : 'go'} on the live-write allowlist with ${acting.length === 1 ? 'its' : 'their'} planned bids and placements back — `
+      + `${plural(p.spending, 'campaign')} start${p.spending === 1 ? 's' : ''} spending at once`
+      + `${paused ? ` (${paused} paused at Amazon ${paused === 1 ? 'stays' : 'stay'} paused: a person enables ${paused === 1 ? 'it' : 'them'} in Nexus)` : ''}`
+      + `${p.heldFloors.length ? `, and ${plural(p.heldFloors.length, 'other campaign')} of the playbook ${p.heldFloors.length === 1 ? 'gets its' : 'get their'} bids back from the floor its stop held` : ''}; `
+      + "then the playbook's hourly plans and rules are switched on. An engine's floor and an ad group's own floor (stock, a product's monthly cap) stay; a bid moved since the build stays where it is."
+    : `Stops ${p.product.sku}'s playbook in ${p.market}: every bid of ${plural(acting.length, 'campaign')} it built goes to the ${SUPPRESSION_FLOOR_CENTS}-cent floor (remembered: START puts them back) and off the live-write allowlist, `
+      + "then the playbook's hourly plans and rules are switched off — the floors an hourly plan set stay, held by the stop, and only START gives them back. "
+      + 'Never a pause, never an archive: a START brings it back in about a minute.'
+  const summary = {
+    campaigns: acting.length, spending: p.spending, slots: acting.map((c) => c.slot), artifacts: p.artifacts.filter((l) => l.does !== 'keep').map((l) => `${l.kind}:${l.key}:${l.does}`),
+    ...(p.heldFloors.length ? { heldFloors: p.heldFloors.map((h) => h.slot) } : {}),
+    ...(p.floorsTaken.length ? { floorsTaken: p.floorsTaken.map((t) => t.slot) } : {}),
+  }
+  return {
+    plan: p,
+    result: {
+      ok: true,
+      preview: {
+        action: TOOL,
+        op,
+        market: p.market,
+        product: p.product,
+        playbook: p.playbook,
+        currency,
+        campaigns,
+        ...(op === 'start' ? { starts: summary } : { stops: summary }),
+        untouched: p.untouched,
+        // START: the floors a stop holds on the playbook's other campaigns (an adopted one's hourly plan), given back.
+        ...(p.heldFloors.length ? { heldFloors: p.heldFloors.map((h) => ({ slot: h.slot, campaignId: h.campaignId, name: h.name, origin: h.origin, status: h.status, adGroups: h.bids.adGroups, targets: h.bids.targets, highestCents: h.bids.highestCents })) } : {}),
+        // STOP: the hourly plans' floors it takes over (kept at the floor; only START gives them back).
+        ...(p.floorsTaken.length ? { floorsTaken: p.floorsTaken } : {}),
+        ...(op === 'start' ? { highestRestoredBidCents: p.highestRestoredBidCents, dailyBudgetCents: p.dailyBudgetCents } : {}),
+        artifacts: p.artifacts,
+        ...(p.artifactErrors.length ? { artifactErrors: p.artifactErrors } : {}),
+        warnings: p.warnings,
+        ...(op === 'start'
+          ? { stepUp: { what: `starts spending on ${plural(p.spending, 'campaign')}${rankOn ? ` and switches on ${plural(rankOn, 'hourly bid plan')}` : ''}`, raises: ['Bids', 'Spend', ...(rankOn ? ['Hourly bid plans'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
+          : { noCode: 'A stop lowers spend: it needs no authenticator code.' }),
+        basis: hash({ op, row: [p.playbook.id, p.playbook.version], campaigns: p.campaigns, untouched: p.untouched, heldFloors: p.heldFloors, floorsTaken: p.floorsTaken, artifacts: p.artifacts }),
+        reach: stored,
+        reachNote: reachNote(stored),
+        effect,
+        undoNote: op === 'start'
+          ? 'Undo asks for a STOP of the campaigns this start started (their bids back to the floor, off the allowlist).'
+          : 'Undo asks for a START of the campaigns this stop stopped (it needs the approver\'s authenticator code again).',
+        ...(facts ? { limitFacts: facts, limitsNote: limitsNote(facts) } : {}),
+      },
+    },
+  }
+}
+
 /** PB-6c — what a hero's preview says about where its term runs now (the winners view's entries for it). */
 const currentLines = (p: HeroBuildPlan) => p.hero.current.slice(0, 10).map((e) => ({
   slot: e.slot, campaignId: e.campaignId, campaignName: e.campaignName, state: e.state, nextStep: e.nextStep, orders: e.current?.orders ?? 0,
@@ -345,47 +470,65 @@ const VIA: Record<ToolDoor, string> = { claude: 'claude', app: 'assistant', flee
 const APPLY_LIMITS = adKitLimits({ maxItems: 1 }, {
   maxCampaigns: z.number().int().min(0).max(MAX_SLOTS).default(0).describe('build: the most campaigns one build may create by rule; 0 = every build waits for a person'),
   maxDailyBudgetCents: z.number().int().min(0).default(0).describe("build: the most daily budget (all its campaigns, minor units of the market's currency) one build may create by rule; 0 = every build waits for a person"),
-  maxBidCents: z.number().int().min(0).default(0).describe("build: the highest planned bid (restored at START) a build created by rule may hold, in minor units of the market's currency"),
+  maxBidCents: z.number().int().min(0).default(0).describe("build: the highest planned bid (restored at START) a build created by rule may hold; start: the highest bid a start by rule may put back — in minor units of the market's currency"),
+  // PB-5b — a start adds spend: off by default, so every start waits for a person with their authenticator code.
+  allowStart: z.boolean().default(false).describe('start: let a start run by rule (inside the other limits and the ads strategy); off by default — every start then waits for a person, who approves it with their authenticator code'),
   markets: z.array(z.string().trim().toUpperCase().min(2).max(20)).max(20).default([]).describe('the markets where it may run by rule (empty = every market)'),
 })
 
-/** PB-5a — apply-ads-playbook's own checks around the kit's (C1–C7, the month). Pure. */
+/**
+ * PB-5a — apply-ads-playbook's own checks around the kit's (C1–C7, the month). Pure. PB-5b — a stop is a brake (never
+ * held by a limit); a start runs by rule only with allowStart, and puts back no bid above maxBidCents or the strategy's
+ * highest bid.
+ */
 function applyRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
   const p = (preview ?? {}) as {
-    op?: string; market?: string; newMarket?: boolean; campaigns?: unknown[]; dailyBudgetCents?: number; highestPlannedBidCents?: number; currency?: string
+    op?: string; market?: string; newMarket?: boolean; campaigns?: unknown[]; dailyBudgetCents?: number; highestPlannedBidCents?: number; highestRestoredBidCents?: number; currency?: string
   }
   if (!p.op) return 'there is no preview of this playbook apply to check; a person decides'
+  if (p.op === 'stop') return null
   const markets = (limits.markets as string[] | undefined) ?? []
   if (p.market && markets.length && !markets.includes(p.market)) return `this business lets a playbook apply run by rule only in ${markets.join(', ')}`
   if (p.op === 'adopt') return null
+  if (p.op === 'start' && limits.allowStart !== true) return "it starts spending: a person decides, with their authenticator code (this business does not let a start run by rule: allowStart is off)"
   const common = commonRefusal(preview, limits)
   if (common) return common
-  if (p.op !== 'build' && p.op !== 'hero') return `op ${p.op} is not one this tool runs by rule; a person decides`
   const currency = p.currency ?? 'EUR'
+  if (p.op === 'start') return highestBidRefusal(preview, p.highestRestoredBidCents ?? 0, 'highest restored bid', limits, currency)
+  if (p.op !== 'build' && p.op !== 'hero') return `op ${p.op} is not one this tool runs by rule; a person decides`
   if (p.newMarket) return `it builds the first campaigns in ${p.market}: a person decides a new market`
   const n = p.campaigns?.length ?? 0
   const maxCampaigns = typeof limits.maxCampaigns === 'number' ? limits.maxCampaigns : 0
   if (n > maxCampaigns) return `it creates ${plural(n, 'campaign')}, more than the ${maxCampaigns} this tool's limits let a build create by rule${maxCampaigns === 0 ? ' (0: every build waits for a person)' : ''}; a person decides`
   const budget = typeof limits.maxDailyBudgetCents === 'number' ? limits.maxDailyBudgetCents : 0
   if ((p.dailyBudgetCents ?? 0) > budget) return `its daily budgets add up to ${amountLabel(p.dailyBudgetCents ?? 0, currency)}, more than the ${amountLabel(budget, currency)} this tool's limits let a build create by rule; a person decides`
+  return highestBidRefusal(preview, p.highestPlannedBidCents ?? 0, 'highest planned bid', limits, currency)
+}
+
+/** A bid a build plans (or a start puts back) above this tool's maxBidCents, or the strategy's highest bid where it lands. */
+function highestBidRefusal(preview: unknown, highest: number, words: string, limits: Record<string, unknown>, currency: string): string | null {
   const bid = typeof limits.maxBidCents === 'number' ? limits.maxBidCents : 0
-  const highest = p.highestPlannedBidCents ?? 0
-  if (highest > bid) return `its highest planned bid ${amountLabel(highest, currency)} is above the ${amountLabel(bid, currency)} this tool's limits allow by rule; a person decides`
+  if (highest > bid) return `its ${words} ${amountLabel(highest, currency)} is above the ${amountLabel(bid, currency)} this tool's limits allow by rule; a person decides`
   const facts = limitFactsOf(preview)
   for (const scope of Object.values(facts?.scopes ?? {})) {
     const max = scope.limits.maxBidCents
     if (max == null || !scope.sources.maxBid || highest <= max) continue
-    return `its highest planned bid ${amountLabel(highest, currency)} is above the highest bid ${amountLabel(max, currency)} (${strategyWords(scope.sources.maxBid)}); a person decides`
+    return `its ${words} ${amountLabel(highest, currency)} is above the highest bid ${amountLabel(max, currency)} (${strategyWords(scope.sources.maxBid)}); a person decides`
   }
   return null
 }
 
-/** What a change of this tool recorded: the op, and its run (build, hero: its key too) or its links (adopt). */
+/** What a change of this tool recorded: the op, and its run (build, hero: its key too), its links (adopt) or the slots it moved (start, stop). */
 type ApplyAfter =
   | { op: 'build' | 'hero'; playbookId: string; applicationId: string; key?: string }
   | { op: 'adopt'; playbookId: string; market: string; productId: string; bound: Array<{ slot: string; campaignId: string }>; unbound: Array<{ slot: string; campaignId: string }> }
+  | { op: 'start' | 'stop'; playbookId: string; market: string; productId: string; slots: string[]; state: string | null; whole?: boolean }
 
-/** Undo: a build — a hero too — is archived (archive-ads buildRunId, permanent at Amazon); an adopt is the inverse adopt. */
+/**
+ * Undo: a build — a hero too — is archived (archive-ads buildRunId, permanent at Amazon); an adopt is the inverse adopt;
+ * a start is a stop of the slots it started, a stop a start of the slots it stopped — while the row's state is still what
+ * it left.
+ */
 export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
   async current(change) {
     const after = (change.after ?? {}) as ApplyAfter
@@ -400,6 +543,10 @@ export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
       const links = await prisma.adsPlaybookLink.findMany({ where: { playbookId: after.playbookId, kind: 'slot' }, select: { key: true, refId: true } })
       const has = (s: { slot: string; campaignId: string }) => links.some((l) => l.key === s.slot && l.refId === s.campaignId)
       return { ...after, bound: after.bound.filter(has), unbound: after.unbound.filter((u) => !has(u)) }
+    }
+    if (after.op === 'start' || after.op === 'stop') {
+      const row = await prisma.adsPlaybook.findUnique({ where: { id: after.playbookId }, select: { state: true } })
+      return { ...after, state: row?.state ?? null }
     }
     return change.after
   },
@@ -422,6 +569,12 @@ export const APPLY_PLAYBOOK_UNDO: ToolUndo = {
         },
       }
     }
+    if (after.op === 'start' || after.op === 'stop') {
+      if (!after.slots?.length) return { refusal: `This ${after.op} ${after.op === 'start' ? 'started' : 'stopped'} no campaign (each one was ${after.op === 'start' ? 'running' : 'stopped'} already): there is nothing of it to undo.` }
+      const back = after.op === 'start' ? 'stop' : 'start'
+      // A start or a stop of the whole playbook is undone whole (its hourly plans, their floors and its rules with it).
+      return { tool: TOOL, args: { op: back, market: after.market, productId: after.productId, ...(after.whole ? {} : { slots: after.slots }), why: `undo of a playbook ${after.op}` } }
+    }
     return { refusal: 'This change does not record what it applied.' }
   },
 }
@@ -431,7 +584,10 @@ const applyAdsPlaybook: AgentTool = {
   title: 'Apply the ads playbook',
   input,
   requires: [F.adsCampaignsManage, F.adsBudgetsEdit, F.adsAutomationManage, FIELDS.financialsAdspendView],
-  restrictedFields: { ...PLAYBOOK_MONEY, ...strategyFactsMoney(), highestPlannedBidCents: FIELDS.financialsAdspendView } as Readonly<Record<string, FieldPermission>>,
+  restrictedFields: {
+    ...PLAYBOOK_MONEY, ...strategyFactsMoney(),
+    ...Object.fromEntries(['highestPlannedBidCents', 'highestRestoredBidCents', 'highestCents', 'rememberedCents', 'toCents', 'bidCents'].map((key) => [key, FIELDS.financialsAdspendView])),
+  } as Readonly<Record<string, FieldPermission>>,
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
@@ -439,7 +595,8 @@ const applyAdsPlaybook: AgentTool = {
   strategyBound: 'amazon-ads',
   requiresApprovalDefault: true,
   openWorld: true,
-  // A build is undone by archiving what it made (permanent at Amazon; what it spent stays spent); an adopt in full.
+  // A build is undone by archiving what it made (permanent at Amazon; what it spent stays spent); an adopt in full; a
+  // start by a stop (what it spent stays spent), a stop by a start.
   reversibility: 'partial',
   maxClaudeTrust: 'auto',
   limits: APPLY_LIMITS,
@@ -454,16 +611,24 @@ const applyAdsPlaybook: AgentTool = {
     + 'once approved: follow it with ads-playbook view build. op hero builds ONE campaign of its own for one winning term '
     + '(term; ads-playbook view winners names the terms whose next step it is): one exact keyword, the product\'s own '
     + 'product ads and negatives, born the same way as a build (2-cent floor, off the allowlist, placements at START) and '
-    + 'linked as the slot hero:<term>, at most one per term; the term keeps running where it runs now (nothing negated, no '
-    + 'bid lowered) until the hero itself proves. op adopt binds campaigns the product already runs to its '
+    + 'linked as the slot hero:<term>, at most one per term; op start with slots ["hero:<term>"] starts it. The term keeps '
+    + 'running where it runs now (nothing negated, no bid lowered) until the hero itself proves. op adopt binds campaigns the product already runs to its '
     + 'slots (bind names some; the rest match by name, then by shape): Nexus only, nothing at Amazon moves (the playbook\'s '
-    + 'own hourly plans follow the slots, switched off until START; one another plan holds is never taken). A person '
-    + 'approves it in Nexus, unless the business lets it run by its rule inside its limits and the ads strategy (by '
-    + 'default a build does not: maxCampaigns 0). Refused, and not queued, when the product is not enrolled, nothing is '
-    + 'missing, the gate or Amazon\'s write gate refuses it, or a build of it is already running. Undo: a build is archived '
-    + '(archive-ads, permanent at Amazon); an adopt is reversed by the opposite adopt.',
+    + 'own hourly plans follow the slots, switched off until START; one another plan holds is never taken). op start '
+    + 'makes the campaigns the playbook built spend: on the live-write allowlist, their planned bids back (never above '
+    + 'what was planned; a bid moved since, an engine\'s floor and an ad group\'s own floor stay), the placements the build '
+    + 'held back, then the playbook\'s hourly plans and rules switched on; a paused campaign is never enabled and an adopted '
+    + 'one is left as it is. Starting to spend needs the approver\'s authenticator code (in Nexus, or the person who asked '
+    + 'confirms it in Claude). op stop is the brake: the built campaigns\' bids to the 2-cent floor (remembered), off the '
+    + 'allowlist, the hourly plans and rules off — never a pause; it needs no code. A person approves it in Nexus, unless '
+    + 'the business lets it run by its rule inside its limits and the ads strategy (by default a build does not: '
+    + 'maxCampaigns 0; a start does not: allowStart off). Refused, and not queued, when the product is not enrolled, '
+    + 'nothing is missing (or nothing to start or stop), the gate or Amazon\'s write gate refuses it, or a build of it is '
+    + 'already running. Undo: a build is archived (archive-ads, permanent at Amazon); an adopt is reversed by the opposite '
+    + 'adopt; a start by a stop, a stop by a start.',
   async handler(args, ctx) {
     const a = args as Args
+    if (a.op === 'start' || a.op === 'stop') return (await startPreview(a, ctx)).result
     if (a.op === 'hero') return (await heroPreview(a, ctx)).result
     return a.op === 'adopt' ? (await adoptPreview(a)).result : (await buildPreview(a, ctx)).result
   },
@@ -499,6 +664,46 @@ const applyAdsPlaybook: AgentTool = {
           after: { op: 'adopt', playbookId: p.playbook.id, market: p.market, productId: p.product.productId, bound: p.bindings.map((b) => ({ slot: b.slot, campaignId: b.campaignId })), unbound: p.unbinds },
         },
       }
+    }
+
+    if (a.op === 'start' || a.op === 'stop') {
+      const op = a.op
+      const fresh = await startPreview(a, ctx)
+      if (!fresh.result.ok || !fresh.plan) return notRun(`Not run: ${fresh.result.error ?? `it is no longer a valid ${op}`}`)
+      const refusal = recheck(ctx, fresh.result, ['op', 'basis', 'reach'])
+      if (refusal) return notRun(refusal)
+      const preview = fresh.result.preview as { reach: StoredReach; effect: string }
+      const run = approvedRun(ctx, a.why ?? preview.effect)
+      if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
+      // A start adds spend: approved with the approver's fresh code, or run by the business's rule (allowStart, itself a
+      // loosening that needed the code). A stop lowers spend: no code.
+      let stepUpAt: Date | null = null
+      if (op === 'start' && ctx.decidedVia !== 'auto') {
+        const coded = await stepUpApproval(ctx)
+        if ('refusal' in coded) return notRun(coded.refusal.replace('a raise runs', 'a start runs').replace('it raises', 'it starts spending').replace('a raise needs', 'a start needs'))
+        stepUpAt = coded.at
+      }
+      const p = fresh.plan
+      const writer = { ...writerOf(run.changeSetId), stepUpAt }
+      const out = op === 'start' ? await runStart(p, run, writer) : await runStop(p, run, writer)
+      const moved = out.done.length
+      const data = {
+        op, [op === 'start' ? 'started' : 'stopped']: out.done, state: out.state, reach: preview.reach, changeSetId: run.changeSetId,
+        ...(out.failed.length ? { failed: out.failed } : {}),
+        ...(out.left.length ? { leftAsTheyStand: out.left } : {}),
+        ...(out.artifacts.length ? { artifactsSwitched: out.artifacts } : {}),
+        ...(out.floorsHeld.length ? { floorsHeld: out.floorsHeld, floorsHeldNote: 'Their hourly plans\' floors are the stop\'s now: they stay at the floor until START gives their bids back (restore-campaign refuses them).' } : {}),
+        ...(out.errors.length ? { errors: out.errors } : {}),
+        note: op === 'start'
+          ? `${plural(moved, 'campaign')} started: on the live-write allowlist, planned bids and placements back; each bid write is sent to Amazon at once.`
+          : `${plural(moved, 'campaign')} stopped: bids at the ${SUPPRESSION_FLOOR_CENTS}-cent floor (remembered) and off the live-write allowlist. Nothing was paused.`,
+      }
+      const change = {
+        before: { op, playbookId: p.playbook.id, state: p.playbook.state, slots: p.campaigns.map((c) => ({ slot: c.slot, campaignId: c.campaignId, allowlist: c.allowlist, bids: c.bids.does })) },
+        after: { op, playbookId: p.playbook.id, market: p.market, productId: p.product.productId, slots: out.done.filter((slot) => p.campaigns.some((c) => c.slot === slot)), state: out.state, ...(a.slots?.length ? {} : { whole: true }) },
+      }
+      if (!moved && out.failed.length) return { ok: false, error: `Not ${op === 'start' ? 'started' : 'stopped'}: ${out.failed.map((f) => `${f.slot}: ${f.why}`).join('; ')}`, data, change }
+      return { ok: true, data, change }
     }
 
     if (a.op === 'hero') {

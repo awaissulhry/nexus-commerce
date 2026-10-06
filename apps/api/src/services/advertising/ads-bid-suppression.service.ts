@@ -24,6 +24,9 @@
  * ADS AUTONOMY W3-3 — `lowerAdGroupBids` floors ONE ad group whose every product is out of stock, with the same memory
  * and ownership; `restoreAdGroupBids` gives it back. Never a pause, never a stock quantity. (A short ad group's step down
  * is a plain bid lowering with no floor markers, so every stop here still floors it: ads-stock.tools.ts.)
+ *
+ * PB-5b — a playbook START gives a build's planned bids back with `restoreCampaignBids(…, { planned })`: never above
+ * the bid remembered, and a bid that left the floor since stays where it is (plannedGiveBack). Its STOP floors them again.
  */
 
 import prisma from '../../db.js'
@@ -69,6 +72,21 @@ function heldGiveBack(
   return { cents: c.cents, reason: `${reason} — put back at ${c.cents}¢, not the remembered ${remembered}¢: the ${bidSideWords(c.held.side)} (${c.held.limit.source})` }
 }
 
+/**
+ * PB-5b — a playbook START's give-back of one remembered (planned) bid, decided once for its preview and its run. A bid
+ * still at the floor goes back to the bid remembered, held inside the bounds that bind it (as heldGiveBack) but never
+ * ABOVE it: a lowest bid that binds puts back the remembered bid, no more. A bid that left the floor since it was floored
+ * (an engine or a person set it) is `left` as it stands. Pure.
+ */
+export function plannedGiveBack(
+  remembered: number, current: number, floorCents: number, bounds: { max: BidBound | null; min: BidBound | null },
+): { left: true } | { cents: number; heldBy: string | null } {
+  if (current !== floorCents) return { left: true }
+  const c = clampBid(remembered, bounds, { currentCents: current, forced: true })
+  if (!c.held || c.cents > remembered) return { cents: Math.min(c.cents, remembered), heldBy: null }
+  return { cents: c.cents, heldBy: `the ${bidSideWords(c.held.side)} (${c.held.limit.source})` }
+}
+
 export const SUPPRESSION_FLOOR_CENTS = 2
 // MB.1 — Amazon's own SP minimum bid is 2¢, and a floor of €100 is past any plausible
 // keyword bid, so a value outside this range is a typo rather than an intention. Clamped
@@ -109,7 +127,9 @@ export async function suppressCampaignBids(
   // MCP full control A8 — `changeSetId` (optional) tags every write with an approved request's id; absent for every
   // existing caller, which behaves exactly as before. ADS AUTONOMY W3-1 — `evidence` (optional) goes on every write's
   // audit row (the recommendation the stop carries out); absent, nothing changes.
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null; changeSetId?: string | null; evidence?: AdWriteEvidence | null },
+  // PB-5b — `manual` (optional): a person approved it (a playbook STOP he approved): his writes pass the allowlist like
+  // his other edits (isPersonEdit). Absent for every existing caller.
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null; changeSetId?: string | null; evidence?: AdWriteEvidence | null; manual?: boolean },
 ): Promise<number> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true } })
   if (!camp || camp.bidsSuppressedAt) return 0 // missing or already suppressed → no-op
@@ -127,7 +147,7 @@ export async function suppressCampaignBids(
     // A1 — save the prior BEFORE flooring (so the floor can never lose it) + isolate each entity.
     try {
       await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: g.defaultBidCents } })
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}) })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}), ...(opts.manual ? { manual: true } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] suppress group threw — skipping', { adGroupId: g.id, error: (e as Error).message }) }
   }
@@ -140,7 +160,7 @@ export async function suppressCampaignBids(
   for (const t of targets) {
     try {
       await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: t.bidCents } })
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}) })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, ...(opts.evidence ? { evidence: opts.evidence } : {}), ...(opts.manual ? { manual: true } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] suppress target threw — skipping', { adTargetId: t.id, error: (e as Error).message }) }
   }
@@ -171,7 +191,9 @@ export async function suppressCampaignBids(
  */
 export async function refloorCampaignBids(
   campaignId: string,
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null },
+  // PB-5b — `changeSetId` and `manual` (optional) as in suppressCampaignBids: a playbook STOP that floors again what a
+  // START left half done. Absent for every existing caller.
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null; changeSetId?: string | null; manual?: boolean },
 ): Promise<number> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true } })
   if (!camp?.bidsSuppressedAt) return 0 // not suppressed → suppressCampaignBids owns this
@@ -193,7 +215,7 @@ export async function refloorCampaignBids(
       // Remember first, and only for an entity with no memory yet — an existing memory is
       // the pre-suppression bid and must survive every re-floor.
       if (g.suppressedFromBidCents == null) await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: g.defaultBidCents } })
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: want }, actor: opts.actor, reason, applyImmediately, force: true })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: want }, actor: opts.actor, reason, applyImmediately, force: true, ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}), ...(opts.manual ? { manual: true } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] refloor group threw — skipping', { adGroupId: g.id, error: (e as Error).message }) }
   }
@@ -207,7 +229,7 @@ export async function refloorCampaignBids(
     if (t.bidCents === want) continue
     try {
       if (t.suppressedFromBidCents == null) await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: t.bidCents } })
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: want }, actor: opts.actor, reason, applyImmediately, force: true })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: want }, actor: opts.actor, reason, applyImmediately, force: true, ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}), ...(opts.manual ? { manual: true } : {}) })
       if (r.ok) touched++
     } catch (e) { logger.warn('[no-pause] refloor target threw — skipping', { adTargetId: t.id, error: (e as Error).message }) }
   }
@@ -246,7 +268,13 @@ export async function restoreCampaignBids(
   // 1e — `manual`: a person clicked Restore (the Budget Manager control plane): it passes the halt and autonomy OFF
   // like his other edits (isPersonEdit). Engines never set it, so their restores still wait for Resume (S1).
   // W1-5 — `holds`: a run's collector for the restores a bound held below (or above) the remembered bid (its run line).
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; changeSetId?: string | null; manual?: boolean; holds?: BidHoldLog },
+  // PB-5b — `planned` (a playbook START): each bid goes back as plannedGiveBack decides — never above the bid remembered,
+  // and one that left the floor since (`floorCents`: the floor the campaign was put at) stays as it is, its memory
+  // dropped, and is listed in `left`. Absent for every existing caller.
+  opts: {
+    actor: AdsActor; reason?: string; applyImmediately?: boolean; changeSetId?: string | null; manual?: boolean; holds?: BidHoldLog
+    planned?: { floorCents: number; left: Array<{ kind: 'adGroup' | 'target'; id: string; bidCents: number; rememberedCents: number }> }
+  },
 ): Promise<number> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, bidsSuppressedAt: true } })
   if (!camp || !camp.bidsSuppressedAt) return 0 // not suppressed → no-op
@@ -266,9 +294,21 @@ export async function restoreCampaignBids(
   const boundsOf = groups.length || targets.length
     ? await giveBackBounds(campaignId, [...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)])
     : null
+  // PB-5b — a START's give-back (plannedGiveBack); null: the bid left the floor since, and stays as it is.
+  const givenBack = (remembered: number, current: number, bounds: { max: BidBound | null; min: BidBound | null }) => {
+    if (!opts.planned) return heldGiveBack(remembered, current, bounds, reason, opts.holds)
+    const p = plannedGiveBack(remembered, current, opts.planned.floorCents, bounds)
+    if ('left' in p) return null
+    return { cents: p.cents, reason: p.heldBy ? `${reason} — put back at ${p.cents}¢, not the planned ${remembered}¢: ${p.heldBy}` : reason }
+  }
   for (const g of groups) {
     try {
-      const back = heldGiveBack(g.suppressedFromBidCents as number, g.defaultBidCents, boundsOf!(g.id), reason, opts.holds)
+      const back = givenBack(g.suppressedFromBidCents as number, g.defaultBidCents, boundsOf!(g.id))
+      if (!back) {
+        await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: null } })
+        opts.planned!.left.push({ kind: 'adGroup', id: g.id, bidCents: g.defaultBidCents, rememberedCents: g.suppressedFromBidCents as number })
+        continue
+      }
       const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
       if (r.ok || r.error === 'not_found') { await prisma.adGroup.update({ where: { id: g.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore group not accepted — keeping prior for retry', { adGroupId: g.id, error: r.error }) }
@@ -277,7 +317,12 @@ export async function restoreCampaignBids(
 
   for (const t of targets) {
     try {
-      const back = heldGiveBack(t.suppressedFromBidCents as number, t.bidCents, boundsOf!(t.adGroupId), reason, opts.holds)
+      const back = givenBack(t.suppressedFromBidCents as number, t.bidCents, boundsOf!(t.adGroupId))
+      if (!back) {
+        await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: null } })
+        opts.planned!.left.push({ kind: 'target', id: t.id, bidCents: t.bidCents, rememberedCents: t.suppressedFromBidCents as number })
+        continue
+      }
       const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, changeSetId: opts.changeSetId ?? null, manual: opts.manual })
       if (r.ok || r.error === 'not_found') { await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
       else { failed++; logger.warn('[no-pause] restore target not accepted — keeping prior for retry', { adTargetId: t.id, error: r.error }) }
