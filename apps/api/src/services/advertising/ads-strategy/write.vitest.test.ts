@@ -179,6 +179,11 @@ describe('judging a change (design §3.3)', () => {
     expect(judge('autonomy', 'claudeAutonomy', null, { bid: 'ask' })).toBe('lower')
     expect(judge('autonomy', 'claudeAutonomy', { bid: 'ask', negative: 'auto' }, { bid: 'off', negative: 'auto' })).toBe('lower')
     expect(judge('autonomy', 'claudeAutonomy', { bid: 'ask' }, { bid: 'off', negative: 'confirm' })).toBe('lower')
+    // AA-W2-4 — watch sits between confirm and auto.
+    expect(judge('autonomy', 'claudeAutonomy', { bid: 'confirm' }, { bid: 'watch' })).toBe('raise')
+    expect(judge('autonomy', 'claudeAutonomy', { bid: 'watch' }, { bid: 'auto' })).toBe('raise')
+    expect(judge('autonomy', 'claudeAutonomy', { bid: 'auto' }, { bid: 'watch' })).toBe('lower')
+    expect(judge('autonomy', 'claudeAutonomy', null, { bid: 'watch' })).toBe('lower')
   })
 
   it("a campaign's own target cleared or put back: raise when anything it may aim at afterwards beats anything before", () => {

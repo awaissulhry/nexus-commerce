@@ -139,8 +139,8 @@ export const STRATEGY_VALUES_INPUT = z.object({
     bidCents: int('stopBidCents').nullable().optional().describe('the low bid of a stop, in cents (2–100); null = the existing 2 cents'),
   }).strict().nullable().optional().describe('how a temporary stop works, as one group'),
   claudeAutonomy: z.object(Object.fromEntries(CLAUDE_ACTION_TYPES.map((action) => [action,
-    z.enum(['off', 'ask', 'confirm', 'auto']).optional().describe(`the most Claude may do alone for ${action} actions here`)])) as Record<ClaudeActionType, z.ZodOptional<z.ZodEnum<{ off: 'off'; ask: 'ask'; confirm: 'confirm'; auto: 'auto' }>>>)
-    .strict().nullable().optional().describe("what Claude may do alone here, per kind of ad action: off, ask, confirm or auto. It only ever NARROWS the business's own level"),
+    z.enum(['off', 'ask', 'confirm', 'watch', 'auto']).optional().describe(`the most Claude may do alone for ${action} actions here`)])) as Record<ClaudeActionType, z.ZodOptional<z.ZodEnum<{ off: 'off'; ask: 'ask'; confirm: 'confirm'; watch: 'watch'; auto: 'auto' }>>>)
+    .strict().nullable().optional().describe("what Claude may do alone here, per kind of ad action: off, ask, confirm, watch (checked as auto and recorded; a person decides) or auto. It only ever NARROWS the business's own level"),
   reviewEveryDays: int('reviewEveryDays').nullable().optional().describe('how often Claude reviews this scope, in days (1–90)'),
   // AA-W2-2b — what Claude's ad changes may add in this market in 24 hours when they run by the business's rule.
   claudeMaxChangesPerDay: int('claudeMaxChangesPerDay').nullable().optional()
@@ -206,7 +206,7 @@ function canonical(value: unknown): string {
 }
 
 const numberOr = (value: unknown, fallback: number) => (typeof value === 'number' ? value : fallback)
-const RANK: Record<string, number> = { off: 0, ask: 1, confirm: 2, auto: 3 }
+const RANK: Record<string, number> = { off: 0, ask: 1, confirm: 2, watch: 3, auto: 4 }
 
 /**
  * Raise, lower or same, for one field, from its value in force before and after (design §3.3). Null = nothing in force

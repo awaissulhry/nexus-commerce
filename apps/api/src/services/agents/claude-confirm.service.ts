@@ -6,7 +6,8 @@
  *             its arguments; a plan already has both) — what Claude shows and what the code is bound to
  *   confirm   confirm-change {approvalId, planHash, code}, checked in this order, nothing spent on a refusal before the
  *             code: the approval in this business; the connection's nexus.run; only the person who asked for it in
- *             Claude; still waiting and not expired; set to `confirm` (every step of a plan at confirm or auto) — W1-8:
+ *             Claude; still waiting and not expired; set to `confirm` or `watch` (every step of a plan at confirm, watch
+ *             or auto) — W1-8:
  *             at the ads strategy's level where each change lands when that is lower, read now; the planHash,
  *             recomputed from what is stored; then the code, once (lib/auth/step-up.ts: lockout after wrong
  *             codes, a used code refused). Then scheduleApproval as that person (decisionVia claude-confirm): the normal
@@ -101,20 +102,22 @@ export async function prepareConfirm(approvalId: string): Promise<{ summary: str
 /**
  * Why this request may not be confirmed in Claude, or null: every change of it set to confirm (a plan: each step at
  * confirm or auto, one at confirm at least). W1-8 — each change at the ads strategy's level where it lands when that
- * is lower, read now: a strategy narrowed since it was asked for leaves it to a person, and says which row.
+ * is lower, read now: a strategy narrowed since it was asked for leaves it to a person, and says which row. AA-W2-4 —
+ * watch allows all confirm allows: a change (or step) at watch may be confirmed too.
  */
 async function notSetToConfirm(ap: { id: string; toolName: string; args: unknown; preview: unknown }): Promise<string | null> {
   const plain = `${ap.toolName} is not set to confirm in Claude in this business: a person approves it in Nexus.`
+  const confirmable = (level: string) => level === 'confirm' || level === 'watch'
   if (ap.toolName !== PLAN_TOOL) {
     const rule = await claudeRuleForChange(ap.toolName, ap.args, ap.preview)
-    if (rule?.level === 'confirm') return null
+    if (rule && confirmable(rule.level)) return null
     return rule?.narrowedBy ? `Not confirmed here: ${narrowedWhy(rule.narrowedBy)}; a person approves it in Nexus.` : plain
   }
   const steps = await prisma.agentPlanStep.findMany({ where: { approvalId: ap.id }, orderBy: { position: 'asc' }, select: { position: true, toolName: true, args: true, preview: true } })
   const rules = await claudeRulesForSteps(steps)
   const levels = rules.map((rule) => rule?.level ?? 'ask')
-  if (levels.length > 0 && levels.every((level) => level === 'confirm' || level === 'auto') && levels.includes('confirm')) return null
-  const narrowed = rules.findIndex((rule, index) => rule?.narrowedBy && levels[index] !== 'confirm' && levels[index] !== 'auto')
+  if (levels.length > 0 && levels.every((level) => confirmable(level) || level === 'auto') && levels.some(confirmable)) return null
+  const narrowed = rules.findIndex((rule, index) => rule?.narrowedBy && !confirmable(levels[index]) && levels[index] !== 'auto')
   if (narrowed >= 0) return `Not confirmed here: step ${steps[narrowed].position} (${steps[narrowed].toolName}): ${narrowedWhy(rules[narrowed]!.narrowedBy!)}; a person approves it in Nexus.`
   return plain
 }

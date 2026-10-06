@@ -55,11 +55,15 @@ export type Reversibility = 'full' | 'partial' | 'none'
  *   off      not offered to Claude at all
  *   ask      a person approves it in Nexus (today, and the default for every tool)
  *   confirm  the person who asked confirms it in Claude with their authenticator code (C7)
+ *   watch    ADS AUTONOMY AA-W2-4 — the full check `auto` would make runs and its verdict is recorded on the request
+ *            (AgentApproval.ruleVerdict: would it have run by rule, or why not), but it never runs by rule: a person
+ *            decides it as at confirm. Only for a tool whose ceiling is auto, never for a brake (claude-trust.service.ts
+ *            `levelsFor`). It sits below auto, so auto → watch is a free lowering and watch → auto a raise.
  *   auto     runs after the undo window without a person, only inside its limits (C5)
  * A tool's `maxClaudeTrust` is the ceiling the business's own level (AgentTool row, C5) cannot exceed.
  */
-export type ClaudeTrust = 'off' | 'ask' | 'confirm' | 'auto'
-export const CLAUDE_TRUST_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'auto']
+export type ClaudeTrust = 'off' | 'ask' | 'confirm' | 'watch' | 'auto'
+export const CLAUDE_TRUST_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'watch', 'auto']
 
 /**
  * ADS AUTONOMY AA-W2-1 — a change whose limits are judged against the business's ads strategy as well as its own
@@ -297,9 +301,10 @@ export interface AgentTool {
   /**
    * C1 — every change tool: the most Claude may ever do with it without a person in Nexus. Floors:
    * `none` (irreversible) is `ask` at most, unless it is a strategy-bound tool whose default limits run nothing alone
-   * (rule 7c); `alwaysAsk` is `ask` at most outside its reviewed lists (rule 7a); `auto` needs `withinLimits`.
+   * (rule 7c); `alwaysAsk` is `ask` at most outside its reviewed lists (rule 7a); `auto` needs `withinLimits`. Never
+   * `watch`: it is offered only below an auto ceiling.
    */
-  maxClaudeTrust?: ClaudeTrust
+  maxClaudeTrust?: Exclude<ClaudeTrust, 'watch'>
   /**
    * C1 — the limits a business may set for running this tool without a person (C5 stores them per business).
    * A zod object whose every field has a default: `limits.parse({})` is the code default.

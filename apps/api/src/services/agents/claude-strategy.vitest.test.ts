@@ -18,6 +18,8 @@
  *   commit      a change scheduled by rule goes back to a person when the strategy narrows it inside the window
  *               (no ad tool may run by rule before W2: set-price stands in as a bid change)
  *   businesses  one business's strategy never narrows in another
+ *   watch       AA-W2-4 — the strategy may hold a kind at watch: checked as auto would, recorded with the strategy row;
+ *               a kind at watch the strategy holds lower is recorded as held by the strategy; the history test counts it
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -60,6 +62,7 @@ import { readStrategy } from '../advertising/ads-strategy/read.js'
 import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { runToolForClaude } from '../mcp/mcp-tool-call.js'
 import { claudeRuleForChange, claudeRuleOf, setClaudeRule } from './claude-trust.service.js'
+import { simulateClaudeRule } from './claude-rule-simulate.service.js'
 import { getTool } from './tool-registry.js'
 
 const A = LEGACY_WORKSPACE_ID
@@ -364,5 +367,54 @@ describe('W1-8 — run by rule (set-price stands in as a bid change: no ad tool 
     expect(inB).toMatchObject({ business: { id: B }, status: 'runs_by_rule' })
     expect(await inside(() => claudeRuleForChange('set-price', {}), B)).toMatchObject({ level: 'auto' })
     expect(await inside(() => claudeRuleForChange('set-price', {}))).toMatchObject({ level: 'ask', narrowedBy: { market: 'IT' } })
+  })
+})
+
+describe('AA-W2-4 — the strategy may hold a kind at watch (set-price stands in as a bid change)', { timeout: TIMEOUT }, () => {
+  it('a strategy at watch holds an auto kind there: checked as auto would, recorded with its row; a person decides', async () => {
+    __claudeStrategyTest.treatAs('set-price', 'bid')
+    await setLevel('set-price', 'auto')
+    await strategy('MARKET', '*', 'Test market (IT)', { bid: 'watch' })
+    const answer = (await call('set-price', { productId: ids.priced, price: 101 })).answer
+    expect(answer).toMatchObject({
+      status: 'waiting_for_approval',
+      trust: { level: 'watch', strategy: { market: 'IT', level: 'watch', business: 'auto' }, watch: { wouldRun: true, check: null } },
+      confirm: { planHash: expect.any(String) },
+    })
+    expect(answer.trust.why).toMatch(/^watching: it would have run by rule; the person who asked types their authenticator code/)
+    const stored = await approvalOf(answer.approvalId)
+    expect(stored).toMatchObject({ status: 'pending', decisionVia: null, executeAfter: null })
+    expect(stored.ruleVerdict).toMatchObject({ level: 'watch', wouldRun: true, strategy: { market: 'IT', scope: 'market', label: 'Test market (IT)', version: 1, level: 'watch' } })
+    // The history test: inside the limits, but today's strategy (not this kind's rule) holds every such request here at
+    // watch, so none would have run by itself; each is counted as held by the strategy.
+    const sim = await inside(() => simulateClaudeRule('set-price', { level: 'auto' }, (_tool, value) => value))
+    expect(sim).toMatchObject({ ok: true, simulation: { wouldRun: 0 } })
+    expect((sim as Extract<typeof sim, { ok: true }>).simulation.heldByStrategy).toBeGreaterThan(0)
+  })
+
+  it('the kind at watch, the strategy at ask where it lands: recorded as held by the strategy; it waits at ask', async () => {
+    __claudeStrategyTest.treatAs('set-price', 'bid')
+    await setLevel('set-price', 'watch')
+    await strategy('MARKET', '*', 'Test market (IT)', { bid: 'ask' })
+    const answer = (await call('set-price', { productId: ids.priced, price: 102 })).answer
+    expect(answer).toMatchObject({
+      status: 'waiting_for_approval',
+      trust: { level: 'ask', strategy: { level: 'ask', business: 'watch' }, watch: { wouldRun: false, check: 'strategy', why: expect.stringContaining(NARROWED_ASK) } },
+    })
+    expect(answer).not.toHaveProperty('confirm')
+    expect((await approvalOf(answer.approvalId)).ruleVerdict).toMatchObject({ level: 'ask', wouldRun: false, check: 'strategy', strategy: { level: 'ask' } })
+  })
+
+  it('the read tool shows a strategy at watch, and it never lifts a business level below it', async () => {
+    await setLevel('set-target-bid', 'confirm')
+    await strategy('MARKET', '*', 'Test market (IT)', { bid: 'watch' })
+    const out = await inside(() => readStrategy({ market: 'IT' }))
+    if ('error' in out) throw new Error(out.error)
+    const bid = ((out.data.markets as Answer[])[0].claude as Answer[]).find((c) => c.action === 'bid')!
+    expect(bid).toMatchObject({ strategy: 'watch' })
+    expect(bid.tools).toEqual([{ tool: 'set-target-bid', business: 'confirm', effective: 'confirm' }, { tool: 'bulk-ad-bid-change', business: 'ask', effective: 'ask' }])
+    const rule = await inside(() => claudeRuleForChange('set-target-bid', { targetId: 't-it', proposedBidCents: 51 }))
+    expect(rule).toMatchObject({ level: 'confirm' })
+    expect(rule).not.toHaveProperty('narrowedBy')
   })
 })

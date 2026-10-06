@@ -65,8 +65,8 @@ export const CLAUDE_ACTION_TOOLS = {
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]
-/** Lowest first; the lower of two levels is the safer one. */
-export const CLAUDE_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'auto']
+/** Lowest first; the lower of two levels is the safer one. AA-W2-4 — watch sits below auto: the strategy may hold a kind at watch. */
+export const CLAUDE_LEVELS: readonly ClaudeTrust[] = ['off', 'ask', 'confirm', 'watch', 'auto']
 /** The reader of `claudeAutonomy` (W1-8): every ad change Claude asks for is held to the lower level. */
 export const CLAUDE_DOOR = "Claude's door (every ad change Claude asks for)"
 

@@ -6144,6 +6144,7 @@ CREATE TABLE "AgentApproval" (
     "decisionVia" TEXT,
     "summary" TEXT,
     "planHash" TEXT,
+    "ruleVerdict" JSONB,
 
     CONSTRAINT "AgentApproval_pkey" PRIMARY KEY ("id")
 );

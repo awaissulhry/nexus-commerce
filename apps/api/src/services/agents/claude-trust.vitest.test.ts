@@ -15,6 +15,9 @@
  *               the window, and the automatic pause after 5 stale or failed rule-runs in an hour
  *   raising     needs settings.security.manage (the routes) and a fresh 2FA code; lowering does not
  *   businesses  one business's level never applies in another
+ *   watch       AA-W2-4 — the full check auto would make runs and its verdict is recorded on the request; it is never
+ *               scheduled: a person decides it (as at confirm); the cap counts the watched changes that would have run;
+ *               offered only below an auto ceiling and never for a brake; raising to it takes the code
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,16 +52,19 @@ import { runToolForClaude } from '../mcp/mcp-tool-call.js'
 import { getTool } from './tool-registry.js'
 import { z } from 'zod'
 import type { AgentTool } from './tool-types.js'
+import { dailyRefusal, LIMIT_FACTS_VERSION, limitFactsOf } from './tools/ads-autonomy-kit.js'
 import {
   AUTO_PAUSE_FAILURES,
   limitsTighten,
   claudeOffTools,
   claudeRuleOf,
+  levelsFor,
   listClaudeRules,
   pauseAutoRuns,
   resumeAutoRuns,
   setClaudeRule,
   setDailyAutoCap,
+  watchedRunsInLastDay,
 } from './claude-trust.service.js'
 
 const A = LEGACY_WORKSPACE_ID
@@ -293,7 +299,7 @@ describe('C5 — raising takes a fresh 2FA code; lowering does not; every change
     const view = await inside(() => listClaudeRules())
     expect(view.autonomy).toMatchObject({ paused: false, dailyAutoCap: 200 })
     const setPrice = view.tools.find((t) => t.name === 'set-price')!
-    expect(setPrice).toMatchObject({ level: 'auto', ceiling: 'auto', levels: ['off', 'ask', 'confirm', 'auto'], limits: { maxChangePercent: 10 }, defaultLimits: { maxChangePercent: 10 } })
+    expect(setPrice).toMatchObject({ level: 'auto', ceiling: 'auto', levels: ['off', 'ask', 'confirm', 'watch', 'auto'], limits: { maxChangePercent: 10 }, defaultLimits: { maxChangePercent: 10 } })
     expect(setPrice.limitsSchema).toMatchObject({ type: 'object', properties: { maxChangePercent: expect.any(Object) } })
     expect(view.tools.find((t) => t.name === 'product-search')).toMatchObject({ level: 'ask', levels: ['off', 'ask'] })
     expect(view.tools.find((t) => t.name === 'send-customer-message')).toMatchObject({ ceiling: 'ask', levels: ['off', 'ask'] })
@@ -421,5 +427,182 @@ describe('C5 — the brakes', { timeout: TIMEOUT }, () => {
     expect(next.answer.status).toBe('waiting_for_approval')
     // The other business is not paused.
     expect((await inside(() => listClaudeRules(), B)).autonomy.paused).toBe(false)
+  })
+})
+
+describe('AA-W2-4 — watch: the full check auto would make, recorded on the request; a person still decides', { timeout: TIMEOUT }, () => {
+  const verdictOf = async (approvalId: string, workspaceId = A) => (await approvalOf(approvalId, workspaceId)).ruleVerdict
+
+  it('inside the limits: never scheduled, recorded as "would have run"; the person who asked may confirm it with their code', async () => {
+    await setLevel('set-price', 'watch')
+    const before = await priceOf(ids.productA)
+    const { answer } = await call('set-price', { productId: ids.productA, price: before + 1 })
+    expect(answer).toMatchObject({
+      status: 'waiting_for_approval',
+      trust: { level: 'watch', why: expect.stringMatching(/^watching: it would have run by rule; the person who asked types their authenticator code/), watch: { wouldRun: true, check: null, why: null } },
+      confirm: { planHash: expect.any(String) },
+    })
+    expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, executeAfter: null })
+    expect(await verdictOf(answer.approvalId)).toEqual({ level: 'watch', wouldRun: true, check: null, why: null, checkedAt: expect.any(String), changes: 1 })
+    expect(await priceOf(ids.productA)).toBe(before)
+    // As at confirm: confirmed with the asker's code, it runs as theirs through the normal window.
+    const confirmed = await call('confirm-change', { approvalId: answer.approvalId, planHash: answer.confirm.planHash, code: code() })
+    expect(confirmed.answer).toMatchObject({ status: 'confirmed' })
+    expect(await approvalOf(answer.approvalId)).toMatchObject({ status: 'scheduled', decisionVia: 'claude-confirm' })
+    expect(await windowCloses(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await priceOf(ids.productA)).toBe(before + 1)
+  })
+
+  it('outside the limits, without nexus.run, under Pause: recorded with the check that held it; a person decides', async () => {
+    await setLevel('set-price', 'watch')
+    const before = await priceOf(ids.productA)
+    const far = await call('set-price', { productId: ids.productA, price: Math.round(before * 1.5) })
+    expect(far.answer).toMatchObject({ trust: { level: 'watch', watch: { wouldRun: false, check: 'limits', why: expect.stringMatching(/more than the 10 % allowed without a person$/) } } })
+    expect(far.answer.trust.why).toMatch(/^watching: it would not — the master price moves [\d.]+ %, more than the 10 % allowed without a person; the person who asked types/)
+    expect(await verdictOf(far.answer.approvalId)).toMatchObject({ level: 'watch', wouldRun: false, check: 'limits' })
+
+    const noScope = await call('set-price', { productId: ids.productA, price: before + 1 }, claude(A, ['nexus.read', 'nexus.write']))
+    expect(noScope.answer).toMatchObject({ trust: { level: 'watch', why: expect.stringMatching(/nexus\.run.*; a person approves it in Nexus$/), watch: { wouldRun: false, check: 'scope' } } })
+    expect(noScope.answer).not.toHaveProperty('confirm')
+
+    await inside(() => pauseAutoRuns(actor(), 'watch week'))
+    const paused = await call('set-price', { productId: ids.productA, price: before + 1 })
+    expect(paused.answer).toMatchObject({ trust: { watch: { wouldRun: false, check: 'pause', why: expect.stringContaining('(watch week)') } } })
+    for (const id of [far.answer.approvalId, noScope.answer.approvalId, paused.answer.approvalId]) {
+      expect(await approvalOf(id)).toMatchObject({ status: 'pending', decisionVia: null, executeAfter: null })
+    }
+  })
+
+  it('the daily cap counts the watched changes that would have run, as if their kinds were at auto', async () => {
+    await setLevel('set-price', 'watch')
+    const first = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(first.answer.trust.watch).toMatchObject({ wouldRun: true })
+    const used = (await inside(() => listClaudeRules())).autonomy.autoRunsLastDay + await inside(() => watchedRunsInLastDay())
+    expect(used).toBeGreaterThan(0)
+    expect(await inside(() => setDailyAutoCap(actor(), { dailyAutoCap: used }))).toMatchObject({ ok: true }) // lowering: no code
+    const second = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(second.answer.trust.watch).toEqual({ wouldRun: false, check: 'cap', why: `this business's limit of ${used} changes run by rule in 24 hours is reached` })
+  })
+
+  it('levels: watch sits between confirm and auto, only below an auto ceiling and never for a brake', async () => {
+    expect(levelsFor(getTool('set-price')!)).toEqual(['off', 'ask', 'confirm', 'watch', 'auto'])
+    for (const brake of ['stop-automation', 'turn-down-automation', 'set-ad-guardrail']) {
+      expect(levelsFor(getTool(brake)!), brake).toEqual(['off', 'ask', 'confirm', 'auto'])
+    }
+    expect(levelsFor(getTool('turn-up-automation')!)).toEqual(['off', 'ask', 'confirm'])
+    expect(await inside(() => setClaudeRule(actor(), 'stop-automation', { level: 'watch', code: code() })))
+      .toMatchObject({ ok: false, status: 400, error: 'stop-automation cannot be watched: it is a brake, so it runs by rule or waits for a person.' })
+    expect(await inside(() => setClaudeRule(actor(), 'turn-up-automation', { level: 'watch', code: code() })))
+      .toMatchObject({ ok: false, status: 400, error: 'turn-up-automation cannot be watched: only a kind that may run by rule (auto) can be.' })
+    // Written straight into the row (a hand edit): a watch the tool does not allow reads as the level below it.
+    await inside(() => db().agentTool.create({ data: { name: 'turn-up-automation', riskTier: 'medium', requiresApproval: true, claudeTrust: 'watch' } }))
+    expect(await inside(() => claudeRuleOf('turn-up-automation'))).toMatchObject({ level: 'confirm', stored: 'watch', ceiling: 'confirm' })
+    expect((await inside(() => listClaudeRules())).tools.find((t) => t.name === 'stop-automation')).toMatchObject({ ceiling: 'auto', levels: ['off', 'ask', 'confirm', 'auto'] })
+  })
+
+  it('raising to watch takes settings.security.manage and the code; auto → watch is a free brake; watch → auto a raise', async () => {
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'watch', code: code() }))).toMatchObject({ ok: false, code: 'forbidden' })
+    await setLevel('set-price', 'confirm')
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: false, code: 'mfa_required' })
+    await setLevel('set-price', 'auto')
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: true, rule: { level: 'watch' } })
+    const audit = await inside(() => db().agentControlAudit.findFirstOrThrow({ where: { charterKey: 'claude', action: 'policy' }, orderBy: { createdAt: 'desc' } }))
+    expect(audit).toMatchObject({ fromValue: { tool: 'set-price', level: 'auto' }, toValue: { tool: 'set-price', level: 'watch' } })
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'confirm' }))).toMatchObject({ ok: true, rule: { level: 'confirm' } })
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: false, code: 'forbidden' })
+    await setLevel('set-price', 'watch')
+    expect(await inside(() => setClaudeRule(actor(), 'set-price', { level: 'auto' }))).toMatchObject({ ok: false, code: 'mfa_required' })
+  })
+
+  it('lowered from auto to watch inside the undo window: the change goes back to a person instead of running', async () => {
+    await setLevel('set-price', 'auto')
+    const before = await priceOf(ids.productA)
+    const parked = await call('set-price', { productId: ids.productA, price: before + 1 })
+    expect(parked.answer.status).toBe('runs_by_rule')
+    expect(await inside(() => setClaudeRule(brake(), 'set-price', { level: 'watch' }))).toMatchObject({ ok: true })
+    expect(await windowCloses(parked.answer.approvalId)).toMatchObject({ ok: false, error: expect.stringContaining('no longer') })
+    expect(await approvalOf(parked.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null })
+    expect(await priceOf(ids.productA)).toBe(before)
+  })
+
+  it('nothing is recorded below watch or at auto, and one business’s watch never applies in the other', async () => {
+    await setLevel('set-price', 'auto')
+    const ran = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(ran.answer.status).toBe('runs_by_rule')
+    expect(await verdictOf(ran.answer.approvalId)).toBeNull()
+    await setLevel('set-price', 'confirm')
+    const confirm = await call('set-price', { productId: ids.productA, price: (await priceOf(ids.productA)) + 1 })
+    expect(confirm.answer.trust).not.toHaveProperty('watch')
+    expect(await verdictOf(confirm.answer.approvalId)).toBeNull()
+    await setLevel('set-price', 'watch')
+    const inB = await inside(() => call('set-price', { productId: ids.productB, price: 101 }, claude(B)), B)
+    expect(inB.answer).toMatchObject({ business: { id: B }, status: 'waiting_for_approval' })
+    expect(inB.answer).not.toHaveProperty('trust')
+    expect(await verdictOf(inB.answer.approvalId, B)).toBeNull()
+  })
+})
+
+describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched changes that would have run; a plan\'s ad steps count together', { timeout: TIMEOUT }, () => {
+  // set-price stands in for a strategy-bound ad tool: its preview carries the kit's limit facts (2 changes in IT; the
+  // strategy allows 5 changes a day) and its limits add the kit's daily check. No ad tool carries facts before AA-W2-6.
+  const facts = () => ({
+    v: LIMIT_FACTS_VERSION, tool: 'set-price', action: 'bid',
+    markets: { IT: { strategy: { version: 'test' }, currency: 'EUR', maxActionsPerRun: null, maxChangesPerDay: 5, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} } },
+    scopes: {}, entityScopes: {}, labels: {},
+    this: { markets: ['IT'], items: 2, writes: 2, raises: 0, cuts: 2, largestRaisePct: 0, largestCutPct: 1, largestRaisePoints: 0, largestCutPoints: 0, highestNewBidCents: null, budgetIncreaseCents: 0, byMarket: { IT: { items: 2, changes: 2, writes: 2, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } }, entities: [], rowsOutsideStrategy: 0, firstOutside: null },
+    today: { IT: { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 } },
+    perEntityToday: { maxChangesByRule: 0, entity: null }, unplaced: [], engineOwned: [], protectedHit: [],
+  })
+  async function asStrategyBound<T>(work: () => Promise<T>): Promise<T> {
+    const tool = getTool('set-price')!
+    const original = { handler: tool.handler, withinLimits: tool.withinLimits!, strategyBound: tool.strategyBound }
+    tool.strategyBound = 'amazon-ads'
+    tool.handler = async (args, ctx) => {
+      const out = await original.handler(args, ctx)
+      return out.ok ? { ...out, preview: { ...(out.preview as object), limitFacts: facts() } } : out
+    }
+    tool.withinLimits = (preview, limits) => original.withinLimits(preview, limits) ?? dailyRefusal(limitFactsOf(preview)!)
+    try {
+      return await work()
+    } finally {
+      Object.assign(tool, original)
+      if (!original.strategyBound) delete tool.strategyBound
+    }
+  }
+  const nextPrice = async () => (await priceOf(ids.productA)) + 1
+  const step = async () => ({ tool: 'set-price', args: { productId: ids.productA, price: await nextPrice() } })
+
+  it('watch: the second day\'s worth is outside; a plan whose steps pass alone but not together is outside, step by step', async () => {
+    await asStrategyBound(async () => {
+      await setLevel('set-price', 'watch')
+      const first = await call('set-price', { productId: ids.productA, price: await nextPrice() })
+      expect(first.answer.trust.watch).toMatchObject({ wouldRun: true })
+      // Each step alone: 2 watched + 2 ≤ 5; together: 2 + 4 > 5.
+      const plan = await call('submit-change-plan', { title: 'Two bid steps', steps: [await step(), await step()] })
+      expect(plan.answer.trust.watch).toEqual({
+        wouldRun: false, check: 'limits', steps: { total: 2, wouldRun: 0 },
+        why: 'the plan\'s ad steps together — IT: 2 changes ran or would have run by rule in the last 24 hours and this adds 4 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day)',
+      })
+      expect((await approvalOf(plan.answer.approvalId)).ruleVerdict).toMatchObject({ steps: [{ wouldRun: false, check: 'limits' }, { wouldRun: false, check: 'limits' }] })
+      // The plan would not have run, so it adds nothing; the next single change still fits, the one after does not.
+      expect((await call('set-price', { productId: ids.productA, price: await nextPrice() })).answer.trust.watch).toMatchObject({ wouldRun: true })
+      const third = await call('set-price', { productId: ids.productA, price: await nextPrice() })
+      expect(third.answer.trust.watch).toEqual({ wouldRun: false, check: 'limits', why: 'IT: 4 changes ran or would have run by rule in the last 24 hours and this adds 2 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day)' })
+    })
+  })
+
+  it('auto: a plan whose ad steps pass alone but not together waits for a person, and Claude is told why', async () => {
+    await asStrategyBound(async () => {
+      await setLevel('set-price', 'auto')
+      const plan = await call('submit-change-plan', { title: 'Three bid steps', steps: [await step(), await step(), await step()] })
+      expect(plan.answer).toMatchObject({
+        status: 'waiting_for_approval',
+        trust: { level: 'auto', why: 'the plan\'s ad steps together — IT: 0 changes ran by rule in the last 24 hours and this adds 6 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day); a person approves it in Nexus' },
+      })
+      expect(await approvalOf(plan.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, ruleVerdict: null })
+      const two = await call('submit-change-plan', { title: 'Two bid steps', steps: [await step(), await step()] })
+      expect(two.answer.status).toBe('runs_by_rule')
+    })
   })
 })

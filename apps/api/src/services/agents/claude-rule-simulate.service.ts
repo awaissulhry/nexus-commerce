@@ -6,14 +6,15 @@
  * The verdict per request is the real rule's own check, never a copy: the tool's `limits` schema (parsed strictly, as
  * setClaudeRule stores them and ruleFrom reads them back) and the tool's own `withinLimits(preview, limits)` — the call
  * claude-trust.service.ts `limitsRefusal` makes at ask time and again at commit — on the preview the request stored
- * (the gate stores `raw.preview ?? raw.data`, the very value the rule judged). Only `auto` runs by itself; at `confirm`
- * or below nothing would have, so `wouldRun` is 0.
+ * (the gate stores `raw.preview ?? raw.data`, the very value the rule judged). Only `auto` runs by itself; at `watch`,
+ * `confirm` or below nothing would have, so `wouldRun` is 0.
  *
  * ADS AUTONOMY (W1-8, honoured here since AA-W2-3) — an ad change is also held to the ads strategy where it lands, as
  * the real rule holds it (`claudeRuleForChange`): the strategy narrows, never widens, so a request it holds below auto
  * there would not have run. The strategy is read as it is NOW: the question is "with these limits and today's
  * strategy". A strategy that cannot be read for a request counts as "would not have run" (the real rule's failure
- * leaves a request with a person).
+ * leaves a request with a person). AA-W2-4 — those inside the proposed limits that the strategy holds below auto (watch
+ * included) are counted in `heldByStrategy`: the strategy, not this kind's rule, held them.
  *
  * What it does NOT replay, because they are the business's brakes of the moment and not part of the kind's rule: the
  * connection's nexus.run scope, a Pause, and the daily cap. Requests from other doors (fleet agents, the in-app
@@ -27,7 +28,7 @@ import type { RuleSimulation } from '@nexus/shared/approval-queue'
 import prisma from '../../db.js'
 import { offeredOn } from './call-tool.js'
 import { strategyLevelFor, strategyMemo } from '../advertising/ads-strategy/claude.js'
-import { CLAUDE_CHARTER, claudeRuleOf, levelsFor, trustCeiling } from './claude-trust.service.js'
+import { CLAUDE_CHARTER, claudeRuleOf, levelNotAllowed, levelsFor } from './claude-trust.service.js'
 import { getTool } from './tool-registry.js'
 import { CLAUDE_TRUST_LEVELS, type ClaudeTrust } from './tool-types.js'
 
@@ -82,15 +83,7 @@ export async function simulateClaudeRule(
   // level — never above the tool's ceiling, in the words setClaudeRule refuses it with.
   const level = query.level === undefined || query.level === '' ? 'auto' : query.level
   if (!isLevel(level)) return refuse(400, `level must be one of ${CLAUDE_TRUST_LEVELS.join(', ')}.`)
-  if (!levelsFor(tool).includes(level)) {
-    const ceiling = trustCeiling(tool)
-    return refuse(
-      400,
-      tool.readOnly || tool.control
-        ? `${toolName} can only be offered to Claude (ask) or not (off).`
-        : `${toolName} can be set to ${ceiling} at most: ${ceiling === 'ask' ? 'a person always approves it' : 'that is the most it may do without a person'}.`,
-    )
-  }
+  if (!levelsFor(tool).includes(level)) return refuse(400, levelNotAllowed(tool, level))
 
   // limits — checked with the tool's own schema, as setClaudeRule checks them before it stores them.
   let limits: Record<string, unknown> | null
@@ -126,15 +119,18 @@ export async function simulateClaudeRule(
       return false // the real rule's failure leaves a request with a person (decideByRule)
     }
   }
-  /** W1-8 — and the ads strategy lets it run by rule where it lands (one read of the strategy for the whole window). */
+  /**
+   * W1-8 — and the ads strategy lets it run by rule where it lands (one read of the strategy for the whole window).
+   * AA-W2-4 — `held`: inside the limits, but the strategy holds it below auto there.
+   */
   const memo = strategyMemo()
-  const wouldRunOne = async (preview: unknown, args: unknown): Promise<boolean> => {
-    if (!withinOne(preview)) return false
+  const verdictOne = async (preview: unknown, args: unknown): Promise<'no' | 'held' | 'run'> => {
+    if (!withinOne(preview)) return 'no'
     try {
       const narrowed = await strategyLevelFor(toolName, args ?? {}, preview, memo)
-      return !narrowed || narrowed.level === 'auto'
+      return !narrowed || narrowed.level === 'auto' ? 'run' : 'held'
     } catch {
-      return false
+      return 'no'
     }
   }
 
@@ -142,6 +138,7 @@ export async function simulateClaudeRule(
   let considered = 0
   let wouldRun = 0
   let rejectedAmongWouldRun = 0
+  let heldByStrategy = 0
   const examples: RuleSimulation['examples'] = []
   let cursor: string | undefined
   for (;;) {
@@ -156,7 +153,9 @@ export async function simulateClaudeRule(
       // A duplicate undo Nexus withdrew is not a request anyone decided.
       if (ap.status === 'rejected' && ap.reason?.startsWith('withdrawn:')) continue
       considered++
-      if (!(await wouldRunOne(ap.preview, ap.args))) continue
+      const verdict = await verdictOne(ap.preview, ap.args)
+      if (verdict === 'held') heldByStrategy++
+      if (verdict !== 'run') continue
       wouldRun++
       if (ap.status !== 'rejected') continue
       rejectedAmongWouldRun++
@@ -173,5 +172,5 @@ export async function simulateClaudeRule(
     cursor = page[page.length - 1].id
   }
 
-  return { ok: true, simulation: { toolName, days, considered, wouldRun, rejectedAmongWouldRun, examples } }
+  return { ok: true, simulation: { toolName, days, considered, wouldRun, rejectedAmongWouldRun, examples, heldByStrategy } }
 }

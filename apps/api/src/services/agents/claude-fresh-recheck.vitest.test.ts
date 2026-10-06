@@ -43,18 +43,18 @@ vi.mock('../../lib/queue.js', () => {
   }
 })
 
-/** The ads strategy's daily limit of writes by rule in IT, as the test tool's dry run reads it NOW. */
-const strategy = { maxWritesPerDay: 10 }
+/** The ads strategy's daily limit of changes by rule in IT, as the test tool's dry run reads it NOW. */
+const strategy = { maxChangesPerDay: 10 }
 const executed: Array<{ args: Record<string, unknown>; ctx: ToolContext }> = []
-const NONE = { writes: 0, raises: 0, budgetIncreaseCents: 0 }
+const NONE = { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 }
 /** The kit's facts of `writes` lowering writes in IT (only what the daily check reads is not empty). */
-function kitFacts(writes: number, today: { writes: number; raises: number; budgetIncreaseCents: number }): LimitFacts {
+function kitFacts(writes: number, today: { changes: number; writes: number; raises: number; budgetIncreaseCents: number }): LimitFacts {
   return {
     v: LIMIT_FACTS_VERSION, tool: 'set-example-bid', action: null, scopes: {}, entityScopes: {}, labels: {},
-    markets: { IT: { strategy: { version: 'test' }, currency: 'EUR', maxActionsPerRun: null, maxWritesPerDay: strategy.maxWritesPerDay, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} } },
+    markets: { IT: { strategy: { version: 'test' }, currency: 'EUR', maxActionsPerRun: null, maxChangesPerDay: strategy.maxChangesPerDay, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} } },
     this: {
       markets: ['IT'], items: writes, writes, raises: 0, cuts: writes, largestRaisePct: 0, largestCutPct: 0, largestRaisePoints: 0, largestCutPoints: 0,
-      highestNewBidCents: null, budgetIncreaseCents: 0, byMarket: { IT: { items: writes, writes, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } },
+      highestNewBidCents: null, budgetIncreaseCents: 0, byMarket: { IT: { items: writes, changes: writes, writes, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } },
       entities: [], rowsOutsideStrategy: 0, firstOutside: null,
     },
     today: { IT: today }, perEntityToday: { maxChangesByRule: 0, entity: null }, unplaced: [], engineOwned: [], protectedHit: [],
@@ -134,7 +134,7 @@ const windowClosed = (approvalId: string) =>
   inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
 const approvalOf = (id: string) => inside(() => db().agentApproval.findUniqueOrThrow({ where: { id } }))
 /** The kit's daily check, in a person's words (ending as the kit ends it). */
-const OVER = (ran: number, adds: number, max: number) => `IT: ${ran} write${ran === 1 ? '' : 's'} ran by rule in the last 24 hours and this adds ${adds}, more than the ${max} a day the ads strategy allows; a person decides`
+const OVER = (ran: number, adds: number, max: number) => `IT: ${ran} change${ran === 1 ? '' : 's'} ran by rule in the last 24 hours and this adds ${adds} change${adds === 1 ? '' : 's'}, more than the ${max} a day the ads strategy allows (most changes Claude may run by rule a day); a person decides`
 /** …and as Claude's door says it: one ending, where the person decides. */
 const IN_NEXUS = (sentence: string) => sentence.replace(/; a person decides$/, '; a person approves it in Nexus')
 const FRESH = `not run — judged again on a fresh dry run: it is no longer inside the business's limits: ${IN_NEXUS(OVER(0, 2, 1))}`
@@ -159,7 +159,7 @@ beforeAll(async () => {
 }, 180_000)
 
 beforeEach(async () => {
-  strategy.maxWritesPerDay = 10
+  strategy.maxChangesPerDay = 10
   executed.length = 0
   BOUND.strategyBound = 'amazon-ads'
   __claudeStrategyTest.reset()
@@ -195,7 +195,7 @@ describe('AA-W2-3 — a strategy-bound rule-run is judged again on the fresh dry
   it('the strategy tightened inside the window (no material field moved): back to a person as rule_refused, with the reason', async () => {
     const asked = await call(BOUND.name, { writes: 2 })
     expect(asked).toMatchObject({ status: 'runs_by_rule' })
-    strategy.maxWritesPerDay = 1
+    strategy.maxChangesPerDay = 1
     await windowClosed(asked.approvalId)
     const out = await inside(() => commitScheduledApproval(asked.approvalId))
     expect(out).toEqual({ ok: false, error: FRESH })
@@ -207,10 +207,10 @@ describe('AA-W2-3 — a strategy-bound rule-run is judged again on the fresh dry
 
   it(`never counts towards the automatic pause, even ${AUTO_PAUSE_FAILURES + 1} times in an hour`, async () => {
     for (let i = 0; i < AUTO_PAUSE_FAILURES + 1; i++) {
-      strategy.maxWritesPerDay = 10
+      strategy.maxChangesPerDay = 10
       const asked = await call(BOUND.name, { writes: 2 })
       expect(asked).toMatchObject({ status: 'runs_by_rule' })
-      strategy.maxWritesPerDay = 1
+      strategy.maxChangesPerDay = 1
       await windowClosed(asked.approvalId)
       expect(await inside(() => commitScheduledApproval(asked.approvalId))).toMatchObject({ ok: false, error: expect.stringContaining(FRESH) })
     }
@@ -222,7 +222,7 @@ describe('AA-W2-3 — a strategy-bound rule-run is judged again on the fresh dry
     BOUND.strategyBound = undefined
     const asked = await call(BOUND.name, { writes: 2 })
     expect(asked).toMatchObject({ status: 'runs_by_rule' })
-    strategy.maxWritesPerDay = 1
+    strategy.maxChangesPerDay = 1
     await windowClosed(asked.approvalId)
     expect(await inside(() => commitScheduledApproval(asked.approvalId))).toMatchObject({ ok: true, status: 'executed' })
     expect(executed).toHaveLength(1)
@@ -270,7 +270,7 @@ describe('AA-W2-3 — a plan’s ad steps count together against the strategy’
   it('when each step runs: the steps of the plan that ran before it count; the one that no longer fits is skipped as rule_refused', async () => {
     const asked = await plan('Steps in turn', [4, 4])
     expect(asked).toMatchObject({ status: 'runs_by_rule' })
-    strategy.maxWritesPerDay = 6 // the strategy tightened inside the window: the commit judged the plan on its stored limits
+    strategy.maxChangesPerDay = 6 // the strategy tightened inside the window: the commit judged the plan on its stored limits
     await windowClosed(asked.approvalId)
     expect(await inside(() => commitScheduledApproval(asked.approvalId))).toMatchObject({ ok: true })
     await inside(() => runPlan(asked.approvalId))
@@ -294,10 +294,10 @@ describe('AA-W2-3 — a plan’s ad steps count together against the strategy’
   it('planDailyRefusal: only strategy-bound steps count, under the tightest daily limit any of them carries; pure', () => {
     const bound = { strategyBound: 'amazon-ads' as const }
     const step = (writes: number, max: number, tool: { strategyBound?: 'amazon-ads' } | null = bound) => {
-      strategy.maxWritesPerDay = max
+      strategy.maxChangesPerDay = max
       return { tool, preview: { limitFacts: kitFacts(writes, NONE) } }
     }
-    const ledger = { byMarket: { IT: { writes: 3, raises: 0, budgetIncreaseCents: 0 } }, byEntity: {}, runs: 1 }
+    const ledger = { byMarket: { IT: { changes: 3, writes: 3, raises: 0, budgetIncreaseCents: 0 } }, byEntity: {}, runs: 1 }
     expect(planDailyRefusal([step(4, 10), step(3, 10)], ledger)).toBeNull()
     expect(planDailyRefusal([step(4, 10), step(4, 10)], ledger)).toBe(`the plan's ad steps together — ${OVER(3, 8, 10)}`)
     // The tighter limit (6) binds, not the first step's (10): 3 + 2 + 1 fits, 3 + 2 + 2 does not.

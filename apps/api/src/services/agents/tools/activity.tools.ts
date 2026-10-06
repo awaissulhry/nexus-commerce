@@ -27,7 +27,10 @@ const claudeActivityTool: AgentTool = {
     'List what Claude did in this business, newest first: every call through a Claude connection, who made it, and what '
     + 'became of it (read, refused, queued for a person, run by the business\'s rule, approved, rejected, expired, handed '
     + 'back, failed, undone), with the change it made and whether undo-change can still put it back. Filter by time, '
-    + 'connection, tool or outcome; pass nextCursor back as cursor for older rows. Changes nothing.',
+    + 'connection, tool or outcome; pass nextCursor back as cursor for older rows. A request asked while its kind was set to '
+    + 'watch carries ruleVerdict: whether the business\'s rule would have run it by itself, or which check held it and why. '
+    + 'The first page also carries watch (when a kind is watched): those would-have-run and would-not changes against what a '
+    + 'person decided, in total and per kind, over the last 7 days unless from/to name a window. Changes nothing.',
   async handler(args, ctx): Promise<ToolResult> {
     try {
       const page = await claudeActivity(args as never, ctx.storedOutput ?? (() => null))
