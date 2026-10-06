@@ -131,6 +131,9 @@ export async function planSync(args: SyncArgs): Promise<{ data: SyncPlan } | { s
 /** A keyword or product target a sync added at the floor, with the bid planned for it, that still bids the floor. */
 export interface SyncedBid { adTargetId: string; campaignId: string; adGroupId: string; text: string; bidCents: number; plannedCents: number }
 
+/** Which of them: these campaigns only; `lifting` — campaigns START takes off their floor first (planned before it does). */
+export interface SyncedBidScope { campaignIds?: Iterable<string>; lifting?: Iterable<string> }
+
 /** Every bid a sync of this playbook planned (its version rows op sync), the newest plan for each target. */
 async function plannedBidsOf(playbookId: string): Promise<Map<string, number>> {
   const rows = await prisma.adsPlaybookVersion.findMany({ where: { kind: 'playbook', refId: playbookId, op: 'sync' }, orderBy: { version: 'asc' }, select: { changes: true } })
@@ -149,19 +152,23 @@ async function plannedBidsOf(playbookId: string): Promise<Map<string, number>> {
  * at the floor that still bid it, with no floor over them now (neither their campaign, nor their ad group, nor a memory
  * of their own: those are a floor's, and its restore's). Read only.
  */
-export async function syncedBidsToGiveBack(playbookId: string): Promise<SyncedBid[]> {
+export async function syncedBidsToGiveBack(playbookId: string, scope: SyncedBidScope = {}): Promise<SyncedBid[]> {
   const { SUPPRESSION_FLOOR_CENTS } = await import('../ads-bid-suppression.service.js')
   const planned = await plannedBidsOf(playbookId)
   if (!planned.size) return []
+  const only = scope.campaignIds ? new Set(scope.campaignIds) : null
+  const lifting = new Set(scope.lifting ?? [])
   const rows = await prisma.adTarget.findMany({
     where: {
       id: { in: [...planned.keys()] }, isNegative: false, status: { not: 'ARCHIVED' }, suppressedFromBidCents: null, bidCents: { lte: SUPPRESSION_FLOOR_CENTS },
-      adGroup: { bidsSuppressedAt: null, campaign: { bidsSuppressedAt: null, status: { not: 'ARCHIVED' } } },
+      adGroup: { bidsSuppressedAt: null, campaign: { status: { not: 'ARCHIVED' }, ...(only ? { id: { in: [...only] } } : {}) } },
     },
-    select: { id: true, adGroupId: true, expressionValue: true, bidCents: true, adGroup: { select: { campaignId: true } } },
+    select: { id: true, adGroupId: true, expressionValue: true, bidCents: true, adGroup: { select: { campaignId: true, campaign: { select: { bidsSuppressedAt: true } } } } },
     orderBy: { id: 'asc' },
   })
-  return rows.map((t) => ({ adTargetId: t.id, campaignId: t.adGroup.campaignId, adGroupId: t.adGroupId, text: t.expressionValue, bidCents: t.bidCents, plannedCents: planned.get(t.id)! }))
+  return rows
+    .filter((t) => !t.adGroup.campaign.bidsSuppressedAt || lifting.has(t.adGroup.campaignId))
+    .map((t) => ({ adTargetId: t.id, campaignId: t.adGroup.campaignId, adGroupId: t.adGroupId, text: t.expressionValue, bidCents: t.bidCents, plannedCents: planned.get(t.id)! }))
 }
 
 /**
@@ -170,7 +177,7 @@ export async function syncedBidsToGiveBack(playbookId: string): Promise<SyncedBi
  * change set. Only START calls it (with the approver's code): no other restore sees these bids. One moved off the floor
  * since (an engine or a person) is no longer listed; a re-run gives nothing again.
  */
-export async function giveBackSyncedBids(playbookId: string, run: { actor: AdsActor; reason: string; changeSetId: string | null; manual?: boolean }): Promise<{
+export async function giveBackSyncedBids(playbookId: string, run: { actor: AdsActor; reason: string; changeSetId: string | null; manual?: boolean; campaignIds?: Iterable<string> }): Promise<{
   given: Array<{ adTargetId: string; text: string; toCents: number; heldBy?: string }>
   failed: Array<{ adTargetId: string; text: string; why: string }>
 }> {
@@ -179,7 +186,7 @@ export async function giveBackSyncedBids(playbookId: string, run: { actor: AdsAc
   const { updateAdTargetWithSync } = await import('../ads-mutation.service.js')
   const out: Awaited<ReturnType<typeof giveBackSyncedBids>> = { given: [], failed: [] }
   const byCampaign = new Map<string, SyncedBid[]>()
-  for (const b of await syncedBidsToGiveBack(playbookId)) byCampaign.set(b.campaignId, [...(byCampaign.get(b.campaignId) ?? []), b])
+  for (const b of await syncedBidsToGiveBack(playbookId, run.campaignIds ? { campaignIds: run.campaignIds } : {})) byCampaign.set(b.campaignId, [...(byCampaign.get(b.campaignId) ?? []), b])
   for (const [campaignId, list] of byCampaign) {
     const boundsOf = await giveBackBounds(campaignId, list.map((b) => b.adGroupId))
     for (const b of list) {

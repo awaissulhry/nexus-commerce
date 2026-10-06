@@ -313,11 +313,22 @@ describe('approved, a sync adds exactly what was approved — in A\'s own ad gro
     await inside(() => db().campaign.update({ where: { id: campaignA }, data: { bidsSuppressedAt: new Date(), bidsSuppressedBy: 'user:u-owner', bidsSuppressedFloorCents: 2 } }))
     await inside(() => restoreCampaignBids(campaignA, { actor: 'user:u-owner' }))
     expect(spies.bids.filter((b) => b.patch?.bidCents === keyword.startBidCents)).toEqual([])
-    const given = await inside(() => giveBackSyncedBids(A.rowId, { actor: 'user:u-approver', reason: 'START', changeSetId: 'start-1', manual: true }))
-    expect(given).toMatchObject({ given: [{ text: 'test coat', toCents: keyword.startBidCents }], failed: [] })
+    // START (PB-5b) gives it: its plan names it (adopted campaign too), its run calls the hook once per campaign.
+    const { planStart, runStart } = await import('../../advertising/ads-playbook/start.js')
+    const planned = await inside(() => planStart({ op: 'start', market: 'IT', productId: A.parent }))
+    if ('error' in planned) throw new Error(planned.error)
+    expect(planned.data.problems).toEqual([])
+    expect(planned.data.syncedBids).toEqual([{ slot: 'broad-category', campaignId: campaignA, text: 'test coat', startBidCents: keyword.startBidCents }])
+    expect(planned.data.highestRestoredBidCents).toBeGreaterThanOrEqual(keyword.startBidCents)
+    const writer = { via: 'assistant', actor: 'user:u-approver', actorUserId: 'u-approver', approvalId: 'start-1', updatedBy: 'user:u-approver' }
+    const ran = await inside(() => runStart(planned.data, { actor: 'user:u-approver', reason: 'START', changeSetId: 'start-1', manual: true }, writer))
+    expect(ran).toMatchObject({ syncedBids: 1, failed: [] })
     expect(spies.bids).toEqual([expect.objectContaining({ patch: { bidCents: keyword.startBidCents }, actor: 'user:u-approver', changeSetId: 'start-1', force: true })])
     expect(await inside(() => db().adTarget.findFirstOrThrow({ where: { adGroupId: groups.A['broad-category'], expressionValue: 'test coat', isNegative: false }, select: { bidCents: true, suppressedFromBidCents: true } }))).toEqual({ bidCents: keyword.startBidCents, suppressedFromBidCents: null })
+    // A re-run of START gives nothing again.
     expect(await inside(() => giveBackSyncedBids(A.rowId, { actor: 'user:u-approver', reason: 'START again', changeSetId: 'start-2' }))).toEqual({ given: [], failed: [] })
+    const again = await inside(() => planStart({ op: 'start', market: 'IT', productId: A.parent }))
+    expect('data' in again && again.data.syncedBids).toEqual([])
   })
 
   it('a sync that moved since approval is not run', async () => {

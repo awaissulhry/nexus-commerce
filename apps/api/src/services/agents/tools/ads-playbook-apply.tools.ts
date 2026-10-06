@@ -278,7 +278,7 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
     ? p.campaigns.filter((c) => c.allowlist === 'on' || c.bids.does === 'restore' || c.placements.does === 'apply')
     : p.campaigns.filter((c) => c.allowlist === 'off' || c.bids.does === 'floor' || c.bids.does === 'refloor')
   const switching = p.artifacts.some((l) => l.does === (op === 'start' ? 'enable' : 'disable'))
-  if (!acting.length && !switching && !p.heldFloors.length) {
+  if (!acting.length && !switching && !p.heldFloors.length && !p.syncedBids.length) {
     return refuse(op === 'start'
       ? `Nothing to start: every campaign the playbook built for ${p.product.sku} in ${p.market} runs already (on the allowlist, at its bids) and its hourly plans and rules are on.`
       : `Nothing to stop: every campaign the playbook built for ${p.product.sku} in ${p.market} is at the floor and off the allowlist already, and its hourly plans and rules are off.`)
@@ -309,6 +309,7 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
       + `${plural(p.spending, 'campaign')} start${p.spending === 1 ? 's' : ''} spending at once`
       + `${paused ? ` (${paused} paused at Amazon ${paused === 1 ? 'stays' : 'stay'} paused: a person enables ${paused === 1 ? 'it' : 'them'} in Nexus)` : ''}`
       + `${p.heldFloors.length ? `, and ${plural(p.heldFloors.length, 'other campaign')} of the playbook ${p.heldFloors.length === 1 ? 'gets its' : 'get their'} bids back from the floor its stop held` : ''}; `
+      + `${p.syncedBids.length ? `${plural(p.syncedBids.length, 'keyword or target')} a sync added at the floor ${p.syncedBids.length === 1 ? 'gets its' : 'get their'} planned bid; ` : ''}`
       + "then the playbook's hourly plans and rules are switched on. An engine's floor and an ad group's own floor (stock, a product's monthly cap) stay; a bid moved since the build stays where it is."
     : `Stops ${p.product.sku}'s playbook in ${p.market}: every bid of ${plural(acting.length, 'campaign')} it built goes to the ${SUPPRESSION_FLOOR_CENTS}-cent floor (remembered: START puts them back) and off the live-write allowlist, `
       + "then the playbook's hourly plans and rules are switched off — the floors an hourly plan set stay, held by the stop, and only START gives them back. "
@@ -336,6 +337,8 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         ...(p.heldFloors.length ? { heldFloors: p.heldFloors.map((h) => ({ slot: h.slot, campaignId: h.campaignId, name: h.name, origin: h.origin, status: h.status, adGroups: h.bids.adGroups, targets: h.bids.targets, highestCents: h.bids.highestCents })) } : {}),
         // STOP: the hourly plans' floors it takes over (kept at the floor; only START gives them back).
         ...(p.floorsTaken.length ? { floorsTaken: p.floorsTaken } : {}),
+        // PB-10 — START: what a sync added at the floor, each with its planned bid (startBidCents: money).
+        ...(p.syncedBids.length ? { syncedBids: p.syncedBids } : {}),
         ...(op === 'start' ? { highestRestoredBidCents: p.highestRestoredBidCents, dailyBudgetCents: p.dailyBudgetCents } : {}),
         artifacts: p.artifacts,
         ...(p.artifactErrors.length ? { artifactErrors: p.artifactErrors } : {}),
@@ -343,7 +346,7 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         ...(op === 'start'
           ? { stepUp: { what: `starts spending on ${plural(p.spending, 'campaign')}${rankOn ? ` and switches on ${plural(rankOn, 'hourly bid plan')}` : ''}`, raises: ['Bids', 'Spend', ...(rankOn ? ['Hourly bid plans'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
           : { noCode: 'A stop lowers spend: it needs no authenticator code.' }),
-        basis: hash({ op, row: [p.playbook.id, p.playbook.version], campaigns: p.campaigns, untouched: p.untouched, heldFloors: p.heldFloors, floorsTaken: p.floorsTaken, artifacts: p.artifacts }),
+        basis: hash({ op, row: [p.playbook.id, p.playbook.version], campaigns: p.campaigns, untouched: p.untouched, heldFloors: p.heldFloors, floorsTaken: p.floorsTaken, artifacts: p.artifacts, syncedBids: p.syncedBids }),
         reach: stored,
         reachNote: reachNote(stored),
         effect,
@@ -599,6 +602,7 @@ const applyAdsPlaybook: AgentTool = {
         ...(out.left.length ? { leftAsTheyStand: out.left } : {}),
         ...(out.artifacts.length ? { artifactsSwitched: out.artifacts } : {}),
         ...(out.floorsHeld.length ? { floorsHeld: out.floorsHeld, floorsHeldNote: 'Their hourly plans\' floors are the stop\'s now: they stay at the floor until START gives their bids back (restore-campaign refuses them).' } : {}),
+        ...(out.syncedBids ? { syncedBidsGiven: out.syncedBids } : {}),
         ...(out.errors.length ? { errors: out.errors } : {}),
         note: op === 'start'
           ? `${plural(moved, 'campaign')} started: on the live-write allowlist, planned bids and placements back; each bid write is sent to Amazon at once.`
