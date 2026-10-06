@@ -1491,6 +1491,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const q = request.query as { blueprintId?: string; status?: string; marketplace?: string; includeDryRuns?: string }
     const rows = await prisma.adBlueprintApplication.findMany({
       where: {
+        // PB-5a — a playbook's build runs are the playbook's (ads-playbook view build), never Replicate's history.
+        playbookId: null,
         ...(q.blueprintId ? { blueprintId: q.blueprintId } : {}),
         ...(q.marketplace ? { marketplace: q.marketplace } : {}),
         ...(q.status ? { status: q.status } : q.includeDryRuns === 'true' ? {} : { status: { not: 'PLANNED' } }),

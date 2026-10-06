@@ -689,6 +689,14 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 }
 
 /**
+ * PB-5a — a run that built an ads playbook (playbookId set) is the playbook's: it starts with the playbook's START (the
+ * allowlist first, then the planned bids and placements) and is undone with archive-ads buildRunId. Replicate's raise and
+ * rollback refuse it, so a raise here never puts bids back on campaigns off the allowlist behind the playbook's back.
+ */
+export const PLAYBOOK_RUN =
+  'This run built an ads playbook: it is started, stopped and undone only through the playbook (apply-ads-playbook; archive-ads with its buildRunId), not from Replicate.'
+
+/**
  * AX3.5 — take a floored run up to the bids it was planned at.
  *
  * The counterpart to launching at the floor. Each entity remembered its planned
@@ -699,6 +707,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
 export async function raiseApplicationBids(applicationId: string, actor?: string): Promise<{ raised: number; campaigns: number; errors: string[] }> {
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
+  if (app.playbookId) throw new Error(PLAYBOOK_RUN)
   if (app.status === 'ROLLED_BACK') return { raised: 0, campaigns: 0, errors: ['this run was rolled back'] }
 
   const { restoreCampaignBids } = await import('./ads-bid-suppression.service.js')
@@ -723,6 +732,7 @@ export async function raiseApplicationBids(applicationId: string, actor?: string
 export async function rollbackApplication(applicationId: string, actor?: string): Promise<{ archived: number; errors: string[] }> {
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
+  if (app.playbookId) throw new Error(PLAYBOOK_RUN)
   if (app.status === 'ROLLED_BACK') return { archived: 0, errors: ['already rolled back'] }
 
   const { updateCampaignWithSync } = await import('./ads-mutation.service.js')
