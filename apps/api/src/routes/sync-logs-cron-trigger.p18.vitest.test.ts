@@ -33,7 +33,8 @@ const work = vi.hoisted(() => ({
   autoBid: vi.fn(async () => ({ proposed: 4, applied: 4, dryRun: false })),
 }))
 vi.mock('../services/advertising/ads-top-of-search.service.js', async (importOriginal) => ({ ...(await importOriginal<object>()), defendTopOfSearch: work.tos }))
-vi.mock('../services/advertising/ads-auto-bid.service.js', () => ({ runAutoBidOnce: work.autoBid }))
+// The run's own summary line (autoBidSummaryLine) is the real one.
+vi.mock('../services/advertising/ads-auto-bid.service.js', async (importOriginal) => ({ ...(await importOriginal<object>()), runAutoBidOnce: work.autoBid }))
 // No real Redis: the job modules' imports reach the queue module; the lock and the heartbeat get stand-ins below.
 vi.mock('../lib/queue.js', () => {
   const queue = { add: vi.fn(async () => ({})), addBulk: vi.fn(async () => []), getJob: vi.fn(async () => null), getJobCounts: vi.fn(async () => ({})) }

@@ -62,6 +62,8 @@ export const CLAUDE_ACTION_TOOLS = {
   create: ['create-ad-campaign'],
   rule: ['save-ad-rule'],
   undo: ['undo-ad-change'],
+  // AA-W2-9 (D-W2-6 = A) — a new campaign goes live in three kinds: create, allowlist (Claude's own), restore.
+  allowlist: ['set-campaign-live-writes'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]
@@ -236,7 +238,11 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
   { key: 'target', label: 'Target', columns: ['targetKind', 'targetPct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: TARGET_READERS },
   // The number Nexus's bid engines steer by: the first ACoS target down the chain (a TACoS target is skipped), after a
   // rule's or plan's own number and the campaign's own target, before the account default.
-  { key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true, readBy: TARGET_READERS },
+  // AA-W2-8 — and Claude's door: a campaign's own target, set by rule, stays at or below it (ads-target-acos.tools.ts).
+  {
+    key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true,
+    readBy: [...TARGET_READERS, `${READERS.claudeByRule}: a campaign's own target ACoS that Claude raises by rule stays at or below it, or a person decides`],
+  },
   // W1-6: the budget engine stops a market at its MARKET row's cap; W1-6b: a category's or product's cap floors every ad
   // group holding a product under it (low bids until the 1st, both).
   {
@@ -279,6 +285,8 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
       'recommendations (terms to graduate)',
       'the harvest preview and the fleet\'s harvest observations, when they name no thresholds',
       'the Keyword Harvest page, one market in view: the stricter of this and the saved harvest policy',
+      // AA-W2-7 — graduate-keyword (ads-propose.tools.ts).
+      'Claude\'s door: a new exact keyword runs by rule only for a term whose record over this window meets it where the term converted',
     ],
   },
   {
@@ -289,6 +297,8 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
       'harvest rules that set no thresholds of their own (harvest_and_negate)',
       'recommendations (wasteful terms to negate)',
       'the harvest preview and the fleet\'s negative observations, when they name no thresholds',
+      // AA-W2-7 — create-negative-keyword (ads-propose.tools.ts).
+      'Claude\'s door: a negative keyword runs by rule only for a term whose record over this window meets it in the ad group it lands in',
     ],
   },
   // The stop bid may be empty inside a set group: the existing 2¢ floor. W1-6: read as the stop BID only — every reader

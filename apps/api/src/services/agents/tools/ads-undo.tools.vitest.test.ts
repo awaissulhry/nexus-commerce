@@ -39,6 +39,8 @@ vi.mock('../../outbound-destination.js', async (importOriginal) => ({
 
 import { callTool, type UserPrincipal } from '../call-tool.js'
 import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
+import { undoRequestFor } from '../change-record.service.js'
+import { getTool } from '../tool-registry.js'
 import { updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -134,5 +136,55 @@ describe('A10 — undo-ad-change puts an approved ad request back', () => {
     await inside(() => updateCampaignWithSync({ campaignId: 'c-uk', patch: { dailyBudget: 19 }, actor: 'user:u-operator', changeSetId: bid.approvalId }))
     expect(await approve(undo.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: what you approved has moved since — rows changed/) })
     expect(await bidOf('t-uk')).toBe(66)
+  })
+})
+
+/**
+ * ADS AUTONOMY AA-W2-9 — an undo's own writes carry its approval as their change set (F11), so it can be undone in turn;
+ * and it may run by rule only inside its limits and the ads strategy, each value it puts back judged as a change of its
+ * own (a put-back that raises is a raise), never a status, an archive or a lifted negative keyword.
+ */
+describe('AA-W2-9 — an undo is a change set of its own, and is judged row by row for a run by rule', () => {
+  const tool = () => getTool('undo-ad-change')!
+  const judged = (p: unknown, limits: Record<string, unknown> = {}) => tool().withinLimits!(p, tool().limits!.parse(limits) as Record<string, unknown>)
+
+  it('its writes carry it as their change set: undo-change of it puts back what it reversed', async () => {
+    const before = await bidOf('t-it')
+    const bid = await ask('set-target-bid', { targetId: 't-it', proposedBidCents: before + 2 })
+    await approve(bid.approvalId!)
+    const undo = await ask('undo-ad-change', { changeSetId: bid.approvalId })
+    expect(await approve(undo.approvalId!)).toMatchObject({ ok: true, result: { reversed: 1, changeSetId: undo.approvalId } })
+    expect(await bidOf('t-it')).toBe(before)
+    expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "AdvertisingActionLog" WHERE "executionId" = $1', [undo.approvalId]))[0].n).toBe(1)
+    expect(tool()).toMatchObject({ reversibility: 'partial', maxClaudeTrust: 'auto', strategyBound: 'amazon-ads' })
+    const again = await inside(() => undoRequestFor({ approvalId: undo.approvalId! }))
+    expect(again).toMatchObject({ request: { tool: 'undo-ad-change', args: { changeSetId: undo.approvalId } } })
+    const redo = await ask('undo-ad-change', { changeSetId: undo.approvalId })
+    expect(await approve(redo.approvalId!)).toMatchObject({ ok: true, result: { reversed: 1 } })
+    expect(await bidOf('t-it')).toBe(before + 2)
+  })
+
+  it('each value it puts back is judged on its own: a put-back that raises waits by default; a status put back is not judged by rule', async () => {
+    const strategy = await inside(() => database.client.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', claudeAutonomy: { undo: 'auto' }, claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 5, updatedBy: 'user:test' } }))
+    try {
+      const now = await bidOf('t-it')
+      // A cut put back is a raise: it waits until the business sets how large one may be.
+      const cut = await ask('set-target-bid', { targetId: 't-it', proposedBidCents: now - 4 })
+      await approve(cut.approvalId!)
+      const raise = (await preview('undo-ad-change', { changeSetId: cut.approvalId })).preview as Row
+      expect(raise).toMatchObject({ ruleGate: null, notJudgedByRule: [], limitFacts: { action: 'undo', this: { items: 1, raises: 1, cuts: 0 } } })
+      expect(judged(raise)).toMatch(/^its largest raise is [\d.]+ %, more than the 0 % this tool's limits let run without a person/)
+      expect(judged(raise, { maxRaisePct: 20 })).toBeNull()
+      // A status put back (here a pause made in Nexus) is not judged by rule: a person decides.
+      const paused = await inside(() => updateCampaignWithSync({ campaignId: 'c-it', patch: { status: 'PAUSED' }, actor: 'user:u-operator', changeSetId: 'set-pause' }))
+      expect(paused.ok).toBe(true)
+      const status = (await preview('undo-ad-change', { changeSetId: 'set-pause' })).preview as Row
+      expect(status.notJudgedByRule).toEqual(['puts back the status of campaign c-it'])
+      expect(judged(status, { maxRaisePct: 20 })).toBe('it also puts back the status of campaign c-it, which a run by rule does not judge; a person decides')
+      // Retired negatives are the same: lifting a block is never judged by rule.
+      expect(judged({ ...raise, notJudgedByRule: ['lifts a negative keyword it created (a block removed)'] }, { maxRaisePct: 20 })).toMatch(/^it also lifts a negative keyword/)
+    } finally {
+      await inside(() => database.client.adsStrategy.delete({ where: { id: strategy.id } }))
+    }
   })
 })

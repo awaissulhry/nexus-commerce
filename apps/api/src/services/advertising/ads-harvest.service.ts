@@ -91,8 +91,8 @@ export interface HarvestPreview {
 const isAsinQuery = (q: string): boolean => /^b0[a-z0-9]{8}$/i.test(q.trim())
 
 const DEFAULT_MIN_SPEND_CENTS = 1500 // €15 with zero orders → wasteful
-const DEFAULT_MIN_ORDERS = 2 // converting → worth graduating
-const DEFAULT_WINDOW_DAYS = 60
+export const DEFAULT_MIN_ORDERS = 2 // converting → worth graduating
+export const DEFAULT_WINDOW_DAYS = 60
 
 /**
  * Every search term × campaign × ad group over a window, summed. Grouped by market too, then folded back: an ad group
@@ -128,8 +128,11 @@ async function termTotals(windowDays: number, adGroupExternalIds?: string[]): Pr
   return out
 }
 
-/** A strategy harvest group's bar: enough orders and clicks, and an ACoS under its ceiling (no sales = no ACoS: kept). */
-const meetsHarvest = (c: HarvestCandidate, h: HarvestThresholds) =>
+/**
+ * A strategy harvest group's bar: enough orders and clicks, and an ACoS under its ceiling (no sales = no ACoS: kept).
+ * AA-W2-7 — exported: a negative Claude asks for runs by rule only for a term that does not meet it (harvest first).
+ */
+export const meetsHarvest = (c: Pick<HarvestCandidate, 'orders' | 'clicks' | 'costCents' | 'salesCents'>, h: Omit<HarvestThresholds, 'windowDays'>) =>
   c.orders >= h.minOrders && c.clicks >= h.minClicks && (h.maxAcosPct == null || c.salesCents <= 0 || (c.costCents / c.salesCents) * 100 <= h.maxAcosPct)
 /** A strategy negate group's bar: enough clicks and spend, and no more orders than it allows. */
 const meetsNegate = (c: HarvestCandidate, n: NegateThresholds) =>

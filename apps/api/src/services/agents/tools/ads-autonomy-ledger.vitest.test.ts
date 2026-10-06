@@ -165,7 +165,7 @@ describe('the facts of one change, end to end', () => {
     const s = f.scopes['IT|adGroup:g-c-it']
     expect(s.label).toBe('the ad group of target "race jacket" (IT)')
     expect(s.limits).toMatchObject({ maxBidCents: 90, maxChangePct: 20, protect: true, claudeLevel: 'ask' })
-    expect(s.sources.maxBidCents).toMatchObject({ level: 'product', label: 'TEST-AK-P2 (IT)', version: 2, product: 'TEST-AK-P2' })
+    expect(s.sources.maxBid).toMatchObject({ level: 'product', label: 'TEST-AK-P2 (IT)', version: 2, product: 'TEST-AK-P2' })
     expect(s.sources.claudeLevel).toMatchObject({ level: 'product', label: 'TEST-AK-P1 (IT)', version: 3, product: 'TEST-AK-P1' })
     expect(f.this).toMatchObject({ markets: ['IT'], items: 1, writes: 1, raises: 1, largestRaisePct: 11.11, highestNewBidCents: 50, entities: ['target:t-it'], rowsOutsideStrategy: 0 })
     expect(f.today).toEqual({ IT: { changes: 12, writes: 12, raises: 3, budgetIncreaseCents: 500 } })
@@ -174,6 +174,15 @@ describe('the facts of one change, end to end', () => {
     expect(f.monthProjection).toBeUndefined()
     // The strategy holds bids at ask where it lands: a person decides.
     expect(commonRefusal({ limitFacts: f }, LIMITS)).toBe('the ads strategy lets Claude only ask for bid changes at the ad group of target "race jacket" (IT) (ads strategy: TEST-AK-P1 (IT), product, v3, from TEST-AK-P1); a person decides')
+  })
+
+  it('AA-W2-7 — a raise from 0 is counted: held by the highest bid where it lands, unbounded where no strategy sets one', async () => {
+    const capped = await facts([bid('t-it', 0, 50)])
+    expect(capped.this).toMatchObject({ raises: 1, largestRaisePct: 0, raisesFromZero: 1 })
+    expect(capped.this.unboundedRaises).toBeUndefined()
+    const bare = await facts([bid('t-uk', 0, 50)])
+    expect(bare.this).toMatchObject({ raises: 1, raisesFromZero: 1, unboundedRaises: 1 })
+    expect((await facts([bid('t-it', 45, 50)])).this.raisesFromZero).toBeUndefined()
   })
 
   it('a cut of a protected product\'s bid, a bid above its band, a protected term negated: each named', async () => {
