@@ -5,8 +5,9 @@
  *
  * Each is ONE `danger` notice (never deduped: ads-automation-notify.service.ts) and one e-mail through the shared
  * transport (a dry run unless outbound e-mail is on). A business-wide alert goes to the business's people's bell and to
- * the Monday ads digest's recipients — the same people the daily report reaches; a connection alert goes to the person
- * whose connection it was, bell and e-mail. Best-effort: an alert that cannot be delivered is logged, never thrown into
+ * the Monday ads digest's recipients (NEXUS_ADS_DIGEST_RECIPIENTS), or, when that list is empty, to this business's own
+ * people who may see its ads (ads-manager-run.service.ts `adsPeople`) — one e-mail per business, never two businesses
+ * in one; a connection alert goes to the person whose connection it was, bell and e-mail. Best-effort: an alert that cannot be delivered is logged, never thrown into
  * the work that raised it. The caller runs it inside the business (row-level security), after its transaction.
  */
 
@@ -52,17 +53,20 @@ async function mail(to: string[], m: AlertMessage): Promise<AlertOutcome['email'
   }
 }
 
-/** The Monday ads digest's recipients (NEXUS_ADS_DIGEST_RECIPIENTS); loaded where used, as its module graph is wide. */
-async function digestRecipients(): Promise<string[]> {
-  const { digestRecipients: read } = await import('../advertising/ads-weekly-digest-mail.service.js')
-  return read()
+/** The Monday ads digest's recipients, else this business's own people who may see its ads (the alerts state no money). */
+async function businessRecipients(): Promise<string[]> {
+  const { digestRecipients } = await import('../advertising/ads-weekly-digest-mail.service.js')
+  const digest = digestRecipients()
+  if (digest.length) return digest
+  const { adsPeople } = await import('./ads-manager-run.service.js')
+  return adsPeople({ money: false })
 }
 
-/** To the business: a danger notice to its people's bell, and the e-mail to the Monday ads digest's recipients. */
+/** To the business: a danger notice to its people's bell, and the e-mail (businessRecipients). */
 export async function alertBusiness(m: AlertMessage): Promise<AlertOutcome> {
   try {
     const notice = await notifyAutomationDetailed({ type: m.type, severity: 'danger', title: m.title, body: m.body, href: m.href, meta: m.meta })
-    return { notices: notice.created, email: await mail(await digestRecipients(), m) }
+    return { notices: notice.created, email: await mail(await businessRecipients(), m) }
   } catch (error) {
     logger.warn('[claude-alerts] business alert failed', { type: m.type, error: String(error).slice(0, 140) })
     return { notices: 0, email: 'failed' }

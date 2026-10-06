@@ -5,6 +5,7 @@
  *   missing     no report by the expected time + 30 min → one danger notice and one e-mail, once; a report that ran,
  *               or that waits for a person, is no miss; a setting newer than the deadline does not look back
  *   started     a run that started 2 hours ago and reported no end → one danger notice and one e-mail, once
+ *   recipients  the digest list, else this business's own people who may see its ads
  *   setting     set-ads-report-time: a person approves it (ceiling ask); a bad zone is refused; undo puts it back
  *   cron        registered through lib/cron/clustered.ts (the real wrapper; node-cron only records) at :40, off with
  *               the switch; with business profiles ON a tick runs inside EACH business: B's stuck run alerts in B only
@@ -207,6 +208,25 @@ describe('W4-2 — one tick in one business', { timeout: TIMEOUT }, () => {
     expect((await inside(() => runWatchdogOnce(at('2026-10-13T09:30:00Z')))).stuck).toEqual([])
     // Done: no run of this business is left started (the cron test below runs at today's real time).
     await inside(() => db().agentRun.updateMany({ where: { id: { in: [late.id, fresh.id] } }, data: { status: 'done', endedAt: now } }))
+  })
+})
+
+describe('W4-2 — who the alert e-mail reaches', { timeout: TIMEOUT }, () => {
+  it('with no digest list, this business\'s own people who may see its ads', async () => {
+    vi.stubEnv('NEXUS_ADS_DIGEST_RECIPIENTS', '')
+    try {
+      await setLongAgo(ROME)
+      const sent = mail.sent.length
+      const tick = await inside(() => runWatchdogOnce(at('2026-10-20T06:40:00Z')))
+      expect(tick.missing?.alert.email).toBe('sent')
+      expect(mail.sent).toHaveLength(sent + 1)
+      const email = (await db().userProfile.findUniqueOrThrow({ where: { id: ids.person } })).email
+      expect(mail.sent.at(-1)?.to).toContain(email)
+      expect(mail.sent.at(-1)?.to).not.toContain('owner@example.test')
+    } finally {
+      vi.stubEnv('NEXUS_ADS_DIGEST_RECIPIENTS', 'owner@example.test')
+      await inside(() => writeExpectedReport(null, 'test'))
+    }
   })
 })
 

@@ -148,7 +148,10 @@ async function stateOf(): Promise<WatchdogState> {
   return { missed: Array.isArray(value?.missed) ? value.missed.map(String) : [], stuck: Array.isArray(value?.stuck) ? value.stuck.map(String) : [] }
 }
 
-/** Did a run report its end (or ask to, waiting for a person) in this window? */
+/**
+ * Did a run report its end in this window? report-ads-run is a journal and records at once; a business whose own tool
+ * policy makes it wait for a person leaves a request instead, which counts too (the run did report).
+ */
 async function reportArrived(since: Date, deadline: Date): Promise<boolean> {
   const [ended, asked] = await Promise.all([
     prisma.agentRun.count({ where: { agentKey: ADS_MANAGER_AGENT_KEY, endedAt: { gt: since, lte: deadline }, status: { in: ['done', 'failed', 'cancelled'] } } }),

@@ -594,10 +594,10 @@ const setAdsReportTime: AgentTool = {
   description:
     'Set by when the daily Claude ads run reports its end (report-ads-run finish or fail), on the business\'s own clock: '
     + 'a time (HH:MM, 24-hour) and a time zone. Nexus\'s watchdog checks every hour: no report by that time plus 30 '
-    + 'minutes sends one danger notice to the bell and one e-mail to the Monday ads digest\'s recipients (a run that '
-    + 'started and reports no end in 2 hours does too, with or without this time). time null switches the missing-report '
-    + 'check off. Nexus only. A person approves it in Nexus (Claude never changes its own watchdog alone); undo sets the '
-    + 'time it replaced again.',
+    + 'minutes sends one danger notice to the bell and one e-mail, to the Monday ads digest\'s recipients or, without '
+    + 'them, to this business\'s own people who may see its ads. A run that started and reports no end in 2 hours does '
+    + 'too, with or without this time. time null switches the missing-report check off. Nexus only. A person approves it '
+    + 'in Nexus (Claude never changes its own watchdog alone); undo sets the time it replaced again.',
   input: z.object({
     time: z.string().trim().regex(TIME, 'a time as HH:MM, 24-hour').nullable()
       .describe('HH:MM, 24-hour, by which the day\'s report arrives (e.g. 08:30); null switches the missing-report check off'),
