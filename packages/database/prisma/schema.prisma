@@ -19207,6 +19207,141 @@ model AdBidPolicy {
   @@index([workspaceId])
 }
 
+/// ADS AUTONOMY W1 — the Owner's advertising strategy for ONE scope in ONE market: what the engines aim at, the limits
+/// they and Claude keep, and why. One row per (channel × market × level × scope); every row belongs to one market.
+///
+/// Resolution inside a market, most specific first: PRODUCT (the variation, then its parent) → CATEGORY (the root
+/// product's primary category, deepest first) → MARKET. A field is taken from the first row that sets it; the groups
+/// (target, harvest, negate, stop) resolve WHOLE, never merged across rows. A null field = this row says nothing about
+/// it (inherit) — NOT "none" and NOT "unlimited".
+///
+/// Targets vs limits: for a target the most specific explicit value wins, and a campaign's own target ACoS still wins
+/// over this table (Owner decision 2026-10-06). For a limit every source that applies binds and the stricter one wins.
+///
+/// 🔴 `scopeId` is NOT nullable; the market row uses the sentinel '*'. Postgres treats NULLs as DISTINCT inside a
+/// unique index, so a nullable key would accept two market rows (the AdsHarvestPolicy rule). It is polymorphic
+/// (Category.id or Product.id), so there is no foreign key: the writer checks the scope exists in this business, and
+/// the resolver ignores and reports a row whose category or product is gone.
+///
+/// 🔴 `*Pct` columns are INTEGER percent (30 = 30 %), never a fraction — the AdsAutomationState.defaultTargetAcosPct
+/// convention. Engines take fractions; they convert through the one tested converter. Money is in minor units of the
+/// market's currency.
+///
+/// Every change writes an AdsStrategyVersion row in the same transaction; `version` equals the newest one.
+model AdsStrategy {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// AMAZON only in W1 (eBay later, same table).
+  channel String @default("AMAZON")
+  /// Short market code ('IT', 'DE', …).
+  market  String
+  /// MARKET | CATEGORY | PRODUCT
+  level   String
+  /// '*' for MARKET · Category.id for CATEGORY · Product.id (a parent or a variation) for PRODUCT.
+  scopeId String @default("*")
+  /// What refusals and screens call it: "Helmets (IT)".
+  label   String
+  /// +1 on every change; equals the newest AdsStrategyVersion.version of this row.
+  version Int    @default(1)
+
+  /// LAUNCH | GROW | PROFIT | CLEAR_STOCK | DEFEND. Descriptive in W1: Claude reads it, no engine derives a number.
+  goal     String?
+  /// The why, in the Owner's words (max 2,000 characters, checked by the writer).
+  goalNote String? @db.Text
+
+  /// Target group — resolved WHOLE (kind + value). ACOS | TACOS; engines steer by ACoS only (a TACOS row is shown
+  /// and read by Claude, and engines fall through to the next ACoS level).
+  targetKind String?
+  /// Integer percent, 1..300.
+  targetPct  Int?
+
+  /// Money limits. Every limit that applies binds; the stricter one wins.
+  monthlySpendCapCents Int?
+  minBidCents          Int?
+  maxBidCents          Int?
+  /// Largest bid change per action, integer percent 1..100.
+  maxChangePct         Int?
+  /// MARKET rows only.
+  maxActionsPerRun     Int?
+
+  /// CATEGORY / PRODUCT rows. true = never negated as an ASIN and never stopped by an optimiser; false = opt out of
+  /// a broader row's protection. Protected SEARCH TERMS stay in AdKeywordProtection.
+  protect Boolean?
+
+  /// Harvest group — resolved WHOLE. harvestMaxAcosPct null inside a set group = no ACoS ceiling.
+  harvestMinOrders    Int?
+  harvestMinClicks    Int?
+  harvestMaxAcosPct   Int?
+  harvestWindowDays   Int?
+  /// Negate group — resolved WHOLE.
+  negateMinClicks     Int?
+  negateMinSpendCents Int?
+  negateMaxOrders     Int?
+  negateWindowDays    Int?
+
+  /// Stop group — resolved WHOLE. LOW_BIDS | PAUSE; W1 engines stop with low bids only.
+  stopMethod   String?
+  /// The low bid of a stop; null inside a set group = the existing 2¢ floor.
+  stopBidCents Int?
+
+  /// What Claude may do alone here: { "<action type>": "off" | "ask" | "confirm" | "auto" }. NARROWS the business's
+  /// trust levels only, never widens them.
+  claudeAutonomy  Json?
+  reviewEveryDays Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  /// 'user:<id>' or 'claude:<approvalId>' — a money decision is never unattributed.
+  updatedBy String
+
+  @@unique([workspaceId, channel, market, level, scopeId], name: "channel_market_level_scopeId", map: "AdsStrategy_channel_market_level_scopeId_key")
+  @@index([market, level])
+  @@index([workspaceId])
+}
+
+/// ADS AUTONOMY W1 — one row per change of an AdsStrategy row; never updated or deleted. The audit, and the history
+/// the screen restores from. It copies the scope so it still reads after its strategy row was removed.
+model AdsStrategyVersion {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// AdsStrategy.id. No foreign key: the history outlives a removed row.
+  strategyId String
+  channel    String
+  market     String
+  level      String
+  scopeId    String
+  version    Int
+
+  /// set | remove | adopt (an older guardrail moved in on the Owner's click)
+  op          String
+  /// The row's own values after the change; null after a remove.
+  values      Json?
+  /// [{ field, from, to, effectiveFrom, effectiveTo, direction: raise | lower | same }]
+  changes     Json
+  /// raise | lower | same — raise when ANY field raises.
+  direction   String
+  /// screen | claude | adopt
+  via         String
+  /// The AgentApproval when the change came through Claude (or a change-plan step's approval).
+  approvalId  String?
+  /// The name shown.
+  actor       String
+  actorUserId String?
+  /// When a raise was confirmed with a fresh authenticator code; null for a pure lowering.
+  stepUpAt    DateTime?
+  reason      String?   @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@unique([workspaceId, strategyId, version], name: "strategyId_version", map: "AdsStrategyVersion_strategyId_version_key")
+  @@index([market, level, scopeId, createdAt])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

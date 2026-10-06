@@ -5986,6 +5986,28 @@
     },
     "relations": []
   },
+  "AdsStrategy": {
+    "scalar": {},
+    "compound": {
+      "channel_market_level_scopeId": [
+        "channel",
+        "market",
+        "level",
+        "scopeId"
+      ]
+    },
+    "relations": []
+  },
+  "AdsStrategyVersion": {
+    "scalar": {},
+    "compound": {
+      "strategyId_version": [
+        "strategyId",
+        "version"
+      ]
+    },
+    "relations": []
+  },
   "AdWriteRefusal": {
     "scalar": {},
     "compound": {},
