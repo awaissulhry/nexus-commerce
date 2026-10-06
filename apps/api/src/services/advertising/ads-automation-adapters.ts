@@ -391,9 +391,10 @@ const A3: AutomationAdapter = {
 
 const A4: AutomationAdapter = {
   id: 'A4', key: 'ads-auto-bid', name: 'Auto-bid (the bid optimiser)',
-  what: 'Moves target bids toward a target ACOS, at most −50 % / +25 % per pass, never below 5¢.',
+  // Owner targets only — the rule in AUTO_BID_SCOPE_WORDS' words (ads-auto-bid.service.ts).
+  what: 'Moves target bids toward a target ACoS, at most −50 % / +25 % per pass, never below 5¢. It moves only bids where you set a target ACoS (campaign, ads strategy or account default) and leaves bids an hourly plan, a goal plan, a person or a pin holds.',
   area: 'amazon-ads', writesTo: ['amazon'], view: FEATURES.adsView, claude: 'switch-tune', preview: 'saved',
-  previewNote: 'The bids it would set now, computed and not written.',
+  previewNote: 'The bids it would set now, chosen as a run chooses them (with what it leaves alone, and why), computed and not written.',
   crons: ['ads-auto-bid'], schedule: process.env.NEXUS_ADS_AUTO_BID_SCHEDULE ?? '20 */6 * * *',
   env: () => amazonAds(),
   async state() {
@@ -405,11 +406,18 @@ const A4: AutomationAdapter = {
   },
   explain: (opts: ExplainOptions) => engineExplain(['ads-auto-bid'], ['automation:auto-bid'], opts),
   async runPreview(): Promise<PreviewOutcome> {
-    const { previewBidOptimization } = await import('./ads-bid-optimizer.service.js')
-    // W0 — with the run's own options: the bare call was the flat-30 % view, not the bids auto-bid would set.
-    const { AUTO_BID_OPTIMIZER_OPTIONS } = await import('./ads-auto-bid.service.js')
-    const out = await previewBidOptimization(AUTO_BID_OPTIMIZER_OPTIONS)
-    return { kind: 'saved', subject: null, result: { targetAcos: out.targetAcos, profitMode: out.profitMode, bayesian: out.bayesian, proposals: out.proposals.slice(0, 100), total: out.proposals.length } }
+    // W0 — with the run's own options. Owner targets only — and the run's own choice (planAutoBid): the bids toward a
+    // target the Owner set that nobody else holds, so the preview is the run; what it leaves alone is counted per reason.
+    const { planAutoBid, leftAloneTotal, leftAloneWords, AUTO_BID_SCOPE_WORDS } = await import('./ads-auto-bid.service.js')
+    const { preview: out, moves, leftAlone } = await planAutoBid()
+    const alone = leftAloneTotal(leftAlone)
+    return {
+      kind: 'saved', subject: null,
+      result: {
+        targetAcos: out.targetAcos, profitMode: out.profitMode, bayesian: out.bayesian, proposals: moves.slice(0, 100), total: moves.length,
+        leftAlone, leftAloneNote: alone ? `${alone} left alone (${leftAloneWords(leftAlone)}): ${AUTO_BID_SCOPE_WORDS}.` : `Nothing left alone: ${AUTO_BID_SCOPE_WORDS}.`,
+      },
+    }
   },
   // R16 — its per-business switch, under the env and the account dial (A3).
   engine: 'auto-bid',

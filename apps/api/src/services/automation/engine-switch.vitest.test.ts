@@ -34,7 +34,7 @@ const work = vi.hoisted(() => ({
   fleet: vi.fn(async () => ({ orchestrationId: 'orch-r16' })),
   enforce: vi.fn(async (opts: { dryRun: boolean }) => ({ result: { totals: { plans: 0, budgetChanges: 0 } }, budgetApplied: 0, suppressed: 0, restored: 0, failed: 0, dryRun: opts.dryRun })),
 }))
-vi.mock('../advertising/ads-auto-bid.service.js', () => ({ runAutoBidOnce: work.autoBid }))
+vi.mock('../advertising/ads-auto-bid.service.js', async (importOriginal) => ({ ...(await importOriginal<object>()), runAutoBidOnce: work.autoBid }))
 vi.mock('../advertising/ads-top-of-search.service.js', async (importOriginal) => ({ ...(await importOriginal<object>()), defendTopOfSearch: work.tos }))
 vi.mock('../advertising/ads-budget-enforce.service.js', async (importOriginal) => ({ ...(await importOriginal<object>()), applyBudgetEnforcement: work.enforce }))
 vi.mock('../agent-fleet/orchestrator.js', async (importOriginal) => ({ ...(await importOriginal<object>()), runFleet: work.fleet }))
