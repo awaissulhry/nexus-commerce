@@ -63,6 +63,10 @@ describe('an engine row', () => {
     expect(engineRow(held, g()).why).toBe('Lowered for this business')
   })
 
+  it('a busy week reads at a glance: thousands separators', () => {
+    expect(engineRow(engine({ runs7d: 670, writes7d: 10474, failures7d: 1 }), g()).week).toBe('670 runs · 10,474 changes · 1 failed')
+  })
+
   it('a warning or a failed run is its problem', () => {
     expect(engineRow(engine({ failures7d: 2 }), g()).problem).toBe('2 runs failed in 7 days')
     expect(engineRow(engine({ warning: 'Still evaluating while stopped' }), g()).problem).toBe('Still evaluating while stopped')
