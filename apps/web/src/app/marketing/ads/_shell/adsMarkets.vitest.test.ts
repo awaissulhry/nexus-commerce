@@ -8,8 +8,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  ALL_MARKETS, READING_ONLY, currencyOf, formatMoney, marketsFromWire, pageMarket, preferredMarket, readMarketsOf,
-  readingOnlyDetail, writeAccessOf, writeMarketsOf, type WireMarket,
+  ALL_MARKETS, READING_ONLY, currencyOf, formatMoney, marketsFromWire, orderMarketCodes, pageMarket, preferredMarket,
+  readMarketsOf, readingOnlyDetail, writeAccessOf, writeBlockFor, writeMarketsOf, type WireMarket,
 } from './adsMarkets'
 import { fmtChangeValue } from '../_shared/changeValue'
 
@@ -18,16 +18,16 @@ const UK: WireMarket = {
   code: 'UK', read: true, write: false, mode: 'sandbox', writesEnabled: false, limitsKnown: false, currency: 'GBP',
   whyNoWrite: `${READING_ONLY}: the UK account is in sandbox mode.`,
 }
-// The API's order: writable first, then reading only, each alphabetical.
-const WIRE = { markets: [live('DE'), live('ES'), live('FR'), live('IT'), UK] }
+// The API's order (the Owner's): the live four as the console always listed them, then reading-only markets.
+const WIRE = { markets: [live('IT'), live('DE'), live('ES'), live('FR'), UK] }
 const never = () => { throw new Error('the API list is used, not the fallback') }
 
 describe('4c — the list is the connections, not a fixed four', () => {
   const markets = marketsFromWire(WIRE, [], never)
 
   it('🔴 UK reading only is read (its data shows) but not written; the four are read and written', () => {
-    expect(readMarketsOf(markets)).toEqual(['DE', 'ES', 'FR', 'IT', 'UK'])
-    expect(writeMarketsOf(markets)).toEqual(['DE', 'ES', 'FR', 'IT'])
+    expect(readMarketsOf(markets)).toEqual(['IT', 'DE', 'ES', 'FR', 'UK'])
+    expect(writeMarketsOf(markets)).toEqual(['IT', 'DE', 'ES', 'FR'])
   })
 
   it('🔴 a write control on UK is off and says why; IT is writable as before', () => {
@@ -42,11 +42,22 @@ describe('4c — the list is the connections, not a fixed four', () => {
     expect(writeAccessOf([], 'PL')).toEqual({ canWrite: true, reason: null })
   })
 
-  it('an older API without `markets`: the rows, readable when the account is read (any mode)', () => {
-    const rows = [{ marketplace: 'IT', isActive: true, mode: 'production', writesEnabledAt: '2026-01-01' }, { marketplace: 'UK', isActive: true, mode: 'sandbox' }]
+  it('an older API without `markets`: the rows, readable when the account is read (any mode), in the Owner\'s order', () => {
+    const rows = ['UK', 'FR', 'ES', 'DE', 'IT', 'BE'].map((m) => ({ marketplace: m, isActive: true, mode: ['UK', 'BE'].includes(m) ? 'sandbox' : 'production', writesEnabledAt: '2026-01-01' }))
     const list = marketsFromWire(undefined, rows, (c) => ({ code: c.code, label: '', mode: c.mode ?? 'sandbox', writesEnabled: !!c.writesEnabledAt, launchable: c.mode === 'production', readable: !!c.isActive }))
-    expect(readMarketsOf(list)).toEqual(['IT', 'UK'])
-    expect(writeMarketsOf(list)).toEqual(['IT'])
+    expect(readMarketsOf(list)).toEqual(['IT', 'DE', 'ES', 'FR', 'BE', 'UK'])
+    expect(writeMarketsOf(list)).toEqual(['IT', 'DE', 'ES', 'FR'])
+  })
+
+  it('🔴 order: a page that merges the read list with the markets its rows name keeps IT, DE, ES, FR first', () => {
+    // The campaigns grid, dashboard, health, portfolios and budget manager merge both lists; they used to sort A–Z.
+    expect(orderMarketCodes(['UK', 'DE', 'IT', 'FR', 'ES', 'ZZ', 'IT'], markets)).toEqual(['IT', 'DE', 'ES', 'FR', 'UK', 'ZZ'])
+  })
+
+  it('🔴 a write touching a reading-only market is off with its reason; the live four are not', () => {
+    expect(writeBlockFor(markets, ['IT', 'DE'])).toBeNull()
+    expect(writeBlockFor(markets, ['IT', 'UK'])).toBe(`${READING_ONLY}: the UK account is in sandbox mode.`)
+    expect(writeBlockFor([], ['UK'])).toBeNull()
   })
 })
 

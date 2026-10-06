@@ -18,6 +18,7 @@ import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../
 import { atMinimumNote, nextDailyBudget, readBudgetChange, readDailyBudget, readTargetAcosPercent, summariseBudgetChange } from '../_shared/budgetInput'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { orderMarketCodes } from '../_shell/adsMarkets'
 import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -1127,7 +1128,7 @@ export function CampaignsGrid() {
   // CBN.2d — header controls
   // AM-28 — the viewer's shared market across the ads pages (each page used to start at "all" and forget the choice).
   const [market, setMarket] = useSharedAdsMarket()
-  const { readMarkets, writeAccess, currencyOf: currencyOfMarket } = useAdsMarketplace()
+  const { readMarkets, markets: adsMarkets, writeAccess, currencyOf: currencyOfMarket } = useAdsMarketplace()
   // AM-16 — the 7 complete days ending yesterday, as the header shows. AM-10 — the graph reads this range too.
   const [dateRange, setDateRange] = useState(() => lastCompleteDays(7))
   // AM-14 — when the performance numbers arrived (per market), and how far today's hourly figures reach (AM-5).
@@ -1569,7 +1570,7 @@ export function CampaignsGrid() {
   const metricCols = useMemo(() => colOrder.filter((k) => visKeySet.has(k)), [colOrder, visKeySet])
 
   // Ads wave 4c — every market Nexus reads, plus any market a loaded campaign names.
-  const markets = useMemo(() => Array.from(new Set([...readMarkets, ...(rows.map((r) => r.marketplace).filter(Boolean) as string[])])).sort(), [rows, readMarkets])
+  const markets = useMemo(() => orderMarketCodes([...readMarkets, ...(rows.map((r) => r.marketplace).filter(Boolean) as string[])], adsMarkets), [rows, readMarkets, adsMarkets])
   // Portfolio filter options — resolve real names from /advertising/portfolios (pfOptions,
   // the same v3-backed source Amazon shows + the bulk-assign picker uses). Fall back to a short
   // id only for a portfolio we have no name for; sort by name so the dropdown reads like Amazon.

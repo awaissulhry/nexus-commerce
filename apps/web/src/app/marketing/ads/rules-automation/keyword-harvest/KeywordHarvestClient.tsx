@@ -77,6 +77,7 @@ import {
 import { HvThresholds } from './HvThresholds'
 import { HvDestination, DestName, DEST_STATUS_LABEL, DEST_STATUS_TIP } from './HvDestination'
 import { HvPromote, promoteSelectionActions } from './HvPromote'
+import { useWriteBlock } from '../../_shell/WriteBlocked'
 import { HvCohort } from './HvCohort'
 import { HvActors } from './HvActors'
 import { HvQueue } from './HvQueue'
@@ -153,6 +154,8 @@ export function KeywordHarvestClient() {
   const [sharedMarket] = useSharedAdsMarket()
   const urlMarket = params.get('market')
   const market = urlMarket ?? (marketReady ? sharedMarket : FALLBACK_MARKET)
+  // Ads wave 4c — a promotion in a market Nexus only reads is not sent (one market, or a comma list of them).
+  const promoteBlocked = useWriteBlock(market === 'all' ? [] : market.split(','))
 
   const scope: HvScope = {
     line: params.get('line') ?? '',
@@ -764,7 +767,7 @@ export function KeywordHarvestClient() {
           next.delete('confirm')
           for (const id of queued) next.append('confirm', id)
           router.replace(`?${next.toString()}`, { scroll: false })
-        })}
+        }, promoteBlocked)}
         /* HV.3 — a row opens its destination picker. This is NOT a write action: it patches the
            URL, so "look at this one" is a link. NO_WRITE_ACTIONS still supplies HV.4's row menu. */
         onRowClick={(r: HarvestRow) => push({ row: r.termKey })}

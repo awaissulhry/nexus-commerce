@@ -12,7 +12,8 @@ import Link from '@/lib/workspaces/Link'
 import { RefreshCw, Plus, Pencil, Archive, Wallet, Search, X } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
-import { preferredMarket } from '../_shell/adsMarkets'
+import { WriteBlockedTip } from '../_shell/WriteBlocked'
+import { orderMarketCodes, preferredMarket } from '../_shell/adsMarkets'
 import { Button } from '@/design-system/primitives/Button'
 import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
@@ -63,9 +64,10 @@ function PortfoliosInner() {
   // AM-28 — the viewer's shared market (each visit used to start at "all" and forget the choice).
   const [market, setMarket] = useSharedAdsMarket()
   // Ads wave 4c — the markets Nexus reads, plus any market this account's campaigns name; writes only where allowed.
-  const { readMarkets, writeMarkets, writeAccess } = useAdsMarketplace()
+  const { readMarkets, writeMarkets, writeAccess, markets: adsMarkets } = useAdsMarketplace()
   const [dataMarkets, setMarkets] = useState<string[]>([])
-  const markets = Array.from(new Set([...readMarkets, ...dataMarkets]))
+  // The Owner's order: IT, DE, ES, FR first, then reading-only markets.
+  const markets = orderMarketCodes([...readMarkets, ...dataMarkets], adsMarkets)
   const [rows, setRows] = useState<PortfolioRow[]>([])
   const [lastSynced, setLastSynced] = useState<string | null>(null)
   // AM-6 — the window the money covers: the header's picker, opening on the Ad Manager's default.
@@ -310,6 +312,8 @@ function PortfoliosInner() {
                   {(r.state ?? '').toUpperCase() !== 'ARCHIVED' && (
                     <ToolbarButton variant="boxed" icon={<Archive size={13} />} label="Archive" description={rowWriteBlock(r) ?? undefined} disabled={rowBusy === r.portfolioId || !!rowWriteBlock(r)} onClick={() => setArchiveRow(r)} tooltipAlign="end" />
                   )}
+                  {/* A disabled button takes no focus: the reason is also on a focusable info icon. */}
+                  <WriteBlockedTip reason={rowWriteBlock(r)} />
                 </span>
               ),
             },

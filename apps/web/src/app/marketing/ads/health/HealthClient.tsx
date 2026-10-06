@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Package, Bot, ChevronRight, ShieldCheck } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { orderMarketCodes } from '../_shell/adsMarkets'
 import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { ProbePanel } from './ProbePanel'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -91,9 +92,10 @@ export function HealthClient() {
   // AM-28 — the viewer's shared market across the ads pages (each page used to start at "all" and forget the choice).
   const [market, setMarket] = useSharedAdsMarket()
   // Ads wave 4c — the markets Nexus reads, plus any market the campaigns name.
-  const { readMarkets } = useAdsMarketplace()
+  const { readMarkets, markets: adsMarkets } = useAdsMarketplace()
   const [dataMarkets, setMarkets] = useState<string[]>([])
-  const markets = Array.from(new Set([...readMarkets, ...dataMarkets]))
+  // The Owner's order: IT, DE, ES, FR first, then reading-only markets.
+  const markets = orderMarketCodes([...readMarkets, ...dataMarkets], adsMarkets)
   const [windowDays, setWindowDays] = useState(7)
   const [alerts, setAlerts] = useState<AlertsResult | null>(null)
   const [retail, setRetail] = useState<Retail | null>(null)

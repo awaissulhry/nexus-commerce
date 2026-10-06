@@ -96,9 +96,39 @@ function shortWhy(m: WireMarket): string | null {
 }
 
 /**
- * The console's market list from the API answer: writable markets first, then read-only ones, then the rest, each
- * alphabetical — the order the API gives. `fallback` builds the list from the rows alone for an API without `markets`.
+ * The console's market list from the API answer, in the order the API gives (`compareMarkets`). `fallback` builds the list from the rows alone for an API without `markets`.
  */
+/** The order the live markets have always had in the ads console. */
+export const LIVE_MARKET_ORDER: readonly string[] = ['IT', 'DE', 'ES', 'FR']
+
+/**
+ * The Owner's order, the API's too (`compareAdsMarkets`): writable markets first — IT, DE, ES, FR, then any other
+ * writable market alphabetically — then reading-only markets alphabetically, then the rest.
+ */
+export function compareMarkets(a: Pick<AdsMarket, 'code' | 'launchable' | 'readable'>, b: Pick<AdsMarket, 'code' | 'launchable' | 'readable'>): number {
+  if (a.launchable !== b.launchable) return a.launchable ? -1 : 1
+  if (!!a.readable !== !!b.readable) return a.readable ? -1 : 1
+  if (a.launchable) {
+    const n = LIVE_MARKET_ORDER.length
+    const ia = LIVE_MARKET_ORDER.indexOf(a.code)
+    const ib = LIVE_MARKET_ORDER.indexOf(b.code)
+    if (ia !== ib) return (ia === -1 ? n : ia) - (ib === -1 ? n : ib)
+  }
+  return a.code.localeCompare(b.code)
+}
+
+/**
+ * A page's market codes (the read list plus any market its rows name) in the Owner's order. A code the connections do
+ * not know goes last, alphabetically.
+ */
+export function orderMarketCodes(codes: Iterable<string>, markets: readonly AdsMarket[]): string[] {
+  const facts = (code: string) => {
+    const m = markets.find((x) => x.code === code)
+    return { code, launchable: !!m?.launchable, readable: m ? !!m.readable : false }
+  }
+  return [...new Set(codes)].filter(Boolean).map(facts).sort(compareMarkets).map((m) => m.code)
+}
+
 export function marketsFromWire(
   wire: { markets?: WireMarket[] } | null | undefined,
   items: readonly WireConnection[],
@@ -121,7 +151,7 @@ export function marketsFromWire(
   return items
     .filter((c) => c.marketplace)
     .map((c) => fallback({ ...c, code: String(c.marketplace).toUpperCase() }))
-    .sort((a, b) => (a.launchable === b.launchable ? a.code.localeCompare(b.code) : a.launchable ? -1 : 1))
+    .sort(compareMarkets)
 }
 
 export const readMarketsOf = (markets: readonly AdsMarket[]): string[] => markets.filter((m) => m.readable).map((m) => m.code)
@@ -164,6 +194,18 @@ export function writeAccessOf(markets: readonly AdsMarket[], code: string | null
   if (!m) return markets.length === 0 ? { canWrite: true, reason: null } : { canWrite: false, reason: `Nexus has no Amazon Ads account for ${code}, so it changes nothing there.` }
   if (m.launchable) return { canWrite: true, reason: null }
   return { canWrite: false, reason: m.whyNot ?? READING_ONLY }
+}
+
+/**
+ * The reason a write touching these markets cannot be sent (the first market that cannot be written), or null when
+ * every one can — or when the list has not loaded (the server's write gate still refuses with its own reason).
+ */
+export function writeBlockFor(markets: readonly AdsMarket[], codes: Iterable<string | null | undefined>): string | null {
+  for (const code of codes) {
+    const a = writeAccessOf(markets, code)
+    if (!a.canWrite) return a.reason
+  }
+  return null
 }
 
 /**

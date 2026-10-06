@@ -35,6 +35,7 @@ import { adsWrite } from '../../../_shared/adsWrite'
 import '../../campaigns-ds.css'
 import { useAdsMarketplace } from '../../../_shell/MarketplaceContext'
 import { currencySymbol } from '../../../_shell/adsMarkets'
+import { WriteBlockedTip } from '../../../_shell/WriteBlocked'
 
 interface DynBidding { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }>; bidAlgorithm?: string; targetAcos?: number | null }
 /** The algorithms the API stores (`campaign-settings.service.ts` BID_ALGORITHMS). Custom has no store yet. */
@@ -403,6 +404,7 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
         <span className="grow" />
         {toast && <span className="msg">{toast}</span>}
     {writeBlock && <span className="msg" role="note">{writeBlock}</span>}
+    <WriteBlockedTip reason={writeBlock} />
     <Button variant="primary" onClick={() => void save()} disabled={!dirty || saving || budgetProblem != null || !!writeBlock} title={writeBlock ?? undefined}>{saving ? 'Saving…' : 'Save Campaign'}</Button>
       </div>
     </div>
