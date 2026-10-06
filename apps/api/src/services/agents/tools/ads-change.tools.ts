@@ -4,6 +4,12 @@
  * with the A3 guards, refused and not queued when Amazon's write gate would refuse it, run only as an approved
  * request (as the approver, changeSetId = the approval), re-checked in `execute`, and never pausing anything (d3).
  *
+ * ADS AUTONOMY AA-W2-8 — set-campaign-budget and set-placement-multipliers are strategy-bound (tool-types.ts
+ * StrategyBound): a business may let them run by its rule, only inside the tool's limits and the ads strategy where the
+ * change lands (ads-autonomy-kit.ts C1–C7, the month's forecast for a budget raise) and only where Amazon's write gate
+ * lets the rule's own write through (ruleFactsFor's `ruleGate`: the allowlist, pins, a halt and his own limits bind a
+ * run by rule).
+ *
  *   set-campaign-budget (A6)        a campaign's daily budget, in its own currency; the campaign's budget bounds and
  *                                   (live) the gate's value cap, spend ceilings and daily budget-movement bound refuse
  *   set-placement-multipliers (A6)  top-of-search / product-pages / rest-of-search adjustments (0–900 %)
@@ -36,10 +42,10 @@ import { adGroupCampaigns, adGroupSuppressionCounts } from '../../advertising/ad
 import { restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
-import { alsoChangedBy, approvedRun, changeClampedBid, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, storedReach, type RuleWrite, type StoredReach } from './ads-change-kit.js'
-import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS } from './ads-autonomy-kit.js'
+import { alsoChangedBy, approvedRun, BY_RULE_WORDS, changeClampedBid, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, storedReach, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
-import type { AgentTool, FieldPermission, ToolResult, ToolUndo } from '../tool-types.js'
+import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 /** The flat horizon a change set reverses within (rollbackByChangeSetId). */
 const SET_WINDOW_MS = 24 * 3600 * 1000
@@ -291,7 +297,7 @@ const campaignIdArg = z.string().trim().min(1).max(64).describe('Nexus campaign 
 
 // ── set-campaign-budget (A6) ──────────────────────────────────────────────────────────────────────
 
-async function budgetPreview(args: Record<string, unknown>): Promise<ToolResult> {
+async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const campaignId = String(args.campaignId ?? '')
   const proposed = Math.round(Number(args.dailyBudgetCents))
   if (!campaignId || !Number.isFinite(proposed) || proposed <= 0) return { ok: false, error: 'campaignId and a dailyBudgetCents above 0 are required' }
@@ -304,10 +310,20 @@ async function budgetPreview(args: Record<string, unknown>): Promise<ToolResult>
   if (proposed === current) return { ok: false, error: `The daily budget of ${c.name} is already ${amountLabel(current, currency)}.` }
   // 3A + 4A — the campaign's own min/max budget is HIS limit: not a refusal here. The gate (asked as the approver)
   // reports it in `reach.pastOwnLimits`, the card warns before he approves, and approving sends it anyway.
-  const reach = await checkLiveReach({ campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'dailyBudget', valueCents: proposed }] })
+  const intent = { campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'dailyBudget', valueCents: proposed }] }
+  const reach = await checkLiveReach(intent)
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
   const bound = await alsoChangedBy(c.id)
+  // AA-W2-8 — what a run by rule is judged on: the gate as the rule's write, the ads strategy where it lands, this
+  // change counted (a raise adds its difference to the market's daily budget increase and its month's forecast).
+  const rule = await ruleFactsFor({
+    tool: 'set-campaign-budget',
+    limits: BUDGET_LIMITS,
+    items: [{ entity: { kind: 'campaign', id: c.id }, change: { field: 'dailyBudget', fromCents: current, toCents: proposed } }],
+    writes: [{ ...intent, label: `campaign "${c.name}"` }],
+    approvalId: ctx?.approvalId,
+  })
   return {
     ok: true,
     preview: {
@@ -321,9 +337,23 @@ async function budgetPreview(args: Record<string, unknown>): Promise<ToolResult>
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
+      ...rule,
       effect: `Sets the daily budget of ${c.name} from ${amountLabel(current, currency)} to ${amountLabel(proposed, currency)}.`,
     },
   }
+}
+
+/** AA-W2-8 — set-campaign-budget's Claude limits: every raise waits for a person until he sets one (0 %); a cut, 100 %. */
+const BUDGET_LIMITS = adKitLimits({ maxItems: 1 }, STEP_PCT_LIMITS)
+
+/** AA-W2-8 — a raise from no recorded budget has no size in percent: it never runs by rule. */
+function budgetRefusal(preview: unknown): string | null {
+  const p = (preview ?? {}) as { currentBudgetCents?: unknown; proposedBudgetCents?: unknown }
+  const from = Number(p.currentBudgetCents)
+  const to = Number(p.proposedBudgetCents)
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return 'the preview does not say the budget before and after; a person decides'
+  if (from <= 0 && to > from) return 'Nexus records no daily budget for the campaign, so the raise has no size to judge against the limits; a person decides'
+  return null
 }
 
 /** C2 — undo of a budget change: set the budget it replaced, through set-campaign-budget itself. */
@@ -353,23 +383,29 @@ const setCampaignBudget: AgentTool = {
   riskTier: 'high',
   readOnly: false,
   alwaysAsk: true,
+  // AA-W2-8 — it may run by the business's rule, only inside its limits and the ads strategy (D-W2-1 = A).
+  strategyBound: 'amazon-ads',
   requiresApprovalDefault: true,
   openWorld: true,
   reversibility: 'full',
-  maxClaudeTrust: 'ask',
+  maxClaudeTrust: 'auto',
+  limits: BUDGET_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? budgetRefusal(preview),
   undo: SET_CAMPAIGN_BUDGET_UNDO,
   description:
     'Set the daily budget of an Amazon Sponsored Products campaign, in the campaign\'s own currency (never converted). '
-    + 'Nothing changes until a person approves it in Nexus; a raise always waits for a person. The preview shows the '
-    + 'budget now and after, where it lands (live at Amazon or sandbox), and the rules that may change it again. Refused, '
-    + 'and not queued, outside the campaign\'s own budget bounds, on a budget pin, or when Amazon\'s write gate would '
-    + 'refuse it (live-write allowlist, the value cap, spend ceilings, the daily budget-movement bound). Undo puts the '
-    + 'old budget back.',
-  async handler(args) {
-    return budgetPreview(args)
+    + `Nothing changes until it is approved. ${BY_RULE_WORDS}: a raise or a cut no larger than its limits allow (a raise `
+    + 'waits for a person until the business sets how large one may be), within the market\'s daily budget increase by '
+    + 'rule, and keeping the month\'s spend forecast under its monthly cap. The preview shows the budget now and after, '
+    + 'where it lands (live at Amazon or sandbox), the ads strategy\'s limits that apply and where each comes from, and '
+    + 'the rules that may change it again. Refused, and not queued, when Amazon\'s write gate would refuse it (the value '
+    + 'cap of one write); the campaign\'s own budget bounds, spend ceilings and the daily budget-movement bound warn the '
+    + 'person who approves it, and a run by rule never goes past them. Undo puts the old budget back.',
+  async handler(args, ctx) {
+    return budgetPreview(args, ctx)
   },
   async execute(args, ctx) {
-    const fresh = await budgetPreview(args)
+    const fresh = await budgetPreview(args, ctx)
     const refusal = recheck(ctx, fresh, ['currentBudgetCents', 'reach'])
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { campaign: { id: string }; currentBudgetCents: number; proposedBudgetCents: number; currency: string; reach: StoredReach; effect: string }
@@ -425,9 +461,15 @@ function placementsOf(dynamicBidding: unknown): Placements {
   return out
 }
 
+/**
+ * AA-W2-8 — set-placement-multipliers' Claude limits: an item is one placement's adjustment (three at most); every raise
+ * waits for a person until he sets how many points one may be (0 by default): a raise raises every bid there.
+ */
+const PLACEMENT_LIMITS = adKitLimits({ maxItems: PLACEMENTS.length }, STEP_POINT_LIMITS)
+
 const pctLine = (v: Record<PlacementKey, number | null>) => PLACEMENTS.map((p) => `${p.label} ${v[p.key] ?? 0}%`).join(', ')
 
-async function placementPreview(args: Record<string, unknown>): Promise<ToolResult> {
+async function placementPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const campaignId = String(args.campaignId ?? '')
   const asked = PLACEMENTS.filter((p) => args[p.key] != null)
   if (!campaignId || !asked.length) return { ok: false, error: 'campaignId and at least one of topOfSearchPct, productPagesPct, restOfSearchPct are required' }
@@ -441,11 +483,16 @@ async function placementPreview(args: Record<string, unknown>): Promise<ToolResu
   if (PLACEMENTS.every((p) => (proposed[p.key] ?? 0) === (current[p.key] ?? 0))) {
     return { ok: false, error: `${c.name} already has these placement adjustments (${pctLine(current)}).` }
   }
-  const reach = await checkLiveReach({ campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'placementBidding', valueCents: null }] })
+  const intent = { campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'placementBidding', valueCents: null }] }
+  const reach = await checkLiveReach(intent)
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
   const bound = await alsoChangedBy(c.id)
   const raises = PLACEMENTS.filter((p) => (proposed[p.key] ?? 0) > (current[p.key] ?? 0)).map((p) => p.label)
+  // AA-W2-8 — each adjustment that moves is one item, in points: a raise raises every bid there.
+  const items: KitItem[] = PLACEMENTS.filter((p) => (proposed[p.key] ?? 0) !== (current[p.key] ?? 0))
+    .map((p): KitItem => ({ entity: { kind: 'campaign', id: c.id }, change: { field: 'placementPct', fromPct: current[p.key] ?? 0, toPct: proposed[p.key] ?? 0 } }))
+  const rule = await ruleFactsFor({ tool: 'set-placement-multipliers', limits: PLACEMENT_LIMITS, items, writes: [{ ...intent, label: `campaign "${c.name}"` }], approvalId: ctx?.approvalId })
   return {
     ok: true,
     preview: {
@@ -457,6 +504,7 @@ async function placementPreview(args: Record<string, unknown>): Promise<ToolResu
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
+      ...rule,
       effect: `Sets the placement adjustments of ${c.name} from ${pctLine(current)} to ${pctLine(proposed)}${raises.length ? `: bids rise on ${raises.join(' and ')}` : ''}.`,
     },
   }
@@ -495,22 +543,27 @@ const setPlacementMultipliers: AgentTool = {
   riskTier: 'high',
   readOnly: false,
   alwaysAsk: true,
+  // AA-W2-8 — it may run by the business's rule, only inside its limits and the ads strategy (D-W2-1 = A).
+  strategyBound: 'amazon-ads',
   requiresApprovalDefault: true,
   openWorld: true,
   reversibility: 'full',
-  maxClaudeTrust: 'ask',
+  maxClaudeTrust: 'auto',
+  limits: PLACEMENT_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits),
   undo: SET_PLACEMENTS_UNDO,
   description:
     'Set the placement bid adjustments of an Amazon Sponsored Products campaign: top of search, product pages, rest '
-    + 'of search, each 0–900 %. Nothing changes until a person approves it in Nexus; it always waits for a person (a '
-    + 'raise raises every bid there). The preview shows the adjustments now and after and where it lands (live at '
-    + 'Amazon or sandbox). Refused, and not queued, on a placement pin or when Amazon\'s write gate would refuse it. '
-    + 'Approved, it is sent at once. Undo puts the old adjustments back.',
-  async handler(args) {
-    return placementPreview(args)
+    + `of search, each 0–900 %. Nothing changes until it is approved. ${BY_RULE_WORDS}: a raise or a cut no larger, in `
+    + 'points, than its limits allow (a raise raises every bid there, so it waits for a person until the business sets '
+    + 'how large one may be). The preview shows the adjustments now and after, where it lands (live at Amazon or '
+    + 'sandbox) and the ads strategy\'s limits that apply. Refused, and not queued, when Amazon\'s write gate would '
+    + 'refuse it. Approved, it is sent at once. Undo puts the old adjustments back.',
+  async handler(args, ctx) {
+    return placementPreview(args, ctx)
   },
   async execute(args, ctx) {
-    const fresh = await placementPreview(args)
+    const fresh = await placementPreview(args, ctx)
     const refusal = recheck(ctx, fresh, ['current', 'reach'])
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { campaign: { id: string }; current: Placements; proposed: Placements; reach: StoredReach; effect: string }

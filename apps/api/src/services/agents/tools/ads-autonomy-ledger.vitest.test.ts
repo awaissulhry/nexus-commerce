@@ -165,7 +165,7 @@ describe('the facts of one change, end to end', () => {
     const s = f.scopes['IT|adGroup:g-c-it']
     expect(s.label).toBe('the ad group of target "race jacket" (IT)')
     expect(s.limits).toMatchObject({ maxBidCents: 90, maxChangePct: 20, protect: true, claudeLevel: 'ask' })
-    expect(s.sources.maxBidCents).toMatchObject({ level: 'product', label: 'TEST-AK-P2 (IT)', version: 2, product: 'TEST-AK-P2' })
+    expect(s.sources.maxBid).toMatchObject({ level: 'product', label: 'TEST-AK-P2 (IT)', version: 2, product: 'TEST-AK-P2' })
     expect(s.sources.claudeLevel).toMatchObject({ level: 'product', label: 'TEST-AK-P1 (IT)', version: 3, product: 'TEST-AK-P1' })
     expect(f.this).toMatchObject({ markets: ['IT'], items: 1, writes: 1, raises: 1, largestRaisePct: 11.11, highestNewBidCents: 50, entities: ['target:t-it'], rowsOutsideStrategy: 0 })
     expect(f.today).toEqual({ IT: { changes: 12, writes: 12, raises: 3, budgetIncreaseCents: 500 } })

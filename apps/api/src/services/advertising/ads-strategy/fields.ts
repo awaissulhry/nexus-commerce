@@ -236,7 +236,11 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
   { key: 'target', label: 'Target', columns: ['targetKind', 'targetPct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: TARGET_READERS },
   // The number Nexus's bid engines steer by: the first ACoS target down the chain (a TACoS target is skipped), after a
   // rule's or plan's own number and the campaign's own target, before the account default.
-  { key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true, readBy: TARGET_READERS },
+  // AA-W2-8 — and Claude's door: a campaign's own target, set by rule, stays at or below it (ads-target-acos.tools.ts).
+  {
+    key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true,
+    readBy: [...TARGET_READERS, `${READERS.claudeByRule}: a campaign's own target ACoS that Claude raises by rule stays at or below it, or a person decides`],
+  },
   // W1-6: the budget engine stops a market at its MARKET row's cap; W1-6b: a category's or product's cap floors every ad
   // group holding a product under it (low bids until the 1st, both).
   {
