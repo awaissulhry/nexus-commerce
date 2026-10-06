@@ -14,6 +14,7 @@ import { listActiveConnections } from '../services/connection-resolver.service.j
 
 const CRON_NAMES = [
   'sync-drift-detection',
+  'stock-push-heal',
   'fba-flip-guard',
   'reservation-sweep',
   'amazon-inventory-sync',

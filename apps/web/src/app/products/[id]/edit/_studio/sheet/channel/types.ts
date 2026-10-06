@@ -507,6 +507,20 @@ export interface SheetListing extends ListingPresenceFields {
    * (the listing was not found), FAILED or NO_ACCOUNT. The Listing ID cell reads MISSING as "Not confirmed". Never a time.
    */
   lastSyncStatus?: string | null
+  /**
+   * E5 — Etsy's last content read differs from Nexus (API `SheetListing.contentDrift`, ChannelDrift 'etsy-content'): when
+   * that read ran, how many fields differ (the true count), how many of them that read itself found (`lastRead`; the rest
+   * an earlier read found and the last one did not compare), and up to 8 by the sheet's words with the time of the read
+   * that found each. Null or absent = no difference recorded (never read, read clean, or the last read could not compare):
+   * the cell then shows no mark.
+   */
+  contentDrift?: {
+    source: string
+    checkedAt: string
+    differing: number
+    lastRead: number
+    fields: Array<{ field: string; label: string; foundAt: string | null }>
+  } | null
   /** The six SSOT fields that have a follow flag; attributes have none. */
   follows: Record<string, boolean>
 }

@@ -12,6 +12,8 @@
  *   refused    no listing on the coordinate yet ("create the listing first"); a language the market does not carry;
  *              no English meaning
  *   undo       a new set-listing-content that puts the listing's own text back (or follows again)
+ *   Etsy       (E5b) the Etsy sheet's own cells: a title pin on the Etsy listing; tags (keywords) and materials as the
+ *              sheet gives them; a listing setting (shipping profile) refused
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -54,7 +56,7 @@ const ALL = () => person(EVERYTHING)
 
 type Data = Record<string, any>
 const db = () => database.client
-const accounts = { amazon: '', ebay: '' }
+const accounts = { amazon: '', ebay: '', etsy: '' }
 
 async function ask(tool: string, args: Record<string, unknown>, who = ALL()) {
   const run = await inside(() => db().agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'running', userId: approverId, via: 'claude' } }))
@@ -118,7 +120,7 @@ beforeAll(async () => {
   const membership = await db().workspaceMembership.create({ data: { workspaceId: A, userId: user.id, status: 'active' } })
   await db().workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   await inside(async () => {
-    for (const [channel, code, language] of [['AMAZON', 'IT', 'it'], ['AMAZON', 'DE', 'de'], ['EBAY', 'DE', 'de'], ['EBAY', 'IT', 'it']] as const) {
+    for (const [channel, code, language] of [['AMAZON', 'IT', 'it'], ['AMAZON', 'DE', 'de'], ['EBAY', 'DE', 'de'], ['EBAY', 'IT', 'it'], ['ETSY', 'GLOBAL', 'en']] as const) {
       await db().marketplace.create({ data: { channel, code, name: `${channel} ${code}`, currency: 'EUR', region: 'EU', language, languages: [language], marketplaceId: `TEST_${channel}_${code}` } as never })
     }
     // Amazon's cached rules for the jacket on DE: text, bullets, and a fit read-only on a listing Amazon already has.
@@ -141,6 +143,8 @@ beforeAll(async () => {
     await db().familyAttribute.create({ data: { familyId: family.id, attributeId: lining.id, channels: [] } })
     accounts.amazon = (await db().channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 't7-amazon', isActive: true, isPrimary: true, externalAccountId: 'SELLER-TEST-T7' } as never })).id
     accounts.ebay = (await db().channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 't7-ebay', isActive: true, isPrimary: true, externalAccountId: 'EBAY-TEST-T7' } as never })).id
+    // E5b — an Etsy shop (fake id; the repo is public).
+    accounts.etsy = (await db().channelConnection.create({ data: { channelType: 'ETSY', accountLabel: 't7-etsy', isActive: true, isPrimary: true, externalAccountId: '90000001' } as never })).id
   })
 }, 120_000)
 
@@ -273,5 +277,56 @@ describe('T7 — set-listing-content', { timeout: 30_000 }, () => {
     expect(request).toMatchObject({ toolName: 'set-listing-content', args: { product: parent.id, language: 'de', follow: ['description'], coordinate: { channel: 'AMAZON', market: 'DE', accountId: accounts.amazon } } })
     expect(await approveAndRun(undo.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
     expect(await translationOf(amazonDe.id)).toMatchObject({ name: 'Amazon-Titel', description: null, follows: ['description'] })
+  })
+
+  describe('E5b — an Etsy listing, through the Etsy sheet', () => {
+    const ETSY = { channel: 'ETSY', market: 'GLOBAL' }
+    async function seedEtsy(sku: string) {
+      return inside(async () => {
+        const product = await db().product.create({ data: { sku, name: `${sku} jacket`, basePrice: '100.00', productType: 'TEST_JACKET', brand: 'Test Brand',
+          description: 'A leather riding jacket.', status: 'ACTIVE' } })
+        const listing = await db().channelListing.create({ data: { productId: product.id, channel: 'ETSY', marketplace: 'GLOBAL', region: 'GLOBAL', channelMarket: 'ETSY_GLOBAL',
+          channelConnectionId: accounts.etsy, aliasKey: '', listingStatus: 'ACTIVE', isPublished: true, externalListingId: '9000000001', syncPaused: false } as never })
+        return { product, listing }
+      })
+    }
+
+    it('a title pin is a preview on the Etsy listing; approved, only that listing keeps it', async () => {
+      const { product, listing } = await seedEtsy('FAKE-SKU-1')
+      const { approvalId, preview: p } = await queued({ product: product.sku, coordinate: { channel: 'etsy', market: 'GLOBAL' }, language: 'en', pin: { title: 'Leather jacket for riders' } })
+      expect(p).toMatchObject({ action: 'set-listing-content', listing: 'Etsy · GLOBAL · FAKE-SKU-1', language: 'en',
+        changes: { title: { kind: 'pin', to: 'Leather jacket for riders' } } })
+      expect(await approveAndRun(approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      expect(await inside(() => db().channelListingTranslation.findFirst({ where: { channelListingId: listing.id, language: 'en' } }))).toMatchObject({ name: 'Leather jacket for riders' })
+      expect((await productOf(product.id)).name).toBe('FAKE-SKU-1 jacket')
+      expect(await queueRows([product.id])).toBe(0)
+      // product-content reads the same Etsy sheet: the listing's own title, as a pin.
+      const read = (await inside(() => callTool(ALL(), 'product-content', { product: product.id, coordinate: ETSY, language: 'en', fields: ['title'] }))).visible as { ok: boolean; error?: string; data?: Data }
+      expect(read.ok, read.error).toBe(true)
+      expect(JSON.stringify(read.data)).toContain('Leather jacket for riders')
+      expect(JSON.stringify(read.data)).toContain('"layer":"pin"')
+    })
+
+    it('tags are the listing\'s own keywords (a pin), materials its own attribute; a listing setting is refused', async () => {
+      const { product, listing } = await seedEtsy('FAKE-SKU-2')
+      // The Etsy sheet's Tags column is the keywords field: a pin on this listing, in its language.
+      const tags = await queued({ product: product.id, coordinate: ETSY, language: 'en', pin: { keywords: ['leather jacket', 'riding'] } })
+      expect(tags.preview).toMatchObject({ listing: 'Etsy · GLOBAL · FAKE-SKU-2', changes: { keywords: { kind: 'pin', from: [], to: ['leather jacket', 'riding'] } },
+        reach: { otherListingsChange: false } })
+      expect(await approveAndRun(tags.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      expect(await inside(() => db().channelListingTranslation.findFirst({ where: { channelListingId: listing.id, language: 'en' } })))
+        .toMatchObject({ keywords: ['leather jacket', 'riding'], source: 'manual' })
+      expect((await productOf(product.id)).keywords).toEqual([])
+      // Materials: the listing's own Etsy attribute, stored on the listing, never on the product.
+      const material = await queued({ product: product.id, coordinate: ETSY, language: 'en', attributes: { material: ['leather'] } })
+      expect(material.preview.changes).toEqual({ material: { kind: 'attribute', from: [], to: ['leather'] } })
+      expect(await approveAndRun(material.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      expect((await listingOf(listing.id)).platformAttributes).toMatchObject({ materials: ['leather'] })
+      expect((await productOf(product.id)).categoryAttributes ?? {}).not.toHaveProperty('material')
+      expect(await queueRows([product.id])).toBe(0)
+      // The shipping profile is a listing setting, not text or an attribute.
+      expect(await preview({ product: product.id, coordinate: ETSY, language: 'en', attributes: { shipping_profile_id: 1 } }))
+        .toMatchObject({ ok: false, error: expect.stringMatching(/shipping_profile_id: a listing setting/) })
+    })
   })
 })

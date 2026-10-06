@@ -25,7 +25,7 @@ import {
   type ActionReach, type CapabilityFacts, type ListingAction, type ListingActionConfirm, type ListingActionDestination,
   type ListingActionPlanRow, type ListingActionPreview, type ListingActionRowResult, type ListingActionRunResult,
   type ListingActionRunStatus, type ListingActionStateRead, type ListingActionStateRow, type ListingDeletion, type ListingModel,
-  type SellingState, type SellingStateRead,
+  type SellingState, type SellingStateRead, ETSY_DRAFT_NO_LIVE, ETSY_DRAFT_NO_PAUSE,
 } from '@nexus/shared/listing-actions'
 import { isOldClosePause } from '@nexus/shared/push-lock'
 import prisma from '../../db.js'
@@ -44,7 +44,7 @@ import { amazonListingActions } from './listing-action-adapters/amazon.js'
 import { ebayTradingListingActions } from './listing-action-adapters/ebay-trading.js'
 import { ebayInventoryListingActions } from './listing-action-adapters/ebay-inventory.js'
 import { shopifyListingActions } from './listing-action-adapters/shopify.js'
-import { etsyListingActions } from './listing-action-adapters/etsy.js'
+import { ETSY_NOT_PAUSED, etsyDraftRow, etsyListingActions, etsyListingPaused, etsyVariationLevel } from './listing-action-adapters/etsy.js'
 import { amazonMarket, readFbaUnits, readListingDeletions, usesPanEu } from './listing-deletions.js'
 import { CHANNEL_SKU_LISTING_SELECT } from './channel-sku.js'
 import { listingSendSku } from './listing-send-sku.js'
@@ -343,7 +343,8 @@ const isFba = (row: ActionListing) => isFbaCoordinate({ fulfillmentMethod: row.f
 const statesOf = (family: FamilyRead, _destination: ListingActionDestination) => family.states
 
 const capabilityFacts = (row: ActionListing | undefined, family: FamilyRead, extra: CapabilityFacts = {}): CapabilityFacts =>
-  ({ isFba: row ? isFba(row) : false, shopifyLinked: family.facts.shopifyLinked, deleted: row ? family.states.get(row.productId)?.deleted ?? null : null, ...extra })
+  ({ isFba: row ? isFba(row) : false, shopifyLinked: family.facts.shopifyLinked, deleted: row ? family.states.get(row.productId)?.deleted ?? null : null,
+    etsyDraft: family.model === 'etsy' && !!row && etsyDraftRow(row), ...extra })
 
 export async function readListingActionState(productId: string, input: DestinationInput): Promise<ListingActionStateRead> {
   const { familyId, destination } = await destinationOf(productId, input)
@@ -373,6 +374,12 @@ interface Plan {
   rows: ListingActionPlanRow[]
   /** listing rows to send, by product id */
   send: Map<string, ActionListing>
+  /** E2 (D6, review m1) — Etsy Pause/Resume: hide/show variations, or the listing's state. Stored with the preview. */
+  etsyLevel?: 'variation' | 'listing'
+  /** E2 (D6, review m8) — a whole-listing Etsy Resume of a listing that is not paused: nothing to resume. */
+  etsyNothingToResume?: boolean
+  /** E3 — the Etsy listing is a draft on Etsy: Pause and Resume are refused on every row (`etsyDraft` capability fact). */
+  etsyDraft?: boolean
 }
 
 /** A Resume of an Ended row (Claude's reopen-listing names its own door instead: relist-listing). */
@@ -388,11 +395,30 @@ const SKIP_WORDS: Record<ListingAction, Partial<Record<SellingState, string>>> =
   delete: {},
 }
 
-function planFor(action: ListingAction, family: FamilyRead, destination: ListingActionDestination, requested: string[] | null, extra: CapabilityFacts = {}): Plan {
+function planFor(action: ListingAction, family: FamilyRead, destination: ListingActionDestination, requested: string[] | null, extra: CapabilityFacts = {}, wholeListing = false): Plan {
   const label = channelName(destination.channel)
   const states = statesOf(family, destination)
   const base = listingActionCapability(family.model, action, capabilityFacts(undefined, family, extra), label)
-  const reach = base.reach
+  // E2 (D6) — Etsy: Pause/Resume of variation rows only (no main row in the request) hides/shows those variations of
+  // the live listing (reach 'row'). A main row in the request keeps the whole-listing meaning (the sheet's Publish
+  // passes only the changed rows, pim/publish-plan.ts), and so does a product with no variations: its one row IS the
+  // listing. `wholeListing` keeps the listing meaning for a caller that names listings, not variations (Claude's
+  // close-listing / reopen-listing).
+  const etsyRow = family.model === 'etsy' && (action === 'pause' || action === 'resume') && !wholeListing && family.products.some(p => p.isParent)
+    && !!requested?.length && requested.every(id => family.products.find(p => p.id === id)?.isParent === false)
+  const reach: ActionReach = etsyRow ? 'row' : base.reach
+  // Review R2-n2 — "is the listing paused?" is asked of the rows of the TARGET Etsy listing only (as the adapter groups
+  // them), never of the family's rows on another Etsy listing.
+  const etsyListingOf = (row: ActionListing | undefined) => row?.externalListingId?.trim() ?? ''
+  const etsyRowsOf = (rows: Array<ActionListing | undefined>) => {
+    const ids = new Set(rows.map(etsyListingOf))
+    return [...family.listings.values()].filter(row => ids.has(etsyListingOf(row)))
+  }
+  // Review m8 — Claude's reopen-listing names listings: on a listing that is not paused there is nothing to resume.
+  // E3 — a row whose listing is a draft on Etsy is never "nothing to resume": the capability table refuses it in its own
+  // words (`etsyDraft`), so the draft refusal wins over this skip.
+  const etsyResumeWhole = family.model === 'etsy' && action === 'resume' && wholeListing
+  let etsyNothingToResume = false
   // Which products the change reaches: the chosen rows; a main product means its variations; an item- or
   // product-level change reaches the whole family (the web shows that in the consequence and the rows).
   const chosen = new Set(requested ?? family.products.map(p => p.id))
@@ -435,6 +461,7 @@ function planFor(action: ListingAction, family: FamilyRead, destination: Listing
       send.set(product.id, listing)
       continue
     }
+    if (etsyResumeWhole && !etsyDraftRow(listing) && !etsyListingPaused(etsyRowsOf([listing]))) { etsyNothingToResume = true; row('skip', ETSY_NOT_PAUSED); continue }
     if (!ACTIONS_FROM_STATE[state].includes(action)) { row('skip', SKIP_WORDS[action][state] ?? `It is ${SELLING_STATE_LABEL[state].toLowerCase()}.`); continue }
     const capability = listingActionCapability(family.model, action, facts, label)
     if (!capability.offered) { row('refused', capability.reason ?? 'Not available here.'); continue }
@@ -442,7 +469,15 @@ function planFor(action: ListingAction, family: FamilyRead, destination: Listing
     row('send', capability.warning ? `${ACTION_SENTENCE[action]} ${capability.warning}` : ACTION_SENTENCE[action])
     send.set(product.id, listing)
   }
-  return { reach, checkedAtSend: base.checkedAtSend, rows, send }
+  // Review m1 — decided here, at the preview, over the target listing's rows, and stored with it (`changes.etsyLevel`);
+  // the run refuses a mismatch. The target: the rows sent, else the rows chosen.
+  const etsyTargets = send.size ? [...send.values()] : [...chosen].map(id => family.listings.get(id))
+  const etsyLevel = family.model === 'etsy' && (action === 'pause' || action === 'resume')
+    ? (etsyVariationLevel(action, reach, etsyRowsOf(etsyTargets), wholeListing) ? 'variation' as const : 'listing' as const) : undefined
+  // E3 — the target Etsy listing is a draft on Etsy (judged over its own rows, R2-n2): the consequence says why nothing goes.
+  const etsyDraft = family.model === 'etsy' && (action === 'pause' || action === 'resume') && etsyRowsOf(etsyTargets).some(etsyDraftRow)
+  return { reach, checkedAtSend: base.checkedAtSend, rows, send, ...(etsyLevel ? { etsyLevel } : {}), ...(etsyNothingToResume ? { etsyNothingToResume } : {}),
+    ...(etsyDraft ? { etsyDraft } : {}) }
 }
 
 const ACTION_SENTENCE: Record<ListingAction, string> = {
@@ -455,7 +490,7 @@ const RELIST_HOW = 'To list it again, set Status to Active and Publish.'
 
 const GONE = 'This cannot be undone.'
 
-function consequenceOf(action: ListingAction, family: FamilyRead, destination: ListingActionDestination, sendCount: number, sent: ActionListing[]): string {
+function consequenceOf(action: ListingAction, family: FamilyRead, destination: ListingActionDestination, sendCount: number, sent: ActionListing[], plan: Pick<Plan, 'etsyLevel' | 'etsyNothingToResume' | 'etsyDraft'> = {}): string {
   const where = destinationLabel(destination)
   const skus = `${sendCount} SKU${sendCount === 1 ? '' : 's'}`
   const variations = family.products.filter(p => !p.isParent).length
@@ -485,6 +520,15 @@ function consequenceOf(action: ListingAction, family: FamilyRead, destination: L
       return `Shopify makes ${family.familySku} active again in every market of the store, and Nexus sends the current stock.`
     }
     case 'etsy':
+      // E3 — a draft first: its refusal wins over "nothing to resume".
+      if (plan.etsyDraft) return action === 'resume' ? ETSY_DRAFT_NO_LIVE : ETSY_DRAFT_NO_PAUSE
+      if (plan.etsyNothingToResume) return ETSY_NOT_PAUSED
+      // E2 (D6) — one variation hidden or shown on the live listing (a Resume with nothing paused at listing level too).
+      if ((action === 'pause' || action === 'resume') && plan.etsyLevel === 'variation') {
+        return action === 'pause'
+          ? `Etsy hides ${skus} on the listing: buyers cannot buy them; the other variations keep selling. Nexus holds their stock pushes until you show them again.`
+          : `Etsy shows ${skus} again; Nexus then sends their current stock.`
+      }
       if (action === 'pause') return `Etsy sets ${family.familySku} inactive: buyers cannot find or buy it; the listing stays. Nexus holds every stock push until you resume.`
       if (action === 'resume') return `Etsy sets ${family.familySku} active again. Etsy may set its quantity to 1 and charge a renewal fee; Nexus then sends the current stock.`
       return listingActionGate(destination.channel) ?? 'Not available here.'
@@ -513,6 +557,8 @@ export interface ListingActionPlan extends Omit<ListingActionPreview, 'previewId
   familyId: string
   /** The rows the caller named (null = the whole family). */
   requested: string[] | null
+  /** E2 (D6, review m1) — Etsy Pause/Resume: what this plan does (stored with a preview; not shown in it). */
+  etsyLevel?: 'variation' | 'listing'
 }
 
 export async function planListingAction(productId: string, actionInput: unknown, body: unknown): Promise<ListingActionPlan> {
@@ -531,13 +577,15 @@ export async function planListingAction(productId: string, actionInput: unknown,
   // An eBay Inventory pause depends on the ACCOUNT's out-of-stock preference: read it now (bounded; unknown refuses).
   const extra: CapabilityFacts = family.model === 'ebay-inventory' && action === 'pause'
     ? { ebayOutOfStockPreference: await readEbayOutOfStockPreference(destination.accountId, destination.marketplace) } : {}
-  const plan = planFor(action, family, destination, requested, extra)
+  // E2 (D6) — `wholeListing: true`: the named rows stand for their channel listing (Etsy: Pause/Resume never narrows to
+  // one variation).
+  const plan = planFor(action, family, destination, requested, extra, input.wholeListing === true)
   if (action === 'delete' && family.model === 'amazon') await warnAmazonDelete(plan, family, destination)
   const sendCount = plan.send.size
   return {
     familyId, requested, action, destination, model: family.model, reach: plan.reach,
-    consequence: consequenceOf(action, family, destination, sendCount, [...plan.send.values()]), checkedAtSend: plan.checkedAtSend,
-    confirm: confirmOf(action, family), rows: plan.rows, sendCount,
+    consequence: consequenceOf(action, family, destination, sendCount, [...plan.send.values()], plan), checkedAtSend: plan.checkedAtSend,
+    confirm: confirmOf(action, family), rows: plan.rows, sendCount, ...(plan.etsyLevel ? { etsyLevel: plan.etsyLevel } : {}),
   }
 }
 
@@ -565,7 +613,9 @@ async function warnAmazonDelete(plan: Plan, family: FamilyRead, destination: Lis
 
 /** The plan, saved for 15 minutes as the caller's preview. `reason` (optional, ≤ 300 characters) travels to the audit. */
 export async function previewListingAction(productId: string, actionInput: unknown, body: unknown, userId: string | null): Promise<ListingActionPreview> {
-  const { familyId, requested, ...plan } = await planListingAction(productId, actionInput, body)
+  const { familyId, requested, etsyLevel, ...plan } = await planListingAction(productId, actionInput, body)
+  // E2 (D6) — kept with the preview, so the run plans the same reach (`planFor`).
+  const wholeListing = object(body).wholeListing === true
   const rawReason = object(body).reason
   const reason = typeof rawReason === 'string' && rawReason.trim() ? rawReason.trim().slice(0, 300) : null
   const previewId = randomUUID()
@@ -575,7 +625,7 @@ export async function previewListingAction(productId: string, actionInput: unkno
     id: previewId, userId, status: 'PREVIEW', productCount: plan.rows.length, changeCount: plan.sendCount, expiresAt,
     kind: LISTING_ACTION_KIND, productId: familyId, channel: plan.destination.channel, marketplace: plan.destination.marketplace,
     channelConnectionId: plan.destination.accountId, aliasKey: plan.destination.aliasKey,
-    changes: { kind: LISTING_ACTION_KIND, action: plan.action, requested, preview, ...(reason ? { reason } : {}) } as never,
+    changes: { kind: LISTING_ACTION_KIND, action: plan.action, requested, ...(wholeListing ? { wholeListing } : {}), ...(etsyLevel ? { etsyLevel } : {}), preview, ...(reason ? { reason } : {}) } as never,
   } })
   return preview
 }
@@ -618,7 +668,7 @@ export async function executeListingAction(previewId: string, opts: { actorUserI
 
   const destination = preview.destination
   const family = await readFamily(String(row.productId), destination)
-  const plan = planFor(action, family, destination, (changes.requested as string[] | null) ?? null)
+  const plan = planFor(action, family, destination, (changes.requested as string[] | null) ?? null, {}, changes.wholeListing === true)
   const reviewed = new Set(preview.rows.filter(r => r.plan === 'send').map(r => r.productId))
   const targets: ActionListing[] = []
   const results: ListingActionRowResult[] = []
@@ -631,7 +681,10 @@ export async function executeListingAction(previewId: string, opts: { actorUserI
   const reason = typeof changes.reason === 'string' ? changes.reason : null
   const ctx: ActionContext = {
     previewId, actor, destination, familyId: family.familyId, familySku: family.familySku,
-    family: [...family.listings.values()],
+    family: [...family.listings.values()], reach: plan.reach,
+    // Review m1/m8 — the preview's own decision and the caller's meaning travel to the adapter.
+    ...(changes.etsyLevel === 'variation' || changes.etsyLevel === 'listing' ? { etsyLevel: changes.etsyLevel } : {}),
+    ...(changes.wholeListing === true ? { wholeListing: true } : {}),
   }
   let adapterRows: AdapterRowResult[] = []
   if (targets.length) {

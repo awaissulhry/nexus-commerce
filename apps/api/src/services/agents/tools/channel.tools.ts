@@ -34,6 +34,7 @@ import {
 import type { DriftEntry, SourceClock } from '../../channel-drift.service.js'
 import { AMAZON_CONTENT_SOURCE } from '../../channel-drift/amazon-content-compare.js'
 import { EBAY_CONTENT_SOURCE } from '../../channel-drift/ebay-content-compare.js'
+import { ETSY_CONTENT_SOURCE } from '../../channel-drift/etsy-content-compare.js'
 import { resolveIntendedQuantity, type IntendedResolution } from '../../sync-control-core.js'
 import { loadChannelPolicies, policyFor, type PolicyMap } from '../../sync-control-policy.service.js'
 import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../../stock-pool/sync-ledgers.js'
@@ -624,6 +625,7 @@ export const READ_BACKS: Readonly<Record<string, { channel: string; covers: read
   [AMAZON_CONTENT_SOURCE]: { channel: 'AMAZON', covers: ['content'], label: 'Amazon listing content' },
   'ebay-trading-getitem': { channel: 'EBAY', covers: ['quantity'], label: 'eBay GetItem' },
   [EBAY_CONTENT_SOURCE]: { channel: 'EBAY', covers: ['content'], label: 'eBay item content' },
+  [ETSY_CONTENT_SOURCE]: { channel: 'ETSY', covers: ['content'], label: 'Etsy listing content (read every 4 hours)' },
   // Its quantity arm skips a pinned listing too, not only the modes that send no quantity (shopify/quantity-readback.service.ts).
   'shopify-inventory-level': { channel: 'SHOPIFY', covers: ['quantity', 'price'], label: 'Shopify inventory level', skipsQuantity: ['pinned'] },
 }
@@ -669,6 +671,8 @@ const aspectOf = (source: string, field: string): Aspect | null => {
 
 const SYNC_SELECT = {
   ...QUANTITY_SELECT,
+  // E5a NIT-13 — `parentId` tells an Etsy variation row (content is read on its main row) from the main row.
+  product: { select: { sku: true, fulfillmentMethod: true, parentId: true } },
   externalListingId: true,
   syncStatus: true,
   lastSyncStatus: true,
@@ -722,6 +726,14 @@ function syncView(row: SyncRow, ledger: ProductLedger | undefined, policies: Pol
     const covering = [...sources].filter((s) => READ_BACKS[s]?.covers.includes(aspect))
     const skipping = aspect === 'quantity' ? covering.filter((s) => READ_BACKS[s]?.skipsQuantity?.includes(mode)) : []
     const looked = covering.filter((s) => !skipping.includes(s))
+    // E5a NIT-13 — one Etsy listing carries the whole family: its content is read and recorded on the main row, so a
+    // variation row never gets a record of its own ("not checked yet" would promise a read that never comes). A record
+    // the content read did write on a variation row (no main row in Nexus) keeps its own reason, below. The sentence says
+    // where the check happens, never that it happened: the main row's own readBack and notChecked say that (R2-1).
+    if (aspect === 'content' && row.channel === 'ETSY' && row.product?.parentId && looked.length === 0) {
+      notChecked.content = 'not checked on this row: one Etsy listing carries the whole family, so its content is read and compared on its main row (see that row)'
+      continue
+    }
     if (looked.length === 0) {
       notChecked[aspect] = skipping.length
         ? `not checked: ${READ_BACKS[skipping[0]].label} skips a ${mode} quantity`
@@ -786,8 +798,9 @@ const outOfSyncListings: AgentTool = {
     + 'quantity, price or content than Nexus), push-failed (the last push to the channel failed), quantity-behind '
     + '(the listing still holds a quantity other than the one Nexus would send now). What is read back: Amazon '
     + 'quantity (never FBA stock) and price from the merchant listings report, Amazon content; eBay quantity and '
-    + 'content; Shopify quantity and price. NOT read back, so never reported as differing: eBay price per listing, '
-    + 'Shopify content, anything on Etsy or WooCommerce. Each item lists readBack (what looked, when) and notChecked '
+    + 'content; Etsy content (every 4 hours, on the listing\'s main row); Shopify quantity and price. NOT read back, so '
+    + 'never reported as differing: eBay price per listing, Shopify content, Etsy price and quantity, WooCommerce. Each '
+    + 'item lists readBack (what looked, when) and notChecked '
     + '(what nobody compared, and why): a listing absent from this list is not proven in sync. An empty page carries a '
     + 'summary: how many listings were checked and how many of them no read-back has ever looked at. Filter by channel, '
     + 'market, sku, productId or reason. Returns { items, nextCursor }; a call checks at most '

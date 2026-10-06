@@ -14,7 +14,7 @@ import { prisma } from '@nexus/database'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { variationSyncProcessor } from '../services/variation-sync-processor.service.js'
-import OutboundSyncService, { computeFailureDisposition, completedSyncQueueData, startAfterAnswer } from '../services/outbound-sync.service.js'
+import OutboundSyncService, { computeFailureDisposition, completedSyncQueueData, listingOutcomeOfCompletion, startAfterAnswer } from '../services/outbound-sync.service.js'
 import { dispatchChannelDelist, applyDelistResultToQueue } from '../services/channel-delist.service.js'
 import { productEventService } from '../services/product-event.service.js'
 import { recordListingSyncOutcome } from '../services/listing-sync-outcome.js'
@@ -307,6 +307,12 @@ async function processOutboundSyncJobInner(job: Job) {
     // ─────────────────────────────────────────────────────────────────────
     // UPDATE QUEUE RECORD
     // ─────────────────────────────────────────────────────────────────────
+    // E2 (D5, 2026-10-05) — a row this job did not get (another run claimed it first, or already moved it on: the
+    // cron backstop, or the Etsy lane sending it in one write with its listing's other rows) belongs to that run,
+    // which records its answer. Writing PENDING/FAILED here would overwrite the winner's row, so nothing is written.
+    if (!syncResult.success && (syncResult.error === 'claim-lost' || syncResult.error === 'not-pending')) {
+      return { status: 'SKIPPED', queueId, reason: syncResult.message }
+    }
     if (syncResult.success) {
       const completion = completedSyncQueueData(syncResult)
       await prisma.outboundSyncQueue.update({
@@ -321,7 +327,9 @@ async function processOutboundSyncJobInner(job: Job) {
         },
       })
       // 2026-10-01 — the listing's own status follows the send (it stayed "Pending" after a successful send).
-      if (completion.syncStatus === 'SUCCESS') await recordListingSyncOutcome(prisma, { channelListingId: queueRecord.channelListingId, productId: queueRecord.productId, outcome: 'sent' })
+      // 2026-10-06 — and a skip that ends its wait (an eBay Trading item's quantity its shared stock sends, …).
+      const settled = listingOutcomeOfCompletion(completion)
+      if (settled) await recordListingSyncOutcome(prisma, { channelListingId: queueRecord.channelListingId, productId: queueRecord.productId, ...settled })
       // CX (review 2026-09-26) — report-only follow-up (the eBay price read-back) only once the row is written.
       startAfterAnswer(syncResult)
 

@@ -21,8 +21,11 @@ import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
 import { enabledRank } from './_grid/enabledRank'
+import { acosRank } from './_grid/format'
 import { AdsDataGrid, type GridColumn, type GridPrefs } from './_grid/AdsDataGrid'
 import { AdManagerGraph } from './AdManagerGraph'
+import { reportFreshnessText, type IntradayInfo, type MarketFreshness } from './reportFreshness'
+import { lastCompleteDays } from '../_shell/DateRangePicker'
 import { InfoTip } from './InfoTip'
 
 import { ExportScopeModal } from '../bulk/ExportScopeModal'
@@ -583,10 +586,20 @@ const RANGE_FIELDS: Array<{ key: string; label: string; unit: '%' | '€' | '' }
   { key: 'cvr', label: 'CVR', unit: '%' }, { key: 'impressions', label: 'Impressions', unit: '' },
   { key: 'dailyBudget', label: 'Daily Budget', unit: '' },
 ]
+/**
+ * The number a metric column sorts and filters by. NaN means "this row has no value" — the filter
+ * never matches it and the sort sinks it in both directions (see `filtered` / `sorted`).
+ */
 function metricVal(c: Camp, key: string): number {
   const spend = num(c.spend), sales = num(c.sales), clicks = num(c.clicks), impr = num(c.impressions), orders = num(c.ppcOrders)
   switch (key) {
-    case 'acos': { const a = c.acos != null ? Number(c.acos) : (sales ? spend / sales : 0); return a <= 1 ? a * 100 : a }
+    /**
+     * 🔴 AM-11 — the display above stopped guessing in ADM-H P7; the filter and sort had kept the
+     * guess (`a <= 1 ? a * 100 : a`, so 150 % filtered as 1.5 %) and mapped "spend, no sales" to 0 %,
+     * the best value: "ACoS max 30 %" kept every campaign that spent and sold nothing. `c.acos` is a
+     * FRACTION (`/advertising/campaigns`); the one shared rule lives in `acosRank`.
+     */
+    case 'acos': return acosRank(c.acos, spend, sales) ?? Number.NaN
     case 'roas': return c.roas != null ? Number(c.roas) : (spend ? sales / spend : 0)
     case 'spend': return spend; case 'sales': return sales; case 'clicks': return clicks; case 'ppcOrders': return orders
     case 'cpc': return clicks ? spend / clicks : 0; case 'ctr': return impr ? (clicks / impr) * 100 : 0
@@ -620,6 +633,7 @@ function metricVal(c: Camp, key: string): number {
   }
   return 0
 }
+const blankIfNaN = (v: number): number | null => (Number.isNaN(v) ? null : v)
 type Range = { min: string; max: string }
 
 // ── filter metadata (Helium 10 Ad Manager match) ────────────────────────────
@@ -1111,8 +1125,10 @@ export function CampaignsGrid() {
   const [colWidths, setColWidths] = useState<Record<string, number>>({})
   // CBN.2d — header controls
   const [market, setMarket] = useState('all')
-  const [rangePreset, setRangePreset] = useState('last7')
-  const [dateRange, setDateRange] = useState(() => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 6); return { start: s, end: e } })
+  // AM-16 — the 7 complete days ending yesterday, as the header shows. AM-10 — the graph reads this range too.
+  const [dateRange, setDateRange] = useState(() => lastCompleteDays(7))
+  // AM-14 — when the performance numbers arrived (per market), and how far today's hourly figures reach (AM-5).
+  const [freshness, setFreshness] = useState<{ markets: MarketFreshness[]; intraday: IntradayInfo | null }>({ markets: [], intraday: null })
   const [syncing, setSyncing] = useState(false)
   const [showGraph, setShowGraph] = useState(false)
   const [page, setPage] = useState(1)
@@ -1190,6 +1206,7 @@ export function CampaignsGrid() {
       // state, toasted "Amazon field pending", and threw the value away on refresh. The cells
       // read `minBidCents`/`maxBidCents` straight off the payload now, so nothing is derived here.
       setRows((d.items ?? []) as Camp[])
+      setFreshness({ markets: Array.isArray(d.freshness) ? d.freshness : [], intraday: d.intraday ?? null })
     } catch { /* ignore */ } finally { setLoading(false); setSyncing(false) }
   }, [])
 
@@ -1580,6 +1597,8 @@ export function CampaignsGrid() {
       for (const f of RANGE_FIELDS) {
         const r = ranges[f.key]; if (!r || (!r.min && !r.max)) continue
         const v = metricVal(c, f.key)
+        // Same rule as the shared grid's filterRows: a row with no value never matches a set range.
+        if (Number.isNaN(v)) return false
         if (r.min && v < Number(r.min)) return false
         if (r.max && v > Number(r.max)) return false
       }
@@ -1826,7 +1845,7 @@ export function CampaignsGrid() {
     // Every header sorted before (metrics numerically, `status` as text, anything else through
     // metricVal's 0 — a stable no-op), so every column stays sortable. The grid's comparator is
     // inert in chromeless mode — `sorted` below IS the order — but the value is the one it sorts by.
-    sortValue: (c) => (pc.key === 'status' ? c.status : metricVal(c, pc.key)),
+    sortValue: (c) => (pc.key === 'status' ? c.status : blankIfNaN(metricVal(c, pc.key))),
     render: (c) => (pc.metric ? renderCol(c, pc.key) : settingsCellRef.current(c, pc.key)),
   })), [physical])
   // Controlled preferences: the visible PHYSICAL keys in order (the cluster already expanded),
@@ -1864,7 +1883,10 @@ export function CampaignsGrid() {
     return [...filtered].sort((a, b) => {
       if (sort.key === 'name') return a.name.toLowerCase() < b.name.toLowerCase() ? -dir : a.name.toLowerCase() > b.name.toLowerCase() ? dir : 0
       if (sort.key === 'status') return a.status < b.status ? -dir : a.status > b.status ? dir : 0
-      return (metricVal(a, sort.key) - metricVal(b, sort.key)) * dir
+      // KT.3 — a row with no value sinks to the bottom in BOTH directions, decided before `dir`.
+      const va = metricVal(a, sort.key), vb = metricVal(b, sort.key)
+      if (Number.isNaN(va) || Number.isNaN(vb)) return Number.isNaN(va) ? (Number.isNaN(vb) ? 0 : 1) : -1
+      return (va - vb) * dir
     })
   }, [filtered, sort])
   // The header is the grid's: a click arrives through `onSortChange` (asc → desc → clear, the
@@ -1880,11 +1902,8 @@ export function CampaignsGrid() {
   const paged = sorted.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage)
   const viewStart = filtered.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1
   const viewEnd = Math.min(safePage * rowsPerPage, filtered.length)
-  const latestReport = (() => {
-    let max = 0
-    for (const r of rows) { const t = r.lastSyncedAt ? Date.parse(r.lastSyncedAt) : 0; if (t > max) max = t }
-    return max ? new Date(max).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'
-  })()
+  // AM-14 — the report's own day and arrival, never `lastSyncedAt` (a settings sync or write push stamps that).
+  const latestReport = reportFreshnessText(freshness.markets, freshness.intraday)
 
   // AX-ZD.5 — say out loud that these numbers are not finished yet.
   //
@@ -1906,11 +1925,8 @@ export function CampaignsGrid() {
   // it trained the eye to skip the header. The sentence now rides the "Latest
   // Report" footer, which already talks about data freshness, and only appends
   // itself when the selected window actually contains unsettled days.
-  // Keyed on `dateRange`, NOT `rangePreset`. The header's picker writes
-  // dateRange and that is what drives `load()`; rangePreset is legacy and now
-  // only feeds AdManagerGraph. Reading the preset here would have described a
-  // different window than the one the numbers below actually cover — silently,
-  // and only once an operator touched the date picker.
+  // Keyed on `dateRange`: the header's picker writes it, it drives `load()`, and
+  // (AM-10) the graph reads it too — the old `rangePreset` path is gone.
   //
   // The dates are pinned to UTC midnight of their LOCAL calendar day first.
   // dateRange is built with setHours(0,0,0,0) — local midnight — while
@@ -1935,7 +1951,7 @@ export function CampaignsGrid() {
       <AdsPageHeader
         title="Ad Manager" subtitle="Create and manage your campaigns"
         markets={markets} market={market} onMarketChange={setMarket}
-        rangePreset={rangePreset} onRangePreset={setRangePreset}
+        dateRange={dateRange}
         onDateRange={(s, e) => { const r = { start: s, end: e }; setDateRange(r); void load({ range: r }) }}
         onDataSync={() => void load({ sync: true, range: dateRange })} syncing={syncing}
         actions={[
@@ -1945,7 +1961,7 @@ export function CampaignsGrid() {
         ]}
       />
 
-      {showGraph && <AdManagerGraph market={market} rangePreset={rangePreset} />}
+      {showGraph && <AdManagerGraph market={market} start={dateRange.start} end={dateRange.end} />}
 
       {/* filter bar — Helium 10 Ad Manager match */}
       <div className={`h10-am-fpanel${filtersOpen ? '' : ' is-collapsed'}`}>
@@ -2136,7 +2152,7 @@ export function CampaignsGrid() {
           <Listbox width={84} options={[{ value: '50', label: '50' }, { value: '100', label: '100' }, { value: '200', label: '200' }, { value: '500', label: '500' }]} value={String(rowsPerPage)} onChange={(v) => { setRowsPerPage(Number(v)); setPage(1) }} ariaLabel="Rows per page" />
         </div>
       </div>
-      <div className="h10-am-latest"><b>Latest Report:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}<span className="lk">Learn More</span></div>
+      <div className="h10-am-latest"><b>Performance data:</b> {latestReport} · Performance data is not real-time{vintage.ruleSafe ? '' : ' — Amazon restates for up to 60 days'}.{' '}<span className="lk">Learn More</span></div>
 
       {/* CBN.2c.2 — edit-mode Discard/Apply footer */}
       {mode === 'edit' && (diffs.length > 0 || budgetEditProblems.length > 0) && (

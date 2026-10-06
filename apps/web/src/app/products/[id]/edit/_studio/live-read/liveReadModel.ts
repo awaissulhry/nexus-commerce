@@ -90,13 +90,35 @@ function fieldLabel(field: string): string {
 
 /** Where the sheet keeps a publish-review field when its key is not the field id itself. */
 const SHEET_KEYS: Record<string, string> = { title: 'name', pictures: 'imageUrls' }
+/**
+ * E5 — the Etsy sheet keys these columns by their Shared name (`channel-specs/etsy.ts` masterKey; `sheet-columns.service.ts`
+ * keys a column by it), so without this Etsy's Tags were never compared with the sheet's Search keywords.
+ */
+const ETSY_SHEET_KEYS: Record<string, string> = { tags: 'keywords', materials: 'material', styles: 'style' }
+/** E5 — the Etsy review's equality (`studio-publication-etsy-changes.ts` `etsySame`): these lists are sets, case ignored. */
+const ETSY_SET_FIELDS = new Set(['tags', 'materials', 'styles'])
+/** Etsy's value + unit objects: the sheet holds the number and the unit in separate columns, so a plain comparison would lie. */
+const ETSY_NOT_COMPARED = new Set(['item_weight', 'item_dimensions'])
 
 /** The sheet's value for a live field: same key, then its root, then the sheet's own name for it, then the folded root. */
-function sheetValue(field: string, nexus: Record<string, unknown>): unknown {
+function sheetValue(field: string, nexus: Record<string, unknown>, etsy = false): unknown {
   const { root } = parseField(field)
-  for (const key of [field, root, SHEET_KEYS[root]]) if (key && key in nexus) return nexus[key]
+  for (const key of [field, root, SHEET_KEYS[root], etsy ? ETSY_SHEET_KEYS[root] : undefined]) if (key && key in nexus) return nexus[key]
   const folded = Object.keys(nexus).find(key => fold(key) === fold(root))
   return folded === undefined ? undefined : nexus[folded]
+}
+
+/** A list as the Etsy review compares it: each item trimmed and lower-cased, once, sorted (a single value is a list of one). */
+const foldedSet = (value: unknown): string[] => [...new Set((Array.isArray(value) ? value : value == null ? [] : [value])
+  .map(item => String(item ?? '').trim().toLocaleLowerCase()).filter(Boolean))].sort()
+/** Etsy may store a description with Windows line ends and trailing space (the review's own `plain`). */
+const plainText = (value: unknown): string => text(value).replace(/\r\n/g, '\n').trim()
+
+/** Same or different, by the channel's own rule where it has one (Etsy: the review's), else the shown text. */
+function sameValue(field: string, live: unknown, mine: unknown, etsy: boolean): boolean {
+  if (etsy && ETSY_SET_FIELDS.has(field)) return JSON.stringify(foldedSet(live)) === JSON.stringify(foldedSet(mine))
+  if (etsy && field === 'description') return plainText(live) === plainText(mine)
+  return text(live).trim() === text(mine).trim()
 }
 
 /** How a value is shown: a list of picture links as a count, since the drawer has no room for URLs (the comparison still uses every link). */
@@ -104,11 +126,12 @@ const shown = (field: string, value: unknown) => field === 'pictures' && Array.i
 
 /** Every live content field, compared with the sheet's value for it. */
 export function contentRows(live: LiveRead, nexus: Record<string, unknown>): LiveContentRow[] {
+  const etsy = live.source === 'etsy-listing'
   return Object.keys(live.content).sort().map(field => {
     const value = live.content[field]
-    const mine = sheetValue(field, nexus)
+    const mine = sheetValue(field, nexus, etsy)
     const state: LiveContentRow['state'] = value.state === 'unread' ? 'unread' : value.state === 'absent' ? 'absent'
-      : mine === undefined ? 'not-compared' : text(value.value).trim() === text(mine).trim() ? 'same' : 'differs'
+      : mine === undefined || (etsy && ETSY_NOT_COMPARED.has(field)) ? 'not-compared' : sameValue(field, value.value, mine, etsy) ? 'same' : 'differs'
     return { field, label: fieldLabel(field), live: value.state === 'value' ? shown(field, value.value) : formatLiveValue(value),
       nexus: mine === undefined ? null : shown(field, mine), state }
   })

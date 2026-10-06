@@ -9,6 +9,7 @@ import { PerformanceGraph } from '@/design-system/components/PerformanceGraph'
 import { FilterChip } from '@/design-system/primitives'
 import type { TrendPayload } from '../_lib'
 import { money } from '../../campaigns/_grid/format'
+import { trendPoint } from './trendPoints'
 
 type View = 'fees_sales' | 'fees_acos' | 'clicks_impr'
 const VIEWS: Array<{ id: View; label: string }> = [
@@ -20,11 +21,8 @@ const VIEWS: Array<{ id: View; label: string }> = [
 export function TrendCard({ trend, loading }: { trend: TrendPayload | null; loading: boolean }) {
   const [view, setView] = useState<View>('fees_sales')
   const data = useMemo(
-    () => (trend?.points ?? []).map((p) => ({
-      date: p.date.slice(5),
-      fees: (p.adFeesCents ?? 0) / 100, sales: (p.salesCents ?? 0) / 100,
-      acos: p.acosPct ?? 0, clicks: p.clicks, impressions: p.impressions,
-    })),
+    // AM-19 — a no-sales day has no ACOS: a gap in the line, never 0 %.
+    () => (trend?.points ?? []).map(trendPoint),
     [trend],
   )
   // AM-21 — money lines in the window's own currency; a window that spans currencies (all markets with eBay GB) has

@@ -20240,6 +20240,9 @@ model StockPoolTask {
   claimedAt DateTime?
   attempts  Int       @default(0)
   lastError String?
+  /// A failed task is released (claimedAt null) and waits until this time, which grows with its attempts
+  /// (services/stock-pool/pool-tasks.ts). Null: due now.
+  retryAt   DateTime?
 
   @@index([workspaceId, claimedAt, createdAt])
   @@index([productId])

@@ -1,4 +1,4 @@
-# Shopify: listing reference (and Etsy)
+# Shopify: listing reference
 
 Read with the list-product skill. The business's own Shopify market and store ids come from `business-overview` (`markets[]` with channel `SHOPIFY`; `accounts.SHOPIFY[].id`). Quoted sentences are what Nexus answers.
 
@@ -64,20 +64,4 @@ Read with the list-product skill. The business's own Shopify market and store id
 | set-shopify-content: "…Choose and synchronize a Shopify product category before editing this category-specific field." | A person sets and synchronizes the category first. |
 | "This Shopify connection needs write_products permission. …" | A person reconnects the store with product editing access. |
 
-## 5. Etsy
-
-Nexus has no Etsy publisher yet. Nothing Claude asks for creates, edits or reads an Etsy listing. Tell the person plainly.
-
-| Tool | Etsy today |
-|---|---|
-| `create-draft-listings` (`ETSY`, `GLOBAL`) | Works with an active Etsy account and Etsy market: inert drafts in Nexus that nothing can publish yet. `remove-draft-listings` removes them while untouched ("…it has values of its own; removing it would lose them." once they hold values). |
-| `publish-review` | Never ready: "Direct publishing to Etsy is not available yet. Your product changes are saved in the studio." |
-| `publish-listing` | Refused: "<SKU>: publishing to Etsy from Nexus is not available yet; nothing can be sent there." |
-| `product-content`, `set-listing-content`, `listing-live-content` | Refused: "Etsy publishing is not available yet: Nexus cannot read or change an Etsy listing's text until the Etsy publish step (P5) exists." |
-| `set-content`, `set-listing-fields`, photo tools | Nexus only: shared text does not go to Etsy, and "Publish does not send Etsy listing fields yet. They stay in Nexus." Title, description and tags keys are refused by set-listing-fields as text. |
-| `set-listing-price` | Saved in Nexus; the push is skipped while Etsy publishing is off on the server, and fails without an Etsy listing id ("This product has no Etsy listing id, so there is nothing on Etsy to change. Nothing was sent."). No sale: "No sale price on this coordinate". |
-| `set-listing-stock` | As price, and also held until Etsy order import is on: "Etsy order import is off (…), so Etsy's own sales do not reach Nexus stock. … Turn on Etsy order import first." |
-| `close-listing`, `reopen-listing` | Only a listing live on Etsy, with Etsy publishing on ("Etsy publishing is turned off. Nothing was changed."). Close sets it inactive; reopen sets it active (Etsy may set its quantity to 1 and charge a renewal). A draft: "…a draft was never live — remove it (remove-draft-listings) instead." |
-| `end-listing`, `relist-listing`, `delete-listing` | Refused ("Etsy has no End here. …", "Etsy has no End or Relist here. …", "Deleting Etsy listings from Nexus is not available yet. …"): `close-listing` / `reopen-listing` instead. |
-| `link-channel-id`, `unlink-channel-id` | Link refused: "…linking a ETSY listing is not built yet." An unlink cannot be undone from Claude. |
-| `out-of-sync-listings` | Etsy is never read back, so never reported as differing. |
+Etsy has its own file: `etsy.md`.

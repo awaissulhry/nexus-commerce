@@ -9,7 +9,7 @@
 import cron from '../lib/cron/clustered.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
-import { BUDGET_ENFORCE_DIAL_WORDS, applyBudgetEnforcement } from '../services/advertising/ads-budget-enforce.service.js'
+import { BUDGET_ENFORCE_DIAL_WORDS, applyBudgetEnforcement, budgetEnforceGate } from '../services/advertising/ads-budget-enforce.service.js'
 import { engineGuardNote } from '../services/advertising/ads-engine-guard.js'
 
 let task: ReturnType<typeof cron.schedule> | null = null
@@ -24,9 +24,9 @@ export async function runBudgetEnforceOnce(): Promise<string> {
 
 async function budgetEnforceTick(): Promise<string> {
   // R16 — the lower of the env (apply only with exactly '1') and this business's switch: OFF stands down, OBSERVE
-  // computes and never applies.
-  const { engineMode } = await import('../services/automation/engine-switch.service.js')
-  const gate = await engineMode('budget-enforce', process.env.NEXUS_BUDGET_ENFORCE_APPLY === '1' ? 'AUTO' : 'OBSERVE')
+  // computes and never applies. AM-8 — ONE gate: the Budget Manager reads the same `budgetEnforceGate` to say what
+  // this engine does, so the screen cannot call a live engine "dry-run" again.
+  const gate = await budgetEnforceGate()
   if (gate.mode === 'OFF') return `skipped: ${gate.note}`
   const apply = gate.mode === 'AUTO'
   // 1d — a live run honours the account dial and this engine's caps; the note says what they held back.

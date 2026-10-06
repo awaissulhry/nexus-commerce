@@ -57,6 +57,7 @@ import { AlertTriangle, ArrowUpRight, Check, Copy, Info } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
+import { acosRank, acosFilterValue } from '../../campaigns/_grid/format'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsFilterBar } from '../../campaigns/_grid/AdsFilterBar'
@@ -439,10 +440,11 @@ export function KeywordHarvestClient() {
       render: (r) => (r.metrics.acosPct == null
         ? <span className="h10-hv-nd" title="not measured — no attributed sales in this window">—</span>
         : <span>{r.metrics.acosPct.toFixed(0)}%</span>),
-      // A null sorts below every real value rather than as a zero, which would rank
-      // "not measured" as the best ACoS on the page.
-      sortValue: (r) => (r.metrics.acosPct == null ? Number.NEGATIVE_INFINITY : r.metrics.acosPct),
-      filterValue: (r) => r.metrics.acosPct ?? 0,
+      // AM-11 rule (`acosPct` is PERCENT POINTS): spend with no sales is the WORST ACoS, never 0 %
+      // and never "below every real value" (-Infinity ranked it best on "lowest first"); a term that
+      // spent nothing has no ACoS — it sinks in the sort and matches no ACoS range.
+      sortValue: (r) => acosRank(r.metrics.acosPct != null ? r.metrics.acosPct / 100 : null, r.metrics.spendCents, r.metrics.salesCents),
+      filterValue: (r) => acosFilterValue(r.metrics.acosPct != null ? r.metrics.acosPct / 100 : null, r.metrics.spendCents, r.metrics.salesCents),
     },
     {
       key: 'cpc', label: 'Observed CPC',

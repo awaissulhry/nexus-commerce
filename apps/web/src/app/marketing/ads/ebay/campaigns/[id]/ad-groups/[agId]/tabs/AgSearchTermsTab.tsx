@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { AdsDataGrid, type GridColumn } from '../../../../../../campaigns/_grid/AdsDataGrid'
-import { int, pct, money } from '../../../../../../campaigns/_grid/format'
+import { int, pct, money, acosRank } from '../../../../../../campaigns/_grid/format'
 import { getEbayAds, type AdGroupDetailPayload, type SearchTermRow, type SearchTermsPayload } from '../../../../../_lib'
 
 export function AgSearchTermsTab({ data, campaignId }: { data: AdGroupDetailPayload; campaignId: string }) {
@@ -29,7 +29,7 @@ export function AgSearchTermsTab({ data, campaignId }: { data: AdGroupDetailPayl
     { key: 'clicks', label: 'Clicks', render: (r) => int(r.clicks), sortValue: (r) => r.clicks },
     { key: 'spend', label: 'Ad Fees', render: (r) => money(r.adFeesCents, currency), sortValue: (r) => r.adFeesCents },
     { key: 'sales', label: 'Ad Sales', render: (r) => money(r.salesCents, currency), sortValue: (r) => r.salesCents },
-    { key: 'acos', label: 'ACOS', render: (r) => (r.acosPct != null ? pct(r.acosPct / 100) : '—'), sortValue: (r) => r.acosPct ?? -1 },
+    { key: 'acos', label: 'ACOS', render: (r) => (r.acosPct != null ? pct(r.acosPct / 100) : '—'), sortValue: (r) => acosRank(r.acosPct != null ? r.acosPct / 100 : null, r.adFeesCents, r.salesCents) },
   ], [currency])
 
   if (error) return <div className="h10-cd-error">Couldn&apos;t load search terms — {error}.</div>

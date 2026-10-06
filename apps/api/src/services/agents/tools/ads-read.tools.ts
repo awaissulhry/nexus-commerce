@@ -165,7 +165,7 @@ function addDays(ymd: string, n: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** A window of `days` ending today (Rome), as the Ads pages resolve it, with the provisional tail named. */
+/** A window of `days` complete days ending yesterday (Rome), as the Ads pages resolve it (AM-16), with the provisional tail named. */
 function windowOf(days: number) {
   const range = resolveRange({ windowDays: days })
   return {
@@ -184,7 +184,7 @@ function windowOf(days: number) {
 
 const daysArg = (fallback: number, what: string) =>
   z.coerce.number().int().min(1).max(MAX_DAYS).default(fallback)
-    .describe(`${what}: the last N days, today included (default ${fallback}, max ${MAX_DAYS})`)
+    .describe(`${what}: the last N complete days, ending yesterday — today has no daily report yet (default ${fallback}, max ${MAX_DAYS})`)
 const marketArg = z.string().trim().toUpperCase().min(2).max(20).optional()
   .describe('only this marketplace: an Amazon code (IT, DE, FR, ES, UK); for eBay EBAY_IT, EBAY_DE, EBAY_FR, EBAY_ES, EBAY_GB or the short code')
 const campaignArg = z.string().trim().min(1).max(64).optional()

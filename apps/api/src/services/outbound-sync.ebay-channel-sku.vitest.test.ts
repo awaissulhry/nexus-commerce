@@ -43,7 +43,9 @@ const { syncLedgerOf } = await import('./sync-control-core.js')
 const service: any = new OutboundSyncService()
 
 const SKU = 'TEST-SKU-1'
-const LIVE = { listingStatus: 'ACTIVE', isPublished: true, externalListingId: '110000000001' }
+// The item is on eBay's Inventory API (its offer id stored, `usesEbayInventory`): this file pins the Inventory calls. A
+// Trading item's rows go out with ReviseInventoryStatus (outbound-sync.ebay-trading-listing.vitest.test.ts).
+const LIVE = { listingStatus: 'ACTIVE', isPublished: true, externalListingId: '110000000001', platformAttributes: { __offerIds: { EBAY_IT: 'OFF-1' } } }
 /** The listing row the job reads (its select), live, with no SKU of its own unless `over` gives one. */
 const listing = (over: Record<string, unknown> = {}) => ({
   id: 'l', productId: 'p', channel: 'EBAY', aliasKey: '', marketplace: 'IT', syncPaused: false, offerClosedAt: null, fulfillmentMethod: 'FBM', quantity: 9, stockBuffer: 0,

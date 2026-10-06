@@ -26,3 +26,13 @@ describe('registries every process shares', () => {
     expect(readFileSync(new URL(file, import.meta.url), 'utf8')).toContain(statement)
   })
 })
+
+describe('queue consumers the worker process starts', () => {
+  // A queue the API produces into but no worker consumes leaves its jobs waiting in Redis forever.
+  it('starts the eBay order-notice worker (stored order notices run now, not at the next minute)', () => {
+    const source = readFileSync(new URL('./worker.ts', import.meta.url), 'utf8')
+    expect(source).toContain("import { initializeEbayOrderNoticeWorker } from '../workers/ebay-order-notice.worker.js'")
+    const started = source.match(/for \(const initialize of \[([^\]]*)\]\)/)?.[1] ?? ''
+    expect(started.split(',').map(name => name.trim())).toContain('initializeEbayOrderNoticeWorker')
+  })
+})

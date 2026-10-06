@@ -1,26 +1,52 @@
 /**
- * E1 (Etsy publisher, 2026-10-05) — the Etsy change plan: one line per listing field, attribute, translation and the
+ * E1/E2 (Etsy publisher, 2026-10-05) — the Etsy change plan: one line per listing field, attribute, translation and the
  * variation set, compared with the live Etsy listing and the last accepted publish (`planPublicationChanges`), and the
  * exact calls a send would make (`etsyPublicationRequest`). PURE: the live listing was read by `prepareEtsyPublication`.
  *
  * A new listing is ONE line: its value is the whole request, so the review shows exactly what Publish would send. A
  * listing that exists is reviewed field by field; a field empty in Nexus is never cleared on Etsy by a tick (Etsy keeps
  * its value), and Nexus never sends a price or a stock number from here (D3: the price and stock pushes do).
+ *
+ * E2 — a listing Etsy already holds is sent (`studio-publication-etsy-send.ts`): the calls go in task order (the listing
+ * PATCH, each attribute, each translation, the inventory PUT last), each naming the change fields it writes. The inventory
+ * body is built again at send from Etsy's FRESH inventory (`etsyInventoryReplaceBody`: Etsy's own price, stock and on/off
+ * for every variation it holds), and the read-back is judged here too (`etsyReadBackMismatches`). Full update (the main
+ * row's Action) sends every line Nexus can send and removes what only Etsy holds where Etsy has a delete for it.
+ *
+ * E3 — a NEW listing is created as an Etsy draft (`studio-publication-etsy-create.ts`): its calls name their fields too,
+ * its inventory is Nexus's own (`etsyCreateInventoryBody`), and the one product Etsy makes with every new draft
+ * (`etsyDraftPlaceholder`) is replaced by the variations, never refused as a variation Nexus lacks.
  */
-import { type StudioPublishChange, type StudioPublishFieldWrite, type StudioPublishValue } from '@nexus/shared/studio-publication'
+import { FULL_NEEDS_LIVE_READ, fullUpdateChange, type StudioPublishChange, type StudioPublishFieldWrite, type StudioPublishIssue, type StudioPublishRemoval,
+  type StudioPublishValue } from '@nexus/shared/studio-publication'
+import type { EtsyInventoryWrite, EtsyWriteOffering, EtsyWriteProduct } from '../etsy/inventory.js'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import { planPublicationChanges, publicationChangeId, publicationReplaces, selectPublicationChanges, type PublicationChangeInput } from './studio-publication-changes.js'
-import { andList, etsyOnProperty, etsyValue, etsyVariationsNexusLacks, ETSY_NEEDS_READINESS } from './studio-publication-etsy-build.js'
+import { andList, etsyFitReadiness, etsyKeptRules, etsyOnProperty, etsyOwnRules, etsyRuleConflicts, etsySameRule, etsyValue, etsyVariationsNexusLacks, ETSY_NEEDS_READINESS,
+  ETSY_RULE_KEYS, type EtsyRuleProduct } from './studio-publication-etsy-build.js'
 import { etsyFieldLabel } from './studio-publication-etsy-problems.js'
-import { ETSY_LISTING_FIELDS, type EtsyCall, type EtsyChangePlan, type EtsyCompiled, type EtsyInventoryStructure, type EtsyListingField, type EtsyListingValues,
-  type EtsyPropertyValue, type EtsyPublication, type EtsyTranslation, type EtsyWireRequest } from './studio-publication-etsy-types.js'
+import { ETSY_KEPT_AT_SEND, ETSY_LISTING_FIELDS, type EtsyCall, type EtsyChangePlan, type EtsyCompiled, type EtsyInventoryStructure, type EtsyListingField,
+  type EtsyListingValues, type EtsyLiveListing, type EtsyPropertyValue, type EtsyPublication, type EtsyTranslation, type EtsyWireRequest } from './studio-publication-etsy-types.js'
 
 const unknown = (reason: string): StudioPublishValue => ({ state: 'unknown', reason })
 
 export const ETSY_EMPTY_KEPT = 'Empty in Nexus; Etsy keeps its value.'
 export const ETSY_STYLES_CREATE_ONLY = 'Etsy takes styles only when a listing is created; Nexus cannot change them on a listing that exists.'
 export const ETSY_LIVE_READ_NEEDED = 'A successful live Etsy read is required before sending changes.'
+/** A send must read back what it wrote, and Etsy's read never reports production partners (live-read/etsy.ts `unread`). */
+export const ETSY_PARTNERS_CREATE_ONLY = 'Etsy does not report production partners, so Nexus could not confirm a change; it sends them only when it creates a listing.'
+/** E2 review R2-n1 — why a Full update leaves an unchanged variations line unticked. */
+export const ETSY_FULL_KEEPS_VARIATIONS = 'Full update does not send unchanged variations again: each send replaces Etsy\'s whole inventory.'
+/** E2 review R2-n3 — the one rule Nexus may change on a listing that exists (no price or stock rides on it). */
+export const ETSY_READINESS_RULE_CHANGE = 'The variations\' processing profiles differ, and this Etsy listing shares one: Publish lets the processing profile vary by variation on Etsy. Prices and stock do not change.'
+/** The inventory PUT is a full replace, and on any of them Etsy blanks a domestic price (etsy/inventory.ts, trap 3). */
+export const ETSY_INVENTORY_REPLACE_NOTE = 'Sending the variations replaces Etsy\'s whole inventory. On a shop that uses Etsy\'s domestic pricing, Etsy then clears the domestic price (an Etsy fault Nexus cannot see); check it on Etsy after the publish.'
 const TRANSLATIONS_UNREAD = 'Etsy\'s translations could not be read.'
+/**
+ * E3 — a draft holding one product without a SKU and no variation: what the variations PUT replaces. On a draft Nexus
+ * created it is the product Etsy makes with every new draft, but Nexus cannot tell that from one a person made on etsy.com.
+ */
+export const ETSY_DRAFT_FIRST_PRODUCT = 'Publish replaces this draft\'s one product without a SKU (Etsy\'s first product, if the draft still holds it).'
 /** Etsy's ids for variation properties a seller names (R1 §3): their name is the seller's, so it is compared too. */
 const CUSTOM_PROPERTY_IDS: ReadonlySet<number> = new Set([513, 514, 516])
 
@@ -32,17 +58,27 @@ const sameSet = (a: unknown, b: unknown) => JSON.stringify(foldedSet(a)) === JSO
 /** Etsy may store a description with Windows line ends and trailing space. */
 const plain = (text: unknown) => String(text ?? '').replace(/\r\n/g, '\n').trim()
 const propertyKey = (value: Partial<EtsyPropertyValue>) => JSON.stringify([foldedSet(value.values), value.scale_id ?? null])
-/** The variation set, by values text (case ignored, sorted) and scale, never by `value_ids` (Etsy renumbers them, R1 §3). */
+/**
+ * The variation set, by values text (case ignored, sorted) and scale, never by `value_ids` (Etsy renumbers them, R1 §3),
+ * and the four `*_on_property` rules (ids ascending; a rule not stated is `[]`, as the live read gives it).
+ */
 const structureKey = (value: EtsyInventoryStructure) => JSON.stringify({
   properties: [...(value.properties ?? [])].sort((a, b) => a.property_id - b.property_id)
     .map(p => [p.property_id, p.scale_id ?? null, CUSTOM_PROPERTY_IDS.has(p.property_id) ? fold(p.property_name) : null]),
   products: [...(value.products ?? [])].sort((a, b) => a.sku < b.sku ? -1 : a.sku > b.sku ? 1 : 0)
     .map(p => [p.sku, [...p.values].sort((a, b) => a.property_id - b.property_id).map(v => [v.property_id, foldedSet(v.values)]), p.readiness_state_id ?? null]),
+  rules: ETSY_RULE_KEYS.map(key => [...new Set(value[key] ?? [])].sort((a, b) => a - b)),
 })
 const translationKey = (value: Partial<EtsyTranslation>) => JSON.stringify([String(value.title ?? '').trim(), plain(value.description), foldedSet(value.tags)])
+/** JSON with object keys sorted: exact equality whatever order the keys were written in. */
+const canonical = (value: unknown) => JSON.stringify(value, (_key, entry) => entry && typeof entry === 'object' && !Array.isArray(entry)
+  ? Object.fromEntries(Object.keys(entry).sort().map(key => [key, entry[key]])) : entry)
+/** A language by its primary subtag, lower case: "en-US" and "EN" are "en" (the review's own rule, studio-publication-etsy.ts). */
+const language = (code: string | null | undefined) => (code ?? '').trim().toLowerCase().split(/[-_]/)[0]
+const sameLanguage = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
 
 /** Etsy's own equality for a field, or undefined for exact equality (`planPublicationChanges`). Only two values compare. */
-function etsySame(field: string, a: StudioPublishValue, b: StudioPublishValue): boolean | undefined {
+export function etsySame(field: string, a: StudioPublishValue, b: StudioPublishValue): boolean | undefined {
   if (a.state !== 'value' || b.state !== 'value') return undefined
   if (field === 'tags' || field === 'materials' || field === 'styles') return sameSet(a.value, b.value)
   if (field === 'description') return plain(a.value) === plain(b.value)
@@ -50,6 +86,14 @@ function etsySame(field: string, a: StudioPublishValue, b: StudioPublishValue): 
   if (field === 'inventory') return structureKey(a.value as EtsyInventoryStructure) === structureKey(b.value as EtsyInventoryStructure)
   if (field.startsWith('translation:')) return translationKey(a.value as EtsyTranslation) === translationKey(b.value as EtsyTranslation)
   return undefined
+}
+
+/**
+ * E3 — the one product every new Etsy draft is born with (R1 §1: createDraftListing makes a draft with ONE product, no SKU,
+ * no variation property): what a draft holds until Nexus's variations step lands. The variations line replaces it.
+ */
+export function etsyDraftPlaceholder(live: EtsyLiveListing): boolean {
+  return live.state === 'draft' && live.unnamedProducts === 1 && live.inventory.products.length === 1 && !live.inventory.properties.length
 }
 
 /** A grouped value in a few words for a DIFFERS warning (the default words would list every id and key). */
@@ -80,11 +124,21 @@ function nexusLines(publication: EtsyPublication) {
   ]
 }
 
+export interface EtsyChangeOptions {
+  /**
+   * Full update (the main row's Action, eBay Trading's rule): every line Nexus can send is ticked and locked, an attribute
+   * only Etsy holds is removed, and so is every variation Etsy holds that Nexus does not (each listed in `removals`).
+   * Listing fields empty in Nexus stay as Etsy holds them (a clear is a later step), and so does what Etsy cannot change.
+   */
+  full?: boolean
+}
+
 /**
  * The change plan of one Etsy publication. `facts` is the adapters' shared argument; the publication already carries
  * every identity Etsy needs (`products`, `ownerProductId`).
  */
-export function prepareEtsyChanges(_facts: PublicationFacts, publication: EtsyPublication, baselineValues: Map<string, StudioPublishValue>): EtsyChangePlan {
+export function prepareEtsyChanges(_facts: PublicationFacts, publication: EtsyPublication, baselineValues: Map<string, StudioPublishValue>,
+  options: EtsyChangeOptions = {}): EtsyChangePlan {
   const owner = publication.products.find(product => product.productId === publication.ownerProductId) ?? publication.products[0]
   if (!owner) throw new Error('No included Etsy product can own this listing publication.')
   const lines = nexusLines(publication)
@@ -100,10 +154,15 @@ export function prepareEtsyChanges(_facts: PublicationFacts, publication: EtsyPu
   const live = publication.live
   // Without the read (sending is off, or Etsy did not answer) nothing can be compared, so nothing is selectable.
   const unread = publication.liveSkipped ?? publication.liveReadError ?? 'The current Etsy listing could not be read.'
+  const full = !!options.full
+  const fullIssues: StudioPublishIssue[] = []
+  const blockFull = (message: string) => fullIssues.push({ productId: owner.productId, sku: owner.sku, severity: 'error', message: `${owner.sku}: ${message}` })
+  if (full && !live) blockFull(FULL_NEEDS_LIVE_READ('Etsy', unread))
   const inputs: PublicationChangeInput[] = []
-  const add = (field: string, label: string, nexus: StudioPublishValue, held: StudioPublishValue, refusal?: string) => {
-    // A field empty in Nexus is not a clear: Etsy keeps its value (a real clear is a later step).
-    const current = nexus.state === 'absent' ? unknown(ETSY_EMPTY_KEPT) : nexus
+  const add = (field: string, label: string, nexus: StudioPublishValue, held: StudioPublishValue, refusal?: string, removable = false) => {
+    // A field empty in Nexus is not a clear: Etsy keeps its value (a real clear is a later step). A Full update removes
+    // an attribute only Etsy holds (`removable`): Etsy has a delete for it.
+    const current = nexus.state === 'absent' && !removable ? unknown(ETSY_EMPTY_KEPT) : nexus
     const channel = live ? held : unknown(unread)
     const lastAccepted = baselineValues.get(publicationChangeId(owner.productId, field)) ?? unknown('No accepted publish record for this field.')
     inputs.push({ ...owner, field, label, current, lastAccepted, channel,
@@ -113,7 +172,8 @@ export function prepareEtsyChanges(_facts: PublicationFacts, publication: EtsyPu
   const byField = new Map(lines.map(line => [line.field, line]))
   for (const field of ETSY_LISTING_FIELDS) {
     const why = live?.unread[field]
-    add(field, etsyFieldLabel(field), byField.get(field)!.value, why ? unknown(why) : etsyValue(field, live?.values[field]), field === 'styles' ? ETSY_STYLES_CREATE_ONLY : undefined)
+    add(field, etsyFieldLabel(field), byField.get(field)!.value, why ? unknown(why) : etsyValue(field, live?.values[field]),
+      field === 'styles' ? ETSY_STYLES_CREATE_ONLY : field === 'production_partner_ids' ? ETSY_PARTNERS_CREATE_ONLY : undefined)
   }
   // Attributes: Nexus's and Etsy's, except properties used as variations (they live in the inventory, R1 §4).
   const variationIds = new Set([...publication.structure.properties, ...(live?.inventory.properties ?? [])].map(property => property.property_id))
@@ -122,41 +182,127 @@ export function prepareEtsyChanges(_facts: PublicationFacts, publication: EtsyPu
   for (const id of propertyIds) {
     const ours = publication.properties.find(property => property.property_id === id), theirs = liveProperties.find(property => property.property_id === id)
     const field = `property:${id}`
-    add(field, ours?.property_name ?? theirs?.property_name ?? `Property ${id}`, etsyValue(field, ours ?? null), etsyValue(field, theirs ?? null))
+    add(field, ours?.property_name ?? theirs?.property_name ?? `Property ${id}`, etsyValue(field, ours ?? null), etsyValue(field, theirs ?? null), undefined, full)
   }
   for (const translation of publication.translations) {
     const field = `translation:${translation.language}`
-    const held = live?.translations?.find(entry => entry.language.toLowerCase() === translation.language.toLowerCase())
+    const held = live?.translations?.find(entry => sameLanguage(entry.language, translation.language))
     add(field, `Translation (${translation.language})`, byField.get(field)!.value, live?.translations === null ? unknown(TRANSLATIONS_UNREAD) : etsyValue(field, held ?? null))
   }
   // The variation set is a full replace (R1 §3): it is never sent while a variation lacks a processing profile (Etsy
-  // refuses the PUT, M1; Etsy's own profile already stands in for one empty in Nexus) or while Etsy holds variations
-  // Nexus does not (the send would delete them, m3).
+  // refuses the PUT, M1; Etsy's own profile already stands in for one empty in Nexus), while a new variation would send
+  // stock Etsy's sales do not reach (order import, Owner 2026-10-01), or — in a Partial update — while Etsy holds
+  // variations Nexus does not (the send would delete them, m3). A Full update removes those, and lists them.
   const noProfile = publication.structure.products.filter(product => product.readiness_state_id === null).map(product => product.sku)
-  const inventoryRefusals = live ? [
+  // E2 review B1 — the listing's own price, stock, SKU and processing-profile rules are kept; a variation whose values
+  // would break one is refused by name (Nexus never changes a rule, and never multiplies a shared stock number).
+  const ruleCheck = live ? etsyRuleCheck(publication, live) : { refusals: [], widened: false }
+  const ruleRefusals = ruleCheck.refusals
+  const blocking = live ? [
     ...(noProfile.length ? [`${ETSY_NEEDS_READINESS} ${andList(noProfile)} ${noProfile.length === 1 ? 'has' : 'have'} no processing profile.`] : []),
-    ...etsyVariationsNexusLacks(live, publication.structure),
+    ...(publication.newVariationStockRefusal ? [publication.newVariationStockRefusal] : []),
+    ...ruleRefusals,
   ] : []
+  if (full) for (const reason of blocking) blockFull(`Full update cannot be sent: ${reason}`)
+  // A Partial update says them too: the variations line is unticked, and this is why.
+  else for (const reason of ruleRefusals) fullIssues.push({ severity: 'warning', field: 'inventory', message: reason })
+  // E3 — a draft's placeholder product is not a variation Nexus lacks: the variations line replaces it.
+  const inventoryRefusals = [...blocking, ...(live && !full && !etsyDraftPlaceholder(live) ? etsyVariationsNexusLacks(live, publication.structure) : [])]
   add('inventory', etsyFieldLabel('inventory'), byField.get('inventory')!.value, etsyValue('inventory', live?.inventory ?? null), inventoryRefusals.join(' ') || undefined)
   // A DIFFERS warning names a grouped value in a few words, not every id and key it holds.
-  const changes: StudioPublishChange[] = planPublicationChanges(inputs, { channel: 'Etsy' }).map(change => change.replaces && WORDED(change.field)
+  let changes: StudioPublishChange[] = planPublicationChanges(inputs, { channel: 'Etsy' }).map(change => change.replaces && WORDED(change.field)
     ? { ...change, replaces: publicationReplaces(change, 'Etsy', { channel: etsyWords(change.field, change.channel), nexus: etsyWords(change.field, change.current) }) } : change)
-  return { ...base, changes, remoteRevision: live?.revision ?? 'unavailable' }
+  const removals: StudioPublishRemoval[] = []
+  if (full) {
+    // Every line Nexus can send is ticked and locked; a line it cannot send stays as Etsy holds it (named once, below),
+    // unless neither side holds anything there or it already matches. The variations are never sent again unchanged:
+    // every inventory PUT is a full replace, and on a shop with domestic pricing Etsy blanks that price on each one.
+    const kept: string[] = []
+    changes = changes.map((change, index) => {
+      const sendable = inputs[index].refusal === undefined && change.current.state !== 'unknown' && change.channel.state !== 'unknown'
+        && !(change.current.state === 'absent' && change.channel.state === 'absent') && !(change.field === 'inventory' && change.status === 'SAME')
+      if (sendable) return fullUpdateChange(change)
+      if (change.field === 'inventory' && change.status === 'SAME' && inputs[index].refusal === undefined) return { ...change, reason: ETSY_FULL_KEEPS_VARIATIONS }
+      if (live && change.status !== 'SAME' && !(change.channel.state === 'absent' && change.current.state !== 'value')) kept.push(change.label)
+      return change
+    })
+    for (const change of changes) if (change.locked && change.current.state === 'absent' && change.channel.state === 'value')
+      removals.push({ productId: change.productId, sku: change.sku, field: change.field, label: change.label, value: change.channel.value })
+    if (live && changes.some(change => change.field === 'inventory' && change.locked)) {
+      const ours = new Set(publication.structure.products.map(product => product.sku))
+      const extra = new Map<string, EtsyInventoryStructure['products'][number]>()
+      for (const product of live.inventory.products) if (product.sku && !ours.has(product.sku) && !extra.has(product.sku)) extra.set(product.sku, product)
+      for (const [sku, product] of extra) removals.push({ productId: owner.productId, sku, field: 'variation', label: 'Variation removed from the listing', value: product.values })
+      const unnamed = live.unnamedProducts
+      if (unnamed) removals.push({ productId: owner.productId, sku: '', field: 'variation', label: `${unnamed} ${unnamed === 1 ? 'variation' : 'variations'} without a SKU removed`, value: unnamed })
+    }
+    const warn = (message: string) => fullIssues.push({ productId: owner.productId, sku: owner.sku, severity: 'warning', message })
+    if (kept.length) warn(`${owner.sku}: Full update leaves ${kept.length === 1 ? 'this field' : `these ${kept.length} fields`} as Etsy holds ${kept.length === 1 ? 'it' : 'them'}: ${kept.join(', ')}.`)
+    // Etsy has no delete for a translation (R1 §6): one Nexus does not hold stays on Etsy. The listing's own language is
+    // its main text, not a translation.
+    if (live?.translations) {
+      const ours = new Set(publication.translations.map(translation => language(translation.language)))
+      const own = new Set([live.language, live.shop.languages[0]].filter((code): code is string => !!code).map(language))
+      for (const translation of live.translations) if (!ours.has(language(translation.language)) && !own.has(language(translation.language)))
+        warn(`${translation.language}: Etsy keeps its translation (Etsy has no delete for translations).`)
+    }
+  }
+  // Whenever the variations can be sent, the review says what a full replace does on Etsy, and when it widens the
+  // processing-profile rule (R2-n3), says that too.
+  if (changes.some(change => change.field === 'inventory' && change.selectable)) {
+    fullIssues.push({ severity: 'warning', field: 'inventory', message: ETSY_INVENTORY_REPLACE_NOTE })
+    if (ruleCheck.widened) fullIssues.push({ severity: 'warning', field: 'inventory', message: ETSY_READINESS_RULE_CHANGE })
+  }
+  return { ...base, changes, remoteRevision: live?.revision ?? 'unavailable', ...(full ? { full: true as const } : {}),
+    ...(removals.length ? { removals } : {}), ...(fullIssues.length ? { fullIssues } : {}) }
 }
 
-/** The publication a selection sends: the whole create, or the selected fields of a listing that exists. PURE. */
+/**
+ * The publication a selection sends: the whole create, or the selected fields of a listing that exists. PURE.
+ *
+ * An update journals its main row, plus every variation when the variations are sent (their journals carry no field
+ * writes). Its `live` is dropped: the send reads Etsy again, so a stored read never decides a write, and Etsy's stock
+ * (which moves on every sale) is not part of the selection's digest.
+ */
 export function compileEtsyChanges(plan: EtsyChangePlan, selectedIds: string[]): EtsyCompiled {
   const selected = selectPublicationChanges(plan.changes, selectedIds)
   const publication = plan.publication
-  if (!selected.length) return { ...publication, products: [], fieldWrites: {}, request: null }
-  if (!publication.listingId) return { ...publication, products: plan.products, fieldWrites: plan.createWrites, request: etsyPublicationRequest(publication, 'all') }
-  if (!publication.live || !publication.liveRevision) throw new Error(ETSY_LIVE_READ_NEEDED)
+  const nothingRemoved = { removeSkus: [], removeUnnamed: false, addedSkus: [] }
+  if (!selected.length) return { ...publication, products: [], fieldWrites: {}, request: null, ...nothingRemoved }
+  if (!publication.listingId) return { ...publication, products: plan.products, fieldWrites: plan.createWrites, request: etsyPublicationRequest(publication, 'all'), ...nothingRemoved }
+  const live = publication.live
+  if (!live || !publication.liveRevision) throw new Error(ETSY_LIVE_READ_NEEDED)
   const fieldWrites: Record<string, StudioPublishFieldWrite[]> = {}
   for (const change of selected) {
     if (change.current.state === 'unknown') throw new Error('An unknown value cannot be sent to Etsy.')
     ;(fieldWrites[change.productId] ??= []).push({ field: change.field, value: change.current })
   }
-  return { ...publication, products: plan.products, fieldWrites, request: etsyPublicationRequest(publication, new Set(selected.map(change => change.field))) }
+  const fields = new Set(selected.map(change => change.field))
+  const inventory = fields.has('inventory')
+  // A Full update's variation removals: what the inventory PUT may drop (the send refuses anything else Etsy holds).
+  const removed = inventory ? (plan.removals ?? []).filter(removal => removal.field === 'variation') : []
+  const removeSkus = [...new Set(removed.map(removal => removal.sku).filter(Boolean))]
+  // E3 — a draft still holding Etsy's placeholder product: the variations replace it (so recovering a create whose
+  // variations step did not land needs no Full update).
+  const placeholder = inventory && etsyDraftPlaceholder(live)
+  const removeUnnamed = removed.some(removal => !removal.sku) || placeholder
+  const addedSkus = inventory ? publication.inventory.products.map(product => product.sku ?? '').filter(sku => !live.offerings[sku]) : []
+  const owner = plan.products.find(product => product.productId === plan.ownerProductId) ?? plan.products[0]
+  const products = [owner, ...(inventory ? publication.inventoryProducts : [])].filter((product, index, all) => all.findIndex(other => other.productId === product.productId) === index)
+  const request = etsyPublicationRequest(publication, fields, { skus: removeSkus, unnamed: !placeholder && removed.some(removal => !removal.sku) ? live.unnamedProducts : 0, placeholder })
+  return { ...publication, live: null, products, fieldWrites, request, removeSkus, removeUnnamed, addedSkus }
+}
+
+/**
+ * What the review's revision digests for an Etsy plan (instead of the plan itself): Etsy's offerings reduced to their
+ * processing profile, and `sold_out` read as `active`. A sale or a stock push between the review and Publish then never
+ * forces a new review; everything a send depends on is still in it (`live.revision` already leaves stock out).
+ */
+export function etsyRevisionView(plan: EtsyChangePlan): unknown {
+  const live = plan.publication.live
+  if (!live) return plan
+  const offerings = Object.fromEntries(Object.entries(live.offerings).map(([sku, offering]) => [sku, { readiness_state_id: offering.readiness_state_id ?? null }]))
+  return { ...plan, publication: { ...plan.publication, live: { ...live, state: live.state === 'sold_out' ? 'active' : live.state, offerings } } }
 }
 
 // ── The request ───────────────────────────────────────────────────────────────────────────────────────────────────
@@ -182,70 +328,280 @@ function patchFields(field: EtsyListingField, values: EtsyListingValues): Record
   return { [field]: Array.isArray(value) ? [...value] : value }
 }
 
+/** The fields Etsy takes only when it creates a listing (R1 §2), or cannot report back (a send must read back what it wrote). */
+const CREATE_ONLY: Readonly<Record<string, string>> = { styles: ETSY_STYLES_CREATE_ONLY, production_partner_ids: ETSY_PARTNERS_CREATE_ONLY }
+
 /**
  * The calls a send would make, in order (R1 §1–6). Paths keep the literal `{shop_id}` (read from the account at send,
  * never stored) and, for a new listing, `{listing_id}` (Etsy answers it). A new listing: createDraftListing, the
  * inventory, each attribute, each translation. A listing that exists: only `selected` (change fields; 'all' = every
- * field Nexus holds), each by its own endpoint.
+ * field Nexus holds), in task order — the listing PATCH, each attribute (set, or removed by a Full update), each
+ * translation, the inventory PUT last — each call naming the change fields it writes. `removed`: the variations a Full
+ * update's inventory PUT drops (named in its note), and whether it replaces a draft's placeholder product (E3).
+ *
+ * E3 — a create's calls name their fields too (the studio journals each call's field writes): the POST every listing
+ * field Nexus holds a value for, then `inventory`, `property:<id>`, `translation:<language>`.
  */
-export function etsyPublicationRequest(publication: EtsyPublication, selected: 'all' | ReadonlySet<string>): EtsyWireRequest {
+export function etsyPublicationRequest(publication: EtsyPublication, selected: 'all' | ReadonlySet<string>,
+  removed: { skus: readonly string[]; unnamed: number; placeholder?: boolean } = { skus: [], unnamed: 0 }): EtsyWireRequest {
   if (!publication.listingId) {
     if (!publication.create) throw new Error('A new Etsy listing needs its price and quantity. Review again.')
+    const listingFields = ETSY_LISTING_FIELDS.filter(field => etsyValue(field, publication.values[field]).state === 'value')
     const calls: EtsyCall[] = [
-      { method: 'POST', path: '/shops/{shop_id}/listings', encoding: 'form', body: { ...publication.form, quantity: publication.create.quantity, price: publication.create.price } },
-      { method: 'PUT', path: '/listings/{listing_id}/inventory', encoding: 'json', body: { ...publication.inventory } },
-      ...publication.properties.map((property): EtsyCall => ({ method: 'PUT', path: `/shops/{shop_id}/listings/{listing_id}/properties/${property.property_id}`, encoding: 'form', body: propertyBody(property) })),
-      ...publication.translations.map((translation): EtsyCall => ({ method: 'POST', path: `/shops/{shop_id}/listings/{listing_id}/translations/${translation.language}`, encoding: 'form', body: translationBody(translation) })),
+      { method: 'POST', path: '/shops/{shop_id}/listings', encoding: 'form', body: { ...publication.form, quantity: publication.create.quantity, price: publication.create.price },
+        fields: [...listingFields] },
+      { method: 'PUT', path: '/listings/{listing_id}/inventory', encoding: 'json', body: { ...publication.inventory }, fields: ['inventory'] },
+      ...publication.properties.map((property): EtsyCall => ({ method: 'PUT', path: `/shops/{shop_id}/listings/{listing_id}/properties/${property.property_id}`, encoding: 'form',
+        body: propertyBody(property), fields: [`property:${property.property_id}`] })),
+      ...publication.translations.map((translation): EtsyCall => ({ method: 'POST', path: `/shops/{shop_id}/listings/{listing_id}/translations/${translation.language}`, encoding: 'form',
+        body: translationBody(translation), fields: [`translation:${translation.language}`] })),
     ]
     return { operation: 'createDraftListing', listingId: null, calls }
   }
   const listingId = publication.listingId
   const lines = new Map(nexusLines(publication).map(line => [line.field, line]))
-  // 'all': every line Nexus holds a value for (a field empty in Nexus is kept on Etsy); styles never (create only).
-  const picked = (field: string) => selected === 'all' ? lines.get(field)?.value.state === 'value' && field !== 'styles' : selected.has(field)
+  // 'all': every line Nexus holds a value for (a field empty in Nexus is kept on Etsy), never a create-only one.
+  const picked = (field: string) => selected === 'all' ? lines.get(field)?.value.state === 'value' && !CREATE_ONLY[field] : selected.has(field)
   const calls: EtsyCall[] = []
+  // 1 — the listing's own fields, in one PATCH.
   const patch: Record<string, unknown> = {}
+  const patched: string[] = []
   for (const field of ETSY_LISTING_FIELDS) if (picked(field)) {
-    if (field === 'styles') throw new Error(ETSY_STYLES_CREATE_ONLY)
+    if (CREATE_ONLY[field]) throw new Error(CREATE_ONLY[field])
     Object.assign(patch, patchFields(field, publication.values))
+    patched.push(field)
   }
-  if (Object.keys(patch).length) calls.push({ method: 'PATCH', path: `/shops/{shop_id}/listings/${listingId}`, encoding: 'form', body: patch })
+  if (patched.length) calls.push({ method: 'PATCH', path: `/shops/{shop_id}/listings/${listingId}`, encoding: 'form', body: patch, fields: patched })
+  // 2 — each attribute by its own call: set (PUT), or — reachable only from a Full update, whose line for an attribute
+  // only Etsy holds is "absent" — removed (DELETE). A Partial update never ticks an attribute empty in Nexus.
+  const propertyIds = selected === 'all' ? publication.properties.map(property => property.property_id)
+    : [...selected].flatMap(field => /^property:(\d+)$/.test(field) ? [Number(field.slice(9))] : [])
+  for (const id of propertyIds) {
+    const property = publication.properties.find(entry => entry.property_id === id)
+    const path = `/shops/{shop_id}/listings/${listingId}/properties/${id}`
+    calls.push(property ? { method: 'PUT', path, encoding: 'form', body: propertyBody(property), fields: [`property:${id}`] }
+      : { method: 'DELETE', path, encoding: 'none', body: null, fields: [`property:${id}`], note: 'Full update removes it: Nexus holds no value here.' })
+  }
+  // 3 — each translation. Etsy has no delete for one; it creates one (POST) or replaces the one it holds (PUT, R1 §6).
+  // The send asks Etsy again just before it writes (GET) and journals the method that answer chose.
+  for (const translation of publication.translations) if (picked(`translation:${translation.language}`)) {
+    const held = publication.live?.translations
+    const holds = held?.some(entry => sameLanguage(entry.language, translation.language))
+    calls.push({ method: holds ? 'PUT' : 'POST', path: `/shops/{shop_id}/listings/${listingId}/translations/${translation.language}`, encoding: 'form',
+      body: translationBody(translation), fields: [`translation:${translation.language}`],
+      ...(held ? {} : { note: `${TRANSLATIONS_UNREAD} If Etsy holds this language, the send replaces it instead (PUT).` }) })
+  }
+  // 4 — the variations, last: a full replace (R1 §3), built again at send from Etsy's fresh inventory
+  // (`etsyInventoryReplaceBody`). Each variation Etsy holds keeps Etsy's own price, stock and on/off (D3; read at send, so
+  // the review shows no live number) with Nexus's processing profile; a variation new on Etsy takes Nexus's offering.
   if (picked('inventory')) {
-    // A full replace (R1 §3): each variation Etsy holds keeps Etsy's own price and stock (D3) with Nexus's processing
-    // profile; a variation new on Etsy takes Nexus's offering.
     const live = publication.live
     if (!live) throw new Error(ETSY_LIVE_READ_NEEDED)
     const added: string[] = []
     const products = publication.inventory.products.map(product => {
       const sku = product.sku ?? ''
-      const held = live.offerings[sku]
       const readiness = publication.structure.products.find(entry => entry.sku === sku)?.readiness_state_id ?? null
-      if (!held) added.push(sku)
-      return { ...product, offerings: [{ ...(held ?? product.offerings[0]), readiness_state_id: readiness }] }
+      if (live.offerings[sku]) return { ...product, offerings: [{ price: ETSY_KEPT_AT_SEND, quantity: ETSY_KEPT_AT_SEND, is_enabled: ETSY_KEPT_AT_SEND, readiness_state_id: readiness }] }
+      added.push(sku)
+      return { ...product, offerings: [{ ...product.offerings[0], readiness_state_id: readiness }] }
     })
-    calls.push({ method: 'PUT', path: `/listings/${listingId}/inventory`, encoding: 'json', body: inventoryBody(products, publication.structure),
-      ...(added.length ? { note: `${added.length === 1 ? 'new variation' : 'new variations'} ${added.join(', ')}` } : {}) })
-  }
-  const propertyIds = selected === 'all' ? publication.properties.map(property => property.property_id)
-    : [...selected].flatMap(field => /^property:(\d+)$/.test(field) ? [Number(field.slice(9))] : [])
-  for (const id of propertyIds) {
-    // An attribute empty in Nexus is kept on Etsy (its line cannot be ticked): there is nothing to send for it.
-    const property = publication.properties.find(entry => entry.property_id === id)
-    if (!property) throw new Error(`Property ${id}: ${ETSY_EMPTY_KEPT}`)
-    calls.push({ method: 'PUT', path: `/shops/{shop_id}/listings/${listingId}/properties/${id}`, encoding: 'form', body: propertyBody(property) })
-  }
-  for (const translation of publication.translations) if (picked(`translation:${translation.language}`)) {
-    const held = publication.live?.translations
-    const path = `/shops/{shop_id}/listings/${listingId}/translations/${translation.language}`
-    // Etsy has no delete for a translation; it creates one (POST) or replaces the one it holds (PUT, R1 §6).
-    const holds = held?.some(entry => entry.language.toLowerCase() === translation.language.toLowerCase())
-    calls.push({ method: holds ? 'PUT' : 'POST', path, encoding: 'form', body: translationBody(translation),
-      ...(held ? {} : { note: `${TRANSLATIONS_UNREAD} If Etsy holds this language, the send replaces it instead (PUT).` }) })
+    const notes = [
+      ...(added.length ? [`${added.length === 1 ? 'new variation' : 'new variations'} ${andList(added)}`] : []),
+      ...(removed.skus.length ? [`removes ${removed.skus.length === 1 ? 'variation' : 'variations'} ${andList(removed.skus)}`] : []),
+      ...(removed.unnamed ? [`removes ${removed.unnamed} ${removed.unnamed === 1 ? 'variation' : 'variations'} without a SKU`] : []),
+    ]
+    // E3 review NIT-5 — Nexus cannot tell Etsy's first product from one a person made on etsy.com: said as a condition.
+    const note = [...(notes.length ? [notes.join('; ')] : []), ...(removed.placeholder ? [ETSY_DRAFT_FIRST_PRODUCT] : [])].join('. ')
+    calls.push({ method: 'PUT', path: `/listings/${listingId}/inventory`, encoding: 'json', body: inventoryBody(products, publication.structure), fields: ['inventory'],
+      ...(note ? { note } : {}) })
   }
   return { operation: 'updateListing', listingId, calls }
 }
 
-/** An update's inventory PUT body: the products as given, with the `*_on_property` arrays the structure calls for (its processing profiles may be Etsy's). */
-function inventoryBody(products: EtsyPublication['inventory']['products'], structure: EtsyInventoryStructure): Record<string, unknown> {
-  return { products, ...etsyOnProperty(structure.properties.map(property => property.property_id), structure.products.map(product => product.readiness_state_id)) }
+/** An update's inventory PUT body: the products as given, with the listing's `*_on_property` rules (Etsy's own, kept; the structure carries them). */
+function inventoryBody(products: readonly unknown[], structure: EtsyInventoryStructure): Record<string, unknown> {
+  const own = etsyOnProperty(structure.properties.map(property => property.property_id), structure.products.map(product => product.readiness_state_id))
+  return { products, ...Object.fromEntries(ETSY_RULE_KEYS.map(key => [key, [...(structure[key] ?? own[key])]])) }
+}
+
+/**
+ * Where this listing's variations, as Nexus would send them, break the listing's own `*_on_property` rules (read live):
+ * a rule Nexus's variations cannot keep, or a variation Etsy does not hold (or a processing profile that changes) whose
+ * value differs inside a group Etsy keeps as one. Etsy's own price and stock stand for the variations it holds (D3).
+ * `widened`: the processing-profile rule is widened instead (R2-n3, `etsyFitReadiness`).
+ */
+function etsyRuleCheck(publication: EtsyPublication, live: EtsyLiveListing): { refusals: string[]; widened: boolean } {
+  const nexusIds = publication.structure.properties.map(property => property.property_id)
+  const own = etsyOwnRules(nexusIds, publication.structure.products.map(product => product.readiness_state_id))
+  const kept = etsyKeptRules(live.inventory, live.inventory.properties.map(property => property.property_id), nexusIds, own)
+  if ('refusal' in kept) return { refusals: [kept.refusal], widened: false }
+  const offers = new Map(publication.inventory.products.map(product => [product.sku ?? '', product.offerings[0]]))
+  const products: EtsyRuleProduct[] = publication.structure.products.map(product => {
+    const held = live.offerings[product.sku], nexus = offers.get(product.sku)
+    return { sku: product.sku, values: product.values, price: held?.price ?? nexus?.price ?? 0, quantity: held?.quantity ?? nexus?.quantity ?? 0, readiness: product.readiness_state_id,
+      sets: { price: !held, quantity: !held, sku: !held, readiness: !held || (held.readiness_state_id ?? null) !== product.readiness_state_id } }
+  })
+  const fitted = etsyFitReadiness(kept.rules, products, nexusIds)
+  return { refusals: etsyRuleConflicts(products, fitted.rules, new Map(publication.structure.properties.map(property => [property.property_id, property.property_name]))), widened: fitted.widened }
+}
+
+// ── At send ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Etsy's own property values for a variation, when they say what Nexus's say (values text, scale, a seller-named property's name). */
+function sameValues(etsy: EtsyWriteProduct['property_values'], nexus: EtsyWriteProduct['property_values']): boolean {
+  const ours = nexus ?? [], theirs = etsy ?? []
+  return ours.length === theirs.length && ours.every(value => {
+    const held = theirs.find(entry => entry.property_id === value.property_id)
+    return !!held && JSON.stringify(foldedSet(held.values)) === JSON.stringify(foldedSet(value.values)) && (held.scale_id ?? null) === (value.scale_id ?? null)
+      && (!CUSTOM_PROPERTY_IDS.has(value.property_id) || fold(held.property_name) === fold(value.property_name))
+  })
+}
+
+/**
+ * The inventory PUT body, built from Etsy's FRESH inventory (read under the listing lock just before the PUT) and Nexus.
+ *
+ * - The listing's own `*_on_property` rules are kept (E2 review B1): a stock number or a price Etsy shares stays one
+ *   shared number — Etsy's own, echoed — and is never sent as one per variation (that would multiply the stock).
+ * - Each variation Etsy holds keeps Etsy's own price, stock and on/off (D3), in Etsy's order, with Nexus's processing
+ *   profile (else Etsy's) and Etsy's own property values when they say what Nexus's say — so an unchanged listing gives
+ *   Etsy's own inventory back and the writer sends nothing (every PUT risks Etsy's domestic-price fault).
+ * - A variation Etsy does not hold takes Nexus's offering (one set Inactive stays off) and must fit the rules.
+ *
+ * A full replace deletes whatever it leaves out (R1 §3), so anything Etsy holds that the review did not agree to remove
+ * refuses the send, as does anything Etsy would refuse or a rule the variations would break.
+ */
+export function etsyInventoryReplaceBody(plan: EtsyCompiled, current: EtsyInventoryWrite): { body: EtsyInventoryWrite } | { refusal: string } {
+  const refuse = (sentence: string) => ({ refusal: `${sentence} Nothing was sent.` })
+  const held = new Map<string, EtsyWriteProduct[]>()
+  let unnamed = 0
+  for (const product of current.products) {
+    const sku = product.sku?.trim()
+    if (!sku) { unnamed++; continue }
+    held.set(sku, [...(held.get(sku) ?? []), product])
+  }
+  const nexusBySku = new Map(plan.inventory.products.map(product => [product.sku ?? '', product]))
+  const removable = new Set(plan.removeSkus)
+  const extra = [...held.keys()].filter(sku => !nexusBySku.has(sku) && !removable.has(sku))
+  if (extra.length === 1) return refuse(`Etsy now holds variation ${extra[0]} that Nexus does not; sending the variations would delete it. Review again.`)
+  if (extra.length) return refuse(`Etsy now holds variations ${andList(extra)} that Nexus does not; sending the variations would delete them. Review again.`)
+  if (unnamed && !plan.removeUnnamed) return refuse(unnamed === 1 ? 'Etsy now holds a variation without a SKU; sending the variations would delete it. Review again.'
+    : `Etsy now holds ${unnamed} variations without a SKU; sending the variations would delete them. Review again.`)
+  const kept = [...held].filter(([sku]) => nexusBySku.has(sku))
+  const shared = kept.filter(([, products]) => products.length > 1).map(([sku]) => sku)
+  if (shared.length) return refuse(`Etsy holds ${andList(shared)} on more than one variation, so Nexus cannot tell which is which.`)
+  const several = kept.filter(([, [product]]) => product.offerings.length > 1).map(([sku]) => sku)
+  if (several.length) return refuse(`Etsy holds more than one offering (price and stock) for ${andList(several)}; Nexus sends one per variation.`)
+  const readinessOf = (sku: string) => plan.structure.products.find(product => product.sku === sku)?.readiness_state_id ?? null
+  const copyValues = (values: EtsyWriteProduct['property_values']) => values?.map(value => ({ ...value, value_ids: [...value.value_ids], values: [...value.values] }))
+  const products: EtsyWriteProduct[] = [], ruled: EtsyRuleProduct[] = []
+  // Etsy's variations first, in Etsy's order; then the new ones, in the review's.
+  const order = [...current.products.map(product => product.sku?.trim() ?? '').filter(sku => nexusBySku.has(sku)),
+    ...plan.inventory.products.map(product => product.sku ?? '').filter(sku => !held.has(sku))]
+  for (const sku of order) {
+    const nexus = nexusBySku.get(sku)!, etsy = held.get(sku)?.[0]
+    const offer = etsy?.offerings[0], own = nexus.offerings[0]
+    const readiness = readinessOf(sku) ?? offer?.readiness_state_id ?? own.readiness_state_id ?? null
+    const offering: EtsyWriteOffering = offer ? { price: offer.price, quantity: offer.quantity, is_enabled: offer.is_enabled, readiness_state_id: readiness }
+      : { price: own.price, quantity: own.quantity, is_enabled: own.is_enabled, readiness_state_id: readiness }
+    const values = etsy && sameValues(etsy.property_values, nexus.property_values) ? etsy.property_values : nexus.property_values
+    products.push({ sku: etsy?.sku ?? sku, ...(values ? { property_values: copyValues(values) } : {}), offerings: [offering] })
+    ruled.push({ sku, values: values ?? [], price: offering.price, quantity: offering.quantity, readiness,
+      sets: { price: !offer, quantity: !offer, sku: !offer, readiness: !offer || (offer.readiness_state_id ?? null) !== readiness } })
+  }
+  const noProfile = ruled.filter(product => product.readiness == null).map(product => product.sku)
+  if (noProfile.length) return refuse(`${ETSY_NEEDS_READINESS} ${andList(noProfile)} ${noProfile.length === 1 ? 'has' : 'have'} no processing profile.`)
+  const unpriced = ruled.filter(product => product.sets.price && !(product.price > 0)).map(product => product.sku)
+  if (unpriced.length) return refuse(`${andList(unpriced)}: a new variation needs a price above 0 on Etsy.`)
+  // The listing's own rules, as Etsy holds them now (a rule Etsy does not state is its default, []).
+  const nexusIds = plan.structure.properties.map(property => property.property_id)
+  const etsyIds = [...new Set(current.products.flatMap(product => (product.property_values ?? []).map(value => value.property_id)))]
+  const etsyRules = etsyKeptRules(current, etsyIds, nexusIds, etsyOwnRules(nexusIds, ruled.map(product => product.readiness)))
+  if ('refusal' in etsyRules) return refuse(etsyRules.refusal)
+  const rules = etsyFitReadiness(etsyRules.rules, ruled, nexusIds)
+  const conflicts = etsyRuleConflicts(ruled, rules.rules, new Map(plan.structure.properties.map(property => [property.property_id, property.property_name])))
+  if (conflicts.length) return refuse(conflicts.join(' '))
+  // Each rule as Etsy stated it (its own array, untouched, when it says the same); one Etsy did not state stays unstated
+  // unless it changes (a widened processing-profile rule), or the listing had no variation property on Etsy (then
+  // Nexus's rules are its first).
+  const body: EtsyInventoryWrite = { products }
+  for (const key of ETSY_RULE_KEYS) {
+    const stated = current[key]
+    if (stated !== undefined) body[key] = etsySameRule(stated, rules.rules[key]) ? [...stated] : [...rules.rules[key]]
+    else if (!etsyIds.length || rules.rules[key].length) body[key] = [...rules.rules[key]]
+  }
+  return { body }
+}
+
+/**
+ * E3 — the inventory PUT of a draft Nexus has just created: Nexus's own inventory exactly (each variation's price, stock,
+ * on/off and processing profile, and Nexus's `*_on_property` rules from the build). A fresh draft has nothing to keep
+ * and nothing shared to multiply, so none of a listing's own rules apply (E2 review B1 is about a listing that exists).
+ *
+ * Etsy's fresh inventory (read under the listing lock just before the PUT) may hold only the draft's own first product
+ * (no SKU) or a SKU Nexus sends; anything else is something Nexus did not make, which a full replace would delete.
+ */
+export function etsyCreateInventoryBody(plan: EtsyCompiled, current: EtsyInventoryWrite): { body: EtsyInventoryWrite } | { refusal: string } {
+  const ours = new Set(plan.inventory.products.map(product => product.sku ?? ''))
+  const foreign = [...new Set(current.products.map(product => product.sku?.trim() ?? '').filter(sku => sku && !ours.has(sku)))]
+  if (foreign.length === 1) return { refusal: `Etsy's new draft holds variation ${foreign[0]} that Nexus did not send. Nothing was sent.` }
+  if (foreign.length) return { refusal: `Etsy's new draft holds variations ${andList(foreign)} that Nexus did not send. Nothing was sent.` }
+  const body: EtsyInventoryWrite = {
+    products: plan.inventory.products.map(product => ({ ...product,
+      ...(product.property_values ? { property_values: product.property_values.map(value => ({ ...value, value_ids: [...value.value_ids], values: [...value.values] })) } : {}),
+      offerings: product.offerings.map(offering => ({ ...offering })) })),
+  }
+  for (const key of ETSY_RULE_KEYS) if (plan.inventory[key] !== undefined) body[key] = [...plan.inventory[key]!]
+  return { body }
+}
+
+/**
+ * `value` as far as a PATCH of `field` wrote it: Item size sends only the measures Nexus holds (and the unit), so a
+ * measure Etsy keeps on its own is not a difference. Every other field is compared whole.
+ */
+function asSent(field: string, value: StudioPublishValue, sent: StudioPublishValue): StudioPublishValue {
+  if (field !== 'item_dimensions' || value.state !== 'value' || sent.state !== 'value') return value
+  const ours = sent.value as EtsyListingValues['item_dimensions'], theirs = value.value as EtsyListingValues['item_dimensions']
+  return { state: 'value', value: { unit: theirs.unit, ...Object.fromEntries((['length', 'width', 'height'] as const).filter(key => ours[key] !== null).map(key => [key, theirs[key]])) } }
+}
+
+/**
+ * The read-back, field by field (only fields whose call Etsy applied): Etsy's own equality for listing fields (tags as a
+ * set, a description's line ends), an attribute by its values text and scale (a removed one must be gone), a
+ * translation by its texts, the variations by their structure (their price, stock and on/off are checked by the
+ * inventory writer). One sentence per field that Etsy does not hold as sent.
+ *
+ * `skipUnread` (E3, a create): a listing field Etsy's read never reports (`after.unread`, e.g. production partners) is
+ * not judged; the create names it as sent but unconfirmed. A listing that exists never sends such a field (E2 refuses it).
+ */
+export function etsyReadBackMismatches(plan: EtsyCompiled, applied: ReadonlySet<string>, after: EtsyLiveListing, options: { skipUnread?: boolean } = {}): string[] {
+  const mismatches: string[] = []
+  const differs = (label: string) => mismatches.push(`${label}: Etsy holds something other than what Nexus sent.`)
+  const removed = new Set((plan.request?.calls ?? []).filter(call => call.method === 'DELETE').flatMap(call => call.fields ?? []))
+  for (const field of applied) {
+    if ((ETSY_LISTING_FIELDS as readonly string[]).includes(field)) {
+      const key = field as EtsyListingField
+      if (options.skipUnread && after.unread[key]) continue
+      const sent = etsyValue(field, plan.values[key])
+      const ours = asSent(field, sent, sent), theirs = asSent(field, etsyValue(field, after.values[key]), sent)
+      if (!(etsySame(field, ours, theirs) ?? canonical(ours) === canonical(theirs))) differs(etsyFieldLabel(field))
+    } else if (field.startsWith('property:')) {
+      const id = Number(field.slice(9))
+      const ours = plan.properties.find(property => property.property_id === id), theirs = after.properties.find(property => property.property_id === id)
+      const label = ours?.property_name ?? theirs?.property_name ?? `Property ${id}`
+      if (removed.has(field)) { if (theirs) mismatches.push(`${label}: Etsy still holds it after Nexus removed it.`) }
+      else if (!ours || !theirs || propertyKey(ours) !== propertyKey(theirs)) differs(label)
+    } else if (field.startsWith('translation:')) {
+      const code = field.slice(12)
+      const label = `Translation (${code})`
+      const ours = plan.translations.find(translation => sameLanguage(translation.language, code))
+      if (after.translations === null) mismatches.push(`${label}: Etsy did not return its translations, so Nexus could not confirm it.`)
+      else {
+        const theirs = after.translations.find(translation => sameLanguage(translation.language, code))
+        if (!ours || !theirs || translationKey(ours) !== translationKey(theirs)) differs(label)
+      }
+    } else if (field === 'inventory') {
+      if (structureKey(plan.structure) !== structureKey(after.inventory)) differs(etsyFieldLabel('inventory'))
+    }
+  }
+  return mismatches
 }

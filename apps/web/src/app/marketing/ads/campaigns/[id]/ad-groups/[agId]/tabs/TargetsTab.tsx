@@ -14,7 +14,7 @@ import { Button, Pill } from '@/design-system/primitives'
 import { Plus } from 'lucide-react'
 import { AddKeywordsTargetsModal } from './AddKeywordsTargetsModal'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../../../../_grid/AdsDataGrid'
-import { num, eur, int, STATUS_PILL, latestReportLabel, METRIC_TIPS } from '../../../../_grid/format'
+import { num, eur, int, STATUS_PILL, latestReportLabel, METRIC_TIPS, acosRank, acosFilterValue } from '../../../../_grid/format'
 import { pickMetricFilters } from '../../../../_grid/filters'
 import { bulkPatch, AdjustBidModal } from '../../../../_grid/bulkActions'
 import { StatusOptions, AD_STATUS_OPTS } from '../../../../FilterDropdown'
@@ -65,6 +65,9 @@ function naTotal(rows: TargetRow[], pick: (r: TargetRow) => number | null | unde
 const spendOf = (r: TargetRow) => num(r.spendCents) / 100
 const salesOf = (r: TargetRow) => num(r.salesCents) / 100
 const acosOf = (r: TargetRow) => { const s = salesOf(r); return s ? (spendOf(r) / s) * 100 : 0 }
+// AM-11 — the one ACoS sort/filter rule: spend with no sales is the WORST value, never 0 %.
+const acosSort = (r: TargetRow) => acosRank(null, spendOf(r), salesOf(r))
+const acosFilter = (r: TargetRow) => acosFilterValue(null, spendOf(r), salesOf(r))
 const roasOf = (r: TargetRow) => { const sp = spendOf(r); return sp ? salesOf(r) / sp : 0 }
 const ctrOf = (r: TargetRow) => { const i = num(r.impressions); return i ? (num(r.clicks) / i) * 100 : 0 }
 const cpcOf = (r: TargetRow) => { const c = num(r.clicks); return c ? spendOf(r) / c : 0 }
@@ -92,7 +95,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
     { key: 'bid', label: 'Bid', render: (r) => eur(num(r.bidCents) / 100), sortValue: (r) => num(r.bidCents), filterValue: (r) => num(r.bidCents) / 100, total: '' },
     { key: 'spend', label: 'Spend', tip: METRIC_TIPS.spend, render: (r) => eur(spendOf(r)), sortValue: spendOf, filterValue: spendOf, total: (vr) => { const T = tot(vr); return eur(T.spend) } },
     { key: 'sales', label: 'Sales', tip: METRIC_TIPS.sales, render: (r) => eur(salesOf(r)), sortValue: salesOf, filterValue: salesOf, total: (vr) => { const T = tot(vr); return eur(T.sales) } },
-    { key: 'acos', label: 'ACoS', tip: METRIC_TIPS.acos, render: (r) => <span className="h10-acos">{salesOf(r) ? `${acosOf(r).toFixed(2)}%` : '-%'}<i className="dot" /></span>, sortValue: acosOf, filterValue: acosOf, total: (vr) => { const T = tot(vr); return <span className="h10-acos">{T.sales ? `${((T.spend / T.sales) * 100).toFixed(2)}%` : '-%'}<i className="dot" /></span> } },
+    { key: 'acos', label: 'ACoS', tip: METRIC_TIPS.acos, render: (r) => <span className="h10-acos">{salesOf(r) ? `${acosOf(r).toFixed(2)}%` : '-%'}<i className="dot" /></span>, sortValue: acosSort, filterValue: acosFilter, total: (vr) => { const T = tot(vr); return <span className="h10-acos">{T.sales ? `${((T.spend / T.sales) * 100).toFixed(2)}%` : '-%'}<i className="dot" /></span> } },
     { key: 'roas', label: 'ROAS', tip: METRIC_TIPS.roas, render: (r) => (roasOf(r) ? roasOf(r).toFixed(2) : '0'), sortValue: roasOf, filterValue: roasOf, total: (vr) => { const T = tot(vr); return (T.spend && T.sales) ? (T.sales / T.spend).toFixed(2) : '0' } },
     { key: 'impressions', label: 'Impressions', tip: METRIC_TIPS.impressions, render: (r) => int(r.impressions), sortValue: (r) => num(r.impressions), filterValue: (r) => num(r.impressions), total: (vr) => { const T = tot(vr); return int(T.impr) } },
     { key: 'clicks', label: 'Clicks', tip: METRIC_TIPS.clicks, render: (r) => int(r.clicks), sortValue: (r) => num(r.clicks), filterValue: (r) => num(r.clicks), total: (vr) => { const T = tot(vr); return int(T.clicks) } },

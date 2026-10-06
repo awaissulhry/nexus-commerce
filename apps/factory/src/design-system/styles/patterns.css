@@ -1274,6 +1274,10 @@
   .nds-workspace-subheader .nds-detailhdr-meta { flex: 1 0 100%; flex-wrap: wrap; }
   .nds-workspace-subheader .nds-detailhdr-right { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
   .nds-workspace-subheader-main .nds-workspace-subheader-tabs .nds-scopebar { height: auto; min-height: var(--nds-toolbar-h); flex-wrap: wrap; gap: var(--nds-space-8); padding-block: var(--nds-space-8); }
+  /* Wrapped like the workspace scope at 760px: the chips' line grows by the band (see there). */
+  .nds-workspace-subheader-main .nds-workspace-subheader-tabs .nds-scopebar:has(> .nds-scopebar-chips[data-overflows]) { height: auto; padding-bottom: var(--nds-space-8); }
+  .nds-workspace-subheader-tabs .nds-scopebar > .nds-scopebar-chips[data-overflows] { margin-bottom: calc(-1 * var(--nds-space-3)); }
+  .nds-workspace-subheader-tabs .nds-scopebar:has(> .nds-scopebar-chips[data-overflows]) > .nds-scopebar-label { align-self: flex-start; line-height: var(--nds-control-h-sm); }
   .nds-workspace-subheader .nds-scopebar-right { flex: 1 0 100%; justify-content: flex-end; }
 }
 
@@ -1372,6 +1376,26 @@
   padding: 3px 3px;
   margin: -3px -3px;
   scrollbar-width: thin;
+}
+/* While the chips SCROLL (`useHorizontalOverflow` marks the track `data-overflows`), the scrollbar sits in a band under
+   the chips, never over a chip or its focus ring — the Tabs rule (components.css), same 14px band, same measurement.
+   The bar is a FIXED-height host (44px; the workspace scope's 40px floor), so nothing may shift: the track's band HANGS
+   below its unchanged 28px layout box (a negative margin as deep as the band) and the bar grows by the band at its
+   bottom (padding), so its content box — and every chip, label and control centred in it — stays exactly where it was.
+   An overlay bar gets the 14px band inside the track; a classic bar is already below the chips and hangs by its own
+   measured height (`--nds-scrollbar-size`, ≤ 14px: Chromium thin is 11px), so the same 14px of bar growth holds it. */
+.nds-scopebar-chips[data-overflows='overlay'] {
+  padding-bottom: calc(var(--nds-space-3) + var(--nds-space-14));
+  margin-bottom: calc(-1 * (var(--nds-space-3) + var(--nds-space-14)));
+}
+.nds-scopebar-chips[data-overflows='classic'] { margin-bottom: calc(-1 * (var(--nds-space-3) + var(--nds-scrollbar-size, 0px))); }
+.nds-scopebar:has(> .nds-scopebar-chips[data-overflows]) {
+  height: calc(44px + var(--nds-space-14));
+  padding-bottom: var(--nds-space-14);
+}
+.nds-scopebar.nds-workspace-scope:has(> .nds-scopebar-chips[data-overflows]) {
+  height: auto;
+  min-height: calc(var(--nds-toolbar-h) + var(--nds-space-14));
 }
 .nds-scopebar-right {
   display: flex;
@@ -1510,6 +1534,12 @@
   .nds-workspace-scope { padding-block: var(--nds-space-8); gap: var(--nds-space-8); }
   .nds-workspace-scope .nds-scopebar-chips { overflow-x: auto; max-width: 100%; }
   .nds-workspace-scope .nds-scopebar-right { flex-basis: 100%; }
+  /* The WRAPPED scope bar (controls on a line of their own) is not of fixed height, and a hanging band would sit on
+     the controls' line: here the chips' line itself grows by the band (the bar keeps its 8px padding), and the label
+     keeps to the chips (a 28px line box at the top of their line) instead of centring on the taller line. */
+  .nds-scopebar.nds-workspace-scope:has(> .nds-scopebar-chips[data-overflows]) { min-height: var(--nds-toolbar-h); padding-bottom: var(--nds-space-8); }
+  .nds-workspace-scope > .nds-scopebar-chips[data-overflows] { margin-bottom: calc(-1 * var(--nds-space-3)); }
+  .nds-workspace-scope:has(> .nds-scopebar-chips[data-overflows]) > .nds-scopebar-label { align-self: flex-start; line-height: var(--nds-control-h-sm); }
 }
 
 /* Opt-in semantic theme for workspaces hosted in an older light-pinned shell. */

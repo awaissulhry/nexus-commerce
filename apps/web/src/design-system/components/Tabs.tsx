@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useHorizontalOverflow } from './useHorizontalOverflow'
 
 export interface TabItem {
   id: string
@@ -56,11 +57,17 @@ export interface TabsProps {
    * CT.1 — 'sm' is a tab strip INSIDE a bar beside 28px controls (the studio's 40px scope row, the
    * record drawer's pane strip): the bar's type (sm-plus, 600), tabs stretched to the strip so the
    * indicator meets its edge, and no hairline of its own because the host draws one.
+   *
+   * While a strip scrolls sideways under an overlay scrollbar it grows by a band below the tabs for the
+   * bar (`useHorizontalOverflow`, components.css). A host that FIXES its height around an `sm` strip must
+   * grow with it (`:has(> .nds-tabs[data-overflows])`), or the band would shrink the tabs.
    */
   size?: 'sm' | 'md' | 'lg'
   /**
    * Keep long labels within a narrow container; the active tab scrolls into view — when it changes, when tabs are
    * added or removed around it, and when a label grows (each moves it out of view on a phone). Only the strip scrolls.
+   * While it scrolls, the scrollbar sits in a band BELOW the tabs, never over a label, the active underline or a focus
+   * ring (Owner 2026-10-05); a strip that fits keeps its exact layout.
    */
   overflow?: 'scroll'
   /**
@@ -90,6 +97,9 @@ export function Tabs({ ariaLabel, tabs, active, onChange, className, size = 'md'
   const base = idBase ?? autoBase
   // The tab ids in order, as one value: a tab added before the active one (a market chosen by itself) pushes it along.
   const tabKey = tabs.map((t) => t.id).join('\u0000')
+  // Every strip, not only `overflow="scroll"`: a host may scroll it too (`.nds-workspace-subheader-tabs`, a page's own
+  // `overflow-x: auto`). Only a strip that really scrolls is marked.
+  useHorizontalOverflow(listRef)
   useEffect(() => {
     if (overflow !== 'scroll') return
     const list = listRef.current

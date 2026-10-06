@@ -37,7 +37,7 @@ export interface SummaryPayload {
   current: MixedDerived
   prior: MixedDerived
   /** One total per currency, never added together (absent on an API older than AM-21). */
-  byCurrency?: Array<{ currency: string; current: Derived; prior: Derived }>
+  byCurrency?: Array<{ currency: string; current: Derived; compared?: Derived; prior: Derived }>
   deltas: { adFeesPct: number | null; salesPct: number | null; clicksPct: number | null; impressionsPct: number | null }
   campaignCounts: Record<string, number>
   economicsStatus: Record<string, number>

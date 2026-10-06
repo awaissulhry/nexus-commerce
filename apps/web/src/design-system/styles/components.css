@@ -160,8 +160,34 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
   max-width: 100%;
   overflow-x: auto;
   padding: var(--nds-space-4);
+  scrollbar-width: thin;
 }
 .nds-tabs.scrollable .nds-tab { flex-shrink: 0; }
+/* A strip that SCROLLS keeps its scrollbar in a band BELOW the tabs (Owner 2026-10-05, the Publish window: "the
+   scrollbar is layered above the text or the tab buttons"). A macOS overlay scrollbar takes no room: it is drawn over
+   the bottom of the scroll box, which was the labels, the active underline and the focus ring. `useHorizontalOverflow`
+   (Tabs) marks the strip `data-overflows` only while it scrolls, so a strip that fits keeps its exact layout.
+   The bar's band is 14px (`--nds-space-14`), MEASURED in Chromium on macOS with overlay bars: a thin bar's thumb is
+   6px, 1px off the edge (7px), and under the pointer it widens to a 14px track — 14 keeps even the hovered bar off
+   the tabs. Above it the strip keeps 4px for the focus ring (outline 2px at 1px offset = 3px below a tab), which a
+   `scrollable` strip already has as padding: every scrolling strip ends 4 + 14 = 18px below its tabs.
+   A classic bar (`data-overflows="classic"`) takes its own room below the tabs and covers nothing: no band.
+   md / lg: the hairline stays where it was — under the tabs, where the active underline meets it — and the band is
+   below it (the border turns transparent and the same 1px line is drawn that far above the bottom edge). sm has no
+   hairline (its host draws one): the band is simply below the tabs. */
+.nds-tabs[data-overflows] { scrollbar-width: thin; }
+.nds-tabs[data-overflows='overlay'] { padding-bottom: calc(var(--nds-space-4) + var(--nds-space-14)); }
+.nds-tabs:not(.sm)[data-overflows='overlay'] {
+  border-bottom-color: transparent;
+  /* Longhands only: a host's background colour stays. The image does not scroll with the tabs (attachment: scroll),
+     so the line spans the visible strip as the border did. */
+  background-image: linear-gradient(var(--nds-border-subtle), var(--nds-border-subtle));
+  background-repeat: no-repeat;
+  background-size: 100% 1px;
+  /* Where the border was: on the tabs' bottom edge (a host-scrolled strip), or under the 4px padding (`scrollable`). */
+  background-position: left 0 bottom calc(var(--nds-space-4) + var(--nds-space-14) - 1px);
+}
+.nds-tabs.scrollable:not(.sm)[data-overflows='overlay'] { background-position: left 0 bottom calc(var(--nds-space-14) - 1px); }
 .nds-tab {
   position: relative;
   border: none;
@@ -3226,7 +3252,10 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 @container (max-width: 560px) { .nds-media-board-row { grid-template-columns: minmax(0, 1fr); } .nds-media-board-head { flex-direction: row; flex-wrap: wrap; align-items: center; } }
 /* MediaBoard `slots` (the Media page's photo grid, 2026-09-29): one header of slot names over every row, fixed slots,
    and the board scrolls sideways as one with the set names kept in view. Stays a two-column grid on a phone. */
-.nds-media-board.slots { --nds-media-board-tile: 76px; overflow-x: auto; overscroll-behavior-x: contain; }
+.nds-media-board.slots { --nds-media-board-tile: 76px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+/* While the board scrolls under an overlay scrollbar, the bar sits in a band under the last row — not over its frame
+   and, under the pointer, its captions (the Tabs band, same 14px and the same reason). */
+.nds-media-board.slots[data-overflows='overlay'] { padding-bottom: var(--nds-space-14); }
 .nds-media-board.slots .nds-media-board-row, .nds-media-board-columns { grid-template-columns: 136px max-content; width: max-content; min-width: 100%; }
 .nds-media-board-columns { display: grid; gap: var(--nds-space-10); padding: 0 var(--nds-space-10); border: 1px solid transparent; color: var(--nds-text-2); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); font-variant-numeric: tabular-nums; }
 .nds-media-board-columns-head { position: sticky; inset-inline-start: 0; }

@@ -14,9 +14,9 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { ExternalLink, ChevronDown, Plus, Upload, Cog } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
-import { DateRangePicker } from '../../_shell/DateRangePicker'
+import { DateRangePicker, lastCompleteDays } from '../../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
-import { int, pct, money, latestReportLabel, METRIC_TIPS } from '../../campaigns/_grid/format'
+import { int, pct, money, latestReportLabel, METRIC_TIPS, acosRank, acosFilterValue } from '../../campaigns/_grid/format'
 import { currencyTotals, moneyPerCurrency, ratioPerCurrency } from '../_lib/currencyTotals'
 import { getBackendUrl } from '@/lib/backend-url'
 import '../ebay.css'
@@ -41,7 +41,7 @@ type CampaignsPayload = {
 const strategyBadge = (c: CampaignRow) => (c.channels.includes('OFF_SITE') ? 'OFF' : c.fundingModel === 'COST_PER_CLICK' ? 'PRI' : 'GEN')
 const strategyLabel = (c: CampaignRow) => (c.channels.includes('OFF_SITE') ? 'Offsite' : c.fundingModel === 'COST_PER_CLICK' ? (c.targetingType === 'SMART' ? 'Priority · Smart' : 'Priority') : 'General')
 
-const defaultRange = () => { const e = new Date(); e.setHours(0, 0, 0, 0); const s = new Date(e); s.setDate(s.getDate() - 29); return { start: s, end: e } }
+const defaultRange = () => lastCompleteDays(30) // AM-16 — complete days, ending yesterday
 
 function StatusCell({ c, onAction, onMenu }: {
   c: CampaignRow
@@ -158,7 +158,9 @@ export function EbayCampaignsGrid() {
     { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales: any buyer purchase within 30 days of any click on the ad.', render: (c) => money(um(c).salesCents, c.budgetCurrency), sortValue: (c) => um(c).salesCents, filterValue: (c) => um(c).salesCents / 100, total: (vr) => moneyPerCurrency(totOf(vr), (t) => t.salesCents) },
     {
       key: 'acos', label: 'ACOS', tip: 'Ad fees ÷ any-click attributed sales. Post-any-click this trends high by construction — judge vs break-even.',
-      render: (c) => (um(c).acos != null ? pct(um(c).acos! / 100) : '—'), sortValue: (c) => um(c).acos ?? -1, filterValue: (c) => um(c).acos ?? 0,
+      render: (c) => (um(c).acos != null ? pct(um(c).acos! / 100) : '—'), // AM-11 — `acos` is PERCENT POINTS (eBay's acosPct); fees with no sales sort/filter as the worst, never 0 %.
+      sortValue: (c) => { const m = um(c); return acosRank(m.acos != null ? m.acos / 100 : null, m.spendCents, m.salesCents) },
+      filterValue: (c) => { const m = um(c); return acosFilterValue(m.acos != null ? m.acos / 100 : null, m.spendCents, m.salesCents) },
       total: (vr) => ratioPerCurrency(totOf(vr), (t) => (t.salesCents > 0 ? t.feesCents / t.salesCents : null), pct),
     },
     {
