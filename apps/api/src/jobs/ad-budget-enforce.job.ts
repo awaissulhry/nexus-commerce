@@ -31,7 +31,9 @@ async function budgetEnforceTick(): Promise<string> {
   const apply = gate.mode === 'AUTO'
   // 1d — a live run honours the account dial and this engine's caps; the note says what they held back.
   const r = await applyBudgetEnforcement({ dryRun: !apply, actor: 'automation:budget-manager-cron' })
-  return `plans=${r.result.totals.plans} budgetChanges=${r.result.totals.budgetChanges} applied=${r.budgetApplied} suppress=${r.suppressed} restore=${r.restored} failed=${r.failed} ${r.dryRun ? '(dry-run)' : '(LIVE)'}${engineGuardNote(r.guard, BUDGET_ENFORCE_DIAL_WORDS)}`
+  // W1-6b — ad groups a category or product cap floored or gave back, only when there were any (a normal line is unchanged).
+  const groups = r.adGroupsSuppressed || r.adGroupsRestored ? ` adGroupFloors=${r.adGroupsSuppressed} adGroupRestores=${r.adGroupsRestored}` : ''
+  return `plans=${r.result.totals.plans} budgetChanges=${r.result.totals.budgetChanges} applied=${r.budgetApplied} suppress=${r.suppressed} restore=${r.restored} failed=${r.failed} ${r.dryRun ? '(dry-run)' : '(LIVE)'}${groups}${engineGuardNote(r.guard, BUDGET_ENFORCE_DIAL_WORDS)}`
 }
 
 export async function runBudgetEnforceCron(): Promise<void> {

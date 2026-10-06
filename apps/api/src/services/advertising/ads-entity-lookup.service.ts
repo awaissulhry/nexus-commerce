@@ -46,12 +46,15 @@ export async function adGroupsByExternalId(externalIds: string[]): Promise<Map<s
 }
 
 /** MCP full control A8 — a campaign's ad groups whose default bid a suppression would floor, and those it remembers. */
-export async function adGroupSuppressionCounts(campaignId: string, floorCents: number): Promise<{ aboveFloor: number; remembered: number }> {
-  const [aboveFloor, remembered] = await Promise.all([
+export async function adGroupSuppressionCounts(campaignId: string, floorCents: number): Promise<{ aboveFloor: number; remembered: number; ownFloors: number }> {
+  // W1-6b — `remembered`: what a campaign restore gives back, so not an ad group floored on its own (its owner lifts
+  // that one; `ownFloors` counts them).
+  const [aboveFloor, remembered, ownFloors] = await Promise.all([
     prisma.adGroup.count({ where: { campaignId, defaultBidCents: { gt: floorCents }, suppressedFromBidCents: null } }),
-    prisma.adGroup.count({ where: { campaignId, suppressedFromBidCents: { not: null } } }),
+    prisma.adGroup.count({ where: { campaignId, bidsSuppressedAt: null, suppressedFromBidCents: { not: null } } }),
+    prisma.adGroup.count({ where: { campaignId, bidsSuppressedAt: { not: null } } }),
   ])
-  return { aboveFloor, remembered }
+  return { aboveFloor, remembered, ownFloors }
 }
 
 /** The rules' pending suggestions, the most recently re-proposed first (at most `take`). */

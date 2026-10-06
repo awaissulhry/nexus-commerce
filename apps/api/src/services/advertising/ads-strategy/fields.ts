@@ -15,8 +15,9 @@
  *   money        ad-spend money: hidden from a person without financials.adspend.view
  *   readBy       the engines and doors that ACT on it. Each W1 engine PR adds itself here, so a screen never claims a
  *                reader that does not exist (fields.vitest.test.ts holds the list). W1-6: the budget engine (the market
- *                cap and the stop bid), the retail guard and suppress-campaign (the stop bid), and the engines whose
- *                guard counts a market's actions per run (hourly bid plans, the budget engine, dayparting).
+ *                cap and the stop bid; W1-6b: category and product caps too), the retail guard and suppress-campaign
+ *                (the stop bid), and the engines whose guard counts a market's actions per run (hourly bid plans, the
+ *                budget engine, dayparting).
  *
  * 🔴 Units. `*Pct` is an INTEGER PERCENT (25 = 25 %), never a fraction — the AdsAutomationState.defaultTargetAcosPct
  * convention. The engines take fractions (Campaign.dynamicBidding.targetAcos = 0.25). The two meet ONLY through
@@ -179,8 +180,9 @@ export const STRATEGY_FIELDS: readonly StrategyField[] = [
   { key: 'target', label: 'Target', columns: ['targetKind', 'targetPct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'mixed', raise: 'target', money: true, readBy: [] },
   // The number Nexus's bid engines would steer by: the first ACoS target down the chain (a TACoS target is skipped).
   { key: 'targetAcosPct', label: 'Target ACoS the engines use', columns: ['targetKind', 'targetPct'], derivedFrom: 'target', levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'target', money: true, readBy: [] },
-  // W1-6: the budget engine stops a market at its MARKET row's cap (low bids until the 1st). Category and product caps: W1-6b.
-  { key: 'monthlySpendCapCents', label: 'Monthly spend cap', columns: ['monthlySpendCapCents'], levels: ALL_LEVELS, resolve: 'everyScope', safer: 'ownSpend', raise: 'up', money: true, readBy: ['budget engine (the market cap)'] },
+  // W1-6: the budget engine stops a market at its MARKET row's cap; W1-6b: a category's or product's cap floors every ad
+  // group holding a product under it (low bids until the 1st, both).
+  { key: 'monthlySpendCapCents', label: 'Monthly spend cap', columns: ['monthlySpendCapCents'], levels: ALL_LEVELS, resolve: 'everyScope', safer: 'ownSpend', raise: 'up', money: true, readBy: ['budget engine (market, category and product caps)'] },
   { key: 'minBidCents', label: 'Lowest bid', columns: ['minBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'floor', money: true, readBy: [] },
   { key: 'maxBidCents', label: 'Highest bid', columns: ['maxBidCents'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: true, readBy: [] },
   { key: 'maxChangePct', label: 'Largest bid change per action', columns: ['maxChangePct'], levels: ALL_LEVELS, resolve: 'inherit', safer: 'lower', raise: 'up', money: false, readBy: [] },
@@ -221,6 +223,8 @@ export function notReadYet(): StrategyFieldKey[] {
 export const STRATEGY_MONEY: Readonly<Record<string, string>> = Object.fromEntries(
   ['targetPct', 'targetAcosPct', 'monthlySpendCapCents', 'minBidCents', 'maxBidCents', 'harvestMaxAcosPct', 'negateMinSpendCents', 'stopBidCents', 'monthlyBudgetCents',
     // W1-6 — this month against a cap: spend so far, the forecast and the cap where bids drop.
-    'spendCents', 'forecastSpendCents', 'stopCapCents']
+    'spendCents', 'forecastSpendCents', 'stopCapCents',
+    // W1-6b — spend of ads Nexus cannot tie to a product (counted on no category or product cap).
+    'unattributedCents']
     .map((key) => [key, FIELDS.financialsAdspendView]),
 )

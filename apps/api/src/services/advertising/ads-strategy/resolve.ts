@@ -482,6 +482,17 @@ export function resolveProducts(
   return { fields, autonomy, caps, warnings: [...new Set(warnings)] }
 }
 
+/**
+ * W1-6b — every monthly cap the market's rows hold, each with its row: a CATEGORY or PRODUCT cap binds on its own
+ * scope's spend (the products under it), the market's on the whole market.
+ */
+export function capRows(index: StrategyIndex): CapInForce[] {
+  return index.rows.flatMap((row) => {
+    const cap = valueIn(index, row, 'monthlySpendCapCents')
+    return typeof cap === 'number' ? [{ source: sourceOf(row), monthlySpendCapCents: cap }] : []
+  })
+}
+
 // ── What the engines take ─────────────────────────────────────────────────────────────────────────
 
 /** The typed numbers an engine reads (W1-5..W1-8). Null: the strategy says nothing; keep today's behaviour. */

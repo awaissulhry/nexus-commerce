@@ -10,7 +10,7 @@
  *
  * Read only, Nexus only: no marketplace call. Honest about readers: each field's `readBy` names the engines and doors
  * that act on it, `notReadYet` the fields none acts on yet; W1 wires the readers one by one (W1-6: the monthly market
- * cap, the stop bid and the actions per run).
+ * cap, the stop bid and the actions per run; W1-6b: category and product caps).
  * Money (targets, bids, caps, spend thresholds) sits only under the keys STRATEGY_MONEY names: a person without
  * financials.adspend.view gets the same answer minus exactly those keys.
  */
@@ -59,7 +59,9 @@ const adsStrategy: AgentTool = {
     + "business's own Claude level per ad tool. view rows lists every strategy row of a market; view history the changes. "
     + "Each field's readBy names the engines and doors that act on it, and notReadYet lists the fields nothing acts on yet "
     + '(stored and shown only). A market cap also says how this month stands (thisMonth: spend so far, the forecast, the cap '
-    + 'where bids drop until the 1st). Targets, bids, caps and spend thresholds are ad-spend money: hidden from a person '
+    + "where bids drop until the 1st); a category's or product's cap says its own scope's spend so far and whether it is "
+    + 'reached (then every ad group holding a product under it is at low bids until the 1st). Targets, bids, caps and spend '
+    + 'thresholds are ad-spend money: hidden from a person '
     + 'without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {
     const out = await readStrategy(args as StrategyReadArgs)

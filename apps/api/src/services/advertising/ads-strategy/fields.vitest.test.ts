@@ -58,12 +58,13 @@ describe('the registry', () => {
   })
 
   it('is honest: each field names exactly the engines and doors that act on it, and notReadYet the rest', () => {
-    // W1-6 — the budget engine stops a market at its cap with the stop bid (ads-budget-enforce.service.ts); the retail
+    // W1-6 — the budget engine stops a market at its cap with the stop bid (ads-budget-enforce.service.ts; W1-6b: a
+    // category's or product's cap floors the ad groups holding it, ads-strategy/spend.ts); the retail
     // guard (ads-retail-readiness.service.ts) and suppress-campaign (ads-change.tools.ts) floor at the stop bid; the
     // engine guard (ads-engine-guard.ts) counts a market's actions per run for the engines that name the market.
     const readers = Object.fromEntries(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => [f.key, f.readBy]))
     expect(readers).toEqual({
-      monthlySpendCapCents: ['budget engine (the market cap)'],
+      monthlySpendCapCents: ['budget engine (market, category and product caps)'],
       maxActionsPerRun: ['hourly bid plans (rank-defend)', 'budget engine', 'dayparting'],
       stop: ['budget engine', 'retail guard', 'suppress-campaign'],
     })

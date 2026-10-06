@@ -184,7 +184,7 @@ describe('effective', () => {
       alsoInForce: [{ setting: `the budget plan ${month()}`, monthlyBudgetCents: 616161, stopOverSpend: true }], stricter: { from: 'the market strategy' },
       // W1-6 — how this month stands against the cap where bids drop (the budget engine's rule), and who reads it.
       thisMonth: { month: month(), spendCents: 0, spendThrough: null, forecastSpendCents: null, stopCapCents: 515151, stopBy: 'the market strategy', reached: false },
-      readBy: ['budget engine (the market cap)'],
+      readBy: ['budget engine (market, category and product caps)'],
     })
     expect(out.notReadYet).not.toEqual(expect.arrayContaining(['monthlySpendCapCents']))
     expect(m.shadowedBy).toEqual([{ campaignId: ids.c1, name: 'Test campaign one', targetAcosPct: 30 }])
@@ -208,6 +208,30 @@ describe('effective', () => {
       // Another business reads its own month only: no cap of its own, no spend of this one.
       const bravo = fieldOf(data(await inB(() => readStrategy({ market: 'IT' }))).markets[0], 'monthlySpendCapCents')
       expect(bravo.thisMonth).toBeUndefined()
+    } finally {
+      await inA(() => db().amazonAdsDailyPerformance.delete({ where: { id: row.id } }))
+    }
+  })
+
+  it('W1-6b — a product\'s cap says its own spend so far (its ads, every ad group) and whether it is reached', async () => {
+    const ad = await inA(() => db().adProductAd.findFirstOrThrow({ where: { adGroupId: ids.g2, productId: ids.q }, select: { id: true } }))
+    const row = await inA(() => db().amazonAdsDailyPerformance.create({ data: {
+      profileId: 'P-TEST', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: new Date(`${month()}-01T00:00:00Z`), entityType: 'PRODUCT_AD', entityId: 'AD-W1-READ-Q',
+      localEntityId: ad.id, costMicros: 313_130_000n, currencyCode: 'EUR', reportRunId: 'RUN-TEST', reportedAt: new Date(),
+    } as never }))
+    try {
+      const cap = fieldOf(data(await inA(() => readStrategy({ market: 'IT', productId: ids.q }))).markets[0], 'monthlySpendCapCents')
+      expect(cap.caps).toEqual([
+        expect.objectContaining({ level: 'product', label: 'TEST-W1-Q (IT)', monthlySpendCapCents: 31313, thisMonth: { spendCents: 31_313, reached: true } }),
+        expect.not.objectContaining({ thisMonth: expect.anything() }), // the market's cap: its own month is `thisMonth` on the field
+      ])
+      expect(cap.scopeSpend).toMatchObject({ spendThrough: `${month()}-01`, unattributedCents: 0 })
+      expect(cap.note).toMatch(/a category's or a product's lowers every ad group holding a product under it/)
+      // The money filter: a person without ad-spend money sees neither the spend nor the cap, only whether it is reached.
+      const reader: UserPrincipal = { kind: 'user', userId: 'u-w1-read', label: 'W1 reader', permissions: { isOwner: false, permissions: new Set(Object.values(FEATURES)) }, workspace: scope(A), via: 'app' }
+      const partial = JSON.stringify((await callTool(reader, 'ads-strategy', { market: 'IT', productId: ids.q })).visible)
+      expect(partial).not.toMatch(/"(spendCents|unattributedCents|monthlySpendCapCents)":/)
+      expect(partial).toContain('"reached":true')
     } finally {
       await inA(() => db().amazonAdsDailyPerformance.delete({ where: { id: row.id } }))
     }

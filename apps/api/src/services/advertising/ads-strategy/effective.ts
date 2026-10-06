@@ -45,6 +45,8 @@ export interface StrategyView {
   forCategory(categoryId: string): Promise<EffectiveStrategy>
   /** Several products as one subject (the safer value per field); `unknownAds`: ads whose product Nexus does not know. */
   forProducts(productIds: readonly string[], unknownAds?: number): Promise<EffectiveStrategy>
+  /** W1-6b — each product on its own (not merged): one catalog read for all of them. Products Nexus does not know are left out. */
+  forEachProduct(productIds: readonly string[]): Promise<Map<string, EffectiveStrategy>>
   /** Each ad group: its products resolved together (the safer value per field). One catalog read for all of them. */
   forAdGroups(adGroupIds: readonly string[]): Promise<Map<string, EffectiveStrategy>>
   /** Each campaign: every product of every ad group of it, resolved together. */
@@ -96,6 +98,16 @@ export async function openStrategy(market: string, channel = 'AMAZON'): Promise<
     },
     async forProducts(productIds, unknownAds = 0) {
       return (await resolveSubjects([{ key: 'products', productIds: [...productIds], unknownAds }])).get('products')!
+    },
+    async forEachProduct(productIds) {
+      if (empty) return new Map([...new Set(productIds)].map((id) => [id, atMarket]))
+      const { catalog } = await loadCatalog(productIds)
+      const out = new Map<string, EffectiveStrategy>()
+      for (const id of new Set(productIds)) {
+        const product = catalog.products.get(id)
+        if (product) out.set(id, effective(resolveProducts(index, [product], catalog)))
+      }
+      return out
     },
     forAdGroups,
     async forCampaigns(campaignIds) {

@@ -35,6 +35,7 @@ import {
   type StrategyField,
 } from './fields.js'
 import { openStrategy } from './effective.js'
+import { scopeCapsThisMonth, type ScopeCapsThisMonth } from './spend.js'
 import {
   bidPolicies,
   campaignMarkets,
@@ -87,8 +88,13 @@ const MONTH_NOTE =
   + "until the cap is raised. The forecast is the Budget Manager's: spend over the complete days, times the days of the month."
 const CAP_NOTE =
   "Each cap binds on its own scope's spend (the market's on the whole market, a category's on its products, a product's on "
-  + "its own); none is inherited. The budget engine stops a market at the market's cap; category and product caps are stored "
-  + 'and shown only (not enforced yet).'
+  + "its own); none is inherited. The budget engine stops at each one until the 1st: the market's cap lowers every campaign of "
+  + "the market to its stop bid; a category's or a product's lowers every ad group holding a product under it (the other "
+  + 'products sharing that ad group stop too). Never a pause.'
+const SCOPE_SPEND_NOTE =
+  "A category's or product's spend so far adds up Amazon's daily advertised-product report (Sponsored Products ads only), "
+  + 'each ad counted on its product and on every cap that product falls under: whole days up to spendThrough, never today. '
+  + 'unattributedCents: spend of ads Nexus cannot tie to a product, counted on no category or product cap.'
 const TARGET_ORDER =
   "a rule's or an autopilot plan's own target → the campaign's own target ACoS → this strategy (product, category, market) → "
   + 'the account default → profit data → 30 %'
@@ -292,17 +298,28 @@ async function monthAgainstCaps(market: string, resolved: ResolvedStrategy, olde
   }
 }
 
-function fieldEntries(resolved: ResolvedStrategy, older: Older, thisMonth: Record<string, unknown> | null): Array<Record<string, unknown>> {
+/** W1-6b — this month's spend of a category's or product's own scope, and whether its cap is reached. */
+function scopeMonth(strategyId: string, scope: ScopeCapsThisMonth | null): Record<string, unknown> {
+  const cap = scope?.caps.find((c) => c.strategyId === strategyId)
+  return cap ? { thisMonth: { spendCents: cap.spendCents, reached: cap.reached } } : {}
+}
+
+function fieldEntries(resolved: ResolvedStrategy, older: Older, thisMonth: Record<string, unknown> | null, scope: ScopeCapsThisMonth | null): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = []
   for (const spec of STRATEGY_FIELDS) {
     if (spec.key === 'claudeAutonomy') continue
     if (spec.key === 'monthlySpendCapCents') {
-      const caps = resolved.caps.map((c) => ({ ...sourceOut(c.source), monthlySpendCapCents: c.monthlySpendCapCents }))
+      const caps = resolved.caps.map((c) => ({
+        ...sourceOut(c.source), monthlySpendCapCents: c.monthlySpendCapCents,
+        ...(c.source.level === 'market' ? {} : scopeMonth(c.source.strategyId, scope)),
+      }))
       const market = resolved.caps.find((c) => c.source.level === 'market')
+      const scoped = resolved.caps.some((c) => c.source.level !== 'market')
       out.push({
         field: spec.key, label: spec.label, caps,
         note: CAP_NOTE,
         ...(thisMonth ? { thisMonth } : {}),
+        ...(scoped && scope ? { scopeSpend: { spendThrough: scope.spendThrough, unattributedCents: scope.unattributedCents, note: SCOPE_SPEND_NOTE } } : {}),
         ...(older.plan ? {
           alsoInForce: [{ setting: `the budget plan ${older.plan.month}`, monthlyBudgetCents: older.plan.monthlyBudgetCents, stopOverSpend: older.plan.stopOverSpend, autoPacing: older.plan.autoPacing }],
           ...(market ? { stricter: { from: market.monthlySpendCapCents <= older.plan.monthlyBudgetCents ? 'the market strategy' : `the budget plan ${older.plan.month}` } } : {}),
@@ -399,6 +416,10 @@ async function effectiveIn(market: string, channel: string, scope: Scope, levels
   }
   const [older, shadows] = await Promise.all([olderSettings(market, scope), shadowing(market, scope)])
   const thisMonth = await monthAgainstCaps(market, resolved, older)
+  // W1-6b — the category and product caps in force here, each with its own scope's spend this month.
+  const month = currentMonth()
+  const [y, m] = month.split('-').map(Number)
+  const scopeSpend = resolved.caps.some((c) => c.source.level !== 'market') ? await scopeCapsThisMonth(view, new Date(Date.UTC(y, m - 1, 1)), new Date(Date.UTC(y, m, 1))) : null
   const claude = CLAUDE_ACTION_TYPES.map((action) => {
     const r = resolved.autonomy.get(action) ?? { value: null, source: null }
     return {
@@ -414,7 +435,7 @@ async function effectiveIn(market: string, channel: string, scope: Scope, levels
     scope: scopeOut,
     strategyRows: view.index.rows.length,
     ...(view.empty ? { note: `No strategy is set for ${market} yet: every engine works as it does today.` } : {}),
-    fields: fieldEntries(resolved, older, thisMonth),
+    fields: fieldEntries(resolved, older, thisMonth, scopeSpend),
     claude,
     claudeNote: CLAUDE_NOTE,
     shadowedBy: shadows.shadowedBy,
