@@ -478,8 +478,11 @@ const cmp = (a: number | string | null, b: number | string | null, sign: number)
  * The schedule's NAME still resolves through to its group — `group?.name ?? name` — the rule
  * `resolveOrigins` applies because *the operator thinks in named groups*. That function is not
  * exported and takes `ChangeRow[]`, so its rule is reused, not the function.
+ *
+ * Exported for auto-bid (ads-auto-bid.service.ts), which leaves the bids a `schedule` or a person (`manual`) owns: the
+ * owner this page and the ad-targets tool show is the one auto-bid obeys.
  */
-async function bidderByCampaign(): Promise<Map<string, { kind: BidderKind; name: string | null }>> {
+export async function bidderByCampaign(): Promise<Map<string, { kind: BidderKind; name: string | null }>> {
   const since60 = new Date(Date.now() - 60 * 86400_000)
   const [schedules, campaigns, bidLogs] = await Promise.all([
     prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true, name: true, group: { select: { name: true } } } }),
