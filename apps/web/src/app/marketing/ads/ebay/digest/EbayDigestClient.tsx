@@ -12,16 +12,21 @@ import { DataGrid } from '@/design-system/grid/datagrid'
 import Link from '@/lib/workspaces/Link'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import '../ebay.css'
-import { postEbayAds, getEbayAds, eurC, pctP, intlN } from '../_lib'
+import { postEbayAds, getEbayAds, pctP, intlN } from '../_lib'
+import { money } from '../../campaigns/_grid/format'
 
-interface Mover { campaign: string; feesCents: number; salesCents: number; sold: number }
+/** AM-21 — `currency` on movers, markets and the week: digests generated before it lack it and were stored in euros. */
+interface Mover { campaign: string; currency?: string; feesCents: number; salesCents: number; sold: number }
 
 interface DigestPayload {
   week: { start: string; end: string }
-  totals: { adFeesCents: number; salesCents: number; clicks: number; impressions: number; soldQty: number; acosPct: number | null }
-  prior: { adFeesCents: number; salesCents: number; soldQty: number }
+  /** The week's one currency; null when it spans more than one (then the money totals are null: read `byCurrency`). */
+  currency?: string | null
+  totals: { adFeesCents: number | null; salesCents: number | null; clicks: number; impressions: number; soldQty: number; acosPct: number | null }
+  prior: { adFeesCents: number | null; salesCents: number | null; soldQty: number }
+  byCurrency?: Array<{ currency: string; adFeesCents: number; salesCents: number; soldQty: number; acosPct: number | null; prior: { adFeesCents: number; salesCents: number; soldQty: number } }>
   // ER4 E2 — present on digests generated after 2026-07-04; older weeks lack it
-  byMarketplace?: Array<{ marketplace: string; adFeesCents: number; salesCents: number; soldQty: number; acosPct: number | null }>
+  byMarketplace?: Array<{ marketplace: string; currency?: string; adFeesCents: number; salesCents: number; soldQty: number; acosPct: number | null }>
   movers: Mover[]
   autopilotApplied: Array<{ kind: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string }; result?: { detail?: string } | null }>
   pendingProposals: Array<{ id: string; kind: string; entityRef: { campaignName?: string; listingId?: string; keywordText?: string } }>
@@ -81,7 +86,12 @@ export function EbayDigestClient() {
   }
 
   const p = digest?.payload
-  const maxMoverFees = p ? Math.max(...p.movers.map((m) => m.feesCents), 1) : 1
+  // AM-21 — never one sum over two currencies: a week with eBay GB shows one total per currency.
+  const ccy = p?.currency ?? 'EUR'
+  const split = p?.byCurrency && p.byCurrency.length > 1 ? p.byCurrency : null
+  const perCcy = (pick: (c: NonNullable<DigestPayload['byCurrency']>[number]) => string) => (split ?? []).map(pick).join(' · ')
+  // Bar widths compare a mover with the largest mover of ITS currency.
+  const maxMoverFees = (currency: string) => (p ? Math.max(...p.movers.filter((m) => (m.currency ?? ccy) === currency).map((m) => m.feesCents), 1) : 1)
 
   return (
     <div className="eb-page h10-am eb-root">
@@ -123,9 +133,9 @@ export function EbayDigestClient() {
           <section className="eb-panel eb-panel--head">
             <header className="eb-panel-head"><h3>Week {p.week.start} → {p.week.end}</h3><span className="eb-panel-note">all markets · any-click attribution · generated {new Date(p.generatedAt).toLocaleString('en-GB')}</span></header>
             <div className="eb-headstats">
-              <div><span className="k">Ad fees</span><span className="v">{eurC(p.totals.adFeesCents)} <Wow cur={p.totals.adFeesCents} prev={p.prior.adFeesCents} goodUp={false} /></span></div>
-              <div><span className="k">Ad sales</span><span className="v">{eurC(p.totals.salesCents)} <Wow cur={p.totals.salesCents} prev={p.prior.salesCents} goodUp /></span></div>
-              <div><span className="k">eBay ACOS</span><span className="v">{pctP(p.totals.acosPct)}</span></div>
+              <div><span className="k">Ad fees</span><span className="v">{split ? perCcy((c) => money(c.adFeesCents, c.currency)) : <>{money(p.totals.adFeesCents, ccy)} <Wow cur={p.totals.adFeesCents ?? 0} prev={p.prior.adFeesCents ?? 0} goodUp={false} /></>}</span></div>
+              <div><span className="k">Ad sales</span><span className="v">{split ? perCcy((c) => money(c.salesCents, c.currency)) : <>{money(p.totals.salesCents, ccy)} <Wow cur={p.totals.salesCents ?? 0} prev={p.prior.salesCents ?? 0} goodUp /></>}</span></div>
+              <div><span className="k">eBay ACOS</span><span className="v">{split ? perCcy((c) => `${c.currency} ${pctP(c.acosPct)}`) : pctP(p.totals.acosPct)}</span></div>
               <div><span className="k">Clicks</span><span className="v">{intlN(p.totals.clicks)}</span></div>
               <div><span className="k">Impressions</span><span className="v">{intlN(p.totals.impressions)}</span></div>
               <div><span className="k">Sold</span><span className="v">{intlN(p.totals.soldQty)} <Wow cur={p.totals.soldQty} prev={p.prior.soldQty} goodUp /></span></div>
@@ -133,8 +143,8 @@ export function EbayDigestClient() {
             {p.byMarketplace && p.byMarketplace.length > 0 && (
               <div className="eb-mkt-split">
                 {p.byMarketplace.map((m) => (
-                  <span key={m.marketplace} className="eb-mkt-chip" title={`${m.marketplace} — week fees / sales / sold${m.acosPct != null ? ` · ACOS ${m.acosPct}%` : ''}`}>
-                    <b>{m.marketplace.replace('EBAY_', '')}</b> {eurC(m.adFeesCents)} fees · {eurC(m.salesCents)} sales · {m.soldQty} sold{m.acosPct != null ? ` · ${m.acosPct}%` : ''}
+                  <span key={`${m.marketplace}-${m.currency ?? ''}`} className="eb-mkt-chip" title={`${m.marketplace} — week fees / sales / sold${m.acosPct != null ? ` · ACOS ${m.acosPct}%` : ''}`}>
+                    <b>{m.marketplace.replace('EBAY_', '')}</b> {money(m.adFeesCents, m.currency ?? ccy)} fees · {money(m.salesCents, m.currency ?? ccy)} sales · {m.soldQty} sold{m.acosPct != null ? ` · ${m.acosPct}%` : ''}
                   </span>
                 ))}
               </div>
@@ -158,10 +168,10 @@ export function EbayDigestClient() {
                 rowKey={(m) => m.campaign}
                 columns={[
                   { key: 'nm', label: 'Campaign', sortable: true, sortValue: (m) => m.campaign, render: (m) => <span className="nm" title={m.campaign}>{m.campaign}</span> },
-                  { key: 'fees', label: 'Ad fees', align: 'right', sortable: true, sortValue: (m) => m.feesCents, render: (m) => eurC(m.feesCents) },
-                  { key: 'sales', label: 'Ad sales', align: 'right', sortable: true, sortValue: (m) => m.salesCents, render: (m) => eurC(m.salesCents) },
+                  { key: 'fees', label: 'Ad fees', align: 'right', sortable: true, sortValue: (m) => m.feesCents, render: (m) => money(m.feesCents, m.currency ?? ccy) },
+                  { key: 'sales', label: 'Ad sales', align: 'right', sortable: true, sortValue: (m) => m.salesCents, render: (m) => money(m.salesCents, m.currency ?? ccy) },
                   { key: 'sold', label: 'Sold', align: 'right', sortable: true, sortValue: (m) => m.sold, render: (m) => intlN(m.sold) },
-                  { key: 'bar', label: <span aria-label="Share of week" />, prefsLabel: 'Share of week', width: 140, render: (m) => <span className="bar"><span style={{ width: `${Math.round((m.feesCents / maxMoverFees) * 100)}%` }} /></span> },
+                  { key: 'bar', label: <span aria-label="Share of week" />, prefsLabel: 'Share of week', width: 140, render: (m) => <span className="bar"><span style={{ width: `${Math.round((m.feesCents / maxMoverFees(m.currency ?? ccy)) * 100)}%` }} /></span> },
                 ]}
               />
             )}

@@ -86,7 +86,9 @@ export function DashboardClient() {
     const mp = market === 'all' ? '' : `&marketplace=${market}`
     const base = getBackendUrl()
     Promise.all([
-      fetch(`${base}/api/advertising/summary`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+      // AM-15 — every tile under the market picker follows it: Campaigns and True margin (summary) and Top movers +
+      // placements (momentum) take the same marketplace as Spend/Sales (trends) and alerts.
+      fetch(`${base}/api/advertising/summary?${mp.replace(/^&/, '')}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       fetch(`${base}/api/advertising/trends?windowDays=30&compare=true${mp}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       fetch(`${base}/api/advertising/alerts?windowDays=7${mp}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       fetch(`${base}/api/advertising/momentum?${mp.replace(/^&/, '')}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null),

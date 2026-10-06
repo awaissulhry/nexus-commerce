@@ -359,6 +359,12 @@ export interface GuardrailGrid {
    * and say nothing about any of them.
    */
   accountWideRules: number
+  /**
+   * AM-12 — the same rules `accountWideRules` counts, by name, so a screen can list what it counts. A rule may still
+   * name one market (`scopeMarketplace`): it then reaches only that market's campaigns, and the Ad Manager counts it
+   * only there. Its own settings (a picked campaign list, a product) can narrow it further.
+   */
+  accountWideRuleList: Array<{ id: string; name: string; level: string; scopeMarketplace: string | null }>
   totals: {
     campaigns: number
     managed: number
@@ -381,7 +387,7 @@ export async function getGuardrailGrid(opts: {
   if (opts.search) where.name = { contains: opts.search, mode: 'insensitive' }
   const limit = Math.min(Math.max(opts.limit ?? 300, 1), 500)
 
-  const [campaigns, rules, accountWideRules, totals] = await Promise.all([
+  const [campaigns, rules, accountWide, totals] = await Promise.all([
     prisma.campaign.findMany({
       where,
       // Managed first: the campaigns automation can actually touch are the ones whose
@@ -401,8 +407,10 @@ export async function getGuardrailGrid(opts: {
       where: { domain: 'advertising', scopeCampaignId: { not: null } },
       select: { id: true, name: true, autonomyLevel: true, enabled: true, scopeCampaignId: true },
     }),
-    prisma.automationRule.count({
+    prisma.automationRule.findMany({
       where: { domain: 'advertising', enabled: true, scopeCampaignId: null, scopePortfolioId: null },
+      select: { id: true, name: true, autonomyLevel: true, scopeMarketplace: true },
+      orderBy: { name: 'asc' },
     }),
     prisma.campaign.aggregate({ _count: { _all: true } }),
   ])
@@ -468,7 +476,8 @@ export async function getGuardrailGrid(opts: {
 
   return {
     rows,
-    accountWideRules,
+    accountWideRules: accountWide.length,
+    accountWideRuleList: accountWide.map((r) => ({ id: r.id, name: r.name, level: r.autonomyLevel ?? 'OFF', scopeMarketplace: r.scopeMarketplace })),
     totals: { campaigns: totals._count._all, managed, withMinBid, withMaxBid, pinned, suppressed },
   }
 }
