@@ -32,7 +32,11 @@
  * kind (create, as create-ad-campaign); it may run by the business's rule only inside the ads strategy where its products
  * are and this tool's limits — by default it does not (maxCampaigns 0: every goal waits for a person).
  *
- * Undo archives every campaign it made at Amazon (archive-ads), permanent at Amazon; the goal is archived in Nexus with it.
+ * Undo archives every campaign it made at Amazon (archive-ads), permanent at Amazon; then the goal is archived in Nexus,
+ * its plan disabled and its rules switched off. A build that stops part-way still answers ok (with `partial`), so the gate
+ * records what it made and undo archives that. The build runs inside the approval: a process that dies mid-build leaves
+ * no change record (the gate records one only when `execute` returns) — the goal then names every campaign made so far
+ * (`nameAsMade`) and each create carries the approval as its change set, for a person to archive by hand.
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -48,12 +52,16 @@ import type { ScaffoldBidOpts } from '../../advertising/ai-goal-materialize.serv
 import { amountLabel, liveReachOf } from './ads-tool-guards.js'
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, requesterOf, storedReach, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote } from './ads-autonomy-kit.js'
-import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import { PLAN_TOOL, type AgentTool, type ToolContext, type ToolResult, type ToolUndo } from '../tool-types.js'
 
 const TOOL = 'create-ai-goal-campaigns'
-/** One goal at most this many products: each makes up to 4 campaigns, and one archive (its undo) names at most 100. */
-const MAX_PRODUCTS = 25
-const LIST_MAX = 100
+/**
+ * The build runs inside the approval (no detached runner), one Amazon write at a time: these caps hold its worst case to
+ * about 410 writes per product (Auto and Research: 100 negative keywords and 50 negative ASINs or 50 keywords each;
+ * Performance and Products: 50 each), about 4,100 for a goal of 10 products — some 7 minutes at the gateway's pace.
+ */
+const MAX_PRODUCTS = 10
+const LIST_MAX = 50
 const BID_MAX_CENTS = 10_000
 const AI_TARGETS = ['IMPRESSION', 'SALES', 'ROAS', 'LIQUIDATE', 'RANK'] as const
 const ASIN = z.string().trim().toUpperCase().regex(/^[A-Z0-9]{10}$/, 'an ASIN is 10 letters and digits')
@@ -67,11 +75,11 @@ const input = z.object({
   goalProducts: z.array(z.object({
     sku: z.string().trim().min(1).max(64).describe('the product\'s SKU in this business'),
     dailyBudgetCents: z.coerce.number().int().min(100).describe('this product\'s daily budget in minor units of the market\'s currency (never converted), split over its campaigns'),
-  })).min(1).max(MAX_PRODUCTS).describe('each product the goal advertises, with its own daily budget: each gets its own campaign set (Strict Control), at most 25'),
-  seedKeywords: z.array(TERM).max(LIST_MAX).optional().describe('keywords to start from: broad in the Research campaign and exact in the Performance campaign of every product, at most 100; none = no Research campaign'),
-  excludeKeywords: z.array(TERM).max(LIST_MAX).optional().describe('searches never shown on: an exact and a phrase negative in every product\'s own Auto and Research campaigns, at most 100'),
-  productTargets: z.array(ASIN).max(LIST_MAX).optional().describe('ASINs to show on (a Products campaign per product), at most 100'),
-  excludeAsins: z.array(ASIN).max(LIST_MAX).optional().describe('ASINs never shown on: negative product targets in every product\'s own Auto campaign, at most 100'),
+  })).min(1).max(MAX_PRODUCTS).describe('each product the goal advertises, with its own daily budget: each gets its own campaign set (Strict Control), at most 10'),
+  seedKeywords: z.array(TERM).max(LIST_MAX).optional().describe('keywords to start from: broad in the Research campaign and exact in the Performance campaign of every product, at most 50; none = no Research campaign'),
+  excludeKeywords: z.array(TERM).max(LIST_MAX).optional().describe('searches never shown on: an exact and a phrase negative in every product\'s own Auto and Research campaigns, at most 50'),
+  productTargets: z.array(ASIN).max(LIST_MAX).optional().describe('ASINs to show on (a Products campaign per product), at most 50'),
+  excludeAsins: z.array(ASIN).max(LIST_MAX).optional().describe('ASINs never shown on: negative product targets in every product\'s own Auto campaign, at most 50'),
   targetAcosPct: z.coerce.number().int().min(5).max(300).optional().describe('the AutopilotPlan\'s target ACoS in percent (default: the plan\'s own, 30)'),
   bidMinCents: z.coerce.number().int().min(5).max(BID_MAX_CENTS).optional().describe('the lowest bid the AutopilotPlan may set, in minor units of the market\'s currency'),
   bidMaxCents: z.coerce.number().int().min(10).max(20_000).optional().describe('the highest bid the AutopilotPlan may set, in minor units of the market\'s currency; above bidMinCents'),
@@ -118,7 +126,7 @@ function twice(values: readonly string[]): string[] {
   return [...repeated]
 }
 
-const UNDO_WORDS = 'Undo archives every campaign it made at Amazon (archive-ads), and that is permanent at Amazon: an archived campaign never comes back. The goal is archived in Nexus with it; its rules and plan stay switched off.'
+const UNDO_WORDS = 'Undo archives every campaign it made at Amazon (archive-ads), and that is permanent at Amazon: an archived campaign never comes back. The goal is then archived in Nexus, its plan disabled and its rules switched off, even if a person switched them on meanwhile.'
 const ISOLATION = 'Strict Control: one campaign set per product, each with its own budget. The negatives it adds (excluded keywords in Auto and Research, excluded ASINs in Auto) and the ones its rules may add later stay inside that product\'s own campaigns: another product of this business is never blocked on a keyword. Shared Budget is not offered: its one set holds every product, so a negative there would stop them all.'
 
 /** The bid evidence an approved preview showed: the run builds those bids (frozen), not today's. */
@@ -127,6 +135,24 @@ function frozenBids(approvedPreview: unknown): ScaffoldBidOpts | null {
   if (!e || typeof e.autoBaseCents !== 'number' || !e.bidCentsByKeyword || typeof e.bidCentsByKeyword !== 'object') return null
   const byKeyword = Object.fromEntries(Object.entries(e.bidCentsByKeyword as Record<string, unknown>).filter(([, v]) => typeof v === 'number')) as Record<string, number>
   return { bidCentsByKeyword: byKeyword, autoBaseCents: e.autoBaseCents }
+}
+
+/**
+ * The evidence an approval froze, for its own re-check: Nexus re-runs the dry run (`handler`) before an approved request
+ * runs (approval-inbox previewStaleness; a plan's step: change-plan runStep), naming the approval. One request keeps its
+ * preview on the approval; a plan keeps each step's on the step. Null when there is none (a new request).
+ */
+async function storedEvidence(approvalId: string | null | undefined, args: Record<string, unknown>): Promise<ScaffoldBidOpts | null> {
+  if (!approvalId) return null
+  const ap = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { toolName: true, preview: true } })
+  if (ap?.toolName === TOOL) return frozenBids(ap.preview)
+  if (ap?.toolName !== PLAN_TOOL) return null
+  // The step whose arguments are these (each read as the tool reads them, defaults filled).
+  const asRead = (value: unknown) => { const parsed = input.safeParse(value); return parsed.success ? canonical(parsed.data) : null }
+  const wanted = asRead(args)
+  const steps = await prisma.agentPlanStep.findMany({ where: { approvalId, toolName: TOOL }, select: { args: true, preview: true } })
+  const step = wanted ? steps.find((s) => asRead(s.args) === wanted) : undefined
+  return step ? frozenBids(step.preview) : null
 }
 
 /** The goal, planned and judged: its preview, and the plan `execute` launches. */
@@ -295,7 +321,9 @@ async function goalPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext, 
       ...(newMarket ? { newMarket: true, newMarketNote: `NEW MARKET: the first campaigns in ${plan.market}.` } : {}),
       warnings: [...scaffold.warnings, ...checks.warnings, ...(sameKeyword?.ownProduct.length ? [sameKeyword.note] : [])],
       bidEvidence: { bidCentsByKeyword: bidEvidence.bidCentsByKeyword ?? {}, autoBaseCents: bidEvidence.autoBaseCents ?? GOAL_AD_GROUP_BID_CENTS },
-      basis: hash(plan),
+      // The goal's shape, never the bids the evidence gives (they move with every report sync and are frozen in the
+      // approval: execute builds those). As PB-6c's hero holds its bid and budget out of its basis.
+      basis: hash({ ...plan, campaigns: plan.campaigns.map((c) => ({ ...c, keywords: c.keywords.map(({ text, matchType }) => ({ text, matchType })), autoGroups: c.autoGroups.map(({ key }) => ({ key })) })) }),
       reach: stored,
       reachNote: reachNote(stored),
       effect,
@@ -319,28 +347,37 @@ interface SameKeyword {
   note: string
 }
 
-/** Where the seed keywords already run in the market (live positive targets), split by whose product they advertise. */
-async function sameKeywordElsewhere(market: string, seeds: readonly string[], products: ReadonlyArray<{ asin: string | null }>): Promise<SameKeyword | null> {
+/**
+ * Where the seed keywords already run in the market (live keyword targets), split by whose product their ad group
+ * advertises — the same product by its id, SKU or ASIN (an ad by SKU only counts too); an ad group advertising nothing
+ * competes with no one and is left out.
+ */
+async function sameKeywordElsewhere(market: string, seeds: readonly string[], products: ReadonlyArray<{ productId: string; sku: string; asin: string | null }>): Promise<SameKeyword | null> {
   if (!seeds.length) return null
-  const { loadExistingTargets } = await import('../../advertising/ads-blueprint-apply.service.js')
+  const { keywordBuyers } = await import('../../advertising/ai-product-goal.service.js')
   const wanted = new Map(seeds.map((s) => [s.toLowerCase(), s]))
-  const own = new Set(products.map((p) => p.asin).filter((asin): asin is string => !!asin))
+  const ids = new Set(products.map((p) => p.productId))
+  const skus = new Set(products.map((p) => p.sku.toLowerCase()))
+  const asins = new Set(products.map((p) => p.asin).filter((asin): asin is string => !!asin))
+  const isOwn = (ad: { asin: string | null; sku: string | null; productId: string | null }) =>
+    (!!ad.productId && ids.has(ad.productId)) || (!!ad.sku && skus.has(ad.sku.toLowerCase())) || (!!ad.asin && asins.has(ad.asin))
   const ownProduct = new Map<string, { keyword: string; campaignId: string; campaign: string }>()
   const others = new Map<string, Set<string>>()
-  for (const t of await loadExistingTargets(market)) {
-    const keyword = wanted.get(t.expression.toLowerCase())
-    if (!keyword) continue
-    if (t.asins.some((asin) => own.has(asin))) ownProduct.set(`${keyword}|${t.campaignId}`, { keyword, campaignId: t.campaignId, campaign: t.campaignName })
+  for (const t of await keywordBuyers(market, seeds)) {
+    const keyword = wanted.get(t.keyword.toLowerCase())
+    if (!keyword || !t.products.length) continue
+    if (t.products.some(isOwn)) ownProduct.set(`${keyword}|${t.campaignId}`, { keyword, campaignId: t.campaignId, campaign: t.campaign })
     else others.set(keyword, (others.get(keyword) ?? new Set()).add(t.campaignId))
   }
   if (!ownProduct.size && !others.size) return null
   const mine = [...ownProduct.values()]
-  const otherProducts = [...others].map(([keyword, ids]) => ({ keyword, campaigns: ids.size }))
+  const otherProducts = [...others].map(([keyword, campaignIds]) => ({ keyword, campaigns: campaignIds.size }))
+  const mineKeywords = new Set(mine.map((m) => m.keyword)).size
   return {
     ownProduct: mine.slice(0, 20),
     otherProducts: otherProducts.slice(0, 20),
     note: mine.length
-      ? `${plural(new Set(mine.map((m) => m.keyword)).size, 'seed keyword')} already run${mine.length === 1 ? 's' : ''} in a campaign of the same product (${mine.slice(0, 3).map((m) => `"${m.keyword}" in "${m.campaign}"`).join(', ')}): the goal's campaigns would bid against it. A person decides (it never runs by rule).`
+      ? `${plural(mineKeywords, 'seed keyword')} already run${mineKeywords === 1 ? 's' : ''} in a campaign of the same product (${mine.slice(0, 3).map((m) => `"${m.keyword}" in "${m.campaign}"`).join(', ')}): the goal's campaigns would bid against it. A person decides (it never runs by rule).`
       : `${plural(otherProducts.length, 'seed keyword')} already run${otherProducts.length === 1 ? 's' : ''} for other products of this business: allowed (isolation is per product), never blocked.`,
   }
 }
@@ -403,12 +440,13 @@ export const AI_GOAL_UNDO: ToolUndo = {
     if (!after.campaignIds?.length) return { refusal: 'This AI goal made no campaign at Amazon, so there is nothing to archive (a campaign only in Nexus spends nothing).' }
     return { tool: 'archive-ads', args: { campaignIds: after.campaignIds, why: `undo of the AI goal "${after.name ?? '?'}" Claude created: its campaigns archived for good` } }
   },
-  // The campaigns are archived: the goal is archived in Nexus too, so the dashboard no longer lists it as running.
+  // The campaigns are archived: the goal is archived in Nexus too, its plan disabled and its rules switched off (a person
+  // may have switched them on meanwhile), so nothing of it proposes any more.
   async undone(change) {
     const goalId = (change.after as Partial<GoalAfter> | null)?.goalId
     if (!goalId) return
-    const { archiveProductGoal } = await import('../../advertising/ai-product-goal.service.js')
-    await archiveProductGoal(goalId)
+    const { retireProductGoal } = await import('../../advertising/ai-product-goal.service.js')
+    await retireProductGoal(goalId)
   },
 }
 
@@ -466,13 +504,15 @@ const createAiGoalCampaigns: AgentTool = {
     + 'warns when the same product already buys one. Undo archives its campaigns (archive-ads): permanent at Amazon, an '
     + 'archived campaign never comes back.',
   async handler(args, ctx) {
-    return goalPreview(args, ctx)
+    // An approval's own re-check plans with the evidence it froze (otherwise a report sync between request and approval
+    // would make every approved goal stale).
+    return goalPreview(args, ctx, await storedEvidence(ctx.approvalId, args))
   },
   async execute(args, ctx) {
     // The bids the person approved (the evidence has moved since): the launch builds those.
     const frozen = frozenBids(ctx.approvedPreview)
     const fresh = await goalPreview(args, ctx, frozen)
-    const refusal = recheck(ctx, fresh, ['plan', 'ceiling', 'reach'])
+    const refusal = recheck(ctx, fresh, ['basis', 'ceiling', 'reach'])
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { plan: GoalPlan; reach: StoredReach; effect: string; bidEvidence: ScaffoldBidOpts }
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
@@ -507,6 +547,7 @@ const createAiGoalCampaigns: AgentTool = {
         changeSetId: run.changeSetId,
         automationOff: true,
         bidOpts: frozen ?? p.bidEvidence,
+        nameAsMade: true,
       })
     } catch (e) {
       // A refusal of the launch's own (MaterializeError) is said as it is; anything else is logged too. Either way, what
@@ -550,14 +591,20 @@ const createAiGoalCampaigns: AgentTool = {
         ...(made.planId ? [`turn-up-automation {"automation":"ads-autopilot","rowId":"${made.planId}","level":"PROPOSE"}`] : []),
       ],
     }
-    // W2-A (CC-2) — a launch that did not fully reach Amazon answers `ok: false` with what did and why.
+    // W2-A (CC-2) — a launch that did not fully reach Amazon says what did and why. It still answers ok, so the gate
+    // records the change: the campaigns it made exist (at the floor, off the allowlist) and undo must archive them; an
+    // ok:false would leave no record (nothing to undo) and put the request back to pending, to be approved again.
     if (failure || !launched?.launch.ok) {
       const { describeLaunch } = await import('../../advertising/launch-outcome.js')
       const why = failure ?? (launched ? describeLaunch(launched.launch) : 'unknown')
       return {
-        ok: false,
-        error: `Created part-way, then stopped: ${why}. The goal "${plan.name}" (${goalId}) holds ${plural(campaigns.length, 'campaign')}, with their bids at the floor and off the allowlist; check them with ad-campaigns before asking for anything more.`,
-        data,
+        ok: true,
+        data: {
+          ...data,
+          partial: true,
+          problem: why,
+          note: `Created part-way, then stopped: ${why}. The goal "${plan.name}" (${goalId}) holds ${plural(campaigns.length, 'campaign')}, with their bids at the floor and off the allowlist; check them with ad-campaigns before asking for anything more. Undo archives what it made${made.atAmazon.length ? ` (archive-ads {"campaignIds":${JSON.stringify(made.atAmazon)}})` : ''}.`,
+        },
         change,
       }
     }

@@ -11,6 +11,7 @@
  * in the approval's change set; the bids are the ones the person approved even when the evidence moved; the undo archives
  * its campaigns; the screen's own launch (no options) is unchanged.
  */
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -40,10 +41,24 @@ vi.mock('../../outbound-destination.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   resolveDestinations: async (_db: unknown, rows: unknown[]) => rows.map(() => ({ connectionId: null, reason: 'NO_ACCOUNT' })),
 }))
+// A build that stops part-way: the create of one named campaign throws (everything else is the real service).
+const refuse = vi.hoisted(() => ({ campaign: null as string | null }))
+vi.mock('../../advertising/ads-create.service.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../advertising/ads-create.service.js')>()
+  return {
+    ...real,
+    createCampaignLocal: async (input: Parameters<typeof real.createCampaignLocal>[0]) => {
+      if (refuse.campaign && input.name === refuse.campaign) throw new Error('Amazon refused it: a test refusal')
+      return real.createCampaignLocal(input)
+    },
+  }
+})
 vi.mock('../../advertising/ads-cache.js', () => ({ cached: async (_k: string, _t: number, work: () => Promise<unknown>) => work(), peekCached: async () => undefined, putCached: () => undefined, flushAdsCache: async () => undefined }))
 
 import { callTool, type UserPrincipal } from '../call-tool.js'
 import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
+import { commitScheduledApproval, decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
+import { runPlan } from '../change-plan.service.js'
 import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
 
@@ -55,22 +70,45 @@ const person = (userId: string, via: 'claude' | 'app'): UserPrincipal => ({
 })
 const claude = person('u-asker', 'claude')
 const approver = person('u-approver', 'app')
+/** A person who belongs to the business (the window's commit checks that the approver still does). */
+const member = { userId: '' }
+const memberPrincipal = () => person(member.userId, 'app')
 const TOOL = 'create-ai-goal-campaigns'
 
 type Row = Record<string, any>
 const preview = async (args: Record<string, unknown>) => (await inside(() => callTool(claude, TOOL, args))).raw
-async function ask(args: Record<string, unknown>) {
+async function ask(args: Record<string, unknown>, tool = TOOL) {
   return inside(async () => {
     const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
-    return runOrQueueTool(TOOL, args, claude, run.id, { forceAsk: true })
+    return runOrQueueTool(tool, args, claude, run.id, { forceAsk: true })
   })
 }
+/** As on the Approvals page: a person approves it, the window closes, and the sweep's commit re-checks and runs it. */
+async function approveThroughWindow(approvalId: string) {
+  const parked = await inside(() => decideFleetApproval({ id: approvalId, decision: 'approve', actor: memberPrincipal() }))
+  expect(parked, parked.error).toMatchObject({ ok: true, status: 'scheduled' })
+  await inside(() => database.client.agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+  return inside(() => commitScheduledApproval(approvalId))
+}
+/** The market's own CPCs move (a report sync): the evidence then says 90 cents for every keyword and Auto group. */
+const moveCpcs = () => inside(() => database.client.adTarget.create({ data: { id: 't-cpc', adGroupId: 'g-c-it', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'cpc mover', bidCents: 90, clicks: 10, spendCents: 900, externalTargetId: 'EXT-t-cpc' } }))
+const unmoveCpcs = () => inside(() => database.client.adTarget.delete({ where: { id: 't-cpc' } }))
+const keptBids = async (campaignIds: string[]) => sql(`SELECT DISTINCT t."suppressedFromBidCents" AS kept FROM "AdTarget" t JOIN "AdGroup" g ON g.id = t."adGroupId"
+  WHERE g."campaignId" = ANY($1) AND t.kind = 'KEYWORD' AND NOT t."isNegative"`, [campaignIds])
 const approve = (approvalId: string) => inside(() => decideApproval(approvalId, 'approve', approver))
 const sql = <T = Row>(text: string, params: unknown[] = []) => inside(async () => (await database.client.$queryRawUnsafe(text, ...params)) as T[])
 const status = async (approvalId: string) => (await inside(() => callTool(claude, 'approval-status', { approvalId }))).visible.data as Row
 
 beforeAll(async () => {
   database = await formulaDatabase()
+  const role = await database.client.role.create({
+    data: { key: `B2_${randomUUID().slice(0, 8)}`, name: 'AI goal tester', description: 'test', isSystem: false, permissions: [...Object.values(FEATURES), ...Object.values(FIELDS)] },
+  })
+  const p = await database.client.userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active', displayName: 'Test approver' } })
+  member.userId = p.id
+  await database.client.userRole.create({ data: { userId: p.id, roleId: role.id } })
+  const membership = await database.client.workspaceMembership.create({ data: { workspaceId: LEGACY_WORKSPACE_ID, userId: p.id, status: 'active' } })
+  await database.client.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   await inside(async () => {
     const db = database.client
     await seedAdsFixture(db)
@@ -148,8 +186,8 @@ describe('B-2 — create-ai-goal-campaigns: the plan, and what refuses it', () =
     expect((await preview(goal({ market: 'ES' }))).error).toMatch(/^Not queued: Amazon's write gate refuses it — no active Amazon Ads profile for marketplace=ES/)
   })
 
-  it('the same product already buying a seed keyword is a warning (a person decides)', async () => {
-    await inside(() => database.client.adProductAd.create({ data: { id: 'pa-own', adGroupId: 'g-c-it', asin: 'B0GOALTST1', sku: 'TEST-GOAL-1', externalAdId: 'EXT-pa-own' } }))
+  it('the same product already buying a seed keyword is a warning (a person decides) — an ad by its SKU only counts too', async () => {
+    await inside(() => database.client.adProductAd.create({ data: { id: 'pa-own', adGroupId: 'g-c-it', asin: null, sku: 'TEST-GOAL-1', externalAdId: 'EXT-pa-own' } }))
     try {
       const p = (await preview(goal({ name: 'Own clash', seedKeywords: ['race jacket'] }))).preview as Row
       expect(p.sameKeyword.ownProduct).toEqual([{ keyword: 'race jacket', campaignId: 'c-it', campaign: 'Italy exact' }])
@@ -220,6 +258,14 @@ describe('B-2 — approved, the builder\'s launch makes it born safe', () => {
     const links = await inside(() => syncLinkedRules({ ...row, enabled: true }))
     expect(links.every((l) => l.syncedEnabled === true && !l.personOff)).toBe(true)
     expect(await sql(`SELECT DISTINCT enabled, "dryRun" AS dry FROM "AutomationRule" WHERE name LIKE '[AI] Test goal%'`)).toEqual([{ enabled: true, dry: true }])
+    await inside(() => database.client.autopilotPlan.update({ where: { id: done.result.planId }, data: { enabled: true } }))
+
+    // Once its undo (the archive) ran: the goal archived, its plan disabled and its rules off — whatever was on meanwhile.
+    const change = await inside(() => database.client.agentChange.findFirstOrThrow({ where: { approvalId: asked.approvalId! } }))
+    await inside(() => getTool(TOOL)!.undo!.undone!({ before: change.before, after: change.after, id: change.id }))
+    expect((await sql('SELECT status FROM "AdProductGoal" WHERE id = $1', [goalId]))[0]).toEqual({ status: 'ARCHIVED' })
+    expect((await sql('SELECT enabled FROM "AutopilotPlan" WHERE id = $1', [done.result.planId]))[0]).toEqual({ enabled: false })
+    expect(await sql(`SELECT DISTINCT enabled FROM "AutomationRule" WHERE name LIKE '[AI] Test goal%'`)).toEqual([{ enabled: false }])
   })
 
   it('a ceiling that moved after approval is not run, and nothing is created — not even the goal', async () => {
@@ -234,21 +280,61 @@ describe('B-2 — approved, the builder\'s launch makes it born safe', () => {
     expect(await sql('SELECT name FROM "AdProductGoal" WHERE name = $1', ['Moved ceiling'])).toEqual([])
   })
 
-  it('the bid evidence moved after approval: it builds the bids the person approved', async () => {
-    const asked = await ask(goal({ name: 'Frozen bids', goalProducts: [{ sku: 'TEST-GOAL-2', dailyBudgetCents: 600 }], seedKeywords: ['heated vest'] }))
-    // The market's own CPCs move: the evidence would now say 90 cents for every keyword and Auto group.
-    await inside(() => database.client.adTarget.create({ data: { id: 't-cpc', adGroupId: 'g-c-it', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'cpc mover', bidCents: 90, clicks: 10, spendCents: 900, externalTargetId: 'EXT-t-cpc' } }))
+  it('🔴 the CPCs move between the request and its approval: the Approvals page\'s re-check passes and it builds the bids approved', async () => {
+    const args = goal({ name: 'Frozen bids', goalProducts: [{ sku: 'TEST-GOAL-2', dailyBudgetCents: 600 }], seedKeywords: ['heated vest'] })
+    const asked = await ask(args)
+    await moveCpcs()
     try {
-      expect((await preview(goal({ name: 'Frozen bids now', goalProducts: [{ sku: 'TEST-GOAL-2', dailyBudgetCents: 600 }], seedKeywords: ['heated vest'] }))).preview)
-        .toMatchObject({ bidEvidence: { autoBaseCents: 90, bidCentsByKeyword: { 'heated vest': 90 } } })
-      const done = await approve(asked.approvalId!) as Row
-      expect(done).toMatchObject({ ok: true, status: 'executed' })
-      const ids = (done.result.campaigns as Row[]).map((c) => c.campaignId as string)
-      expect(await sql(`SELECT DISTINCT t."suppressedFromBidCents" AS kept FROM "AdTarget" t JOIN "AdGroup" g ON g.id = t."adGroupId"
-        WHERE g."campaignId" = ANY($1) AND t.kind = 'KEYWORD' AND NOT t."isNegative"`, [ids])).toEqual([{ kept: 50 }])
+      // A new request would plan with the new evidence; this approval's own re-check plans with the evidence it froze.
+      expect((await preview({ ...args, name: 'Frozen bids now' })).preview).toMatchObject({ bidEvidence: { autoBaseCents: 90, bidCentsByKeyword: { 'heated vest': 90 } } })
+      expect((await inside(() => callTool(claude, TOOL, args, { approvalId: asked.approvalId! }))).raw.preview)
+        .toMatchObject({ bidEvidence: { autoBaseCents: 75, bidCentsByKeyword: { 'heated vest': 50 } } })
+      const committed = await approveThroughWindow(asked.approvalId!)
+      expect(committed, JSON.stringify(committed)).toMatchObject({ ok: true, status: 'executed' })
+      const result = (await inside(() => database.client.agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId! } }))).status
+      expect(result).toBe('executed')
+      const change = await inside(() => database.client.agentChange.findFirstOrThrow({ where: { approvalId: asked.approvalId! } }))
+      expect(await keptBids((change.after as Row).campaignIds)).toEqual([{ kept: 50 }])
     } finally {
-      await inside(() => database.client.adTarget.delete({ where: { id: 't-cpc' } }))
+      await unmoveCpcs()
     }
+  })
+
+  it('🔴 as a step of a change plan: the step\'s re-check passes with its frozen evidence, and it builds the bids approved', async () => {
+    const args = goal({ name: 'Plan bids', goalProducts: [{ sku: 'TEST-GOAL-1', dailyBudgetCents: 600 }], seedKeywords: ['rain jacket'] })
+    const asked = await ask({ title: 'An AI goal as a plan', steps: [{ tool: TOOL, args }] }, 'submit-change-plan')
+    expect(asked, JSON.stringify(asked)).toMatchObject({ ok: true, mode: 'queued' })
+    await moveCpcs()
+    try {
+      // The step's re-check (named by the plan's approval) plans with the evidence the step froze.
+      expect((await inside(() => callTool(claude, TOOL, args, { approvalId: asked.approvalId! }))).raw.preview)
+        .toMatchObject({ bidEvidence: { autoBaseCents: 75, bidCentsByKeyword: { 'rain jacket': 50 } } })
+      const committed = await approveThroughWindow(asked.approvalId!)
+      expect(committed, JSON.stringify(committed)).toMatchObject({ ok: true, status: 'executing' })
+      expect(await inside(() => runPlan(asked.approvalId!))).toMatchObject({ finished: true, counts: { done: 1 } })
+      const change = await inside(() => database.client.agentChange.findFirstOrThrow({ where: { approvalId: asked.approvalId!, toolName: TOOL } }))
+      expect(await keptBids((change.after as Row).campaignIds)).toEqual([{ kept: 50 }])
+    } finally {
+      await unmoveCpcs()
+    }
+  })
+
+  it('a build that stops part-way still records what it made: the goal names it, and undo archives it', async () => {
+    const asked = await ask(goal({ name: 'Partial goal' }))
+    refuse.campaign = '[AI] Partial goal - B0GOALTST2 - Performance'
+    let done: Row
+    try {
+      done = await approve(asked.approvalId!) as Row
+    } finally {
+      refuse.campaign = null
+    }
+    expect(done).toMatchObject({ ok: true, status: 'executed', result: { partial: true, created: { campaigns: 5 }, note: expect.stringMatching(/^Created part-way, then stopped: .*Undo archives what it made \(archive-ads \{"campaignIds":/) } })
+    const ids = (done.result.campaigns as Row[]).map((c) => c.campaignId as string)
+    expect(ids).toHaveLength(5)
+    // The change is recorded (an ok:false would have left none, and put the request back to pending).
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'archive-ads', args: { campaignIds: ids } } })
+    const goalRow = (await sql<{ refs: Row[] }>('SELECT "campaignIds" AS refs FROM "AdProductGoal" WHERE id = $1', [done.result.goalId]))[0]
+    expect(goalRow.refs.map((r) => r.id)).toEqual(ids)
   })
 })
 

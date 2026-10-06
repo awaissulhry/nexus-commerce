@@ -223,6 +223,11 @@ export interface GoalLaunchOptions {
   automationOff?: boolean
   /** The bid evidence the approved preview showed (frozen): the launch builds those bids, not today's evidence. */
   bidOpts?: ScaffoldBidOpts
+  /**
+   * The goal names each campaign the moment it exists (the screen names them all at the end): a run that stops part-way
+   * — even a process that dies — leaves the goal naming what it made, for a person to read and archive.
+   */
+  nameAsMade?: boolean
 }
 
 export async function materializeProductGoal(goalId: string, userId?: string, opts: GoalLaunchOptions = {}) {
@@ -308,6 +313,7 @@ async function materializeClaimed(goal: GoalRow, userId: string | undefined, opt
       // The campaign exists in Nexus: from here it is in the goal, whatever its parts do (it was dropped when its ad
       // group threw).
       refs.push({ id: camp.id, role: pc.role, label: pc.name })
+      if (opts.nameAsMade) await prisma.adProductGoal.update({ where: { id: goalId }, data: { campaignIds: refs as never } }).catch((e: unknown) => logger.warn('[AIAD] goal campaigns not named', { goalId, error: (e as Error).message }))
       // W2-A (CC-3) — not on Amazon: a FAILED record with the reason, and nothing built under it.
       if (!camp.externalCampaignId) { errors.push(`campaign ${pc.name}: ${camp.reason ?? 'not on Amazon'}`); outcomes.push(rec.result()); continue }
       // Same launch repair as SPW: allowlist BEFORE sub-entities, or the per-campaign gate
