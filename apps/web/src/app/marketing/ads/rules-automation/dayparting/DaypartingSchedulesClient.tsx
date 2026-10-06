@@ -22,7 +22,6 @@ import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RankGrid } from './RankGrid'
 import { HourlyPerformance, type ScopeOption } from './HourlyPerformance'
 import { CoveragePanel, type ScheduleOption } from './CoveragePanel'
-import { ProductPlansPanel } from './ProductPlansPanel'
 import { RdDataProvider, useRdData } from './_rd/RdData'
 import { useRdUrlState } from './_rd/useRdUrlState'
 import { RdSection } from './_rd/RdSection'
@@ -208,12 +207,6 @@ function DaypartingSchedulesBody() {
           (P3's row inspector and P4's signal columns land inside this section.) */}
       <RdSection id="p2">
         <RankGrid />
-      </RdSection>
-
-      {/* OC (2026-10-06) — the product rank plans the old Rank Control page made, with their switch. Mounts nothing
-          when there are none. The old Rank Control address and the rank-defend alert land on its anchor. */}
-      <RdSection id="product-plans">
-        <ProductPlansPanel />
       </RdSection>
 
       {/* P5 · Guardrails — RETIRED as a section (FB.3c, operator: "there is no need for it").
