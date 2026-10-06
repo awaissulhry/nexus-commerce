@@ -15,9 +15,11 @@ import { answer } from '../services/automation/service-outcome.js'
 import type { BidPolicyInput, SpendCeilingInput } from '../services/advertising/ads-guardrail.service.js'
 import { computeProductTargetAcos, computeFleetTargetAcos, type AcosMode } from '../services/advertising/ads-target-acos.service.js'
 import { simulateAutopilot, applyAutopilot } from '../services/advertising/ads-autopilot.service.js'
-import { getKeywordTracker, KT_MARKETS } from '../services/advertising/keyword-tracker.service.js'
-import { getNegatives, getTermContext, NEG_MARKETS, NEG_MARKET_ALL } from '../services/advertising/negatives.service.js'
-import { getKeywordHarvest, HV_MARKETS, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
+import { getKeywordTracker } from '../services/advertising/keyword-tracker.service.js'
+import { getNegatives, getTermContext, NEG_MARKET_ALL } from '../services/advertising/negatives.service.js'
+// Ads wave 4c (F3) — every `?market=` here is checked against the markets Nexus reads, not a fixed four.
+import { adsReadMarkets } from '../services/advertising/ads-markets.service.js'
+import { getKeywordHarvest, HV_MARKET_ALL, type HvStatus, type HvKind, type HvSortKey } from '../services/advertising/keyword-harvest.service.js'
 import { resolveHarvestPolicy, listHarvestPolicies, saveHarvestPolicy, deleteHarvestPolicy, HV_DEFAULT_CRITERIA, type HvPolicyGrain } from '../services/advertising/harvest-policy.service.js'
 import { planPromotion, promoteCandidates } from '../services/advertising/harvest-promote.service.js'
 import { getHarvestCohort } from '../services/advertising/harvest-cohort.service.js'
@@ -27,20 +29,20 @@ import {
   type HvDestGrain, type HvCreateType,
 } from '../services/advertising/harvest-destination.service.js'
 import {
-  getBidGrid, getBidCursorForRequest, BID_MARKETS, BID_MARKET_ALL, BID_BANDS,
+  getBidGrid, getBidCursorForRequest, BID_MARKET_ALL, BID_BANDS,
   type BidBand, type BidMeasured, type BidStatusFilter, type BidView,
 } from '../services/advertising/bid-grid.service.js'
 import {
-  getBudgetGrid, getBudgetCursorForRequest, BUD_MARKETS, BUD_MARKET_ALL, BUD_STATES,
+  getBudgetGrid, getBudgetCursorForRequest, BUD_MARKET_ALL, BUD_STATES,
   type BudState, type BudStatusFilter, type BudView,
 } from '../services/advertising/budget-grid.service.js'
 import {
   getPlacementGrid, getPlacementCursorForRequest, previewPlacementBulk,
-  PLC_MARKETS, PLC_MARKET_ALL, PLC_SORT_KEYS, PLC_FLAG_KEYS, LANE_BY_KEY,
+  PLC_MARKET_ALL, PLC_SORT_KEYS, PLC_FLAG_KEYS, LANE_BY_KEY,
   type PlcLaneKey, type PlcSortKey, type PlcFlagKey,
 } from '../services/advertising/placement-grid.service.js'
 import { buildManualAdjustments, type ManagedPlacement } from '../services/advertising/ads-placement-manual.js'
-import { getShareOfVoice, SOV_MARKETS, SOV_WEEKS } from '../services/advertising/share-of-voice.service.js'
+import { getShareOfVoice, SOV_WEEKS } from '../services/advertising/share-of-voice.service.js'
 import { readAdsCronStatus } from '../services/runtime-status/process-views.service.js'
 
 const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
@@ -328,9 +330,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/keyword-tracker', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const market = (q.market ?? '').toUpperCase()
-    if (!KT_MARKETS.includes(market as (typeof KT_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (!readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${KT_MARKETS.join('/')}`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')}`, code: 'market_required' }
     }
     const measured = q.measured === 'yes' || q.measured === 'no' ? q.measured : 'all'
     const sortKeys = ['keyword', 'volume', 'rank', 'share', 'asins', 'asOf'] as const
@@ -380,9 +383,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // count of rows, and those sum honestly across markets. See the service header.
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === NEG_MARKET_ALL ? NEG_MARKET_ALL : raw.toUpperCase()
-    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== NEG_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
@@ -427,9 +431,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const rawMarket = (q.market ?? '').trim()
     const market = rawMarket.toLowerCase() === NEG_MARKET_ALL || !rawMarket ? NEG_MARKET_ALL : rawMarket.toUpperCase()
-    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== NEG_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+      return { error: `market must be one of ${readMarkets.join('/')} or "all"`, code: 'market_invalid' }
     }
     const out = await getTermContext({
       term,
@@ -463,9 +468,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
-    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== NEG_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+      return { error: `market must be one of ${readMarkets.join('/')} or "all"`, code: 'market_invalid' }
     }
     const { getAttention } = await import('../services/advertising/negatives-attention.service.js')
     const out = await getAttention({
@@ -538,9 +544,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
-    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== NEG_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+      return { error: `market must be one of ${readMarkets.join('/')} or "all"`, code: 'market_invalid' }
     }
     const { getProtections } = await import('../services/advertising/negatives-protections.service.js')
     const out = await getProtections({
@@ -613,9 +620,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
-    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== NEG_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+      return { error: `market must be one of ${readMarkets.join('/')} or "all"`, code: 'market_invalid' }
     }
     const { getWastefulWords } = await import('../services/advertising/negatives-ngrams.service.js')
     const out = await getWastefulWords({
@@ -651,9 +659,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const rawMarket = typeof b.market === 'string' ? b.market.trim() : ''
     const market = rawMarket.toLowerCase() === NEG_MARKET_ALL || !rawMarket ? NEG_MARKET_ALL : rawMarket.toUpperCase()
-    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== NEG_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+      return { error: `market must be one of ${readMarkets.join('/')} or "all"`, code: 'market_invalid' }
     }
     const userId = (request as { authUser?: { id?: string } }).authUser?.id ?? 'anonymous'
     const { negateGram } = await import('../services/advertising/negatives-ngrams.service.js')
@@ -687,9 +696,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
-    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== NEG_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+      return { error: `market must be one of ${readMarkets.join('/')} or "all"`, code: 'market_invalid' }
     }
     const { getNegRules } = await import('../services/advertising/negatives-rules.service.js')
     const out = await getNegRules({
@@ -713,9 +723,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === NEG_MARKET_ALL || !raw ? NEG_MARKET_ALL : raw.toUpperCase()
-    if (market !== NEG_MARKET_ALL && !NEG_MARKETS.includes(market as (typeof NEG_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== NEG_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market must be one of ${NEG_MARKETS.join('/')} or "all"`, code: 'market_invalid' }
+      return { error: `market must be one of ${readMarkets.join('/')} or "all"`, code: 'market_invalid' }
     }
     const { getNegRecord } = await import('../services/advertising/negatives-record.service.js')
     const out = await getNegRecord({
@@ -768,9 +779,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === BID_MARKET_ALL ? BID_MARKET_ALL : raw.toUpperCase()
-    if (market !== BID_MARKET_ALL && !BID_MARKETS.includes(market as (typeof BID_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== BID_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${BID_MARKETS.join('/')} or "all"`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
@@ -825,12 +837,13 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // codes is still a mistake worth reporting, so it is refused here rather than silently widened.
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : raw.toUpperCase()
+    const readMarkets = await adsReadMarkets()
     if (market !== HV_MARKET_ALL) {
       const named = market.split(',').map((c) => c.trim()).filter(Boolean)
-      const known = named.filter((c) => HV_MARKETS.includes(c as (typeof HV_MARKETS)[number]))
+      const known = named.filter((c) => readMarkets.includes(c))
       if (named.length === 0 || known.length === 0) {
         reply.status(400)
-        return { error: `market is required and must be one of ${HV_MARKETS.join('/')}, a comma list of them, or "all"`, code: 'market_required' }
+        return { error: `market is required and must be one of ${readMarkets.join('/')}, a comma list of them, or "all"`, code: 'market_required' }
       }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
@@ -931,9 +944,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // all four markets bill in EUR — so a merged view sums nothing dishonestly.
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === PLC_MARKET_ALL ? PLC_MARKET_ALL : raw.toUpperCase()
-    if (market !== PLC_MARKET_ALL && !PLC_MARKETS.includes(market as (typeof PLC_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== PLC_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${PLC_MARKETS.join('/')} or "all"`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
@@ -984,9 +998,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === PLC_MARKET_ALL ? PLC_MARKET_ALL : raw.toUpperCase()
-    if (market !== PLC_MARKET_ALL && !PLC_MARKETS.includes(market as (typeof PLC_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== PLC_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${PLC_MARKETS.join('/')} or "all"`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
     }
     const out = await getPlacementCursorForRequest({
       market, line: q.line || null, portfolio: q.portfolio || null, campaign: q.campaign || null,
@@ -1024,9 +1039,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // the Keyword Tracker, and the opposite of Negatives/Harvest/Placement, where every number is a
     // count or a EUR amount and sums honestly.
     const market = (q.market ?? '').toUpperCase()
-    if (!SOV_MARKETS.includes(market as (typeof SOV_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (!readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${SOV_MARKETS.join('/')}`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')}`, code: 'market_required' }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
@@ -1086,9 +1102,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/share-of-voice-page/row', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const market = (q.market ?? '').toUpperCase()
-    if (!SOV_MARKETS.includes(market as (typeof SOV_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (!readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${SOV_MARKETS.join('/')}`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')}`, code: 'market_required' }
     }
     if (!q.query?.trim()) { reply.status(400); return { error: 'query is required', code: 'query_required' } }
     const { getSovRowDetail } = await import('../services/advertising/share-of-voice.service.js')
@@ -1287,9 +1304,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === HV_MARKET_ALL ? HV_MARKET_ALL : (raw ? raw.toUpperCase() : HV_MARKET_ALL)
-    if (market !== HV_MARKET_ALL && !HV_MARKETS.includes(market as (typeof HV_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== HV_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market must be one of ${HV_MARKETS.join('/')} or "all"`, code: 'market_required' }
+      return { error: `market must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
@@ -1339,9 +1357,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === PLC_MARKET_ALL ? PLC_MARKET_ALL : raw.toUpperCase()
-    if (market !== PLC_MARKET_ALL && !PLC_MARKETS.includes(market as (typeof PLC_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== PLC_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${PLC_MARKETS.join('/')} or "all"`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
     }
     const lane = (Object.keys(LANE_BY_KEY) as PlcLaneKey[]).includes(q.lane as PlcLaneKey) ? (q.lane as PlcLaneKey) : null
     if (!lane) { reply.status(400); return { error: 'lane must be one of top/rest/product', code: 'lane_required' } }
@@ -1430,9 +1449,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === BID_MARKET_ALL ? BID_MARKET_ALL : raw.toUpperCase()
-    if (market !== BID_MARKET_ALL && !BID_MARKETS.includes(market as (typeof BID_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== BID_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${BID_MARKETS.join('/')} or "all"`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
     }
     const out = await getBidCursorForRequest({
       market, line: q.line || null, portfolio: q.portfolio || null, campaign: q.campaign || null,
@@ -1512,9 +1532,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     // across markets, and every row carries its own market.
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === BUD_MARKET_ALL ? BUD_MARKET_ALL : raw.toUpperCase()
-    if (market !== BUD_MARKET_ALL && !BUD_MARKETS.includes(market as (typeof BUD_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== BUD_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${BUD_MARKETS.join('/')} or "all"`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
@@ -1564,9 +1585,10 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const raw = (q.market ?? '').trim()
     const market = raw.toLowerCase() === BUD_MARKET_ALL ? BUD_MARKET_ALL : raw.toUpperCase()
-    if (market !== BUD_MARKET_ALL && !BUD_MARKETS.includes(market as (typeof BUD_MARKETS)[number])) {
+    const readMarkets = await adsReadMarkets()
+    if (market !== BUD_MARKET_ALL && !readMarkets.includes(market)) {
       reply.status(400)
-      return { error: `market is required and must be one of ${BUD_MARKETS.join('/')} or "all"`, code: 'market_required' }
+      return { error: `market is required and must be one of ${readMarkets.join('/')} or "all"`, code: 'market_required' }
     }
     const oneOf = <T extends string>(v: string | undefined, allowed: readonly T[]): T | null =>
       (allowed as readonly string[]).includes(v ?? '') ? (v as T) : null
@@ -1598,8 +1620,9 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/keyword-tracker/term', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
     const market = (q.market ?? '').toUpperCase()
-    if (!KT_MARKETS.includes(market as (typeof KT_MARKETS)[number])) {
-      reply.status(400); return { error: `market must be one of ${KT_MARKETS.join('/')}`, code: 'market_required' }
+    const readMarkets = await adsReadMarkets()
+    if (!readMarkets.includes(market)) {
+      reply.status(400); return { error: `market must be one of ${readMarkets.join('/')}`, code: 'market_required' }
     }
     if (!q.kw?.trim()) { reply.status(400); return { error: 'kw is required', code: 'kw_required' } }
     const { getKeywordTerm } = await import('../services/advertising/keyword-term.service.js')
@@ -1647,8 +1670,9 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/advertising/keyword-watchlists', async (request, reply) => {
     const b = (request.body ?? {}) as { market?: string; name?: string; source?: string; isDefault?: boolean }
     const market = (b.market ?? '').toUpperCase()
-    if (!KT_MARKETS.includes(market as (typeof KT_MARKETS)[number])) {
-      reply.status(400); return { error: `market must be one of ${KT_MARKETS.join('/')}`, code: 'market_required' }
+    const readMarkets = await adsReadMarkets()
+    if (!readMarkets.includes(market)) {
+      reply.status(400); return { error: `market must be one of ${readMarkets.join('/')}`, code: 'market_required' }
     }
     if (!b.name?.trim()) { reply.status(400); return { error: 'name is required', code: 'name_required' } }
     const { createWatchlist } = await import('../services/advertising/keyword-watchlist.service.js')
