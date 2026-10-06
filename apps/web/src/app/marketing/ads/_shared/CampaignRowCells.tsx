@@ -36,6 +36,7 @@ import { Button, Pill } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import { pillTone } from './pillTone'
 import { eur as eurMoney } from '../campaigns/_grid/format'
+import { ArchiveConfirm } from './ArchiveConfirm'
 
 // ── the label maps, defined once ────────────────────────────────────────────────────────────────
 
@@ -135,6 +136,7 @@ export function CampaignNameCell({
  *
  * The chevron is the only way to change a campaign's state from a grid, and it was on the Ad
  * Manager alone. `onChange` is async so the caller can await the gated PATCH and report a refusal.
+ * Archive asks first (ArchiveConfirm): it is permanent at Amazon.
  */
 export function StatusCell({ status, name, onChange }: {
   status: string
@@ -143,6 +145,7 @@ export function StatusCell({ status, name, onChange }: {
   onChange?: (next: 'ENABLED' | 'PAUSED' | 'ARCHIVED') => void
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [askArchive, setAskArchive] = useState(false)
   const sp = STATUS_PILL[status] ?? { label: status, cls: '' }
   if (!onChange) return <Pill tone={pillTone(sp.cls)}>{sp.label}</Pill>
   return (
@@ -157,13 +160,14 @@ export function StatusCell({ status, name, onChange }: {
           <button type="button" className="h10-menu-back" aria-label="Close" onClick={() => setMenu(null)} />
           <div className="h10-statusmenu" style={{ position: 'fixed', left: menu.x, top: menu.y }} role="menu">
             {(['ARCHIVED', 'PAUSED', 'ENABLED'] as const).map((s) => (
-              <button key={s} type="button" role="menuitem" onClick={() => { setMenu(null); onChange(s) }}>
+              <button key={s} type="button" role="menuitem" onClick={() => { setMenu(null); if (s === 'ARCHIVED') setAskArchive(true); else onChange(s) }}>
                 {s === 'ARCHIVED' ? 'Archive' : s === 'PAUSED' ? 'Pause' : 'Enable'}
               </button>
             ))}
           </div>
         </>
       )}
+      {askArchive && <ArchiveConfirm count={1} noun={['campaign', 'campaigns']} onCancel={() => setAskArchive(false)} onConfirm={() => { setAskArchive(false); onChange('ARCHIVED') }} />}
     </span>
   )
 }

@@ -17,6 +17,7 @@ import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageH
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
 import { atMinimumNote, nextDailyBudget, readBudgetChange, readDailyBudget, readTargetAcosPercent, summariseBudgetChange } from '../_shared/budgetInput'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
+import { ARCHIVE_IS_PERMANENT } from '../_shared/archiveWords'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { orderMarketCodes } from '../_shell/adsMarkets'
 import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
@@ -2226,7 +2227,7 @@ export function CampaignsGrid() {
           open
           onClose={() => !applying && setBulkConfirm(null)}
           title={<>{bulkConfirm === 'ENABLED' ? 'Enable' : bulkConfirm === 'PAUSED' ? 'Pause' : 'Archive'} {sel.size} campaign{sel.size > 1 ? 's' : ''}</>}
-          subtitle="Live markets push to Amazon (write-gate enforced); non-live markets update locally only."
+          subtitle={`${bulkConfirm === 'ARCHIVED' ? `${ARCHIVE_IS_PERMANENT} ` : ''}Live markets push to Amazon (write-gate enforced); non-live markets update locally only.`}
           footer={
             <>
               <span className="grow" />

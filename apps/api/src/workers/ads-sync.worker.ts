@@ -261,8 +261,11 @@ async function archiveEntityOf(payload: AdMutationPayload): Promise<SpArchiveEnt
 async function dispatchToAmazon(
   payload: AdMutationPayload,
   ctx: ClientContext,
-  /** AA-W2-13 — the queue row is a deliberate stop (its JSON carries `letsGo`: pause-ads, archive-ads). */
-  opts: { letsGo?: boolean } = {},
+  /**
+   * AA-W2-13 — the queue row is a deliberate stop (its JSON carries `letsGo`: pause-ads, archive-ads), or a person's own
+   * edit (isPersonEdit off its JSON, as the gate is handed it).
+   */
+  opts: { letsGo?: boolean; manual?: boolean } = {},
 ): Promise<{ ok: boolean; rawResponse: unknown; error: string | null }> {
   const patch = patchFromChanges(payload)
   if (!payload.externalId) {
@@ -272,10 +275,11 @@ async function dispatchToAmazon(
     return { ok: true, rawResponse: { skipped: 'no_external_id' }, error: null }
   }
   try {
-    // AA-W2-13 — a deliberate archive (archive-ads) is Amazon's delete operation: no PUT archives a campaign, an ad
-    // group, a keyword, a target or a product ad (ads-api-client.ts SP_V3_ARCHIVE). A negative keeps updateTarget's own
-    // delete route (5f). Every other write, and an archive without the mark, goes out as before.
-    if (opts.letsGo && patch.state === 'archived') {
+    // AA-W2-13 — an archive is Amazon's delete operation: no PUT archives a campaign, an ad group, a keyword, a target or
+    // a product ad (ads-api-client.ts SP_V3_ARCHIVE). Sent so for a deliberate archive (archive-ads) and a person's own
+    // (the Archive actions on the campaign screens, which went out as a PUT Amazon does not accept). A negative keeps
+    // updateTarget's own delete route (5f). Every other write, and an engine's archive, goes out as before.
+    if ((opts.letsGo || opts.manual) && patch.state === 'archived') {
       const entity = await archiveEntityOf(payload)
       if (entity) {
         const res = await archiveSpEntity(ctx, entity, payload.externalId)
@@ -595,7 +599,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   }
 
   const ctx: ClientContext = { profileId, region: regionFor(marketplace) }
-  const result = await dispatchToAmazon(payload, ctx, { letsGo: (row.payload as { letsGo?: unknown } | null)?.letsGo === true })
+  const result = await dispatchToAmazon(payload, ctx, {
+    letsGo: (row.payload as { letsGo?: unknown } | null)?.letsGo === true,
+    manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor),
+  })
   if (result.ok) {
     const localOnly = (result.rawResponse as { skipped?: string } | null)?.skipped // e.g. 'no_external_id' — NOTHING reached Amazon
     await prisma.outboundSyncQueue.update({

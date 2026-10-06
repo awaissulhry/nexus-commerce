@@ -1555,8 +1555,10 @@ export interface TargetPatch {
  *   target     DeleteSponsoredProductsTargetingClauses   POST /sp/targets/delete     { targetIdFilter: { include } }
  *   productAd  DeleteSponsoredProductsProductAds         POST /sp/productAds/delete  { adIdFilter: { include } }
  *
- * Only a deliberate archive is sent this way (archive-ads marks its writes: ads-sync.worker.ts). The update functions
- * above still PUT any state they are handed, as they always did.
+ * Sent this way: a deliberate archive (archive-ads marks its writes `letsGo`) and a person's own archive (the Archive
+ * actions on the campaign screens, `manual` on the queue row), both in ads-sync.worker.ts. A person's archive used to go
+ * out as a PUT with state ARCHIVED, which Amazon does not accept. The update functions above still PUT any state they
+ * are handed.
  */
 export const SP_V3_ARCHIVE = {
   campaign: { path: '/sp/campaigns/delete', mime: 'application/vnd.spCampaign.v3+json', idFilter: 'campaignIdFilter', key: 'campaigns' },
