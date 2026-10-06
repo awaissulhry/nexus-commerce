@@ -16,6 +16,7 @@ import { ADS_CHANGE_TOOLS } from './tools/ads-change.tools.js'
 import { ADS_TARGET_ACOS_TOOLS } from './tools/ads-target-acos.tools.js'
 import { ADS_STRATEGY_TOOLS } from './tools/ads-strategy.tools.js'
 import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
+import { ADS_MANAGER_TOOLS } from './tools/ads-manager.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
 import { ADS_STATUS_TOOLS } from './tools/ads-status.tools.js'
 import { ADS_STOCK_TOOLS } from './tools/ads-stock.tools.js'
@@ -109,6 +110,8 @@ const ALL: AgentTool[] = [
   ...ADS_STRATEGY_TOOLS,
   // Ads playbook PB-2 — how a product's ads are built and run (templates, rows per market, category and product), read.
   ...ADS_PLAYBOOK_TOOLS,
+  // Ads autonomy W4-1 — the daily Claude ads run reports itself (bell + one e-mail a day), and its history.
+  ...ADS_MANAGER_TOOLS,
   ...ADS_CREATE_TOOLS,
   // Ads autonomy AA-W2-12 — a real pause of Amazon ads, and switching back on what a Claude request paused.
   ...ADS_STATUS_TOOLS,

@@ -209,6 +209,8 @@ interface Seeded {
   photoId: string
   /** P9 — a column mapping the person saved for catalog imports (import-catalog's savedMappingId). */
   sourcePresetId: string
+  /** W4-1 — a daily Claude ads run that started and has not reported its end (report-ads-run finishes it). */
+  adsRunId: string
 }
 const seeded = {} as Record<'a' | 'b', Seeded>
 /** Phase 3 T3 — the eBay category id each business has loaded (its details name the business's canary). */
@@ -499,6 +501,10 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       data: { kind: 'adjust_ad_rate', entityRef: { campaignId: ebayCampaign.id, externalCampaignId: ebayCampaign.externalCampaignId, campaignName: `${canary}-EBAY-CAMPAIGN`, marketplace: market }, proposedAction: { field: 'bidPercentage', from: 6, to: 5 }, proposedKey: `adjust_ad_rate:${ebayCampaign.id}:${RUN}` },
     })
     const run = await db.agentRun.create({ data: { agentKey: 'manual-action', trigger: 'manual', status: 'done', input: { note: `${canary}-RUN` } } })
+    // W4-1 — the business's daily Claude ads run, started (report-ads-run's record; ads-manager-runs lists it).
+    const adsRun = await db.agentRun.create({
+      data: { agentKey: 'claude-ads-manager', trigger: 'schedule', status: 'running', input: { v: 1, note: `${canary}-ADS-RUN`, start: { mode: 'ask', markets: [{ market, strategyVersion: null }] } } },
+    })
     const approval = (note: string) =>
       db.agentApproval.create({
         data: {
@@ -676,9 +682,10 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         ebayAdGroup.id, ebayAdGroup.externalAdGroupId,
         matrixOp.id, photo.id,
         sourcePreset.id,
+        adsRun.id,
         queuedWrite.id,
       ],
-      agentRows: [run.id, first.id, spare.id],
+      agentRows: [run.id, first.id, spare.id, adsRun.id],
       changeId: change.id,
       automationRuleId: automationRule.id,
       shipmentId: shipment.id,
@@ -732,6 +739,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       matrixOpId: matrixOp.id,
       photoId: photo.id,
       sourcePresetId: sourcePreset.id,
+      adsRunId: adsRun.id,
     }
   })
 }
@@ -864,6 +872,8 @@ const B_VALUES: Record<string, () => unknown> = {
   photoId: () => seeded.b.photoId,
   // P9 — import-catalog's saved column mapping; rollback-bulk-operation's jobId is B's import job (above).
   savedMappingId: () => seeded.b.sourcePresetId,
+  // W4-1 — report-ads-run names the run it reports (finish, fail, withdraw).
+  runId: () => seeded.b.adsRunId,
   // C2 — set-master-prices names each product by `product` (an id or a SKU).
   product: () => seeded.b.productId,
   targetId: () => seeded.b.targetId,
@@ -1022,6 +1032,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
     doc: undefined, sections: undefined, categoryId: undefined, sku: undefined, values: undefined, recompute: undefined, campaignIds: undefined,
     portfolioId: undefined, namePrefix: undefined, productToken: undefined, competitorTokens: undefined, expectVersion: undefined, reason: undefined,
   },
+  // W4-1 — the end of B's started run (start takes no runId; the loop names one).
+  'report-ads-run': { op: 'finish' },
   // T4 — the eBay ad details open an eBay campaign (the loop's campaignId and adGroupId are Amazon's).
   'ebay-ad-details': { get campaignId() { return seeded.b.ebayCampaignId }, adGroupId: undefined },
   // W3-2 — a cancel names the queued write alone (the loop's changeSetId is a recorded write's, which waits for nothing).

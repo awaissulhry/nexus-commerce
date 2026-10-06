@@ -303,6 +303,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'create-ebay-campaign': () => ({ market: 'EBAY_IT', name: 'Money launch' }),
   // A11 — a new campaign's plan names a budget and bids (it needs money: refused for a person without it).
   'create-ad-campaign': (ids) => ({ market: 'IT', name: 'Money launch', skus: [ids.productId], dailyBudgetCents: 1500, defaultBidCents: 50, keywords: [{ text: 'jacket', matchType: 'EXACT' }] }),
+  // Ads autonomy W4-1 — a run report states each market's spend and sales (it needs money: refused for a person
+  // without it); the run history shows them under the money keys only.
+  'report-ads-run': () => ({ op: 'finish', markets: [{ market: 'IT', lines: ['Money test run'] }] }),
+  'ads-manager-runs': () => ({ days: 7 }),
   'ads-overview': () => ({}),
   'ad-campaigns': () => ({}),
   'ad-targets': (ids) => ({ campaignId: ids.campaignId, status: 'all' }),
@@ -977,8 +981,9 @@ describe('MCP.2 — coverage', () => {
 })
 
 describe('MCP.2 — money a person may not see never comes back', () => {
-  // C7 — confirm-change is Claude's door only and returns its own arguments: no stored money to filter.
-  const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change')
+  // C7 — confirm-change is Claude's door only and returns its own arguments: no stored money to filter. W4-1 —
+  // report-ads-run is Claude's door only too; it needs the ad-spend money permission (ads-manager.tools.vitest.test.ts).
+  const tools = () => listTools().filter((tool) => !AI_DRAFTS.has(tool.name) && tool.name !== 'confirm-change' && tool.name !== 'report-ads-run')
 
   it('the money-cleared run really reads the seeded money (positive control)', async () => {
     const analytics = await run(cleared(A), 'product-analytics', ARGS['product-analytics'](seeded[A]))
