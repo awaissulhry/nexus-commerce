@@ -52,7 +52,9 @@ const UNDO_PENDING: Record<string, string> = {
  * ratchet: adding a name is a reviewed change, and an entry whose tool is no longer alwaysAsk, strategy-bound and above
  * `ask` must be removed (checked below). Empty until a W2 tool PR raises one.
  */
-const AD_STRATEGY_AUTO: readonly string[] = []
+const AD_STRATEGY_AUTO: readonly string[] = [
+  'bulk-ad-bid-change', // AA-W2-6 — many bids, every row inside the ads strategy of its ad group
+]
 
 /**
  * AA-W2-1 — irreversible tools that may be set above `ask` (rule 7c), each with a sample preview that is inside the
@@ -519,7 +521,7 @@ describe('C1 — every registered tool keeps the contract', () => {
     // Refunds, fiscal numbers, messages, publishing, eBay ads and Amazon spend: a person approves each in Nexus.
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
-      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-campaign-budget', 'set-placement-multipliers', 'bulk-ad-bid-change',
+      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-campaign-budget', 'set-placement-multipliers',
       'restore-campaign', 'set-campaign-live-writes', 'create-ad-campaign']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }

@@ -14,6 +14,10 @@
  * `user:<approverId>`, reason `Claude request <approvalId>: <why>`, and changeSetId = the approval id. Requests made
  * before the switch carry no stored reach: they never run and the approval sweep expires them.
  *
+ * ADS AUTONOMY AA-W2-6 — `set-target-bid` is strategy-bound: its dry run carries the limit facts of the bid that lands
+ * (the ads strategy of the target's ad group, Claude's limits, today's runs by rule) and the write gate's answer as a
+ * run by rule, so the business may let it run by its rule inside them (ads-change-kit.ts `ruleFactsFor`, `ruleRefusal`).
+ *
  * The protected-terms check is the write gate's own matcher (ads-negation-policy.ts, 5a): EXACT / PREFIX / CONTAINS, and
  * a phrase negative that a protected term contains; it is not re-invented. Amazon's text limits are checked there too.
  */
@@ -29,9 +33,10 @@ import { adGroupCampaigns, adGroupExternalIds, adGroupsByExternalId } from '../.
 import { loadDestinationGraph, resolveDestination, resolveStoredDestinations } from '../../advertising/harvest-destination.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf } from './ads-tool-guards.js'
-import { alsoChangedBy, approvedRun, notRun, reachNote, reachRefusal, recheck, spOnlyRefusal, stepClampWords, storedReach, type StoredReach } from './ads-change-kit.js'
+import { alsoChangedBy, approvedRun, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stepClampWords, storedReach, type StoredReach } from './ads-change-kit.js'
+import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS } from './ads-autonomy-kit.js'
 import { bidLimitsFor, stepClamp } from '../../advertising/ads-strategy/bids.js'
-import type { AgentTool, ToolResult, ToolUndo } from '../tool-types.js'
+import type { AgentTool, FieldPermission, ToolResult, ToolUndo } from '../tool-types.js'
 
 const BID_FLOOR_CENTS = 5
 const METRIC_WINDOW_DAYS = 60
@@ -480,8 +485,17 @@ const graduateKeyword: AgentTool = {
   },
 }
 
-/** The bid a set-target-bid request would write, and everything the approver must see — or why it is refused. */
-async function targetBidPreview(args: Record<string, unknown>): Promise<ToolResult> {
+/**
+ * AA-W2-6 — set-target-bid's Claude limits (Settings › AI › Claude): the kit's, with a raise and a cut step. By
+ * default no raise runs alone (0 %); a cut runs alone inside the ads strategy's bid band and largest change.
+ */
+const TARGET_BID_LIMITS = adKitLimits({ maxItems: 1 }, STEP_PCT_LIMITS)
+
+/**
+ * The bid a set-target-bid request would write, and everything the approver must see — or why it is refused.
+ * `rule` (the dry run, not `execute`): AA-W2-6 — also the facts its limits are judged on when it may run by rule.
+ */
+async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null } } = {}): Promise<ToolResult> {
   const targetId = String(args.targetId ?? '')
   const proposedBidCents = Math.round(Number(args.proposedBidCents))
   if (!targetId || !Number.isFinite(proposedBidCents)) {
@@ -554,6 +568,17 @@ async function targetBidPreview(args: Record<string, unknown>): Promise<ToolResu
   const currency = campaignCurrency(campaign)
   const stored = storedReach(reach)
   const bound = await alsoChangedBy(campaign.id)
+  // AA-W2-6 — the bid that lands, against the ads strategy of the target's ad group and Claude's limits, and the write
+  // gate as it judges a run by rule.
+  const rule = opts.rule
+    ? await ruleFactsFor({
+      tool: 'set-target-bid',
+      limits: TARGET_BID_LIMITS,
+      items: [{ entity: { kind: 'target', id: target.id }, change: { field: 'bid', fromCents: currentBidCents, toCents: effectiveBidCents } }],
+      writes: [{ label: `campaign "${campaign.name}"`, campaignId: campaign.id, adGroupId: target.adGroupId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: effectiveBidCents }] }],
+      approvalId: opts.rule.approvalId,
+    })
+    : null
   return {
     ok: true,
     preview: {
@@ -569,6 +594,7 @@ async function targetBidPreview(args: Record<string, unknown>): Promise<ToolResu
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
+      ...(rule ?? {}),
       effect: `Moves "${target.expressionValue}" from ${amountLabel(currentBidCents, currency)} to ${amountLabel(effectiveBidCents, currency)} in ${campaign.name}.`,
     },
   }
@@ -606,6 +632,7 @@ const setTargetBid: AgentTool = {
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
   }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
+  restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
@@ -613,18 +640,24 @@ const setTargetBid: AgentTool = {
   // A4 — an approved bid change is sent to Amazon (live) after the 5-minute cancel window.
   openWorld: true,
   reversibility: 'full',
-  maxClaudeTrust: 'confirm',
+  // AA-W2-6 — the business may let it run by its rule, only inside its limits and the ads strategy where it lands.
+  maxClaudeTrust: 'auto',
+  strategyBound: 'amazon-ads',
+  limits: TARGET_BID_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits),
   undo: SET_TARGET_BID_UNDO,
   description:
     'Change one keyword or target bid on an Amazon Sponsored Products campaign. Nothing changes until a person approves '
     + 'it: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the business set it '
-    + 'so. The preview shows the current and new bid in the campaign\'s currency (after the campaign\'s CPC '
-    + 'ceiling and max-change guardrail), whether it lands live at Amazon or in sandbox, and the rules that may move it '
-    + 'again. Refused, and not queued, when Amazon\'s write gate would refuse it (a campaign must be on the live-write '
-    + 'allowlist), when a pin holds the bids, or when it would raise a suppressed (no-pause) bid. Once approved it runs '
-    + 'as the approver; undo-change puts the old bid back.',
-  async handler(args) {
-    return targetBidPreview(args)
+    + 'so — unless the business lets it run by its rule, inside its limits and the ads strategy where it lands (by '
+    + 'default only a cut; a raise waits for a person). The preview shows the current and new bid in the campaign\'s '
+    + 'currency (after the campaign\'s CPC ceiling and max-change guardrail), whether it lands live at Amazon or in '
+    + 'sandbox, the rules that may move it again, and each limit with where it comes from. Refused, and not queued, when '
+    + 'Amazon\'s write gate would refuse it, or when it would raise a suppressed (no-pause) bid. Run by rule, it is also '
+    + 'held by the live-write allowlist, pins and the campaign\'s own bid bounds. Once approved it runs as the approver; '
+    + 'undo-change puts the old bid back.',
+  async handler(args, ctx) {
+    return targetBidPreview(args, { rule: { approvalId: ctx.approvalId } })
   },
   async execute(args, ctx) {
     const fresh = await targetBidPreview(args)
