@@ -652,6 +652,16 @@ describe('4a — builderScopeCampaignIds: the campaigns a builder rule\'s picker
     expect(builderScopeCampaignIds([])).toBeNull()
   })
 
+  it('🔴 CC-15 — a Negative Targeting / Harvest rule with a `campaignIds` LIST (the autopilot\'s) is bound by it; an empty list binds it to nothing', () => {
+    for (const slug of ['negative-targeting', 'keyword-harvesting']) {
+      expect(builderScopeCampaignIds(picked(slug, ['c1', 'c2'], 'campaignIds'))).toEqual(['c1', 'c2'])
+      // Was null — "account-wide" — so an SP Super Wizard AI Control plan's rules read every search term in the market.
+      expect(builderScopeCampaignIds(picked(slug, [], 'campaignIds'))).toEqual([])
+      // The builder's own rules (no `campaignIds` key) keep their ad-group mappings as before.
+      expect(builderScopeCampaignIds([{ type: slug, mappings: [] }])).toBeNull()
+    }
+  })
+
   it('the picks it binds are the same list the handler enforces (`campaignIds` on the translated action)', () => {
     const t = maybeTranslateAdsRule({ id: 'r', actions: picked('placement', ['c1']), conditions: [] })!
     expect((t.actions[0] as { campaignIds: string[] }).campaignIds).toEqual(builderScopeCampaignIds(picked('placement', ['c1'])))

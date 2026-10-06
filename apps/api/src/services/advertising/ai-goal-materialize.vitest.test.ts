@@ -63,14 +63,24 @@ describe('planGoalScaffold', () => {
     expect(bad.guardrails.bidMaxCents).toBe(300)  // default (max ≤ min rejected)
   })
 
-  it('one harvest + one negative rule per scaffold set; missing marketplace warns and defaults', () => {
-    const s = planGoalScaffold({ name: 'G', aiTarget: 'IMPRESSION', budgetMode: 'STRICT', products: [product('A1'), product('A2')], seedKeywords: ['kw'] })
+  it('one harvest + one negative rule per scaffold set', () => {
+    const s = planGoalScaffold({ name: 'G', aiTarget: 'IMPRESSION', budgetMode: 'STRICT', products: [product('A1'), product('A2')], seedKeywords: ['kw'], marketplace: 'DE' })
     expect(s.rules).toHaveLength(4)
     expect(s.rules.filter((r) => r.kind === 'harvest')).toHaveLength(2)
-    expect(s.marketplace).toBe('IT')
-    expect(s.warnings.some((w) => w.includes('marketplace'))).toBe(true)
+    expect(s.marketplace).toBe('DE')
     // LAUNCH preset harvests aggressively → minOrders 1
     expect(s.rules[0].minOrders).toBe(1)
+  })
+
+  it('🔴 CC-29 — a goal with no marketplace is refused, never launched in Italy (it defaulted to IT with a warning)', () => {
+    for (const marketplace of [undefined, null, '', '  ']) {
+      expect(() => planGoalScaffold({ name: 'G', aiTarget: 'SALES', budgetMode: 'SHARED', totalBudgetCents: 1000, products: [product('A1')], marketplace })).toThrow(/no Amazon marketplace/)
+    }
+  })
+
+  it('🔴 CC-5 — a Nexus-only portfolio is refused before Amazon refuses every campaign', () => {
+    expect(() => planGoalScaffold({ name: 'G', aiTarget: 'SALES', budgetMode: 'SHARED', totalBudgetCents: 1000, products: [product('A1')], marketplace: 'IT', portfolioId: 'local-pf-x-spring' })).toThrow(/exists only in Nexus/)
+    expect(planGoalScaffold({ name: 'G', aiTarget: 'SALES', budgetMode: 'SHARED', totalBudgetCents: 1000, products: [product('A1')], marketplace: 'IT', portfolioId: '123' }).marketplace).toBe('IT')
   })
 
   it('bid evidence flows into seeds and auto groups when provided (preview = launch)', () => {

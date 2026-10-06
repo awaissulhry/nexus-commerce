@@ -40,8 +40,14 @@ export interface BidSuggestResult { suggestions: BidSuggestion[]; accountMedianC
 export async function suggestBids(opts: { keywords: string[]; matchType?: string; marketplace?: string }): Promise<BidSuggestResult> {
   const keywords = [...new Set(opts.keywords.map((k) => k.trim()).filter(Boolean))]
   // Observed CPCs from our own keyword targets with traffic.
+  // CC-6 — `marketplace` was accepted and ignored, so every market's builder read one account-wide median. A market's
+  // suggestion now comes from that market's own keywords (no data there → the honest default below).
   const targets = await prisma.adTarget.findMany({
-    where: { kind: 'KEYWORD', clicks: { gt: 0 }, spendCents: { gt: 0 }, ...(opts.matchType ? { expressionType: opts.matchType } : {}) },
+    where: {
+      kind: 'KEYWORD', clicks: { gt: 0 }, spendCents: { gt: 0 },
+      ...(opts.matchType ? { expressionType: opts.matchType } : {}),
+      ...(opts.marketplace ? { adGroup: { campaign: { marketplace: opts.marketplace } } } : {}),
+    },
     take: 5000,
     select: { expressionValue: true, clicks: true, spendCents: true },
   })

@@ -21,7 +21,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { Button } from '@/design-system/primitives'
-import { Modal } from '@/design-system/components'
+import { Banner, Modal } from '@/design-system/components'
 import { DataGrid } from '@/design-system/grid/datagrid'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { X, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus, PackageOpen, Shield, AlertTriangle } from 'lucide-react'
@@ -45,6 +45,7 @@ import { marketLabel } from '../../_shell/MarketSelect'
 import { ProductSelection, type SpwProduct } from '../../campaign-builder/sp-super-wizard/ProductSelection'
 import { PortfolioPicker } from '../../campaign-builder/sp-super-wizard/PortfolioPicker'
 import { AiGoalPreview } from './AiGoalPreview'
+import { marketChangeNote, useOnMarketChange } from '../../campaign-builder/marketChange'
 import './ai-goal.css'
 import { commandKeyFor, useCommandKey } from '@/lib/command-key'
 import { launchBlocked, readChecks, sendLaunch, type LaunchChecks } from '../../campaign-builder/launchChecks'
@@ -118,6 +119,14 @@ export function AiGoalBuilder() {
   const [excludeAsins, setExcludeAsins] = useState<string[]>([])
   const [portfolioId, setPortfolioId] = useState('')
   const exitTo = '/marketing/ads/campaign-builder'
+  // CC-6 — the goal's own Marketplace select is the one market of this launch: the product picker and the portfolio
+  // picker follow it (they read the console's market), and a change drops the products and portfolio chosen for the
+  // old one, saying so.
+  const [marketNote, setMarketNote] = useState('')
+  useOnMarketChange(market, (prev, next) => {
+    setMarketNote(marketChangeNote(prev, next, [products.length ? `${products.length} product${products.length === 1 ? '' : 's'}` : '', portfolioId ? 'the portfolio' : ''].filter(Boolean)))
+    setProducts([]); setPortfolioId('')
+  })
 
   // ── evidence: suggested keywords + budgets for the selected ASINs in the selected market ──
   const asinsKey = useMemo(() => products.map((p) => p.asin).filter(Boolean).sort().join(','), [products])
@@ -225,6 +234,7 @@ export function AiGoalBuilder() {
 
       <div className="h10-aig-body">
         <div className="h10-aig-wrap">
+          {marketNote && <Banner tone="warning" onDismiss={() => setMarketNote('')}>{marketNote}</Banner>}
 
           <section className="h10-aig-sec">
             <h2>Product Goal Details</h2>
@@ -236,11 +246,13 @@ export function AiGoalBuilder() {
                 <Select value={market} onChange={(e) => setMarket(e.target.value)}>
                   {!market && <option value="">Select a marketplace</option>}
                   {mk.markets.filter((m) => m.launchable).map((m) => <option key={m.code} value={m.code}>{marketLabel(m.code)}</option>)}
+                  {/* CC-19 — the markets a campaign cannot reach stay listed, disabled, with the reason. */}
+                  {mk.markets.filter((m) => !m.launchable).map((m) => <option key={m.code} value={m.code} disabled>{`${marketLabel(m.code)} — ${m.whyNotShort ?? m.mode}`}</option>)}
                 </Select>
               </Field>
               <div className="h10-aig-field">
                 <span className="lbl">Portfolio (Optional)</span>
-                <PortfolioPicker value={portfolioId} onChange={setPortfolioId} />
+                <PortfolioPicker value={portfolioId} onChange={setPortfolioId} market={market} />
               </div>
             </div>
           </section>
@@ -416,7 +428,7 @@ export function AiGoalBuilder() {
         <Button variant="primary" disabled={!valid || launching || launchBlocked(checks)} onClick={launch}>{launching ? 'Launching…' : 'Launch'}</Button>
       </footer>
 
-      {showAddProducts && <AddProductsModal selected={products} onClose={() => setShowAddProducts(false)} onApply={(ps) => { setProducts(ps); setShowAddProducts(false) }} />}
+      {showAddProducts && <AddProductsModal market={market} selected={products} onClose={() => setShowAddProducts(false)} onApply={(ps) => { setProducts(ps); setShowAddProducts(false) }} />}
       {advOpen && <AdvancedTargetingDrawer productTargets={productTargets} excludeAsins={excludeAsins} onClose={() => setAdvOpen(false)} onSave={(pt, ea) => { setProductTargets(pt); setExcludeAsins(ea); setAdvOpen(false) }} />}
       {launchPhase && launchPhase !== 'failed' && (
         <LaunchOverlay
@@ -628,7 +640,7 @@ function ProductsEmptyArt() {
 
 /* ── Add Products — reuses the shared SP Super Wizard ProductSelection (Search/Enter tabs +
    parent→child variation expansion + N-Added panel), mapped to AI Goal's budget-bearing Prod. ── */
-function AddProductsModal({ selected, onClose, onApply }: { selected: Prod[]; onClose: () => void; onApply: (ps: Prod[]) => void }) {
+function AddProductsModal({ market, selected, onClose, onApply }: { market: string; selected: Prod[]; onClose: () => void; onApply: (ps: Prod[]) => void }) {
   const [picked, setPicked] = useState<SpwProduct[]>(selected.map(prodToSpw))
   const apply = () => {
     const prevById = new Map(selected.map((p) => [p.id, p]))
@@ -646,7 +658,8 @@ function AddProductsModal({ selected, onClose, onApply }: { selected: Prod[]; on
         </>
       }
     >
-      <ProductSelection products={picked} setProducts={setPicked} />
+      {/* CC-6 — the goal's market, not the console's. */}
+      <ProductSelection products={picked} setProducts={setPicked} marketplace={market} />
     </Modal>
   )
 }

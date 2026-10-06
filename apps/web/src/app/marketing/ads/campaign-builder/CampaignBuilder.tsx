@@ -5,18 +5,14 @@
  * builder type. AI Goal is wired to the AI-Advertising New Product Goal builder;
  * the other types land in later phases. Reuses the shared `.h10-*` design system.
  */
-import { useEffect, useState } from 'react'
 import Link from '@/lib/workspaces/Link'
 import { useRouter } from '@/lib/workspaces/navigation'
-import { Listbox } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
-import { getBackendUrl } from '@/lib/backend-url'
+import { useAdsMarketplace } from '../_shell/MarketplaceContext'
+import { MarketSelect } from '../_shell/MarketSelect'
 import { IconAtom, IconQuick, IconCubes, IconRocket, IconCube, IconReplicate, IconDisplay, IconBanner } from '../_shell/builder-icons'
-
-const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱', SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', TR: '🇹🇷', US: '🇺🇸' }
-const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom', NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', TR: 'Türkiye', US: 'United States' }
 
 type TypeCard = { key: string; title: string; Icon: typeof IconAtom; bestFor: string; desc: string }
 const TYPES: TypeCard[] = [
@@ -47,34 +43,17 @@ function AmazonMark() {
   )
 }
 
-/** Profile picker — amazon mark + flag + profile name + chevron. Markets are the
- *  marketplaces the account advertises in; defaults to the first (primary market). */
-function ProfileSelect() {
-  const [markets, setMarkets] = useState<string[]>(['IT'])
-  const [sel, setSel] = useState('IT')
-  useEffect(() => {
-    let alive = true
-    fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`)
-      .then((r) => r.json()).then((j) => {
-        if (!alive) return
-        const ms = Array.from(new Set((j?.items ?? []).map((c: { marketplace?: string | null }) => (c.marketplace ?? '').toUpperCase()).filter(Boolean))) as string[]
-        if (ms.length) { setMarkets(ms); setSel(ms.includes('IT') ? 'IT' : ms[0]) }
-      }).catch(() => {})
-    return () => { alive = false }
-  }, [])
+/**
+ * CC-23 — the marketplace every builder launches in. The old "Profile" picker was built from campaign rows, defaulted to
+ * Italy and was never passed on: each builder used the console market whatever it showed. This is now the one control,
+ * the console's own launch market (`useAdsMarketplace`), so the choice made here is the one every builder opens with.
+ * Markets a campaign cannot reach stay listed, disabled, with the reason.
+ */
+function LaunchMarketSelect() {
+  const { market, setMarket, markets, ready } = useAdsMarketplace()
   return (
     <div className="h10-cb-profile">
-      <Listbox
-        width={240}
-        value={sel}
-        onChange={setSel}
-        ariaLabel="Advertising profile"
-        options={markets.map((m) => ({
-          value: m,
-          label: `${FLAG[m] ?? '🏳️'} ${MARKET_NAME[m] ?? m}`,
-          leading: <AmazonMark />,
-        }))}
-      />
+      <MarketSelect markets={markets} value={market} onChange={setMarket} disabled={!ready} brand={<AmazonMark />} />
     </div>
   )
 }
@@ -110,9 +89,9 @@ export function CampaignBuilder() {
       </div>
       <div className="h10-cb-panel">
         <section className="h10-cb-sec">
-          <h3>Profile</h3>
-          <p>Select a profile for your campaigns</p>
-          <ProfileSelect />
+          <h3>Marketplace</h3>
+          <p>The Amazon marketplace your new campaigns launch in. Every builder opens with it.</p>
+          <LaunchMarketSelect />
         </section>
         <section className="h10-cb-sec">
           <h3>Campaign Builder Type</h3>

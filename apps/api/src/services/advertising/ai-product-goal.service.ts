@@ -52,6 +52,14 @@ export async function createProductGoal(input: ProductGoalInput) {
   const products = Array.isArray(input?.products) ? input.products : []
   if (products.length === 0) throw new ValidationError('Add at least one product')
 
+  // CC-29 / CC-5 — a goal launches in one market, never a guessed one (materialize used to default to IT), and never
+  // with a portfolio Amazon does not know.
+  const marketplace = (input?.marketplace ?? '').trim()
+  if (!marketplace) throw new ValidationError('Pick the Amazon marketplace for this goal')
+  if ((input?.portfolioId ?? '').startsWith('local-pf-')) {
+    throw new ValidationError('This portfolio exists only in Nexus (it was created while Amazon writes were closed), so Amazon would refuse the campaigns. Pick a portfolio that exists on Amazon, or no portfolio.')
+  }
+
   const aiTarget: AiTarget = (['IMPRESSION', 'SALES', 'ROAS', 'LIQUIDATE', 'RANK'] as const).includes(input?.aiTarget) ? input.aiTarget : 'SALES'
   const budgetMode: BudgetMode = input?.budgetMode === 'SHARED' ? 'SHARED' : 'STRICT'
   const intOrNull = (v: unknown, lo: number, hi: number) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= lo && n <= hi ? n : null }
@@ -87,7 +95,7 @@ export async function createProductGoal(input: ProductGoalInput) {
       productTargets: clean(input.productTargets),
       excludeAsins: clean(input.excludeAsins),
       status: 'ACTIVE',
-      marketplace: input.marketplace ?? null,
+      marketplace,
       portfolioId: (input.portfolioId ?? '').trim() || null,
       targetAcosPct,
       bidMinCents,

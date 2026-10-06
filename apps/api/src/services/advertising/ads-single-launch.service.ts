@@ -63,8 +63,13 @@ export interface SingleLaunchResult {
 
 /** The launch, as the route ran it: `userId` is the actor the route takes from its header. */
 export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: SingleLaunchOptions = {}): Promise<SingleLaunchResult> {
-  const market = b.market || 'IT'
   const name = (b.name || '').trim()
+  // CC-29 / CC-5 — the market is never guessed (it used to become IT) and a Nexus-only portfolio never reaches Amazon.
+  // Before the dry run too: the review step's checks are about one market, never a guessed one.
+  const { launchMarketRefusal, localPortfolioRefusal, bidStrategyRules } = await import('./ads-launch-guards.js')
+  const refused = launchMarketRefusal(b.market) ?? localPortfolioRefusal(b.portfolioId)
+  if (refused) return { status: 400, body: { ok: false, error: refused } }
+  const market = String(b.market).trim()
   const products = (b.products ?? []).filter((p) => p && (p.asin || p.sku || p.productId))
   const defaultBidEur = Number(b.defaultBidEur) || 0.75
   const budgetEur = Number(b.budgetEur) || 10
@@ -159,18 +164,17 @@ export async function singleLaunch(b: SingleLaunchBody, userId: AdsActor, opts: 
       } catch (e) { logger.warn('[single-launch] attach rule failed', { ruleId, error: (e as Error).message }) }
     }
 
+    // CC-4 — Target ACoS becomes a rule the engine runs (a fraction, this campaign's id); a strategy with no engine
+    // creates no rule ("not running yet") instead of an inert `set_bid_strategy` row.
     if (b.bidConfig?.strategy && b.bidConfig.strategy !== 'none') {
-      try {
-        const bc = b.bidConfig
-        const minBidEur = Number(bc.minBid) || undefined
-        const maxBidEur = Number(bc.maxBid) || undefined
-        const action = bc.strategy === 'targetAcos'
-          ? { type: 'bid_to_target_acos', targetAcos: Number(bc.targetAcos) || 30, minBidEur, maxBidEur, campaignIds: [camp.id] }
-          : { type: 'set_bid_strategy', strategy: bc.strategy, minBidEur, maxBidEur, campaignIds: [camp.id] }
-        const label = bc.strategy === 'targetAcos' ? 'Target ACoS' : bc.strategy === 'maxImpressions' ? 'Max Impressions' : bc.strategy === 'maxOrders' ? 'Max Orders' : 'Custom'
-        const rule = await prisma.automationRule.create({ data: { name: `${name} — ${label} bidding`.slice(0, 120), description: 'Bid strategy from Single Campaign builder', domain: 'advertising', trigger: 'SCHEDULE', conditions: [] as never, actions: [action] as never, enabled: !!b.autoBidAdjust, dryRun: true, maxExecutionsPerDay: 4, createdBy: userId ?? null } })
-        rulesCreated.push({ id: rule.id, name: rule.name })
-      } catch (e) { logger.error('[single-launch] bid rule failed', { error: (e as Error).message }) }
+      const plan = bidStrategyRules({ bidConfig: b.bidConfig, campaigns: [{ id: camp.id, name }], market, enabled: !!b.autoBidAdjust, createdBy: userId ?? null, source: 'Single Campaign builder' })
+      if (plan.note) logger.warn('[single-launch] no bid-strategy rule', { strategy: b.bidConfig.strategy, note: plan.note })
+      for (const data of plan.rules) {
+        try {
+          const rule = await prisma.automationRule.create({ data: data as never })
+          rulesCreated.push({ id: rule.id, name: rule.name })
+        } catch (e) { logger.error('[single-launch] bid rule failed', { error: (e as Error).message }) }
+      }
     }
     if (b.addNegativeRule) {
       try {

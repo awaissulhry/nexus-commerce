@@ -16,9 +16,8 @@ import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import '../builder-ds.css'
 import { PortfolioPicker } from '../sp-super-wizard/PortfolioPicker'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import type { PolicyMode, ValuePolicy } from './replicate-types'
-
-const MARKETS = ['IT', 'DE', 'FR', 'ES']
 
 function PolicyControl({ label, hint, unit, policy, setPolicy }: {
   label: string; hint: string; unit: string; policy: ValuePolicy; setPolicy: (p: ValuePolicy) => void
@@ -67,6 +66,9 @@ export function DestinationPanel({
 }) {
   const capNum = Number(cap)
   const over = plannedTotal != null && cap.trim() !== '' && Number.isFinite(capNum) && plannedTotal > capNum
+  // CC-19 — the connected markets, not a hard-coded IT/DE/FR/ES: one a copy cannot reach is shown disabled, with why.
+  const { markets } = useAdsMarketplace()
+  const notOffered = markets.filter((m) => !m.launchable)
   return (
     <div className="h10-spw-card h10-rep-dest">
       <div className="h10-rep-destrow">
@@ -78,9 +80,9 @@ export function DestinationPanel({
             ariaLabel="Destination marketplace"
             value={market}
             onChange={setMarket}
-            options={MARKETS.map((m) => ({ value: m, label: m }))}
+            options={markets.map((m) => ({ value: m.code, label: m.code, disabled: !m.launchable, title: m.whyNot ?? undefined }))}
           />
-          <span className="hint">The self-competition check runs against the campaigns already live in this market.</span>
+          <span className="hint">The self-competition check runs against the campaigns already live in this market.{notOffered.length ? ` Not offered: ${notOffered.map((m) => `${m.code} (${m.whyNotShort ?? m.mode})`).join(', ')}.` : ''}</span>
         </div>
         <div className="h10-rep-policy">
           <span className="lbl">Portfolio</span>

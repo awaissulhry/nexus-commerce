@@ -275,6 +275,26 @@ export async function applyBidOptimization(args: {
   }
 }
 
+/**
+ * CC-4 — the rule's own Min/Max bid. The campaign builders store `minBidEur` / `maxBidEur` on the action ("the algorithm
+ * never bids below Min or above Max"), and nothing read them. A proposal outside the bounds moves to the bound; one
+ * that then equals the current bid is dropped (nothing to change). Absent bounds change nothing.
+ */
+export function clampProposalsToRuleBounds(proposals: BidProposal[], minBidEur: unknown, maxBidEur: unknown): BidProposal[] {
+  const cents = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.round(v * 100) : null)
+  const lo = cents(minBidEur)
+  const hi = cents(maxBidEur)
+  if (lo == null && hi == null) return proposals
+  return proposals
+    .map((p) => {
+      let next = p.proposedBidCents
+      if (lo != null && next < lo) next = lo
+      if (hi != null && (lo == null || hi >= lo) && next > hi) next = hi
+      return next === p.proposedBidCents ? p : { ...p, proposedBidCents: next, deltaCents: next - p.currentBidCents, reason: `${p.reason} (held to the rule's ${next === lo ? 'Min' : 'Max'} bid)` }
+    })
+    .filter((p) => p.proposedBidCents !== p.currentBidCents)
+}
+
 // ── Automation handler: bid_to_target_acos ────────────────────────────────
 ACTION_HANDLERS.bid_to_target_acos = async (action, _context, meta): Promise<ActionResult> => {
   const targetAcos = typeof action.targetAcos === 'number' ? (action.targetAcos as number) : 0.3
@@ -321,7 +341,8 @@ ACTION_HANDLERS.bid_to_target_acos = async (action, _context, meta): Promise<Act
   const mode = typeof action.acosMode === 'string' ? (action.acosMode as AcosMode) : undefined
   // Apex C.3 — a rule can opt into Bayesian sparse-data handling.
   const bayesian = action.bayesian === true || action.bayesian === 'true'
-  const { proposals } = await previewBidOptimization({ targetAcos, campaignId, profitMode, mode, bayesian })
+  const preview = await previewBidOptimization({ targetAcos, campaignId, profitMode, mode, bayesian })
+  const proposals = clampProposalsToRuleBounds(preview.proposals, action.minBidEur, action.maxBidEur)
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, wouldChange: proposals.length, sample: proposals.slice(0, 5) } }
   const r = await applyBidOptimization({ changes: proposals.map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents })), actor: `automation:${meta.ruleId}` })
   return { type: action.type, ok: true, output: { applied: r.applied } }

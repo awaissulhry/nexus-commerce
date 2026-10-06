@@ -22,7 +22,7 @@ import { RuleControlPanel } from './RuleControlPanel'
 import { AiControlPreview } from './AiControlPreview'
 import type { SpwCampaign } from './CampaignSetup'
 import { AiControlPanel, type AiControlConfig } from './AiControlPanel'
-import { BidStrategyCardGrid, BID_STRATEGIES, defaultBidConfig, type BidConfig, type BidStrategy } from '../../_shared/BidStrategy'
+import { BidStrategyCardGrid, BID_STRATEGIES, bidStrategyRuns, defaultBidConfig, type BidConfig, type BidStrategy } from '../../_shared/BidStrategy'
 
 const money = (cur: string, n: number) => `${cur}${n.toFixed(2)}`
 
@@ -50,8 +50,10 @@ export const rulesConfigured = (r: RulesConfig): boolean =>
 export { defaultBidConfig }
 export type { BidConfig, BidStrategy }
 
-export function LaunchStep({ campaigns, productGroupName, productCount, currency, automationMode, setAutomationMode, bidConfig, setBidConfig, rules, setRules, portfolioId, setPortfolioId, aiControl, setAiControl }: {
+export function LaunchStep({ campaigns, productGroupName, productCount, currency, market, automationMode, setAutomationMode, bidConfig, setBidConfig, rules, setRules, portfolioId, setPortfolioId, aiControl, setAiControl }: {
   campaigns: SpwCampaign[]
+  /** CC-5 — the launch market: the portfolio picker lists and creates this market's portfolios only. */
+  market: string
   productGroupName: string
   productCount: number
   currency: string
@@ -73,7 +75,8 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
   // Recap + summary values, driven by the chosen strategy (or AI).
   const strat = BID_STRATEGIES.find((s) => s.key === bidConfig.strategy)
   const stageLabel = ai ? 'AI Control' : bidConfig.strategy === 'none' ? 'None' : strat?.stage ?? '—'
-  const algoLabel = ai ? 'AI' : bidConfig.strategy === 'none' ? 'None' : strat?.label ?? '—'
+  // CC-4 — an algorithm with no engine is named as such wherever it is shown.
+  const algoLabel = ai ? 'AI' : bidConfig.strategy === 'none' ? 'None' : strat ? `${strat.label}${bidStrategyRuns(bidConfig.strategy) ? '' : ' (not running yet)'}` : '—'
   const targetValue = ai ? 'AI' : bidConfig.strategy === 'targetAcos' && bidConfig.targetAcos.trim() ? `${bidConfig.targetAcos}%` : '—'
 
   return (
@@ -90,7 +93,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
         <>
           {/* Bid Strategy */}
           <div className="h10-spw-card">
-            <h3>Bid Strategy <InfoTip tip="The bid strategy becomes one bid rule for the campaigns in this set. The rule starts in dry run." /></h3>
+            <h3>Bid Strategy <InfoTip tip="Target ACoS becomes one bid rule per campaign in this set. It starts in dry run: it proposes bid changes on the Suggestions page and changes nothing until you approve. The other algorithms are not running yet and create no rule." /></h3>
             <p className="h10-spw-desc">Select a bid algorithm based on your product &amp; campaign goals.</p>
             <BidStrategyCardGrid value={bidConfig} onChange={setBid} />
           </div>
@@ -105,7 +108,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
 
           {/* Min/Max Bid */}
           <div className="h10-spw-card">
-            <h3>Min/Max Bid <InfoTip tip="Optional bounds — the algorithm never bids below Min or above Max." /></h3>
+            <h3>Min/Max Bid <InfoTip tip="Optional bounds — the Target ACoS rule never proposes a bid below Min or above Max." /></h3>
             <p className="h10-spw-desc">Set the floor and ceiling for automated bids (optional).</p>
             <div className="h10-spw-bidrow">
               <label className="h10-spw-bidfield"><span className="l">Min Bid</span><Input inputMode="decimal" value={bidConfig.minBid} onChange={(e) => setBid({ minBid: e.target.value })} prefix={currency} placeholder="Min" aria-label="Min bid" fieldClassName="h10-spw-bidnum" /></label>
@@ -129,7 +132,7 @@ export function LaunchStep({ campaigns, productGroupName, productCount, currency
             {portfolioOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />} Portfolio Association (Optional)
           </Button>
         </div>
-        {portfolioOpen && <div className="h10-spw-pgd-portbody"><PortfolioPicker value={portfolioId} onChange={setPortfolioId} /></div>}
+        {portfolioOpen && <div className="h10-spw-pgd-portbody"><PortfolioPicker value={portfolioId} onChange={setPortfolioId} market={market} /></div>}
       </div>
 
       {/* Sponsored Campaign Set */}
