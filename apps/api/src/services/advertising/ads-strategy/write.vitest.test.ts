@@ -193,8 +193,9 @@ describe('a change planned and saved', () => {
       const { plan, out } = await saved(it_({ level: 'market', values: { maxBidCents: 150, maxChangePct: 20, monthlySpendCapCents: 900000 }, reason: 'test start' }))
       expect(plan.direction).toBe('lower')
       expect(plan.preview).toMatchObject({ version: { from: 0, to: 1 }, direction: 'lower', raises: [], stepUp: null, reachesAmazon: false, scope: { level: 'MARKET', scopeId: '*', label: 'IT market' } })
-      expect(plan.preview.liveEffect).toContain('no engine or rule reads it yet')
-      expect(plan.preview.liveEffect).not.toContain('binds at once')
+      // W1-6 — the budget engine reads the market cap; the bid band and step are stored and shown only (until W1-5).
+      expect(plan.preview.liveEffect).toContain('no engine or rule reads them yet')
+      expect(plan.preview.liveEffect).toContain('Monthly spend cap binds at once')
       expect(plan.preview.notReadYet).toEqual(expect.arrayContaining(['maxBidCents', 'target']))
       expect(out).toMatchObject({ ok: true, version: 1, direction: 'lower' })
       const row = (await rowOf('MARKET'))!

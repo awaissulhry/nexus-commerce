@@ -143,9 +143,10 @@ const setAdsStrategy: AgentTool = {
     + 'deletes the row. At market level it can also add or remove protected search terms (they bind Nexus\'s write gate at '
     + "once) and clear the own target ACoS of the market's campaigns that would shadow the strategy (clearCampaignTargets; "
     + 'their old values are kept for undo). The preview lists every field from → to with the level it is in force from, and '
-    + 'judges each RAISE or LOWER; it names the campaigns whose own target still wins. No engine or rule reads the strategy '
-    + 'yet (notReadYet lists those fields): it moves no bid or budget. What Claude may do alone binds at once: Claude\'s '
-    + 'door holds every ad change Claude asks for there to the lower level (readBy says what reads each field). Waits '
+    + 'judges each RAISE or LOWER; it names the campaigns whose own target still wins. Only a field something reads acts '
+    + '(readBy names it: e.g. the budget engine stops a market at its monthly cap with the stop bid; Claude\'s door holds '
+    + 'every ad change Claude asks for there to the lower level of what Claude may do alone); every other field is stored '
+    + 'and shown only (notReadYet). Waits '
     + 'for a person to approve it in Nexus. A change that only lowers may run by the business\'s rule when the business allows '
     + 'it; a RAISE never does: a person with settings.security.manage approves it in Nexus with their authenticator code, or '
     + 'the person who asked confirms it in Claude with theirs. Pass expectVersion (from ads-strategy view rows) to refuse a '
@@ -189,7 +190,7 @@ const setAdsStrategy: AgentTool = {
         version: out.version,
         direction: out.direction,
         changed: out.changes.length,
-        note: 'Saved in Nexus; nothing is sent to Amazon. No engine reads the strategy yet: it moves no bid or budget.',
+        note: 'Saved in Nexus; the save itself sends nothing to Amazon. A field something reads acts from now on (readBy); every other field is stored and shown only (notReadYet).',
       },
       change: { before: out.before, after: out.after },
     }

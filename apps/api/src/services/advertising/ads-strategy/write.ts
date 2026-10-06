@@ -20,8 +20,9 @@
  * 🔴 Money stays keyed. `changes[].field` is a registry key or a column name, a group's values sit under their column
  * names, and labels carry no amount: the strategy reads strip ad-spend money by key (fields.ts STRATEGY_MONEY).
  *
- * Live effect: the strategy itself moves no bid and no budget — no engine or rule reads it yet. What acts at once, the plan
- * says, from the registry and the change: a field a door reads (W1-8: Claude's door reads what Claude may do alone); a
+ * Live effect: only a field something reads acts (the registry's readBy); every other field is stored and shown only. What
+ * acts at once, the plan says, from the registry and the change: a field an engine or a door reads (W1-6: the budget
+ * engine reads the market's monthly cap and the stop bid; W1-8: Claude's door reads what Claude may do alone); a
  * protected term binds Nexus's write gate (no rule may negate it; removing one lets them again); a campaign's own target
  * ACoS cleared or put back changes what Nexus's bid optimiser aims at for that campaign today (without its own target:
  * the account default, profit data, else 30 %).
@@ -686,8 +687,11 @@ function previewOf(p: {
   const clears = p.campaignTargets.filter((c) => c.toFraction == null).length
   const restores = p.campaignTargets.length - clears
   const readNow = SETTABLE_FIELDS.filter((f) => f.readBy.length && p.changes.some((c) => c.field === f.key))
+  const storedOnly = SETTABLE_FIELDS.filter((f) => !f.readBy.length && p.changes.some((c) => c.field === f.key))
   const liveEffect = [
-    'The strategy moves no bid and no budget: no engine or rule reads it yet (notReadYet lists the fields nothing reads). It is stored, versioned and shown.',
+    storedOnly.length
+      ? `${storedOnly.map((f) => f.label).join(', ')}: stored, versioned and shown only — no engine or rule reads ${storedOnly.length === 1 ? 'it' : 'them'} yet (notReadYet lists every such field).`
+      : null,
     ...readNow.map((f) => `${f.label} binds at once: read by ${f.readBy.join(', ')}.`),
     p.terms.add.length ? `${plural(p.terms.add.length, 'protected term')} ${p.terms.add.length === 1 ? 'binds' : 'bind'} at once: Nexus's write gate refuses to negate ${p.terms.add.length === 1 ? 'it' : 'them'} in ${p.market}.` : null,
     p.terms.remove.length ? `${plural(p.terms.remove.length, 'term')} ${p.terms.remove.length === 1 ? 'is' : 'are'} no longer protected at once: rules may negate ${p.terms.remove.length === 1 ? 'it' : 'them'} in ${p.market} again.` : null,
