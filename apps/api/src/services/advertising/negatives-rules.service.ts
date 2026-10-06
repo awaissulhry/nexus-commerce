@@ -42,6 +42,9 @@ export const NEGATION_ACTION_TYPES = [
   'add_negative_exact',
   'add_negative_phrase',
   'sync_negatives_across_campaigns',
+  // PB-7 — a playbook's isolation: one product's own campaigns in one market. API side only so far: the web's tab list
+  // (tabs.tsx) does not name it yet, so `_neg7-rules.mts` reports that one difference until it does.
+  'isolate_product_terms',
   // the builder slug — `RuleBuilder.tsx` writes `actions: [{ type: slug }]`, so a rule created in
   // the modal carries this rather than an action type. Zero rules carry it today.
   'negative-targeting',
