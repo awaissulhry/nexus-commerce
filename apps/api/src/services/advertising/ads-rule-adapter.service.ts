@@ -528,7 +528,7 @@ const ENGINE_TYPE_SLUG: Record<string, string> = {
   set_campaign_target_acos: 'bid',
   pause_target: 'bid', enable_target: 'bid',
   add_negative_exact: 'negative-targeting', add_negative_phrase: 'negative-targeting',
-  sync_negatives_across_campaigns: 'negative-targeting',
+  sync_negatives_across_campaigns: 'negative-targeting', isolate_product_terms: 'negative-targeting',
   promote_to_exact: 'keyword-harvesting', harvest_and_negate: 'keyword-harvesting',
   dayparting_apply: 'dayparting-schedule', refresh_dayparting: 'dayparting-schedule',
 }
@@ -572,6 +572,7 @@ function describeAction(a: Record<string, unknown>): string {
     case 'add_negative_phrase': return `Add negative phrase (${String(a.scope ?? 'CAMPAIGN')})`
     case 'promote_to_exact': return `Promote to exact${a.bidEur != null ? ` at €${num(a.bidEur).toFixed(2)}` : ''}`
     case 'harvest_and_negate': return 'Harvest the term and negate it in source'
+    case 'isolate_product_terms': return 'Keep one product\'s own campaigns from bidding against each other'
     case 'notify': case 'alert_operator': return `Notify ${String(a.target ?? 'operator')}`
     case 'retail_guard': return 'Retail guard'
     case 'archive_keyword': return 'Archive the keyword'

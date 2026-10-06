@@ -449,6 +449,146 @@ describe('PB-6a — winners stay', () => {
   })
 })
 
+/**
+ * PB-6b — the intent router in a rule's harvest: an Auto source's winners land in the product's own Brand, Competitor or
+ * Category Exact by their words; a term already at home in the product's campaigns stays there (L2 beats the router);
+ * and another product's keyword is never a reason to skip one (rule 3). Made-up terms and ids.
+ */
+describe('PB-6b — the intent router', () => {
+  type Row = { id: string; adGroupId: string; kind: string; expressionType: string; expressionValue: string; status: string; externalTargetId: string | null; isNegative: boolean }
+  let targets: Row[] = []
+  const exact = (adGroupId: string, text: string): Row => ({ id: `t-${adGroupId}`, adGroupId, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: text, status: 'ENABLED', externalTargetId: `x-${adGroupId}`, isNegative: false })
+  const router = { router: 'intent' as const, BRAND: 'a-brand', COMPETITOR: 'a-rival', CATEGORY: 'a-cat', brand: ['testbrand'], competitor: ['rivalco'] }
+  // The compiled playbook rule's source row: literal lists, its own router destination, the handover "proven".
+  const plan = { EAG1: { literal: true, graduate: ['EXACT'], negate: ['EXACT'], negateOnLanding: false, destinations: { EXACT: router } } }
+  const rule = { homeScope: ['ag1', 'a-brand', 'a-rival', 'a-cat'], criteria: { windowDays: 60, minOrders: 2 } }
+  const grad = (query: string) => ({ ...(candidate as object), query, orders: 3 }) as never
+  const queried = () => findTargets.mock.calls.flatMap((c) => (c[0] as { where: { adGroupId: { in: string[] } } }).where.adGroupId.in)
+
+  beforeEach(() => {
+    targets = []
+    findTargets.mockImplementation(async (a: unknown) => {
+      const where = (a as { where: { adGroupId: { in: string[] }; isNegative: boolean } }).where
+      return targets.filter((t) => where.adGroupId.in.includes(t.adGroupId) && t.isNegative === where.isNegative)
+    })
+    homeGroups = []
+    createKeywordLocal.mockImplementation(async (a: { adGroupId: string }) => ({ id: `k-${a.adGroupId}`, externalTargetId: `AMZ-${a.adGroupId}` }))
+    writeNegativeKeyword.mockResolvedValue(result({ externalTargetId: 'AMZ-N1', reachedAmazon: true }))
+  })
+
+  it('lands a brand term in the Brand ad group, a competitor term in the Competitor one, the rest in Category — and says which', async () => {
+    const r = await applyHarvest({ graduations: [grad('testbrand jacket'), grad('rivalco jacket'), grad('waterproof jacket')], plan, rule })
+    expect(createKeywordLocal.mock.calls.map((c) => [(c[0] as { keywordText: string }).keywordText, (c[0] as { adGroupId: string }).adGroupId, (c[0] as { matchType: string }).matchType])).toEqual([
+      ['testbrand jacket', 'a-brand', 'EXACT'], ['rivalco jacket', 'a-rival', 'EXACT'], ['waterproof jacket', 'a-cat', 'EXACT'],
+    ])
+    expect(r.keywordsGraduated).toBe(3)
+    expect(r.outcomes.map((o) => [o.destinationAdGroupId, o.intent])).toEqual([['a-brand', 'BRAND'], ['a-rival', 'COMPETITOR'], ['a-cat', 'CATEGORY']])
+    // Handover B: the Auto source keeps running each term until its new keyword proves itself.
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+  })
+
+  it('the dry run\'s card names the router\'s pick for each new keyword', async () => {
+    const empty = { negatives: [] as never[], productNegatives: [] as never[], productGraduations: [] as never[] }
+    const planned = await planRuleHarvest({ ...empty, graduations: [grad('testbrand jacket')], plan, rule })
+    expect(planned.items).toEqual([{ kind: 'graduation', query: 'testbrand jacket', externalAdGroupId: 'EAG1', step: 'create', intent: 'BRAND' }])
+  })
+
+  it('L2 beats the router: a brand term already living in the product\'s Exact | Category stays there, even when the rule\'s own scope leaves that ad group out', async () => {
+    targets = [exact('a-cat', 'testbrand jacket')]
+    const r = await applyHarvest({ graduations: [grad('testbrand jacket')], plan, rule: { ...rule, homeScope: ['ag1'] } })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(r.keywordsGraduated).toBe(0)
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'already_home' }, home: { adGroupId: 'a-cat', live: true } })
+    expect(queried()).toEqual(expect.arrayContaining(['a-brand', 'a-rival', 'a-cat']))
+  })
+
+  it('rule 3 — A harvests "x" into A\'s own Exact while product B holds "x" as an exact keyword; B is never read or touched', async () => {
+    targets = [exact('b-exact', 'waterproof jacket')]
+    const r = await applyHarvest({ graduations: [grad('waterproof jacket')], plan, rule })
+    expect(createKeywordLocal).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'a-cat', keywordText: 'waterproof jacket', matchType: 'EXACT' }))
+    expect(r.keywordsGraduated).toBe(1)
+    expect(queried()).not.toContain('b-exact')
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+  })
+
+  it('a router that misses one of its ad groups is refused by name, never landed elsewhere', async () => {
+    const broken = { EAG1: { ...plan.EAG1, destinations: { EXACT: { ...router, BRAND: '' } } } }
+    const r = await applyHarvest({ graduations: [grad('testbrand jacket')], plan: broken as never, rule })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'no_destination', reason: expect.stringMatching(/cannot be read/) } })
+  })
+})
+
+/**
+ * PB-6b — a source whose playbook edge says not to negate it (`negateSource: false`) is never negated for a term that
+ * graduated from it: not at the landing, not once its new home proves itself. Its waste negatives are unaffected.
+ */
+describe('PB-6b — a source that is never negated for its graduates', () => {
+  type Row = { id: string; adGroupId: string; kind: string; expressionType: string; expressionValue: string; status: string; externalTargetId: string | null; isNegative: boolean }
+  let targets: Row[] = []
+  const exact = (adGroupId: string, text: string, kind = 'KEYWORD', expressionType = 'EXACT'): Row => ({ id: `t-${adGroupId}`, adGroupId, kind, expressionType, expressionValue: text, status: 'ENABLED', externalTargetId: `x-${adGroupId}`, isNegative: false })
+  const provenIn = (externalAdGroupId: string, query = 'giacca moto') => [{ query, campaignId: 'EC2', adGroupId: externalAdGroupId, marketplace: 'IT', _sum: { impressions: 200, clicks: 12, costMicros: 6_000_000n, orders7d: 3, sales7dCents: 9000 } }]
+  const grad = { ...(candidate as object), orders: 3 } as never
+  const rule = { homeScope: ['ag1', 'dst-exact'], criteria: { windowDays: 60, minOrders: 2 } }
+  const dest = { EXACT: 'dst-exact' }
+  const kept = { EAG1: { negateSource: false } }
+
+  beforeEach(() => {
+    targets = []
+    findTargets.mockImplementation(async (a: unknown) => {
+      const where = (a as { where: { adGroupId: { in: string[] }; isNegative: boolean } }).where
+      return targets.filter((t) => where.adGroupId.in.includes(t.adGroupId) && t.isNegative === where.isNegative)
+    })
+    homeGroups = [{ id: 'dst-exact', externalAdGroupId: 'EAG-DST', campaign: { marketplace: 'IT' } }]
+    createKeywordLocal.mockResolvedValue({ id: 'k1', externalTargetId: 'AMZ-K1' })
+    writeNegativeKeyword.mockResolvedValue(result({ externalTargetId: 'AMZ-N1', reachedAmazon: true }))
+    writeNegativeProductTarget.mockResolvedValue({ outcome: 'created', externalTargetId: 'AMZ-NP1', refusal: null })
+  })
+
+  it('its home elsewhere proves itself: the source is still not negated, and the outcome says why', async () => {
+    targets = [exact('dst-exact', 'giacca moto')]
+    searchTerms.mockResolvedValue(provenIn('EAG-DST'))
+    // The control: the same proven home closes a source that says nothing.
+    await applyHarvest({ graduations: [grad], destinations: dest, rule })
+    expect(writeNegativeKeyword).toHaveBeenCalledTimes(1)
+    writeNegativeKeyword.mockClear()
+    const r = await applyHarvest({ graduations: [grad], destinations: dest, plan: kept, rule })
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.isolationNegativesAdded).toBe(0)
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'already_home', reason: expect.stringMatching(/never negated for a term that graduated from it/) } })
+  })
+
+  it('not at the landing either, even where the row asks for negateOnLanding', async () => {
+    const r = await applyHarvest({ graduations: [grad], destinations: dest, plan: { EAG1: { negateSource: false, negateOnLanding: true } }, rule })
+    expect(createKeywordLocal).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'dst-exact' }))
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.outcomes[0].negateReason).toMatch(/landed elsewhere\. This source is never negated/)
+  })
+
+  it('the dry run proposes no handover for it; it lists the term as kept at home', async () => {
+    targets = [exact('dst-exact', 'giacca moto')]
+    searchTerms.mockResolvedValue(provenIn('EAG-DST'))
+    const empty = { negatives: [] as never[], productNegatives: [] as never[], productGraduations: [] as never[] }
+    const planned = await planRuleHarvest({ ...empty, graduations: [grad], destinations: dest, plan: kept, rule })
+    expect(planned.items).toEqual([])
+    expect(planned.keptHome).toEqual([expect.objectContaining({ query: 'giacca moto', why: expect.stringMatching(/never negated/) })])
+  })
+
+  it('an ASIN at home in the product-targeting slot, proven there: no negative product target in the source', async () => {
+    const asin = 'B0TEST0042'
+    targets = [exact('dst-pat', asin, 'PRODUCT', 'ASIN_SAME_AS')]
+    homeGroups = [{ id: 'dst-pat', externalAdGroupId: 'EAG-PAT', campaign: { marketplace: 'IT' } }]
+    searchTerms.mockResolvedValue(provenIn('EAG-PAT', asin))
+    const pg = { ...(candidate as object), query: asin, orders: 3 } as never
+    const args = { productGraduations: [pg], destinations: { PRODUCT: 'dst-pat' }, rule: { homeScope: ['ag1', 'dst-pat'], criteria: { windowDays: 60, minOrders: 2 } } }
+    await applyHarvest({ ...args, plan: { EAG1: { graduateProduct: true } } })
+    expect(writeNegativeProductTarget).toHaveBeenCalledTimes(1) // the control: proven, so closed
+    writeNegativeProductTarget.mockClear()
+    await applyHarvest({ ...args, plan: { EAG1: { graduateProduct: true, negateSource: false } } })
+    expect(writeNegativeProductTarget).not.toHaveBeenCalled()
+  })
+})
+
 /** 🔴 PB-6a review — a rule that names 0 orders (a Negative Targeting rule's "Orders = 0") still finds its waste. */
 describe('previewHarvest — a term graduates only once it has sold', () => {
   const row = (query: string, orders: number, costMicros: bigint) => ({ query, campaignId: 'EC1', adGroupId: 'EAG1', marketplace: 'IT', _sum: { impressions: 100, clicks: 20, costMicros, orders7d: orders, sales7dCents: orders * 3000 } })

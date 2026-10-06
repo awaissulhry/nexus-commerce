@@ -180,10 +180,14 @@ export interface BlueprintDoc {
   sharedTargets: Array<{ expression: string; targetClass: TargetClass }>
 }
 
-/** Case/whitespace-insensitive token match on word boundaries. */
-function hasToken(haystack: string, token: string): boolean {
+/**
+ * Case/whitespace-insensitive token match on word boundaries. PB-6b — exported: the harvest's intent router
+ * (ads-harvest-route.ts) asks the same question of a search term. A word boundary is anything but a letter or a digit
+ * of ANY script: an accented letter is part of its word ("pi" is not in "più").
+ */
+export function hasToken(haystack: string, token: string): boolean {
   if (!token) return false
-  const re = new RegExp(`(^|[^a-z0-9])${escapeRe(token.toLowerCase())}([^a-z0-9]|$)`, 'i')
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRe(token.toLowerCase())}([^\\p{L}\\p{N}]|$)`, 'iu')
   return re.test(haystack)
 }
 function escapeRe(s: string): string { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
