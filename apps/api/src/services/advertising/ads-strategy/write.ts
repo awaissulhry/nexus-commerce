@@ -17,7 +17,8 @@
  *            on the screen with the code (the route), from Claude approved in Nexus with the code or confirmed in Claude
  *            with it (set-ads-strategy). Never by rule — with ONE reviewed exception (PB-9): a playbook phase switch
  *            the business's rule runs because the Owner allowed raising phase moves (apply-ads-playbook `allowPhaseUp`,
- *            itself a limit only loosened with his code); its version says so and keeps no code time.
+ *            itself a limit only loosened with his code); its version says so and keeps no code time. Never a raise of
+ *            what Claude may do alone (claudeAutonomy): that one always needs the code.
  *
  * 🔴 Money stays keyed. `changes[].field` is a registry key or a column name, a group's values sit under their column
  * names, and labels carry no amount: the strategy reads strip ad-spend money by key (fields.ts STRATEGY_MONEY).
@@ -794,6 +795,7 @@ export interface StrategyWriter {
    * PB-9 — the one reviewed way a raise is written without a code: a playbook phase switch run by the business's rule
    * because the Owner let raising phase moves run so (apply-ads-playbook `allowPhaseUp`, a limit only loosened with his
    * authenticator code). The sentence that says so is kept with the version; stepUpAt stays empty (no code was typed).
+   * Never for a raise of what Claude may do alone: `applyStrategyPlan` refuses that without a code.
    */
   raiseByRule?: string | null
   /** On the row: 'user:<id>' or 'claude:<approvalId>'. */
@@ -811,6 +813,10 @@ const MOVED = 'The strategy (or a protected term or campaign target it changes) 
 /** Write a planned change in ONE transaction, with its version row; a row, term or campaign that moved since → a conflict. */
 export async function applyStrategyPlan(plan: StrategyPlan, writer: StrategyWriter): Promise<ApplyOutcome> {
   if (plan.direction === 'raise' && !writer.stepUpAt && !writer.raiseByRule?.trim()) throw new Error('a raise of the ads strategy is written only with the time its authenticator code was confirmed')
+  // The Owner's rule: more of what Claude may do alone is ALWAYS raised with his code — never under raiseByRule.
+  if (!writer.stepUpAt && plan.changes.some((c) => c.field === 'claudeAutonomy' && c.direction === 'raise')) {
+    throw new Error('a raise of what Claude may do alone is written only with the time its authenticator code was confirmed, never by rule')
+  }
   const { scope } = plan
   const reason = writer.raiseByRule?.trim() && plan.direction === 'raise' && !writer.stepUpAt
     ? [plan.reason, writer.raiseByRule.trim()].filter(Boolean).join(' — ')

@@ -15,7 +15,8 @@
  *             compiles. Recipes the row already holds stay unless `recompute`.
  *   judge     each change is RAISE / LOWER / SAME by what it would make an ENROLLED product spend once applied
  *             (judge.ts): enrolling, a higher daily budget or base bid, more terms, slots, start-bid factors,
- *             placements, an isolation switch off. A raise needs settings.security.manage and a fresh authenticator
+ *             placements, an isolation switch off; PB-9 — the phase table and the product's phase recipes by what a
+ *             phase switch would then write. A raise needs settings.security.manage and a fresh authenticator
  *             code — on the screen with the code (the route), from Claude approved in Nexus with it or confirmed in
  *             Claude with it (set-ads-playbook) — and never runs by rule. Everything else a person approves, or the
  *             business's rule runs inside the tool's limits.
@@ -52,7 +53,7 @@ import {
   type SectionKey,
   type TemplateDoc,
 } from './doc.js'
-import { judgeDoc, judgeEnrolled, judgeMoney, judgeTerms, overall, same, type Direction } from './judge.js'
+import { judgeDoc, judgeEnrolled, judgeMoney, judgeRecipes, judgeTerms, overall, same, type Direction } from './judge.js'
 import { loadCaptureSource, loadPlaybookRows, loadTemplates, PLAYBOOK_ROW_SELECT, TEMPLATE_ROW_SELECT } from './load.js'
 import { absoluteRecipes } from './recipes.js'
 import { indexPlaybook, isEnrolled, resolveProduct, type PlaybookRow, type ResolvedPlaybook, type TemplateRow } from './resolve.js'
@@ -243,10 +244,12 @@ interface Effect {
   dailyBudgetCents: Direction
   baseBidCents: Direction
   terms: Direction
+  /** PB-9 — the product's phase recipes, by what they would write at a phase switch. */
+  phaseRecipes: Direction
   products: Array<{ productId: string; sku: string; market: string }>
 }
 
-const noEffect = (): Effect => ({ sections: new Map(), enrolled: 'same', dailyBudgetCents: 'same', baseBidCents: 'same', terms: 'same', products: [] })
+const noEffect = (): Effect => ({ sections: new Map(), enrolled: 'same', dailyBudgetCents: 'same', baseBidCents: 'same', terms: 'same', phaseRecipes: 'same', products: [] })
 const num = (v: unknown) => (typeof v === 'number' ? v : null)
 
 /**
@@ -281,6 +284,7 @@ async function effectIn(
     into.dailyBudgetCents = overall([into.dailyBudgetCents, judgeMoney(was ? num(b.product?.dailyBudgetCents.value) : null, num(a.product?.dailyBudgetCents.value))])
     into.baseBidCents = overall([into.baseBidCents, judgeMoney(was ? num(b.product?.baseBidCents.value) : null, num(a.product?.baseBidCents.value))])
     into.terms = overall([into.terms, judgeTerms(was ? (b.product?.terms.value as ProductTerms | null) : null, a.product?.terms.value as ProductTerms | null)])
+    into.phaseRecipes = overall([into.phaseRecipes, judgeRecipes(was ? (b.product?.phaseRecipes.value as PhaseRecipes | null) : null, a.product?.phaseRecipes.value as PhaseRecipes | null)])
   }
 }
 
@@ -289,7 +293,7 @@ function directionOf(field: string, effect: Effect): Direction {
   if (field === 'overrides.skipSlots') return effect.sections.get('structure') ?? 'same'
   if (field.startsWith('overrides.') || field.startsWith('section.')) return effect.sections.get(field.split('.')[1] as SectionKey) ?? 'same'
   if (field === 'enrolled') return effect.enrolled
-  if (field === 'dailyBudgetCents' || field === 'baseBidCents' || field === 'terms') return effect[field]
+  if (field === 'dailyBudgetCents' || field === 'baseBidCents' || field === 'terms' || field === 'phaseRecipes') return effect[field]
   return 'same'
 }
 

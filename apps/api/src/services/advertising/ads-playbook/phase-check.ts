@@ -6,8 +6,8 @@
  *   phase        the ads strategy's goal at the product (Owner decision D-PB3 = A), with the row that sets it, and since
  *                when: the oldest version of that row, counted back from its newest, that holds this goal — who switched
  *                it (a person, or the business's rule) and how
- *   hold         the phase's own least days (`minDays`, the hysteresis): until they have passed Nexus proposes no move and
- *                none runs by rule; a person's own switch is never held. A question to the Owner (ASK_OWNER) is never
+ *   hold         the phase's own least days (`minDays`, the hysteresis; the design's 14 for a phase that names none):
+ *                until they have passed Nexus proposes no move and none runs by rule; a person's own switch is never held. A question to the Owner (ASK_OWNER) is never
  *                held. A phase whose start Nexus cannot read is held (fail closed).
  *   exits        each exit rule of the phase, every condition with its number: days in phase; ad orders, ACoS against the
  *                target ACoS in force at the product (the strategy's) and the change in ad orders against the window
@@ -25,6 +25,7 @@
  */
 import prisma from '../../../db.js'
 import { adSalesCents } from '../../ads-core/ad-sales.js'
+import { DEFAULT_HOLD_DAYS } from './defaults.js'
 import type { EXIT_CONDITION, Phase, TemplateDoc } from './doc.js'
 import type { z } from 'zod'
 
@@ -121,7 +122,8 @@ export function measureCondition(c: Condition, facts: PhaseFacts, daysInPhase: n
 /** The hold, the exit rules with their numbers, and the move proposed. Pure. */
 export function evaluatePhaseCheck(entry: Entry | undefined, facts: PhaseFacts): PhaseCheckCore {
   const daysInPhase = facts.since ? Math.max(0, Math.floor((facts.now.getTime() - facts.since.getTime()) / DAY_MS)) : null
-  const minDays = entry?.minDays ?? null
+  // A phase of a template saved before PB-9 names no hold: the design's default applies.
+  const minDays = entry ? entry.minDays ?? DEFAULT_HOLD_DAYS : null
   const held = minDays != null && minDays > 0 && (daysInPhase == null || daysInPhase < minDays)
   const daysLeft = held ? (daysInPhase == null ? minDays! : minDays! - daysInPhase) : 0
   const hold = {
@@ -129,7 +131,7 @@ export function evaluatePhaseCheck(entry: Entry | undefined, facts: PhaseFacts):
     held,
     daysLeft,
     note: minDays == null
-      ? 'The playbook sets no hold for this phase (minDays): only its exit rules decide.'
+      ? 'The playbook has no entry for this phase: nothing holds it.'
       : held
         ? daysInPhase == null
           ? `Held: Nexus cannot tell when this phase started, so it proposes no move and none runs by rule; a person may switch by hand.`

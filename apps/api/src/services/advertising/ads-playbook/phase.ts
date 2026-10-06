@@ -11,9 +11,11 @@
  *              where the row still holds the last phase's value; one a person set is left as it is. A group the recipe
  *              cannot set whole is left as it is, said.
  *   slots      each slot as the phase says: `floor` lowers its campaign to the strategy's stop bid (suppressCampaignBids,
- *              its bids remembered; never a pause); `active` gives back a floor the LAST phase set, only once the playbook
- *              runs (before START, START does) and only a floor a person's request set (an engine's floor — the budget
- *              engine, the retail guard, an hourly plan, a stock floor — is left, named). A campaign the playbook BUILT
+ *              its bids remembered; never a pause) and records the floor as the phase's (an AdsPlaybookLink kind
+ *              PHASE_FLOOR_KIND, holder = the approver; START records one too for a floor it leaves "held by phase");
+ *              `active` gives back ONLY such a floor, still held by its holder, once the playbook runs (before START,
+ *              START does) — a floor a person set by hand, or an engine's (the budget engine, the retail guard, an
+ *              hourly plan, a stock floor), is left, named. A campaign the playbook BUILT
  *              that is not started (off the live-write allowlist: never started, or stopped), or one at a floor a playbook
  *              STOP holds, gets its bids back only through START (PB-5b held.ts): the phase names it and leaves it. A built
  *              campaign START started and left at the floor the phase holds ("held by phase …", start.ts) is released
@@ -23,12 +25,13 @@
  *              the request asks to give it back (`rankFloors: giveBack` — a raise, rankOffEffect says so). The Owner's
  *              own hourly plans are never touched (rank.ts refuses a role by name).
  *   harvest    the playbook's harvest rule re-synced (PB-6b syncHarvestRule): it reads the new goal, so it sweeps daily,
- *              weekly or not at all as the phase says. Its switch and its level stay the Owner's. It only proposes.
+ *              weekly or not at all as the phase says (more often: a raise). Its switch and its level stay the Owner's.
  *
  * BY EFFECT. Every part says whether it adds spend: a higher target ACoS or highest bid, a looser harvest or negate
  * group, more Claude may do alone (the strategy writer's rules); a floor given back; an hourly plan switched on, or one
- * switched off that gives back the floors it set. Any of these and the whole switch is a RAISE: it needs the approver's
- * code, and runs by rule only where the Owner allowed raising phase moves (the tool's `allowPhaseUp`). A switch that only
+ * switched off that gives back the floors it set; the harvest more often. Any of these and the whole switch is a RAISE:
+ * it needs the approver's code, and runs by rule only where the Owner allowed raising phase moves (the tool's
+ * `allowPhaseUp`) — never when it lets Claude do more alone (`raisesClaude`): that always needs his code. A switch that only
  * lowers may run by rule where the Owner allows the phase kind. Never a pause, never an archive, never an FBA quantity,
  * never the Owner's own hourly plans.
  */
@@ -44,6 +47,9 @@ import type { RankFloors, RankOffEffect, RankPhaseStates } from './rank.js'
 import type { PlaybookApplyWriter } from './write.js'
 
 export type Direction = 'raise' | 'lower' | 'same'
+
+/** The link a phase writes for each campaign it floors (key and refId the campaign, updatedBy the floor's holder). */
+export const PHASE_FLOOR_KIND = 'phaseFloor'
 type Entry = NonNullable<TemplateDoc['phases'][Phase]>
 type Recipe = NonNullable<PhaseRecipes[Phase]>
 type Own = Readonly<Record<string, unknown>> | null
@@ -136,6 +142,8 @@ export interface SlotCampaign {
   dailyBudgetCents: number
   /** On the live-write allowlist (a built campaign: START started it). */
   liveWrites?: boolean
+  /** The holder of the phase's own floor on it (its PHASE_FLOOR_KIND link), or null: no floor of a phase. */
+  phaseFloorBy?: string | null
 }
 
 export interface SlotStep {
@@ -147,7 +155,8 @@ export interface SlotStep {
   does: 'floor' | 'restore' | 'keep' | 'report'
   direction: Direction
   summary: string
-  /** floor: the stop bid it lowers to (the strategy's, else the 2¢ floor), and the highest bid above it now. */
+  /** floor: the stop bid it lowers to (the strategy's, else the 2¢ floor), and the highest bid above it now; restore: the
+   *  highest bid it puts back (the remembered one, an upper bound: a limit may hold it lower). */
   floorCents?: number
   highestBidCents?: number
   /** restore: the daily budget that spends again. */
@@ -159,7 +168,8 @@ export const isPersonFloor = (by: string | null) => !!by && by.startsWith('user:
 
 /**
  * Each linked slot's step from the last phase's slot states to the new one's. Pure. `running`: the playbook has started
- * (before START, a floor stays: START gives the bids back). `stopBids`: each campaign's stop bid in cents.
+ * (before START, a floor stays: START gives the bids back). `stopBids`: each campaign's stop bid in cents. Only a floor
+ * the phase recorded as its own (`phaseFloorBy`, still its holder's) is given back.
  */
 export function slotSteps(args: {
   doc: TemplateDoc
@@ -197,6 +207,8 @@ export function slotSteps(args: {
       steps.push({ ...base, does: 'keep', direction: 'same', summary: `"${c.name}" stays at the floor until START: the playbook does not run yet.` })
     } else if (!isPersonFloor(c.floorBy)) {
       steps.push({ ...base, does: 'report', direction: 'same', summary: `"${c.name}" is held at the floor by ${by}: a floor an engine set is never lifted here.` })
+    } else if (!c.phaseFloorBy || c.phaseFloorBy !== c.floorBy) {
+      steps.push({ ...base, does: 'keep', direction: 'same', summary: `"${c.name}" is at a floor ${by} set, not the phase's own: it stays (a person's own floor is lifted by restore-campaign, never by a phase).` })
     } else {
       steps.push({ ...base, does: 'restore', direction: 'raise', dailyBudgetCents: c.dailyBudgetCents, summary: `"${c.name}" gets its remembered bids back (floored by ${by}): it serves again (a raise).` })
     }
@@ -230,7 +242,7 @@ export function rankSteps(lines: readonly ArtifactPreviewLine[], from: RankPhase
 
 // ── The plan ──────────────────────────────────────────────────────────────────────────────────────
 
-export interface HarvestStep { does: 'update' | 'keep' | 'report'; summary: string; ruleId?: string; fromCadenceDays?: number | null; toCadenceDays: number | null; harvestFrom: boolean }
+export interface HarvestStep { does: 'update' | 'keep' | 'report'; summary: string; ruleId?: string; fromCadenceDays?: number | null; toCadenceDays: number | null; harvestFrom: boolean; direction: Direction }
 
 export interface PhasePlan {
   channel: string
@@ -253,6 +265,8 @@ export interface PhasePlan {
   harvest: HarvestStep
   direction: Direction
   raises: string[]
+  /** It lets Claude do more alone (a claudeAutonomy level up, or a narrower level taken off): never by rule, always the code. */
+  raisesClaude: boolean
   check: PhaseCheck
   ctx: ArtifactContext
   warnings: string[]
@@ -309,15 +323,16 @@ export async function planPhase(args: { market: string; productId?: string; sku?
 
   // The slots, the hourly plans, the harvest rule.
   const running = row.state === 'RUNNING'
-  const links = await prisma.adsPlaybookLink.findMany({ where: { playbookId: row.id }, select: { kind: true, key: true, refId: true, adGroupId: true, origin: true } })
+  const links = await prisma.adsPlaybookLink.findMany({ where: { playbookId: row.id }, select: { kind: true, key: true, refId: true, adGroupId: true, origin: true, updatedBy: true } })
   const slotLinks = links.filter((l) => l.kind === 'slot')
   const slotCampaigns = slotLinks.length
     ? await prisma.campaign.findMany({ where: { id: { in: slotLinks.map((l) => l.refId) } }, select: { id: true, name: true, status: true, marketplace: true, bidsSuppressedAt: true, bidsSuppressedBy: true, dailyBudget: true, liveBidWritesEnabled: true } })
     : []
+  const phaseFloorOf = new Map(links.filter((l) => l.kind === PHASE_FLOOR_KIND).map((l) => [l.refId, l.updatedBy]))
   const campaigns = new Map(slotCampaigns.map((c) => [c.id, {
     campaignId: c.id, name: c.name, status: String(c.status), marketplace: c.marketplace, floored: !!c.bidsSuppressedAt,
     floorBy: c.bidsSuppressedAt ? c.bidsSuppressedBy ?? null : null, dailyBudgetCents: Math.round(Number(c.dailyBudget ?? 0) * 100),
-    liveWrites: c.liveBidWritesEnabled,
+    liveWrites: c.liveBidWritesEnabled, phaseFloorBy: phaseFloorOf.get(c.id) ?? null,
   } satisfies SlotCampaign]))
   const stops = await stopBidsFor(slotCampaigns.map((c) => ({ id: c.id, marketplace: c.marketplace })), channel)
   let slots = slotSteps({
@@ -339,7 +354,14 @@ export async function planPhase(args: { market: string; productId?: string; sku?
     const c = campaigns.get(s.campaignId)!
     const reach = await checkLiveReach({ campaignId: s.campaignId, marketplace: c.marketplace, changes: [{ field: 'bid', valueCents: s.does === 'floor' ? s.floorCents ?? DEFAULT_STOP_BID_CENTS : null }], isSuppression: true })
     if (reach.reach === 'refused') return { ...s, does: 'report' as const, direction: 'same' as const, summary: `"${c.name}" is left as it is: Amazon's write gate refuses it — ${reach.reason}.` }
-    if (s.does !== 'floor') return s
+    if (s.does === 'restore') {
+      // The highest bid it puts back: the remembered ones (an ad group at its own floor stays: restoreCampaignBids).
+      const [t, g] = await Promise.all([
+        prisma.adTarget.aggregate({ where: { adGroup: { campaignId: s.campaignId, bidsSuppressedAt: null }, suppressedFromBidCents: { not: null } }, _max: { suppressedFromBidCents: true } }),
+        prisma.adGroup.aggregate({ where: { campaignId: s.campaignId, bidsSuppressedAt: null, suppressedFromBidCents: { not: null } }, _max: { suppressedFromBidCents: true } }),
+      ])
+      return { ...s, highestBidCents: Math.max(t._max.suppressedFromBidCents ?? 0, g._max.suppressedFromBidCents ?? 0) }
+    }
     // The highest bid the floor lowers (what a stop moves, as suppress-campaign counts it).
     const floor = s.floorCents ?? DEFAULT_STOP_BID_CENTS
     const [t, g] = await Promise.all([
@@ -378,26 +400,33 @@ export async function planPhase(args: { market: string; productId?: string; sku?
   const ruleLink = links.find((l) => l.kind === 'harvestRule')
   const toDays = CADENCE[entry.harvestCadence]
   let harvest: HarvestStep
-  if (!ruleLink) harvest = { does: 'report', summary: 'The product has no playbook harvest rule yet (a build or an adopt compiles it): it follows the phase from then.', toCadenceDays: toDays, harvestFrom: entry.harvestCadence !== 'off' }
+  if (!ruleLink) harvest = { does: 'report', summary: 'The product has no playbook harvest rule yet (a build or an adopt compiles it): it follows the phase from then.', toCadenceDays: toDays, harvestFrom: entry.harvestCadence !== 'off', direction: 'same' }
   else {
     const rule = await prisma.automationRule.findUnique({ where: { id: ruleLink.refId }, select: { id: true, name: true, actions: true } })
     const action = (Array.isArray(rule?.actions) ? rule!.actions[0] : null) as { cadenceDays?: number | null; sources?: Array<{ harvestFrom?: boolean }> } | null
     const fromDays = action?.cadenceDays ?? null
     const fromOn = (action?.sources ?? []).some((s) => s.harvestFrom !== false)
     const same = fromDays === toDays && fromOn === (entry.harvestCadence !== 'off')
+    // More often harvests more (off < weekly < once a day at most < daily): a raise; less often a lowering.
+    const often = (days: number | null, on: boolean) => (!on ? 0 : days === 7 ? 1 : days === 1 ? 3 : 2)
+    const was = often(fromDays, fromOn)
+    const is = often(toDays, entry.harvestCadence !== 'off')
     harvest = {
       does: !rule ? 'report' : same ? 'keep' : 'update', ruleId: ruleLink.refId, fromCadenceDays: fromDays, toCadenceDays: toDays, harvestFrom: entry.harvestCadence !== 'off',
+      direction: !rule || same || is === was ? 'same' : is > was ? 'raise' : 'lower',
       summary: !rule
         ? 'The playbook harvest rule is gone: the next build or adopt compiles it again.'
         : `The playbook harvest rule "${rule.name}" ${same ? 'keeps' : 'is re-synced to'} the ${to} cadence: ${cadenceWords(toDays, entry.harvestCadence !== 'off')} (was ${cadenceWords(fromDays, fromOn)}). It only proposes; its switch and level stay as they are.`,
     }
   }
 
-  const direction = overallOf([strategy.direction, ...slots.map((s) => s.direction), ...rank.map((r) => r.direction)])
+  const direction = overallOf([strategy.direction, ...slots.map((s) => s.direction), ...rank.map((r) => r.direction), harvest.direction])
+  const raisesClaude = strategy.changes.some((c) => c.field === 'claudeAutonomy' && c.direction === 'raise')
   const raises = [
     ...strategy.raises.filter((r) => r !== 'Goal'),
     ...slots.filter((s) => s.direction === 'raise').map((s) => `bids given back: "${s.name}"`),
     ...rank.filter((r) => r.direction === 'raise').map((r) => (r.does === 'disable' ? `the ${r.role} hourly plan gives back the floors it set` : `the ${r.role} hourly plan ${r.does === 'enable' ? 'switched on' : 'back to its full hours'}`)),
+    ...(harvest.direction === 'raise' ? ['the harvest rule sweeps more often'] : []),
   ]
   const check = await loadPhaseCheck({ market, channel, productId: scopeProductId, doc, now: args.now })
   const warnings = [
@@ -411,7 +440,7 @@ export async function planPhase(args: { market: string; productId?: string; sku?
       channel, market, product: { productId: product.id, sku: product.sku }, scopeProductId,
       playbook: { id: row.id, version: row.version, state: row.state, label: row.label, compiledTemplateVersion: resolved.template.value?.version ?? null },
       nameToken, doc, from, to, entry, rankFloors, running, strategy, strategyNotes: made.notes, slots, rank, harvest,
-      direction, raises: [...new Set(raises)], check, ctx, warnings,
+      direction, raises: [...new Set(raises)], raisesClaude, check, ctx, warnings,
     },
   }
 }
@@ -464,15 +493,20 @@ export async function runPhase(plan: PhasePlan, run: PhaseRun): Promise<PhaseOut
       if (s.does === 'floor') {
         if (now?.bidsSuppressedAt) { out.errors.push(`"${s.name}" was floored meanwhile (by ${now.bidsSuppressedBy ?? 'an unrecorded actor'}): left as it is`); continue }
         const moved = await suppressCampaignBids(s.campaignId, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, floorCents: s.floorCents ?? null })
+        // The floor is the phase's own: only a later phase (or START) gives it back, and only while its holder holds it.
+        await recordPhaseFloor(plan.playbook.id, s.campaignId, run.actor, plan.playbook.version)
         out.floored.push({ slot: s.slot, campaignId: s.campaignId, moved })
       } else {
         if (!now?.bidsSuppressedAt || !isPersonFloor(now.bidsSuppressedBy ?? null)) { out.errors.push(`"${s.name}" is no longer at a floor a person's request set: left as it is`); continue }
+        const link = await prisma.adsPlaybookLink.findFirst({ where: { playbookId: plan.playbook.id, kind: PHASE_FLOOR_KIND, refId: s.campaignId }, select: { updatedBy: true } })
+        if (link?.updatedBy !== now.bidsSuppressedBy) { out.errors.push(`"${s.name}" is no longer at the phase's own floor (${now.bidsSuppressedBy} holds it): left as it is`); continue }
         const why = (await playbookHolds([s.campaignId])).get(s.campaignId)
         const live = (await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { liveBidWritesEnabled: true } }))?.liveBidWritesEnabled
         if (why === 'held' || (why === 'built' && !live)) { out.errors.push(`"${s.name}" is now held for a playbook START: left at the floor`); continue }
         const restored = await restoreCampaignBids(s.campaignId, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual })
         const after = await prisma.campaign.findUnique({ where: { id: s.campaignId }, select: { bidsSuppressedAt: true } })
         if (after?.bidsSuppressedAt) out.errors.push(`"${s.name}": ${plural(restored, 'bid')} put back, some not; it stays at the floor until all are`)
+        else await prisma.adsPlaybookLink.deleteMany({ where: { playbookId: plan.playbook.id, kind: PHASE_FLOOR_KIND, refId: s.campaignId } })
         out.restored.push({ slot: s.slot, campaignId: s.campaignId, restored })
       }
     } catch (e) {
@@ -511,6 +545,16 @@ export async function runPhase(plan: PhasePlan, run: PhaseRun): Promise<PhaseOut
     out.errors.push(`the playbook version was not recorded: ${(e as Error).message.slice(0, 200)}`)
   }
   return out
+}
+
+/**
+ * Record a floor as a phase's own (PHASE_FLOOR_KIND: key and refId the campaign, updatedBy its holder) — after a phase
+ * floors a slot, or when START leaves a floor "held by phase" (start.ts). Replaces an earlier one for the campaign.
+ */
+export async function recordPhaseFloor(playbookId: string, campaignId: string, holder: string, compiledVersion: number): Promise<void> {
+  const had = await prisma.adsPlaybookLink.findFirst({ where: { kind: PHASE_FLOOR_KIND, refId: campaignId }, select: { id: true } })
+  if (had) await prisma.adsPlaybookLink.update({ where: { id: had.id }, data: { playbookId, key: campaignId, updatedBy: holder, compiledVersion } })
+  else await prisma.adsPlaybookLink.create({ data: { playbookId, kind: PHASE_FLOOR_KIND, key: campaignId, refId: campaignId, origin: 'built', compiledVersion, updatedBy: holder } })
 }
 
 /** The phase a product holds now in a market (its strategy's goal at the playbook row's product), for an undo's check. */

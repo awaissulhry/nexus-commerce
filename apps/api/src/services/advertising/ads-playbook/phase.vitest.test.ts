@@ -9,8 +9,10 @@
  *              phase set, once the playbook runs, and only a floor a person's request set — never an engine's
  *   rank       switched on: a raise; switched off: a raise when it gives back the floors it set, else a lowering; light ↔
  *              full by direction while it runs, nothing before START
- *   check      the hold (hysteresis): no proposal until the phase's least days have passed, a question to the Owner never
- *              held, an unknown start held; every condition with its number, an unmeasurable one never met
+ *   check      the hold (hysteresis): no proposal until the phase's least days have passed (the design's 14 for a phase
+ *              that names none), a question to the Owner never held, an unknown start held; every condition with its
+ *              number, an unmeasurable one never met
+ *   judge      a playbook edit of the phase table or a product's recipes is judged by what a switch would then write
  */
 import { describe, expect, it, vi } from 'vitest'
 
@@ -19,6 +21,7 @@ vi.mock('../../../db.js', () => ({ default: {} }))
 const { claudeValues, isPersonFloor, rankSteps, recipeValues, slotSteps } = await import('./phase.js')
 const { evaluatePhaseCheck, measureCondition, windowsOf } = await import('./phase-check.js')
 const { classifyRankOff } = await import('./rank.js')
+const { judgePhases, judgeRecipe, judgeRecipes } = await import('./judge.js')
 const { templateDoc } = await import('../../../test-support/ads-playbook-fixtures.js')
 type Facts = import('./phase-check.js').PhaseFacts
 type Entry = NonNullable<import('./doc.js').TemplateDoc['phases']['GROW']>
@@ -67,7 +70,7 @@ describe('the strategy part: each field by its own rule, the last phase taken ba
 
 describe('the slots', () => {
   const links = new Map([['auto', 'c-auto'], ['broad-category', 'c-broad'], ['exact-category', 'c-exact']])
-  const campaign = (id: string, extra: Partial<{ floored: boolean; floorBy: string | null; status: string }> = {}) => ({
+  const campaign = (id: string, extra: Partial<{ floored: boolean; floorBy: string | null; status: string; phaseFloorBy: string | null }> = {}) => ({
     campaignId: id, name: `Test ${id}`, status: 'ENABLED', marketplace: 'IT', floored: false, floorBy: null, dailyBudgetCents: 500, ...extra,
   })
   const DEFEND = doc.phases.DEFEND!
@@ -84,10 +87,10 @@ describe('the slots', () => {
     expect(steps[0].summary).toMatch(/never paused/)
   })
 
-  it('leaving a floor the last phase set: a give-back (a raise) only once it runs, and only a floor a person\'s request set', () => {
-    const run = (running: boolean, floorBy: string) => slotSteps({
+  it('leaving a floor the last phase set: a give-back (a raise) only once it runs, and only the phase\'s own floor', () => {
+    const run = (running: boolean, floorBy: string, phaseFloorBy: string | null = floorBy) => slotSteps({
       doc, from: DEFEND, to: GROW, running, links,
-      campaigns: new Map([['c-auto', campaign('c-auto', { floored: true, floorBy })], ['c-broad', campaign('c-broad')], ['c-exact', campaign('c-exact', { floored: true, floorBy: 'user:u-someone' })]]),
+      campaigns: new Map([['c-auto', campaign('c-auto', { floored: true, floorBy, phaseFloorBy })], ['c-broad', campaign('c-broad')], ['c-exact', campaign('c-exact', { floored: true, floorBy: 'user:u-someone' })]]),
       stopBids: new Map(),
     })
     // c-exact's floor was not the last phase's (DEFEND leaves exact active): it stays.
@@ -95,6 +98,9 @@ describe('the slots', () => {
     expect(run(false, 'user:u-approver').map((s) => [s.slot, s.does])).toEqual([['auto', 'keep'], ['exact-category', 'keep']])
     expect(run(false, 'user:u-approver')[0].summary).toMatch(/until START/)
     expect(run(true, 'automation:retail-guard').map((s) => [s.slot, s.does, s.direction])).toEqual([['auto', 'report', 'same'], ['exact-category', 'keep', 'same']])
+    // A floor a person set by hand (no phase link), or one another person holds now: never the phase's to lift.
+    expect(run(true, 'user:u-owner', null)[0]).toMatchObject({ slot: 'auto', does: 'keep', summary: expect.stringMatching(/not the phase's own: it stays/) })
+    expect(run(true, 'user:u-owner', 'user:u-approver')[0]).toMatchObject({ does: 'keep' })
     expect(isPersonFloor('user:u-1')).toBe(true)
     expect(isPersonFloor('automation:rank-defend-x')).toBe(false)
     expect(isPersonFloor(null)).toBe(false)
@@ -164,9 +170,10 @@ describe('the phase check', () => {
     const passed = evaluatePhaseCheck(entry, facts(14))
     expect(passed.hold).toMatchObject({ held: false, daysLeft: 0 })
     expect(passed.proposal).toMatchObject({ to: 'PROFIT' })
-    // A start Nexus cannot read holds (fail closed); a phase with no hold is never held.
+    // A start Nexus cannot read holds (fail closed); a phase of an older template names no hold: the design's 14 days.
     expect(evaluatePhaseCheck(entry, facts(null)).hold).toMatchObject({ held: true, daysLeft: 14 })
-    expect(evaluatePhaseCheck({ ...entry, minDays: undefined }, facts(1)).proposal).toMatchObject({ to: 'PROFIT' })
+    expect(evaluatePhaseCheck({ ...entry, minDays: undefined }, facts(1))).toMatchObject({ hold: { minDays: 14, held: true, daysLeft: 13 }, proposal: null })
+    expect(evaluatePhaseCheck({ ...entry, minDays: 0 }, facts(1)).proposal).toMatchObject({ to: 'PROFIT' })
   })
 
   it('a question to the Owner is never held; it is proposed as soon as its condition holds', () => {
@@ -185,5 +192,40 @@ describe('the phase check', () => {
     expect(measureCondition(c('ordersChangePct', 14), facts(20, { windows: new Map([[14, { ...windows.get(14)!, previousAdOrders: 0 }]]) }), 20)).toMatchObject({ ordersChangePct: null, met: null })
     expect(measureCondition(c('adOrders'), facts(20), 20)).toMatchObject({ met: null, note: expect.stringMatching(/names no window/) })
     expect(measureCondition(c('daysInPhase'), facts(null), null)).toMatchObject({ daysInPhase: null, met: null })
+  })
+})
+
+describe('a playbook edit of the phases, judged by what a switch would then write', () => {
+  const recipe = { targetAcosPct: 30, minBidCents: 5, maxBidCents: 80, maxChangePct: 20, harvestMinOrders: 2, harvestMinClicks: 5, harvestWindowDays: 30 as const, negateMinClicks: 20, negateMinSpendCents: 100, negateMaxOrders: 0, negateWindowDays: 30 as const }
+  it("a product's recipe: a higher target, highest bid or floor, a looser group raise; stricter lowers; a number appearing with nothing to judge by raises", () => {
+    expect(judgeRecipe(recipe, { ...recipe })).toBe('same')
+    expect(judgeRecipe(recipe, { ...recipe, targetAcosPct: 35 })).toBe('raise')
+    expect(judgeRecipe(recipe, { ...recipe, maxBidCents: 90 })).toBe('raise')
+    expect(judgeRecipe(recipe, { ...recipe, minBidCents: 8 })).toBe('raise')
+    expect(judgeRecipe(recipe, { ...recipe, harvestMinOrders: 1 })).toBe('raise')
+    expect(judgeRecipe(recipe, { ...recipe, negateMinClicks: 10 })).toBe('raise')
+    expect(judgeRecipe(recipe, { ...recipe, targetAcosPct: 25, harvestMinOrders: 3 })).toBe('lower')
+    expect(judgeRecipe({ ...recipe, targetAcosPct: undefined }, recipe)).toBe('raise')
+    expect(judgeRecipes({ GROW: recipe }, { GROW: recipe, PROFIT: recipe })).toBe('raise')
+    expect(judgeRecipes({ GROW: recipe, PROFIT: recipe }, { GROW: recipe })).toBe('lower')
+  })
+
+  it('the phase table: Claude allowed more alone, a slot back from the floor, a plan on, a cadence more often, a shorter hold, an exit rule changed — each a raise', () => {
+    const phases = doc.phases
+    const edit = (phase: 'LAUNCH' | 'DEFEND' | 'PROFIT', change: Record<string, unknown>) => ({ ...phases, [phase]: { ...phases[phase]!, ...change } })
+    expect(judgePhases(phases, phases)).toBe('same')
+    expect(judgePhases(phases, edit('LAUNCH', { claude: {} }))).toBe('raise')
+    expect(judgePhases(phases, edit('LAUNCH', { claude: { budget: 'off' } }))).toBe('lower')
+    expect(judgePhases(phases, edit('DEFEND', { slots: {} }))).toBe('raise')
+    expect(judgePhases(phases, edit('PROFIT', { rank: { performance: 'on', research: 'on' } }))).toBe('raise')
+    expect(judgePhases(phases, edit('PROFIT', { harvestCadence: 'daily' }))).toBe('raise')
+    expect(judgePhases(phases, edit('PROFIT', { harvestCadence: 'off' }))).toBe('lower')
+    expect(judgePhases(phases, edit('PROFIT', { minDays: 7 }))).toBe('raise')
+    expect(judgePhases(phases, edit('PROFIT', { minDays: 21 }))).toBe('lower')
+    expect(judgePhases(phases, edit('PROFIT', { exit: [] }))).toBe('raise')
+    expect(judgePhases(phases, edit('PROFIT', { recipe: { ...phases.PROFIT!.recipe, targetAcos: { from: 'breakEven', factor: 0.9, fallbackFactor: 1 } } }))).toBe('raise')
+    const { DEFEND: _gone, ...fewer } = phases
+    expect(judgePhases(phases, fewer)).toBe('lower')
+    expect(judgePhases(fewer, phases)).toBe('raise')
   })
 })

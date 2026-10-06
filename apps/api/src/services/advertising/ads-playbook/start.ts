@@ -39,7 +39,7 @@ import type { BuildRunOptions } from './build.js'
 import type { RankRole, TemplateDoc } from './doc.js'
 import { STOP_FLOOR_KIND } from './held.js'
 import { rankOffEffect } from './rank.js'
-import { phaseNow } from './phase.js'
+import { PHASE_FLOOR_KIND, phaseNow, recordPhaseFloor } from './phase.js'
 import { recordPlaybookApply, type PlaybookApplyWriter } from './write.js'
 
 export type ApplyOp = 'start' | 'stop'
@@ -73,6 +73,8 @@ export interface StartCampaign {
   placements: { does: 'apply'; adjustments: Placement[] } | { does: 'already' | 'left' | 'none'; why: string }
   /** START: PAUSED at Amazon — prepared, never enabled. */
   paused?: string
+  /** PB-9 — START: its floor stays, held by the product's current phase; the floor's holder (recorded as the phase's). */
+  phaseHeldBy?: string
   /** After the op: it serves at its planned bids (START), or at the floor (STOP). */
   spends: boolean
 }
@@ -270,6 +272,7 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
       const changes = !c.liveBidWritesEnabled || bids.does === 'restore' || placements.does === 'apply'
       campaigns.push({
         ...base, allowlist: c.liveBidWritesEnabled ? 'already' : 'on', bids, placements, ...(paused ? { paused } : {}),
+        ...(bids.does === 'held' && bids.by === heldByPhase && c.bidsSuppressedBy ? { phaseHeldBy: c.bidsSuppressedBy } : {}),
         spends: status === 'ENABLED' && changes && bids.does !== 'held',
       })
       if (bids.does === 'held' && bids.by === heldByPhase) warnings.push(`"${c.name}" stays at the floor, held by ${heldByPhase}: the ${phase} phase floors slot "${link.key}" (low bids, never a pause). A phase switch to one that runs it gives its bids back.`)
@@ -417,6 +420,9 @@ export async function runStart(plan: StartPlan, run: ApplyRun, writer: PlaybookA
         if (!r.ok) { fail(`its placements were not set: ${r.reason ?? r.error ?? r.mode}`); continue }
         changed = true
       }
+      // PB-9 — a floor the current phase holds is the phase's from now on: a later phase switch gives it back (phase.ts).
+      if (c.phaseHeldBy) await recordPhaseFloor(plan.playbook.id, c.campaignId, c.phaseHeldBy, plan.playbook.version)
+      else if (c.bids.does === 'restore') await prisma.adsPlaybookLink.deleteMany({ where: { playbookId: plan.playbook.id, kind: PHASE_FLOOR_KIND, refId: c.campaignId } })
       if (changed) out.done.push(c.slot)
     } catch (e) {
       fail((e as Error).message.slice(0, 200))

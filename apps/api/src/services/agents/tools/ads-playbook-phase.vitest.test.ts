@@ -9,7 +9,7 @@
  *             switch back
  *   raise     PROFIT → GROW raises the target: the whole switch needs the approver's code — a plain approve is not run
  *   by rule   only the move the check proposes, outside the hold; a raise only with allowPhaseUp, written without a code
- *             and said so
+ *             and said so — never one that lets Claude do more alone (the Owner's rule: always his code)
  *   slots     DEFEND floors the research slots (low bids, remembered, never paused); leaving it in a running playbook gives
  *             back only the floor it set — a raise — never an engine's, nor a stopped built campaign's (only START does);
  *             a built campaign START started and left at the phase's floor is released here, with the code
@@ -49,6 +49,7 @@ import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
 import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
 import { limitsTighten } from '../claude-trust.service.js'
+import { applyStrategyPlan, planStrategyChange } from '../../advertising/ads-strategy/write.js'
 import { phaseItem } from './ads-playbook-apply.tools.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -240,6 +241,35 @@ describe('by rule: only the move the phase check proposes, outside the hold; a r
     const version = await inside(() => db().adsStrategyVersion.findFirstOrThrow({ where: { strategyId }, orderBy: { version: 'desc' } }))
     expect(version).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringMatching(/allowPhaseUp/) })
   })
+
+  it("a switch that lets Claude do more alone never runs by rule — allowPhaseUp or not; the strategy writer refuses it without a code", async () => {
+    // LAUNCH narrows Claude's budget changes to ask; the row holds it, and LAUNCH has run 40 days: the check proposes GROW.
+    await inside(async () => {
+      const row = await db().adsStrategy.findUniqueOrThrow({ where: { id: strategyId } })
+      const version = row.version + 1
+      await db().adsStrategy.update({ where: { id: strategyId }, data: { goal: 'LAUNCH', claudeAutonomy: { budget: 'ask' }, version } })
+      await db().adsStrategyVersion.create({ data: {
+        strategyId, channel: 'AMAZON', market: 'IT', level: 'PRODUCT', scopeId: pb.parent, version, op: 'set', values: { goal: 'LAUNCH', claudeAutonomy: { budget: 'ask' } }, changes: [], direction: 'lower',
+        via: 'screen', actor: 'Test Owner', createdAt: daysAgo(40),
+      } })
+    })
+    const p = (await preview(phase('GROW'))).preview as Row
+    expect(p).toMatchObject({ direction: 'raise', raisesClaude: true, proposed: true })
+    expect(p.strategy.changes.find((c: Row) => c.field === 'claudeAutonomy')).toMatchObject({ direction: 'raise', claudeAutonomy: { from: { budget: 'ask' }, to: null } })
+    expect(judge(p, { allowPhaseUp: true })).toMatch(/it lets Claude do more alone .* always needs a person with settings.security.manage and their authenticator code, never a rule/)
+    expect(judge({ ...p, raisesClaude: undefined }, { allowPhaseUp: true })).toMatch(/does not say whether it raises what Claude may do alone/)
+    // Run by rule anyway (a stale preview): not run, nothing written.
+    const asked = await ask(phase('GROW'))
+    expect(await approve(asked.approvalId!, 'auto')).toMatchObject({ ok: false, error: expect.stringMatching(/lets Claude do more alone, which always needs a person's authenticator code/) })
+    expect(await inside(() => db().adsStrategy.findUniqueOrThrow({ where: { id: strategyId } }))).toMatchObject({ goal: 'LAUNCH' })
+    // The writer holds the line on its own: a raise of Claude's levels is never written under raiseByRule.
+    const planned = await inside(() => planStrategyChange({ channel: 'AMAZON', market: 'IT', level: 'product', productId: pb.parent, values: { claudeAutonomy: null } }))
+    if (!('plan' in planned)) throw new Error('no plan')
+    await expect(inside(() => applyStrategyPlan(planned.plan, { via: 'claude', actor: 'Test', actorUserId: null, updatedBy: 'claude:test', raiseByRule: 'a test rule' }))).rejects.toThrow(/never by rule/)
+    // Back to GROW for the slots below, approved with the code (Claude's budget level comes off with it).
+    const back = await ask(phase('GROW'))
+    expect(await approve(back.approvalId!, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed' })
+  })
 })
 
 describe('slots: a phase floors with low bids, and gives back only the floor it set', () => {
@@ -248,7 +278,7 @@ describe('slots: a phase floors with low bids, and gives back only the floor it 
     expect(p.slots.map((s: Row) => [s.slot, s.does, s.direction])).toEqual([['auto', 'floor', 'lower'], ['broad-category', 'floor', 'lower']])
     expect(p.direction).toBe('lower')
     // The kit counts it as a stop from the highest bid it lowers: a cut, never a raise.
-    expect(p.limitFacts.this).toMatchObject({ raises: 0, cuts: 1, writes: 1 })
+    expect(p.limitFacts.this).toMatchObject({ raises: 0, cuts: 1 })
     const asked = await ask(phase('DEFEND'))
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { floored: [{ slot: 'auto' }, { slot: 'broad-category' }] } })
     for (const slot of ['auto', 'broad-category']) {
@@ -259,13 +289,16 @@ describe('slots: a phase floors with low bids, and gives back only the floor it 
     }
     const exact = await inside(() => db().campaign.findUniqueOrThrow({ where: { id: campaigns['exact-category'] } }))
     expect(exact.bidsSuppressedAt).toBeNull()
+    // Each floor is recorded as the phase's own, held by the approver: only such a floor comes back later.
+    const links = await inside(() => db().adsPlaybookLink.findMany({ where: { playbookId: pb.rowId, kind: 'phaseFloor' }, select: { refId: true, updatedBy: true } }))
+    expect(links.map((l: Row) => [l.refId, l.updatedBy]).sort()).toEqual([[campaigns.auto, 'user:u-approver'], [campaigns['broad-category'], 'user:u-approver']].sort())
   })
 
   it('leaving DEFEND in a running playbook: its own floor comes back (a raise, the code); an engine\'s floor stays', async () => {
     await inside(async () => {
       await db().adsPlaybook.update({ where: { id: pb.rowId }, data: { state: 'RUNNING' } })
-      // The budget engine took the Broad slot's floor over meanwhile.
-      await db().campaign.update({ where: { id: campaigns['broad-category'] }, data: { bidsSuppressedBy: 'automation:budget-engine' } })
+      // A person floored the Broad slot again by hand meanwhile: his floor, not the phase's.
+      await db().campaign.update({ where: { id: campaigns['broad-category'] }, data: { bidsSuppressedBy: 'user:u-owner-hand' } })
     })
     // PB-5b — a campaign the playbook BUILT that is not started (off the allowlist: stopped) gets its bids back only
     // through START: named, left. Started (on the allowlist), the floor its phase held is the phase's to release.
@@ -277,18 +310,29 @@ describe('slots: a phase floors with low bids, and gives back only the floor it 
     expect(stopped.slots.find((s: Row) => s.slot === 'auto')).toMatchObject({ does: 'report', direction: 'same', summary: expect.stringMatching(/stays at the floor: it was built by an ads playbook: its bids go back only with apply-ads-playbook op start/) })
     await inside(() => db().campaign.update({ where: { id: campaigns.auto }, data: { liveBidWritesEnabled: true } }))
     const p = (await preview(phase('GROW'))).preview as Row
-    expect(p.slots.map((s: Row) => [s.slot, s.does, s.direction])).toEqual([['auto', 'restore', 'raise'], ['broad-category', 'report', 'same']])
-    expect(p.slots[1].summary).toMatch(/held at the floor by automation:budget-engine: a floor an engine set is never lifted here/)
+    expect(p.slots.map((s: Row) => [s.slot, s.does, s.direction])).toEqual([['auto', 'restore', 'raise'], ['broad-category', 'keep', 'same']])
+    expect(p.slots[1].summary).toMatch(/at a floor user:u-owner-hand set, not the phase's own: it stays/)
     expect(p).toMatchObject({ direction: 'raise', raises: expect.arrayContaining(['bids given back: "TESTPHZ | IT | Auto"']), stepUp: expect.any(Object) })
-    // A restart: a raise, and its daily budget spends again (the day's limits and the month count it).
-    expect(p.limitFacts.this).toMatchObject({ raises: 1, budgetIncreaseCents: 500 })
+    // One kit item per raising part: the restart (its daily budget spends again), the higher target and GROW's looser
+    // harvest group — each counted as a raise.
+    expect(p.strategy.changes.filter((c: Row) => c.direction === 'raise').map((c: Row) => c.field).sort()).toEqual(['goal', 'harvest', 'target'])
+    expect(p.limitFacts.this).toMatchObject({ items: 3, raises: 3, budgetIncreaseCents: 500 })
+    // By rule, the bids it gives back are held to START's limit (this tool's maxBidCents, default 0).
+    const outsideHold = { ...p, phaseCheck: { ...p.phaseCheck, hold: { held: false }, proposal: { to: 'GROW' } } }
+    // (The product ran by rule twice today above: the per-entity limit is widened to reach the bid check.)
+    const roomy = { allowPhaseUp: true, maxItems: 5, maxChangesPerEntityPerDay: 24 }
+    expect(judge(outsideHold, roomy)).toMatch(/its highest restored bid EUR 0\.50 is above the EUR 0\.00 this tool's limits allow by rule/)
+    expect(judge(outsideHold, { ...roomy, maxBidCents: 60 })).toBeNull()
+    expect(judge(outsideHold, { ...roomy, maxItems: 1, maxBidCents: 60 })).toMatch(/it changes 3 items, more than the 1/)
     const asked = await ask(phase('GROW'))
     expect(await approve(asked.approvalId!, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed', result: { restored: [{ slot: 'auto' }] } })
     const auto = await inside(() => db().campaign.findUniqueOrThrow({ where: { id: campaigns.auto }, include: { adGroups: { include: { targets: true } } } }))
     expect(auto.bidsSuppressedAt).toBeNull()
     expect(auto.adGroups[0].targets[0]).toMatchObject({ bidCents: 50, suppressedFromBidCents: null })
     const broad = await inside(() => db().campaign.findUniqueOrThrow({ where: { id: campaigns['broad-category'] } }))
-    expect(broad).toMatchObject({ bidsSuppressedBy: 'automation:budget-engine' })
+    expect(broad).toMatchObject({ bidsSuppressedBy: 'user:u-owner-hand' })
+    // The floor that came back drops its link; the one a person holds keeps the phase's (not his) as it was.
+    expect(await inside(() => db().adsPlaybookLink.count({ where: { playbookId: pb.rowId, kind: 'phaseFloor', refId: campaigns.auto } }))).toBe(0)
   })
 })
 

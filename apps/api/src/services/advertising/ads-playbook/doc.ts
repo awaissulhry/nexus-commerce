@@ -211,7 +211,7 @@ export const PHASE = z.object({
   exit: z.array(EXIT_RULE).max(6).default([]),
   /**
    * PB-9 — the hold (hysteresis): the least days in this phase before Nexus proposes leaving it, or a switch out of it
-   * may run by the business's rule. A person's own switch is never held. Absent: nothing holds it (only its exit rules).
+   * may run by the business's rule. A person's own switch is never held. Absent: the design's 14 days (DEFAULT_HOLD_DAYS).
    */
   minDays: z.number().int().min(0).max(365).optional(),
 }).strict()
@@ -274,8 +274,9 @@ export type PhaseRecipes = z.infer<typeof PHASE_RECIPES>
 export const PLAYBOOK_MONEY: Readonly<Record<string, string>> = {
   ...STRATEGY_MONEY,
   ...Object.fromEntries(['dailyBudgetCents', 'baseBidCents', 'minPerSlotCents', 'startBidCents', 'ladderBidCents',
-    // PB-9 — a phase check's ad sales and ACoS (ad performance is ad-spend money), and its ACoS against the target.
-    'salesCents', 'acosPct', 'acosToTargetPct'].map((key) => [key, FIELDS.financialsAdspendView])),
+    // PB-9 — a phase check's ad sales and ACoS (ad performance is ad-spend money), its ACoS against the target, and the
+    // break-even ACoS beside them (it tells the margin).
+    'salesCents', 'acosPct', 'acosToTargetPct', 'breakEvenAcosPct'].map((key) => [key, FIELDS.financialsAdspendView])),
 }
 
 // ── Checks across sections ────────────────────────────────────────────────────────────────────────

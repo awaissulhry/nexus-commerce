@@ -55,7 +55,7 @@ import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { marketCurrency } from '../../pim/market-currency.js'
 import { amountLabel, liveReachOf } from './ads-tool-guards.js'
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, requesterOf, storedReach, strategyFactsMoney, type StoredReach } from './ads-change-kit.js'
-import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote, type KitChange } from './ads-autonomy-kit.js'
+import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote, type KitChange, type KitItem } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolDoor, ToolResult, ToolUndo } from '../tool-types.js'
 
@@ -389,6 +389,30 @@ export function phaseItem(p: Pick<PhasePlan, 'slots' | 'strategy'>): KitChange {
   return { field: 'automation' }
 }
 
+/**
+ * The items the kit judges a phase switch on. A switch that only lowers (or moves nothing) is ONE item, the product
+ * (phaseItem). A RAISE is one item per part that adds spend, so the kit counts every one (Claude's daily raises, the
+ * month): each slot that gets its bids back (its campaign, its daily budget spending again), the target up, every other
+ * strategy field that raises (the bid band, the largest change, a looser harvest or negate group, more Claude may do
+ * alone), each hourly plan that raises, the harvest more often. Exported for the tests.
+ */
+export function phaseItems(p: Pick<PhasePlan, 'slots' | 'strategy' | 'rank' | 'harvest' | 'direction' | 'market' | 'scopeProductId' | 'product'>, writes: boolean): KitItem[] {
+  const product = { kind: 'products' as const, market: p.market, productIds: [p.scopeProductId], label: `${p.product.sku}'s playbook phase` }
+  if (p.direction !== 'raise') return [{ entity: product, change: phaseItem(p), nexusOnly: !writes }]
+  const items: KitItem[] = []
+  for (const s of p.slots) {
+    if (s.does === 'restore' && s.campaignId) items.push({ entity: { kind: 'campaign', id: s.campaignId }, change: { field: 'status', from: 'LOW_BIDS', to: 'ENABLED', dailyBudgetCents: s.dailyBudgetCents ?? 0 } })
+  }
+  const pct = (v: unknown) => (typeof (v as { targetPct?: unknown } | null)?.targetPct === 'number' ? (v as { targetPct: number }).targetPct : null)
+  for (const c of p.strategy.changes.filter((x) => x.direction === 'raise' && x.field !== 'goal')) {
+    const toPct = c.field === 'target' ? pct(c.effectiveTo) : null
+    items.push({ entity: product, change: toPct != null ? { field: 'targetAcosPct', fromPct: pct(c.effectiveFrom), toPct } : { field: 'automation', raises: true }, nexusOnly: true })
+  }
+  for (const r of p.rank.filter((x) => x.direction === 'raise')) items.push({ entity: product, change: { field: 'automation', raises: true }, nexusOnly: r.does !== 'disable' })
+  if (p.harvest.direction === 'raise') items.push({ entity: product, change: { field: 'automation', raises: true }, nexusOnly: true })
+  return items.length ? items : [{ entity: product, change: { field: 'automation', raises: true }, nexusOnly: !writes }]
+}
+
 /** The phase switch, planned and judged: its preview, and the plan `execute` runs. */
 async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<{ result: ToolResult; plan?: PhasePlan }> {
   const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult })
@@ -402,9 +426,12 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
   if (reach.reach === 'refused' && writes) return refuse(reachRefusal(reach))
   const stored: StoredReach = reach.reach === 'refused' ? { reach: 'sandbox' } : storedReach(reach)
   const raise = p.direction === 'raise'
+  let currency: string
+  try { currency = await marketCurrency('AMAZON', p.market) } catch (e) { return refuse((e as Error).message) }
+  const highestRestoredBidCents = Math.max(0, ...p.slots.filter((s) => s.does === 'restore').map((s) => s.highestBidCents ?? 0))
   const facts = await buildLimitFacts({
     tool: TOOL, action: 'phase', projectMonth: raise,
-    items: [{ entity: { kind: 'products', market: p.market, productIds: [p.scopeProductId], label: `${p.product.sku}'s playbook phase` }, change: phaseItem(p), nexusOnly: !writes }],
+    items: phaseItems(p, writes),
     approvalId: ctx.approvalId ?? null,
   })
   const floored = p.slots.filter((s) => s.does === 'floor')
@@ -431,6 +458,10 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         phase: { from: p.from, to: p.to },
         direction: p.direction,
         raises: p.raises,
+        // Claude allowed more alone: never by rule, always the approver's code (the Owner's rule).
+        raisesClaude: p.raisesClaude,
+        currency,
+        highestRestoredBidCents,
         strategy: {
           version: p.strategy.preview.version,
           direction: p.strategy.direction,
@@ -441,7 +472,7 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         slots: p.slots.map((s) => ({ slot: s.slot, campaignId: s.campaignId, name: s.name, from: s.from, to: s.to, does: s.does, direction: s.direction, summary: s.summary })),
         rank: p.rank.map((r) => ({ key: r.key, role: r.role, does: r.does, direction: r.direction, summary: r.summary, ...(r.refId ? { refId: r.refId } : {}) })),
         rankFloors: p.rankFloors,
-        harvest: { does: p.harvest.does, summary: p.harvest.summary, toCadenceDays: p.harvest.toCadenceDays },
+        harvest: { does: p.harvest.does, direction: p.harvest.direction, summary: p.harvest.summary, toCadenceDays: p.harvest.toCadenceDays },
         phaseCheck: {
           daysInPhase: check.daysInPhase, since: check.since, lastSwitch: check.lastSwitch, hold: check.hold,
           proposal: check.proposal, ...(check.heldProposal ? { heldProposal: check.heldProposal } : {}), exits: check.exits,
@@ -453,13 +484,14 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
             what: "switches a product's playbook phase in a way that adds spend",
             raises: p.raises,
             needs: STEP_UP_NEEDS,
-            how: 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in Claude with theirs. It runs by rule only where the business allowed raising phase moves (allowPhaseUp).',
+            how: 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in Claude with theirs. '
+              + (p.raisesClaude ? 'It lets Claude do more alone, so it never runs by rule.' : 'It runs by rule only where the business allowed raising phase moves (allowPhaseUp).'),
           }
           : null,
         basis: hash({
           row: [p.playbook.id, p.playbook.version], phase: [p.from, p.to], strategy: p.strategy.preview.basis,
-          slots: p.slots.map((s) => [s.slot, s.campaignId, s.does]), rank: p.rank.map((r) => [r.key, r.does, r.direction]), floors: p.rankFloors,
-          harvest: [p.harvest.does, p.harvest.toCadenceDays],
+          slots: p.slots.map((s) => [s.slot, s.campaignId, s.does, s.highestBidCents ?? null]), rank: p.rank.map((r) => [r.key, r.does, r.direction]), floors: p.rankFloors,
+          harvest: [p.harvest.does, p.harvest.toCadenceDays, p.harvest.direction],
         }),
         reach: stored,
         reachNote: writes ? reachNote(stored) : 'The slots and hourly plans stay as they are: the strategy row and the harvest rule are Nexus only.',
@@ -555,11 +587,13 @@ function highestBidRefusal(preview: unknown, highest: number, words: string, lim
  */
 function phaseRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
   const p = (preview ?? {}) as {
-    phase?: { from?: string | null; to?: string }; direction?: string; raises?: string[]
+    phase?: { from?: string | null; to?: string }; direction?: string; raises?: string[]; raisesClaude?: boolean; highestRestoredBidCents?: number; currency?: string
     phaseCheck?: { hold?: { held?: boolean; daysLeft?: number; minDays?: number | null }; proposal?: { to?: string } | null }
   }
   const to = p.phase?.to
   if (!to || !p.phaseCheck) return 'there is no phase check in this preview; a person decides'
+  // The Owner's rule: more of what Claude may do alone is always raised with his code — allowPhaseUp or not.
+  if (p.raisesClaude !== false) return p.raisesClaude ? "it lets Claude do more alone (the phase's Claude levels): a raise of what Claude may do alone always needs a person with settings.security.manage and their authenticator code, never a rule" : 'the preview does not say whether it raises what Claude may do alone; a person decides'
   const hold = p.phaseCheck.hold
   if (hold?.held) return `${p.phase?.from ?? 'the phase'} is inside its ${hold.minDays ?? ''}-day hold (${hold.daysLeft ?? '?'} more days): only a person's own switch moves it now; a person decides`
   const proposed = p.phaseCheck.proposal?.to
@@ -567,7 +601,11 @@ function phaseRefusal(preview: unknown, limits: Record<string, unknown>): string
   if (p.direction === 'raise' && limits.allowPhaseUp !== true) {
     return `it adds spend (${(p.raises ?? []).join('; ') || 'a raise'}), and this business lets no raising phase switch run by rule (allowPhaseUp is off): a person with settings.security.manage decides, with their authenticator code`
   }
-  return commonRefusal(preview, limits)
+  const common = commonRefusal(preview, limits)
+  if (common) return common
+  // Bids a phase gives back are held to START's own limit: this tool's maxBidCents and the strategy's highest bid.
+  const restored = p.highestRestoredBidCents ?? 0
+  return restored > 0 ? highestBidRefusal(preview, restored, 'highest restored bid', limits, p.currency ?? 'EUR') : null
 }
 
 /** What a change of this tool recorded: the op, and its run (build), its links (adopt) or the slots it moved (start, stop). */
@@ -736,7 +774,9 @@ const applyAdsPlaybook: AgentTool = {
       const preview = fresh.result.preview as { effect: string; reach: StoredReach }
       const run = approvedRun(ctx, a.why ?? preview.effect)
       if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-      // A raise passes the same gate as a start; by rule only with allowPhaseUp (withinLimits).
+      // A raise passes the same gate as a start; by rule only with allowPhaseUp (withinLimits) — and never one that lets
+      // Claude do more alone (the Owner's rule: that always needs his code).
+      if (ctx.decidedVia === 'auto' && p.raisesClaude) return notRun("Not run: it lets Claude do more alone, which always needs a person's authenticator code, never a rule. Ask for it again; a person approves it.")
       const gate = await spendGate(ctx, p.direction === 'raise')
       if ('refusal' in gate) return notRun(gate.refusal)
       const stepUpAt = gate.stepUpAt

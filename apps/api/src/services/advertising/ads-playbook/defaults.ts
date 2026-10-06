@@ -45,6 +45,12 @@ export function defaultHarvest(slots: readonly Slot[]): TemplateDoc['harvest'] {
   return { edges: edges as TemplateDoc['harvest']['edges'] }
 }
 
+/**
+ * The design's hold (§3.7, the hysteresis): at least 14 days in a phase unless a person switches by hand. A phase of a
+ * template saved before PB-9 names no `minDays`: this one applies to it (phase-check.ts, judge.ts).
+ */
+export const DEFAULT_HOLD_DAYS = 14
+
 export const DEFAULT_ISOLATION: Readonly<TemplateDoc['isolation']> = Object.freeze({
   exactIntoResearch: true,
   brandPhraseIntoCategoryAndCompetitor: true,
@@ -61,8 +67,7 @@ export function defaultPhases(slots: readonly Slot[], weights: Readonly<Record<s
   const clearWeights = Object.fromEntries(Object.entries(weights).map(([key, w]) => [key, autos.has(key) ? Math.min(w * 2, 1000) : w]))
   const lenient = { minClicks: 25, maxOrders: 0, windowDays: 30 } as const
   const normal = { minClicks: 15, maxOrders: 0, windowDays: 30 } as const
-  /** The design's hold: at least 14 days in a phase unless a person switches by hand (§3.7). */
-  const hold = 14
+  const hold = DEFAULT_HOLD_DAYS
   const phases: z.input<typeof PHASES_SECTION> = {
     LAUNCH: {
       recipe: { targetAcos: { from: 'breakEven', factor: 1.3, fallbackFactor: 1.5 }, harvest: { minOrders: 1, minClicks: 0, windowDays: 30 }, negate: lenient },

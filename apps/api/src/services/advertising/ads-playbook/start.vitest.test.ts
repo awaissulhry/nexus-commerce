@@ -19,7 +19,8 @@
  *   rules      the playbook's own rule compiler records its stop (PLAYBOOK_STOP_METRIC), so the next START switches the
  *              rule on again — a person's switch-off after it still holds
  *   phase      PB-9 — a slot the product's current phase floors (DEFEND's research slots) keeps its floor at START, named
- *              "held by phase DEFEND"; the performance slot gets its bids back
+ *              "held by phase DEFEND" and recorded as the phase's (a later phase switch releases it); the performance
+ *              slot gets its bids back
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -399,5 +400,9 @@ describe('PB-9 — a floor the current phase holds', () => {
     const exact = await now('exact-category')
     expect(exact.c).toMatchObject({ liveBidWritesEnabled: true, bidsSuppressedAt: null })
     expect(exact.t).toMatchObject({ bidCents: 50, suppressedFromBidCents: null })
+    // The floors it left are the phase's from now on (held by their holder): the next phase switch that runs the slot
+    // gives them back (phase.ts); none for the slot START restored.
+    const links = await inA(() => db().adsPlaybookLink.findMany({ where: { playbookId: other.rowId, kind: 'phaseFloor' }, select: { refId: true, updatedBy: true } }))
+    expect(links.map((l) => [l.refId, l.updatedBy]).sort()).toEqual([[slots.auto.campaign, 'user:u-asker'], [slots['broad-category'].campaign, 'user:u-asker']].sort())
   })
 })
