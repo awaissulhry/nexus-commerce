@@ -1293,13 +1293,18 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // SP-only builds (Quick / SPW / AI Goal) collapse to one product → identical to the old behaviour.
     // PB-6a (C1) — a keyword match type ONE campaign hosts is a rule-level destination. One that several host (Advanced:
     // Exact | Brand, Competitor, Category) lands, per source, in the host of the source's own theme: `theme` when the
-    // payload names it, else the one theme word in the campaign's name; where that cannot be told, nowhere (refused by
-    // name at graduation). It used to be the last one written, so every brand winner went to Exact | Category.
+    // payload names it, else the one slot token of the campaign's name that is a theme (its words after the product
+    // group's name, split at "-", so a group named "Brand …" does not count). A source with no theme (Auto) takes the
+    // Category host: the conservative default (spec §2.4). Where none fits, nowhere (refused by name at graduation). It
+    // used to be the last one written, so every brand winner went to Exact | Category.
     const THEMES = ['brand', 'competitor', 'category']
+    const groupName = (b.productGroupName || '').trim().toLowerCase()
     const themeOf = (c: { name: string; theme?: string }): string | null => {
       const named = typeof c.theme === 'string' ? c.theme.trim().toLowerCase() : ''
       if (THEMES.includes(named)) return named
-      const found = THEMES.filter((t) => new RegExp(`(^|[^a-z])${t}([^a-z]|$)`, 'i').test(c.name))
+      const name = c.name.trim().toLowerCase()
+      const slots = (groupName && name.startsWith(groupName) ? name.slice(groupName.length) : name).split('-').map((t) => t.trim())
+      const found = THEMES.filter((t) => slots.includes(t))
       return found.length === 1 ? found[0] : null
     }
     const widProduct: Record<string, 'SP' | 'SB' | 'SD'> = {}
@@ -1322,7 +1327,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const out: Record<string, string | null> = {}
       for (const [mt, hosts] of Object.entries(hostsByProduct[p] ?? {})) {
         if (hosts.length < 2) continue
-        const mine = widTheme[wid] ? hosts.filter((h) => h.theme === widTheme[wid]) : []
+        const mine = hosts.filter((h) => h.theme === (widTheme[wid] ?? 'category'))
         out[mt] = mine.length === 1 ? mine[0].adGroupId : null
       }
       return Object.keys(out).length ? out : null

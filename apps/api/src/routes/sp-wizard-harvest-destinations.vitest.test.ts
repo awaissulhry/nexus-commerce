@@ -5,8 +5,9 @@
  * (Exact | Category), so a brand winner left its slot. Now:
  *   · a match type ONE campaign hosts stays a rule-level destination (PAT → PRODUCT);
  *   · one several host lands per source in the host of the source's theme (`theme`, else the theme word in its name);
- *   · a source whose theme cannot be told (Auto, a name without one) gets none for it — refused by name at graduation,
- *     never the last one written;
+ *   · a source with no theme (Auto) takes the Category host, the conservative default (spec §2.4); a source whose host
+ *     cannot be told gets none for it — refused by name at graduation, never the last one written;
+ *   · the theme is a slot token after the product group's name: a group named "Brand Category …" changes nothing;
  *   · the rule is v2 (its ticks are literal) and names no constant bid.
  * Values are made up (public repo).
  */
@@ -88,7 +89,7 @@ async function launch(g: string, campaigns: Json[], rows: Record<string, Json>) 
 }
 
 describe('PB-6a — the wizard lands each winner in its own theme\'s campaign', () => {
-  it('Advanced: Broad | Brand → Exact | Brand, Phrase | Competitor → Exact | Competitor; Auto has none; PAT stays rule-level', async () => {
+  it('Advanced: Broad | Brand → Exact | Brand, Phrase | Competitor → Exact | Competitor; Auto → Exact | Category; PAT stays rule-level', async () => {
     const g = 'TADV'
     const { action, agOf, sourceOf } = await launch(g, advanced(g), harvestRows(['w-auto', 'w-Broad-Brand', 'w-Broad-Competitor', 'w-Phrase-Competitor', 'w-Phrase-Category']))
     expect(action).toMatchObject({ type: 'harvest_and_negate', v: 2, mode: 'harvest', control: 'manual' })
@@ -99,9 +100,16 @@ describe('PB-6a — the wizard lands each winner in its own theme\'s campaign', 
     expect(sourceOf(`${g}-SP-Keyword-Competitor-Broad`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Competitor-Exact`))
     expect(sourceOf(`${g}-SP-Keyword-Competitor-Phrase`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Competitor-Exact`))
     expect(sourceOf(`${g}-SP-Keyword-Category-Phrase`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Category-Exact`))
-    // Auto has no theme: refused by name at graduation, never sent to one of the three.
-    expect(sourceOf(`${g}-SP-Auto`).destinations.EXACT).toBeNull()
+    // Auto has no theme: the Category campaign, the conservative default (spec §2.4).
+    expect(sourceOf(`${g}-SP-Auto`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Category-Exact`))
     expect(sourceOf(`${g}-SP-Auto`)).toMatchObject({ graduate: ['EXACT'], negate: ['EXACT'], harvestFrom: true })
+  })
+
+  it('a product group named with theme words: the theme is still the slot token', async () => {
+    const g = 'Brand Category Gear'
+    const { sourceOf, agOf } = await launch(g, advanced(g), harvestRows(['w-Broad-Competitor', 'w-Phrase-Brand']))
+    expect(sourceOf(`${g}-SP-Keyword-Competitor-Broad`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Competitor-Exact`))
+    expect(sourceOf(`${g}-SP-Keyword-Brand-Phrase`).destinations.EXACT).toBe(agOf(`${g}-SP-Keyword-Brand-Exact`))
   })
 
   it('names without a theme word: no Exact destination; a `theme` in the payload tells it', async () => {
