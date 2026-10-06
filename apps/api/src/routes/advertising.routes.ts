@@ -2171,6 +2171,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       adSpend30dCents: agg._sum.advertisingSpendCents ?? 0,
       grossRevenue30dCents: grossCents,
       trueProfit30dCents: trueProfitCents,
+      // PERCENT POINTS (31.2 = 31.2 %), negative on a loss — never a fraction (AM-7).
       trueProfitMargin30dPct: marginPct,
       // What share of 30d revenue the profit figure above actually covers. 0 means the
       // number is absent because no product has a cost price, not because profit is zero.
@@ -3402,6 +3403,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const ctr = (p._sum.impressions ?? 0) > 0
         ? ((p._sum.clicks ?? 0) / (p._sum.impressions ?? 1)) * 100 : null
 
+      // Units: `acos`, `tacos` and `ctr` are PERCENT POINTS (38.02 = 38.02 %), rounded to 2 dp,
+      // and null when the divisor is 0 (no sales / no revenue / no impressions) — never 0 %.
       return {
         date:             dateKey,
         impressions:      p._sum.impressions  ?? 0,
@@ -3420,6 +3423,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // rows already computed + one aggregate query over the immediately prior
     // equal-length window (same scope), so the detail page can render ▲/▼ vs
     // the previous period on each KPI tile.
+    // `acos` and `ctr` are PERCENT POINTS like the rows above; `roas` is a plain ratio.
     const summarize = (sp: number, sa: number, im: number, cl: number, or: number) => ({
       impressions: im, clicks: cl, orders: or, spendCents: sp, salesCents: sa,
       acos: sa > 0 ? Math.round((sp / sa) * 10000) / 100 : null,
@@ -7573,12 +7577,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await setCampaignLimit({ marketplace: b.marketplace, month: b.month || currentMonth(), campaignId: b.campaignId, minCents: b.minCents ?? null, maxCents: b.maxCents ?? null }) }
     catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
-  // BM.B3 — enforcement preview: what Auto Pacing / Stop Over Spend WOULD do (dry-run).
+  // BM.B3 — enforcement preview: what Auto Pacing / Stop Over Spend do on the next run. AM-8 — `engine` says whether
+  // that run applies (the engine's own gate + write mode + dial), so the Budget Manager never asserts it.
   fastify.get('/advertising/budget-manager/enforcement', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
-    const { computeBudgetEnforcement } = await import('../services/advertising/ads-budget-enforce.service.js')
+    const { computeBudgetEnforcement, budgetEnforceMode } = await import('../services/advertising/ads-budget-enforce.service.js')
     reply.header('Cache-Control', 'private, max-age=30')
-    return computeBudgetEnforcement({ month: q.month })
+    const [result, engine] = await Promise.all([computeBudgetEnforcement({ month: q.month }), budgetEnforceMode()])
+    return { ...result, engine }
   })
 
   /**
@@ -10002,11 +10008,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // Portfolios P1 — synced rows enriched with campaign counts + spend/sales rollup (from our data).
+  // AM-6 — spend/sales cover a date window, taken exactly as GET /advertising/campaigns takes it
+  // (startDate + endDate, or preset, or windowDays; default the last 7 days); the answer names it.
   fastify.get('/advertising/portfolios/overview', async (request, reply) => {
-    const q = request.query as { marketplace?: string }
+    const q = request.query as { marketplace?: string; preset?: string; startDate?: string; endDate?: string; windowDays?: string }
     const { getPortfolioOverview } = await import('../services/advertising/ads-portfolio.service.js')
     reply.header('Cache-Control', 'private, max-age=30')
-    try { return await getPortfolioOverview({ marketplace: q.marketplace ?? null }) }
+    try { return await getPortfolioOverview({ marketplace: q.marketplace ?? null, preset: q.preset, startDate: q.startDate, endDate: q.endDate, windowDays: q.windowDays }) }
     catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'overview failed', portfolios: [], lastSyncedAt: null } }
   })
 

@@ -30,6 +30,7 @@ import { coordinatesFor, getSheetColumns, type SheetColumn, type SheetCoordinate
 import { buildCoordinateValidators, evaluateRow, type CoordinateValidators, type FlatRow } from './readiness.service.js'
 import { projectCellValue, isBlankValue } from './sheet-values.js'
 import { isAsinPending } from '@nexus/shared/listing-risk'
+import type { SheetContentDrift } from '../channel-drift/content-drift-view.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -93,6 +94,11 @@ export interface SheetListing {
    * for the same reason as `lastSyncedAt`; null = never stamped.
    */
   lastSyncStatus?: string | null
+  /**
+   * E5 — Etsy's last content read differs from Nexus (ChannelDrift 'etsy-content'); null = no difference recorded. Absent =
+   * not computed (another constructor, or the drift store could not be read).
+   */
+  contentDrift?: SheetContentDrift | null
   /**
    * The LISTING's own optimistic-concurrency token — NOT the product's.
    *

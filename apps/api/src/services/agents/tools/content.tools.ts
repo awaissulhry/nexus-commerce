@@ -12,7 +12,7 @@
  *                       complete (T9)
  *
  * Read-only and low risk: they read this business's own database. No marketplace call: the coordinate a caller may name
- * is Amazon or eBay (the Shopify sheet reads Shopify itself; Shopify and Etsy content are a later phase, D3 = a). The
+ * is Amazon, eBay or Etsy (the Shopify sheet reads Shopify itself, so Shopify is read with shopify-content; D3 = a). The
  * business is the one call-tool.ts bound; no argument names one. Products are named by Nexus id or SKU, in this business.
  *
  * Never returned: the sheet's write tokens (`writeField`, `writeTarget`, `contentAddress`, the acknowledgement). A change
@@ -42,16 +42,12 @@ import {
 import { workspaceIdForQuery } from '../../../lib/workspace-context.js'
 import { logger } from '../../../utils/logger.js'
 
-/** Every channel a coordinate may name; Shopify and Etsy are answered in words (`channelNotHere`), never by a bad-argument error. */
+/** Every channel a coordinate may name; Shopify is answered in words (`channelNotHere`), never by a bad-argument error. */
 export const COORDINATE_CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'] as const
-/** Until the Etsy publish step (P5) exists, Nexus holds no Etsy listing text Claude could read or change. */
-export const ETSY_NOT_YET = 'Etsy publishing is not available yet: Nexus cannot read or change an Etsy listing\'s text until the Etsy publish step (P5) exists.'
 
-/** Why a coordinate tool does not work on this channel, or null when it does (Amazon, eBay). */
+/** Why a coordinate tool does not work on this channel, or null when it does (Amazon, eBay, Etsy — E5b: the Etsy sheet). */
 export function channelNotHere(channel: string, shopify: string): string | null {
-  if (channel === 'ETSY') return ETSY_NOT_YET
-  if (channel === 'SHOPIFY') return shopify
-  return null
+  return channel === 'SHOPIFY' ? shopify : null
 }
 /** A family's variations shown with its parent (the plan: parent + up to 20). */
 const MAX_VARIATIONS = 20
@@ -238,8 +234,8 @@ const productContentInput = z.object({
   language: languageArg.optional()
     .describe('the language to read, e.g. it, de, fr, en (default: the primary language, the source text)'),
   coordinate: z.object({
-    channel: z.preprocess(upper, z.enum(COORDINATE_CHANNELS)).describe('AMAZON or EBAY (Shopify: use shopify-content; Etsy is not available yet)'),
-    market: z.string().trim().toUpperCase().min(2).max(20).describe('the marketplace code, e.g. IT or DE'),
+    channel: z.preprocess(upper, z.enum(COORDINATE_CHANNELS)).describe('AMAZON, EBAY or ETSY (Shopify: use shopify-content)'),
+    market: z.string().trim().toUpperCase().min(2).max(20).describe('the marketplace code, e.g. IT or DE; GLOBAL for Etsy'),
     accountId: z.string().trim().min(1).max(64).optional().describe('the channel account, when the business has more than one'),
     aliasKey: z.string().trim().min(1).max(64).optional().describe('a second listing of the product on this coordinate (its alias key)'),
   }).optional().describe('read what one listing (channel + market) shows instead of the shared text'),

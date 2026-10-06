@@ -492,3 +492,300 @@ describe('S5 — the accepted Shopify variant SKU is recorded as the live one', 
     expect(liveSkuWrites()).toEqual([])
   })
 })
+
+/**
+ * E2 — an Etsy send that ADDED a variation: the row joins the family's one Etsy listing (the id its live rows carry),
+ * with the owner row's status and pause and its journal SKU, only under VERIFIED. No Amazon closed offer, no ASIN read.
+ * §10.5 — a variation created Inactive joined hidden: it is held with the Etsy variation reason, and its prices stay held.
+ */
+describe('E2 — an accepted new Etsy variation joins its listing', () => {
+  const LISTING = '9000000001'
+  const destination = { channel: 'ETSY', marketplace: 'GLOBAL', channelConnectionId: 'etsy-a', aliasKey: '' }
+  const promotions = () => m.updateListings.mock.calls.map(([args]) => args).filter((args: any) => args.data?.externalListingId !== undefined)
+  function etsyPublishing(extra: Record<string, any> = {}) {
+    const row = { id: 'pub-etsy', userId: 'submitter', kind: 'studio-publication', status: 'PUBLISHING', productId: 'family', channel: 'ETSY', marketplace: 'GLOBAL',
+      channelConnectionId: 'etsy-a', aliasKey: '', batchId: null, checkCount: null, submittedAt: T0, nextCheckAt: null, createdAt: T0, summary: null, changes: {} }
+    m.rows.set(row.id, row)
+    const data = { kind: 'studio-publication', productId: 'family', captureVersion: 1, startedAt: T0.toISOString(),
+      scope: { channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'etsy-a' }, delivery: { productIds: ['family', 'child-1', 'child-new', 'child-hidden'], aliasKey: '' }, ...extra }
+    const result = (status: string) => ({ id: row.id, status, message: status, results: [
+      { sku: 'FAKE-SKU-1', status: status === 'VERIFIED' ? 'VERIFIED' : 'ACCEPTED', message: 'Read back from Etsy', reference: LISTING },
+      { sku: 'FAKE-SKU-3', status: status === 'VERIFIED' ? 'VERIFIED' : 'ACCEPTED', message: 'Read back from Etsy', reference: LISTING }] })
+    return { data, result }
+  }
+  /** The two reads the step makes: the accepted drafts (by id), then the family's live rows (externalListingId not null). */
+  function listings(live: any[], drafts = [{ id: 'listing-new', productId: 'child-new' }]) {
+    m.findListings.mockImplementation(async ({ where }: any) => where.externalListingId === null ? drafts.filter(d => where.id.in.includes(d.id)) : live)
+    m.updateListings.mockResolvedValue({ count: 1 })
+  }
+  /** A freshly linked listing: ACTIVE on Etsy, its rows sync-paused (identity link), no hold. */
+  const owner = { productId: 'family', externalListingId: LISTING, listingStatus: 'ACTIVE', syncPaused: true, offerClosedAt: null, offerCloseReason: null }
+  const sibling = { productId: 'child-1', externalListingId: LISTING, listingStatus: 'ACTIVE', syncPaused: true, offerClosedAt: null, offerCloseReason: null }
+  /** The listing paused as a whole (Pause offer: INACTIVE + the sheet-pause hold on every row). */
+  const paused = (row: typeof owner) => ({ ...row, listingStatus: 'INACTIVE', offerClosedAt: new Date('2026-10-01T00:00:00Z'), offerCloseReason: 'sheet-pause' })
+
+  it('VERIFIED: the accepted draft takes the listing id, the owner\'s status and sync pause, and its journal SKU; held prices once; no ASIN, no hold', async () => {
+    const { data, result } = etsyPublishing()
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } }])
+    listings([owner, sibling])
+    await storeResult('pub-etsy', data, 'submitter', result('VERIFIED') as never, ['PUBLISHING'])
+    await flush()
+    expect(m.rows.get('pub-etsy').status).toBe('VERIFIED')
+    expect(m.findListings).toHaveBeenCalledWith({ where: { id: { in: ['listing-new'] }, ...destination, listingStatus: 'DRAFT', isPublished: false, externalListingId: null },
+      select: { id: true, productId: true } })
+    expect(m.findListings).toHaveBeenCalledWith(expect.objectContaining({ where: { ...destination, productId: { in: data.delivery.productIds }, externalListingId: { not: null } } }))
+    const writes = promotions()
+    expect(writes).toHaveLength(1)
+    expect(writes[0].where).toEqual({ id: 'listing-new', ...destination, listingStatus: 'DRAFT', isPublished: false, externalListingId: null })
+    expect(writes[0].data).toEqual({ externalListingId: LISTING, isPublished: true, listingStatus: 'ACTIVE', syncPaused: true, liveChannelSku: 'FAKE-SKU-3',
+      lastSyncedAt: expect.any(Date), lastSyncStatus: 'SUCCESS', version: { increment: 1 } })
+    expect(writes[0].data).not.toHaveProperty('offerClosedAt')
+    expect(writes[0].data).not.toHaveProperty('offerCloseReason')
+    expect(m.held).toHaveBeenCalledTimes(1)
+    expect(m.held).toHaveBeenCalledWith({ listingIds: ['listing-new'], actor: 'submitter', cause: 'publish' })
+    expect(m.fill).not.toHaveBeenCalled()
+  })
+
+  it('an active, unpaused listing gives an active, unpaused row; with no owner row the draft keeps its own pause', async () => {
+    const { data, result } = etsyPublishing()
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } }])
+    listings([{ ...owner, listingStatus: 'ACTIVE', syncPaused: false }])
+    await storeResult('pub-etsy', data, 'submitter', result('VERIFIED') as never, ['PUBLISHING'])
+    expect(promotions()[0].data).toMatchObject({ listingStatus: 'ACTIVE', syncPaused: false })
+    expect(promotions()[0].data).not.toHaveProperty('offerClosedAt')
+    m.rows.clear(); m.updateListings.mockClear()
+    const again = etsyPublishing()
+    listings([sibling])
+    await storeResult('pub-etsy', again.data, 'submitter', again.result('VERIFIED') as never, ['PUBLISHING'])
+    expect(promotions()[0].data.listingStatus).toBe('ACTIVE')
+    expect(promotions()[0].data).not.toHaveProperty('syncPaused')
+  })
+
+  it('m2: a listing paused as a whole — the promoted row gets the same listing-level hold (sheet-pause), and no held price goes', async () => {
+    const { data, result } = etsyPublishing()
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } }])
+    listings([paused(owner), paused(sibling)])
+    await storeResult('pub-etsy', data, 'operator', result('VERIFIED') as never, ['PUBLISHING'])
+    const [write] = promotions()
+    expect(write.data).toEqual({ externalListingId: LISTING, isPublished: true, listingStatus: 'INACTIVE', syncPaused: true, liveChannelSku: 'FAKE-SKU-3',
+      lastSyncedAt: expect.any(Date), lastSyncStatus: 'SUCCESS', version: { increment: 1 },
+      offerClosedAt: expect.any(Date), offerClosedBy: 'operator', offerCloseReason: 'sheet-pause', offerActive: false,
+      offerCloseSnapshot: { channel: 'ETSY', source: 'publish', listingPaused: true, publicationId: 'pub-etsy', etsyListingId: LISTING } })
+    expect(m.held).not.toHaveBeenCalled()
+  })
+
+  it('m2: either sign of a listing-level pause is enough (INACTIVE alone — an older close — or the sheet-pause hold alone)', async () => {
+    for (const live of [[{ ...owner, listingStatus: 'INACTIVE' }], [owner, { ...sibling, offerClosedAt: new Date('2026-10-01T00:00:00Z'), offerCloseReason: 'sheet-pause' }]]) {
+      m.rows.clear(); m.updateListings.mockClear(); m.held.mockClear()
+      const { data, result } = etsyPublishing()
+      m.snapshots.mockResolvedValue([{ channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } }])
+      listings(live)
+      await storeResult('pub-etsy', data, 'submitter', result('VERIFIED') as never, ['PUBLISHING'])
+      expect(promotions()[0].data.offerCloseReason).toBe('sheet-pause')
+      expect(m.held).not.toHaveBeenCalled()
+    }
+  })
+
+  it('m2: one HIDDEN sibling is not a listing-level pause — the new row joins shown, with no hold', async () => {
+    const { data, result } = etsyPublishing()
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } }])
+    listings([owner, { ...sibling, offerClosedAt: new Date('2026-10-01T00:00:00Z'), offerCloseReason: 'etsy-variation-hidden' }])
+    await storeResult('pub-etsy', data, 'submitter', result('VERIFIED') as never, ['PUBLISHING'])
+    expect(promotions()[0].data).not.toHaveProperty('offerClosedAt')
+    expect(m.held).toHaveBeenCalledWith({ listingIds: ['listing-new'], actor: 'submitter', cause: 'publish' })
+  })
+
+  it('m2: created hidden on a paused listing — hidden wins (ETSY_VARIATION_HIDDEN_REASON), the shown sibling takes the listing-level hold', async () => {
+    const { data, result } = etsyPublishing({ inactiveProductIds: ['child-hidden'] })
+    m.snapshots.mockResolvedValue([
+      { channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } },
+      { channelListingId: 'listing-hidden', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-4', requests: [] } },
+    ])
+    listings([paused(owner)], [{ id: 'listing-new', productId: 'child-new' }, { id: 'listing-hidden', productId: 'child-hidden' }])
+    await storeResult('pub-etsy', data, 'operator', result('VERIFIED') as never, ['PUBLISHING'])
+    const writes = promotions()
+    const hidden = writes.find((w: any) => w.where.id === 'listing-hidden')
+    const joined = writes.find((w: any) => w.where.id === 'listing-new')
+    expect(hidden.data).toMatchObject({ offerCloseReason: 'etsy-variation-hidden',
+      offerCloseSnapshot: { channel: 'ETSY', source: 'publish', createdInactive: true, publicationId: 'pub-etsy', etsyListingId: LISTING } })
+    expect(joined.data).toMatchObject({ offerCloseReason: 'sheet-pause', offerCloseSnapshot: { listingPaused: true } })
+    expect(m.held).not.toHaveBeenCalled()
+  })
+
+  it('UNVERIFIED promotes nothing (and sends no held price)', async () => {
+    const { data, result } = etsyPublishing()
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } }])
+    listings([owner])
+    await storeResult('pub-etsy', data, 'submitter', result('UNVERIFIED') as never, ['PUBLISHING'])
+    expect(m.rows.get('pub-etsy').status).toBe('UNVERIFIED')
+    expect(promotions()).toEqual([])
+    expect(m.findListings).not.toHaveBeenCalled()
+    expect(m.held).not.toHaveBeenCalled()
+  })
+
+  it('the family\'s live rows naming two Etsy listings: nothing is promoted (never a guess)', async () => {
+    const { data, result } = etsyPublishing()
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } }])
+    listings([owner, { ...sibling, externalListingId: '9000000002' }])
+    await storeResult('pub-etsy', data, 'submitter', result('VERIFIED') as never, ['PUBLISHING'])
+    expect(promotions()).toEqual([])
+    expect(m.held).not.toHaveBeenCalled()
+    // ...and none at all is the same answer.
+    m.rows.clear()
+    const again = etsyPublishing()
+    listings([])
+    await storeResult('pub-etsy', again.data, 'submitter', again.result('VERIFIED') as never, ['PUBLISHING'])
+    expect(promotions()).toEqual([])
+  })
+
+  it('a row that is not a draft any more (or nothing accepted) is never touched', async () => {
+    const { data, result } = etsyPublishing()
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-live', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-1', requests: [] } }])
+    listings([owner], [])
+    await storeResult('pub-etsy', data, 'submitter', result('VERIFIED') as never, ['PUBLISHING'])
+    expect(promotions()).toEqual([])
+    expect(m.held).not.toHaveBeenCalled()
+  })
+
+  it('§10.5: a variation created Inactive is held with the Etsy variation reason; its shown sibling is not, and only the sibling\'s prices go', async () => {
+    const { data, result } = etsyPublishing({ inactiveProductIds: ['child-hidden'] })
+    m.snapshots.mockResolvedValue([
+      { channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } },
+      { channelListingId: 'listing-hidden', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-4', requests: [] } },
+    ])
+    listings([{ ...owner, listingStatus: 'ACTIVE', syncPaused: false }], [{ id: 'listing-new', productId: 'child-new' }, { id: 'listing-hidden', productId: 'child-hidden' }])
+    await storeResult('pub-etsy', data, 'operator', result('VERIFIED') as never, ['PUBLISHING'])
+    const writes = promotions()
+    expect(writes).toHaveLength(2)
+    const shown = writes.find((w: any) => w.where.id === 'listing-new')
+    const hidden = writes.find((w: any) => w.where.id === 'listing-hidden')
+    expect(shown.data).not.toHaveProperty('offerClosedAt')
+    expect(hidden.data).toEqual({ externalListingId: LISTING, isPublished: true, listingStatus: 'ACTIVE', syncPaused: false, liveChannelSku: 'FAKE-SKU-4',
+      lastSyncedAt: expect.any(Date), lastSyncStatus: 'SUCCESS', version: { increment: 1 },
+      offerClosedAt: expect.any(Date), offerClosedBy: 'operator', offerCloseReason: 'etsy-variation-hidden', offerActive: false,
+      offerCloseSnapshot: { channel: 'ETSY', source: 'publish', createdInactive: true, publicationId: 'pub-etsy', etsyListingId: LISTING } })
+    // Never Amazon's closed-offer fields.
+    expect(JSON.stringify(hidden.data.offerCloseSnapshot)).not.toMatch(/purchasableOffer|productType/)
+    expect(m.held).toHaveBeenCalledTimes(1)
+    expect(m.held).toHaveBeenCalledWith({ listingIds: ['listing-new'], actor: 'operator', cause: 'publish' })
+  })
+
+  it('AMAZON and EBAY results never reach the Etsy step', async () => {
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-x', payload: { channelConnectionId: 'acct-a', sku: 'SELLER-PARENT', requests: [] } }])
+    amazonSubmitted()
+    await storeResult('pub-amazon', m.rows.get('pub-amazon').changes, 'submitter', { id: 'pub-amazon', status: 'ACCEPTED', message: 'ok',
+      results: [{ sku: 'SELLER-PARENT', status: 'ACCEPTED', message: 'ok', reference: 'feed-1' }] } as never, ['SUBMITTED'])
+    const ebayInventory = { id: 'pub-ebay-inv', userId: 'submitter', kind: 'studio-publication', status: 'PUBLISHING', productId: 'family', channel: 'EBAY', marketplace: 'IT',
+      channelConnectionId: 'ebay-a', aliasKey: '', batchId: null, checkCount: null, submittedAt: T0, nextCheckAt: null, createdAt: T0, summary: null, changes: {} }
+    m.rows.set(ebayInventory.id, ebayInventory)
+    await storeResult('pub-ebay-inv', { kind: 'studio-publication', productId: 'family', captureVersion: 1, inventory: true, scope: { channel: 'EBAY', marketplace: 'IT', accountId: 'ebay-a' },
+      delivery: { productIds: ['family'], aliasKey: '' } }, 'submitter', { id: 'pub-ebay-inv', status: 'VERIFIED', message: 'ok',
+      results: [{ sku: 'SKU', status: 'VERIFIED', message: 'ok', reference: 'offer-1' }] } as never, ['PUBLISHING'])
+    expect(m.findListings.mock.calls.some(([args]: any) => args?.where?.externalListingId && typeof args.where.externalListingId === 'object' && 'not' in args.where.externalListingId)).toBe(false)
+    expect(m.updateListings.mock.calls.some(([args]: any) => args?.data?.lastSyncStatus === 'SUCCESS')).toBe(false)
+  })
+})
+
+describe('E3 — a verified create of a new Etsy listing (settleEtsyCreate)', () => {
+  const LISTING = '9000000001'
+  const destination = { channel: 'ETSY', marketplace: 'GLOBAL', channelConnectionId: 'etsy-a', aliasKey: '' }
+  /** A family created as one Etsy draft: the main row (the listing) and two variations (the inventory products). */
+  function etsyCreate(extra: Record<string, any> = {}) {
+    const row = { id: 'pub-etsy-create', userId: 'submitter', kind: 'studio-publication', status: 'PUBLISHING', productId: 'family', channel: 'ETSY', marketplace: 'GLOBAL',
+      channelConnectionId: 'etsy-a', aliasKey: '', batchId: null, checkCount: null, submittedAt: T0, nextCheckAt: null, createdAt: T0, summary: null, changes: {} }
+    m.rows.set(row.id, row)
+    const data = { kind: 'studio-publication', productId: 'family', captureVersion: 1, startedAt: T0.toISOString(), etsyCreate: true,
+      scope: { channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'etsy-a' }, delivery: { productIds: ['family', 'child-1', 'child-2'], aliasKey: '' },
+      changePlan: { publication: { ownerProductId: 'family', inventoryProducts: [{ productId: 'child-1', sku: 'FAKE-SKU-1' }, { productId: 'child-2', sku: 'FAKE-SKU-2' }] } },
+      ...extra }
+    const result = (status: string, reference: string | null = LISTING) => ({ id: row.id, status, message: status,
+      results: ['FAKE-SKU-PARENT', 'FAKE-SKU-1', 'FAKE-SKU-2'].map(sku => ({ sku, status: status === 'VERIFIED' ? 'VERIFIED' : 'SUBMITTED', message: status,
+        ...(reference ? { reference } : {}) })) })
+    return { data, result }
+  }
+  const journal = (listingId: string, productId: string, sku: string) => ({ channelListingId: listingId, payload: { channelConnectionId: 'etsy-a', productId, sku, requests: [] } })
+  const journals = () => [journal('listing-family', 'family', 'FAKE-SKU-PARENT'), journal('listing-1', 'child-1', 'FAKE-SKU-1'), journal('listing-2', 'child-2', 'FAKE-SKU-2')]
+  /** The writes of this step: the SKU confirmations and the sync record, both on rows already on the created listing. */
+  const createWrites = () => m.updateListings.mock.calls.map(([args]) => args).filter((args: any) => args.where?.externalListingId === LISTING)
+
+  it('VERIFIED: the inventory rows record their journal SKU as the SKU Etsy holds; every delivered row on the listing records SUCCESS; no held price', async () => {
+    const { data, result } = etsyCreate()
+    m.snapshots.mockResolvedValue(journals())
+    // promoteEtsyVariations finds no still-draft row: the 201's write already gave every family row the listing id.
+    m.findListings.mockResolvedValue([])
+    m.updateListings.mockResolvedValue({ count: 1 })
+    await storeResult('pub-etsy-create', data, 'submitter', result('VERIFIED') as never, ['PUBLISHING'])
+    await flush()
+    expect(m.rows.get('pub-etsy-create').status).toBe('VERIFIED')
+    const writes = createWrites()
+    expect(writes).toEqual([
+      { where: { id: 'listing-1', ...destination, externalListingId: LISTING }, data: { liveChannelSku: 'FAKE-SKU-1' } },
+      { where: { id: 'listing-2', ...destination, externalListingId: LISTING }, data: { liveChannelSku: 'FAKE-SKU-2' } },
+      { where: { ...destination, productId: { in: ['family', 'child-1', 'child-2'] }, externalListingId: LISTING },
+        data: { lastSyncedAt: expect.any(Date), lastSyncStatus: 'SUCCESS', version: { increment: 1 } } },
+    ])
+    // The main row (the listing, not a variation) records no SKU.
+    expect(writes.some((w: any) => w.where.id === 'listing-family')).toBe(false)
+    // Only this destination's accepted journals were read.
+    expect(m.snapshots).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ publishEventId: 'pub-etsy-create', outcome: 'ACCEPTED',
+      channel: 'ETSY', marketplace: 'GLOBAL', aliasKey: '', payload: { path: ['channelConnectionId'], equals: 'etsy-a' } }) }))
+    expect(m.held).not.toHaveBeenCalled()
+    expect(m.fill).not.toHaveBeenCalled()
+  })
+
+  it('a single product (no variations) is its own inventory product: its row records its SKU', async () => {
+    const { data, result } = etsyCreate({ delivery: { productIds: ['single'], aliasKey: '' },
+      changePlan: { publication: { ownerProductId: 'single', inventoryProducts: [{ productId: 'single', sku: 'FAKE-SKU-1' }] } } })
+    m.snapshots.mockResolvedValue([journal('listing-single', 'single', 'FAKE-SKU-1')])
+    m.updateListings.mockResolvedValue({ count: 1 })
+    await storeResult('pub-etsy-create', data, 'submitter', result('VERIFIED') as never, ['PUBLISHING'])
+    expect(createWrites()).toEqual([
+      { where: { id: 'listing-single', ...destination, externalListingId: LISTING }, data: { liveChannelSku: 'FAKE-SKU-1' } },
+      { where: { ...destination, productId: { in: ['single'] }, externalListingId: LISTING }, data: { lastSyncedAt: expect.any(Date), lastSyncStatus: 'SUCCESS', version: { increment: 1 } } },
+    ])
+  })
+
+  it('UNVERIFIED (Etsy made the draft, but not every part is confirmed, or its answer was lost): nothing is written here', async () => {
+    const { data, result } = etsyCreate()
+    m.snapshots.mockResolvedValue(journals())
+    await storeResult('pub-etsy-create', data, 'submitter', result('UNVERIFIED') as never, ['PUBLISHING'])
+    expect(m.rows.get('pub-etsy-create').status).toBe('UNVERIFIED')
+    expect(createWrites()).toEqual([])
+    m.rows.clear()
+    const lost = etsyCreate()
+    await storeResult('pub-etsy-create', lost.data, 'submitter', lost.result('UNVERIFIED', null) as never, ['PUBLISHING'])
+    expect(createWrites()).toEqual([])
+    expect(m.updateListings.mock.calls.some(([args]: any) => args?.data?.lastSyncStatus === 'SUCCESS')).toBe(false)
+  })
+
+  it('an E2 update (no etsyCreate), or a VERIFIED create whose results name no listing id, writes nothing here', async () => {
+    const { data, result } = etsyCreate({ etsyCreate: undefined })
+    m.snapshots.mockResolvedValue(journals())
+    m.updateListings.mockResolvedValue({ count: 1 })
+    await storeResult('pub-etsy-create', data, 'submitter', result('VERIFIED') as never, ['PUBLISHING'])
+    expect(createWrites()).toEqual([])
+    m.rows.clear()
+    const nameless = etsyCreate()
+    await storeResult('pub-etsy-create', nameless.data, 'submitter', nameless.result('VERIFIED', null) as never, ['PUBLISHING'])
+    expect(m.updateListings.mock.calls.some(([args]: any) => args?.data?.lastSyncStatus === 'SUCCESS' || args?.data?.liveChannelSku)).toBe(false)
+  })
+
+  it('promoteEtsyVariations copies the owner row\'s isPublished: a variation joining an Etsy DRAFT stays unpublished, DRAFT and paused like its draft', async () => {
+    const row = { id: 'pub-etsy', userId: 'submitter', kind: 'studio-publication', status: 'PUBLISHING', productId: 'family', channel: 'ETSY', marketplace: 'GLOBAL',
+      channelConnectionId: 'etsy-a', aliasKey: '', batchId: null, checkCount: null, submittedAt: T0, nextCheckAt: null, createdAt: T0, summary: null, changes: {} }
+    m.rows.set(row.id, row)
+    const data = { kind: 'studio-publication', productId: 'family', captureVersion: 1, scope: { channel: 'ETSY', marketplace: 'GLOBAL', accountId: 'etsy-a' },
+      delivery: { productIds: ['family', 'child-new'], aliasKey: '' } }
+    m.snapshots.mockResolvedValue([{ channelListingId: 'listing-new', payload: { channelConnectionId: 'etsy-a', sku: 'FAKE-SKU-3', requests: [] } }])
+    const draftOwner = { productId: 'family', externalListingId: LISTING, listingStatus: 'DRAFT', isPublished: false, syncPaused: true, offerClosedAt: null, offerCloseReason: null }
+    m.findListings.mockImplementation(async ({ where }: any) => where.externalListingId === null ? [{ id: 'listing-new', productId: 'child-new' }] : [draftOwner])
+    m.updateListings.mockResolvedValue({ count: 1 })
+    await storeResult('pub-etsy', data, 'submitter', { id: 'pub-etsy', status: 'VERIFIED', message: 'ok',
+      results: [{ sku: 'FAKE-SKU-3', status: 'VERIFIED', message: 'Read back from Etsy', reference: LISTING }] } as never, ['PUBLISHING'])
+    const promoted = m.updateListings.mock.calls.map(([args]) => args).find((args: any) => args.data?.externalListingId === LISTING)
+    expect(promoted.data).toMatchObject({ externalListingId: LISTING, isPublished: false, listingStatus: 'DRAFT', syncPaused: true, liveChannelSku: 'FAKE-SKU-3' })
+    expect(m.findListings).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ isPublished: true }) }))
+    // Its held prices go to the price door, which keeps them held while the row is paused (holdsCascadedPrice).
+    expect(m.held).toHaveBeenCalledWith({ listingIds: ['listing-new'], actor: 'submitter', cause: 'publish' })
+  })
+})

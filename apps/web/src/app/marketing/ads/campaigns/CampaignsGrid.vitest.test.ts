@@ -77,3 +77,31 @@ describe('ADM-A1 — every settingsCell column is reachable', () => {
     expect(stranded).toEqual(['actBidHours', 'oobHours'])
   })
 })
+
+/**
+ * AM-11 — the Ad Manager's ACoS FILTER and SORT (its own `metricVal`, not the shared grid's) follow
+ * the one rule in `_grid/format.ts` `acosRank`, whose behaviour `_grid/format.vitest.test.ts` proves.
+ * These arms keep this file wired to it: the old body guessed the unit (`a <= 1 ? a * 100 : a`) and
+ * mapped "spend, no sales" to 0 %, so "ACoS max 30 %" kept every campaign that spent and sold nothing.
+ */
+describe('AM-11 — the Ad Manager ACoS filter and sort use the one rule', () => {
+  const metricVal = blockAfter('function metricVal(c: Camp, key: string): number')
+  const acosCase = metricVal.match(/case 'acos':([^\n]*)/)?.[1] ?? ''
+
+  it('the acos case delegates to acosRank and keeps "no ACoS" as NaN, not 0', () => {
+    expect(acosCase).toContain('acosRank(c.acos, spend, sales)')
+    expect(acosCase).toContain('Number.NaN')
+    expect(acosCase).not.toMatch(/<= ?1 \?|: ?0\)/)
+  })
+
+  it('the filter never lets a row with no value match a set range', () => {
+    const filtered = blockAfter('const filtered = useMemo(')
+    expect(filtered).toMatch(/if \(Number\.isNaN\(v\)\) return false/)
+  })
+
+  it('the sort sinks a row with no value in both directions, before the direction flip', () => {
+    const sorted = blockAfter('const sorted = useMemo(')
+    expect(sorted).toMatch(/Number\.isNaN\(va\) \|\| Number\.isNaN\(vb\)/)
+    expect(sorted).not.toContain('(metricVal(a, sort.key) - metricVal(b, sort.key)) * dir')
+  })
+})

@@ -509,7 +509,7 @@ async function reviewStage(batchId: string, header: ClaimedHeader, deps: BatchRu
         continue
       }
       summary.reviewed! += 1
-      if (!review.id || !['AMAZON', 'EBAY'].includes(pair.scope.channel)) continue
+      if (!review.id || !['AMAZON', 'EBAY', 'ETSY'].includes(pair.scope.channel)) continue
       const row = await prisma.bulkOperation.findFirst({ where: { id: review.id }, select: childSelect })
       if (row?.status !== 'PREVIEW') continue // BLOCKED: the preview kept it with its reason
       const ids = defaultBatchSelection(review, keepChannelValues)

@@ -15,7 +15,7 @@ import { Megaphone, ExternalLink } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { DateRangePicker, lastCompleteDays } from '../../_shell/DateRangePicker'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
-import { eur, int, pct, latestReportLabel } from '../../campaigns/_grid/format'
+import { eur, int, pct, latestReportLabel, acosRank } from '../../campaigns/_grid/format'
 import '../ebay.css'
 import {
   useEbayAdsFetch, EBAY_MARKETS, useWriteMode, SandboxBanner,
@@ -111,7 +111,7 @@ export function EbayProductsRollup() {
     { key: 'spend', label: 'Ad Fees', render: (r) => eur(r.metrics.adFeesCents / 100), sortValue: (r) => r.metrics.adFeesCents, filterValue: (r) => r.metrics.adFeesCents / 100, total: (vr) => eur(vr.reduce((a, r) => a + r.metrics.adFeesCents, 0) / 100) },
     { key: 'sales', label: 'Ad Sales', tip: 'Any-click attributed sales.', render: (r) => eur(r.metrics.salesCents / 100), sortValue: (r) => r.metrics.salesCents, filterValue: (r) => r.metrics.salesCents / 100, total: (vr) => eur(vr.reduce((a, r) => a + r.metrics.salesCents, 0) / 100) },
     {
-      key: 'acos', label: 'eBay ACOS', render: (r) => (r.metrics.acosPct != null ? pct(r.metrics.acosPct / 100) : '—'), sortValue: (r) => r.metrics.acosPct ?? -1,
+      key: 'acos', label: 'eBay ACOS', render: (r) => (r.metrics.acosPct != null ? pct(r.metrics.acosPct / 100) : '—'), sortValue: (r) => acosRank(r.metrics.acosPct != null ? r.metrics.acosPct / 100 : null, r.metrics.adFeesCents, r.metrics.salesCents),
       total: (vr) => { const f = vr.reduce((a, r) => a + r.metrics.adFeesCents, 0); const s = vr.reduce((a, r) => a + r.metrics.salesCents, 0); return s > 0 ? pct(f / s) : '—' },
     },
     {

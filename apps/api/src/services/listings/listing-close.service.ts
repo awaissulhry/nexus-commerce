@@ -104,7 +104,7 @@ export async function planListingClose(listingIds: readonly string[], action: Cl
   for (const [familyId, members] of families) {
     let plan: Awaited<ReturnType<typeof planListingAction>>
     try {
-      plan = await planListingAction(familyId, ENGINE_ACTION[action], { scope, productIds: [...new Set(members.map((l) => l.productId))] })
+      plan = await planListingAction(familyId, ENGINE_ACTION[action], { scope, productIds: [...new Set(members.map((l) => l.productId))], wholeListing: true })
     } catch (err) {
       refusals.push(`${members[0].product.sku}: ${err instanceof Error ? err.message : String(err)}`)
       continue
@@ -150,7 +150,7 @@ export async function runListingClose(input: { listingIds: string[]; action: Clo
   const outcomes: ListingCloseOutcome[] = []
   for (const [familyId, rows] of families) {
     try {
-      const preview = await previewListingAction(familyId, ENGINE_ACTION[input.action], { scope, productIds: rows.map((r) => r.productId), ...(input.reason ? { reason: input.reason } : {}) }, input.actor)
+      const preview = await previewListingAction(familyId, ENGINE_ACTION[input.action], { scope, productIds: rows.map((r) => r.productId), wholeListing: true, ...(input.reason ? { reason: input.reason } : {}) }, input.actor)
       const result = await runListingAction(familyId, ENGINE_ACTION[input.action], { previewId: preview.previewId }, input.actor)
       for (const r of rows) {
         const answer = result.rows.find((x) => x.listingId === r.listingId)

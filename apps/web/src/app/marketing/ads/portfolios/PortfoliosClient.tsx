@@ -23,6 +23,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { AutomationDock, ruleDropProps, setRuleScope } from '../_shared/AutomationDock'
 import { searchOptions } from '@/lib/option-search'
 import { eur, pct, intl } from '../_canvas/format'
+import { defaultPortfolioRange, portfolioWindowNote, ymd, type OverviewWindow } from './portfolioWindow'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
@@ -30,7 +31,11 @@ import './portfolios.css'
 
 interface PortfolioRow {
   portfolioId: string; name: string; state: string | null; marketplaces: string[]
-  campaignCount: number; activeCampaignCount: number; spendCents: number; salesCents: number
+  /** Enabled + paused members; `archivedCampaignCount` is apart and not in spend/sales (AM-35). */
+  campaignCount: number; activeCampaignCount: number; archivedCampaignCount?: number
+  /** CENTS over the overview's `range` (AM-6). */
+  spendCents: number; salesCents: number
+  /** FRACTION (0.38 = 38 %); null when nothing sold. */
   acos: number | null; source: 'amazon' | 'local'; lastSyncedAt: string | null
   budgetAmountCents: number | null; budgetCurrencyCode: string | null; budgetPolicy: string | null; inBudget: boolean | null
 }
@@ -57,6 +62,11 @@ function PortfoliosInner() {
   const [markets, setMarkets] = useState<string[]>([])
   const [rows, setRows] = useState<PortfolioRow[]>([])
   const [lastSynced, setLastSynced] = useState<string | null>(null)
+  // AM-6 — the window the money covers: the header's picker, opening on the Ad Manager's default.
+  const [dateRange, setDateRange] = useState(() => defaultPortfolioRange())
+  const rangeRef = useRef(dateRange)
+  rangeRef.current = dateRange
+  const [moneyWindow, setMoneyWindow] = useState<OverviewWindow | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [mode, setMode] = useState('sandbox')
@@ -88,10 +98,13 @@ function PortfoliosInner() {
   }, [])
 
   const loadOverview = useCallback(async (mk: string): Promise<number> => {
-    const mp = mk === 'all' ? '' : `?marketplace=${mk}`
-    const d = await fetch(`${getBackendUrl()}/api/advertising/portfolios/overview${mp}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
+    const qs = new URLSearchParams()
+    if (mk !== 'all') qs.set('marketplace', mk)
+    qs.set('startDate', ymd(rangeRef.current.start))
+    qs.set('endDate', ymd(rangeRef.current.end))
+    const d = await fetch(`${getBackendUrl()}/api/advertising/portfolios/overview?${qs.toString()}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
     const list: PortfolioRow[] = Array.isArray(d?.portfolios) ? d.portfolios : []
-    setRows(list); setLastSynced(d?.lastSyncedAt ?? null)
+    setRows(list); setLastSynced(d?.lastSyncedAt ?? null); setMoneyWindow(d?.range ?? null)
     return list.length
   }, [])
 
@@ -115,7 +128,7 @@ function PortfoliosInner() {
       if (alive) setLoading(false)
     })
     return () => { alive = false }
-  }, [market, loadOverview, sync])
+  }, [market, dateRange, loadOverview, sync])
 
   const create = async () => {
     const name = newName.trim()
@@ -174,7 +187,7 @@ function PortfoliosInner() {
   // OS.6 — this page listed every portfolio with no way to find one. Tiles and totals stay on the
   // FULL set (they describe the account, not the query); only the table narrows.
   const visible = searchOptions(q, rows, (r) => r.name)
-  const totals = rows.reduce((a, r) => ({ campaigns: a.campaigns + r.campaignCount, spend: a.spend + r.spendCents }), { campaigns: 0, spend: 0 })
+  const totals = rows.reduce((a, r) => ({ campaigns: a.campaigns + r.campaignCount, archived: a.archived + (r.archivedCampaignCount ?? 0), spend: a.spend + r.spendCents }), { campaigns: 0, archived: 0, spend: 0 })
 
   return (
     <div className="pf pf--with-dock">
@@ -183,7 +196,8 @@ function PortfoliosInner() {
         title="Portfolios"
         subtitle="Group campaigns into portfolios and see membership + spend at a glance."
         markets={markets} market={market} onMarketChange={setMarket}
-        showDateRange={false} showDataSync={false}
+        dateRange={dateRange} onDateRange={(start, end) => setDateRange({ start, end })}
+        showDataSync={false}
       />
 
       {mode === 'sandbox'
@@ -217,6 +231,7 @@ function PortfoliosInner() {
           <div className="pf-tile"><div className="pf-tile-k">Spend (grouped)</div><div className="pf-tile-v">{eurc(totals.spend)}</div></div>
         </div>
       )}
+      {rows.length > 0 && <p className="pf-window">{portfolioWindowNote(moneyWindow, totals.archived)}</p>}
 
       {loading ? (
         <div className="pf-empty"><div className="pf-empty-p">Loading…</div></div>
@@ -255,7 +270,16 @@ function PortfoliosInner() {
               ),
             },
             { key: 'markets', label: 'Markets', render: (r) => (r.marketplaces.length ? <span className="pf-mkts">{r.marketplaces.map((m) => <span className="pf-mkt" key={m}>{m}</span>)}</span> : <span className="pf-mkt-none">—</span>) },
-            { key: 'campaigns', label: 'Campaigns', align: 'right', numeric: true, render: (r) => `${r.activeCampaignCount}/${r.campaignCount}` },
+            {
+              key: 'campaigns', label: 'Campaigns', align: 'right', numeric: true,
+              // AM-35 — enabled / (enabled + paused), as the Ad Manager counts by default; archived said apart.
+              render: (r) => (
+                <span title={`${r.activeCampaignCount} enabled of ${r.campaignCount} enabled or paused${r.archivedCampaignCount ? `; ${r.archivedCampaignCount} archived, not counted` : ''}`}>
+                  {r.activeCampaignCount}/{r.campaignCount}
+                  {r.archivedCampaignCount ? <span className="pf-mkt-none"> · {r.archivedCampaignCount} archived</span> : null}
+                </span>
+              ),
+            },
             { key: 'budget', label: 'Budget', align: 'right', numeric: true, render: (r) => <span className={r.budgetAmountCents == null ? 'pf-nocap' : undefined}>{budgetLabel(r)}</span> },
             { key: 'spend', label: 'Spend', align: 'right', numeric: true, render: (r) => eurc(r.spendCents) },
             { key: 'sales', label: 'Sales', align: 'right', numeric: true, render: (r) => eurc(r.salesCents) },

@@ -644,8 +644,8 @@ const ATTRIBUTE_VALUE = z.union([
 const setListingContentInput = z.object({
   product: z.string().trim().min(1).max(191).describe('the product whose listing it is: a Nexus product id or a SKU (a parent or a variation)'),
   coordinate: z.object({
-    channel: z.preprocess(upperText, z.enum(COORDINATE_CHANNELS)).describe('AMAZON or EBAY (a Shopify listing: set-shopify-content; Etsy is not available yet)'),
-    market: z.string().trim().toUpperCase().min(2).max(20).describe('the marketplace code, e.g. IT or DE'),
+    channel: z.preprocess(upperText, z.enum(COORDINATE_CHANNELS)).describe('AMAZON, EBAY or ETSY (a Shopify listing: set-shopify-content)'),
+    market: z.string().trim().toUpperCase().min(2).max(20).describe('the marketplace code, e.g. IT or DE; GLOBAL for Etsy'),
     accountId: z.string().trim().min(1).max(64).optional().describe('the channel account, when the business has more than one'),
     aliasKey: z.string().trim().min(1).max(64).optional().describe('a second listing of the product on this coordinate (its alias key)'),
   }).describe('the one listing: channel + market'),
@@ -660,7 +660,7 @@ const setListingContentInput = z.object({
     .describe("fields this listing stops keeping as its own: they show the shared text again"),
   attributes: z.record(z.string().trim().min(1).max(100), ATTRIBUTE_VALUE).optional()
     .refine((value) => !value || Object.keys(value).length <= MAX_ATTRIBUTES, { message: `at most ${MAX_ATTRIBUTES} attributes` })
-    .describe(`this listing's own channel attributes (Amazon attributes, eBay item specifics) by key: { key: value } — a text, number, true/false, a list, a { value, unit } measure, or null for an empty value; at most ${MAX_ATTRIBUTES}`),
+    .describe(`this listing's own channel attributes (Amazon attributes, eBay item specifics, Etsy attributes) by key: { key: value } — a text, number, true/false, a list, a { value, unit } measure, or null for an empty value; at most ${MAX_ATTRIBUTES}`),
   dropAttributes: z.array(z.string().trim().min(1).max(100)).min(1).max(MAX_ATTRIBUTES).optional()
     .describe("channel attributes this listing stops keeping its own value for: they take the value the listing inherits again"),
   englishMeaning: z.record(z.string().trim().min(1).max(100), z.string().max(20_000)).optional()
@@ -974,9 +974,9 @@ const setListingContent: AgentTool = {
   maxClaudeTrust: 'ask',
   undo: SET_LISTING_CONTENT_UNDO,
   description:
-    'Change what one listing (Amazon or eBay + market) shows, without touching the shared text or any other listing: '
+    'Change what one listing (Amazon, eBay or Etsy + market; Etsy: GLOBAL) shows, without touching the shared text or any other listing: '
     + 'pin = text this listing keeps as its own; follow = fields it stops keeping, so they show the shared text again; '
-    + 'attributes = its own channel attributes (Amazon attributes, eBay item specifics), each with its type; '
+    + 'attributes = its own channel attributes (Amazon attributes, eBay item specifics, Etsy attributes such as material), each with its type; '
     + 'dropAttributes = attributes it stops keeping its own value for. The '
     + 'language must be one of the market\'s. Refused when the product has no listing there yet (create it first), or '
     + 'when a field cannot be edited (the reason is given). Give englishMeaning for every text set unless the language '

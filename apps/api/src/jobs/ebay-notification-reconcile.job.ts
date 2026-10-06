@@ -13,10 +13,15 @@
  *
  * Provisioning requires the Owner's arming (`ebayNotificationSetupGate`): exact
  * NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP=1 AND NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS naming
- * each ready application-level topic (v1: AUTHORIZATION_REVOCATION), plus a configured
+ * each ready topic (AUTHORIZATION_REVOCATION, ORDER_CONFIRMATION), plus a configured
  * endpoint/token. The old switch alone schedules nothing: a scheduler may still hold it
  * from before it became opt-in, and a deploy must never start live subscriptions. The
  * setup service and the admin route enforce the same gate independently.
+ *
+ * GAP2 phase 2: after the app-level setup, when ORDER_CONFIRMATION is armed, every active
+ * business is visited and each of its own active eBay accounts is subscribed with that
+ * seller's own token (`seller-subscriptions.ts`). An account whose sign-in lacks the
+ * permission is reported "reconnect needed" and gets no call.
  *
  * Cadence: 03:55 UTC, after the Amazon reconcile at 03:40 so the two do not interleave
  * in the logs.
@@ -29,8 +34,26 @@ import { recordCronRun } from '../utils/cron-observability.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
-/** One reconcile. Exported so a test can run it without a scheduler. */
+/** The app-level setup, then each seller's own subscription. */
 export async function runEbayNotificationReconcile() {
+  const result = await runAppLevelReconcile()
+  const { reconcileEbaySellersForSetup, summariseSellerReport } = await import('../services/cx/connectors/ebay/seller-subscriptions.js')
+  const sellers = await reconcileEbaySellersForSetup(result, 'every_business')
+  const reconnect = sellers.accounts.filter(account => account.status === 'reconnect_needed').length
+  if (sellers.accounts.some(account => account.status === 'failed' || account.status === 'not_offered')) {
+    logger.error('[ebay-notification-reconcile] a seller order subscription failed', {
+      failures: sellers.accounts.filter(account => account.status === 'failed' || account.status === 'not_offered')
+        .map(account => ({ connectionId: account.connectionId, status: account.status, reason: account.reason })),
+    })
+  } else if (reconnect) {
+    logger.warn('[ebay-notification-reconcile] eBay accounts need Reconnect before they can receive order notices', { accounts: reconnect })
+  } else if (!sellers.skipped) {
+    logger.info('[ebay-notification-reconcile] seller order subscriptions reconciled', { summary: summariseSellerReport(sellers) })
+  }
+  return { ...result, sellers }
+}
+
+async function runAppLevelReconcile() {
   const { setupEbayNotifications, ebayNotificationSetupSucceeded } = await import('../services/cx/connectors/ebay/notifications.js')
   const result = await setupEbayNotifications({ skipTopicsWithoutHandlers: true })
 
@@ -93,10 +116,15 @@ export function startEbayNotificationReconcileCron(): void {
       if (!result.configured) return 'not configured'
       if (!result.armed) return 'not armed — no call made'
       const { ebayNotificationSetupSucceeded } = await import('../services/cx/connectors/ebay/notifications.js')
+      const { sellerReportFailed, summariseSellerReport } = await import('../services/cx/connectors/ebay/seller-subscriptions.js')
       if (!ebayNotificationSetupSucceeded(result)) {
-        throw new Error(result.error ?? `eBay notification reconciliation failed: ${result.perTopic.map(topic => `${topic.topicId}:${topic.status}`).join(' ') || 'no supported subscriptions'}`)
+        throw new Error(result.error ?? `eBay notification reconciliation failed: ${[
+          ...result.perTopic.map(topic => `${topic.topicId}:${topic.status}`), ...result.notOffered.map(topicId => `${topicId}:not_offered`),
+        ].join(' ') || 'no supported subscriptions'}`)
       }
-      return `destination=${result.destinationId} topics=${result.perTopic.map((r) => `${r.topicId}:${r.status}`).join(' ')}`
+      // "Reconnect needed" is the Owner's step, reported in the summary; a failed seller call fails the run.
+      if (sellerReportFailed(result.sellers)) throw new Error(`eBay seller order subscriptions failed: ${summariseSellerReport(result.sellers)}`)
+      return `destination=${result.destinationId} topics=${result.perTopic.map((r) => `${r.topicId}:${r.status}`).join(' ')} ${summariseSellerReport(result.sellers)}`
     }).catch((err) => {
       logger.error('ebay-notification-reconcile cron: failure', {
         error: err instanceof Error ? err.message : String(err),

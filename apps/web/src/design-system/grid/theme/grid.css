@@ -1406,6 +1406,7 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
   box-sizing: border-box;
   align-items: center;
   overflow-x: auto;
+  scrollbar-width: thin;
 }
 .nds-grid-sheet .nds-toolbar > * { max-width: 100%; flex-shrink: 0; }
 .nds-grid-sheet .nds-toolbar > .cnt { white-space: nowrap; }
@@ -1925,6 +1926,22 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-gridcard.nds-grid-sheet .nds-grid-footstrip { padding-inline: var(--nds-space-6); }
 @media (max-width: 1279px) {
   .nds-gridcard.nds-grid-sheet .nds-toolbar { padding-block: var(--nds-space-6); }
+}
+/* 2026-10-05 — while the toolbar SCROLLS sideways (≥ 1280px; below it wraps and never scrolls), its scrollbar gets a
+   band of its own instead of being drawn over the controls (the Tabs rule in components.css: `useHorizontalOverflow`
+   marks the bar, the band is 14px, measured). The 40px band is fixed, so it GROWS rather than squashes: an overlay
+   bar adds 14px of padding under an unchanged 40px content band; a classic bar (already below the controls) adds its
+   own measured height. Either way every control stays exactly where it was. */
+.nds-grid-sheet .nds-toolbar[data-overflows='overlay'] {
+  height: calc(var(--nds-toolbar-h, 40px) + var(--nds-space-14));
+  min-height: calc(var(--nds-toolbar-h, 40px) + var(--nds-space-14));
+  flex-basis: calc(var(--nds-toolbar-h, 40px) + var(--nds-space-14));
+  padding-bottom: var(--nds-space-14);
+}
+.nds-grid-sheet .nds-toolbar[data-overflows='classic'] {
+  height: calc(var(--nds-toolbar-h, 40px) + var(--nds-scrollbar-size, 0px));
+  min-height: calc(var(--nds-toolbar-h, 40px) + var(--nds-scrollbar-size, 0px));
+  flex-basis: calc(var(--nds-toolbar-h, 40px) + var(--nds-scrollbar-size, 0px));
 }
 .nds-grid-confirm-unknown { color: var(--nds-warning-text); }
 

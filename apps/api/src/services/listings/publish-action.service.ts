@@ -50,10 +50,11 @@ import { publishListingEvent } from '../listing-events.service.js'
 import { userNames } from '../pim/publication-history/users.js'
 import { readExcludedListingIds, variationExcludedColumnExists } from '../pim/variation-excluded.js'
 import { DraftListingError, ensureDraftListings } from '../pim/draft-listing.service.js'
-import { isEtsyPublishEnabled } from '../etsy-publish-gate.service.js'
+import { getEtsyPublishMode } from '../etsy-publish-gate.service.js'
 import { nativeListingValue } from '../shopify/native-listing-value.js'
 import { logger } from '../../utils/logger.js'
 import { destinationLabel, destinationSellingStates, oldClosePauses } from './listing-action.service.js'
+import { etsyDraftRow } from './listing-action-adapters/etsy.js'
 import { readListingDeletions } from './listing-deletions.js'
 import { newListingChoices, setBeforeDelete } from './new-listing-choices.js'
 
@@ -252,12 +253,15 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
       const { state, reason, deleted } = read.states.get(product.id) ?? { state: 'not_listed' as const, reason: null, deleted: null }
       const facts: CapabilityFacts = { isFba: read.isFba.get(row.id) ?? false, shopifyLinked: read.shopifyLinked, deleted: deleted ?? null,
         isMain: product.isParent, isVariation: !!product.parentId, noRecord, alias: d.aliasKey !== '', onChannel: !!row.externalListingId,
-        listingOnChannel: group.some(other => !!other.externalListingId) }
+        listingOnChannel: group.some(other => !!other.externalListingId),
+        // E3 — a listing that is a draft on Etsy: Active (Nexus cannot set a draft live yet) and Inactive (nothing to pause) are refused.
+        etsyDraft: d.channel === 'ETSY' && etsyDraftRow(row) }
       const choice = isNewListingRow(state, facts) ? choices.get(product.id) : undefined
       out.push({ row, product, model: read.model, state, reason, facts, channelLabel: channelName(d.channel), noRecord, alias,
         deleted: deleted ? { ...deleted, sentence: deletedShort(deleted) } : null,
         create: choice ? { target: choice.target, source: choice.source, defaultTarget: choice.defaultTarget, noRecord,
-          sentence: newListingSentence(choice, { includedByDefault: choice.includedByDefault, deleted: choice.deleted, channel: d.channel }) } : null })
+          sentence: newListingSentence(choice, { includedByDefault: choice.includedByDefault, deleted: choice.deleted, channel: d.channel,
+            listingOnChannel: facts.listingOnChannel }) } : null })
     }
     for (const row of group) readRow(row, productOf.get(row.productId)!, false)
     const listed = new Set(group.map(row => row.productId))
@@ -284,13 +288,13 @@ async function aliasMarks(keys: readonly string[]): Promise<Map<string, AliasMar
 const sendOptionsOf = (r: RowRead): SendModeOption[] =>
   sendModeOptions(r.model, r.state, { ...r.facts, isParent: r.product.isParent, isVariation: !!r.product.parentId }, r.channelLabel)
 /**
- * D13 (decision 12): while Etsy publishing is off on this server, Publish cannot send an Etsy Status change (the gateway
- * refuses every Etsy write), so each change is HELD with the reason; the row's current value stays. A stored change then
- * reads "No longer applies" with the same reason.
+ * D13 (decision 12): while sending to Etsy is not live on this server (off, or dry-run), Publish cannot send an Etsy
+ * Status change (the gateway sends no Etsy write), so each change is HELD with the reason; the row's current value stays.
+ * A stored change then reads "No longer applies" with the same reason.
  */
 const statusOptionsOf = (r: RowRead): StatusOption[] => {
   const options = statusOptionsFor(r.state, r.model, r.facts, r.channelLabel)
-  return r.model === 'etsy' && !isEtsyPublishEnabled() ? holdStatusChanges(options, ETSY_PUBLISHING_OFF) : options
+  return r.model === 'etsy' && getEtsyPublishMode() !== 'live' ? holdStatusChanges(options, ETSY_PUBLISHING_OFF) : options
 }
 
 function basisOf(row: ListingRow): Basis {

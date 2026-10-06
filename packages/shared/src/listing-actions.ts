@@ -121,8 +121,8 @@ export const SHOPIFY_LINKED_REFUSED = 'This family is several Shopify products (
 export const SHOPIFY_PAUSE_CHECK = 'Nexus checks each variant first. A variant that sells when out of stock ("Continue selling when out of stock" in Shopify) is not paused, because quantity 0 would not stop its sales.'
 export const ETSY_NO_END = 'Etsy has no End here. Set Inactive to pause the listing.'
 export const ETSY_DELETE_NOT_YET = 'Deleting Etsy listings from Nexus is not available yet. Set Inactive, or delete it in Etsy.'
-/** D13 (decision 12): while Etsy publishing is off on the server, an Etsy Status change is held with this reason. */
-export const ETSY_PUBLISHING_OFF = 'Etsy publishing is turned off, so Publish cannot change this. Change it in Etsy.'
+/** D13 (decision 12): while sending to Etsy is not live on the server (off, or dry-run), an Etsy Status change is held with this reason. */
+export const ETSY_PUBLISHING_OFF = 'Sending to Etsy is not live on this server, so Publish cannot change this. Change it in Etsy.'
 
 export interface CapabilityFacts {
   /** Amazon: this row's offer is fulfilled by Amazon. */
@@ -138,7 +138,7 @@ export interface CapabilityFacts {
   deleted?: ListingDeletion | null
   /** New listings: the row is the main product of a family (its variations follow its choice unless they have their own). */
   isMain?: boolean
-  /** New listings: the row is a variation of a family. */
+  /** The row is a variation of a family (new listings; Etsy: its Pause and Resume reach only this row). */
   isVariation?: boolean
   /** New listings: no listing record here yet (a Status choice first starts the drafts). */
   noRecord?: boolean
@@ -154,6 +154,8 @@ export interface CapabilityFacts {
    * channel number), so a new row is a new variation of that listing, not a new listing.
    */
   listingOnChannel?: boolean
+  /** Etsy: this row's listing is a draft on Etsy (listingStatus DRAFT with a listing number). */
+  etsyDraft?: boolean
 }
 
 /** The ONE table: can this action run on this listing model, and how far does it reach? */
@@ -184,6 +186,11 @@ export function listingActionCapability(model: ListingModel, action: ListingActi
     case 'etsy':
       if (action === 'end' || action === 'relist') return no(ETSY_NO_END)
       if (action === 'delete') return no(ETSY_DELETE_NOT_YET)
+      // E3: a listing that is a draft on Etsy cannot be set live from Nexus yet, and a draft has nothing to pause.
+      if (facts.etsyDraft && action === 'resume') return no(ETSY_DRAFT_NO_LIVE)
+      if (facts.etsyDraft && action === 'pause') return no(ETSY_DRAFT_NO_PAUSE)
+      // A variation's Inactive hides only its offering on Etsy (D6); the main row's acts on the whole listing.
+      if ((action === 'pause' || action === 'resume') && facts.isVariation) return yes('row')
       return yes('listing')
     default:
       return no(NOT_AVAILABLE(channelLabel))
@@ -207,6 +214,8 @@ export interface SellingFacts {
 
 /** The hold reason a Pause offer writes on eBay, Shopify and Etsy rows (Amazon's close keeps SCT.6's own reason). */
 export const SHEET_PAUSE_REASON = 'sheet-pause'
+/** The hold reason of ONE hidden variation of an Etsy listing (its offering is off on Etsy; the rest of the listing sells). */
+export const ETSY_VARIATION_HIDDEN_REASON = 'etsy-variation-hidden'
 
 export interface SellingStateRead {
   state: SellingState
@@ -236,7 +245,15 @@ export function sellingStateOf(facts: SellingFacts): SellingStateRead {
   if (status === 'ENDED' && facts.channel === 'AMAZON') return { state: 'not_listed', reason: AMAZON_REMOVED_ELSEWHERE }
   if (status === 'ENDED' && facts.channel === 'ETSY') return { state: 'not_listed', reason: 'Expired or removed on Etsy.' }
   if (status === 'ENDED') return { state: 'ended', reason: 'Ended on the channel.' }
-  if (facts.channel === 'ETSY' && (status === 'INACTIVE' || facts.offerClosedAt)) return { state: 'paused', reason: 'Inactive on Etsy: buyers cannot find or buy it.' }
+  if (facts.channel === 'ETSY' && status === 'INACTIVE') return { state: 'paused', reason: 'Inactive on Etsy: buyers cannot find or buy it.' }
+  // E3: an Etsy listing with a number that Nexus marks DRAFT is a draft on Etsy (Nexus created it so, or the refresh read
+  // a draft made on etsy.com).
+  if (facts.channel === 'ETSY' && status === 'DRAFT' && facts.externalListingId) return { state: 'paused', reason: ETSY_DRAFT_STATE }
+  if (facts.channel === 'ETSY' && facts.offerClosedAt) {
+    return { state: 'paused', reason: facts.offerCloseReason === ETSY_VARIATION_HIDDEN_REASON
+      ? 'Hidden on Etsy: buyers cannot buy this variation; the rest of the listing sells.'
+      : 'Inactive on Etsy: buyers cannot find or buy it.' }
+  }
   if (facts.offerClosedAt) {
     return { state: 'paused', reason: facts.channel === 'AMAZON'
       ? 'Inactive: this market\'s Amazon offer is removed. Other markets keep selling.'
@@ -378,14 +395,22 @@ export const ETSY_PUBLISH_NOT_YET = 'Publishing to Etsy from Nexus is not availa
 export const ETSY_NEW_ACTIVE_NEEDS_PHOTO = 'Etsy needs at least 1 photo to go live; photos come in a later Nexus update.'
 export const ETSY_NEW_DRAFT = 'Starts on Etsy as a draft when Publish sends it: buyers cannot buy a draft.'
 /**
- * Etsy: a new variation of a listing already on Etsy joins it for sale (the listing has its photos). It cannot join hidden:
- * nothing in Nexus could show one Etsy variation later (the price and stock pushes keep Etsy's own, and Pause and Resume
- * act on the whole listing).
+ * Etsy: a new variation of a listing already on Etsy joins it for sale (the listing has its photos), or joins it hidden
+ * (Inactive: its offering is off on Etsy, and Nexus holds its pushes until its row is set Active).
  */
 export const ETSY_NEW_VARIATION_ACTIVE = 'Joins the Etsy listing when Publish sends it; it sells while the listing is active.'
-export const ETSY_VARIATION_CANNOT_HIDE = 'Nexus cannot hide one variation of an Etsy listing yet. Choose Active to add it, or Not listed to leave it out.'
-/** The Status cell's sentence of an Etsy row not on Etsy (E1: Publish reviews it and sends nothing). E3 changes it here. */
-export const ETSY_NEW_ROW_SENTENCE = 'Not on Etsy yet. Publish shows what Nexus would send; sending to Etsy comes in a later Nexus update.'
+export const ETSY_NEW_VARIATION_INACTIVE = 'Joins the Etsy listing hidden when Publish sends it: buyers cannot buy this variation until you set it Active.'
+/** The Status cell's sentence of an Etsy row whose listing is not on Etsy (E3: Publish creates the listing on Etsy as a draft). */
+export const ETSY_NEW_ROW_SENTENCE = 'Not on Etsy yet. Publish creates it on Etsy as a draft: buyers cannot see a draft.'
+/**
+ * E3 — Active on a listing that is a draft on Etsy (listingStatus DRAFT with a listing number), whoever made the draft:
+ * Nexus made it, or someone made it on etsy.com (it may already have photos). Nexus's go-live is not built yet (E4).
+ */
+export const ETSY_DRAFT_NO_LIVE = 'Nexus cannot set an Etsy draft live yet; going live comes in a later Nexus update.'
+/** E3 — the Status cell's sentence of a listing that is a draft on Etsy (Nexus's, or one made on etsy.com). */
+export const ETSY_DRAFT_STATE = `A draft on Etsy: buyers cannot see it. ${ETSY_DRAFT_NO_LIVE}`
+/** E3 — Inactive (pause) on an Etsy draft: a draft is not visible, so there is nothing to pause. */
+export const ETSY_DRAFT_NO_PAUSE = 'A draft on Etsy is not visible to buyers, so there is nothing to pause.'
 export const NEW_LISTING_NOT_AVAILABLE = (channel: string) => `Publishing to ${channel} from Nexus is not available yet.`
 export const SHOPIFY_NEW_VARIATION = 'Shopify creates the whole product. Choose its status on the main row.'
 export const NEW_LISTING_ALIAS = 'An edit never creates an alias listing. Add this product to the listing alias first.'
@@ -470,16 +495,20 @@ export function newListingChoice(input: NewListingChoiceInput): { target: NewLis
 /**
  * The cell's sentence for a new row's choice: what Publish does, and where the choice comes from when nobody set it here.
  * A row Nexus deleted that stays off says so in the delete's own words ("Deleted on Amazon · IT on 4 Oct. To list it
- * again, set Status to Active and Publish."). `channel` ETSY: Active and Inactive read `ETSY_NEW_ROW_SENTENCE` (E1 sends
- * nothing to Etsy).
+ * again, set Status to Active and Publish."). `channel` ETSY: a new variation of a listing on Etsy (`listingOnChannel`)
+ * reads `ETSY_NEW_VARIATION_ACTIVE` or `ETSY_NEW_VARIATION_INACTIVE`; a row of a listing not on Etsy reads
+ * `ETSY_NEW_ROW_SENTENCE` for Inactive (E3: Publish creates the listing on Etsy as a draft) and the refusal
+ * `ETSY_NEW_ACTIVE_NEEDS_PHOTO` for an Active stored earlier (the review refuses it; the Status offers no Active).
  */
 export function newListingSentence(choice: { target: NewListingTarget; source: NewListingSource },
-  options: { includedByDefault?: boolean; deleted?: Pick<ListingDeletion, 'where' | 'at' | 'unlinked'> | null; now?: number; channel?: string } = {}): string {
+  options: { includedByDefault?: boolean; deleted?: Pick<ListingDeletion, 'where' | 'at' | 'unlinked'> | null; now?: number; channel?: string; listingOnChannel?: boolean } = {}): string {
   // An unlinked row is never listed as new (Publish holds it): every choice says why, in the unlink's own words.
   if (options.deleted?.unlinked) return choice.target === 'not_listed' ? deletedStatusReason(options.deleted, options.now) : deletedPublishSkip(options.deleted, options.now)
   if (options.deleted && choice.target === 'not_listed' && choice.source !== 'main') return deletedStatusReason(options.deleted, options.now)
   const etsy = String(options.channel ?? '').toUpperCase() === 'ETSY' && choice.target !== 'not_listed'
-  const what = etsy ? ETSY_NEW_ROW_SENTENCE : (options.deleted ? RELIST_SENTENCE : NEW_LISTING_SENTENCE)[choice.target]
+  const etsyWhat = !options.listingOnChannel ? (choice.target === 'active' ? ETSY_NEW_ACTIVE_NEEDS_PHOTO : ETSY_NEW_ROW_SENTENCE)
+    : choice.target === 'inactive' ? ETSY_NEW_VARIATION_INACTIVE : ETSY_NEW_VARIATION_ACTIVE
+  const what = etsy ? etsyWhat : (options.deleted ? RELIST_SENTENCE : NEW_LISTING_SENTENCE)[choice.target]
   if (choice.source === 'main') return `${what} (It follows the main product's choice; set this row to choose for it.)`
   if (choice.source === 'default' && choice.target === 'not_listed' && options.includedByDefault === false)
     return `${what} (A variation with no listing here is left out until you choose Active or Inactive for it.)`
@@ -493,8 +522,8 @@ export function newListingSentence(choice: { target: NewListingTarget; source: N
  * checked when choosing and when sending). Shopify: all three on the main row (the product's status); a variation
  * follows the main row; a family split into colour products is the Shopify colour lane's. Etsy, a listing not on Etsy
  * yet: Inactive (an Etsy draft) and Not listed; Active waits for photos (E1, Owner D1 = A). Etsy, a new variation of a
- * listing on Etsy (`listingOnChannel`): Active (it joins the listing) and Not listed; Inactive is refused (one Etsy
- * variation cannot be hidden). Other channels: none.
+ * listing on Etsy (`listingOnChannel`): Active (it joins the listing for sale), Inactive (it joins hidden, D6) and Not
+ * listed. Other channels: none.
  * A row with no listing in an alias destination: none (an edit never creates an alias listing).
  */
 export function newListingOptions(model: ListingModel, facts: CapabilityFacts = {}, channelLabel = 'this channel'): StatusOption[] {
@@ -517,7 +546,7 @@ export function newListingOptions(model: ListingModel, facts: CapabilityFacts = 
   }
   const notListedWarning = facts.isMain ? NOT_LISTED_MAIN_WARNING : null
   if (channel === 'ETSY') return facts.listingOnChannel
-    ? [option('active', null, { sentence: ETSY_NEW_VARIATION_ACTIVE }), option('inactive', ETSY_VARIATION_CANNOT_HIDE), option('not_listed', null, { warning: notListedWarning })]
+    ? [option('active', null, { sentence: ETSY_NEW_VARIATION_ACTIVE }), option('inactive', null, { sentence: ETSY_NEW_VARIATION_INACTIVE }), option('not_listed', null, { warning: notListedWarning })]
     : [option('active', ETSY_NEW_ACTIVE_NEEDS_PHOTO), option('inactive', null, { sentence: ETSY_NEW_DRAFT }), option('not_listed', null, { warning: notListedWarning })]
   let inactive = option('inactive', null)
   if (channel === 'EBAY') {

@@ -125,7 +125,7 @@ export function etsyProductSpec(locale?: string): ChannelSpec {
   fields.push(currency); coverage.price.push(currency.key)
   if (locale) for (const key of ['title', 'description', 'tags']) {
     const f = byKey.get(key)
-    if (f) { f.channelStore = pa('_etsyInformationLocales', locale, key); f.helpText = `${f.helpText ?? ''} Saved as a Nexus draft for ${locale}. Etsy translation delivery is not connected to this save.`.trim() }
+    if (f) { f.channelStore = pa('_etsyInformationLocales', locale, key); f.helpText = `${f.helpText ?? ''} Saved as a Nexus draft for ${locale}. Publish sends it to Etsy: as the listing's own text when ${locale} is its first language, otherwise as its ${locale} translation, when the Etsy shop offers ${locale} and the translation has a title and a description.`.trim() }
   }
   Object.assign(byKey.get('language')!, { editable: false, readOnlyReason: 'Original listing language reported by Etsy. Use the content language selector for translations.', helpText: 'Original listing language reported by Etsy.' })
   return makeSpec('*', fields, coverage)

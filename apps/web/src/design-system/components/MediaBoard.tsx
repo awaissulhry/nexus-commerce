@@ -7,6 +7,7 @@ import { cdnFit } from '../lib/cdn-image'
 import { MediaTypeIcon, mediaImageUrl } from './MediaPreview'
 import { useSortableDrag } from './useSortableDrag'
 import { previewIndex } from '../lib/sortable'
+import { useHorizontalOverflow } from './useHorizontalOverflow'
 
 /**
  * MediaBoard — several ordered photo sets on one board (images rebuild P3b; DS-GAPS 2026-09-27).
@@ -114,6 +115,9 @@ export function MediaBoard({ label, rows, onMove, onDropExternal, externalType =
   const editable = (row: MediaBoardRow | undefined) => !!row && !disabled && row.editable !== false
   // Slots mode: every position is a named slot; empty ones show up to the row's capacity (at least the named ones).
   const slotted = !!slots && !live
+  // Slots mode scrolls sideways as one: while it does, the board keeps its scrollbar in a band under the last row
+  // (components.css), off that row's frame and captions.
+  useHorizontalOverflow(board, { enabled: slotted })
   const slotNames = (row: MediaBoardRow) => row.slots ?? slots ?? []
   const slotName = (row: MediaBoardRow, index: number) => slotNames(row)[index] ?? String(index + 1)
   const emptySlots = (row: MediaBoardRow) => !slotted ? 0

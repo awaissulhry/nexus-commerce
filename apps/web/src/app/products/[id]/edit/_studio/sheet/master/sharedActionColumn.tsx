@@ -64,9 +64,9 @@ const QUIET_HINT = 'Publish sends only the fields you changed.'
 
 /**
  * What Partial update does across a product's markets ON the channel, where some market's Partial update carries the
- * channel scope's own note (D5, D13: a product already on Shopify — `SHOPIFY_EXISTING_NOT_YET` —, Etsy —
- * `ETSY_FIELDS_NOT_SENT`): the note alone when every market shares it; otherwise each note after the markets it applies
- * to, then "Other markets: Publish sends only the fields you changed.". Null when no market has a note (the usual hint).
+ * channel scope's own note (D5: a product already on Shopify — `SHOPIFY_EXISTING_NOT_YET`): the note alone when every
+ * market shares it; otherwise each note after the markets it applies to, then "Other markets: Publish sends only the
+ * fields you changed.". Null when no market has a note (the usual hint).
  */
 export function sharedPartialHint(listed: readonly PublishActionCell[]): string | null {
   const byNote = new Map<string, string[]>()

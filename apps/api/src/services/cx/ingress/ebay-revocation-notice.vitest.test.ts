@@ -76,6 +76,18 @@ describe('the documented eBay revocation envelope', () => {
     await expect(identity(input)).rejects.toMatchObject({ reason: 'envelope_invalid' })
   })
 
+  it('reads each topic\'s seller only from its own documented field', async () => {
+    const order = { metadata: { topic: 'ORDER_CONFIRMATION', schemaVersion: '1.0' },
+      notification: { notificationId: 'order-notice-1', data: { user: { userId: 'order-seller', username: 'order-name' }, order: { orderId: 'o-1' } } } }
+    expect(await identity(order)).toEqual({ notificationId: 'order-notice-1', topic: 'ORDER_CONFIRMATION', userId: 'order-seller' })
+    // An order notice with only the account topics' flat field has no seller; nothing is guessed.
+    expect(await identity({ ...order, notification: { ...order.notification, data: { userId: 'flat-seller', order: { orderId: 'o-1' } } } }))
+      .toEqual({ notificationId: 'order-notice-1', topic: 'ORDER_CONFIRMATION', userId: null })
+    // And revocation never reads the order topic's nested field.
+    const input = valid(); delete (input.notification.data as any).userId; (input.notification.data as any).user = { userId: 'nested-seller' }
+    expect(await identity(input)).toEqual({ notificationId: 'notice-1', topic: 'AUTHORIZATION_REVOCATION', userId: null })
+  })
+
   it('uses the same strict calendar validation when storing publication time', async () => {
     const { readEbayPublicationTime } = await import('./ebay-revocation-notice.js')
     const input = valid(); input.notification.publishDate = '2026-02-30T01:00:00Z'

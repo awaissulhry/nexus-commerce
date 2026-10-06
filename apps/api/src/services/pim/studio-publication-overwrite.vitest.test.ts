@@ -125,6 +125,21 @@ it('covers mixed existing and new products without querying a new listing or exc
   expect(m.drift.mock.calls[0][0].where).toEqual({ channelListingId: { in: ['selected-parent'] } })
 })
 
+it('E5a — reads Etsy\'s 4-hourly content record on the main row; a variation has none and reads not_read', async () => {
+  const etsy = 'etsy-content'
+  m.drift.mockResolvedValue([row({ [etsy]: clock({ differing: 1, notCompared: 9 }) }, [field('title', lastRead, etsy), field('quantity', lastRead, 'other-source')])])
+  const result = await readPublicationOverwrite(facts('ETSY'))
+  expect(m.drift.mock.calls[0][0].where).toEqual({ channelListingId: { in: ['selected-parent', 'selected-child'] } })
+  expect(result.requiresConfirmation).toBe(true)
+  expect(result.products[0]).toMatchObject({ status: 'compared', checkedAt: lastRead, differing: 1, notCompared: 9, omittedDifferences: 0,
+    fields: [{ field: 'title', nexusAtRead: 'Nexus at the read', channelAtRead: 'Channel at the read', checkedAt: lastRead }] })
+  expect(result.products[1]).toMatchObject({ status: 'not_read', checkedAt: null, notCompared: null, fields: [],
+    reason: 'No valid saved content-read status is available for this listing.' })
+  // Another channel's content source on the same row is never Etsy evidence.
+  m.drift.mockResolvedValue([row({ 'ebay-content': clock({ differing: 1 }) }, [field('Title', lastRead, 'ebay-content')])])
+  expect((await readPublicationOverwrite(facts('ETSY'))).products[0]).toMatchObject({ status: 'not_read', differing: 0, fields: [] })
+})
+
 it('reports Shopify content observations as unknown and does not query stock drift', async () => {
   const result = await readPublicationOverwrite(facts('SHOPIFY'))
   expect(result.requiresConfirmation).toBe(true)

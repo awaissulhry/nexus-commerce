@@ -133,6 +133,14 @@ const TRADING_CODES: Record<string, GatewayErrorClass> = {
   '488': 'conflict', '21060': 'conflict',
 }
 
+/**
+ * 2026-10-06 — the class the ONE Trading table gives an eBay error code, or undefined for a code it does not name. For a
+ * caller that holds eBay's codes already (a Trading listing's stock row reads them from every error block), so it reads
+ * this table instead of keeping a copy.
+ */
+export const ebayTradingCodeClass = (code: string): GatewayErrorClass | undefined =>
+  Object.prototype.hasOwnProperty.call(TRADING_CODES, code.trim()) ? TRADING_CODES[code.trim()] : undefined
+
 /** eBay Trading answers in XML, with its errors inside an HTTP 200. */
 function ebayTrading(status: number, text: string): ChannelVerdict {
   const code = /<ErrorCode>([^<]+)<\/ErrorCode>/.exec(text)?.[1] ?? null

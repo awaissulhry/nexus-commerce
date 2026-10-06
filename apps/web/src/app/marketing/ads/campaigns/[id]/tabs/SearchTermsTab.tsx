@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../_grid/AdsDataGrid'
-import { num, eur, int, METRIC_TIPS } from '../../_grid/format'
+import { num, eur, int, METRIC_TIPS, acosRank, acosFilterValue } from '../../_grid/format'
 import { pickMetricFilters } from '../../_grid/filters'
 import { SearchTermActionModal } from './SearchTermActionModal'
 import type { CampaignDetailData } from '../CampaignDetail'
@@ -59,7 +59,7 @@ export function SearchTermsTab({ campaign, dateRange }: { campaign: CampaignDeta
     { key: 'cpc', label: 'CPC', tip: METRIC_TIPS.cpc, render: (r) => (num(r.clicks) ? eur(spendOf(r) / num(r.clicks)) : '—'), sortValue: (r) => (num(r.clicks) ? spendOf(r) / num(r.clicks) : 0), filterValue: (r) => (num(r.clicks) ? spendOf(r) / num(r.clicks) : 0), total: (vr) => { const T = tot(vr); return T.clicks ? eur(T.spend / T.clicks) : '—' } },
     { key: 'orders', label: 'Orders', tip: METRIC_TIPS.ppcOrders, render: (r) => int(r.orders), sortValue: (r) => num(r.orders), filterValue: (r) => num(r.orders), total: (vr) => { const T = tot(vr); return int(T.orders) } },
     { key: 'sales', label: 'Sales', tip: METRIC_TIPS.sales, render: (r) => eur(salesOf(r)), sortValue: salesOf, filterValue: salesOf, total: (vr) => { const T = tot(vr); return eur(T.sales) } },
-    { key: 'acos', label: 'ACoS', tip: METRIC_TIPS.acos, render: (r) => (salesOf(r) ? `${(spendOf(r) / salesOf(r) * 100).toFixed(2)}%` : '—'), sortValue: (r) => (salesOf(r) ? spendOf(r) / salesOf(r) * 100 : 0), filterValue: (r) => (salesOf(r) ? spendOf(r) / salesOf(r) * 100 : 0), total: (vr) => { const T = tot(vr); return T.sales ? `${(T.spend / T.sales * 100).toFixed(2)}%` : '—' } },
+    { key: 'acos', label: 'ACoS', tip: METRIC_TIPS.acos, render: (r) => (salesOf(r) ? `${(spendOf(r) / salesOf(r) * 100).toFixed(2)}%` : '—'), sortValue: (r) => acosRank(null, spendOf(r), salesOf(r)), filterValue: (r) => acosFilterValue(null, spendOf(r), salesOf(r)), total: (vr) => { const T = tot(vr); return T.sales ? `${(T.spend / T.sales * 100).toFixed(2)}%` : '—' } },
     { key: 'roas', label: 'ROAS', tip: METRIC_TIPS.roas, render: (r) => (spendOf(r) ? (salesOf(r) / spendOf(r)).toFixed(2) : '—'), sortValue: (r) => (spendOf(r) ? salesOf(r) / spendOf(r) : 0), filterValue: (r) => (spendOf(r) ? salesOf(r) / spendOf(r) : 0), total: (vr) => { const T = tot(vr); return T.spend ? (T.sales / T.spend).toFixed(2) : '—' } },
     { key: 'cvr', label: 'CVR', tip: METRIC_TIPS.cvr, render: (r) => (num(r.clicks) ? `${(num(r.orders) / num(r.clicks) * 100).toFixed(2)}%` : '—'), sortValue: (r) => (num(r.clicks) ? num(r.orders) / num(r.clicks) * 100 : 0), filterValue: (r) => (num(r.clicks) ? num(r.orders) / num(r.clicks) * 100 : 0), total: (vr) => { const T = tot(vr); return T.clicks ? `${(T.orders / T.clicks * 100).toFixed(2)}%` : '—' } },
   ], [])

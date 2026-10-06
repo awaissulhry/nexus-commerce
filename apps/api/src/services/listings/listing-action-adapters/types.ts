@@ -4,7 +4,7 @@
  * calls for those rows, through the channel gateway, and writes the listing facts the channel confirmed — on the exact
  * coordinate rows it was given, never another account's or alias's.
  */
-import type { ListingAction, ListingActionDestination, ListingActionRowOutcome } from '@nexus/shared/listing-actions'
+import type { ActionReach, ListingAction, ListingActionDestination, ListingActionRowOutcome } from '@nexus/shared/listing-actions'
 
 /** One listing row of the family on the destination, as the engine read it (fresh, inside the run). */
 export interface ActionListing {
@@ -40,6 +40,18 @@ export interface ActionContext {
   familySku: string
   /** Every listing of the family on the destination — what an item- or product-level change also updates. */
   family: ActionListing[]
+  /**
+   * E2 (D6) — how far the plan reaches. Etsy: `row` = Pause/Resume of ONE variation (hide/show its offering on the
+   * live listing); otherwise the whole listing. Unset = the capability's own reach.
+   */
+  reach?: ActionReach
+  /**
+   * E2 (D6, review m1) — Etsy: what the PREVIEW decided (hide/show variations, or the listing's state), stored with it.
+   * The run refuses when the listing no longer matches it, rather than changing meaning silently. Unset = not decided.
+   */
+  etsyLevel?: 'variation' | 'listing'
+  /** E2 (D6, review m8) — the caller named listings, not variations (Claude's close/reopen-listing): never variation level. */
+  wholeListing?: boolean
 }
 
 export interface AdapterRowResult {

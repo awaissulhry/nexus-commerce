@@ -9,10 +9,11 @@
  */
 import prisma from '../../db.js'
 import { Prisma } from '@prisma/client'
-import { AMS_DAILY_MARKER, EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
+import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 import { ntbIsPublishedFor } from '../ads-core/metrics-math.js'
 // ADM-P6/DC — THE definition of ad-attributed sales (see ads-core/ad-sales.ts).
 import { adSalesCents } from '../ads-core/ad-sales.js'
+import { campaignDailyWhere } from './ads-campaign-window.js'
 
 /** AM-14 — how far back the freshness read looks: a market silent for longer is stale, and says nothing here. */
 const FRESHNESS_LOOKBACK_DAYS = 60
@@ -182,9 +183,12 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
     // weightedIS above; this one Amazon publishes per day, so a mean over the reported days is
     // the faithful reading.
     const _avg = { ntbOrdersRate14d: true } as const
+    // AM-6 — the two buckets are defined once (`campaignDailyWhere`), and the Portfolios overview
+    // sums the same rows for the same window, so a portfolio's spend is its campaigns' spend here.
+    const dailyWhere = campaignDailyWhere(ids, extIds, dateFilter)
     const [byLocal, byExt] = await Promise.all([
-      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: { entityType: 'CAMPAIGN', localEntityId: { in: ids }, date: dateFilter }, _sum, _count, _avg }),
-      prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: { entityType: 'CAMPAIGN', entityId: { in: extIds }, localEntityId: null, reportRunId: { not: AMS_DAILY_MARKER }, date: dateFilter }, _sum, _count, _avg }),
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['localEntityId'], where: dailyWhere.byLocal, _sum, _count, _avg }),
+      prisma.amazonAdsDailyPerformance.groupBy({ by: ['entityId'], where: dailyWhere.byExt, _sum, _count, _avg }),
     ])
     const mapL = new Map(byLocal.map((r) => [r.localEntityId, r._sum]))
     const mapE = new Map(byExt.map((r) => [r.entityId, r._sum]))
@@ -374,6 +378,7 @@ export async function listAmazonCampaigns(q: AmazonCampaignListQuery) {
         clicks: n(a?.clicks) + n(b?.clicks) + (t?.clicks ?? 0),
         spend: spendCents / 100,
         sales: salesCents / 100,
+        // `acos` is a FRACTION (0.38 = 38 %), null when nothing sold; `roas` a plain ratio.
         acos: salesCents > 0 ? spendCents / salesCents : null,
         roas: spendCents > 0 ? salesCents / spendCents : null,
         ppcOrders,

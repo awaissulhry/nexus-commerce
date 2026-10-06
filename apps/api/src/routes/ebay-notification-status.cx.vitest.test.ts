@@ -48,6 +48,11 @@ vi.mock('../services/cx/connectors/ebay/notifications.js', async (importOriginal
   getEbayDestinations: m.destinations,
   getEbaySubscriptions: m.subscriptions,
 }))
+// The per-account view has its own tests (seller-subscriptions, setup-gate); here it reads no database.
+vi.mock('../services/cx/connectors/ebay/seller-subscriptions.js', () => ({
+  EBAY_ORDER_TOPIC: 'ORDER_CONFIRMATION',
+  ebaySellerSubscriptionStatus: async () => ({ topicId: 'ORDER_CONFIRMATION', armed: false, accounts: [] }),
+}))
 
 const OUR_ENDPOINT = 'https://api.example.test/api/webhooks/ebay-notification'
 const OURS = { destinationId: 'dest-1', endpoint: OUR_ENDPOINT, status: 'ENABLED' }

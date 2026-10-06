@@ -21,6 +21,7 @@ import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
 import { enabledRank } from './_grid/enabledRank'
+import { acosRank } from './_grid/format'
 import { AdsDataGrid, type GridColumn, type GridPrefs } from './_grid/AdsDataGrid'
 import { AdManagerGraph } from './AdManagerGraph'
 import { reportFreshnessText, type IntradayInfo, type MarketFreshness } from './reportFreshness'
@@ -581,10 +582,20 @@ const RANGE_FIELDS: Array<{ key: string; label: string; unit: '%' | '€' | '' }
   { key: 'cvr', label: 'CVR', unit: '%' }, { key: 'impressions', label: 'Impressions', unit: '' },
   { key: 'dailyBudget', label: 'Daily Budget', unit: '' },
 ]
+/**
+ * The number a metric column sorts and filters by. NaN means "this row has no value" — the filter
+ * never matches it and the sort sinks it in both directions (see `filtered` / `sorted`).
+ */
 function metricVal(c: Camp, key: string): number {
   const spend = num(c.spend), sales = num(c.sales), clicks = num(c.clicks), impr = num(c.impressions), orders = num(c.ppcOrders)
   switch (key) {
-    case 'acos': { const a = c.acos != null ? Number(c.acos) : (sales ? spend / sales : 0); return a <= 1 ? a * 100 : a }
+    /**
+     * 🔴 AM-11 — the display above stopped guessing in ADM-H P7; the filter and sort had kept the
+     * guess (`a <= 1 ? a * 100 : a`, so 150 % filtered as 1.5 %) and mapped "spend, no sales" to 0 %,
+     * the best value: "ACoS max 30 %" kept every campaign that spent and sold nothing. `c.acos` is a
+     * FRACTION (`/advertising/campaigns`); the one shared rule lives in `acosRank`.
+     */
+    case 'acos': return acosRank(c.acos, spend, sales) ?? Number.NaN
     case 'roas': return c.roas != null ? Number(c.roas) : (spend ? sales / spend : 0)
     case 'spend': return spend; case 'sales': return sales; case 'clicks': return clicks; case 'ppcOrders': return orders
     case 'cpc': return clicks ? spend / clicks : 0; case 'ctr': return impr ? (clicks / impr) * 100 : 0
@@ -618,6 +629,7 @@ function metricVal(c: Camp, key: string): number {
   }
   return 0
 }
+const blankIfNaN = (v: number): number | null => (Number.isNaN(v) ? null : v)
 type Range = { min: string; max: string }
 
 // ── filter metadata (Helium 10 Ad Manager match) ────────────────────────────
@@ -1546,6 +1558,8 @@ export function CampaignsGrid() {
       for (const f of RANGE_FIELDS) {
         const r = ranges[f.key]; if (!r || (!r.min && !r.max)) continue
         const v = metricVal(c, f.key)
+        // Same rule as the shared grid's filterRows: a row with no value never matches a set range.
+        if (Number.isNaN(v)) return false
         if (r.min && v < Number(r.min)) return false
         if (r.max && v > Number(r.max)) return false
       }
@@ -1786,7 +1800,7 @@ export function CampaignsGrid() {
     // Every header sorted before (metrics numerically, `status` as text, anything else through
     // metricVal's 0 — a stable no-op), so every column stays sortable. The grid's comparator is
     // inert in chromeless mode — `sorted` below IS the order — but the value is the one it sorts by.
-    sortValue: (c) => (pc.key === 'status' ? c.status : metricVal(c, pc.key)),
+    sortValue: (c) => (pc.key === 'status' ? c.status : blankIfNaN(metricVal(c, pc.key))),
     render: (c) => (pc.metric ? renderCol(c, pc.key) : settingsCellRef.current(c, pc.key)),
   })), [physical])
   // Controlled preferences: the visible PHYSICAL keys in order (the cluster already expanded),
@@ -1824,7 +1838,10 @@ export function CampaignsGrid() {
     return [...filtered].sort((a, b) => {
       if (sort.key === 'name') return a.name.toLowerCase() < b.name.toLowerCase() ? -dir : a.name.toLowerCase() > b.name.toLowerCase() ? dir : 0
       if (sort.key === 'status') return a.status < b.status ? -dir : a.status > b.status ? dir : 0
-      return (metricVal(a, sort.key) - metricVal(b, sort.key)) * dir
+      // KT.3 — a row with no value sinks to the bottom in BOTH directions, decided before `dir`.
+      const va = metricVal(a, sort.key), vb = metricVal(b, sort.key)
+      if (Number.isNaN(va) || Number.isNaN(vb)) return Number.isNaN(va) ? (Number.isNaN(vb) ? 0 : 1) : -1
+      return (va - vb) * dir
     })
   }, [filtered, sort])
   // The header is the grid's: a click arrives through `onSortChange` (asc → desc → clear, the
