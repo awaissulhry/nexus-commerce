@@ -489,14 +489,15 @@ describe('AA-W2-4 — watch: the full check auto would make, recorded on the req
     for (const brake of ['stop-automation', 'turn-down-automation', 'set-ad-guardrail']) {
       expect(levelsFor(getTool(brake)!), brake).toEqual(['off', 'ask', 'confirm', 'auto'])
     }
-    expect(levelsFor(getTool('turn-up-automation')!)).toEqual(['off', 'ask', 'confirm'])
+    // AA-W2-11 — a tool whose ceiling is confirm (turn-up-automation, the earlier example, may now run by rule).
+    expect(levelsFor(getTool('steer-fleet')!)).toEqual(['off', 'ask', 'confirm'])
     expect(await inside(() => setClaudeRule(actor(), 'stop-automation', { level: 'watch', code: code() })))
       .toMatchObject({ ok: false, status: 400, error: 'stop-automation cannot be watched: it is a brake, so it runs by rule or waits for a person.' })
-    expect(await inside(() => setClaudeRule(actor(), 'turn-up-automation', { level: 'watch', code: code() })))
-      .toMatchObject({ ok: false, status: 400, error: 'turn-up-automation cannot be watched: only a kind that may run by rule (auto) can be.' })
+    expect(await inside(() => setClaudeRule(actor(), 'steer-fleet', { level: 'watch', code: code() })))
+      .toMatchObject({ ok: false, status: 400, error: 'steer-fleet cannot be watched: only a kind that may run by rule (auto) can be.' })
     // Written straight into the row (a hand edit): a watch the tool does not allow reads as the level below it.
-    await inside(() => db().agentTool.create({ data: { name: 'turn-up-automation', riskTier: 'medium', requiresApproval: true, claudeTrust: 'watch' } }))
-    expect(await inside(() => claudeRuleOf('turn-up-automation'))).toMatchObject({ level: 'confirm', stored: 'watch', ceiling: 'confirm' })
+    await inside(() => db().agentTool.create({ data: { name: 'steer-fleet', riskTier: 'medium', requiresApproval: true, claudeTrust: 'watch' } }))
+    expect(await inside(() => claudeRuleOf('steer-fleet'))).toMatchObject({ level: 'confirm', stored: 'watch', ceiling: 'confirm' })
     expect((await inside(() => listClaudeRules())).tools.find((t) => t.name === 'stop-automation')).toMatchObject({ ceiling: 'auto', levels: ['off', 'ask', 'confirm', 'auto'] })
   })
 
