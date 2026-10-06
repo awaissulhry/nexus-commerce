@@ -51,7 +51,9 @@ const treatedAs = new Map<string, ClaudeActionType>()
  * A playbook START puts campaigns on the allowlist and their planned bids back (restore and allowlist); its STOP is a stop.
  */
 export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeActionType | readonly ClaudeActionType[] | null>>>> = {
-  'apply-ads-playbook': { build: 'create', adopt: null, start: ['restore', 'allowlist'], stop: 'stop' },
+  // PB-10 — a sync builds slots and adds keywords and product ads: the create kind; its negatives alone are a kind of their
+  // own (op sync-negatives).
+  'apply-ads-playbook': { build: 'create', adopt: null, start: ['restore', 'allowlist'], stop: 'stop', sync: 'create', 'sync-negatives': 'negative' },
 }
 
 /** Every kind of ad action a tool is for these args (its own kind first); empty: the strategy never narrows it. */

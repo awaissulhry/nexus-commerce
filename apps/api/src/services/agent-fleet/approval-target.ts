@@ -804,6 +804,22 @@ const READERS: Record<string, Reader> = {
         ],
       }
     }
+    // PB-10 — a sync: what it adds, part by part (it never removes anything).
+    if (p.op === 'sync' || p.op === 'sync-negatives') {
+      const t = (p.totals ?? {}) as Record<string, unknown>
+      const line = (label: string, n: unknown, what: string) => (num(n) ? [{ label, from: null, to: `${plural(num(n)!, what)}` }] : [])
+      return {
+        channel: 'AMAZON',
+        market: marketOf(p.market),
+        changes: [
+          ...line('Negatives', t.negatives, 'negative'),
+          ...line('Keywords and targets', t.positives, 'keyword or target at the 2-cent floor'),
+          ...line('Product ads', t.productAds, 'product ad'),
+          ...line('Slots built', t.slots, 'campaign at the 2-cent floor, off the allowlist'),
+          ...line('Compiled parts', t.artifacts, 'part saved again in Nexus'),
+        ],
+      }
+    }
     const campaigns = recs(p.campaigns)
     return {
       channel: 'AMAZON',

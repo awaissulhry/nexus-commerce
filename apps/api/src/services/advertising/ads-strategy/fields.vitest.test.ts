@@ -167,6 +167,8 @@ describe('the registry', () => {
   it('PB-5a — a tool of several ops: each op its own kind (null: never narrowed); an op not listed, or no args, the tool\'s kind', () => {
     expect(actionOfTool('apply-ads-playbook', { op: 'build' })).toBe('create')
     expect(actionOfTool('apply-ads-playbook', { op: 'adopt' })).toBeNull()
+    expect(actionOfTool('apply-ads-playbook', { op: 'sync' })).toBe('create')
+    expect(actionOfTool('apply-ads-playbook', { op: 'sync-negatives' })).toBe('negative')
     expect(actionOfTool('apply-ads-playbook', { op: 'something-else' })).toBe('create')
     expect(actionOfTool('apply-ads-playbook')).toBe('create')
     // PB-5b — a start is two kinds, its own (restore) first; a stop is a stop.

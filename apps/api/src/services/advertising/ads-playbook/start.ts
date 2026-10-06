@@ -12,7 +12,9 @@
  *               stays where it is, named
  *             3 the placements the build deferred (build run options `deferredPlacements`), only onto a campaign that
  *               holds none: placements set since the build are left, named
- *           then the portfolio read-back repair (settleLaunchPortfolios: it passes the allowlist now), the playbook's
+ *           then PB-10: the bids a playbook sync planned for the keywords and targets it added at the floor
+ *           (sync.ts giveBackSyncedBids), on every linked slot campaign — adopted ones too (a START of some slots: those
+ *           only) — after their floor is lifted; then the portfolio read-back repair (settleLaunchPortfolios: it passes the allowlist now), the playbook's
  *           artifacts switched on (ARTIFACT_COMPILERS setEnabled: hourly plans, harvest and isolation rules — never
  *           over a person's switch-off), and the row's state RUNNING. A campaign PAUSED at Amazon is prepared but never
  *           enabled: a person enables it in Nexus. A campaign the playbook ADOPTED is the business's own: its
@@ -97,6 +99,8 @@ export interface StartPlan {
   floorsTaken: Array<{ slot: string; campaignId: string; name: string; origin: 'built' | 'adopted' }>
   /** START: STOP_FLOOR_KIND links whose floor is gone or no longer the stop's: dropped. */
   staleFloorLinks: string[]
+  /** PB-10 — START: the keywords and targets a sync added at the floor that get their planned bid (`startBidCents`, money). */
+  syncedBids: Array<{ slot: string; campaignId: string; text: string; startBidCents: number }>
   /** Every linked slot (the artifacts' context). */
   slots: Array<{ key: string; campaignId: string; adGroupId: string | null; origin: 'built' | 'adopted' }>
   artifactLinks: StoredArtifactLink[]
@@ -281,7 +285,18 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
       })
     }
   }
-  if (!campaigns.length && !heldFloors.length && !problems.length) {
+  // PB-10 — the bids a sync planned (sync.ts): only START gives them, on every linked slot campaign (adopted too; a START
+  // of some slots, on those only), each campaign taken off its floor first.
+  let syncedBids: StartPlan['syncedBids'] = []
+  if (args.op === 'start') {
+    const { syncedBidsToGiveBack } = await import('./sync.js')
+    const slotOf = new Map(mine.map((l) => [l.refId, l.key]))
+    const scope = asked ? campaigns.map((c) => c.campaignId) : mine.map((l) => l.refId)
+    const lifting = [...campaigns.filter((c) => c.bids.does === 'restore').map((c) => c.campaignId), ...heldFloors.map((h) => h.campaignId)]
+    syncedBids = (await syncedBidsToGiveBack(row.id, { campaignIds: scope, lifting }))
+      .map((b) => ({ slot: slotOf.get(b.campaignId) ?? '?', campaignId: b.campaignId, text: b.text, startBidCents: b.plannedCents }))
+  }
+  if (!campaigns.length && !heldFloors.length && !syncedBids.length && !problems.length) {
     problems.push(mine.some((l) => l.origin === 'built')
       ? `no campaign the playbook built is at Amazon${asked ? ' among the slots asked' : ''}`
       : `the playbook built no campaign for ${product.sku} in ${market} yet (adopted campaigns are the business's own): build it first (apply-ads-playbook op build)`)
@@ -292,10 +307,10 @@ export async function planStart(args: { op: ApplyOp; market: string; productId?:
     op: args.op, market, product: { productId: product.id, sku: product.sku },
     playbook: { id: row.id, version: row.version, state: row.state, label: row.label },
     compiledTemplateVersion: resolved.template.value?.version ?? null,
-    doc, nameToken, campaigns, untouched, heldFloors, floorsTaken: [], staleFloorLinks,
+    doc, nameToken, campaigns, untouched, heldFloors, floorsTaken: [], staleFloorLinks, syncedBids,
     slots: mine.map((l) => ({ key: l.key, campaignId: l.refId, adGroupId: l.adGroupId, origin: l.origin === 'adopted' ? 'adopted' as const : 'built' as const })),
     artifactLinks, artifacts: [], artifactErrors: [],
-    highestRestoredBidCents: Math.max(0, ...campaigns.map((c) => (c.bids.does === 'restore' ? c.bids.highestCents : 0)), ...heldFloors.map((h) => h.bids.highestCents)),
+    highestRestoredBidCents: Math.max(0, ...campaigns.map((c) => (c.bids.does === 'restore' ? c.bids.highestCents : 0)), ...heldFloors.map((h) => h.bids.highestCents), ...syncedBids.map((b) => b.startBidCents)),
     dailyBudgetCents: args.op === 'start'
       ? [...campaigns.filter((c) => c.spends), ...heldFloors.filter((h) => h.status === 'ENABLED')].reduce((sum, c) => sum + c.dailyBudgetCents, 0)
       : 0,
@@ -332,6 +347,8 @@ export interface ApplyOutcome {
   artifacts: string[]
   /** STOP: the slots whose hourly plan's floor it took over (START gives those bids back). */
   floorsHeld: string[]
+  /** PB-10 — START: the keywords and targets a sync added at the floor that got their planned bid. */
+  syncedBids?: number
   errors: string[]
   /** The row's state after the op. */
   state: string | null
@@ -420,6 +437,19 @@ export async function runStart(plan: StartPlan, run: ApplyRun, writer: PlaybookA
       else out.done.push(h.slot)
     } catch (e) { out.failed.push({ slot: h.slot, campaignId: h.campaignId, why: (e as Error).message.slice(0, 200) }) }
   }
+  // PB-10 — the bids a sync planned for what it added at the floor: one call per linked slot campaign, after its floor
+  // is lifted (one still at a floor gives none).
+  if (plan.syncedBids.length) {
+    const { giveBackSyncedBids } = await import('./sync.js')
+    out.syncedBids = 0
+    for (const campaignId of new Set(plan.syncedBids.map((b) => b.campaignId))) {
+      try {
+        const r = await giveBackSyncedBids(plan.playbook.id, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, campaignIds: [campaignId] })
+        out.syncedBids += r.given.length
+        for (const f of r.failed) out.errors.push(`"${f.text}": its planned bid was not taken (${f.why}); it stays at the floor until START runs again`)
+      } catch (e) { out.errors.push(`the planned bids of campaign ${campaignId}: ${(e as Error).message.slice(0, 160)}`) }
+    }
+  }
   // A floor the stop held that is gone (given back) or no longer the stop's: its link is dropped.
   const given = [...plan.staleFloorLinks, ...[...plan.campaigns, ...plan.heldFloors].map((c) => c.campaignId)]
   const gone = given.length ? await prisma.campaign.findMany({ where: { id: { in: given } }, select: { id: true, bidsSuppressedAt: true } }) : []
@@ -441,7 +471,7 @@ export async function runStart(plan: StartPlan, run: ApplyRun, writer: PlaybookA
   out.state = anyRuns
     ? await record(plan, 'RUNNING', writer, `start: ${out.done.length} campaign(s) started${out.failed.length ? `, ${out.failed.length} not` : ''}`, out.errors)
     : plan.playbook.state
-  if (!anyRuns) out.errors.push('no campaign the playbook built runs after this start: its hourly plans and rules stay off and the row\'s state is unchanged')
+  if (!anyRuns && plan.campaigns.length) out.errors.push('no campaign the playbook built runs after this start: its hourly plans and rules stay off and the row\'s state is unchanged')
   logger.info('[PB-5b] playbook start finished', { playbookId: plan.playbook.id, done: out.done.length, failed: out.failed.length, errors: out.errors.length })
   return out
 }
