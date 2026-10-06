@@ -75,7 +75,7 @@ export interface Suggestion {
 export type GroupKey = 'none' | 'rule' | 'campaign' | 'type'
 export type Status = 'pending' | 'applied' | 'dismissed' | 'expired' | 'muted'
 
-export const MARKETS = ['IT', 'DE', 'ES', 'FR']
+// Ads wave 4c (F3) — no market list here: the page offers the provider's `readMarkets` (from the connections).
 
 /**
  * H10's tab order. `ai` has no stored rows yet — the honest producer is the AI-goal /

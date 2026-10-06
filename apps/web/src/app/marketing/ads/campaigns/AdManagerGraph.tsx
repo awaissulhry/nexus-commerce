@@ -18,7 +18,7 @@
  * keeping, and each is now a capability of the shared chart rather than something only this
  * page has.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useChangeAnnotations, AnnotationToggle } from './ChangeAnnotations'
 import { MetricChart, MAX_PLOTTED, type ChartMetric } from '../_shared/MetricChart'
@@ -79,7 +79,11 @@ const STORE = 'h10-am-graph-metrics'
  * AM-10 — the graph draws the range the header's date picker holds, the same one the grid below it shows. It used to
  * take `rangePreset`, a header prop nothing ever wrote, so it was "last 7 days" whatever the picker said.
  */
-export function AdManagerGraph({ market, start, end }: { market: string; start: Date; end: Date }) {
+export function AdManagerGraph({ market, start, end, refreshKey = 0 }: {
+  market: string; start: Date; end: Date
+  /** AM-34 — the header's "Refresh view" bumps it: the graph re-reads past the API's read cache with the grid. */
+  refreshKey?: number
+}) {
   // The two persisted single choices become one persisted list. The defaults are the two the
   // dropdowns used to open on, so an operator who never touches the picker sees what they saw.
   const [selected, setSelected] = useState<string[]>(['spend', 'acos'])
@@ -107,19 +111,23 @@ export function AdManagerGraph({ market, start, end }: { market: string; start: 
   }
 
   const startStr = ymd(start), endStr = ymd(end)
+  const readKey = useRef(refreshKey)
 
   useEffect(() => {
     let abort = false
     setLoading(true)
     const params = new URLSearchParams({ startDate: startStr, endDate: endStr })
     if (market !== 'all') params.set('marketplace', market)
+    // Only the read the button caused skips the cache; a later market or date change reads as usual.
+    // (Marked as read only once the answer is in, so a cancelled read does not use the refresh up.)
+    if (refreshKey !== readKey.current) params.set('fresh', '1')
     fetch(`${getBackendUrl()}/api/advertising/trends?${params.toString()}`, { cache: 'no-store' })
       .then((r) => r.json())
-      .then((d) => { if (!abort) setRows((d?.rows ?? []) as TrendRow[]) })
+      .then((d) => { if (!abort) { setRows((d?.rows ?? []) as TrendRow[]); readKey.current = refreshKey } })
       .catch(() => { if (!abort) setRows([]) })
       .finally(() => { if (!abort) setLoading(false) })
     return () => { abort = true }
-  }, [market, startStr, endStr])
+  }, [market, startStr, endStr, refreshKey])
 
   // Every metric on every row: the chart picks the ticked ones out, so switching metrics is
   // free rather than a rebuild, and the trailing average is computed over the same values.

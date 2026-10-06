@@ -22,7 +22,8 @@ describe('CC-19 — launchable means a create can reach Amazon', () => {
   it('🔴 a production market with no checked Amazon limits is not launchable (it was)', () => {
     const l = launchability(conn({ code: 'UK' }))
     expect(l.launchable).toBe(false)
-    expect(l.short).toBe('no limits list')
+    expect(l.short).toBe('limits not known')
+    expect(l.whyNot).toMatch(/not known yet/)
   })
 
   it('sandbox and inactive connections stay not launchable, each with its reason', () => {

@@ -28,6 +28,8 @@ import { fetchMarketShare, fmtCount, fmtShare, type MarketShare, type ShareQuery
 import { Caveats, ProvenanceStrip, TabState } from './StrategyBits'
 import { SectionLayout, type SectionSpec } from '@/design-system/patterns/SectionLayout'
 import { useSections } from './useSections'
+import { useAdsMarketplace } from '../_shell/MarketplaceContext'
+import { preferredMarket } from '../_shell/adsMarkets'
 
 /**
  * GX.7 — the panels. `funnel` is locked: the four stages on one scale are what this tab IS, and
@@ -83,7 +85,10 @@ export function MarketShareTab({ market }: { market: string }) {
   // This feed has no all-markets grain that means anything: a share is per query per market, and
   // pooling four markets' impressions would invent a market nobody sells in. Default to Italy,
   // which holds 7,487 of the rows, and let the header switch.
-  const chosen = market === 'all' ? 'IT' : market
+  // AM-27 — Reporting no longer hands this tab "all" (it shows one market and the header names it); if it ever does,
+  // the preferred market Nexus reads, never a silent hard-coded one.
+  const { readMarkets } = useAdsMarketplace()
+  const chosen = market === 'all' ? preferredMarket(readMarkets) : market
 
   useEffect(() => {
     const ac = new AbortController()

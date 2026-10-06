@@ -361,9 +361,11 @@ export function ActivityTab() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: 'undone from the Control Room activity feed' }),
       })
-      const j = (await r.json()) as { ok?: boolean; reversed?: number; reason?: string }
+      const j = (await r.json()) as { ok?: boolean; reversed?: number; nothingToUndo?: boolean; reason?: string }
       const ok = r.ok && j.ok !== false && (j.reversed ?? 0) > 0
-      setUndoMsg({ id: c.id, ok, text: ok ? 'Reversed — the previous value is on its way back to Amazon.' : (j.reason ?? `Could not undo (${r.status}).`) })
+      // CM-22 — "Nothing to undo: …" is the server's answer for a change that left nothing to put back; it is shown as
+      // said, never as reversed.
+      setUndoMsg({ id: c.id, ok, text: ok ? 'Reversed — the previous value is on its way back to Amazon.' : (j.reason ?? (j.nothingToUndo ? 'Nothing to undo.' : `Could not undo (${r.status}).`)) })
       setConfirming(null)
       if (ok) await load()
     } catch (e) {

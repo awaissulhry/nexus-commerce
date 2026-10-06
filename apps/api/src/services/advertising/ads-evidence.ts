@@ -44,6 +44,8 @@ export interface AdWriteEvidence {
    * from the action log itself (ads-budget-giveback.ts).
    */
   giveBackOf?: string
+  /** 3A (Owner decided 2026-10-06) — "sent past <limit> by <person>": a person confirmed this write past his own limits. */
+  sentPastOwnLimits?: string
 }
 
 /**

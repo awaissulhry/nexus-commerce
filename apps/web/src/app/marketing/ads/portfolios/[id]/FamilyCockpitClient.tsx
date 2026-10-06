@@ -36,6 +36,7 @@ import '@/design-system/styles/primitives.css'
 import { AutomationDock, ruleDropProps, setRuleScope } from '../../_shared/AutomationDock'
 import { readDailyBudget } from '../../_shared/budgetInput'
 import './family-cockpit.css'
+import { eur as eurMoney, pct as fractionPct } from '../../campaigns/_grid/format'
 
 /* ── contract (mirrors ads-family-cockpit.service.ts) ─────────────────────── */
 interface Campaign {
@@ -90,15 +91,17 @@ interface Cockpit {
   }
   campaigns: Campaign[]
   products: Product[]
-  totals: { campaigns: number; enabled: number; allowlisted: number; spend30dCents: number; sales30dCents: number; acos30d: number | null; dailyBudgetEur: number }
+  /** AM-35 — enabled + paused campaigns, as the Portfolios list counts them; `archived` is said apart (absent on an older API). */
+  totals: { campaigns: number; enabled: number; archived?: number; allowlisted: number; spend30dCents: number; sales30dCents: number; acos30d: number | null; dailyBudgetEur: number }
   coverage: { week: string | null; measured: boolean; rows: CoverageRow[]; totals: { share: number | null; marketImpressions: number; ourImpressions: number | null } } | null
   contests: Contest[]
   proposals: { pending: number; priced: number; spendAtStakeCents: number; recoverableCents: number; top: PricedProposal[] } | null
   automation: { notes: string[]; schedulesEnabled: number; schedulesTotal: number }
 }
 
-const eur = (c: number | null | undefined) => (c == null ? '—' : new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100))
-const pct = (v: number | null | undefined, dp = 2) => (v == null ? '—' : `${(v * 100).toFixed(dp)}%`)
+// AM-30 — the console's one money and percent rendering (€1,234.56 · 38.02%).
+const eur = (c: number | null | undefined) => (c == null ? '—' : eurMoney(c / 100))
+const pct = (v: number | null | undefined, dp = 2) => fractionPct(v, dp)
 const intl = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString('en-IE'))
 
 const TABS = ['Overview', 'Coverage', 'Keywords', 'Automation'] as const
@@ -242,11 +245,12 @@ export function FamilyCockpitClient() {
 
       {/* the family's vitals, always visible */}
       <div className="fc-vitals">
-        <div><span className="k">Campaigns</span><span className="v">{ck.totals.enabled} on · {ck.totals.campaigns} total</span></div>
+        {/* AM-35 — counted as the Portfolios list counts (enabled + paused); archived said apart, spend never added in. */}
+        <div><span className="k">Campaigns</span><span className="v" title="Counts, the 30-day spend and sales cover enabled and paused campaigns, as the Ad Manager shows by default. Archived campaigns are not counted.">{ck.totals.enabled} on · {ck.totals.campaigns} enabled or paused{ck.totals.archived ? ` · ${ck.totals.archived} archived, not counted` : ''}</span></div>
         <div><span className="k">Automation may write to</span><span className="v">{ck.totals.allowlisted} of {ck.totals.campaigns}</span></div>
-        <div><span className="k">Daily budget (enabled)</span><span className="v">€{ck.totals.dailyBudgetEur.toFixed(2)}</span></div>
+        <div><span className="k">Daily budget (enabled)</span><span className="v">{eurMoney(ck.totals.dailyBudgetEur)}</span></div>
         <div><span className="k">30d spend → sales</span><span className="v">{eur(ck.totals.spend30dCents)} → {eur(ck.totals.sales30dCents)}</span></div>
-        <div><span className="k">ACOS 30d</span><span className="v">{pct(ck.totals.acos30d, 0)}</span></div>
+        <div><span className="k">ACOS 30d</span><span className="v">{pct(ck.totals.acos30d)}</span></div>
         <div><span className="k">Page-one share</span><span className="v">{cov?.measured ? pct(cov.totals.share) : '—'}</span></div>
         <div><span className="k">Portfolio cap</span><span className="v">{ck.portfolio.budgetAmountCents == null ? 'No cap' : eur(ck.portfolio.budgetAmountCents)}</span></div>
       </div>
@@ -341,7 +345,7 @@ export function FamilyCockpitClient() {
               },
               { key: 'spend', label: '30d spend', align: 'right', numeric: true, width: 104, render: (c) => eur(c.spend30dCents) },
               { key: 'sales', label: '30d sales', align: 'right', numeric: true, width: 104, render: (c) => eur(c.sales30dCents) },
-              { key: 'acos', label: 'ACOS', align: 'right', numeric: true, width: 84, render: (c) => pct(c.acos30d, 0) },
+              { key: 'acos', label: 'ACOS', align: 'right', numeric: true, width: 84, render: (c) => pct(c.acos30d) },
               {
                 key: 'bounds', label: 'Bounds', align: 'right', numeric: true, width: 108,
                 render: (c) => (

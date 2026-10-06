@@ -33,6 +33,9 @@ import { changedPlacementLanes } from '../../../_shared/placementLanes'
 import { assignablePortfolios, isLocalOnlyPortfolio, type PortfolioOption } from '../../../_shared/portfolioPicker'
 import { adsWrite } from '../../../_shared/adsWrite'
 import '../../campaigns-ds.css'
+import { useAdsMarketplace } from '../../../_shell/MarketplaceContext'
+import { currencySymbol } from '../../../_shell/adsMarkets'
+import { WriteBlockedTip } from '../../../_shell/WriteBlocked'
 
 interface DynBidding { strategy?: string; placementBidding?: Array<{ placement: string; percentage: number }>; bidAlgorithm?: string; targetAcos?: number | null }
 /** The algorithms the API stores (`campaign-settings.service.ts` BID_ALGORITHMS). Custom has no store yet. */
@@ -159,7 +162,13 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
   // an empty, non-number or below-€1.00 box sends nothing. Save stays off while the field says why.
   const budgetRead = readDailyBudget(form.dailyBudget)
   const budgetProblem = form.dailyBudget !== baseline.dailyBudget && !budgetRead.ok ? budgetRead.message : null
-  const currency = (campaign as unknown as { dailyBudgetCurrency?: string })?.dailyBudgetCurrency === 'EUR' ? '€' : '€'
+  // CM-32 — the campaign's own currency (its stored budget currency, else its market account's). This was a ternary that
+  // answered "€" both ways, so a UK campaign showed euros for pounds.
+  const ads = useAdsMarketplace()
+  const marketplace = (campaign as unknown as { marketplace?: string | null })?.marketplace ?? null
+  const currency = currencySymbol((campaign as unknown as { dailyBudgetCurrency?: string | null })?.dailyBudgetCurrency || ads.currencyOf(marketplace)) || undefined
+  // Ads wave 4c — a campaign in a market Nexus only reads cannot be changed from here: Save stays off and says why.
+  const writeBlock = ads.writeAccess(marketplace).reason
 
   // scroll-spy: highlight the section nearest the top of the scroll viewport
   const refs = useRef<Record<string, HTMLElement | null>>({})
@@ -394,7 +403,9 @@ export function DetailsTab({ campaign, campaignId, onSaved }: { campaign: Campai
     <Button onClick={() => setForm(baseline)} disabled={!dirty || saving}>Discard Changes</Button>
         <span className="grow" />
         {toast && <span className="msg">{toast}</span>}
-    <Button variant="primary" onClick={() => void save()} disabled={!dirty || saving || budgetProblem != null}>{saving ? 'Saving…' : 'Save Campaign'}</Button>
+    {writeBlock && <span className="msg" role="note">{writeBlock}</span>}
+    <WriteBlockedTip reason={writeBlock} />
+    <Button variant="primary" onClick={() => void save()} disabled={!dirty || saving || budgetProblem != null || !!writeBlock} title={writeBlock ?? undefined}>{saving ? 'Saving…' : 'Save Campaign'}</Button>
       </div>
     </div>
   )

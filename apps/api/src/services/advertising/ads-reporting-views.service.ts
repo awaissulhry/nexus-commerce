@@ -28,6 +28,7 @@
  * envelope instead: known tab, known market, a bounded number of bounded keys.
  */
 import prisma from '../../db.js'
+import { adsReadMarkets } from './ads-markets.service.js'
 
 /**
  * Views are account-wide, matching every other saved object on this page (saved reports, share
@@ -40,7 +41,6 @@ const SURFACE = 'ads-reporting'
 /** The four tabs that persist anything. Library and Explorer are deliberately absent — see the
  *  web-side `views.ts` for why: one already has saved reports, the other stores nothing. */
 const TABS = new Set(['brand', 'market-share', 'business', 'hourly'])
-const MARKETS = new Set(['all', 'IT', 'DE', 'ES', 'FR'])
 
 /** Bounds on the envelope. Generous for a page of preferences, closed against a runaway writer. */
 const MAX_KEYS = 40
@@ -80,10 +80,11 @@ function cleanName(name: unknown): string {
  * top-level field is dropped rather than stored, so a future reader never has to guess whether
  * something in here was ever meaningful.
  */
-export function cleanPayload(input: unknown): ReportingViewPayload {
+export function cleanPayload(input: unknown, readMarkets: readonly string[]): ReportingViewPayload {
   const p = (input ?? {}) as Partial<ReportingViewPayload>
   if (!TABS.has(String(p.tab))) throw new ViewError(`A view must name one of: ${[...TABS].join(', ')}.`)
-  if (!MARKETS.has(String(p.market))) throw new ViewError('Unknown market.')
+  // Ads wave 4c (F3) — "all" or a market Nexus reads (the connections), not one of a fixed four.
+  if (String(p.market) !== 'all' && !readMarkets.includes(String(p.market))) throw new ViewError('Unknown market.')
 
   const raw = (p.keys && typeof p.keys === 'object') ? p.keys as Record<string, unknown> : {}
   const entries = Object.entries(raw)
@@ -137,7 +138,7 @@ export async function createReportingView(input: {
   name: unknown; payload: unknown; isDefault?: boolean
 }): Promise<ReportingView> {
   const name = cleanName(input.name)
-  const payload = cleanPayload(input.payload)
+  const payload = cleanPayload(input.payload, await adsReadMarkets())
   if (input.isDefault) await clearDefault()
   try {
     const row = await prisma.savedView.create({
@@ -164,7 +165,7 @@ export async function updateReportingView(id: string, input: {
 
   const data: { name?: string; filters?: object; isDefault?: boolean } = {}
   if (input.name !== undefined) data.name = cleanName(input.name)
-  if (input.payload !== undefined) data.filters = cleanPayload(input.payload) as unknown as object
+  if (input.payload !== undefined) data.filters = cleanPayload(input.payload, await adsReadMarkets()) as unknown as object
   if (input.isDefault !== undefined) {
     data.isDefault = !!input.isDefault
     if (input.isDefault) await clearDefault(id)

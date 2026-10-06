@@ -36,10 +36,12 @@ import {
   readProtections, showNothingProtected, splitProtections,
   type MatchType, type Protection, type ProtectionsLoad,
 } from './protectedTermsView'
+import { useAdsMarketplace } from '../_shell/MarketplaceContext'
 
-const MARKETS = ['', 'IT', 'DE', 'FR', 'ES']
 
 export function ProtectedTermsPanel() {
+  // Ads wave 4c — a protection can name any market Nexus reads, not one of a fixed four.
+  const { readMarkets } = useAdsMarketplace()
   const [load, setLoad] = useState<ProtectionsLoad>({ status: 'loading' })
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -134,7 +136,7 @@ export function ProtectedTermsPanel() {
         <Listbox
           ariaLabel="Marketplace" width={130} value={marketplace}
           onChange={(v) => setMarketplace(v)}
-          options={MARKETS.map((m) => ({ value: m, label: m || 'All markets' }))}
+          options={['', ...readMarkets].map((m) => ({ value: m, label: m || 'All markets' }))}
         />
         <Input
           size="sm" fieldClassName="h10-pt-input reason" value={reason} placeholder="Why (optional)"

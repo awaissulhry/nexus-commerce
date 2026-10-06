@@ -40,6 +40,8 @@ import {
   fullCopyScope, emptyNaming, copyPolicy, guessProductToken, verdictOf,
   type CopyScope, type NamingRules, type ValuePolicy, type PlanPreviewResponse, type PlanEdits,
 } from './replicate-types'
+import { PREFERRED_MARKET, isReadMarket, preferredMarket } from '../../_shell/adsMarkets'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 
 type StepN = 1 | 2 | 3
 const STEPS: Array<{ n: StepN; label: string }> = [
@@ -57,7 +59,6 @@ const S1_SECTIONS = [
   { id: 'history', label: 'Past runs' },
 ]
 
-const MARKETS = ['IT', 'DE', 'FR', 'ES']
 const EXIT_TO = '/marketing/ads/campaign-builder'
 
 export function ReplicateBuilder() {
@@ -67,7 +68,10 @@ export function ReplicateBuilder() {
   const [activeSec, setActiveSec] = useState('source')
 
   // ── source ────────────────────────────────────────────────────────────
-  const [sourceMarket, setSourceMarket] = useState('IT')
+  // Ads wave 4c — the source can be any market Nexus reads (from the connections), not one of a fixed four. The
+  // destination is chosen in DestinationPanel, from the markets where a launch can reach Amazon.
+  const { readMarkets, launchable } = useAdsMarketplace()
+  const [sourceMarket, setSourceMarket] = useState(PREFERRED_MARKET)
   const [selectedAdGroups, setSelectedAdGroups] = useState<Set<string>>(new Set())
   const [source, setSource] = useState<SourceSelection>(emptySelection())
   const [reselect, setReselect] = useState<{ campaignIds: string[]; nonce: number } | null>(null)
@@ -80,7 +84,12 @@ export function ReplicateBuilder() {
   const [products, setProducts] = useState<SpwProduct[]>([])
 
   // ── destination ───────────────────────────────────────────────────────
-  const [market, setMarket] = useState('IT')
+  const [market, setMarket] = useState(PREFERRED_MARKET)
+  // Once the lists load, a default that is not offered moves to the preferred one that is (a deep link is kept).
+  useEffect(() => {
+    if (readMarkets.length && !readMarkets.includes(sourceMarket)) setSourceMarket(preferredMarket(readMarkets))
+    if (launchable.length && !launchable.includes(market)) setMarket(preferredMarket(launchable))
+  }, [readMarkets, launchable]) // eslint-disable-line react-hooks/exhaustive-deps
   const [portfolioId, setPortfolioId] = useState('')
   const [cap, setCap] = useState('')
   const [bidPolicy, setBidPolicy] = useState<ValuePolicy>(copyPolicy())
@@ -138,7 +147,7 @@ export function ReplicateBuilder() {
     if (deepLinked.current) return
     const ids = (params?.get('campaigns') ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     const mk = params?.get('market')
-    if (mk && MARKETS.includes(mk)) { setSourceMarket(mk); setMarket(mk) }
+    if (mk && isReadMarket(mk, readMarkets)) { setSourceMarket(mk); setMarket(mk) }
     if (ids.length) setReselect({ campaignIds: ids, nonce: 1 })
     if (ids.length || mk) deepLinked.current = true
   }, [params])
@@ -455,7 +464,7 @@ export function ReplicateBuilder() {
                     ariaLabel="Source marketplace"
                     value={sourceMarket}
                     onChange={setSourceMarket}
-                    options={MARKETS.map((m) => ({ value: m, label: m }))}
+                    options={readMarkets.map((m) => ({ value: m, label: m }))}
                   />
                 </div>
                 <SourcePicker
