@@ -31,7 +31,7 @@
  *   }
  */
 
-import { ACTION_HANDLERS, type ActionResult, getFieldPath } from '../automation-rule.service.js'
+import { ACTION_HANDLERS, type ActionHandler, type ActionResult, getFieldPath } from '../automation-rule.service.js'
 import prisma from '../../db.js'
 import { patchDynamicBidding } from './dynamic-bidding-write.js'
 // KT-P6 — the ≤3¢ suppression convention has ONE declaration, in the KT.6 blast radius.
@@ -61,6 +61,26 @@ import { bidExtraSpend, placementExtraSpend } from './ads-spend-estimate.js'
 
 const BID_FLOOR_CENTS = 5 // €0.05
 const RULE_ACTOR = (ruleId: string): AdsActor => `automation:${ruleId}`
+
+type HandlerMeta = Parameters<ActionHandler>[2]
+
+/**
+ * AA-W2-10 (D7) — how a rule's write names itself: always the rule's own actor; when an approval carries a suggestion
+ * out (`meta.approval`), also the approval's change set (undo-ad-change finds the write by the approval id) and an
+ * audit reason that starts with the request and who decided it. Without an approval it is the rule's write as before.
+ */
+function ruleWrite(meta: Pick<HandlerMeta, 'ruleId' | 'approval'>, reason: string): { actor: AdsActor; reason: string; changeSetId?: string } {
+  return {
+    actor: RULE_ACTOR(meta.ruleId),
+    reason: meta.approval ? `${meta.approval.reason}: ${reason}` : reason,
+    ...(meta.approval ? { changeSetId: meta.approval.changeSetId } : {}),
+  }
+}
+
+/** AA-W2-10 (D7) — a negative an approved apply created (its Nexus row), kept for undo-ad-change to retire. */
+function noteNegative(meta: Pick<HandlerMeta, 'approval'>, adTargetId: string | null | undefined): void {
+  if (meta.approval && adTargetId && !meta.approval.negatives.includes(adTargetId)) meta.approval.negatives.push(adTargetId)
+}
 
 /**
  * Per-rule daily spend cap. The engine's built-in cap is per-execution
@@ -201,8 +221,7 @@ ACTION_HANDLERS.bid_down = async (action, context, meta): Promise<ActionResult> 
       evidence: ctxEvidence(context),
       adTargetId: id,
       patch: { bidCents: newBid },
-      actor: RULE_ACTOR(meta.ruleId),
-      reason: `bid_down ${percent}% via rule ${meta.ruleId}`,
+      ...ruleWrite(meta, `bid_down ${percent}% via rule ${meta.ruleId}`),
     })
     return {
       type: action.type,
@@ -228,8 +247,7 @@ ACTION_HANDLERS.bid_down = async (action, context, meta): Promise<ActionResult> 
       evidence: ctxEvidence(context),
       adGroupId: id,
       patch: { defaultBidCents: newBid },
-      actor: RULE_ACTOR(meta.ruleId),
-      reason: `bid_down ${percent}% via rule ${meta.ruleId}`,
+      ...ruleWrite(meta, `bid_down ${percent}% via rule ${meta.ruleId}`),
     })
     return {
       type: action.type,
@@ -278,8 +296,7 @@ ACTION_HANDLERS.bid_up = async (action, context, meta): Promise<ActionResult> =>
       evidence: ctxEvidence(context),
       adTargetId: id,
       patch: { bidCents: newBid },
-      actor: RULE_ACTOR(meta.ruleId),
-      reason: `bid_up ${percent}% via rule ${meta.ruleId}`,
+      ...ruleWrite(meta, `bid_up ${percent}% via rule ${meta.ruleId}`),
     })
     return {
       type: action.type,
@@ -333,8 +350,7 @@ ACTION_HANDLERS.bid_up = async (action, context, meta): Promise<ActionResult> =>
       evidence: ctxEvidence(context),
       adGroupId: id,
       patch: { defaultBidCents: newBid },
-      actor: RULE_ACTOR(meta.ruleId),
-      reason: `bid_up ${percent}% via rule ${meta.ruleId}`,
+      ...ruleWrite(meta, `bid_up ${percent}% via rule ${meta.ruleId}`),
     })
     return {
       type: action.type,
@@ -452,8 +468,7 @@ ACTION_HANDLERS.adjust_ad_budget = async (action, context, meta): Promise<Action
   const res = await updateCampaignWithSync({
     campaignId: id,
     patch: { dailyBudget: next },
-    actor: RULE_ACTOR(meta.ruleId),
-    reason: action.reason as string | undefined ?? `adjust_ad_budget via rule ${meta.ruleId}`,
+    ...ruleWrite(meta, action.reason as string | undefined ?? `adjust_ad_budget via rule ${meta.ruleId}`),
   })
   return {
     type: action.type,
@@ -751,8 +766,7 @@ ACTION_HANDLERS.resume_campaign = async (action, context, meta): Promise<ActionR
   const res = await updateCampaignWithSync({
     campaignId: id,
     patch: { status: 'ENABLED' },
-    actor: RULE_ACTOR(meta.ruleId),
-    reason: (action.reason as string | undefined) ?? `resume_campaign via rule ${meta.ruleId}`,
+    ...ruleWrite(meta, (action.reason as string | undefined) ?? `resume_campaign via rule ${meta.ruleId}`),
     applyImmediately: true,
   } as never)
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { campaignId: id, outboundQueueId: res.outboundQueueId } }
@@ -959,7 +973,7 @@ ACTION_HANDLERS.set_placement_multiplier = async (action, context, meta): Promis
   const c = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { dynamicBidding: true } })
   const db = (c?.dynamicBidding ?? {}) as { placementBidding?: Array<{ placement: string; percentage: number }> }
   const others = (db.placementBidding ?? []).filter((x) => x.placement !== placement)
-  const res = await updatePlacementBidding({ campaignId, adjustments: [...others, { placement, percentage: pct }], actor: RULE_ACTOR(meta.ruleId), reason: `rule ${action.type}` })
+  const res = await updatePlacementBidding({ campaignId, adjustments: [...others, { placement, percentage: pct }], ...ruleWrite(meta, `rule ${action.type}`) })
   return { type: action.type, ok: res.ok !== false, output: { campaignId, placement, percentage: pct, mode: res.mode } }
 }
 
@@ -989,6 +1003,7 @@ ACTION_HANDLERS.retail_guard = async (action, _context, meta): Promise<ActionRes
     campaignIds: toPause.map((c) => c.campaignId),
     actor: RULE_ACTOR(meta.ruleId),
     marketplace,
+    changeSetId: meta.approval?.changeSetId ?? null, // AA-W2-10 (D7)
   })
   return {
     type: action.type,
@@ -1023,7 +1038,7 @@ const asinCampaignRefusal = (term: string) =>
   `"${term.trim()}" is an ASIN, a product. Nexus negates a product only inside an ad group, as a negative product target, so no campaign-level negative was made.`
 
 const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE') =>
-  async (action: Record<string, unknown> & { type: string }, context: unknown, meta: { ruleId: string; dryRun: boolean }): Promise<ActionResult> => {
+  async (action: Record<string, unknown> & { type: string }, context: unknown, meta: Pick<HandlerMeta, 'ruleId' | 'dryRun' | 'approval'>): Promise<ActionResult> => {
     const keyword = (action.keyword as string | undefined) ?? (action.query as string | undefined) ?? (context as any)?.searchTerm?.query
     const externalCampaignId = (action.externalCampaignId as string | undefined) ?? (context as any)?.searchTerm?.externalCampaignId ?? (context as any)?.campaign?.externalCampaignId
     if (!keyword) return { type: action.type, ok: false, error: 'No keyword/query to negate' }
@@ -1128,6 +1143,7 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
           }
           if (meta.dryRun) { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', wouldCreate: true }); continue }
           const r = await writeNegativeProductTarget({ adGroupId: dst.id, asin: keyword.trim(), userId: RULE_ACTOR(meta.ruleId), evidence: ctxEvidence(context) })
+          if (r.outcome === 'created' || r.outcome === 'local') noteNegative(meta, r.adTargetId)
           if (r.outcome === 'already_existed') { outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', skipped: 'already a negative product target (existing row found at create time)' }); continue }
           if (r.reachedAmazon) { confirmed += 1; outcomes.push({ adGroupId: dst.id, matchType: 'PRODUCT', level: 'AD_GROUP', externalTargetId: r.externalTargetId, reachedAmazon: true }); continue }
           failedWrites += 1
@@ -1171,8 +1187,10 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
               continue
             }
             // 5 — mirror the landed write locally, with its audit row (create_negative_keyword).
-            if (level === 'AD_GROUP') await mirrorNegativeKeywordLocal({ adGroupId: dst.id, keywordText: keyword, matchType, externalTargetId: res.externalNegativeKeywordId })
-            else await createNegativeKeywordCampaignLocal({ externalCampaignId: dst.campaign.externalCampaignId, keywordText: keyword, matchType: t, externalTargetId: res.externalNegativeKeywordId })
+            const mirrored = level === 'AD_GROUP'
+              ? await mirrorNegativeKeywordLocal({ adGroupId: dst.id, keywordText: keyword, matchType, externalTargetId: res.externalNegativeKeywordId })
+              : await createNegativeKeywordCampaignLocal({ externalCampaignId: dst.campaign.externalCampaignId, keywordText: keyword, matchType: t, externalTargetId: res.externalNegativeKeywordId })
+            if (mirrored?.created) noteNegative(meta, mirrored.id)
             confirmed += 1
             outcomes.push({ adGroupId: dst.id, matchType, level, externalTargetId: res.externalNegativeKeywordId, reachedAmazon: true })
           }
@@ -1253,6 +1271,7 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
       if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, matchType: 'PRODUCT', scope } }
       const { writeNegativeProductTarget } = await import('./ads-negative-kw.service.js')
       const r = await writeNegativeProductTarget({ adGroupId: ag.id, asin: keyword.trim(), userId: RULE_ACTOR(meta.ruleId), evidence: ctxEvidence(context) })
+      if (r.outcome === 'created' || r.outcome === 'local') noteNegative(meta, r.adTargetId)
       if (r.outcome !== 'already_existed' && !r.reachedAmazon) {
         return { type: action.type, ok: false, error: r.refusal ? `Refused at ${r.refusal.deniedAt}: ${r.refusal.reason}` : r.error ?? `the negative product target did not reach Amazon (mode=${r.mode})`, output: { keyword, externalCampaignId, matchType: 'PRODUCT', scope } }
       }
@@ -1369,7 +1388,7 @@ function isolationPreview(srcId: string, asin: boolean, wouldLandIn: string[]): 
  * target, a keyword an EXACT negative. A refusal is named, not a failure; a write that did not
  * land is a failure.
  */
-async function isolateInSource(args: { srcId: string; query: string; asin: boolean; landedIn: string[]; ruleId: string; evidence: AdWriteEvidence | null }): Promise<{ isolation: Record<string, unknown>; failed: boolean }> {
+async function isolateInSource(args: { srcId: string; query: string; asin: boolean; landedIn: string[]; ruleId: string; evidence: AdWriteEvidence | null; approval?: HandlerMeta['approval'] }): Promise<{ isolation: Record<string, unknown>; failed: boolean }> {
   const base = { adGroupId: args.srcId, matchType: args.asin ? 'PRODUCT' : 'NEGATIVE_EXACT' }
   if (!args.landedIn.some((id) => id !== args.srcId)) {
     return {
@@ -1381,6 +1400,7 @@ async function isolateInSource(args: { srcId: string; query: string; asin: boole
   const r = args.asin
     ? await writeNegativeProductTarget({ adGroupId: args.srcId, asin: args.query.trim(), userId: RULE_ACTOR(args.ruleId), evidence: args.evidence })
     : await writeNegativeKeyword({ scope: 'AD_GROUP', adGroupId: args.srcId, keywordText: args.query, matchType: 'EXACT', protectConverting: null, userId: RULE_ACTOR(args.ruleId), evidence: args.evidence })
+  if (r.outcome === 'created' || r.outcome === 'local') noteNegative(args, r.adTargetId)
   if (r.outcome === 'already_existed') return { failed: false, isolation: { ...base, attempted: true, alreadyExisted: true, externalTargetId: r.externalTargetId, reachedAmazon: r.reachedAmazon } }
   if (r.outcome === 'refused') return { failed: false, isolation: { ...base, attempted: true, reachedAmazon: false, refused: `${r.refusal?.deniedAt}: ${r.refusal?.reason}` } }
   if (r.reachedAmazon) return { failed: false, isolation: { ...base, attempted: true, externalTargetId: r.externalTargetId, reachedAmazon: true } }
@@ -1508,7 +1528,7 @@ ACTION_HANDLERS.promote_to_exact = async (action, context, meta): Promise<Action
   let isolationFailed = false
   if (action.negateInSource === true) {
     if (meta.dryRun) isolation = isolationPreview(src.id, asin, outcomes.filter((o) => o.wouldCreate === true).map((o) => String(o.adGroupId)))
-    else ({ isolation, failed: isolationFailed } = await isolateInSource({ srcId: src.id, query, asin, landedIn, ruleId: meta.ruleId, evidence }))
+    else ({ isolation, failed: isolationFailed } = await isolateInSource({ srcId: src.id, query, asin, landedIn, ruleId: meta.ruleId, evidence, approval: meta.approval }))
   }
 
   const errors = [
@@ -1617,8 +1637,7 @@ ACTION_HANDLERS.set_daily_budget = async (action, context, meta): Promise<Action
   const res = await updateCampaignWithSync({
     campaignId: id,
     patch: { dailyBudget: budgetEur },
-    actor: RULE_ACTOR(meta.ruleId),
-    reason: (action.reason as string | undefined) ?? `set_daily_budget via rule ${meta.ruleId}`,
+    ...ruleWrite(meta, (action.reason as string | undefined) ?? `set_daily_budget via rule ${meta.ruleId}`),
     applyImmediately: true,
   })
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { campaignId: id, budgetEur, outboundQueueId: res.outboundQueueId } }
@@ -1640,7 +1659,7 @@ ACTION_HANDLERS.scale_bids_for_price_change = async (action, context, meta): Pro
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, targets: targets.length, scaleFactor: clamped, oldPriceEur, newPriceEur } }
   const { bulkUpdateAdTargetBids } = await import('./ads-mutation.service.js')
   const entries = targets.map((t) => ({ adTargetId: t.id, bidCents: Math.max(5, Math.round(t.bidCents * clamped)) }))
-  await bulkUpdateAdTargetBids({ entries, actor: RULE_ACTOR(meta.ruleId), reason: `scale_bids_for_price_change ×${clamped.toFixed(2)}` })
+  await bulkUpdateAdTargetBids({ entries, ...ruleWrite(meta, `scale_bids_for_price_change ×${clamped.toFixed(2)}`) })
   return { type: action.type, ok: true, output: { scaled: entries.length, scaleFactor: clamped } }
 }
 
@@ -1649,7 +1668,7 @@ ACTION_HANDLERS.enable_campaign = async (action, context, meta): Promise<ActionR
   const id = (action.campaignId as string | undefined) ?? ctxCampaignId(action, context)
   if (!id) return { type: action.type, ok: false, error: 'No campaign.id' }
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, campaignId: id } }
-  const res = await updateCampaignWithSync({ campaignId: id, patch: { status: 'ENABLED' }, actor: RULE_ACTOR(meta.ruleId), reason: 'enable_campaign via rule', applyImmediately: true } as never)
+  const res = await updateCampaignWithSync({ campaignId: id, patch: { status: 'ENABLED' }, ...ruleWrite(meta, 'enable_campaign via rule'), applyImmediately: true } as never)
   return { type: action.type, ok: res.ok, output: { campaignId: id, outboundQueueId: res.outboundQueueId } }
 }
 
@@ -1676,7 +1695,7 @@ ACTION_HANDLERS.archive_keyword = async (action, context, meta): Promise<ActionR
   const held = await protectedStopSkip(action.type, id)
   if (held) return held
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id } }
-  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { status: 'ARCHIVED' }, actor: RULE_ACTOR(meta.ruleId), reason: 'archive_keyword via rule' })
+  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { status: 'ARCHIVED' }, ...ruleWrite(meta, 'archive_keyword via rule') })
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, outboundQueueId: res.outboundQueueId } }
 }
 
@@ -1691,7 +1710,7 @@ ACTION_HANDLERS.lower_bid_to_floor = async (action, context, meta): Promise<Acti
   const held = await protectedStopSkip(action.type, id)
   if (held) return held
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, adTargetId: id, bidCents: floorCents } }
-  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: floorCents }, actor: RULE_ACTOR(meta.ruleId), reason: 'lower_bid_to_floor via rule' , evidence: ctxEvidence(context) })
+  const res = await updateAdTargetWithSync({ adTargetId: id, patch: { bidCents: floorCents }, ...ruleWrite(meta, 'lower_bid_to_floor via rule'), evidence: ctxEvidence(context) })
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, output: { adTargetId: id, bidCents: floorCents, outboundQueueId: res.outboundQueueId } }
 }
 
@@ -1710,7 +1729,7 @@ ACTION_HANDLERS.raise_bids_for_rank_defense = async (action, context, meta): Pro
   const entries = targets.map((t) => ({ adTargetId: t.id, bidCents: Math.round(t.bidCents * (1 + pct / 100)) }))
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, targets: entries.length, raisePct: pct } }
   const { bulkUpdateAdTargetBids } = await import('./ads-mutation.service.js')
-  await bulkUpdateAdTargetBids({ entries, actor: RULE_ACTOR(meta.ruleId), reason: `rank_defense +${pct}%` })
+  await bulkUpdateAdTargetBids({ entries, ...ruleWrite(meta, `rank_defense +${pct}%`) })
   return { type: action.type, ok: true, output: { raised: entries.length, pct } }
 }
 
@@ -1874,7 +1893,7 @@ ACTION_HANDLERS.budget_apply = async (action, context, meta): Promise<ActionResu
   if (next === current) return { type: action.type, ok: true, estimatedValueCentsEur: 0, output: { campaignId: id, noChange: true } }
   const cap = await checkDailySpendCap(meta.ruleId, delta)
   if (!cap.allowed) return { type: action.type, ok: false, error: cap.error, estimatedValueCentsEur: 0 }
-  const res = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: next }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string) ?? `budget_apply via rule ${meta.ruleId}` })
+  const res = await updateCampaignWithSync({ campaignId: id, patch: { dailyBudget: next }, ...ruleWrite(meta, (action.reason as string) ?? `budget_apply via rule ${meta.ruleId}`) })
   return { type: action.type, ok: res.ok, error: res.error ?? undefined, estimatedValueCentsEur: delta, output: { campaignId: id, newDailyBudget: next, outboundQueueId: res.outboundQueueId } }
 }
 
@@ -1998,8 +2017,7 @@ ACTION_HANDLERS.placement_apply = async (action, context, meta): Promise<ActionR
   const res = await updatePlacementBidding({
     campaignId: id,
     adjustments: buildManualAdjustments(db.placementBidding, placement as never, next),
-    actor: RULE_ACTOR(meta.ruleId),
-    reason: `rule ${action.type}: ${current}% \u2192 ${next}%`,
+    ...ruleWrite(meta, `rule ${action.type}: ${current}% \u2192 ${next}%`),
   })
   /**
    * 🔴 PLC-P4 — a refusal carries the gate's own sentence.
@@ -2188,7 +2206,7 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   }
   const evidence = ctxEvidence(context)
   const res = await updateAdTargetWithSync({
-    adTargetId: id, patch: { bidCents: nextCents }, actor: RULE_ACTOR(meta.ruleId), reason: (action.reason as string) ?? `bid_apply via rule ${meta.ruleId}`,
+    adTargetId: id, patch: { bidCents: nextCents }, ...ruleWrite(meta, (action.reason as string) ?? `bid_apply via rule ${meta.ruleId}`),
     // W1-5 — which level supplied the target and the strategy limits this bid was held to.
     evidence: Object.keys(sources).length ? { ...(evidence ?? {}), sources } : evidence,
   })
@@ -2223,7 +2241,7 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
 async function setTargetStatus(
   action: Record<string, unknown>,
   context: unknown,
-  meta: { dryRun: boolean; ruleId: string },
+  meta: Pick<HandlerMeta, 'ruleId' | 'dryRun' | 'approval'>,
   status: 'PAUSED' | 'ENABLED',
 ): Promise<ActionResult> {
   const type = String(action.type)
@@ -2250,8 +2268,7 @@ async function setTargetStatus(
   const res = await updateAdTargetWithSync({
     adTargetId: id,
     patch: { status },
-    actor: RULE_ACTOR(meta.ruleId),
-    reason: (action.reason as string | undefined) ?? `${type} via rule ${meta.ruleId}`,
+    ...ruleWrite(meta, (action.reason as string | undefined) ?? `${type} via rule ${meta.ruleId}`),
     evidence: ctxEvidence(context),
   })
   return {
@@ -2313,8 +2330,8 @@ ACTION_HANDLERS.dayparting_apply = async (action, context, meta): Promise<Action
   for (const c of toChange) {
     try {
       bidsMoved += floor
-        ? await suppressCampaignBids(c.id, { actor, reason: `dayparting pause via rule ${meta.ruleId} → bids floored (no-pause)` })
-        : await restoreCampaignBids(c.id, { actor, reason: `dayparting enable via rule ${meta.ruleId} → bids restored` })
+        ? await suppressCampaignBids(c.id, ruleWrite(meta, `dayparting pause via rule ${meta.ruleId} → bids floored (no-pause)`))
+        : await restoreCampaignBids(c.id, ruleWrite(meta, `dayparting enable via rule ${meta.ruleId} → bids restored`))
       changed++
     } catch (e) { errors.push((e as Error).message) }
   }

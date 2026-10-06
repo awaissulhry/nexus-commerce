@@ -147,3 +147,45 @@ describe('R9 — save-ad-rule', () => {
     expect((await dry({ kind: 'amazon-ads', ruleId: ids.created, name: 'TEST lower bids on high ACOS' })).error).toContain('nothing to change')
   })
 })
+
+/**
+ * AA-W2-11 — an Amazon ads rule saved by the business's rule: inside the ads strategy of its scope (the kit's checks),
+ * with every cap set and within the tool's limits (0 by default); a rule for the whole account, an eBay or a marketing
+ * rule waits for a person.
+ */
+describe('AA-W2-11 — save-ad-rule by rule', () => {
+  const tool = () => getTool('save-ad-rule')!
+  const defaults = () => tool().limits!.parse({}) as Record<string, unknown>
+  const roomy = () => ({ ...defaults(), maxWritesPerDay: 50, maxValueCentsEur: 1000, maxDailyAdSpendCentsEur: 2000 })
+  const capped = { ...amazonRule, name: 'TEST capped rule', caps: { ...amazonRule.caps, maxDailyAdSpendCentsEur: 1500 } }
+
+  it('the preview carries the strategy of its scope and its caps; without a strategy nothing is saved by rule', async () => {
+    const out = await dry(capped)
+    expect(out.ok).toBe(true)
+    expect(out.preview).toMatchObject({
+      limitFacts: { tool: 'save-ad-rule', action: 'rule', this: { markets: ['IT'], items: 1, writes: 0 } },
+      ruleFacts: { scope: { placed: true }, caps: { maxWritesPerDay: 20, maxValueCentsEur: 500, maxDailyAdSpendCentsEur: 1500 }, levelAfter: 'OBSERVE' },
+    })
+    expect(tool().withinLimits!(out.preview, roomy())).toContain('there is no ads strategy for IT')
+  })
+
+  it('inside the strategy: every cap set and within the limits runs by rule; 0 by default, a missing cap or the whole account waits', async () => {
+    await inside(() => database.client.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test market (IT)', claudeMaxChangesPerDay: 10, version: 1, updatedBy: 'user:test' } }))
+    const out = await dry(capped)
+    expect(tool().withinLimits!(out.preview, roomy())).toBeNull()
+    expect(tool().withinLimits!(out.preview, defaults())).toBe("its daily writes cap is 20, more than the 0 this tool's limits allow a rule saved without a person (0: every rule waits for a person); a person decides")
+    expect(tool().withinLimits!((await dry(amazonRule)).preview, roomy())).toBe('the rule has no daily ad spend cap (euro cents): a rule saved without a person carries every cap; a person decides')
+    const account = await dry({ ...capped, scope: { wholeAccount: true } })
+    expect(tool().withinLimits!(account.preview, roomy())).toBe("a rule for the whole account cannot be placed in one market's ads strategy; a person decides")
+    // The strategy's own "what Claude may do alone for ads rules" narrows it (C2).
+    await inside(() => database.client.adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeAutonomy: { rule: 'ask' } } }))
+    expect(tool().withinLimits!((await dry(capped)).preview, roomy())).toContain('the ads strategy lets Claude only ask for ads rules')
+    await inside(() => database.client.adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeAutonomy: {} } }))
+  })
+
+  it('an eBay or a marketing rule is never saved by rule', async () => {
+    const ebay = await dry({ kind: 'ebay-ads', name: 'TEST eBay by rule', trigger: { scope: 'CPS_AD', all: [{ metric: 'clicks', windowDays: 14, op: 'gte', threshold: 30 }] }, action: { type: 'adjust_ad_rate', deltaPct: -10 }, guardrails: { maxActionsPerRun: 5 }, scope: { marketplace: 'EBAY_IT' } })
+    expect(ebay.ok).toBe(true)
+    expect(tool().withinLimits!(ebay.preview, roomy())).toBe('only an Amazon ads rule may be saved by rule (the ads strategy covers Amazon); a person decides')
+  })
+})

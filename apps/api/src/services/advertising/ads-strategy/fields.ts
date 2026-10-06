@@ -65,6 +65,9 @@ export const CLAUDE_ACTION_TOOLS = {
   undo: ['undo-ad-change'],
   // AA-W2-9 (D-W2-6 = A) — a new campaign goes live in three kinds: create, allowlist (Claude's own), restore.
   allowlist: ['set-campaign-live-writes'],
+  // AA-W2-11 — an Amazon ads automation moved up or tuned, where it acts (automation-scope.ts): its products, else its
+  // market. Turning one down stays a brake (never narrowed).
+  automation: ['turn-up-automation', 'tune-ad-engine'],
   pause: ['pause-ads'],
   enable: ['enable-ads'],
   archive: ['archive-ads'],
