@@ -61,8 +61,7 @@ import {
 } from './keyword-tracker.service.js'
 import { classifyBranded, normTerm, type ProtectionRule } from './keyword-watchlist.service.js'
 
-/** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
-export const SOV_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
+// Ads wave 4c (F3) — the markets come from the connections: `adsReadMarkets()` (ads-markets.service.ts).
 
 /**
  * `?weeks=` — how far back the view may reach for its ONE period, in weeks.

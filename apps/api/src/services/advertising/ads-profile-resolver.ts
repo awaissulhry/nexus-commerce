@@ -141,13 +141,31 @@ async function decisionFromRow(profileId: string): Promise<{ mode: string; write
   return row ?? null
 }
 
-async function fromScopes(marketplace: string): Promise<AdsProfileRef | null> {
+interface ProfileScopeRow {
+  externalId: string
+  region: string | null
+  metadata: unknown
+}
+
+/**
+ * CM-29 — the profile scopes in ONE order, so every caller that asks for a market gets the same profile.
+ *
+ * `findMany` has no order, and `find` takes the first scope whose market matches: with two profiles for one market
+ * (two advertiser accounts on one grant) the gate, a create, a report and a sync could each pick a different one.
+ * Sorted by Amazon's profile id here, in code, so the answer does not depend on how the database returns the rows.
+ */
+async function loadProfileScopes(): Promise<{ connectionId: string; scopes: ProfileScopeRow[] } | null> {
   const connectionId = await adsConnectionId()
   if (!connectionId) return null
   const scopes = await prisma.connectionScope.findMany({
     where: { connectionId, kind: 'profile' },
     select: { externalId: true, region: true, metadata: true, label: true },
   })
+  const sorted = [...scopes].sort((a, b) => (a.externalId < b.externalId ? -1 : a.externalId > b.externalId ? 1 : 0))
+  return { connectionId, scopes: sorted }
+}
+
+async function refFromScopes(connectionId: string, scopes: ProfileScopeRow[], marketplace: string): Promise<AdsProfileRef | null> {
   const hit = scopes.find((s) => sameMarket((s.metadata as ScopeMetadata | null)?.marketplace, marketplace))
   if (!hit) return null
   const meta = (hit.metadata ?? {}) as ScopeMetadata
@@ -169,9 +187,17 @@ async function fromScopes(marketplace: string): Promise<AdsProfileRef | null> {
   }
 }
 
+async function fromScopes(marketplace: string): Promise<AdsProfileRef | null> {
+  const loaded = await loadProfileScopes()
+  if (!loaded) return null
+  return refFromScopes(loaded.connectionId, loaded.scopes, marketplace)
+}
+
 async function fromRow(marketplace: string): Promise<AdsProfileRef | null> {
   const row = await prisma.amazonAdsConnection.findFirst({
     where: { marketplace, isActive: true },
+    // CM-29 — one order, so two rows for one market always give the same answer.
+    orderBy: { profileId: 'asc' },
     select: { profileId: true, region: true, mode: true, writesEnabledAt: true, lastWriteAt: true, marketplace: true },
   })
   if (!row) return null
@@ -202,6 +228,41 @@ export async function adsProfileFor(marketplace: string | null | undefined): Pro
     }
   }
   return fromRow(marketplace)
+}
+
+/**
+ * The profile for each market, answered exactly as `adsProfileFor` answers one market (same source, same order, same
+ * fallbacks), with the connection core read once. For the market lists (ads-markets.service.ts).
+ */
+export async function adsProfilesForMarkets(markets: readonly string[]): Promise<Map<string, AdsProfileRef | null>> {
+  const out = new Map<string, AdsProfileRef | null>()
+  let loaded: Awaited<ReturnType<typeof loadProfileScopes>> = null
+  if (coreEnabled()) {
+    try {
+      loaded = await loadProfileScopes()
+    } catch (err) {
+      logger.warn('[ads-resolver] the connection core could not answer; using the legacy rows', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+  for (const market of markets) {
+    const scoped = loaded ? await refFromScopes(loaded.connectionId, loaded.scopes, market) : null
+    out.set(market, scoped ?? (await fromRow(market)))
+  }
+  return out
+}
+
+/**
+ * CM-29 / CC-30 — the profile and region an Amazon Ads call for this market goes to: the write gate's own answer
+ * (`adsProfileFor`). Every create, read-back and settings refresh asks this, so the profile a write is approved for is
+ * the profile the call reaches. Null when no profile serves the market.
+ */
+export async function adsClientContextFor(marketplace: string | null | undefined): Promise<{ profileId: string; region: 'EU' | 'NA' | 'FE' } | null> {
+  const ref = await adsProfileFor(marketplace)
+  if (!ref) return null
+  const region = ref.region === 'NA' || ref.region === 'FE' ? ref.region : 'EU'
+  return { profileId: ref.profileId, region }
 }
 
 /** Every profile the account reaches, for the sites that sweep rather than look one up. */

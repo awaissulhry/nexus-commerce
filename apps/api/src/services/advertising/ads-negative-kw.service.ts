@@ -243,11 +243,17 @@ async function convertingRefusal(text: string, config: ProtectConvertingConfig |
   return decision && !decision.allowed ? { deniedAt: 'protect_converting', reason: decision.reason } : null
 }
 
+/**
+ * CM-29 / CC-30 — a LIVE write goes to the profile the write gate approved (`liveProfileId`), never to one a caller
+ * named: the caller's id used to win, so the gate could approve one profile while the call went to another. The market's
+ * profile comes from the gate's own resolver (`adsClientContextFor`), not a second `findFirst`.
+ */
 async function clientContext(marketplace: string | null, liveProfileId: string | null, profileId?: string | null, region?: AdsRegion): Promise<ClientContext> {
-  const conn = marketplace ? await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } }) : null
+  const { adsClientContextFor } = await import('./ads-profile-resolver.js')
+  const conn = marketplace ? await adsClientContextFor(marketplace) : null
   return {
-    profileId: profileId || liveProfileId || conn?.profileId || 'sandbox',
-    region: region ?? ((conn?.region as AdsRegion | undefined) ?? 'EU'),
+    profileId: liveProfileId || profileId || conn?.profileId || 'sandbox',
+    region: region ?? conn?.region ?? 'EU',
   }
 }
 
@@ -649,3 +655,6 @@ export async function createNegative(args: CreateNegativeArgs): Promise<CreateNe
       return { ok: true, mode: sent.mode, externalNegativeKeywordId: sent.externalId, alreadyExisted: false, denied: null, rawResponse: sent.mode === 'sandbox' ? { sandbox: true } : sent.rawResponse }
   }
 }
+
+/** Tests only. */
+export const __negativeKwTest = { clientContext }

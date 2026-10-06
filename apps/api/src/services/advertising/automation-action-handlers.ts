@@ -1086,7 +1086,7 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
         ? (action.levels as unknown[]).map(String).filter((l) => l === 'AD_GROUP' || l === 'CAMPAIGN')
         : ['AD_GROUP']
 
-      const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
+      const conn = await (await import('./ads-profile-resolver.js')).adsClientContextFor(marketplace) // CM-29 — the gate's resolver
       const { createNegative, writeNegativeProductTarget } = await import('./ads-negative-kw.service.js')
       const { mirrorNegativeKeywordLocal, createNegativeKeywordCampaignLocal } = await import('./ads-create.service.js')
 
@@ -1258,7 +1258,7 @@ const makeAddNegativeHandler = (matchType: 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE')
 
     if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, externalCampaignId, matchType, scope } }
     const { createNegative } = await import('./ads-negative-kw.service.js')
-    const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
+    const conn = await (await import('./ads-profile-resolver.js')).adsClientContextFor(marketplace) // CM-29 — the gate's resolver
     const res = await createNegative({ profileId: conn?.profileId ?? '', externalCampaignId, externalAdGroupId, keywordText: keyword, matchType, scope, marketplace })
     // A denied write used to be reported as `ok: true`. With the gate now reachable (above), a
     // refusal by the protected-terms whitelist is the expected outcome for a brand term — and it has
@@ -1552,7 +1552,7 @@ ACTION_HANDLERS.sync_negatives_across_campaigns = async (action, context, meta):
   }
 
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, keyword, wouldNegateIn: campaigns.length, ruleScoped: sweep.scoped } }
-  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true } })
+  const conn = await (await import('./ads-profile-resolver.js')).adsClientContextFor(marketplace) // CM-29 — the gate's resolver
   const { createNegative } = await import('./ads-negative-kw.service.js')
   let added = 0; let denied = 0; const errors: string[] = []
   for (const c of campaigns) {

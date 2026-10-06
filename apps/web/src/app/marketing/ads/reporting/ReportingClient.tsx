@@ -30,6 +30,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../_shell/MarketplaceContext'
 import { Tabs } from '@/design-system/components/Tabs'
 import { BrandTab } from './BrandTab'
 import { MarketShareTab } from './MarketShareTab'
@@ -73,11 +74,11 @@ const SUBTITLES: Record<TabId, string> = {
 }
 
 /**
- * The markets the console sells in. Hard-coded here exactly as the rest of the ads console does
- * it — the alternative is a fifth request on first paint to learn four strings that have not
- * changed in the life of the account.
+ * AM-27 — the tabs that read ONE market. An hour-of-day pattern or a market share pooled across markets is nobody's
+ * day and nobody's market, so these tabs never offer "All markets": they show one market and the header says which.
+ * (They used to show Italy silently under an "All markets" header.)
  */
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
+const ONE_MARKET_TABS: ReadonlySet<string> = new Set(['market-share', 'hourly'])
 
 export function ReportingClient() {
   const router = useRouter()
@@ -87,7 +88,11 @@ export function ReportingClient() {
   const urlTab = params.get('tab')
   const tab: TabId = (TABS.some((t) => t.id === urlTab) ? urlTab : 'brand') as TabId
   const urlMarket = params.get('market')
-  const market = urlMarket && (urlMarket === 'all' || MARKETS.includes(urlMarket)) ? urlMarket : 'IT'
+  // Ads wave 4c / AM-28 — the markets Nexus reads (from the connections, not a fixed four); an absent `?market=` means
+  // the viewer's shared choice (it was Italy); a one-market tab narrows "all" to one market.
+  const { readMarkets } = useAdsMarketplace()
+  const oneMarket = ONE_MARKET_TABS.has(tab)
+  const [market] = useSharedAdsMarket({ allowAll: !oneMarket, raw: urlMarket })
 
   const [reloadKey, setReloadKey] = useState(0)
   const [syncing, setSyncing] = useState(false)
@@ -159,9 +164,10 @@ export function ReportingClient() {
       <AdsPageHeader
         title="Reporting"
         subtitle={SUBTITLES[tab]}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => push({ market: m })}
+        allowAllMarkets={!oneMarket}
         // The library is market-agnostic — it lists reports, and every one of them carries its
         // own per-market freshness. Showing a market picker there would suggest it filters.
         showMarket={tab !== 'library'}

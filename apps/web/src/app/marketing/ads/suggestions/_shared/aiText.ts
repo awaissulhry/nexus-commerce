@@ -6,14 +6,16 @@
 
 import type { HoverContent } from '../ApproveHoverCard'
 import type { AiDecision } from './types'
+// AM-30 — the console's one money rendering (€1,234.56).
+import { eur } from '../../campaigns/_grid/format'
 
 /** Compact before→after reading for a decision's Json pair — only keys that CHANGED, "—" when
  *  neither side says anything (an unreadable change must not render as an empty confident cell).
  *  Known storage keys read back in operator units (the D2d law: no field paths, no cents). */
 export const AI_KEY_READERS: Record<string, { label: string; fmt: (v: unknown) => string }> = {
-  bidCents: { label: 'Bid', fmt: (v) => (Number.isFinite(Number(v)) ? `€${(Number(v) / 100).toFixed(2)}` : String(v)) },
-  dailyBudgetEur: { label: 'Budget', fmt: (v) => (Number.isFinite(Number(v)) ? `€${Number(v).toFixed(2)}` : String(v)) },
-  budgetCents: { label: 'Budget', fmt: (v) => (Number.isFinite(Number(v)) ? `€${(Number(v) / 100).toFixed(2)}` : String(v)) },
+  bidCents: { label: 'Bid', fmt: (v) => (Number.isFinite(Number(v)) ? eur(Number(v) / 100) : String(v)) },
+  dailyBudgetEur: { label: 'Budget', fmt: (v) => (Number.isFinite(Number(v)) ? eur(Number(v)) : String(v)) },
+  budgetCents: { label: 'Budget', fmt: (v) => (Number.isFinite(Number(v)) ? eur(Number(v) / 100) : String(v)) },
 }
 export function aiChangeText(module: string, before: Record<string, unknown> | null, after: Record<string, unknown> | null): string {
   const keys = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])]
@@ -24,7 +26,7 @@ export function aiChangeText(module: string, before: Record<string, unknown> | n
       // wraps beforeCents/afterCents); the module names what the cents are. Without this,
       // every real proposal printed "cents 42 → 51" — storage keys, not operator units (D2d).
       const r = AI_KEY_READERS[k]
-        ?? (k === 'cents' ? { label: module === 'budget' ? 'Budget' : 'Bid', fmt: (v: unknown) => (Number.isFinite(Number(v)) ? `€${(Number(v) / 100).toFixed(2)}` : String(v)) } : undefined)
+        ?? (k === 'cents' ? { label: module === 'budget' ? 'Budget' : 'Bid', fmt: (v: unknown) => (Number.isFinite(Number(v)) ? eur(Number(v) / 100) : String(v)) } : undefined)
       const read = (v: unknown) => (v == null ? '—' : r ? r.fmt(v) : String(v))
       return `${r?.label ?? k} ${read(before?.[k])} → ${read(after?.[k])}`
     })

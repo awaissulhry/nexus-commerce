@@ -188,6 +188,9 @@
 .h10-hdr-r { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .h10-hbtn { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 13px; font-weight: 600; color: var(--nds-grey-700); background: var(--nds-grey-75); border: 1px solid transparent; border-radius: 9px; padding: 8px 13px; cursor: pointer; text-decoration: none; white-space: nowrap; }
 .h10-hbtn:hover { background: var(--nds-grey-150); }
+/* AM-26 — a header control kept as a placeholder: visible and focusable (it says why on focus), but it does not act. */
+.h10-hbtn[aria-disabled="true"] { cursor: default; color: var(--nds-text-muted); }
+.h10-hbtn[aria-disabled="true"]:hover { background: var(--nds-grey-75); }
 .h10-hbtn svg { color: var(--nds-grey-600); }
 .h10-hbtn.ghost { background: var(--nds-white); border-color: var(--nds-blue-200); color: var(--nds-blue-600); }
 .h10-hbtn.ghost:hover { background: var(--nds-blue-50); }

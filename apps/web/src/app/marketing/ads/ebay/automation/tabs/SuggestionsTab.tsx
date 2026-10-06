@@ -12,6 +12,7 @@ import Link from '@/lib/workspaces/Link'
 import { ChevronDown } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../../campaigns/_grid/AdsDataGrid'
 import { getEbayAds, postEbayAds } from '../../_lib'
+import { money } from '../../../campaigns/_grid/format'
 import { kindLabel, type WhyReasoning } from '../_lib/rules'
 import { WhyModal } from '../modals/WhyModal'
 import { Button, FilterChip, Pill } from '@/design-system/primitives'
@@ -113,11 +114,11 @@ export function SuggestionsTab({ busy, act, bump, highlightId }: { busy: boolean
           <span className="eb-impact" title={ei.assumption}>
             {ei.feesDeltaCentsPerWeek != null && (
               <span className={ei.feesDeltaCentsPerWeek <= 0 ? 'good' : 'bad'}>
-                {ei.feesDeltaCentsPerWeek <= 0 ? '−' : '+'}€{(Math.abs(ei.feesDeltaCentsPerWeek) / 100).toFixed(2)} fees
+                {ei.feesDeltaCentsPerWeek <= 0 ? '−' : '+'}{money(Math.abs(ei.feesDeltaCentsPerWeek))} fees
               </span>
             )}
             {ei.salesAtRiskCentsPerWeek != null && ei.salesAtRiskCentsPerWeek > 0 && (
-              <span className="risk">€{(ei.salesAtRiskCentsPerWeek / 100).toFixed(2)} sales at risk</span>
+              <span className="risk">{money(ei.salesAtRiskCentsPerWeek)} sales at risk</span>
             )}
           </span>
         )

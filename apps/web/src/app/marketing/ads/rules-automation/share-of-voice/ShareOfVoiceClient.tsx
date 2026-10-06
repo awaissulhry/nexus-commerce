@@ -57,6 +57,8 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, Info, Search } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
+import { isReadMarket } from '../../_shell/adsMarkets'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -73,8 +75,6 @@ import { SovSavedViews } from './SovSavedViews'
 import { useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets. IE/NL/PL/SE/UK are sandbox and hold no listings. */
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
-const DEFAULT_MARKET = 'IT'
 /** How far back the view may reach for its ONE period, in weeks. See the service's `SOV_WEEKS`. */
 const WEEKS = [4, 8, 13] as const
 const DEFAULT_WEEKS = 8
@@ -287,7 +287,10 @@ export function ShareOfVoiceClient() {
    *   ?row=<query>@<market>  SOV.5 — the detail drawer (the @market half makes a pasted link
    *                          self-contained; absent, the page's market is used).
    */
-  const market = params.get('market') ?? DEFAULT_MARKET
+  // Ads wave 4c / AM-28 — one market from the markets Nexus reads: the URL's, else the viewer's shared choice (one
+  // market, since a share cannot be summed across markets), else the preferred read market.
+  const { readMarkets, ready: marketsReady } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ allowAll: false, raw: params.get('market') })
   const scope: KtScope = {
     line: params.get('line') ?? '',
     portfolio: params.get('portfolio') ?? '',
@@ -348,12 +351,13 @@ export function ShareOfVoiceClient() {
    * `?weeks=` is not. Writing it in means a copied URL says IT rather than meaning "whatever IT
    * happens to be the default on the day you open it".
    */
+  // AM-28 — the market written in is the one the page shows (the viewer's shared choice), once the list has loaded.
   useEffect(() => {
-    if (params.get('market')) return
+    if (params.get('market') || !marketsReady) return
     const next = new URLSearchParams(params.toString())
-    next.set('market', DEFAULT_MARKET)
+    next.set('market', market)
     router.replace(`?${next.toString()}`, { scroll: false })
-  }, [params, router])
+  }, [params, router, marketsReady, market])
 
   useEffect(() => { setQDraft(q) }, [q])
 
@@ -366,7 +370,7 @@ export function ShareOfVoiceClient() {
     return () => { alive = false }
   }, [])
 
-  const isMarket = MARKETS.includes(market)
+  const isMarket = market !== 'all' && isReadMarket(market, readMarkets)
 
   useEffect(() => {
     if (!isMarket) { setLoading(false); return }
@@ -717,8 +721,10 @@ export function ShareOfVoiceClient() {
       <AdsPageHeader
         title="Share of Voice"
         subtitle={activeTab?.subtitle ?? 'On the queries that matter, how much of each market do we hold?'}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
+        // AM-27 — a share is per market: "All markets" is not offered on a page that cannot serve it.
+        allowAllMarkets={false}
         onMarketChange={(m) => push({ market: m })}
         showDataSync={false}
         /* No date range. Brand Analytics is WEEKLY and the paid feed is daily, and they are 15 days
@@ -744,7 +750,7 @@ export function ShareOfVoiceClient() {
             needs one market rather than “all”.
           </p>
           <div className="h10-sov-pickrow">
-            {MARKETS.map((m) => (
+            {readMarkets.map((m) => (
        <Button key={m} onClick={() => push({ market: m })}>{m}</Button>
             ))}
           </div>

@@ -30,9 +30,10 @@
  */
 
 import prisma from '../../db.js'
+import { adsReadMarkets } from './ads-markets.service.js'
 import {
   normaliseNegTerm, normaliseMatchType, resolveNegScope,
-  NEG_MARKETS, NEG_MARKET_ALL,
+  NEG_MARKET_ALL,
   type NegScopeRequest, type NegGrain, type NegMatchType,
 } from './negatives.service.js'
 
@@ -237,7 +238,7 @@ export async function getAttention(req: AttentionRequest): Promise<AttentionPayl
     req.line ? prisma.adProductAd.findMany({ where: { productId: { not: null } }, select: { productId: true, adGroup: { select: { campaignId: true } } } }) : Promise.resolve([]),
   ])
   const scope = resolveNegScope(
-    { campaigns, adGroups: negAdGroups, products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
+    { readMarkets: await adsReadMarkets(), campaigns, adGroups: negAdGroups, products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
     req,
   )
   const scopeCampaigns = new Set(scope.campaignIds)
@@ -570,4 +571,4 @@ export async function getAttention(req: AttentionRequest): Promise<AttentionPayl
   }
 }
 
-export { NEG_MARKETS, NEG_MARKET_ALL }
+export { NEG_MARKET_ALL }

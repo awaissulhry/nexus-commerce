@@ -19,6 +19,7 @@
 import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { RulesTabs, rulesTabHeader } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
@@ -26,12 +27,13 @@ import { useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { HvAdGroupView } from './HvAdGroupView'
 
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
 
 export function KeywordHarvestRulesClient() {
   const router = useRouter()
   const params = useSearchParams()
-  const market = params.get('market') || 'all'
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
   const view = params.get('view') === 'ad-groups' ? 'ad-groups' : 'rules'
 
   const push = (patch: Record<string, string>) => {
@@ -67,7 +69,7 @@ export function KeywordHarvestRulesClient() {
     <div className="h10-rules-page">
       <AdsPageHeader
         {...rulesTabHeader('keyword-harvest')}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => push({ market: m === 'all' ? '' : m })}
         showDataSync={false}

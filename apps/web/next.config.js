@@ -286,6 +286,29 @@ const nextConfig = {
       // takes the same local campaign id.
       { source: '/marketing/trading-desk/automation', destination: '/marketing/ads/rules-automation/control-room', permanent: true },
       { source: '/marketing/trading-desk/campaigns/:id', destination: '/marketing/ads/campaigns/:id', permanent: true },
+
+      // ── OC (2026-10-06) — the old /marketing/ads-console is retired, Rank Control included ──
+      // The Owner: "old ads console is legacy, we can remove it", once every job it does exists in the Ad Manager; and of
+      // Rank Control: "I think we have the replacement" — the Hourly Bids page (hourly bid plans), which stays exactly
+      // as it was. Every page lands on the Ad Manager page that does the same job; Rank Control lands on the Control
+      // Room, where the Rank-defend engine is switched (the rank-defend alert links there too).
+      { source: '/marketing/ads-console', destination: '/marketing/ads/dashboard', permanent: true },
+      { source: '/marketing/ads-console/overview', destination: '/marketing/ads/dashboard', permanent: true },
+      { source: '/marketing/ads-console/campaigns', destination: '/marketing/ads/campaigns', permanent: true },
+      { source: '/marketing/ads-console/products', destination: '/marketing/ads/reporting/advertised-product', permanent: true },
+      { source: '/marketing/ads-console/targeting', destination: '/marketing/ads/reporting/targeting', permanent: true },
+      { source: '/marketing/ads-console/activity', destination: '/marketing/ads/rules-automation/control-room?tab=activity', permanent: true },
+      { source: '/marketing/ads-console/bulk', destination: '/marketing/ads/bulk', permanent: true },
+      // The old hub's ?tab=rank deep link (RC6.5) lands where Rank Control does. Ahead of the plain rule, which would take it.
+      { source: '/marketing/ads-console/automation', has: [{ type: 'query', key: 'tab', value: 'rank' }], destination: '/marketing/ads/rules-automation/control-room', permanent: true },
+      { source: '/marketing/ads-console/automation', destination: '/marketing/ads/rules-automation/automations', permanent: true },
+      { source: '/marketing/ads-console/campaign-builder/guided', destination: '/marketing/ads/campaign-builder/guided', permanent: true },
+      { source: '/marketing/ads-console/settings', destination: '/settings/advertising', permanent: true },
+      // Rank Control lands on the Control Room, where the Rank-defend engine is switched (the Owner, 2026-10-06: Hourly
+      // Bids stays as it is). Stored rank-defend alerts link to `/rank?mode=plan`; the destination's own empty `mode`
+      // wins over the request's (Next merges the destination's query over the request's), so no stale filter rides along.
+      { source: '/marketing/ads-console/rank', has: [{ type: 'query', key: 'mode' }], destination: '/marketing/ads/rules-automation/control-room?mode=', permanent: true },
+      { source: '/marketing/ads-console/rank', destination: '/marketing/ads/rules-automation/control-room', permanent: true },
     ];
     // Config redirects run before the workspace rewrite. Keep legacy bookmarks
     // and routed tabs working with their original business context.

@@ -345,9 +345,10 @@ describe('ACR.0.7 — account halt', () => {
       const notListed = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })
       expect(notListed.allowed).toBe(true)
 
+      // 3A (Owner decided 2026-10-06) — his own bound no longer refuses his own edit: it waits for his "Send anyway".
       campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, maxBidCents: 100 })
       const overCeiling = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })
-      expect(overCeiling.allowed === false && overCeiling.deniedAt).toBe('entity_bounds')
+      expect(overCeiling.allowed === false && overCeiling.deniedAt).toBe('needs_confirmation')
 
       campaignFindUnique.mockResolvedValue(OPEN_CAMPAIGN)
       const underAmazon = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 1, manual: true })
@@ -654,5 +655,90 @@ describe('BID.S5 — four-grain bid bounds', () => {
     bidPolicyFindMany.mockResolvedValue([{ grain: 'MARKET', scopeId: 'IT', label: 'the IT floor', minBidCents: 10, maxBidCents: null }])
     const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 2, isSuppression: true })
     expect(r.allowed).toBe(true)
+  })
+})
+
+/**
+ * 3A (Owner decided 2026-10-06) — HIS limits warn, they never block HIS OWN edits.
+ *
+ * A person's write (ctx.manual) past one of his own limits — the entity bounds, a bid policy, a spend ceiling, the
+ * daily budget-move limit, the per-change value cap — is answered "needs confirmation" with every limit it goes past,
+ * and passes once he confirms. An engine, rule, schedule or sweep is refused exactly as before, and a confirm flag on
+ * an engine's write means nothing. Amazon's own range is not his limit: it refuses him even with a confirm.
+ */
+describe('3A — his own limits ask him, they do not refuse him', () => {
+  it('a person over the campaign bid ceiling → needs confirmation, naming the limit; nothing else refused', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, maxBidCents: 100 })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })
+    expect(r.allowed).toBe(false)
+    if (r.allowed === false) {
+      expect(r.deniedAt).toBe('needs_confirmation')
+      expect(r.ownLimits).toEqual([{ limit: 'entity_bounds', reason: expect.stringContaining('exceeds the 100¢ ceiling') }])
+      expect(r.reason).toContain('your own limit')
+    }
+  })
+
+  it('the same write with his confirm → live, and it says which limit it went past', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, maxBidCents: 100 })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true, confirmOwnLimits: true })
+    expect(r.allowed).toBe(true)
+    if (r.allowed === true) {
+      expect(r.mode).toBe('live')
+      expect(r.pastOwnLimits?.map((l) => l.limit)).toEqual(['entity_bounds'])
+    }
+  })
+
+  it('an engine over the same ceiling is refused — and a confirm flag on its write is ignored', async () => {
+    campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, maxBidCents: 100 })
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, confirmOwnLimits: true })
+    expect(r.allowed === false && r.deniedAt).toBe('entity_bounds')
+  })
+
+  it('a bid policy floor asks him too', async () => {
+    bidPolicyFindMany.mockResolvedValue([{ grain: 'MARKET', scopeId: 'IT', label: 'the IT floor', minBidCents: 10, maxBidCents: null }])
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 5, manual: true })
+    expect(r.allowed === false && r.deniedAt).toBe('needs_confirmation')
+    const engine = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 5 })
+    expect(engine.allowed === false && engine.deniedAt).toBe('entity_bounds')
+  })
+
+  it('a budget past a spend ceiling AND the day-move limit lists both; his confirm sends it', async () => {
+    ceilingFindMany.mockResolvedValue([{ grain: 'CAMPAIGN', scopeId: 'camp-1', label: 'the campaign', dailyCapCents: 1_000 }])
+    const write = { ...base, field: 'dailyBudget', intendedValueCents: 2_000, manual: true } // €5 → €20
+    const ask = await checkAdsWriteGate(write)
+    expect(ask.allowed === false && ask.deniedAt).toBe('needs_confirmation')
+    if (ask.allowed === false) expect(ask.ownLimits?.map((l) => l.limit)).toEqual(['spend_ceiling', 'budget_day_move'])
+    const sent = await checkAdsWriteGate({ ...write, confirmOwnLimits: true })
+    expect(sent.allowed).toBe(true)
+    if (sent.allowed === true) expect(sent.pastOwnLimits?.map((l) => l.limit)).toEqual(['spend_ceiling', 'budget_day_move'])
+    const engine = await checkAdsWriteGate({ ...base, field: 'dailyBudget', intendedValueCents: 2_000 })
+    expect(engine.allowed === false && engine.deniedAt).toBe('spend_ceiling')
+  })
+
+  it('the per-change value cap asks him; an engine is refused', async () => {
+    const r = await checkAdsWriteGate({ ...base, payloadValueCents: 60_000, field: 'bid', intendedValueCents: 150, manual: true })
+    expect(r.allowed === false && r.deniedAt).toBe('needs_confirmation')
+    if (r.allowed === false) expect(r.ownLimits?.map((l) => l.limit)).toEqual(['value_cap'])
+    const sent = await checkAdsWriteGate({ ...base, payloadValueCents: 60_000, field: 'bid', intendedValueCents: 150, manual: true, confirmOwnLimits: true })
+    expect(sent.allowed).toBe(true)
+    const engine = await checkAdsWriteGate({ ...base, payloadValueCents: 60_000, field: 'bid', intendedValueCents: 150 })
+    expect(engine.allowed === false && engine.deniedAt).toBe('value_cap')
+  })
+
+  it('Amazon\'s own range refuses him even with a confirm — it is not his limit', async () => {
+    const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 1, manual: true, confirmOwnLimits: true })
+    expect(r.allowed === false && r.deniedAt).toBe('market_limits')
+  })
+
+  it('the deploy kill switch refuses him even with a confirm', async () => {
+    process.env.NEXUS_ADS_AUTOMATION_KILL = '1'
+    try {
+      automationState.mockResolvedValue({ autonomy: 'AUTO', halted: false, haltReason: null, effectivelyStopped: true, degraded: false })
+      campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, maxBidCents: 100 })
+      const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true, confirmOwnLimits: true })
+      expect(r.allowed === false && r.deniedAt).toBe('automation_halted')
+    } finally {
+      delete process.env.NEXUS_ADS_AUTOMATION_KILL
+    }
   })
 })

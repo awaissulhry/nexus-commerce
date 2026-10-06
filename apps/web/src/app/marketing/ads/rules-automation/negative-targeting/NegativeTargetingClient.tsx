@@ -45,6 +45,7 @@ import { useSearchParams } from 'next/navigation'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, Info } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -73,7 +74,6 @@ import { StaleBanner } from '../_shared/StaleBanner'
 // `RuleListTab` — are gone from this client. Both FILES stay: each has other importers.
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
-const MARKETS = ['IT', 'DE', 'ES', 'FR']
 const DEFAULT_MARKET = 'all'
 
 interface Payload {
@@ -120,7 +120,9 @@ export function NegativeTargetingClient() {
   // a link renders the same view for whoever opens it. `focus` and `alert` are in the contract from
   // day one even though NEG.2 and NEG.4 are the sections that read them: they are what make
   // "look at this" a link rather than a description of where to click.
-  const market = params.get('market') ?? DEFAULT_MARKET
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
   const scope: NegScope = {
     line: params.get('line') ?? '',
     portfolio: params.get('portfolio') ?? '',
@@ -450,7 +452,7 @@ export function NegativeTargetingClient() {
       <AdsPageHeader
         title="Negative Targeting"
         subtitle={activeTab?.subtitle ?? 'What you are blocking, where, and who decided'}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         onMarketChange={(m) => push({ market: m, campaign: '', adGroup: '' })}
         showDataSync={false}

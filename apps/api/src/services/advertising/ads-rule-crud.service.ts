@@ -117,7 +117,7 @@ async function ruleScopeProblems(rule: { actions?: unknown; scopeMarketplace?: s
     } else if (!marketLimitsOf(normalizeMarketplaceCode(market, ''))) {
       // 6b (S10) — the write gate refuses every write in a market without a checked Amazon limits row (a sandbox UK/SE/PL
       // connection is still "active"), so a rule there would only ever be refused.
-      out.push(`Nexus does not change ads in ${market}: it has no checked list of Amazon's currency, bid and budget limits there, so a rule there can never run. Choose ${ADS_LIMIT_MARKETS.join(', ')} or All markets.`)
+      out.push(`Nexus does not change ads in ${market}: Amazon's bid and budget limits for this market are not known yet, so a rule there can never run. Choose ${ADS_LIMIT_MARKETS.join(', ')} or All markets.`)
     }
   }
   const { builderScopeCampaignIds } = await import('./ads-rule-adapter.service.js')

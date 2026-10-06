@@ -31,9 +31,10 @@ import {
   type EntityPair, type LaunchEntityResult, type LaunchVerificationSummary,
 } from '../ads-core/launch-verify.js'
 
+/** CM-29 — the write gate's own resolver, so the read-back reads the profile the launch wrote to. */
 async function resolveCtx(marketplace: string): Promise<{ profileId: string; region: AdsRegion } | null> {
-  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
-  return conn ? { profileId: conn.profileId, region: (conn.region as AdsRegion) ?? 'EU' } : null
+  const { adsClientContextFor } = await import('./ads-profile-resolver.js')
+  return adsClientContextFor(marketplace)
 }
 
 const centsToUnits = (c: number | null | undefined): number | null => (c == null ? null : c / 100)

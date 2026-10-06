@@ -28,6 +28,7 @@ import {
 import type { PreviewRow } from './preview.js'
 import type { NegativeWriteResult } from '../ads-negative-kw.service.js'
 import { applyFields } from './field-map.js'
+import type { OwnLimit } from '../ads-write-gate.js'
 
 export interface ApplyOptions {
   actor: AdsActor
@@ -45,6 +46,13 @@ export interface ApplyOptions {
    * 'skip' (default) is the safe answer; 'mine' overwrites deliberately.
    */
   conflicts: 'skip' | 'mine'
+  /**
+   * 3A (Owner decided 2026-10-06) — the rows the person confirmed "Send anyway" for, past his own limits. A row past
+   * them without his confirmation is NEEDS_CONFIRMATION: nothing written, listed for the review step.
+   */
+  confirmOwnLimitsRows?: number[]
+  /** 3A — run only these rows (the "Send anyway for these rows" pass); every other row is left exactly as it is. */
+  onlyRows?: number[]
 }
 
 export interface ApplyRowResult {
@@ -52,8 +60,10 @@ export interface ApplyRowResult {
   entity: string
   targetId: string | null
   label: string
-  outcome: 'APPLIED' | 'SKIPPED' | 'FAILED'
+  outcome: 'APPLIED' | 'SKIPPED' | 'FAILED' | 'NEEDS_CONFIRMATION'
   message: string
+  /** 3A — with NEEDS_CONFIRMATION: the limits it goes past. */
+  limits?: OwnLimit[]
 }
 
 export interface ApplyResult {
@@ -61,6 +71,8 @@ export interface ApplyResult {
   applied: number
   skipped: number
   failed: number
+  /** 3A — rows waiting for the person's "Send anyway" (nothing written for them). */
+  needsConfirmation: number
   aborted: boolean
   results: ApplyRowResult[]
 }
@@ -101,8 +113,12 @@ async function createRow(
   jobId: string,
   opts: ApplyOptions,
   changeSetId: string,
-): Promise<{ outcome: ApplyRowResult['outcome']; message: string; createdId: string | null }> {
+): Promise<{ outcome: ApplyRowResult['outcome']; message: string; createdId: string | null; limits?: OwnLimit[] }> {
   if (!row.parentId) return { outcome: 'SKIPPED', message: 'No parent resolved for this new row', createdId: null }
+  // 3A — his "Send anyway" for this row; a person's create past his own limits otherwise waits for it.
+  const confirmOwnLimits = (opts.confirmOwnLimitsRows ?? []).includes(row.rowIndex)
+  const waits = (r: { outcome?: string; reason?: string | null; needsConfirmation?: { limits: OwnLimit[] } }) =>
+    r.outcome === 'needs_confirmation' ? { outcome: 'NEEDS_CONFIRMATION' as const, message: r.reason ?? 'This goes past your own limits.', createdId: null, limits: r.needsConfirmation?.limits ?? [] } : null
 
   const text = (c: string): string => (nextOf(row, c) ?? '').trim()
   const bidEur = (): number | null => {
@@ -143,7 +159,8 @@ async function createRow(
         if (!name) return { outcome: 'FAILED', message: 'Ad group name is required to create an ad group', createdId: null }
         const bid = (() => { const raw = text('Ad Group Default Bid'); if (!raw) return null; const m = parseMoney(raw); return 'error' in m ? null : m.value })()
         if (bid == null) return { outcome: 'FAILED', message: 'Ad Group Default Bid is required to create an ad group', createdId: null }
-        const r = await svc.createAdGroupLocal({ campaignId: row.parentId, name, defaultBidEur: bid, userId: actorId, manual })
+        const r = await svc.createAdGroupLocal({ campaignId: row.parentId, name, defaultBidEur: bid, userId: actorId, manual, confirmOwnLimits })
+        const wait = waits(r); if (wait) return wait
         created = { id: r.id, externalId: r.externalAdGroupId }
         break
       }
@@ -152,7 +169,8 @@ async function createRow(
         if (!kw) return { outcome: 'FAILED', message: 'Keyword text is required', createdId: null }
         if (!mt) return { outcome: 'FAILED', message: `Match type "${text('Match type')}" is not one we can create`, createdId: null }
         if (bid == null) return { outcome: 'FAILED', message: 'Bid is required to create a keyword', createdId: null }
-        const r = await svc.createKeywordLocal({ adGroupId: row.parentId, keywordText: kw, matchType: mt, bidEur: bid, userId: actorId, manual })
+        const r = await svc.createKeywordLocal({ adGroupId: row.parentId, keywordText: kw, matchType: mt, bidEur: bid, userId: actorId, manual, confirmOwnLimits })
+        const wait = waits(r); if (wait) return wait
         created = { id: r.id, externalId: r.externalTargetId }
         break
       }
@@ -186,7 +204,8 @@ async function createRow(
         const expr = text('Product targeting expression'); const bid = bidEur()
         if (!expr) return { outcome: 'FAILED', message: 'Product targeting expression is required', createdId: null }
         if (bid == null) return { outcome: 'FAILED', message: 'Bid is required to create a product target', createdId: null }
-        const r = await svc.createTargetLocal({ adGroupId: row.parentId, kind: 'PRODUCT', value: expr, bidEur: bid, userId: actorId, manual })
+        const r = await svc.createTargetLocal({ adGroupId: row.parentId, kind: 'PRODUCT', value: expr, bidEur: bid, userId: actorId, manual, confirmOwnLimits })
+        const wait = waits(r); if (wait) return wait
         created = { id: r.id, externalId: r.externalTargetId }
         break
       }
@@ -296,7 +315,10 @@ export async function applyPlan(
   // The change set: every AdvertisingActionLog row written below carries it, so
   // /actions/:changeSetId/rollback reverts the entire upload in one call.
   const changeSetId = `import:${jobId}`
-  const out: ApplyResult = { changeSetId, applied: 0, skipped: 0, failed: 0, aborted: false, results: [] }
+  const out: ApplyResult = { changeSetId, applied: 0, skipped: 0, failed: 0, needsConfirmation: 0, aborted: false, results: [] }
+  // 3A — the "Send anyway for these rows" pass runs only those rows.
+  const only = opts.onlyRows ? new Set(opts.onlyRows) : null
+  const confirmRows = new Set(opts.confirmOwnLimitsRows ?? [])
 
   // Rows already applied by an earlier run of this same job are skipped — this
   // is the idempotency guarantee, and it uses the staging table we already have.
@@ -307,6 +329,9 @@ export async function applyPlan(
 
   for (const row of rows) {
     if (out.aborted) break
+    if (only && !only.has(row.rowIndex)) continue
+    // 3A — a person's row past his own limits waits for his "Send anyway" (asked now, before anything is written).
+    const own = { askGate: isPersonEdit(opts.manual, opts.actor), confirmOwnLimits: confirmRows.has(row.rowIndex) }
 
     /**
      * The ONE place a row's fate is recorded — response, staging table and
@@ -324,9 +349,11 @@ export async function applyPlan(
      * Routing every outcome through here makes both impossible by construction
      * rather than by remembering.
      */
-    const settle = async (outcome: ApplyRowResult['outcome'], message: string, createdId?: string | null): Promise<void> => {
+    const settle = async (outcome: ApplyRowResult['outcome'], message: string, createdId?: string | null, limits?: OwnLimit[]): Promise<void> => {
       const targetId = createdId ?? row.targetId
-      out.results.push({ rowIndex: row.rowIndex, entity: row.entity, targetId, label: row.label, outcome, message })
+      out.results.push({ rowIndex: row.rowIndex, entity: row.entity, targetId, label: row.label, outcome, message, ...(limits ? { limits } : {}) })
+      // 3A — nothing was written: the staging row stays as it is (not applied), so the confirmed pass can apply it.
+      if (outcome === 'NEEDS_CONFIRMATION') { out.needsConfirmation++; return }
       if (outcome === 'APPLIED') out.applied++
       else if (outcome === 'SKIPPED') out.skipped++
       else out.failed++
@@ -376,7 +403,11 @@ export async function applyPlan(
      * second time. `conflicts: 'mine'` gets there too, when the value someone
      * else set is the value being forced.
      */
-    const settleWrite = async (res: { ok: boolean; error: string | null } | null): Promise<void> => {
+    const settleWrite = async (res: { ok: boolean; error: string | null; needsConfirmation?: { limits: OwnLimit[] } } | null): Promise<void> => {
+      if (res?.needsConfirmation) {
+        await settle('NEEDS_CONFIRMATION', res.error ?? 'This goes past your own limits.', null, res.needsConfirmation.limits)
+        return
+      }
       if (res?.ok && res.error === 'no_changes') {
         await settle('SKIPPED', 'Nothing to change — it already holds that value')
         return
@@ -400,13 +431,13 @@ export async function applyPlan(
       const r = await createRow(prisma, row, jobId, opts, changeSetId)
       // The created id is reported, not row.targetId — which is null on a create,
       // so the operator's result row used to name nothing at all.
-      await settle(r.outcome, r.message, r.createdId)
+      await settle(r.outcome, r.message, r.createdId, r.limits)
       continue
     }
     if (!row.targetId) { await rec('SKIPPED', 'No resolved entity to write to'); continue }
 
     try {
-      let res: { ok: boolean; error: string | null } | null = null
+      let res: { ok: boolean; error: string | null; needsConfirmation?: { limits: OwnLimit[] } } | null = null
 
       if (row.entity === 'Campaign') {
         // D2 — every writable column comes from the shared FIELD_MAP, which is
@@ -419,7 +450,7 @@ export async function applyPlan(
         if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateCampaignWithSync({
           campaignId: row.targetId, patch: patch as Parameters<typeof updateCampaignWithSync>[0]['patch'], actor: opts.actor,
-          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual,
+          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual, ...own,
         })
       } else if (row.entity === 'Portfolio') {
         // AX-IE.2 — same rails as everything else: through the write gate and
@@ -449,7 +480,7 @@ export async function applyPlan(
         if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateAdGroupWithSync({
           adGroupId: row.targetId, patch: patch as Parameters<typeof updateAdGroupWithSync>[0]['patch'], actor: opts.actor,
-          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual,
+          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual, ...own,
         })
       } else if (row.entity === 'Product ad') {
         // State-only, so it does not go through applyFields' patch shape —
@@ -472,7 +503,7 @@ export async function applyPlan(
         if (!Object.keys(patch).length) { await rec('SKIPPED', 'No writable field changed'); continue }
         res = await updateAdTargetWithSync({
           adTargetId: row.targetId, patch: patch as Parameters<typeof updateAdTargetWithSync>[0]['patch'], actor: opts.actor,
-          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual,
+          reason: `bulksheet import ${jobId}`, applyImmediately: opts.applyImmediately, changeSetId, manual: opts.manual, ...own,
         })
       } else {
         // Fail closed. This used to be a bare `else` falling into the AdTarget

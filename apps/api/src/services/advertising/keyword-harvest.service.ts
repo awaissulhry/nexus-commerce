@@ -72,6 +72,7 @@
  */
 
 import prisma from '../../db.js'
+import { adsReadMarkets } from './ads-markets.service.js'
 // HV.2 — the stored criteria. Kept in its own module because HV.4 (the write path) and any later
 // engine repair must resolve the SAME policy this page renders, and a copy would drift.
 import { resolveHarvestPolicy, type HarvestCriteria, type HvPolicyGrain } from './harvest-policy.service.js'
@@ -85,8 +86,8 @@ import {
   type ResolvedDestination, type HvCreateType,
 } from './harvest-destination.service.js'
 
-/** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
-export const HV_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
+// Ads wave 4c (F3) — no market list here: a market is in scope when Nexus reads its Amazon Ads account
+// (`adsReadMarkets`, ads-markets.service.ts). Callers pass that list, so the helpers below stay pure.
 /**
  * `all` is legitimate here, as it is on Negative Targeting and unlike on the Keyword Tracker.
  * Everything this page counts is a count of terms and a sum of euros, and both sum honestly
@@ -105,26 +106,26 @@ export const HV_MARKET_ALL = 'all'
  * An unknown code in the list is dropped rather than erroring: a stale link naming a market that
  * has since been disconnected should narrow the view, not break it.
  */
-export function parseMarketScope(raw: string): { kind: 'all' } | { kind: 'list'; codes: string[] } {
+export function parseMarketScope(raw: string, read: readonly string[]): { kind: 'all' } | { kind: 'list'; codes: string[] } {
   const v = (raw ?? '').trim()
   if (!v || v.toLowerCase() === HV_MARKET_ALL) return { kind: 'all' }
   const codes = [...new Set(v.split(',').map((c) => c.trim().toUpperCase()).filter(Boolean))]
-    .filter((c) => (HV_MARKETS as readonly string[]).includes(c))
+    .filter((c) => read.includes(c))
   // Every code was unknown, or the list was empty after cleaning — fall back to the widest honest
   // answer rather than silently returning nothing.
   return codes.length ? { kind: 'list', codes } : { kind: 'all' }
 }
 
 /** The Prisma filter for a scope. `all` adds no constraint; a list becomes an IN. */
-export const marketWhere = (market: string): Record<string, unknown> => {
-  const s = parseMarketScope(market)
+export const marketWhere = (market: string, read: readonly string[]): Record<string, unknown> => {
+  const s = parseMarketScope(market, read)
   if (s.kind === 'all') return {}
   return s.codes.length === 1 ? { marketplace: s.codes[0] } : { marketplace: { in: s.codes } }
 }
 
-const inScopeMarket = (m: string | null | undefined, market: string): boolean => {
-  const s = parseMarketScope(market)
-  if (s.kind === 'all') return HV_MARKETS.includes((m ?? '') as (typeof HV_MARKETS)[number])
+const inScopeMarket = (m: string | null | undefined, market: string, read: readonly string[]): boolean => {
+  const s = parseMarketScope(market, read)
+  if (s.kind === 'all') return read.includes(m ?? '')
   return s.codes.includes((m ?? '').toUpperCase())
 }
 
@@ -163,6 +164,8 @@ const isExactType = (expressionType: string | null | undefined): boolean =>
 // ── Scope ─────────────────────────────────────────────────────────────────────────────────────
 
 export interface HvScopeGraph {
+  /** The markets Nexus reads (`adsReadMarkets`): what "all" means, and the only markets a scope can name. */
+  readMarkets: readonly string[]
   campaigns: Array<{ id: string; name: string; marketplace: string | null; portfolioId: string | null }>
   /** one row per AdProductAd carrying a productId, joined up to its campaign */
   ads: Array<{ productId: string | null; campaignId: string }>
@@ -203,7 +206,7 @@ export interface HvResolvedScope {
  * constraint is about rules; it does not apply here and the two must not be confused.
  */
 export function resolveHvScope(graph: HvScopeGraph, req: HvScopeRequest): HvResolvedScope {
-  const inMarket = graph.campaigns.filter((c) => inScopeMarket(c.marketplace, req.market))
+  const inMarket = graph.campaigns.filter((c) => inScopeMarket(c.marketplace, req.market, graph.readMarkets))
   const base = { campaignsInMarket: inMarket.length }
   const marketIds = new Set(inMarket.map((c) => c.id))
 
@@ -547,9 +550,10 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
 
   // The fifth picker's universe: ad groups that hold a term in the window. Two steps, because
   // AmazonAdsSearchTerm carries EXTERNAL ids and AdGroup is keyed locally.
+  const readMarkets = await adsReadMarkets()
   const termAdGroups = await prisma.amazonAdsSearchTerm.groupBy({
     by: ['adGroupId'],
-    where: { date: { gte: since }, ...marketWhere(req.market) },
+    where: { date: { gte: since }, ...marketWhere(req.market, readMarkets) },
     _count: true,
   })
   const termsByExtAdGroup = new Map(termAdGroups.map((g) => [g.adGroupId, g._count]))
@@ -568,6 +572,7 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   const agById = new Map(adGroupRows.map((a) => [a.id, a]))
 
   const graph: HvScopeGraph = {
+    readMarkets,
     campaigns,
     ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId),
     products,
@@ -595,7 +600,7 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
     by: ['query', 'campaignId', 'adGroupId', 'marketplace', 'matchType'],
     where: {
       date: { gte: since },
-      ...marketWhere(req.market),
+      ...marketWhere(req.market, readMarkets),
       campaignId: { in: scopedCampaignExtIds },
       ...(scopedAdGroupExtIds ? { adGroupId: { in: scopedAdGroupExtIds } } : {}),
     },

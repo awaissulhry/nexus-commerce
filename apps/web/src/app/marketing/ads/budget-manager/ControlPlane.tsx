@@ -20,6 +20,7 @@ import { AllocationCanvas, type StagedChange, type OntoNode, type SelectRef } fr
 import { getBackendUrl } from '@/lib/backend-url'
 import { readDailyBudget, readTargetAcosPercent } from '../_shared/budgetInput'
 import './control-plane.css'
+import { askSendAnyway, type OwnLimitLine } from '../_shared/sendAnyway'
 
 interface EnfCampaign { id: string; name: string; currentDailyCents: number; targetDailyCents: number | null; deltaCents: number; clamp: 'min' | 'max' | 'floor' | null; suppress: boolean; restore: boolean; currentlySuppressed: boolean }
 interface EnfPlan { marketplace: string; month: string; capCents: number; mtdSpendCents: number; remainingBudgetCents: number; remainingDays: number; dayOfMonth: number; daysInMonth: number; autoPacing: boolean; stopOverSpend: boolean; capReached: boolean; todayTargetCents: number | null; campaigns: EnfCampaign[] }
@@ -334,9 +335,20 @@ export function ControlPlane({ open, onClose, enforcement, month, initialMarket,
     if (changes.length === 0) return
     setCommitting(true)
     try {
-      const r = await fetch(`${API()}/api/advertising/budget-manager/scenario/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, changes }) }).then((x) => x.json())
+      const send = (list: typeof changes, confirmOwnLimits = false) => fetch(`${API()}/api/advertising/budget-manager/scenario/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month, changes: list, ...(confirmOwnLimits ? { confirmOwnLimits: true } : {}) }) }).then((x) => x.json())
+      let r = await send(changes)
+      // 3A — changes past his own limits wait for "Send anyway"; with it, only those changes are committed again.
+      const waiting = (Array.isArray(r?.results) ? r.results : []).filter((x: { needsConfirmation?: { limits?: OwnLimitLine[] } }) => x.needsConfirmation)
+      if (waiting.length) {
+        const limits = waiting.flatMap((x: { needsConfirmation: { limits?: OwnLimitLine[] } }) => x.needsConfirmation.limits ?? [])
+        if (await askSendAnyway(limits, waiting.length)) {
+          const ids = new Set(waiting.map((x: { entityId: string; kind: string }) => `${x.entityId}|${x.kind}`))
+          const again = await send(changes.filter((c) => ids.has(`${c.entityId ?? c.campaignId}|${c.kind}`)), true)
+          r = { ...again, ok: (r?.failed ?? 0) === 0 && again?.ok, applied: (r?.applied ?? 0) + (again?.applied ?? 0), failed: (r?.failed ?? 0) + (again?.failed ?? 0) }
+        } else r = { ...r, ok: false }
+      }
       if (r?.ok) { toast(`Committed ${r.applied} change${r.applied === 1 ? '' : 's'} · undo within 5 min`); if (isWorking) { setScenario({}); setActiveId(null) } setSel(null); setCompareId(null); onCommitted() }
-      else { toast(`Committed ${r?.applied ?? 0}, ${r?.failed ?? 0} failed`); onCommitted() }
+      else { toast(`Committed ${r?.applied ?? 0}, ${r?.failed ?? 0} failed${r?.needsConfirmation ? `, ${r.needsConfirmation} not sent (past your own limits)` : ''}`); onCommitted() }
     } catch { toast('Commit failed') } finally { setCommitting(false) }
   }
   const commit = () => commitChanges(scenario, true)
