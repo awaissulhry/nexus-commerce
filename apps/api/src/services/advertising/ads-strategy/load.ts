@@ -53,8 +53,8 @@ export async function campaignMarkets(): Promise<string[]> {
   return rows.map((r) => r.marketplace!).filter(Boolean).sort()
 }
 
-/** Which of the rows' categories and products still exist here (a soft-deleted product does not). */
-async function liveScopes(rows: readonly StrategyRow[]): Promise<{ categories: Set<string>; products: Set<string> }> {
+/** Which of the rows' categories and products still exist here (a soft-deleted product does not). Also the playbook's rows. */
+export async function liveScopes(rows: ReadonlyArray<Pick<StrategyRow, 'level' | 'scopeId'>>): Promise<{ categories: Set<string>; products: Set<string> }> {
   const categoryIds = rows.filter((r) => r.level === 'CATEGORY').map((r) => r.scopeId)
   const productIds = rows.filter((r) => r.level === 'PRODUCT').map((r) => r.scopeId)
   const [categories, products] = await Promise.all([

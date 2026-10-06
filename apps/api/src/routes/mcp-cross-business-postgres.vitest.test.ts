@@ -984,6 +984,12 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
     channel: 'AMAZON', level: 'product', sku: undefined, categoryId: undefined, values: { goalNote: 'MCP.8 probe' },
     protectedTerms: undefined, restoreCampaignTargets: undefined, clearCampaignTargets: undefined, expectVersion: undefined, reason: undefined,
   },
+  // Ads playbook PB-2 — the playbook is read for ONE scope: the loop's product (its answer names the product). The channel
+  // is Amazon's (the loop's is eBay); a template, a category and a capture's selectors are left out.
+  'ads-playbook': {
+    channel: undefined, sku: undefined, categoryId: undefined, templateId: undefined, campaignIds: undefined, portfolioId: undefined,
+    namePrefix: undefined, productToken: undefined, competitorTokens: undefined,
+  },
   // T4 — the eBay ad details open an eBay campaign (the loop's campaignId and adGroupId are Amazon's).
   'ebay-ad-details': { get campaignId() { return seeded.b.ebayCampaignId }, adGroupId: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.
