@@ -30,6 +30,7 @@ import {
   type FulfilmentMethod,
   type MatrixCells,
   type MatrixCoordinate,
+  type MatrixFbaStock,
   type MatrixRead,
   type MatrixRowRead,
   type QueueCell,
@@ -127,7 +128,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
 
   // ── 2. wave 1 — one query per table keyed by the family ────────────────────────────────────
   const tWave1 = Date.now()
-  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, policies, formulas, snapshots] = await Promise.all([
+  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots] = await Promise.all([
     prisma.channelListing.findMany({ where: { productId: { in: memberIds } }, select: MATRIX_LISTING_SELECT }),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, currency: true, region: true } }),
     prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, isPrimary: true, workspaceId: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }),
@@ -135,10 +136,12 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     // Shared stock — the same ledgers the cascade uses (3 queries): a pooled member shows the pool.
     loadSyncLedgers(prisma, memberIds),
     prisma.fbaInventoryDetail.findMany({ where: { sku: { in: skus }, condition: 'SELLABLE' }, select: { sku: true, marketplaceId: true, quantity: true } }),
+    // The FBA qty column (Owner 2026-10-06): the AMAZON_FBA rows the guard sums (`fbaBucket`), read with their codes and times.
+    prisma.stockLevel.findMany({ where: { productId: { in: memberIds }, location: { type: 'AMAZON_FBA' } }, select: { productId: true, quantity: true, lastUpdatedAt: true, location: { select: { code: true } } } }),
     loadChannelPolicies(),
     prisma.cellFormula.findMany({ where: { productId: { in: memberIds }, scope: 'channel', fieldKey: 'price' }, select: { productId: true, channel: true, marketplace: true, aliasKey: true, expr: true } }),
     prisma.pricingSnapshot.findMany({ where: { sku: { in: skus }, fulfillmentMethod: null }, select: { sku: true, channel: true, marketplace: true, isClamped: true, clampedFrom: true, computedPrice: true } }),
-  ]); queries += 11
+  ]); queries += 12
   const audienceRows = parentRow.productType
     ? await prisma.$queryRawUnsafe<Array<{ marketplace: string | null; audience: unknown }>>(AUDIENCE_SQL, parentRow.productType)
     : []
@@ -187,6 +190,18 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const code = MARKETPLACE_ID_TO_CODE[d.marketplaceId] ?? d.marketplaceId
     const k = `${d.sku}|${code}`
     fbaSellable.set(k, (fbaSellable.get(k) ?? 0) + d.quantity)
+  }
+  /* The FBA qty column: a member's AMAZON_FBA rows; a parent reads its variations' (as the Stock column does). No row → null,
+     never 0 — "Nexus holds no FBA stock for this SKU" is a different fact from "Amazon holds 0". */
+  const fbaRowsOf = new Map<string, Array<{ code: string; units: number; at: Date | null }>>()
+  for (const l of fbaLevels) fbaRowsOf.set(l.productId, [...(fbaRowsOf.get(l.productId) ?? []), { code: l.location?.code ?? 'AMAZON_FBA', units: l.quantity, at: l.lastUpdatedAt }])
+  const fbaStockOf = (ids: readonly string[]): MatrixFbaStock | null => {
+    const rows = ids.flatMap((id) => fbaRowsOf.get(id) ?? [])
+    if (rows.length === 0) return null
+    const byCode = new Map<string, number>()
+    for (const r of rows) byCode.set(r.code, (byCode.get(r.code) ?? 0) + r.units)
+    const newest = rows.reduce<Date | null>((m, r) => (r.at && (!m || r.at > m) ? r.at : m), null)
+    return { units: rows.reduce((n, r) => n + r.units, 0), locations: [...byCode].map(([code, units]) => ({ code, units })), updatedAt: newest?.toISOString() ?? null }
   }
   const suppressed = new Set(openSuppressions.map((s) => s.listingId))
   const fbaOfferOn = new Set(fbaOffers.map((o) => o.channelListingId))
@@ -415,6 +430,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     return {
       id: member.id, sku: member.sku, role: isParent ? 'parent' : 'variant',
       stock: { available, uncounted, locations, source },
+      fba: fbaStockOf(isParent ? children.map((c) => c.id) : [member.id]),
       basePrice: decimalToNumber(member.basePrice), status: member.status, cells,
     }
   }

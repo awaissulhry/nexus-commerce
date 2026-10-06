@@ -135,3 +135,67 @@ describe('a product sheet write never writes an FBA row either', () => {
     expect(await quantityRows(itRow.id)).toBe(0)
   }), 60_000)
 })
+
+// The FBA qty column (Owner 2026-10-06): the Matrix SHOWS Amazon's FBA units next to Stock — and still writes none of them.
+describe('the FBA qty column: the read shows Amazon\'s number, the door writes none of it', () => {
+  let fbaLocation = ''
+  let warehouse = ''
+  beforeAll(() => scoped(async () => {
+    fbaLocation = (await prisma.stockLocation.create({ data: { code: 'AMAZON-EU-FBA', name: 'Amazon EU FBA', type: 'AMAZON_FBA' } })).id
+    warehouse = (await prisma.stockLocation.create({ data: { code: 'IT-MAIN-FBA-COL', name: 'Main', type: 'WAREHOUSE' } })).id
+  }), 60_000)
+  const fbaRow = async (productId: string) =>
+    (await state.db.db.query(`SELECT quantity, reserved, available, "lastUpdatedAt" FROM "StockLevel" WHERE "productId" = $1 AND "locationId" = $2`, [productId, fbaLocation])).rows[0]
+
+  it('per variant: the units at Amazon (a measured 0 is 0), null without an FBA row; the parent is the family total; warehouse stock is not FBA', () => scoped(async () => {
+    await prisma.product.create({ data: { id: 'fbacol-parent', sku: 'FBACOL-P', name: 'fbacol parent', basePrice: 10, isParent: true } })
+    for (const v of ['a', 'b', 'c']) await prisma.product.create({ data: { id: `fbacol-${v}`, sku: `FBACOL-${v.toUpperCase()}`, name: v, basePrice: 10, parentId: 'fbacol-parent' } })
+    await prisma.stockLevel.create({ data: { productId: 'fbacol-a', locationId: fbaLocation, quantity: 14, available: 14 } })
+    await prisma.stockLevel.create({ data: { productId: 'fbacol-b', locationId: fbaLocation, quantity: 0, available: 0 } })
+    await prisma.stockLevel.create({ data: { productId: 'fbacol-c', locationId: warehouse, quantity: 9, available: 9 } })
+
+    const read = await getMatrixRead({ productId: 'fbacol-parent', canEditPrice: true })
+    const fba = (id: string) => read.rows.find((r) => r.id === id)!.fba
+    expect(fba('fbacol-a')).toMatchObject({ units: 14, locations: [{ code: 'AMAZON-EU-FBA', units: 14 }] })
+    expect(Number.isFinite(Date.parse(fba('fbacol-a')!.updatedAt!))).toBe(true)
+    expect(fba('fbacol-b')).toMatchObject({ units: 0, locations: [{ code: 'AMAZON-EU-FBA', units: 0 }] })
+    // 🔴 no FBA row is null, never 0 — and the 9 warehouse units are Stock, not FBA.
+    expect(fba('fbacol-c')).toBeNull()
+    expect(read.rows.find((r) => r.id === 'fbacol-c')!.stock.available).toBe(9)
+    expect(fba('fbacol-parent')).toMatchObject({ units: 14, locations: [{ code: 'AMAZON-EU-FBA', units: 14 }] })
+    expect(read.rows.find((r) => r.id === 'fbacol-parent')!.role).toBe('parent')
+  }), 60_000)
+
+  it('a family with no FBA row anywhere reads null on every row, the parent included', () => scoped(async () => {
+    await prisma.product.create({ data: { id: 'nofba-parent', sku: 'NOFBA-P', name: 'nofba parent', basePrice: 10, isParent: true } })
+    await prisma.product.create({ data: { id: 'nofba-a', sku: 'NOFBA-A', name: 'a', basePrice: 10, parentId: 'nofba-parent' } })
+    const read = await getMatrixRead({ productId: 'nofba-parent', canEditPrice: true })
+    expect(read.rows.map((r) => r.fba)).toEqual([null, null])
+  }), 60_000)
+
+  it.each([['syncQty', 7], ['syncMode', 'PINNED'], ['syncBuffer', 2]] as const)('🔴 %s on an FBA row whose SKU holds FBA units: held in the read, refused by the door; the FBA stock row and the listings are byte-identical', (cell, value) => scoped(async () => {
+    const id = `fbacol-door-${cell.toLowerCase()}`
+    const { it: itRow, de } = await seed(id, { fba: true })
+    await prisma.stockLevel.create({ data: { productId: id, locationId: fbaLocation, quantity: 12, available: 12 } })
+    const read = await getMatrixRead({ productId: id, canEditPrice: true })
+    const row = read.rows.find((r) => r.id === id)!
+    expect(row.fba).toMatchObject({ units: 12 })
+    // FBA units on hand: the fail-closed guard holds the region's inventory cells in the READ, with the sentence.
+    const cells = row.cells['AMAZON:EU']!
+    expect(cells.writable[cell]).toBe(false)
+    // (The IT row is stored FBM under an FBA guard, so the guard's own sentence is the one held — either names the lock.)
+    const held = [MATRIX_COPY.amazonManaged, MATRIX_COPY.guardFba]
+    expect(held).toContain(cells.writeBlockedReason[cell])
+    const before = { stock: await fbaRow(id), it: await raw(itRow.id), de: await raw(de.id) }
+    // …and a write sent anyway (a stale page, a hand-made request) is refused by the door.
+    const result = await writeMatrixCells({ productId: id, actor: 'studio@example.test', can: () => true }, [
+      { rowId: id, coordinateKey: 'AMAZON:EU', cell, value, expectedVersion: cells.version },
+    ])
+    expect(result.results[0]).toMatchObject({ outcome: 'refused' })
+    expect(held).toContain(result.results[0]!.reason)
+    expect(await fbaRow(id)).toEqual(before.stock)
+    expect(await raw(de.id)).toEqual(before.de)
+    expect(await raw(itRow.id)).toEqual(before.it)
+    expect(await quantityRows(de.id)).toBe(0)
+  }), 60_000)
+})

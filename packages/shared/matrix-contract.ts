@@ -216,9 +216,23 @@ export interface MatrixRowRead {
      */
     source?: { kind: 'pool'; grantId: string; lenderName: string } | null
   }
+  /**
+   * Amazon FBA stock (Owner 2026-10-06): the units Amazon holds for this SKU, as Nexus mirrors them — Σ `StockLevel.quantity`
+   * at this business's AMAZON_FBA locations, the number the FBA guard reads (`ProductLedger.fbaBucket`). READ-ONLY on every
+   * surface: Amazon owns it, nothing in Nexus writes it. A parent: the family total of its variations.
+   * `null` = no FBA stock row for this SKU, never `0`; absent = an older server that did not read it.
+   */
+  fba?: MatrixFbaStock | null
   basePrice: number | null
   status: string
   cells: Record<CoordinateKey, MatrixCells>
+}
+
+export interface MatrixFbaStock {
+  units: number
+  locations: ReadonlyArray<{ code: string; units: number }>
+  /** ISO time Nexus last wrote one of these rows (`StockLevel.lastUpdatedAt`, the newest). */
+  updatedAt: string | null
 }
 
 export interface MatrixRead {
@@ -371,6 +385,11 @@ export const MATRIX_COPY = {
   uncountedHint: 'No routed location holds this SKU — nothing is pushed',
   closedHint: 'Selling is paused here — set Active in the sheet\'s Status column and Publish',
   guardFba: 'Guard reads FBA — the quantity is not pushed',
+  /** The FBA qty column (Shared group): locked on every row, and this is why. */
+  fbaLocked: 'Amazon-managed — Nexus shows this number and never changes it',
+  fbaNone: 'No Amazon FBA stock for this SKU in Nexus',
+  fbaNotRead: 'FBA stock was not read',
+  fbaUnits: (units: number, locations: readonly string[]) => `${units} ${units === 1 ? 'unit' : 'units'} at Amazon${locations.length ? ` (${locations.join(' · ')})` : ''}`,
   reported: (r: 'AFN' | 'MFN') => `Amazon reports ${r} — differs from Nexus`,
   followsBase: (price: string) => `Follows the base price ${price}`,
   setHere: 'Set here',

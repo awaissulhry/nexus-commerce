@@ -43,6 +43,22 @@ describe('parseMatrixRead — the ONE parse boundary refuses half a Matrix', () 
     expect(bare.read.coordinates[0]!.market).toBe('IT')
     expect(bare.read.rows[0]!.role).toBe('variant')
   })
+  it('the FBA qty: a number with its locations; null stays null (no FBA row); absent or malformed reads as NOT READ, never 0', () => {
+    const rowWith = (fba: unknown) => ({ ...LIVE.rows[0], fba })
+    const parse = (rows: unknown[]) => { const r = parseMatrixRead({ ...LIVE, rows }, 'p'); if ('problem' in r) throw new Error(r.problem); return r.read.rows }
+    const [counted, zero, none, absent, broken] = parse([
+      rowWith({ units: 14, locations: [{ code: 'AMAZON-EU-FBA', units: 14 }, { code: 7 }], updatedAt: '2026-01-02T03:04:05.000Z' }),
+      rowWith({ units: 0, locations: [{ code: 'AMAZON-EU-FBA', units: 0 }], updatedAt: null }),
+      rowWith(null),
+      LIVE.rows[0],
+      rowWith({ units: 'many' }),
+    ])
+    expect(counted!.fba).toEqual({ units: 14, locations: [{ code: 'AMAZON-EU-FBA', units: 14 }], updatedAt: '2026-01-02T03:04:05.000Z' })
+    expect(zero!.fba).toEqual({ units: 0, locations: [{ code: 'AMAZON-EU-FBA', units: 0 }], updatedAt: null })
+    expect(none!.fba).toBeNull()
+    expect(absent!.fba).toBeUndefined()
+    expect(broken!.fba).toBeUndefined()
+  })
 })
 
 describe('fetchMatrix — live / preview / error decided on the probe\'s own status', () => {
