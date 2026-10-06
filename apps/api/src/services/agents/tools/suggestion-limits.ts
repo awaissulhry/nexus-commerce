@@ -253,7 +253,7 @@ export async function suggestionLimitFacts(items: readonly DecisionItem[], appro
   }
   const limitFacts = await buildLimitFacts({
     tool: 'decide-automation-suggestions', items: kit, approvalId, projectMonth: true,
-    exceptRuleIds: [...new Set(rows.map((r) => r.ruleId))],
+    exceptIds: [...new Set(rows.map((r) => r.ruleId))],
   })
   return { limitFacts, suggestions: facts, limitsNote: [...limitsNote(limitFacts), ...suggestionNote(facts)] }
 }

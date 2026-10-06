@@ -28,7 +28,8 @@ import { ENGINE_SETTINGS, SETTING_ARG, applyTune, planTune, restoreArgsOf, tuneS
 import type { DecisionItem } from '../../advertising/ads-suggestion-decide.service.js'
 import type { StoredReach } from './ads-change-kit.js'
 import { SUGGESTION_LIMITS, suggestionLimitFacts, suggestionRefusal } from './suggestion-limits.js'
-import { SAVE_RULE_LIMITS, TUNE_LIMITS, TURN_UP_LIMITS, ruleSaveFacts, ruleSaveRefusal, tuneRefusal, turnUpRefusal } from './automation-limits.js'
+import { SAVE_RULE_LIMITS, TUNE_LIMITS, TURN_UP_LIMITS, automationFacts, ruleSaveFacts, ruleSaveRefusal, tuneRefusal, turnUpRefusal } from './automation-limits.js'
+import { automationScope, tuneScope } from '../../advertising/ads-strategy/automation-scope.js'
 
 const ID = z.string().trim().min(1).max(64)
 const JSON_OBJECT = z.record(z.string().max(64), z.unknown())
@@ -222,7 +223,9 @@ function switchTool(direction: Direction): AgentTool {
       ? 'Move an automation (an ads rule, an eBay or operations rule, the ads dial, a plan, a pool, a schedule, a coverage set, ' +
         'an autonomous agent, a repricing rule) UP the OFF · OBSERVE · PROPOSE · AUTO ladder. A move waits for a person: ' +
         'approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the business set it so — unless ' +
-        'the business lets it run by its rule inside its limits: up to PROPOSE by default; AUTO only for an automation the ' +
+        'the business lets it run by its rule inside its limits and, for an Amazon ads automation, the ads strategy where it ' +
+        'acts (its products, else its market; one for the whole account or across markets waits): up to PROPOSE by default; ' +
+        'AUTO only for an automation the ' +
         'business lists, once its graduation gate is open (the preview shows the evidence), and a rule only with its own caps ' +
         'set inside those limits. A rule (Amazon or eBay ads, marketing, listing, replenishment, review or bulk-operation) ' +
         'reaches AUTO only after the graduation gate (14 days watched, 10 real runs, 1 match; an Amazon ads rule also a live ' +
@@ -248,8 +251,10 @@ function switchTool(direction: Direction): AgentTool {
     // Seeing automations (ai.view, as list-automations) is the floor; each kind's own manage permission is checked per call.
     requires: [F.aiView],
     reversibility: 'full',
-    // AA-W2-11 (D-W2-4 = A) — up may run by rule too: to AUTO only for listed automations once their gate is open.
+    // AA-W2-11 (D-W2-4 = A) — up may run by rule too: to AUTO only for listed automations once their gate is open. Up is
+    // the ads strategy's `automation` kind: judged where the automation acts (automation-scope.ts). Down is a brake.
     maxClaudeTrust: 'auto',
+    ...(up ? { strategyBound: 'amazon-ads' as const } : {}),
     limits: up
       ? TURN_UP_LIMITS
       : z.object({ allowBrakeDown: z.boolean().default(false).describe('let Claude turn a brake down without a person (it can raise spend); never by default') }),
@@ -270,7 +275,10 @@ function switchTool(direction: Direction): AgentTool {
       if ('error' in found) return { ok: false, error: found.error }
       const planned = await planSwitch(found.adapter, args.rowId as string | undefined, args.level as AutomationLevel, direction)
       if ('error' in planned) return { ok: false, error: planned.error }
-      return { ok: true, preview: planned.plan }
+      if (!up) return { ok: true, preview: planned.plan }
+      // AA-W2-11 — what the business's rule is judged on: the ads strategy where the automation acts.
+      const byRule = await automationFacts(await automationScope(found.adapter.key, args.rowId as string | undefined), 'turn-up-automation', ctx.approvalId, [planned.plan.row.id])
+      return { ok: true, preview: { ...planned.plan, ...byRule } }
     },
     async execute(args, ctx) {
       const found = permitted(ctx, args.automation, args.rowId)
@@ -703,7 +711,8 @@ const tuneAdEngine: AgentTool = {
     'schedule\'s windows (budget-schedule), a harvest policy (harvest-policy: the criteria that qualify a search term, per scope), an eBay ' +
     'campaign\'s automation policy (ebay-campaign-policy), the account default target ACOS (account-target-acos) or the anomaly breaker\'s ' +
     'limits (breaker). A change waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator ' +
-    'code when the business set it so — unless the business lets it run by its rule inside its limits. The preview shows every ' +
+    'code when the business set it so — unless the business lets it run by its rule inside its limits and the ads strategy ' +
+    'where the setting acts (one that can raise spend for the whole account waits). The preview shows every ' +
     'change, whether it can raise spend (a higher budget, cap, target ACOS or breaker limit, a pool shift, a looser harvest, a ' +
     'lowering window removed) and by how many percent at most: a change that cannot raise spend may run by rule; one that can, ' +
     'only when each raise is one value rising within the business\'s percent (0 by default); a raise with no percent — a cleared ' +
@@ -717,8 +726,10 @@ const tuneAdEngine: AgentTool = {
   requires: [F.adsAutomationManage, FIELDS.financialsAdspendView],
   reversibility: 'full',
   // AA-W2-11 — may run by rule: a change that cannot raise spend, or one whose every raise is within `maxRaisePct`
-  // (a numeric limit in place of the old allowRaise switch; 0 by default).
+  // (a numeric limit in place of the old allowRaise switch; 0 by default) — and, as the ads strategy's `automation`
+  // kind, inside the strategy where the setting acts (automation-scope.ts).
   maxClaudeTrust: 'auto',
+  strategyBound: 'amazon-ads',
   limits: TUNE_LIMITS,
   withinLimits: tuneRefusal,
   undo: TUNE_UNDO,
@@ -782,7 +793,9 @@ const tuneAdEngine: AgentTool = {
     if (refusal) return { ok: false, error: refusal }
     const planned = await planTune(input)
     if ('error' in planned) return { ok: false, error: planned.error }
-    return { ok: true, preview: planned.plan }
+    // AA-W2-11 — what the business's rule is judged on: the ads strategy where the setting acts.
+    const byRule = await automationFacts(await tuneScope(input.setting, input.subjectId, input.values), 'tune-ad-engine', ctx.approvalId, planned.plan.subject.id ? [planned.plan.subject.id] : [])
+    return { ok: true, preview: { ...planned.plan, ...byRule } }
   },
   async execute(args, ctx) {
     const input = tuneInputOf(args)

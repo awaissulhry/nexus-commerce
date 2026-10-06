@@ -73,8 +73,8 @@ export const MAX_KIT_ITEMS = 250
  *   dailyBudget  a campaign's daily budget.
  *   status       ENABLED / PAUSED / ARCHIVED; `dailyBudgetCents`: the campaign budget that starts (or stops) spending.
  *   negative     a new negative keyword or target (it only lowers spend).
- *   rule         AA-W2-11 — an ads rule saved for this scope: Nexus only, it moves no value itself (it acts only once
- *                it is turned up, as itself, inside its caps).
+ *   automation   AA-W2-11 — an ads rule saved, or an automation turned up or tuned, for this scope: Nexus only, it moves
+ *                no value itself (the automation acts as itself, inside its own caps).
  */
 export type KitChange =
   | { field: 'bid'; fromCents: number | null; toCents: number; forced?: boolean }
@@ -82,7 +82,7 @@ export type KitChange =
   | { field: 'placementPct' | 'targetAcosPct'; fromPct: number | null; toPct: number }
   | { field: 'status'; from: string | null; to: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudgetCents?: number }
   | { field: 'negative'; term: string; matchType?: string | null }
-  | { field: 'rule' }
+  | { field: 'automation' }
 
 export interface KitItem {
   entity: AdEntityRef
@@ -136,7 +136,7 @@ export function measure(change: KitChange): Measured {
     }
     case 'negative':
       return { ...none, direction: 'cut' }
-    case 'rule':
+    case 'automation':
       return { ...none, direction: 'same' }
   }
 }
@@ -335,7 +335,7 @@ const CUT_WORDS: Record<KitChange['field'], string> = {
   targetAcosPct: 'lowering its target ACoS',
   status: 'stopping it',
   negative: 'negating',
-  rule: 'changing what acts on it',
+  automation: 'changing what acts on it',
 }
 
 /**
@@ -350,8 +350,9 @@ export async function buildLimitFacts(input: {
   items: readonly KitItem[]
   approvalId?: string | null
   projectMonth?: boolean
-  /** AA-W2-10 — rules C4 does not count as an engine that also moves it (a rule whose own suggestion is applied). */
-  exceptRuleIds?: readonly string[]
+  /** AA-W2-10, AA-W2-11 — rules or schedules C4 does not count as an engine that also moves it (a rule whose own
+   *  suggestion is applied, the automation being turned up or saved). */
+  exceptIds?: readonly string[]
   now?: Date
 }): Promise<LimitFacts> {
   const action = actionOfTool(input.tool)
@@ -438,7 +439,7 @@ export async function buildLimitFacts(input: {
     if (!s.campaignId || campaigns.has(s.campaignId)) continue
     campaigns.set(s.campaignId, s.kind === 'campaign' ? s.label : `the campaign of ${s.label}`)
   }
-  for (const [campaignId, by] of await enginesOnCampaigns(campaigns.keys(), { exceptRuleIds: input.exceptRuleIds })) facts.engineOwned.push({ campaignId, label: campaigns.get(campaignId)!, by })
+  for (const [campaignId, by] of await enginesOnCampaigns(campaigns.keys(), { exceptIds: input.exceptIds })) facts.engineOwned.push({ campaignId, label: campaigns.get(campaignId)!, by })
 
   // C5, C6 — what already ran by rule.
   const ledger = await ruleRunLedger({ excludeApprovalId: input.approvalId, now: input.now })
@@ -520,6 +521,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   create: 'new campaigns',
   rule: 'ads rules',
   undo: 'undoing ad changes',
+  automation: 'turning ads automations up and tuning their settings',
 }
 /** What a strategy level below auto allows, in W1-8's words (claude-trust.service.ts narrowedWhy). */
 const ALLOWS: Record<Exclude<ClaudeTrust, 'auto'>, (what: string) => string> = {

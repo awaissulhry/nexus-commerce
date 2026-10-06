@@ -58,6 +58,9 @@ beforeAll(async () => {
     ids.builtIn = (await db.rankTarget.create({ data: { key: 'test-builtin', name: 'TEST built-in', placement: 'PLACEMENT_TOP', builtIn: true } as never })).id
     const campaign = await db.campaign.create({ data: { name: 'TEST CAMPAIGN', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'IT', externalCampaignId: 'TEST-CMP-1', portfolioId: 'TEST-PORTFOLIO-1' } })
     ids.campaign = campaign.id
+    // AA-W2-11 — the pool acts on this campaign, in a market whose ads strategy lets Claude's rule make 100 changes a day.
+    await db.budgetPoolAllocation.create({ data: { budgetPoolId: ids.pool, marketplace: 'IT', campaignId: campaign.id, targetSharePct: 1, minDailyBudgetCents: 100 } })
+    await db.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test market (IT)', claudeMaxChangesPerDay: 100, version: 1, updatedBy: 'user:test' } })
     ids.schedule = (await db.budgetSchedule.create({ data: { name: 'TEST budget schedule', kind: 'BUDGET', type: 'CAMPAIGN_BUDGET', campaigns: [{ id: campaign.id, dailyBudget: 10 }], windows: [{ day: 1, start: '22:00', end: '23:00', adj: 'decPct', value: 30 }], enabled: false } as never })).id
     ids.multiplier = (await db.budgetSchedule.create({ data: { name: 'TEST multiplier', kind: 'BUDGET', type: 'budget-multiplier', campaigns: [], windows: [], enabled: false } as never })).id
     const connection = await db.channelConnection.create({ data: { channelType: 'EBAY', accountLabel: 'r14', isActive: true, externalAccountId: 'TEST-EBAY-SELLER', authStatus: 'connected', managedBy: 'oauth', region: 'IT' } as never })
@@ -83,13 +86,15 @@ describe('R14 — tune-ad-engine', () => {
     // AA-W2-11 — a new strategy and a shorter cool-down have no percent: a person decides, whatever the limits say.
     expect(bigger.preview!.largestRaisePct).toBeNull()
     expect(inLimits(bigger.preview)).toMatch(/^it can raise spend in a way that has no percent \(the pool's daily budget rises .*\); a person decides$/)
-    expect(tool().withinLimits!(bigger.preview, { maxRaisePct: 1000 })).toContain('has no percent')
+    expect(tool().withinLimits!(bigger.preview, { ...tool().limits!.parse({}), maxRaisePct: 1000 })).toContain('has no percent')
     // One value rising from a value above 0 has a percent: 0 by default waits; the business's percent lets it run.
     const budget = await dry({ setting: 'budget-pool', subjectId: ids.pool, budgetPool: { totalDailyBudgetCents: 8000 } })
     expect(budget.preview).toMatchObject({ raises: ["the pool's daily budget rises from €50.00 to €80.00"], largestRaisePct: 60 })
     expect(inLimits(budget.preview)).toBe("it can raise spend by up to 60 % (the pool's daily budget rises from €50.00 to €80.00), more than the 0 % this tool's limits let run without a person (0: every raise waits for a person); a person decides")
-    expect(tool().withinLimits!(budget.preview, { maxRaisePct: 59 })).toContain('more than the 59 %')
-    expect(tool().withinLimits!(budget.preview, { maxRaisePct: 60 })).toBeNull()
+    expect(tool().withinLimits!(budget.preview, { ...tool().limits!.parse({}), maxRaisePct: 59 })).toContain('more than the 59 %')
+    expect(tool().withinLimits!(budget.preview, { ...tool().limits!.parse({}), maxRaisePct: 60 })).toBeNull()
+    // The ads strategy where the pool acts (its campaign in IT) is in the preview.
+    expect(budget.preview).toMatchObject({ automationScope: { placed: true, outside: false }, limitFacts: { tool: 'tune-ad-engine', action: 'automation', this: { markets: ['IT'], items: 1 } } })
 
     const done = await run({ setting: 'budget-pool', subjectId: ids.pool, budgetPool: { totalDailyBudgetCents: 8000 } })
     expect(done).toMatchObject({ ok: true, data: { setting: 'budget-pool', changes: { totalDailyBudgetCents: { from: 5000, to: 8000 } } } })

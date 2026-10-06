@@ -16,23 +16,50 @@
  *   tune-ad-engine      a change that can raise spend runs by rule only when every raise is one value rising by a
  *                       percent (`largestRaisePct`) within `maxRaisePct` (0 by default); a raise with no percent — a
  *                       cleared cap, a new strategy, a window, a looser harvest, a breaker that trips later — waits.
+ *   strategy            turn-up-automation and tune-ad-engine are the strategy's `automation` kind (fields.ts), so both
+ *                       are strategy-bound: judged by the kit where the automation acts (automation-scope.ts: its
+ *                       products, else its market). One for the whole account, or across markets, waits for a person;
+ *                       one outside Amazon ads (eBay, marketing, operations) is not the strategy's to judge.
  *
  * Every check is pure: what it needs is in the preview the dry run stored.
  */
 import { z } from 'zod'
 import { LEVELS, type AutomationLevel, type GateEvidence } from '../../automation/automation-levels.js'
 import type { RuleCaps, RuleScope } from '../../automation/automation-rule-guard.js'
-import { adKitLimits, buildLimitFacts, commonRefusal, type KitItem, type LimitFacts } from './ads-autonomy-kit.js'
+import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, type KitItem, type LimitFacts } from './ads-autonomy-kit.js'
 import type { AdEntityRef } from '../../advertising/ads-strategy/autonomy.js'
+import { automationEntity, type AutomationScope } from '../../advertising/ads-strategy/automation-scope.js'
 
 const A_PERSON = 'a person decides'
 type Limits = Record<string, unknown>
 const numberIn = (limits: Limits, key: string) => (typeof limits[key] === 'number' ? (limits[key] as number) : 0)
 const rank = (level: AutomationLevel) => LEVELS.indexOf(level)
 
+// ── where an automation move lands (turn-up-automation, tune-ad-engine) ─────────────────────────────────────
+
+/** Where an automation move lands, as its preview stores it: placed in one market, outside the strategy, or not placed. */
+export interface AutomationScopeFacts { placed: boolean; outside: boolean; why: string | null }
+
+/** The kit's facts of an automation move where it acts, and where that is. `exceptIds`: the automation itself (C4). */
+export async function automationFacts(scope: AutomationScope, tool: string, approvalId?: string | null, exceptIds: readonly string[] = []): Promise<{ limitFacts: LimitFacts; automationScope: AutomationScopeFacts }> {
+  const entity = await automationEntity(scope)
+  const items: KitItem[] = entity ? [{ entity, change: { field: 'automation' }, nexusOnly: true }] : []
+  return {
+    limitFacts: await buildLimitFacts({ tool, items, approvalId, exceptIds }),
+    automationScope: 'outside' in scope ? { placed: true, outside: true, why: scope.why } : 'unplaced' in scope ? { placed: false, outside: false, why: scope.unplaced } : { placed: true, outside: false, why: null },
+  }
+}
+
+/** A move the strategy cannot place waits for a person; then the kit's checks. Null when both pass. Pure. */
+function scopeAndCommonRefusal(preview: unknown, limits: Limits): string | null {
+  const scope = (preview as { automationScope?: AutomationScopeFacts } | null)?.automationScope
+  if (scope && !scope.placed) return `${scope.why}; ${A_PERSON}`
+  return commonRefusal(preview, limits)
+}
+
 // ── turn-up-automation ────────────────────────────────────────────────────────────────────────────────────────
 
-export const TURN_UP_LIMITS = z.object({
+export const TURN_UP_LIMITS = adKitLimits({ maxItems: 1 }, {
   maxLevel: z.enum(['OBSERVE', 'PROPOSE', 'AUTO']).default('PROPOSE')
     .describe('the highest level Claude may turn an automation up to without a person; AUTO also needs the automation on `automations` and its graduation gate open'),
   automations: z.array(z.string().trim().min(1).max(64)).max(64).default([])
@@ -58,6 +85,8 @@ export function turnUpRefusal(preview: unknown, limits: Limits): string | null {
   if (!p?.to) return 'there is no preview of this move to check'
   // R16 / D-R2, D-W2-4 — an engine the server env switches goes up only with a person's click.
   if (p.env) return 'an engine switched up is never inside the limits: a person clicks it'
+  const placed = scopeAndCommonRefusal(preview, limits)
+  if (placed) return placed
   const max = (LEVELS as readonly string[]).includes(String(limits.maxLevel)) ? (limits.maxLevel as AutomationLevel) : 'PROPOSE'
   if (rank(p.to) > rank(max)) return `${p.to} is above ${max}, the highest level allowed without a person`
   if (p.to !== 'AUTO') return null
@@ -114,7 +143,7 @@ export function ruleScopeItem(scope: RuleScope): { item: KitItem } | { why: stri
     entity = { kind: 'products', market, productIds: [scope.productId], label: 'a rule for one product' }
   } else if (market) entity = { kind: 'products', market, productIds: [], label: scope.portfolioId ? `a rule for a portfolio in ${market}` : `a rule for the whole of ${market}` }
   else return { why: 'a rule whose scope names no market, campaign or product cannot be placed in an ads strategy' }
-  return { item: { entity, change: { field: 'rule' }, nexusOnly: true } }
+  return { item: { entity, change: { field: 'automation' }, nexusOnly: true } }
 }
 
 /** The facts an Amazon save-ad-rule preview stores for its rule: the kit's for its scope, and its caps and level. */
@@ -124,7 +153,7 @@ export async function ruleSaveFacts(plan: { kind: string; ruleId: string | null;
   const limitFacts = await buildLimitFacts({
     tool: 'save-ad-rule', items: 'item' in placed ? [placed.item] : [], approvalId,
     // The rule being edited is not an engine that also moves its own scope.
-    exceptRuleIds: plan.ruleId ? [plan.ruleId] : [],
+    exceptIds: plan.ruleId ? [plan.ruleId] : [],
   })
   const caps = plan.caps ?? {}
   return {
@@ -164,7 +193,7 @@ export function ruleSaveRefusal(preview: unknown, limits: Limits): string | null
 
 // ── tune-ad-engine ────────────────────────────────────────────────────────────────────────────────────────────
 
-export const TUNE_LIMITS = z.object({
+export const TUNE_LIMITS = adKitLimits({ maxItems: 1 }, {
   maxRaisePct: z.number().min(0).max(1000).default(0)
     .describe('the largest raise, in percent of the value before, a setting change may make without a person (a higher budget, cap or target ACOS); 0 = every change that can raise spend waits for a person. A raise with no percent (a cleared cap, a new strategy, a window, a looser harvest, a breaker that trips later) always waits'),
 })
@@ -173,7 +202,15 @@ export const TUNE_LIMITS = z.object({
 export function tuneRefusal(preview: unknown, limits: Limits): string | null {
   const p = preview as { raises?: unknown; largestRaisePct?: number | null } | null
   if (!p || !Array.isArray(p.raises)) return 'there is no preview of this setting change to check'
-  if (!p.raises.length) return null
+  if (!p.raises.length) {
+    // A change that cannot raise spend tightens: one for the whole account is not held to one market's strategy (the
+    // door already holds it to the strictest level the business's strategy sets for automations).
+    const scope = (preview as { automationScope?: AutomationScopeFacts }).automationScope
+    if (scope && !scope.placed) return limitFactsOf(preview) ? null : commonRefusal(preview, limits)
+    return commonRefusal(preview, limits)
+  }
+  const placed = scopeAndCommonRefusal(preview, limits)
+  if (placed) return placed
   const raises = (p.raises as string[]).join('; ')
   if (typeof p.largestRaisePct !== 'number') return `it can raise spend in a way that has no percent (${raises}); ${A_PERSON}`
   const max = numberIn(limits, 'maxRaisePct')

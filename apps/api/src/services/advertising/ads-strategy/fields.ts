@@ -62,6 +62,9 @@ export const CLAUDE_ACTION_TOOLS = {
   create: ['create-ad-campaign'],
   rule: ['save-ad-rule'],
   undo: ['undo-ad-change'],
+  // AA-W2-11 — an Amazon ads automation moved up or tuned, where it acts (automation-scope.ts): its products, else its
+  // market. Turning one down stays a brake (never narrowed).
+  automation: ['turn-up-automation', 'tune-ad-engine'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]

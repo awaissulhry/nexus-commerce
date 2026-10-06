@@ -12,10 +12,27 @@
 import { describe, expect, it } from 'vitest'
 import { limitsTighten } from '../claude-trust.service.js'
 import { gateOfCounts } from '../../automation/automation-levels.js'
+import { LIMIT_FACTS_VERSION, type LimitFacts } from './ads-autonomy-kit.js'
 import { SAVE_RULE_LIMITS, TUNE_LIMITS, TURN_UP_LIMITS, ruleSaveRefusal, ruleScopeItem, tuneRefusal, turnUpRefusal } from './automation-limits.js'
 
 const DAY = 86_400_000
 const NOW = new Date('2026-10-06T12:00:00Z')
+
+/** One automation move in IT, inside a strategy that lets 10 changes run by rule a day (the kit's checks pass). */
+const limitFacts: LimitFacts = {
+  v: LIMIT_FACTS_VERSION, tool: 'turn-up-automation', action: 'automation',
+  markets: { IT: { strategy: { version: '1' }, currency: 'EUR', maxActionsPerRun: null, maxChangesPerDay: 10, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} } },
+  scopes: {}, entityScopes: {}, labels: {},
+  this: {
+    markets: ['IT'], items: 1, writes: 0, raises: 0, cuts: 0, largestRaisePct: 0, largestCutPct: 0, largestRaisePoints: 0, largestCutPoints: 0,
+    highestNewBidCents: null, budgetIncreaseCents: 0, byMarket: { IT: { changes: 1, writes: 0, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } },
+    entities: ['campaign:c1'], rowsOutsideStrategy: 0, firstOutside: null,
+  },
+  today: { IT: { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 } }, perEntityToday: { maxChangesByRule: 0, entity: null },
+  unplaced: [], engineOwned: [], protectedHit: [],
+}
+const placed = { limitFacts, automationScope: { placed: true, outside: false, why: null } }
+const accountWide = { limitFacts: { ...limitFacts, this: { ...limitFacts.this, markets: [], items: 0, byMarket: {}, entities: [] } } }
 
 describe('the graduation gate from counts', () => {
   it('14 days, 10 runs, 1 match or decision — each check says what it counts', () => {
@@ -34,7 +51,7 @@ describe('the graduation gate from counts', () => {
 describe('turn-up-automation by rule', () => {
   const gate = (open: boolean, caps?: { maxWritesPerDay: number | null; maxValueCentsEur: number | null }) =>
     ({ open, from: 'TEST counts', checks: [{ check: '10 runs', passed: open, detail: open ? '12/10 runs' : '3/10 runs' }], ...(caps ? { caps } : {}) })
-  const move = (to: string, extra: Record<string, unknown> = {}) => ({ to, automation: { id: 'A9', key: 'ads-budget-pools', name: 'Budget pools' }, row: { name: 'TEST pool' }, ...extra })
+  const move = (to: string, extra: Record<string, unknown> = {}) => ({ to, automation: { id: 'A9', key: 'ads-budget-pools', name: 'Budget pools' }, row: { name: 'TEST pool' }, ...placed, ...extra })
   const defaults = TURN_UP_LIMITS.parse({}) as Record<string, unknown>
   const listed = { ...defaults, maxLevel: 'AUTO', automations: ['A9'] }
 
@@ -45,6 +62,13 @@ describe('turn-up-automation by rule', () => {
     expect(turnUpRefusal(move('AUTO', { gate: gate(true) }), listed)).toBeNull()
     expect(turnUpRefusal(move('AUTO', { gate: gate(true) }), { ...listed, automations: ['ads-budget-pools'] })).toBeNull()
     expect(turnUpRefusal(move('AUTO', { gate: gate(false) }), listed)).toBe('the graduation gate of TEST pool is not open (10 runs: 3/10 runs; from TEST counts); a person decides')
+  })
+
+  it('the ads strategy where it acts: not placed waits; without the kit\'s facts waits; outside Amazon ads, only the limits', () => {
+    expect(turnUpRefusal(move('PROPOSE', { automationScope: { placed: false, outside: false, why: 'TEST pool reaches the whole account' } }), defaults)).toBe('TEST pool reaches the whole account; a person decides')
+    expect(turnUpRefusal(move('PROPOSE', { limitFacts: undefined }), defaults)).toContain('there are no limit facts in this preview')
+    expect(turnUpRefusal(move('PROPOSE', { limitFacts: { ...limitFacts, markets: { IT: { ...limitFacts.markets.IT, strategy: null } } } }), defaults)).toContain('there is no ads strategy for IT')
+    expect(turnUpRefusal(move('PROPOSE', { ...accountWide, automationScope: { placed: true, outside: true, why: 'TEST is not Amazon ads' } }), defaults)).toBeNull()
   })
 
   it('never: an env engine, a kind with no gate Nexus can check, no preview', () => {
@@ -66,7 +90,7 @@ describe('turn-up-automation by rule', () => {
 
 describe('save-ad-rule by rule', () => {
   it('where a rule\'s scope lands: a campaign, a product in a market, a market or a portfolio in it; never the whole account', () => {
-    expect(ruleScopeItem({ campaignId: 'c1' })).toEqual({ item: { entity: { kind: 'campaign', id: 'c1' }, change: { field: 'rule' }, nexusOnly: true } })
+    expect(ruleScopeItem({ campaignId: 'c1' })).toEqual({ item: { entity: { kind: 'campaign', id: 'c1' }, change: { field: 'automation' }, nexusOnly: true } })
     expect(ruleScopeItem({ marketplace: 'it', productId: 'p1' })).toMatchObject({ item: { entity: { kind: 'products', market: 'IT', productIds: ['p1'], label: 'a rule for one product' } } })
     expect(ruleScopeItem({ marketplace: 'IT' })).toMatchObject({ item: { entity: { kind: 'products', market: 'IT', productIds: [], label: 'a rule for the whole of IT' } } })
     expect(ruleScopeItem({ marketplace: 'IT', portfolioId: 'pf1' })).toMatchObject({ item: { entity: { label: 'a rule for a portfolio in IT' } } })
@@ -84,23 +108,31 @@ describe('save-ad-rule by rule', () => {
 
 describe('tune-ad-engine by rule', () => {
   const defaults = TUNE_LIMITS.parse({}) as Record<string, unknown>
+  const tune = (raises: string[], largestRaisePct?: number | null, extra: Record<string, unknown> = {}) => ({ raises, ...(largestRaisePct !== undefined ? { largestRaisePct } : {}), ...placed, ...extra })
   it('no raise runs; a raise with a percent up to the limit; one without, or an older preview that has none, never', () => {
-    expect(tuneRefusal({ raises: [], largestRaisePct: 0 }, defaults)).toBeNull()
-    expect(tuneRefusal({ raises: ['TEST budget rises'], largestRaisePct: 20 }, defaults)).toBe("it can raise spend by up to 20 % (TEST budget rises), more than the 0 % this tool's limits let run without a person (0: every raise waits for a person); a person decides")
-    expect(tuneRefusal({ raises: ['TEST budget rises'], largestRaisePct: 20 }, { maxRaisePct: 20 })).toBeNull()
-    expect(tuneRefusal({ raises: ['TEST cap cleared'], largestRaisePct: null }, { maxRaisePct: 1000 })).toBe('it can raise spend in a way that has no percent (TEST cap cleared); a person decides')
-    expect(tuneRefusal({ raises: ['TEST budget rises'] }, { maxRaisePct: 1000 })).toContain('has no percent')
+    expect(tuneRefusal(tune([], 0), defaults)).toBeNull()
+    expect(tuneRefusal(tune(['TEST budget rises'], 20), defaults)).toBe("it can raise spend by up to 20 % (TEST budget rises), more than the 0 % this tool's limits let run without a person (0: every raise waits for a person); a person decides")
+    expect(tuneRefusal(tune(['TEST budget rises'], 20), { ...defaults, maxRaisePct: 20 })).toBeNull()
+    expect(tuneRefusal(tune(['TEST cap cleared'], null), { ...defaults, maxRaisePct: 1000 })).toBe('it can raise spend in a way that has no percent (TEST cap cleared); a person decides')
+    expect(tuneRefusal(tune(['TEST budget rises']), { ...defaults, maxRaisePct: 1000 })).toContain('has no percent')
     expect(tuneRefusal(null, defaults)).toBe('there is no preview of this setting change to check')
+  })
+
+  it('a setting for the whole account: a tightening runs (a brake), a raise waits; without facts never', () => {
+    const account = { ...accountWide, automationScope: { placed: false, outside: false, why: 'the anomaly breaker reaches the whole account' } }
+    expect(tuneRefusal(tune([], 0, account), defaults)).toBeNull()
+    expect(tuneRefusal(tune(['TEST trips later'], 10, account), { ...defaults, maxRaisePct: 100 })).toBe('the anomaly breaker reaches the whole account; a person decides')
+    expect(tuneRefusal(tune([], 0, { limitFacts: undefined }), defaults)).toContain('there are no limit facts in this preview')
   })
 })
 
 describe('the limits', () => {
   it('every default runs nothing new alone; tightening is a free brake, loosening is not', () => {
-    expect(TURN_UP_LIMITS.parse({})).toEqual({ maxLevel: 'PROPOSE', automations: [], maxRuleWritesPerDay: 0, maxRuleValueCentsEur: 0 })
+    expect(TURN_UP_LIMITS.parse({})).toEqual({ maxItems: 1, maxChangesPerEntityPerDay: 1, allowEngineOwned: false, maxLevel: 'PROPOSE', automations: [], maxRuleWritesPerDay: 0, maxRuleValueCentsEur: 0 })
     expect(SAVE_RULE_LIMITS.parse({})).toMatchObject({ maxItems: 1, maxWritesPerDay: 0, maxValueCentsEur: 0, maxDailyAdSpendCentsEur: 0, allowEngineOwned: false })
-    expect(TUNE_LIMITS.parse({})).toEqual({ maxRaisePct: 0 })
+    expect(TUNE_LIMITS.parse({})).toEqual({ maxItems: 1, maxChangesPerEntityPerDay: 1, allowEngineOwned: false, maxRaisePct: 0 })
     const up = { limits: TURN_UP_LIMITS }
-    const wide = { maxLevel: 'AUTO', automations: ['A1', 'A9'], maxRuleWritesPerDay: 50, maxRuleValueCentsEur: 1000 }
+    const wide = { ...(TURN_UP_LIMITS.parse({}) as Record<string, unknown>), maxLevel: 'AUTO', automations: ['A1', 'A9'], maxRuleWritesPerDay: 50, maxRuleValueCentsEur: 1000 }
     expect(limitsTighten(up, wide, { ...wide, maxLevel: 'PROPOSE' })).toBe(true)
     expect(limitsTighten(up, wide, { ...wide, automations: ['A1'] })).toBe(true)
     expect(limitsTighten(up, { ...wide, automations: ['A1'] }, wide)).toBe(false)

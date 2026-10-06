@@ -322,14 +322,15 @@ export async function strategyForScopes(scopes: Iterable<EntityScope>, action: C
 
 /**
  * The enabled rules and schedules (hourly bid plans, dayparting) bound to each campaign, by name; campaigns without any
- * left out. `exceptRuleIds` (AA-W2-10): rules that do not count here — the rule whose own suggestion is being applied.
+ * left out. `exceptIds` (AA-W2-10, AA-W2-11): rules or schedules that do not count here — the rule whose own suggestion
+ * is being applied, the automation being turned up.
  */
-export async function enginesOnCampaigns(campaignIds: Iterable<string>, opts: { exceptRuleIds?: readonly string[] } = {}): Promise<Map<string, string[]>> {
+export async function enginesOnCampaigns(campaignIds: Iterable<string>, opts: { exceptIds?: readonly string[] } = {}): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>()
-  const except = new Set(opts.exceptRuleIds ?? [])
+  const except = new Set(opts.exceptIds ?? [])
   await Promise.all([...new Set(campaignIds)].map(async (id) => {
     const { rules, schedules } = await automationsBoundToCampaign(id)
-    const names = [...rules.filter((r) => !except.has(r.id)).map((r) => `rule "${r.name}"`), ...schedules.map((s) => `schedule "${s.name}"`)]
+    const names = [...rules.filter((r) => !except.has(r.id)).map((r) => `rule "${r.name}"`), ...schedules.filter((s) => !except.has(s.id)).map((s) => `schedule "${s.name}"`)]
     if (names.length) out.set(id, names)
   }))
   return out
