@@ -23,7 +23,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { BlueprintDoc } from '../ads-core/ads-blueprint.js'
-import { planApplication, materialise, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget, type PlanEdits } from '../ads-core/ads-blueprint-apply.js'
+import { planApplication, materialise, negativeMatchOf, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget, type PlanEdits } from '../ads-core/ads-blueprint-apply.js'
 import type { PortfolioVerifyResult } from './ads-create.service.js'
 import type { LaunchVerification } from './ads-launch-verify.service.js'
 import type { AdsActor } from './ads-mutation.service.js'
@@ -564,12 +564,14 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
         // but not its exclusions immediately buys the traffic the template pays
         // to avoid. Creating them before the positives means that even a run
         // that fails part-way is narrower than its source, never wider.
-        // Amazon negatives are EXACT or PHRASE only; the blueprint encodes them
-        // with a leading underscore (_EXACT / _PHRASE). bulkNegativeKeywords is
-        // the existing idempotent path — it skips one that already exists.
+        // Amazon negatives are EXACT or PHRASE only; a source stores them as
+        // EXACT / PHRASE (synced), NEGATIVE_EXACT / NEGATIVE_PHRASE (written by
+        // Nexus) or _EXACT / _PHRASE (a blueprint): every spelling is read
+        // (negativeMatchOf). bulkNegativeKeywords is the existing idempotent
+        // path — it skips one that already exists.
         const negItems = g.targets
           .filter((t) => t.isNegative && t.kind?.toUpperCase() === 'KEYWORD')
-          .map((t) => ({ adGroupId: grp.id, keywordText: t.expression, matchType: (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '') as 'EXACT' | 'PHRASE' }))
+          .map((t) => ({ adGroupId: grp.id, keywordText: t.expression, matchType: negativeMatchOf(t.expressionType) as 'EXACT' | 'PHRASE' }))
           .filter((n) => n.matchType === 'EXACT' || n.matchType === 'PHRASE')
         // B-1 — Claude's run: they are part of the creation (`creationFlow`), as its keywords and product ads are.
         if (negItems.length) {

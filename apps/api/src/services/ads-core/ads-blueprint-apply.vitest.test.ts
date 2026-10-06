@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { extractBlueprint, type SourceCampaign } from './ads-blueprint.js'
-import { planApplication, materialise, applyNaming, type ExistingTarget } from './ads-blueprint-apply.js'
+import { planApplication, materialise, applyNaming, negativeMatchOf, type ExistingTarget } from './ads-blueprint-apply.js'
 
 const kw = (expressionValue: string, expressionType = 'EXACT', isNegative = false, bidCents: number | null = 30) => ({
   kind: 'KEYWORD', expressionType, expressionValue, bidCents, isNegative, negativeLevel: isNegative ? 'AD_GROUP' : null,
@@ -749,5 +749,27 @@ describe('planApplication — negatives Amazon will not accept', () => {
 
   it('does not block — the run is still legitimate without them', () => {
     expect(planApplication(d, gale, []).allowed).toBe(true)
+  })
+
+  // A negative Nexus wrote itself is stored NEGATIVE_EXACT / NEGATIVE_PHRASE (Amazon's v3 words), a synced one
+  // EXACT / PHRASE, a blueprint's _EXACT: each is a negative Amazon takes, and a NEGATIVE_PHRASE keeps the phrase limit.
+  it('reads every spelling Nexus stores for a negative: no match-type warning, the phrase limit for NEGATIVE_PHRASE', () => {
+    expect(['EXACT', 'PHRASE', 'NEGATIVE_EXACT', 'negative_phrase', '_EXACT', '_PHRASE', null].map(negativeMatchOf))
+      .toEqual(['EXACT', 'PHRASE', 'EXACT', 'PHRASE', 'EXACT', 'PHRASE', 'EXACT'])
+    expect(negativeMatchOf('BROAD')).toBe('BROAD')
+    const spelled = extractBlueprint([{
+      name: 'IT-TESTNEG-SP-Category-Broad', dailyBudget: 10, biddingStrategy: 'LEGACY_FOR_SALES', placementBidding: [],
+      adGroups: [{ name: 'ag', defaultBidCents: 30, asins: ['B0TESTNEG1'], targets: [
+        kw('test jacket'),
+        kw('test cheap', 'NEGATIVE_EXACT', true),
+        kw('test used', 'NEGATIVE_PHRASE', true),
+        kw('test spare', '_EXACT', true),
+        kw('test summer jacket for men', 'NEGATIVE_PHRASE', true), // 5 words — over the phrase limit
+      ] }],
+    }], { productToken: 'TESTNEG' })
+    const p = planApplication(spelled, gale, [])
+    expect(p.warnings.find((x) => x.includes('match type Amazon does not accept'))).toBeUndefined()
+    expect(p.warnings.find((x) => x.includes("over Amazon's word limit"))).toMatch(/^1 negative.*"test summer jacket for men"/)
+    expect(p.totals.negatives).toBe(4)
   })
 })

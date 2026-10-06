@@ -404,6 +404,34 @@ describe('CC-17 / CC-1 — the read-back checks auto groups by expression, negat
   })
 })
 
+describe('Replicate — negatives in every spelling Nexus stores reach Amazon', () => {
+  it('copies EXACT, PHRASE, NEGATIVE_EXACT, NEGATIVE_PHRASE and _EXACT negatives (a campaign Nexus built keeps its exclusions)', async () => {
+    const neg = (expression: string, expressionType: string) => ({ kind: 'KEYWORD', expressionType, expression, bidCents: null, isNegative: true, negativeLevel: 'AD_GROUP', targetClass: 'GENERIC' })
+    const doc = {
+      version: 1, productToken: 'TESTNEGS', sharedTargets: [],
+      stats: { campaigns: 1, adGroups: 1, positives: 1, negatives: 5, productAds: 1, byClass: { BRAND: 1, CATEGORY: 0, COMPETITOR: 0, ASIN: 0, AUTO: 0, UNKNOWN: 0 }, orphanedInSource: 0 },
+      campaigns: [{
+        role: 'Keyword-Exact', namePattern: '{{product}} - negatives replica', dailyBudget: 5, biddingStrategy: 'LEGACY_FOR_SALES', placementBidding: [], targetingType: 'MANUAL',
+        adGroups: [{ namePattern: '{{product}} negatives group', defaultBidCents: 40, productAdCount: 1, targets: [
+          { kind: 'KEYWORD', expressionType: 'EXACT', expression: '{{product}} jacket', bidCents: 50, isNegative: false, negativeLevel: null, targetClass: 'BRAND' },
+          neg('synced exact', 'EXACT'), neg('synced phrase', 'PHRASE'), neg('nexus exact', 'NEGATIVE_EXACT'), neg('nexus phrase', 'NEGATIVE_PHRASE'), neg('blueprint exact', '_EXACT'),
+        ] }],
+      }],
+    }
+    const bp = await inside(() => db().adBlueprint.create({ data: { name: 'Negatives replica', marketplace: 'IT', productToken: 'TESTNEGS', doc: doc as never } }))
+    const { applyBlueprint } = await import('./ads-blueprint-apply.service.js')
+    const before = amz.calls.filter((c) => c === 'negativeKeywords').length
+    const out = await inside(() => applyBlueprint({ blueprintId: bp.id, target: { productToken: 'TESTNEGS', asins: ['TEST-SKU-1'] }, marketplace: 'IT', dryRun: false, actor: 'user:u-negs' }))
+    expect(out.plan.warnings.filter((w) => w.includes('match type Amazon does not accept'))).toEqual([])
+    expect(out.created.negatives).toBe(5)
+    expect(amz.calls.filter((c) => c === 'negativeKeywords').length - before).toBe(5)
+    const rows = await inside(() => db().adTarget.findMany({ where: { isNegative: true, adGroup: { campaign: { name: 'TESTNEGS - negatives replica' } } }, orderBy: { expressionValue: 'asc' }, select: { expressionValue: true, externalTargetId: true } }))
+    expect(rows.map((r) => [r.expressionValue, !!r.externalTargetId])).toEqual([
+      ['blueprint exact', true], ['nexus exact', true], ['nexus phrase', true], ['synced exact', true], ['synced phrase', true],
+    ])
+  })
+})
+
 describe('CC-1 — Replicate keeps working, through the same auto-group link', () => {
   it('a floored replica of an Auto campaign links Amazon\'s groups (no POST), remembers each planned bid, and stays APPLIED', async () => {
     const autoTarget = (clause: string, type: string, bidCents: number) => ({ kind: 'AUTO', expressionType: type, expression: '', bidCents, isNegative: false, negativeLevel: null, targetClass: 'AUTO', autoClause: clause })

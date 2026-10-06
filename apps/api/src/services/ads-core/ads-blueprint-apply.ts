@@ -304,6 +304,15 @@ function applyValuePolicy(source: number | null, policy: ValuePolicy | undefined
   return source == null ? null : Math.max(floor, Math.round(source * (pct / 100)))
 }
 
+/**
+ * A negative keyword's match type as Amazon takes it (EXACT or PHRASE), from every spelling Nexus stores: the v1 sync's
+ * EXACT / PHRASE, Amazon's v3 NEGATIVE_EXACT / NEGATIVE_PHRASE (what Nexus writes itself, and the campaign-level sync)
+ * and the blueprint's _EXACT / _PHRASE. Anything else comes back as it is (Amazon refuses it for a negative).
+ */
+export function negativeMatchOf(expressionType: string | null | undefined): string {
+  return (expressionType ?? 'EXACT').toUpperCase().replace(/^(NEGATIVE)?_/, '')
+}
+
 /** Apply the bulk rename to one already-materialised name. */
 export function applyNaming(name: string, rules: NamingRules | undefined): string {
   if (!rules) return name
@@ -752,7 +761,7 @@ export function evaluatePlan(
   // will be created and a smaller number arrives, with nothing said about it.
   const badNeg = campaigns.flatMap((c) => c.adGroups.flatMap((g) => g.targets.filter((t) => {
     if (!t.isNegative || (t.kind ?? '').toUpperCase() !== 'KEYWORD') return false
-    const mt = (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '')
+    const mt = negativeMatchOf(t.expressionType)
     return mt !== 'EXACT' && mt !== 'PHRASE'
   })))
   if (badNeg.length) {
@@ -770,7 +779,7 @@ export function evaluatePlan(
   const longNeg = campaigns.flatMap((c) => c.adGroups.flatMap((g) => g.targets.filter((t) => {
     if (!t.isNegative || (t.kind ?? '').toUpperCase() !== 'KEYWORD') return false
     const words = t.expression.trim().split(/\s+/).length
-    const mt = (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '')
+    const mt = negativeMatchOf(t.expressionType)
     return mt === 'PHRASE' ? words > 4 : words > 10
   })))
   if (longNeg.length) {
