@@ -124,9 +124,13 @@ describe('marketCaps — which cap stops a market, which one pacing paces (pure)
     expect(marketCaps(plan(8_000, { autoPacing: true }), null)).toEqual({ capCents: 8_000, stopCapCents: null, stopBy: null, pacingCapCents: 8_000 })
   })
 
-  it('a plan cap of 0 is "no budget set" (as the Budget Manager reads it); a strategy cap of 0 stops at once', () => {
-    expect(marketCaps(plan(0, { stopOverSpend: true, autoPacing: true }), null)).toEqual({ capCents: null, stopCapCents: null, stopBy: null, pacingCapCents: null })
-    expect(marketCaps(plan(0, { stopOverSpend: true }), 0)).toMatchObject({ stopCapCents: 0, stopBy: 'strategy' })
+  it('a cap of 0 is NO cap, in the plan and in the strategy alike (the Budget Manager\'s €0 = "no budget set")', () => {
+    const none = { capCents: null, stopCapCents: null, stopBy: null, pacingCapCents: null }
+    expect(marketCaps(plan(0, { stopOverSpend: true, autoPacing: true }), null)).toEqual(none)
+    expect(marketCaps(null, 0)).toEqual(none)
+    expect(marketCaps(plan(0, { stopOverSpend: true }), 0)).toEqual(none)
+    // A plan cap still stops, and paces, with a strategy cap of 0 beside it.
+    expect(marketCaps(plan(4_000, { stopOverSpend: true, autoPacing: true }), 0)).toEqual({ capCents: 4_000, stopCapCents: 4_000, stopBy: 'plan', pacingCapCents: 4_000 })
   })
 })
 
@@ -172,6 +176,19 @@ describe('the preview — what the engine would do now', () => {
       expect(campaign(it_, ids.cA)).toMatchObject({ suppress: true, stopBidCents: 9 })
     } finally {
       await inA(() => db().adBudgetPlan.delete({ where: { id: plan.id } }))
+    }
+  })
+
+  it('a strategy cap of 0 is no cap: nothing is floored, and this engine\'s own floors are given back', async () => {
+    await inA(() => db().adsStrategy.update({ where: { id: ids.marketRow }, data: { monthlySpendCapCents: 0 } }))
+    try {
+      const it_ = market(await inA(() => computeBudgetEnforcement({ month })), 'IT')
+      expect(it_).toMatchObject({ strategyCap: null, stopCapCents: null, stopBy: null, stopOverSpend: false, capReached: false, mtdSpendCents: 5_500 })
+      expect(it_.campaigns.filter((c) => c.suppress)).toEqual([])
+      expect(campaign(it_, ids.cOld)).toMatchObject({ restore: true })
+      expect(campaign(it_, ids.cRank)).toMatchObject({ restore: false })
+    } finally {
+      await inA(() => db().adsStrategy.update({ where: { id: ids.marketRow }, data: { monthlySpendCapCents: 5_000 } }))
     }
   })
 
