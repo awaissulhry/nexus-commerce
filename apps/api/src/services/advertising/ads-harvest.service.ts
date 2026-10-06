@@ -33,6 +33,8 @@ import { openTermsStrategy, protectedAsins, sourceLabel, strategyMarketOf, terms
 import { blockedPositive, blockedWords, familyAdGroups, homeOf, negativeKey, positivesIn, productFamilyOf, standingNegativesIn, type NegativeMatch, type Positive } from './ads-winner-lock.js'
 import { normalizeHarvestBidMode, resolveHarvestBidEur } from './ads-harvest-wire.js'
 import { bidLimitsFor, clampToStrategy } from './ads-strategy/bids.js'
+// PB-6b — the intent router: a source's destination may pick the product's Brand, Competitor or Category ad group.
+import { destinationAdGroups, resolveDestination, type HarvestDestination, type Intent } from './ads-harvest-route.js'
 
 /**
  * 5d (review 7.4) — the source ad group is a fallback destination only when it can take a keyword or product
@@ -44,6 +46,8 @@ const takesTargets = (ag: { campaign: { targetingType: string | null; adProduct:
 const NO_DESTINATION = 'No destination was given for this match type, and the ad group this term came from is not in a manual Sponsored Products campaign, so it cannot take it. Nothing was created.'
 /** PB-6a — a source whose own plan names no destination for a match type (the wizard could not tell its theme). */
 const UNROUTED = 'Two or more of this rule\'s campaigns take this match type, and which one fits this source (brand, competitor or category) could not be told, so no destination was chosen for it. Nothing was created; set the destination on the rule.'
+/** PB-6b — a stored destination no ad group can be read from (a router missing one of its ad groups, or an ASIN sent to it). */
+const UNREADABLE = 'This rule\'s destination for this match type cannot be read (an ASIN is never routed by intent), so nothing was created.'
 
 export interface HarvestCandidate {
   query: string
@@ -302,6 +306,8 @@ export interface HarvestOutcome {
    * EXACT keyword with its text, or its product target): nothing was created and it is not counted as graduated.
    */
   home?: { adGroupId: string; adTargetId: string; live: boolean }
+  /** PB-6b — the intent router chose the destination: the product's Brand, Competitor or Category ad group. */
+  intent?: Intent
 }
 
 /**
@@ -357,13 +363,23 @@ export interface HarvestPlanRow {
   graduate?: string[]; negate?: string[]; graduateProduct?: boolean; negateProduct?: boolean
   /** PB-6a — a v2 rule's lists are literal: [] = none, absent = EXACT. A v1 row reads an empty list as EXACT. */
   literal?: boolean
-  /** PB-6a — this source's own landing per match type; beats the call's `destinations`. null: none could be chosen (said). */
-  destinations?: Record<string, string | null>
+  /**
+   * PB-6a — this source's own landing per match type; beats the call's `destinations`. null: none could be chosen (said).
+   * PB-6b — or the intent router (ads-harvest-route.ts): the product's Brand, Competitor or Category ad group by the
+   * term's words. An ASIN (PRODUCT) lands in one ad group, never through the router.
+   */
+  destinations?: Record<string, HarvestDestination | null>
   /**
    * PB-6a (L4) — close the source the moment the term lands elsewhere (handover "landed"). False: only once its new home
    * meets the harvest bar there ("proven", the Owner's choice). Absent: proven on a rule's harvest, landed otherwise.
    */
   negateOnLanding?: boolean
+  /**
+   * PB-6b — false: a term that graduated from this source is never negated there — not at the landing, not once its new
+   * home proves itself (the playbook's harvest edge says not to negate the source). Its waste negatives are unaffected.
+   * Absent: true.
+   */
+  negateSource?: boolean
   /** PB-6a — the new target's bid, in the harvest wire's modes (cpc, cpcPlus, adGroupDefault, fixed). */
   bid?: { mode?: unknown; value?: unknown }
 }
@@ -388,6 +404,12 @@ export interface HarvestRuleLock {
   homeScope?: string[]
   /** AdGroup.ids whose products are the rule's own (its sources). Absent: each term's own source ad group. */
   ownAdGroups?: string[]
+  /**
+   * PB-6b — a compiled playbook rule: a term's home is looked up ONLY in the rule's listed slots (`homeScope`) and the ad
+   * groups its routers may land in — never in a product family read from its ad groups. An adopted slot may advertise
+   * another product too, and that product's keyword must never count as this one's home (the Owner's rule 3).
+   */
+  listedOnly?: boolean
   criteria: HarvestCriteria
 }
 
@@ -407,16 +429,26 @@ interface Lock {
 /** The key of a term's home: the normalised term and the home's AdGroup.id. */
 export const winnerKey = (term: string, adGroupId: string) => `${normaliseNegTerm(term)}|${adGroupId}`
 
+/** PB-6b — every ad group a plan row's routers may land in. */
+const routerAdGroupsOf = (row: HarvestPlanRow | undefined): string[] =>
+  Object.values(row?.destinations ?? {}).filter((d) => d != null && typeof d !== 'string').flatMap(destinationAdGroups)
+
 const destinationsOf = (plan: HarvestPlan | undefined, destinations: Record<string, string> | undefined): string[] => [
   ...Object.values(destinations ?? {}),
-  ...Object.values(plan ?? {}).flatMap((row) => Object.values(row.destinations ?? {})),
+  ...Object.values(plan ?? {}).flatMap((row) => Object.values(row.destinations ?? {}).flatMap(destinationAdGroups)),
 ].filter((id): id is string => typeof id === 'string' && !!id)
 
-/** Where a graduation of this match type lands: the source's own destination, the call's, else the source (5d). */
-function landingOf(gm: string, src: SourceRow | null, row: HarvestPlanRow | undefined, destinations: Record<string, string> | undefined): { adGroupId: string } | { deniedAt: string; why: string } {
+type Landing = { adGroupId: string; intent?: Intent }
+
+/**
+ * Where a graduation of this match type lands: the source's own destination, the call's, else the source (5d). PB-6b — a
+ * source's own destination may be the intent router: the term's words pick the ad group (`intent` says which).
+ */
+function landingOf(gm: string, query: string, src: SourceRow | null, row: HarvestPlanRow | undefined, destinations: Record<string, string> | undefined): Landing | { deniedAt: string; why: string } {
   if (row?.destinations && gm in row.destinations) {
     const own = row.destinations[gm]
-    return own ? { adGroupId: own } : { deniedAt: 'no_destination', why: UNROUTED }
+    if (!own) return { deniedAt: 'no_destination', why: UNROUTED }
+    return resolveDestination(query, own) ?? { deniedAt: 'no_destination', why: UNREADABLE }
   }
   const named = destinations?.[gm]
   if (named) return { adGroupId: named }
@@ -429,29 +461,36 @@ const homePositives = (lock: Lock, src: SourceRow | null, destId: string | null)
 
 const homeMatch = (gm: string) => (gm === 'PHRASE' || gm === 'BROAD' ? gm : 'EXACT') as 'EXACT' | 'PHRASE' | 'BROAD'
 
-type GradStep = { kind: 'home'; home: Positive } | { kind: 'create'; adGroupId: string } | { kind: 'refused'; deniedAt: string; why: string }
+type GradStep = { kind: 'home'; home: Positive } | { kind: 'create'; adGroupId: string; intent?: Intent } | { kind: 'refused'; deniedAt: string; why: string }
 
 /** PB-6a — one graduation's step under the lock (L2 first: a term at home stays there, wherever it would land). */
 function gradStep(lock: Lock, rule: boolean, query: string, gm: string, src: SourceRow | null, row: HarvestPlanRow | undefined, destinations: Record<string, string> | undefined): GradStep {
-  const landing = landingOf(gm, src, row, destinations)
+  const landing = landingOf(gm, query, src, row, destinations)
   if (rule) {
     const home = homeOf(query, homePositives(lock, src, 'adGroupId' in landing ? landing.adGroupId : null), homeMatch(gm))
     if (home) return { kind: 'home', home }
   }
-  return 'adGroupId' in landing ? { kind: 'create', adGroupId: landing.adGroupId } : { kind: 'refused', ...landing }
+  return 'adGroupId' in landing ? { kind: 'create', adGroupId: landing.adGroupId, ...(landing.intent ? { intent: landing.intent } : {}) } : { kind: 'refused', ...landing }
 }
 
+/** PB-6b — the source row that is never closed for a graduated term (its edge says not to negate the source). */
+const keepsSource = (row: HarvestPlanRow | undefined) => row?.negateSource === false
+
 /** PB-6a (L4) — the home elsewhere whose turn it is to take the term over from its source, or null. */
-function provenHome(lock: Lock, query: string, src: SourceRow | null, homes: readonly Positive[], negateOnLanding: boolean): Positive | null {
-  if (!src) return null
+function provenHome(lock: Lock, query: string, src: SourceRow | null, homes: readonly Positive[], negateOnLanding: boolean, keep = false): Positive | null {
+  if (!src || keep) return null
   const away = homes.filter((h) => h.adGroupId !== src.id)
   return away.find((h) => negateOnLanding || lock.winners.has(winnerKey(query, h.adGroupId))) ?? null
 }
 
+/** PB-6b — what a source that is never closed says. */
+const KEPT_SOURCE = 'This source is never negated for a term that graduated from it (its harvest edge says not to negate the source), so the term keeps running there too.'
+
 /** The sentence an `alreadyHome` outcome says. */
-function homeWords(home: Positive, src: SourceRow | null, closed: boolean): string {
+function homeWords(home: Positive, src: SourceRow | null, closed: boolean, kept = false): string {
   const what = home.match === 'PRODUCT' ? 'a product target' : `${home.match === 'EXACT' ? 'an exact' : `a ${home.match.toLowerCase()}`} keyword`
   if (src && home.adGroupId === src.id) return `It is already ${what} of the ad group it converted in, so it stays there: nothing was created and nothing negated.`
+  if (kept) return `It already lives as ${what} in this product's campaigns${home.live ? '' : ' (not yet live at Amazon)'}, so it was not created again. ${KEPT_SOURCE}`
   return closed
     ? `It already lives as ${what} in this product's campaigns, and there it now meets the harvest bar, so it was not created again and its source was negated.`
     : `It already lives as ${what} in this product's campaigns${home.live ? '' : ' (not yet live at Amazon)'}, so it was not created again. It keeps running in its source until that keyword meets the harvest bar there.`
@@ -517,10 +556,15 @@ async function readLock(args: {
   const own = args.rule.ownAdGroups?.length ? args.rule.ownAdGroups : null
   const families = new Map<string, Promise<string[]>>()
   for (const src of sources.values()) {
+    // PB-6b — and the ad groups this source's router may land in: a term at home in the product's Exact | Category stays
+    // there even when the router would now pick Exact | Brand (L2 beats the router).
+    const routed = src.externalAdGroupId ? routerAdGroupsOf(args.plan?.[src.externalAdGroupId]) : []
+    // PB-6b — a compiled playbook rule names its product's ad groups itself: no family is read (rule 3).
+    if (args.rule.listedOnly) { lock.scopes.set(src.id, [...new Set([...(args.rule.homeScope ?? []), ...routed])]); continue }
     const market = src.campaign?.marketplace ?? null
     const key = own ? `rule|${strategyMarketOf(market)}` : `source|${src.id}`
     if (!families.has(key)) families.set(key, productFamilyOf(own ?? [src.id]).then((family) => familyAdGroups(family, market)))
-    lock.scopes.set(src.id, [...new Set([...(await families.get(key)!), ...(args.rule.homeScope ?? [])])])
+    lock.scopes.set(src.id, [...new Set([...(await families.get(key)!), ...(args.rule.homeScope ?? []), ...routed])])
   }
   lock.positives = await positivesIn([...[...lock.scopes.values()].flat(), ...rows.map((r) => r.id), ...destinationsOf(args.plan, args.destinations)])
   // The homes a handover may follow: found before anything is created (a home this batch creates is not a winner yet).
@@ -573,7 +617,11 @@ async function startBid(cache: BandCache, g: HarvestCandidate & { bidEur?: numbe
 
 /** PB-6a — the card's items: what a rule's harvest would do, one row per candidate (kind, term, ad group, step). */
 export type HarvestItemKind = 'negative' | 'graduation' | 'productNegative' | 'productGraduation'
-export interface HarvestItem { kind: HarvestItemKind; query: string; externalAdGroupId: string; step: 'negate' | 'create' | 'handover' | 'refused'; why?: string }
+export interface HarvestItem {
+  kind: HarvestItemKind; query: string; externalAdGroupId: string; step: 'negate' | 'create' | 'handover' | 'refused'; why?: string
+  /** PB-6b — the router's pick for a new keyword: the product's Brand, Competitor or Category ad group. */
+  intent?: Intent
+}
 export const harvestItemKey = (i: { kind: string; query: string; externalAdGroupId: string }) => `${i.kind}|${normaliseNegTerm(i.query)}|${i.externalAdGroupId}`
 
 export interface HarvestRulePlan {
@@ -604,7 +652,8 @@ export async function planRuleHarvest(args: {
   const [standing, sourcePositives] = await Promise.all([standingNegativesIn(sourceIds), positivesIn(sourceIds)])
   const bands: BandCache = new Map()
   const out: HarvestRulePlan = { negatives: [], graduations: [], productNegatives: [], productGraduations: [], items: [], keptHome: [], blockedOwnKeyword: [], alreadyStanding: 0 }
-  const item = (kind: HarvestItemKind, c: HarvestCandidate, step: HarvestItem['step'], why?: string) => out.items.push({ kind, query: c.query, externalAdGroupId: c.externalAdGroupId, step, ...(why ? { why } : {}) })
+  const item = (kind: HarvestItemKind, c: HarvestCandidate, step: HarvestItem['step'], why?: string, intent?: Intent) =>
+    out.items.push({ kind, query: c.query, externalAdGroupId: c.externalAdGroupId, step, ...(why ? { why } : {}), ...(intent ? { intent } : {}) })
   /** The negatives of a source that would still be written: not over its own keyword (L1), not already standing. */
   const toWrite = (c: HarvestCandidate, matches: NegativeMatch[]): { write: NegativeMatch[]; blocked: Positive | null } => {
     const src = lock.sources.get(c.externalAdGroupId)
@@ -634,21 +683,21 @@ export async function planRuleHarvest(args: {
       const product = kind === 'productGraduation' || isAsinQuery(c.query)
       const steps = (product ? ['PRODUCT'] : planList(row, 'graduate')).map((gm) => gradStep(lock, true, c.query, gm, src, row, args.destinations))
       let refused = steps.find((s): s is Extract<GradStep, { kind: 'refused' }> => s.kind === 'refused') ?? null
-      let creates = false
+      let creates: Extract<GradStep, { kind: 'create' }> | null = null
       for (const s of steps) {
         if (s.kind !== 'create') continue
         const bid = await startBid(bands, c, row, s.adGroupId, true)
         if ('why' in bid) refused ??= { kind: 'refused', ...bid }
-        else creates = true
+        else creates ??= s
       }
-      if (creates) { into.push(c); item(kind, c, 'create'); continue }
+      if (creates) { into.push(c); item(kind, c, 'create', undefined, creates.intent); continue }
       const homes = steps.flatMap((s) => (s.kind === 'home' ? [s.home] : []))
-      const proven = provenHome(lock, c.query, src, homes, row?.negateOnLanding === true)
+      const proven = provenHome(lock, c.query, src, homes, row?.negateOnLanding === true, keepsSource(row))
       if (proven) {
         const { write } = toWrite(c, product ? ['PRODUCT'] : negMatches(c))
         if (write.length) { into.push(c); item(kind, c, 'handover'); continue }
       }
-      if (homes.length) { out.keptHome.push({ query: c.query, externalAdGroupId: c.externalAdGroupId, why: homeWords(homes[0], src, false) }); continue }
+      if (homes.length) { out.keptHome.push({ query: c.query, externalAdGroupId: c.externalAdGroupId, why: homeWords(homes[0], src, false, keepsSource(row)) }); continue }
       if (refused) item(kind, c, 'refused', refused.why)
     }
   }
@@ -839,7 +888,7 @@ export async function applyHarvest(args: {
       // 5d (review 7.5) — an ASIN graduates as a PRODUCT target (the PRODUCT destination), never as a keyword.
       const asin = isAsinQuery(g.query)
       const gradMatches = asin ? ['PRODUCT'] : planList(row, 'graduate')
-      const made: Array<{ matchType: string; destAdGroupId: string; targetId: string; externalTargetId: string | null; existed: boolean }> = []
+      const made: Array<{ matchType: string; destAdGroupId: string; targetId: string; externalTargetId: string | null; existed: boolean; intent?: Intent }> = []
       // PB-6a (L2) — where the term already lives in this product's campaigns: it is not created again.
       const homes: Positive[] = []
       let refusal: { deniedAt: string; why: string } | null = null
@@ -858,7 +907,7 @@ export async function applyHarvest(args: {
           ? await createTargetLocal({ adGroupId: step.adGroupId, kind: 'PRODUCT', value: g.query.trim(), bidEur: bid.bidEur, userId: args.userId })
           : await createKeywordLocal({ adGroupId: step.adGroupId, keywordText: g.query, matchType: gm as 'EXACT' | 'PHRASE' | 'BROAD', bidEur: bid.bidEur, userId: args.userId, evidence: g.evidence ?? null })
         const existed = !asin && (k as { existed?: boolean }).existed === true
-        made.push({ matchType: gm, destAdGroupId: step.adGroupId, targetId: k.id, externalTargetId: k.externalTargetId, existed })
+        made.push({ matchType: gm, destAdGroupId: step.adGroupId, targetId: k.id, externalTargetId: k.externalTargetId, existed, ...(step.intent ? { intent: step.intent } : {}) })
         if (k.id) remember({ adTargetId: k.id, adGroupId: step.adGroupId, text: g.query, match: asin ? 'PRODUCT' : homeMatch(gm), live: k.externalTargetId != null })
       }
       // PB-6a — counted only when it reached Amazon now (a keyword that was already there is not graduated again).
@@ -872,24 +921,28 @@ export async function applyHarvest(args: {
       // PB-6a (L4) — when: at the landing (`negateOnLanding`: a person's promote, and a rule that asks for it), or — a
       // rule's default, the Owner's choice — only once the term's home there meets the harvest bar (the term keeps
       // running where it wins until then). An accepted create never turns into this handover.
-      const negateOnLanding = row?.negateOnLanding ?? !args.rule
+      // PB-6b — a source whose edge says not to negate it is never closed, at the landing or after.
+      const keep = keepsSource(row)
+      const negateOnLanding = !keep && (row?.negateOnLanding ?? !args.rule)
       const landedElsewhere = !!srcAg && made.some((m) => m.externalTargetId != null && m.destAdGroupId !== srcAg.id)
-      const proven = g.step === 'create' ? null : provenHome(lock, g.query, srcAg, homes, negateOnLanding)
+      const proven = g.step === 'create' ? null : provenHome(lock, g.query, srcAg, homes, negateOnLanding, keep)
       const closeSource = (landedElsewhere && negateOnLanding) || !!proven
       const sourceNegates = asin ? ['PRODUCT'] : planList(row, 'negate')
       let negOutcome: HarvestOutcome['negative'] = null
       // The §4.1 sentence. HV.3 renders the same wording before the write; this records it after.
       let negateReason = proven
         ? homeWords(proven, srcAg, true)
-        : landedElsewhere && !negateOnLanding
-          ? 'The keyword landed elsewhere. The term keeps running in its source until the new keyword meets the harvest bar there; only then is the source negated.'
-          : landedElsewhere
-            ? 'The keyword landed elsewhere, so the source was negated.'
-            : homes.length
-              ? homeWords(homes[0], srcAg, false)
-              : made.some((m) => m.externalTargetId != null)
-                ? `No negative was created: the keyword was created in the ad group that discovered it, so applyHarvest's isolation negative does not fire.`
-                : 'No negative was created: nothing reached Amazon, so the source is not negated.'
+        : keep && landedElsewhere
+          ? `The keyword landed elsewhere. ${KEPT_SOURCE}`
+          : landedElsewhere && !negateOnLanding
+            ? 'The keyword landed elsewhere. The term keeps running in its source until the new keyword meets the harvest bar there; only then is the source negated.'
+            : landedElsewhere
+              ? 'The keyword landed elsewhere, so the source was negated.'
+              : homes.length
+                ? homeWords(homes[0], srcAg, false, keep)
+                : made.some((m) => m.externalTargetId != null)
+                  ? `No negative was created: the keyword was created in the ad group that discovered it, so applyHarvest's isolation negative does not fire.`
+                  : 'No negative was created: nothing reached Amazon, so the source is not negated.'
       if (closeSource && !sourceNegates.length) {
         negateReason = `${negateReason} This source's plan negates nothing, so no negative was made.`
       } else if (closeSource) {
@@ -930,9 +983,10 @@ export async function applyHarvest(args: {
         negative: negOutcome,
         negateReason,
         outcome: made.length > 0 || handedOver ? 'acted' : home || refusal ? 'refused' : 'failed',
-        ...(made.length === 0 && !handedOver && home ? { refusal: { deniedAt: 'already_home', reason: homeWords(home, srcAg, false) } } : {}),
+        ...(made.length === 0 && !handedOver && home ? { refusal: { deniedAt: 'already_home', reason: homeWords(home, srcAg, false, keep) } } : {}),
         ...(made.length === 0 && !home && refusal ? { refusal: { deniedAt: refusal.deniedAt, reason: refusal.why } } : {}),
         ...(home ? { home: { adGroupId: home.adGroupId, adTargetId: home.adTargetId, live: home.live } } : {}),
+        ...(first?.intent ? { intent: first.intent } : {}),
       })
     } catch (e) {
       result.errors.push(`grad "${g.query}": ${(e as Error).message}`)
@@ -978,8 +1032,9 @@ export async function applyHarvest(args: {
       }
       // H.3-analog — isolate: negate the ASIN in its source, 5d: only once it LANDED in a different ad group; PB-6a (L4):
       // on a rule's harvest only once its home there meets the harvest bar (never for an accepted create).
-      const negateOnLanding = row?.negateOnLanding ?? !args.rule
-      const proven = step.kind === 'home' && pg.step !== 'create' ? provenHome(lock, pg.query, srcAg, [step.home], negateOnLanding) : null
+      const keep = keepsSource(row)
+      const negateOnLanding = !keep && (row?.negateOnLanding ?? !args.rule)
+      const proven = step.kind === 'home' && pg.step !== 'create' ? provenHome(lock, pg.query, srcAg, [step.home], negateOnLanding, keep) : null
       if ((landedElsewhere && negateOnLanding) || proven) {
         try { if (await negateProductInSource(pg.externalAdGroupId, pg.query)) result.productNegativesAdded++ }
         catch (e) { result.errors.push(`prod-iso "${pg.query}": ${(e as Error).message}`) }
