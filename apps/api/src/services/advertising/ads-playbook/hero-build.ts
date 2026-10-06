@@ -7,13 +7,17 @@
  *   where it runs now  the term's entries in the winners view (winners.ts): its cost per click and daily spend there
  *                      give the hero's planned bid and budget; they are shown to the person who approves
  *   the gate           the blueprint engine's (`evaluatePlan`), as a build is judged: the name in the market, a market
- *                      that cannot receive writes, the monthly caps at full spend. The term is the point of a hero, so
+ *                      that cannot receive writes; and every monthly cap of the strategy in force at the product WITH
+ *                      the spend already in it: this month's spend of the cap's scope and its pace for the days left
+ *                      (the market's: monthProjections; a category's or a product's: scopeCapsThisMonth), plus the
+ *                      hero's daily budget at full spend for those days. The term is the point of a hero, so
  *                      this product's own other campaigns buying it are accepted on the record (`acceptedShared`);
  *                      another product's are only listed (rule 3: never a reason to refuse)
  *   the portfolio      the playbook's own (its portfolio link); none when it has none
  *
  * The term keeps running where it runs now (rule 2): this plan negates nothing and moves no bid anywhere else.
  */
+import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { evaluatePlan } from '../../ads-core/ads-blueprint-apply.js'
 import { loadExistingCampaignNames, loadExistingTargets, marketContext, priorRunFor } from '../ads-blueprint-apply.service.js'
 import { openStrategy } from '../ads-strategy/effective.js'
@@ -27,17 +31,61 @@ import type { ProductTerms } from './doc.js'
 
 const norm = (s: string) => s.trim().toLowerCase()
 
+/** One monthly cap the hero is held against, with the spend already in its scope. */
+export interface HeroCap {
+  monthlySpendCapCents: number
+  source: { level: string; label: string }
+  /** This month so far, and the month's forecast with the hero at full spend for the days left. */
+  spendCents: number
+  forecastSpendCents: number
+  daysLeft: number
+  over: boolean
+}
+
 /** A hero's build plan: the build's own shape, and what the hero is. */
 export interface HeroBuildPlan extends BuildPlan {
   hero: {
     plan: HeroPlan
     /** Where the term runs now (the winners view's entries for it), the best first. */
     current: WinnerEntry[]
+    caps: HeroCap[]
   }
 }
 
+/**
+ * Every monthly cap in force at the product, with the spend already in it and the hero's daily budget at full spend for
+ * the days left: the market's through the month projection (its spend so far, its pace with the margin, the budget
+ * plan's cap where lower), a category's or a product's from this month's spend of its scope at its pace so far.
+ */
+async function capsWithSpend(view: Awaited<ReturnType<typeof openStrategy>>, market: string, caps: ReadonlyArray<{ monthlySpendCapCents: number; source: { level: string; label: string; strategyId: string } }>, heroDailyCents: number, now = new Date()): Promise<HeroCap[]> {
+  const inForce = caps.filter((c) => c.monthlySpendCapCents > 0)
+  if (!inForce.length) return []
+  const day = budgetDayStart(now)
+  const start = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), 1))
+  const daysInMonth = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 0)).getUTCDate()
+  const daysLeft = daysInMonth - day.getUTCDate() + 1
+  const elapsed = day.getUTCDate() - 1
+  const { monthProjections } = await import('../ads-strategy/autonomy.js')
+  const { scopeCapsThisMonth } = await import('../ads-strategy/spend.js')
+  const [projection, scoped] = await Promise.all([
+    inForce.some((c) => c.source.level === 'market') ? monthProjections([{ market, view, addedDailyCents: heroDailyCents }], now).then((m) => m.get(market) ?? null) : Promise.resolve(null),
+    inForce.some((c) => c.source.level !== 'market') ? scopeCapsThisMonth(view, start, day) : Promise.resolve(null),
+  ])
+  return inForce.map((c) => {
+    if (c.source.level === 'market') {
+      const spendCents = projection?.spentCents ?? 0
+      const forecastSpendCents = projection ? projection.afterCents : heroDailyCents * daysLeft
+      return { monthlySpendCapCents: c.monthlySpendCapCents, source: { level: c.source.level, label: c.source.label }, spendCents, forecastSpendCents, daysLeft, over: forecastSpendCents > c.monthlySpendCapCents }
+    }
+    const spendCents = scoped?.caps.find((x) => x.strategyId === c.source.strategyId)?.spendCents ?? 0
+    const pace = elapsed > 0 ? Math.round((spendCents / elapsed) * daysLeft) : 0
+    const forecastSpendCents = spendCents + pace + heroDailyCents * daysLeft
+    return { monthlySpendCapCents: c.monthlySpendCapCents, source: { level: c.source.level, label: c.source.label }, spendCents, forecastSpendCents, daysLeft, over: forecastSpendCents > c.monthlySpendCapCents }
+  })
+}
+
 /** One product's hero for one term in one market, planned and judged; nothing is written. */
-export async function planHero(args: { market: string; productId?: string; sku?: string; term: string; channel?: string }): Promise<{ data: HeroBuildPlan } | { status: 400 | 404; error: string }> {
+export async function planHero(args: { market: string; productId?: string; sku?: string; term: string; channel?: string; frozen?: { bidCents: number; dailyBudgetCents: number } | null }): Promise<{ data: HeroBuildPlan } | { status: 400 | 404; error: string }> {
   const loaded = await loadProductPlaybook(args)
   if ('error' in loaded) return loaded
   const { channel, market, product, resolved, row, links, linkedNames } = loaded
@@ -54,7 +102,8 @@ export async function planHero(args: { market: string; productId?: string; sku?:
     : []
   const best = current.find((e) => e.current && e.current.clicks > 0)?.current ?? null
   const bestDays = current.find((e) => e.current && e.current.clicks > 0)?.bar.windowDays ?? null
-  const strategy = (await openStrategy(market, channel).then((view) => view.forProducts([product.id]))).values
+  const view = await openStrategy(market, channel)
+  const strategy = (await view.forProducts([product.id])).values
   const fulfilment = doc?.structure.productAds.fulfilment ?? 'FBA'
   const { ads, unlisted } = await productAdsOf(product.id, market, fulfilment)
   const heroKeys = new Set(links.filter((l) => isHeroKey(l.key)).map((l) => l.key))
@@ -63,9 +112,10 @@ export async function planHero(args: { market: string; productId?: string; sku?:
     market, doc, nameToken: nameToken ?? '', term, terms, asins: ads.map((a) => a.asin),
     band: { minBidCents: strategy.minBidCents, maxBidCents: strategy.maxBidCents },
     baseBidCents: value<number>('baseBidCents'), dailyBudgetCents: value<number>('dailyBudgetCents'),
-    cpcCents: best && best.clicks > 0 ? Math.round(best.costCents / best.clicks) : null,
-    dailySpendCents: best && bestDays ? best.costCents / bestDays : null,
+    cpcCents: best && best.clicks > 0 ? Math.round(best.spendCents / best.clicks) : null,
+    dailySpendCents: best && bestDays ? best.spendCents / bestDays : null,
     heroKeys,
+    frozen: args.frozen ?? null,
   })
   const problems = doc ? plan.problems : resolved.problems.length ? resolved.problems : ['the playbook does not compile']
   const base: HeroBuildPlan = {
@@ -79,7 +129,7 @@ export async function planHero(args: { market: string; productId?: string; sku?:
     highestPlannedBidCents: 0, skippedShared: [], acceptedShared: [], sharedWithOtherProducts: [], productAds: ads,
     portfolio: { does: 'none' }, strategy: { minBidCents: strategy.minBidCents, maxBidCents: strategy.maxBidCents, caps: [], daysInMonth: 0 },
     reach: { writable: false, everWritten: false },
-    hero: { plan, current },
+    hero: { plan, current, caps: [] },
   }
   if (!row || problems.length || !plan.campaign || !plan.slot || !doc) return { data: base }
 
@@ -96,16 +146,15 @@ export async function planHero(args: { market: string; productId?: string; sku?:
     { market: market_, existingCampaignNames: namesAll.filter((n) => !linkedNameKeys.has(norm(n))), priorRun, acceptSharedTargets: [term] })
   const named = (list: ReadonlyArray<{ expression: string; existing: NamedTerm['existing'] }>): NamedTerm[] => list.map((c) => ({ term: c.expression, existing: c.existing.slice(0, 5) }))
 
-  // Money: at full spend, over this month, against every monthly cap in force here.
+  // Money: every monthly cap in force here, with the spend already in its scope and the hero at full spend.
   const now = new Date()
   const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate()
   const dailyBudgetCents = plan.dailyBudgetCents
-  const caps = strategy.monthlyCaps.filter((c) => c.monthlySpendCapCents > 0).map((c) => ({
-    monthlySpendCapCents: c.monthlySpendCapCents, source: { level: c.source.level, label: c.source.label }, over: dailyBudgetCents * daysInMonth > c.monthlySpendCapCents,
-  }))
+  const heroCaps = await capsWithSpend(view, market, strategy.monthlyCaps, dailyBudgetCents, now)
+  const caps = heroCaps.map((c) => ({ monthlySpendCapCents: c.monthlySpendCapCents, source: c.source, over: c.over }))
   const blockers = [
     ...applyPlan.blockers,
-    ...caps.filter((c) => c.over).map((c) => `At full spend this daily budget over ${daysInMonth} days adds up to more than the monthly cap of ${c.source.label}: lower it, or raise the cap.`),
+    ...heroCaps.filter((c) => c.over).map((c) => `With what ${c.source.label} has spent this month and its pace, this daily budget at full spend for the ${c.daysLeft} days left goes past its monthly cap: lower it, or raise the cap.`),
   ]
   const bids = applyPlan.campaigns.flatMap((c) => c.adGroups.flatMap((g) => [g.defaultBidCents ?? 0, ...g.targets.filter((t) => !t.isNegative).map((t) => t.bidCents ?? 0)]))
 
@@ -134,6 +183,7 @@ export async function planHero(args: { market: string; productId?: string; sku?:
       sharedWithOtherProducts: named(applyPlan.sharedWithOtherProducts),
       portfolio: portfolioLink ? { does: 'reuse', portfolioId: portfolioLink.refId } : { does: 'none' },
       strategy: { minBidCents: strategy.minBidCents, maxBidCents: strategy.maxBidCents, caps, daysInMonth },
+      hero: { plan, current, caps: heroCaps },
       reach: { writable: market_.writable, everWritten: market_.everWritten },
     },
   }

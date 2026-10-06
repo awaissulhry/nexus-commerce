@@ -203,33 +203,26 @@ describe('the scope assertion', () => {
   })
 })
 
-describe('planIsolation — PB-6c: a term\'s own campaign (a hero) and handover B', () => {
+describe('planIsolation — PB-6c: a term\'s own campaign (a hero) owns its term in research only once it proved itself', () => {
   const hero: ScopeGroup = { adGroupId: 'g-hero', campaignId: 'c-hero', slot: 'hero:test cape', role: 'exact', match: 'EXACT', intent: 'ANY' }
   const withHero = [...scope, hero]
-  // The term's old place: the live exact keyword of Exact | Category; its own campaign holds it too.
-  const positives = [pos('g-hero', 'test cape', 'EXACT'), pos('g-exact', 'test cape', 'EXACT')]
 
-  it('the hero not proven yet: its old Exact place is not closed, and the hero owns nothing in the research slots — both run', () => {
+  it('the hero not proven yet: it owns nothing in the research slots — both run, said', () => {
     const p = plan({ scope: withHero, positives: [pos('g-hero', 'test cape', 'EXACT')] })
     expect(where(p, 'test cape')).toEqual([])
     expect(p.leftAlone.filter((l) => l.text === 'test cape').map((l) => [l.kind, l.adGroupId])).toEqual([['exactIntoResearch', 'g-auto'], ['exactIntoResearch', 'g-broad'], ['exactIntoResearch', 'g-phrase']])
-    const old = plan({ scope: withHero, positives, winners: { 'g-exact': ['test cape'] } })
-    expect(old.adds.filter((a) => a.kind === 'heroHandover')).toEqual([])
-    expect(old.leftAlone.find((l) => l.kind === 'heroHandover')).toMatchObject({ adGroupId: 'g-exact', why: expect.stringMatching(/^Not closed yet: "test cape" has its own campaign \("hero:test cape"\), which has not met the ads strategy's harvest bar there yet/) })
+    expect(p.leftAlone[0].why).toMatch(/^Not negated yet: "test cape" has its own campaign \("hero:test cape"\), which has not met the ads strategy's harvest bar there yet/)
   })
 
-  it('the hero proven: ONE negative exact in its old Exact ad group only (its old keyword superseded), and the research slots', () => {
-    const p = plan({ scope: withHero, positives, winners: { 'g-hero': ['test cape'], 'g-exact': ['test cape'] } })
-    const handover = p.adds.filter((a) => a.kind === 'heroHandover')
-    expect(handover.map((a) => [a.match, a.text, a.adGroupId])).toEqual([['EXACT', 'test cape', 'g-exact']])
-    expect(handover[0]).toMatchObject({ owner: { adGroupId: 'g-hero', slot: 'hero:test cape' }, why: expect.stringMatching(/^Closed: "test cape" has its own campaign .* its old exact keyword in "exact-category" is superseded/) })
-    expect(where(p, 'test cape')).toEqual(['EXACT:g-auto', 'EXACT:g-broad', 'EXACT:g-exact', 'EXACT:g-phrase'])
-    // Never into the hero itself, the brand slot (no old keyword there) or the product-targeting slot.
-    expect(p.adds.map((a) => a.adGroupId)).not.toEqual(expect.arrayContaining(['g-hero', 'g-brand', 'g-pat']))
+  it('the hero proven: negated exact in the research slots; its OLD exact keyword is never negated (L1 holds)', () => {
+    const p = plan({ scope: withHero, positives: [pos('g-hero', 'test cape', 'EXACT'), pos('g-exact', 'test cape', 'EXACT')], winners: { 'g-hero': ['test cape'] } })
+    expect(where(p, 'test cape')).toEqual(['EXACT:g-auto', 'EXACT:g-broad', 'EXACT:g-phrase'])
+    expect(p.adds.map((a) => a.adGroupId)).not.toContain('g-exact')
   })
 
-  it('the old place keeps L1 for every other keyword: a second exact keyword there is never blocked', () => {
-    const p = plan({ scope: withHero, positives: [...positives, pos('g-exact', 'test coat', 'EXACT')], winners: { 'g-hero': ['test cape'] } })
-    expect(p.adds.filter((a) => a.adGroupId === 'g-exact').map((a) => a.text)).toEqual(['test cape'])
+  it('a term another live exact keyword of the product owns is sent there as before, hero or not', () => {
+    const p = plan({ scope: withHero, positives: [pos('g-hero', 'test cape', 'EXACT'), pos('g-exact', 'test cape', 'EXACT')] })
+    expect(where(p, 'test cape')).toEqual(['EXACT:g-auto', 'EXACT:g-broad', 'EXACT:g-phrase'])
+    expect(p.leftAlone.filter((l) => l.text === 'test cape' && /own campaign/.test(l.why))).toEqual([])
   })
 })

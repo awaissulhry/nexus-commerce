@@ -22,6 +22,7 @@
  * Nothing spends until START (PB-5b): a campaign at 2¢ serves next to nothing (not nothing), and off the allowlist no
  * engine, rule or later edit writes to it.
  */
+import { workspaceIdForQuery } from '@nexus/database/workspace-context'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import type { PlannedCampaign } from '../../ads-core/ads-blueprint-apply.js'
@@ -212,8 +213,8 @@ export async function startPlaybookBuild(input: {
 }): Promise<{ applicationId: string; alreadyRunning?: boolean } | { refusal: string }> {
   const { plan } = input
   if (!plan.playbook || !plan.applyPlan || !plan.doc || !plan.nameToken) return { refusal: 'the build has no compiled plan' }
-  const flying = await inFlightRefusal(plan.market, plan.nameToken, plan.playbook.id, { settle: true })
-  if (flying) return { applicationId: flying.applicationId, alreadyRunning: true }
+  // A build that stopped is settled first (it holds nothing); the claim itself is below, under a lock.
+  await settleStoppedBuilds({ market: plan.market, productToken: plan.nameToken, playbookId: plan.playbook.id })
   const options: BuildRunOptions = {
     source: 'playbook',
     changeSetId: input.changeSetId,
@@ -228,23 +229,39 @@ export async function startPlaybookBuild(input: {
     doc: plan.doc,
     slots: plan.campaigns.map((c) => c.role),
   }
-  const row = await prisma.adBlueprintApplication.create({
-    data: {
-      blueprintId: null,
-      productToken: plan.nameToken,
-      marketplace: plan.market,
-      asins: plan.productAds.map((a) => a.asin),
-      status: 'RUNNING',
-      startedAt: new Date(),
-      plan: plan.applyPlan as unknown as object,
-      launchMode: 'floor',
-      actor: input.actor,
-      playbookId: plan.playbook.id,
-      options: options as unknown as object,
-      progress: { done: 0, total: plan.campaigns.length, campaign: null, created: 0, at: new Date().toISOString() } as object,
-    },
-    select: { id: true },
+  // PB-6c (review) — check and claim in ONE transaction under a lock per product token and market: two approvals that
+  // arrive together (a build and a hero of one product) can never both find nothing running and start two runs.
+  const playbook = plan.playbook
+  const nameToken = plan.nameToken
+  const claimed = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify(['nexus-playbook-build', workspaceIdForQuery(), plan.market, nameToken.toLowerCase()])}, 0))`
+    const running = await tx.adBlueprintApplication.findFirst({
+      where: { status: 'RUNNING', OR: [{ marketplace: plan.market, productToken: { equals: nameToken, mode: 'insensitive' } }, { playbookId: playbook.id }] },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    if (running) return { applicationId: running.id, alreadyRunning: true as const }
+    const row = await tx.adBlueprintApplication.create({
+      data: {
+        blueprintId: null,
+        productToken: nameToken,
+        marketplace: plan.market,
+        asins: plan.productAds.map((a) => a.asin),
+        status: 'RUNNING',
+        startedAt: new Date(),
+        plan: plan.applyPlan as unknown as object,
+        launchMode: 'floor',
+        actor: input.actor,
+        playbookId: playbook.id,
+        options: options as unknown as object,
+        progress: { done: 0, total: plan.campaigns.length, campaign: null, created: 0, at: new Date().toISOString() } as object,
+      },
+      select: { id: true },
+    })
+    return { applicationId: row.id }
   })
+  if ('alreadyRunning' in claimed) return claimed
+  const row = { id: claimed.applicationId }
   void runPlaybookBuild(row.id, { compilers: input.compilers }).catch(async (e) => {
     logger.error('[PB-5] detached playbook build threw', { applicationId: row.id, error: (e as Error).message })
     // A thrown run must not sit at RUNNING for ever: it would block the next build on the in-flight guard.

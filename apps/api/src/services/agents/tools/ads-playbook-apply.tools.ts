@@ -20,14 +20,16 @@
  *   stop    PB-5b — the brake and START's undo: the built campaigns' bids to the 2¢ floor (remembered again; an engine's
  *           floor taken over), off the allowlist, then the playbook's hourly plans (their floors handed to the stop) and
  *           rules off. Never a pause, never an archive; no code (it lowers spend).
- *   hero    PB-6c — a winning term's own campaign (ads-playbook/hero.ts, hero-build.ts): ONE campaign, ONE exact keyword,
- *           the product's own product ads and negatives, built by the same build (the SP Super Wizard's launch) and
- *           born the same way — at the 2¢ floor, off the allowlist, placements at START — linked as the slot
- *           `hero:<term>` (kind slot: START and STOP name it in `slots`, and the held-campaign guards cover it). One per
- *           term per product per market. The term keeps running where it runs now: nothing is negated and no bid is
- *           lowered there; once the hero itself meets the harvest bar, the playbook's harvest and isolation rules close
- *           it in the research campaigns (handover B). Another product buying the term never refuses it (rule 3).
- *           Spend is added only by the playbook's START (op start), as for every built slot.
+ *   hero    PB-6c — a declining or lost term's own campaign (ads-playbook/hero.ts, hero-build.ts; a winning term is
+ *           refused, rule 2): ONE campaign, ONE exact keyword, the product's own product ads and negatives, built by the
+ *           same build (the SP Super Wizard's launch) and born the same way — at the 2¢ floor, off the allowlist,
+ *           placements at START — linked as the slot `hero:<term>` (kind slot: START and STOP name it in `slots`, and the
+ *           held-campaign guards cover it). One per term per product per market. Its bid (the term's CPC) and budget
+ *           (its daily spend) are frozen in the approval and asked again only against the strategy's band and caps. The
+ *           term keeps running where it runs now: nothing is negated and no bid is lowered there; once the hero itself
+ *           meets the harvest bar, its old exact keyword is proposed at the 2¢ floor (ads-playbook view winners) and the
+ *           isolation rule negates it in the research campaigns (handover B). Another product buying the term never
+ *           refuses it (rule 3). Spend is added only by the playbook's START (op start), as for every built slot.
  *
  * Like every ad change tool (ads-change-kit.ts): the preview says where it lands and a refusal is not queued; it runs only
  * as an approved request, as the approver, and refuses when what was approved moved. Strategy-bound (ads-autonomy-kit.ts):
@@ -66,7 +68,7 @@ const MAX_SLOTS = 30
 
 const input = z.object({
   op: z.enum(['build', 'adopt', 'start', 'stop', 'hero'])
-    .describe("build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); start: the built campaigns start spending (allowlist, planned bids, placements, then the playbook's hourly plans and rules; needs the approver's authenticator code); stop: the brake — built campaigns back to the 2¢ floor and off the allowlist, the hourly plans and rules off (never a pause); hero: a campaign of its own for one winning term (one exact keyword, born like a build; the term keeps running where it is)"),
+    .describe("build: create the slots the product does not hold yet (born at the 2¢ floor, off the live-write allowlist, no placements: nothing spends until START); adopt: bind campaigns the product already runs to its slots (Nexus only); start: the built campaigns start spending (allowlist, planned bids, placements, then the playbook's hourly plans and rules; needs the approver's authenticator code); stop: the brake — built campaigns back to the 2¢ floor and off the allowlist, the hourly plans and rules off (never a pause); hero: a campaign of its own for a declining or lost term (one exact keyword, born like a build; the term keeps running where it is; a winning term is refused)"),
   market: z.string().trim().toUpperCase().min(2).max(20).describe('ONE Amazon market code (IT, DE, FR, ES, UK; business-overview lists them)'),
   productId: ID.optional().describe('the product (a parent or a variation), its Nexus id; or sku'),
   sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
@@ -360,16 +362,21 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
   }
 }
 
+/** PB-6c — a hero's campaign without its bid and budget (the frozen values carry them), for the basis. */
+const moneyless = (campaigns: HeroBuildPlan['campaigns']) => campaigns.map((c) => ({
+  ...c, dailyBudget: null, adGroups: c.adGroups.map((g) => ({ ...g, defaultBidCents: null, targets: g.targets.map((t) => ({ ...t, bidCents: null })) })),
+}))
+
 /** PB-6c — what a hero's preview says about where its term runs now (the winners view's entries for it). */
 const currentLines = (p: HeroBuildPlan) => p.hero.current.slice(0, 10).map((e) => ({
   slot: e.slot, campaignId: e.campaignId, campaignName: e.campaignName, state: e.state, nextStep: e.nextStep, orders: e.current?.orders ?? 0,
 }))
 
 /** PB-6c — a hero, planned and judged: its preview, and the plan `execute` hands to the build. */
-async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<{ result: ToolResult; plan?: HeroBuildPlan }> {
+async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>, frozen: { bidCents: number; dailyBudgetCents: number } | null = null): Promise<{ result: ToolResult; plan?: HeroBuildPlan }> {
   const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult })
   if (!a.term?.trim()) return refuse('A hero is for one term: name it (term). ads-playbook view winners names the terms whose next step is a campaign of their own.')
-  const out = await planHero({ market: a.market, productId: a.productId, sku: a.sku, term: a.term })
+  const out = await planHero({ market: a.market, productId: a.productId, sku: a.sku, term: a.term, frozen })
   if ('error' in out) return refuse(out.error)
   const p = out.data
   const h = p.hero.plan
@@ -379,6 +386,12 @@ async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promi
   if (p.playbook.state === 'STOPPED') return refuse(`${p.product.sku}'s playbook in ${p.market} is stopped: start it again before its terms get campaigns of their own.`)
   if (!p.compiles) return refuse(`No campaign of its own for "${h.term}": ${p.problems.join('; ')}.`)
   if (!p.allowed) return refuse(`The blueprint gate refuses this campaign — ${p.blockers.join(' ')}`)
+  // Rule 2 — a hero is for a declining or lost term: one that wins where it runs stays there, untouched.
+  const winning = p.hero.current.filter((e) => e.state === 'winning')
+  if (winning.length) return refuse(`"${h.term}" wins where it runs ("${winning[0].campaignName}"): the Owner's rule 2 keeps it there, so it gets no campaign of its own. A hero is for a declining or lost term (ads-playbook view winners).`)
+  if (!p.hero.current.some((e) => e.state === 'declining' || e.state === 'lost')) {
+    return refuse(`"${h.term}" is not declining or lost in ${p.product.sku}'s playbook campaigns in ${p.market} (it has not proven itself there, or the windows cannot be compared): a hero is for a declining or lost term (ads-playbook view winners).`)
+  }
   const flying = await inFlightRefusal(p.market, p.nameToken!, p.playbook.id)
   if (flying && !flying.stopped) return refuse(`A build of this product is running (run ${flying.applicationId}): follow it with ads-playbook view build, then ask again.`)
   let currency: string
@@ -407,7 +420,7 @@ async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promi
   const effect = `Builds ONE Sponsored Products campaign of its own for "${h.term}" — ${p.product.sku}'s hero for this term in ${p.market} — through the SP Super Wizard's launch: `
     + `one exact keyword, ${plural(p.productAds.length, 'ASIN')}, ${plural(h.negatives, 'negative')}, ${amountLabel(p.dailyBudgetCents, currency)} of daily budget. `
     + `Born ENABLED with its bid at the ${floor}-cent floor (the planned bid remembered; suppressed, never paused), off the live-write allowlist and without placements: it serves next to nothing (not nothing) until START. `
-    + `"${h.term}" keeps running where it runs now (${where}): nothing is negated and no bid is lowered there. Once the hero itself meets the harvest bar, the playbook's isolation rule (when on) proposes closing its old places — a negative exact in its old Exact keyword's ad group and in the research campaigns, each a card a person decides — never before.`
+    + `"${h.term}" keeps running where it runs now (${where}): nothing is negated and no bid is lowered there. Once the hero itself meets the harvest bar, its old places are closed — its old exact keyword to the ${floor}-cent floor (ads-playbook view winners proposes it; never a negative), the research campaigns by the playbook's isolation rule — each a request a person decides, never before.`
   return {
     plan: p,
     result: {
@@ -423,11 +436,14 @@ async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promi
         hero: {
           key: h.key, intent: h.intent, modelSlot: h.modelSlot, ...(h.ownIntent ? {} : { modelNote: `no Exact slot for ${h.intent.toLowerCase()} terms: modelled on "${h.modelSlot}"` }),
           keyword: { text: h.term, match: 'EXACT' }, negatives: h.negatives,
-          bidFrom: `${h.bidFrom === 'cpc' ? "the term's cost per click where it runs now" : "the playbook's start-bid ladder for its Exact slot (the term has no clicks yet)"}, clamped to the strategy's bid band at this product${p.slots[0]?.ladderBidCents != null ? ' (the band clamped it)' : ''}`,
-          budgetFrom: `${h.budgetFrom === 'spend' ? "the term's own daily spend where it runs now" : h.budgetFrom === 'productBudget' ? "the product's daily budget (the term spends more than it)" : "the playbook's least budget per slot (the term spends less)"} — at least the least budget per slot, at most the product's daily budget, and held against every monthly cap of the strategy at full spend`,
+          bidFrom: `${h.bidFrom === 'approved' ? 'the bid approved' : h.bidFrom === 'cpc' ? "the term's cost per click where it runs now (its settled window)" : "the playbook's start-bid ladder for its Exact slot (the term has no clicks yet)"}, clamped to the strategy's bid band at this product${p.slots[0]?.ladderBidCents != null ? ' (the band clamped it)' : ''}`,
+          budgetFrom: `${h.budgetFrom === 'approved' ? 'the daily budget approved' : h.budgetFrom === 'spend' ? "the term's own daily spend where it runs now" : h.budgetFrom === 'productBudget' ? "the product's daily budget (the term spends more, or the least per slot is above it)" : "the playbook's least budget per slot (the term spends less)"} — at least the least budget per slot, never above the product's daily budget, and held against every monthly cap of the strategy WITH the spend already in it (caps)`,
         },
         current: currentLines(p),
-        keepsRunning: `"${h.term}" keeps running where it runs now: no negative, no lower bid, no pause anywhere (the Owner's rule 2: winners are never shuffled). Its old places are closed only after the hero proves itself, each by a card a person decides (ads-playbook view winners: "hero proven → old place to be closed").`,
+        // The bid and budget a person approves: planned again as they are at execute (only the band and the caps asked again).
+        frozen: { bidCents: p.slots[0]?.startBidCents ?? 0, dailyBudgetCents: p.dailyBudgetCents },
+        caps: p.hero.caps,
+        keepsRunning: `"${h.term}" keeps running where it runs now: no negative, no lower bid, no pause anywhere (the Owner's rule 2: winners are never shuffled). Its old places are closed only after the hero proves itself, each by a request a person decides (ads-playbook view winners: "hero proven → old keyword to the floor").`,
         campaigns,
         dailyBudgetCents: p.dailyBudgetCents,
         highestPlannedBidCents: p.highestPlannedBidCents,
@@ -442,7 +458,8 @@ async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promi
         warnings: [...p.warnings, ...(flying?.stopped ? [`An earlier build of this product (run ${flying.applicationId}) stopped without finishing: this one marks it FAILED.`] : [])],
         artifacts: artifacts.lines,
         ...(artifacts.errors.length ? { artifactErrors: artifacts.errors } : {}),
-        basis: hash({ row: [p.playbook.id, p.playbook.version], template: p.template, term: h.key, campaigns: p.campaigns, productAds: p.productAds, portfolio: p.portfolio, linked: p.linked }),
+        // The term's CPC and spend move every day: the basis holds the campaign's shape, never its bid or budget (frozen).
+        basis: hash({ row: [p.playbook.id, p.playbook.version], template: p.template, term: h.key, campaigns: moneyless(p.campaigns), productAds: p.productAds, portfolio: p.portfolio, linked: p.linked }),
         reach: stored,
         reachNote: reachNote(stored),
         effect,
@@ -608,7 +625,7 @@ const applyAdsPlaybook: AgentTool = {
     + 'bids remembered; suppressed, never paused), off the live-write allowlist and without placements, so it spends next '
     + 'to nothing until a later START. The plan is the dry run of ads-playbook view compile, held to the blueprint gate '
     + '(only the product\'s own campaigns are kept apart; another product may buy the same keyword). It runs on its own '
-    + 'once approved: follow it with ads-playbook view build. op hero builds ONE campaign of its own for one winning term '
+    + 'once approved: follow it with ads-playbook view build. op hero builds ONE campaign of its own for a declining or lost term '
     + '(term; ads-playbook view winners names the terms whose next step it is): one exact keyword, the product\'s own '
     + 'product ads and negatives, born the same way as a build (2-cent floor, off the allowlist, placements at START) and '
     + 'linked as the slot hero:<term>, at most one per term; op start with slots ["hero:<term>"] starts it. The term keeps '
@@ -707,8 +724,12 @@ const applyAdsPlaybook: AgentTool = {
     }
 
     if (a.op === 'hero') {
-      // PB-6c — a hero runs as a build of one campaign (the same executor, the same launch).
-      const fresh = await heroPreview(a, ctx)
+      // PB-6c — a hero runs as a build of one campaign (the same executor, the same launch), with the bid and budget
+      // the person approved (the term's CPC and spend have moved since): only the band and the caps are asked again.
+      const approved = (ctx.approvedPreview as { frozen?: { bidCents?: unknown; dailyBudgetCents?: unknown } } | undefined)?.frozen
+      const frozen = approved && typeof approved.bidCents === 'number' && typeof approved.dailyBudgetCents === 'number'
+        ? { bidCents: approved.bidCents, dailyBudgetCents: approved.dailyBudgetCents } : null
+      const fresh = await heroPreview(a, ctx, frozen)
       if (!fresh.result.ok || !fresh.plan) return notRun(`Not run: ${fresh.result.error ?? 'it is no longer a valid campaign of its own'}`)
       const refusal = recheck(ctx, fresh.result, ['op', 'basis', 'reach'])
       if (refusal) return notRun(refusal)

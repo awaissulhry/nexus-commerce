@@ -26,6 +26,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import { gunzipSync } from 'node:zlib'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { SEARCH_TERM_DAYS_KEPT } from './ads-settled-window.js'
 import {
   liveCall,
   REPORT_V3_MIME,
@@ -1536,7 +1537,7 @@ export async function runTargetingReportCycle(
 // days to give analytics enough trailing window for trends.
 
 export async function cleanupOldSearchTerms(
-  daysToKeep = 90,
+  daysToKeep = SEARCH_TERM_DAYS_KEPT,
 ): Promise<{ deletedSearchTerms: number; cutoffDate: string }> {
   const cutoff = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000)
   cutoff.setUTCHours(0, 0, 0, 0)

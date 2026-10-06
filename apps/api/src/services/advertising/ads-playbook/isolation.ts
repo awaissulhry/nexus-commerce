@@ -14,10 +14,10 @@
  *                         of its brand slots holds the term
  *   phrase into broad     each live phrase keyword of its Phrase slots → negative phrase in its Broad slots of the SAME
  *                         intent (category into Broad | Category, never Broad | Brand) and its Auto slots
- *   hero handover         PB-6c — a term's own campaign (a hero, slot `hero:<term>`) is its owner only once it proved
- *                         itself (its exact keyword meets the harvest bar there): then the term is negated exact in the
- *                         research slots, and in its OLD Exact slot too — the old keyword is superseded (the lock's L1b:
- *                         ads-winner-lock.ts supersedingHero). Until then both run (the Owner's rule 2), said
+ *   a hero                PB-6c — a term's own campaign (a hero, slot `hero:<term>`) owns its term in the research
+ *                         slots only once it proved itself (its exact keyword meets the harvest bar there); until then
+ *                         both run (the Owner's rule 2), said. Its OLD exact keyword is never negated here (L1 holds):
+ *                         the winners view proposes it at the 2¢ floor instead (winners.ts)
  *
  * A negative is planned into an ad group only when ALL hold: the ad group is in scope; it blocks no keyword of that ad
  * group (the lock, L1); its owner keyword is live; it blocks no search term that WINS there (meets the ads strategy's
@@ -146,7 +146,7 @@ export interface IsolationPlanInput {
   protections: ReadonlyMap<string, readonly ProtectedTerm[]>
 }
 
-export type IsolationKind = 'exactIntoResearch' | 'brandPhrase' | 'phraseIntoBroadAndAuto' | 'heroHandover'
+export type IsolationKind = 'exactIntoResearch' | 'brandPhrase' | 'phraseIntoBroadAndAuto'
 
 export interface PlannedNegative {
   kind: IsolationKind
@@ -191,7 +191,6 @@ export function assertInScope(adds: readonly Pick<PlannedNegative, 'adGroupId' |
 
 /** The sentence a planned negative carries (its evidence note, the card's line). */
 function whyOf(kind: IsolationKind, text: string, owner: { slot: string; text: string }, into: string): string {
-  if (kind === 'heroHandover') return `Closed: "${text}" has its own campaign ("${owner.slot}") and there it now meets the ads strategy's harvest bar, so its old exact keyword in "${into}" is superseded: a negative exact sends its searches to its own campaign.`
   if (kind === 'brandPhrase') return `Kept apart: "${text}" is this product's brand, and its searches go to its brand slot "${owner.slot}" (keyword "${owner.text}"), not to "${into}".`
   return `Kept apart: "${text}" is this product's own ${kind === 'exactIntoResearch' ? 'exact' : 'phrase'} keyword in the slot "${owner.slot}", so its searches go there, not to "${into}".`
 }
@@ -207,7 +206,7 @@ export function planIsolation(input: IsolationPlanInput): IsolationPlan {
   const proven = (term: string, notIn: string) => allPositives.some((p) =>
     p.match === 'EXACT' && p.live && p.adGroupId !== notIn && normaliseNegTerm(p.text) === normaliseNegTerm(term) && winnersIn(p.adGroupId).has(normaliseNegTerm(term)))
 
-  const consider = (kind: IsolationKind, text: string, match: 'EXACT' | 'PHRASE', g: ScopeGroup, owner: Positive & { slot: string }, superseded?: Positive) => {
+  const consider = (kind: IsolationKind, text: string, match: 'EXACT' | 'PHRASE', g: ScopeGroup, owner: Positive & { slot: string }) => {
     const key = isolationItemKey({ match, text, adGroupId: g.adGroupId })
     if (seen.has(key)) return
     seen.add(key)
@@ -215,8 +214,7 @@ export function planIsolation(input: IsolationPlanInput): IsolationPlan {
     if (input.standing.has(negativeKey(g.adGroupId, match, text))) { plan.alreadyStanding++; return }
     const tooLong = negativeKeywordTextProblem(text, match === 'PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT')
     if (tooLong) return leave(`Not negated: ${tooLong}`)
-    // L1 — the hero handover's own old keyword is superseded (L1b); it blocks nothing else here.
-    const blocked = blockedPositive({ text, match }, positivesOf(g).filter((p) => p.adTargetId !== superseded?.adTargetId))
+    const blocked = blockedPositive({ text, match }, positivesOf(g))
     if (blocked) {
       return leave(g.role === 'exact'
         ? `Not negated: it would block your own keyword "${blocked.text}" in this Exact slot; move that keyword to its brand slot first (the playbook's drift list names it).`
@@ -243,7 +241,7 @@ export function planIsolation(input: IsolationPlanInput): IsolationPlan {
   /** PB-6c — a hero owns its term only once its exact keyword meets the harvest bar there (handover B). */
   const heroProven = (owner: Positive) => winnersIn(owner.adGroupId).has(normaliseNegTerm(owner.text))
   const unproven = (owner: Positive & { slot: string }) =>
-    `Not closed yet: "${owner.text}" has its own campaign ("${owner.slot}"), which has not met the ads strategy's harvest bar there yet, so the term keeps running here too.`
+    `Not negated yet: "${owner.text}" has its own campaign ("${owner.slot}"), which has not met the ads strategy's harvest bar there yet, so the term keeps running here too.`
 
   if (action.exactIntoResearch) {
     const owners = ownersIn(scope.filter((g) => g.role === 'exact'), 'EXACT')
@@ -257,17 +255,6 @@ export function planIsolation(input: IsolationPlanInput): IsolationPlan {
         if (waits) { plan.leftAlone.push({ kind: 'exactIntoResearch', text: owner.text, adGroupId: g.adGroupId, slot: g.slot, why: unproven(owner) }); continue }
         consider('exactIntoResearch', owner.text, 'EXACT', g, owner)
       }
-    }
-  }
-
-  // PB-6c — handover B for a hero: its term's old Exact places are closed once the hero proved itself, never before.
-  for (const owner of ownersIn(scope.filter(isHero), 'EXACT')) {
-    const term = normaliseNegTerm(owner.text)
-    for (const g of scope.filter((x) => x.role === 'exact' && !isHero(x) && x.adGroupId !== owner.adGroupId)) {
-      const old = positivesOf(g).find((p) => p.match === 'EXACT' && normaliseNegTerm(p.text) === term)
-      if (!old) continue
-      if (!heroProven(owner)) { plan.leftAlone.push({ kind: 'heroHandover', text: owner.text, adGroupId: g.adGroupId, slot: g.slot, why: unproven(owner) }); continue }
-      consider('heroHandover', owner.text, 'EXACT', g, owner, old)
     }
   }
 

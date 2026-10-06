@@ -8,11 +8,6 @@
  *       refused by name, with the keyword it would block, "remove or lower that keyword instead".
  *   L2  A term that already has a home (a positive EXACT keyword with its text, or for an ASIN a positive product
  *       target) among the ad groups of the SAME product in its market is never created again in another of them.
- *   L1b PB-6c — handover B for a term's own campaign (a hero, playbook slot `hero:<term>`): once the hero's live exact
- *       keyword meets the harvest bar there (homeWinners: the bar the harvest asks), the hero is the term's proven home
- *       and the term's old exact keyword in ANOTHER slot of the same playbook is superseded: a negative exact of it in
- *       that ad group is not refused by L1 (supersedingHero). Until the hero proves, both run (rule 2). Only the same
- *       playbook's slots: another product's keyword is never superseded (rule 3).
  *
  * The product: what the caller's own ad groups advertise, with its sibling variants of one parent (productFamilyOf),
  * in one market (familyAdGroups). Never account-wide, never another product's: another product's keyword "x" never
@@ -24,7 +19,6 @@
  *           "stopped with low bids" state).
  */
 import prisma from '../../db.js'
-import { HARVEST_DEFAULTS } from '@nexus/shared/ads-rule-window'
 import { normaliseNegTerm } from './ads-protect-converting.js'
 import { strategyMarketOf } from './ads-strategy/terms.js'
 
@@ -131,34 +125,6 @@ export function homeOf(term: string, positives: Iterable<Positive>, match?: Excl
   return found
 }
 
-/** PB-6c — a term's own campaign (a hero) is the playbook slot with this key (ads-playbook/hero.ts). */
-export const HERO_PREFIX = 'hero:'
-export const heroLinkKey = (term: string): string => `${HERO_PREFIX}${normaliseNegTerm(term)}`
-
-/**
- * L1b — the hero that supersedes this positive EXACT keyword, or null: the keyword's campaign plays a (non-hero) slot of
- * a playbook, the same playbook holds the slot `hero:<its text>` with a campaign in the same market, not archived, whose
- * ad group holds the term as a LIVE exact keyword, and there the term meets the harvest bar (homeWinners, with the
- * harvest rules' fallbacks where the strategy sets none — the bar the harvest and the isolation ask).
- */
-export async function supersedingHero(p: Positive): Promise<{ campaignId: string; adGroupId: string; name: string } | null> {
-  if (p.match !== 'EXACT') return null
-  const group = await prisma.adGroup.findUnique({ where: { id: p.adGroupId }, select: { campaignId: true, campaign: { select: { marketplace: true } } } })
-  if (!group) return null
-  const slot = await prisma.adsPlaybookLink.findFirst({ where: { kind: 'slot', refId: group.campaignId }, select: { playbookId: true, key: true } })
-  if (!slot || slot.key.startsWith(HERO_PREFIX)) return null
-  const hero = await prisma.adsPlaybookLink.findFirst({ where: { playbookId: slot.playbookId, kind: 'slot', key: heroLinkKey(p.text) }, select: { refId: true, adGroupId: true } })
-  if (!hero?.adGroupId || hero.adGroupId === p.adGroupId) return null
-  const campaign = await prisma.campaign.findUnique({ where: { id: hero.refId }, select: { id: true, name: true, status: true, marketplace: true } })
-  if (!campaign || String(campaign.status) === 'ARCHIVED' || strategyMarketOf(campaign.marketplace) !== strategyMarketOf(group.campaign?.marketplace)) return null
-  const home = homeOf(p.text, (await positivesIn([hero.adGroupId])).get(hero.adGroupId) ?? [])
-  if (!home?.live || home.adGroupId !== hero.adGroupId) return null
-  // Loaded when asked: the harvest service imports this module.
-  const { homeWinners, winnerKey } = await import('./ads-harvest.service.js')
-  const winners = await homeWinners([{ term: p.text, adGroupId: hero.adGroupId }], { defaults: { ...HARVEST_DEFAULTS } })
-  return winners.has(winnerKey(p.text, hero.adGroupId)) ? { campaignId: campaign.id, adGroupId: hero.adGroupId, name: campaign.name } : null
-}
-
 /** The words a refusal by L1 says, naming the keyword it protects and where. */
 export function blockedWords(p: Positive, adGroupName?: string | null): string {
   const what = p.match === 'PRODUCT' ? `product target ${p.text}` : `${p.match.toLowerCase()} keyword "${p.text}"`
@@ -174,10 +140,7 @@ export async function ownKeywordRefusal(where: { scope: 'AD_GROUP' | 'CAMPAIGN';
   const ids = where.scope === 'AD_GROUP'
     ? (where.adGroupId ? [where.adGroupId] : [])
     : (await prisma.adGroup.findMany({ where: { campaignId: where.campaignId }, select: { id: true } })).map((g) => g.id)
-  // L1b — an exact keyword whose own campaign (hero) proved itself is superseded: it blocks nothing here.
-  const blocked = [...(await positivesIn(ids)).values()].flat().filter((p) => blockedPositive({ text, match }, [p]))
-  let own: Positive | null = null
-  for (const p of blocked) if (!(match === 'EXACT' && (await supersedingHero(p)))) { own = p; break }
+  const own = blockedPositive({ text, match }, [...(await positivesIn(ids)).values()].flat())
   if (!own) return null
   const group = await prisma.adGroup.findUnique({ where: { id: own.adGroupId }, select: { name: true } })
   const neg = match === 'PRODUCT' ? `A negative product target ${text.trim()}` : `A negative ${match.toLowerCase()} "${text.trim()}"`

@@ -12,30 +12,33 @@
  *   bid         the term's cost per click where it runs now (the harvest's own start for a winner: it holds the place the
  *               term has), else the model slot's ladder bid — clamped to the strategy's band; START puts it back
  *   budget      the term's own daily spend where it runs now, at least the playbook's least budget per slot, at most the
- *               product's daily budget
+ *               product's daily budget (a product budget below the least per slot is the hero's budget: never above it)
+ *   approved    `frozen`: the bid and budget a person approved, planned again as they were (the term's CPC and spend
+ *               move every day); only the strategy's band is asked again here (and the caps by the build's gate)
  *   placements  the model slot's
  *   negatives   the product's own, and the isolation the template sets for the slot's intent — never one that would
  *               block the hero's own keyword (L1, ads-winner-lock.ts)
  *   one         at most one hero per term per product per market (its link key)
  *
  * What it does NOT do (Owner rule 2): the term keeps running where it runs now — nothing is negated there, no bid is
- * lowered; only once the hero itself meets the harvest bar does the playbook's isolation rule propose closing its old
- * places (handover B, `proven`): a negative exact in its old Exact slot (the lock lets it, L1b) and in the research
- * slots, each a card a person (or Claude inside his limits) decides. Rule 3: another product buying the same term is
- * never a reason to refuse, and never gets a negative.
+ * lowered; only once the hero itself meets the harvest bar (handover B, `proven`) are its old places closed, each by a
+ * request a person decides: its old exact keyword lowered to the 2¢ floor (the winners view proposes it — the Owner's
+ * low-bids stop, undone in about a minute; never a negative over his own keyword, L1), and in the research slots a
+ * negative exact (the playbook's isolation rule). Rule 3: another product buying the same term is never a reason to
+ * refuse, and is never touched.
  */
 import { z } from 'zod'
 import { campaignNameProblem } from '@nexus/shared/ads-campaign-name'
 import type { PlannedCampaign } from '../../ads-core/ads-blueprint-apply.js'
 import { routeIntent, type Intent } from '../ads-harvest-route.js'
 import { normaliseNegTerm } from '../ads-protect-converting.js'
-import { blockedPositive, HERO_PREFIX, heroLinkKey, type Positive } from '../ads-winner-lock.js'
+import { blockedPositive, type Positive } from '../ads-winner-lock.js'
 import { compilePlaybook, type CompiledSlot } from './compile.js'
 import type { ProductTerms, Slot, TemplateDoc } from './doc.js'
 
-/** The link key of a term's hero: `hero:` and the term as the harvest normalises it (the lock's own, L1b). */
-export { HERO_PREFIX }
-export const heroKey = heroLinkKey
+/** The link key of a term's hero: `hero:` and the term as the harvest normalises it. */
+export const HERO_PREFIX = 'hero:'
+export const heroKey = (term: string): string => `${HERO_PREFIX}${normaliseNegTerm(term)}`
 export const isHeroKey = (key: string): boolean => key.startsWith(HERO_PREFIX)
 /** A hero's link key, as a tool names it (START / STOP of one hero). */
 export const HERO_KEY = z.string().trim().regex(/^hero:\S.{0,99}$/, 'a hero key is "hero:" and its term')
@@ -96,6 +99,8 @@ export interface HeroInput {
   dailySpendCents: number | null
   /** The hero keys the product's playbook already holds (campaign not archived). */
   heroKeys: ReadonlySet<string>
+  /** The bid and daily budget a person approved: planned as they are (only the strategy's band asked again). */
+  frozen?: { bidCents: number; dailyBudgetCents: number } | null
 }
 
 export interface HeroPlan {
@@ -109,10 +114,10 @@ export interface HeroPlan {
   /** The one campaign (its `role` is the link key). Null when it cannot be planned. */
   campaign: PlannedCampaign | null
   slot: CompiledSlot | null
-  /** Where the planned bid comes from: the term's cost per click, or the model slot's ladder (then the band). */
-  bidFrom: 'cpc' | 'ladder'
-  /** Where the daily budget comes from: the term's own daily spend, or the least budget per slot. */
-  budgetFrom: 'spend' | 'least' | 'productBudget'
+  /** Where the planned bid comes from: the term's cost per click, the model slot's ladder (then the band), or the approval. */
+  bidFrom: 'cpc' | 'ladder' | 'approved'
+  /** Where the daily budget comes from: the term's own daily spend, the least budget per slot, the product's, or the approval. */
+  budgetFrom: 'spend' | 'least' | 'productBudget' | 'approved'
   dailyBudgetCents: number
   negatives: number
   problems: string[]
@@ -137,17 +142,26 @@ export function heroPlan(input: HeroInput): HeroPlan {
   if (!model.own) out.warnings.push(`The playbook has no Exact slot for ${intent.toLowerCase()} terms: the hero is modelled on "${model.slot.key}"`)
 
   // The bid: the term's own cost per click where it runs, else the model slot's ladder bid (the band clamps either).
+  const frozen = input.frozen ?? null
   const ladderCents = input.baseBidCents ? Math.round(input.baseBidCents * (src.bids.ladder[model.slot.key] ?? 1)) : null
-  const bidCents = input.cpcCents && input.cpcCents > 0 ? input.cpcCents : ladderCents
-  out.bidFrom = input.cpcCents && input.cpcCents > 0 ? 'cpc' : 'ladder'
+  const bidCents = frozen ? frozen.bidCents : input.cpcCents && input.cpcCents > 0 ? input.cpcCents : ladderCents
+  out.bidFrom = frozen ? 'approved' : input.cpcCents && input.cpcCents > 0 ? 'cpc' : 'ladder'
   if (!bidCents) { out.problems.push(`"${term}" has no clicks where it runs and the product row sets no base bid: there is no bid to plan`); return out }
 
-  // The budget: the term's own daily spend, at least the least per slot, at most the product's daily budget.
+  // The budget: the term's own daily spend, at least the least per slot, at most the product's daily budget — and
+  // never above the product's daily budget, even where it is below the least per slot (Amazon's own least stays).
   const least = Math.max(MIN_BUDGET_CENTS, src.budget.minPerSlotCents)
   let budget = least
   out.budgetFrom = 'least'
-  if (input.dailySpendCents && Math.ceil(input.dailySpendCents) > least) { budget = Math.ceil(input.dailySpendCents); out.budgetFrom = 'spend' }
-  if (input.dailyBudgetCents && budget > input.dailyBudgetCents && input.dailyBudgetCents >= least) { budget = input.dailyBudgetCents; out.budgetFrom = 'productBudget' }
+  if (frozen) { budget = frozen.dailyBudgetCents; out.budgetFrom = 'approved' }
+  else {
+    if (input.dailySpendCents && Math.ceil(input.dailySpendCents) > least) { budget = Math.ceil(input.dailySpendCents); out.budgetFrom = 'spend' }
+    if (input.dailyBudgetCents && budget > input.dailyBudgetCents) {
+      budget = Math.max(MIN_BUDGET_CENTS, input.dailyBudgetCents)
+      out.budgetFrom = 'productBudget'
+      if (input.dailyBudgetCents < least) out.warnings.push("The product's daily budget is below the playbook's least budget per slot: the hero gets the product's daily budget")
+    }
+  }
 
   // The one-slot doc: the model slot, fed by the term alone, with the slot's own placements and the template's isolation.
   const slot: Slot = { ...model.slot, key: ONE, feeds: ['category'], nameParts: [...model.slot.nameParts, 'Hero', term], rankRole: 'none', optional: false }
@@ -155,7 +169,8 @@ export function heroPlan(input: HeroInput): HeroPlan {
   const doc: TemplateDoc = {
     ...src,
     structure: { ...src.structure, slots: [slot] },
-    budget: { weights: { [ONE]: 1 }, minPerSlotCents: src.budget.minPerSlotCents },
+    // The least per slot is the hero's own budget at most (a product budget below it, an approved budget).
+    budget: { weights: { [ONE]: 1 }, minPerSlotCents: Math.min(src.budget.minPerSlotCents, budget) },
     bids: { ...src.bids, ladder: { [ONE]: 1 } },
     placements: placement ? { [ONE]: placement } : {},
     harvest: { edges: [] },
@@ -176,7 +191,11 @@ export function heroPlan(input: HeroInput): HeroPlan {
   const nameProblem = campaignNameProblem(campaign.name)
   if (nameProblem) { out.problems.push(`its campaign name cannot be used: ${nameProblem}`); return out }
   out.warnings.push(...compiled.warnings.filter((w) => !w.startsWith(`${ONE}: `) && !/clamps the start bid of/.test(w)))
-  if (compiledSlot.ladderBidCents != null) out.warnings.push(`The strategy's bid band clamps the hero's planned bid`)
+  if (compiledSlot.ladderBidCents != null) {
+    // An approved bid is planned as approved: one the band would move now is not built (a person asks again).
+    if (frozen) { out.problems.push("the bid approved for it is outside the ads strategy's bid band at this product now, so it is not built as approved: ask again"); return out }
+    out.warnings.push(`The strategy's bid band clamps the hero's planned bid`)
+  }
 
   // L1 — no negative of the hero blocks its own keyword (the product's own negatives, a brand phrase).
   const own: Positive[] = [{ adTargetId: ONE, adGroupId: ONE, text: term, match: 'EXACT', live: false }]

@@ -9,15 +9,12 @@ const findMany = vi.fn()
 const groups = { findMany: vi.fn(), findUnique: vi.fn() }
 const productAds = vi.fn()
 const products = vi.fn()
-/** PB-6c (L1b) — the playbook slot links: none here, so no keyword is superseded by a hero. */
-const links = { findFirst: vi.fn(async () => null) }
 vi.mock('../../db.js', () => ({
   default: {
     adTarget: { findMany: (...a: unknown[]) => findMany(...a) },
     adGroup: { findMany: (...a: unknown[]) => groups.findMany(...a), findUnique: (...a: unknown[]) => groups.findUnique(...a) },
     adProductAd: { findMany: (...a: unknown[]) => productAds(...a) },
     product: { findMany: (...a: unknown[]) => products(...a) },
-    adsPlaybookLink: { findFirst: (...a: unknown[]) => (links.findFirst as (...x: unknown[]) => unknown)(...a) },
   },
 }))
 
@@ -99,8 +96,6 @@ describe('the write service\'s refusal (L1 for every writer)', () => {
   const row = (adGroupId: string, text: string, expressionType = 'EXACT') => ({ id: `t-${adGroupId}`, adGroupId, kind: 'KEYWORD', expressionType, expressionValue: text, status: 'ENABLED', externalTargetId: 'x' })
   it('names the keyword it would block and where, and says what to do instead; campaign scope looks in every ad group', async () => {
     findMany.mockResolvedValueOnce([row('ag1', 'test jacket')])
-    // L1b asks first whether a hero supersedes the exact keyword: its campaign plays no playbook slot here.
-    groups.findUnique.mockResolvedValueOnce({ campaignId: 'c1', campaign: { marketplace: 'IT' } })
     groups.findUnique.mockResolvedValueOnce({ name: 'Exact group' })
     expect(await ownKeywordRefusal({ scope: 'AD_GROUP', adGroupId: 'ag1', campaignId: 'c1' }, 'Test Jacket', 'EXACT')).toEqual({
       deniedAt: 'own_keyword',
@@ -114,7 +109,6 @@ describe('the write service\'s refusal (L1 for every writer)', () => {
     expect(campaign?.reason).toMatch(/broad keyword "warm test jacket" in ad group "Broad group"/)
     findMany.mockResolvedValueOnce([row('ag1', 'test jacket')])
     expect(await ownKeywordRefusal({ scope: 'AD_GROUP', adGroupId: 'ag1', campaignId: 'c1' }, 'test', 'EXACT')).toBeNull()
-    expect(links.findFirst).toHaveBeenCalledWith({ where: { kind: 'slot', refId: 'c1' }, select: { playbookId: true, key: true } })
   })
 })
 
