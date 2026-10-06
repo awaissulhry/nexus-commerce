@@ -436,7 +436,7 @@ export function planDailyRefusal(steps: ReadonlyArray<{ tool?: Pick<AgentTool, '
       if (m) limits[market] = limits[market] ? tighterDaily(limits[market], m) : m
     }
   }
-  const zero = { writes: 0, raises: 0, budgetIncreaseCents: 0 }
+  const zero = { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 }
   const together: LimitFacts = {
     ...facts[0],
     markets: limits,
