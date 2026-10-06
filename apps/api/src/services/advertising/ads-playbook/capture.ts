@@ -16,7 +16,10 @@
  *   isolation   which cross-negatives the live set already carries
  *   harvest, phases   the defaults for these slots (defaults.ts): nothing live says them
  *
- * Bids are today's values with the 2¢ floor left out (a campaign at the floor names no start bid: it is asked for).
+ * Bids are today's values with the 2¢ floor left out. Under a floor an engine holds (the campaign's, or an ad group's
+ * own: an hourly plan's Min-bid window, a stop, a launch at the floor) a bid the floor remembers is read instead: the bid
+ * held before the floor, said once per slot. A campaign at the floor with nothing remembered names no start bid: it is
+ * asked for. Budget shares add up to exactly 100.
  * Everything uncertain is said in `warnings`; a doc that does not pass the template checks comes back with `problems`.
  */
 import {
@@ -27,6 +30,7 @@ import {
   PRODUCT_TOKEN,
   type AutoClause,
   type SourceCampaign,
+  type SourceFloor,
   type TargetClass,
 } from '../../ads-core/ads-blueprint.js'
 import { BIDDING_STRATEGIES } from '../../ads-core/ads-blueprint-apply.js'
@@ -184,6 +188,21 @@ function windowsOf(value: unknown): { windows: RankWindow[]; skipped: number } {
 const hoursOf = (w: { days: number[]; startHour: number; endHour: number }) =>
   w.days.length * ((w.endHour >= w.startHour ? w.endHour - w.startHour : w.endHour + 24 - w.startHour) + 1)
 
+/**
+ * Each slot's share of the daily budget, in percent with one decimal, adding up to exactly 100 (largest remainder: every
+ * share rounded down to a tenth, the tenths left over go to the largest remainders, the earlier slot on a tie). A slot
+ * without a budget has 0; none with one: all 0.
+ */
+export function budgetShares(budgetsCents: ReadonlyArray<number | null>): number[] {
+  const total = budgetsCents.reduce<number>((sum, b) => sum + (b ?? 0), 0)
+  if (!(total > 0)) return budgetsCents.map(() => 0)
+  const tenths = budgetsCents.map((b) => Math.floor(((b ?? 0) * 1000) / total))
+  const byRemainder = budgetsCents.map((b, i) => ({ i, rest: (b ?? 0) * 1000 - tenths[i] * total })).sort((a, b) => b.rest - a.rest || a.i - b.i)
+  const left = 1000 - tenths.reduce((sum, n) => sum + n, 0)
+  for (let k = 0; k < left; k++) tenths[byRemainder[k].i]++
+  return tenths.map((n) => n / 10)
+}
+
 /** Per-campaign RankTarget overrides ({ targetKey: { field: number } }), kept only when they read as numbers. */
 function overridesOf(value: unknown): Record<string, Record<string, number>> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
@@ -226,9 +245,23 @@ export function captureTemplate(input: CaptureInput): CaptureResult {
     if (n > 1) warnings.push(`"${source.name}" plays the same slot as another campaign (${base}); it is kept as its own slot "${key}"`)
 
     // The start bid: the middle of today's bids above the floor (keyword, product or auto-group bids), else the ad group's.
-    const bids = targets.filter((t) => !t.isNegative && typeof t.bidCents === 'number' && t.bidCents > FLOOR_BID_CENTS).map((t) => t.bidCents as number)
-    const groupBids = source.adGroups.map((g) => g.defaultBidCents).filter((b): b is number => typeof b === 'number' && b > FLOOR_BID_CENTS)
+    // Under an engine's floor (the campaign's, or the ad group's own) a bid it remembers is read: the bid held before
+    // the floor, not the floor.
+    const heldBy = new Set<string>()
+    let held = 0
+    const planned = (floors: Array<SourceFloor | null | undefined>, current: number | null, remembered: number | null | undefined) => {
+      const on = floors.filter((f): f is SourceFloor => !!f)
+      if (!on.length || typeof remembered !== 'number') return current
+      for (const f of on) heldBy.add(f.by ?? 'an unrecorded owner')
+      held++
+      return remembered
+    }
+    const bidOf = new Map(source.adGroups.flatMap((g) => g.targets.filter((t) => !t.isNegative).map((t) => [t, planned([g.floor, source.floor], t.bidCents, t.suppressedFromBidCents)] as const)))
+    const aboveFloor = (b: number | null | undefined): b is number => typeof b === 'number' && b > FLOOR_BID_CENTS
+    const bids = targets.filter((t) => !t.isNegative).map((t) => bidOf.get(t)).filter(aboveFloor)
+    const groupBids = source.adGroups.map((g) => planned([g.floor, source.floor], g.defaultBidCents, g.suppressedFromBidCents)).filter(aboveFloor)
     const startBidCents = median(bids) ?? median(groupBids)
+    if (held) warnings.push(`"${source.name}": ${held} bid(s) held at the floor; read the bid held before the floor (by ${[...heldBy].join(', ')})`)
     if (startBidCents == null) warnings.push(`"${source.name}": every bid is at the floor (or none is set), so it names no start bid; set its ladder factor by hand`)
 
     let autoGroups: Slot['autoGroups']
@@ -237,7 +270,8 @@ export function captureTemplate(input: CaptureInput): CaptureResult {
       const clauses = new Map<AutoClause, number | null>()
       for (const t of targets) {
         const clause = !t.isNegative ? autoClauseOf(t) : null
-        if (clause) clauses.set(clause, typeof t.bidCents === 'number' && t.bidCents > FLOOR_BID_CENTS ? t.bidCents : null)
+        const bid = bidOf.get(t)
+        if (clause) clauses.set(clause, aboveFloor(bid) ? bid : null)
       }
       for (const clause of ['CLOSE_MATCH', 'LOOSE_MATCH', 'SUBSTITUTES', 'COMPLEMENTS'] as const) {
         const bid = clauses.get(clause)
@@ -301,7 +335,8 @@ export function captureTemplate(input: CaptureInput): CaptureResult {
   const ladder = Object.fromEntries(drafts.map((d) => [d.slot.key, d.startBidCents != null && baseBidCents ? Math.max(round2(d.startBidCents / baseBidCents), 0.01) : 1]))
   const budgets = drafts.map((d) => d.dailyBudgetCents)
   const total = budgets.reduce<number>((sum, b) => sum + (b ?? 0), 0)
-  const weights = Object.fromEntries(drafts.map((d) => [d.slot.key, total > 0 && d.dailyBudgetCents != null ? Math.round((d.dailyBudgetCents / total) * 1000) / 10 : 0]))
+  const shares = budgetShares(budgets)
+  const weights = Object.fromEntries(drafts.map((d, i) => [d.slot.key, shares[i]]))
   if (budgets.some((b) => b == null)) warnings.push('A campaign has no daily budget in Nexus; its budget share is 0')
 
   // ── Rank roles: the campaigns' own hourly plans ──

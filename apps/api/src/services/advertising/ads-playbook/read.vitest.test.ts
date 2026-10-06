@@ -186,6 +186,33 @@ describe('capture', () => {
     expect(await inA(() => db().adsPlaybookTemplate.count())).toBe(before)
   })
 
+  it('a campaign an engine holds at the floor is read with the bids held before the floor, and says so; nothing is written', async () => {
+    const made = await inA(async () => {
+      const c = db()
+      const floored = await c.campaign.create({ data: {
+        name: 'TESTFLOOR | IT | Exact | Category', type: 'SP', marketplace: 'IT', dailyBudget: '10.00', startDate: new Date(),
+        bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: 2, bidsSuppressedBy: 'automation:test-rank',
+      } as never })
+      const group = await c.adGroup.create({ data: { campaignId: floored.id, name: 'TESTFLOOR exact', defaultBidCents: 2, suppressedFromBidCents: 30 } })
+      await c.adTarget.create({ data: { adGroupId: group.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test floor jacket', bidCents: 2, suppressedFromBidCents: 45 } })
+      await c.adTarget.create({ data: { adGroupId: group.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test floor coat', bidCents: 2, suppressedFromBidCents: 55 } })
+      // A campaign nothing floors, with a bid remembered from an old stop, is read as it bids today.
+      const plain = await c.campaign.create({ data: { name: 'TESTFLOOR | IT | Broad | Category', type: 'SP', marketplace: 'IT', dailyBudget: '10.00', startDate: new Date() } as never })
+      const plainGroup = await c.adGroup.create({ data: { campaignId: plain.id, name: 'TESTFLOOR broad', defaultBidCents: 25, suppressedFromBidCents: 90 } })
+      await c.adTarget.create({ data: { adGroupId: plainGroup.id, kind: 'KEYWORD', expressionType: 'BROAD', expressionValue: 'test floor jacket', bidCents: 40, suppressedFromBidCents: 99 } })
+      return { floored: floored.id, group: group.id }
+    })
+    const out = data(await inA(() => readPlaybook({ view: 'capture', market: 'IT', productToken: 'TESTFLOOR', namePrefix: 'TESTFLOOR | IT |' })))
+    expect(out.slots.map((s: Data) => s.slotKey)).toEqual(['broad-category', 'exact-category'])
+    expect(out.product.baseBidCents).toBe(45)
+    expect(out.template.bids.ladder).toEqual({ 'broad-category': 0.89, 'exact-category': 1.11 })
+    expect(out.warnings).toContain('"TESTFLOOR | IT | Exact | Category": 3 bid(s) held at the floor; read the bid held before the floor (by automation:test-rank)')
+    expect(out.warnings.join('\n')).not.toMatch(/every bid is at the floor|"TESTFLOOR \| IT \| Broad \| Category": .*held before the floor/)
+    const after = await inA(() => db().adTarget.findMany({ where: { adGroupId: made.group }, select: { bidCents: true, suppressedFromBidCents: true }, orderBy: { expressionValue: 'asc' } }))
+    expect(after).toEqual([{ bidCents: 2, suppressedFromBidCents: 55 }, { bidCents: 2, suppressedFromBidCents: 45 }])
+    expect(await inA(() => db().campaign.findUnique({ where: { id: made.floored }, select: { bidsSuppressedBy: true } }))).toEqual({ bidsSuppressedBy: 'automation:test-rank' })
+  })
+
   it('a capture names a market, the token and one selector', async () => {
     expect(await inA(() => readPlaybook({ view: 'capture', productToken: 'X', namePrefix: 'X' }))).toMatchObject({ status: 400, error: expect.stringMatching(/one market/) })
     expect(await inA(() => readPlaybook({ view: 'capture', market: 'IT', namePrefix: 'X' }))).toMatchObject({ status: 400, error: expect.stringMatching(/productToken/) })

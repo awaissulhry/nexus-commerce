@@ -116,11 +116,12 @@ export interface CaptureSource {
 }
 
 /**
- * A capture's source: the selected campaigns as the blueprint reader gives them (archived targets left out), their
- * hourly plans (AdSchedule), the RankTarget keys that hold bids at the floor, and their shared portfolio.
+ * A capture's source: the selected campaigns as the blueprint reader gives them (archived targets left out, with the
+ * floors engines hold them at and the bids those remember), their hourly plans (AdSchedule), the RankTarget keys that
+ * hold bids at the floor, and their shared portfolio.
  */
 export async function loadCaptureSource(selector: Pick<CampaignSelector, 'campaignIds' | 'portfolioId' | 'namePrefix' | 'marketplace'>): Promise<CaptureSource> {
-  const { campaigns, ids } = await loadSourceCampaigns({ ...selector, excludeArchivedTargets: true })
+  const { campaigns, ids } = await loadSourceCampaigns({ ...selector, excludeArchivedTargets: true, withFloorMemory: true })
   const [facts, schedules, floors] = await Promise.all([
     ids.length ? prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, marketplace: true, portfolioId: true } }) : Promise.resolve([]),
     ids.length

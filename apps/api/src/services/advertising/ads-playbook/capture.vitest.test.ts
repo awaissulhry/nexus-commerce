@@ -10,10 +10,12 @@
  *   rank        the plan that pushes the most hours is performance, the other research; a third plan is named, not kept
  *   isolation   the cross-negatives the live set carries are detected; the doc passes the template checks
  *   honesty     floor bids name no start bid; a campaign whose name says nothing is read from its keywords, with warnings
+ *   floors      under an engine's floor (the campaign's or an ad group's own) the bid held before the floor is read, and
+ *               each slot says so; a floor with nothing remembered keeps the warning; budget shares add up to 100
  */
 import { describe, expect, it } from 'vitest'
 import { fixtureTargets as t, liveCampaign } from '../../../test-support/ads-playbook-fixtures.js'
-import { captureTemplate, type CaptureInput } from './capture.js'
+import { budgetShares, captureTemplate, type CaptureInput } from './capture.js'
 
 const NAME = (parts: string) => `TESTPROD | IT | ${parts}`
 const NEG = [t.negative('test kids', 'PHRASE'), t.negative('test toy', 'EXACT')]
@@ -149,5 +151,84 @@ describe('capture — what it cannot know, it says', () => {
 
   it('no shared portfolio: the template builds none', () => {
     expect(captureTemplate(input({ portfolioName: null })).doc!.structure.portfolio).toEqual({ pattern: '{product} {market}', mode: 'none' })
+  })
+})
+
+/** The set as an engine's floor holds it (an hourly plan's Min-bid window): every bid above 2¢ at 2¢, its bid remembered. */
+function floored(campaigns: CaptureInput['campaigns'], by: string | null): CaptureInput['campaigns'] {
+  return campaigns.map(({ id, source }) => ({
+    id,
+    source: {
+      ...source,
+      floor: { by },
+      adGroups: source.adGroups.map((g) => ({
+        ...g,
+        defaultBidCents: 2,
+        suppressedFromBidCents: g.defaultBidCents,
+        targets: g.targets.map((x) => (x.isNegative || x.bidCents == null || x.bidCents <= 2 ? x : { ...x, bidCents: 2, suppressedFromBidCents: x.bidCents })),
+      })),
+    },
+  }))
+}
+
+describe('capture — bids an engine holds at the floor', () => {
+  it('a set the hourly plan holds at the floor captures the template it runs by day; each slot says it read the bid held before the floor', () => {
+    const day = captureTemplate(input())
+    const night = captureTemplate(input({ campaigns: floored(elevenCampaigns(), 'automation:test-rank') }))
+    expect(night.problems).toEqual([])
+    expect(night.doc).toEqual(day.doc)
+    expect(night.product.baseBidCents).toBe(28)
+    expect(night.doc!.bids.ladder).toMatchObject({ 'exact-category': 1.5, 'broad-brand': 0.79, pat: 1.36 })
+    const held = night.warnings.filter((w) => /read the bid held before the floor/.test(w))
+    expect(held).toHaveLength(11)
+    expect(held).toContain('"TESTPROD | IT | Exact | Category": 3 bid(s) held at the floor; read the bid held before the floor (by automation:test-rank)')
+    expect(night.warnings.join('\n')).not.toMatch(/every bid is at the floor/)
+  })
+
+  it('an ad group floored on its own is read the same way; its default bid too; a floor whose owner is not recorded says so', () => {
+    const [own] = floored([{ id: 'c1', source: liveCampaign(NAME('Exact | Category'), [t.keyword('test jacket', 'EXACT', 40), t.keyword('test coat', 'EXACT', 50)], { dailyBudget: 5 }) }], null)
+    const onItsOwn = { ...own.source, floor: null, adGroups: own.source.adGroups.map((g) => ({ ...g, floor: { by: 'automation:test-cap' } })) }
+    // A product-targeting campaign whose targets carry no bid of their own: the ad group's default bid is its start bid.
+    const [pat] = floored([{ id: 'c2', source: liveCampaign(NAME('PAT'), [t.asin('B0TESTRIV1', null)], { dailyBudget: 5 }) }], null)
+    pat.source.adGroups[0].suppressedFromBidCents = 60
+    const out = captureTemplate(input({ campaigns: [{ id: 'c1', source: onItsOwn }, pat], schedules: [] }))
+    expect(out.problems).toEqual([])
+    expect(out.product.baseBidCents).toBe(53)
+    expect(out.doc!.bids.ladder).toEqual({ 'exact-category': 0.85, pat: 1.13 })
+    expect(out.warnings).toContain('"TESTPROD | IT | Exact | Category": 3 bid(s) held at the floor; read the bid held before the floor (by automation:test-cap)')
+    expect(out.warnings).toContain('"TESTPROD | IT | PAT": 1 bid(s) held at the floor; read the bid held before the floor (by an unrecorded owner)')
+  })
+
+  it('a floor with nothing remembered keeps the warning; a remembered bid without a floor is not read', () => {
+    const atFloor = liveCampaign(NAME('Exact | Category'), [t.keyword('test jacket', 'EXACT', 2)], { dailyBudget: 5, floor: { by: 'automation:test-rank' } })
+    atFloor.adGroups[0].defaultBidCents = 2
+    const notFloored = liveCampaign(NAME('Phrase | Category'), [{ ...t.keyword('test coat', 'PHRASE', 40), suppressedFromBidCents: 90 }], { dailyBudget: 5 })
+    const out = captureTemplate(input({ campaigns: [{ id: 'c1', source: atFloor }, { id: 'c2', source: notFloored }], schedules: [] }))
+    expect(out.warnings.join('\n')).toMatch(/"TESTPROD \| IT \| Exact \| Category": every bid is at the floor/)
+    expect(out.warnings.join('\n')).not.toMatch(/held before the floor/)
+    expect(out.doc!.bids.ladder['exact-category']).toBe(1)
+    expect(out.product.baseBidCents).toBe(40)
+  })
+})
+
+describe('capture — budget shares add up to 100', () => {
+  const sum = (values: number[]) => values.reduce((a, b) => a + b, 0)
+
+  it('each share rounded down to a tenth, the tenths left over to the largest remainders (the earlier slot on a tie)', () => {
+    expect(budgetShares([100, 200])).toEqual([33.3, 66.7])
+    expect(budgetShares([100, 100, 100])).toEqual([33.4, 33.3, 33.3])
+    expect(budgetShares([500, 500, 500, 500, 500, 500])).toEqual([16.7, 16.7, 16.7, 16.7, 16.6, 16.6])
+    expect(budgetShares([100, null, 0, 300])).toEqual([25, 0, 0, 75])
+    expect(budgetShares([null, 0])).toEqual([0, 0])
+  })
+
+  it('a captured set whose shares rounded one by one came to 100.3 now adds up to exactly 100', () => {
+    const budgets = [3.35, 3.35, 3.35, 3.35, 3.35, 3.35, 3.35, 3.35, 3.2]
+    expect(sum(budgets.map((b) => Math.round((b / 30) * 1000) / 10))).toBeCloseTo(100.3, 9)
+    const campaigns = elevenCampaigns().slice(0, budgets.length).map((c, i) => ({ ...c, source: { ...c.source, dailyBudget: budgets[i] } }))
+    const out = captureTemplate(input({ campaigns, schedules: [] }))
+    expect(out.problems).toEqual([])
+    expect(sum(Object.values(out.doc!.budget.weights))).toBeCloseTo(100, 9)
+    expect(out.doc!.budget.weights).toMatchObject({ auto: 11.2, 'exact-competitor': 10.6 })
   })
 })
