@@ -64,17 +64,33 @@ export interface TrustActor {
   canManage: boolean
 }
 
-const MAY_NOT_RAISE: TrustRefusal = {
-  ok: false,
-  status: 403,
-  code: 'forbidden',
-  error: 'Letting Claude do more without a person needs the settings.security.manage permission in this business. Lowering a level and Pause do not.',
+/**
+ * The words of a raise's refusals, for the act being raised. `act` starts a sentence ("Letting Claude do more without
+ * a person needs …"), `before` ends one ("Turn on two-factor authentication before you …"), `free` says what needs
+ * neither the permission nor the code.
+ */
+export interface RaiseWords {
+  act: string
+  before: string
+  free: string
 }
 
-/** Raising: settings.security.manage, then a fresh 2FA code. */
-async function mayRaise(actor: TrustActor, code: unknown): Promise<TrustRefusal | null> {
-  if (!actor.canManage) return MAY_NOT_RAISE
-  return stepUp(actor.userId, code)
+/** Claude's levels, limits, daily cap and resume (this file): the words every raise here has always used. */
+export const CLAUDE_RAISE: RaiseWords = {
+  act: 'Letting Claude do more without a person',
+  before: 'you let Claude do more without a person',
+  free: 'Lowering a level and Pause do not.',
+}
+
+/**
+ * Raising: settings.security.manage, then a fresh 2FA code (lib/auth/step-up.ts: single use, lockout after wrong
+ * codes). `sentence` names what is raised; the ads strategy (ads autonomy W1-3) raises through here too.
+ */
+export async function mayRaise(actor: TrustActor, code: unknown, sentence: RaiseWords = CLAUDE_RAISE): Promise<TrustRefusal | null> {
+  if (!actor.canManage) {
+    return { ok: false, status: 403, code: 'forbidden', error: `${sentence.act} needs the settings.security.manage permission in this business. ${sentence.free}` }
+  }
+  return stepUp(actor.userId, code, sentence)
 }
 
 export type TrustRefusal = { ok: false; status: 400 | 403 | 404 | 429; code?: string; error: string }
@@ -411,15 +427,15 @@ export async function resumeAutoRuns(actor: TrustActor, code: unknown): Promise<
 }
 
 /** The person's fresh 2FA code, once (lib/auth/step-up.ts: single use, lockout after wrong codes). */
-async function stepUp(userId: string, code: unknown): Promise<TrustRefusal | null> {
+async function stepUp(userId: string, code: unknown, sentence: RaiseWords): Promise<TrustRefusal | null> {
   const user = userId
     ? await prisma.userProfile.findUnique({ where: { id: userId }, select: { twoFactorEnabledAt: true, twoFactorSecret: true } })
     : null
   if (!user?.twoFactorEnabledAt || !user.twoFactorSecret) {
-    return { ok: false, status: 403, code: 'mfa_not_enrolled', error: 'Turn on two-factor authentication before you let Claude do more without a person.' }
+    return { ok: false, status: 403, code: 'mfa_not_enrolled', error: `Turn on two-factor authentication before ${sentence.before}.` }
   }
   if (typeof code !== 'string' || !code.trim()) {
-    return { ok: false, status: 403, code: 'mfa_required', error: 'Letting Claude do more without a person needs the 6-digit code from your authenticator app.' }
+    return { ok: false, status: 403, code: 'mfa_required', error: `${sentence.act} needs the 6-digit code from your authenticator app.` }
   }
   const verdict = await verifyStepUpCode(userId, user.twoFactorSecret, code.trim())
   if (verdict === 'locked') return { ok: false, status: 429, code: 'mfa_locked', error: 'Too many wrong codes. Try again in 15 minutes.' }

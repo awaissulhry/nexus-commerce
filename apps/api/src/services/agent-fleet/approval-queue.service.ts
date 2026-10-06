@@ -37,6 +37,7 @@ import {
   type QueueTarget,
   type QueueTrustLevel,
 } from '@nexus/shared/approval-queue'
+import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
 import { actorLabel, missingPermissions, storedOutputOf, type ToolPrincipal } from '../agents/call-tool.js'
 import { EXPIRY_HOURS } from '../agents/approval-gate.service.js'
@@ -56,6 +57,7 @@ import {
 } from '../agents/tools/approval.tools.js'
 import { masterCurrency } from '../fx-rate.service.js'
 import { cannotApproveFor, planApprovalRefusal, reversibilityOf, UNDO_WINDOW_MS } from './approval-inbox.service.js'
+import { stepUpOf } from '../agents/step-up-approval.js'
 import { bulkApproveRefusal } from './bulk-approve-policy.js'
 import { FLEET_CHARTERS, resolveCharter } from './charter-registry.js'
 import { resolveFleetLabels } from './fleet-labels.service.js'
@@ -397,6 +399,8 @@ function deciderOf(ap: ApprovalRow, state: QueueState, title: string): QueueDeci
   if (!ap.decidedBy) return { kind: 'system', label: ap.decisionVia === 'claude-confirm' ? 'Code in Claude · name not recorded' : 'Name not recorded' }
   const name = ap.decidedBy
   if (ap.decisionVia === 'claude-confirm') return { kind: 'claude-code', label: `${name}, code in Claude` }
+  // W1-3 — a raise approved in Nexus with the approver's authenticator code.
+  if (ap.decisionVia === 'nexus-step-up') return { kind: 'person', label: `${name}, with code` }
   // A duplicate undo withdrawn by Nexus (approval-gate.service.ts askedFor): decidedBy is the control tool's name.
   if (state === 'rejected' && (ap.reason ?? '').startsWith('withdrawn')) return { kind: 'system', label: 'Nexus (withdrawn)' }
   return { kind: 'person', label: name }
@@ -605,17 +609,26 @@ async function buildRows(
     const automation = await automationOf(ap, state, tool, asker, run, joins, opts.planSteps?.get(ap.id))
 
     // May THIS viewer approve it now? Only a waiting request can be approved; the approve's own refusal words.
+    // W1-3 — a raise (its preview's, or a plan's, `stepUp`): approved only with the approver's authenticator code.
+    const stepUp = stepUpOf(ap.preview)
+    const needsCode = stepUp
+      ? `It ${stepUp.what}${stepUp.raises.length ? ` (${stepUp.raises.join(', ')})` : ''}: approving it needs your authenticator code.`
+      : null
     let cannotApproveWhy: string | null = null
     let canApprove = false
     if (PENDING_STATES.has(state)) {
       cannotApproveWhy = cannotApprove(ap.toolName)
       if (!cannotApproveWhy && isPlan && viewer) cannotApproveWhy = await planApprovalRefusal(ap.id, viewer)
       if (!cannotApproveWhy && ap.expiresAt && ap.expiresAt.getTime() <= now) cannotApproveWhy = 'This request expired before anyone approved it. Nothing changed.'
+      if (!cannotApproveWhy && stepUp && !(viewer?.kind === 'user' && (viewer.permissions.isOwner || viewer.permissions.permissions.has(F.settingsSecurityManage)))) {
+        cannotApproveWhy = `It ${stepUp.what}: approving it needs the settings.security.manage permission and your authenticator code.`
+      }
       canApprove = !cannotApproveWhy
     }
 
     // Decision 1 = A: one kind at a time, never a kind that cannot be undone, never a plan.
     let bulkBlockedWhy: string | null = isPlan ? 'A plan is approved on its own' : bulkApproveRefusal(ap.toolName)
+    if (!bulkBlockedWhy && stepUp) bulkBlockedWhy = 'A raise is approved on its own, with your authenticator code'
     if (!bulkBlockedWhy && !PENDING_STATES.has(state)) bulkBlockedWhy = 'Only a request that waits for a decision can be approved'
     if (!bulkBlockedWhy && !canApprove) bulkBlockedWhy = cannotApproveWhy ?? 'You may not approve it'
 
@@ -649,6 +662,7 @@ async function buildRows(
       cannotApproveWhy,
       bulkApprovable: !bulkBlockedWhy,
       bulkBlockedWhy,
+      needsCode,
       automation,
     }
     row.note = noteOf(ap, state, decider, automation, plan)

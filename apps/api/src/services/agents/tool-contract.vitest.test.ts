@@ -291,6 +291,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       'resume-automation': { before: { area: 'amazon-ads', halted: true }, after: { area: 'amazon-ads', halted: false } },
       // R13 — a raised ceiling: undo sets it back.
       'set-ad-guardrail': { before: { kind: 'spend-ceiling', key: { grain: 'MARKET', scopeId: 'IT' }, row: { label: 'Italy', dailyCapCents: 5000, enabled: true, note: null } }, after: { kind: 'spend-ceiling', key: { grain: 'MARKET', scopeId: 'IT' }, row: { label: 'Italy', dailyCapCents: 9000, enabled: true, note: null } } },
+      // Ads autonomy W1-3 — a strategy change: undo writes the previous version back (with its terms and campaign targets).
+      'set-ads-strategy': {
+        before: { channel: 'AMAZON', market: 'IT', level: 'MARKET', scopeId: '*', version: 2, values: { maxBidCents: 150, targetKind: 'ACOS', targetPct: 30, claudeAutonomy: { bid: 'ask' } }, terms: { 'test term': false }, campaignTargets: { c1: 0.25 } },
+        after: { channel: 'AMAZON', market: 'IT', level: 'MARKET', scopeId: '*', version: 3, values: { maxBidCents: 120, targetKind: 'ACOS', targetPct: 30, claudeAutonomy: null }, terms: { 'test term': { matchType: null } }, campaignTargets: { c1: null } },
+      },
       // R14 — a raised pool budget: undo sets it back; a harvest scope given its own policy inherits again.
       'tune-ad-engine': {
         before: { setting: 'budget-pool', subjectId: 'p1', name: 'Pool', state: { totalDailyBudgetCents: 5000, strategy: 'STATIC', coolDownMinutes: 60, maxShiftPerRebalancePct: 20 } },

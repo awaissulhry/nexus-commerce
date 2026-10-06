@@ -33,8 +33,15 @@
  * MCP full control C6: a change plan (toolName submit-change-plan) is approved once by a person who holds the
  * permissions of every step; after the window the commit hands it to the plan worker (change-plan.service.ts), which
  * re-checks each step; the sweep re-enqueues, or runs, a plan nobody runs.
+ *
+ * ADS AUTONOMY W1-3: a request whose preview (or a plan step's) carries `stepUp` — a raise of the ads strategy — is
+ * approved only by a person with settings.security.manage who types their fresh authenticator code (decisionVia
+ * `nexus-step-up`); nothing spends the code that the approve would refuse anyway. A bulk approve leaves such a request
+ * out and says why. The tool's own `execute` checks the decision again (agents/step-up-approval.ts).
  */
+import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
+import { hasPermission } from '../../lib/auth/rbac.js'
 import { decideApproval, EXPIRY_HOURS } from '../agents/approval-gate.service.js'
 import { getTool } from '../agents/tool-registry.js'
 import type { Reversibility } from '../agents/tool-types.js'
@@ -57,8 +64,9 @@ import { logger } from '../../utils/logger.js'
 import { resolvePermissions, type ResolvedPermissions } from '../../lib/auth/rbac.js'
 import { WorkspaceError, type WorkspaceContext } from '../../lib/workspace-context.js'
 import { createWorkspaceService } from '../workspace.service.js'
-import { autoCommitRefusal, autoPlanCommitRefusal, noteAutoFailure } from '../agents/claude-trust.service.js'
+import { autoCommitRefusal, autoPlanCommitRefusal, mayRaise, noteAutoFailure, type RaiseWords } from '../agents/claude-trust.service.js'
 import { drainPlans, enqueuePlan } from '../agents/change-plan.service.js'
+import { approvalStepUp, stepUpOf, type StepUp } from '../agents/step-up-approval.js'
 import { PLAN_TOOL } from '../agents/tool-types.js'
 import type { QueueBulkResult } from '@nexus/shared/approval-queue'
 import { BULK_MAX_IDS, bulkApproveRefusal } from './bulk-approve-policy.js'
@@ -224,29 +232,35 @@ export async function decideFleetApproval(input: {
   reason?: string
   /** A person approves only what their permissions cover (scheduleApproval). */
   actor: ToolPrincipal
-}): Promise<{
-  ok: boolean
-  status?: string
-  result?: unknown
-  error?: string
-  executeAfter?: string
-  code?: 'forbidden'
-}> {
+  /**
+   * W1-3 — the approver's fresh authenticator code. Needed (and only then read) to approve a request that raises: one
+   * whose preview, or a plan step's, carries `stepUp`.
+   */
+  code?: unknown
+}): Promise<DecideOutcome> {
   // AP.4 — an approve parks for the undo window instead of firing. The
   // decision is recorded immediately (attributable, durable); only the
   // execution waits.
   if (input.decision === 'approve') {
+    // W1-3 — a raise: settings.security.manage and the code first. A request the approve would refuse anyway (gone,
+    // decided, expired, not theirs) is refused before the code is checked, so a refusal never spends it.
+    const stepUp = await approvalStepUp(input.id)
+    if (stepUp) {
+      const refused = (await approveRefusal(input.id, input.actor)) ?? (await approverStepUp(input.actor, input.code, stepUp))
+      if (refused) return refused
+    }
     const parked = await scheduleApproval({
       id: input.id,
       actor: input.actor,
       note: input.reason || undefined,
+      via: stepUp ? 'nexus-step-up' : 'nexus',
     })
     if (!parked.ok) return parked
     await recordControlChange({
       charterKey: await charterKeyOf(input.id),
       action: 'approve_action',
-      to: { approvalId: input.id, status: 'scheduled', executeAfter: parked.executeAfter },
-      note: input.reason ?? null,
+      to: { approvalId: input.id, status: 'scheduled', executeAfter: parked.executeAfter, ...(stepUp ? { decisionVia: 'nexus-step-up' } : {}) },
+      note: input.reason ?? (stepUp ? 'approved in Nexus with an authenticator code' : null),
       actor: input.actor.label,
     }).catch((err) =>
       logger.error('[naf-ap] control audit failed', { id: input.id, error: String(err) }),
@@ -308,6 +322,42 @@ export async function decideFleetApproval(input: {
   return out
 }
 
+/** A decision's answer. `httpStatus`: a refusal that is not the default 403 (forbidden) or 409 (anything else). */
+export interface DecideOutcome {
+  ok: boolean
+  status?: string
+  result?: unknown
+  error?: string
+  executeAfter?: string
+  code?: 'forbidden' | 'mfa_required' | 'mfa_not_enrolled' | 'mfa_invalid' | 'mfa_locked'
+  httpStatus?: 400 | 403 | 429
+  /** W1-3 — a raise refused for want of the permission or the code: what it raises, as a person reads it. */
+  raises?: string[]
+}
+
+/** The words of a raise's refusals when it is approved (claude-trust.service.ts mayRaise). */
+function approveRaiseWords(stepUp: StepUp): RaiseWords {
+  return {
+    act: `Approving a change that ${stepUp.what}`,
+    before: `you approve a change that ${stepUp.what}`,
+    free: 'Rejecting it does not.',
+  }
+}
+
+/** W1-3 — the approver of a raise: a signed-in person with settings.security.manage, with their fresh code (used once). */
+async function approverStepUp(actor: ToolPrincipal, code: unknown, stepUp: StepUp): Promise<DecideOutcome | null> {
+  if (actor.kind !== 'user') {
+    return { ok: false, code: 'forbidden', httpStatus: 403, error: `Only a signed-in person approves a change that ${stepUp.what}, with their authenticator code.`, raises: stepUp.raises }
+  }
+  const refused = await mayRaise(
+    { userId: actor.userId, label: actor.label, canManage: hasPermission(actor.permissions, F.settingsSecurityManage) },
+    code,
+    approveRaiseWords(stepUp),
+  )
+  if (!refused) return null
+  return { ok: false, code: refused.code as DecideOutcome['code'], httpStatus: refused.status as DecideOutcome['httpStatus'], error: refused.error, raises: stepUp.raises }
+}
+
 /** The reason stored on a request rejected without the person's own words. */
 export const REJECTED_BY_PREFIX = 'rejected by '
 export function rejectedBy(label: string): string {
@@ -337,9 +387,10 @@ export async function scheduleApproval(input: {
   note?: string
   /**
    * C5 — who decides: a person in Nexus (the default), the business's rule (auto) as the person who asked, or (C7) the
-   * person who asked, confirming in Claude with their authenticator code.
+   * person who asked, confirming in Claude with their authenticator code. W1-3 — `nexus-step-up`: a person in Nexus who
+   * typed their authenticator code (decideFleetApproval checked it), the only way a raise is approved in Nexus.
    */
-  via?: 'nexus' | 'auto' | 'claude-confirm'
+  via?: 'nexus' | 'nexus-step-up' | 'auto' | 'claude-confirm'
 }): Promise<{
   ok: boolean
   status?: string
@@ -380,28 +431,44 @@ export async function scheduleApproval(input: {
     },
   })
   if (claim.count === 0) {
-    const cur = await prisma.agentApproval.findUnique({
-      where: { id: input.id },
-      select: { status: true, toolName: true, expiresAt: true },
-    })
-    if (!cur) return { ok: false, error: 'approval not found' }
-    if (cur.status === 'pending' && cur.expiresAt && cur.expiresAt <= now) {
-      return { ok: false, error: 'This request expired before anyone approved it. Nothing changed.' }
-    }
-    if (cur.status === 'pending' && approvable && !approvable.includes(cur.toolName)) {
-      const tool = getTool(cur.toolName)
-      const missing = tool ? missingPermissions(input.actor, tool) : []
-      return {
-        ok: false,
-        code: 'forbidden',
-        error: missing.length
-          ? permissionMessage(cur.toolName, missing)
-          : `${cur.toolName} is not a tool this workspace knows`,
-      }
-    }
-    return { ok: false, error: `already ${cur.status}` }
+    return (await approveRefusal(input.id, input.actor, now)) ?? { ok: false, error: 'already taken' }
   }
   return { ok: true, status: 'scheduled', executeAfter: executeAfter.toISOString() }
+}
+
+/**
+ * Why this person's approve of this request would be refused now — gone, already decided, expired, a tool (or a plan
+ * step) their permissions do not cover — in the approve's own words; null when nothing stands in the way. Read only:
+ * the reason a claim failed, and (W1-3) the check that runs before a raise's code is spent.
+ */
+async function approveRefusal(
+  id: string,
+  actor: ToolPrincipal,
+  now: Date = new Date(),
+): Promise<{ ok: false; error: string; code?: 'forbidden' } | null> {
+  const cur = await prisma.agentApproval.findUnique({
+    where: { id },
+    select: { status: true, toolName: true, expiresAt: true },
+  })
+  if (!cur) return { ok: false, error: 'approval not found' }
+  if (cur.status !== 'pending') return { ok: false, error: `already ${cur.status}` }
+  if (cur.expiresAt && cur.expiresAt <= now) {
+    return { ok: false, error: 'This request expired before anyone approved it. Nothing changed.' }
+  }
+  const approvable = approvableToolNames(actor)
+  if (approvable && !approvable.includes(cur.toolName)) {
+    const tool = getTool(cur.toolName)
+    const missing = tool ? missingPermissions(actor, tool) : []
+    return {
+      ok: false,
+      code: 'forbidden',
+      error: missing.length
+        ? permissionMessage(cur.toolName, missing)
+        : `${cur.toolName} is not a tool this workspace knows`,
+    }
+  }
+  const planRefusal = await planApprovalRefusal(id, actor)
+  return planRefusal ? { ok: false, code: 'forbidden', error: planRefusal } : null
 }
 
 /** C6 — why this person may not approve this plan (a step's tool they lack the permissions of), or null. */
@@ -834,6 +901,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'resume-automation': ['changes', 'ruleIds', 'basis'],
   // R13 — what the guardrail changes, whether that tightens or loosens, and the row it was planned from.
   'set-ad-guardrail': ['changes', 'direction', 'basis'],
+  // Ads autonomy W1-3 — every field from → to with the value in force before and after (an inherited value that moved
+  // is a different decision), raise or lower, the row's version, and `basis` (the row, its terms and its campaigns).
+  'set-ads-strategy': ['changes', 'direction', 'version', 'basis'],
   'tune-ad-engine': ['changes', 'raises', 'basis'],
   'steer-fleet': ['steer', 'changes', 'basis'],
   'save-price-rule': ['changes', 'bounds', 'basis'],
@@ -1503,7 +1573,10 @@ function bulkPreviewOf(
    */
   const notYours = decision === 'approve' && viewer !== undefined ? cannotApproveFor(viewer) : null
   const theirs = notYours ? rows.filter((r) => notYours(r.toolName)) : []
-  const acting = notYours ? rows.filter((r) => !notYours(r.toolName)) : rows
+  const mayApprove = notYours ? rows.filter((r) => !notYours(r.toolName)) : rows
+  // W1-3 — a raise is approved on its own, with the approver's authenticator code: never in a bulk approve.
+  const coded = decision === 'approve' ? mayApprove.filter((r) => stepUpOf(r.preview)) : []
+  const acting = coded.length ? mayApprove.filter((r) => !coded.includes(r)) : mayApprove
 
   const notActionable = all.length - rows.length
   const byTool: Record<string, number> = {}
@@ -1524,10 +1597,12 @@ function bulkPreviewOf(
       ? ` ${notActionable} other${notActionable === 1 ? '' : 's'} you selected ${notActionable === 1 ? 'is' : 'are'} already decided or counting down, and ${notActionable === 1 ? 'is' : 'are'} not affected.`
       : ''
   const notYoursWhy = theirs.length ? notYours!(theirs[0].toolName) : null
+  const codedWhy = coded.length ? needsCodeWhy(stepUpOf(coded[0].preview)!, coded.length) : null
   const leftOut =
-    theirs.length > 0
+    (theirs.length > 0
       ? ` ${theirs.length} you may not approve ${theirs.length === 1 ? 'is' : 'are'} left out: ${notYoursWhy}`
-      : ''
+      : '')
+    + (coded.length > 0 ? ` ${coded.length} ${coded.length === 1 ? 'is' : 'are'} left out: ${codedWhy}` : '')
   /*
    * S8.1 — reversibility, said EITHER WAY.
    *
@@ -1563,7 +1638,9 @@ function bulkPreviewOf(
           : blockedReason
             ? blockedReason
             : acting.length === 0
-              ? `You may not approve ${rows.length === 1 ? 'this one' : `any of these ${rows.length}`}: ${notYoursWhy}`
+              ? theirs.length
+                ? `You may not approve ${rows.length === 1 ? 'this one' : `any of these ${rows.length}`}: ${notYoursWhy}${coded.length ? ` ${coded.length} ${coded.length === 1 ? 'is' : 'are'} left out: ${codedWhy}` : ''}`
+                : `${rows.length === 1 ? 'This one is' : `None of these ${rows.length} is`} approved in a bulk approve: ${codedWhy}`
               : // The kinds clause takes its own full stop only when nothing
                 // follows it. The shipped version always added one and then began
                 // the tail with an em-dash, producing "…set target bid. — 2 of
@@ -1578,6 +1655,14 @@ function bulkPreviewOf(
     homogeneous,
     blockedReason,
   }
+}
+
+/** W1-3 — why a raise stays out of a bulk approve: it is approved on its own, with the approver's code. */
+function needsCodeWhy(stepUp: StepUp, count = 1): string {
+  const raises = stepUp.raises.length ? ` (${stepUp.raises.join(', ')})` : ''
+  return count === 1
+    ? `it ${stepUp.what}${raises}, so it is approved on its own, with your authenticator code.`
+    : `each ${stepUp.what}, so each is approved on its own, with your authenticator code.`
 }
 
 /** The plain reason a selected row was not decided. */
@@ -1649,6 +1734,13 @@ export async function bulkDecide(input: {
     const notTheirs = notYours?.(row.toolName)
     if (notTheirs) {
       skipped.push({ id, why: notTheirs })
+      continue
+    }
+    // W1-3 — a raise is approved on its own, with the approver's code (decideFleetApproval would refuse it without one).
+    const stepUp = input.decision === 'approve' ? stepUpOf(row.preview) : null
+    if (stepUp) {
+      const why = needsCodeWhy(stepUp)
+      skipped.push({ id, why: `Not approved: ${why}` })
       continue
     }
     // Exactly the path of a single decision: an approve is claimed with the approver's permissions and parked for the

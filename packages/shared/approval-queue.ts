@@ -145,6 +145,12 @@ export interface QueueRow {
   /** Decision 1 = A: may this row be part of a bulk APPROVE? (same kind only; never a kind that cannot be undone). */
   bulkApprovable: boolean
   bulkBlockedWhy: string | null
+  /**
+   * ADS AUTONOMY W1-3 — approving it needs the approver's fresh authenticator code (a raise of the ads strategy, alone or
+   * in a plan): the sentence to show, naming what it raises; null or absent when it does not. The approve then sends
+   * `code` (POST /api/agent/fleet/approvals/:id/decide); without it the answer is 403 `mfa_required`.
+   */
+  needsCode?: string | null
   automation: QueueAutomation
 }
 

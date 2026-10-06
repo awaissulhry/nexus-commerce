@@ -426,13 +426,18 @@ async function rowsIn(market: string, channel: string): Promise<Record<string, u
 
 // ── history ───────────────────────────────────────────────────────────────────────────────────────
 
-/** A recorded change, its numbers under the field's own key (so a money field's from → to is money). */
+/**
+ * A recorded change, its numbers under the field's own key (so a money field's from → to is money). W1-3 — a protected
+ * term or a campaign's own target names which one (`term`, `campaignId`), never an amount.
+ */
 function changeOut(change: unknown): Record<string, unknown> {
   const c = (change ?? {}) as Record<string, unknown>
   const name = typeof c.field === 'string' && /^[A-Za-z][A-Za-z0-9]*$/.test(c.field) ? c.field : 'value'
   return {
     field: c.field ?? null,
     direction: c.direction ?? null,
+    ...(typeof c.term === 'string' ? { term: c.term } : {}),
+    ...(typeof c.campaignId === 'string' ? { campaignId: c.campaignId, campaign: typeof c.campaign === 'string' ? c.campaign : null } : {}),
     [name]: { from: c.from ?? null, to: c.to ?? null, effectiveFrom: c.effectiveFrom ?? null, effectiveTo: c.effectiveTo ?? null },
   }
 }

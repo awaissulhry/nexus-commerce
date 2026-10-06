@@ -25,8 +25,12 @@ function statusOf(error: string): 403 | 404 | 409 {
   return 409
 }
 
-/** Undo one recorded change now, as this person: queue the inverse change and approve it with the click. */
-export async function undoChangeByClick(principal: UserPrincipal, changeId: string): Promise<UndoClickResult> {
+/**
+ * Undo one recorded change now, as this person: queue the inverse change and approve it with the click. ADS AUTONOMY
+ * W1-3 — an inverse that raises (the undo of a strategy lowering) is approved only with the person's fresh
+ * authenticator code (`code`); without it the undo waits in the Approvals page.
+ */
+export async function undoChangeByClick(principal: UserPrincipal, changeId: string, code?: unknown): Promise<UndoClickResult> {
   const id = changeId.trim()
   if (!id || id.length > 64) return { ok: false, status: 400, error: 'Name the change to undo.' }
   const run = await prisma.agentRun.create({
@@ -53,13 +57,16 @@ export async function undoChangeByClick(principal: UserPrincipal, changeId: stri
     return { ok: false, status: statusOf(error), error }
   }
   const approvalId = asked.approvalId!
-  const approved = await decideFleetApproval({ id: approvalId, decision: 'approve', actor: principal })
+  const approved = await decideFleetApproval({ id: approvalId, decision: 'approve', actor: principal, code })
   if (!approved.ok || !approved.executeAfter) {
     // The undo request stays for a person who may approve it; the click could not.
+    const needsCode = !!approved.code && approved.code.startsWith('mfa')
     return {
       ok: false,
-      status: approved.code === 'forbidden' ? 403 : 409,
-      error: approved.error ?? 'The undo was asked for, but it could not be approved here. It waits in the Approvals page.',
+      status: approved.code === 'forbidden' || needsCode ? 403 : 409,
+      error: needsCode
+        ? `${approved.error} The undo waits in the Approvals page.`
+        : approved.error ?? 'The undo was asked for, but it could not be approved here. It waits in the Approvals page.',
       approvalId,
     }
   }
