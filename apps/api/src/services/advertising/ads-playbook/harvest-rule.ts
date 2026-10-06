@@ -13,7 +13,8 @@
  *   bid           the edge's start bid, in the harvest wire's modes (the term's CPC, CPC + a percent, the destination's
  *                 default bid, a fixed bid); held inside the strategy's band at the destination by the harvest
  *   handover      the Owner's choice (B, `proven`): a source keeps running a term until its new home meets the harvest
- *                 bar there; only then is it negated in the source
+ *                 bar there; only then is it negated in the source — never, where an edge from it says `negateSource:
+ *                 false`
  *   cadence       the strategy's goal at this product is the phase; its harvestCadence: daily → 1 day, weekly → 7, off →
  *                 the rule stays off
  *
@@ -63,6 +64,8 @@ export interface HarvestRuleSource {
   graduateProduct: boolean
   negateProduct: boolean
   negateOnLanding: boolean
+  /** False: a term that graduated from here is never negated here (an edge says not to negate the source). */
+  negateSource: boolean
   bid?: HarvestBid
   destinations: { EXACT?: HarvestDestination; PHRASE?: HarvestDestination; PRODUCT?: string }
 }
@@ -146,7 +149,6 @@ export function compileHarvestRule(input: HarvestRuleInput): CompiledHarvestRule
       }
       dest = router
     }
-    if (!edge.negateSource) warnings.push(`${where}: it says not to negate the source; the source still keeps the term only until its new home meets the harvest bar there — then it is negated in the source`)
     for (const from of edge.from) {
       if (!input.links.has(from)) { unlinkedSources.add(from); continue }
       const a = acc.get(from) ?? { graduate: new Set(), destinations: {}, graduateProduct: false, bids: [], negateSource: [] }
@@ -181,7 +183,9 @@ export function compileHarvestRule(input: HarvestRuleInput): CompiledHarvestRule
       negate: slot.targeting === 'PRODUCT' ? [] : ['EXACT'],
       graduateProduct: a?.graduateProduct ?? false,
       negateProduct: slot.targeting === 'AUTO' || slot.targeting === 'PRODUCT',
+      // An edge that says not to negate its source binds the whole source: it is never closed, at the landing or after.
       negateOnLanding: input.handover === 'landed' && !!a?.negateSource.length && a.negateSource.every(Boolean),
+      negateSource: (a?.negateSource ?? []).every(Boolean),
       ...(bids.length ? { bid: bids[0] } : {}),
       destinations: a?.destinations ?? {},
     })

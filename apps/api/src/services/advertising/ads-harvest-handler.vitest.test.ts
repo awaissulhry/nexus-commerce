@@ -429,6 +429,17 @@ describe('PB-6a — harvest_and_negate keeps winners and runs only its own half'
     expect(v1.output).toMatchObject({ wouldGraduate: 1 })
   })
 
+  it('PB-6b — a source with negateSource false reaches the harvest: never negated for its graduate, even with negateOnLanding', async () => {
+    const landing = { ...RULE, v: 2, mode: 'harvest', sources: [{ ...RULE.sources[0], negateOnLanding: true }] }
+    await harvest(landing)
+    expect(h.writeNegativeKeyword).toHaveBeenCalledTimes(1) // the control: landed elsewhere, closed at the landing
+    h.writeNegativeKeyword.mockClear()
+    const r = await harvest({ ...landing, sources: [{ ...landing.sources[0], negateSource: false }] })
+    expect(h.createKeywordLocal).toHaveBeenCalledTimes(2)
+    expect(h.writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(r.output).toMatchObject({ keywordsGraduated: 1, isolationNegativesAdded: 0 })
+  })
+
   it('cadenceDays: a sweep within the cadence holds the next one back; a held run does not count as a sweep', async () => {
     db.automationRuleExecution.findMany.mockResolvedValue([{ actionResults: [{ type: 'harvest_and_negate', ok: true, output: { wouldNegate: 1 } }] }] as never)
     const held = await harvest({ ...RULE, cadenceDays: 7 }, { ...meta, dryRun: true })

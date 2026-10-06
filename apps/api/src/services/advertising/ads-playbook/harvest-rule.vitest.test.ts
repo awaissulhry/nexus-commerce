@@ -9,7 +9,8 @@
  *   cadence        the phase (the strategy's goal) picks it; off keeps the rule off
  *   links          an edge to a slot with no campaign is left out (said); every ad group is one of this product's links
  *   problems       a slot graduating one match type to two slots, start bids that differ, an edge to a wrong-shaped slot
- *   handover       B (`proven`): never negated at the landing; A (`landed`): at the landing where the edges say so
+ *   handover       B (`proven`): never negated at the landing; A (`landed`): at the landing where the edges say so; an
+ *                  edge with negateSource false: its source is never negated for a graduated term
  * Values are made up (public repo).
  */
 import { describe, expect, it, vi } from 'vitest'
@@ -62,7 +63,7 @@ describe('PB-6b — compileHarvestRule', () => {
     expect(out.action.sources.every((s) => s.harvestFrom === true)).toBe(true)
     expect(sourceOf(out, 'broad-brand')).toEqual({
       adGroupId: 'g-broad-brand', campaignId: 'c-broad-brand', harvestFrom: true, graduate: ['EXACT'], negate: ['EXACT'],
-      graduateProduct: true, negateProduct: false, negateOnLanding: false, bid: { mode: 'cpc' },
+      graduateProduct: true, negateProduct: false, negateOnLanding: false, negateSource: true, bid: { mode: 'cpc' },
       destinations: { EXACT: 'g-exact-brand', PRODUCT: 'g-pat' },
     })
     expect(sourceOf(out, 'phrase-competitor')!.destinations).toEqual({ EXACT: 'g-exact-competitor', PRODUCT: 'g-pat' })
@@ -76,7 +77,7 @@ describe('PB-6b — compileHarvestRule', () => {
       },
     })
     // An Exact slot negates waste only; PAT negates wasteful ASINs only.
-    expect(sourceOf(out, 'exact-brand')).toEqual({ adGroupId: 'g-exact-brand', campaignId: 'c-exact-brand', harvestFrom: true, graduate: [], negate: ['EXACT'], graduateProduct: false, negateProduct: false, negateOnLanding: false, destinations: {} })
+    expect(sourceOf(out, 'exact-brand')).toEqual({ adGroupId: 'g-exact-brand', campaignId: 'c-exact-brand', harvestFrom: true, graduate: [], negate: ['EXACT'], graduateProduct: false, negateProduct: false, negateOnLanding: false, negateSource: true, destinations: {} })
     expect(sourceOf(out, 'pat')).toMatchObject({ graduate: [], negate: [], graduateProduct: false, negateProduct: true, destinations: {} })
   })
 
@@ -149,14 +150,18 @@ describe('PB-6b — compileHarvestRule', () => {
       .toEqual([expect.stringMatching(/fixed start bid that names no amount/)])
   })
 
-  it('handover: B (the Owner\'s choice) never negates at the landing; A does where every edge of the source says so', () => {
+  it('handover: B (the Owner\'s choice) never negates at the landing; A does where every edge of the source says so; negateSource false binds the source', () => {
     expect(HARVEST_HANDOVER).toBe('proven')
     expect(compileHarvestRule(input()).action.sources.every((s) => s.negateOnLanding === false)).toBe(true)
     const landed = compileHarvestRule(input({ handover: 'landed' }))
     expect(sourceOf(landed, 'broad-brand')!.negateOnLanding).toBe(true)
     expect(sourceOf(landed, 'exact-brand')!.negateOnLanding).toBe(false) // no edge: nothing lands from it
     const keep = withEdges(doc.harvest.edges.map((e) => (e.to === 'exact-brand' ? { ...e, negateSource: false } : e)))
-    expect(sourceOf(compileHarvestRule(input({ doc: keep, handover: 'landed' })), 'broad-brand')!.negateOnLanding).toBe(false)
-    expect(compileHarvestRule(input({ doc: keep })).warnings.join('\n')).toMatch(/says not to negate the source; the source still keeps the term only until its new home meets the harvest bar/)
+    // One edge of broad-brand says not to negate it (its ASIN edge says yes): the source is never closed, under A or B.
+    expect(sourceOf(compileHarvestRule(input({ doc: keep, handover: 'landed' })), 'broad-brand')).toMatchObject({ negateOnLanding: false, negateSource: false })
+    const kept = compileHarvestRule(input({ doc: keep }))
+    expect(sourceOf(kept, 'broad-brand')).toMatchObject({ negateOnLanding: false, negateSource: false })
+    expect(sourceOf(kept, 'broad-category')!.negateSource).toBe(true)
+    expect(kept.warnings.join('\n')).not.toMatch(/negate the source/)
   })
 })
