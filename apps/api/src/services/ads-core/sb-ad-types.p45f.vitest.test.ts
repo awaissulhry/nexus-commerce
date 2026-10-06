@@ -44,7 +44,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
-  SB_AD_TYPES, SB_AD_TYPE_KEYS, SB_AD_TYPES_CURRENT, SB_AD_STATES, sbAdCreatePath, sbAdTypeSpec, sbAdTypeNotice,
+  SB_AD_TYPES, SB_AD_TYPE_KEYS, SB_AD_TYPES_CURRENT, SB_AD_STATES, sbAdCreatePath, sbAdTypeSpec, sbAdTypeNotice, sbCreativeProblems,
 } from './sb-ad-types.js'
 import { sbAdCreateRequest } from '../advertising/ads-api-client.js'
 
@@ -115,9 +115,11 @@ describe('createSbAdLocal (P4.5f — no silent default)', () => {
   })
 
   it('an omitted creativeType is REFUSED, with a sentence naming the choice', () => {
-    expect(svc).toContain('if (!input.creativeType) {')
-    expect(svc).toContain('an SB creative needs an explicit creativeType.')
-    expect(svc).toContain('SB_AD_TYPE_KEYS.join')
+    // CC-11 — one check (`sbCreativeProblems`) answers the builder's preview, its pre-launch check and the create.
+    expect(svc).toContain('sbCreativeProblems({ creativeType: input.creativeType')
+    expect(svc).toContain('throw new SbCreativeRefused(problems.join')
+    expect(sbCreativeProblems({ creativeType: undefined, headline: 'x', asins: ['B0AAAAAAA1'], brandName: 'Acme' })[0])
+      .toMatch(/^Choose a creative type \(Manual collection or Product collection\)\.$/)
   })
 
   it('an explicitly deprecated type is sent, and logged', () => {

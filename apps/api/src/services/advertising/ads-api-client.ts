@@ -46,6 +46,7 @@ import { QuotaLedger, MemoryQuotaStore, RedisQuotaStore, type QuotaStore } from 
 import { ADS_REGION_HOSTS, type AdsRegion } from '../ads-core/ads-regions.js'
 import { sbAdCreatePath, sbAdTypeSpec } from '../ads-core/sb-ad-types.js'
 import { assertNegativeWriteAllowed } from './ads-negation-policy.js'
+import type { SdExpression } from './sd-target-expression.js'
 
 export type AdsMode = 'sandbox' | 'live'
 
@@ -2217,10 +2218,10 @@ export async function createSdProductAd(ctx: ClientContext, input: CreateSdProdu
 }
 
 // ── Product / category / auto targeting (AX2.1) — v3 SP /sp/targets POST.
-// expression is the Amazon targeting clause: ASIN → [{type:'asinSameAs',
-// value}], category → [{type:'asinCategorySameAs', value}], auto →
-// [{type:'queryHighRelMatches'|'queryBroadRelMatches'|'asinSubstituteRelated'
-// |'asinAccessoryRelated'}]. ────────────────────────────────────────────
+// expression is the Amazon v3 targeting clause: ASIN → [{type:'ASIN_SAME_AS',
+// value}], category → [{type:'ASIN_CATEGORY_SAME_AS', value}]. (The camelCase
+// `asinSameAs` family is the v2 / Sponsored Display dialect — see
+// sd-target-expression.ts.) ─────────────────────────────────────────────
 export interface CreateTargetInput {
   externalCampaignId: string; externalAdGroupId: string
   expression: Array<{ type: string; value?: string }>
@@ -2251,7 +2252,10 @@ export async function createTarget(ctx: ClientContext, input: CreateTargetInput)
 
 export interface CreateNegativeTargetInput { externalCampaignId: string; externalAdGroupId: string; asin: string; state?: 'enabled' | 'paused' }
 export async function createNegativeProductTarget(ctx: ClientContext, input: CreateNegativeTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
-  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: [{ type: 'asinSameAs', value: input.asin }], state: (input.state ?? 'enabled').toUpperCase() }
+  // CC-18 — the v3 predicate type, as the positive /sp/targets path sends it. Amazon's SP 3.0 document
+  // (`SponsoredProductsCreateOrUpdateNegativeTargetingExpressionPredicateType`) allows only `ASIN_SAME_AS` and
+  // `ASIN_BRAND_SAME_AS`; the v2 `asinSameAs` sent here before is not in it. Needs one live confirmation.
+  const v3 = { campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: [{ type: 'ASIN_SAME_AS', value: input.asin }], state: (input.state ?? 'enabled').toUpperCase() }
   if (adsMode() === 'sandbox') {
     // 5a — sandbox refuses what liveCall would refuse.
     await assertNegativeWriteAllowed({ method: 'POST', path: '/sp/negativeTargets', body: { negativeTargetingClauses: [v3] } })
@@ -2282,24 +2286,55 @@ export async function createNegativeKeyword(ctx: ClientContext, input: CreateNeg
 }
 
 // ── Sponsored Display audience / contextual targeting (AX2.3) ───────────
-// SD /sd/targets. Audience targeting expressions: remarketing on
-// views/purchases, plus Amazon-built audiences (in-market / lifestyle /
-// interests) by audienceId. Contextual product/category reuse the same
-// asinSameAs / asinCategorySameAs clause shape as SP.
+// SD /sd/targets. CC-12 — SD's own dialect, from Amazon's SD 3.0 document (`CreateTargetingClause`): a bare array,
+// a NUMERIC adGroupId, `expressionType: 'manual'`, lowercase state, and SD predicate types (`asinSameAs`, nested
+// `views` / `purchases` with a lookback) built by `sdTargetExpression` (sd-target-expression.ts). It used to send the SP
+// shape (UPPERCASE state, string ids, `ASIN_SAME_AS`, no expressionType) and read `.success`, which SD never answers —
+// so even an accepted target came back without its id. Needs one live confirmation: no SD target create has run yet.
 export interface CreateSdTargetInput {
-  externalCampaignId: string; externalAdGroupId: string
-  expression: Array<{ type: string; value?: string }>
+  /** Not part of Amazon's create clause (a target belongs to its ad group); kept for the callers' logs. */
+  externalCampaignId?: string
+  externalAdGroupId: string
+  /** The SD-native expression — see `sdTargetExpression`. */
+  expression: SdExpression
   bid: number; state?: 'enabled' | 'paused'
+  dryRun?: boolean
 }
-export async function createSdTarget(ctx: ClientContext, input: CreateSdTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown }> {
+/** The `/sd/targets` create body for one target. Pure, so the shape is testable without a network. */
+export function sdTargetCreateBody(input: CreateSdTargetInput): Array<Record<string, unknown>> {
+  return [{
+    adGroupId: Number(input.externalAdGroupId),
+    expressionType: 'manual',
+    expression: input.expression,
+    bid: input.bid,
+    state: input.state ?? 'enabled',
+  }]
+}
+/**
+ * Read an SD create answer: a bare array of `{ code, description, targetId }` (HTTP 207). Only an id is a create; any
+ * other item is Amazon's refusal in its own words.
+ */
+export function sdCreateResult(response: unknown, idField: string): { externalId: string | null; error: string | null } {
+  const first = Array.isArray(response) ? (response[0] as Record<string, unknown> | undefined) : undefined
+  const id = first?.[idField]
+  if (id != null && String(id) !== '') return { externalId: String(id), error: null }
+  if (first && (first.code || first.description || first.details)) {
+    return { externalId: null, error: `Amazon refused it: ${[first.code, first.description ?? first.details].filter(Boolean).join(' — ')}`.slice(0, 300) }
+  }
+  return { externalId: null, error: CREATE_NO_ID }
+}
+export async function createSdTarget(ctx: ClientContext, input: CreateSdTargetInput): Promise<{ ok: boolean; mode: AdsMode | 'dry-run'; externalId: string | null; rawResponse: unknown; error: string | null }> {
+  const body = sdTargetCreateBody(input)
+  if (input.dryRun) return { ok: true, mode: 'dry-run', externalId: null, rawResponse: { wouldSend: { method: 'POST', path: '/sd/targets', body } }, error: null }
   if (adsMode() === 'sandbox') {
     const externalId = `sb-sdtgt-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createSdTarget', { input, externalId })
-    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true } }
+    return { ok: true, mode: 'sandbox', externalId, rawResponse: { sandbox: true }, error: null }
   }
-  const body = [{ campaignId: input.externalCampaignId, adGroupId: input.externalAdGroupId, expression: input.expression, bid: input.bid, state: (input.state ?? 'enabled').toUpperCase() }]
-  const response = await liveCall<{ success?: Array<{ targetId: string }> }>({ ...ctx, method: 'POST', path: '/sd/targets', body, contentType: 'application/json', acceptHeader: 'application/json' })
-  return { ok: true, mode: 'live', externalId: response?.success?.[0]?.targetId ?? null, rawResponse: response }
+  const response = await liveCall<Array<{ code?: string; description?: string; targetId?: number | string }>>({ ...ctx, method: 'POST', path: '/sd/targets', body, contentType: 'application/json', acceptHeader: 'application/json' })
+  const made = sdCreateResult(response, 'targetId')
+  if (!made.externalId) logger.warn('[CC-12] createSdTarget returned no targetId', { response })
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 
 // ── Sponsored Brands creative (AX2.9) — SB ads carry a brand creative

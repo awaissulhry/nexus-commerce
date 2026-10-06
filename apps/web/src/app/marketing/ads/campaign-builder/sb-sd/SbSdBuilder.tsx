@@ -24,6 +24,10 @@ import { Button, Checkbox, Input, Radio, RadioCard, Select, Textarea, TokenChip 
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import './sb-sd.css'
+import {
+  SB_CREATIVE_CHOICES, SD_VIEWS_LOOKBACK_DAYS, partlyMadeSummary, sbCreativeAsins, sbCreativeScreenProblems, sbCreativeSpec,
+  type LiveOnAmazon, type SbCreativeChoice,
+} from './sbSdLaunch'
 
 type AdType = 'SB' | 'SD'
 const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸' }
@@ -93,6 +97,14 @@ export function SbSdBuilder() {
   const [sbKeywords, setSbKeywords] = useState('')
   const [sbMatch, setSbMatch] = useState<'EXACT' | 'PHRASE' | 'BROAD'>('PHRASE')
   const [sbTemplate, setSbTemplate] = useState<{ template: SbTemplate | null; usable: boolean } | null>(null)
+  // CC-11 — the creative type is the operator's choice and is sent; it used to be left out, so every SB creative failed.
+  const [creativeType, setCreativeType] = useState<SbCreativeChoice>('manualCollection')
+  /** CC-11 — the API's own check of the creative (dry run), asked before anything is created on Amazon. */
+  const [creativeCheck, setCreativeCheck] = useState<{ ok: boolean; problems: string[]; wouldSend: unknown } | null>(null)
+  /** CC-12 — the window of a "viewed the advertised products" audience (Amazon requires one). */
+  const [lookbackDays, setLookbackDays] = useState<number>(30)
+  /** CC-11 — a launch that stopped part-way: what exists on Amazon now. Nothing is deleted for him. */
+  const [partly, setPartly] = useState<ReturnType<typeof partlyMadeSummary> | null>(null)
 
   // The SB creative's brand assets are cloned from an existing SB campaign in this marketplace.
   // Fetched up front so the operator sees WHOSE creative is being reused before creating one.
@@ -128,11 +140,14 @@ export function SbSdBuilder() {
     () => Array.from(new Set(sbKeywords.split(/[\n,]/).map((k) => k.trim().toLowerCase()).filter(Boolean))),
     [sbKeywords],
   )
+  const creativeSpec = sbCreativeSpec(creativeType)
+  const creativeAsins = useMemo(() => sbCreativeAsins(picked.map((p) => p.asin), creativeType), [picked, creativeType])
+  const creativeProblems = type === 'SB' ? sbCreativeScreenProblems(creativeType, headline, picked.length) : []
   // A campaign with no product ad cannot serve, so it is not a valid launch — only a shell.
   const valid = name.trim().length > 0 && Number.isFinite(budgetNum) && budgetNum > 0
     && Number.isFinite(bidNum) && bidNum > 0 && picked.length > 0
-    // An SB ad without a headline and a clonable brand logo cannot be created at all.
-    && (type !== 'SB' || (headline.trim().length > 0 && !!sbTemplate?.usable && sbKeywordList.length > 0))
+    // An SB ad Amazon would refuse (product count, headline) or without a clonable brand logo cannot be created at all.
+    && (type !== 'SB' || (creativeProblems.length === 0 && !!sbTemplate?.usable && sbKeywordList.length > 0))
 
   /** Products are scoped to the chosen marketplace — a Milan SKU is not advertisable in Germany. */
   useEffect(() => { setPicked([]); setFound([]); setQ('') }, [marketplace])
@@ -173,20 +188,25 @@ export function SbSdBuilder() {
    * (the "defensive self-ASIN targeting" that walls competitors off our detail pages).
    * Audiences (T00030) remarkets to people who viewed the products we are advertising.
    */
-  const plannedTargets = useMemo<Array<{ kind: string; value: string; audienceType?: string; label: string }>>(() => {
+  const plannedTargets = useMemo<Array<{ kind: string; value: string; audienceType?: string; lookbackDays?: number; label: string }>>(() => {
     if (type !== 'SD') return []
     if (tactic === 'T00030') {
-      return picked.map((p) => ({ kind: 'AUDIENCE', value: p.asin, audienceType: 'VIEWS_REMARKETING', label: `views of ${p.asin}` }))
+      // CC-12 — Amazon's "views" audience cannot name one ASIN: it targets people who viewed the ADVERTISED products
+      // (`exactProduct`) within a window. One target covers every product in the ad group.
+      return picked.length === 0 ? [] : [{
+        kind: 'AUDIENCE', value: 'exactProduct', audienceType: 'VIEWS_REMARKETING', lookbackDays,
+        label: `people who viewed the advertised products in the last ${lookbackDays} days`,
+      }]
     }
     return [
       ...rivalList.map((a) => ({ kind: 'PRODUCT', value: a, label: `competitor ${a}` })),
       ...(defensive ? picked.map((p) => ({ kind: 'PRODUCT', value: p.asin, label: `defend ${p.asin}` })) : []),
     ]
-  }, [type, tactic, picked, rivalList, defensive])
+  }, [type, tactic, picked, rivalList, defensive, lookbackDays])
 
   // Any edit invalidates a preview — a payload shown next to changed inputs is a lie.
-  useEffect(() => { setPreview(null); setResult(null); setVerification(null); setSteps([]) },
-    [type, marketplace, name, budget, tactic, startEnabled, defaultBid, picked, rivalAsins, defensive, headline, sbKeywords, sbMatch])
+  useEffect(() => { setPreview(null); setResult(null); setVerification(null); setSteps([]); setCreativeCheck(null); setPartly(null) },
+    [type, marketplace, name, budget, tactic, startEnabled, defaultBid, picked, rivalAsins, defensive, headline, sbKeywords, sbMatch, creativeType, lookbackDays])
 
   const body = useMemo(() => ({
     name: name.trim(), type, marketplace, dailyBudgetEur: budgetNum,
@@ -203,6 +223,22 @@ export function SbSdBuilder() {
     return j
   }
 
+  /** CC-11 — the creative as the API receives it: the chosen type, the products it can carry, the cloned brand assets. */
+  const creativeBody = () => ({
+    creativeType, headline: headline.trim(), asins: creativeAsins,
+    brandName: sbTemplate?.template?.brandName,
+    logoAssetId: sbTemplate?.template?.logoAssetId,
+    landingType: sbTemplate?.template?.landingType,
+    landingUrl: sbTemplate?.template?.landingUrl,
+  })
+  /** CC-11 — ask the API whether Amazon would take this creative, without creating anything. */
+  const checkCreative = async () => {
+    const j = await post('sb-creatives/create', { ...creativeBody(), dryRun: true, marketplace })
+    const c = { ok: j?.mode === 'dry-run' && j?.ok === true, problems: (j?.problems ?? []) as string[], wouldSend: j?.wouldSend ?? null }
+    setCreativeCheck(c)
+    return c
+  }
+
   /**
    * Everything after the campaign row exists.
    *
@@ -214,8 +250,12 @@ export function SbSdBuilder() {
   const finishLaunch = async (campaign: { id?: string; externalCampaignId?: string }) => {
     const reached = (label: string, state: Step['state'], detail?: string) =>
       setSteps((s) => [...s.filter((x) => x.label !== label), { label, state, detail }])
+    // CC-11 — what this launch has made on Amazon so far. A launch that stops part-way lists it; nothing is deleted.
+    const live: LiveOnAmazon[] = []
+    const stop = (why: string) => { setResult(null); setPartly(partlyMadeSummary(live, why)) }
 
     reached('Campaign', 'ok', campaign.externalCampaignId ? `Amazon ${campaign.externalCampaignId}` : 'local only — write gate closed')
+    if (campaign.externalCampaignId) live.push({ what: `Campaign "${name.trim()}", ${startEnabled ? 'enabled' : 'paused'}`, amazonId: campaign.externalCampaignId })
     if (!campaign.id) return
 
     let adGroupId: string | undefined
@@ -223,29 +263,30 @@ export function SbSdBuilder() {
       const ag = await post('adgroups/create', { campaignId: campaign.id, name: `${name.trim()} — ad group`, defaultBidEur: bidNum })
       adGroupId = ag?.id
       reached('Ad group', 'ok', ag?.externalAdGroupId ? `Amazon ${ag.externalAdGroupId}` : 'local only')
+      if (ag?.externalAdGroupId) live.push({ what: 'Ad group', amazonId: ag.externalAdGroupId })
     } catch (e) {
       reached('Ad group', 'fail', (e as Error).message)
-      setResult({ ok: false, msg: 'The campaign was created but its ad group was not. It cannot serve until that is fixed.' })
+      stop('the ad group was not created, so the campaign cannot serve.')
       return
     }
     if (!adGroupId) return
 
-    // SB has no product ad — its unit is one creative carrying up to three ASINs. SD creates one
+    // SB has no product ad — its unit is one creative carrying the chosen products. SD creates one
     // product ad per ASIN. Sending SB down the product-ad path would hit /sp/productAds.
     let ads = 0
     if (type === 'SB') {
       try {
-        await post('sb-creatives/create', {
-          adGroupId, headline: headline.trim(), asins: picked.slice(0, 3).map((p) => p.asin),
-          brandName: sbTemplate?.template?.brandName,
-          logoAssetId: sbTemplate?.template?.logoAssetId,
-          landingType: sbTemplate?.template?.landingType,
-          landingUrl: sbTemplate?.template?.landingUrl,
-        })
+        const ad = await post('sb-creatives/create', { adGroupId, ...creativeBody() })
         ads = 1
-        reached('Creative', 'ok', `${Math.min(picked.length, 3)} ASIN${picked.length === 1 ? '' : 's'}, brand assets from ${sbTemplate?.template?.sourceCampaign ?? 'template'}`)
-      } catch (e) { reached('Creative', 'fail', (e as Error).message) }
-      if (picked.length > 3) reached('Creative note', 'ok', `Amazon allows 3 products per SB creative — ${picked.length - 3} not included`)
+        reached('Creative', 'ok', `${creativeSpec.label}, ${creativeAsins.length} product${creativeAsins.length === 1 ? '' : 's'}, brand assets from ${sbTemplate?.template?.sourceCampaign ?? 'template'}`)
+        live.push({ what: `Creative (${creativeSpec.label.toLowerCase()})`, amazonId: ad?.externalAdId })
+      } catch (e) {
+        // CC-11 — no keywords after a refused creative: they would only add to what cannot serve.
+        reached('Creative', 'fail', (e as Error).message)
+        stop(`Amazon did not take the creative (${(e as Error).message}). The keywords were not added.`)
+        return
+      }
+      if (picked.length > creativeSpec.asinsMax) reached('Creative note', 'ok', `A ${creativeSpec.label.toLowerCase()} takes ${creativeSpec.asinsMax} products — ${picked.length - creativeSpec.asinsMax} not included`)
     } else {
       for (const p of picked) {
         try { await post('product-ads/create', { adGroupId, sku: p.sku, asin: p.asin }); ads += 1 }
@@ -253,17 +294,19 @@ export function SbSdBuilder() {
       }
       if (ads === picked.length) reached('Product ads', 'ok', `${ads} of ${picked.length}`)
       else reached('Product ads', 'fail', `${ads} of ${picked.length} created`)
+      if (ads > 0) live.push({ what: `${ads} product ad${ads === 1 ? '' : 's'}` })
     }
 
     let targets = 0
     for (const t of plannedTargets) {
       try {
-        await post('targets/create', { adGroupId, kind: t.kind, value: t.value, bidEur: bidNum, ...(t.audienceType ? { audienceType: t.audienceType } : {}) })
+        await post('targets/create', { adGroupId, kind: t.kind, value: t.value, bidEur: bidNum, ...(t.audienceType ? { audienceType: t.audienceType } : {}), ...(t.lookbackDays ? { lookbackDays: t.lookbackDays } : {}) })
         targets += 1
       } catch (e) { reached('Targets', 'fail', `${t.label}: ${(e as Error).message}`) }
     }
     if (plannedTargets.length > 0 && targets === plannedTargets.length) reached('Targets', 'ok', `${targets} of ${plannedTargets.length}`)
     else if (plannedTargets.length > 0) reached('Targets', 'fail', `${targets} of ${plannedTargets.length} created`)
+    if (targets > 0) live.push({ what: `${targets} target${targets === 1 ? '' : 's'}` })
 
     // SB keywords go through the keyword endpoint (legacy /sb/keywords), not the target one.
     let keywords = 0
@@ -274,18 +317,21 @@ export function SbSdBuilder() {
       }
       if (keywords === sbKeywordList.length) reached('Keywords', 'ok', `${keywords} ${sbMatch.toLowerCase()}`)
       else reached('Keywords', 'fail', `${keywords} of ${sbKeywordList.length} created`)
+      if (keywords > 0) live.push({ what: `${keywords} keyword${keywords === 1 ? '' : 's'}` })
     }
 
     // Neither family serves on ads alone: SD needs targets, SB needs keywords.
     const servable = ads > 0 && (type === 'SD' ? targets > 0 : keywords > 0)
-    setResult({
-      ok: servable,
-      msg: servable
-        ? type === 'SB'
+    if (servable) {
+      setResult({
+        ok: true,
+        msg: type === 'SB'
           ? `Created ${name.trim()} — ad group, creative and ${keywords} keyword${keywords === 1 ? '' : 's'}, campaign ${startEnabled ? 'ENABLED' : 'PAUSED'}.`
-          : `Created ${name.trim()} — ${ads} product ad${ads === 1 ? '' : 's'}, ${targets} target${targets === 1 ? '' : 's'}, campaign ${startEnabled ? 'ENABLED' : 'PAUSED'}.`
-        : 'The campaign exists but cannot serve yet — see the steps above.',
-    })
+          : `Created ${name.trim()} — ${ads} product ad${ads === 1 ? '' : 's'}, ${targets} target${targets === 1 ? '' : 's'}, campaign ${startEnabled ? 'ENABLED' : 'PAUSED'}.`,
+      })
+    } else {
+      stop(ads === 0 ? 'no product ad was created.' : type === 'SD' ? 'no target was created.' : 'no keyword was created.')
+    }
 
     // AX-VT.4 — read it back. Only meaningful once it reached Amazon; a local-only row has
     // nothing to verify against, and asking would report every entity as NOT_PUSHED.
@@ -302,8 +348,17 @@ export function SbSdBuilder() {
   }
 
   const call = async (dryRun: boolean) => {
-    setBusy(dryRun ? 'preview' : 'create'); setResult(null)
+    setBusy(dryRun ? 'preview' : 'create'); setResult(null); setPartly(null)
     try {
+      // CC-11 — the creative is checked BEFORE anything exists on Amazon: at preview, and again right before the
+      // create. A creative Amazon would refuse stops here, with nothing created.
+      if (type === 'SB') {
+        const c = await checkCreative()
+        if (!c.ok) {
+          setResult({ ok: false, msg: `Amazon would refuse this creative: ${c.problems.join(' ') || 'the check did not pass.'} Nothing was created.` })
+          return
+        }
+      }
       const url = `${getBackendUrl()}/api/advertising/campaigns/create`
       const init: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, dryRun }) }
       const sent = dryRun ? null : await sendCommand<Record<string, any>>(createKey, url, init)
@@ -453,13 +508,23 @@ export function SbSdBuilder() {
               and landing page are cloned from an existing SB campaign in {marketplace} — this
               account has no creative-asset upload flow, and Amazon will not accept an ad without them.
             </p>
+            <div className="h10-sbsd-tactic">
+              <span className="lbl">Creative type</span>
+              {SB_CREATIVE_CHOICES.map((c) => (
+                <Radio className="r" key={c.key} name="sbsd-creative" checked={creativeType === c.key} onChange={() => setCreativeType(c.key)}
+                  label={<span><b>{c.label}</b> — {c.detail}</span>} />
+              ))}
+            </div>
+            <p className="h10-sbsd-note">
+              Store spotlight and video are not offered: they need store pages or a video, which Nexus cannot send yet.
+            </p>
             <label className="h10-sbsd-fld">
-              <span className="h10-sbsd-flabel">Headline</span>
+              <span className="h10-sbsd-flabel">{creativeSpec.headlineLabel}</span>
               <Input
-                value={headline} maxLength={50} aria-label="Headline"
+                value={headline} maxLength={creativeSpec.headlineMax} aria-label={creativeSpec.headlineLabel}
                 onChange={(e) => setHeadline(e.target.value)} placeholder="e.g. RIDE IN STYLE" fieldClassName="h10-sbsd-search"
               />
-              <span className="h10-sbsd-hint">{headline.length}/50 — shown beside your logo above the search results.</span>
+              <span className="h10-sbsd-hint">{headline.length}/{creativeSpec.headlineMax} — shown beside your logo above the search results.</span>
             </label>
             <div className="h10-sbsd-plan">
               {sbTemplate === null
@@ -468,8 +533,14 @@ export function SbSdBuilder() {
                   ? <span>Brand assets: <b>{sbTemplate.template?.brandName}</b>, logo and landing page cloned from <b>{sbTemplate.template?.sourceCampaign}</b>.</span>
                   : <span className="warn">No SB creative exists in {marketplace} to clone brand assets from — an SB ad cannot be created here yet.</span>}
             </div>
-            {picked.length > 3 && (
-              <div className="h10-sbsd-plan"><span className="warn">Amazon allows 3 products per SB creative — only the first 3 selected will be included.</span></div>
+            {picked.length > creativeSpec.asinsMax && (
+              <div className="h10-sbsd-plan"><span className="warn">Amazon allows {creativeSpec.asinsMax} products in a {creativeSpec.label.toLowerCase()} — only the first {creativeSpec.asinsMax} selected will be included.</span></div>
+            )}
+            {creativeProblems.length > 0 && (
+              <div className="h10-sbsd-plan"><span className="warn">{creativeProblems.join(' ')}</span></div>
+            )}
+            {creativeCheck && !creativeCheck.ok && (
+              <div className="h10-sbsd-plan"><span className="warn">Amazon would refuse this creative: {creativeCheck.problems.join(' ')}</span></div>
             )}
           </section>
         )}
@@ -508,9 +579,17 @@ export function SbSdBuilder() {
             <h3>Targeting</h3>
             <p className="h10-sbsd-note">
               {tactic === 'T00030'
-                ? 'Audiences remarket to people who viewed the products above. One audience target is created per product.'
+                ? 'Audiences reach people who viewed the products above in the window you choose. One audience target covers all of them.'
                 : 'Contextual targeting buys placements on specific detail pages. Without at least one target an SD campaign buys nothing.'}
             </p>
+            {tactic === 'T00030' && (
+              <label className="h10-sbsd-fld">
+                <span className="h10-sbsd-flabel">Viewed in the last</span>
+                <Select value={String(lookbackDays)} onChange={(e) => setLookbackDays(Number(e.target.value))} aria-label="Viewed in the last">
+                  {SD_VIEWS_LOOKBACK_DAYS.map((d) => <option key={d} value={d}>{d} days</option>)}
+                </Select>
+              </label>
+            )}
             {tactic === 'T00020' && (
               <>
                 <Checkbox
@@ -565,7 +644,7 @@ export function SbSdBuilder() {
           <Button disabled={!valid || busy !== null} onClick={() => call(true)}>
             {busy === 'preview' ? 'Building…' : 'Preview payload'}
           </Button>
-          <Button variant="primary" disabled={!valid || !preview || busy !== null} onClick={() => call(false)}>
+          <Button variant="primary" disabled={!valid || !preview || busy !== null || (type === 'SB' && !creativeCheck?.ok)} onClick={() => call(false)}>
             {busy === 'create' ? 'Creating…' : startEnabled ? 'Create ENABLED campaign' : 'Create paused campaign'}
           </Button>
           {!preview && valid && <span className="h10-sbsd-hint">Preview the payload before creating.</span>}
@@ -580,6 +659,12 @@ export function SbSdBuilder() {
                 : 'Sponsored Brands uses the v4 API: a campaigns envelope, uppercase states and an ISO start date.'}
             </p>
             <pre className="h10-sbsd-pre">{JSON.stringify(preview, null, 2)}</pre>
+            {type === 'SB' && creativeCheck?.wouldSend != null && (
+              <>
+                <p className="h10-sbsd-note">The creative, checked before anything is created ({creativeSpec.label.toLowerCase()}):</p>
+                <pre className="h10-sbsd-pre">{JSON.stringify(creativeCheck.wouldSend, null, 2)}</pre>
+              </>
+            )}
           </section>
         )}
 
@@ -602,6 +687,15 @@ export function SbSdBuilder() {
 
         {result && (
           <div className={`h10-sbsd-result ${result.ok ? 'ok' : 'bad'}`}>{result.msg}</div>
+        )}
+
+        {/* CC-11 — a launch that stopped part-way: what exists on Amazon now. Nothing is deleted for him. */}
+        {partly && (
+          <div className="h10-sbsd-verify bad" role="status">
+            <b>{partly.title}</b>
+            {partly.items.length > 0 && <ul>{partly.items.map((i) => <li key={i}>{i}</li>)}</ul>}
+            <div className="err">{partly.note}</div>
+          </div>
         )}
 
         {/*

@@ -18,12 +18,14 @@
  * PerformanceCriteria. Launch reuses the proven SPW endpoint (one additive `adProduct` field for
  * multi-type) — campaigns + AutomationRules created gated & local-first.
  *
- * SCOPE (SP backbone): SP is fully configured + launches; SB/SD are selectable with minimal
- * settings + launch as managed local shells. Full SB creative + the new DS image-upload component
- * arrive in the follow-up.
+ * SCOPE (SP backbone): SP is fully configured + launches. CC-10 — SB/SD are shown but not launchable
+ * here: this launch cannot send an SB creative or SD targets, so they were created on Amazon (paused) and
+ * could never serve. They are made in the Sponsored Brands / Display builder; the API refuses them here too.
+ * Their settings below stay in place for when Guided can send them.
  */
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from '@/lib/workspaces/navigation'
+import Link from '@/lib/workspaces/Link'
 import { Layers, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { Field } from '@/design-system/components'
@@ -58,6 +60,8 @@ const STEPS: Array<{ n: StepN; label: string }> = [
 ]
 const SETUP_SUBS = ['Select Campaign Types', 'Campaign Settings']
 const EXIT_TO = '/marketing/ads/campaign-builder'
+/** CC-10 — formats Guided cannot launch (no SB creative, no SD targets); they are made in the SB/SD builder. */
+const NOT_IN_GUIDED: AdProduct[] = ['SB', 'SD']
 const CURRENCY = '€'
 const SUG_LOW = 0.73, SUG_HIGH = 1.27
 const FALLBACK_BID = 0.75, BUDGET_MULT = 50
@@ -341,7 +345,13 @@ export function GuidedBuilder() {
             <section className="h10-spw-sec">
               <h2>Select Campaign Types</h2>
               <p className="h10-spw-desc">Select the campaign types you want to launch. You can add multiple campaign types.</p>
-              <CampaignTypeSelect value={types} onChange={setTypes} />
+              <CampaignTypeSelect value={types} onChange={setTypes} disabled={NOT_IN_GUIDED} disabledLabel="Not in Guided" />
+              <p className="h10-gcb-note">
+                Sponsored Brands and Sponsored Display are not launched from Guided: it cannot send their creative or
+                targets, so Amazon could not serve them. Create them in the{' '}
+                <Link href="/marketing/ads/campaign-builder/sb-sd?type=SB">Sponsored Brands builder</Link> or the{' '}
+                <Link href="/marketing/ads/campaign-builder/sb-sd?type=SD">Sponsored Display builder</Link>.
+              </p>
               {types.includes('SD') && (
                 <p className="h10-gcb-note">Sponsored Display launches as a Product Targeting campaign — configure its bids &amp; budget in the next step.</p>
               )}
