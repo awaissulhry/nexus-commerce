@@ -532,6 +532,12 @@ function undoBy(tool: string, status: string, why: string): ToolUndo {
 }
 
 async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  // PB-5a — a playbook build that stopped is marked FAILED (with what it made) before its campaigns are archived: the
+  // dry run only names them.
+  if (kind === 'archive' && typeof args.buildRunId === 'string' && args.buildRunId) {
+    const { settleStoppedBuild } = await import('../../advertising/ads-playbook/build.js')
+    await settleStoppedBuild(args.buildRunId)
+  }
   const { result: fresh, changing } = await decide(kind, args, ctx)
   const refusal = recheck(ctx, fresh, ['totals', 'basis'])
   if (refusal) return notRun(refusal)

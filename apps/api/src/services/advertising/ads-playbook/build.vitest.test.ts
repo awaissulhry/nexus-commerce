@@ -61,7 +61,7 @@ vi.mock('../ads-portfolio.service.js', () => ({
   createPortfolio: async (input: { name: string }) => ({ portfolio: { portfolioId: portfolios.next, name: input.name }, mode: portfolios.next.startsWith('local-pf-') ? 'local' : 'live' }),
 }))
 
-import { buildRunCampaigns, planBuild, runPlaybookBuild, startPlaybookBuild, wizardBodyOf, STALE_RUN_MS, type BuildPlan } from './build.js'
+import { buildRunCampaigns, inFlightRefusal, planBuild, runPlaybookBuild, settleStoppedBuild, startPlaybookBuild, wizardBodyOf, STALE_RUN_MS, type BuildPlan } from './build.js'
 import type { ArtifactCompiler } from './artifacts.js'
 
 const A = 'pb5_build_alpha'
@@ -238,8 +238,13 @@ describe('one build at a time; a Nexus-only portfolio stops it', () => {
       options: { source: 'playbook', changeSetId: 'ap-dead' }, createdCampaignIds: [],
       progress: { done: 2, total: 5, campaign: 'TESTPB5D dead | IT | Broad', at: new Date(Date.now() - STALE_RUN_MS - 60_000).toISOString() },
     } }))
-    // Its undo (archive-ads buildRunId) names the campaign Amazon holds; the run is FAILED with both and why.
-    expect(await inA(() => buildRunCampaigns(deadRun.id))).toEqual({ campaignIds: [made.at], status: 'FAILED' })
+    // A dry run only says it: its undo (archive-ads buildRunId) names the campaign Amazon holds, and nothing is written.
+    expect(await inA(() => buildRunCampaigns(deadRun.id))).toEqual({ campaignIds: [made.at], status: 'FAILED', stopped: true })
+    expect(await inA(() => inFlightRefusal('IT', 'TESTPB5D', dead.rowId))).toMatchObject({ applicationId: deadRun.id, stopped: true })
+    expect((await inA(() => db().adBlueprintApplication.findUniqueOrThrow({ where: { id: deadRun.id } }))).status).toBe('RUNNING')
+    expect((await inA(() => db().campaign.findUniqueOrThrow({ where: { id: made.local }, select: { status: true } }))).status).toBe('ENABLED')
+    // The execute (archive-ads, a new build) settles it: FAILED with both campaigns and why, the Nexus-only record archived.
+    expect(await inA(() => settleStoppedBuild(deadRun.id))).toBe(true)
     const row = await inA(() => db().adBlueprintApplication.findUniqueOrThrow({ where: { id: deadRun.id } }))
     expect(row.status).toBe('FAILED')
     expect([...row.createdCampaignIds].sort()).toEqual([made.at, made.local].sort())
