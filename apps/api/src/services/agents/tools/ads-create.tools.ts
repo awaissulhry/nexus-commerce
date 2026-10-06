@@ -231,8 +231,8 @@ function createRefusal(preview: unknown, limits: Record<string, unknown>): strin
   if (p.plan.products.length > products) return `it advertises ${plural(p.plan.products.length, 'product')}, more than the ${products} this tool's limits allow by rule; a person decides`
   for (const scope of Object.values(facts.scopes)) {
     const max = scope.limits.maxBidCents
-    if (max == null || !scope.sources.maxBidCents || (p.plannedHighestBidCents ?? 0) <= max) continue
-    return `its highest planned bid ${amountLabel(p.plannedHighestBidCents!, p.plan.currency)} is above the highest bid ${amountLabel(max, p.plan.currency)} (${strategyWords(scope.sources.maxBidCents)}); a person decides`
+    if (max == null || !scope.sources.maxBid || (p.plannedHighestBidCents ?? 0) <= max) continue
+    return `its highest planned bid ${amountLabel(p.plannedHighestBidCents!, p.plan.currency)} is above the highest bid ${amountLabel(max, p.plan.currency)} (${strategyWords(scope.sources.maxBid)}); a person decides`
   }
   return null
 }

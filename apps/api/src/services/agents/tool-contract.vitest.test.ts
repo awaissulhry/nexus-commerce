@@ -50,9 +50,13 @@ const UNDO_PENDING: Record<string, string> = {
  * AA-W2-1 (Owner decision D-W2-1 = A, 2026-10-06) — the `alwaysAsk` tools that may be set above `ask`: strategy-bound
  * Amazon ad tools, each of which may run by rule only inside its own limits and the ads strategy (rule 7a). An exact
  * ratchet: adding a name is a reviewed change, and an entry whose tool is no longer alwaysAsk, strategy-bound and above
- * `ask` must be removed (checked below). Empty until a W2 tool PR raises one.
+ * `ask` must be removed (checked below).
  */
 const AD_STRATEGY_AUTO: readonly string[] = [
+  'bulk-ad-bid-change', // AA-W2-6 — many bids, every row inside the ads strategy of its ad group
+  // AA-W2-8 — a campaign's daily budget and its placement adjustments.
+  'set-campaign-budget',
+  'set-placement-multipliers',
   // AA-W2-12 — a real pause, and switching back on what a Claude request paused.
   'pause-ads', 'enable-ads',
   // AA-W2-13 — an archive (irreversible: also on IRREVERSIBLE_AUTO), and a new campaign (D-W2-6: its own kind).
@@ -69,6 +73,8 @@ const IRREVERSIBLE_AUTO: Readonly<Record<string, unknown>> = {
   // inside the strategy (the lists test below shows it runs with a count above 0), refused at the default count 0.
   'archive-ads': {
     action: 'archive-ads',
+    // The write gate lets it through as a run by rule (AA-W2-6's kit).
+    ruleGate: null,
     limitFacts: {
       v: 1, tool: 'archive-ads', action: 'archive',
       markets: { IT: { strategy: { version: 'test-v1' }, currency: 'EUR', maxActionsPerRun: null, maxChangesPerDay: 10, maxRaisesPerDay: 10, maxBudgetIncreasePerDayCents: 0, sources: {} } },
@@ -551,7 +557,7 @@ describe('C1 — every registered tool keeps the contract', () => {
     // Refunds, fiscal numbers, messages, publishing, eBay ads and Amazon spend: a person approves each in Nexus.
     const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
     for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
-      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-campaign-budget', 'set-placement-multipliers', 'bulk-ad-bid-change',
+      'set-ebay-ad-rates', 'set-ebay-campaign-budget',
       'restore-campaign', 'set-campaign-live-writes']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }

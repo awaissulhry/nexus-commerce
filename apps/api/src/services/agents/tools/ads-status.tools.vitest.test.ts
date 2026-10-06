@@ -257,7 +257,7 @@ describe('a halt: a pause by rule lets go, an enable by rule waits', () => {
     expect(row.payload).toMatchObject({ letsGo: true, actor: 'user:u-approver' })
     expect(row.payload.manual).toBeUndefined()
     // The ads audit says the business's rule decided it.
-    expect(row.payload.reason).toMatch(new RegExp(`^Claude request ${pause.approvalId}: a real pause \\(run by rule\\)$`))
+    expect(row.payload.reason).toBe(`Claude request ${pause.approvalId} (run by rule): a real pause`)
     const enable = await ask('enable-ads', { campaignIds: ['c-h2'] })
     expect(await approveByRule(enable.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: .*(stopped|halt)/i) })
     expect(await statusOf('Campaign', 'c-h2')).toBe('PAUSED')

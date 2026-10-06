@@ -32,6 +32,8 @@ import { z } from 'zod'
 import { FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import {
+  BID_SOURCE,
+  DAILY_SOURCE,
   RATE_DAYS,
   bidLimitsOfScope,
   enginesOnCampaigns,
@@ -41,6 +43,7 @@ import {
   resolveEntityScopes,
   strategyForScopes,
   type AdEntityRef,
+  type DailySource,
   type EntityScope,
   type MonthProjection,
   type ScopeLimits,
@@ -185,7 +188,8 @@ export interface MarketFacts {
   maxChangesPerDay: number | null
   maxRaisesPerDay: number | null
   maxBudgetIncreasePerDayCents: number | null
-  sources: Partial<Record<'maxActionsPerRun' | 'maxChangesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', StrategySource>>
+  /** Keyed by DAILY_SOURCE (a money limit's row under a name that is not money). */
+  sources: Partial<Record<'maxActionsPerRun' | DailySource, StrategySource>>
 }
 
 export interface LimitFacts {
@@ -223,7 +227,9 @@ export interface LimitFacts {
 export const LIMIT_FACTS_MONEY: Readonly<Record<string, string>> = {
   ...STRATEGY_MONEY,
   ...Object.fromEntries(
-    ['highestNewBidCents', 'budgetIncreaseCents', 'addedDailyCents', 'maxBudgetIncreasePerDayCents', 'spentCents', 'ratePerDayCents', 'projectedCents', 'afterCents', 'capCents']
+    ['highestNewBidCents', 'budgetIncreaseCents', 'addedDailyCents', 'maxBudgetIncreasePerDayCents', 'spentCents', 'ratePerDayCents', 'projectedCents', 'afterCents', 'capCents',
+      // AA-W2-8 — the strategy's ACoS target where a change lands.
+      'strategyTargetAcosPct']
       .map((key) => [key, FIELDS.financialsAdspendView]),
   ),
 }
@@ -590,7 +596,8 @@ export function dailyRefusal(facts: LimitFacts): string | null {
       if (l.adds <= 0 || l.ran + l.adds <= (max ?? 0)) continue
       if (max == null) return `${market}: the ads strategy sets no daily limit for this (${DAILY_WORDS[l.key]}) — empty is 0, so ${l.none} runs by rule here; ${A_PERSON}`
       const allowed = l.key === 'maxBudgetIncreasePerDayCents' ? money(max) : String(max)
-      return `${market}: ${l.words(l.ran)} ${ran} in the last 24 hours and this adds ${l.words(l.adds)}, more than the ${allowed} a day the ads strategy allows (${DAILY_WORDS[l.key]}${m.sources[l.key] ? `, ${strategyWords(m.sources[l.key]!)}` : ''}); ${A_PERSON}`
+      const source = m.sources[DAILY_SOURCE[l.key]]
+      return `${market}: ${l.words(l.ran)} ${ran} in the last 24 hours and this adds ${l.words(l.adds)}, more than the ${allowed} a day the ads strategy allows (${DAILY_WORDS[l.key]}${source ? `, ${strategyWords(source)}` : ''}); ${A_PERSON}`
     }
   }
   return null
@@ -712,7 +719,7 @@ const LIMIT_WORDS: Array<[keyof ScopeLimits, string, 'cents' | 'pct']> = [
   ['maxChangePct', 'largest bid change', 'pct'],
   ['stopBidCents', 'stop bid', 'cents'],
 ]
-const SOURCE_OF: Partial<Record<keyof ScopeLimits, keyof ScopeStrategy['sources']>> = { stopBidCents: 'stop' }
+const SOURCE_OF: Partial<Record<keyof ScopeLimits, keyof ScopeStrategy['sources']>> = { ...BID_SOURCE, stopBidCents: 'stop' }
 
 /**
  * Each limit, its value, this change's value, and where the limit comes from (a strategy row, or "Claude's limits for
@@ -729,8 +736,8 @@ export function limitsNote(facts: LimitFacts, limits?: Limits): string[] {
     lines.push(m.strategy ? `${market}: ads strategy version ${m.strategy.version}.` : `${market}: no ads strategy — nothing runs alone there.`)
     const today = facts.today[market] ?? NO_RUNS
     const mine = t.byMarket[market]
-    const limit = (value: number | null, key: keyof MarketFacts['sources'], unset: string, money = false) =>
-      value == null ? unset : `${money ? amountLabel(value, m.currency) : value} a day (${m.sources[key] ? strategyWords(m.sources[key]!) : 'ads strategy'})`
+    const limit = (value: number | null, key: keyof typeof DAILY_SOURCE, unset: string, money = false) =>
+      value == null ? unset : `${money ? amountLabel(value, m.currency) : value} a day (${m.sources[DAILY_SOURCE[key]] ? strategyWords(m.sources[DAILY_SOURCE[key]]!) : 'ads strategy'})`
     lines.push(
       `${market}, run by rule in the last 24 hours: ${plural(today.changes, 'change')}, ${plural(today.raises, 'raise')}, budgets +${amountLabel(today.budgetIncreaseCents, m.currency)}; `
       + `this change: ${plural(mine?.changes ?? 0, 'change')}, ${plural(mine?.raises ?? 0, 'raise')}, budgets +${amountLabel(mine?.budgetIncreaseCents ?? 0, m.currency)}. `
@@ -752,6 +759,11 @@ export function limitsNote(facts: LimitFacts, limits?: Limits): string[] {
     }
     if (scope.limits.protect === true && scope.sources.protect) {
       const line = `protected (${strategyWords(scope.sources.protect)})`
+      said.set(line, [...(said.get(line) ?? []), scope.label])
+    }
+    // AA-W2-8 — a target ACoS change: the ACoS target the engines use there (a raise by rule stays at or below it).
+    if (facts.action === 'target' && scope.limits.strategyTargetAcosPct != null && scope.sources.target) {
+      const line = `target ACoS the engines use ${scope.limits.strategyTargetAcosPct} % (${strategyWords(scope.sources.target)})`
       said.set(line, [...(said.get(line) ?? []), scope.label])
     }
     if (facts.action && scope.limits.claudeLevel && scope.sources.claudeLevel) {

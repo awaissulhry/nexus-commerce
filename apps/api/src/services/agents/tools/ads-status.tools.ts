@@ -31,8 +31,8 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { updateAdGroupWithSync, updateAdTargetWithSync, updateCampaignWithSync, updateProductAdWithSync, type MutationOutcome } from '../../advertising/ads-mutation.service.js'
 import { amountLabel, campaignCurrency, checkLiveReach, type LiveReach } from './ads-tool-guards.js'
-import { approvedRun, notRun, reachNote, reachRefusal, recheck, spOnlyRefusal, type StoredReach } from './ads-change-kit.js'
-import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote, type KitItem } from './ads-autonomy-kit.js'
+import { approvedRun, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { adKitLimits, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { STATUS_CAMPAIGN_SELECT, adGroupStatuses, adGroupsForStatus, externalStatusChanges, highestServingBids, servingUnder } from '../../advertising/ads-status-lookup.service.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -333,7 +333,11 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
     entity: { kind: ad.level, id: ad.id },
     change: { field: 'status', from: ad.status, to, ...(ad.level === 'campaign' ? { dailyBudgetCents: ad.campaign.dailyBudgetCents } : {}) },
   }))
-  const facts = await buildLimitFacts({ tool: TOOL[kind], items, approvalId: ctx.approvalId ?? null, projectMonth: kind === 'enable' })
+  // AA-W2-6's kit: the limit facts, the note, and the write gate's answer as a run by rule (one write per campaign).
+  const writes: RuleWrite[] = [...new Map(changing.map((ad) => [ad.campaign.id, ad.campaign])).values()].map((c) => ({
+    campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'status', valueCents: null }], isSuppression: kind !== 'enable', label: `campaign "${c.name}"`,
+  }))
+  const ruleFacts = await ruleFactsFor({ tool: TOOL[kind], limits: STATUS_LIMITS, items, writes, approvalId: ctx.approvalId ?? null, projectMonth: kind === 'enable' })
 
   const budgets: Record<string, number> = {}
   // The daily budgets that stop (a campaign that serves now) or start again.
@@ -408,8 +412,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
           : kind === 'pause'
           ? 'A real pause: a paused ad serves again only about an hour after enable-ads switches it on. To stop it for a while, lower its bids instead (suppress-campaign): it serves again about a minute after they go back.'
           : 'Spend resumes: these ads compete in auctions again with the bids and budgets shown.',
-        limitFacts: facts,
-        limitsNote: limitsNote(facts),
+        ...ruleFacts,
         effect,
       },
     },
@@ -466,9 +469,9 @@ function restartBidRefusal(preview: unknown): string | null {
     if (!bid) return `the preview does not say which bid serves again for ${facts.labels[key] ?? key}; a person decides`
     const scope = facts.scopes[facts.entityScopes[key] ?? '']
     const max = scope?.limits.maxBidCents
-    if (typeof bid.cents !== 'number' || max == null || bid.cents <= max || !scope.sources.maxBidCents) continue
+    if (typeof bid.cents !== 'number' || max == null || bid.cents <= max || !scope.sources.maxBid) continue
     const currency = typeof bid.currency === 'string' ? bid.currency : 'EUR'
-    return `${facts.labels[key] ?? key} would serve again with a bid of ${amountLabel(bid.cents, currency)}, above the highest bid ${amountLabel(max, currency)} (${strategyWords(scope.sources.maxBidCents)}); a person decides`
+    return `${facts.labels[key] ?? key} would serve again with a bid of ${amountLabel(bid.cents, currency)}, above the highest bid ${amountLabel(max, currency)} (${strategyWords(scope.sources.maxBid)}); a person decides`
   }
   return null
 }
@@ -521,9 +524,9 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
   const refusal = recheck(ctx, fresh, ['totals', 'basis'])
   if (refusal) return notRun(refusal)
   const p = fresh.preview as { reach: StoredReach; effect: string }
-  // AA-W2-1 — a run the business's rule decided says so in the ads audit.
+  // AA-W2-6 — a run the business's rule decided says so in the ads audit (approvedRun).
   const said = String(args.why ?? '').trim() || (kind === 'pause' ? 'a real pause' : kind === 'archive' ? 'archived for good' : 'switching back on what Claude paused')
-  const run = approvedRun(ctx, ctx.decidedVia === 'auto' ? `${said} (run by rule)` : said)
+  const run = approvedRun(ctx, said)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
   const { to } = MOVE[kind]
   // A pause or an archive carries `letsGo`: it lets go of spend, so a halt does not hold it at Amazon's door either
@@ -585,7 +588,7 @@ const pauseAds: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'auto',
   limits: STATUS_LIMITS,
-  withinLimits: (preview, limits) => commonRefusal(preview, limits) ?? levelsRefusal(preview, limits),
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits),
   undo: undoBy(TOOL.enable, 'ENABLED', 'undo of a pause'),
   description:
     `Pause Amazon Sponsored Products ads for real: campaigns, ad groups, keywords and product targets, or product ads (up to ${MAX_ADS} `
@@ -620,7 +623,7 @@ const enableAds: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'auto',
   limits: STATUS_LIMITS,
-  withinLimits: (preview, limits) => commonRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? restartBidRefusal(preview),
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? restartBidRefusal(preview),
   undo: undoBy(TOOL.pause, 'PAUSED', 'undo of an enable'),
   description:
     `Switch Amazon Sponsored Products ads back on that a Claude request paused (pause-ads): campaigns, ad groups, keywords `
@@ -654,7 +657,7 @@ const archiveAds: AgentTool = {
   reversibility: 'none',
   maxClaudeTrust: 'auto',
   limits: STATUS_LIMITS,
-  withinLimits: (preview, limits) => commonRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? archiveProtectedRefusal(preview),
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? archiveProtectedRefusal(preview),
   description:
     `Archive Amazon Sponsored Products ads for good: campaigns, ad groups, keywords and product targets, or product ads (up `
     + `to ${MAX_ADS}), enabled or paused. PERMANENT: Amazon cannot switch an archived ad on again (its API calls this `
