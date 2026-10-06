@@ -597,14 +597,16 @@ const adsManagerRuns: AgentTool = {
     + 'Amounts are minor units of each campaign\'s own currency, never converted; a person without the ad-spend money '
     + 'permission gets the same answer without them (a watched request\'s reason as the rule gave it, ruleWhy — in the '
     + 'watch week and on each approval a run named — may state an amount: they read its check\'s words, meaning). Read only.',
-  // W4-5 — the value a watched item would have set and a verdict's reason (WATCH_WEEK_MONEY, written out here: a tool
-  // file reads no imported constant while it loads). Spend, sales and ACoS are restricted everywhere.
+  // W4-5 — the value a watched item would have set, a verdict's reason and a suggestion's full key (WATCH_WEEK_MONEY,
+  // written out here: a tool file reads no imported constant while it loads). Spend, sales and ACoS are restricted
+  // everywhere.
   restrictedFields: {
     wantedFromCents: FIELDS.financialsAdspendView,
     wantedToCents: FIELDS.financialsAdspendView,
     wantedFromPct: FIELDS.financialsAdspendView,
     wantedToPct: FIELDS.financialsAdspendView,
     ruleWhy: FIELDS.financialsAdspendView,
+    proposedKey: FIELDS.financialsAdspendView,
   },
   async handler(args): Promise<ToolResult> {
     const days = Number((args as { days: number }).days)

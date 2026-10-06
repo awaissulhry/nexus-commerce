@@ -87,7 +87,8 @@ export const MAX_KIT_ITEMS = 250
 export type KitChange =
   | { field: 'bid'; fromCents: number | null; toCents: number; forced?: boolean }
   | { field: 'dailyBudget'; fromCents: number | null; toCents: number }
-  | { field: 'placementPct' | 'targetAcosPct'; fromPct: number | null; toPct: number }
+  /** `placement` (W4-5): Amazon's placement code (PLACEMENT_TOP …) of a placement change, so the watch week compares that one. */
+  | { field: 'placementPct' | 'targetAcosPct'; fromPct: number | null; toPct: number; placement?: string }
   | { field: 'status'; from: string | null; to: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudgetCents?: number }
   | { field: 'negative'; term: string; matchType?: string | null }
   | { field: 'liveWrites'; from: boolean; to: boolean }
@@ -258,6 +259,8 @@ export interface WantedItem {
   wantedToCents?: number
   wantedFromPct?: number | null
   wantedToPct?: number
+  /** A placement change: which placement (Amazon's code). */
+  placement?: string
   from?: string | boolean | null
   to?: string | boolean
   term?: string
@@ -273,7 +276,7 @@ export function wantedOf(entity: string, change: KitChange, direction: Direction
       return { ...base, wantedFromCents: change.fromCents, wantedToCents: change.toCents }
     case 'placementPct':
     case 'targetAcosPct':
-      return { ...base, wantedFromPct: change.fromPct, wantedToPct: change.toPct }
+      return { ...base, wantedFromPct: change.fromPct, wantedToPct: change.toPct, ...(change.placement ? { placement: change.placement } : {}) }
     case 'status':
     case 'liveWrites':
       return { ...base, from: change.from, to: change.to }

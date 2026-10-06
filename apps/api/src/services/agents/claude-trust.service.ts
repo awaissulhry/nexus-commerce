@@ -35,7 +35,8 @@
  *
  * ADS AUTONOMY AA-W2-4 — `watch`, between confirm and auto: a change Claude asks for at watch goes through the full
  * check auto would make (the level where it lands with the ads strategy, nexus.run, Pause, the tool's limits, the daily
- * cap — counting the watched changes that would have run, as if their kinds were at auto) and the verdict is recorded on
+ * cap — counting the watched changes that would have run, as if their kinds were at auto; W4-5: nexus.run as if granted,
+ * the connection's own scope recorded beside the verdict) and the verdict is recorded on
  * the request (AgentApproval.ruleVerdict, `watchVerdictOf` / a plan's per step). It is never scheduled by the rule: a
  * person decides it, as at confirm (watch allows all confirm allows, so lowering watch → confirm never lets Claude do
  * more). Raising to watch is a raise (2FA); lowering auto → watch is a free brake. Offered only for a tool whose
@@ -415,6 +416,14 @@ function levelHold(rule: ClaudeChangeRule | null | undefined): Pick<WatchStepVer
 
 const RULE_COULD_NOT = 'Nexus could not apply the business’s rule to it'
 
+/**
+ * W4-5 (lead decision 2026-10-06) — a watched change is judged as if its connection had nexus.run, so "would have run
+ * by rule" says what the business's rule would do once the watch week ends and the connection is made again with it.
+ * The connection's own scope is recorded beside the verdict (`scope`), never as its check. Only the watch level reads
+ * this: auto still refuses a connection without nexus.run (ruleHold).
+ */
+const watchScopeOf = (runScope: boolean): Pick<WatchVerdict, 'scope'> => (runScope ? {} : { scope: 'no-run-by-rule' })
+
 /** Does a preview carry the ads autonomy kit's limit facts (a strategy-bound ad tool's)? Its version is the kit's to judge. */
 const hasLimitFacts = (preview: unknown) => !!preview && typeof preview === 'object' && 'limitFacts' in preview
 
@@ -465,11 +474,14 @@ function addLedgers(a: RuleRunLedger, b: RuleRunLedger): RuleRunLedger {
  */
 export async function watchVerdictOf(tool: AgentTool, preview: unknown, opts: { runScope: boolean; rule: ClaudeChangeRule }): Promise<WatchVerdict> {
   const { rule } = opts
-  const base = { level: rule.level, checkedAt: new Date().toISOString(), changes: 1, ...(rule.narrowedBy ? { strategy: strategyOf(rule.narrowedBy) } : {}) }
+  const base = {
+    level: rule.level, checkedAt: new Date().toISOString(), changes: 1, ...(rule.narrowedBy ? { strategy: strategyOf(rule.narrowedBy) } : {}), ...watchScopeOf(opts.runScope),
+  }
   if (rule.level !== 'watch') return { ...base, wouldRun: false, ...levelHold(rule) }
   try {
     const judged = await watchJudged([preview], rule.narrowedBy?.level === 'watch')
-    const hold = await ruleHold(tool, judged[0], { runScope: opts.runScope, rule, watching: true })
+    // Judged as if the connection had nexus.run (watchScopeOf): the scope is recorded beside the verdict.
+    const hold = await ruleHold(tool, judged[0], { runScope: true, rule, watching: true })
     return hold ? { ...base, wouldRun: false, check: hold.check, why: bare(hold.why) } : { ...base, wouldRun: true, check: null, why: null }
   } catch (error) {
     logger.error('[claude-trust] the watch check failed', { tool: tool.name, error: error instanceof Error ? error.message : String(error) })
@@ -495,6 +507,7 @@ async function planWatchVerdict(
     checkedAt: new Date().toISOString(),
     changes: steps.length,
     ...(deciding?.narrowedBy ? { strategy: strategyOf(deciding.narrowedBy) } : {}),
+    ...watchScopeOf(opts.runScope),
   }
   const stepOf = (index: number, verdict: Pick<WatchStepVerdict, 'wouldRun' | 'check' | 'why'>): WatchStepVerdict => ({
     step: index + 1,
@@ -505,9 +518,8 @@ async function planWatchVerdict(
   })
   try {
     const autonomy = await autonomyOf()
-    const shared: RuleHold | null = !opts.runScope
-      ? { check: 'scope', why: NO_RUN_SCOPE, then: '' }
-      : autonomy.paused ? { check: 'pause', why: pausedWhy(autonomy), then: '' } : null
+    // Judged as if the connection had nexus.run (watchScopeOf): only the Pause holds every step.
+    const shared: RuleHold | null = autonomy.paused ? { check: 'pause', why: pausedWhy(autonomy), then: '' } : null
     // Each step's preview as watch judges it: today's ad counts with the watched changes that would have run.
     const judged = await watchJudged(steps.map((step) => step.preview), steps.some((_step, index) => rules[index]?.narrowedBy?.level === 'watch'))
     const own = steps.map((step, index) => {
@@ -564,7 +576,8 @@ function planLevelHold(
 /** What Claude is told about a watched change: what the rule would have done, then who decides (as at confirm). */
 export function watchWords(verdict: WatchVerdict, opts: { runScope: boolean }): string {
   const would = verdict.wouldRun ? 'watching: it would have run by rule' : `watching: it would not — ${verdict.why}`
-  return `${would}; ${opts.runScope ? CONFIRM_HOW : A_PERSON}`
+  const scope = verdict.scope === 'no-run-by-rule' ? ' (judged as if this connection may run changes by rule; it was connected without nexus.run)' : ''
+  return `${would}${scope}; ${opts.runScope ? CONFIRM_HOW : A_PERSON}`
 }
 
 /** Record a watched request's verdict on it (AgentApproval.ruleVerdict). */

@@ -18,9 +18,10 @@ export async function adGroupCampaigns(ids: readonly string[]): Promise<Array<{ 
   })
 }
 
-/** The ad groups of one campaign, by id, at most `take`. */
-export async function adGroupIdsOfCampaign(campaignId: string, take: number): Promise<string[]> {
-  return (await prisma.adGroup.findMany({ where: { campaignId }, select: { id: true }, orderBy: { id: 'asc' }, take })).map((r) => r.id)
+/** The ad groups of these campaigns, by id, at most `take` in all. */
+export async function adGroupsOfCampaigns(campaignIds: readonly string[], take: number): Promise<Array<{ id: string; campaignId: string }>> {
+  if (!campaignIds.length) return []
+  return prisma.adGroup.findMany({ where: { campaignId: { in: [...new Set(campaignIds)] } }, select: { id: true, campaignId: true }, orderBy: { id: 'asc' }, take })
 }
 
 export interface SuggestionRow {

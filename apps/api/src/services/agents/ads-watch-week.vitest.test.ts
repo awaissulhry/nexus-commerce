@@ -7,12 +7,15 @@
  *
  *   wanted      the kit stores each item's value in the preview's facts (`limitFacts.wanted`): the watch week reads it back
  *   steps       a request asked at watch and a watched step of a change plan; their verdicts and what a person did
- *   72 hours    an engine moved it the same way, the opposite way, or not at all (a write after 72 h does not count);
- *               a person's write; an engine's suggestion; a search term followed through the negative created for it
+ *   72 hours    an engine moved its lever the same way, the opposite way, or not at all (a write after 72 h does not
+ *               count; a write on another lever is "other"; a write that never reached Amazon is left out); a person's
+ *               write; an engine's suggestion; a search term followed through the negative created for it
+ *   scope       a request asked without nexus.run is judged as if the connection had it; its scope is said beside it
  *   figures     the 3 and 7 days after against the days before, next to the campaign's comparable entities nothing
  *               wrote to (a written one is left out), labelled observed, not proof of cause; better / no peers / no data
  *   table       per kind: would have run, would have waited, agreed, conflicted, held by limits, outcome
- *   money       without the ad-money permission: the same answer without the amounts and the rule's own reasons
+ *   money       without the ad-money permission: the same answer without the amounts, the rule's own reasons and a
+ *               suggestion's full key
  *   business    another business's watched steps are not read
  *   e-mail      the day's e-mail carries the table while watch mode is on, and not after
  */
@@ -55,7 +58,9 @@ import { runToolForClaude } from '../mcp/mcp-tool-call.js'
 import { __claudeStrategyTest } from '../advertising/ads-strategy/claude.js'
 import type { McpPrincipal } from '../mcp/mcp-auth.js'
 import { ADS_MANAGER_AGENT_KEY } from './ads-manager-run.service.js'
-import { engineRelation, OBSERVED_LABEL, outcomeOf, parseEntityKey, relationOf, suggestionDirection, verdictMeaning, WATCH_WEEK_MONEY, writeDirection, type WatchWindow } from './ads-watch-week.service.js'
+import {
+  engineRelation, leverDirection, leverOf, OBSERVED_LABEL, outcomeOf, parseEntityKey, relationOf, stepVerdictOf, suggestionLever, verdictMeaning, WATCH_WEEK_MONEY, type WatchWindow,
+} from './ads-watch-week.service.js'
 import { RESTRICTED_FIELDS } from '../../lib/auth/financial-fields.js'
 import { measure, wantedOf } from './tools/ads-autonomy-kit.js'
 
@@ -68,7 +73,7 @@ const business = (workspaceId: string) => ({ workspaceId, actorUserId: null, mem
 const inside = <T>(work: () => Promise<T>, workspaceId = A) => withWorkspace(business(workspaceId), work)
 const db = () => database.client
 const EVERYTHING = new Set<string>([...Object.values(F), ...Object.values(FIELDS)])
-const ids = { person: '', noMoney: '', cut: '', raise: '', plan: '', term: '', rule: '', bWatched: '' }
+const ids = { person: '', noMoney: '', cut: '', raise: '', plan: '', term: '', budget: '', rule: '', bWatched: '' }
 const names = { A: '', B: 'Bravo watch business' }
 
 /**
@@ -172,7 +177,8 @@ describe('W4-5 — the kit keeps what each item would set', () => {
   it('wantedOf: the entity, the way it moves spend, the value in its own units', () => {
     expect(wantedOf('target:t1', { field: 'bid', fromCents: 45, toCents: 40 })).toEqual({ entity: 'target:t1', field: 'bid', direction: 'cut', wantedFromCents: 45, wantedToCents: 40 })
     expect(wantedOf('target:new', { field: 'bid', fromCents: null, toCents: 30 })).toMatchObject({ direction: 'raise', wantedFromCents: null })
-    expect(wantedOf('campaign:c1', { field: 'placementPct', fromPct: 10, toPct: 30 })).toEqual({ entity: 'campaign:c1', field: 'placementPct', direction: 'raise', wantedFromPct: 10, wantedToPct: 30 })
+    expect(wantedOf('campaign:c1', { field: 'placementPct', fromPct: 10, toPct: 30, placement: 'PLACEMENT_TOP' }))
+      .toEqual({ entity: 'campaign:c1', field: 'placementPct', direction: 'raise', wantedFromPct: 10, wantedToPct: 30, placement: 'PLACEMENT_TOP' })
     expect(wantedOf('campaign:c1', { field: 'status', from: 'ENABLED', to: 'PAUSED' })).toEqual({ entity: 'campaign:c1', field: 'status', direction: 'cut', from: 'ENABLED', to: 'PAUSED' })
     expect(wantedOf(TERM_KEY, { field: 'negative', term: 'cheap helmet', matchType: 'NEGATIVE_EXACT' })).toEqual({ entity: TERM_KEY, field: 'negative', direction: 'cut', term: 'cheap helmet', matchType: 'NEGATIVE_EXACT' })
     expect(measure({ field: 'automation' }).direction).toBe('same')
@@ -180,19 +186,41 @@ describe('W4-5 — the kit keeps what each item would set', () => {
 })
 
 describe('W4-5 — pure readers', () => {
-  it('a write\'s direction from its before and after; a suggestion\'s from its action', () => {
-    expect(writeDirection({ actionType: 'AD_BID_UPDATE', payloadBefore: { bidCents: 45, status: 'ENABLED' }, payloadAfter: { bidCents: 42, status: 'ENABLED' } })).toBe('cut')
-    expect(writeDirection({ actionType: 'CAMPAIGN_UPDATE', payloadBefore: { dailyBudget: 20 }, payloadAfter: { dailyBudget: 25 } })).toBe('raise')
-    expect(writeDirection({ actionType: 'update_placement_bidding', payloadBefore: { adjustments: [{ placement: 'TOP', percentage: 50 }] }, payloadAfter: { adjustments: [{ placement: 'TOP', percentage: 20 }] } })).toBe('cut')
-    expect(writeDirection({ actionType: 'AD_ENTITY_STATE_UPDATE', payloadBefore: { status: 'PAUSED' }, payloadAfter: { status: 'ENABLED' } })).toBe('raise')
-    expect(writeDirection({ actionType: 'create_negative_keyword', payloadBefore: {}, payloadAfter: { keywordText: 'x' } })).toBe('cut')
-    // Two fields the opposite way, or none of them: not read.
-    expect(writeDirection({ actionType: 'x', payloadBefore: { bidCents: 40, status: 'ENABLED' }, payloadAfter: { bidCents: 50, status: 'PAUSED' } })).toBeNull()
-    expect(writeDirection({ actionType: 'rename', payloadBefore: { name: 'a' }, payloadAfter: { name: 'b' } })).toBeNull()
-    expect(suggestionDirection({ type: 'bid_down', percent: 10 })).toBe('cut')
-    expect(suggestionDirection({ type: 'budget_apply', op: 'incPct', value: 20 })).toBe('raise')
-    expect(suggestionDirection({ type: 'promote_to_exact' })).toBe('raise')
-    expect(suggestionDirection({ type: 'bid_apply', op: 'set', value: 1 })).toBeNull()
+  it('the lever: only a write that moved the same lever of the entity has a direction; any other is not read', () => {
+    expect(leverOf('target', { field: 'bid', wantedFromCents: 45 })).toBe('bid')
+    expect(leverOf('searchTerm', { field: 'bid', wantedFromCents: null })).toBe('harvest')
+    expect(leverOf('searchTerm', { field: 'negative' })).toBe('negative')
+    expect(leverOf('campaign', { field: 'dailyBudget', wantedFromCents: 2000 })).toBe('dailyBudget')
+    expect(leverOf('campaign', { field: 'placementPct', placement: 'PLACEMENT_TOP' })).toBe('placement:PLACEMENT_TOP')
+    expect(leverOf('campaign', { field: 'placementPct' })).toBeNull()
+    expect(leverOf('campaign', { field: 'liveWrites' })).toBeNull()
+    expect(leverOf('target', null)).toBeNull()
+    const bid = { entityType: 'AD_TARGET', actionType: 'AD_BID_UPDATE', payloadBefore: { bidCents: 45, status: 'ENABLED' }, payloadAfter: { bidCents: 42, status: 'ENABLED' } }
+    expect(leverDirection(bid, 'bid')).toBe('cut')
+    expect(leverDirection(bid, 'status')).toBeNull()
+    expect(leverDirection({ entityType: 'AD_TARGET', actionType: 'AD_ENTITY_STATE_UPDATE', payloadBefore: { bidCents: 45, status: 'ENABLED' }, payloadAfter: { bidCents: 45, status: 'PAUSED' } }, 'bid')).toBeNull()
+    expect(leverDirection({ entityType: 'AD_GROUP', actionType: 'AD_GROUP_UPDATE', payloadBefore: { defaultBidCents: 30 }, payloadAfter: { defaultBidCents: 40 } }, 'bid')).toBe('raise')
+    // A budget step against a rank engine's placement move: another lever.
+    const placement = { entityType: 'CAMPAIGN', actionType: 'update_placement_bidding', payloadBefore: { adjustments: [{ placement: 'PLACEMENT_TOP', percentage: 50 }] }, payloadAfter: { adjustments: [{ placement: 'PLACEMENT_TOP', percentage: 80 }] } }
+    expect(leverDirection(placement, 'dailyBudget')).toBeNull()
+    expect(leverDirection(placement, 'placement:PLACEMENT_TOP')).toBe('raise')
+    expect(leverDirection(placement, 'placement:PLACEMENT_PRODUCT_PAGE')).toBeNull()
+    expect(leverDirection({ entityType: 'CAMPAIGN', actionType: 'CAMPAIGN_UPDATE', payloadBefore: { dailyBudget: 20, status: 'ENABLED' }, payloadAfter: { dailyBudget: 25, status: 'ENABLED' } }, 'dailyBudget')).toBe('raise')
+    expect(leverDirection({ entityType: 'CAMPAIGN', actionType: 'set_campaign_goal', payloadBefore: { targetAcos: 0.3 }, payloadAfter: { targetAcos: 0.25 } }, 'targetAcos')).toBe('cut')
+    expect(suggestionLever({ type: 'bid_down', percent: 10 })).toEqual({ lever: 'bid', direction: 'cut' })
+    expect(suggestionLever({ type: 'budget_apply', op: 'incPct', value: 20 })).toEqual({ lever: 'dailyBudget', direction: 'raise' })
+    expect(suggestionLever({ type: 'placement_apply', op: 'decPct', placement: 'PLACEMENT_TOP' })).toEqual({ lever: 'placement:PLACEMENT_TOP', direction: 'cut' })
+    expect(suggestionLever({ type: 'promote_to_exact' })).toEqual({ lever: 'harvest', direction: 'raise' })
+    expect(suggestionLever({ type: 'add_negative_exact' })).toEqual({ lever: 'negative', direction: 'cut' })
+    expect(suggestionLever({ type: 'bid_apply', op: 'setValue', value: 1 })).toEqual({ lever: 'bid', direction: null })
+    expect(suggestionLever({ type: 'notify' })).toEqual({ lever: null, direction: null })
+  })
+
+  it('a plan step that would have run takes its plan\'s verdict when the plan would not have', () => {
+    const plan = { wouldRun: false, check: 'limits' as const, why: 'step 2 (x): outside' }
+    expect(stepVerdictOf({ wouldRun: true, check: null, why: null }, plan)).toEqual({ wouldRun: false, check: 'limits', why: 'step 2 (x): outside' })
+    expect(stepVerdictOf({ wouldRun: false, check: 'strategy', why: 'held' }, plan)).toEqual({ wouldRun: false, check: 'strategy', why: 'held' })
+    expect(stepVerdictOf({ wouldRun: true, check: null, why: null }, { wouldRun: true, check: null, why: null })).toEqual({ wouldRun: true, check: null, why: null })
   })
 
   it('same, opposite, other; an item\'s engines together', () => {
@@ -217,6 +245,11 @@ describe('W4-5 — pure readers', () => {
     expect(outcomeOf([w(7, true, { before: p(100, 200), after: p(105, 200) }, peers)])).toBe('flat')
     expect(outcomeOf([w(7, true, { before: p(100, 0), after: p(100, 200) }, peers)])).toBe('no_sales')
     expect(outcomeOf([w(7, true, { before: p(100, 200), after: p(100, 400) }, null)])).toBe('no_peers')
+    // An ACoS of 0 (sales without spend) is no base to measure from: never Infinity or NaN.
+    expect(outcomeOf([w(7, true, { before: p(0, 200), after: p(100, 400) }, peers)])).toBe('no_spend')
+    expect(outcomeOf([w(7, true, { before: p(100, 200), after: p(0, 400) }, peers)])).toBe('better')
+    expect(outcomeOf([w(7, true, { before: p(100, 200), after: p(100, 400) }, { count: 2, before: p(0, 200), after: p(100, 200) })])).toBe('no_peers')
+    expect(outcomeOf([w(7, true, { before: p(100, 200), after: p(100, 400) }, { count: 2, before: p(100, 200), after: p(0, 200) })])).toBe('no_peers')
     expect(outcomeOf([w(7, true, null, peers)])).toBe('no_data')
     expect(outcomeOf([])).toBe('no_data')
   })
@@ -243,8 +276,9 @@ describe('W4-5 — the watch week, read back from what the door recorded', { tim
     expect(cut, JSON.stringify(cut)).toMatchObject({ trust: { level: 'watch', watch: { wouldRun: true } } })
     const raise = await ask('set-target-bid', { targetId: 't-p1', proposedBidCents: 60, why: 'a test raise' }, ['nexus.read', 'nexus.write', 'nexus.run'])
     expect(raise, JSON.stringify(raise)).toMatchObject({ trust: { level: 'watch', watch: { wouldRun: false, check: 'limits' } } })
+    // A plan asked on a connection without nexus.run: judged as if it had it, its scope beside the verdict.
     const plan = await ask('submit-change-plan', { title: 'Test plan', steps: [{ tool: 'set-target-bid', args: { targetId: 't-plan', proposedBidCents: 45, why: 'a plan cut' } }] }, ['nexus.read', 'nexus.write'])
-    expect(plan, JSON.stringify(plan)).toMatchObject({ trust: { level: 'watch' } })
+    expect(plan, JSON.stringify(plan)).toMatchObject({ trust: { level: 'watch', watch: { wouldRun: true, scope: 'no-run-by-rule' } } })
     ids.cut = cut.approvalId
     ids.raise = raise.approvalId
     ids.plan = plan.approvalId
@@ -266,11 +300,36 @@ describe('W4-5 — the watch week, read back from what the door recorded', { tim
       })).id
     })
 
+    // A budget cut Claude asked at watch on c-off (its facts as the kit stores them).
+    ids.budget = await inside(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'claude', trigger: 'manual', status: 'done', userId: ids.person, via: 'claude' } })
+      const facts = {
+        v: 1, tool: 'set-campaign-budget', action: 'budget', markets: { IT: { strategy: { version: 'v1' }, currency: 'EUR' } }, scopes: {}, entityScopes: {},
+        labels: { 'campaign:c-off': 'campaign "Italy not allowlisted"' }, this: { markets: ['IT'], items: 1, entities: ['campaign:c-off'] },
+        wanted: [{ entity: 'campaign:c-off', field: 'dailyBudget', direction: 'cut', wantedFromCents: 2000, wantedToCents: 1500 }],
+      }
+      return (await db().agentApproval.create({
+        data: {
+          agentRunId: run.id, toolName: 'set-campaign-budget', riskTier: 'high', args: {}, status: 'pending', requestedAt: CHECKED, preview: { limitFacts: facts },
+          ruleVerdict: { level: 'watch', wouldRun: true, check: null, why: null, checkedAt: CHECKED.toISOString(), changes: 1 },
+        },
+      })).id
+    })
+
     const at = (hours: number) => new Date(CHECKED.getTime() + hours * HOUR)
     // t-it (Claude: cut): an engine cut it the same way within 72 h, raised it after 72 h (not counted); an engine suggested a cut.
     await write({ entityType: 'AD_TARGET', entityId: 't-it', actionType: 'AD_BID_UPDATE', userId: 'automation:auto-bid', before: { bidCents: 45, status: 'ENABLED' }, after: { bidCents: 42, status: 'ENABLED' }, at: at(10) })
     await write({ entityType: 'AD_TARGET', entityId: 't-it', actionType: 'AD_BID_UPDATE', userId: 'automation:auto-bid', before: { bidCents: 42, status: 'ENABLED' }, after: { bidCents: 60, status: 'ENABLED' }, at: at(80) })
     await inside(() => db().adsRuleSuggestion.create({ data: { ruleId: ids.rule, ruleName: 'TEST negate wasters', entityType: 'AD_TARGET', entityId: 't-it', proposedAction: { type: 'bid_down', percent: 10 }, proposedKey: 'bid_down:10', createdAt: at(2), lastSeenAt: at(2) } }))
+    // A suggestion whose key states an amount: its kind for everyone, its key only with the ad-money permission.
+    await inside(() => db().adsRuleSuggestion.create({ data: { ruleId: ids.rule, ruleName: 'TEST negate wasters', entityType: 'AD_TARGET', entityId: 't-it', proposedAction: { type: 'bid_apply', op: 'setValue', value: 0.87 }, proposedKey: 'bid_apply:setValue:0.87', createdAt: at(4), lastSeenAt: at(4) } }))
+    // Two engine raises on t-it that never reached Amazon (left out): one failed, one the write gate refused in the worker.
+    await inside(() => db().advertisingActionLog.create({ data: { entityType: 'AD_TARGET', entityId: 't-it', actionType: 'AD_BID_UPDATE', userId: 'automation:auto-bid', payloadBefore: { bidCents: 42 }, payloadAfter: { bidCents: 70 }, amazonResponseStatus: 'FAILED', createdAt: at(12) } }))
+    const refused = await inside(() => db().outboundSyncQueue.create({ data: { targetChannel: 'AMAZON', syncType: 'AD_BID_UPDATE', payload: {}, syncStatus: 'SKIPPED', errorCode: 'WRITE_GATE_DENIED' } }))
+    await inside(() => db().advertisingActionLog.create({ data: { entityType: 'AD_TARGET', entityId: 't-it', actionType: 'AD_BID_UPDATE', userId: 'automation:auto-bid', payloadBefore: { bidCents: 42 }, payloadAfter: { bidCents: 75 }, amazonResponseStatus: 'PENDING', outboundQueueId: refused.id, createdAt: at(14) } }))
+    // c-off (Claude: a budget cut): a rank engine's placement move is another lever; an engine's budget cut the same one.
+    await write({ entityType: 'CAMPAIGN', entityId: 'c-off', actionType: 'update_placement_bidding', userId: 'automation:rank-defend-test1', before: { adjustments: [{ placement: 'PLACEMENT_TOP', percentage: 50 }] }, after: { adjustments: [{ placement: 'PLACEMENT_TOP', percentage: 80 }] }, at: at(6) })
+    await write({ entityType: 'CAMPAIGN', entityId: 'c-off', actionType: 'CAMPAIGN_UPDATE', userId: 'automation:budget-pool-rebalance', before: { dailyBudget: 20, status: 'ENABLED' }, after: { dailyBudget: 18, status: 'ENABLED' }, at: at(9) })
     // t-p1 (Claude: raise): an engine cut it (the opposite way); a person raised it.
     await write({ entityType: 'AD_TARGET', entityId: 't-p1', actionType: 'AD_BID_UPDATE', userId: `automation:${ids.rule}`, before: { bidCents: 50 }, after: { bidCents: 45 }, at: at(5) })
     await write({ entityType: 'AD_TARGET', entityId: 't-p1', actionType: 'AD_BID_UPDATE', userId: `user:${ids.person}`, before: { bidCents: 45 }, after: { bidCents: 55 }, at: at(20) })
@@ -298,11 +357,11 @@ describe('W4-5 — the watch week, read back from what the door recorded', { tim
   it('every watched ad step, each item with the value it would have set, its verdict and what a person did', async () => {
     const week = (await runs(person(EVERYTHING))).watchWeek
     expect(week.label).toBe(OBSERVED_LABEL)
-    expect(week.totalSteps).toBe(4)
+    expect(week.totalSteps).toBe(5)
     const step = (approvalId: string) => week.steps.find((s: Answer) => s.approvalId === approvalId)
     expect(step(ids.cut)).toMatchObject({
       step: null, tool: 'set-target-bid', action: 'bid', checkedAt: CHECKED.toISOString(),
-      verdict: { wouldRun: true, check: null, meaning: 'would have run by rule', ruleWhy: null },
+      verdict: { wouldRun: true, check: null, meaning: 'would have run by rule', ruleWhy: null, scope: null },
       request: { status: 'pending', fate: 'waiting', ran: false },
       items: [{ entity: { key: 'target:t-it', kind: 'target', id: 't-it', market: 'IT', currency: 'EUR' }, wanted: { field: 'bid', direction: 'cut', wantedFromCents: 45, wantedToCents: 40 } }],
     })
@@ -311,17 +370,31 @@ describe('W4-5 — the watch week, read back from what the door recorded', { tim
       items: [{ wanted: { direction: 'raise', wantedFromCents: 50, wantedToCents: 60 } }],
     })
     // The plan's watched step: its own step number and preview.
-    expect(step(ids.plan)).toMatchObject({ step: 1, tool: 'set-target-bid', verdict: { wouldRun: false, check: 'scope' }, items: [{ entity: { key: 'target:t-plan' }, wanted: { wantedFromCents: 50, wantedToCents: 45 } }] })
+    expect(step(ids.plan)).toMatchObject({
+      step: 1, tool: 'set-target-bid', verdict: { wouldRun: true, check: null, scope: 'no-run-by-rule' },
+      items: [{ entity: { key: 'target:t-plan' }, wanted: { wantedFromCents: 50, wantedToCents: 45 } }],
+    })
     expect(step(ids.term)).toMatchObject({ tool: 'create-negative-keyword', action: 'negative', request: { fate: 'expired' }, items: [{ entity: { key: TERM_KEY, kind: 'searchTerm', market: 'IT' }, wanted: { field: 'negative', term: 'cheap helmet' } }] })
   })
 
-  it('72 hours: the same way, the opposite way, a person; a write after 72 h does not count; suggestions; a search term\'s negative', async () => {
+  it('72 hours: the same lever the same way or the opposite way, a person; after 72 h, another lever, a write that never reached Amazon: not counted', async () => {
     const week = (await runs(person(EVERYTHING))).watchWeek
     const item = (approvalId: string) => week.steps.find((s: Answer) => s.approvalId === approvalId).items[0].after72h
     const cut = item(ids.cut)
     expect(cut.engine).toBe('same')
+    // The failed and the refused raise are left out (else the engine would read as mixed).
     expect(cut.moves).toEqual([expect.objectContaining({ by: 'engine', who: 'auto bid', what: 'AD_BID_UPDATE', direction: 'cut', relation: 'same' })])
-    expect(cut.suggestions).toEqual([expect.objectContaining({ rule: 'TEST negate wasters', direction: 'cut', relation: 'same' })])
+    expect(week.notes).toContain('2 writes on these entities never reached Amazon (failed, refused by the write gate, skipped or cancelled): left out.')
+    expect(cut.suggestions).toEqual([
+      expect.objectContaining({ rule: 'TEST negate wasters', what: 'bid_down', proposedKey: 'bid_down:10', direction: 'cut', relation: 'same' }),
+      expect.objectContaining({ what: 'bid_apply', proposedKey: 'bid_apply:setValue:0.87', direction: null, relation: 'other' }),
+    ])
+    const budget = item(ids.budget)
+    expect(budget.moves).toEqual([
+      expect.objectContaining({ by: 'engine', what: 'update_placement_bidding', direction: null, relation: 'other' }),
+      expect.objectContaining({ by: 'engine', what: 'CAMPAIGN_UPDATE', direction: 'cut', relation: 'same' }),
+    ])
+    expect(budget.engine).toBe('same')
     const raise = item(ids.raise)
     expect(raise.engine).toBe('opposite')
     expect(raise.moves).toEqual([
@@ -362,12 +435,14 @@ describe('W4-5 — the watch week, read back from what the door recorded', { tim
     const week = (await runs(person(EVERYTHING))).watchWeek
     const bid = week.table.find((r: Answer) => r.action === 'bid')
     expect(bid).toMatchObject({
-      tools: ['set-target-bid'], steps: 3, wouldRun: 1, wouldWait: 2, agreedWithEngine: 1, conflictedWithEngine: 1, heldByLimits: 1,
-      byCheck: { limits: 1, scope: 1 }, suggestedSame: 1, suggestedOpposite: 0, requests: { waiting: 3, approved: 0, declined: 0, expired: 0 },
+      tools: ['set-target-bid'], steps: 3, wouldRun: 2, wouldWait: 1, agreedWithEngine: 1, conflictedWithEngine: 1, heldByLimits: 1, withoutRunByRule: 1,
+      byCheck: { limits: 1 }, suggestedSame: 1, suggestedOpposite: 0, requests: { waiting: 3, approved: 0, declined: 0, expired: 0 },
       outcome: expect.objectContaining({ better: 1, no_data: 2 }),
     })
-    expect(week.table.find((r: Answer) => r.action === 'negative')).toMatchObject({ steps: 1, wouldWait: 1, agreedWithEngine: 1, requests: { expired: 1 }, outcome: expect.objectContaining({ no_sales: 1 }) })
-    expect(week.totals).toMatchObject({ steps: 4, wouldRun: 1, wouldWait: 3, agreedWithEngine: 2, conflictedWithEngine: 1 })
+    // A request recorded before W4-5 kept its old check (the connection's scope) and reads as it was.
+    expect(week.table.find((r: Answer) => r.action === 'negative')).toMatchObject({ steps: 1, wouldWait: 1, byCheck: { scope: 1 }, agreedWithEngine: 1, requests: { expired: 1 }, outcome: expect.objectContaining({ no_sales: 1 }) })
+    expect(week.table.find((r: Answer) => r.action === 'budget')).toMatchObject({ steps: 1, wouldRun: 1, agreedWithEngine: 1, conflictedWithEngine: 0 })
+    expect(week.totals).toMatchObject({ steps: 5, wouldRun: 3, wouldWait: 2, agreedWithEngine: 3, conflictedWithEngine: 1, withoutRunByRule: 1 })
   })
 
   it('without the ad-money permission: the same answer without the amounts (and without the rule\'s own reason)', async () => {
@@ -376,9 +451,12 @@ describe('W4-5 — the watch week, read back from what the door recorded', { tim
     const money = new Set<string>([...WATCH_WEEK_MONEY, ...Object.keys(RESTRICTED_FIELDS)])
     expect(plain).toEqual(JSON.parse(JSON.stringify(full, (key, value) => (key && money.has(key) ? undefined : value))))
     const text = JSON.stringify(plain)
-    for (const key of ['wantedFromCents', 'wantedToCents', 'spendCents', 'salesCents', '"acos"', 'ruleWhy']) expect(text).not.toContain(key)
+    for (const key of ['wantedFromCents', 'wantedToCents', 'spendCents', 'salesCents', '"acos"', 'ruleWhy', 'proposedKey']) expect(text).not.toContain(key)
+    // The seeded amounts never reach this person: the suggestion's set value, the limit's reason.
+    expect(text).not.toContain('0.87')
+    expect(plain.steps.find((s: Answer) => s.approvalId === ids.cut).items[0].after72h.suggestions.map((x: Answer) => x.what)).toEqual(['bid_down', 'bid_apply'])
     const raise = plain.steps.find((s: Answer) => s.approvalId === ids.raise)
-    expect(raise.verdict).toEqual({ wouldRun: false, check: 'limits', meaning: 'would have waited for a person — outside the kind\'s limits' })
+    expect(raise.verdict).toEqual({ wouldRun: false, check: 'limits', meaning: 'would have waited for a person — outside the kind\'s limits', scope: null })
     expect(raise.items[0].wanted).toEqual({ field: 'bid', direction: 'raise' })
     // Clicks and orders are not money.
     expect(plain.steps.find((s: Answer) => s.approvalId === ids.cut).items[0].observed.windows[0].entity.before).toEqual({ clicks: 9, orders: 3 })
@@ -417,7 +495,8 @@ describe('W4-5 — the day\'s e-mail carries the table while watch mode is on', 
     expect(message.html).toContain('Watch week so far (last 7 days)')
     expect(message.html).toContain(OBSERVED_LABEL)
     expect(message.html).toContain('Would run by rule')
-    expect(message.text).toMatch(/bid: would run 1, would wait 2, agreed with an engine 1, conflicted 1, held by limits 1; outcome 1 better/)
+    expect(message.text).toMatch(/bid: would run 2, would wait 1, agreed with an engine 1, conflicted 1, held by limits 1; outcome 1 better/)
+    expect(message.text).toContain('One step was asked on a connection without "run by rule": judged as if it had it.')
     // Counts only: no amount.
     expect(message.html).not.toMatch(/EUR|€/)
   })
