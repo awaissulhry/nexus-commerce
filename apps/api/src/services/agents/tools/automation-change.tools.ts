@@ -32,6 +32,7 @@ import type { StoredReach } from './ads-change-kit.js'
 import { SUGGESTION_LIMITS, suggestionLimitFacts, suggestionRefusal } from './suggestion-limits.js'
 import { SAVE_RULE_LIMITS, TUNE_LIMITS, TURN_UP_LIMITS, automationFacts, ruleSaveFacts, ruleSaveRefusal, tuneRefusal, turnUpRefusal } from './automation-limits.js'
 import { automationScope, tuneScope } from '../../advertising/ads-strategy/automation-scope.js'
+import { CAMPAIGN_GUARDRAIL_KINDS, isCampaignKind } from '../../advertising/ads-guardrail-change.service.js'
 
 const ID = z.string().trim().min(1).max(64)
 const JSON_OBJECT = z.record(z.string().max(64), z.unknown())
@@ -306,6 +307,8 @@ type DecideKind = 'amazon-ads' | 'ebay-ads'
  * approval: every write of its applies carries it) and the negatives its applies created, for undo-ad-change.
  */
 interface DecisionChange { kind: DecideKind; items: Array<{ id: string; status: string }>; changeSetId?: string; negatives?: Array<{ targetId: string }> }
+/** W3-1 — what an Amazon batch's applies wrote (before.actionLogIds): its undo reverses only them, not a plan's siblings. */
+interface DecisionBefore { kind: DecideKind; items: Array<{ id: string; status: string }>; actionLogIds?: string[] }
 
 /** The permission each Amazon suggestion family needs, on top of the tool's own (null when held). */
 function familyPermission(ctx: ToolContext) {
@@ -348,11 +351,13 @@ export const DECIDE_UNDO: ToolUndo = {
     if (after.kind === 'ebay-ads') return { refusal: 'An eBay proposal once decided cannot be put back: a rejected one is raised again by its rule; an applied one is rolled back in Nexus.' }
     if (!applied.length) return { tool: 'decide-automation-suggestions', args: { kind: after.kind, decisions: after.items.map((i) => ({ suggestionId: i.id, decide: 'restore' })) } }
     if (!after.changeSetId) return { refusal: `${applied.length} of these suggestions were applied: what they changed at Amazon is undone from the Change Log in Nexus.` }
+    // W3-1 — a batch that recorded its own writes is named by its id: in a change plan every step shares the plan's set.
+    const own = change.id && Array.isArray((change.before as DecisionBefore | null)?.actionLogIds)
     const dismissed = after.items.filter((i) => i.status === 'dismissed').length
     if (dismissed) {
       return { refusal: `${applied.length} of these suggestions were applied and ${dismissed} dismissed: put the applied ones back with undo-ad-change (changeSetId ${after.changeSetId}), and restore the dismissed ones with decide-automation-suggestions (decide: restore).` }
     }
-    return { tool: 'undo-ad-change', args: { changeSetId: after.changeSetId, why: 'undo of applied rule suggestions' } }
+    return { tool: 'undo-ad-change', args: { changeSetId: after.changeSetId, ...(own ? { changeId: change.id } : {}), why: 'undo of applied rule suggestions' } }
   },
 }
 
@@ -421,6 +426,7 @@ const decideSuggestions: AgentTool = {
     const kind = args.kind as DecideKind
     let results: Array<{ suggestionId: string; ok: boolean; status: string; detail: string | null; skipped?: true }>
     let set: Pick<DecisionChange, 'changeSetId' | 'negatives'> | null = null
+    let actionLogIds: string[] | null = null
     if (kind === 'ebay-ads') {
       const crud = await import('../../marketing/ebay-ads-rule-crud.service.js')
       const planned = await crud.planEbayProposalDecisions(decisions)
@@ -436,12 +442,19 @@ const decideSuggestions: AgentTool = {
       const byRule = ctx.decidedVia === 'auto'
       const approvalId = ctx.approvalId?.trim()
       const who = byRule ? 'run by rule' : ctx.userId ? `approved by user:${ctx.userId}` : 'approved'
+      // W3-1 — the writes of the change set before and after the applies: the difference is this batch's own (a plan's
+      // steps run one after another, so no sibling writes meanwhile).
+      const { writesOfChangeSet } = await import('../../advertising/rollback.service.js')
+      const earlier = approvalId ? new Set(await writesOfChangeSet(approvalId)) : null
       const out = await svc.applySuggestionDecisions(decisions, ctx.userId ?? null, {
         operatorApproved: !byRule,
         ...(approvalId ? { approval: { changeSetId: approvalId, reason: `${ctx.via === 'claude' ? 'Claude request' : 'Approved request'} ${approvalId} (${who})` } } : {}),
       })
       results = out.results
-      if (approvalId) set = { changeSetId: approvalId, negatives: out.negatives.map((targetId) => ({ targetId })) }
+      if (approvalId) {
+        set = { changeSetId: approvalId, negatives: out.negatives.map((targetId) => ({ targetId })) }
+        actionLogIds = (await writesOfChangeSet(approvalId)).filter((id) => !earlier!.has(id))
+      }
     }
     const before = kind === 'ebay-ads' ? 'PENDING' : 'pending'
     // A batch is recorded when any decision went through: those changed something, and undo must know them.
@@ -451,7 +464,7 @@ const decideSuggestions: AgentTool = {
       // AA-W2-10 — a suggestion its rule passed over is said as skipped (with why), never as decided.
       data: { results, decided: results.filter((r) => r.ok).length, refused: results.filter((r) => !r.ok && !r.skipped).length, skipped: results.filter((r) => r.skipped).length, ...(set ? { changeSetId: set.changeSetId } : {}) },
       change: {
-        before: { kind, items: decisions.map((d) => ({ id: d.suggestionId, status: d.decide === 'restore' ? 'dismissed' : before })) },
+        before: { kind, items: decisions.map((d) => ({ id: d.suggestionId, status: d.decide === 'restore' ? 'dismissed' : before })), ...(actionLogIds ? { actionLogIds } : {}) },
         after: { kind, items: results.map((r) => ({ id: r.suggestionId, status: r.status })), ...(set ?? {}) },
       },
     }
@@ -607,9 +620,16 @@ export const GUARDRAIL_UNDO: ToolUndo = {
     const before = change.before as GuardrailChange
     const key = Object.fromEntries(Object.entries(before.key).filter(([, v]) => v != null))
     if (!before.row) return { tool: 'set-ad-guardrail', args: { kind: before.kind, op: 'remove', ...key } }
-    const row = Object.fromEntries(Object.entries(before.row).filter(([k, v]) => v != null || ['dailyCapCents', 'minBidCents', 'maxBidCents'].includes(k)))
+    // W3-2 — a campaign's own guardrail keeps every value, a cleared one (null) too: the undo sets the kind back whole.
+    const campaignKind = isCampaignKind(before.kind)
+    const row = Object.fromEntries(Object.entries(before.row).filter(([k, v]) => v != null || campaignKind || ['dailyCapCents', 'minBidCents', 'maxBidCents'].includes(k)))
     return { tool: 'set-ad-guardrail', args: { kind: before.kind, op: 'set', ...key, ...row } }
   },
+}
+
+/** W3-2 — a campaign's own guardrail is set where its screens set it: those routes need ads.campaigns.manage. */
+function campaignGuardrailPermitted(ctx: ToolContext, kind: unknown): string | null {
+  return isCampaignKind(String(kind)) && !ctx.can(F.adsCampaignsManage) ? `Setting a campaign's ${String(kind)} needs the ${F.adsCampaignsManage} permission.` : null
 }
 
 const setAdGuardrail: AgentTool = {
@@ -619,14 +639,27 @@ const setAdGuardrail: AgentTool = {
   description:
     'Set or remove a guardrail Nexus\'s Amazon ads write gate checks before a Nexus write reaches Amazon (the external ' +
     'bidding engine writes to Amazon itself and does not pass this gate): a spend ceiling (kind spend-ceiling, at campaign, ' +
-    'product line, portfolio or market grain), a bid policy (bid-policy: min / max bid at line, portfolio or market grain), or ' +
-    'a protected term no rule may negate (protected-term). A spend ceiling caps the daily budget INCREASES authorised in its ' +
-    'scope: a budget raise that would take today\'s raises past it is refused, a budget cut never trips it, and it does not ' +
-    'cap what Amazon actually spends, bid raises or placement raises. Waits for a person to approve it in Nexus, unless the ' +
-    'business lets Claude run it by its rule inside its limits. Each change is judged: tightening (a new or lower ceiling, ' +
-    'a new or lower bid ceiling, a new protected term) may run inside those limits; loosening (a higher cap, a cleared or ' +
-    'removed guardrail, a higher bid ceiling, a bid floor that forces bids up) waits for a person unless the business\'s ' +
-    'limits let Claude loosen guardrails (never by default). The write gate applies it at its next decision.',
+    'product line, portfolio or market grain), a bid policy (bid-policy: min / max bid at line, portfolio or market grain), ' +
+    'a protected term no rule may negate (protected-term), or one campaign\'s own guardrails (campaignId): its lowest and ' +
+    'highest bid (campaign-bid-bounds), its lowest and highest daily budget and the baseline relative budget rules start ' +
+    'from (campaign-budget-bounds), the most one change may move a keyword or target bid (bid-change-cap; an ad group\'s ' +
+    'default bid is not stepped), its CPC ceiling (cpc-ceiling: ' +
+    'a bid asked for on the bid screens or by Claude\'s bid tools held to a multiple of a target\'s average cost per click; ' +
+    'the engines do not read it), ' +
+    'or its pins (pin: bids, budget or placement adjustments no engine, rule or schedule may write). Nexus only: nothing is ' +
+    'sent to Amazon. A campaign\'s own bid bound takes the place of a bid policy on its side (it can be looser), and the ' +
+    'ads strategy\'s band binds beside it, the stricter winning: a campaign guardrail never widens the strategy, and a bid ' +
+    'bound is judged on the bounds in force before and after (the preview names what binds after the change). A ' +
+    'spend ceiling caps the daily budget INCREASES authorised in its scope: a budget raise that would take today\'s raises ' +
+    'past it is refused, a budget cut never trips it, and it does not cap what Amazon actually spends, bid raises or ' +
+    'placement raises. Waits for a person to approve it in Nexus, unless the business lets Claude run it by its rule inside ' +
+    'its limits (a campaign\'s own guardrail: only in the markets or campaigns those limits list, none by default). Each ' +
+    'change is judged: tightening (a new or lower ceiling, a new or lower bid ceiling, a new protected term, a lower ' +
+    'largest bid change, a CPC ceiling switched on or lowered) may run inside those limits; loosening (a higher cap, a ' +
+    'cleared or removed guardrail, a higher bid or budget ceiling in force, a bid or budget floor that holds spend up, a ' +
+    'baseline that anchors budget rules higher, a CPC ceiling raised or off, a pin set or lifted — a pin stops cuts too) ' +
+    'can add spend and waits for a person unless the business\'s limits let Claude loosen guardrails (never by default). ' +
+    'The write gate applies it at its next decision.',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -634,36 +667,63 @@ const setAdGuardrail: AgentTool = {
   requires: [F.adsAutomationManage, F.adsBidsEdit, F.adsBudgetsEdit, FIELDS.financialsAdspendView],
   reversibility: 'full',
   maxClaudeTrust: 'auto',
-  limits: z.object({ allowLoosen: z.boolean().default(false).describe('let Claude loosen a guardrail without a person (it can raise spend); never by default') }),
+  limits: z.object({
+    allowLoosen: z.boolean().default(false).describe('let Claude loosen a guardrail without a person (it can raise spend); never by default'),
+    // W3-2 — a campaign's own guardrail runs by rule only where these list it (either list); empty = nowhere.
+    markets: z.array(z.string().trim().toUpperCase().min(2).max(20)).max(50).default([])
+      .describe('a campaign\'s own guardrail: the markets (e.g. IT) where it may change without a person; empty = none'),
+    campaignIds: z.array(ID).max(250).default([])
+      .describe('a campaign\'s own guardrail: the campaigns (Nexus ids) where it may change without a person, beside the markets; empty = none'),
+  }),
   withinLimits(preview, limits) {
-    const p = preview as { direction?: string; why?: string } | null
+    const p = preview as { kind?: string; direction?: string; why?: string; market?: string | null; campaignId?: string } | null
     if (!p?.direction) return 'there is no preview of this guardrail change to check'
+    if (p.kind && isCampaignKind(p.kind)) {
+      const markets = (limits.markets as string[] | undefined) ?? []
+      const campaigns = (limits.campaignIds as string[] | undefined) ?? []
+      const listed = (!!p.market && markets.includes(p.market)) || (!!p.campaignId && campaigns.includes(p.campaignId))
+      const named = [...markets, ...campaigns.map((id) => `campaign ${id}`)]
+      if (!listed) return `a campaign's own guardrail changes by rule only in the markets or campaigns this business lists (${named.length ? named.slice(0, 10).join(', ') + (named.length > 10 ? ', …' : '') : 'none listed'}); this one is ${p.market ? `in ${p.market}` : 'in no market'}: a person decides`
+    }
     return p.direction === 'loosen' && !limits.allowLoosen ? `loosening a guardrail can raise spend (${p.why}): a person decides` : null
   },
   undo: GUARDRAIL_UNDO,
   input: z.object({
-    kind: z.enum(['spend-ceiling', 'bid-policy', 'protected-term']).describe('spend-ceiling, bid-policy or protected-term'),
-    op: z.enum(['set', 'remove']).describe('set (create or change) or remove'),
+    kind: z.enum(['spend-ceiling', 'bid-policy', 'protected-term', ...CAMPAIGN_GUARDRAIL_KINDS])
+      .describe('spend-ceiling, bid-policy or protected-term; or a campaign\'s own: campaign-bid-bounds, campaign-budget-bounds, bid-change-cap, cpc-ceiling or pin'),
+    op: z.enum(['set', 'remove']).describe('set (create or change) or remove (a campaign kind: clear it — no bounds, no largest change, CPC ceiling off, every pin lifted)'),
     grain: z.enum(['CAMPAIGN', 'LINE', 'PORTFOLIO', 'MARKET']).optional().describe('spend-ceiling / bid-policy: what it binds (a spend ceiling: CAMPAIGN unless named; a bid policy: LINE, PORTFOLIO or MARKET)'),
-    scopeId: ID.optional().describe('the campaign id, product line (parent product) id, portfolio id or market code it binds'),
-    label: z.string().trim().min(1).max(120).optional().describe('a name for it (default: the scope\'s name)'),
+    scopeId: ID.optional().describe('spend-ceiling / bid-policy: the campaign id, product line (parent product) id, portfolio id or market code it binds'),
+    label: z.string().trim().min(1).max(120).optional().describe('spend-ceiling / bid-policy: a name for it (default: the scope\'s name)'),
     dailyCapCents: COUNT.nullable().optional().describe('spend-ceiling: the daily cap in euro cents; null = opened but not set'),
-    minBidCents: COUNT.nullable().optional().describe('bid-policy: the lowest bid, in cents (at least 2), or null'),
-    maxBidCents: COUNT.nullable().optional().describe('bid-policy: the highest bid, in cents, or null'),
-    enabled: z.boolean().optional().describe('switch it on or off (off loosens)'),
-    note: z.string().max(300).nullable().optional().describe('why, kept on the row'),
+    minBidCents: COUNT.nullable().optional().describe('bid-policy (at least 2) or campaign-bid-bounds: the lowest bid, in cents of the campaign\'s currency; null clears it'),
+    maxBidCents: COUNT.nullable().optional().describe('bid-policy or campaign-bid-bounds: the highest bid, in cents of the campaign\'s currency; null clears it'),
+    minBudgetCents: COUNT.nullable().optional().describe('campaign-budget-bounds: the lowest daily budget, in cents of the campaign\'s currency (at least 100); null clears it'),
+    maxBudgetCents: COUNT.nullable().optional().describe('campaign-budget-bounds: the highest daily budget, in cents (at least 100); null clears it'),
+    budgetBaselineCents: COUNT.nullable().optional().describe('campaign-budget-bounds: the daily budget relative budget rules and a restore to baseline start from, in cents (at least 100); null clears it'),
+    maxBidChangePct: z.coerce.number().gt(0).max(500).nullable().optional().describe('bid-change-cap: the most one change may move a keyword or target bid, in % (above 0, at most 500; a decimal as the screens store it); null clears it'),
+    cpcMultiple: z.coerce.number().min(1).max(10).optional().describe('cpc-ceiling: the multiple of a target\'s average cost per click a bid may reach (1–10; kept as it is when not given, 1.5 at first)'),
+    enabled: z.boolean().optional().describe('spend-ceiling / bid-policy: switch it on or off (off loosens); cpc-ceiling: on (the default when set) or off'),
+    note: z.string().max(300).nullable().optional().describe('why, kept on the row (pin: on the campaign, at most 280 characters)'),
+    pinBids: z.boolean().optional().describe('pin: true pins the campaign\'s bids (no engine, rule or schedule writes them), false lifts the pin'),
+    pinBudget: z.boolean().optional().describe('pin: true pins its daily budget, false lifts the pin'),
+    pinPlacement: z.boolean().optional().describe('pin: true pins its placement adjustments, false lifts the pin'),
     term: z.string().trim().min(1).max(200).optional().describe('protected-term: the term no rule may negate'),
     matchType: z.enum(['EXACT', 'PREFIX', 'CONTAINS']).optional().describe('protected-term: how the term matches (default EXACT)'),
     marketplace: z.string().trim().min(1).max(20).optional().describe('protected-term: only in this market'),
-    campaignId: ID.optional().describe('protected-term: only in this campaign'),
+    campaignId: ID.optional().describe('a campaign kind: the campaign (its Nexus id, from ad-campaigns); protected-term: only in this campaign'),
   }),
-  async handler(args) {
+  async handler(args, ctx) {
+    const denied = campaignGuardrailPermitted(ctx, args.kind)
+    if (denied) return { ok: false, error: denied }
     const { planGuardrail } = await import('../../advertising/ads-guardrail-change.service.js')
     const planned = await planGuardrail(args as never)
     if ('error' in planned) return { ok: false, error: planned.error }
     return { ok: true, preview: planned.plan }
   },
   async execute(args, ctx) {
+    const denied = campaignGuardrailPermitted(ctx, args.kind)
+    if (denied) return { ok: false, error: denied }
     const { applyGuardrail } = await import('../../advertising/ads-guardrail-change.service.js')
     const out = await applyGuardrail(args as never, ctx.userId ?? null)
     if ('error' in out) return { ok: false, error: out.error }

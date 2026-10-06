@@ -120,6 +120,11 @@ export interface PreviewConvention {
 export interface ToolChange {
   before: unknown
   after: unknown
+  /**
+   * ADS AUTONOMY W3-1 — the recorded change (AgentChange id), when an undo is built from one: an undo may name it to put
+   * back only what THAT change did (one step of a change plan, whose writes share the plan's change set).
+   */
+  id?: string
 }
 
 /** C2 — a call of a registered tool, e.g. the request that puts a change back. */
@@ -154,6 +159,12 @@ export interface ToolUndo {
   current: (change: ToolChange) => Promise<unknown>
   /** The request that puts `change.before` back, or why it cannot be put back. Pure: no reads, no writes. */
   request: (change: ToolChange) => ToolRequest | { refusal: string }
+  /**
+   * ADS AUTONOMY W3-1 — optional: after the change was put back (its undo ran), tidy what it left outside its own rows
+   * (the recommendations it settled come back at once). Called once per undone change; a failure is logged, never a
+   * failed undo.
+   */
+  undone?: (change: ToolChange) => Promise<void>
 }
 
 export interface ToolContext {
@@ -224,6 +235,11 @@ export interface ToolResult {
    * and schedules it; nothing else can.
    */
   confirm?: { approvalId: string; planHash: string; code: string }
+  /**
+   * W4-1 — a journal tool's dry run only: this call is a journal entry (AgentTool.journal), so Claude's door runs it at
+   * once. Without it, a call of a journal tool is a request like any change (report-ads-run's withdraw).
+   */
+  journal?: true
 }
 
 export interface AgentTool {
@@ -298,6 +314,17 @@ export interface AgentTool {
    * the tool it names, with that tool's own permissions, approval and trust level. It has no `execute`.
    */
   control?: boolean
+  /**
+   * ADS AUTONOMY W4-1 (lead decision 2026-10-06) — a journal tool: Claude's own record in Nexus of work it did (a run
+   * record, a bell notice, at most a capped e-mail), never a change of the business — no product, listing, price, stock,
+   * ad, order or setting. A call its dry run marks as a journal entry (ToolResult.journal) runs at once after it
+   * (`execute`, approval-gate.service.ts `runJournal`), never stored as a request: for any connection with the write
+   * scope, also without nexus.run and during a Pause, as there is nothing for a person to approve. Any other call of it
+   * (report-ads-run's withdraw) is a request a person approves, as any change. Turned off for Claude (level off) it is
+   * refused like any tool. An exact list holds the class (tool-contract.vitest.test.ts JOURNAL_TOOLS): closed world,
+   * ceiling ask (offered or not), never alwaysAsk.
+   */
+  journal?: true
   /**
    * C1 — every change tool: the most Claude may ever do with it without a person in Nexus. Floors:
    * `none` (irreversible) is `ask` at most, unless it is a strategy-bound tool whose default limits run nothing alone

@@ -33,9 +33,10 @@ import type { ResolvedField, StrategyRow } from './resolve.js'
 
 /**
  * Brakes are never narrowed, whatever a strategy says: stopping automation, turning one down, a guardrail (it holds
- * the tightening). None is in CLAUDE_ACTION_TOOLS; this list holds the line if one ever were (fields.vitest.test.ts).
+ * the tightening), cancelling a queued ad write before it is sent (W3-2). None is in CLAUDE_ACTION_TOOLS; this list
+ * holds the line if one ever were (fields.vitest.test.ts).
  */
-export const BRAKE_TOOLS = ['stop-automation', 'turn-down-automation', 'set-ad-guardrail'] as const
+export const BRAKE_TOOLS = ['stop-automation', 'turn-down-automation', 'set-ad-guardrail', 'cancel-queued-ad-write'] as const
 
 const ACTION_OF: ReadonlyMap<string, ClaudeActionType> = new Map(
   Object.entries(CLAUDE_ACTION_TOOLS).flatMap(([action, tools]) => tools.map((tool) => [tool, action as ClaudeActionType] as const)),
@@ -272,6 +273,9 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'pause-ads': byStatusArgs,
   'enable-ads': byStatusArgs,
   'archive-ads': byStatusArgs,
+  // W3-3 — a stock lowering and its give-back: each ad group and campaign it names.
+  'lower-ad-bids-for-stock': byStatusArgs,
+  'restore-ad-bids-after-stock': byStatusArgs,
   // AA-W2-11 — an ads automation, where it acts: its products (through its campaigns), else its market.
   'turn-up-automation': async (place, args) => placeAutomation(place, await automationScope(String(args.automation ?? ''), str(args.rowId))),
   'tune-ad-engine': async (place, args) => {

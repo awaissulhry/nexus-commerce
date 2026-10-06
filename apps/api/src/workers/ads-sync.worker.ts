@@ -471,10 +471,18 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
 
   // The claim above already moved the typed rows to IN_FLIGHT — that IS the
   // exclusion token, so settling again here would be a redundant write.
-  await prisma.outboundSyncQueue.update({
-    where: { id: queueId },
+  // W3-2 — the row itself is taken with a compare-and-set: a cancel (the staged tray, cancel-queued-ad-write) that
+  // landed after the read above moved it to CANCELLED and put Nexus's copy back; an unconditional update here sent it
+  // anyway. cancelPendingMutation cancels with the same compare-and-set, so exactly one of the two wins.
+  const taken = await prisma.outboundSyncQueue.updateMany({
+    where: { id: queueId, syncStatus: 'PENDING' },
     data: { syncStatus: 'IN_PROGRESS' },
   })
+  if (taken.count === 0) {
+    const now = await prisma.outboundSyncQueue.findUnique({ where: { id: queueId }, select: { syncStatus: true } })
+    logger.info('[ads-sync.worker] not sent — the row changed before it was taken', { queueId, status: now?.syncStatus ?? null })
+    return { status: now?.syncStatus === 'CANCELLED' ? 'CANCELLED' : 'SKIPPED', queueId }
+  }
 
   // AX-ZD.1f — dispatch from the typed rows, which are now authoritative. The
   // JSON blob remains the fallback for rows enqueued before ZD.1, which have no

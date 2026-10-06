@@ -21,6 +21,8 @@
  *         kind of ad action the ads strategy narrows; such a kind of ad action runs by rule only strategy-bound;
  *      7c an irreversible one is `ask` at most, unless it is strategy-bound, on IRREVERSIBLE_AUTO, and its DEFAULT
  *         limits refuse a sample preview that is inside the strategy (by default nothing permanent runs alone).
+ *      7d ADS AUTONOMY W4-1 — a journal tool (runs at once, no approval: Claude's own record, no change of the business)
+ *         is on JOURNAL_TOOLS, closed world, offered or not (ceiling ask), never alwaysAsk, strategy-bound or limited.
  *
  * Each rule is also run against a tool built to break it, so a check that cannot fail is caught here.
  */
@@ -64,6 +66,8 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   'pause-ads', 'enable-ads',
   // AA-W2-13 — an archive (irreversible: also on IRREVERSIBLE_AUTO), and a new campaign (D-W2-6: its own kind).
   'archive-ads', 'create-ad-campaign',
+  // W3-3 — giving an ad group's bids back once its stock returns (it adds spend).
+  'restore-ad-bids-after-stock',
 ]
 
 /**
@@ -115,12 +119,22 @@ const ALWAYS_ASK_ABOVE_ASK: Readonly<Record<string, string>> = {
   'void-shipping-label': '07 O8 — confirm in Claude at most',
 }
 
+/**
+ * W4-1 (lead decision 2026-10-06) — the journal tools: Claude's door runs them at once, never as a request a person
+ * approves, so each must change nothing of the business. Exact: a new name is a reviewed change, and no other tool may
+ * carry the flag (rule 7d and the exact-list test below).
+ */
+const JOURNAL_TOOLS: readonly string[] = [
+  'report-ads-run', // the daily Claude ads run's own record, its bell notice and at most one e-mail a day
+]
+
 interface ContractLists {
   adStrategyAuto: readonly string[]
   irreversibleAuto: Readonly<Record<string, unknown>>
   alwaysAskAboveAsk: Readonly<Record<string, string>>
+  journal: readonly string[]
 }
-const LISTS: ContractLists = { adStrategyAuto: AD_STRATEGY_AUTO, irreversibleAuto: IRREVERSIBLE_AUTO, alwaysAskAboveAsk: ALWAYS_ASK_ABOVE_ASK }
+const LISTS: ContractLists = { adStrategyAuto: AD_STRATEGY_AUTO, irreversibleAuto: IRREVERSIBLE_AUTO, alwaysAskAboveAsk: ALWAYS_ASK_ABOVE_ASK, journal: JOURNAL_TOOLS }
 
 /** 7b — a preview with everything but the strategy's facts: a strategy-bound tool never lets it run alone. */
 const WITHOUT_FACTS = { summary: 'A change whose preview carries no limitFacts.' }
@@ -220,7 +234,7 @@ function contractProblems(tool: AgentTool, material: Record<string, string[]> = 
   // 4 — honest flags
   if (tool.readOnly) {
     if (tool.execute) bad(4, 'a read tool cannot execute')
-    if (tool.reversibility || tool.maxClaudeTrust || tool.limits || tool.withinLimits || tool.undo) {
+    if (tool.reversibility || tool.maxClaudeTrust || tool.limits || tool.withinLimits || tool.undo || tool.journal) {
       bad(4, 'a read tool carries no change contract')
     }
   } else if (typeof tool.openWorld !== 'boolean') bad(4, 'a change tool must state openWorld (true when it reaches a marketplace or a buyer)')
@@ -263,6 +277,13 @@ function contractProblems(tool: AgentTool, material: Record<string, string[]> = 
     // … and a kind of ad action the strategy narrows runs by rule only strategy-bound.
     if (ceiling === 'auto' && actionOfTool(tool.name) && !tool.strategyBound) {
       bad('7b', 'a kind of ad action the ads strategy narrows may run by rule only when strategy-bound')
+    }
+    // 7d — a journal (W4-1): it runs at once, so it is a reviewed name that reaches no one and is offered or not.
+    if (tool.journal) {
+      if (!lists.journal.includes(tool.name)) bad('7d', 'a journal tool is on JOURNAL_TOOLS')
+      if (tool.openWorld !== false) bad('7d', 'a journal tool reaches no one outside Nexus')
+      if (tool.maxClaudeTrust !== 'ask') bad('7d', 'a journal tool is offered or not: ceiling ask')
+      if (tool.alwaysAsk || tool.strategyBound || tool.limits || tool.control) bad('7d', 'a journal tool is never alwaysAsk, strategy-bound, limited or a control tool')
     }
     if (!!tool.limits !== !!tool.withinLimits) bad(7, 'limits and withinLimits come together')
     // A control tool is judged at the level of the tool it asks for (C5), so it carries no limits of its own.
@@ -374,6 +395,15 @@ describe('C1 — every registered tool keeps the contract', () => {
       'enable-ads': { before: { changeSetId: 'ap1', items: [{ level: 'target', id: 't1', status: 'PAUSED' }] }, after: { items: [{ level: 'target', id: 't1', status: 'ENABLED' }] } },
       // AA-W2-13 — a created campaign is put back (in part) by archiving it.
       'create-ad-campaign': { before: { campaignId: null }, after: { campaignId: 'c9', name: 'Test launch', market: 'IT' } },
+      // W3-3 — a stock lowering is undone by a give-back (even while stock is short), a give-back by a lowering.
+      'lower-ad-bids-for-stock': {
+        before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 50, toCents: 40 }] },
+        after: { adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], stepAdGroupIds: ['g2'], steps: [{ kind: 'target', id: 't1', cents: 40 }] },
+      },
+      'restore-ad-bids-after-stock': {
+        before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 40, toCents: 50 }] },
+        after: { adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ kind: 'target', id: 't1', cents: 50 }] },
+      },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },
@@ -433,6 +463,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       'resume-automation': { before: { area: 'amazon-ads', halted: true }, after: { area: 'amazon-ads', halted: false } },
       // R13 — a raised ceiling: undo sets it back.
       'set-ad-guardrail': { before: { kind: 'spend-ceiling', key: { grain: 'MARKET', scopeId: 'IT' }, row: { label: 'Italy', dailyCapCents: 5000, enabled: true, note: null } }, after: { kind: 'spend-ceiling', key: { grain: 'MARKET', scopeId: 'IT' }, row: { label: 'Italy', dailyCapCents: 9000, enabled: true, note: null } } },
+      // Ads autonomy W3-2 — a cancel of all of one Claude request: undo asks for that request again, through its own tool.
+      'cancel-queued-ad-write': {
+        before: { writes: [{ queueId: 'q1', label: 'keyword "test" (campaign "Test")' }], request: { approvalId: 'ap1', tool: 'set-target-bid', args: { targetId: 't1', proposedBidCents: 40, why: 'test' } } },
+        after: { cancelled: ['q1'] },
+      },
       // Ads autonomy W1-3 — a strategy change: undo writes the previous version back (with its terms and campaign targets).
       'set-ads-strategy': {
         before: { channel: 'AMAZON', market: 'IT', level: 'MARKET', scopeId: '*', version: 2, values: { maxBidCents: 150, targetKind: 'ACOS', targetPct: 30, claudeAutonomy: { bid: 'ask' } }, terms: { 'test term': false }, campaignTargets: { c1: 0.25 } },
@@ -465,6 +500,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       },
       // R11 — dismissed suggestions: undo restores them.
       'decide-automation-suggestions': { before: { kind: 'amazon-ads', items: [{ id: 's1', status: 'pending' }] }, after: { kind: 'amazon-ads', items: [{ id: 's1', status: 'dismissed' }] } },
+      // Ads autonomy W3-1 — a mute is put back by an unmute of the same recommendations.
+      'mute-ad-recommendations': { before: { op: 'mute', items: [{ id: 'bid:t1', state: 'shown' }] }, after: { op: 'mute', items: [{ id: 'bid:t1', state: 'muted' }] } },
       // R9 — an edit of a rule: undo saves the rule as it was.
       'save-ad-rule': {
         before: { kind: 'amazon-ads', ruleId: 'r1', name: 'Rule', description: null, trigger: 'KEYWORD_HIGH_ACOS', conditions: [{ field: 'adTarget.acos', op: 'gt', value: 0.6 }], actions: [{ type: 'bid_down', percent: 5 }], scope: { marketplace: 'IT' }, caps: { maxExecutionsPerDay: 5, maxWritesPerDay: 5, maxValueCentsEur: 100, maxDailyAdSpendCentsEur: null } },
@@ -547,6 +584,8 @@ describe('C1 — every registered tool keeps the contract', () => {
         after: { kind: 'sale', productId: 'p1', sale: [{ rowId: 'r1', coordinateKey: 'AMAZON:IT', value: 8, start: '2026-11-01', end: '2026-11-30' }] } },
       // MCP full control P9 — an import; its undo re-imports the "before" record (rollback-bulk-operation).
       'import-catalog': { before: { jobId: 'j1', file: 'claude-import.csv', records: 2 }, after: { jobId: 'j1', changedSince: [] } },
+      // ADS AUTONOMY W4-1 — a run report: its bell notice is taken back and the run withdrawn (op withdraw).
+      'report-ads-run': { before: { runId: 'r1', status: 'running', withdrawn: false }, after: { runId: 'r1', status: 'done', withdrawn: false } },
     }
     const withUndo = listTools().filter((t) => t.undo)
     expect(withUndo.map((t) => t.name).sort()).toEqual(Object.keys(sample).sort())
@@ -571,6 +610,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-ebay-ad-rates', 'set-ebay-campaign-budget']) {
       expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
     }
+  })
+
+  it('W4-1 — the journal tools are exactly JOURNAL_TOOLS: no other tool runs at once without a request', () => {
+    expect(listTools().filter((tool) => tool.journal).map((tool) => tool.name).sort()).toEqual([...JOURNAL_TOOLS].sort())
+    for (const name of JOURNAL_TOOLS) expect(listTools().find((tool) => tool.name === name)?.execute, name).toBeTypeOf('function')
   })
 
   it('AA-W2-1 — the lists are exact: each entry is a registered tool that still needs to be on it', () => {
@@ -639,6 +683,8 @@ describe('C1 — each rule can fail', () => {
 
   it('a well-made tool passes', () => {
     expect(problemsOf({})).toEqual([])
+    // W4-1 — and as a journal, on the list.
+    expect(problemsOf({ journal: true }, { journal: ['set-example'] })).toEqual([])
   })
 
   it('AA-W2-1 — a well-made strategy-bound ad tool passes, alwaysAsk and above ask, on AD_STRATEGY_AUTO', () => {
@@ -703,6 +749,12 @@ describe('C1 — each rule can fail', () => {
     [{ ...bound, reversibility: 'none' }, onList, 'rule 7: an irreversible change is ask at most'],
     [{ ...bound, reversibility: 'none', strategyBound: undefined }, { ...onList, irreversibleAuto: { 'set-target-bid': {} } }, 'rule 7c: an irreversible change above ask must be strategy-bound'],
     [{ ...bound, reversibility: 'none' }, { ...onList, irreversibleAuto: { 'set-target-bid': { limitFacts: {} } } }, 'rule 7c: an irreversible change above ask must be refused by its default limits'],
+    // W4-1 — rule 7d.
+    [{ journal: true }, {}, 'rule 7d: a journal tool is on JOURNAL_TOOLS'],
+    [{ journal: true, openWorld: true }, { journal: ['set-example'] }, 'rule 7d: a journal tool reaches no one outside Nexus'],
+    [{ journal: true, maxClaudeTrust: 'auto', ...facts, description: 'Changes an example by its rule, or a person approves it.' }, { journal: ['set-example'] }, 'rule 7d: a journal tool is offered or not: ceiling ask'],
+    [{ journal: true, alwaysAsk: true }, { journal: ['set-example'] }, 'rule 7d: a journal tool is never alwaysAsk'],
+    [{ journal: true, readOnly: true, reversibility: undefined, maxClaudeTrust: undefined }, { journal: ['set-example'] }, 'rule 4: a read tool carries no change contract'],
   ] as Array<[Partial<AgentTool>, Partial<ContractLists>, string]>)('%o with lists %o breaks: %s', (patch, lists, expected) => {
     expect(problemsOf(patch, lists).join('\n')).toContain(expected)
   })

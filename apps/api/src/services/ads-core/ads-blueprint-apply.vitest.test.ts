@@ -64,11 +64,17 @@ describe('planApplication — the plan', () => {
 })
 
 describe('planApplication — the self-competition gate', () => {
+  // Owner rule 3: isolation is per product. The clash that blocks is with one of
+  // GALE's OWN campaigns (its ad group advertises a GALE ASIN) — e.g. an older
+  // GALE campaign outside this structure.
   const existing: ExistingTarget[] = [
-    { expression: 'giacca moto', campaignName: 'IT-AIREON-SP-Category-Exact', campaignId: 'c_aireon' },
+    { expression: 'giacca moto', campaignName: 'IT-own-older-Category', campaignId: 'c_own_old', asins: ['B0GALE0002'] },
+  ]
+  const otherProduct: ExistingTarget[] = [
+    { expression: 'giacca moto', campaignName: 'IT-AIREON-SP-Category-Exact', campaignId: 'c_aireon', asins: ['B0AIREON1'] },
   ]
 
-  it('BLOCKS when a shared keyword is already run by another campaign', () => {
+  it('BLOCKS when a shared keyword is already run by one of the SAME product\'s campaigns', () => {
     const p = planApplication(doc, gale, existing)
     expect(p.allowed).toBe(false)
     expect(p.conflicts).toHaveLength(1)
@@ -76,11 +82,49 @@ describe('planApplication — the self-competition gate', () => {
     expect(p.conflicts[0]!.resolution).toBe('UNRESOLVED')
     expect(p.blockers[0]).toMatch(/bid against campaigns you already run/)
     expect(p.blockers[0]).toMatch(/giacca moto/)
+    expect(p.sharedWithOtherProducts).toEqual([])
   })
 
   it('names the campaign it would fight, so the operator can judge', () => {
     const p = planApplication(doc, gale, existing)
-    expect(p.conflicts[0]!.existing).toEqual([{ campaignName: 'IT-AIREON-SP-Category-Exact', campaignId: 'c_aireon' }])
+    expect(p.conflicts[0]!.existing).toEqual([{ campaignName: 'IT-own-older-Category', campaignId: 'c_own_old' }])
+  })
+
+  it('ANOTHER product buying the keyword is allowed: kept, listed once, one warning — never a conflict', () => {
+    const p = planApplication(doc, gale, [...otherProduct, { ...otherProduct[0]!, expression: 'GIACCA MOTO ' }])
+    expect(p.allowed).toBe(true)
+    expect(p.blockers).toEqual([])
+    expect(p.conflicts).toEqual([])
+    expect(p.sharedWithOtherProducts).toEqual([
+      { expression: 'giacca moto', existing: [{ campaignName: 'IT-AIREON-SP-Category-Exact', campaignId: 'c_aireon' }] },
+    ])
+    const cat = p.campaigns.find((c) => c.role === 'Category-Exact')!
+    const kept = cat.adGroups[0]!.targets.find((t) => t.expression === 'giacca moto')!
+    expect(kept).toBeDefined()
+    expect(kept.conflictsWith).toBeUndefined()
+    const shared = p.warnings.filter((w) => /other products' campaigns/.test(w))
+    expect(shared).toHaveLength(1)
+    expect(shared[0]).toMatch(/1 keyword\(s\) are also bought by your other products' campaigns \("giacca moto"\): allowed/)
+  })
+
+  it('a campaign whose ASINs are unknown counts as another product\'s: allowed and listed', () => {
+    const p = planApplication(doc, gale, [{ expression: 'giacca moto', campaignName: 'Unknown', campaignId: 'c_u' }])
+    expect(p.allowed).toBe(true)
+    expect(p.conflicts).toEqual([])
+    expect(p.sharedWithOtherProducts.map((c) => c.expression)).toEqual(['giacca moto'])
+  })
+
+  it('the same product and another product on one keyword: the own clash blocks, the other is listed beside it', () => {
+    const p = planApplication(doc, gale, [...existing, ...otherProduct])
+    expect(p.allowed).toBe(false)
+    expect(p.conflicts.map((c) => [c.expression, c.existing.map((e) => e.campaignId)])).toEqual([['giacca moto', ['c_own_old']]])
+    expect(p.sharedWithOtherProducts.map((c) => [c.expression, c.existing.map((e) => e.campaignId)])).toEqual([['giacca moto', ['c_aireon']]])
+  })
+
+  it('an ad group advertising this product AND another is this product\'s own: it blocks', () => {
+    const p = planApplication(doc, gale, [{ ...otherProduct[0]!, asins: ['B0AIREON1', ' b0gale0001 '] }])
+    expect(p.allowed).toBe(false)
+    expect(p.conflicts.map((c) => c.expression)).toEqual(['giacca moto'])
   })
 
   it('SKIPPING a shared keyword removes it from the plan and unblocks', () => {
@@ -102,21 +146,21 @@ describe('planApplication — the self-competition gate', () => {
   })
 
   it('matching is case- and whitespace-insensitive', () => {
-    const p = planApplication(doc, gale, [{ expression: '  GIACCA Moto ', campaignName: 'X', campaignId: 'x' }])
+    const p = planApplication(doc, gale, [{ expression: '  GIACCA Moto ', campaignName: 'X', campaignId: 'x', asins: ['B0GALE0001'] }])
     expect(p.allowed).toBe(false)
     expect(p.conflicts[0]!.expression).toBe('giacca moto')
   })
 
   it('BRAND keywords never conflict — they parameterise per product', () => {
     // Someone already running "aireon" must not block GALE's own brand campaign.
-    const p = planApplication(doc, gale, [{ expression: 'aireon', campaignName: 'IT-AIREON-SP-Brand-Exact', campaignId: 'c_a' }])
+    const p = planApplication(doc, gale, [{ expression: 'aireon', campaignName: 'IT-AIREON-SP-Brand-Exact', campaignId: 'c_a', asins: ['B0GALE0001'] }])
     expect(p.allowed).toBe(true)
   })
 
   it('a shared keyword that is only a NEGATIVE does not conflict', () => {
     // "casco moto" is a negative in the source; excluding the same traffic for
     // two products is harmless and must not be gated.
-    const p = planApplication(doc, gale, [{ expression: 'casco moto', campaignName: 'Y', campaignId: 'y' }])
+    const p = planApplication(doc, gale, [{ expression: 'casco moto', campaignName: 'Y', campaignId: 'y', asins: ['B0GALE0001'] }])
     expect(p.allowed).toBe(true)
     expect(p.conflicts).toEqual([])
   })
@@ -175,8 +219,10 @@ describe('planApplication — other blockers', () => {
   it('reports every blocker at once rather than one at a time', () => {
     const p = planApplication(doc, { productToken: 'GALE', asins: [] }, [
       { expression: 'giacca moto', campaignName: 'A', campaignId: 'a' },
-    ], { dailyBudgetCapEur: 1 })
+    ], { dailyBudgetCapEur: 1, existingCampaignNames: ['IT-GALE-SP-Brand-Exact'] })
+    // the budget cap, no ASINs, a name already live — and no conflict: with no ASINs nothing is this product's own
     expect(p.blockers.length).toBe(3)
+    expect(p.conflicts).toEqual([])
   })
 })
 
@@ -277,8 +323,8 @@ describe('planApplication — what the plan now carries into creation', () => {
     // Every Auto campaign in the account has all four clauses; treating them as
     // shared keywords would block every replication that includes an Auto role.
     const plan = planApplication(extractBlueprint(autoSrc(), { productToken: 'AIREON' }), gale, [
-      { expression: '', campaignName: 'IT_Auto_Close', campaignId: 'c1' },
-      { expression: 'close', campaignName: 'IT_Auto_Close', campaignId: 'c1' },
+      { expression: '', campaignName: 'IT_Auto_Close', campaignId: 'c1', asins: ['B0GALE0001'] },
+      { expression: 'close', campaignName: 'IT_Auto_Close', campaignId: 'c1', asins: ['B0GALE0001'] },
     ])
     expect(plan.conflicts).toEqual([])
     expect(plan.allowed).toBe(true)
@@ -491,7 +537,7 @@ describe('planApplication — edits', () => {
     // Otherwise "add a keyword" in step 2 is a way to walk straight past the
     // self-competition check that the whole feature exists to enforce.
     const p = planApplication(doc, gale, [
-      { expression: 'stivali moto', campaignName: 'IT-AIREON-SP-Category-Broad', campaignId: 'c_x' },
+      { expression: 'stivali moto', campaignName: 'IT-own-older-Category-Broad', campaignId: 'c_x', asins: ['B0GALE0001'] },
     ], {}, { addedTargets: [{ adGroupId: ids().g0, expression: 'stivali moto', expressionType: 'BROAD' }] })
     expect(p.allowed).toBe(false)
     expect(p.conflicts.map((c) => c.expression)).toContain('stivali moto')
@@ -499,14 +545,14 @@ describe('planApplication — edits', () => {
 
   it('an added BRAND keyword is not gated — it is about the new product', () => {
     const p = planApplication(doc, gale, [
-      { expression: 'gale jacket', campaignName: 'Something', campaignId: 'c_y' },
+      { expression: 'gale jacket', campaignName: 'Something', campaignId: 'c_y', asins: ['B0GALE0001'] },
     ], {}, { addedTargets: [{ adGroupId: ids().g0, expression: 'gale jacket', expressionType: 'EXACT' }] })
     expect(p.allowed).toBe(true)
   })
 
   it('an added NEGATIVE is never gated — a negative cannot compete', () => {
     const p = planApplication(doc, gale, [
-      { expression: 'casco', campaignName: 'Z', campaignId: 'c_z' },
+      { expression: 'casco', campaignName: 'Z', campaignId: 'c_z', asins: ['B0GALE0001'] },
     ], {}, { addedTargets: [{ adGroupId: ids().g0, expression: 'casco', expressionType: 'EXACT', isNegative: true }] })
     expect(p.allowed).toBe(true)
     expect(p.conflicts).toEqual([])
@@ -574,7 +620,7 @@ describe('planApplication — full-control edits', () => {
 
   it('RE-GATES a rewritten keyword against what we already run', () => {
     // 'abbigliamento moto' is not run by anyone, so the plan is clean...
-    const existing: ExistingTarget[] = [{ expression: 'giacca moto', campaignName: 'IT-AIREON-SP-Category-Exact', campaignId: 'c_aireon' }]
+    const existing: ExistingTarget[] = [{ expression: 'giacca moto', campaignName: 'IT-own-older-Category', campaignId: 'c_own_old', asins: ['B0GALE0001'] }]
     const clean = planApplication(doc, gale, existing, { skipSharedTargets: ['giacca moto'] })
     expect(clean.allowed).toBe(true)
     // ...until the operator renames a survivor INTO the keyword we already run.
@@ -586,7 +632,7 @@ describe('planApplication — full-control edits', () => {
   })
 
   it('a rewrite that carries the product token is NOT gated', () => {
-    const existing: ExistingTarget[] = [{ expression: 'giacca moto', campaignName: 'x', campaignId: 'c_x' }]
+    const existing: ExistingTarget[] = [{ expression: 'giacca moto', campaignName: 'x', campaignId: 'c_x', asins: ['B0GALE0001'] }]
     const p = planApplication(doc, gale, existing, { skipSharedTargets: ['giacca moto'] }, {
       targetExpressions: [{ id: 'c1.g0.t1', expression: 'giacca GALE' }],
     })
