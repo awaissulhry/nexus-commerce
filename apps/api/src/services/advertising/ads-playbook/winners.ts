@@ -15,8 +15,9 @@
  *                unproven  it met the bar in neither, or the windows cannot be compared (counted, not listed)
  *   next step    first that applies —
  *                closeOldPlace  handover B: the term has its own campaign (a hero) and the hero itself meets the harvest
- *                             bar: its OLD exact keyword goes to the 2¢ floor (the Owner's low-bids stop — undone in about
- *                             a minute; never a negative over his own keyword), a request a person decides; an old
+ *                             bar: its OLD exact keyword goes to low bids — the strategy's stop bid, at least the bid
+ *                             tool's lowest (bulk-ad-bid-change): the Owner's temporary stop, undone in about a minute;
+ *                             never a negative over his own keyword — a request a person decides; an old
  *                             research place is negated exact by the playbook's isolation rule (its card). Never where an
  *                             hourly plan or a performance slot holds the campaign (reported only), never over a floor
  *                none         a winning term is kept where it is; an unproven one has nothing to keep or repair
@@ -47,7 +48,6 @@
  */
 import prisma from '../../../db.js'
 import { ACTION_WINDOW, HARVEST_DEFAULTS } from '@nexus/shared/ads-rule-window'
-import { SUPPRESSION_FLOOR_CENTS } from '../ads-bid-suppression.service.js'
 import { meetsHarvest } from '../ads-harvest.service.js'
 import { normaliseNegTerm } from '../ads-protect-converting.js'
 import { SEARCH_TERM_DAYS_KEPT, settledBounds, settledEndText, settledWhere } from '../ads-settled-window.js'
@@ -157,7 +157,7 @@ export function winnerLadder(f: LadderFacts): { nextStep: WinnerStep; why: strin
     if (rankHeld) return { nextStep: 'none', why: `hero proven (${proven}), but ${RANK_HELD}`, ladder: [] }
     if (f.held) return { nextStep: 'none', why: `hero proven (${proven}); this old place is held already — ${f.held}`, ladder: [] }
     return f.servedBy?.exact
-      ? { nextStep: 'closeOldPlace', why: `hero proven → old keyword to the floor: ${proven}, so its exact keyword here goes to the ${SUPPRESSION_FLOOR_CENTS}-cent floor (the Owner's low-bids stop, undone in about a minute; never a negative) — a request a person decides`, ladder: [] }
+      ? { nextStep: 'closeOldPlace', why: `hero proven → old keyword to the floor: ${proven}, so its exact keyword here goes to low bids (the Owner's temporary stop, undone in about a minute; never a negative) — a request a person decides`, ladder: [] }
       : { nextStep: 'closeOldPlace', why: `hero proven → old place to be closed: ${proven}, so the playbook's isolation rule negates it exact here (its card: a person decides)`, ladder: [] }
   }
   if (f.state === 'winning') {
@@ -452,6 +452,12 @@ export async function winnerReview(args: { market: string; productId?: string; s
       : Promise.resolve(new Map<string, never>()),
     spentForAutoBid([...servingIds]),
   ])
+  // The low bid an old exact keyword is proposed at: the strategy's stop bid for its campaign, at least the lowest bid the
+  // bid tool sets (loaded when asked: a tool module).
+  const { BULK_FLOOR_CENTS } = await import('../../agents/tools/ads-change.tools.js')
+  const { stopBidsFor } = await import('../ads-strategy/effective.js')
+  const stops = await stopBidsFor(campaignIds.map((id) => ({ id, marketplace: byId.get(id)?.marketplace ?? null })))
+  const lowBidOf = (campaignId: string) => Math.max(BULK_FLOOR_CENTS, stops.get(campaignId)?.cents ?? 0)
   // Terms with clicks per campaign (what a placement change there moves too).
   const clicked = new Map<string, Set<string>>()
   for (const [key, r] of current) {
@@ -461,13 +467,23 @@ export async function winnerReview(args: { market: string; productId?: string; s
   }
 
   // The term's own campaigns (heroes), by term: proven once their live exact keyword meets the harvest bar there, on
-  // the same settled window and bar as every entry here.
-  const heroes = new Map(links.filter((l) => isHeroKey(l.key)).map((l) => {
-    const term = l.key.slice(HERO_PREFIX.length)
+  // the same settled window and bar as every entry here. One still at the build's floor (its campaign or its keyword
+  // waiting for START) is no home yet, as a keyword a sync added at the floor is none (PB-10, isolation.ts).
+  const heroLinks = links.filter((l) => isHeroKey(l.key))
+  const heroHomes = heroLinks.map((l) => {
     const g = placed.find((x) => x.slot === l.key)
-    const home = g ? homeOf(term, positives.get(g.adGroupId) ?? []) : null
-    const proven = !!g && !!home?.live && home.adGroupId === g.adGroupId && meets(current.get(termKey(g.ext, term)) ?? null, barOf.get(g.adGroupId)!.bar)
-    return [term, { key: l.key, campaignId: l.refId, campaignName: byId.get(l.refId)?.name ?? '?', proven }]
+    const home = g ? homeOf(l.key.slice(HERO_PREFIX.length), positives.get(g.adGroupId) ?? []) : null
+    return { l, g, home: home && home.adGroupId === g?.adGroupId && home.live ? home : null }
+  })
+  const heroFloored = new Set((heroHomes.some((h) => h.home)
+    ? await prisma.adTarget.findMany({ where: { id: { in: heroHomes.flatMap((h) => (h.home ? [h.home.adTargetId] : [])) }, suppressedFromBidCents: { not: null } }, select: { id: true } })
+    : []).map((t) => t.id))
+  const heroes = new Map(heroHomes.map(({ l, g, home }) => {
+    const term = l.key.slice(HERO_PREFIX.length)
+    const c = byId.get(l.refId)
+    const waiting = !!c?.bidsSuppressedAt || (!!home && heroFloored.has(home.adTargetId))
+    const proven = !!g && !!home && !waiting && meets(current.get(termKey(g.ext, term)) ?? null, barOf.get(g.adGroupId)!.bar)
+    return [term, { key: l.key, campaignId: l.refId, campaignName: c?.name ?? '?', proven }]
   }))
 
   const entries: WinnerEntry[] = []
@@ -530,8 +546,8 @@ export async function winnerReview(args: { market: string; productId?: string; s
         closeOldPlace: exact && t
           ? {
             how: 'floor' as const,
-            by: 'a request a person decides (bulk-ad-bid-change: one bid; its undo puts the bid back, about a minute to serve again)',
-            request: { tool: 'bulk-ad-bid-change' as const, args: { bids: [{ targetId: t.id, bidCents: SUPPRESSION_FLOOR_CENTS }], why: `"${p.term}" has its own campaign, which proved itself: its old exact keyword goes to the floor (low bids, not a pause)` } },
+            by: "a request a person decides (bulk-ad-bid-change: one bid, at the strategy's stop bid or the tool's lowest; its undo puts the bid back, about a minute to serve again)",
+            request: { tool: 'bulk-ad-bid-change' as const, args: { bids: [{ targetId: t.id, bidCents: lowBidOf(c.id) }], why: `"${p.term}" has its own campaign, which proved itself: its old exact keyword goes to low bids (not a pause, not a negative)` } },
           }
           : { how: 'isolation' as const, by: "the playbook's isolation rule: a negative exact here, on its card (a person decides)", request: null },
       } : {}),

@@ -17,7 +17,7 @@
  *   a hero                PB-6c — a term's own campaign (a hero, slot `hero:<term>`) owns its term in the research
  *                         slots only once it proved itself (its exact keyword meets the harvest bar there); until then
  *                         both run (the Owner's rule 2), said. Its OLD exact keyword is never negated here (L1 holds):
- *                         the winners view proposes it at the 2¢ floor instead (winners.ts)
+ *                         the winners view proposes it at low bids instead (winners.ts)
  *
  * A negative is planned into an ad group only when ALL hold: the ad group is in scope; it blocks no keyword of that ad
  * group (the lock, L1); its owner keyword is live and not waiting for its bid (PB-10: one a sync added at the floor,

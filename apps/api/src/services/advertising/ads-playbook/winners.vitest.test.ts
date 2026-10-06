@@ -2,11 +2,14 @@
  * ADS PLAYBOOK PB-6c — the winners view, pure (winners.ts classifyWinner, winnerLadder). Values are made up (public repo).
  *
  *   states     winning where it runs · declining (ACoS over the target, or under the bar after meeting it) · lost (it
- *              met the bar before and sold nothing since) · unproven
+ *              met the bar before and sold nothing since) · unproven; "cannot compare" (the window before reaches past
+ *              the search terms Nexus keeps) → never declining, unproven
  *   no number  the bar and the target are inputs: two strategies give two answers for the same results
- *   ladder     a winner gets no step (kept where it is); else bid (auto-bid on it, inside the band) → placement (a
- *              research slot or its own campaign, never an hourly plan's or a performance slot's) → a campaign of its
- *              own → none; every rung says why it is open or closed
+ *   ladder     a winner gets no step; a floor or a pause is named and gets none; else bid (auto-bid really on it, the
+ *              target spent in its window, inside the band) → placement (a research slot or its own campaign, never an
+ *              hourly plan's or a performance slot's) → a campaign of its own → none; every rung says why
+ *   handover   the hero proven: the old exact keyword to the floor (never a negative); reported only where an hourly
+ *              plan or a performance slot holds the campaign, nothing over a floor
  */
 import { describe, expect, it } from 'vitest'
 import { classifyWinner, winnerLadder, type LadderFacts, type TermResults, type WinnerBar } from './winners.js'
@@ -18,14 +21,22 @@ describe('classifyWinner — where a term stands, on the strategy\'s numbers onl
   it('winning, declining (ACoS over the target), declining (under the bar now), lost, unproven', () => {
     expect(classifyWinner({ current: r(4, 40, 2000, 10_000), previous: null, bar: bar(), targetAcosPct: 30 })).toMatchObject({ state: 'winning' })
     expect(classifyWinner({ current: r(4, 40, 4000, 10_000), previous: null, bar: bar(), targetAcosPct: 30 }))
-      .toEqual({ state: 'declining', why: 'it meets the harvest bar over the last 30 days, but its ACoS is over the target' })
+      .toEqual({ state: 'declining', why: 'it meets the harvest bar over the settled 30 days, but its ACoS is over the target' })
     expect(classifyWinner({ current: r(1, 12, 500, 2500), previous: r(5, 50, 2000, 12_000), bar: bar(), targetAcosPct: 30 }))
-      .toEqual({ state: 'declining', why: 'it met the harvest bar in the 30 days before and sells less now: under the bar over the last 30 days' })
+      .toEqual({ state: 'declining', why: 'it met the harvest bar in the 30 days before and sells less now: under the bar over the settled 30 days' })
     expect(classifyWinner({ current: r(0, 9, 400, 0), previous: r(5, 50, 2000, 12_000), bar: bar(), targetAcosPct: 30 })).toMatchObject({ state: 'lost' })
     expect(classifyWinner({ current: null, previous: r(3, 30, 900, 6000), bar: bar(), targetAcosPct: null })).toMatchObject({ state: 'lost' })
     expect(classifyWinner({ current: r(1, 3, 100, 900), previous: r(1, 2, 80, 700), bar: bar(), targetAcosPct: null })).toMatchObject({ state: 'unproven' })
     // No target set: the bar alone decides; no sales → no ACoS to hold against it.
     expect(classifyWinner({ current: r(4, 40, 9000, 10_000), previous: null, bar: bar(), targetAcosPct: null })).toMatchObject({ state: 'winning' })
+  })
+
+  it('cannot compare (the window before reaches past the search terms Nexus keeps): a winner still wins, anything else is unproven', () => {
+    expect(classifyWinner({ current: r(4, 40, 2000, 10_000), previous: null, comparable: false, bar: bar({ windowDays: 60 }), targetAcosPct: 30 }).state).toBe('winning')
+    for (const current of [r(4, 40, 4000, 10_000), r(1, 12, 500, 2500), null]) {
+      const out = classifyWinner({ current, previous: r(5, 50, 2000, 12_000), comparable: false, bar: bar({ windowDays: 60 }), targetAcosPct: 30 })
+      expect(out).toEqual({ state: 'unproven', why: 'cannot compare: the 60 days before reach past the 90 days of search terms Nexus keeps, so it is not judged declining and nothing is proposed' })
+    }
   })
 
   it('two strategies, two answers: the same results against another bar, another target, another ceiling', () => {
@@ -35,20 +46,22 @@ describe('classifyWinner — where a term stands, on the strategy\'s numbers onl
     expect(classifyWinner({ ...results, bar: bar(), targetAcosPct: 20 }).state).toBe('declining')
     expect(classifyWinner({ ...results, bar: bar({ maxAcosPct: 20 }), targetAcosPct: null }).state).toBe('declining')
     expect(classifyWinner({ ...results, bar: bar({ minClicks: 31 }), targetAcosPct: null }).state).toBe('declining')
-    expect(classifyWinner({ ...results, bar: bar({ windowDays: 60 }), targetAcosPct: null }).why).toMatch(/over the last 60 days/)
+    expect(classifyWinner({ ...results, bar: bar({ windowDays: 60 }), targetAcosPct: null }).why).toMatch(/over the settled 60 days/)
   })
 })
 
 const facts = (over: Partial<LadderFacts> = {}, campaign: Partial<LadderFacts['campaign']> = {}): LadderFacts => ({
   state: 'declining',
   autoBid: { on: true, why: 'auto-bid runs' },
-  campaign: { liveWrites: true, floored: null, holder: null, performance: false, research: true, hero: false, ...campaign },
-  servedBy: { bidCents: 50, live: true, suppressed: false, personSet: false },
+  held: null,
+  campaign: { liveWrites: true, holder: null, performance: false, research: true, hero: false, ...campaign },
+  servedBy: { bidCents: 50, live: true, personSet: false, spent: true, exact: false },
   targetAcosPct: 30,
   band: { minBidCents: 10, maxBidCents: 100 },
   hero: { exists: null, refusal: null },
   ...over,
 })
+const served = (over: Partial<NonNullable<LadderFacts['servedBy']>>) => ({ servedBy: { bidCents: 50, live: true, personSet: false, spent: true, exact: false, ...over } })
 const step = (f: LadderFacts) => winnerLadder(f).nextStep
 
 describe('winnerLadder — bid, then placement, then a campaign of its own', () => {
@@ -57,7 +70,7 @@ describe('winnerLadder — bid, then placement, then a campaign of its own', () 
     expect(winnerLadder(facts({ state: 'unproven' })).ladder).toEqual([])
   })
 
-  it('bid first: auto-bid already moves it, inside the band', () => {
+  it('bid first: auto-bid really runs, the target spent in its window, inside the band', () => {
     const l = winnerLadder(facts())
     expect(l.nextStep).toBe('bid')
     expect(l.ladder.map((x) => [x.step, x.open])).toEqual([['bid', true], ['placement', true], ['ownCampaign', true]])
@@ -65,23 +78,29 @@ describe('winnerLadder — bid, then placement, then a campaign of its own', () 
 
   it('auto-bid cannot move it → placement on a research slot; each blocker says why', () => {
     const blocked: Array<[Partial<LadderFacts>, Partial<LadderFacts['campaign']>, RegExp]> = [
-      [{ autoBid: { on: false, why: 'auto-bid is switched off for this business' } }, {}, /switched off/],
-      [{}, { floored: 'user:u-1' }, /at a floor \(user:u-1\)/],
+      [{ autoBid: { on: false, why: 'auto-bid does not run: Bid optimiser is switched off on the server' } }, {}, /does not run: Bid optimiser is switched off on the server/],
       [{}, { holder: 'pinned' }, /a pin holds its bids/],
       [{}, { holder: 'goalPlan' }, /a goal plan holds/],
       [{ servedBy: null }, {}, /cannot tell which keyword/],
-      [{ servedBy: { bidCents: 50, live: false, suppressed: false, personSet: false } }, {}, /not live at Amazon/],
-      [{ servedBy: { bidCents: 50, live: true, suppressed: true, personSet: false } }, {}, /keyword that serves it is at a floor/],
-      [{ servedBy: { bidCents: 50, live: true, suppressed: false, personSet: true } }, {}, /a person set its bid/],
+      [served({ live: false }), {}, /not live at Amazon/],
+      [served({ personSet: true }), {}, /a person set its bid/],
+      [served({ spent: false }), {}, /spent nothing in auto-bid's own settled window/],
       [{ targetAcosPct: null }, {}, /no target ACoS you set/],
-      [{ servedBy: { bidCents: 100, live: true, suppressed: false, personSet: false } }, {}, /strategy's highest bid: auto-bid cannot raise it/],
-      [{ servedBy: { bidCents: 10, live: true, suppressed: false, personSet: false } }, {}, /strategy's lowest bid: auto-bid cannot lower it/],
+      [served({ bidCents: 100 }), {}, /strategy's highest bid: auto-bid cannot raise it/],
+      [served({ bidCents: 10 }), {}, /strategy's lowest bid: auto-bid cannot lower it/],
     ]
     for (const [over, campaign, why] of blocked) {
       const l = winnerLadder(facts(over, campaign))
       expect(l.nextStep).toBe('placement')
       expect(l.ladder[0]).toMatchObject({ step: 'bid', open: false, why: expect.stringMatching(why) })
       expect(l.ladder[1].why).toMatch(/set-placement-multipliers/)
+    }
+  })
+
+  it('a floor or a pause holds it: named, and nothing is proposed around it — never a placement or a campaign of its own', () => {
+    for (const held of ['its campaign is at a floor set by user:u-owner', "its ad group is at its own floor, set by automation:stock-test (stock, or a product's monthly cap)", 'its campaign is paused']) {
+      const l = winnerLadder(facts({ held, autoBid: { on: false, why: 'off' } }))
+      expect(l).toEqual({ nextStep: 'none', why: `${held}: the one who set it lifts it — no bid, placement or campaign of its own is proposed around a floor or a pause`, ladder: [] })
     }
   })
 
@@ -93,7 +112,6 @@ describe('winnerLadder — bid, then placement, then a campaign of its own', () 
       expect(l.why).toMatch(/the Owner's Hourly Bids own its bids and placements — reported only/)
       expect(l.ladder.map((x) => x.open)).toEqual([false, false, false])
     }
-    // An hourly plan holds it even while auto-bid is on: auto-bid leaves it (bid closed), and nothing else is proposed.
     expect(step(facts({}, { holder: 'hourlyPlan' }))).toBe('none')
   })
 
@@ -117,14 +135,22 @@ describe('winnerLadder — bid, then placement, then a campaign of its own', () 
   })
 })
 
-describe('winnerLadder — PB-6c handover B: the old place of a term with its own campaign', () => {
+describe('winnerLadder — handover B: the old place of a term whose own campaign proved itself', () => {
   const own = (proven: boolean) => ({ exists: { key: 'hero:x', campaignName: 'T | IT | Hero | x', proven }, refusal: null })
-  it('the hero proven → old place to be closed, whatever the old place\'s own state', () => {
+  it('the hero proven → its old exact keyword to the floor (never a negative), whatever the old place\'s own state', () => {
     for (const state of ['winning', 'declining', 'lost'] as const) {
-      const l = winnerLadder(facts({ state, hero: own(true) }, { research: false }))
+      const l = winnerLadder(facts({ state, hero: own(true), ...served({ exact: true }) }, { research: false }))
       expect(l).toMatchObject({ nextStep: 'closeOldPlace', ladder: [] })
-      expect(l.why).toMatch(/^hero proven → old place to be closed: its own campaign \("T \| IT \| Hero \| x"\) meets the harvest bar/)
+      expect(l.why).toMatch(/^hero proven → old keyword to the floor: its own campaign \("T \| IT \| Hero \| x"\) meets the harvest bar, so its exact keyword here goes to low bids .*never a negative/)
     }
+    // An old research place (a broad keyword or Auto served it): the isolation rule's negative exact there, never its keyword's floor.
+    expect(winnerLadder(facts({ hero: own(true) })).why).toMatch(/^hero proven → old place to be closed: .*isolation rule negates it exact here/)
+  })
+
+  it('reported only where an hourly plan or a performance slot holds the campaign; nothing over a floor', () => {
+    expect(winnerLadder(facts({ hero: own(true), ...served({ exact: true }) }, { performance: true, research: false }))).toMatchObject({ nextStep: 'none', why: expect.stringMatching(/^hero proven .*reported only$/) })
+    expect(step(facts({ hero: own(true), ...served({ exact: true }) }, { holder: 'hourlyPlan' }))).toBe('none')
+    expect(winnerLadder(facts({ hero: own(true), held: 'its campaign is paused', ...served({ exact: true }) }, { research: false }))).toMatchObject({ nextStep: 'none', why: expect.stringMatching(/held already — its campaign is paused$/) })
   })
 
   it('the hero not proven yet: both run — a winning old place stays, a declining one keeps its ladder (never a second hero)', () => {

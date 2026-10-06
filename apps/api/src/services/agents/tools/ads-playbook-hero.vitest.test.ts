@@ -4,14 +4,18 @@
  * write gate the real one, sandbox; the SP Super Wizard launch a stand-in that makes the campaigns in Nexus). Two
  * products, A and B, share the category term "test cape" (the Owner's rule 3: allowed, never blocked). Values are made up.
  *
- *   view      A's terms in A's own campaigns only (a campaign that also advertises B is left out, named): winning where it
- *             runs (no step), declining, lost, unproven (counted); the next step in the Owner's order — bid (auto-bid on
- *             it), placement (a research slot on the allowlist), a campaign of its own
+ *   view      A's terms in A's own campaigns only (a campaign that also advertises B is left out, named), on SETTLED
+ *             windows (the strategy's 30-day harvest window ending at the attribution lag, and the 30 days before):
+ *             winning where it runs (no step), declining, lost, unproven (counted); a floor named, no step; the next step
+ *             in the Owner's order — bid (auto-bid really runs and the target spent), placement (a research slot on the
+ *             allowlist), a campaign of its own
  *   hero      the preview: ONE campaign, ONE exact keyword, modelled on Exact | Category, its bid the term's cost per
  *             click, where the term runs now; B buying the same term only listed; by rule the default limits refuse it
- *   approved  built by the playbook's build (the wizard's launch, one campaign), linked as the slot hero:<term>; the term
- *             keeps running where it ran — no negative, no lower bid; a second hero for the term is refused; the undo
- *             archives what it made
+ *   approved  built by the playbook's build (the wizard's launch, one campaign) at the bid and budget APPROVED (the term's
+ *             CPC moved since: no "basis changed"), linked as the slot hero:<term>; the term keeps running where it ran —
+ *             no negative, no lower bid; a second hero for the term is refused; the undo archives what it made
+ *   handover  once the hero proves itself, its term's old exact keyword is proposed at the 2-cent floor (one bid, a person
+ *             decides) — never a negative (L1 holds); before that, nothing; B's same keyword is never touched
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
@@ -39,6 +43,12 @@ vi.mock('../../../lib/queue.js', () => {
 vi.mock('../../outbound-destination.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   resolveDestinations: async (_db: unknown, rows: unknown[]) => rows.map(() => ({ connectionId: null, reason: 'NO_ACCOUNT' })),
+}))
+/** Whether auto-bid's live run may start (its switch and the scheduler's flag): off unless a test turns it on. */
+const liveRun = vi.hoisted(() => ({ refusal: 'Bid optimiser is switched off on the server (the test scheduler runs no cron)' as string | null }))
+vi.mock('../../advertising/ads-engine-lock.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  liveRunRefusal: async () => liveRun.refusal,
 }))
 /** The wizard's launch, as a stand-in that makes each campaign and its ad group in Nexus (sandbox ids); the bodies kept. */
 const launches = vi.hoisted(() => ({ bodies: [] as any[], options: [] as any[] }))
@@ -123,7 +133,8 @@ beforeAll(async () => {
     A = await seedProductPlaybook(db(), { token: 'TESTWIA', asinPrefix: 'B0TESTWA' })
     B = await seedProductPlaybook(db(), { token: 'TESTWIB', asinPrefix: 'B0TESTWB' })
     // The market strategy lets changes run by rule today: the default limits of the tool still hold a hero.
-    await db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 10, claudeMaxBudgetIncreasePerDayCents: 100_000 } })
+    // Its harvest group (whole): 2 orders over 30 days, so the window before (30 more) is inside the 90 days Nexus keeps.
+    await db().adsStrategy.updateMany({ where: { market: 'IT', level: 'MARKET' }, data: { claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 10, claudeMaxBudgetIncreasePerDayCents: 100_000, harvestMinOrders: 2, harvestMinClicks: 0, harvestMaxAcosPct: null, harvestWindowDays: 30 } })
     const adA = [{ productId: A.v1, asin: 'B0TESTWA01' }]
     exactA = await slotCampaign(A.rowId, 'exact-category', 'TESTWIA | IT | Exact | Category', { allowlist: true, ads: adA, targets: [{ match: 'EXACT', text: 'test coat', ext: 'KW-WA-COAT', bidCents: 50 }] })
     broadA = await slotCampaign(A.rowId, 'broad-category', 'TESTWIA | IT | Broad | Category', { allowlist: false, ads: adA, targets: [{ match: 'BROAD', text: 'test', ext: 'KW-WA-TEST', bidCents: 40 }] })
@@ -133,16 +144,20 @@ beforeAll(async () => {
     // B buys "test cape" as its own exact keyword: allowed, and never A's business.
     exactB = await slotCampaign(B.rowId, 'exact-category', 'TESTWIB | IT | Exact | Category', { allowlist: true, ads: [{ productId: B.v1, asin: 'B0TESTWB01' }], targets: [{ match: 'EXACT', text: 'test cape', ext: 'KW-WB-CAPE', bidCents: 60 }] })
 
-    // A's search terms. The strategy sets no harvest group: the rules' fallbacks (2 orders, 60 days) are the bar.
-    await searched(exactA, 'test coat', 5, { orders: 6, clicks: 40, costCents: 1600, salesCents: 12_000 }, 'KW-WA-COAT')
-    await searched(broadA, 'test cape', 70, { orders: 5, clicks: 30, costCents: 900, salesCents: 9000 }, 'KW-WA-TEST')
-    await searched(broadA, 'test cape', 5, { orders: 1, clicks: 10, costCents: 300, salesCents: 1500 }, 'KW-WA-TEST')
-    await searched(broadA, 'test cloak', 70, { orders: 4, clicks: 20, costCents: 600, salesCents: 7000 }, 'KW-WA-TEST')
-    await searched(broadA, 'test junk', 5, { orders: 0, clicks: 3, costCents: 90, salesCents: 0 }, 'KW-WA-TEST')
-    await searched(autoA, 'test vest', 70, { orders: 5, clicks: 25, costCents: 800, salesCents: 9000 }, 'AT-WA-CLOSE')
-    await searched(autoA, 'test vest', 5, { orders: 1, clicks: 8, costCents: 240, salesCents: 1500 }, 'AT-WA-CLOSE')
-    await searched(sharedA, 'testwia jacket', 5, { orders: 9, clicks: 50, costCents: 1500, salesCents: 20_000 }, 'KW-WA-BRAND')
-    await searched(exactB, 'test cape', 5, { orders: 8, clicks: 40, costCents: 1200, salesCents: 14_000 }, 'KW-WB-CAPE')
+    // A's search terms: day 10 is in the settled window (30 days ending 7 days ago), day 45 in the one before it; day 3
+    // is not settled yet (its sales are still arriving) and never counts.
+    await searched(exactA, 'test coat', 10, { orders: 6, clicks: 40, costCents: 1600, salesCents: 12_000 }, 'KW-WA-COAT')
+    await searched(broadA, 'test cape', 45, { orders: 5, clicks: 30, costCents: 900, salesCents: 9000 }, 'KW-WA-TEST')
+    await searched(broadA, 'test cape', 10, { orders: 1, clicks: 10, costCents: 300, salesCents: 1500 }, 'KW-WA-TEST')
+    await searched(broadA, 'test cape', 3, { orders: 0, clicks: 30, costCents: 3000, salesCents: 0 }, 'KW-WA-TEST')
+    await searched(broadA, 'test cloak', 45, { orders: 4, clicks: 20, costCents: 600, salesCents: 7000 }, 'KW-WA-TEST')
+    await searched(broadA, 'test junk', 10, { orders: 0, clicks: 3, costCents: 90, salesCents: 0 }, 'KW-WA-TEST')
+    await searched(autoA, 'test vest', 45, { orders: 5, clicks: 25, costCents: 800, salesCents: 9000 }, 'AT-WA-CLOSE')
+    await searched(autoA, 'test vest', 10, { orders: 1, clicks: 8, costCents: 240, salesCents: 1500 }, 'AT-WA-CLOSE')
+    await searched(sharedA, 'testwia jacket', 10, { orders: 9, clicks: 50, costCents: 1500, salesCents: 20_000 }, 'KW-WA-BRAND')
+    // B's "test cape" declines too (its own business: B may give it a campaign of its own as well).
+    await searched(exactB, 'test cape', 45, { orders: 8, clicks: 40, costCents: 1200, salesCents: 14_000 }, 'KW-WB-CAPE')
+    await searched(exactB, 'test cape', 10, { orders: 1, clicks: 10, costCents: 400, salesCents: 2000 }, 'KW-WB-CAPE')
   })
 }, 180_000)
 afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
@@ -162,38 +177,52 @@ describe('ads-playbook view winners — one product\'s own campaigns, the Owner\
     const coat = entry(view, 'test coat')
     expect(coat).toMatchObject({
       slot: 'exact-category', state: 'winning', nextStep: 'none', ladder: [], servedBy: { text: 'test coat', match: 'EXACT', bidCents: 50 },
-      bar: { minOrders: 2, windowDays: 60, source: expect.stringMatching(/harvest rules' defaults/) }, current: { orders: 6, clicks: 40 }, previous: null,
+      bar: { minOrders: 2, windowDays: 30, source: expect.stringMatching(/^the ads strategy: Test strategy \(IT\)/) }, current: { orders: 6, clicks: 40, spendCents: 1600 }, previous: null,
     })
     expect(coat.nextWhy).toMatch(/^winning where it runs: it stays there/)
   })
 
   it('the next step: a research slot on the allowlist → placement; off the allowlist → a campaign of its own', async () => {
     const view = await winners(A.parent)
-    expect(view.data.autoBid).toMatchObject({ on: false, why: expect.stringMatching(/the account ads dial is SUGGEST/) })
+    expect(view.data.autoBid).toMatchObject({ on: false, why: expect.stringMatching(/^auto-bid does not run: Bid optimiser is switched off on the server/) })
     const vest = entry(view, 'test vest')
     expect(vest).toMatchObject({ slot: 'auto', state: 'declining', nextStep: 'placement', placement: { campaignId: autoA.campaignId, otherTerms: 0, tool: 'set-placement-multipliers' } })
     expect(vest.ladder.map((r: Row) => [r.step, r.open])).toEqual([['bid', false], ['placement', true], ['ownCampaign', true]])
     const cape = entry(view, 'test cape')
     expect(cape).toMatchObject({
       slot: 'broad-category', state: 'declining', nextStep: 'ownCampaign', servedBy: { text: 'test', match: 'BROAD' },
-      current: { orders: 1, clicks: 10 }, previous: { orders: 5, clicks: 30 },
+      // The settled window only: day 3's unattributed spend is left out (it would read as a loss).
+      current: { orders: 1, clicks: 10, spendCents: 300 }, previous: { orders: 5, clicks: 30 },
       ownCampaign: { tool: 'apply-ads-playbook', args: { op: 'hero', market: 'IT', productId: A.parent, term: 'test cape' } },
     })
     expect(cape.ladder[1]).toMatchObject({ step: 'placement', open: false, why: expect.stringMatching(/off the live-write allowlist/) })
     expect(entry(view, 'test cloak')).toMatchObject({ state: 'lost', nextStep: 'ownCampaign', current: null })
   })
 
-  it('auto-bid on (the dial at AUTO, a target you set): bid first — it already moves the bid', async () => {
+  it('auto-bid really runs (switch, the scheduler\'s flag, the dial at AUTO, a target you set): bid first, once the target spent in its window', async () => {
+    liveRun.refusal = null
     await inside(() => db().adsAutomationState.upsert({ where: { id: 'singleton' }, create: { id: 'singleton', autonomy: 'AUTO', defaultTargetAcosPct: 30 }, update: { autonomy: 'AUTO', defaultTargetAcosPct: 30 } }))
     try {
-      const view = await winners(A.parent)
+      let view = await winners(A.parent)
       expect(view.data.autoBid.on).toBe(true)
+      // The Auto target spent nothing in auto-bid's own window: auto-bid has nothing to move it on, the ladder goes on.
+      expect(entry(view, 'test vest')).toMatchObject({ nextStep: 'placement', ladder: [expect.objectContaining({ step: 'bid', open: false, why: expect.stringMatching(/spent nothing in auto-bid's own settled window/) }), expect.anything(), expect.anything()] })
+      await inside(() => db().adTarget.updateMany({ where: { externalTargetId: 'AT-WA-CLOSE' }, data: { spendCents: 240 } }))
+      view = await winners(A.parent)
       const vest = entry(view, 'test vest')
       expect(vest).toMatchObject({ nextStep: 'bid', target: { targetAcosPct: 30, source: 'the account default' }, servedBy: { match: 'AUTO', bidCents: 40 } })
       // Off the allowlist, auto-bid cannot write: the ladder goes on.
       expect(entry(view, 'test cape').ladder[0]).toMatchObject({ step: 'bid', open: false, why: expect.stringMatching(/off the live-write allowlist/) })
       expect(entry(view, 'test coat')).toMatchObject({ state: 'winning', nextStep: 'none' })
+      // A floor on its ad group (stock, a product's cap): named, and no step at all — never a placement around it.
+      await inside(() => db().adGroup.update({ where: { id: autoA.adGroupId }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: 2, bidsSuppressedBy: 'automation:stock-test' } }))
+      expect(entry(await winners(A.parent), 'test vest')).toMatchObject({
+        nextStep: 'none', ladder: [], held: "its ad group is at its own floor, set by automation:stock-test (stock, or a product's monthly cap)",
+        nextWhy: expect.stringMatching(/the one who set it lifts it — no bid, placement or campaign of its own is proposed around a floor or a pause$/),
+      })
     } finally {
+      liveRun.refusal = 'Bid optimiser is switched off on the server (the test scheduler runs no cron)'
+      await inside(() => db().adGroup.update({ where: { id: autoA.adGroupId }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } }))
       await inside(() => db().adsAutomationState.update({ where: { id: 'singleton' }, data: { autonomy: 'SUGGEST', defaultTargetAcosPct: null } }))
     }
   })
@@ -209,7 +238,8 @@ describe('apply-ads-playbook op hero — the preview and what refuses it', () =>
       hero: { key: 'hero:test cape', intent: 'CATEGORY', modelSlot: 'exact-category', keyword: { text: 'test cape', match: 'EXACT' }, bidFrom: expect.stringMatching(/cost per click/), budgetFrom: expect.stringMatching(/least budget per slot/) },
       current: [{ slot: 'broad-category', campaignId: broadA.campaignId, state: 'declining', nextStep: 'ownCampaign', orders: 1 }],
       keepsRunning: expect.stringMatching(/keeps running where it runs now: no negative, no lower bid, no pause/),
-      dailyBudgetCents: 100, highestPlannedBidCents: 30, portfolio: { does: 'none' },
+      dailyBudgetCents: 100, highestPlannedBidCents: 30, portfolio: { does: 'none' }, frozen: { bidCents: 30, dailyBudgetCents: 100 },
+      caps: [expect.objectContaining({ source: expect.objectContaining({ level: 'market' }), over: false })],
       limitFacts: { tool: 'apply-ads-playbook', action: 'create' }, reach: { reach: 'sandbox' },
       undoNote: expect.stringMatching(/archive-ads buildRunId/),
     })
@@ -227,8 +257,10 @@ describe('apply-ads-playbook op hero — the preview and what refuses it', () =>
     expect(judge(p, { maxCampaigns: 1, maxDailyBudgetCents: 50, maxBidCents: 100 })).toMatch(/daily budgets add up to/)
   })
 
-  it('refused, and not queued: no term, an ASIN, a product not enrolled', async () => {
+  it('refused, and not queued: no term, a winning term (rule 2), one not declining or lost, an ASIN, a product not enrolled', async () => {
     expect((await call('apply-ads-playbook', { op: 'hero', market: 'IT', productId: A.parent })).error).toMatch(/A hero is for one term: name it/)
+    expect((await call('apply-ads-playbook', hero(A.parent, 'test coat'))).error).toMatch(/^"test coat" wins where it runs \("TESTWIA \| IT \| Exact \| Category"\): the Owner's rule 2 keeps it there/)
+    expect((await call('apply-ads-playbook', hero(A.parent, 'test junk'))).error).toMatch(/is not declining or lost in TEST-TESTWIA-PARENT's playbook campaigns in IT/)
     expect((await call('apply-ads-playbook', hero(A.parent, 'B0RIVAL001'))).error).toMatch(/it is an ASIN: a hero holds one exact keyword/)
     await inside(() => db().adsPlaybook.update({ where: { id: B.rowId }, data: { enrolled: false } }))
     expect((await call('apply-ads-playbook', hero(B.parent, 'test cape'))).error).toMatch(/is not enrolled in its playbook in IT/)
@@ -245,6 +277,9 @@ describe('approved, a hero is built by the playbook\'s build; the term keeps run
     const asked = await ask('apply-ads-playbook', { ...hero(A.parent, 'test cape'), why: 'give the term its own campaign' })
     expect(asked).toMatchObject({ ok: true, mode: 'queued' })
     approvalId = asked.approvalId!
+    // A day of search terms lands before the approval: the term's CPC moves (30 → 60 cents). What was approved is built.
+    await inside(() => searched(broadA, 'test cape', 12, { orders: 0, clicks: 10, costCents: 900, salesCents: 0 }, 'KW-WA-TEST'))
+    expect(((await call('apply-ads-playbook', hero(A.parent, 'test cape'))).preview as Row).frozen).toMatchObject({ bidCents: 60 })
     const done = await approve(approvalId) as Row
     expect(done).toMatchObject({ ok: true, status: 'executed', result: { status: 'RUNNING', key: 'hero:test cape', applicationId: expect.any(String), changeSetId: approvalId } })
     applicationId = done.result.applicationId
@@ -296,77 +331,67 @@ describe('approved, a hero is built by the playbook\'s build; the term keeps run
   })
 })
 
-describe('handover B — the term\'s old Exact keyword is closed only once its own campaign proves itself', () => {
-  type Hero = { campaignId: string; adGroupId: string; ext: string; extCampaign: string }
-  let heroG: Hero
-  const negativesIn = (adGroupId: string) => inside(() => db().adTarget.findMany({ where: { adGroupId, isNegative: true }, select: { expressionValue: true, expressionType: true } }))
-  const isolation = async (extra: { dryRun: boolean; items?: Array<{ text: string; match: string; adGroupId: string }> }) => {
-    const { compileIsolationFor, isolateProduct } = await import('../../advertising/ads-playbook/isolation-run.js')
-    return inside(async () => {
-      const c = await compileIsolationFor(A.rowId)
-      if ('problems' in c) throw new Error(c.problems.join('; '))
-      const run = await isolateProduct({ action: c.compiled.action, actor: 'automation:test-isolation', ...extra })
-      if ('refused' in run) throw new Error(run.refused)
-      return run
-    })
-  }
+describe('handover B — once its own campaign proves itself, the term\'s old exact keyword is proposed at the floor (never negated)', () => {
+  type Placed4 = { campaignId: string; adGroupId: string; ext: string; extCampaign: string }
+  let heroG: Placed4
+  let oldId = ''
   const lock = async (g: { adGroupId: string; campaignId: string }) => {
     const { ownKeywordRefusal } = await import('../../advertising/ads-winner-lock.js')
     return inside(() => ownKeywordRefusal({ scope: 'AD_GROUP', adGroupId: g.adGroupId, campaignId: g.campaignId }, 'test cape', 'EXACT'))
   }
+  const capes = (view: Row) => view.data.entries.filter((e: Row) => e.term === 'test cape')
 
   beforeAll(async () => {
     await inside(async () => {
       const link = await db().adsPlaybookLink.findFirstOrThrow({ where: { playbookId: A.rowId, kind: 'slot', key: 'hero:test cape' } })
       const g = await db().adGroup.findUniqueOrThrow({ where: { id: link.adGroupId! }, select: { id: true, externalAdGroupId: true, campaign: { select: { id: true, externalCampaignId: true } } } })
       heroG = { campaignId: g.campaign.id, adGroupId: g.id, ext: g.externalAdGroupId!, extCampaign: g.campaign.externalCampaignId! }
-      // What the real launch makes (the stand-in does not): the hero's product ad and its exact keyword, live.
+      // What the real launch makes (the stand-in does not), and START has run: its product ad, its exact keyword at its
+      // bid, the campaign on the allowlist and off the floor.
       await db().adProductAd.create({ data: { adGroupId: heroG.adGroupId, productId: A.v1, asin: 'B0TESTWA01' } })
       await db().adTarget.create({ data: { adGroupId: heroG.adGroupId, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test cape', bidCents: 30, externalTargetId: 'KW-WA-HERO' } })
-      // The term's old place: an exact keyword of A's Exact | Category, where it still sells.
-      await db().adTarget.create({ data: { adGroupId: exactA.adGroupId, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test cape', bidCents: 45, externalTargetId: 'KW-WA-CAPE-OLD' } })
-      await searched(exactA, 'test cape', 5, { orders: 3, clicks: 20, costCents: 700, salesCents: 5000 }, 'KW-WA-CAPE-OLD')
+      await db().campaign.update({ where: { id: heroG.campaignId }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null, liveBidWritesEnabled: true } })
+      // The term's old place: an exact keyword of A's Exact | Category (here a slot no hourly plan holds), where it sells.
+      oldId = (await db().adTarget.create({ data: { adGroupId: exactA.adGroupId, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'test cape', bidCents: 45, externalTargetId: 'KW-WA-CAPE-OLD' } })).id
+      await searched(exactA, 'test cape', 10, { orders: 3, clicks: 20, costCents: 700, salesCents: 5000 }, 'KW-WA-CAPE-OLD')
+      const template = await db().adsPlaybookTemplate.findUniqueOrThrow({ where: { id: A.templateId }, select: { doc: true } })
+      const doc = template.doc as Row
+      for (const slot of doc.structure.slots) if (slot.key === 'exact-category') slot.rankRole = 'none'
+      await db().adsPlaybookTemplate.update({ where: { id: A.templateId }, data: { doc } })
     })
   })
 
-  it('the hero not proven yet: nothing closes its old place; the lock still refuses the negative there (both run)', async () => {
-    const run = await isolation({ dryRun: true })
-    expect(run.plan.adds.filter((a) => a.kind === 'heroHandover')).toEqual([])
-    expect(run.plan.adds.filter((a) => a.adGroupId === exactA.adGroupId)).toEqual([])
-    expect(run.plan.leftAlone).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'heroHandover', adGroupId: exactA.adGroupId, why: expect.stringMatching(/^Not closed yet/) })]))
+  it('the hero not proven yet: nothing is proposed for its old place — both run; the lock still keeps a negative off it', async () => {
+    const view = await winners(A.parent)
+    const old = capes(view).find((e: Row) => e.adGroupId === exactA.adGroupId)
+    expect(old).toMatchObject({ state: 'winning', nextStep: 'none', heroOf: { key: 'hero:test cape', proven: false }, nextWhy: expect.stringMatching(/runs too until that campaign meets the harvest bar/) })
+    expect(capes(view).map((e: Row) => e.nextStep)).not.toContain('closeOldPlace')
     expect(await lock(exactA)).toMatchObject({ deniedAt: 'own_keyword' })
-    const view = await winners(A.parent)
-    expect(entry(view, 'test cape')).toBeDefined()
-    expect(view.data.entries.filter((e: Row) => e.term === 'test cape').map((e: Row) => e.nextStep)).not.toContain('closeOldPlace')
   })
 
-  it('the hero proven: ONE negative exact proposed in the old Exact ad group only; written through the write service; B untouched', async () => {
-    await inside(() => searched(heroG, 'test cape', 5, { orders: 6, clicks: 30, costCents: 900, salesCents: 9000 }, 'KW-WA-HERO'))
-    const run = await isolation({ dryRun: true })
-    const handover = run.plan.adds.filter((a) => a.kind === 'heroHandover')
-    expect(handover.map((a) => [a.match, a.text, a.adGroupId])).toEqual([['EXACT', 'test cape', exactA.adGroupId]])
-    expect(run.plan.adds.map((a) => a.adGroupId)).not.toContain(exactB.adGroupId)
-    // The lock sees the hero as the term's proven home: the old keyword is superseded — for A only, never for B.
-    expect(await lock(exactA)).toBeNull()
-    expect(await lock(exactB)).toMatchObject({ deniedAt: 'own_keyword' })
-
-    // The winners view says it: hero proven → old place to be closed, with the request that asks for it.
-    const view = await winners(A.parent)
-    const old = view.data.entries.find((e: Row) => e.term === 'test cape' && e.adGroupId === exactA.adGroupId)
-    expect(old).toMatchObject({
-      nextStep: 'closeOldPlace', heroOf: { key: 'hero:test cape', proven: true },
-      closeOldPlace: { negative: { text: 'test cape', match: 'EXACT', adGroupId: exactA.adGroupId }, request: { tool: 'create-negative-keyword', args: { externalAdGroupId: exactA.ext, keywordText: 'test cape', matchType: 'NEGATIVE_EXACT' } } },
-    })
-    expect(old.nextWhy).toMatch(/^hero proven → old place to be closed/)
-
-    // A person accepts the card: only its item is written, through the one negative write service.
+  it('the hero proven: ONE proposed floor of the old exact keyword, in its own ad group only; never a negative; B untouched', async () => {
     const bBefore = await inside(() => db().adTarget.findMany({ where: { adGroupId: exactB.adGroupId }, select: { expressionValue: true, isNegative: true, bidCents: true } }))
-    const done = await isolation({ dryRun: false, items: handover.map((a) => ({ text: a.text, match: a.match, adGroupId: a.adGroupId })) })
-    expect(done.chosen).toHaveLength(1)
-    expect(done.written).toMatchObject({ refused: [], failed: [] })
-    expect((done.written!.added + done.written!.local)).toBe(1)
-    expect(await negativesIn(exactA.adGroupId)).toEqual([{ expressionValue: 'test cape', expressionType: expect.stringMatching(/EXACT/) }])
-    expect(await negativesIn(heroG.adGroupId)).toEqual([])
+    await inside(() => searched(heroG, 'test cape', 10, { orders: 6, clicks: 30, costCents: 900, salesCents: 9000 }, 'KW-WA-HERO'))
+    const view = await winners(A.parent)
+    const floors = view.data.entries.filter((e: Row) => e.closeOldPlace?.how === 'floor')
+    expect(floors).toHaveLength(1)
+    expect(floors[0]).toMatchObject({
+      term: 'test cape', adGroupId: exactA.adGroupId, nextStep: 'closeOldPlace', heroOf: { key: 'hero:test cape', proven: true },
+      // Low bids: the bid tool's lowest (the strategy sets no stop bid here).
+      closeOldPlace: { how: 'floor', request: { tool: 'bulk-ad-bid-change', args: { bids: [{ targetId: oldId, bidCents: 5 }] } } },
+      nextWhy: expect.stringMatching(/^hero proven → old keyword to the floor: .*never a negative/),
+    })
+    // The research place where it also ran closes by the isolation rule's negative exact there (its card), never a floor.
+    expect(capes(view).find((e: Row) => e.adGroupId === broadA.adGroupId)).toMatchObject({ nextStep: 'closeOldPlace', closeOldPlace: { how: 'isolation', request: null } })
+    // The request is one a person approves through the bid tool as it is.
+    const preview = await call('bulk-ad-bid-change', floors[0].closeOldPlace.request.args)
+    expect(preview.ok).toBe(true)
+    // L1 holds: a negative over the old keyword is still refused, whoever asks; nothing was written by the view.
+    expect(await lock(exactA)).toMatchObject({ deniedAt: 'own_keyword' })
+    expect(await inside(() => db().adTarget.count({ where: { adGroupId: exactA.adGroupId, isNegative: true } }))).toBe(0)
+    expect(await inside(() => db().adTarget.findUniqueOrThrow({ where: { id: oldId }, select: { bidCents: true } }))).toEqual({ bidCents: 45 })
+    // Rule 3: B's own "test cape" is never touched or proposed.
     expect(await inside(() => db().adTarget.findMany({ where: { adGroupId: exactB.adGroupId }, select: { expressionValue: true, isNegative: true, bidCents: true } }))).toEqual(bBefore)
+    expect((await winners(B.parent)).data.entries.map((e: Row) => e.nextStep)).not.toContain('closeOldPlace')
   })
 })

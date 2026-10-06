@@ -89,6 +89,23 @@ describe('bid and budget: the term\'s own numbers, inside the playbook and the s
     expect(heroPlan(input({ dailySpendCents: 5000 }))).toMatchObject({ budgetFrom: 'productBudget', dailyBudgetCents: 2000 })
     expect(heroPlan(input({ dailySpendCents: 450.2 }))).toMatchObject({ budgetFrom: 'spend', dailyBudgetCents: 451 })
   })
+
+  it('never above the product\'s daily budget, even where it is below the least budget per slot', () => {
+    const doc = templateDoc()
+    doc.budget.minPerSlotCents = 300
+    const p = heroPlan(input({ doc, dailyBudgetCents: 200, dailySpendCents: 20 }))
+    expect(p).toMatchObject({ budgetFrom: 'productBudget', dailyBudgetCents: 200 })
+    expect(p.warnings).toContain("The product's daily budget is below the playbook's least budget per slot: the hero gets the product's daily budget")
+  })
+
+  it('approved (frozen): the bid and budget as approved, whatever the term\'s CPC and spend now; a band that moved refuses it', () => {
+    const p = heroPlan(input({ frozen: { bidCents: 44, dailyBudgetCents: 333 }, cpcCents: 99, dailySpendCents: 9999 }))
+    expect(p).toMatchObject({ bidFrom: 'approved', budgetFrom: 'approved', dailyBudgetCents: 333, problems: [] })
+    expect(keywords(p)[0].bidCents).toBe(44)
+    const moved = heroPlan(input({ frozen: { bidCents: 44, dailyBudgetCents: 333 }, band: { minBidCents: null, maxBidCents: 40 } }))
+    expect(moved.problems).toEqual(["the bid approved for it is outside the ads strategy's bid band at this product now, so it is not built as approved: ask again"])
+    expect(moved.campaign).toBeNull()
+  })
 })
 
 describe('refused by name', () => {

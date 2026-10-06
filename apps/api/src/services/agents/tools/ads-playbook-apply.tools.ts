@@ -30,7 +30,7 @@
  *           held-campaign guards cover it). One per term per product per market. Its bid (the term's CPC) and budget
  *           (its daily spend) are frozen in the approval and asked again only against the strategy's band and caps. The
  *           term keeps running where it runs now: nothing is negated and no bid is lowered there; once the hero itself
- *           meets the harvest bar, its old exact keyword is proposed at the 2¢ floor (ads-playbook view winners) and the
+ *           meets the harvest bar, its old exact keyword is proposed at low bids (ads-playbook view winners) and the
  *           isolation rule negates it in the research campaigns (handover B). Another product buying the term never
  *           refuses it (rule 3). Spend is added only by the playbook's START (op start), as for every built slot.
  *
@@ -431,7 +431,7 @@ async function heroPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>, frozen
   const effect = `Builds ONE Sponsored Products campaign of its own for "${h.term}" — ${p.product.sku}'s hero for this term in ${p.market} — through the SP Super Wizard's launch: `
     + `one exact keyword, ${plural(p.productAds.length, 'ASIN')}, ${plural(h.negatives, 'negative')}, ${amountLabel(p.dailyBudgetCents, currency)} of daily budget. `
     + `Born ENABLED with its bid at the ${floor}-cent floor (the planned bid remembered; suppressed, never paused), off the live-write allowlist and without placements: it serves next to nothing (not nothing) until START. `
-    + `"${h.term}" keeps running where it runs now (${where}): nothing is negated and no bid is lowered there. Once the hero itself meets the harvest bar, its old places are closed — its old exact keyword to the ${floor}-cent floor (ads-playbook view winners proposes it; never a negative), the research campaigns by the playbook's isolation rule — each a request a person decides, never before.`
+    + `"${h.term}" keeps running where it runs now (${where}): nothing is negated and no bid is lowered there. Once the hero itself meets the harvest bar, its old places are closed — its old exact keyword to low bids (ads-playbook view winners proposes it; never a negative), the research campaigns by the playbook's isolation rule — each a request a person decides, never before.`
   return {
     plan: p,
     result: {

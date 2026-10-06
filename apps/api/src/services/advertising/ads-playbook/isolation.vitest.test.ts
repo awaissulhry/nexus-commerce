@@ -220,6 +220,11 @@ describe('planIsolation — PB-6c: a term\'s own campaign (a hero) owns its term
     expect(p.adds.map((a) => a.adGroupId)).not.toContain('g-exact')
   })
 
+  it('a hero still at the build\'s floor (waiting for START) is no home, as a keyword a sync added at the floor', () => {
+    const p = plan({ scope: withHero, positives: [{ ...pos('g-hero', 'test cape', 'EXACT'), waiting: true }], winners: { 'g-hero': ['test cape'] } })
+    expect(where(p, 'test cape')).toEqual([])
+  })
+
   it('a term another live exact keyword of the product owns is sent there as before, hero or not', () => {
     const p = plan({ scope: withHero, positives: [pos('g-hero', 'test cape', 'EXACT'), pos('g-exact', 'test cape', 'EXACT')] })
     expect(where(p, 'test cape')).toEqual(['EXACT:g-auto', 'EXACT:g-broad', 'EXACT:g-phrase'])

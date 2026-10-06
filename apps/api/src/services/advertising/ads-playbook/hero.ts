@@ -22,8 +22,8 @@
  *
  * What it does NOT do (Owner rule 2): the term keeps running where it runs now — nothing is negated there, no bid is
  * lowered; only once the hero itself meets the harvest bar (handover B, `proven`) are its old places closed, each by a
- * request a person decides: its old exact keyword lowered to the 2¢ floor (the winners view proposes it — the Owner's
- * low-bids stop, undone in about a minute; never a negative over his own keyword, L1), and in the research slots a
+ * request a person decides: its old exact keyword lowered to low bids (the winners view proposes it — the Owner's
+ * temporary stop, undone in about a minute; never a negative over his own keyword, L1), and in the research slots a
  * negative exact (the playbook's isolation rule). Rule 3: another product buying the same term is never a reason to
  * refuse, and is never touched.
  */

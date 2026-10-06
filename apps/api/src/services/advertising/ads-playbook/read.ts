@@ -418,7 +418,7 @@ const WINNERS_NOTE =
   + 'applies: bid (auto-bid already moves its bid toward the target), placement (a research slot or its own campaign: '
   + 'set-placement-multipliers), or a campaign of its own (apply-ads-playbook op hero: born at the floor, off the '
   + 'allowlist, waiting for a person; the term keeps running where it is until that campaign proves itself). Once that '
-  + 'campaign proves itself, the old exact keyword is proposed at the 2-cent floor (never a negative). A floor or a pause '
+  + 'campaign proves itself, the old exact keyword is proposed at low bids (never a negative). A floor or a pause '
   + "is named and gets no step; an hourly plan's campaign and a performance slot are reported only. Both windows are "
   + "settled (ending at the attribution lag); the bar is the ads strategy's harvest group, the target the one auto-bid "
   + "steers by, the band the strategy's. Only this product's own campaigns are read."
