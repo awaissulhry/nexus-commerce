@@ -799,6 +799,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'enable-ads': ['basis', 'reach'],
   // AA-W2-13 — every ad named with its status, and where it lands.
   'archive-ads': ['basis', 'reach'],
+  // W3-3 — every ad group named with its stock verdict, every bid it lowers or gives back, and where it lands.
+  'lower-ad-bids-for-stock': ['basis', 'reach'],
+  'restore-ad-bids-after-stock': ['basis', 'reach'],
   // A14/A15 — eBay: each rate, listing, budget or keyword it starts from and sets, and where it lands (live or sandbox).
   'set-ebay-ad-rates': ['changes', 'reach'],
   'promote-ebay-listings': ['adds', 'adGroup', 'reach'],

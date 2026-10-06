@@ -273,6 +273,9 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'pause-ads': byStatusArgs,
   'enable-ads': byStatusArgs,
   'archive-ads': byStatusArgs,
+  // W3-3 — a stock lowering and its give-back: each ad group and campaign it names.
+  'lower-ad-bids-for-stock': byStatusArgs,
+  'restore-ad-bids-after-stock': byStatusArgs,
   // AA-W2-11 — an ads automation, where it acts: its products (through its campaigns), else its market.
   'turn-up-automation': async (place, args) => placeAutomation(place, await automationScope(String(args.automation ?? ''), str(args.rowId))),
   'tune-ad-engine': async (place, args) => {

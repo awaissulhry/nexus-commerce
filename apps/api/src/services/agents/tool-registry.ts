@@ -18,6 +18,7 @@ import { ADS_STRATEGY_TOOLS } from './tools/ads-strategy.tools.js'
 import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
 import { ADS_STATUS_TOOLS } from './tools/ads-status.tools.js'
+import { ADS_STOCK_TOOLS } from './tools/ads-stock.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -111,6 +112,8 @@ const ALL: AgentTool[] = [
   ...ADS_CREATE_TOOLS,
   // Ads autonomy AA-W2-12 — a real pause of Amazon ads, and switching back on what a Claude request paused.
   ...ADS_STATUS_TOOLS,
+  // Ads autonomy W3-3 — stock-aware bids: which ad groups are short of stock; lower their bids, give them back (never FBA).
+  ...ADS_STOCK_TOOLS,
   // Ads autonomy W3-2 — cancel an ad write Nexus queued and has not sent yet (a brake: nothing reaches Amazon).
   ...ADS_QUEUED_WRITE_TOOLS,
   ...EBAY_AD_TOOLS,
