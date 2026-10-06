@@ -77,9 +77,15 @@ const personAdd = (outcome: PersonAddOutcome, reason: string | null = null): Per
   ok: outcome === 'created' || outcome === 'already_existed', outcome, reason,
 })
 
+/**
+ * CM-29 / CC-30 — the profile a create goes to is the write gate's own answer (`adsProfileFor` via
+ * `adsClientContextFor`). It used to be `AmazonAdsConnection.findFirst({ marketplace, isActive })` while the gate
+ * approved the profile from `ConnectionScope`: if the two ever disagreed, a create went to a profile the gate had not
+ * approved. One resolver, one order, one answer.
+ */
 async function resolveCtx(marketplace: string): Promise<{ profileId: string; region: AdsRegion } | null> {
-  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
-  return conn ? { profileId: conn.profileId, region: (conn.region as AdsRegion) ?? 'EU' } : null
+  const { adsClientContextFor } = await import('./ads-profile-resolver.js')
+  return adsClientContextFor(marketplace)
 }
 
 /**

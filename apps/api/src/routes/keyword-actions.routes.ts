@@ -28,13 +28,18 @@ import {
 import { KT6_BID_FLOOR_CENTS } from '../services/advertising/kt6-bid-action.js'
 import { KT6_CEILING_GRAINS } from '../services/advertising/kt6-spend-ceiling.js'
 
-const KT_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
+import { adsReadMarkets } from '../services/advertising/ads-markets.service.js'
 
-/** Shared validation. Returns an error object to send, or null when the input is good. */
-function badRequest(q: Record<string, string | undefined>): { error: string; code: string } | null {
+/**
+ * Shared validation. Returns an error object to send, or null when the input is good.
+ * Ads wave 4c (F3) — the market must be one Nexus reads (the connections), not one of a fixed four. Whether a bid may
+ * be SENT there is the write gate's answer, given when the change is applied.
+ */
+async function badRequest(q: Record<string, string | undefined>): Promise<{ error: string; code: string } | null> {
   const market = (q.market ?? '').toUpperCase()
-  if (!KT_MARKETS.includes(market as (typeof KT_MARKETS)[number])) {
-    return { error: `market is required and must be one of ${KT_MARKETS.join('/')}`, code: 'market_required' }
+  const readMarkets = await adsReadMarkets()
+  if (!readMarkets.includes(market)) {
+    return { error: `market is required and must be one of ${readMarkets.join('/')}`, code: 'market_required' }
   }
   if (!q.term || !q.term.trim()) return { error: 'term is required', code: 'term_required' }
   return null
@@ -60,7 +65,7 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
    */
   fastify.get('/advertising/keyword-actions/preview', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
-    const bad = badRequest(q)
+    const bad = await badRequest(q)
     if (bad) { reply.status(400); return bad }
     const bid = parseBid(q.bidCents)
     if ('error' in bid) { reply.status(400); return bid }
@@ -116,7 +121,7 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
   fastify.post('/advertising/keyword-actions/propose', async (request, reply) => {
     const b = (request.body ?? {}) as Record<string, unknown>
     const q = { market: String(b.market ?? ''), term: String(b.term ?? '') }
-    const bad = badRequest(q)
+    const bad = await badRequest(q)
     if (bad) { reply.status(400); return bad }
     const bid = parseBid(String(b.bidCents ?? ''))
     if ('error' in bid) { reply.status(400); return bid }
@@ -154,7 +159,7 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
   /** The proposals raised for one row, newest first. */
   fastify.get('/advertising/keyword-actions/proposals', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
-    const bad = badRequest(q)
+    const bad = await badRequest(q)
     if (bad) { reply.status(400); return bad }
     const market = (q.market ?? '').toUpperCase()
     return {
@@ -211,7 +216,7 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
    */
   fastify.get('/advertising/keyword-actions/changes', async (request, reply) => {
     const q = (request.query ?? {}) as Record<string, string | undefined>
-    const bad = badRequest(q)
+    const bad = await badRequest(q)
     if (bad) { reply.status(400); return bad }
     const market = (q.market ?? '').toUpperCase()
     const { loadRow } = await import('../services/advertising/kt6-proposal.service.js')
@@ -360,7 +365,7 @@ const keywordActionsRoutes = async (fastify: FastifyInstance): Promise<void> => 
       })),
       /** the honest empty state: no ceiling anywhere means nothing is capped */
       anyCeilingSet: rows.some((r) => r.enabled && r.dailyCapCents != null),
-      committed: KT_MARKETS.includes(market as (typeof KT_MARKETS)[number]) ? await committedToday(market) : null,
+      committed: (await adsReadMarkets()).includes(market) ? await committedToday(market) : null,
     }
   })
 }

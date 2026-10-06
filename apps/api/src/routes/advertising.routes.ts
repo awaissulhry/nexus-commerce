@@ -4536,21 +4536,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (body.scope === 'AD_GROUP' && !body.externalAdGroupId) {
       return reply.code(400).send({ error: 'externalAdGroupId_required_for_AD_GROUP' })
     }
-    // Resolve profileId from marketplace if not explicitly given
-    let profileId = body.profileId
-    if (!profileId) {
-      const conn = await prisma.amazonAdsConnection.findFirst({
-        where: { marketplace: body.marketplace, isActive: true },
-        select: { profileId: true },
+    // CM-29 — the profile comes from the write gate's own resolver, so the negative goes to the profile the gate
+    // approves. A profileId in the body must be that same profile: a caller cannot point a write at another account.
+    const { adsClientContextFor } = await import('../services/advertising/ads-profile-resolver.js')
+    const resolved = await adsClientContextFor(body.marketplace)
+    if (!resolved) {
+      return reply.code(404).send({
+        error: 'no_active_connection_for_marketplace',
+        marketplace: body.marketplace,
       })
-      if (!conn) {
-        return reply.code(404).send({
-          error: 'no_active_connection_for_marketplace',
-          marketplace: body.marketplace,
-        })
-      }
-      profileId = conn.profileId
     }
+    if (body.profileId && body.profileId !== resolved.profileId) {
+      return reply.code(400).send({
+        error: 'profile_not_for_marketplace',
+        reason: `That Amazon Ads profile does not serve ${body.marketplace} for this business, so nothing was sent to Amazon.`,
+      })
+    }
+    const profileId = resolved.profileId
     const { createNegative } = await import(
       '../services/advertising/ads-negative-kw.service.js'
     )
@@ -7095,14 +7097,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           const ag = t?.adGroup
           const camp = ag?.campaign
           if (ag?.externalAdGroupId && camp?.externalCampaignId && camp.marketplace) {
-            const conn = await prisma.amazonAdsConnection.findFirst({
-              where: { marketplace: camp.marketplace, isActive: true },
-              select: { profileId: true, region: true },
-            })
+            // CM-29 — the same resolver as the write gate.
+            const { adsClientContextFor } = await import('../services/advertising/ads-profile-resolver.js')
+            const conn = await adsClientContextFor(camp.marketplace)
             if (conn) {
               const { getThemeBidRecommendations } = await import('../services/advertising/ads-api-client.js')
               const recs = await getThemeBidRecommendations(
-                { profileId: conn.profileId, region: (conn.region as 'EU' | 'NA' | 'FE') ?? 'EU' },
+                { profileId: conn.profileId, region: conn.region },
                 {
                   externalCampaignId: camp.externalCampaignId,
                   externalAdGroupId: ag.externalAdGroupId,
@@ -10050,10 +10051,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!marketplace) { reply.status(400); return { error: 'marketplace required: a portfolio belongs to one market' } }
     let externalId: string | null = null, mode = 'local', profileId = `local-${marketplace}`
     try {
-      const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
+      // CM-29 — the same resolver as the write gate, so the portfolio is made in the profile the gate approves.
+      const { adsClientContextFor } = await import('../services/advertising/ads-profile-resolver.js')
+      const conn = await adsClientContextFor(marketplace)
       if (conn) {
         profileId = conn.profileId
-        const region = (conn.region === 'NA' || conn.region === 'FE' ? conn.region : 'EU') as AdsRegion
+        const region: AdsRegion = conn.region
         const { checkAdsWriteGate } = await import('../services/advertising/ads-write-gate.js')
         const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0 })
         if (gate.allowed) { const r = await createPortfolio({ profileId, region }, { name, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
@@ -10943,10 +10946,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           : daysToTokenExpiry <= 60 ? 'warning' : 'ok',
       }
     })
+    // Ads wave 4c (F3) — the one list of markets every ads screen uses: `read` (Nexus reads the account's data) and
+    // `write` (the write gate's own market checks pass), with each market's currency and why writes are off.
+    // Additive: the nine existing call sites read `items` and are untouched.
+    const { adsMarketLists } = await import('../services/advertising/ads-markets.service.js')
+    const markets = await adsMarketLists()
     reply.header('Cache-Control', 'private, max-age=30')
     return {
       items: withExpiry,
       count: withExpiry.length,
+      markets,
       adsMode: adsMode(),
       tokenExpiryAlerts: withExpiry.filter((c) => c.isActive && (c.tokenExpiryStatus === 'critical' || c.tokenExpiryStatus === 'expired')).length,
     }

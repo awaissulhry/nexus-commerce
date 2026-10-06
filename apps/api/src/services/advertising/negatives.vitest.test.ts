@@ -112,6 +112,8 @@ describe('attributionOf — four values, never blank', () => {
 
 describe('resolveNegScope — five grains, most specific wins', () => {
   const graph: NegScopeGraph = {
+    // The markets Nexus reads (ads wave 4c: from the connections). With today's accounts, the four live ones.
+    readMarkets: ['DE', 'ES', 'FR', 'IT'],
     campaigns: [
       { id: 'c-it-1', name: 'IT one', marketplace: 'IT', portfolioId: 'p1' },
       { id: 'c-it-2', name: 'IT two', marketplace: 'IT', portfolioId: null },
@@ -205,9 +207,20 @@ describe('resolveNegScope — five grains, most specific wins', () => {
     expect(r.campaignIds).toEqual(['c-de-1'])
   })
 
-  it('a sandbox market is not in "all"', () => {
+  it('a market Nexus does not read is not in "all"', () => {
     const withSandbox: NegScopeGraph = { ...graph, campaigns: [...graph.campaigns, { id: 'c-uk', name: 'UK', marketplace: 'UK', portfolioId: null }] }
     expect(resolveNegScope(withSandbox, { market: 'all' }).campaignIds).not.toContain('c-uk')
+  })
+
+  it('🔴 4c — a market Nexus READS (UK, reading only) is in "all" and can be scoped; IT is unchanged', () => {
+    const withUk: NegScopeGraph = {
+      ...graph,
+      readMarkets: [...graph.readMarkets, 'UK'],
+      campaigns: [...graph.campaigns, { id: 'c-uk', name: 'UK', marketplace: 'UK', portfolioId: null }],
+    }
+    expect(resolveNegScope(withUk, { market: 'all' }).campaignIds).toContain('c-uk')
+    expect(resolveNegScope(withUk, { market: 'UK' }).campaignIds).toEqual(['c-uk'])
+    expect(resolveNegScope(withUk, { market: 'IT' }).campaignIds).toEqual(resolveNegScope(graph, { market: 'IT' }).campaignIds)
   })
 
   it('an unknown line or portfolio resolves to an empty scope, not to the whole market', () => {
