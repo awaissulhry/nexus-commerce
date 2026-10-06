@@ -4,11 +4,12 @@
  *   units      an integer percent becomes the engines' fraction (30 → 0.3) and back; a stored fraction (0.3) is never
  *              read as a percent, nor a percent (30) as 3,000 %
  *   schema     every registry column is an AdsStrategy column and every setting column is in the registry
- *   honest     only the fields an engine acts on have readers (W1-7: harvest, negate, protect), and notReadYet lists
- *              every other field; a reader names where and how
+ *   honest     only the fields something acts on have readers (W1-7: harvest, negate, protect; W1-8: Claude's door
+ *              reads what Claude may do alone), and notReadYet lists every other field; a reader names where and how
  *   stricter   the one order two harvest (or negate) groups are compared by, everywhere they meet
  *   money      every money field's value keys are stripped for a person without ad-spend money
- *   names      every tool an action type narrows is a registered tool; the constants mirror their sources
+ *   names      every tool an action type narrows is a registered tool and knows where its change lands; no brake is
+ *              among them; the constants mirror their sources
  */
 import { describe, expect, it } from 'vitest'
 import { Prisma } from '@prisma/client'
@@ -16,8 +17,10 @@ import { FIELDS } from '@nexus/shared/permissions'
 import { listTools } from '../../agents/tool-registry.js'
 import { SUPPRESSION_FLOOR_CENTS } from '../ads-bid-suppression.service.js'
 import { MAX_ACCOUNT_DEFAULT_PCT } from '../ads-target-acos-resolver.js'
+import { BRAKE_TOOLS, PLACES, actionOfTool } from './claude.js'
 import {
   CLAUDE_ACTION_TOOLS,
+  CLAUDE_DOOR,
   COLUMN_CHECKS,
   DEFAULT_STOP_BID_CENTS,
   MAX_TARGET_PCT,
@@ -60,10 +63,11 @@ describe('the registry', () => {
     expect(Object.keys(COLUMN_CHECKS).sort()).toEqual([...settingColumns].sort())
   })
 
-  it('is honest: only the search-term thresholds and protection have readers (W1-7); every other field is stored and shown only', () => {
-    const read = ['harvest', 'negate', 'protect']
-    expect(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => f.key)).toEqual(['protect', 'harvest', 'negate'])
+  it('is honest: the search-term thresholds and protection (W1-7) and what Claude may do alone (W1-8) have readers; every other field is stored and shown only', () => {
+    const read = ['protect', 'harvest', 'negate', 'claudeAutonomy']
+    expect(STRATEGY_FIELDS.filter((f) => f.readBy.length).map((f) => f.key)).toEqual(read)
     expect(notReadYet()).toEqual(STRATEGY_FIELDS.map((f) => f.key).filter((key) => !read.includes(key)))
+    expect(STRATEGY_FIELDS.find((f) => f.key === 'claudeAutonomy')!.readBy).toEqual([CLAUDE_DOOR])
     // Each reader says where it acts, in words a screen can show.
     for (const f of STRATEGY_FIELDS.filter((x) => x.readBy.length)) for (const r of f.readBy) expect(r.length, f.key).toBeGreaterThan(20)
     expect(STRATEGY_FIELDS.find((f) => f.key === 'harvest')!.readBy.join(' ')).toMatch(/Keyword Harvest page.*stricter/)
@@ -107,5 +111,18 @@ describe('the registry', () => {
   it('every tool an action type narrows is a registered tool', () => {
     const tools = new Set(listTools().map((t) => t.name))
     expect(Object.values(CLAUDE_ACTION_TOOLS).flat().filter((name) => !tools.has(name))).toEqual([])
+  })
+
+  it('W1-8 — each of those tools knows where its change lands; brakes are registered tools, none of them, never narrowed', () => {
+    const narrowed = Object.values(CLAUDE_ACTION_TOOLS).flat()
+    expect(Object.keys(PLACES).sort()).toEqual([...narrowed].sort())
+    const tools = new Set(listTools().map((t) => t.name))
+    for (const brake of BRAKE_TOOLS) {
+      expect(tools.has(brake), brake).toBe(true)
+      expect(narrowed, brake).not.toContain(brake)
+      expect(actionOfTool(brake), brake).toBeNull()
+    }
+    for (const [action, names] of Object.entries(CLAUDE_ACTION_TOOLS)) for (const name of names) expect(actionOfTool(name)).toBe(action)
+    expect(actionOfTool('set-price')).toBeNull()
   })
 })
