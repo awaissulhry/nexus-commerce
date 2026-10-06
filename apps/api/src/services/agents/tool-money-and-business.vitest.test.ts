@@ -308,6 +308,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'replicate-ad-structure': (ids) => ({ sourceMarket: 'IT', campaignIds: [ids.campaignId], sourceProductToken: 'TEST', market: 'IT', productToken: 'COPY', skus: [ids.sku] }),
   // A11 — a new campaign's plan names a budget and bids (it needs money: refused for a person without it).
   'create-ad-campaign': (ids) => ({ market: 'IT', name: 'Money launch', skus: [ids.productId], dailyBudgetCents: 1500, defaultBidCents: 50, keywords: [{ text: 'jacket', matchType: 'EXACT' }] }),
+  // B-2 — an AI goal's plan names budgets and bids (it needs money: refused for a person without it).
+  'create-ai-goal-campaigns': (ids) => ({ market: 'IT', name: 'Money goal', goalProducts: [{ sku: ids.productId, dailyBudgetCents: 1500 }], seedKeywords: ['jacket'] }),
   // Ads autonomy W4-1 — a run report states each market's spend and sales (it needs money: refused for a person
   // without it); the run history shows them under the money keys only.
   'report-ads-run': () => ({ op: 'finish', markets: [{ market: 'IT', lines: ['Money test run'] }] }),

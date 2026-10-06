@@ -298,6 +298,8 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'create-ad-campaign': (place, args) => place.skus(marketOf(args.market), strs(args.skus)),
   // B-1 — a copy lands on the products it advertises, in the market it is created in.
   'replicate-ad-structure': (place, args) => place.skus(marketOf(args.market), strs(args.skus)),
+  // B-2 — an AI goal's products in one market, by SKU.
+  'create-ai-goal-campaigns': (place, args) => place.skus(marketOf(args.market), list(args.goalProducts).map((p) => str(obj(p).sku)).filter((sku): sku is string => !!sku)),
   // PB-5a — one product's playbook in one market: the product (by id, else by SKU).
   'apply-ads-playbook': (place, args) => (str(args.productId)
     ? place.productIds(marketOf(args.market), [str(args.productId)!])

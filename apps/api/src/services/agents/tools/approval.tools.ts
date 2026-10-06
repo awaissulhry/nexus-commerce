@@ -227,6 +227,8 @@ const AD_CHANGE_TOOLS = new Set([
   'apply-ads-playbook',
   // B-1 — a Replicate run, likewise.
   'replicate-ad-structure',
+  // B-2 — an AI goal's campaigns: created at once, not queued; approval-status counts them and how much Amazon holds.
+  'create-ai-goal-campaigns',
 ])
 
 export interface AdDelivery {
@@ -306,6 +308,19 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
       atAmazon += reach === 'live' ? counts.withAmazonId : 0
     }
     out.created = { total, atAmazon }
+    return out
+  }
+  if (toolName === 'create-ai-goal-campaigns') {
+    // B-2 — every campaign of the goal and everything under them; "at Amazon" only when it went live.
+    const goal = after as { campaignIds?: unknown; notAtAmazon?: unknown } | null
+    const ids = [...(Array.isArray(goal?.campaignIds) ? goal!.campaignIds : []), ...(Array.isArray(goal?.notAtAmazon) ? goal!.notAtAmazon : [])].filter((id): id is string => typeof id === 'string')
+    let total = 0, atAmazon = 0
+    for (const id of ids) {
+      const counts = await campaignStructureCounts(id)
+      total += counts.total
+      atAmazon += reach === 'live' ? counts.withAmazonId : 0
+    }
+    if (ids.length) out.created = { total, atAmazon }
     return out
   }
   if (toolName === 'create-ad-campaign') {
