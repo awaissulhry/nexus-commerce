@@ -1,7 +1,7 @@
 {
   "note": "Raw-hex ratchet over app CSS. Conversions LOWER these; a push may never raise one. A file absent here is held at zero. `reasons` explains any entry that was deliberately raised; a raise without one is a regression.",
   "updatedAt": "2026-09-02",
-  "total": 3204,
+  "total": 2754,
   "files": {
     "app/_shared/shared-shell.css": 33,
     "app/fleet/activity/activity.css": 77,
@@ -44,8 +44,7 @@
     "app/marketing/ads/rules-automation/dayparting/rank-dayparting.css": 26,
     "app/marketing/ads/rules-automation/fleet/fleet-sections.css": 87,
     "app/marketing/ads/rules-automation/rules-automation.css": 993,
-    "app/marketing/ads/suggestions/suggestions.css": 24,
-    "app/marketing/ads-console/amazon.css": 450
+    "app/marketing/ads/suggestions/suggestions.css": 24
   },
   "reasons": {
     "app/_shared/shared-shell.css": "30 -> 31 on 2026-09-02 (hub #605). The pin block's `--nds-chrome-bg: #18263b` is a literal BY NECESSITY: it is the root of the chrome chain. `shared-shell.css:606` derives `--nds-rail-bg: var(--nds-chrome-bg)` on a selector list that includes `body:has(.h10-shell)` itself, so pinning chrome-bg to rail-bg would close a var() cycle and drop all three grounds; `--nds-rail-surface` is #f1f3f5, a light grey, so it is not a candidate either. Every other pin in that block derives from this one. The other three tokens added at the same time DID convert (--nds-purple-700 / --nds-cyan-700 / --nds-blue-700), which is why this is +1 and not +4. 31 -> 33 on 2026-09-24 (Step 4.3 #5, A-51, R-49/R-65): the AAA sweep moved six light values this pin block copies and made .dark flip three more tokens, so the pin must hold their LIGHT values. Where the light value IS a theme-stable token the pin uses it (-1 --nds-text-link -> var(--nds-blue-800), -1 --nds-text-muted -> var(--nds-text-3), --nds-primary -> var(--nds-blue-800), --nds-text-2 -> var(--nds-grey-700)). Four have no such token and must be literals: +1 --nds-pill-success-fg #094397 and +1 --nds-primary-hover #0f4290 (neither is a ramp step), +2 --nds-amber-soft #fdf3d3 / --nds-amber-text #6b4800 (these palette steps now flip in .dark themselves, so nothing theme-stable holds their light value). Net +2."

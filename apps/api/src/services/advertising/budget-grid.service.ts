@@ -58,8 +58,7 @@ import { resolveScopeReach } from './ads-scope-reach.js'
 import { resolveAutonomy, type AutonomyLevel } from './ads-autonomy.js'
 import { microsToCents } from '../ads-core/metrics-math.js'
 
-/** Markets with production Amazon Ads connections. IE/NL/PL/SE/UK are sandbox — no listings. */
-export const BUD_MARKETS = ['IT', 'DE', 'FR', 'ES'] as const
+// Ads wave 4c (F3) — the markets come from the connections: `adsReadMarkets()` (ads-markets.service.ts).
 export const BUD_MARKET_ALL = 'all'
 
 export type BudView = 'campaigns' | 'rules'

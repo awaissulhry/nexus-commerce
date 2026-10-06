@@ -50,6 +50,9 @@ import {
 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { NegSlotProps } from './slot-contract'
+import { useAdsMarketplaceOptional } from '../../_shell/MarketplaceContext'
+import { writeBlockFor } from '../../_shell/adsMarkets'
+import { WriteBlockedTip } from '../../_shell/WriteBlocked'
 
 type BlockReason = 'winning-collision' | 'converting-terms' | 'protected-term' | 'below-floor' | 'no-ad-groups' | 'not-allowlisted'
 
@@ -157,6 +160,11 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
     () => (negateGram && data ? data.wasteful.find((w) => w.gram === negateGram) ?? null : null),
     [negateGram, data],
   )
+  // Ads wave 4c — negating in a market Nexus only reads is not sent: the scope's market, or (on "all markets") every
+  // market the word's spend is in. Off, with the reason, on the row and in the dialog.
+  const adsCtx = useAdsMarketplaceOptional()
+  const scopeBlocked = scope.market && scope.market !== 'all' ? writeBlockFor(adsCtx?.markets ?? [], [scope.market]) : null
+  const targetBlocked = scopeBlocked ?? (target ? writeBlockFor(adsCtx?.markets ?? [], target.marketSplit.map((m) => m.market)) : null)
 
   const csv = (rows: Array<Record<string, unknown>>, head: string, name: string) => {
     const body = rows.map((r) => Object.values(r).map((v) => (typeof v === 'string' ? `"${v.replace(/"/g, '""')}"` : String(v ?? ''))).join(',')).join('\n')
@@ -169,7 +177,7 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
   }
 
   const runNegate = async () => {
-    if (!target || busy) return
+    if (!target || busy || targetBlocked) return
     setBusy(true)
     try {
       const r = await fetch(`${getBackendUrl()}/api/advertising/negatives/negate-gram`, {
@@ -334,7 +342,7 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
                       <span className="ag">{num(w.adGroups)} ad {w.adGroups === 1 ? 'group' : 'groups'}</span>
                       <span className="ac">
                         {w.actionable
-                          ? <Button size="xs" onClick={() => { setResult(null); push({ negate: w.gram }) }}>Negate…</Button>
+                          ? <><Button size="xs" disabled={!!scopeBlocked} onClick={() => { setResult(null); push({ negate: w.gram }) }}>Negate…</Button><WriteBlockedTip reason={scopeBlocked} /></>
                           : <em className="why">{BLOCK_LABEL[w.blockedBy[0]]}</em>}
                       </span>
                       {w.isSizeToken && (
@@ -469,7 +477,8 @@ export function NegWastefulWords({ scope, push }: NegSlotProps) {
                 </ul>
                 <div className="acts">
                   <Button size="xs" onClick={() => push({ negate: '' })}>Cancel</Button>
-                  <button type="button" className="h10-ngw-act danger" disabled={busy} onClick={() => void runNegate()}>
+                  <WriteBlockedTip reason={targetBlocked} />
+                  <button type="button" className="h10-ngw-act danger" disabled={busy || !!targetBlocked} onClick={() => void runNegate()}>
                     {busy ? 'Writing…' : `Negate in ${num(target.adGroupsWritable)} ad ${target.adGroupsWritable === 1 ? 'group' : 'groups'}`}
                   </button>
                 </div>

@@ -416,6 +416,7 @@ async function suggestionReach(items: DecisionItem[]): Promise<{ items: Array<De
           marketplace: where.marketplace,
           changes: field ? [{ field, valueCents }] : [],
           ...(item.family === 'negatives' && where.term ? { isNegation: true, keywordText: where.term } : {}),
+          byRule: true, // 4A — the rule writes it, so the rule's checks answer (not the approver's own-click pass)
         })
       : liveReachOf(await checkAdsWriteGate({ marketplace: where.marketplace, payloadValueCents: 0 }))
     if (reach.reach === 'refused') { problems.push(`${label}: ${gateRefusal(reach)}`); continue }

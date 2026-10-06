@@ -34,8 +34,9 @@ import { AUTO_CLAUSE_LABEL, autoClauseFromSpelling, autoClauseOf, type AutoClaus
 import { mergeOntoAmazonPlacements } from './ads-placement-math.js'
 import { sdExpressionValue, sdTargetExpression } from './sd-target-expression.js'
 import { patchDynamicBidding } from './dynamic-bidding-write.js'
-import { checkAdsWriteGate, type GateContext, type GateDecision } from './ads-write-gate.js'
+import { checkAdsWriteGate, sentPastSentence, type GateContext, type GateDecision, type OwnLimit } from './ads-write-gate.js'
 import { createIdentity, withCreateClaim } from './ads-create-claim.js'
+import { adsAccountTimeZone } from './ads-market-time.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
 import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
@@ -67,19 +68,42 @@ async function newCampaignCurrency(marketplace: string): Promise<string | null> 
  * an Amazon id is not "already there": the add sends it. Every other caller (launches, harvest, rules, the bulk sheet)
  * passes nothing and keeps its behaviour; the fields below are extra for them.
  */
-export type PersonAddOutcome = 'created' | 'already_existed' | 'local' | 'refused' | 'failed'
-export interface PersonAddResult { ok?: boolean; outcome?: PersonAddOutcome; reason?: string | null }
+export type PersonAddOutcome = 'created' | 'already_existed' | 'local' | 'refused' | 'failed' | 'needs_confirmation'
+export interface PersonAddResult {
+  ok?: boolean; outcome?: PersonAddOutcome; reason?: string | null
+  /** 3A (Owner decided 2026-10-06) — the add goes past his own limits: nothing written until his "Send anyway". */
+  needsConfirmation?: { limits: OwnLimit[] }
+}
 /** W2-A — why a create did not reach Amazon: the gate / connection refused it, or Amazon (or the call) failed it. */
-export interface NotSent { outcome: 'refused' | 'failed'; reason: string }
+export interface NotSent { outcome: 'refused' | 'failed' | 'needs_confirmation'; reason: string; /** 3A */ limits?: OwnLimit[] }
+/** 3A — the gate's refusal as a create's NotSent: a person's add past his own limits waits for his "Send anyway". */
+const notSentOfGate = (gate: GateDecision): NotSent => {
+  const g = gate as Extract<GateDecision, { allowed: false }>
+  return g.deniedAt === 'needs_confirmation'
+    ? { outcome: 'needs_confirmation', reason: g.reason, limits: g.ownLimits ?? [] }
+    : { outcome: 'refused', reason: gateReason(gate) }
+}
+/** 3A — the audit evidence of an add a person sent past his own limits ("sent past <limit> by <person>"); null otherwise. */
+const sentPastEvidence = (gate: GateDecision, userId: string | null | undefined): AdWriteEvidence | null => {
+  const past = (gate as { pastOwnLimits?: OwnLimit[] }).pastOwnLimits
+  return past?.length ? { sentPastOwnLimits: sentPastSentence(past, userId) } : null
+}
 export const NOT_ON_AMAZON_YET = 'The campaign or ad group is not on Amazon yet, so this was saved in Nexus only. It is sent when the campaign structure is pushed to Amazon.'
 const gateReason = (gate: GateDecision): string => (gate as Extract<GateDecision, { allowed: false }>).reason ?? 'the write gate refused it'
-const personAdd = (outcome: PersonAddOutcome, reason: string | null = null): PersonAddResult => ({
+const personAdd = (outcome: PersonAddOutcome, reason: string | null = null, limits?: OwnLimit[]): PersonAddResult => ({
   ok: outcome === 'created' || outcome === 'already_existed', outcome, reason,
+  ...(outcome === 'needs_confirmation' ? { needsConfirmation: { limits: limits ?? [] } } : {}),
 })
 
+/**
+ * CM-29 / CC-30 — the profile a create goes to is the write gate's own answer (`adsProfileFor` via
+ * `adsClientContextFor`). It used to be `AmazonAdsConnection.findFirst({ marketplace, isActive })` while the gate
+ * approved the profile from `ConnectionScope`: if the two ever disagreed, a create went to a profile the gate had not
+ * approved. One resolver, one order, one answer.
+ */
 async function resolveCtx(marketplace: string): Promise<{ profileId: string; region: AdsRegion } | null> {
-  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
-  return conn ? { profileId: conn.profileId, region: (conn.region as AdsRegion) ?? 'EU' } : null
+  const { adsClientContextFor } = await import('./ads-profile-resolver.js')
+  return adsClientContextFor(marketplace)
 }
 
 /**
@@ -100,12 +124,15 @@ async function resolveCtx(marketplace: string): Promise<{ profileId: string; reg
  */
 function addGateScope(
   campaign: { id: string; adProduct?: string | null; type?: string | null },
-  input: { creationFlow?: boolean },
+  input: { creationFlow?: boolean; confirmOwnLimits?: boolean },
   bid: { field: 'bid' | 'defaultBid'; cents: number } | null,
-): Pick<GateContext, 'campaignId' | 'field' | 'intendedValueCents'> {
+): Pick<GateContext, 'campaignId' | 'field' | 'intendedValueCents' | 'confirmOwnLimits'> {
+  // 3A — a person's "Send anyway" past his own limits (the gate honours it only with `manual`).
+  const confirm = input.confirmOwnLimits === true ? { confirmOwnLimits: true } : {}
   const product = adProductOf(campaign)
-  if (product != null && product !== SPONSORED_PRODUCTS) return {}
+  if (product != null && product !== SPONSORED_PRODUCTS) return confirm
   return {
+    ...confirm,
     ...(input.creationFlow ? {} : { campaignId: campaign.id }),
     ...(bid ? { field: bid.field, intendedValueCents: bid.cents } : {}),
   }
@@ -235,10 +262,12 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
     const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: budgetCents, ...(input.type === 'SP' ? { field: 'dailyBudget', intendedValueCents: budgetCents } : {}) })
     if (gate.allowed || input.dryRun) {
       const common = { name: input.name, dailyBudget: input.dailyBudgetEur, state, portfolioId: input.portfolioId, dryRun: input.dryRun }
+      // CC-26 — SB and SD send a start date: the day in the account's own time zone, not the UTC day.
+      const timeZone = input.type === 'SP' ? null : await startDateTimeZone(ctx.profileId, input.marketplace)
       const r = input.type === 'SD'
-        ? await createSdCampaign(ctx, { ...common, tactic: input.sdTactic ?? 'T00020' })
+        ? await createSdCampaign(ctx, { ...common, tactic: input.sdTactic ?? 'T00020', timeZone })
         : input.type === 'SB'
-          ? await createSbCampaign(ctx, { ...common, brandEntityId: brandEntityId! })
+          ? await createSbCampaign(ctx, { ...common, brandEntityId: brandEntityId!, timeZone })
           // AX-VT.1 — portfolioId travels with the create. It used to be collected by
           // every builder, stored on the local row below, and dropped right here.
           : await createCampaign(ctx, { ...common, targetingType: input.targetingType ?? 'MANUAL', biddingStrategy: input.biddingStrategy })
@@ -268,6 +297,9 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
       ...(brandEntityId ? { brandEntityId } : {}),
       // CC-12 — an SD campaign keeps its tactic, so its ad group is created with the same one (see createAdGroupLocal).
       ...(input.type === 'SD' ? { tactic: input.sdTactic ?? 'T00020' } : {}),
+      // CC-27 — the Sponsored Products targeting type this create asked Amazon for (the same value `createCampaign`
+      // sends). The list, the export and the receipt showed it blank until the settings sync read it back.
+      ...(input.type === 'SP' ? { targetingType: input.targetingType ?? 'MANUAL' } : {}),
       // W2-A (CC-3) — a campaign Amazon does not hold is marked FAILED with the reason (the delivery column shows it), not
       // PENDING as if a push were on its way: no path pushes a campaign that has no Amazon id.
       startDate: new Date(),
@@ -279,6 +311,13 @@ async function createCampaignOnce(input: NewCampaign): Promise<CampaignCreateRes
   await audit('create_campaign', 'CAMPAIGN', campaign.id, { name: input.name, type: input.type, externalId, mode, state, reachedAmazon: externalId != null, ...(externalId ? {} : { error: notSent ?? CAMPAIGN_NOT_ON_AMAZON }) }, input.userId, {}, externalId ? 'SUCCESS' : 'FAILED')
   logger.info('[AX.4] createCampaignLocal', { id: campaign.id, type: input.type, externalId, mode, state, ...(externalId ? {} : { notSent }) })
   return { id: campaign.id, externalCampaignId: externalId, mode, reason: externalId ? null : (notSent ?? CAMPAIGN_NOT_ON_AMAZON) }
+}
+
+/** CC-26 — the zone a Sponsored Brands / Display start date is computed in (see ads-market-time.ts); UTC when unknown, said in the log. */
+async function startDateTimeZone(profileId: string, marketplace: string): Promise<string | null> {
+  const found = await adsAccountTimeZone(profileId, marketplace)
+  if (!found) logger.warn('[CC-26] no time zone known for this ads account — start date sent as the UTC day', { profileId, marketplace })
+  return found?.timeZone ?? null
 }
 
 /**
@@ -302,6 +341,8 @@ export interface NewAdGroup {
   requireAmazon?: boolean
   /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
   creationFlow?: boolean
+  /** 3A — a person's "Send anyway" past his own limits (honoured only for a person's own add). */
+  confirmOwnLimits?: boolean
 }
 export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string | null; externalAdGroupId: string | null; /** W2-A — why it did not reach Amazon (every caller; a launch lists it). */ notSent?: NotSent | null } & PersonAddResult> {
   const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true, tactic: true } })
@@ -322,11 +363,13 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
   const state: 'enabled' | 'paused' = (input.startEnabled ?? true) ? 'enabled' : 'paused'
   // CM-8 — why nothing reached Amazon, for a person's add (W2-A: and for a launch).
   let notSent: NotSent | null = null
+  let pastNote: AdWriteEvidence | null = null // 3A
   if (campaign.externalCampaignId && campaign.marketplace) {
     const ctx = await resolveCtx(campaign.marketplace)
     if (ctx) {
       const bidCents = Math.round(input.defaultBidEur * 100)
       const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: input.campaignId, ...campaign }, input, { field: 'defaultBid', cents: bidCents }) })
+      pastNote = sentPastEvidence(gate, input.userId)
       if (gate.allowed) {
         try {
           const r = isSd
@@ -342,15 +385,16 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
           if (!input.requireAmazon) throw e
           notSent = { outcome: 'failed', reason: (e as Error).message }
         }
-      } else notSent = { outcome: 'refused', reason: gateReason(gate) }
+      } else notSent = notSentOfGate(gate)
     } else notSent = { outcome: 'refused', reason: `No active Amazon Ads connection for ${campaign.marketplace}.` }
   }
-  if (input.requireAmazon && notSent) {
+  // 3A — a person's add past his own limits writes nothing until his "Send anyway", whoever asked for the row.
+  if ((input.requireAmazon || notSent?.outcome === 'needs_confirmation') && notSent) {
     logger.warn('[CM-8] ad group not created — nothing written', { campaignId: input.campaignId, outcome: notSent.outcome, reason: notSent.reason })
-    return { id: null, externalAdGroupId: null, ...personAdd(notSent.outcome, notSent.reason) }
+    return { id: null, externalAdGroupId: null, ...personAdd(notSent.outcome, notSent.reason, notSent.limits) }
   }
   const ag = await prisma.adGroup.create({ data: { campaignId: input.campaignId, name: input.name, defaultBidCents: Math.round(input.defaultBidEur * 100), status: 'ENABLED', externalAdGroupId: externalId } })
-  await audit('create_ad_group', 'AD_GROUP', ag.id, { name: input.name, externalId }, input.userId)
+  await audit('create_ad_group', 'AD_GROUP', ag.id, { name: input.name, externalId }, input.userId, {}, 'SUCCESS', pastNote)
   return {
     id: ag.id, externalAdGroupId: externalId, notSent,
     ...(input.requireAmazon ? personAdd(externalId ? 'created' : 'local', externalId ? null : NOT_ON_AMAZON_YET) : {}),
@@ -372,6 +416,8 @@ export interface NewKeyword {
   requireAmazon?: boolean
   /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
   creationFlow?: boolean
+  /** 3A — a person's "Send anyway" past his own limits (honoured only for a person's own add). */
+  confirmOwnLimits?: boolean
 }
 /**
  * HP1 — the return says WHY a keyword did not reach Amazon, not just that it didn't.
@@ -418,20 +464,24 @@ async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult
     if (!ag.externalAdGroupId || !ag.campaign?.externalCampaignId) return { id: existing.id, externalTargetId: null, existed: true, ...personAdd('local', NOT_ON_AMAZON_YET) }
     // CM-8 — Nexus holds it but Amazon never took it: send that row now (with the bid asked for), never "added".
     await prisma.adTarget.update({ where: { id: existing.id }, data: { bidCents: Math.round(input.bidEur * 100), status: 'ENABLED' } })
-    const pushed = await pushExistingKeyword({ adTargetId: existing.id, userId: input.userId, evidence: input.evidence, manual: input.manual, creationFlow: input.creationFlow })
+    const pushed = await pushExistingKeyword({ adTargetId: existing.id, userId: input.userId, evidence: input.evidence, manual: input.manual, creationFlow: input.creationFlow, confirmOwnLimits: input.confirmOwnLimits })
+    // 3A — past his own limits: waits for his "Send anyway".
+    const waits = pushed.refusal?.deniedAt === 'needs_confirmation'
     return {
       id: existing.id, externalTargetId: pushed.externalTargetId, existed: true,
-      ...(pushed.ok ? personAdd('created') : personAdd(pushed.outcome === 'refused' ? 'refused' : 'failed', pushed.refusal?.reason ?? pushed.error ?? null)),
+      ...(pushed.ok ? personAdd('created') : personAdd(waits ? 'needs_confirmation' : pushed.outcome === 'refused' ? 'refused' : 'failed', pushed.refusal?.reason ?? pushed.error ?? null, pushed.refusal?.limits)),
     }
   }
   let externalId: string | null = null
-  let denied: { deniedAt: string; reason: string } | undefined
+  let denied: { deniedAt: string; reason: string; /** 3A */ limits?: OwnLimit[] } | undefined
   let pushError: string | undefined
+  let pastNote: AdWriteEvidence | null = null // 3A
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const bidCents = Math.round(input.bidEur * 100)
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: bidCents }) })
+      pastNote = sentPastEvidence(gate, input.userId)
       if (gate.allowed) {
         const args = { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bidEur, state: 'enabled' as const }
         // HP1 — a throw used to abort the whole call with the local row unwritten and the reason
@@ -443,8 +493,8 @@ async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult
           if (!externalId) pushError = (r as { error?: string | null }).error ?? CREATE_NO_ID
         } catch (e) { pushError = (e as Error).message }
       } else {
-        const g = gate as { deniedAt?: string; reason?: string }
-        denied = { deniedAt: g.deniedAt ?? 'gate', reason: g.reason ?? 'write gate refused' }
+        const g = gate as { deniedAt?: string; reason?: string; ownLimits?: OwnLimit[] }
+        denied = { deniedAt: g.deniedAt ?? 'gate', reason: g.reason ?? 'write gate refused', ...(g.ownLimits ? { limits: g.ownLimits } : {}) }
       }
     } else {
       denied = { deniedAt: 'connection', reason: `no ads connection context for ${ag.campaign.marketplace}` }
@@ -453,9 +503,10 @@ async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult
     denied = { deniedAt: 'ids', reason: 'the ad group or campaign has no Amazon ids to create under' }
   }
   // CM-8 — a person's add that did not reach Amazon leaves nothing behind (a draft campaign keeps its row).
-  if (input.requireAmazon && !externalId && denied?.deniedAt !== 'ids') {
+  // 3A — a person's add past his own limits writes nothing until his "Send anyway".
+  if ((input.requireAmazon || denied?.deniedAt === 'needs_confirmation') && !externalId && denied?.deniedAt !== 'ids') {
     logger.warn('[CM-8] keyword not created — nothing written', { adGroupId: input.adGroupId, deniedAt: denied?.deniedAt ?? null, reason: denied?.reason ?? pushError })
-    return { id: null, externalTargetId: null, denied, pushError, ...personAdd(denied ? 'refused' : 'failed', denied?.reason ?? pushError ?? CREATE_NO_ID) }
+    return { id: null, externalTargetId: null, denied, pushError, ...personAdd(denied ? (denied.deniedAt === 'needs_confirmation' ? 'needs_confirmation' : 'refused') : 'failed', denied?.reason ?? pushError ?? CREATE_NO_ID, denied?.limits) }
   }
   const t = await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: 'KEYWORD', expressionType: input.matchType, expressionValue: input.keywordText, bidCents: Math.round(input.bidEur * 100), status: 'ENABLED', externalTargetId: externalId } })
   // 🔴 `reachedAmazon` is `externalId != null`, and the payload says so explicitly rather than
@@ -469,7 +520,7 @@ async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult
     // cohort needs the opening bid to answer "did it pay", and it must not be reconstructed from
     // whatever `ad-rank-defend` last moved it to.
     { keywordText: input.keywordText, matchType: input.matchType, externalId, reachedAmazon: externalId != null, bidCents: Math.round(input.bidEur * 100) },
-    input.userId, {}, 'SUCCESS', input.evidence ?? null)
+    input.userId, {}, 'SUCCESS', pastNote ? { ...(input.evidence ?? {}), ...pastNote } : (input.evidence ?? null))
   return {
     id: t.id, externalTargetId: externalId, denied, pushError,
     ...(input.requireAmazon ? personAdd(externalId ? 'created' : 'local', externalId ? null : NOT_ON_AMAZON_YET) : {}),
@@ -492,9 +543,9 @@ async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult
  * Everything else is reused: the same `resolveCtx`, the same write gate, the same `createKeyword`
  * client, the same audit path.
  */
-export async function pushExistingKeyword(input: { adTargetId: string; userId?: string; evidence?: AdWriteEvidence | null; /** 1e — a person's own add (isPersonCreate). */ manual?: boolean; /** CM-20 — see addGateScope. */ creationFlow?: boolean }): Promise<{
+export async function pushExistingKeyword(input: { adTargetId: string; userId?: string; evidence?: AdWriteEvidence | null; /** 1e — a person's own add (isPersonCreate). */ manual?: boolean; /** CM-20 — see addGateScope. */ creationFlow?: boolean; /** 3A — see addGateScope. */ confirmOwnLimits?: boolean }): Promise<{
   ok: boolean; externalTargetId: string | null; outcome: 'acted' | 'refused' | 'failed'
-  refusal?: { deniedAt: string; reason: string }; error?: string
+  refusal?: { deniedAt: string; reason: string; /** 3A — with `needs_confirmation`. */ limits?: OwnLimit[] }; error?: string
 }> {
   const t = await prisma.adTarget.findUnique({
     where: { id: input.adTargetId },
@@ -548,7 +599,7 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
     // instead of a bare `as any`, so a future refusal shape without a `reason` still fails here
     // rather than rendering the string "undefined" to an operator.
     const denied = gate as Extract<GateDecision, { allowed: false }>
-    return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: String(denied.deniedAt), reason: denied.reason } }
+    return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: String(denied.deniedAt), reason: denied.reason, ...(denied.ownLimits ? { limits: denied.ownLimits } : {}) } }
   }
 
   try {
@@ -595,7 +646,8 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
     }
     const r2 = { externalId }
     await prisma.adTarget.update({ where: { id: t.id }, data: { externalTargetId: r2.externalId, lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null } })
-    await audit('push_keyword', 'AD_TARGET', t.id, { keywordText: t.expressionValue, matchType: t.expressionType, externalId: r2.externalId, reachedAmazon: true, bidCents: t.bidCents, recoveredByReadBack: !r.externalId }, input.userId, {}, 'SUCCESS', input.evidence ?? null)
+    const pastNote = sentPastEvidence(gate, input.userId) // 3A
+    await audit('push_keyword', 'AD_TARGET', t.id, { keywordText: t.expressionValue, matchType: t.expressionType, externalId: r2.externalId, reachedAmazon: true, bidCents: t.bidCents, recoveredByReadBack: !r.externalId }, input.userId, {}, 'SUCCESS', pastNote ? { ...(input.evidence ?? {}), ...pastNote } : (input.evidence ?? null))
     return { ok: true, externalTargetId: r2.externalId, outcome: 'acted' }
   } catch (e) {
     return { ok: false, externalTargetId: null, outcome: 'failed', error: (e as Error).message }
@@ -616,6 +668,8 @@ export interface NewProductAd {
   launch?: boolean
   /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
   creationFlow?: boolean
+  /** 3A — a person's "Send anyway" past his own limits (honoured only for a person's own add). */
+  confirmOwnLimits?: boolean
 }
 
 /**
@@ -815,12 +869,12 @@ async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreate
           if (!input.launch) throw e
           notSent = { outcome: 'failed', reason: (e as Error).message }
         }
-      } else notSent = { outcome: 'refused', reason: gateReason(gate) }
+      } else notSent = notSentOfGate(gate)
     } else notSent = { outcome: 'refused', reason: `No active Amazon Ads connection for ${ag.campaign.marketplace}.` }
   }
   if (person && notSent) {
     logger.warn('[CM-8] product ad not created — nothing written', { adGroupId: input.adGroupId, outcome: notSent.outcome, reason: notSent.reason })
-    return { id: held?.id ?? null, externalAdId: null, ...personAdd(notSent.outcome, notSent.reason) }
+    return { id: held?.id ?? null, externalAdId: null, ...personAdd(notSent.outcome, notSent.reason, notSent.limits) }
   }
   if (held && !externalId) return { id: held.id, externalAdId: null, ...personAdd('local', NOT_ON_AMAZON_YET) }
   const ad = held
@@ -848,6 +902,7 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
   if (!gate.allowed) { out.ok = false; out.errors.push('write-gate closed — allowlist the campaign first'); return out }
   const extC = campaign.externalCampaignId
   const isSd = campaign.adProduct === 'SPONSORED_DISPLAY'
+  const isSb = campaign.adProduct === 'SPONSORED_BRANDS'
   const adGroups = await prisma.adGroup.findMany({ where: { campaignId } })
   for (const ag of adGroups) {
     let extAg = ag.externalAdGroupId
@@ -883,6 +938,10 @@ export async function pushCampaignStructure(campaignId: string): Promise<{ ok: b
           const r = await createKeyword(ctx, { externalCampaignId: extC, externalAdGroupId: extAg, keywordText: t.expressionValue ?? '', matchType: (t.expressionType as 'EXACT' | 'PHRASE' | 'BROAD') || 'BROAD', bid, state: 'enabled' })
           extId = r.externalId; if (extId) out.keywords++
           else out.errors.push('keyword "' + (t.expressionValue || '') + '": ' + JSON.stringify(r.rawResponse).slice(0, 200))
+        } else if (isSb) {
+          // CC-31 — not to /sp/targets: Nexus has no Sponsored Brands targets path (see SB_TARGET_REFUSED).
+          out.errors.push('target "' + (t.expressionValue || '') + '": ' + SB_TARGET_REFUSED)
+          continue
         } else {
           const expression = [{ type: 'ASIN_SAME_AS', value: t.expressionValue ?? '' }]
           // CC-12 — an SD row is sent in SD's own dialect, rebuilt from what Nexus stored (kind, audience type, value).
@@ -1235,8 +1294,12 @@ export interface NewTarget {
   requireAmazon?: boolean
   /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
   creationFlow?: boolean
+  /** 3A — a person's "Send anyway" past his own limits (honoured only for a person's own add). */
+  confirmOwnLimits?: boolean
 }
 type TargetCreateResult = { id: string | null; externalTargetId: string | null; mode: string; /** W2-A — why it did not reach Amazon. */ notSent?: NotSent | null } & PersonAddResult
+/** CC-31 — why a product, category or audience target is not added to a Sponsored Brands campaign. */
+export const SB_TARGET_REFUSED = 'Nexus cannot add product, category or audience targets to a Sponsored Brands campaign yet: Amazon takes them on its Sponsored Brands targets endpoint, which Nexus does not send to. Nothing was created. Add them in the Amazon Ads console, or add keywords instead.'
 export async function createTargetLocal(input: NewTarget): Promise<TargetCreateResult> {
   // CM-33 — the dedupe below and the create are one step (see createKeywordLocal).
   return withCreateClaim(createIdentity('target', input.adGroupId, input.kind, input.value), () => createTargetOnce(input), () => {
@@ -1247,6 +1310,17 @@ export async function createTargetLocal(input: NewTarget): Promise<TargetCreateR
 async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
   const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaignId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } })
   if (!ag) throw new Error('ad group not found')
+  // CC-31 — a Sponsored Brands campaign's product / category / audience targets go to Amazon's Sponsored Brands targets
+  // endpoint, which Nexus has no path to. This sent them to the Sponsored Products one (`/sp/targets`), which knows
+  // nothing of an SB campaign. Refused before anything is written or sent, with the reason (a launch lists it, a
+  // person's add answers 403 with it).
+  if (adProductOf(ag.campaign) === 'SPONSORED_BRANDS') {
+    logger.warn('[CC-31] Sponsored Brands target refused — Nexus has no SB targets path', { adGroupId: input.adGroupId, kind: input.kind })
+    return {
+      id: null, externalTargetId: null, mode: 'local', notSent: { outcome: 'refused', reason: SB_TARGET_REFUSED },
+      ...(input.requireAmazon && !input.skipAmazon ? personAdd('refused', SB_TARGET_REFUSED) : {}),
+    }
+  }
   // CC-12 — a Sponsored Display target is built in SD's own dialect, first: one Amazon would refuse is refused before
   // anything is written, and a nested audience is stored (and matched below) by the text it names.
   const sdExpression = input.kind === 'AUDIENCE' || ag.campaign?.adProduct === 'SPONSORED_DISPLAY'
@@ -1276,11 +1350,13 @@ async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
   let externalId: string | null = null, mode = 'local'
   // CM-8 — why nothing reached Amazon, for a person's add (W2-A: and for a launch).
   let notSent: NotSent | null = null
+  let pastNote: AdWriteEvidence | null = null // 3A
   if (!input.skipAmazon && ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
       const bidCents = Math.round(input.bidEur * 100)
       const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: bidCents }) })
+      pastNote = sentPastEvidence(gate, input.userId)
       if (gate.allowed) {
         try {
           const r = sdExpression
@@ -1292,12 +1368,12 @@ async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
           if (!person) throw e
           notSent = { outcome: 'failed', reason: (e as Error).message }
         }
-      } else notSent = { outcome: 'refused', reason: gateReason(gate) }
+      } else notSent = notSentOfGate(gate)
     } else notSent = { outcome: 'refused', reason: `No active Amazon Ads connection for ${ag.campaign.marketplace}.` }
   }
-  if (person && notSent) {
+  if ((person || notSent?.outcome === 'needs_confirmation') && notSent) {
     logger.warn('[CM-8] target not created — nothing written', { adGroupId: input.adGroupId, kind: input.kind, outcome: notSent.outcome, reason: notSent.reason })
-    return { id: dupe?.id ?? null, externalTargetId: null, mode, ...personAdd(notSent.outcome, notSent.reason) }
+    return { id: dupe?.id ?? null, externalTargetId: null, mode, ...personAdd(notSent.outcome, notSent.reason, notSent.limits) }
   }
   if (dupe && !externalId) return { id: dupe.id, externalTargetId: null, mode, ...personAdd('local', NOT_ON_AMAZON_YET) }
   const bidCents = Math.round(input.bidEur * 100)
@@ -1306,7 +1382,7 @@ async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
   const t = dupe
     ? await prisma.adTarget.update({ where: { id: dupe.id }, data: { externalTargetId: externalId, bidCents, status, ...(externalId ? { lastSyncedAt: new Date(), lastSyncStatus: 'SUCCESS', lastSyncError: null } : {}) } })
     : await prisma.adTarget.create({ data: { adGroupId: input.adGroupId, kind: input.kind, expressionType, expressionValue: value, bidCents, status, externalTargetId: externalId } })
-  await audit(dupe ? 'push_target' : 'create_target', 'AD_TARGET', t.id, { kind: input.kind, value, externalId, mode, reachedAmazon: externalId != null }, input.userId)
+  await audit(dupe ? 'push_target' : 'create_target', 'AD_TARGET', t.id, { kind: input.kind, value, externalId, mode, reachedAmazon: externalId != null }, input.userId, {}, 'SUCCESS', pastNote)
   logger.info('[AX2.1] createTargetLocal', { id: t.id, kind: input.kind, externalId, mode })
   return {
     id: t.id, externalTargetId: externalId, mode, notSent,

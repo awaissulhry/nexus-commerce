@@ -54,6 +54,7 @@ import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { Button, Input, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
+import { useAdsMarketplace, useSharedAdsMarket } from '../../_shell/MarketplaceContext'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
 import { RulesTabs, rulesTabByKey } from '../_shared/tabs'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -83,7 +84,6 @@ import { BidRules } from './BidRules'
 import { useAdsSync } from '../_shared/adsBus'
 
 /** The four production Amazon Ads markets, plus the account-wide view the header already offers. */
-const MARKETS = ['IT', 'DE', 'FR', 'ES']
 const DEFAULT_MARKET = 'all'
 const DEFAULT_STATUS = 'enabled'
 const DEFAULT_WINDOW = '30d'
@@ -108,7 +108,9 @@ export function BidClient() {
   // ── the URL contract ──────────────────────────────────────────────────────────────────────────
   // Every view is linkable and an absent param means the default, never a stored preference, so a
   // link renders the same view for whoever opens it.
-  const market = params.get('market') ?? DEFAULT_MARKET
+  // Ads wave 4c / AM-28 — the markets Nexus reads, and the viewer's shared market when the URL names none.
+  const { readMarkets } = useAdsMarketplace()
+  const [market] = useSharedAdsMarket({ raw: params.get('market') })
   const scope: ScopeValue = {
     line: params.get('line') ?? '',
     portfolio: params.get('portfolio') ?? '',
@@ -775,7 +777,7 @@ export function BidClient() {
       <AdsPageHeader
         title="Bid"
         subtitle={activeTab?.subtitle ?? 'What each target bids, why it is that number, and who decided'}
-        markets={MARKETS}
+        markets={readMarkets}
         market={market}
         /* 🔴 The header's picker is the ONLY market control on this page. `showMarket` does not
            exist; the scope bar below renders three grains and never a fourth for market. */

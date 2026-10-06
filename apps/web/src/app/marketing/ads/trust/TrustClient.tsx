@@ -109,7 +109,8 @@ export function TrustClient() {
       <AdsPageHeader
         title="Trust"
         subtitle="Does Nexus match Amazon right now — and when was that last actually checked?"
-        markets={['All markets']} market="All markets" onMarketChange={() => {}}
+        markets={[]} market="all" onMarketChange={() => {}}
+        marketNotYet="Not by market yet: Trust checks every market together."
         showDataSync={false} showDateRange={false}
         actions={[]}
       />

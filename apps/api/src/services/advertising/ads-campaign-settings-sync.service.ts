@@ -334,9 +334,11 @@ function patchFromV3(c: V3CampaignSettings, prevDynamic: unknown): Record<string
 export async function syncOneCampaignSettings(campaignId: string): Promise<{ ok: boolean; placementBids?: number; error?: string }> {
   const camp = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { id: true, externalCampaignId: true, marketplace: true, dynamicBidding: true } })
   if (!camp?.externalCampaignId) return { ok: false, error: 'no_external_id' }
-  const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: camp.marketplace }, select: { profileId: true, region: true } })
+  // CM-29 — the same resolver as the write gate (this lookup had no isActive and no order: any row of the market).
+  const { adsClientContextFor } = await import('./ads-profile-resolver.js')
+  const conn = await adsClientContextFor(camp.marketplace)
   if (!conn) return { ok: false, error: 'no_connection_for_marketplace' }
-  const region: AdsRegion = conn.region === 'NA' || conn.region === 'FE' ? (conn.region as AdsRegion) : 'EU'
+  const region: AdsRegion = conn.region
   let list: V3CampaignSettings[] = []
   try { list = await listCampaignsV3({ profileId: conn.profileId, region }, { campaignIds: [camp.externalCampaignId] }) } catch (e) { return { ok: false, error: (e as Error).message.slice(0, 160) } }
   const c = list.find((x) => x.campaignId === camp.externalCampaignId) ?? list[0]

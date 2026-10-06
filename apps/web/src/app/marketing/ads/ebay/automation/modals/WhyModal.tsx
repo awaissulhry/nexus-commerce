@@ -11,6 +11,7 @@ import { Button, Pill } from '@/design-system/primitives'
 import { DataGrid } from '@/design-system/grid/datagrid'
 import { H10Modal } from '../../_lib/modal'
 import { eurC } from '../../_lib'
+import { money } from '../../../campaigns/_grid/format'
 import { type WhyReasoning, conditionSentence, CENTS_METRICS, PCT_METRICS, type RuleCondition } from '../_lib/rules'
 
 const fmtVal = (c: RuleCondition, v: number | null): string => {
@@ -60,8 +61,8 @@ export function WhyModal({ open, onClose, title, reasoning, ruleName, campaignId
       </p>
       {estimatedImpact && (
         <p className="eb-be-hint" style={{ marginTop: 6 }}>
-          Estimated / week: {estimatedImpact.feesDeltaCentsPerWeek != null && <b>{estimatedImpact.feesDeltaCentsPerWeek <= 0 ? '−' : '+'}€{(Math.abs(estimatedImpact.feesDeltaCentsPerWeek) / 100).toFixed(2)} fees</b>}
-          {estimatedImpact.salesAtRiskCentsPerWeek != null && estimatedImpact.salesAtRiskCentsPerWeek > 0 && <> · <b>€{(estimatedImpact.salesAtRiskCentsPerWeek / 100).toFixed(2)} sales at risk</b></>}
+          Estimated / week: {estimatedImpact.feesDeltaCentsPerWeek != null && <b>{estimatedImpact.feesDeltaCentsPerWeek <= 0 ? '−' : '+'}{money(Math.abs(estimatedImpact.feesDeltaCentsPerWeek))} fees</b>}
+          {estimatedImpact.salesAtRiskCentsPerWeek != null && estimatedImpact.salesAtRiskCentsPerWeek > 0 && <> · <b>{money(estimatedImpact.salesAtRiskCentsPerWeek)} sales at risk</b></>}
           {' — '}{estimatedImpact.assumption}
         </p>
       )}

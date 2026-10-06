@@ -26,6 +26,7 @@ import { fetchBusinessContext, type BusinessContext } from './business-api'
 import { fmtCount, fmtMoney, fmtShare } from './strategy-api'
 import { BlockedNote, Caveats, ProvenanceStrip, StatCard, TabState } from './StrategyBits'
 import { useSections } from './useSections'
+import { completeDaysWindow } from './report-api'
 
 /** Amazon's own names, so a reader is not left to expand SP/SB/SD themselves. */
 const AD_PRODUCT_NAME: Record<string, string> = {
@@ -74,11 +75,8 @@ export function BusinessTab({ market }: { market: string }) {
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
-  const window = useMemo(() => {
-    const to = new Date()
-    const from = new Date(to.getTime() - WINDOW_DAYS * 86_400_000)
-    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
-  }, [])
+  // AM-36 — complete local days ending yesterday, like every other ads window (was UTC days running into today).
+  const window = useMemo(() => completeDaysWindow(WINDOW_DAYS), [])
 
   useEffect(() => {
     const ac = new AbortController()

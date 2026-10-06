@@ -34,7 +34,7 @@ import {
 } from '../../lib/workspace-context.js'
 import { getTool, listTools } from './tool-registry.js'
 import { takeToolCall } from './tool-rate.js'
-import { PLAN_TOOL, type AgentTool, type ToolContext, type ToolDoor, type ToolPermission, type ToolResult, type ToolSurface } from './tool-types.js'
+import { PLAN_TOOL, runAsRuleApproved, type AgentTool, type ToolContext, type ToolDoor, type ToolPermission, type ToolResult, type ToolSurface } from './tool-types.js'
 
 /** Which front door a person came through — recorded, never trusted for access. */
 export type ToolVia = 'app' | 'claude'
@@ -261,6 +261,8 @@ export interface ExecuteOptions {
   approvedPreview?: unknown
   /** The door the approved REQUEST came through; the principal's own door when absent. */
   via?: ToolDoor
+  /** 4A — a person approved it (not a standing rule): see ToolContext.approvedByPerson. */
+  approvedByPerson?: boolean
 }
 
 async function withinHourlyLimit(name: string, limit: number | null | undefined): Promise<void> {
@@ -342,7 +344,13 @@ export async function executeTool(
     via: options.via ?? doorOf(principal),
     ...(options.approvalId ? { approvalId: options.approvalId } : {}),
     ...(options.approvedPreview !== undefined ? { approvedPreview: options.approvedPreview } : {}),
+    // 4A — only for a person principal: a system or rule run is never a person's click.
+    ...(options.approvedByPerson === true && principal.kind === 'user' ? { approvedByPerson: true } : {}),
   }
-  const raw = await asPrincipal(principal, () => execute(input, context))
+  // 4A — an approved run no person approved is judged as the machine's write (see runAsRuleApproved).
+  const run = options.approvalId && context.approvedByPerson !== true
+    ? () => runAsRuleApproved(() => execute(input, context))
+    : () => execute(input, context)
+  const raw = await asPrincipal(principal, run)
   return { tool, raw, visible: visibleTo(principal, tool, raw) }
 }

@@ -87,6 +87,12 @@ export interface RollbackOutcome {
   expired?: boolean
   windowHours?: number
   reason?: string
+  /**
+   * CM-22 — every row the Undo looked at was a no-op (the values before and after are the same, or nothing was
+   * recorded to put back): nothing was reversed and nothing failed. `reason` then starts "Nothing to undo:". Such a row is
+   * counted as skipped, never as reversed, and is not marked undone.
+   */
+  nothingToUndo?: boolean
   details: Array<{
     actionLogId: string
     actionType: string
@@ -126,6 +132,21 @@ async function restoreFloorMemory(log: AdLog, before: Record<string, unknown>): 
   else if (log.entityType === 'AD_GROUP') await prisma.adGroup.updateMany({ where, data: { suppressedFromBidCents: was } })
 }
 
+/** CM-22 — why a row has nothing to put back, in words the Undo shows. */
+const NO_DIFF = 'the values before and after this change are the same, so there is nothing to put back.'
+const NO_PLACEMENT_SNAPSHOT = 'Nexus has no record of the placements before this change, so there is nothing to put back.'
+
+/**
+ * CM-22 — when every row the Undo looked at was a no-op, the answer says "Nothing to undo" with the first row's reason
+ * (it used to answer `reversed: 1` for a row that changed nothing, and mark it undone).
+ */
+export function noteNothingToUndo(out: RollbackOutcome, why?: string | null): RollbackOutcome {
+  if (out.reversed > 0 || out.failed > 0 || out.skipped === 0) return out
+  out.nothingToUndo = true
+  if (!out.reason) out.reason = `Nothing to undo: ${why || 'this change left nothing that can be put back.'}`
+  return out
+}
+
 async function reverseOne(
   log: AdLog,
   actor: AdsActor,
@@ -140,7 +161,7 @@ async function reverseOne(
   // — there's nothing to undo on the Amazon side, and re-applying the
   // before-state via the worker would create noise.
   if (log.amazonResponseStatus !== 'SUCCESS' && log.amazonResponseStatus !== 'PENDING') {
-    return { ok: false, skipped: true, reason: `state=${log.amazonResponseStatus ?? 'null'} — nothing to reverse` }
+    return { ok: false, skipped: true, reason: `this change never reached Amazon (${log.amazonResponseStatus ?? 'no state'}), so there is nothing to put back.` }
   }
   const before = log.payloadBefore as Record<string, unknown> | null
   if (!before || typeof before !== 'object') {
@@ -152,7 +173,7 @@ async function reverseOne(
     // entity is CAMPAIGN but the affected field is dynamicBidding.placementBidding, not budget/status.
     if (log.actionType === 'update_placement_bidding') {
       const beforeAdj = before.adjustments as Array<{ placement: string; percentage: number }> | undefined
-      if (!Array.isArray(beforeAdj)) return { ok: true, skipped: true, reason: 'no prior placement snapshot to restore' }
+      if (!Array.isArray(beforeAdj)) return { ok: true, skipped: true, reason: NO_PLACEMENT_SNAPSHOT }
       const { updatePlacementBidding } = await import('./ads-create.service.js')
       // HX.1 — the 'Undo:' reason prefix is the same marker /campaigns/:id/history already uses to
       // flag a row as an undo, so a reversal reads as one everywhere rather than as a fresh change.
@@ -200,7 +221,13 @@ async function reverseOne(
         patch.biddingStrategy = before.biddingStrategy as 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL'
       if (after.endDate !== before.endDate)
         patch.endDate = before.endDate ? new Date(String(before.endDate)) : null
-      if (Object.keys(patch).length === 0) return { ok: true, skipped: true, reason: 'no diff to reverse' }
+      // CM-22 — a rename and a portfolio move are recorded with their before values like the rest; an Undo of one used
+      // to find "no diff" and say nothing was there to undo.
+      if ('name' in before && after.name !== before.name && typeof before.name === 'string' && before.name.trim())
+        patch.name = before.name
+      if ('portfolioId' in before && (after.portfolioId ?? null) !== (before.portfolioId ?? null))
+        patch.portfolioId = (before.portfolioId as string | null | undefined) ?? null
+      if (Object.keys(patch).length === 0) return { ok: true, skipped: true, reason: NO_DIFF }
       const result = await updateCampaignWithSync({
         campaignId: log.entityId,
         patch,
@@ -217,7 +244,7 @@ async function reverseOne(
       if (after.defaultBidCents !== before.defaultBidCents)
         patch.defaultBidCents = Number(before.defaultBidCents)
       if (after.status !== before.status) patch.status = before.status as 'ENABLED' | 'PAUSED' | 'ARCHIVED'
-      if (Object.keys(patch).length === 0) return { ok: true, skipped: true, reason: 'no diff to reverse' }
+      if (Object.keys(patch).length === 0) return { ok: true, skipped: true, reason: NO_DIFF }
       const result = await updateAdGroupWithSync({
         adGroupId: log.entityId,
         patch,
@@ -235,7 +262,7 @@ async function reverseOne(
       const patch: Parameters<typeof updateAdTargetWithSync>[0]['patch'] = {}
       if (after.bidCents !== before.bidCents) patch.bidCents = Number(before.bidCents)
       if (after.status !== before.status) patch.status = before.status as 'ENABLED' | 'PAUSED' | 'ARCHIVED'
-      if (Object.keys(patch).length === 0) return { ok: true, skipped: true, reason: 'no diff to reverse' }
+      if (Object.keys(patch).length === 0) return { ok: true, skipped: true, reason: NO_DIFF }
       const result = await updateAdTargetWithSync({
         adTargetId: log.entityId,
         patch,
@@ -342,13 +369,20 @@ export async function rollbackByActionLogId(args: {
     return out
   }
   const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true)
-  if (r.ok) {
+  const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
+  // CM-22 — a no-op (`ok` with `skipped`) is skipped, not reversed, and the row is not marked undone.
+  if (r.ok && !r.skipped) {
     out.reversed = 1
+    out.details.push({ ...base, outcome: 'REVERSED' })
     await prisma.advertisingActionLog.update({ where: { id: log.id }, data: { rolledBackAt: new Date(), rollbackReason: args.reason } }).catch(() => {})
-  } else if (r.skipped) out.skipped = 1
-  else { out.failed = 1; out.ok = false; out.reason = r.reason }
-  out.details.push({ id: log.id, actionType: log.actionType, ...r } as never)
-  return out
+  } else if (r.skipped) {
+    out.skipped = 1
+    out.details.push({ ...base, outcome: 'SKIPPED', reason: r.reason })
+  } else {
+    out.failed = 1; out.ok = false; out.reason = r.reason
+    out.details.push({ ...base, outcome: 'FAILED', reason: r.reason })
+  }
+  return noteNothingToUndo(out, r.reason)
 }
 
 export async function rollbackByChangeSetId(args: {
@@ -404,7 +438,7 @@ export async function rollbackByChangeSetId(args: {
       out.details.push({ ...base, outcome: 'FAILED', reason: r.reason })
     }
   }
-  return out
+  return noteNothingToUndo(out, out.details.find((d) => d.outcome === 'SKIPPED')?.reason)
 }
 
 /**
@@ -512,5 +546,5 @@ export async function rollbackByExecutionId(args: {
     }
   }
 
-  return out
+  return noteNothingToUndo(out, out.details.find((d) => d.outcome === 'SKIPPED')?.reason)
 }
