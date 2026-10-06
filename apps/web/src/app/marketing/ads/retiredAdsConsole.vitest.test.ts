@@ -6,13 +6,13 @@ import { REPORT_CATALOGUE } from './reporting/catalogue'
 /**
  * OC (2026-10-06) — the old ads console (/marketing/ads-console) is deleted, Rank Control included. Every page is a
  * config redirect to the Ad Manager page that does the same job, so bookmarks and old links still land on a working
- * page; inside a business the redirect keeps the business. Rank Control lands on Hourly Bids at its "Product rank
- * plans" section, where a plan made there can still be switched off; the rank-defend alert links there too.
+ * page; inside a business the redirect keeps the business. Rank Control lands on the Control Room, where the
+ * Rank-defend engine is switched (Hourly Bids stays exactly as it was); the rank-defend alert links there too.
  */
 const WEB_ROOT = join(__dirname, '..', '..', '..', '..')
 const APP = join(WEB_ROOT, 'src', 'app')
 const REPO = join(WEB_ROOT, '..', '..')
-const PLANS = '/marketing/ads/rules-automation/dayparting#rd-product-plans'
+const PLANS = '/marketing/ads/rules-automation/control-room'
 
 interface NextRedirect { source: string; destination: string; permanent?: boolean; has?: unknown[] }
 const loadRedirects = async (): Promise<NextRedirect[]> => {
@@ -87,17 +87,14 @@ describe('the deleted old ads console', () => {
     const withMode = redirects.findIndex((r) => r.source === '/marketing/ads-console/rank' && r.has)
     const plain = redirects.findIndex((r) => r.source === '/marketing/ads-console/rank' && !r.has)
     expect(redirects[withMode]?.has).toEqual([{ type: 'query', key: 'mode' }])
-    expect(redirects[withMode]?.destination).toBe('/marketing/ads/rules-automation/dayparting?mode=#rd-product-plans')
+    expect(redirects[withMode]?.destination).toBe('/marketing/ads/rules-automation/control-room?mode=')
     expect(withMode).toBeLessThan(plain)
   })
 
-  it('the rank-defend alert links to the Product rank plans section, which Hourly Bids mounts', () => {
+  it('the rank-defend alert links to the Control Room, where the Rank-defend engine is switched', () => {
     const job = readFileSync(join(REPO, 'apps/api/src/jobs/ad-rank-defend.job.ts'), 'utf8')
     expect(job).not.toContain('ads-console')
     expect(job).toContain(`href: '${PLANS}'`)
     expect(pageFor(PLANS)).not.toBeNull()
-    const page = readFileSync(join(APP, 'marketing/ads/rules-automation/dayparting/DaypartingSchedulesClient.tsx'), 'utf8')
-    expect(page).toContain('<RdSection id="product-plans">')
-    expect(page).toContain('<ProductPlansPanel />')
   })
 })
