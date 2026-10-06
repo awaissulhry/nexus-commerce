@@ -31,6 +31,7 @@ import { accountDefaultFraction, readOwnerTargets, targetFraction } from '../ads
 import {
   CLAUDE_ACTION_TOOLS,
   CLAUDE_ACTION_TYPES,
+  CLAUDE_DAILY_FIELDS,
   CLAUDE_LEVELS,
   STRATEGY_FIELDS,
   STRATEGY_LEVELS,
@@ -114,6 +115,11 @@ const CLAUDE_NOTE =
   + 'level for its kind of action where the change lands (`effective` here, for this scope). The strategy only narrows, never '
   + 'widens; stop-automation, turn-down-automation and other brakes are never narrowed. A change Nexus cannot place exactly '
   + '(a selection by market, an id not found) takes the strictest row of its market, or of the business.'
+/** AA-W2-2b — Claude's daily limits per market: what they bound, and that empty is 0 (fail closed). */
+const DAILY_NOTE =
+  "What Claude's ad changes may add in this market in 24 hours when they run by the business's rule (never a person's "
+  + 'approval): what ran by rule in the last 24 hours plus the change must fit, or a person decides. Empty is 0: nothing '
+  + 'that adds to it runs by rule here. The market row only; raising one needs the authenticator code.'
 const NOT_COMPARED = [
   "daily spend ceilings (they cap a day's budget increases: a different thing from a monthly cap)",
   'engine caps per run (code and server settings)',
@@ -385,6 +391,9 @@ function fieldEntries(resolved: ResolvedStrategy, older: Older, thisMonth: Recor
           : older.accountTargetPct != null
             ? { from: `the account default${others}`, targetAcosPct: older.accountTargetPct }
             : { from: `profit data, else a flat 30 %${others}` }
+    }
+    if ((CLAUDE_DAILY_FIELDS as readonly string[]).includes(spec.key)) {
+      entry.note = r.value == null ? `Not set, so 0: nothing that adds to it runs by rule here. ${DAILY_NOTE}` : DAILY_NOTE
     }
     entry.readBy = spec.readBy
     out.push(entry)

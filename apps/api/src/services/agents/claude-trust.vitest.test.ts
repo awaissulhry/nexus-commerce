@@ -544,14 +544,14 @@ describe('AA-W2-4 — watch: the full check auto would make, recorded on the req
 })
 
 describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched changes that would have run; a plan\'s ad steps count together', { timeout: TIMEOUT }, () => {
-  // set-price stands in for a strategy-bound ad tool: its preview carries the kit's limit facts (2 writes in IT; the
-  // strategy allows 5 a day) and its limits add the kit's daily check. No ad tool carries facts before AA-W2-6.
+  // set-price stands in for a strategy-bound ad tool: its preview carries the kit's limit facts (2 changes in IT; the
+  // strategy allows 5 changes a day) and its limits add the kit's daily check. No ad tool carries facts before AA-W2-6.
   const facts = () => ({
     v: LIMIT_FACTS_VERSION, tool: 'set-price', action: 'bid',
-    markets: { IT: { strategy: { version: 'test' }, currency: 'EUR', maxActionsPerRun: null, maxWritesPerDay: 5, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} } },
+    markets: { IT: { strategy: { version: 'test' }, currency: 'EUR', maxActionsPerRun: null, maxChangesPerDay: 5, maxRaisesPerDay: null, maxBudgetIncreasePerDayCents: null, sources: {} } },
     scopes: {}, entityScopes: {}, labels: {},
-    this: { markets: ['IT'], items: 2, writes: 2, raises: 0, cuts: 2, largestRaisePct: 0, largestCutPct: 1, largestRaisePoints: 0, largestCutPoints: 0, highestNewBidCents: null, budgetIncreaseCents: 0, byMarket: { IT: { items: 2, writes: 2, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } }, entities: [], rowsOutsideStrategy: 0, firstOutside: null },
-    today: { IT: { writes: 0, raises: 0, budgetIncreaseCents: 0 } },
+    this: { markets: ['IT'], items: 2, writes: 2, raises: 0, cuts: 2, largestRaisePct: 0, largestCutPct: 1, largestRaisePoints: 0, largestCutPoints: 0, highestNewBidCents: null, budgetIncreaseCents: 0, byMarket: { IT: { items: 2, changes: 2, writes: 2, raises: 0, budgetIncreaseCents: 0, addedDailyCents: 0 } }, entities: [], rowsOutsideStrategy: 0, firstOutside: null },
+    today: { IT: { changes: 0, writes: 0, raises: 0, budgetIncreaseCents: 0 } },
     perEntityToday: { maxChangesByRule: 0, entity: null }, unplaced: [], engineOwned: [], protectedHit: [],
   })
   async function asStrategyBound<T>(work: () => Promise<T>): Promise<T> {
@@ -580,13 +580,13 @@ describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched
       const plan = await call('submit-change-plan', { title: 'Two bid steps', steps: [await step(), await step()] })
       expect(plan.answer.trust.watch).toEqual({
         wouldRun: false, check: 'limits', steps: { total: 2, wouldRun: 0 },
-        why: 'the plan\'s ad steps together — IT: 2 writes ran or would have run by rule in the last 24 hours and this adds 4, more than the 5 a day the ads strategy allows; a person decides',
+        why: 'the plan\'s ad steps together — IT: 2 changes ran or would have run by rule in the last 24 hours and this adds 4 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day); a person decides',
       })
       expect((await approvalOf(plan.answer.approvalId)).ruleVerdict).toMatchObject({ steps: [{ wouldRun: false, check: 'limits' }, { wouldRun: false, check: 'limits' }] })
       // The plan would not have run, so it adds nothing; the next single change still fits, the one after does not.
       expect((await call('set-price', { productId: ids.productA, price: await nextPrice() })).answer.trust.watch).toMatchObject({ wouldRun: true })
       const third = await call('set-price', { productId: ids.productA, price: await nextPrice() })
-      expect(third.answer.trust.watch).toEqual({ wouldRun: false, check: 'limits', why: 'IT: 4 writes ran or would have run by rule in the last 24 hours and this adds 2, more than the 5 a day the ads strategy allows; a person decides' })
+      expect(third.answer.trust.watch).toEqual({ wouldRun: false, check: 'limits', why: 'IT: 4 changes ran or would have run by rule in the last 24 hours and this adds 2 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day); a person decides' })
     })
   })
 
@@ -596,7 +596,7 @@ describe('AA-W2-4 — the ads strategy\'s daily limits: watch counts the watched
       const plan = await call('submit-change-plan', { title: 'Three bid steps', steps: [await step(), await step(), await step()] })
       expect(plan.answer).toMatchObject({
         status: 'waiting_for_approval',
-        trust: { level: 'auto', why: 'the plan\'s ad steps together — IT: 0 writes ran by rule in the last 24 hours and this adds 6, more than the 5 a day the ads strategy allows; a person decides' },
+        trust: { level: 'auto', why: 'the plan\'s ad steps together — IT: 0 changes ran by rule in the last 24 hours and this adds 6 changes, more than the 5 a day the ads strategy allows (most changes Claude may run by rule a day); a person decides' },
       })
       expect(await approvalOf(plan.answer.approvalId)).toMatchObject({ status: 'pending', decisionVia: null, ruleVerdict: null })
       const two = await call('submit-change-plan', { title: 'Two bid steps', steps: [await step(), await step()] })

@@ -216,6 +216,22 @@ describe('C1 — execute knows the approval it carries out', () => {
     })
   })
 
+  it('AA-W2-1 — and who decided it: a person in Nexus, the person who asked with their code in Claude, or the rule', async () => {
+    const cases: Array<[string | null, string, boolean]> = [
+      [null, 'nexus', true], ['nexus', 'nexus', true], ['nexus-step-up', 'nexus', true], ['claude-confirm', 'claude', true], ['auto', 'auto', false],
+    ]
+    for (const [decisionVia, decidedVia, byPerson] of cases) {
+      execute.mockClear()
+      db.agentApproval.findUnique.mockResolvedValue({
+        id: 'a1', status: 'pending', toolName: 'change-price', args: { price: 12 }, preview: null, decisionVia, agentRun: { via: 'claude', mode: null },
+      } as never)
+      await decideApproval('a1', 'approve', PRICE_PERSON)
+      const ctx = execute.mock.calls[0]![1]
+      expect(ctx.decidedVia, String(decisionVia)).toBe(decidedVia)
+      expect(ctx.approvedByPerson === true, String(decisionVia)).toBe(byPerson)
+    }
+  })
+
   it('a fleet request runs as the fleet; one from in-process code as the system', async () => {
     db.agentApproval.findUnique.mockResolvedValue({
       id: 'a1', status: 'pending', toolName: 'change-price', args: { price: 12 }, preview: null, agentRun: { via: null, mode: 'council' },

@@ -27,7 +27,7 @@ import type { WatchVerdict } from '@nexus/shared/approval-queue'
 import prisma from '../../db.js'
 import { getTool } from './tool-registry.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
-import type { AgentTool, ClaudeTrust, ToolDoor } from './tool-types.js'
+import { decidedViaOf, type AgentTool, type ClaudeTrust, type ToolDoor } from './tool-types.js'
 import type { StrategyNarrowing } from '../advertising/ads-strategy/claude.js'
 import { logger } from '../../utils/logger.js'
 import { linkUndoRequest, recordExecutedChangeSafely } from './change-record.service.js'
@@ -408,8 +408,14 @@ export async function decideApproval(
       decider,
       ap.toolName,
       ap.args as Record<string, unknown>,
-      // 4A — approved by a person (in Nexus or with his code in Claude), not by a standing rule.
-      { approvalId: id, approvedPreview: ap.preview ?? undefined, via: requestDoor(ap.agentRun), approvedByPerson: ap.decisionVia !== 'auto' },
+      // 4A — approved by a person (in Nexus or with his code in Claude), not by a standing rule. AA-W2-1 — and which.
+      {
+        approvalId: id,
+        approvedPreview: ap.preview ?? undefined,
+        via: requestDoor(ap.agentRun),
+        approvedByPerson: ap.decisionVia !== 'auto',
+        decidedVia: decidedViaOf(ap.decisionVia),
+      },
     )
     await prisma.agentApproval.update({
       where: { id },

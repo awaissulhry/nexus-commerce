@@ -2,9 +2,10 @@
  * MCP full control C1 — the tool contract (plan section 05 §3.7), held for every registered tool.
  *
  * Rules 1–7, where code can check them:
- *   1. name kebab-case `verb-noun`; a short title; a change tool's description says it waits for a person — and never
- *      "always … in Nexus" (nor "nothing changes until a person approves it in Nexus" alone) when its ceiling lets the
- *      business confirm it in Claude or run it by rule.
+ *   1. name kebab-case `verb-noun`; a short title; a change tool's description says it waits for a person — and, when
+ *      its ceiling lets the business confirm it in Claude or run it by rule, never that it ALWAYS waits for a person in
+ *      Nexus, nor that a person approves it in Nexus without the other way (in Claude; by rule); at `auto`, never that
+ *      it always waits for, or needs, a person at all (N3, widened in AA-W2-1).
  *   2. `requires` names real permissions (ai.run is added by the door).
  *   3. `input` is a zod object; every argument is described; every list is bounded (≤ 250); a `channel`
  *      argument is an enum; NO argument names a business or workspace — the business comes from the caller.
@@ -12,8 +13,14 @@
  *      `openWorld` either way.
  *   5. `restrictedFields` name real money permissions.
  *   6. `surfaces`, when set, name real surfaces.
- *   7. a change tool states `reversibility` and `maxClaudeTrust`; an irreversible one is `ask` at most; `auto`
- *      needs limits with defaults and a `withinLimits` check; an executable one has MATERIAL_PREVIEW_FIELDS.
+ *   7. a change tool states `reversibility` and `maxClaudeTrust`; `auto` needs limits with defaults and a
+ *      `withinLimits` check; an executable one has MATERIAL_PREVIEW_FIELDS. ADS AUTONOMY AA-W2-1 (Owner D-W2-1 = A):
+ *      7a `alwaysAsk` above `ask` only for a strategy-bound tool on AD_STRATEGY_AUTO (or one of ALWAYS_ASK_ABOVE_ASK,
+ *         raised before W2) — outside the lists, `ask` at most;
+ *      7b a strategy-bound tool has limits and refuses a preview without its strategy facts (`limitFacts`), and is a
+ *         kind of ad action the ads strategy narrows; such a kind of ad action runs by rule only strategy-bound;
+ *      7c an irreversible one is `ask` at most, unless it is strategy-bound, on IRREVERSIBLE_AUTO, and its DEFAULT
+ *         limits refuse a sample preview that is inside the strategy (by default nothing permanent runs alone).
  *
  * Each rule is also run against a tool built to break it, so a check that cannot fail is caught here.
  */
@@ -23,6 +30,7 @@ import { isValidPermission } from '@nexus/shared/permissions'
 import { listTools } from './tool-registry.js'
 import { inputJsonSchema } from './tool-loop.service.js'
 import { MATERIAL_PREVIEW_FIELDS } from '../agent-fleet/approval-inbox.service.js'
+import { actionOfTool, PLACES } from '../advertising/ads-strategy/claude.js'
 import { CLAUDE_TRUST_LEVELS, type AgentTool } from './tool-types.js'
 
 const MAX_LIST = 250
@@ -36,6 +44,66 @@ const SURFACES = ['app', 'mcp']
 const UNDO_PENDING: Record<string, string> = {
   'bulk-attribute-change': 'putting back different values per product needs a change plan (C6) or a per-product attribute tool',
   'merge-duplicate-products': 'restoring the duplicate from the trash (and moving an adopted listing back) is a person\'s step in Nexus until a restore tool exists (identity, section 04)',
+}
+
+/**
+ * AA-W2-1 (Owner decision D-W2-1 = A, 2026-10-06) — the `alwaysAsk` tools that may be set above `ask`: strategy-bound
+ * Amazon ad tools, each of which may run by rule only inside its own limits and the ads strategy (rule 7a). An exact
+ * ratchet: adding a name is a reviewed change, and an entry whose tool is no longer alwaysAsk, strategy-bound and above
+ * `ask` must be removed (checked below). Empty until a W2 tool PR raises one.
+ */
+const AD_STRATEGY_AUTO: readonly string[] = []
+
+/**
+ * AA-W2-1 — irreversible tools that may be set above `ask` (rule 7c), each with a sample preview that is inside the
+ * ads strategy, which the tool's DEFAULT limits must still refuse: by default nothing permanent runs alone. Exact, as
+ * above. Empty until archive-ads.
+ */
+const IRREVERSIBLE_AUTO: Readonly<Record<string, unknown>> = {}
+
+/**
+ * AA-W2-1 — `alwaysAsk` tools an earlier, reviewed phase already let a business confirm in Claude or run by rule inside
+ * the tool's own limits, before W2 (each with that phase). Closed: it only shrinks. A new `alwaysAsk` tool above `ask` is
+ * a strategy-bound ad tool on AD_STRATEGY_AUTO, or it stays at `ask`.
+ */
+const ALWAYS_ASK_ABOVE_ASK: Readonly<Record<string, string>> = {
+  'set-price': 'C5 — a master price, inside how far it may move',
+  'bulk-price-change': 'MCP.10 / C5 — master prices of many products, inside their limits',
+  'set-master-prices': 'MCP.10 / C5 — the undo of a bulk price change, inside its limits',
+  'bulk-attribute-change': 'MCP.10 / C5 — master attributes, Nexus only, inside their limits',
+  'bulk-listing-price-change': '08 S11 — listing prices, inside their limits',
+  'schedule-price-change': '08 S12 — confirm in Claude at most',
+  'set-stock': '08 S6 — confirm in Claude at most',
+  'reconcile-stock-count': '08 S6 — confirm in Claude at most',
+  'reserve-stock': '08 S6 — confirm in Claude at most',
+  'bulk-listing-stock': '08 S7 — confirm in Claude at most',
+  'receive-stock': '08 S10 — confirm in Claude at most',
+  'buy-shipping-label': '07 O8 — confirm in Claude at most, inside the label limits',
+  'void-shipping-label': '07 O8 — confirm in Claude at most',
+}
+
+interface ContractLists {
+  adStrategyAuto: readonly string[]
+  irreversibleAuto: Readonly<Record<string, unknown>>
+  alwaysAskAboveAsk: Readonly<Record<string, string>>
+}
+const LISTS: ContractLists = { adStrategyAuto: AD_STRATEGY_AUTO, irreversibleAuto: IRREVERSIBLE_AUTO, alwaysAskAboveAsk: ALWAYS_ASK_ABOVE_ASK }
+
+/** 7b — a preview with everything but the strategy's facts: a strategy-bound tool never lets it run alone. */
+const WITHOUT_FACTS = { summary: 'A change whose preview carries no limitFacts.' }
+
+/**
+ * N3 (AA-W2-1, widened) — the wordings tools use to say a person decides. "Always … in Nexus" is false once the business
+ * may let a change be confirmed in Claude or run by rule; "always … a person" is false once its rule may run it alone;
+ * "a person approves it in Nexus" is true, but alone it hides the other way the business may allow.
+ */
+const ALWAYS_IN_NEXUS = /\balways waits for a person(?: to approve it)?\s+in Nexus\b/i
+const ALWAYS_A_PERSON = /\balways (?:waits for|needs|asks for) a person\b|\ba person always (?:approves|decides)\b|\bevery (?:change|move|request|step) waits for a person\b/i
+const A_PERSON_IN_NEXUS =
+  /\b(?:waits for a person|a person approves (?:it|this|the change)|nothing (?:changes|is created) until a person approves (?:it|this))\b[^.;]*\bin Nexus\b|\brequires approval\b/i
+const THE_OTHER_WAY = {
+  confirm: /\bin Claude\b/i,
+  auto: /\bby (?:its|their|the business(?:'|’)?s?) rule\b|\bitself\b|\blets it run\b|\brun inside\b/i,
 }
 
 /** An argument that would let a caller pick (or name) a business: never, the business is the caller's. */
@@ -71,24 +139,30 @@ function propertyNames(schema: unknown, out: string[] = []): string[] {
 }
 
 /** Every rule this file holds, for one tool: an empty list means it keeps the contract. */
-function contractProblems(tool: AgentTool, material: Record<string, string[]> = MATERIAL_PREVIEW_FIELDS): string[] {
+function contractProblems(tool: AgentTool, material: Record<string, string[]> = MATERIAL_PREVIEW_FIELDS, lists: ContractLists = LISTS): string[] {
   const problems: string[] = []
-  const bad = (rule: number, what: string) => problems.push(`${tool.name} — rule ${rule}: ${what}`)
+  const bad = (rule: string | number, what: string) => problems.push(`${tool.name} — rule ${rule}: ${what}`)
   const change = !tool.readOnly
+  const ceiling = tool.maxClaudeTrust
+  const above = ceiling === 'confirm' || ceiling === 'auto'
 
   // 1 — names and words
   if (!KEBAB.test(tool.name)) bad(1, 'name is not kebab-case verb-noun')
   if (!tool.title?.trim() || tool.title.length > 40) bad(1, 'title missing or longer than 40')
   if (!tool.description?.trim()) bad(1, 'no description')
   if (change && !/approv|a person/i.test(tool.description)) bad(1, 'a change tool must say it waits for approval')
-  // N3 — "always … approve it in Nexus" is false when the business may let it be confirmed in Claude or run by rule.
-  if (change && tool.maxClaudeTrust && tool.maxClaudeTrust !== 'ask' && /always waits for a person to approve it\s+in Nexus/i.test(tool.description)) {
-    bad(1, `says it always waits for a person in Nexus, but it can be ${tool.maxClaudeTrust === 'auto' ? 'run by the business\'s rule' : 'confirmed in Claude'}`)
-  }
-  // D4 — "nothing changes until a person approves it in Nexus" is false alone for the same tools: it must also say the other way.
-  if (change && tool.maxClaudeTrust && tool.maxClaudeTrust !== 'ask' && /Nothing (changes|is created) until a person approves (it|this)\s+in Nexus/i.test(tool.description)
-    && !/in Claude|by (the business'?s )?rule/i.test(tool.description)) {
-    bad(1, `says nothing changes until a person approves it in Nexus, but it can be ${tool.maxClaudeTrust === 'auto' ? 'run by the business\'s rule' : 'confirmed in Claude'}`)
+  if (change && above) {
+    const can = ceiling === 'auto' ? 'run by the business\'s rule' : 'confirmed in Claude'
+    // N3 — "always … in Nexus" is false when the business may let it be confirmed in Claude or run by rule.
+    if (ALWAYS_IN_NEXUS.test(tool.description)) bad(1, `says it always waits for a person in Nexus, but it can be ${can}`)
+    // N3 (widened) — at auto, "always … a person" in any of the tools' wordings is false: the rule may run it alone.
+    if (ceiling === 'auto' && ALWAYS_A_PERSON.test(tool.description)) {
+      bad(1, 'says it always waits for (or needs) a person, but the business\'s rule may run it alone')
+    }
+    // D4 (widened) — "a person approves it in Nexus" alone is false for the same tools: it must also say the other way.
+    if (A_PERSON_IN_NEXUS.test(tool.description) && !THE_OTHER_WAY[ceiling as 'confirm' | 'auto'].test(tool.description)) {
+      bad(1, `says a person approves it in Nexus, but not that it can be ${can}`)
+    }
   }
 
   // 2 — permissions
@@ -130,8 +204,32 @@ function contractProblems(tool: AgentTool, material: Record<string, string[]> = 
   if (change) {
     if (!REVERSIBILITY.includes(tool.reversibility as string)) bad(7, 'reversibility missing')
     if (!CLAUDE_TRUST_LEVELS.includes(tool.maxClaudeTrust as never)) bad(7, 'maxClaudeTrust missing')
-    if (tool.reversibility === 'none' && !['off', 'ask'].includes(tool.maxClaudeTrust as string)) {
-      bad(7, 'an irreversible change is ask at most')
+    // 7c — irreversible: ask at most, unless strategy-bound, listed, and its default limits run nothing permanent alone.
+    if (tool.reversibility === 'none' && above) {
+      if (!(tool.name in lists.irreversibleAuto)) bad(7, 'an irreversible change is ask at most')
+      else if (!tool.strategyBound) bad('7c', 'an irreversible change above ask must be strategy-bound')
+      else if (tool.limits && typeof tool.withinLimits?.(lists.irreversibleAuto[tool.name], tool.limits.parse({}) as Record<string, unknown>) !== 'string') {
+        bad('7c', 'an irreversible change above ask must be refused by its default limits')
+      }
+    }
+    // 7a — alwaysAsk stays a floor: above ask only for a strategy-bound tool on AD_STRATEGY_AUTO (or one raised before W2).
+    if (tool.alwaysAsk && above && !(tool.name in lists.alwaysAskAboveAsk)) {
+      if (!lists.adStrategyAuto.includes(tool.name)) bad('7a', 'an alwaysAsk tool is ask at most unless it is on AD_STRATEGY_AUTO')
+      else if (!tool.strategyBound) bad('7a', 'an alwaysAsk tool above ask must be strategy-bound')
+    }
+    // 7b — strategy-bound: its limits are judged against the ads strategy, so it never runs alone without its facts …
+    if (tool.strategyBound) {
+      if (!tool.limits || !tool.withinLimits) bad('7b', 'a strategy-bound tool needs limits and withinLimits')
+      else if (typeof tool.withinLimits(WITHOUT_FACTS, tool.limits.parse({}) as Record<string, unknown>) !== 'string') {
+        bad('7b', 'a strategy-bound tool refuses a preview without limitFacts')
+      }
+      if (!actionOfTool(tool.name) || !PLACES[tool.name]) {
+        bad('7b', 'a strategy-bound tool is a kind of ad action the ads strategy narrows (CLAUDE_ACTION_TOOLS and PLACES)')
+      }
+    }
+    // … and a kind of ad action the strategy narrows runs by rule only strategy-bound.
+    if (ceiling === 'auto' && actionOfTool(tool.name) && !tool.strategyBound) {
+      bad('7b', 'a kind of ad action the ads strategy narrows may run by rule only when strategy-bound')
     }
     if (!!tool.limits !== !!tool.withinLimits) bad(7, 'limits and withinLimits come together')
     // A control tool is judged at the level of the tool it asks for (C5), so it carries no limits of its own.
@@ -411,6 +509,48 @@ describe('C1 — every registered tool keeps the contract', () => {
     }
   })
 
+  it('AA-W2-1 — outside the reviewed lists, every alwaysAsk tool is ask at most; the floors stay where they are', () => {
+    const changeTools = listTools().filter((t) => !t.readOnly)
+    const outside = changeTools
+      .filter((t) => t.alwaysAsk && t.maxClaudeTrust !== 'ask' && t.maxClaudeTrust !== 'off')
+      .filter((t) => !AD_STRATEGY_AUTO.includes(t.name) && !(t.name in ALWAYS_ASK_ABOVE_ASK))
+      .map((t) => t.name)
+    expect(outside).toEqual([])
+    // Refunds, fiscal numbers, messages, publishing, eBay ads and Amazon spend: a person approves each in Nexus.
+    const atAsk = new Set(changeTools.filter((t) => t.alwaysAsk && t.maxClaudeTrust === 'ask').map((t) => t.name))
+    for (const name of ['issue-refund', 'issue-fiscal-document', 'send-customer-message', 'publish-listing', 'delete-listing',
+      'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-campaign-budget', 'set-placement-multipliers', 'bulk-ad-bid-change',
+      'restore-campaign', 'set-campaign-live-writes', 'create-ad-campaign']) {
+      expect(atAsk.has(name), `${name} is alwaysAsk at ask`).toBe(true)
+    }
+  })
+
+  it('AA-W2-1 — the lists are exact: each entry is a registered tool that still needs to be on it', () => {
+    const byName = new Map(listTools().map((t) => [t.name, t]))
+    const aboveAsk = (t?: AgentTool) => t?.maxClaudeTrust === 'confirm' || t?.maxClaudeTrust === 'auto'
+    for (const name of AD_STRATEGY_AUTO) {
+      const tool = byName.get(name)
+      expect(tool?.alwaysAsk && tool.strategyBound && aboveAsk(tool), `${name}: alwaysAsk, strategy-bound and above ask, or off AD_STRATEGY_AUTO`).toBe(true)
+    }
+    for (const name of Object.keys(IRREVERSIBLE_AUTO)) {
+      const tool = byName.get(name)
+      expect(tool?.reversibility === 'none' && aboveAsk(tool), `${name}: irreversible and above ask, or off IRREVERSIBLE_AUTO`).toBe(true)
+    }
+    for (const name of Object.keys(ALWAYS_ASK_ABOVE_ASK)) {
+      const tool = byName.get(name)
+      expect(tool?.alwaysAsk && aboveAsk(tool) && !tool.strategyBound, `${name}: alwaysAsk above ask (not strategy-bound), or off ALWAYS_ASK_ABOVE_ASK`).toBe(true)
+    }
+    expect(AD_STRATEGY_AUTO.filter((name) => name in ALWAYS_ASK_ABOVE_ASK)).toEqual([])
+  })
+
+  it('N3 (AA-W2-1) — an ad tool at ask that says it always waits for a person is caught the day its ceiling rises', () => {
+    for (const name of ['set-campaign-budget', 'set-placement-multipliers', 'bulk-ad-bid-change', 'restore-campaign', 'set-campaign-live-writes', 'create-ad-campaign']) {
+      const tool = listTools().find((t) => t.name === name)!
+      if (tool.maxClaudeTrust !== 'ask') continue // raised: its text was made honest with it (rules 1–7 hold above)
+      expect(contractProblems({ ...tool, maxClaudeTrust: 'auto' }).join('\n'), name).toContain('says it always waits for (or needs) a person')
+    }
+  })
+
   it('every limit schema has a default, and the default answers', () => {
     for (const tool of listTools().filter((t) => t.limits)) {
       const limits = tool.limits!.parse({}) as Record<string, unknown>
@@ -434,17 +574,46 @@ describe('C1 — each rule can fail', () => {
     maxClaudeTrust: 'ask',
     handler: async () => ({ ok: true }),
   }
-  const problemsOf = (patch: Partial<AgentTool>) => contractProblems({ ...good, ...patch } as AgentTool, {})
+  const problemsOf = (patch: Partial<AgentTool>, lists?: Partial<ContractLists>) =>
+    contractProblems({ ...good, ...patch } as AgentTool, {}, { ...LISTS, ...lists })
+
+  // AA-W2-1 — a strategy-bound ad tool, made as the contract wants it (a real kind of ad action, so the strategy narrows it).
+  const facts = { limits: z.object({ maxRaisePct: z.number().default(0).describe('x') }), withinLimits: (preview: unknown) => ((preview as { limitFacts?: unknown } | null)?.limitFacts ? null : 'no limit facts') }
+  const bound: Partial<AgentTool> = {
+    name: 'set-target-bid', category: 'advertising', alwaysAsk: true, strategyBound: 'amazon-ads', maxClaudeTrust: 'auto', ...facts,
+    description: 'Changes a bid. A person approves it in Nexus, unless the business lets it run by its rule inside its limits and the ads strategy.',
+  }
+  const onList = { adStrategyAuto: ['set-target-bid'] }
+  const refusesByDefault = { withinLimits: (preview: unknown, limits: Record<string, unknown>) => (limits.maxItems ? null : 'archiving waits for a person by default') }
 
   it('a well-made tool passes', () => {
     expect(problemsOf({})).toEqual([])
+  })
+
+  it('AA-W2-1 — a well-made strategy-bound ad tool passes, alwaysAsk and above ask, on AD_STRATEGY_AUTO', () => {
+    expect(problemsOf(bound, onList)).toEqual([])
+    // The tools a person confirms or runs inside limits before W2 are a closed list, not this class.
+    expect(problemsOf({ alwaysAsk: true, maxClaudeTrust: 'confirm', description: 'Changes an example. Waits for a person: approved in Nexus, or confirmed in Claude.' },
+      { alwaysAskAboveAsk: { 'set-example': 'test' } })).toEqual([])
+    // An irreversible one whose default limits refuse even a change inside the strategy.
+    expect(problemsOf({ ...bound, ...refusesByDefault, reversibility: 'none' }, { ...onList, irreversibleAuto: { 'set-target-bid': { limitFacts: {} } } })).toEqual([])
   })
 
   it.each([
     [{ name: 'setExample' }, 'rule 1: name'],
     [{ description: 'Changes an example.' }, 'rule 1: a change tool must say'],
     [{ description: 'Changes an example. Always waits for a person to approve it in Nexus.', maxClaudeTrust: 'confirm' }, 'but it can be confirmed in Claude'],
-    [{ description: 'Changes an example. Nothing changes until a person approves it in Nexus.', maxClaudeTrust: 'confirm' }, 'says nothing changes until a person approves it in Nexus, but it can be confirmed in Claude'],
+    [{ description: 'Changes an example. Nothing changes until a person approves it in Nexus.', maxClaudeTrust: 'confirm' }, 'says a person approves it in Nexus, but not that it can be confirmed in Claude'],
+    // N3, widened (AA-W2-1): the wordings the tools use.
+    [{ description: 'Changes an example. Always waits for a person in Nexus.', maxClaudeTrust: 'confirm' }, 'says it always waits for a person in Nexus'],
+    [{ description: 'Changes an example. Waits for a person to approve it in Nexus.', maxClaudeTrust: 'confirm' }, 'says a person approves it in Nexus, but not that it can be confirmed in Claude'],
+    [{ description: 'Changes an example. A person approves it in Nexus first.', maxClaudeTrust: 'confirm' }, 'but not that it can be confirmed in Claude'],
+    [{ description: 'Changes an example (requires approval).', maxClaudeTrust: 'auto', ...facts }, 'but not that it can be run by the business\'s rule'],
+    [{ description: 'Changes an example. Waits for a person: approved in Nexus, or confirmed in Claude.', maxClaudeTrust: 'auto', ...facts }, 'but not that it can be run by the business\'s rule'],
+    [{ description: 'Changes an example. Nothing changes until a person approves it in Nexus; it always waits for a person.', maxClaudeTrust: 'auto', ...facts }, 'says it always waits for (or needs) a person'],
+    [{ description: 'Changes an example by its rule. A raise always waits for a person.', maxClaudeTrust: 'auto', ...facts }, 'says it always waits for (or needs) a person'],
+    [{ description: 'Changes an example by its rule. A brake can raise spend, so it always needs a person.', maxClaudeTrust: 'auto', ...facts }, 'says it always waits for (or needs) a person'],
+    [{ description: 'Changes an example by its rule. Every move waits for a person.', maxClaudeTrust: 'auto', ...facts }, 'says it always waits for (or needs) a person'],
     [{ requires: ['products.fly'] as never }, 'rule 2'],
     [{ input: z.object({ productId: z.string() }) }, 'argument productId has no describe()'],
     [{ input: z.object({ ids: z.array(z.string()).describe('ids') }) }, 'input.ids is not bounded'],
@@ -469,5 +638,21 @@ describe('C1 — each rule can fail', () => {
     [{ control: true, readOnly: true, reversibility: undefined, maxClaudeTrust: undefined }, 'a control tool asks for changes'],
   ] as Array<[Partial<AgentTool>, string]>)('%o breaks: %s', (patch, expected) => {
     expect(problemsOf(patch).join('\n')).toContain(expected)
+  })
+
+  // AA-W2-1 — rules 7a–7c.
+  it.each([
+    [{ alwaysAsk: true, maxClaudeTrust: 'confirm', description: 'Changes an example. Waits for a person: approved in Nexus, or confirmed in Claude.' }, {}, 'rule 7a: an alwaysAsk tool is ask at most unless it is on AD_STRATEGY_AUTO'],
+    [{ ...bound }, {}, 'rule 7a: an alwaysAsk tool is ask at most unless it is on AD_STRATEGY_AUTO'],
+    [{ ...bound, strategyBound: undefined }, onList, 'rule 7a: an alwaysAsk tool above ask must be strategy-bound'],
+    [{ ...bound, limits: undefined, withinLimits: undefined }, onList, 'rule 7b: a strategy-bound tool needs limits and withinLimits'],
+    [{ ...bound, withinLimits: () => null }, onList, 'rule 7b: a strategy-bound tool refuses a preview without limitFacts'],
+    [{ ...bound, name: 'set-example' }, { adStrategyAuto: ['set-example'] }, 'rule 7b: a strategy-bound tool is a kind of ad action the ads strategy narrows'],
+    [{ ...bound, alwaysAsk: false, strategyBound: undefined }, {}, 'rule 7b: a kind of ad action the ads strategy narrows may run by rule only when strategy-bound'],
+    [{ ...bound, reversibility: 'none' }, onList, 'rule 7: an irreversible change is ask at most'],
+    [{ ...bound, reversibility: 'none', strategyBound: undefined }, { ...onList, irreversibleAuto: { 'set-target-bid': {} } }, 'rule 7c: an irreversible change above ask must be strategy-bound'],
+    [{ ...bound, reversibility: 'none' }, { ...onList, irreversibleAuto: { 'set-target-bid': { limitFacts: {} } } }, 'rule 7c: an irreversible change above ask must be refused by its default limits'],
+  ] as Array<[Partial<AgentTool>, Partial<ContractLists>, string]>)('%o with lists %o breaks: %s', (patch, lists, expected) => {
+    expect(problemsOf(patch, lists).join('\n')).toContain(expected)
   })
 })

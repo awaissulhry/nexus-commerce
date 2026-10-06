@@ -19304,6 +19304,14 @@ model AdsStrategy {
   claudeAutonomy  Json?
   reviewEveryDays Int?
 
+  /// AA-W2-2b — MARKET rows only: the most Claude's ad changes may add in this market in 24 hours when they run by the
+  /// business's rule (not a person's approval). Empty is 0: nothing that adds to it runs by rule here (fail closed).
+  /// Changes (each entity changed counts one), raises (changes that add spend) and budget increase (minor units of the
+  /// market's currency).
+  claudeMaxChangesPerDay             Int?
+  claudeMaxRaisesPerDay              Int?
+  claudeMaxBudgetIncreasePerDayCents Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   /// 'user:<id>' or 'claude:<approvalId>' — a money decision is never unattributed.

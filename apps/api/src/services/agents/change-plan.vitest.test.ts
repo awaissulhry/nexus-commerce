@@ -293,6 +293,30 @@ describe('C6 — a plan runs by the business’s rule only when every step may',
     expect(mixed).toMatchObject({ status: 'waiting_for_approval', trust: { level: 'ask', why: expect.stringContaining('step 2 (apply-content) waits for a person') } })
   })
 
+  it('AA-W2-1 — every step is told who decided the plan: a person in Nexus, or the business’s rule', async () => {
+    const execute = vi.spyOn(getTool('set-price')!, 'execute')
+    try {
+      const byPerson = await submit('Person plan', [price('e2', 104)])
+      expect(byPerson.status).toBe('waiting_for_approval')
+      await approveAndCommit(byPerson.approvalId)
+      await inside(() => runPlan(byPerson.approvalId))
+      expect(execute.mock.calls.at(-1)![1]).toMatchObject({ decidedVia: 'nexus', approvedByPerson: true })
+
+      await toAuto('set-price')
+      const byRule = await submit('Rule plan', [price('e1', 103)])
+      expect(byRule.status).toBe('runs_by_rule')
+      await inside(() => db().agentApproval.update({ where: { id: byRule.approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+      await inside(() => commitScheduledApproval(byRule.approvalId))
+      await inside(() => runPlan(byRule.approvalId))
+      const ctx = execute.mock.calls.at(-1)![1]
+      expect(ctx.decidedVia).toBe('auto')
+      expect(ctx.approvedByPerson).toBeUndefined()
+      expect([await priceOf('e2'), await priceOf('e1')]).toEqual([104, 103])
+    } finally {
+      execute.mockRestore()
+    }
+  })
+
   it('the daily cap counts each step of a plan', async () => {
     await toAuto('set-price')
     const one = await submit('Cap probe', [price('e3', 101)])
