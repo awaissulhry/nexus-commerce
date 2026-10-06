@@ -63,7 +63,7 @@ vi.mock('../services/advertising/ads-api-client.js', () => {
   const record = async (_ctx: unknown, _externalId: string, patch: Record<string, unknown>) => { amazon.calls.push(patch); return { ok: true, rawResponse: {} } }
   return { adsMode: () => 'live', updateCampaign: record, updateAdGroup: record, updateTarget: record, updateProductAd: record, updatePortfolio: record }
 })
-const optimiser = vi.hoisted(() => ({ proposals: [] as Array<{ targetId: string; currentBidCents: number; proposedBidCents: number; deltaCents: number }> }))
+const optimiser = vi.hoisted(() => ({ proposals: [] as Array<{ targetId: string; currentBidCents: number; proposedBidCents: number; deltaCents: number; targetSource?: string }> }))
 vi.mock('../services/advertising/ads-bid-optimizer.service.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   previewBidOptimization: async () => ({ targetAcos: 0.3, profitMode: true, bayesian: true, proposals: optimiser.proposals }),
@@ -405,10 +405,11 @@ describe('auto-bid: its dial behaviour kept, and whole campaigns inside its caps
   it('stopped stands down, SUGGEST only counts, AUTO writes the first campaign and defers the next whole', async () => {
     await seedCampaign('ab-a', 40, [35, 60])
     await seedCampaign('ab-b', 40, [35])
+    // Each toward a target the Owner set (auto-bid moves no other: ads-auto-bid-owner-targets.vitest.test.ts).
     optimiser.proposals = [
-      { targetId: 'ab-a-t1', currentBidCents: 60, proposedBidCents: 50, deltaCents: -10 },
-      { targetId: 'ab-b-t0', currentBidCents: 35, proposedBidCents: 28, deltaCents: -7 },
-      { targetId: 'ab-a-t0', currentBidCents: 35, proposedBidCents: 30, deltaCents: -5 },
+      { targetId: 'ab-a-t1', currentBidCents: 60, proposedBidCents: 50, deltaCents: -10, targetSource: 'campaign' },
+      { targetId: 'ab-b-t0', currentBidCents: 35, proposedBidCents: 28, deltaCents: -7, targetSource: 'account' },
+      { targetId: 'ab-a-t0', currentBidCents: 35, proposedBidCents: 30, deltaCents: -5, targetSource: 'campaign' },
     ]
     const bids = async () => [...(await campaign('ab-a')).targets.map((t) => t.bidCents), ...(await campaign('ab-b')).targets.map((t) => t.bidCents)]
 
