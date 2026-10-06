@@ -134,8 +134,11 @@ async function campaignsMadeBy(row: Pick<RunRow, 'createdCampaignIds' | 'options
   return [...new Set([...row.createdCampaignIds, ...logged])]
 }
 
-/** Campaigns Amazon never took (no Amazon id) are archived in Nexus only — nothing is sent — so their names are free again. */
-async function archiveLocalOnly(campaignIds: readonly string[]): Promise<number> {
+/**
+ * Campaigns Amazon never took (no Amazon id) are archived in Nexus only — nothing is sent — so their names are free again.
+ * B-3 — Claude's one-off SP Super Wizard build (build-sp-wizard-campaigns) frees them the same way.
+ */
+export async function archiveLocalOnly(campaignIds: readonly string[]): Promise<number> {
   if (!campaignIds.length) return 0
   const r = await prisma.campaign.updateMany({ where: { id: { in: [...campaignIds] }, externalCampaignId: null, status: { not: 'ARCHIVED' } }, data: { status: 'ARCHIVED' } })
   return r.count

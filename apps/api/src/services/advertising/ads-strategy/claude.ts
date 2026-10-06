@@ -294,6 +294,8 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
     await suggestions(place, list(args.decisions).map((d) => str(obj(d).suggestionId)).filter((id): id is string => !!id))
   },
   'create-ad-campaign': (place, args) => place.skus(marketOf(args.market), strs(args.skus)),
+  // B-3 — a one-off SP Super Wizard set: the products it advertises.
+  'build-sp-wizard-campaigns': (place, args) => place.skus(marketOf(args.market), strs(args.skus)),
   // PB-5a — one product's playbook in one market: the product (by id, else by SKU).
   'apply-ads-playbook': (place, args) => (str(args.productId)
     ? place.productIds(marketOf(args.market), [str(args.productId)!])

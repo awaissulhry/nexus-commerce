@@ -259,6 +259,7 @@ const AMAZON_AD_TOOLS = new Set([
   'set-target-bid', 'create-negative-keyword', 'graduate-keyword', 'set-campaign-budget', 'set-placement-multipliers',
   'bulk-ad-bid-change', 'suppress-campaign', 'restore-campaign', 'set-campaign-live-writes', 'create-ad-campaign', 'undo-ad-change',
   'set-campaign-target-acos', 'pause-ads', 'enable-ads', 'archive-ads', 'lower-ad-bids-for-stock', 'restore-ad-bids-after-stock', 'apply-ads-playbook',
+  'build-sp-wizard-campaigns',
 ])
 
 /** A campaign page: Amazon's by its Nexus Campaign id, eBay's by its Nexus eBay campaign id. */
@@ -778,6 +779,19 @@ const READERS: Record<string, Reader> = {
       changes: [
         { label: 'Daily budget', from: null, to: adMoney(plan.dailyBudgetCents, plan.currency) },
         { label: 'Advertises', from: null, to: plural(products.length, 'product') },
+      ],
+    }
+  },
+  // B-3 — a one-off SP Super Wizard set: how many campaigns of which structure, their daily budget and the products.
+  'build-sp-wizard-campaigns': (p) => {
+    const structure = text(p.structure)
+    return {
+      channel: 'AMAZON',
+      market: marketOf(p.market),
+      changes: [
+        { label: 'Builds', from: null, to: `${plural(recs(p.campaigns).length, 'campaign')}${structure ? ` (SP Super Wizard, ${structure})` : ''} at the 2-cent floor, off the allowlist` },
+        { label: 'Daily budget', from: null, to: adMoney(p.dailyBudgetCents, p.currency) },
+        { label: 'Advertises', from: null, to: plural(recs(p.products).length, 'product') },
       ],
     }
   },

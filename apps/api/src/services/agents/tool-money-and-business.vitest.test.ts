@@ -304,6 +304,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // PB-5a — a build's campaigns name budgets and bids (it needs money: refused for a person without it); the seeded
   // product has no playbook row, so the answer is a refusal either way.
   'apply-ads-playbook': (ids) => ({ op: 'build', market: 'IT', productId: ids.productId }),
+  // B-3 — a one-off SP Super Wizard set names budgets and bids (it needs money: refused for a person without it).
+  'build-sp-wizard-campaigns': (ids) => ({ market: 'IT', productGroupName: 'Money set', skus: [ids.productId], structure: 'standard', keywords: { category: ['jacket'] }, dailyBudgetCents: 1500, defaultBidCents: 50 }),
   // A11 — a new campaign's plan names a budget and bids (it needs money: refused for a person without it).
   'create-ad-campaign': (ids) => ({ market: 'IT', name: 'Money launch', skus: [ids.productId], dailyBudgetCents: 1500, defaultBidCents: 50, keywords: [{ text: 'jacket', matchType: 'EXACT' }] }),
   // Ads autonomy W4-1 — a run report states each market's spend and sales (it needs money: refused for a person

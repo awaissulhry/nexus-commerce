@@ -225,6 +225,8 @@ const AD_CHANGE_TOOLS = new Set([
   'lower-ad-bids-for-stock', 'restore-ad-bids-after-stock',
   // PB-5a — a playbook build: its creates run detached; approval-status reads its run (status, what Amazon holds).
   'apply-ads-playbook',
+  // B-3 — a one-off SP Super Wizard set: its creates are not queued; approval-status counts what each campaign holds.
+  'build-sp-wizard-campaigns',
 ])
 
 export interface AdDelivery {
@@ -302,6 +304,18 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
       atAmazon += reach === 'live' ? counts.withAmazonId : 0
     }
     out.created = { total, atAmazon }
+    return out
+  }
+  if (toolName === 'build-sp-wizard-campaigns') {
+    // B-3 — every campaign of the set and everything under it; "at Amazon" only when it went live.
+    const ids = (after as { campaignIds?: unknown } | null)?.campaignIds
+    let total = 0, atAmazon = 0
+    for (const id of Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []) {
+      const counts = await campaignStructureCounts(id)
+      total += counts.total
+      atAmazon += reach === 'live' ? counts.withAmazonId : 0
+    }
+    if (total) out.created = { total, atAmazon }
     return out
   }
   if (toolName === 'create-ad-campaign') {
