@@ -1206,16 +1206,45 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       else if (c.kind === 'pat') dest.PRODUCT = ref.adGroupId // H.5 — converting ASINs graduate into the PAT campaign
     }
     for (const [p, byMatch] of Object.entries(hostsByProduct)) for (const [mt, hosts] of Object.entries(byMatch)) if (hosts.length === 1) destinationsByProduct[p][mt] = hosts[0].adGroupId
-    const ownDestinations = (wid: string, p: string): Record<string, string | null> | null => {
-      const out: Record<string, string | null> = {}
+    // PB-6b — a source with no theme of its own (Auto) lands through the intent router when every host of that match type
+    // has a theme, none twice: a term holding a brand word goes to the Brand host, one holding a Competitor campaign's
+    // keyword to the Competitor host, the rest to Category. Else the Category host (PB-6a). The brand words: the launched
+    // products' brand (and their parents'), the Brand campaigns' keywords, and — only when no product names a brand — the
+    // words every Brand keyword shares that no Category or Competitor keyword uses ("testbrand" of "testbrand jacket").
+    const { themedRouter, foldWords } = await import('../services/advertising/ads-harvest-route.js')
+    const themeTerms = (p: string, theme: string) => campaigns
+      .filter((c) => c.id && idMap[c.id] && (c.adProduct ?? 'SP') === p && c.kind === 'keyword' && widTheme[c.id] === theme)
+      .flatMap((c) => (c.keywords ?? []).map((k) => (typeof k === 'string' ? k : k?.text ?? '').trim()).filter(Boolean))
+    const productRefs = [
+      ...(products.some((x) => x.productId) ? [{ id: { in: products.map((x) => x.productId).filter((v): v is string => !!v) } }] : []),
+      ...(products.some((x) => x.sku) ? [{ sku: { in: products.map((x) => x.sku).filter((v): v is string => !!v) } }] : []),
+      ...(products.some((x) => x.asin) ? [{ amazonAsin: { in: products.map((x) => x.asin).filter((v): v is string => !!v) } }] : []),
+    ]
+    const launched = productRefs.length ? await prisma.product.findMany({ where: { deletedAt: null, OR: productRefs }, select: { brand: true, parentId: true } }) : []
+    const parentIds = [...new Set(launched.map((x) => x.parentId).filter((v): v is string => !!v))]
+    const parents = parentIds.length ? await prisma.product.findMany({ where: { id: { in: parentIds } }, select: { brand: true } }) : []
+    const productBrands = [...new Set([...launched, ...parents].map((x) => x.brand?.trim()).filter((v): v is string => !!v))]
+    const words = (k: string) => new Set(foldWords(k).split(' ').filter(Boolean))
+    const brandWords = (p: string): string[] => {
+      const keywords = themeTerms(p, 'brand')
+      if (productBrands.length || !keywords.length) return [...productBrands, ...keywords]
+      const others = new Set([...themeTerms(p, 'category'), ...themeTerms(p, 'competitor')].flatMap((k) => [...words(k)]))
+      const shared = keywords.map(words).reduce((a, b) => new Set([...a].filter((w) => b.has(w))))
+      return [...keywords, ...[...shared].filter((w) => !others.has(w))]
+    }
+    type Dest = string | import('../services/advertising/ads-harvest-route.js').IntentRouter
+    const ownDestinations = (wid: string, p: string): Record<string, Dest | null> | null => {
+      const out: Record<string, Dest | null> = {}
       for (const [mt, hosts] of Object.entries(hostsByProduct[p] ?? {})) {
         if (hosts.length < 2) continue
         const mine = hosts.filter((h) => h.theme === (widTheme[wid] ?? 'category'))
-        out[mt] = mine.length === 1 ? mine[0].adGroupId : null
+        // PB-6b — a themeless source goes through the intent router when every host can be told apart; else Category.
+        const routed = widTheme[wid] ? null : themedRouter(hosts, { brand: brandWords(p), competitor: themeTerms(p, 'competitor') })
+        out[mt] = routed ?? (mine.length === 1 ? mine[0].adGroupId : null)
       }
       return Object.keys(out).length ? out : null
     }
-    type RuleSrc = { product: 'SP' | 'SB' | 'SD'; adGroupId: string; campaignId: string; harvestFrom: boolean; graduate: string[]; negate: string[]; graduateProduct: boolean; negateProduct: boolean; destinations?: Record<string, string | null> }
+    type RuleSrc = { product: 'SP' | 'SB' | 'SD'; adGroupId: string; campaignId: string; harvestFrom: boolean; graduate: string[]; negate: string[]; graduateProduct: boolean; negateProduct: boolean; destinations?: Record<string, Dest | null> }
     const buildRule = async (rcfg: SpwRule | undefined, kind: 'harvest' | 'negative') => {
       if (!rcfg) return
       const allSources: RuleSrc[] = Object.entries(rcfg.rows ?? {})

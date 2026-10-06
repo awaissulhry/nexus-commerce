@@ -871,7 +871,7 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   // "Auto harvest & negate" template). Scope uses live external ad-group ids, so a
   // rule whose campaigns are still gated/local resolves to [] and harvests nothing.
   const rawSources = (action as unknown as { sources?: unknown }).sources
-  type RuleSource = { adGroupId?: string; graduate?: string[]; negate?: string[]; harvestFrom?: boolean; graduateProduct?: boolean; negateProduct?: boolean; destinations?: Record<string, string | null>; negateOnLanding?: boolean; bid?: { mode?: unknown; value?: unknown } }
+  type RuleSource = { adGroupId?: string; graduate?: string[]; negate?: string[]; harvestFrom?: boolean; graduateProduct?: boolean; negateProduct?: boolean; destinations?: Record<string, string | null>; negateOnLanding?: boolean; negateSource?: boolean; bid?: { mode?: unknown; value?: unknown } }
   const sources = Array.isArray(rawSources) ? (rawSources as RuleSource[]) : null
   let adGroupExternalIds: string[] | undefined
   let plan: import('./ads-harvest.service.js').HarvestPlan | undefined
@@ -890,6 +890,8 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
           ...(literal ? { literal: true } : {}),
           ...(s.destinations && typeof s.destinations === 'object' ? { destinations: s.destinations } : {}),
           ...(typeof s.negateOnLanding === 'boolean' ? { negateOnLanding: s.negateOnLanding } : {}),
+          // PB-6b — false: this source is never negated for a term that graduated from it (the playbook's edge says so).
+          ...(typeof s.negateSource === 'boolean' ? { negateSource: s.negateSource } : {}),
           ...(s.bid && typeof s.bid === 'object' ? { bid: s.bid } : {}),
         }
       }
@@ -931,7 +933,8 @@ ACTION_HANDLERS.harvest_and_negate = async (action, _context, meta): Promise<Act
   let graduations: Array<(typeof preview.graduations)[number] & { step?: 'create' | 'handover' }> = mode === 'negative' ? [] : preview.graduations.filter((c) => wants(c.externalAdGroupId, 'graduate'))
   let productNegatives = mode === 'harvest' ? [] : preview.productNegatives.filter((c) => plan?.[c.externalAdGroupId]?.negateProduct === true)
   let productGraduations: Array<(typeof preview.productGraduations)[number] & { step?: 'create' | 'handover' }> = mode === 'negative' ? [] : preview.productGraduations.filter((c) => plan?.[c.externalAdGroupId]?.graduateProduct === true)
-  const rule = { homeScope, ownAdGroups, criteria: criteriaOpts }
+  // PB-6b — a compiled playbook rule (it names its playbook) looks a home up only in its own listed slots (rule 3).
+  const rule = { homeScope, ownAdGroups, criteria: criteriaOpts, ...(typeof action.playbookId === 'string' && homeScope ? { listedOnly: true } : {}) }
 
   // PB-6a — an accepted card: only its items, each planned again on today's data and applied only when its step is the
   // card's (a create never turns into a source negation, nor the reverse; a refused winner is never applied).
