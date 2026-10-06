@@ -586,6 +586,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'import-catalog': { before: { jobId: 'j1', file: 'claude-import.csv', records: 2 }, after: { jobId: 'j1', changedSince: [] } },
       // ADS AUTONOMY W4-1 — a run report: its bell notice is taken back and the run withdrawn (op withdraw).
       'report-ads-run': { before: { runId: 'r1', status: 'running', withdrawn: false }, after: { runId: 'r1', status: 'done', withdrawn: false } },
+      // W4-2 — the expected report time it replaced, set again.
+      'set-ads-report-time': { before: { expected: { time: '08:00', timeZone: 'Europe/Rome' } }, after: { expected: { time: '08:30', timeZone: 'Europe/Rome' } } },
     }
     const withUndo = listTools().filter((t) => t.undo)
     expect(withUndo.map((t) => t.name).sort()).toEqual(Object.keys(sample).sort())
