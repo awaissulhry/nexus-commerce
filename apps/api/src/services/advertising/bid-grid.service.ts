@@ -479,24 +479,17 @@ const cmp = (a: number | string | null, b: number | string | null, sign: number)
  * `resolveOrigins` applies because *the operator thinks in named groups*. That function is not
  * exported and takes `ChangeRow[]`, so its rule is reused, not the function.
  *
- * Exported for auto-bid (ads-auto-bid.service.ts), which leaves the bids a `schedule` or a person (`manual`) owns: the
- * owner this page and the ad-targets tool show is the one auto-bid obeys.
+ * Exported for auto-bid (ads-auto-bid.service.ts), which leaves the bids a `schedule` owns; it reads a person's bid
+ * edits per keyword (personBidTargetIds), not this campaign label. `personTargets`: that set when the caller read it.
  */
-export async function bidderByCampaign(): Promise<Map<string, { kind: BidderKind; name: string | null }>> {
-  const since60 = new Date(Date.now() - 60 * 86400_000)
-  const [schedules, campaigns, bidLogs] = await Promise.all([
+export async function bidderByCampaign(personTargets?: ReadonlySet<string>): Promise<Map<string, { kind: BidderKind; name: string | null }>> {
+  const [schedules, campaigns, personBids] = await Promise.all([
     prisma.adSchedule.findMany({ where: { enabled: true }, select: { campaignId: true, name: true, group: { select: { name: true } } } }),
     prisma.campaign.findMany({ select: { id: true, dynamicBidding: true } }),
-    prisma.advertisingActionLog.findMany({
-      // No `userId` predicate in the query: the column cannot express "a human did this", so the
-      // filtering happens in `parseActor` below where the vocabulary is actually understood.
-      where: { actionType: 'AD_BID_UPDATE', createdAt: { gte: since60 } },
-      select: { entityId: true, userId: true },
-    }),
+    personTargets ?? personBidTargetIds(),
   ])
-  const manualLogs = bidLogs.filter((l) => parseActor(l.userId).source === 'operator')
   // An operator's bid write names a TARGET; the bidder is a property of the CAMPAIGN, so resolve up.
-  const manualTargetIds = [...new Set(manualLogs.map((l) => l.entityId))]
+  const manualTargetIds = [...personBids]
   const manualCampaigns = new Set(
     manualTargetIds.length
       ? (await prisma.adTarget.findMany({ where: { id: { in: manualTargetIds } }, select: { adGroup: { select: { campaignId: true } } } }))
@@ -518,6 +511,23 @@ export async function bidderByCampaign(): Promise<Map<string, { kind: BidderKind
     out.set(c.id, manualCampaigns.has(c.id) ? { kind: 'manual', name: null } : { kind: 'none', name: null })
   }
   return out
+}
+
+/**
+ * The keywords and targets a person changed the bid of in the last 60 days: `AD_BID_UPDATE` rows whose actor
+ * `parseActor` reads as an operator — a person's own edit, and a Claude request a person approved (it writes as him,
+ * `user:<approver>`). The one read of "a person set this bid": `bidderByCampaign` resolves it up to the campaign for
+ * this page, auto-bid (ads-auto-bid.service.ts) leaves each such bid alone.
+ */
+export async function personBidTargetIds(): Promise<Set<string>> {
+  const since60 = new Date(Date.now() - 60 * 86400_000)
+  const bidLogs = await prisma.advertisingActionLog.findMany({
+    // No `userId` predicate in the query: the column cannot express "a human did this", so the
+    // filtering happens in `parseActor` below where the vocabulary is actually understood.
+    where: { actionType: 'AD_BID_UPDATE', createdAt: { gte: since60 } },
+    select: { entityId: true, userId: true },
+  })
+  return new Set(bidLogs.filter((l) => parseActor(l.userId).source === 'operator').map((l) => l.entityId))
 }
 
 async function lastAuditedByTarget(): Promise<Map<string, { cents: number; at: Date }>> {

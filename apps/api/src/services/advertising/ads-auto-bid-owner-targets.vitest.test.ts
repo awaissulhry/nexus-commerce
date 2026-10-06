@@ -5,8 +5,10 @@
  * a profit-derived or flat 30 % one the Owner never chose included — and nothing skipped a bid another owner holds, so
  * auto-bid and an hourly bid plan could undo each other every run. Proven here, through the real reads:
  *   · a bid moves only toward a target he set (campaign, ads strategy, account default); profit and flat are left alone;
- *   · a bid an hourly plan, a product plan, a running autopilot plan, a person or a pin holds is left alone, counted per
- *     reason; a campaign whose only "owner" is its own target ACoS (the Bid page's "Goal") is moved toward it;
+ *   · a bid an hourly plan, a product plan, a running autopilot plan or a pin holds is left alone, counted per reason;
+ *     a campaign whose only "owner" is its own target ACoS (the Bid page's "Goal") is moved toward it;
+ *   · a bid a person set (his own edit, or a Claude request he approved) is left alone per keyword, on any campaign —
+ *     its own-target campaign included — while the campaign's other keywords move; an engine's write is not a person's;
  *   · the A4 preview is the run: the same bids, the same counts;
  *   · the run's summary line, its notification and the A4 catalog entry say the rule and the counts in words.
  * The optimiser's maths, the dial, the guard and the holders' reads are the real ones; profit data is a stand-in, the
@@ -60,6 +62,7 @@ const { automationAdapter } = await import('../automation/automation-catalog.ser
 const { previewAutomation } = await import('../automation/automation-preview.service.js')
 const { setBidAutomation } = await import('./campaign-settings.service.js')
 const { setAutonomy, setDefaultTargetAcosPct } = await import('./ads-automation-state.service.js')
+const { claudeActor } = await import('../agents/tools/ads-tool-guards.js')
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -67,8 +70,12 @@ const db = () => database.client as any
 
 /** Every keyword that spent: 20 clicks, 2 orders, ACoS 50 % (read from the AdTarget columns, the `legacy` source). */
 const SPENT = { clicks: 20, spendCents: 1000, salesCents: 2000, ordersCount: 2 }
-/** The campaigns beside the fixture's, each with one keyword at 50¢, and who holds its bids. */
+/** The campaigns beside the fixture's, each with keywords at 50¢, and who holds its bids. */
 const HELD = ['c-hourly', 'c-plan', 'c-auto', 'c-person', 'c-goal'] as const
+/** The extra keywords: c-person's and c-goal's that no person touched, and c-goal's one a Claude request changed. */
+const MORE: Array<[string, string]> = [['t-person2', 'c-person'], ['t-goal2', 'c-goal'], ['t-goal-claude', 'c-goal']]
+const bidLog = (entityId: string, userId: string) =>
+  db().advertisingActionLog.create({ data: { userId, actionType: 'AD_BID_UPDATE', entityType: 'AD_TARGET', entityId, payloadBefore: { bidCents: 55 }, payloadAfter: { bidCents: 50 } } })
 
 beforeAll(async () => {
   database = await formulaDatabase()
@@ -81,6 +88,9 @@ beforeAll(async () => {
       await db().adGroup.create({ data: { id: `g-${key}`, campaignId: key, name: `group ${key}`, externalAdGroupId: `EXT-g-${key}` } })
       await db().adTarget.create({ data: { id: `t-${key.slice(2)}`, adGroupId: `g-${key}`, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `test ${key}`, bidCents: 50, externalTargetId: `EXT-t-${key}`, ...SPENT } })
     }
+    for (const [id, key] of MORE) {
+      await db().adTarget.create({ data: { id, adGroupId: `g-${key}`, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `test ${id}`, bidCents: 50, externalTargetId: `EXT-${id}`, ...SPENT } })
+    }
     for (const id of ['t-it', 't-uk', 't-pin']) await db().adTarget.update({ where: { id }, data: SPENT })
     // An hourly bid plan (an enabled goal-mode schedule) holds c-hourly.
     await db().adSchedule.create({ data: { campaignId: 'c-hourly', name: 'Test hourly plan', windows: [], defaultTargetKey: 'own-top', enabled: true } })
@@ -88,10 +98,12 @@ beforeAll(async () => {
     await db().productRankPlan.create({ data: { productId: 'p-test', marketplace: 'IT', enabled: true, lastSummary: { decisions: [{ campaignId: 'c-plan' }] } } })
     // A running autopilot plan (a goal plan) names c-auto.
     await db().autopilotPlan.create({ data: { name: 'Test goal plan', marketplace: 'IT', campaignIds: ['c-auto'], goal: 'PROFIT', autonomy: 'SUGGEST', enabled: true } })
-    // A person changed a bid by hand in c-person, and in c-goal — which carries its own target ACoS (the Bid page's "Goal").
-    for (const t of ['t-person', 't-goal']) {
-      await db().advertisingActionLog.create({ data: { userId: 'user:u-test', actionType: 'AD_BID_UPDATE', entityType: 'AD_TARGET', entityId: t, payloadBefore: { bidCents: 55 }, payloadAfter: { bidCents: 50 } } })
-    }
+    // A person changed one bid by hand in c-person, and one in c-goal — which carries its own target ACoS (the Bid page's
+    // "Goal"). A Claude request a person approved changed another c-goal bid: it writes as him. An engine changed t-goal2.
+    await bidLog('t-person', 'user:u-test')
+    await bidLog('t-goal', 'user:u-test')
+    await bidLog('t-goal-claude', claudeActor('u-approver'))
+    await bidLog('t-goal2', 'automation:auto-bid')
     await setBidAutomation('c-goal', { targetAcos: 0.4 })
   })
 }, 180_000)
@@ -114,29 +126,32 @@ const previewA4 = async () => {
 describe('Owner targets only — which bids auto-bid moves', () => {
   it('moves only toward a target he set, and leaves every bid another owner holds, counted per reason', async () => {
     const r = await inside(() => runAutoBidOnce())
-    // c-it and c-uk toward the account default; c-goal toward its own target although a person edited it (the Bid
-    // page shows its owner as "Goal": the target auto-bid moves toward).
-    expect(writes.entries.map((e) => e.adTargetId).sort()).toEqual(['t-goal', 't-it', 't-uk'])
-    expect(r).toMatchObject({ proposed: 3, applied: 3, dryRun: false, leftAlone: { noTargetSetByYou: 0, hourlyPlan: 2, goalPlan: 1, person: 1, pinned: 1 } })
+    // c-it and c-uk toward the account default; c-goal toward its own target. A bid a person set stays, per keyword:
+    // t-person and t-goal (his edits) and t-goal-claude (a Claude request he approved); their campaigns' other keywords
+    // move — t-goal2 too, which only an engine changed.
+    expect(writes.entries.map((e) => e.adTargetId).sort()).toEqual(['t-goal2', 't-it', 't-person2', 't-uk'])
+    expect(r).toMatchObject({ proposed: 4, applied: 4, dryRun: false, leftAlone: { noTargetSetByYou: 0, hourlyPlan: 2, goalPlan: 1, person: 3, pinned: 1 } })
   })
 
   it('a profit-derived or flat target is not one he set: left alone, and counted there first', async () => {
     await inside(() => setDefaultTargetAcosPct(null, 'test'))
     profit.byAdGroup = { 'g-c-it': 0.25 } // c-it: profit-derived; every other campaign without a target of its own: flat 30 %
     const r = await inside(() => runAutoBidOnce())
-    expect(writes.entries.map((e) => e.adTargetId)).toEqual(['t-goal'])
-    expect(r).toMatchObject({ proposed: 1, applied: 1, leftAlone: { noTargetSetByYou: 7, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0 } })
+    // Only c-goal has a target he set: of its keywords, the two a person set stay.
+    expect(writes.entries.map((e) => e.adTargetId)).toEqual(['t-goal2'])
+    expect(r).toMatchObject({ proposed: 1, applied: 1, leftAlone: { noTargetSetByYou: 8, hourlyPlan: 0, goalPlan: 0, person: 2, pinned: 0 } })
   })
 
-  it('ownerMoves: each source and each holder', () => {
+  it('ownerMoves: each source, each holder, and a person per keyword', () => {
     const p = (targetId: string, targetSource: string) => ({ targetId, targetSource }) as never
-    const campaignOf = new Map([['t-a', 'c-a'], ['t-b', 'c-b'], ['t-c', 'c-c'], ['t-d', 'c-d'], ['t-e', 'c-e'], ['t-f', 'c-f'], ['t-g', 'c-g'], ['t-h', 'c-h']])
-    const holders = new Map([['c-e', 'hourlyPlan'], ['c-f', 'goalPlan'], ['c-g', 'person'], ['c-h', 'pinned']] as const)
+    const campaignOf = new Map([['t-a', 'c-a'], ['t-b', 'c-b'], ['t-c', 'c-c'], ['t-d', 'c-d'], ['t-e', 'c-e'], ['t-f', 'c-f'], ['t-g', 'c-b'], ['t-h', 'c-h']])
+    const holders = new Map([['c-e', 'hourlyPlan'], ['c-f', 'goalPlan'], ['c-h', 'pinned']] as const)
     const out = ownerMoves([
       p('t-a', 'explicit'), p('t-b', 'campaign'), p('t-c', 'strategy'), p('t-d', 'account'),
-      p('t-e', 'campaign'), p('t-f', 'strategy'), p('t-g', 'account'), p('t-h', 'campaign'),
+      p('t-e', 'campaign'), p('t-f', 'strategy'), p('t-g', 'campaign'), p('t-h', 'campaign'),
       p('t-x', 'profit'), p('t-y', 'flat'), p('t-h', 'flat'),
-    ], campaignOf, holders)
+    ], campaignOf, holders, new Set(['t-g']))
+    // t-g, a person's bid, stays; t-b, in the same campaign, moves.
     expect(out.moves.map((m: { targetId: string }) => m.targetId)).toEqual(['t-a', 't-b', 't-c', 't-d'])
     // A bid with no target he set counts there first, whoever holds it.
     expect(out.leftAlone).toEqual({ noTargetSetByYou: 3, hourlyPlan: 1, goalPlan: 1, person: 1, pinned: 1 })
@@ -148,8 +163,8 @@ describe('Owner targets only — which bids auto-bid moves', () => {
       await db().adSchedule.updateMany({ data: { enabled: false } })
     })
     const r = await inside(() => runAutoBidOnce())
-    expect(writes.entries.map((e) => e.adTargetId).sort()).toEqual(['t-auto', 't-goal', 't-hourly', 't-it', 't-uk'])
-    expect(r.leftAlone).toEqual({ noTargetSetByYou: 0, hourlyPlan: 1, goalPlan: 0, person: 1, pinned: 1 })
+    expect(writes.entries.map((e) => e.adTargetId).sort()).toEqual(['t-auto', 't-goal2', 't-hourly', 't-it', 't-person2', 't-uk'])
+    expect(r.leftAlone).toEqual({ noTargetSetByYou: 0, hourlyPlan: 1, goalPlan: 0, person: 3, pinned: 1 })
     await inside(async () => {
       await db().autopilotPlan.updateMany({ data: { autonomy: 'SUGGEST' } })
       await db().adSchedule.updateMany({ data: { enabled: true } })
@@ -164,7 +179,7 @@ describe('Owner targets only — the preview is the run, and every surface says 
     expect(preview.proposals.map((p) => [p.targetId, p.proposedBidCents]).sort()).toEqual(writes.entries.map((e) => [e.adTargetId, e.bidCents]).sort())
     expect(preview.total).toBe(r.proposed)
     expect(preview.leftAlone).toEqual(r.leftAlone)
-    expect(preview.leftAloneNote).toBe(`5 left alone (2 an hourly plan holds, 1 a goal plan holds, 1 a person holds, 1 a pin holds): ${AUTO_BID_SCOPE_WORDS}.`)
+    expect(preview.leftAloneNote).toBe(`7 left alone (2 an hourly plan holds, 1 a goal plan holds, 3 a person holds, 1 a pin holds): ${AUTO_BID_SCOPE_WORDS}.`)
     // The same under SUGGEST: the preview does not depend on the dial, the run only counts.
     await inside(() => setAutonomy('SUGGEST', 'test'))
     writes.entries = []
@@ -175,10 +190,10 @@ describe('Owner targets only — the preview is the run, and every surface says 
 
   it("the run's summary line and its notification name the rule and what it left alone", async () => {
     const r = await inside(() => runAutoBidOnce())
-    expect(autoBidSummaryLine(r)).toBe(`proposed=3 applied=3 dryRun=false left-alone=5 (2 an hourly plan holds, 1 a goal plan holds, 1 a person holds, 1 a pin holds: ${AUTO_BID_SCOPE_WORDS})`)
+    expect(autoBidSummaryLine(r)).toBe(`proposed=4 applied=4 dryRun=false left-alone=7 (2 an hourly plan holds, 1 a goal plan holds, 3 a person holds, 1 a pin holds: ${AUTO_BID_SCOPE_WORDS})`)
     expect(notices.sent).toHaveLength(1)
-    expect(notices.sent[0]).toMatchObject({ title: 'Auto-bid: 3 bid changes applied' })
-    expect(notices.sent[0].body).toBe(`Target-ACoS optimization: ${AUTO_BID_SCOPE_WORDS} (3 to move; left alone: 2 an hourly plan holds, 1 a goal plan holds, 1 a person holds, 1 a pin holds). Writes gated per-campaign allowlist + caps.`)
+    expect(notices.sent[0]).toMatchObject({ title: 'Auto-bid: 4 bid changes applied' })
+    expect(notices.sent[0].body).toBe(`Target-ACoS optimization: ${AUTO_BID_SCOPE_WORDS} (4 to move; left alone: 2 an hourly plan holds, 1 a goal plan holds, 3 a person holds, 1 a pin holds). Writes gated per-campaign allowlist + caps.`)
     // A run that left nothing alone keeps its old line.
     expect(autoBidSummaryLine({ proposed: 2, applied: 2, dryRun: false, leftAlone: { noTargetSetByYou: 0, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0 } })).toBe('proposed=2 applied=2 dryRun=false')
   })

@@ -16,9 +16,10 @@
  *
  * Owner targets only (Owner decision 2026-10-06, A) — of the optimiser's proposals it moves only the bids whose target
  * ACoS the Owner set (the campaign's own, the ads strategy's, the account default), and it leaves every bid another
- * owner holds: an hourly bid plan or a product plan, a running autopilot plan, a person, a pin (planAutoBid). A
- * profit-derived or flat 30 % target is one he never chose, so such a bid is left alone and counted. The optimiser
- * itself is unchanged: previews, rules, recommendations and autopilot plans see what they saw before.
+ * owner holds: an hourly bid plan or a product plan, a running autopilot plan, a pin (per campaign), a person (per
+ * keyword: a bid a person set in the last 60 days, whatever the campaign's target) (planAutoBid). A profit-derived or
+ * flat 30 % target is one he never chose, so such a bid is left alone and counted. The optimiser itself is unchanged:
+ * previews, rules, recommendations and autopilot plans see what they saw before.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -26,7 +27,7 @@ import { previewBidOptimization, applyBidOptimization, type BidProposal } from '
 import { notifyAutomation } from './ads-automation-notify.service.js'
 import { allowChange, engineCapsText, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from './ads-engine-guard.js'
 import type { TargetAcosSource } from './ads-target-acos-resolver.js'
-import { bidderByCampaign } from './bid-grid.service.js'
+import { bidderByCampaign, personBidTargetIds } from './bid-grid.service.js'
 import { rankOwnedCampaignIds } from './rank-release.service.js'
 
 // Skip immaterial moves — protects the Amazon API rate budget + per-campaign
@@ -52,9 +53,12 @@ export const AUTO_BID_SCOPE_WORDS = 'it moves only bids where you set a target A
 const OWNER_TARGET_SOURCES: ReadonlySet<TargetAcosSource> = new Set<TargetAcosSource>(['explicit', 'campaign', 'strategy', 'account'])
 
 /** Who else holds a campaign's bids, for auto-bid (autoBidHolders). */
-export type AutoBidHolder = 'pinned' | 'hourlyPlan' | 'goalPlan' | 'person'
-/** The bids auto-bid would have moved and left alone, per reason: no target the Owner set, or another owner holds them. */
-export type AutoBidLeftAlone = Record<'noTargetSetByYou' | AutoBidHolder, number>
+export type AutoBidHolder = 'pinned' | 'hourlyPlan' | 'goalPlan'
+/**
+ * The bids auto-bid would have moved and left alone, per reason: no target the Owner set, another owner holds the
+ * campaign's bids, or a person set this bid.
+ */
+export type AutoBidLeftAlone = Record<'noTargetSetByYou' | AutoBidHolder | 'person', number>
 
 const LEFT_ALONE_WORDS: Record<keyof AutoBidLeftAlone, string> = {
   noTargetSetByYou: 'with no target set by you',
@@ -85,16 +89,17 @@ export function leftAloneWords(l: AutoBidLeftAlone | null | undefined): string {
  *               campaigns Rank & Dayparting holds (rankOwnedCampaignIds, rank-release.service.ts: goal-mode schedules
  *               and the product plans' campaigns).
  *   goalPlan    an autopilot plan the autopilot cron runs (RUNNING_AUTOPILOT_PLANS) that names the campaign.
- *   person      the Bid page's owner `manual`: a person's bid edit in the last 60 days.
  * The Bid page's owner `goal` is the campaign's own target ACoS — the target auto-bid moves toward — so it holds nothing
- * from auto-bid. Not caught: a run that cannot read who holds a bid stops rather than move it.
+ * from auto-bid. A person holds a single bid, not a campaign: ownerMoves leaves each bid he set (personBidTargetIds).
+ * `personTargets`: that set, already read, so the Bid page's labels do not read it again. Not caught: a run that cannot
+ * read who holds a bid stops rather than move it.
  */
-export async function autoBidHolders(campaignIds: string[]): Promise<Map<string, AutoBidHolder>> {
+export async function autoBidHolders(campaignIds: string[], personTargets?: ReadonlySet<string>): Promise<Map<string, AutoBidHolder>> {
   const out = new Map<string, AutoBidHolder>()
   if (!campaignIds.length) return out
   const { RUNNING_AUTOPILOT_PLANS } = await import('../../jobs/ad-autopilot.job.js')
   const [bidders, rankHeld, plans, pinned] = await Promise.all([
-    bidderByCampaign(),
+    bidderByCampaign(personTargets),
     rankOwnedCampaignIds(),
     prisma.autopilotPlan.findMany({ where: RUNNING_AUTOPILOT_PLANS, select: { campaignIds: true } }),
     prisma.campaign.findMany({ where: { id: { in: campaignIds }, pinBids: true }, select: { id: true } }),
@@ -105,8 +110,7 @@ export async function autoBidHolders(campaignIds: string[]): Promise<Map<string,
     const bidder = bidders.get(id)?.kind
     const holder: AutoBidHolder | null = pins.has(id) ? 'pinned'
       : bidder === 'schedule' || rankHeld.has(id) ? 'hourlyPlan'
-        : planHeld.has(id) ? 'goalPlan'
-          : bidder === 'manual' ? 'person' : null
+        : planHeld.has(id) ? 'goalPlan' : null
     if (holder) out.set(id, holder)
   }
   return out
@@ -114,10 +118,11 @@ export async function autoBidHolders(campaignIds: string[]): Promise<Map<string,
 
 /**
  * Which proposals auto-bid moves: a target the Owner set (else `noTargetSetByYou`), on a campaign nobody else holds
- * (else the holder). Pure; the order of `proposals` is kept.
+ * (else the holder), on a bid no person set (else `person` — per keyword, on any campaign, its own target ACoS
+ * included). Pure; the order of `proposals` is kept.
  */
 export function ownerMoves<P extends Pick<BidProposal, 'targetId' | 'targetSource'>>(
-  proposals: P[], campaignOf: ReadonlyMap<string, string>, holders: ReadonlyMap<string, AutoBidHolder>,
+  proposals: P[], campaignOf: ReadonlyMap<string, string>, holders: ReadonlyMap<string, AutoBidHolder>, personTargets: ReadonlySet<string>,
 ): { moves: P[]; leftAlone: AutoBidLeftAlone } {
   const leftAlone = noneLeftAlone()
   const moves: P[] = []
@@ -126,6 +131,7 @@ export function ownerMoves<P extends Pick<BidProposal, 'targetId' | 'targetSourc
     const campaignId = campaignOf.get(p.targetId)
     const holder = campaignId ? holders.get(campaignId) : undefined
     if (holder) { leftAlone[holder]++; continue }
+    if (personTargets.has(p.targetId)) { leftAlone.person++; continue }
     moves.push(p)
   }
   return { moves, leftAlone }
@@ -151,8 +157,9 @@ export async function planAutoBid(): Promise<AutoBidPlan> {
     ? await prisma.adTarget.findMany({ where: { id: { in: withTarget.map((p) => p.targetId) } }, select: { id: true, adGroup: { select: { campaignId: true } } } })
     : []
   const campaignOf = new Map(targets.map((t) => [t.id, t.adGroup.campaignId]))
-  const holders = await autoBidHolders([...new Set(campaignOf.values())])
-  const { moves, leftAlone } = ownerMoves(material, campaignOf, holders)
+  const personTargets = withTarget.length ? await personBidTargetIds() : new Set<string>()
+  const holders = await autoBidHolders([...new Set(campaignOf.values())], personTargets)
+  const { moves, leftAlone } = ownerMoves(material, campaignOf, holders, personTargets)
   return { preview, moves, campaignOf, leftAlone }
 }
 
