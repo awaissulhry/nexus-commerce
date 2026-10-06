@@ -90,7 +90,8 @@ const CAP_NOTE =
   "Each cap binds on its own scope's spend (the market's on the whole market, a category's on its products, a product's on "
   + "its own); none is inherited. The budget engine stops at each one until the 1st: the market's cap lowers every campaign of "
   + "the market to its stop bid; a category's or a product's lowers every ad group holding a product under it (the other "
-  + 'products sharing that ad group stop too). Never a pause.'
+  + 'products sharing that ad group stop too). Never a pause. A cap of 0 means no cap, as in the Budget Manager: an immediate '
+  + 'stop is a stop (suppress-campaign), not a cap of 0.'
 const SCOPE_SPEND_NOTE =
   "A category's or product's spend so far adds up Amazon's daily advertised-product report (Sponsored Products ads only), "
   + 'each ad counted on its product and on every cap that product falls under: whole days up to spendThrough, never today. '
@@ -279,7 +280,8 @@ async function businessLevels(): Promise<Map<string, ClaudeTrust>> {
  * when the market has neither a strategy cap nor a budget plan this month.
  */
 async function monthAgainstCaps(market: string, resolved: ResolvedStrategy, older: Older): Promise<Record<string, unknown> | null> {
-  const strategyCap = resolved.caps.find((c) => c.source.level === 'market')?.monthlySpendCapCents ?? null
+  // 0 = no cap (marketCaps reads it so too).
+  const strategyCap = resolved.caps.find((c) => c.source.level === 'market' && c.monthlySpendCapCents > 0)?.monthlySpendCapCents ?? null
   if (strategyCap == null && !older.plan) return null
   const caps = marketCaps(older.plan, strategyCap)
   const month = currentMonth()
@@ -311,10 +313,11 @@ function fieldEntries(resolved: ResolvedStrategy, older: Older, thisMonth: Recor
     if (spec.key === 'monthlySpendCapCents') {
       const caps = resolved.caps.map((c) => ({
         ...sourceOut(c.source), monthlySpendCapCents: c.monthlySpendCapCents,
+        ...(c.monthlySpendCapCents > 0 ? {} : { noCap: true }),
         ...(c.source.level === 'market' ? {} : scopeMonth(c.source.strategyId, scope)),
       }))
-      const market = resolved.caps.find((c) => c.source.level === 'market')
-      const scoped = resolved.caps.some((c) => c.source.level !== 'market')
+      const market = resolved.caps.find((c) => c.source.level === 'market' && c.monthlySpendCapCents > 0)
+      const scoped = resolved.caps.some((c) => c.source.level !== 'market' && c.monthlySpendCapCents > 0)
       out.push({
         field: spec.key, label: spec.label, caps,
         note: CAP_NOTE,
@@ -322,7 +325,7 @@ function fieldEntries(resolved: ResolvedStrategy, older: Older, thisMonth: Recor
         ...(scoped && scope ? { scopeSpend: { spendThrough: scope.spendThrough, unattributedCents: scope.unattributedCents, note: SCOPE_SPEND_NOTE } } : {}),
         ...(older.plan ? {
           alsoInForce: [{ setting: `the budget plan ${older.plan.month}`, monthlyBudgetCents: older.plan.monthlyBudgetCents, stopOverSpend: older.plan.stopOverSpend, autoPacing: older.plan.autoPacing }],
-          ...(market ? { stricter: { from: market.monthlySpendCapCents <= older.plan.monthlyBudgetCents ? 'the market strategy' : `the budget plan ${older.plan.month}` } } : {}),
+          ...(market ? { stricter: { from: older.plan.monthlyBudgetCents <= 0 || market.monthlySpendCapCents <= older.plan.monthlyBudgetCents ? 'the market strategy' : `the budget plan ${older.plan.month}` } } : {}),
         } : {}),
         readBy: spec.readBy,
       })

@@ -96,7 +96,7 @@ export interface PlanDecision {
   capReached: boolean
   todayTargetCents: number | null
   campaigns: CampaignDecision[]
-  /** W1-6 — this month's budget plan cap (null: no plan, or a cap of 0) and the ads strategy's market cap, each as set. */
+  /** W1-6 — this month's budget plan cap and the ads strategy's market cap (null: none, or a cap of 0 — no cap). */
   planCapCents: number | null
   strategyCap: { cents: number; from: string } | null
   /** W1-6 — where bids drop (null: no stop in force) and which cap that is. */
@@ -141,13 +141,16 @@ export interface MarketCaps {
 
 /**
  * W1-6 — which cap stops a market and which one pacing paces, from this month's plan and the ads strategy's market cap.
- * A plan cap of 0 is "no budget set" (as the Budget Manager reads it); a strategy cap of 0 is a cap: spend nothing.
+ * A cap of 0 (or less) is NO cap, in the plan and in the strategy alike: the Budget Manager has always read a €0 month
+ * as "no budget set" (#357), and the same number must not mean the opposite on two screens. An immediate stop is a
+ * stop (suppress-campaign), never a cap of 0.
  */
 export function marketCaps(
   plan: { monthlyBudgetCents: number; autoPacing: boolean; stopOverSpend: boolean } | null,
-  strategyCapCents: number | null,
+  strategyCents: number | null,
 ): MarketCaps {
   const planCap = plan && plan.monthlyBudgetCents > 0 ? plan.monthlyBudgetCents : null
+  const strategyCapCents = strategyCents != null && strategyCents > 0 ? strategyCents : null
   const lower = (...caps: Array<number | null>) => {
     const set = caps.filter((c): c is number => c != null)
     return set.length ? Math.min(...set) : null
@@ -254,7 +257,8 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
     const p = planByMkt.get(marketplace) ?? null
     // The strategy is opened for a market with a cap, and for any market where a floor is due (its stop bid).
     let view: StrategyView | null = strategyMarkets.has(marketplace) ? await openStrategy(marketplace) : null
-    const strategyCap = view?.forMarket().values.monthlyCaps.find((c) => c.source.level === 'market') ?? null
+    // A strategy cap of 0 is no cap (marketCaps): not shown as one either.
+    const strategyCap = view?.forMarket().values.monthlyCaps.find((c) => c.source.level === 'market' && c.monthlySpendCapCents > 0) ?? null
     const caps = marketCaps(p, strategyCap?.monthlySpendCapCents ?? null)
     const cap = caps.capCents ?? 0
     const mtd = mtdByMkt.get(marketplace) ?? 0

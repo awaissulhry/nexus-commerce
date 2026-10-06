@@ -237,6 +237,20 @@ describe('effective', () => {
     }
   })
 
+  it('W1-6 — a market cap of 0 is no cap (as in the Budget Manager): the plan\'s cap is the one that stops', async () => {
+    const row = await inA(() => db().adsStrategy.findFirstOrThrow({ where: { market: 'IT', level: 'MARKET' }, select: { id: true } }))
+    await inA(() => db().adsStrategy.update({ where: { id: row.id }, data: { monthlySpendCapCents: 0 } }))
+    try {
+      const cap = fieldOf(data(await inA(() => readStrategy({ market: 'IT' }))).markets[0], 'monthlySpendCapCents')
+      expect(cap.caps).toEqual([expect.objectContaining({ level: 'market', monthlySpendCapCents: 0, noCap: true })])
+      expect(cap.stricter).toBeUndefined()
+      expect(cap.thisMonth).toMatchObject({ stopCapCents: 616161, stopBy: `the budget plan ${month()}` })
+      expect(cap.note).toMatch(/A cap of 0 means no cap/)
+    } finally {
+      await inA(() => db().adsStrategy.update({ where: { id: row.id }, data: { monthlySpendCapCents: 515151 } }))
+    }
+  })
+
   it('a campaign answers in its own market: its products, its own limits and target, which win today', async () => {
     const m = data(await inA(() => readStrategy({ campaignId: ids.c1 }))).markets[0]
     expect(m.scope).toMatchObject({ kind: 'campaign', name: 'Test campaign one', adGroups: 1, unknownProductAds: 1 })
