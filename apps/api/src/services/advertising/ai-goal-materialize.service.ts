@@ -21,12 +21,18 @@
  *
  * Governed transparency (AIAD decision Q2): campaigns stay visible and editable everywhere —
  * ownership is carried by the "[AI]" name prefix and the goal linkage, never by a lockout.
+ *
+ * ADS AUTONOMY B-2 — Claude's AI goal (create-ai-goal-campaigns) runs this same launch with `GoalLaunchOptions`: born
+ * at the floor, off the live-write allowlist, its rules and AutopilotPlan switched off, every write in its change set.
+ * Without options the launch is the screen's, unchanged.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { GOAL_PRESETS, DEFAULT_GUARDRAILS, type Goal } from './autopilot/presets.js'
 import { safeCampaignName } from '@nexus/shared/ads-campaign-name'
 import type { GoalProduct } from './ai-product-goal.service.js'
+import type { AdsActor } from './ads-mutation.service.js'
+import { normaliseFloorCents } from './ads-bid-suppression.service.js'
 import { CampaignLaunch, summariseLaunch, describeLaunch, type LaunchCampaignResult, type LaunchResult } from './launch-outcome.js'
 
 export class MaterializeError extends Error {
@@ -193,7 +199,33 @@ export function planGoalScaffold(goal: GoalLike, bidOpts?: ScaffoldBidOpts): Goa
 
 // ── The executor ──────────────────────────────────────────────────────────────
 
-export async function materializeProductGoal(goalId: string, userId?: string) {
+/** B-2 — Claude's AI goal (create-ai-goal-campaigns). Absent: the screen's launch, unchanged. */
+export interface GoalLaunchOptions {
+  /**
+   * CC-7 — default TRUE (the screen): each campaign goes on the live-write allowlist the moment it exists. false = born
+   * off it: its parts still reach Amazon (every create of the launch passes `creationFlow`, its negatives too), but no
+   * engine, rule or later edit writes to it until a person puts it on the list (set-campaign-live-writes).
+   */
+  allowlistAtBirth?: boolean
+  /**
+   * The A11 pattern (ads-single-launch.service.ts): a bid above `floorCents` is created AT it, with the planned bid kept
+   * in `suppressedFromBidCents` (the ad group default, each keyword, product target and Auto group); each campaign is
+   * flagged `bidsSuppressedAt` / `bidsSuppressedFloorCents` / `bidsSuppressedBy = by` right after it is created. Born
+   * ENABLED, never paused: the floor is what keeps it from spending; restore-campaign puts the planned bids back.
+   */
+  bornSuppressed?: { floorCents: number; by: AdsActor }
+  /** The approval it runs for: every AdvertisingActionLog row it writes carries it (executionId). */
+  changeSetId?: string | null
+  /**
+   * The goal's two rules are created switched off (still dry run, propose-first) and its AutopilotPlan disabled: nothing
+   * proposes or acts until a person switches the plan on, which hands the rules to the plan (`syncedEnabled: false`).
+   */
+  automationOff?: boolean
+  /** The bid evidence the approved preview showed (frozen): the launch builds those bids, not today's evidence. */
+  bidOpts?: ScaffoldBidOpts
+}
+
+export async function materializeProductGoal(goalId: string, userId?: string, opts: GoalLaunchOptions = {}) {
   const goal = await prisma.adProductGoal.findUnique({ where: { id: goalId } })
   if (!goal) throw new MaterializeError('goal not found', 404)
   if (goal.status === 'ARCHIVED') throw new MaterializeError('goal is archived', 400)
@@ -207,7 +239,7 @@ export async function materializeProductGoal(goalId: string, userId?: string) {
     logger.error('[AIAD] goal claim not released', { goalId: goal.id, error: (e as Error).message })
   })
   try {
-    return await materializeClaimed(goal, userId)
+    return await materializeClaimed(goal, userId, opts)
   } catch (e) {
     if (e instanceof MaterializeError && e.releaseClaim) await release()
     throw e
@@ -216,12 +248,13 @@ export async function materializeProductGoal(goalId: string, userId?: string) {
 
 type GoalRow = NonNullable<Awaited<ReturnType<typeof prisma.adProductGoal.findUnique>>>
 
-async function materializeClaimed(goal: GoalRow, userId: string | undefined) {
+async function materializeClaimed(goal: GoalRow, userId: string | undefined, opts: GoalLaunchOptions) {
   const goalId = goal.id
 
-  // Same bid evidence the preview showed — resolveGoalBids at both ends, so they cannot differ.
+  // Same bid evidence the preview showed — resolveGoalBids at both ends, so they cannot differ. B-2: Claude's preview
+  // hands over the evidence it showed (frozen in the approval).
   const { resolveGoalBids } = await import('./ai-goal-suggest.service.js')
-  const bidOpts = await resolveGoalBids(goal.seedKeywords ?? [], goal.marketplace)
+  const bidOpts = opts.bidOpts ?? await resolveGoalBids(goal.seedKeywords ?? [], goal.marketplace)
   const scaffold = planGoalScaffold({
     name: goal.name, aiTarget: goal.aiTarget, budgetMode: goal.budgetMode,
     totalBudgetCents: goal.totalBudgetCents,
@@ -250,6 +283,18 @@ async function materializeClaimed(goal: GoalRow, userId: string | undefined) {
   // W2-A (CC-2) — what each campaign made on Amazon, part by part (launch-outcome.ts). `errors` keeps its lines.
   const outcomes: LaunchCampaignResult[] = []
 
+  // B-2 — the options. Absent, every helper below is the identity and the launch is the screen's.
+  const allowlistAtBirth = opts.allowlistAtBirth !== false
+  const cs = opts.changeSetId ? { changeSetId: opts.changeSetId } : {}
+  // Born off the allowlist, the negatives are part of the launch as its keywords are (`creationFlow`, as SPW's and
+  // Single's): the allowlist binds every other negative. The screen's launch allowlists first and sends them as before.
+  const negFlow = allowlistAtBirth ? {} : { creationFlow: true }
+  const floor = opts.bornSuppressed ? normaliseFloorCents(opts.bornSuppressed.floorCents) : null
+  const cents = (eur: number) => Math.round(eur * 100)
+  const floored = (eur: number) => floor != null && cents(eur) > floor
+  const startEur = (eur: number) => (floored(eur) ? (floor as number) / 100 : eur)
+  const remember = (adTargetId: string, eur: number) => prisma.adTarget.update({ where: { id: adTargetId }, data: { suppressedFromBidCents: cents(eur) } })
+
   for (const pc of scaffold.campaigns) {
     const rec = new CampaignLaunch(pc.name)
     try {
@@ -257,7 +302,7 @@ async function materializeClaimed(goal: GoalRow, userId: string | undefined) {
         name: pc.name, type: 'SP', marketplace: scaffold.marketplace,
         targetingType: pc.targetingType,
         dailyBudgetEur: pc.budgetCents / 100, biddingStrategy: 'legacyForSales',
-        portfolioId: goal.portfolioId ?? undefined, userId,
+        portfolioId: goal.portfolioId ?? undefined, userId, ...cs,
       }).catch((e: unknown) => { rec.campaignThrew(e); throw e })
       rec.campaign(camp)
       // The campaign exists in Nexus: from here it is in the goal, whatever its parts do (it was dropped when its ad
@@ -267,43 +312,64 @@ async function materializeClaimed(goal: GoalRow, userId: string | undefined) {
       if (!camp.externalCampaignId) { errors.push(`campaign ${pc.name}: ${camp.reason ?? 'not on Amazon'}`); outcomes.push(rec.result()); continue }
       // Same launch repair as SPW: allowlist BEFORE sub-entities, or the per-campaign gate
       // skips every keyword/product-ad and the campaign lands empty on Amazon.
-      try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[AIAD] allowlist failed', { error: (e as Error).message }) }
+      // B-2 — off it for Claude's goal (`allowlistAtBirth: false`): every create below passes `creationFlow`.
+      if (allowlistAtBirth) { try { await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } }) } catch (e) { logger.warn('[AIAD] allowlist failed', { error: (e as Error).message }) } }
+      // B-2 — born at the floor: flagged as suppressed by the person who asked, from the moment it exists.
+      if (floor != null) {
+        try { await prisma.campaign.update({ where: { id: camp.id }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.bornSuppressed!.by } }) }
+        catch (e) { rec.threw('campaign', 'Born at the floor', e); errors.push(`campaign ${pc.name}: born at the floor: ${(e as Error).message}`) }
+      }
       // CM-20 — `creationFlow`: everything below belongs to the campaign created a moment ago.
       const agName = `${ROLE_LABEL[pc.role]} Ad Group`
-      const ag = await createAdGroupLocal({ campaignId: camp.id, name: agName, defaultBidEur: BASE_BID_EUR, userId, creationFlow: true })
+      const ag = await createAdGroupLocal({ campaignId: camp.id, name: agName, defaultBidEur: startEur(BASE_BID_EUR), userId, creationFlow: true, ...cs })
         .catch((e: unknown) => { rec.adGroup(agName, null, e); throw e })
       rec.adGroup(agName, ag)
       const agId = ag.id as string
       const set = agBySet.get(pc.setLabel) ?? {}
       set[pc.role] = { campaignId: camp.id, adGroupId: agId }
       agBySet.set(pc.setLabel, set)
+      if (floored(BASE_BID_EUR)) { try { await prisma.adGroup.update({ where: { id: agId }, data: { suppressedFromBidCents: cents(BASE_BID_EUR) } }) } catch (e) { rec.threw('ad_group', 'Remember the planned default bid', e) } }
 
       // W2-A (CC-17) — negatives FIRST, as Replicate does: a launch that fails part-way is then narrower, never wider.
       for (const nk of pc.negativeKeywords) {
-        try { rec.negative('negative_keyword', `${nk.text} (${nk.matchType.toLowerCase()})`, await createNegativeKeywordLocal({ adGroupId: agId, keywordText: nk.text, matchType: nk.matchType, userId })) }
+        try { rec.negative('negative_keyword', `${nk.text} (${nk.matchType.toLowerCase()})`, await createNegativeKeywordLocal({ adGroupId: agId, keywordText: nk.text, matchType: nk.matchType, userId, ...negFlow, ...cs })) }
         catch (e) { rec.threw('negative_keyword', nk.text, e); errors.push(`neg "${nk.text}": ${(e as Error).message}`) }
       }
       for (const asin of pc.negativeAsins) {
-        try { rec.negative('negative_product', asin, await createNegativeProductTargetLocal({ adGroupId: agId, asin, userId })) }
+        try { rec.negative('negative_product', asin, await createNegativeProductTargetLocal({ adGroupId: agId, asin, userId, ...negFlow, ...cs })) }
         catch (e) { rec.threw('negative_product', asin, e); errors.push(`neg ASIN ${asin}: ${(e as Error).message}`) }
       }
       for (const p of pc.products) {
         const item = p.sku ?? p.asin ?? '?'
-        try { rec.productAd(item, await createProductAdLocal({ adGroupId: agId, asin: p.asin, sku: p.sku, productId: p.productId, userId, launch: true, creationFlow: true })) }
+        try { rec.productAd(item, await createProductAdLocal({ adGroupId: agId, asin: p.asin, sku: p.sku, productId: p.productId, userId, launch: true, creationFlow: true, ...cs })) }
         catch (e) { rec.threw('product_ad', item, e); errors.push(`product ad ${p.asin ?? p.sku}: ${(e as Error).message}`) }
       }
       // W2-A (CC-1) — Amazon makes the four auto groups itself: link them and set each one's bid (the bid evidence).
       if (pc.autoGroups.length) {
-        try { rec.autoGroups(await linkAutoTargeting({ adGroupId: agId, groups: pc.autoGroups.map((g) => ({ key: g.key, enabled: true, bidEur: g.bidEur })), userId, creationFlow: true })) }
-        catch (e) { rec.threw('auto_targeting', 'Auto groups', e); errors.push(`auto groups: ${(e as Error).message}`) }
+        try {
+          const linked = await linkAutoTargeting({ adGroupId: agId, groups: pc.autoGroups.map((g) => ({ key: g.key, enabled: true, bidEur: startEur(g.bidEur) })), userId, creationFlow: true, ...cs })
+          rec.autoGroups(linked)
+          // B-2 — each linked group remembers the bid planned for it.
+          if (floor != null) {
+            const planned = new Map(pc.autoGroups.map((g) => [g.key, g.bidEur]))
+            for (const l of linked.links) { const eur = planned.get(l.key); if (l.adTargetId && eur != null && floored(eur)) await remember(l.adTargetId, eur) }
+          }
+        } catch (e) { rec.threw('auto_targeting', 'Auto groups', e); errors.push(`auto groups: ${(e as Error).message}`) }
       }
       for (const kw of pc.seeds) {
-        try { rec.keyword(`${kw.text} (${kw.matchType.toLowerCase()})`, await createKeywordLocal({ adGroupId: agId, keywordText: kw.text, matchType: kw.matchType, bidEur: kw.bidCents / 100, userId, creationFlow: true })) }
-        catch (e) { rec.threw('keyword', kw.text, e); errors.push(`${kw.matchType.toLowerCase()} "${kw.text}": ${(e as Error).message}`) }
+        try {
+          const eur = kw.bidCents / 100
+          const k = await createKeywordLocal({ adGroupId: agId, keywordText: kw.text, matchType: kw.matchType, bidEur: startEur(eur), userId, creationFlow: true, ...cs })
+          rec.keyword(`${kw.text} (${kw.matchType.toLowerCase()})`, k)
+          if (floored(eur) && !k.existed && k.id) await remember(k.id, eur)
+        } catch (e) { rec.threw('keyword', kw.text, e); errors.push(`${kw.matchType.toLowerCase()} "${kw.text}": ${(e as Error).message}`) }
       }
       for (const asin of pc.productTargets) {
-        try { rec.productTarget(asin, await createTargetLocal({ adGroupId: agId, kind: 'PRODUCT', value: asin, bidEur: BASE_BID_EUR, userId, creationFlow: true })) }
-        catch (e) { rec.threw('product_target', asin, e); errors.push(`product target ${asin}: ${(e as Error).message}`) }
+        try {
+          const t = await createTargetLocal({ adGroupId: agId, kind: 'PRODUCT', value: asin, bidEur: startEur(BASE_BID_EUR), userId, creationFlow: true, ...cs })
+          rec.productTarget(asin, t)
+          if (floored(BASE_BID_EUR) && t.id) await remember(t.id, BASE_BID_EUR)
+        } catch (e) { rec.threw('product_target', asin, e); errors.push(`product target ${asin}: ${(e as Error).message}`) }
       }
     } catch (e) {
       errors.push(`campaign ${pc.name}: ${(e as Error).message}`)
@@ -317,7 +383,7 @@ async function materializeClaimed(goal: GoalRow, userId: string | undefined) {
   // CC-24 — from here campaigns exist: whatever happens next, the goal keeps its claim and names them, so a retry never
   // builds a second scaffold beside them.
   try {
-    return await finishMaterialize(goal, userId, scaffold, refs, agBySet, errors, launch)
+    return await finishMaterialize(goal, userId, scaffold, refs, agBySet, errors, launch, opts)
   } catch (e) {
     await prisma.adProductGoal.update({ where: { id: goal.id }, data: { campaignIds: refs as never } }).catch(() => {})
     throw e
@@ -327,13 +393,15 @@ async function materializeClaimed(goal: GoalRow, userId: string | undefined) {
 async function finishMaterialize(
   goal: GoalRow, userId: string | undefined, scaffold: GoalScaffold, refs: GoalCampaignRef[],
   agBySet: Map<string, Partial<Record<ScaffoldRole, { campaignId: string; adGroupId: string }>>>, errors: string[],
-  launch: LaunchResult,
+  launch: LaunchResult, opts: GoalLaunchOptions,
 ) {
   const goalId = goal.id
+  // B-2 — Claude's goal: its rules and plan are born switched off (absent: the screen's, on and proposing).
+  const off = opts.automationOff === true
   const { settleLaunchPortfolios } = await import('./ads-create.service.js')
 
   // ── Harvest & Negate + Negative Targeting rules per scaffold (SPW-proven shape, propose-first) ──
-  const linkedRuleIds: Array<{ module: 'harvest' | 'negate'; ruleId: string }> = []
+  const linkedRuleIds: Array<{ module: 'harvest' | 'negate'; ruleId: string; syncedEnabled?: boolean }> = []
   for (const pr of scaffold.rules) {
     const set = agBySet.get(pr.setLabel) ?? {}
     const srcRoles: ScaffoldRole[] = ['AUTO', 'RESEARCH']
@@ -359,9 +427,11 @@ async function finishMaterialize(
           minOrders: pr.minOrders, graduationBidEur: 0.5, sources, destinations,
           mode: pr.kind === 'harvest' ? 'harvest' : 'negative',
         }] as never,
-        enabled: true, dryRun: true, maxExecutionsPerDay: 3, createdBy: userId ?? 'ai-goal',
+        enabled: !off, dryRun: true, maxExecutionsPerDay: 3, createdBy: userId ?? 'ai-goal',
       } })
-      linkedRuleIds.push({ module: pr.kind === 'harvest' ? 'harvest' : 'negate', ruleId: rule.id })
+      // B-2 — a rule born off is the plan's own off (coordination.ts CC-15 reads `syncedEnabled`), not a person's: the
+      // plan switched on later switches it on with it.
+      linkedRuleIds.push({ module: pr.kind === 'harvest' ? 'harvest' : 'negate', ruleId: rule.id, ...(off ? { syncedEnabled: false } : {}) })
     } catch (e) { errors.push(`rule ${pr.name}: ${(e as Error).message}`) }
   }
 
@@ -389,6 +459,7 @@ async function finishMaterialize(
       harvest: { on: true }, negate: { on: true },
     } as never,
     linkedRuleIds: linkedRuleIds as never,
+    ...(off ? { enabled: false } : {}),
     createdBy: userId ?? 'ai-goal',
   } })
 

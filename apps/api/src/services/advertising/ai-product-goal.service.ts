@@ -302,6 +302,14 @@ export async function getProductGoalDetail(id: string) {
   return { goal: g, campaigns: campaignsWithPerf, plan, pendingProposals, series }
 }
 
+/** B-2 — the campaigns a goal names (its launched scaffold, in order) and its plan: create-ai-goal-campaigns reads its goal back. */
+export async function goalCampaignRefs(id: string): Promise<{ planId: string | null; refs: Array<{ id: string; role: string | null }> } | null> {
+  const g = await prisma.adProductGoal.findUnique({ where: { id }, select: { campaignIds: true, planId: true } })
+  if (!g) return null
+  const refs = (Array.isArray(g.campaignIds) ? g.campaignIds : []) as Array<{ id?: unknown; role?: unknown }>
+  return { planId: g.planId, refs: refs.flatMap((r) => (r?.id ? [{ id: String(r.id), role: r.role ? String(r.role) : null }] : [])) }
+}
+
 export async function archiveProductGoal(id: string) {
   return prisma.adProductGoal.update({ where: { id }, data: { status: 'ARCHIVED' } })
 }

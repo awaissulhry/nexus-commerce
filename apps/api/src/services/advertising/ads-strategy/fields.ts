@@ -63,7 +63,8 @@ export const CLAUDE_ACTION_TOOLS = {
   stop: ['suppress-campaign', 'lower-ad-bids-for-stock'],
   restore: ['restore-campaign', 'restore-ad-bids-after-stock'],
   // PB-5a — a playbook build creates campaigns (apply-ads-playbook op build; its other ops map in OP_ACTIONS, claude.ts).
-  create: ['create-ad-campaign', 'apply-ads-playbook'],
+  // B-2 — so does an AI goal (create-ai-goal-campaigns).
+  create: ['create-ad-campaign', 'apply-ads-playbook', 'create-ai-goal-campaigns'],
   rule: ['save-ad-rule'],
   undo: ['undo-ad-change'],
   // AA-W2-9 (D-W2-6 = A) — a new campaign goes live in three kinds: create, allowlist (Claude's own), restore.

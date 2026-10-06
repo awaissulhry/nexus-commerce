@@ -19,6 +19,7 @@ import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
 import { ADS_MANAGER_TOOLS } from './tools/ads-manager.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
 import { ADS_PLAYBOOK_APPLY_TOOLS } from './tools/ads-playbook-apply.tools.js'
+import { ADS_AI_GOAL_TOOLS } from './tools/ads-ai-goal.tools.js'
 import { ADS_STATUS_TOOLS } from './tools/ads-status.tools.js'
 import { ADS_STOCK_TOOLS } from './tools/ads-stock.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
@@ -115,6 +116,8 @@ const ALL: AgentTool[] = [
   ...ADS_MANAGER_TOOLS,
   ...ADS_CREATE_TOOLS,
   ...ADS_PLAYBOOK_APPLY_TOOLS,
+  // Ads autonomy B-2 — an AI Advertising goal and its campaigns, through the AI Goal builder's own launch (born safe).
+  ...ADS_AI_GOAL_TOOLS,
   // Ads autonomy AA-W2-12 — a real pause of Amazon ads, and switching back on what a Claude request paused.
   ...ADS_STATUS_TOOLS,
   // Ads autonomy W3-3 — stock-aware bids: which ad groups are short of stock; lower their bids, give them back (never FBA).

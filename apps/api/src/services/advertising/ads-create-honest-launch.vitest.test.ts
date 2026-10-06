@@ -369,6 +369,30 @@ describe('CC-1 / CC-2 — the AI Goal launch links Amazon\'s auto groups and ans
     expect(amz.targetUpdates).toHaveLength(3)
     expect(amz.targetUpdates.every((u) => u.kind === 'AUTO' && typeof u.patch.bid === 'number' && u.patch.state === undefined)).toBe(true)
   })
+
+  it('B-2 — Claude\'s goal, born off the allowlist and at the floor: every part still reaches Amazon (its negatives too), in its change set', async () => {
+    const goal = await inside(() => db().adProductGoal.create({ data: {
+      name: 'B2 goal', aiTarget: 'SALES', budgetMode: 'STRICT', marketplace: 'IT', products: [{ sku: 'TEST-SKU-1', budgetCents: 2000 }] as never,
+      seedKeywords: ['winter gloves'], excludeKeywords: ['cheap'],
+    } }))
+    const { materializeProductGoal } = await import('./ai-goal-materialize.service.js')
+    const out = await inside(() => materializeProductGoal(goal.id, 'user:u-b2', {
+      allowlistAtBirth: false, bornSuppressed: { floorCents: 2, by: 'user:u-asker' }, changeSetId: 'ap-b2', automationOff: true,
+    }))
+    // Auto, Research and Performance: all live, every part made — the exact and phrase "cheap" in Auto and Research.
+    expect(out.launch).toMatchObject({ ok: true, asked: 3, live: 3 })
+    expect(amz.calls.filter((c) => c === 'negativeKeywords')).toHaveLength(4)
+    const ids = out.campaigns.map((c) => c.id)
+    expect(await inside(() => db().campaign.findMany({ where: { id: { in: ids } }, select: { liveBidWritesEnabled: true, bidsSuppressedBy: true }, distinct: ['liveBidWritesEnabled', 'bidsSuppressedBy'] })))
+      .toEqual([{ liveBidWritesEnabled: false, bidsSuppressedBy: 'user:u-asker' }])
+    // The auto groups are linked at the floor (Amazon made them at the ad group's 2-cent default: nothing to send), each
+    // with its planned bid remembered.
+    expect(amz.targetUpdates).toEqual([])
+    const auto = out.campaigns.find((c) => c.role === 'AUTO')!
+    expect((await inside(() => db().adTarget.findMany({ where: { adGroup: { campaignId: auto.id }, kind: 'AUTO' }, orderBy: { expressionValue: 'asc' }, select: { externalTargetId: true, bidCents: true, suppressedFromBidCents: true } })))
+      .map((t) => [!!t.externalTargetId, t.bidCents, t.suppressedFromBidCents])).toEqual([[true, 2, 75], [true, 2, 45], [true, 2, 49], [true, 2, 83]])
+    expect(await inside(() => db().advertisingActionLog.count({ where: { actionType: 'create_campaign', executionId: 'ap-b2' } }))).toBe(3)
+  })
 })
 
 describe('CC-17 / CC-1 — the read-back checks auto groups by expression, negatives and placements (launch only)', () => {

@@ -73,6 +73,9 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // kinds) needs the approver's code, by rule only with allowStart (off by default: a loosening needs the code); a stop
   // is a brake.
   'apply-ads-playbook',
+  // B-2 — an AI goal, the create kind: only at the floor, off the allowlist, its rules and plan off (nothing spends until
+  // restore-campaign); by default never by rule (maxCampaigns 0).
+  'create-ai-goal-campaigns',
 ]
 
 /**
@@ -400,6 +403,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'enable-ads': { before: { changeSetId: 'ap1', items: [{ level: 'target', id: 't1', status: 'PAUSED' }] }, after: { items: [{ level: 'target', id: 't1', status: 'ENABLED' }] } },
       // AA-W2-13 — a created campaign is put back (in part) by archiving it.
       'create-ad-campaign': { before: { campaignId: null }, after: { campaignId: 'c9', name: 'Test launch', market: 'IT' } },
+      // B-2 — an AI goal is put back (in part) by archiving every campaign it made at Amazon.
+      'create-ai-goal-campaigns': { before: { goalId: null, campaignIds: [] }, after: { goalId: 'g1', planId: 'pl1', market: 'IT', name: 'Test goal', campaignIds: ['c1', 'c2'], notAtAmazon: [] } },
       // W3-3 — a stock lowering is undone by a give-back (even while stock is short), a give-back by a lowering.
       'lower-ad-bids-for-stock': {
         before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 50, toCents: 40 }] },

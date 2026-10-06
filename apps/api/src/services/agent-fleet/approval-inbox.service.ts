@@ -793,6 +793,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-campaign-target-acos': ['basis', 'totals'],
   // A11 — the whole plan (products, targeting, budget and currency), the market's spend ceiling, where it lands.
   'create-ad-campaign': ['plan', 'ceiling', 'reach'],
+  // B-2 — the whole goal (its products, every campaign with its planned bids, rules and plan), the market's ceiling, where it lands.
+  'create-ai-goal-campaigns': ['plan', 'ceiling', 'reach'],
   // PB-5a — the op, every campaign a build makes (or every binding of an adopt) with the row it is planned from, where it lands.
   // PB-5b — and what a start or a stop moves (its campaigns, the bids they spend at, its hourly plans and rules).
   'apply-ads-playbook': ['op', 'basis', 'reach', 'bindings', 'starts', 'stops'],
