@@ -11,8 +11,13 @@
  * GET /advertising/budget-manager (BM.B2). Plan writes go through POST /plans
  * (idempotent by marketplace+month); limits through POST /campaign-limit.
  *
- * Auto Pacing / Stop Over Spend are flags here; the dry-run-safe enforcement
- * engine that acts on them (and floors bids instead of pausing) lands in BM.B3.
+ * Auto Pacing / Stop Over Spend are flags here; the enforcement engine (BM.B3,
+ * `ad-budget-enforce`) acts on them and floors bids instead of pausing.
+ *
+ * AM-8 — whether that engine is LIVE is never written into this page. Every label,
+ * the FAQ and the toasts read `engine` from GET /budget-manager/enforcement, which is
+ * the engine's own gate (`budgetEnforceMode`): the screen used to say "dry-run, nothing
+ * applied" while the engine wrote real budgets.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Input, SegmentedControl, Toggle, ToolbarButton } from '@/design-system/primitives'
@@ -43,13 +48,19 @@ interface Row {
 }
 interface Result {
   month: string; prevMonth: string; nextMonth: string; daysInMonth: number; dayOfMonth: number
+  // AM-17 — the complete budget days pace and forecast count, the last day the report covers, the day boundary.
+  elapsedDays?: number; dataThrough?: string | null; dayBoundary?: string
   rows: Row[]
   totals: { budgetCents: number; spendCents: number; pct: number | null; lastMonthSpendCents: number; nextMonthBudgetCents: number }
 }
 // BM.B3 enforcement preview (drives the pacing banner + Allocation Map canvas).
 interface EnfCampaign { id: string; name: string; currentDailyCents: number; targetDailyCents: number | null; deltaCents: number; clamp: 'min' | 'max' | 'floor' | null; suppress: boolean; restore: boolean; currentlySuppressed: boolean }
 interface EnfPlan { marketplace: string; month: string; capCents: number; mtdSpendCents: number; remainingBudgetCents: number; remainingDays: number; dayOfMonth: number; daysInMonth: number; autoPacing: boolean; stopOverSpend: boolean; capReached: boolean; todayTargetCents: number | null; campaigns: EnfCampaign[] }
-interface EnforcementResult { month: string; plans: EnfPlan[]; totals: { plans: number; budgetChanges: number; suppressing: number; restoring: number; netDeltaCents: number } }
+// AM-8 — the engine's real mode, from the server (`budgetEnforceMode`): the one source for every sentence below.
+interface EngineMode { mode: string; live: boolean; label: string; sentence: string }
+interface EnforcementResult { month: string; plans: EnfPlan[]; totals: { plans: number; budgetChanges: number; suppressing: number; restoring: number; netDeltaCents: number }; engine?: EngineMode }
+/** What to say about the engine when its mode could not be read: never a guess. */
+const ENGINE_UNKNOWN = 'The budget engine’s mode could not be read, so this page cannot say whether it is live.'
 
 const FLAG: Record<string, string> = { IT: '🇮🇹', DE: '🇩🇪', FR: '🇫🇷', ES: '🇪🇸', GB: '🇬🇧', UK: '🇬🇧', NL: '🇳🇱', SE: '🇸🇪', PL: '🇵🇱', BE: '🇧🇪', IE: '🇮🇪', US: '🇺🇸' }
 const MARKET_NAME: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', GB: 'United Kingdom', UK: 'United Kingdom', NL: 'Netherlands', SE: 'Sweden', PL: 'Poland', BE: 'Belgium', IE: 'Ireland', US: 'United States' }
@@ -249,18 +260,21 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
 }
 
 // ── FAQ drawer ───────────────────────────────────────────────────────────────
-const FAQ: Array<{ q: string; a: string }> = [
-  { q: 'What is Budget Manager?', a: 'A cockpit for your monthly Amazon ad budget per market. It reads live spend, compares it to your cap and the expected pace-to-date, and (when enabled) automatically distributes the budget across campaigns and suppresses delivery before you overspend.' },
-  { q: 'How does Auto Pacing allocate the budget?', a: 'It turns your monthly cap into daily campaign budgets, weighted by your distribution calendar and how much of the month remains, then flexes each campaign within the min/max limits you set under “More”. Every change is previewed (dry-run) and audited before it is applied.' },
+// AM-8 / AM-17 — the answers that depend on the engine's mode or the pace rule read them; nothing is asserted here.
+const faqFor = (engine: EngineMode | null, dayBoundary: string): Array<{ q: string; a: string }> => [
+  { q: 'What is Budget Manager?', a: 'A cockpit for your monthly Amazon ad budget per market. It reads spend from Amazon’s daily report, compares it to your cap and the expected pace-to-date, and — when its engine is live — distributes the budget across campaigns and suppresses delivery before you overspend.' },
+  { q: 'Is the budget engine live right now?', a: engine ? `${engine.label}. ${engine.sentence}` : ENGINE_UNKNOWN },
+  { q: 'How does Auto Pacing allocate the budget?', a: 'It turns your monthly cap into daily campaign budgets, weighted by your distribution calendar and how much of the month remains, then flexes each campaign within the min/max limits you set under “More”. It only acts when a market is projected over its cap. Every change it makes is recorded in the change log.' },
   { q: 'What does Stop Over Spend do at the cap?', a: 'When month-to-date spend reaches the cap, it suppresses delivery by dropping bids to the floor (~€0.02) — it never pauses campaigns, which would disrupt Amazon’s ranking. Bids restore automatically next month or when you raise the cap.' },
-  { q: 'How is “This Month” pace calculated?', a: 'Expected pace is the share of the month elapsed (or your calendar’s weighting through today). If spend is more than 10 points ahead it shows “Over pace”, more than 10 behind “Under pace”, otherwise “On track”.' },
-  { q: 'Can I keep full manual control?', a: 'Yes. Leave Auto Pacing off and edit every budget by hand. Pacing and Stop Over Spend are independent per market, and nothing writes to Amazon until the enforcement engine is explicitly enabled.' },
+  { q: 'How is “This Month” pace calculated?', a: `Over complete days only: a budget day runs ${dayBoundary}, and today is not counted until it is over (Amazon’s daily report for it arrives the next morning). Expected pace is the share of the month those days make up (or your calendar’s weighting through them); the month-end forecast is the spend over those days, per day, times the days in the month. If spend is more than 10 points ahead it shows “Over pace”, more than 10 behind “Under pace”, otherwise “On track”.` },
+  { q: 'Can I keep full manual control?', a: `Yes. Leave Auto Pacing and Stop Over Spend off and edit every budget by hand; they are independent per market. The engine right now: ${engine ? engine.sentence : ENGINE_UNKNOWN}` },
   { q: 'What is the Next Month Budget column?', a: 'A budget you pre-set for next month so pacing starts on day one. Click the cell to set it; it creates next month’s plan for that market.' },
   { q: 'Does it support multiple markets?', a: 'Yes — one row per Amazon marketplace (Italy, Germany, France, Spain, …). Use the market selector to focus on one, or manage them all at once.' },
   { q: 'Where can I see what changed?', a: 'Every budget and bid change is recorded in the change log with its reason (manual vs automation), so you can audit and reverse any adjustment.' },
 ]
-function FaqDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+function FaqDrawer({ open, onClose, engine, dayBoundary }: { open: boolean; onClose: () => void; engine: EngineMode | null; dayBoundary: string }) {
   const [openIdx, setOpenIdx] = useState(0)
+  const FAQ = faqFor(engine, dayBoundary)
   return (
     <Drawer open={open} onClose={onClose} title="Budget Manager — FAQ">
       <div className="bm-faq">
@@ -316,9 +330,13 @@ export function BudgetManagerClient() {
   }, [])
   useEffect(() => { load(month) }, [month, load])
 
+  const engine = enforcement?.engine ?? null
   const setFlag = async (row: Row, field: 'autoPacing' | 'stopOverSpend', value: boolean) => {
     const ok = await postJson('/api/advertising/budget-manager/plans', { ...(row.id ? { id: row.id } : {}), marketplace: row.marketplace, month, [field]: value })
-    if (ok) { toast('Status updated successfully.'); load(month) } else toast('Update failed.')
+    // AM-8 — say what switching it on means with the engine as it really is, not "Status updated successfully".
+    // The toast is short; the status line under the month bar carries the engine's full sentence.
+    const what = `${field === 'autoPacing' ? 'Auto Pacing' : 'Stop Over Spend'} ${value ? 'on' : 'off'} for ${mktName(row.marketplace)}.`
+    if (ok) { toast(value ? `${what} Budget engine: ${engine ? `${engine.label}${engine.label === 'Live' ? ' — it acts on this within 30 minutes' : engine.live ? ' — only bid floors land until Resume' : ' — nothing reaches Amazon'}` : 'mode unknown'}.` : what); load(month) } else toast('Update failed.')
   }
   const saveNext = async (row: Row) => {
     // PR 1c — same reader as the settings modal: empty saves €0 ("no cap", as the box says), text or
@@ -351,7 +369,7 @@ export function BudgetManagerClient() {
         ? <Input size="xs" fieldClassName="bm-nextedit" prefix="€" autoFocus inputMode="decimal" value={nextDraft} placeholder="Empty = no cap" title={NO_MONTHLY_CAP} onChange={(e) => setNextDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveNext(r); if (e.key === 'Escape') setEditingNext(null) }} onBlur={() => saveNext(r)} aria-label="Next month budget" />
         : <Button variant="quiet" size="xs" className="bm-nextbtn" onClick={() => { setEditingNext(r.marketplace); setNextDraft(r.nextMonthBudgetCents != null && r.nextMonthBudgetCents > 0 ? (r.nextMonthBudgetCents / 100).toFixed(2) : '') }}>{r.nextMonthBudgetCents != null && r.nextMonthBudgetCents > 0 ? eur(r.nextMonthBudgetCents) : r.nextMonthBudgetCents === 0 ? <span className="ph">No cap</span> : <span className="ph">Set budget</span>}<Pencil size={11} /></Button>
     ) },
-  ], [editingNext, nextDraft, month, result]) // eslint-disable-line react-hooks/exhaustive-deps
+  ], [editingNext, nextDraft, month, result, enforcement]) // eslint-disable-line react-hooks/exhaustive-deps — AM-8: the toggles' toast reads the engine
   /**
    * AGW (2026-09-05) — the legacy page un-froze its identity column by CSS (`budget-manager.css:8`,
    * `th.nm.fz, td.nm.fz { position: static; box-shadow: none; border-right: none }`): a six-column grid
@@ -399,13 +417,16 @@ export function BudgetManagerClient() {
         <span className="bm-grow" />
     <Button onClick={() => setPoolsOpen(true)}><Wallet size={13} /> Budget Pools</Button>
     <Button onClick={() => { setCanvasMarket(enforcement?.plans[0]?.marketplace ?? markets[0] ?? ''); setCanvasOpen(true) }}><Network size={13} /> Allocation Map</Button>
-        {result && <span className="bm-mb-day">Day {result.dayOfMonth} of {result.daysInMonth}</span>}
+        {result && <span className="bm-mb-day" title={result.dayBoundary ? `A budget day runs ${result.dayBoundary}. Pace and the month-end forecast count complete days only${result.dataThrough ? `; the daily report covers up to ${result.dataThrough}` : ''}.` : undefined}>Day {result.dayOfMonth} of {result.daysInMonth}{result.elapsedDays != null ? ` · pace counts ${result.elapsedDays} complete day${result.elapsedDays === 1 ? '' : 's'}` : ''}</span>}
       </div>
+
+      {/* AM-8 — the engine's real mode, said once it is read; it is the server's own reading of the engine's gate. */}
+      {enforcement && <p className={`bm-engine${engine?.live ? ' is-live' : ''}`} role="status"><b>Budget engine: {engine ? engine.label : 'unknown'}.</b> {engine ? engine.sentence : ENGINE_UNKNOWN}</p>}
 
       {enforcement && (enforcement.totals.budgetChanges > 0 || enforcement.totals.suppressing > 0 || enforcement.totals.restoring > 0) && (
         <div className="bm-pacebar">
           <span className="ico"><Sparkles size={15} /></span>
-          <span className="txt"><b>Auto Pacing preview</b> — {enforcement.totals.budgetChanges} budget change{enforcement.totals.budgetChanges === 1 ? '' : 's'}{enforcement.totals.suppressing > 0 ? ` · ${enforcement.totals.suppressing} suppressing` : ''}{enforcement.totals.restoring > 0 ? ` · ${enforcement.totals.restoring} restoring` : ''} today <em>· dry-run, nothing applied</em></span>
+          <span className="txt"><b>Auto Pacing preview</b> — {enforcement.totals.budgetChanges} budget change{enforcement.totals.budgetChanges === 1 ? '' : 's'}{enforcement.totals.suppressing > 0 ? ` · ${enforcement.totals.suppressing} suppressing` : ''}{enforcement.totals.restoring > 0 ? ` · ${enforcement.totals.restoring} restoring` : ''} today <em title={engine?.sentence ?? ENGINE_UNKNOWN}>· {engine ? (engine.live ? 'live — the engine applies these' : `${engine.label.toLowerCase()} — not applied`) : 'engine mode unknown'}</em></span>
           <span className="bm-grow" />
      <Button onClick={() => { setCanvasMarket(enforcement.plans[0]?.marketplace ?? ''); setCanvasOpen(true) }}><Network size={13} /> View Allocation Map</Button>
         </div>
@@ -435,7 +456,7 @@ export function BudgetManagerClient() {
 
       {settingsFor && <SettingsModal row={settingsFor} month={month} onClose={() => setSettingsFor(null)} onSaved={() => load(month)} toast={toast} />}
       {moreFor && <MoreDrawer row={moreFor} month={month} onClose={() => setMoreFor(null)} onSaved={() => load(month)} toast={toast} />}
-      <FaqDrawer open={faqOpen} onClose={() => setFaqOpen(false)} />
+      <FaqDrawer open={faqOpen} onClose={() => setFaqOpen(false)} engine={engine} dayBoundary={result?.dayBoundary ?? '00:00–24:00 UTC'} />
       <BudgetPoolsDrawer open={poolsOpen} onClose={() => setPoolsOpen(false)} toast={toast} />
       <ControlPlane open={canvasOpen} onClose={() => setCanvasOpen(false)} enforcement={enforcement} month={month} initialMarket={canvasMarket} onCommitted={() => load(month)} toast={toast} />
 

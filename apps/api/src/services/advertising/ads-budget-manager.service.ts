@@ -17,6 +17,8 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { budgetDayStart } from '@nexus/shared/ads-budget-day'
+import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 
 export interface SpendSlice {
   month: string
@@ -38,10 +40,10 @@ export interface BudgetPlanRow {
   // this month
   spendCents: number | null
   pct: number | null // spend / budget
-  expectedPct: number // pace-to-date (day / daysInMonth, or calendar-weighted)
+  expectedPct: number // pace-to-date over COMPLETE days (elapsedDays / daysInMonth, or calendar-weighted) — AM-17
   status: 'on-track' | 'over' | 'under' | 'no-budget'
   daily: number[] // this-month daily spend (cents), length = dayOfMonth
-  forecastSpendCents: number | null // projected month-end spend at current pace
+  forecastSpendCents: number | null // projected month-end spend: spend over the complete days ÷ those days × daysInMonth
   projectedOverspend: boolean // forecast > budget
   // last month
   lastMonth: SpendSlice
@@ -54,21 +56,36 @@ export interface BudgetManagerResult {
   nextMonth: string
   daysInMonth: number
   dayOfMonth: number
+  /**
+   * AM-17 — the complete budget days pace and forecast count: days before today (today is unfinished and has no daily
+   * report yet), and never past the last day the daily report covers. 0 = nothing to project from yet.
+   */
+  elapsedDays: number
+  /** AM-17 — the last day of this month the daily report covers ('YYYY-MM-DD'), or null when it covers none yet. */
+  dataThrough: string | null
+  /** AM-17 — when a budget day starts and ends (`@nexus/shared/ads-budget-day`), stated so the screen can say it. */
+  dayBoundary: string
   rows: BudgetPlanRow[]
   totals: { budgetCents: number; spendCents: number; pct: number | null; lastMonthSpendCents: number; nextMonthBudgetCents: number }
 }
 
 interface CampaignLimit { campaignId: string; minCents?: number | null; maxCents?: number | null }
 
-function monthBounds(month: string): { start: Date; end: Date; daysInMonth: number; dayOfMonth: number } {
+/** AM-17 — the budget day, as the enforcement engine and the write gate read it (`@nexus/shared/ads-budget-day`). */
+export const BUDGET_DAY_BOUNDARY = '00:00–24:00 UTC'
+
+function monthBounds(month: string, now: Date = new Date()): { start: Date; end: Date; daysInMonth: number; dayOfMonth: number; completeDays: number } {
   const [y, m] = month.split('-').map(Number)
   const start = new Date(Date.UTC(y, m - 1, 1))
   const end = new Date(Date.UTC(y, m, 1))
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate()
-  const now = new Date()
-  const sameMonth = now.getUTCFullYear() === y && now.getUTCMonth() === m - 1
-  const dayOfMonth = sameMonth ? now.getUTCDate() : daysInMonth
-  return { start, end, daysInMonth, dayOfMonth }
+  // AM-17 — today's BUDGET day, the same boundary the enforcement engine uses (00:00–24:00 UTC in every market).
+  const today = budgetDayStart(now)
+  const sameMonth = today.getUTCFullYear() === y && today.getUTCMonth() === m - 1
+  const dayOfMonth = sameMonth ? today.getUTCDate() : daysInMonth
+  // Complete days: before today in this month; all of a past month; none of a future one.
+  const completeDays = sameMonth ? dayOfMonth - 1 : today.getTime() >= end.getTime() ? daysInMonth : 0
+  return { start, end, daysInMonth, dayOfMonth, completeDays }
 }
 
 export function currentMonth(): string {
@@ -83,12 +100,12 @@ export function shiftMonth(month: string, delta: number): string {
 
 const toCents = (micros: bigint | number | null | undefined) => Math.round(Number(micros ?? 0) / 10_000)
 
-export async function analyzeBudgetManager(opts: { month?: string } = {}): Promise<BudgetManagerResult> {
+export async function analyzeBudgetManager(opts: { month?: string; now?: Date } = {}): Promise<BudgetManagerResult> {
   const month = opts.month ?? currentMonth()
   const prevMonth = shiftMonth(month, -1)
   const nextMonth = shiftMonth(month, 1)
-  const { start, end, daysInMonth, dayOfMonth } = monthBounds(month)
-  const prev = monthBounds(prevMonth)
+  const { start, end, daysInMonth, dayOfMonth, completeDays } = monthBounds(month, opts.now)
+  const prev = monthBounds(prevMonth, opts.now)
 
   const [plans, prevPlans, nextPlans, spendRows] = await Promise.all([
     prisma.adBudgetPlan.findMany({ where: { month }, orderBy: [{ marketplace: 'asc' }, { tag: 'asc' }] }),
@@ -96,9 +113,11 @@ export async function analyzeBudgetManager(opts: { month?: string } = {}): Promi
     prisma.adBudgetPlan.findMany({ where: { month: nextMonth } }),
     // Daily spend across last month + this month, grouped per (marketplace, date),
     // so we can build both sparkline series in one pass.
+    // AM-18 — without the Marketing Stream's duplicate daily rows (`EXCLUDE_AMS_DAILY`), like every other spend
+    // read: the months that hold them (2026-05-21 → 07-27) were inflated here, or showed a raw marketplace id row.
     prisma.amazonAdsDailyPerformance.groupBy({
       by: ['marketplace', 'date'],
-      where: { entityType: 'CAMPAIGN', date: { gte: prev.start, lt: end } },
+      where: { entityType: 'CAMPAIGN', date: { gte: prev.start, lt: end }, ...EXCLUDE_AMS_DAILY },
       _sum: { costMicros: true },
     }),
   ])
@@ -106,12 +125,15 @@ export async function analyzeBudgetManager(opts: { month?: string } = {}): Promi
   // Build per-marketplace daily arrays for this + previous month.
   interface MktSpend { thisDaily: number[]; prevDaily: number[]; thisTotal: number; prevTotal: number }
   const spend = new Map<string, MktSpend>()
+  let lastReportedDom = 0 // the newest day of THIS month any market's daily report covers
   const ensure = (mkt: string): MktSpend => {
     let s = spend.get(mkt)
     if (!s) { s = { thisDaily: Array(daysInMonth).fill(0), prevDaily: Array(prev.daysInMonth).fill(0), thisTotal: 0, prevTotal: 0 }; spend.set(mkt, s) }
     return s
   }
   for (const r of spendRows) {
+    const d0 = new Date(r.date)
+    if (d0 >= start && d0 < end) lastReportedDom = Math.max(lastReportedDom, d0.getUTCDate())
     const cents = toCents(r._sum.costMicros)
     if (!cents) continue
     const d = new Date(r.date)
@@ -125,9 +147,14 @@ export async function analyzeBudgetManager(opts: { month?: string } = {}): Promi
   const nextPlanByMkt = new Map(nextPlans.filter((p) => !p.tag).map((p) => [p.marketplace, p]))
   const thisTagNullByMkt = new Map(plans.filter((p) => !p.tag).map((p) => [p.marketplace, p]))
 
-  // Calendar-weighted expected pace: sum of pct for days 1..dayOfMonth ÷ 100,
+  // AM-17 — pace and forecast count COMPLETE days only. Today (UTC budget day) used to count as an elapsed day with
+  // no spend, so the month-end forecast came out (d−1)/d too low — half on day 2, −20 % on day 5 — which could hide a
+  // projected overspend, and the expected pace ran a day ahead of the data. Now: days before today, and never past the
+  // last day the daily report covers (it arrives the next morning).
+  const elapsedDays = Math.min(completeDays, lastReportedDom)
+  // Calendar-weighted expected pace: sum of pct for days 1..elapsedDays ÷ 100,
   // falling back to even daily split when no calendar is set.
-  const evenExpected = daysInMonth > 0 ? dayOfMonth / daysInMonth : 0
+  const evenExpected = daysInMonth > 0 ? elapsedDays / daysInMonth : 0
 
   const buildMarketRow = (marketplace: string): BudgetPlanRow => {
     const p = thisTagNullByMkt.get(marketplace) ?? null
@@ -138,13 +165,14 @@ export async function analyzeBudgetManager(opts: { month?: string } = {}): Promi
     const spendCents = s?.thisTotal ?? 0
     const pct = monthlyBudgetCents > 0 ? spendCents / monthlyBudgetCents : null
     const expectedPct = calendar.length
-      ? calendar.filter((c) => c.day <= dayOfMonth).reduce((acc, c) => acc + c.pct, 0) / 100
+      ? calendar.filter((c) => c.day <= elapsedDays).reduce((acc, c) => acc + c.pct, 0) / 100
       : evenExpected
     let status: BudgetPlanRow['status'] = 'on-track'
     if (monthlyBudgetCents <= 0) status = 'no-budget'
     else if (pct != null && pct > expectedPct + 0.1) status = 'over'
     else if (pct != null && pct < expectedPct - 0.1) status = 'under'
-    const forecastSpendCents = dayOfMonth > 0 ? Math.round((spendCents / dayOfMonth) * daysInMonth) : null
+    const spentOverElapsed = (s?.thisDaily ?? []).slice(0, elapsedDays).reduce((acc, v) => acc + (v ?? 0), 0)
+    const forecastSpendCents = elapsedDays > 0 ? Math.round((spentOverElapsed / elapsedDays) * daysInMonth) : null
     const prevPlan = prevPlanByMkt.get(marketplace)
     const prevBudget = prevPlan?.monthlyBudgetCents ?? 0
     const prevSpend = s?.prevTotal ?? 0
@@ -203,6 +231,9 @@ export async function analyzeBudgetManager(opts: { month?: string } = {}): Promi
   const nextMonthBudgetCents = rows.reduce((acc, r) => acc + (r.nextMonthBudgetCents ?? 0), 0)
   return {
     month, prevMonth, nextMonth, daysInMonth, dayOfMonth, rows,
+    elapsedDays,
+    dataThrough: lastReportedDom > 0 ? `${month}-${String(lastReportedDom).padStart(2, '0')}` : null,
+    dayBoundary: BUDGET_DAY_BOUNDARY,
     totals: { budgetCents, spendCents, pct: budgetCents > 0 ? spendCents / budgetCents : null, lastMonthSpendCents, nextMonthBudgetCents },
   }
 }
