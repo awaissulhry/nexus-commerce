@@ -1,7 +1,7 @@
 {
   "note": "border-radius declarations that name no DS scale step. This may only FALL. A file absent here is held at zero. See the script header for why these are frozen rather than banned.",
   "updatedAt": "2026-08-25",
-  "total": 959,
+  "total": 680,
   "files": {
     "app/_shared/shared-shell.css": 15,
     "app/fleet/activity/activity.css": 18,
@@ -44,7 +44,6 @@
     "app/marketing/ads/rules-automation/fleet/fleet-sections.css": 10,
     "app/marketing/ads/rules-automation/rules-automation.css": 206,
     "app/marketing/ads/suggestions/suggestions.css": 3,
-    "app/marketing/ads-console/amazon.css": 279,
     "app/products/next/styles.module.css": 13,
     "app/shared/report/[token]/shared-report.css": 1
   }

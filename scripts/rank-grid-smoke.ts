@@ -1,5 +1,5 @@
 /* RG.1 smoke — pure rank-grid model. Run: node_modules/.bin/tsx scripts/rank-grid-smoke.ts */
-import { compileRankGrid, gridFromWindows, emptyRankGrid, describeRankGrid, rankGridCounts, type RankWin } from '../apps/web/src/app/marketing/ads-console/rank/rank-grid-model.ts'
+import { compileRankGrid, gridFromWindows, emptyRankGrid, describeRankGrid, rankGridCounts, type RankWin } from '../apps/web/src/app/marketing/ads/rules-automation/_rank/rank-grid-model.ts'
 
 let pass = 0, fail = 0
 const ok = (cond: boolean, msg: string) => { if (cond) { pass++ } else { fail++; console.error('  ✗ ' + msg) } }

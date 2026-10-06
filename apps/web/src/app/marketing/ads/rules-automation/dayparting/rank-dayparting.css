@@ -182,3 +182,5 @@
 
 /* Owner 2026-10-04 — the live-campaign review dialog behind the Rank & Dayparting banner: one DS Card per campaign. */
 .rd-orphans { display: flex; flex-direction: column; gap: var(--nds-space-3); }
+/* OC (2026-10-06) — a product rank plan's two buttons, side by side in its card head. */
+.rd-plan-actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-2); }

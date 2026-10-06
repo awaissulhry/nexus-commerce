@@ -4,7 +4,7 @@
  *
  * Each person path is driven through its REAL route (so the test proves the route marks the click), the queued ones
  * through the real worker; each engine counterpart calls the same service the way an engine does. Covered: adding a
- * keyword, product target, ad group or product ad; "Add as keyword" from search terms; adding an ad-group negative
+ * keyword, product target, ad group or product ad; adding an ad-group negative
  * keyword or negative ASIN; the change log's Undo button; the Budget Manager control plane (budget, restore, bid,
  * placement). The bulk sheet upload is in workers/ads-manual-control.vitest.test.ts.
  *

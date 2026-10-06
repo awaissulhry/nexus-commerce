@@ -41,9 +41,6 @@ import { AppTopBar } from '@/app/_shared/AppTopBar'
  * These are the deliberately-light shells (operator decision 2026-08-05, "no dark mode here").
  * That still governs their CONTENT. It no longer governs the chrome: since 2026-08-31 the bar
  * and rail are one dark surface on every route, so this list no longer needs to mark them.
- *
- * '/marketing/ads' is a plain prefix, so it also covers the one old-console page left,
- * /marketing/ads-console/rank (the rest of /marketing/ads-console redirects since 2026-10-06).
  */
 const NO_RAIL_PREFIXES = ['/marketing/ads', '/products/next']
 
