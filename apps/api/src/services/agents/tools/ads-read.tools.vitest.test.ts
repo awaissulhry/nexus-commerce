@@ -97,7 +97,8 @@ async function seedA() {
     const db = database.client
     const campaign = (id: string, name: string, marketplace: string, ext: string, extra: Record<string, unknown> = {}) =>
       db.campaign.create({ data: { id, name, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace, externalCampaignId: ext, startDate: dayBefore(200), ...extra } as never })
-    await campaign('ar-c1', 'Alpha race IT', 'IT', 'EXT-C1', { dailyBudget: '23.45', liveBidWritesEnabled: true, dynamicBidding: { placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 35 }], targetAcos: 0.25 } })
+    await campaign('ar-c1', 'Alpha race IT', 'IT', 'EXT-C1', { dailyBudget: '23.45', liveBidWritesEnabled: true, portfolioId: 'EXT-PF1', dynamicBidding: { placementBidding: [{ placement: 'PLACEMENT_TOP', percentage: 35 }], targetAcos: 0.25, maxBidChangePct: 40, cpcCeiling: { enabled: true, multiple: 1.7 } } })
+    await db.amazonAdsPortfolio.create({ data: { profileId: 'P1', externalPortfolioId: 'EXT-PF1', name: 'Race line' } })
     await campaign('ar-c2', 'Bravo boots UK', 'UK', 'EXT-C2', { dailyBudget: '12.34', dailyBudgetCurrency: 'GBP', bidsSuppressedAt: hoursAgo(5), bidsSuppressedBy: 'user:u-ads' })
     await campaign('ar-c3', 'Charlie paused IT', 'IT', 'EXT-C3', { dailyBudget: '5.00', status: 'PAUSED' })
     const group = (id: string, campaignId: string, name: string, ext: string) => db.adGroup.create({ data: { id, campaignId, name, externalAdGroupId: ext } })
@@ -265,9 +266,16 @@ describe('A2 — ad-campaigns', () => {
       campaignId: 'ar-c1', externalCampaignId: 'EXT-C1', name: 'Alpha race IT', market: 'IT', status: 'ENABLED', currency: 'EUR',
       dailyBudgetCents: 2345, targetAcos: 0.25, placementsPct: { topOfSearch: 35, productPages: null, restOfSearch: null },
       liveWrites: true, bidsSuppressed: null,
+      // D11 — the portfolio and the guards that move a bid asked for.
+      portfolio: { id: 'EXT-PF1', name: 'Race line' }, maxBidChangePct: 40, cpcCeiling: { multiple: 1.7 },
       metrics: { impressions: 2100, clicks: 61, orders: 4, spendCents: 2542, salesCents: 8146 },
     })
     expect(bravo).toMatchObject({ campaignId: 'ar-c2', currency: 'GBP', dailyBudgetCents: 1234, bidsSuppressed: { by: 'user:u-ads' }, metrics: { spendCents: 987 } })
+    expect(bravo).toMatchObject({ portfolio: null, maxBidChangePct: null, cpcCeiling: null })
+    // The CPC ceiling caps bids: money, gone for a person without the ad-spend permission; the rest stays.
+    const seen = (await call('ad-campaigns', { limit: 100 }, operator())).data!.items[0]
+    expect(seen).toMatchObject({ portfolio: { id: 'EXT-PF1', name: 'Race line' }, maxBidChangePct: 40 })
+    expect(seen).not.toHaveProperty('cpcCeiling')
     expect(data.dataAsOf).toBe(ymd(dayBefore(1)))
     expect(data.window).toMatchObject({ days: 30, provisionalFrom: ymd(dayBefore(2)) })
   })

@@ -58,19 +58,19 @@ function noteRedisResult(ok: boolean): void {
 }
 
 /**
- * AM-34 — `refresh: true` is a screen's "Refresh view": it skips both tiers' READ, computes the answer now, and stores
- * it, so the next ordinary read sees it too. Without it a refresh re-read a cached answer up to `ttlSec` old and
- * looked like it had worked.
+ * CM-34 / AM-34 — `refresh: true` skips both tiers' READ and stores the fresh answer, so the next ordinary read sees it.
+ *  · A screen that has just saved asks for it: the flush after a write runs on the instance that took the write, after
+ *    its answer was sent, and another instance's L1 can still hold the old values for the whole TTL.
+ *  · A screen's "Refresh view" asks for it: without it a refresh re-read an answer up to `ttlSec` old.
  */
-export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>, opts?: { refresh?: boolean }): Promise<T> {
+export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>, opts: { refresh?: boolean } = {}): Promise<T> {
   const k = cachePrefix() + key
-  const refresh = opts?.refresh === true
   // L1 — instant, always available.
-  const m = refresh ? undefined : memGet(k)
+  const m = opts.refresh ? undefined : memGet(k)
   if (m !== undefined) return m as T
 
   // L2 — Redis, if reachable.
-  if (!refresh && !redisDisabled()) {
+  if (!opts.refresh && !redisDisabled()) {
     try {
       const hit = await withTimeout(redis.connection.get(k), REDIS_OP_TIMEOUT_MS)
       noteRedisResult(true)

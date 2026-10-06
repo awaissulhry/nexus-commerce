@@ -14,6 +14,8 @@
  */
 import cron from '../lib/cron/clustered.js'
 import prisma from '../db.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace, workspaceContext } from '../lib/workspace-context.js'
+import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
 import { executeCharter } from '../services/agent-fleet/agent-executor.js'
 import { runFleetCouncilOnce } from '../services/agent-fleet/fleet-council.service.js'
 import { reclaimStuckRuns, runFleet, runStoredWorkflow } from '../services/agent-fleet/orchestrator.js'
@@ -100,12 +102,44 @@ export async function runFleetSweepCron(): Promise<void> {
   )
 }
 
-let task: ReturnType<typeof cron.schedule> | null = null
+type Clock = ReturnType<typeof cron.schedule>
+
+/** One business's fleet clocks: the sweep, the council, and one per custom
+ *  routine with a stored schedule trigger. */
+interface BusinessClocks {
+  sweep: Clock | null
+  council: Clock | null
+  customs: Map<string, Clock>
+}
+
+/** Keyed by business (the legacy id while business profiles are off). */
+const clocksByBusiness = new Map<string, BusinessClocks>()
+
+function stopClocks(clocks: BusinessClocks): void {
+  clocks.sweep?.stop()
+  clocks.council?.stop()
+  for (const t of clocks.customs.values()) t.stop()
+}
+
+/** A clock for ONE business, armed inside it as the system: clustered.ts
+ *  keeps a schedule made inside a business there, so its tick runs in that
+ *  business only, and never as the person whose click re-armed it. Legacy
+ *  mode (no business selected) arms one plain clock, as before. */
+function armClock(workspaceId: string | null, expression: string, tick: () => Promise<void>): Clock {
+  const arm = () =>
+    cron.schedule(expression, async () => {
+      await tick()
+    })
+  return workspaceId
+    ? withWorkspace({ workspaceId, actorUserId: null, membershipId: null, roleKeys: [] }, arm)
+    : arm()
+}
 
 /** WF.4c — the cron a job should actually fire on: the stored trigger when
  *  one is active (null = stored `manual`, do not arm), else the env/code
  *  default. An unreadable stored layer means the env cron stands — the same
- *  fail-to-code law the walk itself follows. */
+ *  fail-to-code law the walk itself follows. Read in the business being
+ *  armed: the stored trigger is that business's own. */
 async function resolveJobCron(
   key: 'fleet-sweep' | 'fleet-council',
   envDefault: string,
@@ -119,18 +153,25 @@ async function resolveJobCron(
     if (trig?.type === 'schedule' && typeof trig.cron === 'string' && cron.validate(trig.cron)) {
       return trig.cron
     }
-  } catch {
-    /* stored layer unreadable ⇒ env cron */
+  } catch (err) {
+    // Stored layer unreadable ⇒ env cron — said in the log, never silently.
+    logger.warn(`[${key}] stored trigger unreadable — the env schedule stands`, {
+      workspaceId: workspaceContext()?.workspaceId ?? LEGACY_WORKSPACE_ID,
+      error: String(err),
+    })
   }
   return cron.validate(envDefault) ? envDefault : null
 }
 
 /* ── WF.6c — custom workflows' clocks ─────────────────────────────────── */
 
-const customTasks = new Map<string, ReturnType<typeof cron.schedule>>()
-
 async function runCustomWorkflowCron(key: string): Promise<void> {
   await recordCronRun(`workflow:${key}`, async () => {
+    // A custom routine runs the same analysts as the sweep, so this
+    // business's own switch (R16) stands it down the same way.
+    const { engineMode } = await import('../services/automation/engine-switch.service.js')
+    const gate = await engineMode('fleet-analysts', 'OBSERVE')
+    if (gate.mode === 'OFF') return `skipped: ${gate.note}`
     const r = await runStoredWorkflow(key, { trigger: 'schedule' })
     return (
       `started=${r.started} ok=${r.succeeded} failed=${r.failed} skipped=${r.skipped}` +
@@ -141,54 +182,30 @@ async function runCustomWorkflowCron(key: string): Promise<void> {
   )
 }
 
-/** WF.4c/6c — (re)arm every fleet clock from the effective definitions:
- *  the two built-ins AND one clock per enabled custom with a stored
- *  schedule trigger. Called at boot and by the workflow routes after
- *  activate / revert, so a published trigger change takes effect the
- *  moment it is published — no restart, no drift between the page and the
- *  firing. No-op while the master env gate is off. */
-export async function resyncFleetSchedules(): Promise<void> {
-  if (process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1') return
-
+/** One business's clocks, re-derived from ITS effective definitions. Runs
+ *  inside that business (workflows and their triggers are per business);
+ *  `workspaceId` is null only in legacy mode. Everything is read first and
+ *  the clocks are swapped in one synchronous step, so two resyncs of the
+ *  same business can never both leave clocks armed. */
+async function resyncBusinessClocks(workspaceId: string | null): Promise<void> {
+  const business = workspaceId ?? LEGACY_WORKSPACE_ID
   const sweepCron = await resolveJobCron(
     'fleet-sweep',
     process.env.NEXUS_FLEET_SWEEP_SCHEDULE ?? '45 4 * * *',
   )
-  task?.stop()
-  task = null
-  if (sweepCron) {
-    task = cron.schedule(sweepCron, async () => {
-      await runFleetSweepCron()
-    })
-    logger.info(`[fleet-sweep] nightly analyst sweep scheduled (${sweepCron})`)
-  } else {
-    logger.info('[fleet-sweep] stored trigger is manual — clock not armed')
-  }
-
   const councilCron = await resolveJobCron(
     'fleet-council',
     process.env.NEXUS_FLEET_COUNCIL_SCHEDULE ?? '15 5 * * 1',
   )
-  councilTask?.stop()
-  councilTask = null
-  if (councilCron) {
-    councilTask = cron.schedule(councilCron, async () => {
-      await runFleetCouncilCron()
-    })
-    logger.info(`[fleet-council] weekly council scheduled (${councilCron})`)
-  } else {
-    logger.info('[fleet-council] stored trigger is manual — clock not armed')
-  }
 
   // WF.6c — one clock per enabled custom with a stored schedule trigger.
-  // Fully re-derived each resync: stop everything, arm what the record
-  // says. A failure here must never take the built-in clocks down with it.
-  for (const t of customTasks.values()) t.stop()
-  customTasks.clear()
+  // A failure here must never take the built-in clocks down with it.
+  const customs: Array<{ key: string; cron: string }> = []
   try {
     const rows = await prisma.agentWorkflow.findMany({
       where: { kind: 'custom', enabled: true },
       select: { key: true },
+      orderBy: { key: 'asc' },
     })
     const { getEffectiveDefinition } = await import(
       '../services/agent-fleet/workflow-registry.service.js'
@@ -198,17 +215,61 @@ export async function resyncFleetSchedules(): Promise<void> {
       if (trig?.type !== 'schedule' || typeof trig.cron !== 'string' || !cron.validate(trig.cron)) {
         continue
       }
-      customTasks.set(
-        row.key,
-        cron.schedule(trig.cron, async () => {
-          await runCustomWorkflowCron(row.key)
-        }),
-      )
-      logger.info(`[fleet-workflow] ${row.key} scheduled (${trig.cron})`)
+      customs.push({ key: row.key, cron: trig.cron })
     }
   } catch (err) {
-    logger.error('[fleet-workflow] custom clock resync failed', { error: String(err) })
+    logger.error('[fleet-workflow] custom clock resync failed', { workspaceId: business, error: String(err) })
   }
+
+  const previous = clocksByBusiness.get(business)
+  if (previous) stopClocks(previous)
+  const next: BusinessClocks = { sweep: null, council: null, customs: new Map() }
+  clocksByBusiness.set(business, next)
+  if (sweepCron) {
+    next.sweep = armClock(workspaceId, sweepCron, runFleetSweepCron)
+    logger.info(`[fleet-sweep] nightly analyst sweep scheduled (${sweepCron})`, { workspaceId: business })
+  } else {
+    logger.info('[fleet-sweep] stored trigger is manual — clock not armed', { workspaceId: business })
+  }
+  if (councilCron) {
+    next.council = armClock(workspaceId, councilCron, runFleetCouncilCron)
+    logger.info(`[fleet-council] weekly council scheduled (${councilCron})`, { workspaceId: business })
+  } else {
+    logger.info('[fleet-council] stored trigger is manual — clock not armed', { workspaceId: business })
+  }
+  for (const c of customs) {
+    next.customs.set(c.key, armClock(workspaceId, c.cron, () => runCustomWorkflowCron(c.key)))
+    logger.info(`[fleet-workflow] ${c.key} scheduled (${c.cron})`, { workspaceId: business })
+  }
+}
+
+/** WF.4c/6c — (re)arm every fleet clock from the effective definitions:
+ *  the two built-ins AND one clock per enabled custom with a stored
+ *  schedule trigger, per business. Called at boot (no business selected:
+ *  every active business is re-armed, each inside its own context) and by
+ *  the workflow routes after activate / revert (only the request's business
+ *  re-arms; the others keep their clocks), so a published trigger change
+ *  takes effect the moment it is published — no restart, no drift between
+ *  the page and the firing. One business failing never stops the next.
+ *  No-op while the master env gate is off. */
+export async function resyncFleetSchedules(): Promise<void> {
+  if (process.env.NEXUS_ENABLE_FLEET_SWEEP_CRON !== '1') return
+
+  if (!workspaceContext()) {
+    for (const clocks of clocksByBusiness.values()) stopClocks(clocks)
+    clocksByBusiness.clear()
+  }
+  await visitActiveWorkspaces(async () => {
+    const workspaceId = workspaceContext()?.workspaceId ?? null
+    try {
+      await resyncBusinessClocks(workspaceId)
+    } catch (err) {
+      logger.error('[fleet-workflow] clock resync failed for one business', {
+        workspaceId: workspaceId ?? LEGACY_WORKSPACE_ID,
+        error: String(err),
+      })
+    }
+  })
 }
 
 export function startFleetSweepCron(): void {
@@ -216,7 +277,7 @@ export function startFleetSweepCron(): void {
     logger.info('[fleet-sweep] cron disabled (NEXUS_ENABLE_FLEET_SWEEP_CRON != 1)')
     return
   }
-  // WF.4c — one resync arms BOTH clocks from the effective definitions.
+  // WF.4c — one resync arms every business's clocks from its effective definitions.
   void resyncFleetSchedules().catch((err) =>
     logger.error('[fleet-sweep] schedule resync failed', { error: String(err) }),
   )
@@ -247,8 +308,6 @@ export async function runFleetCouncilCron(): Promise<void> {
     (err) => logger.error('[fleet-council] cron failed', { error: String(err) }),
   )
 }
-
-let councilTask: ReturnType<typeof cron.schedule> | null = null
 
 export function startFleetCouncilCron(): void {
   // WF.4c — kept for boot-call compatibility (index.ts calls both starters);

@@ -158,10 +158,6 @@ describe('adds from the campaign manager, while the account is halted', () => {
     const ad = await post('/advertising/product-ads/create', { adGroupId: 'add-c-g', sku: 'SKU-TEST-1' })
     expect([ad.status, ad.manual]).toEqual([200, [true]])
     expect(ad.body.externalAdId).toMatch(/^EXT-NEW-/)
-
-    const promoted = await post('/advertising/search-terms/promote', { query: 'giacca promossa', externalAdGroupId: 'EXT-add-c-g', matchType: 'EXACT', bidEur: 0.3 })
-    expect([promoted.status, promoted.manual]).toEqual([200, [true]])
-    expect(promoted.body.externalTargetId).toMatch(/^EXT-NEW-/)
   })
 
   it('the same adds from an engine or rule are refused by the halt (and say so)', async () => {

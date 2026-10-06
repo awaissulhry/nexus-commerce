@@ -76,7 +76,7 @@ export async function staleRuleSentence(sug: { ruleId: string; ruleName: string 
 // Approve → re-run the proposed action LIVE against the frozen execution context (respects the
 // automation halt + the handlers' own spend caps). The operator already approved, so we apply
 // the action directly rather than re-evaluating conditions — but only while its rule still stands behind it (4l).
-export async function applySuggestion(id: string, ov: ApplyOverride = {}): Promise<DecideResult> {
+export async function applySuggestion(id: string, ov: ApplyOverride = {}, decidedBy = 'operator'): Promise<DecideResult> {
   const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })
   if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
   if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
@@ -118,6 +118,8 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}): Promi
   const handler = ACTION_HANDLERS[String(action.type)]
   if (!handler) return { ok: false, httpStatus: 422, error: `no handler for ${action.type}` }
   // 4e — `operatorApproved`: a person approved this change, so a placement lane the rank engine holds is written, not skipped.
+  // D7 — true here because a person decides every apply (the Suggestions page, or Claude's decide-automation-suggestions
+  // at confirm at most). Revisit it before that tool may run by rule: a rule's run is not a person's write.
   const result = await handler(action as never, triggerData, { dryRun: false, ruleId: sug.ruleId, operatorApproved: true })
   /**
    * 🔴 SG.0 — a refused apply STAYS PENDING.
@@ -132,16 +134,16 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}): Promi
     return { ok: false, refused: true, error: result.error ?? 'refused', result }
   }
   await prisma.adsRuleSuggestion.update({
-    where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy: 'operator', appliedResult: { ...(result as object), ...(overridden && overrideRecord ? { override: overrideRecord } : {}) } as object },
+    where: { id }, data: { status: 'applied', decidedAt: new Date(), decidedBy, appliedResult: { ...(result as object), ...(overridden && overrideRecord ? { override: overrideRecord } : {}) } as object },
   })
   return { ok: true, result }
 }
 
-export async function dismissSuggestion(id: string): Promise<DecideResult> {
+export async function dismissSuggestion(id: string, decidedBy = 'operator'): Promise<DecideResult> {
   const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id }, select: { status: true } })
   if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
   if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
-  await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'dismissed', decidedAt: new Date(), decidedBy: 'operator' } })
+  await prisma.adsRuleSuggestion.update({ where: { id }, data: { status: 'dismissed', decidedAt: new Date(), decidedBy } })
   return { ok: true }
 }
 
@@ -261,6 +263,12 @@ export interface DecisionItem {
   proposed: Record<string, unknown>
   current: number | null
   projected: number | null
+  /**
+   * D7 — an apply only: where its write lands, for the write gate the tool asks (live / sandbox / refused). `campaign`:
+   * the campaign the write gate judges (null when it is not found); `sweep`: a market- or account-wide action with no
+   * single campaign. `term` is a negative's search term (keyword protection binds it).
+   */
+  landsOn?: { scope: 'campaign' | 'sweep'; campaignId: string | null; marketplace: string | null; term: string | null }
 }
 
 /**
@@ -283,12 +291,34 @@ export async function planSuggestionDecisions(
   const { refusedActionsOf } = await import('../automation/no-pause.js')
   const targetIds = rows.filter((r) => r.entityType === 'AD_TARGET').map((r) => r.entityId)
   const campaignIds = rows.filter((r) => r.entityType === 'CAMPAIGN').map((r) => r.entityId)
-  const [targets, campaigns] = await Promise.all([
-    prisma.adTarget.findMany({ where: { id: { in: targetIds } }, select: { id: true, bidCents: true, suppressedFromBidCents: true } }),
-    prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, dailyBudget: true } }),
+  // SEARCH_TERM entity ids are `${externalCampaignId}:${query}` (the query may itself contain ':').
+  const termOf = (entityId: string) => { const at = entityId.indexOf(':'); return at >= 0 ? { ext: entityId.slice(0, at), query: entityId.slice(at + 1) } : { ext: entityId, query: '' } }
+  const termExtIds = [...new Set(rows.filter((r) => r.entityType === 'SEARCH_TERM').map((r) => termOf(r.entityId).ext))]
+  const [targets, campaigns, termCampaigns] = await Promise.all([
+    prisma.adTarget.findMany({ where: { id: { in: targetIds } }, select: { id: true, bidCents: true, suppressedFromBidCents: true, adGroup: { select: { campaign: { select: { id: true, marketplace: true } } } } } }),
+    prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, dailyBudget: true, marketplace: true } }),
+    termExtIds.length ? prisma.campaign.findMany({ where: { externalCampaignId: { in: termExtIds } }, select: { id: true, externalCampaignId: true, marketplace: true } }) : Promise.resolve([]),
   ])
   const targetById = new Map(targets.map((t) => [t.id, t]))
   const budgetById = new Map(campaigns.map((c) => [c.id, Number(c.dailyBudget)]))
+  const campaignById = new Map(campaigns.map((c) => [c.id, c]))
+  /** D7 — where an apply's write lands (DecisionItem.landsOn). */
+  const landsOn = (r: (typeof rows)[number]): NonNullable<DecisionItem['landsOn']> => {
+    if (r.entityType === 'AD_TARGET') {
+      const c = targetById.get(r.entityId)?.adGroup?.campaign
+      return { scope: 'campaign', campaignId: c?.id ?? null, marketplace: c?.marketplace ?? r.marketplace, term: null }
+    }
+    if (r.entityType === 'CAMPAIGN') {
+      const c = campaignById.get(r.entityId)
+      return { scope: 'campaign', campaignId: c?.id ?? null, marketplace: c?.marketplace ?? r.marketplace, term: null }
+    }
+    if (r.entityType === 'SEARCH_TERM') {
+      const { ext, query } = termOf(r.entityId)
+      const c = termCampaigns.find((x) => x.externalCampaignId === ext && x.marketplace === r.marketplace) ?? termCampaigns.find((x) => x.externalCampaignId === ext)
+      return { scope: 'campaign', campaignId: c?.id ?? null, marketplace: c?.marketplace ?? r.marketplace, term: query || r.entityName }
+    }
+    return { scope: 'sweep', campaignId: null, marketplace: r.entityType === 'MARKETPLACE' ? r.entityId : r.marketplace, term: null }
+  }
   const problems: string[] = []
   const items: DecisionItem[] = []
   for (const d of decisions) {
@@ -308,7 +338,7 @@ export async function planSuggestionDecisions(
     }
     const current = r.entityType === 'AD_TARGET' ? targetById.get(r.entityId)?.bidCents ?? null : r.entityType === 'CAMPAIGN' ? budgetById.get(r.entityId) ?? null : null
     const projected = family === 'bids' ? projectBidCents(action, current) : family === 'budget' ? projectBudgetEur(action, current) : null
-    items.push({ suggestionId: r.id, decide: d.decide, rule: r.ruleName, entity: r.entityName ?? r.entityType, family, status: r.status, proposed: { type: action.type ?? null, op: action.op ?? null, value: action.value ?? null }, current, projected })
+    items.push({ suggestionId: r.id, decide: d.decide, rule: r.ruleName, entity: r.entityName ?? r.entityType, family, status: r.status, proposed: { type: action.type ?? null, op: action.op ?? null, value: action.value ?? null }, current, projected, ...(d.decide === 'apply' ? { landsOn: landsOn(r) } : {}) })
   }
   if (decisions.some((d) => d.decide === 'apply')) {
     const { isAutomationHalted } = await import('./ads-automation-state.service.js')
@@ -318,11 +348,16 @@ export async function planSuggestionDecisions(
   return { ok: true, items }
 }
 
-/** The approved run: each decision through the same apply / dismiss / restore the Suggestions page uses. */
-export async function applySuggestionDecisions(decisions: Array<{ suggestionId: string; decide: ClaudeDecision }>): Promise<Array<{ suggestionId: string; decide: ClaudeDecision; ok: boolean; status: string; detail: string | null }>> {
+/**
+ * The approved run: each decision through the same apply / dismiss / restore the Suggestions page uses. D7 — a decision
+ * records the person who approved it (`user:<id>`), not the page's anonymous 'operator'. What an apply writes still
+ * carries the rule's own actor and no change set: undo-ad-change cannot find it by the approval id (the Change Log can).
+ */
+export async function applySuggestionDecisions(decisions: Array<{ suggestionId: string; decide: ClaudeDecision }>, approverId: string | null = null): Promise<Array<{ suggestionId: string; decide: ClaudeDecision; ok: boolean; status: string; detail: string | null }>> {
+  const decidedBy = approverId ? `user:${approverId}` : 'operator'
   const out = []
   for (const d of decisions) {
-    const result = d.decide === 'apply' ? await applySuggestion(d.suggestionId) : d.decide === 'dismiss' ? await dismissSuggestion(d.suggestionId) : await restoreSuggestion(d.suggestionId)
+    const result = d.decide === 'apply' ? await applySuggestion(d.suggestionId, {}, decidedBy) : d.decide === 'dismiss' ? await dismissSuggestion(d.suggestionId, decidedBy) : await restoreSuggestion(d.suggestionId)
     const now = await prisma.adsRuleSuggestion.findUnique({ where: { id: d.suggestionId }, select: { status: true } })
     out.push({ suggestionId: d.suggestionId, decide: d.decide, ok: result.ok, status: now?.status ?? 'gone', detail: result.error ?? null })
   }

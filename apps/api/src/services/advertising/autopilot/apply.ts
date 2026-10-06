@@ -10,6 +10,7 @@ import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { checkAdsWriteGate } from '../ads-write-gate.js'
 import { previewBidOptimization, applyBidOptimization } from '../ads-bid-optimizer.service.js'
+import { commonTargetOf, targetSourceWords } from '../ads-target-acos-resolver.js'
 import { setSearchPlacement } from '../ads-top-of-search.service.js'
 import { updateCampaignWithSync } from '../ads-mutation.service.js'
 import { effectiveTargetAcosPct, clamp, type Goal, type Guardrails, type CampaignSignals } from './presets.js'
@@ -32,6 +33,12 @@ export interface AppliedDecision {
 export async function applyPlanActions(opts: {
   planId: string; goal: Goal; marketplace: string; guardrails: Guardrails
   actions: ProposedAction[]; signals: CampaignSignals[]
+  /**
+   * W0 — the plan stores a target ACoS of its own (`guardrails.targetAcosPct`), rather than taking DEFAULT_GUARDRAILS'.
+   * Its target is then explicit and wins over the campaign's; otherwise it is only the fallback after the campaign's,
+   * the account default and profit data.
+   */
+  planSetsTargetAcos?: boolean
 }): Promise<{ applied: number; denied: number; decisions: AppliedDecision[] }> {
   const { planId, goal, marketplace, guardrails: g, actions, signals } = opts
   const sigById = new Map(signals.map((s) => [s.campaignId, s]))
@@ -52,16 +59,23 @@ export async function applyPlanActions(opts: {
     }
 
     // BID — delegate to the per-target optimizer at the plan's effective target ACoS, clamped to the bid band.
+    // W0 — a target the plan stores is explicit and wins; a plan without one only falls back to its goal's default
+    // after the campaign's own target, the account default and profit data. The decision records the target the bids
+    // actually moved toward.
     if (acts.some((a) => a.module === 'bid')) {
       try {
         const s = sigById.get(campaignId)
         const targetAcos = effectiveTargetAcosPct(goal, g, { marginPct: s?.marginPct ?? null }) / 100
-        const preview = await previewBidOptimization({ campaignId, targetAcos, bayesian: true, profitMode: goal === 'PROFIT' })
-        const changes = preview.proposals
-          .map((p) => ({ targetId: p.targetId, current: p.currentBidCents, proposedBidCents: clamp(p.proposedBidCents, g.bidMinCents, g.bidMaxCents) }))
-          .filter((c) => c.proposedBidCents !== c.current)
-          .map((c) => ({ targetId: c.targetId, proposedBidCents: c.proposedBidCents }))
+        const preview = await previewBidOptimization({
+          campaignId, bayesian: true, profitMode: goal === 'PROFIT',
+          ...(opts.planSetsTargetAcos ? { targetAcos, targetAcosFrom: "this plan's target" } : { fallbackTargetAcos: targetAcos }),
+        })
+        const moved = preview.proposals
+          .map((p) => ({ proposal: p, proposedBidCents: clamp(p.proposedBidCents, g.bidMinCents, g.bidMaxCents) }))
+          .filter((c) => c.proposedBidCents !== c.proposal.currentBidCents)
+        const changes = moved.map((c) => ({ targetId: c.proposal.targetId, proposedBidCents: c.proposedBidCents }))
         if (changes.length) {
+          const used = commonTargetOf(moved.map((c) => c.proposal))
           // SG.10 — one change set for the whole batch, so the operator's Undo reverses every
           // bid this decision moved rather than whichever target happened to be logged first.
           // The id is the plan + campaign + this moment: readable in the log, unique per apply.
@@ -70,8 +84,10 @@ export async function applyPlanActions(opts: {
           applied += 1
           decisions.push({
             module: 'bid', campaignId, action: 'BID_APPLY',
-            after: { targets: changes.length, targetAcosPct: Math.round(targetAcos * 100) },
-            reason: `Optimised ${changes.length} keyword bids → ${Math.round(targetAcos * 100)}% target ACoS`,
+            after: { targets: changes.length, targetAcosPct: used?.targetAcosPct ?? null, targetSource: used?.source ?? 'mixed' },
+            reason: used
+              ? `Optimised ${changes.length} keyword bids → ${used.targetAcosPct}% target ACoS (${used.source === 'explicit' ? "this plan's target" : used.source === 'flat' ? "this plan's goal default" : targetSourceWords(used.source)})`
+              : `Optimised ${changes.length} keyword bids → each ad group's profit-derived target ACoS (this plan's goal default where there is no profit data)`,
             status: 'APPLIED',
             // any log id in the set is a handle to the whole set
             executionId: res.actionLogIds?.[0] ?? null,

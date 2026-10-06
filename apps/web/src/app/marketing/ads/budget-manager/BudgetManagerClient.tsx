@@ -29,12 +29,13 @@ import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
-import { Modal, Drawer, Menu } from '@/design-system/components'
+import { Banner, Modal, Drawer, Menu } from '@/design-system/components'
 import './budget-manager.css'
 import { ControlPlane } from './ControlPlane'
 import { BudgetPoolsDrawer } from './BudgetPoolsDrawer'
 import { NO_MONTHLY_CAP, readMonthlyBudgetCents } from '../_shared/budgetInput'
 import { budgetMonthOf } from './budgetMonth'
+import { initialLimitEdits } from './limitEdits'
 
 // ── types (mirror ads-budget-manager.service BudgetManagerResult) ──────────
 interface SpendSlice { month: string; budgetCents: number; spendCents: number | null; pct: number | null; daily: number[] }
@@ -184,10 +185,20 @@ function SettingsModal({ row, month, onClose, onSaved, toast }: { row: Row; mont
 }
 
 // ── More drawer: per-campaign min/max budget limits ─────────────────────────
-interface BmCampaign { id: string; name: string; status: string; dailyBudgetCents: number; minCents: number | null; maxCents: number | null }
+// CM-30 — each campaign's OWN Min/Max Budget, the same numbers as the Campaigns grid (see limitEdits.ts).
+interface BmCampaign { id: string; name: string; status: string; dailyBudgetCents: number; minCents: number | null; maxCents: number | null; oldMonthLimit?: { minCents: number | null; maxCents: number | null } | null }
+/** POST, and the server's reason when it says no. */
+async function postWithReason(path: string, body: Record<string, unknown>): Promise<{ ok: boolean; reason: string | null }> {
+  try {
+    const r = await fetch(`${API()}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const j = await r.json().catch(() => ({})) as { ok?: boolean; error?: string }
+    return r.ok && j?.ok !== false && j?.error == null ? { ok: true, reason: null } : { ok: false, reason: j?.error ?? `The server answered ${r.status}.` }
+  } catch { return { ok: false, reason: 'No answer from the server.' } }
+}
 function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: string; onClose: () => void; onSaved: () => void; toast: (m: string) => void }) {
   const [camps, setCamps] = useState<BmCampaign[] | null>(null)
   const [edits, setEdits] = useState<Record<string, { min: string; max: string }>>({})
+  const [oldCount, setOldCount] = useState(0)
   const [saving, setSaving] = useState(false)
   const [statusFilter, setStatusFilter] = useState<'ENABLED' | 'PAUSED' | 'ALL'>('ENABLED')
   const [search, setSearch] = useState('')
@@ -200,7 +211,9 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
         if (!alive) return
         const list: BmCampaign[] = Array.isArray(j?.campaigns) ? j.campaigns : []
         setCamps(list)
-        setEdits(Object.fromEntries(list.map((c) => [c.id, { min: c.minCents != null ? (c.minCents / 100).toFixed(2) : '', max: c.maxCents != null ? (c.maxCents / 100).toFixed(2) : '' }])))
+        const init = initialLimitEdits(list)
+        setEdits(init.edits)
+        setOldCount(init.oldCount)
       } catch { if (alive) setCamps([]) }
     })()
     return () => { alive = false }
@@ -215,20 +228,28 @@ function MoreDrawer({ row, month, onClose, onSaved, toast }: { row: Row; month: 
   const saveAll = async () => {
     setSaving(true)
     let ok = 0
+    const reasons: string[] = []
     for (const c of dirty) {
       const e = edits[c.id]
-      const good = await postJson('/api/advertising/budget-manager/campaign-limit', { marketplace: row.marketplace, month, campaignId: c.id, minCents: e.min === '' ? null : parseEur(e.min), maxCents: e.max === '' ? null : parseEur(e.max) })
-      if (good) ok++
+      const r = await postWithReason('/api/advertising/budget-manager/campaign-limit', { marketplace: row.marketplace, month, campaignId: c.id, minCents: e.min === '' ? null : parseEur(e.min), maxCents: e.max === '' ? null : parseEur(e.max) })
+      if (r.ok) ok++
+      else reasons.push(`${c.name}: ${r.reason}`)
     }
     setSaving(false)
-    toast(ok ? `Saved limits for ${ok} campaign${ok === 1 ? '' : 's'}.` : 'Save failed.')
+    const failed = reasons.length ? `${reasons.length} not saved — ${reasons[0]}${reasons.length > 1 ? ` (and ${reasons.length - 1} more)` : ''}` : ''
+    toast(ok ? `Saved limits for ${ok} campaign${ok === 1 ? '' : 's'}.${failed ? ` ${failed}` : ''}` : (failed || 'Save failed.'))
     if (ok) { onSaved() }
   }
 
   return (
     <Drawer open onClose={onClose} title={`Campaign Budget Limits — ${mktName(row.marketplace)}`}
    footer={<><span className="bm-more-foot">{dirty.length ? `${dirty.length} change${dirty.length === 1 ? '' : 's'}` : 'No changes'}</span><Button variant="primary" disabled={saving || !dirty.length} onClick={saveAll}>{saving ? 'Saving…' : 'Save limits'}</Button></>}>
-      <p className="bm-more-intro">Set a minimum and maximum daily budget per campaign. Auto Pacing keeps each campaign within these bounds when it redistributes this market’s monthly budget.</p>
+      <p className="bm-more-intro">Set a minimum and maximum daily budget per campaign. These are the campaign’s own Min/Max Budget — the same numbers the Campaigns grid shows, kept for every month. Auto Pacing keeps each campaign within them, and Nexus refuses a daily budget outside them.</p>
+      {oldCount > 0 && (
+        <Banner tone="warning" title={`${oldCount} older limit${oldCount === 1 ? '' : 's'} not in use`}>
+          {oldCount === 1 ? 'One campaign has' : `${oldCount} campaigns have`} a limit saved only on {monthLabel(month)}’s plan by the earlier Budget Manager. Auto Pacing no longer reads it. It is filled in below: Save limits to keep it as the campaign’s own Min/Max Budget, or clear the boxes to drop it.
+        </Banner>
+      )}
       {camps == null ? <div className="bm-more-loading">Loading campaigns…</div>
         : camps.length === 0 ? <div className="bm-more-empty">No campaigns in {mktName(row.marketplace)}.</div>
         : (<>

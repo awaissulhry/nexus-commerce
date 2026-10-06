@@ -66,11 +66,12 @@ export interface GateContext {
   marketplace: string | null
   payloadValueCents: number
   // Apex A.2a — when provided, the gate enforces the per-campaign live-write
-  // allowlist (default-deny) + the maxWritesPerDay guardrail. The worker
-  // resolves this from the mutated entity; campaign *creation* flows omit it
-  // (there's no campaign to allowlist yet). `null` means the worker tried to
-  // resolve a campaign for an existing-entity mutation and failed → deny in
-  // live mode, so an unattributable write can never slip through.
+  // allowlist (G5 below); the campaign's maxWritesPerDay setting is NOT enforced
+  // (WC below). The worker resolves this from the mutated entity; campaign
+  // *creation* flows omit it (there's no campaign to allowlist yet). `null`
+  // means the worker tried to resolve a campaign for an existing-entity mutation
+  // and failed → deny in live mode, so an unattributable write can never slip
+  // through.
   campaignId?: string | null
 
   // ── ADX A1 ────────────────────────────────────────────────────────────────
@@ -318,6 +319,13 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
   // be denied here with this exact reason, which is visible and recoverable — flip it
   // back via PATCH /advertising/campaigns/:id/live-writes. That is the intended
   // trade: an explicit deny an operator can see beats a silent write they cannot.
+  //
+  // Default-deny is the COLUMN's default (a campaign found by a sync, or made by Claude's
+  // create-ad-campaign, starts off the list). The launch flows on the Nexus screens put a
+  // campaign ON it the moment it exists: the SP super-wizard (routes/advertising.routes.ts,
+  // LAUNCH-REPAIR), the single launch (ads-single-launch.service.ts, allowlistAtBirth),
+  // blueprint apply (ads-blueprint-apply.service.ts) and AI-goal materialize
+  // (ai-goal-materialize.service.ts). A person's own edit (`ctx.manual`) passes it (CM-20).
   if (ctx.campaignId !== undefined) {
     if (!ctx.campaignId) {
       return {
@@ -462,7 +470,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       if (denial) return denial
     }
 
-    // WC — the maxWritesPerDay DAILY cap is intentionally DISABLED (operator decision:
+    // WC — the campaign's maxWritesPerDay DAILY cap is intentionally DISABLED (operator decision:
     // unlimited bid writes). It counted +1 per ENTITY, so a per-hour rank schedule
     // (~12 entities × ~12–24 flips/day) blew through a small cap by mid-morning and then
     // silently dropped the rest of the day's pushes to Amazon (local ≠ Amazon split-brain).

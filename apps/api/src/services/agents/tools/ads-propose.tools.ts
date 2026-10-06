@@ -225,7 +225,8 @@ const createNegativeKeyword: AgentTool = {
   undo: CREATE_NEGATIVE_UNDO,
   description:
     'Add a negative keyword to one ad group of an Amazon Sponsored Products campaign, so a search term stops '
-    + 'triggering its ads. Nothing changes until a person approves it in Nexus. The preview shows the term\'s recent '
+    + 'triggering its ads. Nothing changes until a person approves it: in Nexus, or the person who asked confirms it in '
+    + 'Claude with their authenticator code when the business set it so. The preview shows the term\'s recent '
     + 'spend and orders, the ad group, and whether it lands live at Amazon or in sandbox. Refused, and not queued, '
     + 'for a protected term, a term already negated in the campaign, a campaign-level negative, or when Amazon\'s '
     + 'write gate would refuse it (the campaign must be on the live-write allowlist). Once approved it is created at '
@@ -435,7 +436,8 @@ const graduateKeyword: AgentTool = {
   undo: GRADUATE_UNDO,
   description:
     'Promote a converting search term to an EXACT keyword in an Amazon Sponsored Products ad group (the one named, or '
-    + 'the harvest destination the account resolves). Nothing changes until a person approves it in Nexus. The preview '
+    + 'the harvest destination the account resolves). Nothing changes until a person approves it: in Nexus, or the '
+    + 'person who asked confirms it in Claude with their authenticator code when the business set it so. The preview '
     + 'shows the starting bid in the campaign\'s currency (default: the term\'s cost per click), the term\'s record, '
     + 'and whether it lands live at Amazon or in sandbox. Refused, and not queued, on a bids pin, when the exact '
     + 'keyword exists, or when Amazon\'s write gate would refuse it. The source ad group is not negated. Undo lowers '
@@ -620,7 +622,8 @@ const setTargetBid: AgentTool = {
   undo: SET_TARGET_BID_UNDO,
   description:
     'Change one keyword or target bid on an Amazon Sponsored Products campaign. Nothing changes until a person approves '
-    + 'it in Nexus. The preview shows the current and new bid in the campaign\'s currency (after the campaign\'s CPC '
+    + 'it: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the business set it '
+    + 'so. The preview shows the current and new bid in the campaign\'s currency (after the campaign\'s CPC '
     + 'ceiling and max-change guardrail), whether it lands live at Amazon or in sandbox, and the rules that may move it '
     + 'again. Refused, and not queued, when Amazon\'s write gate would refuse it (a campaign must be on the live-write '
     + 'allowlist), when a pin holds the bids, or when it would raise a suppressed (no-pause) bid. Once approved it runs '

@@ -1057,8 +1057,10 @@ export async function scopeCampaignIds(q: { campaign?: string; portfolio?: strin
 //   RE-PROPOSE  a decided row the engine STILL proposes (lastSeenAt > decidedAt):
 //               'expired' rows return to pending immediately — expiry is a system state, not a
 //               veto. 'dismissed' rows return only after REPROPOSE_AFTER_MS and only when the
-//               decision was the operator's plain dismiss — 'operator:paused' rows stay out
-//               (the operator paused the underlying target; re-nagging them is noise).
+//               decision was a person's plain dismiss — 'operator' (the page) or 'user:<id>' (a
+//               dismissal Claude asked for, recorded as the person who approved it, D7);
+//               'operator:paused' rows stay out (the operator paused the underlying target;
+//               re-nagging them is noise).
 //
 // Ridden by the rule-evaluator tick (no new cron); every call is cheap and idempotent.
 
@@ -1128,7 +1130,7 @@ export async function sweepSuggestionLifecycle(now = new Date()): Promise<{ expi
       UPDATE "AdsRuleSuggestion"
       SET "status" = 'pending', "decidedAt" = NULL, "decidedBy" = NULL
       WHERE ("status" = 'expired' AND "lastSeenAt" > "decidedAt")
-         OR ("status" = 'dismissed' AND "decidedBy" = 'operator'
+         OR ("status" = 'dismissed' AND ("decidedBy" = 'operator' OR "decidedBy" LIKE 'user:%')
              AND "decidedAt" < ${new Date(now.getTime() - REPROPOSE_AFTER_MS)}
              AND "lastSeenAt" > "decidedAt")`
     return { expired, reproposed: Number(backToPending) }
@@ -1155,7 +1157,7 @@ export type DecideResult = { ok: boolean; httpStatus?: number; error?: string; r
  *      rather than keeping proposals the operator just said they did not want to see.
  *
  * `muted` is out of the lifecycle sweep's reach by construction: the sweep only touches
- * `pending`, `expired`, and `dismissed` rows whose decidedBy is exactly 'operator'.
+ * `pending`, `expired`, and `dismissed` rows whose decidedBy is 'operator' or a person's `user:<id>`.
  */
 export async function muteSuggestion(id: string, opts: { by?: string } = {}): Promise<DecideResult> {
   const sug = await prisma.adsRuleSuggestion.findUnique({ where: { id } })

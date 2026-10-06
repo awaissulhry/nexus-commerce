@@ -26,7 +26,6 @@ import prisma from '../../db.js'
  *  same the tracker joins SQP on, so a stored term can never disagree with the join. */
 export const normTerm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
 
-export const KT_WATCHLIST_MARKETS = ['IT', 'DE', 'ES', 'FR'] as const
 
 export interface ProtectionRule {
   term: string

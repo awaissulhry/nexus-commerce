@@ -54,8 +54,9 @@
  */
 
 import prisma from '../../db.js'
+import { adsReadMarkets } from './ads-markets.service.js'
 import { analyzeNgrams, type NgramRow } from './ads-ngram.service.js'
-import { normaliseNegTerm, resolveNegScope, NEG_MARKETS, NEG_MARKET_ALL, type NegScopeRequest, type NegGrain } from './negatives.service.js'
+import { normaliseNegTerm, resolveNegScope, NEG_MARKET_ALL, type NegScopeRequest, type NegGrain } from './negatives.service.js'
 
 const WINDOWS = [30, 60, 120] as const
 const DEFAULT_WINDOW = 60
@@ -196,7 +197,7 @@ export async function getWastefulWords(req: WastefulWordsRequest): Promise<Waste
     req.line ? prisma.adProductAd.findMany({ where: { productId: { not: null } }, select: { productId: true, adGroup: { select: { campaignId: true } } } }) : Promise.resolve([]),
   ])
   const scope = resolveNegScope(
-    { campaigns, adGroups: negAdGroups, products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
+    { readMarkets: await adsReadMarkets(), campaigns, adGroups: negAdGroups, products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
     req,
   )
 
@@ -455,6 +456,7 @@ export async function negateGram(req: NegateGramRequest): Promise<NegateGramResu
   })
   const writeScope = resolveNegScope(
     {
+      readMarkets: await adsReadMarkets(),
       campaigns: scopeCampaignsForWrite,
       adGroups: await prisma.adGroup.findMany({ select: { id: true, name: true, campaignId: true } }),
       products: [], ads: [],
@@ -594,4 +596,4 @@ export async function negateGram(req: NegateGramRequest): Promise<NegateGramResu
   return { ok: true, gram, blockedBy: null, error: null, code: null, outcomes, summary }
 }
 
-export { NEG_MARKETS, NEG_MARKET_ALL }
+export { NEG_MARKET_ALL }

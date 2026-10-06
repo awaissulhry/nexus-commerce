@@ -40,7 +40,8 @@
  */
 
 import prisma from '../../db.js'
-import { resolveNegScope, NEG_MARKETS, NEG_MARKET_ALL, type NegScopeRequest, type NegGrain } from './negatives.service.js'
+import { adsReadMarkets } from './ads-markets.service.js'
+import { resolveNegScope, NEG_MARKET_ALL, type NegScopeRequest, type NegGrain } from './negatives.service.js'
 
 const WINDOWS = [30, 60, 120] as const
 const DEFAULT_WINDOW = 60
@@ -220,7 +221,7 @@ export async function getNegRecord(req: NegRecordRequest): Promise<NegRecordPayl
     req.line ? prisma.adProductAd.findMany({ where: { productId: { not: null } }, select: { productId: true, adGroup: { select: { campaignId: true } } } }) : Promise.resolve([]),
   ])
   const scope = resolveNegScope(
-    { campaigns, adGroups: negAdGroups, products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
+    { readMarkets: await adsReadMarkets(), campaigns, adGroups: negAdGroups, products, ads: ads.map((a) => ({ productId: a.productId, campaignId: a.adGroup?.campaignId ?? '' })).filter((a) => a.campaignId) },
     req,
   )
   const scopeCampaigns = new Set(scope.campaignIds)
@@ -583,4 +584,4 @@ export async function setNegAlert(req: SetNegAlertRequest): Promise<{ ok: boolea
   return { ok: true }
 }
 
-export { NEG_MARKETS, NEG_MARKET_ALL }
+export { NEG_MARKET_ALL }

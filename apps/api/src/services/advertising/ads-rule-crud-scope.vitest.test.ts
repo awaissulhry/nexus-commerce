@@ -167,7 +167,7 @@ describe('4c — a market with no active Amazon Ads connection', () => {
     const out = refusal(await createAdsRule(budgetRule([], 'SE'), 'user:test'))
     expect(out.status).toBe(400)
     expect(out.body.problems).toEqual([
-      "Nexus does not change ads in SE: it has no checked list of Amazon's currency, bid and budget limits there, so a rule there can never run. Choose IT, DE, FR, ES or All markets.",
+      "Nexus does not change ads in SE: Amazon's bid and budget limits for this market are not known yet, so a rule there can never run. Choose IT, DE, FR, ES or All markets.",
     ])
     expect(db.automationRule.create).not.toHaveBeenCalled()
   })

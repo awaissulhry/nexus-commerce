@@ -22,7 +22,7 @@ import { ColumnNA, naCell } from '../../../../../_shared/RuleColumnCells'
 import type { AdGroupDetailData } from '../AdGroupDetail'
 import { pillTone } from '../../../../../_shared/pillTone'
 import { Listbox, useToast } from '@/design-system/components'
-import { adsWriteMany, eachSummary, type EachResult } from '../../../../../_shared/adsWrite'
+import { adsWriteMany, eachSummary, type EachResult, SEND_NOW } from '../../../../../_shared/adsWrite'
 
 interface TargetRow {
   id: string
@@ -141,7 +141,7 @@ export function TargetsTab({ adGroup, onRefresh }: { adGroup: AdGroupDetailData 
     ],
     onApply: async (edits) => {
       const res = await adsWriteMany(edits.map((e) => {
-        const body: Record<string, unknown> = { applyImmediately: false, reason: 'Edit Targets inline' }
+        const body: Record<string, unknown> = { ...SEND_NOW, reason: 'Edit Targets inline' }
         if (e.values.status != null) body.status = e.values.status
         if (e.values.bid != null) body.bidCents = Math.round(parseFloat(e.values.bid) * 100)
         return { id: e.id, path: `/api/advertising/ad-targets/${e.id}`, body }

@@ -10,14 +10,15 @@ import { Button, Input } from '@/design-system/primitives'
 import { Field, Modal } from '@/design-system/components'
 import '../campaigns-ds.css'
 
-import { adsWriteEach, type EachResult } from '../../_shared/adsWrite'
+import { SEND_NOW, adsWriteEach, type EachResult } from '../../_shared/adsWrite'
 
 /**
- * PATCH the same body to /api/advertising/<base>/<id> for every id (applyImmediately:false). CM-11 — it reads every
- * answer now: which ids changed and, for the rest, the server's reason (it used to ignore them all).
+ * PATCH the same body to /api/advertising/<base>/<id> for every id. CM-11 — it reads every answer now: which ids changed
+ * and, for the rest, the server's reason (it used to ignore them all). CM-27 — sent now (`SEND_NOW`), like the same
+ * change from the Campaigns grid; it used to wait the 5-minute grace window.
  */
 export async function bulkPatch(base: string, ids: string[], body: Record<string, unknown>): Promise<EachResult> {
-  return adsWriteEach(base, ids, { ...body, applyImmediately: false })
+  return adsWriteEach(base, ids, { ...body, ...SEND_NOW })
 }
 
 export function AdjustBidModal({ count, noun, bidLabel = 'Bid', currency = '€', onClose, onApply }: {
