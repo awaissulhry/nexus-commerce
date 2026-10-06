@@ -42,7 +42,8 @@ export interface ArtifactContext {
   doc: TemplateDoc
   /** Every linked slot after the build / adopt. */
   slots: ArtifactSlot[]
-  mode: 'build' | 'adopt' | 'start' | 'stop'
+  /** PB-9 — 'phase': a phase switch hands the context to rank.ts's previewRankPhase / applyRankPhase only. */
+  mode: 'build' | 'adopt' | 'start' | 'stop' | 'phase'
   actor: AdsActor
   changeSetId: string | null
   compiledVersion: number

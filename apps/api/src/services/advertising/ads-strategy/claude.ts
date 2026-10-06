@@ -38,9 +38,15 @@ import type { ResolvedField, StrategyRow } from './resolve.js'
  */
 export const BRAKE_TOOLS = ['stop-automation', 'turn-down-automation', 'set-ad-guardrail', 'cancel-queued-ad-write'] as const
 
-const ACTION_OF: ReadonlyMap<string, ClaudeActionType> = new Map(
-  Object.entries(CLAUDE_ACTION_TOOLS).flatMap(([action, tools]) => tools.map((tool) => [tool, action as ClaudeActionType] as const)),
-)
+/**
+ * Each tool's own kind: the first it is listed under. PB-9 — a tool of several ops may also be listed under an op's own
+ * kind (apply-ads-playbook under phase), so the strategy's screens name it there; OP_ACTIONS gives each op its kind.
+ */
+const ACTION_OF: ReadonlyMap<string, ClaudeActionType> = (() => {
+  const out = new Map<string, ClaudeActionType>()
+  for (const [action, tools] of Object.entries(CLAUDE_ACTION_TOOLS)) for (const tool of tools) if (!out.has(tool)) out.set(tool, action as ClaudeActionType)
+  return out
+})()
 /** Tests only: a tool treated as one kind of ad action (no ad tool may run by rule before W2). */
 const treatedAs = new Map<string, ClaudeActionType>()
 
@@ -52,8 +58,8 @@ const treatedAs = new Map<string, ClaudeActionType>()
  */
 export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeActionType | readonly ClaudeActionType[] | null>>>> = {
   // PB-10 — a sync builds slots and adds keywords and product ads: the create kind; its negatives alone are a kind of their
-  // own (op sync-negatives).
-  'apply-ads-playbook': { build: 'create', adopt: null, start: ['restore', 'allowlist'], stop: 'stop', sync: 'create', 'sync-negatives': 'negative' },
+  // own (op sync-negatives). PB-9 — a phase switch is its own kind.
+  'apply-ads-playbook': { build: 'create', adopt: null, start: ['restore', 'allowlist'], stop: 'stop', sync: 'create', 'sync-negatives': 'negative', phase: 'phase' },
 }
 
 /** Every kind of ad action a tool is for these args (its own kind first); empty: the strategy never narrows it. */

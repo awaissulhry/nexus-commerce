@@ -209,6 +209,11 @@ export const PHASE = z.object({
   /** What Claude may do alone in this phase, per kind of ad action (narrows the business's levels, never widens). */
   claude: z.partialRecord(z.enum(CLAUDE_ACTION_TYPES as [string, ...string[]]), z.enum(CLAUDE_LEVELS as [string, ...string[]])).default({}),
   exit: z.array(EXIT_RULE).max(6).default([]),
+  /**
+   * PB-9 — the hold (hysteresis): the least days in this phase before Nexus proposes leaving it, or a switch out of it
+   * may run by the business's rule. A person's own switch is never held. Absent: the design's 14 days (DEFAULT_HOLD_DAYS).
+   */
+  minDays: z.number().int().min(0).max(365).optional(),
 }).strict()
 export const PHASES_SECTION = z.partialRecord(z.enum(PHASES), PHASE)
 
@@ -273,7 +278,10 @@ export type PhaseRecipes = z.infer<typeof PHASE_RECIPES>
  */
 export const PLAYBOOK_MONEY: Readonly<Record<string, string>> = {
   ...STRATEGY_MONEY,
-  ...Object.fromEntries(['dailyBudgetCents', 'baseBidCents', 'minPerSlotCents', 'startBidCents', 'ladderBidCents'].map((key) => [key, FIELDS.financialsAdspendView])),
+  ...Object.fromEntries(['dailyBudgetCents', 'baseBidCents', 'minPerSlotCents', 'startBidCents', 'ladderBidCents',
+    // PB-9 — a phase check's ad sales and ACoS (ad performance is ad-spend money), its ACoS against the target, and the
+    // break-even ACoS beside them (it tells the margin).
+    'salesCents', 'acosPct', 'acosToTargetPct', 'breakEvenAcosPct'].map((key) => [key, FIELDS.financialsAdspendView])),
 }
 
 // ── Checks across sections ────────────────────────────────────────────────────────────────────────

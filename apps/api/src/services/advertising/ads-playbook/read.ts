@@ -21,6 +21,10 @@
  *              drift-load.ts): each item with what fixes it (apply-ads-playbook op sync, another tool, or nothing) and,
  *              for a change a person made himself, keep or revert; or, for a market, every enrolled product counted
  *
+ * PB-9 — `effective` for an enrolled product also carries its `phaseCheck` (phase-check.ts), computed by Nexus: the phase
+ * (the strategy's goal) and since when, the hold, each exit rule with its numbers (ad orders, ACoS against the target,
+ * the change in orders, sellable units, days in phase), the move Nexus proposes, stock cover and the break-even ACoS.
+ *
  * Honest by construction: no engine, rule or Claude change reads a playbook. It is compiled only by an approved apply
  * (PB-5a: apply-ads-playbook build and adopt; PB-10: sync; start and phase come later); until then it is stored and shown only,
  * and nothing at Amazon moves because of it.
@@ -82,7 +86,8 @@ export type PlaybookReadResult = { data: Record<string, unknown> } | PlaybookRea
 export const PLAYBOOK_NOTE =
   'No engine, rule or Claude change follows a playbook, and nothing at Amazon moves because of it, until an approved apply '
   + 'compiles it: apply-ads-playbook builds a product\'s missing campaigns (at the floor, off the live-write allowlist) or '
-  + 'adopts the ones it runs, or syncs its drift (adding only); starting to spend comes later. Until then it is stored and shown only (set-ads-playbook '
+  + 'adopts the ones it runs, syncs its drift (adding only), or switches its phase (op phase: the phase\'s numbers into the '
+  + 'ads strategy, its slots, hourly plans and harvest cadence); starting to spend comes later. Until then it is stored and shown only (set-ads-playbook '
   + "changes it). The numbers the engines obey are the ads strategy's (strategy, read-only here)."
 const ENROLL_NOTE = 'A product is in only when its own row (or its parent\'s) says enrolled; a category or market playbook is a default for the products under it, never a build.'
 const CAPTURE_NOTE =
@@ -185,6 +190,17 @@ async function effectiveIn(market: string, channel: string, scope: Scope): Promi
   const ownRows = scope.kind === 'product' ? [index.products.get(scope.product.id), scope.product.parentId ? index.products.get(scope.product.parentId) : undefined].filter((r): r is NonNullable<typeof r> => !!r) : []
   const links = await playbookLinks(ownRows.map((r) => r.id))
   const names = await campaignNames(links.filter((l) => l.kind === 'slot').map((l) => l.refId))
+  // PB-9 — where an enrolled product stands in its phase (the playbook row's product: its family's ads and stock).
+  let phaseCheck: Record<string, unknown> | null = null
+  const holder = ownRows.find((r) => r.id === resolved.product?.enrolled.source?.id) ?? ownRows[0]
+  if (scope.kind === 'product' && resolved.doc && resolved.product?.enrolled.value === true && holder) {
+    try {
+      const { loadPhaseCheck } = await import('./phase-check.js')
+      phaseCheck = await loadPhaseCheck({ market, channel, productId: holder.scopeId, doc: resolved.doc }) as unknown as Record<string, unknown>
+    } catch (e) {
+      phaseCheck = { error: `The phase check could not be computed: ${(e as Error).message.slice(0, 160)}` }
+    }
+  }
 
   return {
     market,
@@ -218,6 +234,7 @@ async function effectiveIn(market: string, channel: string, scope: Scope): Promi
       })),
     } : {}),
     strategy: strategyOut(strategyResolved),
+    ...(phaseCheck ? { phaseCheck } : {}),
     warnings: resolved.warnings,
     orphans,
   }

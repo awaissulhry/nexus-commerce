@@ -86,7 +86,10 @@ const adsPlaybook: AgentTool = {
     + "gives what one product, category or market follows, every part with its source, the product's own fields (enrolled "
     + '— a product is in only when its own row says so —, state, terms, daily budget, base bid, phase recipes), the slots '
     + 'it would be built from, what it owns (links), why it cannot compile yet, and the ads strategy in force beside it: '
-    + "the phase is the strategy's goal, and the strategy's numbers are what the engines obey. view rows lists a market's "
+    + "the phase is the strategy's goal, and the strategy's numbers are what the engines obey. For an enrolled product it "
+    + 'also gives its phase check, computed by Nexus: days in phase and since when, the phase\'s hold, each exit rule with '
+    + 'its numbers (ad orders, ACoS against the target, the change in orders, sellable units), the move Nexus proposes, '
+    + "stock cover and the break-even ACoS (organic rank is not measured: DEFEND is the Owner's call). view rows lists a market's "
     + 'rows; templates the templates; history the changes; capture what a template captured from live campaigns would hold '
     + '(campaignIds, portfolioId or namePrefix, with productToken): slots, naming, budget shares, bid ladder, placements, '
     + "hourly plans by rank role and the product's terms — nothing is saved. view compile is a DRY RUN of building one "
