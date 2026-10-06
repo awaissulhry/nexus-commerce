@@ -184,7 +184,7 @@ describe('effective', () => {
       alsoInForce: [{ setting: `the budget plan ${month()}`, monthlyBudgetCents: 616161, stopOverSpend: true }], stricter: { from: 'the market strategy' },
       // W1-6 — how this month stands against the cap where bids drop (the budget engine's rule), and who reads it.
       thisMonth: { month: month(), spendCents: 0, spendThrough: null, forecastSpendCents: null, stopCapCents: 515151, stopBy: 'the market strategy', reached: false },
-      readBy: ['budget engine (the market cap)'],
+      readBy: [expect.stringMatching(/^the budget engine \(every 30 minutes\): when the market's spend this month reaches the market's cap/)],
     })
     expect(out.notReadYet).not.toEqual(expect.arrayContaining(['monthlySpendCapCents']))
     expect(m.shadowedBy).toEqual([{ campaignId: ids.c1, name: 'Test campaign one', targetAcosPct: 30 }])
