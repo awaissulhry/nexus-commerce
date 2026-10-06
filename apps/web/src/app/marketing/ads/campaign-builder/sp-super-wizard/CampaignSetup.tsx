@@ -3,8 +3,8 @@
 /**
  * SPW.4 — Step 2 "Campaign Setup" (Helium 10 match). The campaigns generated from the
  * step-1 structure render in an editable table: × delete · campaign-name input + ad-group
- * sub-row · Match/Keyword type · Default Bid + Budget (currency inputs with a Suggested
- * range) · Targeting / Negative Targeting (counts + Edit). Restore Default regenerates.
+ * sub-row · Match/Keyword type · Default Bid + Budget (currency inputs; CC-9: their starting values are labelled
+ * "Default", not "Suggested" — they are constants, not a suggestion) · Targeting / Negative Targeting (counts + Edit). Restore Default regenerates.
  * Per the build decision this is a purpose-built table (not AdsDataGrid — that grid is
  * hardwired for filter/sort/pager); the per-row Edit drawers land in SPW.5.
  */
@@ -50,7 +50,6 @@ export type SpwCampaign = {
   autoGroups: AutoGroup[]
 }
 
-const SUG_LOW = 0.727, SUG_HIGH = 1.273
 const DEFAULT_BID = 0.75, DEFAULT_BUDGET = 10
 
 const matchTok = (m: string) => (m === 'Broad & Phrase & Exact' ? '' : m)
@@ -358,11 +357,11 @@ export function CampaignSetup({ campaigns, setCampaigns, currency, autoNegate, o
             <div className="kt">{c.keywordType}</div>
             <div className="bid">
               <Input inputMode="decimal" prefix={currency} value={c.bid} onChange={(e) => upd(c.id, { bid: e.target.value })} aria-label="Default bid" fieldClassName="spw-field-money" />
-              <div className="sug">Suggested: <b>{money(currency, c.sugBid)}</b> ({money(currency, c.sugBid * SUG_LOW)} - {money(currency, c.sugBid * SUG_HIGH)})</div>
+              <div className="sug">Default: <b>{money(currency, c.sugBid)}</b></div>
             </div>
             <div className="bid">
               <Input inputMode="decimal" prefix={currency} value={c.budget} onChange={(e) => upd(c.id, { budget: e.target.value })} aria-label="Budget" fieldClassName="spw-field-money" />
-              <div className="sug">Suggested: <b>{money(currency, c.sugBudget)}</b> ({money(currency, c.sugBudget * SUG_LOW)} - {money(currency, c.sugBudget * SUG_HIGH)})</div>
+              <div className="sug">Default: <b>{money(currency, c.sugBudget)}</b></div>
             </div>
             <div className="tgt">
               {tgtLabel(c) ? <><span className="ct">{tgtLabel(c)}</span><span><Button variant="link" onClick={() => onEditTargeting?.(c.id)}><Pencil size={12} /> Edit</Button></span></> : <span className="dash">-</span>}

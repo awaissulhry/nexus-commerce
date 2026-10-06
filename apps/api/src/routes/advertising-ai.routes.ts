@@ -61,8 +61,11 @@ const advertisingAiRoutes: FastifyPluginAsync = async (fastify) => {
   // AIAD.1 — materialize a goal: campaign scaffold + harvest/negate rules + AutopilotPlan.
   fastify.post('/advertising/ai-goals/:id/materialize', async (request, reply) => {
     const { id } = request.params as { id: string }
+    // CC-28 — the signed-in person (auth sets `authUser`); the header only without one. The web never sent the header,
+    // so a goal's campaigns and rules carried no author.
     const raw = request.headers['x-actor-id']
-    const userId = typeof raw === 'string' && raw.length > 0 ? `user:${raw}` : undefined
+    const signedIn = (request as { authUser?: { id?: string } }).authUser?.id
+    const userId = signedIn ? `user:${signedIn}` : typeof raw === 'string' && raw.length > 0 ? `user:${raw}` : undefined
     const { materializeProductGoal, MaterializeError } = await import('../services/advertising/ai-goal-materialize.service.js')
     try {
       const result = await materializeProductGoal(id, userId)

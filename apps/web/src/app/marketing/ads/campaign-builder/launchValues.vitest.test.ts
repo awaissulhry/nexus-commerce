@@ -5,7 +5,7 @@
  *          `campaignIds` / `campaigns[].id`, which the answer never had, so its plans held no campaigns).
  */
 import { describe, expect, it } from 'vitest'
-import { createdCampaignIds, missingBidOrBudget, positiveAmount } from './launchValues'
+import { createdCampaignIds, missingBidOrBudget, positiveAmount, startingBidSource } from './launchValues'
 
 describe('CC-29 — no silent bid/budget substitution', () => {
   it('reads a positive amount, comma or dot; blank, zero, negative and text are not amounts', () => {
@@ -40,5 +40,14 @@ describe('CC-15 — the campaigns a launch created', () => {
   it('an answer with no created list, or rows without an id, gives no campaigns', () => {
     expect(createdCampaignIds(null)).toEqual([])
     expect(createdCampaignIds({ created: [{ name: 'x' }, { campaignId: '' }, null] })).toEqual([])
+  })
+})
+
+describe('CC-9 — a starting bid says where it comes from', () => {
+  it('measured CPCs in the market → named as such', () => {
+    expect(startingBidSource(62, 'DE')).toBe('From your DE CPCs')
+  })
+  it('🔴 no measurement → "Default", never "Suggested"', () => {
+    for (const none of [null, undefined, 0]) expect(startingBidSource(none, 'DE')).toBe('Default')
   })
 })

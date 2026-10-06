@@ -676,7 +676,7 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
         </div>
         {setMsg ? <div className="h10-spw-ps-setmsg">{setMsg}</div> : null}
         {sponsoredVideo ? (
-          <div className="h10-spw-ps-rcol sv"><span className="pcol">Product <ChevronsUpDown size={11} /></span><span className="svcol">Sponsored Videos <span className="newtag">New</span></span></div>
+          <div className="h10-spw-ps-rcol sv"><span className="pcol">Product <ChevronsUpDown size={11} /></span><span className="svcol">Sponsored Videos <span className="newtag">Not sent yet</span></span></div>
         ) : (
           <div className="h10-spw-ps-rcol">Product <ChevronsUpDown size={11} /></div>
         )}
@@ -692,7 +692,7 @@ export function ProductSelection({ products, setProducts, sponsoredVideo, channe
                     out mid-build). The tray must show that, not just the catalogue. */}
                 <EligPill e={verdict(p)} />
                 {sponsoredVideo && (
-                  <Checkbox className="h10-spw-ps-sv" title="Run a Sponsored Brands video for this product" checked={sponsoredVideo.enabled.has(p.id)} onChange={() => sponsoredVideo.onToggle(p.id)} aria-label={`Sponsored Videos for ${p.name}`} />
+                  <Checkbox className="h10-spw-ps-sv" title="Not sent to Amazon yet: Nexus records the choice; no Sponsored Brands video is created" checked={sponsoredVideo.enabled.has(p.id)} onChange={() => sponsoredVideo.onToggle(p.id)} aria-label={`Sponsored Videos for ${p.name}`} />
                 )}
                 <ToolbarButton size="sm" tone="danger" tooltip={false} icon={<X size={14} />} label={`Remove ${p.name}`} onClick={() => remove(p.id)} />
               </div>

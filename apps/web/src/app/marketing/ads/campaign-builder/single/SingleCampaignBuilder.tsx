@@ -28,7 +28,7 @@ import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSel
 import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '../../_shared/PlacementBidMultiplier'
 import { BidStrategyCardGrid, bidStrategyRuns, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
 import { marketChangeNote, useOnMarketChange } from '../marketChange'
-import { positiveAmount } from '../launchValues'
+import { positiveAmount, startingBidSource } from '../launchValues'
 import { KeywordTargetingPanel, deriveKeywordSuggestions, type KwBid, type NegKw } from '../../_shared/KeywordTargetingPanel'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -50,7 +50,7 @@ const BIDDING: Array<{ key: BiddingStrategy; label: string; desc: string }> = [
 type SitesOpt = 'amazon' | 'business'
 const SITES: Array<{ key: SitesOpt; label: string; desc: string }> = [
   { key: 'amazon', label: 'Amazon and beyond', desc: 'Ads appear on Amazon—including both Amazon retail and Amazon Business—as well as select sites and apps off Amazon.' },
-  { key: 'business', label: 'Amazon Business', desc: 'Use a B2B strategy to increase sales and exclusively reach business shoppers on Amazon Business.' },
+  { key: 'business', label: 'Amazon Business', desc: 'Use a B2B strategy to increase sales and exclusively reach business shoppers on Amazon Business. Not sent to Amazon yet: Nexus saves the choice, and the campaign is created for Amazon and beyond.' },
 ]
 
 // SB.6 — a rule attached to this campaign: either an existing Rules & Automation rule, or a
@@ -112,18 +112,20 @@ export function SingleCampaignBuilder() {
   const [defaultBid, setDefaultBid] = useState('')
   // Data-grounded suggested default bid (account median CPC by intent); budget heuristic ≈ 50× bid.
   const [sugBidEur, setSugBidEur] = useState<number | null>(null)
+  // CC-9 — the account's measured CPC in this market, or null: then the starting bid is a default, and says so.
+  const [sugMedianCents, setSugMedianCents] = useState<number | null>(null)
   useEffect(() => {
     let alive = true
-    setSugBidEur(null)
+    setSugBidEur(null); setSugMedianCents(null)
     if (!market) return () => { alive = false }
     // CC-6 — the launch market's CPCs (it always asked for Italy's).
     fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=${encodeURIComponent(market)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (!alive || !j?.groups) return; const v = Object.values(j.groups as Record<string, number>).filter((n) => n > 0).sort((a, b) => a - b); if (v.length) setSugBidEur(v[Math.floor(v.length / 2)] / 100) })
+      .then((j) => { if (!alive || !j?.groups) return; setSugMedianCents(typeof j.accountMedianCpcCents === 'number' ? j.accountMedianCpcCents : null); const v = Object.values(j.groups as Record<string, number>).filter((n) => n > 0).sort((a, b) => a - b); if (v.length) setSugBidEur(v[Math.floor(v.length / 2)] / 100) })
       .catch(() => {})
     return () => { alive = false }
   }, [market])
-  const sug = (base: number) => ({ val: base.toFixed(2), lo: (base * 0.73).toFixed(2), hi: (base * 1.27).toFixed(2) })
+  const sug = (base: number) => ({ val: base.toFixed(2) })
   const sugBid = sugBidEur ? sug(sugBidEur) : null
   const sugBudget = sugBidEur ? sug(sugBidEur * 50) : null
   // SB.5 — Targeting (keyword / product). Suggested keywords derive from the selected products.
@@ -309,7 +311,7 @@ export function SingleCampaignBuilder() {
                     <Field className="spw-field" label="Campaign Name" required info={<InfoTip tip="The name you'll use to identify this campaign in the Ad Manager and reports." />}>
                       <Input value={name} onChange={(e) => setName(e.target.value)} fieldClassName="spw-field-full" />
                     </Field>
-                    <Field className="spw-field" label="Ad Group Name" required info={<InfoTip tip="An ad group holds the products you advertise together and the targeting that applies to them." />}>
+                    <Field className="spw-field" label="Ad Group Name (Optional)" info={<InfoTip tip="An ad group holds the products you advertise together and the targeting that applies to them." />}>
                       <Input value={adGroup} onChange={(e) => setAdGroup(e.target.value)} placeholder="Enter Group name" fieldClassName="spw-field-full" />
                     </Field>
                     <Field className="spw-field" label="Portfolio (Optional)" info={<InfoTip tip="Group campaigns together to organize your advertising and manage budgets across them." />}>
@@ -401,12 +403,12 @@ export function SingleCampaignBuilder() {
                     <div className="fld">
                       <span className="lbl">Daily Budget <i className="req">*</i> <InfoTip tip="The most you'll spend per day on this campaign, on average. Some days may run up to 25% over." /></span>
                       <Input inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} prefix="€" aria-label="Daily budget" fieldClassName="h10-scb-money" />
-                      {sugBudget && <span><Button variant="link" size="sm" onClick={() => setBudget(sugBudget.val)}>Suggested: €{sugBudget.val} <span className="rg">(€{sugBudget.lo} - €{sugBudget.hi})</span></Button></span>}
+                      {sugBudget && <span><Button variant="link" size="sm" onClick={() => setBudget(sugBudget.val)}>Default (50 × the bid): €{sugBudget.val} · Use</Button></span>}
                     </div>
                     <div className="fld">
                       <span className="lbl">Default Bid <i className="req">*</i> <InfoTip tip="The starting bid applied to targets that don't have their own bid. You can fine-tune per target later." /></span>
                       <Input inputMode="decimal" value={defaultBid} onChange={(e) => setDefaultBid(e.target.value)} prefix="€" aria-label="Default bid" fieldClassName="h10-scb-money" />
-                      {sugBid && <span><Button variant="link" size="sm" onClick={() => setDefaultBid(sugBid.val)}>Suggested: €{sugBid.val} <span className="rg">(€{sugBid.lo} - €{sugBid.hi})</span></Button></span>}
+                      {sugBid && <span><Button variant="link" size="sm" onClick={() => setDefaultBid(sugBid.val)}>{startingBidSource(sugMedianCents, market)}: €{sugBid.val} · Use</Button></span>}
                     </div>
                   </div>
                 </div>
@@ -530,7 +532,7 @@ export function SingleCampaignBuilder() {
                   <div className="f"><span className="l">Placement</span><span className="v">{placementParts.length ? placementParts.join(' · ') : 'No adjustments'}</span></div>
                   {/* CC-7 — said before launch: the campaign is born on the live-write allowlist, like every builder's. */}
                   <div className="f wide"><span className="l">Live writes</span><span className="v">Allowed from launch, like every builder&apos;s campaign, so its placement and later bid changes can reach Amazon.</span></div>
-                  {boostChips.length > 0 && <div className="f wide"><span className="l">Bid Boosts</span><span className="chips">{boostChips.map((b) => <span key={b} className="chip">{b}</span>)}</span></div>}
+                  {boostChips.length > 0 && <div className="f wide"><span className="l">Bid Boosts (not sent to Amazon yet)</span><span className="chips">{boostChips.map((b) => <span key={b} className="chip">{b}</span>)}</span></div>}
                 </div>
               </section>
 
@@ -542,7 +544,7 @@ export function SingleCampaignBuilder() {
                       {products.slice(0, 12).map((p) => <span key={p.id} className="th" title={p.name}>{p.imageUrl ? <img src={p.imageUrl} alt="" /> : <span className="ph" />}</span>)}
                       {products.length > 12 && <span className="more">+{products.length - 12}</span>}
                     </div>
-                    {svEnabled.size > 0 && <p className="note">{svEnabled.size} with Sponsored Videos</p>}
+                    {svEnabled.size > 0 && <p className="note">{svEnabled.size} with Sponsored Videos (not sent to Amazon yet)</p>}
                   </>
                 )}
               </section>
