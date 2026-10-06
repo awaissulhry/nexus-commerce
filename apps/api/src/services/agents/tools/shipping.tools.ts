@@ -250,8 +250,9 @@ const updateShipment: AgentTool = {
   },
   description:
     'Change shipments of this business before their label: hold (with a reason), release from hold, cancel, or set the '
-    + 'carrier and service (from shipping-rates). No carrier is called. Waits for a person to approve it in Nexus. Undo '
-    + 'releases, holds or sets the service back; a cancelled shipment is not brought back.',
+    + 'carrier and service (from shipping-rates). No carrier is called. Waits for a person: approved in Nexus, or '
+    + 'confirmed in Claude where the business allows it. Undo releases, holds or sets the service back; a cancelled '
+    + 'shipment is not brought back.',
   handler: (args) => previewUpdate(args as UpdateArgs),
   async execute(args, ctx) {
     const checked = await freshOrStale(() => previewUpdate(args as UpdateArgs), ctx, ['shipments'], 'a shipment')
