@@ -83,17 +83,20 @@ function NegKeywordEditor({ manual, auto, onChange }: { manual: NegKeyword[]; au
 
 /** AT.1 — Auto-campaign targeting = the 4 Amazon auto groups, each with an on/off
  *  switch + its own bid (seeded by AT.2's intent-based smart defaults). */
-function AutoTargetingEditor({ groups, currency, onChange }: { groups: AutoGroup[]; currency: string; onChange: (v: AutoGroup[]) => void }) {
+function AutoTargetingEditor({ groups, currency, market, onChange }: { groups: AutoGroup[]; currency: string; market: string; onChange: (v: AutoGroup[]) => void }) {
   const toggle = (key: string) => onChange(groups.map((g) => (g.key === key ? { ...g, enabled: !g.enabled } : g)))
   const setBid = (key: string, bid: string) => onChange(groups.map((g) => (g.key === key ? { ...g, bid } : g)))
   // AT.3 — data-grounded suggested bid per group (account median CPC × intent), read-only.
   const [suggested, setSuggested] = useState<Record<string, number> | null>(null)
+  // CC-6 — the launch market's CPCs (it always asked for Italy's).
   useEffect(() => {
     let alive = true
-    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=IT`)
+    setSuggested(null)
+    if (!market) return () => { alive = false }
+    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=${encodeURIComponent(market)}`)
       .then((r) => (r.ok ? r.json() : null)).then((j) => { if (alive && j?.groups) setSuggested(j.groups as Record<string, number>) }).catch(() => {})
     return () => { alive = false }
-  }, [])
+  }, [market])
   return (
     <div className="h10-spw-auto-ed">
       {groups.map((g) => {
@@ -114,11 +117,13 @@ function AutoTargetingEditor({ groups, currency, onChange }: { groups: AutoGroup
   )
 }
 
-export function TargetingModal({ campaign, mode, autoNegate, currency = '€', products, onClose, onSave }: {
+export function TargetingModal({ campaign, mode, autoNegate, currency = '€', market, products, onClose, onSave }: {
   campaign: SpwCampaign
   mode: 'targeting' | 'negative'
   autoNegate?: boolean
   currency?: string
+  /** The launch market (CC-6). */
+  market: string
   products?: SpwProduct[]
   onClose: () => void
   onSave: (patch: Partial<SpwCampaign>) => void
@@ -170,7 +175,7 @@ export function TargetingModal({ campaign, mode, autoNegate, currency = '€', p
       {active === 'prod' ? (
         <ProductSelection products={prods} setProducts={setProds} />
       ) : isAutoTgt ? (
-        <AutoTargetingEditor groups={autoGroups} currency={currency} onChange={setAutoGroups} />
+        <AutoTargetingEditor groups={autoGroups} currency={currency} market={market} onChange={setAutoGroups} />
       ) : isNeg ? (
         <NegKeywordEditor manual={negKw} auto={autoNegs} onChange={setNegKw} />
       ) : (

@@ -14,7 +14,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { Info } from 'lucide-react'
-import { Field, Modal } from '@/design-system/components'
+import { Banner, Field, Modal } from '@/design-system/components'
 import { Button, Input } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -33,6 +33,8 @@ import { defaultAiControl, aiGuardrailsToCents, type AiControlConfig } from './A
 import { defaultCustomKeywordTypes, defaultCustomTargeting, type CustomKeywordType, type TargetingKind } from './CustomScheme'
 import { HeldLaunchReceipt } from '../LaunchReceipt'
 import { useLaunchReceipt } from '../useLaunchReceipt'
+import { marketChangeNote, useOnMarketChange } from '../marketChange'
+import { createdCampaignIds, missingBidOrBudget, positiveAmount } from '../launchValues'
 import '../launch-receipt.css'
 import { useCommandKey } from '@/lib/command-key'
 import { launchBlocked, sendLaunch, useLaunchChecks } from '../launchChecks'
@@ -89,6 +91,15 @@ export function SpSuperWizard() {
   // verified navigates away exactly as before; adding a "yes it worked" step to the happy path is how receipts get ignored.
   const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
   const receipt = useLaunchReceipt(toCampaigns)
+  // CC-6 — one market per launch: a market change drops the old market's products (and with them the step-2 targeting
+  // generated from them) and its portfolio, wherever the operator is, and says so.
+  const [marketNote, setMarketNote] = useState('')
+  useOnMarketChange(market, (prev, next) => {
+    const parts = [products.length ? `${products.length} product${products.length === 1 ? '' : 's'}` : '', portfolioId ? 'the portfolio' : ''].filter(Boolean)
+    setProducts([]); setPortfolioId('')
+    setMarketNote(marketChangeNote(prev, next, parts))
+    if (products.length && step > 1) setStep(1)
+  })
 
   const goNext = useCallback(() => {
     if (step === 2 && campaignsMissingTargeting(campaigns) > 0) { setGuardOpen(true); return }
@@ -104,9 +115,9 @@ export function SpSuperWizard() {
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
         campaigns: campaigns.map((c) => ({
           id: c.id, name: c.name, adGroupName: c.adGroupName, kind: c.kind, matchType: c.matchType,
-          bidEur: Number(c.bid) || 0.75, budgetEur: Number(c.budget) || 10,
+          bidEur: positiveAmount(c.bid), budgetEur: positiveAmount(c.budget),
           keywords: c.keywords, productTargets: c.productTargets.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
-          autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: Number(g.bid) || Number(c.bid) || 0.75 })) : undefined,
+          autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: positiveAmount(g.bid) ?? positiveAmount(c.bid) })) : undefined,
           negKeywords: c.negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })), negProducts: c.negProducts.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined })),
         })),
         placementBids: { tos: bidMult.tos, pdp: bidMult.pdp, ros: bidMult.ros },
@@ -132,6 +143,9 @@ export function SpSuperWizard() {
     // launchable market, refuse rather than fall back to a default that
     // silently sends the campaign to the wrong country.
     if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
+    // CC-29 — a blank or zero bid/budget is refused, never replaced by €0.75 / €10 behind the operator's back.
+    const missing = missingBidOrBudget(campaigns)
+    if (missing) { setLaunchErr(missing); return }
     setLaunching(true); setLaunchErr('')
     try {
       const out = await sendLaunch<Record<string, any>>(launchKey, launchUrl, payload)
@@ -140,8 +154,11 @@ export function SpSuperWizard() {
       // AI Control: provision the AutopilotPlan for the launched set (best-effort; campaigns are
       // already created). The Conductor (ad-autopilot.job) then drives these campaigns.
       if (automationMode === 'ai') {
-        const createdIds: string[] = Array.isArray(j?.campaignIds) ? j.campaignIds : Array.isArray(j?.campaigns) ? j.campaigns.map((c: { id: string }) => c.id) : []
-        try {
+        // 🔴 CC-15 — the launch answers `created: [{ campaignId }]`. This read `campaignIds` / `campaigns[].id`, which the
+        // answer never had, so every AI Control plan was created with NO campaigns (and its harvest/negative rules then
+        // read the whole market). A plan with no campaigns is not created at all.
+        const createdIds = createdCampaignIds(j)
+        if (createdIds.length) try {
           await fetch(`${getBackendUrl()}/api/advertising/autopilot-plans`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -159,7 +176,7 @@ export function SpSuperWizard() {
       if (receipt.hold(j)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, launchKey, launchUrl, payload, automationMode, productGroupName, aiControl, router, receipt.hold])
+  }, [launching, market, campaigns, launchKey, launchUrl, payload, automationMode, productGroupName, aiControl, router, receipt.hold])
 
 
 
@@ -223,6 +240,7 @@ export function SpSuperWizard() {
       </nav>
 
       <div className="h10-spw-body">
+        {marketNote && <Banner tone="warning" onDismiss={() => setMarketNote('')}>{marketNote}</Banner>}
         {step === 1 && (
           <div className="h10-spw-s1">
             <aside className="cb-subnav" aria-label="Product Selection sections">
@@ -276,7 +294,7 @@ export function SpSuperWizard() {
                 did not land as specified. Absent entirely when everything verified. */}
             <HeldLaunchReceipt state={receipt} onContinue={toCampaigns} continueLabel="Go to campaigns" />
             <LaunchChecksPanel checks={checks} checking={checking} />
-            <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} portfolioId={portfolioId} setPortfolioId={setPortfolioId} aiControl={aiControl} setAiControl={setAiControl} />
+            <LaunchStep campaigns={campaigns} productGroupName={productGroupName} productCount={products.length} currency="€" market={market} automationMode={automationMode} setAutomationMode={setAutomationMode} bidConfig={bidConfig} setBidConfig={setBidConfig} rules={rules} setRules={setRules} portfolioId={portfolioId} setPortfolioId={setPortfolioId} aiControl={aiControl} setAiControl={setAiControl} />
           </>
         )}
       </div>
@@ -303,7 +321,7 @@ export function SpSuperWizard() {
       {editTgt && (() => {
         const c = campaigns.find((x) => x.id === editTgt.id)
         if (!c) return null
-        return <TargetingModal campaign={c} mode={editTgt.mode} autoNegate={autoNegate} currency="€" products={products} onClose={() => setEditTgt(null)} onSave={(patch) => setCampaigns((cs) => applyAutoNegatives(cs.map((x) => (x.id === c.id ? { ...x, ...patch } : x)), autoNegate))} />
+        return <TargetingModal campaign={c} mode={editTgt.mode} autoNegate={autoNegate} currency="€" market={market} products={products} onClose={() => setEditTgt(null)} onSave={(patch) => setCampaigns((cs) => applyAutoNegatives(cs.map((x) => (x.id === c.id ? { ...x, ...patch } : x)), autoNegate))} />
       })()}
     </div>
   )

@@ -20,4 +20,10 @@ describe('trendPoint', () => {
     expect(trendPoint(point({ salesCents: 200, acosPct: 175 })).acos).toBe(175)
     expect(trendPoint(point({ salesCents: 2000, acosPct: 17.5 })).acos).toBe(17.5)
   })
+  it('AM-21 — a window that spans currencies has no money per day: fees and sales are left out, counts stay', () => {
+    const p = trendPoint(point({ adFeesCents: null, salesCents: null, acosPct: null }))
+    expect(p).not.toHaveProperty('fees')
+    expect(p).not.toHaveProperty('sales')
+    expect(p).toMatchObject({ clicks: 4, impressions: 100 })
+  })
 })

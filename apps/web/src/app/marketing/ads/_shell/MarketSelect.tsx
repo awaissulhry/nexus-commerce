@@ -127,11 +127,11 @@ export function MarketSelect({
                 disabled={!m.launchable}
                 // A disabled row still explains itself — the operator should
                 // never have to guess why a connected market cannot be picked.
-                title={m.launchable ? m.label || m.code : `${m.code} is a ${m.mode} connection — campaigns cannot be launched there`}
+                title={m.launchable ? m.label || m.code : (m.whyNot ?? `${m.code} is a ${m.mode} connection — campaigns cannot be launched there`)}
                 onClick={() => { if (!m.launchable) return; if (multi) toggle(m.code); else { onChange(m.code); close() } }}
               >
                 <span>{multi && <span className="mk-box" aria-hidden>{draft.includes(m.code) ? '☑' : '☐'}</span>} {FLAG[m.code] ?? '🏳️'} {MARKET_NAME[m.code] ?? m.code}</span>
-                <span className="sub">{m.launchable ? m.code : `${m.code} · ${m.mode}`}</span>
+                <span className="sub">{m.launchable ? m.code : `${m.code} · ${m.whyNotShort ?? m.mode}`}</span>
               </button>
             ))}
             {markets.length === 0 && <button type="button" disabled>No connected markets</button>}

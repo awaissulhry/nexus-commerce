@@ -18,7 +18,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useRouter } from '@/lib/workspaces/navigation'
 import { ChevronDown, Pencil, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Button, Checkbox, Input, Radio, Toggle, ToolbarButton } from '@/design-system/primitives'
-import { Field } from '@/design-system/components'
+import { Banner, Field } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
@@ -26,7 +26,9 @@ import { InfoTip } from '../../campaigns/InfoTip'
 import { PortfolioPicker } from '../sp-super-wizard/PortfolioPicker'
 import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSelection'
 import { PlacementBidMultiplier, type PlacementBids, emptyPlacementBids } from '../../_shared/PlacementBidMultiplier'
-import { BidStrategyCardGrid, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
+import { BidStrategyCardGrid, bidStrategyRuns, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
+import { marketChangeNote, useOnMarketChange } from '../marketChange'
+import { positiveAmount } from '../launchValues'
 import { KeywordTargetingPanel, deriveKeywordSuggestions, type KwBid, type NegKw } from '../../_shared/KeywordTargetingPanel'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -115,12 +117,15 @@ export function SingleCampaignBuilder() {
   const [sugBidEur, setSugBidEur] = useState<number | null>(null)
   useEffect(() => {
     let alive = true
-    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=IT`)
+    setSugBidEur(null)
+    if (!market) return () => { alive = false }
+    // CC-6 — the launch market's CPCs (it always asked for Italy's).
+    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=${encodeURIComponent(market)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (!alive || !j?.groups) return; const v = Object.values(j.groups as Record<string, number>).filter((n) => n > 0).sort((a, b) => a - b); if (v.length) setSugBidEur(v[Math.floor(v.length / 2)] / 100) })
       .catch(() => {})
     return () => { alive = false }
-  }, [])
+  }, [market])
   const sug = (base: number) => ({ val: base.toFixed(2), lo: (base * 0.73).toFixed(2), hi: (base * 1.27).toFixed(2) })
   const sugBid = sugBidEur ? sug(sugBidEur) : null
   const sugBudget = sugBidEur ? sug(sugBidEur * 50) : null
@@ -161,6 +166,14 @@ export function SingleCampaignBuilder() {
   // W2-A (CC-16) — the launch receipt: held when anything asked for is not live on Amazon, or not read back as asked.
   const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
   const receipt = useLaunchReceipt(toCampaigns)
+  // CC-6 — one market per launch: a market change drops the products, product targets and portfolio chosen for the old
+  // market, and says so.
+  const [marketNote, setMarketNote] = useState('')
+  useOnMarketChange(market, (prev, next) => {
+    const n = products.length, t = productTargets.length
+    setMarketNote(marketChangeNote(prev, next, [n ? `${n} product${n === 1 ? '' : 's'}` : '', t ? `${t} product target${t === 1 ? '' : 's'}` : '', portfolioId ? 'the portfolio' : ''].filter(Boolean)))
+    setProducts([]); setProductTargets([]); setSvEnabled(new Set()); setPortfolioId('')
+  })
   // W2-B — the launch body, built once: the review step's checks (dryRun) and the launch send the same thing.
   const launchUrl = `${getBackendUrl()}/api/advertising/campaign-builder/single/launch`
   const payload = useMemo(() => ({
@@ -170,8 +183,9 @@ export function SingleCampaignBuilder() {
         bidBoosts: { video: bidMult.videoBoost, amazonBusiness: bidMult.abBoost, amazonBusinessPct: bidMult.abBoostPct, audience: bidMult.audienceMod },
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
         sponsoredVideoAsins: products.filter((p) => svEnabled.has(p.id)).map((p) => p.asin || p.sku).filter(Boolean),
-        budgetEur: Number(budget) || undefined, defaultBidEur: Number(defaultBid) || undefined,
-        bidConfig: bidConfig.strategy !== 'none' ? bidConfig : undefined,
+        budgetEur: positiveAmount(budget), defaultBidEur: positiveAmount(defaultBid),
+        // The Min/Max bid travel only when their box is ticked: the Target ACoS rule now honours them.
+        bidConfig: bidConfig.strategy !== 'none' ? { ...bidConfig, ...(minMaxOn ? {} : { minBid: '', maxBid: '' }) } : undefined,
         targetMode,
         keywords: targetMode === 'keyword' ? keywords.map((k) => ({ text: k.text, matchType: k.matchType, bidEur: Number(k.bidEur) || undefined })) : undefined,
         negKeywords: negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })),
@@ -179,7 +193,7 @@ export function SingleCampaignBuilder() {
         addNegativeRule: campaignRules.some((r) => r.type === 'Negative Targeting'),
         attachRuleIds: campaignRules.filter((r) => r.ruleId).map((r) => r.ruleId as string),
         autoBidAdjust,
-  }), [market, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, svEnabled, budget, defaultBid, bidConfig, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust])
+  }), [market, name, adGroup, portfolioId, biddingStrategy, sites, bidMult, products, svEnabled, budget, defaultBid, bidConfig, minMaxOn, targetMode, keywords, negKeywords, productTargets, campaignRules, autoBidAdjust])
   // CC-13 / CC-14 / CC-21 — what would stop the launch, and what only warns, shown on the review step.
   const { checks, checking } = useLaunchChecks(step === 2 && market ? launchUrl : null, payload)
   // CC-24 — one Idempotency-Key per Launch press, kept while the answer is unknown.
@@ -190,6 +204,8 @@ export function SingleCampaignBuilder() {
     // Never guess the launch target — a silent fallback would send the campaign
     // to the wrong country.
     if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
+    // CC-29 — a blank or zero budget/default bid is refused, never replaced by €10 / €0.75 behind the operator's back.
+    if (positiveAmount(budget) == null || positiveAmount(defaultBid) == null) { setLaunchErr('Enter a daily budget and a default bid above 0 (Budget & Default Bid). Nexus no longer fills a blank one in for you.'); return }
     setLaunching(true); setLaunchErr('')
     try {
       const out = await sendLaunch<{ placement?: { sent?: boolean; reason?: string } | null }>(launchKey, launchUrl, payload)
@@ -206,8 +222,8 @@ export function SingleCampaignBuilder() {
       }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, name, launchKey, launchUrl, payload, router, receipt.hold])
-  const bidLabel = bidConfig.strategy === 'none' ? 'None' : (({ maxImpressions: 'Max Impressions', targetAcos: 'Target ACoS', maxOrders: 'Max Orders', custom: 'Custom' } as Record<string, string>)[bidConfig.strategy] ?? '—')
+  }, [launching, market, name, budget, defaultBid, launchKey, launchUrl, payload, router, receipt.hold])
+  const bidLabel = bidConfig.strategy === 'none' ? 'None' : `${(({ maxImpressions: 'Max Impressions', targetAcos: 'Target ACoS', maxOrders: 'Max Orders', custom: 'Custom' } as Record<string, string>)[bidConfig.strategy] ?? '—')}${bidStrategyRuns(bidConfig.strategy) ? '' : ' (not running yet)'}`
   const placementParts = [bidMult.tos && `ToS ${bidMult.tos}%`, bidMult.pdp && `PDP ${bidMult.pdp}%`, bidMult.ros && `RoS ${bidMult.ros}%`].filter(Boolean)
   const boostChips = [bidMult.videoBoost && 'Video', bidMult.abBoost && 'Amazon Business', bidMult.audienceMod && 'Audience'].filter(Boolean) as string[]
   // SB.7 — Review: jump back to a step-1 section, and a pre-launch readiness check.
@@ -284,6 +300,7 @@ export function SingleCampaignBuilder() {
       </nav>
 
       <div className="h10-spw-body">
+        {marketNote && <Banner tone="warning" onDismiss={() => setMarketNote('')}>{marketNote}</Banner>}
         <HeldLaunchReceipt state={receipt} onContinue={toCampaigns} continueLabel="Go to campaigns" />
         {step === 1 && (
           <div className="h10-spw-s1">
@@ -306,7 +323,7 @@ export function SingleCampaignBuilder() {
                       <Input value={adGroup} onChange={(e) => setAdGroup(e.target.value)} placeholder="Enter Group name" fieldClassName="spw-field-full" />
                     </Field>
                     <Field className="spw-field" label="Portfolio (Optional)" info={<InfoTip tip="Group campaigns together to organize your advertising and manage budgets across them." />}>
-                      <PortfolioPicker value={portfolioId} onChange={setPortfolioId} />
+                      <PortfolioPicker value={portfolioId} onChange={setPortfolioId} market={market} />
                     </Field>
                   </div>
                 </div>
@@ -480,10 +497,10 @@ export function SingleCampaignBuilder() {
 
               <section className="h10-spw-sec">
                 <h2>Keyword and Bid Suggestion Automation</h2>
-                <p className="h10-spw-desc">Automation makes bid adjustments automatically. You can adjust automation for launched campaigns in Rules &amp; Automation.</p>
+                <p className="h10-spw-desc">With Target ACoS, the bid rule proposes bid changes on the Suggestions page; nothing changes until you approve. Switched off, the rule is created switched off. The other algorithms are not running yet. You can adjust automation for launched campaigns in Rules &amp; Automation.</p>
                 <span className="h10-scb-autotoggle">
-                  <Toggle checked={autoBidAdjust} onChange={setAutoBidAdjust} aria-label="Automatic Bid Adjustment" />
-                  Automatic Bid Adjustment
+                  <Toggle checked={autoBidAdjust} onChange={setAutoBidAdjust} aria-label="Bid Adjustment rule" />
+                  Bid Adjustment rule
                 </span>
               </section>
             </div>

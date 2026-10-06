@@ -23,14 +23,16 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { Layers, BarChart3 } from 'lucide-react'
 import { Button, Checkbox, Input, Toggle } from '@/design-system/primitives'
-import { Field } from '@/design-system/components'
+import { Banner, Field } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
 import { InfoTip } from '../../campaigns/InfoTip'
 import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSelection'
 import { defaultAutoGroups, type SpwCampaign } from '../sp-super-wizard/CampaignSetup'
-import { BidStrategyCardGrid, BID_STRATEGIES, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
+import { BidStrategyCardGrid, BID_STRATEGIES, bidStrategyRuns, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
+import { marketChangeNote, useOnMarketChange } from '../marketChange'
+import { missingBidOrBudget, positiveAmount } from '../launchValues'
 import { pcDefaultGroup } from '../../rules-automation/_shared/PerformanceCriteria'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -67,12 +69,14 @@ const QUICK_FUNNEL: QuickRole[] = [
 
 // Keyword & Bid Suggestion Automation — all ON by default (Helium 10 match). These drive the
 // rules matrix posted to the SPW launch endpoint; they create no new backend.
+// CC-4 / CC-32 — the words say what the rules do: they PROPOSE on the Suggestions page (control 'manual', dry run) and
+// change nothing until a person approves. The bid rule runs for Target ACoS only.
 type Toggles = { promotion: boolean; isolation: boolean; bidAdjustment: boolean; negativeAutomation: boolean }
 const AUTOMATION: Array<{ key: keyof Toggles; label: string; tip: string }> = [
-  { key: 'promotion', label: 'Automatic Keyword Promotion', tip: 'Promote converting search terms from the Auto & Research campaigns into Performance as exact keywords (and converting ASINs into Product Target).' },
-  { key: 'isolation', label: 'Search Term Isolation', tip: 'Once a term graduates, negate it in its source campaign so each search term serves from a single campaign.' },
-  { key: 'bidAdjustment', label: 'Automatic Bid Adjustment', tip: 'Let the chosen bid algorithm steer bids on a schedule.' },
-  { key: 'negativeAutomation', label: 'Negative Keyword Automation', tip: 'Negate wasteful, non-converting search terms automatically.' },
+  { key: 'promotion', label: 'Keyword Promotion', tip: 'Proposes moving converting search terms from the Auto & Research campaigns into Performance as exact keywords (and converting ASINs into Product Target). Each proposal waits on the Suggestions page for your approval.' },
+  { key: 'isolation', label: 'Search Term Isolation', tip: 'Once a term graduates, proposes negating it in its source campaign so each search term serves from a single campaign. Waits for your approval.' },
+  { key: 'bidAdjustment', label: 'Bid Adjustment', tip: 'With Target ACoS: one bid rule per campaign proposes bid changes toward your target, inside your Min/Max bid, for your approval. The other algorithms are not running yet and create no rule.' },
+  { key: 'negativeAutomation', label: 'Negative Keywords', tip: 'Proposes negating wasteful, non-converting search terms. Each proposal waits on the Suggestions page for your approval.' },
 ]
 
 const money = (n: number) => `${CURRENCY}${n.toFixed(2)}`
@@ -97,6 +101,13 @@ export function QuickBuilder() {
   // W2-A (CC-16) — the launch receipt: held when anything asked for is not live on Amazon, or not read back as asked.
   const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
   const receipt = useLaunchReceipt(toCampaigns)
+  // CC-6 — one market per launch: a market change drops the old market's products and says so.
+  const [marketNote, setMarketNote] = useState('')
+  useOnMarketChange(market, (prev, next) => {
+    setMarketNote(marketChangeNote(prev, next, products.length ? [`${products.length} product${products.length === 1 ? '' : 's'}`] : []))
+    setProducts([])
+    if (products.length) setStep(1)
+  })
 
   const setBid = (patch: Partial<BidConfig>) => setBidConfig((b) => ({ ...b, ...patch }))
   const toggle = (k: keyof Toggles) => setToggles((t) => ({ ...t, [k]: !t[k] }))
@@ -106,12 +117,15 @@ export function QuickBuilder() {
   const [sugBidEur, setSugBidEur] = useState<number | null>(null)
   useEffect(() => {
     let alive = true
-    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=IT`)
+    setSugBidEur(null)
+    if (!market) return () => { alive = false }
+    // CC-6 — the launch market's CPCs (it always asked for Italy's).
+    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=${encodeURIComponent(market)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (!alive || !j?.groups) return; const v = Object.values(j.groups as Record<string, number>).filter((n) => n > 0).sort((a, b) => a - b); if (v.length) setSugBidEur(v[Math.floor(v.length / 2)] / 100) })
       .catch(() => {})
     return () => { alive = false }
-  }, [])
+  }, [market])
   const sugBid = sugBidEur && sugBidEur > 0 ? sugBidEur : FALLBACK_BID
   const sugBudget = sugBid * BUDGET_MULT
 
@@ -138,7 +152,7 @@ export function QuickBuilder() {
   const goNext = useCallback(() => setStep((s) => (s < 2 ? ((s + 1) as StepN) : s)), [])
   const goBack = useCallback(() => setStep((s) => (s > 1 ? ((s - 1) as StepN) : s)), [])
 
-  const algoLabel = bidConfig.strategy === 'none' ? 'None' : BID_STRATEGIES.find((s) => s.key === bidConfig.strategy)?.label ?? '—'
+  const algoLabel = bidConfig.strategy === 'none' ? 'None' : `${BID_STRATEGIES.find((s) => s.key === bidConfig.strategy)?.label ?? '—'}${bidStrategyRuns(bidConfig.strategy) ? '' : ' (not running yet)'}`
 
   // Q.5 — gated launch via the SHARED SP-Super-Wizard endpoint: a fixed 4-campaign preset + a
   // harvest/negative rules matrix derived from the four toggles. Nothing hits Amazon until a
@@ -159,9 +173,9 @@ export function QuickBuilder() {
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
         campaigns: campaigns.map((c) => ({
           id: c.id, name: c.name, adGroupName: c.adGroupName, kind: c.kind, matchType: c.matchType,
-          bidEur: Number(c.bid) || sugBid, budgetEur: Number(c.budget) || sugBudget,
+          bidEur: positiveAmount(c.bid), budgetEur: positiveAmount(c.budget),
           keywords: [], productTargets: [],
-          autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: Number(g.bid) || Number(c.bid) || sugBid })) : undefined,
+          autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: positiveAmount(g.bid) ?? positiveAmount(c.bid) })) : undefined,
           negKeywords: [], negProducts: [],
         })),
         rules: {
@@ -175,9 +189,10 @@ export function QuickBuilder() {
           } : undefined,
         },
         automationMode: 'rule' as const,
-        bidConfig: (toggles.bidAdjustment && bidConfig.strategy !== 'none') ? bidConfig : undefined,
+        // The Min/Max bid travel only when their box is ticked: the Target ACoS rule now honours them.
+        bidConfig: (toggles.bidAdjustment && bidConfig.strategy !== 'none') ? { ...bidConfig, ...(minMaxOn ? {} : { minBid: '', maxBid: '' }) } : undefined,
     }
-  }, [market, productGroupName, products, campaigns, toggles, bidConfig, sugBid, sugBudget])
+  }, [market, productGroupName, products, campaigns, toggles, bidConfig, minMaxOn])
   // CC-13 / CC-14 / CC-21 — what would stop the launch, and what only warns, shown on the review step.
   const { checks, checking } = useLaunchChecks(step === 2 && market ? launchUrl : null, payload)
   // CC-24 — one Idempotency-Key per Launch press, kept while the answer is unknown.
@@ -188,6 +203,9 @@ export function QuickBuilder() {
     // Never guess the launch target — a silent fallback would send the campaign
     // to the wrong country.
     if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
+    // CC-29 — a blank or zero bid/budget is refused, never replaced behind the operator's back.
+    const missing = missingBidOrBudget(campaigns)
+    if (missing) { setLaunchErr(missing); return }
     setLaunching(true); setLaunchErr('')
     try {
       const out = await sendLaunch(launchKey, launchUrl, payload)
@@ -197,7 +215,7 @@ export function QuickBuilder() {
       if (receipt.hold(out.body)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, canNext, launchKey, launchUrl, payload, router, receipt.hold])
+  }, [launching, market, canNext, campaigns, launchKey, launchUrl, payload, router, receipt.hold])
 
   return (
     <div className="h10-spw h10-qcb">
@@ -231,6 +249,7 @@ export function QuickBuilder() {
       </nav>
 
       <div className="h10-spw-body">
+        {marketNote && <Banner tone="warning" onDismiss={() => setMarketNote('')}>{marketNote}</Banner>}
         <HeldLaunchReceipt state={receipt} onContinue={toCampaigns} continueLabel="Go to campaigns" />
         {step === 1 && (
           <div className="h10-qcb-s1">
@@ -271,7 +290,7 @@ export function QuickBuilder() {
                         </span>
                       </div>
                     ) : (
-                      <p className="h10-qcb-custom-note">A custom bid rule will be created for this funnel — fine-tune its performance criteria in Rules &amp; Automation after launch.</p>
+                      <p className="h10-qcb-custom-note">Custom is not running yet: no bid rule is created for it. To adjust bids on your own criteria, build a Bid rule in Rules &amp; Automation after launch.</p>
                     )}
                   </div>
                 )}
@@ -318,7 +337,7 @@ export function QuickBuilder() {
 
             <section className="h10-spw-sec">
               <h2>Keyword and Bid Suggestion Automation</h2>
-              <p className="h10-spw-desc">Automation makes bid adjustments automatically. You can adjust automation for launched campaigns in Rules &amp; Automation.</p>
+              <p className="h10-spw-desc">These rules propose changes on the Suggestions page; nothing changes until you approve it. You can adjust them for launched campaigns in Rules &amp; Automation.</p>
               <div className="h10-spw-card h10-qcb-autom">
                 {AUTOMATION.map((a) => (
                   <span key={a.key} className="h10-qcb-toggle">

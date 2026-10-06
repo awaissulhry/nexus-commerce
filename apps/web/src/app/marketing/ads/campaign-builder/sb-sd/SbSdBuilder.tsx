@@ -24,6 +24,7 @@ import { Button, Checkbox, Input, Radio, RadioCard, Select, Textarea, TokenChip 
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import './sb-sd.css'
+import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import {
   SB_CREATIVE_CHOICES, SD_VIEWS_LOOKBACK_DAYS, partlyMadeSummary, sbCreativeAsins, sbCreativeScreenProblems, sbCreativeSpec,
   type LiveOnAmazon, type SbCreativeChoice,
@@ -71,8 +72,11 @@ export function SbSdBuilder() {
   const params = useSearchParams()
   const initial = (params.get('type') === 'SB' ? 'SB' : 'SD') as AdType
   const [type, setType] = useState<AdType>(initial)
-  const [marketplace, setMarketplace] = useState('IT')
-  const [markets, setMarkets] = useState<string[]>(['IT', 'DE', 'FR', 'ES'])
+  // CC-19 — the connected markets and the console's launch market. The list was built from campaign rows (sandbox
+  // markets included) and the choice defaulted to Italy; a market a campaign cannot reach is now listed disabled, with why.
+  const { market: consoleMarket, markets: connected } = useAdsMarketplace()
+  const [marketplace, setMarketplace] = useState('')
+  useEffect(() => { if (!marketplace && consoleMarket) setMarketplace(consoleMarket) }, [marketplace, consoleMarket])
   const [name, setName] = useState('')
   const [budget, setBudget] = useState('20')
   const [tactic, setTactic] = useState<'T00020' | 'T00030'>('T00020')
@@ -109,7 +113,7 @@ export function SbSdBuilder() {
   // The SB creative's brand assets are cloned from an existing SB campaign in this marketplace.
   // Fetched up front so the operator sees WHOSE creative is being reused before creating one.
   useEffect(() => {
-    if (type !== 'SB') { setSbTemplate(null); return }
+    if (type !== 'SB' || !marketplace) { setSbTemplate(null); return }
     let alive = true
     fetch(`${getBackendUrl()}/api/advertising/sb-template?marketplace=${encodeURIComponent(marketplace)}`)
       .then((r) => r.json())
@@ -118,16 +122,6 @@ export function SbSdBuilder() {
     return () => { alive = false }
   }, [type, marketplace])
 
-  useEffect(() => {
-    let alive = true
-    fetch(`${getBackendUrl()}/api/advertising/campaigns?limit=500`)
-      .then((r) => r.json()).then((j) => {
-        if (!alive) return
-        const ms = Array.from(new Set((j?.items ?? []).map((c: { marketplace?: string | null }) => (c.marketplace ?? '').toUpperCase()).filter(Boolean))) as string[]
-        if (ms.length) setMarkets(ms)
-      }).catch(() => {})
-    return () => { alive = false }
-  }, [])
 
   const budgetNum = Number(budget)
   const bidNum = Number(defaultBid)
@@ -154,7 +148,7 @@ export function SbSdBuilder() {
 
   useEffect(() => {
     const term = q.trim()
-    if (term.length < 2) { setFound([]); setSearchError(null); return }
+    if (term.length < 2 || !marketplace) { setFound([]); setSearchError(null); return }
     let alive = true
     setSearching(true); setSearchError(null)
     const t = setTimeout(() => {
@@ -429,7 +423,8 @@ export function SbSdBuilder() {
             <label className="f">
               <span>Marketplace</span>
               <Select value={marketplace} onChange={(e) => setMarketplace(e.target.value)} aria-label="Marketplace">
-                {markets.map((m) => <option key={m} value={m}>{FLAG[m] ?? ''} {m}</option>)}
+                {!marketplace && <option value="">Select a marketplace</option>}
+                {connected.map((m) => <option key={m.code} value={m.code} disabled={!m.launchable}>{FLAG[m.code] ?? ''} {m.code}{m.launchable ? '' : ` — ${m.whyNotShort ?? m.mode}`}</option>)}
               </Select>
             </label>
             <label className="f wide">

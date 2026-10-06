@@ -1199,7 +1199,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       portfolioId?: string
       dryRun?: boolean
     }
-    const market = b.market || 'IT'
+    // CC-29 / CC-5 — one market per launch, never guessed (it used to become IT), and never a portfolio Amazon does not know.
+    const { launchMarketRefusal, localPortfolioRefusal, bidStrategyRules } = await import('../services/advertising/ads-launch-guards.js')
+    const refused = launchMarketRefusal(b.market) ?? localPortfolioRefusal(b.portfolioId)
+    if (refused) { reply.status(400); return { ok: false, error: refused } }
+    const market = String(b.market).trim()
     const products = (b.products ?? []).filter((p) => p && (p.asin || p.sku || p.productId))
     const campaigns = (b.campaigns ?? []).filter((c) => c && c.name)
     if (!campaigns.length) { reply.status(400); return { error: 'no campaigns to create' } }
@@ -1377,30 +1381,19 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     if (created.length && b.rules) { await buildRule(b.rules.harvest, 'harvest'); await buildRule(b.rules.negative, 'negative') }
 
-    // S3.5 — persist the chosen bid strategy as a bid-management rule scoped to the
-    // new campaigns (Target ACoS → the bid_to_target_acos action; others stored
-    // forward-looking). Gated dryRun. Skipped under AI Control / strategy None.
+    // S3.5 · CC-4 — the chosen bid strategy as rules the engine runs: Target ACoS → one bid_to_target_acos rule per new
+    // campaign (a fraction, one campaignId). Strategies with no engine create no rule ("not running yet"). Gated
+    // dryRun. Skipped under AI Control / strategy None.
     if (created.length && b.automationMode === 'rule' && b.bidConfig?.strategy && b.bidConfig.strategy !== 'none') {
-      try {
-        const bc = b.bidConfig
-        const minBidEur = Number(bc.minBid) || undefined
-        const maxBidEur = Number(bc.maxBid) || undefined
-        const campaignIds = created.map((c) => c.campaignId)
-        const action = bc.strategy === 'targetAcos'
-          ? { type: 'bid_to_target_acos', targetAcos: Number(bc.targetAcos) || 30, minBidEur, maxBidEur, campaignIds }
-          : { type: 'set_bid_strategy', strategy: bc.strategy, minBidEur, maxBidEur, campaignIds }
-        const label = bc.strategy === 'targetAcos' ? 'Target ACoS' : bc.strategy === 'maxImpressions' ? 'Max Impressions' : bc.strategy === 'maxOrders' ? 'Max Orders' : 'Custom'
-        const rule = await prisma.automationRule.create({
-          data: {
-            name: `${(b.productGroupName || 'Campaign').trim()} — ${label} bidding`.slice(0, 120),
-            description: 'Bid strategy from SP Super Wizard', domain: 'advertising', trigger: 'SCHEDULE',
-            conditions: [] as never, actions: [action] as never,
-            enabled: true, dryRun: true, maxExecutionsPerDay: 4, createdBy: userId ?? null,
-          },
-        })
-        rulesCreated.push({ id: rule.id, name: rule.name })
-        logger.warn('[SPW-launch] created bid-strategy rule', { ruleId: rule.id, strategy: bc.strategy })
-      } catch (e) { logger.error('[SPW-launch] bid rule create failed', { error: (e as Error).message }) }
+      const plan = bidStrategyRules({ bidConfig: b.bidConfig, campaigns: created.map((c) => ({ id: c.campaignId, name: c.name })), market, enabled: true, createdBy: userId ?? null, source: 'SP Super Wizard' })
+      if (plan.note) logger.warn('[SPW-launch] no bid-strategy rule', { strategy: b.bidConfig.strategy, note: plan.note })
+      for (const data of plan.rules) {
+        try {
+          const rule = await prisma.automationRule.create({ data: data as never })
+          rulesCreated.push({ id: rule.id, name: rule.name })
+          logger.warn('[SPW-launch] created bid-strategy rule', { ruleId: rule.id, strategy: b.bidConfig.strategy })
+        } catch (e) { logger.error('[SPW-launch] bid rule create failed', { error: (e as Error).message }) }
+      }
     }
 
     logger.warn('[SPW-launch] SP Super Wizard created campaigns', { market, grp: (b.productGroupName || '').trim(), count: created.length, rules: rulesCreated.length, actor: userId })
@@ -1437,8 +1430,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── AT.3 — suggested bid per Auto-targeting group (READ; works pre-launch + while
   // writes are gated). Anchored to the account's OWN median CPC (data-grounded, via
   // ads-bid-suggest), scaled by the same intent multipliers as the smart defaults. ──
-  fastify.get('/advertising/campaign-builder/auto-bid-suggestions', async (request) => {
-    const market = (request.query as { market?: string })?.market || 'IT'
+  fastify.get('/advertising/campaign-builder/auto-bid-suggestions', async (request, reply) => {
+    // CC-6 — the launch market's own CPCs. Every builder sent `market=IT`, and a missing market became IT.
+    const market = ((request.query as { market?: string })?.market ?? '').trim()
+    if (!market) { reply.status(400); return { ok: false, error: 'market is required' } }
     const { suggestBids } = await import('../services/advertising/ads-bid-suggest.service.js')
     const base = await suggestBids({ keywords: [], marketplace: market })
     const baseCents = base.defaultBidCents
@@ -2170,9 +2165,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── GET /advertising/summary ────────────────────────────────────────
-  fastify.get('/advertising/summary', async (_request, reply) => {
+  fastify.get('/advertising/summary', async (request, reply) => {
     const now = new Date()
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    // AM-15 — the Dashboard's market picker. Campaigns and true margin follow the chosen market, like Spend/Sales
+    // beside them; no marketplace = every market, as before. `agedSkusFlagged` (the Health page) stays account-wide.
+    const mp = (request.query as { marketplace?: string }).marketplace || null
+    const inMarket = mp ? { marketplace: mp } : {}
 
     /**
      * ACR.0.5 — the margin headline is computed over the rows that HAVE a profit, not over
@@ -2182,16 +2181,16 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
      * "we measured this and it is zero". Null plus a coverage share instead.
      */
     const [campaignCount, agg, covered, estimatedRows, agedCritical] = await Promise.all([
-      prisma.campaign.count({ where: { status: { in: ['ENABLED', 'PAUSED'] } } }),
+      prisma.campaign.count({ where: { status: { in: ['ENABLED', 'PAUSED'] }, ...inMarket } }),
       prisma.productProfitDaily.aggregate({
-        where: { date: { gte: thirtyDaysAgo } },
+        where: { date: { gte: thirtyDaysAgo }, ...inMarket },
         _sum: {
           grossRevenueCents: true,
           advertisingSpendCents: true,
         },
       }),
       prisma.productProfitDaily.aggregate({
-        where: { date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null } },
+        where: { date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null }, ...inMarket },
         _sum: { grossRevenueCents: true, trueProfitCents: true },
         _count: true,
       }),
@@ -2200,7 +2199,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       // confusion ACR.0.5 existed to remove — only now with a plausible number instead of a zero.
       prisma.productProfitDaily.count({
         where: {
-          date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null },
+          date: { gte: thirtyDaysAgo }, trueProfitCents: { not: null }, ...inMarket,
           coverage: { path: ['costEstimated'], equals: true },
         },
       }).catch(() => 0),
@@ -7601,7 +7600,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const q = request.query as Record<string, string | undefined>
     const { getMomentum } = await import('../services/advertising/ads-momentum.service.js')
     reply.header('Cache-Control', 'private, max-age=120')
-    return getMomentum({ date: q.date })
+    return getMomentum({ date: q.date, marketplace: q.marketplace || null })
   })
 
   // ── AX3.10: Budget Manager ──────────────────────────────────────────
@@ -10036,7 +10035,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const body = request.body as { name?: string; marketplace?: string }
     const name = (body.name ?? '').trim()
     if (!name) { reply.status(400); return { error: 'name required' } }
-    const marketplace = body.marketplace || 'IT'
+    // CC-5 — a portfolio belongs to one market's profile; a missing market used to create it in Italy.
+    const marketplace = (body.marketplace ?? '').trim()
+    if (!marketplace) { reply.status(400); return { error: 'marketplace required: a portfolio belongs to one market' } }
     let externalId: string | null = null, mode = 'local', profileId = `local-${marketplace}`
     try {
       const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })

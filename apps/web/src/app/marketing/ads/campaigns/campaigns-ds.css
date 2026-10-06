@@ -97,3 +97,9 @@
    the DS trigger sizes to its content. */
 .cd-datefield { width: 200px; max-width: 200px; }
 .cd-datefield .nds-listbox-btn { width: 100%; height: 38px; }
+
+/* AM-12 — the Campaign Rules dialog: the notes under its rule table. */
+.am-rules-note { margin: 10px 2px 0; font-size: var(--nds-font-size-sm); line-height: 1.45; color: var(--nds-text-muted); }
+
+/* CM-26 — a held cell on a Sponsored Brands / Display row: the value read-only, the reason icon beside it. */
+.am-held { display: inline-flex; align-items: center; gap: 4px; }

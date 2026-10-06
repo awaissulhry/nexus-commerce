@@ -28,7 +28,7 @@ import { useRouter } from '@/lib/workspaces/navigation'
 import Link from '@/lib/workspaces/Link'
 import { Layers, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, Checkbox, Input } from '@/design-system/primitives'
-import { Field } from '@/design-system/components'
+import { Banner, Field } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'
 import { MarketSelect } from '../../_shell/MarketSelect'
@@ -37,7 +37,9 @@ import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSel
 import { defaultAutoGroups, type SpwCampaign } from '../sp-super-wizard/CampaignSetup'
 import { RuleControlPanel } from '../sp-super-wizard/RuleControlPanel'
 import { defaultRulesConfig, type RulesConfig } from '../sp-super-wizard/LaunchStep'
-import { BidStrategyCardGrid, BID_STRATEGIES, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
+import { BidStrategyCardGrid, BID_STRATEGIES, bidStrategyRuns, defaultBidConfig, type BidConfig } from '../../_shared/BidStrategy'
+import { marketChangeNote, useOnMarketChange } from '../marketChange'
+import { missingBidOrBudget, positiveAmount } from '../launchValues'
 import { CampaignTypeSelect, AD_PRODUCT_META, type AdProduct } from '../../_shared/CampaignTypeSelect'
 import { KeywordTargetingPanel, deriveKeywordSuggestions, type KwBid, type NegKw } from '../../_shared/KeywordTargetingPanel'
 import { HarvestRules } from '../../_shared/HarvestRules'
@@ -122,6 +124,13 @@ export function GuidedBuilder() {
   // W2-A (CC-16) — the launch receipt: held when anything asked for is not live on Amazon, or not read back as asked.
   const toCampaigns = useCallback(() => router.push('/marketing/ads/campaigns'), [router])
   const receipt = useLaunchReceipt(toCampaigns)
+  // CC-6 — one market per launch: a market change drops the old market's products and says so.
+  const [marketNote, setMarketNote] = useState('')
+  useOnMarketChange(market, (prev, next) => {
+    setMarketNote(marketChangeNote(prev, next, products.length ? [`${products.length} product${products.length === 1 ? '' : 's'}`] : []))
+    setProducts([])
+    if (products.length) setStep(1)
+  })
 
   const setBid = (patch: Partial<BidConfig>) => setBidConfig((b) => ({ ...b, ...patch }))
 
@@ -129,12 +138,15 @@ export function GuidedBuilder() {
   const [sugBidEur, setSugBidEur] = useState<number | null>(null)
   useEffect(() => {
     let alive = true
-    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=IT`)
+    setSugBidEur(null)
+    if (!market) return () => { alive = false }
+    // CC-6 — the launch market's CPCs (it always asked for Italy's).
+    fetch(`${getBackendUrl()}/api/advertising/campaign-builder/auto-bid-suggestions?market=${encodeURIComponent(market)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (!alive || !j?.groups) return; const v = Object.values(j.groups as Record<string, number>).filter((n) => n > 0).sort((a, b) => a - b); if (v.length) setSugBidEur(v[Math.floor(v.length / 2)] / 100) })
       .catch(() => {})
     return () => { alive = false }
-  }, [])
+  }, [market])
   const sugBid = sugBidEur && sugBidEur > 0 ? sugBidEur : FALLBACK_BID
   const sugBudget = sugBid * BUDGET_MULT
 
@@ -186,7 +198,7 @@ export function GuidedBuilder() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaigns.map((c) => c.id).join('|')])
 
-  const algoLabel = bidConfig.strategy === 'none' ? 'None' : BID_STRATEGIES.find((s) => s.key === bidConfig.strategy)?.label ?? '—'
+  const algoLabel = bidConfig.strategy === 'none' ? 'None' : `${BID_STRATEGIES.find((s) => s.key === bidConfig.strategy)?.label ?? '—'}${bidStrategyRuns(bidConfig.strategy) ? '' : ' (not running yet)'}`
   const stageLabel = bidConfig.strategy === 'none' ? 'None' : BID_STRATEGIES.find((s) => s.key === bidConfig.strategy)?.stage ?? '—'
   const targetValue = bidConfig.strategy === 'targetAcos' && bidConfig.targetAcos.trim() ? `${bidConfig.targetAcos}%` : '—'
   const kwSuggestions = useMemo(() => deriveKeywordSuggestions(products.map((p) => p.name)), [products])
@@ -222,10 +234,10 @@ export function GuidedBuilder() {
         products: products.map((p) => ({ asin: p.asin || undefined, sku: p.sku || undefined, productId: p.id })),
         campaigns: campaigns.map((c) => ({
           id: c.id, name: c.name, adGroupName: c.adGroupName, kind: c.kind, matchType: c.matchType, adProduct: c.adProduct,
-          bidEur: Number(c.bid) || sugBid, budgetEur: Number(c.budget) || sugBudget,
+          bidEur: positiveAmount(c.bid), budgetEur: positiveAmount(c.budget),
           keywords: c.kind === 'keyword' && c.role === 'Research' ? researchKeywords : [],
           productTargets: [],
-          autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: Number(g.bid) || Number(c.bid) || sugBid })) : undefined,
+          autoGroups: c.kind === 'auto' ? c.autoGroups.map((g) => ({ key: g.key, enabled: g.enabled, bidEur: positiveAmount(g.bid) ?? positiveAmount(c.bid) })) : undefined,
           negKeywords: c.role === 'Research' ? negKeywords.map((n) => ({ text: n.text, matchType: n.matchType })) : [],
           negProducts: [],
           creative: c.adProduct === 'SB' ? sbCreative : undefined,
@@ -235,9 +247,10 @@ export function GuidedBuilder() {
           negative: { ruleName: rules.negative.ruleName || `${grp} — Negative Targeting`, automate: rules.negative.automate, perf: rules.negative.perf, rows: rules.negative.sel },
         },
         automationMode: 'rule' as const,
-        bidConfig: bidConfig.strategy !== 'none' ? bidConfig : undefined,
+        // The Min/Max bid travel only when their box is ticked: the Target ACoS rule now honours them.
+        bidConfig: bidConfig.strategy !== 'none' ? { ...bidConfig, ...(minMaxOn ? {} : { minBid: '', maxBid: '' }) } : undefined,
     }
-  }, [market, productGroupName, products, campaigns, keywords, negKeywords, rules, bidConfig, sbCreative, sugBid, sugBudget])
+  }, [market, productGroupName, products, campaigns, keywords, negKeywords, rules, bidConfig, minMaxOn, sbCreative])
   // CC-13 / CC-14 / CC-21 — what would stop the launch, and what only warns, shown on the review step.
   const { checks, checking } = useLaunchChecks(step === 4 && market ? launchUrl : null, payload)
   // CC-24 — one Idempotency-Key per Launch press, kept while the answer is unknown.
@@ -249,6 +262,9 @@ export function GuidedBuilder() {
     // Never guess the launch target — a silent fallback would send the campaign
     // to the wrong country.
     if (!market) { setLaunchErr('No launchable Amazon marketplace is selected.'); return }
+    // CC-29 — a blank or zero bid/budget is refused, never replaced behind the operator's back.
+    const missing = missingBidOrBudget(campaigns)
+    if (missing) { setLaunchErr(missing); return }
     setLaunching(true); setLaunchErr('')
     try {
       const out = await sendLaunch(launchKey, launchUrl, payload)
@@ -258,7 +274,7 @@ export function GuidedBuilder() {
       if (receipt.hold(out.body)) { setLaunching(false); return }
       router.push('/marketing/ads/campaigns')
     } catch (e) { setLaunchErr((e as Error).message); setLaunching(false) }
-  }, [launching, market, launchKey, launchUrl, payload, router, receipt.hold])
+  }, [launching, market, campaigns, launchKey, launchUrl, payload, router, receipt.hold])
 
   const typeCampaigns = (t: AdProduct) => campaigns.filter((c) => c.adProduct === t)
 
@@ -297,6 +313,7 @@ export function GuidedBuilder() {
       </nav>
 
       <div className="h10-spw-body">
+        {marketNote && <Banner tone="warning" onDismiss={() => setMarketNote('')}>{marketNote}</Banner>}
         <HeldLaunchReceipt state={receipt} onContinue={toCampaigns} continueLabel="Go to campaigns" />
         {/* Step 1 — Product Selection (= Quick's step 1) */}
         {step === 1 && (
