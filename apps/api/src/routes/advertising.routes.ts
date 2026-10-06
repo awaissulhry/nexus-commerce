@@ -7563,12 +7563,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     try { return await setCampaignLimit({ marketplace: b.marketplace, month: b.month || currentMonth(), campaignId: b.campaignId, minCents: b.minCents ?? null, maxCents: b.maxCents ?? null }) }
     catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
-  // BM.B3 — enforcement preview: what Auto Pacing / Stop Over Spend WOULD do (dry-run).
+  // BM.B3 — enforcement preview: what Auto Pacing / Stop Over Spend do on the next run. AM-8 — `engine` says whether
+  // that run applies (the engine's own gate + write mode + dial), so the Budget Manager never asserts it.
   fastify.get('/advertising/budget-manager/enforcement', async (request, reply) => {
     const q = request.query as Record<string, string | undefined>
-    const { computeBudgetEnforcement } = await import('../services/advertising/ads-budget-enforce.service.js')
+    const { computeBudgetEnforcement, budgetEnforceMode } = await import('../services/advertising/ads-budget-enforce.service.js')
     reply.header('Cache-Control', 'private, max-age=30')
-    return computeBudgetEnforcement({ month: q.month })
+    const [result, engine] = await Promise.all([computeBudgetEnforcement({ month: q.month }), budgetEnforceMode()])
+    return { ...result, engine }
   })
 
   /**

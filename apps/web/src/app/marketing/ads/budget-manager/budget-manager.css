@@ -259,3 +259,8 @@
 .bp-histrow .t { font-family: var(--nds-font-mono); color: var(--nds-grey-600); }
 .bp-histrow .by { font-family: var(--nds-font-mono); font-size: 10.5px; }
 .bp-histrow .sh { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+/* AM-8 — the budget engine's real mode, under the month bar. */
+.bm-engine { margin: 0 0 10px; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.bm-engine b { color: var(--nds-text-strong); }
+.bm-engine.is-live b { color: var(--nds-warning-text); }
