@@ -172,7 +172,7 @@ describe('AA-W2-9 — an undo is a change set of its own, and is judged row by r
       const cut = await ask('set-target-bid', { targetId: 't-it', proposedBidCents: now - 4 })
       await approve(cut.approvalId!)
       const raise = (await preview('undo-ad-change', { changeSetId: cut.approvalId })).preview as Row
-      expect(raise).toMatchObject({ ruleReach: { reach: 'sandbox' }, notJudgedByRule: [], limitFacts: { action: 'undo', this: { items: 1, raises: 1, cuts: 0 } } })
+      expect(raise).toMatchObject({ ruleGate: null, notJudgedByRule: [], limitFacts: { action: 'undo', this: { items: 1, raises: 1, cuts: 0 } } })
       expect(judged(raise)).toMatch(/^its largest raise is [\d.]+ %, more than the 0 % this tool's limits let run without a person/)
       expect(judged(raise, { maxRaisePct: 20 })).toBeNull()
       // A status put back (here a pause made in Nexus) is not judged by rule: a person decides.

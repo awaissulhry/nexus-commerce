@@ -378,7 +378,7 @@ describe('A12 — set-campaign-live-writes (the allowlist, d2)', () => {
 
 /**
  * ADS AUTONOMY AA-W2-8 — set-campaign-budget and set-placement-multipliers may run by the business's rule: each preview
- * carries the ads strategy's facts (limitFacts) and the write gate's answer for the rule's own write (ruleReach), so
+ * carries the ads strategy's facts (limitFacts) and the write gate's answer for the rule's own write (ruleGate), so
  * `withinLimits` judges it without a read. The door-level runs (level, strategy, commit) are in claude-strategy.vitest.
  */
 describe('AA-W2-8 — budgets and placements carry what a run by rule is judged on', () => {
@@ -389,7 +389,7 @@ describe('AA-W2-8 — budgets and placements carry what a run by rule is judged 
     expect(tool('set-campaign-budget').limits!.parse({})).toEqual({ maxItems: 1, maxChangesPerEntityPerDay: 1, allowEngineOwned: false, maxRaisePct: 0, maxCutPct: 100 })
     expect(tool('set-placement-multipliers').limits!.parse({})).toEqual({ maxItems: 3, maxChangesPerEntityPerDay: 1, allowEngineOwned: false, maxRaisePoints: 0, maxCutPoints: 100 })
     const cut = (await preview('set-campaign-budget', { campaignId: 'c-uk', dailyBudgetCents: 1000 })).preview as Row
-    expect(cut).toMatchObject({ ruleReach: { reach: 'sandbox' }, limitFacts: { action: 'budget', this: { markets: ['UK'], cuts: 1, raises: 0 }, markets: { UK: { strategy: null } } } })
+    expect(cut).toMatchObject({ ruleGate: null, limitFacts: { action: 'budget', this: { markets: ['UK'], cuts: 1, raises: 0 }, markets: { UK: { strategy: null } } } })
     expect(cut.limitsNote).toContain('UK: no ads strategy — nothing runs alone there.')
     expect(judged('set-campaign-budget', cut)).toBe('there is no ads strategy for UK: nothing runs alone there; a person decides')
     // No facts, no run: a preview made before this (or one whose strategy could not be read) waits for a person.
@@ -402,10 +402,10 @@ describe('AA-W2-8 — budgets and placements carry what a run by rule is judged 
     vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
     const p = (await preview('set-campaign-budget', { campaignId: 'c-off', dailyBudgetCents: 1500 })).preview as Row
     expect(p.reach).toMatchObject({ reach: 'live', profileId: 'P-IT-TEST' })
-    expect(p.ruleReach).toMatchObject({ reach: 'refused', deniedAt: 'campaign_allowlist' })
+    expect(p.ruleGate).toMatch(/^campaign "Italy not allowlisted": Amazon's write gate refuses it as a run by rule — .*allowlist/)
     // Inside the strategy in every other way (a covered market with room for a change today): the gate still holds it.
     const covered = { ...p, limitFacts: { ...p.limitFacts, markets: { IT: { ...p.limitFacts.markets.IT, strategy: { version: 'test' }, maxChangesPerDay: 5 } } } }
-    expect(judged('set-campaign-budget', covered)).toMatch(/^run by rule, Amazon's write gate would refuse it — .+; a person decides \(a person's approval is his own click\)$/)
+    expect(judged('set-campaign-budget', covered)).toMatch(/^campaign "Italy not allowlisted": Amazon's write gate refuses it as a run by rule — .+; a person decides$/)
   })
 
   it('run by rule (no person approved it), the write is the machine\'s and the audit says the rule decided it', async () => {
