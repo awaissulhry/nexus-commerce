@@ -162,6 +162,12 @@ export interface ThisChange {
   largestCutPoints: number
   highestNewBidCents: number | null
   budgetIncreaseCents: number
+  /**
+   * AA-W2-7 — raises of a bid or a budget from 0 (or from none): no percent measures them. `unboundedRaises`: those
+   * where the ads strategy sets no highest bid either (a budget has none), so nothing bounds them. Absent: none.
+   */
+  raisesFromZero?: number
+  unboundedRaises?: number
   byMarket: Record<string, DayCounts & { addedDailyCents: number }>
   /** Every entity it touches, once: the per-entity ledger counts runs by these keys. */
   entities: string[]
@@ -407,6 +413,12 @@ export async function buildLimitFacts(input: {
 
     const scopeFacts = facts.scopes[facts.entityScopes[key] ?? '']
     if (!scopeFacts) continue
+    // AA-W2-7 — a raise from 0 has no percent: held by the strategy's highest bid where it lands, else unbounded.
+    if (m.direction === 'raise' && m.pct == null && (item.change.field === 'bid' || item.change.field === 'dailyBudget')) {
+      t.raisesFromZero = (t.raisesFromZero ?? 0) + 1
+      const capped = item.change.field === 'bid' && scopeFacts.limits.maxBidCents != null && !!scopeFacts.sources.maxBidCents
+      if (!capped) t.unboundedRaises = (t.unboundedRaises ?? 0) + 1
+    }
     // Every row against its own scope's strategy (a bulk change too: not only the lines its preview shows).
     if (item.change.field === 'bid') {
       const why = bidOutsideWhy(item.change, scopeFacts, scope.currency ?? facts.markets[scopeFacts.market]?.currency ?? 'EUR')
@@ -490,7 +502,7 @@ export const STEP_POINT_LIMITS = {
 
 type Limits = Record<string, unknown>
 const numberIn = (limits: Limits, key: string, fallback: number) => (typeof limits[key] === 'number' ? (limits[key] as number) : fallback)
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`
 const A_PERSON = 'a person decides'
 /** The strategy's names of Claude's daily limits (fields.ts labels, lower-cased). */
 const DAILY_WORDS: Record<'maxChangesPerDay' | 'maxRaisesPerDay' | 'maxBudgetIncreasePerDayCents', string> = {
@@ -647,9 +659,20 @@ export function itemsRefusal(facts: LimitFacts, limits: Limits): string | null {
   return null
 }
 
-/** The tool's own raise and cut steps (STEP_PCT_LIMITS, STEP_POINT_LIMITS), when its limits hold them. */
+/**
+ * The tool's own raise and cut steps (STEP_PCT_LIMITS, STEP_POINT_LIMITS), when its limits hold them. AA-W2-7 — a raise
+ * from 0 (no percent measures it) is outside any raise step unless the ads strategy's highest bid bounds it where it
+ * lands, and outside a raise step of 0 either way.
+ */
 export function stepRefusal(facts: LimitFacts, limits: Limits): string | null {
   const t = facts.this
+  if (typeof limits.maxRaisePct === 'number') {
+    const max = limits.maxRaisePct
+    const unbounded = t.unboundedRaises ?? 0
+    const fromZero = t.raisesFromZero ?? 0
+    if (unbounded) return `it raises ${plural(unbounded, 'bid or budget', 'bids or budgets')} from 0, which no percent measures, and the ads strategy sets no highest bid that bounds it: an unbounded raise, more than the ${max} % this tool's limits let run without a person`
+    if (fromZero && max === 0) return `it raises ${plural(fromZero, 'bid', 'bids')} from 0, and this tool's limits let no raise run without a person (0: every raise waits for a person)`
+  }
   const over = (moved: number, key: string, unit: string, what: string) =>
     typeof limits[key] === 'number' && moved > (limits[key] as number)
       ? `its largest ${what} is ${moved}${unit}, more than the ${limits[key]}${unit} this tool's limits let run without a person${limits[key] === 0 ? ` (0: every ${what} waits for a person)` : ''}`

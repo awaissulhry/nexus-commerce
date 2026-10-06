@@ -6,8 +6,9 @@
  * nothing leaves the process. Values are made up (public repo).
  *
  *   negative   a term that meets "Negate a search term when" over the strategy's window (not the preview's 60 days)
- *              runs by rule as an exact negative; one that does not, a phrase negative (until allowed), and a term where
- *              the strategy sets no negate group wait for a person; a protected product's ASIN is never negated
+ *              runs by rule as an exact negative; one that does not, a phrase negative (until allowed), a term where
+ *              the strategy sets no negate group, and a term that meets the harvest group (harvest first, whatever the
+ *              negate group's most orders) wait for a person; a protected product's ASIN is never negated
  *   harvest    a term that meets "Harvest a search term when" where it converted runs by rule once the business sets a
  *              starting-bid limit (0 by default: every new keyword waits); an ACoS above the group's ceiling, and a
  *              starting bid above the destination's bid band, wait for a person
@@ -116,6 +117,9 @@ beforeAll(async () => {
     await term('giacca usata', 5, 4, 5)
     await term('giacca usata', 40, 30, 50)
     // Converting: 30 clicks, 15.00, 3 orders, 90.00 sales (ACoS 16.67 %); and 12 clicks, 40.00, 2 orders, 60.00 (66.67 %).
+    // Spent and converted: 20 clicks, 25.00, 2 orders, 100.00 sales (ACoS 25 %); and 15 clicks, 30.00, 1 order, 20.00.
+    await term('giacca nera', 3, 20, 25, 2, 100)
+    await term('giacca grigia', 3, 15, 30, 1, 20)
     await term('pelle nera', 4, 30, 15, 3, 90)
     await term('pelle rossa', 4, 12, 40, 2, 60)
     await term('pelle verde', 4, 20, 10, 4, 100)
@@ -197,6 +201,23 @@ describe('AA-W2-7 — create-negative-keyword runs by rule for a term the strate
     expect(await call('create-negative-keyword', negative('giacca cuoio'))).toMatchObject({
       status: 'waiting_for_approval', trust: { why: expect.stringMatching(/^the ads strategy sets no "Negate a search term when" group at the ad group of search term "giacca cuoio" \(IT\): a negative runs by rule only for a term that meets one/) },
     })
+  })
+
+  it('harvest first, whatever the negate group\'s most orders: a term that meets the harvest group (or the engine\'s defaults) waits for a person', async () => {
+    await atAuto('create-negative-keyword')
+    // The negate group lets a term with up to 2 orders be negated: both terms meet it.
+    await inside(() => db().adsStrategy.updateMany({ where: { level: 'MARKET' }, data: { negateMaxOrders: 2, version: 2 } }))
+    expect(await call('create-negative-keyword', negative('giacca nera'))).toMatchObject({
+      status: 'waiting_for_approval',
+      trust: { why: expect.stringMatching(/^"giacca nera" has 20 clicks, EUR 25\.00 spent, 2 orders over the last 30 days in its ad group, which meets "Harvest a search term when" \(ads strategy: Test market \(IT\), market, v2\): the engines graduate such a term rather than negate it/) },
+    })
+    // A term that converted less than the harvest group asks still runs by rule.
+    expect(await call('create-negative-keyword', negative('giacca grigia'))).toMatchObject({ status: 'runs_by_rule' })
+    // No harvest group in the strategy: the harvest engine's defaults (2 orders over 60 days) still come first.
+    await inside(() => db().adsStrategy.updateMany({ where: { level: 'MARKET' }, data: { harvestMinOrders: null, harvestMinClicks: null, harvestMaxAcosPct: null, harvestWindowDays: null, version: 3 } }))
+    const asked = await call('create-negative-keyword', negative('giacca nera'))
+    expect(asked).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining("which meets \"Harvest a search term when\" (the harvest engine's defaults: the ads strategy sets no harvest group here)") } })
+    expect((await approvalOf(asked.approvalId)).preview).toMatchObject({ ruleHarvest: { harvestMinOrders: 2, harvestWindowDays: 60 }, ruleHarvestRecord: { windowDays: 60, orders: 2 } })
   })
 
   it('a protected product\'s ASIN is never negated: refused, nothing queued', async () => {

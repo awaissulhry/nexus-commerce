@@ -42,6 +42,7 @@ import { alsoChangedBy, approvedRun, notRun, reachNote, reachRefusal, recheck, r
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type LimitFacts, type ScopeFacts } from './ads-autonomy-kit.js'
 import { bidLimitsFor, stepClamp } from '../../advertising/ads-strategy/bids.js'
 import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
+import { DEFAULT_MIN_ORDERS, DEFAULT_WINDOW_DAYS, meetsHarvest } from '../../advertising/ads-harvest.service.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import type { AgentTool, FieldPermission, ToolResult, ToolUndo } from '../tool-types.js'
 
@@ -117,6 +118,24 @@ async function termRecord(query: string, where: { externalCampaignId: string; ex
     salesCents: agg._sum.sales7dCents ?? 0,
   }
 }
+
+/**
+ * AA-W2-7 — the strategy's harvest group where a term converted (a graduation) or where a negative lands (harvest first),
+ * as a preview stores it (money under its strategy key).
+ */
+interface RuleHarvest {
+  harvestMinOrders: number
+  harvestMinClicks: number
+  harvestMaxAcosPct: number | null
+  harvestWindowDays: number
+  /** Where it was read (an ad group, or a campaign) and the row that gave it. */
+  at: string
+  from: string
+}
+
+/** AA-W2-7 — does this record meet the harvest group (the harvest engine's own bar, ads-harvest.service.ts meetsHarvest)? */
+const meetsGroup = (r: TermRecord, h: RuleHarvest) =>
+  meetsHarvest({ orders: r.orders, clicks: r.clicks, costCents: r.spendCents, salesCents: r.salesCents }, { minOrders: h.harvestMinOrders, minClicks: h.harvestMinClicks, maxAcosPct: h.harvestMaxAcosPct })
 
 /** AA-W2-7 — the one strategy scope a single-item change lands on, and its market's currency. */
 function onlyScope(facts: LimitFacts): { scope: ScopeFacts; currency: string } | null {
@@ -266,13 +285,28 @@ async function negativeRuleFacts(input: {
   })
   const at = onlyScope(facts.limitFacts)
   const days = at?.scope.limits.negateWindowDays
-  const ruleRecord = days ? await termRecord(input.keywordText, { externalCampaignId: input.externalCampaignId, externalAdGroupId: input.adGroup.externalAdGroupId }, days) : null
+  const where = { externalCampaignId: input.externalCampaignId, externalAdGroupId: input.adGroup.externalAdGroupId }
+  const ruleRecord = days ? await termRecord(input.keywordText, where, days) : null
+  // Harvest first (ads-harvest.service.ts previewHarvest): a term that meets the harvest group where it lands — the
+  // strategy's, else the harvest engine's defaults — is graduated, never negated, by the engines; so not by rule either.
+  const l = at?.scope.limits
+  const ruleHarvest: RuleHarvest | null = at
+    ? at.scope.sources.harvest && l?.harvestMinOrders != null && l.harvestMinClicks != null && l.harvestWindowDays
+      ? { harvestMinOrders: l.harvestMinOrders, harvestMinClicks: l.harvestMinClicks, harvestMaxAcosPct: l.harvestMaxAcosPct ?? null, harvestWindowDays: l.harvestWindowDays, at: at.scope.label, from: strategyWords(at.scope.sources.harvest) }
+      : { harvestMinOrders: DEFAULT_MIN_ORDERS, harvestMinClicks: 0, harvestMaxAcosPct: null, harvestWindowDays: DEFAULT_WINDOW_DAYS, at: at.scope.label, from: 'the harvest engine\'s defaults: the ads strategy sets no harvest group here' }
+    : null
+  const ruleHarvestRecord = ruleHarvest
+    ? ruleRecord && ruleRecord.windowDays === ruleHarvest.harvestWindowDays ? ruleRecord : await termRecord(input.keywordText, where, ruleHarvest.harvestWindowDays)
+    : null
   const limitsNote = [...facts.limitsNote]
   if (at && ruleRecord && at.scope.sources.negate) {
     const l = at.scope.limits
     limitsNote.push(`Negate a search term when: at least ${l.negateMinClicks} clicks and ${amountLabel(l.negateMinSpendCents ?? 0, at.currency)} spent, at most ${l.negateMaxOrders} orders, over ${days} days (${strategyWords(at.scope.sources.negate)}); this term in its ad group: ${recordWords(ruleRecord, at.currency)}.`)
   }
-  return { ...facts, limitsNote, ruleRecord }
+  if (ruleHarvest && ruleHarvestRecord && at) {
+    limitsNote.push(`Harvest first — a term that meets "Harvest a search term when" is graduated, never negated: at least ${ruleHarvest.harvestMinOrders} orders and ${ruleHarvest.harvestMinClicks} clicks${ruleHarvest.harvestMaxAcosPct != null ? `, ACoS at most ${ruleHarvest.harvestMaxAcosPct} %` : ''}, over ${ruleHarvest.harvestWindowDays} days (${ruleHarvest.from}); this term: ${recordWords(ruleHarvestRecord, at.currency)}.`)
+  }
+  return { ...facts, limitsNote, ruleRecord, ruleHarvest, ruleHarvestRecord }
 }
 
 /**
@@ -280,7 +314,7 @@ async function negativeRuleFacts(input: {
  * the term's record over the strategy's window meets its negate group where it lands. No group there: a person decides.
  */
 function negativeRuleRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
-  const p = preview as { term?: string; matchType?: string; ruleRecord?: TermRecord | null }
+  const p = preview as { term?: string; matchType?: string; ruleRecord?: TermRecord | null; ruleHarvest?: RuleHarvest | null; ruleHarvestRecord?: TermRecord | null }
   if (p.matchType === 'NEGATIVE_PHRASE' && limits.allowPhrase !== true) {
     return 'a phrase negative blocks every search that contains the term; this tool\'s limits let only exact negatives run by rule (allowPhrase is off); a person decides'
   }
@@ -297,8 +331,13 @@ function negativeRuleRefusal(preview: unknown, limits: Record<string, unknown>):
     r.spendCents < l.negateMinSpendCents ? `less than ${amountLabel(l.negateMinSpendCents, at.currency)} spent` : null,
     r.orders > l.negateMaxOrders ? `more than ${l.negateMaxOrders} orders` : null,
   ].filter((x): x is string => !!x)
-  if (!short.length) return null
-  return `"${p.term}" has ${recordWords(r, at.currency)} in its ad group: ${short.join(', ')}, so it does not meet "Negate a search term when" at ${at.scope.label} (${strategyWords(source)}); a person decides`
+  if (short.length) return `"${p.term}" has ${recordWords(r, at.currency)} in its ad group: ${short.join(', ')}, so it does not meet "Negate a search term when" at ${at.scope.label} (${strategyWords(source)}); a person decides`
+  // Harvest first, whatever the negate group's most orders allows.
+  const h = p.ruleHarvest
+  const hr = p.ruleHarvestRecord
+  if (!h || !hr || hr.windowDays !== h.harvestWindowDays) return `the term's record over the harvest window was not read for this preview; a person decides`
+  if (meetsGroup(hr, h)) return `"${p.term}" has ${recordWords(hr, at.currency)} in its ad group, which meets "Harvest a search term when" (${h.from}): the engines graduate such a term rather than negate it, so a negative of it waits for a person`
+  return null
 }
 
 /** C2 — undo of a negative: undo-ad-change retires what the request created (its change set is the approval). */
@@ -527,17 +566,6 @@ async function graduationPreview(args: Record<string, unknown>, opts: { rule?: {
       effect: `Creates an EXACT keyword "${query}" at ${amountLabel(suggestedBidCents, currency)} in ${campaign.name} › ${group.name}; the term produced ${metrics.orders} orders on ${amountLabel(metrics.costCents, currency)} spend (last ${metrics.windowDays}d). The source ad group is not negated here.`,
     },
   }
-}
-
-/** AA-W2-7 — the strategy's harvest group where a term converted, as a graduation's preview stores it (money under its strategy key). */
-interface RuleHarvest {
-  harvestMinOrders: number
-  harvestMinClicks: number
-  harvestMaxAcosPct: number | null
-  harvestWindowDays: number
-  /** Where it was read (the ad group, or the campaign, the term converted in) and the row that gave it. */
-  at: string
-  from: string
 }
 
 /**

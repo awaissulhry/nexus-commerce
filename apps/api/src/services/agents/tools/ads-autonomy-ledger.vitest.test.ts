@@ -176,6 +176,15 @@ describe('the facts of one change, end to end', () => {
     expect(commonRefusal({ limitFacts: f }, LIMITS)).toBe('the ads strategy lets Claude only ask for bid changes at the ad group of target "race jacket" (IT) (ads strategy: TEST-AK-P1 (IT), product, v3, from TEST-AK-P1); a person decides')
   })
 
+  it('AA-W2-7 — a raise from 0 is counted: held by the highest bid where it lands, unbounded where no strategy sets one', async () => {
+    const capped = await facts([bid('t-it', 0, 50)])
+    expect(capped.this).toMatchObject({ raises: 1, largestRaisePct: 0, raisesFromZero: 1 })
+    expect(capped.this.unboundedRaises).toBeUndefined()
+    const bare = await facts([bid('t-uk', 0, 50)])
+    expect(bare.this).toMatchObject({ raises: 1, raisesFromZero: 1, unboundedRaises: 1 })
+    expect((await facts([bid('t-it', 45, 50)])).this.raisesFromZero).toBeUndefined()
+  })
+
   it('a cut of a protected product\'s bid, a bid above its band, a protected term negated: each named', async () => {
     const cut = await facts([bid('t-it', 45, 40)])
     expect(cut.protectedHit).toEqual([{ entity: 'target:t-it', why: 'target "race jacket": the ads strategy protects a product it advertises (ads strategy: TEST-AK-P2 (IT), product, v2, from TEST-AK-P2), so lowering its bid waits for a person' }])
