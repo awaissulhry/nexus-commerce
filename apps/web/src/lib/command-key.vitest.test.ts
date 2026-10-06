@@ -216,8 +216,29 @@ describe('the API’s command receipts', () => {
 
   it('honours a key on exactly the routes the web keys', () => {
     expect(routes.sort()).toEqual([
+      // W2-B (CM-33) — every ads add: the campaign manager's Add modals (adsAdd), the SB/SD builder's Create, the older
+      // console's adds (adsKeyedPost).
+      '/api/advertising/adgroups/create',
+      // W2-B (CC-24) — AI Goal: the goal and the building of its campaigns (builder and dashboard, sendLaunch).
+      '/api/advertising/ai-goals',
+      '/api/advertising/ai-goals/:id/materialize',
       // R16 — an engine's switch in the Control Room lever drawer.
       '/api/advertising/automation/engine-switch/:key',
+      // W2-B (CC-24) — Replicate's run, and the launch of every builder (sendLaunch; the older console's Guided page).
+      '/api/advertising/blueprints/replicate',
+      '/api/advertising/campaign-builder/launch',
+      '/api/advertising/campaign-builder/single/launch',
+      '/api/advertising/campaign-builder/sp-super-wizard/launch',
+      '/api/advertising/campaigns/create',
+      // Ads wave 4a — "Read this market's data" / "Stop reading" in Settings → Advertising.
+      '/api/advertising/connection/set-active',
+      '/api/advertising/keywords/create',
+      '/api/advertising/negative-keywords',
+      '/api/advertising/negative-targets/create',
+      '/api/advertising/product-ads/create',
+      '/api/advertising/sb-creatives/create',
+      '/api/advertising/search-terms/promote',
+      '/api/advertising/targets/create',
       // MCP full control C6 — "Keep only these N steps" on a plan, in the approvals drawer (grid/PlanSteps.tsx).
       '/api/agent/fleet/approvals/:id/plan-amend',
       // Add rows (R2) — the SKU typed into an empty product-sheet row creates a variation (also the studio's "Add child",
@@ -248,7 +269,8 @@ describe('the API’s command receipts', () => {
     const files = (readdirSync(src, { recursive: true }) as string[])
       .filter((f) => /\.tsx?$/.test(f) && !f.endsWith('.d.ts') && !f.endsWith('.vitest.test.ts'))
     // A `:param` is any interpolated segment: `/api/listing-wizard/${wizardId}/submit`, `…/engine-switch/${engine.key}`.
-    const patterns = routes.map((r) => new RegExp(r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:[a-zA-Z]+/g, '\\$\\{[^}]+\\}') + '(?![\\w-])'))
+    // A route followed by `/` is another route (`/api/advertising/ai-goals/${id}` is a read, not the goal create).
+    const patterns = routes.map((r) => new RegExp(r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:[a-zA-Z]+/g, '\\$\\{[^}]+\\}') + '(?![\\w/-])'))
     const callers = files.filter((f) => {
       const text = readFileSync(path.join(src, f), 'utf8')
       return patterns.some((p) => p.test(text))
@@ -264,8 +286,13 @@ describe('the API’s command receipts', () => {
       path.join('app', 'products', '[id]', 'edit', '_studio', 'sheet', 'master', 'familyOps.ts'),
       path.join('app', 'products', '[id]', 'edit', '_studio', 'sheet', 'channel', 'useChannelSheet.ts'),
     ]))
+    // W2-B — the ads doors that key every call through sendCommand: a builder's launch (sendLaunch), an add (adsAdd,
+    // adsKeyedPost). Each is held to sendCommand itself below.
     for (const file of callers) {
-      expect(readFileSync(path.join(src, file), 'utf8'), file).toMatch(/\bsendCommand\b/)
+      expect(readFileSync(path.join(src, file), 'utf8'), file).toMatch(/\b(sendCommand|sendLaunch|adsAdd|adsKeyedPost)\b/)
+    }
+    for (const door of [path.join('app', 'marketing', 'ads', 'campaign-builder', 'launchChecks.ts'), path.join('app', 'marketing', 'ads', '_shared', 'adsWrite.ts')]) {
+      expect(readFileSync(path.join(src, door), 'utf8'), door).toMatch(/\bsendCommand\(/)
     }
   })
 })

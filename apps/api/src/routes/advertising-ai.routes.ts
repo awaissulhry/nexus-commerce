@@ -32,12 +32,16 @@ const advertisingAiRoutes: FastifyPluginAsync = async (fastify) => {
   // AIAD.4 — "what will be built": the pure scaffold plan for a builder payload. No writes —
   // materialize executes this same plan (same bid evidence), so the preview cannot drift.
   fastify.post('/advertising/ai-goals/preview', async (request, reply) => {
-    const { planGoalScaffold, MaterializeError } = await import('../services/advertising/ai-goal-materialize.service.js')
+    const { planGoalScaffold, MaterializeError, GOAL_AD_GROUP_BID_CENTS } = await import('../services/advertising/ai-goal-materialize.service.js')
     const { resolveGoalBids } = await import('../services/advertising/ai-goal-suggest.service.js')
-    const body = (request.body ?? {}) as { seedKeywords?: string[]; marketplace?: string | null }
+    const { goalLaunchPlan, launchChecks } = await import('../services/advertising/ads-launch-checks.service.js')
+    const body = (request.body ?? {}) as { seedKeywords?: string[]; marketplace?: string | null; portfolioId?: string | null }
     try {
       const bidOpts = await resolveGoalBids(body.seedKeywords ?? [], body.marketplace)
-      return { ok: true, scaffold: planGoalScaffold(request.body as never, bidOpts) }
+      const scaffold = planGoalScaffold(request.body as never, bidOpts)
+      // CC-13 / CC-14 — what would stop the launch (refusals) and what only warns (his bid policies, spend ceilings).
+      const checks = await launchChecks(goalLaunchPlan(scaffold, body.portfolioId, GOAL_AD_GROUP_BID_CENTS))
+      return { ok: true, scaffold, checks }
     } catch (e) {
       if (e instanceof MaterializeError) { reply.status(e.statusCode); return { ok: false, error: e.message } }
       reply.status(500); return { ok: false, error: (e as Error)?.message }

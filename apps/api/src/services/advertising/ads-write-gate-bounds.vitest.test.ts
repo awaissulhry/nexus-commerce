@@ -339,11 +339,11 @@ describe('ACR.0.7 — account halt', () => {
       expect(r.allowed === false && r.deniedAt).toBe('automation_halted')
     })
 
-    it('passes the halt and nothing else: the allowlist, the bounds and Amazon\'s range still bind', async () => {
+    it('passes the halt, the allowlist and pins (CM-20, Owner A); the bounds and Amazon\'s range still bind', async () => {
       automationState.mockResolvedValue(halted)
       campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, liveBidWritesEnabled: false })
       const notListed = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })
-      expect(notListed.allowed === false && notListed.deniedAt).toBe('campaign_allowlist')
+      expect(notListed.allowed).toBe(true)
 
       campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, maxBidCents: 100 })
       const overCeiling = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })
@@ -504,6 +504,40 @@ describe('ACR.1.2b — pins bind AT THE GATE', () => {
     campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBids: true, maxBidCents: 100 })
     const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 900 })
     if (r.allowed === false) expect(r.deniedAt).toBe('authority_pin')
+  })
+
+  /**
+   * CM-20 — Owner decided A (2026-10-06): the allowlist and the pins stop automatic engines, rules, schedules and
+   * sweeps; a person's own edit or add (ctx.manual, set only with a `user:` actor) passes both. Amazon's limits and the
+   * bounds still bind him; nothing here changes for an engine.
+   */
+  describe('CM-20 (Owner decided A) — a person passes the allowlist and pins; an engine does not', () => {
+    it('🔴 a person\'s bid on a bids-pinned campaign passes; the same bid from an engine is refused', async () => {
+      campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, pinBids: true, pinBudget: true, pinPlacement: true })
+      expect((await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })).allowed).toBe(true)
+      expect((await checkAdsWriteGate({ ...base, dimension: 'placement', payloadValueCents: 0, manual: true })).allowed).toBe(true)
+      const engine = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })
+      expect(engine.allowed === false && engine.deniedAt).toBe('authority_pin')
+    })
+
+    it('🔴 a person\'s write to a campaign off the live-write allowlist passes; an engine\'s is refused', async () => {
+      campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, liveBidWritesEnabled: false })
+      expect((await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })).allowed).toBe(true)
+      const engine = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150 })
+      expect(engine.allowed === false && engine.deniedAt).toBe('campaign_allowlist')
+    })
+
+    it('Amazon\'s range still refuses a person, on a pinned and off-list campaign alike', async () => {
+      campaignFindUnique.mockResolvedValue({ ...OPEN_CAMPAIGN, liveBidWritesEnabled: false, pinBids: true })
+      const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 1, manual: true })
+      expect(r.allowed === false && r.deniedAt).toBe('market_limits')
+    })
+
+    it('a campaign that cannot be found is still refused, person or not', async () => {
+      campaignFindUnique.mockResolvedValue(null)
+      const r = await checkAdsWriteGate({ ...base, field: 'bid', intendedValueCents: 150, manual: true })
+      expect(r.allowed === false && r.deniedAt).toBe('campaign_allowlist')
+    })
   })
 
   it('the allowlist still wins over a pin — the outer gate is reported first', async () => {

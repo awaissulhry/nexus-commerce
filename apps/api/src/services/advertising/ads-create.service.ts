@@ -31,12 +31,14 @@ import {
 import { mergeOntoAmazonPlacements } from './ads-placement-math.js'
 import { sdExpressionValue, sdTargetExpression } from './sd-target-expression.js'
 import { patchDynamicBidding } from './dynamic-bidding-write.js'
-import { checkAdsWriteGate, type GateDecision } from './ads-write-gate.js'
+import { checkAdsWriteGate, type GateContext, type GateDecision } from './ads-write-gate.js'
+import { createIdentity, withCreateClaim } from './ads-create-claim.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { marketCurrency } from '../pim/market-currency.js'
 import { readScheduleMembers, releaseScheduleMembers, type ReleaseReport } from './rank-release.service.js'
 import { isPersonCreate, isPersonEdit } from './ads-mutation.service.js'
-import { AD_PRODUCT_UNSUPPORTED, adProductRefusal } from '@nexus/shared/ads-ad-product'
+import { AD_PRODUCT_UNSUPPORTED, SPONSORED_PRODUCTS, adProductOf, adProductRefusal } from '@nexus/shared/ads-ad-product'
+import { campaignNameKey } from '@nexus/shared/ads-campaign-name'
 // 5b — every negative this file writes goes through the one negative write service.
 import { mirrorNegativeKeyword, pushLocalNegative, writeNegativeKeyword, writeNegativeProductTarget, type NegativeWriteResult } from './ads-negative-kw.service.js'
 
@@ -74,6 +76,38 @@ async function resolveCtx(marketplace: string): Promise<{ profileId: string; reg
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace, isActive: true }, select: { profileId: true, region: true } })
   return conn ? { profileId: conn.profileId, region: (conn.region as AdsRegion) ?? 'EU' } : null
 }
+
+/**
+ * CM-20 — what an add tells the write gate besides the market: the same campaign rules an edit of the same thing obeys.
+ *
+ * Adds used to ask the gate with the market alone, so the campaign's live-write allowlist, its pins and bid bounds and
+ * Amazon's bid range were never checked when a keyword, target, product ad or ad group was ADDED to an existing campaign
+ * — though the same keyword's next bid edit was. Now an add names its campaign, the field and the value, exactly as the
+ * edit does. A person's own add (`manual`, isPersonCreate) passes the halt (wave 1e) and — Owner decided A, 2026-10-06 —
+ * the allowlist and pins, which stop engines, rules and sweeps only; Amazon's range and the bounds still bind him.
+ *
+ * `creationFlow` — the campaign was created a moment ago in this same launch (the builders, AI Goal, Replicate): it is
+ * not named, as for the launch's negatives (5b), so a launch is never refused by the allowlist or by a bid policy (his
+ * policies are warnings on the review step, CC-14). Amazon's own bid range still binds: the field and value go along.
+ *
+ * Sponsored Brands and Display adds keep the market-only ask: they go to their own endpoints, and the gate's 6a check
+ * (which refuses SB/SD *updates*, sent to Sponsored Products endpoints) must not refuse them.
+ */
+function addGateScope(
+  campaign: { id: string; adProduct?: string | null; type?: string | null },
+  input: { creationFlow?: boolean },
+  bid: { field: 'bid' | 'defaultBid'; cents: number } | null,
+): Pick<GateContext, 'campaignId' | 'field' | 'intendedValueCents'> {
+  const product = adProductOf(campaign)
+  if (product != null && product !== SPONSORED_PRODUCTS) return {}
+  return {
+    ...(input.creationFlow ? {} : { campaignId: campaign.id }),
+    ...(bid ? { field: bid.field, intendedValueCents: bid.cents } : {}),
+  }
+}
+
+/** CM-33 — the answer when the same add was still running elsewhere after the claim's wait. */
+const SAME_ADD_RUNNING = 'The same item is being added right now from another tab or process. Wait a moment, then check the list: it was not sent twice.'
 
 /**
  * HX.1 — the audit row for a local ads operation.
@@ -137,6 +171,31 @@ export interface NewCampaign {
  * family speaks for all three.
  */
 export async function createCampaignLocal(input: NewCampaign): Promise<{ id: string; externalCampaignId: string | null; mode: string; dryRun?: unknown }> {
+  if (input.dryRun) return createCampaignOnce(input)
+  // CC-24 / CM-33 — one campaign per name and market. Amazon refuses a second campaign with a name already in use, so
+  // a double click, a second tab or a retry used to leave a local row with no Amazon id beside the real one. The claim
+  // makes "is the name free?" and the create one step: the second create waits for the first and is then refused here.
+  const market = normalizeMarketplaceCode(input.marketplace, '') || input.marketplace
+  return withCreateClaim(createIdentity('campaign', market, input.name), async () => {
+    const taken = await campaignNamedInMarket(input.marketplace, input.name)
+    if (taken) throw new Error(`${market} already has a campaign named "${taken.name}", so nothing was created: give the new campaign another name.`)
+    return createCampaignOnce(input)
+  }, () => { throw new Error(`A campaign named "${input.name}" is being created in ${market} right now, so it was not created again.`) })
+}
+
+/** CC-13 / CM-33 — the campaign that already holds this name in the market (archived ones free their name, as on Amazon). */
+export async function campaignNamedInMarket(marketplace: string, name: string): Promise<{ id: string; name: string } | null> {
+  const wanted = name.trim()
+  if (!wanted) return null
+  const rows = await prisma.campaign.findMany({
+    where: { marketplace, status: { not: 'ARCHIVED' }, name: { equals: wanted, mode: 'insensitive' } },
+    select: { id: true, name: true },
+    take: 5,
+  })
+  return rows.find((r) => campaignNameKey(r.name) === campaignNameKey(wanted)) ?? null
+}
+
+async function createCampaignOnce(input: NewCampaign): Promise<{ id: string; externalCampaignId: string | null; mode: string; dryRun?: unknown }> {
   const ctx = await resolveCtx(input.marketplace)
   // SP preserves its long-standing born-ENABLED behaviour; SB/SD are born PAUSED. See the
   // `startEnabled` docblock — this asymmetry is the point, not an oversight.
@@ -161,7 +220,9 @@ export async function createCampaignLocal(input: NewCampaign): Promise<{ id: str
   }
 
   if (ctx) {
-    const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: Math.round(input.dailyBudgetEur * 100) })
+    // CC-14 — a Sponsored Products budget is judged against Amazon's range in the market, as a budget edit is.
+    const budgetCents = Math.round(input.dailyBudgetEur * 100)
+    const gate = await checkAdsWriteGate({ marketplace: input.marketplace, payloadValueCents: budgetCents, ...(input.type === 'SP' ? { field: 'dailyBudget', intendedValueCents: budgetCents } : {}) })
     if (gate.allowed || input.dryRun) {
       const common = { name: input.name, dailyBudget: input.dailyBudgetEur, state, portfolioId: input.portfolioId, dryRun: input.dryRun }
       const r = input.type === 'SD'
@@ -208,9 +269,11 @@ export interface NewAdGroup {
   manual?: boolean
   /** CM-8 — a person's add: no row unless Amazon took it (see PersonAddResult). */
   requireAmazon?: boolean
+  /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
+  creationFlow?: boolean
 }
 export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: string | null; externalAdGroupId: string | null } & PersonAddResult> {
-  const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, tactic: true } })
+  const campaign = await prisma.campaign.findUnique({ where: { id: input.campaignId }, select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true, tactic: true } })
   if (!campaign) throw new Error('campaign not found')
   let externalId: string | null = null
   // ACR Stage 5 — same endpoint-family split as the campaign create above. An SD ad group
@@ -231,7 +294,8 @@ export async function createAdGroupLocal(input: NewAdGroup): Promise<{ id: strin
   if (campaign.externalCampaignId && campaign.marketplace) {
     const ctx = await resolveCtx(campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: Math.round(input.defaultBidEur * 100), manual: isPersonCreate(input.manual, input.userId) })
+      const bidCents = Math.round(input.defaultBidEur * 100)
+      const gate = await checkAdsWriteGate({ marketplace: campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: input.campaignId, ...campaign }, input, { field: 'defaultBid', cents: bidCents }) })
       if (gate.allowed) {
         try {
           const r = isSd
@@ -275,6 +339,8 @@ export interface NewKeyword {
   evidence?: AdWriteEvidence | null
   /** CM-8 — a person's add: no row unless Amazon took it, and a row Amazon never took is sent (see PersonAddResult). */
   requireAmazon?: boolean
+  /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
+  creationFlow?: boolean
 }
 /**
  * HP1 — the return says WHY a keyword did not reach Amazon, not just that it didn't.
@@ -283,8 +349,17 @@ export interface NewKeyword {
  * pre-HP1 caller reads only `id`/`externalTargetId` and is unchanged. `promote_to_exact` reads
  * them to report a local-only create as the failure it is (the 209-of-218 mechanism).
  */
-export async function createKeywordLocal(input: NewKeyword): Promise<{ id: string | null; externalTargetId: string | null; existed?: boolean; denied?: { deniedAt: string; reason: string }; pushError?: string } & PersonAddResult> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
+type KeywordCreateResult = { id: string | null; externalTargetId: string | null; existed?: boolean; denied?: { deniedAt: string; reason: string }; pushError?: string } & PersonAddResult
+export async function createKeywordLocal(input: NewKeyword): Promise<KeywordCreateResult> {
+  // CM-33 — the dedupe below and the create are one step: a second add of the same keyword waits for the first, then
+  // finds its row ("already there") instead of sending it to Amazon twice.
+  return withCreateClaim(createIdentity('keyword', input.adGroupId, input.matchType, input.keywordText), () => createKeywordOnce(input), () => ({
+    id: null, externalTargetId: null, denied: { deniedAt: 'same_add_running', reason: SAME_ADD_RUNNING },
+    ...(input.requireAmazon ? personAdd('refused', SAME_ADD_RUNNING) : {}),
+  }))
+}
+async function createKeywordOnce(input: NewKeyword): Promise<KeywordCreateResult> {
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaignId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } })
   if (!ag) throw new Error('ad group not found')
   /**
    * ACR Stage 5 — the FIFTH place `/sp/*` was hardcoded.
@@ -312,7 +387,7 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
     if (!ag.externalAdGroupId || !ag.campaign?.externalCampaignId) return { id: existing.id, externalTargetId: null, existed: true, ...personAdd('local', NOT_ON_AMAZON_YET) }
     // CM-8 — Nexus holds it but Amazon never took it: send that row now (with the bid asked for), never "added".
     await prisma.adTarget.update({ where: { id: existing.id }, data: { bidCents: Math.round(input.bidEur * 100), status: 'ENABLED' } })
-    const pushed = await pushExistingKeyword({ adTargetId: existing.id, userId: input.userId, evidence: input.evidence, manual: input.manual })
+    const pushed = await pushExistingKeyword({ adTargetId: existing.id, userId: input.userId, evidence: input.evidence, manual: input.manual, creationFlow: input.creationFlow })
     return {
       id: existing.id, externalTargetId: pushed.externalTargetId, existed: true,
       ...(pushed.ok ? personAdd('created') : personAdd(pushed.outcome === 'refused' ? 'refused' : 'failed', pushed.refusal?.reason ?? pushed.error ?? null)),
@@ -324,7 +399,8 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100), manual: isPersonCreate(input.manual, input.userId) })
+      const bidCents = Math.round(input.bidEur * 100)
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: bidCents }) })
       if (gate.allowed) {
         const args = { externalCampaignId: ag.campaign.externalCampaignId, externalAdGroupId: ag.externalAdGroupId, keywordText: input.keywordText, matchType: input.matchType, bid: input.bidEur, state: 'enabled' as const }
         // HP1 — a throw used to abort the whole call with the local row unwritten and the reason
@@ -385,7 +461,7 @@ export async function createKeywordLocal(input: NewKeyword): Promise<{ id: strin
  * Everything else is reused: the same `resolveCtx`, the same write gate, the same `createKeyword`
  * client, the same audit path.
  */
-export async function pushExistingKeyword(input: { adTargetId: string; userId?: string; evidence?: AdWriteEvidence | null; /** 1e — a person's own add (isPersonCreate). */ manual?: boolean }): Promise<{
+export async function pushExistingKeyword(input: { adTargetId: string; userId?: string; evidence?: AdWriteEvidence | null; /** 1e — a person's own add (isPersonCreate). */ manual?: boolean; /** CM-20 — see addGateScope. */ creationFlow?: boolean }): Promise<{
   ok: boolean; externalTargetId: string | null; outcome: 'acted' | 'refused' | 'failed'
   refusal?: { deniedAt: string; reason: string }; error?: string
 }> {
@@ -393,7 +469,7 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
     where: { id: input.adTargetId },
     select: {
       id: true, kind: true, isNegative: true, expressionType: true, expressionValue: true, bidCents: true, externalTargetId: true,
-      adGroup: { select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } },
+      adGroup: { select: { externalAdGroupId: true, campaignId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } },
     },
   })
   if (!t) return { ok: false, externalTargetId: null, outcome: 'failed', error: 'that keyword does not exist' }
@@ -434,7 +510,7 @@ export async function pushExistingKeyword(input: { adTargetId: string; userId?: 
   }
   const ctx = await resolveCtx(ag.campaign.marketplace)
   if (!ctx) return { ok: false, externalTargetId: null, outcome: 'refused', refusal: { deniedAt: 'connection', reason: `No active Amazon Ads connection for ${ag.campaign.marketplace}.` } }
-  const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: t.bidCents, manual: isPersonCreate(input.manual, input.userId) })
+  const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: t.bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: t.bidCents }) })
   if (!gate.allowed) {
     // 🔴 `apps/api`'s tsconfig is NOT strict, so `if (!gate.allowed)` does not narrow the
     // discriminated union the way it would in `apps/web`. `Extract` names the exact variant
@@ -501,6 +577,8 @@ export interface NewProductAd {
   manual?: boolean
   /** CM-8 — a person's add: no row unless Amazon took it, and a row Amazon never took is sent (see PersonAddResult). */
   requireAmazon?: boolean
+  /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
+  creationFlow?: boolean
 }
 
 /**
@@ -623,8 +701,16 @@ async function amazonSkuInMarket(product: { id: string; sku: string }, market: s
   return { sku: [...skus][0] ?? null }
 }
 
-export async function createProductAdLocal(input: NewProductAd): Promise<{ id: string | null; externalAdId: string | null } & PersonAddResult> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
+type ProductAdCreateResult = { id: string | null; externalAdId: string | null } & PersonAddResult
+export async function createProductAdLocal(input: NewProductAd): Promise<ProductAdCreateResult> {
+  // CM-33 — one create per product and ad group at a time (see createKeywordLocal).
+  return withCreateClaim(createIdentity('product-ad', input.adGroupId, input.asin || input.sku || input.productId), () => createProductAdOnce(input), () => {
+    if (input.requireAmazon) return { id: null, externalAdId: null, ...personAdd('refused', SAME_ADD_RUNNING) }
+    throw new Error(SAME_ADD_RUNNING)
+  })
+}
+async function createProductAdOnce(input: NewProductAd): Promise<ProductAdCreateResult> {
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaignId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } })
   if (!ag) throw new Error('ad group not found')
   // S8 — the SKU Amazon holds in the campaign's market. A conflict is held back and refuses only an SP push below.
   let skuConflict: AdSkuConflictError | null = null
@@ -661,7 +747,7 @@ export async function createProductAdLocal(input: NewProductAd): Promise<{ id: s
   if (ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, manual: isPersonCreate(input.manual, input.userId) })
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: 0, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, null) })
       if (gate.allowed) {
         // SD takes either identifier; SP genuinely needs the seller SKU, so only SP hard-fails.
         if (!resolved && !isSd) {
@@ -1105,9 +1191,19 @@ export interface NewTarget {
   skipAmazon?: boolean
   /** CM-8 — a person's add: no row unless Amazon took it, and a row Amazon never took is sent (see PersonAddResult). */
   requireAmazon?: boolean
+  /** CM-20 — part of the launch that created the campaign a moment ago (see addGateScope). */
+  creationFlow?: boolean
 }
-export async function createTargetLocal(input: NewTarget): Promise<{ id: string | null; externalTargetId: string | null; mode: string } & PersonAddResult> {
-  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true } } } })
+type TargetCreateResult = { id: string | null; externalTargetId: string | null; mode: string } & PersonAddResult
+export async function createTargetLocal(input: NewTarget): Promise<TargetCreateResult> {
+  // CM-33 — the dedupe below and the create are one step (see createKeywordLocal).
+  return withCreateClaim(createIdentity('target', input.adGroupId, input.kind, input.value), () => createTargetOnce(input), () => {
+    if (input.requireAmazon && !input.skipAmazon) return { id: null, externalTargetId: null, mode: 'local', ...personAdd('refused', SAME_ADD_RUNNING) }
+    throw new Error(SAME_ADD_RUNNING)
+  })
+}
+async function createTargetOnce(input: NewTarget): Promise<TargetCreateResult> {
+  const ag = await prisma.adGroup.findUnique({ where: { id: input.adGroupId }, select: { externalAdGroupId: true, campaignId: true, campaign: { select: { externalCampaignId: true, marketplace: true, adProduct: true, type: true } } } })
   if (!ag) throw new Error('ad group not found')
   // CC-12 — a Sponsored Display target is built in SD's own dialect, first: one Amazon would refuse is refused before
   // anything is written, and a nested audience is stored (and matched below) by the text it names.
@@ -1141,7 +1237,8 @@ export async function createTargetLocal(input: NewTarget): Promise<{ id: string 
   if (!input.skipAmazon && ag.externalAdGroupId && ag.campaign?.externalCampaignId && ag.campaign.marketplace) {
     const ctx = await resolveCtx(ag.campaign.marketplace)
     if (ctx) {
-      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: Math.round(input.bidEur * 100), manual: isPersonCreate(input.manual, input.userId) })
+      const bidCents = Math.round(input.bidEur * 100)
+      const gate = await checkAdsWriteGate({ marketplace: ag.campaign.marketplace, payloadValueCents: bidCents, manual: isPersonCreate(input.manual, input.userId), ...addGateScope({ id: ag.campaignId, ...ag.campaign }, input, { field: 'bid', cents: bidCents }) })
       if (gate.allowed) {
         try {
           const r = sdExpression

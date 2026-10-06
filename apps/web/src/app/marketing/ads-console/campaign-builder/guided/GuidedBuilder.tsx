@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { TrendingUp, BarChart3, Droplets, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { sendCommand, useCommandKey } from '@/lib/command-key'
 import { Button, Checkbox, Input, Select, Textarea } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
@@ -118,7 +119,13 @@ export function GuidedBuilder() {
     keywords: addedKw.map((k) => ({ text: k.text, match: k.match, bid: Number(k.bid) || undefined })),
     dryRun,
   })
-  const post = (dryRun: boolean) => fetch(`${getBackendUrl()}/api/advertising/campaign-builder/launch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(launchPayload(dryRun)) }).then((r) => r.json())
+  // CC-24 — the launch (not the preview) is one keyed command: an answer lost and sent again never builds twice.
+  const launchKey = useCommandKey()
+  const post = (dryRun: boolean) => {
+    const url = `${getBackendUrl()}/api/advertising/campaign-builder/launch`
+    const init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(launchPayload(dryRun)) }
+    return dryRun ? fetch(url, init).then((r) => r.json()) : sendCommand(launchKey, url, init).then((s) => s.body ?? {})
+  }
   const doPreview = async () => { setLaunching(true); setLaunchMsg(''); try { const r = await post(true); if (r.plan) setPreview(r.plan); else setLaunchMsg(r.error ?? 'Could not build preview.') } catch { setLaunchMsg('Preview failed.') } finally { setLaunching(false) } }
   const doLaunch = async () => { setLaunching(true); try { const r = await post(false); if (r.ok) { setPreview(null); setLaunchMsg(`Created ${r.created?.length ?? 0} campaign(s) on ${market} (${r.mode === 'sandbox' || r.mode === 'local' ? 'sandbox — not live on Amazon' : 'LIVE on Amazon'}).`) } else setLaunchMsg(r.error ?? 'Launch failed.') } catch { setLaunchMsg('Launch failed.') } finally { setLaunching(false) } }
   // a render FUNCTION (not a nested component) so the bid/budget inputs don't remount + lose focus each keystroke

@@ -27,6 +27,7 @@ import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
 import '@/design-system/styles/components.css'
 import { getBackendUrl } from '@/lib/backend-url'
+import { sendCommand, useCommandKey } from '@/lib/command-key'
 import { ProductSelection, type SpwProduct } from '../sp-super-wizard/ProductSelection'
 import { SourcePicker, emptySelection, type SourceSelection } from './SourcePicker'
 import { NamingPanel } from './NamingPanel'
@@ -92,6 +93,9 @@ export function ReplicateBuilder() {
   // ── launch ────────────────────────────────────────────────────────────
   const [launchMode, setLaunchMode] = useState<'live' | 'floor'>('floor')
   const [launching, setLaunching] = useState(false)
+  // CC-24 — the real run is one keyed command per press: a start whose answer was lost, sent again, answers the run
+  // already started instead of starting a second one.
+  const runKey = useCommandKey()
   const [launchErr, setLaunchErr] = useState<string | null>(null)
   const [result, setResult] = useState<LaunchResult | null>(null)
   const [progress, setProgress] = useState<RunProgress | null>(null)
@@ -282,11 +286,11 @@ export function ReplicateBuilder() {
     setLaunching(true); setLaunchErr(null); setProgress(null)
     let applicationId: string | null = null
     try {
-      const r = await fetch(`${getBackendUrl()}/api/advertising/blueprints/replicate`, {
+      const { response: r, body } = await sendCommand<Record<string, any>>(runKey, `${getBackendUrl()}/api/advertising/blueprints/replicate`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: requestBody({ launchMode, dryRun: false }),
       })
-      const j = await r.json().catch(() => ({}))
+      const j = body ?? {}
       if (!r.ok || j?.error) throw new Error(j?.blockers?.join(' · ') || j?.error || `HTTP ${r.status}`)
       applicationId = j.applicationId as string
     } catch (e) {
@@ -305,7 +309,7 @@ export function ReplicateBuilder() {
     }
     await watch(applicationId)
     setLaunching(false)
-  }, [launching, requestBody, launchMode, market, targetToken, watch])
+  }, [launching, runKey, requestBody, launchMode, market, targetToken, watch])
 
   const afterRun = useCallback(async (path: string, label: string) => {
     if (!result || busy) return

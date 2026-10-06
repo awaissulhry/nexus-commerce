@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Ban, RefreshCw, Check, Download, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { adsKeyedPost } from '@/app/marketing/ads/_shared/adsWrite'
 import { Button, Input, ToolbarButton } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'
@@ -63,7 +64,7 @@ export function NegativeMiningTab() {
   useEffect(load, [minSpend])
 
   const negateOne = async (c: Cand): Promise<boolean> => {
-    const r = await fetch(`${getBackendUrl()}/api/advertising/negative-keywords`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ externalCampaignId: c.campaignId, externalAdGroupId: c.adGroupId, keywordText: c.query, matchType: 'NEGATIVE_EXACT', scope: 'AD_GROUP', marketplace: c.marketplace }) }).catch(() => null)
+    const r = await adsKeyedPost('/api/advertising/negative-keywords', { externalCampaignId: c.campaignId, externalAdGroupId: c.adGroupId, keywordText: c.query, matchType: 'NEGATIVE_EXACT', scope: 'AD_GROUP', marketplace: c.marketplace }).catch(() => null)
     return !!r && r.ok
   }
   const negateSelected = async () => {
