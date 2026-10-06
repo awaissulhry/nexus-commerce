@@ -173,7 +173,8 @@ export async function planGuardrail(input: GuardrailInput): Promise<{ ok: true; 
     plan: {
       action: 'set-ad-guardrail', kind: input.kind, op: 'set', direction: loosen ? 'loosen' : 'tighten',
       why: loosen ?? 'it holds spend or bids tighter', label: String(next.label), changes, basis: existing ? (existing.updatedAt as Date).toISOString() : null,
-      effect: `${existing ? 'Changes' : 'Sets'} the ${input.kind} on ${input.grain} ${scopeName}. The write gate applies it at its next decision.`,
+      effect: `${existing ? 'Changes' : 'Sets'} the ${input.kind} on ${input.grain} ${scopeName}. The write gate applies it at its next decision.`
+        + (ceiling ? ' It caps the budget increases authorised in a day in that scope (a raise past it is refused); it does not cap what Amazon spends, bid raises or placement raises.' : ''),
     },
   }
 }

@@ -3,7 +3,8 @@
  *
  * Rules 1–7, where code can check them:
  *   1. name kebab-case `verb-noun`; a short title; a change tool's description says it waits for a person — and never
- *      "always … in Nexus" when its ceiling lets the business confirm it in Claude or run it by rule.
+ *      "always … in Nexus" (nor "nothing changes until a person approves it in Nexus" alone) when its ceiling lets the
+ *      business confirm it in Claude or run it by rule.
  *   2. `requires` names real permissions (ai.run is added by the door).
  *   3. `input` is a zod object; every argument is described; every list is bounded (≤ 250); a `channel`
  *      argument is an enum; NO argument names a business or workspace — the business comes from the caller.
@@ -83,6 +84,11 @@ function contractProblems(tool: AgentTool, material: Record<string, string[]> = 
   // N3 — "always … approve it in Nexus" is false when the business may let it be confirmed in Claude or run by rule.
   if (change && tool.maxClaudeTrust && tool.maxClaudeTrust !== 'ask' && /always waits for a person to approve it\s+in Nexus/i.test(tool.description)) {
     bad(1, `says it always waits for a person in Nexus, but it can be ${tool.maxClaudeTrust === 'auto' ? 'run by the business\'s rule' : 'confirmed in Claude'}`)
+  }
+  // D4 — "nothing changes until a person approves it in Nexus" is false alone for the same tools: it must also say the other way.
+  if (change && tool.maxClaudeTrust && tool.maxClaudeTrust !== 'ask' && /Nothing (changes|is created) until a person approves (it|this)\s+in Nexus/i.test(tool.description)
+    && !/in Claude|by (the business'?s )?rule/i.test(tool.description)) {
+    bad(1, `says nothing changes until a person approves it in Nexus, but it can be ${tool.maxClaudeTrust === 'auto' ? 'run by the business\'s rule' : 'confirmed in Claude'}`)
   }
 
   // 2 — permissions
@@ -433,6 +439,7 @@ describe('C1 — each rule can fail', () => {
     [{ name: 'setExample' }, 'rule 1: name'],
     [{ description: 'Changes an example.' }, 'rule 1: a change tool must say'],
     [{ description: 'Changes an example. Always waits for a person to approve it in Nexus.', maxClaudeTrust: 'confirm' }, 'but it can be confirmed in Claude'],
+    [{ description: 'Changes an example. Nothing changes until a person approves it in Nexus.', maxClaudeTrust: 'confirm' }, 'says nothing changes until a person approves it in Nexus, but it can be confirmed in Claude'],
     [{ requires: ['products.fly'] as never }, 'rule 2'],
     [{ input: z.object({ productId: z.string() }) }, 'argument productId has no describe()'],
     [{ input: z.object({ ids: z.array(z.string()).describe('ids') }) }, 'input.ids is not bounded'],

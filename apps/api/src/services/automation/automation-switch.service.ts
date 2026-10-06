@@ -4,7 +4,9 @@
  *
  *   · AUTO only through the graduation gate AND a person's click (D-R1): the gate is the kind's own `refusal` (Amazon
  *     ads rules: the level dial's ceiling, contested lane and gate — shared with the Control Room dial; other rules:
- *     14 days, 10 real runs, 1 match). The click is the approval every change from Claude waits for.
+ *     14 days, 10 real runs, 1 match). A kind with no such refusal (the ads dial: only a halt; autopilot plans, budget
+ *     pools, dayparting and budget schedules, coverage sets, repricing rules) has no gate: its AUTO is the click alone.
+ *     The click is the approval every change from Claude waits for.
  *   · brakes are not "down" (§3): turning a brake down — a bid-lowering or negating rule, a dayparting schedule, a budget
  *     schedule — can raise spend, so the plan says `brake` and turn-down-automation puts it outside its limits (a person
  *     decides it, always).

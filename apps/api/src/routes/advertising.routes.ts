@@ -686,7 +686,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Apex A.2a: per-campaign bid guardrails (max-change-% + writes/day) ──
   // Stored in dynamicBidding JSON alongside cpcCeiling. maxBidChangePct clamps
   // how far any single bid move (manual/bulk/automation) can swing from the
-  // current bid; maxWritesPerDay caps live writes per UTC day (gate-enforced).
+  // current bid. maxWritesPerDay is stored and read back but NOT enforced: the
+  // write gate disabled that daily cap on purpose (ads-write-gate.ts, WC).
   // Pass 0/null to clear a cap.
   fastify.patch('/advertising/campaigns/:id/guardrails', async (request, reply) => {
     const { id } = request.params as { id: string }
