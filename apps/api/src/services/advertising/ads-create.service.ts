@@ -82,7 +82,8 @@ async function resolveCtx(marketplace: string): Promise<{ profileId: string; reg
  * Adds used to ask the gate with the market alone, so the campaign's live-write allowlist, its pins and bid bounds and
  * Amazon's bid range were never checked when a keyword, target, product ad or ad group was ADDED to an existing campaign
  * — though the same keyword's next bid edit was. Now an add names its campaign, the field and the value, exactly as the
- * edit does (and a person's own add still passes a halt through `manual`, wave 1e).
+ * edit does. A person's own add (`manual`, isPersonCreate) passes the halt (wave 1e) and — Owner decided A, 2026-10-06 —
+ * the allowlist and pins, which stop engines, rules and sweeps only; Amazon's range and the bounds still bind him.
  *
  * `creationFlow` — the campaign was created a moment ago in this same launch (the builders, AI Goal, Replicate): it is
  * not named, as for the launch's negatives (5b), so a launch is never refused by the allowlist or by a bid policy (his

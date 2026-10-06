@@ -2,7 +2,9 @@
  * W2-B — the campaign creator is safe.
  *
  *   CM-20  an add on an EXISTING campaign (keyword, target, product ad, ad group) obeys the same write gate as an edit
- *          of it: the campaign's live-write allowlist, its pins and bid bounds, Amazon's bid range. A launch's own adds
+ *          of it: the campaign's live-write allowlist, its pins and bid bounds, Amazon's bid range. Owner decided A
+ *          (2026-10-06): the allowlist and pins stop engines, rules and sweeps; a PERSON's own add passes them, as his
+ *          edit does; Amazon's range still binds him. A launch's own adds
  *          (`creationFlow`) are not refused by the allowlist or his policies, only by Amazon's range. Sponsored Brands
  *          and Display adds keep going to their own endpoints (the gate's SB/SD refusal is for updates).
  *   CM-33  the create dedupe is atomic: two adds of the same keyword at the same moment send ONE create to Amazon,
@@ -78,13 +80,19 @@ beforeEach(() => {
 })
 
 describe('CM-20 — an add on an existing campaign obeys the campaign\'s own write rules, as an edit does', () => {
-  it('🔴 a keyword added to a campaign NOT on the live-write allowlist is refused in the gate\'s words; nothing is sent or kept', async () => {
+  it('🔴 an ENGINE\'s keyword added to a campaign NOT on the live-write allowlist is refused in the gate\'s words; nothing is sent', async () => {
     const { createKeywordLocal } = await svc()
-    const r = await inside(() => createKeywordLocal({ adGroupId: 'g-c-off', keywordText: 'cm20 allowlist', matchType: 'EXACT', bidEur: 0.4, requireAmazon: true, manual: true, userId: 'user:u-1' }))
-    expect(r).toMatchObject({ ok: false, outcome: 'refused', id: null })
-    expect(r.reason).toMatch(/not on the live-write allowlist/)
+    const r = await inside(() => createKeywordLocal({ adGroupId: 'g-c-off', keywordText: 'cm20 allowlist', matchType: 'EXACT', bidEur: 0.4, userId: 'automation:rule-1' }))
+    expect(r.externalTargetId).toBeNull()
+    expect(r.denied).toMatchObject({ deniedAt: 'campaign_allowlist' })
     expect(amz.creates).toEqual([])
-    expect(await inside(() => db().adTarget.count({ where: { expressionValue: 'cm20 allowlist' } }))).toBe(0)
+  })
+
+  it('🔴 Owner A — a PERSON\'s own add to that same campaign passes the allowlist and is sent', async () => {
+    const { createKeywordLocal } = await svc()
+    const r = await inside(() => createKeywordLocal({ adGroupId: 'g-c-off', keywordText: 'cm20 person add', matchType: 'EXACT', bidEur: 0.4, requireAmazon: true, manual: true, userId: 'user:u-1' }))
+    expect(r).toMatchObject({ ok: true, outcome: 'created' })
+    expect(amz.creates.map((c) => c.resource)).toEqual(['keywords'])
   })
 
   it('the same add on an allowlisted campaign is sent and kept', async () => {
@@ -94,26 +102,26 @@ describe('CM-20 — an add on an existing campaign obeys the campaign\'s own wri
     expect(amz.creates.map((c) => c.resource)).toEqual(['keywords'])
   })
 
-  it('🔴 a campaign whose bids are pinned by hand refuses an added keyword\'s bid, as it refuses a bid edit', async () => {
+  it('🔴 a campaign whose bids are pinned refuses an ENGINE\'s added keyword; a PERSON\'s own add passes (Owner A)', async () => {
     const { createKeywordLocal } = await svc()
-    const r = await inside(() => createKeywordLocal({ adGroupId: 'g-c-pin', keywordText: 'cm20 pinned', matchType: 'EXACT', bidEur: 0.4, requireAmazon: true, manual: true, userId: 'user:u-1' }))
-    expect(r).toMatchObject({ ok: false, outcome: 'refused' })
+    const engine = await inside(() => createKeywordLocal({ adGroupId: 'g-c-pin', keywordText: 'cm20 pinned', matchType: 'EXACT', bidEur: 0.4, userId: 'automation:rule-1' }))
+    expect(engine.denied).toMatchObject({ deniedAt: 'authority_pin' })
     expect(amz.creates).toEqual([])
+    const person = await inside(() => createKeywordLocal({ adGroupId: 'g-c-pin', keywordText: 'cm20 pinned person', matchType: 'EXACT', bidEur: 0.4, requireAmazon: true, manual: true, userId: 'user:u-1' }))
+    expect(person).toMatchObject({ ok: true, outcome: 'created' })
   })
 
-  it('🔴 a bid outside Amazon\'s range in the market is refused with Amazon\'s limit, for an add as for an edit', async () => {
+  it('🔴 a bid outside Amazon\'s range in the market is refused with Amazon\'s limit, for a person too — even off the allowlist', async () => {
     const { createTargetLocal } = await svc()
-    const r = await inside(() => createTargetLocal({ adGroupId: 'g-c-it', kind: 'PRODUCT', value: 'B0CM20LOW1', bidEur: 0.01, requireAmazon: true, manual: true, userId: 'user:u-1' }))
+    const r = await inside(() => createTargetLocal({ adGroupId: 'g-c-off', kind: 'PRODUCT', value: 'B0CM20LOW1', bidEur: 0.01, requireAmazon: true, manual: true, userId: 'user:u-1' }))
     expect(r).toMatchObject({ ok: false, outcome: 'refused' })
     expect(r.reason).toMatch(/below Amazon's minimum of €0\.02 in IT/)
     expect(amz.creates).toEqual([])
   })
 
-  it('a product ad added to a campaign not on the allowlist is refused too (it names the campaign now)', async () => {
+  it('a product ad an ENGINE adds to a campaign not on the allowlist is refused too (the add names its campaign now)', async () => {
     const { createProductAdLocal } = await svc()
-    const r = await inside(() => createProductAdLocal({ adGroupId: 'g-c-off', sku: 'SAFE-SKU-1', requireAmazon: true, manual: true, userId: 'user:u-1' }))
-    expect(r).toMatchObject({ ok: false, outcome: 'refused' })
-    expect(r.reason).toMatch(/not on the live-write allowlist/)
+    await expect(inside(() => createProductAdLocal({ adGroupId: 'g-c-off', sku: 'SAFE-SKU-1', userId: 'automation:rule-1' }))).resolves.toMatchObject({ externalAdId: null })
     expect(amz.creates).toEqual([])
   })
 
