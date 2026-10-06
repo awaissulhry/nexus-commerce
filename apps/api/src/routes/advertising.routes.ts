@@ -24,7 +24,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
-import { testConnection, adsMode, listPortfolios, createPortfolio, v3ErrorText, type AdsRegion } from '../services/advertising/ads-api-client.js'
+import { testConnection, adsMode, listPortfolios, v3ErrorText, type AdsRegion } from '../services/advertising/ads-api-client.js'
 // D2b — the conditions in the Budget tab's own words. Static, and from a module with no imports:
 // a dynamic import of the budget-grid service resolved mid-evaluation through a circular chain and
 // threw "Cannot access 'conditionsTextOf' before initialization" on prod.
@@ -9328,25 +9328,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // CC-5 — a portfolio belongs to one market's profile; a missing market used to create it in Italy.
     const marketplace = (body.marketplace ?? '').trim()
     if (!marketplace) { reply.status(400); return { error: 'marketplace required: a portfolio belongs to one market' } }
-    let externalId: string | null = null, mode = 'local', profileId = `local-${marketplace}`
     try {
-      // CM-29 — the same resolver as the write gate, so the portfolio is made in the profile the gate approves.
-      const { adsClientContextFor } = await import('../services/advertising/ads-profile-resolver.js')
-      const conn = await adsClientContextFor(marketplace)
-      if (conn) {
-        profileId = conn.profileId
-        const region: AdsRegion = conn.region
-        const { checkAdsWriteGate } = await import('../services/advertising/ads-write-gate.js')
-        const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0 })
-        if (gate.allowed) { const r = await createPortfolio({ profileId, region }, { name, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
-      }
-      if (!externalId) externalId = `local-pf-${profileId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24)}`
-      const pf = await prisma.amazonAdsPortfolio.upsert({
-        where: { profileId_externalPortfolioId: workspaceKey({ profileId, externalPortfolioId: externalId }) },
-        update: { name }, create: { profileId, externalPortfolioId: externalId, name, state: 'ENABLED' },
-      })
-      logger.warn('[ADS-PORTFOLIOS] created portfolio', { externalId, name, mode })
-      return { ok: true, portfolio: { portfolioId: pf.externalPortfolioId, name: pf.name }, mode }
+      // PB-4 — the one portfolio create (ads-portfolio.service.ts): CM-29's resolver, the write gate, the stored row.
+      const { createPortfolio } = await import('../services/advertising/ads-portfolio.service.js')
+      return { ok: true, ...(await createPortfolio({ name, marketplace })) }
     } catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'create failed' } }
   })
 

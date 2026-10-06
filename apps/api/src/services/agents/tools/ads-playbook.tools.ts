@@ -59,7 +59,7 @@ const adsPlaybook: AgentTool = {
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
       .describe('one Amazon market code (IT, DE, FR, ES, UK; business-overview lists them); omit for every market with a playbook or a campaign. capture needs one'),
     view: z.enum(PLAYBOOK_VIEWS).default('effective')
-      .describe('effective (default): the playbook one scope follows, each part with its source; rows: every playbook row of a market; templates: the templates (templateId: one with its doc); history: recorded changes; capture: what a template captured from live campaigns would hold (nothing saved)'),
+      .describe('effective (default): the playbook one scope follows, each part with its source; rows: every playbook row of a market; templates: the templates (templateId: one with its doc); history: recorded changes; capture: what a template captured from live campaigns would hold (nothing saved); compile: a dry run of building one product\'s playbook in one market (market and productId or sku; nothing created)'),
     productId: ID.optional().describe('effective or history: one product (a variation or a parent), its Nexus id'),
     sku: z.string().trim().min(1).max(100).optional().describe("instead of productId: the product's SKU in this business"),
     categoryId: ID.optional().describe('effective or history: one category, its Nexus id (catalog-structure)'),
@@ -88,7 +88,11 @@ const adsPlaybook: AgentTool = {
     + "the phase is the strategy's goal, and the strategy's numbers are what the engines obey. view rows lists a market's "
     + 'rows; templates the templates; history the changes; capture what a template captured from live campaigns would hold '
     + '(campaignIds, portfolioId or namePrefix, with productToken): slots, naming, budget shares, bid ladder, placements, '
-    + "hourly plans by rank role and the product's terms — nothing is saved. Nothing reads a playbook yet: no engine, rule "
+    + "hourly plans by rank role and the product's terms — nothing is saved. view compile is a DRY RUN of building one "
+    + "product's playbook in one market: every campaign, ad group, keyword, negative (the product's and the isolation "
+    + 'ones), product ad, budget and start bid (the ladder clamped to the strategy\'s bid band) it would create, the shared '
+    + 'terms another campaign already buys (skipped or accepted, as the template says), the monthly caps, the portfolio, '
+    + "and the blueprint gate's blockers — nothing is created, saved or sent. Nothing reads a playbook yet: no engine, rule "
     + 'or Claude change follows it until an approved apply compiles it. Budgets, bids and targets are ad-spend money: '
     + 'hidden from a person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {

@@ -263,7 +263,7 @@ export type PhaseRecipes = z.infer<typeof PHASE_RECIPES>
  */
 export const PLAYBOOK_MONEY: Readonly<Record<string, string>> = {
   ...STRATEGY_MONEY,
-  ...Object.fromEntries(['dailyBudgetCents', 'baseBidCents', 'minPerSlotCents', 'startBidCents'].map((key) => [key, FIELDS.financialsAdspendView])),
+  ...Object.fromEntries(['dailyBudgetCents', 'baseBidCents', 'minPerSlotCents', 'startBidCents', 'ladderBidCents'].map((key) => [key, FIELDS.financialsAdspendView])),
 }
 
 // ── Checks across sections ────────────────────────────────────────────────────────────────────────

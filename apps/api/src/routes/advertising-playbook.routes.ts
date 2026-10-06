@@ -12,6 +12,10 @@
  *   GET /api/advertising/automation/playbook/capture?market=IT&productToken=&campaignIds=a,b|portfolioId=|namePrefix=
  *       &competitorTokens=a,b                                        what a template captured from live campaigns
  *                                                                     would hold; nothing is saved
+ *   GET /api/advertising/automation/playbook/compile?market=IT&productId|sku=
+ *                                                                     PB-4 — a dry run of building the product's
+ *                                                                     playbook: what it would create, and the gate's
+ *                                                                     verdict; nothing is created, saved or sent
  *
  * ads.view, as every advertising read (permissions-manifest.ts). The playbook's money keys (budgets, bids, targets) are
  * stripped for a person without financials.adspend.view, as the strategy routes strip theirs. No Prisma here
@@ -115,6 +119,8 @@ const advertisingPlaybookRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/advertising/automation/playbook/templates', read('templates'))
   fastify.get('/advertising/automation/playbook/history', read('history'))
   fastify.get('/advertising/automation/playbook/capture', read('capture'))
+  // PB-4 — a dry run of building one product's playbook in one market: nothing is created, saved or sent.
+  fastify.get('/advertising/automation/playbook/compile', read('compile'))
 
   // PB-3 — the change planned, nothing saved: what the Playbook section shows before Save (and whether Save asks for the code).
   fastify.post('/advertising/automation/playbook/preview', async (request, reply) => {

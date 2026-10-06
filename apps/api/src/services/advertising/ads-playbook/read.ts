@@ -12,6 +12,9 @@
  *   history    the recorded changes of a template, or of a market's rows (one scope's), newest first
  *   capture    what a template captured from live campaigns would hold (slots, naming, budget split, bid ladder,
  *              placements, hourly plans by rank role, the product's terms) — a preview: nothing is saved
+ *   compile    PB-4 — a DRY RUN of building one product's playbook in one market (build-preview.ts): the campaigns, ad
+ *              groups, keywords, negatives, product ads, budgets and start bids it would create, judged by the blueprint
+ *              engine's gate — nothing is created, saved or sent
  *
  * Honest by construction: no engine, rule or Claude change reads a playbook. It is compiled only by an approved apply,
  * which later steps add; until then it is stored and shown only, and nothing at Amazon moves because of it.
@@ -44,7 +47,7 @@ import {
   type TemplateRow,
 } from './resolve.js'
 
-export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture'] as const
+export const PLAYBOOK_VIEWS = ['effective', 'rows', 'templates', 'history', 'capture', 'compile'] as const
 export type PlaybookViewName = (typeof PLAYBOOK_VIEWS)[number]
 
 export interface PlaybookReadArgs {
@@ -333,6 +336,13 @@ export async function readPlaybook(args: PlaybookReadArgs): Promise<PlaybookRead
   const view: PlaybookViewName = args.view ?? 'effective'
   if (view === 'templates') return templatesIn(channel, args.templateId)
   if (view === 'capture') return captureIn(args, channel)
+  if (view === 'compile') {
+    if (!args.market) return fail(400, 'A build preview is for one market: name it (market).')
+    if (!args.productId && !args.sku) return fail(400, 'A build preview is for one product: name it (productId or sku).')
+    if (args.productId && args.sku) return fail(400, 'Name the product once: productId or sku, not both.')
+    const { previewBuild } = await import('./build-preview.js')
+    return previewBuild({ market: args.market, productId: args.productId, sku: args.sku, channel })
+  }
   const limit = Math.min(Math.max(Math.trunc(args.limit ?? 20), 1), 100)
   if (view === 'history' && args.templateId) {
     const versions = await playbookVersions({ kind: 'template', refId: args.templateId }, limit)
