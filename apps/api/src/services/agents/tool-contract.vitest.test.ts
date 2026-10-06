@@ -547,6 +547,8 @@ describe('C1 — every registered tool keeps the contract', () => {
         after: { kind: 'sale', productId: 'p1', sale: [{ rowId: 'r1', coordinateKey: 'AMAZON:IT', value: 8, start: '2026-11-01', end: '2026-11-30' }] } },
       // MCP full control P9 — an import; its undo re-imports the "before" record (rollback-bulk-operation).
       'import-catalog': { before: { jobId: 'j1', file: 'claude-import.csv', records: 2 }, after: { jobId: 'j1', changedSince: [] } },
+      // ADS AUTONOMY W4-1 — a run report: its bell notice is taken back and the run withdrawn (op withdraw).
+      'report-ads-run': { before: { runId: 'r1', status: 'running', withdrawn: false }, after: { runId: 'r1', status: 'done', withdrawn: false } },
     }
     const withUndo = listTools().filter((t) => t.undo)
     expect(withUndo.map((t) => t.name).sort()).toEqual(Object.keys(sample).sort())

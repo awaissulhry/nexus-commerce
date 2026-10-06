@@ -97,7 +97,8 @@ describe('MCP.7 — every tool, as Claude sees it', () => {
     const appOnly = listTools().filter((tool) => !offeredOn(tool, 'mcp')).map((tool) => tool.name).sort()
     expect(appOnly).toEqual(AI_DRAFTS)
     // C7 — and only confirm-change is Claude's alone: a person confirms in Claude with a code; in Nexus they approve.
-    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name)).toEqual(['confirm-change'])
+    // W4-1 — and report-ads-run: the scheduled Claude run's own report.
+    expect(listTools().filter((tool) => !offeredOn(tool, 'app')).map((tool) => tool.name).sort()).toEqual(['confirm-change', 'report-ads-run'])
   })
 })
 

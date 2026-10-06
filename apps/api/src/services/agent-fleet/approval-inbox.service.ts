@@ -923,6 +923,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-ads-strategy': ['changes', 'direction', 'version', 'basis'],
   // ADS PLAYBOOK PB-3 — a playbook change: what it changes, raise or lower, the version it starts from, and its basis.
   'set-ads-playbook': ['changes', 'direction', 'version', 'basis'],
+  // ADS AUTONOMY W4-1 — a run report: what it reports (start, finish, fail, withdraw) and the run it names, with whether
+  // it is over: the same run reported or withdrawn since makes it a different report.
+  'report-ads-run': ['op', 'run'],
   'tune-ad-engine': ['changes', 'raises', 'basis'],
   'steer-fleet': ['steer', 'changes', 'basis'],
   'save-price-rule': ['changes', 'bounds', 'basis'],

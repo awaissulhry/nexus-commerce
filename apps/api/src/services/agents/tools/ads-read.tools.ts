@@ -390,7 +390,8 @@ function automationSummary(state: Awaited<ReturnType<typeof getAutomationState>>
   }
 }
 
-async function amazonOverview(args: { market?: string; days: number }) {
+/** W4-1 — also the figures of report-ads-run (ads-manager.tools.ts): a report states the numbers this read states. */
+export async function amazonOverview(args: { market?: string; days: number }) {
   const { range, window } = windowOf(args.days)
   const campaigns = await prisma.campaign.findMany({
     where: args.market ? { marketplace: args.market } : {},

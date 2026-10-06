@@ -120,7 +120,9 @@ describe('MCP.3 — every tool describes its own arguments', () => {
   it('the model is offered every tool the person may use, each with its generated schema', () => {
     const offered = anthropicTools(OWNER)
     // C7 — confirm-change is offered on Claude's door only (surfaces ['mcp']): the in-app assistant has the Approvals page.
-    expect(offered.map((t) => t.name).sort()).toEqual(listTools().filter((t) => t.name !== 'confirm-change').map((t) => t.name).sort())
+    // W4-1 — so is report-ads-run: the scheduled Claude run's own report.
+    const mcpOnly = new Set(['confirm-change', 'report-ads-run'])
+    expect(offered.map((t) => t.name).sort()).toEqual(listTools().filter((t) => !mcpOnly.has(t.name)).map((t) => t.name).sort())
     for (const tool of offered) expect(tool.input_schema).toBe(inputJsonSchema(listTools().find((t) => t.name === tool.name)!))
   })
 })
