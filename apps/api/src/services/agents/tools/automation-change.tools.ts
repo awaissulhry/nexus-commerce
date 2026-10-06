@@ -12,6 +12,7 @@
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
+import prisma from '../../../db.js'
 import type { AgentTool, ToolUndo } from '../tool-types.js'
 import { RULE_KINDS, type RuleKind } from '../../automation/automation-rule-guard.js'
 import { applyAdRuleSave, planAdRuleSave, readRuleConfig, type SaveRuleInput, type SavedRuleConfig } from '../../automation/ad-rule-save.service.js'
@@ -25,6 +26,7 @@ import { STEER_ACTIONS, STEER_LEVELS, applySteer, assignmentStateNow, charterSta
 import { ENGINE_SETTINGS, SETTING_ARG, applyTune, planTune, restoreArgsOf, tuneStateNow, type EngineSetting, type TuneInput, type TuneRecord } from '../../advertising/ads-engine-tune.service.js'
 import type { DecisionItem } from '../../advertising/ads-suggestion-decide.service.js'
 import type { StoredReach } from './ads-change-kit.js'
+import { SUGGESTION_LIMITS, suggestionLimitFacts, suggestionRefusal } from './suggestion-limits.js'
 
 const ID = z.string().trim().min(1).max(64)
 const JSON_OBJECT = z.record(z.string().max(64), z.unknown())
@@ -280,7 +282,11 @@ function switchTool(direction: Direction): AgentTool {
 // ── R11 — decide-automation-suggestions ──────────────────────────────────────────────────────────────
 
 type DecideKind = 'amazon-ads' | 'ebay-ads'
-interface DecisionChange { kind: DecideKind; items: Array<{ id: string; status: string }> }
+/**
+ * What a decision changed. AA-W2-10 (D7) — an Amazon batch run as an approved request also names its change set (the
+ * approval: every write of its applies carries it) and the negatives its applies created, for undo-ad-change.
+ */
+interface DecisionChange { kind: DecideKind; items: Array<{ id: string; status: string }>; changeSetId?: string; negatives?: Array<{ targetId: string }> }
 
 /** The permission each Amazon suggestion family needs, on top of the tool's own (null when held). */
 function familyPermission(ctx: ToolContext) {
@@ -297,18 +303,37 @@ async function statusesNow(change: DecisionChange): Promise<DecisionChange> {
     return { kind: change.kind, items: await ebayProposalStatuses(ids) }
   }
   const { suggestionStatuses } = await import('../../advertising/ads-suggestion-decide.service.js')
-  return { kind: change.kind, items: await suggestionStatuses(ids) }
+  const now: DecisionChange = { kind: change.kind, items: await suggestionStatuses(ids) }
+  if (change.changeSetId) now.changeSetId = change.changeSetId
+  if (change.negatives) {
+    // 5f — status decides, as in retireNegatives: the negatives still standing.
+    const listed = change.negatives.map((n) => n.targetId)
+    const standing = listed.length ? await prisma.adTarget.findMany({ where: { id: { in: listed }, isNegative: true, status: { not: 'ARCHIVED' } }, select: { id: true } }) : []
+    const ids = new Set(standing.map((t) => t.id))
+    now.negatives = listed.filter((id) => ids.has(id)).map((targetId) => ({ targetId }))
+  }
+  return now
 }
 
-/** C2 — dismissed Amazon suggestions are restored to waiting; an applied one changed a marketplace and is undone from the Change Log. */
+/**
+ * C2 — dismissed Amazon suggestions are restored to waiting. AA-W2-10 (D7) — applied ones are put back by undo-ad-change
+ * of the request's change set (its bids, budgets and placements, and the negatives it created); a batch that both
+ * applied and dismissed names the two requests. An apply recorded before its writes carried the change set is undone
+ * from the Change Log.
+ */
 export const DECIDE_UNDO: ToolUndo = {
   current: (change) => statusesNow(change.after as DecisionChange),
   request(change) {
     const after = change.after as DecisionChange
     const applied = after.items.filter((i) => i.status !== 'dismissed' && i.status !== 'REJECTED' && i.status !== 'pending' && i.status !== 'PENDING')
     if (after.kind === 'ebay-ads') return { refusal: 'An eBay proposal once decided cannot be put back: a rejected one is raised again by its rule; an applied one is rolled back in Nexus.' }
-    if (applied.length) return { refusal: `${applied.length} of these suggestions were applied: what they changed at Amazon is undone from the Change Log in Nexus.` }
-    return { tool: 'decide-automation-suggestions', args: { kind: after.kind, decisions: after.items.map((i) => ({ suggestionId: i.id, decide: 'restore' })) } }
+    if (!applied.length) return { tool: 'decide-automation-suggestions', args: { kind: after.kind, decisions: after.items.map((i) => ({ suggestionId: i.id, decide: 'restore' })) } }
+    if (!after.changeSetId) return { refusal: `${applied.length} of these suggestions were applied: what they changed at Amazon is undone from the Change Log in Nexus.` }
+    const dismissed = after.items.filter((i) => i.status === 'dismissed').length
+    if (dismissed) {
+      return { refusal: `${applied.length} of these suggestions were applied and ${dismissed} dismissed: put the applied ones back with undo-ad-change (changeSetId ${after.changeSetId}), and restore the dismissed ones with decide-automation-suggestions (decide: restore).` }
+    }
+    return { tool: 'undo-ad-change', args: { changeSetId: after.changeSetId, why: 'undo of applied rule suggestions' } }
   },
 }
 
@@ -319,22 +344,33 @@ const decideSuggestions: AgentTool = {
   description:
     'Apply or dismiss what PROPOSE rules suggested (kind amazon-ads: the Suggestions queue; ebay-ads: eBay rule proposals), up to ' +
     '100 at a time. Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the ' +
-    'business set it so. An applied change reaches Amazon or eBay through their write gates; for Amazon the preview says, ' +
-    'per suggestion, whether it lands live at Amazon or in sandbox. Refused before anything waits: a suggestion that pauses, ' +
-    'switches on or archives (never pause — dismiss it and use lower bids), one whose target is held at the floor by ' +
-    'no-pause suppression, one already decided, one Amazon\'s write gate would refuse, anything while ads automation is ' +
-    'halted. An applied Amazon suggestion is written as its rule (the approver is recorded on the suggestion) and is undone ' +
-    'from the Change Log in Nexus, not by undo-change. restore puts dismissed Amazon suggestions back to waiting.',
+    'business set it so — or, for Amazon suggestions only, run by the business\'s rule inside its limits and the ads strategy ' +
+    'where each apply lands (with its default limits only cuts, negatives, dismissals and restores; a raise, a new keyword, or an apply ' +
+    'Nexus cannot measure before it runs — a sweep across a market — waits for a person). An applied change reaches Amazon or ' +
+    'eBay through their write gates; for Amazon the preview says, per suggestion, whether it lands live at Amazon or in ' +
+    'sandbox, and each limit it meets with its source. Refused before anything waits: a suggestion that pauses, switches on ' +
+    'or archives (never pause — dismiss it and use lower bids), one whose target is held at the floor by no-pause ' +
+    'suppression, one already decided, one Amazon\'s write gate would refuse, anything while ads automation is halted. An ' +
+    'applied Amazon suggestion is written as its rule, under this request: undo-change puts its bids, budgets and placements ' +
+    'back and retires the negatives it created (undo-ad-change of its changeSetId); keywords it created stay. One decided by ' +
+    'rule never takes a placement lane the hourly bid plans hold. One its rule passes over (such a lane, a protected product, ' +
+    'a campaign its picker leaves out …) writes nothing: it is said as skipped, with why, and keeps waiting. restore puts ' +
+    'dismissed Amazon suggestions back to waiting.',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
   openWorld: true,
   requires: [F.adsAutomationManage, FIELDS.financialsAdspendView],
-  // An applied bid or budget is rolled back from the Change Log, but it ran in between; a dismissal is restored.
+  // An applied bid or budget is put back by undo-ad-change of the request's change set, but it ran in between; a
+  // dismissal is restored; a keyword an apply created stays.
   reversibility: 'partial',
-  // D7 — confirm at most: an apply passes `operatorApproved` (ads-suggestion-decide.service.ts), a person's write that
-  // takes a placement lane the rank engine holds. That must be revisited before this tool may run by rule.
-  maxClaudeTrust: 'confirm',
+  // AA-W2-10 — may run by the business's rule, inside its limits per family and the ads strategy where each apply lands
+  // (suggestion-limits.ts). An apply decided by rule is not a person's write: it passes `operatorApproved: false`, so it
+  // skips a placement lane the rank engine holds instead of taking it (D7).
+  maxClaudeTrust: 'auto',
+  strategyBound: 'amazon-ads',
+  limits: SUGGESTION_LIMITS,
+  withinLimits: suggestionRefusal,
   undo: DECIDE_UNDO,
   input: z.object({
     kind: z.enum(['amazon-ads', 'ebay-ads']).describe('amazon-ads (the Suggestions queue) or ebay-ads (eBay rule proposals)'),
@@ -356,12 +392,15 @@ const decideSuggestions: AgentTool = {
     if ('error' in planned) return { ok: false, error: planned.error }
     const reached = await suggestionReach(planned.items)
     if ('error' in reached) return { ok: false, error: reached.error }
-    return { ok: true, preview: decidePreview('amazon-ads', reached.items as unknown as Array<Record<string, unknown>>) }
+    // AA-W2-10 — the facts the business's rule is judged on: the ads strategy where each apply lands, and each family's move.
+    const byRule = await suggestionLimitFacts(planned.items, ctx.approvalId)
+    return { ok: true, preview: { ...decidePreview('amazon-ads', reached.items as unknown as Array<Record<string, unknown>>), ...byRule } }
   },
   async execute(args, ctx) {
     const decisions = args.decisions as Array<{ suggestionId: string; decide: 'apply' | 'dismiss' | 'restore' }>
     const kind = args.kind as DecideKind
-    let results: Array<{ suggestionId: string; ok: boolean; status: string; detail: string | null }>
+    let results: Array<{ suggestionId: string; ok: boolean; status: string; detail: string | null; skipped?: true }>
+    let set: Pick<DecisionChange, 'changeSetId' | 'negatives'> | null = null
     if (kind === 'ebay-ads') {
       const crud = await import('../../marketing/ebay-ads-rule-crud.service.js')
       const planned = await crud.planEbayProposalDecisions(decisions)
@@ -371,18 +410,29 @@ const decideSuggestions: AgentTool = {
       const svc = await import('../../advertising/ads-suggestion-decide.service.js')
       const planned = await svc.planSuggestionDecisions(decisions, familyPermission(ctx))
       if ('error' in planned) return { ok: false, error: planned.error }
-      // D7 — each decision records the person who approved it, as the eBay path does.
-      results = await svc.applySuggestionDecisions(decisions, ctx.userId ?? null)
+      // D7 — each decision records the person who approved it, as the eBay path does. AA-W2-10 — an apply decided by the
+      // business's rule is not a person's write (no placement lane the rank engine holds), and every write of an apply
+      // joins this request's change set, its audit reason naming the request and who decided it.
+      const byRule = ctx.decidedVia === 'auto'
+      const approvalId = ctx.approvalId?.trim()
+      const who = byRule ? 'run by rule' : ctx.userId ? `approved by user:${ctx.userId}` : 'approved'
+      const out = await svc.applySuggestionDecisions(decisions, ctx.userId ?? null, {
+        operatorApproved: !byRule,
+        ...(approvalId ? { approval: { changeSetId: approvalId, reason: `${ctx.via === 'claude' ? 'Claude request' : 'Approved request'} ${approvalId} (${who})` } } : {}),
+      })
+      results = out.results
+      if (approvalId) set = { changeSetId: approvalId, negatives: out.negatives.map((targetId) => ({ targetId })) }
     }
     const before = kind === 'ebay-ads' ? 'PENDING' : 'pending'
     // A batch is recorded when any decision went through: those changed something, and undo must know them.
     if (!results.some((r) => r.ok)) return { ok: false, error: results.map((r) => `${r.suggestionId}: ${r.detail ?? 'refused'}`).join('; ') }
     return {
       ok: true,
-      data: { results, decided: results.filter((r) => r.ok).length, refused: results.filter((r) => !r.ok).length },
+      // AA-W2-10 — a suggestion its rule passed over is said as skipped (with why), never as decided.
+      data: { results, decided: results.filter((r) => r.ok).length, refused: results.filter((r) => !r.ok && !r.skipped).length, skipped: results.filter((r) => r.skipped).length, ...(set ? { changeSetId: set.changeSetId } : {}) },
       change: {
         before: { kind, items: decisions.map((d) => ({ id: d.suggestionId, status: d.decide === 'restore' ? 'dismissed' : before })) },
-        after: { kind, items: results.map((r) => ({ id: r.suggestionId, status: r.status })) },
+        after: { kind, items: results.map((r) => ({ id: r.suggestionId, status: r.status })), ...(set ?? {}) },
       },
     }
   },

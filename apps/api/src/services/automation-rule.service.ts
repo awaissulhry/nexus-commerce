@@ -165,6 +165,14 @@ export type ActionHandler = (
      * write: `placement_apply` then writes a lane the rank engine holds instead of skipping it, as an automated run does.
      */
     operatorApproved?: boolean
+    /**
+     * AA-W2-10 (D7) — set by `applySuggestion` when an approval carries the apply out (Claude's
+     * decide-automation-suggestions). Every write joins the approval's change set (`changeSetId` = the approval id, so
+     * undo-ad-change and approval-status find exactly its rows), its audit reason starts with `reason` (the request and
+     * who decided it), and each negative it creates is added to `negatives` (undo-ad-change retires them). The actor
+     * stays the rule's own: the rule writes it, and the rule's checks answer.
+     */
+    approval?: { changeSetId: string; reason: string; negatives: string[] }
   },
 ) => Promise<ActionResult>
 

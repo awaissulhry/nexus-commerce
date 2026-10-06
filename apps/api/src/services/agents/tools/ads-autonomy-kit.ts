@@ -363,6 +363,8 @@ export async function buildLimitFacts(input: {
   items: readonly KitItem[]
   approvalId?: string | null
   projectMonth?: boolean
+  /** AA-W2-10 — rules C4 does not count as an engine that also moves it (a rule whose own suggestion is applied). */
+  exceptRuleIds?: readonly string[]
   now?: Date
 }): Promise<LimitFacts> {
   const action = actionOfTool(input.tool)
@@ -455,7 +457,7 @@ export async function buildLimitFacts(input: {
     if (!s.campaignId || campaigns.has(s.campaignId)) continue
     campaigns.set(s.campaignId, s.kind === 'campaign' ? s.label : `the campaign of ${s.label}`)
   }
-  for (const [campaignId, by] of await enginesOnCampaigns(campaigns.keys())) facts.engineOwned.push({ campaignId, label: campaigns.get(campaignId)!, by })
+  for (const [campaignId, by] of await enginesOnCampaigns(campaigns.keys(), { exceptRuleIds: input.exceptRuleIds })) facts.engineOwned.push({ campaignId, label: campaigns.get(campaignId)!, by })
 
   // C5, C6 — what already ran by rule.
   const ledger = await ruleRunLedger({ excludeApprovalId: input.approvalId, now: input.now })

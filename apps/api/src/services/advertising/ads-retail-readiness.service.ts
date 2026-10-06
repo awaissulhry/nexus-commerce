@@ -114,7 +114,11 @@ export async function analyzeRetailReadiness(opts: { marketplace?: string; campa
  *  the existing intel-routes display.)
  *  ADS AUTONOMY W1-6 — the floor is the ads strategy's stop bid for the campaign (its market, the lower across its
  *  products) when one is set, else the 2¢ floor. */
-export async function applyRetailGuard(args: { campaignIds?: string[]; actor?: string; marketplace?: string }): Promise<{ paused: string[]; skipped: number }> {
+export async function applyRetailGuard(args: {
+  campaignIds?: string[]; actor?: string; marketplace?: string
+  /** AA-W2-10 (D7) — the change set every floored bid joins (an approval that carries a rule suggestion out); optional. */
+  changeSetId?: string | null
+}): Promise<{ paused: string[]; skipped: number }> {
   let ids = args.campaignIds
   if (!ids) {
     const analysis = await analyzeRetailReadiness({ marketplace: args.marketplace })
@@ -132,7 +136,7 @@ export async function applyRetailGuard(args: { campaignIds?: string[]; actor?: s
     // NP — never pause: floor the campaign's bids to ~2¢, or the strategy's stop bid (restorable) instead.
     const stop = stops.get(id)
     const named = stop?.source ? ` at ${stop.cents}¢ (${strategySourceWords(stop.source)})` : ''
-    try { await suppressCampaignBids(id, { actor: adsActorOf(args.actor, 'retail-guard'), floorCents: stop?.cents ?? null, reason: `Retail-readiness guard: products unsellable → bids floored${named} (no-pause)` }); paused.push(id) } catch { skipped++ }
+    try { await suppressCampaignBids(id, { actor: adsActorOf(args.actor, 'retail-guard'), floorCents: stop?.cents ?? null, reason: `Retail-readiness guard: products unsellable → bids floored${named} (no-pause)`, ...(args.changeSetId ? { changeSetId: args.changeSetId } : {}) }); paused.push(id) } catch { skipped++ }
   }
   logger.info('[AX3.1] applyRetailGuard', { paused: paused.length, skipped })
   return { paused, skipped }
