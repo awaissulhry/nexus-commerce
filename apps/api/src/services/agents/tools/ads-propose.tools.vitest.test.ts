@@ -324,3 +324,42 @@ describe('A5 — graduate-keyword: into the named or resolved ad group, executed
     expect(getTool('graduate-keyword')!.reversibility).toBe('partial')
   })
 })
+
+/**
+ * PB-6a (L2) — winners stay: graduate-keyword refuses a term that already lives as an exact keyword for the SAME product
+ * (an ad group in the market advertising what the destination advertises), and never refuses one another product holds:
+ * two products may buy the same keyword (the Owner's rule 3). Made-up ASINs.
+ */
+describe('PB-6a — graduate-keyword never creates a winner twice for one product', () => {
+  it('refuses a term at home for the same product; allows a term another product holds', async () => {
+    await inside(async () => {
+      for (const [adGroupId, asin] of [['g-c-it', 'B0TESTSAME'], ['g-c-pin', 'B0TESTSAME'], ['g-c-off', 'B0TESTOTHR']]) {
+        await database.client.adProductAd.create({ data: { adGroupId, asin } })
+      }
+    })
+    const same = await preview('graduate-keyword', { query: 'Pinned Jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
+    expect(same.ok).toBe(false)
+    expect(same.error).toMatch(/already lives as an exact keyword in Italy pinned › group c-pin, which advertises the same product/)
+    const other = await preview('graduate-keyword', { query: 'winter jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
+    expect(other.ok, other.error).toBe(true)
+
+    // A destination shared with another product: only the product the term converted for counts (nit b). The term
+    // converted in c-pin (the SAME product only); c-it also advertises the other product, whose ad group holds it.
+    await inside(() => database.client.adProductAd.create({ data: { adGroupId: 'g-c-it', asin: 'B0TESTOTHR' } }))
+    const shared = await preview('graduate-keyword', { query: 'winter jacket', sourceExternalCampaignId: 'EXT-c-pin', sourceExternalAdGroupId: 'EXT-g-c-pin', destExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
+    expect(shared.ok, shared.error).toBe(true)
+    await inside(() => database.client.adProductAd.deleteMany({ where: { asin: { in: ['B0TESTSAME', 'B0TESTOTHR'] } } }))
+  })
+
+  it('a sibling variant of one parent is the same product: its exact keyword is a home', async () => {
+    await inside(async () => {
+      const parent = await database.client.product.create({ data: { sku: 'TEST-PB6A-PARENT', name: 'Test parent', basePrice: '10.00', isParent: true } })
+      const [kid1, kid2] = await Promise.all(['1', '2'].map((n) => database.client.product.create({ data: { sku: `TEST-PB6A-KID${n}`, name: `Test kid ${n}`, basePrice: '10.00', parentId: parent.id, amazonAsin: `B0TESTKID${n}` } })))
+      await database.client.adProductAd.create({ data: { adGroupId: 'g-c-it', productId: kid1.id, asin: 'B0TESTKID1' } })
+      await database.client.adProductAd.create({ data: { adGroupId: 'g-c-pin', productId: kid2.id, asin: 'B0TESTKID2' } })
+    })
+    const sibling = await preview('graduate-keyword', { query: 'pinned jacket', sourceExternalCampaignId: 'EXT-c-it', destExternalAdGroupId: 'EXT-g-c-it' })
+    expect(sibling.error).toMatch(/already lives as an exact keyword in Italy pinned › group c-pin/)
+    await inside(() => database.client.adProductAd.deleteMany({ where: { asin: { in: ['B0TESTKID1', 'B0TESTKID2'] } } }))
+  })
+})

@@ -1050,7 +1050,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as {
       market?: string; productGroupName?: string
       products?: PRef[]
-      campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; adProduct?: 'SP' | 'SB' | 'SD'; matchType?: string; bidEur?: number; budgetEur?: number; keywords?: Array<string | { text: string; matchType?: 'BROAD' | 'PHRASE' | 'EXACT'; bidEur?: number }>; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }>; creative?: Record<string, unknown> }>
+      campaigns?: Array<{ id?: string; name: string; adGroupName?: string; kind: 'auto' | 'keyword' | 'pat'; adProduct?: 'SP' | 'SB' | 'SD'; matchType?: string; theme?: string; bidEur?: number; budgetEur?: number; keywords?: Array<string | { text: string; matchType?: 'BROAD' | 'PHRASE' | 'EXACT'; bidEur?: number }>; productTargets?: PRef[]; negKeywords?: Array<string | { text?: string; matchType?: 'EXACT' | 'PHRASE' }>; negProducts?: PRef[]; autoGroups?: Array<{ key: string; enabled?: boolean; bidEur?: number }>; creative?: Record<string, unknown> }>
       placementBids?: { tos?: string; pdp?: string; ros?: string }
       rules?: { harvest?: SpwRule; negative?: SpwRule }
       automationMode?: 'rule' | 'ai'
@@ -1174,19 +1174,48 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // instead of back into its source ad group. Scoped PER ad-product (multi-format) so a winner only
     // ever graduates into a campaign of its OWN format — SP→SP exact/PAT, SB→SB — never across formats.
     // SP-only builds (Quick / SPW / AI Goal) collapse to one product → identical to the old behaviour.
+    // PB-6a (C1) — a keyword match type ONE campaign hosts is a rule-level destination. One that several host (Advanced:
+    // Exact | Brand, Competitor, Category) lands, per source, in the host of the source's own theme: `theme` when the
+    // payload names it, else the one slot token of the campaign's name that is a theme (its words after the product
+    // group's name, split at "-", so a group named "Brand …" does not count). A source with no theme (Auto) takes the
+    // Category host: the conservative default (spec §2.4). Where none fits, nowhere (refused by name at graduation). It
+    // used to be the last one written, so every brand winner went to Exact | Category.
+    const THEMES = ['brand', 'competitor', 'category']
+    const groupName = (b.productGroupName || '').trim().toLowerCase()
+    const themeOf = (c: { name: string; theme?: string }): string | null => {
+      const named = typeof c.theme === 'string' ? c.theme.trim().toLowerCase() : ''
+      if (THEMES.includes(named)) return named
+      const name = c.name.trim().toLowerCase()
+      const slots = (groupName && name.startsWith(groupName) ? name.slice(groupName.length) : name).split('-').map((t) => t.trim())
+      const found = THEMES.filter((t) => slots.includes(t))
+      return found.length === 1 ? found[0] : null
+    }
     const widProduct: Record<string, 'SP' | 'SB' | 'SD'> = {}
+    const widTheme: Record<string, string | null> = {}
     const destinationsByProduct: Record<string, Record<string, string>> = {}
+    const hostsByProduct: Record<string, Record<string, Array<{ adGroupId: string; theme: string | null }>>> = {}
     for (const c of campaigns) {
       if (!c.id) continue
       const ref = idMap[c.id]
       if (!ref) continue
       const p = c.adProduct ?? 'SP'
       widProduct[c.id] = p
+      widTheme[c.id] = themeOf(c)
       const dest = (destinationsByProduct[p] ??= {})
-      if (c.kind === 'keyword') { for (const mt of matchTypesFor(c.matchType)) dest[mt] = ref.adGroupId }
+      if (c.kind === 'keyword') { for (const mt of matchTypesFor(c.matchType)) ((hostsByProduct[p] ??= {})[mt] ??= []).push({ adGroupId: ref.adGroupId, theme: widTheme[c.id] }) }
       else if (c.kind === 'pat') dest.PRODUCT = ref.adGroupId // H.5 — converting ASINs graduate into the PAT campaign
     }
-    type RuleSrc = { product: 'SP' | 'SB' | 'SD'; adGroupId: string; campaignId: string; harvestFrom: boolean; graduate: string[]; negate: string[]; graduateProduct: boolean; negateProduct: boolean }
+    for (const [p, byMatch] of Object.entries(hostsByProduct)) for (const [mt, hosts] of Object.entries(byMatch)) if (hosts.length === 1) destinationsByProduct[p][mt] = hosts[0].adGroupId
+    const ownDestinations = (wid: string, p: string): Record<string, string | null> | null => {
+      const out: Record<string, string | null> = {}
+      for (const [mt, hosts] of Object.entries(hostsByProduct[p] ?? {})) {
+        if (hosts.length < 2) continue
+        const mine = hosts.filter((h) => h.theme === (widTheme[wid] ?? 'category'))
+        out[mt] = mine.length === 1 ? mine[0].adGroupId : null
+      }
+      return Object.keys(out).length ? out : null
+    }
+    type RuleSrc = { product: 'SP' | 'SB' | 'SD'; adGroupId: string; campaignId: string; harvestFrom: boolean; graduate: string[]; negate: string[]; graduateProduct: boolean; negateProduct: boolean; destinations?: Record<string, string | null> }
     const buildRule = async (rcfg: SpwRule | undefined, kind: 'harvest' | 'negative') => {
       if (!rcfg) return
       const allSources: RuleSrc[] = Object.entries(rcfg.rows ?? {})
@@ -1198,7 +1227,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           const negate: string[] = []
           if (r.nP) negate.push('PHRASE'); if (r.nE) negate.push('EXACT')
           const any = r.st || graduate.length || negate.length || r.tBox || r.nBox
-          return any ? { product: widProduct[wid] ?? 'SP', adGroupId: ref.adGroupId, campaignId: ref.campaignId, harvestFrom: !!r.st, graduate, negate, graduateProduct: !!r.tBox, negateProduct: !!r.nBox } : null
+          const own = ownDestinations(wid, widProduct[wid] ?? 'SP')
+          return any ? { product: widProduct[wid] ?? 'SP', adGroupId: ref.adGroupId, campaignId: ref.campaignId, harvestFrom: !!r.st, graduate, negate, graduateProduct: !!r.tBox, negateProduct: !!r.nBox, ...(own ? { destinations: own } : {}) } : null
         })
         .filter((s): s is RuleSrc => s != null)
       if (!allSources.length) return
@@ -1223,8 +1253,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           // H.4 — propose-first. control:'manual' makes the engine force dry-run and record each run as
           // an AdsRuleSuggestion the operator approves on /marketing/ads/suggestions (approving re-runs
           // it live, write-gated). Flip to hands-off later by dropping control:'manual' + dryRun:false.
+          // PB-6a — v2: each row's ticks are literal ([] = none); no constant bid (a winner starts at its CPC, inside the band).
           const actions = [
-            { type: 'harvest_and_negate', control: 'manual', windowDays: 60, minSpendCents, minOrders, graduationBidEur: 0.5, sources, destinations, perfCriteria: perf, mode: kind },
+            { type: 'harvest_and_negate', v: 2, control: 'manual', windowDays: 60, minSpendCents, minOrders, sources, destinations, perfCriteria: perf, mode: kind },
           ]
           const rule = await prisma.automationRule.create({
             data: {
