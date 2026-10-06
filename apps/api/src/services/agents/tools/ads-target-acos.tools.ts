@@ -31,8 +31,8 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { setBidAutomation } from '../../advertising/campaign-settings.service.js'
 import { adsMode } from '../../advertising/ads-api-client.js'
-import { approvedRun, BY_RULE_WORDS, notRun, strategyFactsFor } from './ads-change-kit.js'
-import { adKitLimits, commonRefusal, LIMIT_FACTS_MONEY, limitFactsOf, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
+import { approvedRun, BY_RULE_WORDS, notRun, ruleFactsFor, ruleRefusal } from './ads-change-kit.js'
+import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
@@ -207,7 +207,8 @@ async function decide(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'ap
   // target is a raise of all of it), in Nexus only. A cleared or 0 % target is left out: targetRefusal holds it.
   const items = changing.filter((r) => r.toPct != null && r.toPct > 0)
     .map((r): KitItem => ({ entity: { kind: 'campaign', id: r.campaign.id }, change: { field: 'targetAcosPct', fromPct: r.fromPct, toPct: r.toPct as number }, nexusOnly: true }))
-  const facts = await strategyFactsFor(TOOL_NAME, items, ctx)
+  // Nexus only: no write for the gate to judge (the bid engines' own writes are judged when they write).
+  const facts = await ruleFactsFor({ tool: TOOL_NAME, limits: TARGET_LIMITS, items, writes: [], approvalId: ctx?.approvalId })
   return {
     writes,
     result: {
@@ -260,7 +261,7 @@ function targetRefusal(preview: unknown): string | null {
     return `${cleared.name}: its target ACoS ${cleared.toPct == null ? 'is cleared' : 'becomes 0%'}, so Nexus's bid optimiser falls back to ${NO_TARGET_WORDS.replace(/^Nexus uses /, '')} — what that does to its bids is not judged by rule; a person decides`
   }
   const facts = limitFactsOf(preview)
-  if (!facts) return null // commonRefusal says it
+  if (!facts) return null // ruleRefusal says it
   for (const r of list) {
     if (!((r.toPct as number) > (r.fromPct ?? 0))) continue
     const scope = facts.scopes[facts.entityScopes[`campaign:${r.campaignId}`] ?? '']
@@ -290,6 +291,8 @@ export const SET_CAMPAIGN_TARGET_ACOS_UNDO: ToolUndo = {
 }
 
 const TOOL_NAME = 'set-campaign-target-acos'
+/** AA-W2-8 — its Claude limits: up to 50 campaigns a request; each move in points, a raise 0 by default. */
+const TARGET_LIMITS = adKitLimits({ maxItems: 50 }, STEP_POINT_LIMITS)
 const { targetAcosPct: _shownToWhoMaySetIt, ...FACTS_MONEY } = LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>
 const TARGET_TOOL_MONEY: Readonly<Record<string, FieldPermission>> = { ...FACTS_MONEY, limitsNote: FIELDS.financialsAdspendView }
 
@@ -326,8 +329,8 @@ const setCampaignTargetAcos: AgentTool = {
   // business sets how many points one may be) and the ads strategy.
   strategyBound: 'amazon-ads',
   maxClaudeTrust: 'auto',
-  limits: adKitLimits({ maxItems: 50 }, STEP_POINT_LIMITS),
-  withinLimits: (preview, limits) => targetRefusal(preview) ?? commonRefusal(preview, limits),
+  limits: TARGET_LIMITS,
+  withinLimits: (preview, limits) => targetRefusal(preview) ?? ruleRefusal(preview, limits),
   // The ads strategy's facts and lines hold money (bid limits, budgets by rule, its ACoS target): hidden from a person
   // without ad spend. Not its own targetAcosPct: anyone who may set a campaign's target sees it, as before.
   restrictedFields: TARGET_TOOL_MONEY,

@@ -7,13 +7,16 @@
  * ADS AUTONOMY AA-W2-8 — set-campaign-budget and set-placement-multipliers are strategy-bound (tool-types.ts
  * StrategyBound): a business may let them run by its rule, only inside the tool's limits and the ads strategy where the
  * change lands (ads-autonomy-kit.ts C1–C7, the month's forecast for a budget raise) and only where Amazon's write gate
- * lets the rule's own write through (`ruleReach`: the allowlist, pins, a halt and his own limits bind a run by rule).
+ * lets the rule's own write through (ruleFactsFor's `ruleGate`: the allowlist, pins, a halt and his own limits bind a
+ * run by rule).
  *
  *   set-campaign-budget (A6)        a campaign's daily budget, in its own currency; the campaign's budget bounds and
  *                                   (live) the gate's value cap, spend ceilings and daily budget-movement bound refuse
  *   set-placement-multipliers (A6)  top-of-search / product-pages / rest-of-search adjustments (0–900 %)
  *   bulk-ad-bid-change (A7)         up to 500 target bids in one request — a list, or a selection moved by a percent;
- *                                   every exclusion counted by its reason; one change set, undone as one
+ *                                   every exclusion counted by its reason; one change set, undone as one. AA-W2-6 —
+ *                                   strategy-bound: every row is checked against the ads strategy of its own ad group,
+ *                                   so the business may let it run by its rule (one run of its daily cap)
  *   suppress-campaign (A8)          the no-pause stop: every bid of the campaign to the 2-cent floor, remembered
  *   restore-campaign (A8)           puts the remembered bids back — only a suppression a person set (`user:`), never an
  *                                   engine's
@@ -39,10 +42,10 @@ import { adGroupCampaigns, adGroupSuppressionCounts } from '../../advertising/ad
 import { restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_FLOOR_CENTS } from '../../advertising/ads-bid-suppression.service.js'
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
-import { alsoChangedBy, approvedRun, BY_RULE_WORDS, changeClampedBid, notRun, reachNote, reachRefusal, recheck, ruleReachOf, ruleReachRefusal, spOnlyRefusal, storedReach, strategyFactsFor, type StoredReach } from './ads-change-kit.js'
-import { adKitLimits, commonRefusal, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
+import { alsoChangedBy, approvedRun, BY_RULE_WORDS, changeClampedBid, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, storedReach, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
-import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 /** The flat horizon a change set reverses within (rollbackByChangeSetId). */
 const SET_WINDOW_MS = 24 * 3600 * 1000
@@ -314,8 +317,13 @@ async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolConte
   const bound = await alsoChangedBy(c.id)
   // AA-W2-8 — what a run by rule is judged on: the gate as the rule's write, the ads strategy where it lands, this
   // change counted (a raise adds its difference to the market's daily budget increase and its month's forecast).
-  const ruleReach = await ruleReachOf(intent)
-  const facts = await strategyFactsFor('set-campaign-budget', [{ entity: { kind: 'campaign', id: c.id }, change: { field: 'dailyBudget', fromCents: current, toCents: proposed } }], ctx)
+  const rule = await ruleFactsFor({
+    tool: 'set-campaign-budget',
+    limits: BUDGET_LIMITS,
+    items: [{ entity: { kind: 'campaign', id: c.id }, change: { field: 'dailyBudget', fromCents: current, toCents: proposed } }],
+    writes: [{ ...intent, label: `campaign "${c.name}"` }],
+    approvalId: ctx?.approvalId,
+  })
   return {
     ok: true,
     preview: {
@@ -327,14 +335,16 @@ async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolConte
       deltaCents: proposed - current,
       reach: stored,
       reachNote: reachNote(stored),
-      ruleReach,
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
-      ...facts,
+      ...rule,
       effect: `Sets the daily budget of ${c.name} from ${amountLabel(current, currency)} to ${amountLabel(proposed, currency)}.`,
     },
   }
 }
+
+/** AA-W2-8 — set-campaign-budget's Claude limits: every raise waits for a person until he sets one (0 %); a cut, 100 %. */
+const BUDGET_LIMITS = adKitLimits({ maxItems: 1 }, STEP_PCT_LIMITS)
 
 /** AA-W2-8 — a raise from no recorded budget has no size in percent: it never runs by rule. */
 function budgetRefusal(preview: unknown): string | null {
@@ -379,9 +389,8 @@ const setCampaignBudget: AgentTool = {
   openWorld: true,
   reversibility: 'full',
   maxClaudeTrust: 'auto',
-  // Every raise waits for a person until he sets how large one may be (0 by default); a cut, up to 100 %.
-  limits: adKitLimits({ maxItems: 1 }, STEP_PCT_LIMITS),
-  withinLimits: (preview, limits) => commonRefusal(preview, limits) ?? ruleReachRefusal(preview) ?? budgetRefusal(preview),
+  limits: BUDGET_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? budgetRefusal(preview),
   undo: SET_CAMPAIGN_BUDGET_UNDO,
   description:
     'Set the daily budget of an Amazon Sponsored Products campaign, in the campaign\'s own currency (never converted). '
@@ -452,6 +461,12 @@ function placementsOf(dynamicBidding: unknown): Placements {
   return out
 }
 
+/**
+ * AA-W2-8 — set-placement-multipliers' Claude limits: an item is one placement's adjustment (three at most); every raise
+ * waits for a person until he sets how many points one may be (0 by default): a raise raises every bid there.
+ */
+const PLACEMENT_LIMITS = adKitLimits({ maxItems: PLACEMENTS.length }, STEP_POINT_LIMITS)
+
 const pctLine = (v: Record<PlacementKey, number | null>) => PLACEMENTS.map((p) => `${p.label} ${v[p.key] ?? 0}%`).join(', ')
 
 async function placementPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
@@ -475,10 +490,9 @@ async function placementPreview(args: Record<string, unknown>, ctx?: Pick<ToolCo
   const bound = await alsoChangedBy(c.id)
   const raises = PLACEMENTS.filter((p) => (proposed[p.key] ?? 0) > (current[p.key] ?? 0)).map((p) => p.label)
   // AA-W2-8 — each adjustment that moves is one item, in points: a raise raises every bid there.
-  const ruleReach = await ruleReachOf(intent)
   const items: KitItem[] = PLACEMENTS.filter((p) => (proposed[p.key] ?? 0) !== (current[p.key] ?? 0))
     .map((p): KitItem => ({ entity: { kind: 'campaign', id: c.id }, change: { field: 'placementPct', fromPct: current[p.key] ?? 0, toPct: proposed[p.key] ?? 0 } }))
-  const facts = await strategyFactsFor('set-placement-multipliers', items, ctx)
+  const rule = await ruleFactsFor({ tool: 'set-placement-multipliers', limits: PLACEMENT_LIMITS, items, writes: [{ ...intent, label: `campaign "${c.name}"` }], approvalId: ctx?.approvalId })
   return {
     ok: true,
     preview: {
@@ -488,10 +502,9 @@ async function placementPreview(args: Record<string, unknown>, ctx?: Pick<ToolCo
       proposed,
       reach: stored,
       reachNote: reachNote(stored),
-      ruleReach,
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
-      ...facts,
+      ...rule,
       effect: `Sets the placement adjustments of ${c.name} from ${pctLine(current)} to ${pctLine(proposed)}${raises.length ? `: bids rise on ${raises.join(' and ')}` : ''}.`,
     },
   }
@@ -536,10 +549,8 @@ const setPlacementMultipliers: AgentTool = {
   openWorld: true,
   reversibility: 'full',
   maxClaudeTrust: 'auto',
-  // An item is one placement's adjustment (three at most). Every raise waits for a person until he sets how many
-  // points one may be (0 by default): a raise raises every bid there.
-  limits: adKitLimits({ maxItems: PLACEMENTS.length }, STEP_POINT_LIMITS),
-  withinLimits: (preview, limits) => commonRefusal(preview, limits) ?? ruleReachRefusal(preview),
+  limits: PLACEMENT_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits),
   undo: SET_PLACEMENTS_UNDO,
   description:
     'Set the placement bid adjustments of an Amazon Sponsored Products campaign: top of search, product pages, rest '
@@ -650,8 +661,17 @@ async function askedBids(a: BulkArgs): Promise<{ asked: Array<{ targetId: string
 
 type BulkWrite = { targetId: string; fromCents: number; toCents: number }
 
-/** A bulk request decided: its preview (20 lines shown), and every write it makes (all of them). */
-async function bulkDecision(args: Record<string, unknown>): Promise<{ result: ToolResult; writes: BulkWrite[] }> {
+/**
+ * AA-W2-6 — bulk-ad-bid-change's Claude limits: the kit's (at most 50 targets in one request run by rule), with a raise
+ * and a cut step. By default no raise runs alone (0 %); cuts run alone inside the ads strategy of each row's ad group.
+ */
+const BULK_BID_LIMITS = adKitLimits({ maxItems: 50 }, STEP_PCT_LIMITS)
+
+/**
+ * A bulk request decided: its preview (20 lines shown), and every write it makes (all of them). `rule` (the dry run,
+ * not `execute`): AA-W2-6 — also the facts its limits are judged on, over EVERY row, when it may run by rule.
+ */
+async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null } } = {}): Promise<{ result: ToolResult; writes: BulkWrite[] }> {
   const a = args as BulkArgs
   const read = await askedBids(a)
   if ('refusal' in read) return { result: { ok: false, error: read.refusal }, writes: [] }
@@ -695,16 +715,20 @@ async function bulkDecision(args: Record<string, unknown>): Promise<{ result: To
   const profiles = new Set<string>()
   const refusedGroups = new Map<string, string>()
   const pastOwnLimits: Array<{ limit: string; reason: string }> = [] // 3A + 4A — for the card's warning
+  // AA-W2-6 — the same writes as the gate judges a run by rule (asked only when it may run by rule).
+  const ruleWrites: RuleWrite[] = []
   for (const [key, list] of [...byGroup].sort(([x], [y]) => (x < y ? -1 : 1))) {
     const values = [...new Set([Math.min(...list.map((l) => l.to)), Math.max(...list.map((l) => l.to))])]
+    const where = { campaignId: list[0].t.campaign.id, adGroupId: list[0].t.adGroupId, marketplace: list[0].t.campaign.marketplace }
     for (const value of values) {
-      const reach = await checkLiveReach({ campaignId: list[0].t.campaign.id, adGroupId: list[0].t.adGroupId, marketplace: list[0].t.campaign.marketplace, changes: [{ field: 'bid', valueCents: value }] })
+      const reach = await checkLiveReach({ ...where, changes: [{ field: 'bid', valueCents: value }] })
       if (reach.reach === 'refused') { refusedGroups.set(key, reach.reason); break }
       if (reach.reach === 'live') {
         profiles.add(reach.profileId)
         for (const l of reach.pastOwnLimits ?? []) if (!pastOwnLimits.some((x) => x.reason === l.reason)) pastOwnLimits.push(l)
       }
     }
+    if (!refusedGroups.has(key)) for (const value of values) ruleWrites.push({ ...where, label: `campaign "${list[0].t.campaign.name}"`, changes: [{ field: 'bid', valueCents: value }] })
   }
   const going = changing.filter((c) => !refusedGroups.has(groupKey(c.t)))
   for (const c of changing.filter((x) => refusedGroups.has(groupKey(x.t)))) {
@@ -726,6 +750,16 @@ async function bulkDecision(args: Record<string, unknown>): Promise<{ result: To
   const bound = (await Promise.all([...new Set(going.map((g) => g.t.campaign.id))].slice(0, 10).map((id) => alsoChangedBy(id)))).flatMap((b) => b.automations).slice(0, 10)
   const counts = countBy(excluded)
   const writes = going.map((g) => ({ targetId: g.t.id, fromCents: g.t.bidCents, toCents: g.to }))
+  // AA-W2-6 — every row against the ads strategy of its own ad group (not only the 20 lines shown), counted as one run.
+  const rule = opts.rule
+    ? await ruleFactsFor({
+      tool: 'bulk-ad-bid-change',
+      limits: BULK_BID_LIMITS,
+      items: writes.map((w) => ({ entity: { kind: 'target' as const, id: w.targetId }, change: { field: 'bid' as const, fromCents: w.fromCents, toCents: w.toCents } })),
+      writes: ruleWrites,
+      approvalId: opts.rule.approvalId,
+    })
+    : null
   return { writes, result: {
     ok: true,
     preview: {
@@ -742,6 +776,7 @@ async function bulkDecision(args: Record<string, unknown>): Promise<{ result: To
       reach,
       reachNote: reachNote(reach),
       alsoChangedBy: bound,
+      ...(rule ?? {}),
       effect: `Moves ${going.length} bid${going.length === 1 ? '' : 's'} (${Object.entries(byCurrency).map(([cur, v]) => `${v.deltaCents >= 0 ? '+' : '−'}${amountLabel(Math.abs(v.deltaCents), cur)} in total per click on ${v.targets}`).join('; ')})${excluded.length ? `; ${excluded.length} left as they are` : ''}.`,
     },
   } }
@@ -783,6 +818,7 @@ const bulkAdBidChange: AgentTool = {
     why: whyArg,
   }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
+  restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
@@ -790,18 +826,27 @@ const bulkAdBidChange: AgentTool = {
   requiresApprovalDefault: true,
   openWorld: true,
   reversibility: 'full',
-  maxClaudeTrust: 'ask',
+  // AA-W2-6 (Owner D-W2-1 = A, D-W2-3 = A) — still stored as an approval at every door; the business may let Claude's
+  // request run by its rule, only inside its limits and the ads strategy of every row. One request is one run of the
+  // business's daily cap; its rows count against the strategy's daily limits per market.
+  maxClaudeTrust: 'auto',
+  strategyBound: 'amazon-ads',
+  limits: BULK_BID_LIMITS,
+  withinLimits: (preview, limits) => ruleRefusal(preview, limits),
   undo: BULK_BID_UNDO,
   description:
     `Change many Amazon Sponsored Products bids in one request: a list of targets with their new bids (up to ${BULK_LIST_MAX}), `
     + `or a selection (campaign, ad group or market, optionally a text; up to ${BULK_MAX} targets) moved by a percent. `
-    + 'Nothing changes until a person '
-    + 'approves it in Nexus; it always waits for a person. The preview counts what changes and what is left as it is, '
+    + 'Nothing changes until a person approves it in Nexus, or the person who asked confirms it in Claude with their '
+    + 'authenticator code when the business set it so — unless the business lets it run by its rule, inside its limits '
+    + 'and the ads strategy of every row (by default only cuts, at most 50 targets; a raise waits for a person). '
+    + 'The preview counts what changes and what is left as it is, '
     + 'by reason (suppressed bids are never raised, pinned or non-SP campaigns, bid bounds, a campaign Amazon\'s write '
-    + 'gate refuses, unchanged), shows the first 20 changes and the total per currency, and where it lands. Approved, '
+    + 'gate refuses, unchanged), shows the first 20 changes and the total per currency, where it lands, and each limit '
+    + 'with where it comes from. Approved, '
     + 'every write carries the approval as its change set; undo-change reverses the whole set at once.',
-  async handler(args) {
-    return (await bulkDecision(args)).result
+  async handler(args, ctx) {
+    return (await bulkDecision(args, { rule: { approvalId: ctx.approvalId } })).result
   },
   async execute(args, ctx) {
     // One decision: its preview is re-checked against what was approved (the basis fingerprints every write), and

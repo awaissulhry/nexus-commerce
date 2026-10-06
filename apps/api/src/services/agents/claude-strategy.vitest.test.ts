@@ -449,7 +449,7 @@ describe('AA-W2-8 — budgets, placements and target ACoS run by rule only insid
     expect(parked).toMatchObject({ status: 'runs_by_rule' })
     const stored = (await approvalOf(parked.approvalId)).preview as Answer
     expect(stored).toMatchObject({
-      ruleReach: { reach: 'sandbox' },
+      ruleGate: null,
       limitFacts: { tool: 'set-campaign-budget', action: 'budget', this: { markets: ['IT'], items: 1, raises: 0, cuts: 1, budgetIncreaseCents: 0 }, markets: { IT: { strategy: { version: expect.any(String) } } } },
     })
     expect(stored.limitsNote).toEqual(expect.arrayContaining([expect.stringMatching(/^IT: ads strategy version /)]))
@@ -481,7 +481,7 @@ describe('AA-W2-8 — budgets, placements and target ACoS run by rule only insid
     try {
       const answer = (await call('set-campaign-budget', { campaignId: 'c-off', dailyBudgetCents: (await budgetOf('c-off')) - 100 })).answer
       expect(answer).toMatchObject({ status: 'waiting_for_approval' })
-      expect(answer.trust.why).toMatch(/run by rule, Amazon's write gate would refuse it — .*allowlist.*; a person decides \(a person's approval is his own click\)/)
+      expect(answer.trust.why).toMatch(/campaign "Italy not allowlisted": Amazon's write gate refuses it as a run by rule — .*allowlist/)
       expect(((await approvalOf(answer.approvalId)).preview as Answer).reach).toMatchObject({ reach: 'live' })
     } finally {
       vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'sandbox')

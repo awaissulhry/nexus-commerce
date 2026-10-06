@@ -13,7 +13,8 @@
  *                   engine's. (The Owner's rule: never pause — low bids stop delivery.)
  *   currency        amounts are minor units of the campaign's own currency (`Campaign.dailyBudgetCurrency`), labelled
  *                   with it and never converted.
- *   actor / reason  `user:<approverId>`, `Claude request <approvalId>: <why>`.
+ *   actor / reason  `user:<approverId>`, `Claude request <approvalId>: <why>` (`… (run by rule): <why>` when the
+ *                   business's rule decided it, AA-W2-6).
  *   bound rules     the enabled rules bound to the campaign and its enabled schedules: they may change it again.
  */
 import { checkAdsWriteGate, type GateContext, type GateDecision, type GateDeniedAt, type OwnLimit } from '../../advertising/ads-write-gate.js'
@@ -166,7 +167,7 @@ export function claudeActor(approverId: string): AdsActor {
   return `user:${id}`
 }
 
-/** AA-W2-8 — `byRule`: the business's rule decided it (no person), so the Change Log tells the two apart. */
+/** AA-W2-6 — `byRule`: the business's rule decided it, not a person (ToolContext.decidedVia `auto`); the Change Log says so. */
 export function claudeReason(approvalId: string, why: string, opts: { byRule?: boolean } = {}): string {
   if (!approvalId.trim()) throw new Error('an approval id is required: a Claude ad change names the request it came from')
   const said = why.trim()
