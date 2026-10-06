@@ -39,7 +39,7 @@ export function ActionConfirm({ impact, onConfirm, onCancel, mode = 'modal' }: A
   const danger = needsTyping || impact.reach === 'channel' || impact.reach === 'local-destructive' || impact.reversal?.fidelity === 'none'
   const footer = <>
     <Button variant="secondary" data-autofocus onClick={onCancel}>Cancel</Button>
-    <Button variant={danger ? 'danger' : 'primary'} disabled={!canConfirm} onClick={() => { if (canConfirm) onConfirm() }}>Confirm</Button>
+    <Button variant={danger ? 'danger' : 'primary'} disabled={!canConfirm} onClick={() => { if (canConfirm) onConfirm() }}>{impact.confirmLabel?.trim() || 'Confirm'}</Button>
   </>
   const content = <>
     {impact.subject && <p className="nds-confirm-block">{impact.subject.kind}: <strong className="nds-confirm-h">{impact.subject.value}</strong></p>}

@@ -115,6 +115,11 @@ export interface ActionImpact {
   /** The question. One sentence, in the operator's terms, naming what is about to happen. */
   title: string
   /**
+   * The primary button's words, naming the action ("Raise to Auto", "Stop now", "Save 3 changes"). "Confirm" when
+   * absent. A button that says what it does is the one-primary-button rule of the dialogs the Owner liked (PSIE 09-26).
+   */
+  confirmLabel?: string
+  /**
    * What will be lost or changed, itemised. Rendered as a list, never summarised into a count —
    * "5 listings" tells an operator less than naming the five marketplaces.
    */

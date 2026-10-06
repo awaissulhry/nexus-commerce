@@ -3165,6 +3165,8 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-
 
 /* PR.6 — shared consequence review and observed presence. Shared controls retain their primitives. */
 .nds-confirm-h { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+/* Inline mode (a drawer's overlay): the question is the title, so it gets a title's size and room under it. */
+.nds-confirm > .nds-confirm-h:first-child { font-size: var(--nds-font-size-base-plus); margin-bottom: var(--nds-space-12); }
 .nds-confirm-block + .nds-confirm-block { margin-top: var(--nds-space-14); }
 .nds-confirm-list { margin: var(--nds-space-6) 0 0; padding-left: var(--nds-space-18); display: grid; gap: var(--nds-space-4); }
 .nds-confirm-aside { padding-left: var(--nds-space-10); border-left: 2px solid var(--nds-warning); }
