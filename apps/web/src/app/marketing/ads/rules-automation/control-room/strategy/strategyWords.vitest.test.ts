@@ -60,7 +60,7 @@ describe('values in words, in the market\'s money', () => {
     expect(valueText('harvest', { harvestMinOrders: 2, harvestMinClicks: 10, harvestMaxAcosPct: null, harvestWindowDays: 60 }, 'EUR')).toBe('2 orders · 10 clicks · any ACoS · last 60 days')
     expect(valueText('negate', { negateMinClicks: 15, negateMinSpendCents: 1000, negateMaxOrders: 0, negateWindowDays: 30 }, 'EUR')).toBe('15 clicks · €10.00 spent · at most 0 orders · last 30 days')
     expect(valueText('stop', { stopMethod: 'LOW_BIDS', stopBidCents: null }, 'EUR')).toBe('Low bids at Nexus’s own floor')
-    expect(valueText('claudeAutonomy', { bid: 'ask', negative: 'confirm' }, 'EUR')).toBe('Bids: Ask · Negative keywords: Confirm')
+    expect(valueText('claudeAutonomy', { bid: 'ask', negative: 'confirm' }, 'EUR')).toBe('Bids: Ask me · Negative keywords: Ask me + code')
     expect(valueText('goal', 'CLEAR_STOCK', 'EUR')).toBe('Clear stock')
     expect(valueText('maxBidCents', null, 'EUR')).toBeNull()
   })
@@ -219,10 +219,10 @@ describe('the save: one table, the raise list, the counted button', () => {
       "1 campaign loses its own target ACoS: Nexus's bid optimiser then aims at the account default, profit data or 30 % for it.",
       'Nexus only: nothing is sent to Amazon IT by this change.',
     ])
-    const claude: StrategyChange = { field: 'claudeAutonomy', label: 'What Claude may do alone', from: null, to: { bid: 'ask' }, direction: 'lower' }
+    const claude: StrategyChange = { field: 'claudeAutonomy', label: 'What Claude may do', from: null, to: { bid: 'ask' }, direction: 'lower' }
     expect(effectLines([claude], { claudeAutonomy: ["Claude's door (every ad change Claude asks for)"] }, 'IT', { campaigns: 2, products: 3 }).slice(0, 2)).toEqual([
       'It covers 3 products and the 2 campaigns in IT that advertise them.',
-      "What Claude may do alone: binds at once — read by Claude's door.",
+      "What Claude may do: binds at once — read by Claude, on every ad change it asks for.",
     ])
   })
 
@@ -256,15 +256,15 @@ describe('what Claude may do alone', () => {
   })
 
   it('the lower of your rule and the strategy, per tool; the strategy never widens', () => {
-    expect(claudeRow(entry(), '', MARKET)).toEqual({ rule: 'Confirm · Ask', inherited: null, inheritedLevel: null, result: 'Confirm · Ask', noEffect: false })
-    expect(claudeRow(entry(), 'ask', MARKET)).toEqual({ rule: 'Confirm · Ask', inherited: null, inheritedLevel: null, result: 'Ask', noEffect: false })
-    expect(claudeRow(entry(), 'auto', MARKET)).toMatchObject({ result: 'Confirm · Ask', noEffect: true })
+    expect(claudeRow(entry(), '', MARKET)).toEqual({ rule: 'Ask me + code · Ask me', inherited: null, inheritedLevel: null, result: 'Ask me + code · Ask me', noEffect: false })
+    expect(claudeRow(entry(), 'ask', MARKET)).toEqual({ rule: 'Ask me + code · Ask me', inherited: null, inheritedLevel: null, result: 'Ask me', noEffect: false })
+    expect(claudeRow(entry(), 'auto', MARKET)).toMatchObject({ result: 'Ask me + code · Ask me', noEffect: true })
   })
 
   it('a category inherits the market\'s level until it sets its own', () => {
     const inherited = entry({ strategy: 'off', source: marketSource })
     expect(claudeRow(inherited, '', CATEGORY)).toMatchObject({ inherited: 'Inherited from the market: Off', inheritedLevel: 'off', result: 'Off' })
-    expect(claudeRow(inherited, 'ask', CATEGORY)).toMatchObject({ result: 'Ask' })
+    expect(claudeRow(inherited, 'ask', CATEGORY)).toMatchObject({ result: 'Ask me' })
   })
 })
 

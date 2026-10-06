@@ -1,0 +1,119 @@
+/*
+ * CR rebuild 5 — the Campaigns tab: layout only, design-system tokens only. The controls are the design system's own.
+ * Light only, like the rest of the ads console (Operator decision 2026-08-05, _shared/shared-shell.css).
+ */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.toolbarRight {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+/* A two-line grid cell: the campaign, and its market · portfolio · state under it. */
+.cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  height: 100%;
+  line-height: 1.3;
+}
+
+.cellMain {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cellSub {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* A value the draft changes: the stored one struck through, the new one strong. Not saved until Review. */
+.changed {
+  color: var(--nds-info-strong);
+}
+
+.before {
+  color: var(--nds-text-3);
+  text-decoration: line-through;
+}
+
+.muted {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.list {
+  margin: 0;
+  padding-left: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+/* The side panel. */
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.locks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-16);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  width: 100%;
+}
+
+.para {
+  margin: 0;
+}
+
+/* The review: one small table per campaign, under its name. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.groupName {
+  font-weight: var(--nds-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* Under a review line that lets automation do more; it wraps at spaces like the rest of the table. */
+.raiseNote {
+  display: block;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-warning-text);
+}

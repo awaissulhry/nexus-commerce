@@ -1,0 +1,36 @@
+/*
+ * CR rebuild 4 — the Limits tab: layout only, design-system tokens only. Light only, like the rest of the ads console
+ * (Operator decision 2026-08-05, _shared/shared-shell.css).
+ */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.viewSwitch {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+/* The two brake fields side by side; one under the other on a phone. */
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-16);
+  max-width: 720px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.muted {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}

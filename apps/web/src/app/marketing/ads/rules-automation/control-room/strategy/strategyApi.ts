@@ -18,7 +18,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 import type { ClaudeActionKey, FieldKey, Level } from './strategyWords'
 
 export type Direction = 'raise' | 'lower' | 'same'
-export type ClaudeLevel = 'off' | 'ask' | 'confirm' | 'auto'
+/** Lowest first. AA-W2-4: `watch` — checked as Auto would and recorded; a person still decides. */
+export type ClaudeLevel = 'off' | 'ask' | 'confirm' | 'watch' | 'auto'
 
 /** One stored row (rows view): every setting column, null = not set here; a money key is absent when hidden. */
 export interface StrategyRowOut {

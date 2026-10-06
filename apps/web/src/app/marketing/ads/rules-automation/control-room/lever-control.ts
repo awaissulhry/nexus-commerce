@@ -1,11 +1,16 @@
 /**
- * R16 (MCP full control, decision D-R2) — what decides an engine, in words: the server env (the outer limit, the
- * Owner's) and this business's own switch under it. The lever drawer shows both side by side, so "why is this off?"
+ * R16 (MCP full control, decision D-R2) — what decides an engine, in words: the server setting (the outer limit, the
+ * Owner's) and this business's own switch under it. The engine drawer shows both side by side, so "why is this off?"
  * never needs a log. Pure: the drawer renders these lines with the design system's KeyValue.
+ *
+ * CR rebuild 2: the Control Room's one level scale (levelWords.ts), plain words instead of the server's variable names
+ * (those stay in the drawer's Technical details), and BOTH directions ask first — turning a brake such as Budget
+ * enforcement down used to be one click with no question (report 7 §5).
  */
 import type { ActionImpact } from '@/design-system/grid/actions/registry'
+import { LEVEL_WORD, levelRank, type Level } from './levelWords'
 
-export type LeverMode = 'OFF' | 'OBSERVE' | 'PROPOSE' | 'AUTO'
+export type LeverMode = Level
 
 export interface LeverControl {
   env: { mode: LeverMode; reason: string }
@@ -23,41 +28,40 @@ export interface ControlLine {
   hint?: string
 }
 
-const LABEL: Record<LeverMode, string> = { OFF: 'Off', OBSERVE: 'Observe', PROPOSE: 'Propose', AUTO: 'Auto' }
+const LABEL = LEVEL_WORD
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 
 /** Who set it, in words: 'user:<id>' is a person in Nexus (or Claude's change a person approved). */
 const who = (setBy: string) => (setBy.startsWith('user:') ? 'a person' : setBy)
 
-export function leverControlLines(control: LeverControl | undefined, inForce: LeverMode): ControlLine[] {
+/** What decides the engine. "In force" is not repeated here: the drawer says it once, at the top ("May do now"). */
+export function leverControlLines(control: LeverControl | undefined): ControlLine[] {
   if (!control) return []
-  const lines: ControlLine[] = [{ label: 'Server env allows', value: LABEL[control.env.mode], hint: control.env.reason }]
+  const lines: ControlLine[] = [{ label: 'The server allows', value: LABEL[control.env.mode], hint: 'Set on the server. Only a deploy changes it.' }]
   if (!control.switchable) {
-    lines.push({ label: 'This business', value: 'No switch of its own', hint: 'Only the server env switches this engine.' })
+    lines.push({ label: 'This business', value: 'No level of its own', hint: 'Only the server decides this engine.' })
   } else if (!control.switch) {
-    lines.push({ label: 'This business set', value: 'Not set', hint: 'The env alone decides. Turning it down is instant; turning it up waits for a person.' })
+    lines.push({ label: 'This business set', value: 'Not set', hint: 'The server’s level applies.' })
   } else {
     const s = control.switch
     lines.push({
       label: 'This business set',
       value: LABEL[s.mode],
-      hint: `By ${who(s.setBy)} on ${day(s.setAt)}${s.reason ? ` — ${s.reason}` : ''}. Turning it up waits for a person, and never past the env.`,
+      hint: `By ${who(s.setBy)} on ${day(s.setAt)}${s.reason ? ` — ${s.reason}` : ''}. Never above the server setting.`,
     })
   }
-  lines.push({ label: 'In force', value: LABEL[inForce], hint: 'The lower of the two, under the account dial.' })
   return lines
 }
 
 // ── R16 — the switch a person moves in the drawer ──────────────────────────────────────────────────────
 
 
-const ORDER: LeverMode[] = ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO']
-const rank = (mode: LeverMode) => ORDER.indexOf(mode)
+const rank = levelRank
 
 /**
- * Where this business's switch is set: its row, or (no row) open as far as its top level — the env decides. What a
- * move starts from; never what the control SHOWS (that is `effectiveSwitch`).
+ * Where this business's switch is set: its row, or (no row) open as far as its top level — the env decides. Never what
+ * the control SHOWS, nor what a confirmation says a move starts from: both are `effectiveSwitch`, the level in force.
  */
 export function currentSwitch(control: LeverControl): LeverMode {
   return control.switch?.mode ?? control.levels[control.levels.length - 1] ?? 'OFF'
@@ -87,41 +91,80 @@ export function switchOptions(control: LeverControl): SwitchOption[] {
   })
 }
 
-/** Down is instant; up asks first. */
+/** Which way a move goes. Both ways ask first; only up needs the tick and the server's `confirm: true`. */
 export function switchMove(from: LeverMode, to: LeverMode): 'down' | 'up' | 'same' {
   return rank(to) < rank(from) ? 'down' : rank(to) > rank(from) ? 'up' : 'same'
 }
 
-/** The confirmation for turning an engine up (ActionConfirm). */
+/** The confirmation for turning an engine up (ActionConfirm). Only Auto changes the ads, so only Auto needs the tick. */
 export function raiseImpact(engineName: string, from: LeverMode, to: LeverMode): ActionImpact {
+  const consequences = [
+    `${engineName} goes from ${LABEL[from]} to ${LABEL[to]} from its next run, in this business only.`,
+    to === 'AUTO' ? 'At Auto it changes your ads by itself, inside your limits.' : 'It records what it would change. It changes nothing by itself.',
+    'The server setting still caps it, and the account level and Stop now still apply.',
+  ]
+  const reversal = { verb: `Set it back to ${LABEL[from]}`, fidelity: to === 'AUTO' ? 'lossy' as const : 'exact' as const }
+  return to === 'AUTO'
+    ? {
+      level: 'confirm', title: `Raise ${engineName} to Auto for this business?`, consequences, reach: 'channel', reversal,
+      acknowledge: 'I understand it changes my ads by itself from its next run, and what it changes stays changed.',
+      confirmLabel: 'Raise to Auto',
+    }
+    : { level: 'confirm', title: `Raise ${engineName} to ${LABEL[to]} for this business?`, consequences, reach: 'local', reversal, confirmLabel: `Raise to ${LABEL[to]}` }
+}
+
+/** The confirmation for turning an engine down: a plain question, no tick — a brake stays one confirm away. */
+export function lowerImpact(engineName: string, from: LeverMode, to: LeverMode): ActionImpact {
   return {
     level: 'confirm',
-    title: `Turn ${engineName} up to ${LABEL[to]} for this business?`,
+    title: `Lower ${engineName} to ${LABEL[to]} for this business?`,
     consequences: [
       `${engineName} goes from ${LABEL[from]} to ${LABEL[to]} from its next run, in this business only.`,
-      to === 'AUTO' ? 'At Auto it writes to the marketplace by itself, inside the write gate and every guardrail.' : 'It records and proposes; it does not write.',
-      'The server env still caps it, and the account dial and halt still apply.',
+      to === 'OFF'
+        ? 'It stops running. Whatever it protects — a budget, a bid floor — is no longer protected by it.'
+        : 'It stops changing your ads by itself.',
+      'What it changed before stays as it is.',
     ],
-    reach: 'channel',
-    reversal: { verb: 'Turn it down again', fidelity: 'lossy' },
-    acknowledge: 'I understand it acts from its next run, and what it changes before I turn it down again stays changed.',
+    reach: 'local',
+    reversal: { verb: `Set it back to ${LABEL[from]}`, fidelity: 'exact' },
+    confirmLabel: `Lower to ${LABEL[to]}`,
   }
 }
 
 /** The drawer's switch, as states and events: what to show (an open confirmation) and what to send. */
-export interface SwitchState { raise: { impact: ActionImpact; to: LeverMode } | null }
+export interface SwitchState { pending: { impact: ActionImpact; to: LeverMode; up: boolean } | null }
 export type SwitchEvent =
   | { type: 'choose'; to: LeverMode; engineName: string; control: LeverControl }
   | { type: 'cancel' }
   | { type: 'confirm' }
 
-/** Down: send at once. Up: open the confirmation; send only once it is confirmed. Cancel: nothing is sent. */
+/** A move opens its confirmation; it is sent only once confirmed. Cancel: nothing is sent. */
 export function switchStep(state: SwitchState, event: SwitchEvent): { state: SwitchState; send: { to: LeverMode; confirm: boolean } | null } {
-  if (event.type === 'cancel') return { state: { raise: null }, send: null }
-  if (event.type === 'confirm') return { state: { raise: null }, send: state.raise ? { to: state.raise.to, confirm: true } : null }
-  const from = currentSwitch(event.control)
+  if (event.type === 'cancel') return { state: { pending: null }, send: null }
+  if (event.type === 'confirm') return { state: { pending: null }, send: state.pending ? { to: state.pending.to, confirm: state.pending.up } : null }
+  const from = effectiveSwitch(event.control)
   const move = switchMove(from, event.to)
-  if (move === 'down') return { state: { raise: null }, send: { to: event.to, confirm: false } }
-  if (move === 'up') return { state: { raise: { impact: raiseImpact(event.engineName, from, event.to), to: event.to } }, send: null }
-  return { state, send: null }
+  if (move === 'same') return { state, send: null }
+  const up = move === 'up'
+  const impact = up ? raiseImpact(event.engineName, from, event.to) : lowerImpact(event.engineName, from, event.to)
+  return { state: { pending: { impact, to: event.to, up } }, send: null }
+}
+
+/**
+ * The confirmation before Run now. It runs the schedule's own work once, now — and for an engine that changes the ads,
+ * that is a change to the ads, so it asks with the tick. Before, Run now ran on the first click (report 7 §2.4).
+ */
+export function runNowImpact(engineName: string): ActionImpact {
+  return {
+    level: 'confirm',
+    title: `Run ${engineName} now?`,
+    consequences: [
+      'It runs the same work its schedule runs, once, now.',
+      'Every change it makes still passes your limits, the account level and Stop now.',
+    ],
+    reach: 'channel',
+    reversal: { verb: 'Undo its changes in History', fidelity: 'lossy' },
+    acknowledge: 'I understand it may change my ads now.',
+    confirmLabel: 'Run now',
+  }
 }
