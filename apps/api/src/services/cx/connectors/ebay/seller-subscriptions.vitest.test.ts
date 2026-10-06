@@ -31,6 +31,7 @@ vi.mock('../../../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: v
 
 const {
   reconcileEbaySellerSubscriptions, inspectEbaySellerSubscription, reconcileEbaySellersForSetup, ebaySellerSubscriptionStatus,
+  sendEbaySellerTestNotice,
   sellerReportFailed, summariseSellerReport,
 } = await import('./seller-subscriptions.js')
 const { sellerNotificationCall } = await import('./notifications.js')
@@ -218,7 +219,7 @@ describe("the seller's own sign-in, never the app token", () => {
   })
 })
 
-describe('reconnect needed: no call, or stop at eBay\'s 195011', () => {
+describe('reconnect needed only for what the account shows; eBay\'s 195011 is a red failure', () => {
   it.each([
     ['no commerce.notification.subscription', FULL_SCOPES.filter(s => !s.includes('commerce.notification'))],
     ['only the read-only notification scope', FULL_SCOPES.filter(s => !s.endsWith('commerce.notification.subscription'))],
@@ -247,20 +248,24 @@ describe('reconnect needed: no call, or stop at eBay\'s 195011', () => {
     expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toMatchObject({ status: 'created' })
   })
 
-  it('eBay 195011 on the read → reconnect_needed, and no POST', async () => {
+  // Review S1: the sign-in already records the scopes, so 195011 is eBay refusing the topic to the
+  // app/account. Calling it "reconnect needed" kept the nightly run green and sent the Owner to Reconnect for nothing.
+  it('eBay 195011 on the read → failed (not a sign-in problem), and no POST', async () => {
     const ebay = fakeSeller([], { get: () => ebayError(195011) })
-    expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toMatchObject({ status: 'reconnect_needed', reason: expect.stringContaining('195011') })
+    expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toMatchObject({ status: 'failed', reason: expect.stringMatching(/195011.*not a sign-in problem/) })
     expect(ebay.requests).toEqual(['GET /subscription?limit=100'])
   })
 
-  it('eBay 195011 on the create → reconnect_needed', async () => {
-    fakeSeller([], { create: () => ebayError(195011, 400) })
-    expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toMatchObject({ status: 'reconnect_needed', reason: expect.stringContaining('195011') })
+  it('eBay 195011 on the create → failed, and the report fails the run', async () => {
+    fakeSeller([], { create: () => ebayError(195011, 403) })
+    const result = await reconcileEbaySellerSubscriptions(SELLER, { context })
+    expect(result).toMatchObject({ status: 'failed', reason: expect.stringMatching(/refused this topic for the app\/account.*not a sign-in problem/) })
+    expect(sellerReportFailed({ accounts: [{ ...result, signInName: null }] })).toBe(true)
   })
 
-  it('eBay 195011 on the enable → reconnect_needed', async () => {
+  it('eBay 195011 on the enable → failed', async () => {
     fakeSeller([{ subscriptionId: 's-off', topicId: 'ORDER_CONFIRMATION', destinationId: DEST, status: 'DISABLED', payload: subPayload }], { enable: () => ebayError(195011) })
-    expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toMatchObject({ status: 'reconnect_needed', subscriptionId: 's-off' })
+    expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toMatchObject({ status: 'failed', subscriptionId: 's-off', reason: expect.stringContaining('195011') })
   })
 
   it('another eBay error is failed(reason), not reconnect', async () => {
@@ -271,6 +276,52 @@ describe('reconnect needed: no call, or stop at eBay\'s 195011', () => {
   it('the gateway holding the account (needs sign-in) → reconnect_needed', async () => {
     m.transport.mockRejectedValue(Object.assign(new Error('Held, nothing sent: the eBay account needs to be reconnected (needs_reauth).'), { code: 'ACCOUNT_NEEDS_SIGNIN' }))
     expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toMatchObject({ status: 'reconnect_needed' })
+  })
+})
+
+// Review S2: a create that eBay answers "Subscription already exists" (409 / 195012).
+describe('"subscription already exists": read the seller\'s list again', () => {
+  /** The first read sees `before`; the create answers 409 195012; the re-read sees `after`. */
+  function raced(before: object[], after: object[]) {
+    const requests: string[] = []
+    let reads = 0
+    m.transport.mockImplementation(async (url: string, init: RequestInit, connectionId: string) => {
+      expect(connectionId).toBe(SELLER)
+      const method = init.method ?? 'GET'
+      requests.push(`${method} ${url.replace(API, '')}`)
+      if (method === 'GET' && url === `${API}/subscription?limit=100`) return json({ subscriptions: ++reads === 1 ? before : after })
+      if (method === 'POST' && url === `${API}/subscription`) return ebayError(195012, 409)
+      if (method === 'POST' && /\/subscription\/[^/]+\/enable$/.test(url)) return new Response(null, { status: 204 })
+      throw new Error(`Unexpected ${method} ${url}`)
+    })
+    return requests
+  }
+  const on = (destinationId: string, status: string, subscriptionId = 's-raced') =>
+    ({ subscriptionId, topicId: 'ORDER_CONFIRMATION', destinationId, status, payload: subPayload })
+
+  it('a concurrent run made it on our destination → subscribed, no second create', async () => {
+    const requests = raced([], [on(DEST, 'ENABLED')])
+    expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toEqual({ connectionId: SELLER, topicId: 'ORDER_CONFIRMATION', status: 'subscribed', subscriptionId: 's-raced' })
+    expect(requests).toEqual(['GET /subscription?limit=100', 'POST /subscription', 'GET /subscription?limit=100'])
+    expectOnlySellerCalls()
+  })
+
+  it('on our destination but disabled → enabled', async () => {
+    const requests = raced([], [on(DEST, 'DISABLED')])
+    expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toMatchObject({ status: 'enabled', subscriptionId: 's-raced' })
+    expect(requests).toEqual(['GET /subscription?limit=100', 'POST /subscription', 'GET /subscription?limit=100', 'POST /subscription/s-raced/enable'])
+  })
+
+  it('on ANOTHER destination → failed, naming that destination', async () => {
+    const requests = raced([on('old-destination', 'ENABLED', 's-old')], [on('old-destination', 'ENABLED', 's-old')])
+    const result = await reconcileEbaySellerSubscriptions(SELLER, { context })
+    expect(result).toMatchObject({ status: 'failed', subscriptionId: 's-old', reason: expect.stringMatching(/another destination \(old-destination\)/) })
+    expect(requests.filter(r => r.startsWith('POST'))).toEqual(['POST /subscription'])
+  })
+
+  it('eBay says it exists but the list shows none → failed with eBay\'s answer', async () => {
+    raced([], [])
+    expect(await reconcileEbaySellerSubscriptions(SELLER, { context })).toMatchObject({ status: 'failed', reason: expect.stringMatching(/409.*shows none/) })
   })
 })
 
@@ -392,5 +443,89 @@ describe('the status view (read only)', () => {
     const status = await ebaySellerSubscriptionStatus(context)
     expect(status).toEqual({ topicId: 'ORDER_CONFIRMATION', armed: true, accounts: [{ connectionId: 'own-1', signInName: 'seller_one', status: 'reconnect_needed', reason: expect.any(String) }] })
     expect(JSON.stringify(status)).not.toContain('ebay-user-id')
+  })
+})
+
+// Review N2: eBay's test notice for ONE seller's order subscription, with that seller's own token.
+describe('the per-seller test notice', () => {
+  const enabled = { subscriptionId: 's-1', topicId: 'ORDER_CONFIRMATION', destinationId: DEST, status: 'ENABLED', payload: subPayload }
+  /** App-level reads for the context; the seller's list and the test POST as the seller. */
+  function ebayForTest(sellerSubscriptions: object[], testStatus = 202) {
+    const requests: string[] = []
+    m.transport.mockImplementation(async (url: string, init: RequestInit, connectionId: string | null, options?: { appLevel?: boolean }) => {
+      const method = init.method ?? 'GET'
+      requests.push(`${connectionId ?? 'app'} ${method} ${url.replace(API, '')}`)
+      if (connectionId === null) {
+        expect(options?.appLevel).toBe(true)
+        expect(method).toBe('GET')
+        if (url === `${API}/topic?limit=100`) return json({ topics: [orderTopic] })
+        if (url === `${API}/destination?limit=100`) return json({ destinations: [{ destinationId: DEST, status: 'ENABLED', deliveryConfig: { endpoint } }] })
+      } else {
+        expect(connectionId).toBe(SELLER)
+        expect(Object.keys(init.headers ?? {}).map(h => h.toLowerCase())).not.toContain('authorization')
+        if (method === 'GET' && url === `${API}/subscription?limit=100`) return json({ subscriptions: sellerSubscriptions })
+        if (method === 'POST' && url === `${API}/subscription/s-1/test`) return new Response(null, { status: testStatus })
+      }
+      throw new Error(`Unexpected ${connectionId} ${method} ${url}`)
+    })
+    return requests
+  }
+  beforeEach(() => m.list.mockResolvedValue([{ id: SELLER, ebaySignInName: 'seller_a' }]))
+
+  it.each([
+    ['nothing armed', null, null],
+    ['only the application topic armed', 'AUTHORIZATION_REVOCATION', '1'],
+  ])('unarmed (%s) → refused, no account read, no call', async (_label, topics, setup) => {
+    arm(topics, setup)
+    ebayForTest([enabled])
+    expect(await sendEbaySellerTestNotice(SELLER)).toMatchObject({ ok: false, refused: 'not_armed', error: expect.stringMatching(/No eBay call/) })
+    expect(m.list).not.toHaveBeenCalled()
+    expect(m.findUnique).not.toHaveBeenCalled()
+    expect(m.factory).not.toHaveBeenCalled()
+    expect(m.token).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["another business's account (not listed here)", [{ id: 'conn-other-business' }]],
+    ['an account another business shares in', [{ id: SELLER, own: false }]],
+  ])('%s → refused, no call', async (_label, listed) => {
+    m.list.mockResolvedValue(listed)
+    ebayForTest([enabled])
+    expect(await sendEbaySellerTestNotice(SELLER)).toMatchObject({ ok: false, refused: 'not_own_account' })
+    expect(m.findUnique).not.toHaveBeenCalled()
+    expect(m.factory).not.toHaveBeenCalled()
+  })
+
+  it('an account that needs Reconnect → refused before any call', async () => {
+    m.findUnique.mockResolvedValue(account({ grantedScopes: [] }))
+    ebayForTest([enabled])
+    expect(await sendEbaySellerTestNotice(SELLER)).toMatchObject({ ok: false, refused: 'account', error: expect.stringMatching(/Reconnect/) })
+    expect(m.factory).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['no subscription', []],
+    ['a subscription on another destination', [{ ...enabled, destinationId: 'someone-else' }]],
+    ['a disabled subscription', [{ ...enabled, status: 'DISABLED' }]],
+  ])('%s → plain refusal, no test requested', async (_label, subscriptions) => {
+    const requests = ebayForTest(subscriptions)
+    expect(await sendEbaySellerTestNotice(SELLER)).toMatchObject({ ok: false, refused: 'no_subscription', error: expect.stringMatching(/Run the setup first/) })
+    expect(requests.filter(r => r.includes('/test'))).toEqual([])
+  })
+
+  it("happy path: eBay answers 202 to THIS seller's own subscription, sent with the seller's token", async () => {
+    const requests = ebayForTest([enabled])
+    expect(await sendEbaySellerTestNotice(SELLER)).toEqual({ ok: true, topicId: 'ORDER_CONFIRMATION', connectionId: SELLER, subscriptionId: 's-1' })
+    expect(requests).toEqual([
+      'app GET /topic?limit=100', 'app GET /destination?limit=100',
+      `${SELLER} GET /subscription?limit=100`, `${SELLER} POST /subscription/s-1/test`,
+    ])
+    // The app token went only on the two catalogue/destination reads, never on a subscription call.
+    expect(m.token).toHaveBeenCalledTimes(2)
+  })
+
+  it('a refusal from eBay on the test is reported, not ok', async () => {
+    ebayForTest([enabled], 500)
+    expect(await sendEbaySellerTestNotice(SELLER)).toMatchObject({ ok: false, subscriptionId: 's-1', error: expect.stringContaining('testSubscription returned 500') })
   })
 })

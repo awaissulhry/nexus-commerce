@@ -175,6 +175,63 @@ describe('POST /api/admin/ebay-notification-test', () => {
     expect(m.transport).not.toHaveBeenCalled()
   })
 
+  // Review N2: the per-seller order topic is tested with ONE seller's own token, named by connectionId.
+  describe('ORDER_CONFIRMATION (per seller)', () => {
+    beforeEach(() => {
+      vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+      vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION,ORDER_CONFIRMATION')
+    })
+
+    it.each([[''], ['&connectionId=bad%20id%3B']])('answers 400 without a usable connectionId, and makes no call: %j', async extra => {
+      const res = await call('POST', `/api/admin/ebay-notification-test?topicId=ORDER_CONFIRMATION${extra}`)
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toMatchObject({ ok: false, error: expect.stringMatching(/connectionId/) })
+      expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ outcome: 'refused_no_account' }) }))
+      expect(m.transport).not.toHaveBeenCalled()
+      expect(m.testNotice).not.toHaveBeenCalled()
+    })
+
+    it("answers 400 for an account that is not this business's own, and makes no call", async () => {
+      m.list.mockResolvedValue([{ id: 'conn-a' }])
+      const res = await call('POST', '/api/admin/ebay-notification-test?topicId=ORDER_CONFIRMATION&connectionId=conn-other')
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toMatchObject({ ok: false, refused: 'not_own_account' })
+      expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ outcome: 'refused_not_own_account', connectionId: 'conn-other' }) }))
+      expect(m.findUnique).not.toHaveBeenCalled()
+      expect(m.transport).not.toHaveBeenCalled()
+    })
+
+    it("asks eBay to test THIS seller's subscription with the seller's own token (202)", async () => {
+      m.list.mockResolvedValue([{ id: 'conn-a', ebaySignInName: 'seller_a' }])
+      m.findUnique.mockResolvedValue(sellerAccount())
+      // This file stubs the app-level readers (topics, destinations); only seller calls reach the transport.
+      m.topics.mockResolvedValue([orderTopic])
+      m.destinations.mockResolvedValue([{ destinationId: 'd-1', status: 'ENABLED', endpoint }])
+      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 })
+      m.transport.mockImplementation(async (url: string, request: RequestInit, connectionId: string | null) => {
+        const method = request.method ?? 'GET'
+        if (connectionId === 'conn-a') {
+          if (method === 'GET' && url === `${API}/subscription?limit=100`) {
+            return json({ subscriptions: [{ subscriptionId: 'sub-a', topicId: 'ORDER_CONFIRMATION', destinationId: 'd-1', status: 'ENABLED', payload: { format: 'JSON', deliveryProtocol: 'HTTPS', schemaVersion: '1.0' } }] })
+          }
+          if (method === 'POST' && url === `${API}/subscription/sub-a/test`) return new Response(null, { status: 202 })
+        }
+        throw new Error(`Unexpected ${method} ${url} as ${connectionId}`)
+      })
+      const res = await call('POST', '/api/admin/ebay-notification-test?topicId=ORDER_CONFIRMATION&connectionId=conn-a')
+      expect(res.statusCode).toBe(200)
+      expect(res.body).toEqual({ ok: true, topicId: 'ORDER_CONFIRMATION', connectionId: 'conn-a', subscriptionId: 'sub-a' })
+      expect(m.transport.mock.calls.map(([, , connectionId]) => connectionId)).toEqual(['conn-a', 'conn-a'])
+      const testCall = m.transport.mock.calls.find(([url]) => String(url).endsWith('/test'))!
+      expect(testCall[2]).toBe('conn-a')
+      expect(m.token).not.toHaveBeenCalled()
+      expect(JSON.stringify(testCall[1].headers)).not.toMatch(/authorization/i)
+      expect(m.testNotice).not.toHaveBeenCalled()
+      expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'ebay.notification.test',
+        metadata: expect.objectContaining({ outcome: 'sent', topics: ['ORDER_CONFIRMATION'], connectionId: 'conn-a', subscriptionId: 'sub-a' }) }))
+    })
+  })
+
   it('positive control: armed, it asks eBay to test our revocation subscription', async () => {
     vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
     vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION')
