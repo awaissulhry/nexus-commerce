@@ -1,16 +1,17 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ETSY_NEW_ACTIVE_NEEDS_PHOTO, NOT_LISTED_MAIN_HELD } from '@nexus/shared/listing-actions'
-import { ETSY_CREATE_NOT_YET, ETSY_CREATE_REVIEW_ONLY, ETSY_CREATE_SENDS_NOTHING, FULL_ETSY_VARIATION } from '@nexus/shared/publish-actions'
+import { FULL_ETSY_VARIATION } from '@nexus/shared/publish-actions'
 
 /**
- * E2 — the Etsy publisher wired into studio Publish, with its adapter and its send mocked (their own suites prove the
- * payload and each call): a listing Etsy holds is sent (each call journalled just before it goes, then stored through the
- * settle core); a new listing is reviewed and starts as an Etsy draft, but its submit refuses before any claim, draft,
- * journal or event (E3 creates it). Fake ids only (public repo).
+ * E2 + E3 — the Etsy publisher wired into studio Publish, with its adapter, its sends and its "creating" marker mocked
+ * (their own suites prove the payload, each call and the marker's SQL): a listing Etsy holds is sent (each call journalled
+ * just before it goes, then stored through the settle core); a new listing is reviewed, starts as an Etsy draft and is
+ * created by the create send (E3) through the studio's hooks: drafts + marker first, each call journalled, the listing id
+ * stored on every delivered row once Etsy answers. Fake ids only (public repo).
  */
 const m = vi.hoisted(() => ({ facts: vi.fn(), mode: vi.fn(), etsyMode: vi.fn(), etsyPrepare: vi.fn(), etsyNotices: [] as string[], rows: new Map<string, any>(),
   ensure: vi.fn(), record: vi.fn(), ebay: vi.fn(), drift: vi.fn(), locks: vi.fn(), published: [] as any[], changes: vi.fn(), send: vi.fn(), order: [] as string[],
-  live: { quantity: 5, readiness: 1 } }))
+  live: { quantity: 5, readiness: 1 }, create: vi.fn(), createResult: vi.fn(), claimCreate: vi.fn(), markUnknown: vi.fn(), release: vi.fn(), store: vi.fn() }))
 vi.mock('./studio-publication-plan.js', async () => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
@@ -39,7 +40,9 @@ vi.mock('./studio-publication-ebay-changes.js', () => ({
 // request; a listing on Etsy is two lines (Tags and the variations), each sent by its own call.
 const createId = JSON.stringify(['parent', '__create__'])
 const tagsId = JSON.stringify(['parent', 'tags']), inventoryId = JSON.stringify(['parent', 'inventory'])
-const createRequest = { operation: 'createDraftListing', listingId: null, calls: [{ method: 'POST', path: '/shops/{shop_id}/listings', encoding: 'form', body: { title: 'Fake title' } }] }
+const createRequest = { operation: 'createDraftListing', listingId: null, calls: [
+  { method: 'POST', path: '/shops/{shop_id}/listings', encoding: 'form', body: { title: 'Fake title', quantity: 1 }, fields: ['title'] },
+  { method: 'PUT', path: '/listings/{listing_id}/inventory', encoding: 'json', body: { products: [] }, fields: ['inventory'] }] }
 const calls = {
   tags: { method: 'PATCH', path: '/shops/{shop_id}/listings/9000000001', encoding: 'form', body: { tags: ['fake-tag'] }, fields: ['tags'] },
   inventory: { method: 'PUT', path: '/listings/9000000001/inventory', encoding: 'json', body: { products: [] }, fields: ['inventory'] },
@@ -55,7 +58,8 @@ vi.mock('./studio-publication-etsy-changes.js', async original => ({
     m.changes(...args)
     const [, publication, , options] = args
     return { kind: 'etsy-changes', publication, remoteRevision: publication.liveRevision ?? 'new', products: publication.products, ownerProductId: publication.ownerProductId,
-      createWrites: { [publication.ownerProductId]: [{ field: 'title', value: { state: 'value', value: 'Fake title' } }] }, ...(options?.full ? { full: true } : {}),
+      createWrites: { [publication.ownerProductId]: [{ field: 'title', value: { state: 'value', value: 'Fake title' } }, { field: 'inventory', value: { state: 'value', value: { products: [] } } }] },
+      ...(options?.full ? { full: true } : {}),
       changes: publication.listingId
         ? [line(tagsId, 'tags', 'Tags', ['fake-tag'], !!options?.full), line(inventoryId, 'inventory', 'Variations, SKUs and processing profile', { products: [] }, !!options?.full)]
         : [{ ...line(createId, '__create__', 'Create Etsy listing (draft)', createRequest, false), lastAccepted: { state: 'unknown', reason: 'No listing exists.' }, reason: 'New listing' }] }
@@ -75,6 +79,11 @@ vi.mock('./studio-publication-etsy-changes.js', async original => ({
 // The send: its own suite proves each call, the read-back and the result's words. Here it journals each call it is handed,
 // in order, just before "sending" it.
 vi.mock('./studio-publication-etsy-send.js', async original => ({ ...(await original<Record<string, unknown>>()), sendEtsyPublication: m.send }))
+// E3 — the create send (its suite proves the POST, the steps and the result's words) and the "creating" marker (its suite
+// proves the SQL). Here the send calls the studio's hooks in the order its suite proves.
+vi.mock('./studio-publication-etsy-create.js', () => ({ sendEtsyCreate: m.create, etsyCreateResult: m.createResult }))
+vi.mock('./studio-publication-etsy-marker.js', async original => ({ ...(await original<Record<string, unknown>>()), claimEtsyCreate: m.claimCreate,
+  markEtsyCreateUnknown: m.markUnknown, releaseEtsyCreate: m.release, storeEtsyCreatedListing: m.store }))
 vi.mock('./studio-publication-records.js', () => ({ recordPublicationRequests: m.record, settlePublicationRecords: vi.fn() }))
 vi.mock('./draft-listing.service.js', () => ({ ensureDraftListings: m.ensure }))
 vi.mock('./workspace-destination.js', () => ({ WorkspaceScopeError: class extends Error { statusCode: number; constructor(message: string, statusCode = 409) { super(message); this.statusCode = statusCode } } }))
@@ -152,6 +161,31 @@ async function publishOnEtsy(between: () => void = () => {}) {
   return { review, result: await submitStudioPublication('parent', review.id!, { selectionToken: selection.token }, 'user') }
 }
 
+/** The create send as its suite proves it: claim → journal + POST → landed → journal + each later call → the receipt. */
+const creating = (receipt: Record<string, unknown> = {}) => async (plan: any, _accountId: string, reviewId: string, hooks: any) => {
+  await hooks.claim({ reviewId, title: 'Fake title', skus: ['FAKE-SKU-2', 'FAKE-SKU-3'] })
+  const [post, ...later] = plan.request.calls
+  await hooks.beforeSend({ operation: 'createDraftListing', method: 'POST', path: post.path, encoding: post.encoding, body: post.body, fields: post.fields })
+  m.order.push('POST sent')
+  await hooks.landed('9000000001')
+  for (const call of later) {
+    await hooks.beforeSend({ operation: 'createDraftListing', method: call.method, path: call.path.replace('{listing_id}', '9000000001'), encoding: call.encoding, body: call.body, fields: call.fields })
+    m.order.push(`${call.method} sent`)
+  }
+  return { reference: '9000000001', verified: true, steps: [], mismatches: [], created: { listingId: '9000000001', state: 'draft' }, ...receipt }
+}
+/** A stand-in for the create result (its words are the create suite's): VERIFIED or UNVERIFIED from the receipt. */
+const createResultOf = (id: string, plan: any, receipt: any) => ({ id, status: receipt.verified && !receipt.createUnknown ? 'VERIFIED' : 'UNVERIFIED',
+  message: receipt.createUnknown ?? 'Etsy created draft listing 9000000001.', results: plan.products.map((p: any) => ({ sku: p.sku, status: receipt.verified ? 'VERIFIED' : 'SUBMITTED',
+    message: 'stand-in', ...(receipt.reference ? { reference: receipt.reference } : {}) })) })
+/** Review a new Etsy listing, tick its create and submit. */
+async function createOnEtsy() {
+  const review = await previewStudioPublication('parent', etsyScope, 'user')
+  const selection = await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [createId] }, 'user')
+  return { review, result: await submitStudioPublication('parent', review.id!, { selectionToken: selection.token }, 'user') }
+}
+const where = { marketplace: 'GLOBAL', accountId: 'etsy-shop-b', aliasKey: '', ownerProductId: 'parent' }
+
 beforeEach(() => {
   vi.resetAllMocks(); m.rows.clear(); m.etsyNotices = []; m.published.length = 0; m.order.length = 0; m.live = { quantity: 5, readiness: 1 }
   m.mode.mockReturnValue('live'); m.etsyMode.mockReturnValue('live'); m.drift.mockResolvedValue([])
@@ -160,6 +194,10 @@ beforeEach(() => {
   m.facts.mockImplementation(async () => newFamily())
   m.etsyPrepare.mockImplementation(async (facts: any, options: any) => publication(facts, options))
   m.send.mockImplementation(sendingEvery({}))
+  m.create.mockImplementation(creating())
+  m.createResult.mockImplementation(createResultOf)
+  m.claimCreate.mockImplementation(async () => { m.order.push('marker') })
+  m.store.mockImplementation(async () => { m.order.push('stored'); return 3 })
 })
 
 it('a listing on Etsy: each call is journalled just before it goes (its own field writes), drafts are started once, and the verified result is stored', async () => {
@@ -178,8 +216,10 @@ it('a listing on Etsy: each call is journalled just before it goes (its own fiel
   expect(m.record.mock.calls[0][1][0].request).toMatchObject({ operation: 'updateListing', path: '/shops/{shop_id}/listings/9000000001', encoding: 'form', body: { tags: ['fake-tag'] } })
   expect(result.status).toBe('VERIFIED')
   expect(result.results.map(row => row.sku)).toEqual(['FAKE-SKU-1', 'FAKE-SKU-2', 'FAKE-SKU-3'])
-  expect(m.rows.get(review.id!)).toMatchObject({ status: 'VERIFIED', changes: { result: { status: 'VERIFIED' } } })
+  expect(m.rows.get(review.id!)).toMatchObject({ status: 'VERIFIED', changes: { result: { status: 'VERIFIED' }, etsyCreate: false } })
   expect(m.published.map(event => event.status)).toEqual(['PUBLISHING', 'VERIFIED'])
+  // An update never reaches the create send or the marker.
+  expect(m.create).not.toHaveBeenCalled(); expect(m.claimCreate).not.toHaveBeenCalled(); expect(m.store).not.toHaveBeenCalled()
 })
 
 it('a send that sends nothing (Etsy changed after the review) is FAILED, "Nothing was submitted.", and stored', async () => {
@@ -222,7 +262,6 @@ it('sending off, a listing on Etsy: the gate sentence, as for every channel; not
   m.etsyMode.mockReturnValue('dry-run')
   expect((await previewStudioPublication('parent', etsyScope, 'user')).issues.filter(issue => issue.severity === 'error').map(issue => issue.message))
     .toEqual(['Sending is off: publishing to Etsy is in dry-run mode on this server. Nexus ran every check it can without reading Etsy (it reads the live listing only when sending is live); nothing will be sent until live publishing is turned on.'])
-  expect(review.issues.map(issue => issue.message)).not.toContain(ETSY_CREATE_SENDS_NOTHING)
 })
 
 it('Full update on the main row reviews every row as Full update, and the change plan is asked for the whole listing', async () => {
@@ -240,24 +279,26 @@ it('Full update on a variation alone is held with why (Etsy changes a whole list
   expect(m.changes.mock.calls[0][3]).toEqual({})
 })
 
-it('sending off, a new listing: the review still holds the one create change, and one Etsy error replaces the gate sentence; nothing is stored', async () => {
+it('sending off, a new listing: the review still holds the one create change, and the gate sentence is its one error (as an update\'s); nothing is stored', async () => {
   m.etsyMode.mockReturnValue('gated')
   const review = await previewStudioPublication('parent', etsyScope, 'user')
   expect(review.id).toBeNull()
   expect(m.rows.size).toBe(0)
-  expect(review.issues.filter(issue => issue.severity === 'error')).toEqual([{ severity: 'error', message: ETSY_CREATE_SENDS_NOTHING }])
-  expect(review.issues.map(issue => issue.message)).not.toContain(ETSY_CREATE_REVIEW_ONLY)
+  expect(review.issues.filter(issue => issue.severity === 'error')).toEqual([{ severity: 'error',
+    message: 'Sending is off: publishing to Etsy is turned off on this server. Nexus ran every check it can without reading Etsy (it reads the live listing only when sending is live); nothing will be sent until live publishing is turned on.' }])
+  expect(review.issues.map(issue => issue.message).join('\n')).not.toMatch(/next Nexus update/)
   expect(review.changes?.map(change => change.field)).toEqual(['__create__'])
-  // A new listing nobody chose for starts as an Etsy draft (Owner D1 = A); the live reader is handed over, never called here.
-  expect(m.etsyPrepare).toHaveBeenCalledWith(expect.objectContaining({ scope: etsyScope }), { createState: 'draft', readLive: expect.any(Function) })
+  // A new listing nobody chose for starts as an Etsy draft (Owner D1 = A); the live and shop readers are handed over, never called here.
+  expect(m.etsyPrepare).toHaveBeenCalledWith(expect.objectContaining({ scope: etsyScope }), { createState: 'draft', readLive: expect.any(Function), readShop: expect.any(Function) })
+  expect(m.create).not.toHaveBeenCalled()
 })
 
-it('sending live, a new listing: stored as a review with the create warning; every row starts Inactive (a draft); the selection is the exact JSON request', async () => {
+it('sending live, a new listing: stored as a review with no "comes later" warning; every row starts Inactive (a draft); the selection is the exact JSON request', async () => {
   const review = await previewStudioPublication('parent', etsyScope, 'user')
   expect(review.id).toEqual(expect.any(String))
   expect(m.rows.get(review.id!)).toMatchObject({ status: 'PREVIEW', changes: { changeVersion: 1, changePlan: { kind: 'etsy-changes' } } })
   expect(review.issues.filter(issue => issue.severity === 'error')).toEqual([])
-  expect(review.issues).toContainEqual({ severity: 'warning', message: ETSY_CREATE_REVIEW_ONLY })
+  expect(review.issues.map(issue => issue.message).join('\n')).not.toMatch(/next Nexus update/)
   expect(review.changes).toEqual([expect.objectContaining({ id: createId, field: '__create__', selectable: true, selectedByDefault: true })])
   expect(review.rows.map(row => [row.sku, row.startsAs])).toEqual([['FAKE-SKU-1', 'inactive'], ['FAKE-SKU-2', 'inactive'], ['FAKE-SKU-3', 'inactive']])
   const selection = await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [createId] }, 'user')
@@ -265,16 +306,65 @@ it('sending live, a new listing: stored as a review with the create warning; eve
   expect(JSON.parse(selection.payload.content)).toEqual(createRequest)
 })
 
-it('a new listing\'s submit is refused before any claim, draft, journal, send or event — the review stays PREVIEW', async () => {
-  const review = await previewStudioPublication('parent', etsyScope, 'user')
-  const selection = await previewStudioPublicationSelection('parent', review.id!, { selectedIds: [createId] }, 'user')
-  const before = structuredClone(m.rows.get(review.id!))
-  await expect(submitStudioPublication('parent', review.id!, { selectionToken: selection.token }, 'user'))
-    .rejects.toMatchObject({ message: `${ETSY_CREATE_NOT_YET} Nothing was sent.`, statusCode: 422 })
-  expect(m.rows.get(review.id!)).toEqual(before)
-  expect(m.facts).toHaveBeenCalledTimes(1)
-  expect(m.ensure).not.toHaveBeenCalled(); expect(m.record).not.toHaveBeenCalled(); expect(m.locks).not.toHaveBeenCalled(); expect(m.send).not.toHaveBeenCalled()
-  expect(m.published).toEqual([])
+it('E3 — a new listing\'s submit is claimed (no refusal) and sent by the create send: drafts, then the marker, each call journalled in order, the id stored on every delivered row; VERIFIED stored', async () => {
+  const { review, result } = await createOnEtsy()
+  // The claim records that this publication creates the listing (the marker, the settle and Mark as checked read it).
+  expect(m.rows.get(review.id!).changes).toMatchObject({ etsyCreate: true, delivery: { productIds: ['parent', 'child-s', 'child-m'], aliasKey: '' } })
+  expect(m.send).not.toHaveBeenCalled()
+  expect(m.create).toHaveBeenCalledTimes(1)
+  expect(m.create).toHaveBeenCalledWith(expect.objectContaining({ listingId: null, request: createRequest }), 'etsy-shop-b', review.id, expect.objectContaining({
+    claim: expect.any(Function), beforeSend: expect.any(Function), landed: expect.any(Function), unknown: expect.any(Function), release: expect.any(Function) }))
+  expect(m.order).toEqual(['drafts', 'marker', 'journal 0', 'POST sent', 'stored', 'journal 1', 'PUT sent'])
+  expect(m.ensure).toHaveBeenCalledTimes(1)
+  // The marker: this destination's main row, the create send's facts and the person who published.
+  expect(m.claimCreate).toHaveBeenCalledWith(where, { reviewId: review.id, title: 'Fake title', skus: ['FAKE-SKU-2', 'FAKE-SKU-3'], userId: 'user' })
+  // Each journal names every delivered product with the exact call; only the main row writes, and only the fields that call carries.
+  const journal = (at: number) => m.record.mock.calls[at][1].map((item: any) => [item.productId, item.request.method, item.request.intentVersion, item.request.writes.map((w: any) => w.field)])
+  expect(m.record.mock.calls.map(call => call[2])).toEqual([0, 1])
+  expect(journal(0)).toEqual([['parent', 'POST', 1, ['title']], ['child-s', 'POST', 1, []], ['child-m', 'POST', 1, []]])
+  expect(journal(1)).toEqual([['parent', 'PUT', 1, ['inventory']], ['child-s', 'PUT', 1, []], ['child-m', 'PUT', 1, []]])
+  expect(m.record.mock.calls[0][1][0].request).toMatchObject({ operation: 'createDraftListing', path: '/shops/{shop_id}/listings', encoding: 'form', body: { title: 'Fake title', quantity: 1 } })
+  expect(m.record.mock.calls[1][1][0].request).toMatchObject({ operation: 'createDraftListing', path: '/listings/9000000001/inventory' })
+  // Etsy's listing id goes on every delivered row of this destination, once Etsy answered.
+  expect(m.store).toHaveBeenCalledWith(where, { reviewId: review.id, productIds: ['parent', 'child-s', 'child-m'], listingId: '9000000001' })
+  expect(m.markUnknown).not.toHaveBeenCalled(); expect(m.release).not.toHaveBeenCalled()
+  expect(m.createResult).toHaveBeenCalledWith(review.id, expect.objectContaining({ listingId: null }), expect.objectContaining({ reference: '9000000001', verified: true }))
+  expect(result.status).toBe('VERIFIED')
+  expect(m.rows.get(review.id!)).toMatchObject({ status: 'VERIFIED', changes: { result: { status: 'VERIFIED' } } })
+  expect(m.published.map(event => event.status)).toEqual(['PUBLISHING', 'VERIFIED'])
+})
+
+it('E3 — a create that sends nothing (Etsy refused the POST, or the marker was refused) is FAILED, "Nothing was submitted.", and stored', async () => {
+  m.create.mockRejectedValue(Object.assign(new Error('Etsy refused the listing: fake reason.'), { notSent: true }))
+  const { review, result } = await createOnEtsy()
+  expect(result).toEqual({ id: review.id, status: 'FAILED', results: [], message: 'Nothing was submitted. Etsy refused the listing: fake reason.' })
+  expect(m.rows.get(review.id!)).toMatchObject({ status: 'FAILED' })
+  expect(m.createResult).not.toHaveBeenCalled()
+})
+
+it('E3 — a create whose outcome is unknown is stored UNVERIFIED (the destination waits for Mark as checked)', async () => {
+  m.create.mockImplementation(async (plan: any, _accountId: string, reviewId: string, hooks: any) => {
+    await hooks.claim({ reviewId, title: 'Fake title', skus: [] })
+    await hooks.beforeSend({ operation: 'createDraftListing', method: 'POST', path: '/shops/{shop_id}/listings', encoding: 'form', body: plan.request.calls[0].body, fields: ['title'] })
+    await hooks.unknown('No answer from Etsy.')
+    return { reference: '', verified: false, steps: [], mismatches: [], created: { listingId: null, state: null }, createUnknown: 'No answer from Etsy.' }
+  })
+  const { review, result } = await createOnEtsy()
+  expect(m.markUnknown).toHaveBeenCalledWith(where, review.id, 'No answer from Etsy.', undefined)
+  expect(m.store).not.toHaveBeenCalled(); expect(m.release).not.toHaveBeenCalled()
+  expect(result.status).toBe('UNVERIFIED')
+  expect(m.rows.get(review.id!)).toMatchObject({ status: 'UNVERIFIED', changes: { result: { status: 'UNVERIFIED', message: 'No answer from Etsy.' } } })
+})
+
+it('E3 — the hooks address only this destination\'s marker: unknown keeps Etsy\'s id, release removes it (each with this publication\'s id)', async () => {
+  m.create.mockImplementation(async (_plan: any, _accountId: string, _reviewId: string, hooks: any) => {
+    await hooks.unknown('Etsy created listing 9000000001, but Nexus could not record it: fake.', '9000000001')
+    await hooks.release()
+    throw Object.assign(new Error('Stand-in.'), { notSent: true })
+  })
+  const { review } = await createOnEtsy()
+  expect(m.markUnknown).toHaveBeenCalledWith(where, review.id, 'Etsy created listing 9000000001, but Nexus could not record it: fake.', '9000000001')
+  expect(m.release).toHaveBeenCalledWith(where, review.id)
 })
 
 it('a stored Etsy review without its change plan asks for a refreshed review (not the create refusal); nothing is claimed', async () => {
@@ -344,12 +434,17 @@ it('the adapter\'s notes are the review\'s warnings', async () => {
   expect(review.issues).toContainEqual({ severity: 'warning', message: 'Photos are not sent to Etsy yet; they come in a later Nexus update.' })
 })
 
-it('a claimed new Etsy listing that reaches the send anyway is FAILED, "Nothing was submitted": no draft, no journal, no send', async () => {
+it('E3 — a delivery routes by the plan: no listing id → the create send (never the update send); sending turned off since the claim → nothing started', async () => {
   const facts = newFamily()
-  const claim = { productId: 'parent', id: 'review-1', userId: 'user', data: { scope: etsyScope, startedAt: new Date().toISOString() }, input: {},
-    plan: { facts, prepared: publication(facts, {}) } as never,
+  const claim = { productId: 'parent', id: 'review-1', userId: 'user', data: { scope: etsyScope, startedAt: new Date().toISOString(), delivery: { productIds: ['parent'], aliasKey: '' } }, input: {},
+    plan: { facts, prepared: { ...publication(facts, {}), fieldWrites: {}, request: createRequest } } as never,
     destinationRow: { kind: 'studio-publication', productId: 'parent', channel: 'ETSY', marketplace: 'GLOBAL', channelConnectionId: 'etsy-shop-b', aliasKey: '', batchId: null } } as ClaimedPublication
-  // Said once: "Nothing was submitted." is the result's own; the Etsy sentence adds why.
-  expect(await deliverPublication(claim)).toEqual({ result: { id: 'review-1', status: 'FAILED', message: `Nothing was submitted. ${ETSY_CREATE_NOT_YET}`, results: [] }, receipt: undefined })
-  expect(m.ensure).not.toHaveBeenCalled(); expect(m.record).not.toHaveBeenCalled(); expect(m.send).not.toHaveBeenCalled()
+  m.etsyMode.mockReturnValue('gated')
+  expect(await deliverPublication(claim)).toEqual({ result: { id: 'review-1', status: 'FAILED', message: 'Nothing was submitted. Live publication was disabled before submission.', results: [] }, receipt: undefined })
+  expect(m.create).not.toHaveBeenCalled(); expect(m.ensure).not.toHaveBeenCalled(); expect(m.record).not.toHaveBeenCalled()
+  m.etsyMode.mockReturnValue('live')
+  const delivered = await deliverPublication(claim)
+  expect(delivered.result.status).toBe('VERIFIED')
+  expect(m.create).toHaveBeenCalledTimes(1); expect(m.send).not.toHaveBeenCalled()
+  expect(m.store).toHaveBeenCalledWith(where, { reviewId: 'review-1', productIds: ['parent'], listingId: '9000000001' })
 })

@@ -1,4 +1,4 @@
-/** E1/E2 — the Etsy studio publication contract (types and two constants). B1 owns it; B2 and B3 import it. */
+/** E1/E2/E3 — the Etsy studio publication contract (types and two constants). B1 owns it; B2 and B3 import it. */
 import type { StudioPublishChange, StudioPublishFieldWrite, StudioPublishIssue, StudioPublishRemoval } from '@nexus/shared/studio-publication'
 import type { EtsyInventoryWrite, EtsyWriteOffering } from '../etsy/inventory.js'
 
@@ -143,8 +143,32 @@ export type EtsyCompiled = EtsyPublication & { products: ProductIdentity[]; fiel
 /** What the review's request shows for a variation Etsy holds: its price, stock and on/off are read from Etsy at send and kept. */
 export const ETSY_KEPT_AT_SEND = "(Etsy's, read at send)"
 /** One journalled call, exactly as sent (paths keep the literal `{shop_id}`; the listing id is real). */
-export interface EtsyJournalRequest { operation: 'updateListing'; method: EtsyCall['method']; path: string; encoding: EtsyCall['encoding']
+export interface EtsyJournalRequest { operation: 'updateListing' | 'createDraftListing'; method: EtsyCall['method']; path: string; encoding: EtsyCall['encoding']
   body: Record<string, unknown> | null; fields: string[] }
 export type EtsyBeforeSend = (request: EtsyJournalRequest) => Promise<void>
 export interface EtsySendStep { label: string; fields: string[]; outcome: 'applied' | 'unchanged' | 'refused' | 'unknown' | 'not-sent'; message?: string }
-export interface EtsySendReceipt { reference: string; verified: boolean; steps: EtsySendStep[]; mismatches: string[]; readBackError?: string }
+export interface EtsySendReceipt { reference: string; verified: boolean; steps: EtsySendStep[]; mismatches: string[]; readBackError?: string
+  /** E3 — a create: the listing Etsy made (listingId null when its answer was lost) and the state Etsy answered. */
+  created?: { listingId: string | null; state: string | null }
+  /** E3 — why the create's outcome is unknown (no answer, 5xx, an answer without a listing number, or the id could not be stored). */
+  createUnknown?: string
+  /** Fields sent that Etsy's read never reports (production partners): named in the result, not counted against VERIFIED. */
+  unconfirmed?: string[]
+}
+/** E3 — what a shop read gives a create review (GET /shops/{shop_id}). */
+export interface EtsyShopRead { languages: string[]; currencyCode: string | null }
+/** E3 — what the "creating" marker records about the create, before the POST (MARK keeps it on the main row). */
+export interface EtsyCreateMarkerInput { reviewId: string; title: string; skus: string[] }
+/** E3 — the studio's side of a create send (S implements them; CREATE calls them in this order). */
+export interface EtsyCreateHooks {
+  /** Once, before anything is sent: drafts ensured, the marker written. A throw = nothing sent. */
+  claim(marker: EtsyCreateMarkerInput): Promise<void>
+  /** Before every write, with the exact request (the journal). A throw = that write is not made. */
+  beforeSend: EtsyBeforeSend
+  /** Etsy answered with this listing id: stored on every family row, marker cleared. */
+  landed(listingId: string): Promise<void>
+  /** The POST's outcome is unknown: the marker stays open (state 'unknown', with Etsy's id when one was answered). */
+  unknown(message: string, listingId?: string): Promise<void>
+  /** Etsy clearly created nothing: the marker is removed. */
+  release(): Promise<void>
+}

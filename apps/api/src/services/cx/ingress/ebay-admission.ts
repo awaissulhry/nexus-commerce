@@ -48,8 +48,11 @@ async function lockDelivery(tx: Tx, notice: Pick<Notice, 'environment' | 'signat
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`
 }
 
+/** Topics routed to a business by their verified seller id. Every other topic stays in encrypted quarantine. */
+const ROUTED_TOPICS: ReadonlySet<string> = new Set(['AUTHORIZATION_REVOCATION', 'ORDER_CONFIRMATION'])
+
 async function ownerFor(tx: Pick<Tx, '$queryRaw'>, notice: Pick<Notice, 'signatureOk' | 'topic' | 'userId' | 'environment'>, lock: boolean) {
-  if (!notice.signatureOk || notice.topic !== 'AUTHORIZATION_REVOCATION' || !notice.userId) return null
+  if (!notice.signatureOk || !ROUTED_TOPICS.has(notice.topic) || !notice.userId) return null
   const rows = lock
     ? await tx.$queryRaw<Array<{ workspaceId: string; status: string }>>`
       SELECT * FROM nexus_lock_ebay_notice_owner(${notice.environment}, ${notice.userId})`
@@ -61,14 +64,25 @@ async function ownerFor(tx: Pick<Tx, '$queryRaw'>, notice: Pick<Notice, 'signatu
 
 /** Exact subject and environment; one active account wins over its inactive history. */
 async function accountFor(tx: Tx, notice: Notice, workspaceId: string) {
-  const rows = await tx.$queryRaw<Array<{ id: string; isActive: boolean }>>`
-    SELECT id, "isActive" FROM "ChannelConnection" WHERE "workspaceId"=${workspaceId} AND "channelType"='EBAY'
+  const rows = await tx.$queryRaw<Array<{ id: string; isActive: boolean; authStatus: string }>>`
+    SELECT id, "isActive", "authStatus" FROM "ChannelConnection" WHERE "workspaceId"=${workspaceId} AND "channelType"='EBAY'
       AND "externalAccountId"=${notice.userId} AND "managedBy"='oauth'
       AND COALESCE("connectionMetadata"->>'environment','production')=${notice.environment}
     ORDER BY "isActive" DESC, id LIMIT 2`
   if (rows.length === 1 || (rows[0]?.isActive && !rows[1]?.isActive)) return rows[0]
   return null
 }
+
+/**
+ * An order notice is only worth storing for processing when its account can read the order now: the
+ * gateway holds every call of an inactive account or one that needs Reconnect (gateway.ts, step 2),
+ * so such a receipt could only wait. It is quarantined instead (`account_not_connected`: the eBay
+ * account is not connected; the 5-minute order check records the order after Reconnect).
+ * Revocation is not affected: it is exactly the notice an account that lost its sign-in receives.
+ */
+const ACCOUNT_NEEDS_SIGNIN = new Set(['needs_reauth', 'revoked', 'disconnected'])
+const heldForSignIn = (notice: Pick<Notice, 'topic'>, account: { isActive: boolean; authStatus: string }) =>
+  notice.topic === 'ORDER_CONFIRMATION' && (!account.isActive || ACCOUNT_NEEDS_SIGNIN.has(account.authStatus))
 
 function quarantineWhere(notice: Pick<Notice, 'environment' | 'signatureOk' | 'externalId'>) {
   return { environment_signatureOk_externalId: { environment: notice.environment, signatureOk: notice.signatureOk, externalId: notice.externalId } }
@@ -139,7 +153,7 @@ export async function receiveEbayNotice(input: { rawBody: Buffer; header?: strin
   let identity: EbayNoticeIdentity | null = null
   if (verification.ok) { try { identity = readEbayNoticeIdentity(payload) } catch { /* encrypted quarantine */ } }
   const payloadDigest = digest(rawBody)
-  const routeable = identity?.topic === 'AUTHORIZATION_REVOCATION' && !!identity.userId
+  const routeable = !!identity && ROUTED_TOPICS.has(identity.topic) && !!identity.userId
   const notice: Notice = { environment, rawBody, payload, signatureOk: verification.ok, keyId: verification.kid,
     externalId: identity?.notificationId ?? `sha256:${payloadDigest}`, topic: identity?.topic ?? 'unclassified',
     userId: routeable ? identity!.userId : null, subjectHash: routeable ? subjectHash(environment, identity!.userId!) : null, payloadDigest,
@@ -191,12 +205,14 @@ export async function receiveEbayNotice(input: { rawBody: Buffer; header?: strin
       const owner = await ownerFor(tx, notice, true)
       if (owner?.status === 'active' && owner.workspaceId !== workspaceId) return { retryWorkspace: owner.workspaceId } as const
       const account = owner?.status === 'active' ? await accountFor(tx, notice, workspaceId) : null
-      if (account) {
+      const signInHeld = !!account && heldForSignIn(notice, account)
+      if (account && !signInHeld) {
         const saved = await writeOwned(tx, notice, account.id)
         return { outcome: { kind: 'accepted', receiptId: saved.id!, workspaceId, duplicate: saved.duplicate } } as const
       }
       if (notice.signatureOk && !cipher) return { needCipher: true } as const
-      const reason = notice.reason ?? (owner ? owner.status === 'active' ? 'account_ambiguous_or_missing' : 'workspace_inactive' : 'owner_unknown')
+      const reason = notice.reason ?? (signInHeld ? 'account_not_connected'
+        : owner ? owner.status === 'active' ? 'account_ambiguous_or_missing' : 'workspace_inactive' : 'owner_unknown')
       const row = await tx.ebayNoticeQuarantine.create({ data: { id: randomUUID(), environment, signatureOk: notice.signatureOk,
         externalId: notice.externalId, topic: notice.topic, subjectHash: notice.subjectHash, firstOwnerWorkspaceId: owner?.workspaceId ?? null,
         payloadEnc: cipher?.blob ?? null, payloadKeyId: cipher?.keyId ?? null, payloadDigest, verificationKeyId: notice.keyId, reason }, select: { id: true } })

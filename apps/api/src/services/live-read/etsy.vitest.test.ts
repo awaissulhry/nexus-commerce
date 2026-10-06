@@ -13,7 +13,8 @@ vi.mock('../etsy/read-client.js', async (importOriginal) => {
 })
 
 import { etsyReader } from '../etsy/read-client.js'
-import { ETSY_OTHER_SHOP, ETSY_SHOP_NOT_SAID, etsyListingReads, normaliseEtsyListing, readEtsyLive, readEtsyServerLive, type EtsyLiveRaw } from './etsy.js'
+import { ETSY_OTHER_SHOP, ETSY_SHOP_NOT_SAID, ETSY_TOO_MANY_DRAFTS, EtsyDraftUnconfirmed, etsyListingReads, findEtsyDrafts, normaliseEtsyListing, readEtsyLive, readEtsyServerLive, readEtsyShop,
+  type EtsyLiveRaw } from './etsy.js'
 
 const LISTING = '9000000001'
 const PATHS = { listing: `/listings/${LISTING}?includes=Images,Translations`, plain: `/listings/${LISTING}`, inventory: `/listings/${LISTING}/inventory`,
@@ -256,5 +257,161 @@ describe('readEtsyServerLive', () => {
     expect(read).toMatchObject({ source: 'etsy-listing', revision: null, variations: null, raw: null, errors: [{ scope: 'item', reason: 'Etsy could not read this resource (HTTP 500).' }] })
     expect(read.content.title).toEqual({ state: 'unread', reason: 'Etsy could not read this resource (HTTP 500).' })
     expect(Object.keys(read.content)).toHaveLength(16)
+  })
+})
+
+describe('E3 — readEtsyShop (a create review\'s shop read)', () => {
+  it('reads GET /shops/{own shop} through the account\'s reader: languages as Etsy lists them, the currency upper-cased', async () => {
+    expect(await readEtsyShop('account')).toEqual({ languages: ['it', 'en', 'de'], currencyCode: 'EUR' })
+    expect(etsyReader).toHaveBeenCalledWith('account')
+    expect(s.paths).toEqual([PATHS.shop])
+  })
+
+  it('a shop that states no languages or currency gives [] and null (never a guess); a failed read throws', async () => {
+    s.answers[PATHS.shop] = { shop_id: 90000001, languages: [' ', 7], currency_code: ' ' }
+    expect(await readEtsyShop('account')).toEqual({ languages: [], currencyCode: null })
+    s.failures[PATHS.shop] = 503
+    await expect(readEtsyShop('account')).rejects.toThrow('HTTP 503')
+  })
+})
+
+describe('E3 — findEtsyDrafts (a create\'s recovery: this shop\'s drafts that match)', () => {
+  const SINCE = '2026-10-05T18:00:00.000Z'
+  const at = (iso: string) => Math.floor(Date.parse(iso) / 1000)
+  const page = (offset: number) => `/shops/90000001/listings?state=draft&limit=100&offset=${offset}`
+  const batch = (ids: string[]) => `/listings/batch/inventory?listing_ids=${ids.join(',')}`
+  const draft = (id: number, title: string, created: number | null = at('2026-10-05T18:00:05Z'), extra: Record<string, unknown> = {}) => ({
+    listing_id: id, shop_id: 90000001, state: 'draft', title, ...(created === null ? {} : { created_timestamp: created }), ...extra })
+  const filler = (from: number, n: number) => Array.from({ length: n }, (_, i) => draft(from + i, `Altro ${i}`))
+  const inventoryOf = (id: number, skus: Array<string | null>, deleted: string[] = []) => ({ listing_id: id,
+    inventory: { products: [...skus.map(sku => ({ product_id: 1, sku, is_deleted: false, offerings: [] })), ...deleted.map(sku => ({ product_id: 2, sku, is_deleted: true, offerings: [] }))] } })
+  const find = (over: Partial<{ title: string; since: string; skus: string[] }> = {}) =>
+    findEtsyDrafts('account', { title: 'Guanti da moto "Pro"', since: SINCE, skus: ['FAKE-SKU-1', 'FAKE-SKU-2'], ...over })
+
+  it('pages the drafts (two pages), keeps the same title (entities decoded, whitespace and case ignored) created since the marker, then ONE batch inventory read of those only', async () => {
+    s.answers[page(0)] = { count: 103, results: [...filler(9000000100, 98), draft(9000000001, '  guanti DA  moto &quot;Pro&quot; '), draft(9000000002, 'Guanti da moto "Pro" XL')] }
+    s.answers[page(100)] = { count: 103, results: [draft(9000000003, 'Guanti da moto &quot;Pro&quot;', at('2026-10-05T17:30:00Z')),
+      draft(9000000004, 'Guanti da moto "Pro"', null), draft(9000000005, 'Guanti da moto "Pro"', at('2026-10-05T17:52:00Z'))] }
+    s.answers[batch(['9000000001', '9000000004', '9000000005'])] = { count: 3, results: [inventoryOf(9000000001, ['FAKE-SKU-1', 'FAKE-SKU-2']),
+      inventoryOf(9000000004, ['']), inventoryOf(9000000005, ['FAKE-SKU-1'], ['FAKE-SKU-OLD'])] }
+    expect(await find()).toEqual([
+      { listingId: '9000000001', title: 'guanti DA  moto "Pro"', createdAt: '2026-10-05T18:00:05.000Z' },
+      // No creation time from Etsy: kept on the title and SKUs alone.
+      { listingId: '9000000004', title: 'Guanti da moto "Pro"', createdAt: null },
+      // 8 minutes before the marker is inside the 10 minutes' slack; a deleted product's SKU does not count.
+      { listingId: '9000000005', title: 'Guanti da moto "Pro"', createdAt: '2026-10-05T17:52:00.000Z' },
+    ])
+    // 9000000002: another title; 9000000003: created 30 minutes before the marker.
+    expect(s.paths).toEqual([page(0), page(100), batch(['9000000001', '9000000004', '9000000005'])])
+  })
+
+  it('the SKU rule: all empty (Etsy\'s first product) or all among the create\'s SKUs; a foreign or a mixed draft is not ours', async () => {
+    s.answers[page(0)] = { count: 4, results: [draft(9000000001, 'Guanti da moto "Pro"'), draft(9000000002, 'Guanti da moto "Pro"'),
+      draft(9000000003, 'Guanti da moto "Pro"'), draft(9000000004, 'Guanti da moto "Pro"')] }
+    s.answers[batch(['9000000001', '9000000002', '9000000003', '9000000004'])] = { results: [inventoryOf(9000000001, [null]), inventoryOf(9000000002, ['FAKE-SKU-2']),
+      inventoryOf(9000000003, ['FAKE-SKU-1', 'FAKE-SKU-9']), inventoryOf(9000000004, ['', 'FAKE-SKU-1'])] }
+    expect((await find()).map(d => d.listingId)).toEqual(['9000000001', '9000000002'])
+  })
+
+  it('no draft with that title → [] without an inventory read; an active listing in the answer is never a candidate', async () => {
+    s.answers[page(0)] = { count: 2, results: [draft(9000000001, 'Altro'), draft(9000000002, 'Guanti da moto "Pro"', undefined, { state: 'active' })] }
+    expect(await find()).toEqual([])
+    expect(s.paths).toEqual([page(0)])
+  })
+
+  it('more than 5,000 drafts: refused by name after 50 pages (a partial search is never "none")', async () => {
+    for (let n = 0; n < 50; n++) s.answers[page(n * 100)] = { count: 5001, results: filler(9000001000 + n * 100, 100) }
+    await expect(find()).rejects.toThrow('This shop has more than 5,000 Etsy drafts; Nexus cannot search them all.')
+    expect(ETSY_TOO_MANY_DRAFTS).toContain('5,000')
+    expect(s.paths).toHaveLength(50)
+  })
+
+  it('exactly 5,000 drafts (and 1,001, past the old cap) are searched whole', async () => {
+    for (let n = 0; n < 50; n++) s.answers[page(n * 100)] = { count: 5000, results: filler(9000001000 + n * 100, 100) }
+    await expect(find()).resolves.toEqual([])
+    expect(s.paths).toHaveLength(50)
+    s.paths = []
+    for (let n = 0; n < 10; n++) s.answers[page(n * 100)] = { count: 1001, results: filler(9000001000 + n * 100, 100) }
+    s.answers[page(1000)] = { count: 1001, results: [draft(9000000001, 'Guanti da moto "Pro"')] }
+    s.answers[batch(['9000000001'])] = { results: [inventoryOf(9000000001, ['FAKE-SKU-1'])] }
+    expect((await find()).map(d => d.listingId)).toEqual(['9000000001'])
+    expect(s.paths).toHaveLength(12)
+  })
+
+  it('R1 §16: one candidate deleted meanwhile makes the whole batch 404 — the batch is split until that draft is alone, and it is dropped', async () => {
+    const ids = ['9000000001', '9000000002', '9000000003', '9000000004', '9000000005']
+    s.answers[page(0)] = { count: 5, results: ids.map(id => draft(Number(id), 'Guanti da moto "Pro"')) }
+    // 9000000004 is gone: every batch that names it answers 404 (absent from the answers → 404).
+    const alive = ids.filter(id => id !== '9000000004')
+    const answer = (chunk: string[]) => ({ results: chunk.map(id => inventoryOf(Number(id), id === '9000000002' ? ['FAKE-SKU-9'] : ['FAKE-SKU-1'])) })
+    for (const chunk of [['9000000001', '9000000002', '9000000003'], ['9000000005']]) s.answers[batch(chunk)] = answer(chunk)
+    // N2: the lone 404 is proven with its own GET /listings/{id} — a 404 there too: gone.
+    expect((await find()).map(d => d.listingId)).toEqual(alive.filter(id => id !== '9000000002'))
+    expect(s.paths).toEqual([page(0), batch(ids), batch(['9000000001', '9000000002', '9000000003']), batch(['9000000004', '9000000005']), batch(['9000000004']),
+      '/listings/9000000004', batch(['9000000005'])])
+  })
+
+  it('N2: a batch 404 whose lone id still answers its own GET (200) is still a candidate, judged by its own inventory', async () => {
+    s.answers[page(0)] = { count: 1, results: [draft(9000000002, 'Guanti da moto "Pro"')] }
+    s.answers['/listings/9000000002'] = draft(9000000002, 'Guanti da moto "Pro"')
+    s.answers['/listings/9000000002/inventory'] = { products: [{ product_id: 1, sku: 'FAKE-SKU-1', is_deleted: false, offerings: [] }] }
+    expect((await find()).map(d => d.listingId)).toEqual(['9000000002'])
+    expect(s.paths).toEqual([page(0), batch(['9000000002']), '/listings/9000000002', '/listings/9000000002/inventory'])
+    // ...and its own inventory with a foreign SKU is not ours.
+    s.paths = []
+    s.answers['/listings/9000000002/inventory'] = { products: [{ product_id: 1, sku: 'FAKE-SKU-9', is_deleted: false, offerings: [] }] }
+    expect(await find()).toEqual([])
+  })
+
+  it('N2: a batch 404 whose lone id cannot be proven (its GET answers 500, or its inventory cannot be read) throws EtsyDraftUnconfirmed — never "gone"', async () => {
+    s.answers[page(0)] = { count: 1, results: [draft(9000000002, 'Guanti da moto "Pro"')] }
+    s.failures['/listings/9000000002'] = 500
+    const refused = await find().catch((error: unknown) => error)
+    expect(refused).toBeInstanceOf(EtsyDraftUnconfirmed)
+    expect((refused as Error).message).toBe('Nexus could not tell whether Etsy still holds draft 9000000002 (Etsy could not read this resource (HTTP 500).); check again later.')
+    delete s.failures['/listings/9000000002']
+    s.answers['/listings/9000000002'] = draft(9000000002, 'Guanti da moto "Pro"')
+    s.failures['/listings/9000000002/inventory'] = 503
+    await expect(find()).rejects.toThrow('Nexus could not tell whether Etsy still holds draft 9000000002')
+  })
+
+  it('a batch error other than 404 is still a failed search (never "none")', async () => {
+    s.answers[page(0)] = { count: 2, results: [draft(9000000001, 'Guanti da moto "Pro"'), draft(9000000002, 'Guanti da moto "Pro"')] }
+    s.failures[batch(['9000000001', '9000000002'])] = 500
+    await expect(find()).rejects.toThrow('HTTP 500')
+  })
+
+  it('every failure throws, never "none": a page read, an answer without results, a batch read, a candidate missing from the batch', async () => {
+    s.failures[page(0)] = 503
+    await expect(find()).rejects.toThrow('HTTP 503')
+    delete s.failures[page(0)]
+    s.answers[page(0)] = { count: 1 }
+    await expect(find()).rejects.toThrow('without its listings')
+    s.answers[page(0)] = { count: 1, results: [draft(9000000001, 'Guanti da moto "Pro"')] }
+    s.failures[batch(['9000000001'])] = 503
+    await expect(find()).rejects.toThrow('HTTP 503')
+    delete s.failures[batch(['9000000001'])]
+    // A lone draft Etsy no longer holds (404 in the batch AND on its own GET) is not a candidate: "none", not a failure.
+    s.failures[batch(['9000000001'])] = 404
+    s.failures[PATHS.plain] = 404
+    await expect(find()).resolves.toEqual([])
+    delete s.failures[batch(['9000000001'])]; delete s.failures[PATHS.plain]
+    s.answers[batch(['9000000001'])] = { results: [{ listing_id: 9000000001, inventory: null }] }
+    await expect(find()).rejects.toThrow('did not return the inventory of draft 9000000001')
+    await expect(find({ title: '  ' })).rejects.toThrow('no title')
+    await expect(find({ since: 'yesterday' })).rejects.toThrow('no start time')
+  })
+
+  it('reads only this account\'s own shop (the shop id comes from the account), and takes injected reads', async () => {
+    const reads = { drafts: vi.fn(async () => ({ count: 1, results: [draft(9000000001, 'Guanti da moto "Pro"')] })),
+      inventories: vi.fn(async () => ({ results: [inventoryOf(9000000001, ['FAKE-SKU-1'])] })), listingPlain: vi.fn(), inventory: vi.fn() }
+    expect((await findEtsyDrafts('account', { title: 'Guanti da moto "Pro"', since: SINCE, skus: ['FAKE-SKU-1'] }, reads)).map(d => d.listingId)).toEqual(['9000000001'])
+    expect(reads.drafts).toHaveBeenCalledWith(0)
+    expect(reads.inventories).toHaveBeenCalledWith(['9000000001'])
+    expect(etsyReader).not.toHaveBeenCalled()
+    // The default reads: the drafts and batch paths are built from the account's shop, and a bad id never becomes a path.
+    expect(() => etsyListingReads('account').inventories(['12x'])).toThrow('not an Etsy listing id')
+    expect(() => etsyListingReads('account').inventories([])).toThrow()
+    expect(() => etsyListingReads('account').drafts(-1)).toThrow()
   })
 })

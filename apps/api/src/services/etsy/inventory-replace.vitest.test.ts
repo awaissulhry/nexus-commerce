@@ -16,6 +16,9 @@ const h = vi.hoisted(() => ({
   alertThrows: null as Error | null,
   getThrows: null as Error | null,
   afterRead: null as (() => void | Promise<void>) | null,
+  /** E3 — Etsy's listing (GET /listings/{id}, the draft check), and a failure of that read. */
+  listing: { state: 'draft' } as unknown,
+  listingThrows: null as Error | null,
   /** The account's Etsy order-import activation row (EtsyReceiptIngest), as the database would answer. */
   ingest: vi.fn(),
 }))
@@ -26,9 +29,15 @@ vi.mock('./read-client.js', () => ({
     shopId: '90000001',
     get: vi.fn(async (path: string) => {
       h.order.push('get'); h.gets.push(path)
-      if (h.gets.length === 1) await h.afterRead?.()
-      if (h.getThrows && h.gets.length > 1) throw h.getThrows
-      return structuredClone(h.gets.length === 1 ? h.inventory : (h.readBack ?? h.inventory))
+      // E3 — the draft check reads the listing itself, not its inventory.
+      if (!path.endsWith('/inventory')) {
+        if (h.listingThrows) throw h.listingThrows
+        return structuredClone(h.listing)
+      }
+      const reads = h.gets.filter((read) => read.endsWith('/inventory')).length
+      if (reads === 1) await h.afterRead?.()
+      if (h.getThrows && reads > 1) throw h.getThrows
+      return structuredClone(reads === 1 ? h.inventory : (h.readBack ?? h.inventory))
     }),
   })),
 }))
@@ -72,6 +81,7 @@ const added = (overrides: Record<string, unknown> = {}) => ({ sku: 'FAKE-SKU-3',
 beforeEach(() => {
   leaseRedis = new FakeLeaseRedis(); h.afterRead = null
   h.order = []; h.gets = []; h.puts = []; h.alerts = []; h.getThrows = null; h.alertThrows = null
+  h.listing = { listing_id: 9000000001, state: 'draft' }; h.listingThrows = null
   h.inventory = inventory(); h.readBack = null
   vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '1')
   h.ingest.mockReset().mockResolvedValue({ activatedAt: new Date('2026-10-01T00:00:00Z') })
@@ -79,11 +89,11 @@ beforeEach(() => {
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs() })
 
 type Build = (current: EtsyInventoryWrite) => EtsyInventoryWrite
-const replace = (build: Build, options: { readBack?: unknown; beforeSend?: (body: EtsyInventoryWrite) => Promise<void>; priceCurrency?: string } = {}) => {
+const replace = (build: Build, options: { readBack?: unknown; beforeSend?: (body: EtsyInventoryWrite) => Promise<void>; priceCurrency?: string; allowDraftStock?: boolean } = {}) => {
   if (options.readBack !== undefined) h.readBack = options.readBack
   return replaceEtsyInventory({ accountId: 'etsy-account-1', listingId: LISTING, build, readBackDelayMs: 0,
     priceCurrency: 'priceCurrency' in options ? options.priceCurrency : 'EUR', beforeSend: options.beforeSend,
-    ledger: { productId: 'family', triggeredBy: 'api' } })
+    ledger: { productId: 'family', triggeredBy: 'api' }, ...(options.allowDraftStock !== undefined ? { allowDraftStock: options.allowDraftStock } : {}) })
 }
 /** A read-back of Etsy holding exactly `body` (with Etsy's read shape). */
 const heldAs = (body: EtsyInventoryWrite) => ({ ...body, products: body.products.map((p, i) => ({ product_id: i + 1, is_deleted: false, sku: p.sku,
@@ -313,5 +323,81 @@ describe('E2 replace — the read-back, and 🔴 never a throw after the PUT', (
     after.products[0].offerings[0].quantity = 1
     const result = await replace(build, { readBack: after })
     expect(result).toMatchObject({ sent: true, confirmed: false, drift: [{ product: 'FAKE-SKU-1', field: 'quantity', sent: 4, found: 1 }] })
+  })
+})
+
+describe('E3 replace — 🔴 the draft waiver of the stock rule (allowDraftStock): Etsy\'s own state decides', () => {
+  /** A new draft's inventory: the one SKU-less product Etsy makes with every draft (R1 §1). */
+  const placeholder = () => ({ products: [{ product_id: 1, sku: '', is_deleted: false, property_values: [],
+    offerings: [{ offering_id: 1, quantity: 1, is_enabled: true, is_deleted: false, price: money(1999), readiness_state_id: 80000001 }] }],
+    price_on_property: [], quantity_on_property: [], sku_on_property: [], readiness_state_on_property: [] })
+  /** What a create sends: Nexus's variations, stock and prices, replacing the placeholder. */
+  const create: Build = () => ({ products: [added() as never, { ...added(), sku: 'FAKE-SKU-4',
+    property_values: [{ property_id: 513, property_name: 'Taglia', value_ids: [], values: ['XXL'], scale_id: null }] } as never],
+    price_on_property: [513], quantity_on_property: [513], sku_on_property: [513], readiness_state_on_property: [] })
+  const LISTING_PATH = `/listings/${LISTING}`
+
+  beforeEach(() => { h.inventory = placeholder(); vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '') })
+
+  it('order import off + allowDraftStock + Etsy says "draft" (read under the lock, after the inventory, before the PUT) → the PUT is sent', async () => {
+    const beforeSend = vi.fn(async () => { h.order.push('journal') })
+    const result = await replace(create, { allowDraftStock: true, beforeSend, readBack: heldAs(create(toInventoryWrite(placeholder()))) })
+    expect(result).toMatchObject({ sent: true, confirmed: true })
+    expect(h.gets).toEqual([`${LISTING_PATH}/inventory`, LISTING_PATH, `${LISTING_PATH}/inventory`])
+    expect(h.order).toEqual(['get', 'get', 'journal', 'put', 'get'])
+    expect(h.puts).toHaveLength(1)
+    expect(h.puts[0]).toMatchObject({ method: 'PUT', path: `${LISTING_PATH}/inventory` })
+  })
+
+  it('the rule is asked first; Etsy\'s listing is read only because it refused (here: order import not activated for the account)', async () => {
+    vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '1')
+    h.ingest.mockResolvedValue(null)
+    await replace(create, { allowDraftStock: true, readBack: heldAs(create(toInventoryWrite(placeholder()))) })
+    expect(h.ingest).toHaveBeenCalledTimes(1)
+    expect(h.gets.indexOf(LISTING_PATH)).toBe(1)
+    expect(h.puts).toHaveLength(1)
+  })
+
+  it.each([['active'], ['inactive'], ['sold_out'], [undefined]])('Etsy says state %p → EtsyQuantityRefusal, nothing sent', async (state) => {
+    h.listing = { listing_id: 9000000001, ...(state ? { state } : {}) }
+    const beforeSend = vi.fn(async () => {})
+    await expect(replace(create, { allowDraftStock: true, beforeSend })).rejects.toMatchObject({ name: 'EtsyQuantityRefusal', code: 'ETSY_ORDER_IMPORT_OFF' })
+    expect(h.gets).toContain(LISTING_PATH)
+    expect(beforeSend).not.toHaveBeenCalled()
+    expect(h.puts).toEqual([])
+  })
+
+  it('the listing read fails → the rule stands: EtsyQuantityRefusal, nothing sent', async () => {
+    h.listingThrows = new Error('Etsy could not read this resource (HTTP 503).')
+    await expect(replace(create, { allowDraftStock: true })).rejects.toMatchObject({ name: 'EtsyQuantityRefusal' })
+    expect(h.puts).toEqual([])
+  })
+
+  it('without allowDraftStock the listing is never read (E2 and the pushes keep the rule as it was)', async () => {
+    await expect(replace(create)).rejects.toMatchObject({ name: 'EtsyQuantityRefusal' })
+    await expect(replace(create, { allowDraftStock: false })).rejects.toMatchObject({ name: 'EtsyQuantityRefusal' })
+    expect(h.gets).not.toContain(LISTING_PATH)
+    expect(h.puts).toEqual([])
+  })
+
+  it('order import on and activated: the rule does not refuse, so the listing is never read', async () => {
+    vi.stubEnv('NEXUS_ENABLE_ETSY_ORDER_INGEST', '1')
+    h.listing = { listing_id: 9000000001, state: 'active' }
+    const result = await replace(create, { allowDraftStock: true, readBack: heldAs(create(toInventoryWrite(placeholder()))) })
+    expect(result).toMatchObject({ sent: true, confirmed: true })
+    expect(h.gets).not.toContain(LISTING_PATH)
+  })
+
+  it('a body with no stock change (an existing draft\'s structure kept) never asks the rule, so never reads the listing', async () => {
+    h.inventory = inventory()
+    const result = await replace((current) => ({ ...current, products: [...current.products].reverse() }), { allowDraftStock: true })
+    expect(result.sent).toBe(true)
+    expect(h.ingest).not.toHaveBeenCalled()
+    expect(h.gets).not.toContain(LISTING_PATH)
+  })
+
+  it('the waiver lifts only the stock rule: a new variation priced in another currency is still refused', async () => {
+    await expect(replace(create, { allowDraftStock: true, priceCurrency: 'USD' })).rejects.toMatchObject({ name: 'EtsyPriceRefusal' })
+    expect(h.puts).toEqual([])
   })
 })

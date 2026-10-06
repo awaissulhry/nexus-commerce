@@ -54,6 +54,7 @@ import { getEtsyPublishMode } from '../etsy-publish-gate.service.js'
 import { nativeListingValue } from '../shopify/native-listing-value.js'
 import { logger } from '../../utils/logger.js'
 import { destinationLabel, destinationSellingStates, oldClosePauses } from './listing-action.service.js'
+import { etsyDraftRow } from './listing-action-adapters/etsy.js'
 import { readListingDeletions } from './listing-deletions.js'
 import { newListingChoices, setBeforeDelete } from './new-listing-choices.js'
 
@@ -252,7 +253,9 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
       const { state, reason, deleted } = read.states.get(product.id) ?? { state: 'not_listed' as const, reason: null, deleted: null }
       const facts: CapabilityFacts = { isFba: read.isFba.get(row.id) ?? false, shopifyLinked: read.shopifyLinked, deleted: deleted ?? null,
         isMain: product.isParent, isVariation: !!product.parentId, noRecord, alias: d.aliasKey !== '', onChannel: !!row.externalListingId,
-        listingOnChannel: group.some(other => !!other.externalListingId) }
+        listingOnChannel: group.some(other => !!other.externalListingId),
+        // E3 — a listing that is a draft on Etsy: Active (Nexus cannot set a draft live yet) and Inactive (nothing to pause) are refused.
+        etsyDraft: d.channel === 'ETSY' && etsyDraftRow(row) }
       const choice = isNewListingRow(state, facts) ? choices.get(product.id) : undefined
       out.push({ row, product, model: read.model, state, reason, facts, channelLabel: channelName(d.channel), noRecord, alias,
         deleted: deleted ? { ...deleted, sentence: deletedShort(deleted) } : null,

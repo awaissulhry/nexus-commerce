@@ -20,7 +20,9 @@ import { ebayInventoryReads, sendEbayInventoryGroup } from './studio-publication
 import { prepareEtsyPublication } from './studio-publication-etsy.js'
 import { etsyRevisionView, prepareEtsyChanges } from './studio-publication-etsy-changes.js'
 import { etsyPublicationResult, sendEtsyPublication } from './studio-publication-etsy-send.js'
-import type { EtsyCompiled, EtsyPublication } from './studio-publication-etsy-types.js'
+import { etsyCreateResult, sendEtsyCreate } from './studio-publication-etsy-create.js'
+import { claimEtsyCreate, markEtsyCreateUnknown, releaseEtsyCreate, storeEtsyCreatedListing } from './studio-publication-etsy-marker.js'
+import type { EtsyCompiled, EtsyJournalRequest, EtsyPublication } from './studio-publication-etsy-types.js'
 import { etsyShopLabel } from '../etsy/shop-label.js'
 import { readPublicationOverwrite } from './studio-publication-overwrite.js'
 import { recordPublicationRequests, settlePublicationRecords } from './studio-publication-records.js'
@@ -33,7 +35,7 @@ import { prepareEbayChanges } from './studio-publication-ebay-changes.js'
 import { blockRowChanges, compileSelection, type EbayInventorySend, type PublicationChangePlan } from './studio-publication-selection.js'
 import { explainAmazonRelist, type PublicationRelistRecord, FULL_EBAY_INVENTORY_LATER, FULL_EBAY_VARIATION, fbaNewAsinWarning, relistSentence,
   SHOPIFY_EXISTING_NOT_YET, AMAZON_MOVE_NEEDS_CONFIRM, AMAZON_MOVE_ROLE_CANNOT_DELETE, channelSkuLengthProblem, ebayRenameSentence, etsySkuMoveSentence, oldSkuStaysDeleted,
-  ETSY_CREATE_NOT_YET, ETSY_CREATE_REVIEW_ONLY, ETSY_CREATE_SENDS_NOTHING, FULL_ETSY_VARIATION } from '@nexus/shared/publish-actions'
+  FULL_ETSY_VARIATION } from '@nexus/shared/publish-actions'
 import { deletedOn, deletedPublishSkip, etsyCreateState, ETSY_NEW_ACTIVE_NEEDS_PHOTO, NOT_LISTED_LEFT_OUT, NOT_LISTED_MAIN_HELD, shopifyCreateStatus,
   type ListingDeletion } from '@nexus/shared/listing-actions'
 import type { StudioPublishSkuMove } from '@nexus/shared/studio-publication'
@@ -238,7 +240,9 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
     } else if (scope.channel === 'ETSY') {
       // E1 — every check and the whole change plan in every mode; Etsy itself is read only when sending to it is live.
       prepared = await prepareEtsyPublication(facts, { createState: creates.etsyCreateState, ...inactiveOption,
-        readLive: async input => (await import('../live-read/etsy.js')).readEtsyLive(input) })
+        readLive: async input => (await import('../live-read/etsy.js')).readEtsyLive(input),
+        // E3 — a create reads the shop (its languages and currency) when sending is live.
+        readShop: async accountId => (await import('../live-read/etsy.js')).readEtsyShop(accountId) })
       for (const message of prepared.notices ?? []) issues.push({ severity: 'warning', message })
     } else issues.push({ severity: 'error', message: `Direct publishing to ${scope.channel === 'WOOCOMMERCE' ? 'WooCommerce' : scope.channel} is not available yet. Your product changes are saved in the studio.` })
     if (prepared && prepared.kind !== 'shopify') {
@@ -270,16 +274,11 @@ async function buildReview(productId: string, scope: StudioPublishScope, options
   // Audit P1 — eBay's own check, only once Nexus's checks found nothing that blocks (else eBay would name the same gaps again).
   if (options.verify && prepared?.kind === 'ebay' && !prepared.itemId && mode === 'live' && !issues.some(issue => issue.severity === 'error'))
     issues.push(...await verifyNewEbayListing(prepared, scope.accountId))
-  // E2 — Publish sends to an Etsy listing Etsy already holds (off live, the gate sentence as for every channel). A review
-  // that would create one shows exactly what Nexus would send, and says it sends nothing yet: live, a warning (the submit
-  // refuses); off live, its one error in place of the gate sentence. A listing not on Etsy yet set Active is refused here
-  // (Etsy needs a photo to go live, and Nexus does not send photos yet).
-  if (scope.channel === 'ETSY') {
-    const create = prepared?.kind === 'etsy' ? !prepared.listingId : !facts.listings.some(listing => listing.externalListingId)
-    if (create) issues.push(mode === 'live' ? { severity: 'warning', message: ETSY_CREATE_REVIEW_ONLY } : { severity: 'error', message: ETSY_CREATE_SENDS_NOTHING })
-    else if (mode !== 'live') issues.push({ severity: 'error', message: gateMessage(scope.channel, mode) })
-    if (creates.etsyCreateState === 'active') issues.push({ severity: 'error', message: ETSY_NEW_ACTIVE_NEEDS_PHOTO })
-  } else if (mode !== 'live') issues.push({ severity: 'error', message: gateMessage(scope.channel, mode) })
+  // E3 — Publish creates a listing not on Etsy yet as an Etsy draft, or updates one Etsy holds (E2). A listing not on Etsy
+  // yet set Active is refused here (Etsy needs a photo to go live, and Nexus does not send photos yet). Off live, the one
+  // gate sentence, as for every channel (the plan stays visible).
+  if (scope.channel === 'ETSY' && creates.etsyCreateState === 'active') issues.push({ severity: 'error', message: ETSY_NEW_ACTIVE_NEEDS_PHOTO })
+  if (mode !== 'live') issues.push({ severity: 'error', message: gateMessage(scope.channel, mode) })
   // New listings — a Shopify product is one listing with no field ticks: held by Not listed (a deleted product left Not
   // listed included), nothing of it is sent.
   if (scope.channel === 'SHOPIFY' && creates.held.size) issues.push({ severity: 'error', message: [...creates.held.values()][0] })
@@ -661,10 +660,6 @@ export async function claimPublication(productId: string, id: string, body: unkn
   const input = object(body)
   const sparse = ['AMAZON', 'EBAY', 'ETSY'].includes(data.scope?.channel)
   if (sparse && (data.changeVersion !== 1 || !data.changePlan)) throw new WorkspaceScopeError('Refresh this review to choose the fields to publish.')
-  // E2 — a review that would create an Etsy listing (its stored plan has no listing id) sends nothing until E3: refused
-  // before any rebuild, claim, draft, journal or event, so the review stays PREVIEW.
-  if (data.scope?.channel === 'ETSY' && object(object(data.changePlan).publication).listingId == null)
-    throw new WorkspaceScopeError(`${ETSY_CREATE_NOT_YET} Nothing was sent.`, 422)
   if (sparse && (typeof input.selectionToken !== 'string' || input.selectionToken !== data.selection?.token))
     throw new WorkspaceScopeError('Review the exact selected changes before publishing. This selection token is missing or stale.', 400)
   // Build shape v2 — the same rows as Full update as the review (its stored list), so the same plan is rebuilt; New
@@ -700,6 +695,8 @@ export async function claimPublication(productId: string, id: string, body: unkn
   data.delivery = { productIds: plan.prepared.products.map(p => p.productId), aliasKey: plan.facts.destination.aliasKey ?? '' }
   // An Inventory receipt names its group, not a Trading ItemID: a later status read must not re-verify it as one.
   data.inventory = plan.prepared.kind === 'ebay-inventory-send'
+  // E3 — this publication creates a new Etsy listing (as a draft): the marker, the settle and Mark as checked read it.
+  if (plan.prepared.kind === 'etsy') data.etsyCreate = !plan.prepared.listingId
   data.captureVersion = 1
   const claimed = await prisma.$transaction(async tx => {
     await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))::text', `studio-publication:${data.publicationKey}`)
@@ -795,19 +792,39 @@ export async function deliverPublication(claim: ClaimedPublication): Promise<Del
       result = { id, status: 'VERIFIED', message: `Shopify verified the saved product and variants. Visibility: ${plan.review.visibility}.`, results: shopify.products.map(r => ({ sku: r.sku, status: 'VERIFIED', message: 'Verified by Shopify', reference: sent.productId })) }
       receipt = result
     } else if (plan.prepared.kind === 'etsy') {
-      // E2 — a listing Etsy holds: one call per step, each journalled (with the change fields it writes) just before it is
-      // sent, then read back. The claim refuses a create first; should one get here, nothing is started, journalled or sent.
       const etsy = plan.prepared as EtsyCompiled
-      if (!etsy.listingId) throw Object.assign(new Error(ETSY_CREATE_NOT_YET), { notSent: true })
-      let index = 0
-      const sent = await sendEtsyPublication(etsy, scope.accountId, id, async request => {
-        const at = index++
-        if (at === 0) await ensureDrafts()
-        await recordPublicationRequests(context, etsy.products.map(p => ({ ...p, request: { ...request, intentVersion: 1,
-          writes: (etsy.fieldWrites[p.productId] ?? []).filter(write => request.fields.includes(write.field)) } })), at)
-        providerStarted = true
-      })
-      result = etsyPublicationResult(id, etsy, sent)
+      // Each call is journalled (with the change fields it writes) just before it is sent.
+      const journal = (index: number, request: EtsyJournalRequest) =>
+        recordPublicationRequests(context, etsy.products.map(p => ({ ...p, request: { ...request, intentVersion: 1,
+          writes: (etsy.fieldWrites[p.productId] ?? []).filter(write => request.fields.includes(write.field)) } })), index)
+      if (etsy.listingId) {
+        // E2 — a listing Etsy holds: one call per step, each journalled just before it is sent, then read back.
+        let index = 0
+        const sent = await sendEtsyPublication(etsy, scope.accountId, id, async request => {
+          const at = index++
+          if (at === 0) await ensureDrafts()
+          await journal(at, request)
+          providerStarted = true
+        })
+        result = etsyPublicationResult(id, etsy, sent)
+      } else {
+        // E3 — a new Etsy listing, created as a draft: the drafts and the "creating" marker first (a second create of this
+        // listing is refused while it is open), then the POST (never repeated), the listing id stored on every delivered
+        // row as soon as Etsy answers, then the inventory, properties and translations, then the read-back.
+        const where = { marketplace: scope.marketplace, accountId: scope.accountId, aliasKey: plan.facts.destination.aliasKey ?? '', ownerProductId: etsy.ownerProductId }
+        let index = 0
+        const sent = await sendEtsyCreate(etsy, scope.accountId, id, {
+          claim: async marker => { await ensureDrafts(); await claimEtsyCreate(where, { ...marker, userId }) },
+          beforeSend: async request => {
+            await journal(index++, request)
+            providerStarted = true
+          },
+          landed: async listingId => { await storeEtsyCreatedListing(where, { reviewId: id, productIds: data.delivery.productIds, listingId }) },
+          unknown: (message, listingId) => markEtsyCreateUnknown(where, id, message, listingId),
+          release: () => releaseEtsyCreate(where, id),
+        })
+        result = etsyCreateResult(id, etsy, sent)
+      }
       receipt = result
     } else {
       // Creation stores a correctly attributed draft. Only provider results can establish publication.

@@ -4,7 +4,7 @@ import {
   fillResultSentence, isRelistChoice, isStaleWaiting, needsTypedConfirm, parseSendMode, parseStatusTarget, publishPlanSummary,
   relistSentence, SEND_ORDER, sendModeOf, sendModeOptions, statusTargetOf, storedSendMode, storedStatusTarget,
   waitingMark, NEW_LISTING_SENT_WHOLE, SEND_MODE_LABEL, SEND_MODES, newRowId, parseNewRowId, isNewRowId, startedSentence, leftOutSentence,
-  SHARED_NO_LISTING, SHOPIFY_EXISTING_NOT_YET, FULL_ETSY_VARIATION, FULL_ETSY_WARNING, FULL_WARNING, ETSY_CREATE_NOT_YET, ETSY_CREATE_REVIEW_ONLY, ETSY_CREATE_SENDS_NOTHING, ETSY_PHOTOS_NOT_SENT,
+  SHARED_NO_LISTING, SHOPIFY_EXISTING_NOT_YET, FULL_ETSY_VARIATION, FULL_ETSY_WARNING, FULL_WARNING, ETSY_PHOTOS_NOT_SENT,
   amazonMoveConfirmSentence, amazonMoveSentence, AMAZON_MOVE_NEEDS_CONFIRM, channelSkuLengthProblem, CHANNEL_SKU_MAX_LENGTH, EBAY_INVENTORY_SKU_MOVE,
   ebayRenameSentence, etsySkuMoveSentence, fbaMoveWarning, oldSkuStaysDeleted, shopifyRenameSentence, DELETE_OLD_SKU_AGAIN, bothSkusSell,
 } from './publish-actions.js'
@@ -70,10 +70,9 @@ describe('Action column options', () => {
     expect(offered(sendModeOptions('etsy', 'active', { isParent: true, isVariation: false }, 'Etsy'))).toEqual(['partial', 'full'])
     expect(sendModeOptions('etsy', 'not_listed', row, 'Etsy').find(o => o.mode === 'partial')!.reason).toBe(NEW_LISTING_SENT_WHOLE)
   })
-  it('Etsy (E2): the words of a create that waits for E3, and the photo pop-up\'s line', () => {
-    expect(ETSY_CREATE_NOT_YET).toBe('Creating a new Etsy listing from Nexus comes in the next Nexus update.')
-    expect(ETSY_CREATE_REVIEW_ONLY).toBe('Creating a new Etsy listing from Nexus comes in the next Nexus update: this review shows what Nexus would send, and Publish sends nothing to Etsy yet.')
-    expect(ETSY_CREATE_SENDS_NOTHING).toBe('Creating a new Etsy listing from Nexus comes in the next Nexus update. This review shows what Nexus would send; nothing is sent.')
+  it('Etsy (E3): a create is sent now, so the "waits for E3" words are gone; the photo pop-up\'s line stays', async () => {
+    const words = await import('./publish-actions.js') as Record<string, unknown>
+    for (const gone of ['ETSY_CREATE_NOT_YET', 'ETSY_CREATE_REVIEW_ONLY', 'ETSY_CREATE_SENDS_NOTHING']) expect(words[gone]).toBeUndefined()
     expect(ETSY_PHOTOS_NOT_SENT).toBe('Photos are not sent to Etsy yet; they come in a later Nexus update.')
   })
   it('Amazon, eBay and Etsy: Partial update carries no warning', () => {

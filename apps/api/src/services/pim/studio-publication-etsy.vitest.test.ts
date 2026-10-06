@@ -16,6 +16,8 @@ const m = vi.hoisted(() => ({
   mainLeftOut: false, skipped: [] as Array<{ productId: string; sku: string; reason: string }>,
   // E2 — Etsy order import, as `etsyStockWriteRefusal` answers it (null: on and activated).
   stockRefusal: vi.fn(async (_accountId: string): Promise<{ code: string; sentence: string } | null> => null),
+  // E3 — the "creating" marker still open on the main row (null: none), as `openEtsyCreateMarker` answers it.
+  openMarker: vi.fn(async (_where: unknown, _listing: unknown): Promise<{ marker: { reviewId: string }; sending: boolean } | null> => null),
 }))
 
 vi.mock('../../db.js', () => ({ default: { channelListing: { findFirst: async () => m.holder } } }))
@@ -25,6 +27,8 @@ vi.mock('../../lib/queue.js', () => ({ redis: null, addJobSafely: vi.fn(), outbo
   searchIndexQueue: null, bulkJobQueue: null, publicationBatchQueue: null, agentPlanQueue: null, adsSyncQueue: null }))
 vi.mock('../etsy-publish-gate.service.js', () => ({ getEtsyPublishMode: () => m.mode }))
 vi.mock('../etsy/order-ingest-switch.js', () => ({ etsyStockWriteRefusal: m.stockRefusal }))
+vi.mock('./studio-publication-etsy-marker.js', () => ({ openEtsyCreateMarker: m.openMarker,
+  ETSY_CREATE_OPEN: (open: { marker: { reviewId: string }; sending: boolean }) => `A create of this Etsy listing is open (${open.marker.reviewId}, ${open.sending ? 'sending' : 'unknown'}).` }))
 vi.mock('../stock-pool/sync-ledgers.js', () => ({ loadSyncLedgers: async () => new Map() }))
 vi.mock('../listings/channel-sku.pure.js', async original => {
   const real = await original<typeof import('../listings/channel-sku.pure.js')>()
@@ -45,10 +49,10 @@ vi.mock('./variation-rules.service.js', async original => ({
   variationReadinessItems: () => m.readiness,
 }))
 
-import { prepareEtsyPublication, ETSY_CATEGORY_CHANGE, ETSY_LIVE_SKIPPED, ETSY_NO_SHIPPING_PROFILE, ETSY_PHOTOS_LATER } from './studio-publication-etsy.js'
+import { prepareEtsyPublication, ETSY_CATEGORY_CHANGE, ETSY_CREATE_DRAFT_NOTE, ETSY_DRAFT_PLACEHOLDER_NOTE, ETSY_LIVE_SKIPPED, ETSY_NO_SHIPPING_PROFILE, ETSY_PHOTOS_LATER } from './studio-publication-etsy.js'
 import { ETSY_AUTO_RENEW_NOTE, ETSY_NEEDS_READINESS } from './studio-publication-etsy-build.js'
 import { EtsyPublicationProblems } from './studio-publication-etsy-problems.js'
-import type { EtsyLiveListing } from './studio-publication-etsy-types.js'
+import type { EtsyLiveListing, EtsyShopRead } from './studio-publication-etsy-types.js'
 
 const SKUS: Record<string, string> = { p: 'FAKE-SKU-1', c1: 'FAKE-SKU-2', c2: 'FAKE-SKU-3' }
 const MAIN = { title: 'Leather knee slider', description: 'A hand-stitched knee slider.', taxonomy_id: 1234, who_made: 'i_did', when_made: '2020_2026', is_supply: false,
@@ -92,6 +96,8 @@ function liveListing(extra: Partial<EtsyLiveListing> = {}): EtsyLiveListing {
   }
 }
 const readLive = vi.fn(async (): Promise<EtsyLiveListing> => liveListing())
+/** E3 — the shop read a create makes in live mode. */
+const readShop = vi.fn(async (_accountId: string): Promise<EtsyShopRead> => ({ languages: ['en'], currencyCode: 'EUR' }))
 async function problemsOf(promise: Promise<unknown>) {
   const error = await promise.then(() => null, (e: unknown) => e)
   expect(error).toBeInstanceOf(EtsyPublicationProblems)
@@ -102,7 +108,9 @@ beforeEach(() => {
   Object.assign(m, { mode: 'gated', holder: null, listingId: null, products: ['p', 'c1', 'c2'], languages: ['en'], currency: 'EUR', shopCurrency: 'EUR', stock: 3,
     main: {}, own: {}, listing: {}, sku: {}, values: { c1: 'Black', c2: 'Red' }, dropped: [], readiness: [], skuConflict: null, mainLeftOut: false, skipped: [] })
   readLive.mockReset().mockImplementation(async () => liveListing())
+  readShop.mockReset().mockImplementation(async () => ({ languages: ['en'], currencyCode: 'EUR' }))
   m.stockRefusal.mockReset().mockImplementation(async () => null)
+  m.openMarker.mockReset().mockImplementation(async () => null)
 })
 
 describe('built in every mode, read only in live mode (A1)', () => {
@@ -114,7 +122,7 @@ describe('built in every mode, read only in live mode (A1)', () => {
       inventoryProducts: [{ productId: 'c1', sku: 'FAKE-SKU-2' }, { productId: 'c2', sku: 'FAKE-SKU-3' }] })
     expect(publication.liveSkipped).toBeUndefined()
     expect(publication.inventory.products.map(p => p.property_values?.[0].values)).toEqual([['Black'], ['Red']])
-    expect(publication.notices).toEqual([ETSY_PHOTOS_LATER])
+    expect(publication.notices).toEqual([ETSY_CREATE_DRAFT_NOTE, ETSY_PHOTOS_LATER])
   })
 
   it('gated, existing listing: nothing is read, and the publication says why', async () => {
@@ -246,9 +254,9 @@ describe('the problems prepare names (E13, E18–E20, E22, E24, W3–W5, W7–W9
     const error = await problemsOf(prepareEtsyPublication(facts(), { readLive }))
     expect(error.issues).toEqual([{ productId: 'p', sku: 'FAKE-SKU-1', field: 'readiness_state_id', severity: 'error', message: ETSY_NEEDS_READINESS }])
     expect(ETSY_NEEDS_READINESS).toBe('Processing profile is not set. Etsy needs one for every variation: choose it on the main row (or on each row).')
-    expect(error.notes).toEqual([ETSY_PHOTOS_LATER])
+    expect(error.notes).toEqual([ETSY_CREATE_DRAFT_NOTE, ETSY_PHOTOS_LATER])
     m.main = { shipping_profile_id: null }
-    expect((await prepareEtsyPublication(facts(), { readLive })).notices).toEqual([ETSY_PHOTOS_LATER, ETSY_NO_SHIPPING_PROFILE])
+    expect((await prepareEtsyPublication(facts(), { readLive })).notices).toEqual([ETSY_CREATE_DRAFT_NOTE, ETSY_PHOTOS_LATER, ETSY_NO_SHIPPING_PROFILE])
     expect(ETSY_NO_SHIPPING_PROFILE).toBe('Shipping profile is not set. Etsy needs one before the listing can go live.')
     expect(ETSY_PHOTOS_LATER).toBe('Photos are not sent to Etsy yet; they come in a later Nexus update.')
   })
@@ -503,5 +511,136 @@ describe('E2 review round 2 — prepare', () => {
     readLive.mockImplementation(async () => liveListing())
     expect((await prepareEtsyPublication(facts(), { readLive })).newVariationStockRefusal).toBeUndefined()
     expect(m.stockRefusal).not.toHaveBeenCalled()
+  })
+})
+
+describe('E3 — a new listing is created as an Etsy draft', () => {
+  const create = () => prepareEtsyPublication(facts(), { readLive, readShop })
+
+  it('says what Publish does with it (a draft, no fee until it goes live); an Active create or a listing on Etsy is not told that', async () => {
+    expect((await create()).notices).toContain(ETSY_CREATE_DRAFT_NOTE)
+    expect(ETSY_CREATE_DRAFT_NOTE).toBe('Publish creates this listing on Etsy as a draft: buyers cannot see it. Etsy charges its listing fee when a listing goes live, not for a draft.')
+    // Active is refused (photos come later), so Publish would not create it at all.
+    expect((await prepareEtsyPublication(facts(), { readLive, createState: 'active' })).notices).not.toContain(ETSY_CREATE_DRAFT_NOTE)
+    m.listingId = '9000000001'
+    expect((await prepareEtsyPublication(facts(), { readLive })).notices).not.toContain(ETSY_CREATE_DRAFT_NOTE)
+  })
+
+  it('a create still open on this listing (the marker) refuses the review, in the marker\'s own words; none, nothing', async () => {
+    m.openMarker.mockImplementation(async () => ({ marker: { reviewId: 'review-0' }, sending: false }))
+    const error = await problemsOf(create())
+    expect(error.issues).toEqual([{ severity: 'error', message: 'A create of this Etsy listing is open (review-0, unknown).' }])
+    // Asked for this listing's main row at this destination, with the main row's own record.
+    expect(m.openMarker).toHaveBeenCalledTimes(1)
+    expect(m.openMarker).toHaveBeenCalledWith({ marketplace: 'GLOBAL', accountId: 'acc-etsy', aliasKey: '', ownerProductId: 'p' }, expect.objectContaining({ id: 'l-p', productId: 'p' }))
+    m.openMarker.mockImplementation(async () => null)
+    await expect(create()).resolves.toMatchObject({ listingId: null })
+    // A listing on Etsy is never a create: the marker is not asked.
+    m.openMarker.mockClear(); m.listingId = '9000000001'
+    await prepareEtsyPublication(facts(), { readLive })
+    expect(m.openMarker).not.toHaveBeenCalled()
+  })
+
+  it('live: the shop is read once, for this account; its currency stands in when the account has none (the account\'s wins)', async () => {
+    m.mode = 'live'; m.shopCurrency = null
+    await expect(create()).resolves.toMatchObject({ listingId: null, currency: 'EUR' })
+    expect(readShop).toHaveBeenCalledTimes(1)
+    expect(readShop).toHaveBeenCalledWith('acc-etsy')
+    readShop.mockImplementation(async () => ({ languages: ['en'], currencyCode: 'USD' }))
+    expect((await problemsOf(create())).issues.map(issue => issue.message))
+      .toEqual(['This Etsy shop sells in USD and Nexus holds Etsy prices in EUR. A price is never converted: set the Etsy market\'s currency to USD.'])
+    // The account's own currency still wins over the read's.
+    m.shopCurrency = 'EUR'
+    await expect(create()).resolves.toMatchObject({ listingId: null })
+  })
+
+  it('live: the shop\'s languages are checked as a live listing\'s are — its main language first, a translation only in a language it offers', async () => {
+    m.mode = 'live'; m.languages = ['en', 'it']
+    readShop.mockImplementation(async () => ({ languages: ['de', 'en'], currencyCode: 'EUR' }))
+    expect((await problemsOf(create())).issues.map(issue => issue.message))
+      .toEqual(['This Etsy shop\'s main language is de, but Nexus\'s first language for Etsy is en. Put de first in the Etsy market\'s languages.'])
+    readShop.mockImplementation(async () => ({ languages: ['en'], currencyCode: 'EUR' }))
+    const publication = await create()
+    expect(publication.translations).toEqual([])
+    expect(publication.notices).toContain('it: this Etsy shop does not offer that language, so its translation is not sent.')
+    // Offered: sent; the create's POST and translation calls follow from it (studio-publication-etsy-changes.ts).
+    readShop.mockImplementation(async () => ({ languages: ['en-US', 'it'], currencyCode: 'EUR' }))
+    expect((await create()).translations.map(t => t.language)).toEqual(['it'])
+  })
+
+  it('live: a shop that cannot be read refuses the review (never guessed); off live the shop is never read', async () => {
+    m.mode = 'live'
+    readShop.mockRejectedValue(new Error('Etsy could not read this resource (HTTP 503).'))
+    expect((await problemsOf(create())).issues.map(issue => issue.message)).toEqual(['Nexus could not read this Etsy shop just now: Etsy could not read this resource (HTTP 503). Review again.'])
+    readShop.mockReset()
+    m.mode = 'dry-run'
+    await expect(create()).resolves.toMatchObject({ listingId: null })
+    m.mode = 'gated'
+    await create()
+    expect(readShop).not.toHaveBeenCalled()
+    // A listing on Etsy reads its shop with the listing, never separately.
+    m.mode = 'live'; m.listingId = '9000000001'
+    await prepareEtsyPublication(facts(), { readLive, readShop })
+    expect(readShop).not.toHaveBeenCalled()
+  })
+
+  it('the shop id never reaches a stored create, and it survives a JSON round trip', async () => {
+    m.mode = 'live'
+    const publication = await create()
+    expect(JSON.stringify(publication)).not.toContain('90000001')
+    expect(JSON.parse(JSON.stringify(publication))).toStrictEqual(publication)
+  })
+})
+
+describe('E3 — a listing that is a draft on Etsy', () => {
+  const IMPORT_OFF = { code: 'ETSY_ORDER_IMPORT_OFF', sentence: 'Etsy order import is off, so a stock number sent now could put back units Etsy has already sold.' }
+
+  it('cannot sell, so a new variation of it needs no Etsy order import: no refusal, and the switch is never asked', async () => {
+    m.mode = 'live'; m.listingId = '9000000001'
+    m.listing = { c2: { externalListingId: null, listingStatus: 'DRAFT', isPublished: false } }
+    m.stockRefusal.mockImplementation(async () => IMPORT_OFF)
+    const held = liveListing()
+    readLive.mockImplementation(async () => liveListing({ state: 'draft', offerings: { 'FAKE-SKU-2': held.offerings['FAKE-SKU-2'] },
+      inventory: { ...held.inventory, products: held.inventory.products.filter(product => product.sku === 'FAKE-SKU-2') } }))
+    const publication = await prepareEtsyPublication(facts(), { readLive })
+    expect(publication.newVariationStockRefusal).toBeUndefined()
+    expect(m.stockRefusal).not.toHaveBeenCalled()
+    // The same listing live (active) still needs it.
+    readLive.mockImplementation(async () => liveListing({ offerings: { 'FAKE-SKU-2': held.offerings['FAKE-SKU-2'] },
+      inventory: { ...held.inventory, products: held.inventory.products.filter(product => product.sku === 'FAKE-SKU-2') } }))
+    expect((await prepareEtsyPublication(facts(), { readLive })).newVariationStockRefusal).toBe(`FAKE-SKU-3: new on Etsy, so Publish would send its stock. ${IMPORT_OFF.sentence}`)
+  })
+
+  it('still holding Etsy\'s placeholder product (a create whose variations did not land): said once, never as a variation Nexus lacks or a SKU Etsy "no longer" holds', async () => {
+    m.mode = 'live'; m.listingId = '9000000001'
+    m.stockRefusal.mockImplementation(async () => IMPORT_OFF)
+    readLive.mockImplementation(async () => liveListing({ state: 'draft', unnamedProducts: 1, offerings: {},
+      inventory: { properties: [], products: [{ sku: '', values: [], readiness_state_id: 5001 }], price_on_property: [], quantity_on_property: [], sku_on_property: [], readiness_state_on_property: [] } }))
+    const publication = await prepareEtsyPublication(facts(), { readLive })
+    expect(publication.notices).toEqual([ETSY_PHOTOS_LATER, ETSY_DRAFT_PLACEHOLDER_NOTE])
+    expect(ETSY_DRAFT_PLACEHOLDER_NOTE).toBe('This Etsy draft holds one product without a SKU (Etsy\'s first product, if the draft still holds it); Publish replaces it with Nexus\'s SKUs, prices and stock.')
+    expect(publication.newVariationStockRefusal).toBeUndefined()
+    expect(m.stockRefusal).not.toHaveBeenCalled()
+    // Nexus's own rules (the placeholder has no rule to keep), and each variation's price is still judged like a create's.
+    expect(publication.structure).toMatchObject({ price_on_property: [200], quantity_on_property: [200], sku_on_property: [200], readiness_state_on_property: [] })
+    m.listing = { c2: { followMasterPrice: false, priceOverride: null } }
+    expect((await problemsOf(prepareEtsyPublication(facts(), { readLive }))).issues).toEqual([{ productId: 'c2', sku: 'FAKE-SKU-3', field: 'price', severity: 'error',
+      message: 'This listing has no price of its own for Etsy. Set its price first.' }])
+  })
+
+  it('E3 review MAJOR-3 — a change of its stock-sharing rule needs no import either (a draft cannot sell); the same change on a live listing still does', async () => {
+    m.mode = 'live'; m.listingId = '9000000001'
+    m.stockRefusal.mockImplementation(async () => IMPORT_OFF)
+    // Etsy varies the stock by its own property 513; Nexus's variations are by 200: the rule maps onto 200 (R2-n4).
+    const held = liveListing()
+    const by513 = { properties: [{ property_id: 513, property_name: 'Colour', scale_id: null }],
+      products: held.inventory.products.map(p => ({ ...p, values: [{ property_id: 513, values: p.values[0].values }] })),
+      price_on_property: [513], quantity_on_property: [513], sku_on_property: [513], readiness_state_on_property: [] }
+    readLive.mockImplementation(async () => liveListing({ state: 'draft', inventory: by513 }))
+    expect((await prepareEtsyPublication(facts(), { readLive })).newVariationStockRefusal).toBeUndefined()
+    expect(m.stockRefusal).not.toHaveBeenCalled()
+    readLive.mockImplementation(async () => liveListing({ inventory: by513 }))
+    expect((await prepareEtsyPublication(facts(), { readLive })).newVariationStockRefusal)
+      .toBe(`Publish would change which variations share a stock number on Etsy, which counts as sending stock. ${IMPORT_OFF.sentence}`)
   })
 })

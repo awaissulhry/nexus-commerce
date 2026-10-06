@@ -153,7 +153,12 @@ export interface EtsyInventoryReplaceInput { accountId: string; listingId: numbe
   /** Awaited with the exact body just before the PUT (the studio journals it); its throw sends nothing. */
   beforeSend?: (body: EtsyInventoryWrite) => Promise<void>
   /** The currency Nexus holds a new variation's price or a changed price in; required for either (`etsyPriceCurrencyRefusal`). */
-  priceCurrency?: string; ledger?: GatewayRequest['ledger']; readBackDelayMs?: number }
+  priceCurrency?: string; ledger?: GatewayRequest['ledger']; readBackDelayMs?: number
+  /**
+   * E3 — the stock rule (Etsy order import) is waived when Etsy itself says this listing is a draft: a draft cannot sell,
+   * so its stock numbers cannot put back units Etsy already sold. Read under the listing lock, only when the rule would refuse.
+   */
+  allowDraftStock?: boolean }
 export interface EtsyInventoryReplaceResult { sent: boolean; body: EtsyInventoryWrite; current: EtsyInventoryWrite; drift: InventoryDrift[] | null; confirmed: boolean }
 
 /** JSON with object keys sorted: two bodies that differ only in key order are the same body. */
@@ -198,7 +203,7 @@ function assertReplaceBody(body: EtsyInventoryWrite): void {
  * - a stock number (a variation new on Etsy that buyers can see, a held variation whose quantity moved, a hidden one
  *   shown again, or a changed `quantity_on_property` — what the stock is shared by) needs Etsy order import on and
  *   activated for the account (2026-10-01) — a new variation sent hidden (`is_enabled: false`) cannot sell, so it does
- *   not (D6: showing it later asks);
+ *   not (D6: showing it later asks); E3 — waived with `allowDraftStock` when Etsy itself says the listing is a draft;
  * - a price (a new variation, or a held price that moved) must be in the currency Etsy states (2026-09-30).
  *
  * 🔴 After Etsy answered the PUT it never throws: a read-back that cannot be read is `drift: null` (could not check,
@@ -209,6 +214,10 @@ export async function replaceEtsyInventory(input: EtsyInventoryReplaceInput): Pr
   if (!/^[1-9]\d*$/.test(listingId)) throw new Error('That is not an Etsy listing id; nothing was sent.')
   return withEtsyListingLock({ accountId: input.accountId, listingId }, (lease) => replaceHoldingLock(input, listingId, lease))
 }
+
+/** E3 — Etsy's own word that the listing is a draft (GET /listings/{id}, `state`). A read that fails is "not a draft". */
+const listingIsDraft = (reader: Awaited<ReturnType<typeof etsyReader>>, listingId: string): Promise<boolean> =>
+  reader.get<{ state?: unknown } | null>(`/listings/${listingId}`).then((listing) => listing?.state === 'draft', () => false)
 
 async function replaceHoldingLock(input: EtsyInventoryReplaceInput, listingId: string, lease: EtsyListingLease): Promise<EtsyInventoryReplaceResult> {
   const reader = await etsyReader(input.accountId)
@@ -242,7 +251,10 @@ async function replaceHoldingLock(input: EtsyInventoryReplaceInput, listingId: s
   }
   if (stock) {
     const refusal = await etsyStockWriteRefusal(input.accountId)
-    if (refusal) throw new EtsyQuantityRefusal(refusal.sentence, refusal.code)
+    // E3 — a draft cannot sell, so its stock cannot put back units Etsy sold: the rule is waived for a caller that asks
+    // (`allowDraftStock`) when ETSY says, read now under this lock, that the listing is a draft. Asked only when the rule
+    // would refuse; a read that fails keeps the rule.
+    if (refusal && !(input.allowDraftStock && await listingIsDraft(reader, listingId))) throw new EtsyQuantityRefusal(refusal.sentence, refusal.code)
   }
   if (price) {
     const refusal = etsyPriceCurrencyRefusal(raw, input.priceCurrency)

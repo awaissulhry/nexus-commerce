@@ -14,8 +14,9 @@ import type { StudioPublishValue } from '@nexus/shared/studio-publication'
 import type { PublicationFacts } from './studio-publication-plan.js'
 import { publicationChangeId } from './studio-publication-changes.js'
 import { etsyCreateForm, etsyFitReadiness, etsyKeptRules, etsyOwnRules, etsyRuleConflicts, ETSY_NEEDS_READINESS, type EtsyRuleProduct } from './studio-publication-etsy-build.js'
-import { compileEtsyChanges, etsyInventoryReplaceBody, etsyPublicationRequest, etsyReadBackMismatches, etsyRevisionView, prepareEtsyChanges, ETSY_EMPTY_KEPT,
-  ETSY_FULL_KEEPS_VARIATIONS, ETSY_INVENTORY_REPLACE_NOTE, ETSY_LIVE_READ_NEEDED, ETSY_PARTNERS_CREATE_ONLY, ETSY_READINESS_RULE_CHANGE, ETSY_STYLES_CREATE_ONLY } from './studio-publication-etsy-changes.js'
+import { compileEtsyChanges, etsyCreateInventoryBody, etsyDraftPlaceholder, etsyInventoryReplaceBody, etsyPublicationRequest, etsyReadBackMismatches, etsyRevisionView,
+  prepareEtsyChanges, ETSY_EMPTY_KEPT, ETSY_FULL_KEEPS_VARIATIONS, ETSY_INVENTORY_REPLACE_NOTE, ETSY_LIVE_READ_NEEDED, ETSY_PARTNERS_CREATE_ONLY, ETSY_READINESS_RULE_CHANGE,
+  ETSY_STYLES_CREATE_ONLY } from './studio-publication-etsy-changes.js'
 import { ETSY_KEPT_AT_SEND, type EtsyChangePlan, type EtsyCompiled, type EtsyInventoryStructure, type EtsyListingValues, type EtsyLiveListing,
   type EtsyPublication } from './studio-publication-etsy-types.js'
 import type { EtsyInventoryWrite } from '../etsy/inventory.js'
@@ -95,12 +96,17 @@ describe('a new listing', () => {
     const compiled = compileEtsyChanges(plan, [plan.changes[0].id])
     expect(compiled.products).toEqual(source.products)
     expect(compiled.fieldWrites).toEqual(plan.createWrites)
+    // E3 — each call names the change fields it writes (the studio journals each call's field writes by them).
     expect(compiled.request).toEqual({ operation: 'createDraftListing', listingId: null, calls: [
-      { method: 'POST', path: '/shops/{shop_id}/listings', encoding: 'form', body: { ...source.form, quantity: 6, price: 25 } },
-      { method: 'PUT', path: '/listings/{listing_id}/inventory', encoding: 'json', body: source.inventory },
-      { method: 'PUT', path: '/shops/{shop_id}/listings/{listing_id}/properties/47626759834', encoding: 'form', body: { value_ids: [300], values: ['Leather'] } },
-      { method: 'POST', path: '/shops/{shop_id}/listings/{listing_id}/translations/it', encoding: 'form', body: { title: 'Saponetta in pelle', description: 'Cucita a mano.', tags: ['moto'] } },
+      { method: 'POST', path: '/shops/{shop_id}/listings', encoding: 'form', body: { ...source.form, quantity: 6, price: 25 },
+        fields: ['title', 'description', 'tags', 'materials', 'taxonomy_id', 'classification', 'type', 'shipping_profile_id', 'item_weight', 'production_partner_ids', 'styles'] },
+      { method: 'PUT', path: '/listings/{listing_id}/inventory', encoding: 'json', body: source.inventory, fields: ['inventory'] },
+      { method: 'PUT', path: '/shops/{shop_id}/listings/{listing_id}/properties/47626759834', encoding: 'form', body: { value_ids: [300], values: ['Leather'] }, fields: ['property:47626759834'] },
+      { method: 'POST', path: '/shops/{shop_id}/listings/{listing_id}/translations/it', encoding: 'form', body: { title: 'Saponetta in pelle', description: 'Cucita a mano.', tags: ['moto'] },
+        fields: ['translation:it'] },
     ] })
+    // Every field write of the create belongs to exactly one call.
+    expect(compiled.request!.calls.flatMap(call => call.fields ?? []).sort()).toEqual(plan.createWrites.p.map(write => write.field).sort())
     expect(compiled.request!.calls[0].body).toMatchObject({ quantity: 6, title: 'Leather knee slider', description: 'A hand-stitched knee slider.', price: 25,
       who_made: 'i_did', when_made: '2020_2026', taxonomy_id: 1234, is_supply: false })
   })
@@ -674,5 +680,103 @@ describe('E2 review round 2 — the processing-profile rule may widen; price, st
       sets: { price: isNew, quantity: isNew, sku: isNew, readiness: isNew } })
     expect(etsyRuleConflicts([row('FAKE-SKU-2', 'Black', 5, false), row('FAKE-SKU-4', 'White', 3, true)], shared, new Map([[200, 'Primary color']])))
       .toEqual(['FAKE-SKU-4: this Etsy listing shares one stock number across its variations, and Nexus does not change that rule. Nexus holds 3 for FAKE-SKU-4; the listing holds 5. Change the rule on Etsy first, then review again.'])
+  })
+})
+
+// ── E3 ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+describe('E3 — a new listing is created as an Etsy draft', () => {
+  /** The create, compiled (its one line ticked). */
+  const createCompiled = (source = created()) => { const plan = prepareEtsyChanges(facts, source, new Map()); return compileEtsyChanges(plan, [plan.changes[0].id]) }
+  /** A fresh draft's inventory as the writer reads it: the one product Etsy makes with every new draft (no SKU, no property). */
+  const placeholderProduct = { offerings: [{ price: 25, quantity: 6, is_enabled: true, readiness_state_id: 5001 }] }
+  const freshDraft: EtsyInventoryWrite = { products: [placeholderProduct], price_on_property: [], quantity_on_property: [], sku_on_property: [], readiness_state_on_property: [] }
+
+  it('the draft\'s inventory is Nexus\'s own, exactly: its price, stock, on/off and processing profile per variation, and Nexus\'s rules', () => {
+    const plan = createCompiled()
+    expect(etsyCreateInventoryBody(plan, freshDraft)).toEqual({ body: created().inventory })
+    // A copy: the plan's own inventory is never handed to the writer.
+    const out = etsyCreateInventoryBody(plan, freshDraft)
+    if (!('body' in out)) throw new Error(out.refusal)
+    expect(out.body).not.toBe(plan.inventory)
+    expect(out.body.products[0]).not.toBe(plan.inventory.products[0])
+    // A SKU Nexus sends is no stranger either (and the draft's SKU-less first product goes).
+    expect(etsyCreateInventoryBody(plan, current(etsyProduct('FAKE-SKU-2', 'Black')))).toEqual({ body: created().inventory })
+  })
+
+  it('anything else on the new draft is something Nexus did not make: refused by name, and nothing is sent', () => {
+    const plan = createCompiled()
+    expect(etsyCreateInventoryBody(plan, current(etsyProduct('FAKE-SKU-9', 'Green'))))
+      .toEqual({ refusal: 'Etsy\'s new draft holds variation FAKE-SKU-9 that Nexus did not send. Nothing was sent.' })
+    expect(etsyCreateInventoryBody(plan, current(etsyProduct('FAKE-SKU-9', 'Green'), etsyProduct('FAKE-SKU-8', 'Pink'), etsyProduct('FAKE-SKU-9', 'Blue'))))
+      .toEqual({ refusal: 'Etsy\'s new draft holds variations FAKE-SKU-9 and FAKE-SKU-8 that Nexus did not send. Nothing was sent.' })
+  })
+
+  it('never applies a listing\'s "shared price or stock" rule: a fresh draft has nothing shared to multiply', () => {
+    // Variations with different prices and stock: the update path would refuse them against a listing that shares one
+    // price and one stock number; the create sends them as Nexus holds them, with Nexus's per-variation rules.
+    const source = created({ inventory: { ...created().inventory, products: [COLOR('FAKE-SKU-2', 'Black', 1), { ...COLOR('FAKE-SKU-3', 'Red', 2), offerings: [{ price: 31, quantity: 9, is_enabled: true, readiness_state_id: 5001 }] }] } })
+    const shared: EtsyInventoryWrite = { ...freshDraft, price_on_property: [], quantity_on_property: [] }
+    const out = etsyCreateInventoryBody(createCompiled(source), shared)
+    if (!('body' in out)) throw new Error(out.refusal)
+    expect(out.body.products.map(p => [p.sku, p.offerings[0].price, p.offerings[0].quantity])).toEqual([['FAKE-SKU-2', 25, 3], ['FAKE-SKU-3', 31, 9]])
+    expect(out.body).toMatchObject(PER_VARIATION)
+  })
+})
+
+describe('E3 — a listing that is a draft on Etsy, still holding Etsy\'s placeholder product', () => {
+  /** What Etsy holds after a create whose variations step did not land: one product, no SKU, no property. */
+  const placeholderLive = (extra: Partial<EtsyLiveListing> = {}) => live({ state: 'draft', unnamedProducts: 1, offerings: {},
+    inventory: { properties: [], products: [{ sku: '', values: [], readiness_state_id: 5001 }], price_on_property: [], quantity_on_property: [], sku_on_property: [], readiness_state_on_property: [] }, ...extra })
+  const placeholderInventory: EtsyInventoryWrite = { products: [{ offerings: [{ price: 25, quantity: 1, is_enabled: true, readiness_state_id: 5001 }] }],
+    price_on_property: [], quantity_on_property: [], sku_on_property: [], readiness_state_on_property: [] }
+
+  it('is recognised only as the one SKU-less, property-less product of a draft', () => {
+    expect(etsyDraftPlaceholder(placeholderLive())).toBe(true)
+    expect(etsyDraftPlaceholder(placeholderLive({ state: 'active' }))).toBe(false)
+    expect(etsyDraftPlaceholder(placeholderLive({ unnamedProducts: 2, inventory: { ...placeholderLive().inventory, products: [placeholderLive().inventory.products[0], placeholderLive().inventory.products[0]] } }))).toBe(false)
+    expect(etsyDraftPlaceholder(placeholderLive({ inventory: { ...placeholderLive().inventory, properties: [{ property_id: 200, property_name: 'Primary color', scale_id: null }] } }))).toBe(false)
+    expect(etsyDraftPlaceholder(live({ state: 'draft' }))).toBe(false)
+  })
+
+  it('the variations line is not refused, and the PUT replaces the placeholder (said in its note) — no Full update needed', () => {
+    const source = publication({ live: placeholderLive() })
+    const plan = prepareEtsyChanges(facts, source, new Map())
+    const line = changeOf(plan, 'inventory')
+    expect(line).toMatchObject({ selectable: true, selectedByDefault: true })
+    expect(line.reason ?? '').not.toContain('without a SKU')
+    const compiled = compileEtsyChanges(plan, idsOf(plan, 'inventory'))
+    expect(compiled).toMatchObject({ removeUnnamed: true, removeSkus: [], addedSkus: ['FAKE-SKU-2', 'FAKE-SKU-3'] })
+    expect(compiled.request!.calls.at(-1)!.note).toBe('new variations FAKE-SKU-2 and FAKE-SKU-3. Publish replaces this draft\'s one product without a SKU (Etsy\'s first product, if the draft still holds it).')
+    // At send: the placeholder goes and Nexus's variations take its place with Nexus's own offering and rules.
+    const out = etsyInventoryReplaceBody(compiled, placeholderInventory)
+    if (!('body' in out)) throw new Error(out.refusal)
+    expect(out.body.products.map(p => [p.sku, p.offerings[0].price, p.offerings[0].quantity])).toEqual([['FAKE-SKU-2', 25, 3], ['FAKE-SKU-3', 25, 3]])
+    expect(out.body).toMatchObject(PER_VARIATION)
+    // A Full update says it once too (the placeholder, not "a variation without a SKU" as well).
+    const fullPlan = prepareEtsyChanges(facts, source, new Map(), { full: true })
+    const full = compileEtsyChanges(fullPlan, selectedIds(fullPlan))
+    expect(full.removeUnnamed).toBe(true)
+    expect(full.request!.calls.at(-1)!.note).toBe('new variations FAKE-SKU-2 and FAKE-SKU-3. Publish replaces this draft\'s one product without a SKU (Etsy\'s first product, if the draft still holds it).')
+  })
+
+  it('a SKU-less product on a listing that is not a draft is still refused (a send would delete it)', () => {
+    const active = placeholderLive({ state: 'active' })
+    const plan = prepareEtsyChanges(facts, publication({ live: active }), new Map())
+    expect(changeOf(plan, 'inventory')).toMatchObject({ selectable: false, reason: expect.stringContaining('Etsy holds 1 variation without a SKU; sending the variations would delete it on Etsy.') })
+    // And a draft holding more than the placeholder keeps E2's rule too.
+    const more = placeholderLive({ unnamedProducts: 1, inventory: { ...placeholderLive().inventory, products: [...placeholderLive().inventory.products, { sku: 'FAKE-SKU-9', values: [], readiness_state_id: 5001 }] } })
+    expect(changeOf(prepareEtsyChanges(facts, publication({ live: more }), new Map()), 'inventory')).toMatchObject({ selectable: false })
+  })
+})
+
+describe('E3 — the create\'s read-back skips what Etsy never reports', () => {
+  it('skipUnread leaves out a listing field Etsy\'s read does not report (production partners), only when asked', () => {
+    const plan = compileEtsyChanges(prepareEtsyChanges(facts, created(), new Map()), [prepareEtsyChanges(facts, created(), new Map()).changes[0].id])
+    const after = live({ values: { ...VALUES, production_partner_ids: [] } })
+    expect(etsyReadBackMismatches(plan, new Set(['production_partner_ids', 'title']), after)).toEqual(['Production partner IDs: Etsy holds something other than what Nexus sent.'])
+    expect(etsyReadBackMismatches(plan, new Set(['production_partner_ids', 'title']), after, { skipUnread: true })).toEqual([])
+    // A field Etsy does report is still judged.
+    expect(etsyReadBackMismatches(plan, new Set(['title']), live({ values: { ...VALUES, title: 'Other' } }), { skipUnread: true })).toEqual(['Title: Etsy holds something other than what Nexus sent.'])
   })
 })

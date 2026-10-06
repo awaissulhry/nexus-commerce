@@ -5,10 +5,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ transport: vi.fn(), token: vi.fn(), setup: vi.fn(), testNotice: vi.fn(), topics: vi.fn(), destinations: vi.fn(), subscriptions: vi.fn(), audit: vi.fn() }))
+const m = vi.hoisted(() => ({ transport: vi.fn(), token: vi.fn(), setup: vi.fn(), testNotice: vi.fn(), topics: vi.fn(), destinations: vi.fn(), subscriptions: vi.fn(), audit: vi.fn(), list: vi.fn(), findUnique: vi.fn() }))
 vi.mock('../services/audit-log.service.js', () => ({ auditLogService: { write: m.audit } }))
 vi.mock('../services/cx/connectors/ebay/client.js', () => ({ ebayAppToken: m.token }))
-vi.mock('../services/gateway/ebay.js', () => ({ ebayTransport: () => m.transport }))
+// The third argument says whose token a call carries: null = the app-level transport, else that account's own.
+vi.mock('../services/gateway/ebay.js', () => ({ ebayTransport: (connectionId: string | null) => (url: string, init: RequestInit) => m.transport(url, init, connectionId) }))
 vi.mock('../services/cx/connectors/ebay/notifications.js', async original => {
   const actual = await original<Record<string, any>>()
   m.setup.mockImplementation(actual.setupEbayNotifications)
@@ -19,8 +20,8 @@ vi.mock('../services/cx/connectors/ebay/notifications.js', async original => {
     getEbayTopics: m.topics, getEbayDestinations: m.destinations, getEbaySubscriptions: m.subscriptions }
 })
 vi.mock('../services/cx/ingress/ebay-admission.js', () => ({ receiveEbayNotice: vi.fn(), EbayAdmissionError: class extends Error {} }))
-vi.mock('../services/connection-resolver.service.js', () => ({ listActiveConnections: async () => [] }))
-vi.mock('../db.js', () => ({ default: {} }))
+vi.mock('../services/connection-resolver.service.js', () => ({ listActiveConnections: m.list, isOwnConnection: () => true }))
+vi.mock('../db.js', () => ({ default: { channelConnection: { findUnique: m.findUnique } } }))
 vi.mock('../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 
 const API = 'https://api.ebay.com/commerce/notification/v1'
@@ -41,6 +42,7 @@ async function call(method: 'GET' | 'POST', url: string) {
 
 beforeEach(() => {
   m.transport.mockReset(); m.token.mockReset(); m.setup.mockClear(); m.testNotice.mockClear(); m.audit.mockReset().mockResolvedValue(undefined)
+  m.list.mockReset().mockResolvedValue([]); m.findUnique.mockReset()
   for (const reader of [m.topics, m.destinations, m.subscriptions]) reader.mockReset().mockRejectedValue(new Error('status reader not stubbed'))
   vi.stubEnv('EBAY_NOTIFICATION_ENDPOINT_URL', endpoint)
   vi.stubEnv('EBAY_NOTIFICATION_VERIFICATION_TOKEN', verificationToken)
@@ -55,7 +57,7 @@ afterEach(() => vi.unstubAllEnvs())
 const unarmed: Array<[string, string | undefined, string | undefined]> = [
   ['nothing set', undefined, undefined],
   ['the old switch alone (stale environment)', '1', undefined],
-  ['the old switch with a USER topic', '1', 'ORDER_CONFIRMATION'],
+  ['the old switch with a portal topic', '1', 'MARKETPLACE_ACCOUNT_DELETION'],
   ['the topic list without the old switch', undefined, 'AUTHORIZATION_REVOCATION'],
   ['the old switch set to 0', '0', 'AUTHORIZATION_REVOCATION'],
 ]
@@ -94,6 +96,62 @@ describe('POST /api/admin/setup-ebay-notifications', () => {
   })
 })
 
+const S = 'https://api.ebay.com/oauth/api_scope'
+const sellerAccount = (grantedScopes = [`${S}/sell.fulfillment`, `${S}/commerce.notification.subscription`]) =>
+  ({ id: 'conn-a', channelType: 'EBAY', isActive: true, authStatus: 'connected', grantedScopes })
+const orderTopic = { topicId: 'ORDER_CONFIRMATION', scope: 'USER', supportedPayloads: [{ format: ['JSON'], deliveryProtocol: 'HTTPS', schemaVersion: '1.0' }] }
+
+describe('POST /api/admin/setup-ebay-notifications — GAP2 phase 2, ORDER_CONFIRMATION armed', () => {
+  it("creates the destination with the app token, then subscribes this business's account with ITS OWN sign-in", async () => {
+    vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'ORDER_CONFIRMATION')
+    m.list.mockResolvedValue([{ id: 'conn-a', ebaySignInName: 'seller_a' }])
+    m.findUnique.mockResolvedValue(sellerAccount())
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 })
+    const created = (resource: string, id: string) => new Response(null, { status: 201, headers: { Location: `${API}/${resource}/${id}` } })
+    m.transport.mockImplementation(async (url: string, request: RequestInit, connectionId: string | null) => {
+      const method = request.method ?? 'GET'
+      if (connectionId === null) {
+        if (method === 'GET' && url === `${API}/topic?limit=100`) return json({ topics: [orderTopic] })
+        if (method === 'GET' && url === `${API}/destination?limit=100`) return json({ destinations: [] })
+        if (method === 'GET' && url === `${API}/config`) return json({ alertEmail: 'alerts-fixture@example.test' })
+        if (method === 'POST' && url === `${API}/destination`) return created('destination', 'd-new')
+      } else if (connectionId === 'conn-a') {
+        if (method === 'GET' && url === `${API}/subscription?limit=100`) return json({ subscriptions: [] })
+        if (method === 'POST' && url === `${API}/subscription`) return created('subscription', 'sub-a')
+      }
+      throw new Error(`Unexpected ${method} ${url} as ${connectionId}`)
+    })
+    const res = await call('POST', '/api/admin/setup-ebay-notifications')
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toMatchObject({ ok: true, armed: true, destinationId: 'd-new', perTopic: [],
+      sellers: { accounts: [{ connectionId: 'conn-a', signInName: 'seller_a', topicId: 'ORDER_CONFIRMATION', status: 'created', subscriptionId: 'sub-a' }] } })
+    // Every subscription call went as the seller's own account, never as the app.
+    const subscriptionCalls = m.transport.mock.calls.filter(([url]) => String(url).includes('/subscription'))
+    expect(subscriptionCalls.map(([, request, connectionId]) => [request.method, connectionId])).toEqual([['GET', 'conn-a'], ['POST', 'conn-a']])
+    for (const [, request] of subscriptionCalls) expect(JSON.stringify(request.headers)).not.toMatch(/authorization/i)
+    expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'ebay.notification.setup',
+      metadata: expect.objectContaining({ outcome: 'succeeded', topics: ['ORDER_CONFIRMATION'], perSeller: [{ connectionId: 'conn-a', status: 'created' }] }) }))
+  })
+
+  it('reports an account whose sign-in lacks the permission as reconnect needed, with no seller call', async () => {
+    vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'ORDER_CONFIRMATION')
+    m.list.mockResolvedValue([{ id: 'conn-a', ebaySignInName: 'seller_a' }])
+    m.findUnique.mockResolvedValue(sellerAccount([`${S}/sell.fulfillment`]))
+    m.transport.mockImplementation(async (url: string, request: RequestInit, connectionId: string | null) => {
+      if (connectionId !== null) throw new Error('No seller call is allowed for an account that needs Reconnect')
+      if (url === `${API}/topic?limit=100`) return new Response(JSON.stringify({ topics: [orderTopic] }), { status: 200 })
+      if (url === `${API}/destination?limit=100`) return new Response(JSON.stringify({ destinations: [{ destinationId: 'd-1', status: 'ENABLED', deliveryConfig: { endpoint } }] }), { status: 200 })
+      if (url === `${API}/config`) return new Response(JSON.stringify({ alertEmail: 'alerts-fixture@example.test' }), { status: 200 })
+      throw new Error(`Unexpected ${request.method} ${url}`)
+    })
+    const res = await call('POST', '/api/admin/setup-ebay-notifications')
+    expect(res.body).toMatchObject({ ok: true, sellers: { accounts: [{ connectionId: 'conn-a', status: 'reconnect_needed' }] } })
+    expect(m.transport.mock.calls.every(([, , connectionId]) => connectionId === null)).toBe(true)
+  })
+})
+
 describe('POST /api/admin/ebay-notification-test', () => {
   it.each(unarmed)('answers 403 and makes no call when unarmed: %s', async (_label, setup, armed) => {
     vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', setup)
@@ -115,6 +173,63 @@ describe('POST /api/admin/ebay-notification-test', () => {
       metadata: expect.objectContaining({ outcome: 'refused_topic_not_armed', topics: topicId ? [topicId] : [] }) }))
     expect(m.testNotice).not.toHaveBeenCalled()
     expect(m.transport).not.toHaveBeenCalled()
+  })
+
+  // Review N2: the per-seller order topic is tested with ONE seller's own token, named by connectionId.
+  describe('ORDER_CONFIRMATION (per seller)', () => {
+    beforeEach(() => {
+      vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+      vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', 'AUTHORIZATION_REVOCATION,ORDER_CONFIRMATION')
+    })
+
+    it.each([[''], ['&connectionId=bad%20id%3B']])('answers 400 without a usable connectionId, and makes no call: %j', async extra => {
+      const res = await call('POST', `/api/admin/ebay-notification-test?topicId=ORDER_CONFIRMATION${extra}`)
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toMatchObject({ ok: false, error: expect.stringMatching(/connectionId/) })
+      expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ outcome: 'refused_no_account' }) }))
+      expect(m.transport).not.toHaveBeenCalled()
+      expect(m.testNotice).not.toHaveBeenCalled()
+    })
+
+    it("answers 400 for an account that is not this business's own, and makes no call", async () => {
+      m.list.mockResolvedValue([{ id: 'conn-a' }])
+      const res = await call('POST', '/api/admin/ebay-notification-test?topicId=ORDER_CONFIRMATION&connectionId=conn-other')
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toMatchObject({ ok: false, refused: 'not_own_account' })
+      expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ outcome: 'refused_not_own_account', connectionId: 'conn-other' }) }))
+      expect(m.findUnique).not.toHaveBeenCalled()
+      expect(m.transport).not.toHaveBeenCalled()
+    })
+
+    it("asks eBay to test THIS seller's subscription with the seller's own token (202)", async () => {
+      m.list.mockResolvedValue([{ id: 'conn-a', ebaySignInName: 'seller_a' }])
+      m.findUnique.mockResolvedValue(sellerAccount())
+      // This file stubs the app-level readers (topics, destinations); only seller calls reach the transport.
+      m.topics.mockResolvedValue([orderTopic])
+      m.destinations.mockResolvedValue([{ destinationId: 'd-1', status: 'ENABLED', endpoint }])
+      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 })
+      m.transport.mockImplementation(async (url: string, request: RequestInit, connectionId: string | null) => {
+        const method = request.method ?? 'GET'
+        if (connectionId === 'conn-a') {
+          if (method === 'GET' && url === `${API}/subscription?limit=100`) {
+            return json({ subscriptions: [{ subscriptionId: 'sub-a', topicId: 'ORDER_CONFIRMATION', destinationId: 'd-1', status: 'ENABLED', payload: { format: 'JSON', deliveryProtocol: 'HTTPS', schemaVersion: '1.0' } }] })
+          }
+          if (method === 'POST' && url === `${API}/subscription/sub-a/test`) return new Response(null, { status: 202 })
+        }
+        throw new Error(`Unexpected ${method} ${url} as ${connectionId}`)
+      })
+      const res = await call('POST', '/api/admin/ebay-notification-test?topicId=ORDER_CONFIRMATION&connectionId=conn-a')
+      expect(res.statusCode).toBe(200)
+      expect(res.body).toEqual({ ok: true, topicId: 'ORDER_CONFIRMATION', connectionId: 'conn-a', subscriptionId: 'sub-a' })
+      expect(m.transport.mock.calls.map(([, , connectionId]) => connectionId)).toEqual(['conn-a', 'conn-a'])
+      const testCall = m.transport.mock.calls.find(([url]) => String(url).endsWith('/test'))!
+      expect(testCall[2]).toBe('conn-a')
+      expect(m.token).not.toHaveBeenCalled()
+      expect(JSON.stringify(testCall[1].headers)).not.toMatch(/authorization/i)
+      expect(m.testNotice).not.toHaveBeenCalled()
+      expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'ebay.notification.test',
+        metadata: expect.objectContaining({ outcome: 'sent', topics: ['ORDER_CONFIRMATION'], connectionId: 'conn-a', subscriptionId: 'sub-a' }) }))
+    })
   })
 
   it('positive control: armed, it asks eBay to test our revocation subscription', async () => {
@@ -146,6 +261,23 @@ describe('GET /api/admin/ebay-notification-status', () => {
     expect(res.body.configured).toEqual({ hasEndpoint: true, hasVerificationToken: true, verificationTokenValid: true, hasAlertEmail: true })
     expect(res.body.setupGate).toMatchObject({ armed: false, topics: [], reason: expect.stringContaining('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS') })
     expect(res.raw).not.toContain(verificationToken)
+  })
+
+  it.each([
+    ['before arming, an account without the permission', undefined, [`${S}/sell.fulfillment`], 'reconnect_needed'],
+    ['before arming, a ready account', undefined, undefined, 'not_armed'],
+    ['armed for revocation only, a ready account', 'AUTHORIZATION_REVOCATION', undefined, 'not_armed'],
+  ])('lists each eBay account of this business: %s', async (_label, armed, scopes, status) => {
+    vi.stubEnv('NEXUS_ENABLE_EBAY_NOTIFICATION_SETUP', '1')
+    vi.stubEnv('NEXUS_EBAY_NOTIFICATION_ARMED_TOPICS', armed)
+    m.topics.mockResolvedValue([orderTopic]); m.destinations.mockResolvedValue([]); m.subscriptions.mockResolvedValue([])
+    m.list.mockResolvedValue([{ id: 'conn-a', ebaySignInName: 'seller_a', externalAccountId: 'ebay-user-fixture' }])
+    m.findUnique.mockResolvedValue(sellerAccount(scopes))
+    const res = await call('GET', '/api/admin/ebay-notification-status')
+    expect(res.statusCode).toBe(200)
+    expect(res.body.sellers).toEqual({ topicId: 'ORDER_CONFIRMATION', armed: false, accounts: [{ connectionId: 'conn-a', signInName: 'seller_a', status, reason: expect.any(String) }] })
+    expect(res.raw).not.toContain('ebay-user-fixture')
+    expect(m.transport).not.toHaveBeenCalled()
   })
 
   it('reports deletion as portal-only and the order topic as per-seller', async () => {
