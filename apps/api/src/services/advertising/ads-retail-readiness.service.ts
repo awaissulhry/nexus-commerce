@@ -17,6 +17,7 @@ import { suppressCampaignBids } from './ads-bid-suppression.service.js'
 import { adsActorOf } from './ads-actor.js'
 import { logger } from '../../utils/logger.js'
 import { sellableAvailable } from '../stock-pool/sync-ledgers.js'
+import { stopBidsFor, strategySourceWords } from './ads-strategy/effective.js'
 
 export type Verdict = 'pause' | 'watch' | 'ok'
 export interface ProductReadiness { productId: string | null; sku: string | null; asin: string | null; name: string | null; inStock: boolean; availableQty: number; hasBuyBox: boolean | null; priceCompetitive: boolean | null }
@@ -110,7 +111,9 @@ export async function analyzeRetailReadiness(opts: { marketplace?: string; campa
  *  flooring their bids to ~2¢ — NO-PAUSE policy (pausing disrupts Amazon's algo).
  *  Bids are remembered and restored when the products become sellable again.
  *  Goes through the gated, audited write path. (`paused` = guarded count, kept for
- *  the existing intel-routes display.) */
+ *  the existing intel-routes display.)
+ *  ADS AUTONOMY W1-6 — the floor is the ads strategy's stop bid for the campaign (its market, the lower across its
+ *  products) when one is set, else the 2¢ floor. */
 export async function applyRetailGuard(args: { campaignIds?: string[]; actor?: string; marketplace?: string }): Promise<{ paused: string[]; skipped: number }> {
   let ids = args.campaignIds
   if (!ids) {
@@ -119,9 +122,17 @@ export async function applyRetailGuard(args: { campaignIds?: string[]; actor?: s
   }
   const paused: string[] = []
   let skipped = 0
+  // A stop bid that cannot be read: the 2¢ floor, the lowest stop bid there is (a stop never lands higher by accident).
+  const stops = await (async () => stopBidsFor(ids.length ? await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, marketplace: true } }) : []))()
+    .catch((err) => {
+      logger.warn('[AX3.1] ads strategy stop bids unreadable — retail guard floors at 2¢', { error: String(err) })
+      return new Map<string, { cents: number; source: null }>()
+    })
   for (const id of ids) {
-    // NP — never pause: floor the campaign's bids to ~2¢ (restorable) instead.
-    try { await suppressCampaignBids(id, { actor: adsActorOf(args.actor, 'retail-guard'), reason: 'Retail-readiness guard: products unsellable → bids floored (no-pause)' }); paused.push(id) } catch { skipped++ }
+    // NP — never pause: floor the campaign's bids to ~2¢, or the strategy's stop bid (restorable) instead.
+    const stop = stops.get(id)
+    const named = stop?.source ? ` at ${stop.cents}¢ (${strategySourceWords(stop.source)})` : ''
+    try { await suppressCampaignBids(id, { actor: adsActorOf(args.actor, 'retail-guard'), floorCents: stop?.cents ?? null, reason: `Retail-readiness guard: products unsellable → bids floored${named} (no-pause)` }); paused.push(id) } catch { skipped++ }
   }
   logger.info('[AX3.1] applyRetailGuard', { paused: paused.length, skipped })
   return { paused, skipped }

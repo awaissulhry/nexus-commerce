@@ -11,9 +11,11 @@
  *   history    the versions of a market's rows, or of one category's or product's, newest first
  *
  * Honest by construction: every field carries its `readBy` from the registry (fields.ts) — what acts on it today
- * (W1-5: the bid engines on the target, the bid band and the largest change; W1-7: the search-term thresholds and
- * protection; W1-8: Claude's door reads what Claude may do alone). Until an engine reads a field, only the older
- * settings under `alsoInForce` bind.
+ * (W1-5: the bid engines on the target, the bid band and the largest change; W1-6: the monthly market cap, the stop bid
+ * and the actions per run; W1-6b: category and product caps; W1-7: the search-term thresholds and protection; W1-8:
+ * Claude's door reads what Claude may do alone). Until an engine reads a field, only the older settings under
+ * `alsoInForce` bind. W1-6: a monthly cap also says how this month stands against it (`thisMonth`: spend so far, the
+ * forecast, the cap where bids drop; W1-6b: a category's or product's own spend).
  *
  * Money (targets, bids, caps, spend thresholds) sits ONLY under the keys in STRATEGY_MONEY, alone, so the money filter
  * removes exactly the money and keeps where it comes from. Free text written by people beside an older setting (a bid
@@ -22,7 +24,8 @@
 import prisma from '../../../db.js'
 import type { ClaudeTrust } from '../../agents/tool-types.js'
 import { resolveBidPolicy } from '../ads-write-gate.js'
-import { currentMonth } from '../ads-budget-manager.service.js'
+import { analyzeBudgetManager, currentMonth } from '../ads-budget-manager.service.js'
+import { marketCaps } from '../ads-budget-enforce.service.js'
 import { resolveHarvestPolicy } from '../harvest-policy.service.js'
 import { accountDefaultFraction, readOwnerTargets, targetFraction } from '../ads-target-acos-resolver.js'
 import {
@@ -37,6 +40,7 @@ import {
   type StrategyField,
 } from './fields.js'
 import { openStrategy } from './effective.js'
+import { scopeCapsThisMonth, type ScopeCapsThisMonth } from './spend.js'
 import {
   bidPolicies,
   campaignMarkets,
@@ -86,6 +90,21 @@ const READ_BY_NOTE = (() => {
     + 'settings under alsoInForce bind; once it does, every limit binds and the stricter one wins. Engines and rules are '
     + "held to the strategy's bid limits; a person's own edit past one, or a Claude request he approves, is warned and goes when he confirms."
 })()
+const MONTH_NOTE =
+  "Spend so far adds up Amazon's daily campaign reports: whole days up to spendThrough (yesterday's arrives early in the "
+  + 'morning, UTC), never today. Once it reaches the cap where bids drop (stopCapCents), the budget engine, every 30 minutes '
+  + "while it runs live, lowers every bid of every campaign in the market to its stop bid (never a pause) until the 1st, or "
+  + "until the cap is raised. The forecast is the Budget Manager's: spend over the complete days, times the days of the month."
+const CAP_NOTE =
+  "Each cap binds on its own scope's spend (the market's on the whole market, a category's on its products, a product's on "
+  + "its own); none is inherited. The budget engine stops at each one until the 1st: the market's cap lowers every campaign of "
+  + "the market to its stop bid; a category's or a product's lowers every ad group holding a product under it (the other "
+  + 'products sharing that ad group stop too). Never a pause. A cap of 0 means no cap, as in the Budget Manager: an immediate '
+  + 'stop is a stop (suppress-campaign), not a cap of 0.'
+const SCOPE_SPEND_NOTE =
+  "A category's or product's spend so far adds up Amazon's daily advertised-product report (Sponsored Products ads only), "
+  + 'each ad counted on its product and on every cap that product falls under: whole days up to spendThrough, never today. '
+  + 'unattributedCents: spend of ads Nexus cannot tie to a product, counted on no category or product cap.'
 const TARGET_ORDER =
   "a rule's or an autopilot plan's own target → the campaign's own target ACoS → this strategy (product, category, market) → "
   + 'the account default → profit data → 30 %'
@@ -266,19 +285,58 @@ async function businessLevels(): Promise<Map<string, ClaudeTrust>> {
   return levels
 }
 
-function fieldEntries(resolved: ResolvedStrategy, older: Older): Array<Record<string, unknown>> {
+/**
+ * W1-6 — this month against the market's caps, as the budget engine holds it (marketCaps): the cap where bids drop and
+ * which one it is, the spend so far and the forecast (the Budget Manager's own numbers, so the screens agree). Null
+ * when the market has neither a strategy cap nor a budget plan this month.
+ */
+async function monthAgainstCaps(market: string, resolved: ResolvedStrategy, older: Older): Promise<Record<string, unknown> | null> {
+  // 0 = no cap (marketCaps reads it so too).
+  const strategyCap = resolved.caps.find((c) => c.source.level === 'market' && c.monthlySpendCapCents > 0)?.monthlySpendCapCents ?? null
+  if (strategyCap == null && !older.plan) return null
+  const caps = marketCaps(older.plan, strategyCap)
+  const month = currentMonth()
+  const budget = await analyzeBudgetManager({ month })
+  const row = budget.rows.find((r) => r.marketplace === market && r.tag === null)
+  const spendCents = row?.spendCents ?? 0
+  return {
+    month,
+    spendCents,
+    spendThrough: budget.dataThrough,
+    forecastSpendCents: row?.forecastSpendCents ?? null,
+    stopCapCents: caps.stopCapCents,
+    stopBy: caps.stopBy === 'strategy' ? 'the market strategy' : caps.stopBy === 'plan' ? `the budget plan ${month}` : null,
+    reached: caps.stopCapCents != null && spendCents >= caps.stopCapCents,
+    note: caps.stopCapCents == null ? 'No cap stops this market this month: the budget plan has Stop Over Spend off and the strategy sets no market cap.' : MONTH_NOTE,
+  }
+}
+
+/** W1-6b — this month's spend of a category's or product's own scope, and whether its cap is reached. */
+function scopeMonth(strategyId: string, scope: ScopeCapsThisMonth | null): Record<string, unknown> {
+  const cap = scope?.caps.find((c) => c.strategyId === strategyId)
+  return cap ? { thisMonth: { spendCents: cap.spendCents, reached: cap.reached } } : {}
+}
+
+function fieldEntries(resolved: ResolvedStrategy, older: Older, thisMonth: Record<string, unknown> | null, scope: ScopeCapsThisMonth | null): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = []
   for (const spec of STRATEGY_FIELDS) {
     if (spec.key === 'claudeAutonomy') continue
     if (spec.key === 'monthlySpendCapCents') {
-      const caps = resolved.caps.map((c) => ({ ...sourceOut(c.source), monthlySpendCapCents: c.monthlySpendCapCents }))
-      const market = resolved.caps.find((c) => c.source.level === 'market')
+      const caps = resolved.caps.map((c) => ({
+        ...sourceOut(c.source), monthlySpendCapCents: c.monthlySpendCapCents,
+        ...(c.monthlySpendCapCents > 0 ? {} : { noCap: true }),
+        ...(c.source.level === 'market' ? {} : scopeMonth(c.source.strategyId, scope)),
+      }))
+      const market = resolved.caps.find((c) => c.source.level === 'market' && c.monthlySpendCapCents > 0)
+      const scoped = resolved.caps.some((c) => c.source.level !== 'market' && c.monthlySpendCapCents > 0)
       out.push({
         field: spec.key, label: spec.label, caps,
-        note: "Each cap binds on its own scope's spend (the market's on the whole market, a category's on its products, a product's on its own); none is inherited.",
+        note: CAP_NOTE,
+        ...(thisMonth ? { thisMonth } : {}),
+        ...(scoped && scope ? { scopeSpend: { spendThrough: scope.spendThrough, unattributedCents: scope.unattributedCents, note: SCOPE_SPEND_NOTE } } : {}),
         ...(older.plan ? {
           alsoInForce: [{ setting: `the budget plan ${older.plan.month}`, monthlyBudgetCents: older.plan.monthlyBudgetCents, stopOverSpend: older.plan.stopOverSpend, autoPacing: older.plan.autoPacing }],
-          ...(market ? { stricter: { from: market.monthlySpendCapCents <= older.plan.monthlyBudgetCents ? 'the market strategy' : `the budget plan ${older.plan.month}` } } : {}),
+          ...(market ? { stricter: { from: older.plan.monthlyBudgetCents <= 0 || market.monthlySpendCapCents <= older.plan.monthlyBudgetCents ? 'the market strategy' : `the budget plan ${older.plan.month}` } } : {}),
         } : {}),
         readBy: spec.readBy,
       })
@@ -375,6 +433,11 @@ async function effectiveIn(market: string, channel: string, scope: Scope, levels
       break
   }
   const [older, shadows] = await Promise.all([olderSettings(market, scope), shadowing(market, scope)])
+  const thisMonth = await monthAgainstCaps(market, resolved, older)
+  // W1-6b — the category and product caps in force here, each with its own scope's spend this month.
+  const month = currentMonth()
+  const [y, m] = month.split('-').map(Number)
+  const scopeSpend = resolved.caps.some((c) => c.source.level !== 'market') ? await scopeCapsThisMonth(view, new Date(Date.UTC(y, m - 1, 1)), new Date(Date.UTC(y, m, 1))) : null
   const claude = CLAUDE_ACTION_TYPES.map((action) => {
     const r = resolved.autonomy.get(action) ?? { value: null, source: null }
     return {
@@ -394,7 +457,7 @@ async function effectiveIn(market: string, channel: string, scope: Scope, levels
     scope: scopeOut,
     strategyRows: view.index.rows.length,
     ...(view.empty ? { note: `No strategy is set for ${market} yet: every engine works as it does today.` } : {}),
-    fields: fieldEntries(resolved, older),
+    fields: fieldEntries(resolved, older, thisMonth, scopeSpend),
     claude,
     claudeNote: CLAUDE_NOTE,
     shadowedBy: shadows.shadowedBy,

@@ -301,6 +301,54 @@ describe('A8 — suppress-campaign and restore-campaign (never a pause)', () => 
       await inside(() => database.client.adsStrategy.delete({ where: { id: row.id } }))
     }
   })
+
+  it('W1-6 — the stop bid is the ads strategy\'s for the campaign\'s market; a bid already lower stays; a changed stop bid stops the run', async () => {
+    const row = await inside(async () => {
+      await database.client.campaign.create({ data: { id: 'c-a8s', name: 'Italy strategy stop', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-c-a8s', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true } })
+      await database.client.adGroup.create({ data: { id: 'g-a8s', campaignId: 'c-a8s', name: 'strategy stop group', externalAdGroupId: 'EXT-g-a8s', defaultBidCents: 40 } })
+      for (const [id, bid] of [['ss-1', 55], ['ss-2', 15]] as const) {
+        await database.client.adTarget.create({ data: { id, adGroupId: 'g-a8s', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `stop ${id}`, bidCents: bid, externalTargetId: `EXT-${id}` } })
+      }
+      return database.client.adsStrategy.create({ data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', updatedBy: 'user:test', stopMethod: 'LOW_BIDS', stopBidCents: 20 } })
+    })
+    try {
+      const p = (await preview('suppress-campaign', { campaignId: 'c-a8s' })).preview as Row
+      expect(p).toMatchObject({ moves: { targets: 1, adGroups: 1 }, stopBidCents: 20, stopBidFrom: 'ads strategy: Test market (IT) v1' })
+      expect(p.effect).toMatch(/^Lowers every bid of Italy strategy stop to the stop bid of 20 cents \(ads strategy: Test market \(IT\) v1\) — 1 target and 1 ad group default/)
+      // The stop bid moved after the approval: what the person approved is not what would run.
+      const stale = await ask('suppress-campaign', { campaignId: 'c-a8s' })
+      await inside(() => database.client.adsStrategy.update({ where: { id: row.id }, data: { stopBidCents: 10, version: 2 } }))
+      expect(await approve(stale.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/stopBidCents changed/) })
+      const asked = await ask('suppress-campaign', { campaignId: 'c-a8s' })
+      expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { moved: 3 } }) // at 10 cents, both keywords and the default move
+      const after = await sql<{ id: string; b: number; r: number | null }>('SELECT id, "bidCents" AS b, "suppressedFromBidCents" AS r FROM "AdTarget" WHERE id LIKE $1 ORDER BY id', ['ss-%'])
+      expect(after.map((t) => [t.id, t.b, t.r])).toEqual([['ss-1', 10, 55], ['ss-2', 10, 15]])
+      expect((await sql('SELECT "bidsSuppressedFloorCents" AS floor FROM "Campaign" WHERE id = $1', ['c-a8s']))[0]).toEqual({ floor: 10 })
+    } finally {
+      await inside(() => database.client.adsStrategy.delete({ where: { id: row.id } }))
+    }
+  })
+})
+
+describe('W1-6b — a person\'s restore leaves an ad group floored on its own (a product over its monthly cap)', () => {
+  it('the preview counts only what the restore gives back and names what stays; approved, the capped ad group stays floored', async () => {
+    await inside(async () => {
+      await database.client.campaign.create({ data: { id: 'c-a8g', name: 'Italy capped group', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-c-a8g', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true, bidsSuppressedAt: new Date(), bidsSuppressedBy: 'user:u-approver', bidsSuppressedFloorCents: 2 } })
+      await database.client.adGroup.create({ data: { id: 'g-a8g-capped', campaignId: 'c-a8g', name: 'capped', externalAdGroupId: 'EXT-g-a8g-capped', defaultBidCents: 2, suppressedFromBidCents: 40, bidsSuppressedAt: new Date(), bidsSuppressedBy: 'automation:budget-manager-cron', bidsSuppressedFloorCents: 2 } })
+      await database.client.adGroup.create({ data: { id: 'g-a8g-free', campaignId: 'c-a8g', name: 'free', externalAdGroupId: 'EXT-g-a8g-free', defaultBidCents: 2, suppressedFromBidCents: 30 } })
+      await database.client.adTarget.create({ data: { id: 'tg-capped', adGroupId: 'g-a8g-capped', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'capped kw', bidCents: 2, suppressedFromBidCents: 55, externalTargetId: 'EXT-tg-capped' } })
+      await database.client.adTarget.create({ data: { id: 'tg-free', adGroupId: 'g-a8g-free', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'free kw', bidCents: 2, suppressedFromBidCents: 45, externalTargetId: 'EXT-tg-free' } })
+    })
+    const p = (await preview('restore-campaign', { campaignId: 'c-a8g' })).preview as Row
+    expect(p).toMatchObject({ restores: { targets: 1, adGroups: 1 }, staysFloored: { adGroups: 1 }, bids: [{ targetId: 'tg-free', toCents: 45 }] })
+    expect(p.effect).toMatch(/1 ad group stays at its own floor \(a product over its monthly cap in the ads strategy\)/)
+    const asked = await ask('restore-campaign', { campaignId: 'c-a8g' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { restored: 2 } })
+    const after = await sql<{ id: string; b: number; r: number | null }>('SELECT id, "bidCents" AS b, "suppressedFromBidCents" AS r FROM "AdTarget" WHERE id LIKE $1 ORDER BY id', ['tg-%'])
+    expect(after.map((t) => [t.id, t.b, t.r])).toEqual([['tg-capped', 2, 55], ['tg-free', 45, null]])
+    expect((await sql('SELECT "bidsSuppressedBy" AS by FROM "AdGroup" WHERE id = $1', ['g-a8g-capped']))[0]).toEqual({ by: 'automation:budget-manager-cron' })
+    expect((await sql('SELECT "bidsSuppressedAt" AS at FROM "Campaign" WHERE id = $1', ['c-a8g']))[0]).toEqual({ at: null })
+  })
 })
 
 describe('A12 — set-campaign-live-writes (the allowlist, d2)', () => {

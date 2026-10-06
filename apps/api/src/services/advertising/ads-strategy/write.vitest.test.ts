@@ -193,11 +193,13 @@ describe('a change planned and saved', () => {
       const { plan, out } = await saved(it_({ level: 'market', values: { maxBidCents: 150, maxChangePct: 20, monthlySpendCapCents: 900000 }, reason: 'test start' }))
       expect(plan.direction).toBe('lower')
       expect(plan.preview).toMatchObject({ version: { from: 0, to: 1 }, direction: 'lower', raises: [], stepUp: null, reachesAmazon: false, scope: { level: 'MARKET', scopeId: '*', label: 'IT market' } })
-      // W1-5 — the bid engines read the highest bid and the largest change at once; the monthly cap nothing reads yet.
+      // W1-5 + W1-6 — every field of this change is read at once: the bid band and the largest change by the bid
+      // engines, the market cap by the budget engine; nothing of it is stored only.
       expect(plan.preview.liveEffect).toContain('Highest bid binds at once: read by the write gate')
       expect(plan.preview.liveEffect).toContain('Largest bid change per action binds at once')
+      expect(plan.preview.liveEffect).toContain('Monthly spend cap binds at once')
       expect(plan.preview.liveEffect).not.toContain('no engine or rule reads')
-      expect(plan.preview.notReadYet).toEqual(expect.arrayContaining(['monthlySpendCapCents', 'goal']))
+      expect(plan.preview.notReadYet).toEqual(expect.arrayContaining(['goal', 'goalNote']))
       expect(out).toMatchObject({ ok: true, version: 1, direction: 'lower' })
       const row = (await rowOf('MARKET'))!
       expect(row).toMatchObject({ version: 1, maxBidCents: 150, maxChangePct: 20, monthlySpendCapCents: 900000, updatedBy: 'user:u-test', label: 'IT market' })

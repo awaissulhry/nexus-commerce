@@ -20,12 +20,13 @@
  * 🔴 Money stays keyed. `changes[].field` is a registry key or a column name, a group's values sit under their column
  * names, and labels carry no amount: the strategy reads strip ad-spend money by key (fields.ts STRATEGY_MONEY).
  *
- * Live effect: what acts at once, the plan says, from the registry and the change: a field an engine or a door reads
- * (readBy — W1-5: the bid engines on the target, the bid band and the largest change; W1-7: the search-term engines;
- * W1-8: Claude's door reads what Claude may do alone); a protected term binds Nexus's write gate (no rule may negate it;
- * removing one lets them again); a campaign's own target ACoS cleared or put back changes what Nexus's bid optimiser aims
- * at for that campaign today (without its own target: this strategy's, else the account default, profit data, else
- * 30 %). A change of fields nothing reads moves no bid and no budget.
+ * Live effect: only a field something reads acts (the registry's readBy); every other field is stored and shown only. What
+ * acts at once, the plan says, from the registry and the change: a field an engine or a door reads (W1-5: the bid engines
+ * read the target, the bid band and the largest change; W1-6: the budget engine reads the market's monthly cap and the
+ * stop bid; W1-7: the search-term engines; W1-8: Claude's door reads what Claude may do alone); a protected term binds
+ * Nexus's write gate (no rule may negate it; removing one lets them again); a campaign's own target ACoS cleared or put
+ * back changes what Nexus's bid optimiser aims at for that campaign today (without its own target: this strategy's,
+ * else the account default, profit data, else 30 %).
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -688,12 +689,11 @@ function previewOf(p: {
   const clears = p.campaignTargets.filter((c) => c.toFraction == null).length
   const restores = p.campaignTargets.length - clears
   const readNow = SETTABLE_FIELDS.filter((f) => f.readBy.length && p.changes.some((c) => c.field === f.key))
-  // W1-5 — an engine (not only Claude's door) reads a changed field: it can move bids at once, so the plan says so.
-  const engineRead = readNow.some((f) => f.readBy.some((r) => r !== CLAUDE_DOOR))
+  const storedOnly = SETTABLE_FIELDS.filter((f) => !f.readBy.length && p.changes.some((c) => c.field === f.key))
   const liveEffect = [
-    engineRead
-      ? 'It is stored, versioned and shown, and the engines that read a changed field act on it from their next run:'
-      : 'This change moves no bid and no budget: no engine or rule reads these fields yet (notReadYet lists the fields nothing reads). It is stored, versioned and shown.',
+    storedOnly.length
+      ? `${storedOnly.map((f) => f.label).join(', ')}: stored, versioned and shown only — no engine or rule reads ${storedOnly.length === 1 ? 'it' : 'them'} yet (notReadYet lists every such field).`
+      : null,
     ...readNow.map((f) => `${f.label} binds at once: read by ${f.readBy.join(', ')}.`),
     p.terms.add.length ? `${plural(p.terms.add.length, 'protected term')} ${p.terms.add.length === 1 ? 'binds' : 'bind'} at once: Nexus's write gate refuses to negate ${p.terms.add.length === 1 ? 'it' : 'them'} in ${p.market}.` : null,
     p.terms.remove.length ? `${plural(p.terms.remove.length, 'term')} ${p.terms.remove.length === 1 ? 'is' : 'are'} no longer protected at once: rules may negate ${p.terms.remove.length === 1 ? 'it' : 'them'} in ${p.market} again.` : null,

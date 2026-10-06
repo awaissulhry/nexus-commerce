@@ -13,6 +13,13 @@
  * Writes go through the same gated updateAd*WithSync helpers as every other actuation,
  * with force:true to bypass the 5¢ floor / change-clamp (this is a deliberate,
  * reversible, fully-logged system action — the audit trail records every move).
+ *
+ * ADS AUTONOMY W1-6b — an AD GROUP can be floored on its own (a product over its own monthly cap):
+ * `suppressAdGroupBids` / `restoreAdGroupBids`, with the same memory on its default bid and targets
+ * and its own owner (`AdGroup.bidsSuppressedAt` / `bidsSuppressedBy`). Ownership is kept both ways:
+ * a campaign's restore, re-floor and base-bid move (any engine, or a person's restore) leave such an
+ * ad group alone; and the ad group's owner, inside a campaign floored by anyone, only hands its
+ * memory over to that campaign floor (whoever lifts the campaign floor puts the bids back).
  */
 
 import prisma from '../../db.js'
@@ -168,8 +175,9 @@ export async function refloorCampaignBids(
   const applyImmediately = opts.applyImmediately ?? true
   let touched = 0
 
+  // W1-6b — an ad group floored on its own keeps its own floor: its owner moves it, never this campaign floor.
   const groups = await prisma.adGroup.findMany({
-    where: { campaignId, OR: [{ suppressedFromBidCents: { not: null } }, { defaultBidCents: { gt: floor } }] },
+    where: { campaignId, bidsSuppressedAt: null, OR: [{ suppressedFromBidCents: { not: null } }, { defaultBidCents: { gt: floor } }] },
     select: { id: true, defaultBidCents: true, suppressedFromBidCents: true },
   })
   for (const g of groups) {
@@ -185,7 +193,7 @@ export async function refloorCampaignBids(
   }
 
   const targets = await prisma.adTarget.findMany({
-    where: { adGroup: { campaignId }, isNegative: false, OR: [{ suppressedFromBidCents: { not: null } }, { bidCents: { gt: floor } }] },
+    where: { adGroup: { campaignId, bidsSuppressedAt: null }, isNegative: false, OR: [{ suppressedFromBidCents: { not: null } }, { bidCents: { gt: floor } }] },
     select: { id: true, bidCents: true, suppressedFromBidCents: true },
   })
   for (const t of targets) {
@@ -245,8 +253,9 @@ export async function restoreCampaignBids(
   // one failure can't abort the rest, and clear the suppression flag ONLY when every entity is
   // restored. A failed entity keeps its suppressedFromBidCents AND bidsSuppressedAt stays set, so
   // the next serving tick retries it — the prior bid can never be silently lost (the old bug).
-  const groups = await prisma.adGroup.findMany({ where: { campaignId, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true, defaultBidCents: true } })
-  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true, bidCents: true, adGroupId: true } })
+  // W1-6b — an ad group floored on its own (a product over its own cap) stays floored: only its owner lifts it.
+  const groups = await prisma.adGroup.findMany({ where: { campaignId, bidsSuppressedAt: null, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true, defaultBidCents: true } })
+  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId, bidsSuppressedAt: null }, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true, bidCents: true, adGroupId: true } })
   // W1-5 — held inside the bounds that bind this write (heldGiveBack): never refused into a silent stop.
   const boundsOf = groups.length || targets.length
     ? await giveBackBounds(campaignId, [...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)])
@@ -277,6 +286,95 @@ export async function restoreCampaignBids(
   return touched
 }
 
+/**
+ * ADS AUTONOMY W1-6b — floor ONE ad group on its own (a product of it over its own monthly cap): its default bid and
+ * every target bid above the floor go to `floorCents` (else 2¢), each prior bid remembered, exactly as a campaign floor
+ * does; the ad group carries its own owner (`bidsSuppressedBy`). Inside a campaign already floored, the bids are
+ * already floored and remembered: only what is not (a keyword added since) moves, and the ownership is stamped, so the
+ * campaign's restore leaves this ad group floored. Idempotent (no-op if already floored on its own). Returns how many
+ * entities moved.
+ */
+export async function suppressAdGroupBids(
+  adGroupId: string,
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; floorCents?: number | null },
+): Promise<number> {
+  const group = await prisma.adGroup.findUnique({ where: { id: adGroupId }, select: { id: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true } })
+  if (!group || group.bidsSuppressedAt) return 0
+  const floor = normaliseFloorCents(opts.floorCents)
+  const reason = opts.reason ?? 'no-pause: ad group bids floored instead of pausing'
+  const applyImmediately = opts.applyImmediately ?? true
+  let touched = 0
+  if (group.defaultBidCents > floor && group.suppressedFromBidCents == null) {
+    try {
+      await prisma.adGroup.update({ where: { id: group.id }, data: { suppressedFromBidCents: group.defaultBidCents } })
+      const r = await updateAdGroupWithSync({ adGroupId: group.id, patch: { defaultBidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true })
+      if (r.ok) touched++
+    } catch (e) { logger.warn('[no-pause] suppress ad group default threw — skipping', { adGroupId, error: (e as Error).message }) }
+  }
+  const targets = await prisma.adTarget.findMany({
+    where: { adGroupId, isNegative: false, bidCents: { gt: floor }, suppressedFromBidCents: null },
+    select: { id: true, bidCents: true },
+  })
+  for (const t of targets) {
+    try {
+      await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: t.bidCents } })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: floor }, actor: opts.actor, reason, applyImmediately, force: true })
+      if (r.ok) touched++
+    } catch (e) { logger.warn('[no-pause] suppress ad group target threw — skipping', { adTargetId: t.id, error: (e as Error).message }) }
+  }
+  await prisma.adGroup.update({ where: { id: group.id }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.actor } })
+  logger.info('[no-pause] suppressed ad group bids', { adGroupId, floor, targets: targets.length, touched })
+  return touched
+}
+
+/**
+ * ADS AUTONOMY W1-6b — lift an ad group's OWN floor (its owner calls this; a campaign restore never does). Retry-safe
+ * like restoreCampaignBids: a memory is cleared only once its bid is accepted, and the ownership only once every bid is
+ * back. Inside a campaign floored by anyone, nothing is written: the ownership is handed over to that campaign floor,
+ * the memory kept, so whoever lifts the campaign floor puts these bids back too — this owner never lifts another's
+ * floor. Returns how many entities were restored.
+ */
+export async function restoreAdGroupBids(
+  adGroupId: string,
+  // W1-5 — `holds` as in restoreCampaignBids.
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; holds?: BidHoldLog },
+): Promise<number> {
+  const group = await prisma.adGroup.findUnique({ where: { id: adGroupId }, select: { id: true, campaignId: true, defaultBidCents: true, suppressedFromBidCents: true, bidsSuppressedAt: true, campaign: { select: { bidsSuppressedAt: true } } } })
+  if (!group?.bidsSuppressedAt) return 0
+  const handOver = () => prisma.adGroup.update({ where: { id: group.id }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } })
+  if (group.campaign?.bidsSuppressedAt) {
+    await handOver()
+    logger.info('[no-pause] ad group floor handed over to its campaign floor — the campaign restore puts its bids back', { adGroupId })
+    return 0
+  }
+  const reason = opts.reason ?? 'no-pause: restored the ad group\'s prior bids'
+  const applyImmediately = opts.applyImmediately ?? true
+  let touched = 0, failed = 0
+  const targets = await prisma.adTarget.findMany({ where: { adGroupId, suppressedFromBidCents: { not: null } }, select: { id: true, suppressedFromBidCents: true, bidCents: true } })
+  // W1-5 — held inside the bounds that bind this write (heldGiveBack), as a campaign restore: never a silent stop.
+  const bounds = (await giveBackBounds(group.campaignId, [group.id]))(group.id)
+  if (group.suppressedFromBidCents != null) {
+    try {
+      const back = heldGiveBack(group.suppressedFromBidCents, group.defaultBidCents, bounds, reason, opts.holds)
+      const r = await updateAdGroupWithSync({ adGroupId: group.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true })
+      if (r.ok || r.error === 'not_found') { await prisma.adGroup.update({ where: { id: group.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
+      else { failed++; logger.warn('[no-pause] restore ad group default not accepted — keeping prior for retry', { adGroupId, error: r.error }) }
+    } catch (e) { failed++; logger.warn('[no-pause] restore ad group default threw — keeping prior for retry', { adGroupId, error: (e as Error).message }) }
+  }
+  for (const t of targets) {
+    try {
+      const back = heldGiveBack(t.suppressedFromBidCents as number, t.bidCents, bounds, reason, opts.holds)
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true })
+      if (r.ok || r.error === 'not_found') { await prisma.adTarget.update({ where: { id: t.id }, data: { suppressedFromBidCents: null } }); if (r.ok) touched++ }
+      else { failed++; logger.warn('[no-pause] restore ad group target not accepted — keeping prior for retry', { adTargetId: t.id, error: r.error }) }
+    } catch (e) { failed++; logger.warn('[no-pause] restore ad group target threw — keeping prior for retry', { adTargetId: t.id, error: (e as Error).message }) }
+  }
+  if (failed === 0) await handOver()
+  else logger.warn('[no-pause] ad group restore incomplete — its floor stays owned; the next run retries', { adGroupId, failed, touched })
+  logger.info('[no-pause] restored ad group bids', { adGroupId, targets: targets.length, touched, failed })
+  return touched
+}
+
 // BL.7 — base-bid deltaPct: scale every ad-group default + keyword bid by ±% from a STABLE
 // remembered baseline (baseBidFromCents), so repeated ticks NEVER compound and a changed
 // delta re-applies cleanly from the baseline. Independent of suppress/restore (different
@@ -290,8 +388,9 @@ export async function applyBaseBidDelta(
   const reason = opts.reason ?? `rank base-bid ${deltaPct >= 0 ? '+' : ''}${deltaPct}%`
   const applyImmediately = opts.applyImmediately ?? true
   let touched = 0
-  const groups = await prisma.adGroup.findMany({ where: { campaignId }, select: { id: true, defaultBidCents: true, baseBidFromCents: true } })
-  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, isNegative: false }, select: { id: true, bidCents: true, baseBidFromCents: true, adGroupId: true } })
+  // W1-6b — never inside an ad group floored on its own: a base-bid move would lift its floor.
+  const groups = await prisma.adGroup.findMany({ where: { campaignId, bidsSuppressedAt: null }, select: { id: true, defaultBidCents: true, baseBidFromCents: true } })
+  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId, bidsSuppressedAt: null }, isNegative: false }, select: { id: true, bidCents: true, baseBidFromCents: true, adGroupId: true } })
   // W1-5 — every bid the delta sets is held inside the ads strategy band of its ad group first, so the write gate does
   // not refuse it (a forced lowering is exempt from the lowest bid there, and here). The reason names the row.
   const camp = groups.length || targets.length ? await prisma.campaign.findUnique({ where: { id: campaignId }, select: { marketplace: true } }) : null
@@ -338,8 +437,9 @@ export async function revertBaseBidDelta(
   const reason = opts.reason ?? 'rank base-bid delta cleared → restore baseline'
   const applyImmediately = opts.applyImmediately ?? true
   let touched = 0
-  const groups = await prisma.adGroup.findMany({ where: { campaignId, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true, defaultBidCents: true } })
-  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId }, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true, bidCents: true, adGroupId: true } })
+  // W1-6b — not inside an ad group floored on its own (the revert would raise its floored bids); its baseline stays.
+  const groups = await prisma.adGroup.findMany({ where: { campaignId, bidsSuppressedAt: null, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true, defaultBidCents: true } })
+  const targets = await prisma.adTarget.findMany({ where: { adGroup: { campaignId, bidsSuppressedAt: null }, baseBidFromCents: { not: null } }, select: { id: true, baseBidFromCents: true, bidCents: true, adGroupId: true } })
   // W1-5 — the baseline held inside the bounds that bind this write, like a restore (heldGiveBack): a refused revert
   // left the delta's bid in place and retried every run.
   const boundsOf = groups.length || targets.length ? await giveBackBounds(campaignId, [...groups.map((g) => g.id), ...targets.map((t) => t.adGroupId)]) : null

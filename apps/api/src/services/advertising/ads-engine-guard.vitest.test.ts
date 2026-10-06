@@ -1,8 +1,10 @@
 /**
  * Group 1 (1c) — an engine's own brakes: the dial posture (fail closed) and its write caps per run and per day.
+ * ADS AUTONOMY W1-6 — and each market's own cap per run (the ads strategy's "most actions per run"), fail closed.
  *
- * Pure parts run as they are; the two reads (the automation state and today's action-log count) are stand-ins, so
- * this file needs no database. The jobs' own end-to-end arms are in jobs/ad-engine-dial-caps.vitest.test.ts.
+ * Pure parts run as they are; the three reads (the automation state, today's action-log count and the strategy's market
+ * rows) are stand-ins, so this file needs no database. The jobs' own end-to-end arms are in
+ * jobs/ad-engine-dial-caps.vitest.test.ts; the strategy's own reading of a market row in ads-strategy/.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -13,8 +15,8 @@ vi.mock('./ads-automation-state.service.js', () => ({
     return state.value
   },
 }))
-const log = vi.hoisted(() => ({ count: vi.fn() }))
-vi.mock('../../db.js', () => ({ default: { advertisingActionLog: { count: log.count } } }))
+const log = vi.hoisted(() => ({ count: vi.fn(), strategy: vi.fn() }))
+vi.mock('../../db.js', () => ({ default: { advertisingActionLog: { count: log.count }, adsStrategy: { findMany: log.strategy } } }))
 vi.mock('../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() } }))
 
 const {
@@ -30,6 +32,7 @@ const savedKill = process.env.NEXUS_ADS_AUTOMATION_KILL
 beforeEach(() => {
   state.value = view(); state.throws = false
   log.count.mockReset(); log.count.mockResolvedValue(0)
+  log.strategy.mockReset(); log.strategy.mockResolvedValue([])
   delete process.env[ENGINE_CAPS_ENV]; delete process.env.NEXUS_ADS_AUTOMATION_KILL
 })
 afterEach(() => {
@@ -155,6 +158,70 @@ describe('openEngineGuard — one posture read and one day count per run', () =>
   })
 })
 
+describe('W1-6 — a market\'s own cap per run (the ads strategy), on top of the engine\'s', () => {
+  const caps = { perTick: 10, perDay: 100 }
+  const itCap = new Map([['IT', { perRun: 3, source: 'ads strategy: Test market (IT) v2' }]])
+  const guard = (posture: 'auto' | 'suggest' | 'stopped', marketCaps: Map<string, { perRun: number; source: string }> | null | undefined = itCap) =>
+    makeEngineGuard({ engine: 'rank-defend', posture, why: 'test', caps, todayBefore: 0, marketCaps })
+
+  it('counts a campaign\'s changes in its market: once the market\'s cap is used, that market waits and others go on', () => {
+    const g = guard('auto')
+    const first = g.permit({ market: 'it' })
+    expect(first).toEqual({ forward: true, floor: true, restore: true, capped: false, market: 'IT' })
+    g.settle(first, 4, nothingHeld()) // a campaign that starts finishes: 4 > 3, never split
+    const next = g.permit({ market: 'IT' })
+    expect(next).toEqual({ forward: false, floor: false, restore: true, capped: true, market: 'IT', marketCapped: true })
+    g.settle(next, 0, { forward: true, floor: false, restore: false })
+    // Another market, and a campaign whose market the engine did not name, still have room: only the engine's cap.
+    expect(g.permit({ market: 'DE' })).toMatchObject({ forward: true, capped: false, market: 'DE' })
+    expect(g.permit()).toMatchObject({ forward: true, capped: false })
+    expect(g.report()).toMatchObject({ changes: 4, deferredByCap: 1, marketCaps: [{ market: 'IT', perRun: 3, source: 'ads strategy: Test market (IT) v2', changes: 4, deferred: 1 }] })
+  })
+
+  it('a give-back is never refused by a market cap; while stopped, only floors count against it', () => {
+    const full = guard('auto', new Map([['IT', { perRun: 0, source: 'ads strategy: Test market (IT) v1' }]]))
+    expect(full.permit({ market: 'IT' })).toMatchObject({ forward: false, floor: false, restore: true, marketCapped: true })
+    const stopped = guard('stopped', new Map([['IT', { perRun: 0, source: 'ads strategy: Test market (IT) v1' }]]))
+    expect(stopped.permit({ market: 'IT' })).toMatchObject({ forward: false, floor: false, restore: false, capped: true })
+    expect(guard('suggest').permit({ market: 'IT' })).toEqual({ forward: false, floor: false, restore: true, capped: false, market: 'IT' })
+  })
+
+  it('the engine\'s own cap still binds first, and is not blamed on the market', () => {
+    const g = makeEngineGuard({ engine: 'rank-defend', posture: 'auto', why: 'test', caps: { perTick: 2, perDay: null }, todayBefore: 0, marketCaps: itCap })
+    const p = g.permit({ market: 'IT' })
+    g.settle(p, 2, nothingHeld())
+    expect(g.permit({ market: 'IT' })).toEqual({ forward: false, floor: false, restore: true, capped: true, market: 'IT' })
+  })
+
+  it('caps that could not be read leave no room for anything new, in any market (unknown is not "no cap")', () => {
+    const g = guard('auto', null)
+    expect(g.permit({ market: 'DE' })).toMatchObject({ forward: false, floor: false, restore: true, capped: true })
+    expect(g.permit()).toMatchObject({ forward: false, capped: true })
+    expect(g.report().marketCaps).toBeNull()
+  })
+
+  it('openEngineGuard reads every market row with a cap once, checked by the strategy\'s own resolver', async () => {
+    const row = (market: string, maxActionsPerRun: unknown, version = 1) => ({
+      id: `s-${market}`, channel: 'AMAZON', market, level: 'MARKET', scopeId: '*', label: `Test market (${market})`, version, updatedAt: new Date(), updatedBy: 'user:test', maxActionsPerRun,
+    })
+    log.strategy.mockResolvedValue([row('IT', 25, 3), row('DE', -4), row('FR', 'many')])
+    const g = await openEngineGuard('rank-defend')
+    expect(log.strategy).toHaveBeenCalledTimes(1)
+    expect(log.strategy.mock.calls[0]![0].where).toMatchObject({ channel: 'AMAZON', level: 'MARKET', scopeId: '*', OR: [{ maxActionsPerRun: { not: null } }] })
+    // A value the resolver cannot read (below 0, not a number) is no cap, as everywhere the strategy is read.
+    expect(g.report().marketCaps).toEqual([{ market: 'IT', perRun: 25, source: 'ads strategy: Test market (IT) v3', changes: 0, deferred: 0 }])
+  })
+
+  it('a strategy read that fails: nothing new this run, and the run line says why', async () => {
+    log.strategy.mockRejectedValue(new Error('pooler blip'))
+    const g = await openEngineGuard('rank-defend')
+    const p = g.permit({ market: 'IT' })
+    expect(p).toMatchObject({ forward: false, floor: false, restore: true, capped: true })
+    g.settle(p, 0, { forward: true, floor: false, restore: false })
+    expect(engineGuardNote(g.report())).toContain("the ads strategy's caps per market could not be read, so nothing new was written")
+  })
+})
+
 describe('the run summary line', () => {
   const base = { engine: 'rank-defend' as const, why: 'x', caps: { perRun: 600, perDay: 3_000 }, todayBefore: 1_000, changes: 21, wouldApply: 0, waiting: 0, deferredByCap: 0 }
   it('adds nothing on a normal AUTO run, so an ordinary day reads as before', () => {
@@ -168,6 +235,13 @@ describe('the run summary line', () => {
     expect(engineGuardNote({ ...base, posture: 'auto', changes: 612, deferredByCap: 5 }))
       .toBe(' deferred-by-cap=5 (cap 600 a run, 3,000 a day; 612 this run, 1,612 today; they go next run)')
   })
+  it('W1-6 — a market cap that held campaigns back is named with its source', () => {
+    expect(engineGuardNote({ ...base, posture: 'auto', changes: 40, deferredByCap: 2, marketCaps: [
+      { market: 'DE', perRun: 90, source: 'ads strategy: Test market (DE) v1', changes: 0, deferred: 0 },
+      { market: 'IT', perRun: 30, source: 'ads strategy: Test market (IT) v4', changes: 33, deferred: 2 },
+    ] })).toBe(' deferred-by-cap=2 (cap 600 a run, 3,000 a day; market caps: IT at most 30 a run (ads strategy: Test market (IT) v4), 33 this run; 40 this run, 1,040 today; they go next run)')
+  })
+
   it('1d — an engine without floors says what it does instead', () => {
     const words = { suggest: 'nothing is written', stopped: 'nothing is written; placement moves wait for Resume' }
     expect(engineGuardNote({ ...base, posture: 'suggest', why: 'the account ads dial is SUGGEST', wouldApply: 3 }, words))

@@ -6,7 +6,7 @@
  * inside the business the call runs in.
  */
 import prisma from '../../../db.js'
-import { STRATEGY_FIELDS, type StrategyColumn } from './fields.js'
+import { MARKET_SCOPE, STRATEGY_FIELDS, type StrategyColumn } from './fields.js'
 import { indexStrategy, type Catalog, type CatalogProduct, type Orphan, type StrategyIndex, type StrategyRow } from './resolve.js'
 
 const SETTING_COLUMNS = [...new Set(STRATEGY_FIELDS.filter((f) => !f.derivedFrom).flatMap((f) => f.columns))] as StrategyColumn[]
@@ -20,6 +20,25 @@ export const STRATEGY_ROW_SELECT = {
 export async function loadStrategyRows(market: string, channel = 'AMAZON'): Promise<StrategyRow[]> {
   const rows = await prisma.adsStrategy.findMany({ where: { channel, market }, select: STRATEGY_ROW_SELECT, orderBy: [{ level: 'asc' }, { label: 'asc' }] })
   return rows as unknown as StrategyRow[]
+}
+
+/**
+ * W1-6 — the MARKET rows of every market that set one of `columns` (most actions per run, a monthly cap): one indexed
+ * read for an engine's whole run, whatever market its campaigns are in.
+ */
+export async function loadMarketRows(columns: readonly StrategyColumn[], channel = 'AMAZON'): Promise<StrategyRow[]> {
+  const rows = await prisma.adsStrategy.findMany({
+    where: { channel, level: 'MARKET', scopeId: MARKET_SCOPE, OR: columns.map((c) => ({ [c]: { not: null } })) },
+    select: STRATEGY_ROW_SELECT,
+    orderBy: { market: 'asc' },
+  })
+  return rows as unknown as StrategyRow[]
+}
+
+/** W1-6b — the markets with a monthly cap on any row (the market's, a category's or a product's). */
+export async function capMarkets(channel = 'AMAZON'): Promise<string[]> {
+  const rows = await prisma.adsStrategy.findMany({ where: { channel, monthlySpendCapCents: { not: null } }, distinct: ['market'], select: { market: true } })
+  return rows.map((r) => r.market).sort()
 }
 
 /** The markets that hold at least one strategy row, for a channel. */

@@ -177,7 +177,7 @@ export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: num
 // W1-5 — `holds`: the bids a limit held this run (the ads strategy band on a base bid; a bound on a give-back), for the run line.
 export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog }
 
-interface CampRow { id: string; name: string; status: string; marketplace?: string | null; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[] }
+interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[]; marketplace?: string | null }
 interface RankCampaignResult { decision: RankDefendDecision; applied: number; held: HeldBack; writes: RankWriteCounts; keptServing: boolean }
 
 /**
@@ -282,7 +282,8 @@ async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: B
     return { applied: n, keptServing: false }
   }
   if (mode === 'absolute' && spec.bidValueCents != null && spec.bidValueCents > 0) {
-    const ags = await prisma.adGroup.findMany({ where: { campaignId: camp.id }, select: { id: true, defaultBidCents: true } })
+    // W1-6b — never an ad group floored on its own (a product over its cap): only its owner lifts that floor.
+    const ags = await prisma.adGroup.findMany({ where: { campaignId: camp.id, bidsSuppressedAt: null }, select: { id: true, defaultBidCents: true } })
     // W1-5 — the painted base bid held inside the ads strategy band of each ad group (the reason names the row), so the
     // write gate does not refuse it. A market without a strategy bid limit leaves every painted value as it is.
     const strategy = ags.length ? await strategyBidReader().forAdGroups(ags.map((g) => ({ adGroupId: g.id, marketplace: camp.marketplace }))) : new Map()
@@ -322,15 +323,15 @@ async function applyBaseBidDirective(camp: CampRow, spec: RankTargetSpec, ctx: B
 // withholds them, so a held-back run reports a change it would really have made rather than every delta campaign.
 async function hasBaseBidDelta(campaignId: string): Promise<boolean> {
   const [g, t] = await Promise.all([
-    prisma.adGroup.count({ where: { campaignId, baseBidFromCents: { not: null } } }),
-    prisma.adTarget.count({ where: { adGroup: { campaignId }, baseBidFromCents: { not: null } } }),
+    prisma.adGroup.count({ where: { campaignId, bidsSuppressedAt: null, baseBidFromCents: { not: null } } }),
+    prisma.adTarget.count({ where: { adGroup: { campaignId, bidsSuppressedAt: null }, baseBidFromCents: { not: null } } }),
   ])
   return g + t > 0
 }
 async function baseBidDeltaWouldMove(campaignId: string, deltaPct: number): Promise<boolean> {
   const [groups, targets] = await Promise.all([
-    prisma.adGroup.findMany({ where: { campaignId }, select: { defaultBidCents: true, baseBidFromCents: true } }),
-    prisma.adTarget.findMany({ where: { adGroup: { campaignId }, isNegative: false }, select: { bidCents: true, baseBidFromCents: true } }),
+    prisma.adGroup.findMany({ where: { campaignId, bidsSuppressedAt: null }, select: { defaultBidCents: true, baseBidFromCents: true } }),
+    prisma.adTarget.findMany({ where: { adGroup: { campaignId, bidsSuppressedAt: null }, isNegative: false }, select: { bidCents: true, baseBidFromCents: true } }),
   ])
   const moves = (cur: number, from: number | null) => !(from != null && cur === deltaBidCents(from, deltaPct))
   return groups.some((g) => moves(g.defaultBidCents, g.baseBidFromCents)) || targets.some((t) => moves(t.bidCents, t.baseBidFromCents))
@@ -889,7 +890,8 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   const writes = noWrites()
   let keptServing = 0
   for (const w of [...work].sort((a, b) => order.get(a)! - order.get(b)! || a.seq - b.seq)) {
-    const permit = w.write && guard ? guard.permit() : DRY_RUN
+    // W1-6 — the campaign's market: that market's own "most actions per run" (the ads strategy) counts its changes too.
+    const permit = w.write && guard ? guard.permit({ market: w.camp.marketplace }) : DRY_RUN
     const r = await decideAndMaybeApply(w.camp, w.key, w.spec, w.planId, { write: w.write, permit, actor: w.actor, maxBaseBidByCampaign, suppressRaise: w.suppressRaise, entriesToday: entriesToday.get(w.camp.id) ?? 0, holds })
     if (w.write) guard?.settle(permit, r.applied, r.held)
     applied += r.applied
