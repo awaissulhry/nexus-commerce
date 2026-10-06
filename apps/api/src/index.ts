@@ -72,6 +72,7 @@ import ebayAdsRoutes from "./routes/ebay-ads.routes.js";
 import advertisingRoutes from "./routes/advertising.routes.js";
 import advertisingIntelRoutes from "./routes/advertising-intel.routes.js";
 import automationSwitchRoutes from "./routes/automation-switch.routes.js";
+import advertisingStrategyRoutes from "./routes/advertising-strategy.routes.js";
 // KT.6 — the Keyword Tracker's action endpoints. A separate file: see its header.
 import keywordActionsRoutes from "./routes/keyword-actions.routes.js";
 import advertisingAiRoutes from "./routes/advertising-ai.routes.js";
@@ -635,6 +636,7 @@ app.register(ebayAdsRoutes, { prefix: '/api' }); // E3 eBay ads console (reads)
 app.register(advertisingRoutes, { prefix: '/api' });
 // R16 — a person's per-business engine switch, from the Control Room lever drawer.
 app.register(automationSwitchRoutes, { prefix: '/api' });
+app.register(advertisingStrategyRoutes, { prefix: '/api' });
 app.register(advertisingIntelRoutes, { prefix: '/api' });
 app.register(keywordActionsRoutes, { prefix: '/api' });
 app.register(advertisingAiRoutes, { prefix: '/api' }); // AIAD — AI Advertising goal wiring

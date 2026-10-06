@@ -41,6 +41,7 @@ export const ROUTE_COVERAGE: Readonly<Record<string, RouteCoverage>> = {
   admin: { excluded: 'admin repair, purge, restore, backfill, probes and dead connections have no undo (09 §2)', feature: 81 },
   'advertising-ai': { part: '06', feature: 20 },
   'advertising-intel': { part: '01', feature: 17 },
+  'advertising-strategy': { part: '01', feature: 17, also: 'the ads strategy (ads autonomy W1): Claude reads it with ads-strategy; it is set with set-ads-strategy from W1-3' },
   'automation-switch': { part: '06', feature: 20, also: "a person's engine switch in the Control Room; Claude moves it with turn-up / turn-down-automation (R16)" },
   advertising: { part: '01', feature: 17, also: 'its automation paths (rules, autopilot, dayparting) are the automation part, 06 (#20)' },
   'agent-fleet-approvals': { part: '05', feature: 45 },
