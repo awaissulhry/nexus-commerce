@@ -4,7 +4,9 @@
  * stored change and an undo.
  *
  * Rules every tool here follows (part 06 §3):
- *   · never pause anything — a pausing action, rule or suggestion is refused, naming the substitute (lower bids);
+ *   · a rule never pauses, archives or switches anything on — such an action, rule or suggestion is refused, naming the
+ *     substitute (lower bids for a temporary stop; AA-W2-12/13: a real pause, an enable or an archive is its own request —
+ *     pause-ads, enable-ads, archive-ads);
  *   · a rule is born OBSERVE (eBay: OFF) and climbs one step per request; AUTO only through the graduation gate AND a
  *     person's click (D-R1);
  *   · no delete: a rule is retired to OFF;
@@ -106,7 +108,7 @@ const saveAdRule: AgentTool = {
     '(marketing). Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code ' +
     'when the business set it so. A new rule is born OBSERVE (it runs and records, proposes ' +
     'and writes nothing; an eBay rule is saved OFF) and climbs with turn-up-automation. Refused, in words: any pause ' +
-    '(never pause — use lower_bid_to_floor), an action outside the allowed ones, no scope (say wholeAccount: true for ' +
+    '(a rule never pauses — use lower_bid_to_floor for a temporary stop; a real pause is its own request, pause-ads), an action outside the allowed ones, no scope (say wholeAccount: true for ' +
     'the whole account), a cap missing or 0, a percent where a fraction belongs (condition ratios such as acos are fractions: 0.3, not 30; ' +
     'action values carry their own unit — bid_apply\'s targetAcos and every …Pct value are percents, and eBay rule values are ' +
     'percents), a condition on a field ' +
@@ -321,7 +323,8 @@ const decideSuggestions: AgentTool = {
     '100 at a time. Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when the ' +
     'business set it so. An applied change reaches Amazon or eBay through their write gates; for Amazon the preview says, ' +
     'per suggestion, whether it lands live at Amazon or in sandbox. Refused before anything waits: a suggestion that pauses, ' +
-    'switches on or archives (never pause — dismiss it and use lower bids), one whose target is held at the floor by ' +
+    'switches on or archives (a rule\'s change never does: dismiss it — a temporary stop is lower bids, and a real pause, an ' +
+    'enable or an archive is its own request: pause-ads, enable-ads, archive-ads), one whose target is held at the floor by ' +
     'no-pause suppression, one already decided, one Amazon\'s write gate would refuse, anything while ads automation is ' +
     'halted. An applied Amazon suggestion is written as its rule (the approver is recorded on the suggestion) and is undone ' +
     'from the Change Log in Nexus, not by undo-change. restore puts dismissed Amazon suggestions back to waiting.',
@@ -927,7 +930,7 @@ const saveOpsRule: AgentTool = {
     'bulk job). Waits for a person: approved in Nexus, or confirmed in Claude with the asker\'s authenticator code when ' +
     'the business set it so. A new rule is born OBSERVE — it records what it would do and does ' +
     'nothing (a review rule is born OFF: its actions call the AI even in a dry run; listing rules are never scheduled). It climbs ' +
-    'with turn-up-automation. Refused, in words: any pause (Claude never pauses), a trigger or action outside the domain\'s own, ' +
+    'with turn-up-automation. Refused, in words: any pause (a rule Claude saves never pauses), a trigger or action outside the domain\'s own, ' +
     'no conditions, no daily run cap, and for replenishment no value cap. Editing an AUTO rule drops it to PROPOSE. Each domain ' +
     'needs its own permission. Give opsRuleId to edit: fields left out keep the rule\'s own.',
   riskTier: 'medium',
