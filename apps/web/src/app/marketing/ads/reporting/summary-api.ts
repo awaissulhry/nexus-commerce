@@ -21,6 +21,8 @@ export interface SummaryResult {
   compare: CompareMode
   window: { from: string | null; to: string | null }
   comparisonWindow: { from: string | null; to: string | null } | null
+  /** AM-16 — the current side of the change: the window, or its complete days when it runs into today. */
+  comparedWindow?: { from: string; to: string; todayLeftOut: boolean } | null
   metrics: KpiMetric[]
   series: Array<Record<string, number | string | null>>
   bucket: 'day' | 'week' | 'month'

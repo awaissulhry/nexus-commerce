@@ -29,6 +29,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, Info, RefreshCw, Search } fro
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
 import { DataGrid, type Column } from '@/design-system/grid/datagrid'
+import { acosSortNumber } from '../campaigns/_grid/format'
 
 interface Contender {
   campaignId: string
@@ -110,7 +111,7 @@ function contenderColumns(c: Contest, blind: boolean): Array<Column<Contender>> 
     { key: 'clicks', label: 'Clicks', align: 'right', sortable: true, sortValue: (x) => x.clicks, render: (x) => intl(x.clicks) },
     { key: 'spend', label: 'Spend', align: 'right', sortable: true, sortValue: (x) => x.spendCents, render: (x) => eur(x.spendCents) },
     { key: 'sales', label: 'Sales', align: 'right', sortable: true, sortValue: (x) => x.salesCents, render: (x) => eur(x.salesCents) },
-    { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (x) => x.acos ?? -1, render: (x) => <span className={x.acos != null && x.acos > 1 ? 'bad' : undefined}>{pct(x.acos)}</span> },
+    { key: 'acos', label: 'ACOS', align: 'right', sortable: true, sortValue: (x) => acosSortNumber(x.acos, x.spendCents, x.salesCents), render: (x) => <span className={x.acos != null && x.acos > 1 ? 'bad' : undefined}>{pct(x.acos)}</span> },
     {
       key: 'tos', label: <span title="Top-of-search placement bias. Two contenders above 0% are pushing for the same slot.">ToS bias</span>,
       prefsLabel: 'ToS bias', align: 'right', sortable: true, sortValue: (x) => x.tosBias,

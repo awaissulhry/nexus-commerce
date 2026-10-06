@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { AdsDataGrid, type GridColumn } from '../../../../campaigns/_grid/AdsDataGrid'
-import { int, pct, money } from '../../../../campaigns/_grid/format'
+import { int, pct, money, acosRank } from '../../../../campaigns/_grid/format'
 import { getEbayAds, type CampaignDetailPayload, type SearchTermRow, type SearchTermsPayload } from '../../../_lib'
 import { AddKeywordsModal } from '../modals/AddKeywordsModal'
 import { AddNegativeKeywordsModal } from '../modals/AddNegativeKeywordsModal'
@@ -35,7 +35,7 @@ export function SearchTermsTab({ data, campaignId, reload, say }: { data: Campai
     { key: 'clicks', label: 'Clicks', render: (r) => int(r.clicks), sortValue: (r) => r.clicks, total: int(rows.reduce((a, r) => a + r.clicks, 0)) },
     { key: 'spend', label: 'Ad Fees', render: (r) => money(r.adFeesCents, currency), sortValue: (r) => r.adFeesCents, total: money(totFees, currency) },
     { key: 'sales', label: 'Ad Sales', render: (r) => money(r.salesCents, currency), sortValue: (r) => r.salesCents, total: money(totSales, currency) },
-    { key: 'acos', label: 'ACOS', render: (r) => (r.acosPct != null ? pct(r.acosPct / 100) : '—'), sortValue: (r) => r.acosPct ?? -1, total: totSales > 0 ? pct(totFees / totSales) : '—' },
+    { key: 'acos', label: 'ACOS', render: (r) => (r.acosPct != null ? pct(r.acosPct / 100) : '—'), sortValue: (r) => acosRank(r.acosPct != null ? r.acosPct / 100 : null, r.adFeesCents, r.salesCents), total: totSales > 0 ? pct(totFees / totSales) : '—' },
     { key: 'sold', label: 'Sold', render: (r) => int(r.soldQty), sortValue: (r) => r.soldQty, total: int(rows.reduce((a, r) => a + r.soldQty, 0)) },
   ], [rows, currency, totFees, totSales])
 

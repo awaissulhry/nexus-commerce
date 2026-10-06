@@ -4,7 +4,9 @@
  * a volume metric's top hour "busiest"; sales and orders are disclosed as Amazon's 1-day attribution.
  */
 import { describe, expect, it } from 'vitest'
-import { metricInfo, metricLegendNote, metricReading, metricVal, oneDayNote, peakLine, type RawCell } from './heatMetrics'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { heatCell, metricInfo, metricLegendNote, metricReading, metricVal, oneDayNote, peakLine, type RawCell } from './heatMetrics'
 
 const cell = (p: Partial<RawCell>): RawCell => ({ dow: 1, hour: 3, costCents: 0, salesCents: 0, orders: 0, clicks: 0, impressions: 0, acos: null, roas: null, ...p })
 
@@ -13,7 +15,7 @@ describe('metricReading — no denominator is no value, not 0', () => {
     expect(metricReading('ACoS', cell({ costCents: 420 }))).toEqual({ value: null, empty: 'spend, no sales', worst: true })
     expect(metricReading('ACoS', cell({}))).toEqual({ value: null, empty: 'no spend, no sales' })
     expect(metricReading('ACoS', cell({ costCents: 500, salesCents: 2000, acos: 25 }))).toEqual({ value: 25 })
-    // The builder's reader keeps its old answer (0) — only the new reader changes.
+    // `metricVal` keeps its old answer (0) for the builder's sums and two-metric chart; its HEATMAP reads `heatCell` (below).
     expect(metricVal('ACoS').f(cell({ costCents: 420 }))).toBe(0)
   })
   it('CPC, CTR, CVR, ROAS, CPA: no clicks, impressions, spend or orders means no value', () => {
@@ -67,5 +69,20 @@ describe('the card notes', () => {
     expect(metricLegendNote('Spend')).toBe('Darker cells are higher.')
     expect(metricLegendNote('ACoS')).toContain('∞ spent money and sold nothing')
     expect(metricLegendNote('CTR')).toContain('— has no value')
+  })
+})
+
+describe('AM-19 — the schedule builder heatmap: a no-sales hour is a "spend, no sales" cell, never ACoS 0 %', () => {
+  it('heatCell carries the reason and the worst mark instead of a 0', () => {
+    expect(heatCell('ACoS', cell({ costCents: 420 }))).toEqual({ dow: 1, hour: 3, value: 0, empty: 'spend, no sales', worst: true })
+    expect(heatCell('ACoS', cell({}))).toEqual({ dow: 1, hour: 3, value: 0, empty: 'no spend, no sales', worst: undefined })
+    expect(heatCell('ACoS', cell({ costCents: 500, salesCents: 2000, acos: 25 }))).toEqual({ dow: 1, hour: 3, value: 25 })
+    expect(heatCell('Spend', cell({ costCents: 420 }))).toEqual({ dow: 1, hour: 3, value: 4.2 })
+  })
+  it('ScheduleBuilder builds its heatmap cells with heatCell, not the 0-for-no-sales metricVal', () => {
+    const src = readFileSync(fileURLToPath(new URL('./ScheduleBuilder.tsx', import.meta.url)), 'utf8')
+    const line = src.split('\n').find((l) => l.includes('const heatCells = useMemo')) ?? ''
+    expect(line).toContain('heatCell(metric1, c)')
+    expect(line).not.toContain('metricVal')
   })
 })

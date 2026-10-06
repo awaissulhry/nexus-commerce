@@ -87,3 +87,6 @@
 .dash-pnl-cov.ok { background: #e6f4ef; color: #067d62; }
 .dash-pnl-cov.part { background: #fff4e0; color: var(--nds-amber-600); }
 .dash-pnl-cov.thin { background: var(--nds-grey-100); color: var(--nds-text-2); }
+
+/* AM-16 — the window the KPI tiles cover. */
+.dash-window { margin: -8px 0 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }

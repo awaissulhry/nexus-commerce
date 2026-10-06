@@ -146,9 +146,13 @@ export const isoDay = (d: Date): string => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-/** Default window: the trailing 30 days, ending today. */
+/**
+ * Default window: the trailing 30 COMPLETE days, ending yesterday (AM-16 — the rule of every ads page: Amazon reports
+ * a day the next morning, so a window ending today held 29 days of data and was compared with 30).
+ */
 export function defaultRange(): { from: string; to: string } {
   const to = new Date()
+  to.setDate(to.getDate() - 1)
   const from = new Date(to)
   from.setDate(from.getDate() - 29)
   return { from: isoDay(from), to: isoDay(to) }

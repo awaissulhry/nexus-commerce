@@ -24,7 +24,10 @@ import { updateCampaignWithSync, type AdsActor } from './ads-mutation.service.js
 import { suppressCampaignBids, restoreCampaignBids } from './ads-bid-suppression.service.js'
 import { currentMonth } from './ads-budget-manager.service.js'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
-import { allowChange, nothingHeld, openEngineGuard, type EngineGuardReport, type EngineGuardWords } from './ads-engine-guard.js'
+import { allowChange, nothingHeld, openEngineGuard, readEnginePosture, type EngineGuardReport, type EngineGuardWords, type EnginePosture } from './ads-engine-guard.js'
+import { adsMode } from './ads-api-client.js'
+import { envEnabled } from '../../utils/env-flag.js'
+import type { AutomationLevel } from '../automation/automation-levels.js'
 
 const FLOOR_CENTS = 100 // €1/day — Amazon's minimum campaign budget
 /** Actor prefix this engine stamps on Campaign.bidsSuppressedBy when it suppresses. */
@@ -224,4 +227,68 @@ export async function applyBudgetEnforcement(opts: { month?: string; actor?: Ads
 export const BUDGET_ENFORCE_DIAL_WORDS: EngineGuardWords = {
   suggest: 'no pacing and no new floors; it still restores bids it floored over the cap',
   stopped: 'only bid floors land when a cap is reached; restores and budget pacing wait for Resume',
+}
+
+/**
+ * AM-8 — the engine's mode, read EXACTLY as its tick reads it: the lower of the server env (applies only with
+ * NEXUS_BUDGET_ENFORCE_APPLY exactly '1', otherwise it computes and never applies) and this business's switch.
+ * `jobs/ad-budget-enforce.job.ts` calls this, and so does the Budget Manager, so the screen and the engine can never
+ * say two different things again.
+ */
+export async function budgetEnforceGate(): Promise<{ mode: AutomationLevel; note: string | null }> {
+  const { engineMode } = await import('../automation/engine-switch.service.js')
+  const gate = await engineMode('budget-enforce', process.env.NEXUS_BUDGET_ENFORCE_APPLY === '1' ? 'AUTO' : 'OBSERVE')
+  return { mode: gate.mode, note: gate.note }
+}
+
+/** AM-8 — what the Budget Manager says about the engine: its real mode now, and one sentence for every label. */
+export interface BudgetEnforceMode {
+  /** The engine's own gate (`budgetEnforceGate`): OFF stands down, OBSERVE computes only, AUTO applies. */
+  mode: AutomationLevel
+  /** Why the gate is below AUTO, when this business's switch lowered it. */
+  switchNote: string | null
+  /** The Amazon ads crons are scheduled on this server (NEXUS_ENABLE_AMAZON_ADS_CRON); without them nothing runs. */
+  scheduled: boolean
+  /** NEXUS_AMAZON_ADS_MODE: in sandbox an applied change stays in Nexus and never reaches Amazon. */
+  adsWriteMode: 'live' | 'sandbox'
+  /** The account dial a live run honours (ads-engine-guard.ts). */
+  posture: EnginePosture
+  /** True when a run now writes budgets or bid floors to Amazon. */
+  live: boolean
+  /** Short label: Live · Sandbox · Suggest only · Stopped · Observe only · Off. */
+  label: string
+  /** One plain sentence: what the engine does now. */
+  sentence: string
+}
+
+/**
+ * AM-8 — the engine's REAL mode at runtime: its own gate (`budgetEnforceGate`), whether the ads crons are scheduled,
+ * the ads write mode and the account dial a live run honours (`readEnginePosture`, the read the run itself makes).
+ * Read from this process's env and this business's rows; nothing is assumed.
+ */
+export async function budgetEnforceMode(): Promise<BudgetEnforceMode> {
+  const [gate, dial] = await Promise.all([budgetEnforceGate(), readEnginePosture()])
+  const scheduled = envEnabled('NEXUS_ENABLE_AMAZON_ADS_CRON')
+  const writeMode = adsMode()
+  const base = { mode: gate.mode, switchNote: gate.note, scheduled, adsWriteMode: writeMode, posture: dial.posture }
+  const off = (sentence: string): BudgetEnforceMode => ({ ...base, live: false, label: 'Off', sentence })
+  if (!scheduled) return off('Off: the Amazon ads crons are not scheduled on this server (NEXUS_ENABLE_AMAZON_ADS_CRON), so Auto Pacing and Stop Over Spend change nothing.')
+  if (gate.mode === 'OFF') return off(`Off for this business (${gate.note ?? 'switched off'}): Auto Pacing and Stop Over Spend change nothing.`)
+  if (gate.mode === 'OBSERVE') {
+    const why = gate.note ?? 'NEXUS_BUDGET_ENFORCE_APPLY is not 1 on this server'
+    return { ...base, live: false, label: 'Observe only', sentence: `Observe only (${why}): every 30 minutes the engine works out what it would change and applies nothing.` }
+  }
+  if (writeMode === 'sandbox') {
+    return { ...base, live: false, label: 'Sandbox', sentence: 'Applies every 30 minutes, but Amazon ads writes are in sandbox (NEXUS_AMAZON_ADS_MODE): the changes stay in Nexus and never reach Amazon.' }
+  }
+  if (dial.posture === 'suggest') {
+    return { ...base, live: false, label: 'Suggest only', sentence: `Live, but ${dial.why}: it writes nothing new and only gives back bids it floored.` }
+  }
+  if (dial.posture === 'stopped') {
+    return { ...base, live: true, label: 'Stopped', sentence: `Live but stopped (${dial.why}): when a cap is reached bids still drop to about €0.02; budget pacing and restores wait for Resume.` }
+  }
+  return {
+    ...base, live: true, label: 'Live',
+    sentence: 'Live: every 30 minutes it changes campaign daily budgets on Amazon when a market is projected over its monthly cap, and drops bids to about €0.02 when the cap is reached. Nothing is paused.',
+  }
 }

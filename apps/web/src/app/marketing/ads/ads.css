@@ -394,6 +394,8 @@
 .h10-dp-presets .ph { font-size: 11px; font-weight: 700; color: var(--nds-grey-400); text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 8px 8px; }
 .h10-dp-presets button { display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; font-size: 13px; color: var(--nds-grey-800); padding: 8px 10px; border-radius: var(--nds-radius-md); cursor: pointer; }
 .h10-dp-presets button:hover { background: var(--nds-grey-75); color: var(--nds-blue-600); }
+/* AM-16 — the window rule, said where the windows are picked. */
+.h10-dp-note { margin: 8px 0 0; padding: 8px 10px 0; border-top: 1px solid var(--nds-border); font-size: var(--nds-font-size-micro-plus); line-height: 1.4; color: var(--nds-text-muted); }
 
 /* CBN.2f.1 — disable future dates + mark today with a ring (H10 parity) */
 .h10-dp-month .day.dis { color: var(--nds-grey-200); cursor: default; }
