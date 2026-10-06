@@ -44,7 +44,7 @@ import { etsyProductSpec } from './channel-specs/etsy.js'
 import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
 import type { StudioRow } from './studio-sheet.service.js'
 import {
-  AMAZON_QUANTITY_KEY, ETSY_LISTING_ID_COPY, ITEM_ID_COPY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, SHOPIFY_PRODUCT_ID_COPY, STUDIO_STOCK_KEYS, attachStudioStock,
+  AMAZON_QUANTITY_KEY, ETSY_LISTING_ID_COPY, ITEM_ID_COPY, LISTING_ASIN_KEY, LISTING_ITEM_ID_KEY, SHOPIFY_PRODUCT_ID_COPY, STOCK_FBA_KEY, STUDIO_STOCK_KEYS, attachStudioStock,
   confirmShopifyItemIds, isRawQuantityColumn, isShopifyInventoryColumn, listingItemIdState,
   listingAsinColumn, listingItemIdColumn, listingItemIdValue, shopifyInventoryHeldReason, studioStockColumns, studioStockKeys, studioStockSheetColumns,
   withStudioStockGroups, withoutRawQuantityColumns, type StudioRowStock,
@@ -214,6 +214,24 @@ describe('every refusal is the Matrix sentence', () => {
     expect(r.values[LISTING_ASIN_KEY]).toMatchObject({ value: null, writeBlockedReason: MATRIX_COPY.noListingYet })
   })
 
+  it('FBA qty belongs to the SKU, not the listing: a row with no listing here still shows Amazon\'s units, locked', async () => {
+    const fba = await scoped(() => prisma.stockLocation.create({ data: { code: 'TEST-STUDIO-STOCK-FBA', name: 'Amazon FBA', type: 'AMAZON_FBA' } }))
+    await scoped(() => prisma.stockLevel.create({ data: { productId: 'ss-c3', locationId: fba.id, quantity: 6, available: 6 } }))
+    try {
+      const held = row('ss-c3', null)
+      await attach([held], 'AMAZON', 'DE')
+      expect(held.stock).toMatchObject({ cells: null, fba: { units: 6, locations: [{ code: 'TEST-STUDIO-STOCK-FBA', units: 6 }] } })
+      expect(held.values[STOCK_FBA_KEY]).toMatchObject({ value: 6, writable: false, editable: false, writeBlockedReason: MATRIX_COPY.fbaLocked })
+      // A SKU without an FBA row: null (empty), never 0.
+      const none = row('ss-c1', L.c1It!)
+      await attach([none], 'AMAZON', 'IT')
+      expect(none.stock!.fba).toBeNull()
+      expect(none.values[STOCK_FBA_KEY]).toMatchObject({ value: null, writable: false, writeBlockedReason: MATRIX_COPY.fbaLocked })
+    } finally {
+      await scoped(async () => { await prisma.stockLevel.deleteMany({ where: { locationId: fba.id } }); await prisma.stockLocation.delete({ where: { id: fba.id } }) })
+    }
+  })
+
   it('another listing than the Matrix holds for this market (another account\'s): held, and its cells are not shown', async () => {
     const r = row('ss-c1', { id: 'listing-of-another-account', version: 1, externalListingId: 'B0OTHER' })
     await attach([r], 'AMAZON', 'DE')
@@ -259,7 +277,7 @@ describe('the ASIN column', () => {
     await attach([eb], 'EBAY', 'IT')
     expect(eb.values[LISTING_ASIN_KEY]).toBeUndefined()
     expect(listingAsinColumn()).toMatchObject({ key: LISTING_ASIN_KEY, kind: 'text', editable: false, groupKey: 'master:identifiers' })
-    expect(studioStockSheetColumns('AMAZON').map((c) => c.key)).toEqual([...STUDIO_STOCK_KEYS, LISTING_ASIN_KEY])
+    expect(studioStockSheetColumns('AMAZON').map((c) => c.key)).toEqual([...STUDIO_STOCK_KEYS, STOCK_FBA_KEY, LISTING_ASIN_KEY])
     expect(studioStockSheetColumns('EBAY').map((c) => c.key)).toEqual([...STUDIO_STOCK_KEYS, LISTING_ITEM_ID_KEY])
   })
 })
@@ -389,12 +407,15 @@ describe('the Etsy Listing ID and the Shopify Product ID (Item ID control, steps
 })
 
 describe('the columns', () => {
-  it('Mode / Qty / Buffer on every channel the Matrix covers, with the Matrix labels — never bulk- or formula-writable', () => {
+  it('Mode / Qty / Buffer on every channel the Matrix covers (then the locked FBA qty on Amazon only), with the Matrix labels — never bulk- or formula-writable', () => {
     for (const ch of ['AMAZON', 'EBAY', 'ETSY', 'WOOCOMMERCE', 'SHOPIFY']) {
       const cols = studioStockColumns(ch)
       expect(cols.map((c) => [c.key, c.label, c.matrixCell, c.kind])).toEqual([
         ['stock_mode', 'Mode', 'syncMode', 'stockControl'], ['stock_qty', 'Qty', 'syncQty', 'stockControl'], ['stock_buffer', 'Buffer', 'syncBuffer', 'stockControl'],
+        // The pool channels never sell FBA stock (Owner 2026-10-07): FBA qty is Amazon's column only.
+        ...(ch === 'AMAZON' ? [[STOCK_FBA_KEY, 'FBA qty', undefined, 'number']] : []),
       ])
+      if (ch === 'AMAZON') expect(cols.find((c) => c.key === STOCK_FBA_KEY)).toMatchObject({ editable: false, helpText: MATRIX_COPY.fbaLocked })
       for (const c of cols) expect(c).toMatchObject({ groupKey: 'master:inventory', storage: 'listing', formulaWritable: false, requiredBy: [], defaultVisible: true })
     }
     expect(studioStockColumns('ZALANDO')).toEqual([])
@@ -404,6 +425,9 @@ describe('the columns', () => {
       expect(writerAcceptsField(c.writeField)).toBe(false)
       expect(c).toMatchObject({ writeField: c.key, writeTarget: 'channelListing', writeVerb: 'channel', affectsAllChannels: false, formulaWritable: false })
     }
+    // 🔴 FBA qty: not writable, with the Amazon-managed reason — and not one of the keys the Matrix door writes.
+    expect(studioStockSheetColumns('AMAZON').find((c) => c.key === STOCK_FBA_KEY)).toMatchObject({ writable: false, writeBlockedReason: MATRIX_COPY.fbaLocked })
+    expect(STUDIO_STOCK_KEYS as readonly string[]).not.toContain(STOCK_FBA_KEY)
   })
 
   it('the raw quantity columns leave the sheet while the specs still declare them (Etsy quantity, Amazon fulfilment quantity)', () => {
