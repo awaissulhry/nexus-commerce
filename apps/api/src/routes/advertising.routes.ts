@@ -6490,7 +6490,14 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { createNegativeProductTargetLocal } = await import('../services/advertising/ads-create.service.js')
     // 5b — a refused negative writes nothing, so it is not answered 200 (the modal would say it was added).
     // 1e — a person's own add from a screen (isPersonCreate).
-    try { const r = await createNegativeProductTargetLocal({ ...b, manual: true, userId: personActor(request) } as never); if (r.refusal) reply.status(403); else if (r.mode === 'failed') reply.status(502); return r } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+    // W1-7 + 3A — the ASIN of a product his ads strategy protects: 409 with `needsConfirmation`, so the screen asks
+    // "Send anyway" (adsAdd) and sends the same body again with `confirmOwnLimits: true`. Nothing was written.
+    try {
+      const r = await createNegativeProductTargetLocal({ ...b, manual: true, userId: personActor(request), confirmOwnLimits: b.confirmOwnLimits === true } as never)
+      if (r.refusal?.deniedAt === 'needs_confirmation') { reply.status(409); return { ...r, error: r.refusal.reason, needsConfirmation: { limits: r.refusal.limits ?? [] } } }
+      if (r.refusal) reply.status(403); else if (r.mode === 'failed') reply.status(502)
+      return r
+    } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })
 
   // LAUNCH-REPAIR — push a campaign's existing local structure (ad group/keywords/auto/product ads)

@@ -14,6 +14,8 @@ const db = vi.hoisted(() => ({
 vi.mock('../../db.js', () => ({
   default: {
     adKeywordProtection: { findMany: async () => db.protections },
+    // W1-7 — no ads strategy anywhere: no product is protected, so only the protected terms refuse.
+    adsStrategy: { findMany: async () => [] },
     campaign: { findFirst: async () => ({ id: 'c-1', marketplace: 'IT' }) },
     adTarget: { findFirst: async () => db.target },
   },

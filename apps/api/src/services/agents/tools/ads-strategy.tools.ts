@@ -9,7 +9,8 @@
  *   history    the recorded changes, newest first
  *
  * Read only, Nexus only: no marketplace call. Honest about readers: each field's `readBy` names what acts on it
- * (W1-8: Claude's door reads what Claude may do alone) and `notReadYet` lists the rest; W1 wires the readers one by one.
+ * (W1-7: the search-term thresholds and protection; W1-8: Claude's door reads what Claude may do alone) and
+ * `notReadYet` lists the rest; W1 wires the readers one by one.
  * Money (targets, bids, caps, spend thresholds) sits only under the keys STRATEGY_MONEY names: a person without
  * financials.adspend.view gets the same answer minus exactly those keys.
  */
@@ -57,9 +58,10 @@ const adsStrategy: AgentTool = {
     + 'bid and harvest policies, the budget plan), the campaigns whose own target ACoS wins over the strategy, and the '
     + "business's own Claude level per ad tool and the level that applies here (effective: the strategy only narrows it). "
     + 'view rows lists every strategy row of a market; view history the changes. Each field\'s readBy names what acts on it '
-    + "(Claude's door reads what Claude may do alone); notReadYet lists the fields nothing reads yet, for which every engine "
-    + 'works as before. Targets, bids, caps and spend thresholds are ad-spend money: hidden from a person '
-    + 'without permission to see ad spend. Nexus only; reads nothing from Amazon.',
+    + "(the search-term engines read the harvest and negate thresholds and protection; Claude's door reads what Claude may "
+    + 'do alone); notReadYet lists the fields nothing reads yet, for which every engine works as before. Targets, bids, '
+    + 'caps and spend thresholds are ad-spend money: hidden from a person without permission to see ad spend. Nexus only; '
+    + 'reads nothing from Amazon.',
   handler: async (args) => {
     const out = await readStrategy(args as StrategyReadArgs)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
