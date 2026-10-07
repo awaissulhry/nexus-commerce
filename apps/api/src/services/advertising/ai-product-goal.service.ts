@@ -311,15 +311,11 @@ export async function goalCampaignRefs(id: string): Promise<{ planId: string | n
 }
 
 /**
- * B-2 — the undo of Claude's goal (its campaigns archived): the goal archived, its AutopilotPlan disabled and the plan's
- * rules switched off, whatever a person switched on meanwhile — an archived goal leaves nothing proposing.
+ * B-2 — the undo of Claude's goal (its campaigns archived): the goal archived as every archive is (archiveProductGoal),
+ * its AutopilotPlan disabled and the plan's rules switched off.
  */
 export async function retireProductGoal(id: string): Promise<void> {
-  const g = await prisma.adProductGoal.update({ where: { id }, data: { status: 'ARCHIVED' }, select: { planId: true } })
-  if (!g.planId) return
-  const plan = await prisma.autopilotPlan.update({ where: { id: g.planId }, data: { enabled: false }, select: { linkedRuleIds: true } })
-  const ruleIds = (Array.isArray(plan.linkedRuleIds) ? plan.linkedRuleIds : []).map((l) => String((l as { ruleId?: unknown })?.ruleId ?? '')).filter(Boolean)
-  if (ruleIds.length) await prisma.automationRule.updateMany({ where: { id: { in: ruleIds } }, data: { enabled: false } })
+  await archiveProductGoal(id)
 }
 
 /**
@@ -350,8 +346,21 @@ export async function keywordBuyers(market: string, keywords: readonly string[])
     : []))
 }
 
+/**
+ * An AI goal archived, the one place it is done: the goal archived, its AutopilotPlan disabled and the plan's rules
+ * switched off, whatever a person switched on meanwhile — an archived goal leaves nothing proposing (B-2). The AI
+ * Advertising screen's Archive (POST /advertising/ai-goals/:id/archive), create-ai-goal-campaigns (a goal it saved and
+ * could not launch) and that tool's undo (retireProductGoal) all come here. W4-12b — it set only the goal's status, so
+ * the screen's Archive left the goal's plan running. A plan that is gone is not an error.
+ */
 export async function archiveProductGoal(id: string) {
-  return prisma.adProductGoal.update({ where: { id }, data: { status: 'ARCHIVED' } })
+  const goal = await prisma.adProductGoal.update({ where: { id }, data: { status: 'ARCHIVED' } })
+  const plan = goal.planId ? await prisma.autopilotPlan.findUnique({ where: { id: goal.planId }, select: { id: true, linkedRuleIds: true } }) : null
+  if (!plan) return goal
+  await prisma.autopilotPlan.update({ where: { id: plan.id }, data: { enabled: false } })
+  const ruleIds = (Array.isArray(plan.linkedRuleIds) ? plan.linkedRuleIds : []).map((l) => String((l as { ruleId?: unknown })?.ruleId ?? '')).filter(Boolean)
+  if (ruleIds.length) await prisma.automationRule.updateMany({ where: { id: { in: ruleIds } }, data: { enabled: false } })
+  return goal
 }
 
 export class ValidationError extends Error {}
