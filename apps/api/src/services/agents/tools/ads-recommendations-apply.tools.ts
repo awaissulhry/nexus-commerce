@@ -21,12 +21,14 @@
  *                                sov:     refused: information, not a change (the service's apply is null)
  *                              W4-9 — an autopilot plan's decision and a Keyword Tracker proposal (never approveDecision /
  *                              applyProposal, which write as the plan or the page and decide their values when they run):
- *                                autopilot: BID → the bid optimizer run now as a dry run at the plan's target (the way the
- *                                         plan applies a BID decision, planBidChanges), its bids frozen into the one
- *                                         bid step; BUDGET → set-campaign-budget; PLACEMENT → set-placement-multipliers
- *                                         (top of search from its adjustment now, nudged as the plan nudges it)
- *                                kt:      the proposal's bid on each of its targets, frozen into the one bid step, after
- *                                         the Keyword Tracker's own re-checks (its target set unchanged, its ceiling)
+ *                                autopilot: BID → the bids the plan's optimizer computes now at the plan's target
+ *                                         (planBidChanges, the plan's own computation), frozen into the one bid step;
+ *                                         BUDGET → set-campaign-budget; PLACEMENT → set-placement-multipliers (top of
+ *                                         search from its adjustment now, nudged by the decision's step)
+ *                                kt:      the proposal's bid on each of its targets, frozen into the one bid step
+ *                                         (bulk-ad-bid-change), after the Keyword Tracker's own re-checks (its target set
+ *                                         unchanged, its ceiling — over the SUM of the request's proposals); the step
+ *                                         re-checks both before it writes
  *                              When a step runs, its source settles the decision or the proposal (APPLIED, naming the
  *                              request — ads-change-source.ts settleSources).
  *                              Refused as a whole, naming each id's reason, before anything waits: an id whose row this
@@ -36,9 +38,10 @@
  *                              the same request (the later step would find its facts moved and be skipped). Undo:
  *                              undo-change of the plan's approvalId (each step's own undo).
  *   mute-ad-recommendations    Nexus only: mute or unmute engine recommendations by id (SG.9's third verb: the feed stops
- *                              offering one until it is unmuted). W4-9 — dismiss or restore a rule's suggestion, an
- *                              autopilot decision or a Keyword Tracker proposal, as their screens do (dismissSuggestion,
- *                              dismissDecision, the proposal's dismiss). Undo: the opposite op. It changes no spend, so a
+ *                              offering one until it is unmuted). W4-9 — dismiss or restore a rule's suggestion and an
+ *                              autopilot decision as their screens do (dismissSuggestion, dismissDecision), and a Keyword
+ *                              Tracker proposal (the proposal's own DISMISSED status; its page has no dismiss). Undo:
+ *                              the opposite op. It changes no spend, so a
  *                              business may let it run by its rule, inside how many it may change at once.
  *
  * Nothing here calls Amazon: every write is a step's own change tool, through the mutation services and the write gate.
@@ -59,7 +62,7 @@ import {
 import type { HarvestCandidate } from '../../advertising/ads-harvest.service.js'
 import { adGroupsByExternalId } from '../../advertising/ads-entity-lookup.service.js'
 import { approvedRun, canonical, notRun } from './ads-change-kit.js'
-import { decidedTopOfSearchPct, sourceOf, type AdChangeSource } from './ads-change-source.js'
+import { decidedTopOfSearchPct, requestPreviews, sourceOf, type AdChangeSource } from './ads-change-source.js'
 import type { AgentTool, ToolContext, ToolRequest, ToolResult, ToolUndo } from '../tool-types.js'
 
 const MAX_IDS = 100
@@ -262,9 +265,9 @@ const centsOf = (v: unknown): number | null => {
 const units = (minor: number) => (minor / 100).toFixed(2)
 
 /**
- * Autopilot decisions, carried out as their plan carries them out — without approveDecision: a BID decision is the bid
- * optimizer run now as a dry run at the plan's target (planBidChanges, the plan's own apply path), its bids frozen here;
- * a BUDGET decision its budget; a PLACEMENT decision its top-of-search nudge on the adjustment now. Read only.
+ * Autopilot decisions, without approveDecision: a BID decision is the bids the plan's optimizer computes now at the
+ * plan's target (planBidChanges, the plan's own computation), frozen here; a BUDGET decision its budget; a PLACEMENT
+ * decision its top-of-search nudge on the adjustment now. Read only.
  */
 async function planAutopilot(ids: string[], out: HeldPlan): Promise<void> {
   if (!ids.length) return
@@ -302,33 +305,34 @@ async function planAutopilot(ids: string[], out: HeldPlan): Promise<void> {
       if (!planned) { out.problems.push(`${id}: its plan is not found in this business`); continue }
       if (!planned.changes.length) { out.problems.push(`${id}: at the plan's target the bid optimizer finds no bid in ${campaign.name} to move now — ${DISMISS}`); continue }
       out.bids.push(...planned.changes.map((c) => ({ targetId: c.targetId, bidCents: c.proposedBidCents, source })))
-      const target = planned.used ? ` toward ${planned.used.targetAcosPct} % target ACoS` : ''
-      out.notes.push(`${id} (plan${plan}, ${d.action}): carried out as the plan applies a bid decision — the per-target bid optimizer at the plan's target${target}, run now: ${plural(planned.changes.length, 'bid')} in ${campaign.name}, frozen in the bid step (each line from → to).`)
+      const target = planned.used ? ` (${planned.used.targetAcosPct} % target ACoS)` : ''
+      out.notes.push(`${id} (plan${plan}, ${d.action}): the bids the plan's optimizer computes now at the plan's target${target} — ${plural(planned.changes.length, 'bid')} in ${campaign.name}, frozen in the bid step (each line from → to).`)
     }
   }
 }
 
 /**
- * Keyword Tracker proposals, re-checked as the Keyword Tracker's own apply re-checks one (applyProposal): the term's
- * target set is the one it named (bids and the allowlist move: a moved set is refused, never a subset applied), and its
- * spend ceiling against today's ledger. Its one bid on each of its targets is frozen into the bid step. Read only.
+ * Keyword Tracker proposals, re-checked together as the Keyword Tracker's own apply re-checks one (recheckProposals):
+ * the term's target set is the one it named (bids and the allowlist move: a moved set is refused, never a subset
+ * applied), and its spend ceiling against today's ledger plus the proposals before it in this request (their sum, not
+ * each alone). Its one bid on each of its targets is frozen into the bid step, which re-checks both before it writes.
+ * Read only.
  */
 async function planTracker(ids: string[], out: HeldPlan): Promise<void> {
   if (!ids.length) return
-  const { proposalFacts, previewBidChange } = await import('../../advertising/kt6-proposal.service.js')
+  const { proposalFacts, recheckProposals } = await import('../../advertising/kt6-proposal.service.js')
   const facts = await proposalFacts(ids.map(rowIdOf))
+  const waiting: Array<{ id: string; p: NonNullable<ReturnType<typeof facts.get>> }> = []
   for (const id of ids) {
     const p = facts.get(rowIdOf(id))
     if (!p) { out.problems.push(`${id}: not found in this business`); continue }
     if (p.status !== 'PROPOSED') { out.problems.push(`${id}: no longer waiting (it is ${p.status.toLowerCase()})`); continue }
-    const now = await previewBidChange({ term: p.term, marketplace: p.marketplace, requestedBidCents: p.requestedBidCents })
-    const nowIds = new Set(now.radius.actionable.map((t) => t.id))
-    const same = nowIds.size === p.targetIds.length && p.targetIds.every((t) => nowIds.has(t))
-    if (!same) {
-      out.problems.push(`${id}: it names ${plural(p.targetIds.length, 'target')}, and "${p.term}" in ${p.marketplace} now resolves to ${nowIds.size} — bids or the allowlist moved since it was raised: raise a new proposal on the Keyword Tracker, or ${DISMISS}`)
-      continue
-    }
-    if (now.ceiling.verdict === 'REFUSED') { out.problems.push(`${id}: ${now.ceiling.message}`); continue }
+    waiting.push({ id, p })
+  }
+  const verdicts = await recheckProposals(waiting.map((w) => w.p))
+  for (const { id, p } of waiting) {
+    const why = verdicts.get(p.id)
+    if (why) { out.problems.push(`${id}: ${why}: raise a new proposal on the Keyword Tracker, or ${DISMISS}`); continue }
     const source: AdChangeSource = { kind: 'tracker', id }
     out.bids.push(...p.targetIds.map((targetId) => ({ targetId, bidCents: p.requestedBidCents, source })))
     out.notes.push(`${id}: "${p.term}" in ${p.marketplace} at ${units(p.requestedBidCents)} on ${plural(p.targetIds.length, 'target')}, frozen in the bid step.`)
@@ -423,8 +427,10 @@ export async function planRecommendations(a: ApplyArgs): Promise<{ ok: true; tit
     }),
     ...held.bids,
   ]
-  if (bids.length === 1) steps.push({ tool: 'set-target-bid', args: { targetId: bids[0].targetId, proposedBidCents: bids[0].bidCents, why, source: bids[0].source } })
-  else if (bids.length > 1) steps.push({ tool: 'bulk-ad-bid-change', args: { bids, why } })
+  // An autopilot decision's or a proposal's bids always go through bulk-ad-bid-change: its undo reverses through the
+  // action log, where the A.I. Bids tab and the Keyword Tracker read a reversal.
+  if (bids.length === 1 && bids[0].source.kind === 'recommendation') steps.push({ tool: 'set-target-bid', args: { targetId: bids[0].targetId, proposedBidCents: bids[0].bidCents, why, source: bids[0].source } })
+  else if (bids.length) steps.push({ tool: 'bulk-ad-bid-change', args: { bids, why } })
   for (const r of of('negative')) {
     const term = harvestOf(r)!
     steps.push({ tool: 'create-negative-keyword', args: { externalCampaignId: term.externalCampaignId, externalAdGroupId: term.externalAdGroupId, keywordText: term.query, matchType: 'NEGATIVE_EXACT', why, source: source(r.id) } })
@@ -502,11 +508,12 @@ const applyAdRecommendations: AgentTool = {
     + 'group it spent in), grad → graduate-keyword at the term\'s cost per click, budget → set-campaign-budget, retail → '
     + 'suppress-campaign (bids to the stop bid: Nexus never pauses; restore-campaign puts them back), rule → one '
     + 'decide-automation-suggestions (a value of your own is the one its limits judge). An autopilot plan\'s decision '
-    + '(autopilot:) is carried out as its plan carries it out, its values fixed now: a bid decision → the per-target bid '
-    + 'optimizer at the plan\'s target, run now, its bids in the one bid step; a budget decision → set-campaign-budget; a '
-    + 'placement decision → set-placement-multipliers (top of search). A Keyword Tracker proposal (kt:) → its bid on each '
-    + 'of its targets in the one bid step, after the Keyword Tracker\'s own checks (the same targets as when it was raised, '
-    + 'its spend ceiling today). Once a step ran, the decision or the proposal is marked applied, naming the request. '
+    + '(autopilot:), its values fixed now: a bid decision → the bids the plan\'s optimizer computes now at the plan\'s '
+    + 'target, in the one bid step; a budget decision → set-campaign-budget; a placement decision → '
+    + 'set-placement-multipliers (top of search). A Keyword Tracker proposal (kt:) → its bid on each of its targets in the '
+    + 'one bid step, after the Keyword Tracker\'s own checks (the same targets as when it was raised; its spend ceiling '
+    + 'today, counting every proposal of the request together), checked again before it writes. Once a step ran, the '
+    + 'decision or the proposal is marked applied, naming the request. '
     + 'Every step is checked now as you, at its own level and limits, as if asked alone. '
     + 'A person approves the plan in Nexus, or the person who asked confirms it in Claude with their authenticator code '
     + 'when the business set it so — or it runs by the business\'s rule, only when every step may (by default a raise or a '
@@ -541,8 +548,8 @@ const applyAdRecommendations: AgentTool = {
 type MuteOp = 'mute' | 'unmute' | 'dismiss' | 'restore'
 /** W4-9 — where a rule's suggestion, an autopilot decision or a Keyword Tracker proposal stands, as dismiss and restore move it. */
 type DecideState = 'waiting' | 'dismissed'
-/** An autopilot decision's identity (its plan + module|campaign|action): a dismissal reaches the plan's re-proposal of it. */
-interface DecisionIdentity { planId: string; module: string; campaignId: string | null; action: string }
+/** An autopilot decision's identity (its plan + module|campaign|action, and when): a dismissal reaches the plan's re-proposal of it. */
+interface DecisionIdentity { planId: string; module: string; campaignId: string | null; action: string; at: string }
 interface MuteItem { id: string; category: string; title: string; from: MuteState | DecideState; to: MuteState | DecideState; identity?: DecisionIdentity }
 
 /** How many recommendations Claude may mute, unmute, dismiss or restore in one request by the business's rule (it changes no spend). */
@@ -635,12 +642,13 @@ async function decidePlan(ids: string[], op: 'dismiss' | 'restore', frozen: read
       if (d) {
         if (d.source !== 'autopilot') { problems.push(`${id}: a rule's suggestion shown in the plan's feed — decide it with its rule: id`); continue }
         state = decideStateOf(d.status, 'PROPOSED', ['DISMISSED'])
-        const identity = { planId: d.planId, module: d.module, campaignId: d.campaignId, action: d.action }
+        const identity = { planId: d.planId, module: d.module, campaignId: d.campaignId, action: d.action, at: d.at }
         item = { id, category: 'autopilot', title: before?.title ?? `${d.action} on ${(d.campaignId && nameOf.get(d.campaignId)) ?? d.campaignId ?? 'no campaign'} (plan${d.planName ? ` "${d.planName}"` : ''})`, identity }
       } else if (op === 'dismiss' && before?.identity) {
         // The tick replaced it since this was asked: its re-proposal is the same decision.
         const now = await decisionStateNow({ id: rowIdOf(id), ...before.identity })
         state = now.state === 'proposed' ? 'waiting' : now.state === 'dismissed' ? 'dismissed' : null
+        if (state === 'waiting' && !now.planOn) state = null
         item = { id, category: 'autopilot', title: before.title, identity: before.identity }
       } else {
         problems.push(`${id}: not found in this business — an autopilot plan replaces its waiting decisions every 15 minutes: read ad-recommendations again`)
@@ -744,12 +752,16 @@ export const MUTE_UNDO: ToolUndo = {
   },
 }
 
-/** W4-9 — one dismissal or restore, through the screen's own verb; the id of the row it decided (a replaced decision's re-proposal). */
-async function decideOne(item: MuteItem, op: 'dismiss' | 'restore', by: string): Promise<{ ok: boolean; id: string; error?: string }> {
+/**
+ * W4-9 — one dismissal or restore, through the screen's own verb (a proposal: its own DISMISSED status), as the approver
+ * (`by` as each row records a decider: a suggestion `user:<id>`, a proposal the plain id, as KT.7); the id of the row it
+ * decided (a replaced decision's re-proposal).
+ */
+async function decideOne(item: MuteItem, op: 'dismiss' | 'restore', by: { actor: string; userId: string | null }): Promise<{ ok: boolean; id: string; error?: string }> {
   const rowId = rowIdOf(item.id)
   if (item.category === 'rule') {
     const svc = await import('../../advertising/ads-suggestion-decide.service.js')
-    const out = op === 'dismiss' ? await svc.dismissSuggestion(rowId, by) : await svc.restoreSuggestion(rowId)
+    const out = op === 'dismiss' ? await svc.dismissSuggestion(rowId, by.actor) : await svc.restoreSuggestion(rowId)
     return { ok: out.ok, id: item.id, ...(out.ok ? {} : { error: out.error ?? 'refused' }) }
   }
   if (item.category === 'autopilot') {
@@ -763,7 +775,7 @@ async function decideOne(item: MuteItem, op: 'dismiss' | 'restore', by: string):
     return { ok: out.ok, id: out.rowId ? `autopilot:${out.rowId}` : item.id, ...(out.ok ? {} : { error: out.error ?? 'refused' }) }
   }
   const m = await import('../../advertising/kt6-proposal.service.js')
-  const out = op === 'dismiss' ? await m.dismissProposal(rowId, by) : await m.restoreProposal(rowId)
+  const out = op === 'dismiss' ? await m.dismissProposal(rowId, by.userId) : await m.restoreProposal(rowId)
   return { ok: out.ok, id: item.id, ...(out.ok ? {} : { error: out.error ?? 'refused' }) }
 }
 
@@ -773,7 +785,7 @@ const muteAdRecommendations: AgentTool = {
   category: 'advertising',
   input: z.object({
     recommendationIds: z.array(ID).min(1).max(MAX_IDS).describe(`the recommendationIds from ad-recommendations, 1 to ${MAX_IDS}: bid:, neg:, grad:, budget:, sov:, retail: (mute, unmute); rule:, autopilot:, kt: (dismiss, restore)`),
-    op: z.enum(['mute', 'unmute', 'dismiss', 'restore']).describe('mute: Nexus stops offering an engine\'s recommendation until it is unmuted; unmute: offer it again (also one a request already carried out); dismiss: a rule\'s suggestion, an autopilot decision or a Keyword Tracker proposal is set aside, as its screen dismisses it; restore: a dismissed one waits again'),
+    op: z.enum(['mute', 'unmute', 'dismiss', 'restore']).describe('mute: Nexus stops offering an engine\'s recommendation until it is unmuted; unmute: offer it again (also one a request already carried out); dismiss: a rule\'s suggestion or an autopilot decision is set aside as its screen dismisses it, a Keyword Tracker proposal is closed without a write; restore: a dismissed one waits again'),
     days: daysArg,
     why: whyArg.describe('why, in a sentence: kept with the mute'),
   }),
@@ -800,15 +812,22 @@ const muteAdRecommendations: AgentTool = {
     + 'sov:, retail:), or dismiss or restore a rule\'s suggestion (rule:), an autopilot plan\'s decision (autopilot:) or a '
     + 'Keyword Tracker proposal (kt:) — in Nexus only, nothing reaches Amazon. A muted recommendation is not offered (on '
     + 'the Recommendations tab or to Claude) until it is unmuted; unmute also offers again one a request already carried '
-    + 'out. A dismissed suggestion leaves the Suggestions queue; a dismissed autopilot decision leaves the A.I. Bids tab and '
-    + 'its plan does not propose it again for 7 days; a dismissed proposal is closed without a write. restore puts a '
+    + 'out. A dismissed suggestion leaves the Suggestions queue and a dismissed autopilot decision the A.I. Bids tab (its '
+    + 'plan does not propose it again for 7 days), as those screens dismiss them; a dismissed Keyword Tracker proposal is '
+    + 'closed without a write (its own DISMISSED status: the Keyword Tracker page has no dismiss). restore puts a '
     + 'dismissed one back to waiting. A person approves it in Nexus, or the person who asked confirms it in Claude with '
     + 'their authenticator code when the business set it so — or it runs by the business\'s rule, inside its limits (how '
     + 'many at once). Refused before anything waits: an id not recommended now (to mute), one already muted (or not muted, '
     + 'to unmute), one not waiting (to dismiss) or not dismissed (to restore), an op that does not fit the id. undo-change '
     + 'puts it back.',
-  async handler(args): Promise<ToolResult> {
-    const planned = await mutePlan(args)
+  async handler(args, ctx): Promise<ToolResult> {
+    // W4-9 — the request's own re-check (a person approving it) reads the items it froze: a decision the plan's tick
+    // replaced since is dismissed as its re-proposal, as the run does.
+    const frozen = ctx.approvalId ? (await requestPreviews(ctx.approvalId, 'mute-ad-recommendations')).flatMap((p) => {
+      const items = (p as { items?: unknown } | null)?.items
+      return Array.isArray(items) ? (items as MuteItem[]) : []
+    }) : []
+    const planned = await mutePlan(args, frozen)
     if ('error' in planned) return { ok: false, error: planned.error }
     return { ok: true, preview: mutePreview(planned.op, planned.items) }
   },
@@ -826,7 +845,7 @@ const muteAdRecommendations: AgentTool = {
     if (planned.op === 'dismiss' || planned.op === 'restore') {
       const op = planned.op
       const results: Array<{ item: MuteItem; out: { ok: boolean; id: string; error?: string } }> = []
-      for (const item of planned.items) results.push({ item, out: await decideOne(item, op, run.actor) })
+      for (const item of planned.items) results.push({ item, out: await decideOne(item, op, { actor: run.actor, userId: ctx.userId ?? null }) })
       const done = results.filter((r) => r.out.ok)
       const refused = results.filter((r) => !r.out.ok).map((r) => `${r.item.id}: ${r.out.error}`)
       if (!done.length) return notRun(`Not run: ${refused.join('; ')}.`)

@@ -394,44 +394,71 @@ export async function decisionFacts(ids: string[]): Promise<Map<string, Decision
 export type DecisionState = 'proposed' | 'dismissed' | 'decided' | 'gone'
 const stateOfStatus = (status: string): DecisionState => (status === 'PROPOSED' ? 'proposed' : status === 'DISMISSED' ? 'dismissed' : 'decided')
 
+/** A decision's identity, as a request freezes it: the plan, module|campaign|action (the dismissal fingerprint), when. */
+export type DecisionIdentity = Pick<DecisionFacts, 'id' | 'planId' | 'module' | 'campaignId' | 'action' | 'at'>
+
 /**
- * A decision's identity now: its row by id; when the tick replaced it, the plan's current row of the same decision
- * (module|campaign|action, waiting or dismissed) — `rowId` is the row a dismissal or a settle then acts on. Read only.
+ * A decision's identity now, and whether its plan still runs: its row by id; when the tick replaced it, the newest row
+ * of the same decision since it was proposed — waiting (the tick's re-proposal), dismissed, or decided (applied on the
+ * tab, by an AUTO run, or skipped) — and `gone` when the plan no longer proposes it. `rowId` is the row a dismissal then
+ * acts on. Read only.
  */
-export async function decisionStateNow(frozen: Pick<DecisionFacts, 'id' | 'planId' | 'module' | 'campaignId' | 'action'>): Promise<{ state: DecisionState; rowId: string | null; status: string | null }> {
+export async function decisionStateNow(frozen: DecisionIdentity): Promise<{ state: DecisionState; rowId: string | null; status: string | null; planOn: boolean }> {
+  const plan = await prisma.autopilotPlan.findUnique({ where: { id: frozen.planId }, select: { enabled: true, autonomy: true } })
+  const planOn = !!plan?.enabled && plan.autonomy !== 'OFF'
   const row = await prisma.autopilotDecision.findUnique({ where: { id: frozen.id }, select: { id: true, status: true } })
-  if (row) return { state: stateOfStatus(row.status), rowId: row.id, status: row.status }
+  if (row) return { state: stateOfStatus(row.status), rowId: row.id, status: row.status, planOn }
+  const since = new Date(frozen.at)
   const same = await prisma.autopilotDecision.findFirst({
-    where: { planId: frozen.planId, module: frozen.module, campaignId: frozen.campaignId, action: frozen.action, source: 'autopilot', status: { in: ['PROPOSED', 'DISMISSED'] } },
+    where: {
+      planId: frozen.planId, module: frozen.module, campaignId: frozen.campaignId, action: frozen.action, source: 'autopilot',
+      ...(Number.isNaN(since.getTime()) ? {} : { at: { gte: since } }),
+    },
     orderBy: { at: 'desc' },
     select: { id: true, status: true },
   })
-  return same ? { state: stateOfStatus(same.status), rowId: same.id, status: same.status } : { state: 'gone', rowId: null, status: null }
+  return same ? { state: stateOfStatus(same.status), rowId: same.id, status: same.status, planOn } : { state: 'gone', rowId: null, status: null, planOn }
 }
 
 /** Dismiss the decision's identity now (its row, or the tick's re-proposal of it): the conductor stops proposing it for 7 days. */
-export async function dismissDecisionIdentity(frozen: Pick<DecisionFacts, 'id' | 'planId' | 'module' | 'campaignId' | 'action'>): Promise<DecideResult & { rowId?: string }> {
+export async function dismissDecisionIdentity(frozen: DecisionIdentity): Promise<DecideResult & { rowId?: string }> {
   const now = await decisionStateNow(frozen)
   if (now.state !== 'proposed' || !now.rowId) return { ok: false, error: 'No longer waiting — the plan re-evaluated it, or it was decided' }
   const out = await dismissDecision(now.rowId)
   return out.ok ? { ...out, rowId: now.rowId } : out
 }
 
+/** What one carried-out decision's writes left behind, for the A.I. Bids tab to read. */
+export interface CarriedDecision {
+  facts: DecisionFacts
+  /** How many of its bids were written (a bid decision). */
+  targets?: number
+  /** An action-log row of its own writes, and its write's queue row (one write only). */
+  actionLogId?: string | null
+  outboundQueueId?: string | null
+  /** The request changed nothing else: its change set is this decision's own writes. */
+  alone: boolean
+}
+
 /**
  * An approved request carried these decisions out (its change steps wrote the values frozen when it was asked): each
- * row is settled APPLIED as approve settles one, its reason naming the request, `executionId` the request's change set
- * (its writes carry it; undo-change of the request puts them back). A bid decision records how many bids it wrote.
- * When the 15-minute tick replaced the row meanwhile, a decided row is created from the frozen facts under the same id
- * (as approve recreates a row the tick deletes mid-apply), so the A.I. Bids tab's history holds and the id Claude and
- * the person saw still names it. A row decided meanwhile is left as it is. Returns how many were settled.
+ * row is settled APPLIED as approve settles one, its reason naming the request. What the tab reads is what it reads for
+ * its own approve: `executionId` an action-log row of the decision's writes (the tab's Undo reverses that row's change
+ * set) — only when the request changed nothing else, since the set is the whole request; otherwise none, and the reason
+ * says undo-change puts it back — and `outboundQueueId` the queue row of a single write (delivery). A bid decision
+ * records how many bids it wrote. When the 15-minute tick replaced the row meanwhile, a decided row is created from the
+ * frozen facts under the same id (as approve recreates a row the tick deletes mid-apply), so the tab's history holds and
+ * the id Claude and the person saw still names it. A row decided meanwhile is left as it is. Returns how many were
+ * settled.
  */
-export async function settleDecisionsCarried(carried: Array<{ facts: DecisionFacts; targets?: number }>, approvalId: string): Promise<number> {
+export async function settleDecisionsCarried(carried: CarriedDecision[], approvalId: string): Promise<number> {
   let settled = 0
-  for (const { facts, targets } of carried) {
+  for (const { facts, targets, actionLogId, outboundQueueId, alone } of carried) {
     const data = {
       status: 'APPLIED',
-      reason: `${facts.reason} — carried out by request ${approvalId}`,
-      executionId: approvalId,
+      reason: `${facts.reason} — carried out by request ${approvalId}${alone ? '' : ' with other changes (undo-change of that request puts it back)'}`,
+      executionId: alone ? actionLogId ?? null : null,
+      outboundQueueId: outboundQueueId ?? null,
       at: new Date(),
       ...(facts.module === 'bid' && targets != null ? { after: { targets } } : {}),
     }
@@ -447,16 +474,6 @@ export async function settleDecisionsCarried(carried: Array<{ facts: DecisionFac
     settled++
   }
   return settled
-}
-
-/** The request that carried these decisions out was put back: their history says so (the change ran, then was undone). */
-export async function noteDecisionsUndone(ids: string[], approvalId: string): Promise<number> {
-  const rows = ids.length ? await prisma.autopilotDecision.findMany({ where: { id: { in: [...new Set(ids)] }, executionId: approvalId, status: 'APPLIED' }, select: { id: true, reason: true } }) : []
-  for (const r of rows) {
-    if (r.reason.endsWith(' — put back by an undo')) continue
-    await prisma.autopilotDecision.update({ where: { id: r.id }, data: { reason: `${r.reason} — put back by an undo` } })
-  }
-  return rows.length
 }
 
 /**

@@ -18,25 +18,30 @@
  *
  * ADS AUTONOMY W4-9 — an autopilot plan's decision (`kind: autopilot`, id `autopilot:<decisionId>`) and a Keyword
  * Tracker proposal (`kind: tracker`, id `kt:<proposalId>`) ride the same way, on the tools that do what they decide:
- *   taken      autopilot on set-target-bid and bulk-ad-bid-change (a BID decision's bids), set-campaign-budget (a BUDGET
- *              decision) and set-placement-multipliers (a PLACEMENT decision); tracker on the two bid tools (the
- *              proposal's one bid on each of its targets). Any other tool refuses them (sourceRefusal).
- *   checked    against its row once the change's campaign is known (heldSources): a decision of this business, still
- *              waiting, of a plan that runs, of the module this change is, on this campaign, asking this value; a
- *              proposal still waiting, naming this target at this bid. In the request's own re-check (when a person
- *              approves, and before it runs) an autopilot decision the plan's 15-minute tick replaced is still carried
- *              out with the values frozen in the request; one dismissed or decided meanwhile, or whose plan was
- *              switched off, refuses it.
+ *   taken      autopilot on bulk-ad-bid-change (a BID decision's bids), set-campaign-budget (a BUDGET decision) and
+ *              set-placement-multipliers (a PLACEMENT decision); tracker on bulk-ad-bid-change (the proposal's one bid on
+ *              its targets) — the bid tool whose undo reverses through the action log, where the reversal is read. Any
+ *              other tool refuses them (sourceRefusal).
+ *   checked    against its row once the change's campaign is known (heldSources), exactly: a decision of this
+ *              business, still waiting, of a plan that runs, of the module this change is, on this campaign, asking
+ *              exactly this value (a BID decision: exactly the bids the plan's optimizer computes now, target for
+ *              target); a proposal still waiting, its targets at its bid, re-checked as the Keyword Tracker re-checks one
+ *              (its target set now, its spend ceiling — summed over the request's proposals). A row covering only some
+ *              of a proposal's targets is taken, said, and does not settle it. In the request's own re-check (a person
+ *              approving it, its run — by a person or by rule) an autopilot decision the plan's 15-minute tick replaced
+ *              is carried out with the values frozen in the request, unless it was dismissed or decided meanwhile or
+ *              its plan is off (its identity, frozen in the request's stored preview: decisionStateNow).
  *   kept       the preview names it (`sourceNote`) and freezes its facts (`sourceFacts`): what the person approves.
- *   settled    once the write ran — the one hook (settleSources): the decision is APPLIED (autopilot/decisions.ts
- *              settleDecisionsCarried) and the proposal APPLIED (kt6-proposal.service.ts settleProposalsCarried), each
- *              naming the request. Put back (unsettleChange): the proposal's commitment is given back to today's
- *              ceiling, and the decision's history says it was put back.
+ *   settled    once the write ran — the one hook (settleSources): the decision is APPLIED with what the A.I. Bids tab
+ *              reads (autopilot/decisions.ts settleDecisionsCarried) and the proposal APPLIED (kt6-proposal.service.ts
+ *              settleProposalsCarried), each naming the request. An undo changes neither row: the reversal is read from
+ *              the action log, as the Keyword Tracker reads its own.
  */
 import { z } from 'zod'
 import type { AdWriteEvidence } from '../../advertising/ads-evidence.js'
 import { familyOfRecommendationId, isEngineFamily, settleRecommendations, unsettleRecommendations } from '../../advertising/ads-recommendation-mutes.service.js'
 import type { DecisionFacts } from '../../advertising/autopilot/decisions.js'
+import prisma from '../../../db.js'
 import type { ToolChange } from '../tool-types.js'
 import { logger } from '../../../utils/logger.js'
 
@@ -90,7 +95,7 @@ export type HeldChange = 'bid' | 'budget' | 'placement'
 type HeldKind = 'autopilot' | 'tracker'
 const HELD_PREFIX: Record<HeldKind, string> = { autopilot: 'autopilot:', tracker: 'kt:' }
 const isHeld = (kind: SourceKind): kind is HeldKind => kind === 'autopilot' || kind === 'tracker'
-const HELD_TOOLS = 'set-target-bid, bulk-ad-bid-change, set-campaign-budget or set-placement-multipliers'
+const HELD_TOOLS = 'bulk-ad-bid-change (bids), set-campaign-budget or set-placement-multipliers'
 /** The row id behind a held source's id (`autopilot:<id>` → `<id>`). */
 const rowIdOf = (source: AdChangeSource) => source.id.slice(HELD_PREFIX[source.kind as HeldKind].length)
 
@@ -106,7 +111,7 @@ export function sourceRefusal(source: AdChangeSource | null, expectedId: string,
     const prefix = HELD_PREFIX[source.kind]
     if (!source.id.startsWith(prefix) || source.id.length === prefix.length) return `a source of kind ${source.kind} names its id as ${prefix}<id>, from ad-recommendations`
     if (!opts.held) return `an autopilot decision or a Keyword Tracker proposal is carried out with ${HELD_TOOLS} (or apply-ad-recommendations with its id), not named as the source of this change`
-    if (source.kind === 'tracker' && opts.held !== 'bid') return 'a Keyword Tracker proposal changes bids: it is carried out with set-target-bid or bulk-ad-bid-change'
+    if (source.kind === 'tracker' && opts.held !== 'bid') return 'a Keyword Tracker proposal changes bids: it is carried out with bulk-ad-bid-change'
     return null
   }
   if (source.id !== expectedId) return `the source names recommendation ${source.id}, but this change carries out ${expectedId}`
@@ -116,9 +121,9 @@ export function sourceRefusal(source: AdChangeSource | null, expectedId: string,
 /** What the preview freezes about a held source: what the person approves, and what settles its row once it ran. */
 export type SourceFact =
   | { kind: 'autopilot'; id: string; decision: DecisionFacts }
-  | { kind: 'tracker'; id: string; proposal: { id: string; term: string; marketplace: string; requestedBidCents: number; targets: number } }
+  | { kind: 'tracker'; id: string; proposal: { id: string; term: string; marketplace: string; requestedBidCents: number; targets: number }; covers: { targets: number; of: number } }
 
-/** The change a held source rides on, as its row is checked against it. */
+/** The change a held source rides on, as its row is checked against it: one per write (a bulk change: one per row). */
 export interface HeldSubject {
   change: HeldChange
   campaignId: string
@@ -148,30 +153,76 @@ export function decidedTopOfSearchPct(after: unknown, currentPct: number): numbe
 }
 
 /**
- * W4-9 — the rows behind these sources, against what each change does: the facts the preview freezes, or every reason
- * the change may not carry them out. Read only. `recheck` (the request's own re-check: a person approving it, or its
- * run — ToolContext.approvalId): an autopilot decision whose row the plan's 15-minute tick replaced is still carried out
- * with the values frozen in the request (it has no fact now; the request's stored preview keeps the one it was asked
- * with). Engine recommendations pass through (sourceRefusal checked them).
+ * The previews a request stored for this tool (its own, or its plan's steps of this tool): what the person approved,
+ * as the approve re-check and the run read them (they are handed only the request's id). Read only.
  */
-export async function heldSources(items: ReadonlyArray<{ source: AdChangeSource | null; subject: HeldSubject }>, recheck: boolean): Promise<{ refusal: string } | { facts: SourceFact[] }> {
+export async function requestPreviews(approvalId: string, toolName: string): Promise<unknown[]> {
+  const [single, steps] = await Promise.all([
+    prisma.agentApproval.findFirst({ where: { id: approvalId, toolName }, select: { preview: true } }),
+    prisma.agentPlanStep.findMany({ where: { approvalId, toolName }, select: { preview: true } }),
+  ])
+  return [...(single ? [single.preview] : []), ...steps.map((s) => s.preview)]
+}
+
+/** The facts a stored preview froze (`sourceFacts`). */
+function frozenFacts(previews: readonly unknown[]): SourceFact[] {
+  return previews.flatMap((preview) => {
+    const facts = (preview as { sourceFacts?: unknown } | null | undefined)?.sourceFacts
+    return Array.isArray(facts) ? facts.filter((f): f is SourceFact => !!f && typeof f === 'object' && typeof (f as { id?: unknown }).id === 'string') : []
+  })
+}
+
+const sameBids = (a: ReadonlyMap<string, number | undefined>, b: ReadonlyMap<string, number>) => a.size === b.size && [...b].every(([t, v]) => a.get(t) === v)
+
+/**
+ * W4-9 — the rows behind these sources, against what each change does: the facts the preview freezes, or every reason
+ * the change may not carry them out. Read only. `approvalId` (the request's own re-check: a person approving it, or its
+ * run — ToolContext.approvalId): an autopilot decision whose row the plan's 15-minute tick replaced is carried out with
+ * the values frozen in the request, unless its identity (frozen in the request's stored preview) was dismissed or
+ * decided since, or its plan is off; a BID decision's bids were matched to the optimizer when the request was made, and
+ * are not computed again. `tool`: the change tool, whose stored previews hold the frozen facts.
+ */
+export async function heldSources(
+  items: ReadonlyArray<{ source: AdChangeSource | null; subject: HeldSubject }>,
+  opts: { approvalId?: string | null; tool: string },
+): Promise<{ refusal: string } | { facts: SourceFact[] }> {
   const held = items.filter((i): i is { source: AdChangeSource; subject: HeldSubject } => !!i.source && isHeld(i.source.kind))
   if (!held.length) return { facts: [] }
-  const decisionIds = held.filter((i) => i.source.kind === 'autopilot').map((i) => rowIdOf(i.source))
-  const proposalIds = held.filter((i) => i.source.kind === 'tracker').map((i) => rowIdOf(i.source))
-  const [decisions, proposals] = await Promise.all([
-    decisionIds.length ? import('../../advertising/autopilot/decisions.js').then((m) => m.decisionFacts(decisionIds)) : new Map<string, DecisionFacts>(),
-    proposalIds.length ? import('../../advertising/kt6-proposal.service.js').then((m) => m.proposalFacts(proposalIds)) : new Map(),
+  const recheck = !!opts.approvalId
+  const bySource = new Map<string, { source: AdChangeSource; subjects: HeldSubject[] }>()
+  for (const i of held) {
+    const entry = bySource.get(i.source.id) ?? { source: i.source, subjects: [] }
+    entry.subjects.push(i.subject)
+    bySource.set(i.source.id, entry)
+  }
+  const sources = [...bySource.values()]
+  const decisionIds = sources.filter((g) => g.source.kind === 'autopilot').map((g) => rowIdOf(g.source))
+  const proposalIds = sources.filter((g) => g.source.kind === 'tracker').map((g) => rowIdOf(g.source))
+  const decisions = decisionIds.length ? await import('../../advertising/autopilot/decisions.js') : null
+  const kt = proposalIds.length ? await import('../../advertising/kt6-proposal.service.js') : null
+  const [rows, proposals, frozen] = await Promise.all([
+    decisions ? decisions.decisionFacts(decisionIds) : new Map<string, DecisionFacts>(),
+    kt ? kt.proposalFacts(proposalIds) : new Map(),
+    recheck && decisionIds.length ? requestPreviews(opts.approvalId!, opts.tool).then(frozenFacts) : Promise.resolve([] as SourceFact[]),
   ])
   const problems: string[] = []
-  const facts = new Map<string, SourceFact>()
-  for (const { source, subject } of held) {
+  const facts: SourceFact[] = []
+  const waiting: Array<Parameters<NonNullable<typeof kt>['recheckProposals']>[0][number]> = []
+  for (const { source, subjects } of sources) {
     const id = rowIdOf(source)
+    const subject = subjects[0]
     if (source.kind === 'autopilot') {
-      const d = decisions.get(id)
+      const d = rows.get(id)
       if (!d) {
-        // The tick replaced it: the request carries out what it froze. A fresh request needs it waiting now.
-        if (!recheck) problems.push(`${source.id}: no such autopilot decision waits in this business — a plan replaces its proposals every 15 minutes: read ad-recommendations again`)
+        // The tick replaced it: the request carries out what it froze — unless the decision was dismissed or decided
+        // since, or its plan is off. A fresh request needs it waiting now.
+        const was = frozen.find((f): f is Extract<SourceFact, { kind: 'autopilot' }> => f.kind === 'autopilot' && f.id === source.id)
+        if (!recheck || !was) { problems.push(`${source.id}: no such autopilot decision waits in this business — a plan replaces its proposals every 15 minutes: read ad-recommendations again`); continue }
+        const now = await decisions!.decisionStateNow(was.decision)
+        if (!now.planOn) problems.push(`${source.id}: its plan${was.decision.planName ? ` "${was.decision.planName}"` : ''} is off, so its proposals are stale`)
+        else if (now.state === 'dismissed') problems.push(`${source.id}: no longer waiting — it was dismissed`)
+        else if (now.state === 'decided') problems.push(`${source.id}: no longer waiting — the plan's next run decided it (${(now.status ?? '').toLowerCase()})`)
+        else facts.push(was)
         continue
       }
       const asked = d.module === 'budget' ? cents(d.after) : null
@@ -179,22 +230,38 @@ export async function heldSources(items: ReadonlyArray<{ source: AdChangeSource 
       else if (d.status !== 'PROPOSED') problems.push(`${source.id}: no longer waiting — ${d.status === 'DISMISSED' ? 'it was dismissed' : `it is ${d.status.toLowerCase()}`}`)
       else if (!d.planOn) problems.push(`${source.id}: its plan${d.planName ? ` "${d.planName}"` : ''} is off, so its proposals are stale`)
       else if (d.module !== subject.change) problems.push(`${source.id}: a ${d.module} decision, but this change sets a ${WHAT[subject.change]}`)
-      else if (d.campaignId !== subject.campaignId) problems.push(`${source.id}: it decides campaign ${d.campaignId ?? '(none)'}, not ${subject.campaignId}`)
+      else if (subjects.some((s) => s.campaignId !== d.campaignId)) problems.push(`${source.id}: it decides campaign ${d.campaignId ?? '(none)'}, not ${subjects.find((s) => s.campaignId !== d.campaignId)!.campaignId}`)
       else if (subject.change === 'budget' && asked !== subject.valueCents) problems.push(`${source.id}: it decides a daily budget of ${asked == null ? '(none)' : money(asked)}, not ${money(subject.valueCents ?? 0)}`)
       else if (subject.change === 'placement' && (!subject.placement?.onlyTopOfSearch || subject.placement.toPct !== decidedTopOfSearchPct(d.after, subject.placement.fromPct))) {
         problems.push(`${source.id}: it moves top of search only, from ${subject.placement?.fromPct ?? 0} % to ${decidedTopOfSearchPct(d.after, subject.placement?.fromPct ?? 0)} %`)
-      } else facts.set(source.id, { kind: 'autopilot', id: source.id, decision: d })
+      } else if (subject.change === 'bid' && !recheck) {
+        // A bid decision names no target: it is the bids the plan's optimizer computes now, every one of them, exactly.
+        const planned = await decisions!.decisionBidChanges(d)
+        const want = new Map((planned?.changes ?? []).map((c) => [c.targetId, c.proposedBidCents]))
+        const got = new Map(subjects.map((s) => [s.targetId ?? '', s.valueCents]))
+        if (!want.size) problems.push(`${source.id}: at the plan's target the bid optimizer finds no bid to move in its campaign now`)
+        else if (!sameBids(got, want)) problems.push(`${source.id}: it is these ${want.size} bids, exactly: ${[...want].slice(0, 10).map(([t, v]) => `${t} → ${money(v)}`).join(', ')}${want.size > 10 ? ' …' : ''} (apply-ad-recommendations asks for them)`)
+        else facts.push({ kind: 'autopilot', id: source.id, decision: d })
+      } else facts.push({ kind: 'autopilot', id: source.id, decision: d })
       continue
     }
     const p = proposals.get(id)
+    const outside = subjects.filter((s) => !s.targetId || !p?.targetIds.includes(s.targetId))
     if (!p) problems.push(`${source.id}: no such Keyword Tracker proposal in this business`)
     else if (p.status !== 'PROPOSED') problems.push(`${source.id}: no longer waiting — it is ${p.status.toLowerCase()}`)
-    else if (!subject.targetId || !p.targetIds.includes(subject.targetId)) problems.push(`${source.id}: it does not name target ${subject.targetId ?? '(none)'}`)
-    else if (subject.valueCents !== p.requestedBidCents) problems.push(`${source.id}: it asks for a bid of ${money(p.requestedBidCents)} on its targets, not ${money(subject.valueCents ?? 0)}`)
-    else facts.set(source.id, { kind: 'tracker', id: source.id, proposal: { id: p.id, term: p.term, marketplace: p.marketplace, requestedBidCents: p.requestedBidCents, targets: p.targetIds.length } })
+    else if (outside.length) problems.push(`${source.id}: it does not name target ${outside.map((s) => s.targetId ?? '(none)').join(', ')}`)
+    else if (subjects.some((s) => s.valueCents !== p.requestedBidCents)) problems.push(`${source.id}: it asks for a bid of ${money(p.requestedBidCents)} on its targets, not ${money(subjects.find((s) => s.valueCents !== p.requestedBidCents)!.valueCents ?? 0)}`)
+    else {
+      waiting.push(p)
+      const covered = new Set(subjects.map((s) => s.targetId)).size
+      facts.push({ kind: 'tracker', id: source.id, proposal: { id: p.id, term: p.term, marketplace: p.marketplace, requestedBidCents: p.requestedBidCents, targets: p.targetIds.length }, covers: { targets: covered, of: p.targetIds.length } })
+    }
   }
+  // The Keyword Tracker's own re-checks, as its apply makes them before it writes: the target set now, and the ceiling —
+  // over every proposal this change carries out together.
+  if (waiting.length && kt) for (const [pid, why] of await kt.recheckProposals(waiting)) if (why) problems.push(`kt:${pid}: ${why}`)
   if (problems.length) return { refusal: [...new Set(problems)].join('; ') }
-  return { facts: [...facts.values()] }
+  return { facts }
 }
 
 /** What the preview says about a held source, for the person approving. */
@@ -205,7 +272,9 @@ function heldNote(source: AdChangeSource, fact: SourceFact | undefined): string 
   }
   if (fact?.kind === 'tracker') {
     const p = fact.proposal
-    return `From the Keyword Tracker proposal ${fact.id}: "${p.term}" in ${p.marketplace} at ${money(p.requestedBidCents)} on ${p.targets} target${p.targets === 1 ? '' : 's'}. Once this runs the proposal is marked applied, naming this request.`
+    const all = fact.covers.targets === fact.covers.of
+    return `From the Keyword Tracker proposal ${fact.id}: "${p.term}" in ${p.marketplace} at ${money(p.requestedBidCents)} on ${p.targets} target${p.targets === 1 ? '' : 's'}.`
+      + (all ? ' Once this runs the proposal is marked applied, naming this request.' : ` This change sets ${fact.covers.targets} of its ${fact.covers.of} targets, so the proposal stays waiting: it is marked applied only by a change that sets all of them.`)
   }
   return `From the autopilot decision ${source.id}: its plan has proposed again since this was asked; the values frozen in this request stand, and once it runs the decision is marked applied on the A.I. Bids tab.`
 }
@@ -243,26 +312,13 @@ export function sourcesRecord(sources: ReadonlyArray<AdChangeSource | null | und
 
 /**
  * `undo.undone` of every tool here: the change was put back, so the recommendations it settled (`before.sources`, under
- * the request it ran as, `before.changeSetId`) are offered again at once — a person's mute stays. W4-9 — a Keyword
- * Tracker proposal it carried out gives its commitment back to today's ceiling; an autopilot decision's history says it
- * was put back. Never throws for those: the undo ran.
+ * the request it ran as, `before.changeSetId`) are offered again at once. A person's mute stays. W4-9 — an autopilot
+ * decision or a Keyword Tracker proposal it carried out stays APPLIED: the reversal is read from the action log.
  */
 export async function unsettleChange(change: ToolChange): Promise<void> {
   const before = (change.before ?? {}) as { sources?: unknown; changeSetId?: unknown }
-  const ids = Array.isArray(before.sources) ? before.sources.filter((id): id is string => typeof id === 'string') : []
-  if (!ids.length || typeof before.changeSetId !== 'string') return
-  const changeSetId = before.changeSetId
-  const engine = ids.filter((id) => isEngineFamily(familyOfRecommendationId(id)))
-  if (engine.length) await unsettleRecommendations(engine, changeSetId)
-  const rows = (prefix: string) => ids.filter((id) => id.startsWith(prefix)).map((id) => id.slice(prefix.length))
-  try {
-    const decisions = rows(HELD_PREFIX.autopilot)
-    const proposals = rows(HELD_PREFIX.tracker)
-    if (decisions.length) await (await import('../../advertising/autopilot/decisions.js')).noteDecisionsUndone(decisions, changeSetId)
-    if (proposals.length) await (await import('../../advertising/kt6-proposal.service.js')).releaseProposalCommitments(proposals, changeSetId)
-  } catch (error) {
-    logger.warn('[ads-change-source] could not note an undo on the decisions or proposals a change carried out', { changeSetId, error: error instanceof Error ? error.message : String(error) })
-  }
+  const ids = Array.isArray(before.sources) ? before.sources.filter((id): id is string => typeof id === 'string' && isEngineFamily(familyOfRecommendationId(id))) : []
+  if (ids.length && typeof before.changeSetId === 'string') await unsettleRecommendations(ids, before.changeSetId)
 }
 
 /** The audit evidence of a write that carries a source out, on top of what the write already records. */
@@ -271,29 +327,29 @@ export function withSource(evidence: AdWriteEvidence | null | undefined, source:
   return { ...(evidence ?? {}), source: { kind: source.kind, id: source.id } }
 }
 
-/** The facts a stored preview froze (`sourceFacts`, on the preview itself or on its rows' lines). */
-function frozenFacts(preview: unknown): SourceFact[] {
-  const facts = (preview as { sourceFacts?: unknown } | null | undefined)?.sourceFacts
-  return Array.isArray(facts) ? facts.filter((f): f is SourceFact => !!f && typeof f === 'object' && typeof (f as { id?: unknown }).id === 'string') : []
-}
+/** What one write left behind (its action-log row, its queue row), beside the source it carried out. */
+export interface WriteReceipt { actionLogId?: string | null; outboundQueueId?: string | null }
 
 /**
  * After the write ran — the one settle hook: each recommendation it carried out is settled under the request it ran
- * as; W4-9 — each autopilot decision and Keyword Tracker proposal is marked APPLIED, naming the request (one source per
- * write: a bulk change's rows count the bids each wrote). `approvedPreview`: the preview the person approved, whose
- * frozen facts settle a decision the plan's tick replaced meanwhile. `by`: the approver (`user:<id>`). Never throws —
- * the change ran, and a settle that failed only means the feed or the tab may offer it again.
+ * as; W4-9 — each autopilot decision and Keyword Tracker proposal is marked APPLIED, naming the request. `sources` holds
+ * one entry per write (null for a write that carried nothing out), `receipts` the same writes' action-log and queue
+ * rows. `approvedPreview`: the preview the person approved, whose frozen facts settle a decision the plan's tick
+ * replaced meanwhile, and say whether the change set all of a proposal's targets (only then is it settled). `by`: the
+ * approver's id (a proposal records it as KT.7 does). Never throws — the change ran, and a settle that failed only means
+ * the feed or the tab may offer it again.
  */
 export async function settleSources(
   sources: ReadonlyArray<AdChangeSource | null | undefined>,
   approvalId: string | undefined,
-  opts: { approvedPreview?: unknown; by?: string | null } = {},
+  opts: { approvedPreview?: unknown; by?: string | null; receipts?: ReadonlyArray<WriteReceipt | null | undefined> } = {},
 ): Promise<number> {
   const given = sources.filter((s): s is AdChangeSource => !!s)
   if (!given.length || !approvalId) return 0
   const recommendationIds = given.filter((s) => s.kind === 'recommendation').map((s) => s.id)
-  const writes = new Map<string, number>()
-  for (const s of given.filter((x) => isHeld(x.kind))) writes.set(s.id, (writes.get(s.id) ?? 0) + 1)
+  const writes = new Map<string, number[]>()
+  sources.forEach((s, i) => { if (s && isHeld(s.kind)) writes.set(s.id, [...(writes.get(s.id) ?? []), i]) })
+  const frozen = frozenFacts([opts.approvedPreview])
   let settled = 0
   try {
     if (recommendationIds.length) settled += await settleRecommendations(recommendationIds, approvalId)
@@ -301,16 +357,29 @@ export async function settleSources(
     const proposalIds = [...writes.keys()].filter((id) => id.startsWith(HELD_PREFIX.tracker))
     if (decisionIds.length) {
       const m = await import('../../advertising/autopilot/decisions.js')
-      const frozen = new Map(frozenFacts(opts.approvedPreview).filter((f) => f.kind === 'autopilot').map((f) => [f.id, (f as Extract<SourceFact, { kind: 'autopilot' }>).decision]))
+      const was = new Map(frozen.filter((f): f is Extract<SourceFact, { kind: 'autopilot' }> => f.kind === 'autopilot').map((f) => [f.id, f.decision]))
       const now = await m.decisionFacts(decisionIds.map((id) => id.slice(HELD_PREFIX.autopilot.length)))
-      const carried = decisionIds
-        .map((id) => ({ facts: frozen.get(id) ?? now.get(id.slice(HELD_PREFIX.autopilot.length)), targets: writes.get(id) }))
-        .filter((c): c is { facts: DecisionFacts; targets: number } => !!c.facts)
+      // The request changed nothing else (one step, every write this decision's): the tab may offer its own Undo.
+      const steps = await prisma.agentPlanStep.count({ where: { approvalId } })
+      const carried = decisionIds.flatMap((id) => {
+        const facts = was.get(id) ?? now.get(id.slice(HELD_PREFIX.autopilot.length))
+        if (!facts) return []
+        const own = writes.get(id)!
+        const receipts = own.map((i) => opts.receipts?.[i]).filter((r): r is WriteReceipt => !!r)
+        return [{
+          facts, targets: own.length,
+          actionLogId: receipts.find((r) => r.actionLogId)?.actionLogId ?? null,
+          outboundQueueId: own.length === 1 ? receipts[0]?.outboundQueueId ?? null : null,
+          alone: steps <= 1 && sources.every((s) => s?.id === id),
+        }]
+      })
       settled += await m.settleDecisionsCarried(carried, approvalId)
     }
     if (proposalIds.length) {
       const m = await import('../../advertising/kt6-proposal.service.js')
-      settled += await m.settleProposalsCarried(proposalIds.map((id) => ({ id: id.slice(HELD_PREFIX.tracker.length), targets: writes.get(id) ?? 0 })), approvalId, opts.by ?? null)
+      // Only a change that set every one of a proposal's targets carries it out.
+      const whole = proposalIds.filter((id) => frozen.some((f) => f.kind === 'tracker' && f.id === id && f.covers.targets === f.covers.of))
+      settled += await m.settleProposalsCarried(whole.map((id) => ({ id: id.slice(HELD_PREFIX.tracker.length), targets: writes.get(id)!.length })), approvalId, opts.by ?? null)
     }
     return settled
   } catch (error) {

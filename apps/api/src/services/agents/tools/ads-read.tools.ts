@@ -1263,9 +1263,9 @@ const SUGGESTED_TOOL: Partial<Record<(typeof REC_CATEGORIES)[number], string>> =
 /** W4-9 — the change tool an autopilot plan's decision is carried out with, by its module (apply-ad-recommendations does it). */
 const AUTOPILOT_TOOL: Record<string, string> = { bid: 'bulk-ad-bid-change', budget: 'set-campaign-budget', placement: 'set-placement-multipliers' }
 const AUTOPILOT_HOW: Record<string, string> = {
-  bid: 'Carried out as its plan applies a bid decision: the per-target bid optimizer at the plan\'s target, run when apply-ad-recommendations is asked, its bids fixed in the request.',
+  bid: 'Carried out with bulk-ad-bid-change: the bids the plan\'s optimizer computes at the plan\'s target when apply-ad-recommendations is asked, frozen in the request.',
   budget: 'Carried out with set-campaign-budget at the budget it names.',
-  placement: 'Carried out with set-placement-multipliers: top of search nudged as it says, from the adjustment the campaign has then.',
+  placement: 'Carried out with set-placement-multipliers: top of search nudged by its step, from the adjustment the campaign has then.',
 }
 const AUTOPILOT_LIFE = 'Its plan replaces its waiting decisions on every run (every 15 minutes): carry it out or dismiss it soon after reading it.'
 
@@ -1481,8 +1481,8 @@ const adRecommendations: AgentTool = {
         detail: p.confirmationText,
         ...(p.ceilingVerdict !== 'NO_CEILING' ? { note: p.ceilingMessage } : {}),
         proposedAt: iso(p.proposedAt),
-        suggestedTool: p.targetIds.length === 1 ? 'set-target-bid' : 'bulk-ad-bid-change',
-        carriedOut: 'Carried out with its one bid on each of its targets, after the Keyword Tracker\'s own checks (the same targets as when it was raised, its spend ceiling today).',
+        suggestedTool: 'bulk-ad-bid-change',
+        carriedOut: 'Carried out with bulk-ad-bid-change, its one bid on each of its targets, after the Keyword Tracker\'s own checks (the same targets as when it was raised, its spend ceiling today with the request\'s other proposals), checked again before it writes.',
         _campaign: null,
         _campaigns: [...new Set<string>(p.targetIds.map((t) => proposalCampaignOf.get(t) ?? '').filter(Boolean))],
         _market: p.marketplace,

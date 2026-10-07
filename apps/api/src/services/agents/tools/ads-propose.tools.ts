@@ -26,8 +26,7 @@
  * ADS AUTONOMY W3-1 — all three take an optional `source` (ads-change-source.ts): the engine recommendation the change
  * carries out (apply-ad-recommendations sets it). It must name this change's own recommendation; it is kept in the
  * preview and on the ads audit row, and once the write ran the recommendation is settled (not offered again until the
- * data shows what the change did). W4-9 — set-target-bid also carries out an autopilot BID decision of the target's
- * campaign or a Keyword Tracker proposal naming the target at this bid, and marks it applied once the write ran.
+ * data shows what the change did).
  *
  * The protected-terms check is the write gate's own matcher (ads-negation-policy.ts, 5a): EXACT / PREFIX / CONTAINS, and
  * a phrase negative that a protected term contains; it is not re-invented. Amazon's text limits are checked there too.
@@ -51,7 +50,7 @@ import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
 import { DEFAULT_MIN_ORDERS, DEFAULT_WINDOW_DAYS, meetsHarvest } from '../../advertising/ads-harvest.service.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { sameProductHome } from '../../advertising/ads-winner-lock.js'
-import { heldSources, notOfferedRefusal, recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource } from './ads-change-source.js'
+import { notOfferedRefusal, recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource } from './ads-change-source.js'
 import type { AgentTool, FieldPermission, ToolResult, ToolUndo } from '../tool-types.js'
 
 const BID_FLOOR_CENTS = 5
@@ -796,10 +795,8 @@ const TARGET_BID_LIMITS = adKitLimits({ maxItems: 1 }, STEP_PCT_LIMITS)
 /**
  * The bid a set-target-bid request would write, and everything the approver must see — or why it is refused.
  * `rule` (the dry run, not `execute`): AA-W2-6 — also the facts its limits are judged on when it may run by rule.
- * `recheck` (W4-9): the request's own re-check (a person approving it, its run): an autopilot decision the plan's tick
- * replaced since is still carried out (ads-change-source.ts heldSources).
  */
-async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null }; recheck?: boolean } = {}): Promise<ToolResult> {
+async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null } } = {}): Promise<ToolResult> {
   const targetId = String(args.targetId ?? '')
   const proposedBidCents = Math.round(Number(args.proposedBidCents))
   if (!targetId || !Number.isFinite(proposedBidCents)) {
@@ -808,10 +805,9 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
   if (proposedBidCents < BID_FLOOR_CENTS) {
     return { ok: false, error: `proposed bid ${proposedBidCents}c is below the ${BID_FLOOR_CENTS}c floor` }
   }
-  // W3-1 — a source names this target's own bid recommendation, or the request is refused. W4-9 — or an autopilot BID
-  // decision of its campaign, or a Keyword Tracker proposal naming this target at this bid (checked below).
+  // W3-1 — a source names this target's own bid recommendation, or the request is refused.
   const changeSource = sourceOf(args.source)
-  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.bid(targetId), { held: 'bid' })
+  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.bid(targetId))
   if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
   const target = await prisma.adTarget.findUnique({
     where: { id: targetId },
@@ -850,8 +846,6 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
   const campaign = target.adGroup.campaign
   const notSp = spOnlyRefusal(campaign)
   if (notSp) return { ok: false, error: notSp }
-  const held = await heldSources([{ source: changeSource, subject: { change: 'bid', campaignId: campaign.id, targetId: target.id, valueCents: proposedBidCents } }], !!opts.recheck)
-  if ('refusal' in held) return { ok: false, error: `Not queued: ${held.refusal}.` }
   // 4A (Owner decided 2026-10-06) — a pin does not stop it: it runs only once a person approves it, as his own click.
   const currentBidCents = target.bidCents ?? 0
   // The bid that lands: the CPC ceiling first (as the bid routes apply it), then the campaign's max-change guardrail.
@@ -906,7 +900,7 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...(rule ?? {}),
-      ...sourcePreview(changeSource, held.facts),
+      ...sourcePreview(changeSource),
       effect: `Moves "${target.expressionValue}" from ${amountLabel(currentBidCents, currency)} to ${amountLabel(effectiveBidCents, currency)} in ${campaign.name}.`,
     },
   }
@@ -971,10 +965,10 @@ const setTargetBid: AgentTool = {
     + 'held by the live-write allowlist, pins and the campaign\'s own bid bounds. Once approved it runs as the approver; '
     + 'undo-change puts the old bid back.',
   async handler(args, ctx) {
-    return targetBidPreview(args, { rule: { approvalId: ctx.approvalId }, recheck: !!ctx.approvalId })
+    return targetBidPreview(args, { rule: { approvalId: ctx.approvalId } })
   },
   async execute(args, ctx) {
-    const fresh = await targetBidPreview(args, { recheck: true })
+    const fresh = await targetBidPreview(args)
     const refusal = recheck(ctx, fresh, TARGET_BID_MATERIAL)
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { target: { id: string; expression: string }; currentBidCents: number; proposedBidCents: number; effectiveBidCents?: number; reach: unknown; effect: string; currency: string }
@@ -993,7 +987,7 @@ const setTargetBid: AgentTool = {
       ...(changeSource ? { evidence: withSource(null, changeSource) } : {}), // W3-1
     })
     if (!out.ok) return notRun(`Not run: the bid write was refused (${out.error ?? 'unknown'}). Nothing changed.`)
-    await settleSources([changeSource], run.changeSetId, { approvedPreview: ctx.approvedPreview, by: run.actor })
+    await settleSources([changeSource], run.changeSetId)
     const written = await prisma.adTarget.findFirst({ where: { id: p.target.id }, select: { bidCents: true } })
     const after = written?.bidCents ?? newBidCents
     return {
