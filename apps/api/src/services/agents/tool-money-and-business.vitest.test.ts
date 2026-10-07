@@ -269,6 +269,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // A2 — the ad reads, aimed at the seeded campaign where they take one (business B's reads as not found from A).
   // A10 — undo of an ad change set (it needs money: refused for a person without it).
   'undo-ad-change': () => ({ changeSetId: 'none' }),
+  'undo-worse-ad-change': () => ({ judgementId: 'none' }),
   // A6 — campaign budget and placements (they need money: refused for a person without it).
   'set-campaign-budget': (ids) => ({ campaignId: ids.campaignId, dailyBudgetCents: 2500 }),
   'set-placement-multipliers': (ids) => ({ campaignId: ids.campaignId, topOfSearchPct: 30 }),

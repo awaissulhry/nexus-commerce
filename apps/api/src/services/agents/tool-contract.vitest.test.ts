@@ -505,6 +505,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },
+      // Auto-undo (A19) — a person's approved undo of one judged change is put back by undo-ad-change of its change set.
+      'undo-worse-ad-change': { before: { changeSetId: 'ap3', undid: { judgementId: 'j1' } }, after: { changeSetId: 'ap3', standing: 1 } },
       // W4-7 — a plan, a schedule and a pool are set back through their own tool; a restore to baseline through
       // set-campaign-budget's list form.
       'set-monthly-ad-budget': {

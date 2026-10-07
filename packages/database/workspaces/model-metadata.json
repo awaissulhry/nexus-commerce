@@ -6386,6 +6386,10 @@
       "fields": []
     },
     {
+      "name": "AdsAutoUndoJudgement",
+      "fields": []
+    },
+    {
       "name": "AdsAutomationState",
       "fields": [
         {

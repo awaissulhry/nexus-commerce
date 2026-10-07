@@ -340,6 +340,9 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'ad-rank-defend': () => import('./ad-rank-defend.job.js').then(async (m) => m.rankDefendSummaryLine(await m.runRankDefendOnce())),
   'ad-budget-enforce': () => import('./ad-budget-enforce.job.js').then((m) => m.runBudgetEnforceOnce()),
   'ads-auto-bid': () => runAutoBidLiveOnce(),
+  // ADS AUTONOMY — auto-undo (A19): judges the automatic ad changes due a judgement and, at its level, records, asks or
+  // puts back. Its own switch (born OBSERVE) and the account dial bind a manual run as they bind the tick.
+  'ads-auto-undo': () => import('./ads-auto-undo.job.js').then((m) => m.runAdsAutoUndoOnce()),
   // NAF.B — the nightly analyst sweep (read-only fleet; findings only).
   'fleet-sweep': () => import('./fleet-sweep.job.js').then((m) => m.runFleetSweepOnce()),
   // NAF.C — the weekly council (director + critic; queues approvals, no writes).

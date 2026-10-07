@@ -843,6 +843,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'create-ebay-campaign': ['plan', 'account', 'ceiling', 'reach'],
   // A10 — what the undo restores (each write and the value it puts back), the negatives it retires, where it lands.
   'undo-ad-change': ['source', 'rows', 'negatives', 'reach'],
+  /* ADS AUTONOMY — auto-undo's one undo: the judgement it carries out, what goes back (from → to) and where it lands. */
+  'undo-worse-ad-change': ['judgement', 'restore', 'reach'],
   // W4-5 — every target or negative with its place and bids (a harvest: its term, source, destination, bid and negative
   // plan, a bid it worked out itself frozen in the approval; a retire: every negative with who made it), where it lands;
   // for negatives also the other products' places and the proven handovers they would close (never the numbers, which

@@ -1,5 +1,5 @@
 /**
- * R5 (MCP full control, part 06) — the automation catalog: all 39 automations, each at the level its own source says,
+ * R5 (MCP full control, part 06) — the automation catalog: all 39 automations (and A19, auto-undo), each at the level its own source says,
  * held under what the server's env allows; an automation the env switches off reads OFF and names the flag.
  *
  * On a real PostgreSQL (PGlite, production schema), in one business. Env flags are set per test and restored.
@@ -66,10 +66,10 @@ afterAll(async () => {
 }, 30_000)
 
 describe('R5 — the automation catalog', () => {
-  it('lists all 39 automations of the inventory, in order, each with a key, a view permission and a preview statement', async () => {
+  it('lists all 40 automations of the inventory (the 39 and A19, auto-undo), in order, each with a key, a view permission and a preview statement', async () => {
     const entries = await inside(() => getAutomationCatalog())
     expect(entries.map((e) => e.id)).toEqual([...AUTOMATION_IDS])
-    expect(new Set(entries.map((e) => e.key)).size).toBe(39)
+    expect(new Set(entries.map((e) => e.key)).size).toBe(40)
     for (const e of entries) {
       expect(e.name && e.what && e.previewNote, e.id).toBeTruthy()
       expect(isValidPermission(automationAdapter(e.id)!.view), e.id).toBe(true)
@@ -226,7 +226,7 @@ describe('R5 — the automation catalog', () => {
     ])
     expect(await counts()).toEqual([0, 0, 0, 0])
     const entries = await withWorkspace(other, () => getAutomationCatalog())
-    expect(entries).toHaveLength(39)
+    expect(entries).toHaveLength(40)
     // Nothing of the first business shows here.
     expect(JSON.stringify(entries)).not.toContain('TEST ')
     expect(await counts()).toEqual([0, 0, 0, 0])

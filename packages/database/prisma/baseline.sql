@@ -8271,6 +8271,42 @@ CREATE TABLE "AutomationSwitch" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsAutoUndoJudgement" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "actionLogId" TEXT NOT NULL,
+    "actor" TEXT NOT NULL,
+    "origin" TEXT NOT NULL,
+    "originLabel" TEXT,
+    "approvalId" TEXT,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "entityLabel" TEXT,
+    "marketplace" TEXT,
+    "lever" TEXT NOT NULL,
+    "direction" TEXT NOT NULL,
+    "fromValue" DOUBLE PRECISION,
+    "toValue" DOUBLE PRECISION,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "verdict" TEXT NOT NULL,
+    "outcome" TEXT,
+    "evidence" JSONB,
+    "action" TEXT NOT NULL DEFAULT 'none',
+    "actionReason" TEXT,
+    "actionAt" TIMESTAMP(3),
+    "level" TEXT NOT NULL,
+    "undoApprovalId" TEXT,
+    "undoActionLogId" TEXT,
+    "final" BOOLEAN NOT NULL DEFAULT false,
+    "judgedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "checkedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsAutoUndoJudgement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsAutomationState" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL DEFAULT 'singleton',
@@ -14509,6 +14545,18 @@ CREATE INDEX "AutomationSwitch_workspaceId_idx" ON "AutomationSwitch"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AutomationSwitch_workspace_key_key" ON "AutomationSwitch"("workspaceId", "key");
+
+-- CreateIndex
+CREATE INDEX "AdsAutoUndoJudgement_workspaceId_idx" ON "AdsAutoUndoJudgement"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsAutoUndoJudgement_final_checkedAt_idx" ON "AdsAutoUndoJudgement"("final", "checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsAutoUndoJudgement_action_actionAt_idx" ON "AdsAutoUndoJudgement"("action", "actionAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsAutoUndoJudgement_workspace_actionLogId_key" ON "AdsAutoUndoJudgement"("workspaceId", "actionLogId");
 
 -- CreateIndex
 CREATE INDEX "AdsAutomationState_workspaceId_idx" ON "AdsAutomationState"("workspaceId");
