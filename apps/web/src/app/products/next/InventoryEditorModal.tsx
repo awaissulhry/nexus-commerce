@@ -16,9 +16,7 @@ import { Modal, Combobox, Listbox, MultiSelect } from '@/design-system/component
 import { GridToolbar } from '@/design-system/patterns'
 import { Input, Button, Pill } from '@/design-system/primitives'
 import { GridFooterSpacer, GridFooterStrip, GridPanel, type GridApi } from '@/design-system/grid'
-import type { ProductRow } from '../_types'
-
-import { useInventoryEditor } from './useInventoryEditor'
+import { useInventoryEditor, type InventoryEditorTarget } from './useInventoryEditor'
 import type { DensityMode } from './density'
 import { InventoryGrid, OPTIONAL_COLUMN_KINDS, OPTIONAL_COLUMN_LABELS, type OptionalColumnKind } from './InventoryGrid'
 import { changesOf, DEFAULT_REASON, editorModeForRow, pendingKey, REASON_OPTIONS, withEdit, type MatrixRow } from './inventoryEditor.logic'
@@ -33,7 +31,7 @@ const readHidden = (): OptionalColumnKind[] => {
   } catch { return [] }
 }
 
-export function InventoryEditorModal({ row, density, onClose }: { row: ProductRow | null; density: DensityMode; onClose: () => void }) {
+export function InventoryEditorModal({ row, density, onClose }: { row: InventoryEditorTarget | null; density: DensityMode; onClose: () => void }) {
   const open = row != null
   const single = row ? editorModeForRow(row) === 'list' : true
   const { loading, error, model, reload, applyBatch } = useInventoryEditor(row)

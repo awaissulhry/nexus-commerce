@@ -14,6 +14,9 @@ import type { ProductRow } from '@/app/products/_types'
 
 import { buildMatrixModel, buildSingleModel, editorModeForRow, type MatrixModel, type RawLocation } from './inventoryEditor.logic'
 
+/** What the editor needs from the row that opened it: a Products page row, or a Matrix row (Stock cell). */
+export type InventoryEditorTarget = Pick<ProductRow, 'id' | 'sku' | 'name' | 'isParent'> & Partial<Pick<ProductRow, 'imageUrl' | 'lowStockThreshold'>>
+
 interface State {
   loading: boolean
   error: string | null
@@ -31,7 +34,7 @@ export interface BatchResult {
   code?: string
 }
 
-export function useInventoryEditor(row: ProductRow | null) {
+export function useInventoryEditor(row: InventoryEditorTarget | null) {
   const [state, setState] = useState<State>(EMPTY)
   const reqId = useRef(0)
   const productId = row?.id ?? null

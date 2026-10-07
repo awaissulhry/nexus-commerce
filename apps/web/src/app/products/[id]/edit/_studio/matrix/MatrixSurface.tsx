@@ -64,6 +64,10 @@ import {
 } from '@/design-system/grid'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { InventoryEditorModal } from '@/app/products/next/InventoryEditorModal'
+import type { InventoryEditorTarget } from '@/app/products/next/useInventoryEditor'
+import { DEFAULT_DENSITY } from '@/app/products/next/density'
 
 import { useRegisterViewChip, useSaveReporter, useStudioScope, useViewChips } from '../contracts'
 import { SHEET_STATE_OVERLAYS, sheetEmptyState } from '../sheet/sheetGridStates'
@@ -251,6 +255,21 @@ export function MatrixSurface({ productId }: { productId: string }) {
   // Shared stock by SKU (2026-10-01): "Stock source…" — the ticked SKUs, or the whole family when the parent is ticked.
   const [stockSourceTargets, setStockSourceTargets] = useState<StockSourceTarget[] | null>(null)
   const canSwitchStock = has('inventory.adjust')
+  /* Stock per location (Owner 2026-10-07): the Stock cell opens the Products page's inventory editor — the SAME
+     component — for its row: a parent opens the family, a variant its own SKU. */
+  const [stockRow, setStockRow] = useState<InventoryEditorTarget | null>(null)
+  const openStock = useCallback((rowId: string) => {
+    const r = rowsRef.current.find((x) => x.id === rowId)
+    const m = matrix.rowOf(rowId)
+    if (!r || !m) return
+    // A variant often has no name of its own: the editor's title is then the family's name.
+    const parent = rowsRef.current.find((x) => matrix.rowOf(x.id)?.role === 'parent')
+    const name = r.name?.trim() || parent?.name?.trim() || r.sku
+    setStockRow({ id: r.id, sku: r.sku, name, isParent: m.role === 'parent', imageUrl: r.imageUrl ?? null })
+  }, [matrix])
+  const stockDoor = !previewMode && canSwitchStock ? openStock : undefined
+  // The editor's Apply says `stock.adjusted` (this tab and the others): the Matrix re-reads its numbers quietly.
+  useInvalidationChannel('stock.adjusted', () => { matrix.refresh() })
   const onReloadRef = useRef<() => void>(() => {})
 
   /**
@@ -552,9 +571,9 @@ export function MatrixSurface({ productId }: { productId: string }) {
       coordinates: visibleCoordinates, cellsOf: matrix.cellsOf, rowOf: matrix.rowOf, tracker,
       sheetColumns: sheet?.columns ?? [], locale: localeOrFirst, market: marketOrFirst,
       axesRef, rowMenuRef, masterHeldReason, onJump, onPickFulfilment, rowsRef, identityWidth,
-      statusColumnOf: previewMode ? undefined : statusColumnOf,
+      statusColumnOf: previewMode ? undefined : statusColumnOf, onOpenStock: stockDoor,
     }),
-    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, masterHeldReason, onJump, onPickFulfilment, identityWidth, previewMode, statusColumnOf],
+    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, masterHeldReason, onJump, onPickFulfilment, identityWidth, previewMode, statusColumnOf, stockDoor],
   )
   const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true }), [])
   const rowSelection = useMemo(() => gridSelection<StudioRow>(), [])
@@ -612,7 +631,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
     sayReason(held.reason, 'info')
     return true
   }, [tracker, matrix, sayReason])
-  const onCellDoubleClicked = useCallback((e: { data?: StudioRow; colDef?: { colId?: string } }) => { explainHeld(e) }, [explainHeld])
+  const onCellDoubleClicked = useCallback((e: { data?: StudioRow; colDef?: { colId?: string } }) => {
+    if (e.colDef?.colId === STOCK_COL && e.data && stockDoor) { stockDoor(e.data.id); return }
+    explainHeld(e)
+  }, [explainHeld, stockDoor])
   /* AG's union includes a full-width variant without `colDef`; both are typed loosely and guarded. */
   const onCellKeyDown = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null; column?: { getColId(): string } | null }) => {
     /* Delete / Backspace on a market's Status: the selected Status cells go back to "no change" (the sheet's rule). */
@@ -622,9 +644,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
     })) return
     const key = e.event as KeyboardEvent | undefined
     if (!key || key.altKey || key.ctrlKey || key.metaKey) return
+    if ((key.key === 'Enter' || key.key === 'F2') && e.colDef?.colId === STOCK_COL && e.data && stockDoor) { stockDoor(e.data.id); return }
     const opens = key.key === 'Enter' || key.key === 'F2' || (key.key.length === 1 && key.key !== ' ')
     if (opens) explainHeld(e)
-  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf])
+  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf, stockDoor])
 
   /* ── views: presets + saved views on the Matrix surface ─────────────────────────────────── */
 
@@ -947,6 +970,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
         onClose={() => setStockSourceTargets(null)}
         onSwitched={onStockSourceSwitched}
       />
+
+      <InventoryEditorModal row={stockRow} density={DEFAULT_DENSITY} onClose={() => setStockRow(null)} />
 
       <BulkEditDialog
         open={!!bulk}

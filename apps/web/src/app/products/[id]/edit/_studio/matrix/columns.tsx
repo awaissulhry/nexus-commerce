@@ -21,7 +21,7 @@
  */
 import type { MutableRefObject } from 'react'
 
-import type { MenuItemDef } from '@/design-system/components'
+import { CellAction, type MenuItemDef } from '@/design-system/components'
 import { Pill, Tag } from '@/design-system/primitives'
 import { poolSourceSentence } from '@/app/_shared/stock-pool/PoolSourceTag'
 import { lockedColumn, matrixColumnDef, numericColumn, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
@@ -176,15 +176,22 @@ export function MatrixGroupHeader(p: { displayName: string; coordinate?: MatrixC
 
 function stockOf(row: MatrixRowRead | null): MatrixRowRead['stock'] | null { return row?.stock ?? null }
 
-function StockCell(p: ICellRendererParams<StudioRow> & { rowOf?: (id: string) => MatrixRowRead | null }) {
+/** The Stock cell's door: the Products page's inventory editor (stock per location), for this row. */
+export const STOCK_EDIT_COPY = { label: 'Stock by location', detail: 'Enter or F2 opens the stock per location.' } as const
+
+function StockCell(p: ICellRendererParams<StudioRow> & { rowOf?: (id: string) => MatrixRowRead | null; onOpenStock?: (rowId: string) => void }) {
   const d = p.data
   const s = d ? stockOf(p.rowOf?.(d.id) ?? null) : null
-  if (!s) return null
-  if (s.uncounted) return <span className="nds-cell-value nds-cell-stock-out"><span className="nds-cell-value-text">⚠ {MATRIX_COPY.uncounted}</span></span>
+  if (!d || !s) return null
+  const open = p.onOpenStock
+    ? <CellAction label={STOCK_EDIT_COPY.label} description={STOCK_EDIT_COPY.detail} onActivate={() => p.onOpenStock?.(d.id)}
+        onFocusCell={() => { const col = p.column?.getColId(); if (p.node.rowIndex != null && col) p.api.setFocusedCell(p.node.rowIndex, col) }} />
+    : null
+  if (s.uncounted) return <span className={styles.stockShared}>{open}<span className="nds-cell-value nds-cell-stock-out"><span className="nds-cell-value-text">⚠ {MATRIX_COPY.uncounted}</span></span></span>
   const number = <span className="nds-cell-value nds-cell-num"><span className="nds-cell-value-text">{s.available ?? '—'}</span></span>
   // Shared stock by SKU: a SKU that sells from another business's stock says so; the tooltip names the business.
-  if (s.source) return <span className={styles.stockShared}>{number}<Pill tone="info">Shared</Pill></span>
-  return number
+  if (s.source) return <span className={styles.stockShared}>{open}{number}<Pill tone="info">Shared</Pill></span>
+  return open ? <span className={styles.stockShared}>{open}{number}</span> : number
 }
 
 /**
@@ -259,6 +266,8 @@ export interface BuildMatrixColumnsOptions {
   identityWidth?: number
   /** A market's Status column (the page builds it with `statusColumn`), placed right after its Listing; null = none. */
   statusColumnOf?: (coord: MatrixCoordinate) => ColDef<StudioRow> | null
+  /** The Stock cell opens the stock per location for a row (absent = no door: preview, or no right to adjust stock). */
+  onOpenStock?: (rowId: string) => void
 }
 
 const rowId = (r: StudioRow) => r.id
@@ -309,14 +318,15 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
   const stock: ColDef<StudioRow> = {
     colId: STOCK_COL,
     headerName: 'Stock',
-    headerTooltip: 'The routed WAREHOUSE pool this SKU follows — the number Follow rows derive from. "Shared": the stock another business lends. Parent = the family total.',
+    headerTooltip: 'The routed WAREHOUSE pool this SKU follows — the number Follow rows derive from. "Shared": the stock another business lends. Parent = the family total. Enter or the pencil opens the stock per location.',
     width: 112, minWidth: 96,
     editable: false, suppressMovable: true, suppressHeaderMenuButton: true, sortable: true, resizable: true,
     /* A number column: right-aligned with tabular figures, as FBA qty and every market's Qty and Price beside it. */
-    type: numericColumn.type, cellClass: numericColumn.cellClass, headerClass: numericColumn.headerClass,
+    type: numericColumn.type, cellClass: [...numericColumn.cellClass, 'nds-reveal-row'], headerClass: numericColumn.headerClass,
     valueGetter: (p) => (p.data ? stockOf(rowOf(p.data.id))?.available ?? null : null),
     cellRenderer: StockCell,
-    cellRendererParams: { rowOf },
+    cellRendererParams: { rowOf, onOpenStock: opts.onOpenStock,
+      suppressMouseEventHandling: (p: { event: MouseEvent }) => p.event.target instanceof Element && !!p.event.target.closest('[data-nds-cell-action]') },
     tooltipValueGetter: (p) => {
       const s = p.data ? stockOf(rowOf(p.data.id)) : null
       if (!s) return undefined
