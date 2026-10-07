@@ -1078,6 +1078,7 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'set-hourly-bid-plan': {
     op: 'rename', get planId() { return seeded.b.hourlyPlanId }, name: 'MCP8 probe plan', market: undefined, campaignIds: undefined, add: undefined,
     remove: undefined, move: undefined, windows: undefined, days: undefined, defaultTargetKey: undefined, timezone: undefined, on: undefined, values: undefined,
+    portfolioId: undefined,
   },
   // P9 — a file naming B's product by its SKU (built once B is seeded); the saved mapping maps its Name column.
   'import-catalog': () => ({ text: `SKU,Name\n${seeded.b.sku},MCP8 probe name` }),
