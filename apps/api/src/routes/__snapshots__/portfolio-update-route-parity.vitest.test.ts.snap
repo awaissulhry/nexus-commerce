@@ -1,0 +1,17 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`W4-3 — the portfolio route answers as before the move > every outcome, and what Nexus holds after 1`] = `
+"{} → 400 {"error":"name, state or budget required"}
+{"name":"   "} → 400 {"error":"name, state or budget required"}
+{"budget":{"amount":0,"policy":"monthlyRecurring"}} → 400 {"error":"budget requires amount > 0 and policy monthlyRecurring|dateRange"}
+{"budget":{"amount":"50","policy":"monthlyRecurring"}} → 400 {"error":"budget requires amount > 0 and policy monthlyRecurring|dateRange"}
+{"budget":{"amount":100,"policy":"weekly"}} → 400 {"error":"budget requires amount > 0 and policy monthlyRecurring|dateRange"}
+{"budget":{"amount":100,"policy":"dateRange","startDate":"2026-11-01"}} → 400 {"error":"dateRange budget requires startDate + endDate"}
+{"budget":{"amount":100,"policy":"dateRange","endDate":"2026-11-30"}} → 400 {"error":"dateRange budget requires startDate + endDate"}
+{"name":"PARITY elsewhere"} → 404 {"ok":false,"mode":"local","error":"portfolio not found"}
+{"name":"  PARITY renamed  ","ignored":true} → 200 {"ok":true,"mode":"local"}
+{"budget":{"amount":250,"policy":"monthlyRecurring"}} → 200 {"ok":true,"mode":"local"}
+{"budget":{"amount":300.5,"currencyCode":"GBP","policy":"dateRange","startDate":"2026-11-01","endDate":"2026-11-30"}} → 200 {"ok":true,"mode":"local"}
+{"state":"archived"} → 200 {"ok":true,"mode":"local"}
+row {"name":"PARITY renamed","state":"ARCHIVED","budgetAmount":"300.5","budgetCurrencyCode":"GBP","budgetPolicy":"DATE_RANGE","startDate":"2026-11-01T00:00:00.000Z","endDate":"2026-11-30T00:00:00.000Z"}"
+`;
