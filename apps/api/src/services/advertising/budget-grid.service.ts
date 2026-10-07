@@ -27,7 +27,8 @@
  * diverges from Amazon instead. Measured: 28 ENABLED campaigns sit above €1; 24 have the gate open;
  * the other 4 have absorbed **488 identical €10.00 → €1.00 cuts** (122 each) that all ended
  * `SKIPPED / WRITE_GATE_DENIED`, and all 488 still read `amazonResponseStatus = 'PENDING'` because
- * that field is stamped at enqueue and never corrected when the worker skips the row. That is why
+ * that field was stamped at enqueue and not corrected when the worker skipped the row (since W4-12 the
+ * worker marks it SKIPPED; older rows keep PENDING, so the queue row stays the truth). That is why
  * `reachableCents` and `cuttable` are two different numbers on this page: **cuttable is 28, reaches
  * Amazon is 24**, and calling the 4 "protected" would be exactly backwards.
  *
@@ -455,8 +456,8 @@ export async function getBudgetGrid(req: BudGridRequest): Promise<BudGridResult>
   }) : []
 
   // Which of those writes actually reached Amazon. `amazonResponseStatus` cannot answer this: it is
-  // stamped PENDING at enqueue and never corrected when the worker skips the row, which is why all
-  // 488 gate-denied writes still read PENDING. The queue row is the truth.
+  // stamped PENDING at enqueue, and before W4-12 it was never corrected when the worker skipped the row,
+  // which is why all 488 older gate-denied writes still read PENDING. The queue row is the truth.
   const queueIds = [...new Set(logs.map((l) => l.outboundQueueId).filter((x): x is string => !!x))]
   const queueRows = queueIds.length ? await prisma.outboundSyncQueue.findMany({
     where: { id: { in: queueIds } },

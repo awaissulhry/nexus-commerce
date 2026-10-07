@@ -1126,7 +1126,7 @@ async function enqueueBullMQJob(queueRowId: string, syncType: AdSyncType): Promi
   try {
     const { adsSyncQueue } = await import('../../lib/queue.js')
     const add = adsSyncQueue
-      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: `ads-sync:${queueRowId}` })
+      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: `ads-sync-${queueRowId}` })
       .then(() => undefined)
       .catch((err: unknown) => {
         logger.warn('[ads-mutation] BullMQ enqueue failed (cron drain will handle)', {
@@ -2120,5 +2120,9 @@ export async function cancelPendingMutation(outboundQueueId: string): Promise<{
   // PENDING would keep suppressing drift on its fields for the full trust
   // window, which is exactly the bug this model exists to remove.
   await settleAdMutations(outboundQueueId, 'CANCELLED')
+  // W4-12 — and its action log: left PENDING, the change feed and undo read a cancelled write as one that landed.
+  await prisma.advertisingActionLog
+    .updateMany({ where: { outboundQueueId, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'CANCELLED' } })
+    .catch(() => { /* audit-update failure must not fail the cancel */ })
   return { ok: true, error: null, restored: put.restored, kept: put.kept }
 }
