@@ -115,7 +115,7 @@ function ScopedOrderEditor({ open, embedded = false, productId, marketplace, acc
           </Card>)}
         </div>
       </div>}
-      <p>Drag to reorder, or use the up and down buttons. These settings apply to this alias’s variation family; shared variants and Information grid sorting keep their own order.</p>
+      <p>Drag to reorder, or use the up and down buttons. These settings apply to this listing’s variation family. The Matrix and the Information page list the variations in the order saved on a main listing (when several main listings have one, the first by channel and market); an alias’s order changes only that alias.</p>
       {view.warnings.filter(w => !view.conflicts.includes(w)).map(w => <Banner key={w} tone="neutral">{w}</Banner>)}
       <p>Saving updates this listing’s order. Publication requires a separate review. Inventory-managed publication is unavailable.</p>
     </>}

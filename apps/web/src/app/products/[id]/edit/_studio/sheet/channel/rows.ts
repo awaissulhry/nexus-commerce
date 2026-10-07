@@ -19,6 +19,8 @@
 
 import { writeGate as substrateWriteGate } from '@/design-system/grid/editors/writeGate'
 
+import { compareFamilyRank } from '../familyOrder'
+
 import { aliasKeyOf, studioRowId, type AliasGroup, type ChannelSheetRow, type StudioCellValue, type StudioRow } from './types'
 
 /** Keep matching rows and the listing band of each matching variant. Bands can match themselves. */
@@ -201,12 +203,16 @@ export function rowIdOf(row: ChannelSheetRow): string {
 /**
  * Order rows so every alias band is immediately followed by its own children, bands by position
  * (primary, `position: 0`, first). A band separated from its children reads as a bug.
+ *
+ * Inside a band the children follow the FAMILY order — the Matrix's (Owner, 2026-10-07, Option A): `rank` is
+ * `familyRank`'s product id → place, so every market page lists a family's SKUs exactly as the Matrix and the Shared
+ * product page do. A row the rank does not know goes last; a tie falls back to the SKU.
  */
-export function orderRows(rows: ChannelSheetRow[]): ChannelSheetRow[] {
+export function orderRows(rows: ChannelSheetRow[], rank: ReadonlyMap<string, number>): ChannelSheetRow[] {
   return [...rows].sort((a, b) => {
     if (a.aliasPosition !== b.aliasPosition) return a.aliasPosition - b.aliasPosition
     if (a.rowKind !== b.rowKind) return a.rowKind === 'parent' ? -1 : 1
-    return a.sku.localeCompare(b.sku)
+    return compareFamilyRank(rank, a, b)
   })
 }
 

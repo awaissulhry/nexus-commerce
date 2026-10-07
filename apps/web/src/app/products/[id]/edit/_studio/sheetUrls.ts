@@ -63,3 +63,11 @@ export function destinationUrl(productId: string, channel: string, market: strin
   if (listingId !== undefined) query.set('listingId', listingId)
   return `${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/studio/destination?${query}`
 }
+
+/**
+ * The family's ORDER view (Owner 2026-10-07): the axes, their stored order and the children's axis values, without the
+ * projection reads — the Information page's row order (`sheet/useFamilyRank.ts`), started with the page's sheet read.
+ */
+export function familyOrderUrl(productId: string, market: string, locale: string): string {
+  return `${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/studio/family?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}&view=order`
+}
