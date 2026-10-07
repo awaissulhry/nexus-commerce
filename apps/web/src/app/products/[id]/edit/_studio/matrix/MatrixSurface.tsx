@@ -84,7 +84,7 @@ import { mergeAxisValues } from '../variants/family/projections'
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
 import { matrixChip, matrixChips } from './chips'
-import { BASE_PRICE_COL, buildMatrixColumns, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, isMatrixStatusColId, matrixColId, matrixStatusColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
+import { BASE_PRICE_COL, buildMatrixColumns, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
 import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
 import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixVerbTarget } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
@@ -94,7 +94,7 @@ import { StockSourceDialog, type StockSourceSwitched, type StockSourceTarget } f
 import { sharingApi } from '@/app/settings/sharing/sharingApi'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
-import { matrixStatusCell, publishCellsByPlace } from './statusCells'
+import { clearsNothing, matrixStatusCell, publishCellsByPlace, savedBeforeMatrixStatus } from './statusCells'
 import { refusalLead, refusedRowIds, type RefusedMark } from './refusals'
 import { useVerbRun } from './verbs/useVerbRun'
 import { VerbDialog, type VerbDialogInitial } from './verbs/VerbDialog'
@@ -172,7 +172,18 @@ export function MatrixSurface({ productId }: { productId: string }) {
   /* A server refusal is said the way the page says its own (`sayReason`, defined below with the verbs). */
   const sayRefusal = useRef<(reason: string) => void>(() => {})
   const onRefused = useCallback((reason: string) => sayRefusal.current(reason), [])
-  const matrix = useMatrix({ productId, accountId: accountId ?? null, locale, rows: previewRows, coordinates: coordinateSource, tracker, getApi: getApiForMatrix, can: has, onSettled, onRefused })
+  /* A Matrix write (Fulfilment, Mode, Qty, a verb…) can move what a market's Status offers (an FBA warning, what may be
+     paused): the Status read follows it, once per burst — as the Information page reads its own fresh. */
+  const readStatusAgain = useRef<() => void>(() => {})
+  const statusReread = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (statusReread.current) clearTimeout(statusReread.current) }, [])
+  const onMatrixSettled = useCallback((info: { ok: boolean; savedAt: string }) => {
+    onSettled(info)
+    if (!info.ok) return
+    if (statusReread.current) clearTimeout(statusReread.current)
+    statusReread.current = setTimeout(() => { statusReread.current = null; readStatusAgain.current() }, 400)
+  }, [onSettled])
+  const matrix = useMatrix({ productId, accountId: accountId ?? null, locale, rows: previewRows, coordinates: coordinateSource, tracker, getApi: getApiForMatrix, can: has, onSettled: onMatrixSettled, onRefused })
   const read = matrix.read
   const previewMode = read?.source === 'preview'
   const masterHeldReason = previewMode ? 'Preview data — Base price and Status are the Information sheet\'s; edit them there until the Matrix service lands.' : null
@@ -264,8 +275,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const onCellFocused = useCallback((e: { column?: { getColId?: () => string } | string | null }) => {
     const col = e.column
     const colId = typeof col === 'string' ? col : col?.getColId?.()
-    const parsed = parseMatrixColId(colId)
-    setFocusedKey(parsed ? parsed.key : null)
+    // A market's Status cell belongs to its group too: the verbs act on that market, as from any other cell of it.
+    setFocusedKey(matrixGroupKeyOf(colId))
   }, [])
   const focusedCoordinate = useCallback((): MatrixCoordinate | null => (focusedKey ? visibleCoordinates.find((c) => c.key === focusedKey) ?? null : null), [focusedKey, visibleCoordinates])
 
@@ -372,6 +383,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const publishActions = usePublishActions(productId, previewMode ? null : MATRIX_PUBLISH_DESTINATION, { familyId: sheet?.family.id ?? null })
   const publishActionsRef = useRef(publishActions)
   publishActionsRef.current = publishActions
+  readStatusAgain.current = () => { void publishActionsRef.current.reload() }
   const cellsOfRef = useRef(matrix.cellsOf)
   cellsOfRef.current = matrix.cellsOf
   const publishByPlace = useMemo(() => publishCellsByPlace(publishActions.rows), [publishActions.rows])
@@ -419,15 +431,22 @@ export function MatrixSurface({ productId }: { productId: string }) {
     read: () => publishReadRef.current,
     repaint: repaintStatusCells,
     toast: (message, tone, options) => toast.toast(message, tone, options),
-    // New listings: a choice started drafts — the Matrix reads again (quietly: the grid keeps its read) to hold their ids.
-    onStarted: () => matrix.reload(),
+    // New listings: a choice started drafts — the Matrix reads again QUIETLY (its live re-read: the grid keeps its rows and
+    // columns, and waits for an open editor) to hold their ids.
+    onStarted: () => matrix.refresh(),
   })
   const { stage: stageStatus, tracker: statusTracker, onClearKey: clearStatusCells, begin: beginStatusOperation, end: endStatusOperation } = statusEditing
   const statusColumnOf = useCallback((coord: MatrixCoordinate): ColDef<StudioRow> | null => statusColumn<StudioRow>({
     colId: matrixStatusColId(coord.key),
     cell: (row) => statusCellOf(row, coord),
     read: () => publishReadRef.current,
-    onInput: (row, input) => stageStatus(statusPlaceOf(row, coord), input),
+    onInput: (row, input) => {
+      const place = statusPlaceOf(row, coord)
+      /* A range Delete begun on another Matrix cell (AG's own clear) reaches each Status cell as a clear: like the sheet's
+         Delete rule (`onClearKey`), only a cell with a value waiting has one to clear — the rest are left as they are. */
+      if (clearsNothing(input, place.cell)) return
+      stageStatus(place, input)
+    },
     canDelete: () => canDeleteRef.current,
     tracker: statusTracker,
     rowIdOf: (row) => row.id,
@@ -548,20 +567,23 @@ export function MatrixSurface({ productId }: { productId: string }) {
     return api ? api.getAllDisplayedColumns().map((c) => c.getColId()).filter((id) => allColIds.includes(id)) : allColIds
   }, [getGridApi, allColIds])
   const [activePresetId, setActivePresetId] = useState<string | null>(ALL_VIEW_ID)
-  const applyVisible = useCallback((keys: readonly string[]) => {
+  const applyVisible = useCallback((keys: readonly string[], savedBeforeStatus = false) => {
     const api = getGridApi()
     if (!api) return
     /* The progress column is kept like the Product cell: every saved view and preset predates it, and a view that
        could not have listed it must not hide it (the sheet's structural-column rule, views.ts). */
     const want = new Set([IDENTITY_COL, SCOPE_PROGRESS_COLUMN, ...keys])
-    /* The markets' Status columns are newer than every saved view (2026-10-07): a list that names none of them shows the
-       Status of each Listing it shows, rather than hiding them all. */
-    if (!keys.some(isMatrixStatusColId))
+    /* A view saved before the markets' Status columns existed (`MATRIX_STATUS_SINCE`) could not name them: it shows the
+       Status of each Listing it shows, rather than hiding them all. A view saved since keeps exactly what it names. */
+    if (savedBeforeStatus && !keys.some(isMatrixStatusColId))
       for (const colId of allColIds) if (isMatrixStatusColId(colId) && want.has(matrixColId(colId.slice(0, colId.lastIndexOf('.')), 'listing'))) want.add(colId)
     api.applyColumnState({ state: allColIds.map((colId) => ({ colId, hide: !want.has(colId) })) })
   }, [getGridApi, allColIds])
   const applyPreset = useCallback((preset: GridViewPreset) => { applyVisible(preset.columns); setActivePresetId(preset.id); views.markActive(null) }, [applyVisible]) // eslint-disable-line react-hooks/exhaustive-deps
-  const applyColumnsView = useCallback((payload: ColumnsViewPayload) => { applyVisible(payload.columns); setActivePresetId(null) }, [applyVisible])
+  const applyColumnsView = useCallback((payload: ColumnsViewPayload, view?: { updatedAt?: string }) => {
+    applyVisible(payload.columns, savedBeforeMatrixStatus(view?.updatedAt))
+    setActivePresetId(null)
+  }, [applyVisible])
   const getPageState = useCallback((): MatrixPageState => ({ search }), [search])
   const applyPageState = useCallback((s: MatrixPageState) => { if (typeof s?.search === 'string') setSearch(s.search) }, [])
   const views = useGridState<MatrixPageState>({

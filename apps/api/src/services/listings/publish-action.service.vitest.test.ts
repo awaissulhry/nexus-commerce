@@ -658,6 +658,22 @@ describe('newRows every: every destination, read as its own channel sheet reads 
     expect(byListing(plain)).toEqual(byListing(all.filter(c => !isNewRowId(c.listingId))))
   }))
 
+  it('🔴 listings with no account (a deleted connection): never new rows there — no sheet can name that destination', () => scoped(async () => {
+    const f = await family('EV-NULL', ['S', 'M'])
+    await listing(f.root, 'AMAZON', 'IT', ids.amazon)
+    await listing(f.children.M, 'AMAZON', 'IT', ids.amazon)
+    const orphan = await listing(f.children.S, 'AMAZON', 'IT', ids.amazon)
+    await prisma.channelListing.update({ where: { id: orphan }, data: { channelConnectionId: null } })
+    const all = await every(f.root)
+    const accountless = all.filter(c => !c.accountId)
+    expect(accountless.map(c => c.listingId)).toEqual([orphan])
+    expect(all.filter(c => c.listingId.startsWith('new:')).every(c => isNewRowId(c.listingId) && !!c.accountId)).toBe(true)
+    // The account's own destination still reads as its sheet reads it (S is a new row there).
+    const named = await readPublishActions(f.root, { channel: 'AMAZON', marketplace: 'IT', accountId: ids.amazon }, { newRows: true })
+    expect(byListing(all.filter(c => c.accountId === ids.amazon))).toEqual(byListing(named))
+    expect(named.find(c => c.productId === f.children.S)).toMatchObject({ listingId: newRowId({ productId: f.children.S, channel: 'AMAZON', marketplace: 'IT', accountId: ids.amazon, aliasKey: '' }) })
+  }))
+
   it('a new row of that read is written as its market\'s own sheet writes it: the choice starts the drafts there', () => scoped(async () => {
     const f = await family('EV-WRITE', ['S', 'M'])
     await listing(f.root, 'AMAZON', 'IT', ids.amazon)

@@ -5,9 +5,9 @@ import { newRowId, type PublishActionCell } from '@nexus/shared/publish-actions'
 
 import { STATUS_COLUMN, statusColumn, type PublishCellReadState } from '../sheet/channel/statusColumn'
 import type { StudioRow } from '../sheet/master/types'
-import { buildMatrixColumns, hasMatrixStatus, isMatrixStatusColId, matrixColId, matrixStatusColId, parseMatrixColId } from './columns'
+import { buildMatrixColumns, hasMatrixStatus, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, parseMatrixColId } from './columns'
 import type { MatrixCoordinate } from './contract'
-import { matrixStatusCell, publishCellsByPlace, publishPlaceKey } from './statusCells'
+import { clearsNothing, matrixStatusCell, MATRIX_STATUS_SINCE, publishCellsByPlace, publishPlaceKey, savedBeforeMatrixStatus } from './statusCells'
 
 /**
  * The Matrix's Status columns (Owner 2026-10-07): the Information page's own Status column, once per market — "use the
@@ -59,6 +59,19 @@ describe('which publish cell a Matrix row shows on a market', () => {
     const alias = coordinate({ key: 'EBAY:IT#al-1', channel: 'EBAY', market: 'it', alias: { id: 'al-1', label: 'Second', position: 1 } })
     expect(matrixStatusCell('p1', alias, null, byListingId, byPlace)).toBe(aliasRow)
     expect(matrixStatusCell('p1', { ...alias, alias: null }, null, byListingId, byPlace)).toBeNull()
+  })
+
+  it('🔴 a listing the publish read does not hold (yet): no cell — as the sheet, never an older new row of the place', () => {
+    expect(matrixStatusCell('p2', amazonIt, 'L-UNKNOWN', byListingId, byPlace)).toBeNull()
+  })
+
+  it('🔴 a listing of another account (or none) is not this market\'s: the account\'s own row for the product, as its sheet shows', () => {
+    // The Matrix holds S's listing with no account (a deleted connection) on Amazon IT, whose account is acc-1.
+    const orphan = cell({ listingId: 'L-ORPHAN', productId: 'p4', accountId: '' })
+    const own = cell({ listingId: newRowId({ productId: 'p4', channel: 'AMAZON', marketplace: 'IT', accountId: 'acc-1', aliasKey: '' }), productId: 'p4', state: 'not_listed' })
+    const rows2 = [orphan, own]
+    expect(matrixStatusCell('p4', amazonIt, 'L-ORPHAN', new Map(rows2.map((c) => [c.listingId, c])), publishCellsByPlace(rows2))).toBe(own)
+    expect(matrixStatusCell('p4', amazonIt, 'L-ORPHAN', new Map([[orphan.listingId, orphan]]), publishCellsByPlace([orphan]))).toBeNull()
   })
 
   it('a listing Nexus holds wins over the new row of the same place (a choice that just started its draft)', () => {
@@ -150,5 +163,32 @@ describe('where the Matrix places a market\'s Status column', () => {
     expect(isMatrixStatusColId('AMAZON:IT.status')).toBe(true)
     expect(isMatrixStatusColId('EBAY:IT#al-1.status')).toBe(true)
     for (const other of ['status', 'AMAZON:IT.listing', 'shared.fba', 'basePrice', '', null, undefined]) expect(isMatrixStatusColId(other), String(other)).toBe(false)
+  })
+})
+
+describe('the Matrix\'s own rules around the shared column', () => {
+  it('a market\'s Status cell belongs to its group (the toolbar verbs act on that market)', () => {
+    expect(matrixGroupKeyOf('AMAZON:IT.status')).toBe('AMAZON:IT')
+    expect(matrixGroupKeyOf('EBAY:IT#al-1.status')).toBe('EBAY:IT#al-1')
+    expect(matrixGroupKeyOf('AMAZON:IT.price')).toBe('AMAZON:IT')
+    for (const other of ['status', 'shared.fba', 'identity', null]) expect(matrixGroupKeyOf(other), String(other)).toBeNull()
+  })
+
+  it('a range Delete clears only a cell with a value waiting (the sheet\'s Delete rule)', () => {
+    const clear = { change: { column: 'status' as const, target: null } }
+    const nothing = cell({ listingId: 'a', productId: 'p' })
+    const waiting = cell({ listingId: 'b', productId: 'p', status: { target: 'inactive', setAt: 'x', setById: 'u', setByName: 'A', noLongerApplies: null } })
+    expect(clearsNothing(clear, nothing)).toBe(true)
+    expect(clearsNothing(clear, null)).toBe(true)
+    expect(clearsNothing(clear, waiting)).toBe(false)
+    expect(clearsNothing({ change: { column: 'status', target: 'inactive' } }, nothing)).toBe(false)
+    expect(clearsNothing({ refused: 'no' }, nothing)).toBe(false)
+  })
+
+  it('a saved view older than the Status columns shows them beside its Listings; one saved since keeps what it names', () => {
+    expect(savedBeforeMatrixStatus('2026-10-01T10:00:00.000Z')).toBe(true)
+    expect(savedBeforeMatrixStatus(new Date(MATRIX_STATUS_SINCE + 1000).toISOString())).toBe(false)
+    expect(savedBeforeMatrixStatus(undefined)).toBe(false)
+    expect(savedBeforeMatrixStatus('not a date')).toBe(false)
   })
 })

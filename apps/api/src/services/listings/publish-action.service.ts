@@ -244,7 +244,9 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
   const missingByProduct = new Map<string, number>()
   const namedKey = named ? destinationKey({ channel: named.channel, marketplace: named.marketplace, channelConnectionId: named.accountId, aliasKey: named.aliasKey }) : null
   /** Members with no listing on this destination are new rows: the named destination (a channel sheet), or every main listing (the Matrix). */
-  const standsIn = (key: string, d: NewRowRef) => !!options.newRows && (named ? activeAlias(named.aliasKey) && key === namedKey : !!options.everyDestination && d.aliasKey === '')
+  const standsIn = (key: string, d: NewRowRef) => !!options.newRows && (named ? activeAlias(named.aliasKey) && key === namedKey
+    // …never for listings with no account (a deleted connection): no channel sheet can name that destination.
+    : !!options.everyDestination && d.aliasKey === '' && !!d.accountId)
   for (const [key, group] of byDestination) {
     const first = group[0]
     const d: NewRowRef = first
