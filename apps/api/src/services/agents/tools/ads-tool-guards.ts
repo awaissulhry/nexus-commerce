@@ -18,6 +18,7 @@
  *   bound rules     the enabled rules bound to the campaign and its enabled schedules: they may change it again.
  */
 import { checkAdsWriteGate, type GateContext, type GateDecision, type GateDeniedAt, type OwnLimit } from '../../advertising/ads-write-gate.js'
+import type { AdWrite } from '@nexus/shared/ads-ad-product'
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
 import { automationsBoundToCampaign } from '../../advertising/rule-campaign-binding.service.js'
 import { isRuleApprovedRun } from '../tool-types.js'
@@ -45,6 +46,11 @@ export interface AdWriteIntent {
   isNegation?: boolean
   /** 4A — the write is a rule's, not the approver's (an applied automation suggestion): judged as a machine's write. */
   byRule?: boolean
+  /**
+   * W4-11 — what the write is (adWriteRefusal), as the ads worker describes a write the mutation layer let through for a
+   * Sponsored Brands or Display campaign. A tool that sends SB/SD changes says it; absent, SB/SD stays refused (6a).
+   */
+  write?: AdWrite | null
 }
 
 const BID_FIELDS = new Set(['bid', 'defaultBid'])
@@ -69,6 +75,7 @@ export function gateContextFor(intent: AdWriteIntent): GateContext {
     payloadValueCents: values.length ? Math.max(...values.map((v) => Math.round(v))) : 0,
     isSuppression: intent.isSuppression === true,
     ...(intent.isNegation ? { isNegation: true, keywordText: intent.keywordText ?? null } : {}),
+    ...(intent.write ? { write: intent.write } : {}),
     // 4A (Owner decided 2026-10-06) — a change tool writes once a person approves it, and his approval counts as his
     // own click: judged as his write (a halt, autonomy OFF, pins and the allowlist do not stop it), and past his own
     // limits it says so (pastOwnLimits → the card's warning) because approving is his "Send anyway". A run a standing

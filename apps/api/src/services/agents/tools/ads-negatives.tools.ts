@@ -36,7 +36,9 @@ import { adGroupExternalIds } from '../../advertising/ads-entity-lookup.service.
 import { entityKey } from '../../advertising/ads-strategy/autonomy.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
-import { alsoChangedBy, approvedRun, BY_RULE_WORDS, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { alsoChangedBy, approvedRun, BY_RULE_WORDS, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { isSbSdCampaign } from '../../advertising/ads-mutation.service.js'
+import type { AdWrite } from '@nexus/shared/ads-ad-product'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { amountLabel, campaignCurrency, type BoundAutomation } from './ads-tool-guards.js'
 import {
@@ -128,9 +130,13 @@ type PlaceRow = {
 }
 const CAMPAIGN_SELECT = { id: true, name: true, type: true, adProduct: true, status: true, marketplace: true, externalCampaignId: true, dailyBudgetCurrency: true } as const
 
-/** Why Nexus may not add a negative to this campaign at all, or null. */
+/**
+ * Why Nexus may not add a negative to this campaign at all, or null. W4-11 — a Sponsored Brands or Display campaign
+ * passes here: each negative is judged by its own kind and level (negativeWriteOf): an SB negative keyword or an SD
+ * negative product target in an ad group is sent to their own endpoints.
+ */
 function campaignRefusal(c: PlaceRow['campaign']): string | null {
-  const notSp = spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name })
+  const notSp = isSbSdCampaign({ adProduct: c.adProduct, type: c.type == null ? null : String(c.type) }) ? null : spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name })
   if (notSp) return notSp
   if (String(c.status) === 'ARCHIVED') return 'it is archived: an archived campaign serves no more'
   if (!c.externalCampaignId) return 'Nexus holds no Amazon id for it: it is not at Amazon'
@@ -201,6 +207,11 @@ async function itemsOf(a: AddArgs): Promise<{ items: NegItem[] } | { refusal: st
     const key = `${x.level}:${x.placeId}:${x.kind === 'PRODUCT' ? 'PRODUCT' : x.match}:${norm}`
     if (seen.has(key)) { twice.push(negativeWords(x)); continue }
     seen.add(key)
+    // W4-11 — what kind of negative this campaign's ad product takes from Nexus (SB: a keyword, SD: a product target, both
+    // in an ad group); a Sponsored Products campaign takes every kind.
+    const placed = x.level === 'AD_GROUP' ? groupById.get(x.placeId)!.campaign : campaignById.get(x.placeId)!
+    const notThisKind = adWriteRefusalOf(placed, negativeWriteOf(x))
+    if (notThisKind) cannot.push(`${negativeWords(x)}: ${notThisKind}`)
     if (x.level === 'AD_GROUP') {
       const g = groupById.get(x.placeId)!
       items.push({ ...x, key, place: placeWords(g), campaign: campaignOf(g.campaign), adGroupIds: [g.id], externalAdGroupId: g.externalAdGroupId })
@@ -210,7 +221,13 @@ async function itemsOf(a: AddArgs): Promise<{ items: NegItem[] } | { refusal: st
     }
   }
   if (twice.length) return { refusal: `Not queued: asked for twice in the same place — ${named([...new Set(twice)])}. Name each once.` }
+  if (cannot.length) return { refusal: `Not queued: ${named(cannot)}.` }
   return { items }
+}
+
+/** W4-11 — a new negative as the gate and adWriteRefusalOf judge it for a Sponsored Brands / Display campaign. */
+function negativeWriteOf(x: { kind: 'KEYWORD' | 'PRODUCT'; level: Level }): AdWrite {
+  return { entity: 'NEGATIVE_CREATE', kind: x.kind, negativeLevel: x.level }
 }
 
 /** Every check the write service would make, asked first so a refusal is never queued: text, protection, L1, standing. */
@@ -305,6 +322,8 @@ function negativeWrites(items: NegItem[]): Array<RuleWrite & { label: string }> 
   return [...byCampaign].sort(([x], [y]) => (x < y ? -1 : 1)).map(([campaignId, list]) => ({
     campaignId, marketplace: list[0].campaign.marketplace, changes: [{ field: 'negativeKeyword', valueCents: null }], isNegation: true, keywordText: list[0].text,
     label: `campaign "${list[0].campaign.name}"`,
+    // W4-11 — what the gate is told for an SB/SD campaign (each negative was judged by its kind already, itemsOf).
+    write: negativeWriteOf(list[0]),
   }))
 }
 
@@ -520,7 +539,7 @@ const addNegativeTargets: AgentTool = {
   withinLimits: (preview, limits) => addRefusal(preview, limits) ?? ruleRefusal(preview, limits) ?? negateGroupRefusal(preview, limits),
   undo: ADD_NEGATIVES_UNDO,
   description:
-    `Add negatives to Amazon Sponsored Products campaigns in one request (up to ${MAX_NEGATIVES}, one step): negative keywords `
+    `Add negatives to Amazon Sponsored Products campaigns in one request (W4-11: also a negative keyword in a Sponsored Brands ad group, and a negative product target in a Sponsored Display ad group, through their own endpoints) (up to ${MAX_NEGATIVES}, one step): negative keywords `
     + '(NEGATIVE_EXACT or NEGATIVE_PHRASE) and negative product targets (ASINs), into ad groups — one set of terms into many '
     + 'ad groups, the n-gram way — or as campaign negatives (every ad group of a campaign; keywords only), or each with its '
     + 'own place. create-negative-keyword stays the one-term form. Never a search term that converts where it lands (an '
@@ -563,11 +582,12 @@ const addNegativeTargets: AgentTool = {
       // The one negative write service: it asks the gate (the campaign's allowlist binds a rule's run; a person's approval
       // is his own click, 4A), checks protection and the own-keyword lock, pushes, and records the row with its audit row
       // on this change set — only for a negative that stands.
+      // W4-11 — allowSbSd: an SB negative keyword or SD negative product target goes to its own endpoint.
       const out = i.kind === 'PRODUCT'
-        ? await writeNegativeProductTarget({ adGroupId: i.placeId, asin: i.text, userId: run.actor, evidence, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, changeSetId: run.changeSetId })
+        ? await writeNegativeProductTarget({ adGroupId: i.placeId, asin: i.text, userId: run.actor, evidence, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, changeSetId: run.changeSetId, allowSbSd: true })
         : await writeNegativeKeyword({
           scope: i.level, ...(i.level === 'AD_GROUP' ? { adGroupId: i.placeId } : { campaignId: i.placeId }), keywordText: i.text, matchType: i.match!,
-          userId: run.actor, evidence, manual: run.manual, changeSetId: run.changeSetId,
+          userId: run.actor, evidence, manual: run.manual, changeSetId: run.changeSetId, allowSbSd: true,
         })
       if ((out.outcome === 'created' || out.outcome === 'local') && out.adTargetId) made.push({ targetId: out.adTargetId, item: i, reachedAmazon: out.reachedAmazon })
       else if (out.outcome === 'already_existed') already.push(`${negativeWords(i)} in ${i.place}`)
@@ -655,6 +675,11 @@ const retiringOf = (r: NegRow, madeBy: string): Retiring => {
   }
 }
 
+/** W4-11 — a retire (an archive of a negative) as the gate and adWriteRefusalOf judge it for a Sponsored Brands / Display campaign. */
+function retireWriteOf(r: Pick<Retiring, 'kind' | 'level'>): AdWrite {
+  return { entity: 'AD_TARGET', fields: ['status'], toStatus: 'ARCHIVED', kind: r.kind, isNegative: true, negativeLevel: r.level }
+}
+
 /** Who made each negative, in words: the first audit row Nexus kept of it (none: Amazon's sync brought it in). */
 async function madeByOf(ids: string[]): Promise<Map<string, string>> {
   const logs = ids.length
@@ -716,7 +741,8 @@ async function retiringFor(a: RetireArgs): Promise<{ list: Retiring[] } | { refu
     const label = `${negativeWords({ kind: String(r.kind) === 'PRODUCT' ? 'PRODUCT' : 'KEYWORD', text: r.expressionValue, match: /PHRASE/.test(r.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT' })} in ${placeWords(r.adGroup)}`
     if (String(r.status) === 'ARCHIVED') cannot.push(`${label}: it is retired already (archived)`)
     else {
-      const why = spOnlyRefusal({ type: r.adGroup.campaign.type == null ? null : String(r.adGroup.campaign.type), adProduct: r.adGroup.campaign.adProduct, name: r.adGroup.campaign.name })
+      // W4-11 — an SB negative keyword or SD negative product target in an ad group is retired at its own endpoint.
+      const why = adWriteRefusalOf(r.adGroup.campaign, retireWriteOf(retiringOf(r, '')))
         ?? (String(r.adGroup.campaign.status) === 'ARCHIVED' ? 'its campaign is archived' : null)
       if (why) cannot.push(`${label}: ${why}`)
     }
@@ -761,6 +787,7 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
   for (const r of atAmazon) if (!byCampaign.has(r.campaign.id)) byCampaign.set(r.campaign.id, r)
   const writes = [...byCampaign.values()].sort((x, y) => (x.campaign.id < y.campaign.id ? -1 : 1)).map((r) => ({
     campaignId: r.campaign.id, marketplace: r.campaign.marketplace, changes: [{ field: 'status', valueCents: null }], label: `campaign "${r.campaign.name}"`,
+    write: retireWriteOf(r), // W4-11
   }))
   const reached = writes.length ? await reachOver(writes) : { reach: { reach: 'sandbox' } as StoredReach }
   if ('refused' in reached) return refuse(`Not queued: ${reached.label}: ${gateRefusal(reached.refused)}`)
@@ -874,7 +901,7 @@ const retireNegatives: AgentTool = {
   withinLimits: (preview, limits) => retireRefusal(preview, limits) ?? ruleRefusal(preview, limits),
   undo: RETIRE_NEGATIVES_UNDO,
   description:
-    `Retire standing negatives of Amazon Sponsored Products campaigns — any, not only Claude's (up to ${MAX_RETIRE}): negative `
+    `Retire standing negatives of Amazon Sponsored Products campaigns (W4-11: and a Sponsored Brands ad group's negative keywords and a Sponsored Display ad group's negative product targets) — any, not only Claude's (up to ${MAX_RETIRE}): negative `
     + 'keywords and negative product targets, ad group or campaign negatives, by id or by their place and text. One Amazon '
     + 'holds is archived there, through the Negatives page\'s own retire (permanent at Amazon: blocking the search again adds a '
     + 'new one); one only in Nexus has its record removed. Lifting a block lets the searches it blocked show the ads again, '
@@ -899,7 +926,8 @@ const retireNegatives: AgentTool = {
     // The Negatives page's own retire: an archive at Amazon through the queue (the gate in the worker), a Nexus-only row
     // removed; every write and audit row on this change set; a person's approval is his own click (4A).
     const { retireNegatives: retire } = await import('../../advertising/negatives-retire.service.js')
-    const out = await retire({ adTargetIds: list.map((r) => r.id), actor: run.actor, retireReason: run.reason, changeSetId: run.changeSetId, manual: run.manual })
+    // W4-11 — allowSbSd: an SB negative keyword or SD negative product target is archived at its own endpoint.
+    const out = await retire({ adTargetIds: list.map((r) => r.id), actor: run.actor, retireReason: run.reason, changeSetId: run.changeSetId, manual: run.manual, allowSbSd: true })
     const done = out.outcomes.filter((o) => o.kind === 'retired' || o.kind === 'removed_local')
     const notDone = out.outcomes.filter((o) => o.kind === 'refused' || o.kind === 'failed')
     if (!done.length) return notRun(`Not run: no negative was retired — ${named(notDone.map((o) => `"${o.term}" (${o.reason ?? o.kind})`))}. Nothing changed.`)

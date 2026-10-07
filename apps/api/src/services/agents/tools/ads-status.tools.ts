@@ -38,7 +38,8 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { updateAdGroupWithSync, updateAdTargetWithSync, updateCampaignWithSync, updateProductAdWithSync, type MutationOutcome } from '../../advertising/ads-mutation.service.js'
 import { amountLabel, campaignCurrency, checkLiveReach, type LiveReach } from './ads-tool-guards.js'
-import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import type { AdWrite } from '@nexus/shared/ads-ad-product'
 import { adKitLimits, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, stepUpApproval, stepUpOf } from '../step-up-approval.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
@@ -104,6 +105,8 @@ interface Ad {
   product?: string
   /** Why Nexus cannot change it at all (not by the kind of change), or null. */
   cannot: string | null
+  /** W4-11 — the status write as the gate judges it for a Sponsored Brands / Display campaign (campaigns and targets). */
+  write?: AdWrite | null
 }
 
 /** An ad as a change record stores it: enough to name it again in an undo. */
@@ -123,9 +126,13 @@ const campaignOf = (c: CampaignRow): Ad['campaign'] => ({
   dailyBudgetCents: Math.round(Number(c.dailyBudget) * 100), type: c.type == null ? null : String(c.type), adProduct: c.adProduct,
 })
 
-/** Why an ad cannot be paused or enabled at all, whatever the kind; null when it may be. */
-function cannotChange(c: CampaignRow, status: string, externalId: string | null, orphaned: boolean): string | null {
-  const notSp = spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name })
+/**
+ * Why an ad cannot be paused or enabled at all, whatever the kind; null when it may be. W4-11 — `write`: a campaign's or
+ * a keyword's / target's on/off state, which Nexus also sends for a Sponsored Brands or Display campaign (their own
+ * endpoints; archive is not one of them). Without it (ad groups, product ads): Sponsored Products only.
+ */
+function cannotChange(c: CampaignRow, status: string, externalId: string | null, orphaned: boolean, write: AdWrite | null = null): string | null {
+  const notSp = write ? adWriteRefusalOf(c, write) : spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name })
   if (notSp) return notSp
   if (status === 'DRAFT') return 'it is a draft in Nexus and was never sent to Amazon'
   if (!externalId) return 'Nexus holds no Amazon id for it: it is not at Amazon'
@@ -136,7 +143,9 @@ function cannotChange(c: CampaignRow, status: string, externalId: string | null,
 const unique = (ids: readonly string[] | undefined) => [...new Set((ids ?? []).map((id) => id.trim()).filter(Boolean))]
 
 /** Every ad the request names, in its order (campaigns, ad groups, targets, product ads), and what was not found. */
-async function loadAds(a: StatusArgs): Promise<{ ads: Ad[]; missing: string[] }> {
+async function loadAds(a: StatusArgs, kind: Kind): Promise<{ ads: Ad[]; missing: string[] }> {
+  // W4-11 — the state each change sets, for the SB/SD writes (a campaign's and a keyword's / target's on/off state).
+  const toStatus = MOVE[kind].to
   const campaignIds = unique(a.campaignIds), groupIds = unique(a.adGroupIds), targetIds = unique(a.targetIds)
   const productAds = [...new Map((a.productAds ?? []).map((p) => [`${p.adGroupId.trim()}|${p.product.trim()}`, { adGroupId: p.adGroupId.trim(), product: p.product.trim() }])).values()]
   const [campaigns, groups, targets, ads] = await Promise.all([
@@ -166,7 +175,8 @@ async function loadAds(a: StatusArgs): Promise<{ ads: Ad[]; missing: string[] }>
   for (const id of campaignIds) {
     const c = campaignRows.get(id)
     if (!c) { missing.push(`campaign ${id}`); continue }
-    out.push({ level: 'campaign', id, label: `campaign "${c.name}"`, status: String(c.status), campaign: campaignOf(c), adGroupId: null, cannot: cannotChange(c, String(c.status), c.externalCampaignId, false) })
+    const write: AdWrite = { entity: 'CAMPAIGN', fields: ['status'], toStatus }
+    out.push({ level: 'campaign', id, label: `campaign "${c.name}"`, status: String(c.status), campaign: campaignOf(c), adGroupId: null, cannot: cannotChange(c, String(c.status), c.externalCampaignId, false, write), write })
   }
   for (const id of groupIds) {
     const g = groupRows.get(id)
@@ -177,10 +187,11 @@ async function loadAds(a: StatusArgs): Promise<{ ads: Ad[]; missing: string[] }>
     const t = targetRows.get(id)
     if (!t) { missing.push(`target ${id}`); continue }
     const label = `${t.kind === 'KEYWORD' ? 'keyword' : 'target'} "${t.expressionValue}" (campaign "${t.adGroup.campaign.name}")`
+    const write: AdWrite = { entity: 'AD_TARGET', fields: ['status'], toStatus, kind: t.kind == null ? null : String(t.kind), isNegative: false }
     const cannot = t.isNegative
       ? 'it is a negative keyword: it blocks a search term and serves no ad (undo-ad-change retires one Claude created)'
-      : cannotChange(t.adGroup.campaign, String(t.status), t.externalTargetId, !!t.orphanedAt)
-    out.push({ level: 'target', id, label, status: String(t.status), campaign: campaignOf(t.adGroup.campaign), adGroupId: t.adGroupId, cannot })
+      : cannotChange(t.adGroup.campaign, String(t.status), t.externalTargetId, !!t.orphanedAt, write)
+    out.push({ level: 'target', id, label, status: String(t.status), campaign: campaignOf(t.adGroup.campaign), adGroupId: t.adGroupId, cannot, write })
   }
   for (const p of productAds) {
     // The SKU first, then the ASIN: a seller's ad is named by its SKU. The same ad named twice is one ad.
@@ -393,13 +404,14 @@ export async function pausesNoClaudeMade(entities: ReadonlyArray<{ entityType: s
 
 /** Where the writes land: every campaign they touch must answer the same, or the request is refused. */
 async function reachOf(ads: Ad[], kind: Kind): Promise<{ reach: StoredReach } | { refused: Extract<LiveReach, { reach: 'refused' }> }> {
-  const campaigns = new Map<string, string | null>()
-  for (const ad of ads) campaigns.set(ad.campaign.id, ad.campaign.marketplace)
+  const campaigns = new Map<string, { marketplace: string | null; write: AdWrite | null }>()
+  // W4-11 — one write per campaign as the gate judges it (every ad was checked one by one already, adWriteRefusalOf).
+  for (const ad of ads) if (!campaigns.has(ad.campaign.id)) campaigns.set(ad.campaign.id, { marketplace: ad.campaign.marketplace, write: ad.write ?? null })
   const profiles = new Set<string>()
-  for (const [campaignId, marketplace] of [...campaigns].sort(([a], [b]) => (a < b ? -1 : 1))) {
+  for (const [campaignId, { marketplace, write }] of [...campaigns].sort(([a], [b]) => (a < b ? -1 : 1))) {
     // A pause or an archive lets go of spend: like a suppression, the halt does not hold it. An enable starts spend: the
     // halt binds.
-    const reach = await checkLiveReach({ campaignId, marketplace, changes: [{ field: 'status', valueCents: null }], isSuppression: kind !== 'enable' })
+    const reach = await checkLiveReach({ campaignId, marketplace, changes: [{ field: 'status', valueCents: null }], isSuppression: kind !== 'enable', ...(write ? { write } : {}) })
     if (reach.reach === 'refused') return { refused: reach }
     if (reach.reach === 'live') profiles.add(reach.profileId)
   }
@@ -430,7 +442,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   const asked = unique(a.campaignIds).length + unique(a.adGroupIds).length + unique(a.targetIds).length + (a.productAds?.length ?? 0)
   if (!asked) return refuse('Name the ads: campaignIds, adGroupIds, targetIds (keywords and product targets) or productAds (each by its ad group and SKU or ASIN).')
   if (asked > MAX_ADS) return refuse(`${asked} ads named: at most ${MAX_ADS} change in one request. Split them.`)
-  const { ads, missing } = await loadAds(a)
+  const { ads, missing } = await loadAds(a, kind)
   if (missing.length) return refuse(`Not queued: ${named(missing)} ${missing.length === 1 ? 'was' : 'were'} not found in this business.`)
   const cannot = ads.filter((ad) => ad.cannot)
   if (cannot.length) return refuse(`Not queued: ${named(cannot.map((ad) => `${ad.label}: ${ad.cannot}`))}.`)
@@ -476,8 +488,10 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
     change: { field: 'status', from: ad.status, to, ...(ad.level === 'campaign' ? { dailyBudgetCents: ad.campaign.dailyBudgetCents } : {}) },
   }))
   // AA-W2-6's kit: the limit facts, the note, and the write gate's answer as a run by rule (one write per campaign).
-  const writes: RuleWrite[] = [...new Map(changing.map((ad) => [ad.campaign.id, ad.campaign])).values()].map((c) => ({
+  // W4-11 — with each campaign's write as the gate judges it for an SB/SD campaign (its first ad's, as reachOf asks).
+  const writes: RuleWrite[] = [...new Map(changing.map((ad) => [ad.campaign.id, ad])).values()].map(({ campaign: c, write }) => ({
     campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'status', valueCents: null }], isSuppression: kind !== 'enable', label: `campaign "${c.name}"`,
+    ...(write ? { write } : {}),
   }))
   const ruleFacts = await ruleFactsFor({ tool: TOOL[kind], limits: STATUS_LIMITS, items, writes, approvalId: ctx.approvalId ?? null, projectMonth: kind === 'enable' })
 
@@ -768,9 +782,10 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
   const failed: string[] = []
   for (const ad of changing) {
     let out: MutationOutcome
-    if (ad.level === 'campaign') out = await updateCampaignWithSync({ campaignId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits })
+    // W4-11 — a Sponsored Brands / Display campaign's or keyword's / target's on/off state goes to its own endpoint.
+    if (ad.level === 'campaign') out = await updateCampaignWithSync({ campaignId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits, allowSbSd: true })
     else if (ad.level === 'adGroup') out = await updateAdGroupWithSync({ adGroupId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits })
-    else if (ad.level === 'target') out = await updateAdTargetWithSync({ adTargetId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits })
+    else if (ad.level === 'target') out = await updateAdTargetWithSync({ adTargetId: ad.id, patch: { status: to }, ...common, confirmOwnLimits: run.confirmOwnLimits, allowSbSd: true })
     else out = await updateProductAdWithSync({ productAdId: ad.id, status: to, ...common })
     if (!out.ok) failed.push(`${ad.label} (${out.error ?? 'refused'})`)
   }
@@ -837,7 +852,7 @@ const pauseAds: AgentTool = {
   withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits),
   undo: undoBy(TOOL.enable, 'ENABLED', 'undo of a pause'),
   description:
-    `Pause Amazon Sponsored Products ads for real: campaigns, ad groups, keywords and product targets, or product ads (up to ${MAX_ADS} `
+    `Pause Amazon Sponsored Products ads for real: campaigns, ad groups, keywords and product targets, or product ads (W4-11: also Sponsored Brands / Display campaigns, keywords and targets, through their own endpoints) (up to ${MAX_ADS} `
     + 'in one request). Only when a real pause is meant: a paused ad serves again about an hour after it is switched back '
     + 'on. To stop an ad for a while, lower its bids instead (suppress-campaign, or a lower bid): it serves again about a '
     + 'minute after they go back. A person approves it in Nexus, unless the business lets it run by its rule inside its '
@@ -872,7 +887,7 @@ const enableAds: AgentTool = {
   withinLimits: (preview, limits) => peoplesPauseRefusal(preview) ?? ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? restartBidRefusal(preview),
   undo: undoBy(TOOL.pause, 'PAUSED', 'undo of an enable'),
   description:
-    `Switch paused Amazon Sponsored Products ads back on: campaigns, ad groups, keywords and product targets, or product ads `
+    `Switch paused Amazon Sponsored Products ads back on: campaigns, ad groups, keywords and product targets, or product ads (W4-11: also Sponsored Brands / Display campaigns, keywords and targets) `
     + `(up to ${MAX_ADS}). By default only what a Claude request paused (pause-ads). With includePeoplesPauses: true, also an `
     + 'ad no Claude request paused — a person, in Nexus or at Amazon (Seller Central), a writer Nexus did not record, or a '
     + 'Nexus rule that is off or deleted now: the preview says who paused it and when, and a person with '
