@@ -17,6 +17,7 @@ import prisma from '../../db.js'
 import { FEATURES } from '@nexus/shared/permissions'
 import type { ToolPermission } from '../agents/tool-types.js'
 import { resolveAutonomy } from '../advertising/ads-autonomy.js'
+import { ruleBasis } from './row-basis.js'
 import { validateConditions, type ConditionsPayload } from './conditions-tree.js'
 import { BULK_OPS_ACTION_TYPES, BULK_OPS_TRIGGERS } from './bulk-ops-actions.js'
 import { LISTING_ACTION_TYPES, LISTING_TRIGGERS } from '../listing-automation/triggers.js'
@@ -155,7 +156,8 @@ export async function planOpsRuleSave(input: OpsRuleInput): Promise<Planned> {
     if (!r) return { ok: false, error: `There is no ${spec.name} ${input.opsRuleId} in this business (not found).` }
     before = configOf(input.domain, r)
     from = resolveAutonomy(r) as Level
-    basis = r.updatedAt.toISOString()
+    // The rule's settings, never the evaluator's counters (row-basis.ts): each run moves updatedAt.
+    basis = ruleBasis(r)
   }
   const after: OpsRuleConfig = before
     ? { ...before }

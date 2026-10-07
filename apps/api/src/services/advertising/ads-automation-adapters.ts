@@ -16,6 +16,7 @@ import {
   type ExplainOptions, type GateEvidence, type LevelSwitch, type PreviewInput, type PreviewOutcome, type SwitchRow, type WritesFact,
 } from '../automation/automation-levels.js'
 import { isRefused } from '../automation/service-outcome.js'
+import { ruleBasis, settingsBasis } from '../automation/row-basis.js'
 import { breakerLimits, breakerLimitsText, engineCaps, type EngineKey } from './ads-engine-actors.js'
 import { engineCapsText } from './ads-engine-guard.js'
 
@@ -196,7 +197,8 @@ async function auditSwitch(actorUserId: string | null, entityType: string, entit
 
 /** A switch of rows that are on (AUTO) or off. */
 function onOffSwitch(opts: {
-  read: (rowId: string) => Promise<{ id: string; name: string; on: boolean; updatedAt: Date } | null>
+  /** The row, with its `basis`: its settings (row-basis.ts), never what its engine stamps on it each tick. */
+  read: (rowId: string) => Promise<{ id: string; name: string; on: boolean; basis: string | null } | null>
   write: (rowId: string, on: boolean, actorUserId: string | null) => Promise<string | null | { note: string }>
   entityType: string
   /** A fixed sentence, or one read for the row now (2a: what switching it off would give back). */
@@ -210,7 +212,7 @@ function onOffSwitch(opts: {
     async read(rowId) {
       const r = rowId ? await opts.read(rowId) : null
       const brake = typeof opts.brake === 'function' ? (r ? await opts.brake(r.id) : null) : opts.brake ?? null
-      return r ? { id: r.id, name: r.name, level: r.on ? 'AUTO' : 'OFF', basis: r.updatedAt.toISOString(), brake } : null
+      return r ? { id: r.id, name: r.name, level: r.on ? 'AUTO' : 'OFF', basis: r.basis, brake } : null
     },
     async write(row, level, actorUserId) {
       const written = await opts.write(row.id, level === 'AUTO', actorUserId)
@@ -299,7 +301,8 @@ const A1: AutomationAdapter = {
     async read(rowId) {
       const r = rowId ? await prisma.automationRule.findFirst({ where: { id: rowId, domain: 'advertising' } }) : null
       const { resolveAutonomy } = await import('./ads-autonomy.js')
-      return r ? { id: r.id, name: r.name, level: resolveAutonomy(r), basis: r.updatedAt.toISOString(), brake: adsRuleBrake(r.actions) } : null
+      // The rule's settings, never the evaluator's counters (row-basis.ts): its */15 tick moves updatedAt on every rule.
+      return r ? { id: r.id, name: r.name, level: resolveAutonomy(r), basis: ruleBasis(r), brake: adsRuleBrake(r.actions) } : null
     },
     // The graduation ceiling, a contested placement lane, and for AUTO the graduation gate (D-R1) — the level dial's own checks.
     async refusal(row: SwitchRow, level: AutomationLevel) {
@@ -451,7 +454,8 @@ const A3: AutomationAdapter = {
       const row = await prisma.adsAutomationState.findUnique({ where: { id: 'singleton' } })
       const dial = await adsDial()
       const level: AutomationLevel = dial.autonomy === 'OFF' ? 'OFF' : dial.autonomy === 'AUTO' ? 'AUTO' : 'PROPOSE'
-      return { id: 'ads-dial', name: 'The account ads dial', level, basis: row?.updatedAt.toISOString() ?? null, brake: null }
+      // Its settings, never the anomaly guard's lastCheckedAt (every 10 minutes), which moves updatedAt (row-basis.ts).
+      return { id: 'ads-dial', name: 'The account ads dial', level, basis: settingsBasis('adsAutomationState', row), brake: null }
     },
     async refusal(_row: SwitchRow, level: AutomationLevel) {
       const dial = await adsDial()
@@ -535,7 +539,7 @@ const A5: AutomationAdapter = {
     levels: ['OFF', 'PROPOSE', 'AUTO'], needsRow: true, manage: FEATURES.adsAutomationManage,
     async read(rowId) {
       const p = rowId ? await prisma.autopilotPlan.findUnique({ where: { id: rowId } }) : null
-      return p ? { id: p.id, name: p.name, level: (!p.enabled || p.autonomy === 'OFF' ? 'OFF' : p.autonomy === 'AUTO' ? 'AUTO' : 'PROPOSE') as AutomationLevel, basis: p.updatedAt.toISOString(), brake: null } : null
+      return p ? { id: p.id, name: p.name, level: (!p.enabled || p.autonomy === 'OFF' ? 'OFF' : p.autonomy === 'AUTO' ? 'AUTO' : 'PROPOSE') as AutomationLevel, basis: settingsBasis('autopilotPlan', p), brake: null } : null
     },
     // AA-W2-11 — what a plan at PROPOSE leaves behind: its decisions with an outcome (waiting ones are re-made every tick
     // and not counted); one a person or the plan applied is a decision.
@@ -585,7 +589,7 @@ const A6: AutomationAdapter = {
     async read(rowId) {
       const { isGoalMode } = await import('../../jobs/ad-rank-defend.job.js')
       const s = await prisma.adSchedule.findUnique({ where: { id: rowId } })
-      return s && !isGoalMode(s.windows, s.defaultTargetKey) ? { id: s.id, name: s.name, on: s.enabled, updatedAt: s.updatedAt } : null
+      return s && !isGoalMode(s.windows, s.defaultTargetKey) ? { id: s.id, name: s.name, on: s.enabled, basis: settingsBasis('adSchedule', s) } : null
     },
     async write(rowId, on) {
       const { patchAdSchedule } = await import('./ads-schedule.service.js')
@@ -620,7 +624,7 @@ const A7: AutomationAdapter = {
     brake: 'its windows may hold budgets down: switching it off gives each campaign it holds its base budget back',
     async read(rowId) {
       const s = await prisma.budgetSchedule.findFirst({ where: { id: rowId, kind: 'BUDGET' } })
-      return s ? { id: s.id, name: s.name, on: s.enabled, updatedAt: s.updatedAt } : null
+      return s ? { id: s.id, name: s.name, on: s.enabled, basis: settingsBasis('budgetSchedule', s) } : null
     },
     // R14 — through the route's own edit (ads-budget-schedule.service.ts): switched off, it gives back the budgets it
     // holds (W4), and says how many it could not.
@@ -715,7 +719,7 @@ const A9: AutomationAdapter = {
     levels: ['OFF', 'OBSERVE', 'AUTO'], needsRow: true, manage: FEATURES.adsAutomationManage,
     async read(rowId) {
       const p = rowId ? await prisma.budgetPool.findUnique({ where: { id: rowId } }) : null
-      return p ? { id: p.id, name: p.name, level: (!p.enabled ? 'OFF' : p.dryRun ? 'OBSERVE' : 'AUTO') as AutomationLevel, basis: p.updatedAt.toISOString(), brake: null } : null
+      return p ? { id: p.id, name: p.name, level: (!p.enabled ? 'OFF' : p.dryRun ? 'OBSERVE' : 'AUTO') as AutomationLevel, basis: settingsBasis('budgetPool', p), brake: null } : null
     },
     // AA-W2-11 — its rebalances (an OBSERVE pool records them as dry runs); one that would move budget is a match.
     async gateEvidence(row: SwitchRow): Promise<GateEvidence> {
@@ -860,7 +864,7 @@ const A12: AutomationAdapter = {
     },
     async read(rowId) {
       const s = await prisma.keywordCoverageSet.findUnique({ where: { id: rowId } })
-      return s ? { id: s.id, name: s.name, on: s.enabled, updatedAt: s.updatedAt } : null
+      return s ? { id: s.id, name: s.name, on: s.enabled, basis: settingsBasis('keywordCoverageSet', s) } : null
     },
     async write(rowId, on) {
       await prisma.keywordCoverageSet.update({ where: { id: rowId }, data: { enabled: on } })

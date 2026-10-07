@@ -15,6 +15,7 @@
 import prisma from '../../db.js'
 import { FEATURES } from '@nexus/shared/permissions'
 import type { ToolPermission } from '../agents/tool-types.js'
+import { basisOf } from './row-basis.js'
 
 export const STOP_AREAS = ['amazon-ads', 'ebay-ads', 'agent-fleet', 'review-mailer', 'rules'] as const
 export type StopArea = (typeof STOP_AREAS)[number]
@@ -40,25 +41,32 @@ export interface StopChange { area: StopArea; domain?: RuleDomain; halted?: bool
 
 interface AreaState { stopped: boolean; reason: string | null; basis: string | null; enabledRuleIds?: string[]; names?: string[] }
 
+/**
+ * A stop's or a resume's basis: the halt it starts from — whether the area is stopped, and why. Not the state row's
+ * `updatedAt`: the Amazon ads row is also the anomaly guard's, which stamps `lastCheckedAt` on it every 10 minutes, and
+ * the other state rows are upserted by the reads that load them (row-basis.ts).
+ */
+const haltOf = (stopped: boolean, reason: string | null): AreaState => ({ stopped, reason, basis: `halt:${basisOf({ stopped, reason })}` })
+
 async function stateOf(area: StopArea, domain: RuleDomain, ruleIds?: string[]): Promise<AreaState> {
   if (area === 'amazon-ads') {
     const { readHaltState } = await import('../advertising/ads-automation-state.service.js')
     const s = await readHaltState()
-    return { stopped: s.halted, reason: s.haltReason, basis: s.basis }
+    return haltOf(s.halted, s.haltReason)
   }
   if (area === 'ebay-ads') {
     const { ebayHaltState } = await import('../marketing/ebay-ads-rule-crud.service.js')
     const s = await ebayHaltState()
-    return { stopped: s.halted, reason: s.haltReason, basis: s.basis }
+    return haltOf(s.halted, s.haltReason)
   }
   if (area === 'agent-fleet') {
     const row = await prisma.agentFleetState.findFirst()
-    return { stopped: row?.halted ?? false, reason: row?.haltReason ?? null, basis: row?.updatedAt.toISOString() ?? null }
+    return haltOf(row?.halted ?? false, row?.haltReason ?? null)
   }
   if (area === 'review-mailer') {
     const { findReviewMailerState } = await import('../reviews/review-mailer-state.service.js')
     const row = await findReviewMailerState()
-    return { stopped: row?.isPaused ?? false, reason: row?.pausedReason ?? null, basis: row?.updatedAt?.toISOString() ?? null }
+    return haltOf(row?.isPaused ?? false, row?.pausedReason ?? null)
   }
   const rows = await prisma.automationRule.findMany({ where: { domain, enabled: true, ...(ruleIds ? { id: { in: ruleIds } } : {}) }, select: { id: true, name: true }, orderBy: { name: 'asc' } })
   return { stopped: rows.length === 0, reason: null, basis: null, enabledRuleIds: rows.map((r) => r.id), names: rows.map((r) => r.name) }

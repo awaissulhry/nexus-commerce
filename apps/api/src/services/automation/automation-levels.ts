@@ -15,6 +15,7 @@
 import type { ToolPermission } from '../agents/tool-types.js'
 import prisma from '../../db.js'
 import { resolveAutonomy } from '../advertising/ads-autonomy.js'
+import { ruleBasis } from './row-basis.js'
 
 export const LEVELS = ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const
 export type AutomationLevel = (typeof LEVELS)[number]
@@ -181,7 +182,10 @@ export interface SwitchRow {
   id: string
   name: string
   level: AutomationLevel
-  /** The row's updatedAt the move was planned from; an approval runs only while it is unchanged. */
+  /**
+   * What the move was planned from; an approval runs only while it is unchanged. The row's own settings (row-basis.ts),
+   * never what an engine writes on its own tick — a rule's evaluator moves `updatedAt` every 15 minutes.
+   */
   basis: string | null
   /**
    * A brake (part 06 §3, "brakes are not down"): turning it down can RAISE spend — a dayparting closed window lifts,
@@ -286,7 +290,8 @@ export function ruleLevelSwitch(domain: string, manage: ToolPermission, brakeOf:
     manage,
     async read(rowId) {
       const r = rowId ? await prisma.automationRule.findFirst({ where: { id: rowId, domain } }) : null
-      return r ? { id: r.id, name: r.name, level: resolveAutonomy(r), basis: r.updatedAt.toISOString(), brake: brakeOf(r.actions) } : null
+      // The rule's settings, never its evaluator's counters (row-basis.ts): a tick between ask and run moves nothing.
+      return r ? { id: r.id, name: r.name, level: resolveAutonomy(r), basis: ruleBasis(r), brake: brakeOf(r.actions) } : null
     },
     async refusal(row, level) {
       if (level !== 'AUTO') return null

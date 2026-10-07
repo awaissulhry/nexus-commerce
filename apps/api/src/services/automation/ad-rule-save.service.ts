@@ -9,7 +9,8 @@
  *     a missing scope, a cap that is missing or 0, a percent written where a fraction belongs, a condition on a field
  *     the trigger never hands the rule, an empty condition list.
  *   · an edit of an AUTO rule drops it to PROPOSE (eBay: AUTOPILOT → PROPOSE): a changed rule earns AUTO again.
- *   · the plan names the rule's `updatedAt` (`basis`), so an approval is refused when the rule moved since.
+ *   · the plan names the rule's settings and level (`basis`, row-basis.ts), so an approval is refused when someone changed
+ *     the rule since — never because its evaluator ran (it moves `updatedAt` every 15 minutes).
  *
  * `planAdRuleSave` is the dry run (a pure read); `applyAdRuleSave` writes. Nothing here reaches a marketplace: a rule
  * acts only once a person turns it up.
@@ -19,6 +20,7 @@ import { auditLogService } from '../audit-log.service.js'
 import { resolveAutonomy } from '../advertising/ads-autonomy.js'
 import { guardRule, type RuleCaps, type RuleDraft, type RuleKind, type RuleScope } from './automation-rule-guard.js'
 import { isRefused } from './service-outcome.js'
+import { basisOf } from './row-basis.js'
 import type { AutomationLevel } from './automation-levels.js'
 
 /** A saved rule as save-ad-rule reads it, and as its undo puts it back (the tool's own arguments). */
@@ -66,7 +68,10 @@ export interface SavePlan {
   level: { from: AutomationLevel | null; to: AutomationLevel; says: string }
   scope: RuleScope
   reach: { campaigns: number; total: number; applied: string[] } | null
-  /** The rule's `updatedAt` the plan was made from; an approval runs only while it is unchanged. */
+  /**
+   * The rule's settings and level the plan was made from (a fingerprint, row-basis.ts); an approval runs only while they
+   * are unchanged. Not its `updatedAt`: the rule evaluator moves that on every tick.
+   */
   basis: string | null
   effect: string
   config: Omit<SavedRuleConfig, 'ruleId'> & { ruleId: string | null }
@@ -77,7 +82,6 @@ export type PlanAnswer = { ok: true; plan: SavePlan; before: SavedRuleConfig | n
 const DOMAIN: Record<Exclude<RuleKind, 'ebay-ads'>, string> = { 'amazon-ads': 'advertising', marketing: 'marketing' }
 const KIND_NAME: Record<RuleKind, string> = { 'amazon-ads': 'Amazon ads rule', 'ebay-ads': 'eBay ads rule', marketing: 'marketing rule' }
 
-const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null)
 
 function scopeOfRule(r: { scopeMarketplace: string | null; scopePortfolioId?: string | null; scopeCampaignId?: string | null; scopeProductId?: string | null }): RuleScope {
   const s: RuleScope = {}
@@ -214,7 +218,7 @@ export async function planAdRuleSave(input: SaveRuleInput): Promise<PlanAnswer> 
     level: { from, to, says },
     scope: merged.scope,
     reach,
-    basis: iso(existing?.updatedAt ?? null),
+    basis: existing ? `rule:${basisOf({ config: existing.config, level: existing.level })}` : null,
     effect: `${existing ? 'Changes' : 'Creates'} the ${KIND_NAME[input.kind]} "${merged.name}". ${says}${reachText}${rankText} Nothing reaches a marketplace from this save.`,
     config: { ...merged, ruleId: existing?.config.ruleId ?? null },
   }

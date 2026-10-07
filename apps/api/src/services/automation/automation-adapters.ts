@@ -15,6 +15,7 @@
  */
 import { FEATURES } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
+import { repricingRuleBasis } from './row-basis.js'
 import { ADS_AUTOMATION_ADAPTERS, adsCron } from '../advertising/ads-automation-adapters.js'
 import { E1 } from '../marketing/ebay-automation-adapters.js'
 import { STOCK_PUSH_HEAL_FLAG, stockPushHealMode } from '../../jobs/stock-push-heal-mode.js'
@@ -291,7 +292,7 @@ const N1: AutomationAdapter = {
     levels: ['OFF', 'AUTO'], needsRow: true, manage: FEATURES.repricingRulesManage,
     async read(rowId) {
       const r = rowId ? await prisma.repricingRule.findUnique({ where: { id: rowId }, include: { product: { select: { sku: true } } } }) : null
-      return r ? { id: r.id, name: `${r.product.sku} on ${r.channel}${r.marketplace ? ` ${r.marketplace}` : ''} (${r.strategy})`, level: (r.enabled ? 'AUTO' : 'OFF') as AutomationLevel, basis: r.updatedAt.toISOString(), brake: null } : null
+      return r ? { id: r.id, name: `${r.product.sku} on ${r.channel}${r.marketplace ? ` ${r.marketplace}` : ''} (${r.strategy})`, level: (r.enabled ? 'AUTO' : 'OFF') as AutomationLevel, basis: repricingRuleBasis(r), brake: null } : null
     },
     async write(row: SwitchRow, level: AutomationLevel, actorUserId: string | null) {
       await prisma.repricingRule.update({ where: { id: row.id }, data: { enabled: level !== 'OFF' } })

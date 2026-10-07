@@ -39,7 +39,7 @@ import { checkLiveReach, type LiveReach } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, type KitItem } from './ads-autonomy-kit.js'
 import { capMove, capOf, currencyOfMarket, type HeldCap } from './ads-portfolio.tools.js'
-import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import type { AgentTool, PlanEntities, PlanEntityKey, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = 'set-campaign-settings'
 /** The most campaigns one request names. */
@@ -578,12 +578,37 @@ const setCampaignSettings: AgentTool = {
     + 'not found, archived, made in Nexus only or in another market, a name is taken in the market, an end date is in '
     + 'the past, or Amazon\'s write gate would refuse it. A campaign an ads playbook built may be moved out of its '
     + 'portfolio, with a warning (never by rule). Undo puts each campaign\'s settings back.',
+  planEntities: campaignSettingsEntities,
   async handler(args, ctx) {
     return (await decide(args, ctx)).result
   },
   async execute(args, ctx) {
     return runApproved(args, ctx)
   },
+}
+
+/**
+ * C6 — what a step of a change plan stands on and changes (AgentTool.planEntities): every campaign it names, and every
+ * portfolio a campaign leaves or joins (a later step over that portfolio — an hourly plan bound to it — then stands on
+ * what this one changed). Pure, from the arguments and the approved preview.
+ */
+export function campaignSettingsEntities(args: Record<string, unknown>, preview: unknown): PlanEntities {
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+  const named = [
+    ...(Array.isArray(args.campaignIds) ? args.campaignIds : []),
+    ...(Array.isArray(args.campaigns) ? args.campaigns.map((c) => (c as { campaignId?: unknown } | null)?.campaignId) : []),
+  ].map(text).filter((id): id is string => !!id)
+  const items = (preview as { items?: Array<{ campaignId?: unknown; set?: { portfolioId?: { from?: unknown; to?: unknown } } }> } | null)?.items ?? []
+  const portfolios = [
+    text(args.portfolioId),
+    ...(Array.isArray(args.campaigns) ? args.campaigns.map((c) => text((c as { portfolioId?: unknown } | null)?.portfolioId)) : []),
+    ...items.flatMap((i) => [text(i.set?.portfolioId?.from), text(i.set?.portfolioId?.to)]),
+  ].filter((id): id is string => !!id)
+  const keys: PlanEntityKey[] = [
+    ...[...new Set([...named, ...items.map((i) => text(i.campaignId)).filter((id): id is string => !!id)])].sort().map((id) => `campaign:${id}` as const),
+    ...[...new Set(portfolios)].sort().map((id) => `portfolio:${id}` as const),
+  ]
+  return { reads: keys, writes: keys }
 }
 
 export const ADS_CAMPAIGN_SETTINGS_TOOLS: AgentTool[] = [setCampaignSettings]

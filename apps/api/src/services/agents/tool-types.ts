@@ -207,6 +207,23 @@ export interface ToolContext {
   approvedPreview?: unknown
 }
 
+/**
+ * C6 — one thing a change-plan step stands on or changes (AgentTool.planEntities). A key names the thing, never a field
+ * of it; over-naming only costs a dry run. The vocabulary:
+ *   `campaign:<Nexus campaign id>`          a campaign's settings, or which plan or schedule holds it
+ *   `portfolio:<Amazon portfolio id>`       a portfolio's settings, or which campaigns are in it
+ *   `hourly-plan:<RankScheduleGroup id>`    an hourly bid plan (its week, members, values, on/off)
+ *   `automation-rule:<AutomationRule id>`   a rule (any domain: its settings, its level)
+ *   `automation:<adapter id>:<row id | engine>`  any automation row a level switch moves
+ */
+export type PlanEntityKey = `${string}:${string}`
+
+/** C6 — what a plan step stands on and what it changes (AgentTool.planEntities). */
+export interface PlanEntities {
+  reads: PlanEntityKey[]
+  writes: PlanEntityKey[]
+}
+
 export interface ToolResult {
   ok: boolean
   /** Result of a read/draft tool. */
@@ -356,6 +373,15 @@ export interface AgentTool {
    * in a sentence a person reads ("the price moves 14 %, more than the 10 % you allow without a person").
    */
   withinLimits?: (preview: unknown, limits: Record<string, unknown>) => string | null
+  /**
+   * C6 — a step of a change plan: what it stands on (`reads`: the things its basis is made of) and what it changes
+   * (`writes`), as entity keys (PlanEntityKey), from its arguments and the preview it was approved on. Pure, no read.
+   * After an earlier step of the SAME plan changed what a later step stands on, the plan runner takes that later step's
+   * basis again (change-plan.service.ts `chainBases`): the later step is not refused for its own plan's change, while a
+   * change made outside the plan (a person, an engine) still skips it. Absent: the step chains with nothing — its
+   * re-check compares the preview it was approved on, as for any approval.
+   */
+  planEntities?: (args: Record<string, unknown>, preview: unknown) => PlanEntities
   /** Dry-run preview (no side effects). Always safe to run. Call it only
    *  through call-tool.ts. */
   handler: (
