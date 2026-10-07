@@ -161,9 +161,12 @@ export async function keywordMarketShares(
   const measuredMarkets: string[] = []
 
   for (const marketplace of markets) {
+    // 🔴 WEEK only. The table also takes MONTH and QUARTER rows (the manual ingest route accepts a
+    // period), and grouping by `startDate` alone would count a month starting 09-01 as one more
+    // "week" — the newest one — and hand the engine a month's share as this week's.
     const groups = await prisma.searchQueryPerformance.groupBy({
       by: ['startDate'],
-      where: { marketplace },
+      where: { marketplace, reportPeriod: 'WEEK' },
       _count: { _all: true },
     })
     if (!groups.length) {
@@ -194,7 +197,7 @@ export async function keywordMarketShares(
     }
 
     const rows = await prisma.searchQueryPerformance.findMany({
-      where: { marketplace, startDate: gate.start },
+      where: { marketplace, reportPeriod: 'WEEK', startDate: gate.start },
       select: { searchQuery: true, impressionsBrand: true, impressionsTotal: true },
     })
 

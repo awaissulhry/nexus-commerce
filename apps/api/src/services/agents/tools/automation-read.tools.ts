@@ -212,7 +212,7 @@ const previewAutomationTool: AgentTool = {
   input: z.object({
     automation: AUTOMATION.describe('the automation: its number from list-automations (A1 … N17) or its key (e.g. ads-rules)'),
     rowId: z.string().trim().min(1).max(64).optional().describe('a saved row to preview (rule, plan, pool, coverage set …) by id'),
-    draft: JSON_OBJECT.optional().describe("an unsaved rule: for A1 { actions, conditions, scopeMarketplace? } in the rule builder's shape; for E1 { name, trigger, action, guardrails?, scope?, marketplace?, cooldownHours? }"),
+    draft: JSON_OBJECT.optional().describe("an unsaved rule: for A1 { actions, conditions, scopeMarketplace?, scopePortfolioId? } in the rule builder's shape; for E1 { name, trigger, action, guardrails?, scope?, marketplace?, cooldownHours? }"),
     context: JSON_OBJECT.optional().describe('for a saved marketing, listing, replenishment or bulk rule: the context to evaluate it against (otherwise its trigger builds them from current data)'),
   }),
   restrictedFields: PREVIEW_RESTRICTED_FIELDS,
