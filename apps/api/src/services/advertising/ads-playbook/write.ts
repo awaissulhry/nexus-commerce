@@ -649,6 +649,11 @@ export interface PlaybookWriter {
   approvalId?: string | null
   /** When a raise was confirmed with a fresh authenticator code; null for a change that does not raise. */
   stepUpAt?: Date | null
+  /**
+   * The Owner's code rule (agents/tools/ads-code-rule.ts): a raise a PERSON approved where the code table asks no code for
+   * set-ads-playbook — the sentence that says so is kept with the version. Empty today: a playbook raise is a big door.
+   */
+  raiseWithoutCode?: string | null
   /** 'user:<id>' or 'claude:<approvalId>'. */
   updatedBy: string
 }
@@ -661,9 +666,15 @@ class Moved extends Error {}
 const MOVED = 'The playbook moved since this change was planned: nothing was saved. Read it again and change it from there.'
 const json = (value: unknown) => (value == null ? Prisma.DbNull : (value as Prisma.InputJsonValue))
 
+/** The version's reason: the plan's, and for a raise written without a code the sentence that says why. */
+function playbookReason(plan: PlaybookPlan, writer: PlaybookWriter): string | null {
+  const without = plan.direction === 'raise' && !writer.stepUpAt ? writer.raiseWithoutCode?.trim() : null
+  return without ? [plan.reason, without].filter(Boolean).join(' — ') : plan.reason ?? null
+}
+
 /** Write a planned change in ONE transaction, with its version row; a row that moved since → a conflict. */
 export async function applyPlaybookPlan(plan: PlaybookPlan, writer: PlaybookWriter): Promise<ApplyOutcome> {
-  if (plan.direction === 'raise' && !writer.stepUpAt) throw new Error('a raise of an ads playbook is written only with the time its authenticator code was confirmed')
+  if (plan.direction === 'raise' && !writer.stepUpAt && !writer.raiseWithoutCode?.trim()) throw new Error('a raise of an ads playbook is written only with the time its authenticator code was confirmed')
   let id = ''
   let version = 0
   try {
@@ -693,7 +704,7 @@ export async function applyPlaybookPlan(plan: PlaybookPlan, writer: PlaybookWrit
           data: {
             kind: 'template', refId: id, version, op: plan.op, values: after ? ({ name: after.name, status: after.status, doc: after.doc, capturedFrom: after.capturedFrom } as unknown as Prisma.InputJsonValue) : undefined,
             changes: plan.changes as unknown as Prisma.InputJsonValue, direction: plan.direction, via: writer.via, approvalId: writer.approvalId ?? null,
-            actor: writer.actor, actorUserId: writer.actorUserId, stepUpAt: plan.direction === 'raise' ? writer.stepUpAt! : null, reason: plan.reason,
+            actor: writer.actor, actorUserId: writer.actorUserId, stepUpAt: plan.direction === 'raise' ? writer.stepUpAt ?? null : null, reason: playbookReason(plan, writer),
           },
         })
         return
@@ -723,7 +734,7 @@ export async function applyPlaybookPlan(plan: PlaybookPlan, writer: PlaybookWrit
           kind: 'playbook', refId: id, version, market, level: scope.level, scopeId: scope.scopeId, op: plan.op,
           values: after ? (after as unknown as Prisma.InputJsonValue) : undefined, changes: plan.changes as unknown as Prisma.InputJsonValue,
           direction: plan.direction, via: writer.via, approvalId: writer.approvalId ?? null, actor: writer.actor, actorUserId: writer.actorUserId,
-          stepUpAt: plan.direction === 'raise' ? writer.stepUpAt! : null, reason: plan.reason,
+          stepUpAt: plan.direction === 'raise' ? writer.stepUpAt ?? null : null, reason: playbookReason(plan, writer),
         },
       })
     })

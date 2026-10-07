@@ -17,11 +17,12 @@
  * "Never by rule" rules are separate and unchanged (a person's hourly plan without allowPeoplesPlans, a person's pause,
  * a copy to another market, a bid handed back to auto-bid, …).
  *
- * Each tool asks `needsCode(door)` in its own code helper, so a change of the rule is one line here; the table test
- * (ads-code-rule.vitest.test.ts) pins every line, so a change is deliberate. The big doors that already held their code
- * before the rule (create-ad-group, set-ad-group, add-product-ads, apply-ads-playbook, set-ads-playbook,
- * set-ads-strategy, enable-ads) keep it in their own gates: their lines here name them, and flipping one of those also
- * needs its tool's gate.
+ * Every door's tool asks `needsCode(door)` when it builds its preview's `stepUp`, and its `execute` checks the code from
+ * the FRESH dry run's `stepUp` (`codeGate`, or the tool's own gate reading it): a line flipped here changes both the card
+ * and the run. The table test (ads-code-rule.vitest.test.ts) pins every line, and each door's own test flips its line
+ * (`__codeRuleTest`) to prove the tool follows. What the table does NOT decide: a door's "never by rule" (each tool's
+ * withinLimits and execute keep it, code or not), and the Owner's separate rule that more of what Claude may do alone
+ * (the strategy's claudeAutonomy, a phase switch that raises it) is always raised with his code.
  */
 import { stepUpApproval, stepUpOf } from '../step-up-approval.js'
 import type { ToolContext } from '../tool-types.js'
@@ -56,9 +57,18 @@ export const CODE_RULE = {
 
 export type CodeDoor = keyof typeof CODE_RULE
 
+/** Tests only: a line of the table flipped for one test (`__codeRuleTest`); empty in production. */
+const flipped = new Map<CodeDoor, boolean>()
+
 /** Does a raise through this door need the approver's authenticator code? */
 export function needsCode(door: CodeDoor): boolean {
-  return CODE_RULE[door]
+  return flipped.get(door) ?? CODE_RULE[door]
+}
+
+/** Tests only — flip one line of the table, to prove a tool follows it; `reset` puts the table back. */
+export const __codeRuleTest = {
+  flip(door: CodeDoor, value = !CODE_RULE[door]) { flipped.set(door, value) },
+  reset() { flipped.clear() },
 }
 
 /** What a preview says (`noCode`) when it can add spend and approving it needs no code. */

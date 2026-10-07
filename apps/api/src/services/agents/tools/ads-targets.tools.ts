@@ -480,8 +480,9 @@ type HarvestArgs = z.infer<typeof HARVEST_INPUT>
  * negative this tool's own harvest made, as undo-ad-change retires what a request made. Every raise is in `raises` either
  * way, and a person's approval sends it.
  */
-function harvestStepUp(op: 'harvest' | 'undo'): { stepUp?: StepUp } {
-  if (!needsCode('harvest-search-term')) return {}
+function harvestStepUp(op: 'harvest' | 'undo', raises: boolean): { stepUp?: StepUp } {
+  // Nothing that adds spend (an undo that lifts no negative), nothing to approve with a code.
+  if (!raises || !needsCode('harvest-search-term')) return {}
   return { stepUp: { what: op === 'harvest' ? 'adds a harvested keyword that starts spending' : 'lifts the negative a harvest made', raises: ['Spend'], needs: STEP_UP_NEEDS, how: ADD_HOW } }
 }
 
@@ -649,7 +650,7 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
         handovers,
         // A new keyword adds spend: listed; the code is harvestStepUp's (none: a day-to-day change, as graduate-keyword).
         raises: [`${created} at ${amountLabel(bidCents, currency)}`],
-        ...harvestStepUp('harvest'),
+        ...harvestStepUp('harvest', true),
         alsoChangedBy: bound.automations,
         ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
         // The term, its source and destination, the bid asked for and the negative plan (a bid worked out from the report is
@@ -806,7 +807,7 @@ async function undoPreview(a: HarvestArgs, ctx: Pick<ToolContext, 'approvalId'>,
       // a day-to-day change; it lifts only the negative this tool's own harvest made, as undo-ad-change retires what a
       // request made).
       raises: lift ? [`negative "${negative!.expressionValue}" · ${placeWords(negative!.adGroup)} retired (the term shows these ads there again)`] : [],
-      ...harvestStepUp('undo'),
+      ...harvestStepUp('undo', !!lift),
       basis: fingerprint({ change: change.id, keyword: [keyword.id, keyword.bidCents, String(keyword.status)], negative: negative ? [negative.id, String(negative.status)] : null }),
       reach: reached.reach,
       reachNote: reachNote(reached.reach),

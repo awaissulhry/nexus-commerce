@@ -798,6 +798,12 @@ export interface StrategyWriter {
    * Never for a raise of what Claude may do alone: `applyStrategyPlan` refuses that without a code.
    */
   raiseByRule?: string | null
+  /**
+   * The Owner's code rule (agents/tools/ads-code-rule.ts): a raise a PERSON approved where the code table asks no code
+   * for that door — the sentence that says so is kept with the version; stepUpAt stays empty. Empty today: every strategy
+   * raise is a big door. Never for a raise of what Claude may do alone (always with his code).
+   */
+  raiseWithoutCode?: string | null
   /** On the row: 'user:<id>' or 'claude:<approvalId>'. */
   updatedBy: string
 }
@@ -812,14 +818,15 @@ const MOVED = 'The strategy (or a protected term or campaign target it changes) 
 
 /** Write a planned change in ONE transaction, with its version row; a row, term or campaign that moved since → a conflict. */
 export async function applyStrategyPlan(plan: StrategyPlan, writer: StrategyWriter): Promise<ApplyOutcome> {
-  if (plan.direction === 'raise' && !writer.stepUpAt && !writer.raiseByRule?.trim()) throw new Error('a raise of the ads strategy is written only with the time its authenticator code was confirmed')
+  if (plan.direction === 'raise' && !writer.stepUpAt && !writer.raiseByRule?.trim() && !writer.raiseWithoutCode?.trim()) throw new Error('a raise of the ads strategy is written only with the time its authenticator code was confirmed')
   // The Owner's rule: more of what Claude may do alone is ALWAYS raised with his code — never under raiseByRule.
   if (!writer.stepUpAt && plan.changes.some((c) => c.field === 'claudeAutonomy' && c.direction === 'raise')) {
     throw new Error('a raise of what Claude may do alone is written only with the time its authenticator code was confirmed, never by rule')
   }
   const { scope } = plan
-  const reason = writer.raiseByRule?.trim() && plan.direction === 'raise' && !writer.stepUpAt
-    ? [plan.reason, writer.raiseByRule.trim()].filter(Boolean).join(' — ')
+  const without = writer.raiseByRule?.trim() || writer.raiseWithoutCode?.trim()
+  const reason = without && plan.direction === 'raise' && !writer.stepUpAt
+    ? [plan.reason, without].filter(Boolean).join(' — ')
     : plan.reason
   let strategyId = plan.row?.id ?? ''
   const version = plan.row ? plan.row.version + 1 : 1

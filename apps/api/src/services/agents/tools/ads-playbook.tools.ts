@@ -38,9 +38,18 @@ import {
   type PlaybookPreview,
   type PlaybookState,
 } from '../../advertising/ads-playbook/write.js'
-import { stepUpApproval } from '../step-up-approval.js'
 import type { AgentTool, FieldPermission, ToolDoor, ToolUndo } from '../tool-types.js'
 import { notRun } from './ads-change-kit.js'
+import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
+
+/**
+ * set-ads-playbook's code decision, in ONE place: what adds spend is a big door of the Owner's code rule
+ * (ads-code-rule.ts) — the stepUp the playbook writer puts on a raise stays. Never by rule either way.
+ */
+export function playbookCodeOf(preview: PlaybookPreview): PlaybookPreview & { noCode?: string } {
+  if (!preview.stepUp || needsCode('set-ads-playbook: adds spend')) return preview
+  return { ...preview, stepUp: null, noCode: DAY_TO_DAY_NO_CODE }
+}
 
 const upper = (value: unknown) => (typeof value === 'string' ? value.trim().toUpperCase() : value)
 const ID = z.string().trim().min(1).max(64)
@@ -184,7 +193,7 @@ const setAdsPlaybook: AgentTool = {
     + 'Claude with theirs. Pass expectVersion (from ads-playbook) to refuse one that moved. Undo puts the previous version back.',
   async handler(args) {
     const planned = await planPlaybookChange(args)
-    return 'error' in planned ? { ok: false, error: planned.error } : { ok: true, preview: planned.plan.preview }
+    return 'error' in planned ? { ok: false, error: planned.error } : { ok: true, preview: playbookCodeOf(planned.plan.preview) }
   },
   async execute(args, ctx) {
     // One decision, re-checked against what was approved (the basis fingerprints the row, the changes and the recipes).
@@ -198,11 +207,15 @@ const setAdsPlaybook: AgentTool = {
     const approvalId = ctx.approvalId?.trim()
     if (!approvalId || !ctx.userId) return notRun('Not run: a playbook change runs only as an approved request, as the person who approved it.')
     let stepUpAt: Date | null = null
+    let raiseWithoutCode: string | null = null
     if (plan.direction === 'raise') {
-      // A raise runs only when it was approved with a fresh authenticator code (never by rule, never by a plain approve).
-      const coded = await stepUpApproval(ctx)
-      if ('refusal' in coded) return notRun(coded.refusal)
-      stepUpAt = coded.at
+      // A raise never runs by rule (withinLimits refuses it; this is the last door), and runs only with a fresh
+      // authenticator code where the fresh dry run's stepUp asks it (the code table: a big door) — never a plain approve.
+      if (ctx.decidedVia === 'auto') return notRun('Not run: it raises what an ads playbook may spend, which a person decides, never a rule. Ask for it again; a person approves it.')
+      const gate = await codeGate(ctx, playbookCodeOf(plan.preview))
+      if ('refusal' in gate) return notRun(gate.refusal)
+      stepUpAt = gate.at
+      if (!stepUpAt) raiseWithoutCode = "approved by a person without the authenticator code: the Owner's code rule makes this raise a day-to-day change"
     }
     const decision = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { decidedBy: true } })
     const out = await applyPlaybookPlan(plan, {
@@ -211,6 +224,7 @@ const setAdsPlaybook: AgentTool = {
       actorUserId: ctx.userId,
       approvalId,
       stepUpAt,
+      raiseWithoutCode,
       updatedBy: ctx.via === 'claude' ? `claude:${approvalId}` : `user:${ctx.userId}`,
     })
     if ('error' in out) return notRun(`Not run: ${out.error}`)
