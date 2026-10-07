@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { extractBlueprint, type SourceCampaign } from './ads-blueprint.js'
-import { planApplication, materialise, applyNaming, negativeMatchOf, type ExistingTarget } from './ads-blueprint-apply.js'
+import { planApplication, materialise, applyNaming, negativeMatchOf, swapProductWord, type ExistingTarget } from './ads-blueprint-apply.js'
 
 const kw = (expressionValue: string, expressionType = 'EXACT', isNegative = false, bidCents: number | null = 30) => ({
   kind: 'KEYWORD', expressionType, expressionValue, bidCents, isNegative, negativeLevel: isNegative ? 'AD_GROUP' : null,
@@ -810,8 +810,8 @@ describe('planApplication — a copy into another market\'s language (W4-10)', (
       terms: [
         { from: 'abbigliamento moto', to: 'motorradbekleidung', negative: false, kept: false },
         { from: 'giacca moto', to: 'motorradjacke', negative: false, kept: false },
-        { from: 'giacca TESTA', to: 'TESTB jacke', negative: false, kept: false },
-        { from: 'TESTA', to: 'TESTB', negative: false, kept: true },
+        { from: 'giacca testa', to: 'TESTB jacke', negative: false, kept: false },
+        { from: 'testa', to: 'TESTB', negative: false, kept: true },
         { from: 'casco moto', to: 'motorradhelm', negative: true, kept: false },
       ],
       missing: [], unused: [], merged: [],
@@ -856,6 +856,17 @@ describe('planApplication — a copy into another market\'s language (W4-10)', (
     // Skipped by its source text too: the same choice.
     expect(texts(planApplication(doc, testb, own, { translations: all, skipSharedTargets: ['giacca moto'] }))).not.toContain('motorradjacke')
     expect(planApplication(doc, testb, own, { translations: all, acceptSharedTargets: ['motorradjacke'] }).conflicts[0]?.resolution).toBe('ACCEPTED')
+    // Brand terms too, translated or kept: the product may already run in that market with the very same term.
+    const ownBrand: ExistingTarget[] = [
+      { expression: 'TESTB', campaignName: 'DE-TESTB-brand', campaignId: 'c_de_brand', asins: ['B0TESTB002'] },
+      { expression: 'testb jacke', campaignName: 'DE-TESTB-brand', campaignId: 'c_de_brand', asins: ['B0TESTB002'] },
+    ]
+    const brand = planApplication(doc, testb, ownBrand, { translations: all })
+    expect(brand.allowed).toBe(false)
+    expect(brand.conflicts.map((c) => [c.expression, c.resolution])).toEqual([['TESTB', 'UNRESOLVED'], ['TESTB jacke', 'UNRESOLVED']])
+    expect(texts(planApplication(doc, testb, ownBrand, { translations: all, skipSharedTargets: ['testa', 'giacca testa'] }))).toEqual(['motorradjacke', 'motorradbekleidung', '-motorradhelm'])
+    // The screen's copy (no translations) is as it was: a brand term is the new product's own and is not gated.
+    expect(planApplication(doc, testb, ownBrand).allowed).toBe(true)
     const others: ExistingTarget[] = [{ expression: 'motorradjacke', campaignName: 'DE-OTHER', campaignId: 'c_de_other', asins: ['B0OTHER001'] }]
     const shared = planApplication(doc, testb, others, { translations: all })
     expect(shared.allowed).toBe(true)
@@ -869,8 +880,25 @@ describe('planApplication — a copy into another market\'s language (W4-10)', (
     const p = planApplication(doc, testb, [], { translations: { ...all, keywords: all.keywords.map((t) => (t.from === 'abbigliamento moto' ? { ...t, to: 'motorradjacke' } : t)) } })
     expect(p.allowed).toBe(true)
     expect(texts(p)).toEqual(['TESTB', 'TESTB jacke', 'motorradjacke', '-motorradhelm'])
-    expect(p.translation?.merged).toEqual([{ from: 'abbigliamento moto', to: 'motorradjacke', negative: false }])
-    expect(p.warnings).toEqual(expect.arrayContaining(['1 translated term(s) became the same keyword as another in their ad group and are created once ("abbigliamento moto" → "motorradjacke").']))
+    expect(p.translation?.merged).toEqual([{ from: 'abbigliamento moto', to: 'motorradjacke', negative: false, keptFrom: 'giacca moto' }])
+    // Which term is created, and whose bid it keeps, said; "translated" only where it is true.
+    expect(p.warnings).toEqual(expect.arrayContaining(['1 term(s) became the same keyword as an earlier one of their ad group, which is created once: "abbigliamento moto" became "motorradjacke", as "giacca moto" did: created once, at the bid of "giacca moto".']))
+  })
+
+  it('the product\'s name is swapped only where it is a word of its own, in any case; spacing is Amazon\'s', () => {
+    expect(swapProductWord('variante aria', 'ARIA', 'NEWP')).toBe('variante NEWP')
+    expect(swapProductWord('Aria-jacke aria ARIA', 'aria', 'NEWP')).toBe('NEWP-jacke NEWP NEWP')
+    // A letter of any script binds the word: "è" is part of "caffèaria".
+    expect(swapProductWord('caffèaria 2aria aria2', 'aria', 'NEWP')).toBe('caffèaria 2aria aria2')
+    const p = planApplication(doc, testb, [], { translations: { ...all, keywords: [
+      { from: 'testa', keep: true as const },
+      { from: '  GIACCA   testa ', to: 'contestata  testa' },
+      { from: 'giacca moto', to: 'motorrad   jacke' },
+      { from: 'abbigliamento moto', to: 'motorradbekleidung' },
+    ] } })
+    expect(p.allowed, p.blockers.join(' ')).toBe(true)
+    // "testa" inside "contestata" is not the product; the spaces are one.
+    expect(texts(p)).toEqual(['TESTB', 'contestata TESTB', 'motorrad jacke', 'motorradbekleidung', '-motorradhelm'])
   })
 
   it('without translations the plan is as it always was (the screen)', () => {

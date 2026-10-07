@@ -85,11 +85,12 @@ vi.mock('../../advertising/ads-api-client.js', async (importOriginal) => ({
   updateCampaign: async (_ctx: unknown, externalId: string, patch: Record<string, unknown>) => { amazon.updates.push({ externalId, patch }); return { ok: true, mode: 'live', rawResponse: {}, error: null } },
 }))
 
-import { callTool, type UserPrincipal } from '../call-tool.js'
+import { callTool, executeTool, type UserPrincipal } from '../call-tool.js'
 import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
 import { commitScheduledApproval, decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
 import { resolveRequest } from '../../agent-fleet/approval-target.js'
 import { runPlan } from '../change-plan.service.js'
+import { claudeGateRule } from '../../mcp/mcp-tool-call.js'
 import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
 
@@ -524,16 +525,16 @@ describe('W4-10 — a copy into another market, translated by Claude', () => {
       products: [{ sku: 'TEST-DE-1', asin: 'B0DEASN001' }],
       campaigns: [{ name: 'TESTDE Exact DE', from: 'TESTSRC Exact IT', keywords: 3, negatives: 1, startBidCents: 60 }],
       translation: {
-        from: 'IT', to: 'DE', translated: 4, kept: 0,
-        keywords: [{ from: 'race jacket', to: 'renn jacke' }, { from: 'TESTSRC jacket', to: 'TESTDE jacke' }, { from: 'winter boots', to: 'winterstiefel' }],
+        from: 'IT', to: 'DE', counts: { keywords: { translated: 3, kept: 0 }, negatives: { translated: 1, kept: 0 } },
+        keywords: [{ from: 'race jacket', to: 'renn jacke' }, { from: 'testsrc jacket', to: 'TESTDE jacke' }, { from: 'winter boots', to: 'winterstiefel' }],
         negatives: [{ from: 'cheap', to: 'billig' }],
-        note: expect.stringMatching(/checked again on its new text against what the product's own campaigns in DE already buy/),
+        note: expect.stringMatching(/Every keyword of the copy, translated or kept, brand terms too, was checked against what the product's own campaigns in DE already buy\. A copy into another market never runs by rule/),
       },
       // Rule 3 in DE: another product's campaign buys "winterstiefel": listed, allowed, never negated.
       sharedWithOtherProducts: [{ expression: 'winterstiefel', existing: [{ campaignName: 'Fixture de-other DE', campaignId: 'c-de-other' }] }],
       ceiling: { label: 'the DE market', dailyCapCents: 5000 }, reach: { reach: 'sandbox' }, liveWrites: false,
       limitFacts: { tool: 'replicate-ad-structure', action: 'create' },
-      effect: expect.stringMatching(/^Copies the structure of "TESTSRC Exact IT" \(IT\) onto TESTDE in DE with Replicate Structure's own run, every keyword and negative keyword in DE's language as you translated it \(4 translated, 0 kept\): .*born ENABLED with every bid at the 2-cent floor/),
+      effect: expect.stringMatching(/^Copies the structure of "TESTSRC Exact IT" \(IT\) onto TESTDE in DE with Replicate Structure's own run, every keyword and negative keyword in DE's language as you translated it \(3 keywords translated; 1 negative keyword translated\): .*born ENABLED with every bid at the 2-cent floor/),
     })
     expect(r.preview.warnings.join(' ')).not.toMatch(/still says IT/)
     // The approval card: the market it moves to beside the budget (a plan's step shows the first three), then the words.
@@ -542,13 +543,15 @@ describe('W4-10 — a copy into another market, translated by Claude', () => {
       ['Copies', null, '1 campaign for TESTDE, at the 2-cent floor, off the allowlist'],
       ['Market', 'IT', 'DE'],
       ['Daily budget', null, expect.stringMatching(/12\.00/)],
-      ['Keywords', null, '4 terms translated, 0 kept as they are'],
+      ['Keywords', null, '3 translated, 0 kept as they are'],
+      ['Negative keywords', null, '1 translated, 0 kept as they are'],
     ])
     // A brand term kept as it is: the product swapped in, as in a term copied as it is.
     const kept = (await preview(deCopy({ translations: [{ from: 'TESTSRC JACKET', keep: true }, ...WORDS.slice(1)] }))).preview as Row
-    expect(kept.translation).toMatchObject({ translated: 3, kept: 1, keywords: expect.arrayContaining([{ from: 'TESTSRC jacket', to: 'TESTDE jacket', kept: true }]) })
-    // By rule only inside the markets its limits name.
-    expect(judge(r.preview, { maxCampaigns: 1, maxDailyBudgetCents: 1200, maxBidCents: 60, markets: ['IT'] })).toMatch(/only in IT/)
+    expect(kept.translation).toMatchObject({ counts: { keywords: { translated: 2, kept: 1 } }, keywords: expect.arrayContaining([{ from: 'TESTSRC JACKET', to: 'TESTDE JACKET', kept: true }]) })
+    // Lead decision B: into another market never by rule, whatever the limits (the markets they name included).
+    expect(judge(r.preview, { maxCampaigns: 5, maxDailyBudgetCents: 100_000, maxBidCents: 1000, markets: ['DE'] }))
+      .toBe("it copies into another market (IT → DE) with Claude's translations: a person always reads them, so it never runs by rule")
   })
 
   it("rule 3 on the translated text: a keyword the product's own campaigns in DE buy refuses it until skipped or accepted", async () => {
@@ -556,6 +559,28 @@ describe('W4-10 — a copy into another market, translated by Claude', () => {
     expect((await preview(own)).error).toMatch(/^Not queued: Replicate's gate refuses this copy — 1 keyword\(s\) would make TESTDE bid against campaigns you already run for it \("rennjacke"\).*already buy "rennjacke" \("Fixture de-own DE"\): name each in skipTerms/)
     expect((await preview({ ...own, skipTerms: ['rennjacke'] })).preview).toMatchObject({ totals: { positives: 2, negatives: 1 } })
     expect((await preview({ ...own, acceptTerms: ['rennjacke'] })).preview).toMatchObject({ acceptedTerms: ['rennjacke'] })
+  })
+
+  it('rule 3 for a brand term too: the product already running in DE with the term it is copied to is a clash (translated or kept)', async () => {
+    // TEST-DE-1's own DE campaign buying the brand term the copy makes ("TESTDE jacke").
+    await inside(async () => {
+      await db().campaign.create({ data: { id: 'c-de-brand', name: 'Fixture de-brand DE', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'DE', externalCampaignId: 'EXT-c-de-brand', dailyBudget: '5.00', startDate: new Date('2026-01-01T00:00:00Z') } })
+      await db().adGroup.create({ data: { id: 'g-de-brand', campaignId: 'c-de-brand', name: 'de-brand group', externalAdGroupId: 'EXT-g-de-brand' } })
+      await db().adTarget.create({ data: { adGroupId: 'g-de-brand', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'TESTDE jacke', bidCents: 25, externalTargetId: 'EXT-de-brand-kw' } })
+      await db().adTarget.create({ data: { adGroupId: 'g-de-brand', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'TESTDE jacket', bidCents: 25, externalTargetId: 'EXT-de-brand-kw2' } })
+      await db().adProductAd.create({ data: { adGroupId: 'g-de-brand', asin: 'B0DEASN001', externalAdId: 'EXT-pa-de-brand' } })
+    })
+    try {
+      expect((await preview(deCopy())).error).toMatch(/would make TESTDE bid against campaigns you already run for it \("TESTDE jacke"\).*already buy "TESTDE jacke" \("Fixture de-brand DE"\)/)
+      const kept = deCopy({ translations: [{ from: 'testsrc jacket', keep: true }, ...WORDS.slice(1)] })
+      expect((await preview(kept)).error).toMatch(/already buy "TESTDE jacket" \("Fixture de-brand DE"\)/)
+      expect((await preview({ ...deCopy(), skipTerms: ['TESTDE jacke'] })).preview).toMatchObject({ totals: { positives: 2 } })
+      // Another product's campaign with the term: listed, never blocked.
+      await inside(() => db().adProductAd.updateMany({ where: { adGroupId: 'g-de-brand' }, data: { asin: 'B0OTHERDE2' } }))
+      expect((await preview(deCopy())).preview).toMatchObject({ sharedWithOtherProducts: expect.arrayContaining([expect.objectContaining({ expression: 'TESTDE jacke' })]) })
+    } finally {
+      await inside(() => db().campaign.update({ where: { id: 'c-de-brand' }, data: { status: 'ARCHIVED' } }))
+    }
   })
 
   it('refuses, and queues nothing: a term untranslated or unknown, a term twice, translations in one market, a market without checked limits or writes, a product not ACTIVE there, category targets', async () => {
@@ -626,7 +651,7 @@ describe('W4-10 — a copy into another market, translated by Claude', () => {
     const asked = await ask({ title: 'A copy into DE as a plan', steps: [{ tool: 'replicate-ad-structure', args }] }, 'submit-change-plan')
     expect(asked, JSON.stringify(asked)).toMatchObject({ ok: true, mode: 'queued' })
     const step = await inside(() => db().agentPlanStep.findFirstOrThrow({ where: { approvalId: asked.approvalId! } }))
-    expect(step.preview).toMatchObject({ market: 'DE', translation: { translated: 4, keywords: [{ from: 'race jacket', to: 'renn jacke' }, { from: 'TESTSRC jacket', to: 'TESTPLAN jacke' }, { from: 'winter boots', to: 'winterstiefel' }] } })
+    expect(step.preview).toMatchObject({ market: 'DE', translation: { counts: { keywords: { translated: 3 }, negatives: { translated: 1 } }, keywords: [{ from: 'race jacket', to: 'renn jacke' }, { from: 'testsrc jacket', to: 'TESTPLAN jacke' }, { from: 'winter boots', to: 'winterstiefel' }] } })
     const parked = await inside(() => decideFleetApproval({ id: asked.approvalId!, decision: 'approve', actor: person(member.userId, 'app') }))
     expect(parked, parked.error).toMatchObject({ ok: true, status: 'scheduled' })
     await inside(() => db().agentApproval.update({ where: { id: asked.approvalId! }, data: { executeAfter: new Date(Date.now() - 1000) } }))
@@ -636,5 +661,84 @@ describe('W4-10 — a copy into another market, translated by Claude', () => {
     await finished((change.after as Row).applicationId)
     const texts = await sql('SELECT t."expressionValue" AS text FROM "AdTarget" t JOIN "AdGroup" g ON g.id = t."adGroupId" JOIN "Campaign" c ON c.id = g."campaignId" WHERE c.name = $1 ORDER BY lower(t."expressionValue")', ['TESTPLAN Exact DE'])
     expect(texts.map((t) => t.text)).toEqual(['billig', 'renn jacke', 'TESTPLAN jacke', 'winterstiefel'])
+  })
+})
+
+describe('W4-10 — a copy into another market never runs by rule (lead decision B)', () => {
+  /** Claude through its own door (the MCP rule), as a member who may run by rule. */
+  const mcp = () => ({ ...person(member.userId, 'claude'), business: { id: LEGACY_WORKSPACE_ID, name: 'Test business' }, scopes: ['nexus.read', 'nexus.write', 'nexus.run'], oauthGrantId: 'grant-w410' }) as never
+  const byDoor = (args: Record<string, unknown>, tool = 'replicate-ad-structure') => inside(async () => {
+    const principal = mcp()
+    const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: member.userId } })
+    return runOrQueueTool(tool, args, principal, run.id, { forceAsk: true, rule: claudeGateRule(principal) }) as Promise<Row>
+  })
+  const rule = { maxCampaigns: 5, maxDailyBudgetCents: 100_000, maxBidCents: 1000 }
+  const strategies: string[] = []
+  const rulePerson = () => person(member.userId, 'app')
+  /** A person approves it; then it is made to look decided by the business's rule, and the window's commit runs. */
+  const ruleCommit = async (approvalId: string) => {
+    const parked = await inside(() => decideFleetApproval({ id: approvalId, decision: 'approve', actor: rulePerson() }))
+    expect(parked, parked.error).toMatchObject({ ok: true, status: 'scheduled' })
+    await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { decisionVia: 'auto', executeAfter: new Date(Date.now() - 1000) } }))
+    return inside(() => commitScheduledApproval(approvalId))
+  }
+
+  beforeAll(async () => {
+    await inside(async () => {
+      // The business lets the tool run by rule, with room in its limits, inside the ads strategy of IT and DE.
+      await db().agentTool.upsert({
+        where: { name: 'replicate-ad-structure' },
+        create: { name: 'replicate-ad-structure', riskTier: 'high', requiresApproval: true, claudeTrust: 'auto', claudeLimits: rule },
+        update: { claudeTrust: 'auto', claudeLimits: rule },
+      })
+      for (const market of ['IT', 'DE']) {
+        strategies.push((await db().adsStrategy.create({ data: {
+          market, level: 'MARKET', scopeId: '*', label: `Test market (${market})`, updatedBy: 'user:test',
+          claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 10, claudeMaxBudgetIncreasePerDayCents: 50_000, maxBidCents: 100,
+        } })).id)
+      }
+      const p = await db().product.create({ data: { sku: 'TEST-RULE-1', name: 'Test TEST-RULE-1', basePrice: '99.00', amazonAsin: 'B0RULEASN1' } })
+      for (const market of ['IT', 'DE']) await db().channelListing.create({ data: { productId: p.id, channel: 'AMAZON', marketplace: market, region: market, channelMarket: `AMAZON_${market}`, listingStatus: 'ACTIVE' } })
+    })
+  })
+  afterAll(async () => {
+    await inside(async () => {
+      await db().adsStrategy.deleteMany({ where: { id: { in: strategies } } })
+      await db().agentTool.update({ where: { name: 'replicate-ad-structure' }, data: { claudeTrust: 'ask', claudeLimits: {} as never } })
+    })
+  })
+
+  let intoDe = ''
+  it('the door: at auto with room in its limits, a copy inside IT runs by rule; the same copy into DE waits for a person', async () => {
+    const same = await byDoor(copy({ productToken: 'TESTRULE', skus: ['TEST-RULE-1'] }))
+    expect(same, JSON.stringify(same)).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'rule', level: 'auto' } })
+    const other = await byDoor(deCopy({ productToken: 'TESTRULE', skus: ['TEST-RULE-1'] }))
+    expect(other, JSON.stringify(other)).toMatchObject({
+      ok: true, mode: 'queued', rule: { by: 'person', why: "it copies into another market (IT → DE) with Claude's translations: a person always reads them, so it never runs by rule; a person approves it in Nexus" },
+    })
+    intoDe = other.approvalId
+  })
+
+  it("the commit: a rule's decision is handed back to a person, and nothing is made", async () => {
+    await ruleCommit(intoDe)
+    const ap = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: intoDe } }))
+    expect(ap).toMatchObject({ status: 'pending', decisionVia: null, reason: expect.stringMatching(/^not run — .*it copies into another market \(IT → DE\) .*never runs by rule/) })
+    expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "Campaign" WHERE name LIKE $1', ['TESTRULE%DE']))[0].n).toBe(0)
+  })
+
+  it("execute itself refuses a rule's decision, whatever the limits and the strategy say", async () => {
+    const ap = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: intoDe } }))
+    const { raw } = await inside(() => executeTool(rulePerson(), 'replicate-ad-structure', ap.args as Record<string, unknown>, { approvalId: intoDe, approvedPreview: ap.preview ?? undefined, decidedVia: 'auto' }))
+    expect(raw).toMatchObject({ ok: false, error: "Not run: a copy into another market carries Claude's translations, and a person always reads them: it never runs by rule. Ask for it again; a person approves it." })
+    expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "Campaign" WHERE name LIKE $1', ['TESTRULE%DE']))[0].n).toBe(0)
+  })
+
+  it('a change plan with such a step waits for a person, and a rule deciding the plan is handed back', async () => {
+    const plan = await byDoor({ title: 'A copy into DE as a plan', steps: [{ tool: 'replicate-ad-structure', args: deCopy({ productToken: 'TESTRULE', skus: ['TEST-RULE-1'] }) }] }, 'submit-change-plan')
+    expect(plan, JSON.stringify(plan)).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'person', why: expect.stringMatching(/never runs by rule/) } })
+    await ruleCommit(plan.approvalId)
+    const ap = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: plan.approvalId } }))
+    expect(ap).toMatchObject({ status: 'pending', decisionVia: null, reason: expect.stringMatching(/^not run — .*it copies into another market \(IT → DE\) .*never runs by rule/) })
+    expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "Campaign" WHERE name LIKE $1', ['TESTRULE%DE']))[0].n).toBe(0)
   })
 })
