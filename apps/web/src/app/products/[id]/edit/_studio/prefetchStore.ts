@@ -71,6 +71,12 @@ export function adoptPrefetch(url: string, signal?: AbortSignal): Promise<Respon
   })
 }
 
+/** Forget the prefetch of exactly this URL: the page knows it will not want it (the family order of a product with no family). */
+export function discardPrefetch(url: string): void {
+  const kind = prefetchKind(url)
+  if (kind && entries.get(kind)?.url === url) drop(kind, true)
+}
+
 /** Test seam: forget every prefetch. */
 export function clearPrefetches(): void {
   for (const kind of [...entries.keys()]) drop(kind, true)

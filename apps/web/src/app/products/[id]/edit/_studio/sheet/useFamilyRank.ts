@@ -11,12 +11,16 @@
  *   rank is ready at once. More than one product on the sheet counts as a family whatever the product's own flags say.
  * - `settled` is false until the FIRST read answers. The page holds its rows until then, so they never move under a
  *   focused cell (AG keeps focus by row index: a re-order after the first paint would leave the cursor on another SKU).
+ *   Only before the first paint: once the rows are on screen they are never held again — a family that appears later
+ *   (Make parent and a first variation, an import) is read with the rows on screen, as an operator's own change.
  * - A failed read keeps the last order that was read; before any, the rows fall back to parent then SKU — what the
  *   Matrix shows then too — and `error` says so on the page.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useStudioProduct, useStudioScope } from '../contracts'
+import { discardPrefetch } from '../prefetchStore'
+import { familyOrderUrl } from '../sheetUrls'
 import { EMPTY_PROJECTIONS, type FamilyProjections } from '../variants/family/projections'
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
@@ -42,6 +46,8 @@ export function useFamilyRank(productId: string, rows: readonly FamilyOrderRow[]
   const inFamily = product.isParent || !!product.parentId || members.includes('\n')
   const { market, locale } = familyReadScope(useStudioScope())
   const { projections, loading, error, reload } = useFamilyProjections(inFamily ? productId : '', market, locale, 'order')
+  /* The page-load prefetch of the order is useless to a product with no family, and stale by the time one appears. */
+  useEffect(() => { if (members && !inFamily) discardPrefetch(familyOrderUrl(productId, market, locale)) }, [members, inFamily, productId, market, locale])
   const seen = useRef('')
   useEffect(() => {
     if (!inFamily || !members || seen.current === members) return
@@ -56,5 +62,8 @@ export function useFamilyRank(productId: string, rows: readonly FamilyOrderRow[]
   if (projections !== EMPTY_PROJECTIONS) lastRead.current = projections
   const source = projections === EMPTY_PROJECTIONS ? lastRead.current : projections
   const rank = useMemo(() => familyRank(source, columns ?? [], rows), [source, columns, rows])
-  return { rank, settled: !inFamily || answered, error: inFamily ? error : null, reload }
+  const shown = useRef(false)
+  const settled = shown.current || !inFamily || answered
+  if (settled && members) shown.current = true
+  return { rank, settled, error: inFamily ? error : null, reload }
 }

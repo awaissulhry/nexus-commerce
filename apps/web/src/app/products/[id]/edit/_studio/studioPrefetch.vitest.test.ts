@@ -3,7 +3,7 @@
  * adopt them only when they would have made exactly the same read.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { adoptPrefetch, clearPrefetches, PREFETCH_TTL_MS, prefetchKind, startPrefetch } from './prefetchStore'
+import { adoptPrefetch, clearPrefetches, discardPrefetch, PREFETCH_TTL_MS, prefetchKind, startPrefetch } from './prefetchStore'
 import { studioPrefetchPlan } from './studioPrefetch'
 import { fetchStudioRead } from './studio-read'
 import { channelScopeUrl } from './sheet/channel/useChannelSheet'
@@ -67,6 +67,19 @@ describe('the family order read (Owner 2026-10-07) starts with the Information p
   it('prefetches only the order view, never the full family read', () => {
     expect(prefetchKind(familyOrderUrl(ID, 'IT', 'it'))).toBe('family')
     expect(prefetchKind(familyOrderUrl(ID, 'IT', 'it').replace('&view=order', ''))).toBeNull()
+  })
+
+  it('a product with no family discards the prefetch, so a family made later reads fresh', async () => {
+    const url = familyOrderUrl(ID, 'IT', 'it')
+    let signal: AbortSignal | undefined
+    startPrefetch(url, (_url, init) => { signal = init?.signal ?? undefined; return Promise.resolve(new Response('stale')) })
+    discardPrefetch(familyOrderUrl('another-product', 'IT', 'it'))
+    expect(signal?.aborted).toBe(false)
+    discardPrefetch(url)
+    expect(signal?.aborted).toBe(true)
+    const network = vi.fn(() => Promise.resolve(new Response('fresh')))
+    vi.stubGlobal('fetch', network)
+    await expect((await fetchStudioRead(url)).text()).resolves.toBe('fresh')
   })
 
   it('the order read adopts the prefetch once, and a reload reads again', async () => {
