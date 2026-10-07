@@ -17,6 +17,7 @@ vi.mock('../sync-control-policy.service.js', () => ({ loadChannelPolicies: async
 import { syncLedgerOf } from '../sync-control-core.js'
 import type { ProductLedger } from '../stock-pool/sync-ledgers.js'
 import { amazonSendQuantity, loadAmazonSendQuantity, readEuIntentRows, routedSendCeiling, type SendQuantityInput } from './send-quantity.js'
+import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
 
 const ledger = (rows: Array<{ locationCode: string; available: number; syncRoutes: string[] }>, over: Partial<ProductLedger> = {}): ProductLedger => ({
   productId: 'p1', source: { kind: 'own' }, ledger: syncLedgerOf(rows), quantity: rows.reduce((s, r) => s + r.available, 0),
@@ -156,7 +157,17 @@ describe('S3 — the EU sibling read, per seller SKU', () => {
 
   it('the shape the guard reads is unchanged', async () => {
     expect(await readEuIntentRows(reader([sib('DE', { followMasterQuantity: false, quantityOverride: 0, fulfillmentMethod: 'FBA' })]), 'p1', 'SKU-1'))
-      .toEqual([{ marketplace: 'DE', followMasterQuantity: false, quantityOverride: 0, quantity: 5, syncPaused: false, isFba: true }])
+      .toEqual([{ marketplace: 'DE', followMasterQuantity: false, quantityOverride: 0, quantity: 5, syncPaused: false, isFba: true, offerClosed: false }])
+  })
+
+  it('a closed market offer expresses no intent: a live Follow next to a closed pinned market is no conflict (SCT.6)', async () => {
+    const rows = [sib('IT'), sib('ES', { followMasterQuantity: false, quantityOverride: null, quantity: 2, offerClosedAt: new Date('2026-10-07T10:17:00Z') })]
+    const read = await readEuIntentRows(reader(rows), 'p1', 'SKU-1')
+    expect(read.map((r) => [r.marketplace, r.offerClosed])).toEqual([['IT', false], ['ES', true]])
+    expect(detectEuIntentConflict(read)).toEqual({ conflict: false, detail: '' })
+    // Control: the same ES offer open again is the conflict the guard exists for.
+    const open = await readEuIntentRows(reader([sib('IT'), sib('ES', { followMasterQuantity: false, quantityOverride: null, quantity: 2, offerClosedAt: null })]), 'p1', 'SKU-1')
+    expect(detectEuIntentConflict(open).conflict).toBe(true)
   })
 
   it('loadAmazonSendQuantity reads the guard under the listing\'s own seller SKU and names it', async () => {
