@@ -98,17 +98,18 @@ describe('W0 — whose target the optimiser moves a bid toward', () => {
   it('no target set anywhere: exactly as before (flat 30 %, no label)', async () => {
     const out = await preview()
     expect(out.targetAcos).toBe(0.3)
-    // ACoS 50 % > 30 %: ratio 0.6 → 45¢ × 0.6 = 27¢.
-    expect(of(out, 't-it')).toMatchObject({ currentBidCents: 45, proposedBidCents: 27, targetAcosUsed: 0.3, targetBasis: 'flat', targetSource: 'flat', reason: 'ACOS 50% > target 30% — lower' })
+    // ACoS 50 % > 30 %: the goal is 30 % of €1.00 sales a click = 30¢ (C3: before, 45¢ × 30/50 = 27¢, again every run).
+    expect(of(out, 't-it')).toMatchObject({ currentBidCents: 45, proposedBidCents: 30, targetAcosUsed: 0.3, targetBasis: 'flat', targetSource: 'flat', reason: 'ACOS 50% > target 30% — lower toward 30¢ (30% of €1.00 sales a click)' })
   })
 
   it("a campaign's own target ACoS changes its proposal; a campaign without one keeps the flat target", async () => {
     // Written as the screens and Claude's set-campaign-target-acos write it: a fraction, through the same service.
     await inside(() => setBidAutomation('c-it', { targetAcos: 0.4 }))
     const out = await preview()
-    // 50 % > 40 %: ratio 0.8 → 45¢ × 0.8 = 36¢ (it was 27¢ toward the flat 30 %).
-    expect(of(out, 't-it')).toMatchObject({ proposedBidCents: 36, targetAcosUsed: 0.4, targetBasis: 'campaign', targetSource: 'campaign', reason: 'ACOS 50% > target 40% (campaign target) — lower' })
-    expect(of(out, 't-uk')).toMatchObject({ proposedBidCents: 36, targetAcosUsed: 0.3, targetBasis: 'flat' })
+    // 50 % > 40 %: the goal is 40¢ (it was 30¢ toward the flat 30 %).
+    expect(of(out, 't-it')).toMatchObject({ proposedBidCents: 40, targetAcosUsed: 0.4, targetBasis: 'campaign', targetSource: 'campaign', reason: 'ACOS 50% > target 40% (campaign target) — lower toward 40¢ (40% of €1.00 sales a click)' })
+    // 60¢ toward its 30¢ goal: the 50 % step reaches it.
+    expect(of(out, 't-uk')).toMatchObject({ proposedBidCents: 30, targetAcosUsed: 0.3, targetBasis: 'flat' })
   })
 
   it('the account default covers every campaign without its own target; the campaign target still wins', async () => {
@@ -116,8 +117,8 @@ describe('W0 — whose target the optimiser moves a bid toward', () => {
     await inside(() => setDefaultTargetAcosPct(45, 'test'))
     const out = await preview()
     expect(of(out, 't-it')).toMatchObject({ targetAcosUsed: 0.4, targetSource: 'campaign' })
-    // 50 % > 45 %: ratio 0.9 → 60¢ × 0.9 = 54¢.
-    expect(of(out, 't-uk')).toMatchObject({ proposedBidCents: 54, targetAcosUsed: 0.45, targetBasis: 'account', targetSource: 'account', reason: 'ACOS 50% > target 45% (account default) — lower' })
+    // 50 % > 45 %: the goal is 45¢ (60¢ × 45/50 = 54¢ before).
+    expect(of(out, 't-uk')).toMatchObject({ proposedBidCents: 45, targetAcosUsed: 0.45, targetBasis: 'account', targetSource: 'account', reason: 'ACOS 50% > target 45% (account default) — lower toward 45¢ (45% of €1.00 sales a click)' })
   })
 
   it("a caller's explicit target wins over the campaign's and the account default, and the reason names it", async () => {
@@ -125,8 +126,8 @@ describe('W0 — whose target the optimiser moves a bid toward', () => {
     await inside(() => setDefaultTargetAcosPct(45, 'test'))
     const out = await preview({ targetAcos: 0.2, targetAcosFrom: 'the target asked for' })
     expect(out.targetAcos).toBe(0.2)
-    // 50 % > 20 %: ratio max(0.5, 0.4) = 0.5 → 45¢ × 0.5 ≈ 23¢.
-    expect(of(out, 't-it')).toMatchObject({ proposedBidCents: 23, targetAcosUsed: 0.2, targetBasis: 'explicit', targetSource: 'explicit', reason: 'ACOS 50% > target 20% (the target asked for) — lower' })
+    // 50 % > 20 %: the goal is 20¢, and one step (50 %) reaches 45¢ × 0.5 ≈ 23¢ on the way.
+    expect(of(out, 't-it')).toMatchObject({ proposedBidCents: 23, targetAcosUsed: 0.2, targetBasis: 'explicit', targetSource: 'explicit', reason: 'ACOS 50% > target 20% (the target asked for) — lower toward 20¢ (20% of €1.00 sales a click)' })
     expect(of(out, 't-uk')).toMatchObject({ targetAcosUsed: 0.2, targetSource: 'explicit' })
     // A fallback is not explicit: it comes last, so it never masks the campaign's target.
     const fallback = await preview({ fallbackTargetAcos: 0.2 })
@@ -135,13 +136,14 @@ describe('W0 — whose target the optimiser moves a bid toward', () => {
 
   it('a launch target above 100 % is read; a campaign storing 30 (a percent in the fraction field) is skipped, never converted', async () => {
     await inside(() => setBidAutomation('c-it', { targetAcos: 1.5 }))
-    // 50 % < 150 % with orders: ratio min(1.25, 3) → 45¢ × 1.25 ≈ 56¢.
+    // 50 % < 150 % with orders: toward the 150¢ goal, one step (+25 %) → 45¢ × 1.25 ≈ 56¢.
     expect(of(await preview(), 't-it')).toMatchObject({ proposedBidCents: 56, targetAcosUsed: 1.5, targetSource: 'campaign' })
     await storeRaw('c-it', 30)
-    await inside(() => setDefaultTargetAcosPct(45, 'test'))
+    // (40 %, not 45 %: t-it's 45¢ is its goal at 45 %, and a bid at its goal proposes nothing — C3.)
+    await inside(() => setDefaultTargetAcosPct(40, 'test'))
     expect(of(await preview(), 't-it')).toMatchObject({
-      targetAcosUsed: 0.45, targetSource: 'account',
-      reason: 'ACOS 50% > target 45% (account default) [campaign target 30 skipped: not a fraction above 0 and at most 5] — lower',
+      targetAcosUsed: 0.4, targetSource: 'account',
+      reason: 'ACOS 50% > target 40% (account default) [campaign target 30 skipped: not a fraction above 0 and at most 5] — lower toward 40¢ (40% of €1.00 sales a click)',
     })
     // An account default of 150 % is read too.
     await inside(() => setDefaultTargetAcosPct(150, 'test'))
@@ -165,7 +167,7 @@ describe('W0 — whose target the optimiser moves a bid toward', () => {
   it('the Bayesian sparse-data path still runs: its basis stays "bayesian", and targetSource says whose target it used', async () => {
     await inside(() => setBidAutomation('c-it', { targetAcos: 0.4 }))
     const out = await preview({ bayesian: true })
-    expect(of(out, 't-it')).toMatchObject({ targetAcosUsed: 0.4, targetBasis: 'bayesian', targetSource: 'campaign', reason: expect.stringMatching(/target 40% \(campaign target\) — (lower|raise) \(Bayesian CR/) })
+    expect(of(out, 't-it')).toMatchObject({ targetAcosUsed: 0.4, targetBasis: 'bayesian', targetSource: 'campaign', reason: expect.stringMatching(/target 40% \(campaign target\) — (lower|raise) toward \d+¢ \(Bayesian CR/) })
     expect(of(out, 't-uk')).toMatchObject({ targetAcosUsed: 0.3, targetBasis: 'bayesian', targetSource: 'flat' })
   })
 })
