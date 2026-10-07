@@ -5,8 +5,9 @@
  * schema, business profiles ON; the job queue a stub. Values are made up (public repo).
  *
  *   person    a rename of a person's plan at level auto waits for a person, the reason named
- *   allowed   with allowPeoplesPlans the same request runs by rule; the plan is then Claude's, and the version row
- *             names the person the request runs as
+ *   allowed   with allowPeoplesPlans the same request runs by rule, and the version row names the person it runs as;
+ *             the plan stays a person's (one Claude change never makes it Claude's), so the next request waits again
+ *   claude's  a plan Claude made runs by rule (inside the limits) until anyone else saves it — then it is a person's
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -125,7 +126,7 @@ describe('W4-1 — a person\'s hourly plan never changes by rule unless the busi
     expect((await inside(() => db().rankScheduleGroup.findUnique({ where: { id: ids.plan } }))).name).toBe('Test owner plan')
   })
 
-  it('with allowPeoplesPlans the same request runs by rule; the plan is then Claude\'s, the version naming the person it ran as', async () => {
+  it('with allowPeoplesPlans the same request runs by rule; the version names the person it ran as; it stays a person\'s plan', async () => {
     await atAuto({ ...OPEN, allowPeoplesPlans: true })
     const asked = await call({ op: 'rename', planId: ids.plan, name: 'Test owner plan (renamed)', why: 'a test' })
     expect(asked).toMatchObject({ status: 'runs_by_rule' })
@@ -134,8 +135,29 @@ describe('W4-1 — a person\'s hourly plan never changes by rule unless the busi
     expect((await inside(() => db().rankScheduleGroup.findUnique({ where: { id: ids.plan } }))).name).toBe('Test owner plan (renamed)')
     const [version] = await inside(() => db().rankScheduleVersion.findMany({ where: { groupId: ids.plan }, orderBy: { createdAt: 'desc' }, take: 1 }))
     expect(version).toMatchObject({ name: 'Test owner plan (renamed)', changedBy: `user:${ids.person}` })
-    // Nothing moved since: the next request sees Claude's plan, and is not held as a person's.
+    // One approved Claude change never makes a person's plan Claude's: with allowPeoplesPlans off again, the next
+    // request (and the undo of this one) waits for a person.
+    await inside(() => db().agentTool.updateMany({ where: { name: TOOL }, data: { claudeLimits: OPEN } }))
     const next = await call({ op: 'rename', planId: ids.plan, name: 'Test owner plan (again)' })
-    expect(next.preview ?? (await inside(() => db().agentApproval.findUnique({ where: { id: next.approvalId } }))).preview).toMatchObject({ owner: { by: 'claude' }, peoplesPlans: [] })
+    expect(next).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringMatching(/made or last changed by a person/) } })
+    expect((await inside(() => db().agentApproval.findUnique({ where: { id: next.approvalId } }))).preview).toMatchObject({ owner: { by: 'person' }, peoplesPlans: ['Test owner plan (renamed)'] })
+  })
+
+  it('a plan Claude made is Claude\'s until anyone else saves it: one screen edit makes it a person\'s for good', async () => {
+    await atAuto({ ...OPEN, campaignIds: ['c-it', 'c-off'], maxChangesPerEntityPerDay: 5 })
+    const asked = await call({ op: 'create', name: 'Test claude made', market: 'IT', campaignIds: ['c-off'], defaultTargetKey: 'test-top' })
+    expect(asked, JSON.stringify(asked.trust)).toMatchObject({ status: 'runs_by_rule' })
+    await windowClosed(asked.approvalId)
+    expect(await inside(() => commitScheduledApproval(asked.approvalId))).toMatchObject({ ok: true, status: 'executed' })
+    const made = await inside(() => db().rankScheduleGroup.findFirst({ where: { name: 'Test claude made' } }))
+    const renamed = await call({ op: 'rename', planId: made.id, name: 'Test claude made 2' })
+    expect(renamed, JSON.stringify(renamed.trust)).toMatchObject({ status: 'runs_by_rule' })
+    await windowClosed(renamed.approvalId)
+    expect(await inside(() => commitScheduledApproval(renamed.approvalId))).toMatchObject({ ok: true, status: 'executed' })
+    // A person renames it on the Hourly Bids page (the lightweight PATCH), then a Claude request puts the name back.
+    const { patchRankScheduleGroup } = await import('../../advertising/rank-schedule-group.service.js')
+    await inside(() => patchRankScheduleGroup(made.id, { name: 'Test claude made (screen)' }, 'user:screen-person'))
+    const after = await call({ op: 'rename', planId: made.id, name: 'Test claude made 3' })
+    expect(after).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringMatching(/made or last changed by a person/) } })
   })
 })

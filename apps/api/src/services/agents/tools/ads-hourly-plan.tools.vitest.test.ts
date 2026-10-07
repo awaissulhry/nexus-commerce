@@ -46,7 +46,8 @@ import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
 import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
 import { limitsTighten, ruleFrom } from '../claude-trust.service.js'
-import { applyValue } from './ads-hourly-plan.tools.js'
+import { applyValue, HOURLY_PLAN_UNDO } from './ads-hourly-plan.tools.js'
+import { patchRankScheduleGroup } from '../../advertising/rank-schedule-group.service.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -95,7 +96,9 @@ beforeAll(async () => {
   database = await formulaDatabase()
   await inside(async () => {
     await seedAdsFixture(db())
-    for (const id of ['c-h1', 'c-h2', 'c-h3', 'c-h4', 'c-h5', 'c-own', 'c-book']) await campaign(id)
+    for (const id of ['c-h1', 'c-h2', 'c-h3', 'c-h4', 'c-h5', 'c-own', 'c-book', 'c-h6']) await campaign(id)
+    // A campaign in a market with no Amazon Ads connection (the write gate refuses it).
+    await campaign('c-fr', { marketplace: 'FR' })
     await db().rankTarget.create({ data: { key: 'test-floor', name: 'Test min bid', pause: true } })
     await db().rankTarget.create({ data: { key: 'test-top', name: 'Test top', biasPct: 50 } })
     await db().rankTarget.create({ data: { key: 'test-push', name: 'Test push', biasPct: 150, bidMode: 'absolute', bidValueCents: 80 } })
@@ -112,7 +115,7 @@ beforeAll(async () => {
     // IT has an ads strategy that lets changes run by rule today (C1, C5); the tool's own limits still decide.
     await db().adsStrategy.create({ data: { market: 'IT', level: 'MARKET', label: 'Test market (IT)', claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 10, version: 1, updatedBy: 'user:test' } })
     // A campaign with a schedule of its own (no plan).
-    await db().adSchedule.create({ data: { campaignId: 'c-own', name: 'Test own schedule', windows: [{ days: [1], startHour: 0, endHour: 6 }], enabled: true } })
+    await db().adSchedule.create({ data: { campaignId: 'c-own', name: 'Test own schedule', windows: [{ days: [1], startHour: 0, endHour: 6 }], enabled: true, targetOverrides: { 'test-top': { biasPct: 70 } } } })
   })
 }, 180_000)
 afterAll(async () => { await database?.close() }, 30_000)
@@ -146,7 +149,7 @@ describe('ad-hourly-plans — the read', () => {
     const byName = Object.fromEntries((r.data.items as Row[]).map((i) => [i.name, i]))
     expect(byName['Test person plan']).toMatchObject({
       planId: ids.person, market: 'IT', on: true, members: 1,
-      owner: { by: 'person', words: expect.stringMatching(/^a person on the Hourly Bids page \(not named\) — last changed /) },
+      owner: { by: 'person', words: expect.stringMatching(/^a person's plan — last changed by a person on the Hourly Bids page \(not named\) on /) },
       week: { hoursAtFloor: 30, hoursPlanned: 168, highestPlacementPct: 150, highestBaseBidCents: 80 },
     })
     expect(byName['TESTBOOK | IT | Playbook Research']).toMatchObject({ owner: { by: 'playbook', words: expect.stringContaining('rank:research') } })
@@ -348,5 +351,79 @@ describe('set-hourly-bid-plan — delete, and the pointers from the engine\'s ro
     const detail = await call('automation-detail', { automation: 'A10', rowId: ids.personSchedule })
     expect(detail.data.hourlyPlan).toMatchObject({ planId: ids.person, name: 'Test person plan', on: true })
     expect((await call('automation-detail', { automation: 'A10', rowId: ids.person })).data.hourlyPlan).toMatchObject({ planId: ids.person })
+  })
+})
+
+describe('W4-1 review — the Owner\'s plans, windows, values a campaign brings, stale requests, the gate, the delete undo', () => {
+  it('a person\'s plan stays a person\'s after an approved Claude change; the next request and the undo say so', async () => {
+    const asked = await ask({ op: 'rename', planId: ids.person, name: 'Test person plan (claude)' })
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    const next = (await preview({ op: 'rename', planId: ids.person, name: 'Test person plan' })).preview
+    expect(next).toMatchObject({ owner: { by: 'person', words: expect.stringMatching(/^a person's plan — last changed by a Claude request .*; Claude requests changed it too, which never makes it Claude's/) }, peoplesPlans: ['Test person plan (claude)'] })
+    // The undo is a request of this tool too: a person's plan, so it never runs by rule unless the business allowed it.
+    const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId }))
+    const back = (await preview(undo.request.args)).preview
+    expect(back.peoplesPlans).toEqual(['Test person plan (claude)'])
+    expect(judge(back, { maxItems: 5, markets: ['IT'], campaignIds: ['c-h1'], allowEngineOwned: true })).toMatch(/allowPeoplesPlans is off/)
+    expect(await approve((await ask(undo.request.args)).approvalId)).toMatchObject({ ok: true, status: 'executed' })
+  })
+
+  it('a window that ends at or before it starts (crossing midnight) is refused: split it in two', async () => {
+    const crossing = [{ days: [5], startHour: 22, endHour: 2, targetKey: 'test-floor' }]
+    expect((await preview({ op: 'create', name: 'Test night', market: 'IT', campaignIds: ['c-h6'], windows: crossing })).error)
+      .toBe('A window must end after it starts on the same day: 22 → 2 covers no hour. A window does not cross midnight — split it into two (22 → 24 on the first day and 0 → 2 on the next).')
+    expect((await preview({ op: 'update-windows', planId: ids.person, windows: crossing })).error).toMatch(/^A window must end after it starts/)
+  })
+
+  it('a campaign taken in keeps its own target values, as the page\'s builder does: shown, saved, and judged', async () => {
+    const args = { op: 'create', name: 'Test carrier', market: 'IT', campaignIds: ['c-own'], windows: WEEK, defaultTargetKey: 'test-top', move: true }
+    const p = (await preview(args)).preview
+    expect(p.members.added).toEqual([expect.objectContaining({ campaignId: 'c-own', from: 'a schedule of its own', ownTargetValues: { 'test-top': { biasPct: 70 } } })])
+    expect(await approve((await ask(args)).approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    const made = await inside(() => db().rankScheduleGroup.findFirst({ where: { name: 'Test carrier' } }))
+    expect((await members(made.id))[0]).toMatchObject({ campaignId: 'c-own', targetOverrides: { 'test-top': { biasPct: 70 } } })
+  })
+
+  it('stale: a plan saved on the screen between the request and its approval is not changed by it', async () => {
+    const asked = await ask({ op: 'rename', planId: ids.person, name: 'Test person plan (late)' })
+    await inside(() => patchRankScheduleGroup(ids.person, { windows: [], defaultTargetKey: 'test-top' }, 'user:screen-person'))
+    const answer = await approve(asked.approvalId)
+    expect(answer.status).not.toBe('executed')
+    expect(JSON.stringify(answer)).toMatch(/moved|changed|stale/i)
+    expect((await plan(ids.person))!.name).not.toBe('Test person plan (late)')
+  })
+
+  it('live: a market whose write gate refuses is said and stored as refused, not as sandbox', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    try {
+      const p = (await preview({ op: 'create', name: 'Test france', market: 'FR', campaignIds: ['c-fr'], defaultTargetKey: 'test-top' })).preview
+      expect(p.gateRefused).toEqual([expect.objectContaining({ market: 'FR', deniedAt: 'connection' })])
+      expect(p.consequences).toMatch(/Amazon's write gate refuses FR now/)
+      expect(p.reachNote).toMatch(/Amazon's write gate refuses FR now/)
+      // An IT plan: live, nothing refused (the list is there, empty, so execute sees a change either way).
+      const it = (await preview({ op: 'rename', planId: ids.person, name: 'Test person plan x' })).preview
+      expect(it).toMatchObject({ gateRefused: [], reach: { reach: 'live', profileId: 'P-IT-TEST' } })
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('switching off a plan that is on and holds Min-bid hours always asks for the code, even with nothing floored now', async () => {
+    await inside(() => patchRankScheduleGroup(ids.person, { windows: WEEK }, 'user:screen-person'))
+    const p = (await preview({ op: 'switch', planId: ids.person, on: false })).preview
+    expect(p.givesBack).toMatchObject({ restore: 0 })
+    expect(p.raises).toEqual([expect.stringMatching(/^the plan is on and holds Min-bid hours: whatever it floors on 1 campaign it lets go comes back when this runs/)])
+    expect(p.stepUp).toMatchObject({ what: 'gives back bids an hourly bid plan floored', raises: ['Hourly bid plans', 'Bids'] })
+    expect((await preview({ op: 'delete', planId: ids.person })).preview.stepUp).toBeDefined()
+  })
+
+  it('the delete says what goes with it; its undo keeps the portfolio binding and refuses beyond 100 campaigns', async () => {
+    const before = { op: 'delete', planId: 'rg-x', name: 'Test big', marketplace: 'IT', timezone: 'Europe/Rome', windows: WEEK, defaultTargetKey: 'test-top', portfolioId: 'PF-TEST-1', members: ['c1', 'c2'], overrides: {} }
+    expect(HOURLY_PLAN_UNDO.request({ before, after: { op: 'delete', planId: 'rg-x', deleted: true } })).toMatchObject({ tool: TOOL, args: { op: 'create', portfolioId: 'PF-TEST-1', campaignIds: ['c1', 'c2'] } })
+    const big = { ...before, members: Array.from({ length: 101 }, (_, i) => `c${i}`) }
+    expect(HOURLY_PLAN_UNDO.request({ before: big, after: { op: 'delete', planId: 'rg-x', deleted: true } })).toEqual({ refusal: expect.stringMatching(/held 101 campaigns, more than the 100 one request makes a plan with/) })
+    const p = (await preview({ op: 'delete', planId: ids.person })).preview
+    expect(p.effect).toMatch(/Its version history and its dated events go with it, and so do its campaigns' own target values: an undo makes the plan again \(born off\) without them/)
+    expect(p.undoNote).toMatch(/at most 100; above that the undo is refused\), portfolio binding/)
   })
 })

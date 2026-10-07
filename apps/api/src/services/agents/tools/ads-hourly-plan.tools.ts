@@ -117,6 +117,8 @@ const input = z.object({
     .describe('update-windows: paint only these days (0 Sunday … 6 Saturday): their hours become exactly `windows` (which name only these days); omit to replace the whole week'),
   defaultTargetKey: TARGET_KEY.nullable().optional().describe('create, update-windows: the baseline target of every hour no window covers (null: none); omit to keep it'),
   timezone: z.string().trim().min(1).max(64).optional().describe('create: the plan\'s time zone (default: the market\'s own)'),
+  portfolioId: z.string().trim().min(1).max(64).optional()
+    .describe('create: bind the plan to an Amazon portfolio (its Amazon portfolio id): it takes in the portfolio\'s campaigns on every save, as the page\'s portfolio plans do'),
   on: z.boolean().optional().describe('switch: true switches it on, false off (off gives back the bids it floored)'),
   values: z.array(VALUE).min(1).max(50).optional().describe('set-target-values: per campaign (or every member) and target, the values its hours hold'),
   why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the plan\'s history'),
@@ -162,6 +164,17 @@ async function campaignFacts(ids: readonly string[]): Promise<Map<string, Campai
   }]))
 }
 
+/**
+ * A window covers whole hours of one day: `endHour` is exclusive and a window never crosses midnight, so one that ends
+ * at or before it starts (22 → 2) covers nothing — refused, as the page's merge-windows refuses it.
+ */
+function windowRefusal(windows: Args['windows']): string | null {
+  const bad = (windows ?? []).find((w) => w.endHour <= w.startHour)
+  return bad
+    ? `A window must end after it starts on the same day: ${bad.startHour} → ${bad.endHour} covers no hour. A window does not cross midnight — split it into two (${bad.startHour} → 24 on the first day and 0 → ${bad.endHour} on the next).`
+    : null
+}
+
 /** The windows as the request paints them (each validated by the input schema). */
 const paintOf = (windows: Args['windows']): PaintWindow[] =>
   (windows ?? []).map((w) => ({ days: [...new Set(w.days)].sort((a, b) => a - b), startHour: w.startHour, endHour: w.endHour, targetKey: w.targetKey }))
@@ -194,6 +207,12 @@ function highestOf(draft: Draft, lib: TargetLibrary): { placementPct: number; ba
     if (t.highestBaseBidCents != null) baseBidCents = Math.max(baseBidCents ?? 0, t.highestBaseBidCents)
   }
   return { placementPct, baseBidCents }
+}
+
+/** Does any member's week (with its own values) hold Min-bid hours? */
+function floorHoursOf(state: PlanState, lib: TargetLibrary): boolean {
+  const sets = state.members.length ? state.members.map((c) => lib.withOverrides(state.overrides[c])) : [lib.values]
+  return sets.some((values) => weekSummary(state, values).totals.hoursAtFloor > 0)
 }
 
 /** The week of each campaign before and after, aggregated: the most hours of each kind of raise, and the campaigns raised. */
@@ -275,17 +294,22 @@ const START_HOW = 'A person with settings.security.manage approves it in Nexus w
   + 'it in Claude with theirs when the business set this tool to confirm in Claude. By rule only where the business allowed raises (allowRaise) '
   + 'and the ads strategy lets hourly plans change alone.'
 
-/** Where a change lands: each market's write gate (a Nexus-only change is stored as its gate answers; a refusal refuses a give-back). */
-async function reachOf(markets: string[]): Promise<{ stored: StoredReach; refused: Extract<LiveReach, { reach: 'refused' }> | null }> {
+/**
+ * Where a change lands: each market's write gate. `stored` is the kit's reach of the markets the gate lets through (live,
+ * or sandbox); a market it refuses is listed in `refused` — a give-back there is refused and not queued, and a Nexus-only
+ * change says the engine's writes there are refused now (the preview's `gateRefused`, re-checked at execute).
+ */
+async function reachOf(markets: string[]): Promise<{ stored: StoredReach; refused: Array<{ market: string; deniedAt: string; reason: string }>; first: Extract<LiveReach, { reach: 'refused' }> | null }> {
   const profiles = new Set<string>()
-  let refused: Extract<LiveReach, { reach: 'refused' }> | null = null
+  const refused: Array<{ market: string; deniedAt: string; reason: string }> = []
+  let first: Extract<LiveReach, { reach: 'refused' }> | null = null
   for (const marketplace of [...new Set(markets)].sort()) {
     const r = liveReachOf(await checkAdsWriteGate({ marketplace, payloadValueCents: 0 }))
-    if (r.reach === 'refused') refused ??= r
+    if (r.reach === 'refused') { first ??= r; refused.push({ market: marketplace, deniedAt: r.deniedAt, reason: r.reason }) }
     else if (r.reach === 'live') profiles.add(r.profileId)
   }
   // Some of it live, some in sandbox: it is live (that is what reaches Amazon), on every profile named.
-  return { stored: profiles.size ? { reach: 'live', profileId: [...profiles].sort().join(',') } : { reach: 'sandbox' }, refused }
+  return { stored: profiles.size ? { reach: 'live', profileId: [...profiles].sort().join(',') } : { reach: 'sandbox' }, refused, first }
 }
 
 /** The plan a request changes, its draft after the change, and every refusal that stops it before anything is shown. */
@@ -301,10 +325,12 @@ async function draftOf(a: Args, lib: TargetLibrary): Promise<{ planned: Planned 
     const tz = a.timezone?.trim() || MARKET_TIME_ZONE[a.market] || 'Europe/Rome'
     if (!isKnownTimeZone(tz)) return { refusal: `"${tz}" is not a time zone Nexus knows (timezone: e.g. Europe/Rome).` }
     if (!a.windows?.length && !a.defaultTargetKey) return { refusal: 'A plan holds a baseline, windows or both: name defaultTargetKey, windows, or both.' }
+    const crossing = windowRefusal(a.windows)
+    if (crossing) return { refusal: crossing }
     return {
       planned: {
         op, before: null, why,
-        after: { name, enabled: false, timezone: tz, marketplace: a.market, portfolioId: null, windows: paintOf(a.windows), defaultTargetKey: a.defaultTargetKey ?? null, members: campaignIds.sort(), overrides: {} },
+        after: { name, enabled: false, timezone: tz, marketplace: a.market, portfolioId: a.portfolioId ?? null, windows: paintOf(a.windows), defaultTargetKey: a.defaultTargetKey ?? null, members: campaignIds.sort(), overrides: {} },
       },
     }
   }
@@ -333,6 +359,8 @@ async function draftOf(a: Args, lib: TargetLibrary): Promise<{ planned: Planned 
       return planned(null)
     case 'update-windows': {
       if (!a.windows && a.defaultTargetKey === undefined) return { refusal: 'Name the new hours (windows), the baseline (defaultTargetKey), or both.' }
+      const crossing = windowRefusal(a.windows)
+      if (crossing) return { refusal: crossing }
       const painted = paintOf(a.windows)
       let windows: unknown[] = before.windows
       if (a.days?.length) {
@@ -442,8 +470,18 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
     const words = heldElsewhere.slice(0, 3).map((x) => `"${facts.get(x.id)!.name}" (${x.held!.planName ? `hourly plan "${x.held!.planName}"` : 'a schedule of its own'})`)
     return refuse(`Not queued: one campaign, one plan — ${words.join(', ')}${heldElsewhere.length > 3 ? ` and ${heldElsewhere.length - 3} more` : ''} ${heldElsewhere.length === 1 ? 'is' : 'are'} held already. Ask again with move: true to take ${heldElsewhere.length === 1 ? 'it' : 'them'} out of ${heldElsewhere.length === 1 ? 'it' : 'them'}, or leave ${heldElsewhere.length === 1 ? 'it' : 'them'} out.`)
   }
+  // A campaign taken in keeps its own target values from the schedule that holds it now, as the page's builder does
+  // (RankPlanBody reads them from the campaign's schedule): they are shown, and its raises are judged on them.
+  const carried: Record<string, Overrides[string]> = {}
+  for (const id of added) {
+    const own = holders.get(id)?.targetOverrides
+    if (after && own && Object.keys(own).length && !after.overrides[id]) {
+      after.overrides = { ...after.overrides, [id]: own as Overrides[string] }
+      carried[id] = own as Overrides[string]
+    }
+  }
   if (op === 'create') {
-    const twin = await planNamedAlready(after!.name, null)
+    const twin = await planNamedAlready(after!.name, after!.portfolioId)
     if (twin) return refuse(`A plan called "${after!.name}" exists already (${twin.id}): name the new one differently, or change that one.`)
   }
   if (op === 'rename') {
@@ -498,10 +536,22 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
     raises.push(`gives back the bids it floored on ${plural(release.restore, 'campaign')} (${plural(release.bids, 'bid')} leave the Min-bid floor)`)
     for (const c of restoreIds) raisedCampaigns.add(c)
   }
+  // Lead decision A (W4-1 review): letting go of campaigns of a plan that is ON and has Min-bid hours always asks for the
+  // approver's code, whatever is floored at this moment: the engine floors at every Min-bid hour, so a give-back may come
+  // with it by the time it runs (and a plain approve would then end "Not run: it raises").
+  const lettingGo = op === 'delete' || (op === 'switch' && !!after && !after.enabled) || (op === 'set-campaigns' && removed.length > 0)
+  const mayGiveBack = !!before?.enabled && lettingGo && !release?.restore && floorHoursOf(before, lib)
+  if (mayGiveBack) {
+    raises.push(`the plan is on and holds Min-bid hours: whatever it floors on ${plural(released.length, 'campaign')} it lets go comes back when this runs (nothing is floored right now), and a give-back adds spend`)
+    for (const c of released) raisedCampaigns.add(c)
+  }
 
   const markets = [...new Set([...touched.map((id) => facts.get(id)?.marketplace).filter((m): m is string => !!m), ...(op === 'create' && a.market ? [a.market] : [])])].sort()
   const reach = await reachOf(markets)
-  if (reach.refused && writesNow) return refuse(reachRefusal(reach.refused))
+  if (reach.first && writesNow) return refuse(reachRefusal(reach.first))
+  const gateWords = reach.refused.length
+    ? ` Amazon's write gate refuses ${reach.refused.map((r) => `${r.market} now (${r.reason})`).join('; ')}: the engine's writes there are refused until that changes.`
+    : ''
 
   // The owners of every plan it changes: this one, and those it takes campaigns from.
   const peoplesPlans = [
@@ -544,7 +594,7 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
   const later = after?.enabled ? `; ${engine.words}` : after ? '; the plan is off, so the hourly bid engine does not act on it until it is switched on (op switch)' : ''
   const consequences = writesNow
     ? `At Amazon now: the bids the plan floored on ${plural(restoreIds.size, 'campaign')} come back (${plural(bidLines.length, 'bid')}, queued for Amazon through its write gate${release?.waitWhy ? `; ${release.waitWhy}` : ''}). Placement percentages stay as last set. The rest is Nexus only${later}.`
-    : `${nexusOnly}${later}.`
+    : `${nexusOnly}${later}.${gateWords}`
   const effect = effectOf(op, { before, after, name, added, removed, release, releaseWords, valueLines, weekBefore, weekAfter, engine, a }) + (raises.length ? ` It ADDS SPEND (${raises.join('; ')}): the approver's code is needed.` : '')
 
   // What the person approves: the plan as it stood, the plan after, the targets' values it holds, whose plans it changes.
@@ -580,7 +630,10 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
         peoplesPlans,
         members: {
           from: before?.members.length ?? 0, to: after?.members.length ?? 0,
-          added: added.slice(0, LINES_SHOWN).map((id) => ({ campaignId: id, name: facts.get(id)?.name ?? id, from: holders.get(id)?.planName ? `hourly plan "${holders.get(id)!.planName}"` : holders.get(id) ? 'a schedule of its own' : null })),
+          added: added.slice(0, LINES_SHOWN).map((id) => ({
+            campaignId: id, name: facts.get(id)?.name ?? id, from: holders.get(id)?.planName ? `hourly plan "${holders.get(id)!.planName}"` : holders.get(id) ? 'a schedule of its own' : null,
+            ...(carried[id] ? { ownTargetValues: carried[id] } : {}),
+          })),
           removed: removed.slice(0, LINES_SHOWN).map((id) => ({ campaignId: id, name: facts.get(id)?.name ?? id })),
           ...(added.length + removed.length > 2 * LINES_SHOWN ? { more: added.length + removed.length - 2 * LINES_SHOWN } : {}),
         },
@@ -600,7 +653,7 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
         } : {}),
         raises,
         ...(raises.length
-          ? { stepUp: { what: op === 'switch' && after?.enabled ? 'switches an hourly bid plan on' : release?.restore ? 'gives back bids an hourly bid plan floored' : 'changes an hourly bid plan in a way that adds spend', raises: ['Hourly bid plans', ...(release?.restore ? ['Bids'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
+          ? { stepUp: { what: op === 'switch' && after?.enabled ? 'switches an hourly bid plan on' : release?.restore || mayGiveBack ? 'gives back bids an hourly bid plan floored' : 'changes an hourly bid plan in a way that adds spend', raises: ['Hourly bid plans', ...(release?.restore || mayGiveBack ? ['Bids'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
           : { noCode: 'It adds no spend: it needs no authenticator code.' }),
         highest: { placementPct: highest.placementPct, baseBidCents: highest.baseBidCents },
         currency,
@@ -614,7 +667,9 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
         warnings,
         basis,
         reach: reach.stored,
-        reachNote: writesNow ? reachNote(reach.stored) : `${nexusOnly}${later}.`,
+        // Always present (empty: no market refused), so execute's re-check sees a market the gate starts or stops refusing.
+        gateRefused: reach.refused,
+        reachNote: writesNow ? reachNote(reach.stored) : `${nexusOnly}${later}.${gateWords}`,
         effect,
         undoNote: undoNoteOf(op),
         ...ruleFacts,
@@ -694,7 +749,7 @@ function effectOf(op: Op, x: {
         ? `Switches the hourly plan "${x.name}" on: ${x.engine.words}, holding ${totals(x.weekAfter)} on ${plural(x.after!.members.length, 'campaign')}.`
         : `Switches the hourly plan "${x.name}" off: it holds its ${plural(x.before!.members.length, 'campaign')} no more, and ${x.releaseWords ?? 'nothing it floored is floored now'}; placement percentages stay as last set.`
     case 'delete':
-      return `Deletes the hourly plan "${x.name}" and its ${plural(x.before!.members.length, 'member schedule')}${x.before!.enabled ? ' (it is on)' : ''}: ${x.releaseWords ?? 'nothing it floored is floored now'}; placement percentages stay as last set. Its version history goes with it.`
+      return `Deletes the hourly plan "${x.name}" and its ${plural(x.before!.members.length, 'member schedule')}${x.before!.enabled ? ' (it is on)' : ''}: ${x.releaseWords ?? 'nothing it floored is floored now'}; placement percentages stay as last set. Its version history and its dated events go with it, and so do its campaigns' own target values: an undo makes the plan again (born off) without them${x.before!.members.length > MAX_CAMPAIGNS ? `, and it cannot hold more than ${MAX_CAMPAIGNS} campaigns (this one holds ${x.before!.members.length}: an undo is refused, make it again on the Hourly Bids page)` : ''}.`
     case 'set-target-values':
       return `Sets the own target values of ${plural(new Set((x.valueLines as Array<{ campaignId: string }>).map((l) => l.campaignId)).size, 'campaign')} in the hourly plan "${x.name}" (${plural(x.valueLines.length, 'line')}; the library's values stay as they are — tune-ad-engine, setting rank-target, changes those).`
   }
@@ -703,7 +758,7 @@ function effectOf(op: Op, x: {
 function undoNoteOf(op: Op): string {
   switch (op) {
     case 'create': return 'Undo deletes the plan (what it floored by then comes back).'
-    case 'delete': return 'Undo asks for a new plan with the same name, market, campaigns, week and time zone, born switched off; each campaign\'s own values and the switch come back with further requests. What came back at Amazon stays.'
+    case 'delete': return `Undo asks for a new plan with the same name, market, campaigns (at most ${MAX_CAMPAIGNS}; above that the undo is refused), portfolio binding, week and time zone, born switched off. Its dated events, its version history and its campaigns' own target values do not come back; the switch comes back with a further request (switch, with the code). What came back at Amazon stays.`
     case 'update-windows': return 'Undo paints the week (and baseline) it had before.'
     case 'set-campaigns': return 'Undo adds back the campaigns it took out and takes out the ones it added (a campaign it took from another plan does not go back there by itself).'
     case 'rename': return 'Undo renames it back.'
@@ -722,14 +777,27 @@ async function spendGate(ctx: ToolContext, adds: boolean): Promise<{ stepUpAt: D
   return 'refusal' in coded ? { refusal: coded.refusal } : { stepUpAt: coded.at, byRule: false }
 }
 
+/** The business's own limits for this tool now (Settings › AI › Claude); the defaults (which refuse) when none are stored. */
+async function limitsNow(): Promise<Record<string, unknown>> {
+  const row = await prisma.agentTool.findFirst({ where: { name: TOOL }, select: { claudeLimits: true } })
+  const parsed = row?.claudeLimits && typeof row.claudeLimits === 'object' ? PLAN_LIMITS.strict().safeParse(row.claudeLimits) : null
+  return (parsed?.success ? parsed.data : PLAN_LIMITS.parse({})) as Record<string, unknown>
+}
+
 /** The material fields `execute` re-checks (MATERIAL_PREVIEW_FIELDS holds the same). */
-const MATERIAL = ['op', 'basis', 'reach'] as const
+const MATERIAL = ['op', 'basis', 'reach', 'gateRefused'] as const
 
 async function runApproved(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   const { result: fresh, planned } = await decide(args, ctx)
   const refusal = recheck(ctx, fresh, MATERIAL)
   if (refusal || !planned) return notRun(refusal ?? 'Not run: it is no longer a valid change.')
   const p = fresh.preview as { raises: string[]; reach: StoredReach; effect: string }
+  // Never by rule beyond the business's own limits, at the moment it runs too: a person's plan (allowPeoplesPlans), a
+  // raise (allowRaise), a delete (allowDelete) — judged on the fresh dry run, whatever the request was decided on.
+  if (ctx.decidedVia === 'auto') {
+    const why = planRefusal(fresh.preview, await limitsNow())
+    if (why) return notRun(`Not run by the business's rule: ${why}.`)
+  }
   const run = approvedRun(ctx, planned.why || p.effect)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
   const gate = await spendGate(ctx, p.raises.length > 0)
@@ -833,9 +901,16 @@ export const HOURLY_PLAN_UNDO: ToolUndo = {
       case 'delete': {
         const ids = members(before.members)
         if (!ids.length || typeof before.name !== 'string' || typeof before.marketplace !== 'string') return { refusal: 'The deleted plan held no campaign or had no single market, so it cannot be made again here: make it on the Hourly Bids page.' }
+        if (ids.length > MAX_CAMPAIGNS) return { refusal: `The deleted plan held ${ids.length} campaigns, more than the ${MAX_CAMPAIGNS} one request makes a plan with: make it again on the Hourly Bids page.` }
         const windows = windowsArg(before.windows)
         if (windows.length > 60) return { refusal: 'The deleted plan held more than 60 windows: make it again on the Hourly Bids page.' }
-        return { tool: TOOL, args: { op: 'create', name: before.name, market: before.marketplace, campaignIds: ids.slice(0, MAX_CAMPAIGNS), windows, defaultTargetKey: (before.defaultTargetKey as string | null) ?? null, timezone: before.timezone, why } }
+        return {
+          tool: TOOL,
+          args: {
+            op: 'create', name: before.name, market: before.marketplace, campaignIds: ids, windows, defaultTargetKey: (before.defaultTargetKey as string | null) ?? null, timezone: before.timezone,
+            ...(typeof before.portfolioId === 'string' && before.portfolioId ? { portfolioId: before.portfolioId } : {}), why,
+          },
+        }
       }
       case 'update-windows': {
         const windows = windowsArg(before.windows)

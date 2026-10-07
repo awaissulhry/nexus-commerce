@@ -134,7 +134,7 @@ export function stateOnly(value: unknown): Partial<PlanState> {
   return Object.fromEntries(PLAN_STATE_KEYS.filter((k) => k in v).map((k) => [k, v[k]])) as Partial<PlanState>
 }
 
-/** Who a plan is: the playbook's, Claude's (its last change was a Claude request and nothing moved since), or a person's. */
+/** Who a plan is: the playbook's, Claude's (Claude made it and only Claude requests changed it since), or a person's. */
 export type PlanOwner =
   | { by: 'playbook'; playbookId: string; key: string; words: string }
   | { by: 'claude'; approvalId: string; at: string; approvedBy: string | null; words: string }
@@ -146,11 +146,33 @@ function sorted(value: unknown): string {
   return JSON.stringify(sort(JSON.parse(JSON.stringify(value ?? null))))
 }
 
+type ClaudeChange = { approvalId: string; executedAt: Date; executedByUserId: string | null; before: unknown; after: unknown }
+
+/**
+ * Pure — is this plan Claude's? Only when ALL hold, else it is a person's for good (the Owner's plans are his, W4-1):
+ *   · a set-hourly-bid-plan `create` made it (the first change recorded for it);
+ *   · each later Claude change started from exactly what the one before it left (a save by anyone else in between — the
+ *     screen, a template, a restore, a campaign's values edited on its schedule — breaks the chain);
+ *   · every version row of the plan is one a Claude change wrote;
+ *   · what stands now is what the last Claude change left.
+ * `changes`: the plan's set-hourly-bid-plan changes, oldest first.
+ */
+export function claudeOwnsPlan(state: PlanState, changes: readonly ClaudeChange[], versionIds: readonly string[]): boolean {
+  const chain = changes.filter((c) => objOf(c.after).deleted !== true)
+  if (!chain.length || objOf(chain[0].after).op !== 'create') return false
+  for (let i = 1; i < chain.length; i++) {
+    if (sorted(stateOnly(chain[i].before)) !== sorted(stateOnly(chain[i - 1].after))) return false
+  }
+  const written = new Set(chain.map((c) => objOf(c.after).versionId).filter((v): v is string => typeof v === 'string'))
+  if (versionIds.some((id) => !written.has(id))) return false
+  return sorted(stateOnly(chain[chain.length - 1].after)) === sorted(stateOnly(state))
+}
+
 /**
  * Whose each plan is. A plan the ads playbook built (an AdsPlaybookLink rankGroup) is the playbook's. A plan is Claude's
- * while the last set-hourly-bid-plan change recorded for it is exactly what stands (any later save — the screen, a
- * template, a restore — makes it a person's again). Every other plan is a person's: who made or last changed it comes
- * from its newest version row (the screen's saves may name no one).
+ * only as claudeOwnsPlan says: Claude made it, and nothing but Claude requests changed it since. Every other plan is a
+ * person's, for good — one approved Claude change never makes a person's plan Claude's. Who made or last changed it
+ * comes from its newest version row (the screen's saves may name no one).
  */
 export async function planOwners(states: readonly PlanState[]): Promise<Map<string, PlanOwner>> {
   const out = new Map<string, PlanOwner>()
@@ -158,17 +180,14 @@ export async function planOwners(states: readonly PlanState[]): Promise<Map<stri
   const ids = states.map((s) => s.planId)
   const [links, changes, versions] = await Promise.all([
     prisma.adsPlaybookLink.findMany({ where: { kind: 'rankGroup', refId: { in: ids } }, select: { refId: true, key: true, playbookId: true } }),
-    prisma.agentChange.findMany({ where: { toolName: HOURLY_PLAN_TOOL }, orderBy: { executedAt: 'desc' }, take: 2000, select: { approvalId: true, executedAt: true, executedByUserId: true, after: true } }),
-    prisma.rankScheduleVersion.findMany({ where: { groupId: { in: ids } }, orderBy: { createdAt: 'desc' }, select: { groupId: true, changedBy: true, createdAt: true } }),
+    prisma.agentChange.findMany({
+      where: { toolName: HOURLY_PLAN_TOOL, OR: ids.map((id) => ({ after: { path: ['planId'], equals: id } })) },
+      orderBy: { executedAt: 'asc' },
+      select: { approvalId: true, executedAt: true, executedByUserId: true, before: true, after: true },
+    }),
+    prisma.rankScheduleVersion.findMany({ where: { groupId: { in: ids } }, orderBy: { createdAt: 'desc' }, select: { id: true, groupId: true, changedBy: true, createdAt: true } }),
   ])
   const books = links.length ? await prisma.adsPlaybook.findMany({ where: { id: { in: [...new Set(links.map((l) => l.playbookId))] } }, select: { id: true, label: true, market: true } }) : []
-  const lastChange = new Map<string, (typeof changes)[number]>()
-  for (const c of changes) {
-    const planId = objOf(c.after).planId
-    if (typeof planId === 'string' && !lastChange.has(planId)) lastChange.set(planId, c)
-  }
-  const lastVersion = new Map<string, (typeof versions)[number]>()
-  for (const v of versions) if (!lastVersion.has(v.groupId)) lastVersion.set(v.groupId, v)
   const groups = await prisma.rankScheduleGroup.findMany({ where: { id: { in: ids } }, select: { id: true, createdBy: true, createdAt: true } })
   const made = new Map(groups.map((g) => [g.id, g]))
   for (const s of states) {
@@ -178,19 +197,25 @@ export async function planOwners(states: readonly PlanState[]): Promise<Map<stri
       out.set(s.planId, { by: 'playbook', playbookId: link.playbookId, key: link.key, words: `the ads playbook's hourly plan (${link.key}${book ? `, ${book.label} in ${book.market}` : ''})` })
       continue
     }
-    const change = lastChange.get(s.planId)
-    if (change && sorted(stateOnly(change.after)) === sorted(stateOnly(s))) {
+    const mine = changes.filter((c) => objOf(c.after).planId === s.planId)
+    const own = versions.filter((v) => v.groupId === s.planId)
+    if (claudeOwnsPlan(s, mine, own.map((v) => v.id))) {
+      const last = mine[mine.length - 1]
       out.set(s.planId, {
-        by: 'claude', approvalId: change.approvalId, at: change.executedAt.toISOString(), approvedBy: change.executedByUserId ?? null,
-        words: `a Claude request (${change.approvalId}) approved by ${change.executedByUserId ? `user:${change.executedByUserId}` : 'a person'} on ${change.executedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC; nothing changed it since`,
+        by: 'claude', approvalId: last.approvalId, at: last.executedAt.toISOString(), approvedBy: last.executedByUserId ?? null,
+        words: `made by a Claude request and changed only by Claude requests since; the last (${last.approvalId}) approved by ${last.executedByUserId ? `user:${last.executedByUserId}` : 'the business\'s rule'} on ${last.executedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
       })
       continue
     }
-    const v = lastVersion.get(s.planId)
+    const v = own[0]
     const who = v?.changedBy ?? made.get(s.planId)?.createdBy ?? null
     const at = (v?.createdAt ?? made.get(s.planId)?.createdAt ?? null)?.toISOString() ?? null
-    const name = !who ? 'a person (not named)' : who === 'user:anonymous' ? 'a person on the Hourly Bids page (not named)' : who.startsWith('user:') ? `a person (${who})` : who
-    out.set(s.planId, { by: 'person', who, at, words: `${name}${at ? ` — last changed ${at.slice(0, 16).replace('T', ' ')} UTC` : ''}${change ? ' (changed since Claude\'s last request)' : ''}` })
+    // The newest version a Claude change wrote is said as Claude's request (its changedBy is the approver).
+    const byClaude = v ? mine.find((c) => objOf(c.after).versionId === v.id) : undefined
+    const name = byClaude ? `a Claude request (${byClaude.approvalId})`
+      : !who ? 'a person (not named)' : who === 'user:anonymous' ? 'a person on the Hourly Bids page (not named)' : who.startsWith('user:') ? `a person (${who})` : who
+    const claudeToo = mine.length ? '; Claude requests changed it too, which never makes it Claude\'s' : ''
+    out.set(s.planId, { by: 'person', who, at, words: `a person's plan — last changed by ${name}${at ? ` on ${at.slice(0, 16).replace('T', ' ')} UTC` : ''}${claudeToo}` })
   }
   return out
 }
@@ -249,12 +274,18 @@ export async function rankEngineNow(): Promise<{ on: boolean; words: string }> {
 
 // ── W4-1 — the plan reads Claude's tools need, kept inside advertising (scripts/check-context-boundary.mjs) ────────────
 
-/** Who holds each campaign now: an hourly plan (its group), or a schedule of its own (planId null). */
-export async function campaignHolders(campaignIds: readonly string[]): Promise<Map<string, { scheduleId: string; planId: string | null; planName: string | null; enabled: boolean }>> {
+/**
+ * Who holds each campaign now: an hourly plan (its group), or a schedule of its own (planId null), with the campaign's own
+ * target values on that schedule — the screen's builder keeps them when it takes the campaign in (RankPlanBody).
+ */
+export async function campaignHolders(campaignIds: readonly string[]): Promise<Map<string, { scheduleId: string; planId: string | null; planName: string | null; enabled: boolean; targetOverrides: Record<string, Record<string, unknown>> }>> {
   const rows = campaignIds.length
-    ? await prisma.adSchedule.findMany({ where: { campaignId: { in: [...new Set(campaignIds)] } }, select: { id: true, campaignId: true, groupId: true, enabled: true, group: { select: { name: true } } } })
+    ? await prisma.adSchedule.findMany({ where: { campaignId: { in: [...new Set(campaignIds)] } }, select: { id: true, campaignId: true, groupId: true, enabled: true, targetOverrides: true, group: { select: { name: true } } } })
     : []
-  return new Map(rows.map((r) => [r.campaignId, { scheduleId: r.id, planId: r.groupId ?? null, planName: r.group?.name ?? null, enabled: r.enabled }]))
+  return new Map(rows.map((r) => [r.campaignId, {
+    scheduleId: r.id, planId: r.groupId ?? null, planName: r.group?.name ?? null, enabled: r.enabled,
+    targetOverrides: objOf(r.targetOverrides) as Record<string, Record<string, unknown>>,
+  }]))
 }
 
 /** A plan's member schedules (the rows the engine runs), with what each holds now. */

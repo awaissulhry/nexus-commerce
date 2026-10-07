@@ -804,8 +804,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // B-1 — every campaign a Replicate copy makes (from the source as it is now), the market's spend ceiling, where it lands.
   'replicate-ad-structure': ['basis', 'ceiling', 'reach'],
   // W4-1 — the op, the plan as it stood and after (its week, members, values, on/off, whose it is), the targets' values,
-  // and where it lands (what a give-back lifts moves with the engine's hours: execute decides again whether it raises).
-  'set-hourly-bid-plan': ['op', 'basis', 'reach'],
+  // where it lands and the markets whose write gate refuses (what a give-back lifts moves with the engine's hours: execute
+  // decides again whether it raises).
+  'set-hourly-bid-plan': ['op', 'basis', 'reach', 'gateRefused'],
   // AA-W2-12 — every ad named with its status (an enable: the pause it lifts, the budget and the bids that serve again),
   // and where it lands.
   'pause-ads': ['basis', 'reach'],
