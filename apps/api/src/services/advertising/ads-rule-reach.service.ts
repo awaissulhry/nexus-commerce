@@ -101,13 +101,13 @@ async function expandProducts(ids: string[]): Promise<Map<string, string[]>> {
   return out
 }
 
+type ReachRule = { id: string } & RuleScope & { scopeProductId?: string | null; actions?: unknown }
+
 /**
- * Reach for many rules at once. One campaign load for the whole set — this is called on a list
- * endpoint, so a per-rule query would be 51 round trips.
+ * The campaigns each rule's scope admits, by the evaluator's own matcher. One campaign load for the whole set — this is
+ * called on a list endpoint, so a per-rule query would be 51 round trips.
  */
-export async function reachForRules(
-  rules: Array<{ id: string } & RuleScope & { scopeProductId?: string | null; actions?: unknown }>,
-): Promise<Map<string, RuleReach>> {
+async function campaignsReachedBy(rules: ReachRule[]): Promise<{ total: number; byRule: Map<string, CampaignIdentity[]> }> {
   const campaigns = await loadCampaigns()
   const productScoped = [...new Set(rules.map((r) => r.scopeProductId).filter((x): x is string => !!x))]
   const expanded = await expandProducts(productScoped)
@@ -124,7 +124,7 @@ export async function reachForRules(
    */
   const assignedByRule = await resolveAssignedCampaignIds(rules)
 
-  const out = new Map<string, RuleReach>()
+  const byRule = new Map<string, CampaignIdentity[]>()
   for (const r of rules) {
     const scope: RuleScope = {
       scopeMarketplace: r.scopeMarketplace,
@@ -133,19 +133,50 @@ export async function reachForRules(
       scopeProductIds: r.scopeProductId ? expanded.get(r.scopeProductId) ?? [r.scopeProductId] : null,
       assignedCampaignIds: assignedByRule.get(r.id) ?? null,
     }
-    let n = 0
-    let live = 0
-    for (const c of campaigns) {
-      if (!ruleMatchesScope(scope, {
-        marketplace: c.marketplace,
-        campaignId: c.id,
-        portfolioId: c.portfolioId,
-        productIds: c.productIds,
-      })) continue
-      n++
-      if (c.status === 'ENABLED') live++
-    }
-    out.set(r.id, { campaigns: n, enabledCampaigns: live, total: campaigns.length })
+    byRule.set(r.id, campaigns.filter((c) => ruleMatchesScope(scope, {
+      marketplace: c.marketplace,
+      campaignId: c.id,
+      portfolioId: c.portfolioId,
+      productIds: c.productIds,
+    })))
+  }
+  return { total: campaigns.length, byRule }
+}
+
+/** Reach for many rules at once (one campaign load for the whole set). */
+export async function reachForRules(rules: ReachRule[]): Promise<Map<string, RuleReach>> {
+  const { total, byRule } = await campaignsReachedBy(rules)
+  const out = new Map<string, RuleReach>()
+  for (const r of rules) {
+    const reached = byRule.get(r.id) ?? []
+    out.set(r.id, { campaigns: reached.length, enabledCampaigns: reached.filter((c) => c.status === 'ENABLED').length, total })
   }
   return out
+}
+
+/** The markets one rule's scope reaches (see `ruleReachedMarkets`). */
+export interface RuleReachedMarkets {
+  /** Campaigns the rule's scope admits, by the evaluator's own matcher. */
+  campaigns: number
+  /** The distinct market codes of those campaigns, sorted. */
+  markets: string[]
+  /** Of those campaigns, the ones that carry no market (the write gate resolves no profile for them). */
+  withoutMarket: number
+}
+
+/**
+ * The markets a rule's scope reaches: the market codes of exactly the campaigns `reachForRules` counts for it (the same
+ * matcher, the same product expansion, the same assignment resolver). The graduation gate reads it to judge a rule that
+ * is scoped to a campaign, a portfolio, a product or its picked campaigns, but names no market, on the market(s) its
+ * writes really go to.
+ */
+export async function ruleReachedMarkets(rule: ReachRule): Promise<RuleReachedMarkets> {
+  const { adsMarketCode } = await import('./ads-markets.service.js')
+  const reached = (await campaignsReachedBy([rule])).byRule.get(rule.id) ?? []
+  const codes = reached.map((c) => adsMarketCode(c.marketplace))
+  return {
+    campaigns: reached.length,
+    markets: [...new Set(codes.filter(Boolean))].sort(),
+    withoutMarket: codes.filter((c) => !c).length,
+  }
 }
