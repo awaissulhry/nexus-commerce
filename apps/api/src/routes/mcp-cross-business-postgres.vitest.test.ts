@@ -1066,6 +1066,10 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
   // B-1 — a copy reads its source campaign in the market it runs in (B's own); no portfolio (the loop would name an id).
   'replicate-ad-structure': { get sourceMarket() { return seeded.b.market }, portfolioId: undefined },
+  // W4-6 — a new ad group targets keywords (or ASINs) with a planned default bid; an ad group change names its new
+  // default bid (the loop names only the ad group).
+  'create-ad-group': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], defaultBidCents: 50 },
+  'set-ad-group': { defaultBidCents: 40 },
   // P9 — a file naming B's product by its SKU (built once B is seeded); the saved mapping maps its Name column.
   'import-catalog': () => ({ text: `SKU,Name\n${seeded.b.sku},MCP8 probe name` }),
 }
