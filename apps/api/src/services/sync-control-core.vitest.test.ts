@@ -10,6 +10,10 @@ import {
   normalizeMarket,
   validateServesTokens,
   syncLedgerOf,
+  sellsFrom,
+  routedLedgerRows,
+  routedAvailable,
+  marketSourceKey,
   KNOWN_CHANNELS,
   QUANTITY_PUSH_CHANNELS,
   type SyncControlInputs,
@@ -175,13 +179,19 @@ describe('SC.0 — routing (Layer A: servesMarketplaces)', () => {
     })
   })
 
-  it('listing sourceLocationCodes override intersects the routed set (dark Layer B)', () => {
-    const ledger = [row('A', 3), row('B', 5)]
+  it('listing sourceLocationCodes replace the routed set (Step 2 "Sells from")', () => {
+    const ledger = syncLedgerOf([row('A', 3), row('B', 5)])
     expect(resolveIntendedQuantity(base({ ledger, sourceLocationCodes: ['B'] }))).toMatchObject({
       quantity: 5,
       routedLocations: ['B'],
     })
-    // override pointing at an unrouted/unknown location → UNCOUNTED, not zero
+    // The listing's list REPLACES the routes: A routes only to Amazon DE, and an IT listing that names it sells from it.
+    const routedAway = syncLedgerOf([row('A', 3, ['AMAZON:DE']), row('B', 5)])
+    expect(resolveIntendedQuantity(base({ ledger: routedAway }))).toMatchObject({ quantity: 5, routedLocations: ['B'] })
+    expect(resolveIntendedQuantity(base({ ledger: routedAway, sourceLocationCodes: ['A'] }))).toMatchObject({ quantity: 3, routedLocations: ['A'] })
+    // The list's order is the sale order; the quantity is the sum either way.
+    expect(resolveIntendedQuantity(base({ ledger, sourceLocationCodes: ['B', 'A'] }))).toMatchObject({ quantity: 8, routedLocations: ['B', 'A'] })
+    // a list naming a location the product holds no row at → UNCOUNTED, not zero
     expect(resolveIntendedQuantity(base({ ledger, sourceLocationCodes: ['Z'] }))).toEqual({
       kind: 'UNCOUNTED',
     })
@@ -283,5 +293,73 @@ describe('Etsy is a Sync Control channel', () => {
   it('the channels that receive quantity rows are exactly the channels Sync Control knows, Etsy among them', () => {
     expect([...QUANTITY_PUSH_CHANNELS].sort()).toEqual([...KNOWN_CHANNELS].sort())
     expect([...QUANTITY_PUSH_CHANNELS].sort()).toEqual(['AMAZON', 'EBAY', 'ETSY', 'SHOPIFY', 'WOOCOMMERCE'])
+  })
+})
+
+describe('Step 2 — sellsFrom: the listing\'s list, then the market\'s, then the routes', () => {
+  const rows = [row('IT-MAIN', 10), row('MI-3PL', 4, ['AMAZON:DE']), row('RM-SHOP', 2, ['EBAY'])]
+  const inputs = (over: { sources?: string[]; markets?: Record<string, string[]>; channel?: string; marketplace?: string } = {}) => ({
+    ledger: syncLedgerOf(rows, { marketSources: new Map(Object.entries(over.markets ?? {})) }),
+    channel: over.channel ?? 'AMAZON',
+    marketplace: over.marketplace ?? 'IT',
+    sourceLocationCodes: over.sources ?? [],
+  })
+
+  it('the market key is CHANNEL:MARKET, the market normalised (EBAY_IT ≡ IT)', () => {
+    expect(marketSourceKey('ebay', 'EBAY_IT')).toBe('EBAY:IT')
+    expect(marketSourceKey('AMAZON', 'de')).toBe('AMAZON:DE')
+  })
+
+  it('no list anywhere → the routes decide, in the ledger\'s order (origin routes)', () => {
+    expect(sellsFrom(inputs())).toEqual({ origin: 'routes', codes: ['IT-MAIN'], rows: [rows[0]] })
+    expect(sellsFrom(inputs({ marketplace: 'DE' }))).toEqual({ origin: 'routes', codes: ['IT-MAIN', 'MI-3PL'], rows: [rows[0], rows[1]] })
+  })
+
+  it('the market\'s list replaces the routes, in its order (origin market)', () => {
+    const got = sellsFrom(inputs({ markets: { 'AMAZON:IT': ['MI-3PL', 'IT-MAIN'] } }))
+    expect(got).toEqual({ origin: 'market', codes: ['MI-3PL', 'IT-MAIN'], rows: [rows[1], rows[0]] })
+    // another market's list does not apply here
+    expect(sellsFrom(inputs({ markets: { 'AMAZON:DE': ['MI-3PL'] } })).origin).toBe('routes')
+    // eBay's market is normalised on both sides
+    expect(sellsFrom(inputs({ channel: 'EBAY', marketplace: 'EBAY_IT', markets: { 'EBAY:IT': ['RM-SHOP'] } }))).toMatchObject({ origin: 'market', codes: ['RM-SHOP'] })
+  })
+
+  it('the listing\'s own list beats the market\'s (origin product)', () => {
+    const got = sellsFrom(inputs({ sources: ['RM-SHOP'], markets: { 'AMAZON:IT': ['MI-3PL'] } }))
+    expect(got).toEqual({ origin: 'product', codes: ['RM-SHOP'], rows: [rows[2]] })
+  })
+
+  it('a list is read trimmed, case-blind, without repeats; a code with no row picks nothing', () => {
+    expect(sellsFrom(inputs({ sources: [' it-main ', 'IT-MAIN', '', 'NOPE'] }))).toEqual({ origin: 'product', codes: ['it-main', 'NOPE'], rows: [rows[0]] })
+  })
+
+  it('every row of a code counts (variation rows at one location)', () => {
+    const twin = syncLedgerOf([row('IT-MAIN', 3), row('IT-MAIN', 2)], { marketSources: new Map([['AMAZON:IT', ['IT-MAIN']]]) })
+    expect(resolveIntendedQuantity(base({ ledger: twin }))).toMatchObject({ kind: 'FOLLOW', quantity: 5 })
+  })
+
+  it('the quantity, the send-time ceiling and the routed rows all read the same choice', () => {
+    const i = inputs({ markets: { 'AMAZON:IT': ['MI-3PL', 'IT-MAIN'] } })
+    expect(routedLedgerRows(i)).toEqual(sellsFrom(i).rows)
+    expect(routedAvailable(i)).toEqual({ available: 14, routed: true, locationCodes: ['MI-3PL', 'IT-MAIN'] })
+    expect(resolveIntendedQuantity(base({ ledger: i.ledger, stockBuffer: 1 }))).toEqual({ kind: 'FOLLOW', quantity: 13, routedAvailable: 14, routedLocations: ['MI-3PL', 'IT-MAIN'] })
+  })
+
+  it('a market list reaches eBay shared variants through the ledger', () => {
+    const ledger = syncLedgerOf(rows, { marketSources: new Map([['EBAY:IT', ['RM-SHOP']]]) })
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_IT', followPool: true, stockBuffer: 0, ledger })).toMatchObject({ kind: 'FOLLOW', quantity: 2 })
+    expect(resolveMembershipIntended({ marketplace: 'EBAY_DE', followPool: true, stockBuffer: 0, ledger })).toMatchObject({ kind: 'FOLLOW', quantity: 12 })
+  })
+
+  it('syncLedgerOf never changes the rows it is given, and the lists do not change what the ledger equals', () => {
+    const given = [row('IT-MAIN', 1)]
+    const ledger = syncLedgerOf(given, { marketSources: new Map([['AMAZON:IT', ['IT-MAIN']]]) })
+    expect(ledger.marketSources?.get('AMAZON:IT')).toEqual(['IT-MAIN'])
+    expect((given as { marketSources?: unknown }).marketSources).toBeUndefined()
+    expect(ledger).toEqual(given)
+    expect(JSON.stringify(ledger)).toBe(JSON.stringify(given))
+    // no lists: the very same array, as before Step 2
+    expect(syncLedgerOf(given)).toBe(given)
+    expect(syncLedgerOf(given, { marketSources: new Map() })).toBe(given)
   })
 })

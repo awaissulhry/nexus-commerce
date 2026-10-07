@@ -5,6 +5,8 @@
  *   runSyncControlAction   POST /api/stock/sync-control/actions          follow, pin, zero & pin, hold / release the stock
  *                                                                        sync (PAUSE / RESUME), buffer, exclude, include
  *   setLocationRoutes      POST /api/stock/sync-control/location-routes  which channels and markets a location feeds
+ *   setMarketSources       POST /api/stock/sync-control/market-sources   which warehouses a market sells from, in sale
+ *                                                                        order, for every product (Step 2 "Sells from")
  *   setSyncPolicy          POST /api/stock/sync-control/policies         a channel or market's pause and new-listing default
  *
  * Each returns what the route answered: `{ status, body }` — the route sends `body` with `status` (a 200 as the plain
@@ -19,11 +21,13 @@
  * eBay listing an OLDER Claude close-listing paused (pinned at 0 with the presence mark, no hold — `oldClosePauses`)
  * reads and counts the same way: its pin is lifted only by Resume (Status → Active, then Publish).
  */
+import type { Prisma } from '@prisma/client'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
 import { setListingPinEnds, setListingPauseEnds, setMembershipExclusionEnds, setMembershipFixedNumber } from '../sync-control-overrides.service.js'
 import { logger } from '../../utils/logger.js'
-import { resolveIntendedQuantity, resolveMembershipIntended, validateServesTokens } from '../sync-control-core.js'
+import { KNOWN_CHANNELS, normalizeMarket, resolveIntendedQuantity, resolveMembershipIntended, validateServesTokens } from '../sync-control-core.js'
+import { announceListingValues } from '../listing-values-events.js'
 import { loadChannelPolicies, policyFor, validatePolicyInput, enforceNewListingDefaults, writeChannelPolicy } from '../sync-control-policy.service.js'
 import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../stock-pool/sync-ledgers.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../follow-master.service.js'
@@ -927,6 +931,136 @@ export async function setLocationRoutes(body: { code?: string; syncRoutes?: stri
     logger.info('[sync-control] recascade after routing change complete', { ...r, location: loc.code, actor }),
   )
   return answer(200, { ok: true, location: loc.code, syncRoutes: tokens, recascadeQueued: productIds.length })
+}
+
+/** The body of POST /api/stock/sync-control/market-sources. */
+export interface MarketSourcesBody {
+  channel?: string
+  /** One market ('IT', 'GB', 'GLOBAL', 'EBAY_IT' …), or 'EU' for Amazon's EU group — the only way to name an Amazon EU market. */
+  marketplace?: string
+  /** The warehouses the market sells from, in sale order. [] removes the market's list: each location's routes decide again. */
+  codes?: unknown
+  /** true = answer what the save would change, write nothing. */
+  dryRun?: boolean
+}
+
+/** At most this many warehouses in one list. */
+export const MARKET_SOURCES_MAX = 20
+
+const sameCodes = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((code, i) => code === b[i])
+
+/**
+ * The listings a market's list decides: on the channel and the market(s), not ended, not FBA (Amazon owns that
+ * quantity) and not of a product that sells from a shared pool (the pool's rows route everywhere). `following` keep no
+ * list of their own, so the market's list is theirs; `exceptions` have their own and keep it. eBay shared variants of
+ * those markets follow the market's list too: their products are re-pushed.
+ */
+async function marketSourcesScope(channel: string, markets: string[]) {
+  const inMarkets = (marketplace: string | null | undefined) => markets.includes(normalizeMarket(channel, marketplace ?? ''))
+  const listings = (await prisma.channelListing.findMany({
+    where: { channel, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+    select: { id: true, productId: true, marketplace: true, sourceLocationCodes: true, fulfillmentMethod: true },
+  })).filter((l) => inMarkets(l.marketplace) && l.fulfillmentMethod !== 'FBA')
+  const memberships = channel === 'EBAY'
+    ? (await prisma.sharedListingMembership.findMany({ where: { status: 'ACTIVE' }, select: { productId: true, marketplace: true } }))
+        .filter((m) => !!m.productId && inMarkets(m.marketplace))
+    : []
+  const ledgers = await loadSyncLedgers(prisma, [...listings.map((l) => l.productId), ...memberships.map((m) => m.productId as string)])
+  const own = (productId: string) => ledgers.get(productId)?.source.kind !== 'pool'
+  const following = listings.filter((l) => own(l.productId) && (l.sourceLocationCodes ?? []).length === 0)
+  const exceptions = listings.filter((l) => own(l.productId) && (l.sourceLocationCodes ?? []).length > 0)
+  const products = [...new Set(following.map((l) => l.productId))]
+  return {
+    listingIds: following.map((l) => l.id),
+    products,
+    exceptionProducts: new Set(exceptions.map((l) => l.productId)).size,
+    recascade: [...new Set([...products, ...memberships.map((m) => m.productId as string).filter(own)])],
+  }
+}
+
+/**
+ * POST /api/stock/sync-control/market-sources — Step 2 "Sells from": the warehouses ONE market sells from, in sale
+ * order, for every product of the business (SyncChannelPolicy.sourceLocationCodes on the row with no account). A
+ * listing that keeps its own list keeps it. Amazon's EU markets share one quantity per SKU, so they share one list:
+ * 'EU' writes the same list on all of them in one transaction, and a single EU market is refused.
+ *
+ * Answers `{ ok, channel, marketplace, markets, codes, before, listings, products, exceptions }`: `before` is each
+ * market's list now, `listings` / `products` the listings (and their products) that follow the market's list,
+ * `exceptions` the products whose listings there keep their own. `dryRun` stops there. A save also answers
+ * `recascadeQueued`: the products re-pushed in the background (the location routes' save does the same).
+ */
+export async function setMarketSources(body: MarketSourcesBody, actor: string): Promise<SyncControlAnswer> {
+  const channel = String(body?.channel ?? '').trim().toUpperCase()
+  if (!KNOWN_CHANNELS.includes(channel as never)) return answer(400, { error: `unknown channel '${body?.channel ?? ''}'` })
+  const market = normalizeMarket(channel, String(body?.marketplace ?? ''))
+  if (market !== 'GLOBAL' && !/^[A-Z]{2,4}$/.test(market)) {
+    return answer(400, { error: `marketplace must be a market code (or EU for Amazon's EU group), got '${body?.marketplace ?? ''}'` })
+  }
+  const euMarkets = [...AMAZON_EU_SHARED_MARKETS]
+  let markets: string[]
+  if (channel === 'AMAZON' && market === 'EU') markets = euMarkets
+  else if (channel === 'AMAZON' && AMAZON_EU_SHARED_MARKETS.has(market)) {
+    return answer(400, {
+      error: `Amazon EU markets share one choice: Amazon keeps one quantity per SKU for ${euMarkets.join(', ')}, so they sell from the same warehouses. Choose for Amazon EU.`,
+      code: 'AMAZON_EU_GROUP',
+    })
+  } else if (market === 'EU') return answer(400, { error: 'EU names Amazon\'s EU group only.' })
+  else markets = [market]
+
+  if (!Array.isArray(body?.codes)) return answer(400, { error: 'codes[] required: the warehouses this market sells from, in sale order ([] = the locations\' routes decide).' })
+  const asked = body.codes.map((code) => String(code ?? '').trim())
+  if (asked.some((code) => !code)) return answer(400, { error: 'A warehouse code is empty.' })
+  if (asked.length > MARKET_SOURCES_MAX) return answer(400, { error: `At most ${MARKET_SOURCES_MAX} warehouses in one list.` })
+  const twice = asked.filter((code, i) => asked.findIndex((other) => other.toUpperCase() === code.toUpperCase()) !== i)
+  if (twice.length) return answer(400, { error: `Named twice: ${[...new Set(twice)].join(', ')}.` })
+  const warehouses = await prisma.stockLocation.findMany({ where: { type: 'WAREHOUSE' }, select: { code: true, isActive: true } })
+  const byCode = new Map(warehouses.map((w) => [w.code.toUpperCase(), w]))
+  const unknown = asked.filter((code) => !byCode.has(code.toUpperCase()))
+  if (unknown.length) return answer(400, { error: `Not a warehouse of this business: ${unknown.join(', ')}.`, code: 'UNKNOWN_LOCATION' })
+  const off = asked.filter((code) => byCode.get(code.toUpperCase())!.isActive === false)
+  if (off.length) return answer(400, { error: `Switched off: ${off.join(', ')}. A switched-off warehouse sells nothing; switch it on in Locations first.`, code: 'INACTIVE_LOCATION' })
+  const codes = asked.map((code) => byCode.get(code.toUpperCase())!.code)
+
+  const rows = await prisma.syncChannelPolicy.findMany({
+    where: { channel, marketplace: { in: markets }, channelConnectionId: null },
+    select: { marketplace: true, sourceLocationCodes: true },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+  })
+  const before = Object.fromEntries(markets.map((m) => [m, [...(rows.find((r) => r.marketplace === m && (r.sourceLocationCodes ?? []).length > 0)?.sourceLocationCodes ?? [])]]))
+  const scope = await marketSourcesScope(channel, markets)
+  const out = {
+    ok: true, channel, marketplace: markets.length > 1 ? 'EU' : market, markets, codes, before,
+    listings: scope.listingIds.length, products: scope.products.length, exceptions: scope.exceptionProducts,
+  }
+  if (body.dryRun) return answer(200, { ...out, dryRun: true })
+  if (markets.every((m) => sameCodes(before[m]!, codes))) return answer(200, { ...out, noop: true, recascadeQueued: 0 })
+
+  // One transaction: every market of the group gets the same list, or none does.
+  await prisma.$transaction(async (tx) => {
+    const entries: Prisma.SyncControlAuditCreateManyInput[] = []
+    for (const m of markets) {
+      const written = await writeChannelPolicy({ channel, marketplace: m, channelConnectionId: null, sourceLocationCodes: codes }, tx)
+      if (!written.sourcesChanged) continue
+      entries.push({
+        actor, scopeType: 'POLICY', scopeId: written.saved?.id ?? written.before?.id ?? `${channel}:${m}`, scopeName: `${channel}:${m}`,
+        field: 'sourceLocationCodes',
+        before: { sourceLocationCodes: written.before?.sourceLocationCodes ?? [] },
+        after: { sourceLocationCodes: written.nextSourceLocationCodes },
+      })
+    }
+    if (entries.length) await tx.syncControlAudit.createMany({ data: entries })
+  })
+
+  // Every listing that follows the market's list may now show another number: re-push them (background, one product at
+  // a time, as a routes change does), and tell open screens at once and again when the numbers are in.
+  announceListingValues(scope.listingIds, ['stockSource', 'quantity'], 'sync-control')
+  void recascadeAfterSyncControlChange(scope.recascade, actor)
+    .then((r) => {
+      logger.info('[sync-control] recascade after market sources change complete', { ...r, channel, markets, actor })
+      announceListingValues(scope.listingIds, ['quantity'], 'sync-control')
+    })
+    .catch((err) => logger.warn('[sync-control] recascade after market sources change failed', { error: err instanceof Error ? err.message : String(err), channel, markets }))
+  return answer(200, { ...out, recascadeQueued: scope.recascade.length })
 }
 
 /** The body of POST /api/stock/sync-control/policies. */

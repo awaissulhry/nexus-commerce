@@ -124,7 +124,7 @@ describe('MAP.2b — a policy row names an account, or every account', () => {
     for (const rows of [[row({ pushesPaused: false, newListingDefaultMode: 'PAUSED' }), row({})], [row({}), row({ pushesPaused: false, newListingDefaultMode: 'PAUSED' })]]) {
       const policies = await load(rows)
       expect(policies.size).toBe(1)
-      expect(policies.get(policyKey('EBAY', 'IT'))).toEqual({ pushesPaused: true, newListingDefaultMode: 'PAUSED' })
+      expect(policies.get(policyKey('EBAY', 'IT'))).toEqual({ pushesPaused: true, newListingDefaultMode: 'PAUSED', sourceLocationCodes: [] })
     }
   })
 

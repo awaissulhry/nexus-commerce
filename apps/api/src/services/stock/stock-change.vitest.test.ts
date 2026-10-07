@@ -156,7 +156,9 @@ describe('08 S6 — the stock change routes answer as before', () => {
     expect(renamed.body.location).toMatchObject({ name: 'Third renamed', isActive: false })
     expect(await send('PATCH', `/api/stock/locations/${ids.main}`, { isActive: false })).toEqual({ status: 409, body: { error: 'Choose another default warehouse before deactivating this location.' } })
     expect(await send('PATCH', '/api/stock/locations/nope', { name: 'x' })).toEqual({ status: 404, body: { error: 'Location not found' } })
-    expect(await send('DELETE', `/api/stock/locations/${ids.second}`)).toEqual({ status: 200, body: { ok: true } })
+    // Step 2 — a location that still holds units is not switched off (a switched-off warehouse feeds no listing).
+    expect(await send('DELETE', `/api/stock/locations/${ids.second}`)).toEqual({ status: 409, body: { error: 'TEST-SECOND still holds 3 units: move or count them out first. A location is switched off only at 0.' } })
+    expect(await send('DELETE', `/api/stock/locations/${id}`)).toEqual({ status: 200, body: { ok: true } })
     expect(await send('DELETE', `/api/stock/locations/${ids.main}`)).toEqual({ status: 409, body: { error: 'Built-in location TEST-MAIN cannot be deactivated here' } })
     expect(await send('DELETE', '/api/stock/locations/nope')).toEqual({ status: 404, body: { error: 'Location not found' } })
     await inside(() => database.client.stockLocation.update({ where: { id: ids.second }, data: { isActive: true } }))

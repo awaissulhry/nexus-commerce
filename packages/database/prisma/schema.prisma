@@ -17910,6 +17910,11 @@ model SyncChannelPolicy {
   // SC.5 — cutoff for the PAUSED default: only listings created AFTER this
   // moment are auto-paused (kill-switch toggles never move the cutoff).
   newListingModeSetAt   DateTime?
+  // Step 2 "Sells from" (2026-10-07) — the ordered StockLocation codes this channel+market sells from, for the whole
+  // business (rows with no account). Empty = no list: each location's syncRoutes decide, as before. The order is the
+  // order a sale takes stock in; the quantity a listing shows is the sum over the list. A listing's own
+  // ChannelListing.sourceLocationCodes replaces it.
+  sourceLocationCodes   String[]  @default([])
   updatedAt             DateTime  @updatedAt
   createdAt             DateTime  @default(now())
 

@@ -18,6 +18,10 @@
  * When all EU rows agree (all Follow, or all pinned at the same number) pushes
  * flow normally. Per-market suppression is NOT a quantity operation — it is a
  * Seller Central offer-close — and the error messages say so.
+ *
+ * Step 2 "Sells from": two Follow rows agree only when they sell from the same
+ * warehouses (`sources`, when the caller knows them) — a Follow quantity is the
+ * sum over those warehouses, so different sets are different numbers.
  */
 
 /** Marketplaces that share one Amazon EU merchant quantity per SKU. */
@@ -38,6 +42,13 @@ export interface EuIntentRow {
   isFba?: boolean
   /** SCT.6 — a CLOSED market offer expresses NO quantity intent. */
   offerClosed?: boolean
+  /** Step 2 — the listing's own "Sells from" list as stored (`ChannelListing.sourceLocationCodes`; [] = follows the market's). */
+  sourceLocationCodes?: string[] | null
+  /**
+   * Step 2 — the warehouses a FOLLOW row sells from (`sellsFrom(...).codes`), worked out by a caller that holds the
+   * product's ledger; absent/null = not known, not compared. Order is ignored: the quantity is a sum.
+   */
+  sources?: readonly string[] | null
 }
 
 export interface EuIntent {
@@ -85,6 +96,21 @@ export function detectEuIntentConflict(rows: EuIntentRow[]): EuConflict {
         `${follows.map((f) => f.marketplace).join('/')} follow the pool while ` +
         `${pins.map((p) => `${p.marketplace} is pinned at ${p.value}`).join(', ')} — ` +
         `Amazon keeps ONE quantity per SKU across EU markets, so these fight each other`,
+    }
+  }
+  if (follows.length > 1) {
+    // Step 2 — Follow rows that sell from different warehouses would send different sums to the one EU quantity.
+    const setOf = (codes: readonly string[]) => [...new Set(codes.map((c) => c.trim().toUpperCase()).filter(Boolean))].sort().join(' + ')
+    const known = rows
+      .filter((r) => intentOf(r)?.kind === 'FOLLOW' && Array.isArray(r.sources))
+      .map((r) => ({ marketplace: r.marketplace.toUpperCase(), set: setOf(r.sources!) }))
+    if (new Set(known.map((k) => k.set)).size > 1) {
+      return {
+        conflict: true,
+        detail:
+          `follow the pool from different warehouses (${known.map((k) => `${k.marketplace} from ${k.set || 'none'}`).join(', ')}) — ` +
+          `Amazon keeps ONE quantity per SKU across EU markets, so these fight each other`,
+      }
     }
   }
   const pinValues = new Set(pins.map((p) => p.value ?? 0))

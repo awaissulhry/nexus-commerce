@@ -5,7 +5,7 @@ vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, sea
 // CHMAP M4: the builders read the ACTIVE mapping version; none here, so the push is exactly today's.
 // Images rebuild P2 — not on the media plan: the publishers keep their older photo paths here.
 vi.mock('../images/media-plan-switch.js', () => ({ isOnMediaPlan: async () => false, mediaPlanRevision: async () => null, mediaPlanProducts: async () => new Set() }))
-vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, channelListing: { findMany: async () => m.mainRows }, channelMappingSet: { findMany: (...a: unknown[]) => m.sets(...a) }, channelMappingField: { findMany: (...a: unknown[]) => m.mapFields(...a) }, $queryRaw: async () => [] } }))
+vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, syncChannelPolicy: { findMany: async () => [] }, channelListing: { findMany: async () => m.mainRows }, channelMappingSet: { findMany: (...a: unknown[]) => m.sets(...a) }, channelMappingField: { findMany: (...a: unknown[]) => m.mapFields(...a) }, $queryRaw: async () => [] } }))
 vi.mock('../images/amazon-media-workspace.service.js', () => ({ readAmazonMedia: vi.fn(), desiredAmazonImages: vi.fn() }))
 vi.mock('../images/ebay-media-workspace.service.js', () => ({ readEbayMediaGallery: vi.fn() }))
 vi.mock('./studio-publication-plan.js', async () => {

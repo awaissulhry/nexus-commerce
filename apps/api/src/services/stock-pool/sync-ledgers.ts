@@ -1,6 +1,6 @@
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
-import { syncLedgerOf, type RoutedLedgerRow, type SyncLedger } from '../sync-control-core.js'
+import { marketSourceKey, syncLedgerOf, type MarketSources, type RoutedLedgerRow, type SyncLedger } from '../sync-control-core.js'
 import { poolLevels, type PoolLevel } from './pool-doors.js'
 
 /**
@@ -17,6 +17,57 @@ import { poolLevels, type PoolLevel } from './pool-doors.js'
  */
 
 type Db = Prisma.TransactionClient | typeof prisma
+
+/** The location facts a ledger row needs: its kind, code, routes, whether it is switched on, and whether it is the default. */
+const LEDGER_LOCATION_SELECT = {
+  type: true, code: true, syncRoutes: true, isActive: true,
+  warehouse: { select: { isDefault: true, isActive: true } },
+} satisfies Prisma.StockLocationSelect
+
+type LedgerLocation = {
+  type: string
+  code: string | null
+  syncRoutes: string[] | null
+  isActive?: boolean | null
+  warehouse?: { isDefault?: boolean | null; isActive?: boolean | null } | null
+} | null | undefined
+
+/** Step 2 — a switched-off warehouse feeds no listing (the shared-stock door already drops it for a pool). */
+const feedsListings = (location: LedgerLocation): boolean => location?.type === 'WAREHOUSE' && location.isActive !== false
+
+const isDefaultWarehouse = (location: LedgerLocation): boolean => !!location?.warehouse?.isDefault && location.warehouse.isActive !== false
+
+/**
+ * Step 2 — a product's own ledger rows in SALE ORDER: the default warehouse first, then by code. The order is what
+ * `sellsFrom` keeps when a market has no list of its own (the routes decide); it never changes a quantity.
+ */
+function inSaleOrder<T extends { location?: LedgerLocation }>(levels: T[]): T[] {
+  return [...levels].sort((a, b) => {
+    const d = Number(isDefaultWarehouse(b.location)) - Number(isDefaultWarehouse(a.location))
+    if (d !== 0) return d
+    const ac = a.location?.code ?? '', bc = b.location?.code ?? ''
+    return ac < bc ? -1 : ac > bc ? 1 : 0
+  })
+}
+
+/**
+ * Step 2 — the business's "Sells from" lists: one ordered list of StockLocation codes per channel and market, kept on
+ * the SyncChannelPolicy row with no account. Only non-empty lists; when two rows name one market, the newest wins.
+ */
+export async function loadMarketSources(db: Pick<Db, 'syncChannelPolicy'>): Promise<MarketSources> {
+  const rows = await db.syncChannelPolicy.findMany({
+    where: { channelConnectionId: null, NOT: { sourceLocationCodes: { isEmpty: true } } },
+    select: { channel: true, marketplace: true, sourceLocationCodes: true, updatedAt: true },
+    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+  })
+  const out = new Map<string, readonly string[]>()
+  for (const row of [...(rows ?? [])].sort((a, b) => (a.updatedAt?.getTime?.() ?? 0) - (b.updatedAt?.getTime?.() ?? 0))) {
+    const codes = (row.sourceLocationCodes ?? []).map((code) => String(code).trim()).filter(Boolean)
+    if (codes.length === 0 || !row.marketplace || row.marketplace === '*') continue
+    out.set(marketSourceKey(row.channel, row.marketplace), codes)
+  }
+  return out
+}
 
 export type StockSource =
   | { kind: 'own' }
@@ -56,21 +107,23 @@ export async function loadSyncLedgers(db: Db, productIds: Iterable<string>): Pro
   if (ids.length === 0) return out
 
   // One after another: `db` may be an interactive transaction, which runs one statement at a time.
-  const own = await db.stockLevel.findMany({
+  const own = inSaleOrder(await db.stockLevel.findMany({
     where: { productId: { in: ids } },
-    select: { productId: true, quantity: true, available: true, location: { select: { type: true, code: true, syncRoutes: true } } },
-  })
+    select: { productId: true, quantity: true, available: true, location: { select: LEDGER_LOCATION_SELECT } },
+  }))
   // The links first: a product that never joined a pool cannot have one now, so the door is not asked at
   // all (an indexed read instead of a SECURITY DEFINER call on every dispatch of every business).
   const history = await db.stockPoolLink.findMany({ where: { productId: { in: ids } }, select: { productId: true }, distinct: ['productId'] })
   const everPooled = new Set(history.map((h) => h.productId))
   const pool = everPooled.size > 0 ? await poolLevels(db, [...everPooled]) : new Map<string, PoolLevel[]>()
+  // Step 2 — the market lists ride on every own ledger (a pool's ledger never carries them).
+  const marketSources = await loadMarketSources(db)
 
   const ownRows = new Map<string, RoutedLedgerRow[]>()
   const ownTotals = new Map<string, { quantity: number; available: number; fba: number }>()
   for (const row of own) {
     const totals = ownTotals.get(row.productId) ?? { quantity: 0, available: 0, fba: 0 }
-    if (row.location?.type === 'WAREHOUSE') {
+    if (feedsListings(row.location)) {
       const rows = ownRows.get(row.productId) ?? []
       rows.push({ locationCode: row.location.code ?? '?', available: row.available, syncRoutes: row.location.syncRoutes ?? [] })
       ownRows.set(row.productId, rows)
@@ -102,7 +155,7 @@ export async function loadSyncLedgers(db: Db, productIds: Iterable<string>): Pro
     const totals = ownTotals.get(productId)
     out.set(productId, {
       ...emptyOwn(productId),
-      ledger: syncLedgerOf(ownRows.get(productId) ?? []),
+      ledger: syncLedgerOf(ownRows.get(productId) ?? [], { marketSources }),
       quantity: totals?.quantity ?? 0,
       available: totals?.available ?? 0,
       uncountedIsZero: everPooled.has(productId),
@@ -137,10 +190,11 @@ export async function loadLedgerChoices(db: Db, productIds: Iterable<string>, gr
   const ids = [...new Set([...productIds].filter((id): id is string => typeof id === 'string' && id.length > 0))]
   const out = new Map<string, { own: ProductLedger; pool: ProductLedger | null }>()
   if (ids.length === 0) return out
-  const own = await db.stockLevel.findMany({
+  const own = inSaleOrder(await db.stockLevel.findMany({
     where: { productId: { in: ids } },
-    select: { productId: true, quantity: true, available: true, location: { select: { type: true, code: true, syncRoutes: true } } },
-  })
+    select: { productId: true, quantity: true, available: true, location: { select: LEDGER_LOCATION_SELECT } },
+  }))
+  const marketSources = await loadMarketSources(db)
   const preview = grantId
     ? await db.$queryRaw<Array<{ product_id: string; location_id: string; location_code: string | null; quantity: number; reserved: number; available: number }>>`
         SELECT product_id, location_id, location_code, quantity, reserved, available FROM nexus_pool_preview(${grantId}, ${ids}::text[])`
@@ -148,12 +202,12 @@ export async function loadLedgerChoices(db: Db, productIds: Iterable<string>, gr
   const grant = grantId ? await db.stockPoolGrant.findUnique({ where: { id: grantId }, select: { ownerWorkspaceId: true } }) : null
   for (const productId of ids) {
     const rows = own.filter((r) => r.productId === productId)
-    const warehouse = rows.filter((r) => r.location?.type === 'WAREHOUSE')
+    const warehouse = rows.filter((r) => feedsListings(r.location))
     const fbaBucket = rows.filter((r) => r.location?.type === 'AMAZON_FBA').reduce((sum, r) => sum + r.quantity, 0)
     const ownLedger: ProductLedger = {
       productId,
       source: { kind: 'own' },
-      ledger: syncLedgerOf(warehouse.map((r) => ({ locationCode: r.location?.code ?? '?', available: r.available, syncRoutes: r.location?.syncRoutes ?? [] }))),
+      ledger: syncLedgerOf(warehouse.map((r) => ({ locationCode: r.location?.code ?? '?', available: r.available, syncRoutes: r.location?.syncRoutes ?? [] })), { marketSources }),
       quantity: warehouse.reduce((sum, r) => sum + r.quantity, 0),
       available: warehouse.reduce((sum, r) => sum + r.available, 0),
       uncountedIsZero: true,

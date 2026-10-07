@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const s = vi.hoisted(() => ({ load: vi.fn() }))
 // Shared stock — the quantity fallback reads the product's ledger (loadSyncLedgers): nothing is pooled here.
-vi.mock('../db.js', () => ({ default: { product: { findUnique: s.load }, stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, $queryRaw: async () => [] } }))
+vi.mock('../db.js', () => ({ default: { product: { findUnique: s.load }, stockLevel: { findMany: async () => [] }, stockPoolLink: { findMany: async () => [] }, syncChannelPolicy: { findMany: async () => [] }, $queryRaw: async () => [] } }))
 vi.mock('./pim/stored-variation-projection.js', () => ({ loadStoredVariationProjection: async () => ({ cell: { theme: { code: 'Size' }, axes: [] } }) }))
 import { AmazonMapperService, requireAmazonFulfillment } from './amazon-mapper.service.js'
 beforeEach(() => vi.clearAllMocks())

@@ -8351,6 +8351,7 @@ CREATE TABLE "SyncChannelPolicy" (
     "pushesPaused" BOOLEAN NOT NULL DEFAULT false,
     "newListingDefaultMode" TEXT NOT NULL DEFAULT 'FOLLOW',
     "newListingModeSetAt" TIMESTAMP(3),
+    "sourceLocationCodes" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "channelConnectionId" TEXT,

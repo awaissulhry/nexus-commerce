@@ -5,10 +5,25 @@
  * MAP.2b — a row also names an account (`channelConnectionId`); a row with no account is for EVERY
  * account of the channel. A lookup that knows the listing's account sees both.
  */
+import type { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { normalizeMarket, KNOWN_CHANNELS } from './sync-control-core.js'
 
-export type PolicyMap = Map<string, { pushesPaused: boolean; newListingDefaultMode: string }>
+/**
+ * Step 2 — a row may also hold the market's "Sells from" list (`sourceLocationCodes`). That list is not a pause or a
+ * new-listing default: a row that holds a list and nothing else (no pause, the FOLLOW default) carries no policy of its
+ * own, and `policyFor` passes over it, so a channel-wide pause still reaches that market. Any other row reads exactly
+ * as before (an exact market row beats the channel-wide one).
+ */
+export type PolicyMap = Map<string, { pushesPaused: boolean; newListingDefaultMode: string; sourceLocationCodes?: string[] }>
+
+/** A row kept only for its "Sells from" list: no pause, the FOLLOW default, and a list. */
+const listOnly = (p: { pushesPaused: boolean; newListingDefaultMode: string; sourceLocationCodes?: string[] }): boolean =>
+  !p.pushesPaused && p.newListingDefaultMode === 'FOLLOW' && (p.sourceLocationCodes ?? []).length > 0
+
+/** Oldest first, so the newest row of one key is merged last (and its list wins). */
+const byUpdatedAt = <T extends { updatedAt?: Date | null }>(rows: T[]): T[] =>
+  [...rows].sort((a, b) => (a.updatedAt?.getTime?.() ?? 0) - (b.updatedAt?.getTime?.() ?? 0))
 
 /** The map key of one policy row: channel, market ('*' = every market) and account ('' = every account). */
 export function policyKey(channel: string, marketplace: string, connectionId?: string | null): string {
@@ -32,16 +47,19 @@ export async function loadChannelPolicies(
       channelConnectionId?: string | null
       pushesPaused: boolean
       newListingDefaultMode: string
+      sourceLocationCodes?: string[] | null
+      updatedAt?: Date | null
     }>
     const map: PolicyMap = new Map()
-    for (const r of rows) {
+    for (const r of byUpdatedAt(rows)) {
       // The unique key cannot stop two rows for "every account" (NULLs are distinct), so rows of one key
-      // merge, and a pause wins: a row nobody can see must never un-pause a channel.
+      // merge, and a pause wins: a row nobody can see must never un-pause a channel. A list: the newest wins.
       const key = policyKey(r.channel, r.marketplace, r.channelConnectionId)
       const before = map.get(key)
       map.set(key, {
         pushesPaused: r.pushesPaused || !!before?.pushesPaused,
         newListingDefaultMode: r.newListingDefaultMode === 'PAUSED' || before?.newListingDefaultMode === 'PAUSED' ? 'PAUSED' : r.newListingDefaultMode,
+        sourceLocationCodes: r.sourceLocationCodes?.length ? [...r.sourceLocationCodes] : before?.sourceLocationCodes ?? [],
       })
     }
     return map
@@ -62,8 +80,13 @@ export function policyFor(
   connectionId?: string | null,
 ): { pushesPaused: boolean } | null {
   const m = normalizeMarket(channel, marketplace)
+  // A row that holds only a "Sells from" list says nothing about pushes: it is passed over, never read as "not paused".
+  const policy = (key: string) => {
+    const found = policies.get(key)
+    return found && !listOnly(found) ? found : undefined
+  }
   for (const market of [m, '*']) {
-    const found = (connectionId ? policies.get(policyKey(channel, market, connectionId)) : undefined) ?? policies.get(policyKey(channel, market))
+    const found = (connectionId ? policy(policyKey(channel, market, connectionId)) : undefined) ?? policy(policyKey(channel, market))
     if (found) return found
   }
   return null
@@ -73,14 +96,19 @@ export function policyFor(
 
 export interface PolicyWriteResult {
   /** The policy before the write (its rows merged), or null when it had none. */
-  before: { id: string; pushesPaused: boolean; newListingDefaultMode: string } | null
+  before: { id: string; pushesPaused: boolean; newListingDefaultMode: string; sourceLocationCodes: string[] } | null
   /** The row that now holds the policy; null when the result was all-default and its rows were removed. */
   saved: { id: string } | null
   nextPaused: boolean
   nextMode: string
+  /** Step 2 — the market's "Sells from" list after the write ([] = none). */
+  nextSourceLocationCodes: string[]
   pausedChanged: boolean
   modeChanged: boolean
+  sourcesChanged: boolean
 }
+
+const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((code, i) => code === b[i])
 
 /**
  * Save one policy: a channel, a market ('*' = every market) and an account (null = every account). The rows are
@@ -88,7 +116,9 @@ export interface PolicyWriteResult {
  * account left a pause that Resume never found: it answered "ok" and the channel stayed paused.) The key cannot
  * target a NULL account and NULLs do not collide, so "every account" can hold more than one row: they are one
  * policy, read together and written together. An all-default result removes the rows (an all-default row and no
- * row derive identically).
+ * row derive identically) — unless the row still holds the market's "Sells from" list (Step 2): a field the write
+ * does not name keeps its value, so a pause or resume never wipes a list, and a list never moves a pause.
+ * With `tx`, every read and write runs in that transaction (the caller commits); without it, as before.
  */
 export async function writeChannelPolicy(input: {
   channel: string
@@ -96,9 +126,12 @@ export async function writeChannelPolicy(input: {
   channelConnectionId: string | null
   pushesPaused?: boolean
   newListingDefaultMode?: 'FOLLOW' | 'PAUSED'
-}): Promise<PolicyWriteResult> {
+  /** Step 2 — the market's ordered "Sells from" codes; [] removes the list; absent keeps it. */
+  sourceLocationCodes?: string[]
+}, tx?: Prisma.TransactionClient): Promise<PolicyWriteResult> {
   const { channel, marketplace, channelConnectionId } = input
-  const same = await prisma.syncChannelPolicy.findMany({
+  const db = tx ?? prisma
+  const same = await db.syncChannelPolicy.findMany({
     where: { channel, marketplace, channelConnectionId },
     orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
   })
@@ -107,39 +140,48 @@ export async function writeChannelPolicy(input: {
         id: same[0]!.id,
         pushesPaused: same.some((row) => row.pushesPaused),
         newListingDefaultMode: same.some((row) => row.newListingDefaultMode === 'PAUSED') ? 'PAUSED' : same[0]!.newListingDefaultMode,
+        // The newest row that holds a list (rows come newest first).
+        sourceLocationCodes: [...(same.find((row) => (row.sourceLocationCodes ?? []).length > 0)?.sourceLocationCodes ?? [])],
       }
     : null
   const nextPaused = input.pushesPaused ?? before?.pushesPaused ?? false
   const nextMode = input.newListingDefaultMode ?? before?.newListingDefaultMode ?? 'FOLLOW'
+  const nextSourceLocationCodes = input.sourceLocationCodes ? [...input.sourceLocationCodes] : before?.sourceLocationCodes ?? []
   const modeChanged = nextMode !== (before?.newListingDefaultMode ?? 'FOLLOW')
   const pausedChanged = nextPaused !== (before?.pushesPaused ?? false)
-  const result = { before, nextPaused, nextMode, pausedChanged, modeChanged }
+  const sourcesChanged = !sameList(nextSourceLocationCodes, before?.sourceLocationCodes ?? [])
+  const result = { before, nextPaused, nextMode, nextSourceLocationCodes, pausedChanged, modeChanged, sourcesChanged }
 
-  if (!nextPaused && nextMode === 'FOLLOW') {
-    if (same.length) await prisma.syncChannelPolicy.deleteMany({ where: { id: { in: same.map((row) => row.id) } } })
+  if (!nextPaused && nextMode === 'FOLLOW' && nextSourceLocationCodes.length === 0) {
+    if (same.length) await db.syncChannelPolicy.deleteMany({ where: { id: { in: same.map((row) => row.id) } } })
     return { ...result, saved: null }
   }
   if (!before) {
-    const created = await prisma.syncChannelPolicy.create({
-      data: { channel, marketplace, channelConnectionId, pushesPaused: nextPaused, newListingDefaultMode: nextMode, newListingModeSetAt: nextMode === 'PAUSED' ? new Date() : null },
+    const created = await db.syncChannelPolicy.create({
+      data: {
+        channel, marketplace, channelConnectionId, pushesPaused: nextPaused, newListingDefaultMode: nextMode,
+        newListingModeSetAt: nextMode === 'PAUSED' ? new Date() : null, sourceLocationCodes: nextSourceLocationCodes,
+      },
       select: { id: true },
     })
     return { ...result, saved: created }
   }
-  const saved = await prisma.$transaction(async (tx) => {
+  const update = async (t: Prisma.TransactionClient) => {
     // Extra rows of the same policy go; the newest carries the merged values.
-    if (same.length > 1) await tx.syncChannelPolicy.deleteMany({ where: { id: { in: same.slice(1).map((row) => row.id) } } })
-    return tx.syncChannelPolicy.update({
+    if (same.length > 1) await t.syncChannelPolicy.deleteMany({ where: { id: { in: same.slice(1).map((row) => row.id) } } })
+    return t.syncChannelPolicy.update({
       where: { id: before.id },
       data: {
         pushesPaused: nextPaused,
         newListingDefaultMode: nextMode,
+        sourceLocationCodes: nextSourceLocationCodes,
         // Cutoff moves ONLY when the default-mode itself changes.
         ...(modeChanged ? { newListingModeSetAt: nextMode === 'PAUSED' ? new Date() : null } : {}),
       },
       select: { id: true },
     })
-  })
+  }
+  const saved = tx ? await update(tx) : await prisma.$transaction(update)
   return { ...result, saved }
 }
 

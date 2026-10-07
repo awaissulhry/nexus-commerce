@@ -20,6 +20,8 @@ vi.mock('../db.js', () => ({
       aggregate: vi.fn().mockResolvedValue(null),
     },
     stockPoolLink: { findMany: async () => (mocks.pooled ? [{ productId: 'p1' }] : []) },
+    // Step 2 — the loader reads the business's "Sells from" lists (none here).
+    syncChannelPolicy: { findMany: async () => [] },
     // Door 1 — the pool the product sells from: one lent warehouse, 3 available.
     $queryRaw: async () => (mocks.pooled
       ? [{ product_id: 'p1', grant_id: 'g1', owner_workspace_id: 'lender', location_id: 'l1', location_code: 'IT-MAIN', quantity: 4, reserved: 1, available: 3 }]

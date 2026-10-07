@@ -11,7 +11,7 @@ import type { SyncCell } from '@nexus/shared/matrix-contract'
 import { isFbaCoordinate } from '../../lib/amazon-fulfillment.js'
 import { computeAvailableToPublish } from '../available-to-publish.service.js'
 import { ledgerInputs, type ProductLedger } from '../stock-pool/sync-ledgers.js'
-import { locationServes, resolveIntendedQuantity, type IntendedResolution } from '../sync-control-core.js'
+import { resolveIntendedQuantity, routedLedgerRows, type IntendedResolution } from '../sync-control-core.js'
 import { syncCellOf } from './matrix-cells.js'
 
 export interface VerdictListing {
@@ -44,7 +44,7 @@ export interface ListingQuantityVerdictInput {
 export interface ListingQuantityVerdict {
   isFba: boolean
   resolution: IntendedResolution
-  /** The ledger rows that serve this channel + market (`locationServes`). */
+  /** The ledger rows this listing sells from, in sale order (`routedLedgerRows`: its own list, the market's, else the routes). */
   routed: Array<{ locationCode: string; available: number }>
   warehouseAvailable: number
   /** The FBM ceiling (`computeAvailableToPublish`); null for an FBA listing. */
@@ -67,7 +67,9 @@ export function listingQuantityVerdict(input: ListingQuantityVerdictInput): List
     pinnedQuantity: l.quantity, stockBuffer: l.stockBuffer ?? 0,
     channelPolicy: input.channelPolicy, ...inputs,
   })
-  const routed = inputs.ledger.filter((r) => locationServes(r.syncRoutes, ch, mk)).map((r) => ({ locationCode: r.locationCode, available: r.available }))
+  // Step 2 — the SAME rows the quantity above was summed over (the listing's own list, the market's, else the routes).
+  const routed = routedLedgerRows({ ledger: inputs.ledger, channel: ch, marketplace: mk, sourceLocationCodes: inputs.sourceLocationCodes })
+    .map((r) => ({ locationCode: r.locationCode, available: r.available }))
   const warehouseAvailable = routed.reduce((s, r) => s + r.available, 0)
   const publishable = isFba ? null : computeAvailableToPublish({ fulfillmentMethod: 'FBM', warehouseAvailable, fbaSellable: 0, stockBuffer: l.stockBuffer ?? 0 }).available
   const sync = syncCellOf(resolution, {

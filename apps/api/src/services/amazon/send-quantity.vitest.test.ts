@@ -16,7 +16,7 @@ vi.mock('../stock-pool/sync-ledgers.js', async (original) => {
 vi.mock('../sync-control-policy.service.js', () => ({ loadChannelPolicies: async () => new Map(), policyFor: () => null }))
 import { syncLedgerOf } from '../sync-control-core.js'
 import type { ProductLedger } from '../stock-pool/sync-ledgers.js'
-import { amazonSendQuantity, loadAmazonSendQuantity, readEuIntentRows, routedSendCeiling, type SendQuantityInput } from './send-quantity.js'
+import { amazonSendQuantity, loadAmazonSendQuantity, readEuIntentRows, routedSendCeiling, withEuSources, type SendQuantityInput } from './send-quantity.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
 
 const ledger = (rows: Array<{ locationCode: string; available: number; syncRoutes: string[] }>, over: Partial<ProductLedger> = {}): ProductLedger => ({
@@ -108,6 +108,45 @@ describe('equals the stock job', () => {
     expect(paused).toMatchObject({ quantity: null, code: 'NO_QUANTITY' })
     expect(paused.refusal).toMatch(/paused/)
     expect(amazonSendQuantity(input({ listing: listing({ quantity: null, offerClosedAt: new Date() }) as never })).refusal).toMatch(/closed/)
+  })
+})
+
+describe('Step 2 "Sells from" — the EU guard compares what each Follow market sells from', () => {
+  const rows2 = (over: Record<string, unknown> = {}) => [
+    { marketplace: 'IT', followMasterQuantity: true, quantityOverride: null, quantity: 10 },
+    { marketplace: 'DE', followMasterQuantity: true, quantityOverride: null, quantity: 10, ...over },
+  ]
+  const twoWarehouses = (marketSources?: Map<string, string[]>) => ({
+    productId: 'p1', source: { kind: 'own' as const }, quantity: 60, available: 60, uncountedIsZero: false, fbaBucket: 0,
+    ledger: syncLedgerOf([{ locationCode: 'IT-MAIN', available: 50, syncRoutes: [] }, { locationCode: 'MI-3PL', available: 10, syncRoutes: [] }], { marketSources }),
+  })
+
+  it('withEuSources: each row\'s own list, else the market\'s, else the routes; no ledger → rows unchanged', () => {
+    const eu = new Map([['AMAZON:IT', ['MI-3PL', 'IT-MAIN']], ['AMAZON:DE', ['MI-3PL', 'IT-MAIN']]])
+    expect(withEuSources(rows2({ sourceLocationCodes: ['IT-MAIN'] }) as never, twoWarehouses(eu)).map((r) => r.sources)).toEqual([['MI-3PL', 'IT-MAIN'], ['IT-MAIN']])
+    expect(withEuSources(rows2() as never, twoWarehouses()).map((r) => r.sources)).toEqual([['IT-MAIN', 'MI-3PL'], ['IT-MAIN', 'MI-3PL']])
+    const plain = rows2() as never
+    expect(withEuSources(plain, undefined)).toBe(plain)
+  })
+
+  it('a Follow sibling with its own list fights the market\'s list → refused; all on the market\'s list → sent', () => {
+    const eu = new Map([['AMAZON:IT', ['MI-3PL', 'IT-MAIN']], ['AMAZON:DE', ['MI-3PL', 'IT-MAIN']]])
+    const follow = listing({ quantity: 57, followMasterQuantity: true })
+    const fight = amazonSendQuantity(input({ listing: follow as never, ledger: twoWarehouses(eu), euRows: rows2({ sourceLocationCodes: ['IT-MAIN'] }) as never }))
+    expect(fight).toMatchObject({ quantity: null, code: 'EU_SHARED_QTY_CONFLICT' })
+    expect(fight.refusal).toMatch(/follow the pool from different warehouses \(IT from IT-MAIN \+ MI-3PL, DE from IT-MAIN\)/)
+    expect(amazonSendQuantity(input({ listing: follow as never, ledger: twoWarehouses(eu), euRows: rows2() as never }))).toMatchObject({ quantity: 57, code: null })
+  })
+
+  it('the EU sibling read carries a row\'s own list only when it has one', async () => {
+    const LIVE = { listingStatus: 'ACTIVE', isPublished: true, externalListingId: 'B0TEST' }
+    const sib = (marketplace: string, sourceLocationCodes: string[]) => ({
+      marketplace, followMasterQuantity: true, quantityOverride: null, quantity: 5, syncPaused: false, fulfillmentMethod: 'FBM', offerClosedAt: null, sourceLocationCodes,
+      aliasKey: '', channelSku: null, liveChannelSku: null, platformAttributes: {}, flatFileSnapshot: null, offers: [], product: { sku: 'SKU-1' }, ...LIVE,
+    })
+    const rows = await readEuIntentRows({ channelListing: { findMany: async () => [sib('IT', []), sib('DE', ['MI-3PL'])] } } as never, 'p1')
+    expect(rows[0]).not.toHaveProperty('sourceLocationCodes')
+    expect(rows[1]).toMatchObject({ marketplace: 'DE', sourceLocationCodes: ['MI-3PL'] })
   })
 })
 

@@ -12,6 +12,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  *   GET /api/stock/sync-control/overview   — summary, the markets the rows are on, locations, policies, audit
  *   GET /api/stock/sync-control/listings   — flat rows (listings + shared
  *       memberships), filters channel/market/mode/q, paginated
+ *   POST /api/stock/sync-control/market-sources — Step 2 "Sells from": a market's warehouses, in sale order
  */
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
@@ -28,8 +29,8 @@ import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../servic
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 // MCP full control 08 S7 — the writes (and the rows they act on) live in the service, shared with Claude's tools.
 import {
-  audit, buildLedgers, computeRows, resolveCanonicalMasters, runSyncControlAction, setLocationRoutes, setSyncPolicy,
-  type Mode, type SyncControlActionBody, type SyncControlRow, type SyncPolicyBody,
+  audit, buildLedgers, computeRows, resolveCanonicalMasters, runSyncControlAction, setLocationRoutes, setMarketSources, setSyncPolicy,
+  type MarketSourcesBody, type Mode, type SyncControlActionBody, type SyncControlRow, type SyncPolicyBody,
 } from '../services/stock/sync-control-actions.service.js'
 
 /** SCD.8 — ONE parser for every multi-select filter value. The UI sends
@@ -345,6 +346,13 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
   app.post('/stock/sync-control/location-routes', async (request, reply) => {
     const out = await setLocationRoutes(request.body as { code?: string; syncRoutes?: string[] }, actorOf(request as never))
+    return out.status === 200 ? out.body : reply.code(out.status).send(out.body)
+  })
+
+  // Step 2 "Sells from" — which warehouses one market sells from, in sale order, for every product (Amazon EU: one list
+  // for the whole group). Body { channel, marketplace, codes[], dryRun? }; the service holds every read and write.
+  app.post('/stock/sync-control/market-sources', async (request, reply) => {
+    const out = await setMarketSources((request.body ?? {}) as MarketSourcesBody, actorOf(request as never))
     return out.status === 200 ? out.body : reply.code(out.status).send(out.body)
   })
 

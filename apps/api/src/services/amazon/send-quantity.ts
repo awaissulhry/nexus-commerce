@@ -11,6 +11,7 @@
  *   3. the oversell clamp: no more than the stock routed to this market minus the listing's buffer; no routed location
  *      on a pooled product → refused, never capped to 0;
  *   4. the Amazon EU shared-quantity guard: sibling EU markets that disagree → refused; a guard that cannot run → held.
+ *      Step 2: with the product's ledger, Follow siblings must also sell from the same warehouses (`withEuSources`).
  * Kill switches as the job reads them: `NEXUS_SYNC_ORDERING_V2=0`, `NEXUS_OVERSELL_CLAMP=0`, `NEXUS_EU_SHARED_QTY_GUARD=0`.
  *
  * `amazonSendQuantity` is pure; `loadAmazonSendQuantity` runs the job's reads for one listing and calls it.
@@ -20,7 +21,7 @@ import { isFbaCoordinate } from '../../lib/amazon-fulfillment.js'
 import { AMAZON_EU_SHARED_MARKETS, detectEuIntentConflict, EU_GUARD_REMEDY, type EuIntentRow } from '../amazon-eu-quantity-guard.js'
 import { computeAvailableToPublish } from '../available-to-publish.service.js'
 import { ledgerInputs, loadSyncLedgers, type ProductLedger } from '../stock-pool/sync-ledgers.js'
-import { resolveIntendedQuantity, routedAvailable } from '../sync-control-core.js'
+import { resolveIntendedQuantity, routedAvailable, sellsFrom } from '../sync-control-core.js'
 import { sharesAmazonSellerSku } from '../listings/listing-send-sku.js'
 import { liveChannelSku, wantedChannelSku } from '../listings/channel-sku.pure.js'
 import { loadChannelPolicies, policyFor } from '../sync-control-policy.service.js'
@@ -148,13 +149,29 @@ export function amazonSendQuantity(input: SendQuantityInput): SendQuantity {
       return none({ refusal: `EU shared-quantity guard could not run for ${sku} (${detail}). Push held rather than sent blind: Amazon holds one EU quantity per SKU, so an unchecked push can overwrite another market's intent. It will be retried. ${EU_GUARD_REMEDY}`,
         code: 'EU_SHARED_QTY_GUARD_UNAVAILABLE', requested: quantity, available: out.available })
     }
-    const verdict = detectEuIntentConflict(input.euRows)
+    const euRows = withEuSources(input.euRows, input.ledger)
+    const verdict = detectEuIntentConflict(euRows)
     if (verdict.conflict) {
       return none({ refusal: `EU shared-quantity conflict for ${sku}: ${verdict.detail}. Push refused so no market's intent is silently overwritten. ${EU_GUARD_REMEDY}`,
         code: 'EU_SHARED_QTY_CONFLICT', requested: quantity, available: out.available, euConflict: { detail: verdict.detail, rows: input.euRows } })
     }
   }
   return out
+}
+
+/**
+ * Step 2 — the EU sibling rows with the warehouses each one sells from (`sellsFrom` over the product's ledger: the
+ * row's own list, else the market's, else the routes), so the guard sees two Follow markets that would send two
+ * different sums. A row that sells from nothing (UNCOUNTED: it sends nothing) carries no set. Without a ledger the rows
+ * are returned as they are and the guard compares what it always did.
+ */
+export function withEuSources(rows: EuIntentRow[], ledger: ProductLedger | undefined): EuIntentRow[] {
+  if (!ledger) return rows
+  return rows.map((row) => {
+    const inputs = ledgerInputs(ledger, row.sourceLocationCodes ?? [])
+    const chosen = sellsFrom({ ledger: inputs.ledger, channel: 'AMAZON', marketplace: row.marketplace, sourceLocationCodes: inputs.sourceLocationCodes })
+    return { ...row, sources: chosen.rows.length > 0 || inputs.uncountedIsZero ? chosen.codes : null }
+  })
 }
 
 type Db = Pick<Prisma.TransactionClient, 'channelListing' | 'stockLevel' | 'offer' | 'stockPoolLink' | '$queryRaw' | '$queryRawUnsafe' | 'syncChannelPolicy'>
@@ -176,7 +193,7 @@ const SIBLING_SKU_SELECT = {
 export async function readEuIntentRows(db: Pick<Prisma.TransactionClient, 'channelListing'>, productId: string, sku?: string | null): Promise<EuIntentRow[]> {
   const rows = await db.channelListing.findMany({
     where: { productId, channel: 'AMAZON', isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
-    select: { marketplace: true, followMasterQuantity: true, quantityOverride: true, quantity: true, syncPaused: true, fulfillmentMethod: true, offerClosedAt: true, ...SIBLING_SKU_SELECT },
+    select: { marketplace: true, followMasterQuantity: true, quantityOverride: true, quantity: true, syncPaused: true, fulfillmentMethod: true, offerClosedAt: true, sourceLocationCodes: true, ...SIBLING_SKU_SELECT },
   })
   const bySku = typeof sku === 'string' && sku.trim() ? sku.trim() : null
   const siblings = bySku ? rows.filter((sib) => sharesAmazonSellerSku(sib, sib.product?.sku, bySku)) : rows
@@ -187,6 +204,9 @@ export async function readEuIntentRows(db: Pick<Prisma.TransactionClient, 'chann
     // Sync Control, the heal job). Without it a closed market pinned at an old number fought a live market's Follow, and
     // the push was refused for a conflict nothing else could see (2026-10-07: GALE BLACK-S, IT Follow 51 vs closed ES 2).
     offerClosed: !!sib.offerClosedAt,
+    // Step 2 — the row's own "Sells from" list, when it has one; the sender, which holds the ledger, works out what it
+    // sells from (`withEuSources`).
+    ...((sib.sourceLocationCodes ?? []).length ? { sourceLocationCodes: sib.sourceLocationCodes } : {}),
   }))
 }
 

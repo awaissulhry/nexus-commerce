@@ -740,7 +740,8 @@ export async function beginApplyImport(
 
   const location = await prisma.stockLocation.findUnique({
     where: { workspace_code: workspaceKey({ code: locationCode }) },
-    select: { id: true, type: true },
+    // code / syncRoutes / isActive: the planned ledger row of a level this import creates routes like any other row.
+    select: { id: true, type: true, code: true, syncRoutes: true, isActive: true },
   })
   if (!location) throw new Error(`Location ${locationCode} not found`)
   if (location.type === 'AMAZON_FBA') throw new Error('FBA locations are read-only')
@@ -816,7 +817,7 @@ async function executeApplyImport(args: {
   target: ImportTarget
   pinOverride: boolean
   jobId: string
-  location: { id: string; type: string }
+  location: { id: string; type: string; code?: string | null; syncRoutes?: string[] | null; isActive?: boolean | null }
   onProgress?: (p: ApplyProgress) => void | Promise<void>
   shouldAbort?: () => boolean
 }): Promise<ApplyResult> {
@@ -888,7 +889,7 @@ async function executeApplyImport(args: {
             select: {
               id: true, productId: true, locationId: true, variationId: true,
               quantity: true, available: true,
-              location: { select: { type: true, code: true, syncRoutes: true } },
+              location: { select: { type: true, code: true, syncRoutes: true, isActive: true } },
             },
           })
         : [],
@@ -1115,11 +1116,14 @@ async function executeApplyImport(args: {
         if (lvl.location?.type === 'WAREHOUSE') {
           total += qty
           warehouseAvailable += avail
-          scLedger.push({
-            locationCode: (lvl.location as { code?: string })?.code ?? '?',
-            available: avail,
-            syncRoutes: (lvl.location as { syncRoutes?: string[] })?.syncRoutes ?? [],
-          })
+          // Step 2 — a switched-off warehouse feeds no listing (loadSyncLedgers' rule).
+          if ((lvl.location as { isActive?: boolean | null }).isActive !== false) {
+            scLedger.push({
+              locationCode: (lvl.location as { code?: string })?.code ?? '?',
+              available: avail,
+              syncRoutes: (lvl.location as { syncRoutes?: string[] })?.syncRoutes ?? [],
+            })
+          }
         } else if (lvl.location?.type === 'AMAZON_FBA') {
           fbaBucket += lvl.quantity
         }
@@ -1128,11 +1132,13 @@ async function executeApplyImport(args: {
         // Level row doesn't exist yet — the chunk write will create it.
         total += plan.finalQty
         warehouseAvailable += plan.finalQty
-        scLedger.push({
-          locationCode: (location as { code?: string })?.code ?? '?',
-          available: plan.finalQty,
-          syncRoutes: (location as { syncRoutes?: string[] })?.syncRoutes ?? [],
-        })
+        if (location.isActive !== false) {
+          scLedger.push({
+            locationCode: location.code ?? '?',
+            available: plan.finalQty,
+            syncRoutes: location.syncRoutes ?? [],
+          })
+        }
       }
       plan.newTotalStock = total
       const netChange = plan.finalQty - plan.baseQty
@@ -1140,7 +1146,8 @@ async function executeApplyImport(args: {
       // wrote; any other product follows this import's final rows, exactly as before.
       const source = stockSources.get(productId)
       const pooledSource = source?.source.kind === 'pool' ? source : undefined
-      const listingLedger = pooledSource ? pooledSource.ledger : syncLedgerOf(scLedger)
+      // Step 2 — the business's "Sells from" lists ride on the planned ledger as on the loader's own ledger.
+      const listingLedger = pooledSource ? pooledSource.ledger : syncLedgerOf(scLedger, { marketSources: source?.ledger.marketSources })
       const uncountedIsZero = source?.uncountedIsZero ?? false
       const snapshotTotal = pooledSource ? pooledSource.quantity : total
 

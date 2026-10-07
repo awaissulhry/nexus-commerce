@@ -20,6 +20,17 @@ describe('listingQuantityVerdict', () => {
     expect(v.sync).toMatchObject({ kind: 'FOLLOW', mode: 'FOLLOW', intended: 5, held: 4, buffer: 1, poolAvailable: 6, routedLocations: ['WH-IT'], oversold: false })
   })
 
+  it('Step 2 — the routed rows are the ones the quantity was summed over: the listing\'s list, else the market\'s', () => {
+    // The listing's own list replaces the routes (WH-DE routes only to Amazon DE): routed, ceiling and quantity agree.
+    const own = listingQuantityVerdict({ listing: listing({ sourceLocationCodes: ['WH-DE', 'WH-IT'] }) as never, productFulfillmentMethod: 'FBM', ledger: split, fbaStockQty: 0, hasActiveFbaOffer: false, channelPolicy: null })
+    expect(own).toMatchObject({ resolution: { kind: 'FOLLOW', quantity: 14 }, routed: [{ locationCode: 'WH-DE', available: 9 }, { locationCode: 'WH-IT', available: 6 }], warehouseAvailable: 15, publishable: 14 })
+    expect(own.sync).toMatchObject({ intended: 14, poolAvailable: 15, routedLocations: ['WH-DE', 'WH-IT'] })
+    // The market's list (on the ledger) when the listing has none.
+    const market: ProductLedger = { ...split, ledger: syncLedgerOf(split.ledger, { marketSources: new Map([['AMAZON:IT', ['WH-DE']]]) }) }
+    const v = listingQuantityVerdict({ listing: listing() as never, productFulfillmentMethod: 'FBM', ledger: market, fbaStockQty: 0, hasActiveFbaOffer: false, channelPolicy: null })
+    expect(v).toMatchObject({ resolution: { kind: 'FOLLOW', quantity: 8 }, routed: [{ locationCode: 'WH-DE', available: 9 }], warehouseAvailable: 9, publishable: 8 })
+  })
+
   it('pinned: the pin; an FBA code under .attributes → FBA_EXCLUDED with no ceiling', () => {
     expect(listingQuantityVerdict({ listing: listing({ followMasterQuantity: false, quantity: 10 }) as never, productFulfillmentMethod: 'FBM', ledger: split, fbaStockQty: 0, hasActiveFbaOffer: false, channelPolicy: null }).resolution)
       .toEqual({ kind: 'PINNED', quantity: 10 })
