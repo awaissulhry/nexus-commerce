@@ -281,3 +281,104 @@ describe('AA-W2-11 — gate evidence for plans, pools, schedules and coverage se
     await inside(() => database.client.adsStrategy.update({ where: { id: ids.strategy }, data: { claudeAutonomy: {} } }))
   })
 })
+
+/**
+ * W4-12b — an Amazon ads BUILDER rule carries a Manual/Automate setting (`actions[0].control`); on Manual the engine runs
+ * it as a dry run whatever its level (automation-rule.service.ts EA3). The Rules screen flips it with the level when a
+ * person sets Auto (RulesGrid.tsx setAutomation); turn-up-automation did not, so a builder rule Claude raised to AUTO
+ * kept only proposing. Now the level tools move it the same way, through the rule drawer's own save and audit.
+ */
+describe('W4-12b — a builder rule\'s Manual/Automate setting moves with AUTO', () => {
+  const control = async (id: string) => {
+    const r = await inside(() => database.client.automationRule.findUniqueOrThrow({ where: { id }, select: { autonomyLevel: true, dryRun: true, actions: true } }))
+    return { level: r.autonomyLevel, dryRun: r.dryRun, control: (r.actions as Array<{ control?: string }>)[0]?.control }
+  }
+
+  it('raised to AUTO it goes to Automate (said on the preview, audited as the drawer\'s save); turned down, back to Manual; the undo is that move', async () => {
+    process.env.NEXUS_AMAZON_ADS_MODE = 'live'
+    const rule = await inside(async () => {
+      const db = database.client
+      // The gate's live production connection (the graduation test above may have made it already).
+      if (!(await db.amazonAdsConnection.findFirst({ where: { marketplace: 'IT', mode: 'production' } }))) {
+        await db.amazonAdsConnection.create({ data: { profileId: 'TEST-PROFILE-1', marketplace: 'IT', isActive: true, mode: 'production', writesEnabledAt: new Date() } as never })
+      }
+      const campaign = await db.campaign.create({ data: { name: 'TEST BUILDER PICK', type: 'SP', dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), marketplace: 'IT', externalCampaignId: 'TEST-CMP-B1' } })
+      // Watched 20 days, 12 real runs, 3 matches: the graduation gate is open. Its bids go up 10 % when ACoS is under 20 %.
+      return db.automationRule.create({ data: {
+        domain: 'advertising', name: 'TEST builder bids', trigger: 'TARGET_PERFORMANCE', enabled: true, autonomyLevel: 'PROPOSE', dryRun: true,
+        scopeMarketplace: 'IT', createdAt: new Date(Date.now() - 20 * DAY), evaluationCount: 12, matchCount: 3,
+        conditions: [{ conditions: [{ metric: 'ACOS', op: 'lt', value: '20' }], action: { op: 'incPct', value: '10' } }],
+        actions: [{ type: 'bid', control: 'manual', campaigns: [{ id: campaign.id, name: 'TEST BUILDER PICK' }] }],
+      } as never })
+    })
+
+    const asked = await up({ automation: 'A1', rowId: rule.id, level: 'AUTO' })
+    expect(asked.preview).toMatchObject({ from: 'PROPOSE', to: 'AUTO', changes: { level: { from: 'PROPOSE', to: 'AUTO' }, control: { from: 'manual', to: 'automate' } } })
+    expect(asked.preview!.effect).toContain('Its Manual/Automate setting goes from Manual to Automate with it')
+
+    const raised = await run('turn-up-automation', { automation: 'A1', rowId: rule.id, level: 'AUTO' })
+    expect(raised).toMatchObject({ ok: true, data: { from: 'PROPOSE', level: 'AUTO' } })
+    // Before W4-12b: AUTO with a Manual setting — a dry run on every tick, proposing only.
+    expect(await control(rule.id)).toEqual({ level: 'AUTO', dryRun: false, control: 'automate' })
+    const { automationAdapter } = await import('../../automation/automation-catalog.service.js')
+    const board = await inside(() => automationAdapter('A1')!.rows!())
+    expect(board.find((r) => r.id === rule.id)).toMatchObject({ level: 'AUTO', runsAs: 'AUTO' })
+    // The same two audit rows as the screen's: the drawer's save (actions) and the level.
+    const audit = await inside(() => database.client.advertisingActionLog.findMany({ where: { entityId: rule.id }, orderBy: { createdAt: 'asc' }, select: { actionType: true, userId: true } }))
+    expect(audit).toEqual([{ actionType: 'update_rule', userId: 'user:u-r10' }, { actionType: 'set_rule_autonomy', userId: 'user:u-r10' }])
+
+    // The undo of the raise is turn-down-automation to PROPOSE, which puts the setting back to Manual.
+    const back = getTool('turn-up-automation')!.undo!.request(raised.change!) as { tool: string; args: Record<string, unknown> }
+    expect(back).toEqual({ tool: 'turn-down-automation', args: { automation: 'ads-rules', rowId: rule.id, level: 'PROPOSE' } })
+    const lowered = await down(back.args)
+    expect(lowered.preview).toMatchObject({ changes: { control: { from: 'automate', to: 'manual' } } })
+    expect(lowered.preview!.effect).toContain('Its Manual/Automate setting goes back from Automate to Manual')
+    expect(await run('turn-down-automation', back.args)).toMatchObject({ ok: true, data: { level: 'PROPOSE' } })
+    expect(await control(rule.id)).toEqual({ level: 'PROPOSE', dryRun: true, control: 'manual' })
+  })
+
+  it('a move below AUTO, or a rule with no Manual setting, changes no setting', async () => {
+    const below = await inside(() => database.client.automationRule.create({ data: {
+      domain: 'advertising', name: 'TEST builder observed', trigger: 'TARGET_PERFORMANCE', enabled: true, autonomyLevel: 'OBSERVE',
+      conditions: [{ conditions: [{ metric: 'ACOS', op: 'lt', value: '20' }], action: { op: 'incPct', value: '10' } }],
+      actions: [{ type: 'bid', control: 'manual', campaigns: [] }],
+    } as never }))
+    const propose = await up({ automation: 'A1', rowId: below.id, level: 'PROPOSE' })
+    expect(propose.preview).toMatchObject({ changes: { level: { from: 'OBSERVE', to: 'PROPOSE' } } })
+    expect(propose.preview!.changes.control).toBeUndefined()
+    // TEST graduate went to AUTO above with no setting at all: turned down, none is added.
+    const plain = await down({ automation: 'A1', rowId: ids.graduate, level: 'PROPOSE' })
+    expect(plain.preview).toMatchObject({ from: 'AUTO', to: 'PROPOSE' })
+    expect(plain.preview!.changes.control).toBeUndefined()
+  })
+
+  it('a rule a person set to Automate keeps it when Claude turns it down from AUTO: only a level move\'s Automate goes back', async () => {
+    process.env.NEXUS_AMAZON_ADS_MODE = 'live'
+    const rule = await inside(() => database.client.automationRule.create({ data: {
+      domain: 'advertising', name: 'TEST builder chosen automate', trigger: 'TARGET_PERFORMANCE', enabled: true, autonomyLevel: 'PROPOSE', dryRun: true,
+      scopeMarketplace: 'IT', createdAt: new Date(Date.now() - 20 * DAY), evaluationCount: 12, matchCount: 3,
+      conditions: [{ conditions: [{ metric: 'ACOS', op: 'lt', value: '20' }], action: { op: 'incPct', value: '10' } }],
+      actions: [{ type: 'bid', control: 'automate', campaigns: [] }],
+    } as never }))
+    const raise = await up({ automation: 'A1', rowId: rule.id, level: 'AUTO' })
+    expect(raise.preview!.changes.control).toBeUndefined()
+    expect(await run('turn-up-automation', { automation: 'A1', rowId: rule.id, level: 'AUTO' })).toMatchObject({ ok: true, data: { level: 'AUTO' } })
+    const lower = await down({ automation: 'A1', rowId: rule.id, level: 'PROPOSE' })
+    // Before the review: "goes back from Automate to Manual", although it was never Manual.
+    expect(lower.preview!.changes.control).toBeUndefined()
+    expect(await run('turn-down-automation', { automation: 'A1', rowId: rule.id, level: 'PROPOSE' })).toMatchObject({ ok: true, data: { level: 'PROPOSE' } })
+    expect(await control(rule.id)).toEqual({ level: 'PROPOSE', dryRun: true, control: 'automate' })
+  })
+
+  it('an engine-shaped rule set to Manual moves too: the engine reads the same setting on every ads rule', async () => {
+    process.env.NEXUS_AMAZON_ADS_MODE = 'live'
+    const rule = await inside(() => database.client.automationRule.create({ data: {
+      domain: 'advertising', name: 'TEST engine manual', trigger: 'KEYWORD_HIGH_ACOS', enabled: true, autonomyLevel: 'PROPOSE', scopeMarketplace: 'IT',
+      createdAt: new Date(Date.now() - 20 * DAY), evaluationCount: 12, matchCount: 3,
+      conditions: [{ field: 'adTarget.acos', op: 'gt', value: 0.5 }], actions: [{ type: 'bid_up', percent: 5, control: 'manual' }],
+    } as never }))
+    expect((await up({ automation: 'A1', rowId: rule.id, level: 'AUTO' })).preview).toMatchObject({ changes: { control: { from: 'manual', to: 'automate' } } })
+    expect(await run('turn-up-automation', { automation: 'A1', rowId: rule.id, level: 'AUTO' })).toMatchObject({ ok: true, data: { level: 'AUTO' } })
+    expect(await control(rule.id)).toEqual({ level: 'AUTO', dryRun: false, control: 'automate' })
+  })
+})
