@@ -282,6 +282,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'enable-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
   // AA-W2-13 — an archive names the budgets that stop for good (it needs money).
   'archive-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
+  // W4-3 — portfolios: the read hides each cap and its spend from a person without ad-spend money; the two changes
+  // name budget caps and the campaigns' strategy facts (they need money: refused for a person without it).
+  'ad-portfolios': () => ({ market: 'IT', days: 30 }),
+  'set-portfolio': () => ({ op: 'create', market: 'IT', name: 'Money portfolio' }),
+  'set-campaign-settings': (ids) => ({ campaignIds: [ids.campaignId], biddingStrategy: 'manual' }),
   // W3-3 — stock-aware bids: the read shows units and days (no money); the two changes list bids (they need money).
   'ad-stock-risk': (ids) => ({ campaignIds: [ids.campaignId], show: 'all' }),
   'lower-ad-bids-for-stock': (ids) => ({ campaignIds: [ids.campaignId] }),
@@ -714,8 +719,10 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
     const alias = await db.productListingAlias.create({ data: { productId: product.id, channel: 'EBAY', marketplace: 'IT', label: `${mark} second listing`, position: 2 } })
     // A2 — an Amazon campaign with a target, a day of spend, a wasteful search term and a bid change: the ad reads
     // have money to strip, and business B's campaign carries its mark.
+    // W4-3 — the campaign sits in a portfolio with a budget cap (money ad-portfolios hides from a person without it).
+    await db.amazonAdsPortfolio.create({ data: { profileId: `${mark}-PROFILE`, externalPortfolioId: `${mark}-PF`, name: `${mark} portfolio`, state: 'ENABLED', budgetAmount: '2718.28', budgetCurrencyCode: 'EUR', budgetPolicy: 'MONTHLY_RECURRING' } })
     const campaign = await db.campaign.create({
-      data: { name: `${mark} MONEY campaign`, type: 'SP', marketplace: 'IT', externalCampaignId: `${mark}-CMP`, dailyBudget: '31.41', startDate: new Date() } as never,
+      data: { name: `${mark} MONEY campaign`, type: 'SP', marketplace: 'IT', externalCampaignId: `${mark}-CMP`, dailyBudget: '31.41', startDate: new Date(), portfolioId: `${mark}-PF` } as never,
     })
     const adGroup = await db.adGroup.create({ data: { campaignId: campaign.id, name: `${mark} ad group`, externalAdGroupId: `${mark}-AG` } })
     // Ads autonomy W1-2 — the product is advertised in that ad group, and the market and the product have a strategy whose

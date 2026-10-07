@@ -71,6 +71,7 @@ import { attachSourceLinks, familyOfRow, projectBidCents, muteSuggestion, unmute
 import { applySuggestion, dismissSuggestion, restoreSuggestion, decideSuggestionsBulk, type ApplyOverride, type BulkDecideInput } from '../services/advertising/ads-suggestion-decide.service.js'
 import type { AdsRuleCreateInput, AdsRuleUpdateInput } from '../services/advertising/ads-rule-crud.service.js'
 import type { KeywordProtectionInput } from '../services/advertising/ads-guardrail.service.js'
+import type { PortfolioUpdateBody } from '../services/advertising/ads-portfolio.service.js'
 import { answer } from '../services/automation/service-outcome.js'
 import {
   rebalanceAndAudit,
@@ -9077,25 +9078,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Portfolios P2/P3 — rename / archive / set budget-cap (gated live PUT to Amazon + local mirror).
   fastify.patch('/advertising/portfolios/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      name?: string
-      state?: 'enabled' | 'paused' | 'archived'
-      budget?: { amount?: number; currencyCode?: string; policy?: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string }
-    }
-    const name = body.name?.trim() || undefined
-    let budget: { amount: number; currencyCode: string; policy: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string } | undefined
-    if (body.budget) {
-      const b = body.budget
-      if (!(typeof b.amount === 'number' && b.amount > 0) || (b.policy !== 'monthlyRecurring' && b.policy !== 'dateRange')) {
-        reply.status(400); return { error: 'budget requires amount > 0 and policy monthlyRecurring|dateRange' }
-      }
-      if (b.policy === 'dateRange' && (!b.startDate || !b.endDate)) { reply.status(400); return { error: 'dateRange budget requires startDate + endDate' } }
-      budget = { amount: b.amount, currencyCode: b.currencyCode || 'EUR', policy: b.policy, startDate: b.startDate, endDate: b.endDate }
-    }
-    if (name == null && body.state == null && !budget) { reply.status(400); return { error: 'name, state or budget required' } }
-    const { updatePortfolioById } = await import('../services/advertising/ads-portfolio.service.js')
+    // W4-3 — the body check lives in the service (portfolioUpdateOf), shared with Claude's set-portfolio.
+    const { portfolioUpdateOf, updatePortfolioById } = await import('../services/advertising/ads-portfolio.service.js')
+    const asked = portfolioUpdateOf(request.body as PortfolioUpdateBody)
+    if ('error' in asked) { reply.status(400); return { error: asked.error } }
+    const { name, state, budget } = asked.value
     try {
-      const r = await updatePortfolioById({ portfolioId: id, name, state: body.state, budget })
+      const r = await updatePortfolioById({ portfolioId: id, name, state, budget })
       if (!r.ok) reply.status(r.error === 'portfolio not found' ? 404 : r.mode === 'gated' ? 409 : 500)
       return r
     } catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'update failed' } }

@@ -62,6 +62,8 @@ export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeA
   // PB-6c — a hero creates one campaign (a create). PB-10 — a sync builds slots and adds keywords and product ads: the create kind; its negatives alone are a kind of their
   // own (op sync-negatives). PB-9 — a phase switch is its own kind.
   'apply-ads-playbook': { build: 'create', adopt: null, hero: 'create', start: ['restore', 'allowlist'], stop: 'stop', sync: 'create', 'sync-negatives': 'negative', phase: 'phase' },
+  // W4-3 — a portfolio archived is permanent at Amazon: the archive kind narrows it too.
+  'set-portfolio': { create: 'portfolio', update: 'portfolio', archive: ['portfolio', 'archive'] },
 }
 
 /** Every kind of ad action a tool is for these args (its own kind first); empty: the strategy never narrows it. */
@@ -321,6 +323,18 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'pause-ads': byStatusArgs,
   'enable-ads': byStatusArgs,
   'archive-ads': byStatusArgs,
+  // W4-3 — campaign settings: every campaign it names (with its own settings or the shared ones). A portfolio: its
+  // campaigns, else its market (a new one, or one that holds none: the strictest row of the market).
+  'set-campaign-settings': (place, args) => place.campaignIds([...strs(args.campaignIds), ...list(args.campaigns).map((c) => str(obj(c).campaignId))]),
+  'set-portfolio': async (place, args) => {
+    const portfolioId = str(args.portfolioId)
+    if (!portfolioId) return place.market(marketOf(args.market), 'a new portfolio holds no campaign yet')
+    const { portfolioDetails } = await import('../ads-portfolio.service.js')
+    const [pf] = await portfolioDetails({ portfolioIds: [portfolioId] })
+    if (!pf) return place.notPlaced('the portfolio it names was not found')
+    if (pf.campaigns.length) return place.campaignIds(pf.campaigns.map((c) => c.id))
+    place.market(pf.market, 'a portfolio that holds no campaign')
+  },
   // W3-3 — a stock lowering and its give-back: each ad group and campaign it names.
   'lower-ad-bids-for-stock': byStatusArgs,
   'restore-ad-bids-after-stock': byStatusArgs,

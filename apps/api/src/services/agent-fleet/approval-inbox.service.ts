@@ -813,6 +813,10 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'enable-ads': ['basis', 'reach', 'whoPaused'],
   // AA-W2-13 — every ad named with its status, and where it lands.
   'archive-ads': ['basis', 'reach'],
+  // W4-3 — every campaign named with each setting it starts from and gets (and the caps of the portfolios it leaves and
+  // joins), and where it lands; a portfolio with its name, cap and state, what it sets, and where it lands.
+  'set-campaign-settings': ['basis', 'reach'],
+  'set-portfolio': ['basis', 'reach'],
   // W3-3 — every ad group named with its stock verdict, every bid it lowers or gives back, and where it lands.
   'lower-ad-bids-for-stock': ['basis', 'reach'],
   'restore-ad-bids-after-stock': ['basis', 'reach'],
