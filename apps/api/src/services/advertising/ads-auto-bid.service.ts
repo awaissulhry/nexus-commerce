@@ -20,6 +20,12 @@
  * keyword: a bid a person set in the last 60 days, whatever the campaign's target) (planAutoBid). A profit-derived or
  * flat 30 % target is one he never chose, so such a bid is left alone and counted. The optimiser itself is unchanged:
  * previews, rules, recommendations and autopilot plans see what they saw before.
+ *
+ * Honest writes (2026-10-07) — a bid that cannot reach Amazon is not moved: one in a paused or archived campaign or ad
+ * group (it enters no auction), or in a campaign off the live-write allowlist (the write gate refuses every engine
+ * write there), is left alone and counted, as above. And a run asks the write gate before Nexus writes its copy
+ * (askGate): a write the gate refuses leaves the stored bid as it was, makes no queue row, and is counted as not sent —
+ * before, Nexus showed the new bid until the worker refused it and put the old one back, and the run called it applied.
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
@@ -44,7 +50,7 @@ const MIN_DELTA_CENTS = 2
 export const AUTO_BID_OPTIMIZER_OPTIONS = { profitMode: true, bayesian: true } as const
 
 /** What auto-bid does and leaves, in the words its summary, its notification and its catalog entry (A4) use. */
-export const AUTO_BID_SCOPE_WORDS = 'it moves only bids where you set a target ACoS (campaign, ads strategy or account default) and leaves bids an hourly plan, a goal plan, a person or a pin holds'
+export const AUTO_BID_SCOPE_WORDS = 'it moves only bids where you set a target ACoS (campaign, ads strategy or account default), in running campaigns on the live-write allowlist, and leaves bids an hourly plan, a goal plan, a person or a pin holds'
 
 /**
  * The target sources that are the Owner's: a number he set. `explicit` is a caller's own target (auto-bid passes none;
@@ -55,13 +61,20 @@ const OWNER_TARGET_SOURCES: ReadonlySet<TargetAcosSource> = new Set<TargetAcosSo
 /** Who else holds a campaign's bids, for auto-bid (autoBidHolders). */
 export type AutoBidHolder = 'pinned' | 'hourlyPlan' | 'goalPlan'
 /**
- * The bids auto-bid would have moved and left alone, per reason: no target the Owner set, another owner holds the
- * campaign's bids, or a person set this bid.
+ * Why a bid cannot reach Amazon, so auto-bid does not move it (cannotReachAmazon): its campaign or ad group is paused or
+ * archived, or its campaign is off the live-write allowlist.
  */
-export type AutoBidLeftAlone = Record<'noTargetSetByYou' | AutoBidHolder | 'person', number>
+export type AutoBidUnreachable = 'notRunning' | 'notOnAllowlist'
+/**
+ * The bids auto-bid would have moved and left alone, per reason: no target the Owner set, a bid that cannot reach
+ * Amazon, another owner holds the campaign's bids, or a person set this bid.
+ */
+export type AutoBidLeftAlone = Record<'noTargetSetByYou' | AutoBidUnreachable | AutoBidHolder | 'person', number>
 
 const LEFT_ALONE_WORDS: Record<keyof AutoBidLeftAlone, string> = {
   noTargetSetByYou: 'with no target set by you',
+  notRunning: 'in a paused or archived campaign or ad group',
+  notOnAllowlist: 'in a campaign not on the live-write allowlist',
   hourlyPlan: 'an hourly plan holds',
   goalPlan: 'a goal plan holds',
   person: 'a person holds',
@@ -69,7 +82,7 @@ const LEFT_ALONE_WORDS: Record<keyof AutoBidLeftAlone, string> = {
 }
 
 export function noneLeftAlone(): AutoBidLeftAlone {
-  return { noTargetSetByYou: 0, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0 }
+  return { noTargetSetByYou: 0, notRunning: 0, notOnAllowlist: 0, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0 }
 }
 
 export function leftAloneTotal(l: AutoBidLeftAlone | null | undefined): number {
@@ -117,17 +130,35 @@ export async function autoBidHolders(campaignIds: string[], personTargets?: Read
 }
 
 /**
- * Which proposals auto-bid moves: a target the Owner set (else `noTargetSetByYou`), on a campaign nobody else holds
- * (else the holder), on a bid no person set (else `person` — per keyword, on any campaign, its own target ACoS
- * included). Pure; the order of `proposals` is kept.
+ * Honest writes — why this target's bid cannot reach Amazon, or null when it can: its campaign or ad group is paused or
+ * archived (`notRunning`: it enters no auction, and a write there is noise), else its campaign is off the live-write
+ * allowlist (`notOnAllowlist`: the write gate refuses every engine write to it — ads-write-gate.ts, Apex A.2a). Pure.
+ */
+export function cannotReachAmazon(t: {
+  status?: string | null
+  campaign: { status: string; liveBidWritesEnabled: boolean }
+}): AutoBidUnreachable | null {
+  if (t.campaign.status !== 'ENABLED' || (t.status != null && t.status !== 'ENABLED')) return 'notRunning'
+  if (!t.campaign.liveBidWritesEnabled) return 'notOnAllowlist'
+  return null
+}
+
+/**
+ * Which proposals auto-bid moves: a target the Owner set (else `noTargetSetByYou`), a bid that can reach Amazon (else
+ * why not, per target — `unreachable`, cannotReachAmazon), on a campaign nobody else holds (else the holder), on a bid
+ * no person set (else `person` — per keyword, on any campaign, its own target ACoS included). Pure; the order of
+ * `proposals` is kept.
  */
 export function ownerMoves<P extends Pick<BidProposal, 'targetId' | 'targetSource'>>(
   proposals: P[], campaignOf: ReadonlyMap<string, string>, holders: ReadonlyMap<string, AutoBidHolder>, personTargets: ReadonlySet<string>,
+  unreachable: ReadonlyMap<string, AutoBidUnreachable> = new Map(),
 ): { moves: P[]; leftAlone: AutoBidLeftAlone } {
   const leftAlone = noneLeftAlone()
   const moves: P[] = []
   for (const p of proposals) {
     if (!OWNER_TARGET_SOURCES.has(p.targetSource)) { leftAlone.noTargetSetByYou++; continue }
+    const cannot = unreachable.get(p.targetId)
+    if (cannot) { leftAlone[cannot]++; continue }
     const campaignId = campaignOf.get(p.targetId)
     const holder = campaignId ? holders.get(campaignId) : undefined
     if (holder) { leftAlone[holder]++; continue }
@@ -139,7 +170,7 @@ export function ownerMoves<P extends Pick<BidProposal, 'targetId' | 'targetSourc
 
 export interface AutoBidPlan {
   preview: Awaited<ReturnType<typeof previewBidOptimization>>
-  /** The bids a run would set now, biggest first: moves of at least 2¢ that pass ownerMoves. */
+  /** The bids a run would set now, biggest first: moves of at least 2¢ that pass ownerMoves (a running campaign on the allowlist). */
   moves: BidProposal[]
   /** Each move's campaign. */
   campaignOf: Map<string, string>
@@ -151,20 +182,33 @@ export async function planAutoBid(): Promise<AutoBidPlan> {
   // Profit-native target ACOS + Bayesian sparse-data path (best signal); a run moves only the Owner's targets.
   const preview = await previewBidOptimization(AUTO_BID_OPTIMIZER_OPTIONS)
   const material = preview.proposals.filter((p) => Math.abs(p.deltaCents) >= MIN_DELTA_CENTS)
-  // Who holds a bid is read only for the moves toward a target he set (none: no read at all).
+  // Who holds a bid, and whether it can reach Amazon, is read only for the moves toward a target he set (none: no read).
   const withTarget = material.filter((p) => OWNER_TARGET_SOURCES.has(p.targetSource))
   const targets = withTarget.length
-    ? await prisma.adTarget.findMany({ where: { id: { in: withTarget.map((p) => p.targetId) } }, select: { id: true, adGroup: { select: { campaignId: true } } } })
+    ? await prisma.adTarget.findMany({
+        where: { id: { in: withTarget.map((p) => p.targetId) } },
+        select: { id: true, adGroup: { select: { campaignId: true, status: true, campaign: { select: { status: true, liveBidWritesEnabled: true } } } } },
+      })
     : []
   const campaignOf = new Map(targets.map((t) => [t.id, t.adGroup.campaignId]))
+  // Honest writes — a target missing here (deleted since the optimiser read it) is left to the write, which refuses it.
+  const unreachable = new Map(targets.flatMap((t) => {
+    const why = cannotReachAmazon({ status: t.adGroup.status, campaign: t.adGroup.campaign })
+    return why ? [[t.id, why] as const] : []
+  }))
   const personTargets = withTarget.length ? await personBidTargetIds() : new Set<string>()
   const holders = await autoBidHolders([...new Set(campaignOf.values())], personTargets)
-  const { moves, leftAlone } = ownerMoves(material, campaignOf, holders, personTargets)
+  const { moves, leftAlone } = ownerMoves(material, campaignOf, holders, personTargets, unreachable)
   return { preview, moves, campaignOf, leftAlone }
 }
 
 export interface AutoBidResult {
+  /** `applied`: the bids queued for Amazon (the worker sends each after its grace window, and asks the gate again). */
   skipped?: string; proposed: number; applied: number; dryRun: boolean
+  /** Honest writes — the bids the write refused before anything was written or queued (the gate's or the bid write's reason). */
+  notSent?: number
+  /** Their reasons, each once, at most three. */
+  notSentReasons?: string[]
   /** Owner targets only — the bids it would have moved and left alone, per reason. */
   leftAlone?: AutoBidLeftAlone
   /** 1d — the dial posture and the caps this run ran under, and what they held back. */
@@ -199,16 +243,24 @@ export async function runAutoBidOnce(): Promise<AutoBidResult> {
   }
   const report = guard.report()
 
-  const res = await applyBidOptimization({ changes: allowed, actor: 'automation:auto-bid', dryRun: forceDry })
-  logger.info('[ads-auto-bid] run', { proposed: changes.length, applied: res.applied, dryRun: res.dryRun, deferredByCap: report.deferredByCap, leftAlone })
+  // Honest writes — the gate is asked before Nexus writes its copy (askGate): a refusal changes nothing and is not sent.
+  const res = await applyBidOptimization({ changes: allowed, actor: 'automation:auto-bid', dryRun: forceDry, askGate: true })
+  const notSent = res.notSent ?? 0
+  const notSentReasons = res.notSentReasons ?? []
+  logger.info('[ads-auto-bid] run', { proposed: changes.length, applied: res.applied, notSent, dryRun: res.dryRun, deferredByCap: report.deferredByCap, leftAlone })
   const alone = leftAloneWords(leftAlone)
   await notifyAutomation({
     type: 'ads-auto-bid',
     severity: 'info',
-    title: forceDry ? `Auto-bid: ${changes.length} bid changes proposed` : `Auto-bid: ${res.applied} bid changes applied`,
-    body: `Target-ACoS optimization: ${AUTO_BID_SCOPE_WORDS} (${changes.length} to move${alone ? `; left alone: ${alone}` : ''}). ${forceDry ? 'The account dial is at Propose — proposals only.' : 'Writes gated per-campaign allowlist + caps.'}${report.deferredByCap ? ` ${report.deferredByCap} campaigns wait for the next run (its own cap: ${engineCapsText('auto-bid')}).` : ''}`,
+    title: forceDry ? `Auto-bid: ${changes.length} bid changes proposed` : `Auto-bid: ${res.applied} bid changes queued for Amazon`,
+    body: `Target-ACoS optimization: ${AUTO_BID_SCOPE_WORDS} (${changes.length} to move${alone ? `; left alone: ${alone}` : ''}). ${forceDry ? 'The account dial is at Propose — proposals only.' : 'Writes gated per-campaign allowlist + caps.'}${notSent ? ` ${notSentWords(notSent, notSentReasons)}.` : ''}${report.deferredByCap ? ` ${report.deferredByCap} campaigns wait for the next run (its own cap: ${engineCapsText('auto-bid')}).` : ''}`,
   }).catch(() => {})
-  return { proposed: changes.length, applied: res.applied, dryRun: res.dryRun, leftAlone, guard: report }
+  return { proposed: changes.length, applied: res.applied, dryRun: res.dryRun, ...(notSent ? { notSent, notSentReasons } : {}), leftAlone, guard: report }
+}
+
+/** "2 not sent to Amazon, nothing changed in Nexus (Not sent to Amazon: …)" — the bids the write refused, with their reasons. */
+function notSentWords(n: number, reasons: string[]): string {
+  return `${n} not sent to Amazon, nothing changed in Nexus${reasons.length ? ` (${reasons.join('; ')})` : ''}`
 }
 
 /**
@@ -223,7 +275,8 @@ export function autoBidLeftAloneNote(l: AutoBidLeftAlone | null | undefined): st
 /** 1d — the run's summary line, for the cron and Run now: the counts, plus what it left alone and what the dial or the caps held back. */
 export function autoBidSummaryLine(r: AutoBidResult): string {
   if (r.skipped) return `skipped=${r.skipped}`
-  return `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}${autoBidLeftAloneNote(r.leftAlone)}${engineGuardNote(r.guard, {
+  const notSent = r.notSent ? ` not-sent=${r.notSent} (${notSentWords(r.notSent, r.notSentReasons ?? [])})` : ''
+  return `proposed=${r.proposed} applied=${r.applied} dryRun=${r.dryRun}${notSent}${autoBidLeftAloneNote(r.leftAlone)}${engineGuardNote(r.guard, {
     suggest: 'nothing is written; the bids it would set are counted',
     stopped: 'nothing is written',
   })}`

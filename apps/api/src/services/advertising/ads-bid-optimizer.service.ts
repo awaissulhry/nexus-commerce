@@ -362,8 +362,16 @@ export async function applyBidOptimization(args: {
   changes: Array<{ targetId: string; proposedBidCents: number; sources?: WriteSources }>; actor?: string; dryRun?: boolean
   /** SG.10 (additive) — group the batch into ONE reversible change set (see bulkUpdateAdTargetBids). */
   changeSetId?: string | null
+  /**
+   * Honest writes — ask the write gate before Nexus writes its copy (updateAdTargetWithSync `askGate`): a refused bid
+   * leaves no local change and no queue row, and is counted in `notSent`. Auto-bid passes it.
+   */
+  askGate?: boolean
 }): Promise<{
   applied: number; dryRun: boolean
+  /** Honest writes — the bids the write refused before anything was written or queued, and their reasons (each once, at most three). */
+  notSent?: number
+  notSentReasons?: string[]
   /**
    * SG.10 (additive) — the receipts this function used to discard. `actionLogIds[0]` is enough
    * to undo the WHOLE batch when a changeSetId was passed, because rollback follows the set.
@@ -382,10 +390,11 @@ export async function applyBidOptimization(args: {
   if (entries.length === 0) return { applied: 0, dryRun: false }
   // R2 — never `automation:automation:<x>`: auto-bid, a rule and an autopilot plan pass a namespaced actor.
   const actor: AdsActor = adsActorOf(args.actor, 'bid-optimizer')
-  const out = await bulkUpdateAdTargetBids({ entries, actor, reason: 'AX.8 target-ACOS optimization', changeSetId: args.changeSetId ?? null })
+  const out = await bulkUpdateAdTargetBids({ entries, actor, reason: 'AX.8 target-ACOS optimization', changeSetId: args.changeSetId ?? null, ...(args.askGate ? { askGate: true } : {}) })
   logger.info('[AX.8] bid optimization applied', { count: out.applied, skipped: out.skipped, failed: out.failed })
+  const notSentReasons = [...new Set(out.outcomes.filter((o) => o.ok === false).map((o) => o.error ?? 'refused by the bid write'))].slice(0, 3)
   return {
-    applied: out.applied, dryRun: false,
+    applied: out.applied, dryRun: false, ...(out.failed ? { notSent: out.failed, notSentReasons } : {}),
     actionLogIds: out.outcomes.map((o) => o.actionLogId).filter((x): x is string => !!x),
     outboundQueueIds: out.outcomes.map((o) => o.outboundQueueId).filter((x): x is string => !!x),
   }
