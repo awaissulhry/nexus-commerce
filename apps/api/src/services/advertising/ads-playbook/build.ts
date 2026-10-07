@@ -38,6 +38,13 @@ export { planBuild, type BuildPlan } from './build-preview.js'
 /** A RUNNING build with no progress for this long stopped (a deploy or a restart): it is marked FAILED, never resumed. */
 export const STALE_RUN_MS = 30 * 60_000
 
+/**
+ * B-3 — the runs Claude's builders keep in this table: a playbook's build (playbookId set) and a one-off SP Super Wizard
+ * set (build-sp-wizard-campaigns; ads-sp-wizard-run.service.ts, `options.source` 'sp-wizard'). Both are undone with
+ * archive-ads buildRunId and followed with approval-status; a stopped one is settled the same way.
+ */
+export const CLAUDE_BUILD_RUN = { OR: [{ playbookId: { not: null } }, { options: { path: ['source'], equals: 'sp-wizard' } }] }
+
 /** What the run row keeps of its build, beside the plan (options). */
 export interface BuildRunOptions {
   source: 'playbook'
@@ -126,7 +133,7 @@ export const stoppedRunning = (row: Pick<RunRow, 'status' | 'progress' | 'starte
  * Every campaign a build made: the ids it recorded, and every campaign its change set's audit rows say it created (a
  * build killed mid-way recorded none of the last ones it made).
  */
-async function campaignsMadeBy(row: Pick<RunRow, 'createdCampaignIds' | 'options'>): Promise<string[]> {
+export async function campaignsMadeBy(row: { createdCampaignIds: string[]; options: unknown }): Promise<string[]> {
   const changeSetId = (row.options as Partial<BuildRunOptions> | null)?.changeSetId
   const logged = changeSetId
     ? (await prisma.advertisingActionLog.findMany({ where: { executionId: changeSetId, actionType: 'create_campaign', entityType: 'CAMPAIGN' }, select: { entityId: true } })).map((l) => l.entityId)
@@ -134,8 +141,11 @@ async function campaignsMadeBy(row: Pick<RunRow, 'createdCampaignIds' | 'options
   return [...new Set([...row.createdCampaignIds, ...logged])]
 }
 
-/** Campaigns Amazon never took (no Amazon id) are archived in Nexus only — nothing is sent — so their names are free again. */
-async function archiveLocalOnly(campaignIds: readonly string[]): Promise<number> {
+/**
+ * Campaigns Amazon never took (no Amazon id) are archived in Nexus only — nothing is sent — so their names are free again.
+ * B-3 — Claude's one-off SP Super Wizard build (build-sp-wizard-campaigns) frees them the same way.
+ */
+export async function archiveLocalOnly(campaignIds: readonly string[]): Promise<number> {
   if (!campaignIds.length) return 0
   const r = await prisma.campaign.updateMany({ where: { id: { in: [...campaignIds] }, externalCampaignId: null, status: { not: 'ARCHIVED' } }, data: { status: 'ARCHIVED' } })
   return r.count
@@ -161,7 +171,7 @@ async function settleStopped(row: RunRow): Promise<void> {
       ],
     },
   })
-  logger.warn('[PB-5] a playbook build stopped and was marked FAILED', { applicationId: row.id, campaigns: made.length })
+  logger.warn('[PB-5] a build stopped and was marked FAILED', { applicationId: row.id, campaigns: made.length })
 }
 
 /** Every RUNNING playbook build of this product (by its name token) in this market, or of this playbook, that stopped. */
@@ -180,7 +190,7 @@ export async function settleStoppedBuilds(where: { market: string; productToken:
 
 /** One stopped playbook build, settled (FAILED, with what it made); a no-op for any other run. The execute paths call it. */
 export async function settleStoppedBuild(applicationId: string, now = Date.now()): Promise<boolean> {
-  const row = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: { not: null } }, select: RUN_SELECT })
+  const row = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, ...CLAUDE_BUILD_RUN }, select: RUN_SELECT })
   if (!row || !stoppedRunning(row, now)) return false
   await settleStopped(row)
   return true
@@ -441,15 +451,16 @@ export async function runPlaybookBuild(applicationId: string, opts: { compilers?
 }
 
 /**
- * The campaigns a playbook build made that are not archived yet (archive-ads buildRunId, the undo of a build), or why
- * they cannot be named: no such build, or one still running (it is not undone while it creates).
+ * The campaigns a playbook build (B-3: or a one-off SP Super Wizard set) made that are not archived yet (archive-ads
+ * buildRunId, the undo of a build), or why they cannot be named: no such build, or one still running (it is not undone
+ * while it creates).
  */
 export async function buildRunCampaigns(applicationId: string, now = Date.now()): Promise<{ campaignIds: string[]; status: string; stopped?: true } | { refusal: string }> {
-  const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: { not: null } }, select: RUN_SELECT })
-  if (!run) return { refusal: `Playbook build ${applicationId} not found in this business (buildRunId: the applicationId apply-ads-playbook answered).` }
+  const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, ...CLAUDE_BUILD_RUN }, select: RUN_SELECT })
+  if (!run) return { refusal: `Build ${applicationId} not found in this business (buildRunId: the applicationId apply-ads-playbook or build-sp-wizard-campaigns answered).` }
   // Read only: a build that stopped holds nothing and names what it made (archive-ads' execute settles it first).
   const stopped = stoppedRunning(run, now)
-  if (run.status === 'RUNNING' && !stopped) return { refusal: 'Not queued: that build is still running. Follow it with ads-playbook view build, and archive what it made once it ends.' }
+  if (run.status === 'RUNNING' && !stopped) return { refusal: 'Not queued: that build is still running. Follow it with approval-status (or ads-playbook view build), and archive what it made once it ends.' }
   const made = await campaignsMadeBy(run)
   // Only what Amazon holds is archived at Amazon; a record Amazon never took is archived in Nexus by the build itself.
   const live = made.length
@@ -458,18 +469,18 @@ export async function buildRunCampaigns(applicationId: string, now = Date.now())
   return { campaignIds: live.map((c) => c.id), status: stopped ? 'FAILED' : run.status, ...(stopped ? { stopped: true as const } : {}) }
 }
 
-/** Every campaign a playbook build made (archived or not), for the places a change lands; null when there is no such build. */
+/** Every campaign a build of CLAUDE_BUILD_RUN made (archived or not), for the places a change lands; null when there is no such build. */
 export async function buildRunCreated(applicationId: string): Promise<string[] | null> {
-  const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: { not: null } }, select: RUN_SELECT })
+  const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, ...CLAUDE_BUILD_RUN }, select: RUN_SELECT })
   return run ? campaignsMadeBy(run) : null
 }
 
 /** A build's run as approval-status follows it: its status, how far it is, the campaigns it made and how many errors. */
 export async function buildRunDelivery(applicationId: string): Promise<{ status: string; stopped?: true; done: number | null; total: number | null; createdCampaignIds: string[]; errors: number } | null> {
-  const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: { not: null } }, select: { status: true, progress: true, createdCampaignIds: true, errors: true, startedAt: true, createdAt: true } })
+  const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, ...CLAUDE_BUILD_RUN }, select: { status: true, progress: true, createdCampaignIds: true, errors: true, startedAt: true, createdAt: true } })
   if (!run) return null
   const progress = (run.progress ?? {}) as { done?: unknown; total?: unknown }
-  // B-1 — a build a deploy killed reads as stopped (FAILED once the next build or an archive settles it), never RUNNING.
+  // B-1 / B-3 — a build a deploy killed reads as stopped (FAILED once the next build or an archive settles it), never RUNNING.
   const stopped = stoppedRunning(run)
   return {
     status: stopped ? 'FAILED' : run.status, ...(stopped ? { stopped: true as const } : {}),
@@ -481,7 +492,7 @@ export async function buildRunDelivery(applicationId: string): Promise<{ status:
 /** A build run as the playbook's read shows it (view build): no plan, no money. */
 export async function buildRunsOf(where: { applicationId: string } | { playbookIds: string[] }, limit = 10) {
   const rows = await prisma.adBlueprintApplication.findMany({
-    where: 'applicationId' in where ? { id: where.applicationId, playbookId: { not: null } } : { playbookId: { in: where.playbookIds } },
+    where: 'applicationId' in where ? { id: where.applicationId, ...CLAUDE_BUILD_RUN } : { playbookId: { in: where.playbookIds } },
     orderBy: { createdAt: 'desc' },
     take: limit,
     select: { id: true, playbookId: true, marketplace: true, productToken: true, status: true, progress: true, createdCampaignIds: true, notOnAmazon: true, errors: true, startedAt: true, appliedAt: true, createdAt: true, launchMode: true, options: true },
@@ -504,6 +515,8 @@ export async function buildRunsOf(where: { applicationId: string } | { playbookI
       }),
       notOnAmazon: r.notOnAmazon, errors: r.errors,
       placementsAtStart: (o.deferredPlacements ?? []).map((d) => ({ slot: d.slot, campaignId: d.campaignId, placements: d.placementBidding.length })),
+      // B-3 — a one-off SP Super Wizard set: each campaign's set-placement-multipliers request, to ask once it is on the allowlist.
+      ...(Array.isArray((r.options as { placementsToAsk?: unknown } | null)?.placementsToAsk) ? { placementsToAsk: (r.options as { placementsToAsk: unknown[] }).placementsToAsk } : {}),
     }
   })
 }

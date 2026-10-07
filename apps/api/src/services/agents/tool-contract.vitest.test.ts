@@ -73,6 +73,9 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // kinds) needs the approver's code, by rule only with allowStart (off by default: a loosening needs the code); a stop
   // is a brake.
   'apply-ads-playbook',
+  // B-3 — a one-off SP Super Wizard set, the create kind: only at the floor and off the allowlist (nothing spends until
+  // restore-campaign), by default never by rule (maxCampaigns 0, no market).
+  'build-sp-wizard-campaigns',
   // B-1 — a copy of a running structure with the Replicate Structure builder, the create kind: only at the floor and off
   // the allowlist (it spends nothing until set-campaign-live-writes and restore-campaign), by default never by rule
   // (maxCampaigns 0), and never by rule with a clash the product's own campaigns already buy.
@@ -418,6 +421,8 @@ describe('C1 — every registered tool keeps the contract', () => {
         before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 40, toCents: 50 }] },
         after: { adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ kind: 'target', id: 't1', cents: 50 }] },
       },
+      // B-3 — a one-off SP Super Wizard set is put back (in part) by archiving every campaign its run made.
+      'build-sp-wizard-campaigns': { before: { applicationId: null, market: 'IT', productGroupName: 'Test set', structure: 'advanced' }, after: { applicationId: 'run2', market: 'IT', productGroupName: 'Test set', structure: 'advanced' } },
       // PB-5a — a playbook build is archived (every campaign it made); an adopt is put back by the opposite adopt.
       'apply-ads-playbook': { before: { op: 'build', playbookId: 'pb1', state: 'DRAFT', slots: [] }, after: { op: 'build', playbookId: 'pb1', applicationId: 'run1' } },
       // B-1 — a Replicate copy is archived (every campaign its run made).

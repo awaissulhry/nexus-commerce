@@ -19,6 +19,7 @@ import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
 import { ADS_MANAGER_TOOLS } from './tools/ads-manager.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
 import { ADS_PLAYBOOK_APPLY_TOOLS } from './tools/ads-playbook-apply.tools.js'
+import { ADS_SP_WIZARD_TOOLS } from './tools/ads-sp-wizard.tools.js'
 import { ADS_REPLICATE_TOOLS } from './tools/ads-replicate.tools.js'
 import { ADS_AI_GOAL_TOOLS } from './tools/ads-ai-goal.tools.js'
 import { ADS_STATUS_TOOLS } from './tools/ads-status.tools.js'
@@ -117,6 +118,8 @@ const ALL: AgentTool[] = [
   ...ADS_MANAGER_TOOLS,
   ...ADS_CREATE_TOOLS,
   ...ADS_PLAYBOOK_APPLY_TOOLS,
+  // Builders for Claude B-3 — a one-off campaign set built by the SP Super Wizard's own launch, born at the floor.
+  ...ADS_SP_WIZARD_TOOLS,
   // Ads autonomy B-1 — copy a running structure onto another product with the Replicate Structure builder (born safe).
   ...ADS_REPLICATE_TOOLS,
   // Ads autonomy B-2 — an AI Advertising goal and its campaigns, through the AI Goal builder's own launch (born safe).

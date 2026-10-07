@@ -793,6 +793,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'set-campaign-target-acos': ['basis', 'totals'],
   // A11 — the whole plan (products, targeting, budget and currency), the market's spend ceiling, where it lands.
   'create-ad-campaign': ['plan', 'ceiling', 'reach'],
+  // B-3 — a one-off SP Super Wizard set: the whole launch (its basis), the market's ceiling and where it lands.
+  'build-sp-wizard-campaigns': ['basis', 'ceiling', 'reach'],
   // B-2 — the goal's shape (its products, campaigns, budgets, targets, rules and plan; its evidence bids are frozen in the
   // approval, so they are not compared), the market's ceiling, where it lands.
   'create-ai-goal-campaigns': ['basis', 'ceiling', 'reach'],

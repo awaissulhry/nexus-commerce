@@ -1489,7 +1489,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/advertising/blueprint-applications', async (request) => {
     const q = request.query as { blueprintId?: string; status?: string; marketplace?: string; includeDryRuns?: string }
-    const rows = await prisma.adBlueprintApplication.findMany({
+    const found = await prisma.adBlueprintApplication.findMany({
       where: {
         // PB-5a — a playbook's build runs are the playbook's (ads-playbook view build), never Replicate's history.
         playbookId: null,
@@ -1503,9 +1503,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
         id: true, blueprintId: true, productToken: true, marketplace: true, status: true,
         createdCampaignIds: true, notOnAmazon: true, errors: true,
         createdAt: true, appliedAt: true, rolledBackAt: true, launchMode: true,
-        sourceSelector: true, actor: true,
+        sourceSelector: true, actor: true, options: true,
       },
     })
+    // B-3 — nor is a one-off SP Super Wizard set Claude asked for (options.source 'sp-wizard'): it is undone with
+    // archive-ads buildRunId. Left out here, not in the query: a JSON path test is NULL for a run whose options hold no
+    // source, and NOT NULL would drop Replicate's own runs too.
+    const rows = found.filter((r) => (r.options as { source?: unknown } | null)?.source !== 'sp-wizard').map(({ options: _options, ...r }) => r)
     // How many of each run's campaigns are still live — a run whose campaigns
     // were archived elsewhere should not offer a rollback that does nothing.
     const ids = rows.flatMap((r) => r.createdCampaignIds)

@@ -229,6 +229,8 @@ const AD_CHANGE_TOOLS = new Set([
   'replicate-ad-structure',
   // B-2 — an AI goal's campaigns: created at once, not queued; approval-status counts them and how much Amazon holds.
   'create-ai-goal-campaigns',
+  // B-3 — a one-off SP Super Wizard set: its creates run detached too; approval-status reads its run the same way.
+  'build-sp-wizard-campaigns',
 ])
 
 export interface AdDelivery {
@@ -244,7 +246,7 @@ export interface AdDelivery {
   gateReasons?: string[]
   /** Negatives and keywords the request created: how many exist at Amazon (they are created at once, not queued). */
   created?: { total: number; atAmazon: number }
-  /** PB-5a — a playbook build's run (B-1: or a Replicate run's): its status and how far it is (the creates run detached). */
+  /** PB-5a — a playbook build's run (B-1: or a Replicate run's; B-3: or a one-off SP Super Wizard set's): its status and how far it is (the creates run detached). */
   build?: { applicationId: string; status: string; done: number | null; total: number | null; campaigns: number; errors: number; stopped?: boolean }
 }
 
@@ -291,14 +293,14 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
   if (reasons.length) out.gateReasons = reasons
   const change = await prisma.agentChange.findFirst({ where: { approvalId }, orderBy: { executedAt: 'desc' }, select: { after: true } })
   const after = (change?.after ?? null) as { negatives?: Array<{ targetId?: unknown }>; targetId?: unknown; campaignId?: unknown } | null
-  if (toolName === 'apply-ads-playbook' || toolName === 'replicate-ad-structure') {
-    // PB-5a — a build: its run row, and everything its campaigns hold ("at Amazon" only when it went live). B-1 — a
-    // Replicate run is read the same way.
+  if (toolName === 'apply-ads-playbook' || toolName === 'build-sp-wizard-campaigns' || toolName === 'replicate-ad-structure') {
+    // PB-5a — a build (B-3: a one-off SP Super Wizard set too): its run row, and everything its campaigns hold ("at Amazon"
+    // only when it went live). B-1 — a Replicate run is read the same way, from its own run row.
     const applicationId = (after as { applicationId?: unknown } | null)?.applicationId
     if (typeof applicationId !== 'string') return out
-    const run = toolName === 'apply-ads-playbook'
-      ? await (await import('../../advertising/ads-playbook/build.js')).buildRunDelivery(applicationId)
-      : await (await import('../../advertising/ads-blueprint-apply.service.js')).replicateRunDelivery(applicationId)
+    const run = toolName === 'replicate-ad-structure'
+      ? await (await import('../../advertising/ads-blueprint-apply.service.js')).replicateRunDelivery(applicationId)
+      : await (await import('../../advertising/ads-playbook/build.js')).buildRunDelivery(applicationId)
     if (!run) return out
     out.build = { applicationId, status: run.status, done: run.done, total: run.total, campaigns: run.createdCampaignIds.length, errors: run.errors, ...(run.stopped ? { stopped: true } : {}) }
     let total = 0, atAmazon = 0

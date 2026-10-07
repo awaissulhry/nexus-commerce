@@ -1060,6 +1060,8 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'cancel-queued-ad-write': { changeSetId: undefined },
   // PB-5a — one product's playbook, named by its id (its answer then names the product's SKU, which was not sent).
   'apply-ads-playbook': { sku: undefined },
+  // B-3 — a one-off SP Super Wizard set: Standard, one category keyword, its bids under its budget; no portfolio.
+  'build-sp-wizard-campaigns': { structure: 'standard', keywords: { category: ['probe jacket'] }, dailyBudgetCents: 1500, defaultBidCents: 50, portfolioId: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
   // B-1 — a copy reads its source campaign in the market it runs in (B's own); no portfolio (the loop would name an id).

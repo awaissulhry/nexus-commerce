@@ -72,7 +72,7 @@ const adsPlaybook: AgentTool = {
       .describe("capture: the product's token in the campaign names (the word each campaign name of the set carries); it is taken out of the names, and a keyword holding it counts as brand"),
     competitorTokens: z.array(z.string().trim().min(1).max(60)).max(30).optional()
       .describe('capture: rival brand words, so a keyword holding one counts as competitor (a well-named campaign says it anyway)'),
-    applicationId: ID.optional().describe('build: one build run, the applicationId apply-ads-playbook answered'),
+    applicationId: ID.optional().describe('build: one build run, the applicationId apply-ads-playbook (or build-sp-wizard-campaigns) answered'),
     limit: z.coerce.number().int().min(1).max(100).default(20).describe('history: how many changes (default 20, max 100); build: how many builds (at most 50)'),
   }),
   description:

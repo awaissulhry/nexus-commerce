@@ -31,6 +31,7 @@ import { TargetingModal } from './TargetingModal'
 import { LaunchStep, defaultRulesConfig, rulesConfigured, defaultBidConfig, type RulesConfig, type BidConfig } from './LaunchStep'
 import { defaultAiControl, aiGuardrailsToCents, type AiControlConfig } from './AiControlPanel'
 import { defaultCustomKeywordTypes, defaultCustomTargeting, type CustomKeywordType, type TargetingKind } from './CustomScheme'
+import { DEFAULT_CUSTOM_NAME_TOKENS } from '@nexus/shared/ads-sp-wizard'
 import { HeldLaunchReceipt } from '../LaunchReceipt'
 import { useLaunchReceipt } from '../useLaunchReceipt'
 import { marketChangeNote, useOnMarketChange } from '../marketChange'
@@ -70,7 +71,7 @@ export function SpSuperWizard() {
   const [automationMode, setAutomationMode] = useState<AutomationMode>('rule')
   const [customKeywordTypes, setCustomKeywordTypes] = useState<CustomKeywordType[]>(defaultCustomKeywordTypes())
   const [customTargetingTypes, setCustomTargetingTypes] = useState<TargetingKind[]>(defaultCustomTargeting())
-  const [customNameTokens, setCustomNameTokens] = useState<string[]>(['campaignType', 'targetingType', 'matchType', 'keywordType'])
+  const [customNameTokens, setCustomNameTokens] = useState<string[]>([...DEFAULT_CUSTOM_NAME_TOKENS])
   const [rememberSettings, setRememberSettings] = useState(true)
   const [autoNegate, setAutoNegate] = useState(true)
   const [rules, setRules] = useState<{ harvest: RulesConfig; negative: RulesConfig }>({ harvest: defaultRulesConfig('keyword-harvesting'), negative: defaultRulesConfig('negative-targeting') })

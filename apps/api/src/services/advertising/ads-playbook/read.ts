@@ -364,13 +364,20 @@ const BUILD_NOTE =
   + '2¢ floor with its planned bids remembered (suppressed, never paused), off the live-write allowlist, without placements. '
   + 'It serves next to nothing (not nothing) until START puts it on the allowlist and its planned bids and placements back.'
 
+/** B-3 — the note of a one-off SP Super Wizard set (build-sp-wizard-campaigns), read by its applicationId. */
+const WIZARD_BUILD_NOTE =
+  'A one-off SP Super Wizard set Claude asked for, built through the wizard\'s own launch: each campaign at Amazon\'s 2¢ floor with its '
+  + 'planned bids remembered (suppressed, never paused), off the live-write allowlist, without placements. It serves next to nothing '
+  + '(not nothing) until set-campaign-live-writes and restore-campaign are approved for it; placementsToAsk names each campaign\'s '
+  + 'set-placement-multipliers request for after that.'
+
 async function buildIn(a: PlaybookReadArgs, channel: string): Promise<PlaybookReadResult> {
   const { buildRunsOf } = await import('./build.js')
   if (a.applicationId) {
     const [run] = await buildRunsOf({ applicationId: a.applicationId }, 1)
     if (!run) return fail(404, 'Playbook build not found in this business (applicationId: the one apply-ads-playbook answered).')
     const links = run.playbookId ? (await playbookLinks([run.playbookId])).map(linkOut) : []
-    return { data: { channel, view: 'build', run, links, note: BUILD_NOTE } }
+    return { data: { channel, view: 'build', run, links, note: run.playbookId ? BUILD_NOTE : WIZARD_BUILD_NOTE } }
   }
   if (!a.market) return fail(400, 'The builds are read for one product in one market: name the market (or an applicationId).')
   if (!a.productId && !a.sku) return fail(400, 'The builds are read for one product: name it (productId or sku), or one build by applicationId.')

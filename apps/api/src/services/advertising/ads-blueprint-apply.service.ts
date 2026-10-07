@@ -795,6 +795,15 @@ const REPLICATE_RUN_SELECT = { id: true, status: true, progress: true, createdAt
 type ReplicateRunRow = { id: string; status: string; progress: unknown; createdAt: Date; startedAt: Date | null; createdCampaignIds: string[]; errors: string[]; options: unknown }
 
 /**
+ * B-3 — a run that built a one-off SP Super Wizard set for Claude (`options.source` 'sp-wizard'): it shares this table with
+ * Replicate's runs (playbookId null) but is read, settled and archived by the playbook build's code (CLAUDE_BUILD_RUN), so
+ * every Replicate reader below leaves it out. Checked in code: a JSON filter would also drop Replicate's own rows.
+ */
+function isWizardRun(row: { options: unknown }): boolean {
+  return (row.options as { source?: unknown } | null)?.source === 'sp-wizard'
+}
+
+/**
  * Every campaign a Replicate run made: the ids it recorded at the end and, for a run born safe, every campaign its change
  * set's audit rows say it created (a run killed mid-way recorded none).
  */
@@ -825,7 +834,7 @@ export async function settleStoppedReplicates(where: { market: string; productTo
   })
   let settled = 0
   for (const row of rows) {
-    if (!(await safeRunStopped(row, now))) continue
+    if (isWizardRun(row) || !(await safeRunStopped(row, now))) continue
     const made = await replicateMadeBy(row)
     const campaign = (row.progress as { campaign?: unknown } | null)?.campaign
     const { STALE_RUN_MS } = await import('./ads-playbook/build.js')
@@ -877,7 +886,7 @@ export async function replicateInFlight(market: string, productToken: string, no
  */
 export async function replicateRunCampaigns(applicationId: string, now = Date.now()): Promise<{ campaignIds: string[]; status: string; stopped?: true } | { refusal: string } | null> {
   const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: null }, select: REPLICATE_RUN_SELECT })
-  if (!run) return null
+  if (!run || isWizardRun(run)) return null
   // Read only: a run that stopped holds nothing and names what it made (archive-ads' execute settles it first).
   const stopped = await safeRunStopped(run, now)
   if (run.status === 'RUNNING' && !stopped) return { refusal: 'Not queued: that Replicate run is still running. Follow it with approval-status, and archive what it made once it ends.' }
@@ -891,13 +900,13 @@ export async function replicateRunCampaigns(applicationId: string, now = Date.no
 /** Every campaign a Replicate run made (archived or not), for the places a change lands; null when there is no such run. */
 export async function replicateRunCreated(applicationId: string): Promise<string[] | null> {
   const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: null }, select: REPLICATE_RUN_SELECT })
-  return run ? replicateMadeBy(run) : null
+  return run && !isWizardRun(run) ? replicateMadeBy(run) : null
 }
 
 /** A Replicate run as approval-status follows it: its status, how far it is, the campaigns it made, how many errors, the placements it left for later. */
 export async function replicateRunDelivery(applicationId: string): Promise<{ status: string; stopped?: true; done: number | null; total: number | null; createdCampaignIds: string[]; errors: number; deferredPlacements: number } | null> {
   const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: null }, select: REPLICATE_RUN_SELECT })
-  if (!run) return null
+  if (!run || isWizardRun(run)) return null
   const progress = (run.progress ?? {}) as { done?: unknown; total?: unknown }
   // A run a deploy killed reads as what it is: stopped (FAILED once the next run or an archive settles it), never RUNNING.
   const stopped = await safeRunStopped(run, Date.now())
@@ -929,6 +938,20 @@ export const PLAYBOOK_RUN =
   'This run built an ads playbook: it is started, stopped and undone only through the playbook (apply-ads-playbook; archive-ads with its buildRunId), not from Replicate.'
 
 /**
+ * B-3 — a run that built a one-off SP Super Wizard set for Claude (build-sp-wizard-campaigns, `options.source`
+ * 'sp-wizard') is refused here the same way: it goes live with set-campaign-live-writes and restore-campaign, each
+ * approved, and is undone with archive-ads buildRunId.
+ */
+export const WIZARD_RUN =
+  'This run built an SP Super Wizard set Claude asked for: it goes live with set-campaign-live-writes and restore-campaign and is undone with archive-ads (its buildRunId), not from Replicate.'
+
+/** The refusal of Replicate's raise and rollback for a run another builder owns; null for Replicate's own. */
+function ownedRunRefusal(app: { playbookId: string | null; options: unknown }): string | null {
+  if (app.playbookId) return PLAYBOOK_RUN
+  return isWizardRun(app) ? WIZARD_RUN : null
+}
+
+/**
  * AX3.5 — take a floored run up to the bids it was planned at.
  *
  * The counterpart to launching at the floor. Each entity remembered its planned
@@ -939,7 +962,8 @@ export const PLAYBOOK_RUN =
 export async function raiseApplicationBids(applicationId: string, actor?: string): Promise<{ raised: number; campaigns: number; errors: string[] }> {
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
-  if (app.playbookId) throw new Error(PLAYBOOK_RUN)
+  const owned = ownedRunRefusal(app)
+  if (owned) throw new Error(owned)
   if (bornSafeOf(app)) throw new Error(CLAUDE_RUN)
   if (app.status === 'ROLLED_BACK') return { raised: 0, campaigns: 0, errors: ['this run was rolled back'] }
 
@@ -965,7 +989,8 @@ export async function raiseApplicationBids(applicationId: string, actor?: string
 export async function rollbackApplication(applicationId: string, actor?: string): Promise<{ archived: number; errors: string[] }> {
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
-  if (app.playbookId) throw new Error(PLAYBOOK_RUN)
+  const owned = ownedRunRefusal(app)
+  if (owned) throw new Error(owned)
   // B-1 — its campaigns are off the live-write allowlist: this rollback's archives (an automation's, not a person's own)
   // would be refused at Amazon's door and put back, while the run read ROLLED_BACK.
   if (bornSafeOf(app)) throw new Error(claudeRunRollback(applicationId))
