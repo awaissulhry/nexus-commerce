@@ -608,8 +608,9 @@ export async function getBidSeries(opts: { entityIds: string[]; perEntity?: numb
     const a = byEntityLogs.get(entityId)
     if (!a) return null
     const t = at.getTime()
-    // W4-12 — a write the gate refused (SKIPPED) never reached Amazon: it counts as not landed, like a failed one.
-    for (const l of a) if (Math.abs(l.at - t) <= 5000) return l.status === 'SKIPPED' ? 'FAILED' : l.status
+    // W4-12 — a write Nexus did not send (SKIPPED: refused, no connection) or cancelled never reached Amazon: it counts
+    // as not landed, like a failed one.
+    for (const l of a) if (Math.abs(l.at - t) <= 5000) return l.status === 'SKIPPED' || l.status === 'CANCELLED' ? 'FAILED' : l.status
     return null
   }
 

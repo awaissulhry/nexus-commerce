@@ -122,7 +122,7 @@ export interface LedgerRow {
    * 🔴 Amazon's word, in the honest vocabulary. `queued` is NOT `done` — NEG.3 found that
    * `updateAdTargetWithSync` returns ok at ENQUEUE and the gate runs later in the worker.
    */
-  delivery: 'confirmed at Amazon' | 'queued for Amazon' | 'local only' | 'failed at Amazon' | 'not recorded'
+  delivery: 'confirmed at Amazon' | 'queued for Amazon' | 'local only' | 'failed at Amazon' | 'not sent: refused before Amazon' | 'cancelled before it was sent' | 'replaced before it was sent' | 'not recorded'
 }
 
 export interface ProtectionRefusal {
@@ -310,6 +310,10 @@ export async function getNegRecord(req: NegRecordRequest): Promise<NegRecordPayl
       if (s === 'SUCCESS') return 'confirmed at Amazon'
       if (s === 'FAILED') return 'failed at Amazon'
       if (s === 'PENDING') return 'queued for Amazon'
+      // W4-12 — a write Nexus did not send.
+      if (s === 'SKIPPED') return 'not sent: refused before Amazon'
+      if (s === 'CANCELLED') return 'cancelled before it was sent'
+      if (s === 'SUPERSEDED') return 'replaced before it was sent'
       return 'not recorded'
     })()
 

@@ -606,6 +606,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
       },
     })
     await settleAdMutations(queueId, 'FAILED', { isDead: true, error: 'no_active_ads_connection_for_marketplace' })
+    // W4-12 — and its action log says it was not sent, as a gate refusal's does.
+    await prisma.advertisingActionLog
+      .updateMany({ where: { outboundQueueId: queueId, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'SKIPPED' } })
+      .catch(() => { /* audit-update failure must not break the worker */ })
     // CM-17 — nothing reached Amazon: the value it replaced comes back, as below.
     await putBackRefusedWrite(payload).catch(() => { /* best-effort, as every put-back */ })
     return { status: 'FAILED', queueId }

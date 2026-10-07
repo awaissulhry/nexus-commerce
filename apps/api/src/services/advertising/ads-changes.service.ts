@@ -612,6 +612,15 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
     } catch { /* best-effort — delivery enrichment must never blank the feed */ }
   }
   for (const [r, delivery] of unsettled) if (!r.delivery) r.delivery = delivery
+  // W4-12 — a change that never reached Amazon (refused, cancelled, replaced before it was sent, failed) offers no undo,
+  // whatever its op's status says: an older op stayed PENDING when its write was refused or cancelled.
+  for (const r of items) {
+    if (r.undoable && r.delivery && !LANDED_OR_IN_FLIGHT.has(r.delivery.state)) {
+      r.undoable = false
+      r.undoActionLogId = null
+      r.undoBlockedReason = 'This change never reached Amazon, so there is nothing to reverse.'
+    }
+  }
 
   // Post-filters: these read derived fields (source/origin/delivery), so they cannot be pushed
   // into the queries above.
@@ -651,11 +660,14 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
 
 /**
  * W4-12 — an action log's amazonResponseStatus as a delivery state (the AdMutation words): SUCCESS is APPLIED; a write
- * the gate refused (SKIPPED) never reached Amazon, as a cancelled one; anything else as it is (PENDING, FAILED,
- * SUPERSEDED). Never APPLIED unless Amazon took it.
+ * Nexus did not send (SKIPPED: the gate refused it, or no connection) reads CANCELLED, as a cancelled one; anything else
+ * as it is (PENDING, FAILED, CANCELLED, SUPERSEDED). Never APPLIED unless Amazon took it.
  */
 export function opDeliveryState(status: string | null): string {
   if (status === 'SUCCESS') return 'APPLIED'
   if (status === 'SKIPPED') return 'CANCELLED'
   return status ?? 'PENDING'
 }
+
+/** The delivery states of a write that reached Amazon or may still: only these can offer an undo. */
+const LANDED_OR_IN_FLIGHT: ReadonlySet<string> = new Set(['APPLIED', 'PENDING', 'IN_FLIGHT'])

@@ -218,7 +218,8 @@ export function claudeGateRule(principal: McpPrincipal): GateRule {
  */
 export function consequencesOf(tool: Pick<AgentTool, 'control' | 'openWorld' | 'reversibility' | 'undo' | 'consequencesFor'>, args: Record<string, unknown> = {}) {
   if (tool.control || !tool.reversibility) return null
-  const narrower = tool.consequencesFor?.(args) ?? null
+  let narrower: ReturnType<NonNullable<AgentTool['consequencesFor']>> = null
+  try { narrower = tool.consequencesFor?.(args) ?? null } catch { narrower = null } // the kind's facts, never a failed answer
   const openWorld = narrower?.openWorld === false ? false : !!tool.openWorld
   const reversibility = narrower?.reversibility ?? tool.reversibility
   return {

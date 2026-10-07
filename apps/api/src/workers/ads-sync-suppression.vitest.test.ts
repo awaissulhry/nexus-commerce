@@ -72,7 +72,8 @@ const { drainAdsSyncOnce } = await import('./ads-sync.worker.js')
 const { suppressCampaignBids, restoreCampaignBids, applyBaseBidDelta } = await import('../services/advertising/ads-bid-suppression.service.js')
 const { updateAdTargetWithSync, updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
 const { listChanges } = await import('../services/advertising/ads-changes.service.js')
-const { getBidGrid } = await import('../services/advertising/bid-grid.service.js')
+const { getBidGrid, getBidSeries } = await import('../services/advertising/bid-grid.service.js')
+const { cancelPendingMutation } = await import('../services/advertising/ads-mutation.service.js')
 
 const inside = <T>(work: () => Promise<T>) =>
   withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -285,5 +286,32 @@ describe('W4-12 — a refused write, as the change feed and the bid grid tell it
     }))
     const row = (grid.rows as Array<{ id: string; lastAuditedCents: number | null; unrecorded: boolean }>).find((g) => g.id === 'sup-t3')
     expect(row).toMatchObject({ lastAuditedCents: 9, unrecorded: false })
+    // The bid series counts it as not landed.
+    const series = await inside(() => getBidSeries({ entityIds: ['sup-t3'] }))
+    expect(series['sup-t3']?.map((p) => p.delivered)).toEqual(['FAILED'])
+
+    // A real change outside Nexus after the put-back is still one.
+    await inside(() => database.client.adTarget.update({ where: { id: 'sup-t3' }, data: { bidCents: 12 } }))
+    const after = await inside(() => getBidGrid({
+      market: 'all', line: null, portfolio: null, campaign: 'sup-c', view: 'targets', status: 'all', kind: [], match: [],
+      band: null, measured: 'all', q: 'sup-t3', windowDays: 30, sort: null, dir: 'desc', limit: 50,
+    }))
+    expect((after.rows as Array<{ id: string; unrecorded: boolean }>).find((g) => g.id === 'sup-t3')?.unrecorded).toBe(true)
+  })
+
+  it('a write cancelled in its grace window: its action log says CANCELLED, and the feed offers no undo', async () => {
+    await inside(() => database.client.adTarget.create({
+      data: { id: 'sup-t4', adGroupId: 'sup-g', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'kw sup-t4', bidCents: 20, externalTargetId: 'EXT-sup-t4' } as never,
+    }))
+    const r = await inside(() => updateAdTargetWithSync({ adTargetId: 'sup-t4', patch: { bidCents: 15 }, actor: 'automation:auto-bid' }))
+    expect(r.ok).toBe(true)
+    const cancelled = await inside(() => cancelPendingMutation(r.outboundQueueId!))
+    expect(cancelled.ok).toBe(true)
+    const logs = await inside(() => database.client.advertisingActionLog.findMany({ where: { entityId: 'sup-t4' }, select: { amazonResponseStatus: true } }))
+    expect(logs.map((l) => l.amazonResponseStatus)).toEqual(['CANCELLED'])
+    const feed = await inside(() => listChanges({ entityId: 'sup-t4', from: new Date(Date.now() - 3_600_000) }))
+    const bid = feed.items.find((item) => item.field === 'bid')
+    expect(bid?.delivery?.state).toBe('CANCELLED')
+    expect(bid).toMatchObject({ undoable: false, undoBlockedReason: 'This change never reached Amazon, so there is nothing to reverse.' })
   })
 })

@@ -2119,5 +2119,9 @@ export async function cancelPendingMutation(outboundQueueId: string): Promise<{
   // PENDING would keep suppressing drift on its fields for the full trust
   // window, which is exactly the bug this model exists to remove.
   await settleAdMutations(outboundQueueId, 'CANCELLED')
+  // W4-12 — and its action log: left PENDING, the change feed and undo read a cancelled write as one that landed.
+  await prisma.advertisingActionLog
+    .updateMany({ where: { outboundQueueId, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'CANCELLED' } })
+    .catch(() => { /* audit-update failure must not fail the cancel */ })
   return { ok: true, error: null, restored: put.restored, kept: put.kept }
 }

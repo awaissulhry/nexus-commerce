@@ -98,6 +98,30 @@ test('sendEmail() in real mode without RESEND_API_KEY returns error', async () =
   }
 })
 
+test('sendEmail() in real mode trims a pasted key (trailing newline) and sends with it', async () => {
+  const prevEnable = process.env.NEXUS_ENABLE_OUTBOUND_EMAILS
+  const prevKey = process.env.RESEND_API_KEY
+  const prevFetch = globalThis.fetch
+  const seen: string[] = []
+  globalThis.fetch = (async (_url: unknown, init?: { headers?: Record<string, string> }) => {
+    seen.push(init?.headers?.Authorization ?? '')
+    return new Response(JSON.stringify({ id: 'msg-1' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }) as typeof fetch
+  process.env.NEXUS_ENABLE_OUTBOUND_EMAILS = 'true'
+  process.env.RESEND_API_KEY = 're_testkey123\n'
+  try {
+    const r = await sendEmail({ to: 'a@b.com', subject: 'x', html: '<p>x</p>' })
+    assert(r.ok === true, `ok=true (${r.error ?? ''})`)
+    assert(seen.length === 1 && seen[0] === 'Bearer re_testkey123', 'sent once with the trimmed key')
+  } finally {
+    globalThis.fetch = prevFetch
+    if (prevEnable === undefined) delete process.env.NEXUS_ENABLE_OUTBOUND_EMAILS
+    else process.env.NEXUS_ENABLE_OUTBOUND_EMAILS = prevEnable
+    if (prevKey === undefined) delete process.env.RESEND_API_KEY
+    else process.env.RESEND_API_KEY = prevKey
+  }
+})
+
 test('sendEmail() in real mode with a placeholder RESEND_API_KEY says so, and never calls fetch', async () => {
   const prevEnable = process.env.NEXUS_ENABLE_OUTBOUND_EMAILS
   const prevKey = process.env.RESEND_API_KEY

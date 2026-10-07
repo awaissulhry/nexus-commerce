@@ -97,7 +97,8 @@ export async function sendEmail(msg: EmailMessage): Promise<SendResult> {
     return { ok: true, provider: 'mock', dryRun: true, messageId: `mock-${Date.now()}` }
   }
 
-  const apiKey = process.env.RESEND_API_KEY
+  // Surrounding whitespace (a trailing newline from a paste) is trimmed, as fetch itself trims a header value.
+  const apiKey = process.env.RESEND_API_KEY?.trim()
   if (!apiKey) {
     return {
       ok: false,

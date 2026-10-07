@@ -261,6 +261,8 @@ function deliveryWord(row: { syncStatus?: string | null; errorCode?: string | nu
   }
   if (row.amazonResponseStatus === 'SUCCESS') return 'sent'
   if (row.amazonResponseStatus === 'FAILED') return 'failed'
+  // W4-12 — a write Nexus did not send (refused, no connection), cancelled or replaced before it was sent.
+  if (row.amazonResponseStatus === 'SKIPPED' || row.amazonResponseStatus === 'CANCELLED' || row.amazonResponseStatus === 'SUPERSEDED') return 'notSent'
   return 'waiting'
 }
 
