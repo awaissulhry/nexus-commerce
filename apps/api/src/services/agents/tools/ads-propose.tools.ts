@@ -416,7 +416,8 @@ const createNegativeKeyword: AgentTool = {
     + 'from. Refused, and not queued, '
     + 'for a protected term, a term already negated in the campaign, a campaign-level negative, or when Amazon\'s '
     + 'write gate would refuse it. A protected product\'s ASIN is never negated by rule. Once approved it is created at '
-    + 'once as the approver; undo-change retires it again.',
+    + 'once as the approver; undo-change retires it again. The list form — many negatives into many ad groups, campaign '
+    + 'negatives, negative ASINs — is add-negative-targets; retire-negatives retires any negative.',
   async handler(args, ctx) {
     return negativePreview(args, { rule: { approvalId: ctx.approvalId } })
   },
@@ -743,7 +744,8 @@ const graduateKeyword: AgentTool = {
     + 'shows the starting bid in the campaign\'s currency (default: the term\'s cost per click), the term\'s record, '
     + 'whether it lands live at Amazon or in sandbox, and each limit with where it comes from. Refused, and not queued, '
     + 'when the exact keyword exists, or when Amazon\'s write gate would refuse it. The source ad group is not negated. '
-    + 'Undo lowers the keyword to the 5-cent floor (it is never paused or archived).',
+    + 'Undo lowers the keyword to the 5-cent floor (it is never paused or archived). harvest-search-term does this and the '
+    + 'source negative in one step; add-ad-targets adds many keywords and product or category targets to one ad group.',
   async handler(args, ctx) {
     return graduationPreview(args, { rule: { approvalId: ctx.approvalId } })
   },

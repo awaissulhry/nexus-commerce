@@ -66,6 +66,15 @@ export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeA
   'set-portfolio': { create: 'portfolio', update: 'portfolio', archive: ['portfolio', 'archive'] },
 }
 
+/**
+ * W4-5 — a tool whose kinds follow its arguments beyond `op`, its own kind first (every one narrows it, the strictest
+ * wins): harvest-search-term negates the term in its source too, unless asked not to (negateSource false); its undo
+ * lifts that negative again (a retire).
+ */
+export const ARG_ACTIONS: Readonly<Record<string, (args: Record<string, unknown>) => readonly ClaudeActionType[]>> = {
+  'harvest-search-term': (args) => (args.op === 'undo' ? ['harvest', 'retire'] : args.negateSource === false ? ['harvest'] : ['harvest', 'negative']),
+}
+
 /** Every kind of ad action a tool is for these args (its own kind first); empty: the strategy never narrows it. */
 export function actionsOfTool(toolName: string, args?: unknown): ClaudeActionType[] {
   if ((BRAKE_TOOLS as readonly string[]).includes(toolName)) return []
@@ -75,6 +84,8 @@ export function actionsOfTool(toolName: string, args?: unknown): ClaudeActionTyp
     const kinds = ops[op]
     return kinds == null ? [] : typeof kinds === 'string' ? [kinds] : [...kinds]
   }
+  const byArgs = ARG_ACTIONS[toolName]
+  if (byArgs && args && typeof args === 'object') return [...byArgs(args as Record<string, unknown>)]
   const one = ACTION_OF.get(toolName) ?? treatedAs.get(toolName)
   return one ? [one] : []
 }
@@ -351,6 +362,43 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'pause-ads': byStatusArgs,
   'enable-ads': byStatusArgs,
   'archive-ads': byStatusArgs,
+  // W4-5 — targets and negatives: the ad groups and campaigns they land in (a negative named by its place too); the
+  // negatives a retire lifts; a harvest's source and destination (its dry run names the destination it resolved); a
+  // harvest destination: where it applies and the ad group it points to.
+  'add-ad-targets': (place, args) => place.adGroupIds([str(args.adGroupId)]),
+  'add-negative-targets': async (place, args) => {
+    const each = list(args.negatives).map(obj)
+    const adGroups = [...strs(args.adGroupIds), ...each.map((n) => str(n.adGroupId))].filter((id): id is string => !!id)
+    const campaigns = [...strs(args.campaignIds), ...each.map((n) => str(n.campaignId))].filter((id): id is string => !!id)
+    if (adGroups.length) await place.adGroupIds(adGroups)
+    if (campaigns.length) await place.campaignIds(campaigns)
+    if (!adGroups.length && !campaigns.length) place.notPlaced('it names no ad group or campaign')
+  },
+  'retire-negatives': async (place, args, preview) => {
+    const resolved = list(preview?.negatives).map((n) => str(obj(n).targetId))
+    const ids = [...strs(args.negativeIds), ...resolved].filter((id): id is string => !!id)
+    const each = list(args.negatives).map(obj)
+    const adGroups = each.map((n) => str(n.adGroupId)).filter((id): id is string => !!id)
+    const campaigns = each.map((n) => str(n.campaignId)).filter((id): id is string => !!id)
+    if (ids.length) await place.targets(ids)
+    if (adGroups.length) await place.adGroupIds(adGroups)
+    if (campaigns.length) await place.campaignIds(campaigns)
+    if (!ids.length && !adGroups.length && !campaigns.length) place.notPlaced('it names no negative')
+  },
+  'harvest-search-term': async (place, args, preview) => {
+    if (args.op === 'undo') return place.targets([str(args.keywordId), str(args.negativeId)])
+    const destination = str(obj(preview?.destinationAdGroup).id) ?? str(args.destAdGroupId)
+    await place.adGroupIds([str(args.sourceAdGroupId), destination])
+  },
+  'set-harvest-destination': async (place, args, preview) => {
+    const scopeId = str(args.scopeId)
+    if (args.scope === 'adGroup') await place.adGroupIds([scopeId])
+    else if (args.scope === 'campaign') await place.campaignIds([scopeId])
+    else if (args.scope === 'market') place.market(marketOf(scopeId), 'a harvest destination for the whole market')
+    const destination = str(args.adGroupId) ?? str(obj(preview?.from).adGroupId)
+    if (destination) await place.adGroupIds([destination])
+    else if (args.scope !== 'adGroup' && args.scope !== 'campaign' && args.scope !== 'market') place.notPlaced('a harvest destination for a whole line, portfolio or the account that names no ad group')
+  },
   // W4-3 — campaign settings: every campaign it names (with its own settings or the shared ones). A portfolio: its
   // campaigns, else its market (a new one, or one that holds none: the strictest row of the market).
   'set-campaign-settings': (place, args) => place.campaignIds([...strs(args.campaignIds), ...list(args.campaigns).map((c) => str(obj(c).campaignId))]),

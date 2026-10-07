@@ -438,6 +438,11 @@ export async function writeAdvertisingActionLog(args: {
    * engine lacked the numbers, but because there was nowhere to put them.
    */
   evidence?: AdWriteEvidence | null
+  /**
+   * W4-5 — a write that is never sent (a Nexus-only record removed: nothing at Amazon to change) is SKIPPED from the
+   * start, so it never reads as waiting for a queue row it does not have. Default PENDING.
+   */
+  amazonResponseStatus?: 'PENDING' | 'SKIPPED'
 }): Promise<string> {
   const row = await prisma.advertisingActionLog.create({
     data: {
@@ -449,7 +454,7 @@ export async function writeAdvertisingActionLog(args: {
       payloadBefore: args.payloadBefore,
       payloadAfter: args.payloadAfter,
       outboundQueueId: args.outboundQueueId,
-      amazonResponseStatus: 'PENDING',
+      amazonResponseStatus: args.amazonResponseStatus ?? 'PENDING',
       // `as never` matches the existing audit() writer in ads-create.service.ts: AdWriteEvidence
       // is a closed interface and Prisma's InputJsonValue wants an index signature.
       evidence: (packEvidence(args.evidence) ?? undefined) as never,

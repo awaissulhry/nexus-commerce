@@ -32,6 +32,8 @@ import { ADS_STOCK_TOOLS } from './tools/ads-stock.tools.js'
 import { ADS_PORTFOLIO_TOOLS } from './tools/ads-portfolio.tools.js'
 import { ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/ads-campaign-settings.tools.js'
 import { ADS_HOURLY_PLAN_TOOLS } from './tools/ads-hourly-plan.tools.js'
+import { ADS_TARGET_TOOLS } from './tools/ads-targets.tools.js'
+import { ADS_NEGATIVE_TOOLS } from './tools/ads-negatives.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -146,6 +148,10 @@ const ALL: AgentTool[] = [
   ...ADS_CAMPAIGN_SETTINGS_TOOLS,
   // Ads autonomy W4-1 — the Hourly Bids page's plans: read one week by week, and change ONE plan (paint, members, switch).
   ...ADS_HOURLY_PLAN_TOOLS,
+  // Ads autonomy W4-5 — keywords and product or category targets, harvests and their destination; negatives in the list
+  // form, and retiring any negative.
+  ...ADS_TARGET_TOOLS,
+  ...ADS_NEGATIVE_TOOLS,
   // Ads autonomy W3-2 — cancel an ad write Nexus queued and has not sent yet (a brake: nothing reaches Amazon).
   ...ADS_QUEUED_WRITE_TOOLS,
   ...EBAY_AD_TOOLS,

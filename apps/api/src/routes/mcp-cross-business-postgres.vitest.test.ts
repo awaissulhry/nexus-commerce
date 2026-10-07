@@ -1093,6 +1093,14 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
   // W4-3 — a rename of B's portfolio (its market is its own: the loop's market is left out).
   'set-portfolio': { op: 'update', name: 'MCP8 probe portfolio', market: undefined },
+  // Ads autonomy W4-5 — targets and negatives name what they add; a retire names B's target (a keyword, not a negative:
+  // refused inside B by its name); a harvest names the ad group it ran in (B's), never an undo's ids; a harvest destination
+  // is set for B's campaign, to B's ad group.
+  'add-ad-targets': { keywords: [{ text: 'mcp8 probe', matchType: 'EXACT', bidCents: 50 }] },
+  'add-negative-targets': { keywords: [{ text: 'mcp8 probe' }], campaignIds: undefined, negatives: undefined },
+  get 'retire-negatives'() { return { negativeIds: [seeded.b.targetId], negatives: undefined } },
+  get 'harvest-search-term'() { return { sourceAdGroupId: seeded.b.adGroupId, destAdGroupId: undefined, changeSetId: undefined, keywordId: undefined, negativeId: undefined } },
+  'set-harvest-destination': { scope: 'campaign' },
   // B-1 — a copy reads its source campaign in the market it runs in (B's own); no portfolio (the loop would name an id).
   'replicate-ad-structure': { get sourceMarket() { return seeded.b.market }, portfolioId: undefined },
   // Ads autonomy W4-1 — ONE hourly plan, by its id (`planId` is the FBA plan's for the loop): B's plan, read and renamed.

@@ -52,8 +52,10 @@ export const STOP_METHODS = ['LOW_BIDS', 'PAUSE'] as const
  */
 export const CLAUDE_ACTION_TOOLS = {
   bid: ['set-target-bid', 'bulk-ad-bid-change'],
-  negative: ['create-negative-keyword'],
-  harvest: ['graduate-keyword'],
+  // W4-5 — the list form of each (add-negative-targets; harvest-search-term, which negates its source too: claude.ts
+  // ARG_ACTIONS), and where a harvest lands (set-harvest-destination, Nexus only).
+  negative: ['create-negative-keyword', 'add-negative-targets'],
+  harvest: ['graduate-keyword', 'harvest-search-term', 'set-harvest-destination'],
   placement: ['set-placement-multipliers'],
   // W4-7 — the monthly plan, the budget schedules and pools and the restore to baseline move budgets too.
   budget: ['set-campaign-budget', 'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines'],
@@ -89,6 +91,10 @@ export const CLAUDE_ACTION_TOOLS = {
   // W4-1 — the hourly bid plans of the Hourly Bids page (create, paint, members, rename, switch, delete, per-campaign
   // values): their own kind, so the Owner decides per market, category or product whether a plan change may run alone.
   hourly: ['set-hourly-bid-plan'],
+  // W4-5 — keywords, product and category targets added to an ad group (they add spend), and negatives retired (a block
+  // lifted: it can add spend too) — each a kind of its own, so the Owner decides them apart from a negative or a harvest.
+  targeting: ['add-ad-targets'],
+  retire: ['retire-negatives'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]

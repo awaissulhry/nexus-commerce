@@ -67,6 +67,8 @@ interface Seeded {
   shipmentId: string; draftProductId: string; aliasId: string; campaignId: string
   /** W4-1 — an hourly bid plan holding the campaign. */
   hourlyPlanId: string
+  /** W4-5 — the campaign's ad group (targets, negatives and a harvest destination name it). */
+  adGroupId: string
   publicationId: string; familyId: string; variantId: string; variantDraftId: string
   /** P4 — a channel account and the trace of one channel call. */
   connectionId: string; traceId: string
@@ -294,6 +296,13 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'ad-portfolios': () => ({ market: 'IT', days: 30 }),
   'set-portfolio': () => ({ op: 'create', market: 'IT', name: 'Money portfolio' }),
   'set-campaign-settings': (ids) => ({ campaignIds: [ids.campaignId], biddingStrategy: 'manual' }),
+  // W4-5 — targets, negatives and a harvest name bids, spend and orders (they need money: refused for a person without
+  // it); a harvest destination names no money (Nexus only: its preview reads the campaign's ad group).
+  'add-ad-targets': (ids) => ({ adGroupId: ids.adGroupId, keywords: [{ text: 'money jacket', matchType: 'EXACT', bidCents: 45 }] }),
+  'add-negative-targets': (ids) => ({ adGroupIds: [ids.adGroupId], keywords: [{ text: 'money free', matchType: 'NEGATIVE_EXACT' }] }),
+  'retire-negatives': (ids) => ({ negativeIds: [ids.campaignId] }),
+  'harvest-search-term': (ids) => ({ query: 'money cheap jacket', sourceAdGroupId: ids.adGroupId, destAdGroupId: ids.adGroupId, negateSource: false }),
+  'set-harvest-destination': (ids) => ({ scope: 'campaign', scopeId: ids.campaignId, adGroupId: ids.adGroupId }),
   // W3-3 — stock-aware bids: the read shows units and days (no money); the two changes list bids (they need money).
   'ad-stock-risk': (ids) => ({ campaignIds: [ids.campaignId], show: 'all' }),
   'lower-ad-bids-for-stock': (ids) => ({ campaignIds: [ids.campaignId] }),
@@ -729,7 +738,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
     // W4-3 — the campaign sits in a portfolio with a budget cap (money ad-portfolios hides from a person without it).
     await db.amazonAdsPortfolio.create({ data: { profileId: `${mark}-PROFILE`, externalPortfolioId: `${mark}-PF`, name: `${mark} portfolio`, state: 'ENABLED', budgetAmount: '2718.28', budgetCurrencyCode: 'EUR', budgetPolicy: 'MONTHLY_RECURRING' } })
     const campaign = await db.campaign.create({
-      data: { name: `${mark} MONEY campaign`, type: 'SP', marketplace: 'IT', externalCampaignId: `${mark}-CMP`, dailyBudget: '31.41', startDate: new Date(), portfolioId: `${mark}-PF` } as never,
+      data: { name: `${mark} MONEY campaign`, type: 'SP', marketplace: 'IT', externalCampaignId: `${mark}-CMP`, dailyBudget: '31.41', startDate: new Date(), targetingType: 'MANUAL', portfolioId: `${mark}-PF` } as never,
     })
     const adGroup = await db.adGroup.create({ data: { campaignId: campaign.id, name: `${mark} ad group`, externalAdGroupId: `${mark}-AG` } })
     // Ads autonomy W1-2 — the product is advertised in that ad group, and the market and the product have a strategy whose
@@ -912,7 +921,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       pausedRuleId: pausedRule.id,
       productId: product.id, orderId: order.id, approvalId: approval.id, changeId: change.id,
       automationRuleId: automationRule.id, replenishmentRuleId: replenishmentRule.id, shipmentId: shipment.id,
-      draftProductId: draftProduct.id, aliasId: alias.id, campaignId: campaign.id, hourlyPlanId: hourlyPlan.id,
+      draftProductId: draftProduct.id, aliasId: alias.id, campaignId: campaign.id, adGroupId: adGroup.id, hourlyPlanId: hourlyPlan.id,
       publicationId: publication.id, familyId: family.id, variantId: variant.id, variantDraftId: variantDraft.id,
       connectionId: connection.id, traceId,
       ruleId: rule.id, alertEventId: alertEvent.id, assetId: asset.id, stageId: reviewStage.id, themeId: theme.id,

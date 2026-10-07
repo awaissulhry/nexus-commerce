@@ -222,11 +222,26 @@ const rowOut = (log: { id: string; actionType: string; entityType: string; entit
 })
 
 /**
+ * W4-5 — the tools whose recorded `after.negatives` are negatives they LIFTED, not created: never read as a create, and
+ * never put back here — lifting a negative is retire-negatives' own (with the approver's code); undo-change of a retire
+ * adds its negatives again.
+ */
+const NEGATIVE_LIFTS = ['retire-negatives'] as const
+
+/** W4-5 — undo-ad-change of a retire's change set (or one of its steps) is refused: it never lifts a negative again. */
+async function liftRefusal(changeSetId: string, changeId?: string): Promise<string | null> {
+  const lift = await prisma.agentChange.findFirst({ where: { approvalId: changeSetId, toolName: { in: [...NEGATIVE_LIFTS] }, ...(changeId ? { id: changeId } : {}) }, select: { id: true } })
+  if (!lift) return null
+  return `Not undone: ${changeId ? 'that change' : `change set ${changeSetId}`} retired negatives (retire-negatives). undo-ad-change never lifts a negative it did not create — that is retire-negatives' own, with the approver's authenticator code; undo-change of the retire adds the same negatives again.`
+}
+
+/**
  * The negatives an approved request created (its recorded changes), still standing — undo retires them. W3-1 — every
- * change of the request (a change plan records one per step), or only the one named (`changeId`).
+ * change of the request (a change plan records one per step), or only the one named (`changeId`). W4-5 — creates only:
+ * a retire's recorded negatives are the ones it lifted.
  */
 async function negativesCreatedBy(changeSetId: string, changeId?: string): Promise<UndoNegative[]> {
-  const changes = await prisma.agentChange.findMany({ where: { approvalId: changeSetId, ...(changeId ? { id: changeId } : {}) }, select: { after: true } })
+  const changes = await prisma.agentChange.findMany({ where: { approvalId: changeSetId, toolName: { notIn: [...NEGATIVE_LIFTS] }, ...(changeId ? { id: changeId } : {}) }, select: { after: true } })
   const listed = changes.flatMap((c) => ((c.after ?? null) as { negatives?: Array<{ targetId?: unknown; keywordText?: unknown }> } | null)?.negatives ?? [])
   const ids = [...new Set(listed.map((n) => String(n.targetId ?? '')).filter(Boolean))]
   if (!ids.length) return []
@@ -263,6 +278,8 @@ async function undoPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext
     }
     setId = single.changeSetId
   }
+  const lifted = await liftRefusal(setId)
+  if (lifted) return { ok: false, error: lifted }
   // PB-10 — a create's row puts nothing back (its negatives are `negatives`; what else it made is archived): not a row.
   const logs = (await prisma.advertisingActionLog.findMany({
     where: { executionId: setId, rolledBackAt: null },
@@ -288,6 +305,8 @@ async function undoOneChange(changeSetId: string, changeId: string, ctx?: Pick<T
   const change = await prisma.agentChange.findFirst({ where: { id: changeId, approvalId: changeSetId }, select: { before: true, undoneAt: true } })
   if (!change) return { ok: false, error: 'That change is not found in that change set.' }
   if (change.undoneAt) return { ok: false, error: 'Not undone: that change was undone already.' }
+  const lifted = await liftRefusal(changeSetId, changeId)
+  if (lifted) return { ok: false, error: lifted }
   const recorded = (change.before as { actionLogIds?: unknown } | null)?.actionLogIds
   const ids = Array.isArray(recorded) ? recorded.filter((id): id is string => typeof id === 'string') : []
   const logs = ids.length

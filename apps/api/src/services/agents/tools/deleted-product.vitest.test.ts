@@ -85,6 +85,9 @@ const CREATE_OR_EDIT = new Set([
   'set-ads-playbook',
   // PB-5a — one product's playbook applied: given a product (or its SKU), it is about that product.
   'apply-ads-playbook',
+  // W4-5 — negatives' product (`product`, optional: by default the one product every place advertises): given one, the
+  // negatives are about that product. A change, not a list.
+  'add-negative-targets',
 ])
 /** The tools whose input names a product, and how (`product`: one product by Nexus id or SKU). */
 function productTools(): ProductTool[] {
@@ -94,7 +97,7 @@ function productTools(): ProductTool[] {
     const required = new Set<string>(schema.required ?? [])
     if ('productId' in props) return [{ tool, key: 'productId', required: required.has('productId') || CREATE_OR_EDIT.has(tool.name) }]
     if ('products' in props) return [{ tool, key: 'products', required: required.has('products') }]
-    if ('product' in props && props.product.type === 'string') return [{ tool, key: 'product', required: required.has('product') }]
+    if ('product' in props && props.product.type === 'string') return [{ tool, key: 'product', required: required.has('product') || CREATE_OR_EDIT.has(tool.name) }]
     return []
   })
 }
