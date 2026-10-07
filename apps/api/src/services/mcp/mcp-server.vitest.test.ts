@@ -128,6 +128,8 @@ describe('C3 — the server and every change tool name the business', () => {
       'Archive an ad (archive-ads) only when it is meant for good',
       // W1-8 — where the ads strategy lives, and that it only narrows.
       'read it with ads-strategy, change', 'It only narrows what this business lets',
+      // BB-4 — the bid brain's read tool, and that it writes nothing yet.
+      'bid-brain (read only; the bid', 'writes nothing yet',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
       'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
       "a start needs the approver's authenticator code",

@@ -310,6 +310,7 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-campaign-target-acos': (ids) => ({ campaignIds: [ids.campaignId], targetAcosPct: 25 }),
   // Ads autonomy W1-2 — the strategy for the seeded campaign's market: its targets, bids and caps are money.
   'ads-strategy': (ids) => ({ market: 'IT', campaignId: ids.campaignId }),
+  'bid-brain': (ids) => ({ view: 'why', campaignId: ids.campaignId }),
   // Ads playbook PB-2 — the seeded product's playbook in IT: its daily budget and base bid are money, and so are the
   // strategy's numbers shown beside it.
   'ads-playbook': (ids) => ({ market: 'IT', productId: ids.productId }),
