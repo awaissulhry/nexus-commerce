@@ -11,10 +11,15 @@
  *   pause-ads    campaigns, ad groups, keywords and product targets, product ads: ENABLED → PAUSED. A pause lets go of
  *                spend, so a halt does not hold it (the write carries `letsGo`, ads-mutation.service.ts isLetGoWrite).
  *                Undo: enable-ads.
- *   enable-ads   PAUSED → ENABLED, only for an ad whose last status change Nexus recorded is a pause a Claude request made
- *                (pause-ads) and that Amazon has not reported changed since: never one a person paused, in Nexus or at
- *                Amazon (the SYNC.1 lesson, ads-mutation.service.ts). An archived ad cannot be enabled (Amazon's rule).
- *                Spend resumes, so a halt stops it. Undo: pause-ads.
+ *   enable-ads   PAUSED → ENABLED. By default only for an ad whose last status change Nexus recorded is a pause a Claude
+ *                request made (pause-ads) and that Amazon has not reported changed since (the SYNC.1 lesson,
+ *                ads-mutation.service.ts). W4-2 (Owner 2026-10-07) — asked with `includePeoplesPauses`, also one a person
+ *                paused, in Nexus or at Amazon (Seller Central, or before Nexus kept a record), or a writer Nexus did not
+ *                record: the preview says who paused it and when, marks it `needsCode` and carries `stepUp`, so only a
+ *                person approving with their authenticator code lifts it — never the business's rule, whatever its level
+ *                and limits. A pause a Nexus rule or engine made stays refused (it would pause the ad again): the refusal
+ *                names the rule to stop first. An archived ad cannot be enabled (Amazon's rule). Spend resumes, so a halt
+ *                stops it. Undo: pause-ads.
  *   archive-ads  AA-W2-13 — ENABLED or PAUSED → ARCHIVED, for good: Amazon cannot switch an archived ad on again (its
  *                API calls this delete: ads-api-client.ts SP_V3_ARCHIVE; the write carries `letsGo`, so the worker sends
  *                it as that delete, and a halt does not hold it — it lets go). The one irreversible tool the contract
@@ -23,7 +28,8 @@
  *
  * One request names at most 100 ads. An ad already where it is asked to go is left as it is (counted); an ad Nexus cannot
  * change (not found, not Sponsored Products, archived, a draft, not at Amazon, gone at Amazon, a negative, or — for an
- * enable — not paused by a Claude request) refuses the whole request, naming it.
+ * enable — not paused by a Claude request, unless asked with includePeoplesPauses; paused by a Nexus rule, always)
+ * refuses the whole request, naming it.
  */
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
@@ -31,8 +37,9 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { updateAdGroupWithSync, updateAdTargetWithSync, updateCampaignWithSync, updateProductAdWithSync, type MutationOutcome } from '../../advertising/ads-mutation.service.js'
 import { amountLabel, campaignCurrency, checkLiveReach, type LiveReach } from './ads-tool-guards.js'
-import { approvedRun, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
+import { STEP_UP_NEEDS, stepUpApproval, stepUpOf } from '../step-up-approval.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { STATUS_CAMPAIGN_SELECT, adGroupStatuses, adGroupsForStatus, externalStatusChanges, highestServingBids, servingUnder } from '../../advertising/ads-status-lookup.service.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -78,8 +85,9 @@ interface StatusArgs {
   productAds?: Array<{ adGroupId: string; product: string }>
   /** archive-ads, PB-5a — every campaign a playbook build made (the undo of apply-ads-playbook op build); B-1 — or a Replicate run (the undo of replicate-ad-structure); B-3 — or a one-off SP Super Wizard set (build-sp-wizard-campaigns). */
   buildRunId?: string
+  /** enable-ads, W4-2 — also what a person paused (or a writer Nexus cannot name): approved only with the approver's code. */
+  includePeoplesPauses?: boolean
 }
-
 
 
 /** One ad a request names, as Nexus holds it now. */
@@ -206,11 +214,23 @@ const highestBids = (ads: Ad[]): Promise<Map<string, number | null>> => highestS
 
 // ── Who paused it (enable-ads) ────────────────────────────────────────────────────────────────────
 
+/** W4-2 — the Nexus rule an `automation:<rule id>` actor names; `automation` is its number in list-automations (A1: ads rules). */
+interface PausingRule { id: string; name: string; automation: string | null }
+
 type PausedBy =
   | { by: 'claude'; approvalId: string; at: Date }
-  | { by: 'person' | 'rule' | 'unrecorded'; actor: string | null; at: Date }
+  | { by: 'person' | 'unrecorded'; actor: string | null; at: Date }
+  | { by: 'rule'; actor: string | null; at: Date; rule: PausingRule | null }
   | { by: 'amazon'; approvalId: string; at: Date; seenAt: Date }
   | { by: 'none'; lastRecorded: string | null }
+type RulePause = Extract<PausedBy, { by: 'rule' }>
+
+/**
+ * W4-2 — the pauses only a person approving with their authenticator code lifts (enable-ads includePeoplesPauses): a
+ * person's in Nexus, one at Amazon with no Nexus record (Seller Central, or before Nexus kept one), one a writer Nexus did
+ * not record, and a Claude pause Amazon reported changed since. Never by rule. A rule's pause is not lifted at all.
+ */
+const PEOPLES_PAUSES: ReadonlySet<PausedBy['by']> = new Set(['person', 'none', 'unrecorded', 'amazon'])
 
 const statusOf = (payload: unknown): string | null => {
   const s = (payload as { status?: unknown } | null)?.status
@@ -221,7 +241,9 @@ const statusOf = (payload: unknown): string | null => {
  * For each paused ad, who paused it: the last status change Nexus recorded for it (AdvertisingActionLog) must be a pause a
  * Claude request made (its change set names a pause-ads change that names this ad), and Amazon must not have reported its
  * status changed outside Nexus since (an AdDrift EXTERNAL_CHANGE). Anything else is a person's (in Nexus, or at Amazon
- * — Seller Central — when no pause is on record) or an automation's, and enable-ads never switches it back on.
+ * — Seller Central — when no pause is on record) or an automation's: enable-ads switches a person's back on only when
+ * asked with includePeoplesPauses and approved with the approver's code (W4-2), and an automation's never. W4-2 — an
+ * automation that is a Nexus rule (`automation:<rule id>`) is named, so the refusal says which rule to stop first.
  */
 async function pausesOnRecord(ads: Ad[]): Promise<Map<string, PausedBy>> {
   const out = new Map<string, PausedBy>()
@@ -246,6 +268,11 @@ async function pausesOnRecord(ads: Ad[]): Promise<Map<string, PausedBy>> {
     ? await prisma.agentChange.findMany({ where: { approvalId: { in: sets }, toolName: TOOL.pause }, select: { approvalId: true, after: true } })
     : []
   const drift = await externalStatusChanges([...byType].map(([entityType, ids]) => ({ entityType, ids })))
+  const ruleIds = [...new Set([...last.values()].map((l) => l.userId ?? '').filter((u) => u.startsWith('automation:')).map((u) => u.slice('automation:'.length)))]
+  const rules = ruleIds.length
+    ? new Map((await prisma.automationRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true, name: true, domain: true } }))
+      .map((r) => [r.id, { id: r.id, name: r.name, automation: r.domain === 'advertising' ? 'A1' : null }]))
+    : new Map<string, PausingRule>()
   for (const ad of ads) {
     const key = `${ENTITY_TYPE[ad.level]}:${ad.id}`
     const log = last.get(key)
@@ -261,7 +288,11 @@ async function pausesOnRecord(ads: Ad[]): Promise<Map<string, PausedBy>> {
       continue
     }
     const actor = log.userId ?? null
-    out.set(`${ad.level}:${ad.id}`, { by: actor?.startsWith('user:') ? 'person' : actor?.startsWith('automation:') ? 'rule' : 'unrecorded', actor, at: log.createdAt })
+    if (actor?.startsWith('automation:')) {
+      out.set(`${ad.level}:${ad.id}`, { by: 'rule', actor, at: log.createdAt, rule: rules.get(actor.slice('automation:'.length)) ?? null })
+      continue
+    }
+    out.set(`${ad.level}:${ad.id}`, { by: actor?.startsWith('user:') ? 'person' : 'unrecorded', actor, at: log.createdAt })
   }
   return out
 }
@@ -271,13 +302,41 @@ function pausedByWords(p: PausedBy): string {
     case 'claude': return `Claude request ${p.approvalId} paused it (${when(p.at)})`
     case 'amazon': return `Claude request ${p.approvalId} paused it (${when(p.at)}), but Amazon reported its status changed outside Nexus since (${when(p.seenAt)}): a person may have paused it at Amazon`
     case 'person': return `a person paused it in Nexus (${p.actor}, ${when(p.at)})`
-    case 'rule': return `a Nexus rule or engine paused it (${p.actor}, ${when(p.at)})`
+    case 'rule': return p.rule
+      ? `the Nexus rule "${p.rule.name}" paused it (${p.actor}, ${when(p.at)})`
+      : `a Nexus rule or engine paused it (${p.actor}, ${when(p.at)})`
     case 'unrecorded': return `it was paused by a writer Nexus did not record (${when(p.at)})`
     case 'none': return p.lastRecorded
       ? `the last status Nexus recorded for it is ${STATUS_WORDS[p.lastRecorded] ?? p.lastRecorded}: it was paused at Amazon (Seller Central) since`
       : 'Nexus has no record of who paused it: it was paused at Amazon (Seller Central), or before Nexus kept a record'
   }
 }
+
+/** W4-2 — what stops the rule or engine that paused an ad (switched back on, it would pause it again). */
+function ruleStopWords(p: RulePause): string {
+  if (p.rule?.automation) return `switch the rule off (turn-down-automation, automation ${p.rule.automation}, rowId ${p.rule.id}, level OFF) or change it (save-ad-rule)`
+  if (p.rule) return 'switch the rule off or change it (automation-detail names it)'
+  return 'stop or change that engine (list-automations names it)'
+}
+
+/**
+ * W4-2 — who paused an ad, frozen in the preview and compared again in `execute`: a status change Nexus records after the
+ * approval (a person's pause and enable, a rule's, a Claude request's, or Amazon reporting one) moves it. When Amazon
+ * reported its change (`seenAt`) is left out: that time moves with every reconcile while the difference stands.
+ */
+function pausedFacts(p: PausedBy): Record<string, string | null> {
+  switch (p.by) {
+    case 'claude':
+    case 'amazon': return { by: p.by, approvalId: p.approvalId, at: p.at.toISOString() }
+    case 'none': return { by: p.by, lastRecorded: p.lastRecorded }
+    default: return { by: p.by, actor: p.actor, at: p.at.toISOString() }
+  }
+}
+
+/** W4-2 — how a request that lifts a person's pause is approved, in one sentence (its stepUp). */
+const PEOPLES_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked '
+  + 'confirms it in Claude with theirs when the business set enable-ads to confirm in Claude. Never by rule: lifting a pause a person '
+  + 'made is a person\'s decision.'
 
 // ── The decision both tools make, in the dry run and again in `execute` ───────────────────────────
 
@@ -333,12 +392,26 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   const already = ads.filter((ad) => ad.status === to)
   if (!changing.length) return refuse(`Nothing would change: ${named(already.map((ad) => ad.label))} ${already.length === 1 ? 'is' : 'are'} already ${STATUS_WORDS[to].toLowerCase()}.`)
 
-  // enable-ads — only what a Claude request paused; never what a person paused, in Nexus or at Amazon.
+  // enable-ads — what a Claude request paused. W4-2 — asked with includePeoplesPauses, also what a person paused (in Nexus
+  // or at Amazon) or a writer Nexus cannot name: approved only with the approver's code. Never what a Nexus rule paused.
   const pausedBy = kind === 'enable' ? await pausesOnRecord(changing) : new Map<string, PausedBy>()
-  const notClaude = kind === 'enable' ? changing.filter((ad) => pausedBy.get(`${ad.level}:${ad.id}`)?.by !== 'claude') : []
-  if (notClaude.length) {
-    return refuse(`Not queued: enable-ads switches back on only what a Claude request paused (pause-ads), never what a person paused, in Nexus or at Amazon. ${named(notClaude.map((ad) => `${ad.label}: ${pausedByWords(pausedBy.get(`${ad.level}:${ad.id}`) ?? { by: 'none', lastRecorded: null })}`))}.`)
+  const whoPaused = (ad: Ad): PausedBy => pausedBy.get(`${ad.level}:${ad.id}`) ?? { by: 'none', lastRecorded: null }
+  const notClaude = kind === 'enable' ? changing.filter((ad) => whoPaused(ad).by !== 'claude') : []
+  const ruled = notClaude.filter((ad) => whoPaused(ad).by === 'rule')
+  // The ads only the approver's authenticator code switches back on (needsCode).
+  const coded = notClaude.filter((ad) => PEOPLES_PAUSES.has(whoPaused(ad).by))
+  const include = kind === 'enable' && a.includePeoplesPauses === true
+  if (notClaude.length && (!include || ruled.length)) {
+    const said = (list: Ad[]) => named(list.map((ad) => `${ad.label}: ${pausedByWords(whoPaused(ad))}`))
+    const ruleWords = ruled.length
+      ? ` A pause a Nexus rule or engine made is never switched back on, even with includePeoplesPauses: the rule would pause it again. Stop it first, then ask again — ${named(ruled.map((ad) => `${ad.label}: ${ruleStopWords(whoPaused(ad) as RulePause)}`))}.`
+      : ''
+    if (include) return refuse(`Not queued: ${said(ruled)}.${ruleWords}`)
+    return refuse(`Not queued: enable-ads switches back on only what a Claude request paused (pause-ads)${coded.length ? ', unless asked with includePeoplesPauses: true' : ''}. ${said(notClaude)}.`
+      + (coded.length ? ' To switch back on what a person paused (in Nexus or at Amazon), ask again with includePeoplesPauses: true: a person then approves it in Nexus with their authenticator code, and it never runs by rule.' : '')
+      + ruleWords)
   }
+  const needsCode = (ad: Ad) => kind === 'enable' && PEOPLES_PAUSES.has(whoPaused(ad).by)
 
   const reach = await reachOf(changing, kind)
   if ('refused' in reach) return refuse(reachRefusal(reach.refused))
@@ -387,7 +460,10 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
       + (budgetWords ? ` ${budgetWords} of daily budget stops spending.` : '')
       + ' enable-ads switches them back on; they serve again about an hour after that.'
       + (already.length ? ` ${plural(already.length, ['ad', 'ads'])} already paused ${already.length === 1 ? 'is' : 'are'} left as ${already.length === 1 ? 'it is' : 'they are'}.` : '')
-    : `Switches ${plural(changing.length, ['ad', 'ads'])} back on at Amazon that a Claude request paused (${countWords}): ${named(changing.map((ad) => ad.label))}. Spend resumes`
+    : `Switches ${plural(changing.length, ['ad', 'ads'])} back on at Amazon${coded.length ? '' : ' that a Claude request paused'} (${countWords}): ${named(changing.map((ad) => ad.label))}.`
+      // W4-2 — who paused the ones no Claude request paused, and what approving them takes.
+      + (coded.length ? ` Not paused by a Claude request (${coded.length} of ${changing.length}): ${named(coded.map((ad) => `${ad.label}: ${pausedByWords(whoPaused(ad))}`))}. Approving it needs the approver's authenticator code; it never runs by rule.` : '')
+      + ' Spend resumes'
       + (budgetWords ? `: ${budgetWords} of daily budget` : '')
       + (highest ? `${budgetWords ? ',' : ':'} the highest bid serving again ${amountLabel(highest.cents, highest.currency)}` : '')
       + '. They serve again about an hour after Amazon takes the change.'
@@ -398,14 +474,21 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
     marketplace: ad.campaign.marketplace,
     fromLabel: STATUS_WORDS[ad.status] ?? ad.status,
     toLabel: STATUS_WORDS[to],
-    ...(kind === 'enable' ? { pausedBy: pausedByWords(pausedBy.get(`${ad.level}:${ad.id}`)!) } : {}),
+    ...(kind === 'enable' ? { pausedBy: pausedByWords(whoPaused(ad)) } : {}),
+    // W4-2 — a pause no Claude request made: only the approver's code switches it back on.
+    ...(needsCode(ad) ? { needsCode: true } : {}),
     ...(kind === 'enable' && bids.get(`${ad.level}:${ad.id}`) != null ? { highestBidCents: bids.get(`${ad.level}:${ad.id}`), currency: ad.campaign.currency } : {}),
   }))
   // Every ad named, its status, and (for an enable) the pause it lifts and the spend it restarts: a move on any of them
-  // after approval is caught, not only on the lines shown.
+  // after approval is caught, not only on the lines shown. A Claude pause by its request (as before W4-2), any other by
+  // who paused it and when.
+  const pauseOf = (ad: Ad) => {
+    const p = whoPaused(ad)
+    return p.by === 'claude' ? p.approvalId : JSON.stringify(pausedFacts(p))
+  }
   const basis = createHash('sha256').update(ads.map((ad) => [
     ad.level, ad.id, ad.status,
-    ...(kind === 'enable' && from.includes(ad.status) ? [(pausedBy.get(`${ad.level}:${ad.id}`) as { approvalId?: string } | undefined)?.approvalId ?? '', ad.level === 'campaign' ? ad.campaign.dailyBudgetCents : '', bids.get(`${ad.level}:${ad.id}`) ?? ''] : []),
+    ...(kind === 'enable' && from.includes(ad.status) ? [pauseOf(ad), ad.level === 'campaign' ? ad.campaign.dailyBudgetCents : '', bids.get(`${ad.level}:${ad.id}`) ?? ''] : []),
   ].join(':')).join('|')).digest('base64url').slice(0, 32)
 
   return {
@@ -424,6 +507,17 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
         ...(kind === 'archive' ? { permanent: PERMANENT } : {}),
         // enable-ads — every ad's highest bid serving again, in its campaign's currency (not only the lines shown).
         ...(kind === 'enable' ? { restartBids: Object.fromEntries(changing.map((ad) => [`${ad.level}:${ad.id}`, { cents: bids.get(`${ad.level}:${ad.id}`) ?? null, currency: ad.campaign.currency }])) } : {}),
+        // W4-2 — every ad switched back on starts spending again (a raise, as the limit facts count it); who paused each one,
+        // frozen for `execute`; how many only the approver's code switches back on, and then the code itself (stepUp).
+        // A Claude request's own pause is as before: a raise the business may let run by its rule, with no code.
+        ...(kind === 'enable'
+          ? {
+            raises: changing.map((ad) => ad.label),
+            whoPaused: Object.fromEntries(changing.map((ad) => [`${ad.level}:${ad.id}`, pausedFacts(whoPaused(ad))])),
+            needsCode: coded.length,
+            ...(coded.length ? { stepUp: { what: `switches back on ${plural(coded.length, ['ad', 'ads'])} paused by a person or by a writer Nexus cannot name`, raises: ['Spend'], needs: STEP_UP_NEEDS, how: PEOPLES_HOW } } : {}),
+          }
+          : {}),
         basis,
         reach: stored,
         reachNote: reachNote(stored),
@@ -431,7 +525,8 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
           ? `${PERMANENT} To stop an ad for a while, lower its bids (suppress-campaign) or pause it (pause-ads) instead.`
           : kind === 'pause'
           ? 'A real pause: a paused ad serves again only about an hour after enable-ads switches it on. To stop it for a while, lower its bids instead (suppress-campaign): it serves again about a minute after they go back.'
-          : 'Spend resumes: these ads compete in auctions again with the bids and budgets shown.',
+          : 'Spend resumes: these ads compete in auctions again with the bids and budgets shown.'
+            + (coded.length ? ` ${coded.length === changing.length ? (coded.length === 1 ? 'No Claude request paused it' : 'No Claude request paused them') : `${coded.length} of them no Claude request paused`} (each line says who did): approving needs the approver's authenticator code.` : ''),
         ...ruleFacts,
         effect,
       },
@@ -473,6 +568,19 @@ function archiveProtectedRefusal(preview: unknown): string | null {
     return `${scope.label}: the ads strategy protects a product it advertises (${strategyWords(scope.sources.protect)}), so archiving its ads waits for a person`
   }
   return null
+}
+
+/**
+ * enable-ads, W4-2 — an ad a person paused (or a writer Nexus cannot name) is switched back on only by a person approving
+ * with their authenticator code: never by the business's rule, whatever its level and limits — the precedent of
+ * build-sp-wizard-campaigns' accepted same-product keyword. A preview that does not say is a person's too. That is why
+ * no limit lets it: none would ever be read.
+ */
+function peoplesPauseRefusal(preview: unknown): string | null {
+  const n = (preview as { needsCode?: unknown } | null)?.needsCode
+  if (typeof n !== 'number') return 'the preview does not say whether it switches back on an ad a person paused; a person decides'
+  if (n > 0) return `it switches back on ${plural(n, ['ad', 'ads'])} paused by a person or by a writer Nexus cannot name: only a person approving with their authenticator code lifts that, never a rule; a person decides`
+  return stepUpOf(preview) ? 'approving it needs the approver\'s authenticator code, never a rule; a person decides' : null
 }
 
 /**
@@ -539,6 +647,37 @@ function undoBy(tool: string, status: string, why: string): ToolUndo {
   }
 }
 
+/** W4-2 — frozen who-paused facts in words, for a refusal: "a person in Nexus (user:…, 2026-10-07 09:00 UTC)". */
+function factsWords(f: Record<string, unknown> | undefined): string {
+  if (!f) return 'no one the approver saw'
+  const at = typeof f.at === 'string' ? when(new Date(f.at)) : null
+  switch (f.by) {
+    case 'claude': return `Claude request ${String(f.approvalId)}${at ? ` (${at})` : ''}`
+    case 'amazon': return `Claude request ${String(f.approvalId)}, then changed at Amazon`
+    case 'person': return `a person in Nexus (${String(f.actor)}${at ? `, ${at}` : ''})`
+    case 'rule': return `a Nexus rule or engine (${String(f.actor)}${at ? `, ${at}` : ''})`
+    case 'unrecorded': return `a writer Nexus did not record${at ? ` (${at})` : ''}`
+    default: return 'someone at Amazon (Seller Central), with no Nexus record'
+  }
+}
+
+/**
+ * W4-2 — `execute` of an enable: was each ad still paused by whom the approver saw? A status change Nexus recorded since
+ * (anyone's) refuses the request, naming the ad, who paused it then and who now. An approval stored before W4-2 carries
+ * no `whoPaused`: its basis holds the Claude pause it lifts, as before.
+ */
+function whoPausedMoved(approvedPreview: unknown, fresh: ToolResult, changing: Ad[]): string | null {
+  const then = (approvedPreview as { whoPaused?: Record<string, Record<string, unknown>> } | null)?.whoPaused
+  const now = fresh.ok ? (fresh.preview as { whoPaused?: Record<string, Record<string, unknown>> } | undefined)?.whoPaused : undefined
+  if (!then || !now) return null
+  for (const ad of changing) {
+    const key = `${ad.level}:${ad.id}`
+    if (!(key in then) || canonical(then[key]) === canonical(now[key])) continue
+    return `Not run: the status of ${ad.label} changed after it was approved: it was paused by ${factsWords(then[key])}, and now by ${factsWords(now[key])}. Ask for it again with the ads as they are now.`
+  }
+  return null
+}
+
 async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
   // PB-5a — a playbook build that stopped is marked FAILED (with what it made) before its campaigns are archived: the
   // dry run only names them.
@@ -550,13 +689,29 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
     await settleStoppedReplicates({ applicationId: args.buildRunId })
   }
   const { result: fresh, changing } = await decide(kind, args, ctx)
-  const refusal = recheck(ctx, fresh, ['totals', 'basis'])
+  // W4-2 — who paused each ad, as the approver saw it: a status change recorded since refuses it, in words.
+  const moved = kind === 'enable' ? whoPausedMoved(ctx.approvedPreview, fresh, changing) : null
+  if (moved) return notRun(moved)
+  const refusal = recheck(ctx, fresh, kind === 'enable' ? ['totals', 'basis', 'whoPaused'] : ['totals', 'basis'])
   if (refusal) return notRun(refusal)
-  const p = fresh.preview as { reach: StoredReach; effect: string }
+  const p = fresh.preview as { reach: StoredReach; effect: string; needsCode?: number }
+  const coded = kind === 'enable' ? p.needsCode ?? 0 : 0
   // AA-W2-6 — a run the business's rule decided says so in the ads audit (approvedRun).
-  const said = String(args.why ?? '').trim() || (kind === 'pause' ? 'a real pause' : kind === 'archive' ? 'archived for good' : 'switching back on what Claude paused')
+  const said = String(args.why ?? '').trim()
+    || (kind === 'pause' ? 'a real pause' : kind === 'archive' ? 'archived for good' : coded ? 'switching back on what a person paused, approved with the approver\'s authenticator code' : 'switching back on what Claude paused')
   const run = approvedRun(ctx, said)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
+  // W4-2 — a pause a person made (or a writer Nexus cannot name) is lifted only by a person approving with their code:
+  // never by rule (withinLimits refuses it, so the rule cannot schedule it; this is the last door), never by a plain approve.
+  if (coded) {
+    const ads = plural(coded, ['ad', 'ads'])
+    if (ctx.decidedVia === 'auto') return notRun(`Not run: it switches back on ${ads} paused by a person or by a writer Nexus cannot name, which needs a person's authenticator code, never a rule. Ask for it again; a person approves it.`)
+    const code = await stepUpApproval(ctx)
+    if ('refusal' in code) {
+      return notRun(code.refusal.replace('it raises, and a raise runs', `it switches back on ${ads} paused by a person or by a writer Nexus cannot name, and that runs`)
+        .replace('it raises, and', `it switches back on ${ads} a person paused, and`).replace('which a raise needs', 'which that needs'))
+    }
+  }
   const { to } = MOVE[kind]
   // A pause or an archive carries `letsGo`: it lets go of spend, so a halt does not hold it at Amazon's door either
   // (isLetGoWrite), and the worker sends an archive as Amazon's delete operation.
@@ -600,6 +755,13 @@ const STATUS_INPUT = z.object({
     product: z.string().trim().min(1).max(64).describe('the SKU or ASIN the ad advertises'),
   })).max(MAX_ADS).optional().describe('product ads, each named by its ad group and the SKU or ASIN it advertises'),
   why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
+})
+/** enable-ads, W4-2 — may also lift a person's pause, asked for in so many words. pause-ads takes no such option. */
+const ENABLE_INPUT = STATUS_INPUT.extend({
+  includePeoplesPauses: z.boolean().optional()
+    .describe('true: also switch back on an ad a person paused, in Nexus or at Amazon (Seller Central), or one a writer Nexus cannot name; '
+      + "the preview says who paused each and when, and approving needs the approver's authenticator code (never by rule). "
+      + 'A pause a Nexus rule or engine made is never switched back on. Default false: only what a Claude request paused'),
 })
 /** archive-ads also names a playbook build's campaigns at once (PB-5a: the undo of apply-ads-playbook op build). */
 const ARCHIVE_INPUT = STATUS_INPUT.extend({
@@ -645,7 +807,7 @@ const pauseAds: AgentTool = {
 const enableAds: AgentTool = {
   name: TOOL.enable,
   title: 'Switch paused Amazon ads on',
-  input: STATUS_INPUT,
+  input: ENABLE_INPUT,
   requires: [F.adsCampaignsManage, FIELDS.financialsAdspendView],
   category: 'advertising',
   riskTier: 'high',
@@ -657,16 +819,20 @@ const enableAds: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'auto',
   limits: STATUS_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? restartBidRefusal(preview),
+  withinLimits: (preview, limits) => peoplesPauseRefusal(preview) ?? ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? restartBidRefusal(preview),
   undo: undoBy(TOOL.pause, 'PAUSED', 'undo of an enable'),
   description:
-    `Switch Amazon Sponsored Products ads back on that a Claude request paused (pause-ads): campaigns, ad groups, keywords `
-    + `and product targets, or product ads (up to ${MAX_ADS}). Never an ad a person paused, in Nexus or at Amazon (Seller `
-    + 'Central): that stays theirs to switch on. An archived ad cannot be switched on at all (Amazon\'s rule). Spend '
-    + 'resumes: the preview lists each ad from Paused to Enabled, who paused it, the daily budget and the highest bid that '
-    + 'serve again, this month\'s forecast where a monthly cap is set, and where it lands. A person approves it in Nexus, '
-    + 'unless the business lets it run by its rule inside its limits and the ads strategy. Refused, and not queued, when '
-    + 'Amazon\'s write gate would refuse it (a halt stops an enable). pause-ads (or undo-change) pauses them again.',
+    `Switch paused Amazon Sponsored Products ads back on: campaigns, ad groups, keywords and product targets, or product ads `
+    + `(up to ${MAX_ADS}). By default only what a Claude request paused (pause-ads). With includePeoplesPauses: true, also an `
+    + 'ad a person paused, in Nexus or at Amazon (Seller Central), or one a writer Nexus cannot name: the preview says who '
+    + 'paused it and when, and a person with settings.security.manage approves it with their authenticator code (or the '
+    + 'person who asked confirms it in Claude with theirs); it never runs by rule. Never an ad a Nexus rule or engine paused: '
+    + 'it would pause it again, so the refusal names the rule to stop first. An archived ad cannot be switched on at all '
+    + '(Amazon\'s rule). Spend resumes: the preview lists each ad from Paused to Enabled, who paused it, the daily budget and '
+    + 'the highest bid that serve again, this month\'s forecast where a monthly cap is set, and where it lands. A person '
+    + 'approves it in Nexus, unless the business lets it run by its rule inside its limits and the ads strategy (only what a '
+    + 'Claude request paused). Refused, and not queued, when Amazon\'s write gate would refuse it (a halt stops an enable). '
+    + 'pause-ads (or undo-change) pauses them again.',
   async handler(args, ctx) {
     return (await decide('enable', args, ctx)).result
   },
