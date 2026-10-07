@@ -9,18 +9,20 @@
  * state (no account, no language, another tab) is not guessed, it is simply not prefetched.
  */
 import { languageSelection } from './sheet/languages'
-import { channelScopeUrl, compactSheetUrl, destinationUrl, masterSheetUrl } from './sheetUrls'
+import { channelScopeUrl, compactSheetUrl, destinationUrl, familyOrderUrl, masterSheetUrl } from './sheetUrls'
 import { startPrefetch } from './prefetchStore'
 
 export interface StudioPrefetchPlan {
   destination: string | null
   sheet: string | null
+  /** The Information page's row order (`useFamilyRank`), read beside its sheet so the rows do not wait for it. */
+  familyOrder: string | null
 }
 
 type Params = Pick<URLSearchParams, 'get'>
 
 export function studioPrefetchPlan(productId: string, search: Params): StudioPrefetchPlan {
-  const none = { destination: null, sheet: null }
+  const none = { destination: null, sheet: null, familyOrder: null }
   const market = search.get('market')
   if (!productId || !market) return none
   const tab = search.get('tab')
@@ -30,17 +32,19 @@ export function studioPrefetchPlan(productId: string, search: Params): StudioPre
   const locale = locales?.[0] ?? search.get('locale')
   const scope = search.get('scope')
   const listing = search.get('listing') ?? undefined
+  const familyOrder = sheetTab && locale ? familyOrderUrl(productId, market, locale) : null
 
   if (!scope || scope === 'master') {
     // A listing on master is a scope error: nothing loads.
     if (listing) return none
-    return { destination: null, sheet: sheetTab && locale ? compactSheetUrl(masterSheetUrl(productId, market, locale, locales)) : null }
+    return { destination: null, sheet: sheetTab && locale ? compactSheetUrl(masterSheetUrl(productId, market, locale, locales)) : null, familyOrder }
   }
   const account = search.get('account') ?? undefined
   return {
     destination: account !== undefined || listing !== undefined ? destinationUrl(productId, scope, market, account, listing) : null,
     // The sheet reads with the account the URL names; without one it waits for the destination to name it.
     sheet: sheetTab && account && locale ? compactSheetUrl(channelScopeUrl({ productId, channel: scope, marketplace: market, accountId: account, locale, locales })) : null,
+    familyOrder,
   }
 }
 
@@ -49,5 +53,6 @@ export function prefetchStudio(productId: string, search: Params): StudioPrefetc
   const plan = studioPrefetchPlan(productId, search)
   if (plan.destination) startPrefetch(plan.destination)
   if (plan.sheet) startPrefetch(plan.sheet)
+  if (plan.familyOrder) startPrefetch(plan.familyOrder)
   return plan
 }

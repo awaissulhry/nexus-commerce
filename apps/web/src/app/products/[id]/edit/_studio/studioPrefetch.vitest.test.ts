@@ -3,11 +3,11 @@
  * adopt them only when they would have made exactly the same read.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { adoptPrefetch, clearPrefetches, PREFETCH_TTL_MS, startPrefetch } from './prefetchStore'
+import { adoptPrefetch, clearPrefetches, discardPrefetch, PREFETCH_TTL_MS, prefetchKind, startPrefetch } from './prefetchStore'
 import { studioPrefetchPlan } from './studioPrefetch'
 import { fetchStudioRead } from './studio-read'
 import { channelScopeUrl } from './sheet/channel/useChannelSheet'
-import { compactSheetUrl, masterSheetUrl } from './sheetUrls'
+import { compactSheetUrl, familyOrderUrl, masterSheetUrl } from './sheetUrls'
 
 const ID = 'prod-family-1'
 const ACCOUNT = 'acct-ebay-1'
@@ -39,20 +39,57 @@ describe('studioPrefetchPlan', () => {
   })
 
   it('names the master sheet on the Shared scope, with no destination', () => {
-    expect(studioPrefetchPlan(ID, params('scope=master&market=IT&locale=it'))).toEqual({ destination: null, sheet: compactSheetUrl(masterSheetUrl(ID, 'IT', 'it', null)) })
-    expect(studioPrefetchPlan(ID, params('market=IT&locales=it,de'))).toEqual({ destination: null, sheet: compactSheetUrl(masterSheetUrl(ID, 'IT', 'it', ['it', 'de'])) })
+    expect(studioPrefetchPlan(ID, params('scope=master&market=IT&locale=it'))).toEqual({ destination: null, sheet: compactSheetUrl(masterSheetUrl(ID, 'IT', 'it', null)), familyOrder: familyOrderUrl(ID, 'IT', 'it') })
+    expect(studioPrefetchPlan(ID, params('market=IT&locales=it,de'))).toEqual({ destination: null, sheet: compactSheetUrl(masterSheetUrl(ID, 'IT', 'it', ['it', 'de'])), familyOrder: familyOrderUrl(ID, 'IT', 'it') })
   })
 
   it('guesses nothing the URL does not state', () => {
-    // No account: the frame picks the primary one from the accounts it reads first.
-    expect(studioPrefetchPlan(ID, params('scope=EBAY&market=IT&locale=it'))).toEqual({ destination: null, sheet: null })
+    // No account: the frame picks the primary one from the accounts it reads first. The family order needs no account.
+    expect(studioPrefetchPlan(ID, params('scope=EBAY&market=IT&locale=it'))).toEqual({ destination: null, sheet: null, familyOrder: familyOrderUrl(ID, 'IT', 'it') })
     // No language: the frame picks the scope's first language.
     expect(studioPrefetchPlan(ID, params(`scope=EBAY&market=IT&account=${ACCOUNT}`)).sheet).toBeNull()
     // Another tab: no sheet, but the channel tab still waits for its destination.
     const images = studioPrefetchPlan(ID, params(`scope=EBAY&market=IT&account=${ACCOUNT}&locale=it&tab=images`))
     expect(images.sheet).toBeNull()
+    expect(images.familyOrder).toBeNull()
     expect(images.destination).not.toBeNull()
-    expect(studioPrefetchPlan(ID, params('scope=EBAY&locale=it'))).toEqual({ destination: null, sheet: null })
+    expect(studioPrefetchPlan(ID, params('scope=EBAY&locale=it'))).toEqual({ destination: null, sheet: null, familyOrder: null })
+  })
+})
+
+describe('the family order read (Owner 2026-10-07) starts with the Information page\'s sheet', () => {
+  it('names the order view on the Information tab only — the Matrix reads the full family read itself', () => {
+    expect(studioPrefetchPlan(ID, params(`scope=EBAY&market=IT&account=${ACCOUNT}&locale=it&tab=sheet`)).familyOrder).toBe(familyOrderUrl(ID, 'IT', 'it'))
+    expect(studioPrefetchPlan(ID, params('scope=master&market=IT&locale=it&tab=matrix')).familyOrder).toBeNull()
+    expect(new URL(familyOrderUrl(ID, 'IT', 'it')).searchParams.get('view')).toBe('order')
+  })
+
+  it('prefetches only the order view, never the full family read', () => {
+    expect(prefetchKind(familyOrderUrl(ID, 'IT', 'it'))).toBe('family')
+    expect(prefetchKind(familyOrderUrl(ID, 'IT', 'it').replace('&view=order', ''))).toBeNull()
+  })
+
+  it('a product with no family discards the prefetch, so a family made later reads fresh', async () => {
+    const url = familyOrderUrl(ID, 'IT', 'it')
+    let signal: AbortSignal | undefined
+    startPrefetch(url, (_url, init) => { signal = init?.signal ?? undefined; return Promise.resolve(new Response('stale')) })
+    discardPrefetch(familyOrderUrl('another-product', 'IT', 'it'))
+    expect(signal?.aborted).toBe(false)
+    discardPrefetch(url)
+    expect(signal?.aborted).toBe(true)
+    const network = vi.fn(() => Promise.resolve(new Response('fresh')))
+    vi.stubGlobal('fetch', network)
+    await expect((await fetchStudioRead(url)).text()).resolves.toBe('fresh')
+  })
+
+  it('the order read adopts the prefetch once, and a reload reads again', async () => {
+    const url = familyOrderUrl(ID, 'IT', 'it')
+    startPrefetch(url, () => Promise.resolve(new Response('prefetched')))
+    const network = vi.fn(() => Promise.resolve(new Response('network')))
+    vi.stubGlobal('fetch', network)
+    await expect((await fetchStudioRead(url)).text()).resolves.toBe('prefetched')
+    await expect((await fetchStudioRead(url)).text()).resolves.toBe('network')
+    expect(network).toHaveBeenCalledTimes(1)
   })
 })
 

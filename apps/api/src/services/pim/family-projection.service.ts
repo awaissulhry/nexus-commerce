@@ -459,7 +459,16 @@ async function setVariationExcluded(listingIds: string[], excluded: boolean, db:
 // §2 — the family read
 // ────────────────────────────────────────────────────────────────────
 
-export async function getFamilyRead(productId: string, market: string, locale?: string): Promise<FamilyRead> {
+export interface FamilyReadOptions {
+  /**
+   * `false` skips the per-channel projection reads (`getProjectionRead`): each builds a channel sheet and the master
+   * sheet again, so a market with four connected channels costs eight more sheet builds. The order view needs none
+   * of them (`familyOrderView`); every other reader keeps the full read.
+   */
+  projections?: boolean
+}
+
+export async function getFamilyRead(productId: string, market: string, locale?: string, options: FamilyReadOptions = {}): Promise<FamilyRead> {
   const t0 = Date.now()
   const phases: Record<string, number> = {}
   const mark = (name: string, from: number) => { phases[name] = Date.now() - from }
@@ -482,7 +491,10 @@ export async function getFamilyRead(productId: string, market: string, locale?: 
   const tSheet = Date.now()
   let sheet: StudioSheet | null = null
   try {
-    sheet = await getStudioSheet({ productId: root.id, scope: 'master', market, locale, includeMapping: false })
+    // The order view of a product with no variations has nothing to order: no sheet (the Information page asks for it
+    // with every sheet it opens, before it knows whether the product has a family).
+    if (options.projections !== false || children.length > 0)
+      sheet = await getStudioSheet({ productId: root.id, scope: 'master', market, locale, includeMapping: false })
   } catch {
     // A missing schema for the product type must not take the whole page down: the grid can render identity,
     // axes and projections without readiness, and `readiness: null` says honestly that it was not computed.
@@ -626,7 +638,7 @@ export async function getFamilyRead(productId: string, market: string, locale?: 
 
   const projectionReads = new Map<string, ProjectionRead>()
   const failures = new Map<string, string>()
-  await Promise.all(channels.filter(c => c.connected && c.accountId).map(async c => {
+  await Promise.all(channels.filter(c => options.projections !== false && c.connected && c.accountId).map(async c => {
     try { projectionReads.set(c.key, await getProjectionRead({ productId: root.id, channel: c.channel, market: c.market, accountId: c.accountId!, locale, includeOrder: false })) }
     catch (err) { failures.set(c.key, err instanceof Error ? err.message : String(err)) }
   }))
@@ -730,6 +742,32 @@ export async function getFamilyRead(productId: string, market: string, locale?: 
     },
     channels: channels.map(({ key: _key, ...rest }) => rest),
     meta: { tookMs: Date.now() - t0, phases },
+  }
+}
+
+/**
+ * Owner 2026-10-07 (Option A) — what the Information page needs to order a family's rows exactly as the Matrix does:
+ * the axes with their stored value order, and each child's axis values. Cut from the SAME family read the Matrix
+ * reads (one definition of the axes and the values), asked with `projections: false`, so it carries no projection,
+ * readiness or coverage — a caller cannot read a skipped projection as a real one.
+ */
+export interface FamilyOrderRead {
+  version: number
+  view: 'order'
+  axes: FamilyAxis[]
+  parent: { id: string }
+  children: Array<{ id: string; axisValues: Record<string, string> }>
+  meta: FamilyRead['meta']
+}
+
+export function familyOrderView(read: FamilyRead): FamilyOrderRead {
+  return {
+    version: read.version,
+    view: 'order',
+    axes: read.axes,
+    parent: { id: read.parent.id },
+    children: read.children.map((child) => ({ id: child.id, axisValues: child.axisValues })),
+    meta: read.meta,
   }
 }
 
