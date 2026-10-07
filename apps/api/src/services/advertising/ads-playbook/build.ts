@@ -476,15 +476,16 @@ export async function buildRunCreated(applicationId: string): Promise<string[] |
 }
 
 /** A build's run as approval-status follows it: its status, how far it is, the campaigns it made and how many errors. */
-export async function buildRunDelivery(applicationId: string): Promise<{ status: string; done: number | null; total: number | null; createdCampaignIds: string[]; errors: number; stopped?: true } | null> {
+export async function buildRunDelivery(applicationId: string): Promise<{ status: string; stopped?: true; done: number | null; total: number | null; createdCampaignIds: string[]; errors: number } | null> {
   const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, ...CLAUDE_BUILD_RUN }, select: { status: true, progress: true, createdCampaignIds: true, errors: true, startedAt: true, createdAt: true } })
   if (!run) return null
   const progress = (run.progress ?? {}) as { done?: unknown; total?: unknown }
+  // B-1 / B-3 — a build a deploy killed reads as stopped (FAILED once the next build or an archive settles it), never RUNNING.
+  const stopped = stoppedRunning(run)
   return {
-    status: run.status, done: typeof progress.done === 'number' ? progress.done : null, total: typeof progress.total === 'number' ? progress.total : null,
+    status: stopped ? 'FAILED' : run.status, ...(stopped ? { stopped: true as const } : {}),
+    done: typeof progress.done === 'number' ? progress.done : null, total: typeof progress.total === 'number' ? progress.total : null,
     createdCampaignIds: run.createdCampaignIds, errors: run.errors.length,
-    // B-3 — a run that stopped advancing (a deploy killed it) is said; its next build or its archive marks it FAILED.
-    ...(stoppedRunning(run) ? { stopped: true as const } : {}),
   }
 }
 

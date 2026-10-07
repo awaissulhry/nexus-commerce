@@ -76,6 +76,13 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // B-3 — a one-off SP Super Wizard set, the create kind: only at the floor and off the allowlist (nothing spends until
   // restore-campaign), by default never by rule (maxCampaigns 0, no market).
   'build-sp-wizard-campaigns',
+  // B-1 — a copy of a running structure with the Replicate Structure builder, the create kind: only at the floor and off
+  // the allowlist (it spends nothing until set-campaign-live-writes and restore-campaign), by default never by rule
+  // (maxCampaigns 0), and never by rule with a clash the product's own campaigns already buy.
+  'replicate-ad-structure',
+  // B-2 — an AI goal, the create kind: only at the floor, off the allowlist, its rules and plan off (nothing spends until
+  // restore-campaign); by default never by rule (maxCampaigns 0).
+  'create-ai-goal-campaigns',
 ]
 
 /**
@@ -403,6 +410,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'enable-ads': { before: { changeSetId: 'ap1', items: [{ level: 'target', id: 't1', status: 'PAUSED' }] }, after: { items: [{ level: 'target', id: 't1', status: 'ENABLED' }] } },
       // AA-W2-13 — a created campaign is put back (in part) by archiving it.
       'create-ad-campaign': { before: { campaignId: null }, after: { campaignId: 'c9', name: 'Test launch', market: 'IT' } },
+      // B-2 — an AI goal is put back (in part) by archiving every campaign it made at Amazon.
+      'create-ai-goal-campaigns': { before: { goalId: null, campaignIds: [] }, after: { goalId: 'g1', planId: 'pl1', market: 'IT', name: 'Test goal', campaignIds: ['c1', 'c2'], notAtAmazon: [] } },
       // W3-3 — a stock lowering is undone by a give-back (even while stock is short), a give-back by a lowering.
       'lower-ad-bids-for-stock': {
         before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 50, toCents: 40 }] },
@@ -416,6 +425,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'build-sp-wizard-campaigns': { before: { applicationId: null, market: 'IT', productGroupName: 'Test set', structure: 'advanced' }, after: { applicationId: 'run2', market: 'IT', productGroupName: 'Test set', structure: 'advanced' } },
       // PB-5a — a playbook build is archived (every campaign it made); an adopt is put back by the opposite adopt.
       'apply-ads-playbook': { before: { op: 'build', playbookId: 'pb1', state: 'DRAFT', slots: [] }, after: { op: 'build', playbookId: 'pb1', applicationId: 'run1' } },
+      // B-1 — a Replicate copy is archived (every campaign its run made).
+      'replicate-ad-structure': { before: { applicationId: null, market: 'IT', productToken: 'TEST' }, after: { applicationId: 'run2' } },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },

@@ -874,7 +874,8 @@ const A16: AutomationAdapter = {
   id: 'A16', key: 'ads-ai-goals', name: 'AI goals',
   what: 'Turns a product goal into campaigns and rules (rules start disabled, as dry runs).',
   area: 'amazon-ads', writesTo: ['nexus'], view: FEATURES.adsView, claude: 'see', preview: 'none',
-  previewNote: 'Claude reads goals; it does not create them.',
+  // B-2 — Claude asks for a goal and its campaigns with create-ai-goal-campaigns (a person approves it).
+  previewNote: 'Claude reads goals here; it asks for a new one with create-ai-goal-campaigns, which a person approves.',
   crons: [], schedule: null,
   env: noEnv,
   async rows() {
@@ -886,7 +887,7 @@ const A16: AutomationAdapter = {
     const active = rows.filter((r) => r.status === 'ACTIVE').length
     return { level: null, reason: 'A person materialises a goal; nothing runs on a clock.', state: `${rows.length} goals, ${active} active.`, rows: { total: rows.length, byLevel: {} } }
   },
-  noSwitch: 'AI goals are materialised by a person in Nexus',
+  noSwitch: 'AI goals are materialised in Nexus, by a person or by a Claude request a person approves',
 }
 
 const A17: AutomationAdapter = {

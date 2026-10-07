@@ -369,6 +369,30 @@ describe('CC-1 / CC-2 — the AI Goal launch links Amazon\'s auto groups and ans
     expect(amz.targetUpdates).toHaveLength(3)
     expect(amz.targetUpdates.every((u) => u.kind === 'AUTO' && typeof u.patch.bid === 'number' && u.patch.state === undefined)).toBe(true)
   })
+
+  it('B-2 — Claude\'s goal, born off the allowlist and at the floor: every part still reaches Amazon (its negatives too), in its change set', async () => {
+    const goal = await inside(() => db().adProductGoal.create({ data: {
+      name: 'B2 goal', aiTarget: 'SALES', budgetMode: 'STRICT', marketplace: 'IT', products: [{ sku: 'TEST-SKU-1', budgetCents: 2000 }] as never,
+      seedKeywords: ['winter gloves'], excludeKeywords: ['cheap'],
+    } }))
+    const { materializeProductGoal } = await import('./ai-goal-materialize.service.js')
+    const out = await inside(() => materializeProductGoal(goal.id, 'user:u-b2', {
+      allowlistAtBirth: false, bornSuppressed: { floorCents: 2, by: 'user:u-asker' }, changeSetId: 'ap-b2', automationOff: true,
+    }))
+    // Auto, Research and Performance: all live, every part made — the exact and phrase "cheap" in Auto and Research.
+    expect(out.launch).toMatchObject({ ok: true, asked: 3, live: 3 })
+    expect(amz.calls.filter((c) => c === 'negativeKeywords')).toHaveLength(4)
+    const ids = out.campaigns.map((c) => c.id)
+    expect(await inside(() => db().campaign.findMany({ where: { id: { in: ids } }, select: { liveBidWritesEnabled: true, bidsSuppressedBy: true }, distinct: ['liveBidWritesEnabled', 'bidsSuppressedBy'] })))
+      .toEqual([{ liveBidWritesEnabled: false, bidsSuppressedBy: 'user:u-asker' }])
+    // The auto groups are linked at the floor (Amazon made them at the ad group's 2-cent default: nothing to send), each
+    // with its planned bid remembered.
+    expect(amz.targetUpdates).toEqual([])
+    const auto = out.campaigns.find((c) => c.role === 'AUTO')!
+    expect((await inside(() => db().adTarget.findMany({ where: { adGroup: { campaignId: auto.id }, kind: 'AUTO' }, orderBy: { expressionValue: 'asc' }, select: { externalTargetId: true, bidCents: true, suppressedFromBidCents: true } })))
+      .map((t) => [!!t.externalTargetId, t.bidCents, t.suppressedFromBidCents])).toEqual([[true, 2, 75], [true, 2, 45], [true, 2, 49], [true, 2, 83]])
+    expect(await inside(() => db().advertisingActionLog.count({ where: { actionType: 'create_campaign', executionId: 'ap-b2' } }))).toBe(3)
+  })
 })
 
 describe('CC-17 / CC-1 — the read-back checks auto groups by expression, negatives and placements (launch only)', () => {
@@ -401,6 +425,34 @@ describe('CC-17 / CC-1 — the read-back checks auto groups by expression, negat
 
     const r = await inside(() => verifyLaunch(['c-v'], 'RECONCILE'))
     expect(r.entities.map((e) => e.entityType).sort()).toEqual(['AD_GROUP', 'CAMPAIGN'])
+  })
+})
+
+describe('Replicate — negatives in every spelling Nexus stores reach Amazon', () => {
+  it('copies EXACT, PHRASE, NEGATIVE_EXACT, NEGATIVE_PHRASE and _EXACT negatives (a campaign Nexus built keeps its exclusions)', async () => {
+    const neg = (expression: string, expressionType: string) => ({ kind: 'KEYWORD', expressionType, expression, bidCents: null, isNegative: true, negativeLevel: 'AD_GROUP', targetClass: 'GENERIC' })
+    const doc = {
+      version: 1, productToken: 'TESTNEGS', sharedTargets: [],
+      stats: { campaigns: 1, adGroups: 1, positives: 1, negatives: 5, productAds: 1, byClass: { BRAND: 1, CATEGORY: 0, COMPETITOR: 0, ASIN: 0, AUTO: 0, UNKNOWN: 0 }, orphanedInSource: 0 },
+      campaigns: [{
+        role: 'Keyword-Exact', namePattern: '{{product}} - negatives replica', dailyBudget: 5, biddingStrategy: 'LEGACY_FOR_SALES', placementBidding: [], targetingType: 'MANUAL',
+        adGroups: [{ namePattern: '{{product}} negatives group', defaultBidCents: 40, productAdCount: 1, targets: [
+          { kind: 'KEYWORD', expressionType: 'EXACT', expression: '{{product}} jacket', bidCents: 50, isNegative: false, negativeLevel: null, targetClass: 'BRAND' },
+          neg('synced exact', 'EXACT'), neg('synced phrase', 'PHRASE'), neg('nexus exact', 'NEGATIVE_EXACT'), neg('nexus phrase', 'NEGATIVE_PHRASE'), neg('blueprint exact', '_EXACT'),
+        ] }],
+      }],
+    }
+    const bp = await inside(() => db().adBlueprint.create({ data: { name: 'Negatives replica', marketplace: 'IT', productToken: 'TESTNEGS', doc: doc as never } }))
+    const { applyBlueprint } = await import('./ads-blueprint-apply.service.js')
+    const before = amz.calls.filter((c) => c === 'negativeKeywords').length
+    const out = await inside(() => applyBlueprint({ blueprintId: bp.id, target: { productToken: 'TESTNEGS', asins: ['TEST-SKU-1'] }, marketplace: 'IT', dryRun: false, actor: 'user:u-negs' }))
+    expect(out.plan.warnings.filter((w) => w.includes('match type Amazon does not accept'))).toEqual([])
+    expect(out.created.negatives).toBe(5)
+    expect(amz.calls.filter((c) => c === 'negativeKeywords').length - before).toBe(5)
+    const rows = await inside(() => db().adTarget.findMany({ where: { isNegative: true, adGroup: { campaign: { name: 'TESTNEGS - negatives replica' } } }, orderBy: { expressionValue: 'asc' }, select: { expressionValue: true, externalTargetId: true } }))
+    expect(rows.map((r) => [r.expressionValue, !!r.externalTargetId])).toEqual([
+      ['blueprint exact', true], ['nexus exact', true], ['nexus phrase', true], ['synced exact', true], ['synced phrase', true],
+    ])
   })
 })
 

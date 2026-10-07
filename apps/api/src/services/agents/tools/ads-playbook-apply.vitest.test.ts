@@ -202,7 +202,7 @@ describe('approved, a build runs on its own', () => {
     expect((await preview('apply-ads-playbook', build(built.parent))).error).toMatch(/^Nothing to build: every slot of the playbook is held by a live campaign/)
     const running = await inside(() => db().adBlueprintApplication.create({ data: { productToken: 'TESTAPA', marketplace: 'IT', status: 'RUNNING', plan: {}, playbookId: built.rowId, createdCampaignIds: [] } }))
     expect((await preview('archive-ads', { buildRunId: running.id })).error).toMatch(/that build is still running/)
-    expect((await preview('archive-ads', { buildRunId: 'no-such-build' })).error).toMatch(/^Build no-such-build not found in this business/)
+    expect((await preview('archive-ads', { buildRunId: 'no-such-build' })).error).toMatch(/Build run no-such-build not found in this business \(buildRunId: the applicationId apply-ads-playbook, build-sp-wizard-campaigns or replicate-ad-structure answered\)/)
     await inside(() => db().adBlueprintApplication.update({ where: { id: running.id }, data: { status: 'FAILED' } }))
   })
 

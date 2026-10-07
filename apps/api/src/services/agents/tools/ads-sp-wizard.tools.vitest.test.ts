@@ -354,7 +354,8 @@ describe('approved, it runs on its own and is born safe', () => {
     // As a deploy leaves it: still RUNNING, its last progress 31 minutes ago, before it recorded what it made.
     await inside(() => db().adBlueprintApplication.update({ where: { id: applicationId }, data: { status: 'RUNNING', createdCampaignIds: [], progress: { done: 2, total: 4, campaign: 'Killed-SP-Keyword-Category', created: 2, at: new Date(Date.now() - 31 * 60_000).toISOString() } } }))
     const s = (await inside(() => callTool(claude, 'approval-status', { approvalId: asked.approvalId! }))).visible.data as Row
-    expect(s.ads.build).toMatchObject({ applicationId, status: 'RUNNING', stopped: true })
+    // Read as what it is (B-1's rule, shared with playbook builds and Replicate runs): stopped, so FAILED, never RUNNING.
+    expect(s.ads.build).toMatchObject({ applicationId, status: 'FAILED', stopped: true })
     const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! })) as Row
     expect(undo).toMatchObject({ request: { tool: 'archive-ads', args: { buildRunId: applicationId } } })
     // The archive names every campaign its change set's audit rows say it made, and marks the run FAILED when it runs.

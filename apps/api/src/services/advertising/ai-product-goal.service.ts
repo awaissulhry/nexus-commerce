@@ -302,6 +302,54 @@ export async function getProductGoalDetail(id: string) {
   return { goal: g, campaigns: campaignsWithPerf, plan, pendingProposals, series }
 }
 
+/** B-2 — the campaigns a goal names (its launched scaffold, in order) and its plan: create-ai-goal-campaigns reads its goal back. */
+export async function goalCampaignRefs(id: string): Promise<{ planId: string | null; refs: Array<{ id: string; role: string | null }> } | null> {
+  const g = await prisma.adProductGoal.findUnique({ where: { id }, select: { campaignIds: true, planId: true } })
+  if (!g) return null
+  const refs = (Array.isArray(g.campaignIds) ? g.campaignIds : []) as Array<{ id?: unknown; role?: unknown }>
+  return { planId: g.planId, refs: refs.flatMap((r) => (r?.id ? [{ id: String(r.id), role: r.role ? String(r.role) : null }] : [])) }
+}
+
+/**
+ * B-2 — the undo of Claude's goal (its campaigns archived): the goal archived, its AutopilotPlan disabled and the plan's
+ * rules switched off, whatever a person switched on meanwhile — an archived goal leaves nothing proposing.
+ */
+export async function retireProductGoal(id: string): Promise<void> {
+  const g = await prisma.adProductGoal.update({ where: { id }, data: { status: 'ARCHIVED' }, select: { planId: true } })
+  if (!g.planId) return
+  const plan = await prisma.autopilotPlan.update({ where: { id: g.planId }, data: { enabled: false }, select: { linkedRuleIds: true } })
+  const ruleIds = (Array.isArray(plan.linkedRuleIds) ? plan.linkedRuleIds : []).map((l) => String((l as { ruleId?: unknown })?.ruleId ?? '')).filter(Boolean)
+  if (ruleIds.length) await prisma.automationRule.updateMany({ where: { id: { in: ruleIds } }, data: { enabled: false } })
+}
+
+/**
+ * B-2 — the live campaigns of a market that already buy one of these keywords (any match type, case-insensitive), with
+ * what their ad group advertises (ASIN, SKU and product, so a product advertised by SKU only is still recognised).
+ */
+export async function keywordBuyers(market: string, keywords: readonly string[]): Promise<Array<{
+  keyword: string; campaignId: string; campaign: string; products: Array<{ asin: string | null; sku: string | null; productId: string | null }>
+}>> {
+  if (!keywords.length) return []
+  const rows = await prisma.adTarget.findMany({
+    where: {
+      kind: 'KEYWORD', isNegative: false, status: { not: 'ARCHIVED' }, orphanedAt: null,
+      OR: keywords.map((k) => ({ expressionValue: { equals: k, mode: 'insensitive' as const } })),
+      adGroup: { campaign: { marketplace: market, status: { not: 'ARCHIVED' } } },
+    },
+    take: 2000,
+    select: {
+      expressionValue: true,
+      adGroup: { select: {
+        campaign: { select: { id: true, name: true } },
+        productAds: { where: { status: { not: 'ARCHIVED' } }, select: { asin: true, sku: true, productId: true } },
+      } },
+    },
+  })
+  return rows.flatMap((r) => (r.adGroup?.campaign
+    ? [{ keyword: r.expressionValue, campaignId: r.adGroup.campaign.id, campaign: r.adGroup.campaign.name, products: r.adGroup.productAds }]
+    : []))
+}
+
 export async function archiveProductGoal(id: string) {
   return prisma.adProductGoal.update({ where: { id }, data: { status: 'ARCHIVED' } })
 }
