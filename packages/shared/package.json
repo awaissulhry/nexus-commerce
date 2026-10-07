@@ -178,6 +178,10 @@
       "types": "./dist/matrix-preview.d.ts",
       "default": "./dist/matrix-preview.js"
     },
+    "./stock-cases": {
+      "types": "./dist/stock-cases.d.ts",
+      "default": "./dist/stock-cases.js"
+    },
     "./master-sheet": {
       "types": "./dist/master-sheet.d.ts",
       "default": "./dist/master-sheet.js"

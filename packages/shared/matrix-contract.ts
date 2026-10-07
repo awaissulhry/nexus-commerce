@@ -265,9 +265,26 @@ export interface MatrixRowRead {
    * `null` = no FBA stock row for this SKU, never `0`; absent = an older server that did not read it.
    */
   fba?: MatrixFbaStock | null
+  /**
+   * Case pack (Step 3, Owner D2 = B): this SKU's units per case, case size and weight, and who preps and labels for FBA
+   * (`ProductPackage`). `null` = none set; absent = an older server that did not read it. A parent carries its own row
+   * (normally null); the page sums up its variations. Sealed counts are not here (the stock editor shows them).
+   */
+  pack?: MatrixCasePack | null
   basePrice: number | null
   status: string
   cells: Record<CoordinateKey, MatrixCells>
+}
+
+/** One SKU's case pack as the Matrix reads it (`ProductPackage`). Sizes in cm, weight in kg; owners null = not set. */
+export interface MatrixCasePack {
+  unitsPerCase: number | null
+  caseLengthCm: number | null
+  caseWidthCm: number | null
+  caseHeightCm: number | null
+  caseWeightKg: number | null
+  fbaPrepOwner: 'AMAZON' | 'SELLER' | null
+  fbaLabelOwner: 'AMAZON' | 'SELLER' | null
 }
 
 export interface MatrixFbaStock {

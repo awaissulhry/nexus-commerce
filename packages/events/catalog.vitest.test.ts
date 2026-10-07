@@ -125,6 +125,25 @@ describe('listing.values_changed — the live-sync hint of the sheet and the Mat
   })
 })
 
+describe('inventory.cases_changed (Step 3 cases)', () => {
+  it('carries a count at one location and a case-pack change (no location), partitioned by product', () => {
+    const count = parseEventPayload('inventory.cases_changed', { productId: 'p1', locationId: 'loc1', casesBefore: 4, casesAfter: 3, unitsPerCase: 12, reason: 'count' })
+    expect(deriveSubject('inventory.cases_changed', count)).toBe('p1')
+    expect(getEventDefinition('inventory.cases_changed').context).toBe('inventory')
+    const pack = parseEventPayload('inventory.cases_changed', { productId: 'p1', locationId: null, casesBefore: null, casesAfter: null, unitsPerCase: null, reason: 'case-pack' })
+    expect(pack.locationId).toBeNull()
+  })
+
+  it('refuses an unknown key, a negative or fractional count, a zero case size and an unknown reason', () => {
+    const valid = { productId: 'p1', locationId: 'loc1', casesBefore: 4, casesAfter: 3, unitsPerCase: 12, reason: 'count' }
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, sku: 'S' })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, casesAfter: -1 })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, casesBefore: 1.5 })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, unitsPerCase: 0 })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, reason: 'sale' })).toThrow(/Invalid payload/)
+  })
+})
+
 describe('subject derivation', () => {
   it('derives a non-empty subject for every event from a minimal payload', () => {
     // Every definition must be able to produce a partition key. A definition
@@ -153,6 +172,7 @@ describe('subject derivation', () => {
         productId: 'p1', locationId: 'loc1', movementId: 'm1', change: -1,
         quantityBefore: 5, quantityAfter: 4, available: 4, poolTotal: 4, reason: 'ORDER_PLACED',
       },
+      'inventory.cases_changed': { productId: 'p1', locationId: 'loc1', casesBefore: 4, casesAfter: 3, unitsPerCase: 12, reason: 'count' },
       'inventory.reserved': {
         productId: 'p1', reservationId: 'rs1', locationId: 'loc1', quantity: 2, kind: 'HARD', availableAfter: 2,
       },

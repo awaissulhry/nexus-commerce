@@ -2913,6 +2913,42 @@
       }
     ]
   },
+  "ProductPackage": {
+    "scalar": {
+      "productId": "workspace_productId"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockCaseCount": {
+    "scalar": {
+      "stockLevelId": "workspace_stockLevelId"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "stockLevel",
+        "model": "StockLevel",
+        "from": [
+          "stockLevelId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
   "LotRecall": {
     "scalar": {},
     "compound": {},

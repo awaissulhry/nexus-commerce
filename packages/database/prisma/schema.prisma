@@ -450,6 +450,8 @@ model Product {
   /// Shopify colour products of this family (one per value of its split axis, per store).
   shopifyColourProducts ShopifyColourProduct[]
   shopifyColourSyncs    ShopifyColourSync[]
+  /// Step 3 — this SKU's case pack and FBA prep/label owner (at most one row; array because the unique is compound).
+  casePacks             ProductPackage[]
 
   @@unique([workspaceId, sku], name: "workspace_sku", map: "Product_workspace_sku_key")
   @@index([gtin])
@@ -9513,6 +9515,8 @@ model StockLevel {
 
   createdAt     DateTime           @default(now())
   binQuantities StockBinQuantity[] @relation("StockLevelBinQuantities")
+  /// Step 3 — sealed cases at this level (at most one row; array because the unique is compound).
+  caseCounts    StockCaseCount[]
 
   // The DB-level UNIQUE is enforced by two partial indexes (variationId
   // IS NULL / IS NOT NULL) created in the migration SQL. We keep this
@@ -9845,6 +9849,48 @@ model StockBinQuantity {
 
   @@unique([workspaceId, stockLevelId, binId], name: "stockLevelId_binId", map: "StockBinQuantity_stockLevelId_binId_key")
   @@index([binId])
+  @@index([workspaceId])
+}
+
+/// Step 3 (Owner D2 = B) — one SKU's case pack and FBA prep/label owner. Nexus is the source: Amazon has no API for
+/// case-pack templates. Absent row = no case size. Written only by stock/stock-cases.service.ts (setCasePacks).
+model ProductPackage {
+  // Business ownership comes from verified database context.
+  workspaceId   String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id            String   @id @default(cuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Units in one sealed case; null = no case size (the row may still hold prep/label owners).
+  unitsPerCase  Int?
+  caseLengthCm  Decimal? @db.Decimal(6, 1)
+  caseWidthCm   Decimal? @db.Decimal(6, 1)
+  caseHeightCm  Decimal? @db.Decimal(6, 1)
+  caseWeightKg  Decimal? @db.Decimal(6, 2)
+  /// AMAZON | SELLER (Amazon's createInboundPlan prepOwner / labelOwner). null = not set.
+  fbaPrepOwner  String?
+  fbaLabelOwner String?
+  updatedBy     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([workspaceId, productId], name: "workspace_productId", map: "ProductPackage_productId_key")
+  @@index([workspaceId])
+}
+
+/// Step 3 — sealed cases at one StockLevel (the StockBinQuantity pattern). StockLevel.quantity stays the UNIT total;
+/// loose = quantity − cases × unitsPerCase. Invariant: cases × unitsPerCase ≤ quantity, kept by keepCasesInTx.
+/// Only WAREHOUSE levels have rows. Written only by stock/stock-cases.service.ts, under lockProductStock.
+model StockCaseCount {
+  // Business ownership comes from verified database context.
+  workspaceId  String     @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String     @id @default(cuid())
+  stockLevelId String
+  stockLevel   StockLevel @relation(fields: [stockLevelId], references: [id], onDelete: Cascade)
+  cases        Int        @default(0)
+  updatedBy    String?
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([workspaceId, stockLevelId], name: "workspace_stockLevelId", map: "StockCaseCount_stockLevelId_key")
   @@index([workspaceId])
 }
 

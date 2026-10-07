@@ -452,6 +452,12 @@
           "kind": "object",
           "type": "ShopifyColourSync",
           "relationFromFields": []
+        },
+        {
+          "name": "casePacks",
+          "kind": "object",
+          "type": "ProductPackage",
+          "relationFromFields": []
         }
       ]
     },
@@ -3450,6 +3456,12 @@
           "kind": "object",
           "type": "StockBinQuantity",
           "relationFromFields": []
+        },
+        {
+          "name": "caseCounts",
+          "kind": "object",
+          "type": "StockCaseCount",
+          "relationFromFields": []
         }
       ]
     },
@@ -3721,6 +3733,34 @@
             "binId"
           ],
           "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "ProductPackage",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "StockCaseCount",
+      "fields": [
+        {
+          "name": "stockLevel",
+          "kind": "object",
+          "type": "StockLevel",
+          "relationFromFields": [
+            "stockLevelId"
+          ],
+          "relationOnDelete": "Cascade"
         }
       ]
     },

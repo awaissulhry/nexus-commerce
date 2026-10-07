@@ -212,6 +212,8 @@
     "SerialNumber",
     "StockBin",
     "StockBinQuantity",
+    "ProductPackage",
+    "StockCaseCount",
     "LotRecall",
     "YearEndSnapshot",
     "FbaInventoryDetail",

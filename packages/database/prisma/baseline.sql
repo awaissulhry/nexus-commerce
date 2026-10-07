@@ -4327,6 +4327,37 @@ CREATE TABLE "StockBinQuantity" (
 );
 
 -- CreateTable
+CREATE TABLE "ProductPackage" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "unitsPerCase" INTEGER,
+    "caseLengthCm" DECIMAL(6,1),
+    "caseWidthCm" DECIMAL(6,1),
+    "caseHeightCm" DECIMAL(6,1),
+    "caseWeightKg" DECIMAL(6,2),
+    "fbaPrepOwner" TEXT,
+    "fbaLabelOwner" TEXT,
+    "updatedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ProductPackage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "StockCaseCount" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "stockLevelId" TEXT NOT NULL,
+    "cases" INTEGER NOT NULL DEFAULT 0,
+    "updatedBy" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "StockCaseCount_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "LotRecall" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -12405,6 +12436,18 @@ CREATE INDEX "StockBinQuantity_workspaceId_idx" ON "StockBinQuantity"("workspace
 CREATE UNIQUE INDEX "StockBinQuantity_stockLevelId_binId_key" ON "StockBinQuantity"("workspaceId", "stockLevelId", "binId");
 
 -- CreateIndex
+CREATE INDEX "ProductPackage_workspaceId_idx" ON "ProductPackage"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProductPackage_productId_key" ON "ProductPackage"("workspaceId", "productId");
+
+-- CreateIndex
+CREATE INDEX "StockCaseCount_workspaceId_idx" ON "StockCaseCount"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "StockCaseCount_stockLevelId_key" ON "StockCaseCount"("workspaceId", "stockLevelId");
+
+-- CreateIndex
 CREATE INDEX "LotRecall_lotId_idx" ON "LotRecall"("lotId");
 
 -- CreateIndex
@@ -15787,6 +15830,12 @@ ALTER TABLE "StockBinQuantity" ADD CONSTRAINT "StockBinQuantity_stockLevelId_fke
 
 -- AddForeignKey
 ALTER TABLE "StockBinQuantity" ADD CONSTRAINT "StockBinQuantity_binId_fkey" FOREIGN KEY ("binId") REFERENCES "StockBin"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProductPackage" ADD CONSTRAINT "ProductPackage_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StockCaseCount" ADD CONSTRAINT "StockCaseCount_stockLevelId_fkey" FOREIGN KEY ("stockLevelId") REFERENCES "StockLevel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "LotRecall" ADD CONSTRAINT "LotRecall_lotId_fkey" FOREIGN KEY ("lotId") REFERENCES "Lot"("id") ON DELETE CASCADE ON UPDATE CASCADE;

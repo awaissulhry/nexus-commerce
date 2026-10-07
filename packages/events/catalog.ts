@@ -242,6 +242,26 @@ export const EVENTS = {
     }),
     subject: (p) => p.productId,
   }),
+  // Step 3 (Owner D2 = B). Published in the transaction (outbox) by stock/stock-cases.service.ts: setCasesInTx (a
+  // sealed count at one location, reason 'count') and setCasePacks (a SKU's case pack, reason 'case-pack', locationId
+  // null). A sale that opens a case does not publish it: inventory.stock_changed already says the units moved.
+  'inventory.cases_changed': defineEvent({
+    type: 'inventory.cases_changed',
+    context: 'inventory',
+    description: 'Sealed cases were counted at a location, or a SKU\'s case pack (units per case, size, weight, FBA prep/label owner) changed.',
+    schema: z.strictObject({
+      productId: z.string().min(1),
+      /** null = the case pack changed (no one location). */
+      locationId: z.string().min(1).nullable(),
+      /** Sealed cases at the location before / after a count; null for a case-pack change. */
+      casesBefore: z.number().int().nonnegative().nullable(),
+      casesAfter: z.number().int().nonnegative().nullable(),
+      /** Units per case after the change; null = no case size. */
+      unitsPerCase: z.number().int().positive().nullable(),
+      reason: z.enum(['count', 'case-pack']),
+    }),
+    subject: (p) => p.productId,
+  }),
   'inventory.reserved': defineEvent({
     type: 'inventory.reserved',
     context: 'inventory',
