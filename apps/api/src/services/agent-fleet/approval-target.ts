@@ -784,15 +784,19 @@ const READERS: Record<string, Reader> = {
       ],
     }
   },
-  // B-1 — a Replicate copy: what it builds for which product, and its daily budget.
+  // B-1 — a Replicate copy: what it builds for which product, and its daily budget. W4-10 — into another market: from
+  // where, and how many terms Claude translated or kept (each term is listed in the preview).
   'replicate-ad-structure': (p) => {
     const totals = rec(p.totals) ?? {}
+    const words = rec(p.translation)
     return {
       channel: 'AMAZON',
       market: marketOf(p.market),
       changes: [
         { label: 'Copies', from: null, to: `${plural(num(totals.campaigns) ?? 0, 'campaign')} for ${text(p.productToken) ?? '?'}, at the 2-cent floor, off the allowlist` },
+        ...(words ? [{ label: 'Market', from: text(words.from), to: text(words.to) }] : []),
         { label: 'Daily budget', from: null, to: adMoney(p.dailyBudgetCents, p.currency) },
+        ...(words ? [{ label: 'Keywords', from: null, to: `${plural(num(words.translated) ?? 0, 'term')} translated, ${num(words.kept) ?? 0} kept as they are` }] : []),
       ],
     }
   },
