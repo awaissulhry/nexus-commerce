@@ -225,6 +225,8 @@ const AD_CHANGE_TOOLS = new Set([
   'lower-ad-bids-for-stock', 'restore-ad-bids-after-stock',
   // PB-5a — a playbook build: its creates run detached; approval-status reads its run (status, what Amazon holds).
   'apply-ads-playbook',
+  // B-1 — a Replicate run, likewise.
+  'replicate-ad-structure',
   // B-2 — an AI goal's campaigns: created at once, not queued; approval-status counts them and how much Amazon holds.
   'create-ai-goal-campaigns',
 ])
@@ -242,8 +244,8 @@ export interface AdDelivery {
   gateReasons?: string[]
   /** Negatives and keywords the request created: how many exist at Amazon (they are created at once, not queued). */
   created?: { total: number; atAmazon: number }
-  /** PB-5a — a playbook build's run: its status and how far it is (the creates run detached). */
-  build?: { applicationId: string; status: string; done: number | null; total: number | null; campaigns: number; errors: number }
+  /** PB-5a — a playbook build's run (B-1: or a Replicate run's): its status and how far it is (the creates run detached). */
+  build?: { applicationId: string; status: string; done: number | null; total: number | null; campaigns: number; errors: number; stopped?: boolean }
 }
 
 /** One queue row's (or an inline write's) outcome, in the five words a person uses. */
@@ -289,14 +291,16 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
   if (reasons.length) out.gateReasons = reasons
   const change = await prisma.agentChange.findFirst({ where: { approvalId }, orderBy: { executedAt: 'desc' }, select: { after: true } })
   const after = (change?.after ?? null) as { negatives?: Array<{ targetId?: unknown }>; targetId?: unknown; campaignId?: unknown } | null
-  if (toolName === 'apply-ads-playbook') {
-    // PB-5a — a build: its run row, and everything its campaigns hold ("at Amazon" only when it went live).
+  if (toolName === 'apply-ads-playbook' || toolName === 'replicate-ad-structure') {
+    // PB-5a — a build: its run row, and everything its campaigns hold ("at Amazon" only when it went live). B-1 — a
+    // Replicate run is read the same way.
     const applicationId = (after as { applicationId?: unknown } | null)?.applicationId
     if (typeof applicationId !== 'string') return out
-    const { buildRunDelivery } = await import('../../advertising/ads-playbook/build.js')
-    const run = await buildRunDelivery(applicationId)
+    const run = toolName === 'apply-ads-playbook'
+      ? await (await import('../../advertising/ads-playbook/build.js')).buildRunDelivery(applicationId)
+      : await (await import('../../advertising/ads-blueprint-apply.service.js')).replicateRunDelivery(applicationId)
     if (!run) return out
-    out.build = { applicationId, status: run.status, done: run.done, total: run.total, campaigns: run.createdCampaignIds.length, errors: run.errors }
+    out.build = { applicationId, status: run.status, done: run.done, total: run.total, campaigns: run.createdCampaignIds.length, errors: run.errors, ...(run.stopped ? { stopped: true } : {}) }
     let total = 0, atAmazon = 0
     for (const id of run.createdCampaignIds) {
       const counts = await campaignStructureCounts(id)
@@ -386,8 +390,28 @@ export function ebayMeaning(d: EbayDelivery | null): string {
   return `Approved and written in Nexus.${parts.length ? ` eBay: ${parts.join(', ')} (of ${plural(d.writes, 'write')}).` : ''}${sandbox}`
 }
 
+/** PB-5a / B-1 — where a detached run (a playbook build, a Replicate run) is, in a sentence. */
+function runWords(b: NonNullable<AdDelivery['build']>): string {
+  const of = b.total != null ? ` (${b.done ?? 0} of ${plural(b.total, 'campaign')} done)` : ''
+  if (b.stopped) {
+    return `The run stopped without finishing${of}: a deploy or a restart stopped it and it does not resume; archive-ads buildRunId ${b.applicationId} archives what it made.`
+  }
+  if (b.status === 'RUNNING') return `The run is still going${of}: ask again to follow it.`
+  if (b.status === 'APPLIED') return `The run finished: ${plural(b.campaigns, 'campaign')} made.`
+  if (b.status === 'PARTIAL') return `The run finished in part: ${plural(b.campaigns, 'campaign')} made, ${plural(b.errors, 'problem')} recorded.`
+  if (b.status === 'FAILED') return `The run failed: ${plural(b.campaigns, 'campaign')} made, ${plural(b.errors, 'error')} recorded.`
+  if (b.status === 'ROLLED_BACK') return 'The run was rolled back: its campaigns were archived.'
+  return `The run is ${b.status.toLowerCase()}.`
+}
+
 /** A9 — what an executed ad change did, in a sentence: in Nexus, then at Amazon. */
 export function adMeaning(d: AdDelivery): string {
+  // PB-5a / B-1 — a build or a Replicate run runs on its own after approval: say where the run is, never only "run".
+  if (d.build) {
+    const created = d.created ? ` In Nexus: ${d.created.total} created${d.reach === 'sandbox' ? '' : `, ${d.created.atAmazon} of them confirmed at Amazon`}.` : ''
+    const sandbox = d.reach === 'sandbox' ? ' Sandbox: Amazon ads writes are not live, so nothing was sent to Amazon.' : ''
+    return `Approved. ${runWords(d.build)}${created}${sandbox}`
+  }
   if (d.reach === 'sandbox') {
     const what = !d.writes && d.created ? `${d.created.total} created` : plural(d.writes, 'write')
     return `Approved and written in Nexus (${what}). Sandbox: Amazon ads writes are not live, so nothing was sent to Amazon.`

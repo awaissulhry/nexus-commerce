@@ -259,6 +259,7 @@ const AMAZON_AD_TOOLS = new Set([
   'set-target-bid', 'create-negative-keyword', 'graduate-keyword', 'set-campaign-budget', 'set-placement-multipliers',
   'bulk-ad-bid-change', 'suppress-campaign', 'restore-campaign', 'set-campaign-live-writes', 'create-ad-campaign', 'undo-ad-change',
   'set-campaign-target-acos', 'pause-ads', 'enable-ads', 'archive-ads', 'lower-ad-bids-for-stock', 'restore-ad-bids-after-stock', 'apply-ads-playbook',
+  'replicate-ad-structure',
   'create-ai-goal-campaigns',
 ])
 
@@ -779,6 +780,18 @@ const READERS: Record<string, Reader> = {
       changes: [
         { label: 'Daily budget', from: null, to: adMoney(plan.dailyBudgetCents, plan.currency) },
         { label: 'Advertises', from: null, to: plural(products.length, 'product') },
+      ],
+    }
+  },
+  // B-1 — a Replicate copy: what it builds for which product, and its daily budget.
+  'replicate-ad-structure': (p) => {
+    const totals = rec(p.totals) ?? {}
+    return {
+      channel: 'AMAZON',
+      market: marketOf(p.market),
+      changes: [
+        { label: 'Copies', from: null, to: `${plural(num(totals.campaigns) ?? 0, 'campaign')} for ${text(p.productToken) ?? '?'}, at the 2-cent floor, off the allowlist` },
+        { label: 'Daily budget', from: null, to: adMoney(p.dailyBudgetCents, p.currency) },
       ],
     }
   },

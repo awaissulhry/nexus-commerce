@@ -799,6 +799,8 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // PB-5a — the op, every campaign a build makes (or every binding of an adopt) with the row it is planned from, where it lands.
   // PB-5b — and what a start or a stop moves (its campaigns, the bids they spend at, its hourly plans and rules).
   'apply-ads-playbook': ['op', 'basis', 'reach', 'bindings', 'starts', 'stops'],
+  // B-1 — every campaign a Replicate copy makes (from the source as it is now), the market's spend ceiling, where it lands.
+  'replicate-ad-structure': ['basis', 'ceiling', 'reach'],
   // AA-W2-12 — every ad named with its status (an enable: the pause it lifts, the budget and the bids that serve again),
   // and where it lands.
   'pause-ads': ['basis', 'reach'],

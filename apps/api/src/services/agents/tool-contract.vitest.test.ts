@@ -73,6 +73,10 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // kinds) needs the approver's code, by rule only with allowStart (off by default: a loosening needs the code); a stop
   // is a brake.
   'apply-ads-playbook',
+  // B-1 — a copy of a running structure with the Replicate Structure builder, the create kind: only at the floor and off
+  // the allowlist (it spends nothing until set-campaign-live-writes and restore-campaign), by default never by rule
+  // (maxCampaigns 0), and never by rule with a clash the product's own campaigns already buy.
+  'replicate-ad-structure',
   // B-2 — an AI goal, the create kind: only at the floor, off the allowlist, its rules and plan off (nothing spends until
   // restore-campaign); by default never by rule (maxCampaigns 0).
   'create-ai-goal-campaigns',
@@ -416,6 +420,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       },
       // PB-5a — a playbook build is archived (every campaign it made); an adopt is put back by the opposite adopt.
       'apply-ads-playbook': { before: { op: 'build', playbookId: 'pb1', state: 'DRAFT', slots: [] }, after: { op: 'build', playbookId: 'pb1', applicationId: 'run1' } },
+      // B-1 — a Replicate copy is archived (every campaign its run made).
+      'replicate-ad-structure': { before: { applicationId: null, market: 'IT', productToken: 'TEST' }, after: { applicationId: 'run2' } },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },

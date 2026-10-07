@@ -242,10 +242,12 @@ async function adUndo(place: Place, args: Obj, preview: Obj | null) {
 
 /** AA-W2-12/13 — a status change: every campaign, ad group (a product ad's too) and target it names. */
 const byStatusArgs: PlaceReader = async (place, args) => {
-  // PB-5a — archive-ads buildRunId: the campaigns a playbook build made.
+  // PB-5a — archive-ads buildRunId: the campaigns a playbook build made. B-1 — or a Replicate run (replicate-ad-structure).
   const buildRunId = str(args.buildRunId)
-  const built = buildRunId ? await (await import('../ads-playbook/build.js')).buildRunCreated(buildRunId) : null
-  if (buildRunId && !built) place.notPlaced('the playbook build it names was not found')
+  const built = buildRunId
+    ? (await (await import('../ads-playbook/build.js')).buildRunCreated(buildRunId)) ?? (await (await import('../ads-blueprint-apply.service.js')).replicateRunCreated(buildRunId))
+    : null
+  if (buildRunId && !built) place.notPlaced('the playbook build or Replicate run it names was not found')
   const campaigns = [...strs(args.campaignIds), ...(built ?? [])]
   const adGroups = [...strs(args.adGroupIds), ...list(args.productAds).map((ad) => str(obj(ad).adGroupId))].filter((id): id is string => !!id)
   const targets = strs(args.targetIds)
@@ -294,6 +296,8 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
     await suggestions(place, list(args.decisions).map((d) => str(obj(d).suggestionId)).filter((id): id is string => !!id))
   },
   'create-ad-campaign': (place, args) => place.skus(marketOf(args.market), strs(args.skus)),
+  // B-1 — a copy lands on the products it advertises, in the market it is created in.
+  'replicate-ad-structure': (place, args) => place.skus(marketOf(args.market), strs(args.skus)),
   // B-2 — an AI goal's products in one market, by SKU.
   'create-ai-goal-campaigns': (place, args) => place.skus(marketOf(args.market), list(args.goalProducts).map((p) => str(obj(p).sku)).filter((sku): sku is string => !!sku)),
   // PB-5a — one product's playbook in one market: the product (by id, else by SKU).

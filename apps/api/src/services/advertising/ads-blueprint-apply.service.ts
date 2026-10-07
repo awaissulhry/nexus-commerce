@@ -13,14 +13,20 @@
  *   5. After creating we READ BACK: a campaign without an externalCampaignId
  *      did not reach Amazon, and the run is reported PARTIAL rather than
  *      claiming success.
+ *   6. B-1 — a run Claude asked for (replicate-ad-structure, `bornSafe`) is the
+ *      same run, born safe whatever the screen chose: at the floor, suppressed by
+ *      the person who asked, OFF the live-write allowlist, placements kept for
+ *      later, every create on the approval's change set. The screen's run is
+ *      unchanged.
  */
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { BlueprintDoc } from '../ads-core/ads-blueprint.js'
-import { planApplication, materialise, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget, type PlanEdits } from '../ads-core/ads-blueprint-apply.js'
+import { planApplication, materialise, negativeMatchOf, type ApplyPlan, type ApplyOptions, type ApplyTarget, type ExistingTarget, type PlanEdits } from '../ads-core/ads-blueprint-apply.js'
 import type { PortfolioVerifyResult } from './ads-create.service.js'
 import type { LaunchVerification } from './ads-launch-verify.service.js'
+import type { AdsActor } from './ads-mutation.service.js'
 
 /**
  * Every positive keyword we currently target in this marketplace — the surface
@@ -106,7 +112,46 @@ export interface ApplyRequest {
    * suppressed campaign and `restoreCampaignBids` un-does it.
    */
   launchMode?: 'live' | 'floor'
+  /**
+   * B-1 — Claude's run (replicate-ad-structure), born safe whatever the screen does. Absent: the screen's run, unchanged.
+   * At the floor only (`launchMode` 'floor'), each campaign flagged suppressed by `by` the moment it exists (so
+   * restore-campaign may give its planned bids back); OFF the live-write allowlist, so every part of it passes
+   * `creationFlow` (its negatives too); its placements are not written (a campaign off the allowlist is refused them) but
+   * kept on the run (`options.deferredPlacements`); every create's audit row carries `changeSetId`, so its undo finds
+   * what it made (archive-ads buildRunId). Replicate creates no rules.
+   */
+  bornSafe?: { by: AdsActor; changeSetId: string }
 }
+
+/** B-1 — what a run born safe keeps on its row, beside the naming, scope and policies. */
+interface BornSafeOptions {
+  source: 'claude'
+  changeSetId: string
+  /** Whose request it is: the campaigns are flagged suppressed by them. */
+  requester: AdsActor
+  /** After the run: the placements it did not write, per campaign (set once the campaign is live). */
+  deferredPlacements?: Array<{ campaignId: string; campaign: string; placementBidding: Array<{ placement: string; percentage: number }> }>
+}
+
+/** The run row's `options` (AX3.4: the naming rules, copy scope and value policies; B-1: what a safe run was born with). */
+function rowOptions(req: ApplyRequest): object | undefined {
+  const own = req.options ? {
+    naming: req.options.naming, include: req.options.include,
+    bidPolicy: req.options.bidPolicy, budgetPolicy: req.options.budgetPolicy,
+    dailyBudgetCapEur: req.options.dailyBudgetCapEur,
+  } : undefined
+  if (!req.bornSafe) return own
+  const safe: BornSafeOptions = { source: 'claude', changeSetId: req.bornSafe.changeSetId, requester: req.bornSafe.by }
+  return { ...(own ?? {}), ...safe }
+}
+
+/** B-1 — a born-safe run's own options, or null for a screen run. */
+function bornSafeOf(row: { options: unknown }): BornSafeOptions | null {
+  const o = (row.options ?? null) as Partial<BornSafeOptions> | null
+  return o?.source === 'claude' && typeof o.changeSetId === 'string' ? (o as BornSafeOptions) : null
+}
+
+const SAFE_FLOOR_ONLY = 'refused: a run born safe is created at the floor (launchMode floor)'
 
 /**
  * AX3.4 — the doc a run is based on, from either kind of source.
@@ -316,15 +361,17 @@ export async function startBlueprintRun(req: ApplyRequest): Promise<{
   alreadyRunning?: boolean
   plan: ApplyPlan
 }> {
+  if (req.bornSafe && req.launchMode === 'live') throw new Error(SAFE_FLOOR_ONLY)
   const { plan } = await planApply(req)
   if (!plan.allowed) throw new Error(`refused: ${plan.blockers.join(' | ')}`)
 
   // One run per product per market at a time. This is the guard that makes a
   // dropped connection safe: a browser that retries finds the run it lost.
   // PB-5a — a playbook build of this product that stopped (a deploy killed it) is marked FAILED first, so it never holds
-  // this guard for ever.
+  // this guard for ever. B-1 — so is a run Claude asked for (born safe) that stopped; a screen run is left as it is.
   const { settleStoppedBuilds } = await import('./ads-playbook/build.js')
   await settleStoppedBuilds({ market: req.marketplace, productToken: req.target.productToken })
+  await settleStoppedReplicates({ market: req.marketplace, productToken: req.target.productToken })
   const inFlight = await prisma.adBlueprintApplication.findFirst({
     where: { marketplace: req.marketplace, productToken: req.target.productToken, status: 'RUNNING' },
     orderBy: { createdAt: 'desc' },
@@ -335,11 +382,7 @@ export async function startBlueprintRun(req: ApplyRequest): Promise<{
     data: {
       blueprintId: req.blueprintId ?? null,
       sourceSelector: req.source ? ({ ...req.source, sourceProductToken: req.sourceProductToken } as object) : undefined,
-      options: req.options ? ({
-        naming: req.options.naming, include: req.options.include,
-        bidPolicy: req.options.bidPolicy, budgetPolicy: req.options.budgetPolicy,
-        dailyBudgetCapEur: req.options.dailyBudgetCapEur,
-      } as object) : undefined,
+      options: rowOptions(req),
       edits: req.edits ? (req.edits as object) : undefined,
       productToken: req.target.productToken,
       marketplace: req.marketplace,
@@ -351,7 +394,8 @@ export async function startBlueprintRun(req: ApplyRequest): Promise<{
       skippedTargets: (req.options?.skipSharedTargets ?? []),
       launchMode: req.launchMode ?? 'floor',
       actor: req.actor ?? null,
-      progress: { done: 0, total: plan.campaigns.length, campaign: null, created: { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 } } as object,
+      // B-1 — a safe run stamps its progress (`at`), so one a deploy killed is known to have stopped.
+      progress: { done: 0, total: plan.campaigns.length, campaign: null, created: { campaigns: 0, adGroups: 0, targets: 0, negatives: 0, productAds: 0 }, ...(req.bornSafe ? { at: new Date().toISOString() } : {}) } as object,
     },
   })
 
@@ -371,6 +415,7 @@ export async function startBlueprintRun(req: ApplyRequest): Promise<{
 
 export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   const dryRun = req.dryRun !== false // default TRUE — executing is opt-in
+  if (req.bornSafe && req.launchMode === 'live') throw new Error(SAFE_FLOOR_ONLY)
   const { plan } = await planApply(req)
 
   // AX3.8 — when the caller has already claimed a row (the detached-run path,
@@ -386,11 +431,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
       // The naming rules, copy scope and value policies that produced these
       // names and bids. Without them, "why is this campaign called that" is
       // unanswerable a month later.
-      options: req.options ? ({
-        naming: req.options.naming, include: req.options.include,
-        bidPolicy: req.options.bidPolicy, budgetPolicy: req.options.budgetPolicy,
-        dailyBudgetCapEur: req.options.dailyBudgetCapEur,
-      } as object) : undefined,
+      options: rowOptions(req),
       edits: req.edits ? (req.edits as object) : undefined,
       productToken: req.target.productToken,
       marketplace: req.marketplace,
@@ -433,6 +474,11 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   // this option exists to avoid.
   const { SUPPRESSION_FLOOR_CENTS } = await import('./ads-bid-suppression.service.js')
   const floored = (req.launchMode ?? 'floor') === 'floor'
+  // B-1 — Claude's run: every create on the approval's change set, every part of it inside this creation (off the
+  // allowlist), its placements kept for later. Absent: the screen's run.
+  const safe = req.bornSafe ?? null
+  const cs = safe ? { changeSetId: safe.changeSetId } : {}
+  const deferredPlacements: NonNullable<BornSafeOptions['deferredPlacements']> = []
   const bidEurFor = (cents: number | null | undefined, fallback: number) =>
     floored ? SUPPRESSION_FLOOR_CENTS / 100 : (cents ?? fallback) / 100
   /** Remember what this entity's bid WOULD have been, so restore is exact. */
@@ -452,16 +498,26 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     try {
       await prisma.adBlueprintApplication.update({
         where: { id: application.id },
-        data: { progress: { done: campaignsDone, total: plan.campaigns.length, campaign, created } as object },
+        data: { progress: { done: campaignsDone, total: plan.campaigns.length, campaign, created, ...(safe ? { at: new Date().toISOString() } : {}) } as object },
       })
     } catch { /* progress is not the work */ }
   }
   await prisma.adBlueprintApplication.update({
     where: { id: application.id },
-    data: { status: 'RUNNING', startedAt: new Date(), progress: { done: 0, total: plan.campaigns.length, campaign: null, created } as object },
+    data: { status: 'RUNNING', startedAt: new Date(), progress: { done: 0, total: plan.campaigns.length, campaign: null, created, ...(safe ? { at: new Date().toISOString() } : {}) } as object },
   }).catch(() => {})
+  // B-1 — a safe run's heartbeat: its progress stamp moves at least once a minute while it creates, so a campaign with
+  // hundreds of keywords never reads as a run a deploy killed (no progress for 30 minutes: settleStoppedReplicates).
+  let current = ''
+  let beatAt = Date.now()
+  const beat = async () => {
+    if (!safe || Date.now() - beatAt < 60_000) return
+    beatAt = Date.now()
+    await report(current)
+  }
 
   for (const c of plan.campaigns) {
+    current = c.name
     await report(c.name)
     try {
       const camp = await createCampaignLocal({
@@ -478,6 +534,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
         // outside every portfolio, invisible to portfolio budgets and rollups.
         portfolioId: req.portfolioId,
         userId: req.actor,
+        ...cs,
       })
       created.campaigns++
       createdCampaignIds.push(camp.id)
@@ -486,9 +543,17 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
       // both check Campaign.liveBidWritesEnabled, and so does every later bid
       // write from rank-defend / autopilot / ToS-defense. A replica without it is
       // structurally identical to a wizard-built campaign but permanently frozen.
-      try {
-        await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } })
-      } catch (e) { errors.push(`allowlist "${c.name}": ${(e as Error).message.slice(0, 120)}`) }
+      // B-1 — Claude's run is born OFF it (every part below passes `creationFlow`): no engine, rule or later edit writes
+      // to it until a person puts it on the list (set-campaign-live-writes). It is flagged suppressed by the person who
+      // asked from the moment it exists, so restore-campaign may give its planned bids back.
+      if (safe) {
+        try { await prisma.campaign.update({ where: { id: camp.id }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: SUPPRESSION_FLOOR_CENTS, bidsSuppressedBy: safe.by } }) }
+        catch (e) { errors.push(`suppression flag "${c.name}": ${(e as Error).message.slice(0, 90)}`) }
+      } else {
+        try {
+          await prisma.campaign.update({ where: { id: camp.id }, data: { liveBidWritesEnabled: true } })
+        } catch (e) { errors.push(`allowlist "${c.name}": ${(e as Error).message.slice(0, 120)}`) }
+      }
       // Read-back: no external id ⇒ it never reached Amazon (gate closed,
       // sandbox, or a rejected create). Say so instead of implying success.
       if (!camp.externalCampaignId) notOnAmazon.push(c.name)
@@ -497,7 +562,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
         const grp = await createAdGroupLocal({
           campaignId: camp.id, name: g.name,
           // CM-20 — `creationFlow`: this run created the campaign; its policies are the plan's warnings, not blocks.
-          defaultBidEur: bidEurFor(g.defaultBidCents, 50), userId: req.actor, creationFlow: true,
+          defaultBidEur: bidEurFor(g.defaultBidCents, 50), userId: req.actor, creationFlow: true, ...cs,
         })
         created.adGroups++
         if (floored && (g.defaultBidCents ?? 0) > SUPPRESSION_FLOOR_CENTS) {
@@ -509,15 +574,18 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
         // but not its exclusions immediately buys the traffic the template pays
         // to avoid. Creating them before the positives means that even a run
         // that fails part-way is narrower than its source, never wider.
-        // Amazon negatives are EXACT or PHRASE only; the blueprint encodes them
-        // with a leading underscore (_EXACT / _PHRASE). bulkNegativeKeywords is
-        // the existing idempotent path — it skips one that already exists.
+        // Amazon negatives are EXACT or PHRASE only; a source stores them as
+        // EXACT / PHRASE (synced), NEGATIVE_EXACT / NEGATIVE_PHRASE (written by
+        // Nexus) or _EXACT / _PHRASE (a blueprint): every spelling is read
+        // (negativeMatchOf). bulkNegativeKeywords is the existing idempotent
+        // path — it skips one that already exists.
         const negItems = g.targets
           .filter((t) => t.isNegative && t.kind?.toUpperCase() === 'KEYWORD')
-          .map((t) => ({ adGroupId: grp.id, keywordText: t.expression, matchType: (t.expressionType ?? 'EXACT').toUpperCase().replace(/^_/, '') as 'EXACT' | 'PHRASE' }))
+          .map((t) => ({ adGroupId: grp.id, keywordText: t.expression, matchType: negativeMatchOf(t.expressionType) as 'EXACT' | 'PHRASE' }))
           .filter((n) => n.matchType === 'EXACT' || n.matchType === 'PHRASE')
+        // B-1 — Claude's run: they are part of the creation (`creationFlow`), as its keywords and product ads are.
         if (negItems.length) {
-          const nr = await bulkNegativeKeywords(negItems, req.actor)
+          const nr = await bulkNegativeKeywords(negItems, req.actor, safe ? { creationFlow: true, ...cs } : {})
           created.negatives += nr.created
           if (nr.failed) errors.push(`${nr.failed} negative(s) failed: ${nr.errors.slice(0, 2).join('; ').slice(0, 160)}`)
         }
@@ -526,7 +594,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
         for (const t of g.targets) {
           if (!t.isNegative || t.kind?.toUpperCase() !== 'PRODUCT') continue
           try {
-            await createNegativeProductTargetLocal({ adGroupId: grp.id, asin: t.expression, userId: req.actor })
+            await createNegativeProductTargetLocal({ adGroupId: grp.id, asin: t.expression, userId: req.actor, ...(safe ? { creationFlow: true, ...cs } : {}) })
             created.negatives++
           } catch (e) { errors.push(`negative product "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
         }
@@ -544,7 +612,7 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
           // AUTO: the four SP clauses; the Auto campaign was created with nothing.
           if (kind === 'PRODUCT' || kind === 'CATEGORY') {
             try {
-              const r = await createTargetLocal({ adGroupId: grp.id, kind: kind === 'PRODUCT' ? 'PRODUCT' : 'CATEGORY', value: t.expression, bidEur, userId: req.actor, creationFlow: true })
+              const r = await createTargetLocal({ adGroupId: grp.id, kind: kind === 'PRODUCT' ? 'PRODUCT' : 'CATEGORY', value: t.expression, bidEur, userId: req.actor, creationFlow: true, ...cs })
               await rememberTarget(r.id, plannedCents)
               created.targets++
             } catch (e) { errors.push(`${kind.toLowerCase()} target "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
@@ -571,27 +639,29 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
           try {
             const r = await createKeywordLocal({
               adGroupId: grp.id, keywordText: t.expression,
-              matchType: mt, bidEur, userId: req.actor, creationFlow: true,
+              matchType: mt, bidEur, userId: req.actor, creationFlow: true, ...cs,
             })
             await rememberTarget(r.id, plannedCents)
             created.targets++
           } catch (e) { errors.push(`keyword "${t.expression}": ${(e as Error).message.slice(0, 120)}`) }
+          await beat()
         }
 
         for (const asin of g.asins) {
           try {
-            const ad = await createProductAdLocal({ adGroupId: grp.id, asin, userId: req.actor, creationFlow: true })
+            const ad = await createProductAdLocal({ adGroupId: grp.id, asin, userId: req.actor, creationFlow: true, ...cs })
             // Count what reached AMAZON, not what reached our database. Counting
             // local rows is how a run with zero live product ads reported 200 of
             // them and looked like a success.
             if (ad.externalAdId) created.productAds++
             else notPushedAds.push(asin)
           } catch (e) { errors.push(`productAd ${asin}: ${(e as Error).message.slice(0, 160)}`) }
+          await beat()
         }
 
         if (autoWishes.length) {
           try {
-            const linked = await linkAutoTargeting({ adGroupId: grp.id, groups: autoWishes.map((w) => ({ key: w.key, enabled: true, bidEur: w.bidEur })), userId: req.actor, creationFlow: true })
+            const linked = await linkAutoTargeting({ adGroupId: grp.id, groups: autoWishes.map((w) => ({ key: w.key, enabled: true, bidEur: w.bidEur })), userId: req.actor, creationFlow: true, ...cs })
             for (const l of linked.links) {
               if (l.adTargetId) {
                 created.targets++
@@ -610,7 +680,10 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
       // is a large part of why that structure performs; a replica without it is
       // not the same campaign. Applied last, because it needs the campaign to
       // exist on Amazon and the allowlist stamp above to be in place.
-      if (c.placementBidding?.length) {
+      // B-1 — Claude's run is off the allowlist, which refuses placements: they are kept on the run instead, for the day
+      // the campaign goes live (set-placement-multipliers).
+      if (c.placementBidding?.length && safe) deferredPlacements.push({ campaignId: camp.id, campaign: c.name, placementBidding: c.placementBidding })
+      else if (c.placementBidding?.length) {
         try {
           await updatePlacementBidding({
             campaignId: camp.id,
@@ -624,7 +697,8 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
       // AX3.5 — mark a floored campaign as suppressed, using the same flag the
       // no-pause engine sets. That makes it read as suppressed everywhere in the
       // console and lets restoreCampaignBids un-do it with no special case.
-      if (floored) {
+      // B-1 — Claude's run flagged it (with who asked) the moment it existed.
+      if (floored && !safe) {
         try { await prisma.campaign.update({ where: { id: camp.id }, data: { bidsSuppressedAt: new Date() } }) }
         catch (e) { errors.push(`suppression flag "${c.name}": ${(e as Error).message.slice(0, 90)}`) }
       }
@@ -640,8 +714,10 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
   // so every replica landed outside every portfolio anyway. The field now travels with the
   // create AND is read back here, because a create response cannot prove membership landed.
   // Any repair it had to perform is surfaced as an error so a PARTIAL run says why.
+  // B-1 — Claude's run has no START to repair it later: the repair is part of the creation (`creationFlow`), as its
+  // negatives are, so the allowlist it was born off does not refuse it.
   const { settleLaunchPortfolios } = await import('./ads-create.service.js')
-  const portfolioCheck = await settleLaunchPortfolios(createdCampaignIds)
+  const portfolioCheck = await settleLaunchPortfolios(createdCampaignIds, safe ? { creationFlow: true } : {})
   if (portfolioCheck?.repairFailed) {
     errors.push(`portfolio membership could not be set for ${portfolioCheck.repairFailed} campaign(s)`)
   }
@@ -658,7 +734,10 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     errors.push(
       `${notPushedAds.length} product ad(s) were not accepted by Amazon, so those products are not `
       + `being advertised (${notPushedAds.slice(0, 3).join(', ')}${notPushedAds.length > 3 ? ', …' : ''}). `
-      + 'Use "Push the missing pieces" to retry them.',
+      // B-1 — off the allowlist, "Push the missing pieces" is refused: it works once a person put the campaign on it.
+      + (safe
+        ? 'Their campaigns are off the live-write allowlist: once a person puts one on it (set-campaign-live-writes), "Push the missing pieces" retries them.'
+        : 'Use "Push the missing pieces" to retry them.'),
     )
   }
   if (verification && !verification.ok) {
@@ -680,17 +759,166 @@ export async function applyBlueprint(req: ApplyRequest): Promise<ApplyResult> {
     : (errors.length || notOnAmazon.length) ? 'PARTIAL'
     : 'APPLIED'
 
-  await prisma.adBlueprintApplication.update({
-    where: { id: application.id },
-    data: {
-      status, createdCampaignIds, errors, appliedAt: new Date(), notOnAmazon,
-      progress: { done: plan.campaigns.length, total: plan.campaigns.length, campaign: null, created } as object,
-    },
-  })
+  const progress = { done: plan.campaigns.length, total: plan.campaigns.length, campaign: null, created, ...(safe ? { at: new Date().toISOString() } : {}) } as object
+  if (!safe) {
+    await prisma.adBlueprintApplication.update({
+      where: { id: application.id },
+      data: { status, createdCampaignIds, errors, appliedAt: new Date(), notOnAmazon, progress },
+    })
+  } else {
+    // B-1 — guarded: a run marked stopped meanwhile (FAILED by settleStoppedReplicates) keeps that verdict — the next
+    // run may already be going — and records that it did finish, with everything it made.
+    const options = { ...((application.options ?? {}) as object), deferredPlacements } as object
+    const landed = await prisma.adBlueprintApplication.updateMany({
+      where: { id: application.id, status: 'RUNNING' },
+      data: { status, createdCampaignIds, errors, appliedAt: new Date(), notOnAmazon, progress, options },
+    })
+    if (!landed.count) {
+      const row = await prisma.adBlueprintApplication.findUnique({ where: { id: application.id }, select: { createdCampaignIds: true, errors: true } })
+      await prisma.adBlueprintApplication.update({
+        where: { id: application.id },
+        data: {
+          createdCampaignIds: [...new Set([...(row?.createdCampaignIds ?? []), ...createdCampaignIds])], notOnAmazon, options,
+          errors: [...(row?.errors ?? []), `it finished after it was marked stopped: ${status.toLowerCase()}, ${created.campaigns} campaign(s) made`, ...errors],
+        },
+      })
+    }
+  }
   logger.info('[AX2.5] blueprint applied', { applicationId: application.id, status, created, errors: errors.length })
 
   return { applicationId: application.id, status, plan, created, skippedNonKeyword, notOnAmazon, errors, portfolioCheck, verification }
 }
+
+// ── B-1 — Claude's runs (replicate-ad-structure): followed, undone, and settled when a deploy killed them ──────────────
+
+const REPLICATE_RUN_SELECT = { id: true, status: true, progress: true, createdAt: true, startedAt: true, createdCampaignIds: true, errors: true, options: true } as const
+type ReplicateRunRow = { id: string; status: string; progress: unknown; createdAt: Date; startedAt: Date | null; createdCampaignIds: string[]; errors: string[]; options: unknown }
+
+/**
+ * Every campaign a Replicate run made: the ids it recorded at the end and, for a run born safe, every campaign its change
+ * set's audit rows say it created (a run killed mid-way recorded none).
+ */
+async function replicateMadeBy(row: Pick<ReplicateRunRow, 'createdCampaignIds' | 'options'>): Promise<string[]> {
+  const changeSetId = bornSafeOf(row)?.changeSetId
+  const logged = changeSetId
+    ? (await prisma.advertisingActionLog.findMany({ where: { executionId: changeSetId, actionType: 'create_campaign', entityType: 'CAMPAIGN' }, select: { entityId: true } })).map((l) => l.entityId)
+    : []
+  return [...new Set([...row.createdCampaignIds, ...logged])]
+}
+
+/** A run born safe that has not moved for STALE_RUN_MS (the playbook's measure): a deploy or a restart killed it. */
+async function safeRunStopped(row: ReplicateRunRow, now: number): Promise<boolean> {
+  if (!bornSafeOf(row)) return false
+  const { stoppedRunning } = await import('./ads-playbook/build.js')
+  return stoppedRunning(row, now)
+}
+
+/**
+ * Claude's runs (born safe) of this product in this market — or the one named — that stopped advancing: marked FAILED with
+ * every campaign they made, never resumed. What they made is archived (archive-ads buildRunId) or kept. A screen run is
+ * never touched.
+ */
+export async function settleStoppedReplicates(where: { market: string; productToken: string } | { applicationId: string }, now = Date.now()): Promise<number> {
+  const rows = await prisma.adBlueprintApplication.findMany({
+    where: { status: 'RUNNING', playbookId: null, ...('applicationId' in where ? { id: where.applicationId } : { marketplace: where.market, productToken: where.productToken }) },
+    select: REPLICATE_RUN_SELECT,
+  })
+  let settled = 0
+  for (const row of rows) {
+    if (!(await safeRunStopped(row, now))) continue
+    const made = await replicateMadeBy(row)
+    const campaign = (row.progress as { campaign?: unknown } | null)?.campaign
+    const { STALE_RUN_MS } = await import('./ads-playbook/build.js')
+    // Campaigns Amazon never took (no Amazon id) are archived in Nexus only — nothing is sent — so their names are free.
+    const local = made.length
+      ? (await prisma.campaign.updateMany({ where: { id: { in: made }, externalCampaignId: null, status: { not: 'ARCHIVED' } }, data: { status: 'ARCHIVED' } })).count
+      : 0
+    const r = await prisma.adBlueprintApplication.updateMany({
+      where: { id: row.id, status: 'RUNNING' },
+      data: {
+        status: 'FAILED', appliedAt: new Date(), createdCampaignIds: made,
+        errors: [
+          ...row.errors,
+          `the run stopped without finishing${typeof campaign === 'string' ? ` at "${campaign}"` : ''}: no progress for ${STALE_RUN_MS / 60_000} minutes (a deploy or a restart). It does not resume: archive what it made (archive-ads buildRunId ${row.id}), or keep it.`
+            + (local ? ` ${local} campaign record(s) Amazon never took were archived in Nexus.` : ''),
+        ],
+      },
+    })
+    settled += r.count
+  }
+  if (settled) logger.warn('[B-1] a Replicate run Claude asked for stopped and was marked FAILED', { settled })
+  return settled
+}
+
+/** The ad groups named that are not in these campaigns (a source narrowed to some of its ad groups); none when all are. */
+export async function adGroupsOutside(campaignIds: readonly string[], adGroupIds: readonly string[]): Promise<string[]> {
+  if (!adGroupIds.length) return []
+  const rows = await prisma.adGroup.findMany({ where: { id: { in: [...adGroupIds] }, campaignId: { in: [...campaignIds] } }, select: { id: true } })
+  return adGroupIds.filter((id) => !rows.some((r) => r.id === id))
+}
+
+/**
+ * A run of this product in this market still RUNNING — the one startBlueprintRun's guard would answer with — and whether
+ * it stopped (a run of Claude's a deploy killed: the next run settles it); null when none. Read only.
+ */
+export async function replicateInFlight(market: string, productToken: string, now = Date.now()): Promise<{ applicationId: string; stopped: boolean } | null> {
+  const row = await prisma.adBlueprintApplication.findFirst({
+    where: { marketplace: market, productToken, status: 'RUNNING' },
+    orderBy: { createdAt: 'desc' },
+    select: REPLICATE_RUN_SELECT,
+  })
+  return row ? { applicationId: row.id, stopped: await safeRunStopped(row, now) } : null
+}
+
+/**
+ * The campaigns a Replicate run made that are not archived yet and that Amazon holds (archive-ads buildRunId, the undo of
+ * replicate-ad-structure), or why they cannot be named; null when the id is no Replicate run of this business (a
+ * playbook build's is the playbook's).
+ */
+export async function replicateRunCampaigns(applicationId: string, now = Date.now()): Promise<{ campaignIds: string[]; status: string; stopped?: true } | { refusal: string } | null> {
+  const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: null }, select: REPLICATE_RUN_SELECT })
+  if (!run) return null
+  // Read only: a run that stopped holds nothing and names what it made (archive-ads' execute settles it first).
+  const stopped = await safeRunStopped(run, now)
+  if (run.status === 'RUNNING' && !stopped) return { refusal: 'Not queued: that Replicate run is still running. Follow it with approval-status, and archive what it made once it ends.' }
+  const made = await replicateMadeBy(run)
+  const live = made.length
+    ? await prisma.campaign.findMany({ where: { id: { in: made }, status: { not: 'ARCHIVED' }, externalCampaignId: { not: null } }, select: { id: true } })
+    : []
+  return { campaignIds: live.map((c) => c.id), status: stopped ? 'FAILED' : run.status, ...(stopped ? { stopped: true as const } : {}) }
+}
+
+/** Every campaign a Replicate run made (archived or not), for the places a change lands; null when there is no such run. */
+export async function replicateRunCreated(applicationId: string): Promise<string[] | null> {
+  const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: null }, select: REPLICATE_RUN_SELECT })
+  return run ? replicateMadeBy(run) : null
+}
+
+/** A Replicate run as approval-status follows it: its status, how far it is, the campaigns it made, how many errors, the placements it left for later. */
+export async function replicateRunDelivery(applicationId: string): Promise<{ status: string; stopped?: true; done: number | null; total: number | null; createdCampaignIds: string[]; errors: number; deferredPlacements: number } | null> {
+  const run = await prisma.adBlueprintApplication.findFirst({ where: { id: applicationId, playbookId: null }, select: REPLICATE_RUN_SELECT })
+  if (!run) return null
+  const progress = (run.progress ?? {}) as { done?: unknown; total?: unknown }
+  // A run a deploy killed reads as what it is: stopped (FAILED once the next run or an archive settles it), never RUNNING.
+  const stopped = await safeRunStopped(run, Date.now())
+  return {
+    status: stopped ? 'FAILED' : run.status, ...(stopped ? { stopped: true as const } : {}),
+    done: typeof progress.done === 'number' ? progress.done : null, total: typeof progress.total === 'number' ? progress.total : null,
+    createdCampaignIds: await replicateMadeBy(run), errors: run.errors.length, deferredPlacements: bornSafeOf(run)?.deferredPlacements?.length ?? 0,
+  }
+}
+
+/**
+ * B-1 — a run Claude asked for is born off the live-write allowlist: it goes live with set-campaign-live-writes, then
+ * restore-campaign, each a request of its own. Replicate's raise refuses it (off the allowlist its bid writes would be
+ * refused anyway, and the run would read "live").
+ */
+export const CLAUDE_RUN =
+  'Claude asked for this run: it was born off the live-write allowlist and goes live with set-campaign-live-writes, then restore-campaign (each a request a person approves), not with Replicate\'s raise.'
+
+/** B-1 — why Replicate's rollback refuses a run Claude asked for, and what archives it instead. */
+export const claudeRunRollback = (applicationId: string) =>
+  `Claude asked for this run: its campaigns are off the live-write allowlist, so a rollback from here would be refused at Amazon and leave them running. Archive them with archive-ads buildRunId ${applicationId} (a request a person approves: it is sent as that person's own change and reaches Amazon).`
 
 /**
  * PB-5a — a run that built an ads playbook (playbookId set) is the playbook's: it starts with the playbook's START (the
@@ -712,6 +940,7 @@ export async function raiseApplicationBids(applicationId: string, actor?: string
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
   if (app.playbookId) throw new Error(PLAYBOOK_RUN)
+  if (bornSafeOf(app)) throw new Error(CLAUDE_RUN)
   if (app.status === 'ROLLED_BACK') return { raised: 0, campaigns: 0, errors: ['this run was rolled back'] }
 
   const { restoreCampaignBids } = await import('./ads-bid-suppression.service.js')
@@ -737,6 +966,9 @@ export async function rollbackApplication(applicationId: string, actor?: string)
   const app = await prisma.adBlueprintApplication.findUnique({ where: { id: applicationId } })
   if (!app) throw new Error('application not found')
   if (app.playbookId) throw new Error(PLAYBOOK_RUN)
+  // B-1 — its campaigns are off the live-write allowlist: this rollback's archives (an automation's, not a person's own)
+  // would be refused at Amazon's door and put back, while the run read ROLLED_BACK.
+  if (bornSafeOf(app)) throw new Error(claudeRunRollback(applicationId))
   if (app.status === 'ROLLED_BACK') return { archived: 0, errors: ['already rolled back'] }
 
   const { updateCampaignWithSync } = await import('./ads-mutation.service.js')
