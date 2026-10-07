@@ -403,10 +403,9 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
 }
 
 /**
- * add-negative-targets' own checks after the common ones (pure, on the preview): never another product's place by rule
+ * add-negative-targets' own checks, before the common ones (pure, on the preview): never another product's place by rule
  * (rule 3: a person's word) nor a proven handover (a winner's old place: a person decides), the markets, the match types,
- * campaign negatives and ASIN negatives, the least wasted spend, and — as create-negative-keyword (AA-W2-7) — each term's
- * record meets the ads strategy's "Negate a search term when" group where it lands.
+ * campaign negatives and ASIN negatives.
  */
 function addRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
   const p = (preview ?? {}) as {
@@ -434,6 +433,17 @@ function addRefusal(preview: unknown, limits: Record<string, unknown>): string |
     }
     if (w.entity.split(':')[2] === '*' && limits.allowCampaignScope !== true) return 'it adds a campaign negative (every ad group of a campaign); this tool\'s limits do not let one run by rule (allowCampaignScope is off); a person decides'
   }
+  return null
+}
+
+/**
+ * After the common checks — as create-negative-keyword (AA-W2-7), for every item: its record meets the ads strategy's
+ * "Negate a search term when" group where it lands, over that group's window, and this tool's least wasted spend.
+ */
+function negateGroupRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
+  const p = (preview ?? {}) as { ruleRecords?: Record<string, { windowDays: number; clicks: number; spendCents: number; orders: number }> }
+  const facts = limitFactsOf(preview)
+  if (!facts) return null // ruleRefusal says it
   // Each negative against the strategy's negate group where it lands, over that group's window (the kit's facts place it).
   const records = p.ruleRecords
   if (!records) return 'the terms\' records over the strategy\'s windows were not read for this preview; a person decides'
@@ -503,7 +513,7 @@ const addNegativeTargets: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'auto',
   limits: ADD_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? addRefusal(preview, limits),
+  withinLimits: (preview, limits) => addRefusal(preview, limits) ?? ruleRefusal(preview, limits) ?? negateGroupRefusal(preview, limits),
   undo: ADD_NEGATIVES_UNDO,
   description:
     `Add negatives to Amazon Sponsored Products campaigns in one request (up to ${MAX_NEGATIVES}, one step): negative keywords `
@@ -766,7 +776,7 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
   }
 }
 
-/** retire-negatives' own checks after the common ones (pure): a retire runs by rule only where the business allows it. */
+/** retire-negatives' own checks, before the common ones (pure): a retire runs by rule only where the business allows it. */
 function retireRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
   const p = (preview ?? {}) as { action?: string; market?: string; markets?: string[] }
   if (p.action !== TOOL.retire) return 'there is no preview of this retire to check; a person decides'
@@ -829,7 +839,7 @@ const retireNegatives: AgentTool = {
   reversibility: 'partial',
   maxClaudeTrust: 'auto',
   limits: RETIRE_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? retireRefusal(preview, limits),
+  withinLimits: (preview, limits) => retireRefusal(preview, limits) ?? ruleRefusal(preview, limits),
   undo: RETIRE_NEGATIVES_UNDO,
   description:
     `Retire standing negatives of Amazon Sponsored Products campaigns — any, not only Claude's (up to ${MAX_RETIRE}): negative `

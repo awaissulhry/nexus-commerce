@@ -83,6 +83,10 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // B-2 — an AI goal, the create kind: only at the floor, off the allowlist, its rules and plan off (nothing spends until
   // restore-campaign); by default never by rule (maxCampaigns 0).
   'create-ai-goal-campaigns',
+  // W4-5 — targets (the targeting kind: at a bid with the approver's code), negatives in the list form (the negative kind),
+  // a retire (the retire kind: the code), a harvest (harvest and negative kinds) and a harvest destination (Nexus only):
+  // by default never by rule (maxItems 0, no market); another product's place and a winner's old place never by rule.
+  'add-ad-targets', 'add-negative-targets', 'retire-negatives', 'harvest-search-term', 'set-harvest-destination',
 ]
 
 /**
@@ -395,6 +399,16 @@ describe('C1 — every registered tool keeps the contract', () => {
       // A5 — a negative is retired by undo-ad-change; a graduated keyword goes to the floor through set-target-bid.
       'create-negative-keyword': { before: { changeSetId: 'ap1', negatives: [] }, after: { negatives: [{ targetId: 't9' }] } },
       'graduate-keyword': { before: { changeSetId: 'ap1', keyword: null }, after: { targetId: 't9', bidCents: 37 } },
+      // W4-5 — targets added are lowered to the stop bid (they stay); negatives added are retired by undo-ad-change; a retire
+      // adds the same negatives again; a harvest is put back by its own op undo; a destination is set back through itself.
+      'add-ad-targets': { before: { changeSetId: 'ap1', adGroupId: 'g1', targets: [] }, after: { targets: [{ targetId: 't1', bidCents: 45 }, { targetId: 't2', bidCents: 5 }] } },
+      'add-negative-targets': { before: { changeSetId: 'ap1', negatives: [] }, after: { negatives: [{ targetId: 'n1' }] } },
+      'retire-negatives': {
+        before: { changeSetId: 'ap1', negatives: [{ targetId: 'n1', kind: 'KEYWORD', text: 'free', match: 'NEGATIVE_EXACT', level: 'AD_GROUP', adGroupId: 'g1', campaignId: 'c1', atAmazon: true }] },
+        after: { negatives: [{ targetId: 'n1', status: 'ARCHIVED' }] },
+      },
+      'harvest-search-term': { before: { changeSetId: 'ap1', op: 'harvest', keyword: null, negative: null }, after: { op: 'harvest', keyword: { targetId: 't1', bidCents: 45 }, negative: { targetId: 'n1', standing: true } } },
+      'set-harvest-destination': { before: { grain: 'campaign', scopeId: 'c1', matchType: 'EXACT', destination: { adGroupId: 'g1', negateAtSource: true } }, after: { grain: 'campaign', scopeId: 'c1', matchType: 'EXACT', destination: { adGroupId: 'g2', negateAtSource: false } } },
       // A12 — the allowlist switch is set back through itself.
       'set-campaign-live-writes': { before: { campaignId: 'c1', enabled: false }, after: { campaignId: 'c1', enabled: true } },
       // T5 — each campaign's earlier target ACoS (a fraction, or none) is set back through the tool's own list.

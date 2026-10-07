@@ -300,7 +300,7 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
   }
 }
 
-/** add-ad-targets' own checks after the common ones (pure, on the preview). */
+/** add-ad-targets' own checks, before the common ones (pure, on the preview): never accepted clashes by rule, markets, campaigns, kinds. */
 function addRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
   const p = (preview ?? {}) as { action?: string; sameProductClashes?: unknown[]; campaign?: { id?: string; marketplace?: string | null }; changes?: unknown; highestBidCents?: number; currency?: string; totals?: { productTargets?: number; categoryTargets?: number } }
   if (p.action !== TOOL.add) return 'there is no preview of these targets to check; a person decides'
@@ -314,12 +314,16 @@ function addRefusal(preview: unknown, limits: Record<string, unknown>): string |
   if (((p.totals?.productTargets ?? 0) + (p.totals?.categoryTargets ?? 0)) > 0 && limits.allowProductTargets !== true) {
     return 'it adds product or category targets; this tool\'s limits do not let them be added by rule (allowProductTargets is off); a person decides'
   }
-  const facts = limitFactsOf(preview)
-  if (!facts) return null // ruleRefusal says it
   const matchTypes = new Set((limits.matchTypes as string[] | undefined) ?? ['EXACT'])
   for (const line of Array.isArray(p.changes) ? (p.changes as Array<{ kind?: string; match?: string | null }>) : []) {
     if (line.kind === 'KEYWORD' && line.match && !matchTypes.has(line.match)) return `it adds a ${line.match.toLowerCase()} keyword, which this tool's limits do not let be added by rule (matchTypes); a person decides`
   }
+  return null
+}
+
+/** After the common checks: the highest bid a new target starts at, within this tool's limit. */
+function addBidRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
+  const p = (preview ?? {}) as { highestBidCents?: number; currency?: string }
   const max = typeof limits.maxBidCents === 'number' ? limits.maxBidCents : 0
   const highest = p.highestBidCents ?? Number.POSITIVE_INFINITY
   if (!(highest <= max)) return `its highest bid ${amountLabel(highest, p.currency ?? 'EUR')} is above the ${amountLabel(max, p.currency ?? 'EUR')} this tool's limits let a new target start at by rule${max === 0 ? ' (0: every request waits for a person)' : ''}; a person decides`
@@ -371,7 +375,7 @@ const addAdTargets: AgentTool = {
   reversibility: 'partial',
   maxClaudeTrust: 'auto',
   limits: ADD_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? addRefusal(preview, limits),
+  withinLimits: (preview, limits) => addRefusal(preview, limits) ?? ruleRefusal(preview, limits) ?? addBidRefusal(preview, limits),
   undo: ADD_TARGETS_UNDO,
   description:
     `Add keywords (EXACT, PHRASE, BROAD), product targets (ASINs) and category targets to ONE ad group of a manual Amazon `
@@ -635,7 +639,7 @@ async function harvestRuleFacts(plan: HarvestPlan, writes: RuleWrite[], approval
   return { ...facts, ruleHarvest, ruleRecord }
 }
 
-/** harvest-search-term's own checks after the common ones (pure): the bid within its limit, the strategy's harvest bar. */
+/** harvest-search-term's own checks, before the common ones (pure): never its undo by rule, the markets, the bid within its limit. */
 function harvestRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
   const p = (preview ?? {}) as {
     action?: string; op?: string; query?: string; bidCents?: number; currency?: string; campaign?: { marketplace?: string | null }
@@ -650,6 +654,17 @@ function harvestRefusal(preview: unknown, limits: Record<string, unknown>): stri
   const currency = p.currency ?? 'EUR'
   const max = typeof limits.maxStartBidCents === 'number' ? limits.maxStartBidCents : 0
   if (!((p.bidCents ?? Number.POSITIVE_INFINITY) <= max)) return `its starting bid ${amountLabel(p.bidCents ?? 0, currency)} is above the ${amountLabel(max, currency)} this tool's limits let a harvested keyword start at by rule${max === 0 ? ' (0: every harvest waits for a person)' : ''}; a person decides`
+  return null
+}
+
+/** After the common checks — as graduate-keyword (AA-W2-7): the term's record where it ran meets the strategy's harvest bar. */
+function harvestBarRefusal(preview: unknown, _limits: Record<string, unknown>): string | null {
+  const p = (preview ?? {}) as {
+    query?: string; currency?: string
+    ruleHarvest?: { harvestMinOrders: number; harvestMinClicks: number; harvestMaxAcosPct: number | null; harvestWindowDays: number; from: string } | null
+    ruleRecord?: { windowDays: number; clicks: number; spendCents: number; orders: number; salesCents: number } | null
+  }
+  const currency = p.currency ?? 'EUR'
   const h = p.ruleHarvest
   if (!h) return `the ads strategy sets no "Harvest a search term when" group where "${p.query}" ran: a harvest runs by rule only for a term that meets one; a person decides`
   const r = p.ruleRecord
@@ -772,7 +787,7 @@ const harvestSearchTerm: AgentTool = {
   reversibility: 'partial',
   maxClaudeTrust: 'auto',
   limits: HARVEST_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? harvestRefusal(preview, limits),
+  withinLimits: (preview, limits) => harvestRefusal(preview, limits) ?? ruleRefusal(preview, limits) ?? harvestBarRefusal(preview, limits),
   undo: HARVEST_UNDO,
   description:
     'Harvest an Amazon Sponsored Products search term in ONE step: a keyword (EXACT by default; an ASIN becomes a product '
@@ -965,7 +980,7 @@ async function decideDestination(raw: Record<string, unknown>, ctx: Pick<ToolCon
   }
 }
 
-/** set-harvest-destination's own check after the common ones (pure): the markets. */
+/** set-harvest-destination's own check, before the common ones (pure): the markets. */
 function destinationRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
   const p = (preview ?? {}) as { action?: string; market?: string }
   if (p.action !== TOOL.destination) return 'there is no preview of this harvest destination to check; a person decides'
@@ -1015,7 +1030,7 @@ const setHarvestDestination: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'auto',
   limits: DESTINATION_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? destinationRefusal(preview, limits),
+  withinLimits: (preview, limits) => destinationRefusal(preview, limits) ?? ruleRefusal(preview, limits),
   undo: DESTINATION_UNDO,
   description:
     'Set where a harvested search term lands for a scope — a source ad group, its campaign, a portfolio, a product line, a '

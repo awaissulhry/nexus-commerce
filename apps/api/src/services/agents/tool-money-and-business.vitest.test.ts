@@ -65,6 +65,8 @@ const B_MARK = 'BRAVO'
 interface Seeded {
   productId: string; orderId: string; approvalId: string; changeId: string; automationRuleId: string; replenishmentRuleId: string; pausedRuleId: string
   shipmentId: string; draftProductId: string; aliasId: string; campaignId: string
+  /** W4-5 — the campaign's ad group (targets, negatives and a harvest destination name it). */
+  adGroupId: string
   publicationId: string; familyId: string; variantId: string; variantDraftId: string
   /** P4 — a channel account and the trace of one channel call. */
   connectionId: string; traceId: string
@@ -280,6 +282,13 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'enable-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
   // AA-W2-13 — an archive names the budgets that stop for good (it needs money).
   'archive-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
+  // W4-5 — targets, negatives and a harvest name bids, spend and orders (they need money: refused for a person without
+  // it); a harvest destination names no money (Nexus only: its preview reads the campaign's ad group).
+  'add-ad-targets': (ids) => ({ adGroupId: ids.adGroupId, keywords: [{ text: 'money jacket', matchType: 'EXACT', bidCents: 45 }] }),
+  'add-negative-targets': (ids) => ({ adGroupIds: [ids.adGroupId], keywords: [{ text: 'money free', matchType: 'NEGATIVE_EXACT' }] }),
+  'retire-negatives': (ids) => ({ negativeIds: [ids.campaignId] }),
+  'harvest-search-term': (ids) => ({ query: 'money cheap jacket', sourceAdGroupId: ids.adGroupId, destAdGroupId: ids.adGroupId, negateSource: false }),
+  'set-harvest-destination': (ids) => ({ scope: 'campaign', scopeId: ids.campaignId, adGroupId: ids.adGroupId }),
   // W3-3 — stock-aware bids: the read shows units and days (no money); the two changes list bids (they need money).
   'ad-stock-risk': (ids) => ({ campaignIds: [ids.campaignId], show: 'all' }),
   'lower-ad-bids-for-stock': (ids) => ({ campaignIds: [ids.campaignId] }),
@@ -709,7 +718,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
     // A2 — an Amazon campaign with a target, a day of spend, a wasteful search term and a bid change: the ad reads
     // have money to strip, and business B's campaign carries its mark.
     const campaign = await db.campaign.create({
-      data: { name: `${mark} MONEY campaign`, type: 'SP', marketplace: 'IT', externalCampaignId: `${mark}-CMP`, dailyBudget: '31.41', startDate: new Date() } as never,
+      data: { name: `${mark} MONEY campaign`, type: 'SP', marketplace: 'IT', externalCampaignId: `${mark}-CMP`, dailyBudget: '31.41', startDate: new Date(), targetingType: 'MANUAL' } as never,
     })
     const adGroup = await db.adGroup.create({ data: { campaignId: campaign.id, name: `${mark} ad group`, externalAdGroupId: `${mark}-AG` } })
     // Ads autonomy W1-2 — the product is advertised in that ad group, and the market and the product have a strategy whose
@@ -888,7 +897,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       pausedRuleId: pausedRule.id,
       productId: product.id, orderId: order.id, approvalId: approval.id, changeId: change.id,
       automationRuleId: automationRule.id, replenishmentRuleId: replenishmentRule.id, shipmentId: shipment.id,
-      draftProductId: draftProduct.id, aliasId: alias.id, campaignId: campaign.id,
+      draftProductId: draftProduct.id, aliasId: alias.id, campaignId: campaign.id, adGroupId: adGroup.id,
       publicationId: publication.id, familyId: family.id, variantId: variant.id, variantDraftId: variantDraft.id,
       connectionId: connection.id, traceId,
       ruleId: rule.id, alertEventId: alertEvent.id, assetId: asset.id, stageId: reviewStage.id, themeId: theme.id,
