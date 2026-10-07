@@ -477,6 +477,17 @@ export async function deleteHarvestDestination(scopeGrain: HvDestGrain, scopeId:
   return { removed: { scopeGrain, scopeId: scopeGrain === 'account' ? null : id, matchType } }
 }
 
+/**
+ * ADS AUTONOMY W4-5 — the one destination stored at exactly this scope and match type (set-harvest-destination's from →
+ * to), or null. `scopeId`: the account's is HV_DEST_ACCOUNT.
+ */
+export async function storedHarvestDestination(scopeGrain: HvDestGrain, scopeId: string, matchType: HvCreateType): Promise<{ adGroupId: string; negateAtSource: boolean; updatedBy: string } | null> {
+  return prisma.adsHarvestDestination.findUnique({
+    where: { scopeGrain_scopeId_matchType: workspaceKey({ scopeGrain, scopeId, matchType }) },
+    select: { adGroupId: true, negateAtSource: true, updatedBy: true },
+  })
+}
+
 export async function listHarvestDestinations() {
   const rows = await prisma.adsHarvestDestination.findMany({ orderBy: [{ scopeGrain: 'asc' }, { scopeId: 'asc' }, { matchType: 'asc' }] })
   const ags = await prisma.adGroup.findMany({

@@ -51,22 +51,26 @@ export const STOP_METHODS = ['LOW_BIDS', 'PAUSE'] as const
  * stop stays `stop` (low bids). AA-W2-13 — and an archive (Owner D-W2-5: one kind; Amazon's delete is the same archive).
  */
 export const CLAUDE_ACTION_TOOLS = {
-  bid: ['set-target-bid', 'bulk-ad-bid-change'],
-  negative: ['create-negative-keyword'],
-  harvest: ['graduate-keyword'],
+  // W4-6 — an ad group's default bid (set-ad-group's own kind; its stop and start ops are listed under stop and restore).
+  bid: ['set-target-bid', 'bulk-ad-bid-change', 'set-ad-group'],
+  // W4-5 — the list form of each (add-negative-targets; harvest-search-term, which negates its source too: claude.ts
+  // ARG_ACTIONS), and where a harvest lands (set-harvest-destination, Nexus only).
+  negative: ['create-negative-keyword', 'add-negative-targets'],
+  harvest: ['graduate-keyword', 'harvest-search-term', 'set-harvest-destination'],
   placement: ['set-placement-multipliers'],
-  budget: ['set-campaign-budget'],
+  // W4-7 — the monthly plan, the budget schedules and pools and the restore to baseline move budgets too.
+  budget: ['set-campaign-budget', 'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines'],
   target: ['set-campaign-target-acos'],
   suggestion: ['decide-automation-suggestions'],
   // ADS AUTONOMY W3-3 — a stock brake is a temporary stop with low bids too (an ad group short of stock), and giving
   // its bids back a restore.
-  stop: ['suppress-campaign', 'lower-ad-bids-for-stock'],
-  restore: ['restore-campaign', 'restore-ad-bids-after-stock'],
+  stop: ['suppress-campaign', 'lower-ad-bids-for-stock', 'set-ad-group'],
+  restore: ['restore-campaign', 'restore-ad-bids-after-stock', 'set-ad-group'],
   // PB-5a — a playbook build creates campaigns (apply-ads-playbook op build; its other ops map in OP_ACTIONS, claude.ts).
   // B-1 — so does a copy of a running structure (replicate-ad-structure, Replicate Structure's own run).
   // B-2 — so does an AI goal (create-ai-goal-campaigns).
-  // B-3 — and a one-off SP Super Wizard set.
-  create: ['create-ad-campaign', 'apply-ads-playbook', 'create-ai-goal-campaigns', 'replicate-ad-structure', 'build-sp-wizard-campaigns'],
+  // B-3 — and a one-off SP Super Wizard set. W4-6 — and a new ad group, or product ads added to one.
+  create: ['create-ad-campaign', 'apply-ads-playbook', 'create-ai-goal-campaigns', 'replicate-ad-structure', 'build-sp-wizard-campaigns', 'create-ad-group', 'add-product-ads'],
   rule: ['save-ad-rule'],
   undo: ['undo-ad-change'],
   // AA-W2-9 (D-W2-6 = A) — a new campaign goes live in three kinds: create, allowlist (Claude's own), restore.
@@ -81,6 +85,17 @@ export const CLAUDE_ACTION_TOOLS = {
   // Owner decides per market, category or product whether a phase move may run alone. Listed after `create`: the tool's
   // own kind stays create (claude.ts reads the first kind a tool is listed under).
   phase: ['apply-ads-playbook'],
+  // W4-3 — a campaign's settings (its name, portfolio, end date, bidding strategy), and a portfolio made, renamed, capped
+  // or archived (set-portfolio op archive is the archive kind too: OP_ACTIONS, claude.ts).
+  settings: ['set-campaign-settings'],
+  portfolio: ['set-portfolio'],
+  // W4-1 — the hourly bid plans of the Hourly Bids page (create, paint, members, rename, switch, delete, per-campaign
+  // values): their own kind, so the Owner decides per market, category or product whether a plan change may run alone.
+  hourly: ['set-hourly-bid-plan'],
+  // W4-5 — keywords, product and category targets added to an ad group (they add spend), and negatives retired (a block
+  // lifted: it can add spend too) — each a kind of its own, so the Owner decides them apart from a negative or a harvest.
+  targeting: ['add-ad-targets'],
+  retire: ['retire-negatives'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]
@@ -239,8 +254,9 @@ export const READERS = {
   gate: "the write gate (refuses an engine's or a rule's bid outside it; a person's own edit, or a Claude request he approves, is warned and goes when he confirms)",
   hourly: 'hourly bid plans (the base bid)',
   restores: 'restores after a stop (and base-bid give-backs)',
-  stepClamp: "the step clamp on engine, rule and Claude bid changes (not a person's own edit)",
-  claudePreview: "Claude's bid previews (the bid an approval writes)",
+  // W4-4 — a Claude bid request a person approves is his click: warned past the step, never stepped.
+  stepClamp: "the step clamp on engine and rule bid changes and on Claude bid changes run by rule (not a person's own edit, nor a Claude request he approves: the card warns him and approving sends it)",
+  claudePreview: "Claude's bid previews (the warning past it, and the bid a run by rule writes)",
   // AA-W2-2b — the strategy-bound ad tools' common checks (agents/tools/ads-autonomy-kit.ts, C5) in Claude's door.
   claudeByRule: "Claude's door, for an ad change that may run by the business's rule in this market (an ad tool set to run by rule, where its code allows it)",
 } as const

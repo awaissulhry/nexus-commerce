@@ -11,7 +11,7 @@
  * was CANCELLED during the grace window, we skip without calling the
  * API.
  *
- * Idempotency: jobId is "ads-sync:<queueRowId>" so a duplicate enqueue
+ * Idempotency: jobId is "ads-sync-<queueRowId>" so a duplicate enqueue
  * for the same row collapses to one job (BullMQ deduplicates on jobId).
  */
 
@@ -425,6 +425,14 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   if (row.syncStatus !== 'PENDING') {
     return { status: 'SKIPPED', queueId }
   }
+  // W4-12 — not due yet: a hold made longer since the job was queued, or a retry's backoff (2^n minutes). The job ids
+  // were refused by BullMQ until W4-12, so only the drain sent writes, and it reads both; a job that fires early leaves
+  // the row PENDING for the drain to send when it is due.
+  const due = new Date()
+  if ((row.holdUntil && row.holdUntil > due) || (row.nextRetryAt && row.nextRetryAt > due)) {
+    logger.debug('[ads-sync.worker] not due yet — left to the drain', { queueId })
+    return { status: 'NOT_DUE', queueId }
+  }
 
   // AX-ZD.1e — serialise writes per entity. Amazon answers two concurrent writes
   // to one entity with HTTP 423 ConcurrentModificationException, and this worker
@@ -566,6 +574,11 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
         syncedAt: new Date(),
       },
     })
+    // W4-12 — its action log says it was refused, as a superseded write's does: left PENDING, the change feed read it as
+    // APPLIED (and undoable) although nothing reached Amazon.
+    await prisma.advertisingActionLog
+      .updateMany({ where: { outboundQueueId: queueId, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'SKIPPED' } })
+      .catch(() => { /* audit-update failure must not break the worker */ })
     // 4k — a refused write leaves no local change. Nexus wrote its own copy when the write was queued, so each refused
     // field still holding the refused value goes back to the value it replaced (putBackRefusedWrite); a newer change
     // stays. Inside the entity claim, before settling. Never fails the worker.
@@ -601,6 +614,10 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
       },
     })
     await settleAdMutations(queueId, 'FAILED', { isDead: true, error: 'no_active_ads_connection_for_marketplace' })
+    // W4-12 — and its action log says it was not sent, as a gate refusal's does.
+    await prisma.advertisingActionLog
+      .updateMany({ where: { outboundQueueId: queueId, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'SKIPPED' } })
+      .catch(() => { /* audit-update failure must not break the worker */ })
     // CM-17 — nothing reached Amazon: the value it replaced comes back, as below.
     await putBackRefusedWrite(payload).catch(() => { /* best-effort, as every put-back */ })
     return { status: 'FAILED', queueId }

@@ -240,13 +240,14 @@ const rankTarget: Spec = {
 
 // ── budget-schedule (A7) ─────────────────────────────────────────────────────────────────────────────────
 
-interface BudgetWindow { day: number; start?: string; end?: string; adj?: string; value: number }
-const fingerprint = (w: BudgetWindow) => `${Number(w.day)}|${w.start ?? ''}|${w.end ?? ''}|${w.adj ?? ''}|${w.value ?? ''}`
+/** W4-7 — exported: set-budget-schedule judges and words a window as tune-ad-engine does. */
+export interface BudgetWindow { day: number; start?: string; end?: string; adj?: string; value: number }
+export const fingerprint = (w: BudgetWindow) => `${Number(w.day)}|${w.start ?? ''}|${w.end ?? ''}|${w.adj ?? ''}|${w.value ?? ''}`
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const windowText = (w: BudgetWindow, type?: string) =>
+export const windowText = (w: BudgetWindow, type?: string) =>
   `${DAYS[Number(w.day)] ?? `day ${w.day}`} ${w.start && w.end ? `${w.start}–${w.end}` : 'all day'} ${type === 'budget-multiplier' ? `×${w.value}` : `${w.adj} ${w.value}`}`
 /** Only lowers a budget: a decrease, or a multiplier of at most 1. `set` names an amount that may be above the base. */
-const lowers = (w: BudgetWindow, type?: string) => (type === 'budget-multiplier' ? Number(w.value) > 0 && Number(w.value) <= 1 : w.adj === 'decPct')
+export const lowers = (w: BudgetWindow, type?: string) => (type === 'budget-multiplier' ? Number(w.value) > 0 && Number(w.value) <= 1 : w.adj === 'decPct')
 
 const budgetSchedule: Spec = {
   automation: { id: 'A7', name: 'Budget schedules' },

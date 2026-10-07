@@ -91,7 +91,7 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
       } else if (row.syncType?.startsWith('AD_')) {
         // B2 — ads rows carry no channelListingId, so the generic re-enqueue above skips them and
         // they'd wait for the ~1-min drain cron. Re-enqueue on the ads queue for an immediate retry.
-        await adsSyncQueue.add('ads-sync', { queueId: id, syncType: row.syncType }, { jobId: `ads-sync:${id}:retry:${Date.now()}` }).catch(() => {})
+        await adsSyncQueue.add('ads-sync', { queueId: id, syncType: row.syncType }, { jobId: `ads-sync-${id}-retry-${Date.now()}` }).catch(() => {})
       }
 
       logger.info('Outbound queue job retried by operator', { id, channel: row.targetChannel })
@@ -179,7 +179,7 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
               { jobId: `${r.channelListingId}:${r.syncType}:retry:${Date.now()}` },
             )
           : r.syncType?.startsWith('AD_') // B2 — ads rows go on the ads queue
-            ? adsSyncQueue.add('ads-sync', { queueId: r.id, syncType: r.syncType }, { jobId: `ads-sync:${r.id}:retry:${Date.now()}` }).catch(() => {})
+            ? adsSyncQueue.add('ads-sync', { queueId: r.id, syncType: r.syncType }, { jobId: `ads-sync-${r.id}-retry-${Date.now()}` }).catch(() => {})
             : Promise.resolve(),
       ),
     )

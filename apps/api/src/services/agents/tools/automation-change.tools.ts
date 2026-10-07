@@ -215,6 +215,19 @@ function permitted(ctx: ToolContext, automation: unknown, rowId?: unknown): { ad
   return { adapter }
 }
 
+/**
+ * W4-1 — a row of the hourly bid plans (A10: a plan's member schedule, or a plan itself): the engine still switches as a
+ * whole, and ONE plan switches with set-hourly-bid-plan — said with the plan's id, so Claude can ask for exactly that.
+ */
+async function hourlyPlanRowRefusal(adapterKey: string, rowId: unknown, direction: Direction): Promise<string | null> {
+  if (adapterKey !== 'ads-rank-defend' || typeof rowId !== 'string' || !rowId.trim()) return null
+  const { hourlyPlanOfRow } = await import('../../advertising/rank-schedule-group.service.js')
+  const plan = await hourlyPlanOfRow(rowId.trim())
+  if (!plan) return null
+  return `The hourly bid plans switch as a whole here (leave rowId out for the engine's own switch). To switch ONE plan, ask `
+    + `set-hourly-bid-plan {"op":"switch","planId":"${plan.planId}","on":${direction === 'up'}} — row ${rowId.trim()} is in the plan "${plan.name}" (now ${plan.enabled ? 'on' : 'off'}).`
+}
+
 function switchTool(direction: Direction): AgentTool {
   const up = direction === 'up'
   const levels = (up ? ['OBSERVE', 'PROPOSE', 'AUTO'] : ['OFF', 'OBSERVE', 'PROPOSE']) as [AutomationLevel, ...AutomationLevel[]]
@@ -276,6 +289,8 @@ function switchTool(direction: Direction): AgentTool {
     async handler(args, ctx) {
       const found = permitted(ctx, args.automation, args.rowId)
       if ('error' in found) return { ok: false, error: found.error }
+      const onePlan = await hourlyPlanRowRefusal(found.adapter.key, args.rowId, direction)
+      if (onePlan) return { ok: false, error: onePlan }
       const planned = await planSwitch(found.adapter, args.rowId as string | undefined, args.level as AutomationLevel, direction)
       if ('error' in planned) return { ok: false, error: planned.error }
       if (!up) return { ok: true, preview: planned.plan }

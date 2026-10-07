@@ -397,6 +397,17 @@ import { updateCampaignWithSync, type AdsActor } from './ads-mutation.service.js
  */
 export const BUDGET_POOL_CRON_ACTOR: AdsActor = 'automation:budget-pool-rebalance'
 
+/**
+ * W4-7 — what Claude's set-budget-pool (op rebalance-now) adds to a run the screen makes the same way: the approval its
+ * budget writes carry as change set, and — when a person approved it — his own click and his "Send anyway" past his own
+ * limits (the card warned him). Absent on the cron's and the screen's runs, so their writes are unchanged.
+ */
+export interface RebalanceWriteOptions {
+  changeSetId?: string
+  manual?: boolean
+  confirmOwnLimits?: boolean
+}
+
 export interface ApplyOutcome {
   applied: number
   skipped: number
@@ -419,7 +430,7 @@ export async function applyRebalance(args: {
   proposed: ProposedAllocation[]
   actor: AdsActor
   reason: string
-}): Promise<ApplyOutcome> {
+} & RebalanceWriteOptions): Promise<ApplyOutcome> {
   const out: ApplyOutcome = { applied: 0, skipped: 0, failed: 0, perAllocation: [] }
   for (const p of args.proposed) {
     if (!p.campaignId) {
@@ -448,6 +459,10 @@ export async function applyRebalance(args: {
       patch: { dailyBudget: newBudgetEur },
       actor: args.actor,
       reason: args.reason,
+      // W4-7 — a rebalance a Claude request ran: its approval as change set, and (a person approved it) his own click.
+      ...(args.changeSetId ? { changeSetId: args.changeSetId } : {}),
+      ...(args.manual ? { manual: true } : {}),
+      ...(args.confirmOwnLimits ? { confirmOwnLimits: true } : {}),
     })
     if (result.ok && (result.outboundQueueId || result.error === 'no_changes')) {
       out.applied += 1
@@ -486,7 +501,7 @@ export async function rebalanceAndAudit(args: {
   /** Force a specific dryRun decision regardless of pool.dryRun. */
   forceDryRun?: boolean
   actor: AdsActor
-}): Promise<RebalanceOutcome & { applied?: ApplyOutcome; auditId: string | null }> {
+} & RebalanceWriteOptions): Promise<RebalanceOutcome & { applied?: ApplyOutcome; auditId: string | null }> {
   const outcome = await computeRebalance({
     poolId: args.poolId,
     triggeredBy: args.triggeredBy,
@@ -509,6 +524,9 @@ export async function rebalanceAndAudit(args: {
       proposed: outcome.proposed,
       actor: args.actor,
       reason: `BudgetPool rebalance — ${args.triggeredBy}`,
+      changeSetId: args.changeSetId,
+      manual: args.manual,
+      confirmOwnLimits: args.confirmOwnLimits,
     })
     appliedAt = new Date()
   }

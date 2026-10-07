@@ -513,21 +513,57 @@ export async function bidderByCampaign(personTargets?: ReadonlySet<string>): Pro
   return out
 }
 
+/** How long a bid a person set is his: auto-bid leaves it alone this many days (personBidTargetIds). */
+export const PERSON_BID_HOLD_DAYS = 60
+
 /**
  * The keywords and targets a person changed the bid of in the last 60 days: `AD_BID_UPDATE` rows whose actor
  * `parseActor` reads as an operator — a person's own edit, and a Claude request a person approved (it writes as him,
  * `user:<approver>`). The one read of "a person set this bid": `bidderByCampaign` resolves it up to the campaign for
  * this page, auto-bid (ads-auto-bid.service.ts) leaves each such bid alone.
+ *
+ * ADS AUTONOMY W4-4 — unless the NEWEST of those writes handed the bid back to auto-bid: a Claude request asked with
+ * `afterwards: 'auto-bid'`, whose action log row carries `evidence.handBack` and names its request as the change set
+ * (`executionId`). The mark counts only when that request is one a PERSON decided (its AgentApproval decided, and not
+ * by the business's rule — as the run itself tells them apart): a mark on any other write releases nothing. A hand-back
+ * releases an earlier person's bid too; a person's later edit holds the bid again.
  */
 export async function personBidTargetIds(): Promise<Set<string>> {
-  const since60 = new Date(Date.now() - 60 * 86400_000)
-  const bidLogs = await prisma.advertisingActionLog.findMany({
-    // No `userId` predicate in the query: the column cannot express "a human did this", so the
-    // filtering happens in `parseActor` below where the vocabulary is actually understood.
-    where: { actionType: 'AD_BID_UPDATE', createdAt: { gte: since60 } },
-    select: { entityId: true, userId: true },
-  })
-  return new Set(bidLogs.filter((l) => parseActor(l.userId).source === 'operator').map((l) => l.entityId))
+  const since = new Date(Date.now() - PERSON_BID_HOLD_DAYS * 86400_000)
+  const where = { actionType: 'AD_BID_UPDATE', createdAt: { gte: since } }
+  const [bidLogs, marked] = await Promise.all([
+    prisma.advertisingActionLog.findMany({
+      // No `userId` predicate in the query: the column cannot express "a human did this", so the
+      // filtering happens in `parseActor` below where the vocabulary is actually understood.
+      where,
+      select: { id: true, entityId: true, userId: true, createdAt: true },
+    }),
+    prisma.advertisingActionLog.findMany({
+      where: { ...where, executionId: { not: null }, evidence: { path: ['handBack'], equals: 'auto-bid' } },
+      select: { id: true, executionId: true },
+    }),
+  ])
+  // Only a request a person decided hands a bid back: decided, and not by the business's rule (`decisionVia` 'auto') —
+  // the test the run itself makes (approval-gate.service.ts approvedByPerson). An undecided request hands nothing back.
+  const requestIds = [...new Set(marked.map((m) => m.executionId!))]
+  const decided = requestIds.length
+    ? new Set((await prisma.agentApproval.findMany({
+      where: { id: { in: requestIds }, decidedAt: { not: null }, OR: [{ decisionVia: null }, { decisionVia: { not: 'auto' } }] },
+      select: { id: true },
+    })).map((a) => a.id))
+    : new Set<string>()
+  const handBacks = marked.filter((m) => decided.has(m.executionId!))
+  const handedBack = new Set(handBacks.map((h) => h.id))
+  // Per bid, the newest write a person made or approved decides; at the same instant a hold wins (the safer reading).
+  const newest = new Map<string, { at: number; held: boolean }>()
+  for (const l of bidLogs) {
+    if (parseActor(l.userId).source !== 'operator') continue
+    const at = l.createdAt.getTime()
+    const held = !handedBack.has(l.id)
+    const seen = newest.get(l.entityId)
+    if (!seen || at > seen.at || (at === seen.at && held)) newest.set(l.entityId, { at, held })
+  }
+  return new Set([...newest].filter(([, v]) => v.held).map(([entityId]) => entityId))
 }
 
 async function lastAuditedByTarget(): Promise<Map<string, { cents: number; at: Date }>> {
@@ -540,6 +576,28 @@ async function lastAuditedByTarget(): Promise<Map<string, { cents: number; at: D
   for (const r of rows) {
     const n = Number(r.newValue)
     if (Number.isFinite(n)) out.set(r.entityId, { cents: n, at: r.changedAt })
+  }
+  return out
+}
+
+/**
+ * W4-12 — the targets whose newest audited bid is a write Nexus put back: the gate refused it, Amazon rejected it for
+ * good, or it was cancelled, so it never reached Amazon and the bid went back to the value it replaced
+ * (putBackRefusedWrite writes no history row). Their bid disagrees with the newest audited value, but nothing moved it
+ * outside Nexus. Matched exactly on the typed mutation: this target's bid, from the bid it holds now to the audited one.
+ */
+async function refusedPutBacks(mismatched: Array<{ id: string; bidCents: number }>, audited: Map<string, { cents: number; at: Date }>): Promise<Set<string>> {
+  if (!mismatched.length) return new Set()
+  const rows = await prisma.adMutation.findMany({
+    where: { entityType: 'AD_TARGET', entityId: { in: mismatched.map((t) => t.id) }, field: 'bid', state: { in: ['CANCELLED', 'FAILED'] } },
+    select: { entityId: true, previousValue: true, intendedValue: true, createdAt: true },
+  }).catch(() => [])
+  const bid = new Map(mismatched.map((t) => [t.id, t.bidCents]))
+  const out = new Set<string>()
+  for (const m of rows) {
+    const a = audited.get(m.entityId)
+    if (!a || Math.abs(m.createdAt.getTime() - a.at.getTime()) > 60_000) continue
+    if (Number(m.previousValue) === bid.get(m.entityId) && Number(m.intendedValue) === a.cents) out.add(m.entityId)
   }
   return out
 }
@@ -586,7 +644,9 @@ export async function getBidSeries(opts: { entityIds: string[]; perEntity?: numb
     const a = byEntityLogs.get(entityId)
     if (!a) return null
     const t = at.getTime()
-    for (const l of a) if (Math.abs(l.at - t) <= 5000) return l.status
+    // W4-12 — a write Nexus did not send (SKIPPED: refused, no connection) or cancelled never reached Amazon: it counts
+    // as not landed, like a failed one.
+    for (const l of a) if (Math.abs(l.at - t) <= 5000) return l.status === 'SKIPPED' || l.status === 'CANCELLED' ? 'FAILED' : l.status
     return null
   }
 
@@ -662,6 +722,7 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
 
   // BID.S2 — three reads that do not depend on each other, so they go together.
   const [bidders, audited] = await Promise.all([bidderByCampaign(), lastAuditedByTarget()])
+  const putBack = await refusedPutBacks(capped.filter((t) => { const a = audited.get(t.id); return a != null && a.cents !== t.bidCents }), audited)
 
   const all: BidTargetRow[] = capped.map((t) => {
     const p = pmap.get(t.id)
@@ -712,7 +773,7 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
       // bid write in 60 days had `updatedAt` move within 2 hours, because the hourly resync writes
       // `lastSyncedAt` on every row it sees and Prisma's @updatedAt follows. `updatedAt` is a sync
       // heartbeat; comparing values is the only honest drift signal.
-      unrecorded: (() => { const a = audited.get(t.id); return a != null && a.cents !== t.bidCents })(),
+      unrecorded: (() => { const a = audited.get(t.id); return a != null && a.cents !== t.bidCents && !putBack.has(t.id) })(),
       ...(() => { const e = effectiveMaxCpc(t.bidCents, c.dynamicBidding); return { effectiveMaxCpcCents: e.cents, placementPct: e.placementPct, biddingStrategy: e.strategy } })(),
     }
   })

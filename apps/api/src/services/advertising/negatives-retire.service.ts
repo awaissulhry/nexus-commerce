@@ -93,6 +93,14 @@ export interface RetireRequest {
   retireReason?: string | null
   /** optional evidence override; by default the term's numbers at the moment of removal */
   evidence?: AdWriteEvidence | null
+  /**
+   * ADS AUTONOMY W4-5 — the approval a Claude request (retire-negatives) runs for: every write and audit row of this
+   * batch carries it (AdvertisingActionLog.executionId), so approval-status counts them and undo finds them. Absent for
+   * every other caller (the Negatives page, undo-ad-change): unchanged.
+   */
+  changeSetId?: string | null
+  /** W4-5 — a person approved the request (4A, approvedRun): his own click, as the Negatives page's retire is. */
+  manual?: boolean
 }
 
 export interface RetireResult {
@@ -220,6 +228,9 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
           payloadBefore: { status: row.status, externalTargetId: null, negativeLevel: row.negativeLevel, expressionValue: term },
           payloadAfter: { removed: 'local-only', delivery: 'not_applicable', reachedAmazon: false, retireReason: req.retireReason ?? null },
           outboundQueueId: null,
+          // W4-5 — never sent (nothing at Amazon to archive): done in Nexus, not waiting for a queue row it never gets.
+          amazonResponseStatus: 'SKIPPED',
+          ...(req.changeSetId ? { changeSetId: req.changeSetId } : {}),
         })
         await prisma.adTarget.delete({ where: { id: row.id } })
         logger.info('[neg-retire] local-only negative removed — nothing was sent to Amazon', { adTargetId: row.id, term })
@@ -243,6 +254,8 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
         evidence,
         actionType: RETIRE_ACTION_TYPE,
         applyImmediately: true,
+        ...(req.changeSetId ? { changeSetId: req.changeSetId } : {}),
+        ...(req.manual === true ? { manual: true } : {}),
       })
       if (!res.ok) {
         // `no_changes` is a genuine skip, not a failure; everything else is refused or failed.

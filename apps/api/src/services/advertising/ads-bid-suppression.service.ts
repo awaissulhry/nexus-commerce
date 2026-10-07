@@ -428,6 +428,27 @@ export async function restoreAdGroupBids(
 }
 
 /**
+ * ADS AUTONOMY W4-6 — an ad group Claude's create-ad-group made at the floor (the builders' rule 2: born suppressed): its
+ * planned default bid remembered when it starts below it, and — outside a campaign a person stopped with low bids — a
+ * floor of its own held by the person who asked, the same marks suppressAdGroupBids leaves (W1-6b). So every campaign
+ * restore and re-floor leaves it alone (an engine's too), and only its owner's give-back (restoreAdGroupBids: set-ad-group
+ * op start) puts the planned bids back. Inside a campaign a person stopped, the memory joins that floor: restore-campaign
+ * gives it back with the campaign's. Its keywords and targets remember theirs as each is created (rememberPlannedBid).
+ */
+export async function markAdGroupBornAtFloor(adGroupId: string, opts: { plannedDefaultCents: number | null; own: { floorCents: number; by: AdsActor } | null }): Promise<void> {
+  const data = {
+    ...(opts.plannedDefaultCents != null ? { suppressedFromBidCents: opts.plannedDefaultCents } : {}),
+    ...(opts.own ? { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: normaliseFloorCents(opts.own.floorCents), bidsSuppressedBy: opts.own.by } : {}),
+  }
+  if (Object.keys(data).length) await prisma.adGroup.update({ where: { id: adGroupId }, data })
+}
+
+/** W4-6 — a keyword or target created at the floor remembers the bid planned for it (its floor's give-back puts it back). */
+export async function rememberPlannedBid(adTargetId: string, plannedCents: number): Promise<void> {
+  await prisma.adTarget.update({ where: { id: adTargetId }, data: { suppressedFromBidCents: plannedCents } })
+}
+
+/**
  * ADS AUTONOMY W3-3 — floor ONE ad group whose every product is out of stock (Claude's lower-ad-bids-for-stock, approved
  * like every ad change): suppressAdGroupBids' floor — its default bid and every keyword and target bid above the floor go
  * to it, each bid remembered BEFORE it moves, the ad group carrying its owner (W1-6b) — with the approval's change set and
@@ -533,7 +554,8 @@ export async function applyBaseBidDelta(
 export async function revertBaseBidDelta(
   campaignId: string,
   // W1-5 — `holds` as in restoreCampaignBids: a give-back held inside the bounds that bind it is named in the run line.
-  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; holds?: BidHoldLog },
+  // W4-1 — `changeSetId` as in restoreCampaignBids: optional, additive (a Claude request's give-back names its approval).
+  opts: { actor: AdsActor; reason?: string; applyImmediately?: boolean; holds?: BidHoldLog; changeSetId?: string | null },
 ): Promise<number> {
   const reason = opts.reason ?? 'rank base-bid delta cleared → restore baseline'
   const applyImmediately = opts.applyImmediately ?? true
@@ -547,14 +569,14 @@ export async function revertBaseBidDelta(
   for (const g of groups) {
     try {
       const back = heldGiveBack(g.baseBidFromCents as number, g.defaultBidCents, boundsOf!(g.id), reason, opts.holds)
-      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true })
+      const r = await updateAdGroupWithSync({ adGroupId: g.id, patch: { defaultBidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}) })
       if (r.ok || r.error === 'not_found') { await prisma.adGroup.update({ where: { id: g.id }, data: { baseBidFromCents: null } }); if (r.ok) touched++ }
     } catch (e) { logger.warn('[base-bid] revert group failed', { adGroupId: g.id, error: (e as Error).message }) }
   }
   for (const t of targets) {
     try {
       const back = heldGiveBack(t.baseBidFromCents as number, t.bidCents, boundsOf!(t.adGroupId), reason, opts.holds)
-      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true })
+      const r = await updateAdTargetWithSync({ adTargetId: t.id, patch: { bidCents: back.cents }, actor: opts.actor, reason: back.reason, applyImmediately, force: true, ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}) })
       if (r.ok || r.error === 'not_found') { await prisma.adTarget.update({ where: { id: t.id }, data: { baseBidFromCents: null } }); if (r.ok) touched++ }
     } catch (e) { logger.warn('[base-bid] revert target failed', { adTargetId: t.id, error: (e as Error).message }) }
   }

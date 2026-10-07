@@ -776,14 +776,23 @@ async function handPlanToWorker(id: string, decidedBy: string): Promise<{ ok: bo
  */
 export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   /* The fleet's three ads tools, shared with Claude (MCP full control d1 = A). A4: set-target-bid executes —
-     the bid it starts from, the bid that lands (after the CPC ceiling and max-change clamps) and where it lands
-     (live on which Amazon Ads profile, or sandbox) are what the person approved. */
-  'set-target-bid': ['currentBidCents', 'effectiveBidCents', 'reach'],
-  // A6 — the budget or the adjustments it starts from, and where it lands.
-  'set-campaign-budget': ['currentBudgetCents', 'reach'],
+     the bid it starts from, the bid that lands (after the CPC ceiling) and where it lands (live on which Amazon Ads
+     profile, or sandbox) are what the person approved. W4-4 — and the bid a run by rule writes (stepped to the largest
+     change), and what auto-bid does with the bid afterwards (held as a person's, or handed back). */
+  'set-target-bid': ['currentBidCents', 'effectiveBidCents', 'byRuleBidCents', 'afterwards', 'reach'],
+  // A6 — the budget or the adjustments it starts from, and where it lands. W4-7 — the list form: every campaign's budget
+  // now and asked (basis).
+  'set-campaign-budget': ['currentBudgetCents', 'basis', 'reach'],
+  // W4-7 — budgets: the plan, schedule or pool as it is (and every give-back, allocation or rebalance it makes), each
+  // budget a restore starts from and puts back, and where its writes land (Nexus only: none).
+  'set-monthly-ad-budget': ['basis', 'reach'],
+  'set-budget-schedule': ['basis', 'totals', 'reach'],
+  'set-budget-pool': ['basis', 'totals', 'reach'],
+  'restore-budget-baselines': ['basis', 'totals', 'reach'],
   'set-placement-multipliers': ['current', 'reach'],
   // A7 — how many change and why the rest do not, a fingerprint of every target's starting and new bid, where it lands.
-  'bulk-ad-bid-change': ['totals', 'basis', 'reach'],
+  // W4-4 — the fingerprint holds the bids a run by rule writes too; and what auto-bid does with the bids afterwards.
+  'bulk-ad-bid-change': ['totals', 'basis', 'afterwards', 'reach'],
   // A8 — what a suppression floors; whose suppression a restore lifts and every bid it puts back.
   'suppress-campaign': ['moves', 'reach'],
   'restore-campaign': ['suppressedBy', 'basis', 'reach'],
@@ -803,15 +812,29 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'apply-ads-playbook': ['op', 'basis', 'reach', 'bindings', 'starts', 'stops'],
   // B-1 — every campaign a Replicate copy makes (from the source as it is now), the market's spend ceiling, where it lands.
   'replicate-ad-structure': ['basis', 'ceiling', 'reach'],
+  // W4-1 — the op, the plan as it stood and after (its week, members, values, on/off, whose it is), the targets' values,
+  // where it lands and the markets whose write gate refuses (what a give-back lifts moves with the engine's hours: execute
+  // decides again whether it raises).
+  'set-hourly-bid-plan': ['op', 'basis', 'reach', 'gateRefused'],
   // AA-W2-12 — every ad named with its status (an enable: the pause it lifts, the budget and the bids that serve again),
-  // and where it lands.
+  // and where it lands. W4-2 — an enable: who paused each ad and when, frozen (a status change recorded since moves it).
   'pause-ads': ['basis', 'reach'],
-  'enable-ads': ['basis', 'reach'],
+  'enable-ads': ['basis', 'reach', 'whoPaused'],
   // AA-W2-13 — every ad named with its status, and where it lands.
   'archive-ads': ['basis', 'reach'],
+  // W4-3 — every campaign named with each setting it starts from and gets (and the caps of the portfolios it leaves and
+  // joins), and where it lands; a portfolio with its name, cap and state, what it sets, and where it lands.
+  'set-campaign-settings': ['basis', 'reach'],
+  'set-portfolio': ['basis', 'reach'],
   // W3-3 — every ad group named with its stock verdict, every bid it lowers or gives back, and where it lands.
   'lower-ad-bids-for-stock': ['basis', 'reach'],
   'restore-ad-bids-after-stock': ['basis', 'reach'],
+  // W4-6 — a new ad group (every row, its bids and how they start, the products' rule-3 facts and its campaign's floor),
+  // the product ads added (each product and the seller SKU it is created from), an ad group's op and every value it
+  // starts from and sets (W4-4: and the default bid a run by rule writes); and where each lands.
+  'create-ad-group': ['basis', 'reach'],
+  'add-product-ads': ['basis', 'reach'],
+  'set-ad-group': ['op', 'basis', 'byRuleBidCents', 'reach'],
   // A14/A15 — eBay: each rate, listing, budget or keyword it starts from and sets, and where it lands (live or sandbox).
   'set-ebay-ad-rates': ['changes', 'reach'],
   'promote-ebay-listings': ['adds', 'adGroup', 'reach'],
@@ -820,6 +843,15 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'create-ebay-campaign': ['plan', 'account', 'ceiling', 'reach'],
   // A10 — what the undo restores (each write and the value it puts back), the negatives it retires, where it lands.
   'undo-ad-change': ['source', 'rows', 'negatives', 'reach'],
+  // W4-5 — every target or negative with its place and bids (a harvest: its term, source, destination, bid and negative
+  // plan, a bid it worked out itself frozen in the approval; a retire: every negative with who made it), where it lands;
+  // for negatives also the other products' places and the proven handovers they would close (never the numbers, which
+  // move with every report). A harvest destination (Nexus only): the destination from → to.
+  'add-ad-targets': ['basis', 'reach'],
+  'add-negative-targets': ['basis', 'reach', 'otherProductPlaces', 'handovers'],
+  'retire-negatives': ['basis', 'reach'],
+  'harvest-search-term': ['basis', 'reach'],
+  'set-harvest-destination': ['basis'],
   // A5 — executable too: the ad group it goes to, the destination and starting bid, where it lands.
   'create-negative-keyword': ['matchType', 'scope', 'alreadyNegated', 'adGroup', 'reach'],
   'graduate-keyword': ['suggestedBidCents', 'destination', 'destinationAdGroup', 'alreadyExact', 'reach'],
@@ -1075,7 +1107,8 @@ export interface StalenessOptions {
   withFresh?: boolean
 }
 
-const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : String(c))
+// W4-4 — a value the fresh preview no longer carries reads "none", never "undefined".
+const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : c == null ? 'none' : String(c))
 
 /**
  * One text per value whatever the order of its keys, for comparing a stored preview with a fresh one.
@@ -1189,7 +1222,7 @@ export async function previewStaleness(
       moved.push(
         key.toLowerCase().includes('cents')
           ? `${key} changed from ${money(before[key])} to ${money(after[key])}`
-          : `${key} changed from ${JSON.stringify(before[key])} to ${JSON.stringify(after[key])}`,
+          : `${key} changed from ${JSON.stringify(before[key]) ?? 'none'} to ${JSON.stringify(after[key]) ?? 'none'}`,
       )
     }
   }
