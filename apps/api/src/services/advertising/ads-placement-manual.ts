@@ -108,14 +108,9 @@ export function isNoOp(existing: PlacementAdjustment[] | null | undefined, lane:
 }
 
 /**
- * ⚠ A LIFT, not a second derivation — `ad-rank-defend.job.ts:537-556`, verbatim in behaviour.
- *
- * The CPC ceiling and this page's effective-bid preview must measure against the same number or
- * they will disagree about whether a multiplier is affordable. The engine's copy is currently
- * inline in the job, and `ad-rank-defend.job.ts` is **claimed by RD.P2** while this ships, so the
- * job is not edited here: swapping its inline block for a call to this function is a one-line
- * change for whoever next holds that file with a clean claim, and it is posted as a hand-off in
- * locks §4. `_plc-page-write.mts` verifies the two agree today.
+ * The base bid the CPC ceiling is measured against, per campaign: the HIGHEST bid that serves. One reading for the
+ * rank-defend engine (ad-rank-defend.job.ts), the Hourly Bids runtime (rank-runtime.service.ts), the plan's next-24-hours
+ * preview and this page's effective-bid preview, so they cannot disagree about whether a multiplier is affordable.
  *
  * Why the max and not the average: a ceiling derived from the average would still let the most
  * expensive keyword sail past it, which is the one thing "never bid above this" cannot mean.
@@ -123,31 +118,56 @@ export function isNoOp(existing: PlacementAdjustment[] | null | undefined, lane:
  * Why `suppressedFromBidCents` counts: it is what the bid RETURNS to the moment a serving target
  * takes over, so reading only the floored 2¢ of a suppressed campaign would report a base bid of
  * 2¢ for the very tick that restores it.
+ *
+ * C2 (2026-10-07) — which bids serve. Each ad group's ENABLED positive targets (paused and archived ones serve nothing),
+ * and its default bid only when it holds no positive target at all (then Amazon serves the default — auto targeting
+ * Nexus has not synced, say). An ad group whose targets carry their own bids serves its default nowhere: on 2026-10-07
+ * IT_Auto_Close (default 50¢; one live auto target at 14¢, three paused at 30¢) read "base bid ALONE exceeds the €0.45
+ * ceiling" and its 150 % Top of search was capped to 0 %. A campaign where no bid serves (everything paused) keeps the
+ * reading of every bid, as before, so its ceiling is never looser than it was. Pure.
  */
-export async function resolveMaxBaseBidByCampaign(campaignIds: string[]): Promise<Map<string, number>> {
+export function servingBaseBidByCampaign(
+  adGroups: ReadonlyArray<{ id: string; campaignId: string; defaultBidCents: number | null; suppressedFromBidCents: number | null }>,
+  targets: ReadonlyArray<{ adGroupId: string; status: string; bidCents: number | null; suppressedFromBidCents: number | null }>,
+): Map<string, number> {
+  const campaignOf = new Map(adGroups.map((g) => [g.id, g.campaignId]))
+  const serving = new Map<string, number>()
+  const every = new Map<string, number>()
+  const raise = (m: Map<string, number>, k: string, v: number) => { if (v > (m.get(k) ?? 0)) m.set(k, v) }
+  const withTargets = new Set<string>()
+  for (const t of targets) {
+    const cid = campaignOf.get(t.adGroupId); if (!cid) continue
+    withTargets.add(t.adGroupId)
+    const v = Math.max(t.bidCents ?? 0, t.suppressedFromBidCents ?? 0)
+    raise(every, cid, v)
+    if (t.status === 'ENABLED') raise(serving, cid, v)
+  }
+  for (const g of adGroups) {
+    const v = Math.max(g.defaultBidCents ?? 0, g.suppressedFromBidCents ?? 0)
+    raise(every, g.campaignId, v)
+    if (!withTargets.has(g.id)) raise(serving, g.campaignId, v)
+  }
   const out = new Map<string, number>()
-  if (campaignIds.length === 0) return out
+  for (const [cid, v] of every) {
+    const pick = serving.get(cid) ?? v
+    if (pick > 0) out.set(cid, pick)
+  }
+  return out
+}
+
+/** servingBaseBidByCampaign, read: the campaigns' ad groups and their positive targets (grouped per ad group and status). */
+export async function resolveMaxBaseBidByCampaign(campaignIds: string[]): Promise<Map<string, number>> {
+  if (campaignIds.length === 0) return new Map()
   // Grouped rather than row-by-row — one campaign in this account holds 141 targets.
   // Unguarded on purpose: a swallowed failure here would report every base bid as absent, and
   // "no base bid" renders as "no effective bid change", which is a measured zero that is not one.
-  const [agRows, agIndex] = await Promise.all([
-    prisma.adGroup.groupBy({ by: ['campaignId'], where: { campaignId: { in: campaignIds } }, _max: { defaultBidCents: true, suppressedFromBidCents: true } }),
-    prisma.adGroup.findMany({ where: { campaignId: { in: campaignIds } }, select: { id: true, campaignId: true } }),
+  const [adGroups, tgRows] = await Promise.all([
+    prisma.adGroup.findMany({ where: { campaignId: { in: campaignIds } }, select: { id: true, campaignId: true, defaultBidCents: true, suppressedFromBidCents: true } }),
+    prisma.adTarget.groupBy({
+      by: ['adGroupId', 'status'],
+      where: { adGroup: { campaignId: { in: campaignIds } }, isNegative: false },
+      _max: { bidCents: true, suppressedFromBidCents: true },
+    }),
   ])
-  for (const r of agRows) {
-    const v = Math.max(r._max.defaultBidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
-    if (v > 0) out.set(r.campaignId, v)
-  }
-  const campByAdGroup = new Map(agIndex.map((g) => [g.id, g.campaignId]))
-  const tgRows = await prisma.adTarget.groupBy({
-    by: ['adGroupId'],
-    where: { adGroup: { campaignId: { in: campaignIds } }, isNegative: false },
-    _max: { bidCents: true, suppressedFromBidCents: true },
-  })
-  for (const r of tgRows) {
-    const cid = campByAdGroup.get(r.adGroupId); if (!cid) continue
-    const v = Math.max(r._max.bidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
-    if (v > (out.get(cid) ?? 0)) out.set(cid, v)
-  }
-  return out
+  return servingBaseBidByCampaign(adGroups, tgRows.map((r) => ({ adGroupId: r.adGroupId, status: String(r.status), bidCents: r._max.bidCents, suppressedFromBidCents: r._max.suppressedFromBidCents })))
 }

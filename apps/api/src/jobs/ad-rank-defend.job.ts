@@ -34,6 +34,7 @@ import { updateAdGroupWithSync, type AdsActor } from '../services/advertising/ad
 import { suppressCampaignBids, restoreCampaignBids, refloorCampaignBids, normaliseFloorCents, applyBaseBidDelta, revertBaseBidDelta } from '../services/advertising/ads-bid-suppression.service.js'
 import { detectSelfCompetition, type CampaignTargeting, type SelfCompetitionConflict } from '../services/advertising/rank-self-competition.js'
 import { clampPct, deltaBidCents } from '../services/advertising/ads-placement-math.js'
+import { resolveMaxBaseBidByCampaign } from '../services/advertising/ads-placement-manual.js'
 import { DRY_RUN, allowChange, engineGuardNote, nothingHeld, openEngineGuard, type CampaignPermit, type EngineGuard, type EngineGuardReport, type HeldBack } from '../services/advertising/ads-engine-guard.js'
 import { addRelease, emptyRelease, floorOwnerWords, isRankOwnedFloor, releaseCampaigns, sweepOrphanReleases, type ReleaseReport } from '../services/advertising/rank-release.service.js'
 import { isOutOfBudget, outOfBudgetWords } from '../services/advertising/delivery-reasons.js'
@@ -728,28 +729,14 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   // 2e — no signal reads here any more (Top-of-search share, the hourly loss proxy, SQP share): the tick sets the
   // hour's fixed values and none of them fed anything else.
 
-  // MB.4 — each campaign's HIGHEST live base bid, the number the CPC ceiling is measured
-  // against. `suppressedFromBidCents` is taken into account because it is what the bid
-  // RETURNS to the moment a serving target takes over: reading only the floored 2¢ of a
-  // suppressed campaign would compute a ceiling-free cap for the very tick that restores it.
-  // Grouped rather than row-by-row — one campaign here holds 141 targets.
-  const maxBaseBidByCampaign = new Map<string, number>()
+  // MB.4 — each campaign's HIGHEST live base bid, the number the CPC ceiling is measured against
+  // (resolveMaxBaseBidByCampaign, ads-placement-manual.ts — one reading with the Hourly Bids runtime and the previews).
+  // `suppressedFromBidCents` counts, because it is what the bid RETURNS to the moment a serving target takes over.
+  // C2 — only the bids that serve: enabled targets, and an ad group's default bid only where it holds no target (the
+  // default of an auto ad group whose targets bid 14¢ is not a base bid, and capped its Top of search to 0 %).
+  let maxBaseBidByCampaign = new Map<string, number>()
   try {
-    const [agRows, agIndex] = await Promise.all([
-      prisma.adGroup.groupBy({ by: ['campaignId'], where: { campaignId: { in: unionIds } }, _max: { defaultBidCents: true, suppressedFromBidCents: true } }),
-      prisma.adGroup.findMany({ where: { campaignId: { in: unionIds } }, select: { id: true, campaignId: true } }),
-    ])
-    for (const r of agRows) {
-      const v = Math.max(r._max.defaultBidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
-      if (v > 0) maxBaseBidByCampaign.set(r.campaignId, v)
-    }
-    const campByAdGroup = new Map(agIndex.map((g) => [g.id, g.campaignId]))
-    const tgRows = await prisma.adTarget.groupBy({ by: ['adGroupId'], where: { adGroup: { campaignId: { in: unionIds } }, isNegative: false }, _max: { bidCents: true, suppressedFromBidCents: true } })
-    for (const r of tgRows) {
-      const cid = campByAdGroup.get(r.adGroupId); if (!cid) continue
-      const v = Math.max(r._max.bidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
-      if (v > (maxBaseBidByCampaign.get(cid) ?? 0)) maxBaseBidByCampaign.set(cid, v)
-    }
+    maxBaseBidByCampaign = await resolveMaxBaseBidByCampaign(unionIds)
   } catch (e) { logger.warn('[rank-defend] max-base-bid read failed — CPC ceilings not enforced this tick', { error: (e as Error).message }) }
 
   const decisions: RankDefendDecision[] = []
