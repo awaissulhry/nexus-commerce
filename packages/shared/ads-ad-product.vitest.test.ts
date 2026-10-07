@@ -117,6 +117,13 @@ describe('adWriteRefusal (W4-11)', () => {
     no(SB, { entity: 'AD_TARGET', kind: 'KEYWORD', isNegative: true, fields: ['status'], toStatus: 'PAUSED' }, /not a change to a negative other than retiring it/)
   })
 
+  it('an SB campaign with a lifetime budget: its budget is refused, its on/off is not', () => {
+    const life = { ...SB, budgetJson: { budgetType: 'LIFETIME' } }
+    no(life, { entity: 'CAMPAIGN', fields: ['dailyBudget'] }, /^Brand test is a Sponsored Brands campaign with a lifetime budget at Amazon\. Nexus sets a daily budget only/)
+    ok(life, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'PAUSED' })
+    ok({ ...SB, budgetJson: { budgetType: 'DAILY' } }, { entity: 'CAMPAIGN', fields: ['dailyBudget'] })
+  })
+
   it('isLifetimeBudget reads Amazon\'s budget object in either spelling', () => {
     expect(isLifetimeBudget({ budgetType: 'LIFETIME' })).toBe(true)
     expect(isLifetimeBudget({ recurrenceTimePeriod: 'lifetime' })).toBe(true)

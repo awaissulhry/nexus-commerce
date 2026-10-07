@@ -45,6 +45,7 @@ import { logger } from '../../utils/logger.js'
 import {
   liveCall, adsMode, listNegativeKeywords,
   createNegativeKeyword as sendNegativeKeyword, createNegativeProductTarget as sendNegativeProductTarget,
+  createSbNegativeKeyword as sendSbNegativeKeyword, createSdNegativeTarget as sendSdNegativeTarget,
   type AdsRegion, type ClientContext,
 } from './ads-api-client.js'
 import { checkAdsWriteGate, ownLimitsSentence, type OwnLimit } from './ads-write-gate.js'
@@ -53,7 +54,7 @@ import { assertNegativeWriteAllowed, isAsin, negativeKeywordTextProblem, protect
 import { checkProtectConverting, normaliseNegTerm, type ProtectConvertingConfig } from './ads-protect-converting.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
 import { ownKeywordRefusal } from './ads-winner-lock.js'
-import { adProductOf } from '@nexus/shared/ads-ad-product'
+import { SPONSORED_BRANDS, SPONSORED_DISPLAY, adProductOf, type AdWrite } from '@nexus/shared/ads-ad-product'
 
 export type NegativeMatchType = 'NEGATIVE_EXACT' | 'NEGATIVE_PHRASE'
 export type NegativeScope = 'AD_GROUP' | 'CAMPAIGN'
@@ -129,6 +130,11 @@ export interface WriteNegativeKeywordArgs {
   manual?: boolean
   /** PB-5 — the approval this write runs for: its AdvertisingActionLog row carries it (executionId). */
   changeSetId?: string | null
+  /**
+   * W4-11 — a Claude request (add-negative-targets): a negative keyword in a Sponsored Brands ad group is sent to SB's
+   * own endpoint (POST /sb/negativeKeywords). Absent: Sponsored Products only, as before (the gate refuses SB/SD).
+   */
+  allowSbSd?: boolean
 }
 
 export interface WriteNegativeProductTargetArgs {
@@ -146,6 +152,11 @@ export interface WriteNegativeProductTargetArgs {
   confirmOwnLimits?: boolean
   /** PB-5 — see WriteNegativeKeywordArgs.changeSetId. */
   changeSetId?: string | null
+  /**
+   * W4-11 — a Claude request (add-negative-targets): a negative product target in a Sponsored Display ad group is sent
+   * to SD's own endpoint (POST /sd/negativeTargets). Absent: Sponsored Products only, as before.
+   */
+  allowSbSd?: boolean
 }
 
 // ── Endpoint constants (legacy SP v3) ─────────────────────────────────
@@ -346,6 +357,18 @@ interface KeywordJob {
   pushing?: boolean
   /** 1e — a person's own add (already checked by isPersonCreate): passes the halt and autonomy OFF at the gate. */
   manual?: boolean
+  /** W4-11 — see WriteNegativeKeywordArgs.allowSbSd. */
+  allowSbSd?: boolean
+}
+
+/**
+ * W4-11 — the new negative as the gate judges an SB/SD one (adWriteRefusal), for a caller that may send it; null for
+ * every other caller and every Sponsored Products campaign, so the gate keeps refusing SB/SD for them (6a).
+ */
+function sbSdNegative(allow: boolean | undefined, campaign: CampaignRow, kind: 'KEYWORD' | 'PRODUCT', level: NegativeScope): AdWrite | null {
+  const product = adProductOf(campaign)
+  if (allow !== true || (product !== SPONSORED_BRANDS && product !== SPONSORED_DISPLAY)) return null
+  return { entity: 'NEGATIVE_CREATE', kind, negativeLevel: level }
 }
 
 async function sendKeyword(job: KeywordJob): Promise<Sent> {
@@ -371,7 +394,9 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
   if (!campaign.externalCampaignId || (scope === 'AD_GROUP' && !adGroup?.externalAdGroupId)) return { kind: 'draft' }
 
   // Even sandbox calls go through the gate, so the same refusals apply; it returns mode=sandbox for env=sandbox.
-  // 6a — the endpoints below are Sponsored Products ones, so the gate gets the campaign's ad product.
+  // 6a — the endpoints below are Sponsored Products ones, so the gate gets the campaign's ad product. W4-11 — and, for a
+  // caller that may send one, the SB negative keyword it is (sbSdNegative), which goes to SB's own endpoint below.
+  const sbSd = sbSdNegative(job.allowSbSd, campaign, 'KEYWORD', scope)
   const gate = await checkAdsWriteGate({
     marketplace: campaign.marketplace,
     payloadValueCents: 0, // a negative is a structural change with no monetary value
@@ -381,11 +406,22 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
     adProduct: adProductOf(campaign),
     ...(job.creationFlow ? {} : { campaignId: campaign.id }),
     manual: job.manual === true,
+    ...(sbSd ? { write: sbSd } : {}),
   })
   if (gate.allowed === false) return { kind: 'refused', refusal: { deniedAt: gate.deniedAt, reason: gate.reason } }
   const ctx = await clientContext(campaign.marketplace, gate.mode === 'live' ? gate.profileId : null, job.profileId, job.region)
 
   try {
+    // W4-11 — a Sponsored Brands negative keyword (the gate let only an ad-group one through): SB 3.0's own endpoint.
+    // Its answer carries the id or Amazon's refusal; there is no SB read-back here, so no id is a failure (NO_ID).
+    if (sbSd && adProductOf(campaign) === SPONSORED_BRANDS && scope === 'AD_GROUP') {
+      const r = await sendSbNegativeKeyword(ctx, {
+        externalCampaignId: campaign.externalCampaignId, externalAdGroupId: adGroup!.externalAdGroupId!,
+        keywordText: text, matchType: matchType === 'NEGATIVE_PHRASE' ? 'PHRASE' : 'EXACT',
+      })
+      if (r.mode === 'sandbox') return { kind: 'sent', mode: 'sandbox', externalId: null, rawResponse: r.rawResponse, errors: [] }
+      return { kind: 'sent', mode: 'live', externalId: await healNegativeRow(heal, r.externalId), rawResponse: r.rawResponse, errors: r.externalId ? [] : r.error ? [r.error] : [] }
+    }
     if (scope === 'AD_GROUP') {
       const r = await sendNegativeKeyword(ctx, {
         externalCampaignId: campaign.externalCampaignId, externalAdGroupId: adGroup!.externalAdGroupId!,
@@ -424,7 +460,7 @@ async function sendKeyword(job: KeywordJob): Promise<Sent> {
   }
 }
 
-interface ProductJob { placement: Placement; asin: string; creationFlow?: boolean; pushing?: boolean; /** 1e — see KeywordJob.manual. */ manual?: boolean; /** W1-7 — see WriteNegativeProductTargetArgs. */ confirmOwnLimits?: boolean }
+interface ProductJob { placement: Placement; asin: string; creationFlow?: boolean; pushing?: boolean; /** 1e — see KeywordJob.manual. */ manual?: boolean; /** W1-7 — see WriteNegativeProductTargetArgs. */ confirmOwnLimits?: boolean; /** W4-11 — see WriteNegativeProductTargetArgs.allowSbSd. */ allowSbSd?: boolean }
 
 async function sendProductTarget(job: ProductJob): Promise<Sent> {
   const { placement: { campaign, adGroup }, asin } = job
@@ -448,15 +484,23 @@ async function sendProductTarget(job: ProductJob): Promise<Sent> {
     heal = standing?.id ?? null
   }
   if (!campaign.externalCampaignId || !adGroup.externalAdGroupId) return { kind: 'draft' }
+  // W4-11 — for a caller that may send one, the SD negative product target it is (sbSdNegative): SD's own endpoint below.
+  const sbSd = sbSdNegative(job.allowSbSd, campaign, 'PRODUCT', 'AD_GROUP')
   const gate = await checkAdsWriteGate({
     marketplace: campaign.marketplace, payloadValueCents: 0, isNegation: true, keywordText: asin, adProduct: adProductOf(campaign),
     ...(job.creationFlow ? {} : { campaignId: campaign.id }),
     manual: job.manual === true,
     ...(confirmed ? { confirmOwnLimits: true } : {}),
+    ...(sbSd ? { write: sbSd } : {}),
   })
   if (gate.allowed === false) return { kind: 'refused', refusal: { deniedAt: gate.deniedAt, reason: gate.reason, ...(gate.ownLimits ? { limits: gate.ownLimits } : {}) } }
   const ctx = await clientContext(campaign.marketplace, gate.mode === 'live' ? gate.profileId : null)
   try {
+    if (sbSd && adProductOf(campaign) === SPONSORED_DISPLAY) {
+      const r = await sendSdNegativeTarget(ctx, { externalCampaignId: campaign.externalCampaignId, externalAdGroupId: adGroup.externalAdGroupId, asin, state: 'enabled', ...(confirmed ? { personConfirmed: true } : {}) })
+      if (r.mode === 'sandbox') return { kind: 'sent', mode: 'sandbox', externalId: null, rawResponse: r.rawResponse, errors: [] }
+      return { kind: 'sent', mode: 'live', externalId: await healNegativeRow(heal, r.externalId), rawResponse: r.rawResponse, errors: r.externalId ? [] : r.error ? [r.error] : [] }
+    }
     // W1-7 — his confirmed add past a protected product: the wire lets that protection pass (the gate asked him).
     const r = await sendNegativeProductTarget(ctx, { externalCampaignId: campaign.externalCampaignId, externalAdGroupId: adGroup.externalAdGroupId, asin, state: 'enabled', ...(confirmed ? { personConfirmed: true } : {}) })
     if (r.mode === 'sandbox') return { kind: 'sent', mode: 'sandbox', externalId: null, rawResponse: r.rawResponse, errors: [] }
@@ -581,7 +625,7 @@ export async function writeNegativeKeyword(args: WriteNegativeKeywordArgs): Prom
   if (args.scope === 'CAMPAIGN' && !placement.adGroup) {
     return done('negative keyword', failedResult(`${placement.campaign.id} has no ad group to hold Nexus's copy of a campaign negative, so nothing was sent.`, mode))
   }
-  const sent = await sendKeyword({ placement, scope: args.scope, text, matchType, protectConverting: args.protectConverting, creationFlow: args.creationFlow, profileId: args.profileId, region: args.region, manual: isPersonCreate(args.manual, args.userId) })
+  const sent = await sendKeyword({ placement, scope: args.scope, text, matchType, protectConverting: args.protectConverting, creationFlow: args.creationFlow, profileId: args.profileId, region: args.region, manual: isPersonCreate(args.manual, args.userId), allowSbSd: args.allowSbSd })
   const early = settled(sent, sent.kind === 'draft' ? 'local' : mode)
   if (early) return done('negative keyword', early)
 
@@ -603,7 +647,7 @@ export async function writeNegativeProductTarget(args: WriteNegativeProductTarge
   const placement = await resolvePlacement({ scope: 'AD_GROUP', adGroupId: args.adGroupId })
   if (isRefusal(placement)) return done('negative product target', refusedResult(placement, mode))
   const asin = (args.asin ?? '').trim()
-  const sent = await sendProductTarget({ placement, asin, creationFlow: args.creationFlow, manual: isPersonCreate(args.manual, args.userId), confirmOwnLimits: args.confirmOwnLimits })
+  const sent = await sendProductTarget({ placement, asin, creationFlow: args.creationFlow, manual: isPersonCreate(args.manual, args.userId), confirmOwnLimits: args.confirmOwnLimits, allowSbSd: args.allowSbSd })
   const early = settled(sent, sent.kind === 'draft' ? 'local' : mode)
   if (early) return done('negative product target', early)
 

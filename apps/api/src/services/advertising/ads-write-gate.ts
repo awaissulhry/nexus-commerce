@@ -23,7 +23,7 @@ import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
 import { protectedNegativeRefusal } from './ads-negation-policy.js'
-import { adProductRefusal } from '@nexus/shared/ads-ad-product'
+import { adProductOf, adWriteRefusal, type AdWrite } from '@nexus/shared/ads-ad-product'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
@@ -56,7 +56,7 @@ export type GateDeniedAt =
   // The only budget guard keyed to the ENTITY rather than to a rule, which is why it is the one
   // that survives the pacer, a budget schedule, and a rule nobody has written yet.
   | 'budget_day_move'
-  // 6a — the campaign is Sponsored Brands or Display; every write behind this gate goes to a Sponsored Products endpoint.
+  // 6a — the campaign is Sponsored Brands or Display, and (W4-11) the write is not one Nexus sends to their own endpoints.
   | 'ad_product_unsupported'
   // 6b — the market has no checked Amazon limits row, or the bid/budget is outside Amazon's range there.
   | 'market_limits'
@@ -169,8 +169,15 @@ export interface GateContext {
    * caller that knows it but passes no `campaignId` — the negative paths, which must not bind the live-write allowlist.
    * Anything but Sponsored Products is refused, before the sandbox return. Omitted or null = not checked from here; a
    * `campaignId` is checked against the campaign's own row on the live path.
+   * W4-11 — with `write`, a Sponsored Brands or Display write Nexus sends to their own endpoints passes (adWriteRefusal).
    */
   adProduct?: string | null
+  /**
+   * W4-11 — what this write is (the entity, its fields, the state it sets, a target's kind), so a Sponsored Brands or
+   * Display campaign is refused only for a change Nexus does not send to their own endpoints (adWriteRefusal). The ads
+   * worker and the negative write service describe their writes; a caller that does not keeps SB/SD refused (6a).
+   */
+  write?: AdWrite | null
 
   // ── 6.1 — a budget schedule's give-back ───────────────────────────────────
   /**
@@ -242,7 +249,8 @@ export function utcDayKey(d: Date = new Date()): string {
 export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision> {
   // 6a — Sponsored Products only (Owner decision S8; review G.1). Before the sandbox return: an SB/SD write would go to
   // a Sponsored Products endpoint in either mode, and suppression is not exempt — its bid would land there too.
-  const unsupported = adProductRefusal({ adProduct: ctx.adProduct }, { unknown: 'allow' })
+  // W4-11 — unless the write says what it is and it is one Nexus sends to the SB/SD endpoints (adWriteRefusal).
+  const unsupported = adWriteRefusal({ adProduct: ctx.adProduct }, ctx.write, { unknown: 'allow' })
   if (unsupported) return { allowed: false, reason: unsupported, deniedAt: 'ad_product_unsupported' }
 
   // ADX A1 — keyword protection. A whitelisted term may not be negated by anything.
@@ -361,16 +369,39 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     }
   }
 
+  // W4-11 — the campaign's own row, read once here (it was read below, for the allowlist): Amazon's limits below depend
+  // on its ad product and, for SB and SD bids, on how it pays (`costType`). Same select, same single read.
+  const campaign = ctx.campaignId
+    ? await prisma.campaign.findUnique({
+        where: { id: ctx.campaignId },
+        select: {
+          liveBidWritesEnabled: true, dynamicBidding: true, liveBidWritesToday: true, liveBidWritesDay: true,
+          minBidCents: true, maxBidCents: true,
+          // ACR.1.2b — same read, so a pin costs no extra query.
+          pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true,
+          // AUTO.A7 — same read again: the spend-ceiling check needs the current budget (for the
+          // increase delta) and the campaign's containing scopes.
+          dailyBudget: true, portfolioId: true, marketplace: true,
+          // BUD.2 — the budget bounds, enforced below beside the bid bounds.
+          minBudgetCents: true, maxBudgetCents: true,
+          // 6a — the ad product, refused below before the allowlist. W4-11 — how an SB/SD campaign pays, and its budget object.
+          adProduct: true, type: true, name: true, costType: true, budgetJson: true,
+        },
+      })
+    : null
+
   // 6b — Amazon's own limits in this market (review G.5, Owner decision S10). Every amount behind this gate is in euro
   // cents, so a market without a checked row (UK, SE, PL, NL, …) is refused outright rather than converted, and a bid or
   // budget outside Amazon's range is refused before Amazon answers with an error. Suppression is not exempt: it lowers a
   // bid to Amazon's minimum, never below. `marketplace` may be an Amazon marketplace id on older rows (HB.8), hence the
-  // normaliser. The ad product is Sponsored Products here unless the caller says otherwise — 6a refused the others above.
+  // normaliser. The ad product is Sponsored Products here unless the caller or the campaign says otherwise — W4-11: an SB
+  // or SD write is judged on that ad product's limits, and an SB/SD bid on the range of how its campaign pays.
   const outsideLimits = marketLimitsRefusal({
     market: normalizeMarketplaceCode(ctx.marketplace, '') || ctx.marketplace,
-    adProduct: ctx.adProduct ?? null,
+    adProduct: ctx.adProduct ?? adProductOf(campaign) ?? null,
     field: ctx.field ?? null,
     valueMinor: ctx.intendedValueCents ?? null,
+    costType: campaign?.costType ?? null,
   })
   if (outsideLimits) return { allowed: false, reason: outsideLimits, deniedAt: 'market_limits' }
 
@@ -404,25 +435,11 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         deniedAt: 'campaign_allowlist',
       }
     }
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: ctx.campaignId },
-      select: {
-        liveBidWritesEnabled: true, dynamicBidding: true, liveBidWritesToday: true, liveBidWritesDay: true,
-        minBidCents: true, maxBidCents: true,
-        // ACR.1.2b — same read, so a pin costs no extra query.
-        pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true,
-        // AUTO.A7 — same read again: the spend-ceiling check needs the current budget (for the
-        // increase delta) and the campaign's containing scopes.
-        dailyBudget: true, portfolioId: true, marketplace: true,
-        // BUD.2 — the budget bounds, enforced below beside the bid bounds.
-        minBudgetCents: true, maxBudgetCents: true,
-        // 6a — the ad product, refused below before the allowlist.
-        adProduct: true, type: true, name: true,
-      },
-    })
+    // (the campaign's row: read above, before Amazon's limits)
     // 6a — the broader refusal first (the pin-before-bounds order below): no allowlist entry makes an SB/SD campaign
     // writable through Sponsored Products endpoints, so naming the allowlist would point the operator at the wrong fix.
-    const unsupportedCampaign = adProductRefusal(campaign, { unknown: 'allow' })
+    // W4-11 — an SB/SD write Nexus sends to their own endpoints (the write says what it is) passes here.
+    const unsupportedCampaign = adWriteRefusal(campaign, ctx.write, { unknown: 'allow' })
     if (unsupportedCampaign) {
       return { allowed: false, reason: unsupportedCampaign, deniedAt: 'ad_product_unsupported' }
     }

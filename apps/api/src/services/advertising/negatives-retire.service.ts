@@ -101,6 +101,11 @@ export interface RetireRequest {
   changeSetId?: string | null
   /** W4-5 — a person approved the request (4A, approvedRun): his own click, as the Negatives page's retire is. */
   manual?: boolean
+  /**
+   * W4-11 — a Claude request (retire-negatives, and the undo of add-negative-targets): a Sponsored Brands negative keyword
+   * or Sponsored Display negative product target is archived at its own endpoint. Absent: Sponsored Products only.
+   */
+  allowSbSd?: boolean
 }
 
 export interface RetireResult {
@@ -256,6 +261,8 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
         applyImmediately: true,
         ...(req.changeSetId ? { changeSetId: req.changeSetId } : {}),
         ...(req.manual === true ? { manual: true } : {}),
+        // W4-11 — a Claude request: an SB negative keyword or SD negative product target is archived at its own endpoint.
+        ...(req.allowSbSd === true ? { allowSbSd: true } : {}),
       })
       if (!res.ok) {
         // `no_changes` is a genuine skip, not a failure; everything else is refused or failed.

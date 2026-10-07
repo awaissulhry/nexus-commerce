@@ -181,24 +181,38 @@ export async function protectedNegativeRefusal(args: {
 
 // ── At the wire ──────────────────────────────────────────────────────────────────────────────────
 
-/** The SP v3 negative endpoints and the body key that holds their items. Their /list and /delete are not writes of a negative. */
-const NEGATIVE_ENDPOINTS: Record<string, { key: string; kind: 'keyword' | 'target' }> = {
+/**
+ * The negative endpoints and the body key that holds their items. Their /list and /delete are not writes of a negative.
+ * W4-11 — and the Sponsored Brands / Display ones (SB 3.0 `/sb/negativeKeywords`, SD 3.0 `/sd/negativeTargets`), whose
+ * body is a bare array (`key` null): a protected term binds them exactly as it binds the SP ones.
+ */
+const NEGATIVE_ENDPOINTS: Record<string, { key: string | null; kind: 'keyword' | 'target' }> = {
   '/sp/negativeKeywords': { key: 'negativeKeywords', kind: 'keyword' },
   '/sp/campaignNegativeKeywords': { key: 'campaignNegativeKeywords', kind: 'keyword' },
   '/sp/negativeTargets': { key: 'negativeTargetingClauses', kind: 'target' },
+  '/sb/negativeKeywords': { key: null, kind: 'keyword' },
+  '/sd/negativeTargets': { key: null, kind: 'target' },
 }
 
 type WireItem = Record<string, unknown>
 
-function wireItems(body: unknown, key: string): WireItem[] {
-  const list = (body as Record<string, unknown> | null | undefined)?.[key]
+function wireItems(body: unknown, key: string | null): WireItem[] {
+  const list = key == null ? body : (body as Record<string, unknown> | null | undefined)?.[key]
   return Array.isArray(list) ? list.filter((x): x is WireItem => x != null && typeof x === 'object') : []
 }
 
-/** The Nexus campaign behind an Amazon campaign id: its id and market, or nulls when Nexus does not hold it. */
-async function campaignScope(externalCampaignId: unknown): Promise<{ marketplace: string | null; campaignId: string | null }> {
-  if (typeof externalCampaignId !== 'string' && typeof externalCampaignId !== 'number') return { marketplace: null, campaignId: null }
+/**
+ * The Nexus campaign behind an Amazon campaign id — or, W4-11, behind an Amazon ad group id when the item names no
+ * campaign (an SD negative target names only its ad group): its id and market, or nulls when Nexus does not hold it.
+ */
+async function campaignScope(externalCampaignId: unknown, externalAdGroupId?: unknown): Promise<{ marketplace: string | null; campaignId: string | null }> {
+  const usable = (v: unknown): v is string | number => typeof v === 'string' || typeof v === 'number'
+  if (!usable(externalCampaignId) && !usable(externalAdGroupId)) return { marketplace: null, campaignId: null }
   const { default: prisma } = await import('../../db.js')
+  if (!usable(externalCampaignId)) {
+    const g = await prisma.adGroup.findFirst({ where: { externalAdGroupId: String(externalAdGroupId) }, select: { campaign: { select: { id: true, marketplace: true } } } })
+    return { marketplace: g?.campaign?.marketplace ?? null, campaignId: g?.campaign?.id ?? null }
+  }
   const c = await prisma.campaign.findFirst({ where: { externalCampaignId: String(externalCampaignId) }, select: { id: true, marketplace: true } })
   return { marketplace: c?.marketplace ?? null, campaignId: c?.id ?? null }
 }
@@ -225,7 +239,7 @@ export async function negativeWireRefusal(req: { method: string; path: string; b
 
   if (method === 'POST') {
     for (const item of wireItems(req.body, endpoint.key)) {
-      const scope = await campaignScope(item.campaignId)
+      const scope = await campaignScope(item.campaignId, item.adGroupId)
       if (endpoint.kind === 'keyword') {
         const text = String(item.keywordText ?? '')
         const matchType = typeof item.matchType === 'string' ? item.matchType : null

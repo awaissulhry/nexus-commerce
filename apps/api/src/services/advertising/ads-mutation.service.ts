@@ -30,8 +30,8 @@ import {
   IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus, type AdSyncType,
 } from '../ads-core/ad-mutation-state.js'
 import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
-import { SPONSORED_PRODUCTS, adProductOf, adProductRefusal, type AdProductSource } from '@nexus/shared/ads-ad-product'
-import { marketLimitsOf, marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
+import { SPONSORED_BRANDS, SPONSORED_DISPLAY, SPONSORED_PRODUCTS, adProductOf, adWriteRefusal, type AdProductSource, type AdWrite } from '@nexus/shared/ads-ad-product'
+import { bidCostType, marketLimitsOf, marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
 import { checkAdsWriteGate, entityBoundsDenial, logGateDeny, ownLimitsSentence, sentPastSentence, type EntityBoundsCampaign, type OwnLimit, type OwnLimitKind } from './ads-write-gate.js'
 import { NO_LIMITS, bidLimitsFor, limitSources, strategyWords, stepClamp, type StrategyBidLimits, type WriteSources } from './ads-strategy/bids.js'
@@ -136,9 +136,17 @@ const ENGINE_BID_FLOOR_CENTS = 5
  * 1e (CM-19) — Amazon's own minimum Sponsored Products bid in this market, in cents (@nexus/shared/ads-market-limits:
  * €0.02 in IT, DE, FR and ES). Null where Nexus has no checked limits row; the write gate refuses those markets at
  * dispatch, and the 5¢ floor stays there.
+ * W4-11 — for a Sponsored Brands or Display campaign, that ad product's minimum for how the campaign pays (`costType`:
+ * CPC or vCPM); null when the row has none or the cost type is not held (the gate refuses such a bid).
  */
-export function amazonMinBidCents(marketplace: string | null | undefined): number | null {
-  return marketLimitsOf(normalizeMarketplaceCode(marketplace, '') || marketplace)?.adProducts[SPONSORED_PRODUCTS]?.bid.min ?? null
+export function amazonMinBidCents(marketplace: string | null | undefined, campaign?: { adProduct?: string | null; type?: string | null; costType?: string | null } | null): number | null {
+  const row = marketLimitsOf(normalizeMarketplaceCode(marketplace, '') || marketplace)
+  const product = adProductOf(campaign) ?? SPONSORED_PRODUCTS
+  const limits = row?.adProducts[product]
+  if (!limits) return null
+  if (product === SPONSORED_PRODUCTS) return limits.bid.min
+  const pays = bidCostType(campaign?.costType)
+  return pays === 'CPC' ? limits.bid.min : pays === 'VCPM' ? (limits.vcpmBid?.min ?? null) : null
 }
 
 /**
@@ -147,12 +155,16 @@ export function amazonMinBidCents(marketplace: string | null | undefined): numbe
  * below it is told so in Amazon's terms (marketLimitsRefusal) — Amazon would reject that bid anyway. The campaign's
  * own min-bid setting (Campaign.minBidCents, bid policies) is judged after this, by boundsRefused, for both.
  */
-function bidFloorRefusal(cents: number, person: boolean, marketplace: string | null | undefined, field: 'bid' | 'defaultBid'): string | null {
-  const amazonMin = person ? amazonMinBidCents(marketplace) : null
+function bidFloorRefusal(
+  cents: number, person: boolean, marketplace: string | null | undefined, field: 'bid' | 'defaultBid',
+  /** W4-11 — the campaign: an SB or SD bid's floor is that ad product's minimum. */
+  campaign?: { adProduct?: string | null; type?: string | null; costType?: string | null } | null,
+): string | null {
+  const amazonMin = person ? amazonMinBidCents(marketplace, campaign) : null
   if (amazonMin == null) return cents < ENGINE_BID_FLOOR_CENTS ? 'bid_below_floor_5_cents' : null
   if (cents >= amazonMin) return null
   const market = normalizeMarketplaceCode(marketplace, '') || marketplace
-  return marketLimitsRefusal({ market, field, valueMinor: cents })
+  return marketLimitsRefusal({ market, field, valueMinor: cents, adProduct: adProductOf(campaign), costType: campaign?.costType ?? null })
     ?? `A bid of ${cents}¢ is below Amazon's minimum of ${amazonMin}¢ in ${market}, so nothing was sent to Amazon.`
 }
 
@@ -233,6 +245,12 @@ function withStrategyEvidence(evidence: AdWriteEvidence | null | undefined, sour
 /**
  * 6a — Sponsored Products only (Owner decision S8, 2026-10-04; review G.1).
  *
+ * W4-11 — `write` (null = Sponsored Products only, as before): a caller that may change Sponsored Brands and Display
+ * (`allowSbSd`: a Claude request, which runs only once approved, by a person or the business's rule) describes its
+ * write, and an SB/SD write Nexus sends to their own endpoints (adWriteRefusal) is not refused; the worker routes it
+ * there. Every other caller — the engines, rules, schedules, sweeps and the screens' routes — passes none and stays
+ * Sponsored Products only.
+ *
  * The worker sends every write queued here to a Sponsored Products endpoint (/sp/campaigns, /sp/adGroups, /sp/keywords,
  * /sp/targets, /sp/productAds). A Sponsored Brands or Display id is unknown there: a budget lands nowhere, and a keyword
  * answered "not found" is marked orphaned although it is healthy, which then blocks every later write to it. Native
@@ -240,10 +258,16 @@ function withStrategyEvidence(evidence: AdWriteEvidence | null | undefined, sour
  * same placement as SYNC.1 / 1f, and loud. `error` carries the shared sentence, which routes show as it is.
  * A campaign whose ad product is not stated is not refused (`Campaign.type` is required; only a partial select lacks it).
  */
+/** W4-11 — a Sponsored Brands or Display campaign (the two whose own endpoints Nexus sends some changes to). */
+export function isSbSdCampaign(campaign: AdProductSource | null | undefined): boolean {
+  const product = adProductOf(campaign)
+  return product === SPONSORED_BRANDS || product === SPONSORED_DISPLAY
+}
+
 function adProductRefused(
-  entity: AdEntityType, entityId: string, actor: string, campaign: AdProductSource | null | undefined,
+  entity: AdEntityType, entityId: string, actor: string, campaign: AdProductSource | null | undefined, write: AdWrite | null = null,
 ): MutationOutcome | null {
-  const refusal = adProductRefusal(campaign, { unknown: 'allow' })
+  const refusal = adWriteRefusal(campaign, write, { unknown: 'allow' })
   if (!refusal) return null
   logger.warn('[ads-mutation] refused a write to a campaign that is not Sponsored Products', {
     entity, entityId, actor, adProduct: adProductOf(campaign),
@@ -352,6 +376,8 @@ async function gateRefusedNow(args: {
   past?: OwnLimit[]
   /** W1-5 — the ad group a bid lands in, as the worker hands it to the gate. */
   adGroupId?: string | null
+  /** W4-11 — what the write is, as the worker hands it to the gate (an SB/SD write a caller may send). */
+  write?: AdWrite | null
 }): Promise<MutationOutcome | null> {
   if (!args.askGate || !args.actor.startsWith('user:')) return null
   const cents = (v: string | null | undefined, euros = false): number | null => {
@@ -376,6 +402,7 @@ async function gateRefusedNow(args: {
     // 1e — what the worker hands the gate too (isPersonEdit off the queue row), so the two answers agree.
     manual: isPersonEdit(args.manual, args.actor),
     confirmOwnLimits: args.confirmOwnLimits === true,
+    ...(args.write ? { write: args.write } : {}),
   })
   if (gate.allowed !== false) {
     const past = (gate as { pastOwnLimits?: OwnLimit[] }).pastOwnLimits
@@ -498,6 +525,12 @@ interface EnqueueArgs {
   confirmOwnLimits?: boolean
   /** AA-W2-12 — a deliberate pause or archive (see isLetGoWrite). Kept on the queue row's JSON, like `force`; the worker hands it to the gate (and sends a marked archive as Amazon's delete). */
   letsGo?: boolean
+  /**
+   * W4-11 — a Sponsored Brands or Display write this layer let through (`allowSbSd`, adProductRefused). Kept on the queue
+   * row's JSON, like `force`: the worker describes the write to the gate (and routes it to the SB/SD endpoints) only for
+   * a row that carries it, so an SB/SD row any other path queued is still refused there.
+   */
+  sbSd?: boolean
 }
 
 async function enqueueOutbound(args: EnqueueArgs): Promise<string> {
@@ -548,6 +581,8 @@ async function createQueueRow(tx: Tx, args: EnqueueArgs, holdUntil: Date): Promi
         ...(args.manual && args.confirmOwnLimits ? { confirmOwnLimits: true } : {}),
         // AA-W2-12 — and that it is a deliberate pause (isLetGoWrite).
         ...(args.letsGo ? { letsGo: true } : {}),
+        // W4-11 — and that this layer let an SB/SD write through (EnqueueArgs.sbSd).
+        ...(args.sbSd ? { sbSd: true } : {}),
       } as object,
       holdUntil,
       externalListingId: args.externalId,
@@ -1178,6 +1213,11 @@ export async function updateCampaignWithSync(args: {
   confirmOwnLimits?: boolean
   /** AA-W2-12 — a deliberate pause or archive (pause-ads, archive-ads): the halt does not hold it (isLetGoWrite). Nothing else is skipped. */
   letsGo?: boolean
+  /**
+   * W4-11 — a Claude request: a Sponsored Brands or Display campaign's daily budget and on/off state are sent to their
+   * own endpoints (see adProductRefused). Absent: Sponsored Products only, as before.
+   */
+  allowSbSd?: boolean
 }): Promise<MutationOutcome> {
   const existing = await prisma.campaign.findUnique({
     where: { id: args.campaignId },
@@ -1195,13 +1235,17 @@ export async function updateCampaignWithSync(args: {
       endDate: true,
       adProduct: true, // 6a
       type: true,
+      budgetJson: true, // W4-11 — an SB lifetime budget is not set from Nexus
     },
   })
   if (!existing) {
     return { ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error: 'not_found' }
   }
-  // 6a — see adProductRefused.
-  const notSp = adProductRefused('CAMPAIGN', args.campaignId, args.actor, existing)
+  // 6a — see adProductRefused. W4-11 — the write, described from the patch, for a caller that may change SB/SD.
+  const sbSdWrite: AdWrite | null = args.allowSbSd === true
+    ? { entity: 'CAMPAIGN', fields: Object.entries(args.patch).filter(([, v]) => v !== undefined).map(([k]) => k), toStatus: args.patch.status ?? null }
+    : null
+  const notSp = adProductRefused('CAMPAIGN', args.campaignId, args.actor, existing, sbSdWrite)
   if (notSp) return notSp
 
   // SYNC.1 — see isSchedulingEngineActor. Refuse before the diff, so the refusal does not depend on
@@ -1305,7 +1349,7 @@ export async function updateCampaignWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'CAMPAIGN', entityId: args.campaignId,
     campaignId: existing.id, marketplace: existing.marketplace, changes,
-    manual: args.manual, confirmOwnLimits, past,
+    manual: args.manual, confirmOwnLimits, past, write: sbSdWrite,
   })
   if (atDispatch) return atDispatch
 
@@ -1344,6 +1388,7 @@ export async function updateCampaignWithSync(args: {
     manual: person,
     confirmOwnLimits,
     letsGo: args.letsGo,
+    sbSd: sbSdWrite != null && isSbSdCampaign(existing),
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1691,6 +1736,12 @@ export async function updateAdTargetWithSync(args: {
    * skipped (the orphan mark, the 5¢ floor, a person's floor memory).
    */
   stop?: boolean
+  /**
+   * W4-11 — a Claude request: a Sponsored Brands or Display keyword's or target's bid and on/off state, and the retire
+   * of an SB negative keyword or SD negative product target, are sent to their own endpoints (see adProductRefused).
+   * Absent: Sponsored Products only, as before.
+   */
+  allowSbSd?: boolean
 }): Promise<MutationOutcome> {
   const person = isPersonEdit(args.manual, args.actor)
   const existing = await prisma.adTarget.findUnique({
@@ -1707,7 +1758,7 @@ export async function updateAdTargetWithSync(args: {
       isNegative: true,   // NEG.3 — the third routing axis; a negative's id is not a /sp/keywords id
       negativeLevel: true,
       adGroup: {
-        select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true, name: true, adProduct: true, type: true, ...BOUNDS_SELECT } } },
+        select: { id: true, campaign: { select: { id: true, marketplace: true, dynamicBidding: true, name: true, adProduct: true, type: true, costType: true, ...BOUNDS_SELECT } } },
       },
     },
   })
@@ -1716,7 +1767,15 @@ export async function updateAdTargetWithSync(args: {
   }
   // 6a — see adProductRefused. Before the orphan check below, which may itself clear a mark (a local write), and
   // before anything is queued: an SB keyword sent to /sp/keywords comes back "not found" and would be marked orphaned.
-  const notSp = adProductRefused('AD_TARGET', args.adTargetId, args.actor, existing.adGroup?.campaign)
+  // W4-11 — the write, described from the patch, for a caller that may change SB/SD (the worker routes it to their endpoints).
+  const sbSdWrite: AdWrite | null = args.allowSbSd === true
+    ? {
+        entity: 'AD_TARGET',
+        fields: [args.patch.bidCents != null ? 'bid' : null, args.patch.status ? 'status' : null],
+        toStatus: args.patch.status ?? null, kind: existing.kind, isNegative: existing.isNegative, negativeLevel: existing.negativeLevel,
+      }
+    : null
+  const notSp = adProductRefused('AD_TARGET', args.adTargetId, args.actor, existing.adGroup?.campaign, sbSdWrite)
   if (notSp) return notSp
 
   // AX2.0 — Amazon has already told us this target does not exist. Enqueueing
@@ -1808,7 +1867,7 @@ export async function updateAdTargetWithSync(args: {
   }
   // 1e (CM-19) — a person's floor is Amazon's own minimum in the market (bidFloorRefusal); an engine's stays 5¢.
   const belowFloor = !args.force && args.patch.bidCents != null
-    ? bidFloorRefusal(args.patch.bidCents, person, existing.adGroup?.campaign?.marketplace, 'bid')
+    ? bidFloorRefusal(args.patch.bidCents, person, existing.adGroup?.campaign?.marketplace, 'bid', existing.adGroup?.campaign)
     : null
   if (belowFloor) {
     return {
@@ -1835,7 +1894,7 @@ export async function updateAdTargetWithSync(args: {
   const atDispatch = await gateRefusedNow({
     askGate: args.askGate, actor: args.actor, entity: 'AD_TARGET', entityId: args.adTargetId,
     campaignId: existing.adGroup?.campaign?.id, marketplace: existing.adGroup?.campaign?.marketplace, changes, force: forcedLowering,
-    manual: args.manual, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null,
+    manual: args.manual, confirmOwnLimits, past, adGroupId: existing.adGroup?.id ?? null, write: sbSdWrite,
   })
   if (atDispatch) return atDispatch
 
@@ -1870,6 +1929,7 @@ export async function updateAdTargetWithSync(args: {
     manual: person,
     confirmOwnLimits,
     letsGo: args.letsGo,
+    sbSd: sbSdWrite != null && isSbSdCampaign(existing.adGroup?.campaign),
   })
 
   const bidHistoryIds = await writeBidHistory({
@@ -1946,6 +2006,8 @@ export async function bulkUpdateAdTargetBids(args: {
   /** 3A — ask the gate now (a person's bulk edit), and his "Send anyway" past his own limits. */
   askGate?: boolean
   confirmOwnLimits?: boolean
+  /** W4-11 — a Claude request (bulk-ad-bid-change): SB/SD keyword and target bids too (updateAdTargetWithSync). */
+  allowSbSd?: boolean
 }): Promise<BulkBidOutcome> {
   const out: BulkBidOutcome = {
     applied: 0,
@@ -1968,6 +2030,7 @@ export async function bulkUpdateAdTargetBids(args: {
         manual: args.manual,
         askGate: args.askGate,
         confirmOwnLimits: args.confirmOwnLimits,
+        ...(args.allowSbSd ? { allowSbSd: true } : {}),
         evidence: entry.evidence ?? null,
         ...(entry.stop ? { stop: true } : {}),
       })

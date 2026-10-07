@@ -31,6 +31,8 @@ export interface AdProductSource {
   adProduct?: string | null
   type?: string | null
   name?: string | null
+  /** W4-11 — Amazon's budget object (`Campaign.budgetJson`): a Sponsored Brands lifetime budget is not set from Nexus. */
+  budgetJson?: unknown
 }
 
 /** The legacy `CampaignType` codes, also accepted in the `adProduct` column. */
@@ -177,8 +179,14 @@ export function adWriteRefusal(
   if (product == null && opts.unknown === 'allow') return null
   if (!write || (product !== SPONSORED_BRANDS && product !== SPONSORED_DISPLAY)) return adProductRefusal(campaign, opts)
   const problem = sbSdProblem(product, write)
-  if (!problem) return null
   const who = campaign?.name?.trim() || 'This campaign'
+  if (!problem) {
+    const budget = write.entity === 'CAMPAIGN' && (write.fields ?? []).includes('dailyBudget')
+    if (budget && product === SPONSORED_BRANDS && isLifetimeBudget(campaign?.budgetJson)) {
+      return `${who} is a Sponsored Brands campaign with a lifetime budget at Amazon. Nexus sets a daily budget only, so nothing was sent to Amazon; change it in Amazon's advertising console.`
+    }
+    return null
+  }
   return `${who} is a ${adProductLabel(product)} campaign. Nexus changes ${sbSdCan(product)} — not ${problem} — so nothing was sent to Amazon; make this change in Amazon's advertising console.`
 }
 
