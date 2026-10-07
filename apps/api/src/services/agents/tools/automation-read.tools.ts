@@ -98,7 +98,8 @@ const automationDetail: AgentTool = {
     'One automation in full: its level and why, every env flag that bears on it (whether it lets it act, never a value), ' +
     'what this business set, scope, schedule, caps, last run and its rows (rules, plans, schedules, pools …, up to 100). ' +
     'With rowId, one row in full: an ads rule with its conditions in words, window, caps, reach and graduation gate ' +
-    '(the road to AUTO, which a person still clicks); an eBay rule with its versions and last runs. ' +
+    '(the road to AUTO, which a person still clicks); an eBay rule with its versions and last runs; a row of the hourly ' +
+    'bid plans (or a plan\'s id) names its plan, whose week ad-hourly-plans shows hour by hour. ' +
     'Name the automation by its number (A1 … N17) or key from list-automations.',
   riskTier: 'low',
   readOnly: true,
@@ -117,8 +118,15 @@ const automationDetail: AgentTool = {
     const { entry, rows } = await getAutomationDetail(adapter)
     if (rowId) {
       const row = adapter.get ? await adapter.get(rowId) : (rows ?? []).find((r) => r.id === rowId) ?? null
-      if (!row) return { ok: false, error: `${adapter.name} has no row ${rowId} in this business (not found).` }
-      return { ok: true, data: { automation: entry, row } }
+      // W4-1 — a row of the hourly bid plans names its plan: its hours, members and switch are ad-hourly-plans' and
+      // set-hourly-bid-plan's.
+      const plan = adapter.key === 'ads-rank-defend' ? await (await import('../../advertising/rank-schedule-group.service.js')).hourlyPlanOfRow(rowId) : null
+      const hourlyPlan = plan ? { planId: plan.planId, name: plan.name, on: plan.enabled, read: `ad-hourly-plans {"planId":"${plan.planId}"} shows its week hour by hour`, change: 'set-hourly-bid-plan changes it (paint, members, switch, values)' } : null
+      if (!row) {
+        if (hourlyPlan) return { ok: true, data: { automation: entry, hourlyPlan } }
+        return { ok: false, error: `${adapter.name} has no row ${rowId} in this business (not found).` }
+      }
+      return { ok: true, data: { automation: entry, row, ...(hourlyPlan ? { hourlyPlan } : {}) } }
     }
     const shown = (rows ?? []).slice(0, MAX_ROWS)
     return {

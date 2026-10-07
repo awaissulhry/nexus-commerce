@@ -213,6 +213,8 @@ interface Seeded {
   sourcePresetId: string
   /** W4-1 — a daily Claude ads run that started and has not reported its end (report-ads-run finishes it). */
   adsRunId: string
+  /** Ads autonomy W4-1 — an hourly bid plan holding the campaign (ad-hourly-plans reads it, set-hourly-bid-plan changes it). */
+  hourlyPlanId: string
 }
 const seeded = {} as Record<'a' | 'b', Seeded>
 /** Phase 3 T3 — the eBay category id each business has loaded (its details name the business's canary). */
@@ -402,6 +404,10 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     const target = await db.adTarget.create({
       data: { adGroupId: adGroup.id, kind: 'KEYWORD', expressionType: 'BROAD', expressionValue: `${canary}-TARGET`, isNegative: false, bidCents: 40 },
     })
+    // Ads autonomy W4-1 — an hourly bid plan over the campaign, switched off, its member schedule bound to it.
+    await db.rankTarget.create({ data: { key: `${mark.toLowerCase()}-top-${RUN}`, name: `${canary}-RANK-TARGET`, biasPct: 30 } })
+    const hourlyPlan = await db.rankScheduleGroup.create({ data: { name: `${canary}-HOURLY-PLAN`, marketplace: market, windows: [], defaultTargetKey: `${mark.toLowerCase()}-top-${RUN}`, enabled: false } })
+    await db.adSchedule.create({ data: { campaignId: campaign.id, name: `${canary}-HOURLY-MEMBER`, windows: [], defaultTargetKey: `${mark.toLowerCase()}-top-${RUN}`, enabled: false, groupId: hourlyPlan.id } })
     // R6–R8 — an ads rule: what the automation tools (list, detail, activity, preview) read and name.
     const automationRule = await db.automationRule.create({
       data: { domain: 'advertising', name: `${canary}-AUTOMATION-RULE`, trigger: 'SCHEDULE', enabled: true, autonomyLevel: 'OBSERVE', actions: [{ type: 'log_only' }] },
@@ -747,6 +753,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       photoId: photo.id,
       sourcePresetId: sourcePreset.id,
       adsRunId: adsRun.id,
+      hourlyPlanId: hourlyPlan.id,
     }
   })
 }
@@ -1066,6 +1073,13 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
   // B-1 — a copy reads its source campaign in the market it runs in (B's own); no portfolio (the loop would name an id).
   'replicate-ad-structure': { get sourceMarket() { return seeded.b.market }, portfolioId: undefined },
+  // Ads autonomy W4-1 — ONE hourly plan, by its id (`planId` is the FBA plan's for the loop): B's plan, read and renamed.
+  'ad-hourly-plans': { get planId() { return seeded.b.hourlyPlanId }, campaignId: undefined, market: undefined },
+  'set-hourly-bid-plan': {
+    op: 'rename', get planId() { return seeded.b.hourlyPlanId }, name: 'MCP8 probe plan', market: undefined, campaignIds: undefined, add: undefined,
+    remove: undefined, move: undefined, windows: undefined, days: undefined, defaultTargetKey: undefined, timezone: undefined, on: undefined, values: undefined,
+    portfolioId: undefined,
+  },
   // P9 — a file naming B's product by its SKU (built once B is seeded); the saved mapping maps its Name column.
   'import-catalog': () => ({ text: `SKU,Name\n${seeded.b.sku},MCP8 probe name` }),
 }
