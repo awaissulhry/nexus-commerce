@@ -289,6 +289,33 @@ export async function getPortfolioOverview(opts: {
 
 const POLICY_TO_DB: Record<string, string> = { monthlyRecurring: 'MONTHLY_RECURRING', dateRange: 'DATE_RANGE' }
 
+/** What PATCH /advertising/portfolios/:id may ask: a rename, a state, a budget cap (the Portfolios page's three actions). */
+export interface PortfolioUpdateBody {
+  name?: string
+  state?: 'enabled' | 'paused' | 'archived'
+  budget?: { amount?: number; currencyCode?: string; policy?: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string }
+}
+
+/**
+ * W4-3 — the portfolio update's body check, the one place it is done (moved here from PATCH /advertising/portfolios/:id,
+ * answers unchanged; set-portfolio uses it too): a name is trimmed (blank = none); a cap needs an amount above 0 and a
+ * policy (monthlyRecurring or dateRange), a dateRange both dates; the currency defaults to EUR; at least one of the three.
+ */
+export function portfolioUpdateOf(body: PortfolioUpdateBody): { ok: true; value: { name?: string; state?: PortfolioUpdateBody['state']; budget?: PortfolioBudgetInput } } | { ok: false; error: string } {
+  const name = body.name?.trim() || undefined
+  let budget: PortfolioBudgetInput | undefined
+  if (body.budget) {
+    const b = body.budget
+    if (!(typeof b.amount === 'number' && b.amount > 0) || (b.policy !== 'monthlyRecurring' && b.policy !== 'dateRange')) {
+      return { ok: false, error: 'budget requires amount > 0 and policy monthlyRecurring|dateRange' }
+    }
+    if (b.policy === 'dateRange' && (!b.startDate || !b.endDate)) return { ok: false, error: 'dateRange budget requires startDate + endDate' }
+    budget = { amount: b.amount, currencyCode: b.currencyCode || 'EUR', policy: b.policy, startDate: b.startDate, endDate: b.endDate }
+  }
+  if (name == null && body.state == null && !budget) return { ok: false, error: 'name, state or budget required' }
+  return { ok: true, value: { name, state: body.state, budget } }
+}
+
 /** P2/P3 — rename / archive / set budget on a portfolio. Pushes to Amazon when the write gate is
  *  open (v3 PUT /portfolios), then mirrors the change locally. Keyed by externalPortfolioId.
  *  A budget cap can throttle delivery (it's the one field with spend impact) — hence gated. */
