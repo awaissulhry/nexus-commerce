@@ -425,6 +425,14 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   if (row.syncStatus !== 'PENDING') {
     return { status: 'SKIPPED', queueId }
   }
+  // W4-12 — not due yet: a hold made longer since the job was queued, or a retry's backoff (2^n minutes). The job ids
+  // were refused by BullMQ until W4-12, so only the drain sent writes, and it reads both; a job that fires early leaves
+  // the row PENDING for the drain to send when it is due.
+  const due = new Date()
+  if ((row.holdUntil && row.holdUntil > due) || (row.nextRetryAt && row.nextRetryAt > due)) {
+    logger.debug('[ads-sync.worker] not due yet — left to the drain', { queueId })
+    return { status: 'NOT_DUE', queueId }
+  }
 
   // AX-ZD.1e — serialise writes per entity. Amazon answers two concurrent writes
   // to one entity with HTTP 423 ConcurrentModificationException, and this worker
