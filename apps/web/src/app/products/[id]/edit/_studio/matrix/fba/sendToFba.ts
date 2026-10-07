@@ -375,7 +375,7 @@ export async function postCancelPlan(slot: CommandKey, planId: string, opts: Pic
 
 /* ── the Matrix read's Step 4 fields (`source.ts` parses through these) ──────────────────────── */
 
-/** `MatrixRowRead.fbaInbound`: absent = not read (`undefined`); `null` = nothing inbound or planned; malformed = not read. */
+/** `MatrixRowRead.fbaInbound`: absent = not read (`undefined`); `null` = nothing inbound, planned or sent; malformed = not read. */
 export function parseFbaInbound(raw: unknown): MatrixFbaInbound | null | undefined {
   if (raw === null) return null
   const f = raw as Record<string, unknown> | undefined
@@ -383,6 +383,8 @@ export function parseFbaInbound(raw: unknown): MatrixFbaInbound | null | undefin
   return {
     units: f.units, working: num(f.working), shipped: num(f.shipped), receiving: num(f.receiving),
     readAt: typeof f.readAt === 'string' ? f.readAt : null, planned: num(f.planned),
+    // Units Nexus marked Shipped that Amazon may not count yet: a number ≥ 0, else absent (an older server sends none).
+    ...(typeof f.sent === 'number' && Number.isFinite(f.sent) && f.sent >= 0 ? { sent: f.sent } : {}),
   }
 }
 

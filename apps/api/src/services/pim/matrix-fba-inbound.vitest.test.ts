@@ -4,8 +4,8 @@
  *
  * The real Matrix read over a real PostgreSQL in-process (PGlite). Amazon's side is the FBA sweep's INBOUND rows
  * (`FbaInventoryDetail`, fulfilment centre 'ALL', `rawData = { working, shipped, receiving }`); Nexus's side is the open
- * Send-to-FBA plan lines (`FbaInboundPlanLine`, quantity − shippedQuantity). The FBA number (`fba`) stays Amazon's
- * fulfillable units: inbound is shown next to it, never added to it.
+ * Send-to-FBA plan lines (`FbaInboundPlanLine`, quantity − shippedQuantity; `sent` = shippedQuantity of plans still
+ * SHIPPED). The FBA number (`fba`) stays Amazon's fulfillable units: inbound is shown next to it, never added to it.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -54,6 +54,9 @@ beforeAll(() => scoped(async () => {
   await prisma.product.create({ data: { id: 'fi-solo', sku: 'TEST-SKU-FI-SOLO', name: 'Solo', basePrice: 10 } })
   await prisma.product.create({ data: { id: 'fi-none', sku: 'TEST-SKU-FI-NONE', name: 'Nothing inbound', basePrice: 10 } })
   await prisma.product.create({ data: { id: 'fi-other', sku: 'TEST-SKU-FI-OTHER', name: 'Another product', basePrice: 10 } })
+  await prisma.product.create({ data: { id: 'fi-sent', sku: 'TEST-SKU-FI-SENT', name: 'Shipped, Amazon not read yet', basePrice: 10 } })
+  await prisma.product.create({ data: { id: 'fi-arrived', sku: 'TEST-SKU-FI-ARRIVED', name: 'At Amazon', basePrice: 10 } })
+  await prisma.product.create({ data: { id: 'fi-part', sku: 'TEST-SKU-FI-PART', name: 'One of two shipments marked', basePrice: 10 } })
 
   // Amazon's fulfillable FBA number for red: 92 (the FBA qty cell's value).
   const fba = await prisma.stockLocation.create({ data: { type: 'AMAZON_FBA', code: 'AMAZON-EU-FBA', name: 'Amazon FBA (test)' } })
@@ -76,6 +79,11 @@ beforeAll(() => scoped(async () => {
   await plan('plan-closed-222222', 'CLOSED', T2, [['fi-blue', 30, 30]])
   await plan('plan-wizard-333333', 'DRAFT', T2, [['fi-green', 50, 0]], { source: null }) // an older wizard plan: not this vocabulary
   await plan('plan-solo-444444', 'READY_TO_SHIP', T2, [['fi-solo', 7, 0]])
+  // "Mark shipped" (Owner 2026-10-07): a SHIPPED plan with no Amazon row yet → sent; an AT_AMAZON plan → Amazon's only.
+  await plan('plan-sent-555555', 'SHIPPED', T2, [['fi-sent', 21, 21]])
+  await plan('plan-arrived-666666', 'AT_AMAZON', T2, [['fi-arrived', 9, 9]])
+  // Two shipments, one marked Shipped: the plan stays READY_TO_SHIP until the last one — its shipped units still count.
+  await plan('plan-part-777777', 'READY_TO_SHIP', T2, [['fi-part', 10, 4]])
 }), 120_000)
 afterAll(async () => { await state.db?.close() }, 60_000)
 
@@ -83,10 +91,11 @@ describe('the Matrix read carries "Inbound +N" and the open plans', () => {
   it('each variation: Amazon\'s inbound (working / shipped / receiving, one marketplace, ALL rows only) + units in open plans not shipped yet; the parent sums its variations; the FBA number is untouched', () => scoped(async () => {
     const read = await getMatrixRead({ productId: 'fi-red', canEditPrice: true })
     const row = (id: string) => read.rows.find((r) => r.id === id)!
-    expect(row('fi-red').fbaInbound).toEqual({ units: 27, working: 12, shipped: 12, receiving: 3, readAt: T1.toISOString(), planned: 10 })
-    expect(row('fi-blue').fbaInbound).toEqual({ units: 5, working: 5, shipped: 0, receiving: 0, readAt: T2.toISOString(), planned: 3 })
-    expect(row('fi-green').fbaInbound).toEqual({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 6 })
-    expect(row('fi-parent').fbaInbound).toEqual({ units: 32, working: 17, shipped: 12, receiving: 3, readAt: T1.toISOString(), planned: 19 })
+    // `sent` = units marked Shipped in plans still SHIPPED (plan-newer: red 8, blue 1); the parent sums them (9).
+    expect(row('fi-red').fbaInbound).toEqual({ units: 27, working: 12, shipped: 12, receiving: 3, readAt: T1.toISOString(), planned: 10, sent: 8 })
+    expect(row('fi-blue').fbaInbound).toEqual({ units: 5, working: 5, shipped: 0, receiving: 0, readAt: T2.toISOString(), planned: 3, sent: 1 })
+    expect(row('fi-green').fbaInbound).toEqual({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 6, sent: 0 })
+    expect(row('fi-parent').fbaInbound).toEqual({ units: 32, working: 17, shipped: 12, receiving: 3, readAt: T1.toISOString(), planned: 19, sent: 9 })
     // 🔴 The FBA number stays Amazon's fulfillable units: inbound is never added to it.
     expect(row('fi-red').fba).toMatchObject({ units: 92 })
     expect(row('fi-blue').fba).toBeNull()
@@ -104,10 +113,28 @@ describe('the Matrix read carries "Inbound +N" and the open plans', () => {
 
   it('a standalone product reads its own; nothing inbound and nothing planned → null and no plans', () => scoped(async () => {
     const solo = await getMatrixRead({ productId: 'fi-solo', canEditPrice: true })
-    expect(solo.rows[0]!.fbaInbound).toEqual({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 7 })
+    expect(solo.rows[0]!.fbaInbound).toEqual({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 7, sent: 0 })
     expect(solo.fbaPlans).toEqual([{ id: 'plan-solo-444444', name: 'Nexus IT 2026-10-08 #444444', status: 'READY_TO_SHIP', units: 7 }])
     const none = await getMatrixRead({ productId: 'fi-none', canEditPrice: true })
     expect(none.rows[0]!.fbaInbound).toBeNull()
     expect(none.fbaPlans).toEqual([])
+  }))
+})
+
+describe('"Mark shipped" shows at once: `sent` (Owner 2026-10-07)', () => {
+  it('a SHIPPED plan with no Amazon row yet: its shipped units are `sent` (not null, though nothing inbound or planned)', () => scoped(async () => {
+    const read = await getMatrixRead({ productId: 'fi-sent', canEditPrice: true })
+    expect(read.rows[0]!.fbaInbound).toEqual({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 0, sent: 21 })
+  }))
+
+  it('a plan with one of two shipments marked (still READY_TO_SHIP): the marked units are `sent`, the rest planned', () => scoped(async () => {
+    const read = await getMatrixRead({ productId: 'fi-part', canEditPrice: true })
+    expect(read.rows[0]!.fbaInbound).toEqual({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 6, sent: 4 })
+  }))
+
+  it('an AT_AMAZON plan counts no `sent` (Amazon is receiving: its number only); nothing left → null', () => scoped(async () => {
+    const read = await getMatrixRead({ productId: 'fi-arrived', canEditPrice: true })
+    expect(read.rows[0]!.fbaInbound).toBeNull()
+    expect(read.fbaPlans).toEqual([{ id: 'plan-arrived-666666', name: 'Nexus IT 2026-10-08 #666666', status: 'AT_AMAZON', units: 9 }])
   }))
 })

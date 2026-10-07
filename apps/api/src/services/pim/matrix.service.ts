@@ -258,7 +258,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   const packOf = new Map(casePacks.map((p) => [p.productId, casePackOf(p)]))
   /* "Inbound +N" (Step 4). Amazon's side: a member's INBOUND rows (its seller SKUs) from ONE marketplace — the one read
      last — so a Pan-EU pool reported under two marketplaces is never counted twice. Nexus's side: units in open plans
-     not marked Shipped yet. A parent: its variations' sum (as `fba`). Nothing inbound and nothing planned → null. */
+     not marked Shipped yet, and units marked Shipped in plans Amazon is not receiving yet — READY_TO_SHIP (a plan with
+     several shipments, some marked) or SHIPPED — (`sent`). A parent: its variations' sum (as
+     `fba`). Nothing inbound, nothing planned and nothing sent → null. */
   const memberIdBySku = new Map(members.map((m) => [m.sku, m.id]))
   const inboundRowsOf = new Map<string, typeof fbaInboundRows>()
   for (const r of fbaInboundRows) {
@@ -286,8 +288,13 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   const openLines = fbaPlanLines.filter((l) => isFbaPlanOpen(l.plan.status))
   const plannedOf = new Map<string, number>()
   for (const l of openLines) plannedOf.set(l.productId, (plannedOf.get(l.productId) ?? 0) + Math.max(0, l.quantity - l.shippedQuantity))
+  /* "Sent" (Owner 2026-10-07): units Nexus marked Shipped in plans still SHIPPED — Amazon has not started receiving all
+     of them, so its next read may not count them yet. The cell shows the bigger of this and Amazon's `units`
+     (`fbaInboundShown`), never the sum. AT_AMAZON and later plans are Amazon's number only. */
+  const sentOf = new Map<string, number>()
+  for (const l of openLines) if (l.plan.status === 'SHIPPED' || l.plan.status === 'READY_TO_SHIP') sentOf.set(l.productId, (sentOf.get(l.productId) ?? 0) + Math.max(0, l.shippedQuantity))
   const fbaInboundOf = (ids: readonly string[]): MatrixFbaInbound | null => {
-    const out = { units: 0, working: 0, shipped: 0, receiving: 0, planned: 0 }
+    const out = { units: 0, working: 0, shipped: 0, receiving: 0, planned: 0, sent: 0 }
     let readAt: Date | null = null
     for (const id of ids) {
       const amazon = amazonInboundOf(id)
@@ -296,8 +303,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
         if (!readAt || amazon.readAt < readAt) readAt = amazon.readAt
       }
       out.planned += plannedOf.get(id) ?? 0
+      out.sent += sentOf.get(id) ?? 0
     }
-    return out.units === 0 && out.planned === 0 ? null : { ...out, readAt: readAt?.toISOString() ?? null }
+    return out.units === 0 && out.planned === 0 && out.sent === 0 ? null : { ...out, readAt: readAt?.toISOString() ?? null }
   }
   /* The family's open plans, newest first; `units` = this family's units in each. */
   const plansById = new Map<string, MatrixFbaPlan & { createdAt: Date }>()

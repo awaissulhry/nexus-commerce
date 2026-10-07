@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   FBA_CANCELLABLE_STATUSES, FBA_CLAIMABLE_STATUSES, FBA_CLOSED_STATUSES, FBA_JOB_STATUSES, FBA_PERSON_STATUSES,
   FBA_AMAZON_STATUSES, FBA_PLAN_STATUSES, FBA_PLAN_STEPS, FBA_SEND_COPY, FBA_STEP_STATUS, MIXED_BOX_DEFAULT, MIXED_BOX_FILL,
-  addressMissing, effectiveOwners, fbaAmazonPlanName, fbaPlanCan, isFbaPlanOpen, isFbaPlanStatus, lengthCm, lineUnits,
+  addressMissing, effectiveOwners, fbaAmazonPlanName, fbaInboundShown, fbaPlanCan, isFbaPlanOpen, isFbaPlanStatus, lengthCm, lineUnits,
   mixedBoxProblem, nextWorkingDay, planBoxes, sendProblems, sendSummary, unitWeightKg,
   type FbaBoxSku, type FbaSendDraft, type FbaSendSku, type FbaSendChoice,
 } from './fba-send.js'
@@ -355,6 +355,20 @@ describe('states, steps and what a person may do', () => {
     expect(isFbaPlanOpen('CLOSED')).toBe(false)
     expect(isFbaPlanOpen('LABELS_READY')).toBe(false)
     expect(isFbaPlanStatus('LABELS_READY')).toBe(false)
+  })
+
+  it('fbaInboundShown: the "+N" is the bigger of Amazon\'s inbound and Nexus\'s shipped units, never their sum', () => {
+    // Just marked shipped, Amazon has not read it yet: Nexus's count shows at once.
+    expect(fbaInboundShown({ units: 0, sent: 21 })).toBe(21)
+    // Amazon's read now includes the shipment: the same 21, never 42.
+    expect(fbaInboundShown({ units: 21, sent: 21 })).toBe(21)
+    // Amazon counts more (another shipment, or one from outside Nexus): Amazon's number.
+    expect(fbaInboundShown({ units: 30, sent: 5 })).toBe(30)
+    // An older server sends no `sent`; no row at all is 0.
+    expect(fbaInboundShown({ units: 7 })).toBe(7)
+    expect(fbaInboundShown({ units: 0 })).toBe(0)
+    expect(fbaInboundShown(null)).toBe(0)
+    expect(fbaInboundShown(undefined)).toBe(0)
   })
 
   it('fbaPlanCan: choose until the options expire, then get new ones; retry on FAILED; cancel until a shipment is shipped', () => {

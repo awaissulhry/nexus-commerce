@@ -27,6 +27,10 @@ const ROWS: Record<string, MatrixRowRead> = {
   inbound: row('inbound', { units: 92, locations: [{ code: 'AMAZON-EU-FBA', units: 92 }], updatedAt: null }, 'variant', inbound()),
   planned: row('planned', { units: 5, locations: [{ code: 'AMAZON-EU-FBA', units: 5 }], updatedAt: null }, 'variant', inbound({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 24 })),
   noFbaInbound: row('noFbaInbound', null, 'variant', inbound({ units: 6, working: 6, shipped: 0 })),
+  // "Mark shipped" (Owner 2026-10-07): Nexus's shipped units show at once; the "+N" is the bigger count, never the sum.
+  sentOnly: row('sentOnly', { units: 4, locations: [{ code: 'AMAZON-EU-FBA', units: 4 }], updatedAt: null }, 'variant', inbound({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, sent: 21 })),
+  sentCounted: row('sentCounted', { units: 4, locations: [{ code: 'AMAZON-EU-FBA', units: 4 }], updatedAt: null }, 'variant', inbound({ units: 21, working: 0, shipped: 21, receiving: 0, sent: 21 })),
+  amazonMore: row('amazonMore', { units: 4, locations: [{ code: 'AMAZON-EU-FBA', units: 4 }], updatedAt: null }, 'variant', inbound({ units: 30, working: 0, shipped: 30, receiving: 0, sent: 5 })),
 }
 const PLANS: MatrixFbaPlan[] = [{ id: 'cplan000000a1b2c3', name: 'Nexus IT 2026-10-08 #a1b2c3', status: 'WAITING_FOR_CHOICE', units: 24 }]
 
@@ -126,6 +130,32 @@ describe('Send to FBA (Step 4): the FBA qty cell shows Amazon\'s inbound "+N"', 
     expect(text(paint('noFbaInbound'))).toBe('— +6')
   })
 
+  it('"+N" right after "Mark shipped": the bigger of Amazon\'s inbound and Nexus\'s shipped units, never the sum', () => {
+    // Shipped by Nexus, Amazon has not read it yet: "+21" at once.
+    expect(fbaInboundText(ROWS.sentOnly)).toBe('+21')
+    expect(text(paint('sentOnly'))).toBe('4 +21')
+    // Amazon's read now includes the same 21: still "+21", never "+42".
+    expect(fbaInboundText(ROWS.sentCounted)).toBe('+21')
+    expect(text(paint('sentCounted'))).toBe('4 +21')
+    // Amazon counts more than Nexus sent: Amazon's number.
+    expect(fbaInboundText(ROWS.amazonMore)).toBe('+30')
+    // Planned only (not shipped): still no "+N", with or without a `sent` of 0.
+    expect(fbaInboundText({ fbaInbound: inbound({ units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 24, sent: 0 }) })).toBeNull()
+    expect(fbaInboundText(ROWS.planned)).toBeNull()
+    // The value stays the FBA number (sort, copy, export).
+    expect(call<number | null>(fbaDef().valueGetter, { data: { id: 'sentOnly' } })).toBe(4)
+  })
+
+  it('the tooltip adds one line when Nexus shipped more than Amazon counts, and only then', () => {
+    const sentLine = FBA_SEND_COPY.sentNotCounted(21)
+    expect(sentLine).toBe('21 shipped by Nexus — Amazon has not counted them yet')
+    expect(fbaTooltip(ROWS.sentOnly)).toBe(`4 units at Amazon (AMAZON-EU-FBA 4) · ${sentLine} · ${MATRIX_COPY.fbaLocked}`)
+    expect(fbaTooltip(ROWS.sentCounted)).not.toContain('shipped by Nexus')
+    expect(fbaTooltip(ROWS.sentCounted)).toContain('inbound 21 (working 0, shipped 21, receiving 0)')
+    expect(fbaTooltip(ROWS.amazonMore)).not.toContain('shipped by Nexus')
+    expect(fbaTooltip(ROWS.inbound)).not.toContain('shipped by Nexus')
+  })
+
   it('the tooltip: at Amazon · inbound with its breakdown · when Amazon read it · the units in open Nexus plans · locked', () => {
     const tip = fbaTooltip(ROWS.inbound, PLANS)
     expect(tip).toMatch(/^92 units at Amazon \(AMAZON-EU-FBA 92\) · inbound 24 \(working 12, shipped 12, receiving 0\) · read .+ · /)
@@ -147,13 +177,20 @@ describe('Send to FBA (Step 4): the FBA qty cell shows Amazon\'s inbound "+N"', 
         { id: 'b', fbaInbound: null },
         { id: 'c' },
         { id: 'd', fbaInbound: { units: 'many' } },
+        { id: 'e', fbaInbound: { units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 0, sent: 21 } },
+        { id: 'f', fbaInbound: { units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 2, sent: -3 } },
       ],
     }, 'root')
     if (!('read' in parsed)) throw new Error(parsed.problem)
     expect(parsed.read.fbaPlans).toEqual(PLANS)
     expect(parsed.read.rows.map((r) => r.fbaInbound)).toEqual([
       { units: 24, working: 12, shipped: 12, receiving: 0, readAt: '2026-10-07T08:15:00.000Z', planned: 3 }, null, undefined, undefined,
+      { units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 0, sent: 21 },
+      { units: 0, working: 0, shipped: 0, receiving: 0, readAt: null, planned: 2 },
     ])
+    // `sent` absent (an older server) or not a number ≥ 0 stays absent — no key at all.
+    expect('sent' in parsed.read.rows[0]!.fbaInbound!).toBe(false)
+    expect('sent' in parsed.read.rows[5]!.fbaInbound!).toBe(false)
     const older = parseMatrixRead({ coordinates: [], rows: [] }, 'root')
     expect('read' in older && 'fbaPlans' in older.read).toBe(false)
   })

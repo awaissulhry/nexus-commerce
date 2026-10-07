@@ -296,6 +296,12 @@ export interface MatrixFbaInbound {
   readAt: string | null
   /** Units in open Nexus plans (not CLOSED / CANCELLED) not marked Shipped yet: Σ (quantity − shippedQuantity). */
   planned: number
+  /**
+   * Units Nexus marked Shipped in plans Amazon is not receiving yet (status READY_TO_SHIP — some of several shipments
+   * marked — or SHIPPED): Σ shippedQuantity of their lines. The "+N" is the bigger of this and `units` (`fbaInboundShown`), so it shows right
+   * after "Mark shipped", before Amazon's next read. Absent = an older server that did not send it.
+   */
+  sent?: number
 }
 
 /** An open Send-to-FBA plan of this family (Step 4) — the toolbar's "FBA plans · N" and the FBA cell's tooltip. */

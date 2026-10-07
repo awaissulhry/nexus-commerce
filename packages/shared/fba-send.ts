@@ -81,6 +81,18 @@ export function isFbaPlanOpen(status: string): boolean {
   return isFbaPlanStatus(status) && !(FBA_CLOSED_STATUSES as readonly string[]).includes(status)
 }
 
+/**
+ * The Matrix FBA cell's "+N" (Owner 2026-10-07): the bigger of Amazon's inbound count (`units`) and the units Nexus
+ * marked Shipped in plans Amazon has not started receiving (`sent`, `MatrixFbaInbound.sent`); 0 when there is no row.
+ * The bigger, never the sum: once Amazon's read includes a shipment, its units are already in `units`, and adding
+ * `sent` would count them twice. So "+N" shows right after "Mark shipped" and never doubles when Amazon catches up.
+ * (The shape is `Pick<MatrixFbaInbound, 'units' | 'sent'>`, written out so this file needs no import of the contract.)
+ */
+export function fbaInboundShown(i: { units: number; sent?: number } | null | undefined): number {
+  if (!i) return 0
+  return Math.max(i.units, i.sent ?? 0)
+}
+
 /* ── limits and defaults ──────────────────────────────────────────────────────────────────────── */
 
 /** The most SKUs one plan takes (the Matrix's selection cap; Amazon allows more). */
@@ -594,6 +606,8 @@ export const FBA_SEND_COPY = {
   inboundDetail: (units: number, working: number, shipped: number, receiving: number) =>
     `inbound ${units} (working ${working}, shipped ${shipped}, receiving ${receiving})`,
   inPlan: (units: number, plan: string) => `${units} in Nexus plan ${plan}`,
+  /** The FBA cell's tooltip when Nexus's shipped units are more than Amazon's inbound count (`fbaInboundShown`). */
+  sentNotCounted: (units: number) => `${units} shipped by Nexus — Amazon has not counted them yet`,
   /** One Banner title per kind of problem. */
   problemTitle: {
     NOT_A_WAREHOUSE: 'From is not an active warehouse',

@@ -29,7 +29,7 @@ import {
   formatGridValue, LockGlyph, lockedColumn, matrixColumnDef, numericColumn, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams,
   type LockedCellParams, type MatrixColumnOptions,
 } from '@/design-system/grid'
-import { FBA_SEND_COPY } from '@nexus/shared/fba-send'
+import { FBA_SEND_COPY, fbaInboundShown } from '@nexus/shared/fba-send'
 
 import { when } from '../drawer/format'
 import { buildMasterColumns } from '../sheet/master/columns'
@@ -251,9 +251,13 @@ export function fbaUnitsOf(row: MatrixRowRead | null | undefined): number | null
   return row?.fba?.units ?? null
 }
 
-/** Send to FBA (Step 4): the muted "+24" after the FBA number — Amazon's own inbound units; null when none. */
+/**
+ * Send to FBA (Step 4): the muted "+24" after the FBA number — the bigger of Amazon's inbound units and the units Nexus
+ * marked Shipped that Amazon has not counted yet (`fbaInboundShown`: never their sum); null when none. Planned units
+ * (not shipped) never make a "+N".
+ */
 export function fbaInboundText(row: Pick<MatrixRowRead, 'fbaInbound'> | null | undefined): string | null {
-  const units = row?.fbaInbound?.units ?? 0
+  const units = fbaInboundShown(row?.fbaInbound)
   return units > 0 ? FBA_SEND_COPY.inbound(units) : null
 }
 
@@ -280,6 +284,7 @@ export function fbaTooltip(row: (Pick<MatrixRowRead, 'role' | 'fba'> & Partial<P
     lines.push(FBA_SEND_COPY.inboundDetail(inbound.units, inbound.working, inbound.shipped, inbound.receiving))
     if (inbound.readAt && Number.isFinite(Date.parse(inbound.readAt))) lines.push(`read ${when(inbound.readAt)}`)
   }
+  if (inbound && (inbound.sent ?? 0) > inbound.units) lines.push(FBA_SEND_COPY.sentNotCounted(inbound.sent!))
   if (inbound && inbound.planned > 0) lines.push(plans.length ? FBA_SEND_COPY.inPlan(inbound.planned, planTags(plans)) : `${inbound.planned} in open Nexus plans`)
   lines.push(MATRIX_COPY.fbaLocked)
   return lines.join(' · ')
