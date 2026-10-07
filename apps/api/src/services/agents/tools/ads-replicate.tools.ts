@@ -22,8 +22,11 @@
  * W4-10 — into another market: Claude translates (no Nexus AI spend). Every keyword and negative keyword the copy carries
  * needs a translation or an explicit keep (a brand term): the plan itself refuses one with neither, at the preview AND in
  * the run (`options.translations`, planned again when it runs), so a keyword the source gains after the approval is never
- * created in the source's language. The preview shows each term from → to. A translated keyword is gated again on its new
- * text in the target market (rule 3, per product). Refused, not queued: a market without Amazon limits Nexus has checked,
+ * created in the source's language. The preview shows each term from → to. Every keyword of the copy, translated or kept,
+ * brand terms too, is checked against what the product's own campaigns in the target market already buy (rule 3, per
+ * product: refused until skipped or accepted; another product's is listed, never blocked). A copy into another market
+ * NEVER runs by rule (lead decision B): a person always reads Claude's translations — `withinLimits` refuses it and
+ * `execute` refuses a rule's decision. Refused, not queued: a market without Amazon limits Nexus has checked,
  * without a production Amazon Ads connection with writes, without a spend ceiling; a product not ACTIVE there with an
  * ASIN; a name taken; category targets (Amazon's category ids are its own in each market). Money in the target market's
  * currency, stated, never converted (another currency needs fixed bids and budgets).
@@ -198,17 +201,28 @@ function translationRefusal(t: TranslationReport, market: string): string {
 /** W4-10 — the preview's words of a copy into another market: each term from → to, the keywords apart from the negatives. */
 function translationLines(t: TranslationReport, sourceMarket: string, market: string) {
   const side = (negative: boolean) => t.terms.filter((x) => x.negative === negative).map((x) => ({ from: x.from, to: x.to, ...(x.kept ? { kept: true } : {}) }))
-  const kept = t.terms.filter((x) => x.kept).length
+  const count = (negative: boolean) => {
+    const of = t.terms.filter((x) => x.negative === negative)
+    return { translated: of.filter((x) => !x.kept).length, kept: of.filter((x) => x.kept).length }
+  }
   return {
     from: sourceMarket,
     to: market,
-    translated: t.terms.length - kept,
-    kept,
+    counts: { keywords: count(false), negatives: count(true) },
     keywords: side(false),
     negatives: side(true),
     ...(t.merged.length ? { merged: t.merged } : {}),
-    note: `Every keyword and negative keyword as you translated it into ${market}'s language (kept: copied as it is, the product's name swapped in). A translated keyword is checked again on its new text against what the product's own campaigns in ${market} already buy.`,
+    note: `Every keyword and negative keyword as you translated it into ${market}'s language (kept: copied as you spelled it, the product's name swapped in where it is a word of its own). `
+      + `Every keyword of the copy, translated or kept, brand terms too, was checked against what the product's own campaigns in ${market} already buy. `
+      + 'A copy into another market never runs by rule: a person always reads these translations.',
   }
+}
+
+/** W4-10 — the counts in words: "3 keywords translated, 1 kept; 1 negative keyword translated". */
+function countWords(c: ReturnType<typeof translationLines>['counts']): string {
+  const side = (n: { translated: number; kept: number }, word: string) =>
+    `${plural(n.translated, word)} translated${n.kept ? `, ${n.kept} kept` : ''}`
+  return `${side(c.keywords, 'keyword')}; ${side(c.negatives, 'negative keyword')}`
 }
 
 /** A value policy as the run takes it: a scaled one in percent, a fixed bid in cents, a fixed budget in major units; or why not. */
@@ -264,10 +278,12 @@ async function replicatePreview(raw: Record<string, unknown>, ctx: Pick<ToolCont
   if (!crossMarket && translations.keywords.length + translations.negatives.length) {
     return refuse(`Not queued: translations are for a copy into another market; in ${a.market} the source's keywords are copied as they are (leave translations and negativeTranslations out).`)
   }
+  // A term is one term whatever its case and spacing ("Moto  Jacket" is "moto jacket"), as the planner matches it.
+  const termKey = (term: string) => term.trim().replace(/\s+/g, ' ').toLowerCase()
   for (const [name, list] of [['translations', translations.keywords], ['negativeTranslations', translations.negatives]] as const) {
     const said = new Map<string, number>()
-    for (const t of list) said.set(t.from.toLowerCase(), (said.get(t.from.toLowerCase()) ?? 0) + 1)
-    const twice = [...new Map(list.filter((t) => (said.get(t.from.toLowerCase()) ?? 0) > 1).map((t) => [t.from.toLowerCase(), t.from])).values()]
+    for (const t of list) said.set(termKey(t.from), (said.get(termKey(t.from)) ?? 0) + 1)
+    const twice = [...new Map(list.filter((t) => (said.get(termKey(t.from)) ?? 0) > 1).map((t) => [termKey(t.from), t.from])).values()]
     if (twice.length) return refuse(`Not queued: ${name} names ${quoted(twice)} more than once: give each term one translation.`)
   }
 
@@ -425,7 +441,7 @@ async function replicatePreview(raw: Record<string, unknown>, ctx: Pick<ToolCont
   const marked = crossMarket ? campaigns.filter((c) => saysSource.test(c.name)).map((c) => c.name) : []
   const asinTargets = crossMarket ? plan.campaigns.reduce((n, c) => n + c.adGroups.reduce((m, g) => m + g.targets.filter((x) => (x.kind ?? '').toUpperCase() === 'PRODUCT').length, 0), 0) : 0
   const effect = `Copies the structure of ${quoted(names)} (${a.sourceMarket}) onto ${a.productToken} in ${a.market} with Replicate Structure's own run`
-    + `${words ? `, every keyword and negative keyword in ${a.market}'s language as you translated it (${words.translated} translated, ${words.kept} kept)` : ''}: `
+    + `${words ? `, every keyword and negative keyword in ${a.market}'s language as you translated it (${countWords(words.counts)})` : ''}: `
     + `${plural(t.campaigns, 'Sponsored Products campaign')}, ${plural(t.adGroups, 'ad group')}, ${plural(t.positives, 'keyword or target')} and ${plural(t.negatives, 'negative')}, `
     + `advertising ${plural(asins.length, 'ASIN')}, ${amountLabel(dailyBudgetCents, currency)} of daily budget in all. `
     + `Each is born ENABLED with every bid at the ${floor}-cent floor (the planned bids remembered; suppressed by the person who asked, never paused), off the live-write allowlist`
@@ -500,12 +516,21 @@ const REPLICATE_LIMITS = adKitLimits({ maxItems: 1 }, {
   markets: z.array(z.string().trim().toUpperCase().min(2).max(20)).max(20).default([]).describe('the markets a copy may be created in by rule (empty = every market)'),
 })
 
+/** W4-10 — a copy into another market than its source's (its preview carries the translations); false for any other preview. */
+function crossMarketCopy(preview: unknown): boolean {
+  const p = (preview ?? {}) as { source?: { market?: unknown }; market?: unknown; translation?: unknown }
+  return !!p.translation || (typeof p.source?.market === 'string' && typeof p.market === 'string' && p.source.market !== p.market)
+}
+
 /** replicate-ad-structure's own checks around the kit's (C1–C7, the month). Pure. */
 function replicateRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
   const p = (preview ?? {}) as {
     action?: string; market?: string; currency?: string; newMarket?: boolean; campaigns?: unknown[]; dailyBudgetCents?: number; highestPlannedBidCents?: number; acceptedTerms?: string[]
+    source?: { market?: string }
   }
   if (p.action !== TOOL) return 'there is no preview of this copy to check; a person decides'
+  // W4-10, lead decision B — a copy into another market carries Claude's translations: a person always reads them.
+  if (crossMarketCopy(preview)) return `it copies into another market (${p.source?.market ?? '?'} → ${p.market ?? '?'}) with Claude's translations: a person always reads them, so it never runs by rule`
   const markets = (limits.markets as string[] | undefined) ?? []
   if (p.market && markets.length && !markets.includes(p.market)) return `this business lets a copy run by rule only in ${markets.join(', ')}`
   // Rule 3 — a clash with the product's own campaigns, accepted on the record, is a person's decision.
@@ -578,7 +603,8 @@ const replicateAdStructure: AgentTool = {
     + 'same product into another market too: productToken as sourceProductToken), with '
     + "Nexus's Replicate Structure builder: its own plan and run, the same campaigns, ad groups, keywords, targets, auto "
     + 'groups and negatives (naming, copy, bidPolicy and budgetPolicy shape them). A person approves it in Nexus, unless the '
-    + 'business lets it run by its rule inside its limits and the ads strategy (by default it does not: maxCampaigns 0). '
+    + 'business lets it run by its rule inside its limits and the ads strategy (by default it does not: maxCampaigns 0; '
+    + 'into another market it never does). '
     + 'It is born safe: every campaign ENABLED with every bid at the 2-cent floor (the planned bids remembered; suppressed '
     + 'by the person who asked, never paused), off the live-write allowlist, without its placements and with no rules, so '
     + 'it spends next to nothing until set-campaign-live-writes and restore-campaign are approved for it, each a kind of '
@@ -586,7 +612,9 @@ const replicateAdStructure: AgentTool = {
     + 'campaigns are kept apart: a keyword it already buys is refused until it is named in skipTerms or acceptTerms; one '
     + 'another product buys is listed, never blocked. Into another market you translate: every keyword (translations) and '
     + 'negative keyword (negativeTranslations) needs { from, to } or { from, keep: true } for a brand term; the preview '
-    + 'shows each term from → to, and a translated keyword is checked again on its new text in that market. Refused, and '
+    + 'shows each term from → to; every keyword of the copy, translated or kept, is checked against what the product\'s '
+    + 'own campaigns in that market already buy; and a copy into another market never runs by rule (a person always reads '
+    + 'the translations). Refused, and '
     + 'not queued, when a source campaign or SKU is not found, the market has no Amazon limits Nexus has checked or no '
     + 'production Amazon Ads connection with writes, a product is not listed on Amazon there with an ASIN (ACTIVE, for '
     + 'another market), the market has no spend ceiling or the budgets are above it, a term has no translation, a copy into '
@@ -602,6 +630,10 @@ const replicateAdStructure: AgentTool = {
     if (!fresh.result.ok || !fresh.request) return notRun(`Not run: ${fresh.result.error ?? 'it is no longer a valid copy'}`)
     const refusal = recheck(ctx, fresh.result, ['basis', 'ceiling', 'reach'])
     if (refusal) return notRun(refusal)
+    // W4-10, lead decision B — whatever the limits say: a rule never decides a copy into another market.
+    if (ctx.decidedVia === 'auto' && crossMarketCopy(fresh.result.preview)) {
+      return notRun("Not run: a copy into another market carries Claude's translations, and a person always reads them: it never runs by rule. Ask for it again; a person approves it.")
+    }
     const preview = fresh.result.preview as { reach: StoredReach; effect: string; market: string; productToken: string }
     const run = approvedRun(ctx, String(args.why ?? '') || preview.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)

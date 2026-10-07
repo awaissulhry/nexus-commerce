@@ -21,7 +21,7 @@
  * Pure: no I/O, no Prisma. Unit-tested.
  */
 
-import { PRODUCT_TOKEN, parameterise, type AutoClause, type BlueprintDoc } from './ads-blueprint.js'
+import { PRODUCT_TOKEN, type AutoClause, type BlueprintDoc } from './ads-blueprint.js'
 
 /** A product to replicate the structure onto. */
 export interface ApplyTarget {
@@ -218,14 +218,14 @@ export interface TranslationRules {
 /**
  * W4-10 — what the translations did. Every keyword and negative keyword the copy carries must be translated or kept:
  * one with neither is `missing` and blocks; a translation that names no term of the source is `unused` and blocks (a
- * typo would otherwise be ignored and its term copied in the source's language). Two terms of one ad group that became
- * the same keyword are created once (`merged`, a warning).
+ * typo would otherwise be ignored and its term copied in the source's language). A term of an ad group that became the
+ * same keyword as an earlier one there is created once, at the earlier one's bid (`merged`: `keptFrom` is that one).
  */
 export interface TranslationReport {
   terms: Array<{ from: string; to: string; negative: boolean; kept: boolean }>
   missing: Array<{ term: string; negative: boolean }>
   unused: Array<{ term: string; negative: boolean }>
-  merged: Array<{ from: string; to: string; negative: boolean }>
+  merged: Array<{ from: string; to: string; negative: boolean; keptFrom: string }>
 }
 
 /**
@@ -373,12 +373,27 @@ export function materialise(pattern: string, productToken: string): string {
   return pattern.split(PRODUCT_TOKEN).join(productToken)
 }
 
+/** W4-10 — a term's spacing as Amazon keeps it: trimmed, one space between words. */
+const spaced = (s: string): string => s.trim().replace(/\s+/g, ' ')
+/** W4-10 — a term's key for matching: its spacing and case aside ("Moto  Jacket" is "moto jacket"). */
+const termKey = (s: string): string => spaced(s).toLowerCase()
+
+/**
+ * W4-10 — the product's name swapped in a term Claude wrote: the source product's name only as a WORD of its own, in any
+ * case (letters and digits of any script bound it), so a name inside another word ("aria" in "variante") is left alone.
+ */
+export function swapProductWord(text: string, from: string, to: string): string {
+  if (!from.trim()) return text
+  const word = from.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(new RegExp(`(^|[^\\p{L}\\p{N}])${word}(?=[^\\p{L}\\p{N}]|$)`, 'giu'), (_m, before: string) => `${before}${to}`)
+}
+
 /**
  * W4-10 — the translations as the build reads them: each keyword and negative keyword looked up by its text in the
  * source (case and spacing aside), and the report of what was translated, kept, missing, unused or merged.
  */
 function translatorOf(rules: TranslationRules, sourceToken: string) {
-  const byText = (list: TermTranslation[]) => new Map(list.map((t) => [norm(t.from), t] as const))
+  const byText = (list: TermTranslation[]) => new Map(list.map((t) => [termKey(t.from), t] as const))
   const lists = { keywords: byText(rules.keywords), negatives: byText(rules.negatives) }
   const used = { keywords: new Set<string>(), negatives: new Set<string>() }
   const side = (negative: boolean): 'negatives' | 'keywords' => (negative ? 'negatives' : 'keywords')
@@ -390,26 +405,32 @@ function translatorOf(rules: TranslationRules, sourceToken: string) {
     /** The term as the source holds it, and the translation given for it (null: none). */
     lookup(pattern: string, negative: boolean) {
       const source = materialise(pattern, sourceToken)
-      const entry = lists[side(negative)].get(norm(source)) ?? null
-      if (entry) used[side(negative)].add(norm(source))
+      const entry = lists[side(negative)].get(termKey(source)) ?? null
+      if (entry) used[side(negative)].add(termKey(source))
       return { source, entry }
     },
     /** A term the copy carries: what it became, or that it has neither a translation nor a keep. */
     record(id: string, said: { source: string; entry: TermTranslation | null }, expression: string, negative: boolean) {
-      const key = `${side(negative)}|${norm(said.source)}`
-      sourceOf.set(id, said.source)
+      const key = `${side(negative)}|${termKey(said.source)}`
+      // Claude's own spelling of the source term where it gave one (the source's case; the doc keeps only a pattern).
+      const from = said.entry ? spaced(said.entry.from) : said.source
+      sourceOf.set(id, from)
       if (!said.entry) missing.set(key, { term: said.source, negative })
-      else if (!terms.has(key)) terms.set(key, { from: said.source, to: expression, negative, kept: said.entry.keep === true })
+      else if (!terms.has(key)) terms.set(key, { from, to: expression, negative, kept: said.entry.keep === true })
     },
-    /** One keyword per text, match type and side in an ad group: a term that became the same as an earlier one is dropped. */
+    /**
+     * One keyword per text, match type and side in an ad group: a term that became the same as an earlier one is dropped,
+     * and the earlier one (its bid) is created.
+     */
     once(targets: PlannedTarget[]): PlannedTarget[] {
-      const seen = new Set<string>()
+      const first = new Map<string, PlannedTarget>()
       return targets.filter((x) => {
         if ((x.kind ?? '').toUpperCase() !== 'KEYWORD') return true
         const match = x.isNegative ? negativeMatchOf(x.expressionType) : (x.expressionType ?? '').toUpperCase().replace(/^_/, '')
-        const key = `${x.isNegative}|${match}|${norm(x.expression)}`
-        if (!seen.has(key)) { seen.add(key); return true }
-        merged.push({ from: sourceOf.get(x.id) ?? x.expression, to: x.expression, negative: x.isNegative })
+        const key = `${x.isNegative}|${match}|${termKey(x.expression)}`
+        const earlier = first.get(key)
+        if (!earlier) { first.set(key, x); return true }
+        merged.push({ from: sourceOf.get(x.id) ?? x.expression, to: x.expression, negative: x.isNegative, keptFrom: sourceOf.get(earlier.id) ?? earlier.expression })
         return false
       })
     },
@@ -447,6 +468,7 @@ export function buildPlanCampaigns(
   const excluded = { keywords: 0, negatives: 0, productTargets: 0, autoClauses: 0 }
   // W4-10 — a copy into another market's language: every keyword and negative keyword by its text in the source.
   const tr = opts.translations ? translatorOf(opts.translations, doc.productToken) : null
+  const skipKeys = new Set((opts.skipSharedTargets ?? []).map(termKey))
 
   const campaigns: PlannedCampaign[] = doc.campaigns.map((c, ci) => {
     const dailyBudget = scope.budgets
@@ -469,9 +491,10 @@ export function buildPlanCampaigns(
         } else if (!scope.keywords) { excluded.keywords++; return }
 
         const copied = materialise(t.expression, target.productToken)
-        // W4-10 — a translation is the source term in the market's language, the product swapped in as for a copied term.
-        const to = said?.entry?.keep ? undefined : said?.entry?.to?.trim()
-        const expression = to ? materialise(parameterise(to, doc.productToken), target.productToken) : copied
+        // W4-10 — a translation (or the term kept, as Claude spelled it), spaced as Amazon keeps it, the source product's
+        // name swapped for the target's only where it is a word of its own.
+        const own = said?.entry ? (said.entry.keep ? said.entry.from : said.entry.to ?? said.entry.from) : null
+        const expression = own != null ? materialise(swapProductWord(spaced(own), doc.productToken, target.productToken), target.productToken) : copied
         const edited = norm(expression) !== norm(copied)
         // A target's own bid follows the bid policy; with bids off it falls back
         // to the ad group default rather than to zero.
@@ -480,11 +503,11 @@ export function buildPlanCampaigns(
         // Only POSITIVE shared targets are gated. A negative is not a bid and
         // cannot compete; skipping one would silently widen the new campaign.
         const gated = !t.isNegative && shared.has(norm(t.expression))
-        if (gated && !edited && (skip.has(norm(t.expression)) || skip.has(norm(expression)))) return // operator removed it
-        // W4-10 — a translated keyword is gated again on its new text (`edited`, evaluatePlan): skipping it by either text
-        // is the same choice.
-        if (edited && !t.isNegative && !hasProductToken(expression, target.productToken)
-          && (skip.has(norm(expression)) || skip.has(norm(said!.source)))) return
+        if (said && !t.isNegative) {
+          // W4-10 — in a translated copy every keyword is gated in the target market (evaluatePlan): skipping one by its
+          // new text or its source text is the same choice.
+          if (skipKeys.has(termKey(expression)) || skipKeys.has(termKey(said.source))) return
+        } else if (gated && (skip.has(norm(t.expression)) || skip.has(norm(expression)))) return // operator removed it
         const id = `c${ci}.g${gi}.t${ti}`
         if (said) tr!.record(id, said, expression, t.isNegative)
 
@@ -735,8 +758,11 @@ export function evaluatePlan(
         // TARGET product: its own brand term is safe, anything else is treated as
         // shared and gated like a copied one. Without this, "add a keyword" — or
         // "rename this one" — would be a hole straight through the gate.
-        const gated = (t.added || t.edited)
-          ? !hasProductToken(t.expression, target.productToken) && (t.kind ?? 'KEYWORD').toUpperCase() === 'KEYWORD'
+        // W4-10 — a copy into another market's language gates EVERY keyword, translated or kept, its brand terms too: the
+        // product may already run in that market, and its own campaigns there may already buy the very same term.
+        const keyword = (t.kind ?? 'KEYWORD').toUpperCase() === 'KEYWORD'
+        const gated = translation ? keyword
+          : (t.added || t.edited) ? !hasProductToken(t.expression, target.productToken) && keyword
           : (t.gated ?? false)
         if (!gated) continue
         const key = norm(t.expression)
@@ -802,7 +828,8 @@ export function evaluatePlan(
     }
     if (translation.merged.length) {
       const m = translation.merged
-      warnings.push(`${m.length} translated term(s) became the same keyword as another in their ad group and are created once (${m.slice(0, 3).map((x) => `"${x.from}" → "${x.to}"`).join(', ')}${m.length > 3 ? ', …' : ''}).`)
+      warnings.push(`${m.length} term(s) became the same keyword as an earlier one of their ad group, which is created once: `
+        + `${m.slice(0, 3).map((x) => `"${x.from}" became "${x.to}", as "${x.keptFrom}" did: created once, at the bid of "${x.keptFrom}"`).join('; ')}${m.length > 3 ? '; …' : ''}.`)
     }
   }
 
