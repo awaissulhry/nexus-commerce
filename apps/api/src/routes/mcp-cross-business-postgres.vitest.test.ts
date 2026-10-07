@@ -118,6 +118,8 @@ interface Seeded {
   outboundQueueId: string
   /** PB-5a — a playbook build of the business's campaign (what archive-ads buildRunId and ads-playbook view build name). */
   buildRunId: string
+  /** W4-3 — the business's portfolio, which holds its campaign (ad-portfolios, set-portfolio and set-campaign-settings name it). */
+  portfolioId: string
   /** Every value that names one of the business's rows. None may reach the other business. */
   keys: string[]
   /** The AgentRun and AgentApproval rows written before the suite. */
@@ -213,6 +215,8 @@ interface Seeded {
   sourcePresetId: string
   /** W4-1 — a daily Claude ads run that started and has not reported its end (report-ads-run finishes it). */
   adsRunId: string
+  /** Ads autonomy W4-1 — an hourly bid plan holding the campaign (ad-hourly-plans reads it, set-hourly-bid-plan changes it). */
+  hourlyPlanId: string
 }
 const seeded = {} as Record<'a' | 'b', Seeded>
 /** Phase 3 T3 — the eBay category id each business has loaded (its details name the business's canary). */
@@ -393,8 +397,12 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     })
     const alertEvent = await db.alertEvent.create({ data: { ruleId: rule.id, value: 250 } })
     // A2 — the campaign sells in the business's own (traceable) market, so a market filter aims at it too.
+    // W4-3 — a portfolio of the business holds the campaign (its market is the campaign's: no Ads connection names its profile).
+    const portfolio = await db.amazonAdsPortfolio.create({
+      data: { profileId: `${mark}-PROFILE-${RUN}`, externalPortfolioId: `${mark}-PF-${RUN}`, name: `${canary}-PORTFOLIO`, state: 'ENABLED' },
+    })
     const campaign = await db.campaign.create({
-      data: { name: `${canary}-CAMPAIGN`, type: 'SP', dailyBudget: '10.00', startDate: new Date(), marketplace: market, externalCampaignId: `${mark}-CMP-${RUN}` },
+      data: { name: `${canary}-CAMPAIGN`, type: 'SP', dailyBudget: '10.00', startDate: new Date(), marketplace: market, externalCampaignId: `${mark}-CMP-${RUN}`, portfolioId: portfolio.externalPortfolioId },
     })
     const adGroup = await db.adGroup.create({
       data: { campaignId: campaign.id, name: `${canary}-ADGROUP`, externalAdGroupId: `${mark}-AG-${RUN}` },
@@ -402,6 +410,10 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     const target = await db.adTarget.create({
       data: { adGroupId: adGroup.id, kind: 'KEYWORD', expressionType: 'BROAD', expressionValue: `${canary}-TARGET`, isNegative: false, bidCents: 40 },
     })
+    // Ads autonomy W4-1 — an hourly bid plan over the campaign, switched off, its member schedule bound to it.
+    await db.rankTarget.create({ data: { key: `${mark.toLowerCase()}-top-${RUN}`, name: `${canary}-RANK-TARGET`, biasPct: 30 } })
+    const hourlyPlan = await db.rankScheduleGroup.create({ data: { name: `${canary}-HOURLY-PLAN`, marketplace: market, windows: [], defaultTargetKey: `${mark.toLowerCase()}-top-${RUN}`, enabled: false } })
+    await db.adSchedule.create({ data: { campaignId: campaign.id, name: `${canary}-HOURLY-MEMBER`, windows: [], defaultTargetKey: `${mark.toLowerCase()}-top-${RUN}`, enabled: false, groupId: hourlyPlan.id } })
     // R6–R8 — an ads rule: what the automation tools (list, detail, activity, preview) read and name.
     const automationRule = await db.automationRule.create({
       data: { domain: 'advertising', name: `${canary}-AUTOMATION-RULE`, trigger: 'SCHEDULE', enabled: true, autonomyLevel: 'OBSERVE', actions: [{ type: 'log_only' }] },
@@ -670,6 +682,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       changeSetId,
       outboundQueueId: queuedWrite.id,
       buildRunId: buildRun.id,
+      portfolioId: portfolio.externalPortfolioId,
       keys: [
         sku, market, product.id, order.id, order.channelOrderId, listing.id, listing.externalListingId!, first.id, spare.id,
         run.id, rule.id, campaign.id, campaign.externalCampaignId!, adGroup.id, adGroup.externalAdGroupId!, target.id,
@@ -691,6 +704,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         sourcePreset.id,
         adsRun.id,
         queuedWrite.id, buildRun.id,
+        portfolio.id, portfolio.externalPortfolioId,
       ],
       agentRows: [run.id, first.id, spare.id, adsRun.id],
       changeId: change.id,
@@ -747,6 +761,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       photoId: photo.id,
       sourcePresetId: sourcePreset.id,
       adsRunId: adsRun.id,
+      hourlyPlanId: hourlyPlan.id,
     }
   })
 }
@@ -895,6 +910,8 @@ const B_VALUES: Record<string, () => unknown> = {
   sourceExternalAdGroupId: () => seeded.b.externalAdGroupId,
   // PB-5a — archive-ads names a playbook build's campaigns by its run; ads-playbook view build reads one run.
   buildRunId: () => seeded.b.buildRunId,
+  // W4-3 — ad-portfolios, set-portfolio and set-campaign-settings name a portfolio by Amazon's id.
+  portfolioId: () => seeded.b.portfolioId,
   applicationId: () => seeded.b.buildRunId,
   // A10 — undo-ad-change names a recorded ad write, or its change set.
   actionLogId: () => seeded.b.actionLogId,
@@ -1064,8 +1081,17 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'build-sp-wizard-campaigns': { structure: 'standard', keywords: { category: ['probe jacket'] }, dailyBudgetCents: 1500, defaultBidCents: 50, portfolioId: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
+  // W4-3 — a rename of B's portfolio (its market is its own: the loop's market is left out).
+  'set-portfolio': { op: 'update', name: 'MCP8 probe portfolio', market: undefined },
   // B-1 — a copy reads its source campaign in the market it runs in (B's own); no portfolio (the loop would name an id).
   'replicate-ad-structure': { get sourceMarket() { return seeded.b.market }, portfolioId: undefined },
+  // Ads autonomy W4-1 — ONE hourly plan, by its id (`planId` is the FBA plan's for the loop): B's plan, read and renamed.
+  'ad-hourly-plans': { get planId() { return seeded.b.hourlyPlanId }, campaignId: undefined, market: undefined },
+  'set-hourly-bid-plan': {
+    op: 'rename', get planId() { return seeded.b.hourlyPlanId }, name: 'MCP8 probe plan', market: undefined, campaignIds: undefined, add: undefined,
+    remove: undefined, move: undefined, windows: undefined, days: undefined, defaultTargetKey: undefined, timezone: undefined, on: undefined, values: undefined,
+    portfolioId: undefined,
+  },
   // W4-6 — a new ad group targets keywords (or ASINs) with a planned default bid; an ad group change names its new
   // default bid (the loop names only the ad group).
   'create-ad-group': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], defaultBidCents: 50 },

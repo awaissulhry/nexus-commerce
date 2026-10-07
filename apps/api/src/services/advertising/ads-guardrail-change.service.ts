@@ -336,7 +336,7 @@ function campaignEffect(kind: CampaignGuardrailKind, label: string, next: Record
         + 'The write gate refuses a daily budget outside the bounds; relative budget rules and a restore to baseline start from the baseline. The ads strategy\'s monthly cap and the spend ceilings bind beside them.' + tail
     case 'bid-change-cap': {
       const side = inForce?.maxBidChangePct
-      return `Largest bid change of ${label}: ${v('maxBidChangePct', (x) => `${x} %`)}. A keyword or target bid an engine, a rule or Claude's bid tools move is stepped to it (never a person's own edit); an ad group's default bid is not stepped. `
+      return `Largest bid change of ${label}: ${v('maxBidChangePct', (x) => `${x} %`)}. A keyword or target bid an engine, a rule or a Claude bid request run by rule moves is stepped to it (never a person's own edit; a Claude bid request a person approves is warned on the card and sent as asked); an ad group's default bid is not stepped. `
         + `The ads strategy's largest change binds beside it, the lower one winning: after this change ${side?.value == null ? 'no largest change applies' : `${side.value} % (${side.from})`}.${tail}`
     }
     case 'cpc-ceiling':

@@ -231,6 +231,12 @@ const AD_CHANGE_TOOLS = new Set([
   'create-ai-goal-campaigns',
   // B-3 — a one-off SP Super Wizard set: its creates run detached too; approval-status reads its run the same way.
   'build-sp-wizard-campaigns',
+  // W4-3 — campaign settings: one queued write per campaign. A portfolio change: the Portfolios page's direct push, one
+  // audit row per write (a new portfolio is counted as created, and as at Amazon when Amazon gave it an id).
+  'set-campaign-settings', 'set-portfolio',
+  // W4-1 — an hourly plan change is Nexus only, but a switch-off, a delete or a removal gives back floored bids: each
+  // give-back write carries the approval.
+  'set-hourly-bid-plan',
   // W4-6 — a new ad group and product ads (created at once, not queued: approval-status counts them and how much of them
   // Amazon holds); an ad group's default bid or name (queued), or its bids stopped or given back (sent at once).
   'create-ad-group', 'add-product-ads', 'set-ad-group',
@@ -326,6 +332,12 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
       atAmazon += reach === 'live' ? counts.withAmazonId : 0
     }
     if (ids.length) out.created = { total, atAmazon }
+    return out
+  }
+  if (toolName === 'set-portfolio') {
+    // W4-3 — a new portfolio: made once, at Amazon when it holds Amazon's id (not a Nexus-only `local-pf-…` one).
+    const made = after as { op?: unknown; portfolioId?: unknown; atAmazon?: unknown } | null
+    if (made?.op === 'create' && typeof made.portfolioId === 'string') out.created = { total: 1, atAmazon: reach === 'live' && made.atAmazon === true ? 1 : 0 }
     return out
   }
   if (toolName === 'create-ad-campaign') {
