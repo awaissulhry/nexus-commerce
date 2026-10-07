@@ -138,6 +138,11 @@ export interface BulkResult {
   tone: 'success' | 'warning' | 'danger'
   /** Puts the change back; resolves with the receipt sentence. Null when it cannot be called back. */
   undo: (() => Promise<string>) | null
+  /**
+   * The preview's lines as the server ANSWERED them: a line refused at Apply is skipped, with the server's reason.
+   * Absent = the runner could not tell the lines apart (then the table keeps the preview's words).
+   */
+  lines?: readonly BulkLine[]
 }
 
 /** What a dialog opens on. Every member is optional: the dialog defaults the rest (the first offered field and mode). */

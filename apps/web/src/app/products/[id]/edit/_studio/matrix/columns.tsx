@@ -24,7 +24,7 @@ import type { MutableRefObject } from 'react'
 import type { MenuItemDef } from '@/design-system/components'
 import { Pill, Tag } from '@/design-system/primitives'
 import { poolSourceSentence } from '@/app/_shared/stock-pool/PoolSourceTag'
-import { lockedColumn, matrixColumnDef, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
+import { lockedColumn, matrixColumnDef, numericColumn, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
 
 import { when } from '../drawer/format'
 import { buildMasterColumns } from '../sheet/master/columns'
@@ -312,7 +312,8 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     headerTooltip: 'The routed WAREHOUSE pool this SKU follows — the number Follow rows derive from. "Shared": the stock another business lends. Parent = the family total.',
     width: 112, minWidth: 96,
     editable: false, suppressMovable: true, suppressHeaderMenuButton: true, sortable: true, resizable: true,
-    cellClass: 'nds-ag-cell',
+    /* A number column: right-aligned with tabular figures, as FBA qty and every market's Qty and Price beside it. */
+    type: numericColumn.type, cellClass: numericColumn.cellClass, headerClass: numericColumn.headerClass,
     valueGetter: (p) => (p.data ? stockOf(rowOf(p.data.id))?.available ?? null : null),
     cellRenderer: StockCell,
     cellRendererParams: { rowOf },

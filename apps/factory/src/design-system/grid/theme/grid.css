@@ -1684,6 +1684,10 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
   font-size: var(--nds-font-size-sm);
   overflow: hidden;
   text-overflow: ellipsis;
+  /* The id is what the operator reads: it keeps its width and the note gives way (measured 2026-10-07: a
+     "not buyable" note squeezed an ASIN to 4px). */
+  flex-shrink: 0;
+  max-width: 100%;
 }
 /* The right-hand slot belongs to whichever of the two is last: a variant row carries the mono id
    alone and it sits right; a parent row carries the id AND a note, and then the id leads while
@@ -1693,7 +1697,11 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
   margin-left: auto;
 }
 .nds-projcell-note {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--nds-font-size-xs);
   color: var(--nds-text-muted);
 }
@@ -1888,7 +1896,8 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
    `inherited` (the value is somebody else's) — a paused cell is the operator's own, merely held. */
 .nds-ag-wrap .ag-cell.nds-cell-is-paused { background: var(--nds-surface-sunken); color: var(--nds-text-2); }
 /* The trailing marks: 🔗 ✎ ƒ are `.nds-cell-prov` (their own colours); ⚠ ⇄ ⏸ are the Matrix's three. */
-/* 2px gaps and a 3px lead: measured at the contract's 96px, `FBM ✎ ⚠ ⇄ ⌄` needs every one of them. */
+/* 2px gaps and a 3px lead. `FBM ✎ ⚠ ⇄ ⌄` is 107px with the cell's padding: the contract's Fulfilment width is 112
+   (measured 2026-10-07 — at 96 the method itself was cut to `F…` on every row with both marks). */
 .nds-matrix-marks { display: inline-flex; align-items: center; gap: 2px; margin-left: 3px; flex: none; }
 .nds-matrix-marks .nds-cell-prov { margin-right: 0; }
 .nds-matrix-warn { color: var(--nds-warning-text); font-weight: var(--nds-font-weight-bold); line-height: 1; }

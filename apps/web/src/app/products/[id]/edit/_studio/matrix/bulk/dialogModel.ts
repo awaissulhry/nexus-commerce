@@ -313,13 +313,14 @@ export function filterLines(lines: readonly BulkLine[], filter: LineFilter): Bul
  * The table's filter: `All · 12` / `Changes · 10` / `Skipped · 2`. Only when it can narrow the table — with no skipped
  * line (or no change) every segment would show the same rows, so there is no filter at all.
  */
-export function lineFilterOptions(lines: readonly BulkLine[]): Array<{ value: LineFilter; label: string }> {
+export function lineFilterOptions(lines: readonly BulkLine[], done = false): Array<{ value: LineFilter; label: string }> {
   const skipped = lines.filter((l) => l.skipped !== null).length
   const changes = lines.length - skipped
   if (changes === 0 || skipped === 0) return []
   return [
     { value: 'all', label: `All · ${num(lines.length)}` },
-    { value: 'changes', label: `Changes · ${num(changes)}` },
+    // Once applied, the changed lines are what was saved.
+    { value: 'changes', label: `${done ? 'Saved' : 'Changes'} · ${num(changes)}` },
     { value: 'skipped', label: `Skipped · ${num(skipped)}` },
   ]
 }

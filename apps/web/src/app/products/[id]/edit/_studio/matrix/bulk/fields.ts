@@ -19,9 +19,10 @@ export const BULK_PARENT_ONLY = 'The parent row has no listing of its own — ti
 export const BULK_NOT_ON_MARKET = 'Not on this market'
 export const BULK_SAME = (now: string) => `Already ${now}`
 /** Said on a fulfilment change (the server's own sentence, `FULFILMENT_NOT_SENT`). */
-export const BULK_FULFILMENT_NOTICE = 'Nothing is sent to Amazon by this change: convert the offer in Seller Central too. It changes what Nexus sends Amazon from now on.'
+export const BULK_FULFILMENT_NOTICE = 'Saved in Nexus only: Amazon is not asked to switch the offer. Convert it in Seller Central too. From now on Nexus treats these listings as the new method.'
 export const BULK_HOLD_NOTICE = 'Holding the stock sync also holds price and sale changes on these listings: they are kept in Nexus and sent when the stock sync is released.'
 export const BULK_BASE_PRICE_NOTICE = 'Markets that follow the base price get the new price too. Nexus sends it about 30 seconds after saving.'
+export const BULK_STATUS_NEW_ROW = 'Not on this market yet. Choose its Status in the grid to create the listing'
 export const BULK_STATUS_NOTICE = 'Nothing is sent now. Publish sends each new status to its market.'
 export const BULK_SALE_NOTICE = 'Amazon runs a sale between its two dates. Nexus sends it about 30 seconds after saving.'
 
@@ -118,7 +119,8 @@ const servesField = (field: BulkFieldId, c: MatrixCoordinate): boolean => {
 }
 /** Does this row have something to change for the field on this market? */
 function rowOn(ctx: BulkContext, field: BulkFieldId, rowId: string, c: MatrixCoordinate): boolean {
-  if (field === 'listingStatus') return !!ctx.statusCellOf(rowId, c)
+  // Status changes a listing that is ON the market; a row not on it yet is created from its own Status cell, on purpose.
+  if (field === 'listingStatus') { const cell = ctx.statusCellOf(rowId, c); return !!cell && !cell.create }
   const cells = ctx.cellsOf(rowId, c.key)
   if (!cells) return false
   if (field === 'price') return !!cells.price
@@ -156,11 +158,19 @@ export function bulkMarkets(ctx: BulkContext, field: BulkFieldId): BulkMarketOpt
   }))
 }
 
-/** The focused market when it serves the field, else every market the rows are on. */
+/**
+ * The focused market when it serves the field, else every market the rows are on — for Fulfilment, every AMAZON market:
+ * FBA / FBM is Amazon's choice, and an eBay market (FBM / MCF) is ticked only on purpose.
+ */
 export function bulkDefaultMarkets(ctx: BulkContext, field: BulkFieldId): CoordinateKey[] {
   const open = bulkMarkets(ctx, field).filter((m) => !m.held)
   const focused = ctx.focusedKey ? open.find((m) => m.key === ctx.focusedKey) : undefined
-  return focused ? [focused.key] : open.map((m) => m.key)
+  if (focused) return [focused.key]
+  if (field === 'fulfilment') {
+    const amazon = open.filter((m) => ctx.coordinates.find((c) => c.key === m.key)?.channel === 'AMAZON')
+    if (amazon.length > 0) return amazon.map((m) => m.key)
+  }
+  return open.map((m) => m.key)
 }
 
 /** The choices of a `choice` mode on these markets. */
@@ -182,7 +192,9 @@ export function bulkChoices(ctx: BulkContext, field: BulkFieldId, mode: BulkMode
   if (field === 'listingStatus') {
     const offered = new Set<StatusTarget>()
     for (const c of chosen) for (const r of ctx.rows) {
-      for (const o of ctx.statusCellOf(r.id, c)?.statusOptions ?? []) if (o.offered) offered.add(o.target)
+      const cell = ctx.statusCellOf(r.id, c)
+      if (!cell || cell.create) continue
+      for (const o of cell.statusOptions) if (o.offered) offered.add(o.target)
     }
     return STATUS_ORDER.filter((t) => offered.has(t)).map((t) => ({ value: t, label: STATUS_WORD[t] }))
   }
@@ -339,6 +351,7 @@ export function statusLines(ctx: BulkContext, target: StatusTarget, keys: readon
     const before = cell.create ? (cell.create.source === 'own' ? cell.status.target : null) : cell.status.target
     const line = { id: `t|${r.id}|${c.key}`, rowId: r.id, sku: r.sku, where: c.label, now: now.word, coordinateKey: c.key, target, before }
     const option = cell.statusOptions.find((o) => o.target === target)
+    if (cell.create) { out.push({ ...line, next: null, note: null, skipped: BULK_STATUS_NEW_ROW }); continue }
     if (now.target === target) { out.push({ ...line, next: null, note: null, skipped: BULK_SAME(STATUS_WORD[target]) }); continue }
     if (!option || !option.offered) { out.push({ ...line, next: null, note: null, skipped: option?.reason ?? `${STATUS_WORD[target]} is not offered here` }); continue }
     if (target === 'ended' && !ctx.canDelete) { out.push({ ...line, next: null, note: null, skipped: 'Your role cannot end or delete listings' }); continue }

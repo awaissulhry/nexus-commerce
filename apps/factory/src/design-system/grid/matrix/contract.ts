@@ -48,7 +48,7 @@ export const MATRIX_CELL_LABELS: Readonly<Record<MatrixCellKind, string>> = {
 }
 /** Design §3.3 widths (px). */
 export const MATRIX_CELL_WIDTHS: Readonly<Record<MatrixCellKind, number>> = {
-  listing: 150, fulfilment: 96, syncMode: 96, syncQty: 88, syncBuffer: 76, syncState: 96, price: 104, salePrice: 190,
+  listing: 196, fulfilment: 112, syncMode: 96, syncQty: 88, syncBuffer: 76, syncState: 96, price: 104, salePrice: 190,
 }
 
 /** MX.F (ruled): the absent-capable kinds — the eight plus the reserved business cells (design §3.11). Absence-only today. */

@@ -9,7 +9,7 @@ import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import type { MatrixCells, MatrixCoordinate } from '../contract'
 import {
   BULK_PARENT_ONLY, BULK_PRICE_PERMISSION, basePriceLines, bulkChoices, bulkDefaultMarkets, bulkFields, bulkMarkets, largeChangeWord,
-  saleLines, statusLines, verbLines, verbNotices, verbParams, verbTargets, BULK_FULFILMENT_NOTICE, type BulkContext,
+  saleLines, statusLines, verbLines, verbNotices, verbParams, verbTargets, BULK_FULFILMENT_NOTICE, BULK_STATUS_NEW_ROW, type BulkContext,
 } from './fields'
 import { verbSentence } from './bulkSource'
 
@@ -89,6 +89,11 @@ describe('markets', () => {
     expect(bulkDefaultMarkets(ctx({ focusedKey: 'AMAZON:EU' }), 'fulfilment')).toEqual(['AMAZON:EU'])
     expect(bulkDefaultMarkets(ctx({ focusedKey: 'AMAZON:EU' }), 'price')).toEqual(['AMAZON:IT'])
   })
+  it('ticks only the Amazon markets for Fulfilment when nothing is focused: FBA / FBM is Amazon\'s choice', () => {
+    const both: BulkContext = ctx({ cellsOf: (_rowId, key) => (key === 'EBAY:IT' || key === 'AMAZON:EU' ? synced() : null) })
+    expect(bulkDefaultMarkets(both, 'fulfilment')).toEqual(['AMAZON:EU'])
+    expect(bulkDefaultMarkets(both, 'quantity')).toEqual(['AMAZON:EU', 'EBAY:IT'])
+  })
   it('offers the methods the chosen markets have, and the Status targets their cells offer', () => {
     expect(bulkChoices(ctx(), 'fulfilment', 'method', ['AMAZON:EU']).map((c) => c.value)).toEqual(['FBA', 'FBM'])
     expect(bulkChoices(ctx(), 'fulfilment', 'method', ['AMAZON:EU', 'EBAY:IT']).map((c) => c.value)).toEqual(['FBA', 'FBM', 'MCF'])
@@ -148,6 +153,12 @@ describe('lines the page works out', () => {
     expect(statusLines(ctx(), 'inactive', ['AMAZON:IT']).map((l) => [l.sku, l.now, l.next, l.note])).toEqual([['A', 'Active', 'Inactive', 'Waits for Publish'], ['B', 'Active', 'Inactive', 'Waits for Publish']])
     expect(statusLines(ctx(), 'ended', ['AMAZON:IT']).map((l) => l.skipped)).toEqual(['Amazon has no Ended', 'Amazon has no Ended'])
     expect(statusLines(ctx(), 'active', ['AMAZON:IT']).map((l) => l.skipped)).toEqual(['Already Active', 'Already Active'])
+  })
+  it('Status never creates a listing: a row not on the market yet is skipped, and a market with only such rows is held', () => {
+    const fresh = ctx({ statusCellOf: (rowId, c) => (c.key === 'AMAZON:IT' ? statusCell({ listingId: `new:${rowId}`, create: { target: 'not_listed', source: 'default', sentence: null } as never }) : null) })
+    expect(statusLines(fresh, 'inactive', ['AMAZON:IT']).map((l) => l.skipped)).toEqual([BULK_STATUS_NEW_ROW, BULK_STATUS_NEW_ROW])
+    expect(bulkMarkets(fresh, 'listingStatus').map((m) => [m.key, m.held])).toEqual([['AMAZON:IT', 'None of these rows is on this market'], ['EBAY:IT', 'None of these rows is on this market']])
+    expect(bulkFields(fresh).find((f) => f.id === 'listingStatus')!.held).toMatch(/None of these rows has a Status/)
   })
   it('asks for a typed word on a large change, as the verbs do', () => {
     expect(largeChangeWord(100)).toBe('APPLY')

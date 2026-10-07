@@ -464,9 +464,23 @@ export function MatrixSurface({ productId }: { productId: string }) {
           return row && coord ? [{ ...p, place: statusPlaceOfRef.current(row, coord) }] : []
         })
         const answer = await statusEditingRef.current.fillNow({ column: 'status', target }, at.map((a) => a.place), { quiet: true })
+        // Each cell's answer, by its listing: saved, or the server's reason (a whole write that failed refuses its cells).
         const saved = new Set(answer.outcomes.flatMap((o) => (o.ok ? o.applied : [])))
-        const applied = at.filter((a) => a.place.cell && saved.has(a.place.cell.listingId)).map(({ rowId, coordinateKey }) => ({ rowId, coordinateKey }))
-        return { applied, refused: places.length - applied.length }
+        const why = new Map<string, string>()
+        for (const o of answer.outcomes) {
+          if (!o.ok) for (const id of o.requested) why.set(id, o.error ?? 'The change could not be saved')
+          for (const r of o.refused) why.set(r.listingId, r.reason)
+          for (const c of o.conflicts) why.set(c.listingId, `${c.setByName ?? 'Someone else'} changed it first`)
+        }
+        const early = new Map(answer.refused.map((r) => [r.sku, r.reason]))
+        const applied: Array<{ rowId: string; coordinateKey: string }> = []
+        const refused: Array<{ rowId: string; coordinateKey: string; reason: string }> = []
+        for (const a of at) {
+          const id = a.place.cell?.listingId
+          if (id && saved.has(id)) applied.push({ rowId: a.rowId, coordinateKey: a.coordinateKey })
+          else refused.push({ rowId: a.rowId, coordinateKey: a.coordinateKey, reason: (id ? why.get(id) : undefined) ?? early.get(a.place.sku) ?? 'Not saved' })
+        }
+        return { applied, refused }
       },
     }
   }, [matrix, getGridApi, writer, tracker, statusCellOf])

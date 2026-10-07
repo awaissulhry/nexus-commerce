@@ -24,13 +24,13 @@ export interface BulkDoors {
   /** The context NOW (a write moves cells and versions): read at every preview and apply. The rows stay the opening's. */
   context: () => BulkContext
   previewVerb: (req: MatrixVerbRequest) => Promise<VerbPreview>
-  applyVerb: (preview: VerbPreview) => Promise<VerbOperation>
+  applyVerb: (preview: VerbPreview) => Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }>
   revertVerb: (op: VerbOperation) => Promise<void>
   writeCells: (cells: readonly MatrixWriteCell[]) => Promise<MatrixWriteOutcome[]>
   /** Base price for these rows, as one save; each row's answer (a refusal carries the server's reason). */
   masterWrite: (writes: ReadonlyArray<{ rowId: string; value: number | null }>) => Promise<Array<{ rowId: string; ok: boolean; reason?: string }>>
   /** Each market's Status for these cells (a null target clears the waiting one); what was saved and what was refused. */
-  statusWrite: (target: StatusTarget | null, places: ReadonlyArray<{ rowId: string; coordinateKey: CoordinateKey }>) => Promise<{ applied: ReadonlyArray<{ rowId: string; coordinateKey: CoordinateKey }>; refused: number }>
+  statusWrite: (target: StatusTarget | null, places: ReadonlyArray<{ rowId: string; coordinateKey: CoordinateKey }>) => Promise<{ applied: ReadonlyArray<{ rowId: string; coordinateKey: CoordinateKey }>; refused: ReadonlyArray<{ rowId: string; coordinateKey: CoordinateKey; reason: string }> }>
 }
 
 type Payload =
@@ -40,6 +40,17 @@ type Payload =
   | { kind: 'status'; lines: StatusLine[] }
 
 const skippedPart = (n: number) => (n > 0 ? ` · ${n} skipped` : '')
+const placeKey = (rowId: string, key: CoordinateKey) => `${rowId}|${key}`
+/** A verb change line's market (`verbLines` ids are `c|row|coordinate|cell|n`). */
+const coordinateOfVerbLine = (l: BulkLine) => l.id.split('|')[2] ?? ''
+/** The lines as answered: a changing line the server refused is skipped with its reason; the rest as previewed. */
+function answered<L extends BulkLine>(lines: readonly L[], refusedAt: (line: L) => string | null): L[] {
+  return lines.map((l) => {
+    if (l.skipped !== null) return l
+    const reason = refusedAt(l)
+    return reason === null ? l : { ...l, next: null, skipped: reason }
+  })
+}
 const toneOf = (applied: number, skipped: number): BulkResult['tone'] => (applied === 0 ? 'danger' : skipped > 0 ? 'warning' : 'success')
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
@@ -102,8 +113,10 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
       const op = await doors.applyVerb(payload.preview)
       const skipped = payload.preview.refusals.length + op.refused
       const canUndo = shown.undoable && op.applied > 0
+      const refused = new Map((op.results ?? []).filter((r) => r.outcome !== 'applied').map((r) => [placeKey(r.rowId, r.coordinateKey), r.reason ?? (r.outcome === 'conflict' ? 'Changed by someone else first' : 'Not changed')]))
       return {
         applied: op.applied, skipped, tone: toneOf(op.applied, skipped),
+        ...(op.results ? { lines: answered(shown.lines, (l) => (l.id.startsWith('c|') ? refused.get(placeKey(l.rowId, coordinateOfVerbLine(l))) ?? null : null)) } : {}),
         sentence: verbSentence(payload.preview, op.applied, skipped),
         undo: canUndo ? async () => { await doors.revertVerb(op); return `Put back ${plural(op.before.length, 'listing', 'listings')} as they were.` } : null,
       }
@@ -114,10 +127,12 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
       const answers = await doors.masterWrite(changing.map((l) => ({ rowId: l.rowId, value: l.value })))
       const ok = answers.filter((a) => a.ok).map((a) => a.rowId)
       const skipped = shown.skipped + (answers.length - ok.length)
+      const why = new Map(answers.filter((a) => !a.ok).map((a) => [a.rowId, a.reason ?? 'Not saved']))
       const back = changing.filter((l) => ok.includes(l.rowId)).map((l) => ({ rowId: l.rowId, value: l.before }))
       return {
         applied: ok.length, skipped, tone: toneOf(ok.length, skipped),
         sentence: `${bulkNoun('basePrice', ok.length)} changed${skippedPart(skipped)}. Markets that follow it get the new price in about 30 seconds.`,
+      lines: answered(shown.lines, (l) => why.get(l.rowId) ?? null),
         undo: back.length ? async () => {
           const undone = await doors.masterWrite(back)
           return `Put back ${bulkNoun('basePrice', undone.filter((a) => a.ok).length)}.`
@@ -139,14 +154,21 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
         const outcomes = cells.length ? await doors.writeCells(cells) : []
         return { outcomes, early }
       }
+      const reasons = (r: { outcomes: readonly MatrixWriteOutcome[] }) => {
+        const m = new Map<string, string>()
+        for (const o of r.outcomes) if (o.outcome !== 'applied') m.set(placeKey(o.rowId, o.coordinateKey), o.reason ?? (o.outcome === 'conflict' ? 'Changed by someone else first' : 'Not changed'))
+        return m
+      }
       const changing = payload.lines.filter((l) => l.skipped === null)
       const { outcomes, early } = await send(changing, (l) => l.value)
       const appliedKeys = new Set(outcomes.filter((o) => o.outcome === 'applied').map((o) => `${o.rowId}|${o.coordinateKey}`))
       const applied = appliedKeys.size
       const skipped = shown.skipped + early.length + (outcomes.length - applied)
       const back = changing.filter((l) => appliedKeys.has(`${l.rowId}|${l.coordinateKey}`))
+      const why = reasons({ outcomes })
       return {
         applied, skipped, tone: toneOf(applied, skipped),
+      lines: answered(shown.lines as SaleLine[], (l) => (appliedKeys.has(placeKey(l.rowId, l.coordinateKey)) ? null : why.get(placeKey(l.rowId, l.coordinateKey)) ?? 'Not saved')),
         sentence: `${bulkNoun('salePrice', applied)} ${shown.request.mode === 'sale-remove' ? 'removed' : 'set'}${skippedPart(skipped)}. Nexus sends ${applied === 1 ? 'it' : 'them'} in about 30 seconds.`,
         undo: back.length ? async () => {
           const r = await send(back, (l) => l.before)
@@ -160,12 +182,14 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
     const target = changing[0]?.target ?? (shown.request.input.choice as StatusTarget)
     const r = await doors.statusWrite(target, changing.map((l) => ({ rowId: l.rowId, coordinateKey: l.coordinateKey })))
     const applied = r.applied.length
-    const skipped = shown.skipped + r.refused
+    const skipped = shown.skipped + r.refused.length
+    const why = new Map(r.refused.map((x) => [placeKey(x.rowId, x.coordinateKey), x.reason]))
     const done = new Set(r.applied.map((a) => `${a.rowId}|${a.coordinateKey}`))
     const back = changing.filter((l) => done.has(`${l.rowId}|${l.coordinateKey}`))
     return {
       applied, skipped, tone: toneOf(applied, skipped),
       sentence: `${bulkNoun('listingStatus', applied)} set to ${changing[0]?.next ?? 'the new status'}${skippedPart(skipped)}. Publish sends ${applied === 1 ? 'it' : 'them'} to the markets.`,
+      lines: answered(shown.lines as StatusLine[], (l) => (done.has(placeKey(l.rowId, l.coordinateKey)) ? null : why.get(placeKey(l.rowId, l.coordinateKey)) ?? 'Not saved')),
       undo: back.length ? async () => {
         const groups = new Map<StatusTarget | null, StatusLine[]>()
         for (const l of back) groups.set(l.before, [...(groups.get(l.before) ?? []), l])

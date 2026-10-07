@@ -61,13 +61,16 @@ function NewCell({ line }: { line: BulkLine }) {
   )
 }
 
-const COLUMNS: Column<BulkLine>[] = [
-  { key: 'sku', label: 'Variant', width: 180, render: (l) => <span className={styles.mono}>{l.sku}</span> },
-  { key: 'where', label: 'Where', width: 130, render: (l) => l.where },
-  { key: 'now', label: 'Now', width: 100, render: (l) => l.now },
-  { key: 'new', label: 'New', width: 140, render: (l) => <NewCell line={l} /> },
-  { key: 'status', label: 'Status', width: 90, render: (l) => (l.skipped === null ? <Tag tone="info">Change</Tag> : <Tag tone="warning">Skipped</Tag>) },
+/** The table's columns; once applied, a changed line reads Saved (the server's answer), a refused one Skipped. */
+const columnsFor = (done: boolean): Column<BulkLine>[] => [
+  { key: 'sku', label: 'Variant', width: 250, render: (l) => <span className={styles.mono}>{l.sku}</span> },
+  { key: 'where', label: 'Where', width: 170, render: (l) => l.where },
+  { key: 'now', label: 'Now', width: 120, render: (l) => l.now },
+  { key: 'new', label: 'New', width: 240, render: (l) => <NewCell line={l} /> },
+  { key: 'status', label: 'Status', width: 90, render: (l) => (l.skipped !== null ? <Tag tone="warning">Skipped</Tag> : done ? <Tag tone="success">Saved</Tag> : <Tag tone="info">Change</Tag>) },
 ]
+const FORM_COLUMNS = columnsFor(false)
+const DONE_COLUMNS = columnsFor(true)
 
 const rows = (n: number) => `${n.toLocaleString('en')} ${n === 1 ? 'row' : 'rows'}`
 
@@ -152,7 +155,7 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
   const status = footerStatus({ phase, current, held })
   const locked = phase === 'applying' || phase === 'undoing'
 
-  const filterOptions = useMemo(() => (shown ? lineFilterOptions(shown.lines) : []), [shown])
+  const filterOptions = useMemo(() => (shown ? lineFilterOptions(shown.lines, !inForm) : []), [shown, inForm])
   const activeFilter = shown ? effectiveFilter(shown.lines, filter) : 'all'
   const tableRows = useMemo(() => (shown ? filterLines(shown.lines, activeFilter) : []), [shown, activeFilter])
   const skipGroups = useMemo(() => (shown ? groupSkipped(shown.lines) : []), [shown])
@@ -209,6 +212,11 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
     setApplied(current); setPhase('applying'); setFailure(null)
     try {
       const r = await source.apply(current)
+      // The table now says what the server answered, line by line (a line refused at Apply is skipped, with why).
+      if (r.lines) {
+        const changes = r.lines.filter((l) => l.skipped === null).length
+        setApplied({ ...current, lines: r.lines, changes, skipped: r.lines.length - changes })
+      }
       setResult(r); setReceipt(null); setPhase('done')
       p.onApplied?.(r)
     } catch (e) {
@@ -325,7 +333,7 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
       </div>
       <div className={styles.tableArea} aria-busy={refreshing || undefined}>
         <DataGrid ariaLabel={inForm ? 'What would change' : 'What was changed'} size="sm" keyboardScroll maxHeight={320}
-          columns={COLUMNS} rows={tableRows} rowKey={(l) => l.id}
+          columns={inForm ? FORM_COLUMNS : DONE_COLUMNS} rows={tableRows} rowKey={(l) => l.id}
           emptyState={<EmptyState title="Nothing to show" description="None of these rows is on the chosen markets." />} />
       </div>
     </>
@@ -411,7 +419,7 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
   )
 
   return (
-    <Modal open={open && source !== null} onClose={close} size="lg" title={source?.title} subtitle={source?.subtitle} footer={footer}>
+    <Modal open={open && source !== null} onClose={close} size="xl" title={source?.title} subtitle={source?.subtitle} footer={footer}>
       <div ref={bodyRef} className={styles.body}>{body}</div>
     </Modal>
   )
