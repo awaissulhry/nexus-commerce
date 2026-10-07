@@ -15,7 +15,7 @@
   4. Send to FBA from the Matrix (Amazon "Send to Amazon" v2024-03-20 flow, run as a background job).
 - **Owner decisions (2026-10-07):** D1 = A (per market for the business + per-product exceptions in the Matrix) ·
   D2 = B (count sealed cases and loose units apart, per location).
-- **Status:** Steps 1–3 DONE locally (not pushed). Next: Step 4 (Send to FBA).
+- **Status:** Steps 1–4 DONE locally (not pushed). Next: release (Owner's go).
 
 Research notes (private, with file paths and line numbers): `~/nexus-archive/2026-10-07-matrix-inventory/research/`
 1 Matrix page · 2 stock backend · 3 FBA inbound code · 4 Available pop-up + design system · 5 web research.
@@ -83,7 +83,20 @@ Research notes (private, with file paths and line numbers): `~/nexus-archive/202
 - Matrix Shared group: a "Case" column ("12 / case"); a click opens a small pop-up. The stock editor shows
   "4 cases + 3" per location and can open / count cases.
 
-## Step 4 — Send to FBA
+## Step 4 — Send to FBA — DONE locally 2026-10-07 (fake Amazon only)
+- Build plan: `~/nexus-archive/2026-10-07-matrix-inventory/research/11-step4-build-plan.md`. Owner answers: loose units
+  go in mixed boxes; units are held at Create plan (cancel releases them); placement is confirmed with ONE click that
+  shows Amazon's fees; the first real plan is a real small send after release, stopped at the placement choice.
+- Built: migration `20261007d_fba_send`, `packages/shared/fba-send.ts` (box rules), the fixed v2024-03-20 client, a
+  background runner + resume job (never confirms on its own), `/api/fba/inbound/*` routes, holds + FBA_TRANSFER_OUT on
+  Mark shipped, Amazon's inbound units kept (FbaInventoryDetail INBOUND rows), the Matrix toolbar action + dialog +
+  plans drawer, "+N" on the FBA cell. Full browser flow passed against the fake Amazon.
+- Switches: `NEXUS_ENABLE_FBA_INBOUND_SEND` (off by default — no plan reaches Amazon until it is on);
+  `NEXUS_FBA_INBOUND_FAKE=1` (private stack only; refused in production and off a loopback test database).
+- Before the first real send: the ship-from address (Settings › Company name + phone, IT-MAIN's warehouse address) must
+  be filled in production; open the dialog in production and read its address line first.
+- Known open: an FBA_SEND hold never expires by itself (cancel releases it); no route yet to correct a tracking number
+  Amazon refused; "+N" shows Amazon's own inbound count (up to one 15-min read late).
 - Tick rows → "Send to FBA…" → one dialog: From (default warehouse) · per SKU cases or units · boxes worked out ·
   checks (23 kg / 63.5 cm) · one summary · primary button "Create plan · N units".
 - A background job runs Amazon's steps; each step's status shows live (Matrix cell + a small shipments drawer).
