@@ -6,7 +6,7 @@
  * inventory controls the operator turns.
  *
  *     [ 21 rows · 1 parent · 20 variants   Find…   chips   Views Customise Export ⋯ ]   40px
- *     [ Selected 12 rows   Edit…   Stock source…   Clear ]          (while rows are ticked)
+ *     [ Selected 12 rows   Edit…   Stock source…   Send to FBA…   Clear ]          (while rows are ticked)
  *     [ PRODUCT │ SHARED                 │ AMAZON EU · INVENTORY · IT DE │ AMAZON · IT │ … ]   30px
  *     [ Product │ Base price Stock Case FBA qty │ Fulfilment Mode Qty Buffer Sync │ Listing Status Price Sale ] 28px
  *     [ … 36px rows … ]
@@ -64,6 +64,8 @@ import {
 } from '@/design-system/grid'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import { commandKeyFor } from '@/lib/command-key'
+import { FBA_SEND_COPY } from '@nexus/shared/fba-send'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { InventoryEditorModal } from '@/app/products/next/InventoryEditorModal'
 import type { InventoryEditorTarget } from '@/app/products/next/useInventoryEditor'
@@ -104,6 +106,9 @@ import { CaseDialog, type CaseSaved, type CaseTarget } from './CaseDialog'
 import { allVariants, CASE_MIXED } from './casePack'
 import { refusalLead, refusedRowIds, type RefusedMark } from './refusals'
 import { BulkEditDialog } from './bulk/BulkEditDialog'
+import { SendToFbaDialog, type SendToFbaCreated, type SendToFbaTarget } from './fba/SendToFbaDialog'
+import { DONE_COPY, hasAmazonListing, openPlans, postCancelPlan, sendDescription, sendHeld, sendProductIds } from './fba/sendToFba'
+import { FbaPlansDrawer } from './fba/FbaPlansDrawer'
 import { createBulkSource, type BulkDoors } from './bulk/bulkSource'
 import type { BulkContext } from './bulk/fields'
 import type { BulkEditSource, BulkInitial } from './bulk/types'
@@ -339,6 +344,44 @@ export function MatrixSurface({ productId }: { productId: string }) {
     )
     reread()
   }, [toast, productId])
+  /* Send to FBA (Step 4, Owner 2026-10-07): the toolbar's `Send to FBA…` opens ONE dialog on the ticked SKUs; Create plan
+     holds the units at From and queues the plan; the FBA qty cell shows Amazon's inbound "+N", and the plans drawer
+     follows every open plan of this family. Nexus never writes the FBA quantity. */
+  const canInbound = has('inbound.manage')
+  const [fbaSend, setFbaSend] = useState<SendToFbaTarget | null>(null)
+  /** The plans drawer: open on one plan (`Follow it`), or on the family's open plans (`planId: null`). */
+  const [plansDrawer, setPlansDrawer] = useState<{ planId: string | null } | null>(null)
+  const fbaPlansOf = useCallback(() => openPlans(readRef.current), [])
+  /** A plan made or cancelled moved the holds: the Matrix (and every page that shows stock) reads again. */
+  const onFbaChanged = useCallback(() => {
+    emitInvalidation({ type: 'stock.adjusted', id: productId, meta: { productId, source: 'matrix-fba-send', subtype: 'fba-plan' } })
+  }, [productId])
+  /** Closed after a plan was made: the Done screen's Undo again, as a toast (the bulk Edit's pattern). */
+  const onFbaClosed = useCallback((result: { created: SendToFbaCreated; undone: boolean } | null) => {
+    setFbaSend(null)
+    if (!result || result.undone) return
+    const { planId, units } = result.created
+    let used = false
+    const undo = async () => {
+      if (used) return
+      used = true
+      try {
+        // The drawer's Cancel uses the same intent slot: a cancel pressed in both places is ONE cancel.
+        const outcome = await postCancelPlan(commandKeyFor(`fba-cancel:${planId}`), planId)
+        toast.toast(outcome.ok ? DONE_COPY.undoneToast : outcome.message, outcome.ok ? 'info' : 'danger')
+      } catch (e) {
+        toast.toast(e instanceof Error ? e.message : String(e), 'danger')
+      } finally {
+        onFbaChanged()
+      }
+    }
+    toast.toast(
+      <span className="nds-matrix-toast">{DONE_COPY.created(units)} <Button size="sm" variant="link" title={FBA_SEND_COPY.undoHint} onClick={() => { void undo() }}>{FBA_SEND_COPY.undo}</Button></span>,
+      'success',
+      { duration: 12000 },
+    )
+  }, [toast, onFbaChanged])
+  const onFbaFollow = useCallback((planId: string) => { setFbaSend(null); setPlansDrawer({ planId }) }, [])
   const onReloadRef = useRef<() => void>(() => {})
 
   /**
@@ -644,9 +687,9 @@ export function MatrixSurface({ productId }: { productId: string }) {
       coordinates: visibleCoordinates, cellsOf: matrix.cellsOf, rowOf: matrix.rowOf, tracker,
       sheetColumns: sheet?.columns ?? [], locale: localeOrFirst, market: marketOrFirst,
       axesRef, rowMenuRef, masterHeldReason, onJump, onPickFulfilment, rowsRef, identityWidth,
-      statusColumnOf: previewMode ? undefined : statusColumnOf, onOpenStock: stockDoor, onOpenFrom: fromDoor, onOpenCase: caseDoor,
+      statusColumnOf: previewMode ? undefined : statusColumnOf, onOpenStock: stockDoor, onOpenFrom: fromDoor, onOpenCase: caseDoor, fbaPlansOf,
     }),
-    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, masterHeldReason, onJump, onPickFulfilment, identityWidth, previewMode, statusColumnOf, stockDoor, fromDoor, caseDoor],
+    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, masterHeldReason, onJump, onPickFulfilment, identityWidth, previewMode, statusColumnOf, stockDoor, fromDoor, caseDoor, fbaPlansOf],
   )
   const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true }), [])
   const rowSelection = useMemo(() => gridSelection<StudioRow>(), [])
@@ -721,6 +764,15 @@ export function MatrixSurface({ productId }: { productId: string }) {
     fromDoor(e.data.id, key, target instanceof Element ? target.closest<HTMLElement>('[role="gridcell"]') : null)
     return true
   }, [fromDoor, matrix])
+  /** The FBA qty cell on an open gesture (double-click, Enter, F2): a row with inbound or planned units, or a family with
+   *  open plans, opens the plans drawer; otherwise the locked sentence, as before (`explainHeld`). */
+  const openFbaCell = useCallback((e: { data?: StudioRow; colDef?: { colId?: string } }): boolean => {
+    if (e.colDef?.colId !== FBA_COL || !e.data || !canInbound || previewMode) return false
+    const inbound = matrix.rowOf(e.data.id)?.fbaInbound
+    if (!((inbound?.units ?? 0) > 0 || (inbound?.planned ?? 0) > 0 || openPlans(readRef.current).length > 0)) return false
+    setPlansDrawer({ planId: null })
+    return true
+  }, [canInbound, previewMode, matrix])
   /** The Case door on an open gesture (double-click, Enter, F2), when the cell has one; anchored on the cell. */
   const openCaseCell = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null }): boolean => {
     if (e.colDef?.colId !== CASE_COL || !e.data || !caseDoor) return false
@@ -732,8 +784,9 @@ export function MatrixSurface({ productId }: { productId: string }) {
     if (e.colDef?.colId === STOCK_COL && e.data && stockDoor) { stockDoor(e.data.id); return }
     if (openCaseCell(e)) return
     if (openFromCell(e)) return
+    if (openFbaCell(e)) return
     explainHeld(e)
-  }, [explainHeld, stockDoor, openFromCell, openCaseCell])
+  }, [explainHeld, stockDoor, openFromCell, openCaseCell, openFbaCell])
   /* AG's union includes a full-width variant without `colDef`; both are typed loosely and guarded. */
   const onCellKeyDown = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null; column?: { getColId(): string } | null }) => {
     /* Delete / Backspace on a market's Status: the selected Status cells go back to "no change" (the sheet's rule). */
@@ -746,9 +799,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
     if ((key.key === 'Enter' || key.key === 'F2') && e.colDef?.colId === STOCK_COL && e.data && stockDoor) { stockDoor(e.data.id); return }
     if ((key.key === 'Enter' || key.key === 'F2') && openFromCell(e)) return
     if ((key.key === 'Enter' || key.key === 'F2') && openCaseCell(e)) return
+    if ((key.key === 'Enter' || key.key === 'F2') && openFbaCell(e)) return
     const opens = key.key === 'Enter' || key.key === 'F2' || (key.key.length === 1 && key.key !== ' ')
     if (opens) explainHeld(e)
-  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf, stockDoor, openFromCell, openCaseCell])
+  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf, stockDoor, openFromCell, openCaseCell, openFbaCell])
 
   /* ── views: presets + saved views on the Matrix surface ─────────────────────────────────── */
 
@@ -943,6 +997,18 @@ export function MatrixSurface({ productId }: { productId: string }) {
       onSelect: () => setStockSourceTargets(family.map((r) => ({ id: r.id, sku: r.sku, source: matrix.rowOf(r.id)?.stock.source ?? null }))),
     }
   }, [selectedRows, rows, matrix])
+  // Send to FBA: the ticked SKUs (a ticked parent = every variation); a person who may manage inbound, a family on Amazon.
+  const sendToFba = useMemo(() => {
+    if (selectedRows.length === 0 || !canInbound || previewMode || !hasAmazonListing(read)) return null
+    const productIds = sendProductIds(selectedRows, rows)
+    const wholeFamily = selectedRows.some((r) => r.isParent)
+    return {
+      description: sendDescription(productIds.length, wholeFamily),
+      held: sendHeld({ loading: !read || busy, productIds }),
+      onSelect: () => setFbaSend({ productIds, subtitle: sheet?.family.sku }),
+    }
+  }, [selectedRows, rows, canInbound, previewMode, read, busy, sheet])
+  const fbaPlansOpen = useMemo(() => (canInbound && !previewMode ? openPlans(read).length : 0), [canInbound, previewMode, read])
 
   // After a switch: the Matrix re-reads now, and once more when the background has sent the new numbers.
   const reloadSoonAgain = useCallback(() => { onReloadRef.current(); setTimeout(() => onReloadRef.current(), 1500) }, [])
@@ -990,7 +1056,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
             onSaveCurrentView={saveCurrentView} onUpdateCurrentView={updateCurrentView} viewsEmptyLabel={viewsEmptyLabel}
             onCustomise={openCustomise} onExport={onExport} exportDisabled={!read || busy} onReload={onReload}
             /* Selection in the TOOLBAR, as on the sheet and the Variants tab (Owner, 2026-09-26). */
-            selectionActions={<MatrixSelectionActions onEdit={() => openBulk(selectedRows)} editHeld={!read || busy ? 'The Matrix is still loading' : null} stockSource={stockSource} />}
+            selectionActions={<MatrixSelectionActions onEdit={() => openBulk(selectedRows)} editHeld={!read || busy ? 'The Matrix is still loading' : null} stockSource={stockSource} sendToFba={sendToFba} />}
             onClearSelection={() => getGridApi()?.deselectAll()}
           />
         }
@@ -1024,6 +1090,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
                   </span>
                 )}
                 {scopeNote && <span className="nds-cell-muted" title={scopeNote}>{scopeNote.split(' — ')[0]}</span>}
+                {/* Send to FBA: the family's open plans, one click from the grid (the FBA qty cell opens them too). */}
+                {fbaPlansOpen > 0 && <Button size="sm" variant="link" onClick={() => setPlansDrawer({ planId: null })}>{FBA_SEND_COPY.plansButton(fbaPlansOpen)}</Button>}
                 {conflicts.length > 0 && (
                   <Button size="sm" variant="link" onClick={reload}>{conflicts.length} {conflicts.length === 1 ? 'row' : 'rows'} changed elsewhere — refresh</Button>
                 )}
@@ -1100,6 +1168,14 @@ export function MatrixSurface({ productId }: { productId: string }) {
       )}
 
       {caseTarget && <CaseDialog target={caseTarget} onClose={() => setCaseTarget(null)} onSaved={onCaseSaved} />}
+
+      {fbaSend && <SendToFbaDialog target={fbaSend} onClose={onFbaClosed} onChanged={onFbaChanged} onFollow={onFbaFollow} />}
+
+      {/* The plans drawer (Part E2): it reads only while open, and after its own clicks it tells the stock pages (the
+          Matrix included) to read again. */}
+      {canInbound && !previewMode && (
+        <FbaPlansDrawer open={!!plansDrawer} onClose={() => setPlansDrawer(null)} productId={read?.productId ?? productId} planId={plansDrawer?.planId ?? null} />
+      )}
 
       <BulkEditDialog
         open={!!bulk}

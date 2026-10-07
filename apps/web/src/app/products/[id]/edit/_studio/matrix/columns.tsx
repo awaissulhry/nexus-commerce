@@ -25,7 +25,11 @@ import type { MutableRefObject } from 'react'
 import { CellAction, type MenuItemDef } from '@/design-system/components'
 import { Pill, Tag } from '@/design-system/primitives'
 import { poolSourceSentence } from '@/app/_shared/stock-pool/PoolSourceTag'
-import { lockedColumn, matrixColumnDef, numericColumn, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
+import {
+  formatGridValue, LockGlyph, lockedColumn, matrixColumnDef, numericColumn, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams,
+  type LockedCellParams, type MatrixColumnOptions,
+} from '@/design-system/grid'
+import { FBA_SEND_COPY } from '@nexus/shared/fba-send'
 
 import { when } from '../drawer/format'
 import { buildMasterColumns } from '../sheet/master/columns'
@@ -34,7 +38,7 @@ import { VariantIdentity as SharedVariantIdentity } from '../variants/VariantIde
 import { sharedProgressColumn } from '../sheet/progressColumns'
 import type { AxisSummary } from '../variants/family/coverage'
 
-import { MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixRowRead } from './contract'
+import { MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixFbaPlan, type MatrixRowRead } from './contract'
 import { refusedTooltip } from './refusals'
 import { CASE_EDIT_COPY, CASE_HEADER_TIP, CASE_LABEL, caseCellView, type CaseCellView } from './casePack'
 import { FROM_COL_W, FROM_LABEL, fromBefore, fromCellText, fromCellView, isMatrixFromColId, matrixFromColId } from './sellsFrom'
@@ -247,12 +251,22 @@ export function fbaUnitsOf(row: MatrixRowRead | null | undefined): number | null
   return row?.fba?.units ?? null
 }
 
+/** Send to FBA (Step 4): the muted "+24" after the FBA number — Amazon's own inbound units; null when none. */
+export function fbaInboundText(row: Pick<MatrixRowRead, 'fbaInbound'> | null | undefined): string | null {
+  const units = row?.fbaInbound?.units ?? 0
+  return units > 0 ? FBA_SEND_COPY.inbound(units) : null
+}
+
+/** The open plans a row's planned units sit in, by their short tag (`#a1b2c3`, the end of the Amazon plan name). */
+const planTags = (plans: readonly MatrixFbaPlan[]): string => plans.map((p) => `#${p.id.slice(-6)}`).join(', ')
+
 /**
- * The FBA qty cell's tooltip: how many units and where, when Nexus last updated them, and — on every row, whatever the
- * number — why the cell is locked. `null` (no FBA row) and `undefined` (not read) say different things: neither is `0`.
+ * The FBA qty cell's tooltip: how many units and where, when Nexus last updated them, Amazon's inbound (working, shipped,
+ * receiving) and the units in open Nexus plans, and — on every row, whatever the number — why the cell is locked. `null`
+ * (no FBA row) and `undefined` (not read) say different things: neither is `0`.
  * The product sheet's Amazon FBA qty column reads it too (`sheet/channel/stockColumns.tsx`).
  */
-export function fbaTooltip(row: Pick<MatrixRowRead, 'role' | 'fba'> | null | undefined): string {
+export function fbaTooltip(row: (Pick<MatrixRowRead, 'role' | 'fba'> & Partial<Pick<MatrixRowRead, 'fbaInbound'>>) | null | undefined, plans: readonly MatrixFbaPlan[] = []): string {
   const f = row?.fba
   const lines: string[] = []
   if (f === undefined) lines.push(MATRIX_COPY.fbaNotRead)
@@ -261,8 +275,30 @@ export function fbaTooltip(row: Pick<MatrixRowRead, 'role' | 'fba'> | null | und
     lines.push(`${row?.role === 'parent' ? 'Family total: ' : ''}${MATRIX_COPY.fbaUnits(f.units, f.locations.map((l) => `${l.code} ${l.units}`))}`)
     if (f.updatedAt && Number.isFinite(Date.parse(f.updatedAt))) lines.push(`Last updated in Nexus ${when(f.updatedAt)}`)
   }
+  const inbound = row?.fbaInbound
+  if (inbound && inbound.units > 0) {
+    lines.push(FBA_SEND_COPY.inboundDetail(inbound.units, inbound.working, inbound.shipped, inbound.receiving))
+    if (inbound.readAt && Number.isFinite(Date.parse(inbound.readAt))) lines.push(`read ${when(inbound.readAt)}`)
+  }
+  if (inbound && inbound.planned > 0) lines.push(plans.length ? FBA_SEND_COPY.inPlan(inbound.planned, planTags(plans)) : `${inbound.planned} in open Nexus plans`)
   lines.push(MATRIX_COPY.fbaLocked)
   return lines.join(' · ')
+}
+
+/**
+ * The FBA qty cell: Amazon's number, Amazon's inbound "+24" muted after it (Step 4), and the DS lock — the same parts
+ * as the DS `LockedCell`. The value stays the FBA number: a sort, a copy and an export read 92, never "92 +24".
+ */
+function FbaQtyCell(p: ICellRendererParams<StudioRow> & LockedCellParams & { rowOf?: (id: string) => MatrixRowRead | null }) {
+  const f = formatGridValue(p.kind ?? 'integer', p.value)
+  const inbound = p.data ? fbaInboundText(p.rowOf?.(p.data.id)) : null
+  return (
+    <span className="nds-cell-locked">
+      {f.empty ? '—' : f.text}
+      {inbound && <span className="nds-cell-muted">{inbound}</span>}
+      <LockGlyph reason={p.reason} />
+    </span>
+  )
 }
 
 /* ── the From cell ("Sells from", Step 2) ─────────────────────────────────────────────────────── */
@@ -328,6 +364,8 @@ export interface BuildMatrixColumnsOptions {
   onOpenFrom?: (rowId: string, key: CoordinateKey, anchor: HTMLElement | null) => void
   /** The Case cell opens the Case pop-up for a row (absent = no door: preview, or no right to adjust stock). */
   onOpenCase?: (rowId: string, anchor: HTMLElement | null) => void
+  /** Send to FBA (Step 4): this family's open plans, read at PAINT time (the FBA qty tooltip names them). */
+  fbaPlansOf?: () => readonly MatrixFbaPlan[]
 }
 
 const rowId = (r: StudioRow) => r.id
@@ -415,19 +453,23 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
 
   /* The DS locked column (`lockedColumn`, GRID.md rule 10: the lock is in the DEFINITION) — not editable, not movable, no
      fill handle, the lock glyph in the cell and the locked tint on it. Its value is a READ of `MatrixRowRead.fba`, the
-     same way Stock reads `stock`: a copy, an export and a sort read the number; nothing can paste one back. */
+     same way Stock reads `stock`: a copy, an export and a sort read the number; nothing can paste one back. Step 4: the
+     cell adds Amazon's inbound "+24" (muted) before the lock, and the tooltip its breakdown and the open plans. */
+  const fbaPlansOf = opts.fbaPlansOf ?? (() => [])
   const fba: ColDef<StudioRow> = {
     ...lockedColumn<StudioRow>(FBA_COL, { kind: 'integer', reason: MATRIX_COPY.fbaLocked }),
     field: undefined,
     colId: FBA_COL,
     headerName: 'FBA qty',
-    headerTooltip: `Units Amazon holds at its FBA warehouses for this SKU. ${MATRIX_COPY.fbaLocked}. Parent = the family total.`,
+    headerTooltip: `Units Amazon holds at its FBA warehouses for this SKU; "+N" = on its way to Amazon. ${MATRIX_COPY.fbaLocked}. Parent = the family total.`,
     width: FBA_COL_W, minWidth: FBA_COL_W,
     suppressHeaderMenuButton: true, suppressFillHandle: true, suppressPaste: true, sortable: true, resizable: true,
+    cellRenderer: FbaQtyCell,
+    cellRendererParams: { kind: 'integer', reason: MATRIX_COPY.fbaLocked, rowOf },
     cellClassRules: { 'nds-cell-is-locked': () => true },
     valueGetter: (p) => (p.data ? fbaUnitsOf(rowOf(p.data.id)) : null),
     valueFormatter: (p) => (p.value == null ? '' : String(p.value)),
-    tooltipValueGetter: (p) => (p.data ? fbaTooltip(rowOf(p.data.id)) : undefined),
+    tooltipValueGetter: (p) => (p.data ? fbaTooltip(rowOf(p.data.id), fbaPlansOf()) : undefined),
     getQuickFilterText: (p) => { const n = p.data ? fbaUnitsOf(rowOf(p.data.id)) : null; return n == null ? '' : `${n} fba` },
   }
 

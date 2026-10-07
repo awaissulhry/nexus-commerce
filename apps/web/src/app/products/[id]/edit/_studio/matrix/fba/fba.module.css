@@ -1,0 +1,97 @@
+/* Send to FBA (Step 4 part E1) — the dialog's layout only; every control and colour is the design system's (Modal,
+   Field, Listbox, DateField, SegmentedControl, DataGrid, NumberStepper, Pill, Disclosure, Input, MetricStrip, Banner). */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  line-height: 1.5;
+}
+
+/* From · To · Ready on one line; one under the other on a phone. */
+.where {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* Prep by · Labels by, then the hint; they wrap on a narrow dialog. */
+.owners {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-8) var(--nds-space-18);
+  min-width: 0;
+}
+
+/* The table holds its place while the draft is read again (From or To changed; Create plan is held meanwhile). */
+.table {
+  min-width: 0;
+}
+
+.sku {
+  font-family: var(--nds-font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* The ONE summary line: `2 SKUs · 29 units · 3 boxes · 31.4 kg`. */
+.totals {
+  margin: 0;
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Loose units go in 2 mixed boxes · 60 × 40 × 40 cm" and its Change box size. */
+.box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+.sides {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 140px));
+  gap: var(--nds-space-10);
+  padding-top: var(--nds-space-8);
+}
+
+.list {
+  margin: 0;
+  padding-inline-start: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  overflow-wrap: anywhere;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-10);
+  min-height: 168px;
+}
+
+/* The footer's sentence (why Create plan is held). On a phone it takes its own line above the buttons. */
+.status {
+  min-width: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+@media (max-width: 640px) {
+  .where { grid-template-columns: minmax(0, 1fr); }
+  .sides { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .status { flex-basis: 100%; }
+}

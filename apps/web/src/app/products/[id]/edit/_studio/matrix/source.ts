@@ -31,6 +31,7 @@ import {
   type MatrixWriteResult,
 } from './contract'
 import type { PreviewCoordinateInput, PreviewRowInput } from './fixtures'
+import { parseFbaInbound, parseFbaPlans } from './fba/sendToFba'
 
 /* ── the read ───────────────────────────────────────────────────────────────────────────────── */
 
@@ -166,6 +167,8 @@ export function parseMatrixRead(body: unknown, productId: string): { read: Matri
       },
       fba: fbaOf(r.fba),
       pack: packOf(r.pack),
+      // Send to FBA (Step 4): Amazon's inbound + the units in open Nexus plans ("+N" in the FBA qty cell).
+      fbaInbound: parseFbaInbound(r.fbaInbound),
       basePrice: typeof r.basePrice === 'number' ? r.basePrice : null,
       status: typeof r.status === 'string' ? r.status : '',
       cells: r.cells && typeof r.cells === 'object' ? (r.cells as MatrixRowRead['cells']) : {},
@@ -181,6 +184,8 @@ export function parseMatrixRead(body: unknown, productId: string): { read: Matri
       rows,
       policies: Array.isArray(b.policies) ? (b.policies as MatrixRead['policies']) : [],
       ...(Array.isArray(b.locations) ? { locations: locationsOf(b.locations) } : {}),
+      // Send to FBA (Step 4): this family's open plans (absent on an older server).
+      ...(Array.isArray(b.fbaPlans) ? { fbaPlans: parseFbaPlans(b.fbaPlans) } : {}),
     },
   }
 }

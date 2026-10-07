@@ -6,10 +6,16 @@
  * keeps its own dialog (own stock, or the stock another business lends). It replaces the three verb menus
  * (Prices · Stock · Sync, 2026-09-26): a change the Owner looked for under one of them was hard to find.
  *
+ * Step 4 (Owner 2026-10-07): `Send to FBA…` — the ticked SKUs (a ticked parent = every variation) into ONE dialog that
+ * creates an Amazon inbound plan (`fba/SendToFbaDialog.tsx`). Offered to a person who may manage inbound, on a family
+ * that is on Amazon, outside preview.
+ *
  * A held button stays focusable and says why (`aria-disabled` + its reason), never a silent `disabled`.
  */
 import { memo } from 'react'
 import { Pencil } from 'lucide-react'
+
+import { FBA_SEND_COPY } from '@nexus/shared/fba-send'
 
 import { Button } from '@/design-system/primitives'
 
@@ -19,9 +25,11 @@ export interface MatrixSelectionActionsProps {
   editHeld: string | null
   /** `Stock source…` — the ticked SKUs, or the whole family when the parent is ticked; null = not offered. */
   stockSource: { description: string; onSelect: () => void } | null
+  /** `Send to FBA…` — the ticked SKUs; `held` = why it cannot open now (still loading, too many SKUs); null = not offered. */
+  sendToFba?: { description: string; held: string | null; onSelect: () => void } | null
 }
 
-export const MatrixSelectionActions = memo(function MatrixSelectionActions({ onEdit, editHeld, stockSource }: MatrixSelectionActionsProps) {
+export const MatrixSelectionActions = memo(function MatrixSelectionActions({ onEdit, editHeld, stockSource, sendToFba }: MatrixSelectionActionsProps) {
   return (
     <>
       <Button
@@ -37,6 +45,18 @@ export const MatrixSelectionActions = memo(function MatrixSelectionActions({ onE
       {stockSource && (
         <Button size="sm" variant="secondary" title={stockSource.description} onClick={stockSource.onSelect}>
           Stock source…
+        </Button>
+      )}
+      {sendToFba && (
+        <Button
+          size="sm"
+          variant="secondary"
+          aria-disabled={sendToFba.held ? true : undefined}
+          className={sendToFba.held ? 'held' : undefined}
+          title={sendToFba.held ?? sendToFba.description}
+          onClick={() => { if (!sendToFba.held) sendToFba.onSelect() }}
+        >
+          {FBA_SEND_COPY.open}
         </Button>
       )}
     </>
