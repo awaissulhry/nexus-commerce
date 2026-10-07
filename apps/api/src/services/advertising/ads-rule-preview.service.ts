@@ -101,6 +101,8 @@ export interface BudgetPreviewDraft {
   actions?: unknown
   conditions?: unknown
   scopeMarketplace?: string | null
+  /** The rule's portfolio scope (external portfolio id, as `AutomationRule.scopePortfolioId`). */
+  scopePortfolioId?: string | null
 }
 
 const PREVIEW_RULE_ID = 'draft-preview'
@@ -166,6 +168,13 @@ export async function runDraftPreview<C extends CampaignCtx>(
     buildContexts?: (windowDays: number) => Promise<unknown[]>
     /** The id key + value the handler is called with. Defaults to `campaignId` = the campaign's id. */
     entityId?: (ctx: C) => { key: string; value: string }
+    /**
+     * True where the ENGINE reads an empty picker as "no restriction" (Share of Voice: `bid_apply`'s
+     * `campaignIds` and `builderScopeCampaignIds` both do). The preview then runs over the rule's
+     * market / portfolio scope instead of returning nothing. Off by default: a Budget rule with no
+     * picks matches nothing, and its preview says so.
+     */
+    emptyPickMeansScope?: boolean
   },
 ): Promise<DraftPreviewRun<C>> {
   const blank = (windowDays: number): DraftPreviewRun<C> => ({
@@ -182,7 +191,7 @@ export async function runDraftPreview<C extends CampaignCtx>(
   const windowDays = Math.max(7, Math.min(90, Math.round(raw)))
 
   const picked = builderDraftCampaignIds(draft.actions, opts.slug) ?? []
-  if (picked.length === 0) return blank(windowDays)
+  if (picked.length === 0 && !opts.emptyPickMeansScope) return blank(windowDays)
 
   // ── the engine's own translation, so the conditions and the action are the real ones ──
   const translated = maybeTranslateAdsRule({ id: PREVIEW_RULE_ID, actions: draft.actions, conditions: draft.conditions })
@@ -204,8 +213,9 @@ export async function runDraftPreview<C extends CampaignCtx>(
   const pickedSet = new Set(picked)
 
   // Only the picked campaigns can be touched — the same restriction `campaignAllowed` applies
-  // inside the handler, and (since BUD-P2) the same list that governs the rule's assignment.
-  const mine = contexts.filter((c) => c.campaign?.id != null && pickedSet.has(c.campaign.id))
+  // inside the handler, and (since BUD-P2) the same list that governs the rule's assignment. With
+  // `emptyPickMeansScope` and no picks, every context with a campaign is offered, as the engine does.
+  const mine = contexts.filter((c) => c.campaign?.id != null && (picked.length === 0 || pickedSet.has(c.campaign.id)))
 
   /**
    * The rule's marketplace scope, enforced by the same pure matcher the tick uses.
@@ -216,9 +226,22 @@ export async function runDraftPreview<C extends CampaignCtx>(
    * widget whose whole job is to say what will happen. Measured on the live rig before ship.
    */
   const mkt = draft.scopeMarketplace && draft.scopeMarketplace !== 'all' ? draft.scopeMarketplace : null
+  /**
+   * The portfolio scope, resolved exactly as the tick resolves it: campaign → `Campaign.portfolioId`.
+   * Read only when the draft names a portfolio, so a draft without one costs nothing extra.
+   */
+  const portfolio = draft.scopePortfolioId ? String(draft.scopePortfolioId) : null
+  const portfolioOf = new Map<string, string | null>()
+  if (portfolio && mine.length) {
+    const camps = await prisma.campaign.findMany({
+      where: { id: { in: [...new Set(mine.map((c) => c.campaign.id))] } },
+      select: { id: true, portfolioId: true },
+    })
+    for (const c of camps) portfolioOf.set(c.id, c.portfolioId)
+  }
   const scoped = mine.filter((c) => ruleMatchesScope(
-    { scopeMarketplace: mkt, scopePortfolioId: null, scopeCampaignId: null, scopeProductIds: null },
-    { marketplace: c.marketplace, campaignId: c.campaign.id, portfolioId: null },
+    { scopeMarketplace: mkt, scopePortfolioId: portfolio, scopeCampaignId: null, scopeProductIds: null },
+    { marketplace: c.marketplace, campaignId: c.campaign.id, portfolioId: portfolioOf.get(c.campaign.id) ?? null },
   ))
 
   const blocks = translated.blocks?.length ? translated.blocks : [{ conditions: translated.conditions, actions: translated.actions }]

@@ -1,6 +1,7 @@
 import { amazonCredsConfigured } from '../../lib/amazon-sp-client.js'
 import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
 import { amazonSpClient } from '../../lib/amazon-sp-client.js'
+import { sendWithRateRetry } from "../sp-api-rate-retry.js";
 import { SellingPartner } from "amazon-sp-api";
 import { parse } from "csv-parse/sync";
 // P5.1 — Orders v0 is removed 2027-03-27. `amazon-orders-2026.ts` speaks both
@@ -320,14 +321,16 @@ export class AmazonService {
       const sp = await this.getClient(accountId);
 
       // Step 1 — Create the report
-      const createRes: any = await sp.callAPI({
+      // A gateway "Not sent yet … Retry later." (the account's createReport bucket is shared with every
+      // other report pull) is sent again after the wait it names instead of failing the catalog read.
+      const createRes: any = await sendWithRateRetry(() => sp.callAPI({
         operation: "createReport",
         endpoint: "reports",
         body: {
           reportType: "GET_MERCHANT_LISTINGS_ALL_DATA",
           marketplaceIds: [mpId],
         },
-      });
+      }));
 
       const reportId: string = createRes.reportId;
       console.log(`[Amazon] Report created: ${reportId}`);

@@ -91,6 +91,26 @@ describe('applyBidOptimization', () => {
     expect(bulk).not.toHaveBeenCalled()
   })
 
+  it('honest writes — askGate rides to the bulk write; what it refused is counted not sent, each reason once', async () => {
+    const refused = (error: string) => ({ ok: false, outboundQueueId: null, bidHistoryIds: [], actionLogId: null, error })
+    bulk.mockResolvedValue({
+      applied: 1, skipped: 0, failed: 3, chunks: 1,
+      outcomes: [
+        { ok: true, outboundQueueId: 'q1', bidHistoryIds: [], actionLogId: 'a1', error: null },
+        refused('Not sent to Amazon: campaign c1 is not on the live-write allowlist'),
+        refused('Not sent to Amazon: campaign c1 is not on the live-write allowlist'),
+        refused('entity_orphaned'),
+      ],
+    } as never)
+    const out = await applyBidOptimization({ changes: [{ targetId: 't1', proposedBidCents: 30 }], actor: 'automation:auto-bid', askGate: true })
+    expect(bulk.mock.calls[0]![0]!).toMatchObject({ askGate: true })
+    expect(out).toMatchObject({ applied: 1, notSent: 3, notSentReasons: ['Not sent to Amazon: campaign c1 is not on the live-write allowlist', 'entity_orphaned'] })
+    // Without it, the bulk write is asked as before (no askGate key at all).
+    bulk.mockClear()
+    await applyBidOptimization({ changes: [{ targetId: 't1', proposedBidCents: 30 }] })
+    expect(bulk.mock.calls[0]![0]!).not.toHaveProperty('askGate')
+  })
+
   it('reports the gate-verdict counts, not the request size', async () => {
     bulk.mockResolvedValue({ applied: 1, skipped: 1, failed: 0, outcomes: [], chunks: 1 } as never)
     const out = await applyBidOptimization({
