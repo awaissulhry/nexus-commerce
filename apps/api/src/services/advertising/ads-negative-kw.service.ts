@@ -10,6 +10,9 @@
  * Scope of this service: SP only, covering ~89% of campaigns in the
  * IT account. SB negatives need Amazon to unblock the v1 gateway
  * (separate concern, deferred).
+ * W4-11 — no longer only: for a caller that may change SB/SD (`allowSbSd`, Claude's add-negative-targets), a negative
+ * keyword in a Sponsored Brands ad group goes to SB 3.0's own POST /sb/negativeKeywords and a negative product target in
+ * a Sponsored Display ad group to SD 3.0's POST /sd/negativeTargets (ads-api-client.ts), through the same order below.
  *
  * 5b — THE ONE NEGATIVE WRITE SERVICE (review 7.1, 7.5, 7.6, 7.12). Every Nexus path that adds a negative — the
  * launches, bulk negatives, the bulk sheet, blueprints, AI goals, the launch repair, harvest, the rules, n-grams, the

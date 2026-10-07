@@ -17,7 +17,8 @@
  *   pre-switch     a request queued before these tools could run carries no stored reach: it is never run (d1 = A),
  *                  and the approval sweep expires it (approval-inbox.service.ts).
  *   stale          `execute` re-runs the dry run and refuses when a starting value the person approved has moved.
- *   SP only        phase 1 changes Sponsored Products campaigns only.
+ *   SP only        phase 1 changes Sponsored Products campaigns only. W4-11 — the budget, bid, status and negative tools
+ *                  also send the Sponsored Brands / Display changes Nexus has endpoints for (adWriteRefusalOf).
  *   bid step       W4-4 — a bid request a person approves sends the bid asked for, past the largest change per action
  *                  after the card's warning; a run by rule is stepped as before (bidStepOf). `afterwards` says whether
  *                  auto-bid then leaves the bid alone (a person's) or may move it (handed back).
