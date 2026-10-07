@@ -17,7 +17,9 @@
  * Pure: no database, no clock.
  */
 
-export type BrainPhase = 'LAUNCH' | 'GROW' | 'PROFIT' | 'CLEAR_STOCK' | 'DEFEND'
+/** The strategy's `goal` values (ads-strategy/fields.ts STRATEGY_GOALS), which the brain reads as the phase. */
+export const BRAIN_PHASES = ['LAUNCH', 'GROW', 'PROFIT', 'CLEAR_STOCK', 'DEFEND'] as const
+export type BrainPhase = (typeof BRAIN_PHASES)[number]
 
 export const BAND_BELOW = 0.9
 export const BAND_ABOVE = 1.15
