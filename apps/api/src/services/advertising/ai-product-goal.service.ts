@@ -351,14 +351,21 @@ export async function keywordBuyers(market: string, keywords: readonly string[])
  * switched off, whatever a person switched on meanwhile — an archived goal leaves nothing proposing (B-2). The AI
  * Advertising screen's Archive (POST /advertising/ai-goals/:id/archive), create-ai-goal-campaigns (a goal it saved and
  * could not launch) and that tool's undo (retireProductGoal) all come here. W4-12b — it set only the goal's status, so
- * the screen's Archive left the goal's plan running. A plan that is gone is not an error.
+ * the screen's Archive left the goal's plan running. A plan that is gone is not an error. A plan switched on again
+ * later keeps these rules off (and says the archive did it) until a person switches them on in Rules.
  */
 export async function archiveProductGoal(id: string) {
   const goal = await prisma.adProductGoal.update({ where: { id }, data: { status: 'ARCHIVED' } })
   const plan = goal.planId ? await prisma.autopilotPlan.findUnique({ where: { id: goal.planId }, select: { id: true, linkedRuleIds: true } }) : null
   if (!plan) return goal
-  await prisma.autopilotPlan.update({ where: { id: plan.id }, data: { enabled: false } })
-  const ruleIds = (Array.isArray(plan.linkedRuleIds) ? plan.linkedRuleIds : []).map((l) => String((l as { ruleId?: unknown })?.ruleId ?? '')).filter(Boolean)
+  // Each link remembers that the archive switched its rule off (coordination.ts `offBy`), so a plan switched on again
+  // keeps the rule off and says why, instead of saying a person switched it off in Rules.
+  const links = (Array.isArray(plan.linkedRuleIds) ? plan.linkedRuleIds : []) as Array<Record<string, unknown>>
+  const ruleIds = links.map((l) => String(l?.ruleId ?? '')).filter(Boolean)
+  await prisma.autopilotPlan.update({
+    where: { id: plan.id },
+    data: { enabled: false, ...(links.length ? { linkedRuleIds: links.map((l) => ({ ...l, offBy: 'goal-archive' })) as never } : {}) },
+  })
   if (ruleIds.length) await prisma.automationRule.updateMany({ where: { id: { in: ruleIds } }, data: { enabled: false } })
   return goal
 }

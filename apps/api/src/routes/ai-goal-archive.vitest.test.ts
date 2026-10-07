@@ -54,14 +54,14 @@ afterAll(async () => {
 }, 30_000)
 
 /** A launched goal whose plan is switched on (AUTO) with its two rules on, as a person may have left them. */
-async function runningGoal(name: string) {
+async function runningGoal(name: string, syncedEnabled = true) {
   return inside(async () => {
     const db = database.client
     const rule = (module: string) => db.automationRule.create({ data: { domain: 'advertising', name: `[AI] ${name} — ${module}`, trigger: 'SCHEDULE', enabled: true, dryRun: true, actions: [{ type: 'keyword-harvesting', control: 'manual', campaignIds: [] }] } as never })
     const [harvest, negate] = [await rule('Harvest'), await rule('Negate')]
     const plan = await db.autopilotPlan.create({ data: {
       name: `${name} plan`, marketplace: 'IT', autonomy: 'AUTO', enabled: true,
-      linkedRuleIds: [{ ruleId: harvest.id, module: 'harvest' }, { ruleId: negate.id, module: 'negate' }],
+      linkedRuleIds: [{ ruleId: harvest.id, module: 'harvest', syncedEnabled }, { ruleId: negate.id, module: 'negate', syncedEnabled }],
     } as never })
     const goal = await db.adProductGoal.create({ data: {
       name, aiTarget: 'SALES', budgetMode: 'STRICT', marketplace: 'IT', products: [{ sku: 'TEST-SKU-1', asin: 'B0TESTGOAL' }] as never,
@@ -80,6 +80,25 @@ const state = (g: { goalId: string; planId: string; ruleIds: string[] }) => insi
   return { goal: goal.status, plan: plan.enabled, rules: [...new Set(rules.map((r) => r.enabled))] }
 })
 
+/**
+ * The plan switched on again after the archive (its next sync, autopilot/coordination.ts): its rules stay off — a person
+ * switches them on in Rules — and its feed says the archive did it, not "switched off in Rules".
+ */
+async function planSwitchedOnAgain(g: { planId: string; ruleIds: string[] }) {
+  const { syncLinkedRules } = await import('../services/advertising/autopilot/coordination.js')
+  const plan = await inside(() => database.client.autopilotPlan.findUniqueOrThrow({ where: { id: g.planId } }))
+  const links = await inside(() => syncLinkedRules({ ...plan, enabled: true }))
+  expect(links.every((l) => (l as { personOff?: boolean }).personOff === true)).toBe(true)
+  const rules = await inside(() => database.client.automationRule.findMany({ where: { id: { in: g.ruleIds } }, select: { enabled: true } }))
+  expect(rules.every((r) => !r.enabled)).toBe(true)
+  const notes = await inside(() => database.client.autopilotDecision.findMany({ where: { planId: g.planId, action: 'NOOP' }, select: { reason: true } }))
+  expect(notes.map((n) => n.reason)).toEqual([
+    expect.stringMatching(/was switched off when this plan's AI goal was archived\. The plan leaves it off; switch it on in Rules/),
+    expect.stringMatching(/was switched off when this plan's AI goal was archived/),
+  ])
+  expect(notes.some((n) => /switched off in Rules\./.test(n.reason ?? ''))).toBe(false)
+}
+
 describe('W4-12b — an archived AI goal leaves nothing running', () => {
   it('the screen\'s Archive: the goal archived, its plan switched off and its rules off; the answer as before', async () => {
     const g = await runningGoal('Screen archive goal')
@@ -89,13 +108,16 @@ describe('W4-12b — an archived AI goal leaves nothing running', () => {
     expect(res.json()).toMatchObject({ ok: true, goal: { id: g.goalId, status: 'ARCHIVED', planId: g.planId } })
     // Before W4-12b: { goal: 'ARCHIVED', plan: true, rules: [true] } — the plan went on running for an archived goal.
     expect(await state(g)).toEqual({ goal: 'ARCHIVED', plan: false, rules: [false] })
+    await planSwitchedOnAgain(g)
   })
 
   it('Claude\'s path (create-ai-goal-campaigns\' undo) goes through the same archive', async () => {
-    const g = await runningGoal('Claude archive goal')
+    // A goal Claude made: its plan's links say the sync left the rules off (the plan was born off).
+    const g = await runningGoal('Claude archive goal', false)
     const { getTool } = await import('../services/agents/tool-registry.js')
     await inside(() => getTool('create-ai-goal-campaigns')!.undo!.undone!({ before: null, after: { goalId: g.goalId }, id: 'test-change' } as never))
     expect(await state(g)).toEqual({ goal: 'ARCHIVED', plan: false, rules: [false] })
+    await planSwitchedOnAgain(g)
   })
 
   it('a goal never launched (no plan), or whose plan is gone, is archived without an error', async () => {
