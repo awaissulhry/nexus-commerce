@@ -133,12 +133,16 @@ interface BornSafeOptions {
   deferredPlacements?: Array<{ campaignId: string; campaign: string; placementBidding: Array<{ placement: string; percentage: number }> }>
 }
 
-/** The run row's `options` (AX3.4: the naming rules, copy scope and value policies; B-1: what a safe run was born with). */
+/**
+ * The run row's `options` (AX3.4: the naming rules, copy scope and value policies; B-1: what a safe run was born with;
+ * W4-10: the translations a copy into another market was planned with, so "why is this keyword called that" has an answer).
+ */
 function rowOptions(req: ApplyRequest): object | undefined {
   const own = req.options ? {
     naming: req.options.naming, include: req.options.include,
     bidPolicy: req.options.bidPolicy, budgetPolicy: req.options.budgetPolicy,
     dailyBudgetCapEur: req.options.dailyBudgetCapEur,
+    ...(req.options.translations ? { translations: req.options.translations } : {}),
   } : undefined
   if (!req.bornSafe) return own
   const safe: BornSafeOptions = { source: 'claude', changeSetId: req.bornSafe.changeSetId, requester: req.bornSafe.by }
