@@ -134,7 +134,9 @@ describe('C3 — the server and every change tool name the business', () => {
       // W4-14 — a copy into another market, a person's hourly plan and a person's pause keep their own doors.
       'a copy into another market never runs by rule',
       'An hourly bid plan a person made changes by rule only where the business allowed it',
-      "only with enable-ads includePeoplesPauses and the approver's authenticator code, never by rule"]) {
+      "only with enable-ads includePeoplesPauses and the approver's authenticator code, never by rule",
+      // Platform health watchdog (2026-10-07) — the daily checks are read first in an unattended run.
+      'read platform-health-checks first in a daily or unattended run']) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
   })

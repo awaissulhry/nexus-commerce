@@ -15,6 +15,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 
 ## 1. Read
 
+0. **Nexus's own checks.** `platform-health-checks` (`status: "problems"` for only what is not ok): the daily watchdog's verdict on scheduled jobs and process restarts, each data feed per market, whether ad writes reached Amazon, approved plan steps, automation that cannot progress and the queue path — each in plain words with its likely cause, next step and evidence. A stale run means the watchdog itself did not run; `live: true` measures now.
 1. **Accounts.** `channel-connections` (`channel`; `connectionId` for one account's last 10 events): health and why, sign-in state, markets, permissions missing since the channel asked for more, last sync and last error, own or shared with this business.
 2. **Calls.** `channel-health` (`channel`, `hours` up to 168): failed and slow calls against their targets, how long the oldest waiting change has waited, incoming events that gave up, the five worst operations. `traceId` (from `sync-activity`) shows every channel call one change made.
 3. **Inbox.** `alerts-inbox` (`source`, `severity`): failed or given-up syncs, alerts that fired and were not acknowledged, unread notifications, failed incoming events, worst first; the first page counts them and lists the alert rules.
@@ -24,6 +25,7 @@ The Nexus server's instructions hold the rules for every change — say which bu
 
 ## 2. Report
 
+- Every check of `platform-health-checks` that is not ok, worst first, with its next step; then
 - Accounts that need a person (sign in again, grant a missing permission), with where: Settings › Channels in Nexus.
 - Channels whose calls fail or lag, the worst operations, and the oldest waiting change.
 - Alerts by severity, the recurring errors, and dead queue items per channel.

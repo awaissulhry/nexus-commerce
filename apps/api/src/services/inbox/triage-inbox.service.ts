@@ -25,6 +25,23 @@ export interface InboxItem {
 
 const SEVERITY_RANK: Record<string, number> = { critical: 0, warn: 1, info: 2 }
 
+/** The platform health watchdog's alert rules: metric `platformHealth:<checkId>`, value 2 = fail, 1 = warn. */
+const HEALTH_PREFIX = 'platformHealth:'
+const HEALTH_FAIL_VALUE = 2
+const healthCheckId = (metric: unknown): string | null =>
+  typeof metric === 'string' && metric.startsWith(HEALTH_PREFIX) ? metric.slice(HEALTH_PREFIX.length) : null
+
+/** The newest message of each check, as the watchdog stored it. */
+async function latestHealthMessages(checkIds: string[]): Promise<Map<string, string>> {
+  const rows = await prisma.platformHealthCheck.findMany({
+    where: { checkId: { in: checkIds } },
+    orderBy: { measuredAt: 'desc' },
+    distinct: ['checkId'],
+    select: { checkId: true, message: true },
+  })
+  return new Map(rows.map((r) => [r.checkId, r.message.length > 400 ? `${r.message.slice(0, 399)}…` : r.message]))
+}
+
 /** What to read: one source or all (null), one severity or all (null), and the page. */
 export interface TriageInboxQuery {
   sourceFilter: string | null
@@ -122,14 +139,21 @@ export async function readTriageInbox({ sourceFilter, severityFilter, limit, off
     })
   }
 
+  // Platform health watchdog — a check's alert says what the check found, in its words, and a failing check is critical.
+  const healthIds = [...new Set((alertItems as any[]).map((a) => healthCheckId(a.rule?.metric)).filter((id): id is string => !!id))]
+  const healthWords = healthIds.length ? await latestHealthMessages(healthIds) : new Map<string, string>()
+
   for (const a of alertItems as any[]) {
     const isRateMetric = a.rule?.metric === 'errorRate' || a.rule?.metric === 'latencyP95'
+    const healthId = healthCheckId(a.rule?.metric)
     items.push({
       key: `alert:${a.id}`,
       source: 'alert',
-      severity: isRateMetric ? 'critical' : 'warn',
+      severity: isRateMetric || (healthId && a.value >= HEALTH_FAIL_VALUE) ? 'critical' : 'warn',
       title: `Alert fired: ${a.rule?.name ?? a.ruleId}`,
-      body: a.rule?.channel
+      body: healthId && healthWords.has(healthId)
+        ? healthWords.get(healthId)!
+        : a.rule?.channel
         ? `${a.rule.channel} · ${a.rule.metric} = ${a.value}`
         : `${a.rule?.metric ?? 'metric'} = ${a.value}`,
       channel: a.rule?.channel ?? undefined,
@@ -201,8 +225,8 @@ export async function countTriageInbox(): Promise<{ total: number; bySeverity: {
     await Promise.all([
       (prisma.outboundSyncQueue as any).count({ where: { isDead: true } }),
       (prisma.outboundSyncQueue as any).count({ where: { syncStatus: 'FAILED', retryCount: { gt: 0 }, isDead: false } }),
-      prisma.alertEvent.count({ where: { status: 'TRIGGERED', rule: { metric: { in: ['errorRate', 'latencyP95'] } } } }),
-      prisma.alertEvent.count({ where: { status: 'TRIGGERED', rule: { metric: { notIn: ['errorRate', 'latencyP95'] } } } }),
+      prisma.alertEvent.count({ where: { status: 'TRIGGERED', OR: [{ rule: { metric: { in: ['errorRate', 'latencyP95'] } } }, { value: { gte: HEALTH_FAIL_VALUE }, rule: { metric: { startsWith: HEALTH_PREFIX } } }] } }),
+      prisma.alertEvent.count({ where: { status: 'TRIGGERED', rule: { metric: { notIn: ['errorRate', 'latencyP95'] } }, NOT: { value: { gte: HEALTH_FAIL_VALUE }, rule: { metric: { startsWith: HEALTH_PREFIX } } } } }),
       prisma.notification.count({ where: { readAt: null } }),
       prisma.webhookEvent.count({ where: { isProcessed: false, error: { not: null } } }),
     ])
