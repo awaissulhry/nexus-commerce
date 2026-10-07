@@ -39,6 +39,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { envEnabled } from '../utils/env-flag.js'
 import type { AsinYieldEvidence } from '../services/advertising/sqp-yield.js'
+import type { ReportPacer } from '../services/advertising/sqp-async.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
@@ -143,6 +144,99 @@ export function buildSqpSummary(args: {
   return { summary, fatal: null }
 }
 
+/** What the catch-up did tonight, for the summary and the log. */
+export interface SqpCatchUpOutcome {
+  /** (market × week) units asked for tonight */
+  units: number
+  /** gaps found in all — the ones not asked tonight are asked on later nights */
+  gaps: number
+  created: number
+  deferred: number
+  failed: number
+  /** ` · catchUp=…` — appended to the request pass's summary; empty when the catch-up is off */
+  summary: string
+}
+
+/**
+ * The catch-up half of the request pass (see sqp-catchup.ts for the rule). Exported for its test.
+ *
+ * 🔴 The summary it returns must never carry a `rows=` token: keyword-tracker.service.ts reads
+ * `/rows=(\d+)/` out of this job's summary, and the first match wins.
+ */
+export async function runCatchUp(args: {
+  /** tonight's market order (already rotated), only markets with a marketplace id */
+  markets: string[]
+  idOf: Map<string, string>
+  yieldOf: (mkt: string) => Promise<{ pool: string[]; evidence: Map<string, AsinYieldEvidence> }>
+  pacer: ReportPacer
+  deadlineAt: number
+  now: Date
+}): Promise<SqpCatchUpOutcome> {
+  const {
+    planCatchUp, catchUpLookbacks, weekKey,
+    SQP_CATCHUP_WEEKS_PER_NIGHT, SQP_CATCHUP_ASINS_PER_WEEK, SQP_CATCHUP_ANSWERED_STATUSES,
+  } = await import('../services/advertising/sqp-catchup.js')
+  const none: SqpCatchUpOutcome = { units: 0, gaps: 0, created: 0, deferred: 0, failed: 0, summary: '' }
+  if (SQP_CATCHUP_WEEKS_PER_NIGHT === 0 || SQP_CATCHUP_ASINS_PER_WEEK === 0 || args.markets.length === 0) return none
+
+  const { periodWindow, SQP_LOOKBACK } = await import('../services/advertising/sqp.service.js')
+  const { SOV_DEFAULT_WEEKS } = await import('../services/advertising/share-of-voice.service.js')
+  const { rankByYield } = await import('../services/advertising/sqp-yield.js')
+  const { requestSqpReports } = await import('../services/advertising/sqp-async.service.js')
+
+  // Newest first: lookback SQP_LOOKBACK+1 … SOV_DEFAULT_WEEKS-2. The oldest asked week still has a week
+  // of life inside Share of Voice's 56-day window once it is collected.
+  const weeks = catchUpLookbacks(SQP_LOOKBACK + 1, SOV_DEFAULT_WEEKS - 2).map((k) => periodWindow('WEEK', args.now, k))
+  if (!weeks.length) return none
+  const starts = weeks.map((w) => w.start)
+
+  const markets: Array<{ mkt: string; proven: string[]; answered: Map<string, Set<string>> }> = []
+  for (const mkt of args.markets) {
+    const { pool, evidence } = await args.yieldOf(mkt)
+    const proven = rankByYield(pool, evidence).filter((r) => r.tier === 'proven').map((r) => r.asin)
+    const top = proven.slice(0, SQP_CATCHUP_ASINS_PER_WEEK)
+    const answered = new Map<string, Set<string>>()
+    if (top.length) {
+      const [asked, held] = await Promise.all([
+        prisma.sqpReportRequest.findMany({
+          where: { marketplace: mkt, reportPeriod: 'WEEK', startDate: { in: starts }, asin: { in: top }, status: { in: [...SQP_CATCHUP_ANSWERED_STATUSES] } },
+          select: { asin: true, startDate: true },
+        }),
+        prisma.searchQueryPerformance.findMany({
+          where: { marketplace: mkt, reportPeriod: 'WEEK', startDate: { in: starts }, asin: { in: top } },
+          select: { asin: true, startDate: true }, distinct: ['asin', 'startDate'],
+        }),
+      ])
+      for (const r of [...asked, ...held]) {
+        if (!r.asin) continue
+        const k = weekKey(r.startDate)
+        const set = answered.get(k) ?? new Set<string>()
+        set.add(r.asin)
+        answered.set(k, set)
+      }
+    }
+    markets.push({ mkt, proven, answered })
+  }
+
+  const plan = planCatchUp({ markets, weeks, maxUnits: SQP_CATCHUP_WEEKS_PER_NIGHT, asinsPerWeek: SQP_CATCHUP_ASINS_PER_WEEK })
+  let created = 0, deferred = 0, failed = 0
+  const parts: string[] = []
+  for (const u of plan.units) {
+    const marketplaceId = args.idOf.get(u.mkt)!
+    const r = await requestSqpReports({
+      marketplaceCode: u.mkt, marketplaceId, asins: u.asins, period: 'WEEK',
+      start: u.week.start, end: u.week.end, pacer: args.pacer, deadlineAt: args.deadlineAt,
+    })
+    created += r.created; deferred += r.deferred; failed += r.failed
+    parts.push(`${u.mkt} ${weekKey(u.week.start)} ${r.created}/${u.asins.length}${r.deferred ? ` ${r.deferred} deferred` : ''}${r.failed ? ` ${r.failed} failed` : ''}`)
+  }
+  const summary = plan.gaps === 0
+    ? ' · catchUp=none (no missing week)'
+    : ` · catchUp=${plan.units.length}/${plan.gaps} weeks asked: requested=${created}${deferred ? ` deferred=${deferred}` : ''}${failed ? ` failed=${failed}` : ''}` +
+      (parts.length ? ` [${parts.join(' · ')}]` : '')
+  return { units: plan.units.length, gaps: plan.gaps, created, deferred, failed, summary }
+}
+
 /**
  * ACR.1.2d — the tick's work AND its summary, without the CronRun wrapper, so the
  * manual-trigger registry can call it and produce ONE honest row. See the same note on
@@ -237,38 +331,50 @@ export async function runSqpIngestOnce(): Promise<string> {
     // ONE pacer for the whole pass: createReport is one bucket per account, not per market.
     const pacer = createReportPacer()
     const deadlineAt = startedAt + SQP_REQUEST_PASS_BUDGET_MS
+
+    // Each market's yield evidence, read once and shared by the normal week and the catch-up.
+    const yieldByMarket = new Map<string, { pool: string[]; evidence: Map<string, AsinYieldEvidence> }>()
+    const yieldOf = async (mkt: string) => {
+      const known = yieldByMarket.get(mkt)
+      if (known) return known
+      const pool = await ourAsinsForMarketplace(mkt, SQP_ROTATION_POOL)
+
+      // Successes. SearchQueryPerformance records only these — an ASIN that returned nothing leaves
+      // no row here and is indistinguishable from one never asked.
+      const wins = await prisma.searchQueryPerformance.groupBy({
+        by: ['asin'], where: { reportPeriod: 'WEEK', marketplace: mkt, asin: { in: pool } }, _count: { _all: true },
+      })
+      const weeks = await prisma.searchQueryPerformance.findMany({
+        where: { reportPeriod: 'WEEK', marketplace: mkt, asin: { in: pool } },
+        select: { asin: true, startDate: true }, distinct: ['asin', 'startDate'],
+      })
+      const weekCount = new Map<string, number>()
+      for (const w of weeks) if (w.asin) weekCount.set(w.asin, (weekCount.get(w.asin) ?? 0) + 1)
+
+      // 🔴 And the zeros, which live ONLY in the ledger. Without this an ASIN measured five times
+      // and empty five times is treated as unexplored and gets asked again forever.
+      const asked = await prisma.sqpReportRequest.groupBy({
+        by: ['asin'], where: { marketplace: mkt, reportPeriod: 'WEEK', asin: { in: pool } }, _count: { _all: true },
+      })
+      const askedCount = new Map(asked.map((a) => [a.asin, a._count._all]))
+
+      const evidence = new Map<string, AsinYieldEvidence>()
+      for (const a of pool) {
+        const rows = wins.find((w) => w.asin === a)?._count._all ?? 0
+        evidence.set(a, { rows, weeksMeasured: weekCount.get(a) ?? 0, reportsRequested: askedCount.get(a) ?? 0 })
+      }
+      const out = { pool, evidence }
+      yieldByMarket.set(mkt, out)
+      return out
+    }
+
     for (const { mkt, asins: coreAsins } of ordered) {
       const marketplaceId = idOf.get(mkt)
       if (!marketplaceId) { parts.push(`${mkt} NO-MARKETPLACE-ID`); failed += coreAsins.length; continue }
 
       let asins = coreAsins
       if (yieldOrder) {
-        const pool = await ourAsinsForMarketplace(mkt, SQP_ROTATION_POOL)
-
-        // Successes. SearchQueryPerformance records only these — an ASIN that returned nothing leaves
-        // no row here and is indistinguishable from one never asked.
-        const wins = await prisma.searchQueryPerformance.groupBy({
-          by: ['asin'], where: { reportPeriod: 'WEEK', marketplace: mkt, asin: { in: pool } }, _count: { _all: true },
-        })
-        const weeks = await prisma.searchQueryPerformance.findMany({
-          where: { reportPeriod: 'WEEK', marketplace: mkt, asin: { in: pool } },
-          select: { asin: true, startDate: true }, distinct: ['asin', 'startDate'],
-        })
-        const weekCount = new Map<string, number>()
-        for (const w of weeks) if (w.asin) weekCount.set(w.asin, (weekCount.get(w.asin) ?? 0) + 1)
-
-        // 🔴 And the zeros, which live ONLY in the ledger. Without this an ASIN measured five times
-        // and empty five times is treated as unexplored and gets asked again forever.
-        const asked = await prisma.sqpReportRequest.groupBy({
-          by: ['asin'], where: { marketplace: mkt, reportPeriod: 'WEEK', asin: { in: pool } }, _count: { _all: true },
-        })
-        const askedCount = new Map(asked.map((a) => [a.asin, a._count._all]))
-
-        const evidence = new Map<string, AsinYieldEvidence>()
-        for (const a of pool) {
-          const rows = wins.find((w) => w.asin === a)?._count._all ?? 0
-          evidence.set(a, { rows, weeksMeasured: weekCount.get(a) ?? 0, reportsRequested: askedCount.get(a) ?? 0 })
-        }
+        const { pool, evidence } = await yieldOf(mkt)
 
         const forWeek = await prisma.sqpReportRequest.findMany({
           where: { marketplace: mkt, reportPeriod: 'WEEK', startDate: win.start, asin: { in: pool } },
@@ -289,23 +395,41 @@ export async function runSqpIngestOnce(): Promise<string> {
       created += r.created; failed += r.failed; outstanding += r.alreadyOutstanding; settled += r.alreadySettled; deferred += r.deferred
       parts.push(`${mkt} ${r.created}/${r.asinsRequested}${r.alreadyOutstanding ? ` (${r.alreadyOutstanding} already outstanding)` : ''}${r.alreadySettled ? ` (${r.alreadySettled} settled)` : ''}${r.failed ? ` ${r.failed} failed` : ''}${r.deferred ? ` ${r.deferred} deferred` : ''}`)
     }
+
+    // ── Catch-up: the older complete weeks the nightly pass missed (sqp-catchup.ts) ─────────────────
+    // After the normal week, in the same pacer and the same time budget, so it can only use what the
+    // normal week left. Bounded: SQP_CATCHUP_WEEKS_PER_NIGHT (market × week) a night, proven ASINs only.
+    // A catch-up failure never fails the normal week: it is logged and named in the summary.
+    const catchUp: SqpCatchUpOutcome = await runCatchUp({
+      markets: ordered.map((o) => o.mkt).filter((m) => idOf.has(m)),
+      idOf, yieldOf, pacer, deadlineAt, now: new Date(startedAt),
+    }).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.warn('[sqp-ingest] catch-up failed; the normal week is unaffected', { error: message })
+      return { units: 0, gaps: 0, created: 0, deferred: 0, failed: 0, summary: ` · catchUp=error(${message.slice(0, 120)})` }
+    })
     const summary =
       `mode=async · markets=${eligible.length}${skipped.length ? ` skipped=${skipped.length}[${skipped.join(',')}]` : ''}` +
       `${dormant.length ? ` dormant=${dormant.length}[${dormant.join(',')}] (0 ACTIVE listings — self-restoring)` : ''}` +
       ` · requested=${created} failed=${failed}${deferred ? ` deferred=${deferred}(not sent — asked again next night)` : ''}${outstanding ? ` alreadyOutstanding=${outstanding}` : ''}${settled ? ` settled=${settled}` : ''}` +
       ` · aim=${yieldOrder ? `yield-ordered(${explored} exploring)` : 'off'}` +
       ` · week=${win.start.toISOString().slice(0, 10)} · rows=0 (collected by sqp-collect)` +
-      (parts.length ? ` · ${parts.join(' · ')}` : '')
+      (parts.length ? ` · ${parts.join(' · ')}` : '') +
+      catchUp.summary
     // 🔴 `rows=0` here is CORRECT and must not be treated as the old zero-row failure: this pass
     // writes no SearchQueryPerformance rows by design. So this branch does NOT throw on rows=0 —
     // the honest failure for a request pass is "created nothing", which is what is checked.
     // 🔴 `settled` belongs in this condition, not outside it. Once a week has been confirmed frozen
     // for every ASIN, the correct behaviour is to request nothing — and without this term that
     // success would throw every single night, exactly as if the feed had broken.
-    if (created === 0 && outstanding === 0 && settled === 0) {
+    if (created === 0 && catchUp.created === 0 && outstanding === 0 && settled === 0) {
       throw new Error(`sqp-ingest (async): created 0 report requests across ${eligible.length} markets, nothing was already outstanding, and no week was settled. ${summary}`)
     }
-    logger.info('[sqp-ingest] request pass complete', { created, failed, deferred, outstanding, settled, explored, yieldOrder, week: win.start.toISOString().slice(0, 10), minutes: Math.round((Date.now() - startedAt) / 60_000) })
+    logger.info('[sqp-ingest] request pass complete', {
+      created, failed, deferred, outstanding, settled, explored, yieldOrder, week: win.start.toISOString().slice(0, 10),
+      catchUpWeeks: catchUp.units, catchUpGaps: catchUp.gaps, catchUpCreated: catchUp.created, catchUpDeferred: catchUp.deferred, catchUpFailed: catchUp.failed,
+      minutes: Math.round((Date.now() - startedAt) / 60_000),
+    })
     return summary
   }
 

@@ -87,14 +87,15 @@ export interface SovPreviewResult {
   ok: boolean
   error?: string
   windowDays: number
-  /** Campaigns the operator picked. */
+  /** Campaigns the operator picked. 0 = no picks: the rule's market / portfolio scope is previewed. */
   selected: number
   /**
-   * Of the picked campaigns' keyword targets, how many produced a context at all — i.e. carry a
-   * market share Amazon reported on a complete week. The rest were never offered to the rule.
+   * Of the picked campaigns' keyword targets (every campaign's, with no picks), how many produced a
+   * context at all — i.e. carry a market share Amazon reported on a complete week. The rest were
+   * never offered to the rule.
    */
   measurable: number
-  /** Of the measurable, how many the rule's marketplace scope admits. */
+  /** Of the measurable, how many the rule's marketplace and portfolio scope admits. */
   inScope: number
   /** Of those, how many match the criteria right now. */
   matched: number
@@ -175,18 +176,31 @@ export async function previewSovRule(draft: BudgetPreviewDraft): Promise<SovPrev
     refused: p.refused,
     reason: p.reason,
   }))
-  if (!picked.length) return empty({ periods })
+  /**
+   * 🔴 No picks is NOT "nothing" for a Share-of-Voice rule. The engine reads an empty picker as "no
+   * campaign restriction" (`builderScopeCampaignIds` → null, `bid_apply`'s empty `campaignIds`), so a
+   * SOV rule scoped by market and portfolio alone acts on every keyword target in that scope.
+   *
+   * This preview used to return `selected: 0, matched: 0` for exactly that draft without building a
+   * single context — measured 2026-10-07: a dry run of an IT rule `sovPct < 10 %` on one portfolio
+   * read 0 / 0, which said nothing about the rule and looked like "no keyword qualifies". It now runs over the rule's market / portfolio scope, as the tick would.
+   */
+  const mkt = draft.scopeMarketplace && draft.scopeMarketplace !== 'all' ? draft.scopeMarketplace : null
+  const portfolio = draft.scopePortfolioId ? String(draft.scopePortfolioId) : null
+  const inPicked = picked.length
+    ? { campaignId: { in: picked } }
+    : { campaign: { ...(mkt ? { marketplace: mkt } : {}), ...(portfolio ? { portfolioId: portfolio } : {}) } }
 
   /**
    * The two denominators the census needs, straight from the DB rather than from the contexts —
    * a context that was never built cannot count itself.
    */
   const [selectedTargets, eligible, notEnabled] = await Promise.all([
-    prisma.adTarget.count({ where: { isNegative: false, adGroup: { campaignId: { in: picked } } } }),
+    prisma.adTarget.count({ where: { isNegative: false, adGroup: inPicked } }),
     // Mirrors `buildSovBidContexts`'s own `where` exactly. If the two ever diverge the census
     // starts describing a population the engine does not read — the class this file exists to end.
-    prisma.adTarget.count({ where: { kind: 'KEYWORD', isNegative: false, status: 'ENABLED', adGroup: { campaignId: { in: picked } } } }),
-    prisma.adTarget.count({ where: { kind: 'KEYWORD', isNegative: false, status: { not: 'ENABLED' }, adGroup: { campaignId: { in: picked } } } }),
+    prisma.adTarget.count({ where: { kind: 'KEYWORD', isNegative: false, status: 'ENABLED', adGroup: inPicked } }),
+    prisma.adTarget.count({ where: { kind: 'KEYWORD', isNegative: false, status: { not: 'ENABLED' }, adGroup: inPicked } }),
   ])
 
   const run = await runDraftPreview<SovCtx>(draft, {
@@ -228,6 +242,7 @@ export async function previewSovRule(draft: BudgetPreviewDraft): Promise<SovPrev
     },
     // `bid_apply` acts on an ad target, not a campaign.
     entityId: (ctx) => ({ key: 'adTargetId', value: ctx.adTarget.id }),
+    emptyPickMeansScope: true,
   })
 
   if (!run.ok) {

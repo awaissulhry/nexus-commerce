@@ -274,10 +274,15 @@ const A1: AutomationAdapter = {
     const { producedActionTypes } = await import('./ads-rule-adapter.service.js')
     if (input.draft) {
       const { previewAdsRuleDraft } = await import('./ads-rule-preview.service.js')
-      const draft = { actions: input.draft.actions, conditions: input.draft.conditions, scopeMarketplace: (input.draft.scopeMarketplace as string | null | undefined) ?? null }
+      const draft = {
+        actions: input.draft.actions, conditions: input.draft.conditions,
+        scopeMarketplace: (input.draft.scopeMarketplace as string | null | undefined) ?? null,
+        // The portfolio scope narrows the preview exactly as the tick does (campaign → portfolio).
+        scopePortfolioId: (input.draft.scopePortfolioId as string | null | undefined) ?? null,
+      }
       return {
         kind: 'draft', subject: null, result: await previewAdsRuleDraft(draft), actionTypes: producedActionTypes(draft),
-        notes: ["A draft in the rule builder's shape (actions[0].type budget, bid, placement, sov or keyword-tracker), run through the real engine as a dry run. An engine-native rule is previewed once saved."],
+        notes: ["A draft in the rule builder's shape (actions[0].type budget, bid, placement, sov or keyword-tracker), run through the real engine as a dry run, inside its scopeMarketplace and scopePortfolioId. A sov draft with no campaigns picked runs over that whole scope, as the engine would. An engine-native rule is previewed once saved."],
       }
     }
     if (!input.rowId) return { refused: 'Give a draft, or name a saved rule (rowId).' }
