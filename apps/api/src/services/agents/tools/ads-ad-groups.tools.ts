@@ -140,6 +140,19 @@ function groupRefusal(g: GroupRow): string | null {
 const isAutoCampaign = async (c: CampaignRow) =>
   c.targetingType === 'AUTO' || !!(await prisma.adTarget.findFirst({ where: { adGroup: { campaignId: c.id }, kind: 'AUTO' }, select: { id: true } }))
 
+/**
+ * PB-5b — a campaign an ads playbook built (or whose floor a playbook stop holds) is the playbook's: its structure and its
+ * floors move through the playbook (an ad group added here would sit outside its plan, and a floor set here would wait
+ * for a START that never gives it back). Null when no playbook holds it.
+ */
+async function playbookRefusal(campaign: CampaignRow, what: string): Promise<string | null> {
+  const held = (await playbookHolds([campaign.id])).get(campaign.id)
+  if (!held) return null
+  return held === 'built'
+    ? `campaign "${campaign.name}" was built by an ads playbook, so ${what} through the playbook: set-ads-playbook changes its plan, apply-ads-playbook op sync adds what the plan holds, op stop and op start move its bids`
+    : startOnlyRefusal(`campaign "${campaign.name}"`, held)
+}
+
 /** Where a campaign's bids are held at a floor now, in words; null when they are not. */
 const campaignFloorWords = (c: CampaignRow) => (c.bidsSuppressedAt ? `campaign "${c.name}" is stopped with low bids (by ${whoWords(c.bidsSuppressedBy)}, since ${when(c.bidsSuppressedAt)})` : null)
 
@@ -453,6 +466,8 @@ async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
   if (await isAutoCampaign(campaign)) {
     return { ok: false, error: `Not queued: campaign "${campaign.name}" is an Auto campaign — Amazon chooses its searches and makes each ad group's four auto groups itself. create-ad-group adds a manual ad group (keywords or product targets); an Auto campaign is built with Nexus's builders.` }
   }
+  const playbook = await playbookRefusal(campaign, 'its ad groups are added')
+  if (playbook) return { ok: false, error: `Not queued: ${playbook}.` }
   if (!keywords.length === !targets.length) return { ok: false, error: 'Give either keywords or productTargets (Amazon takes one targeting kind per manual ad group), not both and not neither.' }
   if (keywords.length + negatives.length + negativeAsins.length + targets.length > LIST_MAX * 2) {
     return { ok: false, error: `At most ${LIST_MAX * 2} keywords, targets and negatives in one ad group request: split it (add-ad-targets and add-negative-targets add more later).` }
@@ -799,6 +814,8 @@ async function adsPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext, '
   if (refused) return { ok: false, error: `Not queued: ${refused}.` }
   const campaign = group.campaign
   const market = campaign.marketplace!
+  const playbook = await playbookRefusal(campaign, 'its product ads are added')
+  if (playbook) return { ok: false, error: `Not queued: ${playbook}.` }
   const sold = await productsSoldIn(a.skus, market)
   if ('refusal' in sold) return { ok: false, error: sold.refusal }
   const around = await productsAround(campaign, sold.products)
@@ -1066,6 +1083,9 @@ async function floorPreview(op: 'stop' | 'start', group: GroupRow, ctx: Pick<Too
   if (campaignFloor) {
     return { ok: false, error: `Not queued: ${campaignFloor}: its ad groups' bids are that floor's — ${isPerson(campaign.bidsSuppressedBy) ? 'restore-campaign gives them back' : 'the engine that set it gives them back'}${op === 'stop' ? ', and they already serve at it' : ''}.` }
   }
+  // PB-5b — a playbook's campaign: its bids stop and start only with the playbook's own ops (START needs the code).
+  const playbook = await playbookRefusal(campaign, 'its ad groups\' bids move')
+  if (playbook) return { ok: false, error: `Not queued: ${playbook}.` }
   let moves: BidMove[] = []
   let stop: { cents: number; from: string } | null = null
   if (op === 'stop') {
@@ -1084,9 +1104,6 @@ async function floorPreview(op: 'stop' | 'start', group: GroupRow, ctx: Pick<Too
   } else {
     if (!group.bidsSuppressedAt) return { ok: false, error: `Nothing would change: ad group "${group.name}" is not held at a floor of its own (set-ad-group op stop puts it there; a born-at-the-floor ad group holds one until started).` }
     if (!isPerson(group.bidsSuppressedBy)) return { ok: false, error: `Not queued: ad group "${group.name}" is held at a floor ${group.bidsSuppressedBy ?? 'an unrecorded actor'} set (an engine): only a floor a person set (create-ad-group's, or set-ad-group op stop's) is given back here; that engine gives back its own.` }
-    // PB-5b — a playbook's campaign gets its bids back only with the playbook's START (its code).
-    const playbookHeld = (await playbookHolds([campaign.id])).get(campaign.id)
-    if (playbookHeld) return { ok: false, error: `Not queued: ${startOnlyRefusal(`campaign "${campaign.name}"`, playbookHeld)}.` }
     const targets = await prisma.adTarget.findMany({ where: { adGroupId: group.id, suppressedFromBidCents: { not: null } }, select: { id: true, expressionValue: true, bidCents: true, suppressedFromBidCents: true, adGroupId: true }, orderBy: { id: 'asc' } })
     const entries = [
       ...(group.suppressedFromBidCents != null ? [{ id: `adGroup:${group.id}`, adGroupId: group.id, bidCents: group.defaultBidCents, suppressedFromBidCents: group.suppressedFromBidCents }] : []),
@@ -1137,8 +1154,9 @@ async function floorPreview(op: 'stop' | 'start', group: GroupRow, ctx: Pick<Too
       noCode: op === 'start'
         ? 'Giving a floor\'s bids back is a restore, like restore-campaign: approving it needs no authenticator code; by rule only up to the highest bid this tool\'s limits allow (0 by default).'
         : 'A stop lowers spend: it needs no authenticator code.',
-      // Every bid it moves, from where to where, and whose floor it lifts: a move after approval is caught.
-      basis: hash({ op, floor: [group.bidsSuppressedAt?.toISOString() ?? null, group.bidsSuppressedBy], moves: lines }),
+      // Every bid it moves, from where to where, and whose floor it lifts: a move after approval is caught (the cents
+      // only: a limit's words name its strategy row's version, and saving the row again moves nothing here).
+      basis: hash({ op, floor: [group.bidsSuppressedAt?.toISOString() ?? null, group.bidsSuppressedBy], moves: moves.map((m) => [m.kind, m.id, m.fromCents, m.toCents]) }),
       reach: stored,
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,

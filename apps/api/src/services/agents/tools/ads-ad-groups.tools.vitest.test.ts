@@ -163,6 +163,10 @@ beforeAll(async () => {
     await campaign('c-stop')
     await db().adTarget.create({ data: { id: 't-c-stop', adGroupId: 'g-c-stop', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'stop me', bidCents: 55, externalTargetId: 'EXT-t-c-stop' } })
     await db().adKeywordProtection.create({ data: { mode: 'WHITELIST', term: 'testbrand', matchType: 'CONTAINS', marketplace: 'IT' } as never })
+    // A campaign an ads playbook built (a slot, origin built): its structure and floors are the playbook's.
+    await campaign('c-playbook')
+    const playbook = await db().adsPlaybook.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: 'p-test', label: 'Test playbook (IT)', enrolled: true, updatedBy: 'user:u-person' } as never })
+    await db().adsPlaybookLink.create({ data: { playbookId: playbook.id, kind: 'slot', key: 'exact', refId: 'c-playbook', origin: 'built', compiledVersion: 1, updatedBy: 'user:u-person' } })
   })
 }, 180_000)
 afterAll(async () => { await database?.close() }, 30_000)
@@ -254,6 +258,10 @@ describe('create-ad-group — the preview and what refuses it', () => {
     expect((await preview('create-ad-group', group({ negativeKeywords: [{ text: 'winter jacket', matchType: 'PHRASE' }] }))).error).toMatch(/Both a keyword and a negative/)
     expect((await preview('create-ad-group', group({ negativeKeywords: [{ text: 'testbrand helmets', matchType: 'PHRASE' }] }))).error).toMatch(/^Not queued: .*protected/i)
     expect((await preview('create-ad-group', group({ defaultBidCents: 2500 }))).error).toMatch(/above campaign "Italy exact"'s daily budget/)
+    // A playbook's campaign: its structure and its floors move through the playbook.
+    expect((await preview('create-ad-group', group({ campaignId: 'c-playbook' }))).error).toMatch(/was built by an ads playbook, so its ad groups are added through the playbook: .*apply-ads-playbook op sync/)
+    expect((await preview('add-product-ads', { adGroupId: 'g-c-playbook', skus: ['TEST-AG-5'] })).error).toMatch(/was built by an ads playbook, so its product ads are added through the playbook/)
+    expect((await preview('set-ad-group', { adGroupId: 'g-c-playbook', op: 'stop' })).error).toMatch(/was built by an ads playbook, so its ad groups' bids move through the playbook/)
   })
 
   it('only what Amazon sells in the market: a SKU not found, not listed there, or only a draft listing is refused', async () => {
