@@ -310,3 +310,75 @@ describe('CM-23 — portfolio writes read Amazon\'s answer', () => {
     expect(row.name).toBe('Core')
   })
 })
+
+/**
+ * W4-12b — a queued portfolio cap change (the bulk-sheet path: bulksheet/apply.ts → updatePortfolioWithSync) goes to
+ * Amazon as the WHOLE cap Amazon's v3 PUT /portfolios takes ({ amount, currencyCode, policy, startDate, endDate }); a row
+ * that changed only the amount used to go out as `{ amount }`, without its policy and currency.
+ */
+describe('W4-12b — a queued portfolio cap goes out whole', () => {
+  const PF_MONTHLY = '900011112222333' // made-up Amazon portfolio ids
+  const PF_RANGE = '900044445555666'
+  const PF_BARE = '900077778888999'
+  beforeAll(async () => {
+    await inside(async () => {
+      const db = database.client
+      await db.amazonAdsPortfolio.create({ data: { id: 'wr-cap-m', profileId: 'P-TEST', externalPortfolioId: PF_MONTHLY, name: 'Monthly cap', budgetAmount: '100.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'MONTHLY_RECURRING', startDate: new Date('2026-01-01T00:00:00Z') } as never })
+      await db.amazonAdsPortfolio.create({ data: { id: 'wr-cap-d', profileId: 'P-TEST', externalPortfolioId: PF_RANGE, name: 'Range cap', budgetAmount: '200.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'DATE_RANGE', startDate: new Date('2026-11-01T00:00:00Z'), endDate: new Date('2026-11-30T00:00:00Z') } as never })
+      await db.amazonAdsPortfolio.create({ data: { id: 'wr-cap-none', profileId: 'P-TEST', externalPortfolioId: PF_BARE, name: 'No cap yet' } as never })
+    })
+  })
+  const queueCap = async (portfolioId: string, patch: Parameters<typeof updatePortfolioWithSync>[0]['patch']) => {
+    const r = await inside(() => updatePortfolioWithSync({ portfolioId, patch, actor: USER, reason: 'bulksheet import test', applyImmediately: true }))
+    expect(r.ok, r.error ?? '').toBe(true)
+    return r.outboundQueueId!
+  }
+
+  it('an amount-only change is sent with the cap\'s policy and currency (read from the portfolio)', async () => {
+    const q = await queueCap('wr-cap-m', { budgetAmount: 150 })
+    const { rows } = await drain()
+    expect(amazon.calls).toHaveLength(1)
+    // Before W4-12b: { amount: 150 } — no policy, no currency.
+    expect(amazon.calls[0]!.patch.budget).toEqual({ amount: 150, currencyCode: 'EUR', policy: 'MONTHLY_RECURRING' })
+    // A monthly cap carries no dates unless the write changes them (as the Portfolios page sends none).
+    expect(amazon.calls[0]!.patch.budget).not.toHaveProperty('startDate')
+    expect(rows.find((r) => r.id === q)?.syncStatus).toBe('SUCCESS')
+  })
+
+  it('a date-range end date alone is sent with the amount, currency, policy and start date', async () => {
+    await queueCap('wr-cap-d', { endDate: '2026-12-15' })
+    await drain()
+    expect(amazon.calls.map((c) => c.patch.budget)).toEqual([
+      { amount: 200, currencyCode: 'EUR', policy: 'DATE_RANGE', startDate: '2026-11-01', endDate: '2026-12-15' },
+    ])
+  })
+
+  it('the policy as a bulk sheet spells it goes out in Amazon\'s v3 spelling', async () => {
+    await queueCap('wr-cap-m', { budgetAmount: 90, budgetPolicy: 'monthlyRecurring' })
+    await drain()
+    expect(amazon.calls.map((c) => c.patch.budget)).toEqual([{ amount: 90, currencyCode: 'EUR', policy: 'MONTHLY_RECURRING' }])
+  })
+
+  it('a cap Nexus cannot complete (no policy anywhere) is not sent: it fails for good, saying why', async () => {
+    const q = await queueCap('wr-cap-none', { budgetAmount: 60 })
+    const { rows } = await drain()
+    expect(amazon.calls).toEqual([])
+    const row = rows.find((r) => r.id === q)!
+    expect(row).toMatchObject({ syncStatus: 'FAILED', errorCode: 'AMAZON_PERMANENT_REJECTION' })
+    expect(row.errorMessage).toMatch(/not sent to Amazon: Nexus holds no budget policy/)
+  })
+
+  it('a rename alone still sends no budget at all', async () => {
+    await queueCap('wr-cap-m', { name: 'Monthly cap 2' })
+    await drain()
+    expect(amazon.calls).toHaveLength(1)
+    expect(amazon.calls[0]!.patch).toMatchObject({ portfolioId: PF_MONTHLY, name: 'Monthly cap 2' })
+    expect(amazon.calls[0]!.patch.budget).toBeUndefined()
+  })
+
+  it('the Portfolios page\'s own push (updatePortfolioById) is unchanged: its cap goes out exactly as it builds it', async () => {
+    const r = await inside(() => updatePortfolioById({ portfolioId: PF_MONTHLY, budget: { amount: 120, currencyCode: 'EUR', policy: 'monthlyRecurring' } }))
+    expect(r).toMatchObject({ ok: true, mode: 'live' })
+    expect(amazon.calls.map((c) => c.patch.budget)).toEqual([{ amount: 120, currencyCode: 'EUR', policy: 'monthlyRecurring' }])
+  })
+})
