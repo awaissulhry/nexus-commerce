@@ -15,7 +15,7 @@
   4. Send to FBA from the Matrix (Amazon "Send to Amazon" v2024-03-20 flow, run as a background job).
 - **Owner decisions (2026-10-07):** D1 = A (per market for the business + per-product exceptions in the Matrix) ·
   D2 = B (count sealed cases and loose units apart, per location).
-- **Status:** Step 1 DONE locally (not pushed). Next: Step 2.
+- **Status:** Step 1 + Step 2 DONE locally (not pushed). Next: Step 3 (cases).
 
 Research notes (private, with file paths and line numbers): `~/nexus-archive/2026-10-07-matrix-inventory/research/`
 1 Matrix page · 2 stock backend · 3 FBA inbound code · 4 Available pop-up + design system · 5 web research.
@@ -50,7 +50,15 @@ Research notes (private, with file paths and line numbers): `~/nexus-archive/202
 - Built: pencil in the Stock cell (hover), Enter / F2 / double-click open the editor; parent = family, variant = its
   SKU; Apply → `stock.adjusted` → the Matrix re-reads at once. Test `matrix/stock-column.vitest.test.ts`.
 
-## Step 2 — "Sells from" per market
+## Step 2 — "Sells from" per market — DONE locally 2026-10-07
+- Build plan: `~/nexus-archive/2026-10-07-matrix-inventory/research/6-step2-build-plan.md` (parts A routing · B orders ·
+  C Matrix contract + write · D web). Lead took its recommended answers: the default is set in the same pop-up
+  ("This product | Every product"); an order line is never split; switching off a warehouse that holds units is
+  refused; ship-from addresses (OrderRoutingRule) stay as they are for now.
+- Data: one additive column `SyncChannelPolicy.sourceLocationCodes` (market default, in sale order). The product
+  exception is `ChannelListing.sourceLocationCodes`. A list REPLACES the routes; no lists = numbers as before.
+- Before release: set `MATRIX_FROM_SINCE` (`_studio/matrix/statusCells.ts`) to the real release day.
+- Not exercised in a browser: an "Every product" save and the toast Undo (unit-tested).
 - One list: `syncRoutes` is the truth; the Locations page edits the same list.
 - Inactive warehouses stop feeding listings (from Step 1's check).
 - Matrix: a "From" cell in each market group (once for AMAZON:EU). Pop-up = tick locations; the order of the list
