@@ -231,6 +231,9 @@ const AD_CHANGE_TOOLS = new Set([
   'create-ai-goal-campaigns',
   // B-3 — a one-off SP Super Wizard set: its creates run detached too; approval-status reads its run the same way.
   'build-sp-wizard-campaigns',
+  // W4-7 — budgets: a schedule's give-backs, a pool's live rebalance and a restore to baseline are budget writes in the
+  // approval's change set; a plan (and a Nexus-only schedule or pool change) writes none, and reads "Approved and run."
+  'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines',
 ])
 
 export interface AdDelivery {

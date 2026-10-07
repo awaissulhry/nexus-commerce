@@ -83,6 +83,10 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // B-2 — an AI goal, the create kind: only at the floor, off the allowlist, its rules and plan off (nothing spends until
   // restore-campaign); by default never by rule (maxCampaigns 0).
   'create-ai-goal-campaigns',
+  // W4-7 — budgets, the budget kind: a market's monthly plan, a budget schedule, a budget pool, a restore to baseline. By
+  // default nothing runs by rule (maxItems 0, no op or market listed, no raise); a raise through a new lever needs the
+  // approver's code.
+  'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines',
 ]
 
 /**
@@ -430,6 +434,21 @@ describe('C1 — every registered tool keeps the contract', () => {
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },
+      // W4-7 — a plan, a schedule and a pool are set back through their own tool; a restore to baseline through
+      // set-campaign-budget's list form.
+      'set-monthly-ad-budget': {
+        before: { market: 'IT', month: '2026-11', plan: { monthlyBudgetCents: 50000, autoPacing: false, stopOverSpend: true, calendar: [] }, limits: [{ campaignId: 'c1', minCents: null, maxCents: 3000 }], planChanged: true, changeSetId: 'ap1' },
+        after: { market: 'IT', month: '2026-11', plan: { monthlyBudgetCents: 60000, autoPacing: false, stopOverSpend: true, calendar: [] }, limits: [{ campaignId: 'c1', minCents: null, maxCents: 4000 }] },
+      },
+      'set-budget-schedule': {
+        before: { op: 'update', changeSetId: 'ap1', state: { scheduleId: 's1', name: 'Test schedule', type: 'campaign-budget', enabled: true, timezone: 'Europe/Rome', startDate: '2026-10-01', endDate: null, excludeDates: [], campaignIds: ['c1'], windows: [{ day: 1, start: '08:00', end: '12:00', adj: 'incPct', value: 20 }] } },
+        after: { scheduleId: 's1', state: { scheduleId: 's1', name: 'Test schedule', type: 'campaign-budget', enabled: false, timezone: 'Europe/Rome', startDate: '2026-10-01', endDate: null, excludeDates: [], campaignIds: ['c1'], windows: [{ day: 1, start: '08:00', end: '12:00', adj: 'incPct', value: 20 }] } },
+      },
+      'set-budget-pool': {
+        before: { op: 'update', changeSetId: 'ap1', state: { poolId: 'p1', pool: { name: 'Test pool', description: null, currency: 'EUR', totalDailyBudgetCents: 5000, strategy: 'STATIC', coolDownMinutes: 60, maxShiftPerRebalancePct: 20, enabled: false, dryRun: true }, allocations: [] } },
+        after: { poolId: 'p1', pool: { name: 'Test pool', description: null, currency: 'EUR', totalDailyBudgetCents: 7000, strategy: 'STATIC', coolDownMinutes: 60, maxShiftPerRebalancePct: 20, enabled: false, dryRun: true }, allocations: [] },
+      },
+      'restore-budget-baselines': { before: { campaigns: [{ campaignId: 'c1', dailyBudgetCents: 1000 }], changeSetId: 'ap1' }, after: { campaigns: [{ campaignId: 'c1', dailyBudgetCents: 1500 }] } },
       // A6 — a budget or the placement adjustments are set back through the same tool.
       'set-campaign-budget': { before: { campaignId: 'c1', dailyBudgetCents: 2000, changeSetId: 'ap1' }, after: { campaignId: 'c1', dailyBudgetCents: 2500 } },
       'set-placement-multipliers': {

@@ -55,7 +55,8 @@ export const CLAUDE_ACTION_TOOLS = {
   negative: ['create-negative-keyword'],
   harvest: ['graduate-keyword'],
   placement: ['set-placement-multipliers'],
-  budget: ['set-campaign-budget'],
+  // W4-7 — the monthly plan, the budget schedules and pools and the restore to baseline move budgets too.
+  budget: ['set-campaign-budget', 'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines'],
   target: ['set-campaign-target-acos'],
   suggestion: ['decide-automation-suggestions'],
   // ADS AUTONOMY W3-3 — a stock brake is a temporary stop with low bids too (an ad group short of stock), and giving

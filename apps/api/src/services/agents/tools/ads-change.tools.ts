@@ -486,9 +486,15 @@ const campaignIdArg = z.string().trim().min(1).max(64).describe('Nexus campaign 
 // ── set-campaign-budget (A6) ──────────────────────────────────────────────────────────────────────
 
 async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
+  // W4-7 — the list form: many campaigns in one request (one step), on the same rules.
+  if (Array.isArray(args.campaigns)) {
+    if (args.campaignId !== undefined || args.dailyBudgetCents !== undefined) return { ok: false, error: 'Name the budgets one way: campaignId with dailyBudgetCents, or campaigns (a list) — not both.' }
+    if (args.source !== undefined) return { ok: false, error: 'source names one campaign\'s own recommendation: use campaignId with dailyBudgetCents for it.' }
+    return budgetListPreview(args.campaigns as Array<{ campaignId: string; dailyBudgetCents: number }>, ctx)
+  }
   const campaignId = String(args.campaignId ?? '')
   const proposed = Math.round(Number(args.dailyBudgetCents))
-  if (!campaignId || !Number.isFinite(proposed) || proposed <= 0) return { ok: false, error: 'campaignId and a dailyBudgetCents above 0 are required' }
+  if (!campaignId || !Number.isFinite(proposed) || proposed <= 0) return { ok: false, error: 'campaignId and a dailyBudgetCents above 0 are required (or campaigns: a list of them)' }
   // W3-1 — a source names this campaign's own budget recommendation, or the request is refused.
   const changeSource = sourceOf(args.source)
   const wrongSource = sourceRefusal(changeSource, recommendationIdFor.budget(campaignId))
@@ -536,11 +542,125 @@ async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolConte
   }
 }
 
+// ── set-campaign-budget, W4-7: the list form ───────────────────────────────────────────────────────
+
+/** The most budgets one request of the list form sets (one step, one approval). */
+const MAX_BUDGET_LIST = 100
+
+/** Each campaign's daily budget now (minor units), in the order asked; null when it is gone. */
+async function budgetsNow(ids: readonly string[]): Promise<Array<{ campaignId: string; dailyBudgetCents: number | null }>> {
+  const rows = ids.length ? await prisma.campaign.findMany({ where: { id: { in: [...ids] } }, select: { id: true, dailyBudget: true } }) : []
+  const byId = new Map(rows.map((r) => [r.id, Math.round(Number(r.dailyBudget) * 100)]))
+  return ids.map((campaignId) => ({ campaignId, dailyBudgetCents: byId.get(campaignId) ?? null }))
+}
+
+/**
+ * W4-7 — many campaigns' daily budgets in one request, each judged as the single form judges one: not found or not SP
+ * refuses the whole request, a budget already as asked is left as it is (counted), the write gate is asked for every
+ * write (a refusal is not queued; his own limits are warned), and the kit's facts count every row.
+ */
+async function budgetListPreview(asked: Array<{ campaignId: string; dailyBudgetCents: number }>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
+  const ids = asked.map((c) => String(c.campaignId ?? '').trim())
+  if (new Set(ids).size !== ids.length) return { ok: false, error: 'campaigns names a campaign twice.' }
+  const rows = await prisma.campaign.findMany({ where: { id: { in: ids } }, select: CAMPAIGN_FOR_CHANGE })
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const refused: string[] = []
+  for (const id of ids) {
+    const why = campaignRefusal(byId.get(id) ?? null, id, 'budget')
+    if (why) refused.push(why)
+  }
+  if (refused.length) return { ok: false, error: `Not queued: ${refused.slice(0, 3).join('; ')}${refused.length > 3 ? ` and ${refused.length - 3} more` : ''}.` }
+  const lines = asked.map((a) => {
+    const c = byId.get(a.campaignId)!
+    const currency = campaignCurrency(c)
+    return { campaignId: c.id, name: c.name, marketplace: c.marketplace, currency, currentBudgetCents: Math.round(Number(c.dailyBudget) * 100), proposedBudgetCents: Math.round(Number(a.dailyBudgetCents)) }
+  })
+  const changing = lines.filter((l) => l.proposedBudgetCents !== l.currentBudgetCents)
+  const already = lines.length - changing.length
+  if (!changing.length) return { ok: false, error: `Nothing would change: every budget named is already as asked (${lines.slice(0, 3).map((l) => `${l.name} ${amountLabel(l.currentBudgetCents, l.currency)}`).join(', ')}${lines.length > 3 ? ', …' : ''}).` }
+  // Where the writes land, every campaign asked as the approver's own click (sorted); his own limits are named by campaign.
+  const profiles = new Set<string>()
+  const past: Array<{ limit: string; reason: string }> = []
+  for (const l of [...changing].sort((x, y) => (x.campaignId < y.campaignId ? -1 : 1))) {
+    const reach = await checkLiveReach({ campaignId: l.campaignId, marketplace: l.marketplace, changes: [{ field: 'dailyBudget', valueCents: l.proposedBudgetCents }] })
+    if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach).replace('Not queued: ', `Not queued: campaign "${l.name}": `) }
+    if (reach.reach === 'live') {
+      profiles.add(reach.profileId)
+      for (const o of reach.pastOwnLimits ?? []) past.push({ limit: o.limit, reason: `campaign "${l.name}": ${o.reason}` })
+    }
+  }
+  const stored: StoredReach = profiles.size ? { reach: 'live', profileId: [...profiles].sort().join(','), ...(past.length ? { pastOwnLimits: past } : {}) } : { reach: 'sandbox' }
+  const rule = await ruleFactsFor({
+    tool: 'set-campaign-budget',
+    limits: BUDGET_LIMITS,
+    items: changing.map((l) => ({ entity: { kind: 'campaign', id: l.campaignId }, change: { field: 'dailyBudget', fromCents: l.currentBudgetCents, toCents: l.proposedBudgetCents } })),
+    writes: changing.map((l) => ({ campaignId: l.campaignId, marketplace: l.marketplace, changes: [{ field: 'dailyBudget', valueCents: l.proposedBudgetCents }], label: `campaign "${l.name}"` })),
+    approvalId: ctx?.approvalId,
+  })
+  const shown = changing.map((l) => ({ ...l, deltaCents: l.proposedBudgetCents - l.currentBudgetCents }))
+  const raising = changing.filter((l) => l.proposedBudgetCents > l.currentBudgetCents).length
+  return {
+    ok: true,
+    preview: {
+      action: 'set-campaign-budget',
+      campaigns: shown.slice(0, ROWS_SHOWN),
+      ...(shown.length > ROWS_SHOWN ? { moreCampaigns: shown.length - ROWS_SHOWN } : {}),
+      totals: { changing: changing.length, alreadyAsAsked: already, raising, lowering: changing.length - raising },
+      // Every campaign asked with the budget it has now and gets: a move on any of them after approval is caught.
+      basis: createHash('sha256').update(lines.map((l) => `${l.campaignId}:${l.currentBudgetCents}:${l.proposedBudgetCents}`).join('|')).digest('base64url').slice(0, 32),
+      reach: stored,
+      reachNote: reachNote(stored),
+      alsoChangedBy: rule.limitFacts.engineOwned.slice(0, 10),
+      ...rule,
+      effect: `Sets the daily budget of ${changing.length} campaign${changing.length === 1 ? '' : 's'}: ${changing.slice(0, 3).map((l) => `${l.name} ${amountLabel(l.currentBudgetCents, l.currency)} → ${amountLabel(l.proposedBudgetCents, l.currency)}`).join(', ')}${changing.length > 3 ? ` and ${changing.length - 3} more` : ''}.`
+        + (already ? ` ${already} already as asked ${already === 1 ? 'is' : 'are'} left as ${already === 1 ? 'it is' : 'they are'}.` : ''),
+    },
+  }
+}
+
+/** W4-7 — the list form, run: one write per campaign, as the approver, every write in the approval's change set. */
+async function budgetListExecute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+  const fresh = await budgetPreview(args, ctx)
+  const refusal = recheck(ctx, fresh, ['basis', 'totals'])
+  if (refusal) return notRun(refusal)
+  const p = fresh.preview as { reach: StoredReach; effect: string }
+  const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
+  if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
+  const asked = args.campaigns as Array<{ campaignId: string; dailyBudgetCents: number }>
+  const now = await budgetsNow(asked.map((c) => c.campaignId))
+  const failed: string[] = []
+  const ran: Array<{ campaignId: string; dailyBudgetCents: number }> = []
+  for (const a of asked) {
+    const was = now.find((n) => n.campaignId === a.campaignId)?.dailyBudgetCents
+    if (was == null || was === Math.round(Number(a.dailyBudgetCents))) continue
+    const out = await updateCampaignWithSync({
+      campaignId: a.campaignId,
+      patch: { dailyBudget: Math.round(Number(a.dailyBudgetCents)) / 100 },
+      actor: run.actor,
+      reason: run.reason,
+      changeSetId: run.changeSetId,
+      manual: run.manual, // 4A — a person approved it: his own click
+      confirmOwnLimits: run.confirmOwnLimits, // 4A — his approval is his "Send anyway" (the card warned him)
+    })
+    if (out.ok) ran.push({ campaignId: a.campaignId, dailyBudgetCents: was })
+    else failed.push(`campaign ${a.campaignId} (${out.error ?? 'refused'})`)
+  }
+  const change = ran.length
+    ? { before: { campaigns: ran, changeSetId: run.changeSetId }, after: { campaigns: await budgetsNow(ran.map((r) => r.campaignId)) } }
+    : undefined
+  const data = { changed: ran.length, failed: failed.length, reach: p.reach, changeSetId: run.changeSetId, note: 'Queued for Amazon: each change is sent after the 5-minute cancel window. approval-status follows them.' }
+  if (!ran.length) return notRun(`Not run: every budget write was refused (${failed.slice(0, 3).join('; ')}). Nothing changed.`)
+  if (failed.length) return { ok: false, data, change, error: `Partly run: ${ran.length} set, ${failed.length} refused by the write — ${failed.slice(0, 3).join('; ')}. undo-change puts back what ran.` }
+  return { ok: true, data, change }
+}
+
 /** AA-W2-8 — set-campaign-budget's Claude limits: every raise waits for a person until he sets one (0 %); a cut, 100 %. */
 const BUDGET_LIMITS = adKitLimits({ maxItems: 1 }, STEP_PCT_LIMITS)
 
 /** AA-W2-8 — a raise from no recorded budget has no size in percent: it never runs by rule. */
 function budgetRefusal(preview: unknown): string | null {
+  // W4-7 — the list form: every row's raise from no recorded budget is caught by the kit's step check (an unbounded raise).
+  if (Array.isArray((preview as { campaigns?: unknown } | null)?.campaigns)) return null
   const p = (preview ?? {}) as { currentBudgetCents?: unknown; proposedBudgetCents?: unknown }
   const from = Number(p.currentBudgetCents)
   const to = Number(p.proposedBudgetCents)
@@ -552,11 +672,20 @@ function budgetRefusal(preview: unknown): string | null {
 /** C2 — undo of a budget change: set the budget it replaced, through set-campaign-budget itself. */
 export const SET_CAMPAIGN_BUDGET_UNDO: ToolUndo = {
   async current(change) {
+    // W4-7 — the list form: every campaign's budget now.
+    const listed = (change.after as { campaigns?: Array<{ campaignId: string }> } | null)?.campaigns
+    if (Array.isArray(listed)) return { campaigns: await budgetsNow(listed.map((c) => c.campaignId)) }
     const campaignId = String((change.after as { campaignId?: unknown } | null)?.campaignId ?? '')
     const c = await prisma.campaign.findFirst({ where: { id: campaignId }, select: { dailyBudget: true } })
     return { campaignId, dailyBudgetCents: c ? Math.round(Number(c.dailyBudget) * 100) : null }
   },
   request(change) {
+    // W4-7 — the list form: every budget it replaced, in one request.
+    const listed = (change.before as { campaigns?: Array<{ campaignId: string; dailyBudgetCents: number }> } | null)?.campaigns
+    if (Array.isArray(listed)) {
+      if (!listed.length || listed.some((c) => !(Number(c.dailyBudgetCents) > 0))) return { refusal: 'This change does not record the budgets it replaced.' }
+      return { tool: 'set-campaign-budget', args: { campaigns: listed.map((c) => ({ campaignId: c.campaignId, dailyBudgetCents: c.dailyBudgetCents })), why: 'undo of an earlier budget change' } }
+    }
     const before = (change.before ?? {}) as { campaignId?: string; dailyBudgetCents?: number }
     if (!before.campaignId || !(Number(before.dailyBudgetCents) > 0)) return { refusal: 'This change does not record the budget it replaced.' }
     return { tool: 'set-campaign-budget', args: { campaignId: before.campaignId, dailyBudgetCents: before.dailyBudgetCents, why: 'undo of an earlier budget change' } }
@@ -568,8 +697,14 @@ const setCampaignBudget: AgentTool = {
   name: 'set-campaign-budget',
   title: 'Change a campaign budget',
   input: z.object({
-    campaignId: campaignIdArg,
-    dailyBudgetCents: z.coerce.number().int().positive().describe('new daily budget in minor units (cents) of the campaign\'s own currency'),
+    campaignId: campaignIdArg.optional(),
+    dailyBudgetCents: z.coerce.number().int().positive().optional().describe('new daily budget in minor units (cents) of the campaign\'s own currency'),
+    // W4-7 — the list form: up to 100 campaigns in one request (one step of a plan, one approval).
+    campaigns: z.array(z.object({
+      campaignId: campaignIdArg,
+      dailyBudgetCents: z.coerce.number().int().positive().describe('its new daily budget in minor units (cents) of its own currency'),
+    })).min(1).max(MAX_BUDGET_LIST).optional()
+      .describe(`instead of campaignId and dailyBudgetCents: up to ${MAX_BUDGET_LIST} campaigns, each with its new daily budget, in one request`),
     why: whyArg,
     source: sourceArg,
   }),
@@ -595,11 +730,14 @@ const setCampaignBudget: AgentTool = {
     + 'where it lands (live at Amazon or sandbox), the ads strategy\'s limits that apply and where each comes from, and '
     + 'the rules that may change it again. Refused, and not queued, when Amazon\'s write gate would refuse it (the value '
     + 'cap of one write); the campaign\'s own budget bounds, spend ceilings and the daily budget-movement bound warn the '
-    + 'person who approves it, and a run by rule never goes past them. Undo puts the old budget back.',
+    + 'person who approves it, and a run by rule never goes past them. Undo puts the old budget back. W4-7 — the list '
+    + `form (campaigns, up to ${MAX_BUDGET_LIST}) sets many budgets in one request, on the same rules; a budget already as `
+    + 'asked is left as it is.',
   async handler(args, ctx) {
     return budgetPreview(args, ctx)
   },
   async execute(args, ctx) {
+    if (Array.isArray(args.campaigns)) return budgetListExecute(args, ctx)
     const fresh = await budgetPreview(args, ctx)
     const refusal = recheck(ctx, fresh, ['currentBudgetCents', 'reach'])
     if (refusal) return notRun(refusal)

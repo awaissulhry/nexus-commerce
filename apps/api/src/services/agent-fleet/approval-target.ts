@@ -262,6 +262,8 @@ const AMAZON_AD_TOOLS = new Set([
   'replicate-ad-structure',
   'create-ai-goal-campaigns',
   'build-sp-wizard-campaigns',
+  // W4-7 — budgets.
+  'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines',
 ])
 
 /** A campaign page: Amazon's by its Nexus Campaign id, eBay's by its Nexus eBay campaign id. */
@@ -718,10 +720,76 @@ const READERS: Record<string, Reader> = {
         : {}),
     }
   },
-  'set-campaign-budget': (p, _a, _ctx, tool) => ({
-    ...adCampaign(p, tool),
-    changes: [{ label: 'Daily budget', from: adMoney(p.currentBudgetCents, p.currency), to: adMoney(p.proposedBudgetCents, p.currency) }],
+  'set-campaign-budget': (p, _a, _ctx, tool) => {
+    // W4-7 — the list form: one line per campaign, in its own currency.
+    if (Array.isArray(p.campaigns)) {
+      const lines = recs(p.campaigns).map((c) => ({ sku: null, name: text(c.name), change: { label: `Daily budget · “${text(c.name) ?? '?'}”`, from: adMoney(c.currentBudgetCents, c.currency), to: adMoney(c.proposedBudgetCents, c.currency) } }))
+      return {
+        channel: 'AMAZON',
+        market: agreed(recs(p.campaigns).map((c) => marketOf(c.marketplace))),
+        changes: lines.map((l) => l.change),
+        items: lines,
+        changeCount: num(rec(p.totals)?.changing) ?? lines.length,
+      }
+    }
+    return {
+      ...adCampaign(p, tool),
+      changes: [{ label: 'Daily budget', from: adMoney(p.currentBudgetCents, p.currency), to: adMoney(p.proposedBudgetCents, p.currency) }],
+    }
+  },
+  // W4-7 — a market's monthly plan: each value from → to, and each campaign's lowest and highest budget.
+  'set-monthly-ad-budget': (p) => ({
+    channel: 'AMAZON',
+    market: marketOf(p.market),
+    changes: [
+      ...recs(p.changes).map((c) => ({ label: `${text(c.label) ?? 'Plan'} (${text(p.month) ?? '?'})`, from: text(c.from) ?? EMPTY, to: text(c.to) ?? EMPTY })),
+      ...recs(p.campaignLimits).map((l) => ({ label: `Limits · ${text(l.label) ?? '?'}`, from: text(l.from) ?? EMPTY, to: text(l.to) ?? EMPTY })),
+    ],
   }),
+  // W4-7 — a budget schedule: what it becomes, and each budget it gives back.
+  'set-budget-schedule': (p) => {
+    const words = (s: Rec | null) => (s ? `${s.enabled ? 'On' : 'Off'} · ${plural(num(s.campaigns) ?? 0, 'campaign')} · ${plural(recs(s.windows).length || (Array.isArray(s.windows) ? s.windows.length : 0), 'window')}` : EMPTY)
+    const sched = rec(p.schedule)
+    return {
+      channel: 'AMAZON',
+      market: agreed((Array.isArray(p.markets) ? p.markets : []).map(marketOf)),
+      changes: [
+        { label: `Budget schedule “${text(p.name) ?? '?'}”`, from: words(rec(sched?.from)), to: p.op === 'delete' ? 'Deleted' : words(rec(sched?.to)) },
+        ...recs(p.giveBacks).map((g) => ({ label: `Gives back · ${text(g.label) ?? '?'}`, from: adMoney(g.fromCents, g.currency), to: adMoney(g.toCents, g.currency) })),
+      ],
+    }
+  },
+  // W4-7 — a budget pool: its values, the campaigns joining or leaving, or each budget a rebalance moves.
+  'set-budget-pool': (p) => {
+    const pool = rec(p.pool)
+    const from = rec(pool?.from)
+    const to = rec(pool?.to)
+    const head = p.op === 'create' ? { label: `Budget pool “${text(p.name) ?? '?'}”`, from: null, to: `${adMoney(to?.totalDailyBudgetCents, to?.currency) ?? '?'} a day, off, dry run` }
+      : p.op === 'delete' ? { label: `Budget pool “${text(p.name) ?? '?'}”`, from: `${adMoney(from?.totalDailyBudgetCents, from?.currency) ?? '?'} a day`, to: 'Deleted' }
+        : null
+    return {
+      channel: 'AMAZON',
+      market: agreed((Array.isArray(p.markets) ? p.markets : []).map(marketOf)),
+      changes: [
+        ...(head ? [head] : []),
+        ...recs(p.changes).map((c) => ({ label: `${text(c.label) ?? '?'} (“${text(p.name) ?? '?'}”)`, from: text(c.from) ?? EMPTY, to: text(c.to) ?? EMPTY })),
+        ...recs(p.campaigns).map((c) => (c.fromCents != null
+          ? { label: `Rebalance · ${text(c.label) ?? '?'}`, from: adMoney(c.fromCents, c.currency), to: adMoney(c.toCents, c.currency) }
+          : { label: text(c.label) ?? '?', from: null, to: text(c.does) ?? EMPTY })),
+      ],
+    }
+  },
+  // W4-7 — each campaign's daily budget back to its baseline.
+  'restore-budget-baselines': (p) => {
+    const lines = recs(p.changes).map((c) => ({ sku: null, name: text(c.label), change: { label: `Daily budget · ${text(c.label) ?? '?'}`, from: adMoney(c.fromCents, c.currency), to: adMoney(c.toCents, c.currency) } }))
+    return {
+      channel: 'AMAZON',
+      market: agreed(recs(p.changes).map((c) => marketOf(c.marketplace))),
+      changes: lines.map((l) => l.change),
+      items: lines,
+      changeCount: num(rec(p.totals)?.restoring) ?? lines.length,
+    }
+  },
   'set-ebay-campaign-budget': (p, _a, _ctx, tool) => ({
     ...adCampaign(p, tool),
     changes: [{ label: 'Daily budget', from: adMoney(p.currentBudgetCents, p.currency), to: adMoney(p.proposedBudgetCents, p.currency) }],

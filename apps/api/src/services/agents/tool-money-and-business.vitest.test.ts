@@ -268,6 +268,13 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // A6 — campaign budget and placements (they need money: refused for a person without it).
   'set-campaign-budget': (ids) => ({ campaignId: ids.campaignId, dailyBudgetCents: 2500 }),
   'set-placement-multipliers': (ids) => ({ campaignId: ids.campaignId, topOfSearchPct: 30 }),
+  // W4-7 — budgets (they need money: refused for a person without it): a plan for the seeded campaign's market, a new
+  // schedule and a new pool for it, its restore to baseline (it has none: a refusal either way), and the read.
+  'set-monthly-ad-budget': (ids) => ({ market: 'IT', monthlyBudgetCents: 50000, stopOverSpend: true, campaignLimits: [{ campaignId: ids.campaignId, minCents: null, maxCents: 4000 }] }),
+  'set-budget-schedule': (ids) => ({ op: 'create', name: 'Money schedule', campaignIds: [ids.campaignId], windows: [{ day: 1, start: '08:00', end: '12:00', adj: 'incPct', value: 20 }] }),
+  'set-budget-pool': (ids) => ({ op: 'create', name: 'Money pool', totalDailyBudgetCents: 5000, add: [{ campaignId: ids.campaignId }] }),
+  'restore-budget-baselines': (ids) => ({ campaignIds: [ids.campaignId] }),
+  'ad-budgets': () => ({ market: 'IT' }),
   // A7 — a selection moved by a percent (it needs money: refused for a person without it).
   'bulk-ad-bid-change': (ids) => ({ campaignId: ids.campaignId, percent: 10 }),
   // A8 — the no-pause stop shows counts only (no money needed); a restore lists the bids it puts back (money needed).

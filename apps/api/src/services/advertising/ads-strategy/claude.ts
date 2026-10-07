@@ -281,7 +281,35 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
     return place.externalCampaign(str(args.sourceExternalCampaignId), 'the ad group it lands in is chosen when it runs')
   },
   'set-placement-multipliers': byCampaignArg,
-  'set-campaign-budget': byCampaignArg,
+  // W4-7 — one campaign, or the list form's campaigns.
+  'set-campaign-budget': (place, args) => (Array.isArray(args.campaigns)
+    ? place.campaignIds(list(args.campaigns).map((c) => str(obj(c).campaignId)))
+    : place.campaignIds([str(args.campaignId)])),
+  // W4-7 — a market's monthly plan reaches the whole market; the campaigns whose limits it sets, each.
+  'set-monthly-ad-budget': async (place, args) => {
+    place.market(marketOf(args.market), 'a market\'s monthly budget plan reaches every campaign of it')
+    const limited = list(args.campaignLimits).map((c) => str(obj(c).campaignId))
+    if (limited.length) await place.campaignIds(limited)
+  },
+  // W4-7 — a budget schedule: the campaigns it names now and the ones asked.
+  'set-budget-schedule': async (place, args) => {
+    const scheduleId = str(args.scheduleId)
+    const stored = scheduleId ? await (await import('../ads-budget-schedule.service.js')).readBudgetSchedule(scheduleId) : null
+    if (scheduleId && !stored) return place.notPlaced('the budget schedule it names was not found')
+    const ids = [...strs(args.campaignIds), ...list(stored?.campaigns).map((c) => str(obj(c).id))]
+    if (ids.length) await place.campaignIds(ids)
+    else place.notPlaced('it names no campaign')
+  },
+  // W4-7 — a budget pool: its campaigns now and the ones joining or leaving; a pool of none reaches no market.
+  'set-budget-pool': async (place, args) => {
+    const poolId = str(args.poolId)
+    const stored = poolId ? await (await import('../ads-budget-pool.service.js')).getBudgetPool(poolId) : null
+    if (poolId && !stored) return place.notPlaced('the budget pool it names was not found')
+    const ids = [...list(args.add).map((c) => str(obj(c).campaignId)), ...strs(args.remove), ...(stored?.pool.allocations ?? []).map((a) => a.campaignId)]
+    if (ids.some(Boolean)) await place.campaignIds(ids)
+    else place.notPlaced('a pool with no campaigns names no market')
+  },
+  'restore-budget-baselines': (place, args) => place.campaignIds(strs(args.campaignIds)),
   'suppress-campaign': byCampaignArg,
   'restore-campaign': byCampaignArg,
   'set-campaign-live-writes': byCampaignArg,

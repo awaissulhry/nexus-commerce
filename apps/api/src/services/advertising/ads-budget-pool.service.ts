@@ -16,7 +16,7 @@
  */
 import prisma from '../../db.js'
 import type { AdsActor } from './ads-mutation.service.js'
-import { computeRebalance, rebalanceAndAudit } from './budget-pool-rebalancer.service.js'
+import { computeRebalance, rebalanceAndAudit, type RebalanceWriteOptions } from './budget-pool-rebalancer.service.js'
 
 export type PoolStrategy = 'STATIC' | 'PROFIT_WEIGHTED' | 'URGENCY_WEIGHTED'
 
@@ -76,7 +76,7 @@ export interface NewBudgetPool {
 }
 
 /** POST /advertising/budget-pools — a pool, born switched off and in dry run. `invalid`: the route's 400. */
-export async function createBudgetPool(body: NewBudgetPool) {
+export async function createBudgetPool(body: NewBudgetPool, opts: { createdBy?: string } = {}) {
   if (!body?.name || !body.totalDailyBudgetCents) {
     return { invalid: 'name + totalDailyBudgetCents required' as const }
   }
@@ -91,7 +91,8 @@ export async function createBudgetPool(body: NewBudgetPool) {
       maxShiftPerRebalancePct: body.maxShiftPerRebalancePct ?? 20,
       enabled: false,
       dryRun: true,
-      createdBy: 'user',
+      // W4-7 — Claude's create names the person who approved it; the screen's stays 'user'.
+      createdBy: opts.createdBy ?? 'user',
     },
   })
   return { pool }
@@ -159,7 +160,7 @@ export async function removePoolAllocation(poolId: string, allocationId: string)
  * POST /advertising/budget-pools/:id/rebalance — `preview`: what a rebalance would propose now (cool-down ignored),
  * nothing written; otherwise a run through rebalanceAndAudit, honouring the pool's dry run. `skipped`: the route's 409.
  */
-export async function rebalanceBudgetPool(id: string, opts: { preview: boolean; actor: AdsActor }) {
+export async function rebalanceBudgetPool(id: string, opts: { preview: boolean; actor: AdsActor } & RebalanceWriteOptions) {
   if (opts.preview) {
     const outcome = await computeRebalance({
       poolId: id,
@@ -173,6 +174,10 @@ export async function rebalanceBudgetPool(id: string, opts: { preview: boolean; 
     triggeredBy: `user:${opts.actor.slice(5)}`,
     ignoreCoolDown: true,
     actor: opts.actor,
+    // W4-7 — Claude's rebalance-now (set-budget-pool): its approval and, a person's approval, his click. None from the route.
+    changeSetId: opts.changeSetId,
+    manual: opts.manual,
+    confirmOwnLimits: opts.confirmOwnLimits,
   })
   if (outcome.skipped) return { skipped: outcome.skipped }
   return { mode: 'committed' as const, outcome }
@@ -186,4 +191,21 @@ export async function budgetPoolHistory(id: string, limit: number) {
     take: limit,
   })
   return { items, count: items.length }
+}
+
+// ── W4-7 — reads for Claude's set-budget-pool and ad-budgets (nothing here writes) ──────────────────────────
+
+/** The pool each of these campaigns is in now (a campaign is in one pool at most), by campaign id. */
+export async function poolsOfCampaigns(campaignIds: readonly string[]): Promise<Map<string, { poolId: string; poolName: string; allocationId: string }>> {
+  if (!campaignIds.length) return new Map()
+  const rows = await prisma.budgetPoolAllocation.findMany({
+    where: { campaignId: { in: [...campaignIds] } },
+    select: { id: true, campaignId: true, budgetPoolId: true, budgetPool: { select: { name: true } } },
+  })
+  return new Map(rows.filter((r) => r.campaignId).map((r) => [r.campaignId!, { poolId: r.budgetPoolId, poolName: r.budgetPool.name, allocationId: r.id }]))
+}
+
+/** A pool by its exact name (a name is how a person finds one), or null. */
+export async function budgetPoolNamed(name: string) {
+  return prisma.budgetPool.findFirst({ where: { name }, select: { id: true } })
 }

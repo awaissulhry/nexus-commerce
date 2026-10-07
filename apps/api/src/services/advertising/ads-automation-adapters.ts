@@ -584,9 +584,9 @@ const A8: AutomationAdapter = {
     return { kind: 'saved', subject: null, result: await computeBudgetEnforcement() }
   },
   // R16 — the engine's per-business switch (a brake: switched down, nothing catches the next over-spend). Its budget plans
-  // are set by a person in Nexus.
+  // are set in Nexus (the Budget Manager), or by a Claude request a person approves (W4-7: set-monthly-ad-budget).
   engine: 'budget-enforce',
-  noSwitch: 'its budget plans are set by a person in Nexus — the engine itself switches with no rowId',
+  noSwitch: 'its budget plans are set in Nexus (the Budget Manager) or with set-monthly-ad-budget — the engine itself switches with no rowId',
 }
 
 const A9: AutomationAdapter = {

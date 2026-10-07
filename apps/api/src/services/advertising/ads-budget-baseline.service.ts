@@ -20,8 +20,21 @@ export interface BaselineRestoreRow {
   toCents?: number
 }
 
+/**
+ * W4-7 — what Claude's restore-budget-baselines adds to a restore the screen makes the same way: the approval each
+ * write carries as change set, and — when a person approved it — his own click and his "Send anyway" past his own limits
+ * (the card warned him). Absent on the screen's restore, so its writes are unchanged.
+ */
+export interface BaselineRestoreOptions {
+  changeSetId?: string
+  manual?: boolean
+  confirmOwnLimits?: boolean
+  /** The audit reason before the screen's own words ("Claude request …: …"). */
+  reason?: string
+}
+
 /** The route's answer: each campaign found, restored, skipped or failed (a campaign not found is not listed). */
-export async function restoreBudgetBaselines(ids: string[], actor: AdsActor) {
+export async function restoreBudgetBaselines(ids: string[], actor: AdsActor, opts: BaselineRestoreOptions = {}) {
   const rows = await prisma.campaign.findMany({
     where: { id: { in: ids } },
     select: { id: true, name: true, dailyBudget: true, budgetBaselineCents: true },
@@ -37,7 +50,10 @@ export async function restoreBudgetBaselines(ids: string[], actor: AdsActor) {
         campaignId: c.id,
         patch: { dailyBudget: c.budgetBaselineCents / 100 },
         actor,
-        reason: `restore to baseline €${(c.budgetBaselineCents / 100).toFixed(2)} (was €${(currentCents / 100).toFixed(2)})`,
+        reason: `${opts.reason ? `${opts.reason} — ` : ''}restore to baseline €${(c.budgetBaselineCents / 100).toFixed(2)} (was €${(currentCents / 100).toFixed(2)})`,
+        ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}),
+        ...(opts.manual ? { manual: true } : {}),
+        ...(opts.confirmOwnLimits ? { confirmOwnLimits: true } : {}),
       } as never)
       const ok = (res as { ok?: boolean }).ok !== false
       results.push({ id: c.id, name: c.name, outcome: ok ? 'restored' : 'failed', why: (res as { error?: string }).error, fromCents: currentCents, toCents: c.budgetBaselineCents })
