@@ -25,6 +25,7 @@ import type { Prisma } from '@prisma/client'
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { adsSyncJobId } from '../../lib/job-id.js'
 import { isContradictoryOrphan } from '../ads-core/amazon-entity-gone.js'
 import {
   IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus, type AdSyncType,
@@ -359,7 +360,11 @@ export function writeValueCents(fieldChanges: FieldChange[]): number {
  * what the worker would hand it (the `user:` actor, every field, the money value, the value replaced), and a refusal is
  * answered at once in the gate's own words — nothing written, no queue row, no audit row; recorded as a gate refusal
  * (queueId null). It decides nothing itself: every rule is the gate's, and the worker still asks again at dispatch.
- * Engines and the other callers do not pass `askGate` and keep the queue-then-dispatch path.
+ * Honest writes (2026-10-07) — an engine may ask too: auto-bid passes `askGate`, so a bid the gate refuses (a campaign
+ * off the live-write allowlist, a pin, the halt, Amazon's limits) is answered at once, with no local change — before,
+ * Nexus showed the refused bid until the worker put the old one back, and the run counted it applied. The gate is
+ * handed the engine's actor and no person mark, so it judges the write exactly as at dispatch. The other engines and
+ * callers do not pass `askGate` and keep the queue-then-dispatch path.
  */
 async function gateRefusedNow(args: {
   askGate?: boolean
@@ -380,7 +385,7 @@ async function gateRefusedNow(args: {
   /** W4-11 — what the write is, as the worker hands it to the gate (an SB/SD write a caller may send). */
   write?: AdWrite | null
 }): Promise<MutationOutcome | null> {
-  if (!args.askGate || !args.actor.startsWith('user:')) return null
+  if (!args.askGate) return null
   const cents = (v: string | null | undefined, euros = false): number | null => {
     const n = v == null || String(v).trim() === '' ? NaN : Number(v)
     return Number.isFinite(n) ? Math.round(euros ? n * 100 : n) : null
@@ -1176,7 +1181,7 @@ async function enqueueBullMQJob(queueRowId: string, syncType: AdSyncType): Promi
   try {
     const { adsSyncQueue } = await import('../../lib/queue.js')
     const add = adsSyncQueue
-      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: `ads-sync-${queueRowId}` })
+      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: adsSyncJobId(queueRowId) })
       .then(() => undefined)
       .catch((err: unknown) => {
         logger.warn('[ads-mutation] BullMQ enqueue failed (cron drain will handle)', {

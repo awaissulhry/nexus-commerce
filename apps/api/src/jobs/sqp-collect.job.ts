@@ -30,14 +30,25 @@ import { envEnabled } from '../utils/env-flag.js'
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 export async function runSqpCollectOnce(): Promise<string> {
-  const { collectSqpReports, SQP_DOCUMENT_RETENTION_HOURS } = await import('../services/advertising/sqp-async.service.js')
+  const { collectSqpReports, requeueNotSentErrors, SQP_DOCUMENT_RETENTION_HOURS, SQP_REPORT_RETENTION_DAYS } = await import('../services/advertising/sqp-async.service.js')
+
+  // 🔴 First, once: the rows the OLD collect code marked ERROR on the gateway's "Not sent yet … Retry
+  // later." go back to PENDING (inside Amazon's retention). Nothing had been sent, so those reports were
+  // never lost — only dropped from the queue. This changes rows; it is a no-op once they are back.
+  const requeued = await requeueNotSentErrors()
+  if (requeued > 0) {
+    logger.info('[sqp-collect] requeued reports an older collect pass had marked ERROR although the gateway never sent the poll', {
+      requeued, withinDays: SQP_REPORT_RETENTION_DAYS,
+    })
+  }
+  const requeuedPart = requeued ? ` · requeued=${requeued}(old "Not sent yet" ERROR rows back to PENDING)` : ''
 
   const before = await prisma.sqpReportRequest.groupBy({ by: ['status'], _count: { _all: true } })
   const outstandingBefore = before.filter((b) => b.status === 'PENDING' || b.status === 'DONE').reduce((a, b) => a + b._count._all, 0)
   if (outstandingBefore === 0) {
     // Nothing to do is not a failure and must not read as one. A request pass that never ran is a
     // different problem, visible on sqp-ingest's own row.
-    return `nothing outstanding · states=${before.map((b) => `${b.status}=${b._count._all}`).join(',') || 'none'}`
+    return `nothing outstanding · states=${before.map((b) => `${b.status}=${b._count._all}`).join(',') || 'none'}${requeuedPart}`
   }
 
   const r = await collectSqpReports({ limit: Number(process.env.NEXUS_SQP_COLLECT_LIMIT) || 60, paceMs: 1_200 })
@@ -58,9 +69,11 @@ export async function runSqpCollectOnce(): Promise<string> {
     (r.terminal ? ` terminal=${r.terminal}` : '') +
     (r.errors ? ` errors=${r.errors}` : '') +
     (r.notSent ? ` notSent=${r.notSent}(gateway did not send — kept for the next tick)` : '') +
+    (r.expiredAfterRequeue ? ` expiredAfterRequeue=${r.expiredAfterRequeue}(requeued rows Amazon no longer holds — lost by the old collect code)` : '') +
     (r.pastRetentionStillTrying ? ` pastRetention=${r.pastRetentionStillTrying}(still polling — expiry is only ever a 404)` : '') +
     (r.collectionLagMsP50 != null ? ` · lag(done→ingest) p50=${(r.collectionLagMsP50 / 60_000).toFixed(1)}m` : '') +
-    (oldest ? ` · oldest outstanding ${oldestH.toFixed(1)}h (${headroomH.toFixed(1)}h of retention left)` : '')
+    (oldest ? ` · oldest outstanding ${oldestH.toFixed(1)}h (${headroomH.toFixed(1)}h of retention left)` : '') +
+    requeuedPart
 
   // 🔴 An expiry is a real defect — a report generated and lost — so it fails the row rather than
   // hiding in a summary nobody reads. Anything still pending is NOT a failure.

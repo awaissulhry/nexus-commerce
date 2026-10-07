@@ -154,7 +154,7 @@ describe('Owner targets only — which bids auto-bid moves', () => {
     // t-g, a person's bid, stays; t-b, in the same campaign, moves.
     expect(out.moves.map((m: { targetId: string }) => m.targetId)).toEqual(['t-a', 't-b', 't-c', 't-d'])
     // A bid with no target he set counts there first, whoever holds it.
-    expect(out.leftAlone).toEqual({ noTargetSetByYou: 3, hourlyPlan: 1, goalPlan: 1, person: 1, pinned: 1 })
+    expect(out.leftAlone).toEqual({ noTargetSetByYou: 3, notRunning: 0, notOnAllowlist: 0, hourlyPlan: 1, goalPlan: 1, person: 1, pinned: 1 })
   })
 
   it('an autopilot plan switched OFF and a disabled schedule hold nothing', async () => {
@@ -164,7 +164,7 @@ describe('Owner targets only — which bids auto-bid moves', () => {
     })
     const r = await inside(() => runAutoBidOnce())
     expect(writes.entries.map((e) => e.adTargetId).sort()).toEqual(['t-auto', 't-goal2', 't-hourly', 't-it', 't-person2', 't-uk'])
-    expect(r.leftAlone).toEqual({ noTargetSetByYou: 0, hourlyPlan: 1, goalPlan: 0, person: 3, pinned: 1 })
+    expect(r.leftAlone).toEqual({ noTargetSetByYou: 0, notRunning: 0, notOnAllowlist: 0, hourlyPlan: 1, goalPlan: 0, person: 3, pinned: 1 })
     await inside(async () => {
       await db().autopilotPlan.updateMany({ data: { autonomy: 'SUGGEST' } })
       await db().adSchedule.updateMany({ data: { enabled: true } })
@@ -192,14 +192,14 @@ describe('Owner targets only — the preview is the run, and every surface says 
     const r = await inside(() => runAutoBidOnce())
     expect(autoBidSummaryLine(r)).toBe(`proposed=4 applied=4 dryRun=false left-alone=7 (2 an hourly plan holds, 1 a goal plan holds, 3 a person holds, 1 a pin holds: ${AUTO_BID_SCOPE_WORDS})`)
     expect(notices.sent).toHaveLength(1)
-    expect(notices.sent[0]).toMatchObject({ title: 'Auto-bid: 4 bid changes applied' })
+    expect(notices.sent[0]).toMatchObject({ title: 'Auto-bid: 4 bid changes queued for Amazon' })
     expect(notices.sent[0].body).toBe(`Target-ACoS optimization: ${AUTO_BID_SCOPE_WORDS} (4 to move; left alone: 2 an hourly plan holds, 1 a goal plan holds, 3 a person holds, 1 a pin holds). Writes gated per-campaign allowlist + caps.`)
     // A run that left nothing alone keeps its old line.
-    expect(autoBidSummaryLine({ proposed: 2, applied: 2, dryRun: false, leftAlone: { noTargetSetByYou: 0, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0 } })).toBe('proposed=2 applied=2 dryRun=false')
+    expect(autoBidSummaryLine({ proposed: 2, applied: 2, dryRun: false, leftAlone: { noTargetSetByYou: 0, notRunning: 0, notOnAllowlist: 0, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0 } })).toBe('proposed=2 applied=2 dryRun=false')
   })
 
   it('the A4 catalog entry (list-automations) says the rule in the same words', () => {
-    expect(AUTO_BID_SCOPE_WORDS).toBe('it moves only bids where you set a target ACoS (campaign, ads strategy or account default) and leaves bids an hourly plan, a goal plan, a person or a pin holds')
+    expect(AUTO_BID_SCOPE_WORDS).toBe('it moves only bids where you set a target ACoS (campaign, ads strategy or account default), in running campaigns on the live-write allowlist, and leaves bids an hourly plan, a goal plan, a person or a pin holds')
     expect(automationAdapter('A4')!.what).toContain(`It ${AUTO_BID_SCOPE_WORDS.slice(3)}.`)
   })
 })

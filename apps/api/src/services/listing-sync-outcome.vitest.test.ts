@@ -76,7 +76,7 @@ describe('recordListingSyncOutcome — the listing follows its queue', () => {
     expect(after).toMatchObject({ syncStatus: 'IN_SYNC', lastSyncStatus: 'SUCCESS', lastSyncError: null, version: l.version })
     expect(after.lastSyncedAt).toBeInstanceOf(Date)
     // The grids read lastSyncStatus from the product read cache: its refresh job is queued.
-    expect(state.addJob).toHaveBeenCalledWith(expect.anything(), 'refresh', { productId: l.productId }, expect.objectContaining({ jobId: `cache:refresh:${l.productId}` }))
+    expect(state.addJob).toHaveBeenCalledWith(expect.anything(), 'refresh', { productId: l.productId }, expect.objectContaining({ jobId: `cache-refresh-${l.productId}` }))
   }))
 
   it('a send while another row of the listing still waits: the send is recorded, the listing stays PENDING', () => scoped(async () => {

@@ -66,6 +66,60 @@ function isHeaderSafe(value: string): boolean {
   return /^[\x21-\x7e]+$/.test(value)
 }
 
+/**
+ * Where each part of a message goes, and why none of it can break the request (2026-10-07):
+ *   · the subject, the sender (with its display name), the recipients and the bodies go in the JSON BODY, the fields
+ *     Resend expects (`subject`, `from`, `to`, `html`, `text`), as UTF-8: "…", "€", "à" arrive as written, and Resend
+ *     encodes them for the mail itself;
+ *   · the HTTP request headers carry only the API key and the content type. A header value must be a ByteString (no
+ *     character above 255): fetch threw "Cannot convert argument to a ByteString because the character at index 10 has
+ *     a value of 8230" for a shortened placeholder key "re_…" ("Bearer " is 7 characters, "re_" 3: index 10 is its
+ *     "…"). The key is checked before the call (`isHeaderSafe`);
+ *   · the message's own extra headers (`msg.headers`, e.g. List-Unsubscribe) go in the JSON body too, but Resend writes
+ *     them into the mail as raw header lines, which must be ASCII (RFC 5322). `mailHeaderValue` encodes any other
+ *     character per RFC 2047, so the meaning is kept whole.
+ */
+
+/** A header field name as RFC 5322 allows it: printable ASCII, no colon. */
+function isHeaderName(name: string): boolean {
+  return /^[\x21-\x39\x3b-\x7e]+$/.test(name)
+}
+
+/** One RFC 2047 encoded-word holds at most 75 characters: "=?UTF-8?B?" + base64 + "?=", so 45 bytes of text. */
+const ENCODED_WORD_BYTES = 45
+
+/**
+ * A mail header value that a raw header line can carry. Printable ASCII (with spaces) is returned as it is. A value
+ * with any other character (…, €, à) becomes RFC 2047 encoded-words (`=?UTF-8?B?…?=`, base64 of the UTF-8 bytes, a
+ * character never split between two words, the words separated by a space, which a decoder drops), so every mail
+ * client shows the value exactly as written. A line break would start a new header line: it is unfolded to one space.
+ */
+export function mailHeaderValue(value: string): string {
+  const unfolded = value.replace(/[\t ]*(?:\r\n|\r|\n)[\t ]*/g, ' ')
+  if (/^[\x20-\x7e\t]*$/.test(unfolded)) return unfolded
+  const words: string[] = []
+  let chunk = ''
+  for (const ch of unfolded) {
+    if (chunk && Buffer.byteLength(chunk + ch, 'utf8') > ENCODED_WORD_BYTES) {
+      words.push(chunk)
+      chunk = ''
+    }
+    chunk += ch
+  }
+  if (chunk) words.push(chunk)
+  return words.map((w) => `=?UTF-8?B?${Buffer.from(w, 'utf8').toString('base64')}?=`).join(' ')
+}
+
+/** The message's extra headers, ready for Resend; a name no header can have is a refusal (named), never dropped. */
+function mailHeaders(headers: Record<string, string>): { headers: Record<string, string> } | { error: string } {
+  const out: Record<string, string> = {}
+  for (const [name, value] of Object.entries(headers)) {
+    if (!isHeaderName(name)) return { error: `the e-mail header name ${JSON.stringify(name)} is not a valid header name (printable ASCII, no colon)` }
+    out[name] = mailHeaderValue(String(value ?? ''))
+  }
+  return { headers: out }
+}
+
 /** The sender when a message names none (Xavia's; every other business names its own, O3). */
 export function defaultFrom(): string {
   return process.env.NEXUS_EMAIL_FROM ?? 'Xavia <ship@xavia.it>'
@@ -129,9 +183,12 @@ export async function sendEmail(msg: EmailMessage): Promise<SendResult> {
     payload.attachments = msg.attachments.map(encodeAttachment)
   }
   // RV.9.5 — Resend forwards `headers` as raw SMTP headers, which is
-  // how List-Unsubscribe + List-Unsubscribe-Post get to the inbox.
+  // how List-Unsubscribe + List-Unsubscribe-Post get to the inbox. Raw header lines are ASCII: see `mailHeaderValue`.
   if (msg.headers && Object.keys(msg.headers).length > 0) {
-    payload.headers = msg.headers
+    const safe = mailHeaders(msg.headers)
+    // (`in`, not a flag: this tsconfig is not strict, so a literal `ok` would not narrow.)
+    if ('error' in safe) return { ok: false, provider: 'resend', dryRun: false, error: safe.error }
+    payload.headers = safe.headers
   }
 
   let res: Response
@@ -170,4 +227,4 @@ export async function sendEmail(msg: EmailMessage): Promise<SendResult> {
   }
 }
 
-export const __test = { isReal, defaultFrom, encodeAttachment }
+export const __test = { isReal, defaultFrom, encodeAttachment, isHeaderName, mailHeaders }

@@ -62,7 +62,7 @@ import { pipelineHealth } from '../../advertising/ads-pipeline-health.service.js
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
 import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.service.js'
 import { previewHarvest, type HarvestCandidate } from '../../advertising/ads-harvest.service.js'
-import { listChanges, type ChangeRow, type ChangeSource } from '../../advertising/ads-changes.service.js'
+import { bidsNotAtAmazon, listChanges, type ChangeRow, type ChangeSource } from '../../advertising/ads-changes.service.js'
 // Imported where it is used: loading the recommendations engine registers rule-action handlers (bid optimiser,
 // pacing, top-of-search) — a side effect the tool registry must not have in every process that lists tools.
 import type { Recommendation } from '../../advertising/ads-recommendations.service.js'
@@ -122,6 +122,8 @@ const AD_MONEY = {
   // W4-9 — a Keyword Tracker proposal's bid times its targets.
   commitmentCents: ADSPEND,
   proposedBidCents: ADSPEND,
+  // Honest writes — the bid Amazon still has while Nexus's copy waits to be sent or failed (ad-targets bidNotAtAmazon).
+  amazonBidCents: ADSPEND,
   proposedBudgetCents: ADSPEND,
   proposedChange: ADSPEND,
   fromAmount: ADSPEND,
@@ -875,7 +877,9 @@ const adTargets: AgentTool = {
     + 'text, kind, match type, status, live now (target and campaign enabled), bid, the bid it held before a no-pause '
     + 'suppression (suppressedFromBidCents; a suppressed bid is not raised), the campaign\'s bid bounds, effective max '
     + 'CPC, who owns its bids (schedule, goal, manual or none), and impressions, clicks, orders, spend, sales, CPC and '
-    + 'ACoS over the window. Filter by campaignId, adGroupId, market, status or text.' + MONEY_WORDS + PAGING,
+    + 'ACoS over the window. The bid is Nexus\'s copy: when it has not reached Amazon yet (a write queued or being sent, '
+    + 'or one that failed), bidNotAtAmazon says so, with the bid Amazon still has (amazonBidCents) and, for a failed '
+    + 'one, why; null when Amazon has the bid shown. Filter by campaignId, adGroupId, market, status or text.' + MONEY_WORDS + PAGING,
   handler: (args) => listTool('ad-targets', async () => {
     const a = args as { campaignId?: string; adGroupId?: string; market?: string; status: (typeof TARGET_STATUSES)[number]; search?: string; days: number; limit?: number; cursor?: string }
     const size = pageSize(a.limit)
@@ -910,9 +914,12 @@ const adTargets: AgentTool = {
     const page = keysetPage(rows, positionOf, size, scope, a.cursor)
     const campaignIds = [...new Set(page.items.map((r) => r.campaignId))]
     const groupIds = [...new Set(page.items.map((r) => r.adGroupId))]
-    const [index, externalGroup] = await Promise.all([campaignIndex(campaignIds, []), adGroupExternalIds(groupIds)])
+    const [index, externalGroup, notAtAmazon] = await Promise.all([
+      campaignIndex(campaignIds, []), adGroupExternalIds(groupIds), bidsNotAtAmazon(page.items.map((r) => ({ id: r.id, bidCents: r.bidCents }))),
+    ])
     const items = page.items.map((r) => {
       const c = index.byId.get(r.campaignId)
+      const unsent = notAtAmazon.get(r.id)
       return {
         targetId: r.id,
         text: r.label,
@@ -934,6 +941,8 @@ const adTargets: AgentTool = {
         market: r.market,
         currency: c ? campaignCurrency(c) : null,
         bidCents: r.bidCents,
+        // Honest writes — a bid Nexus shows that Amazon does not have yet (or did not take).
+        bidNotAtAmazon: unsent ? { state: unsent.state, amazonBidCents: unsent.amazonBidCents, since: iso(unsent.since), deliveryError: unsent.deliveryError } : null,
         suppressed: r.suppressedFromBidCents != null,
         suppressedFromBidCents: r.suppressedFromBidCents,
         inMinBidWindow: r.inMinBidWindow,

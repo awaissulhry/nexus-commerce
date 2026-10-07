@@ -165,19 +165,19 @@ async function loadProfileScopes(): Promise<{ connectionId: string; scopes: Prof
   return { connectionId, scopes: sorted }
 }
 
-async function refFromScopes(connectionId: string, scopes: ProfileScopeRow[], marketplace: string): Promise<AdsProfileRef | null> {
-  const hit = scopes.find((s) => sameMarket((s.metadata as ScopeMetadata | null)?.marketplace, marketplace))
-  if (!hit) return null
-  const meta = (hit.metadata ?? {}) as ScopeMetadata
-  // The channel's facts come from the scope; the operator's decision comes from the
-  // scope only when it HAS one, and otherwise from the row that owns it.
+/**
+ * One profile scope as the write gate reads it: the channel's facts from the scope; the operator's decision from the
+ * scope only when it HAS one, and otherwise from the row that owns it (then sandbox, when neither records one).
+ */
+async function refFromScope(connectionId: string, scope: ProfileScopeRow, marketplace: string): Promise<AdsProfileRef> {
+  const meta = (scope.metadata ?? {}) as ScopeMetadata
   const decision =
     typeof meta.mode === 'string'
       ? { mode: meta.mode, writesEnabledAt: asDate(meta.writesEnabledAt), lastWriteAt: asDate(meta.lastWriteAt) }
-      : ((await decisionFromRow(hit.externalId)) ?? { mode: 'sandbox', writesEnabledAt: null, lastWriteAt: null })
+      : ((await decisionFromRow(scope.externalId)) ?? { mode: 'sandbox', writesEnabledAt: null, lastWriteAt: null })
   return {
-    profileId: hit.externalId,
-    region: hit.region ?? 'EU',
+    profileId: scope.externalId,
+    region: scope.region ?? 'EU',
     connectionId,
     mode: decision.mode,
     writesEnabledAt: decision.writesEnabledAt,
@@ -185,6 +185,12 @@ async function refFromScopes(connectionId: string, scopes: ProfileScopeRow[], ma
     marketplace: typeof meta.marketplace === 'string' ? meta.marketplace : marketplace,
     source: 'scope',
   }
+}
+
+async function refFromScopes(connectionId: string, scopes: ProfileScopeRow[], marketplace: string): Promise<AdsProfileRef | null> {
+  const hit = scopes.find((s) => sameMarket((s.metadata as ScopeMetadata | null)?.marketplace, marketplace))
+  if (!hit) return null
+  return refFromScope(connectionId, hit, marketplace)
 }
 
 async function fromScopes(marketplace: string): Promise<AdsProfileRef | null> {
@@ -265,29 +271,21 @@ export async function adsClientContextFor(marketplace: string | null | undefined
   return { profileId: ref.profileId, region }
 }
 
-/** Every profile the account reaches, for the sites that sweep rather than look one up. */
+/**
+ * Every profile the account reaches, for the sites that sweep rather than look one up.
+ *
+ * Each profile is answered exactly as `adsProfileFor` answers its market — the write gate's own reading, in the same
+ * order (by profile id): a scope that records no decision reads the row that owns it, and only then sandbox. It used to
+ * assume sandbox there, so a sweep and the write gate disagreed on every profile whose scope lost its decision (the
+ * 2026-08-29 heartbeats), and `activeOnly` dropped profiles the gate lets write.
+ */
 export async function listAdsProfiles(opts: { activeOnly?: boolean } = {}): Promise<AdsProfileRef[]> {
   if (coreEnabled()) {
     try {
-      const connectionId = await adsConnectionId()
-      if (connectionId) {
-        const scopes = await prisma.connectionScope.findMany({
-          where: { connectionId, kind: 'profile' },
-          select: { externalId: true, region: true, metadata: true },
-        })
-        const refs = scopes.map((s) => {
-          const meta = (s.metadata ?? {}) as ScopeMetadata
-          return {
-            profileId: s.externalId,
-            region: s.region ?? 'EU',
-            connectionId,
-            mode: typeof meta.mode === 'string' ? meta.mode : 'sandbox',
-            writesEnabledAt: asDate(meta.writesEnabledAt),
-            lastWriteAt: asDate(meta.lastWriteAt),
-            marketplace: typeof meta.marketplace === 'string' ? meta.marketplace : '',
-            source: 'scope' as const,
-          }
-        })
+      const loaded = await loadProfileScopes()
+      if (loaded) {
+        const refs: AdsProfileRef[] = []
+        for (const scope of loaded.scopes) refs.push(await refFromScope(loaded.connectionId, scope, ''))
         if (refs.length > 0) return opts.activeOnly ? refs.filter((r) => r.mode === 'production') : refs
       }
     } catch (err) {
@@ -298,6 +296,8 @@ export async function listAdsProfiles(opts: { activeOnly?: boolean } = {}): Prom
   }
   const rows = await prisma.amazonAdsConnection.findMany({
     where: { isActive: true, ...(opts.activeOnly ? { mode: 'production' } : {}) },
+    // CM-29 — the same order as the scopes and as `adsProfileFor`'s row lookup.
+    orderBy: { profileId: 'asc' },
     select: { profileId: true, region: true, mode: true, writesEnabledAt: true, lastWriteAt: true, marketplace: true },
   })
   return rows.map((r) => ({ ...r, connectionId: null, source: 'row' as const }))

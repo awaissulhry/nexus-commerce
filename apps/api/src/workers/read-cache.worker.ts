@@ -4,7 +4,7 @@
  * Processes jobs enqueued by productEventService.enqueueRefresh().
  * Each job carries a single { productId } and triggers one upsert
  * into ProductReadCache. Because jobs are deduplicated by jobId
- * ("cache:refresh:<productId>"), rapid successive mutations on the
+ * ("cache-refresh-<productId>"), rapid successive mutations on the
  * same product collapse to one rebuild.
  */
 

@@ -131,6 +131,8 @@ async function seedA() {
     await history({ entityType: 'CAMPAIGN', entityId: 'ar-c1', campaignId: 'ar-c1', field: 'dailyBudget', oldValue: '20.00', newValue: '23.45', changedAt: hoursAgo(1), changedBy: 'user:u-ads', reason: 'more budget for the weekend' })
     await history({ entityType: 'CAMPAIGN', entityId: 'ar-c3', campaignId: 'ar-c3', field: 'status', oldValue: 'ENABLED', newValue: 'PAUSED', changedAt: hoursAgo(3), changedBy: 'user:u-ads' })
     await history({ entityType: 'AD_TARGET', entityId: 'ar-t3', campaignId: 'ar-c2', field: 'bid', oldValue: '70', newValue: '77', changedAt: hoursAgo(0.5), changedBy: 'automation:rule-xyz' })
+    // Honest writes — that bid write is still queued: Nexus shows 77, Amazon still has 70.
+    await db.adMutation.create({ data: { entityType: 'AD_TARGET', entityId: 'ar-t3', field: 'bid', previousValue: '70', intendedValue: '77', state: 'PENDING', actor: 'automation:rule-xyz', createdAt: hoursAgo(0.5) } })
 
     const suggestion = (ruleId: string, ruleName: string, entityId: string, action: Record<string, unknown>, key: string) =>
       db.adsRuleSuggestion.create({ data: { ruleId, ruleName, entityType: 'AD_TARGET', entityId, entityName: 'race jacket', marketplace: 'IT', proposedAction: action, proposedKey: key } as never })
@@ -317,6 +319,17 @@ describe('A2 — ad-targets', () => {
     const t2 = data.items.find((i: Row) => i.targetId === 'ar-t2')
     expect(t2).toMatchObject({ bidCents: 2, suppressed: true, suppressedFromBidCents: 61 })
     expect(data.items.find((i: Row) => i.targetId === 'ar-t3')).toMatchObject({ currency: 'GBP', externalCampaignId: 'EXT-C2' })
+  })
+
+  it('a bid Nexus holds that has not reached Amazon says so, with the bid Amazon still has; the others say null', async () => {
+    const data = (await call('ad-targets', { limit: 100 })).data!
+    expect(data.items.find((i: Row) => i.targetId === 'ar-t3').bidNotAtAmazon).toMatchObject({ state: 'PENDING', amazonBidCents: 70, deliveryError: null, since: expect.any(String) })
+    expect(data.items.filter((i: Row) => i.bidNotAtAmazon != null).map((i: Row) => i.targetId)).toEqual(['ar-t3'])
+    // Amazon's bid is money: a person without the ad-spend permission gets the state and not the amount.
+    const partial = (await call('ad-targets', { limit: 100 }, operator())).data!
+    const marker = partial.items.find((i: Row) => i.targetId === 'ar-t3').bidNotAtAmazon
+    expect(marker).toMatchObject({ state: 'PENDING' })
+    expect(marker).not.toHaveProperty('amazonBidCents')
   })
 
   it('pages, and narrows to a campaign, an ad group, a market or a text', async () => {

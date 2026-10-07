@@ -52,6 +52,7 @@ import {
 } from '@nexus/shared/matrix-contract'
 import { logger } from '../../utils/logger.js'
 import { outboundSyncQueue, addJobSafely } from '../../lib/queue.js'
+import { safeJobId } from '../../lib/job-id.js'
 import { setFollowMasterQuantity, setStockBuffer, amazonManagedListingIds } from '../follow-master.service.js'
 import { recascadeAfterSyncControlChange } from '../stock-movement.service.js'
 import { coalescePendingQuantityRows } from '../sync-coalesce.js'
@@ -405,7 +406,7 @@ async function applySyncState(read: MatrixRead, change: VerbChange, verb: Matrix
       await bumpTx(targets)
       /* The explicit row id, never the unscoped bulk route (report 28 §5.4) — the same statement `POST /api/outbound-queue/:id/retry` runs. */
       await prisma.outboundSyncQueue.update({ where: { id: failed.id }, data: { syncStatus: 'PENDING', retryCount: 0, errorMessage: null, errorCode: null, nextRetryAt: null, isDead: false, diedAt: null } })
-      await addJobSafely(outboundSyncQueue, 'sync-job', { queueId: failed.id, productId: failed.productId, channelListingId: failed.channelListingId, targetChannel: failed.targetChannel, syncType: failed.syncType }, { jobId: `${failed.channelListingId}:${failed.syncType}:retry:${Date.now()}` })
+      await addJobSafely(outboundSyncQueue, 'sync-job', { queueId: failed.id, productId: failed.productId, channelListingId: failed.channelListingId, targetChannel: failed.targetChannel, syncType: failed.syncType }, { jobId: safeJobId(failed.channelListingId, failed.syncType, 'retry', Date.now()) })
       return applied()
     }
   } catch (err) {

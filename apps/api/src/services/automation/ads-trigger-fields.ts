@@ -35,6 +35,9 @@ export const ADS_TRIGGER_FIELDS: Readonly<Record<string, readonly string[]>> = {
   CAMPAIGN_ROAS_DECLINING: ['trigger', 'marketplace', 'campaign.id', 'campaign.externalCampaignId', 'campaign.name', 'campaign.roas', 'campaign.previousRoas', 'campaign.spendCents', 'campaign.declinePct'],
   KEYWORD_RISING_STAR: ['trigger', 'marketplace', 'adTarget.id', 'adTarget.orders', 'adTarget.previousOrders', 'adTarget.spendCents', 'adTarget.salesCents', 'adTarget.roas', 'adTarget.growthPct'],
   SOV_BID: ['trigger', 'marketplace', 'campaign.id', 'adGroup.id', 'adTarget.id', 'adTarget.sovPct', 'adTarget.topSharePct', 'adTarget.spendCents', 'adTarget.salesCents', 'adTarget.orders', 'adTarget.clicks', 'adTarget.impressions', 'adTarget.acos', 'adTarget.roas', 'adTarget.ctr', 'adTarget.cvr', 'adTarget.cpcCents'],
+  // Keyword Tracker. `searchVolume` (searches per Brand Analytics week) is filled by the keyword-rank-feed cron;
+  // `organicRank`, `sponsoredRank` and `rankDelta` have no automatic source and exist only after a hand import
+  // (services/advertising/keyword-rank-feed.service.ts) — a rule on them alone is valid and matches nothing.
   KEYWORD_RANK_BID: ['trigger', 'marketplace', 'campaign.id', 'adGroup.id', 'adTarget.id', 'adTarget.organicRank', 'adTarget.sponsoredRank', 'adTarget.searchVolume', 'adTarget.rankDelta', 'adTarget.spendCents', 'adTarget.salesCents', 'adTarget.orders', 'adTarget.clicks', 'adTarget.impressions', 'adTarget.acos', 'adTarget.roas', 'adTarget.ctr', 'adTarget.cvr', 'adTarget.cpcCents'],
 }
 

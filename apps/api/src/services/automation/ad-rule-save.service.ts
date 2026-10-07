@@ -200,6 +200,14 @@ export async function planAdRuleSave(input: SaveRuleInput): Promise<PlanAnswer> 
       ? 'The rule is AUTO: an edit drops it to PROPOSE, so a changed rule proposes before it acts again.'
       : `The rule stays at ${to}.`
   const reachText = reach ? ` It reaches ${reach.campaigns} of ${reach.total} campaigns${merged.scope.wholeAccount ? ' (the whole account)' : ''}.` : ''
+  // A Keyword Tracker rule on a rank no source fills is valid and matches nothing: said in the plan, never refused —
+  // a hand import (POST /advertising/keyword-ranks) can still supply one. keyword-rank-feed.service.ts says why.
+  let rankText = ''
+  if (input.kind === 'amazon-ads' && merged.trigger === 'KEYWORD_RANK_BID') {
+    const { conditionFields, keywordRankFieldCensus, unsourcedRankNote } = await import('../advertising/keyword-rank-feed.service.js')
+    const note = unsourcedRankNote(conditionFields(merged.conditions), await keywordRankFieldCensus())
+    if (note) rankText = ` ${note}`
+  }
   const plan: SavePlan = {
     action: 'save-ad-rule',
     kind: input.kind,
@@ -211,7 +219,7 @@ export async function planAdRuleSave(input: SaveRuleInput): Promise<PlanAnswer> 
     scope: merged.scope,
     reach,
     basis: existing ? `rule:${basisOf({ config: existing.config, level: existing.level })}` : null,
-    effect: `${existing ? 'Changes' : 'Creates'} the ${KIND_NAME[input.kind]} "${merged.name}". ${says}${reachText} Nothing reaches a marketplace from this save.`,
+    effect: `${existing ? 'Changes' : 'Creates'} the ${KIND_NAME[input.kind]} "${merged.name}". ${says}${reachText}${rankText} Nothing reaches a marketplace from this save.`,
     config: { ...merged, ruleId: existing?.config.ruleId ?? null },
   }
   return { ok: true, plan, before: existing?.config ?? null }

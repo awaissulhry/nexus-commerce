@@ -9,6 +9,7 @@
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { outboundSyncQueue, adsSyncQueue, addJobSafely } from '../lib/queue.js'
+import { adsSyncJobId, safeJobId } from '../lib/job-id.js'
 import { logger } from '../utils/logger.js'
 import { isHeldPriceRow } from '../services/pim/follower-price.js'
 // MCP full control P3 — the list read and the row shape live in sync-activity.service.ts (retry and cancel answer
@@ -86,12 +87,12 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
             targetChannel: row.targetChannel,
             syncType: row.syncType,
           },
-          { jobId: `${row.channelListingId}:${row.syncType}:retry:${Date.now()}` },
+          { jobId: safeJobId(row.channelListingId, row.syncType, 'retry', Date.now()) },
         )
       } else if (row.syncType?.startsWith('AD_')) {
         // B2 — ads rows carry no channelListingId, so the generic re-enqueue above skips them and
         // they'd wait for the ~1-min drain cron. Re-enqueue on the ads queue for an immediate retry.
-        await adsSyncQueue.add('ads-sync', { queueId: id, syncType: row.syncType }, { jobId: `ads-sync-${id}-retry-${Date.now()}` }).catch(() => {})
+        await adsSyncQueue.add('ads-sync', { queueId: id, syncType: row.syncType }, { jobId: safeJobId(adsSyncJobId(id), 'retry', Date.now()) }).catch(() => {})
       }
 
       logger.info('Outbound queue job retried by operator', { id, channel: row.targetChannel })
@@ -176,10 +177,10 @@ export default async function outboundQueueRoutes(fastify: FastifyInstance) {
               outboundSyncQueue,
               'sync-job',
               { queueId: r.id, productId: r.productId, channelListingId: r.channelListingId, targetChannel: r.targetChannel, syncType: r.syncType },
-              { jobId: `${r.channelListingId}:${r.syncType}:retry:${Date.now()}` },
+              { jobId: safeJobId(r.channelListingId, r.syncType, 'retry', Date.now()) },
             )
           : r.syncType?.startsWith('AD_') // B2 — ads rows go on the ads queue
-            ? adsSyncQueue.add('ads-sync', { queueId: r.id, syncType: r.syncType }, { jobId: `ads-sync-${r.id}-retry-${Date.now()}` }).catch(() => {})
+            ? adsSyncQueue.add('ads-sync', { queueId: r.id, syncType: r.syncType }, { jobId: safeJobId(adsSyncJobId(r.id), 'retry', Date.now()) }).catch(() => {})
             : Promise.resolve(),
       ),
     )
