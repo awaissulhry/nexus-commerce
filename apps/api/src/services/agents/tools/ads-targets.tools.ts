@@ -5,9 +5,10 @@
  *                            ids) into ONE ad group of a manual campaign, up to 250 in one request, one step. Through the
  *                            ad group's own create services (ads-create.service.ts createKeywordLocal, createTargetLocal)
  *                            with `requireAmazon`: nothing is written unless Amazon took it. Each at the bid asked for —
- *                            it adds spend, so a person approves it with the approver's authenticator code (stepUp) — or,
- *                            with startAtFloor, born at the 5-cent floor with its planned bid remembered in the change
- *                            (no code: set-target-bid or bulk-ad-bid-change raises it later). A keyword or ASIN this
+ *                            it adds spend, listed in raises and said in the effect; the Owner's code rule
+ *                            (ads-code-rule.ts) makes it a day-to-day change, so a person's approval sends it with no
+ *                            authenticator code — or, with startAtFloor, born at the 5-cent floor with its planned bid
+ *                            remembered in the change (set-target-bid or bulk-ad-bid-change raises it later). A keyword or ASIN this
  *                            product already buys in another of its ad groups (the winners lock's "same product") is not
  *                            queued until the person says skip (it stays where it runs: the Owner's rule 2) or accept
  *                            (both buy it), never by rule once accepted — as build-sp-wizard-campaigns. Another
@@ -52,6 +53,7 @@ import {
   type HvCreateType, type HvDestGrain,
 } from '../../advertising/harvest-destination.service.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
+import { addsSpendWords, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, STOP_MIN_CENTS, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
@@ -129,7 +131,7 @@ const ADD_INPUT = z.object({
   })).max(MAX_TARGETS).optional().describe('category targets to add'),
   bidCents: BID.optional().describe("the bid of every target that names none, in minor units of the campaign's currency (default: the ad group's default bid)"),
   startAtFloor: z.boolean().optional()
-    .describe(`true: every target is born at the ${FLOOR_CENTS}-cent floor with its planned bid remembered in the change (no authenticator code: it spends next to nothing); set-target-bid raises it later. Default false: at its bid, which adds spend and needs the approver's code`),
+    .describe(`true: every target is born at the ${FLOOR_CENTS}-cent floor with its planned bid remembered in the change (it spends next to nothing); set-target-bid raises it later. Default false: at its bid, which adds spend (listed in raises; a person's approval sends it, no authenticator code)`),
   sameProductTerms: z.enum(['skip', 'accept']).optional()
     .describe('a keyword or ASIN this product already buys in another of its ad groups: skip = leave it out (it keeps running where it is), accept = this ad group buys it too (both bid for it; never by rule). Without it, such a request is not queued'),
   why: whyArg,
@@ -150,12 +152,14 @@ const ADD_LIMITS = adKitLimits({ maxItems: 0 }, {
 })
 
 /**
- * add-ad-targets' code decision, in ONE place (the Owner's code policy is still open): a target that starts spending at
- * its bid needs the approver's authenticator code; one born at the floor does not (it spends next to nothing, and the
- * raise to its planned bid is a set-target-bid of its own). Every new target is in `raises` either way.
+ * add-ad-targets' code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) makes a target that starts
+ * spending at its bid in an existing ad group a day-to-day change — listed in raises and said in the effect, and a
+ * person's approval sends it (no stepUp); one born at the floor spends next to nothing (the raise to its planned bid is a
+ * set-target-bid of its own). Every new target is in `raises` either way.
  */
-function addTargetsStepUp(atBid: number): { stepUp?: StepUp } {
+function addTargetsStepUp(atBid: number): { stepUp?: StepUp; noCode?: string } {
   if (!atBid) return {}
+  if (!needsCode('add-ad-targets: at a bid')) return { noCode: DAY_TO_DAY_NO_CODE }
   return { stepUp: { what: `adds ${plural(atBid, 'target')} that ${atBid === 1 ? 'starts' : 'start'} spending at ${atBid === 1 ? 'its bid' : 'their bids'}`, raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS, how: ADD_HOW } }
 }
 
@@ -274,7 +278,7 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
   const effect = `Adds ${plural(targets.length, 'target')} to ${placeWords(g)} at Amazon: ${named(lines.map((l) => `${l.label} ${l.toLabel}`))}.`
     + (a.startAtFloor
       ? ` Each starts at the ${FLOOR_CENTS}-cent floor and spends next to nothing; its planned bid is kept in this change, and set-target-bid (or bulk-ad-bid-change) raises it when it should spend.`
-      : ` They start spending at their bids (the highest ${amountLabel(highest, currency)}).`)
+      : ` They start spending at their bids (the highest ${amountLabel(highest, currency)}).${addsSpendWords(atBid.length ? [`${plural(atBid.length, 'new target')} at ${atBid.length === 1 ? 'its bid' : 'their bids'}`] : [], !!addTargetsStepUp(atBid.length).stepUp)}`)
     + (skipped.size ? ` Left out (this product buys them elsewhere, where they keep running): ${named(clashes.map((c) => c.target))}.` : '')
     + (accepted.length ? ` Accepted: this product already buys ${named(accepted.map((c) => c.target))} elsewhere — both now bid for ${accepted.length === 1 ? 'it' : 'them'}.` : '')
   return {
@@ -394,9 +398,9 @@ const addAdTargets: AgentTool = {
     `Add keywords (EXACT, PHRASE, BROAD), product targets (ASINs) and category targets to ONE ad group of a manual Amazon `
     + `Sponsored Products campaign, up to ${MAX_TARGETS} in one request (one step), through the ad group's own create services: `
     + 'nothing is written unless Amazon takes it. At its bid (each its own, else bidCents, else the ad group\'s default bid) a '
-    + 'target starts spending, so a person with settings.security.manage approves it in Nexus with their authenticator code '
-    + '(or the person who asked confirms it in Claude with theirs); with startAtFloor: true every target is born at the '
-    + `${FLOOR_CENTS}-cent floor with its planned bid kept in the change, no code, and set-target-bid raises it later. A keyword or `
+    + 'target starts spending: listed in raises and said in the preview, a day-to-day change, so a person\'s approval sends '
+    + 'it with no authenticator code; with startAtFloor: true every target is born at the '
+    + `${FLOOR_CENTS}-cent floor with its planned bid kept in the change, and set-target-bid raises it later. A keyword or `
     + 'ASIN this product already buys in another of its ad groups is not queued until sameProductTerms says skip (it stays '
     + 'where it runs) or accept (both buy it; never by rule); another product buying the same words is allowed. Refused, '
     + 'and not queued, for an auto campaign, a target already in the ad group, a floored campaign without startAtFloor, or '
@@ -413,7 +417,7 @@ const addAdTargets: AgentTool = {
     const p = fresh.preview as { reach: StoredReach; effect: string; sameProductClashes: unknown[] }
     // Accepting what this product already buys elsewhere is a person's word: never a run the business's rule decided.
     if (ctx.decidedVia === 'auto' && p.sameProductClashes.length) return notRun('Not run: it adds what this product already buys elsewhere (accepted), which a person decides, never a rule. Ask for it again; a person approves it.')
-    // The code, as addTargetsStepUp decided it on this fresh preview.
+    // The code, as addTargetsStepUp decided it on this fresh preview (none under the Owner's code rule).
     const gate = await spendGate(ctx, fresh.preview)
     if ('refusal' in gate) return notRun(gate.refusal)
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
@@ -471,13 +475,15 @@ const HARVEST_INPUT = z.object({
 type HarvestArgs = z.infer<typeof HARVEST_INPUT>
 
 /**
- * harvest-search-term's code decision, in ONE place (the Owner's code policy is still open). A harvest: none — its keyword
- * is graduate-keyword's lever, which needs no code (the money family rule), and its source negative only lowers spend. Its
- * undo: none — it lifts only the negative this tool's own harvest made, as undo-ad-change retires what a request made.
- * Every raise is in `raises` either way.
+ * harvest-search-term's code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) makes a harvest a day-to-day
+ * change — its keyword is graduate-keyword's lever, and its source negative only lowers spend. Its undo lifts only the
+ * negative this tool's own harvest made, as undo-ad-change retires what a request made. Every raise is in `raises` either
+ * way, and a person's approval sends it.
  */
-function harvestStepUp(_op: 'harvest' | 'undo'): { stepUp?: StepUp } {
-  return {}
+function harvestStepUp(op: 'harvest' | 'undo', raises: boolean): { stepUp?: StepUp } {
+  // Nothing that adds spend (an undo that lifts no negative), nothing to approve with a code.
+  if (!raises || !needsCode('harvest-search-term')) return {}
+  return { stepUp: { what: op === 'harvest' ? 'adds a harvested keyword that starts spending' : 'lifts the negative a harvest made', raises: ['Spend'], needs: STEP_UP_NEEDS, how: ADD_HOW } }
 }
 
 /**
@@ -642,9 +648,9 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
         negateSource: negate,
         // Rule 2 — a converting source closed because its own exact keyword wins elsewhere: a person's decision, never a rule.
         handovers,
-        // A new keyword adds spend: listed; the code is harvestStepUp's (none today, as graduate-keyword).
+        // A new keyword adds spend: listed; the code is harvestStepUp's (none: a day-to-day change, as graduate-keyword).
         raises: [`${created} at ${amountLabel(bidCents, currency)}`],
-        ...harvestStepUp('harvest'),
+        ...harvestStepUp('harvest', true),
         alsoChangedBy: bound.automations,
         ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
         // The term, its source and destination, the bid asked for and the negative plan (a bid worked out from the report is
@@ -743,7 +749,7 @@ async function undoPreview(a: HarvestArgs, ctx: Pick<ToolContext, 'approvalId'>,
   if (!a.changeSetId || !a.keywordId) return { ok: false, error: 'Name the harvest to put back: changeSetId (its approvalId) and keywordId (and negativeId, when it made one) — undo-change fills them in.' }
   // Only a harvest this tool made: its recorded change (a request's, or a plan step's) names exactly this keyword and this
   // negative. Any other change set — a plan of other tools, a playbook build or sync, an import — is not a harvest, and
-  // its negatives are never lifted here (retire-negatives does that, with the approver's code).
+  // its negatives are never lifted here (retire-negatives does that, a request of its own).
   const recorded = await prisma.agentChange.findMany({ where: { approvalId: a.changeSetId, toolName: TOOL.harvest }, select: { id: true, after: true, undoneAt: true } })
   const afterOf = (c: { after: unknown }) => (c.after ?? {}) as { op?: unknown; keyword?: { targetId?: unknown } | null; negative?: { targetId?: unknown } | null }
   const change = recorded.find((c) => afterOf(c).op === 'harvest' && afterOf(c).keyword?.targetId === a.keywordId)
@@ -798,9 +804,10 @@ async function undoPreview(a: HarvestArgs, ctx: Pick<ToolContext, 'approvalId'>,
         ...(lift ? [{ label: `negative "${negative!.expressionValue}" · ${placeWords(negative!.adGroup)}`, fromLabel: 'Standing', toLabel: 'Retired' }] : []),
       ],
       // Lifting the negative lets the term show the source's ads again: a raise, listed; the code is harvestStepUp's (none:
-      // it lifts only the negative this tool's own harvest made, as undo-ad-change retires what a request made).
+      // a day-to-day change; it lifts only the negative this tool's own harvest made, as undo-ad-change retires what a
+      // request made).
       raises: lift ? [`negative "${negative!.expressionValue}" · ${placeWords(negative!.adGroup)} retired (the term shows these ads there again)`] : [],
-      ...harvestStepUp('undo'),
+      ...harvestStepUp('undo', !!lift),
       basis: fingerprint({ change: change.id, keyword: [keyword.id, keyword.bidCents, String(keyword.status)], negative: negative ? [negative.id, String(negative.status)] : null }),
       reach: reached.reach,
       reachNote: reachNote(reached.reach),
@@ -873,7 +880,8 @@ const harvestSearchTerm: AgentTool = {
     + 'card; a person decides it, never a rule); otherwise ask with negateSource false, and once the new keyword wins, '
     + 'add-negative-targets closes the old place. A term already at home for the same product is not created again; a '
     + 'source negative in an ad group of another product is refused. The starting bid is the '
-    + 'term\'s cost per click in its source unless named; like graduate-keyword it needs no authenticator code. '
+    + 'term\'s cost per click in its source unless named; like graduate-keyword it is a day-to-day change: listed in '
+    + 'raises, and a person\'s approval sends it with no authenticator code. '
     + `${BY_RULE_WORDS} (by default it does not: maxItems 0, no market; then only for a term that meets the ads strategy's `
     + '"Harvest a search term when" group). Refused, and not queued, when the term did not run in its source, no '
     + 'destination is decided, the keyword is there already, or Amazon\'s write gate would refuse it. Undo (undo-change, or '
@@ -886,7 +894,7 @@ const harvestSearchTerm: AgentTool = {
     const refusal = recheck(ctx, fresh, HARVEST_MATERIAL)
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { op: 'harvest' | 'undo'; reach: StoredReach; effect: string; undoes?: string; undoesChangeId?: string; handovers?: unknown[] }
-    // The code, as harvestStepUp decided it on this fresh preview (none today, as graduate-keyword).
+    // The code, as harvestStepUp decided it on this fresh preview (none: a day-to-day change, as graduate-keyword).
     const gate = await spendGate(ctx, fresh.preview)
     if ('refusal' in gate) return notRun(gate.refusal)
     if (p.op === 'undo') {

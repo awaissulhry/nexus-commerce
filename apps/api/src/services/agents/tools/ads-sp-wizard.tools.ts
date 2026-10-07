@@ -400,8 +400,8 @@ async function wizardPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
         effect,
         nextSteps: [
           'follow the run with approval-status, or ads-playbook view build with its applicationId',
-          'set-campaign-live-writes (enabled: true), for each campaign: only an allowlisted campaign takes an approved change live',
-          'restore-campaign, for each campaign: puts the planned bids back — it starts spending',
+          'set-campaign-live-writes (enabled: true), for each campaign: only an allowlisted campaign takes an approved change live (a big door: the approver\'s authenticator code)',
+          'restore-campaign, for each campaign: puts the planned bids back — it starts spending (a big door: the approver\'s authenticator code)',
           ...(Object.keys(placementBids).length ? ['set-placement-multipliers, for each campaign once it is on the allowlist: the run\'s placementsToAsk'] : []),
         ],
         undoNote: UNDO_WORDS,

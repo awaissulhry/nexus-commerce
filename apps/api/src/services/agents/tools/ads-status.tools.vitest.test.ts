@@ -19,6 +19,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -346,6 +347,14 @@ describe('W4-2 — enable-ads lifts a pause no Claude request made only when ask
       ['campaign "Test c-w4"', true, expect.stringMatching(/^Claude request \S+ paused it .*Amazon reported its status changed outside Nexus since/)],
     ])
     expect(p.effect).toMatch(/^Switches 4 ads back on at Amazon \(4 campaigns\): .* Not paused by a Claude request \(4 of 4\): .* Approving it needs the approver's authenticator code; it never runs by rule\. Spend resumes: EUR 48\.00 of daily budget/)
+    // The code table decides the code (a big door): flipped, the card asks none — and it still never runs by rule.
+    __codeRuleTest.flip('enable-ads: includePeoplesPauses')
+    try {
+      const flipped = (await preview('enable-ads', { campaignIds: ['c-w1'], includePeoplesPauses: true })).preview as Row
+      expect(flipped).toMatchObject({ needsCode: 1 })
+      expect(flipped).not.toHaveProperty('stepUp')
+      expect(getTool('enable-ads')!.withinLimits!(flipped, getTool('enable-ads')!.limits!.parse({ maxItems: 100 }) as Record<string, unknown>)).toMatch(/never a rule; a person decides$/)
+    } finally { __codeRuleTest.reset() }
     // Without the option: today's refusal, naming it.
     expect((await preview('enable-ads', { campaignIds: ['c-w2'] })).error)
       .toMatch(/^Not queued: enable-ads switches back on only what a Claude request paused \(pause-ads\), unless asked with includePeoplesPauses: true\. campaign "Test c-w2": Nexus has no record of who paused it.* To switch back on a pause no Claude request made, ask again with includePeoplesPauses: true/)

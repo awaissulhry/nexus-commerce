@@ -251,6 +251,8 @@ describe('B-2 — approved, the builder\'s launch makes it born safe', () => {
     // Its planned bids come back with restore-campaign (the asker's suppression), a request a person approves.
     const r = await inside(() => callTool(claude, 'restore-campaign', { campaignId: ids[2] }))
     expect(r.raw.preview).toMatchObject({ suppressedBy: 'user:u-asker' })
+    // The Owner's code rule A: born at the floor, the goal's campaign goes live with this restore — the approver's code.
+    expect(r.raw.preview).toMatchObject({ bornAtFloor: { since: expect.any(String) }, stepUp: { raises: ['Bids', 'Spend'] } })
 
     // Switching the goal's plan on hands it its rules (still proposing): the plan's own off, not a person's.
     const { syncLinkedRules } = await import('../../advertising/autopilot/coordination.js')

@@ -17,6 +17,7 @@
  *   stop      PB-5b — no code: floored and off the allowlist, the row STOPPED; its undo is a start
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -238,6 +239,14 @@ describe('PB-5b — START and STOP of the built playbook', () => {
     expect(judge(p)).toMatch(/it starts spending: a person decides, with their authenticator code .*allowStart is off/)
     expect(judge(p, { allowStart: true, maxBidCents: 100 })).toBeNull()
     expect(judge({ op: 'stop', market: 'IT' })).toBeNull()
+    // The code table decides the code (a big door): flipped, the start card asks none; by rule still only with allowStart.
+    __codeRuleTest.flip('apply-ads-playbook: start')
+    try {
+      const flipped = (await preview('apply-ads-playbook', start())).preview as Row
+      expect(flipped).not.toHaveProperty('stepUp')
+      expect(flipped.noCode).toMatch(/day-to-day/)
+      expect(judge(flipped)).toMatch(/allowStart is off/)
+    } finally { __codeRuleTest.reset() }
     // A stop carries no code.
     const s = (await preview('apply-ads-playbook', stop())).preview as Row
     expect(s).toMatchObject({ op: 'stop', noCode: expect.any(String) })
@@ -250,7 +259,7 @@ describe('PB-5b — START and STOP of the built playbook', () => {
     startApproval = asked.approvalId!
     const plain = await approve(startApproval) as Row
     expect(plain).toMatchObject({ ok: false, status: 'pending' })
-    expect(plain.error).toMatch(/it starts spending, and a start runs only when a person with settings\.security\.manage approved it with their authenticator code/)
+    expect(plain.error).toMatch(/it starts spending on \d+ campaigns?.*, and that runs only when a person with settings\.security\.manage approved it with their authenticator code/)
     expect((await liveWrites()).some((c) => c.liveBidWritesEnabled)).toBe(false)
     // As the Approvals page records a decision taken with the approver's code.
     await inside(() => db().agentApproval.update({ where: { id: startApproval }, data: { decisionVia: 'nexus-step-up' } }))

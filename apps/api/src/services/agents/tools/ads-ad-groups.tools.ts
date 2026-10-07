@@ -14,16 +14,20 @@
  *                    it with its planned bid remembered, on a floor of the ad group's own held by the person who asked —
  *                    inside a campaign stopped with low bids too, so no campaign restore gives it back (lead decision,
  *                    W4-6 review): only set-ad-group op start does, with the approver's code. `startLive` starts the bids
- *                    as planned: it adds spend, so approving it needs the approver's authenticator code.
+ *                    as planned: a new structure going live, a big door of the Owner's code rule (ads-code-rule.ts) — the
+ *                    approver's authenticator code.
  *   add-product-ads  products (by SKU) into an existing ad group (createProductAdLocal). Each serves at the ad group's bids,
- *                    so it adds spend: approving it needs the approver's authenticator code.
+ *                    so it adds spend: new product ads are a big door — the approver's authenticator code.
  *   set-ad-group     one ad group. op edit: its default bid — as set-target-bid does a bid (the CPC step the campaign and
  *                    the ads strategy allow, never raising a bid a floor holds) — and its name (updateAdGroupWithSync).
  *                    op stop: its bids to the stop bid, each remembered (lowerAdGroupBids: the Owner's temporary stop is
  *                    low bids, never a pause). op start: the remembered bids back (restoreAdGroupBids) — only a floor
  *                    create-ad-group or op stop made (a stock floor is restore-ad-bids-after-stock's, an engine's is its
- *                    own) — with the approver's authenticator code and never by rule, as a playbook START: a new structure
- *                    goes live only with the code. A pause, an enable and an archive of an ad group stay pause-ads,
+ *                    own). The floor create-ad-group made it at (born at the floor, never started since): a new structure
+ *                    going live, a big door — the approver's authenticator code, never by rule, as a playbook START. The
+ *                    floor an op stop made (lead decision under code rule A, as restore-campaign after a later stop): a
+ *                    day-to-day give-back — no code, the raise listed, by rule only inside this tool's limits
+ *                    (maxRestoredBidCents, 0 by default). A pause, an enable and an archive of an ad group stay pause-ads,
  *                    enable-ads and archive-ads (W2).
  *
  * The Owner's rule 3 (isolation is per product): a product is advertised once per campaign — the same product twice in
@@ -62,7 +66,8 @@ import {
   spOnlyRefusal, stepClampWords, bidStepOf, withStepPast, type RuleWrite, type StoredReach,
 } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
-import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
+import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
+import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import type { AgentTool, FieldPermission, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = { read: 'ad-groups', create: 'create-ad-group', ads: 'add-product-ads', set: 'set-ad-group' } as const
@@ -207,8 +212,8 @@ export async function floorOriginsOf(groups: ReadonlyArray<{ id: string; bidsSup
 export function floorUntilWords(origin: FloorOrigin | undefined): string {
   if (!origin) return 'until its owner gives it back'
   switch (origin.made) {
-    case 'create': return 'until set-ad-group op start gives its planned bids back (create-ad-group made it at the floor; the approver\'s authenticator code)'
-    case 'stop': return 'until set-ad-group op start gives its bids back (set-ad-group op stop lowered them; the approver\'s authenticator code)'
+    case 'create': return `until set-ad-group op start gives its planned bids back (create-ad-group made it at the floor${needsCode('set-ad-group: op start') ? '; the approver\'s authenticator code' : ''})`
+    case 'stop': return 'until set-ad-group op start gives its bids back (set-ad-group op stop lowered them)'
     case 'stock': return 'until restore-ad-bids-after-stock gives its bids back once its stock is back (lower-ad-bids-for-stock floored it)'
     case 'person': return `until the person who set it (${origin.by ?? 'not recorded'}) gives it back`
     case 'engine': return origin.by?.startsWith('automation:budget-')
@@ -219,8 +224,8 @@ export function floorUntilWords(origin: FloorOrigin | undefined): string {
 
 /**
  * W4-6 review — undo-ad-change's guard: a put-back that would raise a bid of an ad group held at a floor create-ad-group
- * or set-ad-group op stop made is refused. Such a floor goes back only with set-ad-group op start (the approver's code,
- * never by rule), so no other door lifts it. Lowering stays an undo.
+ * or set-ad-group op stop made is refused. Such a floor goes back only with set-ad-group op start (a born floor with the
+ * approver's code, never by rule; an op stop's by its limits), so no other door lifts it. Lowering stays an undo.
  */
 export async function ownFloorRaiseRefusal(items: readonly KitItem[]): Promise<string | null> {
   const raises = items.filter((i) => i.change.field === 'bid' && i.change.toCents > (i.change.fromCents ?? 0))
@@ -232,7 +237,7 @@ export async function ownFloorRaiseRefusal(items: readonly KitItem[]): Promise<s
   const floored = await ownFloorsOf({ ids: groupIds })
   const origins = await floorOriginsOf(floored)
   const held = floored.find((g) => { const o = origins.get(g.id); return o?.made === 'create' || o?.made === 'stop' })
-  return held ? `Not undone: it would raise bids of ad group "${held.name}", which is held at its own floor ${floorUntilWords(origins.get(held.id))}. That floor goes back only that way: never by rule.` : null
+  return held ? `Not undone: it would raise bids of ad group "${held.name}", which is held at its own floor ${floorUntilWords(origins.get(held.id))}. That floor goes back only that way${origins.get(held.id)?.made === 'create' ? ': never by rule' : ''}.` : null
 }
 
 /** Where a campaign's bids are held at a floor now, in words; null when they are not. */
@@ -371,16 +376,6 @@ const allowlistWords = (c: CampaignRow) => c.liveBidWritesEnabled
   ? 'The campaign is on the live-write allowlist.'
   : `Campaign "${c.name}" is off the live-write allowlist: a person's approval sends it anyway (his own click), but run by the business's rule it waits for a person; afterwards no rule or engine writes it at Amazon until set-campaign-live-writes puts the campaign on the list.`
 
-/**
- * PB-5b's one gate of a change that adds spend: approved with the approver's fresh authenticator code, or run by the
- * business's rule where this tool's limits let it (they hold the rest). A change that adds nothing passes.
- */
-async function spendGate(ctx: ToolContext, adds: boolean): Promise<{ refusal: string } | null> {
-  if (!adds || ctx.decidedVia === 'auto') return null
-  const coded = await stepUpApproval(ctx)
-  return 'refusal' in coded ? { refusal: coded.refusal } : null
-}
-
 const whyArg = z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit')
 const SKU = z.string().trim().min(1).max(64)
 const ASIN = z.string().trim().toUpperCase().regex(/^[A-Z0-9]{10}$/, 'an ASIN is 10 letters and digits')
@@ -508,7 +503,7 @@ const CREATE_INPUT = z.object({
   negativeKeywords: z.array(negativeArg).max(LIST_MAX).optional().describe("searches this ad group never shows on (its own negatives only), at most 250"),
   negativeAsins: z.array(ASIN).max(LIST_MAX).optional().describe('ASINs this ad group never shows on (its own negatives only), at most 250'),
   startLive: z.boolean().default(false)
-    .describe("false (default): born at the 2-cent floor, every planned bid kept to give back (set-ad-group op start, or restore-campaign inside a stopped campaign); true: the bids start as planned and it spends from the start — approving that needs the approver's authenticator code"),
+    .describe("false (default): born at the 2-cent floor, every planned bid kept to give back (set-ad-group op start, or restore-campaign inside a stopped campaign); true: the bids start as planned and it spends from the start — a big door: approving that needs the approver's authenticator code"),
   why: whyArg,
 })
 type CreateArgs = z.infer<typeof CREATE_INPUT>
@@ -652,7 +647,7 @@ async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
   const remembered = [plan.defaultBid, ...bids].filter((b) => b.startCents !== b.plannedCents).length
   const startWords = start === 'live'
     ? `Its bids start as planned (the highest ${amountLabel(highestPlanned, currency)}): it spends from the start.`
-    : `It is born with every bid at the ${floor}-cent floor (a floor of its own, held by the person who asked; never paused), its planned bids remembered: it spends next to nothing until set-ad-group op start gives them back, with the approver's authenticator code.`
+    : `It is born with every bid at the ${floor}-cent floor (a floor of its own, held by the person who asked; never paused), its planned bids remembered: it spends next to nothing until set-ad-group op start gives them back${needsCode('set-ad-group: op start') ? ', with the approver\'s authenticator code' : ''}.`
       + (campaignFloor ? ` Its campaign is stopped with low bids now (${campaignFloor.replace(/^campaign "[^"]*" is stopped with low bids /, '')}): restore-campaign leaves this ad group at its own floor.` : '')
   const effect = `Creates the ad group "${plan.name}" in campaign "${campaign.name}" (${market}): ${plural(plan.products.length, 'product ad')}, ${targeting}`
     + `${negativeCount ? ` and ${plural(negativeCount, 'negative')}` : ''}, default bid ${amountLabel(plan.defaultBid.plannedCents, currency)}. ${startWords}`
@@ -674,9 +669,12 @@ async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
         : { how: 'its own floor', floorCents: floor, by: 'the person who asked', note: startWords },
       ...aroundPreview(around),
       raises,
+      // The Owner's code rule (ads-code-rule.ts): a new ad group going live is a big door.
       ...(start === 'live'
-        ? { stepUp: { what: `starts a new ad group spending (${plural(plan.products.length, 'product ad')}, ${targeting})`, raises: ['Product ads', 'Bids', 'Spend'], needs: STEP_UP_NEEDS, how: START_HOW } }
-        : { noCode: 'Born at the floor, it adds next to no spend: approving it needs no authenticator code (giving its planned bids back is its own request, set-ad-group op start, which needs it).' }),
+        ? needsCode('create-ad-group: startLive')
+          ? { stepUp: { what: `starts a new ad group spending (${plural(plan.products.length, 'product ad')}, ${targeting})`, raises: ['Product ads', 'Bids', 'Spend'], needs: STEP_UP_NEEDS, how: START_HOW } }
+          : { noCode: DAY_TO_DAY_NO_CODE }
+        : { noCode: `Born at the floor, it adds next to no spend: approving it needs no authenticator code (giving its planned bids back is its own request, set-ad-group op start${needsCode('set-ad-group: op start') ? ', which needs it' : ''}).` }),
       liveWrites: campaign.liveBidWritesEnabled,
       liveWritesNote: allowlistWords(campaign),
       alsoChangedBy: bound.automations,
@@ -690,7 +688,7 @@ async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
       effect,
       nextSteps: start === 'live'
         ? ['ad-groups: the ad group, its ads and targets as Amazon took them']
-        : ['set-ad-group (op start, the new ad group): gives the planned bids back with the approver\'s authenticator code — it starts spending'],
+        : [`set-ad-group (op start, the new ad group): gives the planned bids back${needsCode('set-ad-group: op start') ? ' with the approver\'s authenticator code' : ''} — it starts spending`],
       undoNote: CREATE_UNDO_WORDS,
     },
   }
@@ -761,9 +759,9 @@ async function runCreate(args: Record<string, unknown>, ctx: ToolContext): Promi
   const plan = p.plan
   const run = approvedRun(ctx, String(args.why ?? '').trim() || p.effect)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-  // A live start adds spend: the approver's code, or the business's rule inside its limits.
-  const gate = await spendGate(ctx, plan.start === 'live')
-  if (gate) return notRun(gate.refusal)
+  // A live start: the code as the fresh dry run's stepUp asks it (a big door), or the business's rule inside its limits.
+  const gate = await codeGate(ctx, fresh.preview)
+  if ('refusal' in gate) return notRun(gate.refusal)
   const by = await requesterOf(ctx, run.actor)
   const { createAdGroupLocal, createKeywordLocal, createNegativeKeywordLocal, createNegativeProductTargetLocal, createProductAdLocal, createTargetLocal } = await import('../../advertising/ads-create.service.js')
   // Every create as the screen's own add of the same row (nothing kept unless Amazon took it), as the approver, with the
@@ -880,8 +878,8 @@ const createAdGroup: AgentTool = {
     + '(keywords and ASINs) — through the screen\'s own creates. It is born safe: every bid starts at the 2-cent floor '
     + '(never paused) with its planned bid remembered, so it spends next to nothing until set-ad-group op start gives the '
     + 'planned bids back (inside a campaign a person stopped with low bids it joins that floor, and restore-campaign gives '
-    + 'everything back). startLive: true starts the bids as planned — that adds spend, so approving it needs the '
-    + 'approver\'s authenticator code. Each product must be sold on Amazon in the campaign\'s market; the same product twice '
+    + 'everything back). startLive: true starts the bids as planned — a new structure going live (a big door of the Owner\'s '
+    + 'code rule), so approving it needs the approver\'s authenticator code. Each product must be sold on Amazon in the campaign\'s market; the same product twice '
     + 'in one campaign is refused (its ads would bid against each other), another product in the campaign is only '
     + 'listed, and the same product in another campaign of the market is warned. A person approves it in Nexus, unless '
     + 'the business lets it run by its rule inside its limits and the ads strategy (by default it does not). The preview '
@@ -953,7 +951,10 @@ async function adsPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext, '
       totals: { productAds: sold.products.length },
       ...aroundPreview(around),
       raises: sold.products.map((p) => `the ad of ${p.sku}: it serves at the ad group's bids`),
-      stepUp: { what: `adds ${plural(sold.products.length, 'product ad')} that serve at the ad group's bids`, raises: ['Product ads', 'Spend'], needs: STEP_UP_NEEDS, how: ADS_HOW },
+      // The Owner's code rule (ads-code-rule.ts): new product ads are a big door.
+      ...(needsCode('add-product-ads')
+        ? { stepUp: { what: `adds ${plural(sold.products.length, 'product ad')} that serve at the ad group's bids`, raises: ['Product ads', 'Spend'], needs: STEP_UP_NEEDS, how: ADS_HOW } }
+        : { noCode: DAY_TO_DAY_NO_CODE }),
       liveWrites: campaign.liveBidWritesEnabled,
       liveWritesNote: allowlistWords(campaign),
       alsoChangedBy: bound.automations,
@@ -1010,9 +1011,10 @@ async function runAds(args: Record<string, unknown>, ctx: ToolContext): Promise<
   const p = fresh.preview as { adGroup: { id: string; name: string }; products: AdProduct[]; reach: StoredReach; effect: string }
   const run = approvedRun(ctx, String(args.why ?? '').trim() || p.effect)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-  // Each new ad adds spend: the approver's code, or the business's rule inside its limits.
-  const gate = await spendGate(ctx, true)
-  if (gate) return notRun(gate.refusal)
+  // Each new ad adds spend: the code as the fresh dry run's stepUp asks it (a big door), or the business's rule inside its
+  // limits.
+  const gate = await codeGate(ctx, fresh.preview)
+  if ('refusal' in gate) return notRun(gate.refusal)
   const { createProductAdLocal } = await import('../../advertising/ads-create.service.js')
   const ids: string[] = []
   const failed: string[] = []
@@ -1059,8 +1061,9 @@ const addProductAds: AgentTool = {
   undo: ADS_UNDO,
   description:
     'Add product ads (by SKU, up to 100) to an existing ad group of an Amazon Sponsored Products campaign, through the '
-    + 'screen\'s own create. Each serves at the ad group\'s bids, so it adds spend: approving it needs the approver\'s '
-    + 'authenticator code (in Nexus, or the person who asked confirms it in Claude) — unless the business lets it run by '
+    + 'screen\'s own create. Each serves at the ad group\'s bids, so it adds spend: new product ads are a big door of the '
+    + 'Owner\'s code rule — approving it needs the approver\'s authenticator code (in Nexus, or the person who asked '
+    + 'confirms it in Claude) — unless the business lets it run by '
     + 'its rule inside its limits and the ads strategy (by default it does not). Each product must be sold on Amazon in '
     + 'the campaign\'s market (a live listing with an ASIN); the same product twice in one campaign is refused (its ads '
     + 'would bid against each other), another product in the campaign is only listed, and the same product in another '
@@ -1084,7 +1087,7 @@ type SetOp = (typeof SET_OPS)[number]
 const SET_INPUT = z.object({
   adGroupId: z.string().trim().min(1).max(64).describe('the ad group: its Nexus id (adGroupId in ad-groups or ad-targets)'),
   op: z.enum(SET_OPS).default('edit')
-    .describe('edit (default): its default bid and/or name; stop: its bids to the stop bid, each remembered (a temporary stop is low bids, never a pause); start: the bids a floor of its own remembered given back (e.g. after create-ad-group born at the floor)'),
+    .describe('edit (default): its default bid and/or name; stop: its bids to the stop bid, each remembered (a temporary stop is low bids, never a pause); start: the bids a floor of its own remembered given back — after create-ad-group born at the floor (a big door: the approver\'s code, never by rule), or after an op stop (day-to-day)'),
   defaultBidCents: z.coerce.number().int().min(2).max(BID_MAX_CENTS).optional().describe("op edit: the new default bid in minor units of the campaign's currency"),
   name: z.string().trim().min(1).max(128).optional().describe("op edit: the new name; new among the campaign's ad groups"),
   why: whyArg,
@@ -1269,11 +1272,17 @@ async function floorPreview(op: 'stop' | 'start', group: GroupRow, ctx: Pick<Too
   const rule = await ruleFactsFor({ tool: TOOL.set, limits: SET_LIMITS, items, writes: [{ ...intent, label: `campaign "${campaign.name}"` }], approvalId: ctx.approvalId ?? null, projectMonth: op === 'start', action: op === 'stop' ? 'stop' : 'restore' })
   const held = moves.filter((m) => m.heldBy)
   const lines = moves.map((m) => ({ kind: m.kind, id: m.id, text: m.text, fromCents: m.fromCents, toCents: m.toCents, ...(m.heldBy ? { rememberedCents: m.rememberedCents, heldBy: m.heldBy } : {}) }))
-  // A floor create-ad-group made held an ad group that never spent: it starts spending; after a stop it spends again.
-  const spends = origin?.made === 'create' ? 'It starts spending' : 'It spends again'
+  // A floor create-ad-group made held an ad group that never spent: it starts spending (a new structure going live, a big
+  // door); after an op stop it spends again (day-to-day, as restore-campaign after a later stop: lead decision, rule A).
+  const born = op === 'start' && origin?.made === 'create'
+  const spends = born ? 'It starts spending' : 'It spends again'
+  const code = op !== 'start' ? null : startStepUp(born, group.name, spends)
   const effect = op === 'stop'
-    ? `Lowers ${plural(moves.length, 'bid')} of ad group "${group.name}" (campaign "${campaign.name}") to ${amountLabel(stop!.cents, currency)} — ${stop!.from} — so it stops winning auctions without being paused. Each bid is remembered; set-ad-group op start puts them back (with the approver's authenticator code).`
-    : `Gives back ${plural(moves.length, 'bid')} the floor of ad group "${group.name}" (campaign "${campaign.name}") remembered${origin?.made === 'create' ? ' — the planned bids create-ad-group made it with' : ''}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}${held.length ? `; ${plural(held.length, 'bid')} at a bid limit instead of the bid it had (each line says which)` : ''}. ${spends}. Approving it needs the approver's authenticator code; it never runs by rule.`
+    ? `Lowers ${plural(moves.length, 'bid')} of ad group "${group.name}" (campaign "${campaign.name}") to ${amountLabel(stop!.cents, currency)} — ${stop!.from} — so it stops winning auctions without being paused. Each bid is remembered; set-ad-group op start puts them back (a day-to-day give-back).`
+    : `Gives back ${plural(moves.length, 'bid')} the floor of ad group "${group.name}" (campaign "${campaign.name}") remembered${born ? ' — the planned bids create-ad-group made it with' : ''}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}${held.length ? `; ${plural(held.length, 'bid')} at a bid limit instead of the bid it had (each line says which)` : ''}. ${spends}. `
+      + (born
+        ? `A new ad group goes live: ${code && 'stepUp' in code ? 'approving it needs the approver\'s authenticator code; ' : ''}it never runs by rule.`
+        : `It ADDS SPEND: a day-to-day change — a person's approval sends it, with no authenticator code; by the business's rule only inside this tool's limits (maxRestoredBidCents).`)
   return {
     ok: true,
     preview: {
@@ -1286,13 +1295,10 @@ async function floorPreview(op: 'stop' | 'start', group: GroupRow, ctx: Pick<Too
       totals: { bids: moves.length },
       bids: lines.slice(0, LINES_SHOWN),
       ...(lines.length > LINES_SHOWN ? { moreBids: lines.length - LINES_SHOWN } : {}),
-      ...(op === 'start' ? { highestRestoredBidCents: highest, floorMadeBy: origin && 'approvalId' in origin ? { tool: origin.made === 'create' ? 'create-ad-group' : 'set-ad-group op stop', approvalId: origin.approvalId } : null } : {}),
+      // Whose floor a start lifts: create-ad-group's (born, a big door, never by rule) or an op stop's (day-to-day).
+      ...(op === 'start' ? { highestRestoredBidCents: highest, floorOrigin: origin?.made ?? null, floorMadeBy: origin && 'approvalId' in origin ? { tool: origin.made === 'create' ? 'create-ad-group' : 'set-ad-group op stop', approvalId: origin.approvalId } : null } : {}),
       raises: op === 'start' ? [`ad group "${group.name}": ${plural(moves.length, 'bid')} given back — ${spends.toLowerCase()}`] : [],
-      // Lead decision (W4-6 review): a new structure goes live only with the approver's code, never by rule — as
-      // create-ad-group startLive and a playbook START.
-      ...(op === 'start'
-        ? { stepUp: { what: `gives back the bids of ad group "${group.name}" (${spends.toLowerCase()})`, raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS, how: START_FLOOR_HOW } }
-        : { noCode: 'A stop lowers spend: it needs no authenticator code.' }),
+      ...(code ?? { noCode: 'A stop lowers spend: it needs no authenticator code.' }),
       // Every bid it moves, from where to where, and whose floor it lifts (and which request made it): a move after
       // approval is caught (the cents only: a limit's words name its strategy row's version, and saving the row again
       // moves nothing here).
@@ -1307,27 +1313,49 @@ async function floorPreview(op: 'stop' | 'start', group: GroupRow, ctx: Pick<Too
   }
 }
 
-/** How an op start is approved, in one sentence (its stepUp). */
+/** How an op start of a born floor is approved, in one sentence (its stepUp). */
 const START_FLOOR_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in '
   + 'Claude with theirs when the business set the tool to confirm in Claude. Never by rule.'
 
-/** The refusal of an op start run by the business's rule, in its withinLimits and again in `execute`. */
-const START_NEVER_BY_RULE = 'it gives an ad group\'s floor back (a new or stopped ad group goes live): that needs the approver\'s authenticator code and never runs by rule; a person decides'
+/**
+ * set-ad-group op start's code decision, in ONE place (the Owner's code rule, ads-code-rule.ts): the floor create-ad-group
+ * made it at — a new ad group going live — is a big door, the approver's code; the floor an op stop made is a day-to-day
+ * give-back (lead decision, as restore-campaign after a later stop): listed in raises, no code.
+ */
+function startStepUp(born: boolean, name: string, spends: string): { stepUp: StepUp } | { noCode: string } {
+  if (born && needsCode('set-ad-group: op start')) return { stepUp: { what: `gives back the bids of ad group "${name}" (${spends.toLowerCase()})`, raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS, how: START_FLOOR_HOW } }
+  return { noCode: born ? 'A new ad group goes live: the Owner\'s code rule asks no authenticator code for it now; it still never runs by rule.' : DAY_TO_DAY_NO_CODE }
+}
+
+/** The refusal of an op start of a born floor run by the business's rule, in its withinLimits and again in `execute`. */
+const START_NEVER_BY_RULE = 'it gives back the floor create-ad-group made the ad group at (a new ad group goes live): that never runs by rule; a person decides'
 
 /**
  * set-ad-group's Claude limits: the kit's, a default bid's raise and cut steps (as set-target-bid: no raise by rule until
- * a person types a number) and a rename (off). An op start never runs by rule: no limit can let it.
+ * a person types a number), a rename (off) and the highest bid an op start after an op stop gives back (0). An op start
+ * of a born floor never runs by rule: no limit can let it.
  */
 const SET_LIMITS = adKitLimits({ maxItems: 1 }, {
   ...STEP_PCT_LIMITS,
   allowRename: z.boolean().default(false).describe('let a rename run by rule; off: a person decides'),
+  maxRestoredBidCents: z.number().int().min(0).max(BID_MAX_CENTS).default(0)
+    .describe("the highest bid an op start after an op stop may give back by rule, in minor units of the campaign's currency; 0 = every start waits for a person (a born ad group's start never runs by rule)"),
 })
 
 function setRefusal(preview: unknown, limits: Record<string, unknown>): string | null {
-  const p = (preview ?? {}) as { op?: SetOp; name?: unknown }
+  const p = (preview ?? {}) as { op?: SetOp; name?: unknown; floorOrigin?: unknown; highestRestoredBidCents?: unknown; currency?: unknown }
   if (!p.op) return 'the preview does not say what it does to the ad group; a person decides'
-  // The sp-wizard `sameProductTerms: 'accept'` precedent: a kind of request no limit lets run by rule.
-  if (p.op === 'start') return START_NEVER_BY_RULE
+  if (p.op === 'start') {
+    // The sp-wizard `sameProductTerms: 'accept'` precedent: a born ad group's start is a kind no limit lets run by rule. A
+    // preview that does not say whose floor it lifts (stored before code rule A) is judged as that one.
+    if (p.floorOrigin !== 'stop') return START_NEVER_BY_RULE
+    const highest = Number(p.highestRestoredBidCents)
+    if (!Number.isFinite(highest)) return 'the preview does not say the highest bid it gives back; a person decides'
+    const max = typeof limits.maxRestoredBidCents === 'number' ? limits.maxRestoredBidCents : 0
+    const currency = String(p.currency ?? 'EUR')
+    if (highest > max) return `it gives back bids up to ${amountLabel(highest, currency)}, more than the ${amountLabel(max, currency)} this tool's limits let an op start give back by rule${max === 0 ? ' (0: every start waits for a person)' : ''}; a person decides`
+    return null
+  }
   if (p.name && limits.allowRename !== true) return 'it renames the ad group: this tool\'s limits let no rename run by rule (allowRename is off); a person decides'
   return null
 }
@@ -1400,10 +1428,11 @@ async function runSet(args: Record<string, unknown>, ctx: ToolContext): Promise<
     if (out.failed) return { ok: true, data: { ...data, partial: true, notLowered: out.failed, note: `Lowered part-way: ${plural(out.failed, 'bid')} refused by the write. ${data.note}` }, change: { before, after } }
     return { ok: true, data, change: { before, after } }
   }
-  // op start — never by rule (also refused by withinLimits), and approved only with the approver's code.
-  if (ctx.decidedVia === 'auto') return notRun(`Not run: ${START_NEVER_BY_RULE.replace(/; a person decides$/, '')}.`)
-  const coded = await stepUpApproval(ctx)
-  if ('refusal' in coded) return notRun(coded.refusal)
+  // op start of a born floor — never by rule (also refused by withinLimits, whatever the code table says); its code as the
+  // fresh dry run's stepUp asks it. After an op stop: day-to-day (by rule only inside its limits, judged at the commit).
+  if (ctx.decidedVia === 'auto' && (fresh.preview as { floorOrigin?: unknown }).floorOrigin !== 'stop') return notRun(`Not run: ${START_NEVER_BY_RULE.replace(/; a person decides$/, '')}.`)
+  const gate = await codeGate(ctx, fresh.preview)
+  if ('refusal' in gate) return notRun(gate.refusal)
   const restored = await restoreAdGroupBids(p.adGroup.id, write)
   const after = await setStateNow(p.adGroup.id, 'start')
   const change = { before, after }
@@ -1426,7 +1455,8 @@ const setAdGroup: AgentTool = {
   category: 'advertising',
   riskTier: 'high',
   readOnly: false,
-  // A start gives a floor's bids back (it adds spend; the approver's code, never by rule): no policy may let it run unasked.
+  // A start gives a floor's bids back (it adds spend; a born ad group's: the approver's code, never by rule): no policy may
+  // let it run unasked.
   alwaysAsk: true,
   requiresApprovalDefault: true,
   // An edit is sent after the 5-minute cancel window; a stop's and a start's bids are sent at once.
@@ -1444,11 +1474,13 @@ const setAdGroup: AgentTool = {
     + 'approval card and a person\'s approval sends it as asked, while run by rule it moves only as far as that change '
     + 'allows (byRuleBidCents); never raising a bid a floor holds — and/or its name (new in its campaign). op stop: every bid of it to the stop bid the ads strategy sets (the 2-cent floor when it '
     + 'sets none), each remembered — the temporary stop, never a pause; refused on an ad group already at a floor of its '
-    + 'own. op start: the bids a floor create-ad-group or op stop made remembered given back (e.g. the planned bids of a new '
-    + 'ad group): approving it needs the approver\'s authenticator code, and it never runs by rule; a stock floor is '
+    + 'own. op start: the bids a floor create-ad-group or op stop made remembered given back — the planned bids of a new '
+    + 'ad group born at the floor are a big door (the approver\'s authenticator code, and it never runs by rule); after an '
+    + 'op stop it is a day-to-day give-back (listed in raises, no code; by rule only inside maxRestoredBidCents, 0 by '
+    + 'default); a stock floor is '
     + 'restore-ad-bids-after-stock\'s, an engine\'s or another person\'s floor theirs. Nothing changes until it is approved: '
     + `in Nexus, or the person who asked confirms it in Claude. ${BY_RULE_WORDS} (by default a default-bid cut and a stop; `
-    + 'no raise or rename, and never a start). The preview shows each value from → to in the campaign\'s '
+    + 'no raise, rename or start, and never the start of a born ad group). The preview shows each value from → to in the campaign\'s '
     + 'currency, where it lands (live at Amazon or sandbox), the rules that may move it again and each limit with where '
     + 'it comes from. Refused, and not queued, for an archived or not-at-Amazon ad group, a taken name, a floor an engine '
     + 'or the campaign holds, or when Amazon\'s write gate would refuse it. Pausing, enabling and archiving an ad group are '

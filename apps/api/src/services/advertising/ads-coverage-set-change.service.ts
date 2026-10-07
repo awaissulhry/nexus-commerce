@@ -58,8 +58,9 @@ function climbOf(t: Pick<TermState, 'status' | 'isControl' | 'targetSharePct' | 
 }
 
 /**
- * ONE place decides which term edits need the approver's authenticator code (the Owner's open question: it can flip
- * here): an edit after which the engine may bid a term higher than it could before. Pure.
+ * ONE place decides which term edits raise (listed in raises; whether approving needs the approver's code is the
+ * Owner's code rule, ads-code-rule.ts — set-coverage-set is a day-to-day door): an edit after which the engine may bid
+ * a term higher than it could before. Pure.
  */
 export function termRaise(before: TermState, after: TermState): string | null {
   const was = climbOf(before)
@@ -197,7 +198,7 @@ export async function planCoverageChange(input: CoverageInput): Promise<{ plan: 
   if (!afterTerms.length) return { error: `Nothing would change: every term named already has these values.` }
 
   const warnings: string[] = []
-  if (raises.length) warnings.push(`It can raise spend once the engine runs the set: ${raises.slice(0, 5).join('; ')}${raises.length > 5 ? `; and ${raises.length - 5} more` : ''}. Approving it needs the approver's authenticator code.`)
+  if (raises.length) warnings.push(`It can raise spend once the engine runs the set: ${raises.slice(0, 5).join('; ')}${raises.length > 5 ? `; and ${raises.length - 5} more` : ''}.`)
   if (!set.enabled) warnings.push(`"${set.name}" is switched off (a draft): the engine reads none of this until it is switched on (turn-up-automation A12).`)
   const effect = `Edits ${plural(afterTerms.length, 'term')} of the coverage set "${set.name}" (${set.marketplace}): ${plural(lines.length, 'value')} ${lines.length === 1 ? 'changes' : 'change'}. Nexus only: nothing is sent to Amazon by this change. ${engine.words}.`
   return {

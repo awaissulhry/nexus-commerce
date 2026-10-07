@@ -492,8 +492,8 @@ async function replicatePreview(raw: Record<string, unknown>, ctx: Pick<ToolCont
         effect,
         nextSteps: [
           'approval-status (approvalId): follow the run; it answers its id at once and runs on its own',
-          'set-campaign-live-writes (enabled: true), per campaign: only an allowlisted campaign takes an approved change live',
-          'restore-campaign, per campaign: puts the planned bids back — the campaign starts spending',
+          'set-campaign-live-writes (enabled: true), per campaign: only an allowlisted campaign takes an approved change live (a big door: the approver\'s authenticator code)',
+          'restore-campaign, per campaign: puts the planned bids back — the campaign starts spending (a big door: the approver\'s authenticator code)',
           'set-placement-multipliers: the placements listed per campaign, once it is live',
         ],
         undoNote: UNDO_WORDS,
