@@ -65,6 +65,13 @@ export interface AdWriteEvidence {
    * can say "from the bid optimizer". A record for the reader only: no gate trusts it.
    */
   source?: { kind: string; id: string }
+  /**
+   * ADS AUTONOMY W4-4 — an approved Claude bid request that hands the bid back to auto-bid (its `afterwards: 'auto-bid'`,
+   * which the person saw on the card): bid-grid.service.ts personBidTargetIds does not count this write as a person's
+   * bid, so auto-bid may move it from its next run. Read only on a person's write (`user:`) that names an approved
+   * request as its change set; a person's own edit never carries it.
+   */
+  handBack?: 'auto-bid'
 }
 
 /**

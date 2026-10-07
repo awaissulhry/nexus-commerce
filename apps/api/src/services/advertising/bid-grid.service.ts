@@ -513,21 +513,45 @@ export async function bidderByCampaign(personTargets?: ReadonlySet<string>): Pro
   return out
 }
 
+/** How long a bid a person set is his: auto-bid leaves it alone this many days (personBidTargetIds). */
+export const PERSON_BID_HOLD_DAYS = 60
+
 /**
  * The keywords and targets a person changed the bid of in the last 60 days: `AD_BID_UPDATE` rows whose actor
  * `parseActor` reads as an operator — a person's own edit, and a Claude request a person approved (it writes as him,
  * `user:<approver>`). The one read of "a person set this bid": `bidderByCampaign` resolves it up to the campaign for
  * this page, auto-bid (ads-auto-bid.service.ts) leaves each such bid alone.
+ *
+ * ADS AUTONOMY W4-4 — unless the NEWEST of those writes handed the bid back to auto-bid: an approved Claude request
+ * asked with `afterwards: 'auto-bid'`, whose action log row carries `evidence.handBack` and names the request as its
+ * change set (`executionId`). It releases an earlier person's bid too; a person's later edit holds the bid again.
  */
 export async function personBidTargetIds(): Promise<Set<string>> {
-  const since60 = new Date(Date.now() - 60 * 86400_000)
-  const bidLogs = await prisma.advertisingActionLog.findMany({
-    // No `userId` predicate in the query: the column cannot express "a human did this", so the
-    // filtering happens in `parseActor` below where the vocabulary is actually understood.
-    where: { actionType: 'AD_BID_UPDATE', createdAt: { gte: since60 } },
-    select: { entityId: true, userId: true },
-  })
-  return new Set(bidLogs.filter((l) => parseActor(l.userId).source === 'operator').map((l) => l.entityId))
+  const since = new Date(Date.now() - PERSON_BID_HOLD_DAYS * 86400_000)
+  const where = { actionType: 'AD_BID_UPDATE', createdAt: { gte: since } }
+  const [bidLogs, handBacks] = await Promise.all([
+    prisma.advertisingActionLog.findMany({
+      // No `userId` predicate in the query: the column cannot express "a human did this", so the
+      // filtering happens in `parseActor` below where the vocabulary is actually understood.
+      where,
+      select: { id: true, entityId: true, userId: true, createdAt: true },
+    }),
+    prisma.advertisingActionLog.findMany({
+      where: { ...where, executionId: { not: null }, evidence: { path: ['handBack'], equals: 'auto-bid' } },
+      select: { id: true },
+    }),
+  ])
+  const handedBack = new Set(handBacks.map((h) => h.id))
+  // Per bid, the newest write a person made or approved decides; at the same instant a hold wins (the safer reading).
+  const newest = new Map<string, { at: number; held: boolean }>()
+  for (const l of bidLogs) {
+    if (parseActor(l.userId).source !== 'operator') continue
+    const at = l.createdAt.getTime()
+    const held = !handedBack.has(l.id)
+    const seen = newest.get(l.entityId)
+    if (!seen || at > seen.at || (at === seen.at && held)) newest.set(l.entityId, { at, held })
+  }
+  return new Set([...newest].filter(([, v]) => v.held).map(([entityId]) => entityId))
 }
 
 async function lastAuditedByTarget(): Promise<Map<string, { cents: number; at: Date }>> {
