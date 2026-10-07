@@ -43,7 +43,6 @@ import {
   gridGeometry,
   gridSelection,
   isColumnsViewPayload,
-  matrixActions,
   matrixCellEditable,
   matrixCellText,
   matrixWrite,
@@ -55,7 +54,6 @@ import {
   useGridState,
   writeGate,
   type ColDef,
-  type MatrixVerbSpec,
   type ColumnsViewPayload,
   type GridApi,
   type GridReadyEvent,
@@ -75,7 +73,7 @@ import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { usePublishActions } from '../sheet/usePublishActions'
 import type { PublishActionsDestination } from '../sheet/publishActionsApi'
 import { usePublishCellEditing, type PublishCellPlace } from '../sheet/usePublishCellEditing'
-import { STATUS_COLUMN_LABEL, statusCellText, statusCellValue, statusColumn, type PublishCellReadState } from '../sheet/channel/statusColumn'
+import { STATUS_COLUMN_LABEL, STATUS_READ_FAILED, statusCellText, statusCellValue, statusColumn, type PublishCellReadState } from '../sheet/channel/statusColumn'
 import { ACTION_ROLE_CANNOT_PUBLISH } from '../sheet/channel/channelActions'
 import { listingLabel } from '../sheet/master/sharedActionColumn'
 import type { StudioRow } from '../sheet/master/types'
@@ -86,18 +84,20 @@ import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 import { matrixChip, matrixChips } from './chips'
 import { BASE_PRICE_COL, buildMatrixColumns, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
 import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
-import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixVerbTarget } from './contract'
+import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
 import { MatrixBanner } from './MatrixBanner'
-import { MatrixSelectionVerbs } from './MatrixSelectionVerbs'
+import { MatrixSelectionActions } from './MatrixSelectionActions'
 import { StockSourceDialog, type StockSourceSwitched, type StockSourceTarget } from './StockSourceDialog'
 import { sharingApi } from '@/app/settings/sharing/sharingApi'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
 import { clearsNothing, matrixStatusCell, publishCellsByPlace, savedBeforeMatrixStatus } from './statusCells'
 import { refusalLead, refusedRowIds, type RefusedMark } from './refusals'
-import { useVerbRun } from './verbs/useVerbRun'
-import { VerbDialog, type VerbDialogInitial } from './verbs/VerbDialog'
+import { BulkEditDialog } from './bulk/BulkEditDialog'
+import { createBulkSource, type BulkDoors } from './bulk/bulkSource'
+import type { BulkContext } from './bulk/fields'
+import type { BulkEditSource, BulkInitial } from './bulk/types'
 import styles from './matrix.module.css'
 
 /** Saved views live here (design D-MX8); widths, pins and sort are remembered per surface. */
@@ -234,9 +234,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
     })
   }, [ordered, chipBar.active, search, showRefusedOnly, refusedIds])
 
-  /* ── verbs: preview → confirm → run → revert ────────────────────────────────────────────── */
+  /* ── the bulk Edit: one dialog for every change (Owner 2026-10-07) ─────────────────────────── */
 
-  const run = useVerbRun(matrix)
   /* ONE way a refusal sentence reaches the operator, de-duplicated the way the sheet does it (a fill
      refused twenty times for one reason is one sentence). */
   const lastSaid = useRef({ text: '', at: 0 })
@@ -247,83 +246,27 @@ export function MatrixSurface({ productId }: { productId: string }) {
     toast.toast(reason, tone)
   }, [toast])
   sayRefusal.current = (reason: string) => sayReason(reason, 'danger')
-  const [verb, setVerb] = useState<{ spec: MatrixVerbSpec; targets: MatrixVerbTarget[]; label: string; initial?: VerbDialogInitial } | null>(null)
   const [selectedRows, setSelectedRows] = useState<StudioRow[]>([])
-  const canEdit = has('products.edit')
   // Shared stock by SKU (2026-10-01): "Stock source…" — the ticked SKUs, or the whole family when the parent is ticked.
   const [stockSourceTargets, setStockSourceTargets] = useState<StockSourceTarget[] | null>(null)
   const canSwitchStock = has('inventory.adjust')
   const onReloadRef = useRef<() => void>(() => {})
 
   /**
-   * SELECTION = the ticked rows × the focused coordinate group, or every visible group.
+   * The market group the operator is in — the Edit dialog ticks it first when the field lives there.
    *
-   * 🔴 The focused COORDINATE is React state fed by AG's `cellFocused`, not a read of
-   * `api.getFocusedCell()` inside a memo — measured 17:1x: the bar kept saying `on Amazon EU · Inventory`
-   * (and holding the price verbs) after the focus had moved to a Price cell, because nothing re-ran
-   * the memo when only the focus moved.
+   * 🔴 React state fed by AG's `cellFocused`, not a read of `api.getFocusedCell()` inside a memo — measured 17:1x: a
+   * memo kept the old group after the focus had moved, because nothing re-ran it when only the focus moved.
    */
   const [focusedKey, setFocusedKey] = useState<string | null>(null)
   const onCellFocused = useCallback((e: { column?: { getColId?: () => string } | string | null }) => {
     const col = e.column
     const colId = typeof col === 'string' ? col : col?.getColId?.()
-    // A market's Status cell belongs to its group too: the verbs act on that market, as from any other cell of it.
+    // A market's Status cell belongs to its group too.
     setFocusedKey(matrixGroupKeyOf(colId))
   }, [])
-  const focusedCoordinate = useCallback((): MatrixCoordinate | null => (focusedKey ? visibleCoordinates.find((c) => c.key === focusedKey) ?? null : null), [focusedKey, visibleCoordinates])
-
-  const targetsFor = useCallback((rs: readonly StudioRow[], coords: readonly MatrixCoordinate[]): MatrixVerbTarget[] =>
-    rs.flatMap((r) => coords.filter((c) => c.connected && matrix.cellsOf(r.id, c.key)).map((c) => ({ rowId: r.id, coordinateKey: c.key }))),
-  [matrix])
-
-  const selectionCoords = useMemo(() => {
-    const f = focusedCoordinate()
-    return f ? [f] : visibleCoordinates.filter((c) => c.connected)
-  }, [focusedCoordinate, visibleCoordinates])
-  const selectionLabel = selectionCoords.length === 1 ? `on ${selectionCoords[0]!.label}` : `on all ${selectionCoords.length} coordinates`
-
-  const verbSpecs = useMemo<MatrixVerbSpec[]>(() => {
-    if (!read) return []
-    const targets = targetsFor(selectedRows, selectionCoords)
-    const cells = targets.map((t) => matrix.cellsOf(t.rowId, t.coordinateKey)).filter((c): c is NonNullable<typeof c> => !!c)
-    const parentOnly = selectedRows.length > 0 && selectedRows.every((r) => r.isParent)
-    const currency = selectionCoords[0]?.currency ?? 'EUR'
-    return matrixActions({
-      hasInventory: cells.some((c) => !!c.sync),
-      hasPrice: cells.some((c) => !!c.price),
-      hasQueueFailure: cells.some((c) => c.queue?.state === 'failed' || c.queue?.state === 'dead'),
-      parentOnly,
-      canEditPrices: canEdit,
-      currency,
-      coordinateOptions: read.coordinates.filter((c) => c.connected && c.cells.includes('price') && !selectionCoords.some((s) => s.key === c.key)).map((c) => ({ value: c.key, label: c.label })),
-    })
-  }, [read, selectedRows, selectionCoords, targetsFor, matrix, canEdit])
-
-  const openVerb = useCallback((spec: MatrixVerbSpec, targets: MatrixVerbTarget[], label: string, initial?: VerbDialogInitial) => {
-    setVerb({ spec, targets, label, initial })
-  }, [])
-  const onSelectionVerb = useCallback((spec: MatrixVerbSpec) => {
-    openVerb(spec, targetsFor(selectedRows, selectionCoords), `${selectedRows.length} ${selectedRows.length === 1 ? 'row' : 'rows'} ${selectionLabel}`)
-  }, [openVerb, targetsFor, selectedRows, selectionCoords, selectionLabel])
-
-  /* The row ⋯: the ROW verbs (`push-now`, `set-fulfilment`, `retry-sync`) across the row's coordinates. */
-  const rowMenuRef = useRef<(row: StudioRow) => MenuItemDef[]>(() => [])
-  rowMenuRef.current = useMemo(() => (row: StudioRow): MenuItemDef[] => {
-    if (!read) return []
-    const coords = visibleCoordinates.filter((c) => c.connected)
-    const cells = coords.map((c) => matrix.cellsOf(row.id, c.key)).filter((c): c is NonNullable<typeof c> => !!c)
-    const specs = matrixActions({
-      hasInventory: cells.some((c) => !!c.sync), hasPrice: cells.some((c) => !!c.price),
-      hasQueueFailure: cells.some((c) => c.queue?.state === 'failed' || c.queue?.state === 'dead'),
-      parentOnly: row.isParent, canEditPrices: canEdit, currency: coords[0]?.currency ?? 'EUR', coordinateOptions: [],
-    }).filter((s) => s.row && !s.hidden)
-    return specs.map((s) => ({ id: `matrix-row-${s.id}`, label: s.label, description: s.unavailable ?? `${row.sku} · ${coords.length} ${coords.length === 1 ? 'coordinate' : 'coordinates'}`, disabled: !!s.unavailable, onSelect: () => openVerb(s, targetsFor([row], coords), `${row.sku} ${coords.length === 1 ? `on ${coords[0]!.label}` : `on all ${coords.length} coordinates`}`) }))
-  }, [read, visibleCoordinates, matrix, canEdit, openVerb, targetsFor])
-
-  const applyVerb = useCallback(async (preview: Parameters<typeof run.apply>[0]) => {
-    const op = await run.apply(preview)
-    if (op) setVerb(null)
-  }, [run])
+  /** Opens the Edit dialog on these rows (defined below, once the Status cells it reaches are). */
+  const openBulkRef = useRef<(rows: readonly StudioRow[], initial?: BulkInitial) => void>(() => {})
 
   /* ── the grid ────────────────────────────────────────────────────────────────────────────── */
 
@@ -347,14 +290,15 @@ export function MatrixSurface({ productId }: { productId: string }) {
     setTab('errors')
   }, [read, setScope, setTab])
 
+  /* The Fulfilment cell's select: the choice opens the Edit dialog on that row and market, method chosen — the same
+     preview, confirm word and Undo as a change made for many rows (§3.4: the cell itself writes nothing). */
   const onPickFulfilment = useCallback((method: FulfilmentMethod, params: ICellRendererParams) => {
     const parsed = parseMatrixColId(params.colDef?.colId)
     const row = params.data as StudioRow | undefined
     const coord = parsed ? read?.coordinates.find((c) => c.key === parsed.key) : null
     if (!coord || !row) return
-    const spec = verbSpecs.find((s) => s.id === 'set-fulfilment') ?? matrixActions({ hasInventory: true, hasPrice: false, hasQueueFailure: false, parentOnly: false, canEditPrices: canEdit, currency: coord.currency, coordinateOptions: [] }).find((s) => s.id === 'set-fulfilment')!
-    openVerb({ ...spec, unavailable: null }, [{ rowId: row.id, coordinateKey: coord.key }], `${row.sku} on ${coord.label}`, { method })
-  }, [read, verbSpecs, canEdit, openVerb])
+    openBulkRef.current([row], { field: 'fulfilment', mode: 'method', input: { choice: method }, coordinateKeys: [coord.key] })
+  }, [read])
 
   /* A phone: the pinned identity gives way so a coordinate column can be on screen (`identityWidthFor`). The room it
      shares is the grid's width less the OTHER pinned columns (the selection checkbox). Changes only when the grid
@@ -451,6 +395,142 @@ export function MatrixSurface({ productId }: { productId: string }) {
     onPasteStart: beginStatusOperation, onPasteEnd: endStatusOperation,
     onCellSelectionDeleteStart: beginStatusOperation, onCellSelectionDeleteEnd: endStatusOperation,
   }), [beginStatusOperation, endStatusOperation])
+
+  /* ── the bulk Edit's doors ──────────────────────────────────────────────────────────────────
+     Read at every preview and Apply through refs: a write moves cells and versions while the dialog is open. */
+
+  const bulkLive = useRef({ visibleCoordinates, focusedKey, masterHeldReason, publishRead, previewMode, canPrice: false, canDelete: false })
+  bulkLive.current = {
+    visibleCoordinates, focusedKey, masterHeldReason, publishRead, previewMode,
+    // The server refuses every price write without both (`products.edit` on the route, `products.price.edit` in the service).
+    canPrice: has('products.edit') && has('products.price.edit'),
+    canDelete: has('products.delete'),
+  }
+  const statusEditingRef = useRef(statusEditing)
+  statusEditingRef.current = statusEditing
+  const statusPlaceOfRef = useRef(statusPlaceOf)
+  statusPlaceOfRef.current = statusPlaceOf
+
+  const bulkDoors = useCallback((rows: readonly StudioRow[]): BulkDoors => {
+    const context = (): BulkContext => {
+      const live = bulkLive.current
+      const now = new Map(rowsRef.current.map((r) => [r.id, r]))
+      return {
+        rows: rows.map((r) => ({ id: r.id, sku: r.sku, isParent: r.isParent, basePrice: now.get(r.id)?.basePrice ?? r.basePrice ?? null })),
+        coordinates: live.visibleCoordinates,
+        cellsOf: (rowId, key) => cellsOfRef.current(rowId, key),
+        statusCellOf: (rowId, coord) => { const row = now.get(rowId); return row ? statusCellOf(row, coord) : null },
+        canPrice: live.canPrice,
+        masterHeld: live.masterHeldReason,
+        statusHeld: live.previewMode ? 'Preview data — the markets\' Status is set on each market\'s own sheet until the Matrix service lands.'
+          : !live.publishRead.loaded ? 'The markets\' Status is still being read. Try again in a moment.'
+            : live.publishRead.failed ? STATUS_READ_FAILED : live.publishRead.lockedReason,
+        canDelete: live.canDelete,
+        focusedKey: live.focusedKey,
+      }
+    }
+    return {
+      context,
+      previewVerb: (req) => matrix.previewVerbRun(req),
+      applyVerb: (preview) => matrix.applyVerbRun(preview),
+      revertVerb: (op) => matrix.revert(op),
+      writeCells: (cells) => matrix.write(cells),
+      /* Base price: the grid's own road (as the Information page's "Set every row…"): each value lands on its row and
+         reaches `onCellValueChanged` → the master writer, fenced as ONE operation so it leaves as one save. */
+      masterWrite: async (writes) => {
+        const api = getGridApi()
+        if (!api || api.isDestroyed()) throw new Error('The grid is not ready. Try again in a moment.')
+        writer.beginOperation()
+        try {
+          for (const w of writes) api.getRowNode(w.rowId)?.setDataValue(BASE_PRICE_COL, w.value, 'bulk-edit')
+        } finally {
+          writer.endOperation()
+        }
+        await writer.flush()
+        return writes.map((w) => {
+          const mark = tracker.get(w.rowId, BASE_PRICE_COL)
+          return mark?.state === 'refused' ? { rowId: w.rowId, ok: false, reason: mark.reason } : { rowId: w.rowId, ok: true }
+        })
+      },
+      /* Each market's Status: the Status column's own editing (one write per value, the cells marked), answered, quiet —
+         the dialog says the result. */
+      statusWrite: async (target, places) => {
+        const coords = bulkLive.current.visibleCoordinates
+        const now = new Map(rowsRef.current.map((r) => [r.id, r]))
+        const at = places.flatMap((p) => {
+          const row = now.get(p.rowId)
+          const coord = coords.find((c) => c.key === p.coordinateKey)
+          return row && coord ? [{ ...p, place: statusPlaceOfRef.current(row, coord) }] : []
+        })
+        const answer = await statusEditingRef.current.fillNow({ column: 'status', target }, at.map((a) => a.place), { quiet: true })
+        const saved = new Set(answer.outcomes.flatMap((o) => (o.ok ? o.applied : [])))
+        const applied = at.filter((a) => a.place.cell && saved.has(a.place.cell.listingId)).map(({ rowId, coordinateKey }) => ({ rowId, coordinateKey }))
+        return { applied, refused: places.length - applied.length }
+      },
+    }
+  }, [matrix, getGridApi, writer, tracker, statusCellOf])
+
+  const [bulk, setBulk] = useState<{ source: BulkEditSource; initial?: BulkInitial } | null>(null)
+  /** The last change the dialog applied that can still be put back — offered again as a toast when the dialog closes. */
+  const bulkUndo = useRef<{ sentence: string; undo: () => Promise<string>; used: boolean } | null>(null)
+  const openBulk = useCallback((rows: readonly StudioRow[], initial?: BulkInitial) => {
+    if (!read || rows.length === 0) return
+    const variantsTicked = rows.filter((r) => !r.isParent).length
+    const family = sheet?.family.sku ?? ''
+    const total = rowsRef.current.filter((r) => !r.isParent).length
+    const base = createBulkSource(bulkDoors(rows), {
+      title: rows.length === 1 ? `Edit ${rows[0]!.sku}` : `Edit ${rows.length} rows`,
+      subtitle: [family, rows.length === 1 && rows[0]!.isParent ? 'the parent row' : `${variantsTicked} of ${total} ${total === 1 ? 'variant' : 'variants'}`].filter(Boolean).join(' · '),
+    })
+    bulkUndo.current = null
+    setBulk({
+      initial,
+      source: {
+        ...base,
+        apply: async (preview) => {
+          const result = await base.apply(preview)
+          if (!result.undo) { bulkUndo.current = null; return result }
+          const entry = { sentence: result.sentence, undo: result.undo, used: false }
+          bulkUndo.current = entry
+          return { ...result, undo: async () => { entry.used = true; return result.undo!() } }
+        },
+      },
+    })
+  }, [read, sheet, bulkDoors])
+  openBulkRef.current = openBulk
+  const closeBulk = useCallback(() => {
+    setBulk(null)
+    const last = bulkUndo.current
+    bulkUndo.current = null
+    if (!last || last.used) return
+    const undo = async () => {
+      if (last.used) return
+      last.used = true
+      try { toast.toast(await last.undo(), 'info') } catch (e) { toast.toast(e instanceof Error ? e.message : String(e), 'danger') }
+    }
+    toast.toast(
+      <span className="nds-matrix-toast">{last.sentence} <Button size="sm" variant="link" onClick={() => { void undo() }}>Undo</Button></span>,
+      'success',
+      { duration: 12000 },
+    )
+  }, [toast])
+
+  /* The row ⋯: Edit that one row, and the two stock-sync actions on it — each opens the same dialog, preview first. */
+  const rowMenuRef = useRef<(row: StudioRow) => MenuItemDef[]>(() => [])
+  rowMenuRef.current = useMemo(() => (row: StudioRow): MenuItemDef[] => {
+    if (!read) return []
+    const edit: MenuItemDef = { id: 'matrix-row-edit', label: 'Edit…', description: `${row.sku} · price, status, fulfilment, quantity…`, onSelect: () => openBulk([row]) }
+    if (row.isParent) return [edit]
+    const coords = visibleCoordinates.filter((c) => c.connected)
+    const cells = coords.map((c) => matrix.cellsOf(row.id, c.key)).filter((c): c is NonNullable<typeof c> => !!c)
+    const noInventory = cells.some((c) => !!c.sync) ? null : 'Nothing on this row carries inventory'
+    const noFailure = cells.some((c) => c.queue?.state === 'failed' || c.queue?.state === 'dead') ? null : 'Nothing on this row has failed'
+    return [
+      edit,
+      { id: 'matrix-row-push-now', label: 'Push quantity now…', description: noInventory ?? 'Sends the quantity each market should show — preview first', disabled: !!noInventory, onSelect: () => openBulk([row], { field: 'stockSync', mode: 'push' }) },
+      { id: 'matrix-row-retry-sync', label: 'Retry…', description: noFailure ?? 'Sends the failed push again — preview first', disabled: !!noFailure, onSelect: () => openBulk([row], { field: 'stockSync', mode: 'retry' }) },
+    ]
+  }, [read, visibleCoordinates, matrix, openBulk])
 
   const columnDefs = useMemo(
     () => buildMatrixColumns({
@@ -703,14 +783,14 @@ export function MatrixSurface({ productId }: { productId: string }) {
     for (const r of rows) { const g = matrix.rowOf(r.id)?.stock.source?.grantId; if (g) counts.set(g, (counts.get(g) ?? 0) + 1) }
     return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
   }, [rows, matrix])
-  const stockItems = useMemo<MenuItemDef[]>(() => {
-    if (selectedRows.length === 0) return []
-    const family = selectedRows.some((r) => r.isParent) ? rows : selectedRows
-    return [{
-      id: 'matrix-stock-source', label: 'Stock source…',
-      description: selectedRows.some((r) => r.isParent) ? `The whole family: ${family.length} SKUs` : 'Own stock, or the stock another business lends',
+  const stockSource = useMemo(() => {
+    if (selectedRows.length === 0) return null
+    const wholeFamily = selectedRows.some((r) => r.isParent)
+    const family = wholeFamily ? rows : selectedRows
+    return {
+      description: wholeFamily ? `The whole family: ${family.length} SKUs — own stock, or the stock another business lends` : 'Own stock, or the stock another business lends',
       onSelect: () => setStockSourceTargets(family.map((r) => ({ id: r.id, sku: r.sku, source: matrix.rowOf(r.id)?.stock.source ?? null }))),
-    }]
+    }
   }, [selectedRows, rows, matrix])
 
   // After a switch: the Matrix re-reads now, and once more when the background has sent the new numbers.
@@ -743,8 +823,6 @@ export function MatrixSurface({ productId }: { productId: string }) {
     reloadSoonAgain()
   }, [toast, undoStockSource, reloadSoonAgain])
 
-  const coordinateOptions = useMemo(() => (read ? read.coordinates.filter((c) => c.connected && c.cells.includes('price')).map((c) => ({ value: c.key, label: c.label })) : []), [read])
-  const currency = verb?.targets[0] ? read?.coordinates.find((c) => c.key === verb.targets[0]!.coordinateKey)?.currency ?? 'EUR' : 'EUR'
   const viewsEmptyLabel = `Custom (${visibleColIds().length})`
 
   return (
@@ -761,7 +839,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
             onSaveCurrentView={saveCurrentView} onUpdateCurrentView={updateCurrentView} viewsEmptyLabel={viewsEmptyLabel}
             onCustomise={openCustomise} onExport={onExport} exportDisabled={!read || busy} onReload={onReload}
             /* Selection in the TOOLBAR, as on the sheet and the Variants tab (Owner, 2026-09-26). */
-            selectionActions={<MatrixSelectionVerbs verbs={verbSpecs} scopeLabel={selectionLabel} busy={run.busy} onVerb={onSelectionVerb} stockItems={stockItems} />}
+            selectionActions={<MatrixSelectionActions onEdit={() => openBulk(selectedRows)} editHeld={!read || busy ? 'The Matrix is still loading' : null} stockSource={stockSource} />}
             onClearSelection={() => getGridApi()?.deselectAll()}
           />
         }
@@ -856,19 +934,11 @@ export function MatrixSurface({ productId }: { productId: string }) {
         onSwitched={onStockSourceSwitched}
       />
 
-      <VerbDialog
-        open={!!verb}
-        spec={verb?.spec ?? null}
-        targets={verb?.targets ?? []}
-        targetLabel={verb?.label ?? ''}
-        read={read}
-        initial={verb?.initial}
-        coordinateOptions={coordinateOptions}
-        currency={currency}
-        previewRun={matrix.previewVerbRun}
-        busy={run.busy}
-        onApply={applyVerb}
-        onClose={() => setVerb(null)}
+      <BulkEditDialog
+        open={!!bulk}
+        source={bulk?.source ?? null}
+        initial={bulk?.initial}
+        onClose={closeBulk}
       />
 
       <PreferencesModal

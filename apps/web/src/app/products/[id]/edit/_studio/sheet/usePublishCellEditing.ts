@@ -72,6 +72,11 @@ export interface PublishCellEditing {
   /** Fill these cells with one change (Action ▾): one operation, so one write and one toast. */
   fill: (change: PublishActionChange, places: readonly PublishCellPlace[]) => void
   /**
+   * Fill these cells with one change NOW and answer what the server did (the Matrix's bulk Edit, 2026-10-07): the same
+   * marks, writes and refresh as `fill`; `quiet` leaves the toast out, because the caller says the result itself.
+   */
+  fillNow: (change: PublishActionChange, places: readonly PublishCellPlace[], options?: { quiet?: boolean }) => Promise<PublishFillResult>
+  /**
    * Delete / Backspace on a publish cell: the selected publish cells go back to "no change" (Status) / Partial update
    * (Action). `isPublishColumn` says whether the key's own column is one; `placeOf` gives each selected cell's place, or
    * null for a cell that is not a publish cell. True when the key was handled.
@@ -80,14 +85,20 @@ export interface PublishCellEditing {
     isPublishColumn: (colId: string) => boolean, placeOf: (target: { rowId: string; colId: string; row: Row }) => PublishCellPlace | null) => boolean
 }
 
+/** What one fill did: the server's answer per write, and the cells refused before any write. */
+export interface PublishFillResult {
+  outcomes: PublishActionWriteOutcome[]
+  refused: Array<{ column: Column; sku: string; reason: string }>
+}
+
 export function usePublishCellEditing(deps: PublishCellEditingDeps): PublishCellEditing {
   const live = useRef(deps)
   live.current = deps
   const [tracker] = useState(() => new CellSaveTracker())
 
   /** One operation's cells, sent: marks while it is on its way, the server's word per cell after, and ONE toast. */
-  const flush = useRef<(items: StagedPublishCell[]) => Promise<void>>(async () => {})
-  flush.current = async (items) => {
+  const flush = useRef<(items: StagedPublishCell[], options?: { quiet?: boolean }) => Promise<PublishFillResult>>(async () => ({ outcomes: [], refused: [] }))
+  flush.current = async (items, options = {}) => {
     const { writes, refused } = groupStaged(items)
     const at = live.current.places()
     const touched: string[] = []
@@ -113,9 +124,10 @@ export function usePublishCellEditing(deps: PublishCellEditingDeps): PublishCell
     live.current.repaint(touched)
     // S11 follow-up — each listing named by the SKU it holds or sends here, never the product SKU in its place.
     const summary = operationToast(outcomes, refused, at.label)
-    if (summary && !summary.quiet) live.current.toast(summary.message, summary.tone, { duration: summary.tone === 'success' ? 5000 : 10000 })
+    if (summary && !summary.quiet && !options.quiet) live.current.toast(summary.message, summary.tone, { duration: summary.tone === 'success' ? 5000 : 10000 })
     // New listings: a choice started the family's drafts — the page reads its rows again (their listing ids).
     if (outcomes.some((outcome) => outcome.started)) live.current.onStarted()
+    return { outcomes, refused }
   }
   const [fence] = useState(() => new PublishActionFence((items) => { void flush.current(items) }))
   useEffect(() => () => fence.dispose(), [fence])
@@ -141,6 +153,18 @@ export function usePublishCellEditing(deps: PublishCellEditingDeps): PublishCell
       fence.end()
     }
   }, [fence, stage])
+
+  const fillNow = useCallback(async (change: PublishActionChange, places: readonly PublishCellPlace[], options: { quiet?: boolean } = {}): Promise<PublishFillResult> => {
+    const items: StagedPublishCell[] = []
+    for (const place of places) {
+      // A new row's current choice again: nothing to write (as `stage`).
+      const input = withoutSameNewChoice(place.cell, { change })
+      if ('skip' in input) continue
+      tracker.clear(place.rowId, place.colId)
+      items.push({ column: place.column, listingId: place.cell?.listingId ?? null, sku: place.sku, input })
+    }
+    return flush.current(items, options)
+  }, [tracker])
 
   const onClearKey: PublishCellEditing['onClearKey'] = useCallback((event, api, rowIdOf, isPublishColumn, placeOf) => {
     const key = event.event as KeyboardEvent | null | undefined
@@ -168,7 +192,7 @@ export function usePublishCellEditing(deps: PublishCellEditingDeps): PublishCell
 
   const begin = useCallback(() => fence.begin(), [fence])
   const end = useCallback(() => fence.end(), [fence])
-  return { tracker, begin, end, stage, fill, onClearKey }
+  return { tracker, begin, end, stage, fill, fillNow, onClearKey }
 }
 
 /** A channel sheet's two publish column ids, by column kind. */
