@@ -52,14 +52,14 @@ import { lowerAdGroupBids, markAdGroupBornAtFloor, rememberPlannedBid, restoreAd
 import { AD_GROUP_CAMPAIGN_SELECT, adGroupForChange, adGroupNamedInCampaign, adGroupState, campaignAdGroupsForRead, ownFloorsOf } from '../../advertising/ad-group-lookup.service.js'
 import { groupSelfCompetition, type SelfCompetitionConflict } from '../../advertising/campaign-settings.service.js'
 import { negativeKeywordTextProblem, protectedNegativeRefusal } from '../../advertising/ads-negation-policy.js'
-import { bidLimitsFor, stepClamp } from '../../advertising/ads-strategy/bids.js'
+import { bidLimitsFor } from '../../advertising/ads-strategy/bids.js'
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
 import {
   alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, notRun, reachNote, reachRefusal, recheck, requesterOf, ruleFactsFor, ruleRefusal,
-  spOnlyRefusal, stepClampWords, type RuleWrite, type StoredReach,
+  spOnlyRefusal, stepClampWords, bidStepOf, withStepPast, type RuleWrite, type StoredReach,
 } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
@@ -1107,27 +1107,34 @@ async function setPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext, '
   return floorPreview(a.op, group, ctx)
 }
 
-/** op edit — the default bid as set-target-bid moves a bid, and the name. */
+/**
+ * op edit — the default bid as set-target-bid moves a bid (W4-4: a person's approval sends the bid asked for, warned on the
+ * card past the largest change per action; a run by rule writes the stepped bid — bidStepOf), and the name.
+ */
 async function editPreview(a: SetArgs, group: GroupRow, ctx: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   if (a.defaultBidCents == null && !a.name) return { ok: false, error: 'Name what changes: defaultBidCents and/or name (or op stop / op start for its bids as a whole).' }
   const campaign = group.campaign
   const currency = campaignCurrency(campaign)
   const changes: Array<{ field: 'defaultBid' | 'name'; from: string; to: string }> = []
-  let bid: { currentBidCents: number; proposedBidCents: number; effectiveBidCents: number; clampedBy: string | null } | null = null
+  let bid: { currentBidCents: number; proposedBidCents: number; effectiveBidCents: number; byRuleBidCents: number; steppedBy: string | null; past: { limit: string; reason: string } | null } | null = null
   if (a.defaultBidCents != null) {
     const current = group.defaultBidCents
-    // The bid that lands: the largest change per action — the lower of the campaign's max-change guardrail and the ads
-    // strategy's for this ad group (stepClamp), as set-target-bid previews a bid; the write gate judges the band.
+    // The largest change per action — the lower of the campaign's max-change guardrail and the ads strategy's for this ad
+    // group — is his own limit (W4-4, bidStepOf, as set-target-bid): a person's approval sends the bid asked for, the card
+    // warning him past the step; a run by rule writes the stepped bid. The write gate judges the band either way.
     const strategy = await bidLimitsFor({ marketplace: campaign.marketplace, adGroupId: group.id, campaignId: campaign.id })
-    const step = stepClamp(current, a.defaultBidCents, campaign.dynamicBidding, strategy)
+    const step = bidStepOf({ currentCents: current, wantedCents: a.defaultBidCents, dynamicBidding: campaign.dynamicBidding, strategy, label: `the default bid of ad group "${group.name}"`, currency })
     // No-pause: a bid a floor holds is never raised here; the floor's own give-back lifts it.
-    const verdict = suppressionOf({ id: group.id, bidCents: current, suppressedFromBidCents: group.suppressedFromBidCents }, step.cents)
-    if (verdict !== 'ok' || ((group.bidsSuppressedAt || campaign.bidsSuppressedAt) && step.cents > current)) {
+    const verdict = suppressionOf({ id: group.id, bidCents: current, suppressedFromBidCents: group.suppressedFromBidCents }, step.personCents)
+    if (verdict !== 'ok' || ((group.bidsSuppressedAt || campaign.bidsSuppressedAt) && step.personCents > current)) {
       const floor = group.bidsSuppressedAt ? `ad group "${group.name}" is held at a floor (by ${whoWords(group.bidsSuppressedBy)})` : campaignFloorWords(campaign) ?? `its default bid sits at ${amountLabel(current, currency)}, the floor another path lowered it to`
       const back = group.bidsSuppressedAt && isPerson(group.bidsSuppressedBy) ? 'set-ad-group op start gives its bids back' : campaign.bidsSuppressedAt && isPerson(campaign.bidsSuppressedBy) ? 'restore-campaign gives its bids back' : 'the floor\'s own give-back lifts it'
       return { ok: false, error: `Not queued: ${floor}: its default bid is not raised here — ${back}.` }
     }
-    bid = { currentBidCents: current, proposedBidCents: a.defaultBidCents, effectiveBidCents: step.cents, clampedBy: step.cents !== a.defaultBidCents ? stepClampWords(step, strategy) : null }
+    bid = {
+      currentBidCents: current, proposedBidCents: a.defaultBidCents, effectiveBidCents: step.personCents, byRuleBidCents: step.ruleCents,
+      steppedBy: step.ruleCents !== step.personCents ? stepClampWords(step.step, strategy) : null, past: step.past,
+    }
     if (bid.effectiveBidCents !== current) changes.push({ field: 'defaultBid', from: amountLabel(current, currency), to: amountLabel(bid.effectiveBidCents, currency) })
   }
   if (a.name && a.name !== group.name) {
@@ -1135,26 +1142,33 @@ async function editPreview(a: SetArgs, group: GroupRow, ctx: Pick<ToolContext, '
     if (taken) return { ok: false, error: `Campaign "${campaign.name}" already has an ad group named "${taken.name}" (${taken.id}): choose another name.` }
     changes.push({ field: 'name', from: `"${group.name}"`, to: `"${a.name}"` })
   }
-  if (!changes.length) return { ok: false, error: `Nothing would change: ad group "${group.name}" already has ${bid ? `a default bid of ${amountLabel(group.defaultBidCents, currency)}` : 'this name'}${bid?.clampedBy ? ` (the largest change per action holds it there: ${bid.clampedBy})` : ''}.` }
+  if (!changes.length) return { ok: false, error: `Nothing would change: ad group "${group.name}" already has ${bid ? `a default bid of ${amountLabel(group.defaultBidCents, currency)}` : 'this name'}.` }
 
-  const newBid = changes.some((c) => c.field === 'defaultBid') ? bid!.effectiveBidCents : null
-  const intent: AdWriteIntent = {
+  const bidChanges = changes.some((c) => c.field === 'defaultBid')
+  const renames = changes.some((c) => c.field === 'name')
+  const intentOf = (valueCents: number | null): AdWriteIntent => ({
     campaignId: campaign.id, adGroupId: group.id, marketplace: campaign.marketplace,
-    changes: [...(newBid != null ? [{ field: 'defaultBid', valueCents: newBid }] : []), ...(changes.some((c) => c.field === 'name') ? [{ field: 'name', valueCents: null }] : [])],
-  }
-  const reach = await reachOf([intent])
+    changes: [...(valueCents != null ? [{ field: 'defaultBid', valueCents }] : []), ...(renames ? [{ field: 'name', valueCents: null }] : [])],
+  })
+  const newBid = bidChanges ? bid!.effectiveBidCents : null
+  const reach = await reachOf([intentOf(newBid)])
   if ('refused' in reach) return { ok: false, error: reachRefusal(reach.refused) }
-  const stored = reach.reach
+  // W4-4 — past the largest change the card warns him, where it warns about his other own limits (#401).
+  const stored = withStepPast(reach.reach, [bidChanges ? bid!.past : null])
   const bound = await alsoChangedBy(campaign.id)
-  // AA-W2-6's kit: the default bid that lands against the ads strategy of this ad group and Claude's limits (a rename
-  // moves no money: it is one change of the ad group), and the write gate as it judges a run by rule.
-  const items: KitItem[] = newBid != null
-    ? [{ entity: { kind: 'adGroup', id: group.id }, change: { field: 'bid', fromCents: bid!.currentBidCents, toCents: newBid } }]
+  // AA-W2-6's kit: the default bid a run by rule writes (W4-4: the stepped one) against the ads strategy of this ad group
+  // and Claude's limits (a rename moves no money: it is one change of the ad group), and the write gate as it judges a
+  // run by rule — asked about the bid asked for too: a rule never decides a request whose card warns about his limits.
+  const ruleBid = bidChanges ? bid!.byRuleBidCents : null
+  const items: KitItem[] = ruleBid != null
+    ? [{ entity: { kind: 'adGroup', id: group.id }, change: { field: 'bid', fromCents: bid!.currentBidCents, toCents: ruleBid } }]
     : [{ entity: { kind: 'adGroup', id: group.id }, change: { field: 'automation' } }]
-  const rule = await ruleFactsFor({ tool: TOOL.set, limits: SET_LIMITS, items, writes: [{ ...intent, label: `campaign "${campaign.name}"` }], approvalId: ctx.approvalId ?? null, action: 'bid' })
+  const writes: RuleWrite[] = [...new Set([ruleBid, newBid])].map((valueCents) => ({ ...intentOf(valueCents), label: `campaign "${campaign.name}"` }))
+  const rule = await ruleFactsFor({ tool: TOOL.set, limits: SET_LIMITS, items, writes, approvalId: ctx.approvalId ?? null, action: 'bid' })
   const raise = newBid != null && newBid > bid!.currentBidCents
-  const effect = `Changes ad group "${group.name}" (campaign "${campaign.name}"): ${changes.map((c) => `${c.field === 'defaultBid' ? 'default bid' : 'name'} ${c.from} → ${c.to}`).join(', ')}.`
-    + (bid?.clampedBy && newBid != null ? ` The ${amountLabel(bid.proposedBidCents, currency)} asked for is held at ${amountLabel(newBid, currency)} by ${bid.clampedBy}.` : '')
+  const stepped = bidChanges && bid!.steppedBy ? bid!.steppedBy : null
+  const effect = `Changes ad group "${group.name}" (campaign "${campaign.name}"): ${changes.map((c) => `${c.field === 'defaultBid' ? 'default bid' : 'name'} ${c.from} → ${c.to}`).join(', ')}`
+    + (stepped ? `; run by the business's rule instead, the default bid only to ${amountLabel(bid!.byRuleBidCents, currency)} (${stepped}).` : '.')
     + (newBid != null ? ' The default bid is what its auto targets and every keyword or target without a bid of its own bid.' : '')
   return {
     ok: true,
@@ -1164,12 +1178,15 @@ async function editPreview(a: SetArgs, group: GroupRow, ctx: Pick<ToolContext, '
       adGroup: { id: group.id, name: group.name },
       campaign: { id: campaign.id, name: campaign.name, marketplace: campaign.marketplace },
       currency,
-      ...(bid ? { currentBidCents: bid.currentBidCents, proposedBidCents: bid.proposedBidCents, effectiveBidCents: newBid ?? bid.currentBidCents, ...(bid.clampedBy ? { clampedBy: bid.clampedBy } : {}) } : {}),
-      ...(changes.some((c) => c.field === 'name') ? { name: { from: group.name, to: a.name } } : {}),
+      // W4-4 — the bid a person's approval sends (the one asked for), and what a run by rule writes instead (stepped).
+      ...(bid ? { currentBidCents: bid.currentBidCents, proposedBidCents: bid.proposedBidCents, effectiveBidCents: bid.effectiveBidCents, byRuleBidCents: bid.byRuleBidCents, ...(stepped ? { byRuleSteppedBy: stepped } : {}) } : {}),
+      ...(renames ? { name: { from: group.name, to: a.name } } : {}),
       changes,
       raises: raise ? [`the default bid ${amountLabel(bid!.currentBidCents, currency)} → ${amountLabel(newBid!, currency)}`] : [],
       noCode: 'A default bid moves like a keyword bid (set-target-bid): approving it needs no authenticator code; a raise by rule waits for a person unless the business\'s limits allow it.',
-      basis: hash({ op: 'edit', group: [group.id, group.name, group.defaultBidCents], to: [newBid, a.name ?? null] }),
+      // The values it starts from and sets — the bid asked for and the one a run by rule writes (the strategy's words
+      // stay out: a save of the row that keeps the number moves nothing here).
+      basis: hash({ op: 'edit', group: [group.id, group.name, group.defaultBidCents], to: [newBid, ruleBid, a.name ?? null] }),
       reach: stored,
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
@@ -1351,16 +1368,19 @@ async function runSet(args: Record<string, unknown>, ctx: ToolContext): Promise<
   const fresh = await setPreview(args, ctx)
   const refusal = recheck(ctx, fresh, SET_MATERIAL)
   if (refusal) return notRun(refusal)
-  const p = fresh.preview as { op: SetOp; adGroup: { id: string; name: string }; effectiveBidCents?: number; currentBidCents?: number; name?: { from: string; to: string }; stopBidCents?: number; changes?: Array<{ field: string }>; reach: StoredReach; effect: string }
+  const p = fresh.preview as { op: SetOp; adGroup: { id: string; name: string }; effectiveBidCents?: number; byRuleBidCents?: number; currentBidCents?: number; name?: { from: string; to: string }; stopBidCents?: number; changes?: Array<{ field: string }>; reach: StoredReach; effect: string }
   const run = approvedRun(ctx, String(args.why ?? '').trim() || p.effect)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
   const before = { ...(await setStateNow(p.adGroup.id, p.op)), changeSetId: run.changeSetId }
   const write = { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual }
   if (p.op === 'edit') {
     const bidChanges = (p.changes ?? []).some((c) => c.field === 'defaultBid')
+    // W4-4 — a person's approval (his manual mark, from the approval door) sends the default bid asked for: the card
+    // warned him past the largest change. A run by rule writes the stepped bid.
+    const newBid = run.manual ? p.effectiveBidCents : (p.byRuleBidCents ?? p.effectiveBidCents)
     const out = await updateAdGroupWithSync({
       adGroupId: p.adGroup.id,
-      patch: { ...(bidChanges ? { defaultBidCents: p.effectiveBidCents } : {}), ...(p.name ? { name: p.name.to } : {}) },
+      patch: { ...(bidChanges ? { defaultBidCents: newBid } : {}), ...(p.name ? { name: p.name.to } : {}) },
       ...write,
       confirmOwnLimits: run.confirmOwnLimits,
     })
@@ -1391,8 +1411,11 @@ async function runSet(args: Record<string, unknown>, ctx: ToolContext): Promise<
   return { ok: true, data: { adGroupId: p.adGroup.id, restored, reach: p.reach, changeSetId: run.changeSetId, note: 'Bids given back; each is sent to Amazon at once.' }, change }
 }
 
-/** What a set-ad-group re-checks before it runs: every value it starts from and sets (basis) and where it lands. */
-const SET_MATERIAL = ['op', 'basis', 'reach'] as const
+/**
+ * What a set-ad-group re-checks before it runs: its op, every value it starts from and sets (basis), the default bid a run
+ * by rule writes (W4-4) and where it lands (with the warnings the card showed).
+ */
+const SET_MATERIAL = ['op', 'basis', 'byRuleBidCents', 'reach'] as const
 
 const setAdGroup: AgentTool = {
   name: TOOL.set,
@@ -1416,9 +1439,10 @@ const setAdGroup: AgentTool = {
   undo: SET_UNDO,
   description:
     'Change one ad group of an Amazon Sponsored Products campaign. op edit: its default bid (the bid of its auto targets '
-    + 'and of every keyword or target without its own), moved like a keyword bid in set-target-bid — held to the largest '
-    + 'change per action the campaign and the ads strategy allow, never raising a bid a floor holds — and/or its name '
-    + '(new in its campaign). op stop: every bid of it to the stop bid the ads strategy sets (the 2-cent floor when it '
+    + 'and of every keyword or target without its own), moved like a keyword bid in set-target-bid — past the largest '
+    + 'change per action (the campaign\'s max-change guardrail or the ads strategy\'s, the lower one) it is warned on the '
+    + 'approval card and a person\'s approval sends it as asked, while run by rule it moves only as far as that change '
+    + 'allows (byRuleBidCents); never raising a bid a floor holds — and/or its name (new in its campaign). op stop: every bid of it to the stop bid the ads strategy sets (the 2-cent floor when it '
     + 'sets none), each remembered — the temporary stop, never a pause; refused on an ad group already at a floor of its '
     + 'own. op start: the bids a floor create-ad-group or op stop made remembered given back (e.g. the planned bids of a new '
     + 'ad group): approving it needs the approver\'s authenticator code, and it never runs by rule; a stock floor is '

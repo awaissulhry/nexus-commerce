@@ -65,6 +65,8 @@ import { ruleFrom } from '../claude-trust.service.js'
 import { commitScheduledApproval, decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
 import { queuePlan, runPlan } from '../change-plan.service.js'
 import { STEP_UP_NEEDS } from '../step-up-approval.js'
+import { resolveRequest } from '../../agent-fleet/approval-target.js'
+import { PLAN_TOOL } from '../tool-types.js'
 import { __stepUpTest } from '../../../lib/auth/step-up.js'
 import { generateSecret, generateSync } from 'otplib'
 
@@ -178,6 +180,7 @@ beforeAll(async () => {
     await campaign('c-auto', { targetingType: 'AUTO' })
     await campaign('c-person-floor', { bidsSuppressedAt: new Date('2026-10-01T00:00:00Z'), bidsSuppressedFloorCents: 2, bidsSuppressedBy: 'user:u-person' })
     await campaign('c-step', { dynamicBidding: { maxBidChangePct: 20 } })
+    await campaign('c-step2', { dynamicBidding: { maxBidChangePct: 20 } })
     await campaign('c-edit')
     await db().adGroup.create({ data: { id: 'g-c-edit-2', campaignId: 'c-edit', name: 'second group', externalAdGroupId: 'EXT-g-c-edit-2', defaultBidCents: 30 } })
     await campaign('c-engine-floor')
@@ -502,20 +505,48 @@ describe('add-product-ads', () => {
 })
 
 describe('set-ad-group', () => {
-  it('op edit: a default bid stepped like set-target-bid (no code); approved it is queued as the approver; undo sets it back', async () => {
+  it('op edit (W4-4, as set-target-bid): a person\'s approval sends the asked default bid, warned on the card; by rule the stepped bid; undo sets it back', async () => {
     const p = (await preview('set-ad-group', { adGroupId: 'g-c-step', defaultBidCents: 60 })).preview
     expect(p).toMatchObject({
-      op: 'edit', currentBidCents: 30, proposedBidCents: 60, effectiveBidCents: 36, clampedBy: "the campaign's max-change guardrail",
-      raises: [expect.stringMatching(/EUR 0\.30 → EUR 0\.36/)], limitFacts: { action: 'bid' },
+      op: 'edit', currentBidCents: 30, proposedBidCents: 60, effectiveBidCents: 60, byRuleBidCents: 36, byRuleSteppedBy: "the campaign's max-change guardrail",
+      raises: [expect.stringMatching(/EUR 0\.30 → EUR 0\.60/)], limitFacts: { action: 'bid' },
+      reach: { reach: 'sandbox', pastOwnLimits: [{ limit: 'bid_step', reason: 'the default bid of ad group "group c-step" moves 100 % (EUR 0.30 → EUR 0.60), more than the largest bid change 20 % (the campaign\'s own max-change guardrail); run by the business\'s rule instead it moves only to EUR 0.36' }] },
     })
+    expect(p.effect).toMatch(/default bid EUR 0\.30 → EUR 0\.60; run by the business's rule instead, the default bid only to EUR 0\.36/)
     expect(p.stepUp).toBeUndefined()
+    // The approval card: the warning first, the bid asked for and what a rule writes.
+    const card = resolveRequest('set-ad-group', { adGroupId: 'g-c-step' }, p, { masterCurrency: 'EUR' } as never)
+    expect(card.summary).toMatch(/^Warning — this goes past your own limits: the default bid of ad group "group c-step" moves 100 %.*Approving it sends it anyway\./)
+    expect(card.changes).toEqual([expect.objectContaining({ label: '“group c-step” · Default bid', to: expect.stringMatching(/0\.60 \(by rule: .*0\.36\)$/) })])
     // By default a raise never runs by rule (maxRaisePct 0), as set-target-bid.
     expect(judge('set-ad-group', p)).toBeTypeOf('string')
     const asked = await ask('set-ad-group', { adGroupId: 'g-c-step', defaultBidCents: 60 })
-    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { defaultBidCents: 36 } })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { defaultBidCents: 60 } })
     const [queued] = await sql<{ payload: Row }>(`SELECT payload FROM "OutboundSyncQueue" WHERE payload->>'entityId' = 'g-c-step' ORDER BY "createdAt" DESC LIMIT 1`)
-    expect(queued.payload).toMatchObject({ actor: 'user:u-approver', fieldChanges: [{ field: 'defaultBid', oldValue: '30', newValue: '36' }] })
+    expect(queued.payload).toMatchObject({ actor: 'user:u-approver', fieldChanges: [{ field: 'defaultBid', oldValue: '30', newValue: '60' }] })
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'set-ad-group', args: { adGroupId: 'g-c-step', op: 'edit', defaultBidCents: 30 } } })
+    // Run by the business's rule, a cut past the step writes the stepped bid (60 → 48, not 30).
+    const cut = await ask('set-ad-group', { adGroupId: 'g-c-step', defaultBidCents: 30 })
+    expect(((await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: cut.approvalId! } }))).preview as Row)).toMatchObject({ effectiveBidCents: 30, byRuleBidCents: 48 })
+    await inside(() => db().agentApproval.update({ where: { id: cut.approvalId! }, data: { decisionVia: 'auto' } }))
+    expect(await approve(cut.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { defaultBidCents: 48 } })
+  })
+
+  it('op edit in a change plan: the plan card carries the bid step warning, named by its step; approved, the asked bid is sent', async () => {
+    const queued = await inside(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
+      return queuePlan({ title: 'Test default bids', steps: [{ tool: 'set-ad-group', args: { adGroupId: 'g-c-step2', defaultBidCents: 60 } }] }, claude, run.id)
+    })
+    expect(queued).toMatchObject({ ok: true, mode: 'queued' })
+    const plan = (await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: queued.approvalId! } }))).preview as Row
+    expect(plan).toMatchObject({ pastOwnLimits: [{ limit: 'bid_step', step: 1, reason: expect.stringMatching(/^step 1: the default bid of ad group "group c-step2" moves 100 % \(EUR 0\.30 → EUR 0\.60\)/) }] })
+    expect(plan.stepUp).toBeUndefined()
+    const card = resolveRequest(PLAN_TOOL, { title: 'Test default bids', steps: 1 }, plan, { masterCurrency: 'EUR' } as never)
+    expect(card.summary).toMatch(/^Warning — this goes past your own limits: step 1: the default bid of ad group "group c-step2" moves 100 %.*Approving it sends it anyway\./)
+    expect(await inside(() => decideFleetApproval({ id: queued.approvalId!, decision: 'approve', actor: owner.principal }))).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await commitNow(queued.approvalId!)).toMatchObject({ ok: true })
+    expect(await inside(() => runPlan(queued.approvalId!))).toMatchObject({ finished: true, counts: { done: 1 } })
+    expect(await sql(`SELECT "defaultBidCents" AS bid FROM "AdGroup" WHERE id = 'g-c-step2'`)).toEqual([{ bid: 60 }])
   })
 
   it('op edit: a rename (new in its campaign; never by rule by default); refusals: a taken name, a floored bid raised, nothing to change', async () => {

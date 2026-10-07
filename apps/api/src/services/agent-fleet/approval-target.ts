@@ -874,7 +874,11 @@ const READERS: Record<string, Reader> = {
       }
     }
     const changes: QueueChange[] = []
-    if (p.effectiveBidCents != null && p.effectiveBidCents !== p.currentBidCents) changes.push({ label: `${group ? `“${group}” · ` : ''}Default bid`, from: adMoney(p.currentBidCents, p.currency), to: adMoney(p.effectiveBidCents, p.currency) })
+    // W4-4 — the default bid a person's approval sends and, past the largest change, what a run by rule writes instead.
+    const sent = num(p.effectiveBidCents)
+    const rule = num(p.byRuleBidCents)
+    const to = adMoney(sent, p.currency)
+    if (sent != null && sent !== num(p.currentBidCents)) changes.push({ label: `${group ? `“${group}” · ` : ''}Default bid`, from: adMoney(p.currentBidCents, p.currency), to: to && rule != null && rule !== sent ? `${to} (by rule: ${adMoney(rule, p.currency)})` : to })
     if (name) changes.push({ label: 'Ad group name', from: text(name.from) ? `“${text(name.from)}”` : null, to: text(name.to) ? `“${text(name.to)}”` : null })
     return { ...adCampaign(p, tool), changes }
   },

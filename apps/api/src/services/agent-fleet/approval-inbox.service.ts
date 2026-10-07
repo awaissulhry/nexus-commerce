@@ -824,10 +824,10 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'restore-ad-bids-after-stock': ['basis', 'reach'],
   // W4-6 — a new ad group (every row, its bids and how they start, the products' rule-3 facts and its campaign's floor),
   // the product ads added (each product and the seller SKU it is created from), an ad group's op and every value it
-  // starts from and sets; and where each lands.
+  // starts from and sets (W4-4: and the default bid a run by rule writes); and where each lands.
   'create-ad-group': ['basis', 'reach'],
   'add-product-ads': ['basis', 'reach'],
-  'set-ad-group': ['op', 'basis', 'reach'],
+  'set-ad-group': ['op', 'basis', 'byRuleBidCents', 'reach'],
   // A14/A15 — eBay: each rate, listing, budget or keyword it starts from and sets, and where it lands (live or sandbox).
   'set-ebay-ad-rates': ['changes', 'reach'],
   'promote-ebay-listings': ['adds', 'adGroup', 'reach'],
