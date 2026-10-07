@@ -190,6 +190,14 @@ export interface SwitchRow {
   brake: string | null
 }
 
+/** W4-12b — a field a level move changes with the level (from → to), and the sentence the preview says it in. */
+export interface SwitchAlso {
+  field: string
+  from: string
+  to: string
+  words: string
+}
+
 export interface LevelSwitch {
   /** The levels its rows can be at, lowest first. */
   levels: readonly AutomationLevel[]
@@ -206,6 +214,11 @@ export interface LevelSwitch {
    * click is held by `refusal` alone, as before. Absent: no gate Nexus can check — AUTO stays a person's click.
    */
   gateEvidence?(row: SwitchRow): Promise<GateEvidence>
+  /**
+   * W4-12b — what else a move to `level` changes on the row besides its level (an Amazon ads builder rule's
+   * Manual/Automate setting), said on the preview; null when nothing. `write` makes the same change.
+   */
+  alsoChanges?(row: SwitchRow, level: AutomationLevel): Promise<SwitchAlso | null>
   /** The move itself, with its own audit; returns why it failed, or null — or what else it did (`note`, e.g. a give-back). */
   write(row: SwitchRow, level: AutomationLevel, actorUserId: string | null): Promise<string | null | { note: string }>
 }

@@ -28,7 +28,8 @@ export interface SwitchPlan {
   row: { id: string; name: string }
   from: AutomationLevel
   to: AutomationLevel
-  changes: { level: { from: AutomationLevel; to: AutomationLevel } }
+  /** The level, and (W4-12b) any field the move changes with it (LevelSwitch.alsoChanges: an ads builder rule's `control`). */
+  changes: { level: { from: AutomationLevel; to: AutomationLevel }; [field: string]: { from: string; to: string } }
   /** Why turning this down can raise spend; null when it cannot. */
   brake: string | null
   basis: string | null
@@ -86,9 +87,12 @@ export async function planSwitch(adapter: AutomationAdapter, rowId: string | und
   const env = engine ? adapter.env() : null
   // AA-W2-11 — the gate's evidence, for the limits Claude's rule is judged on (a person's click is held by `refusal` above).
   const gate = direction === 'up' && to === 'AUTO' ? (!engine && sw.gateEvidence ? await sw.gateEvidence(row) : null) : undefined
+  // W4-12b — what else the move changes with the level (the kind's write changes it too).
+  const also = !engine && sw.alsoChanges ? await sw.alsoChanges(row, to) : null
   const effect = (direction === 'up'
     ? `${row.name} goes from ${row.level} to ${to}.${to === 'AUTO' ? ' At AUTO it acts by itself, inside its caps and every guardrail.' : ''}`
     : `${row.name} goes from ${row.level} down to ${to}.${brake ? ` A brake: ${brake}.` : ''}`)
+    + (also ? ` ${also.words}` : '')
     + (env ? ` The server env allows it ${env.ceiling}; it acts at the lower of the two from its next tick, in this business only.` : '')
   return {
     ok: true,
@@ -98,7 +102,7 @@ export async function planSwitch(adapter: AutomationAdapter, rowId: string | und
       automation: { id: adapter.id, key: adapter.key, name: adapter.name },
       row: { id: row.id, name: row.name },
       from: row.level, to,
-      changes: { level: { from: row.level, to } },
+      changes: { level: { from: row.level, to }, ...(also ? { [also.field]: { from: also.from, to: also.to } } : {}) },
       brake, basis: row.basis, effect,
       env: env ? { ceiling: env.ceiling, reason: env.reason } : null,
       ...(gate !== undefined ? { gate } : {}),

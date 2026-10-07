@@ -313,12 +313,62 @@ const A1: AutomationAdapter = {
       if (isRefused(status)) return { open: false, from: 'the rule\'s graduation gate', checks: [{ check: 'the rule', passed: false, detail: 'not found' }], caps }
       return { open: status.value.gateOpen, from: 'the rule\'s graduation gate (the Control Room\'s gate status)', checks: status.value.checks.map((c) => ({ check: c.label, passed: c.passed, detail: c.detail })), caps }
     },
+    // W4-12b — a rule's Manual/Automate setting moves with the level (controlMove).
+    async alsoChanges(row: SwitchRow, level: AutomationLevel) {
+      const move = await controlMove(row, level)
+      return move ? { field: 'control', from: move.from, to: move.to, words: move.words } : null
+    },
     async write(row: SwitchRow, level: AutomationLevel, actorUserId: string | null) {
-      const { setAdsRuleLevel } = await import('./ads-rule-crud.service.js')
-      const out = await setAdsRuleLevel(row.id, level, `user:${actorUserId ?? 'anonymous'}` as never)
-      return out.ok ? null : String((out as { body: Record<string, unknown> }).body.message ?? (out as { body: Record<string, unknown> }).body.error)
+      const { setAdsRuleLevel, updateAdsRule } = await import('./ads-rule-crud.service.js')
+      const actor = `user:${actorUserId ?? 'anonymous'}` as const
+      const why = (out: unknown) => String((out as { body: Record<string, unknown> }).body.message ?? (out as { body: Record<string, unknown> }).body.error)
+      // W4-12b — as the Rules screen (RulesGrid.tsx setAutomation): the setting goes to Automate FIRST, through the rule
+      // drawer's own save and audit (updateAdsRule, PATCH /advertising/automation-rules/:id), so AUTO never stands beside
+      // Manual; it goes back to Manual if the level is refused.
+      const move = await controlMove(row, level)
+      const note = `Manual/Automate set to ${move?.to === 'automate' ? 'Automate' : 'Manual'} with the level ${level}`
+      if (move?.to === 'automate') {
+        const set = await updateAdsRule(row.id, { actions: move.actions }, actor, { note })
+        if (!set.ok) return `its Manual/Automate setting could not be set to Automate (${why(set)}), so it stays ${row.level}`
+      }
+      const out = await setAdsRuleLevel(row.id, level, actor as never)
+      if (!out.ok) {
+        if (move?.to === 'automate') await updateAdsRule(row.id, { actions: move.before }, actor, { note: `Manual/Automate put back to Manual: the level ${level} was refused` }).catch(() => undefined)
+        return why(out)
+      }
+      // Down from AUTO: back to Manual after the level, as the screen does (best-effort there too: below AUTO the level
+      // alone keeps the rule proposing). Said when it could not be.
+      if (move?.to === 'manual') {
+        const back = await updateAdsRule(row.id, { actions: move.actions }, actor, { note }).catch(() => null)
+        if (!back?.ok) return { note: `its Manual/Automate setting stayed on Automate (${back ? why(back) : 'the save failed'}); at ${level} it proposes anyway` }
+      }
+      return null
     },
   },
+}
+
+/**
+ * W4-12b — an Amazon ads rule's Manual/Automate setting (`actions[0].control`, the rule builder's radio) as a level move
+ * changes it. On Manual the engine runs the rule as a dry run whatever its level (automation-rule.service.ts EA3): it
+ * only proposes. The Rules screen keeps it in step when a person switches Auto (RulesGrid.tsx setAutomation, BP.P1):
+ * Automate when the rule goes to AUTO, Manual when Auto is switched off. A move of Claude's does the same, so a rule
+ * raised to AUTO acts, and turned down from AUTO it goes back to Manual (what the raise changed). A rule with no setting
+ * is left as it is. (A rule a builder made Manual on purpose — a Harvest & Negate, a playbook's isolation — cannot reach
+ * AUTO: its graduation ceiling holds it at PROPOSE, refused before this.) Null: nothing to change.
+ */
+async function controlMove(row: SwitchRow, level: AutomationLevel): Promise<{ from: string; to: 'manual' | 'automate'; words: string; actions: object[]; before: object[] } | null> {
+  const rule = await prisma.automationRule.findFirst({ where: { id: row.id, domain: 'advertising' }, select: { actions: true } })
+  if (!rule || !Array.isArray(rule.actions)) return null
+  const before = rule.actions as Array<Record<string, unknown>>
+  const control = before[0]?.control
+  const to = level === 'AUTO' && control === 'manual' ? 'automate' as const
+    : row.level === 'AUTO' && level !== 'AUTO' && control === 'automate' ? 'manual' as const
+      : null
+  if (!to) return null
+  const words = to === 'automate'
+    ? 'Its Manual/Automate setting goes from Manual to Automate with it, as the Rules screen does when a person sets Auto: on Manual a rule only proposes, whatever its level.'
+    : 'Its Manual/Automate setting goes back from Automate to Manual, as the Rules screen does when Auto is switched off.'
+  return { from: String(control), to, words, actions: before.map((a, i) => (i === 0 ? { ...a, control: to } : a)), before }
 }
 
 const A2: AutomationAdapter = {
