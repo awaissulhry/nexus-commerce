@@ -23,8 +23,11 @@ import { GOAL_PRESETS, type Goal } from './presets.js'
  *    off by a person in the Rules screen;
  *  · `personOff` — that person's choice, which the sync now keeps: it no longer touches the rule until a person
  *    switches it on again. It used to re-enable it every 15 minutes.
+ *  · `offBy: 'goal-archive'` (W4-12b) — the rule was switched off when the plan's AI goal was archived
+ *    (archiveProductGoal), not in the Rules screen: the plan, switched on again, keeps it off like a person's off, and
+ *    its note says why.
  */
-type LinkRef = { module: 'harvest' | 'negate'; ruleId: string; syncedEnabled?: boolean; personOff?: boolean }
+type LinkRef = { module: 'harvest' | 'negate'; ruleId: string; syncedEnabled?: boolean; personOff?: boolean; offBy?: 'goal-archive' }
 interface PlanLike {
   id: string; name: string; marketplace: string; goal: string; autonomy: string
   campaignIds: unknown; modules: unknown; linkedRuleIds: unknown
@@ -107,9 +110,16 @@ export async function syncLinkedRules(plan: PlanLike): Promise<LinkRef[]> {
        * switched it off in the Rules screen. The sync then leaves the rule alone — no enable, no dryRun, no actions —
        * and says so once in the plan's feed. Switching it on again in Rules hands it back to the plan.
        */
+      // W4-12b — a rule switched on again since the goal's archive no longer carries the archive's mark.
+      if (link.offBy && rule.enabled) link = { module: link.module, ruleId: link.ruleId, ...(link.syncedEnabled !== undefined ? { syncedEnabled: link.syncedEnabled } : {}), ...(link.personOff ? { personOff: true } : {}) }
       if (link.personOff) {
         if (!rule.enabled) { out.push(link); continue }
         link = { module: link.module, ruleId: link.ruleId }
+      } else if (!rule.enabled && link.offBy === 'goal-archive') {
+        // W4-12b — off since the goal's archive, whatever the sync last wrote: kept off like a person's off, said truly.
+        if (wantEnabled) await noteOnce(plan.id, link.module, `"${rule.name}" was switched off when this plan's AI goal was archived. The plan leaves it off; switch it on in Rules to hand it back to the plan.`)
+        out.push({ ...link, personOff: true })
+        continue
       } else if (!rule.enabled && wantEnabled && link.syncedEnabled !== false) {
         await noteOnce(plan.id, link.module, `"${rule.name}" was switched off in Rules. The plan leaves it off; switch it on in Rules to hand it back to the plan.`)
         out.push({ ...link, personOff: true })

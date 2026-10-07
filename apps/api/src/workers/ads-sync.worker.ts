@@ -16,6 +16,7 @@
  */
 
 import { type Job } from 'bullmq'
+import { marketLimitsOf } from '@nexus/shared/ads-market-limits'
 import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import prisma from '../db.js'
 import { claimEntityWrite, dispatchPayloadFromMutations, isLetGoWrite, isPersonEdit, isSuppressionWrite, putBackRefusedWrite, settleAdMutations, supersedeOlderWrites } from '../services/advertising/ads-mutation.service.js'
@@ -73,13 +74,18 @@ const VALUE_FIELDS = new Set(['bid', 'defaultBid', 'dailyBudget', 'budgetAmount'
  * Bid changes are cents per click (small); budget changes are EUR units
  * (need ×100). The worker uses this to gate value-cap denials.
  */
-function estimatePayloadValueCents(payload: AdMutationPayload): number {
-  let maxCents = 0
+function estimatePayloadValueCents(payload: AdMutationPayload, sentCap?: PortfolioCap | { error: string }): number {
+  // W4-12b (review) — a portfolio write sends its whole cap (portfolioBudgetOf): a policy- or dates-only edit sends the
+  // stored amount too, and that amount is what the value cap judges, in minor units.
+  let maxCents = sentCap && !('error' in sentCap) && sentCap.amount != null && Number.isFinite(sentCap.amount) ? Math.round(sentCap.amount * 100) : 0
   for (const c of payload.fieldChanges) {
     if (c.newValue == null || !VALUE_FIELDS.has(c.field)) continue
     const n = Number(c.newValue)
     if (!Number.isFinite(n)) continue
-    if (c.field === 'dailyBudget') {
+    // W4-12b — a portfolio's cap is in major units too (AmazonAdsPortfolio.budgetAmount, Decimal(12,2); the Portfolios
+    // page's own push counts it ×100, updatePortfolioById). It was counted as cents, so a €600 cap read as 600¢ and passed
+    // a €500 value cap.
+    if (c.field === 'dailyBudget' || c.field === 'budgetAmount') {
       // Stored as EUR (Campaign.dailyBudget is Decimal(10,2) EUR units)
       maxCents = Math.max(maxCents, Math.round(n * 100))
     } else {
@@ -258,6 +264,85 @@ async function archiveEntityOf(payload: AdMutationPayload): Promise<SpArchiveEnt
   return t.kind === 'PRODUCT' || t.kind === 'AUTO' ? 'target' : 'keyword'
 }
 
+/** The cap fields a queued portfolio write can carry (updatePortfolioWithSync, ads-mutation.service.ts). */
+const PORTFOLIO_CAP_FIELDS: readonly string[] = ['budgetAmount', 'budgetCurrencyCode', 'budgetPolicy', 'startDate', 'endDate']
+
+/** A portfolio's budget cap as Amazon's v3 PUT /portfolios takes it (amount null only with NO_CAP). */
+interface PortfolioCap { amount: number | null; currencyCode: string; policy: string; startDate?: string; endDate?: string }
+
+/** The currency of an Amazon market: as configured (Marketplace), else Amazon's checked limits for it; null: unknown. */
+async function marketCurrencyOf(market: string | null): Promise<string | null> {
+  if (!market) return null
+  try {
+    const { marketCurrency } = await import('../services/pim/market-currency.js')
+    return await marketCurrency('AMAZON', market)
+  } catch {
+    return marketLimitsOf(market)?.currency ?? null
+  }
+}
+
+/**
+ * W4-12b — the budget cap a queued portfolio write sends, whole.
+ *
+ * Amazon's v3 PUT /portfolios (Portfolios API 3.0, `application/vnd.spPortfolio.v3+json`) takes the cap as ONE object,
+ * PortfolioBudget { amount, currencyCode, policy, startDate, endDate }: `policy` is DATE_RANGE ("a budget for a specific
+ * period of time", from startDate to endDate), MONTHLY_RECURRING ("automatically renewed at the beginning of each
+ * month") or NO_CAP ("to remove budget, set budget amount, startDate, endDate to null and set policy to NO_CAP"), and
+ * `currencyCode` "cannot be null". A bulk-sheet row (bulksheet/apply.ts → updatePortfolioWithSync) queues only the
+ * columns it changed, so an amount-only edit went out without its policy and currency. Now what the write does not
+ * change comes from the portfolio's own row (updatePortfolioWithSync wrote the change there when it queued it) and the
+ * currency, last, from its market; the policy goes out in Amazon's v3 spelling (capPolicyOf), whoever stored it. A
+ * monthly cap carries dates only when this write changes them, as the Portfolios page sends none.
+ *
+ * Undefined: the write changes no cap field (a rename). An error: a cap Nexus cannot complete (no policy, no amount, a
+ * date range without its dates, no currency) or an amount or dates for a portfolio with no cap (NO_CAP) — not sent, and
+ * it says why (a permanent failure: the same answer every time). Read once per write, before the write gate, so the
+ * value cap judges the amount that is sent (estimatePayloadValueCents). The Portfolios page's own push
+ * (updatePortfolioById) builds its cap itself and does not come here.
+ */
+async function portfolioBudgetOf(payload: AdMutationPayload): Promise<PortfolioCap | { error: string } | undefined> {
+  const changed = new Map(payload.fieldChanges.filter((c) => PORTFOLIO_CAP_FIELDS.includes(c.field)).map((c) => [c.field, c.newValue || null]))
+  if (!changed.size) return undefined
+  const row = await prisma.amazonAdsPortfolio.findUnique({
+    where: { id: payload.entityId },
+    select: { budgetAmount: true, budgetCurrencyCode: true, budgetPolicy: true, startDate: true, endDate: true },
+  })
+  const day = (d: Date | null | undefined): string | null => (d ? d.toISOString().slice(0, 10) : null)
+  const value = (field: string, stored: string | null | undefined): string | null => (changed.has(field) ? changed.get(field) ?? null : stored ?? null)
+  const date = (field: string, stored: Date | null | undefined): string | undefined => {
+    const v = value(field, day(stored))
+    return v ? amazonDate(v) : undefined
+  }
+  const notSent = (why: string) => ({ error: `invalid portfolio budget, not sent to Amazon: ${why}` })
+
+  const { capPolicyOf } = await import('../services/advertising/ads-portfolio.service.js')
+  const policy = capPolicyOf(value('budgetPolicy', row?.budgetPolicy))
+  const currencyCode = value('budgetCurrencyCode', row?.budgetCurrencyCode) ?? (await marketCurrencyOf(payload.marketplace))
+  if (!currencyCode) return notSent('Nexus knows no currency for this portfolio or its market, and Amazon\'s cap needs one')
+  if (policy === 'NO_CAP') {
+    // W4-12b (review) — a portfolio with no cap takes no amount and no dates: Amazon accepts {amount: null, NO_CAP} and
+    // the amount or dates this write carries would be dropped while the row reads SUCCESS. Refused instead.
+    const amountGiven = changed.has('budgetAmount') && Number(changed.get('budgetAmount')) > 0
+    const dateGiven = !!(changed.get('startDate') || changed.get('endDate'))
+    if (amountGiven || dateGiven) return notSent(`this portfolio has no cap (NO_CAP), so the ${amountGiven ? 'amount' : 'dates'} given would be dropped: set a cap policy for this portfolio first (monthlyRecurring or dateRange, in the Budget policy column)`)
+    return { amount: null, currencyCode, policy }
+  }
+  if (!policy) return notSent('Nexus holds no budget policy for this portfolio (monthlyRecurring or dateRange): give the Budget policy column too')
+  if (policy !== 'MONTHLY_RECURRING' && policy !== 'DATE_RANGE') return notSent(`Nexus cannot read the budget policy "${policy}" (Amazon's are MONTHLY_RECURRING, DATE_RANGE and NO_CAP)`)
+  const amountText = value('budgetAmount', row?.budgetAmount == null ? null : String(Number(row.budgetAmount)))
+  const amount = amountText == null ? NaN : Number(amountText)
+  if (!(Number.isFinite(amount) && amount > 0)) return notSent('the cap has no amount above 0: give the Budget amount column too')
+  if (policy === 'MONTHLY_RECURRING') {
+    const startDate = changed.has('startDate') ? date('startDate', null) : undefined
+    const endDate = changed.has('endDate') ? date('endDate', null) : undefined
+    return { amount, currencyCode, policy, ...(startDate ? { startDate } : {}), ...(endDate ? { endDate } : {}) }
+  }
+  const startDate = date('startDate', row?.startDate)
+  const endDate = date('endDate', row?.endDate)
+  if (!startDate || !endDate) return notSent('a date-range cap needs its start and end dates: give both Budget date columns')
+  return { amount, currencyCode, policy, startDate, endDate }
+}
+
 async function dispatchToAmazon(
   payload: AdMutationPayload,
   ctx: ClientContext,
@@ -265,7 +350,7 @@ async function dispatchToAmazon(
    * AA-W2-13 — the queue row is a deliberate stop (its JSON carries `letsGo`: pause-ads, archive-ads), or a person's own
    * edit (isPersonEdit off its JSON, as the gate is handed it).
    */
-  opts: { letsGo?: boolean; manual?: boolean } = {},
+  opts: { letsGo?: boolean; manual?: boolean; portfolioCap?: PortfolioCap | { error: string } } = {},
 ): Promise<{ ok: boolean; rawResponse: unknown; error: string | null }> {
   const patch = patchFromChanges(payload)
   if (!payload.externalId) {
@@ -327,16 +412,9 @@ async function dispatchToAmazon(
       // through patchFromChanges (which only knows campaign-shaped keys).
       const get = (f: string): string | undefined =>
         payload.fieldChanges.find((c) => c.field === f)?.newValue ?? undefined
-      const amount = get('budgetAmount')
-      const budget = amount !== undefined || get('budgetPolicy') || get('startDate') || get('endDate')
-        ? {
-            amount: amount !== undefined ? Number(amount) : undefined,
-            currencyCode: get('budgetCurrencyCode'),
-            policy: get('budgetPolicy'),
-            startDate: get('startDate'),
-            endDate: get('endDate'),
-          }
-        : undefined
+      // W4-12b — the whole cap, never only the fields this write changed (portfolioBudgetOf, read before the gate).
+      const budget = 'portfolioCap' in opts ? opts.portfolioCap : await portfolioBudgetOf(payload)
+      if (budget && 'error' in budget) return { ok: false, rawResponse: null, error: budget.error }
       const res = await updatePortfolio(ctx, {
         portfolioId: payload.externalId,
         name: get('name'),
@@ -505,7 +583,12 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
   // AD.4 — Two-key live-write gate. In sandbox mode the gate passes
   // through; in live mode it enforces env flag + per-connection
   // writesEnabledAt + value-cap.
-  const payloadValueCents = estimatePayloadValueCents(payload)
+  // W4-12b — a portfolio write's whole cap, read once: the value cap judges it and the dispatch sends it. A failed read
+  // is a retryable failure of the dispatch (no "invalid" in it).
+  const portfolioCap = payload?.entityType === 'PORTFOLIO'
+    ? await portfolioBudgetOf(payload).catch((err) => ({ error: `portfolio budget could not be read: ${err instanceof Error ? err.message : String(err)}` }))
+    : undefined
+  const payloadValueCents = estimatePayloadValueCents(payload, portfolioCap)
   const { campaignId, adGroupId } = await resolveWriteScope(payload)
   // ADX A1 — hand the gate the field and intended value so Campaign.minBidCents /
   // maxBidCents can bind this write. A payload carries one field in the common case;
@@ -625,6 +708,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
 
   const ctx: ClientContext = { profileId, region: regionFor(marketplace) }
   const result = await dispatchToAmazon(payload, ctx, {
+    ...(payload.entityType === 'PORTFOLIO' ? { portfolioCap } : {}),
     letsGo: (row.payload as { letsGo?: unknown } | null)?.letsGo === true,
     manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor),
   })
