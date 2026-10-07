@@ -58,7 +58,7 @@ const STEP_UP_PCT = Number(process.env.NEXUS_COVERAGE_STEP_UP_PCT ?? 12)
 const DECAY_PCT = Number(process.env.NEXUS_COVERAGE_DECAY_PCT ?? 6)
 const MIN_BID_CENTS = 5
 /** Hard ceiling when neither the term nor the account provides one — never unbounded (ACR.1.4). */
-const DEFAULT_MAX_CPC_CENTS = Number(process.env.NEXUS_COVERAGE_DEFAULT_MAX_CPC_CENTS ?? 120)
+export const DEFAULT_MAX_CPC_CENTS = Number(process.env.NEXUS_COVERAGE_DEFAULT_MAX_CPC_CENTS ?? 120)
 
 export interface LadderInput {
   currentBidCents: number

@@ -185,6 +185,9 @@ interface Seeded {
   suggestionId: string
   /** R14 — a budget pool, the row tune-ad-engine tunes by `subjectId`. */
   budgetPoolId: string
+  /** W4-8 — a coverage set and its term, what set-coverage-set edits by `setId` and `termId`. */
+  coverageSetId: string
+  coverageTermId: string
   /** R15 — a fleet assignment, what steer-fleet runs or cancels by `assignmentId`. */
   assignmentId: string
   /** R17 — a repricing rule of the business's product, what save-price-rule edits by `priceRuleId`. */
@@ -493,6 +496,9 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     await db.adsSuggestionMute.create({ data: { scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: `budget:${campaign.id}`, entityName: `${canary}-MUTED-RECOMMENDATION`, createdBy: 'user:mcp8' } })
     // R14 — a budget pool: what tune-ad-engine tunes.
     const budgetPool = await db.budgetPool.create({ data: { name: `${canary}-BUDGET-POOL`, totalDailyBudgetCents: 5000 } })
+    // W4-8 — a coverage set with one term: what set-coverage-set edits.
+    const coverageSet = await db.keywordCoverageSet.create({ data: { name: `${canary}-COVERAGE-SET`, portfolioId: `${mark}-PORTFOLIO-${RUN}`, marketplace: market } })
+    const coverageTerm = await db.keywordCoverageTerm.create({ data: { setId: coverageSet.id, term: `${canary.toLowerCase()}-coverage-term`, status: 'ACTIVE' } })
     // R15 — an assignment of a fleet worker: what steer-fleet runs or cancels.
     const assignment = await db.agentAssignment.create({ data: { charterKey: 'amazon-bid-tuner', title: `${canary}-ASSIGNMENT` } })
     // R17 — a repricing rule on the business's own market: what save-price-rule edits.
@@ -683,7 +689,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         connection.id, traceId, folder.id, tag.id, view.id, job.id,
         alertEvent.id, notification.id, looseAsset.id, workflow.id, draft.id, reviewStage.id, revision.id, theme.id, preset.id,
         attribute.id, option.id, group.id, family.id, parentFamily.id, category.id, parentCategory.id,
-        change.id, automationRule.id, suggestion.id, budgetPool.id, assignment.id, priceRule.id, opsRule.id,
+        change.id, automationRule.id, suggestion.id, budgetPool.id, coverageSet.id, coverageTerm.id, assignment.id, priceRule.id, opsRule.id,
         productReview.id, orderNote.id, customerNote.id, shipWarehouse.id, order.items[0].id, refund.id,
         secondWarehouse.id, secondWarehouse.code, fbaPlan.id,
         ebayAdGroup.id, ebayAdGroup.externalAdGroupId,
@@ -732,6 +738,8 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       parentCategoryId: parentCategory.id,
       suggestionId: suggestion.id,
       budgetPoolId: budgetPool.id,
+      coverageSetId: coverageSet.id,
+      coverageTermId: coverageTerm.id,
       assignmentId: assignment.id,
       priceRuleId: priceRule.id,
       opsRuleId: opsRule.id,
@@ -987,6 +995,12 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'save-ops-rule': { description: 'MCP.8 probe' },
   // Integration (P7 + R9): `ruleId` names an alert rule for set-alert-rule (B_VALUES) and an ads automation rule here.
   'save-ad-rule': { get ruleId() { return seeded.b.automationRuleId } },
+  // W4-8 — assign-ad-rules names an ads automation rule (`ruleId`, an alert rule in B_VALUES); set-coverage-set edits one
+  // term of B's coverage set (no portfolio: the seed op names one by its Amazon id); run-ad-engine-now names no row
+  // (CREATES): the rules evaluator, which this suite's businesses can run.
+  'assign-ad-rules': { get ruleId() { return seeded.b.automationRuleId } },
+  'set-coverage-set': { op: 'edit-terms', portfolioId: undefined, get setId() { return seeded.b.coverageSetId }, get terms() { return [{ termId: seeded.b.coverageTermId, status: 'PAUSED' }] } },
+  'run-ad-engine-now': { engine: 'rules' },
   // Integration (P7 + R12): stop-automation and resume-automation name ads automation rules (`ruleIds`).
   'stop-automation': { get ruleIds() { return [seeded.b.automationRuleId] } },
   'resume-automation': { get ruleIds() { return [seeded.b.automationRuleId] } },
@@ -1099,6 +1113,8 @@ const CREATES = new Set([
   'create-product',
   // W4-2 — the business's own expected report time names no row either: from A it is A's own setting, waiting in A.
   'set-ads-report-time',
+  // W4-8 — an engine's Run now names no row either: from A it is a run of A's own engine, waiting for a person in A.
+  'run-ad-engine-now',
 ])
 
 /** An argument named like an id. One with no B_VALUES entry fails the build: the loop would probe nothing. */

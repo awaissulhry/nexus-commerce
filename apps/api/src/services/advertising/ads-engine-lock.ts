@@ -108,6 +108,24 @@ async function lockStore(): Promise<EngineLockStore | null> {
   return (redis?.connection ?? null) as unknown as EngineLockStore | null
 }
 
+const HELD_FOR = `return redis.call('pttl', KEYS[1])`
+
+/**
+ * ADS AUTONOMY W4-8 — read only: is this business's lease for the engine held now (a run is in progress)? `unknown` when
+ * Redis cannot be asked (then a live run could not take the lock either). Never takes, renews or releases it.
+ */
+export async function engineLockHeld(workspaceId: string, engine: LockedEngine): Promise<{ held: boolean } | { unknown: string }> {
+  try {
+    const store = await lockStore()
+    if (!store || store.status !== 'ready') return { unknown: 'Redis is not connected' }
+    const ttl = Number(await store.eval(HELD_FOR, 1, engineLockKey(workspaceId, engine)))
+    // -2: no such key; -1: no expiry (never set by this file); above 0: held for that many ms more unless renewed.
+    return { held: ttl > 0 || ttl === -1 }
+  } catch (error) {
+    return { unknown: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 /** Run `fn` holding this business's lease for the engine; answer "a run is already in progress" when another holds it. */
 export async function withEngineLock<T>(workspaceId: string, engine: LockedEngine, fn: () => Promise<T>): Promise<EngineRun<T>> {
   const key = engineLockKey(workspaceId, engine)

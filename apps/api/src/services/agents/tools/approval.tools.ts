@@ -430,13 +430,22 @@ export function adMeaning(d: AdDelivery): string {
   return `Approved and written in Nexus. Amazon: ${parts.join(', ')} (of ${plural(d.writes, 'write')}).${created}`
 }
 
+/** W4-8 — what became of the engine run a Run now request started (its own words are `engineRun.run.runSummary`: they can name money). */
+function engineRunMeaning(run: { status: string } | null): string {
+  if (!run) return 'Approved and started: the engine\'s run has no record yet (it is written as the run begins). Ask again in a minute.'
+  if (run.status === 'RUNNING') return 'The engine is running now. Ask again when it ends: the run\'s record then says what it did.'
+  return run.status === 'FAILED'
+    ? 'The engine\'s run failed: engineRun.run.runSummary says why.'
+    : `The engine ran (${run.status.toLowerCase()}): engineRun.run.runSummary says what it did. Each change it made is in the Change Log under the engine's name.`
+}
+
 const approvalStatus: AgentTool = {
   name: 'approval-status',
   title: 'Approval status',
   input: z.object({ approvalId: z.string().min(1).describe('the approvalId a change tool returned') }),
   requires: [F.aiView],
   // A9 — the write gate's words for a refused ad write can name an amount.
-  restrictedFields: { gateReasons: FIELDS.financialsAdspendView },
+  restrictedFields: { gateReasons: FIELDS.financialsAdspendView, runSummary: FIELDS.financialsAdspendView },
   category: 'approvals',
   riskTier: 'low',
   readOnly: true,
@@ -448,7 +457,8 @@ const approvalStatus: AgentTool = {
     + 'For an approved change that is sent on to a marketplace (a price change, a publish), channels counts the queue rows '
     + 'it made: waiting to be sent, sent, failed. For an approved ad change, ads counts its writes at Amazon: waiting, '
     + 'sent, refused by the write gate, failed (or says it ran in sandbox), and ebay counts eBay ad writes. For an approved '
-    + 'publish, publication names its studio publication and its status (publication-status reads it in full). Once it ran, '
+    + 'publish, publication names its studio publication and its status (publication-status reads it in full). For an approved '
+    + 'run-ad-engine-now, engineRun says how the engine\'s run went (running, its summary, or why it failed). Once it ran, '
     + 'change.changeId names the change for undo-change. For a change plan, plan says what became of each step (done, '
     + 'skipped with its reason, failed).',
   async handler(args, ctx) {
@@ -490,6 +500,11 @@ const approvalStatus: AgentTool = {
           select: { id: true, reversibility: true, undoneAt: true, undoneByApprovalId: true, after: true },
         })
       : null
+    // ADS AUTONOMY W4-8 — an engine's Run now: the run it started (the first hand-run of its job from then), and how it went.
+    const engineAfter = ap.toolName === 'run-ad-engine-now' ? (recorded?.after as { job?: unknown; startedAt?: unknown } | null) : null
+    const engineRun = engineAfter && typeof engineAfter.job === 'string' && typeof engineAfter.startedAt === 'string'
+      ? { job: engineAfter.job, run: await (await import('../../advertising/ads-engine-run-now.service.js')).engineRunOf(engineAfter.job, engineAfter.startedAt) }
+      : null
     // L5 — a publish's publication, as Nexus stored it (a pure read; it settles through the sweep or the studio).
     const publicationId = ap.toolName === 'publish-listing' ? (recorded?.after as { publicationId?: unknown } | null)?.publicationId : undefined
     const stored = typeof publicationId === 'string' ? await (await import('../../pim/studio-publication.service.js')).readStoredPublication(publicationId) : null
@@ -505,6 +520,7 @@ const approvalStatus: AgentTool = {
         meaning: outcome ? outcome.meaning
           : ap.status !== 'executed' ? (MEANING[ap.status] ?? null)
           : publication ? publishedMeaning(publication.status)
+          : engineRun ? engineRunMeaning(engineRun.run)
           : ads ? adMeaning(ads) : EBAY_AD_TOOLS.has(ap.toolName) ? ebayMeaning(ebay) : executedMeaning(ap.toolName, channels),
         ...(outcome?.rejectedReason ? { rejectedReason: outcome.rejectedReason } : {}),
         ...(outcome?.replacedBy ? { replacedBy: outcome.replacedBy } : {}),
@@ -514,6 +530,7 @@ const approvalStatus: AgentTool = {
         ...(ads ? { ads } : {}),
         ...(ebay ? { ebay } : {}),
         ...(publication ? { publication } : {}),
+        ...(engineRun ? { engineRun } : {}),
         ...(plan
           ? {
               plan: {

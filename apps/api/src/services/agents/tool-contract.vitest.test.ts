@@ -111,6 +111,21 @@ const IRREVERSIBLE_AUTO: Readonly<Record<string, unknown>> = {
       unplaced: [], engineOwned: [], protectedHit: [],
     },
   },
+  // W4-8 — an engine's Run now cannot be called back (its changes are the engine's own): the bid optimiser, last run long
+  // ago, with the strategy's facts for a run that names no item. Refused at the default count 0.
+  'run-ad-engine-now': {
+    action: 'run-ad-engine-now', engine: 'auto-bid', name: 'Bid optimiser (auto-bid)', level: 'AUTO',
+    lastRun: { at: '2026-01-01T00:00:00.000Z', status: 'SUCCESS', by: 'schedule', summary: null, minutes: 2 },
+    raises: ['it may raise bids'],
+    limitFacts: {
+      v: 1, tool: 'run-ad-engine-now', action: 'automation', markets: {}, scopes: {}, entityScopes: {}, labels: {},
+      this: {
+        markets: [], items: 0, writes: 0, raises: 0, cuts: 0, largestRaisePct: 0, largestCutPct: 0, largestRaisePoints: 0, largestCutPoints: 0,
+        highestNewBidCents: null, budgetIncreaseCents: 0, byMarket: {}, entities: [], rowsOutsideStrategy: 0, firstOutside: null,
+      },
+      today: {}, perEntityToday: { maxChangesByRule: 0, entity: null }, unplaced: [], engineOwned: [], protectedHit: [],
+    },
+  },
 }
 
 /**
@@ -611,6 +626,12 @@ describe('C1 — every registered tool keeps the contract', () => {
       'report-ads-run': { before: { runId: 'r1', status: 'running', withdrawn: false }, after: { runId: 'r1', status: 'done', withdrawn: false } },
       // W4-2 — the expected report time it replaced, set again.
       'set-ads-report-time': { before: { expected: { time: '08:00', timeZone: 'Europe/Rome' } }, after: { expected: { time: '08:30', timeZone: 'Europe/Rome' } } },
+      // W4-8 — a rule's campaigns put back (replace); a coverage term's values put back through the same tool.
+      'assign-ad-rules': { before: { ruleId: 'r1', name: 'Rule — DE', binding: 'picker', campaignIds: ['c1'] }, after: { ruleId: 'r1', name: 'Rule — DE', binding: 'picker', campaignIds: ['c1', 'c2'] } },
+      'set-coverage-set': {
+        before: { setId: 's1', name: 'Set', terms: [{ termId: 't1', term: 'test term', leadAsin: null, status: 'ACTIVE', maxCpcCents: 80, targetSharePct: null, isControl: false }] },
+        after: { setId: 's1', name: 'Set', terms: [{ termId: 't1', term: 'test term', leadAsin: null, status: 'ACTIVE', maxCpcCents: 80, targetSharePct: 20, isControl: false }] },
+      },
     }
     const withUndo = listTools().filter((t) => t.undo)
     expect(withUndo.map((t) => t.name).sort()).toEqual(Object.keys(sample).sort())

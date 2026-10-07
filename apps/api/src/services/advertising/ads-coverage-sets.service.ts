@@ -40,7 +40,7 @@ export interface CoverageSetSummary {
 }
 
 /** The family's ASINs + campaign ids — one resolver, matching the cockpit's membership rule. */
-async function familyIdentity(portfolioId: string): Promise<{ marketplace: string | null; campaignIds: string[]; asins: string[] }> {
+export async function familyIdentity(portfolioId: string): Promise<{ marketplace: string | null; campaignIds: string[]; asins: string[] }> {
   const campaigns = await prisma.campaign.findMany({
     where: { portfolioId },
     select: { id: true, marketplace: true },
@@ -136,6 +136,34 @@ export async function seedCoverageSet(args: {
     added += 1
   }
   return { setId: set.id, created, termsAdded: added, termsKept: have.size, unmeasured: false }
+}
+
+/**
+ * ADS AUTONOMY W4-8 — what a seed would do, read only (Claude's set-coverage-set preview): the set it tops up or the draft
+ * it creates, and the terms it would add — the same evidence and threshold seedCoverageSet reads. seedCoverageSet itself
+ * is unchanged; a seed run later may add a term or two more when a new SQP week landed in between.
+ */
+export async function previewCoverageSeed(args: { portfolioId: string; minMarketImpressions?: number }): Promise<{
+  marketplace: string
+  set: { id: string; name: string; enabled: boolean } | null
+  /** The name a new set gets. */
+  newName: string
+  terms: string[]
+  kept: number
+  unmeasured: boolean
+}> {
+  const minMarket = args.minMarketImpressions ?? 2_000
+  const { marketplace, campaignIds, asins } = await familyIdentity(args.portfolioId)
+  if (!marketplace) throw new Error('portfolio has no campaigns with a marketplace')
+  const portfolio = await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: args.portfolioId }, select: { name: true } })
+  const set = await prisma.keywordCoverageSet.findFirst({ where: { portfolioId: args.portfolioId, marketplace }, select: { id: true, name: true, enabled: true } })
+  const board = asins.length ? await getCoverageScoreboard({ marketplace, asins, campaignIds, limit: 200 }) : null
+  const newName = `${portfolio?.name ?? args.portfolioId} — coverage`
+  if (!board || !board.measured) return { marketplace, set, newName, terms: [], kept: 0, unmeasured: true }
+  const existing = set ? await prisma.keywordCoverageTerm.findMany({ where: { setId: set.id }, select: { term: true } }) : []
+  const have = new Set(existing.map((t) => t.term))
+  const terms = board.rows.filter((row) => row.marketImpressions >= minMarket && !have.has(row.term)).map((row) => row.term)
+  return { marketplace, set, newName, terms, kept: have.size, unmeasured: false }
 }
 
 /** The set with live evidence joined per term — the read the cockpit section renders. */

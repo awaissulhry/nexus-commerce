@@ -30,6 +30,8 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // L9 — closing and reopening a listing changes it on the channel. Phase 3 (T1) — so do ending, relisting and deleting it.
 // Phase 3 T3 — ebay-categories reads eBay's category suggestions and a category's details live (it stores nothing).
 // Ads autonomy W3-1 — apply-ad-recommendations asks for a plan whose steps reach Amazon.
+// Ads autonomy W4-8 — run-ad-engine-now starts an engine that writes to Amazon itself (assign-ad-rules and
+// set-coverage-set change Nexus only: the rule or the engine acts on its next run).
 const OPEN_WORLD = [
   'add-photo-from-url', 'advance-purchase-order', 'apply-ad-recommendations', 'apply-ads-playbook', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
   'cancel-order', 'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ai-goal-campaigns',
@@ -37,7 +39,7 @@ const OPEN_WORLD = [
   'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'fba-shipment-options', 'graduate-keyword', 'import-catalog', 'issue-refund',
   'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
   'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing', 'reopen-listing', 'replicate-ad-structure', 'reply-to-review', 'request-review', 'resend-prices',
-  'reserve-stock', 'restore-ad-bids-after-stock', 'restore-campaign', 'resume-automation', 'revert-listing-change', 'rollback-bulk-operation',
+  'reserve-stock', 'restore-ad-bids-after-stock', 'restore-campaign', 'resume-automation', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
   'set-campaign-budget', 'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion',
   'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-placement-multipliers', 'set-price',

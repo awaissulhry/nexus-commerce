@@ -947,6 +947,12 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // W4-2 — the expected report time from → to: someone else's change of it since makes this a different one.
   'set-ads-report-time': ['changes'],
   'tune-ad-engine': ['changes', 'raises', 'basis'],
+  // ADS AUTONOMY W4-8 — a rule's campaigns: every campaign bound before and after, its level and scope (basis), and what
+  // can raise; a coverage set: every term's values from and to (or the seed's terms) and what can raise; a Run now: the
+  // engine, what it may do now (its level), and a slow engine's last run (a tick since makes the approved run another one).
+  'assign-ad-rules': ['basis', 'raises'],
+  'set-coverage-set': ['basis', 'raises'],
+  'run-ad-engine-now': ['engine', 'level', 'basis'],
   'steer-fleet': ['steer', 'changes', 'basis'],
   'save-price-rule': ['changes', 'bounds', 'basis'],
   'save-ops-rule': ['changes', 'level', 'basis'],
