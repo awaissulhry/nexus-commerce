@@ -28,6 +28,8 @@ const ADSPEND_KEYS = [
   'maxValueCentsEur', 'perExecutionCents', 'perDayCents', 'defaultTargetAcosPct', 'dailySpendCapCents', 'dailyCapCents',
   'minBidCents', 'maxBidCents', 'monthlyCapCents', 'targetAcosPct', 'bidMinCents', 'bidMaxCents', 'budgetMinCents',
   'budgetMaxCents', 'maxDailySpendCents', 'bidFloorCents', 'bidCapCents', 'dailyBudgetUSD', 'dailyCeilingUSD',
+  // ADS AUTONOMY — auto-undo (A19): the value a judged change moved from and to (a bid or a budget), and its spend bar.
+  'fromValue', 'toValue', 'minSpendCents',
 ] as const
 export const AUTOMATION_RESTRICTED_FIELDS: Readonly<Record<string, FieldPermission>> = Object.fromEntries(
   ADSPEND_KEYS.map((key) => [key, FIELDS.financialsAdspendView]),
@@ -99,14 +101,15 @@ const automationDetail: AgentTool = {
     'what this business set, scope, schedule, caps, last run and its rows (rules, plans, schedules, pools …, up to 100). ' +
     'With rowId, one row in full: an ads rule with its conditions in words, window, caps, reach and graduation gate ' +
     '(the road to AUTO, which a person still clicks); an eBay rule with its versions and last runs; a row of the hourly ' +
-    'bid plans (or a plan\'s id) names its plan, whose week ad-hourly-plans shows hour by hour. ' +
+    'bid plans (or a plan\'s id) names its plan, whose week ad-hourly-plans shows hour by hour; auto-undo (A19) lists its ' +
+    'judgements of automatic ad changes (what it compared, the verdict, what it did or why not) and, with rowId, one in full. ' +
     'Name the automation by its number (A1 … N17) or key from list-automations.',
   riskTier: 'low',
   readOnly: true,
   openWorld: false,
   requires: [F.aiView],
   input: z.object({
-    automation: AUTOMATION.describe('the automation: its number from list-automations (A1 … A18, E1, E2, F1, F2, N1 … N17) or its key (e.g. ads-rules)'),
+    automation: AUTOMATION.describe('the automation: its number from list-automations (A1 … A19, E1, E2, F1, F2, N1 … N17) or its key (e.g. ads-rules)'),
     rowId: z.string().trim().min(1).max(64).optional().describe('one of its rows (a rule, plan, schedule …) by id, from this tool or list-automations'),
   }),
   restrictedFields: AUTOMATION_RESTRICTED_FIELDS,

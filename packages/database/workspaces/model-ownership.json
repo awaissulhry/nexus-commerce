@@ -404,6 +404,7 @@
     "DevelopmentCertification",
     "AdsAutomationState",
     "AutomationSwitch",
+    "AdsAutoUndoJudgement",
     "AmazonReportRun",
     "SharedListingMembership",
     "SyncChannelPolicy",

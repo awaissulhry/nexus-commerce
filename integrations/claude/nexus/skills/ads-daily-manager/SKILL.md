@@ -54,6 +54,7 @@ From `ads-manager-runs`, and `approval-status` where a step's detail matters:
 - A declined change was the Owner's answer: ask it again only when the data behind it has changed, and say so in its `why`.
 - A step skipped as stale or refused: ask again at most once, with fresh values. An expired request: again only if today's data still supports it.
 - What ran 3 or more days ago: did the number it aimed at move? Say it as observed, not as proof of cause.
+- Auto-undo (`automation-activity` / `automation-detail`, automation `A19`): what it judged of the automatic changes (engines, rules at AUTO, Claude changes that ran by rule) and what it did — would undo (OBSERVE), asked a person (PROPOSE) or undid (AUTO). Never ask again for a change it undid or asked about; one it would undo at OBSERVE may go in the plan as `undo-worse-ad-change` with its `judgementId` (a person approves it). Nexus adds its line to the report.
 
 ## 4. Decide, in this order
 

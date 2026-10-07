@@ -5606,6 +5606,13 @@
     "compound": {},
     "relations": []
   },
+  "AdsAutoUndoJudgement": {
+    "scalar": {
+      "actionLogId": "workspace_actionLogId"
+    },
+    "compound": {},
+    "relations": []
+  },
   "AmazonReportRun": {
     "scalar": {
       "reportId": "workspace_reportId"

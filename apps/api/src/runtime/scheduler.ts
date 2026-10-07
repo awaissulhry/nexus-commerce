@@ -909,6 +909,11 @@ export async function startScheduler(): Promise<void> {
     // were actually watched, and neither Amazon feed can be backfilled.
     const { startBudgetUsageCron } = await import('../jobs/ads-budget-usage.job.js');
     startBudgetUsageCron();
+    // ADS AUTONOMY — auto-undo (A19): daily after the reports land, before the daily Claude ads run. Born OBSERVE: it
+    // records what it would undo until a person turns it up (NEXUS_ENABLE_ADS_AUTO_UNDO_CRON=0 stops the cron).
+    markCronStep('ads:import ads-auto-undo.job');
+    const { startAdsAutoUndoCron } = await import('../jobs/ads-auto-undo.job.js');
+    startAdsAutoUndoCron();
     markCronStep('ads:schedules registered');
 
     markCronStep('ads:block complete');
