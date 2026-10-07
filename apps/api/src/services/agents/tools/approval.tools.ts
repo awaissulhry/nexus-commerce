@@ -231,6 +231,9 @@ const AD_CHANGE_TOOLS = new Set([
   'create-ai-goal-campaigns',
   // B-3 — a one-off SP Super Wizard set: its creates run detached too; approval-status reads its run the same way.
   'build-sp-wizard-campaigns',
+  // W4-1 — an hourly plan change is Nexus only, but a switch-off, a delete or a removal gives back floored bids: each
+  // give-back write carries the approval.
+  'set-hourly-bid-plan',
 ])
 
 export interface AdDelivery {

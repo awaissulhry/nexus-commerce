@@ -9,6 +9,7 @@ export {
   DateCell,
   BadgeCell,
   LockedCell,
+  LockGlyph,
   LinkCell,
   StockCell,
   stockLevel,

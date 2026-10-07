@@ -147,7 +147,15 @@ interface FamilyRead {
 }
 
 /** The read's options. `newRows`: also a stand-in row for every family member with no listing on each destination read. */
-interface ReadOptions { newRows?: boolean }
+interface ReadOptions {
+  newRows?: boolean
+  /**
+   * The Matrix's Status columns (Owner 2026-10-07): with `newRows`, every destination of the family is read as its own
+   * channel sheet reads it — the members with no listing on a destination's MAIN listing are new rows there (never on an
+   * alias: the channel sheet names no alias). Only destinations the family has a listing on (the Matrix draws cells there only).
+   */
+  everyDestination?: boolean
+}
 
 /** A family member with no listing on a destination, as a row with nothing stored (its id is a `new:` id). */
 function standInRow(product: FamilyProduct, d: NewRowRef): ListingRow {
@@ -234,6 +242,11 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
   const excluded = await excludedRows(rows.filter(row => !row.externalListingId && row.productId !== familyId).map(row => row.id))
   const out: RowRead[] = []
   const missingByProduct = new Map<string, number>()
+  const namedKey = named ? destinationKey({ channel: named.channel, marketplace: named.marketplace, channelConnectionId: named.accountId, aliasKey: named.aliasKey }) : null
+  /** Members with no listing on this destination are new rows: the named destination (a channel sheet), or every main listing (the Matrix). */
+  const standsIn = (key: string, d: NewRowRef) => !!options.newRows && (named ? activeAlias(named.aliasKey) && key === namedKey
+    // …never for listings with no account (a deleted connection): no channel sheet can name that destination.
+    : !!options.everyDestination && d.aliasKey === '' && !!d.accountId)
   for (const [key, group] of byDestination) {
     const first = group[0]
     const d: NewRowRef = first
@@ -268,8 +281,7 @@ async function readFamilyRows(productId: string, filter: PublishActionDestinatio
     for (const product of products) {
       if (listed.has(product.id)) continue
       if (group.length) missingByProduct.set(product.id, (missingByProduct.get(product.id) ?? 0) + 1)
-      if (options.newRows && named && activeAlias(named.aliasKey) && key === destinationKey({ channel: named.channel, marketplace: named.marketplace, channelConnectionId: named.accountId, aliasKey: named.aliasKey }))
-        readRow(standInRow(product, { ...d, productId: product.id }), product, true)
+      if (standsIn(key, d)) readRow(standInRow(product, { ...d, productId: product.id }), product, true)
     }
   }
   return { familyId, products, rows: out, missingByProduct }

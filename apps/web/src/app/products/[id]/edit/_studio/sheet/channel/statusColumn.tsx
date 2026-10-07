@@ -161,6 +161,11 @@ export function statusCellText(value: SellingStatusValue | undefined): string {
 export const samePublishCellValue = (a: unknown, b: unknown): boolean => a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 
 export interface PublishColumnInput<Row> {
+  /**
+   * The column's id: `STATUS_COLUMN` on a sheet (the default). The Matrix draws this same column once per market
+   * (Owner 2026-10-07), so each copy of it on the grid needs its own id; its save marks are kept under that id.
+   */
+  colId?: string
   /** Read when a cell asks — through refs, so a new read repaints cells without rebuilding the column. */
   cell: (row: Row) => PublishActionCell | null
   read: () => PublishCellReadState
@@ -174,9 +179,10 @@ export interface PublishColumnInput<Row> {
 }
 
 export function statusColumn<Row>(input: PublishColumnInput<Row>): ColDef<Row> {
+  const colId = input.colId ?? STATUS_COLUMN
   const valueOf = (row: Row) => statusCellValue(input.cell(row), input.read())
   return {
-    colId: STATUS_COLUMN,
+    colId,
     headerName: STATUS_COLUMN_LABEL,
     headerTooltip: STATUS_COLUMN_TIP,
     width: STATUS_COLUMN_WIDTH,
@@ -200,7 +206,7 @@ export function statusColumn<Row>(input: PublishColumnInput<Row>): ColDef<Row> {
     },
     cellRenderer: SellingStatusCell,
     tooltipValueGetter: p => composeCellTooltip(
-      saveNote(p.data ? input.tracker.get(input.rowIdOf(p.data), STATUS_COLUMN) : undefined),
+      saveNote(p.data ? input.tracker.get(input.rowIdOf(p.data), colId) : undefined),
       sellingStatusModel(p.value as SellingStatusValue | undefined).tooltip,
     ),
     // Delete / Backspace reset the cell through the sheet (one write), never AG's clear.

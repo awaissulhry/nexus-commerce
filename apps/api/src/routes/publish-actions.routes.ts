@@ -6,6 +6,7 @@
  *       → { rows, readAt }: every listing row of the family — selling state, waiting values with who and when,
  *         options. New listings: with channel, marketplace and accountId all named (one destination; aliasKey '' unless
  *         named), every family member with NO listing there is a row too (`create`, a `new:` listing id). products.view
+ *         `newRows=every` (the Matrix's Status columns): every destination's main listing reads its new rows the same way.
  *   PUT /api/products/:id/studio/publish-actions/send/:mode      partial | full | delete
  *   PUT /api/products/:id/studio/publish-actions/status/:target  active | inactive | ended | not_listed | none (clears)
  *       (a `new:` listing id starts the family's drafts on that destination first: `started` in the answer)
@@ -56,9 +57,12 @@ const publishActionRoutes: FastifyPluginAsync = async fastify => {
     try {
       reply.header('Cache-Control', 'no-store')
       const destination = destinationOf(request.query)
-      // New listings: one destination named exactly also reads the family members with no listing there.
-      const newRows = !!(destination.channel && destination.marketplace && destination.accountId)
-      return { rows: await readPublishActions(request.params.id, destination, { newRows }), readAt: new Date().toISOString() }
+      const every = (request.query as Record<string, unknown> | undefined)?.newRows
+      if (every !== undefined && every !== 'every') return reply.code(400).send({ error: 'invalid_request', message: 'newRows must be "every", or be omitted.' })
+      // New listings: one destination named exactly also reads the family members with no listing there; `newRows=every`
+      // reads them on every destination's main listing (the Matrix), as each channel sheet does on its own.
+      const named = !!(destination.channel && destination.marketplace && destination.accountId)
+      return { rows: await readPublishActions(request.params.id, destination, { newRows: named || every === 'every', everyDestination: every === 'every' }), readAt: new Date().toISOString() }
     } catch (err) { return sendError(reply, request, err) }
   })
 

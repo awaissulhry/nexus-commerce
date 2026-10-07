@@ -109,6 +109,18 @@ function adMoney(cents: unknown, currency: unknown): string | null {
   return money(value / 100, text(currency) ?? 'EUR')
 }
 
+/** W4-1 — a rank target's values as one line: its floor, placement %, base bid and CPC ceiling (what is set). */
+function valueWords(v: Rec | null, currency: unknown): string {
+  if (!v) return EMPTY
+  const parts = [
+    num(v.floorBidCents) != null ? `floor ${adMoney(v.floorBidCents, currency)}` : '',
+    num(v.placementPct) != null ? `placement ${v.placementPct}%` : '',
+    num(v.bidValueCents) != null ? `base bid ${adMoney(v.bidValueCents, currency)}` : '',
+    num(v.maxCpcCents) != null ? `CPC ≤ ${adMoney(v.maxCpcCents, currency)}` : '',
+  ].filter(Boolean)
+  return parts.length ? parts.join(', ') : EMPTY
+}
+
 /**
  * A value in words, never raw JSON: a short list joins its first three items, a flat object reads "key: value", anything
  * deeper is counted (as the web's `plainValue` in apps/web/src/app/fleet/approvals/grid/planWords.ts, so the grid's rows and a
@@ -262,6 +274,7 @@ const AMAZON_AD_TOOLS = new Set([
   'replicate-ad-structure',
   'create-ai-goal-campaigns',
   'build-sp-wizard-campaigns',
+  'set-hourly-bid-plan',
 ])
 
 /** A campaign page: Amazon's by its Nexus Campaign id, eBay's by its Nexus eBay campaign id. */
@@ -823,6 +836,37 @@ const READERS: Record<string, Reader> = {
         { label: 'Daily budget', from: null, to: adMoney(p.dailyBudgetCents, p.currency) },
         { label: 'Advertises', from: null, to: plural(recs(p.products).length, 'product') },
       ],
+    }
+  },
+  // W4-1 — an hourly bid plan: the plan, then what the op changes (its switch, name, members, the days it paints, a
+  // campaign's own target values, what a give-back lifts).
+  'set-hourly-bid-plan': (p) => {
+    const plan = rec(p.plan) ?? {}
+    const name = text(plan.name) ?? '?'
+    const enabled = rec(plan.enabled) ?? {}
+    const onOff = (v: unknown) => (v === true ? 'On' : v === false ? 'Off' : EMPTY)
+    const members = rec(p.members) ?? {}
+    const back = rec(p.givesBack)
+    const lines: QueueChange[] = []
+    if (p.op === 'create') lines.push({ label: 'Hourly plan', from: null, to: `“${name}” · ${plural(num(members.to) ?? 0, 'campaign')}, switched off` })
+    if (p.op === 'delete') lines.push({ label: 'Hourly plan', from: `“${name}”`, to: '(deleted)' })
+    if (p.op === 'switch') lines.push({ label: `Hourly plan “${name}”`, from: onOff(enabled.from), to: onOff(enabled.to) })
+    if (p.op === 'rename') lines.push({ label: 'Hourly plan name', from: text(rec(p.rename)?.from) ?? EMPTY, to: text(rec(p.rename)?.to) ?? EMPTY })
+    if (p.op === 'set-campaigns') lines.push({ label: `Campaigns of “${name}”`, from: plainValue(members.from), to: plainValue(members.to) })
+    if (p.op === 'update-windows' || p.op === 'create') {
+      const hours = (d: Rec | null) => (d ? `${plainValue(d.hoursAtFloor)} h Min bid, ${plainValue(24 - (num(d.hoursAtFloor) ?? 0) - (num(d.hoursUnplanned) ?? 0))} h on targets` : EMPTY)
+      for (const d of recs(p.week)) {
+        const from = rec(d.from), to = rec(d.to)
+        if (p.op === 'create' || text(from?.hours) !== text(to?.hours)) lines.push({ label: `${text(d.day) ?? '?'} hours`, from: p.op === 'create' ? null : hours(from), to: hours(to) })
+      }
+    }
+    for (const v of recs(p.targetValues)) lines.push({ label: `“${text(v.campaign) ?? '?'}” · ${text(v.targetKey) ?? '?'}`, from: valueWords(rec(v.from), p.currency), to: valueWords(rec(v.to), p.currency) })
+    if (back && num(back.restore)) lines.push({ label: 'Floored bids', from: `${plainValue(back.bids)} at the Min-bid floor`, to: 'given back' })
+    return {
+      channel: 'AMAZON',
+      market: marketOf(plan.market),
+      target: target('other', { id: text(plan.planId), name: `Hourly plan “${name}”`, href: '/marketing/ads/rules-automation/dayparting' }),
+      changes: lines,
     }
   },
   // PB-5a — a build's campaigns and their daily budget, or an adopt's bindings (Nexus only).

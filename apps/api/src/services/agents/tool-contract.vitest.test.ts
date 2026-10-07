@@ -83,6 +83,9 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // B-2 — an AI goal, the create kind: only at the floor, off the allowlist, its rules and plan off (nothing spends until
   // restore-campaign); by default never by rule (maxCampaigns 0).
   'create-ai-goal-campaigns',
+  // W4-1 — one hourly bid plan (its own kind, hourly): Nexus only but for a give-back; a raise needs the approver's code;
+  // by default never by rule (maxItems 0, no market), and a person's plan never by rule unless allowPeoplesPlans.
+  'set-hourly-bid-plan',
 ]
 
 /**
@@ -410,6 +413,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       'enable-ads': { before: { changeSetId: 'ap1', items: [{ level: 'target', id: 't1', status: 'PAUSED' }] }, after: { items: [{ level: 'target', id: 't1', status: 'ENABLED' }] } },
       // AA-W2-13 — a created campaign is put back (in part) by archiving it.
       'create-ad-campaign': { before: { campaignId: null }, after: { campaignId: 'c9', name: 'Test launch', market: 'IT' } },
+      // W4-1 — an hourly plan's paint is put back by painting the week it replaced (the same tool, the inverse op).
+      [`set-hourly-bid-plan`]: {
+        before: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [{ days: [1], startHour: 0, endHour: 6, targetKey: 'test-floor' }], defaultTargetKey: 'test-top', members: ['c1'], overrides: {} },
+        after: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [], defaultTargetKey: 'test-top', members: ['c1'], overrides: {}, versionId: 'v2' },
+      },
       // B-2 — an AI goal is put back (in part) by archiving every campaign it made at Amazon.
       'create-ai-goal-campaigns': { before: { goalId: null, campaignIds: [] }, after: { goalId: 'g1', planId: 'pl1', market: 'IT', name: 'Test goal', campaignIds: ['c1', 'c2'], notAtAmazon: [] } },
       // W3-3 — a stock lowering is undone by a give-back (even while stock is short), a give-back by a lowering.
