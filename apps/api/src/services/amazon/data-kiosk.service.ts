@@ -307,9 +307,12 @@ export async function runDataKioskPollCycle(limit = 10): Promise<DataKioskCycleR
   const result: DataKioskCycleResult = { polled: 0, completed: 0, failed: 0, stillRunning: 0, rowsIngested: 0, errors: [] }
   const sp = await getClient()
 
+  // Least recently polled first, and a job never polled before all of them. Postgres sorts NULL LAST in ascending
+  // order, so a plain `asc` put every new job (lastPolledAt = null) behind the old ones: once `limit` old jobs kept
+  // failing (they stay IN_PROGRESS and are polled again each tick), no new day's query was ever polled or ingested.
   const jobs = await prisma.dataKioskQueryJob.findMany({
     where: { status: { in: ['PENDING', 'IN_PROGRESS'] } },
-    orderBy: [{ lastPolledAt: 'asc' }, { createdAt: 'asc' }],
+    orderBy: [{ lastPolledAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
     take: limit,
   })
 
