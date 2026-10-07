@@ -22,6 +22,7 @@
 import type { Prisma } from '@prisma/client'
 import { logger } from '../utils/logger.js'
 import { addJobSafely, readCacheQueue } from '../lib/queue.js'
+import { safeJobId } from '../lib/job-id.js'
 
 /** The caller's client (the dispatcher's own): this module imports no database, so it adds no import to a worker. */
 type Db = { channelListing: { updateMany: (args: { where: Prisma.ChannelListingWhereInput; data: Prisma.ChannelListingUpdateManyMutationInput }) => Promise<{ count: number }> } }
@@ -68,7 +69,7 @@ export async function recordListingSyncOutcome(db: Db, input: ListingSyncOutcome
     // The product read cache carries each listing's lastSyncStatus (the grids' sync chip): the same debounced refresh job
     // a product event enqueues (`product-event.service.ts`); a skipped add is healed by the 15-minute reconcile.
     if (changed && input.productId) {
-      void addJobSafely(readCacheQueue, 'refresh', { productId: input.productId }, { jobId: `cache:refresh:${input.productId}`, delay: 2000 }).catch(() => {})
+      void addJobSafely(readCacheQueue, 'refresh', { productId: input.productId }, { jobId: safeJobId('cache', 'refresh', input.productId), delay: 2000 }).catch(() => {})
     }
   } catch (error) {
     logger.warn('listing sync outcome not recorded', { channelListingId: id, outcome: input.outcome, error: error instanceof Error ? error.message : String(error) })

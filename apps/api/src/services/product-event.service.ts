@@ -16,6 +16,7 @@
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
 import { addJobSafely, readCacheQueue, searchIndexQueue } from '../lib/queue.js'
+import { safeJobId } from '../lib/job-id.js'
 import { publishListingEvent } from './listing-events.service.js'
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ export class ProductEventService {
       readCacheQueue,
       'refresh',
       { productId: input.aggregateId },
-      { jobId: `cache:refresh:${input.aggregateId}`, delay: refreshDelay },
+      { jobId: safeJobId('cache', 'refresh', input.aggregateId), delay: refreshDelay },
     )
       .then((r) => {
         if (!r.enqueued) {
@@ -168,7 +169,7 @@ export class ProductEventService {
         .add(
           'index',
           { productId: input.aggregateId },
-          { jobId: `search:index:${input.aggregateId}`, delay: 2000 },
+          { jobId: safeJobId('search', 'index', input.aggregateId), delay: 2000 },
         )
         .catch((err) =>
           console.warn(

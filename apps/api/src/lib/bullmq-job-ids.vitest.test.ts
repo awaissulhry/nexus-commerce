@@ -7,8 +7,10 @@
  * "agent-plan:<approvalId>" was refused on every enqueue ("Custom Id cannot contain :"), so an approved plan never ran.
  *
  *   1  the plan worker's id, as enqueuePlan builds it, passes BullMQ's validator (and the old one is refused: control)
- *   2  every `jobId: \`…\`` template in apps/api/src, with each `${…}` filled, passes it — except the ones listed in
- *      PRE_EXISTING (ids already on main before this work, reported, owned elsewhere): a ratchet, the list only shrinks
+ *   2  every `jobId: \`…\`` template in apps/api/src, with each `${…}` filled, passes it, and holds no ":" at all (BullMQ
+ *      lets a three-part id through only for old repeatable jobs, and plans to refuse it): ids with parts go through
+ *      safeJobId (lib/job-id.ts). PRE_EXISTING emptied 2026-10-07 (readiness, the two queue-page retries, the Matrix
+ *      retry now use safeJobId); it stays empty.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -49,12 +51,7 @@ function sources(dir: string, out: string[] = []): string[] {
 }
 
 /** Ids on main before this work that BullMQ refuses: reported (their owners fix them), never added to. */
-const PRE_EXISTING = new Set([
-  'routes/outbound-queue.routes.ts:`${row.channelListingId}:${row.syncType}:retry:${Date.now()}`',
-  'routes/outbound-queue.routes.ts:`${r.channelListingId}:${r.syncType}:retry:${Date.now()}`',
-  'services/pim/readiness-index.service.ts:`readiness:${rootId}`',
-  'services/pim/matrix-write.service.ts:`${failed.channelListingId}:${failed.syncType}:retry:${Date.now()}`',
-])
+const PRE_EXISTING = new Set<string>([])
 
 describe('BullMQ job ids', () => {
   it('the validator refuses what BullMQ refuses (control) and passes a plain id', () => {
@@ -78,12 +75,13 @@ describe('BullMQ job ids', () => {
     const stillThere = new Set<string>()
     for (const file of sources(SRC)) {
       const text = readFileSync(file, 'utf8')
-      for (const [, template] of text.matchAll(/jobId:\s*(`[^`]*`)/g)) {
+      // A template, or a plain quoted literal (no template to fill).
+      for (const [, template] of text.matchAll(/jobId:\s*(`[^`]*`|'[^'\n]*'|"[^"\n]*")/g)) {
         const key = `${relative(SRC, file)}:${template}`
         const sample = template.slice(1, -1).replace(/\$\{[^}]*\}/g, 'x1')
-        if (bullmqRefusal(sample) === null) continue
+        if (bullmqRefusal(sample) === null && !sample.includes(':')) continue
         if (PRE_EXISTING.has(key)) stillThere.add(key)
-        else refused.push(`${key} → ${bullmqRefusal(sample)}`)
+        else refused.push(`${key} → ${bullmqRefusal(sample) ?? 'a ":" in a job id (use safeJobId)'}`)
       }
     }
     expect(refused).toEqual([])

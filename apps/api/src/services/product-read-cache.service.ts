@@ -12,6 +12,7 @@ import prisma from '../db.js'
 import { Prisma } from '@prisma/client'
 import { deriveFulfillmentMethod } from './fulfillment-derivation.service.js'
 import { retryableConflict } from '../lib/database-context.js'
+import { safeJobId } from '../lib/job-id.js'
 
 /**
  * PG.2 + PG.4 — Catalog thumbnail picker.
@@ -177,7 +178,7 @@ export class ProductReadCacheService {
         // Preserve the existing search-index fan-out for parents whose thumbnail/coverage changed.
         if (process.env.SEARCH_ENGINE_ENABLED === '1') {
           const { addJobSafely, searchIndexQueue } = await import('../lib/queue.js')
-          for (const id of refreshed) if (!productIds.includes(id)) void addJobSafely(searchIndexQueue, 'index', { productId: id }, { jobId: `search:index:${id}`, delay: 2000 }).catch(() => {})
+          for (const id of refreshed) if (!productIds.includes(id)) void addJobSafely(searchIndexQueue, 'index', { productId: id }, { jobId: safeJobId('search', 'index', id), delay: 2000 }).catch(() => {})
         }
         return
       } catch (error) {

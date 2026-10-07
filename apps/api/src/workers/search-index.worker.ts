@@ -4,7 +4,7 @@
  * Sibling to read-cache.worker.ts. Processes jobs enqueued by
  * productEventService (gated on SEARCH_ENGINE_ENABLED) and pushes the
  * updated product document into Typesense. Deduped by jobId
- * ("search:index:<productId>") so rapid successive mutations on the same
+ * ("search-index-<productId>") so rapid successive mutations on the same
  * product collapse to one index op.
  *
  * Failures here never touch the read-cache rebuild (separate queue) and

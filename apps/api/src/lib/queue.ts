@@ -150,7 +150,7 @@ export const channelSyncQueue: Queue = new Queue('channel-sync', {
 })
 
 // ES.3 — ProductReadCache refresh queue. One job per productId.
-// jobId deduplication (jobId = "cache:refresh:<productId>") means
+// jobId deduplication (jobId = "cache-refresh-<productId>", lib/job-id.ts) means
 // rapid successive events for the same product collapse to one job.
 // 2s delay gives a debounce window for bulk flat-file imports.
 export const readCacheQueue: Queue = new Queue('read-cache', {
@@ -164,7 +164,7 @@ export const readCacheQueue: Queue = new Queue('read-cache', {
 })
 
 // P2 (docs/attributes/PLAN.md §4.7) — readiness rebuilt AFTER a bulk edit. One job per family root, deduplicated by
-// jobId "readiness:<rootId>". The durable truth is `ReadinessIndex.pendingSince`; the `readiness-pending` drain cron
+// jobId "readiness-<rootId>". The durable truth is `ReadinessIndex.pendingSince`; the `readiness-pending` drain cron
 // rebuilds anything this queue missed (workers off, Redis down, a lost job).
 export const readinessQueue: Queue = new Queue('readiness', {
   connection: redis.connection,
@@ -179,7 +179,7 @@ export const readinessQueue: Queue = new Queue('readiness', {
 // PIM search read-engine indexer queue. Parallel sibling to readCacheQueue
 // (NOT folded into it) so a Typesense outage can never back up or fail the
 // load-bearing ProductReadCache rebuild. Same jobId-dedupe + 2s debounce
-// discipline (jobId = "search:index:<productId>"). Only enqueued when
+// discipline (jobId = "search-index-<productId>"). Only enqueued when
 // SEARCH_ENGINE_ENABLED=1 (gated at the product-event enqueue point).
 export const searchIndexQueue: Queue = new Queue('search-index', {
   connection: redis.connection,

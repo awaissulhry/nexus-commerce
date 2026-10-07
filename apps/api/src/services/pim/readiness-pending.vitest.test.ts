@@ -96,7 +96,7 @@ it('commits a big edit WITHOUT building a sheet, marks the families pending with
   expect(saved.map(p => p.manufacturer)).toEqual(['Pending Co', 'Pending Co', 'Pending Co'])
   // …and every readiness row of the three families says it is not current.
   expect(await pendingRows()).toBe(rowsBefore)
-  expect(queue.addJobSafely.mock.calls.map(call => (call as unknown[])[3])).toEqual(FAMILIES.map(root => ({ jobId: `readiness:${root}` })))
+  expect(queue.addJobSafely.mock.calls.map(call => (call as unknown[])[3])).toEqual(FAMILIES.map(root => ({ jobId: `readiness-${root}` })))
   // The reader says so: every scope of the family carries `pendingSince`, so no screen shows the old verdict as current.
   const whilePending = await getProductReadiness({ productId: 'rp-a', market: 'IT' })
   expect(whilePending.scopes.length).toBeGreaterThan(1)
