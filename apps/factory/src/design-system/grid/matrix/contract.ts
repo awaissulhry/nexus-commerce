@@ -80,6 +80,19 @@ export interface FulfilmentCell {
   source: 'set' | 'derived'
   guard: 'FBA' | 'FBM' | null
   reported: 'AFN' | 'MFN' | null
+  /** The newest FBA ⇄ FBM conversion Nexus SENT Amazon for this coordinate (2026-10-07); null/absent = none. */
+  conversion?: FulfilmentConversionStatus | null
+}
+
+/** A conversion's state: SENDING → SENT | REFUSED; SENT → CONFIRMED | STILL_OLD | NOT_IN_REPORT. */
+export type FulfilmentConversionState = 'SENDING' | 'SENT' | 'CONFIRMED' | 'STILL_OLD' | 'REFUSED' | 'NOT_IN_REPORT'
+
+export interface FulfilmentConversionStatus {
+  status: FulfilmentConversionState
+  to: 'FBA' | 'FBM'
+  at: string
+  markets: readonly string[]
+  message: string | null
 }
 
 /** `resolveIntendedQuantity`'s verdict, verbatim. */
@@ -261,4 +274,6 @@ export interface MatrixCopy {
   readonly clamped: (which: 'floor' | 'ceiling') => string
   /** Optional until the engine default table carries it: absent = no waiting line. */
   readonly waitingForPublish: (value: string) => string
+  /** The Fulfilment cell's one line for the newest conversion sent to Amazon (2026-10-07). */
+  readonly conversion: (c: FulfilmentConversionStatus) => string
 }
