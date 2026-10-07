@@ -12,7 +12,7 @@ import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { PLAN_TOOL, type AgentTool } from '../tool-types.js'
 import { planView } from '../change-plan.service.js'
-import { campaignStructureCounts } from '../../advertising/ads-entity-lookup.service.js'
+import { adGroupExternalIds, campaignStructureCounts } from '../../advertising/ads-entity-lookup.service.js'
 
 /** Each stored status, said plainly: the model repeats it to a person. */
 const MEANING: Record<string, string> = {
@@ -231,6 +231,21 @@ const AD_CHANGE_TOOLS = new Set([
   'create-ai-goal-campaigns',
   // B-3 — a one-off SP Super Wizard set: its creates run detached too; approval-status reads its run the same way.
   'build-sp-wizard-campaigns',
+  // W4-3 — campaign settings: one queued write per campaign. A portfolio change: the Portfolios page's direct push, one
+  // audit row per write (a new portfolio is counted as created, and as at Amazon when Amazon gave it an id).
+  'set-campaign-settings', 'set-portfolio',
+  // W4-1 — an hourly plan change is Nexus only, but a switch-off, a delete or a removal gives back floored bids: each
+  // give-back write carries the approval.
+  'set-hourly-bid-plan',
+  // W4-7 — budgets: a schedule's give-backs, a pool's live rebalance and a restore to baseline are budget writes in the
+  // approval's change set; a plan (and a Nexus-only schedule or pool change) writes none, and reads "Approved and run."
+  'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines',
+  // W4-5 — targets, negatives and a harvest are created at once (approval-status counts them and how many Amazon holds); a
+  // retire is one queued archive per negative. (set-harvest-destination is Nexus only: no ad write to follow.)
+  'add-ad-targets', 'add-negative-targets', 'harvest-search-term', 'retire-negatives',
+  // W4-6 — a new ad group and product ads (created at once, not queued: approval-status counts them and how much of them
+  // Amazon holds); an ad group's default bid or name (queued), or its bids stopped or given back (sent at once).
+  'create-ad-group', 'add-product-ads', 'set-ad-group',
 ])
 
 export interface AdDelivery {
@@ -242,6 +257,8 @@ export interface AdDelivery {
   refusedByGate: number
   failed: number
   notSent: number
+  /** W4-5 — of `notSent`: Nexus-only records removed (a retire of a negative Amazon never held) — done in Nexus, nothing to send. */
+  nexusOnly?: number
   /** The write gate's own words, for the refused ones (at most 3): money may be named, so it is a money key. */
   gateReasons?: string[]
   /** Negatives and keywords the request created: how many exist at Amazon (they are created at once, not queued). */
@@ -261,7 +278,15 @@ function deliveryWord(row: { syncStatus?: string | null; errorCode?: string | nu
   }
   if (row.amazonResponseStatus === 'SUCCESS') return 'sent'
   if (row.amazonResponseStatus === 'FAILED') return 'failed'
+  // W4-12 — a write Nexus did not send (refused, no connection), cancelled or replaced before it was sent; W4-5 — and an
+  // inline write never sent (a Nexus-only record removed): done, not waiting.
+  if (row.amazonResponseStatus === 'SKIPPED' || row.amazonResponseStatus === 'CANCELLED' || row.amazonResponseStatus === 'SUPERSEDED') return 'notSent'
   return 'waiting'
+}
+
+/** W4-5 — an audit row of a Nexus-only record removed (retire-negatives' local path): never sent, done in Nexus. */
+function removedInNexusOnly(log: { outboundQueueId: string | null; amazonResponseStatus: string | null; payloadAfter: unknown }): boolean {
+  return !log.outboundQueueId && log.amazonResponseStatus === 'SKIPPED' && (log.payloadAfter as { delivery?: unknown } | null)?.delivery === 'not_applicable'
 }
 
 /**
@@ -275,7 +300,7 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
   const reach = ((preview as { reach?: { reach?: unknown } } | null)?.reach?.reach ?? null) as AdDelivery['reach']
   const logs = await prisma.advertisingActionLog.findMany({
     where: { executionId: approvalId },
-    select: { outboundQueueId: true, amazonResponseStatus: true },
+    select: { outboundQueueId: true, amazonResponseStatus: true, payloadAfter: true },
   })
   const queueIds = logs.map((l) => l.outboundQueueId).filter((id): id is string => !!id)
   const queued = queueIds.length
@@ -288,6 +313,7 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
     const q = log.outboundQueueId ? byId.get(log.outboundQueueId) : undefined
     const word = deliveryWord(q ? { syncStatus: q.syncStatus, errorCode: q.errorCode } : { amazonResponseStatus: log.amazonResponseStatus })
     out[word]++
+    if (word === 'notSent' && !q && removedInNexusOnly(log)) out.nexusOnly = (out.nexusOnly ?? 0) + 1
     if (word === 'refusedByGate' && q?.errorMessage && reasons.length < 3) reasons.push(q.errorMessage.replace(/^\[ADS-WRITE-GATE-DENY\]\s*/, ''))
   }
   if (reasons.length) out.gateReasons = reasons
@@ -325,6 +351,12 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
     if (ids.length) out.created = { total, atAmazon }
     return out
   }
+  if (toolName === 'set-portfolio') {
+    // W4-3 — a new portfolio: made once, at Amazon when it holds Amazon's id (not a Nexus-only `local-pf-…` one).
+    const made = after as { op?: unknown; portfolioId?: unknown; atAmazon?: unknown } | null
+    if (made?.op === 'create' && typeof made.portfolioId === 'string') out.created = { total: 1, atAmazon: reach === 'live' && made.atAmazon === true ? 1 : 0 }
+    return out
+  }
   if (toolName === 'create-ad-campaign') {
     // A11 — the campaign and everything under it; "at Amazon" only when it went live (a sandbox id is not Amazon's).
     if (typeof after?.campaignId === 'string') {
@@ -333,9 +365,28 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
     }
     return out
   }
-  const createdIds = toolName === 'create-negative-keyword'
+  if (toolName === 'create-ad-group' || toolName === 'add-product-ads') {
+    // W4-6 — the ad group (and every row in it) or the product ads the request made; "at Amazon" only when it went live.
+    const made = after as { adGroupId?: unknown; productAds?: Array<{ productAdId?: unknown }> } | null
+    const groupId = toolName === 'create-ad-group' && typeof made?.adGroupId === 'string' ? made.adGroupId : null
+    const adIds = toolName === 'add-product-ads' ? (made?.productAds ?? []).map((ad) => String(ad.productAdId ?? '')).filter(Boolean) : []
+    const [group, ads, targets] = await Promise.all([
+      groupId ? adGroupExternalIds([groupId]) : new Map<string, string | null>(),
+      groupId || adIds.length ? prisma.adProductAd.findMany({ where: groupId ? { adGroupId: groupId } : { id: { in: adIds } }, select: { externalAdId: true } }) : [],
+      groupId ? prisma.adTarget.findMany({ where: { adGroupId: groupId }, select: { externalTargetId: true } }) : [],
+    ])
+    const ids = [...group.values(), ...ads.map((a) => a.externalAdId), ...targets.map((t) => t.externalTargetId)]
+    if (ids.length) out.created = { total: ids.length, atAmazon: reach === 'live' ? ids.filter(Boolean).length : 0 }
+    return out
+  }
+  // W4-5 — what the list tools and a harvest created (a harvest's undo op creates nothing).
+  const made = after as { targets?: Array<{ targetId?: unknown }>; keyword?: { targetId?: unknown } | null; negative?: { targetId?: unknown } | null } | null
+  const createdIds = toolName === 'create-negative-keyword' || toolName === 'add-negative-targets'
     ? (after?.negatives ?? []).map((n) => String(n.targetId ?? '')).filter(Boolean)
-    : toolName === 'graduate-keyword' && typeof after?.targetId === 'string' ? [after.targetId] : []
+    : toolName === 'graduate-keyword' && typeof after?.targetId === 'string' ? [after.targetId]
+      : toolName === 'add-ad-targets' ? (made?.targets ?? []).map((t) => String(t.targetId ?? '')).filter(Boolean)
+        : toolName === 'harvest-search-term' ? [made?.keyword?.targetId, made?.negative?.targetId].filter((id): id is string => typeof id === 'string')
+          : []
   if (createdIds.length) {
     const atAmazon = reach === 'live'
       ? await prisma.adTarget.count({ where: { id: { in: createdIds }, externalTargetId: { not: null } } })
@@ -423,7 +474,8 @@ export function adMeaning(d: AdDelivery): string {
     d.waiting ? `${d.waiting} waiting to be sent (a queued ad write waits out a 5-minute cancel window)` : '',
     d.refusedByGate ? `${d.refusedByGate} refused by the write gate` : '',
     d.failed ? `${d.failed} failed` : '',
-    d.notSent ? `${d.notSent} not sent (skipped or cancelled)` : '',
+    d.notSent - (d.nexusOnly ?? 0) ? `${d.notSent - (d.nexusOnly ?? 0)} not sent (skipped or cancelled)` : '',
+    d.nexusOnly ? `${d.nexusOnly} removed in Nexus only (Amazon never held ${d.nexusOnly === 1 ? 'it' : 'them'}: nothing to send)` : '',
   ].filter(Boolean)
   const created = d.created ? ` Created ${d.created.total}, ${d.created.atAmazon} of them confirmed at Amazon.` : ''
   if (!d.writes) return `Approved and run.${created}`.trim()

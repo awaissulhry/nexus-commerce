@@ -21,7 +21,7 @@
  */
 
 import { z } from 'zod'
-import { FEATURES as F } from '@nexus/shared/permissions'
+import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { PLAN_MAX_STEPS, PLAN_TOOL, type AgentTool, type ToolResult } from '../tool-types.js'
 import { undoRequestFor } from '../change-record.service.js'
 
@@ -78,6 +78,8 @@ const submitChangePlan: AgentTool = {
       .describe(`the changes, in the order they run: 1 to ${PLAN_MAX_STEPS} steps (a bulk change of many products counts as one step)`),
   }),
   requires: [F.aiRun],
+  // W4-4 — the own limits its steps go past (change-plan.service.ts mergedPastOwnLimits) name ad money: ad-spend viewers only.
+  restrictedFields: { pastOwnLimits: FIELDS.financialsAdspendView },
   category: 'approvals',
   riskTier: 'high',
   readOnly: false,

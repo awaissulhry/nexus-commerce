@@ -438,6 +438,11 @@ export async function writeAdvertisingActionLog(args: {
    * engine lacked the numbers, but because there was nowhere to put them.
    */
   evidence?: AdWriteEvidence | null
+  /**
+   * W4-5 — a write that is never sent (a Nexus-only record removed: nothing at Amazon to change) is SKIPPED from the
+   * start, so it never reads as waiting for a queue row it does not have. Default PENDING.
+   */
+  amazonResponseStatus?: 'PENDING' | 'SKIPPED'
 }): Promise<string> {
   const row = await prisma.advertisingActionLog.create({
     data: {
@@ -449,7 +454,7 @@ export async function writeAdvertisingActionLog(args: {
       payloadBefore: args.payloadBefore,
       payloadAfter: args.payloadAfter,
       outboundQueueId: args.outboundQueueId,
-      amazonResponseStatus: 'PENDING',
+      amazonResponseStatus: args.amazonResponseStatus ?? 'PENDING',
       // `as never` matches the existing audit() writer in ads-create.service.ts: AdWriteEvidence
       // is a closed interface and Prisma's InputJsonValue wants an index signature.
       evidence: (packEvidence(args.evidence) ?? undefined) as never,
@@ -1126,7 +1131,7 @@ async function enqueueBullMQJob(queueRowId: string, syncType: AdSyncType): Promi
   try {
     const { adsSyncQueue } = await import('../../lib/queue.js')
     const add = adsSyncQueue
-      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: `ads-sync:${queueRowId}` })
+      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: `ads-sync-${queueRowId}` })
       .then(() => undefined)
       .catch((err: unknown) => {
         logger.warn('[ads-mutation] BullMQ enqueue failed (cron drain will handle)', {
@@ -1764,7 +1769,8 @@ export async function updateAdTargetWithSync(args: {
   // brake may stop automation, not second-guess his click. Engines and rules keep it.
   // W1-5 — the largest change is the LOWER of the campaign's and the ads strategy's (stepClamp, the same arithmetic as
   // Claude's preview, ads-change-kit.ts); a bid asked for inside the strategy band stays inside it. A person's own edit
-  // past the strategy's largest change is sent, with a warning (never rewritten, never held for a confirmation).
+  // past the strategy's largest change is sent, with a warning (never rewritten, never held for a confirmation). W4-4 — a
+  // Claude request a person approved carries his mark (approvedRun) and goes the same way: the card warned him first.
   if (!args.force && !stop && args.patch.bidCents != null && existing.bidCents > 0) {
     if (!person) {
       const step = stepClamp(existing.bidCents, args.patch.bidCents, campaignOfTarget?.dynamicBidding, strategy)
@@ -1773,7 +1779,7 @@ export async function updateAdTargetWithSync(args: {
       args.patch.bidCents = step.cents
     } else if (strategy.maxChangePct && stepClamp(existing.bidCents, args.patch.bidCents, null, { ...NO_LIMITS, maxChangePct: strategy.maxChangePct }).cents !== args.patch.bidCents) {
       const pct = Math.round((Math.abs(args.patch.bidCents - existing.bidCents) / existing.bidCents) * 100)
-      warnings.push(`a ${pct} % change (${existing.bidCents}¢ → ${args.patch.bidCents}¢) is more than the largest bid change ${strategy.maxChangePct.value} % (${strategyWords(strategy.maxChangePct.source)}); sent, because it is your own edit`)
+      warnings.push(`a ${pct} % change (${existing.bidCents}¢ → ${args.patch.bidCents}¢) is more than the largest bid change ${strategy.maxChangePct.value} % (${strategyWords(strategy.maxChangePct.source)}); sent, because a person made or approved it`)
     }
   }
 
@@ -2119,5 +2125,9 @@ export async function cancelPendingMutation(outboundQueueId: string): Promise<{
   // PENDING would keep suppressing drift on its fields for the full trust
   // window, which is exactly the bug this model exists to remove.
   await settleAdMutations(outboundQueueId, 'CANCELLED')
+  // W4-12 — and its action log: left PENDING, the change feed and undo read a cancelled write as one that landed.
+  await prisma.advertisingActionLog
+    .updateMany({ where: { outboundQueueId, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'CANCELLED' } })
+    .catch(() => { /* audit-update failure must not fail the cancel */ })
   return { ok: true, error: null, restored: put.restored, kept: put.kept }
 }
