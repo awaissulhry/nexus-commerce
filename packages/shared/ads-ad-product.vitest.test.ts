@@ -4,7 +4,7 @@
  * campaign is refused in the same words everywhere and a Sponsored Products one never is.
  */
 import { describe, it, expect } from 'vitest'
-import { adProductOf, adProductLabel, adProductRefusal, AD_PRODUCT_UNSUPPORTED, SPONSORED_PRODUCTS } from './ads-ad-product.js'
+import { adProductOf, adProductLabel, adProductRefusal, adWriteRefusal, isLifetimeBudget, AD_PRODUCT_UNSUPPORTED, SPONSORED_PRODUCTS, type AdWrite } from './ads-ad-product.js'
 
 describe('adProductOf — v1 column first, legacy type second', () => {
   it('reads the v1 adProduct column', () => {
@@ -61,5 +61,66 @@ describe('adProductRefusal — one sentence, null for Sponsored Products', () =>
     expect(adProductLabel('SPONSORED_BRANDS')).toBe('Sponsored Brands')
     expect(adProductLabel(null)).toBeNull()
     expect(AD_PRODUCT_UNSUPPORTED).toBe('ad_product_unsupported')
+  })
+})
+
+/** W4-11 — the SB and SD changes Nexus sends through their own endpoints; everything else keeps the refusal. */
+describe('adWriteRefusal (W4-11)', () => {
+  const SB = { adProduct: 'SPONSORED_BRANDS', type: 'SB', name: 'Brand test' }
+  const SD = { adProduct: 'SPONSORED_DISPLAY', type: 'SD', name: 'Display test' }
+  const ok = (c: object, w: AdWrite) => expect(adWriteRefusal(c, w)).toBeNull()
+  const no = (c: object, w: AdWrite | null, re: RegExp) => expect(adWriteRefusal(c, w)).toMatch(re)
+
+  it('never refuses Sponsored Products, whatever the write', () => {
+    for (const w of [null, { entity: 'PLACEMENT' }, { entity: 'AD_GROUP', fields: ['defaultBid'] }] as Array<AdWrite | null>) {
+      expect(adWriteRefusal({ adProduct: SPONSORED_PRODUCTS }, w)).toBeNull()
+    }
+  })
+
+  it('a write that does not say what it is keeps the Sponsored-Products-only sentence', () => {
+    expect(adWriteRefusal(SB, null)).toBe(adProductRefusal(SB))
+    expect(adWriteRefusal({ adProduct: 'SPONSORED_TELEVISION', name: 'TV' }, { entity: 'CAMPAIGN', fields: ['dailyBudget'] })).toBe(adProductRefusal({ adProduct: 'SPONSORED_TELEVISION', name: 'TV' }))
+  })
+
+  it('a campaign: daily budget and on/off are sent; archive, placements, strategy and the rest are refused by name', () => {
+    for (const c of [SB, SD]) {
+      ok(c, { entity: 'CAMPAIGN', fields: ['dailyBudget'] })
+      ok(c, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'paused' })
+      ok(c, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'ENABLED' })
+      no(c, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'ARCHIVED' }, /— not archiving the campaign —/)
+      no(c, { entity: 'CAMPAIGN', fields: ['biddingStrategy'] }, /— not the campaign's biddingStrategy —/)
+      no(c, { entity: 'PLACEMENT' }, /— not a change to the placement adjustments —/)
+      no(c, { entity: 'AD_GROUP', fields: ['defaultBid'] }, /— not a change to an ad group —/)
+      no(c, { entity: 'PRODUCT_AD', fields: ['status'], toStatus: 'PAUSED' }, /— not a change to an ad —/)
+    }
+    no(SB, { entity: 'CAMPAIGN', fields: ['endDate'] }, /^Brand test is a Sponsored Brands campaign\. Nexus changes its daily budget and on\/off state, the bids and on\/off state of its keywords and product targets, and its negative keywords in an ad group \(add and retire\) — not the campaign's endDate — so nothing was sent to Amazon; make this change in Amazon's advertising console\.$/)
+  })
+
+  it('a target: bid and on/off of SB keywords and product targets, and of SD targets', () => {
+    ok(SB, { entity: 'AD_TARGET', kind: 'KEYWORD', fields: ['bid'] })
+    ok(SB, { entity: 'AD_TARGET', kind: 'PRODUCT', fields: ['bid', 'status'], toStatus: 'PAUSED' })
+    no(SB, { entity: 'AD_TARGET', kind: 'AUDIENCE', fields: ['bid'] }, /not that kind of target/)
+    ok(SD, { entity: 'AD_TARGET', kind: 'AUDIENCE', fields: ['bid'] })
+    ok(SD, { entity: 'AD_TARGET', kind: 'PRODUCT', fields: ['status'], toStatus: 'ENABLED' })
+    no(SD, { entity: 'AD_TARGET', kind: 'KEYWORD', fields: ['bid'] }, /not that kind of target/)
+    no(SD, { entity: 'AD_TARGET', kind: 'PRODUCT', fields: ['status'], toStatus: 'ARCHIVED' }, /not archiving a target/)
+  })
+
+  it('negatives: SB keyword and SD product target in an ad group, added and retired; nothing else', () => {
+    ok(SB, { entity: 'NEGATIVE_CREATE', kind: 'KEYWORD', negativeLevel: 'AD_GROUP' })
+    no(SB, { entity: 'NEGATIVE_CREATE', kind: 'KEYWORD', negativeLevel: 'CAMPAIGN' }, /not a negative other than a keyword in an ad group/)
+    no(SB, { entity: 'NEGATIVE_CREATE', kind: 'PRODUCT' }, /not a negative other than a keyword in an ad group/)
+    ok(SD, { entity: 'NEGATIVE_CREATE', kind: 'PRODUCT', negativeLevel: null })
+    no(SD, { entity: 'NEGATIVE_CREATE', kind: 'KEYWORD' }, /not a negative other than a product target \(an ASIN\) in an ad group/)
+    ok(SB, { entity: 'AD_TARGET', kind: 'KEYWORD', isNegative: true, negativeLevel: 'AD_GROUP', fields: ['status'], toStatus: 'ARCHIVED' })
+    ok(SD, { entity: 'AD_TARGET', kind: 'PRODUCT', isNegative: true, fields: ['status'], toStatus: 'archived' })
+    no(SB, { entity: 'AD_TARGET', kind: 'KEYWORD', isNegative: true, fields: ['status'], toStatus: 'PAUSED' }, /not a change to a negative other than retiring it/)
+  })
+
+  it('isLifetimeBudget reads Amazon\'s budget object in either spelling', () => {
+    expect(isLifetimeBudget({ budgetType: 'LIFETIME' })).toBe(true)
+    expect(isLifetimeBudget({ recurrenceTimePeriod: 'lifetime' })).toBe(true)
+    expect(isLifetimeBudget({ budgetType: 'DAILY' })).toBe(false)
+    expect(isLifetimeBudget(null)).toBe(false)
   })
 })
