@@ -10129,6 +10129,25 @@ CREATE TABLE "ChannelItemClaim" (
     CONSTRAINT "ChannelItemClaim_pkey" PRIMARY KEY ("channel","marketplace","externalId")
 );
 
+-- CreateTable
+CREATE TABLE "PlatformHealthCheck" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "checkId" TEXT NOT NULL,
+    "subsystem" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "likelyCause" TEXT,
+    "nextStep" TEXT,
+    "evidence" JSONB NOT NULL,
+    "triggeredBy" TEXT NOT NULL DEFAULT 'cron',
+    "measuredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PlatformHealthCheck_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE INDEX "Product_gtin_idx" ON "Product"("gtin");
 
@@ -15342,6 +15361,18 @@ CREATE UNIQUE INDEX "ChannelHeldSweep_workspaceId_channelConnectionId_channel_ke
 
 -- CreateIndex
 CREATE INDEX "ChannelItemClaim_workspaceId_idx" ON "ChannelItemClaim"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_checkId_measuredAt_idx" ON "PlatformHealthCheck"("checkId", "measuredAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_runId_idx" ON "PlatformHealthCheck"("runId");
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_measuredAt_idx" ON "PlatformHealthCheck"("measuredAt");
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_workspaceId_idx" ON "PlatformHealthCheck"("workspaceId");
 
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;

@@ -63,6 +63,7 @@ import { CATALOG_STRUCTURE_TOOLS } from './tools/catalog-structure.tools.js'
 import { PLATFORM_LIBRARY_TOOLS } from './tools/platform-library.tools.js'
 import { REPORT_TOOLS } from './tools/reports.tools.js'
 import { PLATFORM_ACTIVITY_TOOLS } from './tools/platform-activity.tools.js'
+import { PLATFORM_HEALTH_TOOLS } from './tools/platform-health.tools.js'
 import { ORGANIZE_CATALOG_TOOLS } from './tools/organize-catalog.tools.js'
 import { ORGANIZE_PLATFORM_TOOLS } from './tools/organize-platform.tools.js'
 import { STRUCTURE_CHANGE_TOOLS } from './tools/structure-change.tools.js'
@@ -204,6 +205,8 @@ const ALL: AgentTool[] = [
   // MCP full control P6 — reports, the alerts inbox, the audit trail, sync activity and AI usage, read.
   ...REPORT_TOOLS,
   ...PLATFORM_ACTIVITY_TOOLS,
+  // Platform health watchdog (2026-10-07) — the daily checks of crons, feeds, ad writes, approvals, automation and queues.
+  ...PLATFORM_HEALTH_TOOLS,
   // MCP full control P7 — organizing changes: tags, workflow stage, saved views, alert rules, acknowledging alerts, the image library.
   ...ORGANIZE_CATALOG_TOOLS,
   ...ORGANIZE_PLATFORM_TOOLS,

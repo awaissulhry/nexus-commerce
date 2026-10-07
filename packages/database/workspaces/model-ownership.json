@@ -481,6 +481,7 @@
     "ShopifyColourSync",
     "BuyerMessage",
     "ChannelHeldId",
-    "ChannelHeldSweep"
+    "ChannelHeldSweep",
+    "PlatformHealthCheck"
   ]
 }

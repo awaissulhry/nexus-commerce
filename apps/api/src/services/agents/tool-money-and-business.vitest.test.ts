@@ -382,6 +382,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'audit-trail': (ids) => ({ entityId: ids.productId }),
   'sync-activity': () => ({ kind: 'queue' }),
   'ai-usage': () => ({}),
+  // Platform health watchdog — the newest daily run of the checks (none stored here: says so), and one check live.
+  'platform-health-checks': () => ({}),
   // MCP full control P7 — previews of the organizing changes.
   'set-product-tags': (ids) => ({ productId: ids.productId, tags: ['MONEY tag'] }),
   'move-workflow-stage': (ids) => ({ productId: ids.productId, stageId: ids.stageId }),

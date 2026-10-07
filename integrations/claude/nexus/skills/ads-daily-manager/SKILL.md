@@ -32,6 +32,7 @@ The Nexus server's instructions hold the rules for every change. Follow them. In
    - `dailyCap`, and each market's `strategyVersion`.
 
    A refused start (a run still open, or the day's runs used up) ends the run: one sentence, then stop. Never start a second run.
+3. `platform-health-checks` (`status: "problems"`): Nexus's own daily checks, before anything else is read. Every check that is not ok goes in `problems` in its own words. A market whose ads daily reports check is late or failing gets no bid or budget change today; while the ad writes or queue path check fails, ask for no new bid or budget change (say why); a stale run (the watchdog itself did not run) is a problem too.
 
 ## 2. Read, in this order
 

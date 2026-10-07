@@ -6626,5 +6626,10 @@
         ]
       }
     ]
+  },
+  "PlatformHealthCheck": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
   }
 }
