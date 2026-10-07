@@ -116,9 +116,11 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
   }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* The first stepper takes the focus once the table is there (the grid draws its rows a moment after the draft lands):
-     a keyboard opening can type at once. Never taken from a control the person already moved to. */
+     a keyboard opening can type at once. Never taken from a control the person already moved to. Not on a phone: the
+     grid scrolls a focused cell into view and the SKU column left the screen (measured at 390 px, 2026-10-07). */
   useEffect(() => {
     if (focused.current || !draft || reading) return
+    if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 599px)').matches) { focused.current = true; return }
     let tries = 0
     let timer: ReturnType<typeof setTimeout> | null = null
     const attempt = () => {
