@@ -177,7 +177,9 @@ describe('pause-ads', () => {
   it('refuses what Nexus cannot pause, and is not queued; an ad already paused is left as it is', async () => {
     expect((await preview('pause-ads', {})).error).toMatch(/^Name the ads/)
     expect((await preview('pause-ads', { campaignIds: ['nope'] })).error).toBe('Not queued: campaign nope was not found in this business.')
-    expect((await preview('pause-ads', { campaignIds: ['c-sb'] })).error).toMatch(/^Not queued: campaign "Italy brands": .*not a Sponsored Products campaign/)
+    // W4-11 — a Sponsored Brands campaign is paused at SB's own endpoint; archiving one is still not sent from Nexus.
+    expect((await preview('pause-ads', { campaignIds: ['c-sb'] })).ok).toBe(true)
+    expect((await preview('archive-ads', { campaignIds: ['c-sb'] })).error).toMatch(/^Not queued: campaign "Italy brands": Italy brands is a Sponsored Brands campaign\. .* — not archiving the campaign —/)
     expect((await preview('pause-ads', { targetIds: ['t-neg'] })).error).toMatch(/it is a negative keyword/)
     expect((await preview('pause-ads', { campaignIds: ['c-arch'] })).error).toMatch(/is archived already: an archived ad serves no more/)
     expect((await preview('pause-ads', { campaignIds: ['c-draft'] })).error).toMatch(/a draft in Nexus and was never sent to Amazon/)

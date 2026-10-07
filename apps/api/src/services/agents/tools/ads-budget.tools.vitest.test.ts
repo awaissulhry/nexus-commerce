@@ -202,7 +202,8 @@ describe('set-campaign-budget — the list form', () => {
     expect((r.preview as Row).stepUp).toBeUndefined()
     expect((await preview('set-campaign-budget', { campaigns: [{ campaignId: 'c-b1', dailyBudgetCents: 2500 }, { campaignId: 'c-b1', dailyBudgetCents: 2600 }] })).error).toBe('campaigns names a campaign twice.')
     expect((await preview('set-campaign-budget', { campaignId: 'c-b1', dailyBudgetCents: 2500, campaigns: [{ campaignId: 'c-b2', dailyBudgetCents: 1500 }] })).error).toMatch(/^Name the budgets one way/)
-    expect((await preview('set-campaign-budget', { campaigns: [{ campaignId: 'c-sb', dailyBudgetCents: 1500 }] })).error).toMatch(/^Not queued: .*not a Sponsored Products/)
+    // W4-11 — a Sponsored Brands campaign's daily budget is sent to SB's own endpoint: the list form takes it too.
+    expect((await preview('set-campaign-budget', { campaigns: [{ campaignId: 'c-sb', dailyBudgetCents: 1500 }] })).ok).toBe(true)
     expect((await preview('set-campaign-budget', { campaigns: [{ campaignId: 'c-b3', dailyBudgetCents: 2000 }] })).error).toMatch(/^Nothing would change/)
     expect((await preview('set-campaign-budget', {})).error).toMatch(/or campaigns: a list of them/)
   })

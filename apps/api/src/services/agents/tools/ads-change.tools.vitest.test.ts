@@ -87,7 +87,8 @@ describe('A6 — set-campaign-budget', () => {
 
   it('refuses the same value, a non-SP or unknown campaign and what Amazon refuses — his own limits only warn (4A)', async () => {
     expect((await preview('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: 2000 })).error).toMatch(/already EUR 20.00/)
-    expect((await preview('set-campaign-budget', { campaignId: 'c-sb', dailyBudgetCents: 2500 })).error).toMatch(/not a Sponsored Products campaign/)
+    // W4-11 — a Sponsored Brands campaign's daily budget is sent to SB's own endpoint (ads-sbsd-tools.vitest.test.ts).
+    expect((await preview('set-campaign-budget', { campaignId: 'c-sb', dailyBudgetCents: 2500 })).ok).toBe(true)
     expect((await preview('set-campaign-budget', { campaignId: 'nope', dailyBudgetCents: 2500 })).error).toBe('campaign nope not found')
     // 4A (Owner decided 2026-10-06) — it runs only once a person approves it, as his own click: a pin no longer refuses it.
     expect((await preview('set-campaign-budget', { campaignId: 'c-pin', dailyBudgetCents: 2500 })).ok).toBe(true)
@@ -175,11 +176,12 @@ describe('A7 — bulk-ad-bid-change', () => {
     expect(r.preview).toMatchObject({
       mode: 'list',
       // 4A — a pinned campaign's bid is no longer left out: the request runs only once a person approves it.
-      totals: { asked: 8, changing: 3, excluded: { suppressed: 1, lowUnflagged: 1, notSponsoredProducts: 1, notFound: 1, unchanged: 1 } },
-      byCurrency: { EUR: { targets: 2, deltaCents: 25 }, GBP: { targets: 1, deltaCents: 10 } },
+      // W4-11 — the Sponsored Brands keyword (t-sb) takes a bid too, through SB's own endpoint.
+      totals: { asked: 8, changing: 4, excluded: { suppressed: 1, lowUnflagged: 1, notFound: 1, unchanged: 1 } },
+      byCurrency: { EUR: { targets: 3, deltaCents: 35 }, GBP: { targets: 1, deltaCents: 10 } },
       reach: { reach: 'sandbox' },
     })
-    expect((r.preview as Row).changes.map((c: Row) => [c.targetId, c.fromCents, c.toCents, c.currency])).toEqual([['t-it', 45, 60, 'EUR'], ['t-pin', 40, 50, 'EUR'], ['t-uk', 60, 70, 'GBP']])
+    expect((r.preview as Row).changes.map((c: Row) => [c.targetId, c.fromCents, c.toCents, c.currency])).toEqual([['t-it', 45, 60, 'EUR'], ['t-pin', 40, 50, 'EUR'], ['t-sb', 40, 50, 'EUR'], ['t-uk', 60, 70, 'GBP']])
   })
 
   it('a selection moved by a percent; never the whole account, never both forms, nothing to do is refused', async () => {
