@@ -414,6 +414,89 @@ const gateWords = () => `${GRADUATION_GATE.observationDays} days, ${GRADUATION_G
 export interface GateCheck { id: string; label: string; detail: string; passed: boolean }
 export interface GateStatus { gateOpen: boolean; daysInDryRun: number; observationDaysRequired: number; checks: GateCheck[] }
 
+/** The Amazon Ads connection a rule's live writes go through, as the graduation gate judges it. */
+export interface RuleWriteConnection {
+  /** The rule's own market (`scopeMarketplace`); null for a rule across the whole account. */
+  market: string | null
+  /** The profile the gate judged; null when no profile serves the rule's market (or the account has none). */
+  judged: { market: string; profileId: string | null; mode: string; writesEnabledAt: Date | null } | null
+  /** Whole-account rule only: the markets Nexus reads that are production with writes on, and the others. */
+  liveMarkets: string[]
+  notLiveMarkets: string[]
+}
+
+/**
+ * The connection the graduation gate judges for a rule — the ONE answer the gate status, the graduate route and the
+ * level dial (Claude's turn-up-automation, through `adsRuleLevelRefusal`) read, so the three cannot disagree.
+ *
+ * It was `amazonAdsConnection.findFirst({ where: { isActive: true } })`: no market and no order. With nine profiles
+ * (IT, DE, FR, ES production with writes on; UK, NL, PL, SE, BE sandbox) it answered with a sandbox row, and every rule
+ * — an IT rule, a DE rule — read "mode = sandbox", "writes enabled: false" while IT bids were being written live.
+ *
+ *   · a rule with a market: that market's profile, asked of the write gate's own resolver (`adsProfileFor`), so the
+ *     gate judges exactly the profile every write of the rule is checked against.
+ *   · a rule with no market (whole account): it reaches every market, and the write gate checks each write against
+ *     its own market's profile and refuses a sandbox one. So the connection checks pass when at least one market Nexus
+ *     reads is production with writes on. The judged profile is the first of those in the screens' order
+ *     (`adsMarketLists`: IT, DE, ES, FR, then the rest); with none, the first production one, then the first read one.
+ *     The detail names it and lists the markets the rule's writes stay refused in.
+ */
+export async function adsRuleWriteConnection(rule: { scopeMarketplace?: string | null }): Promise<RuleWriteConnection> {
+  const market = typeof rule.scopeMarketplace === 'string' && rule.scopeMarketplace.trim() ? rule.scopeMarketplace : null
+  const { adsProfileFor } = await import('./ads-profile-resolver.js')
+  const judge = async (code: string, fallbackMode: string | null): Promise<RuleWriteConnection['judged']> => {
+    const ref = await adsProfileFor(code)
+    if (!ref) return fallbackMode == null ? null : { market: code, profileId: null, mode: fallbackMode, writesEnabledAt: null }
+    return { market: code, profileId: ref.profileId, mode: ref.mode, writesEnabledAt: ref.writesEnabledAt }
+  }
+  if (market) return { market, judged: await judge(market, null), liveMarkets: [], notLiveMarkets: [] }
+
+  const { adsMarketLists } = await import('./ads-markets.service.js')
+  const read = (await adsMarketLists({ currency: false })).markets.filter((m) => m.read)
+  const isLive = (m: { mode: string; writesEnabled: boolean }) => m.mode === 'production' && m.writesEnabled
+  const pick = read.find(isLive) ?? read.find((m) => m.mode === 'production') ?? read[0]
+  return {
+    market: null,
+    judged: pick ? await judge(pick.code, pick.mode) : null,
+    liveMarkets: read.filter(isLive).map((m) => m.code),
+    notLiveMarkets: read.filter((m) => !isLive(m)).map((m) => m.code),
+  }
+}
+
+/** The gate's two connection checks, from the one judged connection: the gate status shows them, graduate re-runs them. */
+function connectionChecks(conn: RuleWriteConnection): GateCheck[] {
+  const j = conn.judged
+  const profile = j?.profileId ? `, profile ${j.profileId}` : ''
+  // Nothing judged on a whole-account rule (no connection at all) keeps the words it always had.
+  const where = j
+    ? (conn.market ? `${j.market} (the rule's market${profile}): ` : `Whole account, judged on ${j.market}${profile}: `)
+    : (conn.market ? `No Amazon Ads profile serves ${conn.market} (the rule's market): ` : '')
+  const markets = conn.market || !j
+    ? ''
+    : `. Live (production, writes on): ${conn.liveMarkets.join(', ') || 'none'}` +
+      (conn.notLiveMarkets.length ? `. Not live, so the write gate refuses this rule's writes there: ${conn.notLiveMarkets.join(', ')}` : '')
+  const production = j?.mode === 'production'
+  const writes = j?.writesEnabledAt != null
+  return [
+    {
+      id: 'CONNECTION_PRODUCTION',
+      label: 'Ads connection in production mode',
+      detail: production
+        ? `${where}AmazonAdsConnection.mode = production${markets}`
+        : `${where}AmazonAdsConnection.mode = ${j?.mode ?? 'none'} (must be production)${markets}`,
+      passed: production,
+    },
+    {
+      id: 'WRITES_ENABLED',
+      label: 'Live writes explicitly enabled',
+      detail: writes
+        ? `${where}Writes enabled at ${j!.writesEnabledAt!.toISOString()}`
+        : `${where}Run /advertising/connection/preview-writes + /enable-writes first`,
+      passed: writes,
+    },
+  ]
+}
+
 /**
  * GET /advertising/automation-rules/:id/gate-status — Phase 9. The 8 checks a rule must pass before it may graduate
  * from dry-run to live. OBSERVATION_WINDOW uses rule.createdAt as a conservative proxy for "how long has this rule been
@@ -425,15 +508,13 @@ export async function adsRuleGateStatus(id: string): Promise<ServiceOutcome<Gate
     select: {
       id: true, domain: true, enabled: true, dryRun: true,
       createdAt: true, evaluationCount: true, matchCount: true,
-      executionCount: true,
+      executionCount: true, scopeMarketplace: true,
     },
   })
   if (!rule || rule.domain !== 'advertising') return refused(404, { error: 'not_found' })
 
-  const conn = await prisma.amazonAdsConnection.findFirst({
-    where: { isActive: true },
-    select: { mode: true, writesEnabledAt: true },
-  })
+  // The connection this rule's writes go through — its own market's, never whichever row came first.
+  const conn = await adsRuleWriteConnection(rule)
 
   const daysInDryRun = Math.floor(
     (Date.now() - rule.createdAt.getTime()) / (1000 * 60 * 60 * 24),
@@ -478,22 +559,7 @@ export async function adsRuleGateStatus(id: string): Promise<ServiceOutcome<Gate
         : 'Zero matches — rule may not be triggering correctly (check conditions)',
       passed: rule.matchCount >= GRADUATION_GATE.matches,
     },
-    {
-      id: 'CONNECTION_PRODUCTION',
-      label: 'Ads connection in production mode',
-      detail: conn?.mode === 'production'
-        ? 'AmazonAdsConnection.mode = production'
-        : `AmazonAdsConnection.mode = ${conn?.mode ?? 'none'} (must be production)`,
-      passed: conn?.mode === 'production',
-    },
-    {
-      id: 'WRITES_ENABLED',
-      label: 'Live writes explicitly enabled',
-      detail: conn?.writesEnabledAt != null
-        ? `Writes enabled at ${conn.writesEnabledAt.toISOString()}`
-        : 'Run /advertising/connection/preview-writes + /enable-writes first',
-      passed: conn?.writesEnabledAt != null,
-    },
+    ...connectionChecks(conn),
     {
       id: 'LIVE_MODE_ENV',
       label: 'NEXUS_AMAZON_ADS_MODE=live deployed',
@@ -517,7 +583,7 @@ export async function graduateAdsRule(id: string, actor: AdsActor): Promise<Serv
     where: { id },
     select: {
       id: true, domain: true, name: true, enabled: true, dryRun: true,
-      createdAt: true, evaluationCount: true, matchCount: true, actions: true, conditions: true,
+      createdAt: true, evaluationCount: true, matchCount: true, actions: true, conditions: true, scopeMarketplace: true,
     },
   })
   if (!rule || rule.domain !== 'advertising') return refused(404, { error: 'not_found' })
@@ -550,11 +616,9 @@ export async function graduateAdsRule(id: string, actor: AdsActor): Promise<Serv
     })
   }
 
-  // Re-validate gate server-side — never trust the client's gate result
-  const conn = await prisma.amazonAdsConnection.findFirst({
-    where: { isActive: true },
-    select: { profileId: true, mode: true, writesEnabledAt: true },
-  })
+  // Re-validate gate server-side — never trust the client's gate result. The connection checks are the gate status's
+  // own (`connectionChecks` on the rule's own market's connection), so the screen and this route cannot disagree.
+  const conn = await adsRuleWriteConnection(rule)
   const daysInDryRun = Math.floor((Date.now() - rule.createdAt.getTime()) / (1000 * 60 * 60 * 24))
   const liveMode = (process.env.NEXUS_AMAZON_ADS_MODE ?? 'sandbox') === 'live'
 
@@ -566,8 +630,7 @@ export async function graduateAdsRule(id: string, actor: AdsActor): Promise<Serv
   if (daysInDryRun < g.observationDays) failures.push(`OBSERVATION_WINDOW (${daysInDryRun}/${g.observationDays} days)`)
   if (rule.evaluationCount < g.evaluations) failures.push(`HAS_EVALUATIONS (${rule.evaluationCount}/${g.evaluations})`)
   if (rule.matchCount < g.matches) failures.push('HAS_MATCHES')
-  if (conn?.mode !== 'production') failures.push('CONNECTION_PRODUCTION')
-  if (!conn?.writesEnabledAt)   failures.push('WRITES_ENABLED')
+  for (const c of connectionChecks(conn)) if (!c.passed) failures.push(c.id)
   if (!liveMode)                failures.push('LIVE_MODE_ENV')
 
   if (failures.length > 0) {
@@ -586,7 +649,7 @@ export async function graduateAdsRule(id: string, actor: AdsActor): Promise<Serv
     select: { id: true, name: true, dryRun: true, enabled: true, autonomyLevel: true },
   })
   logger.info('[ADS-GRADUATE] rule graduated to live', {
-    ruleId: id, ruleName: rule.name, profileId: conn?.profileId,
+    ruleId: id, ruleName: rule.name, profileId: conn.judged?.profileId, marketplace: conn.judged?.market,
   })
   await auditRule(actor, 'set_rule_autonomy', id, { dryRun: true }, { level: 'AUTO', dryRun: false }, `${rule.name} → AUTO (graduated through the gate)`)
   return done({ ok: true as const, rule: updated, graduatedAt: new Date().toISOString() })
