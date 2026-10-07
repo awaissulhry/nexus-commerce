@@ -408,8 +408,9 @@ describe('W1-6b — a person\'s restore leaves an ad group floored on its own (a
       await database.client.adTarget.create({ data: { id: 'tg-free', adGroupId: 'g-a8g-free', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'free kw', bidCents: 2, suppressedFromBidCents: 45, externalTargetId: 'EXT-tg-free' } })
     })
     const p = (await preview('restore-campaign', { campaignId: 'c-a8g' })).preview as Row
-    expect(p).toMatchObject({ restores: { targets: 1, adGroups: 1 }, staysFloored: { adGroups: 1 }, bids: [{ targetId: 'tg-free', toCents: 45 }] })
-    expect(p.effect).toMatch(/1 ad group stays at its own floor \(a product over its monthly cap in the ads strategy\)/)
+    // W4-6 review — each own floor says who made it and what lifts it (here the budget manager's: a product over its cap).
+    expect(p).toMatchObject({ restores: { targets: 1, adGroups: 1 }, staysFloored: { adGroups: 1, floors: [{ adGroupId: 'g-a8g-capped', name: 'capped' }] }, bids: [{ targetId: 'tg-free', toCents: 45 }] })
+    expect(p.effect).toMatch(/1 ad group stays at its own floor: "capped" until the 1st or until that cap is raised \(a product of it is over its monthly cap in the ads strategy\)/)
     const asked = await ask('restore-campaign', { campaignId: 'c-a8g' })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { restored: 2 } })
     const after = await sql<{ id: string; b: number; r: number | null }>('SELECT id, "bidCents" AS b, "suppressedFromBidCents" AS r FROM "AdTarget" WHERE id LIKE $1 ORDER BY id', ['tg-%'])

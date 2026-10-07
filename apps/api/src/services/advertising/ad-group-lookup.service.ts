@@ -63,3 +63,17 @@ export async function adGroupState(id: string): Promise<{ defaultBidCents: numbe
   const g = await prisma.adGroup.findFirst({ where: { id }, select: { defaultBidCents: true, name: true, bidsSuppressedAt: true, bidsSuppressedBy: true, status: true } })
   return g ? { ...g, status: String(g.status) } : null
 }
+
+/**
+ * W4-6 review — the ad groups held at a floor of their own (W1-6b): of one campaign, or by id. What restore-campaign
+ * leaves floored, and what set-ad-group op start and undo-ad-change ask about.
+ */
+export async function ownFloorsOf(where: { campaignId?: string; ids?: readonly string[] }): Promise<Array<{ id: string; name: string; bidsSuppressedAt: Date; bidsSuppressedBy: string | null }>> {
+  if (!where.campaignId && !where.ids?.length) return []
+  const rows = await prisma.adGroup.findMany({
+    where: { bidsSuppressedAt: { not: null }, ...(where.campaignId ? { campaignId: where.campaignId } : {}), ...(where.ids?.length ? { id: { in: [...where.ids] } } : {}) },
+    select: { id: true, name: true, bidsSuppressedAt: true, bidsSuppressedBy: true },
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+  })
+  return rows.map((r) => ({ ...r, bidsSuppressedAt: r.bidsSuppressedAt as Date }))
+}
