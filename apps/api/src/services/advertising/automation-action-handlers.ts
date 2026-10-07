@@ -44,6 +44,7 @@ import { fractionToPct } from './ads-strategy/fields.js'
 // P1 — the harvest thresholds this file falls back to, shared with the Rules grid that renders them.
 import { BID_WINDOW_MAX, BID_WINDOW_MIN, HARVEST_DEFAULTS, TRIGGER_WINDOW } from '@nexus/shared/ads-rule-window'
 import { settledWhere } from './ads-settled-window.js'
+import { withinGoal } from './ads-bid-goal.js'
 import { microsToCents } from '../ads-core/metrics-math.js'
 // NEG.0(a) — the reader for `protectConverting`. Until this import existed, the builder's headline
 // safety promise was written into every negation rule's action JSON and consulted by nothing.
@@ -2322,8 +2323,18 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
       if (perf.acos == null) {
         return { type: action.type, ok: false, error: `this target has spend but no attributed sales in the rule's window, so its actual ACoS is undefined — a bid cannot be scaled by it`, output: { adTargetId: id, clicks: perf.clicks } }
       }
-      const base = action.op === 'curBidTargetAcos' ? currentEur : perf.cpcEur
-      computedEur = base * ((targetPct / 100) / perf.acos)
+      // C3 (2026-10-07) — the goal is CPC × target / ACoS (= target × sales per click), whatever the bid is now; the
+      // `targetAcos` op sets it. `curBidTargetAcos` steps from the current bid by H10's ratio, but never past that goal
+      // and not at all within GOAL_TOLERANCE of it (or when the goal lies the other way): the window's ACoS barely moves
+      // between two firings, so the bare ratio multiplied into the bid again on every firing (ads-bid-goal.ts).
+      const goalEur = perf.cpcEur * ((targetPct / 100) / perf.acos)
+      if (action.op === 'curBidTargetAcos') {
+        const steppedEur = currentEur * ((targetPct / 100) / perf.acos)
+        const towardGoal = (steppedEur < currentEur) === (goalEur < currentEur) && !withinGoal(currentEur * 100, goalEur * 100)
+        computedEur = !towardGoal ? currentEur : steppedEur < currentEur ? Math.max(goalEur, steppedEur) : Math.min(goalEur, steppedEur)
+      } else {
+        computedEur = goalEur
+      }
     }
   }
 

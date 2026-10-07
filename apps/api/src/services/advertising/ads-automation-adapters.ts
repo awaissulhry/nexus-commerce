@@ -1014,5 +1014,61 @@ const A18: AutomationAdapter = {
   noSwitch: 'the external bidding engine runs outside Nexus',
 }
 
-/** A1–A18, in the inventory's order. */
-export const ADS_AUTOMATION_ADAPTERS: readonly AutomationAdapter[] = [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18]
+/**
+ * ADS AUTONOMY — auto-undo (ads-auto-undo.service.ts): checks every automatic ad change once its settled days are in and
+ * puts back what made things clearly worse. Its level is its engine switch (`auto-undo`), born OBSERVE, under the env and
+ * the account dial; a person turns it up (turn-up-automation of an engine switch is always a person's click).
+ */
+const A19: AutomationAdapter = {
+  id: 'A19', key: 'ads-auto-undo', name: 'Auto-undo of automatic ad changes',
+  what: 'Once an automatic ad change (an engine\'s, a rule\'s at AUTO, a Claude change that ran by rule) has 3 settled days after it, compares what happened with comparable entities; when it made things clearly worse it puts the bid, budget or placement back — OBSERVE records what it would undo, PROPOSE asks a person, AUTO undoes it inside its caps. Never a person\'s change or one a person approved, never a stop, never a superseded change.',
+  area: 'amazon-ads', writesTo: ['nexus', 'amazon'], view: FEATURES.adsView, claude: 'switch', preview: 'saved',
+  previewNote: 'What it would judge and undo now, at its level, computed and not written: no judgement, no request, no undo.',
+  crons: ['ads-auto-undo'], schedule: process.env.NEXUS_ADS_AUTO_UNDO_SCHEDULE ?? '15 6 * * *',
+  env: () => amazonAds(),
+  async rows() {
+    const { recentJudgements, judgementOut } = await import('./ads-auto-undo.service.js')
+    return (await recentJudgements(100)).map((j) => {
+      const out = judgementOut(j)
+      return { ...out, name: `${out.entity.label}: ${out.lever} ${out.direction} — ${out.verdictWords}; ${out.actionWords}`, level: (j.level as AutomationLevel) ?? 'OBSERVE' }
+    })
+  },
+  async get(rowId: string) {
+    const { judgementDetail } = await import('./ads-auto-undo.service.js')
+    return judgementDetail(rowId)
+  },
+  async state() {
+    const { autoUndoBusinessState } = await import('./ads-auto-undo.service.js')
+    const s = await autoUndoBusinessState()
+    const t = s.tally
+    return {
+      level: s.level,
+      reason: s.reason,
+      state: `In 7 days: ${t.judged} automatic changes judged, ${t.worse} clearly worse; ${t.wouldUndo} it would undo, ${t.proposed} asked of a person, ${t.undone} undone, ${t.held} held; ${t.superseded} superseded.`,
+      caps: s.caps,
+    }
+  },
+  async explain(opts: ExplainOptions) {
+    const { judgementTally, recentJudgements, judgementOut } = await import('./ads-auto-undo.service.js')
+    const [runs, writes, tally, newest] = await Promise.all([
+      cronRunsFact(['ads-auto-undo'], opts.since),
+      adsWrites(['automation:auto-undo'], opts.since),
+      judgementTally(opts.since),
+      recentJudgements(20),
+    ])
+    return {
+      subject: null, runs, writes, refusals: null,
+      findings: { judgements: tally, newest: newest.filter((j) => j.checkedAt >= opts.since).map(judgementOut) },
+      notes: ['Its writes are the values it put back at AUTO (as automation:auto-undo); a person\'s approved undo-worse-ad-change writes as that person. Each judgement says what it compared, the verdict and what was done — or why not.'],
+    }
+  },
+  async runPreview(): Promise<PreviewOutcome> {
+    const { runAutoUndo } = await import('./ads-auto-undo.service.js')
+    return { kind: 'saved', subject: null, result: await runAutoUndo({ dryRun: true }), notes: ['A dry run at its level now: what it would judge, and what it would do with each.'] }
+  },
+  // Its per-business switch, born OBSERVE (engine-switch.service.ts), under the env and the account dial.
+  engine: 'auto-undo',
+}
+
+/** A1–A19, in the inventory's order. */
+export const ADS_AUTOMATION_ADAPTERS: readonly AutomationAdapter[] = [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19]

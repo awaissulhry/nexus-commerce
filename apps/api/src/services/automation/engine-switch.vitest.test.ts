@@ -69,12 +69,30 @@ afterAll(async () => {
 }, 30_000)
 
 describe('R16 — the per-business engine switch', () => {
-  it('no row: every engine reads exactly what its env gives it', async () => {
+  it('no row: every engine reads exactly what its env gives it — auto-undo, born OBSERVE, no higher than that', async () => {
     for (const key of svc.ENGINE_KEYS) {
       for (const env of ['OFF', 'OBSERVE', 'AUTO'] as const) {
+        if (key === 'auto-undo' && env === 'AUTO') {
+          expect(await inside(() => svc.engineMode(key, env)), `${key} ${env}`).toEqual({ mode: 'OBSERVE', switched: null, note: 'Auto-undo is born OBSERVE: a person turns it up for this business' })
+          continue
+        }
         expect(await inside(() => svc.engineMode(key, env)), `${key} ${env}`).toEqual({ mode: env, switched: null, note: null })
       }
     }
+  })
+
+  it('auto-undo: born OBSERVE (no row); a person turns it up to PROPOSE or AUTO (a row); OBSERVE again removes the row', async () => {
+    expect(svc.levelWithoutRow(svc.ENGINES['auto-undo'])).toBe('OBSERVE')
+    await inside(() => svc.setEngineSwitch('auto-undo', 'AUTO', 'user:u-au'))
+    expect(await inside(() => svc.engineMode('auto-undo', 'AUTO'))).toMatchObject({ mode: 'AUTO', note: null })
+    // The env stays the outer limit.
+    expect(await inside(() => svc.engineMode('auto-undo', 'OBSERVE'))).toMatchObject({ mode: 'OBSERVE' })
+    await inside(() => svc.setEngineSwitch('auto-undo', 'PROPOSE', 'user:u-au'))
+    expect(await inside(() => svc.engineMode('auto-undo', 'AUTO'))).toMatchObject({ mode: 'PROPOSE' })
+    await inside(() => svc.setEngineSwitch('auto-undo', 'OBSERVE', 'user:u-au'))
+    expect(await inside(() => database.client.automationSwitch.count())).toBe(0)
+    await inside(() => svc.setEngineSwitch('auto-undo', 'OFF', 'user:u-au'))
+    expect(await inside(() => svc.engineMode('auto-undo', 'AUTO'))).toMatchObject({ mode: 'OFF' })
   })
 
   it('a switch only lowers: env off wins over a switch on; the top level removes the row; one business never touches another', async () => {

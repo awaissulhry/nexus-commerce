@@ -188,6 +188,20 @@ interface ReportPlan {
   severity: NoticeSeverity
   title: string
   email: { send: boolean; recipients: number; why: string | null }
+  /** ADS AUTONOMY — auto-undo's (A19) one line: what it judged and did in the last 24 hours, at its level; null when unread. */
+  autoUndo: string | null
+}
+
+/** ADS AUTONOMY — auto-undo's line for the report, counts only (no amounts); one that cannot be read holds nothing back. */
+async function autoUndoLine(now: Date): Promise<string | null> {
+  try {
+    const { autoUndoLevel, judgementTally, autoUndoReportLine } = await import('../../advertising/ads-auto-undo.service.js')
+    const [{ level }, tally] = await Promise.all([autoUndoLevel(), judgementTally(new Date(now.getTime() - 86_400_000))])
+    return autoUndoReportLine(level, tally)
+  } catch (error) {
+    logger.warn('[ads-manager-run] the auto-undo line could not be read', { error: String(error).slice(0, 140) })
+    return null
+  }
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -245,9 +259,10 @@ async function planReport(a: Args, now = new Date()): Promise<ReportPlan | Refus
     if (named.has(m.market)) return { ok: false, error: `markets: ${m.market} is named twice; give each market one entry. Nothing was queued.` }
     named.add(m.market)
   }
-  const [figures, approvals] = await Promise.all([
+  const [figures, approvals, autoUndo] = await Promise.all([
     named.size ? marketFigures() : Promise.resolve(new Map<string, MarketFigures>()),
     namedApprovals({ ranByRule: a.ranByRule ?? [], waiting: a.waiting ?? [], wouldDo: a.wouldDo ?? [] }),
+    autoUndoLine(now),
   ])
   const unknown = [...named].filter((m) => !figures.has(m))
   if (unknown.length) {
@@ -281,6 +296,7 @@ async function planReport(a: Args, now = new Date()): Promise<ReportPlan | Refus
     severity: noticeSeverity(danger, counts),
     title,
     email: await emailPlan(a.email !== false, now),
+    autoUndo,
   }
 }
 
@@ -304,6 +320,7 @@ function reportPreview(p: ReportPlan) {
     nextFocus: p.nextFocus,
     notice: { severity: p.severity, title: p.title },
     email: p.email,
+    ...(p.autoUndo ? { autoUndo: p.autoUndo } : {}),
     totals: { markets: p.markets.length, ranByRule: p.counts.ranByRule, waitingForYou: p.counts.waitingForYou, wouldHaveRun: p.counts.wouldHaveRun, problems: p.problems.length },
     ...(mismatches.length ? { warnings: mismatches.slice(0, 10) } : {}),
   }
@@ -377,6 +394,7 @@ async function renderEmail(p: ReportPlan, business: string | null, runId: string
   ${group('Decided by a person', p.approvals.filter((a) => !a.byRule && (a.fate === 'ran' || a.fate === 'approved')))}
   ${group('Not run', p.approvals.filter((a) => !['ran', 'approved', 'waiting', 'handed_back'].includes(a.fate)))}
   ${watch?.html ?? ''}
+  ${p.autoUndo ? `<p style="margin:16px 0 0;color:#5b6573;font-size:13px">${esc(p.autoUndo)}</p>` : ''}
   ${p.nextFocus ? `<p style="margin:16px 0 0"><b>Next:</b> ${esc(p.nextFocus)}</p>` : ''}
   <p style="margin:20px 0 0;color:#8a93a1;font-size:12px">Run ${esc(runId)}. Every figure here is Nexus's own, read when the report was made; the words are Claude's.</p>
 </div>`
@@ -386,6 +404,7 @@ async function renderEmail(p: ReportPlan, business: string | null, runId: string
     ...p.markets.flatMap((m) => [m.figures ? figuresLine(m.figures) : m.market, ...m.lines.map((line) => `  - ${line}`)]),
     ...p.approvals.map((a) => `${a.title ?? a.tool} (${a.approvalId}): ${FATE_WORDS[a.fate]}`),
     ...(watch ? [watch.text] : []),
+    ...(p.autoUndo ? [p.autoUndo] : []),
     ...(p.nextFocus ? [`Next: ${p.nextFocus}`] : []),
   ].join('\n')
   return { subject, html, text }
