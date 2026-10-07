@@ -65,6 +65,8 @@ const B_MARK = 'BRAVO'
 interface Seeded {
   productId: string; orderId: string; approvalId: string; changeId: string; automationRuleId: string; replenishmentRuleId: string; pausedRuleId: string
   shipmentId: string; draftProductId: string; aliasId: string; campaignId: string
+  /** W4-6 — the seeded campaign's ad group (the ad group tools name it). */
+  adGroupId: string
   publicationId: string; familyId: string; variantId: string; variantDraftId: string
   /** P4 — a channel account and the trace of one channel call. */
   connectionId: string; traceId: string
@@ -310,6 +312,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'replicate-ad-structure': (ids) => ({ sourceMarket: 'IT', campaignIds: [ids.campaignId], sourceProductToken: 'TEST', market: 'IT', productToken: 'COPY', skus: [ids.sku] }),
   // A11 — a new campaign's plan names a budget and bids (it needs money: refused for a person without it).
   'create-ad-campaign': (ids) => ({ market: 'IT', name: 'Money launch', skus: [ids.productId], dailyBudgetCents: 1500, defaultBidCents: 50, keywords: [{ text: 'jacket', matchType: 'EXACT' }] }),
+  // W4-6 — the ad groups of the seeded campaign (default bids and metrics are money, stripped for a person without it);
+  // a new ad group, product ads and an ad group change name bids (they need money: refused for a person without it).
+  'ad-groups': (ids) => ({ campaignId: ids.campaignId, status: 'all' }),
+  'create-ad-group': (ids) => ({ campaignId: ids.campaignId, name: 'Money group', defaultBidCents: 40, skus: [ids.sku], keywords: [{ text: 'jacket', matchType: 'EXACT' }] }),
+  'add-product-ads': (ids) => ({ adGroupId: ids.adGroupId, skus: [ids.sku] }),
+  'set-ad-group': (ids) => ({ adGroupId: ids.adGroupId, defaultBidCents: 30 }),
   // B-2 — an AI goal's plan names budgets and bids (it needs money: refused for a person without it).
   'create-ai-goal-campaigns': (ids) => ({ market: 'IT', name: 'Money goal', goalProducts: [{ sku: ids.productId, dailyBudgetCents: 1500 }], seedKeywords: ['jacket'] }),
   // Ads autonomy W4-1 — a run report states each market's spend and sales (it needs money: refused for a person
@@ -888,7 +896,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       pausedRuleId: pausedRule.id,
       productId: product.id, orderId: order.id, approvalId: approval.id, changeId: change.id,
       automationRuleId: automationRule.id, replenishmentRuleId: replenishmentRule.id, shipmentId: shipment.id,
-      draftProductId: draftProduct.id, aliasId: alias.id, campaignId: campaign.id,
+      draftProductId: draftProduct.id, aliasId: alias.id, campaignId: campaign.id, adGroupId: adGroup.id,
       publicationId: publication.id, familyId: family.id, variantId: variant.id, variantDraftId: variantDraft.id,
       connectionId: connection.id, traceId,
       ruleId: rule.id, alertEventId: alertEvent.id, assetId: asset.id, stageId: reviewStage.id, themeId: theme.id,

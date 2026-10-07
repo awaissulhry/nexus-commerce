@@ -83,6 +83,10 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // B-2 — an AI goal, the create kind: only at the floor, off the allowlist, its rules and plan off (nothing spends until
   // restore-campaign); by default never by rule (maxCampaigns 0).
   'create-ai-goal-campaigns',
+  // W4-6 — a new ad group (the create kind, born at the floor unless startLive, which needs the approver's code) and
+  // product ads (the create kind, the approver's code), by default never by rule (maxItems 0); one ad group's default
+  // bid and name (bid), its stop (stop) and the give-back of its floor (restore: maxRestoredBidCents 0 by default).
+  'create-ad-group', 'add-product-ads', 'set-ad-group',
 ]
 
 /**
@@ -420,6 +424,14 @@ describe('C1 — every registered tool keeps the contract', () => {
       'restore-ad-bids-after-stock': {
         before: { changeSetId: 'ap1', adGroups: [{ adGroupId: 'g1', floored: true, by: 'user:u1' }], steps: [{ adGroupId: 'g2', kind: 'target', id: 't1', fromCents: 40, toCents: 50 }] },
         after: { adGroups: [{ adGroupId: 'g1', floored: false, by: null }], steps: [{ kind: 'target', id: 't1', cents: 50 }] },
+      },
+      // W4-6 — a new ad group is archived (with everything in it); product ads are paused (by their ad group and SKU); an
+      // ad group's edit is set back through set-ad-group itself, its stop by a start and its start by a stop.
+      'create-ad-group': { before: { changeSetId: 'ap1', adGroupId: null }, after: { adGroupId: 'g9', campaignId: 'c1', name: 'Test group', start: 'own', productAdIds: ['pa1'], targetIds: ['t1'], negativeIds: [] } },
+      'add-product-ads': { before: { changeSetId: 'ap1', adGroupId: 'g1', productAds: [] }, after: { adGroupId: 'g1', productAds: [{ productAdId: 'pa9', sku: 'TEST-SKU-9', status: 'ENABLED' }] } },
+      'set-ad-group': {
+        before: { adGroupId: 'g1', op: 'edit', defaultBidCents: 30, name: 'Old group', floored: false, by: null, changeSetId: 'ap1' },
+        after: { adGroupId: 'g1', op: 'edit', defaultBidCents: 36, name: 'New group', floored: false, by: null },
       },
       // B-3 — a one-off SP Super Wizard set is put back (in part) by archiving every campaign its run made.
       'build-sp-wizard-campaigns': { before: { applicationId: null, market: 'IT', productGroupName: 'Test set', structure: 'advanced' }, after: { applicationId: 'run2', market: 'IT', productGroupName: 'Test set', structure: 'advanced' } },
