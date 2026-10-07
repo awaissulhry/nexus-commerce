@@ -176,13 +176,17 @@ const SIBLING_SKU_SELECT = {
 export async function readEuIntentRows(db: Pick<Prisma.TransactionClient, 'channelListing'>, productId: string, sku?: string | null): Promise<EuIntentRow[]> {
   const rows = await db.channelListing.findMany({
     where: { productId, channel: 'AMAZON', isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
-    select: { marketplace: true, followMasterQuantity: true, quantityOverride: true, quantity: true, syncPaused: true, fulfillmentMethod: true, ...SIBLING_SKU_SELECT },
+    select: { marketplace: true, followMasterQuantity: true, quantityOverride: true, quantity: true, syncPaused: true, fulfillmentMethod: true, offerClosedAt: true, ...SIBLING_SKU_SELECT },
   })
   const bySku = typeof sku === 'string' && sku.trim() ? sku.trim() : null
   const siblings = bySku ? rows.filter((sib) => sharesAmazonSellerSku(sib, sib.product?.sku, bySku)) : rows
   return siblings.map((sib) => ({
     marketplace: sib.marketplace, followMasterQuantity: sib.followMasterQuantity, quantityOverride: sib.quantityOverride,
     quantity: sib.quantity, syncPaused: sib.syncPaused, isFba: sib.fulfillmentMethod === 'FBA',
+    // SCT.6 — a CLOSED market offer expresses no quantity intent, as every other reader of these rows says (the Matrix,
+    // Sync Control, the heal job). Without it a closed market pinned at an old number fought a live market's Follow, and
+    // the push was refused for a conflict nothing else could see (2026-10-07: GALE BLACK-S, IT Follow 51 vs closed ES 2).
+    offerClosed: !!sib.offerClosedAt,
   }))
 }
 
