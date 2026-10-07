@@ -1702,6 +1702,8 @@ export interface PlacementBiddingInput {
   targetKey?: string
   /** MCP full control A6 — tag the audit row with a change set (an approved request's id). Optional; additive. */
   changeSetId?: string | null
+  /** W4-9 — more audit evidence for the write that lands (e.g. the autopilot decision it carries out). Optional; additive. */
+  evidence?: AdWriteEvidence | null
   /**
    * G.4 — re-sending a write Amazon did not take (the failed-write sweep). The local copy then holds the
    * undelivered values, so every placement in `adjustments` counts as set by this write, none as carried.
@@ -1922,6 +1924,7 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
     // sentence ("rank — Min bid placement 150→300%"); structuring the numbers beside it
     // is what makes "show me every placement move above 300%" answerable.
     {
+      ...(input.evidence ?? {}),
       targetKey: input.targetKey,
       metric: 'placementBidding',
       observed: priorAdjustments.find((a) => a.placement === adjustments[0]?.placement)?.percentage ?? null,

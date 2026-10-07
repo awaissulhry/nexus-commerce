@@ -9,7 +9,7 @@
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { checkAdsWriteGate } from '../ads-write-gate.js'
-import { previewBidOptimization, applyBidOptimization, holdToStrategy } from '../ads-bid-optimizer.service.js'
+import { previewBidOptimization, applyBidOptimization, holdToStrategy, type BidProposal } from '../ads-bid-optimizer.service.js'
 import { commonTargetOf, targetSourceWords } from '../ads-target-acos-resolver.js'
 import { setSearchPlacement } from '../ads-top-of-search.service.js'
 import { updateCampaignWithSync } from '../ads-mutation.service.js'
@@ -28,6 +28,39 @@ export interface AppliedDecision {
    * from `OutboundSyncQueue.syncStatus` instead of asserted.
    */
   outboundQueueId?: string | null
+}
+
+/**
+ * The bids a plan's BID decision moves in one campaign: the per-target optimizer at the plan's effective target ACoS,
+ * each bid held to the plan's bid band and the ads strategy's band. Read only. W4-9 — moved unchanged out of
+ * applyPlanActions, so an AUTO plan's apply and Claude's dry run of a BID decision (apply-ad-recommendations, which
+ * freezes these bids into a change request) compute the same bids.
+ *
+ * W0 — a target the plan stores is explicit and wins; a plan without one only falls back to its goal's default after
+ * the campaign's own target, the ads strategy's (W1-5), the account default and profit data. `used` is the target the
+ * bids actually moved toward.
+ */
+export async function planBidChanges(opts: {
+  campaignId: string; goal: Goal; guardrails: Guardrails; marginPct: number | null; planSetsTargetAcos?: boolean
+}): Promise<{
+  changes: Array<{ targetId: string; currentBidCents: number; proposedBidCents: number; sources: BidProposal['sources'] }>
+  used: ReturnType<typeof commonTargetOf>
+}> {
+  const { campaignId, goal, guardrails: g } = opts
+  const targetAcos = effectiveTargetAcosPct(goal, g, { marginPct: opts.marginPct }) / 100
+  const preview = await previewBidOptimization({
+    campaignId, bayesian: true, profitMode: goal === 'PROFIT',
+    ...(opts.planSetsTargetAcos ? { targetAcos, targetAcosFrom: "this plan's target" } : { fallbackTargetAcos: targetAcos }),
+  })
+  // W1-5 — the plan's bid band and the ads strategy's band of each ad group both bind: the stricter wins.
+  const moved = holdToStrategy(preview.proposals.map((p) => {
+    const proposedBidCents = clamp(p.proposedBidCents, g.bidMinCents, g.bidMaxCents)
+    return { ...p, proposedBidCents, deltaCents: proposedBidCents - p.currentBidCents }
+  })).map((p) => ({ proposal: p, proposedBidCents: p.proposedBidCents }))
+  return {
+    changes: moved.map((c) => ({ targetId: c.proposal.targetId, currentBidCents: c.proposal.currentBidCents, proposedBidCents: c.proposedBidCents, sources: c.proposal.sources })),
+    used: commonTargetOf(moved.map((c) => c.proposal)),
+  }
 }
 
 export async function applyPlanActions(opts: {
@@ -58,26 +91,14 @@ export async function applyPlanActions(opts: {
       continue
     }
 
-    // BID — delegate to the per-target optimizer at the plan's effective target ACoS, clamped to the bid band.
-    // W0 — a target the plan stores is explicit and wins; a plan without one only falls back to its goal's default
-    // after the campaign's own target, the ads strategy's (W1-5), the account default and profit data. The decision
-    // records the target the bids actually moved toward.
+    // BID — delegate to the per-target optimizer at the plan's effective target ACoS, clamped to the bid band
+    // (planBidChanges). The decision records the target the bids actually moved toward.
     if (acts.some((a) => a.module === 'bid')) {
       try {
-        const s = sigById.get(campaignId)
-        const targetAcos = effectiveTargetAcosPct(goal, g, { marginPct: s?.marginPct ?? null }) / 100
-        const preview = await previewBidOptimization({
-          campaignId, bayesian: true, profitMode: goal === 'PROFIT',
-          ...(opts.planSetsTargetAcos ? { targetAcos, targetAcosFrom: "this plan's target" } : { fallbackTargetAcos: targetAcos }),
-        })
-        // W1-5 — the plan's bid band and the ads strategy's band of each ad group both bind: the stricter wins.
-        const moved = holdToStrategy(preview.proposals.map((p) => {
-          const proposedBidCents = clamp(p.proposedBidCents, g.bidMinCents, g.bidMaxCents)
-          return { ...p, proposedBidCents, deltaCents: proposedBidCents - p.currentBidCents }
-        })).map((p) => ({ proposal: p, proposedBidCents: p.proposedBidCents }))
-        const changes = moved.map((c) => ({ targetId: c.proposal.targetId, proposedBidCents: c.proposedBidCents, sources: c.proposal.sources }))
+        const planned = await planBidChanges({ campaignId, goal, guardrails: g, marginPct: sigById.get(campaignId)?.marginPct ?? null, planSetsTargetAcos: opts.planSetsTargetAcos })
+        const changes = planned.changes.map((c) => ({ targetId: c.targetId, proposedBidCents: c.proposedBidCents, sources: c.sources }))
         if (changes.length) {
-          const used = commonTargetOf(moved.map((c) => c.proposal))
+          const used = planned.used
           // SG.10 — one change set for the whole batch, so the operator's Undo reverses every
           // bid this decision moved rather than whichever target happened to be logged first.
           // The id is the plan + campaign + this moment: readable in the log, unique per apply.

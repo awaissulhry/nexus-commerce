@@ -68,6 +68,7 @@ import { STRUCTURE_CHANGE_TOOLS } from './tools/structure-change.tools.js'
 import { MAPPING_CHANGE_TOOLS } from './tools/mapping-change.tools.js'
 import { BUSINESS_SETTINGS_TOOLS } from './tools/business-settings.tools.js'
 import { AUTOMATION_CHANGE_TOOLS } from './tools/automation-change.tools.js'
+import { ADS_ENGINE_SETTINGS_TOOLS } from './tools/ads-engine-settings.tools.js'
 import { ORDER_DESK_TOOLS } from './tools/order-desk.tools.js'
 import { SHIPPING_TOOLS } from './tools/shipping.tools.js'
 import { ORDER_ACTION_TOOLS } from './tools/order-actions.tools.js'
@@ -210,6 +211,8 @@ const ALL: AgentTool[] = [
   ...BUSINESS_SETTINGS_TOOLS,
   // MCP full control R9–R15 — automation changes, each a request a person approves.
   ...AUTOMATION_CHANGE_TOOLS,
+  // ADS AUTONOMY W4-8 — engine settings: which campaigns a rule acts on, a coverage set's seed and terms, an engine's Run now.
+  ...ADS_ENGINE_SETTINGS_TOOLS,
   // MCP full control 08 S6 — stock changes in Nexus: counts, transfers, stock counts, holds, own warehouses.
   ...STOCK_CHANGE_TOOLS,
   // MCP full control 08 S7 — Sync Control: many listings' stock mode at once; stock policies and location feeds.

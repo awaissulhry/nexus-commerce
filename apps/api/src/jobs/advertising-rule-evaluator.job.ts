@@ -1715,13 +1715,19 @@ export async function buildKeywordRankBidContexts() {
   } catch (e) { logger.warn('[ads-rule-evaluator] buildKeywordRankBidContexts failed', { error: (e as Error).message }); return [] }
 }
 
-export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
+/**
+ * ADS AUTONOMY W4-8 — `onLine` hears the tick's own summary line (the one its scheduled run records), or why it evaluated
+ * nothing: what a hand-run records as its ONE run row (runAdvertisingRuleEvaluatorLineOnce). Callers without it are
+ * unchanged.
+ */
+export async function runAdvertisingRuleEvaluatorOnce(opts: { onLine?: (line: string) => void } = {}): Promise<TickSummary> {
   const startedAt = Date.now()
   // AME.14 — global kill-switch. When set, NO advertising rule auto-applies
   // (the ultimate safety; per-rule enabled/dryRun guardrails are the finer
   // controls). Operable from Railway env or flipped via /autonomy/pause-all.
   if (process.env.NEXUS_ADS_AUTOMATION_KILL === '1') {
     logger.warn('[ads-rule-evaluator] global kill-switch active — skipping all rule evaluation')
+    opts.onLine?.('skipped: NEXUS_ADS_AUTOMATION_KILL is set — no rule evaluated')
     return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, totalCapped: 0, totalFailed: 0, durationMs: Date.now() - startedAt }
   }
   // TD.0 — runtime halt (circuit-breaker / operator) + OFF autonomy dial, set
@@ -1733,6 +1739,7 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
     const { isAutomationHalted, shouldForceDryRun } = await import('../services/advertising/ads-automation-state.service.js')
     if (await isAutomationHalted()) {
       logger.warn('[ads-rule-evaluator] automation halted (AdsAutomationState) — skipping all rule evaluation')
+      opts.onLine?.('skipped: ads automation is halted, its autonomy is OFF, or its state could not be read — no rule evaluated')
       return { fbaAgeContexts: 0, profitabilityContexts: 0, cacSpikeContexts: 0, underperformContexts: 0, campaignBudgetContexts: 0, totalEvaluations: 0, totalMatches: 0, totalCapped: 0, totalFailed: 0, durationMs: Date.now() - startedAt }
     }
     forceDryRun = await shouldForceDryRun()
@@ -1876,7 +1883,21 @@ export async function runAdvertisingRuleEvaluatorOnce(): Promise<TickSummary> {
   }
   lastRunAt = new Date()
   lastSummary = `fba=${fbaAge.length} prof=${profitability.length} cac=${cacSpike.length} under=${underperform.length} schedule=${scheduleContexts.length} evals=${totalEvaluations} matches=${totalMatches} capped=${totalCapped} failed=${totalFailed} durationMs=${summary.durationMs}`
+  opts.onLine?.(lastSummary)
   return summary
+}
+
+/**
+ * ADS AUTONOMY W4-8 (the ACR.1.2d form, as ads-sync-drain.job.ts) — the tick's work AND its own summary line, without
+ * the CronRun wrapper, for the manual-trigger registry: a hand-run (the Sync Logs hub's Run now, Claude's
+ * run-ad-engine-now) records ONE honest row — `manual`, this run's own line, FAILED when it throws. Registering
+ * runAdvertisingRuleEvaluatorCron wrote two rows per hand-run (a `manual` one saying the module's last line, often a
+ * scheduled run's, and a nested `cron` one), and the wrapper's catch made a failed run read as a success.
+ */
+export async function runAdvertisingRuleEvaluatorLineOnce(): Promise<string> {
+  let line = ''
+  await runAdvertisingRuleEvaluatorOnce({ onLine: (said) => { line = said } })
+  return line || 'no-summary'
 }
 
 /**

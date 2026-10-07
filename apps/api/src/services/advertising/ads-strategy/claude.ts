@@ -29,7 +29,7 @@ import prisma from '../../../db.js'
 import type { ClaudeTrust } from '../../agents/tool-types.js'
 import { CLAUDE_ACTION_TOOLS, CLAUDE_LEVELS, type ClaudeActionType } from './fields.js'
 import { openStrategy, type StrategyView } from './effective.js'
-import { automationScope, tuneScope, type AutomationScope } from './automation-scope.js'
+import { automationScope, coverageSeedScope, tuneScope, type AutomationScope } from './automation-scope.js'
 import type { ResolvedField, StrategyRow } from './resolve.js'
 
 /**
@@ -450,6 +450,20 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
     if (str(args.market)) return place.market(marketOf(args.market), 'a new hourly plan that names no campaign')
     place.notPlaced(planId ? 'the hourly plan it names holds no campaign, or was not found' : 'it names no hourly plan, campaign or market')
   },
+  // W4-8 — a rule's campaigns: every campaign it adds or takes off (the preview names those a replace takes off).
+  'assign-ad-rules': async (place, args, preview) => {
+    const ids = [...strs(args.campaignIds), ...strs(preview?.added), ...strs(preview?.removed)]
+    if (ids.length) return place.campaignIds([...new Set(ids)])
+    place.notPlaced('it names no campaign')
+  },
+  // W4-8 — a coverage set: where the set acts (its portfolio's campaigns in its market).
+  'set-coverage-set': async (place, args) => {
+    if (str(args.setId)) return placeAutomation(place, await tuneScope('coverage-set', str(args.setId), {}))
+    if (str(args.portfolioId)) return placeAutomation(place, await coverageSeedScope(str(args.portfolioId)!))
+    place.notPlaced('it names no coverage set or portfolio')
+  },
+  // W4-8 — an engine runs for the whole account: the business's strictest level for the kind.
+  'run-ad-engine-now': (place) => place.notPlaced('an engine runs for the whole account, in every market'),
 }
 
 /** AA-W2-11 — an automation's scope, on the door's places. */

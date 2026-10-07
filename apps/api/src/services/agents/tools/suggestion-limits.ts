@@ -170,7 +170,8 @@ export async function suggestionLimitFacts(items: readonly DecisionItem[], appro
     placements: { raises: 0, largestRaisePoints: 0, largestCutPoints: 0 },
     newKeywords: { count: 0, highestStartBid: null },
   }
-  const { suggestionSubjects } = await import('../../advertising/ads-suggestion-decide.service.js')
+  const decideService = await import('../../advertising/ads-suggestion-decide.service.js')
+  const { suggestionSubjects } = decideService
   const rows = await suggestionSubjects(applies.map((i) => i.suggestionId))
   const byId = new Map(rows.map((r) => [r.id, r]))
   const ids = (type: string) => [...new Set(rows.filter((r) => r.entityType === type).map((r) => r.entityId))]
@@ -202,7 +203,8 @@ export async function suggestionLimitFacts(items: readonly DecisionItem[], appro
   for (const item of applies) {
     const row = byId.get(item.suggestionId)
     if (!row) { unjudged(item, 'it was not found'); continue }
-    const action = obj(row.proposedAction)
+    // W4-9 — an edited value is judged as the apply will run it (the Suggestions page's own translation).
+    const action = obj(item.override ? decideService.overriddenAction(row.proposedAction, item.override).action : row.proposedAction)
     const type = String(action.type ?? row.proposedKey.split(':')[0])
     const family = familyOf(type)
     if (family === 'bids') {

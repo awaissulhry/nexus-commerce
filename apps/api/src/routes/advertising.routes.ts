@@ -921,95 +921,15 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * ── D3 — the global Apply ─────────────────────────────────────────────────────────────────────
    *
-   * Commits STAGED assignment changes for many campaigns at once. The operator's study: selecting
-   * in the dropdown stages, and one Apply finalises.
-   *
-   * 🔴 **One transaction.** A per-campaign loop that fails halfway leaves the account in a state
-   * nobody chose — half the campaigns governed by the new set and half by the old — and the
-   * operator's only evidence would be a toast. Set-replacement per campaign, all or nothing.
-   *
-   * `ruleIds: []` is a real instruction: unassign everything for that campaign and kind. It is
-   * how the study's "None" works, and under assignment-as-reach it means no budget rule may move
-   * that campaign at all.
+   * ADS AUTONOMY W4-8 — the logic (one transaction, set-replacement per campaign, the BUD-P2 inverse mirror) lives in
+   * rule-campaign-binding.service.ts (applyCampaignRuleAssignments), shared with Claude's assign-ad-rules; the answer is
+   * unchanged (campaign-rule-assignment-route-parity.vitest.test.ts).
    */
   fastify.post('/advertising/campaign-rule-assignments/bulk', async (request, reply) => {
-    const b = request.body as { kind?: string; changes?: Array<{ campaignId?: string; ruleIds?: string[] }> }
-    const kind = b.kind || 'budget'
-    const changes = (b.changes ?? []).filter((c) => typeof c.campaignId === 'string' && Array.isArray(c.ruleIds))
-    if (changes.length === 0) { reply.status(400); return { error: 'changes required' } }
-
-    // Validate BEFORE writing: an unknown campaign or rule id would otherwise fail at the foreign
-    // key mid-transaction and report itself as a database error rather than a bad request.
-    const campaignIds = [...new Set(changes.map((c) => c.campaignId as string))]
-    const ruleIds = [...new Set(changes.flatMap((c) => c.ruleIds as string[]))]
-    const [knownCampaigns, knownRules] = await Promise.all([
-      prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true } }),
-      ruleIds.length ? prisma.automationRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true } }) : Promise.resolve([]),
-    ])
-    const okCampaign = new Set(knownCampaigns.map((c) => c.id))
-    const okRule = new Set(knownRules.map((r) => r.id))
-    const badCampaign = campaignIds.filter((id) => !okCampaign.has(id))
-    const badRule = ruleIds.filter((id) => !okRule.has(id))
-    if (badCampaign.length || badRule.length) {
-      reply.status(400)
-      return { error: 'unknown id', campaigns: badCampaign.slice(0, 5), rules: badRule.slice(0, 5) }
-    }
-
-    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
-    let created = 0
-    let removed = 0
-    /**
-     * BUD-P2 — every rule this Apply TOUCHES, which is not the same as every rule it names.
-     * Unchecking a rule everywhere sends `ruleIds: []`, so the rule losing its last campaign
-     * appears nowhere in the request body. Collecting the rows we DELETE as well as the ones we
-     * add is what lets the inverse mirror below clear that rule's own list — without it, "remove
-     * this rule from this campaign" would still have been a no-op for builder rules.
-     */
-    const affectedRuleIds = new Set<string>(ruleIds)
-    await prisma.$transaction(async (tx) => {
-      for (const c of changes) {
-        const want = new Set(c.ruleIds as string[])
-        const have = await tx.campaignRuleAssignment.findMany({
-          where: { campaignId: c.campaignId as string, kind },
-          select: { id: true, ruleId: true },
-        })
-        for (const h of have) affectedRuleIds.add(h.ruleId)
-        const haveIds = new Set(have.map((h) => h.ruleId))
-        const toRemove = have.filter((h) => !want.has(h.ruleId)).map((h) => h.id)
-        const toAdd = [...want].filter((id) => !haveIds.has(id))
-        if (toRemove.length) {
-          const r = await tx.campaignRuleAssignment.deleteMany({ where: { id: { in: toRemove } } })
-          removed += r.count
-        }
-        if (toAdd.length) {
-          const r = await tx.campaignRuleAssignment.createMany({
-            data: toAdd.map((ruleId) => ({ campaignId: c.campaignId as string, ruleId, kind, createdBy: actor })),
-            skipDuplicates: true,
-          })
-          created += r.count
-        }
-      }
-    })
-    /**
-     * BUD-P2 — the inverse mirror. A BUILDER budget rule is governed by its own `campaigns` list
-     * (that is what `budget_apply` enforces and what the evaluator matches on), so a column edit
-     * only REACHES the engine once that list is rewritten from the links just committed. Without
-     * this the column moved rows the engine never read — it displayed a binding that did nothing.
-     *
-     * Outside the transaction on purpose: the assignments are committed and must stay committed;
-     * a failure here is a stale rule list to re-converge, not a reason to undo the operator's Apply.
-     */
-    let rulesRewritten: string[] = []
-    if (kind === 'budget' && affectedRuleIds.size > 0) {
-      try {
-        const { syncBuilderRuleFromAssignments } = await import('../services/advertising/rule-campaign-binding.service.js')
-        rulesRewritten = (await syncBuilderRuleFromAssignments([...affectedRuleIds], actor)).updated
-      } catch (e) {
-        logger.error('[ADS-RULE-BINDING] bulk inverse mirror failed', { ruleIds: [...affectedRuleIds], error: String(e) })
-      }
-    }
-    logger.warn('[ADS-RULE-ASSIGNMENT]', { kind, campaigns: changes.length, created, removed, actor, rulesRewritten: rulesRewritten.length })
-    return { ok: true, kind, campaigns: changes.length, created, removed, rulesRewritten: rulesRewritten.length }
+    const { applyCampaignRuleAssignments } = await import('../services/advertising/rule-campaign-binding.service.js')
+    const out = await applyCampaignRuleAssignments(request.body as import('../services/advertising/rule-campaign-binding.service.js').CampaignRuleAssignmentsBody, actorFromHeaders(request.headers as Record<string, unknown>))
+    if (out.status !== 200) reply.status(out.status)
+    return out.body
   })
 
   // ── SPW.7: SP Super Wizard launch ───────────────────────────────────────

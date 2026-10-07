@@ -35,6 +35,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { sendEmail } from '../email/transport.js'
+import { ownTargets } from './kt6-proposal.service.js'
 
 const numEnv = (k: string, d: number): number => {
   const v = Number(process.env[k])
@@ -146,7 +147,7 @@ export interface Kt7DigestData {
 export async function buildKtDigest(since: Date, until = new Date()): Promise<Kt7DigestData> {
   const decided = await prisma.keywordBidProposal.findMany({
     where: { decidedAt: { gte: since, lte: until } },
-    select: { id: true, status: true, actionableTargets: true, commitmentCents: true, executionId: true },
+    select: { id: true, status: true, actionableTargets: true, commitmentCents: true, executionId: true, targetIds: true },
   })
   const applied = decided.filter((d) => d.status === 'APPLIED')
 
@@ -155,7 +156,8 @@ export async function buildKtDigest(since: Date, until = new Date()): Promise<Kt
   let keptCents = 0
   for (const a of applied) {
     if (!a.executionId) { keptTargets += a.actionableTargets; keptCents += a.commitmentCents; continue }
-    const live = await prisma.advertisingActionLog.count({ where: { executionId: a.executionId, rolledBackAt: null } })
+    // W4-9 — its own target writes: an approved Claude request's change set may hold other changes too.
+    const live = await prisma.advertisingActionLog.count({ where: { executionId: a.executionId, rolledBackAt: null, ...ownTargets(a.targetIds) } })
     if (live === 0) reversed++
     else { keptTargets += a.actionableTargets; keptCents += a.commitmentCents }
   }

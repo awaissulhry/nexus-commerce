@@ -186,6 +186,123 @@ export async function syncBuilderRuleFromAssignments(
   return { updated }
 }
 
+/** The Apply Rules page's one Apply (POST /advertising/campaign-rule-assignments/bulk), as its body arrives. */
+export interface CampaignRuleAssignmentsBody { kind?: string; changes?: Array<{ campaignId?: string; ruleIds?: string[] }> }
+
+/**
+ * ADS AUTONOMY W4-8 — one rule bound to more campaigns or taken off some (Claude's assign-ad-rules): each campaign's set
+ * is read INSIDE the Apply's transaction and only this rule moves in it, so a link another rule gained meanwhile stays.
+ */
+export interface RuleDelta { ruleId: string; add: string[]; remove: string[] }
+
+/**
+ * ── D3 — the global Apply ─────────────────────────────────────────────────────────────────────
+ *
+ * Commits STAGED assignment changes for many campaigns at once. The operator's study: selecting
+ * in the dropdown stages, and one Apply finalises.
+ *
+ * 🔴 **One transaction.** A per-campaign loop that fails halfway leaves the account in a state
+ * nobody chose — half the campaigns governed by the new set and half by the old — and the
+ * operator's only evidence would be a toast. Set-replacement per campaign, all or nothing.
+ *
+ * `ruleIds: []` is a real instruction: unassign everything for that campaign and kind. It is
+ * how the study's "None" works, and under assignment-as-reach it means no budget rule may move
+ * that campaign at all.
+ *
+ * ADS AUTONOMY W4-8 — moved unchanged out of `routes/advertising.routes.ts` so Claude's assign-ad-rules runs the same
+ * code; the route answers byte for byte as before (campaign-rule-assignment-route-parity.vitest.test.ts).
+ */
+export async function applyCampaignRuleAssignments(
+  b: CampaignRuleAssignmentsBody,
+  actor: string,
+  delta?: RuleDelta,
+): Promise<{ status: 200 | 400; body: Record<string, unknown> }> {
+  const kind = b.kind || 'budget'
+  // W4-8 — a delta names its campaigns and its one rule; each campaign's set is decided inside the transaction below.
+  const changes = delta
+    ? [...new Set([...delta.add, ...delta.remove])].map((campaignId) => ({ campaignId, ruleIds: [delta.ruleId] }))
+    : (b.changes ?? []).filter((c) => typeof c.campaignId === 'string' && Array.isArray(c.ruleIds))
+  if (changes.length === 0) return { status: 400, body: { error: 'changes required' } }
+
+  // Validate BEFORE writing: an unknown campaign or rule id would otherwise fail at the foreign
+  // key mid-transaction and report itself as a database error rather than a bad request.
+  const campaignIds = [...new Set(changes.map((c) => c.campaignId as string))]
+  const ruleIds = [...new Set(changes.flatMap((c) => c.ruleIds as string[]))]
+  const [knownCampaigns, knownRules] = await Promise.all([
+    prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true } }),
+    ruleIds.length ? prisma.automationRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true } }) : Promise.resolve([]),
+  ])
+  const okCampaign = new Set(knownCampaigns.map((c) => c.id))
+  const okRule = new Set(knownRules.map((r) => r.id))
+  const badCampaign = campaignIds.filter((id) => !okCampaign.has(id))
+  const badRule = ruleIds.filter((id) => !okRule.has(id))
+  if (badCampaign.length || badRule.length) {
+    return { status: 400, body: { error: 'unknown id', campaigns: badCampaign.slice(0, 5), rules: badRule.slice(0, 5) } }
+  }
+
+  let created = 0
+  let removed = 0
+  /**
+   * BUD-P2 — every rule this Apply TOUCHES, which is not the same as every rule it names.
+   * Unchecking a rule everywhere sends `ruleIds: []`, so the rule losing its last campaign
+   * appears nowhere in the request body. Collecting the rows we DELETE as well as the ones we
+   * add is what lets the inverse mirror below clear that rule's own list — without it, "remove
+   * this rule from this campaign" would still have been a no-op for builder rules.
+   */
+  const affectedRuleIds = new Set<string>(ruleIds)
+  await prisma.$transaction(async (tx) => {
+    for (const c of changes) {
+      const have = await tx.campaignRuleAssignment.findMany({
+        where: { campaignId: c.campaignId as string, kind },
+        select: { id: true, ruleId: true },
+      })
+      const want = delta ? deltaSet(have.map((h) => h.ruleId), delta, c.campaignId as string) : new Set(c.ruleIds as string[])
+      for (const h of have) affectedRuleIds.add(h.ruleId)
+      const haveIds = new Set(have.map((h) => h.ruleId))
+      const toRemove = have.filter((h) => !want.has(h.ruleId)).map((h) => h.id)
+      const toAdd = [...want].filter((id) => !haveIds.has(id))
+      if (toRemove.length) {
+        const r = await tx.campaignRuleAssignment.deleteMany({ where: { id: { in: toRemove } } })
+        removed += r.count
+      }
+      if (toAdd.length) {
+        const r = await tx.campaignRuleAssignment.createMany({
+          data: toAdd.map((ruleId) => ({ campaignId: c.campaignId as string, ruleId, kind, createdBy: actor })),
+          skipDuplicates: true,
+        })
+        created += r.count
+      }
+    }
+  })
+  /**
+   * BUD-P2 — the inverse mirror. A BUILDER budget rule is governed by its own `campaigns` list
+   * (that is what `budget_apply` enforces and what the evaluator matches on), so a column edit
+   * only REACHES the engine once that list is rewritten from the links just committed. Without
+   * this the column moved rows the engine never read — it displayed a binding that did nothing.
+   *
+   * Outside the transaction on purpose: the assignments are committed and must stay committed;
+   * a failure here is a stale rule list to re-converge, not a reason to undo the operator's Apply.
+   */
+  let rulesRewritten: string[] = []
+  if (kind === 'budget' && affectedRuleIds.size > 0) {
+    try {
+      rulesRewritten = (await syncBuilderRuleFromAssignments([...affectedRuleIds], actor)).updated
+    } catch (e) {
+      logger.error('[ADS-RULE-BINDING] bulk inverse mirror failed', { ruleIds: [...affectedRuleIds], error: String(e) })
+    }
+  }
+  logger.warn('[ADS-RULE-ASSIGNMENT]', { kind, campaigns: changes.length, created, removed, actor, rulesRewritten: rulesRewritten.length })
+  return { status: 200, body: { ok: true, kind, campaigns: changes.length, created, removed, rulesRewritten: rulesRewritten.length } }
+}
+
+/** W4-8 — a campaign's rules after a delta: what it holds now, with the one rule added or taken off. */
+function deltaSet(have: string[], delta: RuleDelta, campaignId: string): Set<string> {
+  const out = new Set(have)
+  if (delta.add.includes(campaignId)) out.add(delta.ruleId)
+  if (delta.remove.includes(campaignId)) out.delete(delta.ruleId)
+  return out
+}
+
 /**
  * MCP full control A3 — the read side: what may change one campaign again on its own. The ENABLED advertising rules
  * bound to it through `CampaignRuleAssignment` (every kind, each with the kind it is bound by), and its schedule when

@@ -101,7 +101,7 @@ import {
   runAutoBidLiveOnce,
 } from './ads-sync.job.js'
 // AD.3 — advertising-domain AutomationRule evaluator.
-import { runAdvertisingRuleEvaluatorCron } from './advertising-rule-evaluator.job.js'
+import { runAdvertisingRuleEvaluatorLineOnce } from './advertising-rule-evaluator.job.js'
 import { runMarketingRuleEvaluatorCron } from './marketing-rule-evaluator.job.js'
 import { runMarketingSyncDrainCron } from './marketing-sync-drain.job.js'
 import { runMarketingAmazonShadowBackfillCron } from './marketing-amazon-shadow-backfill.job.js'
@@ -258,7 +258,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'fba-storage-age-ingest': () => runFbaStorageAgeIngestCron(),
   'true-profit-rollup': () => runTrueProfitRollupCron(),
   'ads-metrics-reconcile': () => runAdsReconcileCron(),
-  'advertising-rule-evaluator': () => runAdvertisingRuleEvaluatorCron(),
+  // W4-8 — the *Once form (ACR.1.2d below): a hand-run records ONE row with its own line, FAILED when it throws.
+  'advertising-rule-evaluator': () => runAdvertisingRuleEvaluatorLineOnce(),
   'marketing-rule-evaluator': () => runMarketingRuleEvaluatorCron(),
   'marketing-sync-drain': () => runMarketingSyncDrainCron(),
   // AX-IE.1 — refresh the Amazon cross-channel shadow (MarketingCampaign /
@@ -320,8 +321,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
    * the single row, and these lambdas hand it the same summary string the scheduled tick
    * would have produced.
    *
-   * (The five ads entries above predate this and still double-write. Left alone here
-   * rather than changed in passing — they are someone else's rows to reason about.)
+   * (The ads entries above that predate this still double-write — except the rules evaluator, moved to its *Once form
+   * by W4-8 because Claude's run-ad-engine-now starts it and reads its row back.)
    *
    * These engines write live bids. That is the point: a manual run does exactly what the
    * scheduled tick does, and every write still passes ads-write-gate — the account halt,
