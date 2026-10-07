@@ -9,21 +9,22 @@
  * The cells. Every Matrix cell kind is ONE engine definition (`matrixColumnDef`, MX.G), consumed
  * here by `colId`, coordinate and a `cells` reader — the reader hands back the row's CLONE, which the
  * engine's setter mutates (see `useMatrix.commitRead`).
- * The SHARED group's `Base price` and `Status` are the Information sheet's OWN column defs, taken
- * from `buildMasterColumns` and re-grouped — the editor a `Status` cell opens here is the one it
- * opens on Information (`feedback_shared_components_no_copy_props`). The identity band is the
- * Variants page's shared `VariantIdentity`.
+ * The SHARED group's `Base price` is the Information sheet's OWN column def, taken from
+ * `buildMasterColumns` and re-grouped (`feedback_shared_components_no_copy_props`). The identity band
+ * is the Variants page's shared `VariantIdentity`. The Nexus product status (`ACTIVE` …) is NOT shown:
+ * since 2026-10-04 (Owner) it is the Products list's catalog status, not a selling state, and the
+ * Information page's Shared scope dropped it — each market's own Status column says whether it sells.
  *
  * What is genuinely this page's: the group shape, the strip tag, the `Not listed` column, the
  * `Stock` column (a read of `MatrixRowRead.stock`, never a number derived here), the locked `FBA qty`
- * column (a read of `MatrixRowRead.fba`) and the preview-mode hold on the two master columns.
+ * column (a read of `MatrixRowRead.fba`) and the preview-mode hold on the master column.
  */
 import type { MutableRefObject } from 'react'
 
 import type { MenuItemDef } from '@/design-system/components'
 import { Pill, Tag } from '@/design-system/primitives'
 import { poolSourceSentence } from '@/app/_shared/stock-pool/PoolSourceTag'
-import { lockedColumn, matrixColumnDef, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
+import { lockedColumn, matrixColumnDef, numericColumn, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type MatrixColumnOptions } from '@/design-system/grid'
 
 import { when } from '../drawer/format'
 import { buildMasterColumns } from '../sheet/master/columns'
@@ -71,7 +72,6 @@ export const STOCK_COL = 'shared.stock'
 /** The FBA qty column (Owner 2026-10-06): Amazon's FBA units, shown and LOCKED — nothing on this page can write it. */
 export const FBA_COL = 'shared.fba'
 export const FBA_COL_W = 96
-export const STATUS_COL = 'status'
 export const NOT_LISTED_W = 120
 
 export const matrixColId = (key: CoordinateKey, kind: MatrixCellKind | 'notListed'): string => `${key}.${kind}`
@@ -249,7 +249,7 @@ export interface BuildMatrixColumnsOptions {
   market: string
   axesRef: MutableRefObject<AxisSummary[]>
   rowMenuRef: MutableRefObject<(row: StudioRow) => MenuItemDef[]>
-  /** Preview mode: the two master columns are read-only, and this is the sentence they carry. */
+  /** Preview mode: the master column (Base price) is read-only, and this is the sentence it carries. */
   masterHeldReason: string | null
   onJump: (params: ICellRendererParams) => void
   /** The fulfilment select's CHOICE — the engine's setter routes it here and writes nothing (§3.4). */
@@ -306,17 +306,14 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     colId: BASE_PRICE_COL, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W, editable: false,
     valueGetter: (p) => p.data?.basePrice ?? null, cellClass: 'nds-ag-cell nds-cell-num',
   })
-  const status = held(byId.get(STATUS_COL.toLowerCase()), {
-    colId: STATUS_COL, headerName: 'Status', width: 104, minWidth: 104, editable: false,
-    valueGetter: (p) => p.data?.status ?? null, cellClass: 'nds-ag-cell',
-  })
   const stock: ColDef<StudioRow> = {
     colId: STOCK_COL,
     headerName: 'Stock',
     headerTooltip: 'The routed WAREHOUSE pool this SKU follows — the number Follow rows derive from. "Shared": the stock another business lends. Parent = the family total.',
     width: 112, minWidth: 96,
     editable: false, suppressMovable: true, suppressHeaderMenuButton: true, sortable: true, resizable: true,
-    cellClass: 'nds-ag-cell',
+    /* A number column: right-aligned with tabular figures, as FBA qty and every market's Qty and Price beside it. */
+    type: numericColumn.type, cellClass: numericColumn.cellClass, headerClass: numericColumn.headerClass,
     valueGetter: (p) => (p.data ? stockOf(rowOf(p.data.id))?.available ?? null : null),
     cellRenderer: StockCell,
     cellRendererParams: { rowOf },
@@ -351,7 +348,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     /* The progress column has its OWN header group. Inside the Product group it split that group across the pinned
        boundary (Product is pinned, progress is not) and AG drew "PRODUCT" twice — measured on production 2026-09-27. */
     { groupId: 'grp-progress', headerName: 'Progress', children: [sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
-    { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, fba, { ...status, headerName: 'Status', width: 104, minWidth: 104 }] },
+    { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, fba] },
   ]
 
   for (const coord of coordinates) {

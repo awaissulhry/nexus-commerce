@@ -80,7 +80,8 @@ export interface MatrixState {
   /** The one door. Per-cell outcomes are painted through the tracker; the read is replaced. */
   write: (cells: readonly MatrixWriteCell[]) => Promise<MatrixWriteOutcome[]>
   previewVerbRun: (req: MatrixVerbRequest) => Promise<VerbPreview>
-  applyVerbRun: (preview: VerbPreview) => Promise<VerbOperation>
+  /** The operation, and each cell's outcome (a cell refused at the run says why). */
+  applyVerbRun: (preview: VerbPreview) => Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }>
   revert: (op: VerbOperation) => Promise<void>
   /** `MATRIX_COPY.pinnedThisSession(n)` — pins made from the grid this session, and a one-step undo. */
   pinnedThisSession: number
@@ -376,14 +377,14 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     return body as VerbPreview
   }, [productId, can])
 
-  const applyVerbRun = useCallback(async (preview: VerbPreview): Promise<VerbOperation> => {
+  const applyVerbRun = useCallback(async (preview: VerbPreview): Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }> => {
     const current = readRef.current
     if (!current) throw new Error('The Matrix has not loaded')
     if (current.source === 'preview') {
       const { read: next, operation, results } = applyVerb(current, preview)
       commitRead(next)
       mark(results)
-      return operation
+      return { ...operation, results }
     }
     live.begin()
     let covered: number | null = null
@@ -397,7 +398,8 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       const seqAtReread = live.state.seq
       const again = await fetchMatrix(productId, { accountId, locale })
       if (again.kind === 'live') { commitRead(again.read); covered = seqAtReread }
-      return (body as { operation: VerbOperation }).operation
+      const answer = body as { operation: VerbOperation; results?: MatrixWriteOutcome[] }
+      return { ...answer.operation, results: answer.results }
     } finally {
       live.end(covered)
     }

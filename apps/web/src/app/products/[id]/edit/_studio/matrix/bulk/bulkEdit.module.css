@@ -1,0 +1,145 @@
+/* The Matrix bulk Edit dialog — layout only; every control and colour comes from the design system. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  line-height: 1.5;
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+  margin: 0;
+}
+
+/* Change · How · Value: one column; each control keeps a readable width on a wide dialog and takes the line on a phone. */
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+.change { width: min(100%, 340px); }
+.value { width: min(100%, 240px); }
+.sale {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-space-10);
+  width: min(100%, 600px);
+}
+.hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* Markets: a fieldset that draws nothing of its own; the boxes wrap inline. */
+.markets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.markets > legend { padding: 0; margin-bottom: var(--nds-space-6); }
+.marketList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8) var(--nds-space-18);
+}
+.heldNote {
+  margin-inline-start: var(--nds-space-6);
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  font-style: italic;
+}
+
+/* The preview: notices, the skipped reasons, the filter and the table, in that order. */
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.list {
+  margin: 0;
+  padding-inline-start: var(--nds-space-18);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  overflow-wrap: anywhere;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-10);
+  min-height: var(--nds-control-h-sm);
+}
+.muted {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}
+/* The table area holds its height from the first answer on: loading, refreshing and the table take the same room. */
+.tableArea {
+  min-height: 168px;
+  min-width: 0;
+}
+.loading {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-10);
+  min-height: 168px;
+}
+.prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 168px;
+  padding: var(--nds-space-12);
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  color: var(--nds-text-2);
+  text-align: center;
+}
+
+/* Table cells: the grid sizes the columns (Column.width); these only shape the text inside a cell. */
+.mono {
+  font-family: var(--nds-font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+.next > b { font-weight: var(--nds-font-weight-bold); }
+.note, .reason {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+.reason { font-style: italic; }
+
+/* The footer's sentence. On a phone it takes its own line above the buttons. */
+.status {
+  min-width: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+@media (max-width: 640px) {
+  .status { flex-basis: 100%; }
+  .change, .value, .sale { width: 100%; }
+  .sale { grid-template-columns: minmax(0, 1fr); }
+}

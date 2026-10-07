@@ -66,39 +66,6 @@
   }
 }
 
-/* The verb dialog: form, notices, table, refusals — one column. */
-:global(.nds-matrix-verb-body) {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-:global(.nds-matrix-verb-form) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-end;
-}
-:global(.nds-matrix-verb-field) {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 160px;
-}
-:global(.nds-matrix-verb-table) {
-  max-height: 44vh;
-  overflow: auto;
-}
-:global(.nds-matrix-verb-refusals ul) {
-  margin: 0;
-  padding-left: 18px;
-}
-:global(.nds-matrix-verb-summary) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Shared stock by SKU: the Stock number and its "Shared" tag on one line. */
 .stockShared {
   display: inline-flex;

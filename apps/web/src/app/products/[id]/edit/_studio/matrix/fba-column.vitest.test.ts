@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { LockedCell } from '@/design-system/grid'
 
-import { buildMatrixColumns, FBA_COL, fbaTooltip, fbaUnitsOf, STATUS_COL, STOCK_COL } from './columns'
+import { buildMatrixColumns, FBA_COL, fbaTooltip, fbaUnitsOf, STOCK_COL } from './columns'
 import { MATRIX_COPY, type MatrixRowRead } from './contract'
 
 /**
@@ -34,7 +34,7 @@ const call = <T,>(fn: unknown, params: unknown): T => (fn as (p: unknown) => T)(
 
 describe('the FBA qty column on the Matrix', () => {
   it('sits in the Shared group right after Stock, headed "FBA qty"', () => {
-    expect(shared().map((d) => d.colId)).toEqual(['basePrice', STOCK_COL, FBA_COL, STATUS_COL])
+    expect(shared().map((d) => d.colId)).toEqual(['basePrice', STOCK_COL, FBA_COL])
     expect(fbaDef().headerName).toBe('FBA qty')
   })
 
