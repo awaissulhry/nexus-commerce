@@ -8,6 +8,7 @@
  */
 import { FEATURES } from '@nexus/shared/permissions'
 import prisma from '../../db.js'
+import { settingsBasis } from '../automation/row-basis.js'
 import {
   envVerdict, flagOn, isOne, iso, lowest, summarise,
   evidenceGate, gateOfCounts,
@@ -119,7 +120,9 @@ export const E1: AutomationAdapter = {
       const type = String(action.type ?? '')
       const lowers = type === 'set_rate_to_breakeven_factor' || (type === 'adjust_ad_rate' && Number(action.deltaPct ?? -10) < 0) || type === 'bid_down_keyword'
       return {
-        id: r.id, name: r.name, level: (!r.enabled ? 'OFF' : r.mode === 'AUTOPILOT' ? 'AUTO' : 'PROPOSE') as AutomationLevel, basis: r.updatedAt.toISOString(),
+        id: r.id, name: r.name, level: (!r.enabled ? 'OFF' : r.mode === 'AUTOPILOT' ? 'AUTO' : 'PROPOSE') as AutomationLevel,
+        // Its settings, never the eBay ads automation's lastEvaluatedAt / cooldownUntil, which move updatedAt (row-basis.ts).
+        basis: settingsBasis('ebayAdsRule', r),
         brake: lowers ? 'it lowers ad rates or bids: turning it down can raise spend' : null,
       }
     },

@@ -16,7 +16,7 @@
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
-import type { AgentTool, ToolUndo } from '../tool-types.js'
+import type { AgentTool, PlanEntities, PlanEntityKey, ToolUndo } from '../tool-types.js'
 import { RULE_KINDS, type RuleKind } from '../../automation/automation-rule-guard.js'
 import { applyAdRuleSave, planAdRuleSave, readRuleConfig, type SaveRuleInput, type SavedRuleConfig } from '../../automation/ad-rule-save.service.js'
 import { automationAdapter } from '../../automation/automation-catalog.service.js'
@@ -53,6 +53,31 @@ const RULE_CAPS = z.object({
   maxValueCentsEur: COUNT.nullable().optional().describe('euro cents one run may commit; above 0'),
   maxDailyAdSpendCentsEur: COUNT.nullable().optional().describe('optional: euro cents of ad spend per day'),
 })
+
+/** C6 — a rule (any domain) as a change-plan entity: a save and a level move of the same rule chain within one plan. */
+const ruleKeys = (...ids: unknown[]): PlanEntityKey[] =>
+  [...new Set(ids.filter((id): id is string => typeof id === 'string' && !!id.trim()).map((id) => id.trim()))].map((id) => `automation-rule:${id}` as const)
+
+/** C6 — save-ad-rule / save-ops-rule in a change plan (AgentTool.planEntities): the rule it edits (a new one: none). Pure. */
+function savedRuleEntities(idArg: 'ruleId' | 'opsRuleId') {
+  return (args: Record<string, unknown>, preview: unknown): PlanEntities => {
+    const p = (preview ?? {}) as { ruleId?: unknown; rule?: { id?: unknown } }
+    const keys = ruleKeys(args[idArg], p.ruleId, p.rule?.id)
+    return { reads: keys, writes: keys }
+  }
+}
+
+/**
+ * C6 — turn-up / turn-down-automation in a change plan (AgentTool.planEntities): the row it moves (an engine's own switch
+ * when no row is named), and that row as a rule, so a save of the rule earlier in the plan chains with the move. Pure.
+ */
+export function switchEntities(args: Record<string, unknown>, preview: unknown): PlanEntities {
+  const p = (preview ?? {}) as { automation?: { id?: unknown }; row?: { id?: unknown } }
+  const rowId = typeof args.rowId === 'string' ? args.rowId.trim() : ''
+  const automation = typeof p.automation?.id === 'string' ? p.automation.id : String(args.automation ?? '')
+  const keys: PlanEntityKey[] = [`automation:${automation}:${rowId || 'engine'}`, ...(rowId ? ruleKeys(rowId) : [])]
+  return { reads: keys, writes: keys }
+}
 
 /** save-ad-rule's arguments that put a saved rule back exactly as it was (its undo). */
 export function saveArgsOf(config: SavedRuleConfig): Record<string, unknown> {
@@ -139,6 +164,7 @@ const saveAdRule: AgentTool = {
   limits: SAVE_RULE_LIMITS,
   withinLimits: ruleSaveRefusal,
   undo: SAVE_AD_RULE_UNDO,
+  planEntities: savedRuleEntities('ruleId'),
   input: z.object({
     kind: z.enum(RULE_KINDS as [RuleKind, ...RuleKind[]]).describe('amazon-ads, ebay-ads or marketing'),
     ruleId: ID.optional().describe('the rule to edit (from list-automations / automation-detail); omit to create one'),
@@ -281,6 +307,7 @@ function switchTool(direction: Direction): AgentTool {
       return p.brake && !limits.allowBrakeDown ? `turning a brake down can raise spend (${p.brake}): a person decides` : null
     },
     undo: switchUndo(direction),
+    planEntities: switchEntities,
     input: z.object({
       automation: AUTOMATION.describe('the automation: its number from list-automations (A1 … N17) or its key'),
       rowId: ID.optional().describe('the row to switch (a rule, plan, pool, schedule …); omit for the ads dial (A3) or an engine\'s own switch'),
@@ -1118,6 +1145,7 @@ const saveOpsRule: AgentTool = {
   reversibility: 'full',
   maxClaudeTrust: 'confirm',
   undo: SAVE_OPS_RULE_UNDO,
+  planEntities: savedRuleEntities('opsRuleId'),
   input: z.object({
     domain: z.enum(['listings', 'replenishment', 'reviews', 'bulk-operations']).describe('listings, replenishment, reviews or bulk-operations'),
     opsRuleId: ID.optional().describe('the rule to edit (from automation-detail N5, N6, N7 or N9); omit to create one'),

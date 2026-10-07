@@ -21,6 +21,7 @@
  * Placement %, CPC ceiling and Min-bid floor (its goal, ACoS, step, ceiling and keep-climbing fields are not read).
  */
 import prisma from '../../db.js'
+import { settingsBasis } from '../automation/row-basis.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { HV_ACCOUNT_SCOPE, HV_DEFAULT_CRITERIA, type HvPolicyGrain } from './harvest-policy.service.js'
 
@@ -148,7 +149,7 @@ const budgetPool: Spec = {
   async load(input) {
     const p = await prisma.budgetPool.findUnique({ where: { id: input.subjectId! } })
     if (!p) return `there is no budget pool ${input.subjectId} in this business (not found)`
-    return { id: p.id, name: p.name, basis: p.updatedAt.toISOString(), state: { totalDailyBudgetCents: p.totalDailyBudgetCents, strategy: p.strategy, coolDownMinutes: p.coolDownMinutes, maxShiftPerRebalancePct: p.maxShiftPerRebalancePct } }
+    return { id: p.id, name: p.name, basis: settingsBasis('budgetPool', p), state: { totalDailyBudgetCents: p.totalDailyBudgetCents, strategy: p.strategy, coolDownMinutes: p.coolDownMinutes, maxShiftPerRebalancePct: p.maxShiftPerRebalancePct } }
   },
   next(loaded, values) {
     return merge(loaded.state, values, POOL_FIELDS)
@@ -211,7 +212,7 @@ const rankTarget: Spec = {
     const t = await prisma.rankTarget.findUnique({ where: { id: input.subjectId! } })
     if (!t) return `there is no rank target ${input.subjectId} in this business (not found)`
     const state = Object.fromEntries(RANK_TARGET_TUNABLE.map((f) => [f, (t as unknown as Record<string, unknown>)[f] ?? null]))
-    return { id: t.id, name: t.name, basis: t.updatedAt.toISOString(), state, note: t.builtIn ? 'a built-in target: every plan and schedule using it changes' : undefined }
+    return { id: t.id, name: t.name, basis: settingsBasis('rankTarget', t), state, note: t.builtIn ? 'a built-in target: every plan and schedule using it changes' : undefined }
   },
   next(loaded, values) {
     return merge(loaded.state, values, RANK_TARGET_TUNABLE)
@@ -256,7 +257,7 @@ const budgetSchedule: Spec = {
   async load(input) {
     const s = await prisma.budgetSchedule.findFirst({ where: { id: input.subjectId!, kind: 'BUDGET' } })
     if (!s) return `there is no budget schedule ${input.subjectId} in this business (not found)`
-    return { id: s.id, name: s.name, basis: s.updatedAt.toISOString(), type: s.type, state: { windows: Array.isArray(s.windows) ? s.windows : [] } }
+    return { id: s.id, name: s.name, basis: settingsBasis('budgetSchedule', s), type: s.type, state: { windows: Array.isArray(s.windows) ? s.windows : [] } }
   },
   next(loaded, values) {
     if (values.windows === undefined) return loaded.state
@@ -415,7 +416,7 @@ const accountTargetAcos: Spec = {
   needsSubject: false,
   async load() {
     const row = await adsStateRow()
-    return { id: null, name: 'the account default target ACOS', basis: row?.updatedAt.toISOString() ?? null, state: { targetAcosPct: row?.defaultTargetAcosPct ?? null } }
+    return { id: null, name: 'the account default target ACOS', basis: settingsBasis('adsAutomationState', row), state: { targetAcosPct: row?.defaultTargetAcosPct ?? null } }
   },
   next(loaded, values) {
     return values.targetAcosPct === undefined ? loaded.state : { targetAcosPct: values.targetAcosPct }
@@ -446,7 +447,7 @@ const breaker: Spec = {
   needsSubject: false,
   async load() {
     const row = await adsStateRow()
-    return { id: null, name: 'the ads anomaly breaker', basis: row?.updatedAt.toISOString() ?? null, state: { maxHourlySpendCentsEur: row?.maxHourlySpendCentsEur ?? null, maxActionsPerHour: row?.maxActionsPerHour ?? null } }
+    return { id: null, name: 'the ads anomaly breaker', basis: settingsBasis('adsAutomationState', row), state: { maxHourlySpendCentsEur: row?.maxHourlySpendCentsEur ?? null, maxActionsPerHour: row?.maxActionsPerHour ?? null } }
   },
   next(loaded, values) {
     return merge(loaded.state, values, ['maxHourlySpendCentsEur', 'maxActionsPerHour'])

@@ -46,6 +46,10 @@ export type ControlAction =
   // because the business paused Claude's rule-runs, lowered the tool's level or tightened its limits meanwhile. It
   // never ran. Not a failure: it does not count towards the automatic pause.
   | 'rule_refused'
+  // C6 — a later step of a change plan whose facts an EARLIER step of the same plan changed: its basis was taken again
+  // after that step ran (only when nothing outside the plan had moved it), so it is not refused for its own plan's
+  // change. Not a decision and not a failure: a trace of what the step is now checked against.
+  | 'basis_rebased'
   // NAF.AQ.8 — the operator edited a proposal before approving it. Its own
   // action rather than an approve, because the interesting fact is that the
   // worker's number was WRONG and a human corrected it: that is the highest

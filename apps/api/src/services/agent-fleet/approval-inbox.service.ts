@@ -1201,28 +1201,50 @@ export async function previewStaleness(
       : { stale: false, why: null }
   }
 
-  let fresh: Awaited<ReturnType<NonNullable<typeof tool.handler>>>
+  const fresh = await freshDryRun(ap.toolName, (ap.args ?? {}) as Record<string, unknown>, approvalId)
+  if (!fresh.ok) return { stale: true, why: fresh.why ?? 'it is no longer a valid action' }
+
+  const moved = movedFields(ap.toolName, ap.preview, fresh.preview)
+  if (moved.length > 0) {
+    return {
+      stale: true,
+      why: `the facts moved since you approved it — ${moved.join('; ')}`,
+    }
+  }
+  return opts.withFresh ? { stale: false, why: null, fresh: fresh.preview ?? fresh.data } : { stale: false, why: null }
+}
+
+/**
+ * C6 — a change's own dry run now, as the re-check takes it (the system, `approval-recheck`, naming the approval it
+ * re-checks). Never throws: a dry run that cannot run, or that refuses, says why — and is never permission to proceed.
+ */
+export async function freshDryRun(
+  toolName: string,
+  args: Record<string, unknown>,
+  approvalId: string,
+): Promise<{ ok: boolean; why: string | null; preview?: unknown; data?: unknown }> {
+  let fresh: Awaited<ReturnType<typeof callTool>>['raw']
   try {
-    fresh = (
-      await callTool(
-        systemPrincipal('approval-recheck'),
-        ap.toolName,
-        (ap.args ?? {}) as Record<string, unknown>,
-        { approvalId }, // C1 — the tool may know which approval it is re-checking
-      )
-    ).raw
+    // C1 — the tool may know which approval it is re-checking
+    fresh = (await callTool(systemPrincipal('approval-recheck'), toolName, args, { approvalId })).raw
   } catch (err) {
     // A re-check that cannot run is not permission to proceed.
-    return { stale: true, why: `it could not be re-checked: ${String(err)}` }
+    return { ok: false, why: `it could not be re-checked: ${String(err)}` }
   }
-  if (!fresh.ok) {
-    return { stale: true, why: fresh.error ?? 'it is no longer a valid action' }
-  }
+  if (!fresh.ok) return { ok: false, why: fresh.error ?? 'it is no longer a valid action' }
+  return { ok: true, why: null, preview: fresh.preview, data: fresh.data }
+}
 
-  const before = (ap.preview ?? {}) as Record<string, unknown>
-  const after = (fresh.preview ?? {}) as Record<string, unknown>
+/**
+ * The material fields (MATERIAL_PREVIEW_FIELDS) of a tool that differ between the preview approved and a fresh one, each
+ * as the sentence the re-check says; empty when none moved. A field the approved preview did not carry is not compared.
+ * Pure.
+ */
+export function movedFields(toolName: string, approved: unknown, now: unknown): string[] {
+  const before = (approved ?? {}) as Record<string, unknown>
+  const after = (now ?? {}) as Record<string, unknown>
   const moved: string[] = []
-  for (const key of MATERIAL_PREVIEW_FIELDS[ap.toolName] ?? []) {
+  for (const key of MATERIAL_PREVIEW_FIELDS[toolName] ?? []) {
     if (!(key in before)) continue
     if (canonicalJson(before[key]) !== canonicalJson(after[key])) {
       moved.push(
@@ -1232,13 +1254,7 @@ export async function previewStaleness(
       )
     }
   }
-  if (moved.length > 0) {
-    return {
-      stale: true,
-      why: `the facts moved since you approved it — ${moved.join('; ')}`,
-    }
-  }
-  return opts.withFresh ? { stale: false, why: null, fresh: fresh.preview ?? fresh.data } : { stale: false, why: null }
+  return moved
 }
 
 /* ── AP.7: the precedent a decision actually created ───────────────────── */

@@ -12,6 +12,7 @@
  */
 import prisma from '../db.js'
 import { isRefused } from './automation/service-outcome.js'
+import { repricingRuleBasis } from './automation/row-basis.js'
 import { VALID_STRATEGIES, createRepricingRule, patchRepricingRule } from './repricing-rule.service.js'
 import { boundsApply, type PriceBounds } from './price-bounds.service.js'
 
@@ -74,7 +75,8 @@ async function configOf(id: string): Promise<{ config: PriceRuleConfig; basis: s
   // A rule of a deleted product is as gone as its product (MCP.12).
   if (!r || r.product.deletedAt) return null
   return {
-    basis: r.updatedAt.toISOString(),
+    // The rule's settings, never the repricing engine's last-run snapshot, which moves updatedAt on every evaluation.
+    basis: repricingRuleBasis(r),
     bounds: { minPrice: num(r.product.minPrice), maxPrice: num(r.product.maxPrice) },
     config: {
       priceRuleId: r.id, productId: r.productId, sku: r.product.sku, channel: r.channel, marketplace: r.marketplace, enabled: r.enabled,

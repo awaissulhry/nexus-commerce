@@ -11,7 +11,11 @@
  *   run      `runPlan`, step by step in order: claim (pending → executing); the approver's permissions for that step's
  *            tool re-checked now; the step's preview re-checked (staleness, as for any approval); a rule-run re-checks
  *            the rule. Then the tool's execute as the approver, and its change recorded (AgentChange.planStepId). A stale
- *            or refused step is skipped with its reason, a failing one is failed; the others go on. The pending steps
+ *            or refused step is skipped with its reason, a failing one is failed; the others go on.
+ *   chain    a later step is never refused for a change an EARLIER step of the same plan made (`chainBases`): just before
+ *            a step runs, every later step that stands on what it changes (AgentTool.planEntities) is dry-run, and when
+ *            nothing outside the plan has moved it, its basis is taken again once the step ran — the later step is then
+ *            checked against that. A change made outside the plan (a person, an engine) still skips it. The pending steps
  *            are the durable record: a stopped worker resumes there; a step left `executing` past a lease is marked
  *            failed (it may or may not have run — never run twice); the approval sweep re-enqueues a plan nobody runs,
  *            or runs it itself when there are no workers.
@@ -26,7 +30,7 @@ import prisma from '../../db.js'
 import { addJobSafely, agentPlanQueue } from '../../lib/queue.js'
 import { logger } from '../../utils/logger.js'
 import { recordControlChange, type ControlAction } from '../agent-fleet/control-audit.service.js'
-import { deciderPrincipal, previewStaleness } from '../agent-fleet/approval-inbox.service.js'
+import { deciderPrincipal, freshDryRun, movedFields, previewStaleness } from '../agent-fleet/approval-inbox.service.js'
 import { decideByRule, EXPIRY_HOURS, requestDoor, type GateOutcome, type GateRule } from './approval-gate.service.js'
 import { callTool, executeTool, ToolAccessError, type ToolPrincipal, type UserPrincipal } from './call-tool.js'
 import { recordExecutedChangeSafely } from './change-record.service.js'
@@ -34,7 +38,7 @@ import { autoFreshRefusal, autoPlanStepRefusal, noteAutoFailure } from './claude
 import { mergedStepUp } from './step-up-approval.js'
 import { resolveToolPolicy } from './tool-policy.service.js'
 import { getTool } from './tool-registry.js'
-import { PLAN_MAX_STEPS, PLAN_TOOL, decidedViaOf, type AgentTool, type PlanRequest, type ToolRequest } from './tool-types.js'
+import { PLAN_MAX_STEPS, PLAN_TOOL, decidedViaOf, type AgentTool, type PlanEntities, type PlanRequest, type ToolRequest } from './tool-types.js'
 
 /** How many steps a preview lists in full; the rest are counted. */
 const PREVIEW_STEPS = 20
@@ -42,6 +46,8 @@ const PREVIEW_STEPS = 20
 const INTERRUPTED_AFTER_MS = 10 * 60_000
 /** A plan with no step started or ended for this long, and workers on, is re-enqueued by the sweep. */
 const STUCK_AFTER_MS = 2 * 60_000
+/** The most later steps one step's run takes a basis again for (each costs two dry runs); past it they are checked as approved. */
+const CHAIN_MAX = 50
 
 export interface PlanRefusal {
   step: number
@@ -273,6 +279,81 @@ type PlanApproval = {
 
 type StepRow = { id: string; position: number; toolName: string; args: Prisma.JsonValue; preview: Prisma.JsonValue; undoesChangeId: string | null }
 
+/**
+ * C6 — the bases this run of a plan took again (`chainBases`): step id → the preview the step is now checked against
+ * (re-checked and handed to its execute as the approved preview). Held for one run of the plan: a plan resumed by
+ * another run checks such a step against the preview it was approved on — skipped as before, never run unchecked.
+ */
+type Rebased = Map<string, unknown>
+
+const STEP_SELECT = { id: true, position: true, toolName: true, args: true, preview: true, undoesChangeId: true } as const
+
+/** What a step is checked against now: its basis taken again in this run, or the preview it was approved on. */
+const expectedOf = (step: StepRow, rebased: Rebased): unknown => (rebased.has(step.id) ? rebased.get(step.id) : step.preview)
+
+/** A step's entities (AgentTool.planEntities); null when its tool declares none or cannot say. */
+function entitiesOf(step: StepRow, preview: unknown): PlanEntities | null {
+  const tool = getTool(step.toolName)
+  if (!tool?.planEntities) return null
+  try {
+    return tool.planEntities((step.args ?? {}) as Record<string, unknown>, preview)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * C6 — taken just BEFORE a step runs: the later pending steps of its plan that stand on what it changes (their `reads`
+ * meet its `writes`) and that nothing outside the plan has moved — their dry run now still matches what they are
+ * checked against. Those are the steps whose basis is taken again once it ran (`chainBases`). A later step whose facts
+ * already moved is left out: its own re-check skips it, saying why. Never throws.
+ */
+async function chainCandidates(ap: PlanApproval, step: StepRow, rebased: Rebased): Promise<StepRow[]> {
+  try {
+    const writes = new Set(entitiesOf(step, expectedOf(step, rebased))?.writes ?? [])
+    if (!writes.size) return []
+    const later = await prisma.agentPlanStep.findMany({
+      where: { approvalId: ap.id, status: 'pending', position: { gt: step.position } },
+      orderBy: { position: 'asc' },
+      select: STEP_SELECT,
+    })
+    const out: StepRow[] = []
+    for (const next of later) {
+      if (out.length >= CHAIN_MAX) break
+      const expected = expectedOf(next, rebased)
+      if (!(entitiesOf(next, expected)?.reads ?? []).some((key) => writes.has(key))) continue
+      const now = await freshDryRun(next.toolName, (next.args ?? {}) as Record<string, unknown>, ap.id)
+      if (!now.ok || movedFields(next.toolName, expected, now.preview).length) continue
+      out.push(next)
+    }
+    return out
+  } catch (error) {
+    logger.warn('[agent-plan] the later steps a step changes could not be read; they are checked as approved', { approvalId: ap.id, step: step.position, error: String(error) })
+    return []
+  }
+}
+
+/**
+ * C6 — taken just AFTER a step ran and changed something: the basis of each later step it stands under (chainCandidates),
+ * from its dry run now. What moved between the two dry runs is this step's change, so the later step is not refused for
+ * it; its own re-check, when its turn comes, still catches anything that moves after this. A dry run that now refuses is
+ * left alone (the step's own check says why). Never throws.
+ */
+async function chainBases(ap: PlanApproval, step: StepRow, candidates: StepRow[], rebased: Rebased): Promise<void> {
+  for (const next of candidates) {
+    try {
+      const now = await freshDryRun(next.toolName, (next.args ?? {}) as Record<string, unknown>, ap.id)
+      if (!now.ok) continue
+      const moved = movedFields(next.toolName, expectedOf(next, rebased), now.preview)
+      if (!moved.length) continue
+      rebased.set(next.id, now.preview ?? null)
+      await stepAudit(ap, next, 'basis_rebased', `step ${step.position} (${step.toolName}) of this plan changed what it stands on: its basis was taken again after it ran (nothing outside the plan had moved it) — ${moved.join('; ').slice(0, 500)}`)
+    } catch (error) {
+      logger.warn('[agent-plan] a later step\'s basis could not be taken again; it is checked as approved', { approvalId: ap.id, step: next.position, error: String(error) })
+    }
+  }
+}
+
 async function stepAudit(ap: PlanApproval, step: StepRow, action: ControlAction, note: string): Promise<void> {
   await recordControlChange({
     charterKey: ap.agentRun?.agentKey ?? 'unknown',
@@ -284,14 +365,16 @@ async function stepAudit(ap: PlanApproval, step: StepRow, action: ControlAction,
 }
 
 /** One step: re-checked, then run as the approver; its fate on its row. Never throws. */
-async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
+async function runStep(ap: PlanApproval, step: StepRow, rebased: Rebased): Promise<void> {
   const end = (status: 'done' | 'skipped' | 'failed', data: { reason?: string | null; changeId?: string | null } = {}) =>
     prisma.agentPlanStep.update({ where: { id: step.id }, data: { status, endedAt: new Date(), ...data } })
   const auto = ap.decisionVia === 'auto'
+  // C6 — what it is checked against: the preview approved, or its basis taken again after an earlier step of this plan.
+  const approved = expectedOf(step, rebased)
   try {
     // C5 — a plan run by the rule stops running by it the moment the business pauses or lowers a step's level.
     if (auto) {
-      const ruleNow = await autoPlanStepRefusal(step.toolName, step.preview, step.args)
+      const ruleNow = await autoPlanStepRefusal(step.toolName, approved, step.args)
       if (ruleNow) {
         await end('skipped', { reason: `not run — ${ruleNow}` })
         await stepAudit(ap, step, 'rule_refused', ruleNow)
@@ -307,7 +390,7 @@ async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
       return
     }
     const args = (step.args ?? {}) as Record<string, unknown>
-    const stale = await previewStaleness(step.toolName, args, step.preview, ap.id, { withFresh: auto })
+    const stale = await previewStaleness(step.toolName, args, approved, ap.id, { withFresh: auto })
     if (stale.stale) {
       const why = stale.why ?? 'it is no longer a valid action'
       await end('skipped', { reason: `not run — ${why}` })
@@ -325,9 +408,11 @@ async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
       }
     }
     const tool = getTool(step.toolName)!
+    // C6 — the later steps standing on what this one changes, whose facts nothing outside the plan moved: taken now.
+    const chained = await chainCandidates(ap, step, rebased)
     const { raw } = await executeTool(decider.principal, step.toolName, args, {
       approvalId: ap.id,
-      approvedPreview: step.preview ?? undefined,
+      approvedPreview: approved ?? undefined,
       via: requestDoor(ap.agentRun),
       approvedByPerson: !auto, // 4A — a plan a person approved; a plan run by his standing rule is not his click
       decidedVia: decidedViaOf(ap.decisionVia), // AA-W2-1 — who decided the plan, for every step
@@ -351,6 +436,8 @@ async function runStep(ap: PlanApproval, step: StepRow): Promise<void> {
       decisionVia: ap.decisionVia,
     })
     await end('done', { changeId })
+    // C6 — this step's own change is not a reason to refuse a later step of the same plan.
+    if (chained.length) await chainBases(ap, step, chained, rebased)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.error('[agent-plan] a step failed', { approvalId: ap.id, step: step.position, tool: step.toolName, error: message })
@@ -386,18 +473,19 @@ export async function runPlan(approvalId: string, opts: { maxSteps?: number } = 
   })
 
   let ran = 0
+  const rebased: Rebased = new Map()
   for (;;) {
     if (opts.maxSteps != null && ran >= opts.maxSteps) return { ran, finished: false }
     const step = await prisma.agentPlanStep.findFirst({
       where: { approvalId, status: 'pending' },
       orderBy: { position: 'asc' },
-      select: { id: true, position: true, toolName: true, args: true, preview: true, undoesChangeId: true },
+      select: STEP_SELECT,
     })
     if (!step) break
     const claimed = await prisma.agentPlanStep.updateMany({ where: { id: step.id, status: 'pending' }, data: { status: 'executing', startedAt: new Date() } })
     if (claimed.count === 0) continue
     ran++
-    await runStep(ap, step)
+    await runStep(ap, step, rebased)
   }
 
   const open = await prisma.agentPlanStep.count({ where: { approvalId, status: { in: ['pending', 'executing'] } } })

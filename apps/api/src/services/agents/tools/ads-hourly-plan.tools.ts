@@ -57,7 +57,7 @@ import { adKitLimits, type KitItem } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { ADDS_NO_SPEND, addsSpendWords, codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { isRefused } from '../../automation/service-outcome.js'
-import type { AgentTool, FieldPermission, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import type { AgentTool, FieldPermission, PlanEntities, PlanEntityKey, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = HOURLY_PLAN_TOOL
 /** The most campaigns one request names (a plan may hold more: its own members are carried as they are). */
@@ -1121,12 +1121,30 @@ const setHourlyBidPlan: AgentTool = {
     + 'shows the week per day from → to, the members from → to, what comes back bid by bid, whose plan it is, what also '
     + 'acts on its campaigns, and where it lands: Nexus only, the hourly bid engine applying it from its next run. '
     + 'undo-change asks for the opposite change.',
+  planEntities: hourlyPlanEntities,
   async handler(args, ctx) {
     return (await decide(args, ctx)).result
   },
   async execute(args, ctx) {
     return runApproved(args, ctx)
   },
+}
+
+/**
+ * C6 — what a step of a change plan stands on and changes (AgentTool.planEntities): the plan; every campaign it touches
+ * (which plan holds each, and its values, are in the basis); and, for a plan over a portfolio, the portfolio — its
+ * campaigns join the plan on every save, so an earlier step that moves campaigns into it changes this step's basis.
+ * Pure, from the arguments and the approved preview.
+ */
+export function hourlyPlanEntities(args: Record<string, unknown>, preview: unknown): PlanEntities {
+  const p = obj(preview)
+  const plan = obj(p.plan)
+  const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()).map((x) => x.trim()) : [])
+  const planId = typeof args.planId === 'string' && args.planId.trim() ? args.planId.trim() : typeof plan.planId === 'string' ? plan.planId : null
+  const portfolioId = typeof plan.portfolioId === 'string' && plan.portfolioId ? plan.portfolioId : typeof args.portfolioId === 'string' && args.portfolioId ? args.portfolioId : null
+  const campaigns = [...new Set([...ids(p.campaignIds), ...ids(args.campaignIds), ...ids(args.add), ...ids(args.remove)])].sort()
+  const writes: PlanEntityKey[] = [...(planId ? [`hourly-plan:${planId}` as const] : []), ...campaigns.map((id) => `campaign:${id}` as const)]
+  return { reads: [...writes, ...(portfolioId ? [`portfolio:${portfolioId}` as const] : [])], writes }
 }
 
 export const ADS_HOURLY_PLAN_TOOLS: AgentTool[] = [adHourlyPlans, setHourlyBidPlan]
