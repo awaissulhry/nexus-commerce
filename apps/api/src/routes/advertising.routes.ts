@@ -8232,22 +8232,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       const ids = members.map((m) => m.campaignId)
       if (!ids.length) return undefined
       const { strategyHeadroom, cpcCapPct: capOf } = await import('../services/advertising/rank-controller.js')
-      const [camps, ags] = await Promise.all([
+      const { resolveMaxBaseBidByCampaign } = await import('../services/advertising/ads-placement-manual.js')
+      // C2 — the engine's own reading: the highest bid that serves (enabled targets; a default bid only where no target).
+      const [camps, maxBase] = await Promise.all([
         prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, biddingStrategy: true } }),
-        prisma.adGroup.findMany({ where: { campaignId: { in: ids } }, select: { id: true, campaignId: true, defaultBidCents: true, suppressedFromBidCents: true } }),
+        resolveMaxBaseBidByCampaign(ids),
       ])
-      const maxBase = new Map<string, number>()
-      for (const g of ags) {
-        const v = Math.max(g.defaultBidCents ?? 0, g.suppressedFromBidCents ?? 0)
-        if (v > (maxBase.get(g.campaignId) ?? 0)) maxBase.set(g.campaignId, v)
-      }
-      const campByAg = new Map(ags.map((g) => [g.id, g.campaignId]))
-      const tgs = await prisma.adTarget.groupBy({ by: ['adGroupId'], where: { adGroup: { campaignId: { in: ids } }, isNegative: false }, _max: { bidCents: true, suppressedFromBidCents: true } })
-      for (const r of tgs) {
-        const cid = campByAg.get(r.adGroupId); if (!cid) continue
-        const v = Math.max(r._max.bidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
-        if (v > (maxBase.get(cid) ?? 0)) maxBase.set(cid, v)
-      }
       // Pick the member whose ceiling bites hardest, measured against a reference ceiling so
       // strategy headroom and base bid are compared on one scale rather than separately.
       let worst: { maxBaseBidCents: number | null; strategyMultiple: number } | undefined
