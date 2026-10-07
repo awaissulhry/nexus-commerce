@@ -2230,12 +2230,12 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         error: `Only FBA (AMAZON_EU) or FBM (DEFAULT) can be set here, not ${code}.${describeAmazonFulfilmentCode(code).kind === 'REMOTE' ? ` ${describeAmazonFulfilmentCode(code).readOnlyReason}` : ''}` })
       const method = code === null ? null : code === 'DEFAULT' ? 'FBM' as const : 'FBA' as const
       // A LIVE Amazon offer is converted on Amazon, never only in Nexus (Owner 2026-10-07): FBA ⇄ FBM goes through the
-      // Matrix's Set fulfilment…, which sends the conversion and confirms it from Amazon's report. A draft keeps the
+      // Matrix (the Fulfilment cell, or Edit… → Fulfilment), which sends the conversion and confirms it from Amazon's report. A draft keeps the
       // sheet's value (Publish sends it); a value that changes nothing still saves.
       const live = !isStillDraftListing(listing) && (listing.isPublished === true || !!listing.externalListingId)
       const now = effectiveFulfilment({ activeOfferMethod: (listing.offers ?? []).length ? 'FBA' : null, typed: listing.fulfillmentMethod, platformAttributes: listing.platformAttributes, productMethod: listing.product?.fulfillmentMethod ?? null })?.method ?? 'FBM'
       if (live && (method === null ? listing.fulfillmentMethod != null : method !== now)) throw new ProductBulkError(400, {
-        error: `This listing is live on Amazon ${d.marketplace}: FBA ⇄ FBM is changed in the Matrix (Set fulfilment…), which converts the offer on Amazon and confirms it from Amazon's report. The product sheet does not send it, so nothing was saved.` })
+        error: `This listing is live on Amazon ${d.marketplace}: FBA ⇄ FBM is changed in the Matrix (the Fulfilment cell, or Edit… → Fulfilment), which converts the offer on Amazon and confirms it from Amazon's report. The product sheet does not send it, so nothing was saved.` })
       return { listingId: listing.id, method, expectedVersion: priceWrittenIds.get(listing.id) ?? expectedVersion }
     })
     const written = await setFulfillmentMethod({ targets, actor: context.userId ?? 'system' })

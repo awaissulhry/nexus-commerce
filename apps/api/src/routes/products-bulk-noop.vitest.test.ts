@@ -298,7 +298,7 @@ describe('the Amazon fulfilment method writes through its one door (2026-09-27)'
     try {
       const refused = await send('AMAZON_EU')
       expect(refused.statusCode).toBe(400)
-      expect(refused.body).toContain('This listing is live on Amazon IT: FBA ⇄ FBM is changed in the Matrix (Set fulfilment…)')
+      expect(refused.body).toContain('This listing is live on Amazon IT: FBA ⇄ FBM is changed in the Matrix (the Fulfilment cell, or Edit… → Fulfilment)')
       expect(refused.body).toContain('nothing was saved')
       expect(fulfilmentWrite).not.toHaveBeenCalled()
       /* the same method it already has: the door writes it (no conversion is needed). */

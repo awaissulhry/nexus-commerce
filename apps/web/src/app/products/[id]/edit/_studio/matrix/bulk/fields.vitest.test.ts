@@ -9,7 +9,7 @@ import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import type { MatrixCells, MatrixCoordinate } from '../contract'
 import {
   BULK_PARENT_ONLY, BULK_PRICE_PERMISSION, basePriceLines, bulkChoices, bulkDefaultMarkets, bulkFields, bulkMarkets, largeChangeWord,
-  saleLines, statusLines, verbLines, verbNotices, verbParams, verbTargets, BULK_FULFILMENT_NOTICE, BULK_STATUS_NEW_ROW, type BulkContext,
+  saleLines, statusLines, verbLines, verbNotices, verbParams, verbTargets, BULK_HOLD_NOTICE, BULK_STATUS_NEW_ROW, type BulkContext,
 } from './fields'
 import { verbSentence } from './bulkSource'
 
@@ -114,7 +114,7 @@ describe('verbs', () => {
   it('targets every ticked variant on every chosen market where it has the field', () => {
     expect(verbTargets(ctx(), 'fulfilment', ['AMAZON:EU', 'EBAY:IT'])).toEqual([{ rowId: 'a', coordinateKey: 'AMAZON:EU' }, { rowId: 'b', coordinateKey: 'AMAZON:EU' }])
   })
-  it('turns the server preview into lines: changes, then refusals with their reason; a fulfilment change says nothing is sent to Amazon', () => {
+  it('turns the server preview into lines: changes, then refusals with their reason; a hold says what else it holds', () => {
     const lines = verbLines({
       changes: [{ rowId: 'a', sku: 'A', coordinateKey: 'AMAZON:EU', cell: 'fulfilment', from: 'FBA', to: 'FBM', fromLabel: 'FBA', toLabel: 'FBM', note: 'Follow → 6' }],
       refusals: [{ rowId: 'b', sku: 'B', coordinateKey: 'AMAZON:EU', kind: 'guard', reason: 'Refused — 3 units of FBA stock on hand keep the guard closed' }],
@@ -123,10 +123,12 @@ describe('verbs', () => {
       ['A', 'Amazon EU', 'FBA', 'FBM', 'Follow → 6', null],
       ['B', 'Amazon EU', '', null, null, 'Refused — 3 units of FBA stock on hand keep the guard closed'],
     ])
-    expect(verbNotices({ verb: 'set-fulfilment', notices: [] })).toEqual([BULK_FULFILMENT_NOTICE])
+    expect(verbNotices({ verb: 'set-fulfilment', notices: ['Sends Amazon …'] })).toEqual(['Sends Amazon …'])
+    expect(verbNotices({ verb: 'pause-sync', notices: [] })).toEqual([BULK_HOLD_NOTICE])
   })
   it('says the result in words, counting what the server applied', () => {
-    expect(verbSentence({ verb: 'set-fulfilment', changes: [{ toLabel: 'FBM' } as never] }, 10, 2)).toBe('10 listings set to FBM in Nexus · 2 skipped. Convert the offer in Seller Central too.')
+    expect(verbSentence({ verb: 'set-fulfilment', changes: [{ toLabel: 'FBM', coordinateKey: 'AMAZON:EU' } as never] }, 10, 2)).toBe('10 listings sent to Amazon as FBM · 2 skipped. Amazon\'s report confirms it within about 15 minutes — the Fulfilment cell shows it.')
+    expect(verbSentence({ verb: 'set-fulfilment', changes: [{ toLabel: 'MCF', coordinateKey: 'EBAY:IT' } as never] }, 1, 0)).toBe('1 listing set to MCF in Nexus.')
     expect(verbSentence({ verb: 'set-price', changes: [] }, 1, 0)).toBe('1 price changed. Nexus sends it in about 30 seconds.')
   })
 })

@@ -18,8 +18,6 @@ export const BULK_PRICE_PERMISSION = 'You do not have permission to change price
 export const BULK_PARENT_ONLY = 'The parent row has no listing of its own — tick its variants'
 export const BULK_NOT_ON_MARKET = 'Not on this market'
 export const BULK_SAME = (now: string) => `Already ${now}`
-/** Said on a fulfilment change (the server's own sentence, `FULFILMENT_NOT_SENT`). */
-export const BULK_FULFILMENT_NOTICE = 'Saved in Nexus only: Amazon is not asked to switch the offer. Convert it in Seller Central too. From now on Nexus treats these listings as the new method.'
 export const BULK_HOLD_NOTICE = 'Holding the stock sync also holds price and sale changes on these listings: they are kept in Nexus and sent when the stock sync is released.'
 export const BULK_BASE_PRICE_NOTICE = 'Markets that follow the base price get the new price too. Nexus sends it about 30 seconds after saving.'
 export const BULK_STATUS_NEW_ROW = 'Not on this market yet. Choose its Status in the grid to create the listing'
@@ -49,7 +47,7 @@ const MODES: Record<BulkFieldId, readonly BulkModeSpec[]> = {
     { id: 'status', label: 'Set to', input: 'choice', inputLabel: 'New status', hint: 'Saved in Nexus now. Publish sends it to each market.' },
   ],
   fulfilment: [
-    { id: 'method', label: 'Set to', input: 'choice', inputLabel: 'Method', hint: 'FBA: Amazon ships from its own stock. FBM: you ship, and Nexus sends your stock.' },
+    { id: 'method', label: 'Set to', input: 'choice', inputLabel: 'Method', hint: 'FBA: Amazon ships from its own stock. FBM: you ship, and Nexus sends your stock. On Amazon the offer itself is switched, and Amazon\'s report confirms it.' },
   ],
   quantity: [
     { id: 'follow', label: 'Follow stock', input: 'none', hint: 'The market shows your warehouse stock, less the buffer, and moves with it.' },
@@ -254,9 +252,12 @@ export function verbLines(preview: Pick<VerbPreview, 'changes' | 'refusals'>, la
   return [...changes, ...refusals]
 }
 
-/** The notices a verb's preview carries, plus the sentence the operator must read for this verb. */
+/**
+ * The notices a verb's preview carries, plus the sentence the operator must read for this verb. A fulfilment change says
+ * its own (the server's preview: what is sent to Amazon and where, Amazon EU's one quantity, eBay's Nexus-only method).
+ */
 export function verbNotices(preview: Pick<VerbPreview, 'verb' | 'notices'>): string[] {
-  const own = preview.verb === 'set-fulfilment' ? [BULK_FULFILMENT_NOTICE] : preview.verb === 'pause-sync' ? [BULK_HOLD_NOTICE] : []
+  const own = preview.verb === 'pause-sync' ? [BULK_HOLD_NOTICE] : []
   return [...preview.notices, ...own]
 }
 
