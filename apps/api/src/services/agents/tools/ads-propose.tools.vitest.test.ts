@@ -102,10 +102,10 @@ describe('A4 — set-target-bid previews what lands, where, in which currency', 
   it('W4-4 — past the campaign\'s max-change guardrail: a person\'s approval sends the bid asked for after the card\'s warning; a run by rule writes the stepped bid', async () => {
     const r = await preview('set-target-bid', { targetId: 't-it', proposedBidCents: 200 })
     expect(r.preview).toMatchObject({
-      proposedBidCents: 200, deltaCents: 155, byRuleBidCents: 68, byRuleSteppedBy: expect.stringContaining('max-change'),
+      proposedBidCents: 200, effectiveBidCents: 200, deltaCents: 155, byRuleBidCents: 68, byRuleSteppedBy: expect.stringContaining('max-change'),
       reach: { reach: 'sandbox', pastOwnLimits: [{ limit: 'bid_step', reason: expect.stringContaining('more than the largest bid change 50 % (the campaign\'s own max-change guardrail)') }] },
     })
-    expect(r.preview).not.toHaveProperty('effectiveBidCents')
+    expect(r.preview).not.toHaveProperty('clampedBy')
   })
 
   it('live: it lands on the Amazon Ads profile; 4A — off the allowlist it lands too (an approved request is his click); a market Nexus does not send to is refused and not queued', async () => {

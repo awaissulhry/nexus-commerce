@@ -524,8 +524,8 @@ export const PERSON_BID_HOLD_DAYS = 60
  *
  * ADS AUTONOMY W4-4 — unless the NEWEST of those writes handed the bid back to auto-bid: a Claude request asked with
  * `afterwards: 'auto-bid'`, whose action log row carries `evidence.handBack` and names its request as the change set
- * (`executionId`). The mark counts only when that request is one a PERSON decided (its AgentApproval, decided in Nexus
- * or confirmed with a code, never by the business's rule): a mark on any other write releases nothing. A hand-back
+ * (`executionId`). The mark counts only when that request is one a PERSON decided (its AgentApproval decided, and not
+ * by the business's rule — as the run itself tells them apart): a mark on any other write releases nothing. A hand-back
  * releases an earlier person's bid too; a person's later edit holds the bid again.
  */
 export async function personBidTargetIds(): Promise<Set<string>> {
@@ -543,10 +543,14 @@ export async function personBidTargetIds(): Promise<Set<string>> {
       select: { id: true, executionId: true },
     }),
   ])
-  // Only a request a person decided hands a bid back (`decisionVia` null or 'auto' never does).
+  // Only a request a person decided hands a bid back: decided, and not by the business's rule (`decisionVia` 'auto') —
+  // the test the run itself makes (approval-gate.service.ts approvedByPerson). An undecided request hands nothing back.
   const requestIds = [...new Set(marked.map((m) => m.executionId!))]
   const decided = requestIds.length
-    ? new Set((await prisma.agentApproval.findMany({ where: { id: { in: requestIds }, decisionVia: { not: 'auto' } }, select: { id: true } })).map((a) => a.id))
+    ? new Set((await prisma.agentApproval.findMany({
+      where: { id: { in: requestIds }, decidedAt: { not: null }, OR: [{ decisionVia: null }, { decisionVia: { not: 'auto' } }] },
+      select: { id: true },
+    })).map((a) => a.id))
     : new Set<string>()
   const handBacks = marked.filter((m) => decided.has(m.executionId!))
   const handedBack = new Set(handBacks.map((h) => h.id))
