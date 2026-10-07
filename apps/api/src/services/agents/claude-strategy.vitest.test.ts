@@ -206,7 +206,7 @@ describe('W1-8 — the strategy narrows: confirm becomes ask where it says ask',
     const out = await inside(() => readStrategy({ market: 'IT' }))
     if ('error' in out) throw new Error(out.error)
     const bid = ((out.data.markets as Answer[])[0].claude as Answer[]).find((c) => c.action === 'bid')!
-    expect(bid.tools).toEqual([{ tool: 'set-target-bid', business: 'confirm', effective: 'ask' }, { tool: 'bulk-ad-bid-change', business: 'ask', effective: 'ask' }])
+    expect(bid.tools).toEqual([{ tool: 'set-target-bid', business: 'confirm', effective: 'ask' }, { tool: 'bulk-ad-bid-change', business: 'ask', effective: 'ask' }, { tool: 'set-ad-group', business: 'ask', effective: 'ask' }]) // W4-6 — an ad group's default bid is a bid too
   })
 })
 
@@ -412,7 +412,7 @@ describe('AA-W2-4 — the strategy may hold a kind at watch (set-price stands in
     if ('error' in out) throw new Error(out.error)
     const bid = ((out.data.markets as Answer[])[0].claude as Answer[]).find((c) => c.action === 'bid')!
     expect(bid).toMatchObject({ strategy: 'watch' })
-    expect(bid.tools).toEqual([{ tool: 'set-target-bid', business: 'confirm', effective: 'confirm' }, { tool: 'bulk-ad-bid-change', business: 'ask', effective: 'ask' }])
+    expect(bid.tools).toEqual([{ tool: 'set-target-bid', business: 'confirm', effective: 'confirm' }, { tool: 'bulk-ad-bid-change', business: 'ask', effective: 'ask' }, { tool: 'set-ad-group', business: 'ask', effective: 'ask' }]) // W4-6 — an ad group's default bid is a bid too
     const rule = await inside(() => claudeRuleForChange('set-target-bid', { targetId: 't-it', proposedBidCents: 51 }))
     expect(rule).toMatchObject({ level: 'confirm' })
     expect(rule).not.toHaveProperty('narrowedBy')

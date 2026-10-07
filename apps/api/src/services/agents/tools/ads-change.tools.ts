@@ -66,6 +66,8 @@ import { recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview,
 import { afterUndone } from '../change-record.service.js'
 import { pausesNoClaudeMade } from './ads-status.tools.js'
 import { alsoChangedByOf, budgetEnginesOf } from './ads-budget-kit.js'
+import { floorOriginsOf, floorUntilWords, ownFloorRaiseRefusal } from './ads-ad-groups.tools.js'
+import { ownFloorsOf } from '../../advertising/ad-group-lookup.service.js'
 
 /** The flat horizon a change set reverses within (rollbackByChangeSetId). */
 const SET_WINDOW_MS = 24 * 3600 * 1000
@@ -361,6 +363,9 @@ async function finish(source: Record<string, unknown>, rows: UndoRow[], negative
   const { settingsUndoRefusal } = await import('./ads-campaign-settings.tools.js')
   const settings = await settingsUndoRefusal(rows)
   if (settings) return { ok: false, error: settings }
+  // W4-6 review — nor a floor create-ad-group or set-ad-group op stop made: only op start lifts it (the approver's code).
+  const ownFloor = await ownFloorRaiseRefusal(items)
+  if (ownFloor) return { ok: false, error: ownFloor }
   const rule = await ruleFactsFor({ tool: 'undo-ad-change', limits: UNDO_LIMITS, items, writes, approvalId: ctx?.approvalId })
   const parts = [
     rows.length ? `restores ${total} recorded write${total === 1 ? '' : 's'} to the values before them` : '',
@@ -1532,6 +1537,10 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
   const top = remembered.reduce<(typeof remembered)[number] | null>((best, t) => (!best || toCents(t) > toCents(best) ? t : best), null)
   const highest = top ? toCents(top) : 0
   const held = remembered.filter((t) => back.get(t.id)?.heldBy)
+  // W1-6b — the ad groups at a floor of their own stay at it; W4-6 review — each says who made it and what lifts it.
+  const ownFloors = groups.ownFloors ? await ownFloorsOf({ campaignId }) : []
+  const origins = await floorOriginsOf(ownFloors)
+  const stays = ownFloors.map((g) => ({ adGroupId: g.id, name: g.name, until: floorUntilWords(origins.get(g.id)) }))
   const intent = { campaignId, adGroupId: top?.adGroupId ?? null, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: highest || null }], isSuppression: true }
   const reach = await checkLiveReach(intent)
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
@@ -1568,9 +1577,9 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
-      ...(groups.ownFloors ? { staysFloored: { adGroups: groups.ownFloors } } : {}),
+      ...(groups.ownFloors ? { staysFloored: { adGroups: groups.ownFloors, floors: stays.slice(0, LINES_SHOWN) } } : {}),
       ...rule,
-      effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}${held.length ? `; ${held.length} at a bid limit instead of the bid it had (each line says which)` : ''}. The campaign serves again.${groups.ownFloors ? ` ${groups.ownFloors} ad group${groups.ownFloors === 1 ? ' stays' : 's stay'} at ${groups.ownFloors === 1 ? 'its' : 'their'} own floor (a product over its monthly cap in the ads strategy) until the 1st or until that cap is raised.` : ''}`,
+      effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}${held.length ? `; ${held.length} at a bid limit instead of the bid it had (each line says which)` : ''}. The campaign serves again.${stays.length ? ` ${stays.length} ad group${stays.length === 1 ? ' stays' : 's stay'} at ${stays.length === 1 ? 'its' : 'their'} own floor: ${stays.slice(0, 3).map((g) => `"${g.name}" ${g.until}`).join('; ')}${stays.length > 3 ? `; and ${stays.length - 3} more (staysFloored)` : ''}.` : ''}`,
     },
   }
 }

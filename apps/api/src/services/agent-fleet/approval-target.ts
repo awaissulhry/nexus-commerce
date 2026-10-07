@@ -279,6 +279,8 @@ const AMAZON_AD_TOOLS = new Set([
   // W4-7 — budgets.
   'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines',
   'add-ad-targets', 'add-negative-targets', 'retire-negatives', 'harvest-search-term', 'set-harvest-destination',
+  // W4-6 — ad groups and product ads.
+  'create-ad-group', 'add-product-ads', 'set-ad-group',
 ])
 
 /** A campaign page: Amazon's by its Nexus Campaign id, eBay's by its Nexus eBay campaign id. */
@@ -935,6 +937,56 @@ const READERS: Record<string, Reader> = {
         { label: 'Daily budget', from: null, to: adMoney(plan.dailyBudgetCents, plan.currency) },
       ],
     }
+  },
+  // W4-6 — a new ad group: its name and what it holds, and how its bids start (at the floor, or as planned).
+  'create-ad-group': (p, _a, ctx, tool) => {
+    const plan = rec(p.plan) ?? {}
+    const products = recs(plan.products)
+    const keywords = recs(plan.keywords).length
+    const targets = recs(plan.productTargets).length
+    const negatives = recs(plan.negativeKeywords).length + strings(plan.negativeAsins).length
+    const live = plan.start === 'live'
+    return {
+      ...adCampaign(p, tool),
+      target: productTarget({ id: text(products[0]?.productId), sku: text(products[0]?.sku) }, products.length || 1, ctx),
+      changes: [
+        { label: 'New ad group', from: null, to: `“${text(plan.name) ?? '?'}” · ${plural(products.length, 'product ad')} · ${keywords ? plural(keywords, 'keyword') : plural(targets, 'product target')}${negatives ? ` · ${plural(negatives, 'negative')}` : ''}` },
+        { label: 'Bids', from: null, to: live ? `as planned, up to ${adMoney(p.highestPlannedBidCents, p.currency) ?? '?'}` : `at the 2-cent floor, the planned bids kept (up to ${adMoney(p.highestPlannedBidCents, p.currency) ?? '?'})` },
+      ],
+    }
+  },
+  // W4-6 — product ads into an ad group: one line per product.
+  'add-product-ads': (p, _a, ctx, tool) => {
+    const products = recs(p.products)
+    const group = text(rec(p.adGroup)?.name)
+    const items = products.map((x) => ({ sku: text(x.sku), name: null, change: { label: text(x.sku) ?? 'Product', from: null, to: `Product ad${group ? ` in “${group}”` : ''}` } }))
+    return {
+      ...adCampaign(p, tool),
+      changes: items.map((i) => i.change),
+      items,
+      changeCount: num(rec(p.totals)?.productAds) ?? items.length,
+      target: productTarget({ id: text(products[0]?.productId), sku: text(products[0]?.sku) }, products.length || 1, ctx),
+    }
+  },
+  // W4-6 — one ad group: its default bid and name, or its bids stopped or given back.
+  'set-ad-group': (p, _a, _ctx, tool) => {
+    const group = text(rec(p.adGroup)?.name)
+    const name = rec(p.name)
+    if (p.op === 'stop' || p.op === 'start') {
+      return {
+        ...adCampaign(p, tool),
+        changes: recs(p.bids).map((b) => ({ label: `${group ? `“${group}” · ` : ''}${text(b.text) ?? '?'}`, from: adMoney(b.fromCents, p.currency), to: adMoney(b.toCents, p.currency) })),
+        changeCount: num(rec(p.totals)?.bids) ?? recs(p.bids).length,
+      }
+    }
+    const changes: QueueChange[] = []
+    // W4-4 — the default bid a person's approval sends and, past the largest change, what a run by rule writes instead.
+    const sent = num(p.effectiveBidCents)
+    const rule = num(p.byRuleBidCents)
+    const to = adMoney(sent, p.currency)
+    if (sent != null && sent !== num(p.currentBidCents)) changes.push({ label: `${group ? `“${group}” · ` : ''}Default bid`, from: adMoney(p.currentBidCents, p.currency), to: to && rule != null && rule !== sent ? `${to} (by rule: ${adMoney(rule, p.currency)})` : to })
+    if (name) changes.push({ label: 'Ad group name', from: text(name.from) ? `“${text(name.from)}”` : null, to: text(name.to) ? `“${text(name.to)}”` : null })
+    return { ...adCampaign(p, tool), changes }
   },
   // B-3 — a one-off SP Super Wizard set: how many campaigns of which structure, their daily budget and the products.
   'build-sp-wizard-campaigns': (p) => {

@@ -34,6 +34,7 @@ import { ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/ads-campaign-settings.tools
 import { ADS_HOURLY_PLAN_TOOLS } from './tools/ads-hourly-plan.tools.js'
 import { ADS_TARGET_TOOLS } from './tools/ads-targets.tools.js'
 import { ADS_NEGATIVE_TOOLS } from './tools/ads-negatives.tools.js'
+import { ADS_AD_GROUP_TOOLS } from './tools/ads-ad-groups.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -152,6 +153,8 @@ const ALL: AgentTool[] = [
   // form, and retiring any negative.
   ...ADS_TARGET_TOOLS,
   ...ADS_NEGATIVE_TOOLS,
+  // Ads autonomy W4-6 — ad groups and product ads: read them, create one (born at the floor), add product ads, change one.
+  ...ADS_AD_GROUP_TOOLS,
   // Ads autonomy W3-2 — cancel an ad write Nexus queued and has not sent yet (a brake: nothing reaches Amazon).
   ...ADS_QUEUED_WRITE_TOOLS,
   ...EBAY_AD_TOOLS,

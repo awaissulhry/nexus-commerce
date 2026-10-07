@@ -33,6 +33,7 @@ import { buildLimitFacts, commonRefusal, LIMIT_FACTS_MONEY, limitsNote, type Kit
 import type { FieldPermission, ToolContext, ToolResult } from '../tool-types.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import { stepClamp, strategyWords, limitWords, type StepClamp, type StrategyBidLimits } from '../../advertising/ads-strategy/bids.js'
+import type { ClaudeActionType } from '../../advertising/ads-strategy/fields.js'
 
 // ── Running as an approved request ────────────────────────────────────────────────────────────────
 
@@ -407,8 +408,10 @@ export async function ruleFactsFor(input: {
   projectMonth?: boolean
   /** W4-1 — the schedules C4 does not count as an engine that also moves it (the hourly plan being changed). */
   exceptIds?: readonly string[]
+  /** W4-6 — the kind of this op of a tool with several (OP_ACTIONS, ads-strategy/claude.ts); absent: the tool's kind. */
+  action?: ClaudeActionType | null
 }): Promise<RuleFacts> {
-  const limitFacts = await buildLimitFacts({ tool: input.tool, items: input.items, approvalId: input.approvalId, projectMonth: input.projectMonth, exceptIds: input.exceptIds })
+  const limitFacts = await buildLimitFacts({ tool: input.tool, items: input.items, approvalId: input.approvalId, projectMonth: input.projectMonth, exceptIds: input.exceptIds, ...(input.action !== undefined ? { action: input.action } : {}) })
   const ruleGate = await ruleGateRefusal(input.writes)
   return { limitFacts, limitsNote: limitsNote(limitFacts, await toolLimitsHere(input.tool, input.limits)), ruleGate }
 }

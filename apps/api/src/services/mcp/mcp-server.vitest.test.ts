@@ -33,8 +33,11 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // Ads autonomy W4-7 — the budget tools: a give-back, a rebalance or a restore writes budgets at Amazon; a plan, a schedule or a
 // pool is acted on at Amazon by its engine.
 const OPEN_WORLD = [
-  'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'advance-purchase-order', 'apply-ad-recommendations', 'apply-ads-playbook', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change', 'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label',
-  'cancel-order', 'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ai-goal-campaigns',
+  'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
+  'apply-ad-recommendations', 'apply-ads-playbook', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
+  'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
+  'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ad-group',
+  'create-ai-goal-campaigns',
   'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
   'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'fba-shipment-options', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
   'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
@@ -42,10 +45,10 @@ const OPEN_WORLD = [
   'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign', 'resume-automation',
   'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
-  'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings', 'set-ebay-ad-rates',
-  'set-ebay-campaign-budget', 'set-ebay-price-promotion', 'set-hourly-bid-plan', 'set-listing-price',
-  'set-listing-stock', 'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers', 'set-portfolio',
-  'set-price',
+  'set-ad-group', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
+  'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion', 'set-hourly-bid-plan',
+  'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers',
+  'set-portfolio', 'set-price',
   'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid', 'shipping-rates',
   'shopify-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock', 'tune-ad-engine',
   'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'void-shipping-label',

@@ -67,7 +67,7 @@ interface Seeded {
   shipmentId: string; draftProductId: string; aliasId: string; campaignId: string
   /** W4-1 — an hourly bid plan holding the campaign. */
   hourlyPlanId: string
-  /** W4-5 — the campaign's ad group (targets, negatives and a harvest destination name it). */
+  /** W4-5 / W4-6 — the campaign's ad group (targets, negatives, a harvest destination and the ad group tools name it). */
   adGroupId: string
   publicationId: string; familyId: string; variantId: string; variantDraftId: string
   /** P4 — a channel account and the trace of one channel call. */
@@ -337,6 +337,12 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // money; business B's plan never shows from A); a plan change needs money (refused for a person without it).
   'ad-hourly-plans': (ids) => ({ campaignId: ids.campaignId }),
   'set-hourly-bid-plan': (ids) => ({ op: 'rename', planId: ids.hourlyPlanId, name: 'Money plan renamed' }),
+  // W4-6 — the ad groups of the seeded campaign (default bids and metrics are money, stripped for a person without it);
+  // a new ad group, product ads and an ad group change name bids (they need money: refused for a person without it).
+  'ad-groups': (ids) => ({ campaignId: ids.campaignId, status: 'all' }),
+  'create-ad-group': (ids) => ({ campaignId: ids.campaignId, name: 'Money group', defaultBidCents: 40, skus: [ids.sku], keywords: [{ text: 'jacket', matchType: 'EXACT' }] }),
+  'add-product-ads': (ids) => ({ adGroupId: ids.adGroupId, skus: [ids.sku] }),
+  'set-ad-group': (ids) => ({ adGroupId: ids.adGroupId, defaultBidCents: 30 }),
   // B-2 — an AI goal's plan names budgets and bids (it needs money: refused for a person without it).
   'create-ai-goal-campaigns': (ids) => ({ market: 'IT', name: 'Money goal', goalProducts: [{ sku: ids.productId, dailyBudgetCents: 1500 }], seedKeywords: ['jacket'] }),
   // Ads autonomy W4-1 — a run report states each market's spend and sales (it needs money: refused for a person

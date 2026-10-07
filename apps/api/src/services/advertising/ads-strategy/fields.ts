@@ -51,7 +51,8 @@ export const STOP_METHODS = ['LOW_BIDS', 'PAUSE'] as const
  * stop stays `stop` (low bids). AA-W2-13 — and an archive (Owner D-W2-5: one kind; Amazon's delete is the same archive).
  */
 export const CLAUDE_ACTION_TOOLS = {
-  bid: ['set-target-bid', 'bulk-ad-bid-change'],
+  // W4-6 — an ad group's default bid (set-ad-group's own kind; its stop and start ops are listed under stop and restore).
+  bid: ['set-target-bid', 'bulk-ad-bid-change', 'set-ad-group'],
   // W4-5 — the list form of each (add-negative-targets; harvest-search-term, which negates its source too: claude.ts
   // ARG_ACTIONS), and where a harvest lands (set-harvest-destination, Nexus only).
   negative: ['create-negative-keyword', 'add-negative-targets'],
@@ -63,13 +64,13 @@ export const CLAUDE_ACTION_TOOLS = {
   suggestion: ['decide-automation-suggestions'],
   // ADS AUTONOMY W3-3 — a stock brake is a temporary stop with low bids too (an ad group short of stock), and giving
   // its bids back a restore.
-  stop: ['suppress-campaign', 'lower-ad-bids-for-stock'],
-  restore: ['restore-campaign', 'restore-ad-bids-after-stock'],
+  stop: ['suppress-campaign', 'lower-ad-bids-for-stock', 'set-ad-group'],
+  restore: ['restore-campaign', 'restore-ad-bids-after-stock', 'set-ad-group'],
   // PB-5a — a playbook build creates campaigns (apply-ads-playbook op build; its other ops map in OP_ACTIONS, claude.ts).
   // B-1 — so does a copy of a running structure (replicate-ad-structure, Replicate Structure's own run).
   // B-2 — so does an AI goal (create-ai-goal-campaigns).
-  // B-3 — and a one-off SP Super Wizard set.
-  create: ['create-ad-campaign', 'apply-ads-playbook', 'create-ai-goal-campaigns', 'replicate-ad-structure', 'build-sp-wizard-campaigns'],
+  // B-3 — and a one-off SP Super Wizard set. W4-6 — and a new ad group, or product ads added to one.
+  create: ['create-ad-campaign', 'apply-ads-playbook', 'create-ai-goal-campaigns', 'replicate-ad-structure', 'build-sp-wizard-campaigns', 'create-ad-group', 'add-product-ads'],
   rule: ['save-ad-rule'],
   undo: ['undo-ad-change'],
   // AA-W2-9 (D-W2-6 = A) — a new campaign goes live in three kinds: create, allowlist (Claude's own), restore.
