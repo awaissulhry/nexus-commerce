@@ -22,6 +22,7 @@ import { startWizardCleanupCron } from "../jobs/wizard-cleanup.job.js";
 import { startOrphanBulkJobCleanupCron } from "../jobs/bulk-job-orphan-cleanup.job.js";
 import { startFbaFlipGuardCron } from "../jobs/fba-flip-guard.job.js";
 import { startFbaDriftDetectorCron } from "../jobs/fba-drift-detector.job.js";
+import { startFulfilmentConversionConfirmCron } from "../jobs/fulfilment-conversion-confirm.job.js";
 import { startReadCacheReconcileCron } from "../jobs/read-cache-reconcile.job.js";
 import { startScheduledBulkActionCron } from "../jobs/scheduled-bulk-action.job.js";
 import { startBulkAutomationTickCron } from "../jobs/bulk-automation-tick.job.js";
@@ -149,6 +150,11 @@ export async function startScheduler(): Promise<void> {
   // SKU we expect FBA shows as FBM — catches flips from ANY source (Seller
   // Central, other tools), not just Nexus. Opt out: NEXUS_ENABLE_FBA_DRIFT_DETECTOR=0.
   startFbaDriftDetectorCron();
+
+  // Amazon fulfilment conversion (2026-10-07) — every 15 min, only while an FBA ⇄ FBM change Nexus sent is waiting for
+  // Amazon's merchant listings report (< 24 h): confirms it, or says it is still old / not in the report. Read-only on
+  // Amazon. Opt out: NEXUS_ENABLE_FULFILMENT_CONFIRM=0.
+  startFulfilmentConversionConfirmCron();
 
   // ES.4 — ProductReadCache reconcile (every 15 min). Worker-independent
   // backstop that heals any drift between Product truth and the /products

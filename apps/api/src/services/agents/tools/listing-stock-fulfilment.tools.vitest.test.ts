@@ -3,17 +3,17 @@
  * through the one door (call-tool.ts) on the Matrix door (`runMatrixVerb`, `revertMatrixOperation`), against a real
  * PostgreSQL with the production schema and business-isolation policies (PGlite). The job queue is faked.
  *
- * Proven here: a fulfilment change lands on an Amazon EU market's whole group (AMAZON:EU), sends Amazon nothing, and its
- * preview says what changes on Amazon (no quantity: it is Amazon's; the last quantity Amazon keeps; the product's FBA
- * mark and the other markets it closes); revert-listing-change puts it back. FBA → FBM is refused while FBA units are on
- * hand (the Matrix's own guard) and while an active FBA offer remains (the write's guard, which the Matrix preview does
- * not check) — in the preview and again at the run, nothing written. Only Amazon coordinates and FBA/FBM are offered.
+ * Proven here (Amazon fulfilment conversion, 2026-10-07): a fulfilment change lands on an Amazon EU market's whole group
+ * (AMAZON:EU) and is SENT to Amazon — one Listings Items patch per open market, the SP-API client faked — after a person
+ * approved the preview, which says what is sent where; the dry run sends nothing; revert-listing-change sends the
+ * opposite conversion. FBA → FBM is refused while FBA units are on hand and while an active FBA offer remains — in the
+ * preview and again at the run, nothing sent or written. Only Amazon coordinates and FBA/FBM are offered.
  * Retry sends the newest failed push again, refuses a push that only reads as failed (skipped), and has no undo.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 
-const state = vi.hoisted(() => ({ db: null as any, enqueue: null as any }))
+const state = vi.hoisted(() => ({ db: null as any, enqueue: null as any, submit: null as any }))
 vi.mock('@nexus/database', async (original) => {
   const { formulaDatabase } = await import('../../../test-support/formula-database.js')
   state.db = await formulaDatabase()
@@ -27,11 +27,17 @@ vi.mock('../../../lib/queue.js', () => {
 vi.mock('../../product-event.service.js', () => ({ productEventService: { emit: vi.fn(), emitMany: vi.fn(), emitManyTx: vi.fn(), emitTx: vi.fn() } }))
 vi.mock('../../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(async () => undefined), refreshMany: vi.fn(async () => undefined), refreshInTransaction: vi.fn(async () => undefined) } }))
 vi.mock('../../stock-movement.service.js', async (original) => ({ ...(await original<object>()), recascadeAfterSyncControlChange: vi.fn(async () => ({ ok: 1, noLedger: 0, failed: 0, heldPricesSent: 0 })) }))
+// Amazon is faked: every patch is answered ACCEPTED, and recorded.
+vi.mock('../../../clients/amazon-sp-api.client.js', () => {
+  state.submit = vi.fn(async (o: { sku: string }) => ({ success: true, sku: o.sku, status: 'ACCEPTED', rawResponse: { status: 'ACCEPTED', submissionId: 'sub-1', issues: [] } }))
+  return { amazonSpApiClient: { submitListingPayload: state.submit } }
+})
+vi.mock('../../../lib/amazon-sp-client.js', async (original) => ({ ...(await original<object>()), getAmazonSellerId: vi.fn(async () => 'SELLER-T2'), getAmazonRegion: vi.fn(async () => 'eu') }))
 
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../../lib/workspace-context.js'
 import { callTool, executeTool, type UserPrincipal } from '../call-tool.js'
 import { getTool } from '../tool-registry.js'
-import { FULFILMENT_NOT_SENT, RETRY_SENDS_AGAIN, fulfilmentWords } from './listing-stock.tools.js'
+import { FULFILMENT_SENT, RETRY_SENDS_AGAIN, fulfilmentWords } from './listing-stock.tools.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -87,54 +93,78 @@ beforeAll(async () => {
 afterAll(async () => { await state.db?.close() }, 60_000)
 
 describe('set-listing-stock set-fulfilment', () => {
-  it('FBM → FBA on an EU market lands on the EU group, says what changes on Amazon, runs, and reverts', async () => {
+  const sent = () => state.submit.mock.calls.map(([o]: [any]) => ({ sku: o.sku, marketplaceId: o.marketplaceId, value: o.payload.patches[0].value, path: o.payload.patches[0].path, conversion: typeof o.conversionId === 'string' }))
+  const records = async (listingIds: string[]) => (await state.db.db.query(`SELECT marketplace, "fromMethod", "toMethod", quantity, status, "operatorConfirmed", origin FROM "FulfilmentConversion" WHERE "channelListingId" = ANY($1) ORDER BY "createdAt", marketplace`, [listingIds])).rows
+
+  it('FBM → FBA on an EU market lands on the EU group, is SENT to Amazon per market after the yes, and reverts by the opposite conversion', async () => {
+    state.submit.mockClear()
     const args = { productId: ids.fbm, action: 'set-fulfilment', method: 'FBA', targets: [{ rowId: ids.fbm, coordinateKey: 'AMAZON:IT' }] }
     const preview = await dryRun(args)
     expect(preview.ok, preview.error).toBe(true)
-    expect(preview.preview).toMatchObject({ verb: 'set-fulfilment', changes: [{ coordinateKey: 'AMAZON:EU', cell: 'fulfilment', from: 'FBM', to: 'FBA' }] })
+    expect(preview.preview).toMatchObject({ verb: 'set-fulfilment', changes: [{ coordinateKey: 'AMAZON:EU', cell: 'fulfilment', from: 'FBM', to: 'FBA',
+      note: 'Sends Amazon FBA (AMAZON_EU) on IT DE, no quantity — out of stock until Amazon receives units' }] })
     expect(preview.preview.summary).toBe('TEST-SKU-T2: set-fulfilment — 1 change on AMAZON:EU.')
     const warning = preview.preview.warning as string
     expect(warning).toContain('Amazon EU: this covers')
-    expect(warning).toContain(FULFILMENT_NOT_SENT)
-    expect(warning).toContain('TEST-SKU-T2-M on Amazon IT DE: from now on Nexus sends no quantity — the quantity is Amazon\'s')
-    expect(warning).toContain('Amazon keeps the last quantity Nexus sent (5)')
-    expect(warning).toContain('TEST-SKU-T2-M itself becomes marked FBA, so Nexus also stops sending a quantity to AMAZON:UK.')
-    // The dry run changed nothing.
+    expect(warning).toContain(FULFILMENT_SENT)
+    expect(warning).toContain('Sent to Amazon on IT DE')
+    expect(warning).toContain('shows out of stock on Amazon until Amazon receives units')
+    expect(warning).toContain('TEST-SKU-T2-M on AMAZON:EU: Sends Amazon FBA (AMAZON_EU) on IT DE')
+    // The dry run sent nothing and changed nothing.
+    expect(state.submit).not.toHaveBeenCalled()
     expect((await listingRow(ids.fbmIt)).fulfillmentMethod).toBe('FBM')
 
     const ran = await runApproved(args, preview.preview)
     expect(ran.ok, ran.error).toBe(true)
+    expect(sent()).toEqual([
+      { sku: 'TEST-SKU-T2-M', marketplaceId: 'APJ6JRA9NG5V4', path: '/attributes/fulfillment_availability', value: [{ fulfillment_channel_code: 'AMAZON_EU' }], conversion: true },
+      { sku: 'TEST-SKU-T2-M', marketplaceId: 'A1PA6795UKMFR9', path: '/attributes/fulfillment_availability', value: [{ fulfillment_channel_code: 'AMAZON_EU' }], conversion: true },
+    ])
     expect([(await listingRow(ids.fbmIt)).fulfillmentMethod, (await listingRow(ids.fbmDe)).fulfillmentMethod, (await listingRow(ids.fbmUk)).fulfillmentMethod]).toEqual(['FBA', 'FBA', 'FBM'])
     expect(await productMark(ids.fbm)).toBe('FBA')
+    expect((await records([ids.fbmIt, ids.fbmDe])).map((r: any) => [r.marketplace, r.fromMethod, r.toMethod, r.quantity, r.status, r.operatorConfirmed, r.origin]).sort())
+      .toEqual([['DE', 'FBM', 'FBA', null, 'SENT', true, 'matrix-verb'], ['IT', 'FBM', 'FBA', null, 'SENT', true, 'matrix-verb']])
 
+    state.submit.mockClear()
     const tool = getTool('set-listing-stock')!
     const undo = tool.undo!.request(ran.change) as Json
     expect(undo).toEqual({ tool: 'revert-listing-change', args: { productId: ids.parent, operationId: ran.data.operationId } })
     const back = await inside(() => callTool(claude, 'revert-listing-change', undo.args))
     const reverted = (await inside(() => executeTool(approver, 'revert-listing-change', undo.args, { approvedPreview: (back.raw as Json).preview, via: 'claude' }))).raw as Json
     expect(reverted.ok, reverted.error).toBe(true)
+    // The revert is the opposite conversion, sent: FBM with the quantity the listings follow (7 at WH-T2).
+    expect(sent().map((x: any) => [x.marketplaceId, x.value])).toEqual([
+      ['APJ6JRA9NG5V4', [{ fulfillment_channel_code: 'DEFAULT', quantity: 7 }]],
+      ['A1PA6795UKMFR9', [{ fulfillment_channel_code: 'DEFAULT', quantity: 7 }]],
+    ])
     expect([(await listingRow(ids.fbmIt)).fulfillmentMethod, (await listingRow(ids.fbmDe)).fulfillmentMethod]).toEqual(['FBM', 'FBM'])
+    expect([(await listingRow(ids.fbmIt)).quantity, (await listingRow(ids.fbmDe)).quantity]).toEqual([7, 7])
     expect(await productMark(ids.fbm)).toBe('FBM')
+    expect((await records([ids.fbmIt, ids.fbmDe])).filter((r: any) => r.origin === 'matrix-revert').map((r: any) => [r.marketplace, r.toMethod, r.quantity, r.status]).sort())
+      .toEqual([['DE', 'FBM', 7, 'SENT'], ['IT', 'FBM', 7, 'SENT']])
   })
 
-  it('FBA → FBM is refused while FBA units are on hand (the Matrix\'s own guard); nothing is written', async () => {
+  it('FBA → FBM is refused while FBA units are on hand; nothing is sent or written', async () => {
+    state.submit.mockClear()
     const before = [await listingRow(ids.fbaIt), await listingRow(ids.fbaDe)]
     const refused = await dryRun({ productId: ids.fba, action: 'set-fulfilment', method: 'FBM', targets: [{ rowId: ids.fba, coordinateKey: 'AMAZON:DE' }] })
-    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining('units of FBA stock on hand keep the guard closed') })
+    expect(refused).toMatchObject({ ok: false, error: expect.stringContaining('3 units of FBA stock on hand keep the guard closed') })
     expect([await listingRow(ids.fbaIt), await listingRow(ids.fbaDe)]).toEqual(before)
+    expect(state.submit).not.toHaveBeenCalled()
   })
 
   it('FBA → FBM is refused while an active FBA offer remains — in the preview, and again at the run', async () => {
+    state.submit.mockClear()
     const args = { productId: ids.offer, action: 'set-fulfilment', method: 'FBM', targets: [{ rowId: ids.offer, coordinateKey: 'AMAZON:UK' }] }
     expect(await dryRun(args)).toMatchObject({ ok: false, error: expect.stringContaining('an active FBA offer keeps the guard closed') })
 
     await inside(() => db().offer.update({ where: { id: ids.offerRow }, data: { isActive: false } }))
     const preview = await dryRun(args)
     expect(preview.ok, preview.error).toBe(true)
-    expect(preview.preview.changes).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:UK', from: 'FBA', to: 'FBM', note: 'Follow → 7 pushed from WH-T2' })])
-    expect(preview.preview.warning).toContain('TEST-SKU-T2-S on Amazon UK: TEST-SKU-T2-S is no longer marked FBA, and Nexus sends Amazon the stock it follows (7 from WH-T2) at once.')
+    expect(preview.preview.changes).toEqual([expect.objectContaining({ coordinateKey: 'AMAZON:UK', from: 'FBA', to: 'FBM', note: 'Sends Amazon FBM (DEFAULT) with quantity 7 on UK' })])
+    expect(preview.preview.warning).toContain('TEST-SKU-T2-S on AMAZON:UK: Sends Amazon FBM (DEFAULT) with quantity 7 on UK. Once Amazon accepts, Nexus manages the merchant quantity from then on.')
 
-    // The offer comes back before the person's yes runs: refused whole, nothing written.
+    // The offer comes back before the person's yes runs: refused whole, nothing sent or written.
     await inside(() => db().offer.update({ where: { id: ids.offerRow }, data: { isActive: true } }))
     const before = await listingRow(ids.offerUk)
     const ran = await runApproved(args, preview.preview)
@@ -142,6 +172,7 @@ describe('set-listing-stock set-fulfilment', () => {
     expect(ran.error).toContain('an active FBA offer')
     expect(await listingRow(ids.offerUk)).toEqual(before)
     expect(await productMark(ids.offer)).toBe('FBA')
+    expect(state.submit).not.toHaveBeenCalled()
   })
 
   it('offers Amazon\'s FBA and FBM only, on Amazon coordinates only, and a method only with set-fulfilment', async () => {
@@ -183,21 +214,13 @@ describe('set-listing-stock retry-sync', () => {
 })
 
 describe('fulfilmentWords', () => {
-  const sync = { kind: 'FOLLOW', via: null, mode: 'FOLLOW', intended: 4, held: 4, buffer: 1, poolAvailable: 5, routedLocations: ['WH-A', 'WH-B'], fbaAtAmazon: null, oversold: false } as const
-  const base = { sku: 'S1', markets: ['UK'], sync, others: [], stillFba: [], derived: false }
-
-  it('FBM while the product stays marked FBA: nothing is sent yet', () => {
-    expect(fulfilmentWords({ ...base, method: 'FBM', productMark: 'FBA', stillFba: ['EBAY IT'] }))
-      .toBe('S1 on Amazon UK: S1 stays marked FBA while EBAY IT is FBA, so Nexus still sends Amazon no quantity for it.')
+  it('FBM: what is sent, then Nexus manages the merchant quantity', () => {
+    expect(fulfilmentWords({ sku: 'S1', coordinateKey: 'AMAZON:EU', method: 'FBM', note: 'Sends Amazon FBM (DEFAULT) with quantity 4 on IT DE — skips FR (Inactive)' }))
+      .toBe('S1 on AMAZON:EU: Sends Amazon FBM (DEFAULT) with quantity 4 on IT DE — skips FR (Inactive). Once Amazon accepts, Nexus manages the merchant quantity from then on.')
   })
 
-  it('FBM on a product not marked FBA: the quantity goes at the next stock change', () => {
-    expect(fulfilmentWords({ ...base, method: 'FBM', productMark: null }))
-      .toBe('S1 on Amazon UK: from now on Nexus sends Amazon the stock it follows (4 from WH-A, WH-B) — at the next stock change, or at once with push-now.')
-  })
-
-  it('FBA from a derived method: a revert leaves the product\'s FBA mark', () => {
-    expect(fulfilmentWords({ ...base, method: 'FBA', productMark: 'FBM', derived: true }))
-      .toContain('S1 itself becomes marked FBA; a revert clears this listing\'s method but leaves that mark.')
+  it('FBA: no quantity from then on, out of stock until Amazon receives units', () => {
+    expect(fulfilmentWords({ sku: 'S1', coordinateKey: 'AMAZON:UK', method: 'FBA', note: null }))
+      .toBe('S1 on AMAZON:UK: Sends Amazon FBA. Once Amazon accepts, Nexus sends no quantity: the quantity is Amazon\'s FBA units, and the offer shows out of stock until Amazon receives units.')
   })
 })

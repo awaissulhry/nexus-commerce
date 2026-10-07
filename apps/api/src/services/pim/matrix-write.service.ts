@@ -29,7 +29,7 @@
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
-import { inventoryCoordinate, previewVerb, type PreviewContext } from '@nexus/shared/matrix-preview'
+import { inventoryCoordinate, previewVerb, type AmazonFulfilmentFacts, type PreviewContext } from '@nexus/shared/matrix-preview'
 import {
   MATRIX_COPY,
   type CoordinateKey,
@@ -60,6 +60,7 @@ import { fireOutboundJobs } from '../outbound-enqueue.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { canonical } from './import-diff.service.js'
 import { setFulfillmentMethod, type FulfilmentWrite } from './fulfillment-method.service.js'
+import { convertAmazonFulfilment, loadConversionPlan, type ConversionOrigin } from './fulfilment-conversion.service.js'
 import { writeChannelPrices } from './channel-price-write.service.js'
 import { getMatrixRead } from './matrix.service.js'
 import { roundCents } from '@nexus/shared/listing-price'
@@ -75,6 +76,12 @@ export interface DoorContext {
   can: (permission: string) => boolean
   /** The account the caller's read used (`GET …/studio/matrix?accountId=`): the door reads with it, so it resolves the same listings. */
   accountId?: string | null
+  /**
+   * Amazon fulfilment conversion (2026-10-07): set only by a run a person confirmed — the verb's commit (the Matrix's typed
+   * confirmation, an approved Claude preview) or a revert. An Amazon Fulfilment cell is converted on Amazon only then; a
+   * direct cell write is refused with `MATRIX_COPY.fulfilmentViaVerb`.
+   */
+  conversion?: ConversionOrigin
 }
 
 const PRICE_PERMISSION = 'products.price.edit'
@@ -276,6 +283,18 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         const m = w.value === 'FBA' || w.value === 'FBM' || w.value === 'MCF' ? (w.value as FulfilmentMethod) : w.value === null ? null : undefined
         if (m === undefined) return refuse('Fulfilment is FBA, FBM or MCF')
         if (m && !coord.vocabulary.fulfilment?.includes(m)) return refuse(`${m} is not a method on ${coord.label}`)
+        /* Amazon (2026-10-07): a real conversion, sent to Amazon and confirmed from its report — only from a confirmed run,
+           never a value-only write (`fulfilment-conversion.service.ts`). eBay (MCF) stays Nexus's own, below. */
+        if (coord.channel === 'AMAZON') {
+          if (!ctx.conversion) return refuse(MATRIX_COPY.fulfilmentViaVerb)
+          if (m !== 'FBA' && m !== 'FBM') return refuse('On Amazon the method is FBA or FBM — a conversion needs one of them')
+          const r = await convertAmazonFulfilment({ primaryListingId: cells.listingId, targets, to: m, cell: f, actor: ctx.actor, origin: ctx.conversion })
+          const mine = r.listings.find((x) => x.listingId === cells.listingId)?.version ?? cells.version
+          if (r.outcome === 'noop') return noop()
+          if (r.outcome === 'conflict') return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: r.conflictVersion ?? cells.version }
+          if (r.outcome === 'refused') return { ...base, outcome: 'refused', reason: r.reason, version: mine, ...(r.listings.length ? { listings: r.listings } : {}) }
+          return { ...base, outcome: 'applied', version: mine, ...(r.reason ? { reason: r.reason } : {}), ...(expandedTo ? { expandedTo } : {}), listings: r.listings }
+        }
         if (m && f.method === m && f.source === 'set') return noop()
         const typed: FulfilmentWrite = m === null ? null : m === 'MCF' ? 'FBA' : m
         const r = await setFulfillmentMethod({ targets: targets.map((t) => ({ listingId: t.id, method: typed, expectedVersion: t.version })), actor: ctx.actor })
@@ -471,9 +490,38 @@ export async function ebayZeroAllowedFor(pairs: Iterable<{ accountId: string | n
   return (accountId, market) => answers.get(JSON.stringify([accountId, market])) ?? null
 }
 
+/**
+ * Amazon fulfilment conversion (2026-10-07) — the server's facts for every Amazon target of a set-fulfilment (a fresh
+ * request, or a carried preview), read now (`loadConversionPlan`): the open markets, the Inactive ones, FBA units, an
+ * active FBA offer, an Amazon-only code, a draft, a lock, the FBM quantity and the newest conversion. A target whose
+ * facts could not be read gets none, and the shared preview refuses it (never sent unchecked).
+ */
+async function amazonFulfilmentFacts(read: MatrixRead, req: MatrixVerbRequest & { preview?: VerbPreview }): Promise<PreviewContext['amazonFulfilment']> {
+  if (req.params.verb !== 'set-fulfilment') return undefined
+  const keys = new Map<string, { rowId: string; key: CoordinateKey }>()
+  for (const t of [...req.targets, ...(req.preview?.changes ?? [])]) {
+    const key = inventoryCoordinate(read, t.coordinateKey)
+    if (read.coordinates.find((c) => c.key === key)?.channel !== 'AMAZON') continue
+    keys.set(`${t.rowId}|${key}`, { rowId: t.rowId, key })
+  }
+  const facts = new Map<string, AmazonFulfilmentFacts | null>()
+  for (const [k, { rowId, key }] of keys) {
+    const hit = locate(read, rowId, key)
+    if (!hit?.cells.listingId || hit.row.role === 'parent') continue
+    try {
+      const landed = await targetsOf(read, hit, hit.cells.version)
+      facts.set(k, 'conflict' in landed ? null : (await loadConversionPlan({ primaryListingId: hit.cells.listingId, targetIds: landed.targets.map((t) => t.id) }))?.facts ?? null)
+    } catch (err) {
+      logger.warn('matrix: Amazon fulfilment facts not read — the target is refused', { rowId, key, error: err instanceof Error ? err.message : String(err) })
+      facts.set(k, null)
+    }
+  }
+  return (rowId, key) => facts.get(`${rowId}|${key}`) ?? null
+}
+
 export async function runMatrixVerb(ctx: DoorContext, req: MatrixVerbRequest & { preview?: VerbPreview }): Promise<VerbPreview | VerbCommitResult> {
   const read = await getMatrixRead({ productId: ctx.productId, accountId: ctx.accountId ?? null, canEditPrice: ctx.can(PRICE_PERMISSION) })
-  const pctx: PreviewContext = { can: ctx.can, simulated: false, ebayZeroAllowed: await ebayZeroAllowed(read, req) }
+  const pctx: PreviewContext = { can: ctx.can, simulated: false, ebayZeroAllowed: await ebayZeroAllowed(read, req), amazonFulfilment: await amazonFulfilmentFacts(read, req) }
   if (!req.commit) return previewVerb(read, { ...req, commit: false }, pctx)
   const verb = req.params.verb
   /* The page commits with `params: { verb }` + the preview it showed; a caller with full params gets a fresh preview. */
@@ -502,7 +550,7 @@ export async function runMatrixVerb(ctx: DoorContext, req: MatrixVerbRequest & {
     const cells = locate(read, ch.rowId, ch.coordinateKey)?.cells
     const outcome = ch.cell === 'syncState' || STATE_VERBS.has(verb)
       ? await applySyncState(read, ch, verb, ctx)
-      : await applyCell(read, { rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell as MatrixWritableKind, value: ch.to, expectedVersion: cells?.version ?? 0 }, ctx)
+      : await applyCell(read, { rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell as MatrixWritableKind, value: ch.to, expectedVersion: cells?.version ?? 0 }, verb === 'set-fulfilment' ? { ...ctx, conversion: 'matrix-verb' } : ctx)
     if (outcome.outcome === 'applied' && cells) cells.version = outcome.version
     results.push(outcome)
   }
@@ -539,7 +587,8 @@ export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixC
     if (b.sync.kind === 'PAUSED' && b.sync.via === 'LISTING' && l.sync.kind !== 'PAUSED') out.push({ kind: 'state', verb: 'pause-sync' })
     if (b.sync.kind !== 'PAUSED' && l.sync.kind === 'PAUSED' && l.sync.via === 'LISTING') out.push({ kind: 'state', verb: 'resume-sync' })
   }
-  if (b.fulfilment && l.fulfilment && b.fulfilment.method !== l.fulfilment.method) out.push({ kind: 'cell', cell: 'fulfilment', value: b.fulfilment.source === 'set' ? b.fulfilment.method : null })
+  /* Amazon: never a value-only fulfilment write — a set-fulfilment is reverted by the opposite CONVERSION (`revertMatrixOperation`). */
+  if (b.fulfilment && l.fulfilment && b.fulfilment.method !== l.fulfilment.method && !isAmazonKey(key)) out.push({ kind: 'cell', cell: 'fulfilment', value: b.fulfilment.source === 'set' ? b.fulfilment.method : null })
   if (b.sync && l.sync && b.sync.kind !== 'FBA_EXCLUDED') {
     if (b.sync.mode === 'PINNED' && (l.sync.mode !== 'PINNED' || l.sync.intended !== b.sync.intended)) out.push({ kind: 'cell', cell: 'syncQty', value: b.sync.intended ?? b.sync.held ?? 0 })
     else if (b.sync.mode === 'FOLLOW' && l.sync.mode !== 'FOLLOW') out.push({ kind: 'cell', cell: 'syncMode', value: 'FOLLOW' })
@@ -550,9 +599,11 @@ export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixC
     else if (b.price.source === 'master' && l.price.source === 'override') out.push({ kind: 'cell', cell: 'price', value: null })
   }
   if (b.sale && l.sale && (b.sale.value !== l.sale.value || b.sale.start !== l.sale.start || b.sale.end !== l.sale.end)) out.push({ kind: 'cell', cell: 'salePrice', value: { ...b.sale } })
-  void rowId; void key
+  void rowId
   return out
 }
+
+const isAmazonKey = (key: CoordinateKey): boolean => /^AMAZON:/i.test(key)
 
 export async function revertMatrixOperation(ctx: DoorContext, operationId: string): Promise<VerbCommitResult> {
   const op = await prisma.bulkOperation.findUnique({ where: { id: operationId } })
@@ -569,6 +620,14 @@ export async function revertMatrixOperation(ctx: DoorContext, operationId: strin
     for (const b of stored.before ?? []) {
       const hit = locate(read, b.rowId, b.coordinateKey)
       if (!hit) { results.push({ rowId: b.rowId, coordinateKey: b.coordinateKey, cell: 'syncMode', outcome: 'refused', reason: 'No listing on this coordinate any more', version: 0 }); continue }
+      /* Amazon fulfilment (2026-10-07): the revert of a conversion that reached Amazon is the OPPOSITE conversion, through
+         the same door with fresh checks (refused with the reason when they fail) — never a value-only write. */
+      const sent = isAmazonKey(b.coordinateKey) ? stored.changes?.find((c) => c.rowId === b.rowId && c.coordinateKey === b.coordinateKey && c.cell === 'fulfilment') : undefined
+      if (sent && stored.outcomes?.some((o) => o.rowId === b.rowId && o.coordinateKey === b.coordinateKey && o.cell === 'fulfilment' && o.outcome === 'applied')) {
+        const outcome = await applyCell(read, { rowId: b.rowId, coordinateKey: b.coordinateKey, cell: 'fulfilment', value: sent.to === 'FBA' ? 'FBM' : 'FBA', expectedVersion: hit.cells.version }, { ...ctx, conversion: 'matrix-revert' })
+        if (outcome.outcome === 'applied') hit.cells.version = outcome.version
+        results.push(outcome)
+      }
       for (const w of restoreWrites(b.rowId, b.coordinateKey, b.cells, hit.cells)) {
         const outcome = w.kind === 'state'
           ? await applySyncState(read, { rowId: b.rowId, sku: hit.row.sku, coordinateKey: b.coordinateKey, cell: 'syncState', from: null, to: null, fromLabel: '', toLabel: '' }, w.verb, ctx)

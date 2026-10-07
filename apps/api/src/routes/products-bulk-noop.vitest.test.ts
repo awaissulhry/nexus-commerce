@@ -291,6 +291,23 @@ describe('the Amazon fulfilment method writes through its one door (2026-09-27)'
     } finally { spies.forEach(s => s.mockRestore()) }
   })
 
+  it('a LIVE Amazon listing: FBA ⇄ FBM is refused by name (the Matrix converts it on Amazon); a value that changes nothing still saves (2026-10-07)', async () => {
+    const spies = setUp()
+    const live = { channelConnectionId: 'account-a', isPublished: true, externalListingId: 'B0TESTASIN', listingStatus: 'ACTIVE', fulfillmentMethod: 'FBM', offers: [] }
+    channelListingFindMany.mockResolvedValue([listingRow({ ...live, platformAttributes: {} })])
+    try {
+      const refused = await send('AMAZON_EU')
+      expect(refused.statusCode).toBe(400)
+      expect(refused.body).toContain('This listing is live on Amazon IT: FBA ⇄ FBM is changed in the Matrix (Set fulfilment…)')
+      expect(refused.body).toContain('nothing was saved')
+      expect(fulfilmentWrite).not.toHaveBeenCalled()
+      /* the same method it already has: the door writes it (no conversion is needed). */
+      const same = await send('DEFAULT')
+      expect(same.statusCode, same.body).toBe(200)
+      expect(fulfilmentWrite.mock.calls[0][0].targets).toEqual([{ listingId: 'listing_1', method: 'FBM', expectedVersion: 19 }])
+    } finally { spies.forEach(s => s.mockRestore()) }
+  })
+
   it('token 0 against a listing that exists: 409 with that listing\'s version, and nothing is started or written', async () => {
     const spies = setUp()
     channelListingFindMany.mockResolvedValue([listingRow({ channelConnectionId: 'account-a', platformAttributes: {} })])

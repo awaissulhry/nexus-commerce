@@ -53,6 +53,13 @@ interface SubmitListingPayloadOptions {
   sellerId: string
   sku: string
   payload: any
+  /** The account the write goes to (the proxy resolves it when the profiles are on); omitted = the seller's. */
+  accountId?: string
+  /**
+   * Amazon fulfilment conversion (2026-10-07): the `FulfilmentConversion` row an operator-confirmed FBA → FBM run created
+   * for THIS patch. The FBA hard block lets the merchant quantity through only against it (`conversionLetsThrough`).
+   */
+  conversionId?: string
   /** P0b 2026-07-20 — REQUIRED query param for patchListingsItem. Omitting it
    *  made SP-API 400 every call while the old error handling (issues-only)
    *  reported success — the false-green zero-inventory incident. Defaults to
@@ -381,10 +388,17 @@ export class AmazonSpApiClient {
    * Amazon — that payload is exactly what flips an FBA offer to FBM. Fail-closed:
    * a lookup error blocks. A genuinely-FBM SKU (no FBA evidence) is left untouched
    * so its merchant quantity still syncs. Returns the (possibly filtered) payload.
+   *
+   * The ONE exception (Amazon fulfilment conversion, 2026-10-07): a call carrying a
+   * `conversionId` whose row is an operator-confirmed FBA → FBM conversion of this
+   * SKU and marketplace with this quantity, SENDING, under 10 minutes old, while no
+   * FBA units are mirrored now (`conversionLetsThrough`). Every other case strips
+   * exactly as before; a failed lookup strips.
    */
   private async guardFbaQtyFlip(
     sku: string,
     payload: any,
+    conversion?: { conversionId?: string; marketplaceId: string },
   ): Promise<{ payload: any; blocked: boolean }> {
     const patches = payload?.patches
     if (!Array.isArray(patches)) return { payload, blocked: false }
@@ -426,6 +440,24 @@ export class AmazonSpApiClient {
       })
     }
     if (!isFba) return { payload, blocked: false } // genuine FBM — allow merchant qty
+
+    if (conversion?.conversionId) {
+      const quantities = patches.filter(isFlip).flatMap((p: any) => (Array.isArray(p.value) ? p.value : [])
+        .filter((v: any) => String(v?.fulfillment_channel_code ?? '').toUpperCase() === 'DEFAULT' && v?.quantity != null)
+        .map((v: any) => Number(v.quantity)))
+      let verdict: { pass: boolean; reason: string }
+      try {
+        const { conversionLetsThrough } = await import('../services/pim/fulfilment-conversion-guard.js')
+        verdict = await conversionLetsThrough(conversion.conversionId, { sku, marketplaceId: conversion.marketplaceId, quantities })
+      } catch (err) {
+        verdict = { pass: false, reason: `the conversion check failed (${err instanceof Error ? err.message : String(err)})` }
+      }
+      if (verdict.pass) {
+        logger.warn('FBA guard: an operator-confirmed FBA → FBM conversion sends its merchant quantity', { sku, marketplaceId: conversion.marketplaceId, conversionId: conversion.conversionId, quantities })
+        return { payload, blocked: false }
+      }
+      logger.error('FBA guard: a conversion patch was NOT let through — stripped as every other merchant quantity for an FBA SKU', { sku, conversionId: conversion.conversionId, reason: verdict.reason })
+    }
 
     const safePatches = patches.filter((p: any) => !isFlip(p))
     logger.error(
@@ -475,7 +507,7 @@ export class AmazonSpApiClient {
 
     // FBA-flip HARD BLOCK — strip a merchant DEFAULT+quantity fulfillment for an
     // FBA SKU before it can reach Amazon. If nothing else remains, skip the call.
-    const guarded = await this.guardFbaQtyFlip(sku, payload)
+    const guarded = await this.guardFbaQtyFlip(sku, payload, { conversionId: options.conversionId, marketplaceId: options.marketplaceId ?? this.defaultMarketplaceId() })
     payload = guarded.payload
     if (guarded.blocked && (!Array.isArray(payload?.patches) || payload.patches.length === 0)) {
       return { success: true, sku, status: 'SKIPPED_FBA_HARD_BLOCK', dryRun: false }
