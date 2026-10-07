@@ -81,6 +81,26 @@ export interface FulfilmentCell {
   guard: 'FBA' | 'FBM' | null
   /** Amazon's own last reported channel from the merchant listings report, when known. */
   reported: 'AFN' | 'MFN' | null
+  /**
+   * Amazon fulfilment conversion (2026-10-07): where the newest FBA ⇄ FBM change Nexus SENT Amazon for this coordinate
+   * stands — sent, confirmed by Amazon's merchant listings report, still old, refused. Null/absent = none was sent.
+   */
+  conversion?: FulfilmentConversionStatus | null
+}
+
+/** A conversion's state: SENDING → SENT | REFUSED; SENT → CONFIRMED | STILL_OLD | NOT_IN_REPORT. */
+export type FulfilmentConversionState = 'SENDING' | 'SENT' | 'CONFIRMED' | 'STILL_OLD' | 'REFUSED' | 'NOT_IN_REPORT'
+
+export interface FulfilmentConversionStatus {
+  status: FulfilmentConversionState
+  /** The method sent. */
+  to: 'FBA' | 'FBM'
+  /** ISO time of this status (sent, confirmed, refused, last report read). */
+  at: string
+  /** The markets the change was sent to (the coordinate's rows). */
+  markets: readonly string[]
+  /** Amazon's or the report's own sentence, when there is one. */
+  message: string | null
 }
 
 /** `resolveIntendedQuantity`'s verdict, verbatim. */
@@ -412,4 +432,31 @@ export const MATRIX_COPY = {
   noAccountConnected: 'No account is connected',
   pinnedThisSession: (n: number) => `${n} pinned this session · Undo`,
   simulated: 'Preview — nothing is sent',
+  /** The Fulfilment cell's one tooltip line for the newest conversion Nexus sent Amazon (2026-10-07). */
+  conversion: (c: FulfilmentConversionStatus) => conversionLine(c),
+  /** Set fulfilment on Amazon: what the run does, said once above the table. */
+  fulfilmentSent: (markets: readonly string[]) => `Sent to Amazon on ${markets.join(' ')}: each market's offer is converted, then checked against Amazon's merchant listings report within minutes — the Fulfilment cell shows when Amazon confirms it`,
+  fulfilmentEuQuantity: 'Amazon EU keeps ONE merchant quantity per SKU: the FBM quantity sent sells on every open EU market',
+  fulfilmentFbaOutOfStock: 'After the switch to FBA the offer shows out of stock on Amazon until Amazon receives units at its fulfilment centres',
+  fulfilmentNexusOnly: 'Nexus only — nothing is sent to the channel; the quantity pushes follow the new method',
+  /** A direct write of an Amazon Fulfilment cell (not the confirmed verb). */
+  fulfilmentViaVerb: 'On Amazon the method is changed with Set fulfilment… (type the method to confirm): it converts the offer on Amazon',
 } as const
+
+const hhmm = (iso: string): string => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** PURE — the one line a conversion reads as ("Sent to Amazon 12:04 · waiting for Amazon's report"). */
+function conversionLine(c: FulfilmentConversionStatus): string {
+  const old = c.to === 'FBM' ? 'FBA' : 'FBM'
+  switch (c.status) {
+    case 'SENDING': return `Sending ${c.to} to Amazon ${hhmm(c.at)}`
+    case 'SENT': return `Sent to Amazon ${hhmm(c.at)} · waiting for Amazon's report`
+    case 'CONFIRMED': return `Confirmed by Amazon ${hhmm(c.at)}`
+    case 'STILL_OLD': return `Amazon still reports ${old} — check Seller Central`
+    case 'NOT_IN_REPORT': return `Not in Amazon's report — check Seller Central`
+    case 'REFUSED': return `${c.to} not sent — ${c.message ?? 'refused'}`
+  }
+}
