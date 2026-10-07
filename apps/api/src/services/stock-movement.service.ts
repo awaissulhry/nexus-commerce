@@ -16,6 +16,7 @@ import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundEnqueuePriority } from './sync-priority.js'
 import { productReadCacheService } from './product-read-cache.service.js'
 import { lockProductStock } from './stock-lock.js'
+import { keepCasesInTx } from './stock/stock-cases.service.js'
 import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { pooledNow, PooledProductError } from './stock-pool/pool-guard.js'
 import { StockLocationUnresolved } from './default-stock-location.js'
@@ -242,6 +243,13 @@ export type StockMovementInput = {
    *  but the lot's unitsRemaining is NOT incremented (lots track
    *  receives separately via createLot). */
   lotId?: string
+  /**
+   * Step 3 cases — whole sealed cases that move with these units (Step 4's Send to FBA: −2 = two cases leave
+   * sealed). Without it a decrease takes loose units first, then opens a case (the clamp in keepCasesInTx).
+   * Refused (CaseCountError, the movement rolls back) when more cases leave than are sealed, the SKU has no case
+   * size, or the location is not a warehouse.
+   */
+  casesChange?: number
   /**
    * P0/B4 — caller's outer transaction. When set, the stock write,
    * StockLevel ledger update, totalStock recompute, ChannelListing
@@ -476,6 +484,7 @@ export async function applyStockMovementInTx(
   const reserved = existing?.reserved ?? 0
   const newAvailable = newQuantity - reserved
 
+  let stockLevelId = existing?.id ?? null
   if (existing) {
     await tx.stockLevel.update({
       where: { id: existing.id },
@@ -486,7 +495,7 @@ export async function applyStockMovementInTx(
       },
     })
   } else {
-    await tx.stockLevel.create({
+    stockLevelId = (await tx.stockLevel.create({
       data: {
         locationId: resolvedLocationId,
         productId,
@@ -497,7 +506,15 @@ export async function applyStockMovementInTx(
         syncStatus: 'SYNCED',
         lastSyncedAt: new Date(),
       },
-    })
+      select: { id: true },
+    })).id
+  }
+
+  // Step 3 cases — loose units leave first, then a sealed case opens: after a decrease the sealed count is clamped to
+  // what the units still fill. Units that arrive (receives, returns, transfers in) arrive loose and change no count,
+  // and a new level has no case row. Whole cases moved say so (`casesChange`). Under the product lock taken above.
+  if (stockLevelId && ((existing && change < 0) || input.casesChange !== undefined)) {
+    await keepCasesInTx(tx, [{ stockLevelId, quantityAfter: newQuantity, casesChange: input.casesChange }])
   }
 
   const balanceAfter = newQuantity

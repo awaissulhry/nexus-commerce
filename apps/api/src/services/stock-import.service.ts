@@ -42,6 +42,7 @@ import { buildSharedFanoutRows, type SharedMembershipRow } from './ebay-shared-f
 import { handleMovementStockoutTransition } from './stockout-detector.service.js'
 import { productReadCacheService } from './product-read-cache.service.js'
 import { lockProductStock } from './stock-lock.js'
+import { keepCasesInTx } from './stock/stock-cases.service.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
@@ -1323,6 +1324,9 @@ async function executeApplyImport(args: {
             "lastUpdatedAt" = now()
         FROM (SELECT unnest(${ids}::text[]) AS id, unnest(${qtys}::int[]) AS qty) AS u
         WHERE sl.id = u.id`
+      // Step 3 cases — a sheet that lowered units opens sealed cases (loose first, then a case: the clamp); one that
+      // raised them changes no count. Under the chunk's product lock (applyProducts). New levels have no case row.
+      await keepCasesInTx(tx, slUpdates.map((p) => ({ stockLevelId: p.stockLevelId as string, quantityAfter: p.finalQty })))
     }
     const slCreates = chunk.filter((p) => p.movements.length > 0 && !p.stockLevelId)
     if (slCreates.length > 0) {

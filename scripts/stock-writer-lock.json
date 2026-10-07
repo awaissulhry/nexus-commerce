@@ -72,6 +72,13 @@
       "why": "Marks that one kept pool hold released, lender only, after the borrower's order is cancelled or refunded."
     }
   },
+  "caseFiles": {
+    "apps/api/src/services/stock/stock-cases.service.ts": {
+      "writes": 6,
+      "lock": true,
+      "why": "The one owner of case counts and case packs (Step 3 cases): keepCasesInTx clamps or moves a level's sealed cases (update, create; the caller — applyStockMovementInTx, the import chunk, the pool settle — holds the product lock), setCasesInTx sets an absolute count (upsert, after lockProductStock), setCasePacks writes the case pack and removes the case rows a size change opens (two deleteMany and an upsert, after lockProductStock)."
+    }
+  },
   "orderMovementFiles": {
     "apps/api/src/services/stock-level.service.ts": {
       "writes": 4,

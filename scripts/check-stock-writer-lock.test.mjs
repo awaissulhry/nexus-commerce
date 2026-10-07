@@ -10,10 +10,11 @@ import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const GATE = fileURLToPath(new URL('./check-stock-writer-lock.mjs', import.meta.url))
-const EMPTY_LIST = JSON.stringify({ files: {}, sqlFunctions: {}, reservationFiles: {}, reservationSqlFunctions: {}, orderMovementFiles: {} })
+const EMPTY = { files: {}, sqlFunctions: {}, reservationFiles: {}, reservationSqlFunctions: {}, orderMovementFiles: {}, caseFiles: {} }
+const EMPTY_LIST = JSON.stringify(EMPTY)
 
-/** Run the gate on a scratch tree holding `files` (path → text) and an empty approved list. */
-function gate(files) {
+/** Run the gate on a scratch tree holding `files` (path → text) and an approved list (empty unless given). */
+function gate(files, list = EMPTY_LIST) {
   const root = mkdtempSync(join(tmpdir(), 'stock-writer-gate-'))
   try {
     const all = { 'apps/api/src/services/harmless.ts': 'export const nothing = 1\n', ...files }
@@ -21,7 +22,7 @@ function gate(files) {
       mkdirSync(dirname(join(root, path)), { recursive: true })
       writeFileSync(join(root, path), text)
     }
-    writeFileSync(join(root, 'list.json'), EMPTY_LIST)
+    writeFileSync(join(root, 'list.json'), list)
     const run = spawnSync(process.execPath, [GATE, '--check', '--root', root, '--list', join(root, 'list.json')], { encoding: 'utf8' })
     return { status: run.status, out: `${run.stdout}\n${run.stderr}` }
   } finally { rmSync(root, { recursive: true, force: true }) }
@@ -51,8 +52,27 @@ const cases = {
   'a hold written through a level relation': [TS, "export const f = (tx: any) => tx.product.update({ where: { id: 'p' }, data: { stockLevels: { update: { where: { id: 'l' }, data: { reservations: { create: { quantity: 1 } } } } } } })\n", 'StockReservation'],
   'an order movement written through a product relation': [TS, "export const f = (tx: any) => tx.product.update({ where: { id: 'p' }, data: { stockMovements: { create: { change: -1, reason: 'ORDER_CANCELLED' } } } })\n", 'order stock movement'],
   'a delegate behind a cast': [TS, "export const f = (tx: any) => (tx.stockReservation as any).update({ where: { id: 'x' }, data: {} })\n", 'StockReservation'],
+  // Step 3 cases (2026-10-07): sealed case counts and case packs have one owner, under the product lock.
+  'an unlisted case count write': [TS, "export const f = (tx: any) => tx.stockCaseCount.update({ where: { id: 'x' }, data: { cases: 0 } })\n", 'StockCaseCount'],
+  'a raw case count write': [TS, 'export const f = (tx: any) => tx.$executeRaw`UPDATE "StockCaseCount" SET cases = 0`\n', 'StockCaseCount'],
+  'an unlisted case pack write': [TS, "export const f = (tx: any) => tx.productPackage.upsert({ where: { productId: 'p' }, create: { productId: 'p' }, update: {} })\n", 'ProductPackage'],
+  'a case pack written through a product relation': [TS, "export const f = (tx: any) => tx.product.update({ where: { id: 'p' }, data: { casePacks: { create: { unitsPerCase: 12 } } } })\n", 'StockCaseCount or ProductPackage'],
+  'a case count written through a level relation': [TS, "export const f = (tx: any) => tx.warehouse.update({ where: { id: 'w' }, data: { stock: { update: { where: { id: 'l' }, data: { caseCounts: { create: { cases: 4 } } } } } } })\n", 'StockCaseCount or ProductPackage'],
   'a function defined only in a migration': ['packages/database/prisma/migrations/20990101a_probe/migration.sql', 'CREATE OR REPLACE FUNCTION public.probe_migration() RETURNS void LANGUAGE plpgsql AS $$ BEGIN INSERT INTO "StockReservation" (id) VALUES (\'x\'); END $$;\n', 'probe_migration'],
 }
+test('fails on a listed case writer that does not take the product lock', () => {
+  const list = JSON.stringify({ ...EMPTY, caseFiles: { [TS]: { writes: 1, lock: true, why: 'probe: one case count write' } } })
+  const { status, out } = gate({ [TS]: "export const f = (tx: any) => tx.stockCaseCount.update({ where: { id: 'x' }, data: { cases: 0 } })\n" }, list)
+  assert.equal(status, 1, `the gate passed a case writer without the lock:\n${out}`)
+  assert.match(out, /LOCKED case writer/)
+})
+
+test('CONTROL: a listed case writer that takes the product lock passes', () => {
+  const list = JSON.stringify({ ...EMPTY, caseFiles: { [TS]: { writes: 1, lock: true, why: 'probe: one case count write under the lock' } } })
+  const { status, out } = gate({ [TS]: "import { lockProductStock } from './stock-lock.js'\nexport async function f(tx: any) { await lockProductStock(tx, ['p']); await tx.stockCaseCount.update({ where: { id: 'x' }, data: { cases: 0 } }) }\n" }, list)
+  assert.equal(status, 0, out)
+})
+
 for (const [name, [path, text, expected]] of Object.entries(cases)) {
   test(`fails on ${name}`, () => {
     const { status, out } = gate({ [path]: text })
