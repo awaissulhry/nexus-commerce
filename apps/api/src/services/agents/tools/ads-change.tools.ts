@@ -53,10 +53,10 @@
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
-import { isPlainCreateLog, previewRollbackOfAction, rollbackByActionLogId, rollbackByChangeSetId } from '../../advertising/rollback.service.js'
+import { isPlainCreateLog, previewRollbackOfAction, rollbackByActionLogId, rollbackByChangeSetId, wasSbSdWrite } from '../../advertising/rollback.service.js'
 import { setLiveWrites } from '../../advertising/campaign-settings.service.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
-import { bulkUpdateAdTargetBids, updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
+import { bulkUpdateAdTargetBids, isSbSdCampaign, updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.service.js'
 import { createHash } from 'node:crypto'
@@ -66,7 +66,8 @@ import { restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { playbookHoldOf, playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
-import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, BY_RULE_WORDS, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stopBidOf, STOP_MIN_CENTS, storedReach, strategyFactsMoney, withStepPast, type BidAfterwards, type BidStep, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, BY_RULE_WORDS, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, bidWriteOf, stopBidOf, STOP_MIN_CENTS, storedReach, strategyFactsMoney, withStepPast, type BidAfterwards, type BidStep, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import type { AdWrite } from '@nexus/shared/ads-ad-product'
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -129,23 +130,73 @@ async function campaignsOf(rows: Array<{ entityType: string; entityId: string }>
   return out
 }
 
+/** The fields a recorded write changed (its before and after differ), in the mutation layer's names. */
+const RESTORED_FIELDS: Record<string, string> = {
+  dailyBudget: 'dailyBudget', dailyBudgetCurrency: 'dailyBudgetCurrency', status: 'status', biddingStrategy: 'biddingStrategy', endDate: 'endDate',
+  name: 'name', portfolioId: 'portfolioId', bidCents: 'bid', defaultBidCents: 'defaultBid',
+}
+function restoredFieldsOf(r: UndoRow): string[] {
+  const before = (r.restores ?? {}) as Record<string, unknown>
+  const after = (r.wrote ?? {}) as Record<string, unknown>
+  return Object.entries(RESTORED_FIELDS).filter(([key]) => key in before && before[key] !== after[key]).map(([, field]) => field)
+}
+
+/**
+ * ADS AUTONOMY W4-11 — what the gate is told about each restore of a Sponsored Brands / Display write: only a write the
+ * mutation layer let through for a Claude request (its queue row carries `sbSd`, wasSbSdWrite) is described — the
+ * rollback sends exactly those back on the same route (rollback.service.ts reverseOne) — and each negative a Claude
+ * request added in an SB/SD ad group (its retire). Keyed by action log id, or `neg:<targetId>`. Anything else is not
+ * described, so the gate keeps refusing it, as before.
+ */
+async function sbSdRestoreWrites(rows: UndoRow[], negatives: UndoNegative[]): Promise<Map<string, AdWrite>> {
+  const out = new Map<string, AdWrite>()
+  const logs = rows.length ? await prisma.advertisingActionLog.findMany({ where: { id: { in: rows.map((r) => r.actionLogId) } }, select: { id: true, outboundQueueId: true } }) : []
+  const marked = new Set<string>()
+  for (const l of logs) if (await wasSbSdWrite(l)) marked.add(l.id)
+  const targetIds = [...rows.filter((r) => r.entityType === 'AD_TARGET' && marked.has(r.actionLogId)).map((r) => r.entityId), ...negatives.map((n) => n.targetId)]
+  const targets = targetIds.length
+    ? await prisma.adTarget.findMany({ where: { id: { in: targetIds } }, select: { id: true, kind: true, isNegative: true, negativeLevel: true, adGroup: { select: { campaign: { select: { adProduct: true, type: true } } } } } })
+    : []
+  const target = new Map(targets.map((t) => [t.id, t]))
+  for (const r of rows) {
+    if (!marked.has(r.actionLogId)) continue
+    const status = (r.restores as { status?: unknown } | null)?.status
+    const toStatus = typeof status === 'string' ? status : null
+    if (r.entityType === 'CAMPAIGN') out.set(r.actionLogId, { entity: 'CAMPAIGN', fields: restoredFieldsOf(r), toStatus })
+    const t = r.entityType === 'AD_TARGET' ? target.get(r.entityId) : undefined
+    if (t) out.set(r.actionLogId, { entity: 'AD_TARGET', fields: restoredFieldsOf(r), toStatus, kind: t.kind == null ? null : String(t.kind), isNegative: t.isNegative, negativeLevel: t.negativeLevel })
+  }
+  for (const n of negatives) {
+    const t = target.get(n.targetId)
+    if (t && isSbSdCampaign({ adProduct: t.adGroup.campaign.adProduct, type: t.adGroup.campaign.type == null ? null : String(t.adGroup.campaign.type) })) {
+      out.set(`neg:${n.targetId}`, { entity: 'AD_TARGET', fields: ['status'], toStatus: 'ARCHIVED', kind: t.kind == null ? null : String(t.kind), isNegative: true, negativeLevel: t.negativeLevel })
+    }
+  }
+  return out
+}
+
 /**
  * The writes of a restore, one per campaign it touches, sorted. AA-W2-9 — the same writes the gate judges as a run by
- * rule (ruleFactsFor).
+ * rule (ruleFactsFor). W4-11 — a Sponsored Brands / Display campaign's restores are one write per kind of write (each
+ * described to the gate, sbSdRestoreWrites); a Sponsored Products campaign's stay one write, as before.
  */
 async function restoreWrites(rows: UndoRow[], negatives: UndoNegative[]): Promise<RuleWrite[]> {
   const campaignOf = await campaignsOf(rows, negatives)
-  const byCampaign = new Map<string, { marketplace: string | null; changes: AdWriteIntent['changes'] }>()
-  const add = (entityId: string, changes: AdWriteIntent['changes']) => {
+  const described = await sbSdRestoreWrites(rows, negatives)
+  const byKey = new Map<string, { campaignId: string; marketplace: string | null; changes: AdWriteIntent['changes']; write?: AdWrite }>()
+  const add = (entityId: string, changes: AdWriteIntent['changes'], write: AdWrite | undefined) => {
     const c = campaignOf.get(entityId)
     if (!c) return
-    const entry = byCampaign.get(c.id) ?? { marketplace: c.marketplace, changes: [] }
+    const key = write ? `${c.id}|${JSON.stringify(write)}` : c.id
+    const entry = byKey.get(key) ?? { campaignId: c.id, marketplace: c.marketplace, changes: [], ...(write ? { write } : {}) }
     entry.changes.push(...changes)
-    byCampaign.set(c.id, entry)
+    byKey.set(key, entry)
   }
-  for (const r of rows) add(r.entityId, intentFieldsOf(r))
-  for (const n of negatives) add(n.targetId, [{ field: 'status', valueCents: null }])
-  return [...byCampaign].sort(([a], [b]) => (a < b ? -1 : 1)).map(([campaignId, entry]) => ({ campaignId, marketplace: entry.marketplace, changes: entry.changes, label: `campaign ${campaignId}` }))
+  for (const r of rows) add(r.entityId, intentFieldsOf(r), described.get(r.actionLogId))
+  for (const n of negatives) add(n.targetId, [{ field: 'status', valueCents: null }], described.get(`neg:${n.targetId}`))
+  return [...byKey].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, e]) => ({
+    campaignId: e.campaignId, marketplace: e.marketplace, changes: e.changes, ...(e.write ? { write: e.write } : {}), label: `campaign ${e.campaignId}`,
+  }))
 }
 
 /** Where the restore lands: every campaign it touches must answer the same, or it is refused. */
@@ -479,18 +530,21 @@ const undoAdChange: AgentTool = {
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     // AA-W2-9 — the reversal's own writes carry this request as their change set (F11): it can be undone in turn.
     const rollback = p.rows.length
+      // W4-11 — allowSbSd: a Sponsored Brands / Display write a Claude request made goes back on its own route (only a
+      // write whose queue row carries the mark, rollback.service.ts wasSbSdWrite).
       ? p.source.mode === 'action'
-        ? await rollbackByActionLogId({ actionLogId: p.source.actionLogId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId })
+        ? await rollbackByActionLogId({ actionLogId: p.source.actionLogId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId, allowSbSd: true })
         // W3-1 — one change of the set: only the writes it recorded (the preview read them all, not only those shown).
         : await rollbackByChangeSetId({
-          changeSetId: p.source.changeSetId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId,
+          changeSetId: p.source.changeSetId!, actor: run.actor, reason: run.reason, manual: run.manual, stampChangeSetId: run.changeSetId, allowSbSd: true,
           ...(p.source.mode === 'change' ? { actionLogIds: await recordedWritesOf(p.source.changeId!) } : {}),
         })
       : null
     let retired: { retired: number; refused: number; failed: number } | null = null
     if (p.negatives.length) {
       const { retireNegatives } = await import('../../advertising/negatives-retire.service.js')
-      const out = await retireNegatives({ adTargetIds: p.negatives.map((n) => n.targetId), actor: run.actor, retireReason: run.reason })
+      // W4-11 — a negative a Claude request added in a Sponsored Brands / Display ad group is retired at its own endpoint.
+      const out = await retireNegatives({ adTargetIds: p.negatives.map((n) => n.targetId), actor: run.actor, retireReason: run.reason, allowSbSd: true })
       retired = { retired: out.summary.retired + out.summary.removedLocal, refused: out.summary.refused, failed: out.summary.failed }
     }
     // The request this put back is undone now (also when it was asked for directly, not through undo-change). W3-1 —
@@ -524,6 +578,7 @@ const CAMPAIGN_FOR_CHANGE = {
   id: true, name: true, type: true, adProduct: true, marketplace: true, dailyBudget: true, dailyBudgetCurrency: true,
   dynamicBidding: true, minBudgetCents: true, maxBudgetCents: true, pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true,
   liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true,
+  budgetJson: true, // W4-11 — a Sponsored Brands budget is set only when Nexus has read it is daily
 } as const
 
 async function campaignForChange(campaignId: string) {
@@ -534,12 +589,17 @@ type ChangeCampaign = NonNullable<Awaited<ReturnType<typeof campaignForChange>>>
 /**
  * Not found or not SP: why a change to it is refused; null when it may go on. 4A (Owner decided 2026-10-06) — a pin
  * no longer refuses it: a change tool writes only once a person approves it, and his approval counts as his own click,
- * which a pin (like the allowlist) does not stop. `dimension` is kept for the callers.
+ * which a pin (like the allowlist) does not stop.
+ * W4-11 — a daily budget (`budget`) is sent for a Sponsored Brands or Display campaign too (BUDGET_WRITE); placements
+ * and the campaign-wide bid tools (suppress-campaign, restore-campaign) stay Sponsored Products only.
  */
-function campaignRefusal(campaign: ChangeCampaign | null, campaignId: string, _dimension: 'bids' | 'budget' | 'placement'): string | null {
+function campaignRefusal(campaign: ChangeCampaign | null, campaignId: string, dimension: 'bids' | 'budget' | 'placement'): string | null {
   if (!campaign) return `campaign ${campaignId} not found`
-  return spOnlyRefusal(campaign)
+  return dimension === 'budget' ? adWriteRefusalOf(campaign, BUDGET_WRITE) : spOnlyRefusal(campaign)
 }
+
+/** W4-11 — a daily budget write, as the gate and the mutation layer judge it for an SB/SD campaign (adWriteRefusal). */
+const BUDGET_WRITE: AdWrite = { entity: 'CAMPAIGN', fields: ['dailyBudget'] }
 
 const whyArg = z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit')
 const campaignIdArg = z.string().trim().min(1).max(64).describe('Nexus campaign id (campaignId in ad-campaigns)')
@@ -572,7 +632,7 @@ async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolConte
   if (proposed === current) return { ok: false, error: `The daily budget of ${c.name} is already ${amountLabel(current, currency)}.` }
   // 3A + 4A — the campaign's own min/max budget is HIS limit: not a refusal here. The gate (asked as the approver)
   // reports it in `reach.pastOwnLimits`, the card warns before he approves, and approving sends it anyway.
-  const intent = { campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'dailyBudget', valueCents: proposed }] }
+  const intent = { campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'dailyBudget', valueCents: proposed }], write: BUDGET_WRITE }
   const reach = await checkLiveReach(intent)
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   const stored = storedReach(reach)
@@ -646,7 +706,7 @@ async function budgetListPreview(asked: Array<{ campaignId: string; dailyBudgetC
   const profiles = new Set<string>()
   const past: Array<{ limit: string; reason: string }> = []
   for (const l of [...changing].sort((x, y) => (x.campaignId < y.campaignId ? -1 : 1))) {
-    const reach = await checkLiveReach({ campaignId: l.campaignId, marketplace: l.marketplace, changes: [{ field: 'dailyBudget', valueCents: l.proposedBudgetCents }] })
+    const reach = await checkLiveReach({ campaignId: l.campaignId, marketplace: l.marketplace, changes: [{ field: 'dailyBudget', valueCents: l.proposedBudgetCents }], write: BUDGET_WRITE })
     if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach).replace('Not queued: ', `Not queued: campaign "${l.name}": `) }
     if (reach.reach === 'live') {
       profiles.add(reach.profileId)
@@ -658,7 +718,7 @@ async function budgetListPreview(asked: Array<{ campaignId: string; dailyBudgetC
     tool: 'set-campaign-budget',
     limits: BUDGET_LIMITS,
     items: changing.map((l) => ({ entity: { kind: 'campaign', id: l.campaignId }, change: { field: 'dailyBudget', fromCents: l.currentBudgetCents, toCents: l.proposedBudgetCents } })),
-    writes: changing.map((l) => ({ campaignId: l.campaignId, marketplace: l.marketplace, changes: [{ field: 'dailyBudget', valueCents: l.proposedBudgetCents }], label: `campaign "${l.name}"` })),
+    writes: changing.map((l) => ({ campaignId: l.campaignId, marketplace: l.marketplace, changes: [{ field: 'dailyBudget', valueCents: l.proposedBudgetCents }], write: BUDGET_WRITE, label: `campaign "${l.name}"` })),
     approvalId: ctx?.approvalId,
   })
   const shown = changing.map((l) => ({ ...l, deltaCents: l.proposedBudgetCents - l.currentBudgetCents }))
@@ -706,6 +766,7 @@ async function budgetListExecute(args: Record<string, unknown>, ctx: ToolContext
       changeSetId: run.changeSetId,
       manual: run.manual, // 4A — a person approved it: his own click
       confirmOwnLimits: run.confirmOwnLimits, // 4A — his approval is his "Send anyway" (the card warned him)
+      allowSbSd: true, // W4-11 — an SB/SD campaign's budget goes to its own endpoint
     })
     if (out.ok) ran.push({ campaignId: a.campaignId, dailyBudgetCents: was })
     else failed.push(`campaign ${a.campaignId} (${out.error ?? 'refused'})`)
@@ -788,7 +849,8 @@ const setCampaignBudget: AgentTool = {
   withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? budgetRefusal(preview),
   undo: SET_CAMPAIGN_BUDGET_UNDO,
   description:
-    'Set the daily budget of an Amazon Sponsored Products campaign, in the campaign\'s own currency (never converted). '
+    'Set the daily budget of an Amazon Sponsored Products, Sponsored Brands or Sponsored Display campaign (a Sponsored '
+    + 'Brands budget only when Nexus has read it is daily; a lifetime one is refused), in the campaign\'s own currency (never converted). '
     + `Nothing changes until it is approved. ${BY_RULE_WORDS}: a raise or a cut no larger than its limits allow (a raise `
     + 'waits for a person until the business sets how large one may be), within the market\'s daily budget increase by '
     + 'rule, and keeping the month\'s spend forecast under its monthly cap. The preview shows the budget now and after, '
@@ -818,6 +880,7 @@ const setCampaignBudget: AgentTool = {
       changeSetId: run.changeSetId,
       manual: run.manual, // 4A — a person approved it: his own click
       confirmOwnLimits: run.confirmOwnLimits, // 4A — his approval is his "Send anyway" (the card warned him)
+      allowSbSd: true, // W4-11 — an SB/SD campaign's budget goes to its own endpoint
       ...(changeSource ? { evidence: withSource(null, changeSource) } : {}), // W3-1
     })
     if (!out.ok) return notRun(`Not run: the budget write was refused (${out.error ?? 'unknown'}). Nothing changed.`)
@@ -1015,7 +1078,8 @@ export const BULK_FLOOR_CENTS = 5
 type Exclusion = 'notFound' | 'notSponsoredProducts' | 'pinned' | 'belowFloor' | 'suppressed' | 'lowUnflagged' | 'unchanged' | 'outsideBounds' | 'refusedByGate' | 'atStop'
 const EXCLUSION_WORDS: Record<Exclusion, string> = {
   notFound: 'not found (or a negative)',
-  notSponsoredProducts: 'not a Sponsored Products campaign',
+  // W4-11 — a Sponsored Brands keyword or product target and a Sponsored Display target are changed (adWriteRefusalOf).
+  notSponsoredProducts: 'its ad product: Nexus changes Sponsored Products bids, and the bids of Sponsored Brands keywords and product targets and Sponsored Display targets in campaigns that pay per click, only',
   pinned: 'its campaign\'s bids are pinned by hand',
   belowFloor: 'below the 5-cent floor',
   suppressed: 'suppressed (no-pause floor): only a restore raises it',
@@ -1029,21 +1093,23 @@ const EXCLUSION_WORDS: Record<Exclusion, string> = {
 interface BulkTarget {
   id: string
   text: string
+  /** W4-11 — AdTarget.kind: which Sponsored Brands / Display bids Nexus sends (adWriteRefusalOf). */
+  kind: string | null
   bidCents: number
   suppressedFromBidCents: number | null
-  campaign: { id: string; name: string; type: string; adProduct: string | null; marketplace: string | null; dailyBudgetCurrency: string; dynamicBidding: unknown; minBidCents: number | null; maxBidCents: number | null; pinPlacement: boolean; pinBids: boolean; pinBudget: boolean; pinNote: string | null }
+  campaign: { id: string; name: string; type: string; adProduct: string | null; costType: string | null; marketplace: string | null; dailyBudgetCurrency: string; dynamicBidding: unknown; minBidCents: number | null; maxBidCents: number | null; pinPlacement: boolean; pinBids: boolean; pinBudget: boolean; pinNote: string | null }
   adGroupId: string
 }
 
 const TARGET_SELECT = {
-  id: true, expressionValue: true, bidCents: true, suppressedFromBidCents: true, isNegative: true, adGroupId: true,
-  adGroup: { select: { campaign: { select: { id: true, name: true, type: true, adProduct: true, marketplace: true, dailyBudgetCurrency: true, dynamicBidding: true, minBidCents: true, maxBidCents: true, pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true } } } },
+  id: true, expressionValue: true, bidCents: true, suppressedFromBidCents: true, isNegative: true, adGroupId: true, kind: true,
+  adGroup: { select: { campaign: { select: { id: true, name: true, type: true, adProduct: true, costType: true, marketplace: true, dailyBudgetCurrency: true, dynamicBidding: true, minBidCents: true, maxBidCents: true, pinPlacement: true, pinBids: true, pinBudget: true, pinNote: true } } } },
 } as const
 
 async function loadTargets(ids: string[]): Promise<Map<string, BulkTarget>> {
   if (!ids.length) return new Map()
   const rows = await prisma.adTarget.findMany({ where: { id: { in: [...new Set(ids)] }, isNegative: false }, select: TARGET_SELECT })
-  return new Map(rows.map((t) => [t.id, { id: t.id, text: t.expressionValue, bidCents: t.bidCents, suppressedFromBidCents: t.suppressedFromBidCents, campaign: { ...t.adGroup.campaign, type: String(t.adGroup.campaign.type) }, adGroupId: t.adGroupId }]))
+  return new Map(rows.map((t) => [t.id, { id: t.id, text: t.expressionValue, kind: t.kind == null ? null : String(t.kind), bidCents: t.bidCents, suppressedFromBidCents: t.suppressedFromBidCents, campaign: { ...t.adGroup.campaign, type: String(t.adGroup.campaign.type) }, adGroupId: t.adGroupId }]))
 }
 
 interface BulkArgs {
@@ -1149,7 +1215,8 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
       excluded.push({ targetId: ask.targetId, why: 'notFound' })
       continue
     }
-    if (spOnlyRefusal(t.campaign)) { excluded.push({ targetId: t.id, why: 'notSponsoredProducts' }); continue }
+    // W4-11 — a Sponsored Brands keyword or product target, and a Sponsored Display target, take a bid too.
+    if (adWriteRefusalOf(t.campaign, bidWriteOf(t.kind))) { excluded.push({ targetId: t.id, why: 'notSponsoredProducts' }); continue }
     if (ask.stop) {
       const to = stopBidOf(t.bidCents, stops.get(t.campaign.id))
       if (to == null) { excluded.push({ targetId: t.id, why: 'atStop' }); continue }
@@ -1191,7 +1258,7 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
   const ruleWrites: RuleWrite[] = []
   for (const [key, list] of [...byGroup].sort(([x], [y]) => (x < y ? -1 : 1))) {
     const values = [...new Set([Math.min(...list.map((l) => l.to)), Math.max(...list.map((l) => l.to))])]
-    const where = { campaignId: list[0].t.campaign.id, adGroupId: list[0].t.adGroupId, marketplace: list[0].t.campaign.marketplace, ...(list[0].stop ? { isSuppression: true } : {}) }
+    const where = { campaignId: list[0].t.campaign.id, adGroupId: list[0].t.adGroupId, marketplace: list[0].t.campaign.marketplace, write: bidWriteOf(list[0].t.kind), ...(list[0].stop ? { isSuppression: true } : {}) }
     for (const value of values) {
       const reach = await checkLiveReach({ ...where, changes: [{ field: 'bid', valueCents: value }] })
       if (reach.reach === 'refused') { refusedGroups.set(key, reach.reason); break }
@@ -1379,7 +1446,7 @@ const bulkAdBidChange: AgentTool = {
   withinLimits: (preview, limits) => handBackRefusal(preview) ?? ruleRefusal(preview, limits),
   undo: BULK_BID_UNDO,
   description:
-    `Change many Amazon Sponsored Products bids in one request: a list of targets with their new bids (up to ${BULK_LIST_MAX}), `
+    `Change many Amazon Sponsored Products bids in one request, and Sponsored Brands keyword and product-target bids and Sponsored Display target bids of campaigns that pay per click: a list of targets with their new bids (up to ${BULK_LIST_MAX}), `
     + `or a selection (campaign, ad group or market, optionally a text; up to ${BULK_MAX} targets) moved by a percent. `
     + 'A row may be a stop instead of a bid (stop: true): its bid goes to the ads strategy\'s stop bid in one move, only ever down. '
     + 'Nothing changes until a person approves it in Nexus, or the person who asked confirms it in Claude with their '
@@ -1421,6 +1488,7 @@ const bulkAdBidChange: AgentTool = {
       changeSetId: run.changeSetId,
       manual: run.manual, // 4A
       confirmOwnLimits: run.confirmOwnLimits, // 4A
+      allowSbSd: true, // W4-11 — SB/SD keyword and target bids go to their own endpoints
     })
     // W3-1 — the recommendations of the rows that were written (or already held the bid) are settled; W4-9 — and the
     // autopilot decisions and Keyword Tracker proposals they carried out.

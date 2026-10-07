@@ -47,7 +47,7 @@ import { adGroupCampaigns, adGroupExternalIds, adGroupsByExternalId } from '../.
 import { loadDestinationGraph, resolveDestination, resolveStoredDestinations } from '../../advertising/harvest-destination.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf } from './ads-tool-guards.js'
-import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stepClampWords, storedReach, withStepPast, type BidAfterwards, type StoredReach } from './ads-change-kit.js'
+import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, bidWriteOf, stepClampWords, storedReach, withStepPast, type BidAfterwards, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type LimitFacts, type ScopeFacts } from './ads-autonomy-kit.js'
 import { bidLimitsFor } from '../../advertising/ads-strategy/bids.js'
 import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
@@ -824,6 +824,7 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
       bidCents: true,
       suppressedFromBidCents: true,
       isNegative: true,
+      kind: true, // W4-11 — which Sponsored Brands / Display bids Nexus sends
       adGroupId: true,
       adGroup: {
         select: {
@@ -833,6 +834,7 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
               name: true,
               type: true,
               adProduct: true,
+              costType: true, // W4-11 — SB/SD bids only in a campaign that pays per click
               marketplace: true,
               dailyBudgetCurrency: true,
               dynamicBidding: true,
@@ -850,7 +852,9 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
     return { ok: false, error: `target ${targetId} not found (or is a negative)` }
   }
   const campaign = target.adGroup.campaign
-  const notSp = spOnlyRefusal(campaign)
+  // W4-11 — a Sponsored Brands keyword or product target, or a Sponsored Display target, takes a bid too (their endpoints).
+  const bidWrite = bidWriteOf(target.kind)
+  const notSp = adWriteRefusalOf(campaign, bidWrite)
   if (notSp) return { ok: false, error: notSp }
   // 4A (Owner decided 2026-10-06) — a pin does not stop it: it runs only once a person approves it, as his own click.
   const currentBidCents = target.bidCents ?? 0
@@ -879,6 +883,7 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
     adGroupId: target.adGroupId,
     marketplace: campaign.marketplace,
     changes: [{ field: 'bid', valueCents: effectiveBidCents }],
+    write: bidWrite,
   })
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
   // W4-4 — past the largest change the card warns him, where it warns about his other own limits (#401).
@@ -894,7 +899,7 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
       limits: TARGET_BID_LIMITS,
       items: [{ entity: { kind: 'target', id: target.id }, change: { field: 'bid', fromCents: currentBidCents, toCents: byRuleBidCents } }],
       writes: [...new Set([byRuleBidCents, effectiveBidCents])].map((valueCents) => ({
-        label: `campaign "${campaign.name}"`, campaignId: campaign.id, adGroupId: target.adGroupId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents }],
+        label: `campaign "${campaign.name}"`, campaignId: campaign.id, adGroupId: target.adGroupId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents }], write: bidWrite,
       })),
       approvalId: opts.rule.approvalId,
     })
@@ -983,7 +988,8 @@ const setTargetBid: AgentTool = {
   withinLimits: (preview, limits) => handBackRefusal(preview) ?? ruleRefusal(preview, limits),
   undo: SET_TARGET_BID_UNDO,
   description:
-    'Change one keyword or target bid on an Amazon Sponsored Products campaign. Nothing changes until a person approves '
+    'Change one keyword or target bid on an Amazon Sponsored Products campaign, or a Sponsored Brands keyword or product '
+    + 'target or a Sponsored Display target in a campaign that pays per click. Nothing changes until a person approves '
     + 'it: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the business set it '
     + 'so — unless the business lets it run by its rule, inside its limits and the ads strategy where it lands (by '
     + 'default only a cut; a raise waits for a person). The preview shows the current and new bid in the campaign\'s '
@@ -1023,6 +1029,7 @@ const setTargetBid: AgentTool = {
       changeSetId: run.changeSetId,
       manual: run.manual, // 4A
       confirmOwnLimits: run.confirmOwnLimits, // 4A
+      allowSbSd: true, // W4-11 — an SB/SD keyword's or target's bid goes to its own endpoint
       ...(evidence ? { evidence } : {}),
     })
     if (!out.ok) return notRun(`Not run: the bid write was refused (${out.error ?? 'unknown'}). Nothing changed.`)

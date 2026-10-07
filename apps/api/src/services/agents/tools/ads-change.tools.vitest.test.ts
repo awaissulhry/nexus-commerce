@@ -87,7 +87,9 @@ describe('A6 — set-campaign-budget', () => {
 
   it('refuses the same value, a non-SP or unknown campaign and what Amazon refuses — his own limits only warn (4A)', async () => {
     expect((await preview('set-campaign-budget', { campaignId: 'c-it', dailyBudgetCents: 2000 })).error).toMatch(/already EUR 20.00/)
-    expect((await preview('set-campaign-budget', { campaignId: 'c-sb', dailyBudgetCents: 2500 })).error).toMatch(/not a Sponsored Products campaign/)
+    // W4-11 — a Sponsored Brands budget is sent to SB's own endpoint only once Nexus has read it is daily
+    // (ads-sbsd-tools.vitest.test.ts); the fixture's c-sb holds no budget object, so it is refused, by name.
+    expect((await preview('set-campaign-budget', { campaignId: 'c-sb', dailyBudgetCents: 2500 })).error).toMatch(/^Italy brands is a Sponsored Brands campaign, and Nexus has not read from Amazon whether its budget is daily/)
     expect((await preview('set-campaign-budget', { campaignId: 'nope', dailyBudgetCents: 2500 })).error).toBe('campaign nope not found')
     // 4A (Owner decided 2026-10-06) — it runs only once a person approves it, as his own click: a pin no longer refuses it.
     expect((await preview('set-campaign-budget', { campaignId: 'c-pin', dailyBudgetCents: 2500 })).ok).toBe(true)
@@ -175,6 +177,7 @@ describe('A7 — bulk-ad-bid-change', () => {
     expect(r.preview).toMatchObject({
       mode: 'list',
       // 4A — a pinned campaign's bid is no longer left out: the request runs only once a person approves it.
+      // W4-11 — an SB keyword takes a bid only in a campaign Nexus has read pays per click; the fixture's c-sb has no cost type.
       totals: { asked: 8, changing: 3, excluded: { suppressed: 1, lowUnflagged: 1, notSponsoredProducts: 1, notFound: 1, unchanged: 1 } },
       byCurrency: { EUR: { targets: 2, deltaCents: 25 }, GBP: { targets: 1, deltaCents: 10 } },
       reach: { reach: 'sandbox' },

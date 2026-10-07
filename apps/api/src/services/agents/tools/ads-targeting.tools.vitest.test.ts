@@ -216,7 +216,8 @@ describe('add-negative-targets', () => {
     expect(await refused({ adGroupIds: ['g-a1'], keywords: [{ text: 'B0ABCDEFGH' }] })).toMatch(/is an ASIN, a product: name it in asins/)
     expect(await refused({ scope: 'CAMPAIGN', campaignIds: ['c-a'], asins: ['B0ABCDEFGH'] })).toMatch(/a negative product target goes into an ad group, not a whole campaign/)
     expect(await refused({ adGroupIds: ['nope'], keywords: [{ text: 'x' }] })).toBe('Not queued: ad group nope was not found in this business.')
-    expect(await refused({ adGroupIds: ['g-c-sb'], keywords: [{ text: 'x' }] })).toMatch(/not a Sponsored Products campaign/)
+    // W4-11 — a Sponsored Brands ad group takes a negative keyword (SB's own endpoint), not a negative product target.
+    expect(await refused({ adGroupIds: ['g-c-sb'], asins: ['B0ABCDEFGH'] })).toMatch(/not a negative other than a keyword in an ad group/)
     expect(await refused({})).toMatch(/^Name the negatives/)
   })
 

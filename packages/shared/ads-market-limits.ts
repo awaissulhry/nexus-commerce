@@ -17,9 +17,22 @@
  *
  * UK, SE and PL (sandbox connections today), NL and BE have no row on purpose: a row is added only when it is transcribed
  * from that page, never from memory. Amounts are in hundredths of the currency (cents), like every Nexus ads column.
+ *
+ * W4-11 (2026-10-07) — Sponsored Brands and Sponsored Display, transcribed from the same page, read 2026-10-07:
+ * "Bid constraints by marketplace" (https://advertising.amazon.com/API/docs/en-us/reference/concepts/limits#bid-constraints-by-marketplace)
+ * and "Budget constraints by marketplace" (…/limits#budget-constraints-by-marketplace). For DE, FR, IT and ES (EUR):
+ *   · SB (CPC) image 0.10/39 and SBV (CPC) video 0.15/39. Nexus does not hold which format an SB ad group runs, so the
+ *     row is the range BOTH accept: 0.15–39. SB vCPM bids (image/video × brand impression share/new-to-brand) are four
+ *     columns that differ per market; no row here, so an SB vCPM bid is refused.
+ *   · SD (CPC) 0.02/1000 and SD (vCPM) 1/1000.
+ *   · SB daily budget 1–1,000,000. SD daily budget 1–1,000,000 for a seller and 1–50,000 for a vendor; Nexus does not
+ *     hold which the account is, so the row is the range both accept: 1–50,000.
+ * SB and SD bid limits depend on how the campaign pays (`Campaign.costType`, cpc | vcpm): a bid in a campaign whose cost
+ * type Nexus does not hold is refused, never guessed. The SD vCPM row is transcribed for completeness: Nexus sends no
+ * vCPM bid today (adWriteRefusal refuses it — the ads strategy's bid limits and the floors are per click).
  */
 
-import { SPONSORED_PRODUCTS, adProductLabel } from './ads-ad-product.js'
+import { SPONSORED_BRANDS, SPONSORED_DISPLAY, SPONSORED_PRODUCTS, adProductLabel } from './ads-ad-product.js'
 
 /** Lowest and highest value Amazon accepts, both inclusive, in hundredths of the market's currency. */
 export interface MinorRange {
@@ -28,8 +41,13 @@ export interface MinorRange {
 }
 
 export interface AdProductLimits {
-  /** A keyword or product-target bid, and an ad group's default bid. */
+  /** A keyword or product-target bid, and an ad group's default bid. For SB and SD: a bid in a campaign that pays per click (CPC). */
   bid: MinorRange
+  /**
+   * W4-11 — a bid in a campaign that pays per thousand viewable impressions (vCPM; SB and SD only). Absent: no checked
+   * row, so such a bid is refused.
+   */
+  vcpmBid?: MinorRange
   /** A campaign's daily budget. */
   dailyBudget: MinorRange
 }
@@ -53,10 +71,29 @@ const SP_EUR: AdProductLimits = {
   dailyBudget: { min: 100, max: 100_000_000 },
 }
 
+/**
+ * W4-11 — Sponsored Brands in a euro market (DE, FR, IT, ES): a CPC bid €0.15–€39 (the range image 0.10/39 and video
+ * 0.15/39 both accept), no vCPM row, daily budget €1–€1,000,000.
+ */
+const SB_EUR: AdProductLimits = {
+  bid: { min: 15, max: 3_900 },
+  dailyBudget: { min: 100, max: 100_000_000 },
+}
+
+/**
+ * W4-11 — Sponsored Display in a euro market (DE, FR, IT, ES): a CPC bid €0.02–€1,000, a vCPM bid €1–€1,000, daily budget
+ * €1–€50,000 (a seller's 1–1,000,000 and a vendor's 1–50,000 both accept it).
+ */
+const SD_EUR: AdProductLimits = {
+  bid: { min: 2, max: 100_000 },
+  vcpmBid: { min: 100, max: 100_000 },
+  dailyBudget: { min: 100, max: 5_000_000 },
+}
+
 const eur = (market: string): MarketLimits => ({
   market,
   currency: 'EUR',
-  adProducts: { [SPONSORED_PRODUCTS]: SP_EUR },
+  adProducts: { [SPONSORED_PRODUCTS]: SP_EUR, [SPONSORED_BRANDS]: SB_EUR, [SPONSORED_DISPLAY]: SD_EUR },
   source: AMAZON_LIMITS_PAGE,
 })
 
@@ -78,6 +115,12 @@ function money(minor: number, currency: string): string {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(minor / 100)
 }
 
+/** W4-11 — `Campaign.costType` as one of Amazon's two bid models, or null when it says neither. */
+export function bidCostType(costType: string | null | undefined): 'CPC' | 'VCPM' | null {
+  const c = (costType ?? '').trim().toUpperCase()
+  return c === 'CPC' || c === 'VCPM' ? c : null
+}
+
 function listed(codes: readonly string[]): string {
   return codes.length > 1 ? `${codes.slice(0, -1).join(', ')} and ${codes[codes.length - 1]}` : (codes[0] ?? '')
 }
@@ -89,6 +132,8 @@ function listed(codes: readonly string[]): string {
  * Products, as in the write gate), and a bid (`bid`, `defaultBid`) or daily budget (`dailyBudget`) outside the row's
  * range. Any other field, or no value, is judged on the market alone. A suppression is not exempt: it lowers a bid to
  * Amazon's minimum, never below it, and Amazon refuses a lower one whatever Nexus intends.
+ * W4-11 — an SB or SD bid is judged on the range of how its campaign pays (`costType`): CPC on `bid`, vCPM on `vcpmBid`
+ * (refused where the row has none); a cost type Nexus does not hold refuses the bid.
  */
 export function marketLimitsRefusal(args: {
   market: string | null | undefined
@@ -96,6 +141,8 @@ export function marketLimitsRefusal(args: {
   field?: string | null
   /** The new value, in hundredths of the market's currency. */
   valueMinor?: number | null
+  /** W4-11 — how an SB or SD campaign pays (`Campaign.costType`: cpc | vcpm, any case); not read for Sponsored Products. */
+  costType?: string | null
 }): string | null {
   const row = marketLimitsOf(args.market)
   const shown = (args.market ?? '').trim() || 'this market'
@@ -111,7 +158,18 @@ export function marketLimitsRefusal(args: {
   if (v == null || !Number.isFinite(v)) return null
   const what = args.field && BID_FIELDS.has(args.field) ? 'bid' : args.field === 'dailyBudget' ? 'daily budget' : null
   if (!what) return null
-  const range = what === 'bid' ? limits.bid : limits.dailyBudget
+  let range = what === 'bid' ? limits.bid : limits.dailyBudget
+  if (what === 'bid' && product !== SPONSORED_PRODUCTS) {
+    const label = adProductLabel(product) ?? product
+    const pays = bidCostType(args.costType)
+    if (!pays) {
+      return `Nexus does not know whether this ${label} campaign pays per click (CPC) or per thousand viewable impressions (vCPM), and Amazon's bid limits differ between them, so nothing was sent to Amazon.`
+    }
+    if (pays === 'VCPM') {
+      if (!limits.vcpmBid) return `Nexus has no checked Amazon limits for a vCPM bid in ${label} in ${row.market}, so nothing was sent to Amazon.`
+      range = limits.vcpmBid
+    }
+  }
   if (v < range.min) {
     return `A ${what} of ${money(v, row.currency)} is below Amazon's minimum of ${money(range.min, row.currency)} in ${row.market}, so nothing was sent to Amazon.`
   }

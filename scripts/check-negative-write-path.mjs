@@ -12,9 +12,11 @@
  *
  * THE RULE (baseline 0 — fix the code, never add an allowance)
  * Outside the service, the Amazon client, the negation policy, the syncs and tests, apps/api/src may not:
- *   1. call the client's negative creators `createNegativeKeyword(` / `createNegativeProductTarget(`;
- *   2. name a negative create endpoint — '/sp/negativeKeywords', '/sp/campaignNegativeKeywords', '/sp/negativeTargets'
- *      (their /list and /delete are other strings) — unless the line says `// negative-write-exempt: <reason>`;
+ *   1. call the client's negative creators `createNegativeKeyword(` / `createNegativeProductTarget(` (W4-11: and the
+ *      Sponsored Brands / Display ones, `createSbNegativeKeyword(` / `createSdNegativeTarget(`);
+ *   2. name a negative create endpoint — '/sp/negativeKeywords', '/sp/campaignNegativeKeywords', '/sp/negativeTargets',
+ *      '/sb/negativeKeywords', '/sd/negativeTargets' (their /list and /delete are other strings) — unless the line says
+ *      `// negative-write-exempt: <reason>`;
  *   3. call `adTarget.create` / `createMany` / `upsert` with `isNegative: true` in its argument
  *      (use mirrorNegativeRow / mirrorNegativeKeyword from the service).
  *
@@ -35,8 +37,8 @@ const ALLOWED = new Set([
   'apps/api/src/services/advertising/ads-v1-sync.service.ts', // the syncs mirror what Amazon already holds
   'apps/api/src/services/advertising/ads-keyword-list-sync.service.ts',
 ])
-const CREATORS = new Set(['createNegativeKeyword', 'createNegativeProductTarget'])
-const ENDPOINTS = new Set(['/sp/negativeKeywords', '/sp/campaignNegativeKeywords', '/sp/negativeTargets'])
+const CREATORS = new Set(['createNegativeKeyword', 'createNegativeProductTarget', 'createSbNegativeKeyword', 'createSdNegativeTarget'])
+const ENDPOINTS = new Set(['/sp/negativeKeywords', '/sp/campaignNegativeKeywords', '/sp/negativeTargets', '/sb/negativeKeywords', '/sd/negativeTargets'])
 const ROW_WRITES = new Set(['create', 'createMany', 'upsert'])
 const EXEMPT = 'negative-write-exempt:'
 

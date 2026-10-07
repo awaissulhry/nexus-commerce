@@ -17,7 +17,8 @@
  *   pre-switch     a request queued before these tools could run carries no stored reach: it is never run (d1 = A),
  *                  and the approval sweep expires it (approval-inbox.service.ts).
  *   stale          `execute` re-runs the dry run and refuses when a starting value the person approved has moved.
- *   SP only        phase 1 changes Sponsored Products campaigns only.
+ *   SP only        phase 1 changes Sponsored Products campaigns only. W4-11 — the budget, bid, status and negative tools
+ *                  also send the Sponsored Brands / Display changes Nexus has endpoints for (adWriteRefusalOf).
  *   bid step       W4-4 — a bid request a person approves sends the bid asked for, past the largest change per action
  *                  after the card's warning; a run by rule is stepped as before (bidStepOf). `afterwards` says whether
  *                  auto-bid then leaves the bid alone (a person's) or may move it (handed back).
@@ -31,7 +32,7 @@ import { amountLabel, boundAutomationsFor, checkLiveReach, claudeActor, claudeRe
 import { FIELDS } from '@nexus/shared/permissions'
 import { buildLimitFacts, commonRefusal, LIMIT_FACTS_MONEY, limitsNote, type KitItem, type LimitFacts } from './ads-autonomy-kit.js'
 import type { FieldPermission, ToolContext, ToolResult } from '../tool-types.js'
-import { adProductRefusal } from '@nexus/shared/ads-ad-product'
+import { adProductRefusal, adWriteRefusal, type AdWrite } from '@nexus/shared/ads-ad-product'
 import { stepClamp, strategyWords, limitWords, type StepClamp, type StrategyBidLimits } from '../../advertising/ads-strategy/bids.js'
 import type { ClaudeActionType } from '../../advertising/ads-strategy/fields.js'
 
@@ -205,9 +206,30 @@ export function recheck(ctx: ToolContext, fresh: ToolResult, material: readonly 
 /**
  * Phase 1 changes Sponsored Products campaigns only (SB negatives are blocked upstream; SD has none). 6a — the shared
  * ad product and sentence the mutation layer and the write gate refuse with; an unknown ad product is refused here.
+ * W4-11 — still the check of every tool whose logic is Sponsored Products only (placements, suppress/restore, archive,
+ * ad groups, product ads, the playbook, the builders, hourly plans, budget plans/schedules/pools, stock bids, harvest).
+ * The tools that send Sponsored Brands / Display changes use `adWriteRefusalOf`.
  */
 export function spOnlyRefusal(campaign: { type?: string | null; adProduct?: string | null; name?: string | null }): string | null {
   return adProductRefusal(campaign)
+}
+
+/**
+ * W4-11 — why Nexus cannot send this write to this campaign; null when it can: any Sponsored Products write, and the
+ * Sponsored Brands / Display changes it sends to their own endpoints (adWriteRefusal: a campaign's daily budget and
+ * on/off state, a keyword's or target's bid and on/off state, adding and retiring an SB negative keyword or SD negative
+ * product target in an ad group). An ad product neither column states is refused, as `spOnlyRefusal` refuses it.
+ */
+export function adWriteRefusalOf(
+  campaign: { type?: unknown; adProduct?: string | null; name?: string | null; budgetJson?: unknown; costType?: string | null },
+  write: AdWrite,
+): string | null {
+  return adWriteRefusal({ type: campaign.type == null ? null : String(campaign.type), adProduct: campaign.adProduct ?? null, name: campaign.name ?? null, budgetJson: campaign.budgetJson, costType: campaign.costType ?? null }, write)
+}
+
+/** W4-11 — a keyword's or target's bid write, as the gate and the mutation layer judge it for an SB/SD campaign. */
+export function bidWriteOf(kind: string | null | undefined): AdWrite {
+  return { entity: 'AD_TARGET', fields: ['bid'], kind: kind ?? null, isNegative: false }
 }
 
 /** The enabled rules and schedules bound to the campaign: they may change it again after this change. */

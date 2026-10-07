@@ -1794,6 +1794,206 @@ export async function updateTarget(
   return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
 }
 
+// ── W4-11 — Sponsored Brands and Sponsored Display: changes to EXISTING campaigns ──────────────────────────────────────
+//
+// Until W4-11 every update above went to a Sponsored Products endpoint, and Nexus refused SB/SD writes before they were
+// queued (6a, Owner decision S8). These send the changes Nexus now supports (`adWriteRefusal`, @nexus/shared/ads-ad-product)
+// to each ad product's own endpoints, through `liveCall` → the channel gateway like every call here, and short-circuit in
+// sandbox like the SP updates. Request shapes are Amazon's published OpenAPI documents, read 2026-10-07:
+//
+//   SB 4.0  https://advertising.amazon.com/API/docs/en-us/sponsored-brands/3-0/openapi/prod  (sponsored-brands/4-0/openapi.json)
+//   SB 3.0  https://advertising.amazon.com/API/docs/en-us/sponsored-brands/3-0/openapi       (sponsored-brands/3-0/openapi.yaml)
+//   SD 3.0  https://advertising.amazon.com/API/docs/en-us/sponsored-display/3-0/openapi      (sponsored-display/3-0/openapi.yaml)
+//
+// The SB 3.0 and SD 3.0 legacy families take NUMERIC (int64) ids, lowercase states and a bare-array body; SB 4.0 takes
+// string ids and UPPERCASE states. Each needs one live confirmation: no SB/SD update has been sent from Nexus yet.
+
+/** W4-11 — a Sponsored Brands or Display update: what changes. Bids are in the currency's units (cents / 100), as the SP updates. */
+export interface SbSdPatch {
+  state?: 'enabled' | 'paused' | 'archived'
+  /** A campaign's daily budget. */
+  dailyBudget?: number
+  /** A keyword's or target's bid. */
+  bid?: number
+}
+
+/**
+ * The legacy SB 3.0 and SD 3.0 bodies take int64 ids as JSON numbers. An id past 2^53 would be sent rounded — another
+ * entity's id — so it is refused instead (thrown, so the write fails and says why; nothing is sent).
+ */
+export function amazonIntId(id: string): number {
+  const n = Number(String(id).trim())
+  if (!/^\d+$/.test(String(id).trim()) || !Number.isSafeInteger(n)) {
+    throw new Error(`Amazon id "${id}" cannot be sent as a number without changing it, so nothing was sent to Amazon`)
+  }
+  return n
+}
+
+/** W4-11 — the failure when Amazon's answer to an SB/SD update has no result Nexus can read: never counted as done. */
+export const SBSD_ANSWER_NOT_UNDERSTOOD = "Amazon's answer was not understood (it carries no result for this change), so Nexus does not count the change as made"
+
+/**
+ * The SB 3.0 / SD 3.0 answer (HTTP 207, or 200 for an archive): a bare array of `{ code, description, <id> }`, or one
+ * such object. Every item must say SUCCESS; any other code is Amazon's refusal, in its own words. Fail closed: an answer
+ * of another shape, an empty one, or an item with no code is not a success (SBSD_ANSWER_NOT_UNDERSTOOD).
+ */
+export function sbSdItemsResult(response: unknown): { ok: boolean; error: string | null } {
+  const items = Array.isArray(response) ? response : response && typeof response === 'object' && 'code' in (response as object) ? [response] : []
+  if (!items.length) return { ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD }
+  for (const item of items as Array<Record<string, unknown>>) {
+    const code = String(item?.code ?? '')
+    if (!code) return { ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD }
+    if (code.toUpperCase() !== 'SUCCESS') {
+      const words = [code, item.description ?? item.details].filter(Boolean).join(' — ')
+      const detail = Array.isArray(item.errors) && item.errors.length ? ` ${amazonErrorText(item.errors)}` : ''
+      return { ok: false, error: `amazon_rejected: ${words}${detail}`.slice(0, 300) }
+    }
+  }
+  return { ok: true, error: null }
+}
+
+/**
+ * W4-11 — the SB 4.0 answer to `UpdateSponsoredBrandsCampaigns` (HTTP 207, `{ campaigns: { success, error } }`): an error
+ * item is Amazon's refusal in its own words; a success item is the change made. Fail closed: neither is not a success.
+ */
+export function sbV4CampaignsResult(response: unknown): { ok: boolean; error: string | null } {
+  const block = (response as { campaigns?: { success?: unknown[]; error?: unknown[] } } | null)?.campaigns
+  if (Array.isArray(block?.error) && block.error.length) return { ok: false, error: `amazon_rejected: ${amazonErrorText(block.error[0])}` }
+  if (Array.isArray(block?.success) && block.success.length) return { ok: true, error: null }
+  return { ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD }
+}
+
+/** What a W4-11 update sends, built apart from the call so the shape is testable without a network. */
+export interface SbSdRequest {
+  method: 'PUT' | 'DELETE'
+  path: string
+  body?: unknown
+  contentType?: string
+  acceptHeader: string
+  /** How Amazon's answer is read. */
+  answer: 'v4' | 'items' | 'sbTargets'
+}
+
+const SB_CAMPAIGN_V4_MIME = 'application/vnd.sbcampaignresource.v4+json'
+const SB_KEYWORD_RESPONSE_MIME = 'application/vnd.sbkeywordresponse.v3+json'
+
+/**
+ * SB 4.0 `UpdateSponsoredBrandsCampaigns` — PUT /sb/v4/campaigns, `application/vnd.sbcampaignresource.v4+json`,
+ * `{ campaigns: [{ campaignId, state?: ENABLED|PAUSED, budget? }] }` (state has no ARCHIVED: archive is its own delete);
+ * answered 207 `{ campaigns: { success, error } }`.
+ */
+export function sbCampaignUpdateRequest(externalCampaignId: string, patch: SbSdPatch): SbSdRequest {
+  if (patch.state === 'archived') throw new Error('a Sponsored Brands campaign is archived by its own delete operation, not by an update; nothing was sent')
+  const campaign: Record<string, unknown> = { campaignId: String(externalCampaignId) }
+  if (patch.state) campaign.state = patch.state.toUpperCase()
+  if (patch.dailyBudget != null) campaign.budget = patch.dailyBudget
+  return { method: 'PUT', path: '/sb/v4/campaigns', body: { campaigns: [campaign] }, contentType: SB_CAMPAIGN_V4_MIME, acceptHeader: SB_CAMPAIGN_V4_MIME, answer: 'v4' }
+}
+
+/**
+ * SD 3.0 `updateCampaigns` — PUT /sd/campaigns, `application/json`, `[{ campaignId (int64), state?: enabled|paused,
+ * budget? }]`; answered 207 `[{ code, description, campaignId }]`. Only a daily budget exists on SD (`budgetType: daily`).
+ */
+export function sdCampaignUpdateRequest(externalCampaignId: string, patch: SbSdPatch): SbSdRequest {
+  const campaign: Record<string, unknown> = { campaignId: amazonIntId(externalCampaignId) }
+  if (patch.state) campaign.state = patch.state
+  if (patch.dailyBudget != null) campaign.budget = patch.dailyBudget
+  return { method: 'PUT', path: '/sd/campaigns', body: [campaign], contentType: 'application/json', acceptHeader: 'application/json', answer: 'items' }
+}
+
+/** The Amazon ids an SB 3.0 keyword or target update needs besides its own (the API requires them on a keyword). */
+export interface SbTargetIds { externalTargetId: string; externalAdGroupId: string; externalCampaignId: string }
+
+/**
+ * SB 3.0 `updateKeywords` — PUT /sb/keywords, `application/json`, `[{ keywordId, adGroupId, campaignId (all int64,
+ * required), state?: enabled|paused, bid? }]`, Accept `application/vnd.sbkeywordresponse.v3+json`; answered 207 with
+ * `{ keywordId, code, description }` items.
+ */
+export function sbKeywordUpdateRequest(ids: SbTargetIds, patch: SbSdPatch): SbSdRequest {
+  const keyword: Record<string, unknown> = {
+    keywordId: amazonIntId(ids.externalTargetId), adGroupId: amazonIntId(ids.externalAdGroupId), campaignId: amazonIntId(ids.externalCampaignId),
+  }
+  if (patch.state) keyword.state = patch.state
+  if (patch.bid != null) keyword.bid = patch.bid
+  return { method: 'PUT', path: '/sb/keywords', body: [keyword], contentType: 'application/json', acceptHeader: SB_KEYWORD_RESPONSE_MIME, answer: 'items' }
+}
+
+/**
+ * SB 3.0 `updateTargets` — PUT /sb/targets, `application/json`, `{ targets: [{ targetId, adGroupId, campaignId (int64),
+ * state?: enabled|paused, bid? }] }`, Accept `application/vnd.updatetargetsresponse.v3+json`; answered 200
+ * `{ updateTargetSuccessResults, updateTargetErrorResults }`.
+ */
+export function sbTargetUpdateRequest(ids: SbTargetIds, patch: SbSdPatch): SbSdRequest {
+  const target: Record<string, unknown> = {
+    targetId: amazonIntId(ids.externalTargetId), adGroupId: amazonIntId(ids.externalAdGroupId), campaignId: amazonIntId(ids.externalCampaignId),
+  }
+  if (patch.state) target.state = patch.state
+  if (patch.bid != null) target.bid = patch.bid
+  return { method: 'PUT', path: '/sb/targets', body: { targets: [target] }, contentType: 'application/json', acceptHeader: 'application/vnd.updatetargetsresponse.v3+json', answer: 'sbTargets' }
+}
+
+/**
+ * SD 3.0 `updateTargetingClauses` — PUT /sd/targets, `application/json`, `[{ targetId (int64), state?: enabled|paused,
+ * bid? }]` ("The mutable fields are bid and state"); answered 207 `[{ code, description, targetId }]`.
+ */
+export function sdTargetUpdateRequest(externalTargetId: string, patch: SbSdPatch): SbSdRequest {
+  const target: Record<string, unknown> = { targetId: amazonIntId(externalTargetId) }
+  if (patch.state) target.state = patch.state
+  if (patch.bid != null) target.bid = patch.bid
+  return { method: 'PUT', path: '/sd/targets', body: [target], contentType: 'application/json', acceptHeader: 'application/json', answer: 'items' }
+}
+
+/**
+ * Retiring a negative — archive is final at Amazon: an archived negative is never enabled again. An SD negative product
+ * target can be added anew; an SB negative keyword can NOT: Amazon's createNegativeKeywords (SB 3.0) — "negative keywords
+ * can not be recreated for a campaign if the negative keyword has previously been associated with a campaign and
+ * subsequently archived". So an SB negative keyword's retire is for good (retire-negatives says so, Retiring.final).
+ *   SB 3.0 `archiveNegativeKeyword`          DELETE /sb/negativeKeywords/{keywordId}, Accept application/vnd.sbkeywordresponse.v3+json
+ *   SD 3.0 `archiveNegativeTargetingClause`  DELETE /sd/negativeTargets/{negativeTargetId}, Accept application/json
+ * Both answer 200 with one `{ code, description, <id> }` ("equivalent to an update that sets the state to archived").
+ */
+export function sbSdNegativeArchiveRequest(adProduct: 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY', externalTargetId: string): SbSdRequest {
+  const id = amazonIntId(externalTargetId)
+  return adProduct === 'SPONSORED_BRANDS'
+    ? { method: 'DELETE', path: `/sb/negativeKeywords/${id}`, acceptHeader: SB_KEYWORD_RESPONSE_MIME, answer: 'items' }
+    : { method: 'DELETE', path: `/sd/negativeTargets/${id}`, acceptHeader: 'application/json', answer: 'items' }
+}
+
+/**
+ * Read an SB 3.0 `updateTargets` answer: any `updateTargetErrorResults` item is Amazon's refusal; a
+ * `updateTargetSuccessResults` item is the change made. Fail closed: neither is not a success.
+ */
+export function sbTargetsResult(response: unknown): { ok: boolean; error: string | null } {
+  const r = response as { updateTargetErrorResults?: Array<{ code?: string; details?: string }>; updateTargetSuccessResults?: unknown[] } | null
+  const errors = r?.updateTargetErrorResults
+  if (Array.isArray(errors) && errors.length) {
+    return { ok: false, error: `amazon_rejected: ${[errors[0]?.code, errors[0]?.details].filter(Boolean).join(' — ')}`.slice(0, 300) }
+  }
+  if (Array.isArray(r?.updateTargetSuccessResults) && r.updateTargetSuccessResults.length) return { ok: true, error: null }
+  return { ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD }
+}
+
+/** W4-11 — send one SB/SD update (built by the functions above) through the gateway; sandbox sends nothing. */
+export async function sendSbSdUpdate(
+  ctx: ClientContext,
+  request: SbSdRequest,
+  label: string,
+): Promise<{ ok: boolean; mode: AdsMode; rawResponse: unknown; error?: string | null }> {
+  if (adsMode() === 'sandbox') {
+    logger.info(`[ADS-SANDBOX] ${label}`, { profileId: ctx.profileId, method: request.method, route: request.path, body: request.body })
+    return { ok: true, mode: 'sandbox', rawResponse: { sandbox: true, route: request.path, method: request.method } }
+  }
+  const response = await liveCall<unknown>({
+    ...ctx,
+    method: request.method,
+    path: request.path,
+    ...(request.body !== undefined ? { body: request.body, contentType: request.contentType } : {}),
+    acceptHeader: request.acceptHeader,
+  })
+  const parsed = request.answer === 'v4' ? sbV4CampaignsResult(response) : request.answer === 'sbTargets' ? sbTargetsResult(response) : sbSdItemsResult(response)
+  return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
+}
+
 // ── CREATE (AX.4) — v3 SP POST. Same LWA-Bearer v3 path as the updates;
 // sandbox short-circuits returning a generated external id so the full
 // create → local-row → (later) live-sync flow exercises end-to-end. ─────
@@ -2456,6 +2656,69 @@ export async function createSdTarget(ctx: ClientContext, input: CreateSdTargetIn
   const response = await liveCall<Array<{ code?: string; description?: string; targetId?: number | string }>>({ ...ctx, method: 'POST', path: '/sd/targets', body, contentType: 'application/json', acceptHeader: 'application/json' })
   const made = sdCreateResult(response, 'targetId')
   if (!made.externalId) logger.warn('[CC-12] createSdTarget returned no targetId', { response })
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
+}
+
+// ── W4-11 — a negative in an EXISTING Sponsored Brands or Display ad group (the add half of add-negative-targets) ─────
+
+/**
+ * SB 3.0 `createNegativeKeywords` — POST /sb/negativeKeywords, `application/json`, `[{ campaignId, adGroupId (int64),
+ * keywordText, matchType: negativeExact | negativePhrase }]` ("The bid and state can't be set at negative keyword
+ * creation"), Accept `application/vnd.sbkeywordresponse.v3+json`; answered 207 with `{ keywordId, code, description }`
+ * items. Source: https://advertising.amazon.com/API/docs/en-us/sponsored-brands/3-0/openapi#/Negative%20keywords
+ */
+export function sbNegativeKeywordCreateBody(input: CreateNegativeKeywordInput): Array<Record<string, unknown>> {
+  return [{
+    campaignId: amazonIntId(input.externalCampaignId),
+    adGroupId: amazonIntId(input.externalAdGroupId),
+    keywordText: input.keywordText,
+    matchType: input.matchType === 'PHRASE' ? 'negativePhrase' : 'negativeExact',
+  }]
+}
+
+/**
+ * SD 3.0 `createNegativeTargetingClauses` — POST /sd/negativeTargets, `application/json`, `[{ adGroupId (int64),
+ * expressionType: manual, expression: [{ type: asinSameAs, value }], state: enabled }]`; answered 207 with
+ * `{ code, description, targetId }` items. Source: https://advertising.amazon.com/API/docs/en-us/sponsored-display/3-0/openapi#/Negative%20Targeting
+ */
+export function sdNegativeTargetCreateBody(input: CreateNegativeTargetInput): Array<Record<string, unknown>> {
+  return [{
+    adGroupId: amazonIntId(input.externalAdGroupId),
+    expressionType: 'manual',
+    expression: [{ type: 'asinSameAs', value: input.asin }],
+    state: input.state ?? 'enabled',
+  }]
+}
+
+/** The id Amazon gave a new SB/SD negative, or its refusal in its own words (sdCreateResult's reading of a 207 array). */
+function sbSdNegativeResult(response: unknown, idField: 'keywordId' | 'targetId'): { externalId: string | null; error: string | null } {
+  return sdCreateResult(response, idField)
+}
+
+/** W4-11 — add an SB negative keyword in an ad group (sbNegativeKeywordCreateBody). The wire check (5a) binds it like the SP ones. */
+export async function createSbNegativeKeyword(ctx: ClientContext, input: CreateNegativeKeywordInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
+  const body = sbNegativeKeywordCreateBody(input)
+  if (adsMode() === 'sandbox') {
+    // 5a — sandbox refuses what liveCall would refuse.
+    await assertNegativeWriteAllowed({ method: 'POST', path: '/sb/negativeKeywords', body })
+    logger.info('[ADS-SANDBOX] createSbNegativeKeyword', { input })
+    return { ok: true, mode: 'sandbox', externalId: `sb-sbnkw-${randomUUID().slice(0, 8)}`, rawResponse: { sandbox: true }, error: null }
+  }
+  const response = await liveCall<unknown>({ ...ctx, method: 'POST', path: '/sb/negativeKeywords', body, contentType: 'application/json', acceptHeader: 'application/vnd.sbkeywordresponse.v3+json' })
+  const made = sbSdNegativeResult(response, 'keywordId')
+  return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
+}
+
+/** W4-11 — add an SD negative product target (an ASIN) in an ad group (sdNegativeTargetCreateBody). The wire check binds it. */
+export async function createSdNegativeTarget(ctx: ClientContext, input: CreateNegativeTargetInput): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; rawResponse: unknown; error: string | null }> {
+  const body = sdNegativeTargetCreateBody(input)
+  if (adsMode() === 'sandbox') {
+    await assertNegativeWriteAllowed({ method: 'POST', path: '/sd/negativeTargets', body, personConfirmed: input.personConfirmed === true })
+    logger.info('[ADS-SANDBOX] createSdNegativeTarget', { input })
+    return { ok: true, mode: 'sandbox', externalId: `sb-sdntgt-${randomUUID().slice(0, 8)}`, rawResponse: { sandbox: true }, error: null }
+  }
+  const response = await liveCall<unknown>({ ...ctx, method: 'POST', path: '/sd/negativeTargets', body, contentType: 'application/json', acceptHeader: 'application/json', personConfirmed: input.personConfirmed === true })
+  const made = sbSdNegativeResult(response, 'targetId')
   return { ok: made.externalId != null, mode: 'live', externalId: made.externalId, rawResponse: response, error: made.error }
 }
 

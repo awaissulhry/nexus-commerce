@@ -34,11 +34,21 @@ import {
   archiveSpEntity,
   listCampaignsV3,
   adsMode,
+  sbCampaignUpdateRequest,
+  sdCampaignUpdateRequest,
+  sbKeywordUpdateRequest,
+  sbTargetUpdateRequest,
+  sdTargetUpdateRequest,
+  sbSdNegativeArchiveRequest,
+  sendSbSdUpdate,
   type CampaignPatch,
   type ClientContext,
+  type SbSdPatch,
+  type SbSdRequest,
   type SpArchiveEntity,
   type AdsRegion,
 } from '../services/advertising/ads-api-client.js'
+import { SPONSORED_BRANDS, SPONSORED_DISPLAY, adProductLabel, adProductOf, type AdWrite } from '@nexus/shared/ads-ad-product'
 import {
   checkAdsWriteGate,
   logGateDeny,
@@ -51,7 +61,7 @@ interface AdsJobData {
   syncType: string
 }
 
-interface AdMutationPayload {
+export interface AdMutationPayload {
   entityType: 'CAMPAIGN' | 'AD_GROUP' | 'AD_TARGET' | 'PRODUCT_AD' | 'PORTFOLIO'
   entityId: string
   externalId: string | null
@@ -264,6 +274,61 @@ async function archiveEntityOf(payload: AdMutationPayload): Promise<SpArchiveEnt
   return t.kind === 'PRODUCT' || t.kind === 'AUTO' ? 'target' : 'keyword'
 }
 
+// ── W4-11 — Sponsored Brands and Display ────────────────────────────────────────────────────────────────────────────
+
+/** W4-11 — where an SB/SD write goes: the campaign's ad product and, for a target, its kind and Amazon's ids around it. */
+export interface SbSdRoute {
+  adProduct: 'SPONSORED_BRANDS' | 'SPONSORED_DISPLAY'
+  kind: string | null
+  isNegative: boolean
+  negativeLevel: string | null
+  externalAdGroupId: string | null
+  externalCampaignId: string | null
+}
+
+/**
+ * W4-11 — the route of a queue row the mutation layer marked as an SB/SD write (`sbSd` on its JSON). Null when the
+ * row's campaign is not Sponsored Brands or Display (it then goes out as before) or cannot be read.
+ */
+export async function sbSdRouteOf(payload: Pick<AdMutationPayload, 'entityType' | 'entityId'>): Promise<SbSdRoute | null> {
+  const product = (c: { adProduct: string | null; type: unknown } | null | undefined) => {
+    const p = adProductOf(c ? { adProduct: c.adProduct, type: c.type == null ? null : String(c.type) } : null)
+    return p === SPONSORED_BRANDS ? 'SPONSORED_BRANDS' as const : p === SPONSORED_DISPLAY ? 'SPONSORED_DISPLAY' as const : null
+  }
+  try {
+    if (payload.entityType === 'CAMPAIGN') {
+      const c = await prisma.campaign.findUnique({ where: { id: payload.entityId }, select: { adProduct: true, type: true, externalCampaignId: true } })
+      const p = product(c)
+      return p ? { adProduct: p, kind: null, isNegative: false, negativeLevel: null, externalAdGroupId: null, externalCampaignId: c?.externalCampaignId ?? null } : null
+    }
+    if (payload.entityType === 'AD_TARGET') {
+      const t = await prisma.adTarget.findUnique({
+        where: { id: payload.entityId },
+        select: { kind: true, isNegative: true, negativeLevel: true, adGroup: { select: { externalAdGroupId: true, campaign: { select: { adProduct: true, type: true, externalCampaignId: true } } } } },
+      })
+      const p = product(t?.adGroup?.campaign)
+      return p && t
+        ? { adProduct: p, kind: t.kind == null ? null : String(t.kind), isNegative: t.isNegative === true, negativeLevel: t.negativeLevel ?? null, externalAdGroupId: t.adGroup?.externalAdGroupId ?? null, externalCampaignId: t.adGroup?.campaign?.externalCampaignId ?? null }
+        : null
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/** W4-11 — the write as the gate judges an SB/SD one (adWriteRefusal): what it is, the state it sets, the target's kind. */
+export function sbSdWriteOf(payload: AdMutationPayload, route: SbSdRoute): AdWrite {
+  return {
+    entity: payload.entityType,
+    fields: payload.fieldChanges.map((c) => c.field),
+    toStatus: payload.fieldChanges.find((c) => c.field === 'status')?.newValue ?? null,
+    kind: route.kind,
+    isNegative: route.isNegative,
+    negativeLevel: route.negativeLevel,
+  }
+}
+
 /** The cap fields a queued portfolio write can carry (updatePortfolioWithSync, ads-mutation.service.ts). */
 const PORTFOLIO_CAP_FIELDS: readonly string[] = ['budgetAmount', 'budgetCurrencyCode', 'budgetPolicy', 'startDate', 'endDate']
 
@@ -279,6 +344,37 @@ async function marketCurrencyOf(market: string | null): Promise<string | null> {
   } catch {
     return marketLimitsOf(market)?.currency ?? null
   }
+}
+
+/**
+ * W4-11 — the SB/SD request for this write (ads-api-client.ts, Amazon's documented shapes): a campaign's budget and
+ * state (SB 4.0 PUT /sb/v4/campaigns, SD PUT /sd/campaigns), an SB keyword's or product target's bid and state (PUT
+ * /sb/keywords, PUT /sb/targets), an SD target's (PUT /sd/targets), and the retire of an SB negative keyword or SD
+ * negative product target (their DELETE). Throws for anything else, which the gate already refused.
+ */
+export function sbSdRequestFor(payload: AdMutationPayload, route: SbSdRoute): SbSdRequest {
+  const p = patchFromChanges(payload)
+  const patch: SbSdPatch = {
+    ...(p.state ? { state: p.state } : {}),
+    ...(p.dailyBudget != null ? { dailyBudget: p.dailyBudget } : {}),
+    ...(p.bid != null ? { bid: p.bid } : {}),
+  }
+  const externalId = String(payload.externalId)
+  const label = adProductLabel(route.adProduct)
+  if (payload.entityType === 'CAMPAIGN') {
+    return route.adProduct === SPONSORED_BRANDS ? sbCampaignUpdateRequest(externalId, patch) : sdCampaignUpdateRequest(externalId, patch)
+  }
+  if (payload.entityType === 'AD_TARGET') {
+    if (route.isNegative) {
+      if (patch.state !== 'archived' || patch.bid != null) throw new Error(`a ${label} negative is only retired (archived) from Nexus`)
+      return sbSdNegativeArchiveRequest(route.adProduct, externalId)
+    }
+    if (route.adProduct === SPONSORED_DISPLAY) return sdTargetUpdateRequest(externalId, patch)
+    if (!route.externalAdGroupId || !route.externalCampaignId) throw new Error(`Nexus holds no Amazon id for this ${label} keyword's ad group or campaign`)
+    const ids = { externalTargetId: externalId, externalAdGroupId: route.externalAdGroupId, externalCampaignId: route.externalCampaignId }
+    return String(route.kind ?? '').toUpperCase() === 'KEYWORD' ? sbKeywordUpdateRequest(ids, patch) : sbTargetUpdateRequest(ids, patch)
+  }
+  throw new Error(`Nexus sends no ${payload.entityType} change to a ${label} campaign`)
 }
 
 /**
@@ -350,7 +446,7 @@ async function dispatchToAmazon(
    * AA-W2-13 — the queue row is a deliberate stop (its JSON carries `letsGo`: pause-ads, archive-ads), or a person's own
    * edit (isPersonEdit off its JSON, as the gate is handed it).
    */
-  opts: { letsGo?: boolean; manual?: boolean; portfolioCap?: PortfolioCap | { error: string } } = {},
+  opts: { letsGo?: boolean; manual?: boolean; portfolioCap?: PortfolioCap | { error: string }; /** W4-11 — the row's SB/SD route (sbSdRouteOf), when the mutation layer marked it. */ sbSd?: SbSdRoute | null } = {},
 ): Promise<{ ok: boolean; rawResponse: unknown; error: string | null }> {
   const patch = patchFromChanges(payload)
   if (!payload.externalId) {
@@ -358,6 +454,23 @@ async function dispatchToAmazon(
     // For AD.2 we treat this as a no-op success — AD.4 wires the
     // create-campaign-from-draft flow.
     return { ok: true, rawResponse: { skipped: 'no_external_id' }, error: null }
+  }
+  // W4-11 — an SB/SD write goes to its ad product's own endpoints, never to the Sponsored Products ones below. A request
+  // that cannot be built (an id Amazon's number type would change, a write Nexus does not send) is permanent: "forbidden
+  // by Nexus" stops the retries (isRetryableSyncError), and nothing is sent.
+  if (opts.sbSd) {
+    let request: SbSdRequest
+    try {
+      request = sbSdRequestFor(payload, opts.sbSd)
+    } catch (err) {
+      return { ok: false, rawResponse: null, error: `forbidden by Nexus: ${err instanceof Error ? err.message : String(err)}` }
+    }
+    try {
+      const res = await sendSbSdUpdate(ctx, request, `${adProductLabel(opts.sbSd.adProduct)} ${payload.entityType} update`)
+      return { ok: res.ok, rawResponse: res.rawResponse, error: res.error ?? null }
+    } catch (err) {
+      return { ok: false, rawResponse: null, error: err instanceof Error ? err.message : String(err) }
+    }
   }
   try {
     // AA-W2-13 — an archive is Amazon's delete operation: no PUT archives a campaign, an ad group, a keyword, a target or
@@ -590,6 +703,9 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     : undefined
   const payloadValueCents = estimatePayloadValueCents(payload, portfolioCap)
   const { campaignId, adGroupId } = await resolveWriteScope(payload)
+  // W4-11 — a row the mutation layer marked as an SB/SD write it let through: its route, and the write described to the
+  // gate (adWriteRefusal). An unmarked row is not described, so an SB/SD one any other path queued is refused (6a).
+  const sbSdRoute = (row.payload as { sbSd?: unknown } | null)?.sbSd === true ? await sbSdRouteOf(payload) : null
   // ADX A1 — hand the gate the field and intended value so Campaign.minBidCents /
   // maxBidCents can bind this write. A payload carries one field in the common case;
   // when it carries several we surface the bid field, which is the bounded one.
@@ -641,6 +757,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     actor: payload.actor ?? null,
     previousValueCents: previousBudgetCents,
     queueId,
+    ...(sbSdRoute ? { write: sbSdWriteOf(payload, sbSdRoute) } : {}),
   })
   if (gate.allowed === false) {
     logGateDeny(
@@ -711,6 +828,7 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
     ...(payload.entityType === 'PORTFOLIO' ? { portfolioCap } : {}),
     letsGo: (row.payload as { letsGo?: unknown } | null)?.letsGo === true,
     manual: isPersonEdit((row.payload as { manual?: unknown } | null)?.manual, payload.actor),
+    sbSd: sbSdRoute,
   })
   if (result.ok) {
     const localOnly = (result.rawResponse as { skipped?: string } | null)?.skipped // e.g. 'no_external_id' — NOTHING reached Amazon
