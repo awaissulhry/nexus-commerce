@@ -17771,6 +17771,66 @@ model AutomationSwitch {
   @@index([workspaceId])
 }
 
+/// ADS AUTONOMY — auto-undo (automation A19, apps/api/src/services/advertising/ads-auto-undo.service.ts): ONE row per
+/// AUTOMATIC Amazon ad change it judged — an engine's (auto-bid, the hourly bid plans, autopilot …), a rule's at AUTO,
+/// or a Claude change that ran by the business's rule; never a person's own change or one a person approved. Written
+/// once the change has its settled days after it, re-checked until its longest window is settled, with the shared
+/// watch-week outcome (`outcome`), the numbers it stands on (`evidence`) and what auto-undo did: nothing, would undo
+/// (OBSERVE), asked a person (PROPOSE, `undoApprovalId`), undid it (AUTO, `undoActionLogId`) or held it (and why).
+/// No foreign key to the action log: the log keeps its own retention.
+model AdsAutoUndoJudgement {
+  // Business ownership comes from verified database context.
+  workspaceId     String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id              String    @id @default(cuid())
+  /// The AdvertisingActionLog row of the change judged.
+  actionLogId     String
+  /// Who made it: the actor string as written, its kind (engine | rule | claude-rule) and its name in words.
+  actor           String
+  origin          String
+  originLabel     String?
+  /// claude-rule: the Claude request that ran by the business's rule (its change set).
+  approvalId      String?
+  /// AD_TARGET | AD_GROUP | CAMPAIGN, and the Nexus id.
+  entityType      String
+  entityId        String
+  entityLabel     String?
+  marketplace     String?
+  /// bid | dailyBudget | placement:<code>
+  lever           String
+  /// raise | cut — the way the change went (its undo goes the other way).
+  direction       String
+  /// The lever's value before and after the change: cents for a bid or a budget, percent for a placement.
+  fromValue       Float?
+  toValue         Float?
+  changedAt       DateTime
+  /// not_enough_data | not_worse | worse | superseded — `worse` is clearly worse by the thresholds of its market.
+  verdict         String
+  /// The shared outcome (ads-watch-week.service.ts outcomeOf): better | worse | flat | no_sales | no_spend | no_peers | not_yet | no_data
+  outcome         String?
+  /// The windows, the comparable entities, the thresholds and the reasons the verdict stands on.
+  evidence        Json?
+  /// none | would_undo | proposed | undone | held
+  action          String    @default("none")
+  actionReason    String?
+  actionAt        DateTime?
+  /// The level auto-undo ran at when it last judged it: OBSERVE | PROPOSE | AUTO.
+  level           String
+  /// PROPOSE: the request a person decides; AUTO (or that request, once run): the write that put the value back.
+  undoApprovalId  String?
+  undoActionLogId String?
+  /// true once its longest window is settled, or an action was taken, or it was superseded: never judged again.
+  final           Boolean   @default(false)
+  judgedAt        DateTime  @default(now())
+  checkedAt       DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([workspaceId, actionLogId], name: "workspace_actionLogId", map: "AdsAutoUndoJudgement_workspace_actionLogId_key")
+  @@index([workspaceId])
+  @@index([final, checkedAt])
+  @@index([action, actionAt])
+}
+
 model AdsAutomationState {
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
@@ -21061,5 +21121,39 @@ model ChannelItemClaim {
   claimedAt     DateTime  @default(now())
 
   @@id([channel, marketplace, externalId])
+  @@index([workspaceId])
+}
+
+/// Platform health watchdog (2026-10-07). The Owner's ads run by themselves, so a part that stops must be found by the
+/// platform, not by chance: eight faults ran silently for days that day (SQP requests refused every night under a SUCCESS
+/// cron row, the scheduler dying at 03:20 UTC, a graduation gate reading a sandbox connection, …). Once a day
+/// (`jobs/platform-health-watchdog.job.ts`, also "Run now") every check of `services/platform-health/` measures one part
+/// and leaves ONE row here: its verdict, in plain words, with the numbers it rests on. A failing check also keeps ONE
+/// open alert (AlertRule metric `platformHealth:<checkId>`), resolved when it passes again. Claude's
+/// `platform-health-checks` reads the newest run. Rows older than 60 days are removed by the watchdog itself.
+model PlatformHealthCheck {
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  /// One watchdog run: every check it measured shares this id.
+  runId       String
+  /// The check (`cron-runs`, `sqp-feed`, …) and the part of the platform it watches (scheduler, data-feeds, …).
+  checkId     String
+  subsystem   String
+  /// ok | warn | fail | unknown (it could not measure: `message` says why — never counted as ok).
+  status      String
+  /// What is wrong, or that all is well, in plain words.
+  message     String
+  likelyCause String?
+  nextStep    String?
+  /// The numbers the verdict rests on (counts, dates, names; never money).
+  evidence    Json
+  /// cron | manual (a "Run now")
+  triggeredBy String   @default("cron")
+  measuredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([checkId, measuredAt(sort: Desc)])
+  @@index([runId])
+  @@index([measuredAt])
   @@index([workspaceId])
 }

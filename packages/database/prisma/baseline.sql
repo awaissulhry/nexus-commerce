@@ -8271,6 +8271,42 @@ CREATE TABLE "AutomationSwitch" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsAutoUndoJudgement" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "actionLogId" TEXT NOT NULL,
+    "actor" TEXT NOT NULL,
+    "origin" TEXT NOT NULL,
+    "originLabel" TEXT,
+    "approvalId" TEXT,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "entityLabel" TEXT,
+    "marketplace" TEXT,
+    "lever" TEXT NOT NULL,
+    "direction" TEXT NOT NULL,
+    "fromValue" DOUBLE PRECISION,
+    "toValue" DOUBLE PRECISION,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "verdict" TEXT NOT NULL,
+    "outcome" TEXT,
+    "evidence" JSONB,
+    "action" TEXT NOT NULL DEFAULT 'none',
+    "actionReason" TEXT,
+    "actionAt" TIMESTAMP(3),
+    "level" TEXT NOT NULL,
+    "undoApprovalId" TEXT,
+    "undoActionLogId" TEXT,
+    "final" BOOLEAN NOT NULL DEFAULT false,
+    "judgedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "checkedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsAutoUndoJudgement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsAutomationState" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL DEFAULT 'singleton',
@@ -10091,6 +10127,25 @@ CREATE TABLE "ChannelItemClaim" (
     "claimedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "ChannelItemClaim_pkey" PRIMARY KEY ("channel","marketplace","externalId")
+);
+
+-- CreateTable
+CREATE TABLE "PlatformHealthCheck" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "checkId" TEXT NOT NULL,
+    "subsystem" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "likelyCause" TEXT,
+    "nextStep" TEXT,
+    "evidence" JSONB NOT NULL,
+    "triggeredBy" TEXT NOT NULL DEFAULT 'cron',
+    "measuredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "PlatformHealthCheck_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -14492,6 +14547,18 @@ CREATE INDEX "AutomationSwitch_workspaceId_idx" ON "AutomationSwitch"("workspace
 CREATE UNIQUE INDEX "AutomationSwitch_workspace_key_key" ON "AutomationSwitch"("workspaceId", "key");
 
 -- CreateIndex
+CREATE INDEX "AdsAutoUndoJudgement_workspaceId_idx" ON "AdsAutoUndoJudgement"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsAutoUndoJudgement_final_checkedAt_idx" ON "AdsAutoUndoJudgement"("final", "checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsAutoUndoJudgement_action_actionAt_idx" ON "AdsAutoUndoJudgement"("action", "actionAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsAutoUndoJudgement_workspace_actionLogId_key" ON "AdsAutoUndoJudgement"("workspaceId", "actionLogId");
+
+-- CreateIndex
 CREATE INDEX "AdsAutomationState_workspaceId_idx" ON "AdsAutomationState"("workspaceId");
 
 -- CreateIndex
@@ -15294,6 +15361,18 @@ CREATE UNIQUE INDEX "ChannelHeldSweep_workspaceId_channelConnectionId_channel_ke
 
 -- CreateIndex
 CREATE INDEX "ChannelItemClaim_workspaceId_idx" ON "ChannelItemClaim"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_checkId_measuredAt_idx" ON "PlatformHealthCheck"("checkId", "measuredAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_runId_idx" ON "PlatformHealthCheck"("runId");
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_measuredAt_idx" ON "PlatformHealthCheck"("measuredAt");
+
+-- CreateIndex
+CREATE INDEX "PlatformHealthCheck_workspaceId_idx" ON "PlatformHealthCheck"("workspaceId");
 
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_familyId_fkey" FOREIGN KEY ("familyId") REFERENCES "ProductFamily"("id") ON DELETE SET NULL ON UPDATE CASCADE;

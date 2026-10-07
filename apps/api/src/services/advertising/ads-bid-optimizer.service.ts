@@ -10,6 +10,15 @@
  *
  * Also exposes a `bid_to_target_acos` automation handler so a rule can run
  * it on a schedule (registered into ACTION_HANDLERS by side-effect import).
+ *
+ * C3 (2026-10-07) — no compounding. The window's evidence barely moves between two runs (auto-bid runs every 6 hours on
+ * 30 settled days), and every proposal used to be `current bid × target / ACoS`: each run multiplied the bid the last
+ * run had left by the same ratio again (one target went 33 → 25 → 19 → 14¢ in 6 hours). Now the evidence sets a GOAL
+ * bid, independent of the current bid — target ACoS × sales per click (Bayesian: × the shrunk CR × AOV), which equals
+ * the average CPC × target / ACoS — and a proposal moves the current bid TOWARD it (one step at most, never past it),
+ * and proposes nothing within GOAL_TOLERANCE of it (ads-bid-goal.ts). The zero-sales cut has no goal (a click there
+ * earned nothing), so it waits for evidence at the bid it would cut: once the bid moved inside the window, it needs a
+ * click floor of clicks on the settled days after that move before it cuts again (clicksAtCurrentBid).
  */
 
 import prisma from '../../db.js'
@@ -23,8 +32,9 @@ import { NO_LIMITS, clampToStrategy, limitSources, limitWords, strategyBidReader
 import { fractionToPct } from './ads-strategy/fields.js'
 import { fitBetaPrior, shrunkConversionRate, dataConfidence } from './ads-bayesian-bidding.service.js'
 import { ACTION_WINDOW } from '@nexus/shared/ads-rule-window'
-import { settledWhere } from './ads-settled-window.js'
+import { settledBounds, settledWhere } from './ads-settled-window.js'
 import { protectedAdGroups, protectedStopWhy } from './ads-strategy/terms.js'
+import { stepTowardGoal } from './ads-bid-goal.js'
 import type { StrategySource } from './ads-strategy/resolve.js'
 
 const FLOOR_CENTS = 5
@@ -114,6 +124,47 @@ function stepsFor(limits: StrategyBidLimits): { down: number; up: number } {
   const pct = limits.maxChangePct?.value
   return pct != null ? { down: Math.min(MAX_DOWN, pct / 100), up: Math.min(MAX_UP, pct / 100) } : { down: MAX_DOWN, up: MAX_UP }
 }
+
+/**
+ * C3 — evidence at the bid a target has now, for the zero-sales cut. For each target whose serving bid moved inside the
+ * decision window (CampaignBidHistory: a bid write between two serving bids, both at least the 5¢ floor — a ~2¢
+ * suppression floor and the restore that undoes it leave the serving bid where it was), the newest move and the clicks
+ * on settled days AFTER the day it moved (that day is part old bid, part new). A target missing from the map did not
+ * move inside the window: every click in it was at the bid it has now. `daily` false (the legacy columns): there are no
+ * days to count, so a target that moved has no clicks at its bid yet.
+ */
+export async function clicksAtCurrentBid(targetIds: string[], daily: boolean): Promise<Map<string, { movedAt: Date; clicks: number }>> {
+  const out = new Map<string, { movedAt: Date; clicks: number }>()
+  if (!targetIds.length) return out
+  // The earlier start of the two lags (Sponsored Brands/Display wait 14 days), so a move inside either window is seen.
+  const since = settledBounds(DAILY_WINDOW_DAYS, 'SPONSORED_BRANDS').since
+  const moves = await prisma.campaignBidHistory.findMany({
+    where: { entityType: 'AD_TARGET', field: 'bid', entityId: { in: targetIds }, changedAt: { gte: since } },
+    select: { entityId: true, oldValue: true, newValue: true, changedAt: true },
+  })
+  for (const m of moves) {
+    const from = Number(m.oldValue)
+    const to = Number(m.newValue)
+    if (!(from >= FLOOR_CENTS) || !(to >= FLOOR_CENTS) || from === to) continue
+    const seen = out.get(m.entityId)
+    if (!seen || m.changedAt > seen.movedAt) out.set(m.entityId, { movedAt: m.changedAt, clicks: 0 })
+  }
+  if (!out.size || !daily) return out
+  const days = await prisma.amazonAdsDailyPerformance.findMany({
+    where: { entityType: 'AD_TARGET', localEntityId: { in: [...out.keys()] }, clicks: { gt: 0 }, ...settledWhere(DAILY_WINDOW_DAYS) },
+    select: { localEntityId: true, date: true, clicks: true },
+  })
+  for (const d of days) {
+    const m = d.localEntityId ? out.get(d.localEntityId) : undefined
+    if (!m) continue
+    const dayAfterMove = Date.UTC(m.movedAt.getUTCFullYear(), m.movedAt.getUTCMonth(), m.movedAt.getUTCDate() + 1)
+    if (d.date.getTime() >= dayAfterMove) m.clicks += d.clicks
+  }
+  return out
+}
+
+/** "€1.23" from cents, for a reason. */
+const eur = (cents: number) => `€${(cents / 100).toFixed(2)}`
 
 /**
  * W1-5 — a proposal a caller clamped again (a rule's or a plan's own Min/Max bid) held back inside the ads strategy's band
@@ -284,6 +335,11 @@ export async function previewBidOptimization(
     ? await protectedAdGroups([...new Map(zeroSales.map((t) => [t.adGroupId, { id: t.adGroupId, market: t.adGroup?.campaign?.marketplace ?? null }])).values()])
     : new Map<string, StrategySource>()
   const held: HeldCut[] = []
+  // C3 — the flat path's zero-sales cut waits for evidence at the bid it would cut (clicksAtCurrentBid). The Bayesian
+  // path has no such cut: its goal falls smoothly as clicks without an order add up.
+  const movedBids = bayesian ? new Map<string, { movedAt: Date; clicks: number }>() : await clicksAtCurrentBid(zeroSales.map((t) => t.id), dailyMetrics != null)
+  const pct = (f: number) => (f * 100).toFixed(0)
+  const cmp = (a: number, b: number) => (a > b ? '>' : a < b ? '<' : '=')
 
   const proposals: BidProposal[] = []
   for (const t of targets) {
@@ -301,39 +357,37 @@ export async function previewBidOptimization(
     let targetBasis: BidProposal['targetBasis'] = resolved.source
 
     if (bayesian && prior) {
-      // Shrink CR toward the pool, derive an EXPECTED ACOS, and move toward
-      // target. Works even at 0 observed sales (the prior gives a non-zero CR),
-      // so sparse keywords get a gentle, principled bid instead of being skipped
-      // or hard-cut on noise.
+      // Shrink CR toward the pool and derive an EXPECTED ACOS. Works even at 0 observed sales (the prior gives a
+      // non-zero CR), so sparse keywords get a gentle, principled bid instead of being skipped or hard-cut on noise.
+      // C3 — the goal is the bid whose expected ACoS is the target: target × expected sales per click (shrunk CR × AOV).
       const crS = shrunkConversionRate(t.ordersCount ?? 0, t.clicks, prior)
       const aovCents = (t.ordersCount ?? 0) > 0 ? t.salesCents / (t.ordersCount ?? 1) : poolAovCents
       const expectedSalesCents = t.clicks * crS * aovCents
       const expAcos = expectedSalesCents > 0 ? t.spendCents / expectedSalesCents : null
       if (expAcos == null) continue
+      const goal = targetAcos * crS * aovCents
+      const next = stepTowardGoal(t.bidCents, goal, step, FLOOR_CENTS)
+      if (next == null) continue
+      proposed = next
       const conf = dataConfidence(t.clicks, prior)
       targetBasis = 'bayesian'
       const tag = `Bayesian CR ${(crS * 100).toFixed(1)}% · ${(conf * 100).toFixed(0)}% data-confidence`
-      if (expAcos > targetAcos) {
-        const ratio = Math.max(1 - step.down, targetAcos / expAcos)
-        proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * ratio))
-        reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${whose} — lower (${tag})`
-      } else if (expAcos < targetAcos) {
-        const ratio = Math.min(1 + step.up, targetAcos / expAcos)
-        proposed = Math.round(t.bidCents * ratio)
-        reason = `exp.ACOS ${(expAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${whose} — raise (${tag})`
-      } else continue
+      reason = `exp.ACOS ${pct(expAcos)}% ${cmp(expAcos, targetAcos)} target ${pct(targetAcos)}%${whose} — ${next < t.bidCents ? 'lower' : 'raise'} toward ${Math.round(goal)}¢ (${tag})`
     } else if (t.salesCents === 0) {
-      // Spending with no sales → cut hard toward the floor.
+      // Spending with no sales → cut hard toward the floor. There is no goal (a click here earned nothing), so C3: once
+      // the bid moved inside the window, the cut needs the click floor of clicks at the bid it has now — no second cut
+      // on the evidence the last one already acted on.
+      const moved = movedBids.get(t.id)
+      if (moved && moved.clicks < clickFloor) continue
       proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * (1 - step.down)))
-      reason = `${t.clicks} clicks, 0 sales — cut ${Math.round(step.down * 100)}%`
-    } else if (observedAcos != null && observedAcos > targetAcos) {
-      const ratio = Math.max(1 - step.down, targetAcos / observedAcos)
-      proposed = Math.max(FLOOR_CENTS, Math.round(t.bidCents * ratio))
-      reason = `ACOS ${(observedAcos * 100).toFixed(0)}% > target ${(targetAcos * 100).toFixed(0)}%${whose} — lower`
-    } else if (observedAcos != null && observedAcos < targetAcos && t.ordersCount >= 1) {
-      const ratio = Math.min(1 + step.up, targetAcos / observedAcos)
-      proposed = Math.round(t.bidCents * ratio)
-      reason = `ACOS ${(observedAcos * 100).toFixed(0)}% < target ${(targetAcos * 100).toFixed(0)}%${whose} — raise to capture volume`
+      reason = `${moved ? `${moved.clicks} clicks at this bid (${t.clicks} in the window)` : `${t.clicks} clicks`}, 0 sales — cut ${Math.round(step.down * 100)}%`
+    } else if (observedAcos != null) {
+      // C3 — the goal is target × sales per click (= average CPC × target / ACoS), whatever the bid is now.
+      const goal = (targetAcos * t.salesCents) / t.clicks
+      const next = stepTowardGoal(t.bidCents, goal, step, FLOOR_CENTS)
+      if (next == null || (next > t.bidCents && t.ordersCount < 1)) continue
+      proposed = next
+      reason = `ACOS ${pct(observedAcos)}% ${cmp(observedAcos, targetAcos)} target ${pct(targetAcos)}%${whose} — ${next < t.bidCents ? 'lower' : 'raise'} toward ${Math.round(goal)}¢ (${pct(targetAcos)}% of ${eur(t.salesCents / t.clicks)} sales a click)`
     } else continue
     const acos = observedAcos
     if (proposed === t.bidCents) continue

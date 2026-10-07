@@ -404,6 +404,7 @@
     "DevelopmentCertification",
     "AdsAutomationState",
     "AutomationSwitch",
+    "AdsAutoUndoJudgement",
     "AmazonReportRun",
     "SharedListingMembership",
     "SyncChannelPolicy",
@@ -480,6 +481,7 @@
     "ShopifyColourSync",
     "BuyerMessage",
     "ChannelHeldId",
-    "ChannelHeldSweep"
+    "ChannelHeldSweep",
+    "PlatformHealthCheck"
   ]
 }

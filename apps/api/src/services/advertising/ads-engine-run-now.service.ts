@@ -58,6 +58,12 @@ export const RUN_NOW_ENGINES = {
     lever: 'tos-defense', job: 'top-of-search-defense', locked: 'tos-defense', name: 'Top-of-search defense', steps: true,
     again: 'A second run on the same data takes one more step: it nudges each campaign\'s top-of-search adjustment one step toward its target per run.',
   },
+  // ADS AUTONOMY — auto-undo (A19): no Control Room lever; its level is its own switch (born OBSERVE) under the dial.
+  'auto-undo': {
+    lever: null, job: 'ads-auto-undo', locked: null, name: 'Auto-undo of automatic ad changes', steps: false,
+    again: 'A second run on the same data changes nothing new: a change it already undid or asked a person about stands, and each market\'s daily cap of undos counts both runs.',
+    overlap: 'it has no lock: a scheduled run that starts in the same moment can overlap it; one judgement per change is kept, and the undo itself refuses a change that was already put back',
+  },
 } as const satisfies Record<string, { lever: string | null; job: string; locked: LockedEngine | null; name: string; steps: boolean; again: string; overlap?: string }>
 export type RunNowEngine = keyof typeof RUN_NOW_ENGINES
 export const RUN_NOW_ENGINE_KEYS = Object.keys(RUN_NOW_ENGINES) as [RunNowEngine, ...RunNowEngine[]]
@@ -74,6 +80,8 @@ const SWEPT_BY_MS = 2.5 * 3600_000
 const SLOW_ENGINE_MINUTES = 60
 /** The rules evaluator has no Control Room lever: its schedule is NEXUS_ADVERTISING_RULE_SCHEDULE, every 15 min by default. */
 const RULES_SCHEDULE = 'every 15 min'
+/** Auto-undo runs once a day (NEXUS_ADS_AUTO_UNDO_SCHEDULE, 06:15 UTC by default). */
+const AUTO_UNDO_SCHEDULE_WORDS = 'daily 06:15 UTC'
 
 /** Minutes between two runs, from the Control Room's schedule words ("every 15 min", "every 6 h", "daily 07:10"); null when unknown. */
 export function scheduleMinutes(words: string | null | undefined): number | null {
@@ -184,6 +192,14 @@ export async function planEngineRun(engine: RunNowEngine, now = new Date()): Pro
     level = lever.mode
     levelWhy = lever.modeReason
     schedule = lever.schedule ?? 'on its own schedule'
+  } else if (engine === 'auto-undo') {
+    // Its own switch (born OBSERVE) under the env and the account dial; OFF runs nothing.
+    const { autoUndoLevel } = await import('./ads-auto-undo.service.js')
+    const own = await autoUndoLevel()
+    if (own.level === 'OFF') return { error: `Not queued: auto-undo is OFF here — ${own.why}.` }
+    level = own.level
+    levelWhy = own.why
+    schedule = AUTO_UNDO_SCHEDULE_WORDS
   } else {
     const rules = await rulesLevel()
     if (rules.refusal) return { error: `Not queued: ${rules.refusal}.` }

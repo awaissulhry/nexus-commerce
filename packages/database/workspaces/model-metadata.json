@@ -6386,6 +6386,10 @@
       "fields": []
     },
     {
+      "name": "AdsAutoUndoJudgement",
+      "fields": []
+    },
+    {
       "name": "AdsAutomationState",
       "fields": [
         {
@@ -7606,6 +7610,10 @@
           "relationOnDelete": "Restrict"
         }
       ]
+    },
+    {
+      "name": "PlatformHealthCheck",
+      "fields": []
     }
   ]
 }

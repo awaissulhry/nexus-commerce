@@ -84,7 +84,7 @@ const writesFor = (id: string) => inside(async () => ({
 }))
 const NONE = { queue: 0, log: 0, history: 0 }
 
-/** Every keyword that spent: 20 clicks, 2 orders, ACoS 50 % — above the 40 % account default, so each is lowered. */
+/** Every keyword that spent: 20 clicks, 2 orders, ACoS 50 % — the 40 % account default makes each one's goal 40¢. */
 const SPENT = { clicks: 20, spendCents: 1000, salesCents: 2000, ordersCount: 2 }
 
 beforeAll(async () => {
@@ -104,6 +104,8 @@ beforeAll(async () => {
       await db().adTarget.create({ data: { id, adGroupId: group, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `test ${id}`, bidCents: 50, externalTargetId: `EXT-${id}` } })
     }
     for (const id of ['t-it', 't-uk', 't-off', 't-pin', 't-paused', 't-pg']) await db().adTarget.update({ where: { id }, data: SPENT })
+    // C3 — t-pin's 40¢ is already its goal (40 % of €1.00 sales a click), which proposes nothing: 50¢, so the pin holds a move.
+    await db().adTarget.update({ where: { id: 't-pin' }, data: { bidCents: 50 } })
   })
 }, 180_000)
 afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
@@ -165,7 +167,9 @@ describe('auto-bid moves only bids that can reach Amazon, and asks the gate befo
     const out = await inside(() => previewAutomation(automationAdapter('A4')!, {}))
     expect(out.ok).toBe(true)
     const preview = (out as { data: { preview: { proposals: Array<{ targetId: string }>; leftAlone: Record<string, number>; leftAloneNote: string } } }).data.preview
-    expect(preview.proposals.map((p) => p.targetId).sort()).toEqual(['t-it', 't-uk'])
+    // C3 — t-it already sits at its goal (40¢) since the run above: no second cut on the same evidence. t-uk, refused
+    // there, still waits at 60¢.
+    expect(preview.proposals.map((p) => p.targetId).sort()).toEqual(['t-uk'])
     expect(preview.leftAlone).toMatchObject({ notRunning: 2, notOnAllowlist: 1, pinned: 1 })
     expect(preview.leftAloneNote).toContain('2 in a paused or archived campaign or ad group, 1 in a campaign not on the live-write allowlist')
   })
