@@ -133,6 +133,15 @@ export async function shareAge(marketplace: string): Promise<Kt6ShareAge> {
   return { days: Math.floor((Date.now() - weekEnd) / 86_400_000), label: weekLabel(chosen.start) }
 }
 
+/**
+ * W4-9 — the action-log filter for a proposal's own writes: its targets (AD_TARGET rows). Every KT.7 apply's set holds
+ * only them, so the filter changes nothing there; an approved Claude request's set may hold other changes too.
+ */
+export function ownTargets(targetIds: unknown): { entityId?: { in: string[] } } {
+  const ids = Array.isArray(targetIds) ? targetIds.filter((t): t is string => typeof t === 'string') : []
+  return ids.length ? { entityId: { in: ids } } : {}
+}
+
 /** UTC day start — the ledger's bucket, matching the write gate's `utcDayKey`. */
 function todayStart(): Date {
   const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d
@@ -169,12 +178,14 @@ export async function committedToday(marketplace: string): Promise<Kt6Committed>
   // `rolledBackAt` lives. A change set whose rows are all rolled back contributes nothing.
   const appliedRows = await prisma.keywordBidProposal.findMany({
     where: { marketplace, status: 'APPLIED', decidedAt: { gte: since }, executionId: { not: null } },
-    select: { id: true, executionId: true, commitmentCents: true },
+    select: { id: true, executionId: true, commitmentCents: true, targetIds: true },
   })
   let committedCents = 0
   for (const r of appliedRows) {
+    // W4-9 — the proposal's OWN writes in its change set: an approved Claude request's set may hold other changes too
+    // (a plan's other steps), which do not keep this proposal's money committed once its own bids were reversed.
     const live = await prisma.advertisingActionLog.count({
-      where: { executionId: r.executionId as string, rolledBackAt: null },
+      where: { executionId: r.executionId as string, rolledBackAt: null, ...ownTargets(r.targetIds) },
     })
     if (live > 0) committedCents += r.commitmentCents
   }
@@ -400,4 +411,132 @@ export async function proposalsFor(term: string, marketplace: string, limit = 10
       ceilingVerdict: true, confirmationText: true, shareAgeDays: true, executionId: true,
     },
   })
+}
+
+// ── W4-9 — Claude reads a proposal, carries it out through a change request, or dismisses it ─────────────
+//
+// Claude never calls applyProposal: apply-ad-recommendations re-checks a proposal the way it does (the target set
+// unchanged, the ceiling against the ledger now) and freezes its bid on its targets into a change request of the
+// existing bid tools (set-target-bid, bulk-ad-bid-change), which a person approves. When that request runs, its
+// source settles the proposal here. Nothing in this section writes to Amazon.
+
+const PROPOSAL_FACTS = {
+  id: true, term: true, marketplace: true, requestedBidCents: true, status: true, targetIds: true, matchedTargets: true,
+  actionableTargets: true, actionableCampaigns: true, commitmentCents: true, ceilingVerdict: true, ceilingMessage: true,
+  confirmationText: true, shareAgeDays: true, proposedAt: true, proposedBy: true,
+} as const
+
+/** A proposal as Claude's tools read it: what it asks (one bid on these targets), and what it was told when raised. */
+export interface ProposalFacts {
+  id: string
+  term: string
+  marketplace: string
+  requestedBidCents: number
+  status: string
+  /** The AdTarget ids it changes, frozen when it was raised. */
+  targetIds: string[]
+  matchedTargets: number
+  actionableTargets: number
+  actionableCampaigns: number
+  commitmentCents: number
+  ceilingVerdict: string
+  ceilingMessage: string
+  confirmationText: string
+  shareAgeDays: number | null
+  proposedAt: Date
+  proposedBy: string | null
+}
+
+const factsOf = (r: Omit<ProposalFacts, 'targetIds'> & { targetIds: unknown }): ProposalFacts =>
+  ({ ...r, targetIds: Array.isArray(r.targetIds) ? (r.targetIds as unknown[]).filter((t): t is string => typeof t === 'string') : [] })
+
+/** These proposals, by id (a row this business does not have is absent). Read only. */
+export async function proposalFacts(ids: string[]): Promise<Map<string, ProposalFacts>> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  const rows = unique.length ? await prisma.keywordBidProposal.findMany({ where: { id: { in: unique } }, select: PROPOSAL_FACTS }) : []
+  return new Map(rows.map((r) => [r.id, factsOf(r)]))
+}
+
+/** The proposals still waiting to be decided, newest first (ad-recommendations' `tracker` category). Read only. */
+export async function waitingProposals(limit = 200): Promise<ProposalFacts[]> {
+  const rows = await prisma.keywordBidProposal.findMany({ where: { status: 'PROPOSED' }, orderBy: { proposedAt: 'desc' }, take: limit, select: PROPOSAL_FACTS })
+  return rows.map(factsOf)
+}
+
+/** Dismiss a waiting proposal: it is decided without a write (the KT drawer lists it as dismissed). */
+export async function dismissProposal(id: string, decidedBy: string | null): Promise<{ ok: boolean; error?: string }> {
+  const r = await prisma.keywordBidProposal.updateMany({ where: { id, status: 'PROPOSED' }, data: { status: 'DISMISSED', decidedAt: new Date(), decidedBy } })
+  return r.count ? { ok: true } : { ok: false, error: 'Only a waiting proposal can be dismissed' }
+}
+
+/** Put a dismissed proposal back to waiting (it can then be applied, or dismissed again). */
+export async function restoreProposal(id: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await prisma.keywordBidProposal.updateMany({ where: { id, status: 'DISMISSED' }, data: { status: 'PROPOSED', decidedAt: null, decidedBy: null } })
+  return r.count ? { ok: true } : { ok: false, error: 'Only a dismissed proposal can be restored' }
+}
+
+/**
+ * W4-9 — these proposals re-checked together, as applyProposal re-checks one before it writes: each one's target set
+ * now is the one it named (bids and the allowlist move: a moved set is refused, never a subset written), and the spend
+ * ceiling that binds it — against today's ledger PLUS what the proposals before it in the same request commit in its
+ * market (two proposals at 60 % of a cap are 120 % together, not 60 % twice). Each proposal's refusal sentence, or null.
+ * Read only.
+ */
+export async function recheckProposals(proposals: ReadonlyArray<Pick<ProposalFacts, 'id' | 'term' | 'marketplace' | 'requestedBidCents' | 'targetIds'>>): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>()
+  const ledger = new Map<string, Kt6Committed>()
+  const inRequest = new Map<string, number>()
+  const euro = (c: number) => `€${(c / 100).toFixed(2)}`
+  for (const p of proposals) {
+    const row = await loadRow(p.term, p.marketplace)
+    const radius = computeBlastRadius(row.targets, p.requestedBidCents)
+    const now = new Set(radius.actionable.map((t) => t.id))
+    if (now.size !== p.targetIds.length || !p.targetIds.every((t) => now.has(t))) {
+      out.set(p.id, `it names ${p.targetIds.length} target${p.targetIds.length === 1 ? '' : 's'}, and "${p.term}" in ${p.marketplace} now resolves to ${now.size} — bids or the allowlist moved since it was raised`)
+      continue
+    }
+    const campaignIds = [...new Set(row.targets.map((t) => t.campaignId))]
+    const committed = ledger.get(p.marketplace) ?? await committedToday(p.marketplace)
+    ledger.set(p.marketplace, committed)
+    const before = inRequest.get(p.marketplace) ?? 0
+    const commitment = commitmentCents(radius.actionable.length, p.requestedBidCents)
+    const ceiling = checkCeiling(
+      resolveCeiling({
+        campaignId: campaignIds.length === 1 ? campaignIds[0] : null,
+        portfolioId: row.portfolioIds.length === 1 ? row.portfolioIds[0] : null,
+        lineId: row.lineIds.length === 1 ? row.lineIds[0] : null,
+        marketplace: p.marketplace,
+      }, await ceilingsFor(row, campaignIds)),
+      { ...committed, committedCents: committed.committedCents + before },
+      commitment,
+    )
+    if (ceiling.verdict === 'REFUSED') {
+      out.set(p.id, before ? `${ceiling.message} (counting ${euro(before)} that other proposals in this request commit in ${p.marketplace})` : ceiling.message)
+      continue
+    }
+    inRequest.set(p.marketplace, before + commitment)
+    out.set(p.id, null)
+  }
+  return out
+}
+
+/**
+ * An approved request carried these proposals out (`targets`: how many of its bids were written): each is APPLIED,
+ * decided by the approver (their id, as KT.7 records it), under the request's change set (`executionId` = the request:
+ * the ledger reads the reversal of the proposal's own target writes there), and the commitment the ceiling counts is
+ * what was written — targets written × the bid, as applyProposal records it. A proposal decided meanwhile is left as it
+ * is. Returns how many were settled.
+ */
+export async function settleProposalsCarried(carried: Array<{ id: string; targets: number }>, approvalId: string, decidedBy: string | null): Promise<number> {
+  let settled = 0
+  for (const c of carried) {
+    const p = await prisma.keywordBidProposal.findUnique({ where: { id: c.id }, select: { status: true, requestedBidCents: true } })
+    if (!p || p.status !== 'PROPOSED') continue
+    const r = await prisma.keywordBidProposal.updateMany({
+      where: { id: c.id, status: 'PROPOSED' },
+      data: { status: 'APPLIED', decidedAt: new Date(), decidedBy, executionId: approvalId, commitmentCents: commitmentCents(c.targets, p.requestedBidCents) },
+    })
+    settled += r.count
+  }
+  return settled
 }

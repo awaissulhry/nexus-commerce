@@ -36,7 +36,9 @@
  *
  * ADS AUTONOMY W3-1 — set-campaign-budget, bulk-ad-bid-change (per row) and suppress-campaign take an optional `source`
  * (ads-change-source.ts): the engine recommendation the change carries out, kept in the preview and on the ads audit
- * rows, and settled once the write ran.
+ * rows, and settled once the write ran. W4-9 — set-campaign-budget, set-placement-multipliers and bulk-ad-bid-change
+ * also carry out an autopilot plan's decision (BUDGET, PLACEMENT, BID) and bulk-ad-bid-change a Keyword Tracker
+ * proposal, each checked exactly against its row and marked applied once the write ran (ads-change-source.ts).
  *
  * ADS AUTONOMY W4-4 — bulk-ad-bid-change: a person's approval sends each bid as asked, past the largest change per action
  * after the card's warning (as a budget past the daily move, #401); a run by rule writes the stepped bids, as before
@@ -62,7 +64,7 @@ import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
-import { recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource, type AdChangeSource } from './ads-change-source.js'
+import { heldSources, recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource, type AdChangeSource, type SourceFact } from './ads-change-source.js'
 import { afterUndone } from '../change-record.service.js'
 import { pausesNoClaudeMade } from './ads-status.tools.js'
 import { alsoChangedByOf, budgetEnginesOf } from './ads-budget-kit.js'
@@ -546,14 +548,17 @@ async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolConte
   const campaignId = String(args.campaignId ?? '')
   const proposed = Math.round(Number(args.dailyBudgetCents))
   if (!campaignId || !Number.isFinite(proposed) || proposed <= 0) return { ok: false, error: 'campaignId and a dailyBudgetCents above 0 are required (or campaigns: a list of them)' }
-  // W3-1 — a source names this campaign's own budget recommendation, or the request is refused.
+  // W3-1 — a source names this campaign's own budget recommendation, or the request is refused. W4-9 — or an autopilot
+  // BUDGET decision of this campaign asking this budget (heldSources).
   const changeSource = sourceOf(args.source)
-  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.budget(campaignId))
+  const wrongSource = sourceRefusal(changeSource, recommendationIdFor.budget(campaignId), { held: 'budget' })
   if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
   const campaign = await campaignForChange(campaignId)
   const refused = campaignRefusal(campaign, campaignId, 'budget')
   if (refused) return { ok: false, error: refused }
   const c = campaign!
+  const held = await heldSources([{ source: changeSource, subject: { change: 'budget', campaignId: c.id, valueCents: proposed } }], { approvalId: ctx?.approvalId, tool: 'set-campaign-budget' })
+  if ('refusal' in held) return { ok: false, error: `Not queued: ${held.refusal}.` }
   const currency = campaignCurrency(c)
   const current = Math.round(Number(c.dailyBudget) * 100)
   if (proposed === current) return { ok: false, error: `The daily budget of ${c.name} is already ${amountLabel(current, currency)}.` }
@@ -587,7 +592,7 @@ async function budgetPreview(args: Record<string, unknown>, ctx?: Pick<ToolConte
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...rule,
-      ...sourcePreview(changeSource),
+      ...sourcePreview(changeSource, held.facts),
       effect: `Sets the daily budget of ${c.name} from ${amountLabel(current, currency)} to ${amountLabel(proposed, currency)}.`,
     },
   }
@@ -808,7 +813,7 @@ const setCampaignBudget: AgentTool = {
       ...(changeSource ? { evidence: withSource(null, changeSource) } : {}), // W3-1
     })
     if (!out.ok) return notRun(`Not run: the budget write was refused (${out.error ?? 'unknown'}). Nothing changed.`)
-    await settleSources([changeSource], run.changeSetId)
+    await settleSources([changeSource], run.changeSetId, { approvedPreview: ctx.approvedPreview, by: ctx.userId ?? null, receipts: [{ actionLogId: out.actionLogId ?? null, outboundQueueId: out.outboundQueueId ?? null }] })
     return {
       ok: true,
       data: {
@@ -861,6 +866,13 @@ async function placementPreview(args: Record<string, unknown>, ctx?: Pick<ToolCo
   const campaignId = String(args.campaignId ?? '')
   const asked = PLACEMENTS.filter((p) => args[p.key] != null)
   if (!campaignId || !asked.length) return { ok: false, error: 'campaignId and at least one of topOfSearchPct, productPagesPct, restOfSearchPct are required' }
+  // W4-9 — the one source this change takes: an autopilot PLACEMENT decision of this campaign (no engine recommendation
+  // sets placements), checked against its row below.
+  const changeSource = sourceOf(args.source)
+  const wrongSource = changeSource?.kind === 'recommendation'
+    ? 'no engine recommendation sets placement adjustments: only an autopilot PLACEMENT decision rides on this change'
+    : sourceRefusal(changeSource, '', { held: 'placement' })
+  if (wrongSource) return { ok: false, error: `Not queued: ${wrongSource}.` }
   const campaign = await campaignForChange(campaignId)
   const refused = campaignRefusal(campaign, campaignId, 'placement')
   if (refused) return { ok: false, error: refused }
@@ -871,6 +883,9 @@ async function placementPreview(args: Record<string, unknown>, ctx?: Pick<ToolCo
   if (PLACEMENTS.every((p) => (proposed[p.key] ?? 0) === (current[p.key] ?? 0))) {
     return { ok: false, error: `${c.name} already has these placement adjustments (${pctLine(current)}).` }
   }
+  const onlyTopOfSearch = PLACEMENTS.every((p) => p.key === 'topOfSearchPct' || (proposed[p.key] ?? 0) === (current[p.key] ?? 0))
+  const held = await heldSources([{ source: changeSource, subject: { change: 'placement', campaignId: c.id, placement: { fromPct: current.topOfSearchPct ?? 0, toPct: proposed.topOfSearchPct ?? 0, onlyTopOfSearch } } }], { approvalId: ctx?.approvalId, tool: 'set-placement-multipliers' })
+  if ('refusal' in held) return { ok: false, error: `Not queued: ${held.refusal}.` }
   const intent = { campaignId: c.id, marketplace: c.marketplace, changes: [{ field: 'placementBidding', valueCents: null }] }
   const reach = await checkLiveReach(intent)
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
@@ -893,6 +908,7 @@ async function placementPreview(args: Record<string, unknown>, ctx?: Pick<ToolCo
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...rule,
+      ...sourcePreview(changeSource, held.facts),
       effect: `Sets the placement adjustments of ${c.name} from ${pctLine(current)} to ${pctLine(proposed)}${raises.length ? `: bids rise on ${raises.join(' and ')}` : ''}.`,
     },
   }
@@ -925,6 +941,7 @@ const setPlacementMultipliers: AgentTool = {
     productPagesPct: pctArg('product-pages'),
     restOfSearchPct: pctArg('rest-of-search'),
     why: whyArg,
+    source: sourceArg,
   }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
   category: 'advertising',
@@ -946,7 +963,8 @@ const setPlacementMultipliers: AgentTool = {
     + 'points, than its limits allow (a raise raises every bid there, so it waits for a person until the business sets '
     + 'how large one may be). The preview shows the adjustments now and after, where it lands (live at Amazon or '
     + 'sandbox) and the ads strategy\'s limits that apply. Refused, and not queued, when Amazon\'s write gate would '
-    + 'refuse it. Approved, it is sent at once. Undo puts the old adjustments back.',
+    + 'refuse it. Approved, it is sent at once. Undo puts the old adjustments back. It may carry out an autopilot plan\'s '
+    + 'placement decision (source autopilot:<id>, as apply-ad-recommendations sets it): marked applied once it ran.',
   async handler(args, ctx) {
     return placementPreview(args, ctx)
   },
@@ -958,13 +976,18 @@ const setPlacementMultipliers: AgentTool = {
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const adjustments = PLACEMENTS.filter((pl) => p.proposed[pl.key] != null).map((pl) => ({ placement: pl.placement, percentage: p.proposed[pl.key] as number }))
-    const out = await updatePlacementBidding({ campaignId: p.campaign.id, adjustments, actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual })
+    const changeSource = sourceOf(args.source)
+    const out = await updatePlacementBidding({
+      campaignId: p.campaign.id, adjustments, actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual,
+      ...(changeSource ? { evidence: withSource(null, changeSource) } : {}), // W4-9
+    })
     if (!out.ok) return notRun(`Not run: ${out.reason ? `Amazon's write gate refused it — ${out.reason}` : 'Amazon did not accept the new adjustments'}. Nothing changed.`)
+    await settleSources([changeSource], run.changeSetId, { approvedPreview: ctx.approvedPreview, by: ctx.userId ?? null })
     return {
       ok: true,
       data: { campaignId: p.campaign.id, placements: p.proposed, reach: p.reach, mode: out.mode, changeSetId: run.changeSetId },
       change: {
-        before: { campaignId: p.campaign.id, placements: p.current, changeSetId: run.changeSetId },
+        before: { campaignId: p.campaign.id, placements: p.current, changeSetId: run.changeSetId, ...sourcesRecord([changeSource]) },
         after: { campaignId: p.campaign.id, placements: p.proposed },
       },
     }
@@ -1080,19 +1103,29 @@ const BULK_BID_LIMITS = adKitLimits({ maxItems: 50 }, STEP_PCT_LIMITS)
  * A bulk request decided: its preview (20 lines shown), and every write it makes (all of them). `rule` (the dry run,
  * not `execute`): AA-W2-6 — also the facts its limits are judged on, over EVERY row, when it may run by rule.
  */
-async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null } } = {}): Promise<{ result: ToolResult; writes: BulkWrite[] }> {
+async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { approvalId?: string | null }; approvalId?: string | null } = {}): Promise<{ result: ToolResult; writes: BulkWrite[] }> {
   const a = args as BulkArgs
-  // W3-1 — each row's source names that target's own bid recommendation, or the whole request is refused.
+  // W3-1 — each row's source names that target's own bid recommendation, or the whole request is refused. W4-9 — or an
+  // autopilot BID decision of its campaign, or a Keyword Tracker proposal naming it at this bid (heldSources, below).
   const sourceByTarget = new Map<string, AdChangeSource>()
   for (const row of a.bids ?? []) {
     const rowSource = sourceOf(row.source)
-    const wrongSource = sourceRefusal(rowSource, recommendationIdFor.bid(row.targetId))
+    const wrongSource = row.stop === true && rowSource && rowSource.kind !== 'recommendation'
+      ? 'a stop carries out no autopilot decision or Keyword Tracker proposal'
+      : sourceRefusal(rowSource, recommendationIdFor.bid(row.targetId), { held: 'bid' })
     if (wrongSource) return { result: { ok: false, error: `Not queued: target ${row.targetId}: ${wrongSource}.` }, writes: [] }
     if (rowSource) sourceByTarget.set(row.targetId, rowSource)
   }
   const read = await askedBids(a)
   if ('refusal' in read) return { result: { ok: false, error: read.refusal }, writes: [] }
   const targets = await loadTargets(read.asked.map((t) => t.targetId))
+  // W4-9 — the rows that carry out an autopilot decision or a proposal, against their rows (a target not found is
+  // left out below, and carries nothing out).
+  const held = await heldSources(read.asked.filter((x) => targets.has(x.targetId) && sourceByTarget.has(x.targetId)).map((x) => ({
+    source: sourceByTarget.get(x.targetId)!,
+    subject: { change: 'bid' as const, campaignId: targets.get(x.targetId)!.campaign.id, targetId: x.targetId, valueCents: x.bidCents },
+  })), { approvalId: opts.approvalId, tool: 'bulk-ad-bid-change' })
+  if ('refusal' in held) return { result: { ok: false, error: `Not queued: ${held.refusal}.` }, writes: [] }
   const excluded: Array<{ targetId: string; why: Exclusion; detail?: string }> = []
   const kept: Array<{ t: BulkTarget; wanted: number }> = []
   // D4 — a stop's bid: the ads strategy's stop bid for its campaign, at least 5¢ (stopBidOf); a lowering only.
@@ -1195,7 +1228,6 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
   }))
   const stopsGoing = writes.filter((w) => w.stop).length
   const stepped = writes.filter((w) => w.ruleCents != null).length
-  const sourced = writes.filter((w) => w.source).length
   // AA-W2-6 — every row against the ads strategy of its own ad group (not only the 20 lines shown), counted as one run.
   const rule = opts.rule
     ? await ruleFactsFor({
@@ -1226,8 +1258,9 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
       reachNote: reachNote(reach),
       alsoChangedBy: bound,
       ...(rule ?? {}),
-      // W3-1 — how many rows carry out an engine's recommendation (each line names its id).
-      ...(sourced ? { sources: { recommendations: sourced }, sourceNote: `${sourced} of these bids carry out the bid optimizer's recommendations (each line names its id). Once they run they are not offered again until the data shows what the change did.` } : {}),
+      // W3-1 — how many rows carry out an engine's recommendation (each line names its id). W4-9 — and an autopilot
+      // decision's or a Keyword Tracker proposal's, their facts frozen (sourceFacts: what settles them once they ran).
+      ...bulkSources(writes, held.facts),
       ...(stopsGoing ? { stopNote: `${stopsGoing} of these ${stopsGoing === 1 ? 'is a stop' : 'are stops'}: lowered to the ads strategy's stop bid for its campaign (at least ${STOP_MIN_CENTS} cents) in one move — a temporary stop with low bids, never a pause. The largest bid change per action does not apply to a stop, and a stop never raises a bid.` } : {}),
       // W4-4 — the rows a person's approval sends past the largest change, and what a run by rule writes instead.
       ...(stepped ? { stepNote: `${stepped} of these ${stepped === 1 ? 'bid moves' : 'bids move'} more than the largest bid change per action: a person's approval sends ${stepped === 1 ? 'it' : 'them'} as asked (the card warns first); run by the business's rule, ${stepped === 1 ? 'it moves' : 'they move'} only as far as the largest change allows (byRuleCents on each line).` } : {}),
@@ -1243,6 +1276,32 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
   } }
 }
 
+/** W3-1 + W4-9 — what a bulk change's preview says about the rows that carry something out (each line names its id). */
+function bulkSources(writes: BulkWrite[], allFacts: SourceFact[]): Record<string, unknown> {
+  const facts = allFacts.filter((f) => writes.some((w) => w.source?.id === f.id))
+  const count = (kind: AdChangeSource['kind']) => writes.filter((w) => w.source?.kind === kind).length
+  const recommendations = count('recommendation')
+  const autopilot = count('autopilot')
+  const tracker = count('tracker')
+  if (!recommendations && !autopilot && !tracker) return {}
+  const rows = (id: string) => writes.filter((w) => w.source?.id === id).length
+  const notes = [
+    ...(recommendations ? [`${recommendations} of these bids carry out the bid optimizer's recommendations (each line names its id). Once they run they are not offered again until the data shows what the change did.`] : []),
+    ...facts.map((f) => (f.kind === 'autopilot'
+      ? `${rows(f.id)} of these bids carry out the autopilot plan${f.decision.planName ? ` "${f.decision.planName}"` : ''}'s bid decision ${f.id} (${f.decision.action} — ${f.decision.reason}): the bids the plan's optimizer computed at its target when this was asked, frozen here. Once they run the decision is marked applied on the A.I. Bids tab, naming this request.`
+      : f.covers.targets === f.covers.of
+        ? `${rows(f.id)} of these bids carry out the Keyword Tracker proposal ${f.id} ("${f.proposal.term}" in ${f.proposal.marketplace}), after its own checks (its targets, its spend ceiling today). Once they run the proposal is marked applied, naming this request.`
+        : `${rows(f.id)} of these bids set ${f.covers.targets} of the ${f.covers.of} targets of the Keyword Tracker proposal ${f.id} ("${f.proposal.term}" in ${f.proposal.marketplace}): the proposal stays waiting — it is marked applied only by a change that sets all of them.`)),
+  ]
+  // An autopilot decision the plan re-proposed since the request was made: its frozen values stand.
+  const unread = [...new Set(writes.map((w) => w.source).filter((x): x is AdChangeSource => !!x && x.kind === 'autopilot' && !facts.some((f) => f.id === x.id)).map((x) => x.id))]
+  for (const id of unread) notes.push(`Some of these bids carry out the autopilot decision ${id}: its plan has proposed again since this was asked; the values frozen in this request stand.`)
+  return {
+    sources: { ...(recommendations ? { recommendations } : {}), ...(autopilot ? { autopilot } : {}), ...(tracker ? { tracker } : {}) },
+    sourceNote: notes.join(' '),
+    ...(facts.length ? { sourceFacts: facts } : {}),
+  }
+}
 /**
  * A7 — what an approved bulk bid change must still find (MATERIAL_PREVIEW_FIELDS holds the same list): the counts, every
  * row's starting and new bid (basis), where it lands. W4-4 — and what auto-bid does with the bids afterwards.
@@ -1328,12 +1387,12 @@ const bulkAdBidChange: AgentTool = {
     + 'handed back, auto-bid may move them from its next run. Approved, '
     + 'every write carries the approval as its change set; undo-change reverses the whole set at once.',
   async handler(args, ctx) {
-    return (await bulkDecision(args, { rule: { approvalId: ctx.approvalId } })).result
+    return (await bulkDecision(args, { rule: { approvalId: ctx.approvalId }, approvalId: ctx.approvalId })).result
   },
   async execute(args, ctx) {
     // One decision: its preview is re-checked against what was approved (the basis fingerprints every write), and
     // its full list of writes — not the 20 lines shown — is what runs.
-    const { result: fresh, writes: going } = await bulkDecision(args)
+    const { result: fresh, writes: going } = await bulkDecision(args, { approvalId: ctx.approvalId })
     const refusal = recheck(ctx, fresh, BULK_BID_MATERIAL)
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { reach: StoredReach; effect: string; afterwards: BidAfterwards }
@@ -1355,8 +1414,13 @@ const bulkAdBidChange: AgentTool = {
       manual: run.manual, // 4A
       confirmOwnLimits: run.confirmOwnLimits, // 4A
     })
-    // W3-1 — the recommendations of the rows that were written (or already held the bid) are settled.
-    await settleSources(going.filter((g, i) => out.outcomes[i]?.ok).map((g) => g.source), run.changeSetId)
+    // W3-1 — the recommendations of the rows that were written (or already held the bid) are settled; W4-9 — and the
+    // autopilot decisions and Keyword Tracker proposals they carried out.
+    const done = going.map((g, i) => ({ g, o: out.outcomes[i] })).filter((x) => x.o?.ok)
+    await settleSources(done.map((x) => x.g.source), run.changeSetId, {
+      approvedPreview: ctx.approvedPreview, by: ctx.userId ?? null,
+      receipts: done.map((x) => ({ actionLogId: x.o.actionLogId ?? null, outboundQueueId: x.o.outboundQueueId ?? null })),
+    })
     const ids = going.map((g) => g.targetId)
     const now = await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, bidCents: true } })
     const sorted = (rows: Array<{ id: string; bidCents: number }>) => Object.fromEntries([...rows].sort((x, y) => (x.id < y.id ? -1 : 1)).map((r) => [r.id, r.bidCents]))

@@ -8,7 +8,8 @@
  *   ad-targets          the targets (keywords, product and auto targets) with their bids and window metrics
  *   ad-search-terms     the search terms that spent with no order, and the ones that convert
  *   ad-changes          what changed on the account, who changed it, whether it reached Amazon, and its undo handle
- *   ad-recommendations  the engines' recommendations and the rules' pending suggestions
+ *   ad-recommendations  the engines' recommendations and the rules' pending suggestions; W4-9 — and the autopilot plans'
+ *                       waiting decisions (the A.I. Bids tab) and the Keyword Tracker's waiting bid proposals
  *
  * Every read answers from Nexus's own stored data, through the services the Ads pages use (no marketplace call, no
  * gateway, no queue). Each returns the ids the change tools take (Nexus campaign / ad group / target ids, Amazon's
@@ -117,6 +118,8 @@ const AD_MONEY = {
   cpcCents: ADSPEND,
   effectiveMaxCpcCents: ADSPEND,
   impactCents: ADSPEND,
+  // W4-9 — a Keyword Tracker proposal's bid times its targets.
+  commitmentCents: ADSPEND,
   proposedBidCents: ADSPEND,
   proposedBudgetCents: ADSPEND,
   proposedChange: ADSPEND,
@@ -1246,7 +1249,7 @@ async function ebayChanges(args: Record<string, unknown>, scope: string): Promis
 
 // ── ad-recommendations ─────────────────────────────────────────────────────────────────────────────
 
-const REC_CATEGORIES = ['bid', 'negative', 'graduate', 'budget', 'sov', 'retail', 'rule'] as const
+const REC_CATEGORIES = ['bid', 'negative', 'graduate', 'budget', 'sov', 'retail', 'rule', 'autopilot', 'tracker'] as const
 /** A rule's suggested action that would pause, enable, resume or archive: never done (the Owner's no-pause rule). */
 const PAUSING_ACTION = /(^|_)(pause|enable|resume|archive)(_|$)/i
 const NO_PAUSE = 'Nexus never pauses, enables or archives ads on its own: to stop delivery it lowers bids (suppression). This one is information only.'
@@ -1257,13 +1260,33 @@ const SUGGESTED_TOOL: Partial<Record<(typeof REC_CATEGORIES)[number], string>> =
   bid: 'set-target-bid', negative: 'create-negative-keyword', graduate: 'graduate-keyword', budget: 'set-campaign-budget', retail: 'suppress-campaign',
 }
 
+/** W4-9 — the change tool an autopilot plan's decision is carried out with, by its module (apply-ad-recommendations does it). */
+const AUTOPILOT_TOOL: Record<string, string> = { bid: 'bulk-ad-bid-change', budget: 'set-campaign-budget', placement: 'set-placement-multipliers' }
+const AUTOPILOT_HOW: Record<string, string> = {
+  bid: 'Carried out with bulk-ad-bid-change: the bids the plan\'s optimizer computes at the plan\'s target when apply-ad-recommendations is asked, frozen in the request.',
+  budget: 'Carried out with set-campaign-budget at the budget it names.',
+  placement: 'Carried out with set-placement-multipliers: top of search nudged by its step, from the adjustment the campaign has then.',
+}
+const AUTOPILOT_LIFE = 'Its plan replaces its waiting decisions on every run (every 15 minutes): carry it out or dismiss it soon after reading it.'
+
 interface RecItem {
   recommendationId: string
-  from: 'engine' | 'rule'
+  from: 'engine' | 'rule' | 'autopilot' | 'tracker'
   category: (typeof REC_CATEGORIES)[number]
   severity: string
   title: string
   [key: string]: unknown
+}
+
+/**
+ * W4-9 — the autopilot plans' waiting decisions, as the A.I. Bids tab lists them (listAiDecisions 'proposed'), each with
+ * whether its plan still runs (a plan switched off or OFF proposes nothing new: its rows are stale). Read only.
+ */
+async function waitingDecisions() {
+  const { listAiDecisions, decisionFacts } = await import('../../advertising/autopilot/decisions.js')
+  const listed = (await listAiDecisions('proposed')).items as Array<{ id: string }>
+  const facts = await decisionFacts(listed.map((d) => d.id))
+  return listed.map((d) => facts.get(d.id)).filter((d): d is NonNullable<typeof d> => !!d)
 }
 
 const adRecommendations: AgentTool = {
@@ -1277,7 +1300,7 @@ const adRecommendations: AgentTool = {
   input: z.object({
     channel: channelArg,
     category: z.preprocess(lower, z.enum(REC_CATEGORIES)).optional()
-      .describe('only bid, negative, graduate, budget, sov (share of voice), retail (unsellable products) or rule (a rule\'s pending suggestion)'),
+      .describe('only bid, negative, graduate, budget, sov (share of voice), retail (unsellable products), rule (a rule\'s pending suggestion), autopilot (an autopilot plan\'s waiting decision) or tracker (a Keyword Tracker bid proposal)'),
     campaignId: campaignArg,
     market: marketArg,
     days: daysArg(30, 'the window the engines judge'),
@@ -1287,13 +1310,16 @@ const adRecommendations: AgentTool = {
   description:
     'What the Amazon ad engines recommend now (bid changes, wasteful terms to negate, converting terms to graduate, '
     + 'budget changes, share-of-voice and unsellable-product warnings), most severe first, then the automation rules\' '
-    + 'pending suggestions. Per recommendation: id, category, severity, title, why (detail), estimated impact and what '
+    + 'pending suggestions, the autopilot plans\' waiting decisions (autopilot:, the A.I. Bids tab: a bid, budget or '
+    + 'placement change of one campaign; an id lasts until its plan\'s next run, every 15 minutes) and the Keyword '
+    + 'Tracker\'s waiting bid proposals (kt:, one bid on every target of a term in a market). Per recommendation: id, category, severity, title, why (detail), estimated impact and what '
     + 'kind of number it is, the supporting metrics, the ids a change tool takes (targetId, campaignId, '
     + 'externalCampaignId, externalAdGroupId, query) and suggestedTool when one exists. Nothing pauses: a '
     + 'recommendation to pause is shown as information (noPause); an unsellable campaign is carried out by lowering its '
     + 'bids to the stop bid. Carry recommendations out by id with apply-ad-recommendations (one change plan), or mute '
-    + 'them with mute-ad-recommendations; one already carried out is not offered again until the data shows what the '
-    + 'change did. Filter by category, campaignId or market. The list '
+    + 'them with mute-ad-recommendations (a rule\'s suggestion, an autopilot decision or a proposal: dismiss or restore); '
+    + 'one already carried out is not offered again until the data shows what the change did. Filter by category, '
+    + 'campaignId or market. The list '
     + 'is computed live: a row that moves between two pages may repeat.'
     + ' eBay (channel ebay): the eBay rules\' pending proposals (rate, bid, budget, negatives), each with its campaign, '
     + 'listing or keyword, the change it proposes and the reasoning; a proposal to pause is information only.'
@@ -1304,15 +1330,26 @@ const adRecommendations: AgentTool = {
     const size = pageSize(a.limit)
     const scope = scopeOf('ad-recommendations', args)
     if (a.campaignId && !(await campaignById(a.campaignId))) return { ok: false, error: 'Campaign not found' }
-    const wantEngine = a.category !== 'rule'
+    const wantEngine = !a.category || !['rule', 'autopilot', 'tracker'].includes(a.category)
     const wantRules = !a.category || a.category === 'rule'
-    const [feed, suggestions, fresh] = await Promise.all([
+    // W4-9 — the autopilot plans' waiting decisions (the A.I. Bids tab) and the Keyword Tracker's waiting proposals.
+    const wantAutopilot = !a.category || a.category === 'autopilot'
+    const wantTracker = !a.category || a.category === 'tracker'
+    const [feed, suggestions, fresh, decisions, proposals] = await Promise.all([
       wantEngine ? import('../../advertising/ads-recommendations.service.js').then((m) => m.buildRecommendations({ windowDays: a.days })) : Promise.resolve(null),
       wantRules
         ? pendingRuleSuggestions(500)
         : Promise.resolve([] as Awaited<ReturnType<typeof pendingRuleSuggestions>>),
       performanceAsOf(a.market ? [a.market] : []),
+      wantAutopilot ? waitingDecisions() : Promise.resolve([]),
+      wantTracker ? import('../../advertising/kt6-proposal.service.js').then((m) => m.waitingProposals(200)) : Promise.resolve([]),
     ])
+    // W4-9 — the campaigns each proposal's targets sit in, for the campaignId filter.
+    const proposalTargets = [...new Set(proposals.flatMap((p) => p.targetIds))]
+    const proposalCampaignOf = new Map<string, string>(
+      (proposalTargets.length ? await prisma.adTarget.findMany({ where: { id: { in: proposalTargets } }, select: { id: true, adGroup: { select: { campaignId: true } } } }) : [])
+        .map((t) => [t.id, t.adGroup.campaignId] as [string, string]),
+    )
     const recs: Recommendation[] = (feed?.recommendations ?? []).filter((r) => !a.category || r.category === a.category)
 
     // Where each recommendation lives: targets → their campaign, Amazon ids → Nexus campaigns.
@@ -1340,13 +1377,14 @@ const adRecommendations: AgentTool = {
         ...recs.map(campaignIdOf),
         ...targets.map((t) => t.adGroup.campaignId),
         ...suggestions.filter((s) => s.entityType === 'CAMPAIGN').map((s) => s.entityId),
+        ...decisions.map((d) => d.campaignId),
       ].filter((id): id is string => !!id),
       recs.map((r) => harvestOf(r)?.externalCampaignId).filter((id): id is string => !!id),
     )
     const groupExternals = recs.map((r) => harvestOf(r)?.externalAdGroupId).filter((id): id is string => !!id)
     const groupByExternal = await adGroupsByExternalId(groupExternals)
 
-    const items: Array<RecItem & { _campaign: CampaignRef | null }> = []
+    const items: Array<RecItem & { _campaign: CampaignRef | null; _campaigns?: string[]; _market?: string }> = []
     for (const r of recs) {
       const term = harvestOf(r)
       const campaign = term ? index.byExternal.get(term.externalCampaignId) ?? null : index.byId.get(campaignIdOf(r) ?? '') ?? null
@@ -1400,9 +1438,60 @@ const adRecommendations: AgentTool = {
         _campaign: campaign,
       })
     }
+    // W4-9 — the autopilot plans' decisions, then the Keyword Tracker's proposals (they span the term's campaigns).
+    for (const d of decisions) {
+      const campaign = d.campaignId ? index.byId.get(d.campaignId) ?? null : null
+      const tool = AUTOPILOT_TOOL[d.module] ?? null
+      items.push({
+        recommendationId: `autopilot:${d.id}`,
+        from: 'autopilot',
+        category: 'autopilot',
+        severity: 'medium',
+        title: `Autopilot plan${d.planName ? ` "${d.planName}"` : ''} proposes ${d.action} on ${campaign?.name ?? d.campaignId ?? 'no campaign'}`,
+        decisionId: d.id,
+        plan: { id: d.planId, name: d.planName, on: d.planOn },
+        module: d.module,
+        action: d.action,
+        ...campaignOut(campaign),
+        proposedChange: { before: d.before, after: d.after },
+        detail: d.reason,
+        proposedAt: d.at,
+        suggestedTool: d.planOn ? tool : null,
+        ...(tool && d.planOn ? { carriedOut: `${AUTOPILOT_HOW[d.module]} ${AUTOPILOT_LIFE}` } : {}),
+        ...(!d.planOn ? { stale: 'Its plan is off, so this proposal is stale: dismiss it (mute-ad-recommendations, op dismiss).' } : {}),
+        ...(d.planOn && !tool ? { noApply: `The ${d.module} module has no way to be carried out: dismiss it (mute-ad-recommendations, op dismiss).` } : {}),
+        _campaign: campaign,
+      })
+    }
+    for (const p of proposals) {
+      items.push({
+        recommendationId: `kt:${p.id}`,
+        from: 'tracker',
+        category: 'tracker',
+        severity: 'medium',
+        title: `Keyword Tracker proposal: one bid on "${p.term}" in ${p.marketplace} (${p.targetIds.length} target${p.targetIds.length === 1 ? '' : 's'})`,
+        proposalId: p.id,
+        query: p.term,
+        market: p.marketplace,
+        proposedBidCents: p.requestedBidCents,
+        targets: p.targetIds.length,
+        campaigns: p.actionableCampaigns,
+        targetIds: p.targetIds.slice(0, 50),
+        commitmentCents: p.commitmentCents,
+        detail: p.confirmationText,
+        ...(p.ceilingVerdict !== 'NO_CEILING' ? { note: p.ceilingMessage } : {}),
+        proposedAt: iso(p.proposedAt),
+        suggestedTool: 'bulk-ad-bid-change',
+        carriedOut: 'Carried out with bulk-ad-bid-change, its one bid on each of its targets, after the Keyword Tracker\'s own checks (the same targets as when it was raised, its spend ceiling today with the request\'s other proposals), checked again before it writes.',
+        _campaign: null,
+        _campaigns: [...new Set<string>(p.targetIds.map((t) => proposalCampaignOf.get(t) ?? '').filter(Boolean))],
+        _market: p.marketplace,
+      })
+    }
     const scoped: RecItem[] = items
-      .filter((item) => (!a.campaignId || item._campaign?.id === a.campaignId) && (!a.market || item._campaign?.marketplace === a.market))
-      .map(({ _campaign, ...item }) => item)
+      .filter((item) => (!a.campaignId || item._campaign?.id === a.campaignId || !!item._campaigns?.includes(a.campaignId))
+        && (!a.market || (item._campaign?.marketplace ?? item._market) === a.market))
+      .map(({ _campaign, _campaigns, _market, ...item }) => item)
     const page = rankedPage(scoped, (item) => shortId(item.recommendationId), size, scope, a.cursor)
     return {
       ok: true,
