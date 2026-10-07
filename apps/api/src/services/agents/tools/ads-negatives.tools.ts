@@ -14,8 +14,10 @@
  *   retire-negatives      standing negatives — any, not only Claude's — by id, or by their place and text: archived at
  *                         Amazon through the Negatives page's own retire (negatives-retire.service.ts retireNegatives),
  *                         or removed from Nexus when Amazon never had one. Lifting a block lets the searches it blocked
- *                         show the ads again (it can add spend): a person approves it with the approver's authenticator
- *                         code (retireStepUp); by the business's rule only where it allows that (allowRetire). Undo adds the
+ *                         show the ads again (it can add spend): listed in raises and said in the effect; the Owner's
+ *                         code rule (ads-code-rule.ts) makes it a day-to-day change, so a person's approval sends it with
+ *                         no authenticator code (retireStepUp decides it); by the business's rule only where it allows
+ *                         that (allowRetire). Undo adds the
  *                         same negatives again (new ones: Amazon never switches an archived one on again).
  *
  * Both follow ads-change-kit.ts — previewed first; refused, and not queued, when the write gate would refuse it; run only
@@ -36,6 +38,7 @@ import { adGroupExternalIds } from '../../advertising/ads-entity-lookup.service.
 import { entityKey } from '../../advertising/ads-strategy/autonomy.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
+import { DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { alsoChangedBy, approvedRun, BY_RULE_WORDS, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { isSbSdCampaign } from '../../advertising/ads-mutation.service.js'
 import { SPONSORED_BRANDS, adProductOf, type AdWrite } from '@nexus/shared/ads-ad-product'
@@ -781,20 +784,21 @@ async function retiringFor(a: RetireArgs): Promise<{ list: Retiring[] } | { refu
 }
 
 /**
- * add-negative-targets' code decision, in ONE place (the Owner's code policy is still open): a negative only lowers spend,
- * so approving it needs no authenticator code — no stepUp.
+ * add-negative-targets' code decision, in ONE place: a negative only lowers spend, so approving it needs no authenticator
+ * code — no stepUp (the Owner's code rule, ads-code-rule.ts, has no door for it).
  */
 function addNegativesStepUp(): { stepUp?: StepUp } {
   return {}
 }
 
 /**
- * retire-negatives' code decision, in ONE place (the Owner's code policy is still open): lifting a negative Amazon holds
- * lets the searches it blocked show the ads again (a raise), so approving needs the approver's authenticator code; a
- * Nexus-only row removed moves nothing.
+ * retire-negatives' code decision, in ONE place: lifting a negative Amazon holds lets the searches it blocked show the
+ * ads again (a raise, listed); the Owner's code rule (ads-code-rule.ts) makes it a day-to-day change, so a person's
+ * approval sends it (no stepUp). A Nexus-only row removed moves nothing.
  */
-function retireStepUp(atAmazon: number): { stepUp?: StepUp } {
+function retireStepUp(atAmazon: number): { stepUp?: StepUp; noCode?: string } {
   if (!atAmazon) return {}
+  if (!needsCode('retire-negatives')) return { noCode: DAY_TO_DAY_NO_CODE }
   return { stepUp: { what: `lifts ${plural(atAmazon, 'negative')} at Amazon (the searches ${atAmazon === 1 ? 'it blocks' : 'they block'} can show the ads again)`, raises: ['Spend'], needs: STEP_UP_NEEDS, how: RETIRE_HOW } }
 }
 
@@ -836,7 +840,7 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
   const anew = atAmazon.length - final.length
   const markets = [...new Set(list.map((r) => r.campaign.marketplace).filter((m): m is string => !!m))].sort()
   const effect = `Retires ${plural(list.length, 'negative')} (${named(lines.map((l) => l.label))}).`
-    + (atAmazon.length ? ` ${plural(atAmazon.length, 'is', 'are')} archived at Amazon: the searches ${atAmazon.length === 1 ? 'it blocks' : 'they block'} can show these ads again, so spend can rise. Amazon never switches an archived negative on again.` : '')
+    + (atAmazon.length ? ` ${plural(atAmazon.length, 'is', 'are')} archived at Amazon: the searches ${atAmazon.length === 1 ? 'it blocks' : 'they block'} can show these ads again, so spend can rise${retireStepUp(atAmazon.length).stepUp ? ': approving it needs the approver\'s authenticator code' : ' (a day-to-day change: a person\'s approval sends it, with no authenticator code)'}. Amazon never switches an archived negative on again.` : '')
     + (anew ? ` To block ${anew === 1 ? 'that search' : 'those searches'} again, a new negative is added.` : '')
     + (final.length ? ` For good: ${named(final.map((r) => `${negativeWords(r)} · ${r.place}`))} — ${FINAL_WORDS}, so ${final.length === 1 ? 'that search' : 'those searches'} cannot be blocked there again, not even by an undo.` : '')
     + (local ? ` ${plural(local, 'is', 'are')} only in Nexus (Amazon never had ${local === 1 ? 'it' : 'them'}): ${local === 1 ? 'its' : 'their'} record is removed and nothing changes at Amazon.` : '')
@@ -850,7 +854,7 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
         totals: { retiring: list.length, atAmazon: atAmazon.length, nexusOnly: local },
         changes: lines.slice(0, LINES_SHOWN),
         ...(lines.length > LINES_SHOWN ? { moreChanges: lines.length - LINES_SHOWN } : {}),
-        // Every negative lifted at Amazon can let spend rise: each is listed, and approving needs the approver's code.
+        // Every negative lifted at Amazon can let spend rise: each is listed (the code is retireStepUp's: none, day-to-day).
         raises: atAmazon.map((r) => `${negativeWords(r)} · ${r.place}`),
         ...retireStepUp(atAmazon.length),
         alsoChangedBy: bound.automations,
@@ -956,8 +960,8 @@ const retireNegatives: AgentTool = {
     + 'holds is archived there, through the Negatives page\'s own retire (permanent at Amazon: blocking the search again adds a '
     + 'new one — except a Sponsored Brands negative keyword, which Amazon never lets be added to that campaign again, so its '
     + 'retire cannot be undone; the preview lists those as irreversible); one only in Nexus has its record removed. Lifting a block lets the searches it blocked show the ads again, '
-    + 'so spend can rise: the preview lists each negative with who added it, and a person with settings.security.manage '
-    + 'approves it in Nexus with their authenticator code (or the person who asked confirms it in Claude with theirs). '
+    + 'so spend can rise: the preview lists each negative with who added it, in raises — a day-to-day change, so a '
+    + 'person\'s approval sends it with no authenticator code. '
     + 'It may run by the business\'s rule only where the business allows a retire (allowRetire, off by default), in a market it names, inside its limits and the ads strategy. Refused, and not queued, when a '
     + 'negative is not found, is not a negative, is retired already, or when Amazon\'s write gate would refuse it. Undo '
     + '(undo-change) adds the same negatives again where they stood (not a Sponsored Brands negative keyword).',
@@ -969,7 +973,7 @@ const retireNegatives: AgentTool = {
     const refusal = recheck(ctx, fresh, RETIRE_MATERIAL)
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { reach: StoredReach; effect: string; totals: { atAmazon: number } }
-    // The code, as retireStepUp decided it on this fresh preview.
+    // The code, as retireStepUp decided it on this fresh preview (none under the Owner's code rule).
     const gate = await spendGate(ctx, fresh.preview)
     if ('refusal' in gate) return notRun(gate.refusal)
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)

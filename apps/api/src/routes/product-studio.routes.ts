@@ -270,10 +270,12 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
     const market = String(q.market ?? '').trim().toUpperCase()
     if (!market) return missingMarket(reply, q)
     try {
-      const { getFamilyRead } = await import('../services/pim/family-projection.service.js')
-      const result = await getFamilyRead(id, market, q.locale ? String(q.locale) : undefined)
+      const { familyOrderView, getFamilyRead } = await import('../services/pim/family-projection.service.js')
+      // `view=order` — the Information page's row order (Owner 2026-10-07): the same read without the projection reads.
+      const orderOnly = q.view === 'order'
+      const result = await getFamilyRead(id, market, q.locale ? String(q.locale) : undefined, { projections: !orderOnly })
       reply.header('Server-Timing', `family;dur=${result.meta.tookMs}`)
-      return result
+      return orderOnly ? familyOrderView(result) : result
     } catch (err) { return sendError(reply, err, request.log, { id, market }) }
   })
 

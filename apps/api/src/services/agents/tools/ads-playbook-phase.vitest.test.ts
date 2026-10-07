@@ -16,6 +16,7 @@
  *   rank      a phase that switches an hourly plan off is a raise when the floors it set come back, a lowering when kept
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -199,9 +200,18 @@ describe('PROFIT → GROW raises the target: the whole switch needs the approver
   it('stepUp on the preview; a plain approve is not run; approved with the code it runs and keeps when the code was typed', async () => {
     const p = (await preview(phase('GROW'))).preview as Row
     expect(p).toMatchObject({ direction: 'raise', raises: expect.arrayContaining(['Target']), stepUp: { what: expect.stringMatching(/adds spend/), raises: expect.arrayContaining(['Target']) } })
+    // The code table decides the code (a big door): flipped, the card asks none (unless it lets Claude do more alone).
+    __codeRuleTest.flip('apply-ads-playbook: a phase switch that raises')
+    try {
+      const flipped = (await preview(phase('GROW'))).preview as Row
+      expect(flipped.raisesClaude).toBe(false)
+      expect(flipped.stepUp).toBeNull()
+      expect(flipped.noCode).toMatch(/day-to-day/)
+      expect(flipped.effect).toMatch(/It ADDS SPEND \(.*\): a day-to-day change/)
+    } finally { __codeRuleTest.reset() }
     expect(p.strategy.changes.find((c: Row) => c.field === 'goal')).toMatchObject({ direction: 'raise' })
     const asked = await ask(phase('GROW'))
-    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/it raises, and a raise runs only when a person with settings.security.manage approved it with their authenticator code/) })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/it switches a product's playbook phase in a way that adds spend, and that runs only when a person with settings.security.manage approved it with their authenticator code/) })
     expect(await inside(() => db().adsStrategy.findUniqueOrThrow({ where: { id: strategyId } }))).toMatchObject({ goal: 'PROFIT', version: 2 })
     expect(await approve(asked.approvalId!, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed', result: { direction: 'raise', strategy: { version: 3, direction: 'raise' } } })
     const version = await inside(() => db().adsStrategyVersion.findFirstOrThrow({ where: { strategyId, version: 3 } }))

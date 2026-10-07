@@ -20,7 +20,8 @@
  *   reach    every campaign a request writes to answers the write gate the same way, or it is refused; the own limits
  *            any of them goes past are kept on the reach (the card's warning, a plan's too).
  *   the code each tool decides in ONE helper of its own whether approving needs the approver's authenticator code (its
- *            preview's stepUp: the Owner's code policy is still open, so it changes in one place); `spendGate` reads that
+ *            preview's stepUp), reading the Owner's code rule (ads-code-rule.ts: none of these is a big door, so none
+ *            needs it today; a change of the rule is one line there); `spendGate` reads that
  *            stepUp in `execute`: a person's approval runs only with the code, a run the business's rule decided only
  *            inside the tool's limits. Every raise is in the preview's `raises`, whatever the code decision.
  *

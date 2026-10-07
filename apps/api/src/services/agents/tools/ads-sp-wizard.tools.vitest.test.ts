@@ -338,6 +338,10 @@ describe('approved, it runs on its own and is born safe', () => {
     await expect(inside(() => raiseApplicationBids(applicationId))).rejects.toThrow(WIZARD_RUN)
     await expect(inside(() => rollbackApplication(applicationId))).rejects.toThrow(WIZARD_RUN)
 
+    // Going live is the Owner's big door (code rule A): the allowlist and the restore of a campaign born at the floor
+    // each ask for the approver's authenticator code.
+    expect(((await preview({ campaignId: ids[0], enabled: true }, 'set-campaign-live-writes')).preview as Row).stepUp).toMatchObject({ raises: ['Live writes'] })
+    expect((await preview({ campaignId: ids[0] }, 'restore-campaign')).preview).toMatchObject({ suppressedBy: 'user:u-asker', bornAtFloor: { since: expect.any(String) }, stepUp: { raises: ['Bids', 'Spend'] } })
     // Undo archives every campaign its run made.
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'archive-ads', args: { buildRunId: applicationId } } })
     expect(((await preview({ buildRunId: applicationId }, 'archive-ads')).preview as Row).totals).toMatchObject({ changing: 11 })

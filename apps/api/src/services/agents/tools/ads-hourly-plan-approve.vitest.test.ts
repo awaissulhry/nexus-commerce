@@ -1,17 +1,21 @@
 /**
  * ADS AUTONOMY W4-1 (review) — set-hourly-bid-plan through the REAL approve path: the Approvals inbox's own approve
- * (decideFleetApproval, the route's call) with and without the approver's authenticator code, then the commit after the
- * undo window; a change plan carrying the step's code and words; and a run by the business's rule judged again in
- * `execute`. PGlite, production schema; the job queue a stub. Made-up ids and values.
+ * (decideFleetApproval, the route's call), then the commit after the undo window; a change plan carrying the step's
+ * words; and a run by the business's rule judged again in `execute`. PGlite, production schema; the job queue a stub.
+ * Made-up ids and values.
  *
- *   switch on      needs the code: without it mfa_required, nothing changes; with it, it runs
- *   switch off     a plan that is on with Min-bid hours asks for the code even when nothing is floored now (lead decision A)
- *   change plan    a step that raises makes the plan need the code (mergedStepUp); the step keeps its warnings
+ * The Owner's code rule A (2026-10-07, ads-code-rule.ts): an hourly plan's raises are day-to-day — listed in raises,
+ * said in the effect, and a person's plain approve runs them (no authenticator code).
+ *
+ *   switch on      a raise, listed and said: a plain approve schedules it, and it runs
+ *   switch off     a plan that is on with Min-bid hours lists a give-back even when nothing is floored now (lead
+ *                  decision A): a plain approve runs it
+ *   change plan    a step that raises: the plan carries no code; the step keeps its raises and warnings
  *   by rule        execute refuses a person's plan run by rule unless the business's limits allow it now
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { generateSecret, generateSync } from 'otplib'
+import { generateSecret } from 'otplib'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -71,7 +75,6 @@ async function commit(id: string): Promise<Row> {
   return inside(() => commitScheduledApproval(id)) as Promise<Row>
 }
 const plan = (id: string) => inside(() => db().rankScheduleGroup.findUnique({ where: { id } })) as Promise<Row>
-const code = () => { __stepUpTest.reset(); return generateSync({ secret: people.secret }) }
 
 beforeAll(async () => {
   database = await formulaDatabase()
@@ -101,36 +104,40 @@ beforeEach(() => __stepUpTest.reset())
 afterAll(async () => { await database?.close() }, 30_000)
 
 describe('W4-1 — set-hourly-bid-plan through the Approvals inbox', () => {
-  it('a switch on needs the approver\'s code: without it mfa_required and nothing changes; with it, it runs', async () => {
+  it('a switch on is day-to-day (code rule A): listed and said, no code; a plain approve schedules it and it runs', async () => {
     const asked = await ask({ op: 'switch', planId: ids.off, on: true })
     expect(asked).toMatchObject({ ok: true, mode: 'queued' })
-    expect(await approve(asked.approvalId)).toMatchObject({ ok: false, code: 'mfa_required', raises: ['Hourly bid plans'] })
-    expect((await plan(ids.off)).enabled).toBe(false)
-    expect(await approve(asked.approvalId, code())).toMatchObject({ ok: true, status: 'scheduled' })
+    const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
+    expect(stored.preview).toMatchObject({
+      raises: [expect.stringMatching(/^switches the plan on/)], noCode: expect.stringMatching(/day-to-day/),
+      effect: expect.stringMatching(/It ADDS SPEND \(switches the plan on.*\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/),
+    })
+    expect(stored.preview.stepUp).toBeUndefined()
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
     const done = await commit(asked.approvalId)
     expect(done, JSON.stringify(done)).toMatchObject({ ok: true, status: 'executed' })
     expect((await plan(ids.off)).enabled).toBe(true)
   })
 
-  it('switching off a plan that is on with Min-bid hours asks for the code even with nothing floored now (lead decision A)', async () => {
+  it('switching off a plan that is on with Min-bid hours lists a give-back even with nothing floored now (lead decision A); a plain approve runs it', async () => {
     const asked = await ask({ op: 'switch', planId: ids.person, on: false })
     const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
-    expect(stored.preview).toMatchObject({ givesBack: { restore: 0 }, stepUp: { what: 'gives back bids an hourly bid plan floored' } })
-    expect(await approve(asked.approvalId)).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await approve(asked.approvalId, code())).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(stored.preview).toMatchObject({ givesBack: { restore: 0 }, raises: [expect.stringMatching(/a give-back adds spend/)], noCode: expect.stringMatching(/day-to-day/) })
+    expect(stored.preview.stepUp).toBeUndefined()
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
     const done = await commit(asked.approvalId)
     expect(done, JSON.stringify(done)).toMatchObject({ ok: true, status: 'executed' })
     expect((await plan(ids.person)).enabled).toBe(false)
   })
 
-  it('as a step of a change plan: the plan needs the code (the step\'s stepUp) and keeps the step\'s words', async () => {
+  it('as a step of a change plan: the plan carries no code (day-to-day) and keeps the step\'s words; a plain approve schedules it', async () => {
     const asked = await ask({ title: 'Switch a test plan on', steps: [{ tool: TOOL, args: { op: 'switch', planId: ids.person, on: true } }] }, 'submit-change-plan')
     expect(asked, JSON.stringify(asked)).toMatchObject({ ok: true, mode: 'queued' })
     const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
-    expect(stored.preview).toMatchObject({ stepUp: { what: 'switches an hourly bid plan on', raises: ['Hourly bid plans'], steps: [1] } })
+    expect(stored.preview.stepUp).toBeUndefined()
     const [step] = await inside(() => db().agentPlanStep.findMany({ where: { approvalId: asked.approvalId } }))
-    expect(step.preview).toMatchObject({ op: 'switch', raises: [expect.stringMatching(/^switches the plan on/)], peoplesPlans: ['Test on plan'], warnings: expect.any(Array), consequences: expect.stringMatching(/^Nexus only/) })
-    expect(await approve(asked.approvalId)).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect(step.preview).toMatchObject({ op: 'switch', raises: [expect.stringMatching(/^switches the plan on/)], noCode: expect.stringMatching(/day-to-day/), peoplesPlans: ['Test on plan'], warnings: expect.any(Array), consequences: expect.stringMatching(/^Nexus only/) })
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
   })
 
   it('by rule: execute refuses a person\'s plan unless the business\'s limits allow it now (a fresh dry run, decidedVia auto)', async () => {

@@ -130,8 +130,24 @@ describe('C3 — the server and every change tool name the business', () => {
       'read it with ads-strategy, change', 'It only narrows what this business lets',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
       'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
-      "a start needs the approver's authenticator code"]) {
+      "a start needs the approver's authenticator code",
+      // W4-14 — a copy into another market, a person's hourly plan and a person's pause keep their own doors.
+      'a copy into another market never runs by rule',
+      'An hourly bid plan a person made changes by rule only where the business allowed it',
+      "only with enable-ads includePeoplesPauses and the approver's authenticator code, never by rule"]) {
       expect(mcpInstructions(business), rule).toContain(rule)
+    }
+  })
+
+  it('W4-14 — the instructions name every Wave 4 Amazon ads tool, and each is a registered tool', () => {
+    const registered = new Set(listTools().map((tool) => tool.name))
+    for (const name of ['ad-hourly-plans', 'set-hourly-bid-plan', 'enable-ads', 'ad-portfolios', 'set-portfolio', 'set-campaign-settings',
+      'add-ad-targets', 'add-negative-targets', 'retire-negatives', 'harvest-search-term', 'set-harvest-destination', 'ad-groups',
+      'create-ad-group', 'add-product-ads', 'set-ad-group', 'ad-budgets', 'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool',
+      'restore-budget-baselines', 'assign-ad-rules', 'set-coverage-set', 'run-ad-engine-now', 'ad-recommendations', 'apply-ad-recommendations',
+      'mute-ad-recommendations', 'replicate-ad-structure']) {
+      expect(registered.has(name), name).toBe(true)
+      expect(mcpInstructions(business), name).toMatch(new RegExp(`(^|[^a-z-])${name}([^a-z-]|$)`))
     }
   })
 

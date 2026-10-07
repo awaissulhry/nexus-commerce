@@ -103,7 +103,7 @@ import { useDeleteRows } from '../deleteRows/useDeleteRows';
 import { FamilySelectionVerbs } from '../master/FamilySelectionBar';
 import type { PublishActionChange } from '@nexus/shared/publish-actions';
 import { ExpandSlot, SELLING_ROW_MARK_CLASS, UNSAVED_ROW_CLASS, isUnsavedRowData, rowCarriesInactiveMark } from '@/design-system/grid';
-import { aliasKeyOf, wireAliasKey, type ChannelScopeChannel, type ChannelSheetRow, type StudioCellValue } from './types';
+import { aliasKeyOf, wireAliasKey, type ChannelScopeChannel, type ChannelSheetRow, type StudioCellValue, type StudioRow } from './types';
 import './channel-sheet.css';
 import { buildSheetColumns } from '../buildSheetColumns';
 import { useSheetControl } from '../useSheetControl';
@@ -115,8 +115,13 @@ import { NewRowsControl } from '../newRows/NewRowsControl';
 import { aliasTarget, newRowsContextMenu, newRowsGridKey, newRowsPaste, useNewRows, variationTarget } from '../newRows/useNewRows';
 import { channelNewRow, lockedOnNewRows, newRowRefusal, unsavedOf, withNewRows } from '../newRows/newRowsGrid';
 import type { NewRowKind } from '../newRows/newRows';
+import { sharedIdentityRows } from '../familyOrder';
+import { useFamilyRank } from '../useFamilyRank';
+import { FamilyOrderNotice } from '../FamilyOrderNotice';
 /** Add rows — a channel scope adds variations or listings (aliases). */
 const CHANNEL_ROW_KINDS: readonly NewRowKind[] = ['variation', 'alias'];
+/** No rows yet — one constant, so the family rank is not rebuilt on every render while the sheet loads. */
+const NO_ROWS: readonly StudioRow[] = [];
 export interface ChannelSheetProps {
     shopifySchema?: import('@nexus/shared/shopify-linked-products').ShopifyStoreSchema | null;
     accountId?: string;
@@ -136,7 +141,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const languageScope = useStudioScope();
     const { accounts, destination, setListing, registerScopeChangeGuard } = languageScope;
     const alternateAccount = !studioAccountAccess(accounts, accountId).supportsPrimaryTools;
-    const { data: loadedData, loading, switching, error, backendMissing, reload, refresh } = useChannelSheet({
+    const { data: loadedData, loading: sheetLoading, switching, error, backendMissing, reload, refresh } = useChannelSheet({
         productId,
         locales: languageScope.locales,
         schemaRevision: shopifySchema?.revision,
@@ -211,7 +216,15 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /* P2 (I4-4) — a server row keeps its grid row object: reference names landing, or a read that returns the row
        unchanged, never make AG re-render it, and an edit settled in place (`savedCellPatch.ts`) survives them. */
     const rowObjects = useRef(new WeakMap<object, ChannelSheetRow>());
-    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current)) : []), [data]);
+    /* Owner 2026-10-07 (Option A) — the rows inside each alias block follow the Matrix's family order (`useFamilyRank`). */
+    /* Ranked from every row the sheet read, before a listing is chosen: picking one alias must not read the family again. */
+    const rankRows = useMemo(() => sharedIdentityRows(loadedData?.rows ?? NO_ROWS), [loadedData]);
+    const familyOrder = useFamilyRank(productId, rankRows, loadedData?.columns);
+    /* Held until the family order is first read: rows that moved after the first paint would leave a focused cell on another SKU. */
+    const orderPending = !!data && !familyOrder.settled;
+    /* Everything that reads "loaded" — the toolbar, Export, the chips, the drawer — waits for the order too. */
+    const loading = sheetLoading || orderPending;
+    const rows = useMemo(() => (data && familyOrder.settled ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current), familyOrder.rank) : []), [data, familyOrder.settled, familyOrder.rank]);
     // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
     const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
     const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
@@ -508,8 +521,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         writer.discard();
         newRows.store.clear();
         reload();
+        familyOrder.reload();
         refreshReadiness();
-    }, [writer, refused, rows, channel, marketplace, accountId, locale, writeInstanceId, reload, reloadConfirm.ask, refreshReadiness, newRows.store]);
+    }, [writer, refused, rows, channel, marketplace, accountId, locale, writeInstanceId, reload, familyOrder.reload, reloadConfirm.ask, refreshReadiness, newRows.store]);
     /** "Refresh progress": the rows' bars (a quiet re-read — edits in flight stay) and the scope's readiness. */
     const refreshProgress = useCallback(() => {
         refreshReadiness();
@@ -1088,8 +1102,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 : afterWaiting;
         return searchTerm ? filterProductSheetRows(afterPublish, matchesSearch) : afterPublish;
     }, [rows, searchTerm, matchesSearch, showRefusedOnly, refusedRowIds, showRejectedOnly, rejectedCount, rowPublicationStatus, offerDrafts, publishFilter, publishCellOf, publishActions.version]);
-    useLanguageChips(data ? scopeRows : null, gridColumns);
-    useSheetChips(data ? scopeRows : null, gridColumns, { scope: 'channel', mapping: true, warningsId: 'channel-warnings', mappingRun: data?.meta.mapping ?? null });
+    useLanguageChips(data && !orderPending ? scopeRows : null, gridColumns);
+    useSheetChips(data && !orderPending ? scopeRows : null, gridColumns, { scope: 'channel', mapping: true, warningsId: 'channel-warnings', mappingRun: data?.meta.mapping ?? null });
     const { activeId, active, setActive } = useViewChips();
     const visibleRows = useMemo(() => active ? filterProductSheetRows(scopeRows, row => (active.cells.byRow[productSheetRowKey(row)]?.length ?? 0) > 0) : scopeRows, [scopeRows, active]);
     /* Add rows — the empty rows after the rows on screen: a variation under the listing shown, a listing as a band of its own. */
@@ -1268,7 +1282,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const noAccount = !accountId && !data?.scope.connectionId && accounts.length === 0;
     return {
         scope: 'channel',
-        loading, switching, unavailable: unavailable,
+        loading: loading, switching, unavailable: unavailable,
         errorLabel: `${channelLabel(channel)} · ${marketplace} information`,
         errorMessage: error,
         backendMissing: backendMissing, retry: reload,
@@ -1389,7 +1403,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerStart: <NewRowsControl {...newRows.control}/>, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the Shared product — every channel sees those edits`}>
               {crossChannelCols} of {data.columns.length} columns write the Shared product — every channel sees those edits
             </span>)}</>,
-        notice: <>{startsDraftHere && <Banner tone={noAccount ? 'warning' : 'info'} title={noAccount ? noAccountTitle(channel) : notListedTitle(channel, marketplace)}>{noAccount ? connectAccountSentence(channel, marketplace) : draftStartSentence(channel, 'edit')}</Banner>}
+        notice: <><FamilyOrderNotice error={familyOrder.error} onRetry={familyOrder.reload}/>{startsDraftHere && <Banner tone={noAccount ? 'warning' : 'info'} title={noAccount ? noAccountTitle(channel) : notListedTitle(channel, marketplace)}>{noAccount ? connectAccountSentence(channel, marketplace) : draftStartSentence(channel, 'edit')}</Banner>}
             {fieldsBanner}
             {problem && <Banner tone="warning" onDismiss={clearProblem}>{problem}</Banner>}
             {/* 2026-09-24 — never a silent short sheet: while the store's field list is not available, say so. The sheet reloads
@@ -1464,7 +1478,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             {control.element}
             {reloadConfirm.element}</>, afterPreferences: <>
     {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: selectedAlias ?? selected[0]?.aliasId ?? '' }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}
-    {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><SheetTransfer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
+    {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><SheetTransfer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); familyOrder.reload(); }}/>
         {mediaEditor.element}
         {shopifyEditor.element}
         {/* "Publish this listing…" (a band's ⋯): the studio's own Publish window, only this listing ticked. */}

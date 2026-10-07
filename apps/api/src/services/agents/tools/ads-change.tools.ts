@@ -34,6 +34,12 @@
  * AA-W2-9 — suppress-campaign, restore-campaign, set-campaign-live-writes (on: only a campaign Claude created; off: a
  * brake) and undo-ad-change are strategy-bound too, each on the same terms.
  *
+ * THE OWNER'S CODE RULE (ads-code-rule.ts, 2026-10-07) — two big doors live here: set-campaign-live-writes on (the
+ * allowlist), and restore-campaign of a campaign born at the floor (with the allowlist, the builders' go-live: a new
+ * structure starts spending). A person approves each only with their authenticator code (stepUp); by the business's rule
+ * only inside the tool's own limits, as before. A restore after a later stop (suppress-campaign, a person's no-pause stop)
+ * is day-to-day: no code. The other tools here move day-to-day levers: listed, warned past his own limits, no code.
+ *
  * ADS AUTONOMY W3-1 — set-campaign-budget, bulk-ad-bid-change (per row) and suppress-campaign take an optional `source`
  * (ads-change-source.ts): the engine recommendation the change carries out, kept in the preview and on the ads audit
  * rows, and settled once the write ran. W4-9 — set-campaign-budget, set-placement-multipliers and bulk-ad-bid-change
@@ -68,6 +74,8 @@ import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } fr
 import { heldSources, recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource, type AdChangeSource, type SourceFact } from './ads-change-source.js'
 import { afterUndone } from '../change-record.service.js'
 import { pausesNoClaudeMade } from './ads-status.tools.js'
+import { codeGate, needsCode } from './ads-code-rule.js'
+import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { alsoChangedByOf, budgetEnginesOf } from './ads-budget-kit.js'
 import { floorOriginsOf, floorUntilWords, ownFloorRaiseRefusal } from './ads-ad-groups.tools.js'
 import { ownFloorsOf } from '../../advertising/ad-group-lookup.service.js'
@@ -1642,6 +1650,36 @@ const suppressCampaign: AgentTool = {
   },
 }
 
+/** How a big door here is approved, in one sentence (its stepUp). */
+const BIG_DOOR_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked '
+  + 'confirms it in Claude with theirs. By the business\'s rule only inside this tool\'s own limits (none by default), which are loosened only with that code.'
+
+/** A builder floors a campaign it makes right after it exists: a suppression this close to the row's birth is that one. */
+const BORN_WINDOW_MS = 10 * 60_000
+
+/**
+ * Was this campaign born at the floor and never restored since — made by a Claude request or builder (create-ad-campaign,
+ * the SP Super Wizard's launch, an AI goal, a Replicate copy: createdByClaudeRequest), its bids at the floor since the
+ * moment it was made (a restore clears the mark, a later stop sets a new one)? Its time; null when not.
+ */
+async function bornAtFloorSince(campaignId: string, suppressedAt: Date | null): Promise<Date | null> {
+  if (!suppressedAt) return null
+  const row = await prisma.campaign.findFirst({ where: { id: campaignId }, select: { createdAt: true } })
+  if (!row || Math.abs(suppressedAt.getTime() - row.createdAt.getTime()) > BORN_WINDOW_MS) return null
+  return (await createdByClaudeRequest(campaignId)) ? suppressedAt : null
+}
+
+/**
+ * restore-campaign's code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) — giving a campaign born at
+ * the floor its planned bids starts a new structure spending (with the allowlist, the builders' go-live): a big door, the
+ * approver's authenticator code. A restore after a later stop (suppress-campaign, a person's no-pause stop) is
+ * day-to-day: no code.
+ */
+function restoreStepUp(born: Date | null, name: string): { stepUp?: StepUp } {
+  if (!born || !needsCode('restore-campaign: born at the floor')) return {}
+  return { stepUp: { what: `gives ${name}, born at the floor, its planned bids (a new campaign starts spending)`, raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW } }
+}
+
 async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolContext, 'approvalId'>): Promise<ToolResult> {
   const campaignId = String(args.campaignId ?? '')
   const campaign = await campaignForChange(campaignId)
@@ -1689,6 +1727,8 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
     writes: [{ ...intent, label: `campaign "${campaign.name}"` }],
     approvalId: ctx?.approvalId,
   })
+  const born = await bornAtFloorSince(campaign.id, campaign.bidsSuppressedAt)
+  const code = restoreStepUp(born, campaign.name)
   return {
     ok: true,
     preview: {
@@ -1710,8 +1750,10 @@ async function restorePreview(args: Record<string, unknown>, ctx?: Pick<ToolCont
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...(groups.ownFloors ? { staysFloored: { adGroups: groups.ownFloors, floors: stays.slice(0, LINES_SHOWN) } } : {}),
+      ...(born ? { bornAtFloor: { since: born.toISOString() } } : {}),
+      ...code,
       ...rule,
-      effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}${held.length ? `; ${held.length} at a bid limit instead of the bid it had (each line says which)` : ''}. The campaign serves again.${stays.length ? ` ${stays.length} ad group${stays.length === 1 ? ' stays' : 's stay'} at ${stays.length === 1 ? 'its' : 'their'} own floor: ${stays.slice(0, 3).map((g) => `"${g.name}" ${g.until}`).join('; ')}${stays.length > 3 ? `; and ${stays.length - 3} more (staysFloored)` : ''}.` : ''}`,
+      effect: `Puts back the bids ${campaign.name} had before it was suppressed: ${remembered.length} target${remembered.length === 1 ? '' : 's'} and ${groups.remembered} ad group default${groups.remembered === 1 ? '' : 's'}${highest ? `, the highest ${amountLabel(highest, currency)}` : ''}${held.length ? `; ${held.length} at a bid limit instead of the bid it had (each line says which)` : ''}. The campaign serves again.${stays.length ? ` ${stays.length} ad group${stays.length === 1 ? ' stays' : 's stay'} at ${stays.length === 1 ? 'its' : 'their'} own floor: ${stays.slice(0, 3).map((g) => `"${g.name}" ${g.until}`).join('; ')}${stays.length > 3 ? `; and ${stays.length - 3} more (staysFloored)` : ''}.` : ''}${born ? ` It was born at the floor and has not spent at its planned bids yet: a new campaign starts spending${code.stepUp ? ', so approving it needs the approver\'s authenticator code' : ''}.` : ''}`,
     },
   }
 }
@@ -1760,7 +1802,9 @@ const restoreCampaign: AgentTool = {
   description:
     'Put back the bids an Amazon Sponsored Products campaign had before it was suppressed (the no-pause stop), so it '
     + 'serves again. Only a suppression a person set is lifted here — never one an engine set (dayparting, the retail '
-    + 'guard, budget enforcement own theirs). Nothing changes until it is approved; spend resumes. '
+    + 'guard, budget enforcement own theirs). Nothing changes until it is approved; spend resumes. A campaign born at the '
+    + 'floor (made by create-ad-campaign or a builder, never restored since) starts spending with it: a big door (the '
+    + 'Owner\'s code rule), so a person approves it with their authenticator code; a restore after a later stop needs none. '
     + `${BY_RULE_WORDS}: no bid put back above the highest its limits allow (0 by default: every restore waits for a `
     + 'person), within the market\'s daily budget increase by rule (its daily budget spends again) and keeping the '
     + 'month\'s spend forecast under its monthly cap. The preview lists the bids it restores in the campaign\'s currency, '
@@ -1772,6 +1816,9 @@ const restoreCampaign: AgentTool = {
     const fresh = await restorePreview(args, ctx)
     const refusal = recheck(ctx, fresh, ['suppressedBy', 'basis', 'reach'])
     if (refusal) return notRun(refusal)
+    // The code, as restoreStepUp decided it on this fresh dry run: a campaign born at the floor goes live only with it.
+    const gate = await codeGate(ctx, fresh.preview)
+    if ('refusal' in gate) return notRun(gate.refusal)
     const p = fresh.preview as { campaign: { id: string }; suppressedBy: string | null; reach: StoredReach; effect: string }
     const run = approvedRun(ctx, String(args.why ?? '') || 'restore after a no-pause stop')
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
@@ -1865,11 +1912,22 @@ async function liveWritesPreview(args: Record<string, unknown>, ctx?: Pick<ToolC
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...facts,
+      ...liveWritesStepUp(enabled, campaign.name),
       effect: enabled
-        ? `Puts ${campaign.name} on the live-write allowlist: approved changes${bound.automations.length ? ' and its rules and schedules' : ''} may then write its bids, budget and placements at Amazon${connectionLive ? '' : ' — once Amazon ads writes are live and its market\'s connection allows writes (today they would not reach Amazon)'}.`
+        ? `Puts ${campaign.name} on the live-write allowlist: approved changes${bound.automations.length ? ' and its rules and schedules' : ''} may then write its bids, budget and placements at Amazon${connectionLive ? '' : ' — once Amazon ads writes are live and its market\'s connection allows writes (today they would not reach Amazon)'}.${liveWritesStepUp(enabled, campaign.name).stepUp ? ' A new structure going live: approving it needs the approver\'s authenticator code.' : ''}`
         : `Takes ${campaign.name} off the live-write allowlist: no write reaches Amazon for it any more (bids already sent stay where they are; nothing is paused).`,
     },
   }
+}
+
+/**
+ * set-campaign-live-writes' code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) makes putting a campaign
+ * ON the allowlist a big door — the writes it lets through start a structure spending — so a person approves it with the
+ * approver's authenticator code; taking one off is a brake (no code).
+ */
+function liveWritesStepUp(enabled: boolean, name: string): { stepUp?: StepUp } {
+  if (!enabled || !needsCode('set-campaign-live-writes: on')) return {}
+  return { stepUp: { what: `puts ${name} on the live-write allowlist (its approved changes, rules and schedules may then write at Amazon)`, raises: ['Live writes'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW } }
 }
 
 /**
@@ -1935,7 +1993,9 @@ const setCampaignLiveWrites: AgentTool = {
     + 'write from an approved ad change, a rule or a schedule (d2); a person\'s own edit on the Nexus screens passes it. '
     + 'A campaign launched from the Nexus screens (the campaign wizards, a blueprint, an AI goal) is put on it the moment '
     + 'it exists; one made by create-ad-campaign or found by a sync starts off it. It is a Nexus switch and sends nothing '
-    + `to Amazon itself. Nothing changes until it is approved. ${BY_RULE_WORDS}: taking a campaign off (a brake) at any `
+    + 'to Amazon itself. Putting a campaign ON is a big door (the Owner\'s code rule: a new structure going live): a person '
+    + 'approves it with their authenticator code; taking one off needs none. '
+    + `Nothing changes until it is approved. ${BY_RULE_WORDS}: taking a campaign off (a brake) at any `
     + 'limit; putting one on only for a campaign a Claude request created in this business, at most as many a day as its '
     + 'limits allow (0 by default: each waits for a person), and never one a rule or schedule also moves. The preview '
     + 'says whether its market\'s connection would let writes through today, which rules may then write to it, and who '
@@ -1949,6 +2009,10 @@ const setCampaignLiveWrites: AgentTool = {
     const p = fresh.preview as { campaign: { id: string }; liveWrites: { from: boolean; to: boolean }; effect: string }
     const approved = (ctx.approvedPreview as { liveWrites?: { from?: unknown } } | undefined)?.liveWrites
     if (approved && approved.from !== p.liveWrites.from) return notRun('Not run: the allowlist setting changed since it was approved. Nothing changed.')
+    // The code, as liveWritesStepUp decided it on this fresh dry run: ON is a big door (the Owner's code rule). A request
+    // approved before the rule, without the code, is refused here: ask for it again.
+    const gate = await codeGate(ctx, fresh.preview)
+    if ('refusal' in gate) return notRun(gate.refusal)
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const out = await setLiveWrites(p.campaign.id, p.liveWrites.to, `${run.actor} (${run.reason})`)

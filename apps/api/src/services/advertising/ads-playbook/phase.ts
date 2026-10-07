@@ -461,10 +461,12 @@ export interface PhaseRun {
   changeSetId: string
   manual: boolean
   /** The writer of the strategy row and the playbook version. */
-  writer: Omit<StrategyWriter, 'stepUpAt' | 'raiseByRule'> & Omit<PlaybookApplyWriter, 'stepUpAt'>
+  writer: Omit<StrategyWriter, 'stepUpAt' | 'raiseByRule' | 'raiseWithoutCode'> & Omit<PlaybookApplyWriter, 'stepUpAt'>
   /** A raise: when its code was confirmed, or the sentence of the rule that let it run without one. */
   stepUpAt?: Date | null
   raiseByRule?: string | null
+  /** A raise a person approved where the Owner's code rule asks no code (StrategyWriter.raiseWithoutCode). */
+  raiseWithoutCode?: string | null
 }
 
 export interface PhaseOutcome {
@@ -487,7 +489,7 @@ export async function runPhase(plan: PhasePlan, run: PhaseRun): Promise<PhaseOut
     import('../ads-strategy/write.js'), import('../ads-bid-suppression.service.js'), import('./rank.js'), import('./harvest-rule.js'), import('./write.js'), import('./held.js'),
   ])
   const raise = plan.strategy.direction === 'raise'
-  const wrote = await applyStrategyPlan(plan.strategy, { ...run.writer, stepUpAt: raise ? run.stepUpAt ?? null : null, raiseByRule: raise ? run.raiseByRule ?? null : null })
+  const wrote = await applyStrategyPlan(plan.strategy, { ...run.writer, stepUpAt: raise ? run.stepUpAt ?? null : null, raiseByRule: raise ? run.raiseByRule ?? null : null, raiseWithoutCode: raise ? run.raiseWithoutCode ?? null : null })
   if ('error' in wrote) return { error: wrote.error }
   const out: PhaseOutcome = {
     strategy: { strategyId: wrote.strategyId, version: wrote.version, direction: wrote.direction },

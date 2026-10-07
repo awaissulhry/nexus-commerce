@@ -16,8 +16,9 @@
  *                ads-mutation.service.ts). W4-2 (Owner 2026-10-07) — asked with `includePeoplesPauses`, also one a person
  *                paused, in Nexus or at Amazon (Seller Central, or before Nexus kept a record), or a writer Nexus did not
  *                record, or a Nexus rule that is off or deleted now (lead decision 2026-10-07): the preview says who paused
- *                it and when, marks it `needsCode` and carries `stepUp`, so only a person approving with their
- *                authenticator code lifts it — never the business's rule, whatever its level and limits. A pause of a rule
+ *                it and when, marks it `needsCode` and carries `stepUp` (a big door of the Owner's code rule,
+ *                ads-code-rule.ts), so only a person approving with their authenticator code lifts it — never the
+ *                business's rule, whatever its level and limits (that holds whatever the code table says). A pause of a rule
  *                still on stays refused (it would pause the ad again): the refusal names the rule to switch off first; an
  *                engine's that is no rule too. undo-ad-change sends such a pause here (ads-change.tools.ts). An archived ad
  *                cannot be enabled (Amazon's rule). Spend resumes, so a halt stops it. Undo: pause-ads.
@@ -41,7 +42,8 @@ import { amountLabel, campaignCurrency, checkLiveReach, type LiveReach } from '.
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import type { AdWrite } from '@nexus/shared/ads-ad-product'
 import { adKitLimits, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
-import { STEP_UP_NEEDS, stepUpApproval, stepUpOf } from '../step-up-approval.js'
+import { STEP_UP_NEEDS, stepUpOf } from '../step-up-approval.js'
+import { codeGate, needsCode as doorNeedsCode } from './ads-code-rule.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { resolveAutonomy } from '../../advertising/ads-autonomy.js'
 import { STATUS_CAMPAIGN_SELECT, adGroupStatuses, adGroupsForStatus, externalStatusChanges, highestServingBids, servingUnder } from '../../advertising/ads-status-lookup.service.js'
@@ -469,7 +471,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
     const blockedWords = blocked.length ? ` Not switched back on, even with includePeoplesPauses — ${named(blocked.map((ad) => `${ad.label}: ${ruleStopWords(whoPaused(ad) as RulePause)}`))}.` : ''
     if (include) return refuse(`Not queued: ${said(blocked)}.${blockedWords}`)
     return refuse(`Not queued: enable-ads switches back on only what a Claude request paused (pause-ads)${coded.length ? ', unless asked with includePeoplesPauses: true' : ''}. ${said(notClaude)}.`
-      + (coded.length ? ' To switch back on a pause no Claude request made, ask again with includePeoplesPauses: true: a person then approves it in Nexus with their authenticator code, and it never runs by rule.' : '')
+      + (coded.length ? ` To switch back on a pause no Claude request made, ask again with includePeoplesPauses: true: a person then approves it in Nexus${doorNeedsCode('enable-ads: includePeoplesPauses') ? ' with their authenticator code' : ''}, and it never runs by rule.` : '')
       + blockedWords)
   }
   const needsCode = (ad: Ad) => kind === 'enable' && liftOf(whoPaused(ad)) === 'code'
@@ -525,7 +527,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
       + (already.length ? ` ${plural(already.length, ['ad', 'ads'])} already paused ${already.length === 1 ? 'is' : 'are'} left as ${already.length === 1 ? 'it is' : 'they are'}.` : '')
     : `Switches ${plural(changing.length, ['ad', 'ads'])} back on at Amazon${coded.length ? '' : ' that a Claude request paused'} (${countWords}): ${named(changing.map((ad) => ad.label))}.`
       // W4-2 — who paused the ones no Claude request paused, and what approving them takes.
-      + (coded.length ? ` Not paused by a Claude request (${coded.length} of ${changing.length}): ${named(coded.map((ad) => `${ad.label}: ${pausedByWords(whoPaused(ad))}`))}. Approving it needs the approver's authenticator code; it never runs by rule.` : '')
+      + (coded.length ? ` Not paused by a Claude request (${coded.length} of ${changing.length}): ${named(coded.map((ad) => `${ad.label}: ${pausedByWords(whoPaused(ad))}`))}. ${doorNeedsCode('enable-ads: includePeoplesPauses') ? 'Approving it needs the approver\'s authenticator code; it' : 'A person approves it; it'} never runs by rule.` : '')
       + ' Spend resumes'
       + (budgetWords ? `: ${budgetWords} of daily budget` : '')
       + (highest ? `${budgetWords ? ',' : ':'} the highest bid serving again ${amountLabel(highest.cents, highest.currency)}` : '')
@@ -578,7 +580,9 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
             raises: changing.map((ad) => ad.label),
             whoPaused: Object.fromEntries(changing.map((ad) => [`${ad.level}:${ad.id}`, pausedFacts(whoPaused(ad))])),
             needsCode: coded.length,
-            ...(coded.length ? { stepUp: { what: `switches back on ${notClaudes(coded.length)}`, raises: ['Spend'], needs: STEP_UP_NEEDS, how: PEOPLES_HOW } } : {}),
+            // The Owner's code rule (ads-code-rule.ts): lifting someone else's pause is a big door. `needsCode` (the
+            // count) keeps it from ever running by rule, whatever the table says.
+            ...(coded.length && doorNeedsCode('enable-ads: includePeoplesPauses') ? { stepUp: { what: `switches back on ${notClaudes(coded.length)}`, raises: ['Spend'], needs: STEP_UP_NEEDS, how: PEOPLES_HOW } } : {}),
           }
           : {}),
         basis,
@@ -589,7 +593,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
           : kind === 'pause'
           ? 'A real pause: a paused ad serves again only about an hour after enable-ads switches it on. To stop it for a while, lower its bids instead (suppress-campaign): it serves again about a minute after they go back.'
           : 'Spend resumes: these ads compete in auctions again with the bids and budgets shown.'
-            + (coded.length ? ` ${coded.length === changing.length ? (coded.length === 1 ? 'No Claude request paused it' : 'No Claude request paused them') : `${coded.length} of them no Claude request paused`} (each line says who did): approving needs the approver's authenticator code.` : ''),
+            + (coded.length ? ` ${coded.length === changing.length ? (coded.length === 1 ? 'No Claude request paused it' : 'No Claude request paused them') : `${coded.length} of them no Claude request paused`} (each line says who did): ${doorNeedsCode('enable-ads: includePeoplesPauses') ? 'approving needs the approver\'s authenticator code' : 'a person approves it, never a rule'}.` : ''),
         ...ruleFacts,
         effect,
       },
@@ -764,16 +768,14 @@ async function runApproved(kind: Kind, args: Record<string, unknown>, ctx: ToolC
     || (kind === 'pause' ? 'a real pause' : kind === 'archive' ? 'archived for good' : coded ? 'switching back on what no Claude request paused, approved with the approver\'s authenticator code' : 'switching back on what Claude paused')
   const run = approvedRun(ctx, said)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-  // W4-2 — a pause no Claude request made is lifted only by a person approving with their code: never by rule
-  // (withinLimits refuses it, so the rule cannot schedule it; this is the last door), never by a plain approve.
+  // W4-2 — a pause no Claude request made is lifted only by a person: never by rule (withinLimits refuses it, so the rule
+  // cannot schedule it; this is the last door), and with their code as the fresh dry run's stepUp asks it (the Owner's
+  // code rule: a big door), never by a plain approve.
   if (coded) {
     const ads = notClaudes(coded)
-    if (ctx.decidedVia === 'auto') return notRun(`Not run: it switches back on ${ads}, which needs a person's authenticator code, never a rule. Ask for it again; a person approves it.`)
-    const code = await stepUpApproval(ctx)
-    if ('refusal' in code) {
-      return notRun(code.refusal.replace('it raises, and a raise runs', `it switches back on ${ads}, and that runs`)
-        .replace('it raises, and', `it switches back on ${ads}, and`).replace('which a raise needs', 'which that needs'))
-    }
+    if (ctx.decidedVia === 'auto') return notRun(`Not run: it switches back on ${ads}, which ${doorNeedsCode('enable-ads: includePeoplesPauses') ? 'needs a person\'s authenticator code' : 'a person decides'}, never a rule. Ask for it again; a person approves it.`)
+    const gate = await codeGate(ctx, fresh.preview)
+    if ('refusal' in gate) return notRun(gate.refusal)
   }
   const { to } = MOVE[kind]
   // A pause or an archive carries `letsGo`: it lets go of spend, so a halt does not hold it at Amazon's door either

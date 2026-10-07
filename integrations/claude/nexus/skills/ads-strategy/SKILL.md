@@ -32,7 +32,7 @@ eBay, per market (the strategy covers Amazon only in this release):
 8. `list-automations` (`area: "ebay-ads"`): E1 rules and `caps.spendCeilings` (monthly cap, kill switch); `levelReason` names the eBay dial when it holds rules back.
 9. `ebay-ad-details` (`view`: `listings`, `ad-groups` or `keywords`; `market`, `campaignId`): each promoted listing's ad rate and break-even rate, a Priority campaign's ad groups, its keywords and bids.
 
-Not readable by any tool — write "not readable", never guess: a campaign's max bid change % and CPC ceiling, its budget baseline, which campaigns a rule reaches (A1 rows give only the count, `reach`); eBay campaign policy rate/bid caps and floors, eBay search terms.
+Not readable by any tool — write "not readable", never guess: a campaign's max bid change % and CPC ceiling, which campaigns a rule reaches (A1 rows give only the count, `reach`); eBay campaign policy rate/bid caps and floors, eBay search terms. Budget baselines, monthly budget plans, budget schedules and pools are in `ad-budgets`; hourly bid plans in `ad-hourly-plans`; portfolios in `ad-portfolios`.
 
 ## 2. Show one table per market
 
@@ -44,7 +44,9 @@ The goal in the person's words (for example launch, grow, profit, clear stock, d
 
 ## 4. What Claude may do alone
 
-The strategy's `claudeAutonomy` holds a level per kind of ad action — `bid`, `negative`, `harvest`, `placement`, `budget`, `target`, `suggestion`, `stop`, `restore`, `create`, `rule`, `undo`, `pause`, `enable`, `archive` — each `off`, `ask`, `confirm` or `auto`. `stop` is the temporary stop with low bids (`suppress-campaign`); `pause` is a real pause (`pause-ads`) and `enable` switches back on what a Claude request paused (`enable-ads`); `archive` (`archive-ads`) is for good: Amazon cannot switch an archived ad on again, so advise keeping it at `ask`. `create` makes a campaign that is born at the floor and off the allowlist; switching it on is `set-campaign-live-writes` and starting it is `restore`, each its own kind.
+The strategy's `claudeAutonomy` holds a level per kind of ad action — `bid`, `negative`, `harvest`, `placement`, `budget`, `target`, `suggestion`, `stop`, `restore`, `create`, `rule`, `undo`, `allowlist`, `automation`, `pause`, `enable`, `archive`, `phase`, `settings`, `portfolio`, `hourly`, `targeting`, `retire` — each `off`, `ask`, `confirm`, `watch` or `auto`. `stop` is the temporary stop with low bids (`suppress-campaign`, `set-ad-group` `op: "stop"`); `pause` is a real pause (`pause-ads`); `enable` switches back on what a Claude request paused (`enable-ads`) — with `includePeoplesPauses` also what a person, Seller Central or a rule now off paused, which always needs the approver's authenticator code and never runs by rule; `archive` (`archive-ads`) is for good: Amazon cannot switch an archived ad on again, so advise keeping it at `ask`. `create` makes a campaign (born at the floor and off the allowlist) or an ad group (`create-ad-group`, born at the floor), or adds product ads (`add-product-ads`); switching a campaign on is `allowlist` (`set-campaign-live-writes`) and starting it is `restore`, each its own kind.
+
+The other kinds: `negative` includes the list form (`add-negative-targets`); `harvest` includes `harvest-search-term` and `set-harvest-destination`; `budget` includes the month's budget plan, budget schedules, budget pools and baselines (`set-monthly-ad-budget`, `set-budget-schedule`, `set-budget-pool`, `restore-budget-baselines`); `automation` is an automation moved up or tuned, the campaigns a rule acts on, a coverage set and an engine's Run now (`turn-up-automation`, `tune-ad-engine`, `assign-ad-rules`, `set-coverage-set`, `run-ad-engine-now`); `settings` is a campaign's name, portfolio, end date and bidding strategy (`set-campaign-settings`); `portfolio` is a portfolio made, renamed, capped or archived (`set-portfolio`; an archive is the `archive` kind too); `hourly` is the hourly bid plans (`set-hourly-bid-plan`; a plan a person made changes by rule only where the business allowed it); `targeting` is keywords and product or category targets added to an ad group (`add-ad-targets`); `retire` is negatives lifted (`retire-negatives`); `phase` is a playbook's phase switch (`apply-ads-playbook` `op: "phase"`).
 
 - It only narrows the level the business set for each tool (Nexus, Settings › AI › Claude): a change Claude asks for is held to the lower of the two where it lands. It never widens it.
 - Brakes are never narrowed: `stop-automation`, `turn-down-automation`, a guardrail.
@@ -84,9 +86,14 @@ What reads which target: Nexus's bid optimiser (auto-bid, autopilot plans and `b
 | Market bid policy (an older bound; it keeps binding beside the strategy's bid limits, the stricter wins) | `set-ad-guardrail` (`kind: "bid-policy"`, `grain: "MARKET"`, `scopeId`, `minBidCents`, `maxBidCents`) |
 | Protect a brand term from negation | `set-ad-guardrail` (`kind: "protected-term"`, `op: "set"`, `term`, `matchType` EXACT · PREFIX · CONTAINS, optional `marketplace`) |
 | One campaign's own guardrails (they only narrow the strategy: where both set a number, the stricter binds) | `set-ad-guardrail` with `campaignId` and `kind` `campaign-bid-bounds` (`minBidCents`/`maxBidCents`), `campaign-budget-bounds` (`minBudgetCents`/`maxBudgetCents`/`budgetBaselineCents`), `bid-change-cap` (`maxBidChangePct`), `cpc-ceiling` (`cpcMultiple`, `enabled`) or `pin` (`pinBids`/`pinBudget`/`pinPlacement`); `null` clears a value, `op: "remove"` clears the kind. Nexus only. Loosening (a pin set or lifted too) waits for a person; by rule only in the markets or campaigns the business lists |
-| Daily budgets | `set-campaign-budget` (`campaignId`, `dailyBudgetCents`) — every change waits for a person |
+| Daily budgets | `set-campaign-budget` (`campaignId`, `dailyBudgetCents`, or `campaigns`, a list) — it waits for a person unless the business lets it run by its rule; `restore-budget-baselines` puts budgets back to a captured baseline |
+| A market's budget plan for a month (Budget Manager: budget, Auto Pacing, Stop Over Spend, the calendar, each campaign's lowest and highest daily budget) | `set-monthly-ad-budget` (`market`, `month`). Nexus only: the budget engine acts on it. The strategy's own monthly cap binds beside it |
+| A budget schedule or a budget pool (create, change, delete; a pool's campaigns; a rebalance now) | `set-budget-schedule`, `set-budget-pool`. Switching a pool on, off or live is `turn-up-automation` / `turn-down-automation` |
+| Portfolios, and the campaigns in them | `set-portfolio` (create, rename, budget cap; archive is for good), `set-campaign-settings` (into or out of a portfolio, name, end date, bidding strategy) |
+| An hourly bid plan | `set-hourly-bid-plan` (the plans are the Owner's: only when the person asks) |
+| Which campaigns a rule acts on; where harvested terms land | `assign-ad-rules`; `set-harvest-destination` |
 | Harvest policy for a market (an older setting; it keeps binding beside the strategy's harvest thresholds, the stricter wins) | `tune-ad-engine` (`setting: "harvest-policy"`, `harvestPolicy: { scopeGrain: "market", scopeId, minOrders, minClicks, maxAcosPct, windowDays }`) |
-| Budget pool, budget schedule windows, breaker | `tune-ad-engine` (`budget-pool` / `budget-schedule` with `subjectId` of an existing one — a schedule's windows are replaced whole; `breaker`) |
+| A budget pool's or schedule's values, breaker | `tune-ad-engine` (`budget-pool` / `budget-schedule` with `subjectId` of an existing one — a schedule's windows are replaced whole; `breaker`) |
 | A market's rule | `save-ad-rule` (`scope: { marketplace: "IT" }`; eBay `"EBAY_IT"`), born OBSERVE (eBay: OFF); levels and previews in `automation-review` |
 | Automation level, dial, engine switch | `turn-up-automation` / `turn-down-automation` (A3 dial and engine switches: no `rowId`) |
 | eBay rates, budgets, rule guard rails | `set-ebay-ad-rates`, `set-ebay-campaign-budget`, `tune-ad-engine` (`ebay-campaign-policy`, `subjectId` = eBay campaign, one per step) |
@@ -99,7 +106,7 @@ What reads which target: Nexus's bid optimiser (auto-bid, autopilot plans and `b
 
 - **Live or sandbox** is the server's, not the business's: each change preview says `live` or `sandbox`. An Amazon sandbox preview skips the live checks (halt, connection, markets, allowlist, pins, spend ceiling, daily budget move, value cap): a sandbox yes predicts nothing about live.
 - **Amazon live ad writes only in IT, DE, FR and ES.** Any other Amazon market is refused at the live write gate, with no way round from Claude.
-- **Allowlist:** an Amazon campaign takes a live write (approved change, rule or schedule) only when `liveWrites` is true; putting a campaign on with `set-campaign-live-writes` waits for a person, unless the business lets it run by its rule for a campaign Claude itself created (taking one off is a brake). eBay has no allowlist and no `suppress-campaign` (both Amazon-only).
+- **Allowlist:** an Amazon campaign takes a live write (approved change, rule or schedule) only when `liveWrites` is true; putting a campaign on with `set-campaign-live-writes` is a big door: a person approves it with their authenticator code, or the business's rule runs it inside its limits for a campaign Claude itself created (by default never; taking one off is a brake). eBay has no allowlist and no `suppress-campaign` (both Amazon-only).
 - **Daily budget move:** by default an Amazon campaign's budget may move at most 30 % down or 50 % up (more for very small budgets) from the day's opening value per UTC day, counting every writer; it resets at 00:00 UTC. Plan bigger moves over several days. eBay: 15 budget changes per campaign per day.
 - **Spend ceiling** caps the sum of today's Amazon budget increases, not spend; it never binds bids. One write above the server's value cap is refused.
 - **Dial and halt are business-wide:** Amazon dial OFF or a halt refuses every live Amazon write except a suppression's lowering, approved changes included; SUGGEST keeps every rule proposing. An eBay market at its monthly ceiling (checked by `ads-overview` with `channel: "ebay"` and by the rule run) halts every eBay ad write of the business, lowering included, until a person resumes it.
@@ -110,9 +117,6 @@ What reads which target: Nexus's bid optimiser (auto-bid, autopilot plans and `b
 
 | Setting | Where |
 |---|---|
-| A campaign's own bid bounds, pins, CPC ceiling | Ads › Rules & Automation › Control Room (guardrails) |
-| Which campaigns a budget rule acts on (it reaches none until assigned) | Ads › Rules & Automation › Apply Rules; harvest destinations: Keyword Harvest |
-| Creating budget pools, budget schedules, rank plans, coverage sets; monthly budget plans (A8) | Ads › Rules & Automation |
 | Amazon Ads connection mode and enabling its writes | Nexus's Amazon Ads connection (an operator's step) |
 | eBay dial, kill switch, monthly ceiling (that screen sets the EBAY_IT ceiling only today) | Ads › eBay › Rules & Automation |
 | eBay campaign-level rate and rate strategy, ad groups | Ads › eBay |

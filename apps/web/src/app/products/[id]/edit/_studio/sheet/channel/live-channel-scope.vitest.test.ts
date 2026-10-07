@@ -99,7 +99,8 @@ beforeAll(async () => {
   )
   if (!res.ok) throw new Error(`studio sheet read failed: HTTP ${res.status} ${await res.text()}`)
   page = (await res.json()) as ChannelScopePage
-  rows = orderRows(withRowIdentity(page.rows, page.aliases))
+  /* An empty family rank: this suite checks bands above their children, and the rows then tie on the SKU. */
+  rows = orderRows(withRowIdentity(page.rows, page.aliases), new Map())
 }, 60_000)
 
 /**

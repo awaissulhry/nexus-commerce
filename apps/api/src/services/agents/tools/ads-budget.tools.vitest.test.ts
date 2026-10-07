@@ -4,16 +4,16 @@
  *
  * Proven: set-campaign-budget's list form (many budgets, one request, the same rules, undone as one); restore-budget-
  * baselines (the screen's own restore, as the approver, every write in the approval's change set, undone through
- * set-campaign-budget); set-monthly-ad-budget (the Budget Manager's plan and campaign limits; a raise through the plan
- * needs the approver's code — a plain approve does not run it, the Approvals page asks for the code, with it it runs; a
- * campaign's limits loosened need none, as set-ad-guardrail); set-budget-schedule (create, windows, campaigns, pause and
- * delete with the screen's give-back, the one-schedule rule, the code for a raise through a new lever and none for a
- * window edit or a pause); set-budget-pool (create born off, allocate, a live rebalance in the change set, the code for
- * campaigns joining a live pool); ad-budgets reads them; a change plan carries a step's code; by default nothing runs by
- * rule, and the limits judge the op, the market and a raise.
+ * set-campaign-budget); set-monthly-ad-budget (the Budget Manager's plan and campaign limits); set-budget-schedule
+ * (create, windows, campaigns, pause and delete with the screen's give-back, the one-schedule rule); set-budget-pool
+ * (create born off, allocate, a live rebalance in the change set); ad-budgets reads them. The Owner's code rule A
+ * (2026-10-07): every budget raise is day-to-day — listed in raises (raisesWithoutCode names it), said in the effect,
+ * and a person's plain approve runs it, through the Approvals page too, alone or as a step of a change plan (no code).
+ * By default nothing runs by rule, and the limits judge the op, the market and a raise.
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -51,9 +51,7 @@ import { ruleFrom } from '../claude-trust.service.js'
 import { commitScheduledApproval, decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
 import { queuePlan, runPlan } from '../change-plan.service.js'
 import { budgetRuleRefusal } from './ads-budget-kit.js'
-import { STEP_UP_NEEDS } from '../step-up-approval.js'
-import { __stepUpTest } from '../../../lib/auth/step-up.js'
-import { generateSecret, generateSync } from 'otplib'
+import { generateSecret } from 'otplib'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -74,8 +72,6 @@ async function ask(tool: string, args: Record<string, unknown>) {
 }
 /** A person's plain approve (no authenticator code). */
 const approve = (approvalId: string) => inside(() => decideApproval(approvalId, 'approve', approver)) as Promise<Row>
-/** As the Approvals page records a decision taken with the approver's authenticator code. */
-const withCode = (approvalId: string) => inside(() => database.client.agentApproval.update({ where: { id: approvalId }, data: { decisionVia: 'nexus-step-up' } }))
 const approvalRow = (id: string) => inside(() => database.client.agentApproval.findUniqueOrThrow({ where: { id } }))
 const sql = <T = Row>(text: string, params: unknown[] = []) => inside(async () => (await database.client.$queryRawUnsafe(text, ...params)) as T[])
 const budgetOf = async (id: string) => Math.round(Number((await sql<{ b: string }>('SELECT "dailyBudget"::text AS b FROM "Campaign" WHERE id = $1', [id]))[0]?.b) * 100)
@@ -98,7 +94,6 @@ async function realPerson(label: string): Promise<RealPerson> {
   await client.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   return { id: user.id, secret, principal: { kind: 'user', userId: user.id, label, via: 'app', workspace: business, permissions: { isOwner: false, permissions: EVERYTHING } } }
 }
-const codeOf = (p: RealPerson) => { __stepUpTest.reset(); return generateSync({ secret: p.secret }) }
 
 /** One more SP campaign in IT, with a budget of 20.00. */
 const campaign = (id: string, extra: Record<string, unknown> = {}) => database.client.campaign.create({
@@ -240,6 +235,11 @@ describe('restore-budget-baselines', () => {
       limitFacts: { tool: 'restore-budget-baselines', action: 'budget', this: { items: 2, raises: 1, cuts: 1 } },
     })
     expect((r.preview as Row).stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('restore-budget-baselines'), the card asks for it.
+    __codeRuleTest.flip('restore-budget-baselines')
+    try {
+      expect(((await preview('restore-budget-baselines', { campaignIds: ['c-l1', 'c-l2', 'c-b3'] })).preview as Row).stepUp, 'restore-budget-baselines').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     expect((await preview('restore-budget-baselines', { campaignIds: ['c-b3'] })).error).toMatch(/^Nothing would change: campaign "Test c-b3" \(no baseline captured\)/)
     expect((await preview('restore-budget-baselines', { campaignIds: ['nope'] })).error).toBe('Not queued: campaign nope was not found in this business.')
   })
@@ -258,7 +258,7 @@ describe('restore-budget-baselines', () => {
 describe('set-monthly-ad-budget', () => {
   const month = nextMonth()
 
-  it('a new plan with a cap: a brake, no code; then a bigger budget or Stop Over Spend off needs the code', async () => {
+  it('a new plan with a cap: a brake; then a bigger budget or Stop Over Spend off is a raise, listed and said (no code)', async () => {
     const created = await preview('set-monthly-ad-budget', { market: 'IT', month, monthlyBudgetCents: 50_000, stopOverSpend: true })
     expect(created.ok, created.error).toBe(true)
     expect(created.preview).toMatchObject({
@@ -277,24 +277,27 @@ describe('set-monthly-ad-budget', () => {
     const raise = await preview('set-monthly-ad-budget', { market: 'IT', month, monthlyBudgetCents: 60_000 })
     expect(raise.preview).toMatchObject({
       raises: ['the monthly budget rises from EUR 500.00 to EUR 600.00: Stop Over Spend and Auto Pacing act at the higher cap'],
-      stepUp: { what: `raises spend through the IT budget plan for ${month}`, raises: ['Monthly budget'], needs: STEP_UP_NEEDS, how: expect.stringMatching(/authenticator code/) },
+      raisesWithoutCode: ['the monthly budget rises from EUR 500.00 to EUR 600.00: Stop Over Spend and Auto Pacing act at the higher cap — no code (a day-to-day raise)'],
+      effect: expect.stringMatching(/ It ADDS SPEND \(the monthly budget rises from EUR 500\.00 to EUR 600\.00: .*\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/),
     })
+    expect((raise.preview as Row).stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('set-monthly-ad-budget'), the card asks for it.
+    __codeRuleTest.flip('set-monthly-ad-budget')
+    try {
+      expect(((await preview('set-monthly-ad-budget', { market: 'IT', month, monthlyBudgetCents: 60_000 })).preview as Row).stepUp, 'set-monthly-ad-budget').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     const off = await preview('set-monthly-ad-budget', { market: 'IT', month, stopOverSpend: false })
     expect((off.preview as Row).raises).toEqual(['Stop Over Spend switched off: the engine gives back the bids it floored and floors none at the cap'])
-    expect((off.preview as Row).stepUp).toBeTruthy()
+    expect((off.preview as Row).stepUp).toBeUndefined()
     const cut = await preview('set-monthly-ad-budget', { market: 'IT', month, monthlyBudgetCents: 40_000 })
     expect((cut.preview as Row).raises).toEqual([])
   })
 
-  it('a raise: a plain approve does not run it; the Approvals page asks for the code; with it it runs at commit', async () => {
+  it('a raise is day-to-day: the Approvals page takes a plain approve (no code), and it runs at commit', async () => {
     const asked = await ask('set-monthly-ad-budget', { market: 'IT', month, monthlyBudgetCents: 70_000 })
-    expect(((await approvalRow(asked.approvalId!)).preview as Row).stepUp).toMatchObject({ raises: ['Monthly budget'] })
-    const plain = await approve(asked.approvalId!)
-    expect(plain).toMatchObject({ ok: false })
-    expect(plain.error).toMatch(/^Not run: it raises, and a raise runs only when a person with settings\.security\.manage approved it with their authenticator code/)
-    const decide = (code?: string) => inside(() => decideFleetApproval({ id: asked.approvalId!, decision: 'approve', actor: people.approver.principal, ...(code ? { code } : {}) }))
-    expect(await decide()).toMatchObject({ ok: false, code: 'mfa_required', httpStatus: 403 })
-    expect(await decide(codeOf(people.approver))).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(((await approvalRow(asked.approvalId!)).preview as Row).stepUp).toBeUndefined()
+    const decide = () => inside(() => decideFleetApproval({ id: asked.approvalId!, decision: 'approve', actor: people.approver.principal }))
+    expect(await decide()).toMatchObject({ ok: true, status: 'scheduled' })
     expect(await commitNow(asked.approvalId!)).toMatchObject({ ok: true })
     const [plan] = await sql('SELECT "monthlyBudgetCents" FROM "AdBudgetPlan" WHERE marketplace = $1 AND month = $2', ['IT', month])
     expect(plan.monthlyBudgetCents).toBe(70_000)
@@ -327,17 +330,18 @@ describe('set-monthly-ad-budget', () => {
     expect((await preview('set-monthly-ad-budget', { market: 'IT', month, monthlyBudgetCents: 70_000 })).error).toMatch(/^Nothing would change/)
   })
 
-  it('a change plan carries a step\'s code: no code → mfa_required; with it the step runs', async () => {
+  it('a change plan with a step that raises: the plan carries no code (day-to-day); a plain approve schedules it and both steps run', async () => {
     const queued = await inside(async () => {
       const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
       return queuePlan({ title: 'Test budget plan', steps: [{ tool: 'set-monthly-ad-budget', args: { market: 'IT', month, monthlyBudgetCents: 80_000 } }, { tool: 'set-campaign-budget', args: { campaigns: [{ campaignId: 'c-b3', dailyBudgetCents: 2200 }] } }] }, claude, run.id)
     })
     expect(queued).toMatchObject({ ok: true, mode: 'queued' })
     const planId = queued.approvalId!
-    expect(((await approvalRow(planId)).preview as Row).stepUp).toMatchObject({ raises: ['Monthly budget'], steps: [1] })
-    const decide = (code?: string) => inside(() => decideFleetApproval({ id: planId, decision: 'approve', actor: people.approver.principal, ...(code ? { code } : {}) }))
-    expect(await decide()).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await decide(codeOf(people.approver))).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(((await approvalRow(planId)).preview as Row).stepUp).toBeUndefined()
+    const steps = await inside(() => database.client.agentPlanStep.findMany({ where: { approvalId: planId }, orderBy: { position: 'asc' } })) as Row[]
+    expect(steps[0].preview).toMatchObject({ raises: [expect.stringMatching(/^the monthly budget rises/)], effect: expect.stringMatching(/It ADDS SPEND/) })
+    const decide = () => inside(() => decideFleetApproval({ id: planId, decision: 'approve', actor: people.approver.principal }))
+    expect(await decide()).toMatchObject({ ok: true, status: 'scheduled' })
     expect(await commitNow(planId)).toMatchObject({ ok: true, status: 'executing' })
     expect(await inside(() => runPlan(planId))).toMatchObject({ finished: true, counts: { done: 2 } })
     expect((await sql('SELECT "monthlyBudgetCents" FROM "AdBudgetPlan" WHERE marketplace = $1 AND month = $2', ['IT', month]))[0].monthlyBudgetCents).toBe(80_000)
@@ -349,7 +353,7 @@ describe('set-budget-schedule', () => {
   const window = { day: 1, start: '08:00', end: '12:00', adj: 'incPct', value: 20 }
   let scheduleId = ''
 
-  it('create: a window that can raise a budget needs the code; one that only lowers does not', async () => {
+  it('create: a window that can raise a budget is a raise, listed and said (no code); one that only lowers is not', async () => {
     const lowering = await preview('set-budget-schedule', { op: 'create', name: 'Test lowering', campaignIds: ['c-s1'], windows: [{ ...window, adj: 'decPct' }] })
     expect(lowering.ok, lowering.error).toBe(true)
     expect(lowering.preview).toMatchObject({ op: 'create', raises: [], reach: null, markets: ['IT'], schedule: { from: null, to: { enabled: true, campaigns: 1, windows: ['Mon 08:00–12:00 decPct 20'] } } })
@@ -357,18 +361,23 @@ describe('set-budget-schedule', () => {
     const raising = await preview('set-budget-schedule', { op: 'create', name: 'Test raising', campaignIds: ['c-s1', 'c-s2'], windows: [window] })
     expect(raising.preview).toMatchObject({
       raises: ['window Mon 08:00–12:00 incPct 20 can raise a budget'],
-      stepUp: { what: 'creates the budget schedule "Test raising", which can raise budgets', raises: ['Budgets'] },
+      raisesWithoutCode: ['window Mon 08:00–12:00 incPct 20 can raise a budget — no code (a day-to-day raise)'],
+      effect: expect.stringMatching(/It ADDS SPEND \(window Mon 08:00–12:00 incPct 20 can raise a budget\): a day-to-day change/),
       limitFacts: { tool: 'set-budget-schedule', action: 'budget', this: { items: 2, raises: 2 } },
     })
+    expect((raising.preview as Row).stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('set-budget-schedule'), the card asks for it.
+    __codeRuleTest.flip('set-budget-schedule')
+    try {
+      expect(((await preview('set-budget-schedule', { op: 'create', name: 'Test raising', campaignIds: ['c-s1', 'c-s2'], windows: [window] })).preview as Row).stepUp, 'set-budget-schedule').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     expect((await preview('set-budget-schedule', { op: 'create', name: 'x', campaignIds: ['c-s1'], windows: [{ day: 1, start: '08:00', adj: 'incPct', value: 20 }] })).error).toMatch(/needs both start and end/)
     expect((await preview('set-budget-schedule', { op: 'create', name: 'x', campaignIds: ['c-s1'], windows: [{ day: 1, adj: 'set', value: 0.5 }] })).error).toMatch(/^Not queued: .*Set budget to/)
     expect((await preview('set-budget-schedule', { op: 'create', name: 'x', campaignIds: ['c-sb'], windows: [window] })).error).toMatch(/not a Sponsored Products/)
   })
 
-  it('approved with the code, the screen\'s create runs; a second schedule on the same campaign is refused, naming the first', async () => {
+  it('a plain approve runs the screen\'s create; a second schedule on the same campaign is refused, naming the first', async () => {
     const asked = await ask('set-budget-schedule', { op: 'create', name: 'Test raising', campaignIds: ['c-s1', 'c-s2'], windows: [window] })
-    expect((await approve(asked.approvalId!)).error).toMatch(/^Not run: it raises/)
-    await withCode(asked.approvalId!)
     const ran = await approve(asked.approvalId!)
     expect(ran).toMatchObject({ ok: true, status: 'executed', result: { op: 'create', enabled: true, campaigns: 2, windows: 1 } })
     scheduleId = ran.result.scheduleId
@@ -379,17 +388,18 @@ describe('set-budget-schedule', () => {
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'set-budget-schedule', args: { op: 'delete', scheduleId } } })
   })
 
-  it('update: a window edit is tune-ad-engine\'s lever (listed, no code); campaigns added to a raising schedule need it', async () => {
+  it('update: a window edit is tune-ad-engine\'s lever (listed, no code); campaigns added to a raising schedule are listed too (no code)', async () => {
     const windows = await preview('set-budget-schedule', { op: 'update', scheduleId, windows: [window, { ...window, day: 2 }] })
     expect(windows.preview).toMatchObject({ raises: ['window Tue 08:00–12:00 incPct 20 can raise a budget'], raisesWithoutCode: ['window Tue 08:00–12:00 incPct 20 can raise a budget — no code, as with tune-ad-engine (budget-schedule)'] })
     expect((windows.preview as Row).stepUp).toBeUndefined()
     const added = await preview('set-budget-schedule', { op: 'update', scheduleId, campaignIds: ['c-s1', 'c-s2', 'c-s3'] })
-    expect(added.preview).toMatchObject({ raises: ['campaign "Test c-s3" joins a schedule whose windows can raise its budget'], stepUp: { raises: ['Budgets'] }, campaigns: { added: ['campaign "Test c-s3"'], takenOut: [] } })
+    expect(added.preview).toMatchObject({ raises: ['campaign "Test c-s3" joins a schedule whose windows can raise its budget'], raisesWithoutCode: [expect.stringMatching(/— no code \(a day-to-day raise\)$/)], campaigns: { added: ['campaign "Test c-s3"'], takenOut: [] } })
+    expect((added.preview as Row).stepUp).toBeUndefined()
     expect((await preview('set-budget-schedule', { op: 'update', scheduleId, type: 'budget-multiplier' })).error).toMatch(/A schedule keeps its type/)
     expect((await preview('set-budget-schedule', { op: 'update', scheduleId, name: 'Test raising' })).error).toMatch(/^Nothing would change/)
   })
 
-  it('a pause gives back as the screen (no code); a delete giving a held-down budget back needs the code; the give-back is in the change set', async () => {
+  it('a pause gives back as the screen; a delete giving a held-down budget back is a raise, listed (no code); the give-back is in the change set', async () => {
     // The schedule holds c-s1 lowered: it set 10.00 from a base of 20.00 (its memo), and the campaign sits at it.
     await setBudget('c-s1', 1000)
     await inside(() => database.client.budgetSchedule.update({ where: { id: scheduleId }, data: { lastApplied: { 'c-s1': { budget: 10, ownCents: 1000, baseCents: 2000, at: new Date().toISOString(), state: 'applied' } } } }))
@@ -403,7 +413,8 @@ describe('set-budget-schedule', () => {
     })
     expect((pause.preview as Row).stepUp).toBeUndefined()
     const del = await preview('set-budget-schedule', { op: 'delete', scheduleId })
-    expect(del.preview).toMatchObject({ stepUp: { what: 'deletes the budget schedule "Test raising" and gives budgets back up' } })
+    expect(del.preview).toMatchObject({ raises: ['campaign "Test c-s1": its budget comes back up from EUR 10.00 to EUR 20.00 (the schedule held it lower)'], raisesWithoutCode: [expect.stringMatching(/— no code \(a day-to-day raise\)$/)] })
+    expect((del.preview as Row).stepUp).toBeUndefined()
     const asked = await ask('set-budget-schedule', { op: 'update', scheduleId, enabled: false })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { op: 'update', enabled: false, gaveBack: { restored: 1, kept: 0, refused: 0 } } })
     expect(await budgetOf('c-s1')).toBe(2000)
@@ -412,7 +423,7 @@ describe('set-budget-schedule', () => {
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'set-budget-schedule', args: { op: 'update', scheduleId, enabled: true } } })
   })
 
-  it('dates and time zone of a schedule whose windows raise budgets: a longer run, an earlier start, blackout days removed or a time-zone change is a raise and needs the code', async () => {
+  it('dates and time zone of a schedule whose windows raise budgets: a longer run, an earlier start, blackout days removed or a time-zone change is a raise, listed (no code)', async () => {
     const dated = await inside(() => database.client.budgetSchedule.create({ data: {
       name: 'Test dated', kind: 'BUDGET', type: 'campaign-budget', enabled: true, timezone: 'Europe/Rome',
       campaigns: [{ id: 'c-s5', name: 'Test c-s5', dailyBudget: 20 }], windows: [window],
@@ -421,13 +432,17 @@ describe('set-budget-schedule', () => {
     } }))
     const raiseOf = async (args: Record<string, unknown>) => (await preview('set-budget-schedule', { op: 'update', scheduleId: dated.id, ...args })).preview as Row
     const later = await raiseOf({ endDate: '2027-03-31' })
-    expect(later).toMatchObject({ raises: ['it runs longer: its last day 2027-01-31 → 2027-03-31'], stepUp: { raises: ['Budgets'] }, limitFacts: { this: { raises: 1 } } })
+    expect(later).toMatchObject({ raises: ['it runs longer: its last day 2027-01-31 → 2027-03-31'], raisesWithoutCode: [expect.stringMatching(/— no code \(a day-to-day raise\)$/)], limitFacts: { this: { raises: 1 } } })
     expect((await raiseOf({ endDate: null })).raises).toEqual(['its last day 2027-01-31 goes: it never ends'])
     expect((await raiseOf({ startDate: '2026-09-01' })).raises).toEqual(['it starts earlier: its first day 2026-10-01 → 2026-09-01'])
     expect((await raiseOf({ excludeDates: [] })).raises).toEqual(['the days it did not run, 2026-12-24 to 2026-12-26, are no longer left out: its windows run on them'])
     expect((await raiseOf({ timezone: 'Europe/London' })).raises).toEqual(['its windows move from Europe/Rome to Europe/London time: the hours that raise budgets fall at other times'])
-    for (const args of [{ endDate: '2027-03-31' }, { timezone: 'Europe/London' }]) expect((await raiseOf(args)).stepUp, JSON.stringify(args)).toBeTruthy()
-    // A shorter run lowers nothing it could raise: no raise, no code.
+    for (const args of [{ endDate: '2027-03-31' }, { timezone: 'Europe/London' }]) {
+      const r = await raiseOf(args)
+      expect(r.stepUp, JSON.stringify(args)).toBeUndefined()
+      expect(r.effect, JSON.stringify(args)).toMatch(/It ADDS SPEND/)
+    }
+    // A shorter run lowers nothing it could raise: no raise.
     const shorter = await raiseOf({ endDate: '2026-12-31' })
     expect(shorter.raises).toEqual([])
     expect(shorter.stepUp).toBeUndefined()
@@ -437,17 +452,16 @@ describe('set-budget-schedule', () => {
     await inside(() => database.client.budgetSchedule.delete({ where: { id: dated.id } }))
   })
 
-  it('a schedule asked switched off is made off in one write; its raising windows are still listed and need the code', async () => {
+  it('a schedule asked switched off is made off in one write; its raising windows are still listed (no code)', async () => {
     const args = { op: 'create', name: 'Test made off', campaignIds: ['c-s5'], windows: [window], enabled: false }
     const r = await preview('set-budget-schedule', args)
     expect(r.preview).toMatchObject({
       raises: ['window Mon 08:00–12:00 incPct 20 can raise a budget (once the schedule is switched on)'],
-      stepUp: { raises: ['Budgets'] },
+      raisesWithoutCode: [expect.stringMatching(/— no code \(a day-to-day raise\)$/)],
       schedule: { to: { enabled: false } },
       reachNote: expect.stringMatching(/Switched off, it writes nothing until it is switched on/),
     })
     const asked = await ask('set-budget-schedule', args)
-    await withCode(asked.approvalId!)
     const ran = await approve(asked.approvalId!)
     expect(ran).toMatchObject({ ok: true, status: 'executed', result: { op: 'create', enabled: false } })
     expect((await sql('SELECT enabled FROM "BudgetSchedule" WHERE id = $1', [ran.result.scheduleId]))[0].enabled).toBe(false)
@@ -472,7 +486,7 @@ describe('set-budget-schedule', () => {
 describe('set-budget-pool', () => {
   let poolId = ''
 
-  it('create: born off and in dry run; a campaign joining is a raise (once the pool is live) and needs the code; undo deletes it', async () => {
+  it('create: born off and in dry run; a campaign joining is a raise (once the pool is live), listed (no code); undo deletes it', async () => {
     const args = { op: 'create', name: 'Test pool', totalDailyBudgetCents: 6000, add: [{ campaignId: 'c-p1', targetSharePct: 50 }, { campaignId: 'c-p2', targetSharePct: 50 }] }
     const r = await preview('set-budget-pool', args)
     expect(r.ok, r.error).toBe(true)
@@ -482,15 +496,15 @@ describe('set-budget-pool', () => {
         'campaign "Test c-p1" joins the pool: once the pool is live, its rebalances may raise its budget from EUR 20.00 (no highest budget is set)',
         'campaign "Test c-p2" joins the pool: once the pool is live, its rebalances may raise its budget from EUR 20.00 (no highest budget is set)',
       ],
-      stepUp: { what: 'changes which campaigns the budget pool "Test pool" holds, which can raise spend', raises: ['Budgets'] },
+      raisesWithoutCode: [expect.stringMatching(/— no code \(a day-to-day raise\)$/), expect.stringMatching(/— no code \(a day-to-day raise\)$/)],
+      effect: expect.stringMatching(/It ADDS SPEND \(campaign "Test c-p1" joins the pool/),
       engine: { label: 'Off' },
       reachNote: expect.stringMatching(/It writes nothing at Amazon while it is switched off/),
     })
     expect((await preview('set-budget-pool', { op: 'create', name: 'Test pool UK', totalDailyBudgetCents: 6000, add: [{ campaignId: 'c-uk' }] })).error)
       .toMatch(/^Not queued: campaign "UK exact" budgets in GBP, and the pool in EUR: a rebalance writes the pool's amounts into each campaign, never converted/)
+    expect((r.preview as Row).stepUp).toBeUndefined()
     const asked = await ask('set-budget-pool', args)
-    expect((await approve(asked.approvalId!)).error).toMatch(/^Not run: it raises/)
-    await withCode(asked.approvalId!)
     const ran = await approve(asked.approvalId!)
     expect(ran).toMatchObject({ ok: true, status: 'executed', result: { op: 'create', campaigns: 2 } })
     poolId = ran.result.poolId
@@ -499,7 +513,7 @@ describe('set-budget-pool', () => {
     expect((await preview('set-budget-pool', { op: 'allocate', poolId: poolId, add: [{ campaignId: 'c-p1' }] })).error).toMatch(/is in this pool already/)
   })
 
-  it('a dry-run rebalance is Nexus only; a live pool\'s rebalance raising a budget, and campaigns joining it, need the code', async () => {
+  it('a dry-run rebalance is Nexus only; a live pool\'s rebalance raising a budget, and campaigns joining it, are raises, listed (no code)', async () => {
     await inside(() => database.client.budgetPool.update({ where: { id: poolId }, data: { enabled: true, dryRun: true } }))
     await setBudget('c-p1', 1000)
     await setBudget('c-p2', 5000)
@@ -509,26 +523,27 @@ describe('set-budget-pool', () => {
     await inside(() => database.client.budgetPool.update({ where: { id: poolId }, data: { dryRun: false } }))
     const live = await preview('set-budget-pool', { op: 'rebalance-now', poolId })
     expect(live.preview).toMatchObject({
-      reach: { reach: 'sandbox' }, totals: { writes: 2 }, stepUp: { raises: ['Budgets'] },
+      reach: { reach: 'sandbox' }, totals: { writes: 2 },
       raises: [expect.stringMatching(/^campaign "Test c-p1": EUR 10\.00 → EUR /)],
     })
+    expect((live.preview as Row).stepUp).toBeUndefined()
     const join = await preview('set-budget-pool', { op: 'allocate', poolId, add: [{ campaignId: 'c-p3', maxDailyBudgetCents: 3000 }] })
-    expect(join.preview).toMatchObject({ stepUp: { raises: ['Budgets'] }, raises: ['campaign "Test c-p3" joins a live pool: its next rebalance may raise its budget from EUR 20.00 up to EUR 30.00'] })
+    expect(join.preview).toMatchObject({ raises: ['campaign "Test c-p3" joins a live pool: its next rebalance may raise its budget from EUR 20.00 up to EUR 30.00'] })
+    expect((join.preview as Row).stepUp).toBeUndefined()
     const values = await preview('set-budget-pool', { op: 'update', poolId, totalDailyBudgetCents: 8000 })
     expect(values.preview).toMatchObject({ raises: ['the pool\'s daily budget rises from EUR 60.00 to EUR 80.00'], raisesWithoutCode: ['the pool\'s daily budget rises from EUR 60.00 to EUR 80.00 — no code, as with tune-ad-engine (budget-pool)'] })
     expect((values.preview as Row).stepUp).toBeUndefined()
   })
 
-  it('a live rebalance approved with the code writes each budget in the change set; undo asks set-campaign-budget', async () => {
+  it('a live rebalance approved with a plain approve writes each budget in the change set; undo asks set-campaign-budget', async () => {
     const asked = await ask('set-budget-pool', { op: 'rebalance-now', poolId })
-    await withCode(asked.approvalId!)
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { op: 'rebalance-now' } })
     const logs = await sql(`SELECT "entityId", "userId", "executionId" FROM "AdvertisingActionLog" WHERE "executionId" = $1 ORDER BY "entityId"`, [asked.approvalId])
     expect(logs).toEqual([{ entityId: 'c-p1', userId: 'user:u-approver', executionId: asked.approvalId }, { entityId: 'c-p2', userId: 'user:u-approver', executionId: asked.approvalId }])
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'set-campaign-budget', args: { campaigns: [{ campaignId: 'c-p1', dailyBudgetCents: 1000 }, { campaignId: 'c-p2', dailyBudgetCents: 5000 }] } } })
   })
 
-  it('allocate: a campaign in another pool is refused, naming it; leaving a live pool is a raise with its amount and needs the code; undo reverses it', async () => {
+  it('allocate: a campaign in another pool is refused, naming it; leaving a live pool is a raise with its amount, listed (no code); undo reverses it', async () => {
     const other = await inside(() => database.client.budgetPool.create({ data: { name: 'Test other pool', totalDailyBudgetCents: 1000 } }))
     await inside(() => database.client.budgetPoolAllocation.create({ data: { budgetPoolId: other.id, marketplace: 'IT', campaignId: 'c-p4' } }))
     expect((await preview('set-budget-pool', { op: 'allocate', poolId, add: [{ campaignId: 'c-p4' }] })).error).toMatch(/campaign "Test c-p4" is in the pool "Test other pool"/)
@@ -536,12 +551,16 @@ describe('set-budget-pool', () => {
     const leave = await preview('set-budget-pool', { op: 'allocate', poolId, remove: ['c-p2'] })
     expect(leave.preview).toMatchObject({
       raises: [`campaign "Test c-p2" leaves the pool and keeps its budget of EUR ${(before / 100).toFixed(2)}, while the pool's next rebalance spreads the whole pool over the campaigns left: up to EUR ${(before / 100).toFixed(2)} a day more in all`],
-      stepUp: { raises: ['Budgets'] },
+      raisesWithoutCode: [expect.stringMatching(/— no code \(a day-to-day raise\)$/)],
       limitFacts: { this: { raises: 1 } },
     })
+    expect((leave.preview as Row).stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('set-budget-pool'), the card asks for it.
+    __codeRuleTest.flip('set-budget-pool')
+    try {
+      expect(((await preview('set-budget-pool', { op: 'allocate', poolId, remove: ['c-p2'] })).preview as Row).stepUp, 'set-budget-pool').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     const asked = await ask('set-budget-pool', { op: 'allocate', poolId, remove: ['c-p2'] })
-    expect((await approve(asked.approvalId!)).error).toMatch(/^Not run: it raises/)
-    await withCode(asked.approvalId!)
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { campaigns: 1 } })
     expect(await budgetOf('c-p2')).toBe(before)
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'set-budget-pool', args: { op: 'allocate', poolId, add: [{ campaignId: 'c-p2', targetSharePct: 50, minDailyBudgetCents: 100 }] } } })

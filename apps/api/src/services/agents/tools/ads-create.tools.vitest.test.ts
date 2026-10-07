@@ -6,7 +6,8 @@
  * it lands; refused and not queued without a market spend ceiling ("Set a spend ceiling for this market first"), above
  * it, on a taken name, an unknown SKU, a bid above the budget, or where the gate refuses; approved, the campaign is
  * created ENABLED (never paused), OFF the live-write allowlist and born suppressed — every bid at the 2-cent floor, the
- * planned bid remembered, `bidsSuppressedBy` the person who asked — so restore-campaign puts the planned bids back;
+ * planned bid remembered, `bidsSuppressedBy` the person who asked — so restore-campaign puts the planned bids back, a big
+ * door under the Owner's code rule A (a plain approve is not run; with the approver's code it runs);
  * approval-status counts what it created; a plan or ceiling that moved after approval is not run.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -165,7 +166,16 @@ describe('A11 — approved, it is born safe', () => {
     // The person who asked may have its planned bids put back (a person's suppression), after a person approves it.
     const r = await preview('restore-campaign', { campaignId })
     expect(r.preview).toMatchObject({ suppressedBy: 'user:u-asker', restores: { targets: 2, adGroups: 1 }, effect: expect.stringContaining('the highest EUR 0.90') })
+    // The Owner's code rule A: born at the floor, it starts spending with this restore — a big door, the approver's code.
+    expect(r.preview).toMatchObject({
+      bornAtFloor: { since: expect.any(String) },
+      stepUp: { what: 'gives Italy jackets launch, born at the floor, its planned bids (a new campaign starts spending)', raises: ['Bids', 'Spend'] },
+      effect: expect.stringMatching(/It was born at the floor and has not spent at its planned bids yet: a new campaign starts spending, so approving it needs the approver's authenticator code\.$/),
+    })
     const restore = await ask('restore-campaign', { campaignId })
+    expect(await approve(restore.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: it gives Italy jackets launch, born at the floor, its planned bids \(a new campaign starts spending\), and that runs only when a person with settings\.security\.manage approved it with their authenticator code/) })
+    expect(await sql('SELECT t."bidCents" AS bid FROM "AdTarget" t JOIN "AdGroup" g ON g.id = t."adGroupId" WHERE g."campaignId" = $1 AND NOT t."isNegative" ORDER BY t."expressionValue"', [campaignId])).toEqual([{ bid: 2 }, { bid: 2 }])
+    await inside(() => database.client.agentApproval.update({ where: { id: restore.approvalId! }, data: { decisionVia: 'nexus-step-up' } }))
     expect(await approve(restore.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { restored: 3 } })
     expect(await sql('SELECT t."bidCents" AS bid FROM "AdTarget" t JOIN "AdGroup" g ON g.id = t."adGroupId" WHERE g."campaignId" = $1 AND NOT t."isNegative" ORDER BY t."expressionValue"', [campaignId])).toEqual([{ bid: 60 }, { bid: 90 }])
   })

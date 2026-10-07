@@ -15,6 +15,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { generateSecret, generateSync } from 'otplib'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -202,7 +203,27 @@ describe('PB-3 — a raise needs the approver\u2019s fresh authenticator code', 
     expect(await inside(() => scheduleApproval({ id: answer.approvalId, actor: viewer('owner', EVERYTHING), via: 'nexus' }))).toMatchObject({ ok: true })
     const out = await commit(answer.approvalId)
     expect(out).toMatchObject({ ok: false })
-    expect(out.error).toContain('a raise runs only when a person with settings.security.manage approved it with their authenticator code')
+    expect(out.error).toContain('it raises what an ads playbook may spend, and that runs only when a person with settings.security.manage approved it with their authenticator code')
+    expect((await rowOf()).dailyBudgetCents).toBe(2000)
+  })
+})
+
+describe('PB-3 — the code table (ads-code-rule.ts)', { timeout: TIMEOUT }, () => {
+  it('flipped, a raise asks no code and a plain approve runs it, the version saying so; still never by rule', async () => {
+    __codeRuleTest.flip('set-ads-playbook: adds spend')
+    try {
+      const { answer } = await productRow({ dailyBudgetCents: 2700 })
+      expect(answer.preview).toMatchObject({ direction: 'raise', stepUp: null, noCode: expect.stringMatching(/day-to-day/) })
+      expect(getTool('set-ads-playbook')!.withinLimits!(answer.preview, { allowTemplateEdit: true, markets: [] })).toMatch(/^it raises/)
+      expect(await inside(() => scheduleApproval({ id: answer.approvalId, actor: viewer('owner', EVERYTHING), via: 'nexus' }))).toMatchObject({ ok: true })
+      expect(await commit(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      expect((await rowOf()).dailyBudgetCents).toBe(2700)
+      expect(await versionOf(answer.approvalId)).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringMatching(/without the authenticator code: the Owner's code rule/) })
+    } finally { __codeRuleTest.reset() }
+    // Put back as it was for the tests after this one (a lowering runs on a plain approve).
+    const back = await productRow({ dailyBudgetCents: 2000 })
+    expect(await inside(() => scheduleApproval({ id: back.answer.approvalId, actor: viewer('owner', EVERYTHING), via: 'nexus' }))).toMatchObject({ ok: true })
+    expect(await commit(back.answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
     expect((await rowOf()).dailyBudgetCents).toBe(2000)
   })
 })

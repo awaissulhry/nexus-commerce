@@ -1,15 +1,20 @@
 /**
- * ADS AUTONOMY W1-3 — a request a person approves only with their fresh authenticator code: today a change that raises
- * the ads strategy (set-ads-strategy), alone or as a step of a change plan.
+ * ADS AUTONOMY W1-3 — a request a person approves only with their fresh authenticator code, alone or as a step of a
+ * change plan: the ads "big doors" of the Owner's code rule (tools/ads-code-rule.ts, 2026-10-07) — a strategy raise, a
+ * playbook change or START, a new structure going live, new product ads, someone else's pause lifted.
  *
  *   mark     the tool's dry run puts `stepUp` on its preview ({ what, raises, needs, how }); a change plan copies it onto
  *            its own preview (change-plan.service.ts). The Approvals page, the bulk approve and Claude read it there.
  *   approve  a person with settings.security.manage types their code in Nexus (approval-inbox.service.ts
  *            decideFleetApproval, decisionVia `nexus-step-up`), or the person who asked confirms it in Claude with theirs
  *            (claude-confirm.service.ts, decisionVia `claude-confirm`). A bulk approve leaves it out, and says why.
- *   run      the tool's `execute` asks `stepUpApproval`: a fresh dry run that still raises runs only when the request was
- *            approved with a code and the approver holds settings.security.manage now. Never by rule: no limit lets a
- *            raise run without a person (set-ads-strategy withinLimits), and a plain approve without a code is refused.
+ *   run      the tool's `execute` asks `stepUpApproval` (through tools/ads-code-rule.ts `codeGate`) when its FRESH dry
+ *            run still carries `stepUp`: a person's approval runs only when it was given with a code and the approver
+ *            holds settings.security.manage now — a plain approve is refused. A run the business's rule decided needs no
+ *            code: it runs only where that tool's own limits let that door run alone (create-ad-group allowStartLive,
+ *            apply-ads-playbook allowStart / allowPhaseUp, set-campaign-live-writes and restore-campaign, 0 by default);
+ *            some doors never run by rule, whatever the limits (a strategy or playbook raise, a born ad group's start,
+ *            enable-ads with people's pauses, more of what Claude may do alone).
  */
 import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../db.js'

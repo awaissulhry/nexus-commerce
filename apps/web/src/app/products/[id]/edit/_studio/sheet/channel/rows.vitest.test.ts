@@ -125,7 +125,7 @@ describe('grouping', () => {
   })
 
   it('orders each band directly above its own children, primary first', () => {
-    const ordered = orderRows([...ROWS].reverse())
+    const ordered = orderRows([...ROWS].reverse(), new Map())
     expect(ordered.slice(0, 4).map((r) => `${aliasKeyOf(r.aliasId)}/${r.rowKind}`)).toEqual([
       'primary/parent', 'primary/variant', 'primary/variant', 'primary/variant',
     ])

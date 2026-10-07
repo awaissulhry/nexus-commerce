@@ -428,9 +428,16 @@ describe('A12 — set-campaign-live-writes (the allowlist, d2)', () => {
   it('previews the switch and the connection; approved, flips it as the approver; undo flips it back', async () => {
     const r = await preview('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })
     expect(r.preview).toMatchObject({ liveWrites: { from: false, to: true }, connection: { profileId: 'P-IT-TEST', mode: 'production', writesEnabled: true }, effect: expect.stringMatching(/^Puts Italy not allowlisted on the live-write allowlist/) })
+    // The Owner's code rule A: ON is a big door (a new structure going live) — the approver's code.
+    expect(r.preview).toMatchObject({ stepUp: { what: expect.stringMatching(/^puts Italy not allowlisted on the live-write allowlist/), raises: ['Live writes'] }, effect: expect.stringMatching(/A new structure going live: approving it needs the approver's authenticator code\.$/) })
     expect(getTool('set-campaign-live-writes')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'auto', strategyBound: 'amazon-ads', openWorld: false, requires: ['ads.campaigns.manage', 'ads.automation.manage'] })
     expect((await preview('set-campaign-live-writes', { campaignId: 'c-it', enabled: true })).error).toMatch(/already on the live-write allowlist/)
+    // OFF is a brake: no code.
+    expect((await preview('set-campaign-live-writes', { campaignId: 'c-it', enabled: false })).preview).not.toHaveProperty('stepUp')
     const asked = await ask('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: it puts Italy not allowlisted on the live-write allowlist .*, and that runs only when a person with settings\.security\.manage approved it with their authenticator code/) })
+    expect((await sql('SELECT "liveBidWritesEnabled" AS on FROM "Campaign" WHERE id = $1', ['c-off']))[0]).toEqual({ on: false })
+    await inside(() => database.client.agentApproval.update({ where: { id: asked.approvalId! }, data: { decisionVia: 'nexus-step-up' } }))
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { liveWrites: true } })
     expect((await sql('SELECT "liveBidWritesEnabled" AS on FROM "Campaign" WHERE id = $1', ['c-off']))[0]).toEqual({ on: true })
     // Now a live change to that campaign is no longer refused at the allowlist.

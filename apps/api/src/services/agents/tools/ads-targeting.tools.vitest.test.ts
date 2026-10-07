@@ -8,11 +8,13 @@
  * the inverse. The Owner's rule 2 — a negative never blocks a search term that converts where it lands (but the proven
  * handover, to a home that serves), a harvest never negates a converting term in its source, an order on any of the 90
  * days kept counts — and rule 3 — any ad group of another product needs allowOtherProducts, a person's word, never a rule
- * (the limits refuse it; a run the rule decided is refused in execute too). What adds spend needs the approver's code (a plain approve does not run it; the code does);
- * the plan path carries it. By default nothing runs by rule.
+ * (the limits refuse it; a run the rule decided is refused in execute too). What adds spend is listed in raises and said
+ * in the effect; the Owner's code rule A makes it day-to-day (a plain approve runs it, through the Approvals page and
+ * the plan path too; no code). By default nothing runs by rule.
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -51,11 +53,9 @@ import { actionOfTool, actionsOfTool, __claudeStrategyTest } from '../../adverti
 import { commitScheduledApproval, decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
 import { queuePlan, runPlan } from '../change-plan.service.js'
 import { adDeliveryOf, adMeaning } from './approval.tools.js'
-import { STEP_UP_NEEDS } from '../step-up-approval.js'
 import type { McpPrincipal } from '../../mcp/mcp-auth.js'
 import { claudeGateRule } from '../../mcp/mcp-tool-call.js'
-import { __stepUpTest } from '../../../lib/auth/step-up.js'
-import { generateSecret, generateSync } from 'otplib'
+import { generateSecret } from 'otplib'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -75,8 +75,6 @@ async function ask(tool: string, args: Record<string, unknown>) {
   })
 }
 const approve = (approvalId: string) => inside(() => decideApproval(approvalId, 'approve', approver)) as Promise<Row>
-/** As the Approvals page records a decision taken with the approver's authenticator code. */
-const withCode = (approvalId: string) => inside(() => database.client.agentApproval.update({ where: { id: approvalId }, data: { decisionVia: 'nexus-step-up' } }))
 /** A request approved by the business's standing rule, not a person (decisionVia auto). */
 const approveByRule = async (approvalId: string) => {
   await inside(() => database.client.agentApproval.update({ where: { id: approvalId }, data: { decisionVia: 'auto' } }))
@@ -101,7 +99,6 @@ async function realPerson(label: string): Promise<RealPerson> {
   await client.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   return { id: user.id, secret, principal: { kind: 'user', userId: user.id, label, via: 'app', workspace: business, permissions: { isOwner: false, permissions: EVERYTHING } } }
 }
-const codeOf = (p: RealPerson) => { __stepUpTest.reset(); return generateSync({ secret: p.secret }) }
 const commitNow = async (approvalId: string) => {
   await inside(() => database.client.agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
   return inside(() => commitScheduledApproval(approvalId))
@@ -376,15 +373,22 @@ describe('add-negative-targets', () => {
 })
 
 describe('retire-negatives', () => {
-  it('any negative, by id or by its place and text: who added it, at Amazon or only in Nexus; lifting one needs the code', async () => {
+  it('any negative, by id or by its place and text: who added it, at Amazon or only in Nexus; lifting one is a raise, listed (no code)', async () => {
     const r = await preview('retire-negatives', { negativeIds: ['n-old'], negatives: [{ adGroupId: 'g-a1', text: 'local term' }] })
     expect(r.ok, r.error).toBe(true)
     expect(r.preview).toMatchObject({
       action: 'retire-negatives', market: 'IT', totals: { retiring: 2, atAmazon: 1, nexusOnly: 1 },
       raises: ['negative exact "old term" · ad group "group g-a1" (campaign "Test c-a")'],
-      stepUp: { what: 'lifts 1 negative at Amazon (the searches it blocks can show the ads again)', raises: ['Spend'], needs: STEP_UP_NEEDS, how: expect.stringMatching(/authenticator code.*allowRetire/) },
+      noCode: expect.stringMatching(/day-to-day/),
+      effect: expect.stringMatching(/so spend can rise \(a day-to-day change: a person's approval sends it, with no authenticator code\)/),
       limitFacts: { action: 'retire', this: { items: 2, raises: 1, writes: 1 } },
     })
+    expect(r.preview).not.toHaveProperty('stepUp')
+    // The code table decides the code: its line flipped ('retire-negatives'), the card asks for it.
+    __codeRuleTest.flip('retire-negatives')
+    try {
+      expect(((await preview('retire-negatives', { negativeIds: ['n-old'], negatives: [{ adGroupId: 'g-a1', text: 'local term' }] })).preview).stepUp, 'retire-negatives').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     expect(r.preview.changes.map((c: Row) => [c.label, c.toLabel, c.madeBy])).toEqual([
       ['negative exact "old term" · ad group "group g-a1" (campaign "Test c-a")', 'Retired: archived at Amazon', expect.stringMatching(/^no record in Nexus of who added it/)],
       ['negative phrase "local term" · ad group "group g-a1" (campaign "Test c-a")', 'Removed from Nexus (Amazon never had it)', expect.stringMatching(/^no record in Nexus/)],
@@ -399,12 +403,9 @@ describe('retire-negatives', () => {
     expect((await preview('retire-negatives', {})).error).toMatch(/^Name the negatives to retire/)
   })
 
-  it('a plain approve does not run it; with the code it retires as the approver on the change set; undo adds them again', async () => {
+  it('a plain approve retires it as the approver on the change set (code rule A: day-to-day); undo adds them again', async () => {
     const asked = await ask('retire-negatives', { negativeIds: ['n-old', 'n-local'], why: 'they block a good term' })
-    const plain = await approve(asked.approvalId!)
-    expect(plain).toMatchObject({ ok: false, status: 'pending', error: expect.stringMatching(/^Not run: it lifts 1 negative at Amazon \(the searches it blocks can show the ads again\), and that runs only when a person with settings\.security\.manage approved it with their authenticator code/) })
     expect((await target('n-old'))?.status).toBe('ENABLED')
-    await withCode(asked.approvalId!)
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { retired: 1, removedFromNexus: 1 } })
     expect((await target('n-old'))?.status).toBe('ARCHIVED')
     expect(await target('n-local')).toBeNull()
@@ -426,7 +427,6 @@ describe('retire-negatives', () => {
     // A negative of "blue jacket" in g-a3, retired; meanwhile the term converts in g-a3.
     await inside(() => database.client.adTarget.create({ data: { id: 'n-blue', adGroupId: 'g-a3', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'blue jacket', bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: 'EXT-n-blue' } }))
     const asked = await ask('retire-negatives', { negativeIds: ['n-blue'] })
-    await withCode(asked.approvalId!)
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { retired: 1 } })
     await inside(() => term('c-a', 'g-a3', 'blue jacket', { impressions: 60, clicks: 4, costCents: 200, orders: 1 }))
     const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))
@@ -434,28 +434,36 @@ describe('retire-negatives', () => {
     expect((await preview(undo.request!.tool, undo.request!.args)).error).toMatch(/^Not queued: a negative there would block a search term that converts — "blue jacket" in ad group "group g-a3" .*: 1 order over the last 90 days/)
   })
 
-  it('the Approvals page: approving without the code is refused (mfa_required); with it, it runs at commit', async () => {
+  it('the Approvals page: a plain approve (no code) schedules it, and it runs at commit', async () => {
     await inside(() => database.client.adTarget.create({ data: { id: 'n-page', adGroupId: 'g-a3', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'page term', bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: 'EXT-n-page' } }))
     const boss = await inside(() => realPerson('Test Approver'))
     const asked = await ask('retire-negatives', { negativeIds: ['n-page'] })
-    const decide = (code?: string) => inside(() => decideFleetApproval({ id: asked.approvalId!, decision: 'approve', actor: boss.principal, ...(code ? { code } : {}) }))
-    expect(await decide()).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await decide(codeOf(boss))).toMatchObject({ ok: true, status: 'scheduled' })
+    const decide = () => inside(() => decideFleetApproval({ id: asked.approvalId!, decision: 'approve', actor: boss.principal }))
+    expect(await decide()).toMatchObject({ ok: true, status: 'scheduled' })
     expect(await commitNow(asked.approvalId!)).toMatchObject({ ok: true })
     expect((await target('n-page'))?.status).toBe('ARCHIVED')
   })
 })
 
 describe('add-ad-targets', () => {
-  it('at its bid: each target listed in raises, approving needs the code; at the floor: no code, the planned bid kept', async () => {
+  it('at its bid: each target listed in raises and said (code rule A: day-to-day, no code); at the floor: the planned bid kept', async () => {
     const r = await preview('add-ad-targets', { adGroupId: 'g-a1', keywords: [{ text: 'new boots', matchType: 'EXACT', bidCents: 40 }], productTargets: [{ asin: 'B0OTHERCC1' }], categoryTargets: [{ categoryId: '123456' }], bidCents: 25 })
     expect(r.ok, r.error).toBe(true)
     expect(r.preview).toMatchObject({
       action: 'add-ad-targets', currency: 'EUR', highestBidCents: 40, totals: { targets: 3, keywords: 1, productTargets: 1, categoryTargets: 1, atBid: 3, atFloor: 0 },
       raises: ['exact keyword "new boots" at EUR 0.40', 'product target B0OTHERCC1 at EUR 0.25', 'category target 123456 at EUR 0.25'],
-      stepUp: { what: 'adds 3 targets that start spending at their bids', raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS },
+      noCode: expect.stringMatching(/day-to-day/),
+      effect: expect.stringMatching(/They start spending at their bids \(the highest EUR 0\.40\)\. It ADDS SPEND \(3 new targets at their bids\): a day-to-day change — a person's approval sends it, with no authenticator code\./),
       sameProductClashes: [], reach: { reach: 'sandbox' }, limitFacts: { action: 'targeting', this: { items: 3, raises: 3 } },
     })
+    expect(r.preview).not.toHaveProperty('stepUp')
+    // The code table decides the code: its line flipped ('add-ad-targets: at a bid'), the card asks for it.
+    __codeRuleTest.flip('add-ad-targets: at a bid')
+    try {
+      expect(((await preview('add-ad-targets', { adGroupId: 'g-a1', keywords: [{ text: 'new boots', matchType: 'EXACT', bidCents: 40 }], productTargets: [{ asin: 'B0OTHERCC1' }], categoryTargets: [{ categoryId: '123456' }], bidCents: 25 })).preview).stepUp, 'add-ad-targets: at a bid').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
+    // Its limits still judge a run by rule: at the defaults, none.
+    expect(judge('add-ad-targets', r.preview, {})).toBeTypeOf('string')
     const floor = await preview('add-ad-targets', { adGroupId: 'g-a1', keywords: [{ text: 'new boots', matchType: 'EXACT', bidCents: 40 }], startAtFloor: true })
     // Every raise is listed whatever the code decides: a target born at the floor starts spending too (no code for it).
     expect(floor.preview).toMatchObject({ raises: ['exact keyword "new boots" at EUR 0.05 (the floor; planned EUR 0.40)'], highestBidCents: 5, startsAtFloor: { floorCents: 5 }, changes: [{ toLabel: 'at the 5-cent floor (planned EUR 0.40)', bidCents: 5, plannedBidCents: 40 }] })
@@ -485,10 +493,8 @@ describe('add-ad-targets', () => {
     expect(await approveByRule(accepted.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: it adds what this product already buys elsewhere \(accepted\), which a person decides, never a rule/) })
   })
 
-  it('approved with the code: created at Amazon as the approver on the change set; undo lowers them to the stop bid', async () => {
+  it('a plain approve: created at Amazon as the approver on the change set; undo lowers them to the stop bid', async () => {
     const asked = await ask('add-ad-targets', { adGroupId: 'g-a3', keywords: [{ text: 'rain boots', matchType: 'EXACT', bidCents: 35 }], productTargets: [{ asin: 'B0OTHERDD1', bidCents: 20 }] })
-    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, status: 'pending', error: expect.stringMatching(/^Not run: it adds 2 targets that start spending at their bids, and that runs only when a person/) })
-    await withCode(asked.approvalId!)
     const done = await approve(asked.approvalId!)
     expect(done).toMatchObject({ ok: true, status: 'executed', result: { added: 2, reachedAmazon: 2 } })
     const made = await sql<{ id: string; bidCents: number; externalTargetId: string | null }>(`SELECT id, "bidCents", "externalTargetId" FROM "AdTarget" WHERE "adGroupId" = 'g-a3' AND NOT "isNegative" AND "expressionValue" IN ('rain boots', 'B0OTHERDD1') ORDER BY "bidCents" DESC`)
@@ -526,6 +532,11 @@ describe('harvest-search-term', () => {
     const r = await preview('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })
     expect(r.preview).toMatchObject({ negateSource: 'add', bidCents: 120, raises: ['exact keyword "wool jacket" at EUR 1.20'], limitFacts: { action: 'harvest', this: { items: 2, raises: 1, cuts: 1 } } })
     expect(r.preview).not.toHaveProperty('stepUp')
+    // The code table decides the code: its line flipped ('harvest-search-term'), the card asks for it.
+    __codeRuleTest.flip('harvest-search-term')
+    try {
+      expect(((await preview('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })).preview).stepUp, 'harvest-search-term').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     const asked = await ask('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })
     // A report arrives before it is approved: the term's cost per click moves (to EUR 2.10). The bid it worked out is frozen
     // in the approval, so the request is not stale, and it runs at the EUR 1.20 the person approved.
@@ -622,7 +633,7 @@ describe('set-harvest-destination', () => {
 })
 
 describe('the plan path', () => {
-  it('submit-change-plan: a step that adds spend carries its code onto the plan; approved with it, every step runs', async () => {
+  it('submit-change-plan: a step that adds spend (day-to-day) puts no code on the plan; a plain approve runs every step', async () => {
     const boss = await inside(() => realPerson('Test Plan Approver'))
     const queued = await inside(async () => {
       const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
@@ -634,11 +645,11 @@ describe('the plan path', () => {
         ],
       }, claude, run.id)
     })
-    expect(queued).toMatchObject({ ok: true, mode: 'queued', preview: { stepUp: { what: 'adds 1 target that starts spending at its bid', raises: ['Bids', 'Spend'], steps: [2] } } })
+    expect(queued).toMatchObject({ ok: true, mode: 'queued' })
+    expect((queued as Row).preview?.stepUp).toBeUndefined()
     const planId = queued.approvalId!
-    const decide = (code?: string) => inside(() => decideFleetApproval({ id: planId, decision: 'approve', actor: boss.principal, ...(code ? { code } : {}) }))
-    expect(await decide()).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await decide(codeOf(boss))).toMatchObject({ ok: true, status: 'scheduled' })
+    const decide = () => inside(() => decideFleetApproval({ id: planId, decision: 'approve', actor: boss.principal }))
+    expect(await decide()).toMatchObject({ ok: true, status: 'scheduled' })
     expect(await commitNow(planId)).toMatchObject({ ok: true, status: 'executing' })
     expect(await inside(() => runPlan(planId))).toMatchObject({ finished: true, counts: { done: 2 } })
     expect((await sql(`SELECT id FROM "AdTarget" WHERE "adGroupId" = 'g-a3' AND "expressionValue" IN ('plan socks', 'plan boots')`)).length).toBe(2)
