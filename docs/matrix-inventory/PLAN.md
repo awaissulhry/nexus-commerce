@@ -15,7 +15,7 @@
   4. Send to FBA from the Matrix (Amazon "Send to Amazon" v2024-03-20 flow, run as a background job).
 - **Owner decisions (2026-10-07):** D1 = A (per market for the business + per-product exceptions in the Matrix) ·
   D2 = B (count sealed cases and loose units apart, per location).
-- **Status:** Step 1 + Step 2 DONE locally (not pushed). Next: Step 3 (cases).
+- **Status:** Steps 1–3 DONE locally (not pushed). Next: Step 4 (Send to FBA).
 
 Research notes (private, with file paths and line numbers): `~/nexus-archive/2026-10-07-matrix-inventory/research/`
 1 Matrix page · 2 stock backend · 3 FBA inbound code · 4 Available pop-up + design system · 5 web research.
@@ -67,7 +67,15 @@ Research notes (private, with file paths and line numbers): `~/nexus-archive/202
 - Orders take stock from the first location in the market's list that has stock (replaces the fixed warehouse).
 - Combine = sum only. Not now: percent, max shown, per-market combine modes.
 
-## Step 3 — Cases (D2 = B: sealed cases + loose units)
+## Step 3 — Cases (D2 = B: sealed cases + loose units) — DONE locally 2026-10-07
+- Build plan: `~/nexus-archive/2026-10-07-matrix-inventory/research/8-step3-build-plan.md`. Owner answers: a size change
+  with sealed cases in stock shows the cases and opens them on a 2nd click; goods received arrive as loose units (the
+  Owner sets sealed cases); prep / label owner stays "not set" until Send to FBA asks once.
+- Built: `ProductPackage` + `StockCaseCount` (migration `20261007c_case_packs`), the shared rule
+  `packages/shared/stock-cases.ts`, the keeper `stock-cases.service.ts` on every movement / import / pool settle,
+  `POST /api/stock/adjust-locations` + `cases`, `PUT /api/stock/case-packs`, the Matrix Case column + pop-up, the
+  stock editor's Cases column ("4 + 3").
+- Before release: set `MATRIX_CASE_SINCE` (`_studio/matrix/statusCells.ts`) to the real release day.
 - New table `ProductPackage` (product, units per case, case L/W/H cm, case weight kg) + FBA prep owner and label
   owner per SKU. Additive migration, model-ownership, scoped-keys, baseline.sql.
 - New side table for sealed cases per location (same pattern as `StockBinQuantity`): `StockLevel.quantity` stays the
