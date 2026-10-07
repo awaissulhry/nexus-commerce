@@ -32,6 +32,7 @@
  * tools take (ebayCampaignId, ebayItemId, ebayAdGroupId, ebayKeywordId).
  */
 
+import { adProductOf, isLifetimeBudget } from '@nexus/shared/ads-ad-product'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -294,9 +295,12 @@ const CAMPAIGN_SELECT = {
   externalCampaignId: true,
   dailyBudgetCurrency: true,
   status: true,
+  // W4-11 — which ad product a target's campaign is (Nexus also sends SB/SD keyword and target bids).
+  adProduct: true,
+  type: true,
 } as const
 
-type CampaignRef = { id: string; name: string; marketplace: string | null; externalCampaignId: string | null; dailyBudgetCurrency: string; status: string }
+type CampaignRef = { id: string; name: string; marketplace: string | null; externalCampaignId: string | null; dailyBudgetCurrency: string; status: string; adProduct: string | null; type: unknown }
 
 /** The campaign a scope names, in this business (row-level security), or null: another business's id is not found. */
 async function campaignById(id: string): Promise<CampaignRef | null> {
@@ -541,6 +545,7 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
           select: {
             id: true, dailyBudgetCurrency: true, liveBidWritesEnabled: true, bidsSuppressedAt: true, bidsSuppressedBy: true,
             pinBids: true, pinBudget: true, pinPlacement: true, targetingType: true, dynamicBidding: true, budgetBaselineCents: true,
+            costType: true, budgetJson: true, // W4-11
           },
         })
       : Promise.resolve([]),
@@ -564,6 +569,10 @@ async function amazonCampaigns(a: CampaignListArgs, scope: string) {
       name: c.name,
       market: c.marketplace ?? null,
       adProduct: c.adProduct ?? c.type ?? null,
+      // W4-11 — for Sponsored Brands / Display: how it pays (cpc | vcpm; Amazon's bid limits differ, and a bid in a campaign
+      // whose cost type Nexus does not hold is refused), and a Sponsored Brands lifetime budget (not set from Nexus).
+      costType: x?.costType ?? null,
+      ...(x && isLifetimeBudget(x.budgetJson) ? { budgetPeriod: 'LIFETIME' } : {}),
       targetingType: x?.targetingType ?? null,
       status: String(c.status),
       deliveryStatus: c.deliveryStatus ?? null,
@@ -631,7 +640,8 @@ const adCampaigns: AgentTool = {
   }),
   description:
     'The Amazon campaigns, by market and name. Per campaign: campaignId (the Nexus id the other ad tools take) and '
-    + 'externalCampaignId (Amazon\'s), name, market, ad product, status and delivery, currency, daily budget, bidding '
+    + 'externalCampaignId (Amazon\'s), name, market, ad product (for Sponsored Brands / Display also costType, cpc or vcpm, '
+    + 'and budgetPeriod LIFETIME for an SB lifetime budget), status and delivery, currency, daily budget, bidding '
     + 'strategy, target ACoS, placement adjustments, bid and budget bounds and the budget baseline, its portfolio (Amazon\'s id and name), the '
     + 'guards that move a bid asked for (maxBidChangePct: the most one bid change may move, in %; cpcCeiling: no bid above '
     + 'that multiple of a target\'s average cost per click), whether live writes are allowed for it '
@@ -857,7 +867,8 @@ const adTargets: AgentTool = {
   }),
   description:
     'The positive targets (keywords, product and auto targets) of the Amazon campaigns, by campaign, ad group and '
-    + 'text. Per target: targetId (the id set-target-bid takes), its ad group and campaign (Nexus and Amazon ids), '
+    + 'text. Per target: targetId (the id set-target-bid takes), its ad group and campaign (Nexus and Amazon ids, and the '
+    + 'campaign\'s ad product), '
     + 'text, kind, match type, status, live now (target and campaign enabled), bid, the bid it held before a no-pause '
     + 'suppression (suppressedFromBidCents; a suppressed bid is not raised), the campaign\'s bid bounds, effective max '
     + 'CPC, who owns its bids (schedule, goal, manual or none), and impressions, clicks, orders, spend, sales, CPC and '
@@ -913,6 +924,9 @@ const adTargets: AgentTool = {
         campaignId: r.campaignId,
         externalCampaignId: c?.externalCampaignId ?? null,
         campaignName: r.campaignName,
+        // W4-11 — set-target-bid and bulk-ad-bid-change also change Sponsored Brands keyword and product-target bids and
+        // Sponsored Display target bids.
+        adProduct: c ? adProductOf({ adProduct: c.adProduct, type: c.type == null ? null : String(c.type) }) : null,
         campaignStatus: r.campaignStatus,
         market: r.market,
         currency: c ? campaignCurrency(c) : null,
