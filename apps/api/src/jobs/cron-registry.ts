@@ -340,6 +340,9 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'ad-rank-defend': () => import('./ad-rank-defend.job.js').then(async (m) => m.rankDefendSummaryLine(await m.runRankDefendOnce())),
   'ad-budget-enforce': () => import('./ad-budget-enforce.job.js').then((m) => m.runBudgetEnforceOnce()),
   'ads-auto-bid': () => runAutoBidLiveOnce(),
+  // ADS AUTONOMY — auto-undo (A19): judges the automatic ad changes due a judgement and, at its level, records, asks or
+  // puts back. Its own switch (born OBSERVE) and the account dial bind a manual run as they bind the tick.
+  'ads-auto-undo': () => import('./ads-auto-undo.job.js').then((m) => m.runAdsAutoUndoOnce()),
   // NAF.B — the nightly analyst sweep (read-only fleet; findings only).
   'fleet-sweep': () => import('./fleet-sweep.job.js').then((m) => m.runFleetSweepOnce()),
   // NAF.C — the weekly council (director + critic; queues approvals, no writes).
@@ -420,6 +423,9 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
     const { runNightlyContentDrift } = await import('./content-drift.job.js')
     return (await runNightlyContentDrift()).line
   },
+  // Platform health watchdog (2026-10-07) — the daily checks of crons, feeds, ad writes, approvals, automation and queues
+  // (services/platform-health/), measured, stored and alerted on now. Reads only, plus its own rows and alerts.
+  'platform-health-watchdog': () => import('./platform-health-watchdog.job.js').then((m) => m.runPlatformHealthWatchdogOnce('manual')),
   // 2026-09-24 — the readiness reconcile, on demand ONLY (the nightly is scheduled in index.ts at 02:17). A manual run
   // recomputes EVERY family of the request's business now (not only rows older than 20 h), with the nightly's writer
   // and budget; a failed family fails the run, as the cron does.

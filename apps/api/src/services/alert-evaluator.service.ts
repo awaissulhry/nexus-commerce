@@ -190,10 +190,37 @@ interface DispatchResult {
   error?: string
 }
 
+/**
+ * Platform health watchdog (2026-10-07) — what a check found, in plain words. A rule evaluated by the watchdog
+ * (metric `platformHealth:<checkId>`) carries it into every channel, so the e-mail says what is wrong instead of
+ * "metric = 2".
+ */
+export interface AlertDetail {
+  /** ok | warn | fail */
+  status: string
+  message: string
+  likelyCause?: string | null
+  nextStep?: string | null
+  /** True when an open alert got worse (warn → fail): the channels hear it again. */
+  escalated?: boolean
+}
+
+/** The metric family the platform health watchdog evaluates itself, once a day: the minute evaluator skips it. */
+export const PLATFORM_HEALTH_METRIC_PREFIX = 'platformHealth:'
+
+const detailLines = (d: AlertDetail): string[] => [
+  `${d.escalated ? 'Now ' : ''}${d.status.toUpperCase()}: ${d.message}`,
+  ...(d.likelyCause ? [``, `Likely cause: ${d.likelyCause}`] : []),
+  ...(d.nextStep ? [``, `Next step: ${d.nextStep}`] : []),
+]
+
+const escHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
+
 async function dispatch(
   rule: { id: string; name: string; metric: string; threshold: number },
   channel: string,
   value: number,
+  detail?: AlertDetail,
 ): Promise<DispatchResult> {
   if (channel === 'log') {
     logger.warn('[ALERT] rule fired', {
@@ -202,6 +229,7 @@ async function dispatch(
       metric: rule.metric,
       value,
       threshold: rule.threshold,
+      ...(detail ? { status: detail.status, message: detail.message.slice(0, 500), escalated: detail.escalated === true } : {}),
     })
     return { channel, ok: true }
   }
@@ -216,6 +244,7 @@ async function dispatch(
           rule: { id: rule.id, name: rule.name, metric: rule.metric, threshold: rule.threshold },
           value,
           firedAt: new Date().toISOString(),
+          ...(detail ? { detail } : {}),
         }),
       })
       if (!r.ok) {
@@ -230,6 +259,26 @@ async function dispatch(
   // L.18.0 — email dispatch via the existing Resend transport.
   // dryRun mode (default when NEXUS_ENABLE_OUTBOUND_EMAILS≠'true' or
   // RESEND_API_KEY is unset) logs to stdout and returns ok=true.
+  if (channel.startsWith('email:') && detail) {
+    const to = channel.slice('email:'.length)
+    const lines = detailLines(detail)
+    try {
+      const r = await sendEmail({
+        to,
+        subject: `[Nexus alert] ${rule.name}${detail.escalated ? ' now' : ''}: ${detail.status}`,
+        text: [`Alert "${rule.name}" ${detail.escalated ? 'got worse' : 'fired'}.`, ``, ...lines, ``, `Open the alerts view: /sync-logs/alerts`].join('\n'),
+        html: `<p>Alert <strong>"${escHtml(rule.name)}"</strong> ${detail.escalated ? 'got worse' : 'fired'}.</p>
+${lines.filter(Boolean).map((line) => `<p style="font-family:Inter,sans-serif;font-size:13px;color:#0f172a;">${escHtml(line)}</p>`).join('\n')}
+<p><a href="/sync-logs/alerts">Open the alerts view →</a></p>`,
+        tag: `alert-${rule.id}`,
+      })
+      if (r.ok) return { channel, ok: true }
+      return { channel, ok: false, error: r.error ?? 'email send failed' }
+    } catch (e) {
+      return { channel, ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
   if (channel.startsWith('email:')) {
     const to = channel.slice('email:'.length)
     const valueStr =
@@ -306,7 +355,9 @@ async function dispatch(
           // legacy webhooks; modern ones ignore it. Keeping it makes
           // the rule readable in the UI either way.
           channel: slackChannelHint || undefined,
-          text: `:rotating_light: *Alert fired:* ${rule.name}`,
+          text: detail
+            ? `:rotating_light: *Alert ${detail.escalated ? 'got worse' : 'fired'}:* ${rule.name} — ${detail.status}: ${detail.message.slice(0, 1500)}`
+            : `:rotating_light: *Alert fired:* ${rule.name}`,
           attachments: [
             {
               color: '#dc2626',
@@ -348,8 +399,106 @@ interface EvalResult {
   errors: number
 }
 
+/** The rule fields settling an evaluation needs. */
+export interface SettleableRule {
+  id: string
+  name: string
+  metric: string
+  operator: string
+  threshold: number
+  notificationChannels: unknown
+  lastFired: boolean
+  lastValue: number | null
+}
+
+export type AlertSettlement = 'fired' | 'resolved' | 'escalated' | 'unchanged'
+
+export interface SettleOptions {
+  /** What a watchdog check found, for the channels (absent for the minute evaluator's metrics). */
+  detail?: AlertDetail
+  /** Also resolve an ACKNOWLEDGED event when the condition clears (the watchdog's checks: "resolved when it passes"). */
+  resolveAcknowledged?: boolean
+  /** A firing rule whose value rose (warn → fail) updates its open event and notifies again. */
+  notifyOnRise?: boolean
+}
+
+/**
+ * One evaluated value, settled on its rule: not firing → firing creates ONE AlertEvent (TRIGGERED) and notifies; firing →
+ * not firing auto-resolves it (resolvedBy 'auto'); no transition only refreshes lastValue + lastEvaluatedAt — no spam.
+ * The minute evaluator and the platform health watchdog both settle through here.
+ */
+export async function settleAlertRule(rule: SettleableRule, value: number, opts: SettleOptions = {}): Promise<AlertSettlement> {
+  const op = rule.operator as Operator
+  const fires = COMPARE[op] ? COMPARE[op](value, rule.threshold) : false
+
+  if (fires && !rule.lastFired) {
+    // Transition: not-firing → firing. Create event + notify.
+    const channels = (rule.notificationChannels as string[]) ?? ['log']
+    const dispatchResults: DispatchResult[] = []
+    for (const ch of channels) {
+      dispatchResults.push(await dispatch(rule, ch, value, opts.detail))
+    }
+    await prisma.alertEvent.create({
+      data: {
+        ruleId: rule.id,
+        value,
+        status: 'TRIGGERED',
+        notifications: dispatchResults as never,
+      },
+    })
+    await prisma.alertRule.update({
+      where: { id: rule.id },
+      data: {
+        lastEvaluatedAt: new Date(),
+        lastValue: value,
+        lastFired: true,
+      },
+    })
+    return 'fired'
+  }
+  if (!fires && rule.lastFired) {
+    // Transition: firing → not-firing. Auto-resolve any open
+    // event for this rule.
+    await prisma.alertEvent.updateMany({
+      where: { ruleId: rule.id, status: opts.resolveAcknowledged ? { in: ['TRIGGERED', 'ACKNOWLEDGED'] } : 'TRIGGERED' },
+      data: {
+        status: 'RESOLVED',
+        resolvedAt: new Date(),
+        resolvedBy: 'auto',
+      },
+    })
+    await prisma.alertRule.update({
+      where: { id: rule.id },
+      data: {
+        lastEvaluatedAt: new Date(),
+        lastValue: value,
+        lastFired: false,
+      },
+    })
+    return 'resolved'
+  }
+  if (fires && opts.notifyOnRise && rule.lastValue != null && value > rule.lastValue) {
+    // Still firing, and worse: the open event carries the new value and needs a look again; the channels hear it.
+    const channels = (rule.notificationChannels as string[]) ?? ['log']
+    for (const ch of channels) await dispatch(rule, ch, value, opts.detail ? { ...opts.detail, escalated: true } : undefined)
+    await prisma.alertEvent.updateMany({
+      where: { ruleId: rule.id, status: { in: ['TRIGGERED', 'ACKNOWLEDGED'] } },
+      data: { value, status: 'TRIGGERED' },
+    })
+    await prisma.alertRule.update({ where: { id: rule.id }, data: { lastEvaluatedAt: new Date(), lastValue: value } })
+    return 'escalated'
+  }
+  // No transition — just refresh the lastEvaluated/lastValue.
+  await prisma.alertRule.update({
+    where: { id: rule.id },
+    data: { lastEvaluatedAt: new Date(), lastValue: value },
+  })
+  return 'unchanged'
+}
+
 export async function runAlertEvaluator(): Promise<EvalResult> {
-  const rules = await prisma.alertRule.findMany({ where: { enabled: true } })
+  // The platform health watchdog's rules are evaluated by the watchdog itself, once a day, with their findings.
+  const rules = await prisma.alertRule.findMany({ where: { enabled: true, NOT: { metric: { startsWith: PLATFORM_HEALTH_METRIC_PREFIX } } } })
   const result: EvalResult = {
     rulesEvaluated: 0,
     rulesFired: 0,
@@ -374,61 +523,10 @@ export async function runAlertEvaluator(): Promise<EvalResult> {
         windowMs: rule.windowMinutes * 60 * 1000,
         channel: rule.channel,
       })
-      const op = rule.operator as Operator
-      const fires = COMPARE[op] ? COMPARE[op](value, rule.threshold) : false
-
-      if (fires && !rule.lastFired) {
-        // Transition: not-firing → firing. Create event + notify.
-        const channels = (rule.notificationChannels as string[]) ?? ['log']
-        const dispatchResults: DispatchResult[] = []
-        for (const ch of channels) {
-          dispatchResults.push(await dispatch(rule, ch, value))
-        }
-        await prisma.alertEvent.create({
-          data: {
-            ruleId: rule.id,
-            value,
-            status: 'TRIGGERED',
-            notifications: dispatchResults as never,
-          },
-        })
-        await prisma.alertRule.update({
-          where: { id: rule.id },
-          data: {
-            lastEvaluatedAt: new Date(),
-            lastValue: value,
-            lastFired: true,
-          },
-        })
-        result.rulesFired++
-      } else if (!fires && rule.lastFired) {
-        // Transition: firing → not-firing. Auto-resolve any open
-        // event for this rule.
-        await prisma.alertEvent.updateMany({
-          where: { ruleId: rule.id, status: 'TRIGGERED' },
-          data: {
-            status: 'RESOLVED',
-            resolvedAt: new Date(),
-            resolvedBy: 'auto',
-          },
-        })
-        await prisma.alertRule.update({
-          where: { id: rule.id },
-          data: {
-            lastEvaluatedAt: new Date(),
-            lastValue: value,
-            lastFired: false,
-          },
-        })
-        result.rulesResolved++
-      } else {
-        // No transition — just refresh the lastEvaluated/lastValue.
-        await prisma.alertRule.update({
-          where: { id: rule.id },
-          data: { lastEvaluatedAt: new Date(), lastValue: value },
-        })
-        result.rulesUnchanged++
-      }
+      const outcome = await settleAlertRule(rule, value)
+      if (outcome === 'fired') result.rulesFired++
+      else if (outcome === 'resolved') result.rulesResolved++
+      else result.rulesUnchanged++
     } catch (err) {
       logger.error('[alert-evaluator] rule failed', {
         ruleId: rule.id,
@@ -453,9 +551,14 @@ export async function runAlertEvaluator(): Promise<EvalResult> {
  * → support@xavia.it; the 'log' channel always works even with email off. Add a
  * 'slack:#alerts' channel in the UI once NEXUS_SLACK_WEBHOOK_URL is set.
  */
-export async function seedDefaultAlertRules(): Promise<{ created: string[] }> {
+/** Where a seeded reliability rule notifies: the log, and the operator's alert inbox (NEXUS_ALERT_EMAIL → NEXUS_SUPPORT_INBOX → the support inbox). */
+export function defaultAlertChannels(): { email: string; channels: string[] } {
   const email = process.env.NEXUS_ALERT_EMAIL ?? process.env.NEXUS_SUPPORT_INBOX ?? 'support@xavia.it'
-  const channels = ['log', `email:${email}`]
+  return { email, channels: ['log', `email:${email}`] }
+}
+
+export async function seedDefaultAlertRules(): Promise<{ created: string[] }> {
+  const { email, channels } = defaultAlertChannels()
   const defaults = [
     {
       name: 'Review pipeline starved',

@@ -443,7 +443,8 @@ async function watchedSteps(from: Date, to: Date): Promise<{ steps: RawStep[]; t
 
 // ── Entities, their campaigns, their writes ────────────────────────────────────────────────────────
 
-interface Placed {
+/** An entity of a step, placed in its campaign, market and currency (auto-undo places its changes the same way). */
+export interface Placed {
   key: string
   kind: EntityKind
   id: string | null
@@ -461,7 +462,7 @@ const PERF_TYPE: Partial<Record<EntityKind, Grain>> = {
 }
 const currencyOf = (c: { dailyBudgetCurrency: string | null }) => c.dailyBudgetCurrency?.trim() || 'EUR'
 
-async function placeEntities(keys: Map<string, string>): Promise<Map<string, Placed>> {
+export async function placeEntities(keys: Map<string, string>): Promise<Map<string, Placed>> {
   const parsed = [...keys].map(([key, label]) => ({ key, label, ...parseEntityKey(key) }))
   const idsOf = (kind: EntityKind) => [...new Set(parsed.filter((p) => p.kind === kind && p.id).map((p) => p.id!))]
   const exts = [...new Set(parsed.filter((p) => p.term).map((p) => p.term!.ext))]
@@ -618,7 +619,7 @@ function pooled(series: Array<DaySums | undefined>): DaySums {
   return out
 }
 
-interface Figures {
+export interface Figures {
   /** Per entity key, per day. */
   own: Map<string, DaySums>
   /** Per entity key, its comparable entities pooled per day, and how many (null: not counted one by one). */
@@ -660,7 +661,11 @@ async function peerCandidates(grain: Grain, groups: string[]): Promise<Map<strin
   return out
 }
 
-async function figuresOf(placed: Placed[], watchedKeys: Set<string>, span: { from: string; to: string }): Promise<Figures> {
+/**
+ * The daily figures of these entities and of their comparable entities nothing wrote to in the span (`watchedKeys` are
+ * never peers). Shared with auto-undo (ads-auto-undo.service.ts): one measurement of better and worse.
+ */
+export async function figuresOf(placed: Placed[], watchedKeys: Set<string>, span: { from: string; to: string }): Promise<Figures> {
   const date = { gte: new Date(`${span.from}T00:00:00Z`), lte: new Date(`${span.to}T00:00:00Z`) }
   const writeSpan = { gte: date.gte, lte: new Date(date.lte.getTime() + DAY_MS) }
   const own = new Map<string, DaySums>()
@@ -732,7 +737,8 @@ async function figuresOf(placed: Placed[], watchedKeys: Set<string>, span: { fro
   return { own, peers, asOf }
 }
 
-function windowsOf(p: Placed, d: string, figures: Figures): { windows: WatchWindow[]; dataAsOf: string | null } {
+/** The 3- and 7-day windows around day `d` (the day itself left out), the entity's and its comparable entities'. */
+export function windowsOf(p: Placed, d: string, figures: Figures): { windows: WatchWindow[]; dataAsOf: string | null } {
   const grain = p.term ? 'SEARCH_TERM' : PERF_TYPE[p.kind]
   const dataAsOf = grain ? figures.asOf.get(asOfKey(p.market, grain)) ?? null : null
   if (!grain) return { windows: [], dataAsOf }

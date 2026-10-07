@@ -133,9 +133,9 @@ beforeEach(() => { delete process.env.NEXUS_BID_OPTIMIZER_SOURCE })
 describe('the target chain in the optimiser, per ad group', () => {
   it("the campaign's own target wins over the strategy; the strategy over the account default; each named, with its sources", async () => {
     const list = await proposals()
-    // Own target 40 %: ratio max(1 − 30 % step, 40/50) = 0.8 → 48¢. Band 10–80¢ (market floor, category ceiling).
+    // Own target 40 %: the goal is 40¢ (40 % of €1.00 a click); one 30 % step reaches 42¢. Band 10–80¢ (market floor, category ceiling).
     expect(of(list, 't-own')).toMatchObject({
-      proposedBidCents: 48, targetAcosUsed: 0.4, targetSource: 'campaign', reason: 'ACOS 50% > target 40% (campaign target) — lower',
+      proposedBidCents: 42, targetAcosUsed: 0.4, targetSource: 'campaign', reason: 'ACOS 50% > target 40% (campaign target) — lower toward 40¢ (40% of €1.00 sales a click)',
       sources: {
         targetAcosPct: { level: 'campaign', value: 40 },
         minBidCents: source('market', 'Test market (IT)', 10),
@@ -143,14 +143,14 @@ describe('the target chain in the optimiser, per ad group', () => {
         maxChangePct: source('market', 'Test market (IT)', 30),
       },
     })
-    // No own target: the category's 20 % (P1 → its parent's primary category) — ratio max(0.7, 0.4) = 0.7 → 42¢.
+    // No own target: the category's 20 % (P1 → its parent's primary category) — toward 20¢, one 30 % step → 42¢.
     expect(of(list, 't-strat')).toMatchObject({
       proposedBidCents: 42, targetAcosUsed: 0.2, targetSource: 'strategy',
-      reason: 'ACOS 50% > target 20% (ads strategy: Test leaf (IT), category, v1) — lower',
+      reason: 'ACOS 50% > target 20% (ads strategy: Test leaf (IT), category, v1) — lower toward 20¢ (20% of €1.00 sales a click)',
       sources: { targetAcosPct: source('category', 'Test leaf (IT)', 20) },
     })
-    // A market without a strategy: the account default 45 %, no strategy source, as W0 (ratio 0.9 → 54¢).
-    expect(of(list, 't-de')).toMatchObject({ proposedBidCents: 54, targetAcosUsed: 0.45, targetSource: 'account' })
+    // A market without a strategy: the account default 45 %, no strategy source, as W0 (its goal 45¢).
+    expect(of(list, 't-de')).toMatchObject({ proposedBidCents: 45, targetAcosUsed: 0.45, targetSource: 'account' })
     expect(of(list, 't-de').sources).toEqual({ targetAcosPct: { level: 'account', value: 45 } })
   })
 
@@ -166,7 +166,7 @@ describe('the target chain in the optimiser, per ad group', () => {
     expect(of(await proposals({ targetAcos: 0.25, targetAcosFrom: "this rule's target" }), 't-strat')).toMatchObject({ targetAcosUsed: 0.25, targetSource: 'explicit' })
     await inA(() => db().adsAutomationState.updateMany({ data: { defaultTargetAcosPct: null } }))
     try {
-      expect(of(await proposals(), 't-de')).toMatchObject({ targetAcosUsed: 0.3, targetSource: 'flat', proposedBidCents: 36 })
+      expect(of(await proposals(), 't-de')).toMatchObject({ targetAcosUsed: 0.3, targetSource: 'flat', proposedBidCents: 30 })
     } finally {
       await inA(() => db().adsAutomationState.updateMany({ data: { defaultTargetAcosPct: 45 } }))
     }
@@ -174,7 +174,7 @@ describe('the target chain in the optimiser, per ad group', () => {
 
   it("another business's strategy holds nothing here", async () => {
     const list = await proposals()
-    expect(of(list, 't-own').proposedBidCents).toBe(48) // not B's 3¢ ceiling, not its 5 % target
+    expect(of(list, 't-own').proposedBidCents).toBe(42) // not B's 3¢ ceiling, not its 5 % target
     expect(await inB(() => previewBidOptimization())).toMatchObject({ proposals: [] })
   })
 
