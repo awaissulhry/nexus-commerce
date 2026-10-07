@@ -4,7 +4,8 @@
  *
  * Proven: each setting (portfolio in and out, name, end date, bidding strategy) previews from → to and is written through
  * the screens' own write (updateCampaignWithSync) as the approver, changeSetId = the approval; many campaigns move in ONE
- * request; whatever can add spend is in `raises` and runs only with the approver's code; a person's approval passes the
+ * request; whatever can add spend is in `raises` and said in the effect, a day-to-day change under the Owner's code rule A
+ * (a plain approve runs it, no code; its limits still judge a run by rule); a person's approval passes the
  * live-write allowlist and a run by rule does not; a name the market already uses, another market's portfolio, a portfolio
  * made in Nexus only and a past end date are refused and not queued; undo puts each campaign back with its own values;
  * the default limits let nothing run alone.
@@ -46,8 +47,7 @@ import { getTool } from '../tool-registry.js'
 import { ruleFrom } from '../claude-trust.service.js'
 import { settingMove } from './ads-campaign-settings.tools.js'
 import { randomUUID } from 'node:crypto'
-import { generateSecret, generateSync } from 'otplib'
-import { __stepUpTest } from '../../../lib/auth/step-up.js'
+import { generateSecret } from 'otplib'
 import { commitScheduledApproval, decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
 import { queuePlan, runPlan } from '../change-plan.service.js'
 import type { McpPrincipal } from '../../mcp/mcp-auth.js'
@@ -190,31 +190,36 @@ describe('each setting', () => {
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: TOOL, args: { campaigns: [{ campaignId: 'c-n1', name: 'Test c-n1' }] } } })
   })
 
-  it('an end date: setting one holds spend back (no code); a past one is refused; removing one adds spend (code)', async () => {
+  it('an end date: setting one holds spend back; a past one is refused; removing one adds spend (listed, said, day-to-day: no code)', async () => {
     const end = inAYear()
     const set = await preview({ campaignIds: ['c-e1'], endDate: end })
     expect(set.preview).toMatchObject({ raises: [], noCode: expect.any(String), changes: [{ changes: [{ label: 'End date', from: 'no end date', to: end }] }], limitFacts: { this: { cuts: 1, raises: 0 } } })
     expect((await preview({ campaignIds: ['c-e1'], endDate: '2020-01-01' })).error).toMatch(/is in the past, which would end it at once/)
     const removed = await preview({ campaignIds: ['c-end'], endDate: null })
-    expect(removed.preview).toMatchObject({ raises: [{ campaignId: 'c-end', why: expect.stringMatching(/is removed: it keeps spending until stopped/) }], stepUp: { raises: ['End date'] } })
+    expect(removed.preview).toMatchObject({
+      raises: [{ campaignId: 'c-end', why: expect.stringMatching(/is removed: it keeps spending until stopped/) }],
+      noCode: expect.stringMatching(/day-to-day/), effect: expect.stringMatching(/It ADDS SPEND \(campaign "Test c-end": its end date .* is removed: it keeps spending until stopped\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/),
+    })
+    expect(removed.preview.stepUp).toBeUndefined()
+    // Its limits still judge a run by rule (none by default).
+    expect(judge(removed.preview)).toBeTypeOf('string')
     const asked = await ask({ campaignIds: ['c-end'], endDate: null })
-    // A plain approve does not run a raise; with the approver's code it runs.
-    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/it raises, and a raise runs only when a person with settings\.security\.manage approved it with their authenticator code/) })
-    expect((await campaignOf('c-end')).endDate).not.toBeNull()
-    expect(await approve(asked.approvalId!, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed' })
+    // The Owner's code rule A: a plain approve runs it.
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
     expect((await campaignOf('c-end')).endDate).toBeNull()
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: TOOL, args: { campaigns: [{ campaignId: 'c-end', endDate: inAYear() }] } } })
   })
 
-  it('the bidding strategy: up and down (and fixed after down only) add spend and need the code; the screen\'s words', async () => {
+  it('the bidding strategy: up and down (and fixed after down only) add spend, listed and said (no code); the screen\'s words', async () => {
     const up = await preview({ campaignIds: ['c-b1'], biddingStrategy: 'autoForSales' })
     expect(up.preview).toMatchObject({
       changes: [{ changes: [{ label: 'Bidding strategy', from: 'Dynamic bids - down only', to: 'Dynamic bids - up and down' }] }],
-      raises: [{ why: expect.stringMatching(/Amazon may bid up to twice its bids/) }], stepUp: { raises: ['Bidding strategy'] },
+      raises: [{ why: expect.stringMatching(/Amazon may bid up to twice its bids/) }], noCode: expect.stringMatching(/day-to-day/),
     })
+    expect(up.preview.stepUp).toBeUndefined()
     expect((await preview({ campaignIds: ['c-b1'], biddingStrategy: 'manual' })).preview).toMatchObject({ raises: [{ why: expect.stringMatching(/its full bids, never lowering them/) }] })
     const asked = await ask({ campaignIds: ['c-b1'], biddingStrategy: 'autoForSales' })
-    expect(await approve(asked.approvalId!, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
     expect((await campaignOf('c-b1')).biddingStrategy).toBe('AUTO_FOR_SALES')
     const queued = await inside(() => db().outboundSyncQueue.findFirst({ where: { payload: { path: ['entityId'], equals: 'c-b1' } }, orderBy: { createdAt: 'desc' }, select: { payload: true } })) as Row
     expect(queued.payload).toMatchObject({ fieldChanges: [{ field: 'biddingStrategy', oldValue: 'LEGACY_FOR_SALES', newValue: 'AUTO_FOR_SALES' }] })
@@ -222,9 +227,9 @@ describe('each setting', () => {
     expect((await preview({ campaignIds: ['c-b1'], biddingStrategy: 'legacyForSales' })).preview).toMatchObject({ raises: [], noCode: expect.any(String) })
   })
 
-  it('out of a capped portfolio adds spend (code); a campaign a playbook built may move, with a warning that never runs by rule', async () => {
+  it('out of a capped portfolio adds spend (listed, no code); a campaign a playbook built may move, with a warning that never runs by rule', async () => {
     expect((await preview({ campaignIds: ['c-capped'], portfolioId: null })).preview).toMatchObject({
-      raises: [{ why: 'it moves from portfolio "Test capped" to no portfolio: the cap EUR 500.00 a month no longer holds it' }], stepUp: { raises: ['Portfolio'] },
+      raises: [{ why: 'it moves from portfolio "Test capped" to no portfolio: the cap EUR 500.00 a month no longer holds it' }], noCode: expect.stringMatching(/day-to-day/),
     })
     const built = (await preview({ campaignIds: ['c-built'], portfolioId: null })).preview as Row
     expect(built.warnings[0]).toMatch(/was built by an ads playbook: a portfolio move here leaves the playbook's own portfolio/)
@@ -242,19 +247,19 @@ describe('each setting', () => {
 })
 
 describe('a stored cap in another spelling, or one Nexus cannot read: leaving it is never "the same"', () => {
-  it('a synced MONTHLYRECURRING, the bulk sheet\'s monthlyRecurring and an unknown policy: each move out is a raise (code)', async () => {
+  it('a synced MONTHLYRECURRING, the bulk sheet\'s monthlyRecurring and an unknown policy: each move out is a raise (listed; judged by its limits)', async () => {
     for (const [id, why] of [
       ['c-sync', 'it moves from portfolio "Test synced" to no portfolio: the cap EUR 400.00 a month no longer holds it'],
       ['c-bulk', 'it moves from portfolio "Test bulk sheet" to no portfolio: the cap EUR 400.00 a month no longer holds it'],
       ['c-odd', 'it moves from portfolio "Test odd" to no portfolio: the cap it holds now is a cap Nexus cannot read (its policy "weekly" is not one Nexus knows), so Nexus cannot tell whether it lets more spend: it counts as a raise'],
     ] as const) {
-      expect((await preview({ campaignIds: [id], portfolioId: null })).preview, id).toMatchObject({ raises: [{ why }], stepUp: { raises: ['Portfolio'] } })
+      const p = (await preview({ campaignIds: [id], portfolioId: null })).preview as Row
+      expect(p, id).toMatchObject({ raises: [{ why }], noCode: expect.stringMatching(/day-to-day/) })
+      // A raise to the limits: with only the market listed, it never runs by rule.
+      expect(judge(p, { markets: ['IT'], maxItems: 5 }), id).toBeTypeOf('string')
     }
     // Into a portfolio with a cap Nexus cannot read: a raise too (fail closed).
     expect((await preview({ campaignIds: ['c-ctl'], portfolioId: 'PF-ODD' })).preview).toMatchObject({ raises: [{ why: expect.stringMatching(/the cap it gets is a cap Nexus cannot read/) }] })
-    const asked = await ask({ campaignIds: ['c-odd'], portfolioId: null })
-    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/it raises/) })
-    expect((await campaignOf('c-odd')).portfolioId).toBe('PF-ODD')
   })
 })
 
@@ -271,7 +276,6 @@ async function realPerson(label: string): Promise<RealPerson> {
   await client.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   return { id: user.id, secret, principal: { kind: 'user', userId: user.id, label, via: 'app', workspace: business, permissions: { isOwner: false, permissions: EVERYTHING } } }
 }
-const codeOf = (p: RealPerson) => { __stepUpTest.reset(); return generateSync({ secret: p.secret }) }
 const approvalRow = (id: string) => inside(() => db().agentApproval.findUniqueOrThrow({ where: { id } })) as Promise<Row>
 /** The undo window closes now, and the sweep's commit takes it (as the person who approved it, re-checked). */
 const commitNow = async (approvalId: string) => {
@@ -287,18 +291,18 @@ describe('the real approve paths', () => {
     asker = await inside(() => realPerson('Test Asker'))
   }, 60_000)
 
-  it('a change plan carries the step\'s code: no code → mfa_required; with it the step runs', async () => {
+  it('a change plan step that adds spend (day-to-day): the plan carries no code, a plain approve runs it, and the step keeps its words', async () => {
     const queued = await inside(async () => {
       const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
       return queuePlan({ title: 'Test settings plan', steps: [{ tool: TOOL, args: { campaignIds: ['c-plan'], endDate: null } }] }, claude, run.id)
     }) as Row
     expect(queued).toMatchObject({ ok: true, mode: 'queued' })
     const planId = queued.approvalId as string
-    expect((await approvalRow(planId)).preview.stepUp).toMatchObject({ what: 'changes settings that can add spend on 1 campaign', raises: ['End date'], steps: [1] })
+    expect((await approvalRow(planId)).preview.stepUp).toBeUndefined()
+    const [step] = await inside(() => db().agentPlanStep.findMany({ where: { approvalId: planId } })) as Row[]
+    expect(step.preview).toMatchObject({ raises: [{ campaignId: 'c-plan' }], noCode: expect.stringMatching(/day-to-day/), effect: expect.stringMatching(/It ADDS SPEND/) })
     const decide = (code?: string) => inside(() => decideFleetApproval({ id: planId, decision: 'approve', actor: approverPerson.principal, ...(code ? { code } : {}) }))
-    expect(await decide()).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect((await campaignOf('c-plan')).endDate).not.toBeNull()
-    expect(await decide(codeOf(approverPerson))).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await decide()).toMatchObject({ ok: true, status: 'scheduled' })
     expect(await commitNow(planId)).toMatchObject({ ok: true, status: 'executing' })
     expect(await inside(() => runPlan(planId))).toMatchObject({ finished: true, counts: { done: 1 } })
     expect((await campaignOf('c-plan')).endDate).toBeNull()
@@ -330,20 +334,20 @@ describe('the real approve paths', () => {
   })
 })
 
-describe('the other doors: undo-ad-change and undo-change are no way around the code', () => {
-  it('undo-ad-change refuses to put back a setting that adds spend; undo-change asks set-campaign-settings, which needs the code', async () => {
+describe('the other doors: undo-ad-change and undo-change are no way around set-campaign-settings', () => {
+  it('undo-ad-change refuses to put back a setting that adds spend; undo-change asks set-campaign-settings, which lists the raise', async () => {
     const asked = await ask({ campaignIds: ['c-u1'], endDate: inAYear() })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
     const back = await inside(() => callTool(claude, 'undo-ad-change', { changeSetId: asked.approvalId })) as Row
-    expect(back.raw.error).toMatch(/^Not undone: putting these campaign settings back would add spend — campaign "Test c-u1": its end date .* is removed: it keeps spending until stopped\. set-campaign-settings does that, with the approver's authenticator code/)
+    expect(back.raw.error).toMatch(/^Not undone: putting these campaign settings back would add spend — campaign "Test c-u1": its end date .* is removed: it keeps spending until stopped\. set-campaign-settings does that, as a raise its preview lists/)
     const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! })) as Row
     expect(undo).toMatchObject({ request: { tool: TOOL, args: { campaigns: [{ campaignId: 'c-u1', endDate: null }] } } })
-    expect((await preview(undo.request.args)).preview).toMatchObject({ stepUp: { raises: ['End date'] } })
+    expect((await preview(undo.request.args)).preview).toMatchObject({ raises: [{ campaignId: 'c-u1' }], noCode: expect.stringMatching(/day-to-day/) })
   })
 
   it('undo-ad-change still puts back a setting that lowers spend', async () => {
     const asked = await ask({ campaignIds: ['c-u2'], biddingStrategy: 'autoForSales' })
-    expect(await approve(asked.approvalId!, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
     const back = await inside(() => callTool(claude, 'undo-ad-change', { changeSetId: asked.approvalId })) as Row
     expect(back.raw.ok, back.raw.error).toBe(true)
   })

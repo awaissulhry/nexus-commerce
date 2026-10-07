@@ -5,7 +5,8 @@
  * Proven: the read lists each portfolio with its market, cap, campaigns and spend; a create, a rename, a cap and an
  * archive go through the Portfolios page's own services (createPortfolio, updatePortfolioById) as the approver, each on
  * the ads audit with the approval as change set; a raised cap and an archive that frees a capped portfolio's campaigns
- * need the approver's code; a taken name, a portfolio made in Nexus only, an archived one and a bad cap are refused and
+ * are day-to-day under the Owner's code rule A (listed in raises, said in the effect, a plain approve runs them, no
+ * code); a taken name, a portfolio made in Nexus only, an archived one and a bad cap are refused and
  * not queued; undo archives a new portfolio and puts an old name and cap back (never a cap removed); the default limits
  * let nothing run alone.
  */
@@ -209,17 +210,19 @@ describe('set-portfolio — create', () => {
 })
 
 describe('set-portfolio — update', () => {
-  it('a raised cap needs the code: a plain approve does not run it; with the code the page\'s own push sets it; undo puts the old cap back', async () => {
+  it('a raised cap is day-to-day (code rule A): listed and said, no code; a plain approve runs the page\'s own push; undo puts the old cap back', async () => {
     const r = await preview({ op: 'update', portfolioId: 'PF-CAP', cap: { amountCents: 80000, policy: 'monthly' } })
     expect(r.preview).toMatchObject({
       changes: [{ label: 'Budget cap', from: 'EUR 500.00 a month', to: 'EUR 800.00 a month' }],
       raises: [{ what: 'Budget cap', why: 'its cap rises from EUR 500.00 a month to EUR 800.00 a month' }],
-      stepUp: { raises: ['Portfolio budget cap'] }, portfolio: { portfolioId: 'PF-CAP', campaigns: 1 },
+      noCode: expect.stringMatching(/^It can add spend \(listed in raises\), as a day-to-day change/), portfolio: { portfolioId: 'PF-CAP', campaigns: 1 },
+      effect: expect.stringMatching(/It ADDS SPEND \(its cap rises from EUR 500\.00 a month to EUR 800\.00 a month\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/),
     })
+    expect(r.preview.stepUp).toBeUndefined()
+    // Its limits still judge a run by rule: none by default.
+    expect(judge(r.preview)).toBeTypeOf('string')
     const asked = await ask({ op: 'update', portfolioId: 'PF-CAP', cap: { amountCents: 80000, policy: 'monthly' } })
-    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/it raises, and a raise runs only when a person/) })
-    expect(Number((await portfolio('PF-CAP'))!.budgetAmount)).toBe(500)
-    expect(await approve(asked.approvalId!, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
     expect(await portfolio('PF-CAP')).toMatchObject({ budgetPolicy: 'MONTHLY_RECURRING', budgetCurrencyCode: 'EUR' })
     expect(Number((await portfolio('PF-CAP'))!.budgetAmount)).toBe(800)
     const [log] = await inside(() => db().advertisingActionLog.findMany({ where: { executionId: asked.approvalId } })) as Row[]
@@ -259,15 +262,17 @@ describe('set-portfolio — update', () => {
 })
 
 describe('set-portfolio — archive', () => {
-  it('a capped portfolio with campaigns: its campaigns leave the cap (a raise, the code); permanent; no undo', async () => {
+  it('a capped portfolio with campaigns: its campaigns leave the cap (a raise, day-to-day: no code); permanent; no undo', async () => {
     const r = await preview({ op: 'archive', portfolioId: 'PF-ARCHME' })
     expect(r.preview).toMatchObject({
       op: 'archive', changes: [{ label: 'State', from: 'ENABLED', to: 'ARCHIVED' }], permanent: expect.stringMatching(/^PERMANENT/),
-      raises: [{ why: 'archiving it lets its 1 campaign spend without its cap (EUR 300.00 a month)' }], stepUp: { what: expect.stringMatching(/archives a capped portfolio/) },
+      raises: [{ why: 'archiving it lets its 1 campaign spend without its cap (EUR 300.00 a month)' }], noCode: expect.stringMatching(/day-to-day/),
+      effect: expect.stringMatching(/It ADDS SPEND \(archiving it lets its 1 campaign spend without its cap/),
     })
+    expect(r.preview.stepUp).toBeUndefined()
     expect(judge(r.preview, { markets: ['IT'] })).toBeTypeOf('string')
     const asked = await ask({ op: 'archive', portfolioId: 'PF-ARCHME' })
-    expect(await approve(asked.approvalId!, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
     expect((await portfolio('PF-ARCHME'))!.state).toBe('ARCHIVED')
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ error: expect.stringMatching(/cannot be brought back/) })
     expect((await preview({ op: 'archive', portfolioId: 'PF-ARCHME' })).error).toMatch(/^Nothing would change: portfolio "Test to archive" is archived already/)
@@ -275,26 +280,25 @@ describe('set-portfolio — archive', () => {
 })
 
 describe('a stored cap in another spelling, or one Nexus cannot read: never read as no cap', () => {
-  it('the bulk sheet\'s dateRange: a raise is a raise (code)', async () => {
+  it('the bulk sheet\'s dateRange: a raise is a raise (listed; day-to-day, no code)', async () => {
     const end = (await portfolio('PF-BULK'))!.endDate.toISOString().slice(0, 10)
     const r = await preview({ op: 'update', portfolioId: 'PF-BULK', cap: { amountCents: 80000, policy: 'dateRange', startDate: '2026-01-01', endDate: end } })
     expect(r.preview).toMatchObject({
       changes: [{ label: 'Budget cap', from: `EUR 500.00 from 2026-01-01 to ${end}`, to: `EUR 800.00 from 2026-01-01 to ${end}` }],
-      raises: [{ why: expect.stringMatching(/its cap rises/) }], stepUp: { raises: ['Portfolio budget cap'] },
+      raises: [{ why: expect.stringMatching(/its cap rises/) }], noCode: expect.stringMatching(/day-to-day/),
     })
+    expect(r.preview.stepUp).toBeUndefined()
   })
 
   it('a synced MONTHLYRECURRING cap holding a campaign: archiving it is a raise; so is any change of an unknown policy', async () => {
-    expect((await preview({ op: 'archive', portfolioId: 'PF-SYNC' })).preview).toMatchObject({ raises: [{ why: 'archiving it lets its 1 campaign spend without its cap (EUR 400.00 a month)' }], stepUp: expect.any(Object) })
+    expect((await preview({ op: 'archive', portfolioId: 'PF-SYNC' })).preview).toMatchObject({ raises: [{ why: 'archiving it lets its 1 campaign spend without its cap (EUR 400.00 a month)' }], noCode: expect.stringMatching(/day-to-day/) })
     const odd = await preview({ op: 'update', portfolioId: 'PF-ODD', cap: { amountCents: 100, policy: 'monthly' } })
     expect(odd.preview).toMatchObject({
       changes: [{ label: 'Budget cap', from: 'a cap Nexus cannot read (its policy "weekly" is not one Nexus knows)', to: 'EUR 1.00 a month' }],
-      raises: [{ why: expect.stringMatching(/Nexus cannot tell whether it lets more spend: it counts as a raise/) }], stepUp: expect.any(Object),
+      raises: [{ why: expect.stringMatching(/Nexus cannot tell whether it lets more spend: it counts as a raise/) }], noCode: expect.stringMatching(/day-to-day/),
     })
-    // A plain approve does not run it.
-    const asked = await ask({ op: 'update', portfolioId: 'PF-ODD', cap: { amountCents: 100, policy: 'monthly' } })
-    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/it raises/) })
-    expect((await portfolio('PF-ODD'))!.budgetPolicy).toBe('weekly')
+    // Its limits still judge it as a raise: it never runs by rule with the defaults.
+    expect(judge(odd.preview, { markets: ['IT'] })).toBeTypeOf('string')
     const read = (await call('ad-portfolios', { portfolioId: 'PF-ODD' })).data.items[0]
     expect(read.cap).toMatchObject({ capCents: 40000, policy: 'unreadable', storedPolicy: 'weekly', note: expect.stringMatching(/counts as a raise/) })
   })

@@ -160,7 +160,7 @@ export interface AssignPlan {
   marketsAfter: Record<string, number>
   /** What its actions can do to spend (ruleMoves): up, down, or both. */
   moves: { up: boolean; down: boolean }
-  /** What can raise spend (the approver's code), or empty. */
+  /** What can raise spend (listed; the code is the Owner's code rule's, ads-code-rule.ts), or empty. */
   raises: string[]
   warnings: string[]
   /** Other enabled rules and schedules already bound to the campaigns it adds (the first LINES_SHOWN). */
@@ -184,7 +184,8 @@ export interface AssignPlan {
 const LEVEL_WORDS: Record<string, string> = { OFF: 'Off', OBSERVE: 'Observe', PROPOSE: 'Propose', AUTO: 'Auto' }
 
 /**
- * ONE place decides what needs the approver's authenticator code (the Owner's open question: it can flip here). A rule
+ * ONE place decides what raises (listed in raises; whether approving needs the approver's code is the Owner's code rule,
+ * ads-code-rule.ts — assign-ad-rules is a day-to-day door). A rule
  * at Auto writes by itself, so binding it to more campaigns adds spend there when it can raise, and taking campaigns
  * from it adds spend there when it was cutting them. Below Auto nothing it does reaches Amazon without a person.
  */
@@ -263,7 +264,7 @@ export async function planRuleAssign(input: AssignInput): Promise<{ plan: Assign
   const fixed = removed.filter(otherMarket)
   if (fixed.length && ruleMarket) warnings.push(`It takes ${plural(fixed.length, 'campaign')} outside ${ruleMarket} off the rule (${tally(fixed)}).`)
   if (everyOther) warnings.push(`"${rule.name}" has no campaigns picked today, so it acts on every campaign in its scope: after this it acts only on the ${plural(afterIds.length, 'campaign')} picked.`)
-  if (raises.length) warnings.push(`It can raise spend: ${raises.join('; ')}. Approving it needs the approver's authenticator code.`)
+  if (raises.length) warnings.push(`It can raise spend: ${raises.join('; ')}.`)
 
   const alsoChangedBy: AssignPlan['alsoChangedBy'] = []
   if (added.length) {

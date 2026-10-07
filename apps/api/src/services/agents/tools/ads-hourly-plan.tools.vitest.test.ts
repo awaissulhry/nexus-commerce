@@ -5,8 +5,9 @@
  *   read        every plan with whose it is; one plan as a 7 × 24 summary per day, its targets, members, the next 24 h
  *   create      born switched off, through the screen's own save: a version row names the approver; Claude's plan after
  *   paint       a week painted on a plan: the version row, from → to per day; undo paints the old week back
- *   switch      on is a raise: the approver's code, a plain approve is not run; off gives back the floored bids exactly as
- *               the screen does, each write carrying the request as its change set
+ *   switch      on is a raise: listed and said, a day-to-day change under the Owner's code rule A (a plain approve runs
+ *               it, no code; by rule only with allowRaise); off gives back the floored bids exactly as the screen does,
+ *               each write carrying the request as its change set
  *   owners      a person's plan is named (never by rule: the limits refuse it); the playbook's plan is refused
  *   members     one campaign, one plan: a campaign another plan holds needs move; the playbook's never
  *   values      a campaign's own placement %, from → to; a raise when the plan is on; undo sets it back
@@ -228,16 +229,15 @@ describe('set-hourly-bid-plan — create, paint, switch', () => {
     expect((await plan(planId))!.windows).toEqual(WEEK)
   })
 
-  it('switch on is a raise: the approver\'s code; a plain approve is not run, with the code it runs', async () => {
+  it('switch on is a raise: listed and said (code rule A: day-to-day, no code); by rule only with allowRaise; a plain approve runs it', async () => {
     const p = (await preview({ op: 'switch', planId, on: true })).preview
     expect(p.raises[0]).toMatch(/^switches the plan on: from the hourly bid engine's next run it holds its week on 2 campaigns/)
-    expect(p.stepUp).toMatchObject({ what: 'switches an hourly bid plan on', raises: ['Hourly bid plans'] })
-    expect(judge(p, { maxItems: 5, markets: ['IT'], campaignIds: ['c-h2', 'c-h3'] })).toMatch(/allowRaise is off/)
+    expect(p.stepUp).toBeUndefined()
+    expect(p.noCode).toMatch(/^It can add spend \(listed in raises\), as a day-to-day change/)
+    expect(p.effect).toMatch(/It ADDS SPEND \(switches the plan on: .*\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/)
+    expect(judge(p, { maxItems: 5, markets: ['IT'], campaignIds: ['c-h2', 'c-h3'] })).toMatch(/allowRaise is off\); a person decides$/)
     const plain = await ask({ op: 'switch', planId, on: true })
-    expect(await approve(plain.approvalId)).toMatchObject({ ok: false })
-    expect((await plan(planId))!.enabled).toBe(false)
-    const coded = await ask({ op: 'switch', planId, on: true })
-    expect(await approve(coded.approvalId, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed', result: { enabled: true } })
+    expect(await approve(plain.approvalId)).toMatchObject({ ok: true, status: 'executed', result: { enabled: true } })
     expect((await members(planId)).every((m) => m.enabled)).toBe(true)
     expect((await versions(planId)).at(-1)).toMatchObject({ enabled: true, changedBy: 'user:u-approver' })
   })
@@ -248,8 +248,9 @@ describe('set-hourly-bid-plan — create, paint, switch', () => {
     expect(p.targetValues).toEqual([expect.objectContaining({ campaignId: 'c-h2', targetKey: 'test-top', from: expect.objectContaining({ placementPct: 50 }), to: expect.objectContaining({ placementPct: 80 }), raises: ['a higher placement %'] })])
     expect(p.raises).toEqual(["1 campaign holds a higher placement % in the plan's hours"])
     expect(p.highest.placementPct).toBe(150)
+    expect(p.stepUp).toBeUndefined()
     const asked = await ask(args)
-    expect(await approve(asked.approvalId, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed' })
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'executed' })
     expect((await members(planId)).find((m) => m.campaignId === 'c-h2')!.targetOverrides).toEqual({ 'test-top': { biasPct: 80 } })
     // A version row even though only a campaign's values moved (Claude's change always leaves one).
     expect((await versions(planId)).at(-1)).toMatchObject({ changedBy: 'user:u-approver' })
@@ -269,9 +270,10 @@ describe('set-hourly-bid-plan — create, paint, switch', () => {
       consequences: expect.stringMatching(/^At Amazon now: the bids the plan floored on 1 campaign come back/),
     })
     expect(p.raises).toEqual([expect.stringMatching(/^gives back the bids it floored on 1 campaign \(1 bid leave the Min-bid floor\)/)])
-    expect(p.stepUp).toMatchObject({ what: 'gives back bids an hourly bid plan floored', raises: ['Hourly bid plans', 'Bids'] })
+    expect(p.stepUp).toBeUndefined()
+    expect(p.noCode).toMatch(/day-to-day/)
     const asked = await ask({ op: 'switch', planId, on: false })
-    expect(await approve(asked.approvalId, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed', result: { enabled: false, givesBack: { restored: 1 } } })
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'executed', result: { enabled: false, givesBack: { restored: 1 } } })
     const [camp, target] = await inside(() => Promise.all([db().campaign.findUnique({ where: { id: 'c-h3' } }), db().adTarget.findUnique({ where: { id: 't-c-h3' } })]))
     expect(camp.bidsSuppressedAt).toBeNull()
     expect(target).toMatchObject({ bidCents: 45, suppressedFromBidCents: null })
@@ -408,13 +410,17 @@ describe('W4-1 review — the Owner\'s plans, windows, values a campaign brings,
     }
   })
 
-  it('switching off a plan that is on and holds Min-bid hours always asks for the code, even with nothing floored now', async () => {
+  it('switching off a plan that is on and holds Min-bid hours always lists a give-back, even with nothing floored now (no code: day-to-day)', async () => {
     await inside(() => patchRankScheduleGroup(ids.person, { windows: WEEK }, 'user:screen-person'))
     const p = (await preview({ op: 'switch', planId: ids.person, on: false })).preview
     expect(p.givesBack).toMatchObject({ restore: 0 })
     expect(p.raises).toEqual([expect.stringMatching(/^the plan is on and holds Min-bid hours: whatever it floors on 1 campaign it lets go comes back when this runs/)])
-    expect(p.stepUp).toMatchObject({ what: 'gives back bids an hourly bid plan floored', raises: ['Hourly bid plans', 'Bids'] })
-    expect((await preview({ op: 'delete', planId: ids.person })).preview.stepUp).toBeDefined()
+    expect(p.stepUp).toBeUndefined()
+    const deleted = (await preview({ op: 'delete', planId: ids.person })).preview
+    expect(deleted.raises).toEqual([expect.stringMatching(/^the plan is on and holds Min-bid hours/)])
+    expect(deleted.stepUp).toBeUndefined()
+    // Its limits judge the raise: never by rule without allowRaise.
+    expect(judge(p, { maxItems: 5, markets: ['IT'], campaignIds: ['c-h1'], allowPeoplesPlans: true, maxPlacementPct: 900, maxBaseBidCents: 10_000, allowEngineOwned: true })).toMatch(/allowRaise is off/)
   })
 
   it('the delete says what goes with it; its undo keeps the portfolio binding and refuses beyond 100 campaigns', async () => {

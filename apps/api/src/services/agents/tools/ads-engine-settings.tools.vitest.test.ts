@@ -6,8 +6,9 @@
  *   assign      the preview lists each campaign with its market and warns when it is not the rule's (the name's "— DE");
  *               such a request never runs by rule; approved, a builder rule's picker list is saved by the rule drawer's
  *               path (audit row naming the request, the Apply Rules column mirrored) and an engine budget rule's rows by
- *               the Apply Rules path (another rule on the campaign kept); refusals; a rule at Auto raises: no code 403,
- *               approved without a code it never runs, with the code it runs; undo puts the list back
+ *               the Apply Rules path (another rule on the campaign kept); refusals; a rule at Auto raises: listed and
+ *               said, a day-to-day change under the Owner's code rule A (a plain approve runs it, no code; by rule only
+ *               with allowRaise); undo puts the list back
  *   coverage    term edits through the cockpit's service; a higher target is a raise; a lead ASIN the family does not
  *               advertise is refused; an unmeasured seed creates a switched-off draft
  *   run-now     the preview says when the engine last ran and that a second run on the same data takes one more step;
@@ -15,7 +16,7 @@
  *               Control Room does not offer Run now; approved, it starts the registry's own job by hand (one CronRun row,
  *               manual) and approval-status reads how it went; by rule only with maxItems 1, a listed engine, and long
  *               enough after the last run
- *   plan        a change plan carries a step's stepUp
+ *   plan        a change plan with a step that raises carries no code (day-to-day), and a plain approve runs it
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -276,26 +277,19 @@ describe('W4-8 assign-ad-rules — the market check, and the screens’ own path
     expect((await preview('assign-ad-rules', { ruleId: ids.budget, op: 'add', campaignIds: [ids.de1] })).error).toMatch(/^Nothing would change/)
   })
 
-  it('a rule at Auto: raises, stepUp; no code 403; approved without a code never runs; with the code it runs', async () => {
+  it('a rule at Auto: the raise is listed and said, no code (code rule A: day-to-day); by rule never with allowRaise off; a plain approve runs it', async () => {
     const { answer } = await call('assign-ad-rules', { ruleId: ids.auto, op: 'add', campaignIds: [ids.de2] })
     expect(answer.preview).toMatchObject({
       rule: { level: 'AUTO' }, raises: ['at Auto, the rule starts acting on 1 more campaign, and it can raise what they spend'],
-      stepUp: { what: 'changes what the ads rule "Push bids — DE" acts on at Auto', raises: ['Rule reach'] },
+      noCode: expect.stringMatching(/day-to-day/),
+      effect: expect.stringMatching(/ It ADDS SPEND \(at Auto, the rule starts acting on 1 more campaign, and it can raise what they spend\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/),
+      warnings: expect.arrayContaining(['It can raise spend: at Auto, the rule starts acting on 1 more campaign, and it can raise what they spend.']),
     })
+    expect(answer.preview.stepUp).toBeUndefined()
     // By rule: never with allowRaise off (the default), whatever else is open.
-    expect(judge('assign-ad-rules', answer.preview, { maxItems: 250, allowEngineOwned: true })).toMatch(/it can raise spend .*allowRaise is off/)
-    const noCode = await decide('owner', answer.approvalId, {})
-    expect(noCode.statusCode).toBe(403)
-    expect(noCode.json()).toMatchObject({ code: 'mfa_required' })
-    expect((await decide('manager', answer.approvalId, { code: codeOf('manager') })).statusCode).toBe(403)
-    // A plain approve (no code) that reached the commit some other way is never run.
-    const plain = await call('assign-ad-rules', { ruleId: ids.auto, op: 'add', campaignIds: [ids.de2] })
-    expect(await inside(() => scheduleApproval({ id: plain.answer.approvalId, actor: viewer('owner'), via: 'nexus' }))).toMatchObject({ ok: true })
-    const refused = await commit(plain.answer.approvalId)
-    expect(refused).toMatchObject({ ok: false })
-    expect(refused.error).toContain('a raise runs only when a person with settings.security.manage approved it with their authenticator code')
+    expect(judge('assign-ad-rules', answer.preview, { maxItems: 250, allowEngineOwned: true })).toMatch(/it can raise spend .*a person decides \(allowRaise is off\)$/)
     expect(await picks(ids.auto)).toEqual([ids.de1])
-    expect((await decide('owner', answer.approvalId, { code: codeOf() })).statusCode).toBe(200)
+    expect((await decide('owner', answer.approvalId, {})).statusCode).toBe(200)
     expect(await commit(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
     expect(await picks(ids.auto)).toEqual([ids.de1, ids.de2].sort())
   })
@@ -321,19 +315,22 @@ describe('W4-8 assign-ad-rules — the market check, and the screens’ own path
     for (const name of ['pause it', 'let it be', 'Trim spend IT', 'Trim spend - it', 'Trim spend — XX', 'Trim (DE)']) expect(nameMarket(name), name).toBeNull()
   })
 
-  it('a change plan carries the step’s stepUp', async () => {
+  it('a change plan with a step that raises at Auto: no code on the plan (day-to-day)', async () => {
     const { answer } = await call('submit-change-plan', { title: 'Test plan', steps: [{ tool: 'assign-ad-rules', args: { ruleId: ids.auto, op: 'add', campaignIds: [ids.it1] } }] })
-    expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval', preview: { stepUp: { steps: [1], raises: ['Rule reach'] } } })
+    expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval' })
+    expect(answer.preview?.stepUp).toBeUndefined()
   })
 })
 
 describe('W4-8 set-coverage-set — the cockpit’s own service', { timeout: TIMEOUT }, () => {
-  it('a higher target is a raise (code); a pause is not; a lead ASIN the family does not advertise is refused', async () => {
+  it('a higher target is a raise, listed and said (no code: day-to-day); a pause is not; a lead ASIN the family does not advertise is refused', async () => {
     const raise = await preview('set-coverage-set', { op: 'edit-terms', setId: ids.set, terms: [{ termId: ids.t2, targetSharePct: 30 }, { termId: ids.t3, status: 'ACTIVE' }] })
     expect(raise.preview).toMatchObject({
       action: 'set-coverage-set', op: 'edit-terms', set: { name: 'TEST coverage', enabled: true },
-      totals: { termsEdited: 2, raises: 2 }, raisedTerms: [ids.t2, ids.t3], stepUp: { raises: ['Coverage bids'] }, reach: { nexusOnly: true },
+      totals: { termsEdited: 2, raises: 2 }, raisedTerms: [ids.t2, ids.t3], noCode: expect.stringMatching(/day-to-day/), reach: { nexusOnly: true },
+      effect: expect.stringMatching(/It ADDS SPEND \("test term two": target share 20 → 30 %/),
     })
+    expect(raise.preview.stepUp).toBeUndefined()
     expect(raise.preview.raises[0]).toBe('"test term two": target share 20 → 30 %, so the engine may raise its bid further')
     expect(raise.preview.raises[1]).toMatch(/^"test term three": it is active again, so the engine may raise its bid toward 15 % share/)
     expect(judge('set-coverage-set', raise.preview, { maxItems: 250, allowEngineOwned: true })).toMatch(/allowRaise is off/)
@@ -389,19 +386,16 @@ describe('W4-8 run-ad-engine-now — the Control Room’s Run now', { timeout: T
     expect((await preview('run-ad-engine-now', { engine: 'auto-bid' })).error).toBe('Not queued: the Ads Control Room does not offer Run now for Bid optimiser (auto-bid) — while this engine is off: switched off for this business.')
   })
 
-  it('at Auto it raises (code); approved with the code it starts the registry’s job by hand, and approval-status reads the run', async () => {
+  it('at Auto it raises (listed and said, no code: day-to-day); a plain approve starts the registry’s job by hand, and approval-status reads the run', async () => {
     setEngineLockStoreForTests({ status: 'ready', eval: async () => -2 })
     const { answer } = await call('run-ad-engine-now', { engine: 'auto-bid', why: 'test: run now' })
-    expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval', preview: { level: 'AUTO', stepUp: { raises: ['Bids', 'Budgets'] } }, consequences: { reversibility: 'none' } })
-    expect((await decide('owner', answer.approvalId, {})).statusCode).toBe(403)
-    // A plain approve (no code) that reached the commit some other way never starts it.
-    const plain = await call('run-ad-engine-now', { engine: 'auto-bid' })
-    expect(await inside(() => scheduleApproval({ id: plain.answer.approvalId, actor: viewer('owner'), via: 'nexus' }))).toMatchObject({ ok: true })
-    const refused = await commit(plain.answer.approvalId)
-    expect(refused).toMatchObject({ ok: false })
-    expect(refused.error).toContain('a raise runs only when a person with settings.security.manage approved it with their authenticator code')
+    expect(answer, JSON.stringify(answer)).toMatchObject({
+      status: 'waiting_for_approval', consequences: { reversibility: 'none' },
+      preview: { level: 'AUTO', raises: [expect.stringMatching(/runs at Auto: it may raise bids or budgets on this run/)], noCode: expect.stringMatching(/day-to-day/), effect: expect.stringMatching(/It ADDS SPEND \(.* runs at Auto/) },
+    })
+    expect(answer.preview.stepUp).toBeUndefined()
     expect(jobs.ran).not.toContain('ads-auto-bid')
-    expect((await decide('owner', answer.approvalId, { code: codeOf() })).statusCode).toBe(200)
+    expect((await decide('owner', answer.approvalId, {})).statusCode).toBe(200)
     expect(await commit(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
     await vi.waitFor(async () => {
       const row = await inside(() => db().cronRun.findFirst({ where: { jobName: 'ads-auto-bid', triggeredBy: 'manual' } }))
@@ -436,13 +430,13 @@ describe('W4-8 run-ad-engine-now — the Control Room’s Run now', { timeout: T
     expect(pool.preview.warnings[1]).toMatch(/it has no lock: a scheduled run that starts in the same moment can overlap it/)
   })
 
-  it('a change plan carries the run’s stepUp; approved with the code, the plan starts the engine', async () => {
+  it('a change plan with the run (day-to-day): no code on the plan; a plain approve, and the plan starts the engine', async () => {
     setEngineLockStoreForTests({ status: 'ready', eval: async () => -2 })
     const { answer } = await call('submit-change-plan', { title: 'Test run plan', steps: [{ tool: 'run-ad-engine-now', args: { engine: 'auto-bid' } }] })
-    expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval', preview: { stepUp: { steps: [1], raises: ['Bids', 'Budgets'] } } })
-    expect((await decide('owner', answer.approvalId, {})).statusCode).toBe(403)
+    expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval' })
+    expect(answer.preview?.stepUp).toBeUndefined()
     const before = jobs.ran.filter((j) => j === 'ads-auto-bid').length
-    expect((await decide('owner', answer.approvalId, { code: codeOf() })).statusCode).toBe(200)
+    expect((await decide('owner', answer.approvalId, {})).statusCode).toBe(200)
     expect(await commit(answer.approvalId)).toMatchObject({ ok: true })
     expect(await inside(() => runPlan(answer.approvalId))).toMatchObject({ finished: true, counts: { done: 1 } })
     await vi.waitFor(() => expect(jobs.ran.filter((j) => j === 'ads-auto-bid').length).toBe(before + 1))
