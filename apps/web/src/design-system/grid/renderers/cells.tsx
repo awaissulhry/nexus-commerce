@@ -14,7 +14,7 @@
  */
 import { memo, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronRight, ExternalLink, MoreHorizontal } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Lock, MoreHorizontal } from 'lucide-react'
 import type { ICellRendererParams, IRowNode } from 'ag-grid-community'
 
 import { Button, InfoTip, Pill, TagGlyph, Tooltip, type Tone } from '../../primitives'
@@ -120,12 +120,20 @@ export interface LockedCellParams {
   reason?: string
 }
 
+/**
+ * The lock beside a read-only value (Owner 2026-10-07: an outline icon, not the 🔒 emoji) — the same outline `Lock` the
+ * Status and Action cells draw when they are held, in the muted grid ink, so the app has one lock. Its name is the reason.
+ */
+export function LockGlyph({ reason }: { reason?: string | null }) {
+  return <Lock size={11} strokeWidth={2.25} className="nds-cell-lock-glyph" role="img" aria-label={reason || 'Read-only'} />
+}
+
 export const LockedCell = memo(function LockedCell(p: ICellRendererParams & LockedCellParams) {
   const f = formatGridValue(p.kind ?? 'text', p.value)
   return (
     <span className="nds-cell-locked">
       {f.empty ? EMPTY_DASH : f.text}
-      <span className="nds-cell-lock-glyph" role="img" aria-label={p.reason ?? 'Read-only'}>🔒</span>
+      <LockGlyph reason={p.reason} />
     </span>
   )
 })

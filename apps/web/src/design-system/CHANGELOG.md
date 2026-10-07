@@ -1,3 +1,10 @@
+## LockGlyph: a locked cell's lock is an outline icon, not the 🔒 emoji — 2026-10-07
+
+- **`LockGlyph`** (`grid/renderers/cells.tsx`): the outline `Lock` (11px, the held Status and Action cells' icon) in the
+  muted grid ink (`--nds-grid-muted-fg`); its accessible name is the reason. `LockedCell` (every `lockedColumn`: the FBA
+  qty on the Matrix and the Information page) and the inventory grid's read-only stock cell draw it. The Owner found the
+  emoji out of place. Mirrored between Web and Factory (cells.tsx, renderers/index.ts, grid.css).
+
 ## ActionConfirm: a button that names the action; an inline question with a title's room — 2026-10-06
 
 - **`ActionImpact.confirmLabel`** (`grid/actions/registry.ts`): the primary button's words ("Raise to Auto", "Stop now",

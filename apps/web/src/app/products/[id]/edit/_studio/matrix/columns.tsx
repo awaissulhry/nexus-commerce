@@ -76,6 +76,22 @@ export const NOT_LISTED_W = 120
 
 export const matrixColId = (key: CoordinateKey, kind: MatrixCellKind | 'notListed'): string => `${key}.${kind}`
 
+/**
+ * The Status column of one market (Owner 2026-10-07): the Information page's own Status column (`statusColumn`), once
+ * per market, right after Listing. Its id is not a Matrix cell id (`parseMatrixColId` → null), so no Matrix write path
+ * can take it: its values are the publish actions' (`usePublishActions`), written by `usePublishCellEditing`.
+ */
+export const matrixStatusColId = (key: CoordinateKey): string => `${key}.status`
+export const isMatrixStatusColId = (colId: string | null | undefined): boolean => !!colId && colId.lastIndexOf('.') > 0 && colId.endsWith('.status')
+/** The market group a column belongs to (its coordinate key): a Matrix cell's, or a market's Status; null for the rest. */
+export function matrixGroupKeyOf(colId: string | null | undefined): CoordinateKey | null {
+  const parsed = parseMatrixColId(colId)
+  if (parsed) return parsed.key
+  return isMatrixStatusColId(colId) ? colId!.slice(0, colId!.lastIndexOf('.')) : null
+}
+/** A market that draws a Status column: one with a Listing cell (a listed market, or an alias), never a region's inventory. */
+export const hasMatrixStatus = (coord: Pick<MatrixCoordinate, 'connected' | 'cells'>): boolean => coord.connected && coord.cells.includes('listing')
+
 /** `AMAZON:IT.price` → `{ key: 'AMAZON:IT', kind: 'price' }`; a non-Matrix id → null. Keys carry no `.`. */
 export function parseMatrixColId(colId: string | undefined | null): { key: CoordinateKey; kind: MatrixCellKind } | null {
   if (!colId) return null
@@ -241,6 +257,8 @@ export interface BuildMatrixColumnsOptions {
   rowsRef: MutableRefObject<StudioRow[]>
   /** The identity column's width (`identityWidthFor`); the desktop 380 when not given. */
   identityWidth?: number
+  /** A market's Status column (the page builds it with `statusColumn`), placed right after its Listing; null = none. */
+  statusColumnOf?: (coord: MatrixCoordinate) => ColDef<StudioRow> | null
 }
 
 const rowId = (r: StudioRow) => r.id
@@ -381,6 +399,10 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
             return refusedTooltip(mark?.state === 'refused' ? mark.reason : undefined, withSource)
           },
         })
+        if (kind === 'listing' && hasMatrixStatus(coord)) {
+          const status = opts.statusColumnOf?.(coord)
+          if (status) children.push(status)
+        }
       }
     }
     groups.push({
