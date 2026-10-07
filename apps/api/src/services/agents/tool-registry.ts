@@ -36,6 +36,7 @@ import { ADS_TARGET_TOOLS } from './tools/ads-targets.tools.js'
 import { ADS_NEGATIVE_TOOLS } from './tools/ads-negatives.tools.js'
 import { ADS_AD_GROUP_TOOLS } from './tools/ads-ad-groups.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
+import { ADS_AUTO_UNDO_TOOLS } from './tools/ads-auto-undo.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
@@ -62,6 +63,7 @@ import { CATALOG_STRUCTURE_TOOLS } from './tools/catalog-structure.tools.js'
 import { PLATFORM_LIBRARY_TOOLS } from './tools/platform-library.tools.js'
 import { REPORT_TOOLS } from './tools/reports.tools.js'
 import { PLATFORM_ACTIVITY_TOOLS } from './tools/platform-activity.tools.js'
+import { PLATFORM_HEALTH_TOOLS } from './tools/platform-health.tools.js'
 import { ORGANIZE_CATALOG_TOOLS } from './tools/organize-catalog.tools.js'
 import { ORGANIZE_PLATFORM_TOOLS } from './tools/organize-platform.tools.js'
 import { STRUCTURE_CHANGE_TOOLS } from './tools/structure-change.tools.js'
@@ -158,6 +160,8 @@ const ALL: AgentTool[] = [
   ...ADS_AD_GROUP_TOOLS,
   // Ads autonomy W3-2 — cancel an ad write Nexus queued and has not sent yet (a brake: nothing reaches Amazon).
   ...ADS_QUEUED_WRITE_TOOLS,
+  // ADS AUTONOMY — auto-undo (A19): one undo of an automatic change it judged clearly worse, a person decides it.
+  ...ADS_AUTO_UNDO_TOOLS,
   ...EBAY_AD_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,
@@ -201,6 +205,8 @@ const ALL: AgentTool[] = [
   // MCP full control P6 — reports, the alerts inbox, the audit trail, sync activity and AI usage, read.
   ...REPORT_TOOLS,
   ...PLATFORM_ACTIVITY_TOOLS,
+  // Platform health watchdog (2026-10-07) — the daily checks of crons, feeds, ad writes, approvals, automation and queues.
+  ...PLATFORM_HEALTH_TOOLS,
   // MCP full control P7 — organizing changes: tags, workflow stage, saved views, alert rules, acknowledging alerts, the image library.
   ...ORGANIZE_CATALOG_TOOLS,
   ...ORGANIZE_PLATFORM_TOOLS,

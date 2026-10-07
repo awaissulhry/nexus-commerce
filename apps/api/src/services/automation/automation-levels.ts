@@ -27,9 +27,9 @@ export const highest = (...levels: AutomationLevel[]): AutomationLevel =>
   levels.reduce((a, b) => (rank(a) >= rank(b) ? a : b), 'OFF' as AutomationLevel)
 export const isLevel = (value: unknown): value is AutomationLevel => LEVELS.includes(value as AutomationLevel)
 
-/** The 39 automations of plan part 06 §1, by their inventory number. */
+/** The 39 automations of plan part 06 §1, by their inventory number, and A19 (ads autonomy: auto-undo). */
 export const AUTOMATION_IDS = [
-  'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17', 'A18',
+  'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19',
   'E1', 'E2', 'F1', 'F2',
   'N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7', 'N8', 'N9', 'N10', 'N11', 'N12', 'N13', 'N14', 'N15', 'N16', 'N17',
 ] as const
@@ -429,6 +429,8 @@ export interface ExplainFacts {
   writes: WritesFact | null
   refusals: RefusalsFact | null
   notes?: string[]
+  /** What it found, in its own shape (A19 auto-undo: its judgements of the window, counted, and the newest of them). */
+  findings?: Record<string, unknown>
 }
 
 const LAST = 10

@@ -35,6 +35,8 @@ export interface AutomationActivity {
   runs: ExplainFacts['runs']
   writes: ExplainFacts['writes']
   refusals: ExplainFacts['refusals']
+  /** What it found, when it keeps such a record (A19 auto-undo: its judgements). */
+  findings?: ExplainFacts['findings']
   verdicts: Verdict[]
   notes: string[]
 }
@@ -106,6 +108,7 @@ export async function explainAutomation(adapter: AutomationAdapter, opts: { rowI
     runs: facts.runs,
     writes: facts.writes,
     refusals: facts.refusals,
+    ...(facts.findings ? { findings: facts.findings } : {}),
     verdicts: verdictsOf(level, levelReason, facts, days),
     notes: [
       ...(facts.notes ?? []),

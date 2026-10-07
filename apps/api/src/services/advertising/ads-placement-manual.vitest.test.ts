@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildManualAdjustments, currentLanes, isNoOp } from './ads-placement-manual.js'
+import { buildManualAdjustments, currentLanes, isNoOp, servingBaseBidByCampaign } from './ads-placement-manual.js'
+import { cpcCapPct } from './rank-controller.js'
 
 /**
  * PLC.3 — these tests exist because of one line in the write path.
@@ -115,5 +116,44 @@ describe('isNoOp — an unchanged lane must not be counted as a write', () => {
   })
   it('compares AFTER clamping, so 1000 → 900 on a lane already at 900 is a no-op', () => {
     expect(isNoOp([{ placement: TOP, percentage: 900 }], TOP, 1000)).toBe(true)
+  })
+})
+
+/**
+ * C2 (2026-10-07) — the CPC ceiling's base bid is the highest bid that SERVES. On 2026-10-07 the auto campaign
+ * IT_Auto_Close (ad group default 50¢; its one live auto target at 14¢, three paused at 30¢) read "base bid ALONE exceeds
+ * the €0.45 CPC ceiling" and its 150 % Top of search was capped to 0 %: the default no target uses was the base.
+ */
+describe('servingBaseBidByCampaign — the bids that serve', () => {
+  const group = (id: string, campaignId: string, defaultBidCents: number, suppressedFromBidCents: number | null = null) => ({ id, campaignId, defaultBidCents, suppressedFromBidCents })
+  const target = (adGroupId: string, bidCents: number, status = 'ENABLED', suppressedFromBidCents: number | null = null) => ({ adGroupId, status, bidCents, suppressedFromBidCents })
+
+  it('an auto ad group whose targets bid for themselves: its live target, not its default or its paused targets', () => {
+    const base = servingBaseBidByCampaign([group('g', 'IT_Auto_Close', 50)], [target('g', 14), target('g', 30, 'PAUSED')])
+    expect(base.get('IT_Auto_Close')).toBe(14)
+    // The ceiling then caps nothing at 150 %: €0.45 / 14¢ − 1 = 221 % (it was 0 %, "base bid ALONE exceeds it").
+    expect(cpcCapPct(45, base.get('IT_Auto_Close'))).toEqual({ capPct: 221, baseAlone: false })
+    expect(cpcCapPct(45, 50)).toEqual({ capPct: 0, baseAlone: true })
+  })
+
+  it('an ad group with no target of its own serves its default bid', () => {
+    const base = servingBaseBidByCampaign([group('g1', 'c', 60), group('g2', 'c', 50)], [target('g2', 20)])
+    expect(base.get('c')).toBe(60)
+  })
+
+  it('the bid a suppression gives back still counts — it is what serves the moment the floor lifts', () => {
+    expect(servingBaseBidByCampaign([group('g', 'c', 50)], [target('g', 2, 'ENABLED', 35)]).get('c')).toBe(35)
+    expect(servingBaseBidByCampaign([group('g', 'c', 2, 70)], []).get('c')).toBe(70)
+  })
+
+  it('the highest serving bid across ad groups wins', () => {
+    const base = servingBaseBidByCampaign([group('g1', 'c', 50), group('g2', 'c', 50)], [target('g1', 14), target('g2', 22), target('g2', 90, 'ARCHIVED')])
+    expect(base.get('c')).toBe(22)
+  })
+
+  it('a campaign where nothing serves (every target paused) keeps the reading of every bid, so its ceiling is never looser', () => {
+    const base = servingBaseBidByCampaign([group('g', 'c', 50)], [target('g', 30, 'PAUSED')])
+    expect(base.get('c')).toBe(50)
+    expect(servingBaseBidByCampaign([], []).size).toBe(0)
   })
 })

@@ -7,7 +7,7 @@
 import { logger } from '../../utils/logger.js'
 import { registeredCronModules } from '../../lib/cron/clustered.js'
 import {
-  PUBLISH_INTERVAL_MS, currentProcessRole, flagSection, publishLocalSnapshot, registerStatusSection, withdrawLocalSnapshot,
+  PUBLISH_INTERVAL_MS, buildSection, currentProcessRole, flagSection, publishLocalSnapshot, registerStatusSection, withdrawLocalSnapshot,
 } from '../../lib/runtime-status/process-snapshot.js'
 import { applyRequestedCircuitResets, registerCircuitSection } from './circuit-breakers.service.js'
 
@@ -16,6 +16,8 @@ export function registerCoreStatusSections(): void {
   registerCircuitSection()
   registerStatusSection('scheduledJobs', registeredCronModules)
   registerStatusSection('flags', () => flagSection())
+  // Platform health watchdog — a restart under the same deployment is a crash, not a deploy.
+  registerStatusSection('build', () => buildSection())
 }
 
 export function startRuntimeStatusPublisher(options: { intervalMs?: number } = {}): () => Promise<void> {
