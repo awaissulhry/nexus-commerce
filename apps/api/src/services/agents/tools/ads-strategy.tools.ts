@@ -36,9 +36,20 @@ import {
   type StrategyPreview,
   type StrategyState,
 } from '../../advertising/ads-strategy/write.js'
-import { stepUpApproval } from '../step-up-approval.js'
 import type { AgentTool, FieldPermission, ToolDoor, ToolUndo } from '../tool-types.js'
 import { notRun } from './ads-change-kit.js'
+import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
+
+/**
+ * set-ads-strategy's code decision, in ONE place: a raise is a big door of the Owner's code rule (ads-code-rule.ts) —
+ * the stepUp the strategy writer puts on a raise stays. Should the table ever let it go, a raise of what Claude may do
+ * alone (claudeAutonomy) still keeps it: the Owner's own rule, which the writer enforces too. Never by rule either way.
+ */
+export function strategyCodeOf(preview: StrategyPreview): StrategyPreview & { noCode?: string } {
+  if (!preview.stepUp || needsCode('set-ads-strategy: a raise')) return preview
+  if (preview.changes.some((c) => c.field === 'claudeAutonomy' && c.direction === 'raise')) return preview
+  return { ...preview, stepUp: null, noCode: DAY_TO_DAY_NO_CODE }
+}
 
 const upper = (value: unknown) => (typeof value === 'string' ? value.trim().toUpperCase() : value)
 const ID = z.string().trim().min(1).max(64)
@@ -163,7 +174,7 @@ const setAdsStrategy: AgentTool = {
     + 'row that moved. Undo puts the previous version back.',
   async handler(args) {
     const planned = await planStrategyChange(args)
-    return 'error' in planned ? { ok: false, error: planned.error } : { ok: true, preview: planned.plan.preview }
+    return 'error' in planned ? { ok: false, error: planned.error } : { ok: true, preview: strategyCodeOf(planned.plan.preview) }
   },
   async execute(args, ctx) {
     // One decision, re-checked against what was approved (the basis fingerprints the row, the terms and the campaigns).
@@ -177,11 +188,15 @@ const setAdsStrategy: AgentTool = {
     const approvalId = ctx.approvalId?.trim()
     if (!approvalId || !ctx.userId) return notRun('Not run: a strategy change runs only as an approved request, as the person who approved it.')
     let stepUpAt: Date | null = null
+    let raiseWithoutCode: string | null = null
     if (plan.direction === 'raise') {
-      // A raise runs only when it was approved with a fresh authenticator code (never by rule, never by a plain approve).
-      const coded = await stepUpApproval(ctx)
-      if ('refusal' in coded) return notRun(coded.refusal)
-      stepUpAt = coded.at
+      // A raise never runs by rule (withinLimits refuses it; this is the last door), and runs only with a fresh
+      // authenticator code where the fresh dry run's stepUp asks it (the code table: a big door) — never a plain approve.
+      if (ctx.decidedVia === 'auto') return notRun('Not run: it raises the ads strategy, which a person decides, never a rule. Ask for it again; a person approves it.')
+      const gate = await codeGate(ctx, strategyCodeOf(plan.preview))
+      if ('refusal' in gate) return notRun(gate.refusal)
+      stepUpAt = gate.at
+      if (!stepUpAt) raiseWithoutCode = "approved by a person without the authenticator code: the Owner's code rule makes this raise a day-to-day change"
     }
     const decision = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { decidedBy: true } })
     const out = await applyStrategyPlan(plan, {
@@ -190,6 +205,7 @@ const setAdsStrategy: AgentTool = {
       actorUserId: ctx.userId,
       approvalId,
       stepUpAt,
+      raiseWithoutCode,
       updatedBy: ctx.via === 'claude' ? `claude:${approvalId}` : `user:${ctx.userId}`,
     })
     if ('error' in out) return notRun(`Not run: ${out.error}`)

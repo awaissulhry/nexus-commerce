@@ -19,7 +19,8 @@
  * (4A: it passes the live-write allowlist, as on the screen); a run by the business's rule is a machine's write, so the
  * allowlist binds it (`ruleGate`: a campaign off the allowlist never runs by rule). Whatever can add spend — up-and-down
  * bidding (or fixed bids after down only), an end date removed or moved later, leaving a portfolio's budget cap for a
- * looser one or none — is listed in `raises` and needs the approver's authenticator code (stepUp). Strategy-bound
+ * looser one or none — is listed in `raises` and said in the effect; the Owner's code rule (ads-code-rule.ts) makes it a
+ * day-to-day change: a person's approval sends it with no authenticator code (settingsStepUp decides it). Strategy-bound
  * (ads-autonomy-kit.ts): the settings kind; by default nothing runs by rule (maxItems 0, no market or campaign listed).
  * Undo asks this tool to put each campaign's settings back.
  */
@@ -32,7 +33,8 @@ import { updateCampaignWithSync, type CampaignPatch } from '../../advertising/ad
 import { campaignNamedInMarket } from '../../advertising/ads-create.service.js'
 import { portfolioDetails, type PortfolioDetail } from '../../advertising/ads-portfolio.service.js'
 import { playbookHolds } from '../../advertising/ads-playbook/held.js'
-import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
+import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
+import { ADDS_NO_SPEND, addsSpendWords, codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { checkLiveReach, type LiveReach } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, type KitItem } from './ads-autonomy-kit.js'
@@ -126,6 +128,25 @@ interface Item {
   raising: Setting[]
   /** A campaign an ads playbook built: a portfolio move leaves the playbook's portfolio. */
   playbookBuilt?: true
+}
+
+/**
+ * set-campaign-settings' code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) makes up-and-down bidding,
+ * an end date removed or moved later and a looser portfolio cap a day-to-day change — listed in raises and said in the
+ * effect, and a person's approval sends it (no stepUp).
+ */
+function settingsStepUp(raising: readonly Item[]): { stepUp?: StepUp; noCode?: string } {
+  if (!raising.length) return { noCode: ADDS_NO_SPEND }
+  if (!needsCode('set-campaign-settings')) return { noCode: DAY_TO_DAY_NO_CODE }
+  return {
+    stepUp: {
+      what: `changes settings that can add spend on ${plural(raising.length, 'campaign')}`,
+      raises: [...new Set(raising.flatMap((i) => i.raising.map((s) => SETTING_WORDS[s])))],
+      needs: STEP_UP_NEEDS,
+      how: 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in Claude with theirs. '
+        + "By rule only inside this tool's limits (allowUpAndDown, allowEndDateRemoval), which are loosened only with that code.",
+    },
+  }
 }
 
 /**
@@ -326,6 +347,7 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
     + `${named(lines.map((l) => `${l.label} — ${l.changes.map((x) => `${x.label.toLowerCase()} ${x.from} → ${x.to}`).join(', ')}`))}.`
     + (already.length ? ` ${plural(already.length, 'campaign')} already set so ${already.length === 1 ? 'is' : 'are'} left as ${already.length === 1 ? 'it is' : 'they are'}.` : '')
     + ' Queued for Amazon: each write is sent after the 5-minute cancel window.'
+    + addsSpendWords(raises.map((r) => `${r.label}: ${r.why}`), !!settingsStepUp(raising).stepUp)
   return {
     items,
     result: {
@@ -336,17 +358,7 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
         changes: lines.slice(0, LINES_SHOWN),
         ...(lines.length > LINES_SHOWN ? { moreChanges: lines.length - LINES_SHOWN } : {}),
         raises,
-        ...(raises.length
-          ? {
-            stepUp: {
-              what: `changes settings that can add spend on ${plural(raising.length, 'campaign')}`,
-              raises: [...new Set(raising.flatMap((i) => i.raising.map((s) => SETTING_WORDS[s])))],
-              needs: STEP_UP_NEEDS,
-              how: 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in Claude with theirs. '
-                + "By rule only inside this tool's limits (allowUpAndDown, allowEndDateRemoval), which are loosened only with that code.",
-            },
-          }
-          : { noCode: 'It adds no spend: it needs no authenticator code.' }),
+        ...settingsStepUp(raising),
         ...(warnings.length ? { warnings } : {}),
         // AA-W2-6's facts name every campaign an enabled rule or schedule also moves.
         alsoChangedBy: facts.limitFacts.engineOwned.map((e) => ({ campaignId: e.campaignId, label: e.label, by: e.by })),
@@ -368,13 +380,14 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
 
 /**
  * One rule for both doors: undo-ad-change puts a campaign's recorded settings back through the rollback service, with
- * no code. What would add spend that way — a looser bidding strategy, an end date removed or moved later, a portfolio's
- * cap let go (or one Nexus cannot read) — is refused there and asked of set-campaign-settings, which needs the approver's
- * code; a portfolio change (set-portfolio, its own entity) only through undo-change of its request. Null: it may go on.
+ * none of set-campaign-settings' own checks. What would add spend that way — a looser bidding strategy, an end date removed or moved later, a
+ * portfolio's cap let go (or one Nexus cannot read) — is refused there and asked of set-campaign-settings, which lists it
+ * as a raise and judges it by its own limits; a portfolio change (set-portfolio, its own entity) only through undo-change
+ * of its request. Null: it may go on.
  */
 export async function settingsUndoRefusal(rows: ReadonlyArray<{ entityType: string; entityId: string; wrote: unknown; restores: unknown }>): Promise<string | null> {
   if (rows.some((r) => r.entityType === 'PORTFOLIO')) {
-    return 'Not undone: it holds a portfolio change (set-portfolio), which undo-ad-change cannot put back. undo-change of that request asks set-portfolio for the old name and cap (a raise needs the approver\'s authenticator code).'
+    return 'Not undone: it holds a portfolio change (set-portfolio), which undo-ad-change cannot put back. undo-change of that request asks set-portfolio for the old name and cap (a raise is listed in its preview).'
   }
   const asked = rows.filter((r) => r.entityType === 'CAMPAIGN').map((r) => {
     const before = (r.restores ?? {}) as Record<string, unknown>
@@ -408,7 +421,7 @@ export async function settingsUndoRefusal(rows: ReadonlyArray<{ entityType: stri
     }
   }
   if (!raises.length) return null
-  return `Not undone: putting these campaign settings back would add spend — ${named(raises, 2)}. set-campaign-settings does that, with the approver's authenticator code: ask for it there (undo-change of a Claude request asks it for you).`
+  return `Not undone: putting these campaign settings back would add spend — ${named(raises, 2)}. set-campaign-settings does that, as a raise its preview lists: ask for it there (undo-change of a Claude request asks it for you).`
 }
 
 // ── Limits: what may run by the business's rule ───────────────────────────────────────────────────
@@ -497,11 +510,9 @@ async function runApproved(args: Record<string, unknown>, ctx: ToolContext): Pro
   if (ctx.decidedVia === 'auto' && items.some((i) => i.playbookBuilt)) {
     return notRun('Not run: it moves a campaign an ads playbook built out of the playbook\'s portfolio, which never runs by rule: a person approves it.')
   }
-  // A raise runs only with the approver's code, or by the business's rule inside limits loosened with that code.
-  if (p.raises.length && ctx.decidedVia !== 'auto') {
-    const coded = await stepUpApproval(ctx)
-    if ('refusal' in coded) return notRun(coded.refusal)
-  }
+  // The code, as settingsStepUp decided it on this fresh dry run (none under the Owner's code rule).
+  const gate = await codeGate(ctx, fresh.preview)
+  if ('refusal' in gate) return notRun(gate.refusal)
   const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
   const failed: string[] = []
@@ -559,8 +570,9 @@ const setCampaignSettings: AgentTool = {
     + 'the same settings; campaigns gives each its own. Budgets, bids, placements and status have their own tools. '
     + `${BY_RULE_WORDS} (by default it does not: maxItems 0, no market or campaign listed), and by rule only on a campaign `
     + 'on the live-write allowlist. Whatever can add spend — up-and-down bidding (or fixed bids after down only), an end '
-    + "date removed or moved later, leaving a portfolio's budget cap for a looser one or none — needs the approver's "
-    + 'authenticator code. The preview lists each campaign from → to, where it lands (live at Amazon or sandbox), the '
+    + "date removed or moved later, leaving a portfolio's budget cap for a looser one or none — is listed in raises and "
+    + 'said in the preview: a day-to-day change, so a person\'s approval sends it with no authenticator code. The preview '
+    + 'lists each campaign from → to, where it lands (live at Amazon or sandbox), the '
     + 'rules that also move it and the limits that apply; each write is queued for Amazon with a 5-minute cancel window. '
     + 'Refused, and not queued, when a campaign is not found, archived, a draft or not Sponsored Products, a portfolio is '
     + 'not found, archived, made in Nexus only or in another market, a name is taken in the market, an end date is in '

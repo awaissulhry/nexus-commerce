@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../../db.js', () => ({ default: {} }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: vi.fn() } }))
 
-const { axisValuesOf, buildFamilyAxes, orderHeldReason, orderWritableHere, readStoredMapping, targetOptionsFrom } = await import('./family-projection.service.js')
+const { axisValuesOf, buildFamilyAxes, familyOrderView, orderHeldReason, orderWritableHere, readStoredMapping, targetOptionsFrom } = await import('./family-projection.service.js')
 type FamilyAxis = ReturnType<typeof buildFamilyAxes>[number]
 
 /** The real GALE-JACKET shapes, measured on the database 2026-09-11 rather than invented for the test. */
@@ -260,5 +260,32 @@ describe('targetOptionsFrom derives the options from the coordinate itself', () 
 
   it('Shopify takes free names, so it offers no list at all', () => {
     expect(targetOptionsFrom('SHOPIFY', ebayColumns, 'Shopify · GLOBAL', [])).toEqual([])
+  })
+})
+
+describe('familyOrderView — the Information page\'s row order (Owner 2026-10-07)', () => {
+  it('keeps the axes with their stored order and each child\'s axis values, and drops every projection', () => {
+    const axes = buildFamilyAxes(['Colore', 'Taglia'], [CHILD_18_OF_20])
+    axes[1].valueOrder = { source: 'stored', from: 'EBAY:IT', codes: ['XS', 'S', 'M'] }
+    const read = {
+      version: 7,
+      family: { parentId: 'p', parentSku: 'P', role: 'parent' },
+      axes,
+      children: [{ id: 'c1', sku: 'P-NERO-S', axisValues: { Colore: 'Nero', Taglia: 'S' }, projections: { 'EBAY:IT': { state: 'not_set_up' } } }],
+      parent: { id: 'p', sku: 'P', projections: { 'EBAY:IT': { state: 'not_set_up', listings: 0 } } },
+      coverage: { state: 'ok' },
+      channels: [{ channel: 'EBAY', market: 'IT' }],
+      meta: { tookMs: 12, phases: {} },
+    } as unknown as Parameters<typeof familyOrderView>[0]
+    const view = familyOrderView(read)
+    expect(view).toEqual({
+      version: 7,
+      view: 'order',
+      axes,
+      parent: { id: 'p' },
+      children: [{ id: 'c1', axisValues: { Colore: 'Nero', Taglia: 'S' } }],
+      meta: { tookMs: 12, phases: {} },
+    })
+    expect(JSON.stringify(view)).not.toContain('projections')
   })
 })

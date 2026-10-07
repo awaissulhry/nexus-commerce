@@ -8,13 +8,13 @@
  *            set-campaign-budget does. His own limits it goes past (the campaign's budget bounds, a spend ceiling, the
  *            day's budget move) are WARNED on the card and approving sends it anyway (4A + 3A). A change of a plan, a
  *            schedule or a pool is Nexus only now (`reach` null): its engine writes at Amazon on its next run.
- *   code     the money family rule (lead, Wave B): a request that can raise spend through a lever no older Claude tool
- *            moves without a code carries `stepUp` — the approver's fresh authenticator code (or, by the business's rule,
- *            only where its limits allow raises). A lever an older tool already moves without one behaves exactly like
- *            that tool: a campaign's daily budget (set-campaign-budget), a schedule's windows and a pool's values
- *            (tune-ad-engine), switching a schedule on or off with its give-back (turn-up / turn-down-automation), a
- *            campaign's lowest and highest daily budget (set-ad-guardrail). Those raises are listed in `raises` and warned,
- *            and need no code.
+ *   code     the Owner's code rule (ads-code-rule.ts, 2026-10-07): every budget lever is a day-to-day door — a raise is
+ *            listed in `raises`, said in the effect, warned on the card past his own limits, and a person's approval
+ *            sends it with no authenticator code. Each tool still decides it in ONE helper (`…NeedsCode`), so a change of
+ *            the rule is one line: `codeRuleOf(door)`. A lever an older tool already moves without a code names that tool
+ *            (a campaign's daily budget: set-campaign-budget; a schedule's windows and a pool's values: tune-ad-engine;
+ *            a schedule switched with its give-back: turn-up / turn-down-automation; a campaign's lowest and highest daily
+ *            budget: set-ad-guardrail).
  *   recheck  `execute` re-runs the dry run and refuses when where it lands, or a value the person approved, moved.
  *   limits   by default nothing runs by rule (maxItems 0, no op listed, no market listed, no raise); each loosening is a
  *            limit the business sets (Settings › AI › Claude), which itself needs the code.
@@ -24,6 +24,7 @@ import { checkLiveReach } from './ads-tool-guards.js'
 import { canonical, ownLimitsNote, ruleRefusal, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, stepUpApproval, type StepUp } from '../step-up-approval.js'
+import { addsSpendWords, needsCode, type CodeDoor } from './ads-code-rule.js'
 import type { ToolContext, ToolResult } from '../tool-types.js'
 import type { LimitFacts } from './ads-autonomy-kit.js'
 
@@ -94,11 +95,21 @@ export const BUDGET_CODE_HOW = 'A person with settings.security.manage approves 
   + 'switching it on needs the code too).'
 
 /**
- * Whether a raise through a lever needs the approver's code — each tool decides it in ONE helper (its `…NeedsCode`), so the
- * Owner's answer can be changed in one place: `code: true` for a raise no older Claude tool can make; `code: false` for a
- * lever an older tool already moves without one, named (`as`), which this tool then behaves like.
+ * Whether a raise through a lever needs the approver's code — each tool decides it in ONE helper (its `…NeedsCode`), so a
+ * change of the Owner's code rule is one line: `code: true` where it asks for the code; `code: false` for a day-to-day
+ * raise, naming the older tool that already moves that lever without one (`as`), when there is one.
  */
-export type CodeRule = { code: true } | { code: false; as: string }
+export type CodeRule = { code: true } | { code: false; as?: string }
+
+/** The Owner's code rule (ads-code-rule.ts) for one door: the code, or a day-to-day raise (no code). */
+export function codeRuleOf(door: CodeDoor): CodeRule {
+  return needsCode(door) ? { code: true } : { code: false }
+}
+
+/** The sentence a budget request's effect ends with when it can raise spend (no silent raise); empty when none. */
+export function budgetRaiseWords(raises: readonly string[], coded: readonly string[]): string {
+  return addsSpendWords(raises, coded.length > 0)
+}
 
 /** One way a request can raise spend: the lever (what the code rule reads) and the sentence a person reads. */
 export interface Raise<L extends string> { lever: L; why: string }
@@ -113,7 +124,7 @@ export function splitRaises<L extends string>(all: ReadonlyArray<Raise<L>>, rule
   for (const r of all) {
     const decided = rule(r.lever)
     if (decided.code === true) coded.push(r.why)
-    else without.push(`${r.why} — no code, as with ${decided.as}`)
+    else without.push(`${r.why} — no code${decided.as ? `, as with ${decided.as}` : ' (a day-to-day raise)'}`)
   }
   return { raises: all.map((r) => r.why), coded, ...(without.length ? { raisesWithoutCode: without } : {}) }
 }

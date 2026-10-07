@@ -17,7 +17,8 @@
  * the approval as change set; `execute` refuses when what was approved moved. These writes are the page's own direct
  * pushes: they reach Amazon as soon as the request runs, with no 5-minute cancel window (as on the page). Whatever can
  * add spend — a cap raised, its policy or dates changed, an archive that frees a capped portfolio's campaigns — is listed
- * in `raises` and needs the approver's authenticator code (stepUp). Strategy-bound (ads-autonomy-kit.ts): the portfolio
+ * in `raises` and said in the effect; the Owner's code rule (ads-code-rule.ts) makes it a day-to-day change: a person's
+ * approval sends it with no authenticator code (portfolioStepUp decides it). Strategy-bound (ads-autonomy-kit.ts): the portfolio
  * kind (an archive is the archive kind too); by default nothing runs by rule (no market is listed in its limits).
  */
 import { createHash } from 'node:crypto'
@@ -35,7 +36,8 @@ import {
   type PortfolioDetail,
 } from '../../advertising/ads-portfolio.service.js'
 import { marketCurrency } from '../../pim/market-currency.js'
-import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
+import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
+import { ADDS_NO_SPEND, addsSpendWords, codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { amountLabel, liveReachOf } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, storedReach } from './ads-change-kit.js'
 import { adKitLimits, type KitItem } from './ads-autonomy-kit.js'
@@ -63,7 +65,7 @@ export interface Cap { amountCents: number; currency: string; policy: 'monthly' 
 /**
  * A cap stored in a form Nexus cannot read — a policy it does not know, a policy without an amount (or the reverse), no
  * currency, a date range without dates. FAIL CLOSED: any change of it, or of what it holds, counts as one that may add
- * spend (the approver's code).
+ * spend (listed in raises).
  */
 export interface UnreadCap { unread: true; why: string; policy: string | null; amountCents: number | null; currency: string | null }
 export type HeldCap = Cap | UnreadCap
@@ -243,6 +245,17 @@ const DIRECT = "Sent to Amazon as soon as it is approved: the Portfolios page's 
 const STEP_UP_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked '
   + "confirms it in Claude with theirs. By rule only inside this tool's limits (maxCapCents, allowArchive), which are loosened only with that code."
 
+/**
+ * set-portfolio's code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) makes a cap raised or an archive
+ * that frees a capped portfolio's campaigns a day-to-day change — listed in raises and said in the effect, and a person's
+ * approval sends it (no stepUp).
+ */
+function portfolioStepUp(raises: readonly unknown[], archive: boolean): { stepUp: StepUp } | { noCode: string } {
+  if (!raises.length) return { noCode: ADDS_NO_SPEND }
+  if (!needsCode('set-portfolio')) return { noCode: DAY_TO_DAY_NO_CODE }
+  return { stepUp: { what: archive ? 'archives a capped portfolio, which frees its campaigns from its budget cap' : "raises a portfolio's budget cap", raises: ['Portfolio budget cap'], needs: STEP_UP_NEEDS, how: STEP_UP_HOW } }
+}
+
 /** What one request decided: its preview, and what `execute` writes. */
 interface PortfolioPlan {
   op: Op
@@ -385,11 +398,13 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
   }
   const facts = await ruleFactsFor({ tool: TOOL, limits: PORTFOLIO_LIMITS, items: [item], writes: [], approvalId: ctx.approvalId ?? null })
 
-  const effect = plan.op === 'create'
+  const code = portfolioStepUp(raises, plan.archive)
+  const effect = (plan.op === 'create'
     ? `Creates the portfolio ${quote(plan.name!.to)} in ${plan.market}${plan.cap ? `, with a budget cap of ${capWords(plan.cap.to)}` : ', with no budget cap'}. It holds no campaign yet: set-campaign-settings moves campaigns into it.`
     : plan.archive
       ? `Archives ${label} in ${plan.market} for good${plan.portfolio!.campaigns ? `: its ${plural(plan.portfolio!.campaigns, 'campaign')} leave it and keep running${plan.portfolio!.cap ? ', no longer held by its budget cap' : ''}` : ''}.`
-      : `Changes ${label} in ${plan.market}: ${lines.map((l) => `${l.label.toLowerCase()} ${l.from ?? 'none'} → ${l.to}`).join('; ')}${plan.portfolio!.campaigns ? ` (it holds ${plural(plan.portfolio!.campaigns, 'campaign')})` : ''}.`
+      : `Changes ${label} in ${plan.market}: ${lines.map((l) => `${l.label.toLowerCase()} ${l.from ?? 'none'} → ${l.to}`).join('; ')}${plan.portfolio!.campaigns ? ` (it holds ${plural(plan.portfolio!.campaigns, 'campaign')})` : ''}.`)
+    + addsSpendWords(raises.map((r) => r.why), 'stepUp' in code)
   return {
     plan,
     result: {
@@ -403,9 +418,7 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
         changes: lines,
         ...(plan.cap ? { capChange: { fromCents: plan.cap.from?.amountCents ?? null, toCents: plan.cap.to.amountCents, fromPolicy: plan.cap.from?.policy ?? null, toPolicy: plan.cap.to.policy, startDate: plan.cap.to.startDate, endDate: plan.cap.to.endDate } } : {}),
         raises,
-        ...(raises.length
-          ? { stepUp: { what: plan.archive ? "archives a capped portfolio, which frees its campaigns from its budget cap" : "raises a portfolio's budget cap", raises: ['Portfolio budget cap'], needs: STEP_UP_NEEDS, how: STEP_UP_HOW } }
-          : { noCode: 'It adds no spend: it needs no authenticator code.' }),
+        ...code,
         ...(plan.archive ? { permanent: PERMANENT } : {}),
         // Every value it starts from and sets: a move of any of them after approval is caught (recheck).
         basis: hash({ op: plan.op, market: plan.market, portfolio: plan.portfolio, name: plan.name, cap: plan.cap, archive: plan.archive }),
@@ -529,7 +542,8 @@ const setPortfolio: AgentTool = {
     + "Amazon does not bring it back; its campaigns leave it and keep running. A cap cannot be removed here (neither the page "
     + 'nor Nexus\'s Amazon client can). To move campaigns into or out of a portfolio use set-campaign-settings. '
     + `${BY_RULE_WORDS} (by default it does not: no market is listed). Whatever can add spend — a cap raised, its policy or `
-    + 'dates changed, an archive that frees a capped portfolio\'s campaigns — needs the approver\'s authenticator code. '
+    + 'dates changed, an archive that frees a capped portfolio\'s campaigns — is listed in raises and said in the preview: '
+    + 'a day-to-day change, so a person\'s approval sends it with no authenticator code. '
     + 'The preview shows each value from → to, where it lands (live at Amazon or sandbox) and the limits that apply; '
     + "it is sent to Amazon as soon as it is approved (the page's own push, no 5-minute cancel window). Refused, and not "
     + 'queued, when the portfolio is not found, archived or made in Nexus only, a name is taken in the market, or Amazon\'s '
@@ -542,11 +556,9 @@ const setPortfolio: AgentTool = {
     const refusal = recheck(ctx, fresh, ['basis'])
     if (refusal || !plan) return notRun(refusal ?? 'Not run: it is no longer a valid change.')
     const p = fresh.preview as { raises: unknown[]; effect: string; reach: unknown }
-    // A raise runs only with the approver's code, or by the business's rule inside limits loosened with that code.
-    if (p.raises.length && ctx.decidedVia !== 'auto') {
-      const coded = await stepUpApproval(ctx)
-      if ('refusal' in coded) return notRun(coded.refusal)
-    }
+    // The code, as portfolioStepUp decided it on this fresh dry run (none under the Owner's code rule).
+    const gate = await codeGate(ctx, fresh.preview)
+    if ('refusal' in gate) return notRun(gate.refusal)
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const audit = { actor: run.actor, changeSetId: run.changeSetId }

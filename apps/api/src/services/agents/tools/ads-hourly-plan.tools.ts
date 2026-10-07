@@ -26,8 +26,10 @@
  * (ads-change-kit.ts): previewed first, run only as an approved request as the approver (the version row names them,
  * `changedBy`), re-checked in `execute` (stale: refused). Strategy-bound (its own kind, `hourly`): by default nothing runs
  * by rule (maxItems 0, no market). Anything that adds spend — a switch on, more hours out of the Min-bid floor, a higher
- * placement % or base bid, a campaign joining a plan that is on, a give-back — is listed in `raises` and needs the
- * approver's authenticator code (stepUp), or the business's rule where it allowed raises (allowRaise).
+ * placement % or base bid, a campaign joining a plan that is on, a give-back — is listed in `raises` and said in the
+ * effect. The Owner's code rule (ads-code-rule.ts, 2026-10-07) makes it a day-to-day change: a person's approval sends
+ * it with no authenticator code (planStepUp decides it, one line); by the business's rule only where it allowed raises
+ * (allowRaise).
  *
  * THE OWNER'S PLANS: a plan a person made or last changed (planOwners: not the playbook's, and not exactly as Claude's
  * last request left it) changes only with a person's approval — it never runs by rule unless the business allowed it
@@ -52,7 +54,8 @@ import {
 import { amountLabel, campaignCurrency, liveReachOf, type LiveReach } from './ads-tool-guards.js'
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, type KitItem } from './ads-autonomy-kit.js'
-import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
+import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
+import { ADDS_NO_SPEND, addsSpendWords, codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { isRefused } from '../../automation/service-outcome.js'
 import type { AgentTool, FieldPermission, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
@@ -272,7 +275,7 @@ function planRefusal(preview: unknown, limits: Record<string, unknown>): string 
   const off = (p.campaignIds ?? []).filter((id) => !allowed.includes(id))
   if (off.length) return `${plural(off.length, 'campaign')} it touches ${off.length === 1 ? 'is' : 'are'} not on this tool's list of campaigns (campaignIds); a person decides`
   if (p.op === 'delete' && limits.allowDelete !== true) return 'deleting a plan runs by rule only where this tool\'s limits allow it (allowDelete is off); a person decides'
-  if (p.raises?.length && limits.allowRaise !== true) return `it adds spend (${p.raises[0]}${p.raises.length > 1 ? ` and ${plural(p.raises.length - 1, 'more')}` : ''}), and this tool's limits let no raise run by rule (allowRaise is off); a person decides with their code`
+  if (p.raises?.length && limits.allowRaise !== true) return `it adds spend (${p.raises[0]}${p.raises.length > 1 ? ` and ${plural(p.raises.length - 1, 'more')}` : ''}), and this tool's limits let no raise run by rule (allowRaise is off); a person decides`
   const maxPct = typeof limits.maxPlacementPct === 'number' ? limits.maxPlacementPct : 0
   if ((p.highest?.placementPct ?? 0) > maxPct) return `the plan holds a placement of ${p.highest!.placementPct} % in some hour, above the ${maxPct} % this tool's limits allow by rule; a person decides`
   const maxBid = typeof limits.maxBaseBidCents === 'number' ? limits.maxBaseBidCents : 0
@@ -293,6 +296,17 @@ interface Planned {
 const START_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms '
   + 'it in Claude with theirs when the business set this tool to confirm in Claude. By rule only where the business allowed raises (allowRaise) '
   + 'and the ads strategy lets hourly plans change alone.'
+
+/**
+ * set-hourly-bid-plan's code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) makes every raise of an
+ * hourly plan — a switch on, more hours, higher values, a campaign joining, a give-back — a day-to-day change: listed in
+ * raises and said in the effect, and a person's approval sends it (no stepUp). `what`/`bids`: the words a code would carry.
+ */
+function planStepUp(raises: readonly string[], what: string, bids: boolean): { stepUp: StepUp } | { noCode: string } {
+  if (!raises.length) return { noCode: ADDS_NO_SPEND }
+  if (!needsCode('set-hourly-bid-plan')) return { noCode: DAY_TO_DAY_NO_CODE }
+  return { stepUp: { what, raises: ['Hourly bid plans', ...(bids ? ['Bids'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
+}
 
 /**
  * Where a change lands: each market's write gate. `stored` is the kit's reach of the markets the gate lets through (live,
@@ -536,9 +550,9 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
     raises.push(`gives back the bids it floored on ${plural(release.restore, 'campaign')} (${plural(release.bids, 'bid')} leave the Min-bid floor)`)
     for (const c of restoreIds) raisedCampaigns.add(c)
   }
-  // Lead decision A (W4-1 review): letting go of campaigns of a plan that is ON and has Min-bid hours always asks for the
-  // approver's code, whatever is floored at this moment: the engine floors at every Min-bid hour, so a give-back may come
-  // with it by the time it runs (and a plain approve would then end "Not run: it raises").
+  // Lead decision A (W4-1 review): letting go of campaigns of a plan that is ON and has Min-bid hours is always listed as a
+  // raise, whatever is floored at this moment: the engine floors at every Min-bid hour, so a give-back may come with it by
+  // the time it runs (a run by rule then needs allowRaise; a person's approval sends it, the Owner's code rule).
   const lettingGo = op === 'delete' || (op === 'switch' && !!after && !after.enabled) || (op === 'set-campaigns' && removed.length > 0)
   const mayGiveBack = !!before?.enabled && lettingGo && !release?.restore && floorHoursOf(before, lib)
   if (mayGiveBack) {
@@ -595,11 +609,12 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
   const consequences = writesNow
     ? `At Amazon now: the bids the plan floored on ${plural(restoreIds.size, 'campaign')} come back (${plural(bidLines.length, 'bid')}, queued for Amazon through its write gate${release?.waitWhy ? `; ${release.waitWhy}` : ''}). Placement percentages stay as last set. The rest is Nexus only${later}.`
     : `${nexusOnly}${later}.${gateWords}`
-  const effect = effectOf(op, { before, after, name, added, removed, release, releaseWords, valueLines, weekBefore, weekAfter, engine, a }) + (raises.length ? ` It ADDS SPEND (${raises.join('; ')}): the approver's code is needed.` : '')
+  const code = planStepUp(raises, op === 'switch' && after?.enabled ? 'switches an hourly bid plan on' : release?.restore || mayGiveBack ? 'gives back bids an hourly bid plan floored' : 'changes an hourly bid plan in a way that adds spend', !!(release?.restore || mayGiveBack))
+  const effect = effectOf(op, { before, after, name, added, removed, release, releaseWords, valueLines, weekBefore, weekAfter, engine, a }) + addsSpendWords(raises, 'stepUp' in code, raises.length)
 
   // What the person approves: the plan as it stood, the plan after, the targets' values it holds, whose plans it changes.
   // Not what a give-back lifts: the engine floors and lifts bids at every Min-bid hour, so that would go stale by the hour
-  // (execute's fresh dry run decides again whether it raises, and a raise then still needs the approver's code).
+  // (execute's fresh dry run decides again whether it raises: a run by rule then still needs allowRaise).
   const basis = hash({
     op, before: before ? stateOnly(before) : null, after,
     targets: [...lib.values.values()].filter((t) => JSON.stringify(after ?? before).includes(`"${t.key}"`)),
@@ -652,9 +667,7 @@ async function decide(args: Record<string, unknown>, ctx: Pick<ToolContext, 'app
           },
         } : {}),
         raises,
-        ...(raises.length
-          ? { stepUp: { what: op === 'switch' && after?.enabled ? 'switches an hourly bid plan on' : release?.restore || mayGiveBack ? 'gives back bids an hourly bid plan floored' : 'changes an hourly bid plan in a way that adds spend', raises: ['Hourly bid plans', ...(release?.restore || mayGiveBack ? ['Bids'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
-          : { noCode: 'It adds no spend: it needs no authenticator code.' }),
+        ...code,
         highest: { placementPct: highest.placementPct, baseBidCents: highest.baseBidCents },
         currency,
         markets,
@@ -736,7 +749,7 @@ function effectOf(op: Op, x: {
     case 'create':
       return `Creates the hourly plan "${x.name}" in ${x.after!.marketplace} over ${plural(x.after!.members.length, 'campaign')}, switched OFF (time zone ${x.after!.timezone}): a week of ${totals(x.weekAfter)}.`
         + (x.release?.restore ? ` Saved switched off, it holds none of its campaigns: ${x.releaseWords}.` : '')
-        + ' Nothing changes at Amazon until it is switched on (op switch, which needs the approver\'s code).'
+        + ' Nothing changes at Amazon until it is switched on (op switch, a request of its own).'
     case 'update-windows':
       return `Paints the week of "${x.name}" (${x.after!.enabled ? 'on' : 'off'}${x.a.days?.length ? `, only ${x.a.days.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}` : ''}): from ${totals(x.weekBefore)} to ${totals(x.weekAfter)}.`
     case 'set-campaigns':
@@ -758,24 +771,16 @@ function effectOf(op: Op, x: {
 function undoNoteOf(op: Op): string {
   switch (op) {
     case 'create': return 'Undo deletes the plan (what it floored by then comes back).'
-    case 'delete': return `Undo asks for a new plan with the same name, market, campaigns (at most ${MAX_CAMPAIGNS}; above that the undo is refused), portfolio binding, week and time zone, born switched off. Its dated events, its version history and its campaigns' own target values do not come back; the switch comes back with a further request (switch, with the code). What came back at Amazon stays.`
+    case 'delete': return `Undo asks for a new plan with the same name, market, campaigns (at most ${MAX_CAMPAIGNS}; above that the undo is refused), portfolio binding, week and time zone, born switched off. Its dated events, its version history and its campaigns' own target values do not come back; the switch comes back with a further request (op switch). What came back at Amazon stays.`
     case 'update-windows': return 'Undo paints the week (and baseline) it had before.'
     case 'set-campaigns': return 'Undo adds back the campaigns it took out and takes out the ones it added (a campaign it took from another plan does not go back there by itself).'
     case 'rename': return 'Undo renames it back.'
-    case 'switch': return 'Undo switches it back (a switch on needs the approver\'s code again).'
+    case 'switch': return 'Undo switches it back (a request of its own; a switch on adds spend again, listed in raises).'
     case 'set-target-values': return 'Undo sets each campaign\'s values for those targets back.'
   }
 }
 
 // ── Running an approved request ───────────────────────────────────────────────────────────────────
-
-/** PB-5b's gate: a raise is approved with the approver's fresh code, or runs by rule where the limits allowed it. */
-async function spendGate(ctx: ToolContext, adds: boolean): Promise<{ stepUpAt: Date | null; byRule: boolean } | { refusal: string }> {
-  if (!adds) return { stepUpAt: null, byRule: false }
-  if (ctx.decidedVia === 'auto') return { stepUpAt: null, byRule: true }
-  const coded = await stepUpApproval(ctx)
-  return 'refusal' in coded ? { refusal: coded.refusal } : { stepUpAt: coded.at, byRule: false }
-}
 
 /** The business's own limits for this tool now (Settings › AI › Claude); the defaults (which refuse) when none are stored. */
 async function limitsNow(): Promise<Record<string, unknown>> {
@@ -800,7 +805,8 @@ async function runApproved(args: Record<string, unknown>, ctx: ToolContext): Pro
   }
   const run = approvedRun(ctx, planned.why || p.effect)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-  const gate = await spendGate(ctx, p.raises.length > 0)
+  // The code, as planStepUp decided it on this fresh dry run (none under the Owner's code rule: a day-to-day change).
+  const gate = await codeGate(ctx, fresh.preview)
   if ('refusal' in gate) return notRun(gate.refusal)
   const { op, before, after } = planned
   const started = new Date()
@@ -846,7 +852,7 @@ async function runApproved(args: Record<string, unknown>, ctx: ToolContext): Pro
       ...(release ? { givesBack: release } : {}),
       reach: p.reach,
       changeSetId: run.changeSetId,
-      ...(gate.stepUpAt ? { approvedWithCode: gate.stepUpAt.toISOString() } : {}),
+      ...(gate.at ? { approvedWithCode: gate.at.toISOString() } : {}),
       note: release
         ? 'The plan is saved in Nexus; the bids it gave back are queued for Amazon (each after the 5-minute cancel window). approval-status follows them.'
         : 'The plan is saved in Nexus; the hourly bid engine applies it from its next run.',
@@ -1036,7 +1042,7 @@ async function planDetail(planId: string) {
     versions: versions.map((v) => ({ versionId: v.id, at: v.createdAt.toISOString(), changedBy: v.changedBy, name: v.name, on: v.enabled, campaigns: v.campaignCount })),
     alsoChangedBy: await alsoChanged(s.members, ownSchedules, facts),
     engine,
-    change: 'set-hourly-bid-plan changes it (a person approves; a switch on or a raise needs their code). The library\'s target values are tune-ad-engine\'s (setting rank-target).',
+    change: 'set-hourly-bid-plan changes it (a person approves; a switch on or a raise is listed in raises, and needs no authenticator code). The library\'s target values are tune-ad-engine\'s (setting rank-target).',
   }
 }
 
@@ -1108,8 +1114,9 @@ const setHourlyBidPlan: AgentTool = {
     + 'Switching off, deleting or taking a campaign out gives back the bids the plan floored, as the page does. A person '
     + 'approves it in Nexus — unless the business lets it run by its rule inside its limits and the ads strategy (by '
     + 'default nothing runs by rule). Anything that adds spend (a switch on, hours out of the Min-bid floor, a higher '
-    + 'placement % or base bid, a campaign joining a plan that is on, a give-back) is listed in raises and needs the '
-    + 'approver\'s authenticator code. A plan a person made or last changed changes by rule only where the business '
+    + 'placement % or base bid, a campaign joining a plan that is on, a give-back) is listed in raises and said in the '
+    + 'preview: a day-to-day change, so a person\'s approval sends it with no authenticator code (by rule only with '
+    + 'allowRaise). A plan a person made or last changed changes by rule only where the business '
     + 'allowed it (allowPeoplesPlans); one the ads playbook built is refused (apply-ads-playbook runs it). The preview '
     + 'shows the week per day from → to, the members from → to, what comes back bid by bid, whose plan it is, what also '
     + 'acts on its campaigns, and where it lands: Nexus only, the hourly bid engine applying it from its next run. '

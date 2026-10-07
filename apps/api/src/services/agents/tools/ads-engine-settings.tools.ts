@@ -13,9 +13,10 @@
  *                       same data takes one more step, and it is refused while the engine runs.
  *
  * Every one: default level ask, ceiling auto (D2 = B), strategy-bound as the ads strategy's `automation` kind (fields.ts),
- * limits that refuse by default. What can raise spend is said in `raises` and carries `stepUp` (the approver's
- * authenticator code); by rule a raise runs only where the business's limits allow it (allowRaise; for run-now, maxItems
- * 1 and the engines it lists). ONE helper per tool decides what raises (the Owner's open question can flip it there):
+ * limits that refuse by default. What can raise spend is said in `raises` and in the effect; the Owner's code rule
+ * (ads-code-rule.ts) makes all three day-to-day doors: a person's approval sends a raise with no authenticator code (no
+ * `stepUp`; ONE helper per tool decides it: codeOf). By rule a raise runs only where the business's limits allow it
+ * (allowRaise; for run-now, maxItems 1 and the engines it lists). ONE helper per tool decides what raises:
  * assignRaises, termRaise, runRaises. The two settings tools are Nexus only; run-now reaches Amazon through the engine.
  */
 import { z } from 'zod'
@@ -23,7 +24,8 @@ import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { approvedRun, notRun } from './ads-change-kit.js'
-import { STEP_UP_NEEDS, stepUpApproval, type StepUp } from '../step-up-approval.js'
+import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
+import { ADDS_NO_SPEND, addsSpendWords, codeGate, DAY_TO_DAY_NO_CODE, needsCode, type CodeDoor } from './ads-code-rule.js'
 import { ASSIGN_OPS, MAX_ASSIGN_CAMPAIGNS, applyRuleAssign, planRuleAssign, ruleBindingNow, type AssignInput, type AssignPlan, type BindingState } from '../../advertising/ads-rule-assign.service.js'
 import { COVERAGE_OPS, MAX_TERM_EDITS, TERM_STATUSES, applyCoverageChange, coverageStateNow, planCoverageChange, type CoverageInput, type CoveragePlan, type CoverageState } from '../../advertising/ads-coverage-set-change.service.js'
 import { RUN_NOW_ENGINE_KEYS, RUN_NOW_ENGINES, planEngineRun, startEngineRun, type EnginePlan, type RunNowEngine } from '../../advertising/ads-engine-run-now.service.js'
@@ -37,17 +39,29 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const RAISE_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked '
   + 'confirms it in Claude with theirs when the business set this tool to confirm in Claude. By rule only where the business\'s limits allow it.'
 
-const stepUpOf = (what: string, raises: string[]): StepUp => ({ what, raises, needs: STEP_UP_NEEDS, how: RAISE_HOW })
+/**
+ * Each tool's code decision, in ONE place: the Owner's code rule (ads-code-rule.ts) makes a raise through these three
+ * doors a day-to-day change — listed in raises and said in the effect, and a person's approval sends it (no stepUp).
+ */
+function codeOf(door: CodeDoor, raises: readonly string[], what: string, stepRaises: string[]): { stepUp: StepUp } | { noCode: string } {
+  if (!raises.length) return { noCode: ADDS_NO_SPEND }
+  if (!needsCode(door)) return { noCode: DAY_TO_DAY_NO_CODE }
+  return { stepUp: { what, raises: stepRaises, needs: STEP_UP_NEEDS, how: RAISE_HOW } }
+}
 
 /**
  * `execute` of a request whose fresh plan raises: by rule it ran because the business's limits let it (withinLimits judged
- * the fresh dry run at commit); a person's approval must carry the approver's code. Null when it may run.
+ * the fresh dry run at commit); a person's approval carries the approver's code only where codeOf asked for it. Null when
+ * it may run.
  */
-async function raiseGate(ctx: ToolContext, raises: readonly string[]): Promise<string | null> {
-  if (!raises.length || ctx.decidedVia === 'auto') return null
-  const coded = await stepUpApproval(ctx)
-  return 'refusal' in coded ? coded.refusal : null
+async function raiseGate(ctx: ToolContext, code: { stepUp: StepUp } | { noCode: string }): Promise<string | null> {
+  const gate = await codeGate(ctx, code)
+  return 'refusal' in gate ? gate.refusal : null
 }
+
+const assignCode = (plan: Pick<AssignPlan, 'raises' | 'rule'>) => codeOf('assign-ad-rules: a rule at Auto', plan.raises, `changes what the ads rule "${plan.rule.name}" acts on at Auto`, ['Rule reach'])
+const coverageCode = (plan: Pick<CoveragePlan, 'raises' | 'set'>) => codeOf('set-coverage-set', plan.raises, `lets the coverage engine bid higher on ${plural(plan.raises.length, 'term')} of "${plan.set.name}"`, ['Coverage bids'])
+const runCode = (plan: Pick<EnginePlan, 'name'>, raises: readonly string[]) => codeOf('run-ad-engine-now', raises, `runs ${plan.name} now, at Auto`, ['Bids', 'Budgets'])
 
 /** The actor and the audit words of an approved run (who approved it, the request), or why it may not run. */
 function runAs(ctx: ToolContext, why: unknown, fallback: string): { actor: `user:${string}`; reason: string } | { refusal: string } {
@@ -76,7 +90,7 @@ function assignRefusal(preview: unknown, limits: Record<string, unknown>): strin
   if (typeof p.totals?.otherMarketAfter !== 'number') return `the preview does not say which campaigns are outside the rule's market; ${A_PERSON}`
   if (p.totals.otherMarketAfter > 0) return `it binds "${p.rule.name}" to ${plural(p.totals.otherMarketAfter, 'campaign')} outside ${p.rule.market} (its ${p.rule.marketFrom}): ${A_PERSON}`
   if (!Array.isArray(p.raises)) return `the preview does not say whether it can raise spend; ${A_PERSON}`
-  if (p.raises.length && limits.allowRaise !== true) return `it can raise spend (${p.raises.join('; ')}): ${A_PERSON}, with their authenticator code (allowRaise is off)`
+  if (p.raises.length && limits.allowRaise !== true) return `it can raise spend (${p.raises.join('; ')}): ${A_PERSON} (allowRaise is off)`
   return commonRefusal(preview, limits)
 }
 
@@ -124,8 +138,9 @@ const assignAdRules: AgentTool = {
     + 'the rule\'s market (its scope, else the market its name ends with, e.g. "… — DE"). Nexus only: the rule acts as itself, '
     + 'at its own level, on its next run. A person approves it in Nexus, or confirms it in Claude with their code when the '
     + 'business set it so — or it runs by the business\'s rule inside its limits and the ads strategy (none by default). '
-    + 'Changing what a rule at Auto acts on can raise spend: the preview says so in raises, and approving it needs the '
-    + 'approver\'s authenticator code (by rule only with allowRaise); a campaign outside the rule\'s market never runs by rule. '
+    + 'Changing what a rule at Auto acts on can raise spend: the preview says so in raises and in its effect — a day-to-day '
+    + 'change, so a person\'s approval sends it with no authenticator code (by rule only with allowRaise); a campaign outside '
+    + 'the rule\'s market never runs by rule. '
     + 'Refused, and not queued: a rule that is not bound to campaigns (its scope decides: save-ad-rule), one the autopilot binds, '
     + 'a campaign not found, picks the rule drawer would refuse (outside the rule\'s market scope, a Placement pick that is not '
     + 'Sponsored Products), a request that would empty a Bid, SOV, Keyword Tracker or Placement rule (empty means every '
@@ -160,8 +175,10 @@ const assignAdRules: AgentTool = {
       ok: true,
       preview: {
         ...plan,
+        summary: plan.effect + addsSpendWords(plan.raises, 'stepUp' in assignCode(plan)),
+        effect: plan.effect + addsSpendWords(plan.raises, 'stepUp' in assignCode(plan)),
         limitFacts,
-        ...(plan.raises.length ? { stepUp: stepUpOf(`changes what the ads rule "${plan.rule.name}" acts on at Auto`, ['Rule reach']) } : {}),
+        ...assignCode(plan),
       },
     }
   },
@@ -171,7 +188,7 @@ const assignAdRules: AgentTool = {
     if ('error' in planned) return notRun(`Not run: ${planned.error}`)
     // Never by rule: a campaign outside the rule's market (withinLimits refuses it; this holds an old or edited request).
     if (ctx.decidedVia === 'auto' && planned.plan.totals.otherMarketAfter > 0) return notRun(`Not run: it binds a campaign outside the rule's market, and that never runs by rule; ${A_PERSON}.`)
-    const raised = await raiseGate(ctx, planned.plan.raises)
+    const raised = await raiseGate(ctx, assignCode(planned.plan))
     if (raised) return notRun(raised)
     const run = runAs(ctx, args.why, `rule campaigns ${input.op}`)
     if ('refusal' in run) return notRun(run.refusal)
@@ -198,7 +215,7 @@ function coverageRefusal(preview: unknown, limits: Record<string, unknown>): str
   const p = preview as CoveragePreview | null
   if (p?.action !== 'set-coverage-set') return `there is no preview of this coverage set change to check; ${A_PERSON}`
   if (!Array.isArray(p.raises)) return `the preview does not say whether it can raise spend; ${A_PERSON}`
-  if (p.raises.length && limits.allowRaise !== true) return `it lets the coverage engine bid higher (${p.raises.slice(0, 3).join('; ')}): ${A_PERSON}, with their authenticator code (allowRaise is off)`
+  if (p.raises.length && limits.allowRaise !== true) return `it lets the coverage engine bid higher (${p.raises.slice(0, 3).join('; ')}): ${A_PERSON} (allowRaise is off)`
   return commonRefusal(preview, limits)
 }
 
@@ -254,8 +271,9 @@ const setCoverageSet: AgentTool = {
     + 'engine reads the set on its next run and moves bids itself, at its own level (the preview says which). A person approves it '
     + 'in Nexus, or confirms it in Claude with their code when the business set it so — or it runs by the business\'s rule inside '
     + 'its limits and the ads strategy (none by default). An edit that lets the engine bid higher (a term Active again or handed '
-    + 'back to the engine with a target, a higher target share, a higher or cleared max CPC) is listed in raises and needs the '
-    + 'approver\'s authenticator code (by rule only with allowRaise). Refused, and not queued: a term not in the set, a retired '
+    + 'back to the engine with a target, a higher target share, a higher or cleared max CPC) is listed in raises and said in the '
+    + 'effect — a day-to-day change, so a person\'s approval sends it with no authenticator code (by rule only with allowRaise). '
+    + 'Refused, and not queued: a term not in the set, a retired '
     + 'term, a lead ASIN the family does not advertise, nothing to change. undo-change puts the values back (a seed: its terms '
     + 'are paused; a set it created stays as a draft).',
   riskTier: 'medium',
@@ -294,8 +312,10 @@ const setCoverageSet: AgentTool = {
       ok: true,
       preview: {
         ...plan,
+        summary: plan.effect + addsSpendWords(plan.raises, 'stepUp' in coverageCode(plan)),
+        effect: plan.effect + addsSpendWords(plan.raises, 'stepUp' in coverageCode(plan)),
         limitFacts,
-        ...(plan.raises.length ? { stepUp: stepUpOf(`lets the coverage engine bid higher on ${plural(plan.raises.length, 'term')} of "${plan.set.name}"`, ['Coverage bids']) } : {}),
+        ...coverageCode(plan),
       },
     }
   },
@@ -303,7 +323,7 @@ const setCoverageSet: AgentTool = {
     const input = coverageInput(args)
     const planned = await planCoverageChange(input)
     if ('error' in planned) return notRun(`Not run: ${planned.error}`)
-    const raised = await raiseGate(ctx, planned.plan.raises)
+    const raised = await raiseGate(ctx, coverageCode(planned.plan))
     if (raised) return notRun(raised)
     const run = runAs(ctx, args.why, `coverage set ${input.op}`)
     if ('refusal' in run) return notRun(run.refusal)
@@ -334,7 +354,7 @@ const RUN_LIMITS = z.object({
 })
 
 /**
- * ONE place decides what a run raises (the Owner's open question: it can flip here). At Auto an engine's run can raise
+ * ONE place decides what a run raises (listed; the code is runCode's: none, a day-to-day door). At Auto an engine's run can raise
  * bids or budgets as any of its runs can — and an engine that steps takes one more step on the same data; below Auto
  * nothing reaches Amazon.
  */
@@ -376,7 +396,8 @@ const runAdEngineNow: AgentTool = {
     + 'or confirms it in Claude with their code when the business set it so — or it runs by the business\'s rule only once its '
     + 'limits allow a run (maxItems 1) for an engine they list (none by default), and for an engine that steps not sooner than '
     + 'minHoursSinceLastRun after its last run. A run at '
-    + 'Auto can raise spend: approving it needs the approver\'s authenticator code. It cannot be called back.',
+    + 'Auto can raise spend: listed in raises and said in the effect — a day-to-day change, so a person\'s approval starts '
+    + 'it with no authenticator code. It cannot be called back.',
   riskTier: 'high',
   readOnly: false,
   requiresApprovalDefault: true,
@@ -404,9 +425,11 @@ const runAdEngineNow: AgentTool = {
       ok: true,
       preview: {
         ...planned.plan,
+        summary: planned.plan.effect + addsSpendWords(raises, 'stepUp' in runCode(planned.plan, raises)),
+        effect: planned.plan.effect + addsSpendWords(raises, 'stepUp' in runCode(planned.plan, raises)),
         raises,
         limitFacts,
-        ...(raises.length ? { stepUp: stepUpOf(`runs ${planned.plan.name} now, at Auto`, ['Bids', 'Budgets']) } : {}),
+        ...runCode(planned.plan, raises),
       },
     }
   },
@@ -414,7 +437,7 @@ const runAdEngineNow: AgentTool = {
     const engine = args.engine as RunNowEngine
     const planned = await planEngineRun(engine)
     if ('error' in planned) return notRun(`Not run: ${planned.error.replace(/^Not queued: /, '')}`)
-    const raised = await raiseGate(ctx, runRaises(planned.plan))
+    const raised = await raiseGate(ctx, runCode(planned.plan, runRaises(planned.plan)))
     if (raised) return notRun(raised)
     const run = runAs(ctx, args.why, 'run now')
     if ('refusal' in run) return notRun(run.refusal)

@@ -9,9 +9,10 @@
  *                             Campaigns grid write). Nexus only now: the budget engine acts on the plan every 30 minutes,
  *                             as its own mode allows (the preview names it). A raise through the plan (a bigger budget,
  *                             the cap removed, Stop Over Spend off, Auto Pacing switched or its calendar changed, the plan
- *                             removed) needs the approver's code — no older tool moves a plan; a campaign's limits
- *                             loosened behave as set-ad-guardrail (listed and warned, no code). Undo: the plan and the
- *                             limits as they were, through this tool.
+ *                             removed) and a campaign's limits loosened (as set-ad-guardrail) are listed in raises and
+ *                             said in the effect: the Owner's code rule (ads-code-rule.ts) makes them day-to-day, so a
+ *                             person's approval sends them with no code. Undo: the plan and the limits as they were,
+ *                             through this tool.
  *   restore-budget-baselines  the Budget page's "Restore to baseline": each campaign's daily budget back to the baseline
  *                             a person captured (restoreBudgetBaselines, the route's own code), written as the approver
  *                             through the write gate. A campaign's daily budget is set-campaign-budget's lever, so it
@@ -33,8 +34,8 @@ import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, STEP_PCT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import {
-  alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, ID, MARKET, named,
-  plural, splitRaises, WHY, type CodeRule, type Raise,
+  alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetRaiseWords, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, codeRuleOf,
+  ID, MARKET, named, plural, splitRaises, WHY, type CodeRule, type Raise,
 } from './ads-budget-kit.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
@@ -105,12 +106,12 @@ async function planStateNow(market: string, month: string, campaignIds: readonly
 type PlanLever = 'monthlyBudget' | 'capRemoved' | 'stopOverSpendOff' | 'autoPacing' | 'calendar' | 'planRemoved' | 'campaignLimits'
 
 /**
- * THE code rule of set-monthly-ad-budget (ads-budget-kit.ts CodeRule): no older Claude tool moves a market's monthly plan,
- * so a raise through it needs the approver's code; a campaign's lowest and highest daily budget are set-ad-guardrail's
- * lever (campaign-budget-bounds), without one.
+ * THE code rule of set-monthly-ad-budget (ads-budget-kit.ts CodeRule): the Owner's code rule (ads-code-rule.ts) makes a
+ * raise through a market's monthly plan a day-to-day change (no code); a campaign's lowest and highest daily budget are
+ * set-ad-guardrail's lever (campaign-budget-bounds), without one.
  */
 function planNeedsCode(lever: PlanLever): CodeRule {
-  return lever === 'campaignLimits' ? { code: false, as: 'set-ad-guardrail (campaign-budget-bounds)' } : { code: true }
+  return lever === 'campaignLimits' ? { code: false, as: 'set-ad-guardrail (campaign-budget-bounds)' } : codeRuleOf('set-monthly-ad-budget')
 }
 
 /** Why a campaign's limits move can raise spend, in words (set-ad-guardrail's campaign-budget-bounds rule), or null. */
@@ -236,6 +237,7 @@ async function planPreview(a: PlanArgs, ctx: Pick<ToolContext, 'approvalId'>): P
     : planMoves ? `${from ? 'Changes' : 'Creates'} the ${a.market} budget plan for ${month}: ${planWords(from)} → ${planWords(to)}.` : `Keeps the ${a.market} budget plan for ${month} as it is.`)
     + (limitLines.length ? ` Sets the lowest and highest daily budget of ${plural(limitLines.length, 'campaign')}: ${named(limitLines.map((l) => l.label))}.` : '')
     + ' Nexus only now.'
+    + budgetRaiseWords(raises, coded)
   return {
     ok: true,
     preview: {
@@ -379,9 +381,9 @@ const setMonthlyAdBudget: AgentTool = {
     + 'sets). Nexus only now: the budget engine acts on the plan every 30 minutes, as its own mode allows (the preview '
     + `says which), and the ads strategy's own monthly cap binds beside it. ${BY_RULE_WORDS} (by default nothing runs by `
     + 'rule). A change through the plan that can raise spend — a bigger budget, the cap removed, Stop Over Spend switched '
-    + 'off, Auto Pacing switched or its calendar changed, the plan removed — is approved with the approver\'s '
-    + 'authenticator code (stepUp); a campaign\'s limits loosened are listed in raises and need no code, as with '
-    + 'set-ad-guardrail. The preview shows the plan from → to, each campaign\'s limits from → to, what can raise spend '
+    + 'off, Auto Pacing switched or its calendar changed, the plan removed — and a campaign\'s limits loosened (as with '
+    + 'set-ad-guardrail) are listed in raises and said in the preview: a day-to-day change, so a person\'s approval sends '
+    + 'it with no authenticator code. The preview shows the plan from → to, each campaign\'s limits from → to, what can raise spend '
     + 'and the engine\'s mode. A past month is refused. Undo sets the plan and the limits back.',
   async handler(args, ctx) {
     return planPreview(args as PlanArgs, ctx)
@@ -403,10 +405,16 @@ const baselineInput = z.object({
 
 /**
  * THE code rule of restore-budget-baselines (ads-budget-kit.ts CodeRule): a campaign's daily budget is set-campaign-budget's
- * lever, without a code — a raise is listed, warned past his own limits, and approving sends it.
+ * lever, and the Owner's code rule (ads-code-rule.ts) makes it a day-to-day change — a raise is listed, warned past his
+ * own limits, and approving sends it, with no code.
  */
 function baselineNeedsCode(_lever: 'campaignBudget'): CodeRule {
-  return { code: false, as: 'set-campaign-budget' }
+  return needsCodeAs(codeRuleOf('restore-budget-baselines'), 'set-campaign-budget')
+}
+
+/** A day-to-day CodeRule names the older tool that moves the same lever without a code. */
+function needsCodeAs(rule: CodeRule, as: string): CodeRule {
+  return rule.code ? rule : { code: false, as }
 }
 
 /** One campaign of the request, as Nexus holds it now. */
@@ -453,6 +461,7 @@ async function baselinePreview(args: Record<string, unknown>, ctx: Pick<ToolCont
   const skipped = lines.filter((l) => l.does === 'skip').map((l) => ({ campaignId: l.campaignId, label: l.label, why: l.why! }))
   const effect = `Sets the daily budget of ${plural(restoring.length, 'campaign')} back to its baseline: ${named(restoring.map((l) => `${l.label} ${amountLabel(l.fromCents, l.currency)} → ${amountLabel(l.toCents!, l.currency)}`))}.`
     + (skipped.length ? ` ${plural(skipped.length, 'campaign')} left as ${skipped.length === 1 ? 'it is' : 'they are'} (${named(skipped.map((s) => `${s.label}: ${s.why}`))}).` : '')
+    + budgetRaiseWords(raises, coded)
   return {
     lines,
     result: {

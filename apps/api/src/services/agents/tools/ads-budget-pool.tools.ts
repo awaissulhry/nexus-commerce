@@ -17,8 +17,9 @@
  * Every way it can raise spend is listed in `raises`: a campaign joining (a rebalance may raise its budget — now if the
  * pool is live, else once it is), a campaign leaving (it keeps its budget while the pool's whole budget is spread over the
  * rest), a live rebalance that raises a budget, a pool's values (a bigger budget, another strategy, a larger shift, a
- * shorter cool-down). Which need the approver's code is decided in ONE place, poolNeedsCode (ads-budget-kit.ts, the money
- * family rule). A campaign joins only a pool of its own currency. The preview names what else moves the campaigns'
+ * shorter cool-down). Whether any needs the approver's code is decided in ONE place, poolNeedsCode: the Owner's code rule
+ * (ads-code-rule.ts) makes them all day-to-day (said in the effect, a person's approval sends them, no code). A campaign
+ * joins only a pool of its own currency. The preview names what else moves the campaigns'
  * budgets (alsoChangedBy), warns when a switched-on budget schedule also sets one, and says what the pools' cron does now.
  *
  * Undo: a create is deleted; an update is set back; an allocation is reversed; a delete is created again (a new pool,
@@ -39,8 +40,8 @@ import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, ruleFactsFor, spOnlyRefusal } from './ads-change-kit.js'
 import type { KitItem } from './ads-autonomy-kit.js'
 import {
-  alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, ID, named, plural,
-  splitRaises, WHY, type CodeRule, type Raise,
+  alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetRaiseWords, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, codeRuleOf,
+  ID, named, plural, splitRaises, WHY, type CodeRule, type Raise,
 } from './ads-budget-kit.js'
 import { budgetEngineMode } from '../../advertising/ads-budget-engine-mode.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -99,13 +100,12 @@ async function poolNow(poolId: string | null): Promise<PoolState> {
 type PoolLever = 'join' | 'leave' | 'rebalance' | 'values'
 
 /**
- * THE code rule of set-budget-pool (ads-budget-kit.ts CodeRule): no older Claude tool adds a campaign to a pool, takes one
- * out or runs a rebalance — those raises need the approver's code, whatever the pool's level now (switching a pool live is
- * turn-up-automation's, without a code, so a join made while it is off is judged as the raise it becomes); a pool's values
- * are tune-ad-engine's lever, without one.
+ * THE code rule of set-budget-pool (ads-budget-kit.ts CodeRule): the Owner's code rule (ads-code-rule.ts) makes a campaign
+ * joining or leaving a pool and a rebalance a day-to-day change (no code), whatever the pool's level now (a join made while
+ * it is off is listed as the raise it becomes); a pool's values are tune-ad-engine's lever, without one.
  */
 function poolNeedsCode(lever: PoolLever): CodeRule {
-  return lever === 'values' ? { code: false, as: 'tune-ad-engine (budget-pool)' } : { code: true }
+  return lever === 'values' ? { code: false, as: 'tune-ad-engine (budget-pool)' } : codeRuleOf('set-budget-pool')
 }
 
 const levelWords = (p: PoolValues) => (!p.enabled ? 'switched off' : p.dryRun ? 'on, in dry run (it records rebalances and writes nothing)' : 'live (its rebalances write budgets at Amazon)')
@@ -332,7 +332,7 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
         basis: hash({ state, lines }),
         reach: reached.reach,
         reachNote: budgetReachNote(reached.reach, later),
-        effect,
+        effect: effect + budgetRaiseWords(raises, coded),
         undoNote: {
           create: 'Undo deletes the pool.',
           update: 'Undo sets the pool\'s values back, through set-budget-pool.',
@@ -508,9 +508,9 @@ const setBudgetPool: AgentTool = {
     + 'leave with remove, keeping the budget they have; a campaign is in one pool at a time), delete (each campaign keeps '
     + 'its budget) or rebalance-now (one rebalance now, ignoring the cool-down: a pool in dry run only records it; a live '
     + 'one writes each budget as the approver). Switching a pool on, off or live is turn-up / turn-down-automation (A9). '
-    + `${BY_RULE_WORDS} (by default nothing runs by rule). A campaign joining or leaving a pool (whatever its level) and a `
-    + 'live rebalance that raises a budget are approved with the approver\'s authenticator code (stepUp); a pool\'s values '
-    + 'behave as tune-ad-engine (listed in raises, no code). A campaign joins only a pool of its own currency. The preview '
+    + `${BY_RULE_WORDS} (by default nothing runs by rule). A campaign joining or leaving a pool (whatever its level), a `
+    + 'live rebalance that raises a budget and a pool\'s values (as tune-ad-engine) are listed in raises and said in the '
+    + 'preview: a day-to-day change, so a person\'s approval sends it with no authenticator code. A campaign joins only a pool of its own currency. The preview '
     + 'shows the pool from → to, each campaign joining, leaving or moving, what else moves those budgets (a switched-on '
     + 'budget schedule too: warned), where a write lands (live at Amazon or sandbox) and what the pools\' cron does now. '
     + 'Undo reverses it (a deleted pool comes back as a new one, switched off).',

@@ -79,8 +79,8 @@ import { STATUS_COLUMN_LABEL, statusCellText, statusCellValue, statusColumn, typ
 import { ACTION_ROLE_CANNOT_PUBLISH } from '../sheet/channel/channelActions'
 import { listingLabel } from '../sheet/master/sharedActionColumn'
 import type { StudioRow } from '../sheet/master/types'
-import { axisSummary, orderByAxisValues, type AxisSummary } from '../variants/family/coverage'
-import { mergeAxisValues } from '../variants/family/projections'
+import { orderByAxisValues, type AxisSummary } from '../variants/family/coverage'
+import { familyAxes, familyAxisValues, familyReadScope } from '../sheet/familyOrder'
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
 import { matrixChip, matrixChips } from './chips'
@@ -119,9 +119,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const reporter = useSaveReporter()
   const { has, status: authStatus } = useAuth()
   const toast = useToast()
-  const { scope, market, locale, accountId, options, marketplaces, setTab, setScope } = useStudioScope()
-  const marketOrFirst = market ?? options.markets[0]?.code ?? 'IT'
-  const localeOrFirst = locale ?? options.locales[0]?.code ?? 'it'
+  const studioScope = useStudioScope()
+  const { scope, market, locale, accountId, options, marketplaces, setTab, setScope } = studioScope
+  /* The family read's market and language — the Information page asks with the same rule (`familyReadScope`). */
+  const { market: marketOrFirst, locale: localeOrFirst } = familyReadScope(studioScope)
 
   /* ── the rows: the sheet's, with the family read's axis values and images merged in ─────── */
 
@@ -141,7 +142,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
     const base = sheet?.rows ?? []
     if (axisKeys.length === 0 && Object.keys(projections.images).length === 0) return base
     return base.map((row) => {
-      const axisValues = mergeAxisValues(axisKeys, projections.axisValues[row.id], row.axisValues)
+      const axisValues = familyAxisValues(projections, row)
       const mine = projections.images[row.id]
       return { ...row, axisValues, imageUrl: row.imageUrl ?? mine?.url ?? null, imageInherited: row.imageUrl ? row.imageInherited : mine?.inherited, axisValuesSuspect: projections.suspect?.[row.id] ?? [] }
     })
@@ -149,17 +150,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const rowsRef = useRef<StudioRow[]>(rows)
   rowsRef.current = rows
 
-  const axes = useMemo<AxisSummary[]>(() => {
-    const stated = new Map(projections.axes.map((a) => [a.key, a]))
-    const columns = sheet?.columns ?? []
-    return axisKeys.map((key) => {
-      const server = stated.get(key)
-      const want = [(server?.storedKey ?? key).toLowerCase(), key.toLowerCase()]
-      const column = columns.find((c) => want.includes(c.key.toLowerCase()))
-      /* `valueOrder` is the operator-arranged order stored on the parent listing — the Variants page's rule (VP.3). */
-      return { valueOrder: server?.valueOrder, ...axisSummary({ key, label: server?.label ?? column?.label ?? key, storedKey: server?.storedKey, options: server?.values ?? column?.options, optionLabels: column?.optionLabels }, rows) }
-    })
-  }, [axisKeys, projections.axes, sheet, rows])
+  /* The family order the Information page shares — it builds the same axes with the same rule (`sheet/familyOrder.ts`). */
+  const axes = useMemo<AxisSummary[]>(() => familyAxes(projections, sheet?.columns ?? [], rows), [projections.axes, sheet, rows])
   const axesRef = useRef<AxisSummary[]>(axes)
   axesRef.current = axes
   const ordered = useMemo(() => orderByAxisValues(rows, axes), [rows, axes])

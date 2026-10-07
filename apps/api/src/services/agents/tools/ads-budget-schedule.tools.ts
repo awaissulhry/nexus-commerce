@@ -21,8 +21,9 @@
  *
  * Every way it can raise spend is listed in `raises` (what the limits and the card read): a window that can raise a
  * budget, campaigns added to such a schedule, a later or removed end date, an earlier start, blackout days removed, a
- * time-zone change, a switch-on, a give-back that raises a budget the schedule held lower. Which need the approver's code
- * is decided in ONE place, scheduleNeedsCode (ads-budget-kit.ts, the money family rule). The preview names what else
+ * time-zone change, a switch-on, a give-back that raises a budget the schedule held lower. Whether any needs the
+ * approver's code is decided in ONE place, scheduleNeedsCode: the Owner's code rule (ads-code-rule.ts) makes them all
+ * day-to-day (said in the effect, a person's approval sends them, no code). The preview names what else
  * moves the campaigns' budgets (alsoChangedBy: rules, hourly schedules, other budget schedules, pools), warns when a pool
  * also sets one, and says what the schedules' cron does now (budgetEngineMode: scheduled, the dial, live or sandbox).
  *
@@ -42,8 +43,8 @@ import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, ruleFactsFor, spOnlyRefusal } from './ads-change-kit.js'
 import type { KitItem } from './ads-autonomy-kit.js'
 import {
-  alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, ID, named, plural,
-  splitRaises, WHY, type CodeRule, type Raise,
+  alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetRaiseWords, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, codeRuleOf,
+  ID, named, plural, splitRaises, WHY, type CodeRule, type Raise,
 } from './ads-budget-kit.js'
 import { budgetEngineMode } from '../../advertising/ads-budget-engine-mode.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -86,16 +87,16 @@ type Args = z.infer<typeof input>
 type ScheduleLever = 'newWindow' | 'campaignAdded' | 'dates' | 'giveBack' | 'windowEdit' | 'switchOn' | 'pauseGiveBack'
 
 /**
- * THE code rule of set-budget-schedule (ads-budget-kit.ts CodeRule). No older Claude tool creates a schedule, adds a
- * campaign to one, moves its dates, blackout days or time zone, or deletes one (or takes a campaign out) with its
- * give-back: those raises need the approver's code — whether the schedule is on or off (switching it on is
- * turn-up-automation's, without a code, so a raise made while it is off is judged as the raise it becomes). A window edit
- * is tune-ad-engine's lever, a switch on or off with its give-back turn-up / turn-down-automation's: as those, no code.
+ * THE code rule of set-budget-schedule (ads-budget-kit.ts CodeRule). The Owner's code rule (ads-code-rule.ts) makes a new
+ * schedule, a campaign added to one, its dates, blackout days or time zone moved, and a delete (or a campaign taken out)
+ * with its give-back a day-to-day change (no code) — whether the schedule is on or off (a raise made while it is off is
+ * listed as the raise it becomes). A window edit is tune-ad-engine's lever, a switch on or off with its give-back
+ * turn-up / turn-down-automation's: as those, no code.
  */
 function scheduleNeedsCode(lever: ScheduleLever): CodeRule {
   if (lever === 'windowEdit') return { code: false, as: 'tune-ad-engine (budget-schedule)' }
   if (lever === 'switchOn' || lever === 'pauseGiveBack') return { code: false, as: 'turn-up / turn-down-automation' }
-  return { code: true }
+  return codeRuleOf('set-budget-schedule')
 }
 
 /** A schedule as a change records it, and as `current` reads it back (the undo guard compares the two). */
@@ -350,6 +351,7 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
       : `Changes the budget schedule ${label}: ${Object.keys(body).filter((k) => k !== 'neverExpire').map((k) => (k === 'enabled' ? (body.enabled ? 'switched back on' : 'paused') : k === 'campaigns' ? 'its campaigns' : k)).join(', ')}.`)
     + (giveBackLines.length ? ` Gives back ${plural(giveBackLines.filter((g) => !g.refusedByGate).length, 'budget')} now (each to its budget from before the window).` : '')
     + (keptLines.length ? ` ${named(keptLines)} ${keptLines.length === 1 ? 'keeps' : 'keep'} the budget someone set since.` : '')
+    + budgetRaiseWords(raises, coded)
   const later = !after ? ''
     : onAfter ? `Its cron sets each campaign's budget when a window opens and gives it back when the window closes — now: ${engine.sentence}`
       : 'Switched off, it writes nothing until it is switched on (turn-up-automation, A7, or this tool with enabled true).'
@@ -512,10 +514,10 @@ const setBudgetSchedule: AgentTool = {
     + 'lists the schedule from → to, every give-back from → to and where it lands (live at Amazon or sandbox), and what '
     + `can raise spend, what else moves those budgets (a pool too: warned) and what the schedules' cron does now. ${BY_RULE_WORDS} `
     + '(by default nothing runs by rule). A new schedule with a window that can raise a budget, campaigns added to such a '
-    + 'schedule, a later or removed end date, an earlier start, blackout days removed or a time-zone change on one, or a '
-    + 'delete or campaign taken out whose give-back raises a budget is approved with the approver\'s authenticator code '
-    + '(stepUp), whether the schedule is on or off; a window edit and a switch on or off behave as tune-ad-engine and '
-    + 'turn-up / turn-down-automation (listed in raises, no code). Undo puts it back (a deleted schedule comes back as a new one).',
+    + 'schedule, a later or removed end date, an earlier start, blackout days removed or a time-zone change on one, a '
+    + 'delete or campaign taken out whose give-back raises a budget, a window edit and a switch on or off (as tune-ad-engine '
+    + 'and turn-up / turn-down-automation) are listed in raises and said in the preview, whether the schedule is on or off: '
+    + 'a day-to-day change, so a person\'s approval sends it with no authenticator code. Undo puts it back (a deleted schedule comes back as a new one).',
   async handler(args, ctx) {
     return (await plan(args as Args, ctx)).result
   },

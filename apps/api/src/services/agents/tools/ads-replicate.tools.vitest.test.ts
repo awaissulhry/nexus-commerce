@@ -346,6 +346,8 @@ describe('B-1 — approved, it is born safe', () => {
     expect((await preview({ buildRunId: applicationId }, 'archive-ads')).preview).toMatchObject({ permanent: expect.stringMatching(/^PERMANENT/) })
     // The person who asked holds the floor: restore-campaign (its own request) may put the planned bids back.
     expect((await preview({ campaignId }, 'restore-campaign')).preview).toMatchObject({ suppressedBy: 'user:u-asker', restores: { targets: 2, adGroups: 1 } })
+    // The Owner's code rule A: the copy is born at the floor, so that restore is its go-live — the approver's code.
+    expect((await preview({ campaignId }, 'restore-campaign')).preview).toMatchObject({ bornAtFloor: { since: expect.any(String) }, stepUp: { raises: ['Bids', 'Spend'] } })
     const { raiseApplicationBids, rollbackApplication, CLAUDE_RUN, claudeRunRollback } = await import('../../advertising/ads-blueprint-apply.service.js')
     await expect(inside(() => raiseApplicationBids(applicationId, 'user:u-screen'))).rejects.toThrow(CLAUDE_RUN)
     // Replicate's rollback would queue an automation's archives the allowlist refuses: it names archive-ads instead.

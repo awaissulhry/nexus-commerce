@@ -71,7 +71,8 @@ import { marketCurrency } from '../../pim/market-currency.js'
 import { amountLabel, liveReachOf } from './ads-tool-guards.js'
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, requesterOf, storedReach, strategyFactsMoney, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote, type KitChange, type KitItem } from './ads-autonomy-kit.js'
-import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
+import { STEP_UP_NEEDS } from '../step-up-approval.js'
+import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { executeSync, syncPreview, syncRefusal, syncUndoCurrent, syncUndoRequest, type SyncAfter, type SyncArgsIn } from './ads-playbook-sync.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolDoor, ToolResult, ToolUndo } from '../tool-types.js'
 
@@ -369,8 +370,11 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         artifacts: p.artifacts,
         ...(p.artifactErrors.length ? { artifactErrors: p.artifactErrors } : {}),
         warnings: p.warnings,
+        // The Owner's code rule (ads-code-rule.ts): a playbook START is a big door.
         ...(op === 'start'
-          ? { stepUp: { what: `starts spending on ${plural(p.spending, 'campaign')}${rankOn ? ` and switches on ${plural(rankOn, 'hourly bid plan')}` : ''}`, raises: ['Bids', 'Spend', ...(rankOn ? ['Hourly bid plans'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
+          ? needsCode('apply-ads-playbook: start')
+            ? { stepUp: { what: `starts spending on ${plural(p.spending, 'campaign')}${rankOn ? ` and switches on ${plural(rankOn, 'hourly bid plan')}` : ''}`, raises: ['Bids', 'Spend', ...(rankOn ? ['Hourly bid plans'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
+            : { noCode: DAY_TO_DAY_NO_CODE }
           : { noCode: 'A stop lowers spend: it needs no authenticator code.' }),
         basis: hash({ op, row: [p.playbook.id, p.playbook.version], campaigns: p.campaigns, untouched: p.untouched, heldFloors: p.heldFloors, floorsTaken: p.floorsTaken, artifacts: p.artifacts, syncedBids: p.syncedBids }),
         reach: stored,
@@ -467,7 +471,7 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
     + `${restored.length ? `; ${plural(restored.length, 'slot campaign')} get${restored.length === 1 ? 's its' : ' their'} remembered bids back` : ''}`
     + `${switched.length ? `; ${plural(switched.length, 'hourly plan')} of the playbook switched (${switched.map((r) => `${r.role} ${r.does === 'enable' ? 'on' : r.does === 'disable' ? 'off' : 'rewritten'}`).join(', ')})` : ''}`
     + `${p.harvest.does === 'update' ? '; the harvest rule re-synced to the phase\'s cadence' : ''}. `
-    + (raise ? `It ADDS SPEND (${p.raises.join('; ') || 'a raise'}): the approver's code is needed.` : p.direction === 'lower' ? 'It only lowers what the ads may spend.' : 'It moves no spend.')
+    + (raise ? `It ADDS SPEND (${p.raises.join('; ') || 'a raise'}): ${phaseNeedsCode(p) ? 'the approver\'s code is needed' : 'a day-to-day change — a person\'s approval sends it, with no authenticator code'}.` : p.direction === 'lower' ? 'It only lowers what the ads may spend.' : 'It moves no spend.')
   const check = p.check
   return {
     plan: p,
@@ -503,7 +507,8 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         },
         proposed: check.proposal?.to === p.to && !check.hold.held,
         warnings: p.warnings,
-        stepUp: raise
+        ...(raise && !phaseNeedsCode(p) ? { noCode: DAY_TO_DAY_NO_CODE } : {}),
+        stepUp: raise && phaseNeedsCode(p)
           ? {
             what: "switches a product's playbook phase in a way that adds spend",
             raises: p.raises,
@@ -531,15 +536,23 @@ async function phasePreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
 }
 
 /**
- * PB-5b, PB-9 — the ONE gate of an op that adds spend (a start; a phase switch that raises): approved with the approver's
- * fresh authenticator code, or run by the business's rule where this tool's limits let it (allowStart, allowPhaseUp —
- * each a loosening that itself needed the code; withinLimits holds the rest). An op that adds nothing passes.
+ * A phase switch's code decision, in ONE place: a raise is a strategy raise through the playbook — a big door of the
+ * Owner's code rule (ads-code-rule.ts) — and one that lets Claude do more alone ALWAYS needs the code (the Owner's own
+ * rule, apart from the table).
  */
-async function spendGate(ctx: ToolContext, adds: boolean): Promise<{ stepUpAt: Date | null; byRule: boolean } | { refusal: string }> {
-  if (!adds) return { stepUpAt: null, byRule: false }
-  if (ctx.decidedVia === 'auto') return { stepUpAt: null, byRule: true }
-  const coded = await stepUpApproval(ctx)
-  return 'refusal' in coded ? { refusal: coded.refusal } : { stepUpAt: coded.at, byRule: false }
+function phaseNeedsCode(p: Pick<PhasePlan, 'direction' | 'raisesClaude'>): boolean {
+  return p.direction === 'raise' && (needsCode('apply-ads-playbook: a phase switch that raises') || !!p.raisesClaude)
+}
+
+/**
+ * PB-5b, PB-9 — the ONE gate of an op that adds spend (a start; a phase switch that raises), reading the fresh dry run's
+ * stepUp (the code table decided it): approved with the approver's fresh authenticator code, or run by the business's
+ * rule where this tool's limits let it (allowStart, allowPhaseUp — each a loosening that itself needed the code;
+ * withinLimits holds the rest). An op that adds nothing, or one the table asks no code for, passes.
+ */
+async function spendGate(ctx: ToolContext, preview: unknown): Promise<{ stepUpAt: Date | null; byRule: boolean } | { refusal: string }> {
+  const gate = await codeGate(ctx, preview)
+  return 'refusal' in gate ? gate : { stepUpAt: gate.at, byRule: gate.byRule }
 }
 
 /** PB-6c — a hero's campaign without its bid and budget (the frozen values carry them), for the basis. */
@@ -940,11 +953,15 @@ const applyAdsPlaybook: AgentTool = {
       // A raise passes the same gate as a start; by rule only with allowPhaseUp (withinLimits) — and never one that lets
       // Claude do more alone (the Owner's rule: that always needs his code).
       if (ctx.decidedVia === 'auto' && p.raisesClaude) return notRun("Not run: it lets Claude do more alone, which always needs a person's authenticator code, never a rule. Ask for it again; a person approves it.")
-      const gate = await spendGate(ctx, p.direction === 'raise')
+      const gate = await spendGate(ctx, fresh.result.preview)
       if ('refusal' in gate) return notRun(gate.refusal)
       const stepUpAt = gate.stepUpAt
-      const raiseByRule = gate.byRule ? "run by the business's rule: this business lets raising playbook phase switches run so (apply-ads-playbook allowPhaseUp)" : null
-      const out = await runPhase(p, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, writer: writerOf(run.changeSetId), stepUpAt, raiseByRule })
+      const raise = p.direction === 'raise'
+      const byRule = raise && ctx.decidedVia === 'auto'
+      const raiseByRule = byRule ? "run by the business's rule: this business lets raising playbook phase switches run so (apply-ads-playbook allowPhaseUp)" : null
+      // A raise a person approved where the code table asks no code (never one that lets Claude do more alone).
+      const raiseWithoutCode = raise && !byRule && !stepUpAt ? "approved by a person without the authenticator code: the Owner's code rule makes this phase switch a day-to-day change" : null
+      const out = await runPhase(p, { actor: run.actor, reason: run.reason, changeSetId: run.changeSetId, manual: run.manual, writer: writerOf(run.changeSetId), stepUpAt, raiseByRule, raiseWithoutCode })
       if ('error' in out) return notRun(`Not run: ${out.error}`)
       return {
         ok: true,
@@ -972,7 +989,7 @@ const applyAdsPlaybook: AgentTool = {
       if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
       // A start adds spend: approved with the approver's fresh code, or run by the business's rule (allowStart, itself a
       // loosening that needed the code). A stop lowers spend: no code.
-      const gate = await spendGate(ctx, op === 'start')
+      const gate = await spendGate(ctx, fresh.result.preview)
       if ('refusal' in gate) return notRun(gate.refusal.replace('a raise runs', 'a start runs').replace('it raises', 'it starts spending').replace('a raise needs', 'a start needs'))
       const stepUpAt = gate.stepUpAt
       const p = fresh.plan
