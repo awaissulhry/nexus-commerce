@@ -10,7 +10,10 @@
  *   · an IT rule passes the connection checks on the IT profile, even with a sandbox UK row first in the table;
  *   · a rule in a sandbox market fails them;
  *   · a whole-account rule passes when at least one market Nexus reads is production with writes on, and the detail
- *     names the profile it judged and the markets its writes stay refused in.
+ *     names the profile it judged and the markets its writes stay refused in;
+ *   · a rule with no market but bound to one campaign, a portfolio, a product or its picked campaigns is judged on the
+ *     market those campaigns are in (a UK sandbox campaign fails), across its own markets when they are several, and
+ *     fails when its scope reaches no campaign.
  *
  * The database is a stub; the resolver (`adsProfileFor`, on its legacy-row path) and the market lists are the real ones.
  */
@@ -43,8 +46,33 @@ function ordered(rows: ConnRow[], orderBy?: { profileId?: 'asc' | 'desc' }): Con
   return orderBy.profileId === 'asc' ? s : s.reverse()
 }
 
+/** Campaigns, product ads and product lines for the scoped rules (the whole-account rules never read them). */
+interface Camp { id: string; marketplace: string | null; portfolioId: string | null; status: string }
+const CAMPAIGNS: Camp[] = [
+  { id: 'c-it-1', marketplace: 'IT', portfolioId: 'pf-it', status: 'ENABLED' },
+  { id: 'c-it-2', marketplace: 'IT', portfolioId: 'pf-it', status: 'ENABLED' },
+  { id: 'c-uk-1', marketplace: 'UK', portfolioId: 'pf-uk', status: 'ENABLED' },
+  { id: 'c-uk-2', marketplace: 'UK', portfolioId: 'pf-uk', status: 'ENABLED' },
+  { id: 'c-de-1', marketplace: 'DE', portfolioId: null, status: 'ENABLED' },
+  { id: 'c-nl-1', marketplace: 'NL', portfolioId: null, status: 'ENABLED' },
+]
+/** `p-line` is a parent: its children `p-a`, `p-b` are advertised in DE only. */
+const PRODUCTS = [{ id: 'p-a', parentId: 'p-line' }, { id: 'p-b', parentId: 'p-line' }]
+const ADS = [
+  { productId: 'p-a', adGroup: { campaignId: 'c-de-1' } },
+  { productId: 'p-b', adGroup: { campaignId: 'c-de-1' } },
+  { productId: 'p-mixed', adGroup: { campaignId: 'c-it-1' } },
+  { productId: 'p-mixed', adGroup: { campaignId: 'c-uk-1' } },
+  { productId: 'p-sandbox', adGroup: { campaignId: 'c-uk-2' } },
+  { productId: 'p-sandbox', adGroup: { campaignId: 'c-nl-1' } },
+]
+
 const db = vi.hoisted(() => ({
   automationRule: { findUnique: vi.fn(), update: vi.fn() },
+  campaign: { findMany: vi.fn() },
+  adProductAd: { findMany: vi.fn() },
+  product: { findMany: vi.fn() },
+  campaignRuleAssignment: { findMany: vi.fn(async () => []) },
   amazonAdsConnection: { findFirst: vi.fn(), findMany: vi.fn() },
   adKeywordProtection: { count: vi.fn(async () => 0) },
   advertisingActionLog: { create: vi.fn(async () => ({})), createMany: vi.fn(async () => ({})) },
@@ -92,6 +120,12 @@ beforeEach(() => {
     ordered(connections.filter((r) => matches(r, where)), orderBy)[0] ?? null)
   db.amazonAdsConnection.findMany.mockImplementation(async ({ where, orderBy }: { where?: Record<string, unknown>; orderBy?: { profileId?: 'asc' | 'desc' } } = {}) =>
     ordered(connections.filter((r) => matches(r, where)), orderBy))
+  db.campaign.findMany.mockImplementation(async () => CAMPAIGNS)
+  db.adProductAd.findMany.mockImplementation(async ({ where }: { where?: { productId?: { in?: string[] } } } = {}) =>
+    ADS.filter((a) => !where?.productId?.in || where.productId.in.includes(a.productId)))
+  db.product.findMany.mockImplementation(async ({ where }: { where?: { parentId?: { in?: string[] } } } = {}) =>
+    PRODUCTS.filter((p) => where?.parentId?.in?.includes(p.parentId)))
+  db.campaignRuleAssignment.findMany.mockImplementation(async () => [])
 })
 
 describe('the stub reproduces the bug', () => {
@@ -227,5 +261,110 @@ describe('the graduate route and the level dial read the same answer', () => {
     expect(await adsRuleLevelRefusal(current.id, 'AUTO')).toMatchObject({
       ok: false, status: 409, body: { error: 'gate_not_open', failures: ['CONNECTION_PRODUCTION', 'WRITES_ENABLED'] },
     })
+  })
+})
+
+describe('a rule with no market but a narrower scope is judged on the market its campaigns are in', () => {
+  /** The evidence of `rule(null)`, bound below the market. */
+  const scoped = (extra: Record<string, unknown>) => ({
+    ...rule(null), id: 'r-scoped', scopePortfolioId: null, scopeCampaignId: null, scopeProductId: null, ...extra,
+  })
+
+  it('🔴 a rule bound to ONE UK (sandbox) campaign fails both connection checks, judged on UK', async () => {
+    current = scoped({ scopeCampaignId: 'c-uk-1' })
+    const g = await gate()
+    expect(check(g.checks, 'CONNECTION_PRODUCTION')).toMatchObject({
+      passed: false,
+      detail: "UK (the market of the rule's campaign, profile 1000000000000001): AmazonAdsConnection.mode = sandbox (must be production)",
+    })
+    expect(check(g.checks, 'WRITES_ENABLED')).toMatchObject({
+      passed: false,
+      detail: "UK (the market of the rule's campaign, profile 1000000000000001): Run /advertising/connection/preview-writes + /enable-writes first",
+    })
+    expect(g.gateOpen).toBe(false)
+  })
+
+  it('🔴 the graduate route and the level dial refuse it too', async () => {
+    current = scoped({ scopeCampaignId: 'c-uk-1' })
+    expect(await graduateAdsRule(current.id, 'user:test')).toMatchObject({
+      ok: false, status: 409, body: { error: 'gate_not_open', failures: ['CONNECTION_PRODUCTION', 'WRITES_ENABLED'] },
+    })
+    expect(await adsRuleLevelRefusal(current.id, 'AUTO')).toMatchObject({
+      ok: false, status: 409, body: { error: 'gate_not_open', failures: ['CONNECTION_PRODUCTION', 'WRITES_ENABLED'] },
+    })
+    expect(db.automationRule.update).not.toHaveBeenCalled()
+  })
+
+  it('a rule bound to one IT campaign passes on the IT profile and graduates', async () => {
+    current = scoped({ scopeCampaignId: 'c-it-2' })
+    const g = await gate()
+    expect(check(g.checks, 'CONNECTION_PRODUCTION').detail)
+      .toBe("IT (the market of the rule's campaign, profile 3000000000000003): AmazonAdsConnection.mode = production")
+    expect(g.gateOpen).toBe(true)
+    expect((await graduateAdsRule(current.id, 'user:test')).ok).toBe(true)
+  })
+
+  it('a portfolio whose campaigns are all in UK is judged on UK', async () => {
+    current = scoped({ scopePortfolioId: 'pf-uk' })
+    const g = await gate()
+    expect(check(g.checks, 'CONNECTION_PRODUCTION')).toMatchObject({ passed: false })
+    expect(check(g.checks, 'CONNECTION_PRODUCTION').detail).toContain("UK (the market of the rule's portfolio, profile 1000000000000001)")
+  })
+
+  it('a product line (a parent, its children advertised in DE only) is judged on DE', async () => {
+    current = scoped({ scopeProductId: 'p-line' })
+    const conn = await adsRuleWriteConnection(current)
+    expect(conn).toMatchObject({ market: 'DE', scope: { words: 'product', campaigns: 1, markets: ['DE'], derived: true } })
+    expect((await gate()).gateOpen).toBe(true)
+  })
+
+  it('a product in IT and UK is judged across those two only: passes on IT, UK named as refused, no other market listed', async () => {
+    current = scoped({ scopeProductId: 'p-mixed' })
+    const g = await gate()
+    expect(check(g.checks, 'CONNECTION_PRODUCTION')).toMatchObject({
+      passed: true,
+      detail: "The rule's scope (product) reaches 2 campaigns in IT, UK, judged on IT, profile 3000000000000003: " +
+        'AmazonAdsConnection.mode = production. Live (production, writes on): IT. ' +
+        "Not live, so the write gate refuses this rule's writes there: UK",
+    })
+  })
+
+  it('🔴 a product only in sandbox markets (UK, NL) fails, though IT, DE, FR, ES are live elsewhere in the account', async () => {
+    current = scoped({ scopeProductId: 'p-sandbox' })
+    const g = await gate()
+    expect(check(g.checks, 'CONNECTION_PRODUCTION').passed).toBe(false)
+    expect(check(g.checks, 'CONNECTION_PRODUCTION').detail).toContain('Live (production, writes on): none')
+    expect(check(g.checks, 'WRITES_ENABLED').passed).toBe(false)
+    expect(g.gateOpen).toBe(false)
+  })
+
+  it('🔴 a builder rule whose picker holds only UK campaigns is judged on UK', async () => {
+    current = scoped({ actions: [{ type: 'bid', campaigns: [{ id: 'c-uk-1' }, { id: 'c-uk-2' }] }] })
+    const conn = await adsRuleWriteConnection(current)
+    expect(conn).toMatchObject({ market: 'UK', scope: { words: 'picked campaigns', campaigns: 2, derived: true } })
+    expect(check((await gate()).checks, 'CONNECTION_PRODUCTION').passed).toBe(false)
+  })
+
+  it('a scope that reaches no campaign fails both checks and says no market can be judged', async () => {
+    current = scoped({ scopeProductId: 'p-not-advertised' })
+    const g = await gate()
+    expect(check(g.checks, 'CONNECTION_PRODUCTION')).toMatchObject({
+      passed: false,
+      detail: "The rule's scope (product) reaches no campaign today, so no market's connection can be judged: AmazonAdsConnection.mode = none (must be production)",
+    })
+    expect(check(g.checks, 'WRITES_ENABLED').passed).toBe(false)
+  })
+
+  it('a market on the rule wins over its scope (the scope is not read)', async () => {
+    current = { ...scoped({ scopeCampaignId: 'c-uk-1' }), scopeMarketplace: 'IT' }
+    expect((await adsRuleWriteConnection(current)).judged?.market).toBe('IT')
+    expect(db.campaign.findMany).not.toHaveBeenCalled()
+  })
+
+  it('a whole-account rule reads no campaign at all', async () => {
+    current = rule(null)
+    await gate()
+    expect(db.campaign.findMany).not.toHaveBeenCalled()
+    expect(db.adProductAd.findMany).not.toHaveBeenCalled()
   })
 })

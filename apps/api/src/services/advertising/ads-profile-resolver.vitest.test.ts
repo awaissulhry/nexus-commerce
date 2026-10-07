@@ -151,6 +151,32 @@ describe('listAdsProfiles', () => {
     expect(live).toHaveLength(1)
     expect(live[0].profileId).toBe('111')
   })
+
+  it('🔴 a scope with no recorded decision reads the row, exactly as adsProfileFor (the write gate) does', async () => {
+    // It assumed sandbox: a sweep called IT sandbox and `activeOnly` dropped it while the gate let IT write.
+    scopes[0].metadata = { marketplace: 'IT', currencyCode: 'EUR' }
+    const [listed] = await listAdsProfiles()
+    const gate = await adsProfileFor('IT')
+    expect(listed).toMatchObject({ profileId: '111', mode: 'production', source: 'scope', marketplace: 'IT' })
+    expect(listed.mode).toBe(gate?.mode)
+    expect(listed.writesEnabledAt?.toISOString()).toBe(gate?.writesEnabledAt?.toISOString())
+    expect((await listAdsProfiles({ activeOnly: true })).map((r) => r.profileId)).toEqual(['111'])
+  })
+
+  it('and sandbox only when neither the scope nor a row records one — the same as adsProfileFor', async () => {
+    scopes[0].metadata = { marketplace: 'IT' }
+    rows.length = 0
+    const [listed] = await listAdsProfiles()
+    expect(listed).toMatchObject({ mode: 'sandbox', writesEnabledAt: null })
+    expect((await adsProfileFor('IT'))?.mode).toBe('sandbox')
+    expect(await listAdsProfiles({ activeOnly: true })).toEqual([])
+  })
+
+  it('lists the profiles in profile-id order, the order adsProfileFor picks from', async () => {
+    scopes.unshift({ externalId: '999', region: 'EU', metadata: { marketplace: 'DE', mode: 'sandbox' } })
+    scopes.push({ externalId: '055', region: 'EU', metadata: { marketplace: 'FR', mode: 'sandbox' } })
+    expect((await listAdsProfiles()).map((r) => r.profileId)).toEqual(['055', '111', '999'])
+  })
 })
 
 describe('recordOperatorDecision', () => {
