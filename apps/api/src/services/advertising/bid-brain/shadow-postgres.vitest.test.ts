@@ -35,6 +35,7 @@ vi.mock('../../../lib/queue.js', () => {
 })
 
 const { runShadowOnce } = await import('./shadow.js')
+const { readBidBrain } = await import('./read.js')
 
 const W = `bb3_shadow_${randomBytes(4).toString('hex')}`
 const OTHER = `bb3_other_${randomBytes(4).toString('hex')}`
@@ -94,6 +95,22 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-3 — the shadow bid brain (real P
     expect(await rows('SELECT (SELECT count(*)::int FROM "AdMutation") m, (SELECT count(*)::int FROM "OutboundSyncQueue") q, (SELECT count(*)::int FROM "AdvertisingActionLog") l')).toEqual(before)
     expect(await rows<{ id: string; bidCents: number }>('SELECT id, "bidCents" FROM "AdTarget" WHERE id IN (\'t-it\', \'t-low\', \'t-pin\') ORDER BY id'))
       .toEqual([{ id: 't-it', bidCents: 45 }, { id: 't-low', bidCents: 3 }, { id: 't-pin', bidCents: 40 }])
+  })
+
+  it('BB-4 — the read: why per campaign, a what-if that stores nothing, and the diff per day', async () => {
+    const why = await inside(() => readBidBrain({ view: 'why', campaignId: 'c-pin' })) as { data: { decisions: Array<Record<string, unknown>> } }
+    expect(why.data.decisions).toHaveLength(1)
+    expect(why.data.decisions[0]).toMatchObject({ targetId: 't-pin', keyword: 'pinned jacket (EXACT)', layer: 'pin', action: 'hold', currentCents: 40 })
+    const stored = await inside(() => database.client.bidBrainDecision.count())
+    const whatIf = await inside(() => readBidBrain({ view: 'what-if', campaignId: 'c-it', targetAcosPct: 60 })) as { data: { decisions: Array<Record<string, unknown>>; totals: Record<string, number> } }
+    expect(whatIf.data.totals.keywords).toBe(3)
+    expect(whatIf.data.decisions.find((d) => d.targetId === 't-it')?.why).toMatch(/aim 60%/)
+    expect(await inside(() => database.client.bidBrainDecision.count())).toBe(stored)
+    const diff = await inside(() => readBidBrain({ view: 'diff', market: 'IT', days: 7 })) as { data: { days: Array<Record<string, number | string>> } }
+    const today = diff.data.days.find((d) => d.day === NOW.toISOString().slice(0, 10))!
+    expect(today).toMatchObject({ decided: 4, conflicts: 0, writes: 0 })
+    expect((today.agree as number) + (today.higher as number) + (today.lower as number) + (today.hold as number) + (today.brake as number)).toBe(4)
+    expect(await inside(() => readBidBrain({ view: 'what-if', campaignId: 'c-it' }))).toEqual({ error: 'what-if needs targetAcosPct (and optionally bandLoPct / bandHiPct).' })
   })
 
   it('a rerun on the same facts stores nothing; the next day stores one snapshot each', async () => {

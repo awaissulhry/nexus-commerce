@@ -75,6 +75,8 @@ The other kinds: `negative` includes the list form (`add-negative-targets`); `ha
 
 What reads which target: Nexus's bid optimiser (auto-bid, autopilot plans and `bid_to_target_acos` rules) moves each keyword's bid toward the first of: the rule's or plan's own target (one a person set), the campaign's own `targetAcos`, the business default, profit data (profit mode), 30 %. The strategy's target sits after the campaign's own once the bid engines read it: `ads-strategy` says whether they do (`readBy` of `targetAcosPct`) and gives the order (`order`). A value outside what the screens take (above 0, at most 500 %) is skipped there, never converted. It writes to Amazon only on campaigns on the live-write allowlist. `bid_apply` rules (`op: targetAcos` / `curBidTargetAcos`) use their own `value`, else the business default. The external bidding engine also reads the campaign's `targetAcos` when it runs. eBay has no target ACoS: an `acos_pct` condition in a market-scoped rule is the proxy.
 
+The bid brain (`bid-brain`, read only) runs in shadow on IT and DE: it decides each keyword bid of an allowlisted campaign from this target and writes nothing yet. Before proposing a new target, `bid-brain` `view: "what-if"` with `targetAcosPct` shows what it would do to the bids; `view: "why"` explains a bid, `view: "diff"` sets the brain against what today's writers set.
+
 ## 6. Propose ONE change plan
 
 | To | Tool |

@@ -74,6 +74,8 @@ export function mcpInstructions(business: McpBusiness): string {
     'The Amazon ads strategy lives in Nexus, one place per market, category and product: read it with ads-strategy, change',
     'it with set-ads-strategy (a raise needs the person\'s authenticator code). It only narrows what this business lets',
     'Claude do alone per kind of ad action, never widens it; an answer it narrowed names the strategy row (trust.strategy).',
+    'Why an Amazon keyword bid is what it is, and what it would be at another target ACoS: bid-brain (read only; the bid',
+    'brain runs in shadow on IT and DE and writes nothing yet — its diff view sets it against what today\'s writers set).',
     'How a product\'s Amazon ads are built and run is its playbook: read it with ads-playbook, change it with',
     'set-ads-playbook, and build, adopt, start, stop or sync its campaigns, switch its phase or give a declining term a',
     'campaign of its own with apply-ads-playbook (built through the SP Super Wizard\'s own launch, at the floor and off the',

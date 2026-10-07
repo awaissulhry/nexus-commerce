@@ -15,6 +15,7 @@ import { ADS_RECOMMENDATION_TOOLS } from './tools/ads-recommendations-apply.tool
 import { ADS_CHANGE_TOOLS } from './tools/ads-change.tools.js'
 import { ADS_TARGET_ACOS_TOOLS } from './tools/ads-target-acos.tools.js'
 import { ADS_STRATEGY_TOOLS } from './tools/ads-strategy.tools.js'
+import { ADS_BID_BRAIN_TOOLS } from './tools/ads-bid-brain.tools.js'
 import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
 import { ADS_MANAGER_TOOLS } from './tools/ads-manager.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
@@ -126,6 +127,8 @@ const ALL: AgentTool[] = [
   ...ADS_TARGET_ACOS_TOOLS,
   // Ads autonomy W1-2/W1-3 — the Owner's ads strategy per market, category and product: read, and set (raises need the code).
   ...ADS_STRATEGY_TOOLS,
+  // Bid brain BB-4 — what the shadow bid brain decides (why this bid, what-if for a target, the shadow vs actual diff), read.
+  ...ADS_BID_BRAIN_TOOLS,
   // Ads playbook PB-2 — how a product's ads are built and run (templates, rows per market, category and product), read.
   ...ADS_PLAYBOOK_TOOLS,
   // Ads autonomy W4-1 — the daily Claude ads run reports itself (bell + one e-mail a day), and its history.
