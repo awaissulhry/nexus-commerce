@@ -18,6 +18,17 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * matching the "what can I sell right now" semantics the /products
  * grid exposes. The richer breakdown lives in the per-row return value
  * for callers that want it (cron logging, dashboard tiles).
+ *
+ * Step 4 (Send to FBA) — Amazon's INBOUND numbers are kept, never as stock:
+ * one `FbaInventoryDetail` row per seller SKU × the sweep's marketplace,
+ * `fulfillmentCenterId = 'ALL'`, `condition = 'INBOUND'`, `quantity` =
+ * working + shipped + receiving, `rawData = { working, shipped, receiving }`.
+ * The Matrix reads it as "Inbound +N"; the FBA→FBM conversion guard and the
+ * delete warnings read it too. A SKU with nothing inbound holds NO row
+ * (absent = nothing inbound): a full sweep removes the rows of SKUs it saw
+ * with 0 inbound or did not see at all; a bounded refresh removes only the
+ * rows of SKUs it saw with 0. The AMAZON-EU-FBA StockLevel stays Amazon's
+ * fulfillable number only — inbound units never enter it.
  */
 
 import prisma from '../db.js'
@@ -25,8 +36,20 @@ import { AmazonService, FBAInventoryRow } from './marketplaces/amazon.service.js
 import { applyStockMovement } from './stock-movement.service.js'
 import { logger } from '../utils/logger.js'
 import { amazonAccountIdFor, productByOwnSku } from './listings/reported-sku.js'
+import { FBA_ALL_CENTRES } from './fba-pan-eu.service.js'
 
 const FBA_LOCATION_CODE = 'AMAZON-EU-FBA'
+const INBOUND = 'INBOUND'
+
+/** Amazon's inbound for one report row (Step 4): the three buckets and their sum. A missing or odd bucket counts 0. */
+export function inboundOf(row: Partial<Pick<FBAInventoryRow, 'inboundWorkingQuantity' | 'inboundShippedQuantity' | 'inboundReceivingQuantity'>>):
+  { working: number; shipped: number; receiving: number; units: number } {
+  const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0)
+  const working = count(row.inboundWorkingQuantity)
+  const shipped = count(row.inboundShippedQuantity)
+  const receiving = count(row.inboundReceivingQuantity)
+  return { working, shipped, receiving, units: working + shipped + receiving }
+}
 
 const amazonService = new AmazonService()
 
@@ -42,6 +65,9 @@ interface SyncSummary {
   errors: Array<{ sku: string; error: string }>
   // First few unmatched SKUs for diagnostics (full list would flood logs)
   unmatchedSampleSkus: string[]
+  /** Step 4 — INBOUND rows written (one per seller SKU with units inbound) and removed (nothing inbound any more). */
+  inboundRowsWritten: number
+  inboundRowsCleared: number
 }
 
 export class AmazonInventoryService {
@@ -68,6 +94,8 @@ export class AmazonInventoryService {
       skusNotFoundInDb: 0,
       errors: [],
       unmatchedSampleSkus: [],
+      inboundRowsWritten: 0,
+      inboundRowsCleared: 0,
     }
 
     let rows: FBAInventoryRow[]
@@ -87,7 +115,7 @@ export class AmazonInventoryService {
       return summary
     }
 
-    await this.applyRows(rows, summary)
+    await this.applyRows(rows, summary, { full: true })
 
     summary.completedAt = new Date()
     summary.durationMs = summary.completedAt.getTime() - startedAt.getTime()
@@ -98,6 +126,8 @@ export class AmazonInventoryService {
       productsUpdated: summary.productsUpdated,
       productsUnchanged: summary.productsUnchanged,
       skusNotFoundInDb: summary.skusNotFoundInDb,
+      inboundRowsWritten: summary.inboundRowsWritten,
+      inboundRowsCleared: summary.inboundRowsCleared,
       errorCount: summary.errors.length,
     })
     return summary
@@ -129,6 +159,8 @@ export class AmazonInventoryService {
       skusNotFoundInDb: 0,
       errors: [],
       unmatchedSampleSkus: [],
+      inboundRowsWritten: 0,
+      inboundRowsCleared: 0,
     }
 
     if (sellerSkus.length === 0) {
@@ -153,7 +185,7 @@ export class AmazonInventoryService {
       return summary
     }
 
-    await this.applyRows(rows, summary)
+    await this.applyRows(rows, summary, { full: false })
     summary.completedAt = new Date()
     summary.durationMs = summary.completedAt.getTime() - startedAt.getTime()
     return summary
@@ -183,7 +215,7 @@ export class AmazonInventoryService {
    *  short-circuit avoids no-op writes (saves a transaction + an
    *  updatedAt bump that would invalidate the 30s grid poll cache for
    *  nothing). */
-  private async applyRows(rows: FBAInventoryRow[], summary: SyncSummary): Promise<void> {
+  private async applyRows(rows: FBAInventoryRow[], summary: SyncSummary, options: { full: boolean }): Promise<void> {
     // Resolve the AMAZON-EU-FBA location once per sweep. Created by the
     // H.1 backfill — a missing row is a configuration error worth
     // surfacing loudly rather than silently lazy-creating.
@@ -297,6 +329,67 @@ export class AmazonInventoryService {
           error: err instanceof Error ? err.message : String(err),
         })
       }
+    }
+
+    // Pass 3 — Step 4: Amazon's inbound numbers, apart from the FBA number above (which a `delta === 0` row skips).
+    await this.applyInbound(rows, matched, summary, options)
+  }
+
+  /**
+   * Step 4 — one INBOUND `FbaInventoryDetail` row per seller SKU of the report in the sweep's marketplace
+   * (`fulfillmentCenterId` 'ALL'), keyed by Amazon's seller SKU, so two seller SKUs of one product never overwrite each
+   * other. `productId` = the product pass 1 matched; null when it matched none (unknown SKU, or two products on one
+   * SKU — never a guessed product). Nothing inbound → no row: a 0 row would make the delete warnings say "Nexus read 0
+   * FBA units" while Amazon holds sellable ones. A full sweep removes the rows of every SKU it did not write (seen
+   * with 0, or not in the report); an EMPTY report removes nothing (more likely a bad read than an empty FBA account).
+   * A bounded refresh removes only the rows of the SKUs it saw with 0. A row whose write failed is left as it was.
+   * Never the FBA quantity: no StockLevel and no movement is written here.
+   */
+  private async applyInbound(
+    rows: FBAInventoryRow[],
+    matched: ReadonlyArray<{ row: FBAInventoryRow; productId: string }>,
+    summary: SyncSummary,
+    options: { full: boolean },
+  ): Promise<void> {
+    const marketplaceId = summary.marketplaceId
+    const productOf = new Map(matched.map((m) => [m.row.sku, m.productId]))
+    const now = new Date()
+    const kept = new Set<string>()
+    const zero = new Set<string>()
+    for (const row of rows) {
+      const inbound = inboundOf(row)
+      if (inbound.units === 0) { zero.add(row.sku); continue }
+      kept.add(row.sku)
+      const data = {
+        productId: productOf.get(row.sku) ?? null,
+        asin: row.asin ?? null,
+        quantity: inbound.units,
+        lastSyncedAt: now,
+        rawData: { working: inbound.working, shipped: inbound.shipped, receiving: inbound.receiving },
+      }
+      try {
+        await prisma.fbaInventoryDetail.upsert({
+          where: { sku_marketplaceId_fulfillmentCenterId_condition: workspaceKey({ sku: row.sku, marketplaceId, fulfillmentCenterId: FBA_ALL_CENTRES, condition: INBOUND }) },
+          create: { sku: row.sku, marketplaceId, fulfillmentCenterId: FBA_ALL_CENTRES, condition: INBOUND, ...data },
+          update: data,
+        })
+        summary.inboundRowsWritten++
+      } catch (err) {
+        summary.errors.push({ sku: row.sku, error: err instanceof Error ? err.message : String(err) })
+        logger.warn('amazon-inventory: inbound row not written', { sku: row.sku, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+
+    const where = { marketplaceId, fulfillmentCenterId: FBA_ALL_CENTRES, condition: INBOUND }
+    const clear = options.full
+      ? (rows.length > 0 ? { ...where, sku: { notIn: [...kept] } } : null)
+      : (zero.size > 0 ? { ...where, sku: { in: [...zero] } } : null)
+    if (!clear) return
+    try {
+      summary.inboundRowsCleared += (await prisma.fbaInventoryDetail.deleteMany({ where: clear })).count
+    } catch (err) {
+      summary.errors.push({ sku: 'INBOUND', error: err instanceof Error ? err.message : String(err) })
+      logger.warn('amazon-inventory: old inbound rows not removed', { error: err instanceof Error ? err.message : String(err) })
     }
   }
 }

@@ -235,6 +235,16 @@ describe('Amazon: pause = remove this market\'s offer (FBA too, with a warning);
     expect((await previewListingAction(g.root, 'delete', amazonScope(), USER)).rows.find(r => r.sku === 'AMZ-DEL3-S')!.warning).toBe(AMAZON_FBA_DELETE_WARNING)
     await prisma.marketplace.updateMany({ where: { channel: 'AMAZON', code: 'IT' }, data: { fbaProgram: null } })
   }))
+
+  it('Step 4: only the FBA sweep\'s INBOUND row (centre ALL) is no count — the plain FBA warning, never "Nexus read 0" or "N on the way" alone', () => scoped(async () => {
+    const f = await family('AMZ-DEL4', ['S'], { S: 'FBA' })
+    await listing(f.children.S, 'AMAZON', 'IT', ids.amazon, { fulfillmentMethod: 'FBA', externalListingId: 'B0DEL4' })
+    // Amazon's sellable units are in the AMAZON-EU-FBA StockLevel, not in this table: the inbound row alone names no count.
+    await prisma.fbaInventoryDetail.create({ data: { productId: f.children.S, sku: 'AMZ-DEL4-S', asin: 'B0DEL4', marketplaceId: 'APJ6JRA9NG5V4', fulfillmentCenterId: 'ALL', condition: 'INBOUND', quantity: 5,
+      rawData: { working: 3, shipped: 2, receiving: 0 } } })
+    const preview = await previewListingAction(f.root, 'delete', amazonScope(), USER)
+    expect(preview.rows.find(r => r.sku === 'AMZ-DEL4-S')!.warning).toBe(`${AMAZON_FBA_DELETE_WARNING} ${AMAZON_PAN_EU_DELETE_WARNING}`)
+  }))
 })
 
 describe('S3 (per-channel SKU) — every Amazon row is acted on under the SKU Amazon holds for it', () => {

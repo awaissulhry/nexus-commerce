@@ -128,3 +128,18 @@ it('batches 200 products without per-target queries', async () => {
   await readOperationalImpact({ verb: 'hard-delete', targets: Array.from({ length: 200 }, (_, i) => ({ productId: `p-${i}` })) })
   for (const model of Object.values(db)) expect(model.findMany).toHaveBeenCalledTimes(1)
 })
+it('Step 4: the FBA sweep\'s INBOUND row (centre ALL) never reads as 0 sellable in the posture; the hard-delete preflight still lists it', async () => {
+  const inbound = { id: 'inbound', productId: 'p', sku: 'SKU', asin: 'ASIN', marketplaceId: 'italy', fulfillmentCenterId: 'ALL', quantity: 4, condition: 'INBOUND', lastSyncedAt: observedAt }
+  db.fbaInventoryDetail.findMany.mockResolvedValue([inbound])
+  // As with no row at all: an FBA product names no count ("units are not zero"); an FBM one stays FBM with no units.
+  db.product.findMany.mockResolvedValue([{ id: 'p', sku: 'SKU', fulfillmentMethod: 'FBA' }])
+  expect((await read()).fbaPosture).toMatchObject({ status: 'unavailable', refusal: expect.stringContaining('units are not zero'), rows: [{ isFba: true, units: null, sellable: null, detail: [] }] })
+  db.product.findMany.mockResolvedValue([{ id: 'p', sku: 'SKU', fulfillmentMethod: 'FBM' }])
+  expect((await read()).fbaPosture).toMatchObject({ status: 'ok', rows: [{ isFba: false, units: null, sellable: null, detail: [] }] })
+  // A per-centre row beside it still counts as before.
+  db.fbaInventoryDetail.findMany.mockResolvedValue([inbound, { ...inbound, id: 'centre', fulfillmentCenterId: 'MXP6', condition: 'SELLABLE', quantity: 6 }])
+  expect((await read()).fbaPosture).toMatchObject({ status: 'ok', rows: [{ isFba: true, units: 6, sellable: 6, detail: [expect.objectContaining({ id: 'centre' })] }] })
+  // Units on the way to Amazon are a real reason to warn before a permanent delete: the legacy list keeps the row.
+  db.fbaInventoryDetail.findMany.mockResolvedValue([inbound])
+  expect((await readHardDeletePreflight(['p'])).fbaInventory).toEqual([{ productId: 'p', marketplaceId: 'italy', fulfillmentCenterId: 'ALL', quantity: 4, condition: 'INBOUND' }])
+})

@@ -17,6 +17,9 @@
  *   - `listing.selling` (build shape v2, P7): THE engine's selling state per coordinate (`destinationSellingStates`,
  *     the reader the sheet's Status column and the listing-action engine use) — from the rows already read, no query.
  *   - `pack` (Step 3, the Case column): the member's own `ProductPackage`, sizes and weight as numbers (`casePackOf`).
+ *   - `fbaInbound` / `fbaPlans` (Step 4, "Inbound +N"): Amazon's inbound per seller SKU as the FBA sweep stored it
+ *     (`FbaInventoryDetail` INBOUND, fulfilment centre 'ALL') and the family's open Send-to-FBA plan lines. Read only:
+ *     the FBA number (`fba`) stays Amazon's fulfillable units; inbound is never added to it.
  *
  * One query per table, joined in memory (two waves: the family's tables, then the tables keyed by listing id).
  * Amazon coordinates never touch the schema cache, so no live SP-API product-type call can be triggered here.
@@ -32,6 +35,8 @@ import {
   type MatrixCasePack,
   type MatrixCells,
   type MatrixCoordinate,
+  type MatrixFbaInbound,
+  type MatrixFbaPlan,
   type MatrixFbaStock,
   type MatrixRead,
   type MatrixRowRead,
@@ -40,6 +45,7 @@ import {
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import type { SellingStateRead } from '@nexus/shared/listing-actions'
+import { FBA_CLOSED_STATUSES, isFbaPlanOpen, type FbaPlanStatus } from '@nexus/shared/fba-send'
 import { isCaseOwner } from '@nexus/shared/stock-cases'
 import { destinationSellingStates, oldClosePauses } from '../listings/listing-action.service.js'
 import { ledgerInputs, loadMarketSources, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
@@ -56,6 +62,7 @@ import { completeAxisValueOrder } from './shared-variation-values.js'
 import { decimalToNumber } from './sheet-rows.service.js'
 import { conversionStatusOf, loadConversionRecords } from './fulfilment-conversion.service.js'
 import { readSaleWindows } from './sale-window.js'
+import { FBA_ALL_CENTRES } from '../fba-pan-eu.service.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
   businessAbsence, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, flattenAudience, foldQueue, isAmazonEuMarket,
@@ -155,7 +162,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
 
   // ── 2. wave 1 — one query per table keyed by the family ────────────────────────────────────
   const tWave1 = Date.now()
-  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots, warehouses, marketSources, casePacks] = await Promise.all([
+  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots, warehouses, marketSources, casePacks, fbaInboundRows, fbaPlanLines] = await Promise.all([
     prisma.channelListing.findMany({ where: { productId: { in: memberIds } }, select: MATRIX_LISTING_SELECT }),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, currency: true, region: true } }),
     prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, isPrimary: true, workspaceId: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }),
@@ -173,7 +180,17 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     loadMarketSources(prisma),
     // The Case column (Step 3): each member's case pack — units per case, case size and weight, FBA prep/label owner.
     prisma.productPackage.findMany({ where: { productId: { in: memberIds } }, select: CASE_PACK_SELECT }),
-  ]); queries += 15
+    // "Inbound +N" (Step 4): Amazon's inbound per seller SKU (the FBA sweep's rows; a row names its product when the sweep
+    // matched one, else only its SKU) and the members' lines in Send-to-FBA plans not closed or cancelled.
+    prisma.fbaInventoryDetail.findMany({
+      where: { condition: 'INBOUND', fulfillmentCenterId: FBA_ALL_CENTRES, OR: [{ productId: { in: memberIds } }, { productId: null, sku: { in: skus } }] },
+      select: { productId: true, sku: true, marketplaceId: true, quantity: true, rawData: true, lastSyncedAt: true },
+    }),
+    prisma.fbaInboundPlanLine.findMany({
+      where: { productId: { in: memberIds }, plan: { status: { notIn: [...FBA_CLOSED_STATUSES] } } },
+      select: { productId: true, quantity: true, shippedQuantity: true, plan: { select: { id: true, name: true, status: true, createdAt: true } } },
+    }),
+  ]); queries += 17
   const audienceRows = parentRow.productType
     ? await prisma.$queryRawUnsafe<Array<{ marketplace: string | null; audience: unknown }>>(AUDIENCE_SQL, parentRow.productType)
     : []
@@ -239,6 +256,59 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   }
   /* The Case column (Step 3): a member's own case pack; null = none set. A parent carries its own (normally none). */
   const packOf = new Map(casePacks.map((p) => [p.productId, casePackOf(p)]))
+  /* "Inbound +N" (Step 4). Amazon's side: a member's INBOUND rows (its seller SKUs) from ONE marketplace — the one read
+     last — so a Pan-EU pool reported under two marketplaces is never counted twice. Nexus's side: units in open plans
+     not marked Shipped yet. A parent: its variations' sum (as `fba`). Nothing inbound and nothing planned → null. */
+  const memberIdBySku = new Map(members.map((m) => [m.sku, m.id]))
+  const inboundRowsOf = new Map<string, typeof fbaInboundRows>()
+  for (const r of fbaInboundRows) {
+    const id = r.productId ?? memberIdBySku.get(r.sku)
+    if (id && memberById.has(id)) inboundRowsOf.set(id, [...(inboundRowsOf.get(id) ?? []), r])
+  }
+  const bucket = (raw: unknown, key: 'working' | 'shipped' | 'receiving'): number => {
+    const v = raw && typeof raw === 'object' ? (raw as Record<string, unknown>)[key] : null
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0
+  }
+  const amazonInboundOf = (id: string) => {
+    const all = inboundRowsOf.get(id) ?? []
+    if (all.length === 0) return null
+    const lastRead = all.reduce((a, b) => (b.lastSyncedAt > a.lastSyncedAt ? b : a)).marketplaceId
+    const rows = all.filter((r) => r.marketplaceId === lastRead)
+    return {
+      units: rows.reduce((n, r) => n + Math.max(0, r.quantity), 0),
+      working: rows.reduce((n, r) => n + bucket(r.rawData, 'working'), 0),
+      shipped: rows.reduce((n, r) => n + bucket(r.rawData, 'shipped'), 0),
+      receiving: rows.reduce((n, r) => n + bucket(r.rawData, 'receiving'), 0),
+      // The oldest contributing read: a fresh row must not make a stale one look fresh.
+      readAt: rows.reduce((m, r) => (r.lastSyncedAt < m ? r.lastSyncedAt : m), rows[0]!.lastSyncedAt),
+    }
+  }
+  const openLines = fbaPlanLines.filter((l) => isFbaPlanOpen(l.plan.status))
+  const plannedOf = new Map<string, number>()
+  for (const l of openLines) plannedOf.set(l.productId, (plannedOf.get(l.productId) ?? 0) + Math.max(0, l.quantity - l.shippedQuantity))
+  const fbaInboundOf = (ids: readonly string[]): MatrixFbaInbound | null => {
+    const out = { units: 0, working: 0, shipped: 0, receiving: 0, planned: 0 }
+    let readAt: Date | null = null
+    for (const id of ids) {
+      const amazon = amazonInboundOf(id)
+      if (amazon) {
+        out.units += amazon.units; out.working += amazon.working; out.shipped += amazon.shipped; out.receiving += amazon.receiving
+        if (!readAt || amazon.readAt < readAt) readAt = amazon.readAt
+      }
+      out.planned += plannedOf.get(id) ?? 0
+    }
+    return out.units === 0 && out.planned === 0 ? null : { ...out, readAt: readAt?.toISOString() ?? null }
+  }
+  /* The family's open plans, newest first; `units` = this family's units in each. */
+  const plansById = new Map<string, MatrixFbaPlan & { createdAt: Date }>()
+  for (const l of openLines) {
+    const plan = plansById.get(l.plan.id) ?? { id: l.plan.id, name: l.plan.name || `#${l.plan.id.slice(-6)}`, status: l.plan.status as FbaPlanStatus, units: 0, createdAt: l.plan.createdAt }
+    plan.units += Math.max(0, l.quantity)
+    plansById.set(l.plan.id, plan)
+  }
+  const fbaPlans: MatrixFbaPlan[] = [...plansById.values()]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))
+    .map(({ createdAt: _c, ...plan }) => plan)
   /* "Sells from": the warehouses in sale order (the default first, then by code — the loader's order). */
   const sourceLocations: Array<SourceLocation & { name: string }> = inSourceOrder(warehouses.map((w) => ({
     code: w.code, name: w.name, active: w.isActive !== false, syncRoutes: w.syncRoutes ?? [],
@@ -491,6 +561,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       stock: { available, uncounted, locations, source },
       fba: fbaStockOf(isParent ? children.map((c) => c.id) : [member.id]),
       pack: packOf.get(member.id) ?? null,
+      fbaInbound: fbaInboundOf(isParent ? children.map((c) => c.id) : [member.id]),
       basePrice: decimalToNumber(member.basePrice), status: member.status, cells,
     }
   }
@@ -519,6 +590,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       return { ...key, pushesPaused: v.pushesPaused, ...(list?.length ? { sourceLocationCodes: [...list] } : {}) }
     }),
     locations: sourceLocations.map((l) => ({ code: l.code, name: l.name, active: l.active, isDefault: l.isDefault })),
+    fbaPlans,
     meta: { tookMs: Date.now() - t0, phases, queries },
   }
 }

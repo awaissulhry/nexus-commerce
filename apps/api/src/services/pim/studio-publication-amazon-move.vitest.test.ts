@@ -31,7 +31,7 @@ import { merchantQuantityEntries } from '../../lib/amazon-fba-boundary.js'
 import { readPublicationFacts } from './studio-publication-plan.js'
 import { amazonMovesWithoutPublication, prepareAmazonPublication } from './studio-publication-amazon.js'
 import { skuMoveRows } from './studio-publication.service.js'
-import { amazonMoveReview, deleteOldSkuAgain, finishAmazonMoves, historySkuMoves, recoverAmazonMoves, SKU_MOVE_MARKER } from './studio-publication-amazon-move.js'
+import { amazonMoveReview, deleteOldSkuAgain, fbaUnitsUnderSku, finishAmazonMoves, historySkuMoves, recoverAmazonMoves, SKU_MOVE_MARKER } from './studio-publication-amazon-move.js'
 import { PUBLICATION_KIND } from './studio-publication-settle.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -139,6 +139,15 @@ describe('the review: the move, its FBA note, and the typed confirmation', () =>
       warning: 'rv-new starts with no FBA units; Amazon\'s 14 FBA units stay under rv-old (12 sellable, 2 on the way), read 2 hours ago. Once rv-old is deleted they cannot sell until you list rv-old here again, and Amazon still charges storage.' })
     expect(review.confirm).toEqual({ kind: 'type', expected: 'rv-fam', token: 'DELETE',
       sentence: 'This Publish deletes rv-old on Amazon · IT once Amazon accepts its new SKU. If Amazon refuses a new SKU, its old one stays and nothing is deleted. It cannot be undone.' })
+  })
+
+  it('Step 4: only the FBA sweep\'s INBOUND row (centre ALL) under OLD is no count — the warning names no number, never "0" or "N on the way" alone', async () => {
+    await scoped(() => prisma.fbaInventoryDetail.create({ data: {
+      sku: 'rv-inb-old', marketplaceId: 'TEST_MARKET_IT', fulfillmentCenterId: 'ALL', condition: 'INBOUND', quantity: 5, rawData: { working: 3, shipped: 2, receiving: 0 } } }))
+    expect(await scoped(() => fbaUnitsUnderSku('TEST_MARKET_IT', 'rv-inb-old'))).toBeNull()
+    const review = await scoped(() => amazonMoveReview({ scope: { channel: 'AMAZON', marketplace: 'IT', accountId: account }, parent: { sku: 'rv-inb' } } as never,
+      { marketplaceId: 'TEST_MARKET_IT', moves: [{ productId: 'p2', listingId: 'l2', from: 'rv-inb-old', to: 'rv-inb-new', asin: 'B0RVI', fba: true }] }))
+    expect(review.rows.get('p2')!.warning).toBe('rv-inb-new starts with no FBA units; any FBA units Amazon holds stay under rv-inb-old. Once rv-inb-old is deleted they cannot sell until you list rv-inb-old here again, and Amazon still charges storage.')
   })
 })
 

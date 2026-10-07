@@ -67,7 +67,8 @@ const where = (marketplace: string) => channelPlace('AMAZON', marketplace)
 export async function fbaUnitsUnderSku(marketplaceId: string, sku: string): Promise<FbaUnits | null> {
   try {
     const rows = await prisma.fbaInventoryDetail.findMany({ where: { marketplaceId, sku }, select: { condition: true, quantity: true, lastSyncedAt: true } })
-    if (!rows.length) return null
+    // Step 4: inbound rows alone (the 15-min sweep's) would read as "0 sellable" — Nexus then holds no count, as before.
+    if (!rows.length || rows.every(row => row.condition === 'INBOUND')) return null
     const units: FbaUnits = { sellable: 0, inbound: 0, reserved: 0, other: 0, readAt: rows.map(row => row.lastSyncedAt.toISOString()).sort()[0] ?? null }
     for (const row of rows) {
       const quantity = Math.max(0, row.quantity)

@@ -130,7 +130,9 @@ export async function readFbaUnits(marketplaceId: string | null, products: Reado
     })
     for (const product of products) {
       const mine = rows.filter(row => row.productId === product.productId || row.sku === product.sku)
-      if (!mine.length) continue
+      // Step 4: the 15-min sweep keeps Amazon's inbound units as INBOUND rows, while Amazon's sellable units live in
+      // StockLevel, not here. Inbound rows alone would read as "0 sellable" — so they name no count, as before.
+      if (!mine.length || mine.every(row => row.condition === 'INBOUND')) continue
       const units: FbaUnits = { sellable: 0, inbound: 0, reserved: 0, other: 0, readAt: null }
       for (const row of mine) {
         const quantity = Math.max(0, row.quantity)
