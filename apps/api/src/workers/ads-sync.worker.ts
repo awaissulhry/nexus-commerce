@@ -566,6 +566,11 @@ async function processAdsSyncJob(job: Job<AdsJobData>): Promise<{ status: string
         syncedAt: new Date(),
       },
     })
+    // W4-12 — its action log says it was refused, as a superseded write's does: left PENDING, the change feed read it as
+    // APPLIED (and undoable) although nothing reached Amazon.
+    await prisma.advertisingActionLog
+      .updateMany({ where: { outboundQueueId: queueId, amazonResponseStatus: 'PENDING' }, data: { amazonResponseStatus: 'SKIPPED' } })
+      .catch(() => { /* audit-update failure must not break the worker */ })
     // 4k — a refused write leaves no local change. Nexus wrote its own copy when the write was queued, so each refused
     // field still holding the refused value goes back to the value it replaced (putBackRefusedWrite); a newer change
     // stays. Inside the entity claim, before settling. Never fails the worker.
