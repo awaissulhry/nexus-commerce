@@ -35,6 +35,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { getSpApiClient } from '../sp-api-reports.service.js'
+import { GatewayRefusal } from '../gateway/gateway.js'
 import { parseSqp, SQP_REPORT_TYPE, share, type SqpPeriod } from './sqp.service.js'
 
 /**
@@ -64,6 +65,84 @@ export interface SqpRequestResult {
   alreadyOutstanding: number
   /** skipped because a re-fetch already confirmed this (asin, week) has stopped moving. */
   alreadySettled: number
+  /**
+   * NOT SENT: the gateway still had no rate slot after the retries, or the pass ran out of time. Nothing
+   * reached Amazon and no row was written, so the next night asks for these again.
+   */
+  deferred: number
+}
+
+// ── Pacing: Amazon allows createReport about once a minute ───────────────────────────────────────
+//
+// 🔴 Measured 2026-10-01..10-05: every night ended `created=6 failed=24`. The pass sent ~30 createReport
+// calls back to back; the gateway's bucket for this account held a few, and for each later call it would
+// have had to wait ~60 s for a slot (Amazon: 0.0167 requests/s). It waits at most 30 s, so it answered
+// "Not sent yet: … needs 56 s more. Retry later." and this pass counted that as a failure and moved on.
+// DE came first alphabetically and got the 6; ES and IT got none, so IT had no new week since 2026-08-16.
+// So: space the calls one slot apart, and when the gateway still says "not sent yet", wait the time it
+// names and send the SAME request again.
+
+/** One createReport slot (Amazon: 0.0167/s = one per 60 s) plus a second of margin. */
+export const SQP_CREATE_PACE_MS = 61_000
+/** How many times one createReport is sent again after the gateway's "not sent yet" (rate) refusal. */
+export const SQP_CREATE_RATE_RETRIES = 3
+/** The longest one retry waits, whatever the gateway names. */
+export const SQP_CREATE_MAX_RETRY_WAIT_MS = 120_000
+
+/** The gateway refused for its own rate limit: nothing reached Amazon, so the same request can be sent later. */
+export function isGatewayRateRefusal(err: unknown): err is GatewayRefusal {
+  return err instanceof GatewayRefusal && err.code === 'RATE_LIMITED_LOCAL'
+}
+
+/** How long to wait before sending again: the wait the gateway named plus a second, else one slot. */
+export function rateRetryWaitMs(err: GatewayRefusal): number {
+  const named = err.retryAfterMs
+  const ms = named != null && named > 0 ? named + 1_000 : SQP_CREATE_PACE_MS
+  return Math.min(ms, SQP_CREATE_MAX_RETRY_WAIT_MS)
+}
+
+/**
+ * Waits for the next createReport slot and answers true — or answers false at once, without waiting,
+ * when that slot falls after `deadlineAt`.
+ */
+export type ReportPacer = (deadlineAt?: number) => Promise<boolean>
+
+/**
+ * Spaces createReport calls `intervalMs` apart: the first goes at once, each next one waits for the gap
+ * since the one before. Give ONE pacer to every market of a pass, so the spacing holds across markets.
+ */
+export function createReportPacer(intervalMs = SQP_CREATE_PACE_MS): ReportPacer {
+  let lastAt: number | null = null
+  return async (deadlineAt) => {
+    const sendAt = lastAt == null ? Date.now() : Math.max(Date.now(), lastAt + intervalMs)
+    if (deadlineAt != null && sendAt > deadlineAt) return false
+    if (sendAt > Date.now()) await sleep(sendAt - Date.now())
+    lastAt = Date.now()
+    return true
+  }
+}
+
+/** The pass ran out of time before this request could be sent. Nothing was sent. */
+class SqpPassOutOfTime extends Error {
+  constructor() { super('not sent: the request pass reached its time budget'); this.name = 'SqpPassOutOfTime' }
+}
+
+/**
+ * Send one request, paced; on the gateway's rate refusal wait and send the same request again, at most
+ * `retries` times and never past `deadlineAt`. Any other error, or the last refusal, is thrown.
+ */
+async function sendWithRateRetry<T>(send: () => Promise<T>, opts: { pace: ReportPacer; retries: number; deadlineAt?: number }): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    if (!(await opts.pace(opts.deadlineAt))) throw new SqpPassOutOfTime()
+    try {
+      return await send()
+    } catch (err) {
+      if (!isGatewayRateRefusal(err) || attempt >= opts.retries) throw err
+      const waitMs = rateRetryWaitMs(err)
+      if (opts.deadlineAt != null && Date.now() + waitMs > opts.deadlineAt) throw err
+      await sleep(waitMs)
+    }
+  }
 }
 
 /**
@@ -138,8 +217,8 @@ export function partitionRequestSet(args: {
 
 /**
  * The REQUEST pass — `createReport` only, one per ASIN, recorded and returned. No polling, no
- * download, no ingest. This is what makes the nightly run short enough that the 2h stale sweeper
- * can no longer reach it.
+ * download, no ingest. Paced one createReport slot apart (~61 s), so ~30 requests take ~30 minutes —
+ * still well inside the 2h stale sweeper, which the old poll loop (208 minutes) used to trip.
  */
 export async function requestSqpReports(args: {
   marketplaceCode: string
@@ -148,9 +227,11 @@ export async function requestSqpReports(args: {
   period?: SqpPeriod
   start: Date
   end: Date
-  /** ms between createReport calls. See `measurePacing` — pacing does not raise throughput, but it
-   *  does make each report collectable sooner, which matters when documents expire. */
-  paceMs?: number
+  /** Spacing between createReport calls; pass one `createReportPacer()` to every market of a pass.
+   *  Omitted, this call paces itself (`SQP_CREATE_PACE_MS`). */
+  pacer?: ReportPacer
+  /** Epoch ms. Nothing more is sent after it; what is left is counted as `deferred`. */
+  deadlineAt?: number
 }): Promise<SqpRequestResult> {
   const period = args.period ?? 'WEEK'
   const startDateOnly = new Date(args.start); startDateOnly.setUTCHours(0, 0, 0, 0)
@@ -190,11 +271,13 @@ export async function requestSqpReports(args: {
   })
   const skip = new Set([...part.alreadyOutstanding, ...part.alreadySettled])
 
-  let created = 0, failed = 0
+  const pace = args.pacer ?? createReportPacer()
+  let created = 0, failed = 0, deferred = 0
   for (const asin of args.asins) {
     if (skip.has(asin)) continue
+    if (args.deadlineAt != null && Date.now() >= args.deadlineAt) { deferred++; continue }
     try {
-      const res: any = await (sp as any).callAPI({
+      const res: any = await sendWithRateRetry(() => (sp as any).callAPI({
         operation: 'createReport',
         endpoint: 'reports',
         body: {
@@ -204,7 +287,7 @@ export async function requestSqpReports(args: {
           dataEndTime: args.end.toISOString(),
           reportOptions: { reportPeriod: period, asin },
         },
-      })
+      }), { pace, retries: SQP_CREATE_RATE_RETRIES, deadlineAt: args.deadlineAt })
       const reportId: string | undefined = res?.reportId
       if (!reportId) { failed++; logger.warn('[sqp-async] createReport returned no reportId', { marketplace: args.marketplaceCode, asin }); continue }
       await prisma.sqpReportRequest.create({
@@ -217,16 +300,19 @@ export async function requestSqpReports(args: {
         logger.warn('[sqp-async] request row not stored (duplicate reportId?)', { reportId, error: (e as Error).message })
       })
       created++
-      if (args.paceMs) await sleep(args.paceMs)
     } catch (err) {
-      failed++
-      logger.warn('[sqp-async] createReport failed', { marketplace: args.marketplaceCode, asin, error: err instanceof Error ? err.message : String(err) })
+      // Not sent is not failed: Amazon was never asked, and the next night asks again.
+      const notSent = isGatewayRateRefusal(err) || err instanceof SqpPassOutOfTime
+      if (notSent) deferred++
+      else failed++
+      logger.warn(notSent ? '[sqp-async] createReport not sent, deferred to the next night' : '[sqp-async] createReport failed', { marketplace: args.marketplaceCode, asin, error: err instanceof Error ? err.message : String(err) })
     }
   }
   return {
     marketplace: args.marketplaceCode, period, startDate: startDateOnly.toISOString().slice(0, 10),
     asinsRequested: args.asins.length, created, failed,
     alreadyOutstanding: part.alreadyOutstanding.length, alreadySettled: part.alreadySettled.length,
+    deferred,
   }
 }
 
@@ -245,6 +331,12 @@ export interface SqpCollectResult {
   pastRetentionStillTrying: number
   /** ms from Amazon reporting DONE to us ingesting — the latency this design exists to expose. */
   collectionLagMsP50: number | null
+  /**
+   * The gateway refused to send (its rate limit, an account that needs signing in, …): nothing reached
+   * Amazon, so nothing was learned about the report. The row keeps its status and the next tick tries
+   * again; the pass stops at the first one, because the next call would meet the same refusal.
+   */
+  notSent: number
 }
 
 /**
@@ -267,7 +359,7 @@ export async function collectSqpReports(args: { limit?: number; paceMs?: number 
   const out: SqpCollectResult = {
     polled: 0, ingested: 0, rowsUpserted: 0, rowsChanged: 0, rowsParsed: 0,
     stillPending: 0, expired: 0, terminal: 0, errors: 0, pastRetentionStillTrying: 0,
-    collectionLagMsP50: null,
+    collectionLagMsP50: null, notSent: 0,
   }
   const lags: number[] = []
 
@@ -302,6 +394,9 @@ export async function collectSqpReports(args: { limit?: number; paceMs?: number 
           continue
         }
       } catch (err) {
+        // 🔴 Before the text tests: "Not sent yet: … Retry later." is not a 404 and not an error of the
+        // report. Marking it ERROR retired the request for good, although Amazon was never asked.
+        if (err instanceof GatewayRefusal) { out.notSent++; logNotSent(req, 'getReport', err); break }
         const msg = err instanceof Error ? err.message : String(err)
         if (/404|not ?found|NotFound/i.test(msg)) { await mark(req.id, { status: 'EXPIRED', errorMessage: `getReport 404 at ${ageH.toFixed(1)}h old` }); out.expired++ }
         else { await mark(req.id, { status: 'ERROR', errorMessage: msg.slice(0, 500) }); out.errors++ }
@@ -389,6 +484,8 @@ export async function collectSqpReports(args: { limit?: number; paceMs?: number 
       out.rowsChanged += changed
       if (doneAt) lags.push(+collectedAt - +doneAt)
     } catch (err) {
+      // Same as above: a refusal is not a lost document. The row stays DONE with its document id.
+      if (err instanceof GatewayRefusal) { out.notSent++; logNotSent(req, 'getReportDocument', err); break }
       const msg = err instanceof Error ? err.message : String(err)
       if (/404|not ?found|NotFound|expire|gone/i.test(msg)) { await mark(req.id, { status: 'EXPIRED', errorMessage: `document gone at ${ageH.toFixed(1)}h old: ${msg.slice(0, 200)}` }); out.expired++ }
       else { await mark(req.id, { status: 'ERROR', errorMessage: msg.slice(0, 500) }); out.errors++ }
@@ -401,6 +498,12 @@ export async function collectSqpReports(args: { limit?: number; paceMs?: number 
     out.collectionLagMsP50 = s[Math.floor(s.length / 2)]
   }
   return out
+}
+
+function logNotSent(req: { reportId: string; marketplace: string; asin: string }, operation: string, err: GatewayRefusal): void {
+  logger.info('[sqp-async] collect stopped: the gateway did not send, the request stays as it is', {
+    operation, reportId: req.reportId, marketplace: req.marketplace, asin: req.asin, code: err.code, error: err.message,
+  })
 }
 
 async function mark(id: string, data: Record<string, unknown>): Promise<void> {

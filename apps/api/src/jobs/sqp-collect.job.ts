@@ -1,7 +1,7 @@
 /**
  * SQP.2 — the COLLECT tick. The other half of the split that `sqp-ingest` no longer does itself.
  *
- * `sqp-ingest` creates the reports and returns in seconds. This picks them up whenever Amazon has
+ * `sqp-ingest` creates the reports (paced, ~30 minutes a night) and returns. This picks them up whenever Amazon has
  * finished them, which measured 83 minutes to 13.7 hours after the request — because Amazon
  * generates this account's reports serially and the queue is our own burst
  * (docs/2026-08-12-sqp-feed.md §3).
@@ -57,6 +57,7 @@ export async function runSqpCollectOnce(): Promise<string> {
     (r.expired ? ` 🔴 expired=${r.expired}` : '') +
     (r.terminal ? ` terminal=${r.terminal}` : '') +
     (r.errors ? ` errors=${r.errors}` : '') +
+    (r.notSent ? ` notSent=${r.notSent}(gateway did not send — kept for the next tick)` : '') +
     (r.pastRetentionStillTrying ? ` pastRetention=${r.pastRetentionStillTrying}(still polling — expiry is only ever a 404)` : '') +
     (r.collectionLagMsP50 != null ? ` · lag(done→ingest) p50=${(r.collectionLagMsP50 / 60_000).toFixed(1)}m` : '') +
     (oldest ? ` · oldest outstanding ${oldestH.toFixed(1)}h (${headroomH.toFixed(1)}h of retention left)` : '')

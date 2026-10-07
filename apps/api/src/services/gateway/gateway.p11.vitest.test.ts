@@ -201,7 +201,11 @@ describe('P1.1 — step 6: rate buckets fed by the channel', () => {
   it('no token within the wait → not sent, rate_limited locally (the queue retries later)', async () => {
     const key = 'EBAY:ebay-A:all'
     await observeRate('EBAY', key, { retryAfterSec: 30 })
-    expect(await refusalOf(gatewayCall(ebayWrite({ maxRateWaitMs: 0 })))).toMatchObject({ outcome: 'refused', code: 'RATE_LIMITED_LOCAL', statusCode: 429 })
+    const refusal = await refusalOf(gatewayCall(ebayWrite({ maxRateWaitMs: 0 })))
+    expect(refusal).toMatchObject({ outcome: 'refused', code: 'RATE_LIMITED_LOCAL', statusCode: 429 })
+    // The wait it names in words is also carried as a number, so a caller can retry without reading the text.
+    expect(refusal?.retryAfterMs).toBeGreaterThan(29_000)
+    expect(refusal?.retryAfterMs).toBeLessThanOrEqual(30_000)
     expect(h.calls).toHaveLength(0)
   })
   it('the bucket itself: capacity then refill; Amazon\'s rate header sets the refill', async () => {
