@@ -204,6 +204,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'a 200-step change plan (MCP full control C6: one approval, a stopped worker resumed, two workers at once, each step exactly once, a stale step skipped)', file: 'src/services/agents/change-plan-postgres.vitest.test.ts', expect: 2 },
   { name: 'identity: one channel item, two businesses, the same moment (MCP full control I12: report mode both succeed with one claim; enforce mode one wins)', file: 'src/services/identity/channel-item-claim-postgres.vitest.test.ts', expect: 2 },
   { name: 'Claude\'s approved bulk bid change and an engine write on one target (MCP full control A7: both queued, one claim wins, the other waits for it)', file: 'src/services/advertising/ads-claude-bulk-postgres.vitest.test.ts', expect: 2 },
+  { name: 'Sells from: a sale takes stock from the first listed location with enough (Step 2)', file: 'src/services/stock/sale-location-postgres.vitest.test.ts', expect: 6 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'

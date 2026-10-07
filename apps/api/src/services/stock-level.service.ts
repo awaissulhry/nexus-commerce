@@ -32,6 +32,7 @@ import { pooledNow, PoolHoldError, PooledProductError } from './stock-pool/pool-
 import { consumePoolHolds, releasePoolHolds, reportPoolOrderRefusal } from './stock-pool/order-routing.js'
 import { poolConsume, poolLenderRelease, poolOrderHold, poolOrderTaken, poolPutBack, poolRelease, poolReserve, refusalOf, type PoolRefusal } from './stock-pool/pool-doors.js'
 import { afterPoolChange } from './stock-pool/pool-tasks.js'
+import { saleLocationInTx, type SaleRoute } from './stock/sale-location.service.js'
 // EV.2 — reservation facts, published inside each reservation's own transaction.
 import { publishEvent } from '../lib/events/publish.js'
 import { logger } from '../utils/logger.js'
@@ -556,8 +557,11 @@ export function unitsPerProduct<T extends { productId: string | null; quantity: 
  * migrating later) to hold stock from the moment the order is
  * recognised through to shipment, without altering Product.totalStock.
  *
- * Location resolution: caller supplies locationId. For FBM today every
- * order ships from IT-MAIN; locationId is resolved to that.
+ * Location resolution: caller supplies locationId (IT-MAIN, else the default warehouse). Step 2 —
+ * "Sells from": with `sale` (the channel, market and account of the order), a NEW warehouse hold is
+ * made at the first location of the market's "Sells from" list that has enough available, picked
+ * inside the transaction after the lock (`saleLocationInTx`); `locationId` stays the fallback for a
+ * pooled product, one with no routed row, or a market that cannot be told.
  *
  * Insufficient-stock handling: re-thrown as-is. The caller decides
  * whether to log + continue (Amazon already accepted the order — we
@@ -571,6 +575,8 @@ export async function reserveOpenOrder(args: {
   locationId: string
   quantity: number
   actor?: string
+  /** Step 2 — where the order sold: its warehouse hold is picked from that market's "Sells from" list. */
+  sale?: SaleRoute
 }) {
   // ONE transaction, as the channel writers run it (review B1): the order-stock lock door first — the
   // product, its pool sources and the pool-link lock — then the side is decided and the hold made
@@ -618,6 +624,7 @@ async function reserveOwnOpenOrderInTx(tx: Prisma.TransactionClient, args: {
   locationId: string
   quantity: number
   actor?: string
+  sale?: SaleRoute
 }) {
   // AE.1 — the "already reserved?" check runs under the same lock as the reservation.
   // Checked outside it, a webhook and a poll for one order both found nothing and both
@@ -642,11 +649,16 @@ async function reserveOwnOpenOrderInTx(tx: Prisma.TransactionClient, args: {
   const owed = args.quantity - took.reduce((sum, r) => sum + r.quantity, 0)
   if (took.length > 0 && owed <= 0) return { reservation: took[0], reused: true }
 
+  // Step 2 — "Sells from": a new hold goes to the first location of the sale's list with enough available for
+  // what is owed (never split; none has enough → the first, which reports the shortfall as before). Picked here,
+  // under the lock, so a concurrent order's hold is seen. No answer (pooled, nothing routed): the caller's location.
+  const picked = args.sale ? await saleLocationInTx(tx, { ...args.sale, productId: args.productId, quantity: owed }) : null
+
   return {
     reservation: await reserveStockInTx(tx, {
       productId: args.productId,
       variationId: args.variationId,
-      locationId: args.locationId,
+      locationId: picked?.locationId ?? args.locationId,
       quantity: owed,
       orderId: args.orderId,
       reason: 'OPEN_ORDER',
@@ -781,9 +793,11 @@ export async function takeOrderUnitsWithLots(args: { orderId: string; productId:
  * gives back from if the order is cancelled before it ships. Throws InsufficientStockError (nothing
  * written) when stock is short, and the location/pool refusals of applyStockMovementInTx.
  */
-export async function takeOrderUnitsInTx(tx: Prisma.TransactionClient, args: { orderId: string; productId: string; quantity: number; actor: string; notes?: string }): Promise<StockMovementTxResult> {
+export async function takeOrderUnitsInTx(tx: Prisma.TransactionClient, args: { orderId: string; productId: string; quantity: number; actor: string; notes?: string; locationId?: string | null }): Promise<StockMovementTxResult> {
   return await applyStockMovementInTx(tx, {
     productId: args.productId, change: -args.quantity, reason: 'ORDER_PLACED', referenceType: 'ORDER', referenceId: args.orderId,
+    // Step 2 — the location "Sells from" picked (saleLocationInTx); none = the default location, as before.
+    ...(args.locationId ? { locationId: args.locationId } : {}),
     orderId: args.orderId, actor: args.actor, ...(args.notes ? { notes: args.notes } : {}),
   })
 }
@@ -941,9 +955,12 @@ export async function reserveOpenOrderInTx(tx: Prisma.TransactionClient, args: {
   orderId: string
   productId: string
   variationId?: string
+  /** A warehouse (or, for MCF, the FBA location). With `sale`, the fallback when "Sells from" does not decide. */
   locationId: string
   quantity: number
   actor?: string
+  /** Step 2 — where the order sold: a new warehouse hold is picked from that market's "Sells from" list. */
+  sale?: SaleRoute
 }): Promise<OrderHoldInTx> {
   const after = nothingAfter()
   const location = await tx.stockLocation.findUnique({ where: { id: args.locationId }, select: { type: true } })
@@ -964,7 +981,8 @@ export async function reserveOpenOrderInTx(tx: Prisma.TransactionClient, args: {
       }
     }
   }
-  const own = await reserveOwnOpenOrderInTx(tx, args)
+  // Only a warehouse hold follows "Sells from"; an FBA hold (MCF) stays where the caller put it.
+  const own = await reserveOwnOpenOrderInTx(tx, { ...args, sale: location?.type === 'WAREHOUSE' ? args.sale : undefined })
   return { via: 'own', reservationId: own.reservation.id, quantity: own.reservation.quantity, reused: own.reused, after }
 }
 

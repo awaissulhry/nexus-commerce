@@ -23,6 +23,7 @@ import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { afterStockMovementCommit, InsufficientStockError, type StockMovementTxResult } from './stock-movement.service.js'
 import { takeOrderUnitsInTx } from './stock-level.service.js'
+import { saleLocationInTx } from './stock/sale-location.service.js'
 import { takeForOrderInTx } from './stock-pool/order-routing.js'
 import { shouldPreserveTerminalStatus } from './order-status-guards.js'
 import { ebaySellerIdentity } from './cx/ebay-identity.js'
@@ -403,7 +404,8 @@ function blockedLinesOf(items: ReadonlyArray<{ id: string; externalLineItemId: s
     const metadata = (item.ebayMetadata ?? {}) as Record<string, unknown>
     if (metadata.stockEffect !== 'stock_blocked' || !item.productId || !(item.quantity > 0) || !item.externalLineItemId) continue
     pending.push({
-      line: { lineItemId: item.externalLineItemId, sku: item.sku, rawSku: item.sku, legacyItemId: null, title: null, quantity: item.quantity, price: null, rawCost: null, taxAmount: 0, discountAmount: 0, index: -1, fulfillmentStatus: null },
+      // The item id the line was sold through (kept on the line), so "Sells from" finds the same listing again.
+      line: { lineItemId: item.externalLineItemId, sku: item.sku, rawSku: item.sku, legacyItemId: typeof metadata.legacyItemId === 'string' && metadata.legacyItemId ? metadata.legacyItemId : null, title: null, quantity: item.quantity, price: null, rawCost: null, taxAmount: 0, discountAmount: 0, index: -1, fulfillmentStatus: null },
       sku: item.sku, productId: item.productId, effect: 'own_movement', retryOf: { orderItemId: item.id, metadata },
     })
   }
@@ -415,8 +417,8 @@ function blockedLinesOf(items: ReadonlyArray<{ id: string; externalLineItemId: s
  * for its pending lines, records every line's effect, and tells the owners about shortfalls and
  * blocked lines (one notice per order and line set). The caller holds the order's locks.
  */
-async function takePendingLinesInTx(tx: Tx, args: { pending: PendingLine[]; orderId: string; channelOrderId: string; workspaceId: string; actor: string; stats: { inventoryDeducted: number } }): Promise<Pick<EbayOrderWriteResult, 'lines' | 'movements' | 'poolChanged'>> {
-  const { pending, orderId, channelOrderId, workspaceId, actor, stats } = args
+async function takePendingLinesInTx(tx: Tx, args: { pending: PendingLine[]; orderId: string; channelOrderId: string; workspaceId: string; actor: string; stats: { inventoryDeducted: number }; connectionId: string | null }): Promise<Pick<EbayOrderWriteResult, 'lines' | 'movements' | 'poolChanged'>> {
+  const { pending, orderId, channelOrderId, workspaceId, actor, stats, connectionId } = args
   // Stock leaves once per product for all its new lines: a pool takes ONE sale per order and product
   // (one variant can sit in two eBay listings bought together). Own stock moves line by line.
   const byProduct = new Map<string, PendingLine[]>()
@@ -450,8 +452,12 @@ async function takePendingLinesInTx(tx: Tx, args: { pending: PendingLine[]; orde
     }
     for (const entry of entries) {
       try {
+        // Step 2 — "Sells from": the line is taken from the first location of its listing's list with enough stock
+        // (never split; none has enough → the first, which reports the shortfall). Picked under the locks above and
+        // after the lines before it were taken. No answer (nothing routed): the default location, as before.
+        const picked = await saleLocationInTx(tx, { productId, quantity: entry.line.quantity, channel: 'EBAY', channelConnectionId: connectionId, externalListingId: entry.line.legacyItemId })
         // R2 — the take is the stock service's: an ORDER_PLACED movement carrying the order.
-        movements.push({ productId, result: await takeOrderUnitsInTx(tx, { orderId, productId, quantity: entry.line.quantity, actor, notes: `eBay order ${channelOrderId} line ${entry.line.lineItemId}` }) })
+        movements.push({ productId, result: await takeOrderUnitsInTx(tx, { orderId, productId, quantity: entry.line.quantity, actor, notes: `eBay order ${channelOrderId} line ${entry.line.lineItemId}`, locationId: picked?.locationId ?? null }) })
         stats.inventoryDeducted++
       } catch (error) {
         // Only typed refusals raised before the movement wrote anything: the sale is real, so it is
@@ -654,7 +660,7 @@ export async function writeEbayOrderInTx(tx: Tx, input: { order: NormalizedEbayO
     pending.push({ line, sku, productId, effect: !productId ? 'unlinked' : status === 'CANCELLED' ? 'arrived_cancelled' : 'own_movement', ...(unlinkedReason ? { unlinkedReason } : {}) })
   }
 
-  const { lines, movements, poolChanged } = await takePendingLinesInTx(tx, { pending, orderId: dbOrder.id, channelOrderId: order.orderId, workspaceId, actor, stats })
+  const { lines, movements, poolChanged } = await takePendingLinesInTx(tx, { pending, orderId: dbOrder.id, channelOrderId: order.orderId, workspaceId, actor, stats, connectionId })
   // C1 — each recorded line keeps eBay's latest word on whether it shipped: a cancellation after a
   // partial shipment gives back only the lines that did not. Merged into the line's metadata (after
   // the stock phase, which rewrites a retried line's metadata from its earlier read).
@@ -831,7 +837,7 @@ export async function retryBlockedEbayOrderInTx(tx: Tx, input: { orderId: string
   if (!order || order.status === 'CANCELLED') return none
   const pending = blockedLinesOf(order.items)
   if (!pending.length) return none
-  const { movements, poolChanged } = await takePendingLinesInTx(tx, { pending, orderId: input.orderId, channelOrderId: head.channelOrderId, workspaceId, actor: input.actor, stats: { inventoryDeducted: 0 } })
+  const { movements, poolChanged } = await takePendingLinesInTx(tx, { pending, orderId: input.orderId, channelOrderId: head.channelOrderId, workspaceId, actor: input.actor, stats: { inventoryDeducted: 0 }, connectionId: head.channelConnectionId })
   const stillBlocked = pending.filter(entry => entry.effect === 'stock_blocked').length
   return { resolved: pending.length - stillBlocked, stillBlocked, movements, poolChanged }
 }
