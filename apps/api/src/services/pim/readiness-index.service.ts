@@ -13,6 +13,7 @@ import { variationSourceFor, type VariationThemeCell } from './variation-rules.s
 import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, readinessMissingEntries, requirementSources, type ReadinessCoordinate } from './readiness-model.js'
 import { runResumableSweep, type SweepReport } from './resumable-sweep.js'
 import { logger } from '../../utils/logger.js'
+import { safeJobId } from '../../lib/job-id.js'
 import { channelFootprint, type ChannelFootprint } from '../channel-footprint.service.js'
 
 export type ReadinessScope = { channel: string; market: string; accountId: string | null }
@@ -159,7 +160,7 @@ async function enqueuePendingReadiness(rootIds: string[]): Promise<void> {
   try {
     const { addJobSafely, readinessQueue } = await import('../../lib/queue.js')
     for (const rootId of rootIds) {
-      await addJobSafely(readinessQueue, 'rebuild', { rootId }, { jobId: `readiness:${rootId}` })
+      await addJobSafely(readinessQueue, 'rebuild', { rootId }, { jobId: safeJobId('readiness', rootId) })
     }
   } catch (error) {
     logger.warn('[readiness] pending rebuild not enqueued; the readiness-pending drain will pick it up', {

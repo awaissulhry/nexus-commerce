@@ -158,7 +158,7 @@ describe('CategoryTreeService writes on a real database', () => {
     expect({ version: await productVersion(productId), events: await productEvents(productId) }).toEqual({ version: before.version + 1, events: before.events + 1 })
     // The read-cache refresh is enqueued once, after the commit.
     expect(effects.addJobSafely).toHaveBeenCalledOnce()
-    expect(effects.addJobSafely).toHaveBeenCalledWith(expect.anything(), 'refresh', { productId }, expect.objectContaining({ jobId: `cache:refresh:${productId}` }))
+    expect(effects.addJobSafely).toHaveBeenCalledWith(expect.anything(), 'refresh', { productId }, expect.objectContaining({ jobId: `cache-refresh-${productId}` }))
     expect(await problems()).toEqual([])
   })
 

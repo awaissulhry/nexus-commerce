@@ -25,6 +25,7 @@ import type { Prisma } from '@prisma/client'
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { adsSyncJobId } from '../../lib/job-id.js'
 import { isContradictoryOrphan } from '../ads-core/amazon-entity-gone.js'
 import {
   IN_FLIGHT_STATES, isBelievablyPending, isBlockingWrite, isTerminal, stateForQueueStatus, type AdSyncType,
@@ -1180,7 +1181,7 @@ async function enqueueBullMQJob(queueRowId: string, syncType: AdSyncType): Promi
   try {
     const { adsSyncQueue } = await import('../../lib/queue.js')
     const add = adsSyncQueue
-      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: `ads-sync-${queueRowId}` })
+      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: adsSyncJobId(queueRowId) })
       .then(() => undefined)
       .catch((err: unknown) => {
         logger.warn('[ads-mutation] BullMQ enqueue failed (cron drain will handle)', {
