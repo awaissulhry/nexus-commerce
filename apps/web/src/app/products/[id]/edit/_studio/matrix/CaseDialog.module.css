@@ -1,0 +1,43 @@
+/* The Case pop-up (Step 3 part D) — layout only; every control is the design system's (Modal, Field, Input,
+   SegmentedControl, Banner, Button). */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  font-size: var(--nds-font-size-base);
+}
+
+/* Units per case and Case weight side by side; one under the other on a phone. */
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--nds-space-12);
+}
+
+@media (max-width: 480px) {
+  .pair { grid-template-columns: 1fr; }
+}
+
+/* L × W × H on one line: three equal fields with the × between them. */
+.sides {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--nds-space-4);
+}
+
+.side {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.side > :last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.times {
+  flex: none;
+  color: var(--nds-text-2);
+}

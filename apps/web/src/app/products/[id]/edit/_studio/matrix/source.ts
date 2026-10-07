@@ -137,6 +137,18 @@ export function parseMatrixRead(body: unknown, productId: string): { read: Matri
       : []
     return { units: f.units, locations, updatedAt: typeof f.updatedAt === 'string' ? f.updatedAt : null }
   }
+  /** The Case column (Step 3): absent on the wire = not read (`undefined`); `null` = no case pack; a malformed one reads as not read. */
+  const packOf = (raw: unknown): MatrixRowRead['pack'] => {
+    if (raw === null) return null
+    const p = raw as Record<string, unknown> | undefined
+    if (!p || typeof p !== 'object') return undefined
+    const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : null)
+    const owner = (v: unknown): 'AMAZON' | 'SELLER' | null => (v === 'AMAZON' || v === 'SELLER' ? v : null)
+    return {
+      unitsPerCase: num(p.unitsPerCase), caseLengthCm: num(p.caseLengthCm), caseWidthCm: num(p.caseWidthCm), caseHeightCm: num(p.caseHeightCm),
+      caseWeightKg: num(p.caseWeightKg), fbaPrepOwner: owner(p.fbaPrepOwner), fbaLabelOwner: owner(p.fbaLabelOwner),
+    }
+  }
   const rows: MatrixRowRead[] = []
   for (const raw of b.rows) {
     const r = raw as Record<string, unknown>
@@ -153,6 +165,7 @@ export function parseMatrixRead(body: unknown, productId: string): { read: Matri
         source: poolSourceOf(stock.source),
       },
       fba: fbaOf(r.fba),
+      pack: packOf(r.pack),
       basePrice: typeof r.basePrice === 'number' ? r.basePrice : null,
       status: typeof r.status === 'string' ? r.status : '',
       cells: r.cells && typeof r.cells === 'object' ? (r.cells as MatrixRowRead['cells']) : {},

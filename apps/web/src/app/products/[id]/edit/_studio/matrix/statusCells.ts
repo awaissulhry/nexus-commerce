@@ -67,6 +67,15 @@ export function savedBeforeMatrixFrom(updatedAt: string | null | undefined): boo
   return Number.isFinite(at) && at < MATRIX_FROM_SINCE
 }
 
+/** When the Case column (Step 3) reached the Matrix (built 2026-10-07; set to the release day). */
+export const MATRIX_CASE_SINCE = Date.parse('2026-10-09T00:00:00.000Z')
+
+/** A saved view last saved before the Case column existed could not name it (it then shows Case wherever it shows Stock). */
+export function savedBeforeMatrixCase(updatedAt: string | null | undefined): boolean {
+  const at = updatedAt ? Date.parse(updatedAt) : NaN
+  return Number.isFinite(at) && at < MATRIX_CASE_SINCE
+}
+
 /** A Status clear for a cell with nothing waiting: nothing to clear (the sheet's Delete rule, `usePublishCellEditing`). */
 export function clearsNothing(input: PublishCellInput, cell: Pick<PublishActionCell, 'status'> | null): boolean {
   return 'change' in input && input.change.column === 'status' && input.change.target === null && !cell?.status.target

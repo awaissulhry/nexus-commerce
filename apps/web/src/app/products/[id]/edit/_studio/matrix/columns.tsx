@@ -16,8 +16,9 @@
  * Information page's Shared scope dropped it — each market's own Status column says whether it sells.
  *
  * What is genuinely this page's: the group shape, the strip tag, the `Not listed` column, the
- * `Stock` column (a read of `MatrixRowRead.stock`, never a number derived here), the locked `FBA qty`
- * column (a read of `MatrixRowRead.fba`) and the preview-mode hold on the master column.
+ * `Stock` column (a read of `MatrixRowRead.stock`, never a number derived here), the `Case` column (a read of
+ * `MatrixRowRead.pack`, Step 3), the locked `FBA qty` column (a read of `MatrixRowRead.fba`) and the preview-mode hold
+ * on the master column.
  */
 import type { MutableRefObject } from 'react'
 
@@ -35,6 +36,7 @@ import type { AxisSummary } from '../variants/family/coverage'
 
 import { MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixRowRead } from './contract'
 import { refusedTooltip } from './refusals'
+import { CASE_EDIT_COPY, CASE_HEADER_TIP, CASE_LABEL, caseCellView, type CaseCellView } from './casePack'
 import { FROM_COL_W, FROM_LABEL, fromBefore, fromCellText, fromCellView, isMatrixFromColId, matrixFromColId } from './sellsFrom'
 import styles from './matrix.module.css'
 
@@ -70,6 +72,9 @@ export const BASE_PRICE_COL = 'basePrice'
  */
 export const BASE_PRICE_COL_W = 120
 export const STOCK_COL = 'shared.stock'
+/** The Case column (Step 3, Owner 2026-10-07): units per case, case size and weight, FBA prep and labels — the pop-up writes it. */
+export const CASE_COL = 'shared.case'
+export const CASE_COL_W = 104
 /** The FBA qty column (Owner 2026-10-06): Amazon's FBA units, shown and LOCKED — nothing on this page can write it. */
 export const FBA_COL = 'shared.fba'
 export const FBA_COL_W = 96
@@ -214,6 +219,27 @@ export function stockTooltip(s: MatrixRowRead['stock']): string {
   return `${poolSourceSentence({ lenderName: s.source.lenderName, available: s.available ?? 0 })} ${where}. This business's own stock is not used.`
 }
 
+/* ── the Case cell (Step 3) ─────────────────────────────────────────────────────────────────── */
+
+/** A row's Case view: a variant its own; the parent sums up its variants (every other Matrix row). */
+export function caseViewOf(rowId: string, rowOf: (id: string) => MatrixRowRead | null, rows: readonly { id: string }[]): CaseCellView {
+  const row = rowOf(rowId)
+  if (row?.role !== 'parent') return caseCellView(row)
+  return caseCellView(row, rows.flatMap((r) => { const m = r.id === rowId ? null : rowOf(r.id); return m && m.role !== 'parent' ? [m] : [] }))
+}
+
+function CaseCell(p: ICellRendererParams<StudioRow> & { viewOf?: (rowId: string) => CaseCellView; onOpenCase?: (rowId: string, anchor: HTMLElement | null) => void }) {
+  const d = p.data
+  if (!d || !p.viewOf) return null
+  const v = p.viewOf(d.id)
+  const open = v.door && p.onOpenCase
+    ? <CellAction label={CASE_EDIT_COPY.label} description={CASE_EDIT_COPY.detail} onActivate={(anchor) => p.onOpenCase?.(d.id, anchor)}
+        onFocusCell={() => { const col = p.column?.getColId(); if (p.node.rowIndex != null && col) p.api.setFocusedCell(p.node.rowIndex, col) }} />
+    : null
+  const text = <span className={`nds-cell-value${v.look === 'mixed' ? ' nds-cell-muted' : ''}`}><span className="nds-cell-value-text">{v.text}</span></span>
+  return open ? <span className={styles.stockShared}>{open}{text}</span> : text
+}
+
 /* ── the FBA qty cell ─────────────────────────────────────────────────────────────────────── */
 
 /** The FBA number a row shows: units, or null for "no FBA row" AND for "not read" (the tooltip tells them apart). */
@@ -300,6 +326,8 @@ export interface BuildMatrixColumnsOptions {
   onOpenStock?: (rowId: string) => void
   /** A market's From cell opens "Sells from" (absent = no door: preview, or no right to adjust stock). */
   onOpenFrom?: (rowId: string, key: CoordinateKey, anchor: HTMLElement | null) => void
+  /** The Case cell opens the Case pop-up for a row (absent = no door: preview, or no right to adjust stock). */
+  onOpenCase?: (rowId: string, anchor: HTMLElement | null) => void
 }
 
 const rowId = (r: StudioRow) => r.id
@@ -367,6 +395,24 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     getQuickFilterText: (p) => { const s = p.data ? stockOf(rowOf(p.data.id)) : null; return s?.uncounted ? MATRIX_COPY.uncounted : `${s?.available ?? ''}${s?.source ? ` shared ${s.source.lenderName}` : ''}` },
   }
 
+  /* The Case column (Step 3): a read of `MatrixRowRead.pack`; the pop-up is its only writer. A sort, a copy and an export
+     read the number (units per case); the cell says `12 / case`, the parent `Mixed` when its variants differ. */
+  const caseView = (data: StudioRow | undefined) => (data ? caseViewOf(data.id, rowOf, rowsRef.current) : null)
+  const caseCol: ColDef<StudioRow> = {
+    colId: CASE_COL,
+    headerName: CASE_LABEL,
+    headerTooltip: CASE_HEADER_TIP,
+    width: CASE_COL_W, minWidth: 96,
+    editable: false, suppressMovable: true, suppressHeaderMenuButton: true, suppressFillHandle: true, suppressPaste: true, sortable: true, resizable: true,
+    type: numericColumn.type, cellClass: [...numericColumn.cellClass, 'nds-reveal-row'], headerClass: numericColumn.headerClass,
+    valueGetter: (p) => caseView(p.data)?.value ?? null,
+    cellRenderer: CaseCell,
+    cellRendererParams: { viewOf: (id: string) => caseViewOf(id, rowOf, rowsRef.current), onOpenCase: opts.onOpenCase,
+      suppressMouseEventHandling: (p: { event: MouseEvent }) => p.event.target instanceof Element && !!p.event.target.closest('[data-nds-cell-action]') },
+    tooltipValueGetter: (p) => caseView(p.data)?.tooltip,
+    getQuickFilterText: (p) => caseView(p.data)?.text ?? '',
+  }
+
   /* The DS locked column (`lockedColumn`, GRID.md rule 10: the lock is in the DEFINITION) — not editable, not movable, no
      fill handle, the lock glyph in the cell and the locked tint on it. Its value is a READ of `MatrixRowRead.fba`, the
      same way Stock reads `stock`: a copy, an export and a sort read the number; nothing can paste one back. */
@@ -390,7 +436,7 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     /* The progress column has its OWN header group. Inside the Product group it split that group across the pinned
        boundary (Product is pinned, progress is not) and AG drew "PRODUCT" twice — measured on production 2026-09-27. */
     { groupId: 'grp-progress', headerName: 'Progress', children: [sharedProgressColumn<StudioRow>({ market: opts.market, locale: opts.locale })] },
-    { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, fba] },
+    { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, caseCol, fba] },
   ]
 
   /* A market group's From column ("Sells from", Step 2): read-only here — the pop-up is its only writer. */
