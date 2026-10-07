@@ -30,6 +30,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // L9 — closing and reopening a listing changes it on the channel. Phase 3 (T1) — so do ending, relisting and deleting it.
 // Phase 3 T3 — ebay-categories reads eBay's category suggestions and a category's details live (it stores nothing).
 // Ads autonomy W3-1 — apply-ad-recommendations asks for a plan whose steps reach Amazon.
+// Ads autonomy (auto-undo, A19) — undo-worse-ad-change puts a bid, budget or placement back at Amazon.
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
@@ -50,7 +51,7 @@ const OPEN_WORLD = [
   'set-portfolio', 'set-price',
   'set-promotion', 'set-shopify-content', 'set-stock', 'set-stock-policy', 'set-stock-source', 'set-target-bid', 'shipping-rates',
   'shopify-content', 'submit-change-plan', 'suppress-campaign', 'sync-orders-now', 'transfer-stock', 'tune-ad-engine',
-  'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'void-shipping-label',
+  'turn-down-automation', 'turn-up-automation', 'undo-ad-change', 'undo-worse-ad-change', 'void-shipping-label',
 ]
 
 describe('MCP.7 — every tool, as Claude sees it', () => {
@@ -136,7 +137,9 @@ describe('C3 — the server and every change tool name the business', () => {
       // W4-14 — a copy into another market, a person's hourly plan and a person's pause keep their own doors.
       'a copy into another market never runs by rule',
       'An hourly bid plan a person made changes by rule only where the business allowed it',
-      "only with enable-ads includePeoplesPauses and the approver's authenticator code, never by rule"]) {
+      "only with enable-ads includePeoplesPauses and the approver's authenticator code, never by rule",
+      // Platform health watchdog (2026-10-07) — the daily checks are read first in an unattended run.
+      'read platform-health-checks first in a daily or unattended run']) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
   })

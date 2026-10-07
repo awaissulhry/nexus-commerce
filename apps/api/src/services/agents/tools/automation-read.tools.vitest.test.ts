@@ -74,10 +74,10 @@ afterAll(async () => {
 }, 30_000)
 
 describe('R6 — list-automations', () => {
-  it('a person who may see everything sees all 39, at their levels, and nothing hidden', async () => {
+  it('a person who may see everything sees all 40 (A19 auto-undo with them), at their levels, and nothing hidden', async () => {
     const out = await call('list-automations', {})
     expect(out.ok).toBe(true)
-    expect(out.data!.items).toHaveLength(39)
+    expect(out.data!.items).toHaveLength(40)
     expect(out.data!.hidden).toBe(0)
     const a1 = out.data!.items.find((e: Row) => e.id === 'A1')
     expect(a1).toMatchObject({ key: 'ads-rules', name: 'Amazon ads rules', business: { level: 'OBSERVE' } })
@@ -91,7 +91,7 @@ describe('R6 — list-automations', () => {
     const out = await call('list-automations', {}, adsOnly)
     const shown = out.data!.items.map((e: Row) => e.id)
     // ai.view (which the tool itself needs) also shows the agent fleet and the autonomous agents.
-    expect(shown).toEqual(['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'E1', 'F1', 'F2'])
+    expect(shown).toEqual(['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A17', 'A18', 'A19', 'E1', 'F1', 'F2'])
     expect(out.data!.hidden).toBe(18)
     const text = JSON.stringify(out)
     expect(text).not.toContain('Repricing rules')

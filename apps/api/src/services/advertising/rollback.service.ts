@@ -27,6 +27,7 @@ import {
   updateAdTargetWithSync,
   type AdsActor,
 } from './ads-mutation.service.js'
+import { NON_CHANGE_ACTION_TYPES } from './ads-engine-actors.js'
 
 const ROLLBACK_WINDOW_MS = 24 * 60 * 60 * 1000
 /** Surfaced to the UI so the button can explain itself rather than no-op. */
@@ -180,7 +181,13 @@ async function reverseOne(
    * Claude request (its queue row carries `sbSd`, sbSdWriteOf). Every other caller and write stays Sponsored Products only.
    */
   sbSd = false,
-): Promise<{ ok: boolean; reason?: string; skipped?: boolean }> {
+  /**
+   * ADS AUTONOMY (auto-undo) — the reversal waits out the mutation layer's 5-minute grace window (holdUntil), as any
+   * engine write does, so a person can still cancel it (cancel-queued-ad-write) before it reaches Amazon. Every other
+   * caller sends at once, as before. A placement write has no queue: it goes at once either way.
+   */
+  hold = false,
+): Promise<{ ok: boolean; reason?: string; skipped?: boolean; actionLogId?: string | null }> {
   // Refuse to invert anything that never made it past the gate / queue
   // — there's nothing to undo on the Amazon side, and re-applying the
   // before-state via the worker would create noise.
@@ -262,12 +269,12 @@ async function reverseOne(
         patch,
         actor,
         reason: `rollback: ${reason}`,
-        applyImmediately: true,
+        applyImmediately: !hold,
         manual,
         changeSetId,
         ...(sbSd && (await wasSbSdWrite(log)) ? { allowSbSd: true } : {}), // W4-11
       })
-      return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
+      return result.ok ? { ok: true, actionLogId: result.actionLogId ?? null } : { ok: false, reason: result.error ?? 'unknown' }
     }
     if (log.entityType === 'AD_GROUP') {
       const after = log.payloadAfter as Record<string, unknown>
@@ -281,13 +288,13 @@ async function reverseOne(
         patch,
         actor,
         reason: `rollback: ${reason}`,
-        applyImmediately: true,
+        applyImmediately: !hold,
         manual,
         reversal: true,
         changeSetId,
       })
       if (result.ok) await restoreFloorMemory(log, before)
-      return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
+      return result.ok ? { ok: true, actionLogId: result.actionLogId ?? null } : { ok: false, reason: result.error ?? 'unknown' }
     }
     if (log.entityType === 'AD_TARGET') {
       const after = log.payloadAfter as Record<string, unknown>
@@ -300,14 +307,14 @@ async function reverseOne(
         patch,
         actor,
         reason: `rollback: ${reason}`,
-        applyImmediately: true,
+        applyImmediately: !hold,
         manual,
         reversal: true,
         changeSetId,
         ...(sbSd && (await wasSbSdWrite(log)) ? { allowSbSd: true } : {}), // W4-11
       })
       if (result.ok) await restoreFloorMemory(log, before)
-      return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
+      return result.ok ? { ok: true, actionLogId: result.actionLogId ?? null } : { ok: false, reason: result.error ?? 'unknown' }
     }
     if (log.entityType === 'RETAIL_EVENT') {
       // Soft-disable: set isActive=false. promotion-scheduler treats
@@ -438,6 +445,76 @@ export async function rollbackByActionLogId(args: {
     out.details.push({ ...base, outcome: 'FAILED', reason: r.reason })
   }
   return noteNothingToUndo(out, r.reason)
+}
+
+
+/**
+ * ADS AUTONOMY (auto-undo) — does this write still stand: no later write on its entity (one that failed at Amazon set
+ * nothing), and the entity holds now what it set? Null when it stands, else why not, in words.
+ */
+export async function judgedWriteStands(log: { id: string; entityType: string; entityId: string; actionType: string; payloadAfter: unknown; createdAt: Date }): Promise<string | null> {
+  const later = await prisma.advertisingActionLog.count({
+    where: {
+      entityType: log.entityType, entityId: log.entityId, id: { not: log.id }, createdAt: { gt: log.createdAt },
+      // A row that records something other than a change (a would-do, a receipt) is never a later change.
+      actionType: { notIn: [...NON_CHANGE_ACTION_TYPES] },
+      OR: [{ amazonResponseStatus: null }, { amazonResponseStatus: { not: 'FAILED' } }],
+    },
+  })
+  if (later) return `a later change on the same ${log.entityType.toLowerCase().replace('_', ' ')} superseded it (${later} since)`
+  const after = (log.payloadAfter ?? {}) as Record<string, unknown>
+  const same = (a: unknown, b: unknown) => a != null && b != null && Math.abs(Number(a) - Number(b)) < 0.005
+  if (log.actionType === 'update_placement_bidding') {
+    const c = await prisma.campaign.findUnique({ where: { id: log.entityId }, select: { dynamicBidding: true } })
+    const now = ((c?.dynamicBidding as { placementBidding?: Array<{ placement?: string; percentage?: number }> } | null)?.placementBidding) ?? []
+    const wrote = Array.isArray(after.adjustments) ? (after.adjustments as Array<{ placement?: string; percentage?: number }>) : []
+    const holds = c && wrote.every((w) => (now.find((n) => n.placement === w.placement)?.percentage ?? 0) === (w.percentage ?? 0))
+    return holds ? null : 'the campaign\'s placements are no longer what this change set'
+  }
+  if (log.entityType === 'AD_TARGET') {
+    const t = await prisma.adTarget.findUnique({ where: { id: log.entityId }, select: { bidCents: true } })
+    return t && same(t.bidCents, after.bidCents) ? null : 'the bid is no longer what this change set'
+  }
+  if (log.entityType === 'AD_GROUP') {
+    const g = await prisma.adGroup.findUnique({ where: { id: log.entityId }, select: { defaultBidCents: true } })
+    return g && same(g.defaultBidCents, after.defaultBidCents) ? null : 'the ad group\'s default bid is no longer what this change set'
+  }
+  if (log.entityType === 'CAMPAIGN') {
+    const c = await prisma.campaign.findUnique({ where: { id: log.entityId }, select: { dailyBudget: true } })
+    return c && same(c.dailyBudget, after.dailyBudget) ? null : 'the daily budget is no longer what this change set'
+  }
+  return `a ${log.entityType} write is not one auto-undo puts back`
+}
+
+/**
+ * ADS AUTONOMY (auto-undo) — put back ONE recorded write that auto-undo judged clearly worse (ads-auto-undo.service.ts),
+ * at AUTO or once a person approved undo-worse-ad-change. The same Undo as everywhere (reverseOne): the mutation layer,
+ * its write gate, the ads audit row ("rollback: …") and the original row marked undone (rolledBackAt). Three things
+ * differ, each on purpose:
+ *   · one row only, never its whole change set: the judgement is of this write alone (the rest of its set stands);
+ *   · no 24-hour / 7-day undo window: that window keeps an old value from overwriting what has moved since. Here the
+ *     write is judged days later by design, so this checks exactly that instead, right before writing (compare-and-set,
+ *     judgedWriteStands): a later write on the entity, or a value that moved, refuses it (`superseded`), nothing written;
+ *   · `hold`: the reversal waits out the 5-minute grace window, so a person can still cancel it (cancel-queued-ad-write).
+ */
+export async function reverseJudgedWrite(args: {
+  actionLogId: string
+  actor: AdsActor
+  reason: string
+  /** A person approved it (undo-worse-ad-change): his click, as approvedRun says. Never set at AUTO. */
+  manual?: boolean
+  /** The approved request's id (its writes carry it, so undo-ad-change of it puts the engine's value back). */
+  changeSetId?: string | null
+}): Promise<{ ok: true; actionLogId: string | null } | { ok: false; reason: string; superseded?: boolean }> {
+  const log = await prisma.advertisingActionLog.findUnique({ where: { id: args.actionLogId } })
+  if (!log) return { ok: false, reason: 'That change no longer exists.' }
+  if (log.rolledBackAt) return { ok: false, reason: 'It was undone already.', superseded: true }
+  const moved = await judgedWriteStands(log)
+  if (moved) return { ok: false, reason: `Not undone: ${moved}.`, superseded: true }
+  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true, args.changeSetId ?? null, false, true)
+  if (!r.ok || r.skipped) return { ok: false, reason: r.reason ?? 'the undo was refused' }
+  await prisma.advertisingActionLog.update({ where: { id: log.id }, data: { rolledBackAt: new Date(), rollbackReason: args.reason } }).catch(() => {})
+  return { ok: true, actionLogId: r.actionLogId ?? null }
 }
 
 /** ADS AUTONOMY W3-1 — the ids of every write a change set holds (read only), for a step to tell its own writes apart. */

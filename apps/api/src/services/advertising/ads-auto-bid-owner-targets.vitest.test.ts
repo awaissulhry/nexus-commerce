@@ -92,6 +92,8 @@ beforeAll(async () => {
       await db().adTarget.create({ data: { id, adGroupId: `g-${key}`, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `test ${id}`, bidCents: 50, externalTargetId: `EXT-${id}`, ...SPENT } })
     }
     for (const id of ['t-it', 't-uk', 't-pin']) await db().adTarget.update({ where: { id }, data: SPENT })
+    // C3 — t-pin's 40¢ is already its goal (40 % of €1.00 sales a click), which proposes nothing: 50¢, so the pin holds a move.
+    await db().adTarget.update({ where: { id: 't-pin' }, data: { bidCents: 50 } })
     // An hourly bid plan (an enabled goal-mode schedule) holds c-hourly.
     await db().adSchedule.create({ data: { campaignId: 'c-hourly', name: 'Test hourly plan', windows: [], defaultTargetKey: 'own-top', enabled: true } })
     // A product plan's last run resolved its family to c-plan.

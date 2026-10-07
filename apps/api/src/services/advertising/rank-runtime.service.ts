@@ -20,6 +20,7 @@ import {
 } from './rank-runtime.js'
 import { pickActiveEvents } from '../../jobs/ad-rank-defend.job.js'
 import { analyzeTopOfSearch } from './ads-top-of-search.service.js'
+import { resolveMaxBaseBidByCampaign } from './ads-placement-manual.js'
 import { sqpImpressionShareForAsins } from './sqp.service.js'
 import type { ScheduleWindow } from './rank-controller.js'
 
@@ -154,23 +155,8 @@ export async function getRankRuntime(): Promise<RankRuntimePayload> {
     }
   }
 
-  // ── highest live base bid per campaign — grouped, because one campaign holds 141 targets ──
-  const maxBaseBid = new Map<string, number>()
-  const [agRows, agIndex] = await Promise.all([
-    prisma.adGroup.groupBy({ by: ['campaignId'], where: { campaignId: { in: campIds } }, _max: { defaultBidCents: true, suppressedFromBidCents: true } }),
-    prisma.adGroup.findMany({ where: { campaignId: { in: campIds } }, select: { id: true, campaignId: true } }),
-  ])
-  for (const r of agRows) {
-    const v = Math.max(r._max.defaultBidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
-    if (v > 0) maxBaseBid.set(r.campaignId, v)
-  }
-  const campByAdGroup = new Map(agIndex.map((g) => [g.id, g.campaignId]))
-  const tgRows = await prisma.adTarget.groupBy({ by: ['adGroupId'], where: { adGroup: { campaignId: { in: campIds } }, isNegative: false }, _max: { bidCents: true, suppressedFromBidCents: true } })
-  for (const r of tgRows) {
-    const cid = campByAdGroup.get(r.adGroupId); if (!cid) continue
-    const v = Math.max(r._max.bidCents ?? 0, r._max.suppressedFromBidCents ?? 0)
-    if (v > (maxBaseBid.get(cid) ?? 0)) maxBaseBid.set(cid, v)
-  }
+  // ── highest base bid that serves, per campaign — the engine's own reading (resolveMaxBaseBidByCampaign) ──
+  const maxBaseBid = await resolveMaxBaseBidByCampaign(campIds)
 
   // ── the derivation ────────────────────────────────────────────────────────────────────────
   const runtimes = schedules.map((s) => {
