@@ -29,14 +29,8 @@ import { logger } from '../utils/logger.js'
 import { keptAmazonFulfilmentCodes } from '../lib/amazon-fulfilment-programme.js'
 import { listingSendSku } from './listings/listing-send-sku.js'
 import { isFbaCoordinate } from '../lib/amazon-fulfillment.js'
+import { marketplaceCodeToId } from '../utils/marketplace-code.js'
 
-const AMZ_MP_ID: Record<string, string> = {
-  IT: 'APJ6JRA9NG5V4',
-  DE: 'A1PA6795UKMFR9',
-  FR: 'A13V1IB3VIYZZH',
-  ES: 'A1RKKUPIHCS9HS',
-  UK: 'A1F83G8C2ARO7P',
-}
 
 export interface FbaRestoreItemResult {
   sku: string
@@ -135,7 +129,9 @@ export async function restoreFbaListings(options?: {
     }
 
     processed++
-    const marketplaceId = AMZ_MP_ID[cl.marketplace] ?? AMZ_MP_ID.IT
+    // 2026-10-07 — the listing's OWN market, always: the PATCH used to name none, so every restore went to the client's
+    // home market (IT), and an unknown market fell back to IT too. A market with no id is reported, nothing sent.
+    const marketplaceId = marketplaceCodeToId(String(cl.marketplace ?? '').toUpperCase() === 'GB' ? 'UK' : cl.marketplace)
     const productType = String(
       (cl.platformAttributes as Record<string, unknown>)?.productType ??
         cl.product?.productType ??
@@ -148,7 +144,8 @@ export async function restoreFbaListings(options?: {
         {
           op: 'replace',
           path: '/attributes/fulfillment_availability',
-          value: [{ fulfillment_channel_code: 'AMAZON_EU', marketplace_id: marketplaceId }],
+          // Entries are channel-scoped: the market is the request's `marketplaceIds`, never a `marketplace_id` in the entry.
+          value: [{ fulfillment_channel_code: 'AMAZON_EU' }],
         },
       ],
     }
@@ -162,13 +159,17 @@ export async function restoreFbaListings(options?: {
       results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, dryRun, ok: false, error: `${held.code}: ${held.refusal}` })
       continue
     }
+    if (!marketplaceId) {
+      results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, dryRun, ok: false, error: `Amazon ${cl.marketplace} has no marketplace id in Nexus, so nothing was sent` })
+      continue
+    }
     if (dryRun) {
       results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, dryRun: true })
       continue
     }
 
     try {
-      const r = await amazonSpApiClient.submitListingPayload({ sellerId, sku, payload })
+      const r = await amazonSpApiClient.submitListingPayload({ sellerId, sku, payload, marketplaceId })
       sent++
       logger.info('fba-restore: re-asserted AMAZON_EU', {
         sku,

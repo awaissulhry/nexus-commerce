@@ -36,4 +36,21 @@ describe('restoreFbaListings', () => {
     expect(s.submit.mock.calls.map(([a]) => a.sku)).toEqual(['SKU-flipped', 'SKU-fba'])
     for (const [a] of s.submit.mock.calls) expect(a.payload.patches[0].value[0].fulfillment_channel_code).toBe('AMAZON_EU')
   })
+
+  it('names each listing\'s own marketplace and puts no marketplace_id inside the entry (2026-10-07)', async () => {
+    s.listings = [
+      { ...listing('it', {}), marketplace: 'IT' },
+      { ...listing('de', {}), marketplace: 'DE' },
+      { ...listing('fr', {}), marketplace: 'FR' },
+      { ...listing('nl', {}), marketplace: 'NL' },
+      { ...listing('xx', {}), marketplace: 'XX' },
+    ]
+    const r = await restoreFbaListings({ dryRun: false })
+    expect(s.submit.mock.calls.map(([a]) => [a.sku, a.marketplaceId])).toEqual([
+      ['SKU-it', 'APJ6JRA9NG5V4'], ['SKU-de', 'A1PA6795UKMFR9'], ['SKU-fr', 'A13V1IB3VIYZZH'], ['SKU-nl', 'A1805IZSGTT6HS'],
+    ])
+    for (const [a] of s.submit.mock.calls) expect(a.payload.patches[0].value).toEqual([{ fulfillment_channel_code: 'AMAZON_EU' }])
+    // An unknown market is reported, never sent to IT.
+    expect(r.results.find((x) => x.sku === 'SKU-xx')).toMatchObject({ ok: false, error: expect.stringContaining('no marketplace id') })
+  })
 })
