@@ -326,7 +326,7 @@ const A1: AutomationAdapter = {
       // drawer's own save and audit (updateAdsRule, PATCH /advertising/automation-rules/:id), so AUTO never stands beside
       // Manual; it goes back to Manual if the level is refused.
       const move = await controlMove(row, level)
-      const note = `Manual/Automate set to ${move?.to === 'automate' ? 'Automate' : 'Manual'} with the level ${level}`
+      const note = `Manual/Automate set to ${move?.to === 'automate' ? 'Automate' : 'Manual'} with the level ${level} ${LEVEL_MOVE_MARK}`
       if (move?.to === 'automate') {
         const set = await updateAdsRule(row.id, { actions: move.actions }, actor, { note })
         if (!set.ok) return `its Manual/Automate setting could not be set to Automate (${why(set)}), so it stays ${row.level}`
@@ -336,8 +336,8 @@ const A1: AutomationAdapter = {
         if (move?.to === 'automate') await updateAdsRule(row.id, { actions: move.before }, actor, { note: `Manual/Automate put back to Manual: the level ${level} was refused` }).catch(() => undefined)
         return why(out)
       }
-      // Down from AUTO: back to Manual after the level, as the screen does (best-effort there too: below AUTO the level
-      // alone keeps the rule proposing). Said when it could not be.
+      // Down from AUTO: back to Manual after the level, when a level move set it to Automate (best-effort, as on the
+      // screen: below AUTO the level alone keeps the rule proposing). Said when it could not be.
       if (move?.to === 'manual') {
         const back = await updateAdsRule(row.id, { actions: move.actions }, actor, { note }).catch(() => null)
         if (!back?.ok) return { note: `its Manual/Automate setting stayed on Automate (${back ? why(back) : 'the save failed'}); at ${level} it proposes anyway` }
@@ -347,14 +347,36 @@ const A1: AutomationAdapter = {
   },
 }
 
+/** W4-12b — in the audit note of a Manual/Automate change a level move made (and only there). */
+const LEVEL_MOVE_MARK = '(by a level move)'
+
+/**
+ * W4-12b — whether the rule's Manual/Automate setting was last changed by a level move, from Manual to Automate: the
+ * latest `update_rule` audit row (the drawer's save, updateAdsRule) whose actions[0].control changed. A person's radio
+ * in the rule builder, or the Rules screen's own flip, leaves no mark: then the setting is theirs and is left alone.
+ */
+async function automateSetByLevelMove(ruleId: string): Promise<boolean> {
+  const rows = await prisma.advertisingActionLog.findMany({
+    where: { entityType: 'RULE', entityId: ruleId, actionType: 'update_rule' },
+    orderBy: { createdAt: 'desc' }, take: 50, select: { payloadBefore: true, payloadAfter: true, evidence: true },
+  })
+  const controlOf = (payload: unknown) => ((payload as { actions?: Array<{ control?: unknown }> } | null)?.actions?.[0]?.control) ?? null
+  const last = rows.find((r) => controlOf(r.payloadBefore) !== controlOf(r.payloadAfter))
+  if (!last) return false
+  const note = String((last.evidence as { note?: unknown } | null)?.note ?? '')
+  return controlOf(last.payloadBefore) === 'manual' && controlOf(last.payloadAfter) === 'automate' && note.includes(LEVEL_MOVE_MARK)
+}
+
 /**
  * W4-12b — an Amazon ads rule's Manual/Automate setting (`actions[0].control`, the rule builder's radio) as a level move
  * changes it. On Manual the engine runs the rule as a dry run whatever its level (automation-rule.service.ts EA3): it
  * only proposes. The Rules screen keeps it in step when a person switches Auto (RulesGrid.tsx setAutomation, BP.P1):
- * Automate when the rule goes to AUTO, Manual when Auto is switched off. A move of Claude's does the same, so a rule
- * raised to AUTO acts, and turned down from AUTO it goes back to Manual (what the raise changed). A rule with no setting
- * is left as it is. (A rule a builder made Manual on purpose — a Harvest & Negate, a playbook's isolation — cannot reach
- * AUTO: its graduation ceiling holds it at PROPOSE, refused before this.) Null: nothing to change.
+ * Automate when the rule goes to AUTO, Manual when Auto is switched off. A move of Claude's sets Automate the same way,
+ * so a rule raised to AUTO acts; turned down from AUTO it goes back to Manual only when a level move set Automate
+ * (automateSetByLevelMove) — a setting a person chose stays theirs (below AUTO the rule proposes either way). A rule
+ * with no setting is left as it is. (A rule a builder made Manual on purpose — a Harvest & Negate, a playbook's
+ * isolation — cannot reach AUTO: its graduation ceiling holds it at PROPOSE, refused before this.) Null: nothing to
+ * change.
  */
 async function controlMove(row: SwitchRow, level: AutomationLevel): Promise<{ from: string; to: 'manual' | 'automate'; words: string; actions: object[]; before: object[] } | null> {
   const rule = await prisma.automationRule.findFirst({ where: { id: row.id, domain: 'advertising' }, select: { actions: true } })
@@ -362,12 +384,12 @@ async function controlMove(row: SwitchRow, level: AutomationLevel): Promise<{ fr
   const before = rule.actions as Array<Record<string, unknown>>
   const control = before[0]?.control
   const to = level === 'AUTO' && control === 'manual' ? 'automate' as const
-    : row.level === 'AUTO' && level !== 'AUTO' && control === 'automate' ? 'manual' as const
+    : row.level === 'AUTO' && level !== 'AUTO' && control === 'automate' && (await automateSetByLevelMove(row.id)) ? 'manual' as const
       : null
   if (!to) return null
   const words = to === 'automate'
     ? 'Its Manual/Automate setting goes from Manual to Automate with it, as the Rules screen does when a person sets Auto: on Manual a rule only proposes, whatever its level.'
-    : 'Its Manual/Automate setting goes back from Automate to Manual, as the Rules screen does when Auto is switched off.'
+    : 'Its Manual/Automate setting goes back from Automate to Manual, where it was before a level move set Automate, as the Rules screen does when Auto is switched off.'
   return { from: String(control), to, words, actions: before.map((a, i) => (i === 0 ? { ...a, control: to } : a)), before }
 }
 

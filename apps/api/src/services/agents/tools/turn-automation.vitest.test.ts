@@ -352,6 +352,24 @@ describe('W4-12b — a builder rule\'s Manual/Automate setting moves with AUTO',
     expect(plain.preview!.changes.control).toBeUndefined()
   })
 
+  it('a rule a person set to Automate keeps it when Claude turns it down from AUTO: only a level move\'s Automate goes back', async () => {
+    process.env.NEXUS_AMAZON_ADS_MODE = 'live'
+    const rule = await inside(() => database.client.automationRule.create({ data: {
+      domain: 'advertising', name: 'TEST builder chosen automate', trigger: 'TARGET_PERFORMANCE', enabled: true, autonomyLevel: 'PROPOSE', dryRun: true,
+      scopeMarketplace: 'IT', createdAt: new Date(Date.now() - 20 * DAY), evaluationCount: 12, matchCount: 3,
+      conditions: [{ conditions: [{ metric: 'ACOS', op: 'lt', value: '20' }], action: { op: 'incPct', value: '10' } }],
+      actions: [{ type: 'bid', control: 'automate', campaigns: [] }],
+    } as never }))
+    const raise = await up({ automation: 'A1', rowId: rule.id, level: 'AUTO' })
+    expect(raise.preview!.changes.control).toBeUndefined()
+    expect(await run('turn-up-automation', { automation: 'A1', rowId: rule.id, level: 'AUTO' })).toMatchObject({ ok: true, data: { level: 'AUTO' } })
+    const lower = await down({ automation: 'A1', rowId: rule.id, level: 'PROPOSE' })
+    // Before the review: "goes back from Automate to Manual", although it was never Manual.
+    expect(lower.preview!.changes.control).toBeUndefined()
+    expect(await run('turn-down-automation', { automation: 'A1', rowId: rule.id, level: 'PROPOSE' })).toMatchObject({ ok: true, data: { level: 'PROPOSE' } })
+    expect(await control(rule.id)).toEqual({ level: 'PROPOSE', dryRun: true, control: 'automate' })
+  })
+
   it('an engine-shaped rule set to Manual moves too: the engine reads the same setting on every ads rule', async () => {
     process.env.NEXUS_AMAZON_ADS_MODE = 'live'
     const rule = await inside(() => database.client.automationRule.create({ data: {
