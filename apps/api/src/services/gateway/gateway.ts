@@ -135,6 +135,11 @@ export class GatewayRefusal extends Error {
     readonly code: string,
     message: string,
     readonly statusCode: number,
+    /**
+     * RATE_LIMITED_LOCAL only: how long until this account's rate bucket has a slot, i.e. when the same
+     * request can be sent again. Null for every other refusal.
+     */
+    readonly retryAfterMs: number | null = null,
   ) {
     super(message)
     this.name = 'GatewayRefusal'
@@ -181,9 +186,9 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
     orderId: req.ledger?.orderId ?? null,
     triggeredBy: req.ledger?.triggeredBy,
   }
-  const refuse = async (outcome: Exclude<GatewayOutcome, 'sent'>, code: string, message: string, statusCode: number): Promise<never> => {
+  const refuse = async (outcome: Exclude<GatewayOutcome, 'sent'>, code: string, message: string, statusCode: number, retryAfterMs: number | null = null): Promise<never> => {
     await writeLedgerRow({ ...base, statusCode: null, success: false, latencyMs: Date.now() - started, outcome, errorCode: code, errorMessage: message })
-    throw new GatewayRefusal(outcome, code, message, statusCode)
+    throw new GatewayRefusal(outcome, code, message, statusCode, retryAfterMs)
   }
 
   // 1. account
@@ -307,7 +312,7 @@ async function runGatewayCall(req: GatewayRequest): Promise<GatewayResponse> {
   for (;;) {
     const slot = await takeToken(req.channel, key, req.maxRateWaitMs ?? 30_000)
     if (!slot.ok) {
-      return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: the ${name} rate limit for this account needs ${Math.ceil(slot.waitMs / 1000)} s more. Retry later.`, 429)
+      return refuse('refused', 'RATE_LIMITED_LOCAL', `Not sent yet: the ${name} rate limit for this account needs ${Math.ceil(slot.waitMs / 1000)} s more. Retry later.`, 429, slot.waitMs)
     }
     attempts++
     timedOut = false

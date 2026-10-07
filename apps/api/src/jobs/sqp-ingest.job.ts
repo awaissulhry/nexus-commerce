@@ -52,6 +52,26 @@ const SQP_ASINS_PER_MARKET = 10
  */
 const SQP_ROTATION_POOL = Math.max(SQP_ASINS_PER_MARKET, Number(process.env.NEXUS_SQP_ROTATION_POOL) || 250)
 
+/**
+ * The request pass stops sending after this long; what is left is `deferred` to the next night. ~30
+ * requests paced ~61 s apart take ~30 minutes, so this leaves room for retries and stays well inside the
+ * 2h stale sweeper (cron-orphan-sweeper.job.ts).
+ */
+export const SQP_REQUEST_PASS_BUDGET_MS = 75 * 60_000
+
+/**
+ * The markets in a different order each night: the list rotated by the UTC day number.
+ *
+ * 🔴 Alphabetical order put DE first every night, and when the requests ran out DE got all of them and
+ * IT none — IT had no new week from 2026-08-16 to 2026-10-05. Rotating means no market is always last.
+ */
+export function rotateForNight<T>(items: readonly T[], now: Date): T[] {
+  if (items.length < 2) return [...items]
+  const day = Math.floor(now.getTime() / 86_400_000)
+  const k = day % items.length
+  return [...items.slice(k), ...items.slice(0, k)]
+}
+
 /** One market's outcome, as `ingestSqp` reports it — plus the case where the market itself threw. */
 export interface SqpMarketOutcome {
   marketplace: string
@@ -129,6 +149,7 @@ export function buildSqpSummary(args: {
  * ads-sync-drain.job.ts.
  */
 export async function runSqpIngestOnce(): Promise<string> {
+  const startedAt = Date.now()
   const { ingestSqp, ourAsinsForMarketplace } = await import('../services/advertising/sqp.service.js')
   const conns = await prisma.amazonAdsConnection.findMany({ where: { isActive: true }, select: { marketplace: true } })
   const candidates = [...new Set(conns.map((c) => c.marketplace))].sort()
@@ -169,6 +190,8 @@ export async function runSqpIngestOnce(): Promise<string> {
 
     eligible.push({ mkt, asins })
   }
+  // A different market goes first each night (see rotateForNight).
+  const ordered = rotateForNight(eligible, new Date(startedAt))
   if (dormant.length) {
     logger.info('[sqp-ingest] markets DORMANT — zero ACTIVE listings, nothing to measure', { dormant })
   }
@@ -183,7 +206,7 @@ export async function runSqpIngestOnce(): Promise<string> {
   // because it provably cannot work: Amazon generates this account's reports serially, so waiting
   // 300s per report abandoned 40 of 40 on two consecutive nights.
   if (!envEnabled('NEXUS_SQP_SYNCHRONOUS_INGEST')) {
-    const { requestSqpReports } = await import('../services/advertising/sqp-async.service.js')
+    const { requestSqpReports, createReportPacer } = await import('../services/advertising/sqp-async.service.js')
     // 🔴 Imported, never re-derived. This line used to carry its OWN `|| 2`, so the lookback had two
     // independent defaults and changing the one in sqp.service.ts would have had no effect on the
     // job that actually requests the reports. Same constant, one definition.
@@ -210,8 +233,11 @@ export async function runSqpIngestOnce(): Promise<string> {
     const { settledAsins } = await import('../services/advertising/sqp-async.service.js')
 
     const parts: string[] = []
-    let created = 0, failed = 0, outstanding = 0, settled = 0, explored = 0
-    for (const { mkt, asins: coreAsins } of eligible) {
+    let created = 0, failed = 0, outstanding = 0, settled = 0, explored = 0, deferred = 0
+    // ONE pacer for the whole pass: createReport is one bucket per account, not per market.
+    const pacer = createReportPacer()
+    const deadlineAt = startedAt + SQP_REQUEST_PASS_BUDGET_MS
+    for (const { mkt, asins: coreAsins } of ordered) {
       const marketplaceId = idOf.get(mkt)
       if (!marketplaceId) { parts.push(`${mkt} NO-MARKETPLACE-ID`); failed += coreAsins.length; continue }
 
@@ -259,14 +285,14 @@ export async function runSqpIngestOnce(): Promise<string> {
         parts.push(`${mkt} ${plan.chosen.length}/${pool.length} (${plan.exploit.length} proven + ${plan.explore.length} new${plan.barrenSkipped ? `, ${plan.barrenSkipped} barren skipped` : ''})`)
       }
 
-      const r = await requestSqpReports({ marketplaceCode: mkt, marketplaceId, asins, period: 'WEEK', start: win.start, end: win.end })
-      created += r.created; failed += r.failed; outstanding += r.alreadyOutstanding; settled += r.alreadySettled
-      parts.push(`${mkt} ${r.created}/${r.asinsRequested}${r.alreadyOutstanding ? ` (${r.alreadyOutstanding} already outstanding)` : ''}${r.alreadySettled ? ` (${r.alreadySettled} settled)` : ''}${r.failed ? ` ${r.failed} failed` : ''}`)
+      const r = await requestSqpReports({ marketplaceCode: mkt, marketplaceId, asins, period: 'WEEK', start: win.start, end: win.end, pacer, deadlineAt })
+      created += r.created; failed += r.failed; outstanding += r.alreadyOutstanding; settled += r.alreadySettled; deferred += r.deferred
+      parts.push(`${mkt} ${r.created}/${r.asinsRequested}${r.alreadyOutstanding ? ` (${r.alreadyOutstanding} already outstanding)` : ''}${r.alreadySettled ? ` (${r.alreadySettled} settled)` : ''}${r.failed ? ` ${r.failed} failed` : ''}${r.deferred ? ` ${r.deferred} deferred` : ''}`)
     }
     const summary =
       `mode=async · markets=${eligible.length}${skipped.length ? ` skipped=${skipped.length}[${skipped.join(',')}]` : ''}` +
       `${dormant.length ? ` dormant=${dormant.length}[${dormant.join(',')}] (0 ACTIVE listings — self-restoring)` : ''}` +
-      ` · requested=${created} failed=${failed}${outstanding ? ` alreadyOutstanding=${outstanding}` : ''}${settled ? ` settled=${settled}` : ''}` +
+      ` · requested=${created} failed=${failed}${deferred ? ` deferred=${deferred}(not sent — asked again next night)` : ''}${outstanding ? ` alreadyOutstanding=${outstanding}` : ''}${settled ? ` settled=${settled}` : ''}` +
       ` · aim=${yieldOrder ? `yield-ordered(${explored} exploring)` : 'off'}` +
       ` · week=${win.start.toISOString().slice(0, 10)} · rows=0 (collected by sqp-collect)` +
       (parts.length ? ` · ${parts.join(' · ')}` : '')
@@ -279,12 +305,12 @@ export async function runSqpIngestOnce(): Promise<string> {
     if (created === 0 && outstanding === 0 && settled === 0) {
       throw new Error(`sqp-ingest (async): created 0 report requests across ${eligible.length} markets, nothing was already outstanding, and no week was settled. ${summary}`)
     }
-    logger.info('[sqp-ingest] request pass complete', { created, failed, outstanding, settled, explored, yieldOrder, week: win.start.toISOString().slice(0, 10) })
+    logger.info('[sqp-ingest] request pass complete', { created, failed, deferred, outstanding, settled, explored, yieldOrder, week: win.start.toISOString().slice(0, 10), minutes: Math.round((Date.now() - startedAt) / 60_000) })
     return summary
   }
 
   const outcomes: SqpMarketOutcome[] = []
-  for (const { mkt, asins } of eligible) {
+  for (const { mkt, asins } of ordered) {
     try {
       const r = await ingestSqp({ marketplaceCode: mkt, period: 'WEEK', asins })
       outcomes.push({
