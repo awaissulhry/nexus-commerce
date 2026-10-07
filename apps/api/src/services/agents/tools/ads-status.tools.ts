@@ -579,7 +579,7 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
           : kind === 'pause'
           ? 'A real pause: a paused ad serves again only about an hour after enable-ads switches it on. To stop it for a while, lower its bids instead (suppress-campaign): it serves again about a minute after they go back.'
           : 'Spend resumes: these ads compete in auctions again with the bids and budgets shown.'
-            + (coded.length ? ` ${coded.length === changing.length ? (coded.length === 1 ? 'No Claude request paused it' : 'No Claude request paused them') : `${coded.length} of them no Claude request paused`} (each line says who did): approving needs the approver's authenticator code.` : ''),
+            + (coded.length ? ` ${coded.length === changing.length ? (coded.length === 1 ? 'No Claude request paused it' : 'No Claude request paused them') : `${coded.length} of them no Claude request paused`} (each line says who did): ${doorNeedsCode('enable-ads: includePeoplesPauses') ? 'approving needs the approver\'s authenticator code' : 'a person approves it, never a rule'}.` : ''),
         ...ruleFacts,
         effect,
       },

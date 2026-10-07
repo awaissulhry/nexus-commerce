@@ -69,6 +69,7 @@ import { resolveRequest } from '../../agent-fleet/approval-target.js'
 import { PLAN_TOOL } from '../tool-types.js'
 import { __stepUpTest } from '../../../lib/auth/step-up.js'
 import { generateSecret, generateSync } from 'otplib'
+import { __codeRuleTest } from './ads-code-rule.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -225,8 +226,9 @@ describe('the tools as the contract holds them', () => {
     expect(getTool('create-ad-group')!.limits!.parse({})).toMatchObject({ maxBidCents: 0, allowStartLive: false, markets: [], campaignIds: [] })
     expect(getTool('set-ad-group')).toMatchObject({ alwaysAsk: true, strategyBound: 'amazon-ads', maxClaudeTrust: 'auto', reversibility: 'full' })
     expect(getTool('set-ad-group')!.limits!.parse({})).toMatchObject({ maxItems: 1, maxRaisePct: 0, allowRename: false })
-    // An op start never runs by rule: no limit lets it.
-    expect(getTool('set-ad-group')!.limits!.parse({})).not.toHaveProperty('maxRestoredBidCents')
+    // A born ad group's op start never runs by rule (no limit lets it); a start after an op stop only up to
+    // maxRestoredBidCents, 0 by default.
+    expect(getTool('set-ad-group')!.limits!.parse({})).toMatchObject({ maxRestoredBidCents: 0 })
     expect(getTool('ad-groups')).toMatchObject({ readOnly: true, requires: ['ads.view'] })
   })
 })
@@ -369,21 +371,33 @@ describe('create-ad-group — approved', () => {
     const read = (await preview('ad-groups', { adGroupId: id })).data.items[0]
     expect(read).toMatchObject({ floor: { by: 'user:u-asker', plannedDefaultBidCents: 40, givenBackBy: 'set-ad-group op start' }, targets: { keywords: 2, negatives: 1, heldAtFloor: 2 } })
 
-    // set-ad-group op start gives the planned bids back: the approver's code, never by rule (lead decision, W4-6 review).
+    // set-ad-group op start gives the planned bids back: a new ad group going live, a big door of the Owner's code rule —
+    // the approver's code, never by rule (lead decision, W4-6 review).
     const start = (await preview('set-ad-group', { adGroupId: id, op: 'start' })).preview
     expect(start).toMatchObject({
-      op: 'start', totals: { bids: 3 }, highestRestoredBidCents: 55, limitFacts: { action: 'restore' },
+      op: 'start', totals: { bids: 3 }, highestRestoredBidCents: 55, limitFacts: { action: 'restore' }, floorOrigin: 'create',
       floorMadeBy: { tool: 'create-ad-group', approvalId: asked.approvalId },
       stepUp: { raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS, how: expect.stringMatching(/Never by rule\.$/) },
     })
-    expect(start.effect).toMatch(/the planned bids create-ad-group made it with, the highest EUR 0\.55\. It starts spending\. Approving it needs the approver's authenticator code; it never runs by rule\.$/)
+    expect(start.effect).toMatch(/the planned bids create-ad-group made it with, the highest EUR 0\.55\. It starts spending\. A new ad group goes live: approving it needs the approver's authenticator code; it never runs by rule\.$/)
     expect(start.noCode).toBeUndefined()
-    // Never by rule, whatever the limits.
-    expect(judge('set-ad-group', { ...start, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10, maxRaisePct: 100 })).toMatch(/never runs by rule/)
+    // Never by rule, whatever the limits (maxRestoredBidCents too).
+    expect(judge('set-ad-group', { ...start, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10, maxRaisePct: 100, maxRestoredBidCents: 100_000 })).toMatch(/never runs by rule/)
+    // The table decides the code: flipped, the card follows — and its never-by-rule does not.
+    __codeRuleTest.flip('set-ad-group: op start')
+    try {
+      const flipped = (await preview('set-ad-group', { adGroupId: id, op: 'start' })).preview
+      expect(flipped.stepUp).toBeUndefined()
+      expect(flipped.noCode).toMatch(/it still never runs by rule/)
+      expect(judge('set-ad-group', { ...flipped, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10, maxRestoredBidCents: 100_000 })).toMatch(/never runs by rule/)
+    } finally { __codeRuleTest.reset() }
     const started = await ask('set-ad-group', { adGroupId: id, op: 'start' })
     const plain = await approve(started.approvalId!)
     expect(plain).toMatchObject({ ok: false, status: 'pending' })
-    expect(plain.error).toMatch(/^Not run: it raises, and a raise runs only when a person with settings\.security\.manage approved it with their authenticator code/)
+    expect(plain.error).toMatch(/^Not run: it gives back the bids of ad group "Test born at floor" \(it starts spending\), and that runs only when a person with settings\.security\.manage approved it with their authenticator code/)
+    // Decided by the business's rule (as if a limit had let it): execute refuses it all the same.
+    await inside(() => db().agentApproval.update({ where: { id: started.approvalId! }, data: { decisionVia: 'auto' } }))
+    expect((await approve(started.approvalId!)).error).toMatch(/never runs by rule/)
     await withCode(started.approvalId!)
     expect(await approve(started.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { restored: 3 } })
     const [after] = await sql(`SELECT "defaultBidCents" AS bid, "bidsSuppressedAt" AS at FROM "AdGroup" WHERE id = $1`, [id])
@@ -421,10 +435,17 @@ describe('create-ad-group — approved', () => {
   })
 
   it('startLive: a plain approve does not run it; the Approvals page asks for the code, and with it the bids start as planned', async () => {
+    // The table decides the code (a big door): flipped, the card follows.
+    __codeRuleTest.flip('create-ad-group: startLive')
+    try {
+      const flipped = (await preview('create-ad-group', group({ name: 'Test live flipped', startLive: true, skus: ['TEST-AG-7'] }))).preview
+      expect(flipped.stepUp).toBeUndefined()
+      expect(flipped.noCode).toMatch(/day-to-day/)
+    } finally { __codeRuleTest.reset() }
     const plain = await ask('create-ad-group', group({ name: 'Test live plain', startLive: true, skus: ['TEST-AG-7'] }))
     const refused = await approve(plain.approvalId!)
     expect(refused).toMatchObject({ ok: false, status: 'pending' })
-    expect(refused.error).toMatch(/^Not run: it raises, and a raise runs only when a person with settings\.security\.manage approved it with their authenticator code/)
+    expect(refused.error).toMatch(/^Not run: it starts a new ad group spending \(1 product ad, .*\), and that runs only when a person with settings\.security\.manage approved it with their authenticator code/)
     expect(await sql(`SELECT id FROM "AdGroup" WHERE name = 'Test live plain'`)).toEqual([])
 
     const asked = await ask('create-ad-group', group({ name: 'Test live coded', startLive: true, skus: ['TEST-AG-7'] }))
@@ -466,6 +487,12 @@ describe('add-product-ads', () => {
       otherProducts: { skus: expect.arrayContaining(['TEST-OTHER-1', 'TEST-AG-2']) },
       limitFacts: { tool: 'add-product-ads', action: 'create', this: { items: 1, raises: 1 } },
     })
+    // The table decides the code (a big door): flipped, the card follows.
+    __codeRuleTest.flip('add-product-ads')
+    try {
+      expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-AG-5'] })).preview).toMatchObject({ noCode: expect.stringMatching(/day-to-day/) })
+      expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-AG-5'] })).preview.stepUp).toBeUndefined()
+    } finally { __codeRuleTest.reset() }
     expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-AG-2'] })).error).toMatch(/the same product twice in one campaign/)
     expect((await preview('add-product-ads', { adGroupId: 'g-c-it', skus: ['TEST-UNLISTED-1'] })).error).toMatch(/^Not sold on Amazon IT/)
     expect((await preview('add-product-ads', { adGroupId: 'nope', skus: ['TEST-AG-5'] })).error).toMatch(/^Ad group nope not found/)
@@ -586,23 +613,26 @@ describe('set-ad-group', () => {
     expect((await preview('set-ad-group', { adGroupId: 'g-c-edit-2', op: 'start' })).error).toMatch(/^Nothing would change: .* not held at a floor of its own/)
   })
 
-  it('op start: the Approvals page asks for the code; by rule it never runs; a change plan carries the code', async () => {
-    // Floor two ad groups with an approved stop, then ask to start them.
+  it('op start after an op stop: day-to-day (lead decision, code rule A) — the raise listed, no code, by rule only inside maxRestoredBidCents; a plain approve runs it, alone or in a plan', async () => {
+    // Floor an ad group with an approved stop, then ask to start it.
     const stopOf = async (adGroupId: string) => {
       const stopped = await ask('set-ad-group', { adGroupId, op: 'stop' })
       expect(await approve(stopped.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
     }
     await stopOf('g-c-edit-2')
+    const p = (await preview('set-ad-group', { adGroupId: 'g-c-edit-2', op: 'start' })).preview
+    expect(p).toMatchObject({
+      op: 'start', floorOrigin: 'stop', highestRestoredBidCents: 30, raises: [expect.stringMatching(/given back — it spends again$/)],
+      noCode: expect.stringMatching(/day-to-day/),
+      effect: expect.stringMatching(/It spends again\. It ADDS SPEND: a day-to-day change — a person's approval sends it, with no authenticator code; by the business's rule only inside this tool's limits \(maxRestoredBidCents\)\.$/),
+    })
+    expect(p.stepUp).toBeUndefined()
+    // By rule: only inside maxRestoredBidCents (0 by default: every start waits for a person).
+    expect(judge('set-ad-group', { ...p, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10 })).toMatch(/more than the EUR 0\.00 this tool's limits let an op start give back by rule \(0: every start waits for a person\)/)
+    expect(judge('set-ad-group', { ...p, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10, maxRestoredBidCents: 30 })).toBeNull()
     const asked = await ask('set-ad-group', { adGroupId: 'g-c-edit-2', op: 'start' })
-    const decide = (code?: string) => inside(() => decideFleetApproval({ id: asked.approvalId!, decision: 'approve', actor: owner.principal, ...(code ? { code } : {}) }))
-    expect(await decide()).toMatchObject({ ok: false, code: 'mfa_required', raises: ['Bids', 'Spend'] })
-    // Decided by the business's rule (as if a limit had let it): execute refuses it all the same.
-    await inside(() => db().agentApproval.update({ where: { id: asked.approvalId! }, data: { decisionVia: 'auto' } }))
-    const byRule = await approve(asked.approvalId!)
-    expect(byRule).toMatchObject({ ok: false, status: 'pending' })
-    expect(byRule.error).toMatch(/never runs by rule/)
-    await inside(() => db().agentApproval.update({ where: { id: asked.approvalId! }, data: { decisionVia: null } }))
-    expect(await decide(codeOf(owner))).toMatchObject({ ok: true, status: 'scheduled' })
+    const decide = () => inside(() => decideFleetApproval({ id: asked.approvalId!, decision: 'approve', actor: owner.principal }))
+    expect(await decide()).toMatchObject({ ok: true, status: 'scheduled' })
     expect(await commitNow(asked.approvalId!)).toMatchObject({ ok: true })
     expect(await sql(`SELECT "defaultBidCents" AS bid, "bidsSuppressedAt" AS at FROM "AdGroup" WHERE id = 'g-c-edit-2'`)).toEqual([{ bid: 30, at: null }])
 
@@ -611,10 +641,10 @@ describe('set-ad-group', () => {
       const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
       return queuePlan({ title: 'Test start an ad group', steps: [{ tool: 'set-ad-group', args: { adGroupId: 'g-c-edit-2', op: 'start' } }] }, claude, run.id)
     })
-    expect(queued).toMatchObject({ ok: true, mode: 'queued', preview: { stepUp: { raises: ['Bids', 'Spend'], steps: [1] } } })
-    const decidePlan = (code?: string) => inside(() => decideFleetApproval({ id: queued.approvalId!, decision: 'approve', actor: owner.principal, ...(code ? { code } : {}) }))
-    expect(await decidePlan()).toMatchObject({ ok: false, code: 'mfa_required' })
-    expect(await decidePlan(codeOf(owner))).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(queued).toMatchObject({ ok: true, mode: 'queued' })
+    expect((queued as Row).preview?.stepUp).toBeUndefined()
+    const decidePlan = () => inside(() => decideFleetApproval({ id: queued.approvalId!, decision: 'approve', actor: owner.principal }))
+    expect(await decidePlan()).toMatchObject({ ok: true, status: 'scheduled' })
     expect(await commitNow(queued.approvalId!)).toMatchObject({ ok: true })
     expect(await inside(() => runPlan(queued.approvalId!))).toMatchObject({ finished: true, counts: { done: 1 } })
     expect(await sql(`SELECT "bidsSuppressedAt" AS at FROM "AdGroup" WHERE id = 'g-c-edit-2'`)).toEqual([{ at: null }])
