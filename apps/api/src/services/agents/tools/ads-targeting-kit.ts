@@ -3,19 +3,26 @@
  * harvest-search-term, set-harvest-destination; ads-negatives.tools.ts: add-negative-targets, retire-negatives):
  *
  *   rule 2   the Owner's rule (2026-10-06), winners stay where they win: a negative Claude asks for never blocks a search
- *            term that CONVERTS where it lands (an order there over the last WINDOW_DAYS days, for the product that ad
- *            group advertises) — refused, naming the term, the ad group and its orders. One exception, the harvest's own
- *            "proven" handover (PB-6a L4, PB-7, PB-6c): the term already lives as a live exact keyword (an ASIN: a live
- *            product target) in another ad group of the SAME product in the market, and it wins there (homeWinners: the
- *            harvest bar where it lives). Closing the old place is then the handover, and the card says so.
- *   rule 3   isolation is per product only: a negative that would stop ANOTHER product's ad group from a term that
- *            product buys (the term ran there: an impression or a click) is listed, and runs only when the person says
- *            so (allowOtherProducts — never by rule). Whose product it is: the product named, else the one every ad group
- *            advertises (with its sibling variants of one parent); an ad group that advertises no product is nobody's.
+ *            term that CONVERTS where it lands — an order there on any day Nexus keeps (WINDOW_DAYS, the 90 days of search
+ *            terms it keeps: longer than any settled harvest window PB-6c judges a winner on, 30, 60 or 90, so a PB-6c
+ *            winner is always converting here), for the product that ad group advertises — refused, naming the term, the
+ *            ad group and its orders. One exception, the harvest's own "proven" handover (PB-6a L4, PB-7, PB-6c): the
+ *            term already lives as an exact keyword (an ASIN: a product target) in another ad group of the SAME product in
+ *            the market that SERVES — the keyword, its ad group and its campaign enabled, none at a floor (a stopped home
+ *            is no home) — and it wins there (homeWinners: the harvest bar where it lives). Closing the old place is then
+ *            the handover: the card says so, and a person decides it, never a rule.
+ *   rule 3   isolation is per product only (lead decision 2026-10-07: products MAY share keywords, never blocked): a
+ *            negative in ANY ad group of another product is listed, and runs only when the person says so
+ *            (allowOtherProducts — never by rule), whether that product bought the term yet or not (what it bought there
+ *            is said). Whose product it is: the product named, else the one every ad group advertises (with its sibling
+ *            variants of one parent); an ad group that also advertises another product is another product's (as PB-7's
+ *            familyOnly); an ad group that advertises no product is nobody's.
  *   reach    every campaign a request writes to answers the write gate the same way, or it is refused; the own limits
  *            any of them goes past are kept on the reach (the card's warning, a plan's too).
- *   the code a request that adds spend runs, when a person approved it, only with the approver's authenticator code
- *            (stepUp, step-up-approval.ts); by the business's rule only inside the tool's limits (spendGate).
+ *   the code each tool decides in ONE helper of its own whether approving needs the approver's authenticator code (its
+ *            preview's stepUp: the Owner's code policy is still open, so it changes in one place); `spendGate` reads that
+ *            stepUp in `execute`: a person's approval runs only with the code, a run the business's rule decided only
+ *            inside the tool's limits. Every raise is in the preview's `raises`, whatever the code decision.
  *
  * Read only, but for nothing: no number of its own — "converts" is an order, "buys" an impression or a click, "wins"
  * the harvest bar.
@@ -26,13 +33,17 @@ import { searchTermTotals, homeWinners, winnerKey, type HarvestCandidate } from 
 import { familyAdGroups, homeOf, negativeBlocksTerm, positivesIn, productFamilyOf, type Positive } from '../../advertising/ads-winner-lock.js'
 import { normaliseNegTerm } from '../../advertising/ads-protect-converting.js'
 import { adGroupPlaces } from '../../advertising/ads-targeting-lookup.service.js'
-import { checkLiveReach, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
+import { checkLiveReach, LOW_BID_UNFLAGGED_CENTS, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
 import { canonical, type StoredReach } from './ads-change-kit.js'
-import { stepUpApproval } from '../step-up-approval.js'
+import { SEARCH_TERM_DAYS_KEPT } from '../../advertising/ads-settled-window.js'
+import { stepUpApproval, stepUpOf } from '../step-up-approval.js'
 import type { ToolContext } from '../tool-types.js'
 
-/** The window both rules read: the harvest engine's own default window (ads-harvest.service.ts DEFAULT_WINDOW_DAYS). */
-export const WINDOW_DAYS = 60
+/**
+ * The window both rules read: every day of search terms Nexus keeps (PB-6c's SEARCH_TERM_DAYS_KEPT), so rule 2 sees every
+ * order any harvest window could have judged a winner on (the strategy's are 30, 60 or 90 days, settled).
+ */
+export const WINDOW_DAYS = SEARCH_TERM_DAYS_KEPT
 
 /** One negative, and the ad groups it blocks in: its ad group, or every ad group of its campaign (campaign scope). */
 export interface NegativePlacement {
@@ -57,7 +68,7 @@ export interface TermRules {
   converting: ConvertingHit[]
   /** Rule 2 — converting terms whose live exact home elsewhere wins: the proven handover. */
   handovers: Handover[]
-  /** Rule 3 — another product's ad groups a negative would stop from a term that product buys. */
+  /** Rule 3 — another product's ad groups a negative lands in (with what of it that product bought there, maybe nothing). */
   otherProducts: OtherProductHit[]
   /** The product the negatives are for, as a person reads it (null: none, or several). */
   productFor: string | null
@@ -146,8 +157,9 @@ export async function termRulesFor(placements: readonly NegativePlacement[], opt
         record.terms++; record.impressions += t.impressions; record.clicks += t.clicks; record.spendCents += t.costCents; record.orders += t.orders
         if (t.orders > 0) candidates.push({ key: p.key, term: t.query, adGroupId, place: placeWords(g), orders: t.orders, clicks: t.clicks, spendCents: t.costCents })
       }
+      // Rule 3 — any ad group of another product, whether it bought the term yet or not (lead decision 2026-10-07).
       const bought = blocked.filter((t) => t.impressions > 0 || t.clicks > 0)
-      if (bought.length && foreign(adGroupId)) {
+      if (foreign(adGroupId)) {
         otherProducts.push({
           key: p.key, adGroupId, place: placeWords(g), products: roots.get(adGroupId)?.names.slice(0, 5) ?? [],
           terms: bought.sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions).slice(0, 3).map((t) => ({ term: t.query, impressions: t.impressions, clicks: t.clicks, spendCents: t.costCents })),
@@ -157,7 +169,7 @@ export async function termRulesFor(placements: readonly NegativePlacement[], opt
     records[p.key] = record
   }
 
-  // Rule 2's one exception: a live exact home of the same product elsewhere in the market that wins there.
+  // Rule 2's one exception: an exact home of the same product elsewhere in the market that serves and wins there.
   const homes = new Map<string, Positive>()
   const familyCache = new Map<string, Promise<string[]>>()
   const scopeOf = (adGroupId: string) => {
@@ -170,6 +182,9 @@ export async function termRulesFor(placements: readonly NegativePlacement[], opt
     const home = homeOf(c.term, [...(await positivesIn(scope)).values()].flat())
     if (home?.live) homes.set(`${c.key}|${c.adGroupId}|${normaliseNegTerm(c.term)}`, home)
   }
+  // A stopped home is no home: a paused or floored keyword, ad group or campaign serves nothing to hand over to.
+  const serving = await servingTargets([...new Set([...homes.values()].map((h) => h.adTargetId))])
+  for (const [key, home] of [...homes]) if (!serving.has(home.adTargetId)) homes.delete(key)
   const winners = await homeWinners([...homes.values()].map((h) => ({ term: h.text, adGroupId: h.adGroupId })), {})
   const homeGroups = await adGroupPlaces([...homes.values()].map((h) => h.adGroupId))
   const converting: ConvertingHit[] = []
@@ -184,6 +199,25 @@ export async function termRulesFor(placements: readonly NegativePlacement[], opt
   return { windowDays: WINDOW_DAYS, records, converting, handovers, otherProducts, productFor: ownNames }
 }
 
+/**
+ * Of these positive targets, the ones that serve now (PB-6c's "held", winners.ts): the target enabled at Amazon, no
+ * no-pause memory and a bid above the floor; its ad group enabled, not gone and not at its own floor; its campaign
+ * enabled and not at a floor.
+ */
+async function servingTargets(ids: readonly string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set()
+  const rows = await prisma.adTarget.findMany({
+    where: { id: { in: [...ids] } },
+    select: {
+      id: true, status: true, externalTargetId: true, bidCents: true, suppressedFromBidCents: true,
+      adGroup: { select: { status: true, orphanedAt: true, bidsSuppressedAt: true, campaign: { select: { status: true, bidsSuppressedAt: true } } } },
+    },
+  })
+  return new Set(rows.filter((t) => String(t.status) === 'ENABLED' && !!t.externalTargetId && t.suppressedFromBidCents == null && t.bidCents > LOW_BID_UNFLAGGED_CENTS
+    && String(t.adGroup.status) === 'ENABLED' && !t.adGroup.orphanedAt && !t.adGroup.bidsSuppressedAt
+    && String(t.adGroup.campaign.status) === 'ENABLED' && !t.adGroup.campaign.bidsSuppressedAt).map((t) => t.id))
+}
+
 /** Rule 2's refusal, naming each term, where it converts and its orders (at most three, then a count). */
 export function convertingWords(hits: readonly ConvertingHit[]): string {
   const shown = hits.slice(0, 3).map((h) => `"${h.term}" in ${h.place}: ${h.orders} order${h.orders === 1 ? '' : 's'}`).join('; ')
@@ -192,7 +226,10 @@ export function convertingWords(hits: readonly ConvertingHit[]): string {
 
 /** Rule 3's list, naming each ad group, its products and what of the term it bought (at most three, then a count). */
 export function otherProductWords(hits: readonly OtherProductHit[]): string {
-  const shown = hits.slice(0, 3).map((h) => `${h.place}, which advertises ${h.products.join(', ') || 'another product'} and bought ${h.terms.map((t) => `"${t.term}" (${t.clicks} click${t.clicks === 1 ? '' : 's'})`).join(', ')}`).join('; ')
+  const bought = (h: OtherProductHit) => (h.terms.length
+    ? ` and bought ${h.terms.map((t) => `"${t.term}" (${t.clicks} click${t.clicks === 1 ? '' : 's'})`).join(', ')} there`
+    : ' (it has not bought the term there yet)')
+  const shown = hits.slice(0, 3).map((h) => `${h.place}, which advertises ${h.products.join(', ') || 'another product'}${bought(h)}`).join('; ')
   return `${shown}${hits.length > 3 ? `; and ${hits.length - 3} more` : ''}`
 }
 
@@ -229,13 +266,16 @@ export async function reachOver(writes: ReadonlyArray<AdWriteIntent & { label: s
 }
 
 /**
- * The ONE gate of a request that adds spend (PB-5b spendGate, ads-playbook-apply.tools.ts): a person's approval runs it
- * only with the approver's fresh authenticator code; a run the business's rule decided runs inside the tool's limits
- * (withinLimits judged it). A request that adds nothing passes. `what`: the words the refusal says it does.
+ * The ONE gate of a request whose approval needs the approver's code (PB-5b spendGate, ads-playbook-apply.tools.ts): it
+ * reads the stepUp of the fresh preview, which each tool's own code helper decided. A person's approval runs it only
+ * with the approver's fresh authenticator code; a run the business's rule decided runs inside the tool's limits
+ * (withinLimits judged it). A preview without a stepUp passes.
  */
-export async function spendGate(ctx: Pick<ToolContext, 'approvalId' | 'can' | 'decidedVia'>, adds: boolean, what: string): Promise<{ byRule: boolean } | { refusal: string }> {
-  if (!adds) return { byRule: false }
+export async function spendGate(ctx: Pick<ToolContext, 'approvalId' | 'can' | 'decidedVia'>, preview: unknown): Promise<{ byRule: boolean } | { refusal: string }> {
+  const stepUp = stepUpOf(preview)
+  if (!stepUp) return { byRule: false }
   if (ctx.decidedVia === 'auto') return { byRule: true }
+  const what = stepUp.what
   const coded = await stepUpApproval(ctx)
   if (!('refusal' in coded)) return { byRule: false }
   return { refusal: coded.refusal.replace('it raises, and a raise runs', `it ${what}, and that runs`).replace('it raises, and', `it ${what}, and`).replace('which a raise needs', 'which that needs') }

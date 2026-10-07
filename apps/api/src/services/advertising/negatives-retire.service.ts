@@ -228,6 +228,8 @@ export async function retireNegatives(req: RetireRequest): Promise<RetireResult>
           payloadBefore: { status: row.status, externalTargetId: null, negativeLevel: row.negativeLevel, expressionValue: term },
           payloadAfter: { removed: 'local-only', delivery: 'not_applicable', reachedAmazon: false, retireReason: req.retireReason ?? null },
           outboundQueueId: null,
+          // W4-5 — never sent (nothing at Amazon to archive): done in Nexus, not waiting for a queue row it never gets.
+          amazonResponseStatus: 'SKIPPED',
           ...(req.changeSetId ? { changeSetId: req.changeSetId } : {}),
         })
         await prisma.adTarget.delete({ where: { id: row.id } })

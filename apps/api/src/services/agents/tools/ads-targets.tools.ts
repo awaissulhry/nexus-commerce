@@ -51,11 +51,11 @@ import {
   HV_DEST_ACCOUNT, deleteHarvestDestination, loadDestinationGraph, resolveDestination, resolveStoredDestinations, saveHarvestDestination, storedHarvestDestination,
   type HvCreateType, type HvDestGrain,
 } from '../../advertising/harvest-destination.service.js'
-import { STEP_UP_NEEDS } from '../step-up-approval.js'
+import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, STOP_MIN_CENTS, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
-import { convertingWords, fingerprint, named, otherProductWords, placeWords, plural, productRootsOf, reachOver, spendGate, termRulesFor, WINDOW_DAYS } from './ads-targeting-kit.js'
+import { convertingWords, fingerprint, named, otherProductWords, placeWords, plural, productRootsOf, reachOver, spendGate, termRulesFor, type Handover } from './ads-targeting-kit.js'
 import { PLAN_TOOL, type AgentTool, type FieldPermission, type ToolChange, type ToolContext, type ToolResult, type ToolUndo } from '../tool-types.js'
 
 const TOOL = { add: 'add-ad-targets', harvest: 'harvest-search-term', destination: 'set-harvest-destination' } as const
@@ -71,6 +71,8 @@ const LINES_SHOWN = 20
 const FLOOR_CENTS = STOP_MIN_CENTS
 /** Amazon's most words in a keyword. */
 const KEYWORD_MAX_WORDS = 10
+/** A harvest's record of its term in its source, and its own starting bid: graduate-keyword's window (METRIC_WINDOW_DAYS). */
+const RECORD_WINDOW_DAYS = 60
 
 const ID = z.string().trim().min(1).max(64)
 const ASIN = z.string().trim().toUpperCase().regex(/^B0[A-Z0-9]{8}$/, 'an ASIN is B0 and 8 letters or digits')
@@ -146,6 +148,16 @@ const ADD_LIMITS = adKitLimits({ maxItems: 0 }, {
   campaignIds: z.array(ID).max(100).default([]).describe('the campaigns (Nexus ids) whose ad groups may take targets by rule; empty = any campaign of the markets below'),
   markets: marketsLimit,
 })
+
+/**
+ * add-ad-targets' code decision, in ONE place (the Owner's code policy is still open): a target that starts spending at
+ * its bid needs the approver's authenticator code; one born at the floor does not (it spends next to nothing, and the
+ * raise to its planned bid is a set-target-bid of its own). Every new target is in `raises` either way.
+ */
+function addTargetsStepUp(atBid: number): { stepUp?: StepUp } {
+  if (!atBid) return {}
+  return { stepUp: { what: `adds ${plural(atBid, 'target')} that ${atBid === 1 ? 'starts' : 'start'} spending at ${atBid === 1 ? 'its bid' : 'their bids'}`, raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS, how: ADD_HOW } }
+}
 
 /** How a request at its bids is approved, in one sentence (its stepUp). */
 const ADD_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in '
@@ -278,9 +290,9 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
         totals: { targets: targets.length, ...counts, atBid: atBid.length, atFloor: a.startAtFloor ? targets.length : 0, leftOut: skipped.size },
         changes: lines.slice(0, LINES_SHOWN),
         ...(lines.length > LINES_SHOWN ? { moreChanges: lines.length - LINES_SHOWN } : {}),
-        // Every target at its bid starts spending: each is listed, and approving needs the approver's code.
-        raises: atBid.map((t) => `${targetWords(t)} at ${amountLabel(t.writtenCents, currency)}`),
-        ...(atBid.length ? { stepUp: { what: `adds ${plural(atBid.length, 'target')} that ${atBid.length === 1 ? 'starts' : 'start'} spending at ${atBid.length === 1 ? 'its bid' : 'their bids'}`, raises: ['Bids', 'Spend'], needs: STEP_UP_NEEDS, how: ADD_HOW } } : {}),
+        // Every new target adds spend (one born at the floor a little): each is listed; the code is addTargetsStepUp's.
+        raises: targets.map((t) => `${targetWords(t)} at ${amountLabel(t.writtenCents, currency)}${t.writtenCents < t.plannedCents ? ` (the floor; planned ${amountLabel(t.plannedCents, currency)})` : ''}`),
+        ...addTargetsStepUp(atBid.length),
         ...(a.startAtFloor ? { startsAtFloor: { floorCents: FLOOR_CENTS, note: `Every target starts at the ${FLOOR_CENTS}-cent floor; its planned bid is kept in this change. set-target-bid raises it when it should spend (a raise, judged then).` } } : {}),
         highestBidCents: highest,
         // Rule 2 / rule 3 — what this product already buys elsewhere that this ad group buys too (accepted: never by rule).
@@ -398,10 +410,11 @@ const addAdTargets: AgentTool = {
     const { result: fresh, group: g, targets } = await decideAdd(args, ctx, { rule: false })
     const refusal = recheck(ctx, fresh, ADD_MATERIAL)
     if (refusal) return notRun(refusal)
-    const p = fresh.preview as { reach: StoredReach; effect: string; raises: string[]; sameProductClashes: unknown[] }
+    const p = fresh.preview as { reach: StoredReach; effect: string; sameProductClashes: unknown[] }
     // Accepting what this product already buys elsewhere is a person's word: never a run the business's rule decided.
     if (ctx.decidedVia === 'auto' && p.sameProductClashes.length) return notRun('Not run: it adds what this product already buys elsewhere (accepted), which a person decides, never a rule. Ask for it again; a person approves it.')
-    const gate = await spendGate(ctx, p.raises.length > 0, `adds ${plural(p.raises.length, 'target')} that start spending`)
+    // The code, as addTargetsStepUp decided it on this fresh preview.
+    const gate = await spendGate(ctx, fresh.preview)
     if ('refusal' in gate) return notRun(gate.refusal)
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
@@ -458,6 +471,16 @@ const HARVEST_INPUT = z.object({
 type HarvestArgs = z.infer<typeof HARVEST_INPUT>
 
 /**
+ * harvest-search-term's code decision, in ONE place (the Owner's code policy is still open). A harvest: none — its keyword
+ * is graduate-keyword's lever, which needs no code (the money family rule), and its source negative only lowers spend. Its
+ * undo: none — it lifts only the negative this tool's own harvest made, as undo-ad-change retires what a request made.
+ * Every raise is in `raises` either way.
+ */
+function harvestStepUp(_op: 'harvest' | 'undo'): { stepUp?: StepUp } {
+  return {}
+}
+
+/**
  * harvest-search-term's Claude limits — as graduate-keyword's and create-negative-keyword's together: the highest
  * starting bid a keyword may get by rule (0: every harvest waits for a person) and the markets (none by default).
  */
@@ -479,7 +502,7 @@ interface HarvestPlan {
 }
 
 /** The term's record in its source over the window (search-term report). */
-async function sourceRecord(query: string, g: GroupRow, windowDays = WINDOW_DAYS) {
+async function sourceRecord(query: string, g: GroupRow, windowDays = RECORD_WINDOW_DAYS) {
   const all = g.externalAdGroupId ? [...(await searchTermTotals(windowDays, [g.externalAdGroupId])).values()] : []
   const key = isAsin(query) ? query.trim().toUpperCase() : normaliseNegTerm(query)
   const hit = all.filter((t) => (isAsin(t.query) ? t.query.trim().toUpperCase() : normaliseNegTerm(t.query)) === key)
@@ -503,7 +526,7 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
   if (sourceCannot) return refuse(`Not queued: ${placeWords(source)}: ${sourceCannot}.`)
   const record = await sourceRecord(query, source)
   if (!record.impressions && !record.clicks) {
-    return refuse(`Not queued: "${query}" did not run in ${placeWords(source)} over the last ${WINDOW_DAYS} days: there is nothing to harvest. To add a keyword of your own, ask add-ad-targets.`)
+    return refuse(`Not queued: "${query}" did not run in ${placeWords(source)} over the last ${RECORD_WINDOW_DAYS} days: there is nothing to harvest. To add a keyword of your own, ask add-ad-targets.`)
   }
 
   // Where it lands: the ad group named, else the harvest destination the account resolves (graduate-keyword's way).
@@ -534,18 +557,25 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
   const negateAsked = a.negateSource ?? storedNegate ?? true
   if (negateAsked && dest.id === source.id) return refuse(`Not queued: the keyword lands in ${placeWords(source)}, the ad group the term ran in: a negative there would block it. Ask with negateSource: false, or name another destination.`)
 
-  // Already there, or at home for the same product elsewhere: a winner stays where it is (PB-6a L2).
+  // Already there (enabled, paused, archived or only in Nexus: the create service would find that row and write nothing),
+  // or at home for the same product elsewhere: a winner stays where it is (PB-6a L2).
   const kind = product ? 'PRODUCT' : 'KEYWORD'
-  const already = await prisma.adTarget.findFirst({
+  const there = await prisma.adTarget.findMany({
     where: { adGroupId: dest.id, isNegative: false, kind, expressionValue: { equals: query, mode: 'insensitive' } },
-    select: { expressionType: true, status: true },
+    select: { expressionType: true, status: true, externalTargetId: true },
   })
-  if (already && (product || storedMatch(already.expressionType) === match)) return refuse(`Not queued: ${targetWords({ kind, value: query, match: product ? null : match })} is already in ${placeWords(dest)} (${String(already.status).toLowerCase()}).`)
+  const already = there.find((t) => product || storedMatch(t.expressionType) === match)
+  if (already) {
+    const state = String(already.status) === 'ARCHIVED' ? 'archived (Amazon never switches it on again, and Nexus does not add the same one again here)' : !already.externalTargetId ? 'in Nexus only (it never reached Amazon)' : String(already.status).toLowerCase()
+    return refuse(`Not queued: ${targetWords({ kind, value: query, match: product ? null : match })} is already in ${placeWords(dest)}, ${state}.`)
+  }
   const home = await sameProductHome(query, { destAdGroupId: dest.id, source: { adGroupId: source.id, campaignId: source.campaign.id }, marketplace: dest.campaign.marketplace })
   if (home) return refuse(`Not queued: "${query}" already lives in ${home.campaign} › ${home.adGroup}, which advertises the same product, so it is not created again: a winner stays where it is.`)
 
-  // The source negative — never harvesting a winner away (rule 2), never another product's (rule 3).
+  // The source negative — the same rules as add-negative-targets: never harvesting a winner away (rule 2; the proven
+  // handover, said and a person's decision), never in another product's ad group (rule 3).
   let negate: HarvestPlan['negate'] = 'none'
+  let handovers: Handover[] = []
   if (negateAsked) {
     const standing = await prisma.adTarget.findFirst({
       where: { adGroupId: source.id, isNegative: true, status: { not: 'ARCHIVED' }, kind, expressionValue: { equals: query, mode: 'insensitive' }, ...(product ? {} : { expressionType: { in: ['NEGATIVE_EXACT', 'EXACT'] } }) },
@@ -562,8 +592,9 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
           + 'Ask with negateSource: false: the keyword is added and the term keeps running in its source too; once the new keyword wins, add-negative-targets closes the old place (the proven handover).')
       }
       if (rules.otherProducts.length) {
-        return refuse(`Not queued: the source negative would stop another product from a term it buys — ${otherProductWords(rules.otherProducts)} (the Owner's rule 3). Ask with negateSource: false, or ask add-negative-targets for that negative with allowOtherProducts.`)
+        return refuse(`Not queued: the source negative would land in another product's ad group — ${otherProductWords(rules.otherProducts)} (the Owner's rule 3: products may share keywords). Ask with negateSource: false, or ask add-negative-targets for that negative with allowOtherProducts.`)
       }
+      handovers = rules.handovers
       negate = 'add'
     }
   }
@@ -585,10 +616,11 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
   const rule = opts.rule ? await harvestRuleFacts(plan, writes, ctx.approvalId ?? null) : null
   const created = targetWords({ kind, value: query, match: product ? null : match })
   const sourceCurrency = campaignCurrency(source.campaign)
-  const effect = `Harvests "${query}": a ${created} at ${amountLabel(bidCents, currency)} in ${placeWords(dest)} (${destWhy}); in ${placeWords(source)} it had ${record.clicks} click${record.clicks === 1 ? '' : 's'}, ${record.orders} order${record.orders === 1 ? '' : 's'} on ${amountLabel(record.spendCents, sourceCurrency)} over the last ${WINDOW_DAYS} days. `
+  const effect = `Harvests "${query}": a ${created} at ${amountLabel(bidCents, currency)} in ${placeWords(dest)} (${destWhy}); in ${placeWords(source)} it had ${record.clicks} click${record.clicks === 1 ? '' : 's'}, ${record.orders} order${record.orders === 1 ? '' : 's'} on ${amountLabel(record.spendCents, sourceCurrency)} over the last ${RECORD_WINDOW_DAYS} days. `
     + (negate === 'add' ? `Then an exact negative of it in ${placeWords(source)}, so that ad group stops bidding for it — only once the keyword stands.`
       : negate === 'standing' ? `${placeWords(source)} negates it already: no negative is added.`
         : `${placeWords(source)} is not negated: the term keeps running there too.`)
+    + (handovers.length ? ` It converts there, but its own exact keyword wins elsewhere for the same product (the proven handover): ${named(handovers.map((h) => `in ${h.home}`))} — a person decides that, never a rule.` : '')
   return {
     plan,
     result: {
@@ -608,13 +640,16 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
         bidCents,
         record,
         negateSource: negate,
-        // As graduate-keyword: a new keyword is a raise the kit counts, approved without a code (the money family rule).
+        // Rule 2 — a converting source closed because its own exact keyword wins elsewhere: a person's decision, never a rule.
+        handovers,
+        // A new keyword adds spend: listed; the code is harvestStepUp's (none today, as graduate-keyword).
         raises: [`${created} at ${amountLabel(bidCents, currency)}`],
+        ...harvestStepUp('harvest'),
         alsoChangedBy: bound.automations,
         ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
         // The term, its source and destination, the bid asked for and the negative plan (a bid worked out from the report is
         // frozen in the approval instead: it moves with every report).
-        basis: fingerprint({ query: normaliseNegTerm(query), match, source: source.id, dest: dest.id, bidCents: a.bidCents ?? null, negate }),
+        basis: fingerprint({ query: normaliseNegTerm(query), match, source: source.id, dest: dest.id, bidCents: a.bidCents ?? null, negate, handovers: handovers.map((h) => h.home) }),
         reach: stored,
         reachNote: reachNote(stored),
         effect,
@@ -675,6 +710,7 @@ function harvestRefusal(preview: unknown, limits: Record<string, unknown>): stri
   }
   if (p.action !== TOOL.harvest) return 'there is no preview of this harvest to check; a person decides'
   if (p.op === 'undo') return 'an undo of a harvest lifts the negative it made, which no run by rule judges; a person decides'
+  if (Array.isArray((p as { handovers?: unknown }).handovers) && ((p as { handovers: unknown[] }).handovers.length)) return 'it closes a converting term\'s old place (the proven handover): a person decides a winner\'s move'
   const markets = (limits.markets as string[] | undefined) ?? []
   if (!markets.length) return 'this business names no market where a harvest may run by rule (markets is empty); a person decides'
   if (!p.campaign?.marketplace || !markets.includes(p.campaign.marketplace)) return `this business lets a harvest run by rule only in ${markets.join(', ')}; a person decides`
@@ -705,18 +741,25 @@ function harvestBarRefusal(preview: unknown, _limits: Record<string, unknown>): 
 /** The undo of a harvest, judged: what is left of what it made, as its preview. */
 async function undoPreview(a: HarvestArgs, ctx: Pick<ToolContext, 'approvalId'>, opts: { rule: boolean }): Promise<ToolResult> {
   if (!a.changeSetId || !a.keywordId) return { ok: false, error: 'Name the harvest to put back: changeSetId (its approvalId) and keywordId (and negativeId, when it made one) — undo-change fills them in.' }
+  // Only a harvest this tool made: its recorded change (a request's, or a plan step's) names exactly this keyword and this
+  // negative. Any other change set — a plan of other tools, a playbook build or sync, an import — is not a harvest, and
+  // its negatives are never lifted here (retire-negatives does that, with the approver's code).
+  const recorded = await prisma.agentChange.findMany({ where: { approvalId: a.changeSetId, toolName: TOOL.harvest }, select: { id: true, after: true, undoneAt: true } })
+  const afterOf = (c: { after: unknown }) => (c.after ?? {}) as { op?: unknown; keyword?: { targetId?: unknown } | null; negative?: { targetId?: unknown } | null }
+  const change = recorded.find((c) => afterOf(c).op === 'harvest' && afterOf(c).keyword?.targetId === a.keywordId)
+  if (!change) return { ok: false, error: `Not queued: ${a.changeSetId} is no harvest-search-term request that made the keyword ${a.keywordId} in this business: op undo puts back only a harvest this tool made (undo-change names it).` }
+  const recordedNegative = typeof afterOf(change).negative?.targetId === 'string' ? (afterOf(change).negative!.targetId as string) : null
+  if ((a.negativeId ?? null) !== recordedNegative) {
+    return { ok: false, error: `Not queued: that harvest ${recordedNegative ? `made the negative ${recordedNegative}` : 'made no negative'}, so op undo names ${recordedNegative ? 'exactly that one' : 'none'} (undo-change fills it in).` }
+  }
+  if (change.undoneAt) return { ok: false, error: `Nothing of harvest ${a.changeSetId} is left to put back: it was undone already.` }
   const ids = [a.keywordId, ...(a.negativeId ? [a.negativeId] : [])]
-  const [rows, made] = await Promise.all([
-    prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, isNegative: true, status: true, bidCents: true, kind: true, expressionValue: true, suppressedFromBidCents: true, adGroup: { select: { id: true, name: true, campaign: { select: TARGETING_CAMPAIGN_SELECT } } } } }),
-    // Only what that harvest made: its own create rows carry its change set.
-    prisma.advertisingActionLog.findMany({ where: { executionId: a.changeSetId, entityType: 'AD_TARGET', entityId: { in: ids } }, select: { entityId: true } }),
-  ])
+  const rows = await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, isNegative: true, status: true, bidCents: true, kind: true, expressionValue: true, suppressedFromBidCents: true, adGroup: { select: { id: true, name: true, campaign: { select: TARGETING_CAMPAIGN_SELECT } } } } })
   const byId = new Map(rows.map((r) => [r.id, r]))
-  const ours = new Set(made.map((m) => m.entityId))
   const keyword = byId.get(a.keywordId)
-  if (!keyword || keyword.isNegative || !ours.has(keyword.id)) return { ok: false, error: `Not queued: harvest ${a.changeSetId} did not make the keyword ${a.keywordId} in this business.` }
+  if (!keyword || keyword.isNegative) return { ok: false, error: `Not queued: the keyword ${a.keywordId} that harvest made is no longer in Nexus.` }
   const negative = a.negativeId ? byId.get(a.negativeId) : undefined
-  if (a.negativeId && (!negative || !negative.isNegative || !ours.has(negative.id))) return { ok: false, error: `Not queued: harvest ${a.changeSetId} did not make the negative ${a.negativeId} in this business.` }
+  if (a.negativeId && (!negative || !negative.isNegative)) return { ok: false, error: `Not queued: the negative ${a.negativeId} that harvest made is no longer in Nexus.` }
   const lower = keyword.bidCents > FLOOR_CENTS && keyword.suppressedFromBidCents == null && String(keyword.status) !== 'ARCHIVED'
   const lift = !!negative && String(negative.status) !== 'ARCHIVED'
   if (!lower && !lift) return { ok: false, error: `Nothing of harvest ${a.changeSetId} is left to put back: its keyword sits at or below the ${FLOOR_CENTS}-cent floor (or is archived) and ${negative ? 'its negative is retired' : 'it made no negative'}.` }
@@ -747,15 +790,18 @@ async function undoPreview(a: HarvestArgs, ctx: Pick<ToolContext, 'approvalId'>,
       action: TOOL.harvest,
       op: 'undo',
       undoes: a.changeSetId,
+      undoesChangeId: change.id,
       campaign: { id: campaignOfKeyword.id, name: campaignOfKeyword.name, marketplace: campaignOfKeyword.marketplace },
       currency,
       changes: [
         ...(lower ? [{ label: `"${keyword.expressionValue}" · ${placeWords(keyword.adGroup)}`, fromLabel: amountLabel(keyword.bidCents, currency), toLabel: 'the stop bid' }] : []),
         ...(lift ? [{ label: `negative "${negative!.expressionValue}" · ${placeWords(negative!.adGroup)}`, fromLabel: 'Standing', toLabel: 'Retired' }] : []),
       ],
-      // It only puts back what this tool's harvest made: the negative it lifts did not exist before that harvest.
-      raises: [],
-      basis: fingerprint({ keyword: [keyword.id, keyword.bidCents, String(keyword.status)], negative: negative ? [negative.id, String(negative.status)] : null }),
+      // Lifting the negative lets the term show the source's ads again: a raise, listed; the code is harvestStepUp's (none:
+      // it lifts only the negative this tool's own harvest made, as undo-ad-change retires what a request made).
+      raises: lift ? [`negative "${negative!.expressionValue}" · ${placeWords(negative!.adGroup)} retired (the term shows these ads there again)`] : [],
+      ...harvestStepUp('undo'),
+      basis: fingerprint({ change: change.id, keyword: [keyword.id, keyword.bidCents, String(keyword.status)], negative: negative ? [negative.id, String(negative.status)] : null }),
       reach: reached.reach,
       reachNote: reachNote(reached.reach),
       effect,
@@ -821,10 +867,12 @@ const harvestSearchTerm: AgentTool = {
     + 'target) in its destination ad group — the one named, else the harvest destination stored for its source '
     + '(set-harvest-destination), else the only one the harvest resolver offers — and, once that keyword stands, an exact '
     + 'negative of the term in the ad group it ran in, so that ad group stops bidding for it (negateSource, default true). '
-    + 'graduate-keyword and create-negative-keyword are the same two moves alone. A term that converts in its source is '
-    + 'never negated there (the Owner\'s rule: winners stay where they win): ask with negateSource false, and once the new '
-    + 'keyword wins, add-negative-targets closes the old place. A term already at home for the same product is not created '
-    + 'again; a source negative that would stop another product from a term it buys is refused. The starting bid is the '
+    + 'graduate-keyword and create-negative-keyword are the same two moves alone. A term that converts in its source (an '
+    + 'order on any of the 90 days Nexus keeps) is never negated there (the Owner\'s rule: winners stay where they win) — '
+    + 'unless its own exact keyword already wins and serves elsewhere for the same product (the proven handover, said on the '
+    + 'card; a person decides it, never a rule); otherwise ask with negateSource false, and once the new keyword wins, '
+    + 'add-negative-targets closes the old place. A term already at home for the same product is not created again; a '
+    + 'source negative in an ad group of another product is refused. The starting bid is the '
     + 'term\'s cost per click in its source unless named; like graduate-keyword it needs no authenticator code. '
     + `${BY_RULE_WORDS} (by default it does not: maxItems 0, no market; then only for a term that meets the ads strategy's `
     + '"Harvest a search term when" group). Refused, and not queued, when the term did not run in its source, no '
@@ -837,12 +885,17 @@ const harvestSearchTerm: AgentTool = {
     const { result: fresh, plan } = await decideHarvest(args, ctx, { rule: false })
     const refusal = recheck(ctx, fresh, HARVEST_MATERIAL)
     if (refusal) return notRun(refusal)
-    const p = fresh.preview as { op: 'harvest' | 'undo'; reach: StoredReach; effect: string; undoes?: string }
+    const p = fresh.preview as { op: 'harvest' | 'undo'; reach: StoredReach; effect: string; undoes?: string; undoesChangeId?: string; handovers?: unknown[] }
+    // The code, as harvestStepUp decided it on this fresh preview (none today, as graduate-keyword).
+    const gate = await spendGate(ctx, fresh.preview)
+    if ('refusal' in gate) return notRun(gate.refusal)
     if (p.op === 'undo') {
       // Lifting the negative a harvest made is a person's decision, never a rule's (withinLimits refuses it; the last door).
       if (ctx.decidedVia === 'auto') return notRun('Not run: an undo of a harvest lifts the negative it made, which a person decides, never a rule. Ask for it again; a person approves it.')
       return runUndo(args as HarvestArgs, ctx, p)
     }
+    // A winner's old place closed (the proven handover) is a person's decision, never a rule's (the last door).
+    if (ctx.decidedVia === 'auto' && p.handovers?.length) return notRun('Not run: it closes a converting term\'s old place (the proven handover), which a person decides, never a rule. Ask for it again; a person approves it.')
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const h = plan!
@@ -879,7 +932,7 @@ const harvestSearchTerm: AgentTool = {
 }
 
 /** The undo op, run as the approver: the keyword lowered to the stop bid, the negative retired — both on this change set. */
-async function runUndo(a: HarvestArgs, ctx: ToolContext, p: { reach: StoredReach; effect: string; undoes?: string }): Promise<ToolResult> {
+async function runUndo(a: HarvestArgs, ctx: ToolContext, p: { reach: StoredReach; effect: string; undoes?: string; undoesChangeId?: string }): Promise<ToolResult> {
   const run = approvedRun(ctx, String(a.why ?? '') || p.effect)
   if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
   const keyword = await prisma.adTarget.findUnique({ where: { id: a.keywordId! }, select: { id: true, bidCents: true, status: true, suppressedFromBidCents: true } })
@@ -900,6 +953,10 @@ async function runUndo(a: HarvestArgs, ctx: ToolContext, p: { reach: StoredReach
     else if (o && o.kind !== 'skipped') problems.push(`the source negative (${o.reason ?? o.kind})`)
   }
   if (!lowered && !retired) return notRun(`Not run: nothing was put back — ${problems.join('; ') || 'nothing was left to put back'}.`)
+  // Asked for directly (not through undo-change, which claims the change and has the record mark it undone with its
+  // event), the harvest it put back is marked undone here, so it is not put back twice. A claimed change is left to the
+  // record.
+  if (p.undoesChangeId) await prisma.agentChange.updateMany({ where: { id: p.undoesChangeId, undoneAt: null, undoneByApprovalId: null }, data: { undoneAt: new Date(), undoneByApprovalId: run.changeSetId } })
   return {
     ok: true,
     data: { lowered, retired, ...(problems.length ? { partial: true, problem: `Not put back: ${problems.join('; ')}.` } : {}), reach: p.reach, changeSetId: run.changeSetId },

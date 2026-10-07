@@ -8,14 +8,14 @@
  *                         writeNegativeKeyword, writeNegativeProductTarget: the write gate with the campaign's
  *                         allowlist, protected terms, Amazon's text limits, the own-keyword lock L1). The Owner's rules
  *                         (ads-targeting-kit.ts): rule 2 — never a term that converts where it lands (but the proven
- *                         handover); rule 3 — another product's ad group that buys the term is listed and needs
- *                         allowOtherProducts, a person's word, never a rule. A negative only lowers spend: no code. Undo:
+ *                         handover); rule 3 — any ad group of another product is listed and needs allowOtherProducts,
+ *                         a person's word, never a rule. A negative only lowers spend: no code (addNegativesStepUp). Undo:
  *                         undo-ad-change retires exactly what it made. create-negative-keyword stays the one-term tool.
  *   retire-negatives      standing negatives — any, not only Claude's — by id, or by their place and text: archived at
  *                         Amazon through the Negatives page's own retire (negatives-retire.service.ts retireNegatives),
  *                         or removed from Nexus when Amazon never had one. Lifting a block lets the searches it blocked
  *                         show the ads again (it can add spend): a person approves it with the approver's authenticator
- *                         code (stepUp); by the business's rule only where it allows that (allowRetire). Undo adds the
+ *                         code (retireStepUp); by the business's rule only where it allows that (allowRetire). Undo adds the
  *                         same negatives again (new ones: Amazon never switches an archived one on again).
  *
  * Both follow ads-change-kit.ts — previewed first; refused, and not queued, when the write gate would refuse it; run only
@@ -35,7 +35,7 @@ import { adGroupPlaces, targetingAdGroups } from '../../advertising/ads-targetin
 import { adGroupExternalIds } from '../../advertising/ads-entity-lookup.service.js'
 import { entityKey } from '../../advertising/ads-strategy/autonomy.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
-import { STEP_UP_NEEDS } from '../step-up-approval.js'
+import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { alsoChangedBy, approvedRun, BY_RULE_WORDS, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { amountLabel, campaignCurrency, type BoundAutomation } from './ads-tool-guards.js'
@@ -105,7 +105,7 @@ const ADD_INPUT = z.object({
   product: z.string().trim().min(1).max(64).optional()
     .describe('the product whose own campaigns these negatives keep apart: its SKU or Nexus id (default: the one product every place advertises)'),
   allowOtherProducts: z.boolean().optional()
-    .describe("true: also where another product's ad group buys the term (each such place is listed in the preview). Isolation is per product: a person's word, never a rule"),
+    .describe("true: also into ad groups of another product (each is listed in the preview, with what that product bought of the term there). Products may share keywords, so isolation is per product: a person's word, never a rule"),
   why: whyArg,
 })
 type AddArgs = z.infer<typeof ADD_INPUT>
@@ -115,7 +115,7 @@ const ADD_LIMITS = adKitLimits({ maxItems: 0 }, {
   matchTypes: z.array(NEG_MATCH).max(2).default(['NEGATIVE_EXACT'])
     .describe('the keyword match types that may run by rule (a phrase negative blocks every search holding its words)'),
   minWastedSpendCents: z.number().int().min(0).max(10_000_000).default(0)
-    .describe("the least a negative's blocked searches must have spent where it lands over the last 60 days (minor units of the campaign's currency) to run by rule; 0 = no floor of its own"),
+    .describe("the least a negative's blocked searches must have spent where it lands, over the window of the ads strategy's \"Negate a search term when\" group there (minor units of the campaign's currency), to run by rule; 0 = no floor of its own"),
   allowCampaignScope: z.boolean().default(false).describe('let a campaign negative (every ad group of the campaign) run by rule'),
   allowAsinNegatives: z.boolean().default(false).describe('let a negative product target (an ASIN) run by rule'),
   markets: z.array(z.string().trim().toUpperCase().min(2).max(20)).max(20).default([])
@@ -336,7 +336,7 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
       + 'Winners stay where they win (the Owner\'s rule 2): leave it out, and lower its bid or placement there instead; once its own exact keyword elsewhere wins, its old place can be closed.')
   }
   if (rules.otherProducts.length && a.allowOtherProducts !== true) {
-    return refuse(`Not queued: isolation is per product (the Owner's rule 3) — ${otherProductWords(rules.otherProducts)}: the negative would stop that product from a term it buys. `
+    return refuse(`Not queued: isolation is per product (the Owner's rule 3: products may share keywords) — ${otherProductWords(rules.otherProducts)}: a negative there stops that product too. `
       + 'Leave those places out, name the product these negatives are for (product), or ask with allowOtherProducts: true (a person decides it, never a rule).')
   }
 
@@ -378,8 +378,9 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
         totals: { negatives: items.length, ...counts, places, campaigns: new Set(items.map((i) => i.campaign.id)).size },
         changes: lines.slice(0, LINES_SHOWN),
         ...(lines.length > LINES_SHOWN ? { moreChanges: lines.length - LINES_SHOWN } : {}),
-        // A negative only lowers spend: nothing here raises it.
+        // A negative only lowers spend: nothing here raises it, and approving needs no code (addNegativesStepUp).
         raises: [],
+        ...addNegativesStepUp(),
         windowDays: rules.windowDays,
         ...(rules.productFor ? { productFor: rules.productFor } : {}),
         // Rule 3 — the places of another product it blocks (only with allowOtherProducts), with what each bought there.
@@ -415,8 +416,8 @@ function addRefusal(preview: unknown, limits: Record<string, unknown>): string |
     ruleRecords?: Record<string, { windowDays: number; clicks: number; spendCents: number; orders: number }>
   }
   if (p.action !== TOOL.add) return 'there is no preview of these negatives to check; a person decides'
-  if (!Array.isArray(p.otherProducts)) return 'the preview does not say whether another product buys these terms; a person decides'
-  if (p.otherProducts.length) return 'it blocks a term in another product\'s ad group (allowOtherProducts): isolation is per product, a person\'s word, never a rule; a person decides'
+  if (!Array.isArray(p.otherProducts)) return 'the preview does not say whether these negatives land in another product\'s ad group; a person decides'
+  if (p.otherProducts.length) return 'it puts a negative in another product\'s ad group (allowOtherProducts): isolation is per product, a person\'s word, never a rule; a person decides'
   if (Array.isArray(p.handovers) && p.handovers.length) return 'it closes a converting term\'s old place (the proven handover): a person decides a winner\'s move'
   const markets = (limits.markets as string[] | undefined) ?? []
   const where = p.market ? [p.market] : p.markets ?? []
@@ -522,10 +523,11 @@ const addNegativeTargets: AgentTool = {
     + '(NEGATIVE_EXACT or NEGATIVE_PHRASE) and negative product targets (ASINs), into ad groups — one set of terms into many '
     + 'ad groups, the n-gram way — or as campaign negatives (every ad group of a campaign; keywords only), or each with its '
     + 'own place. create-negative-keyword stays the one-term form. Never a search term that converts where it lands (an '
-    + 'order over the last 60 days; the Owner\'s rule: winners stay where they win) — unless its own exact keyword wins '
-    + 'elsewhere for the same product (the proven handover, said on the card). Isolation is per product: a place of another '
-    + 'product that buys the term is listed and refused unless allowOtherProducts: true, a person\'s word that never runs by '
-    + 'rule. Refused, and not queued, for a protected term, a negative already there, one that would block a keyword of its '
+    + 'order on any of the 90 days Nexus keeps; the Owner\'s rule: winners stay where they win) — unless its own exact keyword wins '
+    + 'elsewhere for the same product and still serves there (the proven handover, said on the card; a person decides it). '
+    + 'Isolation is per product (products may share keywords): any ad group of another product is listed and refused unless '
+    + 'allowOtherProducts: true, a person\'s word that never runs by rule. Refused, and not queued, for a protected term, a '
+    + 'negative already there, one that would block a keyword of its '
     + 'own place, or when Amazon\'s write gate would refuse it; a protected product\'s ASIN is warned. A negative only lowers '
     + `spend, so it needs no authenticator code. ${BY_RULE_WORDS} (by default it does not: maxItems 0, no market; then only exact `
     + 'negatives of terms that meet the ads strategy\'s "Negate a search term when" group where they land). The preview lists '
@@ -542,8 +544,11 @@ const addNegativeTargets: AgentTool = {
     // Rule 3 and a winner's move are a person's word: never a run the business's rule decided (withinLimits refuses it;
     // this is the last door).
     if (ctx.decidedVia === 'auto' && (p.otherProducts.length || p.handovers.length)) {
-      return notRun(`Not run: it ${p.otherProducts.length ? 'blocks a term in another product\'s ad group' : 'closes a converting term\'s old place'}, which a person decides, never a rule. Ask for it again; a person approves it.`)
+      return notRun(`Not run: it ${p.otherProducts.length ? 'puts a negative in another product\'s ad group' : 'closes a converting term\'s old place'}, which a person decides, never a rule. Ask for it again; a person approves it.`)
     }
+    // The code, as addNegativesStepUp decided it on this fresh preview (none today: a negative only lowers spend).
+    const gate = await spendGate(ctx, fresh.preview)
+    if ('refusal' in gate) return notRun(gate.refusal)
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const made: Array<{ targetId: string; item: NegItem; reachedAmazon: boolean }> = []
@@ -717,6 +722,24 @@ async function retiringFor(a: RetireArgs): Promise<{ list: Retiring[] } | { refu
   return { list: unique.map((r) => retiringOf(r, madeBy.get(r.id)!)) }
 }
 
+/**
+ * add-negative-targets' code decision, in ONE place (the Owner's code policy is still open): a negative only lowers spend,
+ * so approving it needs no authenticator code — no stepUp.
+ */
+function addNegativesStepUp(): { stepUp?: StepUp } {
+  return {}
+}
+
+/**
+ * retire-negatives' code decision, in ONE place (the Owner's code policy is still open): lifting a negative Amazon holds
+ * lets the searches it blocked show the ads again (a raise), so approving needs the approver's authenticator code; a
+ * Nexus-only row removed moves nothing.
+ */
+function retireStepUp(atAmazon: number): { stepUp?: StepUp } {
+  if (!atAmazon) return {}
+  return { stepUp: { what: `lifts ${plural(atAmazon, 'negative')} at Amazon (the searches ${atAmazon === 1 ? 'it blocks' : 'they block'} can show the ads again)`, raises: ['Spend'], needs: STEP_UP_NEEDS, how: RETIRE_HOW } }
+}
+
 /** How a retire is approved, in one sentence (its stepUp). */
 const RETIRE_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it '
   + 'in Claude with theirs when the business set retire-negatives to confirm in Claude. By rule only where the business allows a retire (allowRetire).'
@@ -765,7 +788,7 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
         ...(lines.length > LINES_SHOWN ? { moreChanges: lines.length - LINES_SHOWN } : {}),
         // Every negative lifted at Amazon can let spend rise: each is listed, and approving needs the approver's code.
         raises: atAmazon.map((r) => `${negativeWords(r)} · ${r.place}`),
-        ...(atAmazon.length ? { stepUp: { what: `lifts ${plural(atAmazon.length, 'negative')} at Amazon (the searches ${atAmazon.length === 1 ? 'it blocks' : 'they block'} can show the ads again)`, raises: ['Spend'], needs: STEP_UP_NEEDS, how: RETIRE_HOW } } : {}),
+        ...retireStepUp(atAmazon.length),
         alsoChangedBy: bound.automations,
         ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
         // Every negative named, with its status, whether Amazon holds it and who made it: a move of any is caught.
@@ -864,7 +887,8 @@ const retireNegatives: AgentTool = {
     const refusal = recheck(ctx, fresh, RETIRE_MATERIAL)
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { reach: StoredReach; effect: string; totals: { atAmazon: number } }
-    const gate = await spendGate(ctx, p.totals.atAmazon > 0, `lifts ${plural(p.totals.atAmazon, 'negative')} at Amazon`)
+    // The code, as retireStepUp decided it on this fresh preview.
+    const gate = await spendGate(ctx, fresh.preview)
     if ('refusal' in gate) return notRun(gate.refusal)
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)

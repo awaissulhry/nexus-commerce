@@ -245,6 +245,8 @@ export interface AdDelivery {
   refusedByGate: number
   failed: number
   notSent: number
+  /** W4-5 — of `notSent`: Nexus-only records removed (a retire of a negative Amazon never held) — done in Nexus, nothing to send. */
+  nexusOnly?: number
   /** The write gate's own words, for the refused ones (at most 3): money may be named, so it is a money key. */
   gateReasons?: string[]
   /** Negatives and keywords the request created: how many exist at Amazon (they are created at once, not queued). */
@@ -264,7 +266,14 @@ function deliveryWord(row: { syncStatus?: string | null; errorCode?: string | nu
   }
   if (row.amazonResponseStatus === 'SUCCESS') return 'sent'
   if (row.amazonResponseStatus === 'FAILED') return 'failed'
+  // W4-5 — an inline write never sent (a Nexus-only record removed) is done, not waiting.
+  if (row.amazonResponseStatus === 'SKIPPED' || row.amazonResponseStatus === 'CANCELLED' || row.amazonResponseStatus === 'SUPERSEDED') return 'notSent'
   return 'waiting'
+}
+
+/** W4-5 — an audit row of a Nexus-only record removed (retire-negatives' local path): never sent, done in Nexus. */
+function removedInNexusOnly(log: { outboundQueueId: string | null; amazonResponseStatus: string | null; payloadAfter: unknown }): boolean {
+  return !log.outboundQueueId && log.amazonResponseStatus === 'SKIPPED' && (log.payloadAfter as { delivery?: unknown } | null)?.delivery === 'not_applicable'
 }
 
 /**
@@ -278,7 +287,7 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
   const reach = ((preview as { reach?: { reach?: unknown } } | null)?.reach?.reach ?? null) as AdDelivery['reach']
   const logs = await prisma.advertisingActionLog.findMany({
     where: { executionId: approvalId },
-    select: { outboundQueueId: true, amazonResponseStatus: true },
+    select: { outboundQueueId: true, amazonResponseStatus: true, payloadAfter: true },
   })
   const queueIds = logs.map((l) => l.outboundQueueId).filter((id): id is string => !!id)
   const queued = queueIds.length
@@ -291,6 +300,7 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
     const q = log.outboundQueueId ? byId.get(log.outboundQueueId) : undefined
     const word = deliveryWord(q ? { syncStatus: q.syncStatus, errorCode: q.errorCode } : { amazonResponseStatus: log.amazonResponseStatus })
     out[word]++
+    if (word === 'notSent' && !q && removedInNexusOnly(log)) out.nexusOnly = (out.nexusOnly ?? 0) + 1
     if (word === 'refusedByGate' && q?.errorMessage && reasons.length < 3) reasons.push(q.errorMessage.replace(/^\[ADS-WRITE-GATE-DENY\]\s*/, ''))
   }
   if (reasons.length) out.gateReasons = reasons
@@ -431,7 +441,8 @@ export function adMeaning(d: AdDelivery): string {
     d.waiting ? `${d.waiting} waiting to be sent (a queued ad write waits out a 5-minute cancel window)` : '',
     d.refusedByGate ? `${d.refusedByGate} refused by the write gate` : '',
     d.failed ? `${d.failed} failed` : '',
-    d.notSent ? `${d.notSent} not sent (skipped or cancelled)` : '',
+    d.notSent - (d.nexusOnly ?? 0) ? `${d.notSent - (d.nexusOnly ?? 0)} not sent (skipped or cancelled)` : '',
+    d.nexusOnly ? `${d.nexusOnly} removed in Nexus only (Amazon never held ${d.nexusOnly === 1 ? 'it' : 'them'}: nothing to send)` : '',
   ].filter(Boolean)
   const created = d.created ? ` Created ${d.created.total}, ${d.created.atAmazon} of them confirmed at Amazon.` : ''
   if (!d.writes) return `Approved and run.${created}`.trim()
