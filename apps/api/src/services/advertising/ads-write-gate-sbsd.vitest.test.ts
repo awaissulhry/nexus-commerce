@@ -62,7 +62,7 @@ describe('the 6a door, per ad product', () => {
 
   it('a write that does not say what it is keeps the Sponsored-Products-only refusal, word for word', async () => {
     const r = await bid(SB, 50, null)
-    expect(r).toEqual({ allowed: false, deniedAt: 'ad_product_unsupported', reason: expect.stringMatching(/^Test brands is not a Sponsored Products campaign \(it is Sponsored Brands\)\. Nexus changes Sponsored Products campaigns only/) })
+    expect(r).toEqual({ allowed: false, deniedAt: 'ad_product_unsupported', reason: expect.stringMatching(/^Test brands is not a Sponsored Products campaign \(it is Sponsored Brands\)\. Nexus makes this change for Sponsored Products campaigns only/) })
   })
 
   it('a write Nexus does not send for SB/SD is refused, naming what it can change', async () => {
@@ -93,15 +93,15 @@ describe("Amazon's limits per ad product (market_limits)", () => {
     expect(await bid(SB, 3_901)).toMatchObject({ allowed: false, deniedAt: 'market_limits', reason: expect.stringContaining("above Amazon's maximum of €39.00") })
   })
 
-  it('an SB/SD bid whose cost type Nexus does not hold is refused; an SB vCPM bid has no checked row', async () => {
-    expect(await bid({ ...SB, costType: null }, 50)).toMatchObject({ allowed: false, deniedAt: 'market_limits', reason: expect.stringMatching(/^Nexus does not know whether this Sponsored Brands campaign pays per click/) })
-    expect(await bid({ ...SB, costType: 'VCPM' }, 500)).toMatchObject({ allowed: false, deniedAt: 'market_limits', reason: expect.stringContaining('no checked Amazon limits for a vCPM bid') })
+  it('fails closed: an SB/SD bid whose cost type Nexus has not read is refused at the 6a door, in sandbox too', async () => {
+    expect(await bid({ ...SB, costType: null }, 50)).toMatchObject({ allowed: false, deniedAt: 'ad_product_unsupported', reason: expect.stringMatching(/has not read from Amazon whether it pays per click \(CPC\) or per thousand viewable impressions/) })
   })
 
-  it('an SD vCPM bid is judged on 1–1000; a CPC one on 0.02–1000', async () => {
-    expect(await bid({ ...SD, costType: 'vcpm' }, 50, BID('AUDIENCE'))).toMatchObject({ allowed: false, deniedAt: 'market_limits', reason: expect.stringContaining("below Amazon's minimum of €1.00") })
-    expect(await bid({ ...SD, costType: 'vcpm' }, 150, BID('AUDIENCE'))).toMatchObject({ allowed: true })
+  it('a vCPM bid (SB or SD) is refused: the strategy\'s bid limits and the floors are per click; a CPC SD bid is judged on 0.02–1000', async () => {
+    expect(await bid({ ...SB, costType: 'VCPM' }, 500)).toMatchObject({ allowed: false, deniedAt: 'ad_product_unsupported', reason: expect.stringContaining('pays per thousand viewable impressions (vCPM)') })
+    expect(await bid({ ...SD, costType: 'vcpm' }, 150, BID('AUDIENCE'))).toMatchObject({ allowed: false, deniedAt: 'ad_product_unsupported', reason: expect.stringContaining("bid limits and Nexus's bid floors are per click") })
     expect(await bid(SD, 2, BID('PRODUCT'))).toMatchObject({ allowed: true })
+    expect(await bid(SD, 1, BID('PRODUCT'))).toMatchObject({ allowed: false, deniedAt: 'market_limits' })
   })
 
   it('a daily budget on its ad product\'s range: SD up to €50,000 (seller and vendor)', async () => {
@@ -118,9 +118,14 @@ describe("Amazon's limits per ad product (market_limits)", () => {
     expect(r).toMatchObject({ allowed: false, deniedAt: 'market_limits', reason: expect.stringMatching(/^Nexus does not change ads in SE/) })
   })
 
-  it('an SB lifetime budget: its budget is refused at the door, its on/off is not', async () => {
+  it('an SB lifetime budget, or one whose period Nexus has not read: its budget is refused at the door, its on/off is not', async () => {
+    const budget = () => checkAdsWriteGate({ marketplace: 'IT', payloadValueCents: 0, campaignId: 'c-x', field: 'dailyBudget', fields: ['dailyBudget'], intendedValueCents: 2000, write: BUDGET, manual: true, confirmOwnLimits: true })
+    campaignFindUnique.mockResolvedValue({ ...SB, budgetJson: null })
+    expect(await budget()).toMatchObject({ allowed: false, deniedAt: 'ad_product_unsupported', reason: expect.stringContaining('has not read from Amazon whether its budget is daily') })
+    campaignFindUnique.mockResolvedValue({ ...SB, budgetJson: { budgetType: 'DAILY' } })
+    expect(await budget()).toMatchObject({ allowed: true })
     campaignFindUnique.mockResolvedValue({ ...SB, budgetJson: { budgetType: 'LIFETIME' } })
-    const r = await checkAdsWriteGate({ marketplace: 'IT', payloadValueCents: 0, campaignId: 'c-x', field: 'dailyBudget', fields: ['dailyBudget'], intendedValueCents: 2000, write: BUDGET })
+    const r = await budget()
     expect(r).toMatchObject({ allowed: false, deniedAt: 'ad_product_unsupported', reason: expect.stringContaining('lifetime budget') })
     expect(await checkAdsWriteGate({ marketplace: 'IT', payloadValueCents: 0, campaignId: 'c-x', fields: ['status'], write: { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'PAUSED' } })).toMatchObject({ allowed: true })
   })

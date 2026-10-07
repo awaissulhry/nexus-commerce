@@ -852,7 +852,7 @@ const pauseAds: AgentTool = {
   withinLimits: (preview, limits) => ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits),
   undo: undoBy(TOOL.enable, 'ENABLED', 'undo of a pause'),
   description:
-    `Pause Amazon Sponsored Products ads for real: campaigns, ad groups, keywords and product targets, or product ads (W4-11: also Sponsored Brands / Display campaigns, keywords and targets, through their own endpoints) (up to ${MAX_ADS} `
+    `Pause Amazon Sponsored Products ads for real: campaigns, ad groups, keywords and product targets, or product ads, and Sponsored Brands / Display campaigns, keywords and targets (up to ${MAX_ADS} `
     + 'in one request). Only when a real pause is meant: a paused ad serves again about an hour after it is switched back '
     + 'on. To stop an ad for a while, lower its bids instead (suppress-campaign, or a lower bid): it serves again about a '
     + 'minute after they go back. A person approves it in Nexus, unless the business lets it run by its rule inside its '
@@ -887,7 +887,7 @@ const enableAds: AgentTool = {
   withinLimits: (preview, limits) => peoplesPauseRefusal(preview) ?? ruleRefusal(preview, limits) ?? levelsRefusal(preview, limits) ?? restartBidRefusal(preview),
   undo: undoBy(TOOL.pause, 'PAUSED', 'undo of an enable'),
   description:
-    `Switch paused Amazon Sponsored Products ads back on: campaigns, ad groups, keywords and product targets, or product ads (W4-11: also Sponsored Brands / Display campaigns, keywords and targets) `
+    `Switch paused Amazon Sponsored Products ads back on: campaigns, ad groups, keywords and product targets, or product ads, and Sponsored Brands / Display campaigns, keywords and targets `
     + `(up to ${MAX_ADS}). By default only what a Claude request paused (pause-ads). With includePeoplesPauses: true, also an `
     + 'ad no Claude request paused — a person, in Nexus or at Amazon (Seller Central), a writer Nexus did not record, or a '
     + 'Nexus rule that is off or deleted now: the preview says who paused it and when, and a person with '

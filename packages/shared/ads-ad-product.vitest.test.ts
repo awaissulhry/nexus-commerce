@@ -4,7 +4,7 @@
  * campaign is refused in the same words everywhere and a Sponsored Products one never is.
  */
 import { describe, it, expect } from 'vitest'
-import { adProductOf, adProductLabel, adProductRefusal, adWriteRefusal, isLifetimeBudget, AD_PRODUCT_UNSUPPORTED, SPONSORED_PRODUCTS, type AdWrite } from './ads-ad-product.js'
+import { adProductOf, adProductLabel, adProductRefusal, adWriteRefusal, budgetPeriodOf, isLifetimeBudget, AD_PRODUCT_UNSUPPORTED, SPONSORED_PRODUCTS, type AdWrite } from './ads-ad-product.js'
 
 describe('adProductOf — v1 column first, legacy type second', () => {
   it('reads the v1 adProduct column', () => {
@@ -45,13 +45,14 @@ describe('adProductRefusal — one sentence, null for Sponsored Products', () =>
 
   it('refuses Sponsored Brands and Display by name, saying what it is and where to make the change', () => {
     const sb = adProductRefusal({ adProduct: 'SPONSORED_BRANDS', type: 'SB', name: 'Italy brands' })
-    expect(sb).toBe("Italy brands is not a Sponsored Products campaign (it is Sponsored Brands). Nexus changes Sponsored Products campaigns only for now, so nothing was sent to Amazon; make this change in Amazon's advertising console.")
+    // W4-11 — "this change": Nexus now sends some SB/SD changes; the sentence is true of the change it refuses.
+    expect(sb).toBe("Italy brands is not a Sponsored Products campaign (it is Sponsored Brands). Nexus makes this change for Sponsored Products campaigns only, so nothing was sent to Amazon; make it in Amazon's advertising console.")
     expect(adProductRefusal({ type: 'SD', name: 'GALE Display IT' })).toMatch(/^GALE Display IT is not a Sponsored Products campaign \(it is Sponsored Display\)\./)
     expect(adProductRefusal({ type: 'DSP' })).toMatch(/^This campaign is not a Sponsored Products campaign \(it is Amazon DSP\)\./)
   })
 
   it('an unknown ad product is refused by default (fail closed) and allowed only when the caller says so', () => {
-    expect(adProductRefusal({ name: 'Mystery' })).toMatch(/^Mystery is not a Sponsored Products campaign\. Nexus changes/)
+    expect(adProductRefusal({ name: 'Mystery' })).toMatch(/^Mystery is not a Sponsored Products campaign\. Nexus makes this change/)
     expect(adProductRefusal({ name: 'Mystery' }, { unknown: 'allow' })).toBeNull()
     // 'allow' is about the unknown only: a known Sponsored Brands campaign is still refused.
     expect(adProductRefusal({ type: 'SB' }, { unknown: 'allow' })).toMatch(/it is Sponsored Brands/)
@@ -66,8 +67,8 @@ describe('adProductRefusal — one sentence, null for Sponsored Products', () =>
 
 /** W4-11 — the SB and SD changes Nexus sends through their own endpoints; everything else keeps the refusal. */
 describe('adWriteRefusal (W4-11)', () => {
-  const SB = { adProduct: 'SPONSORED_BRANDS', type: 'SB', name: 'Brand test' }
-  const SD = { adProduct: 'SPONSORED_DISPLAY', type: 'SD', name: 'Display test' }
+  const SB = { adProduct: 'SPONSORED_BRANDS', type: 'SB', name: 'Brand test', costType: 'cpc', budgetJson: { budgetType: 'DAILY' } }
+  const SD = { adProduct: 'SPONSORED_DISPLAY', type: 'SD', name: 'Display test', costType: 'CPC' }
   const ok = (c: object, w: AdWrite) => expect(adWriteRefusal(c, w)).toBeNull()
   const no = (c: object, w: AdWrite | null, re: RegExp) => expect(adWriteRefusal(c, w)).toMatch(re)
 
@@ -121,7 +122,27 @@ describe('adWriteRefusal (W4-11)', () => {
     const life = { ...SB, budgetJson: { budgetType: 'LIFETIME' } }
     no(life, { entity: 'CAMPAIGN', fields: ['dailyBudget'] }, /^Brand test is a Sponsored Brands campaign with a lifetime budget at Amazon\. Nexus sets a daily budget only/)
     ok(life, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'PAUSED' })
-    ok({ ...SB, budgetJson: { budgetType: 'DAILY' } }, { entity: 'CAMPAIGN', fields: ['dailyBudget'] })
+    ok({ ...SB, budgetJson: { recurrenceTimePeriod: 'DAILY' } }, { entity: 'CAMPAIGN', fields: ['dailyBudget'] })
+  })
+
+  it('fails closed: an SB budget whose period Nexus has not read, and an SB/SD bid whose cost type it has not read, are refused', () => {
+    no({ ...SB, budgetJson: null }, { entity: 'CAMPAIGN', fields: ['dailyBudget'] }, /^Brand test is a Sponsored Brands campaign, and Nexus has not read from Amazon whether its budget is daily or for the campaign's lifetime\./)
+    no({ ...SB, budgetJson: { budgetType: 'MONETARY' } }, { entity: 'CAMPAIGN', fields: ['dailyBudget'] }, /has not read from Amazon whether its budget is daily/)
+    ok({ ...SB, budgetJson: null }, { entity: 'CAMPAIGN', fields: ['status'], toStatus: 'PAUSED' })
+    // SD has a daily budget only (SD 3.0 `budgetType: daily`): no period to read.
+    ok({ ...SD, budgetJson: null }, { entity: 'CAMPAIGN', fields: ['dailyBudget'] })
+    for (const c of [SB, SD]) no({ ...c, costType: null }, { entity: 'AD_TARGET', kind: c === SB ? 'KEYWORD' : 'PRODUCT', fields: ['bid'] }, /has not read from Amazon whether it pays per click \(CPC\) or per thousand viewable impressions \(vCPM\)/)
+    ok({ ...SB, costType: null }, { entity: 'AD_TARGET', kind: 'KEYWORD', fields: ['status'], toStatus: 'PAUSED' })
+  })
+
+  it('an SB or SD bid in a vCPM campaign is refused: the bid limits are per click', () => {
+    no({ ...SD, costType: 'vcpm' }, { entity: 'AD_TARGET', kind: 'AUDIENCE', fields: ['bid'] }, /^Display test is a Sponsored Display campaign that pays per thousand viewable impressions \(vCPM\)\. The ads strategy's bid limits and Nexus's bid floors are per click, so Nexus does not change its bids/)
+    no({ ...SB, costType: 'VCPM' }, { entity: 'AD_TARGET', kind: 'KEYWORD', fields: ['bid'] }, /pays per thousand viewable impressions/)
+    ok({ ...SD, costType: 'vcpm' }, { entity: 'AD_TARGET', kind: 'AUDIENCE', fields: ['status'], toStatus: 'PAUSED' })
+  })
+
+  it('budgetPeriodOf reads Amazon\'s budget object: daily, lifetime, or not read', () => {
+    expect([budgetPeriodOf({ budgetType: 'DAILY' }), budgetPeriodOf({ recurrenceTimePeriod: 'lifetime' }), budgetPeriodOf({ budgetType: 'MONETARY' }), budgetPeriodOf(null)]).toEqual(['DAILY', 'LIFETIME', null, null])
   })
 
   it('isLifetimeBudget reads Amazon\'s budget object in either spelling', () => {

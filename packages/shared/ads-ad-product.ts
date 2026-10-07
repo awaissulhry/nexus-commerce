@@ -10,9 +10,10 @@
  * Creating SB/SD campaigns, ad groups, keywords and ads is NOT refused here: those calls go to their own endpoints.
  *
  * W4-11 (2026-10-07; reverses S8 for these writes) — Nexus now sends some changes to an EXISTING Sponsored Brands or
- * Display campaign through their own endpoints (ads-api-client.ts): its daily budget and on/off state, the bid and on/off
- * state of its keywords and targets, adding a negative (SB: a negative keyword in an ad group; SD: a negative product
- * target) and retiring one. `adWriteRefusal` says, for one write, whether it is one of them. `adProductRefusal` stays the
+ * Display campaign through their own endpoints (ads-api-client.ts), for the callers that ask (Claude's tools): its daily
+ * budget (SB: a daily one Nexus has read) and on/off state, the bid (per-click campaigns only) and on/off state of its
+ * keywords and targets, adding a negative (SB: a negative keyword in an ad group; SD: a negative product target) and
+ * retiring one. `adWriteRefusal` says, for one write, whether it is one of them. `adProductRefusal` stays the
  * sentence for every path that is still Sponsored Products only (placements, the bulk sheet, the engines), and for a
  * write that does not say what it is.
  */
@@ -33,6 +34,8 @@ export interface AdProductSource {
   name?: string | null
   /** W4-11 — Amazon's budget object (`Campaign.budgetJson`): a Sponsored Brands lifetime budget is not set from Nexus. */
   budgetJson?: unknown
+  /** W4-11 — how an SB/SD campaign pays (`Campaign.costType`: cpc | vcpm): Nexus changes the bids of a per-click one only. */
+  costType?: string | null
 }
 
 /** The legacy `CampaignType` codes, also accepted in the `adProduct` column. */
@@ -85,7 +88,8 @@ export function adProductRefusal(
   if (product == null && opts.unknown === 'allow') return null
   const who = campaign?.name?.trim() || 'This campaign'
   const what = product ? ` (it is ${adProductLabel(product)})` : ''
-  return `${who} is not a Sponsored Products campaign${what}. Nexus changes Sponsored Products campaigns only for now, so nothing was sent to Amazon; make this change in Amazon's advertising console.`
+  // W4-11 — "this change": Nexus now sends some Sponsored Brands / Display changes (adWriteRefusal); the one refused here is not one.
+  return `${who} is not a Sponsored Products campaign${what}. Nexus makes this change for Sponsored Products campaigns only, so nothing was sent to Amazon; make it in Amazon's advertising console.`
 }
 
 // ── W4-11 — the Sponsored Brands and Display changes Nexus can send ──────────────────────────────────────────────────
@@ -180,10 +184,28 @@ export function adWriteRefusal(
   if (!write || (product !== SPONSORED_BRANDS && product !== SPONSORED_DISPLAY)) return adProductRefusal(campaign, opts)
   const problem = sbSdProblem(product, write)
   const who = campaign?.name?.trim() || 'This campaign'
+  const label = adProductLabel(product)
   if (!problem) {
+    // A Sponsored Brands budget is daily or for the campaign's lifetime (SB v4 `budgetType`); Nexus counts a daily one.
+    // Fail closed: a budget whose period Nexus has not read from Amazon is not set.
     const budget = write.entity === 'CAMPAIGN' && (write.fields ?? []).includes('dailyBudget')
-    if (budget && product === SPONSORED_BRANDS && isLifetimeBudget(campaign?.budgetJson)) {
+    const period = budget && product === SPONSORED_BRANDS ? budgetPeriodOf(campaign?.budgetJson) : 'DAILY'
+    if (period === 'LIFETIME') {
       return `${who} is a Sponsored Brands campaign with a lifetime budget at Amazon. Nexus sets a daily budget only, so nothing was sent to Amazon; change it in Amazon's advertising console.`
+    }
+    if (period == null) {
+      return `${who} is a Sponsored Brands campaign, and Nexus has not read from Amazon whether its budget is daily or for the campaign's lifetime. Nexus sets a daily budget only, so nothing was sent to Amazon; let the next sync read it, or change it in Amazon's advertising console.`
+    }
+    // A bid: only in a campaign that pays per click. The ads strategy's bid limits and Nexus's floors are per click, so
+    // they cannot judge a bid per thousand viewable impressions (vCPM); a cost type Nexus has not read is not guessed.
+    if (write.entity === 'AD_TARGET' && (write.fields ?? []).includes('bid')) {
+      const pays = (campaign?.costType ?? '').trim().toUpperCase()
+      if (pays === 'VCPM') {
+        return `${who} is a ${label} campaign that pays per thousand viewable impressions (vCPM). The ads strategy's bid limits and Nexus's bid floors are per click, so Nexus does not change its bids and nothing was sent to Amazon; change them in Amazon's advertising console.`
+      }
+      if (pays !== 'CPC') {
+        return `${who} is a ${label} campaign, and Nexus has not read from Amazon whether it pays per click (CPC) or per thousand viewable impressions (vCPM); its bid limits differ between them, so nothing was sent to Amazon. Let the next sync read it, or change the bid in Amazon's advertising console.`
+      }
     }
     return null
   }
@@ -191,10 +213,18 @@ export function adWriteRefusal(
 }
 
 /**
- * W4-11 — a Sponsored Brands campaign whose budget at Amazon is a LIFETIME budget (SB v4 `budgetType`; the v1 sync keeps
- * Amazon's budget object in `Campaign.budgetJson`). Nexus counts a daily budget, so it does not set one there.
+ * W4-11 — the period of a campaign's budget at Amazon, from Amazon's budget object (`Campaign.budgetJson`, kept by the
+ * v1 sync: SB v4 `budgetType`, v1 `recurrenceTimePeriod`): DAILY, LIFETIME, or null when it says neither (not read).
  */
-export function isLifetimeBudget(budgetJson: unknown): boolean {
+export function budgetPeriodOf(budgetJson: unknown): 'DAILY' | 'LIFETIME' | null {
   const b = (budgetJson ?? {}) as { budgetType?: unknown; recurrenceTimePeriod?: unknown }
-  return [b.budgetType, b.recurrenceTimePeriod].some((v) => typeof v === 'string' && v.trim().toUpperCase() === 'LIFETIME')
+  const said = [b.budgetType, b.recurrenceTimePeriod].map((v) => (typeof v === 'string' ? v.trim().toUpperCase() : ''))
+  if (said.includes('LIFETIME')) return 'LIFETIME'
+  if (said.includes('DAILY')) return 'DAILY'
+  return null
+}
+
+/** W4-11 — a Sponsored Brands campaign whose budget at Amazon is a LIFETIME budget (budgetPeriodOf). */
+export function isLifetimeBudget(budgetJson: unknown): boolean {
+  return budgetPeriodOf(budgetJson) === 'LIFETIME'
 }

@@ -38,7 +38,7 @@ import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { alsoChangedBy, approvedRun, BY_RULE_WORDS, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, adWriteRefusalOf, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { isSbSdCampaign } from '../../advertising/ads-mutation.service.js'
-import type { AdWrite } from '@nexus/shared/ads-ad-product'
+import { SPONSORED_BRANDS, adProductOf, type AdWrite } from '@nexus/shared/ads-ad-product'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { amountLabel, campaignCurrency, type BoundAutomation } from './ads-tool-guards.js'
 import {
@@ -277,6 +277,24 @@ async function checksOf(items: NegItem[]): Promise<{ refusal: string } | { warni
     return `${level}:${level === 'CAMPAIGN' ? s.adGroup.campaignId : s.adGroupId}:${match}:${s.kind === 'PRODUCT' ? s.expressionValue.trim().toUpperCase() : normaliseNegTerm(s.expressionValue)}`
   }))
   for (const i of items) if (there.has(i.key)) problems.push(`${negativeWords(i)} is already negated in ${i.place}`)
+  // W4-11 — a Sponsored Brands negative keyword archived in a campaign is never created there again (Amazon's
+  // createNegativeKeywords): refused here, by name, rather than sent for Amazon to refuse.
+  const keywordCampaigns = [...new Set(items.filter((i) => i.kind === 'KEYWORD').map((i) => i.campaign.id))]
+  const sbCampaigns = keywordCampaigns.length
+    ? new Set((await prisma.campaign.findMany({ where: { id: { in: keywordCampaigns } }, select: { id: true, adProduct: true, type: true } }))
+      .filter((c) => adProductOf({ adProduct: c.adProduct, type: c.type == null ? null : String(c.type) }) === SPONSORED_BRANDS).map((c) => c.id))
+    : new Set<string>()
+  const sbItems = items.filter((i) => i.kind === 'KEYWORD' && sbCampaigns.has(i.campaign.id))
+  if (sbItems.length) {
+    const archived = await prisma.adTarget.findMany({
+      where: { isNegative: true, kind: 'KEYWORD', status: 'ARCHIVED', adGroup: { campaignId: { in: [...new Set(sbItems.map((i) => i.campaign.id))] } } },
+      select: { expressionType: true, expressionValue: true, adGroup: { select: { campaignId: true } } },
+    })
+    const gone = new Set(archived.map((a) => `${a.adGroup.campaignId}|${/PHRASE/.test(a.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT'}|${normaliseNegTerm(a.expressionValue)}`))
+    for (const i of sbItems) {
+      if (gone.has(`${i.campaign.id}|${i.match}|${normaliseNegTerm(i.text)}`)) problems.push(`${negativeWords(i)} was retired in campaign "${i.campaign.name}" before: ${FINAL_WORDS}`)
+    }
+  }
   if (problems.length) return { refusal: `Not queued: ${named(problems)}.` }
   return { warnings }
 }
@@ -539,7 +557,7 @@ const addNegativeTargets: AgentTool = {
   withinLimits: (preview, limits) => addRefusal(preview, limits) ?? ruleRefusal(preview, limits) ?? negateGroupRefusal(preview, limits),
   undo: ADD_NEGATIVES_UNDO,
   description:
-    `Add negatives to Amazon Sponsored Products campaigns in one request (W4-11: also a negative keyword in a Sponsored Brands ad group, and a negative product target in a Sponsored Display ad group, through their own endpoints) (up to ${MAX_NEGATIVES}, one step): negative keywords `
+    `Add negatives to Amazon Sponsored Products campaigns in one request, and a negative keyword to a Sponsored Brands ad group or a negative product target to a Sponsored Display ad group (up to ${MAX_NEGATIVES}, one step): negative keywords `
     + '(NEGATIVE_EXACT or NEGATIVE_PHRASE) and negative product targets (ASINs), into ad groups — one set of terms into many '
     + 'ad groups, the n-gram way — or as campaign negatives (every ad group of a campaign; keywords only), or each with its '
     + 'own place. create-negative-keyword stays the one-term form. Never a search term that converts where it lands (an '
@@ -662,18 +680,28 @@ interface Retiring {
   place: string
   atAmazon: boolean
   madeBy: string
+  /**
+   * W4-11 — retiring it is for good: a Sponsored Brands negative keyword Amazon holds. Amazon's createNegativeKeywords
+   * (SB 3.0): a negative keyword "can not be recreated for a campaign if [it] has previously been associated with a
+   * campaign and subsequently archived" — so neither the undo nor a later add-negative-targets can block that search there.
+   */
+  final: boolean
 }
 
 const retiringOf = (r: NegRow, madeBy: string): Retiring => {
   const kind = String(r.kind) === 'PRODUCT' ? 'PRODUCT' : 'KEYWORD'
   const level: Level = r.negativeLevel === 'CAMPAIGN' ? 'CAMPAIGN' : 'AD_GROUP'
+  const sbKeyword = kind === 'KEYWORD' && adProductOf({ adProduct: r.adGroup.campaign.adProduct, type: r.adGroup.campaign.type == null ? null : String(r.adGroup.campaign.type) }) === SPONSORED_BRANDS
   return {
     id: r.id, kind, text: r.expressionValue, match: kind === 'PRODUCT' ? null : /PHRASE/.test(r.expressionType) ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT',
     level, adGroupId: r.adGroupId, campaign: campaignOf(r.adGroup.campaign),
     place: level === 'CAMPAIGN' ? `campaign "${r.adGroup.campaign.name}" (every ad group)` : placeWords(r.adGroup),
-    atAmazon: !!r.externalTargetId, madeBy,
+    atAmazon: !!r.externalTargetId, madeBy, final: sbKeyword && !!r.externalTargetId,
   }
 }
+
+/** W4-11 — the sentence for the retires that are for good (Retiring.final). */
+const FINAL_WORDS = 'Amazon does not let a Sponsored Brands negative keyword archived in a campaign be added to that campaign again'
 
 /** W4-11 — a retire (an archive of a negative) as the gate and adWriteRefusalOf judge it for a Sponsored Brands / Display campaign. */
 function retireWriteOf(r: Pick<Retiring, 'kind' | 'level'>): AdWrite {
@@ -803,9 +831,14 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
     fromLabel: 'Standing (blocks the search)', toLabel: r.atAmazon ? 'Retired: archived at Amazon' : 'Removed from Nexus (Amazon never had it)',
   }))
   const local = list.length - atAmazon.length
+  // W4-11 — a Sponsored Brands negative keyword's retire is for good (Retiring.final); every other one can be added anew.
+  const final = list.filter((r) => r.final)
+  const anew = atAmazon.length - final.length
   const markets = [...new Set(list.map((r) => r.campaign.marketplace).filter((m): m is string => !!m))].sort()
   const effect = `Retires ${plural(list.length, 'negative')} (${named(lines.map((l) => l.label))}).`
-    + (atAmazon.length ? ` ${plural(atAmazon.length, 'is', 'are')} archived at Amazon: the searches ${atAmazon.length === 1 ? 'it blocks' : 'they block'} can show these ads again, so spend can rise. Amazon never switches an archived negative on again: to block a search again, a new one is added.` : '')
+    + (atAmazon.length ? ` ${plural(atAmazon.length, 'is', 'are')} archived at Amazon: the searches ${atAmazon.length === 1 ? 'it blocks' : 'they block'} can show these ads again, so spend can rise. Amazon never switches an archived negative on again.` : '')
+    + (anew ? ` To block ${anew === 1 ? 'that search' : 'those searches'} again, a new negative is added.` : '')
+    + (final.length ? ` For good: ${named(final.map((r) => `${negativeWords(r)} · ${r.place}`))} — ${FINAL_WORDS}, so ${final.length === 1 ? 'that search' : 'those searches'} cannot be blocked there again, not even by an undo.` : '')
     + (local ? ` ${plural(local, 'is', 'are')} only in Nexus (Amazon never had ${local === 1 ? 'it' : 'them'}): ${local === 1 ? 'its' : 'their'} record is removed and nothing changes at Amazon.` : '')
   return {
     list,
@@ -823,12 +856,20 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
         alsoChangedBy: bound.automations,
         ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
         // Every negative named, with its status, whether Amazon holds it and who made it: a move of any is caught.
-        basis: fingerprint(list.map((r) => [r.id, r.atAmazon, r.madeBy])),
+        basis: fingerprint(list.map((r) => [r.id, r.atAmazon, r.madeBy, r.final])),
         reach: stored,
         reachNote: atAmazon.length ? reachNote(stored) : 'Nexus only: none of these negatives is at Amazon, so nothing is sent there.',
-        warning: atAmazon.length ? 'Lifting a block lets the searches it blocked show these ads again: spend can rise. A retired negative is archived at Amazon for good; blocking the search again adds a new one.' : 'Nexus only: nothing changes at Amazon.',
+        warning: atAmazon.length
+          ? 'Lifting a block lets the searches it blocked show these ads again: spend can rise. A retired negative is archived at Amazon for good'
+            + (anew ? '; blocking the search again adds a new one' : '')
+            + (final.length ? `; ${FINAL_WORDS}, so ${final.length === 1 ? 'that block cannot' : `those ${final.length} blocks cannot`} be made again there` : '')
+            + '.'
+          : 'Nexus only: nothing changes at Amazon.',
+        // W4-11 — what Amazon cannot undo (design §3 item 4): a Sponsored Brands negative keyword's retire.
+        ...(final.length ? { irreversible: final.map((r) => `${negativeWords(r)} · ${r.place}`), irreversibleNote: `${FINAL_WORDS}: these retires cannot be undone.` } : {}),
         effect,
-        undoNote: 'Undo adds the same negatives again where they stood (add-negative-targets: new ones at Amazon, checked again against the Owner\'s rules); the ones only in Nexus are not made again.',
+        undoNote: (anew ? 'Undo adds the same negatives again where they stood (add-negative-targets: new ones at Amazon, checked again against the Owner\'s rules); the ones only in Nexus are not made again.' : 'Undo adds nothing at Amazon again.')
+          + (final.length ? ` The Sponsored Brands negative keywords are not added again: ${FINAL_WORDS}.` : ''),
         ...(facts ?? {}),
       },
     },
@@ -866,8 +907,15 @@ export const RETIRE_NEGATIVES_UNDO: ToolUndo = {
   request(change) {
     const before = ((change.before as { negatives?: Array<Record<string, unknown>> } | null)?.negatives ?? [])
     const archived = new Set(((change.after as { negatives?: Array<{ targetId?: unknown; status?: unknown }> } | null)?.negatives ?? []).filter((n) => n.status === 'ARCHIVED').map((n) => String(n.targetId ?? '')))
-    const back = before.filter((n) => n.atAmazon === true && archived.has(String(n.targetId ?? '')))
-    if (!back.length) return { refusal: 'None of the negatives this retire lifted was at Amazon: there is nothing to add again there.' }
+    const lifted = before.filter((n) => n.atAmazon === true && archived.has(String(n.targetId ?? '')))
+    // W4-11 — a Sponsored Brands negative keyword's retire is for good (Retiring.final): it is not asked for again.
+    const final = lifted.filter((n) => n.final === true)
+    const back = lifted.filter((n) => n.final !== true)
+    if (!back.length) {
+      return { refusal: final.length
+        ? `${FINAL_WORDS}: the ${final.length === 1 ? 'Sponsored Brands negative keyword' : `${final.length} Sponsored Brands negative keywords`} this retire lifted cannot be added again.`
+        : 'None of the negatives this retire lifted was at Amazon: there is nothing to add again there.' }
+    }
     return {
       tool: TOOL.add,
       args: {
@@ -875,7 +923,8 @@ export const RETIRE_NEGATIVES_UNDO: ToolUndo = {
           ? { adGroupId: String(n.adGroupId), asin: String(n.text) }
           : { ...(n.level === 'CAMPAIGN' ? { campaignId: String(n.campaignId) } : { adGroupId: String(n.adGroupId) }), text: String(n.text), matchType: n.match === 'NEGATIVE_PHRASE' ? 'NEGATIVE_PHRASE' : 'NEGATIVE_EXACT' })),
         allowOtherProducts: true,
-        why: 'undo of retire-negatives: the same negatives added again where they stood',
+        why: 'undo of retire-negatives: the same negatives added again where they stood'
+          + (final.length ? ` (not the ${final.length === 1 ? 'Sponsored Brands negative keyword' : `${final.length} Sponsored Brands negative keywords`}: Amazon does not let one archived in a campaign be added there again)` : ''),
       },
     }
   },
@@ -895,21 +944,23 @@ const retireNegatives: AgentTool = {
   requiresApprovalDefault: true,
   openWorld: true,
   // Amazon never switches an archived negative on again: undo adds new ones (and a Nexus-only one is not made again).
+  // W4-11 — a Sponsored Brands negative keyword's retire cannot be undone at all (its preview says so, `irreversible`).
   reversibility: 'partial',
   maxClaudeTrust: 'auto',
   limits: RETIRE_LIMITS,
   withinLimits: (preview, limits) => retireRefusal(preview, limits) ?? ruleRefusal(preview, limits),
   undo: RETIRE_NEGATIVES_UNDO,
   description:
-    `Retire standing negatives of Amazon Sponsored Products campaigns (W4-11: and a Sponsored Brands ad group's negative keywords and a Sponsored Display ad group's negative product targets) — any, not only Claude's (up to ${MAX_RETIRE}): negative `
+    `Retire standing negatives of Amazon Sponsored Products campaigns, and a Sponsored Brands ad group's negative keywords and a Sponsored Display ad group's negative product targets — any, not only Claude's (up to ${MAX_RETIRE}): negative `
     + 'keywords and negative product targets, ad group or campaign negatives, by id or by their place and text. One Amazon '
     + 'holds is archived there, through the Negatives page\'s own retire (permanent at Amazon: blocking the search again adds a '
-    + 'new one); one only in Nexus has its record removed. Lifting a block lets the searches it blocked show the ads again, '
+    + 'new one — except a Sponsored Brands negative keyword, which Amazon never lets be added to that campaign again, so its '
+    + 'retire cannot be undone; the preview lists those as irreversible); one only in Nexus has its record removed. Lifting a block lets the searches it blocked show the ads again, '
     + 'so spend can rise: the preview lists each negative with who added it, and a person with settings.security.manage '
     + 'approves it in Nexus with their authenticator code (or the person who asked confirms it in Claude with theirs). '
     + 'It may run by the business\'s rule only where the business allows a retire (allowRetire, off by default), in a market it names, inside its limits and the ads strategy. Refused, and not queued, when a '
     + 'negative is not found, is not a negative, is retired already, or when Amazon\'s write gate would refuse it. Undo '
-    + '(undo-change) adds the same negatives again where they stood.',
+    + '(undo-change) adds the same negatives again where they stood (not a Sponsored Brands negative keyword).',
   async handler(args, ctx) {
     return (await decideRetire(args, ctx, { rule: true })).result
   },
@@ -945,7 +996,7 @@ const retireNegatives: AgentTool = {
       ok: true,
       data,
       change: {
-        before: { changeSetId: run.changeSetId, negatives: list.filter((r) => doneIds.has(r.id)).map((r) => ({ targetId: r.id, kind: r.kind, text: r.text, match: r.match, level: r.level, adGroupId: r.adGroupId, campaignId: r.campaign.id, atAmazon: r.atAmazon })) },
+        before: { changeSetId: run.changeSetId, negatives: list.filter((r) => doneIds.has(r.id)).map((r) => ({ targetId: r.id, kind: r.kind, text: r.text, match: r.match, level: r.level, adGroupId: r.adGroupId, campaignId: r.campaign.id, atAmazon: r.atAmazon, ...(r.final ? { final: true } : {}) })) },
         after: await retiredNow({ before: null, after: { negatives: done.map((o) => ({ targetId: o.adTargetId })) } }),
       },
     }

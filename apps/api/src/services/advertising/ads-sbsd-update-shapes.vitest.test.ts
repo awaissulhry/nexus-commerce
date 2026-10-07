@@ -48,7 +48,8 @@ import { gatewayLedger } from '../../test-support/gateway-stubs.js'
 import { __rateTest } from '../gateway/rate.js'
 import {
   amazonIntId, createSbNegativeKeyword, createSdNegativeTarget, sbCampaignUpdateRequest, sbKeywordUpdateRequest, sbSdItemsResult,
-  sbSdNegativeArchiveRequest, sbTargetUpdateRequest, sdCampaignUpdateRequest, sdTargetUpdateRequest, sendSbSdUpdate,
+  sbSdNegativeArchiveRequest, sbTargetsResult, sbTargetUpdateRequest, sbV4CampaignsResult, sdCampaignUpdateRequest, sdTargetUpdateRequest,
+  sendSbSdUpdate, SBSD_ANSWER_NOT_UNDERSTOOD,
 } from './ads-api-client.js'
 
 const ctx = { profileId: '123', region: 'EU' as const }
@@ -107,11 +108,22 @@ describe('the request builders (pure)', () => {
     expect(() => amazonIntId('EXT-1')).toThrow(/cannot be sent as a number/)
   })
 
-  it('reads Amazon\'s per-item answer: SUCCESS is ok, anything else is its refusal in its own words', () => {
+  it('reads Amazon\'s per-item answer: SUCCESS is ok, any other code is its refusal in its own words', () => {
     expect(sbSdItemsResult([{ code: 'SUCCESS', campaignId: 1 }])).toEqual({ ok: true, error: null })
     expect(sbSdItemsResult({ code: 'SUCCESS', keywordId: 1 })).toEqual({ ok: true, error: null })
     expect(sbSdItemsResult([{ code: 'INVALID_ARGUMENT', description: 'Bid is below the minimum' }])).toEqual({ ok: false, error: 'amazon_rejected: INVALID_ARGUMENT — Bid is below the minimum' })
-    expect(sbSdItemsResult({ unexpected: true })).toEqual({ ok: true, error: null })
+  })
+
+  it('🔴 fails closed: an answer it cannot read is never counted as done', () => {
+    for (const answer of [{ unexpected: true }, [], [{ campaignId: 1 }], null, 'ok']) {
+      expect(sbSdItemsResult(answer)).toEqual({ ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD })
+    }
+    expect(SBSD_ANSWER_NOT_UNDERSTOOD).toMatch(/^Amazon's answer was not understood/)
+    expect(sbV4CampaignsResult({ campaigns: { success: [{ index: 0, campaignId: '1' }], error: [] } })).toEqual({ ok: true, error: null })
+    expect(sbV4CampaignsResult({ campaigns: { success: [], error: [] } })).toEqual({ ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD })
+    expect(sbV4CampaignsResult({})).toEqual({ ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD })
+    expect(sbTargetsResult({ updateTargetSuccessResults: [{ targetId: 1, targetRequestIndex: 0 }] })).toEqual({ ok: true, error: null })
+    expect(sbTargetsResult({})).toEqual({ ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD })
   })
 })
 

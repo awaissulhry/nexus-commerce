@@ -1803,22 +1803,38 @@ export function amazonIntId(id: string): number {
   return n
 }
 
+/** W4-11 — the failure when Amazon's answer to an SB/SD update has no result Nexus can read: never counted as done. */
+export const SBSD_ANSWER_NOT_UNDERSTOOD = "Amazon's answer was not understood (it carries no result for this change), so Nexus does not count the change as made"
+
 /**
  * The SB 3.0 / SD 3.0 answer (HTTP 207, or 200 for an archive): a bare array of `{ code, description, <id> }`, or one
- * such object. Every item must say SUCCESS; anything else is Amazon's refusal, in its own words. An answer of another
- * shape is not read as a failure (as v3BatchResult: a shape surprise must not turn a real success into a false failure).
+ * such object. Every item must say SUCCESS; any other code is Amazon's refusal, in its own words. Fail closed: an answer
+ * of another shape, an empty one, or an item with no code is not a success (SBSD_ANSWER_NOT_UNDERSTOOD).
  */
 export function sbSdItemsResult(response: unknown): { ok: boolean; error: string | null } {
   const items = Array.isArray(response) ? response : response && typeof response === 'object' && 'code' in (response as object) ? [response] : []
+  if (!items.length) return { ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD }
   for (const item of items as Array<Record<string, unknown>>) {
     const code = String(item?.code ?? '')
-    if (code && code.toUpperCase() !== 'SUCCESS') {
+    if (!code) return { ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD }
+    if (code.toUpperCase() !== 'SUCCESS') {
       const words = [code, item.description ?? item.details].filter(Boolean).join(' — ')
       const detail = Array.isArray(item.errors) && item.errors.length ? ` ${amazonErrorText(item.errors)}` : ''
       return { ok: false, error: `amazon_rejected: ${words}${detail}`.slice(0, 300) }
     }
   }
   return { ok: true, error: null }
+}
+
+/**
+ * W4-11 — the SB 4.0 answer to `UpdateSponsoredBrandsCampaigns` (HTTP 207, `{ campaigns: { success, error } }`): an error
+ * item is Amazon's refusal in its own words; a success item is the change made. Fail closed: neither is not a success.
+ */
+export function sbV4CampaignsResult(response: unknown): { ok: boolean; error: string | null } {
+  const block = (response as { campaigns?: { success?: unknown[]; error?: unknown[] } } | null)?.campaigns
+  if (Array.isArray(block?.error) && block.error.length) return { ok: false, error: `amazon_rejected: ${amazonErrorText(block.error[0])}` }
+  if (Array.isArray(block?.success) && block.success.length) return { ok: true, error: null }
+  return { ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD }
 }
 
 /** What a W4-11 update sends, built apart from the call so the shape is testable without a network. */
@@ -1902,7 +1918,10 @@ export function sdTargetUpdateRequest(externalTargetId: string, patch: SbSdPatch
 }
 
 /**
- * Retiring a negative — archive is final at Amazon (an archived negative is never enabled again; it is added anew).
+ * Retiring a negative — archive is final at Amazon: an archived negative is never enabled again. An SD negative product
+ * target can be added anew; an SB negative keyword can NOT: Amazon's createNegativeKeywords (SB 3.0) — "negative keywords
+ * can not be recreated for a campaign if the negative keyword has previously been associated with a campaign and
+ * subsequently archived". So an SB negative keyword's retire is for good (retire-negatives says so, Retiring.final).
  *   SB 3.0 `archiveNegativeKeyword`          DELETE /sb/negativeKeywords/{keywordId}, Accept application/vnd.sbkeywordresponse.v3+json
  *   SD 3.0 `archiveNegativeTargetingClause`  DELETE /sd/negativeTargets/{negativeTargetId}, Accept application/json
  * Both answer 200 with one `{ code, description, <id> }` ("equivalent to an update that sets the state to archived").
@@ -1914,13 +1933,18 @@ export function sbSdNegativeArchiveRequest(adProduct: 'SPONSORED_BRANDS' | 'SPON
     : { method: 'DELETE', path: `/sd/negativeTargets/${id}`, acceptHeader: 'application/json', answer: 'items' }
 }
 
-/** Read an SB 3.0 `updateTargets` answer: any `updateTargetErrorResults` item is Amazon's refusal. */
-function sbTargetsResult(response: unknown): { ok: boolean; error: string | null } {
-  const errors = (response as { updateTargetErrorResults?: Array<{ code?: string; details?: string }> } | null)?.updateTargetErrorResults
+/**
+ * Read an SB 3.0 `updateTargets` answer: any `updateTargetErrorResults` item is Amazon's refusal; a
+ * `updateTargetSuccessResults` item is the change made. Fail closed: neither is not a success.
+ */
+export function sbTargetsResult(response: unknown): { ok: boolean; error: string | null } {
+  const r = response as { updateTargetErrorResults?: Array<{ code?: string; details?: string }>; updateTargetSuccessResults?: unknown[] } | null
+  const errors = r?.updateTargetErrorResults
   if (Array.isArray(errors) && errors.length) {
     return { ok: false, error: `amazon_rejected: ${[errors[0]?.code, errors[0]?.details].filter(Boolean).join(' — ')}`.slice(0, 300) }
   }
-  return { ok: true, error: null }
+  if (Array.isArray(r?.updateTargetSuccessResults) && r.updateTargetSuccessResults.length) return { ok: true, error: null }
+  return { ok: false, error: SBSD_ANSWER_NOT_UNDERSTOOD }
 }
 
 /** W4-11 — send one SB/SD update (built by the functions above) through the gateway; sandbox sends nothing. */
@@ -1940,7 +1964,7 @@ export async function sendSbSdUpdate(
     ...(request.body !== undefined ? { body: request.body, contentType: request.contentType } : {}),
     acceptHeader: request.acceptHeader,
   })
-  const parsed = request.answer === 'v4' ? v3BatchResult(response, 'campaigns') : request.answer === 'sbTargets' ? sbTargetsResult(response) : sbSdItemsResult(response)
+  const parsed = request.answer === 'v4' ? sbV4CampaignsResult(response) : request.answer === 'sbTargets' ? sbTargetsResult(response) : sbSdItemsResult(response)
   return { ok: parsed.ok, mode: 'live', rawResponse: response, error: parsed.error }
 }
 

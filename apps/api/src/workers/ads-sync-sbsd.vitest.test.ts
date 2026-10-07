@@ -82,7 +82,7 @@ beforeAll(async () => {
     const campaign = (id: string, ext: string, adProduct: string, type: string, extra: Record<string, unknown> = {}) => db.campaign.create({
       data: { id, name: `Test ${id}`, type, adProduct, marketplace: 'IT', externalCampaignId: ext, dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true, costType: 'cpc', ...extra } as never,
     })
-    await campaign('w-sb', '100000000001', 'SPONSORED_BRANDS', 'SB')
+    await campaign('w-sb', '100000000001', 'SPONSORED_BRANDS', 'SB', { budgetJson: { budgetType: 'DAILY' } })
     await campaign('w-sd', '100000000002', 'SPONSORED_DISPLAY', 'SD')
     await campaign('w-sp', '100000000003', 'SPONSORED_PRODUCTS', 'SP')
     for (const [g, c, ext] of [['wg-sb', 'w-sb', '200000000001'], ['wg-sd', 'w-sd', '200000000002'], ['wg-sp', 'w-sp', '200000000003']]) {

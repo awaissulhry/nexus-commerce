@@ -834,6 +834,7 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
               name: true,
               type: true,
               adProduct: true,
+              costType: true, // W4-11 — SB/SD bids only in a campaign that pays per click
               marketplace: true,
               dailyBudgetCurrency: true,
               dynamicBidding: true,
@@ -987,8 +988,8 @@ const setTargetBid: AgentTool = {
   withinLimits: (preview, limits) => handBackRefusal(preview) ?? ruleRefusal(preview, limits),
   undo: SET_TARGET_BID_UNDO,
   description:
-    'Change one keyword or target bid on an Amazon Sponsored Products campaign (W4-11: or a Sponsored Brands keyword or '
-    + 'product target, or a Sponsored Display target, through their own endpoints). Nothing changes until a person approves '
+    'Change one keyword or target bid on an Amazon Sponsored Products campaign, or a Sponsored Brands keyword or product '
+    + 'target or a Sponsored Display target in a campaign that pays per click. Nothing changes until a person approves '
     + 'it: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the business set it '
     + 'so — unless the business lets it run by its rule, inside its limits and the ads strategy where it lands (by '
     + 'default only a cut; a raise waits for a person). The preview shows the current and new bid in the campaign\'s '

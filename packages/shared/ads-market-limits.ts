@@ -28,7 +28,8 @@
  *   · SB daily budget 1–1,000,000. SD daily budget 1–1,000,000 for a seller and 1–50,000 for a vendor; Nexus does not
  *     hold which the account is, so the row is the range both accept: 1–50,000.
  * SB and SD bid limits depend on how the campaign pays (`Campaign.costType`, cpc | vcpm): a bid in a campaign whose cost
- * type Nexus does not hold is refused, never guessed.
+ * type Nexus does not hold is refused, never guessed. The SD vCPM row is transcribed for completeness: Nexus sends no
+ * vCPM bid today (adWriteRefusal refuses it — the ads strategy's bid limits and the floors are per click).
  */
 
 import { SPONSORED_BRANDS, SPONSORED_DISPLAY, SPONSORED_PRODUCTS, adProductLabel } from './ads-ad-product.js'

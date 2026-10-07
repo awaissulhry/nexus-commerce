@@ -101,7 +101,7 @@ beforeAll(async () => {
     const db = database.client
     await seedAdsFixture(db)
     // SB and SD take Amazon's ids as numbers (SB 3.0 / SD 3.0): the fixture's SB campaign gets numeric ones, as Amazon's are.
-    await db.campaign.update({ where: { id: 'c-sb' }, data: { costType: 'CPC', externalCampaignId: '100000000101' } })
+    await db.campaign.update({ where: { id: 'c-sb' }, data: { costType: 'CPC', externalCampaignId: '100000000101', budgetJson: { budgetType: 'DAILY' } } })
     await db.adGroup.update({ where: { id: 'g-c-sb' }, data: { externalAdGroupId: '200000000101' } })
     let next = 100000000200
     const campaign = (id: string, name: string, type: string, adProduct: string, extra: Record<string, unknown> = {}) => db.campaign.create({
@@ -109,8 +109,10 @@ beforeAll(async () => {
     })
     await campaign('c-sd', 'Test display', 'SD', 'SPONSORED_DISPLAY')
     await campaign('c-sb-life', 'Test brands lifetime', 'SB', 'SPONSORED_BRANDS', { budgetJson: { budgetType: 'LIFETIME' } })
+    await campaign('c-sb-unread', 'Test brands unread', 'SB', 'SPONSORED_BRANDS')
+    await campaign('c-sd-vcpm', 'Test display vcpm', 'SD', 'SPONSORED_DISPLAY', { costType: 'vcpm' })
     await campaign('c-dsp', 'Test DSP', 'DSP', 'DSP')
-    for (const [g, c] of [['g-c-sd', 'c-sd'], ['g-c-sb-life', 'c-sb-life'], ['g-c-dsp', 'c-dsp']]) {
+    for (const [g, c] of [['g-c-sd', 'c-sd'], ['g-c-sb-life', 'c-sb-life'], ['g-c-dsp', 'c-dsp'], ['g-c-sd-vcpm', 'c-sd-vcpm']]) {
       await db.adGroup.create({ data: { id: g, campaignId: c, name: `group ${g}`, externalAdGroupId: String(next++) } })
     }
     const target = (id: string, adGroupId: string, kind: string, text: string, bidCents: number, extra: Record<string, unknown> = {}) => db.adTarget.create({
@@ -121,6 +123,8 @@ beforeAll(async () => {
     await target('t-sd-pt', 'g-c-sd', 'PRODUCT', 'B0TESTSD01', 30)
     await target('t-sd-aud', 'g-c-sd', 'AUDIENCE', 'views', 30)
     await target('t-dsp', 'g-c-dsp', 'PRODUCT', 'B0TESTDS01', 30)
+    await target('t-sd-vcpm', 'g-c-sd-vcpm', 'AUDIENCE', 'views', 300)
+    await target('n-sb2', 'g-c-sb', 'KEYWORD', 'cheap brand two', 0, { isNegative: true, negativeLevel: 'AD_GROUP', expressionType: 'NEGATIVE_EXACT' })
     await target('n-sb', 'g-c-sb', 'KEYWORD', 'cheap brand', 0, { isNegative: true, negativeLevel: 'AD_GROUP', expressionType: 'NEGATIVE_EXACT' })
     await target('n-sd', 'g-c-sd', 'PRODUCT', 'B0TESTNEG1', 0, { isNegative: true, negativeLevel: 'AD_GROUP' })
   })
@@ -146,8 +150,9 @@ describe('set-campaign-budget', () => {
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'set-campaign-budget', args: { campaigns: [{ campaignId: 'c-sb', dailyBudgetCents: 2000 }, { campaignId: 'c-sd', dailyBudgetCents: 2000 }] } } })
   })
 
-  it('refuses an SB lifetime budget and an Amazon DSP campaign by name; not queued', async () => {
+  it('refuses an SB lifetime budget, one whose period Nexus has not read, and an Amazon DSP campaign, by name; not queued', async () => {
     expect((await preview('set-campaign-budget', { campaignId: 'c-sb-life', dailyBudgetCents: 2500 })).error).toMatch(/^Test brands lifetime is a Sponsored Brands campaign with a lifetime budget at Amazon/)
+    expect((await preview('set-campaign-budget', { campaignId: 'c-sb-unread', dailyBudgetCents: 2500 })).error).toMatch(/^Test brands unread is a Sponsored Brands campaign, and Nexus has not read from Amazon whether its budget is daily or for the campaign's lifetime/)
     expect((await preview('set-campaign-budget', { campaignId: 'c-dsp', dailyBudgetCents: 2500 })).error).toMatch(/^Test DSP is not a Sponsored Products campaign \(it is Amazon DSP\)/)
   })
 
@@ -170,6 +175,11 @@ describe('set-target-bid and bulk-ad-bid-change', () => {
     }
     expect((await preview('set-target-bid', { targetId: 't-sb-aud', proposedBidCents: 60 })).error).toMatch(/is a Sponsored Brands campaign\. .* — not that kind of target —/)
     expect((await preview('set-target-bid', { targetId: 't-dsp', proposedBidCents: 60 })).error).toMatch(/it is Amazon DSP/)
+    // A vCPM campaign's bids are not changed: the ads strategy's bid limits and the floors are per click.
+    expect((await preview('set-target-bid', { targetId: 't-sd-vcpm', proposedBidCents: 400 })).error).toMatch(/^Test display vcpm is a Sponsored Display campaign that pays per thousand viewable impressions \(vCPM\)/)
+    expect((await preview('bulk-ad-bid-change', { bids: [{ targetId: 't-sd-vcpm', bidCents: 400 }] })).error).toMatch(/^Nothing would change: 1 its ad product/)
+    // Its on/off is not a bid: it still pauses.
+    expect((await preview('pause-ads', { targetIds: ['t-sd-vcpm'] })).ok).toBe(true)
   })
 
   it("live: an SB bid under Amazon's SB minimum (€0.15) is refused before it is queued; an SD CPC bid of €0.05 is not", async () => {
@@ -189,7 +199,7 @@ describe('set-target-bid and bulk-ad-bid-change', () => {
     const r = await preview('bulk-ad-bid-change', { bids: [{ targetId: 't-sb', bidCents: 45 }, { targetId: 't-sd-aud', bidCents: 35 }, { targetId: 't-sb-aud', bidCents: 60 }] })
     expect(r.ok, r.error).toBe(true)
     expect(r.preview).toMatchObject({ totals: { asked: 3, changing: 2, excluded: { notSponsoredProducts: 1 } } })
-    expect(r.preview.excludedLines).toEqual([{ targetId: 't-sb-aud', why: expect.stringMatching(/^its ad product: Nexus changes Sponsored Products bids, and the bids of Sponsored Brands keywords and product targets and Sponsored Display targets, only$/) }])
+    expect(r.preview.excludedLines).toEqual([{ targetId: 't-sb-aud', why: expect.stringMatching(/^its ad product: Nexus changes Sponsored Products bids, and the bids of Sponsored Brands keywords and product targets and Sponsored Display targets in campaigns that pay per click, only$/) }])
     const asked = await ask('bulk-ad-bid-change', { bids: [{ targetId: 't-sb', bidCents: 45 }, { targetId: 't-sd-aud', bidCents: 35 }] })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { applied: 2 } })
     expect(await queuedBy(asked.approvalId!)).toEqual([
@@ -243,14 +253,83 @@ describe('add-negative-targets and retire-negatives', () => {
     expect(logs.length).toBe(2)
   })
 
-  it('retire-negatives lifts an SB negative keyword and an SD negative product target (with the approver\'s code, as for SP), marked', async () => {
+  it('retire-negatives lifts an SB negative keyword (for good: said plainly) and an SD negative product target (with the approver\'s code, as for SP), marked', async () => {
     const r = await preview('retire-negatives', { negativeIds: ['n-sb', 'n-sd'] })
     expect(r.ok, r.error).toBe(true)
-    expect(r.preview).toMatchObject({ totals: { retiring: 2, atAmazon: 2 }, stepUp: { raises: ['Spend'] } })
+    expect(r.preview).toMatchObject({
+      totals: { retiring: 2, atAmazon: 2 }, stepUp: { raises: ['Spend'] },
+      irreversible: ['negative exact "cheap brand" · ad group "group c-sb" (campaign "Italy brands")'],
+      irreversibleNote: 'Amazon does not let a Sponsored Brands negative keyword archived in a campaign be added to that campaign again: these retires cannot be undone.',
+      effect: expect.stringMatching(/To block that search again, a new negative is added\. For good: negative exact "cheap brand" .* — Amazon does not let a Sponsored Brands negative keyword archived in a campaign be added to that campaign again, so that search cannot be blocked there again, not even by an undo\./),
+      warning: expect.stringMatching(/blocking the search again adds a new one; Amazon does not let a Sponsored Brands negative keyword archived in a campaign be added to that campaign again, so that block cannot be made again there\.$/),
+      undoNote: expect.stringMatching(/The Sponsored Brands negative keywords are not added again/),
+    })
     const asked = await ask('retire-negatives', { negativeIds: ['n-sb', 'n-sd'], why: 'test' })
     await withCode(asked.approvalId!)
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { retired: 2 } })
     expect((await queuedBy(asked.approvalId!)).map((q) => [q.entityId, q.sbSd, q.fields])).toEqual([['n-sb', true, ['status=ARCHIVED']], ['n-sd', true, ['status=ARCHIVED']]])
+    // Its undo adds the SD one again and says honestly that the SB keyword cannot come back.
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({
+      request: { tool: 'add-negative-targets', args: { negatives: [{ adGroupId: 'g-c-sd', asin: 'B0TESTNEG1' }], why: expect.stringMatching(/not the Sponsored Brands negative keyword: Amazon does not let one archived in a campaign be added there again/) } },
+    })
+    // …and add-negative-targets refuses it by name rather than send it for Amazon to refuse.
+    expect((await preview('add-negative-targets', { adGroupIds: ['g-c-sb'], keywords: [{ text: 'cheap brand' }] })).error).toMatch(/negative exact "cheap brand" was retired in campaign "Italy brands" before: Amazon does not let a Sponsored Brands negative keyword archived in a campaign be added to that campaign again/)
+  })
+
+  it('a retire of SB negative keywords only: its undo is refused, honestly', async () => {
+    const asked = await ask('retire-negatives', { negativeIds: ['n-sb2'], why: 'test' })
+    await withCode(asked.approvalId!)
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { retired: 1 } })
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toEqual({
+      error: 'Amazon does not let a Sponsored Brands negative keyword archived in a campaign be added to that campaign again: the Sponsored Brands negative keyword this retire lifted cannot be added again. Nothing was queued.',
+    })
+  })
+})
+
+describe('undo-ad-change of an SB/SD request (its writes go back on the same route)', () => {
+  it('the undo of add-negative-targets retires the SB negative keyword it added: live, the gate is told what it is; in sandbox it runs', async () => {
+    const asked = await ask('add-negative-targets', { adGroupIds: ['g-c-sb'], keywords: [{ text: 'undo brand' }], why: 'test' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { added: 1 } })
+    // As if Amazon had answered with its id (sandbox gives none): the retire then goes to Amazon, not to Nexus only.
+    await inside(() => database.client.adTarget.updateMany({ where: { adGroupId: 'g-c-sb', expressionValue: 'undo brand' }, data: { externalTargetId: '400000000777' } }))
+    const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))
+    expect(undo).toMatchObject({ request: { tool: 'undo-ad-change', args: { changeSetId: asked.approvalId } } })
+    const args = (undo as { request: { args: Record<string, unknown> } }).request.args
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    const live = await preview('undo-ad-change', args)
+    expect(live.ok, live.error).toBe(true)
+    expect(live.preview).toMatchObject({ reach: { reach: 'live', profileId: 'P-IT-TEST' }, negatives: [expect.objectContaining({ keywordText: 'undo brand' })] })
+    vi.unstubAllEnvs()
+    const back = await ask('undo-ad-change', args)
+    expect(await approve(back.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { negatives: { retired: 1, refused: 0, failed: 0 } } })
+    const [row] = await sql<{ id: string; status: string }>(`SELECT id, status FROM "AdTarget" WHERE "adGroupId" = 'g-c-sb' AND "expressionValue" = 'undo brand'`)
+    expect(row.status).toBe('ARCHIVED')
+    const [q] = await sql<{ payload: Row }>(`SELECT payload FROM "OutboundSyncQueue" WHERE payload->>'entityId' = $1`, [row.id])
+    expect(q.payload).toMatchObject({ entityType: 'AD_TARGET', sbSd: true, fieldChanges: [{ field: 'status', newValue: 'ARCHIVED' }] })
+  })
+
+  it('the undo of an SB keyword bid puts it back on the same route: live preview reaches Amazon, sandbox reverses it', async () => {
+    const [{ bidCents: was }] = await sql<{ bidCents: number }>(`SELECT "bidCents" FROM "AdTarget" WHERE id = 't-sb'`)
+    const asked = await ask('set-target-bid', { targetId: 't-sb', proposedBidCents: 70, why: 'test' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    const live = await preview('undo-ad-change', { changeSetId: asked.approvalId! })
+    expect(live.ok, live.error).toBe(true)
+    expect(live.preview).toMatchObject({ reach: { reach: 'live' } })
+    vi.unstubAllEnvs()
+    const back = await ask('undo-ad-change', { changeSetId: asked.approvalId!, why: 'test' })
+    expect(await approve(back.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { reversed: 1, failed: 0 } })
+    expect(await queuedBy(back.approvalId!)).toEqual([{ entityId: 't-sb', actor: 'user:u-approver', sbSd: true, fields: [`bid=${was}`] }])
+  })
+
+  it('🔴 a write the mark did not cover is not given the SB/SD route by the undo: the gate refuses it with the true sentence', async () => {
+    const asked = await ask('set-campaign-budget', { campaignId: 'c-sd', dailyBudgetCents: 2100, why: 'test' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    // As if some other path had queued it: its queue row loses the mark.
+    const [log] = await sql<{ outboundQueueId: string }>(`SELECT "outboundQueueId" FROM "AdvertisingActionLog" WHERE "executionId" = $1 AND "outboundQueueId" IS NOT NULL`, [asked.approvalId])
+    await sql(`UPDATE "OutboundSyncQueue" SET payload = payload - 'sbSd' WHERE id = $1`, [log.outboundQueueId])
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    expect((await preview('undo-ad-change', { changeSetId: asked.approvalId! })).error).toMatch(/Test display is not a Sponsored Products campaign \(it is Sponsored Display\)\. Nexus makes this change for Sponsored Products campaigns only/)
   })
 })
 

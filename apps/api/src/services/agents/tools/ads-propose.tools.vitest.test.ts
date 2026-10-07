@@ -126,8 +126,8 @@ describe('A4 — set-target-bid previews what lands, where, in which currency', 
     expect((await preview('set-target-bid', { targetId: 't-it', proposedBidCents: 4 })).error).toMatch(/below the 5c floor/)
     // 4A — a pin no longer refuses a request a person approves (his own click).
     expect((await preview('set-target-bid', { targetId: 't-pin', proposedBidCents: 50 })).ok).toBe(true)
-    // W4-11 — a Sponsored Brands keyword's bid is sent to SB's own endpoint (ads-sbsd-tools.vitest.test.ts).
-    expect((await preview('set-target-bid', { targetId: 't-sb', proposedBidCents: 50 })).ok).toBe(true)
+    // W4-11 — a Sponsored Brands keyword's bid only in a campaign Nexus has read pays per click (ads-sbsd-tools.vitest.test.ts).
+    expect((await preview('set-target-bid', { targetId: 't-sb', proposedBidCents: 50 })).error).toMatch(/has not read from Amazon whether it pays per click/)
     expect((await preview('set-target-bid', { targetId: 't-neg', proposedBidCents: 50 })).error).toMatch(/not found \(or is a negative\)/)
     expect((await preview('set-target-bid', { targetId: 't-sup', proposedBidCents: 30 })).error).toMatch(/is suppressed .*Restoring the campaign lifts it/)
     expect((await preview('set-target-bid', { targetId: 't-low', proposedBidCents: 30 })).error).toMatch(/sits at 3c/)

@@ -55,7 +55,7 @@ describe('ctx.adProduct — the negative paths, before the sandbox return', () =
     const r = await checkAdsWriteGate({ marketplace: 'IT', payloadValueCents: 0, isNegation: true, keywordText: 'x', adProduct: 'SPONSORED_BRANDS' })
     expect(r).toEqual({
       allowed: false, deniedAt: 'ad_product_unsupported',
-      reason: expect.stringMatching(/^This campaign is not a Sponsored Products campaign \(it is Sponsored Brands\)\. Nexus changes/),
+      reason: expect.stringMatching(/^This campaign is not a Sponsored Products campaign \(it is Sponsored Brands\)\. Nexus makes this change for Sponsored Products campaigns only/),
     })
   })
 

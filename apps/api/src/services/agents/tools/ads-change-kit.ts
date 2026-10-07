@@ -221,10 +221,10 @@ export function spOnlyRefusal(campaign: { type?: string | null; adProduct?: stri
  * product target in an ad group). An ad product neither column states is refused, as `spOnlyRefusal` refuses it.
  */
 export function adWriteRefusalOf(
-  campaign: { type?: unknown; adProduct?: string | null; name?: string | null; budgetJson?: unknown },
+  campaign: { type?: unknown; adProduct?: string | null; name?: string | null; budgetJson?: unknown; costType?: string | null },
   write: AdWrite,
 ): string | null {
-  return adWriteRefusal({ type: campaign.type == null ? null : String(campaign.type), adProduct: campaign.adProduct ?? null, name: campaign.name ?? null, budgetJson: campaign.budgetJson }, write)
+  return adWriteRefusal({ type: campaign.type == null ? null : String(campaign.type), adProduct: campaign.adProduct ?? null, name: campaign.name ?? null, budgetJson: campaign.budgetJson, costType: campaign.costType ?? null }, write)
 }
 
 /** W4-11 — a keyword's or target's bid write, as the gate and the mutation layer judge it for an SB/SD campaign. */

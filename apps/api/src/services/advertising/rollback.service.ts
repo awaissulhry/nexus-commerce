@@ -114,6 +114,8 @@ interface AdLog {
   createdAt: Date
   rolledBackAt: Date | null
   amazonResponseStatus: string | null
+  /** W4-11 — the queue row this write went out on (wasSbSdWrite reads its `sbSd` mark). */
+  outboundQueueId?: string | null
 }
 
 /**
@@ -147,6 +149,16 @@ export function noteNothingToUndo(out: RollbackOutcome, why?: string | null): Ro
   return out
 }
 
+/**
+ * ADS AUTONOMY W4-11 — the write this row records was a Sponsored Brands / Display write the mutation layer let through
+ * for a Claude request: its queue row carries `sbSd` (ads-mutation.service.ts EnqueueArgs.sbSd). Read off that row only.
+ */
+export async function wasSbSdWrite(log: { outboundQueueId?: string | null }): Promise<boolean> {
+  if (!log.outboundQueueId) return false
+  const row = await prisma.outboundSyncQueue.findUnique({ where: { id: log.outboundQueueId }, select: { payload: true } }).catch(() => null)
+  return (row?.payload as { sbSd?: unknown } | null | undefined)?.sbSd === true
+}
+
 async function reverseOne(
   log: AdLog,
   actor: AdsActor,
@@ -162,6 +174,12 @@ async function reverseOne(
    * an archive cannot be undone at Amazon.
    */
   changeSetId: string | null = null,
+  /**
+   * ADS AUTONOMY W4-11 — undo-ad-change asks for it: the reversal of a Sponsored Brands / Display write goes back on the
+   * same SB/SD route as the write it reverses (`allowSbSd`), but only for a write the mutation layer let through for a
+   * Claude request (its queue row carries `sbSd`, sbSdWriteOf). Every other caller and write stays Sponsored Products only.
+   */
+  sbSd = false,
 ): Promise<{ ok: boolean; reason?: string; skipped?: boolean }> {
   // Refuse to invert anything that never made it past the gate / queue
   // — there's nothing to undo on the Amazon side, and re-applying the
@@ -247,6 +265,7 @@ async function reverseOne(
         applyImmediately: true,
         manual,
         changeSetId,
+        ...(sbSd && (await wasSbSdWrite(log)) ? { allowSbSd: true } : {}), // W4-11
       })
       return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
     }
@@ -285,6 +304,7 @@ async function reverseOne(
         manual,
         reversal: true,
         changeSetId,
+        ...(sbSd && (await wasSbSdWrite(log)) ? { allowSbSd: true } : {}), // W4-11
       })
       if (result.ok) await restoreFloorMemory(log, before)
       return result.ok ? { ok: true } : { ok: false, reason: result.error ?? 'unknown' }
@@ -388,11 +408,13 @@ export async function rollbackByActionLogId(args: {
   manual?: boolean
   /** AA-W2-9 — the change set the reversal's own writes carry (see reverseOne). */
   stampChangeSetId?: string | null
+  /** W4-11 — undo-ad-change: an SB/SD write a Claude request made goes back on its own route (see reverseOne). */
+  allowSbSd?: boolean
 }): Promise<RollbackOutcome> {
   const log = await prisma.advertisingActionLog.findUnique({ where: { id: args.actionLogId } })
   if (!log) return { ok: false, reversed: 0, skipped: 0, failed: 0, details: [], reason: 'That change no longer exists.' }
   // A grouped row reverses with its set, so the entity never lands in a state that never existed.
-  if (log.executionId) return rollbackByChangeSetId({ changeSetId: log.executionId, actor: args.actor, reason: args.reason, manual: args.manual, stampChangeSetId: args.stampChangeSetId })
+  if (log.executionId) return rollbackByChangeSetId({ changeSetId: log.executionId, actor: args.actor, reason: args.reason, manual: args.manual, stampChangeSetId: args.stampChangeSetId, allowSbSd: args.allowSbSd })
 
   const out: RollbackOutcome = { ok: true, reversed: 0, skipped: 0, failed: 0, details: [] }
   if (log.rolledBackAt) { out.skipped = 1; out.reason = 'Already undone.'; return out }
@@ -401,7 +423,7 @@ export async function rollbackByActionLogId(args: {
     out.reason = `Older than the ${rollbackWindowLabel(log.actionType)} undo window for this kind of change.`
     return out
   }
-  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true, args.stampChangeSetId ?? null)
+  const r = await reverseOne(log as never, args.actor, args.reason, args.manual === true, args.stampChangeSetId ?? null, args.allowSbSd === true)
   const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
   // CM-22 — a no-op (`ok` with `skipped`) is skipped, not reversed, and the row is not marked undone.
   if (r.ok && !r.skipped) {
@@ -437,6 +459,8 @@ export async function rollbackByChangeSetId(args: {
    * Absent: every write of the set, as before.
    */
   actionLogIds?: string[] | null
+  /** W4-11 — undo-ad-change: an SB/SD write a Claude request made goes back on its own route (see reverseOne). */
+  allowSbSd?: boolean
 }): Promise<RollbackOutcome> {
   const logs = await prisma.advertisingActionLog.findMany({
     where: {
@@ -468,7 +492,7 @@ export async function rollbackByChangeSetId(args: {
   }
   const stamp = args.stampChangeSetId && args.stampChangeSetId !== args.changeSetId ? args.stampChangeSetId : null
   for (const log of logs) {
-    const r = await reverseOne(log, args.actor, args.reason, args.manual === true, stamp)
+    const r = await reverseOne(log, args.actor, args.reason, args.manual === true, stamp, args.allowSbSd === true)
     const base = { actionLogId: log.id, actionType: log.actionType, entityType: log.entityType, entityId: log.entityId }
     if (r.ok && !r.skipped) {
       out.reversed += 1
