@@ -17,6 +17,7 @@ vi.mock('../sync-coalesce.js', () => ({ coalescePendingQuantityRows: vi.fn() }))
 vi.mock('../outbound-enqueue.js', () => ({ fireOutboundJobs: vi.fn() }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshMany: vi.fn() } }))
 vi.mock('./fulfillment-method.service.js', () => ({ setFulfillmentMethod: vi.fn() }))
+vi.mock('./fulfilment-conversion.service.js', () => ({ convertAmazonFulfilment: vi.fn(), loadConversionPlan: vi.fn() }))
 vi.mock('./channel-price-write.service.js', () => ({ writeChannelPrices: vi.fn() }))
 vi.mock('./matrix.service.js', () => ({ getMatrixRead: vi.fn() }))
 vi.mock('../listing-values-events.js', () => ({ announceListingValues: vi.fn() }))
@@ -25,6 +26,7 @@ import { applyCell, paramsForChange, restoreWrites, writeMatrixCells } from './m
 import { writeChannelPrices, type PriceWriteTarget } from './channel-price-write.service.js'
 import { setFollowMasterQuantity, setStockBuffer } from '../follow-master.service.js'
 import { setFulfillmentMethod } from './fulfillment-method.service.js'
+import { convertAmazonFulfilment } from './fulfilment-conversion.service.js'
 import { getMatrixRead } from './matrix.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
@@ -70,9 +72,16 @@ describe('restoreWrites — the writes that take a live cell back to its capture
       price: { value: 90, currency: 'EUR', source: 'override', formula: null, clamped: null },
       sale: { value: 80, start: '2026-09-14', end: '2026-09-20' },
     })
-    expect(restoreWrites('r', 'AMAZON:EU', before, live)).toEqual([
+    expect(restoreWrites('r', 'EBAY:IT', before, live)).toEqual([
       { kind: 'state', verb: 'resume-sync' },
       { kind: 'cell', cell: 'fulfilment', value: 'FBM' },
+      { kind: 'cell', cell: 'syncBuffer', value: 0 },
+      { kind: 'cell', cell: 'price', value: null },
+      { kind: 'cell', cell: 'salePrice', value: { value: null, start: null, end: null } },
+    ])
+    /* Amazon (2026-10-07): never a value-only fulfilment write — the revert sends the opposite conversion instead. */
+    expect(restoreWrites('r', 'AMAZON:EU', before, live)).toEqual([
+      { kind: 'state', verb: 'resume-sync' },
       { kind: 'cell', cell: 'syncBuffer', value: 0 },
       { kind: 'cell', cell: 'price', value: null },
       { kind: 'cell', cell: 'salePrice', value: { value: null, start: null, end: null } },
@@ -186,16 +195,29 @@ describe('the door answers the listings it moved, refuses a listing it did not e
   })
 
   it('fulfilment and price answer the versions their own doors report', async () => {
-    vi.mocked(setFulfillmentMethod).mockReset().mockResolvedValue({ results: [
-      { listingId: 'l-it', productId: 'row', channel: 'AMAZON', marketplace: 'IT', outcome: 'applied', version: 4, productFlag: null },
-      { listingId: 'l-de', productId: 'row', channel: 'AMAZON', marketplace: 'DE', outcome: 'noop', version: 5, productFlag: null },
-    ], applied: 1, refused: 0, noop: 1, conflict: 0, productConversions: [] })
-    const f = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'fulfilment', value: 'FBA', expectedVersion: 3 } as never, ctx)
-    expect(f).toMatchObject({ outcome: 'applied', version: 4, listings: [{ listingId: 'l-it', productId: 'row', version: 4 }] })
+    /* Amazon (2026-10-07): the conversion answers the listings it wrote, Amazon's partial refusal by name. */
+    vi.mocked(setFulfillmentMethod).mockReset()
+    vi.mocked(convertAmazonFulfilment).mockReset().mockResolvedValue({ outcome: 'applied', reason: 'Sent to Amazon IT — Amazon DE refused: Amazon refused it: 8541', listings: [{ listingId: 'l-it', productId: 'row', version: 4 }], runId: 'run', accepted: ['IT'], refused: [{ market: 'DE', reason: 'Amazon refused it: 8541' }] })
+    const f = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'fulfilment', value: 'FBA', expectedVersion: 3 } as never, { ...ctx, conversion: 'matrix-verb' })
+    expect(f).toMatchObject({ outcome: 'applied', version: 4, reason: expect.stringContaining('Amazon DE refused'), listings: [{ listingId: 'l-it', productId: 'row', version: 4 }] })
+    expect(vi.mocked(convertAmazonFulfilment).mock.calls[0]![0]).toMatchObject({ primaryListingId: 'l-it', to: 'FBA', origin: 'matrix-verb', targets: [{ id: 'l-it', marketplace: 'IT', version: 3 }, { id: 'l-de', marketplace: 'DE', version: 5 }] })
+    expect(setFulfillmentMethod).not.toHaveBeenCalled()
 
     vi.mocked(writeChannelPrices).mockReset().mockResolvedValue({ results: [{ listingId: 'l-it', productId: 'row', channel: 'AMAZON', marketplace: 'IT', outcome: 'applied', version: 4, guarded: true, queueId: null }], applied: 1, refused: 0, noop: 0, conflict: 0 })
     const p = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:IT', cell: 'price', value: 90, expectedVersion: 3 } as never, ctx)
     expect(p).toMatchObject({ outcome: 'applied', version: 4, listings: [{ listingId: 'l-it', productId: 'row', version: 4 }] })
+  })
+
+  it('an Amazon Fulfilment cell written directly (not the confirmed verb) is refused by name; nothing is converted', async () => {
+    vi.mocked(convertAmazonFulfilment).mockReset()
+    vi.mocked(setFulfillmentMethod).mockReset()
+    const f = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'fulfilment', value: 'FBM', expectedVersion: 3 } as never, ctx)
+    expect(f).toMatchObject({ outcome: 'refused', reason: MATRIX_COPY.fulfilmentViaVerb, version: 3 })
+    expect(convertAmazonFulfilment).not.toHaveBeenCalled()
+    expect(setFulfillmentMethod).not.toHaveBeenCalled()
+    /* A clear is not a conversion on Amazon, even from the confirmed verb. */
+    const cleared = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'fulfilment', value: null, expectedVersion: 3 } as never, { ...ctx, conversion: 'matrix-verb' })
+    expect(cleared).toMatchObject({ outcome: 'refused', reason: expect.stringContaining('FBA or FBM') })
   })
 
   it('a refusal after the rows were staged still reports them (their versions moved)', async () => {

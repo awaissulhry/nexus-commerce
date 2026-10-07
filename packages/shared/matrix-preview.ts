@@ -14,6 +14,8 @@
 import {
   MATRIX_COPY,
   type CoordinateKey,
+  type FulfilmentCell,
+  type FulfilmentConversionStatus,
   type MatrixCells,
   type MatrixCoordinate,
   type MatrixRead,
@@ -37,6 +39,96 @@ export interface PreviewContext {
    * server reads the option from eBay; a context without it previews as before, and the server's re-check refuses.
    */
   ebayZeroAllowed?: (accountId: string | null, market: string) => boolean | null
+  /**
+   * Amazon fulfilment conversion (2026-10-07) — the server's facts for a set-fulfilment target on an Amazon coordinate
+   * (`fulfilment-conversion.service.ts` `amazonFulfilmentFacts`), by row and INVENTORY coordinate. Given = the run sends
+   * the change to Amazon, so the preview refuses and tells by these facts; a target with no facts is refused (never sent
+   * unchecked). Absent (the page's own fixture preview) = the cell facts alone, as before.
+   */
+  amazonFulfilment?: (rowId: string, coordinateKey: CoordinateKey) => AmazonFulfilmentFacts | null | undefined
+}
+
+/** What the server read for one Amazon set-fulfilment target, fresh, before anything is sent. */
+export interface AmazonFulfilmentFacts {
+  /** The open markets the patch goes to (one listing row each), in market order. */
+  markets: readonly string[]
+  /** Markets of the coordinate skipped: selling is paused there (Inactive), or the listing is not live on Amazon yet. */
+  skipped: ReadonlyArray<{ market: string; why: 'inactive' | 'not-listed' }>
+  /** FBM: the merchant quantity that will be sent — the cell's intended quantity (Follow: pool − buffer; Pinned: the number). */
+  quantity: number | null
+  /** Why no merchant quantity could be worked out (an FBM change is refused then). */
+  quantityRefusal: string | null
+  /** The SKU's FBA units Nexus mirrors: on hand at Amazon, reserved, inbound. */
+  fbaUnits: { onHand: number; reserved: number; inbound: number }
+  /** An active FBA offer on one of these listings. */
+  activeFbaOffer: boolean
+  /** An Amazon-only fulfilment code (Remote Fulfilment, VCS) on one of the listings: its sentence. */
+  keptCodeReason: string | null
+  /** No listing here is live on Amazon yet (a draft): there is no offer to convert. */
+  notListed: boolean
+  /** A lock that refuses any send to these listings (stock sync held, ended, two seller SKUs …): its sentence. */
+  locked: string | null
+  /** The newest conversion sent for these listings. */
+  latest: FulfilmentConversionStatus | null
+}
+
+/** Facts the server could not read for an Amazon target: refused, never sent unchecked. */
+export const AMAZON_FULFILMENT_FACTS_UNREAD = 'Refused — the Amazon facts for this listing (FBA units, markets, quantity) could not be read, so nothing is sent'
+
+const methodOfReported = (r: 'AFN' | 'MFN' | null): 'FBA' | 'FBM' | null => (r === 'AFN' ? 'FBA' : r === 'MFN' ? 'FBM' : null)
+const timeOf = (iso: string): string => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * PURE — why an Amazon set-fulfilment target is not sent (`kind` + the operator's sentence), `'noop'` when Amazon and
+ * Nexus already agree on `method`, or null = it is sent. The refusals, by name: an Amazon-only code; not listed (a draft);
+ * every market Inactive; a send lock; FBA → FBM while FBA units are on hand, reserved or inbound, or an FBA offer is
+ * active (the guard Nexus has always held, kept); no merchant quantity to send; a change already on its way.
+ */
+export function amazonConversionRefusal(facts: AmazonFulfilmentFacts, method: 'FBA' | 'FBM', f: Pick<FulfilmentCell, 'method' | 'source' | 'guard' | 'reported'>):
+  { kind: VerbRefusal['kind']; reason: string } | 'noop' | null {
+  const latest = facts.latest
+  if (latest && latest.to === method && (latest.status === 'SENDING' || latest.status === 'SENT')) {
+    return { kind: 'not-applicable', reason: `Already sent to Amazon ${timeOf(latest.at)} — waiting for Amazon's report` }
+  }
+  const reported = methodOfReported(f.reported)
+  const confirmed = latest?.to === method && latest.status === 'CONFIRMED'
+  const unresolved = latest?.to === method && (latest.status === 'STILL_OLD' || latest.status === 'NOT_IN_REPORT' || latest.status === 'REFUSED')
+  if (f.method === method && f.source === 'set' && f.guard === method && !unresolved && (confirmed || reported == null || reported === method)) return 'noop'
+  if (facts.notListed) return { kind: 'no-listing', reason: 'Not listed on Amazon yet — there is no offer to convert. Set the method in the product sheet; Publish sends it' }
+  if (facts.keptCodeReason) return { kind: 'guard', reason: `Refused — ${facts.keptCodeReason}` }
+  if (facts.markets.length === 0) return { kind: 'not-applicable', reason: `No open offer to convert here: ${skippedWords(facts.skipped) || 'no market is live'}` }
+  if (facts.locked) return { kind: 'guard', reason: facts.locked }
+  if (method === 'FBM') {
+    const u = facts.fbaUnits
+    const tail = 'Amazon must hold no FBA units of this SKU before its offer is converted to FBM'
+    if (u.onHand > 0) return { kind: 'guard', reason: `Refused — ${u.onHand} units of FBA stock on hand keep the guard closed; ${tail}` }
+    if (u.reserved > 0) return { kind: 'guard', reason: `Refused — ${u.reserved} FBA units reserved at Amazon keep the guard closed; ${tail}` }
+    if (u.inbound > 0) return { kind: 'guard', reason: `Refused — ${u.inbound} FBA units inbound to Amazon keep the guard closed; ${tail}` }
+    if (facts.activeFbaOffer) return { kind: 'guard', reason: 'Refused — an active FBA offer keeps the guard closed; convert the offer in Seller Central first' }
+    if (facts.quantity == null) return { kind: 'guard', reason: `Refused — ${facts.quantityRefusal ?? 'no merchant quantity could be worked out'}; an FBM offer needs one` }
+  }
+  return null
+}
+
+/** "FR ES (Inactive), DE (not listed)". */
+const skippedWords = (skipped: AmazonFulfilmentFacts['skipped']): string => {
+  const of = (why: 'inactive' | 'not-listed') => skipped.filter((x) => x.why === why).map((x) => x.market)
+  const inactive = of('inactive'), draft = of('not-listed')
+  return [inactive.length ? `${inactive.join(' ')} (Inactive)` : '', draft.length ? `${draft.join(' ')} (not listed)` : ''].filter(Boolean).join(', ')
+}
+
+/** PURE — the change's note: what is sent to Amazon, where, and what Amazon reports now when it differs. */
+export function amazonConversionNote(facts: AmazonFulfilmentFacts, method: 'FBA' | 'FBM', reported: 'AFN' | 'MFN' | null): string {
+  const was = methodOfReported(reported)
+  const lead = was && was !== method ? `Amazon reports ${reported}. ` : ''
+  const where = facts.markets.join(' ')
+  const skips = facts.skipped.length ? ` — skips ${skippedWords(facts.skipped)}` : ''
+  return method === 'FBM'
+    ? `${lead}Sends Amazon FBM (DEFAULT) with quantity ${facts.quantity ?? '—'} on ${where}${skips}`
+    : `${lead}Sends Amazon FBA (AMAZON_EU) on ${where}, no quantity — out of stock until Amazon receives units${skips}`
 }
 
 export const EBAY_ZERO_REFUSAL = 'Refused — eBay ends a listing pinned at 0 unless the account\'s out-of-stock option is ON, and it is OFF '
@@ -178,11 +270,26 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
         const f = cells.fulfilment
         if (!f) { refuse(row, key, 'not-applicable', 'This channel has no fulfilment method'); break }
         if (!coord.vocabulary.fulfilment?.includes(p.method)) { refuse(row, key, 'not-applicable', `${p.method} is not a method on ${coord.label}`); break }
+        /* Amazon (2026-10-07): the run SENDS the conversion to Amazon — refused and told by the server's fresh facts. */
+        if (coord.channel === 'AMAZON' && ctx.amazonFulfilment && (p.method === 'FBA' || p.method === 'FBM')) {
+          const facts = ctx.amazonFulfilment(row.id, key)
+          if (!facts) { refuse(row, key, 'guard', AMAZON_FULFILMENT_FACTS_UNREAD); break }
+          const verdict = amazonConversionRefusal(facts, p.method, f)
+          if (verdict === 'noop') break
+          if (verdict) { refuse(row, key, verdict.kind, verdict.reason); break }
+          notices.add(MATRIX_COPY.fulfilmentSent(facts.markets))
+          if (p.method === 'FBM' && coord.sharedInventoryWith) notices.add(MATRIX_COPY.fulfilmentEuQuantity)
+          if (p.method === 'FBA') notices.add(MATRIX_COPY.fulfilmentFbaOutOfStock)
+          changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'fulfilment', from: f.method, to: p.method, fromLabel: f.method ?? '—', toLabel: p.method, note: amazonConversionNote(facts, p.method, f.reported) })
+          break
+        }
         if (f.method === p.method && f.source === 'set') break
         const s = cells.sync
         if (f.method === 'FBA' && p.method === 'FBM' && s?.fbaAtAmazon != null && s.fbaAtAmazon > 0) { refuse(row, key, 'guard', `Refused — ${s.fbaAtAmazon} units of FBA stock on hand keep the guard closed; convert the offer in Seller Central first`); break }
         const pool = s?.poolAvailable ?? null
         const after = p.method === 'FBA' ? 'Amazon-managed · no merchant quantity is pushed' : pool == null ? `Follow → ${MATRIX_COPY.uncounted}` : `Follow → ${Math.max(0, pool - (s?.buffer ?? 0))} pushed from ${s?.routedLocations.join(', ') || 'no routed location'}`
+        /* eBay (MCF) stays Nexus's own and says so; the page's fixture preview keeps the cell facts it has. */
+        if (coord.channel !== 'AMAZON') notices.add(MATRIX_COPY.fulfilmentNexusOnly)
         changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'fulfilment', from: f.method, to: p.method, fromLabel: f.method ?? '—', toLabel: p.method, note: after })
         break
       }

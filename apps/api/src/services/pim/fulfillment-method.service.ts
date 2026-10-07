@@ -18,7 +18,10 @@
  *     when every other FBA signal is clear; toggling FBA locks it. A completed FBM conversion recascades the product
  *     so the pool quantity is pushed at once — the pause→resume workaround retires (D-MX11).
  *
- * The method itself is converted in Seller Central (M7): nothing here calls Amazon.
+ * This door writes NEXUS only — nothing here calls Amazon. On an Amazon coordinate the Matrix's set-fulfilment is a real
+ * conversion (2026-10-07, `fulfilment-conversion.service.ts`): it sends Amazon the patch per market and writes here around
+ * the send — FBA → FBM after Amazon accepted (`unguarded: 'amazon-accepted'`), FBM → FBA before the send, and back again
+ * when Amazon refuses (`unguarded: 'amazon-refused'`).
  */
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
@@ -154,7 +157,15 @@ export async function fulfilmentRefusals(targets: ReadonlyArray<{ listingId: str
   return out
 }
 
-export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[]; actor: string }): Promise<FulfilmentResult> {
+/**
+ * Why a write may skip the FBA guard's refusal (never the CAS): Amazon itself already answered for these listings. A
+ * closed set, as the price door's unguarded reasons.
+ *   - `amazon-accepted`: Amazon accepted an FBA → FBM conversion, so Nexus must manage the merchant quantity now;
+ *   - `amazon-refused`: Amazon refused an FBM → FBA conversion, so Nexus puts back the method Amazon still has.
+ */
+export type FulfilmentUnguardedReason = 'amazon-accepted' | 'amazon-refused'
+
+export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[]; actor: string; unguarded?: FulfilmentUnguardedReason }): Promise<FulfilmentResult> {
   const result: FulfilmentResult = { results: [], applied: 0, refused: 0, noop: 0, conflict: 0, productConversions: [] }
   if (input.targets.length === 0) return result
   const { byId, fbaUnits, activeFbaOffer } = await loadGuardFacts([...new Set(input.targets.map((t) => t.listingId))])
@@ -169,7 +180,7 @@ export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[];
     if (l.channel !== 'AMAZON' && l.channel !== 'EBAY') { push({ ...base, outcome: 'refused', reason: `${l.channel} has no fulfilment method`, version: l.version }); continue }
     if (t.expectedVersion !== undefined && t.expectedVersion !== l.version) { push({ ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: l.version }); continue }
     const units = fbaUnits.get(l.productId) ?? 0
-    const held = guardRefusal(l, t.method, units, activeFbaOffer.has(l.id))
+    const held = input.unguarded ? null : guardRefusal(l, t.method, units, activeFbaOffer.has(l.id))
     if (held) { push({ ...base, outcome: 'refused', reason: held, version: l.version }); continue }
     const pa = fulfilmentAttributes(l.platformAttributes, l.channel, t.method)
     const paBefore = (l.platformAttributes as Record<string, unknown> | null) ?? {}
@@ -203,7 +214,7 @@ export async function setFulfillmentMethod(input: { targets: FulfilmentTarget[];
     if (!written) { push({ ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: (await prisma.channelListing.findUnique({ where: { id: l.id }, select: { version: true } }))?.version ?? l.version }); continue }
     if (written.productFlag === 'FBM') { result.productConversions.push(l.productId); recascade.add(l.productId) }
     if (written.productFlag === 'held') logger.warn('fulfillment: product flag HELD (live FBA evidence remains)', { productId: l.productId, listingId: l.id, units, activeOffer: activeFbaOffer.has(l.id) })
-    audit.push({ actor: input.actor, scopeType: 'LISTING', scopeId: l.id, scopeName: `${l.product?.sku ?? '?'}@${l.channel}:${l.marketplace}`, field: 'fulfillmentMethod', before: { method: l.fulfillmentMethod ?? null }, after: { method: t.method, productFlag: written.productFlag } })
+    audit.push({ actor: input.actor, scopeType: 'LISTING', scopeId: l.id, scopeName: `${l.product?.sku ?? '?'}@${l.channel}:${l.marketplace}`, field: 'fulfillmentMethod', before: { method: l.fulfillmentMethod ?? null }, after: { method: t.method, productFlag: written.productFlag }, ...(input.unguarded ? { reason: input.unguarded } : {}) })
     push({ ...base, outcome: 'applied', version: written.version, productFlag: written.productFlag })
   }
   if (audit.length) await prisma.syncControlAudit.createMany({ data: audit }).catch((err) => logger.warn('fulfillment: audit write failed', { error: err instanceof Error ? err.message : String(err) }))

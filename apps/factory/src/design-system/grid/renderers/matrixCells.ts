@@ -32,6 +32,7 @@
  */
 import {
   MATRIX_CELL_KINDS,
+  type FulfilmentConversionStatus,
   type FulfilmentMethod,
   type ListingCell,
   type MatrixCellKind,
@@ -79,6 +80,25 @@ export const MATRIX_CELL_COPY: MatrixCopy = {
   formula: (expr) => `Formula ${expr}`,
   clamped: (which) => `Clamped to the ${which}`,
   waitingForPublish: (value) => `Product sheet change waits for Publish: ${value}`,
+  conversion: (c) => matrixConversionLine(c),
+}
+
+const conversionTime = (iso: string): string => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+}
+
+/** PURE — the one line a conversion reads as ("Sent to Amazon 12:04 · waiting for Amazon's report"). Equal to the app's (parity test). */
+export function matrixConversionLine(c: FulfilmentConversionStatus): string {
+  const old = c.to === 'FBM' ? 'FBA' : 'FBM'
+  switch (c.status) {
+    case 'SENDING': return `Sending ${c.to} to Amazon ${conversionTime(c.at)}`
+    case 'SENT': return `Sent to Amazon ${conversionTime(c.at)} · waiting for Amazon's report`
+    case 'CONFIRMED': return `Confirmed by Amazon ${conversionTime(c.at)}`
+    case 'STILL_OLD': return `Amazon still reports ${old} — check Seller Central`
+    case 'NOT_IN_REPORT': return `Not in Amazon's report — check Seller Central`
+    case 'REFUSED': return `${c.to} not sent — ${c.message ?? 'refused'}`
+  }
 }
 
 /* ── the states §3.4 enumerates, named so a screenshot table and a gate row can address them ── */
@@ -573,7 +593,7 @@ export const MATRIX_CELL_CLASSES: readonly string[] = [
 export function matrixCellTooltip(
   kind: MatrixCellKind,
   cells: MatrixCells | null | undefined,
-  coord: Pick<MatrixCoordinate, 'currency' | 'sharedInventoryWith'>,
+  coord: Pick<MatrixCoordinate, 'currency' | 'sharedInventoryWith'> & { channel?: string },
   copy: MatrixCopy = MATRIX_CELL_COPY,
   now: number = Date.now(),
 ): string | null {
@@ -602,9 +622,13 @@ export function matrixCellTooltip(
       if (f.method) lines.push(f.source === 'set' ? copy.setHere : 'Derived — nothing is stored on this listing')
       if (guardDiffers(f.method, f.guard)) lines.push(copy.guardFba)
       if (reportedDiffers(f.method, f.reported)) lines.push(copy.reported(f.reported as 'AFN' | 'MFN'))
-      /* §3.4's honesty clause, and the whole reason this cell is not a plain select: it re-points
-         the pool behind the quantity; the OFFER is converted in Seller Central (design M7). */
-      lines.push('Changing this re-points the pool behind the quantity — the offer itself is converted in Seller Central')
+      /* 2026-10-07 — the newest conversion Nexus sent Amazon, in one line (sent · confirmed · still old · refused). */
+      if (f.conversion) lines.push(copy.conversion(f.conversion))
+      /* §3.4's honesty clause, and the whole reason this cell is not a plain select: on Amazon a change is a real
+         conversion of the offer (typed confirmation, then Amazon's report); elsewhere it re-points the pool, Nexus only. */
+      lines.push(coord.channel === 'AMAZON'
+        ? 'Changing this converts the offer on Amazon (type the method to confirm) and checks Amazon\'s report'
+        : 'Changing this re-points the pool behind the quantity — Nexus only, nothing is sent to the channel')
       if (region) lines.push(region)
       break
     }

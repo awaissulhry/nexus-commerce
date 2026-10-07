@@ -6402,6 +6402,22 @@
       }
     ]
   },
+  "FulfilmentConversion": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
   "EtsyReceiptIngest": {
     "scalar": {
       "connectionId": "workspace_connectionId"

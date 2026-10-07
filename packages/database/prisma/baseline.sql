@@ -9869,6 +9869,40 @@ CREATE TABLE "ReadinessIndex" (
 );
 
 -- CreateTable
+CREATE TABLE "FulfilmentConversion" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "channelListingId" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "channelConnectionId" TEXT,
+    "sku" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "marketplaceId" TEXT NOT NULL,
+    "fromMethod" TEXT NOT NULL,
+    "toMethod" TEXT NOT NULL,
+    "quantity" INTEGER,
+    "payload" JSONB NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'SENDING',
+    "message" TEXT,
+    "submissionId" TEXT,
+    "submissionStatus" TEXT,
+    "issues" JSONB,
+    "operatorConfirmed" BOOLEAN NOT NULL DEFAULT false,
+    "origin" TEXT NOT NULL,
+    "actor" TEXT NOT NULL,
+    "reportChannel" TEXT,
+    "reportPulls" INTEGER NOT NULL DEFAULT 0,
+    "lastReportAt" TIMESTAMP(3),
+    "sentAt" TIMESTAMP(3),
+    "confirmedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FulfilmentConversion_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "ChannelDrift" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15166,6 +15200,18 @@ CREATE INDEX "ReadinessIndex_workspaceId_pendingSince_idx" ON "ReadinessIndex"("
 CREATE UNIQUE INDEX "ReadinessIndex_workspaceId_productId_coordinateKey_language_key" ON "ReadinessIndex"("workspaceId", "productId", "coordinateKey", "language");
 
 -- CreateIndex
+CREATE INDEX "FulfilmentConversion_workspaceId_idx" ON "FulfilmentConversion"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "FulfilmentConversion_channelListingId_createdAt_idx" ON "FulfilmentConversion"("channelListingId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "FulfilmentConversion_status_createdAt_idx" ON "FulfilmentConversion"("status", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "FulfilmentConversion_sku_marketplaceId_idx" ON "FulfilmentConversion"("sku", "marketplaceId");
+
+-- CreateIndex
 CREATE INDEX "ChannelDrift_workspaceId_idx" ON "ChannelDrift"("workspaceId");
 
 -- CreateIndex
@@ -16280,6 +16326,9 @@ ALTER TABLE "ChannelListingTranslation" ADD CONSTRAINT "ChannelListingTranslatio
 
 -- AddForeignKey
 ALTER TABLE "ReadinessIndex" ADD CONSTRAINT "ReadinessIndex_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FulfilmentConversion" ADD CONSTRAINT "FulfilmentConversion_channelListingId_fkey" FOREIGN KEY ("channelListingId") REFERENCES "ChannelListing"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ChannelDrift" ADD CONSTRAINT "ChannelDrift_channelListingId_fkey" FOREIGN KEY ("channelListingId") REFERENCES "ChannelListing"("id") ON DELETE CASCADE ON UPDATE CASCADE;

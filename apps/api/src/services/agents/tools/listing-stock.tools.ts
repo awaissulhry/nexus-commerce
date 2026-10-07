@@ -4,7 +4,8 @@
  *
  *   set-listing-stock     pin a quantity, follow the stock again, set a buffer, hold or release the stock sync, push now,
  *                         retry a failed push (the Matrix's Sync › Retry), or set an Amazon listing's fulfilment to FBA or
- *                         FBM (the Matrix's Set fulfilment…; Amazon is never called — it changes what Nexus sends it).
+ *                         FBM (the Matrix's Set fulfilment…: a real conversion SENT to Amazon per market and confirmed
+ *                         from Amazon's merchant listings report — `fulfilment-conversion.service.ts`).
  *   set-listing-price     set a price, adjust prices by a percentage, copy prices from another market, or set a sale.
  *   revert-listing-change put back a Matrix operation one of them ran (the undo of both).
  *
@@ -22,15 +23,13 @@
 
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
-import { MATRIX_COPY, type MatrixVerbParams, type MatrixVerbTarget, type VerbChange, type VerbPreview, type VerbRefusal, type MatrixWriteOutcome, type SyncCell } from '@nexus/shared/matrix-contract'
-import { followQty } from '@nexus/shared/matrix-preview'
+import { MATRIX_COPY, type MatrixVerbParams, type MatrixVerbTarget, type VerbChange, type VerbPreview, type VerbRefusal, type MatrixWriteOutcome } from '@nexus/shared/matrix-contract'
 import prisma from '../../../db.js'
 import type { AgentTool, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { liveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 
 const matrixWrite = () => import('../../pim/matrix-write.service.js')
 const matrixRead = () => import('../../pim/matrix.service.js')
-const fulfilmentWrite = () => import('../../pim/fulfillment-method.service.js')
 
 const targetsInput = z.array(z.object({
   rowId: z.string().trim().min(1).max(64).describe('the row: a product id from listing-matrix (rowId)'),
@@ -60,9 +59,10 @@ export const HOLD_HOLDS_PRICES = 'Holding the stock sync also holds price and sa
 /** Retry sends a push again; once it reached the channel it cannot be called back (the Matrix keeps nothing to put back). */
 export const RETRY_SENDS_AGAIN = 'Retry sends the failed push to the channel again; what reaches the channel cannot be called back.'
 
-/** The fulfilment write is Nexus's own (`fulfillment-method.service.ts`): Amazon is never called by it. */
-export const FULFILMENT_NOT_SENT = 'Nothing is sent to Amazon by this change: the offer itself is converted in Seller Central. It changes '
-  + 'what Nexus sends Amazon from now on.'
+/** Amazon fulfilment conversion (2026-10-07): set-fulfilment on Amazon is SENT to Amazon and confirmed from its report. */
+export const FULFILMENT_SENT = 'This change is sent to Amazon: each market\'s offer is converted with a Listings Items patch (FBM: DEFAULT '
+  + 'with the merchant quantity; FBA: AMAZON_EU, no quantity), then checked against Amazon\'s merchant listings report within minutes — '
+  + 'the Matrix\'s Fulfilment cell shows when Amazon confirms it. Its revert is the opposite conversion, with fresh checks.'
 
 /**
  * N4 — the Matrix preview in words for the Approvals card (which reads `summary` and `warning`, not a list of cells):
@@ -75,7 +75,7 @@ export function matrixStory(sku: string, preview: Pick<VerbPreview, 'verb' | 'ch
     + `${keys.slice(0, 6).join(', ')}${keys.length > 6 ? ` and ${keys.length - 6} more` : ''}`
     + `${preview.refusals.length ? `; ${preview.refusals.length} refused (see refused)` : ''}.`
   const byVerb = preview.verb === 'pause-sync' ? [HOLD_HOLDS_PRICES] : preview.verb === 'retry-sync' ? [RETRY_SENDS_AGAIN]
-    : preview.verb === 'set-fulfilment' ? [FULFILMENT_NOT_SENT] : []
+    : preview.verb === 'set-fulfilment' ? [FULFILMENT_SENT] : []
   const warnings = [...preview.notices, ...byVerb, ...also]
   return { summary, ...(warnings.length ? { warning: warnings.join(' ') } : {}) }
 }
@@ -139,7 +139,9 @@ async function runVerbFor(args: Record<string, unknown>, ctx: ToolContext, param
   const now = new Set(fresh.changes.map(key))
   const moved = (approved.changes as VerbPreview['changes']).filter((c) => !now.has(key(c)))
   if (moved.length) {
-    return { ok: false, error: `${family.sku}: ${moved.slice(0, 10).map((c) => `${c.sku} ${c.coordinateKey}`).join(', ')} changed since it was approved. Nothing changed; ask Claude again.` }
+    // The fresh preview's own sentence when it refuses the target now (a guard that closed meanwhile), by name.
+    const why = (c: VerbChange) => fresh.refusals.find((r) => r.rowId === c.rowId && r.coordinateKey === c.coordinateKey)?.reason
+    return { ok: false, error: `${family.sku}: ${moved.slice(0, 10).map((c) => `${c.sku} ${c.coordinateKey}${why(c) ? ` (${why(c)})` : ''}`).join(', ')} changed since it was approved. Nothing changed; ask Claude again.` }
   }
   const carried: VerbPreview = { verb: params.verb, changes: approved.changes as VerbPreview['changes'], refusals: [], notices: [], confirm: 'none', confirmWord: null, simulated: false }
   // The verb's own check again, on what was approved: a guard that closed meanwhile (FBA units arrived, the failed push
@@ -222,90 +224,36 @@ async function landingOf(familyId: string, ctx: ToolContext) {
 }
 
 const refusalOf = (c: VerbChange, reason: string): VerbRefusal => ({ rowId: c.rowId, sku: c.sku, coordinateKey: c.coordinateKey, kind: 'guard', reason })
-const listed = (xs: readonly string[]) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
-
-/** What the stock a listing takes would be once Nexus may send it: the pinned number, or the stock it follows. */
-function stockWords(s: SyncCell | null): string {
-  if (!s) return 'the stock it follows'
-  if (s.mode === 'PINNED') return `its pinned quantity (${s.intended ?? s.held ?? '—'})`
-  const n = followQty(s)
-  return n == null ? 'the stock it follows (none is counted now, so nothing is sent until it is)' : `the stock it follows (${n} from ${s.routedLocations.join(', ') || 'no routed location'})`
-}
 
 /**
- * PURE — what a fulfilment change does on Amazon, in words, for one change. The write sends Amazon nothing
- * (`fulfillment-method.service.ts`); it changes what Nexus sends from now on, by the fail-closed FBA guard
- * (`isFbaCoordinate`: the listing's method, an FBA code, the product's FBA mark, FBA units, an active FBA offer):
- *   - FBA: no quantity is sent to these listings; Amazon keeps the last one Nexus sent until the offer is converted. A
- *     product marked FBM becomes marked FBA, which closes the guard on every Amazon listing of the SKU (`others`).
- *   - FBM: a product marked FBA is cleared only when no other listing of it is FBA (`stillFba`); until then nothing is
- *     sent. Cleared, the write pushes at once; a product that was not marked FBA gets its quantity at the next stock change.
+ * PURE — what a fulfilment change does, in words, for one change of the door's preview (its `note` says what is sent to
+ * Amazon, where, and which markets are skipped). After Amazon accepts: FBM — Nexus manages the merchant quantity (the
+ * stock it follows, or the pin), on every open EU market at once; FBA — Nexus sends no quantity, Amazon's FBA units are
+ * the quantity and the offer shows out of stock until Amazon receives units.
  */
-export function fulfilmentWords(input: {
-  sku: string
-  method: 'FBA' | 'FBM'
-  markets: readonly string[]
-  sync: SyncCell | null
-  /** `Product.fulfillmentMethod` now. */
-  productMark: string | null
-  /** FBA: the SKU's other Amazon inventory cells that Nexus still sends a quantity to (coordinate keys). */
-  others: readonly string[]
-  /** FBM: the SKU's other listings that are FBA (typed) or hold an active FBA offer (`CHANNEL MARKET`). */
-  stillFba: readonly string[]
-  /** The cell's method was derived (not set): a revert clears it again rather than setting the old method. */
-  derived: boolean
-}): string {
-  const where = `${input.sku} on Amazon ${input.markets.join(' ')}`
-  if (input.method === 'FBA') {
-    const held = input.sync && input.sync.kind !== 'FBA_EXCLUDED' && input.sync.held != null
-      ? ` Until the offer is converted in Seller Central, Amazon keeps the last quantity Nexus sent (${input.sync.held}).` : ''
-    const mark = input.productMark !== 'FBM' ? ''
-      : ` ${input.sku} itself becomes marked FBA${input.others.length ? `, so Nexus also stops sending a quantity to ${listed(input.others)}` : ''}`
-        + `${input.derived ? '; a revert clears this listing\'s method but leaves that mark' : ''}.`
-    return `${where}: from now on Nexus sends no quantity — the quantity is Amazon's (the units at its fulfilment centres).${held}${mark}`
-  }
-  if (input.productMark === 'FBA' && input.stillFba.length) {
-    return `${where}: ${input.sku} stays marked FBA while ${listed(input.stillFba)} ${input.stillFba.length === 1 ? 'is' : 'are'} FBA, so Nexus still sends Amazon no quantity for it.`
-  }
-  const held = input.sync?.kind === 'PAUSED' ? ' Its stock sync is held: nothing is sent until it is released.' : ''
-  return input.productMark === 'FBA'
-    ? `${where}: ${input.sku} is no longer marked FBA, and Nexus sends Amazon ${stockWords(input.sync)} at once.${held}`
-    : `${where}: from now on Nexus sends Amazon ${stockWords(input.sync)} — at the next stock change, or at once with push-now.${held}`
+export function fulfilmentWords(input: { sku: string; coordinateKey: string; method: 'FBA' | 'FBM'; note?: string | null }): string {
+  const sent = input.note ? `${input.note}.` : `Sends Amazon ${input.method}.`
+  const after = input.method === 'FBM'
+    ? 'Once Amazon accepts, Nexus manages the merchant quantity from then on.'
+    : 'Once Amazon accepts, Nexus sends no quantity: the quantity is Amazon\'s FBA units, and the offer shows out of stock until Amazon receives units.'
+  return `${input.sku} on ${input.coordinateKey}: ${sent} ${after}`
 }
 
 /**
- * set-fulfilment — the door's preview checks FBA units from the Matrix read only; its write (`setFulfillmentMethod`) also
- * refuses an active FBA offer and a code Amazon set, per listing. Here every listing a change lands on is checked by the
- * write's own guard (`fulfilmentRefusals`), and a change is kept only when ALL of them would be written — the door would
- * otherwise write part of an Amazon EU group. Each kept change says what it does on Amazon.
+ * set-fulfilment — the door's own preview carries every check now (on Amazon: the server's fresh facts — FBA units on
+ * hand, reserved and inbound, an active FBA offer, an Amazon-only code, a draft, Inactive markets, the quantity); here
+ * each change is checked to still land on the Matrix (else refused as changed elsewhere) and says what it does.
  */
 function vetFulfilment(method: 'FBA' | 'FBM'): Vet {
   return async (family, preview, ctx) => {
-    const [landing, { fulfilmentRefusals }] = await Promise.all([landingOf(family.id, ctx), fulfilmentWrite()])
-    const rowIds = [...new Set(preview.changes.map((c) => c.rowId))]
-    const marks = new Map((await prisma.product.findMany({ where: { id: { in: rowIds } }, select: { id: true, fulfillmentMethod: true } })).map((p) => [p.id, p.fulfillmentMethod as string | null]))
+    const landing = await landingOf(family.id, ctx)
     const changes: VerbChange[] = []
     const refusals = [...preview.refusals]
     const also: string[] = []
     for (const change of preview.changes) {
-      const landed = await landing.of(change)
-      if (!landed) { refusals.push(refusalOf(change, MATRIX_COPY.changedElsewhere)); continue }
-      const refused = await fulfilmentRefusals(landed.targets.map((t) => ({ listingId: t.id, method })))
-      const first = landed.targets.find((t) => refused.has(t.id))
-      if (first) { refusals.push(refusalOf(change, `${landed.targets.length > 1 ? `Amazon ${first.marketplace}: ` : ''}${refused.get(first.id)}`)); continue }
+      if (!(await landing.of(change))) { refusals.push(refusalOf(change, MATRIX_COPY.changedElsewhere)); continue }
       changes.push(change)
-      const { hit, targets } = landed
-      const ids = targets.map((t) => t.id)
-      const others = landing.read.coordinates
-        .filter((c) => c.channel === 'AMAZON' && c.key !== hit.coord.key)
-        .filter((c) => { const k = hit.row.cells[c.key]?.sync?.kind; return !!k && k !== 'FBA_EXCLUDED' && k !== 'CLOSED' })
-        .map((c) => c.key)
-      const stillFba = method === 'FBM' ? (await prisma.channelListing.findMany({
-        where: { productId: hit.row.id, id: { notIn: ids }, OR: [{ fulfillmentMethod: 'FBA' }, { offers: { some: { fulfillmentMethod: 'FBA', isActive: true } } }] },
-        select: { channel: true, marketplace: true },
-      })).map((l) => `${l.channel} ${l.marketplace}`) : []
-      also.push(fulfilmentWords({ sku: change.sku, method, markets: targets.map((t) => t.marketplace), sync: hit.cells.sync, productMark: marks.get(change.rowId) ?? null,
-        others, stillFba: [...new Set(stillFba)], derived: hit.cells.fulfilment?.source === 'derived' }))
+      also.push(fulfilmentWords({ sku: change.sku, coordinateKey: change.coordinateKey, method, note: change.note }))
     }
     return { preview: { ...preview, changes, refusals }, also }
   }
@@ -359,8 +307,10 @@ const setListingStock: AgentTool = {
     + 'listing-matrix. FBA quantities are never written; Amazon\'s EU markets share one quantity and one fulfilment '
     + '(AMAZON:EU); an eBay pin to 0 needs the account\'s out-of-stock option ON (else eBay ends the item); a listing whose '
     + 'selling is paused (Inactive) takes no quantity — resume it in the product sheet\'s Status column. set-fulfilment '
-    + 'sends Amazon nothing (the offer is converted in Seller Central): it changes what Nexus sends — FBA means the '
-    + 'quantity is Amazon\'s — and FBA → FBM is refused while FBA units, an active FBA offer or an Amazon FBA code remain. '
+    + 'on Amazon is SENT to Amazon: each open market\'s offer is converted (FBM: DEFAULT with the merchant quantity the cell '
+    + 'would push; FBA: AMAZON_EU, no quantity) and then confirmed from Amazon\'s merchant listings report; FBA → FBM is '
+    + 'refused while FBA units are on hand, reserved or inbound, an active FBA offer or an Amazon-only code remains, and on '
+    + 'a draft or Inactive market; eBay\'s MCF stays Nexus-only. '
     + 'The preview is the Matrix\'s own. Waits for a person to approve it in Nexus; a target that changed since is refused, '
     + 'and revert-listing-change puts it back (a push already sent cannot be called back).',
   handler: (args, ctx) => previewVerbFor('set-listing-stock', args, ctx, stockParams(args), {}, stockVet(args)),

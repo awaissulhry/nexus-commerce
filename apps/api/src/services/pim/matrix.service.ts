@@ -50,6 +50,7 @@ import { axisSynonymKey } from '../ebay-theme-axes.js'
 import { familyAccountId } from './family-account.js'
 import { completeAxisValueOrder } from './shared-variation-values.js'
 import { decimalToNumber } from './sheet-rows.service.js'
+import { conversionStatusOf, loadConversionRecords } from './fulfilment-conversion.service.js'
 import { readSaleWindows } from './sale-window.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
@@ -152,7 +153,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   // ── 3. wave 2 — the tables keyed by listing id ─────────────────────────────────────────────
   const tWave2 = Date.now()
   const listingIds = listings.map((l) => l.id)
-  const [openSuppressions, queueRows, fbaOffers, saleWindows, excluded] = await Promise.all([
+  const [openSuppressions, queueRows, fbaOffers, saleWindows, excluded, conversions] = await Promise.all([
     prisma.amazonSuppression.findMany({ where: { listingId: { in: listingIds }, resolvedAt: null }, select: { listingId: true } }),
     prisma.outboundSyncQueue.findMany({
       where: { channelListingId: { in: listingIds }, syncType: { in: ['QUANTITY_UPDATE', 'PRICE_UPDATE'] }, syncStatus: { not: 'CANCELLED' } },
@@ -163,7 +164,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     prisma.offer.findMany({ where: { channelListingId: { in: listingIds }, fulfillmentMethod: 'FBA', isActive: true }, select: { channelListingId: true } }),
     readSaleWindows(prisma as never, listingIds),
     readExcludedListingIds(listingIds),
-  ]); queries += 5
+    // Amazon fulfilment conversions (2026-10-07): the newest runs sent for these listings (the Fulfilment cell's status).
+    loadConversionRecords(listings.filter((l) => l.channel === 'AMAZON').map((l) => l.id)),
+  ]); queries += 6
   mark('wave2', tWave2)
 
   // ── 4. indexes ─────────────────────────────────────────────────────────────────────────────
@@ -373,6 +376,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       const r = resolveListing(primary, member)
       sync = serves('syncMode') || serves('syncQty') ? r.sync : null
       fulfilment = serves('fulfilment') ? r.fulfilment : null
+      /* The newest FBA ⇄ FBM conversion sent for this coordinate's rows (the EU group's, or the listing's own). */
+      const conversion = fulfilment && coord.channel === 'AMAZON' ? conversionStatusOf(rows.flatMap((l) => conversions.get(l.id) ?? [])) : null
+      if (fulfilment && conversion) fulfilment = { ...fulfilment, conversion }
       if (serves('syncState')) {
         /* The region folds every EU row's queue (one quantity per SKU); a market folds its own listing's. */
         queue = foldQueue(rows.flatMap((l) => queueByListing.get(l.id) ?? []), r.sync)

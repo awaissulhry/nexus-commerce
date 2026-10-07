@@ -367,7 +367,7 @@ export type MatrixWriteDecision =
 
 export const MATRIX_NOT_A_COLUMN = 'Not a Matrix column'
 export const MATRIX_NO_LISTING = 'No listing on this coordinate'
-export const MATRIX_FULFILMENT_INLINE = 'Fulfilment is set through Set fulfilment… — never written inline'
+export const MATRIX_FULFILMENT_INLINE = 'Fulfilment is changed through its preview (the cell\'s picker, or Edit… → Fulfilment) — never pasted or filled'
 export const MATRIX_UNCHANGED = 'Unchanged'
 
 const MATRIX_NOT_A_VALUE: Readonly<Record<string, string>> = {

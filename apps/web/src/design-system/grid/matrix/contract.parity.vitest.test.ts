@@ -49,6 +49,8 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     expect(bothWays<engine.ListingCell, wire.ListingCell>(true)).toBe(true)
     expect(bothWays<engine.FulfilmentMethod, wire.FulfilmentMethod>(true)).toBe(true)
     expect(bothWays<engine.FulfilmentCell, wire.FulfilmentCell>(true)).toBe(true)
+    expect(bothWays<engine.FulfilmentConversionState, wire.FulfilmentConversionState>(true)).toBe(true)
+    expect(bothWays<engine.FulfilmentConversionStatus, wire.FulfilmentConversionStatus>(true)).toBe(true)
     expect(bothWays<engine.SyncKind, wire.SyncKind>(true)).toBe(true)
     expect(bothWays<engine.SyncMode, wire.SyncMode>(true)).toBe(true)
     expect(bothWays<engine.SyncCell, wire.SyncCell>(true)).toBe(true)
@@ -122,12 +124,23 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     same(e.clamped('floor'), w.clamped('floor'))
     same(e.clamped('ceiling'), w.clamped('ceiling'))
     same(e.waitingForPublish('€44.90'), w.waitingForPublish('€44.90'))
+    /* 2026-10-07 — every state of the conversion line, both directions, a refusal with and without Amazon's words. */
+    const at = '2026-10-07T10:04:00.000Z'
+    for (const c of [
+      { status: 'SENDING', to: 'FBM', at, markets: ['IT'], message: null },
+      { status: 'SENT', to: 'FBM', at, markets: ['IT', 'DE'], message: null },
+      { status: 'CONFIRMED', to: 'FBA', at, markets: ['IT'], message: null },
+      { status: 'STILL_OLD', to: 'FBM', at, markets: ['IT'], message: 'Amazon still reports FBA (AMAZON_EU)' },
+      { status: 'NOT_IN_REPORT', to: 'FBA', at, markets: ['IT'], message: null },
+      { status: 'REFUSED', to: 'FBM', at, markets: ['IT'], message: 'Amazon refused it: 8541' },
+      { status: 'REFUSED', to: 'FBA', at, markets: ['IT'], message: null },
+    ] as const) same(e.conversion(c), w.conversion(c))
 
     /* A loop that asserts nothing still goes green. Count the arms, and check the COUNT against the
        interface's own member list so a member added to `MatrixCopy` cannot slip through unchecked. */
-    expect(checked).toBe(21)
+    expect(checked).toBe(28)
     expect(Object.keys(e).sort()).toEqual([
-      'amazonManaged', 'clamped', 'closed', 'closedHint', 'followsBase', 'followsPool', 'formula',
+      'amazonManaged', 'clamped', 'closed', 'closedHint', 'conversion', 'followsBase', 'followsPool', 'formula',
       'guardFba', 'notListed', 'pausedBy', 'pinnedAt', 'reported', 'setHere', 'sharedEu',
       'uncounted', 'uncountedHint', 'waitingForPublish',
     ])

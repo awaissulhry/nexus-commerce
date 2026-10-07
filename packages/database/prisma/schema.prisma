@@ -1557,6 +1557,8 @@ model ChannelListing {
   heldIds ChannelHeldId[]
   /// PLAN Step 3.5a (A-36) — what the channel holds that differs from us, for THIS listing (at most one: `listing_drift`).
   channelDrifts ChannelDrift[]
+  /// Amazon fulfilment conversions (2026-10-07) — every FBA ⇄ FBM change Nexus sent Amazon for this listing, newest last.
+  fulfilmentConversions FulfilmentConversion[]
   // Business ownership comes from verified database context.
   workspaceId   String                      @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id            String                      @id @default(cuid())
@@ -20699,6 +20701,65 @@ model ReadinessIndex {
   @@index([productId])
   @@index([workspaceId])
   @@index([workspaceId, pendingSince])
+}
+
+/// Amazon fulfilment conversion (Owner 2026-10-07: "a fulfillment channel change from FBA to FBM or from FBM to FBA must
+/// actually reach the channel … make sure that it is certain"). ONE row per listing and Amazon marketplace a Matrix
+/// set-fulfilment (or its revert) sends: what was sent (`fromMethod` → `toMethod`, the merchant `quantity` for FBM, the
+/// exact `fulfillment_availability` value in `payload`), Amazon's answer to the Listings Items patch (`submissionId`,
+/// `submissionStatus`, `issues`), and what Amazon's merchant listings report said afterwards (`reportChannel`):
+///   SENDING → SENT (Amazon accepted the patch) | REFUSED (Amazon or Nexus refused it; nothing changed on Amazon)
+///   SENT → CONFIRMED (the report shows the new channel) | STILL_OLD (still the old one after ~4 h) | NOT_IN_REPORT
+/// Written ONLY by `apps/api/src/services/pim/fulfilment-conversion.service.ts` and its confirmation job. The FBA guard
+/// (`guardFbaQtyFlip`) lets a merchant quantity through for an FBA SKU only against a SENDING row of an operator-confirmed
+/// run (`operatorConfirmed`), for the same SKU, market and quantity, less than 10 minutes old.
+model FulfilmentConversion {
+  workspaceId         String         @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                  String         @id @default(cuid())
+  channelListingId    String
+  channelListing      ChannelListing @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
+  productId           String
+  /// One Set fulfilment (or revert) of one Matrix cell: every market it sent shares this id.
+  runId               String
+  /// The Amazon account the patch went to (`ChannelConnection.id`); the report is read on the same account.
+  channelConnectionId String?
+  /// The seller SKU the patch named (`listingSendSku`).
+  sku                 String
+  /// Market code (IT) and Amazon marketplace id (APJ6JRA9NG5V4).
+  marketplace         String
+  marketplaceId       String
+  /// FBA | FBM
+  fromMethod          String
+  toMethod            String
+  /// FBM: the merchant quantity sent. FBA: null — Amazon owns the quantity.
+  quantity            Int?
+  /// The `fulfillment_availability` value sent, verbatim.
+  payload             Json
+  /// SENDING | SENT | CONFIRMED | STILL_OLD | REFUSED | NOT_IN_REPORT
+  status              String         @default("SENDING")
+  /// The operator's sentence for the current status (Amazon's issues, the report's answer).
+  message             String?
+  submissionId        String?
+  submissionStatus    String?
+  issues              Json?
+  /// true = created by a run a person confirmed (the Matrix's typed confirmation, an approved Claude preview, a revert).
+  operatorConfirmed   Boolean        @default(false)
+  /// matrix-verb | matrix-revert
+  origin              String
+  actor               String
+  /// The report's fulfillment-channel at the last pull (DEFAULT, AMAZON_EU, …); `reportPulls` counts the pulls.
+  reportChannel       String?
+  reportPulls         Int            @default(0)
+  lastReportAt        DateTime?
+  sentAt              DateTime?
+  confirmedAt         DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([workspaceId])
+  @@index([channelListingId, createdAt])
+  @@index([status, createdAt])
+  @@index([sku, marketplaceId])
 }
 
 /// PLAN Step 3.5a (A-36, R-36) — what a CHANNEL holds that differs from what Nexus holds, per listing coordinate.

@@ -44,6 +44,8 @@ import { numericStorageError } from '../pim/numeric-storage.js'
 import { writeChannelPrices } from '../pim/channel-price-write.service.js'
 import { AMAZON_FULFILMENT_KEY } from '../pim/channel-specs/amazon.js'
 import { setFulfillmentMethod } from '../pim/fulfillment-method.service.js'
+import { isStillDraftListing } from '@nexus/shared/push-lock'
+import { effectiveFulfilment } from '../pim/matrix-cells.js'
 import { AMAZON_FULFILMENT_CHOICES, describeAmazonFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
 import { OFFER_VERSION_REQUIRED, isAmazonOfferSheetField, writeSheetOfferChanges } from '../pim/amazon-offer-writes.js'
 import { applySheetQuantityChanges, isSheetQuantityChange, type SheetQuantityOutcome } from '../pim/sheet-quantity-door.js'
@@ -2213,7 +2215,10 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       .map(ctx => ({ change, marketplace: ctx.marketplace, channelConnectionId: connFor.get('AMAZON') ?? null, aliasKey: ctx.aliasKey ?? '' })))
     const listings = destinations.length ? await prisma.channelListing.findMany({ where: { OR: destinations.map(d => ({
       productId: d.change.id, channel: 'AMAZON', marketplace: d.marketplace, channelConnectionId: d.channelConnectionId, aliasKey: d.aliasKey,
-    })) }, select: { id: true, productId: true, marketplace: true, channelConnectionId: true, aliasKey: true } }) : []
+    })) }, select: { id: true, productId: true, marketplace: true, channelConnectionId: true, aliasKey: true,
+      // Amazon fulfilment conversion (2026-10-07): what tells a live listing, and its method now.
+      fulfillmentMethod: true, platformAttributes: true, listingStatus: true, isPublished: true, externalListingId: true,
+      product: { select: { fulfillmentMethod: true } }, offers: { where: { isActive: true, fulfillmentMethod: 'FBA' }, select: { id: true }, take: 1 } } }) : []
     const targets = destinations.map(d => {
       const listing = listings.find(l => l.productId === d.change.id && l.marketplace === d.marketplace &&
         l.channelConnectionId === d.channelConnectionId && l.aliasKey === d.aliasKey)
@@ -2223,7 +2228,15 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       // FBA or FBM only (D3): Remote Fulfilment and every other Amazon code are set in Seller Central, never here.
       if (code !== null && !(AMAZON_FULFILMENT_CHOICES as readonly string[]).includes(code)) throw new ProductBulkError(400, {
         error: `Only FBA (AMAZON_EU) or FBM (DEFAULT) can be set here, not ${code}.${describeAmazonFulfilmentCode(code).kind === 'REMOTE' ? ` ${describeAmazonFulfilmentCode(code).readOnlyReason}` : ''}` })
-      return { listingId: listing.id, method: code === null ? null : code === 'DEFAULT' ? 'FBM' as const : 'FBA' as const, expectedVersion: priceWrittenIds.get(listing.id) ?? expectedVersion }
+      const method = code === null ? null : code === 'DEFAULT' ? 'FBM' as const : 'FBA' as const
+      // A LIVE Amazon offer is converted on Amazon, never only in Nexus (Owner 2026-10-07): FBA ⇄ FBM goes through the
+      // Matrix (the Fulfilment cell, or Edit… → Fulfilment), which sends the conversion and confirms it from Amazon's report. A draft keeps the
+      // sheet's value (Publish sends it); a value that changes nothing still saves.
+      const live = !isStillDraftListing(listing) && (listing.isPublished === true || !!listing.externalListingId)
+      const now = effectiveFulfilment({ activeOfferMethod: (listing.offers ?? []).length ? 'FBA' : null, typed: listing.fulfillmentMethod, platformAttributes: listing.platformAttributes, productMethod: listing.product?.fulfillmentMethod ?? null })?.method ?? 'FBM'
+      if (live && (method === null ? listing.fulfillmentMethod != null : method !== now)) throw new ProductBulkError(400, {
+        error: `This listing is live on Amazon ${d.marketplace}: FBA ⇄ FBM is changed in the Matrix (the Fulfilment cell, or Edit… → Fulfilment), which converts the offer on Amazon and confirms it from Amazon's report. The product sheet does not send it, so nothing was saved.` })
+      return { listingId: listing.id, method, expectedVersion: priceWrittenIds.get(listing.id) ?? expectedVersion }
     })
     const written = await setFulfillmentMethod({ targets, actor: context.userId ?? 'system' })
     for (const outcome of written.results) {

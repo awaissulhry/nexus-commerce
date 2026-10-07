@@ -334,11 +334,25 @@ describe('matrixCellTooltip — Appendix A through MATRIX_COPY, plus the blocked
     expect(matrixCellTooltip('price', STATE_FIXTURES['price-clamped'].c, COORD)).toBe('Set here · Clamped to the floor')
     expect(matrixCellTooltip('price', STATE_FIXTURES['sale-set'].c, COORD)).toBe('Follows the base price €105.00 · Sale €89.00 until 30 Sep')
   })
-  it('Fulfilment: the guard and the report sentences, and the Seller Central clause', () => {
+  it('Fulfilment: the guard and the report sentences, and what a change does (Amazon: a real conversion)', () => {
     const t = matrixCellTooltip('fulfilment', cells({ fulfilment: { method: 'FBM', guard: 'FBA', reported: 'AFN' } }), COORD)!
     expect(t).toContain(MATRIX_CELL_COPY.guardFba)
     expect(t).toContain(MATRIX_CELL_COPY.reported('AFN'))
-    expect(t).toContain('Seller Central')
+    expect(t).toContain('Changing this converts the offer on Amazon (type the method to confirm) and checks Amazon\'s report')
+    /* eBay (MCF): Nexus only. */
+    expect(matrixCellTooltip('fulfilment', cells({ fulfilment: { method: 'FBM', guard: 'FBM', reported: null } }), { ...COORD, channel: 'EBAY' })!)
+      .toContain('Changing this re-points the pool behind the quantity — Nexus only, nothing is sent to the channel')
+  })
+  it('Fulfilment: the newest conversion sent to Amazon, in one line (2026-10-07)', () => {
+    const at = '2026-10-07T10:04:00.000Z'
+    const hhmm = new Date(at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    const tip = (status: 'SENT' | 'CONFIRMED' | 'STILL_OLD' | 'REFUSED', message: string | null = null) =>
+      matrixCellTooltip('fulfilment', cells({ fulfilment: { method: 'FBM', guard: 'FBM', reported: null, conversion: { status, to: 'FBM', at, markets: ['IT', 'DE'], message } } }), COORD)!
+    expect(tip('SENT')).toContain(`Sent to Amazon ${hhmm} · waiting for Amazon's report`)
+    expect(tip('CONFIRMED')).toContain(`Confirmed by Amazon ${hhmm}`)
+    expect(tip('STILL_OLD')).toContain('Amazon still reports FBA — check Seller Central')
+    expect(tip('REFUSED', 'Amazon refused it: 8541')).toContain('FBM not sent — Amazon refused it: 8541')
+    expect(matrixCellTooltip('fulfilment', cells({ fulfilment: { method: 'FBM', guard: 'FBM', reported: null } }), COORD)!).not.toContain('Amazon ' + hhmm)
   })
   it('Sync: the word, the lane and the server’s reason; Listing: the hint, the id, the detail', () => {
     expect(matrixCellTooltip('syncState', STATE_FIXTURES['queue-failed'].c, COORD)).toBe('Failed · Quantity queue · eBay: 25002 — the item is not active on this site')

@@ -26,6 +26,7 @@ import { restoreFbaListings } from '../services/fba-restore.service.js'
 import { CHANNEL_SKU_LISTING_SELECT } from '../services/listings/channel-sku.js'
 import type { ChannelSkuListing } from '../services/listings/channel-sku.pure.js'
 import { amazonAccountIdFor, onAccount, reportedSkuOf } from '../services/listings/reported-sku.js'
+import { operatorFbmConversions } from '../services/pim/fulfilment-conversion.service.js'
 
 const JOB = 'fba-drift-detector'
 const SCHEDULE = process.env.NEXUS_FBA_DRIFT_CRON_SCHEDULE ?? '0 5 * * *'
@@ -118,6 +119,19 @@ export async function runFbaDriftDetector(): Promise<void> {
         }
       }
 
+      // Amazon fulfilment conversion (2026-10-07): a SKU an operator converted to FBM from the Matrix (its newest conversion
+      // is to FBM and was not refused) is the operator's choice, never drift — alerted, NEVER auto-restored.
+      const converted = drift.length ? await operatorFbmConversions(drift.map((d) => ({ sku: d.sku, marketplaceId: MP_ID[d.market] ?? d.market }))).catch((err) => {
+        // Unreadable: nothing is restored this run (an operator's conversion must never be reverted on a guess).
+        logger.error('fba-drift-detector: conversions not read — no auto-restore this run', { error: err instanceof Error ? err.message : String(err) })
+        return null
+      }) : new Set<string>()
+      const byOperator = converted ? drift.filter((d) => converted.has(`${d.sku}|${MP_ID[d.market] ?? d.market}`)) : []
+      if (byOperator.length > 0) {
+        logger.warn('fba-drift-detector: FBM on Amazon by an operator\'s fulfilment conversion — alert only, not restored', { count: byOperator.length, sample: byOperator.slice(0, 25) })
+        drift.splice(0, drift.length, ...drift.filter((d) => !byOperator.includes(d)))
+      }
+
       if (drift.length > 0) {
         // The restore is asked by PRODUCT SKU and sends the PRODUCT SKU (`fba-restore.service.ts`). A drift found under a
         // listing's own seller SKU would make it PATCH another SKU (another offer), so that one is not auto-restored: it
@@ -145,6 +159,8 @@ export async function runFbaDriftDetector(): Promise<void> {
         }
         if (restorable.length === 0) {
           // Nothing the restore can send correctly.
+        } else if (converted === null) {
+          logger.error('fba-drift-detector: auto-restore skipped — the fulfilment conversions could not be read, so an operator\'s FBM conversion cannot be told from drift')
         } else if (process.env.NEXUS_FBA_AUTO_RESTORE !== '0') {
           try {
             const summary = await restoreFbaListings({
@@ -168,9 +184,9 @@ export async function runFbaDriftDetector(): Promise<void> {
           logger.error('fba-drift-detector: auto-restore disabled (NEXUS_FBA_AUTO_RESTORE=0) — run POST /admin/amazon/restore-fba {"dryRun":false} manually')
         }
 
-        return `DRIFT: ${drift.length} FBA→FBM across ${marketsPulled} market(s); checked ${checked}; ${marketsFailed} pull(s) failed${notChecked}`
+        return `DRIFT: ${drift.length} FBA→FBM across ${marketsPulled} market(s); checked ${checked}; ${marketsFailed} pull(s) failed${notChecked}${byOperator.length ? `; ${byOperator.length} FBM by an operator's conversion, not restored` : ''}`
       }
-      return `ok — no drift (checked ${checked} sku(s) across ${marketsPulled} market(s); ${marketsFailed} pull(s) failed${notChecked})`
+      return `ok — no drift (checked ${checked} sku(s) across ${marketsPulled} market(s); ${marketsFailed} pull(s) failed${notChecked}${byOperator.length ? `; ${byOperator.length} FBM by an operator's conversion, not restored` : ''})`
     })
   } catch (err) {
     logger.error('fba-drift-detector: failure', { error: err instanceof Error ? err.message : String(err) })

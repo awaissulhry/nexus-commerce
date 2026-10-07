@@ -61,7 +61,14 @@ export function verbSentence(preview: Pick<VerbPreview, 'verb' | 'changes'>, app
   const to = preview.changes[0]?.toLabel
   switch (preview.verb) {
     case 'set-price': case 'adjust-prices': case 'copy-prices': return `${bulkNoun('price', applied)} changed${s}. Nexus sends ${applied === 1 ? 'it' : 'them'} in about 30 seconds.`
-    case 'set-fulfilment': return `${listings} set to ${to ?? 'the new method'} in Nexus${s}. Convert the offer in Seller Central too.`
+    case 'set-fulfilment': {
+      // An Amazon coordinate is a real conversion (sent per market, confirmed from Amazon's report); eBay's is Nexus only.
+      const amazon = preview.changes.length > 0 && preview.changes.every((c) => c.coordinateKey.startsWith('AMAZON:'))
+      const some = preview.changes.some((c) => c.coordinateKey.startsWith('AMAZON:'))
+      if (amazon) return `${listings} sent to Amazon as ${to ?? 'the new method'}${s}. Amazon's report confirms it within about 15 minutes — the Fulfilment cell shows it.`
+      if (some) return `${listings} set to ${to ?? 'the new method'}${s}. The Amazon ones are sent to Amazon and confirmed from its report; eBay's is set in Nexus.`
+      return `${listings} set to ${to ?? 'the new method'} in Nexus${s}.`
+    }
     case 'set-follow': return `${listings} now follow your stock${s}.`
     case 'pin-quantity': return `${listings} now show a fixed quantity${s}. Nexus sends it in about 30 seconds.`
     case 'set-buffer': return `${bulkNoun('buffer', applied)} changed${s}.`

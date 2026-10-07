@@ -40,7 +40,7 @@ describe('S3 — the restore names each listing\'s seller SKU', () => {
     expect(await restoreFbaListings({ dryRun: false })).toMatchObject({ processed: 2, sent: 2 })
     expect(sent()).toEqual(['OWN-B-IT', 'OWN-C-IT'])
     for (const [a] of s.submit.mock.calls) {
-      expect(a.payload.patches).toEqual([{ op: 'replace', path: '/attributes/fulfillment_availability', value: [{ fulfillment_channel_code: 'AMAZON_EU', marketplace_id: 'APJ6JRA9NG5V4' }] }])
+      expect(a.payload.patches).toEqual([{ op: 'replace', path: '/attributes/fulfillment_availability', value: [{ fulfillment_channel_code: 'AMAZON_EU' }] }])
       expect(JSON.stringify(a.payload)).not.toMatch(/quantity/)
     }
   })
