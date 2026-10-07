@@ -661,7 +661,8 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     const category = await db.category.create({ data: { slug: `mcp8-${mark.toLowerCase()}`, name: { en: { name: `${canary}-CATEGORY` }, it: {} } } })
     for (const id of [parentCategory.id, category.id]) await db.categoryClosure.create({ data: { ancestorId: id, descendantId: id, depth: 0 } })
     // 08 S13 — an FBA inbound plan still being created (no Amazon plan id), named with the canary.
-    const fbaPlan = await db.fbaInboundPlanV2.create({ data: { name: `${canary}-FBA-PLAN`, status: 'CREATING', currentStep: 'CREATE' } })
+    // Step 4 — a Send to FBA plan (source set): fba-shipment-options reads only those.
+    const fbaPlan = await db.fbaInboundPlanV2.create({ data: { name: `${canary}-FBA-PLAN`, status: 'CREATING', currentStep: 'CREATE', source: 'matrix' } })
     const matrixOp = await db.bulkOperation.create({
       data: { userId: null, status: 'COMPLETED', productCount: 1, changeCount: 0, expiresAt: new Date(Date.now() + 3600_000),
         changes: { kind: 'studio-matrix-verb', verb: 'set-buffer', productId: product.id, before: [], changes: [], outcomes: [], phase: 'apply' } },
@@ -1040,10 +1041,10 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'bulk-listing-price-change': { mode: 'percent', value: 5, prices: undefined },
   // Integration (P7 + 08 S12): set-pricing-rule's `ruleId` is a pricing rule.
   'set-pricing-rule': { get ruleId() { return seeded.b.pricingRuleId } },
-  // Integration (07 O5 + 08 S10/S13): `shipmentId` is an inbound shipment for the receiving and FBA tools.
+  // Integration (07 O5 + 08 S10): `shipmentId` is an inbound shipment for the receiving tools. (Step 4: plan-fba-shipment
+  // links no inbound shipment any more — its lines name B's product, which A does not find.)
   'receive-stock': { get shipmentId() { return seeded.b.inboundShipmentId } },
   'update-inbound-shipment': { get shipmentId() { return seeded.b.inboundShipmentId } },
-  'plan-fba-shipment': { get shipmentId() { return seeded.b.inboundShipmentId } },
   // 07 O7 — an update names at least one change.
   'update-order': { note: 'MCP.8 probe note' },
   'update-customer': { note: 'MCP.8 probe note' },
@@ -1153,6 +1154,8 @@ const extraOf = (name: string) => {
  */
 const REACHED_BY_REFUSAL: Record<string, RegExp> = {
   'confirm-change': /may not confirm changes|Only the person who asked/,
+  // Step 4 — the Send to FBA rule judges a plan only once its products were read (from A: "Product not found" first).
+  'plan-fba-shipment': /Add units to send|Choose one of your active warehouses as From/,
 }
 
 /**

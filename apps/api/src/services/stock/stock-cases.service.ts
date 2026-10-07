@@ -16,6 +16,7 @@
  *                   floor(units / unitsPerCase). Whole cases moved (Step 4) pass `casesChange`.
  *   setCasesInTx  — the stock editor's absolute count at one location (Part B, `adjustOneLocation`).
  *   setCasePacks  — the Matrix Case pop-up (Part B, `PUT /api/stock/case-packs`).
+ *   setFbaOwnersIfUnset — Step 4 Send to FBA: the dialog's "Prep by / Labels by" for SKUs that had none (owners only).
  *   sealedByLevel — the readers.
  *
  * The signatures are FROZEN (Step 3 Part A stage 1): Part B imports them.
@@ -28,7 +29,7 @@ import { publishEvent } from '../../lib/events/publish.js'
 import { auditLogService, type AuditWriteInput } from '../audit-log.service.js'
 import {
   CASE_COPY, caseCountProblem, casesAfterMove, isCaseOwner, packProblem, sealedCases,
-  type CasePackValues, type CaseProblemCode,
+  type CaseOwner, type CasePackValues, type CaseProblemCode,
 } from '@nexus/shared/stock-cases'
 import type { AdjustReason } from './location-adjust.service.js'
 
@@ -304,6 +305,52 @@ export async function setCasePacks(a: { productIds: string[]; values: CasePackVa
   // Fail-open, after the commit (auditing never rolls a save back).
   await auditLogService.writeMany(audit)
   return results
+}
+
+/**
+ * Step 4 Send to FBA (Owner 2026-10-07) — "Prep by / Labels by", asked once in the dialog when a SKU has them "not set",
+ * remembered for those SKUs. Inside the plan's transaction (the caller holds the product locks; taken again here, which
+ * is a no-op in the same transaction). Writes ONLY the owner columns, and only where they are null: a SKU whose owner is
+ * set keeps it, and no case size, dimension or weight is touched. A SKU with no case pack row gets one with only the
+ * owners. Publishes `inventory.cases_changed` (reason `case-pack`, locationId null) per SKU changed, so the Matrix Case
+ * column re-reads. Answers the SKUs changed with their owners before → after (the caller audits after its commit).
+ */
+export async function setFbaOwnersIfUnset(tx: Prisma.TransactionClient, a: { productIds: string[]; prepOwner: CaseOwner; labelOwner: CaseOwner; actor: string }): Promise<Array<{ productId: string; before: { fbaPrepOwner: CaseOwner | null; fbaLabelOwner: CaseOwner | null }; after: { fbaPrepOwner: CaseOwner | null; fbaLabelOwner: CaseOwner | null } }>> {
+  const productIds = [...new Set(a.productIds)].filter((id) => typeof id === 'string' && id.length > 0)
+  if (productIds.length === 0) return []
+  if (!isCaseOwner(a.prepOwner) || !isCaseOwner(a.labelOwner)) throw new Error('setFbaOwnersIfUnset: prep and label owner must be AMAZON or SELLER')
+  await lockProductStock(tx, productIds)
+  const rows = await tx.productPackage.findMany({ where: { productId: { in: productIds } }, select: { productId: true, unitsPerCase: true, fbaPrepOwner: true, fbaLabelOwner: true } })
+  const rowOf = new Map(rows.map((row) => [row.productId, row]))
+  const missing = productIds.filter((productId) => !rowOf.has(productId))
+  if (missing.length > 0) {
+    await tx.productPackage.createMany({ data: missing.map((productId) => ({ productId, fbaPrepOwner: a.prepOwner, fbaLabelOwner: a.labelOwner, updatedBy: a.actor })) })
+  }
+  const withRow = productIds.filter((productId) => rowOf.has(productId))
+  if (withRow.length > 0) {
+    await tx.productPackage.updateMany({ where: { productId: { in: withRow }, fbaPrepOwner: null }, data: { fbaPrepOwner: a.prepOwner, updatedBy: a.actor } })
+    await tx.productPackage.updateMany({ where: { productId: { in: withRow }, fbaLabelOwner: null }, data: { fbaLabelOwner: a.labelOwner, updatedBy: a.actor } })
+  }
+  const changed: Array<{ productId: string; before: { fbaPrepOwner: CaseOwner | null; fbaLabelOwner: CaseOwner | null }; after: { fbaPrepOwner: CaseOwner | null; fbaLabelOwner: CaseOwner | null } }> = []
+  for (const productId of productIds) {
+    const row = rowOf.get(productId)
+    const prepBefore = row && isCaseOwner(row.fbaPrepOwner) ? row.fbaPrepOwner : null
+    const labelBefore = row && isCaseOwner(row.fbaLabelOwner) ? row.fbaLabelOwner : null
+    // A stored value that is not AMAZON/SELLER reads "not set" but is not overwritten (only null columns are written).
+    const prepAfter = row ? (row.fbaPrepOwner === null ? a.prepOwner : prepBefore) : a.prepOwner
+    const labelAfter = row ? (row.fbaLabelOwner === null ? a.labelOwner : labelBefore) : a.labelOwner
+    if (prepAfter === prepBefore && labelAfter === labelBefore) continue
+    changed.push({ productId, before: { fbaPrepOwner: prepBefore, fbaLabelOwner: labelBefore }, after: { fbaPrepOwner: prepAfter, fbaLabelOwner: labelAfter } })
+    await publishEvent(tx, 'inventory.cases_changed', {
+      productId,
+      locationId: null,
+      casesBefore: null,
+      casesAfter: null,
+      unitsPerCase: row?.unitsPerCase ?? null,
+      reason: 'case-pack',
+    })
+  }
+  return changed
 }
 
 /** What `sealedByLevel` reads: the client or a transaction. */

@@ -2,6 +2,9 @@ import { WorkspaceCache } from '../lib/workspace-cache.js'
 import { getAmazonRegion, amazonCredsConfigured } from '../lib/amazon-sp-client.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
+ * (Step 4, 2026-10-07: the v0 create path below is deleted — see the note where it was. What stays: getLabels, the
+ * shipment status reads, the FNSKU cache.)
+ *
  * H.8a (Inbound) — real Amazon SP-API createInboundShipmentPlan.
  *
  * Replaces the H.0c-honesty-banner stub at /fulfillment/fba/plan-shipment
@@ -53,135 +56,10 @@ async function spSend(method: 'GET' | 'POST', url: string, operation: string, bo
 
 export async function isFbaInboundConfigured(): Promise<boolean> { return amazonCredsConfigured() }
 
-// ─── Types mirror the v0 createInboundShipmentPlan request/response ─
-
-export interface PlanItemInput {
-  sellerSku: string
-  quantity: number
-  asin?: string
-  condition?: 'NewItem' | 'NewWithWarranty' | 'NewOEM' | 'NewOpenBox' | 'UsedLikeNew' | 'UsedVeryGood' | 'UsedGood' | 'UsedAcceptable' | 'UsedPoor' | 'UsedRefurbished' | 'CollectibleLikeNew' | 'CollectibleVeryGood' | 'CollectibleGood' | 'CollectibleAcceptable' | 'CollectiblePoor' | 'RefurbishedWithWarranty' | 'Refurbished' | 'Club'
-  quantityInCase?: number
-}
-
-export interface ShipFromAddress {
-  Name: string
-  AddressLine1: string
-  AddressLine2?: string
-  City: string
-  StateOrProvinceCode: string
-  CountryCode: string
-  PostalCode: string
-}
-
-export interface InboundShipmentPlanResponse {
-  ShipmentId: string
-  DestinationFulfillmentCenterId: string
-  ShipToAddress: ShipFromAddress
-  LabelPrepType: 'NO_LABEL' | 'SELLER_LABEL' | 'AMAZON_LABEL'
-  Items: Array<{
-    SellerSKU: string
-    FulfillmentNetworkSKU?: string
-    Quantity: number
-    PrepDetailsList?: Array<{ PrepInstruction: string; PrepOwner: string }>
-  }>
-}
-
-export interface CreatePlanResult {
-  shipmentPlans: InboundShipmentPlanResponse[]
-}
-
-/**
- * Resolve the ship-from address from the default Warehouse row,
- * with env-var overrides for fields the legacy schema doesn't
- * carry (Name, StateOrProvinceCode — Italy uses an empty string
- * but Amazon requires the field present).
- */
-async function resolveShipFromAddress(): Promise<ShipFromAddress> {
-  const w = await prisma.warehouse.findFirst({
-    where: { isDefault: true, isActive: true },
-    select: { code: true, name: true, addressLine1: true, addressLine2: true, city: true, postalCode: true, country: true },
-  })
-  const fallbackName = process.env.NEXUS_FBA_SHIP_FROM_NAME ?? w?.name ?? 'Nexus Warehouse'
-  const fallbackLine1 = process.env.NEXUS_FBA_SHIP_FROM_LINE1 ?? w?.addressLine1 ?? ''
-  const fallbackCity = process.env.NEXUS_FBA_SHIP_FROM_CITY ?? w?.city ?? ''
-  const fallbackPostal = process.env.NEXUS_FBA_SHIP_FROM_POSTAL ?? w?.postalCode ?? ''
-  const fallbackCountry = process.env.NEXUS_FBA_SHIP_FROM_COUNTRY ?? w?.country ?? 'IT'
-  const fallbackState = process.env.NEXUS_FBA_SHIP_FROM_STATE ?? '' // Italy doesn't use state codes
-  if (!fallbackLine1 || !fallbackCity || !fallbackPostal) {
-    throw new Error(
-      'FBA ship-from address incomplete. Set Warehouse.addressLine1/city/postalCode on the default warehouse, ' +
-        'or override with NEXUS_FBA_SHIP_FROM_LINE1 / _CITY / _POSTAL env vars.',
-    )
-  }
-  const addr: ShipFromAddress = {
-    Name: fallbackName,
-    AddressLine1: fallbackLine1,
-    City: fallbackCity,
-    StateOrProvinceCode: fallbackState,
-    CountryCode: fallbackCountry,
-    PostalCode: fallbackPostal,
-  }
-  if (w?.addressLine2) addr.AddressLine2 = w.addressLine2
-  return addr
-}
-
-/**
- * Call SP-API v0 createInboundShipmentPlan. Returns the plan(s) Amazon
- * generated — usually 1 per destination FC. Persists nothing here;
- * caller decides whether to commit (handled in a future commit creating
- * shipments from these plans).
- */
-export async function createInboundShipmentPlan(args: {
-  items: PlanItemInput[]
-  shipFrom?: ShipFromAddress
-  labelPrepPreference?: 'SELLER_LABEL' | 'AMAZON_LABEL_ONLY' | 'AMAZON_LABEL_PREFERRED'
-}): Promise<CreatePlanResult> {
-  if (!(await isFbaInboundConfigured())) {
-    throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
-  }
-  if (!args.items || args.items.length === 0) {
-    throw new Error('items[] required')
-  }
-
-  const shipFrom = args.shipFrom ?? (await resolveShipFromAddress())
-  const labelPrepPreference = args.labelPrepPreference ?? 'SELLER_LABEL'
-  const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
-
-  // SP-API v0 createInboundShipmentPlan body shape per Amazon docs.
-  const body = {
-    ShipFromAddress: shipFrom,
-    LabelPrepPreference: labelPrepPreference,
-    InboundShipmentPlanRequestItems: args.items.map((it) => ({
-      SellerSKU: it.sellerSku,
-      Quantity: it.quantity,
-      ASIN: it.asin ?? '',
-      Condition: it.condition ?? 'NewItem',
-      ...(it.quantityInCase != null ? { QuantityInCase: it.quantityInCase } : {}),
-    })),
-  }
-
-  const url = `${REGION_ENDPOINTS[await getAmazonRegion()]}/fba/inbound/v0/plans?MarketplaceId=${encodeURIComponent(marketplaceId)}`
-
-  const res = await spSend('POST', url, 'fbaInbound.createInboundShipmentPlan', body)
-
-  const text = await res.text()
-  let data: any = null
-  try { data = text ? JSON.parse(text) : null } catch { data = text }
-
-  if (!res.ok) {
-    const errMsg = data?.errors?.[0]?.message ?? data?.message ?? text.slice(0, 300)
-    logger.warn('fba-inbound: createInboundShipmentPlan failed', {
-      status: res.status,
-      err: errMsg,
-    })
-    throw new Error(`SP-API createInboundShipmentPlan ${res.status}: ${errMsg}`)
-  }
-
-  const plans = data?.payload?.InboundShipmentPlans ?? []
-  return {
-    shipmentPlans: plans as InboundShipmentPlanResponse[],
-  }
-}
+// Step 4 Send to FBA (2026-10-07) — the v0 createInboundShipmentPlan path (its types, the ship-from resolver with its
+// env fallbacks and a 'Nexus Warehouse' placeholder name, and the call) is deleted: Amazon removed the operation, and
+// sending stock into FBA runs from the Matrix (services/fba-inbound/, ship-from address in address.ts). The routes that
+// used it answer 410 (routes/fulfillment.routes.ts). getLabels below stays: "Labels (PDF)" reads it.
 
 // ─── H.8b — getLabels ──────────────────────────────────────────────
 
@@ -224,6 +102,9 @@ export interface GetLabelsResult {
  * error handling uniform across the FBA inbound surface.
  */
 export async function getInboundShipmentLabels(args: GetLabelsArgs): Promise<GetLabelsResult> {
+  // Step 4 — with NEXUS_FBA_INBOUND_FAKE=1 the fake Amazon answers (where allowed; refused elsewhere, never sent to Amazon).
+  const faked = await (await import('../clients/amazon-fba-inbound-v2.client.js')).shipmentLabelsFromFake({ shipmentConfirmationId: args.shipmentId, pageType: args.pageType, labelType: args.labelType, packageLabelsToPrint: args.packageLabelsToPrint ?? [] })
+  if (faked) return faked
   if (!(await isFbaInboundConfigured())) {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }

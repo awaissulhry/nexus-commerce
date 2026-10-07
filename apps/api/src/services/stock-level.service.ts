@@ -65,7 +65,9 @@ export interface ReserveStockArgs {
   locationId: string
   quantity: number
   orderId?: string
-  reason?: 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION' | 'OPEN_ORDER' | 'CART_HOLD'
+  /** FBA_SEND — Step 4 Send to FBA: the units of a plan, held at the From warehouse from "Create plan" until each shipment
+   *  is marked Shipped (or the plan is cancelled). Never swept by `sweepExpiredReservations` (PENDING_ORDER only). */
+  reason?: 'PENDING_ORDER' | 'MANUAL_HOLD' | 'PROMOTION' | 'OPEN_ORDER' | 'CART_HOLD' | 'FBA_SEND'
   /** RV.1 — HARD decrements StockLevel.reserved (default, all
    *  existing callers). SOFT is advisory: row exists but doesn't
    *  decrement available. Used for cart hold / payment-pending so
@@ -95,8 +97,9 @@ export async function reserveStock(args: ReserveStockArgs) {
   return await prisma.$transaction((tx) => reserveStockInTx(tx, args))
 }
 
-/** reserveStock inside a transaction the caller owns. Takes the product stock lock first. */
-async function reserveStockInTx(tx: Prisma.TransactionClient, args: ReserveStockArgs) {
+/** reserveStock inside a transaction the caller owns. Takes the product stock lock first. Step 4's Send to FBA
+ *  (services/fba-inbound/send.service.ts, ship.service.ts) holds a plan's units with it, in the plan's transaction. */
+export async function reserveStockInTx(tx: Prisma.TransactionClient, args: ReserveStockArgs) {
   const {
     productId,
     variationId,
@@ -225,8 +228,9 @@ export async function releaseReservationFromStockPage(reservationId: string, opt
   }
 }
 
-/** releaseReservation's work inside a transaction the caller owns. Idempotent on a settled row. */
-async function releaseReservationInTx(
+/** releaseReservation's work inside a transaction the caller owns. Idempotent on a settled row. Step 4's Send to FBA
+ *  releases a plan's holds with it (cancel, and each Shipped shipment), in the plan's transaction. */
+export async function releaseReservationInTx(
   tx: Prisma.TransactionClient,
   reservationId: string,
   opts: { actor?: string; reason?: string },

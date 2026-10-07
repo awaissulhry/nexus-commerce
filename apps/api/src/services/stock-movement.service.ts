@@ -390,10 +390,20 @@ const MANUAL_REASON_WORDS: Record<string, string> = {
   MANUAL_ADJUSTMENT: 'an adjustment', INVENTORY_COUNT: 'a stock count', WRITE_OFF: 'a write-off', TRANSFER_OUT: 'a transfer', TRANSFER_IN: 'a transfer',
 }
 
+/**
+ * Step 4 Send to FBA — the reasons of units sent into FBA. The Shipped movement leaves the From WAREHOUSE
+ * (FBA_TRANSFER_OUT); Nexus never writes the FBA quantity, so neither reason may land on the FBA mirror (Amazon's
+ * number, written only by the FBA inventory sync) or on a Shopify location (Shopify's own number).
+ */
+export const FBA_TRANSFER_REASONS: ReadonlySet<string> = new Set(['FBA_TRANSFER_OUT', 'FBA_TRANSFER_IN'])
+
 /** F7 — the refusal for a movement of `reason` at a location of `locationType`, or null when it may be written. */
 export function protectedLocationRefusal(reason: string, locationId: string, locationType: string | null | undefined): ProtectedLocationError | null {
   if (MANUAL_STOCK_REASONS.has(reason) && (locationType === 'AMAZON_FBA' || locationType === 'SHOPIFY_LOCATION')) {
     return new ProtectedLocationError(locationId, locationType, MANUAL_REASON_WORDS[reason] ?? 'a manual change')
+  }
+  if (FBA_TRANSFER_REASONS.has(reason) && (locationType === 'AMAZON_FBA' || locationType === 'SHOPIFY_LOCATION')) {
+    return new ProtectedLocationError(locationId, locationType, 'an FBA transfer')
   }
   if (reason === 'CHANNEL_STOCK_RECONCILIATION' && locationType === 'AMAZON_FBA') {
     return new ProtectedLocationError(locationId, locationType, 'a channel stock event')
@@ -451,7 +461,8 @@ export async function applyStockMovementInTx(
   })
 
   // 08 S2 (F7) — a person's change never lands on the FBA mirror or a Shopify location; no channel event changes FBA.
-  if (MANUAL_STOCK_REASONS.has(reason) || reason === 'CHANNEL_STOCK_RECONCILIATION') {
+  // Step 4 — neither does an FBA transfer (the Send to FBA movement leaves the From warehouse only).
+  if (MANUAL_STOCK_REASONS.has(reason) || FBA_TRANSFER_REASONS.has(reason) || reason === 'CHANNEL_STOCK_RECONCILIATION') {
     const target = await tx.stockLocation.findUnique({ where: { id: resolvedLocationId }, select: { type: true } })
     const refusal = protectedLocationRefusal(reason, resolvedLocationId, target?.type)
     if (refusal) throw refusal

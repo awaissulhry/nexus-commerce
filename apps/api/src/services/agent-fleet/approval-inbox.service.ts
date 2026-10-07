@@ -1061,7 +1061,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // 08 S13 — an eBay promotion (live or dry run, the prices it sets), tier prices, an FBA plan's lines.
   'set-ebay-price-promotion': ['kind', 'live', 'dates', 'discount', 'listings', 'products', 'tiers', 'marketplace'],
   'set-tier-prices': ['product', 'tiers'],
-  'plan-fba-shipment': ['marketplace', 'lines', 'totals', 'shipment'],
+  // Step 4 Send to FBA — where it leaves from (the warehouse and its address), the day, each SKU's cases / units / free
+  // units / owners and the box totals: a sale or a changed owner between preview and approval changes what is held.
+  'plan-fba-shipment': ['marketplace', 'from', 'readyToShipOn', 'lines', 'totals'],
   // `basis` fingerprints the Shopify sheet's own cell tokens and baselines: a draft edit or a store change in between.
   'set-shopify-content': ['changes', 'reach', 'basis'],
   // I9 — the id read at preview time (and for unlink, the quantity it was advertising); for link, the channel's proof.

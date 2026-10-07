@@ -35,6 +35,7 @@ import { outboundRoutes } from "./routes/outbound.routes.js";
 import { matrixRoutes } from "./routes/matrix.routes.js";
 // F.4 (P0 #50) — v2024-03-20 SP-API inbound flow.
 import fbaInboundV2Routes from "./routes/fba-inbound-v2.routes.js";
+import fbaSendRoutes from "./routes/fba-send.routes.js";
 import { sendcloudWebhookRoutes } from "./routes/sendcloud-webhooks.routes.js";
 import { ordersRoutes } from "./routes/orders.routes.js";
 import { customersRoutes } from "./routes/customers.routes.js";
@@ -602,6 +603,7 @@ app.register(fieldLinksRoutes);
 app.register(outboundRoutes);
 app.register(matrixRoutes);
 app.register(fbaInboundV2Routes, { prefix: '/api' });
+app.register(fbaSendRoutes, { prefix: '/api' }); // Step 4 — Send to FBA from the Matrix: /api/fba/inbound/send-draft, /plans…, /shipments/:id/…
 app.register(sendcloudWebhookRoutes);
 app.register(ordersRoutes);
 app.register(customersRoutes);

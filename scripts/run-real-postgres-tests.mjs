@@ -73,6 +73,9 @@
  *     bulk bid change and an engine write on one target: when the drain claims both at once, exactly one wins.
  *   · `services/stock/stock-cases-postgres.vitest.test.ts` (Step 3 cases, 2026-10-07) — sealed cases × units per case
  *     never exceed the units: sales at once, a case count racing a sale, a case-size change racing a sale.
+ *   · `services/fba-inbound/fba-send-postgres.vitest.test.ts` (Step 4 Send to FBA, 2026-10-07) — a double-click on
+ *     "Create plan" through the route makes one plan and one set of holds; two cancels release each hold once; "Mark
+ *     shipped" twice moves the units once; "Mark shipped" racing a sale keeps units, holds and sealed cases right.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
  * nothing. This script supplies one.
  *
@@ -208,6 +211,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'Claude\'s approved bulk bid change and an engine write on one target (MCP full control A7: both queued, one claim wins, the other waits for it)', file: 'src/services/advertising/ads-claude-bulk-postgres.vitest.test.ts', expect: 2 },
   { name: 'Sells from: a sale takes stock from the first listed location with enough (Step 2)', file: 'src/services/stock/sale-location-postgres.vitest.test.ts', expect: 6 },
   { name: 'sealed cases under concurrency (Step 3: ten sales at once end at floor(units / case size), a case count racing a sale, a case-size change racing a sale)', file: 'src/services/stock/stock-cases-postgres.vitest.test.ts', expect: 3 },
+  { name: 'Send to FBA races (Step 4: a double-click on Create plan makes one plan and one set of holds, cancel releases the holds once, Mark shipped twice moves once, Mark shipped racing a sale keeps units and sealed cases right)', file: 'src/services/fba-inbound/fba-send-postgres.vitest.test.ts', expect: 4 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'

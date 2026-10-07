@@ -74,9 +74,9 @@
   },
   "caseFiles": {
     "apps/api/src/services/stock/stock-cases.service.ts": {
-      "writes": 6,
+      "writes": 9,
       "lock": true,
-      "why": "The one owner of case counts and case packs (Step 3 cases): keepCasesInTx clamps or moves a level's sealed cases (update, create; the caller — applyStockMovementInTx, the import chunk, the pool settle — holds the product lock), setCasesInTx sets an absolute count (upsert, after lockProductStock), setCasePacks writes the case pack and removes the case rows a size change opens (two deleteMany and an upsert, after lockProductStock)."
+      "why": "The one owner of case counts and case packs (Step 3 cases): keepCasesInTx clamps or moves a level's sealed cases (update, create; the caller — applyStockMovementInTx, the import chunk, the pool settle — holds the product lock), setCasesInTx sets an absolute count (upsert, after lockProductStock), setCasePacks writes the case pack and removes the case rows a size change opens (two deleteMany and an upsert, after lockProductStock), setFbaOwnersIfUnset (Step 4 Send to FBA) writes only the null prep/label owner columns (a createMany and two updateMany, after lockProductStock)."
     }
   },
   "orderMovementFiles": {

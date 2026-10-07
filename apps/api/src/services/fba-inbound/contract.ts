@@ -129,121 +129,13 @@ function notBuilt(name: string): never {
   throw new FbaSendError('NOT_BUILT', `fba-inbound/contract: ${name} is not built yet (Step 4 Part A stage 1 stub)`)
 }
 
-/* ══ Part C — send / read / ship. Replace ONLY this section with re-exports when built. ══════════════════════════ */
+/* ══ Part C — send / read / ship (built 2026-10-07; signatures unchanged, rules in each function's JSDoc there). ══════ */
 
-/**
- * The dialog's facts for the ticked SKUs at `from` for `market` (send.service.ts). Reads only. Per SKU: the Amazon SKU in
- * the market (no listing → `msku: null`), free units and free sealed/loose (`caseSplit` at From), the case pack, unit
- * weight and size (`unitWeightKg` / `lengthCm`), owners, units in open plans; plus the From/To choices, the address
- * check (`addressMissing` over the From `Warehouse` + company name and phone) and today (Europe/Rome).
- * Problems are NOT in the draft: both sides compute them with `sendProblems(draft, choice)`.
- * Throws NOT_FOUND for no product, REFUSED (TOO_MANY_SKUS) above the cap.
- */
-export async function readSendDraft(_query: FbaSendDraftQuery): Promise<FbaSendDraft> {
-  return notBuilt('readSendDraft')
-}
+export { readSendDraft, createSendPlan, confirmChoice, cancelPlan, retryPlan } from './send.service.js'
+export { markShipped, labelsFor } from './ship.service.js'
+export { readPlans, readPlan } from './read.service.js'
 
-/**
- * "Create plan" (send.service.ts). Re-reads the draft for `req.from` / `req.market` and refuses with
- * `FbaSendError('REFUSED', held, blockingProblems)` while `sendProblems` has a blocking problem. Then ONE transaction
- * under the product stock locks: saves `req.owners` into `ProductPackage` for the SKUs that had none
- * (`setFbaOwnersIfUnset`), creates the plan (status QUEUED, currentStep CREATE, source, channelConnectionId,
- * marketplaceId, sourceLocationId, sourceAddress, readyToShipOn, mixedBox, createdBy = who.actor) and one
- * `FbaInboundPlanLine` per SKU with units (msku, quantity, cases, unitsPerCase, looseUnits, owners), HOLDS each line
- * at From (`StockReservation` FBA_SEND, HARD, 45 days → `reservationId`) and publishes `fba.plan_changed`. After the
- * commit: `dispatchFbaPlan(planId)`. Never calls Amazon itself. A double-click is stopped by the route's Idempotency-Key.
- */
-export async function createSendPlan(_req: FbaCreateRequest, _who: FbaActor, _source: FbaPlanSource): Promise<FbaCreateAnswer> {
-  return notBuilt('createSendPlan')
-}
+/* ══ Part B — the job (built 2026-10-07; signatures unchanged, rules in each function's JSDoc there). ════════════════ */
 
-/**
- * The Owner's pick → CONFIRMING (send.service.ts). Only a person (`who.userId`, else NEEDS_PERSON). Checks the choice
- * against `plan.options` (OPTION_UNKNOWN; every shipment of the option once) and the expiry (OPTIONS_EXPIRED), then
- * compare-and-set `status WAITING_FOR_CHOICE → CONFIRMING` exactly once (else WRONG_STATE) with `choice`,
- * `confirmedBy = who.userId`, `confirmedAt`, `currentStep CONFIRM`, publishes `fba.plan_changed`; after commit
- * `dispatchFbaPlan`. The runner confirms at Amazon only when `confirmedBy` is set.
- */
-export async function confirmChoice(_planId: string, _choice: FbaChoiceRequest, _who: FbaPerson): Promise<FbaPlanView> {
-  return notBuilt('confirmChoice')
-}
-
-/**
- * Cancel (send.service.ts). Allowed while `fbaPlanCan(...).cancel` (a cancellable status and no shipment marked
- * Shipped), else WRONG_STATE. One transaction: releases every line's hold NOW (units back on sale at once,
- * `reservationId = null`), sets `cancelledAt`, and — when Amazon has the plan or a CREATE may be in flight — status
- * CANCELLING / step CANCEL (the runner then sends cancelInboundPlan); when Amazon never saw it (QUEUED, no CREATE
- * operation) status CANCELLED directly. Publishes `fba.plan_changed`; after commit `dispatchFbaPlan` when CANCELLING.
- */
-export async function cancelPlan(_planId: string, _who: FbaActor): Promise<FbaPlanView> {
-  return notBuilt('cancelPlan')
-}
-
-/**
- * "Try again" / "Get new options" (send.service.ts). FAILED → the failed step's status (`FBA_STEP_STATUS[currentStep]`),
- * or WAITING_FOR_CHOICE with expired options → PLACING / step PLACE; `lastError` cleared, `nextCheckAt` null.
- * Anything else → WRONG_STATE. Publishes `fba.plan_changed`; after commit `dispatchFbaPlan`.
- */
-export async function retryPlan(_planId: string, _who: FbaActor): Promise<FbaPlanView> {
-  return notBuilt('retryPlan')
-}
-
-/**
- * "Mark shipped" for one Amazon shipment (`shipmentId` = FBAShipment.id) (ship.service.ts). The plan must be
- * READY_TO_SHIP; `req.tracking` must name every box of the shipment once with a non-empty number (TRACKING_INVALID).
- * ONE transaction under the product stock locks: `shippedAt` / `shippedBy` set only where null (a second call is a
- * no-op that returns the view — never a second movement); `tracking` stored with `sentAt: null`; per product in the
- * shipment: release its hold, `applyStockMovementInTx({ locationId: From, change: −qty, reason: 'FBA_TRANSFER_OUT',
- * referenceType: 'FbaInboundShipment', referenceId: shipment id, casesChange: −(its case boxes) })`, re-hold what the
- * line still has to send, `shippedQuantity += qty`; plan `nextCheckAt = now` (TRACKING), status SHIPPED when every
- * shipment is shipped; publishes `fba.plan_changed`. After commit: `afterStockMovementCommit`, `dispatchFbaPlan`.
- */
-export async function markShipped(_shipmentId: string, _req: FbaShippedRequest, _who: FbaActor): Promise<FbaPlanView> {
-  return notBuilt('markShipped')
-}
-
-/**
- * Labels for one Amazon shipment (`shipmentId` = FBAShipment.id) (ship.service.ts): v0 getLabels with the
- * shipmentConfirmationId, `PageType=PackageLabel_A4_4`, `LabelType=UNIQUE`, `PackageLabelsToPrint` = its box ids → a
- * fresh `downloadUrl` (never stored: it expires in minutes). LABELS_UNAVAILABLE without boxes or a link.
- */
-export async function labelsFor(_shipmentId: string): Promise<FbaLabelsAnswer> {
-  return notBuilt('labelsFor')
-}
-
-/**
- * Send-to-FBA plans (source 'matrix' | 'claude' — older wizard plans are not listed), newest first (read.service.ts).
- * `productId` = a SKU or a family root (its variations count); `open` = only open plans. Full views: the drawer
- * shows a Card per plan.
- */
-export async function readPlans(_query: FbaPlansQuery): Promise<FbaPlanView[]> {
-  return notBuilt('readPlans')
-}
-
-/** One Send-to-FBA plan with its lines, steps, options, choice and shipments; null when absent or an older wizard plan. */
-export async function readPlan(_planId: string): Promise<FbaPlanView | null> {
-  return notBuilt('readPlan')
-}
-
-/* ══ Part B — the job. Replace ONLY this section with re-exports when built. ═════════════════════════════════════ */
-
-/**
- * Run a plan soon (dispatch.ts) — the publication-batch pattern: `fbaInboundQueue.add('run', { planRowId }, { jobId:
- * fbaPlanJobId(planRowId) })` when `ENABLE_QUEUE_WORKERS=1`, else `setImmediate(() => runFbaPlan(planRowId))` in this
- * process (the private stack and the tests). A second dispatch is harmless: only the run that claims the plan works.
- */
-export async function dispatchFbaPlan(_planRowId: string): Promise<'queued' | 'inline'> {
-  return notBuilt('dispatchFbaPlan')
-}
-
-/**
- * One run of the job (runner.ts). Claims the plan (`updateMany where id, status in FBA_CLAIMABLE_STATUSES, nextCheckAt
- * null or ≤ now → nextCheckAt = now + FBA_LEASE_MS`; count 0 → `{ claimed: false }`), then runs steps until a person
- * is needed (WAITING_FOR_CHOICE / READY_TO_SHIP), an operation is still IN_PROGRESS (`nextCheckAt = now +
- * FBA_RECHECK_MS`), the plan is HELD (writes off / sign-in / rate wait) or FAILED, or done. Operation ids are written
- * to `plan.steps` BEFORE polling; resume polls them and never confirms twice. CONFIRM runs only when `confirmedBy` is
- * set. Publishes `fba.plan_changed` with every status / step change. Never touches stock.
- */
-export async function runFbaPlan(_planRowId: string): Promise<FbaRunOutcome> {
-  return notBuilt('runFbaPlan')
-}
+export { dispatchFbaPlan } from './dispatch.js'
+export { runFbaPlan } from './runner.js'

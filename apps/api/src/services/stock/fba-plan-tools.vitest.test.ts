@@ -1,13 +1,16 @@
 /**
  * MCP full control 08 S13 — plan-fba-shipment and fba-shipment-options (decided S-3: Claude creates the plan; confirming
- * packing, placement and transport with Amazon's fees stays a person's click in Nexus).
+ * where it goes, with Amazon's fees, stays a person's click in Nexus). Step 4 (2026-10-07): both run on the Matrix's
+ * Send to FBA services.
  *
- *   The plan is created at Amazon (client mocked: nothing leaves the machine) with the products' SKUs, the market's
- *   Amazon id and the address given; it writes NO quantity — every StockLevel, the products' totals and every listing's
- *   quantity are unchanged. A non-FBA inbound shipment cannot be linked. The options are read without writing the plan
- *   row; transport needs one of the plan's Amazon shipments; a plan not created at Amazon yet is said so.
+ *   plan-fba-shipment   the dry run shows what is held where (From, lines, boxes) and writes nothing; refusals by the shared
+ *                       rule (owners not set → "set them in the Matrix Case column", no listing, more than free); on approval
+ *                       the plan is created (source claude, the approver as actor), its units HELD at the warehouse, the job
+ *                       dispatched. No quantity changes anywhere except the hold: StockLevel quantity, the products' totals,
+ *                       the FBA level and every listing's quantity are unchanged.
+ *   fba-shipment-options reads the plan's stored status, steps and options (Amazon is not called; nothing is written).
  *
- * Real SQL (PGlite with the production schema); the FBA Inbound v2024-03-20 client is mocked.
+ * Real SQL (PGlite with the production schema); the job (dispatchFbaPlan) is a spy: nothing reaches Amazon.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../test-support/formula-database.js'
@@ -35,88 +38,131 @@ vi.mock('../../lib/queue.js', () => {
     redis: { connection: null },
   }
 })
-const amazon = vi.hoisted(() => ({ created: [] as any[], reads: [] as string[] }))
-vi.mock('../../clients/amazon-fba-inbound-v2.client.js', () => ({
-  createInboundPlan: vi.fn(async (input: unknown) => { amazon.created.push(input); return { operationId: 'TEST-OP-1' } }),
-  getInboundOperation: vi.fn(async () => ({ operationId: 'TEST-OP-1', operationStatus: 'SUCCESS', operationProblems: [], planId: 'TEST-PLAN-1' })),
-  listPackingOptions: vi.fn(async (planId: string) => {
-    amazon.reads.push(`packing:${planId}`)
-    return { packingOptions: [{ packingOptionId: 'TEST-PACK-1', status: 'OFFERED', packingGroups: ['g1', 'g2'], packingFeatures: [], fees: [{ type: 'FBA_PREP', value: { amount: 12.5, currencyCode: 'EUR' } }] }] }
-  }),
-  listPlacementOptions: vi.fn(async () => ({ placementOptions: [{ placementOptionId: 'TEST-PLACE-1', status: 'OFFERED', shipmentIds: ['TEST-SHIP-1'], fees: [] }] })),
-  listTransportationOptions: vi.fn(async () => ({ transportationOptions: [{ transportationOptionId: 'TEST-TR-1', carrier: { name: 'TEST carrier' }, shippingMode: 'SMALL_PARCEL', quote: { cost: { amount: 40, currencyCode: 'EUR' } } }] })),
-  confirmPackingOption: vi.fn(), confirmPlacementOption: vi.fn(), confirmTransportationOptions: vi.fn(), getShipmentLabels: vi.fn(),
+vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(async () => undefined), refreshMany: vi.fn(async () => undefined), refreshInTransaction: vi.fn(async () => undefined) } }))
+const s = vi.hoisted(() => ({ account: '' }))
+vi.mock('../../lib/amazon-sp-client.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/amazon-sp-client.js')>()),
+  amazonAccount: vi.fn(async () => { if (!s.account) throw new Error('no Amazon account'); return { id: s.account } }),
 }))
+vi.mock('../stock-movement.service.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../stock-movement.service.js')>()),
+  recascadeProduct: vi.fn(async () => ({ ok: true })),
+}))
+/** The contract with the real Part C services behind it (loaded at call time) and Part B's job as a spy. */
+vi.mock('../fba-inbound/contract.js', () => {
+  const HTTP: Record<string, number> = { NOT_FOUND: 404, REFUSED: 400, WRONG_STATE: 409, OPTION_UNKNOWN: 400, OPTIONS_EXPIRED: 409, NEEDS_PERSON: 403, TRACKING_INVALID: 400, LABELS_UNAVAILABLE: 409, NOT_BUILT: 501 }
+  class FbaSendError extends Error {
+    constructor(readonly code: string, message: string, readonly problems: unknown[] = []) { super(message); this.name = 'FbaSendError' }
+    get httpStatus() { return HTTP[this.code] }
+  }
+  const sendFn = (name: string) => async (...args: unknown[]) => ((await import('../fba-inbound/send.service.js')) as any)[name](...args)
+  const readFn = (name: string) => async (...args: unknown[]) => ((await import('../fba-inbound/read.service.js')) as any)[name](...args)
+  return {
+    FbaSendError, dispatchFbaPlan: vi.fn(async () => 'inline'),
+    readSendDraft: sendFn('readSendDraft'), createSendPlan: sendFn('createSendPlan'), readPlan: readFn('readPlan'), readPlans: readFn('readPlans'),
+  }
+})
+
+import { dispatchFbaPlan } from '../fba-inbound/contract.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: ['OWNER'] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
-const ids = { jacket: '', location: '', supplierShipment: '' }
-const ADDRESS = { name: 'Test Sender', addressLine1: 'Via Test 1', city: 'Testville', stateOrProvinceCode: 'TS', postalCode: '00000', countryCode: 'it', email: 'ship@example.test' }
+const ids = { jacket: '', boots: '', main: '', fba: '', account: '' }
 
 type Tool = import('../agents/tool-types.js').AgentTool
 const tools: Record<string, Tool> = {}
 const person = { userId: 'u-approver', can: () => true, via: 'claude' as const }
 const run = (name: string, raw: Record<string, unknown>, mode: 'handler' | 'execute' = 'handler') => {
   const args = tools[name].input.parse(raw) as Record<string, unknown>
-  return inside(() => (mode === 'handler' ? tools[name].handler(args, person) : tools[name].execute!(args, person)))
+  return inside(() => (mode === 'handler' ? tools[name].handler(args, person as never) : tools[name].execute!(args, person as never)))
 }
-/** Every quantity Nexus holds for the product: stock levels, its total, its listings. */
+/** Every quantity Nexus holds for the jacket: stock levels, its total, its listings. */
 const quantities = () => inside(async () => ({
-  levels: (await database.client.stockLevel.findMany({ orderBy: { id: 'asc' }, select: { quantity: true, reserved: true, available: true } })),
+  levels: (await database.client.stockLevel.findMany({ where: { productId: ids.jacket }, orderBy: { id: 'asc' }, select: { locationId: true, quantity: true } })),
   total: (await database.client.product.findUniqueOrThrow({ where: { id: ids.jacket }, select: { totalStock: true } })).totalStock,
-  listings: (await database.client.channelListing.findMany({ orderBy: { id: 'asc' }, select: { quantity: true } })),
+  listings: (await database.client.channelListing.findMany({ where: { productId: ids.jacket }, orderBy: { id: 'asc' }, select: { quantity: true } })),
 }))
 
 beforeAll(async () => {
+  vi.stubEnv('NEXUS_ISSUER_NAME', '')
+  vi.stubEnv('NEXUS_ISSUER_PHONE', '')
   database = await formulaDatabase()
   await inside(async () => {
     const db = database.client
+    const warehouse = (await db.warehouse.create({ data: { code: 'TEST-MAIN', name: 'Main', addressLine1: 'Via Test 1', city: 'Testville', postalCode: '00000', country: 'IT', isDefault: true } })).id
+    ids.main = (await db.stockLocation.create({ data: { type: 'WAREHOUSE', code: 'TEST-MAIN', name: 'Main warehouse', warehouseId: warehouse } })).id
+    ids.fba = (await db.stockLocation.create({ data: { type: 'AMAZON_FBA', code: 'AMAZON-EU-FBA', name: 'Amazon FBA' } })).id
+    await db.brandSettings.create({ data: { companyName: 'Test Company', contactPhone: '+39 000 000' } })
+    ids.account = (await db.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'test-s13', externalAccountId: 'TEST-SELLER', isActive: true } as never })).id
+    s.account = ids.account
     await db.marketplace.create({ data: { channel: 'AMAZON', code: 'IT', name: 'Italy', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'], marketplaceId: 'TEST-MKT-IT' } as never })
-    ids.jacket = (await db.product.create({ data: { sku: 'TEST-SKU-S13-FBA', name: 'Test jacket', basePrice: '100.00', totalStock: 12 } })).id
-    ids.location = (await db.stockLocation.create({ data: { type: 'AMAZON_FBA', code: 'AMAZON-EU-FBA', name: 'Amazon FBA' } })).id
-    await db.stockLevel.create({ data: { productId: ids.jacket, locationId: ids.location, quantity: 4, reserved: 0, available: 4 } })
-    await db.channelListing.create({ data: { productId: ids.jacket, channelMarket: 'AMAZON_IT', channel: 'AMAZON', region: 'IT', marketplace: 'IT', price: '100.00', quantity: 4, listingStatus: 'ACTIVE', fulfillmentMethod: 'FBA' } as never })
-    ids.supplierShipment = (await db.inboundShipment.create({ data: { type: 'SUPPLIER', status: 'IN_TRANSIT', reference: 'TEST-SUPPLIER-DELIVERY' } })).id
+    ids.jacket = (await db.product.create({ data: { sku: 'TEST-SKU-S13-FBA', name: 'Test jacket', basePrice: '100.00', totalStock: 12, weightValue: '1.2', weightUnit: 'kg' } as never })).id
+    ids.boots = (await db.product.create({ data: { sku: 'TEST-SKU-S13-BOOTS', name: 'Test boots', basePrice: '80.00', totalStock: 6, weightValue: '2', weightUnit: 'kg' } as never })).id
+    await db.productPackage.create({ data: { productId: ids.jacket, fbaPrepOwner: 'SELLER', fbaLabelOwner: 'SELLER' } })
+    await db.stockLevel.create({ data: { productId: ids.jacket, locationId: ids.main, quantity: 12, reserved: 0, available: 12 } })
+    await db.stockLevel.create({ data: { productId: ids.boots, locationId: ids.main, quantity: 6, reserved: 0, available: 6 } })
+    await db.stockLevel.create({ data: { productId: ids.jacket, locationId: ids.fba, quantity: 4, reserved: 0, available: 4 } })
+    for (const productId of [ids.jacket, ids.boots]) {
+      await db.channelListing.create({ data: { productId, channelMarket: 'AMAZON_IT', channel: 'AMAZON', region: 'IT', marketplace: 'IT', channelConnectionId: ids.account, aliasKey: '', price: '100.00', quantity: 4, listingStatus: 'ACTIVE', fulfillmentMethod: 'FBA' } as never })
+    }
   })
   const { getTool } = await import('../agents/tool-registry.js')
   for (const name of ['plan-fba-shipment', 'fba-shipment-options']) tools[name] = getTool(name)!
 }, 180_000)
 
 afterAll(async () => {
+  vi.unstubAllEnvs()
   await database?.close()
 })
 
-describe('08 S13 — FBA inbound plans', () => {
-  it('plan-fba-shipment: creates the plan at Amazon and writes no quantity anywhere', async () => {
-    expect((await run('plan-fba-shipment', { marketplace: 'DE', lines: [{ productId: ids.jacket, quantity: 6 }], sourceAddress: ADDRESS })).error).toBe('No Amazon marketplace DE in this business (see the Amazon markets in Nexus).')
-    expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, quantity: 6 }], sourceAddress: ADDRESS, shipmentId: ids.supplierShipment })).error)
-      .toBe('shipment "TEST-SUPPLIER-DELIVERY" is not an FBA shipment (it is SUPPLIER): link an FBA shipment, or none.')
-    const dry = await run('plan-fba-shipment', { marketplace: 'it', lines: [{ productId: ids.jacket, quantity: 6 }], sourceAddress: ADDRESS, name: 'TEST plan' })
-    expect(dry, dry.error).toMatchObject({ ok: true, preview: { marketplace: 'IT', name: 'TEST plan', lines: [{ sku: 'TEST-SKU-S13-FBA', quantity: 6, ownStockNow: 12 }], totals: { skus: 1, units: 6 }, note: expect.stringContaining('Claude cannot confirm') } })
-    expect(amazon.created).toEqual([])
+describe('08 S13 — FBA plans through the Send to FBA services', () => {
+  it('plan-fba-shipment: the dry run shows what is held where and writes nothing; refusals name the fix', async () => {
+    expect((await run('plan-fba-shipment', { marketplace: 'DE', lines: [{ productId: ids.jacket, units: 6 }] })).error)
+      .toBe('No Amazon account sells in DE. TEST-SKU-S13-FBA: no Amazon listing in DE. Nothing was sent to Amazon.')
+    expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.boots, units: 2 }] })).error)
+      .toBe('TEST-SKU-S13-BOOTS: choose who preps and labels (Prep by / Labels by) — Set Prep by / Labels by in the Matrix Case column first. Nothing was sent to Amazon.')
+    expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, units: 20 }] })).error)
+      .toBe('TEST-SKU-S13-FBA: 20 units asked; 12 free at TEST-MAIN. Nothing was sent to Amazon.')
+    const dry = await run('plan-fba-shipment', { marketplace: 'it', lines: [{ productId: ids.jacket, quantity: 6 }] })
+    expect(dry, dry.error).toMatchObject({ ok: true, preview: {
+      marketplace: 'IT', from: { code: 'TEST-MAIN', town: 'Testville' },
+      lines: [{ sku: 'TEST-SKU-S13-FBA', cases: 0, units: 6, quantity: 6, freeNow: 12, prepBy: 'SELLER', labelsBy: 'SELLER' }],
+      totals: { skus: 1, units: 6, boxes: 1, mixedBoxes: 1 }, note: expect.stringContaining('Claude cannot confirm'),
+    } })
+    expect(await inside(() => database.client.fbaInboundPlanV2.count())).toBe(0)
+    expect(dispatchFbaPlan).not.toHaveBeenCalled()
+  })
+
+  it('on approval: the plan is created by the approver (source claude), its units held at the warehouse, the job dispatched; no quantity moves', async () => {
     const before = await quantities()
-    const ran = await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, quantity: 6 }], sourceAddress: ADDRESS, name: 'TEST plan' }, 'execute')
-    expect(ran, ran.error).toMatchObject({ ok: true, data: { planId: expect.any(String) } })
-    expect(amazon.created).toEqual([{
-      name: 'TEST plan', destinationMarketplaces: ['TEST-MKT-IT'], msku: 'TEST-SKU-S13-FBA', items: [{ msku: 'TEST-SKU-S13-FBA', quantity: 6 }],
-      sourceAddress: { name: 'Test Sender', addressLine1: 'Via Test 1', city: 'Testville', stateOrProvinceCode: 'TS', postalCode: '00000', countryCode: 'IT', email: 'ship@example.test' },
-    }])
-    expect(await inside(() => database.client.fbaInboundPlanV2.findUniqueOrThrow({ where: { id: (ran.data as { planId: string }).planId }, select: { planId: true, status: true, createdBy: true } })))
-      .toEqual({ planId: 'TEST-PLAN-1', status: 'ACTIVE', createdBy: 'u-approver' })
+    const ran = await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, units: 6 }] }, 'execute')
+    expect(ran, ran.error).toMatchObject({ ok: true, data: { planId: expect.any(String), held: { from: 'TEST-MAIN', units: 6 } } })
+    const planId = (ran.data as { planId: string }).planId
+    expect(await inside(() => database.client.fbaInboundPlanV2.findUniqueOrThrow({ where: { id: planId }, select: { status: true, source: true, createdBy: true, planId: true, confirmedBy: true } })))
+      .toEqual({ status: 'QUEUED', source: 'claude', createdBy: 'u-approver', planId: null, confirmedBy: null })
+    expect(dispatchFbaPlan).toHaveBeenCalledWith(planId)
+    expect(await inside(() => database.client.stockLevel.findFirstOrThrow({ where: { productId: ids.jacket, locationId: ids.main }, select: { quantity: true, reserved: true, available: true } })))
+      .toEqual({ quantity: 12, reserved: 6, available: 6 })
     expect(await quantities()).toEqual(before)
   })
 
-  it('fba-shipment-options: reads packing, placement and transport live, writing nothing; transport names a shipment', async () => {
-    const plan = await inside(() => database.client.fbaInboundPlanV2.findFirstOrThrow({ where: { planId: 'TEST-PLAN-1' } }))
-    const packing = await run('fba-shipment-options', { planId: plan.id })
-    expect(packing, packing.error).toMatchObject({ ok: true, data: { packing: [{ packingOptionId: 'TEST-PACK-1', packingGroups: 2, fees: [{ type: 'FBA_PREP', amount: 12.5, currencyCode: 'EUR' }] }] } })
-    expect(await inside(() => database.client.fbaInboundPlanV2.findUniqueOrThrow({ where: { id: plan.id }, select: { status: true, currentStep: true } }))).toEqual({ status: plan.status, currentStep: plan.currentStep })
-    expect((await run('fba-shipment-options', { planId: plan.id, kind: 'transport' })).error).toBe('"TEST plan" has no Amazon shipments yet: placement is confirmed first, by a person in Nexus.')
-    await inside(() => database.client.fbaInboundPlanV2.update({ where: { id: plan.id }, data: { shipmentIds: ['TEST-SHIP-1'] } }))
-    const transport = await run('fba-shipment-options', { planId: plan.id, kind: 'transport', amazonShipment: 'TEST-SHIP-1' })
-    expect(transport, transport.error).toMatchObject({ ok: true, data: { transport: [{ transportationOptionId: 'TEST-TR-1', carrier: 'TEST carrier', quote: { amount: 40, currencyCode: 'EUR' } }] } })
-    const pending = await inside(() => database.client.fbaInboundPlanV2.create({ data: { name: 'TEST pending', status: 'CREATING', currentStep: 'CREATE' } }))
-    expect(await run('fba-shipment-options', { planId: pending.id })).toEqual({ ok: false, error: '"TEST pending" is not created at Amazon yet (CREATING).' })
+  it('fba-shipment-options: reads the stored status, steps and options (Amazon not called, nothing written); an unknown plan is said so', async () => {
+    const plan = await inside(() => database.client.fbaInboundPlanV2.findFirstOrThrow({ where: { source: 'claude' } }))
+    const queued = await run('fba-shipment-options', { planId: plan.id })
+    expect(queued, queued.error).toMatchObject({ ok: true, data: { plan: { id: plan.id, status: 'QUEUED', statusText: 'Queued', market: 'IT', from: 'TEST-MAIN', units: 6 }, options: null, can: { cancel: true, choose: false } } })
+    const options = {
+      readAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      placements: [{ placementOptionId: 'po-1', status: 'OFFERED', expiresAt: null, fees: [{ type: 'FEE', target: 'Placement Services', description: null, value: { amount: 0, currency: 'EUR' } }], discounts: [],
+        shipments: [{ shipmentId: 'sh-1', destinationFc: 'MXP5', destinationTown: null, deliveryWindows: [{ deliveryWindowOptionId: 'dw-1', start: '2026-10-14', end: '2026-10-21', availabilityType: null, validUntil: null }],
+          transport: [{ transportationOptionId: 'to-1', shipmentId: 'sh-1', carrierName: 'BRT', carrierCode: 'BRT', shippingMode: 'GROUND_SMALL_PARCEL', shippingSolution: 'USE_YOUR_OWN_CARRIER', quote: null, preconditions: [] }] }] }],
+    }
+    await inside(() => database.client.fbaInboundPlanV2.update({ where: { id: plan.id }, data: { status: 'WAITING_FOR_CHOICE', currentStep: 'CONFIRM', options: options as never } }))
+    const waiting = await run('fba-shipment-options', { planId: plan.id })
+    expect(waiting, waiting.error).toMatchObject({ ok: true, data: {
+      plan: { status: 'WAITING_FOR_CHOICE' }, can: { choose: true },
+      options: { placements: [{ placementOptionId: 'po-1', fees: [{ type: 'FEE' }], shipments: [{ shipmentId: 'sh-1', fulfilmentCentre: 'MXP5', transport: [{ transportationOptionId: 'to-1', carrier: 'BRT' }], deliveryWindows: [{ deliveryWindowOptionId: 'dw-1' }] }] }] },
+    } })
+    expect(await inside(() => database.client.fbaInboundPlanV2.findUniqueOrThrow({ where: { id: plan.id }, select: { status: true, confirmedBy: true } }))).toEqual({ status: 'WAITING_FOR_CHOICE', confirmedBy: null })
     expect(await run('fba-shipment-options', { planId: 'nope' })).toEqual({ ok: false, error: 'FBA plan not found' })
   })
 })

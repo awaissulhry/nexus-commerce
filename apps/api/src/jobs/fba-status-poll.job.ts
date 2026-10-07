@@ -19,6 +19,10 @@
  * a SHIPPED→IN_TRANSIT→RECEIVING→CLOSED progression that's stuck on
  * the wrong status in the local DB silently misleads operators.
  * Set to '0' to opt out (e.g. dev/test envs without SP-API creds).
+ *
+ * Step 4 Send to FBA (2026-10-07): a shipment of a Send-to-FBA plan (`planRowId`) rolls its plan up in the same
+ * transaction — every shipment at Amazon (RECEIVING / CLOSED) → AT_AMAZON, every one CLOSED → CLOSED (only from the
+ * states Amazon moves, SHIPPED / AT_AMAZON) — and publishes `fba.plan_changed`, so the Matrix drawer follows Amazon.
  */
 
 import cron from '../lib/cron/clustered.js'
@@ -31,6 +35,8 @@ import {
   type AmazonShipmentStatus,
 } from '../services/fba-inbound.service.js'
 import { recordCronRun } from '../utils/cron-observability.js'
+import { publishEvent } from '../lib/events/publish.js'
+import { FBA_EVENT_MAX_PRODUCTS } from '@nexus/shared/fba-send'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 let lastRunAt: Date | null = null
@@ -53,7 +59,7 @@ export async function runFbaStatusPoll(): Promise<{
   // re-reading.
   const candidates = await prisma.fBAShipment.findMany({
     where: { status: { not: 'CLOSED' } },
-    select: { id: true, shipmentId: true, status: true },
+    select: { id: true, shipmentId: true, status: true, planRowId: true },
   })
 
   if (candidates.length === 0) {
@@ -102,10 +108,8 @@ export async function runFbaStatusPoll(): Promise<{
         continue
       }
       try {
-        await prisma.fBAShipment.update({
-          where: { id: local.id },
-          data: { status: mapped },
-        })
+        if (local.planRowId) await updateAndRollUp(local.id, local.planRowId, mapped)
+        else await prisma.fBAShipment.update({ where: { id: local.id }, data: { status: mapped } })
         updated++
         logger.info('fba-status-poll: status changed', {
           shipmentId: local.shipmentId,
@@ -131,6 +135,39 @@ export async function runFbaStatusPoll(): Promise<{
     })
   }
   return { scanned: candidates.length, updated, unchanged, skipped, errors }
+}
+
+type LocalShipmentStatus = ReturnType<typeof mapAmazonShipmentStatusToLocal>
+
+/**
+ * A Send-to-FBA plan's status from its shipments' statuses. Only the states Amazon moves change: SHIPPED → AT_AMAZON
+ * when every shipment is at Amazon (RECEIVING or CLOSED), → CLOSED when every one is CLOSED. A plan a person still acts
+ * on (READY_TO_SHIP: a shipment Amazon shows shipped that Nexus did not mark) keeps its status. Pure.
+ */
+export function planStatusFromShipments(planStatus: string, shipmentStatuses: readonly string[]): string {
+  if (planStatus !== 'SHIPPED' && planStatus !== 'AT_AMAZON') return planStatus
+  if (!shipmentStatuses.length) return planStatus
+  if (shipmentStatuses.every(s => s === 'CLOSED')) return 'CLOSED'
+  if (shipmentStatuses.every(s => s === 'RECEIVING' || s === 'CLOSED')) return 'AT_AMAZON'
+  return planStatus
+}
+
+/** One transaction: the shipment's new status, its plan rolled up, and `fba.plan_changed` for the drawer. */
+async function updateAndRollUp(shipmentRowId: string, planRowId: string, status: LocalShipmentStatus): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.fBAShipment.update({ where: { id: shipmentRowId }, data: { status } })
+    const plan = await tx.fbaInboundPlanV2.findFirst({ where: { id: planRowId }, select: { id: true, status: true, currentStep: true, source: true } })
+    if (!plan?.source) return
+    const statuses = (await tx.fBAShipment.findMany({ where: { planRowId }, select: { status: true } })).map((s) => s.status)
+    const next = planStatusFromShipments(plan.status, statuses)
+    if (next !== plan.status) {
+      const moved = await tx.fbaInboundPlanV2.updateMany({ where: { id: plan.id, status: plan.status }, data: { status: next, nextCheckAt: null } })
+      if (moved.count) logger.info('fba-status-poll: plan rolled up', { planRowId, from: plan.status, to: next })
+    }
+    const productIds = (await tx.fbaInboundPlanLine.findMany({ where: { planRowId }, select: { productId: true }, orderBy: { createdAt: 'asc' } }))
+      .map((l) => l.productId).slice(0, FBA_EVENT_MAX_PRODUCTS)
+    await publishEvent(tx as never, 'fba.plan_changed', { planId: plan.id, status: next, step: plan.currentStep || null, productIds })
+  })
 }
 
 export function startFbaStatusPollCron(): void {
