@@ -462,6 +462,7 @@
     "ChannelListingTranslation",
     "ReadinessIndex",
     "ChannelDrift",
+    "FulfilmentConversion",
     "SellerReferenceLabel",
     "Assortment",
     "AssortmentMember",
