@@ -58,6 +58,7 @@ The other kinds: `negative` includes the list form (`add-negative-targets`); `ha
 | Field | Set with | Unit |
 |---|---|---|
 | Strategy target (`target`: kind `ACOS` or `TACOS`) | `set-ads-strategy` | whole percent 1–500 (30 = 30 %) |
+| Strategy band around the target (`target.loPct` / `target.hiPct`, read by the bid brain only, in shadow) | `set-ads-strategy` | whole percent 1–500, `loPct` ≤ `pct` ≤ `hiPct`; empty = 10 % below / 15 % above `pct` |
 | Strategy monthly cap, lowest and highest bid, stop bid, negate spend | `set-ads-strategy` | minor units of the market's currency |
 | Strategy largest bid change per action | `set-ads-strategy` | whole percent 1–100 |
 | Strategy harvest and negate windows | `set-ads-strategy` | 30, 60 or 90 days |

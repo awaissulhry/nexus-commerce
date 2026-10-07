@@ -19336,6 +19336,11 @@ model AdsStrategy {
   targetKind String?
   /// Integer percent, 1..300.
   targetPct  Int?
+  /// BID BRAIN BB-5 — the band around the target, in the target's own kind (integer percent, 1..500): inside it the bid
+  /// brain leaves a bid alone, and `targetPct` is the aim inside it (Owner 2026-10-07). Part of the target group, resolved
+  /// WHOLE with it. Either side may be empty: −10 % / +15 % around targetPct stands in for it. Read by the bid brain only.
+  targetLoPct Int?
+  targetHiPct Int?
 
   /// Money limits. Every limit that applies binds; the stricter one wins.
   monthlySpendCapCents Int?

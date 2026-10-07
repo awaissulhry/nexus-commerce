@@ -4,8 +4,9 @@
  *   pools      target → the same keyword text in the product's other campaigns → ad group → product family → market
  *              (category waits for a later step). A level holding exactly the same keywords as the one below it is
  *              left out, so a keyword is never shrunk toward itself.
- *   goal       the campaign's own target ACoS, else the ads strategy's target as written (ACoS or TACoS), else the
- *              account default — the order every bid engine uses today (W0, Owner: the campaign's target wins)
+ *   goal       the campaign's own target ACoS, else the ads strategy's target as written (ACoS or TACoS, and its band,
+ *              BB-5), else the account default — the order every bid engine uses today (W0, Owner: the campaign's target
+ *              wins); a TACoS target takes the family's 30-day Amazon sales against its ad sales
  *   limits     the strategy's lowest and highest bid and largest change, and the campaign's own bounds
  *   overrides  a stop floor (budget or a stop by Claude), or a keyword floored with its bid remembered → STOP; a retail-guard floor → STOCK (not buyable); a Min-bid
  *              window → MIN-BID HOUR; pinned bids, a person's bid of the last 60 days or a BidHold row → PIN; a HELD
@@ -74,6 +75,8 @@ export interface MarketRows {
   adGroups: ReadonlyMap<string, AdGroupRow>
   targets: readonly TargetRow[]
   evidence: ReadonlyMap<string, Evidence>
+  /** BB-5 — each keyword's ad sales over the 30 settled days, in cents (TACoS). */
+  adSales30?: ReadonlyMap<string, number>
   /** Listing price per family, in cents. */
   prices: ReadonlyMap<string, number>
 }
@@ -90,6 +93,8 @@ export interface RunRows {
   /** Enrollment mode per campaign (HELD → freeze). */
   enrollments: ReadonlyMap<string, { mode: string; heldBy: string | null; heldUntil: Date | null }>
   lastSteps: ReadonlyMap<string, { dataDay: string; fromCents: number; toCents: number }>
+  /** BB-5 — each family's total Amazon sales in the market over the 30 settled days, in cents (read for TACoS only). */
+  familySales?: ReadonlyMap<string, number>
 }
 
 const add = (a: Evidence, b: Evidence): Evidence => ({ clicks: a.clicks + b.clicks, orders: a.orders + b.orders, salesCents: a.salesCents + b.salesCents, costCents: a.costCents + b.costCents })
@@ -173,6 +178,12 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     const s = run.strategy.get(group.id)
     const phase = s?.goal && (BRAIN_PHASES as readonly string[]).includes(s.goal) ? (s.goal as BrainPhase) : null
     const goal: GoalInputs = { ...goalTarget(campaign, s, run.accountDefaultPct), band: s?.band ?? null, phase }
+    // BB-5 — a TACoS target: the family's total sales against its ad sales over 30 days (goal.ts converts the aim).
+    if (goal.target?.kind === 'TACOS' && fam) {
+      const totalCents = group.families.reduce((n, f) => n + (run.familySales?.get(f) ?? 0), 0)
+      const adCents = (groupsByFamily.get(fam) ?? []).reduce((n, id) => n + (byGroup.get(id) ?? []).reduce((k, x) => k + (m.adSales30?.get(x.id) ?? 0), 0), 0)
+      goal.sales = { totalCents, adCents }
+    }
 
     // Overrides.
     const overrides: Overrides = { ...floorOverride(campaign.bidsSuppressedBy, campaign.bidsSuppressedFloorCents, campaign.bidsSuppressedAt), ...floorOverride(group.bidsSuppressedBy, group.bidsSuppressedFloorCents, group.bidsSuppressedAt) }

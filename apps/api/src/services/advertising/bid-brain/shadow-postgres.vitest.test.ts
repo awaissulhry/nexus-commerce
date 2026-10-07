@@ -143,6 +143,31 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-3 — the shadow bid brain (real P
     expect(await inside(() => database.client.bidBrainDecision.count(), OTHER)).toBe(0)
   })
 
+  it('BB-5 — a TACoS target with its band: the family\'s 30-day Amazon sales against its ad sales give the ACoS aim', async () => {
+    const until = new Date(Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth(), NOW.getUTCDate()) - 7 * DAY)
+    await inside(async () => {
+      const db = database.client
+      await db.campaign.create({ data: { id: 'c-de', name: 'Germany exact', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'DE', externalCampaignId: 'EXT-c-de', dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true } })
+      await db.adGroup.create({ data: { id: 'g-c-de', campaignId: 'c-de', name: 'group c-de', externalAdGroupId: 'EXT-g-c-de' } })
+      await db.adTarget.create({ data: { id: 't-de', adGroupId: 'g-c-de', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'motorradjacke', bidCents: 40, externalTargetId: 'EXT-t-de' } })
+      const parent = await db.product.create({ data: { sku: 'BB5-PARENT', name: 'BB5 parent', basePrice: '90.00', isParent: true } })
+      const child = await db.product.create({ data: { sku: 'BB5-V1', name: 'BB5 v1', basePrice: '90.00', parentId: parent.id } })
+      await db.adProductAd.create({ data: { adGroupId: 'g-c-de', productId: child.id, asin: 'B0FXBB5V01', sku: 'BB5-V1' } })
+      await db.amazonAdsDailyPerformance.createMany({ data: Array.from({ length: 37 }, (_, k) => ({
+        profileId: 'P-DE-TEST', marketplace: 'DE', adProduct: 'SPONSORED_PRODUCTS', date: new Date(NOW.getTime() - (k + 1) * DAY), entityType: 'AD_TARGET',
+        entityId: 'EXT-t-de', localEntityId: 't-de', clicks: 10, costMicros: BigInt(3_000_000), currencyCode: 'EUR', orders7d: 1, sales7dCents: 8000, reportedAt: new Date(NOW.getTime() - 3_600_000),
+      })) })
+      // 30 settled days of €200 a day: €6,000 of Amazon sales against €2,400 of ad sales — a ratio of 2.5.
+      await db.dailySalesAggregate.createMany({ data: Array.from({ length: 30 }, (_, k) => ({ sku: 'BB5-V1', channel: 'AMAZON', marketplace: 'DE', day: new Date(until.getTime() - k * DAY), grossRevenue: '200.00', ordersCount: 2, unitsSold: 2 })) })
+      await db.adsStrategy.create({ data: { market: 'DE', level: 'MARKET', label: 'Test market (DE)', targetKind: 'TACOS', targetPct: 10, targetLoPct: 8, targetHiPct: 14, updatedBy: 'user:test' } })
+    })
+    const r = await inside(() => runShadowOnce({ now: NOW, mode: 'shadow' }))
+    expect(r.markets.find((m) => m.market === 'DE')).toMatchObject({ decided: 1, stored: 1 })
+    const [d] = await rows<{ why: string; aim: string; bandLo: string; bandHi: string }>('SELECT why, aim::text, "bandLo"::text, "bandHi"::text FROM "BidBrainDecision" WHERE "targetId" = \'t-de\'')
+    expect(d.why).toMatch(/aim 25% \(band 20%–35%\); TACoS 10% × sales ratio 2\.5/)
+    expect([Number(d.aim), Number(d.bandLo), Number(d.bandHi)]).toEqual([0.25, 0.2, 0.35])
+  })
+
   it('does nothing with the switch off', async () => {
     const r = await inside(() => runShadowOnce({ now: NOW, mode: 'off' }))
     expect(r).toMatchObject({ mode: 'off', markets: [], pruned: 0 })

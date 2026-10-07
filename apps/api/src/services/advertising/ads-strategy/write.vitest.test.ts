@@ -149,6 +149,16 @@ describe('judging a change (design §3.3)', () => {
     expect(judge('target', 'target', null, acos(20), 28)).toBe('lower') // below the account default
   })
 
+  it('BB-5 — a band: either side up raises, both down lowers; an empty side is the default band around the aim', () => {
+    const band = (pct: number, lo: number | null, hi: number | null) => ({ targetKind: 'ACOS', targetPct: pct, targetLoPct: lo, targetHiPct: hi })
+    expect(judge('target', 'target', band(20, null, null), band(20, 18, 28))).toBe('raise') // the top 23 → 28
+    expect(judge('target', 'target', band(20, 18, 28), band(20, 18, 23))).toBe('lower')
+    expect(judge('target', 'target', band(20, 18, 28), band(20, 16, 28))).toBe('lower')
+    expect(judge('target', 'target', band(20, 18, 28), band(20, 19, 25))).toBe('raise') // a higher bottom raises bids sooner
+    expect(judge('target', 'target', band(20, 18, 23), band(20, null, null))).toBe('same')
+    expect(judge('target', 'target', band(20, 18, 28), { targetKind: 'TACOS', targetPct: 8, targetLoPct: null, targetHiPct: null })).toBe('raise')
+  })
+
   it('harvest and negate: less evidence, a higher ceiling, any window change, or the group going raises', () => {
     const h = (minOrders: number, minClicks: number, maxAcosPct: number | null, windowDays = 60) => ({ harvestMinOrders: minOrders, harvestMinClicks: minClicks, harvestMaxAcosPct: maxAcosPct, harvestWindowDays: windowDays })
     expect(judge('loosen', 'harvest', h(3, 7, 40), h(2, 7, 40))).toBe('raise')
@@ -287,6 +297,26 @@ describe('a change planned and saved', () => {
       expect(await rowOf('PRODUCT', ids.q)).toBeNull()
       const history = await db().adsStrategyVersion.findMany({ where: { level: 'PRODUCT', scopeId: ids.q }, orderBy: { version: 'asc' } })
       expect(history.map((v) => [v.version, v.op, v.values == null])).toEqual([[1, 'set', false], [2, 'remove', true]])
+    })
+  })
+})
+
+describe('BB-5 — the band', () => {
+  it('a band set with the target: previewed from → to, judged, and read by the bid brain only; a band that does not hold the aim is refused', async () => {
+    await inA(async () => {
+      const plan = await planned(it_({ level: 'market', values: { target: { kind: 'ACOS', pct: 35, loPct: 30, hiPct: 38 } } }))
+      expect(plan.changes.find((c) => c.field === 'target')).toMatchObject({
+        from: { targetKind: 'ACOS', targetPct: 35, targetLoPct: null, targetHiPct: null },
+        to: { targetKind: 'ACOS', targetPct: 35, targetLoPct: 30, targetHiPct: 38 },
+        direction: 'lower',
+      })
+      expect(plan.preview.warnings).toEqual(expect.arrayContaining([expect.stringContaining('The band is read by the bid brain only')]))
+      expect(plan.preview.liveEffect).toContain('the bid brain, in shadow')
+      const wide = await planned(it_({ level: 'market', values: { target: { kind: 'ACOS', pct: 35, loPct: 30, hiPct: 50 } } }))
+      expect(wide.direction).toBe('raise')
+      expect((await refusal(it_({ level: 'market', values: { target: { kind: 'ACOS', pct: 35, loPct: 40 } } }))).error)
+        .toBe('target: the band must hold the aim — loPct at or below pct, hiPct at or above it (pct 35, loPct 40).')
+      expect((await refusal(it_({ level: 'market', values: { target: { kind: 'ACOS', pct: 35, hiPct: 30 } } }))).status).toBe(400)
     })
   })
 })
