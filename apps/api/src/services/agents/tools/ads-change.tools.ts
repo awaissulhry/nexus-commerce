@@ -60,6 +60,7 @@ import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource, type AdChangeSource } from './ads-change-source.js'
 import { afterUndone } from '../change-record.service.js'
+import { alsoChangedByOf, budgetEnginesOf } from './ads-budget-kit.js'
 
 /** The flat horizon a change set reverses within (rollbackByChangeSetId). */
 const SET_WINDOW_MS = 24 * 3600 * 1000
@@ -610,7 +611,8 @@ async function budgetListPreview(asked: Array<{ campaignId: string; dailyBudgetC
       basis: createHash('sha256').update(lines.map((l) => `${l.campaignId}:${l.currentBudgetCents}:${l.proposedBudgetCents}`).join('|')).digest('base64url').slice(0, 32),
       reach: stored,
       reachNote: reachNote(stored),
-      alsoChangedBy: rule.limitFacts.engineOwned.slice(0, 10),
+      // W4-7 — what else moves these budgets: rules, hourly schedules, and the budget schedules and pools.
+      alsoChangedBy: alsoChangedByOf(rule.limitFacts, await budgetEnginesOf(changing.map((l) => l.campaignId)), new Map(changing.map((l) => [l.campaignId, `campaign "${l.name}"`]))),
       ...rule,
       effect: `Sets the daily budget of ${changing.length} campaign${changing.length === 1 ? '' : 's'}: ${changing.slice(0, 3).map((l) => `${l.name} ${amountLabel(l.currentBudgetCents, l.currency)} → ${amountLabel(l.proposedBudgetCents, l.currency)}`).join(', ')}${changing.length > 3 ? ` and ${changing.length - 3} more` : ''}.`
         + (already ? ` ${already} already as asked ${already === 1 ? 'is' : 'are'} left as ${already === 1 ? 'it is' : 'they are'}.` : ''),

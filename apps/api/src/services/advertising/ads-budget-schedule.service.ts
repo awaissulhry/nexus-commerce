@@ -181,10 +181,14 @@ export function readScheduleWindows(windows: unknown, type: unknown): { windows:
  * a new schedule is switched on, so a campaign already in another switched-on schedule refuses the create.
  * The route checks the name (400) before it calls this.
  */
-export async function createBudgetSchedule(b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule } | { conflict: BudgetScheduleConflict } | { invalid: BudgetScheduleInvalid }> {
+export async function createBudgetSchedule(b: Record<string, unknown>, actor: AdsActor, opts: { enabled?: boolean } = {}): Promise<{ schedule: BudgetSchedule } | { conflict: BudgetScheduleConflict } | { invalid: BudgetScheduleInvalid }> {
   const read = readScheduleWindows(b.windows, b.type) // 4b — before anything else is checked or written
   if ('invalid' in read) return read
-  const conflict = await budgetScheduleConflict(b.campaigns, null)
+  // W4-7 — Claude's set-budget-schedule may create one switched off, in this one write (no cron tick between a create and
+  // a pause): a switched-off schedule holds nothing, so the one-schedule rule does not bind it until it is switched on.
+  // The route passes no `opts`: its creates are switched on, as before.
+  const on = opts.enabled !== false
+  const conflict = on ? await budgetScheduleConflict(b.campaigns, null) : null
   if (conflict) return { conflict }
   const schedule = await prisma.budgetSchedule.create({ data: {
     name: String(b.name), kind: 'BUDGET', type: (b.type as string) ?? 'CAMPAIGN_BUDGET',
@@ -195,6 +199,7 @@ export async function createBudgetSchedule(b: Record<string, unknown>, actor: Ad
     // BSP.2 (§2.2) — only an ARRAY of ranges is a blackout list. The old `?? []` let the
     // builder's boolean `false` through into a Json column documented as `[{start,end}]`.
     neverExpire: b.neverExpire !== false, excludeDates: Array.isArray(b.excludeDates) ? b.excludeDates : [],
+    ...(on ? {} : { enabled: false }),
     /**
      * 🔴 BSP-B5 sweep — `autoRefill` is NOT read from the body any more.
      *

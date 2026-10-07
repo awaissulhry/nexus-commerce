@@ -32,7 +32,10 @@ import { restoreBudgetBaselines } from '../../advertising/ads-budget-baseline.se
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, STEP_PCT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
-import { budgetLimits, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, ID, MARKET, named, plural, WHY } from './ads-budget-kit.js'
+import {
+  alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, ID, MARKET, named,
+  plural, splitRaises, WHY, type CodeRule, type Raise,
+} from './ads-budget-kit.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const hash = (value: unknown) => createHash('sha256').update(canonical(value)).digest('base64url').slice(0, 24)
@@ -96,6 +99,18 @@ async function limitsNow(ids: readonly string[]) {
 async function planStateNow(market: string, month: string, campaignIds: readonly string[]): Promise<PlanState> {
   const [plan, limits] = await Promise.all([budgetPlanFor(market, month), limitsNow(campaignIds)])
   return { market, month, plan: valuesOf(plan), limits: limits.map((l) => ({ campaignId: l.id, minCents: l.minCents, maxCents: l.maxCents })) }
+}
+
+/** The ways a plan request can raise spend: the lever its code rule reads. */
+type PlanLever = 'monthlyBudget' | 'capRemoved' | 'stopOverSpendOff' | 'autoPacing' | 'calendar' | 'planRemoved' | 'campaignLimits'
+
+/**
+ * THE code rule of set-monthly-ad-budget (ads-budget-kit.ts CodeRule): no older Claude tool moves a market's monthly plan,
+ * so a raise through it needs the approver's code; a campaign's lowest and highest daily budget are set-ad-guardrail's
+ * lever (campaign-budget-bounds), without one.
+ */
+function planNeedsCode(lever: PlanLever): CodeRule {
+  return lever === 'campaignLimits' ? { code: false, as: 'set-ad-guardrail (campaign-budget-bounds)' } : { code: true }
 }
 
 /** Why a campaign's limits move can raise spend, in words (set-ad-guardrail's campaign-budget-bounds rule), or null. */
@@ -168,30 +183,38 @@ async function planPreview(a: PlanArgs, ctx: Pick<ToolContext, 'approvalId'>): P
   const planMoves = a.op === 'remove' || canonical(from) !== canonical(to)
   if (!planMoves && !limitLines.length) return refuse(`Nothing would change: the ${a.market} plan for ${month} and the limits named are already as asked.`)
 
-  // What can raise spend. Through the plan: a new lever (the code); a campaign's limits: set-ad-guardrail's (no code).
+  // Every way it can raise spend (each listed, whatever the code rule).
   const f = from ?? NO_PLAN
   const capped = (v: PlanValues | null) => !!v && v.monthlyBudgetCents > 0 && (v.stopOverSpend || v.autoPacing)
-  const coded: string[] = []
+  const found: Array<Raise<PlanLever>> = []
   if (planMoves) {
     if (to) {
-      if (f.monthlyBudgetCents > 0 && to.monthlyBudgetCents > f.monthlyBudgetCents && capped(to)) coded.push(`the monthly budget rises from ${money(f.monthlyBudgetCents)} to ${money(to.monthlyBudgetCents)}: Stop Over Spend and Auto Pacing act at the higher cap`)
-      if (f.monthlyBudgetCents > 0 && to.monthlyBudgetCents === 0 && capped(from)) coded.push(`the cap of ${money(f.monthlyBudgetCents)} goes (0 = no cap): the engine stops and paces this market no more`)
-      if (f.stopOverSpend && !to.stopOverSpend && f.monthlyBudgetCents > 0) coded.push('Stop Over Spend switched off: the engine gives back the bids it floored and floors none at the cap')
-      if (f.autoPacing !== to.autoPacing && to.monthlyBudgetCents > 0) coded.push(to.autoPacing ? 'Auto Pacing switched on: when the market is projected over its cap it sets each campaign\'s budget by its share of spend, up as well as down' : 'Auto Pacing switched off: it lowers no budget when the market is projected over its cap')
-      if (canonical(f.calendar) !== canonical(to.calendar) && to.autoPacing && to.monthlyBudgetCents > 0) coded.push('a new calendar moves each day\'s share of the month: a day\'s pace can rise')
+      if (f.monthlyBudgetCents > 0 && to.monthlyBudgetCents > f.monthlyBudgetCents && capped(to)) found.push({ lever: 'monthlyBudget', why: `the monthly budget rises from ${money(f.monthlyBudgetCents)} to ${money(to.monthlyBudgetCents)}: Stop Over Spend and Auto Pacing act at the higher cap` })
+      if (f.monthlyBudgetCents > 0 && to.monthlyBudgetCents === 0 && capped(from)) found.push({ lever: 'capRemoved', why: `the cap of ${money(f.monthlyBudgetCents)} goes (0 = no cap): the engine stops and paces this market no more` })
+      if (f.stopOverSpend && !to.stopOverSpend && f.monthlyBudgetCents > 0) found.push({ lever: 'stopOverSpendOff', why: 'Stop Over Spend switched off: the engine gives back the bids it floored and floors none at the cap' })
+      if (f.autoPacing !== to.autoPacing && to.monthlyBudgetCents > 0) found.push({ lever: 'autoPacing', why: to.autoPacing ? 'Auto Pacing switched on: when the market is projected over its cap it sets each campaign\'s budget by its share of spend, up as well as down' : 'Auto Pacing switched off: it lowers no budget when the market is projected over its cap' })
+      if (canonical(f.calendar) !== canonical(to.calendar) && to.autoPacing && to.monthlyBudgetCents > 0) found.push({ lever: 'calendar', why: 'a new calendar moves each day\'s share of the month: a day\'s pace can rise' })
     } else if (capped(from)) {
-      coded.push(`the plan goes: its cap of ${money(f.monthlyBudgetCents)} stops and paces this market no more (the ads strategy's own monthly cap still binds)`)
+      found.push({ lever: 'planRemoved', why: `the plan goes: its cap of ${money(f.monthlyBudgetCents)} stops and paces this market no more (the ads strategy's own monthly cap still binds)` })
     }
   }
-  const loosened = limitLines.map((l) => limitRaise(l.label, l.from, l.to, l.currency)).filter((r): r is string => !!r)
-  const raises = [...coded, ...loosened]
+  const planRaises = found.length > 0
+  for (const l of limitLines) {
+    const why = limitRaise(l.label, l.from, l.to, l.currency)
+    if (why) found.push({ lever: 'campaignLimits', why })
+  }
+  const { raises, coded, raisesWithoutCode } = splitRaises(found, planNeedsCode)
 
   // The facts a run by rule is judged on: the market's plan, each campaign's limits — Nexus only.
   const items: KitItem[] = [
-    ...(planMoves ? [{ entity: { kind: 'products' as const, market: a.market, productIds: [], label: `the ${a.market} budget plan for ${month}` }, change: { field: 'automation' as const, raises: coded.length > 0 }, nexusOnly: true }] : []),
+    ...(planMoves ? [{ entity: { kind: 'products' as const, market: a.market, productIds: [], label: `the ${a.market} budget plan for ${month}` }, change: { field: 'automation' as const, raises: planRaises }, nexusOnly: true }] : []),
     ...limitLines.map((l) => ({ entity: { kind: 'campaign' as const, id: l.campaignId }, change: { field: 'automation' as const, raises: !!limitRaise(l.label, l.from, l.to, l.currency) }, nexusOnly: true })),
   ]
   const rule = await ruleFactsFor({ tool: PLAN_TOOL_NAME, limits: PLAN_LIMITS, items, writes: [], approvalId: ctx.approvalId ?? null })
+  // What else moves the named campaigns' budgets (rules, hourly schedules, budget schedules, pools).
+  const limitLabels = new Map(limitLines.map((l) => [l.campaignId, l.label]))
+  const alsoChangedBy = alsoChangedByOf(rule.limitFacts, await budgetEnginesOf([...limitLabels.keys()]), limitLabels)
+  // TODO(W4-12 #465): once `consequencesFor` is on main, say "Nexus only" for every plan change (the engine writes later).
   const { budgetEnforceMode } = await import('../../advertising/ads-budget-enforce.service.js')
   const engine = await budgetEnforceMode()
 
@@ -229,7 +252,8 @@ async function planPreview(a: PlanArgs, ctx: Pick<ToolContext, 'approvalId'>): P
       totals: { planChanges: planMoves ? 1 : 0, campaignLimits: limitLines.length, alreadyAsAsked: asked.length - limitLines.length },
       raises,
       ...(stepUp ? { stepUp } : {}),
-      ...(loosened.length ? { raisesWithoutCode: `${plural(loosened.length, 'campaign')}' limits are loosened: as set-ad-guardrail, that is warned here and needs no code.` } : {}),
+      ...(raisesWithoutCode ? { raisesWithoutCode } : {}),
+      alsoChangedBy,
       engine: { label: engine.label, sentence: engine.sentence },
       // Every starting value the person approves: the plan as it is, and every named campaign's limits.
       basis: hash({ from, limits: now.map((l) => [l.id, l.minCents, l.maxCents]) }),
@@ -377,6 +401,14 @@ const baselineInput = z.object({
   why: WHY,
 })
 
+/**
+ * THE code rule of restore-budget-baselines (ads-budget-kit.ts CodeRule): a campaign's daily budget is set-campaign-budget's
+ * lever, without a code — a raise is listed, warned past his own limits, and approving sends it.
+ */
+function baselineNeedsCode(_lever: 'campaignBudget'): CodeRule {
+  return { code: false, as: 'set-campaign-budget' }
+}
+
 /** One campaign of the request, as Nexus holds it now. */
 interface BaselineLine { campaignId: string; label: string; marketplace: string | null; currency: string; fromCents: number; toCents: number | null; does: 'restore' | 'skip'; why?: string }
 
@@ -411,7 +443,12 @@ async function baselinePreview(args: Record<string, unknown>, ctx: Pick<ToolCont
   const items: KitItem[] = restoring.map((l) => ({ entity: { kind: 'campaign', id: l.campaignId }, change: { field: 'dailyBudget', fromCents: l.fromCents, toCents: l.toCents! } }))
   const writes: RuleWrite[] = restoring.map((l) => ({ campaignId: l.campaignId, marketplace: l.marketplace, changes: [{ field: 'dailyBudget', valueCents: l.toCents! }], label: l.label }))
   const rule = await ruleFactsFor({ tool: BASELINE_TOOL_NAME, limits: BASELINE_LIMITS, items, writes, approvalId: ctx.approvalId ?? null })
-  const raises = restoring.filter((l) => l.toCents! > l.fromCents).map((l) => `${l.label}: ${amountLabel(l.fromCents, l.currency)} → ${amountLabel(l.toCents!, l.currency)}`)
+  const found: Array<Raise<'campaignBudget'>> = restoring.filter((l) => l.toCents! > l.fromCents).map((l) => ({ lever: 'campaignBudget', why: `${l.label}: ${amountLabel(l.fromCents, l.currency)} → ${amountLabel(l.toCents!, l.currency)}` }))
+  const { raises, coded, raisesWithoutCode } = splitRaises(found, baselineNeedsCode)
+  const stepUp = budgetStepUp(`raises ${plural(coded.length, 'campaign budget')} back to ${coded.length === 1 ? 'its' : 'their'} baseline`, coded.length ? ['Budgets'] : [])
+  // What else moves these budgets (rules, hourly schedules, budget schedules, pools): they may move them again.
+  const labels = new Map(restoring.map((l) => [l.campaignId, l.label]))
+  const alsoChangedBy = alsoChangedByOf(rule.limitFacts, await budgetEnginesOf([...labels.keys()]), labels)
   const shown = restoring.map((l) => ({ campaignId: l.campaignId, label: l.label, marketplace: l.marketplace, currency: l.currency, fromCents: l.fromCents, toCents: l.toCents! }))
   const skipped = lines.filter((l) => l.does === 'skip').map((l) => ({ campaignId: l.campaignId, label: l.label, why: l.why! }))
   const effect = `Sets the daily budget of ${plural(restoring.length, 'campaign')} back to its baseline: ${named(restoring.map((l) => `${l.label} ${amountLabel(l.fromCents, l.currency)} → ${amountLabel(l.toCents!, l.currency)}`))}.`
@@ -429,8 +466,9 @@ async function baselinePreview(args: Record<string, unknown>, ctx: Pick<ToolCont
         skipped,
         totals: { restoring: restoring.length, skipped: skipped.length, raising: raises.length },
         raises,
-        ...(raises.length ? { raisesWithoutCode: 'A campaign\'s daily budget is set-campaign-budget\'s lever: a raise is warned past your own limits and needs no code, as there.' } : {}),
-        alsoChangedBy: rule.limitFacts.engineOwned.slice(0, 10),
+        ...(stepUp ? { stepUp } : {}),
+        ...(raisesWithoutCode ? { raisesWithoutCode } : {}),
+        alsoChangedBy,
         basis: hash(lines.map((l) => [l.campaignId, l.fromCents, l.toCents])),
         reach,
         reachNote: budgetReachNote(reach, ''),
@@ -496,6 +534,8 @@ const restoreBudgetBaselinesTool: AgentTool = {
     const refusal = budgetRecheck(ctx, fresh, ['basis', 'totals'])
     if (refusal) return notRun(refusal)
     const p = fresh.preview as { reach: StoredReach; effect: string }
+    const coded = await codeGate(ctx, fresh.preview)
+    if (coded) return notRun(coded)
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const restoring = lines.filter((l) => l.does === 'restore')

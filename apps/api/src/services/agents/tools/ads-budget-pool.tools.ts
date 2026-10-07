@@ -14,10 +14,12 @@
  *                  nothing; a live one writes each campaign's new budget as the approver, every write in the approval's
  *                  change set.
  *
- * What can raise spend, and the approver's code (ads-budget-kit.ts, the money family rule): campaigns joining a live pool
- * (its next rebalance may raise them) and a live rebalance that raises a budget — the code. A pool's values
- * (tune-ad-engine's lever: a bigger budget, another strategy, a larger shift, a shorter cool-down) are listed in `raises`
- * and need no code, as there. A create (born off, in dry run) and a delete raise nothing.
+ * Every way it can raise spend is listed in `raises`: a campaign joining (a rebalance may raise its budget — now if the
+ * pool is live, else once it is), a campaign leaving (it keeps its budget while the pool's whole budget is spread over the
+ * rest), a live rebalance that raises a budget, a pool's values (a bigger budget, another strategy, a larger shift, a
+ * shorter cool-down). Which need the approver's code is decided in ONE place, poolNeedsCode (ads-budget-kit.ts, the money
+ * family rule). A campaign joins only a pool of its own currency. The preview names what else moves the campaigns'
+ * budgets (alsoChangedBy), warns when a switched-on budget schedule also sets one, and says what the pools' cron does now.
  *
  * Undo: a create is deleted; an update is set back; an allocation is reversed; a delete is created again (a new pool,
  * switched off and in dry run, with its campaigns: reversibility partial); a live rebalance is put back through
@@ -36,7 +38,11 @@ import { computeRebalance } from '../../advertising/budget-pool-rebalancer.servi
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, ruleFactsFor, spOnlyRefusal } from './ads-change-kit.js'
 import type { KitItem } from './ads-autonomy-kit.js'
-import { budgetLimits, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, ID, named, plural, WHY } from './ads-budget-kit.js'
+import {
+  alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, ID, named, plural,
+  splitRaises, WHY, type CodeRule, type Raise,
+} from './ads-budget-kit.js'
+import { budgetEngineMode } from '../../advertising/ads-budget-engine-mode.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = 'set-budget-pool'
@@ -89,10 +95,26 @@ async function poolNow(poolId: string | null): Promise<PoolState> {
   }
 }
 
+/** The ways a pool request can raise spend: the lever its code rule reads. */
+type PoolLever = 'join' | 'leave' | 'rebalance' | 'values'
+
+/**
+ * THE code rule of set-budget-pool (ads-budget-kit.ts CodeRule): no older Claude tool adds a campaign to a pool, takes one
+ * out or runs a rebalance — those raises need the approver's code, whatever the pool's level now (switching a pool live is
+ * turn-up-automation's, without a code, so a join made while it is off is judged as the raise it becomes); a pool's values
+ * are tune-ad-engine's lever, without one.
+ */
+function poolNeedsCode(lever: PoolLever): CodeRule {
+  return lever === 'values' ? { code: false, as: 'tune-ad-engine (budget-pool)' } : { code: true }
+}
+
 const levelWords = (p: PoolValues) => (!p.enabled ? 'switched off' : p.dryRun ? 'on, in dry run (it records rebalances and writes nothing)' : 'live (its rebalances write budgets at Amazon)')
 
-/** Campaigns that may join a pool: found, Sponsored Products, not archived, with a market (the route's 400). */
-async function joiners(add: NonNullable<Args['add']>, poolId: string | null) {
+/**
+ * Campaigns that may join a pool: found, Sponsored Products, not archived, with a market (the route's 400), budgeted in
+ * the pool's currency (a rebalance writes the pool's amounts into each campaign, never converted), in no other pool.
+ */
+async function joiners(add: NonNullable<Args['add']>, poolId: string | null, poolCurrency: string) {
   const ids = add.map((a) => a.campaignId)
   if (new Set(ids).size !== ids.length) return { refusal: 'add names a campaign twice.' }
   const rows = ids.length ? await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, type: true, adProduct: true, marketplace: true, status: true, dailyBudget: true, dailyBudgetCurrency: true } }) : []
@@ -101,12 +123,23 @@ async function joiners(add: NonNullable<Args['add']>, poolId: string | null) {
   if (missing.length) return { refusal: `Not queued: campaign ${named(missing)} ${missing.length === 1 ? 'was' : 'were'} not found in this business.` }
   const cannot = ids.map((id) => byId.get(id)!).map((c) => ({ c, why: spOnlyRefusal({ type: c.type == null ? null : String(c.type), adProduct: c.adProduct, name: c.name }) ?? (String(c.status) === 'ARCHIVED' ? 'it is archived' : !c.marketplace ? 'it has no market in Nexus' : null) })).filter((x) => x.why)
   if (cannot.length) return { refusal: `Not queued: ${named(cannot.map((x) => `campaign "${x.c.name}": ${x.why}`))}.` }
+  const otherCurrency = ids.map((id) => byId.get(id)!).filter((c) => campaignCurrency(c) !== poolCurrency)
+  if (otherCurrency.length) {
+    return { refusal: `Not queued: ${named(otherCurrency.map((c) => `campaign "${c.name}" budgets in ${campaignCurrency(c)}`))}, and the pool in ${poolCurrency}: a rebalance writes the pool's amounts into each campaign, never converted, so a pool holds campaigns of its own currency only.` }
+  }
   const inPool = await poolsOfCampaigns(ids)
   const taken = ids.filter((id) => inPool.has(id) && inPool.get(id)!.poolId !== poolId).map((id) => `campaign "${byId.get(id)!.name}" is in the pool "${inPool.get(id)!.poolName}"`)
   if (taken.length) return { refusal: `Not queued: ${named(taken)}. A campaign is in one pool at a time: take it out of that pool first (op allocate, remove).` }
   const already = ids.filter((id) => inPool.get(id)?.poolId === poolId && poolId)
   if (already.length) return { refusal: `Not queued: ${named(already.map((id) => `campaign "${byId.get(id)!.name}"`))} ${already.length === 1 ? 'is' : 'are'} in this pool already.` }
   return { rows: ids.map((id) => byId.get(id)!) }
+}
+
+/** What a campaign joining a pool can do to its budget, in words: a live pool's next rebalance, or once it is live. */
+function joinWords(c: { name: string; dailyBudget: unknown; dailyBudgetCurrency: string | null }, maxCents: number | undefined, live: boolean): string {
+  const currency = campaignCurrency(c)
+  const now = amountLabel(Math.round(Number(c.dailyBudget) * 100), currency)
+  return `campaign "${c.name}" joins ${live ? 'a live pool: its next rebalance' : 'the pool: once the pool is live, its rebalances'} may raise its budget from ${now}${maxCents ? ` up to ${amountLabel(maxCents, currency)}` : ' (no highest budget is set)'}`
 }
 
 interface Planned { result: ToolResult; state?: PoolState }
@@ -123,9 +156,10 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
   const money = (cents: number, currency = pool?.currency ?? a.currency ?? 'EUR') => amountLabel(cents, currency)
   const extra = (allowed: readonly string[]) => given([...POOL_VALUES, 'currency', 'add', 'remove']).filter((k) => !allowed.includes(k))
 
-  const coded: string[] = []
-  const uncoded: string[] = []
+  const found: Array<Raise<PoolLever>> = []
   const items: KitItem[] = []
+  /** Every campaign the request touches, with what a person calls it (alsoChangedBy). */
+  const touched = new Map<string, string>()
   const markets = new Set<string>()
   let changes: Array<{ label: string; from: string; to: string }> = []
   let lines: Array<Record<string, unknown>> = []
@@ -138,10 +172,15 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
     const wrong = extra(['name', 'description', 'currency', 'totalDailyBudgetCents', 'strategy', 'coolDownMinutes', 'maxShiftPerRebalancePct', 'add'])
     if (wrong.length) return refuse(`op create takes no ${wrong.join(', ')}.`)
     if (!a.name || !a.totalDailyBudgetCents) return refuse('A new pool needs a name and its daily budget (totalDailyBudgetCents).')
-    const joining = a.add?.length ? await joiners(a.add, null) : { rows: [] }
+    const joining = a.add?.length ? await joiners(a.add, null, a.currency ?? 'EUR') : { rows: [] }
     if ('refusal' in joining) return refuse(joining.refusal!)
     after = { name: a.name, description: a.description ?? null, currency: a.currency ?? 'EUR', totalDailyBudgetCents: a.totalDailyBudgetCents, strategy: a.strategy ?? 'STATIC', coolDownMinutes: a.coolDownMinutes ?? 60, maxShiftPerRebalancePct: a.maxShiftPerRebalancePct ?? 20, enabled: false, dryRun: true }
-    for (const c of joining.rows!) { markets.add(c.marketplace!); items.push({ entity: { kind: 'campaign', id: c.id }, change: { field: 'automation', raises: false }, nexusOnly: true }) }
+    for (const c of joining.rows!) {
+      markets.add(c.marketplace!)
+      touched.set(c.id, `campaign "${c.name}"`)
+      found.push({ lever: 'join', why: joinWords(c, a.add!.find((x) => x.campaignId === c.id)!.maxDailyBudgetCents, false) })
+      items.push({ entity: { kind: 'campaign', id: c.id }, change: { field: 'automation', raises: true }, nexusOnly: true })
+    }
     lines = joining.rows!.map((c) => ({ campaignId: c.id, label: `campaign "${c.name}"`, does: 'joins' }))
     effect = `Creates the budget pool "${a.name}" (${money(after.totalDailyBudgetCents, after.currency)} a day, ${after.strategy}), switched off and in dry run as the screen makes one${lines.length ? `, with ${plural(lines.length, 'campaign')}` : ''}. It moves no budget until a person switches it on (turn-up-automation).`
   } else if (a.op === 'update') {
@@ -152,34 +191,46 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
       label: k, from: k === 'totalDailyBudgetCents' ? money(pool![k]) : String(pool![k] ?? 'none'), to: k === 'totalDailyBudgetCents' ? money(after![k]) : String(after![k] ?? 'none'),
     }))
     if (!changes.length) nothing = `the pool "${pool!.name}" is already as asked`
-    // tune-ad-engine's own judgement of a pool's values (listed, no code: its lever).
-    if (after.totalDailyBudgetCents > pool!.totalDailyBudgetCents) uncoded.push(`the pool's daily budget rises from ${money(pool!.totalDailyBudgetCents)} to ${money(after.totalDailyBudgetCents)}`)
-    if (after.strategy !== pool!.strategy) uncoded.push(`a new strategy (${pool!.strategy} → ${after.strategy}) moves budget between the pool's campaigns`)
-    if (after.maxShiftPerRebalancePct > pool!.maxShiftPerRebalancePct) uncoded.push(`one rebalance may move more of the pool (${pool!.maxShiftPerRebalancePct}% → ${after.maxShiftPerRebalancePct}%)`)
-    if (after.coolDownMinutes < pool!.coolDownMinutes) uncoded.push(`the pool rebalances more often (every ${pool!.coolDownMinutes} → ${after.coolDownMinutes} minutes)`)
+    // tune-ad-engine's own judgement of a pool's values.
+    if (after.totalDailyBudgetCents > pool!.totalDailyBudgetCents) found.push({ lever: 'values', why: `the pool's daily budget rises from ${money(pool!.totalDailyBudgetCents)} to ${money(after.totalDailyBudgetCents)}` })
+    if (after.strategy !== pool!.strategy) found.push({ lever: 'values', why: `a new strategy (${pool!.strategy} → ${after.strategy}) moves budget between the pool's campaigns` })
+    if (after.maxShiftPerRebalancePct > pool!.maxShiftPerRebalancePct) found.push({ lever: 'values', why: `one rebalance may move more of the pool (${pool!.maxShiftPerRebalancePct}% → ${after.maxShiftPerRebalancePct}%)` })
+    if (after.coolDownMinutes < pool!.coolDownMinutes) found.push({ lever: 'values', why: `the pool rebalances more often (every ${pool!.coolDownMinutes} → ${after.coolDownMinutes} minutes)` })
     const ids = state!.allocations.map((x) => x.campaignId)
-    const rows = ids.length ? await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, marketplace: true } }) : []
-    for (const r of rows) { if (r.marketplace) markets.add(r.marketplace); items.push({ entity: { kind: 'campaign', id: r.id }, change: { field: 'automation', raises: uncoded.length > 0 }, nexusOnly: true }) }
+    const rows = ids.length ? await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, marketplace: true } }) : []
+    for (const r of rows) {
+      if (r.marketplace) markets.add(r.marketplace)
+      touched.set(r.id, `campaign "${r.name}"`)
+      items.push({ entity: { kind: 'campaign', id: r.id }, change: { field: 'automation', raises: found.length > 0 }, nexusOnly: true })
+    }
     effect = `Changes the budget pool "${pool!.name}": ${changes.map((c) => `${c.label} ${c.from} → ${c.to}`).join(', ')}. It is ${levelWords(pool!)}: the new values apply from its next rebalance.`
   } else if (a.op === 'allocate') {
     const wrong = extra(['add', 'remove'])
     if (wrong.length) return refuse(`op allocate takes no ${wrong.join(', ')} (a pool's values change with op update).`)
     if (!a.add?.length && !a.remove?.length) return refuse('Name the campaigns that join (add) or leave (remove) the pool.')
-    const joining = a.add?.length ? await joiners(a.add, a.poolId!) : { rows: [] }
+    const joining = a.add?.length ? await joiners(a.add, a.poolId!, pool!.currency) : { rows: [] }
     if ('refusal' in joining) return refuse(joining.refusal!)
     const leaving = [...new Set(a.remove ?? [])]
     if ((a.add ?? []).some((x) => leaving.includes(x.campaignId))) return refuse('A campaign cannot both join and leave the pool in one request.')
     const notIn = leaving.filter((id) => !state!.allocations.some((x) => x.campaignId === id))
     if (notIn.length) return refuse(`Not queued: campaign ${named(notIn)} ${notIn.length === 1 ? 'is' : 'are'} not in the pool "${pool!.name}".`)
-    const leaveRows = leaving.length ? await prisma.campaign.findMany({ where: { id: { in: leaving } }, select: { id: true, name: true, marketplace: true } }) : []
+    const leaveRows = leaving.length ? await prisma.campaign.findMany({ where: { id: { in: leaving } }, select: { id: true, name: true, marketplace: true, dailyBudget: true, dailyBudgetCurrency: true } }) : []
     const live = pool!.enabled && !pool!.dryRun
     for (const c of joining.rows!) {
       markets.add(c.marketplace!)
-      const max = a.add!.find((x) => x.campaignId === c.id)!.maxDailyBudgetCents
-      if (live) coded.push(`campaign "${c.name}" joins a live pool: its next rebalance may raise its budget from ${amountLabel(Math.round(Number(c.dailyBudget) * 100), campaignCurrency(c))}${max ? ` up to ${amountLabel(max, campaignCurrency(c))}` : ''}`)
-      items.push({ entity: { kind: 'campaign', id: c.id }, change: { field: 'automation', raises: live }, nexusOnly: true })
+      touched.set(c.id, `campaign "${c.name}"`)
+      found.push({ lever: 'join', why: joinWords(c, a.add!.find((x) => x.campaignId === c.id)!.maxDailyBudgetCents, live) })
+      items.push({ entity: { kind: 'campaign', id: c.id }, change: { field: 'automation', raises: true }, nexusOnly: true })
     }
-    for (const c of leaveRows) { if (c.marketplace) markets.add(c.marketplace); items.push({ entity: { kind: 'campaign', id: c.id }, change: { field: 'automation', raises: false }, nexusOnly: true }) }
+    // A campaign that leaves keeps its own budget, and the pool's next rebalance spreads its whole daily budget over the
+    // campaigns left (budget-pool-rebalancer.service.ts): together they can spend up to the leaver's budget more a day.
+    for (const c of leaveRows) {
+      if (c.marketplace) markets.add(c.marketplace)
+      touched.set(c.id, `campaign "${c.name}"`)
+      const budget = amountLabel(Math.round(Number(c.dailyBudget) * 100), campaignCurrency(c))
+      found.push({ lever: 'leave', why: `campaign "${c.name}" leaves the pool and keeps its budget of ${budget}, while ${live ? 'the pool\'s next rebalance' : 'once the pool is live its rebalances'} spread${live ? 's' : ''} the whole pool over the campaigns left: up to ${budget} a day more in all` })
+      items.push({ entity: { kind: 'campaign', id: c.id }, change: { field: 'automation', raises: true }, nexusOnly: true })
+    }
     lines = [
       ...joining.rows!.map((c) => ({ campaignId: c.id, label: `campaign "${c.name}"`, does: 'joins', ...a.add!.find((x) => x.campaignId === c.id) })),
       ...leaving.map((id) => ({ campaignId: id, label: `campaign "${leaveRows.find((r) => r.id === id)?.name ?? id}"`, does: 'leaves (keeps the budget it has)' })),
@@ -190,8 +241,12 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
     if (wrong.length) return refuse(`op delete takes no ${wrong.join(', ')}: it deletes the pool and its allocations.`)
     after = null
     const ids = state!.allocations.map((x) => x.campaignId)
-    const rows = ids.length ? await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, marketplace: true } }) : []
-    for (const r of rows) { if (r.marketplace) markets.add(r.marketplace); items.push({ entity: { kind: 'campaign', id: r.id }, change: { field: 'automation', raises: false }, nexusOnly: true }) }
+    const rows = ids.length ? await prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, marketplace: true } }) : []
+    for (const r of rows) {
+      if (r.marketplace) markets.add(r.marketplace)
+      touched.set(r.id, `campaign "${r.name}"`)
+      items.push({ entity: { kind: 'campaign', id: r.id }, change: { field: 'automation', raises: false }, nexusOnly: true })
+    }
     effect = `Deletes the budget pool "${pool!.name}" (${levelWords(pool!)}) and its ${plural(ids.length, 'allocation')}: each campaign keeps the budget it has now; nothing is given back.`
   } else {
     const wrong = extra([])
@@ -213,10 +268,11 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
     for (const x of moving) {
       const c = byId.get(x.campaignId!)!
       if (c.marketplace) markets.add(c.marketplace)
+      touched.set(c.id, `campaign "${c.name}"`)
       items.push(pool!.dryRun
         ? { entity: { kind: 'campaign', id: c.id }, change: { field: 'automation', raises: false }, nexusOnly: true }
         : { entity: { kind: 'campaign', id: c.id }, change: { field: 'dailyBudget', fromCents: x.oldBudgetCents, toCents: x.proposedBudgetCents } })
-      if (!pool!.dryRun && x.proposedBudgetCents > x.oldBudgetCents) coded.push(`campaign "${c.name}": ${amountLabel(x.oldBudgetCents, campaignCurrency(c))} → ${amountLabel(x.proposedBudgetCents, campaignCurrency(c))}`)
+      if (!pool!.dryRun && x.proposedBudgetCents > x.oldBudgetCents) found.push({ lever: 'rebalance', why: `campaign "${c.name}": ${amountLabel(x.oldBudgetCents, campaignCurrency(c))} → ${amountLabel(x.proposedBudgetCents, campaignCurrency(c))}` })
     }
     if (!pool!.dryRun) writes = moving.map((x) => ({ campaignId: x.campaignId!, marketplace: byId.get(x.campaignId!)!.marketplace, toCents: x.proposedBudgetCents, label: `campaign "${byId.get(x.campaignId!)!.name}"` }))
     effect = pool!.dryRun
@@ -227,14 +283,28 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
 
   const reached = writes.length ? await budgetReach(writes) : { reach: null, gateRefuses: [] }
   if ('refused' in reached) return refuse(`Not queued: ${reached.refused}`)
-  const raises = [...coded, ...uncoded]
+  const { raises, coded, raisesWithoutCode } = splitRaises(found, poolNeedsCode)
   const rule = await ruleFactsFor({
     tool: TOOL, limits: POOL_LIMITS, items, approvalId: ctx.approvalId ?? null,
     writes: writes.map((w) => ({ campaignId: w.campaignId, marketplace: w.marketplace, changes: [{ field: 'dailyBudget', valueCents: w.toCents }], label: w.label })),
   })
   const label = `"${pool?.name ?? a.name}"`
-  const stepUp = budgetStepUp(a.op === 'rebalance-now' ? `rebalances the live budget pool ${label}, raising budgets` : `adds campaigns to the live budget pool ${label}, which may raise their budgets`, coded.length ? ['Budgets'] : [])
-  const later = a.op === 'rebalance-now' ? '' : after && after.enabled && !after.dryRun ? 'Its cron rebalances it at Amazon every 15 minutes, after its cool-down.' : 'It writes nothing at Amazon until a person switches it live (turn-up-automation, A9).'
+  const stepUp = budgetStepUp(a.op === 'rebalance-now' ? `rebalances the live budget pool ${label}, raising budgets` : `changes which campaigns the budget pool ${label} holds, which can raise spend`, coded.length ? ['Budgets'] : [])
+  // What else moves these campaigns' budgets (rules, hourly schedules, budget schedules), and a warning for a campaign a
+  // switched-on budget schedule also sets: the schedule's windows and the pool's rebalances both write its budget.
+  const engines = await budgetEnginesOf([...touched.keys()], { poolId: a.poolId ?? null })
+  const alsoChangedBy = alsoChangedByOf(rule.limitFacts, engines, touched)
+  const joiningIds = new Set((a.add ?? []).map((x) => x.campaignId))
+  const warnings = [...engines].filter(([id, e]) => joiningIds.has(id) && e.schedules.length)
+    .map(([id, e]) => `${touched.get(id)} is also in the switched-on budget schedule ${e.schedules.map((x) => `"${x.name}"`).join(', ')}: its windows and this pool's rebalances both set its budget, and the last write wins.`)
+  const engine = await budgetEngineMode('budget-pools')
+  const later = a.op === 'rebalance-now' ? ''
+    : !after ? ''
+      : !after.enabled ? 'It writes nothing at Amazon while it is switched off (turn-up-automation, A9, switches it on).'
+        : after.dryRun ? 'In dry run it records its rebalances and writes nothing (turn-up-automation, A9, takes it live).'
+          : `Its cron: ${engine.sentence}`
+  // TODO(W4-12 #465): once `consequencesFor` is on main, say "Nexus only" for the ops that write nothing at Amazon now
+  // (create, update, allocate, delete, a dry-run rebalance); today Claude's consequences name the tool's worst case.
   return {
     state: state ?? undefined,
     result: {
@@ -254,7 +324,10 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
         poolDailyBudgetCents: after?.totalDailyBudgetCents ?? null,
         raises,
         ...(stepUp ? { stepUp } : {}),
-        ...(uncoded.length ? { raisesWithoutCode: 'A pool\'s values are tune-ad-engine\'s lever: they move spend without a code there, so here too.' } : {}),
+        ...(raisesWithoutCode ? { raisesWithoutCode } : {}),
+        ...(warnings.length ? { warnings } : {}),
+        alsoChangedBy,
+        engine: { label: engine.label, sentence: engine.sentence },
         // Every starting value the person approves: the pool and its allocations as they are, and what a rebalance moves.
         basis: hash({ state, lines }),
         reach: reached.reach,
@@ -435,10 +508,12 @@ const setBudgetPool: AgentTool = {
     + 'leave with remove, keeping the budget they have; a campaign is in one pool at a time), delete (each campaign keeps '
     + 'its budget) or rebalance-now (one rebalance now, ignoring the cool-down: a pool in dry run only records it; a live '
     + 'one writes each budget as the approver). Switching a pool on, off or live is turn-up / turn-down-automation (A9). '
-    + `${BY_RULE_WORDS} (by default nothing runs by rule). Campaigns joining a live pool and a live rebalance that raises a `
-    + 'budget are approved with the approver\'s authenticator code (stepUp); a pool\'s values behave as tune-ad-engine '
-    + '(listed in raises, no code). The preview shows the pool from → to, each campaign joining, leaving or moving, and '
-    + 'where a write lands (live at Amazon or sandbox). Undo reverses it (a deleted pool comes back as a new one, switched off).',
+    + `${BY_RULE_WORDS} (by default nothing runs by rule). A campaign joining or leaving a pool (whatever its level) and a `
+    + 'live rebalance that raises a budget are approved with the approver\'s authenticator code (stepUp); a pool\'s values '
+    + 'behave as tune-ad-engine (listed in raises, no code). A campaign joins only a pool of its own currency. The preview '
+    + 'shows the pool from → to, each campaign joining, leaving or moving, what else moves those budgets (a switched-on '
+    + 'budget schedule too: warned), where a write lands (live at Amazon or sandbox) and what the pools\' cron does now. '
+    + 'Undo reverses it (a deleted pool comes back as a new one, switched off).',
   async handler(args, ctx) {
     return (await plan(args as Args, ctx)).result
   },

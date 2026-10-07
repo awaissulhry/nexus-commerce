@@ -5,23 +5,26 @@
  * A schedule sets each of its campaigns' daily budget per time window (an amount, a percent up or down, or a whole day's
  * budget × a multiplier); its cron writes at Amazon when a window opens and gives the budget back when it closes.
  *
- *   create   a schedule, switched on as the screen makes one (or off: enabled false), its campaigns in no other
- *            switched-on schedule (the screen's one-schedule rule refuses it otherwise, naming the other).
+ *   create   a schedule, switched on as the screen makes one, its campaigns in no other switched-on schedule (the
+ *            screen's one-schedule rule refuses it otherwise, naming the other); or made switched off in the one write
+ *            (enabled false: createBudgetSchedule's own option, so no cron tick enters a window first).
  *   update   its name, campaigns (the whole list; a campaign taken out gets its budget back, as the screen does), windows
  *            (every window: they replace them all), time zone, dates; enabled false pauses it (it gives back the budgets
  *            it holds), true switches it back on.
  *   delete   gives back the budgets it holds, then it is gone.
  *
  * The give-back is the screen's own (restoreBudgetScheduleBase): written as the schedule's, only while a campaign still
- * sits at the budget the schedule set (someone's later change is kept), each write carrying the approval as change set.
+ * sits at the budget the schedule set (someone's later change is kept), queued for Amazon at once (no cancel window, as
+ * on the screen), each write carrying the approval as change set.
  * The preview lists each give-back from → to now (scheduleGiveBacks — the same check), and the ones the write gate would
  * refuse (that campaign keeps the schedule's budget, as on the screen).
  *
- * What can raise spend, and the approver's code (ads-budget-kit.ts, the money family rule): a new schedule with a window
- * that can raise a budget, campaigns added to a schedule whose window can raise theirs, a delete or a campaign taken out
- * whose give-back raises a budget the schedule held lower — the code. A window edit of an existing schedule
- * (tune-ad-engine's lever) and a switch on or off with its give-back (turn-up / turn-down-automation's) behave as those
- * tools: listed in `raises`, no code.
+ * Every way it can raise spend is listed in `raises` (what the limits and the card read): a window that can raise a
+ * budget, campaigns added to such a schedule, a later or removed end date, an earlier start, blackout days removed, a
+ * time-zone change, a switch-on, a give-back that raises a budget the schedule held lower. Which need the approver's code
+ * is decided in ONE place, scheduleNeedsCode (ads-budget-kit.ts, the money family rule). The preview names what else
+ * moves the campaigns' budgets (alsoChangedBy: rules, hourly schedules, other budget schedules, pools), warns when a pool
+ * also sets one, and says what the schedules' cron does now (budgetEngineMode: scheduled, the dial, live or sandbox).
  *
  * Undo: a create is deleted; an update is set back (its campaigns, windows, switch and dates as they were); a delete is
  * created again as it was — a new schedule (its record of what it applied is not brought back): reversibility partial.
@@ -38,7 +41,11 @@ import { fingerprint, lowers, windowText, type BudgetWindow } from '../../advert
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, ruleFactsFor, spOnlyRefusal } from './ads-change-kit.js'
 import type { KitItem } from './ads-autonomy-kit.js'
-import { budgetLimits, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, ID, named, plural, WHY } from './ads-budget-kit.js'
+import {
+  alsoChangedByOf, budgetEnginesOf, budgetLimits, budgetReach, budgetReachNote, budgetRecheck, budgetRuleRefusal, budgetStepUp, codeGate, ID, named, plural,
+  splitRaises, WHY, type CodeRule, type Raise,
+} from './ads-budget-kit.js'
+import { budgetEngineMode } from '../../advertising/ads-budget-engine-mode.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = 'set-budget-schedule'
@@ -74,6 +81,22 @@ const input = z.object({
   why: WHY,
 })
 type Args = z.infer<typeof input>
+
+/** The ways a schedule request can raise spend: the lever its code rule reads. */
+type ScheduleLever = 'newWindow' | 'campaignAdded' | 'dates' | 'giveBack' | 'windowEdit' | 'switchOn' | 'pauseGiveBack'
+
+/**
+ * THE code rule of set-budget-schedule (ads-budget-kit.ts CodeRule). No older Claude tool creates a schedule, adds a
+ * campaign to one, moves its dates, blackout days or time zone, or deletes one (or takes a campaign out) with its
+ * give-back: those raises need the approver's code — whether the schedule is on or off (switching it on is
+ * turn-up-automation's, without a code, so a raise made while it is off is judged as the raise it becomes). A window edit
+ * is tune-ad-engine's lever, a switch on or off with its give-back turn-up / turn-down-automation's: as those, no code.
+ */
+function scheduleNeedsCode(lever: ScheduleLever): CodeRule {
+  if (lever === 'windowEdit') return { code: false, as: 'tune-ad-engine (budget-schedule)' }
+  if (lever === 'switchOn' || lever === 'pauseGiveBack') return { code: false, as: 'turn-up / turn-down-automation' }
+  return { code: true }
+}
 
 /** A schedule as a change records it, and as `current` reads it back (the undo guard compares the two). */
 interface ScheduleState {
@@ -225,10 +248,10 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
     if ('invalid' in read) return refuse(`Not queued: ${read.invalid.error}`)
   }
 
-  // The one-schedule rule (3c): switched on after this, a campaign is in no other switched-on schedule.
+  // The one-schedule rule (3c): switched on after this, a campaign is in no other switched-on schedule (a schedule created
+  // switched off holds nothing: it is checked when it is switched on).
   const onAfter = !!after?.enabled
-  // A create is switched on as it is made (create, then paused when asked off): it is checked either way.
-  if (a.op === 'create' || (onAfter && (body.campaigns || body.enabled === true))) {
+  if (onAfter && (a.op === 'create' || body.campaigns || body.enabled === true)) {
     const campaigns = (body.campaigns as unknown) ?? (existing?.campaigns as unknown)
     const conflict = await budgetScheduleConflict(campaigns, existing?.id ?? null)
     if (conflict) return refuse(`Not queued: ${conflict.error}`)
@@ -252,40 +275,43 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
   })
   const keptLines = giveBacks.filter((g) => g.act === 'kept').map((g) => names.get(g.campaignId)!.label)
 
-  // What can raise spend, and which of it needs the approver's code (ads-budget-kit.ts).
+  // Every way it can raise spend (each listed, whatever the code rule), and which campaigns' budgets the schedule's windows
+  // can then raise.
   const raisingWindows = (ws: BudgetWindow[]) => ws.filter((w) => !lowers(w, type))
-  const coded: string[] = []
-  const uncoded: string[] = []
-  /** The campaigns whose budget the schedule's windows can raise once this runs (Nexus only now; its cron writes later). */
+  const found: Array<Raise<ScheduleLever>> = []
   const windowRaised = new Set<string>()
-  if (a.op === 'create' && onAfter && raisingWindows(after!.windows).length) {
-    for (const w of raisingWindows(after!.windows)) coded.push(`window ${windowText(w, type)} can raise a budget`)
+  if (a.op === 'create' && raisingWindows(after!.windows).length) {
+    for (const w of raisingWindows(after!.windows)) found.push({ lever: 'newWindow', why: `window ${windowText(w, type)} can raise a budget${onAfter ? '' : ' (once the schedule is switched on)'}` })
     for (const id of after!.campaignIds) windowRaised.add(id)
   }
   if (a.op === 'update' && after && before) {
-    const windowRaises: string[] = []
+    const raising = raisingWindows(after.windows)
+    const whole = (lever: ScheduleLever, why: string) => { found.push({ lever, why }); for (const id of after.campaignIds) windowRaised.add(id) }
     if (body.windows) {
       const had = new Set(before.windows.map(fingerprint))
       const has = new Set(after.windows.map(fingerprint))
-      for (const w of after.windows) if (!had.has(fingerprint(w)) && !lowers(w, type)) windowRaises.push(`window ${windowText(w, type)} can raise a budget`)
-      for (const w of before.windows) if (!has.has(fingerprint(w)) && lowers(w, type)) windowRaises.push(`the lowering window ${windowText(w, type)} goes: its budgets come back up`)
+      for (const w of after.windows) if (!had.has(fingerprint(w)) && !lowers(w, type)) whole('windowEdit', `window ${windowText(w, type)} can raise a budget`)
+      for (const w of before.windows) if (!has.has(fingerprint(w)) && lowers(w, type)) whole('windowEdit', `the lowering window ${windowText(w, type)} goes: its budgets come back up`)
     }
-    if (body.enabled === true && raisingWindows(after.windows).length) windowRaises.push(`switched back on, its windows can raise budgets (${named(raisingWindows(after.windows).map((w) => windowText(w, type)), 2)})`)
-    uncoded.push(...windowRaises)
-    if (windowRaises.length && after.enabled) for (const id of after.campaignIds) windowRaised.add(id)
-    const added = after.campaignIds.filter((id) => !before.campaignIds.includes(id))
-    if (added.length && after.enabled && raisingWindows(after.windows).length) {
-      coded.push(`${named(added.map((id) => names.get(id)!.label))} ${added.length === 1 ? 'joins' : 'join'} a schedule whose windows can raise ${added.length === 1 ? 'its' : 'their'} budget`)
-      for (const id of added) windowRaised.add(id)
+    if (body.enabled === true && raising.length) whole('switchOn', `switched back on, its windows can raise budgets (${named(raising.map((w) => windowText(w, type)), 2)})`)
+    if (raising.length) {
+      // Its windows can raise budgets: more days, other hours or more campaigns under them raise spend too.
+      if (before.endDate != null && (after.endDate == null || after.endDate > before.endDate)) whole('dates', after.endDate ? `it runs longer: its last day ${before.endDate} → ${after.endDate}` : `its last day ${before.endDate} goes: it never ends`)
+      if (before.startDate != null && (after.startDate == null || after.startDate < before.startDate)) whole('dates', `it starts earlier: its first day ${before.startDate} → ${after.startDate ?? 'none'}`)
+      const kept = new Set(after.excludeDates.map((d) => `${d.start}|${d.end}`))
+      for (const d of before.excludeDates) if (!kept.has(`${d.start}|${d.end}`)) whole('dates', `the days it did not run, ${d.start} to ${d.end}, are no longer left out: its windows run on them`)
+      if (after.timezone !== before.timezone) whole('dates', `its windows move from ${before.timezone} to ${after.timezone} time: the hours that raise budgets fall at other times`)
+      const added = after.campaignIds.filter((id) => !before.campaignIds.includes(id))
+      if (added.length) {
+        found.push({ lever: 'campaignAdded', why: `${named(added.map((id) => names.get(id)!.label))} ${added.length === 1 ? 'joins' : 'join'} a schedule whose windows can raise ${added.length === 1 ? 'its' : 'their'} budget${after.enabled ? '' : ' (once it is switched on)'}` })
+        for (const id of added) windowRaised.add(id)
+      }
     }
   }
   for (const g of giveBackLines.filter((l) => l.toCents > l.fromCents && !l.refusedByGate)) {
-    const words = `${g.label}: its budget comes back up from ${amountLabel(g.fromCents, g.currency)} to ${amountLabel(g.toCents, g.currency)} (the schedule held it lower)`
-    // A pause's give-back is turn-down-automation's lever (no code); a delete's or a campaign taken out's is not.
-    if (a.op === 'update' && body.enabled === false) uncoded.push(words)
-    else coded.push(words)
+    found.push({ lever: a.op === 'update' && body.enabled === false ? 'pauseGiveBack' : 'giveBack', why: `${g.label}: its budget comes back up from ${amountLabel(g.fromCents, g.currency)} to ${amountLabel(g.toCents, g.currency)} (the schedule held it lower)` })
   }
-  const raises = [...coded, ...uncoded]
+  const { raises, coded, raisesWithoutCode } = splitRaises(found, scheduleNeedsCode)
 
   // The facts a run by rule is judged on: each give-back (a budget write now), each other campaign it touches (Nexus only).
   const touched = [...new Set([...(after?.campaignIds ?? []), ...(before?.campaignIds ?? [])])]
@@ -301,6 +327,18 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
     writes: [...writing.values()].map((g) => ({ campaignId: g.campaignId, marketplace: names.get(g.campaignId)?.marketplace ?? null, changes: [{ field: 'dailyBudget', valueCents: g.toCents }], label: g.label })),
   })
   const markets = [...new Set(touched.map((id) => names.get(id)?.marketplace).filter((m): m is string => !!m))].sort()
+  // What else moves these campaigns' budgets (rules, hourly schedules, other budget schedules, pools), and a warning for a
+  // campaign a budget pool also sets: the pool's rebalances and this schedule's windows both write its budget.
+  const engines = await budgetEnginesOf(touched, { scheduleId: existing?.id ?? null })
+  const labels = new Map(touched.map((id) => [id, names.get(id)?.label ?? `campaign ${id}`]))
+  const alsoChangedBy = alsoChangedByOf(rule.limitFacts, engines, labels)
+  const warnings = after
+    ? after.campaignIds.filter((id) => engines.get(id)?.pool).map((id) => {
+      const pool = engines.get(id)!.pool!
+      return `${labels.get(id)} is also in the budget pool "${pool.name}" (${pool.level}): its rebalances and this schedule's windows both set its budget, and the last write wins.`
+    })
+    : []
+  const engine = await budgetEngineMode('budget-schedules')
 
   const label = `"${after?.name ?? before!.name}"`
   const wordsOf = (ws: BudgetWindow[]) => ws.map((w) => windowText(w, type))
@@ -312,7 +350,11 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
       : `Changes the budget schedule ${label}: ${Object.keys(body).filter((k) => k !== 'neverExpire').map((k) => (k === 'enabled' ? (body.enabled ? 'switched back on' : 'paused') : k === 'campaigns' ? 'its campaigns' : k)).join(', ')}.`)
     + (giveBackLines.length ? ` Gives back ${plural(giveBackLines.filter((g) => !g.refusedByGate).length, 'budget')} now (each to its budget from before the window).` : '')
     + (keptLines.length ? ` ${named(keptLines)} ${keptLines.length === 1 ? 'keeps' : 'keep'} the budget someone set since.` : '')
-  const later = after && onAfter ? 'Its cron writes each campaign\'s budget at Amazon when a window opens (every 15 minutes), and gives it back when the window closes.' : ''
+  const later = !after ? ''
+    : onAfter ? `Its cron sets each campaign's budget when a window opens and gives it back when the window closes — now: ${engine.sentence}`
+      : 'Switched off, it writes nothing until it is switched on (turn-up-automation, A7, or this tool with enabled true).'
+  // TODO(W4-12 #465): once `consequencesFor` is on main, say "Nexus only" for a request that gives nothing back (a create,
+  // an edit without a give-back); today Claude's consequences name the tool's worst case.
   const ref = existing ? { scheduleId: existing.id, name: existing.name } : { scheduleId: null, name: a.name }
   return {
     schedule: existing,
@@ -339,7 +381,10 @@ async function plan(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Promise<Plan
         totals: { campaigns: after?.campaignIds.length ?? 0, givesBack: writing.size, gateRefusesGiveBack: gateRefused.size, kept: keptLines.length },
         raises,
         ...(stepUp ? { stepUp } : {}),
-        ...(uncoded.length ? { raisesWithoutCode: 'A window edit (tune-ad-engine) and a switch on or off with its give-back (turn-up / turn-down-automation) move spend without a code there, so here too.' } : {}),
+        ...(raisesWithoutCode ? { raisesWithoutCode } : {}),
+        ...(warnings.length ? { warnings } : {}),
+        alsoChangedBy,
+        engine: { label: engine.label, sentence: engine.sentence },
         // Every starting value the person approves: the schedule as it is and every give-back it would make (not its
         // record of what it applied, which its cron rewrites every run).
         basis: hash({ before, giveBacks }),
@@ -409,12 +454,11 @@ async function execute(a: Args, ctx: ToolContext): Promise<ToolResult> {
   let scheduleId = fresh.schedule?.id ?? null
   let restore: { restored: number; kept: number; refused: number } | null = null
   if (a.op === 'create') {
-    const out = await createBudgetSchedule(fresh.body!, run.actor)
+    // Asked switched off: made off in the one write (no cron tick can enter a window first).
+    const out = await createBudgetSchedule(fresh.body!, run.actor, { enabled: a.enabled !== false })
     if ('conflict' in out) return notRun(`Not run: ${out.conflict.error}`)
     if ('invalid' in out) return notRun(`Not run: ${out.invalid.error}`)
     scheduleId = out.schedule.id
-    // Asked switched off: as the screen's pause right after it is made (it holds nothing yet, so nothing is given back).
-    if (a.enabled === false) await patchBudgetSchedule(scheduleId, { enabled: false }, run.actor, opts)
   } else if (a.op === 'update') {
     const out = await patchBudgetSchedule(scheduleId!, fresh.body!, run.actor, opts)
     if (!out) return notRun('Not run: the schedule is gone. Nothing changed.')
@@ -432,7 +476,9 @@ async function execute(a: Args, ctx: ToolContext): Promise<ToolResult> {
     op: a.op, scheduleId, ...(now ? { enabled: now.enabled, campaigns: now.campaignIds.length, windows: now.windows.length } : {}),
     ...(restore ? { gaveBack: restore } : {}),
     reach: p.reach, changeSetId: run.changeSetId,
-    note: restore?.refused ? `${plural(restore.refused, 'give-back')} refused or failed: ${restore.refused === 1 ? 'that campaign keeps' : 'those campaigns keep'} the schedule's budget (approval-status follows the rest).` : 'Saved in Nexus. Its give-backs are queued for Amazon (after the 5-minute cancel window); its cron writes the windows.',
+    note: restore?.refused
+      ? `${plural(restore.refused, 'give-back')} refused or failed: ${restore.refused === 1 ? 'that campaign keeps' : 'those campaigns keep'} the schedule's budget (approval-status follows the rest).`
+      : `Saved in Nexus.${restore?.restored ? ' Its give-backs are queued for Amazon at once, with no cancel window (as the screen\'s give-back); approval-status follows them.' : ''} Its cron writes the windows.`,
   }
   return { ok: true, data, change }
 }
@@ -464,11 +510,12 @@ const setBudgetSchedule: AgentTool = {
     + 'or op delete. A pause, a delete and a campaign taken out give back the budget the schedule holds, as the screen '
     + 'does (a budget someone changed since is kept); a campaign is in one switched-on schedule at a time. The preview '
     + 'lists the schedule from → to, every give-back from → to and where it lands (live at Amazon or sandbox), and what '
-    + `can raise spend. ${BY_RULE_WORDS} (by default nothing runs by rule). A new schedule with a window that can raise a `
-    + 'budget, campaigns added to a raising schedule, or a delete or campaign taken out whose give-back raises a budget is '
-    + 'approved with the approver\'s authenticator code (stepUp); a window edit and a switch on or off behave as '
-    + 'tune-ad-engine and turn-up / turn-down-automation (listed, no code). Undo puts it back (a deleted schedule comes '
-    + 'back as a new one).',
+    + `can raise spend, what else moves those budgets (a pool too: warned) and what the schedules' cron does now. ${BY_RULE_WORDS} `
+    + '(by default nothing runs by rule). A new schedule with a window that can raise a budget, campaigns added to such a '
+    + 'schedule, a later or removed end date, an earlier start, blackout days removed or a time-zone change on one, or a '
+    + 'delete or campaign taken out whose give-back raises a budget is approved with the approver\'s authenticator code '
+    + '(stepUp), whether the schedule is on or off; a window edit and a switch on or off behave as tune-ad-engine and '
+    + 'turn-up / turn-down-automation (listed in raises, no code). Undo puts it back (a deleted schedule comes back as a new one).',
   async handler(args, ctx) {
     return (await plan(args as Args, ctx)).result
   },

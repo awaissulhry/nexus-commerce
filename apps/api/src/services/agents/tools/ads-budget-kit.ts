@@ -25,6 +25,7 @@ import { canonical, ownLimitsNote, ruleRefusal, type StoredReach } from './ads-c
 import { adKitLimits } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS, stepUpApproval, type StepUp } from '../step-up-approval.js'
 import type { ToolContext, ToolResult } from '../tool-types.js'
+import type { LimitFacts } from './ads-autonomy-kit.js'
 
 export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`
 /** "a, b and 3 more". */
@@ -91,6 +92,31 @@ export function budgetReachNote(reach: StoredReach | null, later: string): strin
 export const BUDGET_CODE_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked '
   + 'confirms it in Claude with theirs. By the business\'s rule only where this tool\'s limits allow a raise (allowRaise, off by default; '
   + 'switching it on needs the code too).'
+
+/**
+ * Whether a raise through a lever needs the approver's code — each tool decides it in ONE helper (its `…NeedsCode`), so the
+ * Owner's answer can be changed in one place: `code: true` for a raise no older Claude tool can make; `code: false` for a
+ * lever an older tool already moves without one, named (`as`), which this tool then behaves like.
+ */
+export type CodeRule = { code: true } | { code: false; as: string }
+
+/** One way a request can raise spend: the lever (what the code rule reads) and the sentence a person reads. */
+export interface Raise<L extends string> { lever: L; why: string }
+
+/**
+ * Every raise listed (`raises`: what the limits and the card read, whatever the code rule), the ones that need the code
+ * (`coded`, for stepUp), and the others with the older tool they behave like (`raisesWithoutCode`, absent when none).
+ */
+export function splitRaises<L extends string>(all: ReadonlyArray<Raise<L>>, rule: (lever: L) => CodeRule) {
+  const coded: string[] = []
+  const without: string[] = []
+  for (const r of all) {
+    const decided = rule(r.lever)
+    if (decided.code === true) coded.push(r.why)
+    else without.push(`${r.why} — no code, as with ${decided.as}`)
+  }
+  return { raises: all.map((r) => r.why), coded, ...(without.length ? { raisesWithoutCode: without } : {}) }
+}
 
 /** The stepUp a preview carries when approving it needs the approver's code; null when nothing in it needs one. */
 export function budgetStepUp(what: string, coded: readonly string[]): StepUp | null {
@@ -175,4 +201,46 @@ export function budgetRuleRefusal(preview: unknown, limits: Record<string, unkno
   if (!Array.isArray(p.raises)) return 'the preview does not say whether it can raise spend; a person decides'
   if (p.raises.length && limits.allowRaise !== true) return `it can raise spend (${named(p.raises, 2)}); this tool's limits let no raise run by rule (allowRaise is off); a person decides`
   return null
+}
+
+// ── What else moves these campaigns' budgets ──────────────────────────────────────────────────────
+
+/** One campaign and every automation that also moves it: rules and hourly schedules (the kit's), budget schedules, pools. */
+export interface AlsoChangedBy { campaignId: string; label: string; by: string[] }
+
+/**
+ * The budget schedules (switched on) and budget pools each campaign is in, by campaign id — the engines the kit's
+ * `engineOwned` (rules and hourly schedules) does not name. `except`: the schedule or pool the request itself changes.
+ */
+export async function budgetEnginesOf(campaignIds: readonly string[], except: { scheduleId?: string | null; poolId?: string | null } = {}) {
+  const ids = new Set(campaignIds)
+  const out = new Map<string, { schedules: Array<{ id: string; name: string }>; pool: { id: string; name: string; level: string } | null }>()
+  if (!ids.size) return out
+  const { listBudgetSchedules } = await import('../../advertising/ads-budget-schedule.service.js')
+  const { poolsOfCampaigns } = await import('../../advertising/ads-budget-pool.service.js')
+  const [schedules, pools] = await Promise.all([listBudgetSchedules(), poolsOfCampaigns([...ids])])
+  const at = (id: string) => out.get(id) ?? out.set(id, { schedules: [], pool: null }).get(id)!
+  for (const s of schedules) {
+    if (!s.enabled || s.id === except.scheduleId) continue
+    for (const c of Array.isArray(s.campaigns) ? (s.campaigns as Array<{ id?: unknown }>) : []) {
+      if (typeof c?.id === 'string' && ids.has(c.id)) at(c.id).schedules.push({ id: s.id, name: s.name })
+    }
+  }
+  for (const [id, p] of pools) if (p.poolId !== except.poolId) at(id).pool = { id: p.poolId, name: p.poolName, level: p.level }
+  return out
+}
+
+/**
+ * Every campaign of the request another automation also moves: the kit's rules and hourly schedules (`limitFacts.
+ * engineOwned`) and the budget schedules and pools (`budgetEnginesOf`), each named — at most 20 campaigns listed.
+ */
+export function alsoChangedByOf(facts: Pick<LimitFacts, 'engineOwned'>, engines: Awaited<ReturnType<typeof budgetEnginesOf>>, labels: ReadonlyMap<string, string>): AlsoChangedBy[] {
+  const out = new Map<string, AlsoChangedBy>()
+  for (const o of facts.engineOwned) out.set(o.campaignId, { campaignId: o.campaignId, label: o.label, by: [...o.by] })
+  for (const [id, e] of engines) {
+    const row = out.get(id) ?? { campaignId: id, label: labels.get(id) ?? `campaign ${id}`, by: [] }
+    row.by.push(...e.schedules.map((s) => `budget schedule "${s.name}"`), ...(e.pool ? [`budget pool "${e.pool.name}" (${e.pool.level})`] : []))
+    if (row.by.length) out.set(id, row)
+  }
+  return [...out.values()].slice(0, 20)
 }

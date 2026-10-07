@@ -234,7 +234,7 @@ describe('restore-budget-baselines', () => {
       skipped: [{ campaignId: 'c-b3', why: 'no baseline captured' }],
       totals: { restoring: 2, skipped: 1, raising: 1 },
       raises: ['campaign "Test c-l1": EUR 10.00 → EUR 30.00'],
-      raisesWithoutCode: expect.stringMatching(/set-campaign-budget's lever/),
+      raisesWithoutCode: ['campaign "Test c-l1": EUR 10.00 → EUR 30.00 — no code, as with set-campaign-budget'],
       reach: { reach: 'sandbox' },
       limitFacts: { tool: 'restore-budget-baselines', action: 'budget', this: { items: 2, raises: 1, cuts: 1 } },
     })
@@ -307,7 +307,7 @@ describe('set-monthly-ad-budget', () => {
       totals: { planChanges: 0, campaignLimits: 1 },
       campaignLimits: [{ campaignId: 'c-b3', from: 'lowest none, highest none', to: 'lowest EUR 5.00, highest none' }],
       raises: ['campaign "Test c-b3": its lowest daily budget none → EUR 5.00 holds its spend up'],
-      raisesWithoutCode: expect.stringMatching(/as set-ad-guardrail/),
+      raisesWithoutCode: ['campaign "Test c-b3": its lowest daily budget none → EUR 5.00 holds its spend up — no code, as with set-ad-guardrail (campaign-budget-bounds)'],
     })
     expect((r.preview as Row).stepUp).toBeUndefined()
     expect((await preview('set-monthly-ad-budget', { market: 'IT', month, campaignLimits: [{ campaignId: 'c-b3', minCents: 900, maxCents: 500 }] })).error).toMatch(/minimum daily budget .* is above the maximum/)
@@ -380,7 +380,7 @@ describe('set-budget-schedule', () => {
 
   it('update: a window edit is tune-ad-engine\'s lever (listed, no code); campaigns added to a raising schedule need it', async () => {
     const windows = await preview('set-budget-schedule', { op: 'update', scheduleId, windows: [window, { ...window, day: 2 }] })
-    expect(windows.preview).toMatchObject({ raises: ['window Tue 08:00–12:00 incPct 20 can raise a budget'], raisesWithoutCode: expect.stringMatching(/tune-ad-engine/) })
+    expect(windows.preview).toMatchObject({ raises: ['window Tue 08:00–12:00 incPct 20 can raise a budget'], raisesWithoutCode: ['window Tue 08:00–12:00 incPct 20 can raise a budget — no code, as with tune-ad-engine (budget-schedule)'] })
     expect((windows.preview as Row).stepUp).toBeUndefined()
     const added = await preview('set-budget-schedule', { op: 'update', scheduleId, campaignIds: ['c-s1', 'c-s2', 'c-s3'] })
     expect(added.preview).toMatchObject({ raises: ['campaign "Test c-s3" joins a schedule whose windows can raise its budget'], stepUp: { raises: ['Budgets'] }, campaigns: { added: ['campaign "Test c-s3"'], takenOut: [] } })
@@ -396,7 +396,7 @@ describe('set-budget-schedule', () => {
     expect(pause.preview).toMatchObject({
       giveBacks: [{ campaignId: 'c-s1', fromCents: 1000, toCents: 2000 }],
       raises: ['campaign "Test c-s1": its budget comes back up from EUR 10.00 to EUR 20.00 (the schedule held it lower)'],
-      raisesWithoutCode: expect.stringMatching(/turn-up \/ turn-down-automation/),
+      raisesWithoutCode: [expect.stringMatching(/\(the schedule held it lower\) — no code, as with turn-up \/ turn-down-automation$/)],
       reach: { reach: 'sandbox' },
       totals: { givesBack: 1 },
     })
@@ -409,6 +409,53 @@ describe('set-budget-schedule', () => {
     const [log] = await sql(`SELECT "userId", "executionId" FROM "AdvertisingActionLog" WHERE "entityId" = 'c-s1' AND "actionType" <> 'budget_schedule_update' ORDER BY "createdAt" DESC LIMIT 1`)
     expect(log).toEqual({ userId: `automation:budget-schedule-${scheduleId}`, executionId: asked.approvalId })
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'set-budget-schedule', args: { op: 'update', scheduleId, enabled: true } } })
+  })
+
+  it('dates and time zone of a schedule whose windows raise budgets: a longer run, an earlier start, blackout days removed or a time-zone change is a raise and needs the code', async () => {
+    const dated = await inside(() => database.client.budgetSchedule.create({ data: {
+      name: 'Test dated', kind: 'BUDGET', type: 'campaign-budget', enabled: true, timezone: 'Europe/Rome',
+      campaigns: [{ id: 'c-s5', name: 'Test c-s5', dailyBudget: 20 }], windows: [window],
+      startDate: new Date('2026-10-01T00:00:00Z'), endDate: new Date('2027-01-31T00:00:00Z'), neverExpire: false,
+      excludeDates: [{ start: '2026-12-24', end: '2026-12-26' }],
+    } }))
+    const raiseOf = async (args: Record<string, unknown>) => (await preview('set-budget-schedule', { op: 'update', scheduleId: dated.id, ...args })).preview as Row
+    const later = await raiseOf({ endDate: '2027-03-31' })
+    expect(later).toMatchObject({ raises: ['it runs longer: its last day 2027-01-31 → 2027-03-31'], stepUp: { raises: ['Budgets'] }, limitFacts: { this: { raises: 1 } } })
+    expect((await raiseOf({ endDate: null })).raises).toEqual(['its last day 2027-01-31 goes: it never ends'])
+    expect((await raiseOf({ startDate: '2026-09-01' })).raises).toEqual(['it starts earlier: its first day 2026-10-01 → 2026-09-01'])
+    expect((await raiseOf({ excludeDates: [] })).raises).toEqual(['the days it did not run, 2026-12-24 to 2026-12-26, are no longer left out: its windows run on them'])
+    expect((await raiseOf({ timezone: 'Europe/London' })).raises).toEqual(['its windows move from Europe/Rome to Europe/London time: the hours that raise budgets fall at other times'])
+    for (const args of [{ endDate: '2027-03-31' }, { timezone: 'Europe/London' }]) expect((await raiseOf(args)).stepUp, JSON.stringify(args)).toBeTruthy()
+    // A shorter run lowers nothing it could raise: no raise, no code.
+    const shorter = await raiseOf({ endDate: '2026-12-31' })
+    expect(shorter.raises).toEqual([])
+    expect(shorter.stepUp).toBeUndefined()
+    // Its windows only lower: a longer run raises nothing.
+    await inside(() => database.client.budgetSchedule.update({ where: { id: dated.id }, data: { windows: [{ ...window, adj: 'decPct' }] } }))
+    expect((await raiseOf({ endDate: null })).raises).toEqual([])
+    await inside(() => database.client.budgetSchedule.delete({ where: { id: dated.id } }))
+  })
+
+  it('a schedule asked switched off is made off in one write; its raising windows are still listed and need the code', async () => {
+    const args = { op: 'create', name: 'Test made off', campaignIds: ['c-s5'], windows: [window], enabled: false }
+    const r = await preview('set-budget-schedule', args)
+    expect(r.preview).toMatchObject({
+      raises: ['window Mon 08:00–12:00 incPct 20 can raise a budget (once the schedule is switched on)'],
+      stepUp: { raises: ['Budgets'] },
+      schedule: { to: { enabled: false } },
+      reachNote: expect.stringMatching(/Switched off, it writes nothing until it is switched on/),
+    })
+    const asked = await ask('set-budget-schedule', args)
+    await withCode(asked.approvalId!)
+    const ran = await approve(asked.approvalId!)
+    expect(ran).toMatchObject({ ok: true, status: 'executed', result: { op: 'create', enabled: false } })
+    expect((await sql('SELECT enabled FROM "BudgetSchedule" WHERE id = $1', [ran.result.scheduleId]))[0].enabled).toBe(false)
+    const logs = await sql(`SELECT "actionType", "payloadAfter" FROM "AdvertisingActionLog" WHERE "entityId" = $1`, [ran.result.scheduleId])
+    expect(logs).toEqual([{ actionType: 'budget_schedule_create', payloadAfter: { name: 'Test made off', type: 'campaign-budget', enabled: false } }])
+    // Its cron's mode is named, never assumed: the ads crons are not scheduled in this test.
+    const on = await preview('set-budget-schedule', { op: 'update', scheduleId: ran.result.scheduleId, enabled: true })
+    expect(on.preview).toMatchObject({ engine: { label: 'Off' }, reachNote: expect.stringMatching(/now: Off: the Amazon ads crons are not scheduled on this server/) })
+    await inside(() => database.client.budgetSchedule.delete({ where: { id: ran.result.scheduleId } }))
   })
 
   it('delete, then undo creates it again as it was (a new schedule)', async () => {
@@ -424,12 +471,25 @@ describe('set-budget-schedule', () => {
 describe('set-budget-pool', () => {
   let poolId = ''
 
-  it('create: born off and in dry run (no code); campaigns join at once; undo deletes it', async () => {
-    const r = await preview('set-budget-pool', { op: 'create', name: 'Test pool', totalDailyBudgetCents: 6000, add: [{ campaignId: 'c-p1', targetSharePct: 50 }, { campaignId: 'c-p2', targetSharePct: 50 }] })
+  it('create: born off and in dry run; a campaign joining is a raise (once the pool is live) and needs the code; undo deletes it', async () => {
+    const args = { op: 'create', name: 'Test pool', totalDailyBudgetCents: 6000, add: [{ campaignId: 'c-p1', targetSharePct: 50 }, { campaignId: 'c-p2', targetSharePct: 50 }] }
+    const r = await preview('set-budget-pool', args)
     expect(r.ok, r.error).toBe(true)
-    expect(r.preview).toMatchObject({ op: 'create', raises: [], reach: null, markets: ['IT'], pool: { from: null, to: { enabled: false, dryRun: true, totalDailyBudgetCents: 6000 } } })
-    expect((r.preview as Row).stepUp).toBeUndefined()
-    const asked = await ask('set-budget-pool', { op: 'create', name: 'Test pool', totalDailyBudgetCents: 6000, add: [{ campaignId: 'c-p1', targetSharePct: 50 }, { campaignId: 'c-p2', targetSharePct: 50 }] })
+    expect(r.preview).toMatchObject({
+      op: 'create', reach: null, markets: ['IT'], pool: { from: null, to: { enabled: false, dryRun: true, totalDailyBudgetCents: 6000 } },
+      raises: [
+        'campaign "Test c-p1" joins the pool: once the pool is live, its rebalances may raise its budget from EUR 20.00 (no highest budget is set)',
+        'campaign "Test c-p2" joins the pool: once the pool is live, its rebalances may raise its budget from EUR 20.00 (no highest budget is set)',
+      ],
+      stepUp: { what: 'changes which campaigns the budget pool "Test pool" holds, which can raise spend', raises: ['Budgets'] },
+      engine: { label: 'Off' },
+      reachNote: expect.stringMatching(/It writes nothing at Amazon while it is switched off/),
+    })
+    expect((await preview('set-budget-pool', { op: 'create', name: 'Test pool UK', totalDailyBudgetCents: 6000, add: [{ campaignId: 'c-uk' }] })).error)
+      .toMatch(/^Not queued: campaign "UK exact" budgets in GBP, and the pool in EUR: a rebalance writes the pool's amounts into each campaign, never converted/)
+    const asked = await ask('set-budget-pool', args)
+    expect((await approve(asked.approvalId!)).error).toMatch(/^Not run: it raises/)
+    await withCode(asked.approvalId!)
     const ran = await approve(asked.approvalId!)
     expect(ran).toMatchObject({ ok: true, status: 'executed', result: { op: 'create', campaigns: 2 } })
     poolId = ran.result.poolId
@@ -454,7 +514,7 @@ describe('set-budget-pool', () => {
     const join = await preview('set-budget-pool', { op: 'allocate', poolId, add: [{ campaignId: 'c-p3', maxDailyBudgetCents: 3000 }] })
     expect(join.preview).toMatchObject({ stepUp: { raises: ['Budgets'] }, raises: ['campaign "Test c-p3" joins a live pool: its next rebalance may raise its budget from EUR 20.00 up to EUR 30.00'] })
     const values = await preview('set-budget-pool', { op: 'update', poolId, totalDailyBudgetCents: 8000 })
-    expect(values.preview).toMatchObject({ raises: ['the pool\'s daily budget rises from EUR 60.00 to EUR 80.00'], raisesWithoutCode: expect.stringMatching(/tune-ad-engine/) })
+    expect(values.preview).toMatchObject({ raises: ['the pool\'s daily budget rises from EUR 60.00 to EUR 80.00'], raisesWithoutCode: ['the pool\'s daily budget rises from EUR 60.00 to EUR 80.00 — no code, as with tune-ad-engine (budget-pool)'] })
     expect((values.preview as Row).stepUp).toBeUndefined()
   })
 
@@ -467,15 +527,38 @@ describe('set-budget-pool', () => {
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'set-campaign-budget', args: { campaigns: [{ campaignId: 'c-p1', dailyBudgetCents: 1000 }, { campaignId: 'c-p2', dailyBudgetCents: 5000 }] } } })
   })
 
-  it('allocate: a campaign in another pool is refused, naming it; leaving keeps the budget; undo reverses it', async () => {
+  it('allocate: a campaign in another pool is refused, naming it; leaving a live pool is a raise with its amount and needs the code; undo reverses it', async () => {
     const other = await inside(() => database.client.budgetPool.create({ data: { name: 'Test other pool', totalDailyBudgetCents: 1000 } }))
     await inside(() => database.client.budgetPoolAllocation.create({ data: { budgetPoolId: other.id, marketplace: 'IT', campaignId: 'c-p4' } }))
     expect((await preview('set-budget-pool', { op: 'allocate', poolId, add: [{ campaignId: 'c-p4' }] })).error).toMatch(/campaign "Test c-p4" is in the pool "Test other pool"/)
-    const asked = await ask('set-budget-pool', { op: 'allocate', poolId, remove: ['c-p2'] })
     const before = await budgetOf('c-p2')
+    const leave = await preview('set-budget-pool', { op: 'allocate', poolId, remove: ['c-p2'] })
+    expect(leave.preview).toMatchObject({
+      raises: [`campaign "Test c-p2" leaves the pool and keeps its budget of EUR ${(before / 100).toFixed(2)}, while the pool's next rebalance spreads the whole pool over the campaigns left: up to EUR ${(before / 100).toFixed(2)} a day more in all`],
+      stepUp: { raises: ['Budgets'] },
+      limitFacts: { this: { raises: 1 } },
+    })
+    const asked = await ask('set-budget-pool', { op: 'allocate', poolId, remove: ['c-p2'] })
+    expect((await approve(asked.approvalId!)).error).toMatch(/^Not run: it raises/)
+    await withCode(asked.approvalId!)
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { campaigns: 1 } })
     expect(await budgetOf('c-p2')).toBe(before)
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'set-budget-pool', args: { op: 'allocate', poolId, add: [{ campaignId: 'c-p2', targetSharePct: 50, minDailyBudgetCents: 100 }] } } })
+  })
+
+  it('a campaign in a pool and a switched-on budget schedule: both name the other (alsoChangedBy) and warn', async () => {
+    const schedule = await preview('set-budget-schedule', { op: 'create', name: 'Test overlap pool', campaignIds: ['c-p1'], windows: [{ day: 5, adj: 'decPct', value: 10 }] })
+    expect(schedule.ok, schedule.error).toBe(true)
+    expect(schedule.preview).toMatchObject({
+      warnings: ['campaign "Test c-p1" is also in the budget pool "Test pool" (live): its rebalances and this schedule\'s windows both set its budget, and the last write wins.'],
+      alsoChangedBy: [{ campaignId: 'c-p1', by: ['budget pool "Test pool" (live)'] }],
+    })
+    await ask('set-budget-schedule', { op: 'create', name: 'Test overlap pool', campaignIds: ['c-p3'], windows: [{ day: 5, adj: 'decPct', value: 10 }] }).then((x) => approve(x.approvalId!))
+    const join = await preview('set-budget-pool', { op: 'allocate', poolId, add: [{ campaignId: 'c-p3' }] })
+    expect(join.preview).toMatchObject({
+      warnings: [expect.stringMatching(/^campaign "Test c-p3" is also in the switched-on budget schedule "Test overlap pool": its windows and this pool's rebalances both set its budget/)],
+      alsoChangedBy: expect.arrayContaining([{ campaignId: 'c-p3', label: 'campaign "Test c-p3"', by: ['budget schedule "Test overlap pool"'] }]),
+    })
   })
 })
 

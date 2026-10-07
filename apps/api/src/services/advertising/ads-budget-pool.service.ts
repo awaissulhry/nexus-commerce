@@ -195,14 +195,17 @@ export async function budgetPoolHistory(id: string, limit: number) {
 
 // ── W4-7 — reads for Claude's set-budget-pool and ad-budgets (nothing here writes) ──────────────────────────
 
-/** The pool each of these campaigns is in now (a campaign is in one pool at most), by campaign id. */
-export async function poolsOfCampaigns(campaignIds: readonly string[]): Promise<Map<string, { poolId: string; poolName: string; allocationId: string }>> {
+/** The pool each of these campaigns is in now (a campaign is in one pool at most), by campaign id, with its level. */
+export async function poolsOfCampaigns(campaignIds: readonly string[]): Promise<Map<string, { poolId: string; poolName: string; allocationId: string; level: 'off' | 'dry run' | 'live' }>> {
   if (!campaignIds.length) return new Map()
   const rows = await prisma.budgetPoolAllocation.findMany({
     where: { campaignId: { in: [...campaignIds] } },
-    select: { id: true, campaignId: true, budgetPoolId: true, budgetPool: { select: { name: true } } },
+    select: { id: true, campaignId: true, budgetPoolId: true, budgetPool: { select: { name: true, enabled: true, dryRun: true } } },
   })
-  return new Map(rows.filter((r) => r.campaignId).map((r) => [r.campaignId!, { poolId: r.budgetPoolId, poolName: r.budgetPool.name, allocationId: r.id }]))
+  return new Map(rows.filter((r) => r.campaignId).map((r) => [r.campaignId!, {
+    poolId: r.budgetPoolId, poolName: r.budgetPool.name, allocationId: r.id,
+    level: !r.budgetPool.enabled ? 'off' as const : r.budgetPool.dryRun ? 'dry run' as const : 'live' as const,
+  }]))
 }
 
 /** A pool by its exact name (a name is how a person finds one), or null. */
