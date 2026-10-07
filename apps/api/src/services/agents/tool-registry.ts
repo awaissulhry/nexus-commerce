@@ -29,6 +29,9 @@ import { ADS_BUDGET_SCHEDULE_TOOLS } from './tools/ads-budget-schedule.tools.js'
 import { ADS_BUDGET_POOL_TOOLS } from './tools/ads-budget-pool.tools.js'
 import { ADS_BUDGET_READ_TOOLS } from './tools/ads-budget-read.tools.js'
 import { ADS_STOCK_TOOLS } from './tools/ads-stock.tools.js'
+import { ADS_PORTFOLIO_TOOLS } from './tools/ads-portfolio.tools.js'
+import { ADS_CAMPAIGN_SETTINGS_TOOLS } from './tools/ads-campaign-settings.tools.js'
+import { ADS_HOURLY_PLAN_TOOLS } from './tools/ads-hourly-plan.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -137,6 +140,12 @@ const ALL: AgentTool[] = [
   ...ADS_BUDGET_READ_TOOLS,
   // Ads autonomy W3-3 — stock-aware bids: which ad groups are short of stock; lower their bids, give them back (never FBA).
   ...ADS_STOCK_TOOLS,
+  // Ads autonomy W4-3 — portfolios (read; create, rename, cap, archive) and campaign settings (portfolio, name, end
+  // date, bidding strategy), through the Portfolios page's and the campaign Details tab's own services.
+  ...ADS_PORTFOLIO_TOOLS,
+  ...ADS_CAMPAIGN_SETTINGS_TOOLS,
+  // Ads autonomy W4-1 — the Hourly Bids page's plans: read one week by week, and change ONE plan (paint, members, switch).
+  ...ADS_HOURLY_PLAN_TOOLS,
   // Ads autonomy W3-2 — cancel an ad write Nexus queued and has not sent yet (a brake: nothing reaches Amazon).
   ...ADS_QUEUED_WRITE_TOOLS,
   ...EBAY_AD_TOOLS,

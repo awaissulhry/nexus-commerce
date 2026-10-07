@@ -83,6 +83,12 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // B-2 — an AI goal, the create kind: only at the floor, off the allowlist, its rules and plan off (nothing spends until
   // restore-campaign); by default never by rule (maxCampaigns 0).
   'create-ai-goal-campaigns',
+  // W4-3 — campaign settings (the settings kind) and portfolios (the portfolio kind; an archive is the archive kind too):
+  // by default never by rule (maxItems 0 / no market listed); whatever adds spend needs the approver's code.
+  'set-campaign-settings', 'set-portfolio',
+  // W4-1 — one hourly bid plan (its own kind, hourly): Nexus only but for a give-back; a raise needs the approver's code;
+  // by default never by rule (maxItems 0, no market), and a person's plan never by rule unless allowPeoplesPlans.
+  'set-hourly-bid-plan',
   // W4-7 — budgets, the budget kind: a market's monthly plan, a budget schedule, a budget pool, a restore to baseline. By
   // default nothing runs by rule (maxItems 0, no op or market listed, no raise); a raise through a new lever needs the
   // approver's code.
@@ -414,6 +420,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       'enable-ads': { before: { changeSetId: 'ap1', items: [{ level: 'target', id: 't1', status: 'PAUSED' }] }, after: { items: [{ level: 'target', id: 't1', status: 'ENABLED' }] } },
       // AA-W2-13 — a created campaign is put back (in part) by archiving it.
       'create-ad-campaign': { before: { campaignId: null }, after: { campaignId: 'c9', name: 'Test launch', market: 'IT' } },
+      // W4-1 — an hourly plan's paint is put back by painting the week it replaced (the same tool, the inverse op).
+      [`set-hourly-bid-plan`]: {
+        before: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [{ days: [1], startHour: 0, endHour: 6, targetKey: 'test-floor' }], defaultTargetKey: 'test-top', members: ['c1'], overrides: {} },
+        after: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [], defaultTargetKey: 'test-top', members: ['c1'], overrides: {}, versionId: 'v2' },
+      },
       // B-2 — an AI goal is put back (in part) by archiving every campaign it made at Amazon.
       'create-ai-goal-campaigns': { before: { goalId: null, campaignIds: [] }, after: { goalId: 'g1', planId: 'pl1', market: 'IT', name: 'Test goal', campaignIds: ['c1', 'c2'], notAtAmazon: [] } },
       // W3-3 — a stock lowering is undone by a give-back (even while stock is short), a give-back by a lowering.
@@ -431,6 +442,16 @@ describe('C1 — every registered tool keeps the contract', () => {
       'apply-ads-playbook': { before: { op: 'build', playbookId: 'pb1', state: 'DRAFT', slots: [] }, after: { op: 'build', playbookId: 'pb1', applicationId: 'run1' } },
       // B-1 — a Replicate copy is archived (every campaign its run made).
       'replicate-ad-structure': { before: { applicationId: null, market: 'IT', productToken: 'TEST' }, after: { applicationId: 'run2' } },
+      // W4-3 — campaign settings go back through the tool, each campaign with its own values; a portfolio change through
+      // set-portfolio (a create is archived).
+      'set-campaign-settings': {
+        before: { changeSetId: 'ap1', campaigns: [{ campaignId: 'c1', portfolioId: 'PF-1', biddingStrategy: 'legacyForSales' }, { campaignId: 'c2', portfolioId: null, endDate: '2026-12-31' }] },
+        after: { campaigns: [{ campaignId: 'c1', portfolioId: 'PF-2', biddingStrategy: 'autoForSales' }, { campaignId: 'c2', portfolioId: 'PF-2', endDate: null }] },
+      },
+      'set-portfolio': {
+        before: { op: 'update', portfolioId: 'PF-1', market: 'IT', name: 'Old name', cap: { amountCents: 50000, currency: 'EUR', policy: 'monthly', startDate: null, endDate: null }, state: 'ENABLED', changeSetId: 'ap1' },
+        after: { op: 'update', portfolioId: 'PF-1', market: 'IT', name: 'New name', cap: { amountCents: 60000, currency: 'EUR', policy: 'monthly', startDate: null, endDate: null }, state: 'ENABLED' },
+      },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },

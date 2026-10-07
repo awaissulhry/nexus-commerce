@@ -71,6 +71,7 @@ import { attachSourceLinks, familyOfRow, projectBidCents, muteSuggestion, unmute
 import { applySuggestion, dismissSuggestion, restoreSuggestion, decideSuggestionsBulk, type ApplyOverride, type BulkDecideInput } from '../services/advertising/ads-suggestion-decide.service.js'
 import type { AdsRuleCreateInput, AdsRuleUpdateInput } from '../services/advertising/ads-rule-crud.service.js'
 import type { KeywordProtectionInput } from '../services/advertising/ads-guardrail.service.js'
+import type { PortfolioUpdateBody } from '../services/advertising/ads-portfolio.service.js'
 import { answer } from '../services/automation/service-outcome.js'
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
 // ADM-P6/DC — THE definition of ad-attributed sales. Fourteen readers open-coded it as
@@ -8654,57 +8655,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     // Lightweight PATCH (e.g. bulk enable/pause) — no campaignIds → just update group fields + members' enabled.
+    // W4-1 — moved unchanged into rank-schedule-group.service.ts, which Claude's set-hourly-bid-plan also uses.
     if (!Array.isArray(b?.campaignIds)) {
-      const data: Record<string, unknown> = {}
-      for (const k of ['name', 'windows', 'defaultTargetKey', 'targetOverrides', 'enabled', 'marketplace', 'portfolioId', 'timezone']) if (b[k] !== undefined) data[k] = b[k]
-      if (!Object.keys(data).length) { reply.status(400); return { error: 'nothing to update' } }
-      // RDX/B2 — a rename must not manufacture the duplicate DPS.1 spent a phase eliminating.
-      // saveRankScheduleGroup adopts an existing (name, portfolioId) group rather than minting a
-      // rival, but this lightweight PATCH bypasses that path entirely — so without this guard,
-      // renaming "IT AIRMESH 2" to "IT AIRMESH" would recreate the exact collision by hand.
-      if (typeof data.name === 'string') {
-        const nm = String(data.name).trim()
-        if (!nm) { reply.status(400); return { error: 'name is required' } }
-        data.name = nm
-        const self = await prisma.rankScheduleGroup.findUnique({ where: { id }, select: { portfolioId: true } })
-        const twin = await prisma.rankScheduleGroup.findFirst({
-          where: { name: nm, portfolioId: self?.portfolioId ?? null, NOT: { id } },
-          select: { id: true },
-        })
-        if (twin) { reply.status(409); return { error: `Another schedule in this scope is already called "${nm}".` } }
-      }
-      try {
-        const g = await prisma.rankScheduleGroup.update({ where: { id }, data })
-        if (b.enabled !== undefined) await prisma.adSchedule.updateMany({ where: { groupId: id }, data: { enabled: !!b.enabled } })
-        // 2a (review 3.2) — pausing gives back what the group floored on every member, once the members say paused.
-        let release: unknown
-        if (b.enabled === false) {
-          const { releaseGroupMembers } = await import('../services/advertising/rank-release.service.js')
-          release = await releaseGroupMembers(id, 'its rank schedule was paused')
-        }
-        /**
-         * RD.P7 — the most consequential click on the page (Enable/Pause) took this lightweight
-         * path and wrote NO version, so the history could not answer "who paused this and when".
-         * Snapshot with the same meaningful-change comparison saveRankScheduleGroup uses; a
-         * failed snapshot warns and never fails the write it describes.
-         */
-        try {
-          const members = await prisma.adSchedule.count({ where: { groupId: id } })
-          const last = await prisma.rankScheduleVersion.findFirst({ where: { groupId: id }, orderBy: { createdAt: 'desc' }, select: { name: true, windows: true, defaultTargetKey: true, campaignCount: true, enabled: true } })
-          const changed = !last
-            || last.name !== g.name
-            || (last.defaultTargetKey ?? null) !== (g.defaultTargetKey ?? null)
-            || last.campaignCount !== members
-            || last.enabled !== g.enabled
-            || JSON.stringify(last.windows) !== JSON.stringify(g.windows)
-          if (changed) {
-            await prisma.rankScheduleVersion.create({
-              data: { groupId: id, name: g.name, windows: g.windows as never, defaultTargetKey: g.defaultTargetKey ?? null, campaignCount: members, enabled: g.enabled, changedBy: actorFromHeaders(request.headers as Record<string, unknown>) },
-            })
-          }
-        } catch (e) { logger.warn('[RD.P7] version snapshot failed on lightweight PATCH', { id, error: (e as Error).message }) }
-        return release ? { ...g, release } : g
-      } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+      const { patchRankScheduleGroup } = await import('../services/advertising/rank-schedule-group.service.js')
+      return answer(reply, await patchRankScheduleGroup(id, b, actorFromHeaders(request.headers as Record<string, unknown>)))
     }
     if (b.name !== undefined && !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
     const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
@@ -9097,25 +9051,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Portfolios P2/P3 — rename / archive / set budget-cap (gated live PUT to Amazon + local mirror).
   fastify.patch('/advertising/portfolios/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      name?: string
-      state?: 'enabled' | 'paused' | 'archived'
-      budget?: { amount?: number; currencyCode?: string; policy?: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string }
-    }
-    const name = body.name?.trim() || undefined
-    let budget: { amount: number; currencyCode: string; policy: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string } | undefined
-    if (body.budget) {
-      const b = body.budget
-      if (!(typeof b.amount === 'number' && b.amount > 0) || (b.policy !== 'monthlyRecurring' && b.policy !== 'dateRange')) {
-        reply.status(400); return { error: 'budget requires amount > 0 and policy monthlyRecurring|dateRange' }
-      }
-      if (b.policy === 'dateRange' && (!b.startDate || !b.endDate)) { reply.status(400); return { error: 'dateRange budget requires startDate + endDate' } }
-      budget = { amount: b.amount, currencyCode: b.currencyCode || 'EUR', policy: b.policy, startDate: b.startDate, endDate: b.endDate }
-    }
-    if (name == null && body.state == null && !budget) { reply.status(400); return { error: 'name, state or budget required' } }
-    const { updatePortfolioById } = await import('../services/advertising/ads-portfolio.service.js')
+    // W4-3 — the body check lives in the service (portfolioUpdateOf), shared with Claude's set-portfolio.
+    const { portfolioUpdateOf, updatePortfolioById } = await import('../services/advertising/ads-portfolio.service.js')
+    const asked = portfolioUpdateOf(request.body as PortfolioUpdateBody)
+    if ('error' in asked) { reply.status(400); return { error: asked.error } }
+    const { name, state, budget } = asked.value
     try {
-      const r = await updatePortfolioById({ portfolioId: id, name, state: body.state, budget })
+      const r = await updatePortfolioById({ portfolioId: id, name, state, budget })
       if (!r.ok) reply.status(r.error === 'portfolio not found' ? 404 : r.mode === 'gated' ? 409 : 500)
       return r
     } catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'update failed' } }

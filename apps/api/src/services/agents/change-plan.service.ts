@@ -175,7 +175,13 @@ export async function queuePlan(
   // ADS AUTONOMY W1-3 — a step that raises (its preview's `stepUp`) makes the whole plan one a person approves with their
   // authenticator code: said on the plan itself, where the Approvals page and the bulk approve read it.
   const stepUp = mergedStepUp(checked.map((c) => c.raw))
-  const preview = { action: PLAN_TOOL, title, summary, kinds, totals: { steps: checked.length, reachOutside: outbound }, ...(stepUp ? { stepUp } : {}) }
+  // ADS AUTONOMY W4-4 — the own limits its steps go past (a bid past the largest change, a budget past the daily move, a
+  // bound …), on the plan itself, each named by its step: the card warns before he approves the plan, as for one request.
+  const pastOwnLimits = mergedPastOwnLimits(checked.map((c) => c.raw))
+  const preview = {
+    action: PLAN_TOOL, title, summary, kinds, totals: { steps: checked.length, reachOutside: outbound },
+    ...(stepUp ? { stepUp } : {}), ...(pastOwnLimits.length ? { pastOwnLimits } : {}),
+  }
   const approval = await prisma.$transaction(async (tx) => {
     const created = await tx.agentApproval.create({
       data: {
@@ -217,10 +223,31 @@ export async function queuePlan(
       steps: checked.slice(0, PREVIEW_STEPS).map((step, index) => ({ step: index + 1, tool: step.tool.name, preview: step.visible })),
       ...(checked.length > PREVIEW_STEPS ? { moreSteps: checked.length - PREVIEW_STEPS } : {}),
       ...(stepUp ? { stepUp } : {}),
+      ...(pastOwnLimits.length ? { pastOwnLimits } : {}),
     },
     plan: { steps: checked.length, summary, planHash },
     ...(rule ? { rule } : {}),
   }
+}
+
+/**
+ * ADS AUTONOMY W4-4 — the own limits a plan's steps go past, from each step's `reach.pastOwnLimits` (an ads change tool's
+ * preview: his bounds, spend ceilings, the daily budget move, the value cap, the largest bid change …), each reason
+ * named by its step. The plan stores them on its own preview, where the approval card reads them (approval-target.ts
+ * resolveRequest) — a plan's card shows no step's reach — and approving the plan sends them, as for one request (#401).
+ * Money in the reasons: the plan tool lets only ad-spend viewers see them (control.tools.ts restrictedFields). Pure.
+ */
+export function mergedPastOwnLimits(previews: readonly unknown[]): Array<{ limit: string; reason: string; step: number }> {
+  const out: Array<{ limit: string; reason: string; step: number }> = []
+  previews.forEach((preview, index) => {
+    const past = (preview as { reach?: { pastOwnLimits?: unknown } } | null | undefined)?.reach?.pastOwnLimits
+    if (!Array.isArray(past)) return
+    for (const l of past as Array<{ limit?: unknown; reason?: unknown } | null>) {
+      if (typeof l?.reason !== 'string' || !l.reason) continue
+      out.push({ limit: typeof l.limit === 'string' ? l.limit : 'own_limit', reason: `step ${index + 1}: ${l.reason}`, step: index + 1 })
+    }
+  })
+  return out
 }
 
 // ── Running a plan ─────────────────────────────────────────────────────────────────────────────────────

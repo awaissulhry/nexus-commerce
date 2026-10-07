@@ -701,7 +701,8 @@ const A10: AutomationAdapter = {
   },
   // R16 — the engine's per-business switch. Its plans and goal schedules are switched in Nexus.
   engine: 'rank-defend',
-  noSwitch: 'a rank plan or goal schedule is switched in Nexus, where switching it off also gives back the bids it floored (2a) — the engine itself switches with no rowId',
+  // W4-1 — ONE hourly bid plan (a rank-schedule group) switches with set-hourly-bid-plan op switch.
+  noSwitch: 'one hourly bid plan is switched with set-hourly-bid-plan op switch (its planId: ad-hourly-plans; switching it off gives back the bids it floored, 2a); a product rank plan is switched in Nexus — the engine itself switches with no rowId',
 }
 
 const A11: AutomationAdapter = {

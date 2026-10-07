@@ -831,7 +831,7 @@ export async function listPortfolios(ctx: ClientContext): Promise<AdsPortfolioDT
 }
 // PA.2 — create a portfolio (v3 POST /portfolios). Sandbox returns a generated id. The v3
 // response mirrors campaign create: { portfolios: { success: [{ portfolioId }] } }.
-export async function createPortfolio(ctx: ClientContext, input: { name: string; state?: 'enabled' | 'paused' }): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null }> {
+export async function createPortfolio(ctx: ClientContext, input: { name: string; state?: 'enabled' | 'paused' }): Promise<{ ok: boolean; mode: AdsMode; externalId: string | null; error?: string }> {
   if (adsMode() === 'sandbox') {
     const externalId = `sb-pf-${randomUUID().slice(0, 8)}`
     logger.info('[ADS-SANDBOX] createPortfolio', { input, externalId })
@@ -845,7 +845,8 @@ export async function createPortfolio(ctx: ClientContext, input: { name: string;
   const bag = resp?.portfolios
   const row = Array.isArray(bag) ? bag[0] : bag?.success?.[0]
   const id = row?.portfolioId
-  return { ok: true, mode: 'live', externalId: id != null ? String(id) : null }
+  // W4-3 — no id: Amazon refused it (portfolios.error[]); its own words ride along. The answer is otherwise unchanged.
+  return { ok: true, mode: 'live', externalId: id != null ? String(id) : null, ...(id == null ? { error: v3ErrorText(resp) ?? 'Amazon answered without a portfolio id' } : {}) }
 }
 // P3 — portfolio budget cap. v3 policy is 'monthlyRecurring' | 'dateRange' (dateRange needs
 // start+end). currencyCode must match the connection's marketplace (EUR for IT/DE/FR/ES).

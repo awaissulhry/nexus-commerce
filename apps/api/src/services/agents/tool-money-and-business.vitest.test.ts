@@ -65,6 +65,8 @@ const B_MARK = 'BRAVO'
 interface Seeded {
   productId: string; orderId: string; approvalId: string; changeId: string; automationRuleId: string; replenishmentRuleId: string; pausedRuleId: string
   shipmentId: string; draftProductId: string; aliasId: string; campaignId: string
+  /** W4-1 — an hourly bid plan holding the campaign. */
+  hourlyPlanId: string
   publicationId: string; familyId: string; variantId: string; variantDraftId: string
   /** P4 — a channel account and the trace of one channel call. */
   connectionId: string; traceId: string
@@ -287,6 +289,11 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'enable-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
   // AA-W2-13 — an archive names the budgets that stop for good (it needs money).
   'archive-ads': (ids) => ({ campaignIds: [ids.campaignId] }),
+  // W4-3 — portfolios: the read hides each cap and its spend from a person without ad-spend money; the two changes
+  // name budget caps and the campaigns' strategy facts (they need money: refused for a person without it).
+  'ad-portfolios': () => ({ market: 'IT', days: 30 }),
+  'set-portfolio': () => ({ op: 'create', market: 'IT', name: 'Money portfolio' }),
+  'set-campaign-settings': (ids) => ({ campaignIds: [ids.campaignId], biddingStrategy: 'manual' }),
   // W3-3 — stock-aware bids: the read shows units and days (no money); the two changes list bids (they need money).
   'ad-stock-risk': (ids) => ({ campaignIds: [ids.campaignId], show: 'all' }),
   'lower-ad-bids-for-stock': (ids) => ({ campaignIds: [ids.campaignId] }),
@@ -317,6 +324,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'replicate-ad-structure': (ids) => ({ sourceMarket: 'IT', campaignIds: [ids.campaignId], sourceProductToken: 'TEST', market: 'IT', productToken: 'COPY', skus: [ids.sku] }),
   // A11 — a new campaign's plan names a budget and bids (it needs money: refused for a person without it).
   'create-ad-campaign': (ids) => ({ market: 'IT', name: 'Money launch', skus: [ids.productId], dailyBudgetCents: 1500, defaultBidCents: 50, keywords: [{ text: 'jacket', matchType: 'EXACT' }] }),
+  // W4-1 — the hourly plans: the read shows placement % and base bids under money keys (stripped for a person without
+  // money; business B's plan never shows from A); a plan change needs money (refused for a person without it).
+  'ad-hourly-plans': (ids) => ({ campaignId: ids.campaignId }),
+  'set-hourly-bid-plan': (ids) => ({ op: 'rename', planId: ids.hourlyPlanId, name: 'Money plan renamed' }),
   // B-2 — an AI goal's plan names budgets and bids (it needs money: refused for a person without it).
   'create-ai-goal-campaigns': (ids) => ({ market: 'IT', name: 'Money goal', goalProducts: [{ sku: ids.productId, dailyBudgetCents: 1500 }], seedKeywords: ['jacket'] }),
   // Ads autonomy W4-1 — a run report states each market's spend and sales (it needs money: refused for a person
@@ -715,8 +726,10 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
     const alias = await db.productListingAlias.create({ data: { productId: product.id, channel: 'EBAY', marketplace: 'IT', label: `${mark} second listing`, position: 2 } })
     // A2 — an Amazon campaign with a target, a day of spend, a wasteful search term and a bid change: the ad reads
     // have money to strip, and business B's campaign carries its mark.
+    // W4-3 — the campaign sits in a portfolio with a budget cap (money ad-portfolios hides from a person without it).
+    await db.amazonAdsPortfolio.create({ data: { profileId: `${mark}-PROFILE`, externalPortfolioId: `${mark}-PF`, name: `${mark} portfolio`, state: 'ENABLED', budgetAmount: '2718.28', budgetCurrencyCode: 'EUR', budgetPolicy: 'MONTHLY_RECURRING' } })
     const campaign = await db.campaign.create({
-      data: { name: `${mark} MONEY campaign`, type: 'SP', marketplace: 'IT', externalCampaignId: `${mark}-CMP`, dailyBudget: '31.41', startDate: new Date() } as never,
+      data: { name: `${mark} MONEY campaign`, type: 'SP', marketplace: 'IT', externalCampaignId: `${mark}-CMP`, dailyBudget: '31.41', startDate: new Date(), portfolioId: `${mark}-PF` } as never,
     })
     const adGroup = await db.adGroup.create({ data: { campaignId: campaign.id, name: `${mark} ad group`, externalAdGroupId: `${mark}-AG` } })
     // Ads autonomy W1-2 — the product is advertised in that ad group, and the market and the product have a strategy whose
@@ -727,6 +740,10 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
     // Ads playbook PB-2 — the product's playbook row: its daily budget and base bid are money (ads-playbook hides them).
     await db.adsPlaybook.create({ data: { market: 'IT', level: 'PRODUCT', scopeId: product.id, label: `${mark} playbook (IT)`, enrolled: true, dailyBudgetCents: 646464, baseBidCents: 5353, updatedBy: 'user:u-money' } })
     const target = await db.adTarget.create({ data: { adGroupId: adGroup.id, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `${mark} jacket`, bidCents: 4747 } })
+    // W4-1 — an hourly bid plan over that campaign: its target's placement % and base bid are money.
+    await db.rankTarget.create({ data: { key: `${mark.toLowerCase()}-push`, name: `${mark} push`, biasPct: 137, bidMode: 'absolute', bidValueCents: 6161 } })
+    const hourlyPlan = await db.rankScheduleGroup.create({ data: { name: `${mark} hourly plan`, marketplace: 'IT', windows: [], defaultTargetKey: `${mark.toLowerCase()}-push`, enabled: false } })
+    await db.adSchedule.create({ data: { campaignId: campaign.id, name: `${mark} hourly plan member`, windows: [], defaultTargetKey: `${mark.toLowerCase()}-push`, enabled: false, groupId: hourlyPlan.id } })
     const yesterday = new Date(Date.now() - 86_400_000)
     await db.amazonAdsDailyPerformance.create({
       data: { profileId: 'P1', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', date: yesterday, entityType: 'CAMPAIGN', entityId: `${mark}-CMP`, localEntityId: campaign.id, impressions: 321, clicks: 17, costMicros: 73_730_000n, currencyCode: 'EUR', sales7dCents: 9191, orders7d: 1, reportedAt: new Date() } as never,
@@ -895,7 +912,7 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
       pausedRuleId: pausedRule.id,
       productId: product.id, orderId: order.id, approvalId: approval.id, changeId: change.id,
       automationRuleId: automationRule.id, replenishmentRuleId: replenishmentRule.id, shipmentId: shipment.id,
-      draftProductId: draftProduct.id, aliasId: alias.id, campaignId: campaign.id,
+      draftProductId: draftProduct.id, aliasId: alias.id, campaignId: campaign.id, hourlyPlanId: hourlyPlan.id,
       publicationId: publication.id, familyId: family.id, variantId: variant.id, variantDraftId: variantDraft.id,
       connectionId: connection.id, traceId,
       ruleId: rule.id, alertEventId: alertEvent.id, assetId: asset.id, stageId: reviewStage.id, themeId: theme.id,

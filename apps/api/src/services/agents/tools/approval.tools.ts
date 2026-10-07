@@ -231,6 +231,12 @@ const AD_CHANGE_TOOLS = new Set([
   'create-ai-goal-campaigns',
   // B-3 — a one-off SP Super Wizard set: its creates run detached too; approval-status reads its run the same way.
   'build-sp-wizard-campaigns',
+  // W4-3 — campaign settings: one queued write per campaign. A portfolio change: the Portfolios page's direct push, one
+  // audit row per write (a new portfolio is counted as created, and as at Amazon when Amazon gave it an id).
+  'set-campaign-settings', 'set-portfolio',
+  // W4-1 — an hourly plan change is Nexus only, but a switch-off, a delete or a removal gives back floored bids: each
+  // give-back write carries the approval.
+  'set-hourly-bid-plan',
   // W4-7 — budgets: a schedule's give-backs, a pool's live rebalance and a restore to baseline are budget writes in the
   // approval's change set; a plan (and a Nexus-only schedule or pool change) writes none, and reads "Approved and run."
   'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines',
@@ -264,6 +270,8 @@ function deliveryWord(row: { syncStatus?: string | null; errorCode?: string | nu
   }
   if (row.amazonResponseStatus === 'SUCCESS') return 'sent'
   if (row.amazonResponseStatus === 'FAILED') return 'failed'
+  // W4-12 — a write Nexus did not send (refused, no connection), cancelled or replaced before it was sent.
+  if (row.amazonResponseStatus === 'SKIPPED' || row.amazonResponseStatus === 'CANCELLED' || row.amazonResponseStatus === 'SUPERSEDED') return 'notSent'
   return 'waiting'
 }
 
@@ -326,6 +334,12 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
       atAmazon += reach === 'live' ? counts.withAmazonId : 0
     }
     if (ids.length) out.created = { total, atAmazon }
+    return out
+  }
+  if (toolName === 'set-portfolio') {
+    // W4-3 — a new portfolio: made once, at Amazon when it holds Amazon's id (not a Nexus-only `local-pf-…` one).
+    const made = after as { op?: unknown; portfolioId?: unknown; atAmazon?: unknown } | null
+    if (made?.op === 'create' && typeof made.portfolioId === 'string') out.created = { total: 1, atAmazon: reach === 'live' && made.atAmazon === true ? 1 : 0 }
     return out
   }
   if (toolName === 'create-ad-campaign') {

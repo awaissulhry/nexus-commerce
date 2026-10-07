@@ -17,7 +17,7 @@ add(['pause_campaign', 'pause_ad_group', 'pause_target', 'pause_all_campaigns', 
   'it pauses — a rule never pauses (Owner rule: a temporary stop is lower bids)', 'lower_bid_to_floor (suppression at the floor bid), or a lower budget; a real pause is its own request (pause-ads on Amazon)')
 add(['dayparting_apply', 'refresh_dayparting'], 'it pauses and re-enables campaigns on hour windows — status changes are never automated by Claude', 'a budget schedule, or lower bids in dead hours')
 add(['enable_target', 'enable_campaign', 'enable_ad_group', 'resume_campaign', 'resume_target', 'mkt_resume_campaign', 'reactivate_ad'],
-  'it switches an entity back on — a rule never does; that is a person\'s click or its own request', 'raise the bid back from the floor; enable-ads switches on what a Claude request paused (Amazon)')
+  'it switches an entity back on — a rule never does; that is a person\'s click or its own request', 'raise the bid back from the floor; enable-ads switches it back on at Amazon (what a Claude request paused; any other pause only with includePeoplesPauses and the approver\'s authenticator code)')
 add(['archive_keyword'], 'it archives — for good, and a rule never does', 'lower_bid_to_floor; an archive meant for good is its own request (archive-ads on Amazon)')
 add(['create_amazon_promotion', 'liquidate_aged_stock', 'reroute_marketplace_budget'], 'it is not in the actions Claude may automate', 'a change request a person approves')
 

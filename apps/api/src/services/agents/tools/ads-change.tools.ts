@@ -37,6 +37,10 @@
  * ADS AUTONOMY W3-1 — set-campaign-budget, bulk-ad-bid-change (per row) and suppress-campaign take an optional `source`
  * (ads-change-source.ts): the engine recommendation the change carries out, kept in the preview and on the ads audit
  * rows, and settled once the write ran.
+ *
+ * ADS AUTONOMY W4-4 — bulk-ad-bid-change: a person's approval sends each bid as asked, past the largest change per action
+ * after the card's warning (as a budget past the daily move, #401); a run by rule writes the stepped bids, as before
+ * (ads-change-kit.ts bidStepOf). `afterwards: 'auto-bid'` hands the bids back to auto-bid instead of holding them 60 days.
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -54,12 +58,13 @@ import { restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { playbookHoldOf, playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
-import { alsoChangedBy, approvedRun, BY_RULE_WORDS, changeClampedBid, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stopBidOf, STOP_MIN_CENTS, storedReach, strategyFactsMoney, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, BY_RULE_WORDS, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stopBidOf, STOP_MIN_CENTS, storedReach, strategyFactsMoney, withStepPast, type BidAfterwards, type BidStep, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource, type AdChangeSource } from './ads-change-source.js'
 import { afterUndone } from '../change-record.service.js'
+import { pausesNoClaudeMade } from './ads-status.tools.js'
 import { alsoChangedByOf, budgetEnginesOf } from './ads-budget-kit.js'
 
 /** The flat horizon a change set reverses within (rollbackByChangeSetId). */
@@ -319,6 +324,24 @@ async function finish(source: Record<string, unknown>, rows: UndoRow[], negative
   const { items, notJudged } = await undoItems(rows, negatives)
   const playbook = await playbookRaiseRefusal(items)
   if (playbook) return { ok: false, error: playbook }
+  // W4-2 — never switches back on a pause no Claude request made: that is enable-ads with includePeoplesPauses (who paused
+  // it shown, the approver's code, never by rule) — one rule for both doors. A Claude request's own pause undoes as before.
+  const statusOf = (payload: unknown) => (payload as { status?: unknown } | null)?.status
+  const enables = rows.filter((r) => statusOf(r.restores) === 'ENABLED' && statusOf(r.wrote) === 'PAUSED')
+  const theirs = enables.length ? await pausesNoClaudeMade(enables) : []
+  if (theirs.length) {
+    const shown = theirs.slice(0, 3).join('; ') + (theirs.length > 3 ? `; and ${theirs.length - 3} more` : '')
+    return {
+      ok: false,
+      error: `Not undone: it would switch back on what no Claude request paused — ${shown}. Such a pause is lifted only with enable-ads and `
+        + 'includePeoplesPauses: true: the preview says who paused it, and a person approves it with their authenticator code, never by rule.',
+    }
+  }
+  // W4-3 — never a back door around set-campaign-settings' code (a setting put back that adds spend), nor around
+  // set-portfolio (a portfolio change is put back through undo-change of its request).
+  const { settingsUndoRefusal } = await import('./ads-campaign-settings.tools.js')
+  const settings = await settingsUndoRefusal(rows)
+  if (settings) return { ok: false, error: settings }
   const rule = await ruleFactsFor({ tool: 'undo-ad-change', limits: UNDO_LIMITS, items, writes, approvalId: ctx?.approvalId })
   const parts = [
     rows.length ? `restores ${total} recorded write${total === 1 ? '' : 's'} to the values before them` : '',
@@ -405,7 +428,10 @@ const undoAdChange: AgentTool = {
     + `retired. Nothing changes until it is approved. ${BY_RULE_WORDS}: each value it puts back no larger a move than its `
     + 'limits allow (a put-back that raises waits for a person by default), and never a status, an archive or a lifted '
     + 'negative keyword. The preview lists every write it reverses, where it lands (live or sandbox) and the ads '
-    + 'strategy\'s limits that apply; refused, and not queued, when Amazon\'s write gate would refuse it. Its own writes '
+    + 'strategy\'s limits that apply; refused, and not queued, when Amazon\'s write gate would refuse it, when it would '
+    + 'switch back on a pause no Claude request made (enable-ads with includePeoplesPauses does that, with the approver\'s '
+    + 'authenticator code), when a campaign setting it puts back would add spend (set-campaign-settings does that, with '
+    + 'the approver\'s authenticator code), or when it holds a portfolio change (undo-change of that request). Its own writes '
     + 'are a change set of their own: undo-change of it puts back what it reversed (retired negatives are not created again).',
   async handler(args, ctx) {
     return undoPreview(args, ctx)
@@ -972,6 +998,8 @@ interface BulkArgs {
   market?: string
   search?: string
   percent?: number
+  /** W4-4 — what auto-bid does with the bids afterwards (afterwardsArg). */
+  afterwards?: string
 }
 
 /**
@@ -1004,7 +1032,19 @@ async function askedBids(a: BulkArgs): Promise<{ asked: Array<{ targetId: string
   return { asked: rows.map((r) => ({ targetId: r.id, bidCents: Math.max(BULK_FLOOR_CENTS, Math.round(r.bidCents * (1 + Number(a.percent) / 100))) })) }
 }
 
-type BulkWrite = { targetId: string; fromCents: number; toCents: number; source?: AdChangeSource; stop?: true }
+/**
+ * One bulk write: `toCents` is what a person's approval sends; W4-4 — `ruleCents`, when it differs, what a run by rule
+ * writes instead (stepped to the largest change per action, as before).
+ */
+type BulkWrite = { targetId: string; fromCents: number; toCents: number; ruleCents?: number; source?: AdChangeSource; stop?: true }
+
+/** W4-4 — the step warnings of a bulk request as ONE own limit on the card: how many, and the first few by name. */
+function bulkStepPast(steps: ReadonlyArray<BidStep['past']>): { limit: string; reason: string } | null {
+  const past = steps.filter((p): p is NonNullable<BidStep['past']> => !!p)
+  if (!past.length) return null
+  const shown = past.slice(0, 3).map((p) => p.reason).join('; ')
+  return { limit: past[0].limit, reason: `${past.length} bid${past.length === 1 ? '' : 's'} move${past.length === 1 ? 's' : ''} more than the largest bid change per action — ${shown}${past.length > 3 ? `; and ${past.length - 3} more` : ''}` }
+}
 
 /**
  * AA-W2-6 — bulk-ad-bid-change's Claude limits: the kit's (at most 50 targets in one request run by rule), with a raise
@@ -1055,26 +1095,29 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
     if (!(ask.bidCents >= BULK_FLOOR_CENTS)) { excluded.push({ targetId: t.id, why: 'belowFloor' }); continue }
     kept.push({ t, wanted: ask.bidCents })
   }
-  // The bid that lands: the CPC ceiling, then each campaign's max-change guardrail (as set-target-bid shows it).
+  // The bid that lands: the CPC ceiling, then the largest change per action (as set-target-bid shows it).
   // W1-5 — the largest change is the lower of the campaign's and the ads strategy's for the target's ad group.
+  // W4-4 — the step is his own limit: a person's approval sends each bid asked for (the card warns about the rows past
+  // it); a run by rule writes the stepped bids (`rule`), as before (bidStepOf).
   const { entries } = await clampBidsByCeiling(kept.map((k) => ({ adTargetId: k.t.id, bidCents: k.wanted })))
   const strategy = kept.length ? await strategyBidReader().forAdGroups(kept.map((k) => ({ adGroupId: k.t.adGroupId, marketplace: k.t.campaign.marketplace }))) : new Map()
-  const changing: Array<{ t: BulkTarget; to: number; stop?: true }> = stopRows.map((r) => ({ ...r, stop: true as const }))
+  const changing: Array<{ t: BulkTarget; to: number; rule: number; past?: BidStep['past']; stop?: true }> = stopRows.map((r) => ({ ...r, rule: r.to, stop: true as const }))
   kept.forEach((k, i) => {
-    const to = changeClampedBid(k.t.bidCents, entries[i].bidCents, k.t.campaign.dynamicBidding, strategy.get(k.t.adGroupId)?.limits)
+    const step = bidStepOf({ currentCents: k.t.bidCents, wantedCents: entries[i].bidCents, dynamicBidding: k.t.campaign.dynamicBidding, strategy: strategy.get(k.t.adGroupId)?.limits, label: `"${k.t.text}"`, currency: campaignCurrency(k.t.campaign) })
+    const to = step.personCents
     const verdict = suppressionOf({ id: k.t.id, bidCents: k.t.bidCents, suppressedFromBidCents: k.t.suppressedFromBidCents }, to)
     if (verdict === 'suppressed') return void excluded.push({ targetId: k.t.id, why: 'suppressed' })
     if (verdict === 'low-unflagged') return void excluded.push({ targetId: k.t.id, why: 'lowUnflagged' })
     if (to === k.t.bidCents) return void excluded.push({ targetId: k.t.id, why: 'unchanged' })
     // 3A + 4A — the campaign's own min/max bid is HIS limit: the gate reports it (pastOwnLimits) and the card warns.
-    changing.push({ t: k.t, to })
+    changing.push({ t: k.t, to, rule: step.ruleCents, past: step.past })
   })
   // Live reach per ad group: bounds are an interval, so the lowest and the highest new bid answer for all between.
   // W1-5 — per AD GROUP (it was per campaign): the ads strategy's bid band is the one of each ad group's products, as
   // the write itself is judged (ads-mutation.service.ts, the worker).
   // D4 — a stop is asked of the gate as the lowering-only stop it is (the lowest bid does not bind it), apart from bids.
   const groupKey = (c: { t: BulkTarget; stop?: true }) => `${c.t.campaign.id}|${c.t.adGroupId}${c.stop ? '|stop' : ''}`
-  const byGroup = new Map<string, Array<{ t: BulkTarget; to: number; stop?: true }>>()
+  const byGroup = new Map<string, Array<{ t: BulkTarget; to: number; rule: number; stop?: true }>>()
   for (const c of changing) byGroup.set(groupKey(c), [...(byGroup.get(groupKey(c)) ?? []), c])
   const profiles = new Set<string>()
   const refusedGroups = new Map<string, string>()
@@ -1092,7 +1135,11 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
         for (const l of reach.pastOwnLimits ?? []) if (!pastOwnLimits.some((x) => x.reason === l.reason)) pastOwnLimits.push(l)
       }
     }
-    if (!refusedGroups.has(key)) for (const value of values) ruleWrites.push({ ...where, label: `campaign "${list[0].t.campaign.name}"`, changes: [{ field: 'bid', valueCents: value }] })
+    // W4-4 — a run by rule is judged on the stepped bids it writes, and on the bids asked for: a rule never decides a
+    // request whose card warns about another of his own limits.
+    const both = list.flatMap((l) => [l.to, l.rule])
+    const judged = [...new Set([Math.min(...both), Math.max(...both)])]
+    if (!refusedGroups.has(key)) for (const value of judged) ruleWrites.push({ ...where, label: `campaign "${list[0].t.campaign.name}"`, changes: [{ field: 'bid', valueCents: value }] })
   }
   const going = changing.filter((c) => !refusedGroups.has(groupKey(c)))
   for (const c of changing.filter((x) => refusedGroups.has(groupKey(x)))) {
@@ -1103,7 +1150,12 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
     return { result: { ok: false, error: `Nothing would change: ${Object.entries(counts).map(([k, n]) => `${n} ${EXCLUSION_WORDS[k as Exclusion]}`).join('; ')}.` }, writes: [] }
   }
   going.sort((x, y) => (x.t.id < y.t.id ? -1 : 1))
-  const reach: StoredReach = profiles.size ? { reach: 'live', profileId: [...profiles].sort().join(','), ...(pastOwnLimits.length ? { pastOwnLimits } : {}) } : { reach: 'sandbox' }
+  // W4-4 — the rows past the largest change, as one more own limit the card warns about (live or sandbox).
+  const reach: StoredReach = withStepPast(
+    profiles.size ? { reach: 'live', profileId: [...profiles].sort().join(','), ...(pastOwnLimits.length ? { pastOwnLimits } : {}) } : { reach: 'sandbox' },
+    [bulkStepPast(going.map((g) => g.past ?? null))],
+  )
+  const afterwards = afterwardsOf(a.afterwards)
   const byCurrency: Record<string, { targets: number; deltaCents: number }> = {}
   for (const g of going) {
     const cur = campaignCurrency(g.t.campaign)
@@ -1113,8 +1165,12 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
   }
   const bound = (await Promise.all([...new Set(going.map((g) => g.t.campaign.id))].slice(0, 10).map((id) => alsoChangedBy(id)))).flatMap((b) => b.automations).slice(0, 10)
   const counts = countBy(excluded)
-  const writes = going.map((g) => ({ targetId: g.t.id, fromCents: g.t.bidCents, toCents: g.to, ...(sourceByTarget.has(g.t.id) ? { source: sourceByTarget.get(g.t.id)! } : {}), ...(g.stop ? { stop: true as const } : {}) }))
+  const writes: BulkWrite[] = going.map((g) => ({
+    targetId: g.t.id, fromCents: g.t.bidCents, toCents: g.to, ...(g.rule !== g.to ? { ruleCents: g.rule } : {}),
+    ...(sourceByTarget.has(g.t.id) ? { source: sourceByTarget.get(g.t.id)! } : {}), ...(g.stop ? { stop: true as const } : {}),
+  }))
   const stopsGoing = writes.filter((w) => w.stop).length
+  const stepped = writes.filter((w) => w.ruleCents != null).length
   const sourced = writes.filter((w) => w.source).length
   // AA-W2-6 — every row against the ads strategy of its own ad group (not only the 20 lines shown), counted as one run.
   const rule = opts.rule
@@ -1122,7 +1178,8 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
       tool: 'bulk-ad-bid-change',
       limits: BULK_BID_LIMITS,
       // D4 — a stop's low bid is `forced` to the kit: no step and no lowest bid binds it (as at the write gate).
-      items: writes.map((w) => ({ entity: { kind: 'target' as const, id: w.targetId }, change: { field: 'bid' as const, fromCents: w.fromCents, toCents: w.toCents, ...(w.stop ? { forced: true } : {}) } })),
+      // W4-4 — each row as a run by rule writes it: the stepped bid.
+      items: writes.map((w) => ({ entity: { kind: 'target' as const, id: w.targetId }, change: { field: 'bid' as const, fromCents: w.fromCents, toCents: w.ruleCents ?? w.toCents, ...(w.stop ? { forced: true } : {}) } })),
       writes: ruleWrites,
       approvalId: opts.rule.approvalId,
     })
@@ -1134,12 +1191,13 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
       mode: a.bids?.length ? 'list' : 'selection',
       ...(a.percent != null ? { percent: a.percent } : {}),
       totals: { asked: read.asked.length, changing: going.length, excluded: counts },
-      changes: going.slice(0, LINES_SHOWN).map((g) => ({ targetId: g.t.id, text: g.t.text, campaignName: g.t.campaign.name, currency: campaignCurrency(g.t.campaign), fromCents: g.t.bidCents, toCents: g.to, ...(sourceByTarget.has(g.t.id) ? { source: sourceByTarget.get(g.t.id)!.id } : {}), ...(g.stop ? { stop: true } : {}) })),
+      changes: going.slice(0, LINES_SHOWN).map((g) => ({ targetId: g.t.id, text: g.t.text, campaignName: g.t.campaign.name, currency: campaignCurrency(g.t.campaign), fromCents: g.t.bidCents, toCents: g.to, ...(g.rule !== g.to ? { byRuleCents: g.rule } : {}), ...(sourceByTarget.has(g.t.id) ? { source: sourceByTarget.get(g.t.id)!.id } : {}), ...(g.stop ? { stop: true } : {}) })),
       ...(going.length > LINES_SHOWN ? { moreChanges: going.length - LINES_SHOWN } : {}),
       excludedLines: excluded.slice(0, LINES_SHOWN).map((e) => ({ targetId: e.targetId, why: e.detail ? `${EXCLUSION_WORDS[e.why]}: ${e.detail}` : EXCLUSION_WORDS[e.why] })),
       byCurrency,
       // Every target's id, starting bid and new bid: a move on any of the 500 is caught, not only on the 20 shown.
-      basis: createHash('sha256').update(going.map((g) => `${g.t.id}:${g.t.bidCents}:${g.to}${g.stop ? ':stop' : ''}`).join('|')).digest('base64url').slice(0, 32),
+      // W4-4 — and, where it differs, the bid a run by rule writes.
+      basis: createHash('sha256').update(going.map((g) => `${g.t.id}:${g.t.bidCents}:${g.to}${g.rule !== g.to ? `:rule${g.rule}` : ''}${g.stop ? ':stop' : ''}`).join('|')).digest('base64url').slice(0, 32),
       reach,
       reachNote: reachNote(reach),
       alsoChangedBy: bound,
@@ -1147,10 +1205,25 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
       // W3-1 — how many rows carry out an engine's recommendation (each line names its id).
       ...(sourced ? { sources: { recommendations: sourced }, sourceNote: `${sourced} of these bids carry out the bid optimizer's recommendations (each line names its id). Once they run they are not offered again until the data shows what the change did.` } : {}),
       ...(stopsGoing ? { stopNote: `${stopsGoing} of these ${stopsGoing === 1 ? 'is a stop' : 'are stops'}: lowered to the ads strategy's stop bid for its campaign (at least ${STOP_MIN_CENTS} cents) in one move — a temporary stop with low bids, never a pause. The largest bid change per action does not apply to a stop, and a stop never raises a bid.` } : {}),
-      effect: `Moves ${going.length} bid${going.length === 1 ? '' : 's'} (${Object.entries(byCurrency).map(([cur, v]) => `${v.deltaCents >= 0 ? '+' : '−'}${amountLabel(Math.abs(v.deltaCents), cur)} in total per click on ${v.targets}`).join('; ')})${stopsGoing ? `, ${stopsGoing} of them to the stop bid` : ''}${excluded.length ? `; ${excluded.length} left as they are` : ''}.`,
+      // W4-4 — the rows a person's approval sends past the largest change, and what a run by rule writes instead.
+      ...(stepped ? { stepNote: `${stepped} of these ${stepped === 1 ? 'bid moves' : 'bids move'} more than the largest bid change per action: a person's approval sends ${stepped === 1 ? 'it' : 'them'} as asked (the card warns first); run by the business's rule, ${stepped === 1 ? 'it moves' : 'they move'} only as far as the largest change allows (byRuleCents on each line).` } : {}),
+      afterwards,
+      // W4-4 — a stop row is never handed back: auto-bid could raise it. It stays held, as a person's bid.
+      afterwardsNote: afterwards === 'auto-bid' && stopsGoing
+        ? stopsGoing === writes.length
+          ? `Every row is a stop, and a stop is never handed back to auto-bid (it could raise it): ${stopsGoing === 1 ? 'it stays' : 'they stay'} held as a person's bid for 60 days.`
+          : `${afterwardsNote(afterwards, writes.length - stopsGoing !== 1)} The ${stopsGoing} stop row${stopsGoing === 1 ? ' is' : 's are'} not handed back (auto-bid could raise ${stopsGoing === 1 ? 'it' : 'them'}): ${stopsGoing === 1 ? 'it stays' : 'they stay'} held as a person's bid for 60 days.`
+        : afterwardsNote(afterwards, going.length !== 1),
+      effect: `Moves ${going.length} bid${going.length === 1 ? '' : 's'} (${Object.entries(byCurrency).map(([cur, v]) => `${v.deltaCents >= 0 ? '+' : '−'}${amountLabel(Math.abs(v.deltaCents), cur)} in total per click on ${v.targets}`).join('; ')})${stopsGoing ? `, ${stopsGoing} of them to the stop bid` : ''}${stepped ? `; run by the business's rule instead, ${stepped} of them move only as far as the largest bid change allows` : ''}${excluded.length ? `; ${excluded.length} left as they are` : ''}.`,
     },
   } }
 }
+
+/**
+ * A7 — what an approved bulk bid change must still find (MATERIAL_PREVIEW_FIELDS holds the same list): the counts, every
+ * row's starting and new bid (basis), where it lands. W4-4 — and what auto-bid does with the bids afterwards.
+ */
+const BULK_BID_MATERIAL = ['totals', 'basis', 'afterwards', 'reach'] as const
 
 const countBy = (list: Array<{ why: Exclusion }>) => {
   const out: Partial<Record<Exclusion, number>> = {}
@@ -1194,6 +1267,7 @@ const bulkAdBidChange: AgentTool = {
     search: z.string().trim().min(1).max(100).optional().describe('with a selection: only targets whose text, campaign or ad group name contains this'),
     percent: z.coerce.number().min(-90).max(100).optional().describe('with a selection: move every selected enabled target\'s bid by this percent (−90 to +100)'),
     why: whyArg,
+    afterwards: afterwardsArg, // W4-4
   }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
   restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
@@ -1210,7 +1284,8 @@ const bulkAdBidChange: AgentTool = {
   maxClaudeTrust: 'auto',
   strategyBound: 'amazon-ads',
   limits: BULK_BID_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits),
+  // W4-4 — a hand-back to auto-bid never runs by rule.
+  withinLimits: (preview, limits) => handBackRefusal(preview) ?? ruleRefusal(preview, limits),
   undo: BULK_BID_UNDO,
   description:
     `Change many Amazon Sponsored Products bids in one request: a list of targets with their new bids (up to ${BULK_LIST_MAX}), `
@@ -1222,7 +1297,11 @@ const bulkAdBidChange: AgentTool = {
     + 'The preview counts what changes and what is left as it is, '
     + 'by reason (suppressed bids are never raised, pinned or non-SP campaigns, bid bounds, a campaign Amazon\'s write '
     + 'gate refuses, unchanged), shows the first 20 changes and the total per currency, where it lands, and each limit '
-    + 'with where it comes from. Approved, '
+    + 'with where it comes from. A bid that moves more than the largest bid change per action (the campaign\'s '
+    + 'max-change guardrail or the ads strategy\'s, the lower one) is warned on the approval card, and a person\'s approval '
+    + 'sends it as asked; run by rule it moves only as far as the largest change allows (byRuleCents on its line). '
+    + 'afterwards: "hold" (default) — auto-bid then leaves these bids alone for 60 days, as a person\'s; "auto-bid" — '
+    + 'handed back, auto-bid may move them from its next run. Approved, '
     + 'every write carries the approval as its change set; undo-change reverses the whole set at once.',
   async handler(args, ctx) {
     return (await bulkDecision(args, { rule: { approvalId: ctx.approvalId } })).result
@@ -1231,13 +1310,21 @@ const bulkAdBidChange: AgentTool = {
     // One decision: its preview is re-checked against what was approved (the basis fingerprints every write), and
     // its full list of writes — not the 20 lines shown — is what runs.
     const { result: fresh, writes: going } = await bulkDecision(args)
-    const refusal = recheck(ctx, fresh, ['totals', 'basis', 'reach'])
+    const refusal = recheck(ctx, fresh, BULK_BID_MATERIAL)
     if (refusal) return notRun(refusal)
-    const p = fresh.preview as { reach: StoredReach; effect: string }
+    const p = fresh.preview as { reach: StoredReach; effect: string; afterwards: BidAfterwards }
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
+    // W4-4 — a person's approval (his manual mark, from the approval door) sends each bid asked for: the card warned him
+    // past the largest change. A run by rule writes the stepped bids, as before; the mutation layer steps any bid
+    // without his mark anyway, whatever is sent.
+    const bidOf = (g: BulkWrite) => (run.manual ? g.toCents : g.ruleCents ?? g.toCents)
     const out = await bulkUpdateAdTargetBids({
-      entries: going.map((g) => ({ adTargetId: g.targetId, bidCents: g.toCents, ...(g.source ? { evidence: withSource(null, g.source) } : {}), ...(g.stop ? { stop: true } : {}) })),
+      entries: going.map((g) => {
+        // W3-1, W4-4 — a stop row is never handed back (auto-bid could raise it).
+        const evidence = handBackEvidence(g.source ? withSource(null, g.source) : null, g.stop ? 'hold' : p.afterwards)
+        return { adTargetId: g.targetId, bidCents: bidOf(g), ...(evidence ? { evidence } : {}), ...(g.stop ? { stop: true } : {}) }
+      }),
       actor: run.actor,
       reason: run.reason,
       changeSetId: run.changeSetId,
@@ -1252,7 +1339,7 @@ const bulkAdBidChange: AgentTool = {
     return {
       ok: out.failed === 0,
       ...(out.failed ? { error: `Partly run: ${out.applied} queued, ${out.failed} refused by the bid write. Undo-change reverses what was queued.` } : {}),
-      data: { applied: out.applied, skipped: out.skipped, failed: out.failed, reach: p.reach, changeSetId: run.changeSetId, note: 'Queued for Amazon: each bid is sent after the 5-minute cancel window. approval-status follows them.' },
+      data: { applied: out.applied, skipped: out.skipped, failed: out.failed, reach: p.reach, afterwards: p.afterwards, changeSetId: run.changeSetId, note: 'Queued for Amazon: each bid is sent after the 5-minute cancel window. approval-status follows them.' },
       change: {
         // W3-1 — the writes this change made (its undo reverses only them) and the recommendations it settled.
         before: {
