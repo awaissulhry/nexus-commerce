@@ -321,6 +321,9 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
   const parsed = ADD_INPUT.safeParse(raw)
   if (!parsed.success) return refuse(parsed.error.issues.map((i) => `${i.path.join('.') || 'arguments'}: ${i.message}`).join('; '))
   const a = parsed.data
+  // MCP.12 — the product named comes first: one not found here (or deleted) is said before anything else.
+  const product = a.product ? await productRootOf(a.product) : null
+  if (a.product && !product) return refuse(`Not queued: product ${a.product} was not found in this business.`)
   const built = await itemsOf(a)
   if ('refusal' in built) return refuse(built.refusal)
   const items = built.items
@@ -328,8 +331,6 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
   if ('refusal' in checked) return refuse(checked.refusal)
 
   // The Owner's rules 2 and 3, on the search-term report of the ad groups the negatives land in.
-  const product = a.product ? await productRootOf(a.product) : null
-  if (a.product && !product) return refuse(`Not queued: product ${a.product} was not found in this business.`)
   const rules = await termRulesFor(items.map(placementOf), { product })
   if (rules.converting.length) {
     return refuse(`Not queued: a negative there would block a search term that converts — ${convertingWords(rules.converting)} over the last ${rules.windowDays} days. `
@@ -537,6 +538,9 @@ const addNegativeTargets: AgentTool = {
     return (await decideAdd(args, ctx, { rule: true })).result
   },
   async execute(args, ctx) {
+    // MCP.12 — a product deleted after approval is not found: said first, nothing written.
+    const productNamed = typeof args.product === 'string' ? args.product.trim() : ''
+    if (productNamed && !(await productRootOf(productNamed))) return notRun(`Not run: product ${productNamed} was not found in this business.`)
     const { result: fresh, items } = await decideAdd(args, ctx, { rule: false })
     const refusal = recheck(ctx, fresh, ADD_MATERIAL)
     if (refusal) return notRun(refusal)
