@@ -416,13 +416,34 @@ export interface GateStatus { gateOpen: boolean; daysInDryRun: number; observati
 
 /** The Amazon Ads connection a rule's live writes go through, as the graduation gate judges it. */
 export interface RuleWriteConnection {
-  /** The rule's own market (`scopeMarketplace`); null for a rule across the whole account. */
+  /**
+   * The ONE market the rule is judged on: its own `scopeMarketplace`, or the one market every campaign in its scope
+   * belongs to (`scope.derived`). Null for a rule across the whole account, or a scope across several markets.
+   */
   market: string | null
+  /**
+   * The rule's scope below the market (a campaign, a portfolio, a product, its picked campaigns) when it names no market
+   * of its own; null otherwise. `words` names it ("campaign", "product and picked campaigns").
+   */
+  scope: { words: string; campaigns: number; markets: string[]; withoutMarket: number; derived: boolean } | null
   /** The profile the gate judged; null when no profile serves the rule's market (or the account has none). */
   judged: { market: string; profileId: string | null; mode: string; writesEnabledAt: Date | null } | null
-  /** Whole-account rule only: the markets Nexus reads that are production with writes on, and the others. */
+  /**
+   * Whole-account rule: the markets Nexus reads that are production with writes on, and the others. A scope across
+   * several markets: the same, over the markets its campaigns are in.
+   */
   liveMarkets: string[]
   notLiveMarkets: string[]
+}
+
+/** The scope columns (and the picker list in `actions`) the graduation gate reads to find a rule's market. */
+export interface RuleWriteScope {
+  id?: string
+  scopeMarketplace?: string | null
+  scopePortfolioId?: string | null
+  scopeCampaignId?: string | null
+  scopeProductId?: string | null
+  actions?: unknown
 }
 
 /**
@@ -435,13 +456,18 @@ export interface RuleWriteConnection {
  *
  *   · a rule with a market: that market's profile, asked of the write gate's own resolver (`adsProfileFor`), so the
  *     gate judges exactly the profile every write of the rule is checked against.
- *   · a rule with no market (whole account): it reaches every market, and the write gate checks each write against
- *     its own market's profile and refuses a sandbox one. So the connection checks pass when at least one market Nexus
- *     reads is production with writes on. The judged profile is the first of those in the screens' order
- *     (`adsMarketLists`: IT, DE, ES, FR, then the rest); with none, the first production one, then the first read one.
- *     The detail names it and lists the markets the rule's writes stay refused in.
+ *   · a rule with no market but a narrower scope — one campaign, a portfolio, a product (line), or its picked campaigns
+ *     (a builder rule's picker, an engine budget rule's assignments): the markets of the campaigns that scope reaches,
+ *     by the evaluator's own matcher (`ruleReachedMarkets`). All in one market: judged on that market exactly as if the
+ *     rule named it (a rule bound to a UK sandbox campaign fails). Several markets: as a whole-account rule, but over
+ *     those markets only. No campaign at all: nothing can be judged, so the checks fail and say why.
+ *   · a rule with no market and no narrower scope (whole account): it reaches every market, and the write gate checks
+ *     each write against its own market's profile and refuses a sandbox one. So the connection checks pass when at
+ *     least one market Nexus reads is production with writes on. The judged profile is the first of those in the
+ *     screens' order (`adsMarketLists`: IT, DE, ES, FR, then the rest); with none, the first production one, then the
+ *     first read one. The detail names it and lists the markets the rule's writes stay refused in.
  */
-export async function adsRuleWriteConnection(rule: { scopeMarketplace?: string | null }): Promise<RuleWriteConnection> {
+export async function adsRuleWriteConnection(rule: RuleWriteScope): Promise<RuleWriteConnection> {
   const market = typeof rule.scopeMarketplace === 'string' && rule.scopeMarketplace.trim() ? rule.scopeMarketplace : null
   const { adsProfileFor } = await import('./ads-profile-resolver.js')
   const judge = async (code: string, fallbackMode: string | null): Promise<RuleWriteConnection['judged']> => {
@@ -449,28 +475,77 @@ export async function adsRuleWriteConnection(rule: { scopeMarketplace?: string |
     if (!ref) return fallbackMode == null ? null : { market: code, profileId: null, mode: fallbackMode, writesEnabledAt: null }
     return { market: code, profileId: ref.profileId, mode: ref.mode, writesEnabledAt: ref.writesEnabledAt }
   }
-  if (market) return { market, judged: await judge(market, null), liveMarkets: [], notLiveMarkets: [] }
-
-  const { adsMarketLists } = await import('./ads-markets.service.js')
-  const read = (await adsMarketLists({ currency: false })).markets.filter((m) => m.read)
-  const isLive = (m: { mode: string; writesEnabled: boolean }) => m.mode === 'production' && m.writesEnabled
-  const pick = read.find(isLive) ?? read.find((m) => m.mode === 'production') ?? read[0]
-  return {
-    market: null,
-    judged: pick ? await judge(pick.code, pick.mode) : null,
-    liveMarkets: read.filter(isLive).map((m) => m.code),
-    notLiveMarkets: read.filter((m) => !isLive(m)).map((m) => m.code),
+  /** At least one of these markets (null: every market Nexus reads) live, judged on the first in the screens' order. */
+  const judgeAcross = async (only: string[] | null): Promise<Pick<RuleWriteConnection, 'judged' | 'liveMarkets' | 'notLiveMarkets'>> => {
+    const { adsMarketLists } = await import('./ads-markets.service.js')
+    const read = (await adsMarketLists({ currency: false })).markets.filter((m) => m.read && (!only || only.includes(m.code)))
+    const isLive = (m: { mode: string; writesEnabled: boolean }) => m.mode === 'production' && m.writesEnabled
+    const pick = read.find(isLive) ?? read.find((m) => m.mode === 'production') ?? read[0]
+    // A market of the scope that Nexus does not read is never live: the write gate refuses every write there.
+    const unread = only ? only.filter((code) => !read.some((m) => m.code === code)) : []
+    return {
+      judged: pick ? await judge(pick.code, pick.mode) : null,
+      liveMarkets: read.filter(isLive).map((m) => m.code),
+      notLiveMarkets: [...read.filter((m) => !isLive(m)).map((m) => m.code), ...unread],
+    }
   }
+  if (market) return { market, scope: null, judged: await judge(market, null), liveMarkets: [], notLiveMarkets: [] }
+
+  // A scope below the market. Pure checks first, so a whole-account rule reads no campaign at all.
+  const { isEngineBudgetRule, builderScopeCampaignIds } = await import('./ads-rule-adapter.service.js')
+  const picked = isEngineBudgetRule(rule.actions) || builderScopeCampaignIds(rule.actions) != null
+  const parts = [
+    rule.scopeCampaignId ? 'campaign' : null,
+    rule.scopePortfolioId ? 'portfolio' : null,
+    rule.scopeProductId ? 'product' : null,
+    picked ? 'picked campaigns' : null,
+  ].filter((x): x is string => !!x)
+
+  if (parts.length > 0) {
+    const { ruleReachedMarkets } = await import('./ads-rule-reach.service.js')
+    // `id` keys an engine budget rule's assignments: the gate's callers pass the rule as stored.
+    const reached = await ruleReachedMarkets({
+      id: rule.id ?? '',
+      scopeMarketplace: null,
+      scopePortfolioId: rule.scopePortfolioId ?? null,
+      scopeCampaignId: rule.scopeCampaignId ?? null,
+      scopeProductId: rule.scopeProductId ?? null,
+      actions: rule.actions,
+    })
+    const words = parts.join(' and ')
+    const one = reached.markets.length === 1 && reached.withoutMarket === 0 ? reached.markets[0] : null
+    const scope = { words, campaigns: reached.campaigns, markets: reached.markets, withoutMarket: reached.withoutMarket, derived: !!one }
+    if (one) return { market: one, scope, judged: await judge(one, null), liveMarkets: [], notLiveMarkets: [] }
+    if (reached.markets.length === 0) return { market: null, scope, judged: null, liveMarkets: [], notLiveMarkets: [] }
+    return { market: null, scope, ...(await judgeAcross(reached.markets)) }
+  }
+  return { market: null, scope: null, ...(await judgeAcross(null)) }
 }
 
 /** The gate's two connection checks, from the one judged connection: the gate status shows them, graduate re-runs them. */
 function connectionChecks(conn: RuleWriteConnection): GateCheck[] {
   const j = conn.judged
   const profile = j?.profileId ? `, profile ${j.profileId}` : ''
-  // Nothing judged on a whole-account rule (no connection at all) keeps the words it always had.
-  const where = j
-    ? (conn.market ? `${j.market} (the rule's market${profile}): ` : `Whole account, judged on ${j.market}${profile}: `)
-    : (conn.market ? `No Amazon Ads profile serves ${conn.market} (the rule's market): ` : '')
+  const sc = conn.scope
+  const count = (n: number, one: string) => `${n} ${plural(n, one, `${one}s`)}`
+  const noMarket = sc && sc.withoutMarket > 0 ? ` (${count(sc.withoutMarket, 'campaign')} of them ${plural(sc.withoutMarket, 'carries', 'carry')} no market)` : ''
+  let where: string
+  if (sc && !sc.derived && sc.markets.length === 0) {
+    // A scope that reaches no campaign (or only campaigns without a market): no market's connection can be judged.
+    where = sc.campaigns === 0
+      ? `The rule's scope (${sc.words}) reaches no campaign today, so no market's connection can be judged: `
+      : `The rule's scope (${sc.words}) reaches only campaigns without a market (${sc.campaigns}), so no market's connection can be judged: `
+  } else if (sc && !sc.derived) {
+    where = j
+      ? `The rule's scope (${sc.words}) reaches ${count(sc.campaigns, 'campaign')} in ${sc.markets.join(', ')}${noMarket}, judged on ${j.market}${profile}: `
+      : `Nexus reads none of ${sc.markets.join(', ')} (the markets of the rule's ${sc.words}), so the write gate refuses its writes there: `
+  } else if (conn.market) {
+    const whose = sc ? `the market of the rule's ${sc.words}` : "the rule's market"
+    where = j ? `${j.market} (${whose}${profile}): ` : `No Amazon Ads profile serves ${conn.market} (${whose}): `
+  } else {
+    // Nothing judged on a whole-account rule (no connection at all) keeps the words it always had.
+    where = j ? `Whole account, judged on ${j.market}${profile}: ` : ''
+  }
   const markets = conn.market || !j
     ? ''
     : `. Live (production, writes on): ${conn.liveMarkets.join(', ') || 'none'}` +
@@ -509,6 +584,8 @@ export async function adsRuleGateStatus(id: string): Promise<ServiceOutcome<Gate
       id: true, domain: true, enabled: true, dryRun: true,
       createdAt: true, evaluationCount: true, matchCount: true,
       executionCount: true, scopeMarketplace: true,
+      // The scope below the market and the picker list: a rule bound to campaigns of one market is judged on it.
+      scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true, actions: true,
     },
   })
   if (!rule || rule.domain !== 'advertising') return refused(404, { error: 'not_found' })
@@ -584,6 +661,7 @@ export async function graduateAdsRule(id: string, actor: AdsActor): Promise<Serv
     select: {
       id: true, domain: true, name: true, enabled: true, dryRun: true,
       createdAt: true, evaluationCount: true, matchCount: true, actions: true, conditions: true, scopeMarketplace: true,
+      scopePortfolioId: true, scopeCampaignId: true, scopeProductId: true,
     },
   })
   if (!rule || rule.domain !== 'advertising') return refused(404, { error: 'not_found' })
