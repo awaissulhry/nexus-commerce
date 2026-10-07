@@ -101,6 +101,8 @@ export interface BudgetPreviewDraft {
   actions?: unknown
   conditions?: unknown
   scopeMarketplace?: string | null
+  /** The rule's portfolio scope (external portfolio id, as `AutomationRule.scopePortfolioId`). */
+  scopePortfolioId?: string | null
 }
 
 const PREVIEW_RULE_ID = 'draft-preview'
@@ -166,6 +168,13 @@ export async function runDraftPreview<C extends CampaignCtx>(
     buildContexts?: (windowDays: number) => Promise<unknown[]>
     /** The id key + value the handler is called with. Defaults to `campaignId` = the campaign's id. */
     entityId?: (ctx: C) => { key: string; value: string }
+    /**
+     * True where the ENGINE reads an empty picker as "no restriction" (Share of Voice: `bid_apply`'s
+     * `campaignIds` and `builderScopeCampaignIds` both do). The preview then runs over the rule's
+     * market / portfolio scope instead of returning nothing. Off by default: a Budget rule with no
+     * picks matches nothing, and its preview says so.
+     */
+    emptyPickMeansScope?: boolean
   },
 ): Promise<DraftPreviewRun<C>> {
   const blank = (windowDays: number): DraftPreviewRun<C> => ({
@@ -182,7 +191,11 @@ export async function runDraftPreview<C extends CampaignCtx>(
   const windowDays = Math.max(7, Math.min(90, Math.round(raw)))
 
   const picked = builderDraftCampaignIds(draft.actions, opts.slug) ?? []
-  if (picked.length === 0) return blank(windowDays)
+  // An empty picker previews the rule's scope only where the engine reads it so — and only once the draft has
+  // conditions to judge: a draft still being built (no conditions yet) answers "nothing selected", as it always did,
+  // instead of an error the builder would show while the person is still typing.
+  const hasConditions = Array.isArray(draft.conditions) && draft.conditions.length > 0
+  if (picked.length === 0 && !(opts.emptyPickMeansScope && hasConditions)) return blank(windowDays)
 
   // ── the engine's own translation, so the conditions and the action are the real ones ──
   const translated = maybeTranslateAdsRule({ id: PREVIEW_RULE_ID, actions: draft.actions, conditions: draft.conditions })
@@ -204,8 +217,9 @@ export async function runDraftPreview<C extends CampaignCtx>(
   const pickedSet = new Set(picked)
 
   // Only the picked campaigns can be touched — the same restriction `campaignAllowed` applies
-  // inside the handler, and (since BUD-P2) the same list that governs the rule's assignment.
-  const mine = contexts.filter((c) => c.campaign?.id != null && pickedSet.has(c.campaign.id))
+  // inside the handler, and (since BUD-P2) the same list that governs the rule's assignment. With
+  // `emptyPickMeansScope` and no picks, every context with a campaign is offered, as the engine does.
+  const mine = contexts.filter((c) => c.campaign?.id != null && (picked.length === 0 || pickedSet.has(c.campaign.id)))
 
   /**
    * The rule's marketplace scope, enforced by the same pure matcher the tick uses.
@@ -216,9 +230,22 @@ export async function runDraftPreview<C extends CampaignCtx>(
    * widget whose whole job is to say what will happen. Measured on the live rig before ship.
    */
   const mkt = draft.scopeMarketplace && draft.scopeMarketplace !== 'all' ? draft.scopeMarketplace : null
+  /**
+   * The portfolio scope, resolved exactly as the tick resolves it: campaign → `Campaign.portfolioId`.
+   * Read only when the draft names a portfolio, so a draft without one costs nothing extra.
+   */
+  const portfolio = draft.scopePortfolioId ? String(draft.scopePortfolioId) : null
+  const portfolioOf = new Map<string, string | null>()
+  if (portfolio && mine.length) {
+    const camps = await prisma.campaign.findMany({
+      where: { id: { in: [...new Set(mine.map((c) => c.campaign.id))] } },
+      select: { id: true, portfolioId: true },
+    })
+    for (const c of camps) portfolioOf.set(c.id, c.portfolioId)
+  }
   const scoped = mine.filter((c) => ruleMatchesScope(
-    { scopeMarketplace: mkt, scopePortfolioId: null, scopeCampaignId: null, scopeProductIds: null },
-    { marketplace: c.marketplace, campaignId: c.campaign.id, portfolioId: null },
+    { scopeMarketplace: mkt, scopePortfolioId: portfolio, scopeCampaignId: null, scopeProductIds: null },
+    { marketplace: c.marketplace, campaignId: c.campaign.id, portfolioId: portfolioOf.get(c.campaign.id) ?? null },
   ))
 
   const blocks = translated.blocks?.length ? translated.blocks : [{ conditions: translated.conditions, actions: translated.actions }]
@@ -530,6 +557,8 @@ export interface KeywordTrackerPreviewRow {
   organicRank: number | null
   sponsoredRank: number | null
   rankDelta: number | null
+  /** searches for the keyword in its market in one Brand Analytics week; null = no fresh reading */
+  searchVolume: number | null
   currentEur: number
   proposedEur: number
   /** 'flag' = carries `suppressedFromBidCents`; 'bid' = at or under 3¢ with no flag. */
@@ -556,6 +585,12 @@ export interface KeywordTrackerPreviewResult {
   campaignSuppressedMatched: number
   /** KT-P6 — of the matched, how many the engine REFUSED because they are switched off. */
   refusedSuppressed: number
+  /**
+   * Why this draft can match nothing whatever the keywords do: it reads Organic Rank, Sponsored Rank or Rank Change,
+   * and no fresh reading of that field exists (no automatic source fills them — keyword-rank-feed.service.ts).
+   * Absent when the draft reads none of them, or an import supplied one.
+   */
+  unsourced?: string
   /** 🔴 The rank feed itself — the difference between "nothing matched" and "nothing was measured". */
   feed: {
     rows: number
@@ -565,20 +600,27 @@ export interface KeywordTrackerPreviewResult {
     /** positive keyword targets whose text+market appears in the feed at all */
     coveredTargets: number
     totalTargets: number
+    /**
+     * Readings younger than the freshness limit (`maxAgeDays`), and how many of them carry each field — what a rule
+     * can read right now. The Brand Analytics feed fills `searchVolume` only; a rank count above 0 means an import.
+     */
+    measured: { maxAgeDays: number; freshRows: number; organicRank: number; sponsoredRank: number; searchVolume: number }
   }
   readAt: string
 }
 
 /** The rank feed's own census. Exported because the builder's banner states it before any draft exists. */
 export async function keywordRankFeedHealth(): Promise<KeywordTrackerPreviewResult['feed']> {
+  const { keywordRankFieldCensus, KEYWORD_RANK_MAX_AGE_DAYS } = await import('./keyword-rank-feed.service.js')
   const [rows, totalTargets] = await Promise.all([
     prisma.keywordRank.count(),
     prisma.adTarget.count({ where: { kind: 'KEYWORD', isNegative: false } }),
   ])
   if (rows === 0) {
-    return { rows: 0, keywords: 0, markets: 0, newestCapturedAt: null, coveredTargets: 0, totalTargets }
+    const measured = { maxAgeDays: KEYWORD_RANK_MAX_AGE_DAYS, freshRows: 0, organicRank: 0, sponsoredRank: 0, searchVolume: 0 }
+    return { rows: 0, keywords: 0, markets: 0, newestCapturedAt: null, coveredTargets: 0, totalTargets, measured }
   }
-  const [agg, distinct, covered] = await Promise.all([
+  const [agg, distinct, covered, measured] = await Promise.all([
     prisma.keywordRank.aggregate({ _max: { capturedAt: true } }),
     prisma.$queryRawUnsafe<Array<{ keywords: number; markets: number }>>(
       `SELECT count(DISTINCT lower(trim("keyword")))::int AS keywords, count(DISTINCT "marketplace")::int AS markets FROM "KeywordRank"`,
@@ -593,6 +635,7 @@ export async function keywordRankFeedHealth(): Promise<KeywordTrackerPreviewResu
                        WHERE lower(trim(k."keyword")) = lower(trim(t."expressionValue"))
                          AND k."marketplace" = c."marketplace")`,
     ),
+    keywordRankFieldCensus(),
   ])
   return {
     rows,
@@ -601,6 +644,7 @@ export async function keywordRankFeedHealth(): Promise<KeywordTrackerPreviewResu
     newestCapturedAt: agg._max.capturedAt ? agg._max.capturedAt.toISOString() : null,
     coveredTargets: covered[0]?.n ?? 0,
     totalTargets,
+    measured,
   }
 }
 
@@ -616,8 +660,16 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
   interface RankCtx {
     marketplace: string | null
     campaign: { id: string; name: string; [k: string]: unknown }
-    adTarget: { id: string; organicRank?: number; sponsoredRank?: number; rankDelta?: number; [k: string]: unknown }
+    adTarget: { id: string; organicRank?: number; sponsoredRank?: number; rankDelta?: number; searchVolume?: number; [k: string]: unknown }
   }
+
+  // A draft on a rank no source fills matches nothing whatever the keywords do — said once, in words, not left to an
+  // empty table. Read from the engine's own translation, so it names exactly the fields the rule will compare.
+  const { conditionFields, unsourcedRankNote } = await import('./keyword-rank-feed.service.js')
+  const unsourced = unsourcedRankNote(
+    conditionFields(maybeTranslateAdsRule({ id: PREVIEW_RULE_ID, actions: draft.actions, conditions: draft.conditions })),
+    feed.measured,
+  )
 
   const { buildKeywordRankBidContexts } = await import('../../jobs/advertising-rule-evaluator.job.js')
   const run = await runDraftPreview<RankCtx>(draft, {
@@ -743,6 +795,7 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
       organicRank: num(p.ctx.adTarget.organicRank),
       sponsoredRank: num(p.ctx.adTarget.sponsoredRank),
       rankDelta: num(p.ctx.adTarget.rankDelta),
+      searchVolume: num(p.ctx.adTarget.searchVolume),
       currentEur: p.currentCents / 100,
       proposedEur: p.proposedCents / 100,
       suppressed,
@@ -767,6 +820,7 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
     suppressedMatched: rows.filter((r) => r.suppressed !== null).length,
     suppressedUnflaggedMatched: rows.filter((r) => r.suppressed === 'bid').length,
     campaignSuppressedMatched: rows.filter((r) => r.campaignSuppressed).length,
+    ...(unsourced ? { unsourced } : {}),
     feed,
     readAt,
   }

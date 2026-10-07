@@ -83,11 +83,99 @@ export interface BackfillReport {
 }
 
 /**
+ * How many daily-performance rows the copy holds at once: one page read, one page written.
+ *
+ * The copy used to read the whole table in one findMany (every ~70-column row, with its Decimal, BigInt and Date
+ * objects), map it to a second array and send one createMany. Under Prisma 7's driver adapter all of that sits in the
+ * V8 heap. At 74,870 rows (2026-10-07) it filled the scheduler's ~2 GB heap at 03:20 every night: the process spent
+ * half an hour in garbage collection, missed every cron after it, and died "JavaScript heap out of memory".
+ *
+ * A page of 1,000 rows keeps the job's memory flat whatever the table's size, and one page is one INSERT
+ * (1,000 rows x 25 columns stays under Postgres's bind-parameter limit).
+ */
+export const PERF_PAGE_ROWS = 1_000
+
+/** Only the columns the copy writes, plus the id it pages on: the other ~45 columns are never read. */
+const PERF_COPY_SELECT = {
+  id: true,
+  marketplace: true,
+  date: true,
+  entityType: true,
+  entityId: true,
+  localEntityId: true,
+  impressions: true,
+  clicks: true,
+  costMicros: true,
+  currencyCode: true,
+  sales7dCents: true,
+  sales14dCents: true,
+  sales30dCents: true,
+  orders7d: true,
+  units7d: true,
+  ntbOrders14d: true,
+  viewableImpressions: true,
+  detailPageViews7d: true,
+  acos7d: true,
+  roas7d: true,
+  reportRunId: true,
+  reportedAt: true,
+} as const
+
+/**
+ * One page of the copy's source, in id order after `afterId`. Keyset paging (not offset), so each page costs the same
+ * however deep the copy is.
+ */
+function readPerfPage(afterId: string | null, take: number) {
+  return prisma.amazonAdsDailyPerformance.findMany({
+    where: { ...EXCLUDE_AMS_DAILY, ...(afterId ? { id: { gt: afterId } } : {}) },
+    orderBy: { id: 'asc' },
+    take,
+    select: PERF_COPY_SELECT,
+  })
+}
+
+type PerfCopyRow = Awaited<ReturnType<typeof readPerfPage>>[number]
+
+/** One source row as its CampaignMetric row. Unchanged mapping; `eur` is its costEurCents (null when no FX rate). */
+function toCampaignMetricRow(p: PerfCopyRow, eur: bigint | null, extToNew: ReadonlyMap<string, string>) {
+  return {
+    campaignId: p.entityType === 'CAMPAIGN' ? (extToNew.get(p.entityId) ?? null) : null,
+    channel: 'AMAZON' as const,
+    marketplace: p.marketplace,
+    date: p.date,
+    entityType: p.entityType,
+    entityId: p.entityId,
+    localEntityId: p.localEntityId,
+    impressions: p.impressions,
+    clicks: p.clicks,
+    costMicros: p.costMicros,
+    currencyCode: p.currencyCode,
+    costEurCents: eur,
+    sales7dCents: p.sales7dCents,
+    sales14dCents: p.sales14dCents,
+    sales30dCents: p.sales30dCents,
+    orders7d: p.orders7d,
+    units7d: p.units7d,
+    ntbOrders14d: p.ntbOrders14d,
+    viewableImpressions: p.viewableImpressions,
+    detailPageViews7d: p.detailPageViews7d,
+    attributionModel: 'amazon-windowed',
+    acos7d: p.acos7d,
+    roas7d: p.roas7d,
+    reportRunId: p.reportRunId,
+    reportedAt: p.reportedAt,
+  }
+}
+
+/**
  * Run the Amazon shadow backfill. apply=false returns the plan without
  * writing. Returns a parity report when apply=true.
+ *
+ * `pageRows` is for tests; the job and the endpoint use PERF_PAGE_ROWS.
  */
-export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<BackfillReport> {
+export async function backfillAmazonShadow(opts: { apply: boolean; pageRows?: number }): Promise<BackfillReport> {
   const { apply } = opts
+  const pageRows = Math.max(1, Math.floor(opts.pageRows ?? PERF_PAGE_ROWS))
   const campaigns = await prisma.campaign.findMany({ orderBy: { createdAt: 'asc' } })
   // AX-IE.1 — exclude the AMS daily rows, for the same reason AX2.3 excludes them
   // from every console aggregate: the daily grain is owned by the report pipeline,
@@ -103,11 +191,13 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
   // was arbitrary — e.g. campaign 139838320481420 on 2026-06-06 had an 'ams' row at
   // cost 0 against the real IT row at EUR 4.79, so a day's spend could land as zero.
   // Excluding them makes the copy both correct and exactly parity-checkable.
-  const perf = await prisma.amazonAdsDailyPerformance.findMany({ where: { ...EXCLUDE_AMS_DAILY } })
+  //
+  // Counted here, read later in pages (PERF_PAGE_ROWS) — never held whole.
+  const perfCount = await prisma.amazonAdsDailyPerformance.count({ where: { ...EXCLUDE_AMS_DAILY } })
   const fx = await buildFx()
   const marketCodes = await buildMarketCodeMap()
   logger.info(
-    `[UM][backfill] apply=${apply} source: ${campaigns.length} campaigns, ${perf.length} perf, ${fx.size} fx`,
+    `[UM][backfill] apply=${apply} source: ${campaigns.length} campaigns, ${perfCount} perf, ${fx.size} fx`,
   )
 
   if (apply) {
@@ -219,40 +309,27 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
 
   let writtenMetrics = 0
   let fxMissing = 0
+  // What was read and copied, page by page: the parity check compares the copy against exactly these rows.
+  let sourceMetrics = perfCount
+  let srcCost = 0n
   if (apply) {
-    const batch = perf.map((p) => {
-      const eur = costEurCents(p.costMicros, p.currencyCode, fx)
-      if (eur === null && p.currencyCode !== 'EUR') fxMissing++
-      return {
-        campaignId: p.entityType === 'CAMPAIGN' ? (extToNew.get(p.entityId) ?? null) : null,
-        channel: 'AMAZON' as const,
-        marketplace: p.marketplace,
-        date: p.date,
-        entityType: p.entityType,
-        entityId: p.entityId,
-        localEntityId: p.localEntityId,
-        impressions: p.impressions,
-        clicks: p.clicks,
-        costMicros: p.costMicros,
-        currencyCode: p.currencyCode,
-        costEurCents: eur,
-        sales7dCents: p.sales7dCents,
-        sales14dCents: p.sales14dCents,
-        sales30dCents: p.sales30dCents,
-        orders7d: p.orders7d,
-        units7d: p.units7d,
-        ntbOrders14d: p.ntbOrders14d,
-        viewableImpressions: p.viewableImpressions,
-        detailPageViews7d: p.detailPageViews7d,
-        attributionModel: 'amazon-windowed',
-        acos7d: p.acos7d,
-        roas7d: p.roas7d,
-        reportRunId: p.reportRunId,
-        reportedAt: p.reportedAt,
-      }
-    })
-    const res = await prisma.campaignMetric.createMany({ data: batch, skipDuplicates: true })
-    writtenMetrics = res.count
+    sourceMetrics = 0
+    let afterId: string | null = null
+    for (;;) {
+      const page = await readPerfPage(afterId, pageRows)
+      if (page.length === 0) break
+      const data = page.map((p) => {
+        srcCost += p.costMicros
+        const eur = costEurCents(p.costMicros, p.currencyCode, fx)
+        if (eur === null && p.currencyCode !== 'EUR') fxMissing++
+        return toCampaignMetricRow(p, eur, extToNew)
+      })
+      const res = await prisma.campaignMetric.createMany({ data, skipDuplicates: true })
+      writtenMetrics += res.count
+      sourceMetrics += page.length
+      if (page.length < pageRows) break
+      afterId = page[page.length - 1].id
+    }
 
     // Roll up real spend/sales onto the denormalized campaign columns from
     // the CAMPAIGN-grain metrics (legacy Campaign.spend/sales aggregates are
@@ -276,7 +353,7 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
       WHERE mc.id = agg."campaignId"
     `)
   } else {
-    writtenMetrics = perf.length
+    writtenMetrics = perfCount
   }
 
   let parity: BackfillReport['parity'] = null
@@ -286,10 +363,9 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
       prisma.campaignMetric.count({ where: { channel: 'AMAZON' } }),
       prisma.campaignMetric.aggregate({ where: { channel: 'AMAZON' }, _sum: { costMicros: true } }),
     ])
-    const srcCost = perf.reduce((a, p) => a + p.costMicros, 0n)
     const dstCost = dstAgg._sum.costMicros ?? 0n
     const campaignsOk = mc === campaigns.length
-    const metricsOk = cm === perf.length
+    const metricsOk = cm === sourceMetrics
     const costOk = srcCost === dstCost
     parity = { campaignsOk, metricsOk, costOk, ok: campaignsOk && metricsOk && costOk }
 
@@ -301,7 +377,7 @@ export async function backfillAmazonShadow(opts: { apply: boolean }): Promise<Ba
 
   return {
     apply,
-    source: { campaigns: campaigns.length, metrics: perf.length, fxPairs: fx.size },
+    source: { campaigns: campaigns.length, metrics: sourceMetrics, fxPairs: fx.size },
     written: { campaigns: writtenCampaigns, links: writtenLinks, metrics: writtenMetrics },
     skippedDupLinks,
     fxMissing,

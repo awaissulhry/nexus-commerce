@@ -17,6 +17,7 @@ import { amazonSpClient } from '../lib/amazon-sp-client.js'
 
 import type { SellingPartner } from 'amazon-sp-api'
 import { logger } from '../utils/logger.js'
+import { sendWithRateRetry } from './sp-api-rate-retry.js'
 import {
   startReportRun,
   completeReportRun,
@@ -181,7 +182,10 @@ async function doFetchSpApiReport<T = unknown>(
     dataStartTime: args.dataStartTime.toISOString(),
     dataEndTime: args.dataEndTime.toISOString(),
   })
-  const createRes: any = await (sp as any).callAPI({
+  // Every createReport of the account shares one gateway rate bucket (about one a minute). When the
+  // gateway answers "Not sent yet … Retry later." nothing reached Amazon, so the SAME request is sent
+  // again after the wait it names — it used to fail the whole pull (sp-api-rate-retry.ts).
+  const createRes: any = await sendWithRateRetry(() => (sp as any).callAPI({
     operation: 'createReport',
     endpoint: 'reports',
     body: {
@@ -191,6 +195,10 @@ async function doFetchSpApiReport<T = unknown>(
       dataEndTime: args.dataEndTime.toISOString(),
       ...(args.reportOptions ? { reportOptions: args.reportOptions } : {}),
     },
+  }), {
+    onRetry: ({ attempt, waitMs }) => logger.info('sp-api-reports: createReport not sent yet (gateway rate limit), sending again', {
+      reportType: args.reportType, marketplaceId: args.marketplaceId, attempt, waitMs,
+    }),
   })
   const reportId: string | undefined = createRes?.reportId
   if (!reportId) {

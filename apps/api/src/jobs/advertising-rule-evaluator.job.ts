@@ -45,6 +45,7 @@ import type { AdWriteEvidence } from '../services/advertising/ads-evidence.js'
 import { REPORT_LABEL_TO_PLACEMENT, PLACEMENT_TOP, PLACEMENT_REST, PLACEMENT_PRODUCT } from '../services/advertising/ads-placement-math.js'
 import { adSalesCents } from '../services/ads-core/ad-sales.js'
 import { KT6_SUPPRESSION_CENTS } from '../services/advertising/kt6-bid-action.js'
+import { KEYWORD_RANK_MAX_AGE_DAYS } from '../services/advertising/keyword-rank-feed.service.js'
 
 /**
  * B2 (2026-08-20) — each trigger's window now comes from `@nexus/shared/ads-rule-window`, which
@@ -1561,9 +1562,11 @@ async function targetPerfMap(targetIds: string[], windowDays: number) {
   return map
 }
 
-// ── KEYWORD_RANK_BID (SK4) — keyword bid adjustment driven by organic/paid rank. For each positive
+// ── KEYWORD_RANK_BID (SK4) — keyword bid adjustment driven by rank and search volume. For each positive
 // keyword target, attach the latest KeywordRank (matched by lowercased text + marketplace) so a rule
-// can e.g. raise the bid where organic rank is poor. Empty until rank data is ingested (SK3 backend).
+// can e.g. raise the bid on a high-volume keyword that converts. What fills KeywordRank, and why organic
+// and sponsored rank stay empty: services/advertising/keyword-rank-feed.service.ts (the weekly Brand
+// Analytics feed fills searchVolume only; a rank comes only from a hand import).
 /**
  * 🔴 KT-P3 (2026-08-22) — "not measurable" must OMIT THE KEY. `null` is not enough, and that is not
  * a style point: it is the difference between the rule refusing and the rule firing on everything.
@@ -1610,18 +1613,19 @@ const KEYWORD_RANK_SCAN_CAP = 8000
 /**
  * 4m (review 3.13) — a rank reading expires after 14 days.
  *
- * Ranks arrive only through `POST /advertising/keyword-ranks` (a manual or file import; no collector
- * runs on a clock), so there is no refresh interval in code to derive from. A weekly import is the
- * slowest cadence a rank rule is useful at; twice that lets one import be late without the rule going
- * blind, and nothing older drives a bid. Before this, a reading from months ago moved bids as if it
- * were today's.
+ * Readings arrive two ways: the weekly Brand Analytics feed (`keyword-rank-feed`, daily, one reading per
+ * keyword per Amazon week, dated at the week's end) and `POST /advertising/keyword-ranks` (a hand
+ * import). Weekly is the slowest cadence a rank rule is useful at; twice that lets one week be late
+ * without the rule going blind, and nothing older drives a bid. Before this, a reading from months ago
+ * moved bids as if it were today's. The value lives beside the feed (keyword-rank-feed.service.ts) so
+ * its census reads the same limit; it is re-exported here, where it is applied.
  *
  * A stale reading is ABSENT, exactly like one the source never measured (KT-P3 above: absent, never
  * null or 0, so every rank condition refuses), and `adTarget.rankNote` says why in plain words. The
  * same limit holds for the reading before it: a "rank change" against a reading older than the limit
  * is not a recent change, so `rankDelta` is absent then too.
  */
-export const KEYWORD_RANK_MAX_AGE_DAYS = 14
+export { KEYWORD_RANK_MAX_AGE_DAYS }
 
 export async function buildKeywordRankBidContexts() {
   try {
@@ -1652,11 +1656,29 @@ export async function buildKeywordRankBidContexts() {
       const e = perAsin.get(k)
       if (!e) perAsin.set(k, { r }); else if (!e.prior) e.prior = r
     }
+    /**
+     * Two sources write this table, and they measure different things: the Brand Analytics feed carries
+     * search volume only (every rank NULL, asin NULL), a hand import may carry a rank. So a reading that
+     * carries a rank represents the pair over one that does not, whatever their dates — or each weekly
+     * volume reading would hide an imported rank. Among equals the newest wins, as before.
+     */
+    const carriesRank = (r: typeof ranks[number]) => r.organicRank != null || r.sponsoredRank != null
     const latest = new Map<string, { r: typeof ranks[number]; prior?: typeof ranks[number] }>()
     for (const [k, e] of perAsin) {
       const pairKey = k.slice(0, k.lastIndexOf('\u001f'))
       const held = latest.get(pairKey)
-      if (!held || e.r.capturedAt > held.r.capturedAt) latest.set(pairKey, e)
+      const better = !held || (carriesRank(e.r) !== carriesRank(held.r) ? carriesRank(e.r) : e.r.capturedAt > held.r.capturedAt)
+      if (better) latest.set(pairKey, e)
+    }
+    /**
+     * Search volume is the keyword's in its market, not a product's or a source's: the newest reading that
+     * carries one, whichever row represents the pair's rank. Rows arrive newest-first.
+     */
+    const volumeOf = new Map<string, typeof ranks[number]>()
+    for (const r of ranks) {
+      if (r.searchVolume == null) continue
+      const pairKey = `${r.keyword.trim().toLowerCase()}\u001f${r.marketplace}`
+      if (!volumeOf.has(pairKey)) volumeOf.set(pairKey, r)
     }
     const targets = await prisma.adTarget.findMany({
       /**
@@ -1684,18 +1706,25 @@ export async function buildKeywordRankBidContexts() {
       .map((t) => {
         const kw = (t.expressionValue ?? '').trim().toLowerCase()
         const mkt = t.adGroup?.campaign?.marketplace ?? ''
-        const e = kw ? latest.get(`${kw}\u001f${mkt}`) : undefined
+        const pairKey = `${kw}\u001f${mkt}`
+        const e = kw ? latest.get(pairKey) : undefined
         if (!e) return null // no rank snapshot for this keyword → skip
         const cur = e.r, prior = e.prior
         // 4m — a reading older than KEYWORD_RANK_MAX_AGE_DAYS is not used (see the note there).
         const curFresh = cur.capturedAt.getTime() >= freshSince
         const priorFresh = prior != null && prior.capturedAt.getTime() >= freshSince
+        const vol = volumeOf.get(pairKey)
+        const volFresh = vol != null && vol.capturedAt.getTime() >= freshSince
         // +ve delta = rank improved (the number went down). ABSENT — not 0 — when either end is missing or stale.
         const rankDelta = curFresh && priorFresh && prior?.organicRank != null && cur.organicRank != null ? prior.organicRank - cur.organicRank : undefined
-        const rankNote = !curFresh
-          ? `Rank not used: the newest rank reading for this keyword is ${ageDays(cur.capturedAt)} days old, and readings older than ${KEYWORD_RANK_MAX_AGE_DAYS} days are ignored.`
-          : prior != null && !priorFresh
-            ? `Rank change not used: the reading before the newest is ${ageDays(prior.capturedAt)} days old, and readings older than ${KEYWORD_RANK_MAX_AGE_DAYS} days are ignored.`
+        const rankNote = carriesRank(cur)
+          ? !curFresh
+            ? `Rank not used: the newest rank reading for this keyword is ${ageDays(cur.capturedAt)} days old, and readings older than ${KEYWORD_RANK_MAX_AGE_DAYS} days are ignored.`
+            : prior != null && !priorFresh
+              ? `Rank change not used: the reading before the newest is ${ageDays(prior.capturedAt)} days old, and readings older than ${KEYWORD_RANK_MAX_AGE_DAYS} days are ignored.`
+              : undefined
+          : vol != null && !volFresh
+            ? `Search volume not used: the newest reading for this keyword is ${ageDays(vol.capturedAt)} days old, and readings older than ${KEYWORD_RANK_MAX_AGE_DAYS} days are ignored.`
             : undefined
         return {
           trigger: 'KEYWORD_RANK_BID' as const,
@@ -1704,7 +1733,8 @@ export async function buildKeywordRankBidContexts() {
           adGroup: t.adGroup?.id ? { id: t.adGroup.id } : undefined,
           adTarget: {
             id: t.id,
-            ...(curFresh ? measured({ organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, searchVolume: cur.searchVolume, rankDelta }) : {}),
+            ...(curFresh ? measured({ organicRank: cur.organicRank, sponsoredRank: cur.sponsoredRank, rankDelta }) : {}),
+            ...(volFresh ? measured({ searchVolume: vol.searchVolume }) : {}),
             ...(rankNote ? { rankNote } : {}),
             ...measured(perfByTarget.get(t.id) ?? EMPTY_TARGET_PERF),
           },

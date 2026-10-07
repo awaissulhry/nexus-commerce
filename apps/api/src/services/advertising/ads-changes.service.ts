@@ -411,9 +411,15 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       // yields an empty patch. Cheap here because this query is bounded by `take`; the same
       // column over an unbounded week cost 1.9s in the weekly digest, which is why that one
       // reads it for a single action type instead.
-      select: { id: true, createdAt: true, actionType: true, entityType: true, entityId: true, userId: true, amazonResponseStatus: true, rolledBackAt: true, payloadBefore: true, payloadAfter: true, evidence: true },
+      select: { id: true, createdAt: true, actionType: true, entityType: true, entityId: true, userId: true, amazonResponseStatus: true, rolledBackAt: true, payloadBefore: true, payloadAfter: true, evidence: true, outboundQueueId: true },
     }),
   ])
+
+  // Honest writes — why a write that did not land did not land. A queued write's op row carries no error of its own (its
+  // payloadAfter is the values), so a FAILED op read "FAILED" with no reason: the reason is on its own queue row.
+  const queueErrors = await unsentWriteErrors(ops)
+  const opError = (o: (typeof ops)[number]): string | null =>
+    ((o.payloadAfter ?? {}) as { error?: string }).error ?? (o.outboundQueueId ? queueErrors.get(o.outboundQueueId) ?? null : null)
 
   const now = Date.now()
   const fieldRows: ChangeRow[] = hist.map((h) => {
@@ -450,7 +456,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       // writer not yet emitting it, which is most of them; absent is normal.
       evidence: (o.evidence ?? null) as Record<string, unknown> | null,
       delivery: o.amazonResponseStatus
-        ? { state: opDeliveryState(o.amazonResponseStatus), attempts: 1, lastError: after.error ?? null }
+        ? { state: opDeliveryState(o.amazonResponseStatus), attempts: 1, lastError: opError(o) }
         : null,
       /**
        * ACR.4.3 — these were hard-coded `false` while a working undo endpoint sat behind them.
@@ -520,7 +526,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       if (!cands?.length) continue
       let best = cands[0], gap = Math.abs(cands[0].createdAt.getTime() - r.at.getTime())
       for (const c of cands.slice(1)) { const g = Math.abs(c.createdAt.getTime() - r.at.getTime()); if (g < gap) { gap = g; best = c } }
-      const err = (best.payloadAfter as { error?: string } | null)?.error ?? null
+      const err = opError(best)
       // Delivery keeps the looser nearest-in-time match it has always had: mis-attributing a
       // delivery chip is cosmetic, and tightening it here would regress rows that resolve today.
       // W4-12 — only a settled op says it here. A write still queued (PENDING), refused at the gate (SKIPPED) or replaced
@@ -658,6 +664,32 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
   return { items, count: items.length, from, to, members: groupMembers }
 }
 
+/** The op states of a write that did not land: it failed, was refused or cancelled, or was replaced before it was sent. */
+const UNSENT_OP_STATES: ReadonlySet<string> = new Set(['FAILED', 'SKIPPED', 'CANCELLED', 'SUPERSEDED'])
+
+/**
+ * Honest writes (2026-10-07) — the reason each write that did not land did not land, by its queue row, for the op rows
+ * that carry none of their own: its typed mutation's `lastError` (what the worker settled it with: Amazon's answer,
+ * the gate's reason), else the queue row's `errorMessage`. Seen live: a bid Amazon rejected (the keyword no longer
+ * existed) read FAILED with no reason. Two indexed reads, only for such rows; best-effort (a failed read leaves the
+ * reason empty, as before).
+ */
+async function unsentWriteErrors(ops: Array<{ amazonResponseStatus: string | null; outboundQueueId: string | null; payloadAfter: unknown }>): Promise<Map<string, string>> {
+  const ids = [...new Set(ops.filter((o) => o.outboundQueueId && UNSENT_OP_STATES.has(o.amazonResponseStatus ?? '')
+    && !((o.payloadAfter ?? {}) as { error?: string }).error).map((o) => o.outboundQueueId!))]
+  const out = new Map<string, string>()
+  if (!ids.length) return out
+  try {
+    const [muts, rows] = await Promise.all([
+      prisma.adMutation.findMany({ where: { outboundQueueId: { in: ids }, lastError: { not: null } }, select: { outboundQueueId: true, lastError: true } }),
+      prisma.outboundSyncQueue.findMany({ where: { id: { in: ids }, errorMessage: { not: null } }, select: { id: true, errorMessage: true } }),
+    ])
+    for (const r of rows) if (r.errorMessage) out.set(r.id, r.errorMessage)
+    for (const m of muts) if (m.outboundQueueId && m.lastError) out.set(m.outboundQueueId, m.lastError)
+  } catch { /* best-effort — a reason must never blank the feed */ }
+  return out
+}
+
 /**
  * W4-12 — an action log's amazonResponseStatus as a delivery state (the AdMutation words): SUCCESS is APPLIED; a write
  * Nexus did not send (SKIPPED: the gate refused it, or no connection) reads CANCELLED, as a cancelled one; anything else
@@ -671,3 +703,61 @@ export function opDeliveryState(status: string | null): string {
 
 /** The delivery states of a write that reached Amazon or may still: only these can offer an undo. */
 const LANDED_OR_IN_FLIGHT: ReadonlySet<string> = new Set(['APPLIED', 'PENDING', 'IN_FLIGHT'])
+
+/** A bid Nexus shows that has not reached Amazon (bidsNotAtAmazon). */
+export interface BidNotAtAmazon {
+  /** The typed mutation's state: PENDING (queued, in its cancel window or waiting to retry), IN_FLIGHT (being sent), FAILED. */
+  state: string
+  /** The bid Amazon still has: the value the write replaced. */
+  amazonBidCents: number | null
+  /** When the write was queued. */
+  since: Date
+  /** Why it did not land, for a failed one (Amazon's answer). */
+  deliveryError: string | null
+}
+
+/** How far back bidsNotAtAmazon looks: a queued write is sent within minutes, and an unsent one dead-letters after a day. */
+const NOT_AT_AMAZON_WINDOW_MS = 7 * 24 * 3600 * 1000
+
+/**
+ * Honest writes (2026-10-07) — the targets whose bid in Nexus is one Amazon does not have: the newest bid write to the
+ * target is still queued or being sent, or failed and left the value in Nexus (a transient failure out of retries keeps
+ * it for the reconcile sweep), and Nexus still holds exactly the value that write meant to send. A write the gate
+ * refused, cancelled or rejected for good put the old bid back, so it is not here; a later write Amazon took clears it.
+ * For ad-targets, whose `bidCents` is Nexus's own copy. Two indexed reads per page.
+ */
+export async function bidsNotAtAmazon(targets: Array<{ id: string; bidCents: number }>, now: Date = new Date()): Promise<Map<string, BidNotAtAmazon>> {
+  const out = new Map<string, BidNotAtAmazon>()
+  if (!targets.length) return out
+  const bidOf = new Map(targets.map((t) => [t.id, t.bidCents]))
+  const open = await prisma.adMutation.findMany({
+    where: {
+      entityType: 'AD_TARGET', entityId: { in: [...bidOf.keys()] }, field: 'bid', state: { in: ['PENDING', 'IN_FLIGHT', 'FAILED'] },
+      createdAt: { gte: new Date(now.getTime() - NOT_AT_AMAZON_WINDOW_MS) },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { entityId: true, intendedValue: true, previousValue: true, state: true, lastError: true, createdAt: true },
+  })
+  const newest = new Map<string, (typeof open)[number]>()
+  for (const m of open) if (!newest.has(m.entityId)) newest.set(m.entityId, m)
+  for (const [id, m] of newest) if (m.intendedValue == null || Number(m.intendedValue) !== bidOf.get(id)) newest.delete(id)
+  if (!newest.size) return out
+  const landed = await prisma.adMutation.findMany({
+    where: {
+      entityType: 'AD_TARGET', entityId: { in: [...newest.keys()] }, field: 'bid', state: 'APPLIED',
+      createdAt: { gt: new Date(Math.min(...[...newest.values()].map((m) => m.createdAt.getTime()))) },
+    },
+    select: { entityId: true, createdAt: true },
+  })
+  for (const [id, m] of newest) {
+    if (landed.some((l) => l.entityId === id && l.createdAt > m.createdAt)) continue
+    const before = m.previousValue == null ? NaN : Number(m.previousValue)
+    out.set(id, {
+      state: m.state,
+      amazonBidCents: Number.isFinite(before) ? before : null,
+      since: m.createdAt,
+      deliveryError: m.state === 'FAILED' ? m.lastError ?? null : null,
+    })
+  }
+  return out
+}

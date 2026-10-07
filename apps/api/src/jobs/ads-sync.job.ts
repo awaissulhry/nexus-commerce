@@ -27,6 +27,7 @@
  */
 
 import cron from '../lib/cron/clustered.js'
+import { startKeywordRankFeedCron, stopKeywordRankFeedCron } from './keyword-rank-feed.job.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import {
@@ -792,9 +793,12 @@ export function startAllAdvertisingCrons(): void {
   // harvesting is builder rules through the advertising-rule evaluator. Do not re-add a cron.
   // ACR.3 — coverage engine (observe-first; enabled sets only).
   startCoverageEngineCron()
+  // The Keyword Tracker's feed: KeywordRank search volume from Brand Analytics weeks already ingested (no Amazon call).
+  startKeywordRankFeedCron()
 }
 
 export function stopAllAdvertisingCrons(): void {
+  stopKeywordRankFeedCron()
   if (coverageEngineTask) {
     coverageEngineTask.stop()
     coverageEngineTask = null
