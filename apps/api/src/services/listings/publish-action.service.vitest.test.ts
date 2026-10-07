@@ -22,7 +22,7 @@ import prisma from '../../db.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 import { ALREADY_DELETED, AMAZON_NO_END, AMAZON_FBA_DELETE_WARNING, deletedShort, deletedStatusReason, EBAY_NEW_INACTIVE_OOS_OFF, ETSY_DRAFT_NO_LIVE, ETSY_DRAFT_NO_PAUSE, ETSY_DRAFT_STATE, ETSY_NEW_ACTIVE_NEEDS_PHOTO, ETSY_NEW_ROW_SENTENCE, ETSY_NEW_VARIATION_ACTIVE, ETSY_NEW_VARIATION_INACTIVE, ETSY_PUBLISHING_OFF, NEW_LISTING_ALIAS,
   RELIST_SENTENCE, SHOPIFY_LINKED_REFUSED, SHOPIFY_NEW_VARIATION } from '@nexus/shared/listing-actions'
-import { DELETE_EBAY_VARIATION, FULL_ETSY_VARIATION, NEW_LISTING_SENT_WHOLE, NOTHING_TO_DELETE_YET, newRowId, SHARED_NO_LISTING } from '@nexus/shared/publish-actions'
+import { DELETE_EBAY_VARIATION, FULL_ETSY_VARIATION, isNewRowId, NEW_LISTING_SENT_WHOLE, NOTHING_TO_DELETE_YET, newRowId, SHARED_NO_LISTING } from '@nexus/shared/publish-actions'
 import { clearWaitingValues, parsePublishActionBody, readPublishActions, SHARED_DELETED, writePublishActions, type PublishActionActor } from './publish-action.service.js'
 
 const scoped = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
@@ -605,5 +605,88 @@ describe('delete and relist: Status is the one control', () => {
     const result = await writePublishActions(f.children.M, { listingIds: [s, mAmazon, mEbay], allCoordinates: true, change: { column: 'status', target: 'inactive' } }, publisher())
     expect(result).toMatchObject({ refused: [], leftOut: { count: 1 } })
     expect(result.applied.sort()).toEqual([s, mAmazon, mEbay].sort())
+  }))
+})
+
+/**
+ * The Matrix's Status columns (Owner 2026-10-07): one read of every destination, with each destination's rows exactly as
+ * that market's own channel sheet reads them (`newRows` + `everyDestination`) — so the two pages can never disagree.
+ */
+describe('newRows every: every destination, read as its own channel sheet reads it', () => {
+  const byListing = <T extends { listingId: string }>(cells: readonly T[]) => [...cells].sort((a, b) => a.listingId.localeCompare(b.listingId))
+  const every = (productId: string) => readPublishActions(productId, {}, { newRows: true, everyDestination: true })
+
+  it('🔴 each destination equals its named read, new rows included; an alias starts none; the plain read is unchanged', () => scoped(async () => {
+    const f = await family('EV-READ', ['S', 'M', 'L'])
+    await listing(f.root, 'AMAZON', 'IT', ids.amazon)
+    const s = await listing(f.children.S, 'AMAZON', 'IT', ids.amazon)
+    await listing(f.children.M, 'AMAZON', 'IT', ids.amazon, { offerClosedAt: new Date(), offerCloseReason: 'sheet-pause' })
+    // A value waiting for Publish (who and when) rides along.
+    await writePublishActions(f.root, { listingIds: [s], change: { column: 'status', target: 'inactive' } }, publisher())
+    await listing(f.children.S, 'AMAZON', 'DE', ids.amazon, { listingStatus: 'DRAFT', isPublished: false, externalListingId: null })
+    await listing(f.root, 'EBAY', 'IT', ids.ebay, { externalListingId: '5551' })
+    await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '5551' })
+    const alias = (await prisma.productListingAlias.create({ data: { productId: f.root, channel: 'EBAY', marketplace: 'IT', channelConnectionId: ids.ebay, label: 'Second', position: 1 } as never })).id
+    await listing(f.children.S, 'EBAY', 'IT', ids.ebay, { externalListingId: '5552', aliasKey: alias })
+    // A second Amazon account on the same market, holding M only: its own destination.
+    const other = (await prisma.channelConnection.create({ data: { channelType: 'AMAZON', accountLabel: 'ev-amazon-2', externalAccountId: 'ev-amazon-2', isActive: true, isPrimary: false } as never })).id
+    await listing(f.children.M, 'AMAZON', 'IT', other)
+
+    const all = await every(f.children.S)
+    let total = 0
+    for (const [channel, marketplace, accountId] of [['AMAZON', 'IT', ids.amazon], ['AMAZON', 'IT', other], ['AMAZON', 'DE', ids.amazon], ['EBAY', 'IT', ids.ebay]]) {
+      const named = await readPublishActions(f.children.S, { channel, marketplace, accountId }, { newRows: true })
+      const mine = all.filter(c => c.channel === channel && c.marketplace === marketplace && c.accountId === accountId)
+      expect(byListing(mine), `${channel} ${marketplace} ${accountId === other ? 'second account' : 'main account'}`).toEqual(byListing(named))
+      total += named.length
+    }
+    expect(all).toHaveLength(total)
+    // The new rows: every member with no listing on a destination's main listing — never on the alias. (On the second
+    // account the main product reads its variation M, which is listed there: not a new row — as on that market's sheet.)
+    const where = (c: { channel: string; marketplace: string; accountId: string }) => `${c.channel} ${c.marketplace}${c.accountId === other ? ' (2nd)' : ''}`
+    expect(all.filter(c => c.create?.noRecord).map(c => `${where(c)} ${c.sku}`).sort()).toEqual([
+      'AMAZON DE EV-READ', 'AMAZON DE EV-READ-L', 'AMAZON DE EV-READ-M',
+      'AMAZON IT (2nd) EV-READ-L', 'AMAZON IT (2nd) EV-READ-S',
+      'AMAZON IT EV-READ-L',
+      'EBAY IT EV-READ-L', 'EBAY IT EV-READ-M',
+    ])
+    expect(all.filter(c => c.aliasKey === alias).map(c => c.sku)).toEqual(['EV-READ-S'])
+    expect(all.find(c => c.listingId === s)).toMatchObject({ state: 'active', status: { target: 'inactive', setByName: 'Anna' } })
+    // The plain read (the Shared scope) is unchanged: the same rows, and no stand-in (`new:`) ones.
+    const plain = await readPublishActions(f.children.S)
+    expect(plain.some(c => isNewRowId(c.listingId))).toBe(false)
+    expect(byListing(plain)).toEqual(byListing(all.filter(c => !isNewRowId(c.listingId))))
+  }))
+
+  it('🔴 listings with no account (a deleted connection): never new rows there — no sheet can name that destination', () => scoped(async () => {
+    const f = await family('EV-NULL', ['S', 'M'])
+    await listing(f.root, 'AMAZON', 'IT', ids.amazon)
+    await listing(f.children.M, 'AMAZON', 'IT', ids.amazon)
+    const orphan = await listing(f.children.S, 'AMAZON', 'IT', ids.amazon)
+    await prisma.channelListing.update({ where: { id: orphan }, data: { channelConnectionId: null } })
+    const all = await every(f.root)
+    const accountless = all.filter(c => !c.accountId)
+    expect(accountless.map(c => c.listingId)).toEqual([orphan])
+    expect(all.filter(c => c.listingId.startsWith('new:')).every(c => isNewRowId(c.listingId) && !!c.accountId)).toBe(true)
+    // The account's own destination still reads as its sheet reads it (S is a new row there).
+    const named = await readPublishActions(f.root, { channel: 'AMAZON', marketplace: 'IT', accountId: ids.amazon }, { newRows: true })
+    expect(byListing(all.filter(c => c.accountId === ids.amazon))).toEqual(byListing(named))
+    expect(named.find(c => c.productId === f.children.S)).toMatchObject({ listingId: newRowId({ productId: f.children.S, channel: 'AMAZON', marketplace: 'IT', accountId: ids.amazon, aliasKey: '' }) })
+  }))
+
+  it('a new row of that read is written as its market\'s own sheet writes it: the choice starts the drafts there', () => scoped(async () => {
+    const f = await family('EV-WRITE', ['S', 'M'])
+    await listing(f.root, 'AMAZON', 'IT', ids.amazon)
+    await listing(f.children.S, 'AMAZON', 'IT', ids.amazon)
+    const cell = (await every(f.root)).find(c => c.sku === 'EV-WRITE-M')!
+    expect(cell.listingId).toBe(newRowId({ productId: f.children.M, channel: 'AMAZON', marketplace: 'IT', accountId: ids.amazon, aliasKey: '' }))
+    const result = await writePublishActions(f.root, { listingIds: [cell.listingId], expected: { [cell.listingId]: null }, change: { column: 'status', target: 'inactive' } }, publisher())
+    expect(result).toMatchObject({ refused: [], applied: [cell.listingId] })
+    expect(result.started!.rows).toHaveLength(1)
+    const after = await every(f.root)
+    expect(after.filter(c => c.sku === 'EV-WRITE-M').map(c => c.listingId)).toEqual([result.started!.rows[0].listingId])
+    // …and it reads the same on the market's own sheet.
+    const named = await readPublishActions(f.root, { channel: 'AMAZON', marketplace: 'IT', accountId: ids.amazon }, { newRows: true })
+    expect(byListing(after)).toEqual(byListing(named))
   }))
 })

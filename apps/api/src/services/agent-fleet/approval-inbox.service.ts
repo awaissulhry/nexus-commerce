@@ -805,12 +805,20 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'apply-ads-playbook': ['op', 'basis', 'reach', 'bindings', 'starts', 'stops'],
   // B-1 — every campaign a Replicate copy makes (from the source as it is now), the market's spend ceiling, where it lands.
   'replicate-ad-structure': ['basis', 'ceiling', 'reach'],
+  // W4-1 — the op, the plan as it stood and after (its week, members, values, on/off, whose it is), the targets' values,
+  // where it lands and the markets whose write gate refuses (what a give-back lifts moves with the engine's hours: execute
+  // decides again whether it raises).
+  'set-hourly-bid-plan': ['op', 'basis', 'reach', 'gateRefused'],
   // AA-W2-12 — every ad named with its status (an enable: the pause it lifts, the budget and the bids that serve again),
-  // and where it lands.
+  // and where it lands. W4-2 — an enable: who paused each ad and when, frozen (a status change recorded since moves it).
   'pause-ads': ['basis', 'reach'],
-  'enable-ads': ['basis', 'reach'],
+  'enable-ads': ['basis', 'reach', 'whoPaused'],
   // AA-W2-13 — every ad named with its status, and where it lands.
   'archive-ads': ['basis', 'reach'],
+  // W4-3 — every campaign named with each setting it starts from and gets (and the caps of the portfolios it leaves and
+  // joins), and where it lands; a portfolio with its name, cap and state, what it sets, and where it lands.
+  'set-campaign-settings': ['basis', 'reach'],
+  'set-portfolio': ['basis', 'reach'],
   // W3-3 — every ad group named with its stock verdict, every bid it lowers or gives back, and where it lands.
   'lower-ad-bids-for-stock': ['basis', 'reach'],
   'restore-ad-bids-after-stock': ['basis', 'reach'],

@@ -30,7 +30,19 @@ export interface PublishActionsDestination {
   marketplace?: string | null
   accountId?: string | null
   aliasKey?: string | null
+  /**
+   * The Matrix's Status columns (Owner 2026-10-07): with no filter, every destination is read as its own channel sheet
+   * reads it — each main listing's members with no listing there are new rows (`newRows=every`). Its writes are each
+   * market's own, never the Shared scope's.
+   */
+  newRows?: 'every' | null
 }
+
+/**
+ * Whether this read's writes are the Shared scope's (`allCoordinates`: a product's every market, never starting a
+ * listing): no channel named — except the Matrix's every-market read, whose cells are each market's own.
+ */
+export const isSharedScopeDestination = (destination: PublishActionsDestination): boolean => !destination.channel && destination.newRows !== 'every'
 
 export interface PublishActionsRead {
   rows: PublishActionCell[]
@@ -51,6 +63,7 @@ export function publishActionsReadUrl(productId: string, destination: PublishAct
   if (destination.accountId) query.set('accountId', destination.accountId)
   // '' is a real filter (the primary listing); only null / undefined mean "every listing".
   if (destination.aliasKey != null) query.set('aliasKey', destination.aliasKey)
+  if (destination.newRows === 'every') query.set('newRows', 'every')
   const qs = query.toString()
   return qs ? `${base(productId)}?${qs}` : base(productId)
 }
@@ -104,7 +117,8 @@ export type PublishActionsCacheEvent =
 
 /** The cache key of one read: the product and the destination's filter, as the request names them. */
 export function publishActionsReadKey(productId: string, destination: PublishActionsDestination): string {
-  return JSON.stringify([productId, destination.channel || null, destination.marketplace || null, destination.accountId || null, destination.aliasKey ?? null])
+  return JSON.stringify([productId, destination.channel || null, destination.marketplace || null, destination.accountId || null, destination.aliasKey ?? null,
+    ...(destination.newRows === 'every' ? ['every'] : [])])
 }
 
 interface Flight {

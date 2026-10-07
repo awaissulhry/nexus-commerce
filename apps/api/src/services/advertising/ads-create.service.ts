@@ -2068,6 +2068,13 @@ export interface RankScheduleGroupInput {
   windows: unknown[]; defaultTargetKey?: string | null
   targetOverrides?: Record<string, unknown> // per-campaign map: { [campaignId]: { targetKey: {...} } }
   enabled?: boolean; campaignIds: string[]; portfolioId?: string | null; userId?: string
+  /**
+   * W4-1 — a Claude request (set-hourly-bid-plan): its approval names every write of the give-back, and its save always
+   * writes a version row (changedBy = the approver), even when only the members or their target values moved. Absent
+   * for every other caller: the screen's saves behave as before.
+   */
+  changeSetId?: string | null
+  alwaysVersion?: boolean
 }
 // A portfolio-scoped group covers the whole portfolio: its current, non-archived campaigns. Resolved
 // by Campaign.portfolioId (the Amazon external id the /portfolios list also keys on).
@@ -2156,7 +2163,7 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
   const removed = await readScheduleMembers({ groupId: group.id, campaignIdNotIn: campaignIds })
   await prisma.adSchedule.deleteMany({ where: { groupId: group.id, campaignId: { notIn: campaignIds.length ? campaignIds : ['__none__'] } } })
   const released = [...removed, ...(enabled ? [] : await readScheduleMembers({ groupId: group.id }))]
-  const release = released.length ? await releaseScheduleMembers(released, enabled ? 'campaign removed from its rank schedule' : 'its rank schedule was saved switched off') : undefined
+  const release = released.length ? await releaseScheduleMembers(released, enabled ? 'campaign removed from its rank schedule' : 'its rank schedule was saved switched off', { changeSetId: input.changeSetId ?? null }) : undefined
   /**
    * HX.8 — snapshot the plan as it now stands.
    *
@@ -2171,7 +2178,8 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
    */
   try {
     const last = await prisma.rankScheduleVersion.findFirst({ where: { groupId: group.id }, orderBy: { createdAt: 'desc' }, select: { name: true, windows: true, defaultTargetKey: true, campaignCount: true, enabled: true } })
-    const changed = !last
+    const changed = input.alwaysVersion === true
+      || !last
       || last.name !== name
       || (last.defaultTargetKey ?? null) !== (input.defaultTargetKey ?? null)
       || last.campaignCount !== campaignIds.length
@@ -2189,11 +2197,12 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
 }
 
 // 2a (review 3.2) — deleting a group gives back what its schedules floored on every member, after the rows are gone.
-export async function deleteRankScheduleGroup(id: string): Promise<{ ok: boolean; removedSchedules: number; release: ReleaseReport }> {
+// W4-1 — `changeSetId`: a Claude request's delete names its approval on every write of the give-back.
+export async function deleteRankScheduleGroup(id: string, opts: { changeSetId?: string | null } = {}): Promise<{ ok: boolean; removedSchedules: number; release: ReleaseReport }> {
   const members = await readScheduleMembers({ groupId: id })
   const del = await prisma.adSchedule.deleteMany({ where: { groupId: id } })
   await prisma.rankScheduleGroup.delete({ where: { id } }).catch(() => {})
-  const release = await releaseScheduleMembers(members, 'its rank schedule was deleted')
+  const release = await releaseScheduleMembers(members, 'its rank schedule was deleted', { changeSetId: opts.changeSetId ?? null })
   logger.info('[Phase3] deleteRankScheduleGroup', { id, removedSchedules: del.count, restored: release.restored, deferred: release.deferred })
   return { ok: true, removedSchedules: del.count, release }
 }

@@ -64,6 +64,7 @@ import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 import { recommendationIdFor, settleSources, sourceArg, sourceOf, sourcePreview, sourceRefusal, sourcesRecord, unsettleChange, withSource, type AdChangeSource } from './ads-change-source.js'
 import { afterUndone } from '../change-record.service.js'
+import { pausesNoClaudeMade } from './ads-status.tools.js'
 
 /** The flat horizon a change set reverses within (rollbackByChangeSetId). */
 const SET_WINDOW_MS = 24 * 3600 * 1000
@@ -322,6 +323,24 @@ async function finish(source: Record<string, unknown>, rows: UndoRow[], negative
   const { items, notJudged } = await undoItems(rows, negatives)
   const playbook = await playbookRaiseRefusal(items)
   if (playbook) return { ok: false, error: playbook }
+  // W4-2 — never switches back on a pause no Claude request made: that is enable-ads with includePeoplesPauses (who paused
+  // it shown, the approver's code, never by rule) — one rule for both doors. A Claude request's own pause undoes as before.
+  const statusOf = (payload: unknown) => (payload as { status?: unknown } | null)?.status
+  const enables = rows.filter((r) => statusOf(r.restores) === 'ENABLED' && statusOf(r.wrote) === 'PAUSED')
+  const theirs = enables.length ? await pausesNoClaudeMade(enables) : []
+  if (theirs.length) {
+    const shown = theirs.slice(0, 3).join('; ') + (theirs.length > 3 ? `; and ${theirs.length - 3} more` : '')
+    return {
+      ok: false,
+      error: `Not undone: it would switch back on what no Claude request paused — ${shown}. Such a pause is lifted only with enable-ads and `
+        + 'includePeoplesPauses: true: the preview says who paused it, and a person approves it with their authenticator code, never by rule.',
+    }
+  }
+  // W4-3 — never a back door around set-campaign-settings' code (a setting put back that adds spend), nor around
+  // set-portfolio (a portfolio change is put back through undo-change of its request).
+  const { settingsUndoRefusal } = await import('./ads-campaign-settings.tools.js')
+  const settings = await settingsUndoRefusal(rows)
+  if (settings) return { ok: false, error: settings }
   const rule = await ruleFactsFor({ tool: 'undo-ad-change', limits: UNDO_LIMITS, items, writes, approvalId: ctx?.approvalId })
   const parts = [
     rows.length ? `restores ${total} recorded write${total === 1 ? '' : 's'} to the values before them` : '',
@@ -408,7 +427,10 @@ const undoAdChange: AgentTool = {
     + `retired. Nothing changes until it is approved. ${BY_RULE_WORDS}: each value it puts back no larger a move than its `
     + 'limits allow (a put-back that raises waits for a person by default), and never a status, an archive or a lifted '
     + 'negative keyword. The preview lists every write it reverses, where it lands (live or sandbox) and the ads '
-    + 'strategy\'s limits that apply; refused, and not queued, when Amazon\'s write gate would refuse it. Its own writes '
+    + 'strategy\'s limits that apply; refused, and not queued, when Amazon\'s write gate would refuse it, when it would '
+    + 'switch back on a pause no Claude request made (enable-ads with includePeoplesPauses does that, with the approver\'s '
+    + 'authenticator code), when a campaign setting it puts back would add spend (set-campaign-settings does that, with '
+    + 'the approver\'s authenticator code), or when it holds a portfolio change (undo-change of that request). Its own writes '
     + 'are a change set of their own: undo-change of it puts back what it reversed (retired negatives are not created again).',
   async handler(args, ctx) {
     return undoPreview(args, ctx)

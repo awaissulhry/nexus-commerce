@@ -81,6 +81,13 @@ export const CLAUDE_ACTION_TOOLS = {
   // Owner decides per market, category or product whether a phase move may run alone. Listed after `create`: the tool's
   // own kind stays create (claude.ts reads the first kind a tool is listed under).
   phase: ['apply-ads-playbook'],
+  // W4-3 — a campaign's settings (its name, portfolio, end date, bidding strategy), and a portfolio made, renamed, capped
+  // or archived (set-portfolio op archive is the archive kind too: OP_ACTIONS, claude.ts).
+  settings: ['set-campaign-settings'],
+  portfolio: ['set-portfolio'],
+  // W4-1 — the hourly bid plans of the Hourly Bids page (create, paint, members, rename, switch, delete, per-campaign
+  // values): their own kind, so the Owner decides per market, category or product whether a plan change may run alone.
+  hourly: ['set-hourly-bid-plan'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]

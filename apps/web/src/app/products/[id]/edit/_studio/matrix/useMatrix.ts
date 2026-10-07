@@ -75,6 +75,8 @@ export interface MatrixState {
   /** What the probe saw — `The Matrix service answered HTTP 404` — for the ledger and the footer. */
   probeNote: string | null
   reload: () => void
+  /** Read again QUIETLY (the live re-read): the grid keeps its read; it waits for an open editor or a write in flight. */
+  refresh: () => void
   /** The one door. Per-cell outcomes are painted through the tracker; the read is replaced. */
   write: (cells: readonly MatrixWriteCell[]) => Promise<MatrixWriteOutcome[]>
   previewVerbRun: (req: MatrixVerbRequest) => Promise<VerbPreview>
@@ -448,6 +450,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     error: probe?.kind === 'error' ? probe.message : null,
     probeNote: probe?.kind === 'preview' ? probe.reason : null,
     reload,
+    refresh: live.request,
     write,
     previewVerbRun,
     applyVerbRun,

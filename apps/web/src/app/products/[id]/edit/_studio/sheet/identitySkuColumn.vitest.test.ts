@@ -157,9 +157,14 @@ describe('the tint, the marks and the hover', () => {
 describe('the Status / Action labels name the listing\'s own SKU in a channel scope only (source read)', () => {
   const read = (file: string) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
   it('a channel scope stages and announces each listing by `listingSkuLabel` (the SKU it holds, else the SKU Publish sends)', () => {
+    // The channel sheet names each place by `listingSkuLabel`; the shared editing (also the Matrix's, 2026-10-07) stages and
+    // announces each cell by the name its page gave it.
     const channel = read('./channel/useChannelSheetAdapter.tsx')
-    expect(channel).toContain('publishFence.stage({ column, listingId: cell?.listingId ?? null, sku: listingSkuLabel(row), input });')
-    expect(channel).toMatch(/operationToast\(outcomes, refused, \(listingId\) => \{[^\n]*listingSkuLabel\(row\)/)
+    expect(channel).toContain('rowId: row.rowId, colId: sheetPublishColumnOf(column), column, cell: publishCellOf(row), sku: listingSkuLabel(row),')
+    expect(channel).toMatch(/label: \(listingId\) => \{[^\n]*listingSkuLabel\(row\)/)
+    const editing = read('./usePublishCellEditing.ts')
+    expect(editing).toContain('fence.stage({ column: place.column, listingId: place.cell?.listingId ?? null, sku: place.sku, input })')
+    expect(editing).toContain('operationToast(outcomes, refused, at.label)')
   })
   it('the Shared scope keeps naming listings by the product SKU and its market', () => {
     const shared = read('./master/useMasterSheetAdapter.tsx')
