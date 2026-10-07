@@ -101,7 +101,8 @@ describe('MCP.3 — every tool describes its own arguments', () => {
     expect(described('create-negative-keyword')).toContain('keywordText')
     expect(described('graduate-keyword')).toContain('sourceExternalCampaignId')
     // A4 — and why, which the approver reads and the ads audit keeps. W3-1 — and the recommendation it carries out.
-    expect(described('set-target-bid')).toEqual(['targetId', 'proposedBidCents', 'why', 'source'])
+    // W4-4 — and what auto-bid does with the bid afterwards.
+    expect(described('set-target-bid')).toEqual(['targetId', 'proposedBidCents', 'why', 'source', 'afterwards'])
   })
 
   it('A2 / A13 — the ad reads describe their filters and paging (overview and campaigns also a channel), and none takes a required argument', () => {

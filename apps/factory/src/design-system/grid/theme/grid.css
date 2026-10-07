@@ -573,7 +573,8 @@
 /* locked — the cell (a whole read-only column) and the value (a lock glyph beside it) */
 .nds-ag-wrap .ag-cell.nds-cell-is-locked { color: var(--nds-grid-locked-fg); }
 .nds-cell-locked { color: var(--nds-grid-locked-fg); display: inline-flex; align-items: center; gap: 6px; }
-.nds-cell-lock-glyph { font-size: 10px; }
+/* The outline lock (`LockGlyph`): the held Status cell's icon and ink (`.nds-selling-lock`), so the app has one lock. */
+.nds-cell-lock-glyph { flex: none; color: var(--nds-grid-muted-fg); }
 
 /* the delta chip on a pending edit */
 .nds-cell-delta {

@@ -9,7 +9,8 @@
  *                    campaign; a new campaign → its products in its market; a suggestion → what it applies to; an ad
  *                    undo → every entity it puts back; an ads automation turned up or tuned (AA-W2-11) → what it acts
  *                    on, else its market (automation-scope.ts); a pause, an enable or an archive (AA-W2-12/13) → each
- *                    campaign, ad group and target it names (a product ad → its ad group). An ad group or a campaign
+ *                    campaign, ad group and target it names (a product ad → its ad group); an hourly bid plan (W4-1) →
+ *                    every campaign it holds before and after the change. An ad group or a campaign
  *                    resolves through its products (the safer level across them, resolve.ts), a product through product
  *                    → parent → primary category → market.
  *   fail closed      a change that reaches a whole market (a selection by market), or that Nexus cannot place more
@@ -61,6 +62,8 @@ export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeA
   // PB-6c — a hero creates one campaign (a create). PB-10 — a sync builds slots and adds keywords and product ads: the create kind; its negatives alone are a kind of their
   // own (op sync-negatives). PB-9 — a phase switch is its own kind.
   'apply-ads-playbook': { build: 'create', adopt: null, hero: 'create', start: ['restore', 'allowlist'], stop: 'stop', sync: 'create', 'sync-negatives': 'negative', phase: 'phase' },
+  // W4-3 — a portfolio archived is permanent at Amazon: the archive kind narrows it too.
+  'set-portfolio': { create: 'portfolio', update: 'portfolio', archive: ['portfolio', 'archive'] },
 }
 
 /** Every kind of ad action a tool is for these args (its own kind first); empty: the strategy never narrows it. */
@@ -320,6 +323,18 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   'pause-ads': byStatusArgs,
   'enable-ads': byStatusArgs,
   'archive-ads': byStatusArgs,
+  // W4-3 — campaign settings: every campaign it names (with its own settings or the shared ones). A portfolio: its
+  // campaigns, else its market (a new one, or one that holds none: the strictest row of the market).
+  'set-campaign-settings': (place, args) => place.campaignIds([...strs(args.campaignIds), ...list(args.campaigns).map((c) => str(obj(c).campaignId))]),
+  'set-portfolio': async (place, args) => {
+    const portfolioId = str(args.portfolioId)
+    if (!portfolioId) return place.market(marketOf(args.market), 'a new portfolio holds no campaign yet')
+    const { portfolioDetails } = await import('../ads-portfolio.service.js')
+    const [pf] = await portfolioDetails({ portfolioIds: [portfolioId] })
+    if (!pf) return place.notPlaced('the portfolio it names was not found')
+    if (pf.campaigns.length) return place.campaignIds(pf.campaigns.map((c) => c.id))
+    place.market(pf.market, 'a portfolio that holds no campaign')
+  },
   // W3-3 — a stock lowering and its give-back: each ad group and campaign it names.
   'lower-ad-bids-for-stock': byStatusArgs,
   'restore-ad-bids-after-stock': byStatusArgs,
@@ -330,6 +345,17 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
     const { SETTING_ARG } = await import('../ads-engine-tune.service.js')
     const values = obj(args[(SETTING_ARG as Record<string, string>)[setting] ?? ''])
     await placeAutomation(place, await tuneScope(setting, str(args.subjectId), values))
+  },
+  // W4-1 — an hourly bid plan: every campaign it holds before and after the change (the preview names them), else the
+  // campaigns the arguments name and the plan's members now, else the market of a new plan.
+  'set-hourly-bid-plan': async (place, args, preview) => {
+    const named = strs(preview?.campaignIds)
+    const planId = str(args.planId)
+    const members = !named.length && planId ? (await prisma.adSchedule.findMany({ where: { groupId: planId }, select: { campaignId: true } })).map((m) => m.campaignId) : []
+    const ids = named.length ? named : [...strs(args.campaignIds), ...strs(args.add), ...strs(args.remove), ...members]
+    if (ids.length) return place.campaignIds(ids)
+    if (str(args.market)) return place.market(marketOf(args.market), 'a new hourly plan that names no campaign')
+    place.notPlaced(planId ? 'the hourly plan it names holds no campaign, or was not found' : 'it names no hourly plan, campaign or market')
   },
 }
 

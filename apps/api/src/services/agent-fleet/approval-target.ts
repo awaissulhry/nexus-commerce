@@ -109,6 +109,18 @@ function adMoney(cents: unknown, currency: unknown): string | null {
   return money(value / 100, text(currency) ?? 'EUR')
 }
 
+/** W4-1 — a rank target's values as one line: its floor, placement %, base bid and CPC ceiling (what is set). */
+function valueWords(v: Rec | null, currency: unknown): string {
+  if (!v) return EMPTY
+  const parts = [
+    num(v.floorBidCents) != null ? `floor ${adMoney(v.floorBidCents, currency)}` : '',
+    num(v.placementPct) != null ? `placement ${v.placementPct}%` : '',
+    num(v.bidValueCents) != null ? `base bid ${adMoney(v.bidValueCents, currency)}` : '',
+    num(v.maxCpcCents) != null ? `CPC ≤ ${adMoney(v.maxCpcCents, currency)}` : '',
+  ].filter(Boolean)
+  return parts.length ? parts.join(', ') : EMPTY
+}
+
 /**
  * A value in words, never raw JSON: a short list joins its first three items, a flat object reads "key: value", anything
  * deeper is counted (as the web's `plainValue` in apps/web/src/app/fleet/approvals/grid/planWords.ts, so the grid's rows and a
@@ -262,6 +274,8 @@ const AMAZON_AD_TOOLS = new Set([
   'replicate-ad-structure',
   'create-ai-goal-campaigns',
   'build-sp-wizard-campaigns',
+  'set-campaign-settings', 'set-portfolio',
+  'set-hourly-bid-plan',
 ])
 
 /** A campaign page: Amazon's by its Nexus Campaign id, eBay's by its Nexus eBay campaign id. */
@@ -697,8 +711,11 @@ const READERS: Record<string, Reader> = {
   'set-ads-playbook': (p) => playbookPart(p),
   'set-target-bid': (p, _a, _ctx, tool) => {
     const from = adMoney(p.currentBidCents, p.currency)
-    const to = adMoney(num(p.effectiveBidCents) ?? p.proposedBidCents, p.currency)
-    return { ...adCampaign(p, tool), changes: from || to ? [{ label: 'Bid', from, to }] : [] }
+    const sent = num(p.effectiveBidCents) ?? num(p.proposedBidCents)
+    // W4-4 — past the largest change a run by rule writes the stepped bid: the line says both.
+    const rule = num(p.byRuleBidCents)
+    const to = adMoney(sent, p.currency)
+    return { ...adCampaign(p, tool), changes: from || to ? [{ label: 'Bid', from, to: to && rule != null && rule !== sent ? `${to} (by rule: ${adMoney(rule, p.currency)})` : to }] : [] }
   },
   'create-negative-keyword': (p, _a, _ctx, tool) => ({
     ...adCampaign(p, tool),
@@ -742,7 +759,8 @@ const READERS: Record<string, Reader> = {
     const lines = recs(p.changes).map((c) => ({
       sku: null,
       name: text(c.text),
-      change: { label: `“${text(c.text) ?? '?'}”${text(c.campaignName) ? ` · ${text(c.campaignName)}` : ''}`, from: adMoney(c.fromCents, c.currency), to: adMoney(c.toCents, c.currency) },
+      // W4-4 — a line past the largest change: what a run by rule writes instead.
+      change: { label: `“${text(c.text) ?? '?'}”${text(c.campaignName) ? ` · ${text(c.campaignName)}` : ''}`, from: adMoney(c.fromCents, c.currency), to: num(c.byRuleCents) != null ? `${adMoney(c.toCents, c.currency)} (by rule: ${adMoney(c.byRuleCents, c.currency)})` : adMoney(c.toCents, c.currency) },
     }))
     const changing = num(rec(p.totals)?.changing)
     const first = recs(p.changes)[0]
@@ -823,6 +841,69 @@ const READERS: Record<string, Reader> = {
         { label: 'Daily budget', from: null, to: adMoney(p.dailyBudgetCents, p.currency) },
         { label: 'Advertises', from: null, to: plural(recs(p.products).length, 'product') },
       ],
+    }
+  },
+  // W4-3 — each campaign's settings from → to (one line per setting; the campaign named when there are several).
+  'set-campaign-settings': (p) => {
+    const lines = recs(p.changes)
+    const many = lines.length > 1 || (num(rec(p.totals)?.changing) ?? 0) > 1
+    const items = lines.flatMap((l) => recs(l.changes).map((c) => ({
+      sku: null,
+      name: text(l.label),
+      change: { label: many ? `${text(l.label) ?? '?'} · ${text(c.label) ?? '?'}` : text(c.label) ?? '?', from: text(c.from), to: text(c.to) },
+    })))
+    const first = lines[0]
+    return {
+      channel: 'AMAZON',
+      market: agreed(lines.map((l) => marketOf(l.market))),
+      changes: items.map((i) => i.change),
+      items,
+      changeCount: num(rec(p.totals)?.changing) ?? lines.length,
+      target: target('campaign', { id: text(first?.campaignId), name: text(first?.label), count: num(rec(p.totals)?.changing) ?? lines.length, href: campaignHref('set-campaign-settings', text(first?.campaignId)) }),
+    }
+  },
+  // W4-3 — a portfolio made, renamed, capped or archived: the portfolio (a new one by its name), each value from → to.
+  'set-portfolio': (p) => {
+    const changes = recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.from), to: text(c.to) }))
+    const pf = rec(p.portfolio)
+    const created = recs(p.changes).find((c) => text(c.label) === 'Portfolio')
+    return {
+      channel: 'AMAZON',
+      market: marketOf(p.market),
+      changes,
+      changeCount: changes.length,
+      target: target('other', { id: text(pf?.portfolioId), name: pf ? `Portfolio “${text(pf.name) ?? '?'}”` : `New portfolio ${text(created?.to) ?? ''}`.trim(), href: '/marketing/ads/portfolios' }),
+    }
+  },
+  // W4-1 — an hourly bid plan: the plan, then what the op changes (its switch, name, members, the days it paints, a
+  // campaign's own target values, what a give-back lifts).
+  'set-hourly-bid-plan': (p) => {
+    const plan = rec(p.plan) ?? {}
+    const name = text(plan.name) ?? '?'
+    const enabled = rec(plan.enabled) ?? {}
+    const onOff = (v: unknown) => (v === true ? 'On' : v === false ? 'Off' : EMPTY)
+    const members = rec(p.members) ?? {}
+    const back = rec(p.givesBack)
+    const lines: QueueChange[] = []
+    if (p.op === 'create') lines.push({ label: 'Hourly plan', from: null, to: `“${name}” · ${plural(num(members.to) ?? 0, 'campaign')}, switched off` })
+    if (p.op === 'delete') lines.push({ label: 'Hourly plan', from: `“${name}”`, to: '(deleted)' })
+    if (p.op === 'switch') lines.push({ label: `Hourly plan “${name}”`, from: onOff(enabled.from), to: onOff(enabled.to) })
+    if (p.op === 'rename') lines.push({ label: 'Hourly plan name', from: text(rec(p.rename)?.from) ?? EMPTY, to: text(rec(p.rename)?.to) ?? EMPTY })
+    if (p.op === 'set-campaigns') lines.push({ label: `Campaigns of “${name}”`, from: plainValue(members.from), to: plainValue(members.to) })
+    if (p.op === 'update-windows' || p.op === 'create') {
+      const hours = (d: Rec | null) => (d ? `${plainValue(d.hoursAtFloor)} h Min bid, ${plainValue(24 - (num(d.hoursAtFloor) ?? 0) - (num(d.hoursUnplanned) ?? 0))} h on targets` : EMPTY)
+      for (const d of recs(p.week)) {
+        const from = rec(d.from), to = rec(d.to)
+        if (p.op === 'create' || text(from?.hours) !== text(to?.hours)) lines.push({ label: `${text(d.day) ?? '?'} hours`, from: p.op === 'create' ? null : hours(from), to: hours(to) })
+      }
+    }
+    for (const v of recs(p.targetValues)) lines.push({ label: `“${text(v.campaign) ?? '?'}” · ${text(v.targetKey) ?? '?'}`, from: valueWords(rec(v.from), p.currency), to: valueWords(rec(v.to), p.currency) })
+    if (back && num(back.restore)) lines.push({ label: 'Floored bids', from: `${plainValue(back.bids)} at the Min-bid floor`, to: 'given back' })
+    return {
+      channel: 'AMAZON',
+      market: marketOf(plan.market),
+      target: target('other', { id: text(plan.planId), name: `Hourly plan “${name}”`, href: '/marketing/ads/rules-automation/dayparting' }),
+      changes: lines,
     }
   },
   // PB-5a — a build's campaigns and their daily budget, or an adopt's bindings (Nexus only).
@@ -1096,8 +1177,9 @@ export function resolveRequest(toolName: string, args: unknown, preview: unknown
   const where = genericWhere(toolName, a, p)
   const said = own.summary !== undefined ? own.summary : (text(p.summary) ?? text(p.effect))
   // 4A + 3A (Owner decided 2026-10-06) — a request past his own limits says so on the card BEFORE he approves: his
-  // approval is his "Send anyway". First, so the 400-character card summary never cuts it off.
-  const pastReach = rec(p.reach)?.pastOwnLimits
+  // approval is his "Send anyway". First, so the 400-character card summary never cuts it off. W4-4 — a change plan
+  // carries its steps' on its own preview, each named by its step (change-plan.service.ts mergedPastOwnLimits).
+  const pastReach = rec(p.reach)?.pastOwnLimits ?? (toolName === PLAN_TOOL ? p.pastOwnLimits : undefined)
   const past = Array.isArray(pastReach) ? pastReach.map((l) => text(rec(l)?.reason)).filter((x): x is string => !!x) : []
   const warning = past.length ? `Warning — this goes past your own limits: ${past.join('; ')}. Approving it sends it anyway.` : null
   const summary = warning ? (said ? `${warning} ${said}` : warning) : said

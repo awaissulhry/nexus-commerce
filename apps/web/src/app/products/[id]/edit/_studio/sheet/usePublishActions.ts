@@ -42,7 +42,7 @@ import type { SheetStatus } from '@/design-system/grid'
 import { isInactiveSellingState } from '@/design-system/grid/renderers/sellingStatus'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { emitInvalidation, useInvalidationChannel, type InvalidationEvent } from '@/lib/sync/invalidation-channel'
-import { invalidatePublishActions, publishActionsReads, readPublishActionsShared, writePublishActions, type PublishActionsDestination, type PublishActionsRead, type SharedReadOptions } from './publishActionsApi'
+import { invalidatePublishActions, isSharedScopeDestination, publishActionsReads, readPublishActionsShared, writePublishActions, type PublishActionsDestination, type PublishActionsRead, type SharedReadOptions } from './publishActionsApi'
 
 export type { PublishActionsDestination } from './publishActionsApi'
 
@@ -644,6 +644,7 @@ export function usePublishActions(productId: string, destination: PublishActions
   const key = destination ? JSON.stringify({
     channel: destination.channel ?? null, marketplace: destination.marketplace ?? null,
     accountId: destination.accountId ?? null, aliasKey: destination.aliasKey ?? null,
+    ...(destination.newRows === 'every' ? { newRows: 'every' } : {}),
   }) : null
   const target = useMemo(() => (key ? JSON.parse(key) as PublishActionsDestination : null), [key])
 
@@ -652,8 +653,9 @@ export function usePublishActions(productId: string, destination: PublishActions
   const store = useMemo(() => target ? new PublishActionsStore({
     // One shared read per destination (m2): the listing picker and the toolbar mark read the same answer.
     read: (signal, options) => readPublishActionsShared(productId, target, signal, options),
-    // No channel = the Shared scope (every market of the family).
-    write: (change, body) => writePublishActions(productId, change, { ...body, sharedScope: !target.channel }),
+    // No channel = the Shared scope (every market of a product) — unless it is the Matrix's read of every market, whose
+    // cells are each market's own (`newRows: 'every'`).
+    write: (change, body) => writePublishActions(productId, change, { ...body, sharedScope: isSharedScopeDestination(target) }),
     viewer: () => viewer.current,
     invalidate: () => {
       invalidating.current = true

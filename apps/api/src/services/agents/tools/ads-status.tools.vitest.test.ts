@@ -7,7 +7,17 @@
  * changeSetId = the approval and undo asks the other tool for the same ads; enable-ads switches on only what a Claude
  * request paused — never what a person paused, in Nexus or at Amazon; a pause run by the business's rule passes a halt
  * (it lets go) and an enable does not; the default limits let nothing run alone.
+ *
+ * W4-2 — asked with includePeoplesPauses, enable-ads also lifts a pause a person made (in Nexus or at Amazon), one Nexus
+ * has no record of, one a writer Nexus did not record, and a Claude pause Amazon reported changed: each line says who
+ * paused it and when and is marked needsCode, the preview carries stepUp, a plain approve does not run it and the
+ * approver's code does (decideApproval, the Approvals page, a change plan, confirm in Claude — each needing
+ * settings.security.manage); it never runs by rule, whatever the level and limits; a rule's pause is refused while the
+ * rule is on (switch it off first) and lifted like a person's once it is off or deleted; an engine's stays refused; who
+ * paused it is frozen, and a status change recorded after the approval refuses it; an approval stored before W4-2 runs as
+ * before; undo-ad-change sends such a pause to enable-ads instead of switching it on.
  */
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -25,7 +35,7 @@ vi.mock('../../../lib/queue.js', () => {
   return {
     addJobSafely: vi.fn(async () => ({ enqueued: false, skipped: true })),
     outboundSyncQueue: queue, channelSyncQueue: queue, readCacheQueue: queue, searchIndexQueue: queue, bulkJobQueue: queue, adsSyncQueue: queue,
-    queueEvents: { on: vi.fn() }, channelSyncQueueEvents: { on: vi.fn() },
+    readinessQueue: queue, agentPlanQueue: null, queueEvents: { on: vi.fn() }, channelSyncQueueEvents: { on: vi.fn() },
     getQueueStats: vi.fn(async () => ({})), initializeQueue: vi.fn(async () => true), closeQueue: vi.fn(async () => {}),
     getRedisRuntimeStatus: () => ({ configured: false, status: 'not-initialized' }), resolveRedisTarget: vi.fn(), resetEnqueueCircuitForTests: vi.fn(),
     redis: { connection: null },
@@ -47,6 +57,14 @@ import { updateCampaignWithSync } from '../../advertising/ads-mutation.service.j
 import { setClaudeRule } from '../claude-trust.service.js'
 import { __stepUpTest } from '../../../lib/auth/step-up.js'
 import { generateSecret, generateSync } from 'otplib'
+import { updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
+import { __claudeStrategyTest } from '../../advertising/ads-strategy/claude.js'
+import { commitScheduledApproval, decideFleetApproval, previewStaleness } from '../../agent-fleet/approval-inbox.service.js'
+import { queuePlan, runPlan } from '../change-plan.service.js'
+import { confirmByCode } from '../claude-confirm.service.js'
+import type { McpPrincipal } from '../../mcp/mcp-auth.js'
+import { claudeGateRule } from '../../mcp/mcp-tool-call.js'
+import { STEP_UP_NEEDS } from '../step-up-approval.js'
 
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
 const inside = <T>(work: () => Promise<T>) => withWorkspace(business, work)
@@ -90,7 +108,7 @@ beforeAll(async () => {
   database = await formulaDatabase()
   await inside(async () => {
     await seedAdsFixture(database.client)
-    for (const id of ['c-p1', 'c-p2', 'c-p3', 'c-p4', 'c-p5', 'c-h1', 'c-h2', 'c-lim', 'c-a1', 'c-a2', 'c-a3', 'c-h3']) await campaign(id)
+    for (const id of ['c-p1', 'c-p2', 'c-p3', 'c-p4', 'c-p5', 'c-h1', 'c-h2', 'c-lim', 'c-a1', 'c-a2', 'c-a3', 'c-h3', 'c-w1', 'c-w2', 'c-w3', 'c-w4', 'c-w5', 'c-w6', 'c-w7', 'c-w8', 'c-w9', 'c-w10', 'c-w11', 'c-w12', 'c-w13', 'c-w14', 'c-w15']) await campaign(id)
     // AA-W2-13 — a paused campaign whose keyword is paused too; a campaign advertising a product the strategy protects.
     await database.client.campaign.update({ where: { id: 'c-a2' }, data: { status: 'PAUSED' } })
     await database.client.adTarget.update({ where: { id: 't-c-a2' }, data: { status: 'PAUSED' } })
@@ -123,7 +141,12 @@ describe('the tools as the contract holds them', () => {
       expect(tool.limits!.parse({})).toMatchObject({ maxItems: 0, maxChangesPerEntityPerDay: 1, allowEngineOwned: false, levels: ['campaign', 'adGroup', 'target', 'productAd'] })
     }
     expect(getTool('pause-ads')!.description).toMatch(/lower its bids instead \(suppress-campaign/)
-    expect(getTool('enable-ads')!.description).toMatch(/Never an ad a person paused, in Nexus or at Amazon/)
+    // W4-2 — enable-ads lifts a pause no Claude request made only when asked so, with the approver's code; never while the
+    // rule that paused it is on. pause-ads unchanged.
+    expect(getTool('enable-ads')!.description).toMatch(/By default only what a Claude request paused \(pause-ads\)\. With includePeoplesPauses: true, also an ad no Claude request paused/)
+    expect(getTool('enable-ads')!.description).toMatch(/it never runs by rule\. Never while the Nexus rule that paused it is still on/)
+    expect(Object.keys((getTool('enable-ads')!.input as unknown as { shape: object }).shape)).toContain('includePeoplesPauses')
+    expect(Object.keys((getTool('pause-ads')!.input as unknown as { shape: object }).shape)).not.toContain('includePeoplesPauses')
   })
 })
 
@@ -223,6 +246,8 @@ describe('enable-ads — only what a Claude request paused', () => {
     // A person's own pause on the Nexus screens.
     await inside(() => updateCampaignWithSync({ campaignId: 'c-p2', patch: { status: 'PAUSED' }, actor: 'user:u-person', manual: true }))
     expect((await preview('enable-ads', { campaignIds: ['c-p2'] })).error).toMatch(/^Not queued: enable-ads switches back on only what a Claude request paused .* campaign "Test c-p2": a person paused it in Nexus \(user:u-person/)
+    // W4-2 — the refusal names the way a person's pause can be lifted: asked so, with the approver's code.
+    expect((await preview('enable-ads', { campaignIds: ['c-p2'] })).error).toMatch(/ask again with includePeoplesPauses: true: a person then approves it in Nexus with their authenticator code, and it never runs by rule\.$/)
     // Paused at Amazon (Seller Central): the sync pulled PAUSED down; Nexus recorded no pause.
     await inside(() => database.client.campaign.update({ where: { id: 'c-p3' }, data: { status: 'PAUSED' } }))
     expect((await preview('enable-ads', { campaignIds: ['c-p3'] })).error).toMatch(/Nexus has no record of who paused it: it was paused at Amazon \(Seller Central\)/)
@@ -235,6 +260,302 @@ describe('enable-ads — only what a Claude request paused', () => {
     // An archived ad cannot be switched on at all.
     expect((await preview('enable-ads', { campaignIds: ['c-arch'] })).error).toMatch(/Amazon cannot switch an archived ad on again; to advertise it again, a new one is created/)
     expect((await preview('enable-ads', { campaignIds: ['c-p5'] })).error).toMatch(/^Nothing would change: campaign "Test c-p5" is already enabled/)
+  })
+})
+
+/** W4-2 — a status change Nexus records with no person behind it (an import, an old writer): no actor on the row. */
+const unrecordedPause = (campaignId: string) => inside(async () => {
+  await database.client.campaign.update({ where: { id: campaignId }, data: { status: 'PAUSED' } })
+  await database.client.advertisingActionLog.create({ data: { userId: null, actionType: 'pause_campaign', entityType: 'CAMPAIGN', entityId: campaignId, payloadBefore: { status: 'ENABLED' }, payloadAfter: { status: 'PAUSED' } } })
+})
+const personPause = (campaignId: string, who = 'user:u-person', status: 'PAUSED' | 'ENABLED' = 'PAUSED') =>
+  inside(() => updateCampaignWithSync({ campaignId, patch: { status }, actor: who as `user:${string}`, manual: true }))
+/** As the Approvals page records a decision taken with the approver's authenticator code. */
+const withCode = (approvalId: string) => inside(() => database.client.agentApproval.update({ where: { id: approvalId }, data: { decisionVia: 'nexus-step-up' } }))
+/** The undo window closes now, and the sweep's commit takes it (as the person who approved it, re-checked). */
+const commitNow = async (approvalId: string) => {
+  await inside(() => database.client.agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+  return inside(() => commitScheduledApproval(approvalId))
+}
+const approvalRow = (id: string) => inside(() => database.client.agentApproval.findUniqueOrThrow({ where: { id } }))
+
+/** Real people (a row, a role, a membership, an authenticator), for the real approve, confirm and commit paths. */
+const EVERYTHING = new Set<string>([...Object.values(FEATURES), ...Object.values(FIELDS)])
+const WITHOUT_SECURITY = new Set<string>([...EVERYTHING].filter((p) => p !== FEATURES.settingsSecurityManage))
+type RealPerson = { id: string; secret: string; principal: UserPrincipal }
+async function realPerson(label: string, permissions: Set<string>): Promise<RealPerson> {
+  const client = database.client
+  const secret = generateSecret()
+  const role = await client.role.create({ data: { key: `W42_${randomUUID().slice(0, 8)}`, name: label, description: 'test', isSystem: false, permissions: [...permissions] } })
+  const user = await client.userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active', displayName: label, twoFactorEnabledAt: new Date(), twoFactorSecret: secret } })
+  await client.userRole.create({ data: { userId: user.id, roleId: role.id } })
+  const membership = await client.workspaceMembership.create({ data: { workspaceId: LEGACY_WORKSPACE_ID, userId: user.id, status: 'active' } })
+  await client.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
+  return { id: user.id, secret, principal: { kind: 'user', userId: user.id, label, via: 'app', workspace: business, permissions: { isOwner: false, permissions } } }
+}
+/** A fresh code from this person's authenticator (a code is single use). */
+const codeOf = (p: RealPerson) => { __stepUpTest.reset(); return generateSync({ secret: p.secret }) }
+/** Claude's own door for this person: the business's rule decides who takes the request. */
+const mcpOf = (p: UserPrincipal) => ({ ...p, via: 'claude', business: { id: LEGACY_WORKSPACE_ID, name: 'Test business' }, scopes: ['nexus.read', 'nexus.write', 'nexus.run'], oauthGrantId: 'grant-w42' }) as McpPrincipal
+const viaGate = (who: McpPrincipal, args: Record<string, unknown>) => inside(async () => {
+  const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: who.userId } })
+  return runOrQueueTool('enable-ads', args, who, run.id, { rule: claudeGateRule(who) })
+})
+
+describe('W4-2 — enable-ads lifts a pause no Claude request made only when asked so, with the approver\'s code', () => {
+  const people = {} as Record<'approver' | 'limited' | 'asker' | 'limitedAsker', RealPerson>
+  beforeAll(async () => {
+    people.approver = await realPerson('Test Approver', EVERYTHING)
+    people.limited = await realPerson('Test Limited', WITHOUT_SECURITY)
+    people.asker = await realPerson('Test Asker', EVERYTHING)
+    people.limitedAsker = await realPerson('Test Limited Asker', WITHOUT_SECURITY)
+    await personPause('c-w1') // a person, on the Nexus screens
+    await inside(() => database.client.campaign.update({ where: { id: 'c-w2' }, data: { status: 'PAUSED' } })) // Seller Central
+    await unrecordedPause('c-w3') // a writer Nexus did not record
+    // A Claude request paused it, then Amazon reported its status changed outside Nexus.
+    const paused = await ask('pause-ads', { campaignIds: ['c-w4'] })
+    await approve(paused.approvalId!)
+    await inside(() => database.client.adDrift.create({ data: { entityType: 'CAMPAIGN', entityId: 'c-w4', field: 'status', ourValue: 'PAUSED', amazonValue: 'ENABLED', classification: 'EXTERNAL_CHANGE' } }))
+    // Claude's own pause: as before.
+    const own = await ask('pause-ads', { campaignIds: ['c-w5'] })
+    await approve(own.approvalId!)
+  }, 60_000)
+
+  it('each pause no Claude request made: who paused it and when, needsCode, in raises, and the approver\'s code (stepUp)', async () => {
+    const r = await preview('enable-ads', { campaignIds: ['c-w1', 'c-w2', 'c-w3', 'c-w4'], includePeoplesPauses: true })
+    expect(r.ok, r.error).toBe(true)
+    const p = r.preview as Row
+    expect(p).toMatchObject({
+      action: 'enable-ads', totals: { changing: 4, alreadyEnabled: 0 }, needsCode: 4,
+      raises: ['campaign "Test c-w1"', 'campaign "Test c-w2"', 'campaign "Test c-w3"', 'campaign "Test c-w4"'],
+      stepUp: { what: 'switches back on 4 ads no Claude request paused', raises: ['Spend'], needs: STEP_UP_NEEDS, how: expect.stringMatching(/authenticator code.*Never by rule/) },
+      whoPaused: {
+        'campaign:c-w1': { by: 'person', actor: 'user:u-person', at: expect.any(String) },
+        'campaign:c-w2': { by: 'none', lastRecorded: null },
+        'campaign:c-w3': { by: 'unrecorded', actor: null, at: expect.any(String) },
+        'campaign:c-w4': { by: 'amazon', approvalId: expect.any(String), at: expect.any(String) },
+      },
+      warning: expect.stringMatching(/No Claude request paused them \(each line says who did\): approving needs the approver's authenticator code\.$/),
+    })
+    // Amazon's report time moves with every reconcile while the difference stands: it is not frozen.
+    expect(p.whoPaused['campaign:c-w4']).not.toHaveProperty('seenAt')
+    expect(p.changes.map((c: Row) => [c.label, c.needsCode, c.pausedBy])).toEqual([
+      ['campaign "Test c-w1"', true, expect.stringMatching(/^a person paused it in Nexus \(user:u-person, \d{4}-\d\d-\d\d \d\d:\d\d UTC\)$/)],
+      ['campaign "Test c-w2"', true, 'Nexus has no record of who paused it: it was paused at Amazon (Seller Central), or before Nexus kept a record'],
+      ['campaign "Test c-w3"', true, expect.stringMatching(/^it was paused by a writer Nexus did not record \(/)],
+      ['campaign "Test c-w4"', true, expect.stringMatching(/^Claude request \S+ paused it .*Amazon reported its status changed outside Nexus since/)],
+    ])
+    expect(p.effect).toMatch(/^Switches 4 ads back on at Amazon \(4 campaigns\): .* Not paused by a Claude request \(4 of 4\): .* Approving it needs the approver's authenticator code; it never runs by rule\. Spend resumes: EUR 48\.00 of daily budget/)
+    // Without the option: today's refusal, naming it.
+    expect((await preview('enable-ads', { campaignIds: ['c-w2'] })).error)
+      .toMatch(/^Not queued: enable-ads switches back on only what a Claude request paused \(pause-ads\), unless asked with includePeoplesPauses: true\. campaign "Test c-w2": Nexus has no record of who paused it.* To switch back on a pause no Claude request made, ask again with includePeoplesPauses: true/)
+  })
+
+  it('Claude\'s own pause, with or without the option: as before — no code, nothing marked', async () => {
+    for (const args of [{ campaignIds: ['c-w5'] }, { campaignIds: ['c-w5'], includePeoplesPauses: true }]) {
+      const p = (await preview('enable-ads', args)).preview as Row
+      expect(p).toMatchObject({ needsCode: 0, raises: ['campaign "Test c-w5"'], whoPaused: { 'campaign:c-w5': { by: 'claude' } } })
+      expect(p).not.toHaveProperty('stepUp')
+      expect(p.changes[0]).not.toHaveProperty('needsCode')
+      expect(p.effect).toMatch(/^Switches 1 ad back on at Amazon that a Claude request paused/)
+    }
+    // Mixed: only the person's pause needs the code, and the request as a whole carries it.
+    const mixed = (await preview('enable-ads', { campaignIds: ['c-w5', 'c-w1'], includePeoplesPauses: true })).preview as Row
+    expect(mixed).toMatchObject({ needsCode: 1, stepUp: { what: 'switches back on 1 ad no Claude request paused' } })
+    expect(mixed.changes.map((c: Row) => c.needsCode ?? false)).toEqual([false, true])
+    expect(mixed.warning).toMatch(/1 of them no Claude request paused \(each line says who did\)/)
+  })
+
+  it('a Nexus rule\'s pause: refused while the rule is on (switch it off first); once off or deleted, lifted like a person\'s; an engine\'s stays refused', async () => {
+    const rule = await inside(() => database.client.automationRule.create({ data: { name: 'Test pause rule', domain: 'advertising', trigger: 'SCHEDULE', enabled: true, dryRun: false, autonomyLevel: 'AUTO' } }))
+    await inside(() => updateAdTargetWithSync({ adTargetId: 't-c-w6', patch: { status: 'PAUSED' }, actor: `automation:${rule.id}` }))
+    const args = { targetIds: ['t-c-w6'], includePeoplesPauses: true }
+    // On: refused, naming the rule, how to switch it off, and that asking again with the option then works.
+    expect((await preview('enable-ads', args)).error).toMatch(new RegExp(
+      `^Not queued: keyword "term c-w6" \\(campaign "Test c-w6"\\): the Nexus rule "Test pause rule" paused it \\(automation:${rule.id}, .*\\); the rule is on now\\. `
+      + `Not switched back on, even with includePeoplesPauses — keyword "term c-w6" \\(campaign "Test c-w6"\\): the rule is on and would pause it again: switch it off first `
+      + `\\(turn-down-automation, automation A1, rowId ${rule.id}, level OFF\\), then ask again with includePeoplesPauses: true \\(a person approves it with their authenticator code\\)\\.$`))
+    // Without the option, a rule's pause alone: no offer of the option it would not help yet.
+    const plain = (await preview('enable-ads', { targetIds: ['t-c-w6'] })).error
+    expect(plain).toMatch(/^Not queued: enable-ads switches back on only what a Claude request paused \(pause-ads\)\. keyword "term c-w6"/)
+    expect(plain).not.toMatch(/unless asked with includePeoplesPauses/)
+    // Off (as turn-down-automation leaves it): lifted like a person's pause — the code, never by rule.
+    await inside(() => database.client.automationRule.update({ where: { id: rule.id }, data: { enabled: false } }))
+    const off = await preview('enable-ads', args)
+    expect(off.ok, off.error).toBe(true)
+    expect(off.preview).toMatchObject({ needsCode: 1, stepUp: { what: 'switches back on 1 ad no Claude request paused' }, whoPaused: { 'target:t-c-w6': { by: 'rule', actor: `automation:${rule.id}`, rule: 'off' } } })
+    expect((off.preview as Row).changes[0].pausedBy).toMatch(/^the Nexus rule "Test pause rule" paused it \(automation:\S+, .*\); the rule is off now$/)
+    expect(getTool('enable-ads')!.withinLimits!(off.preview, getTool('enable-ads')!.limits!.parse({ maxItems: 100 }) as Record<string, unknown>)).toMatch(/never a rule/)
+    // Asked while off, the rule switched on again before it runs: stale, refused.
+    const asked = await ask('enable-ads', args)
+    await inside(() => database.client.automationRule.update({ where: { id: rule.id }, data: { enabled: true } }))
+    await withCode(asked.approvalId!)
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: Not queued: keyword "term c-w6" .*the rule is on now/) })
+    expect(await statusOf('AdTarget', 't-c-w6')).toBe('PAUSED')
+    // Deleted: lifted like a person's pause too.
+    await inside(() => database.client.automationRule.delete({ where: { id: rule.id } }))
+    const gone = await preview('enable-ads', args)
+    expect(gone.ok, gone.error).toBe(true)
+    expect(gone.preview).toMatchObject({ needsCode: 1, whoPaused: { 'target:t-c-w6': { by: 'rule', rule: 'deleted' } } })
+    expect((gone.preview as Row).changes[0].pausedBy).toMatch(/^a Nexus rule paused it \(automation:\S+, .*\); that rule no longer exists$/)
+    // An engine that is no rule: Nexus cannot tell whether it would pause it again, and promises nothing.
+    await inside(async () => {
+      await database.client.adTarget.update({ where: { id: 't-c-w7' }, data: { status: 'PAUSED' } })
+      await database.client.advertisingActionLog.create({ data: { userId: 'automation:test-engine', actionType: 'pause_target', entityType: 'AD_TARGET', entityId: 't-c-w7', payloadBefore: { status: 'ENABLED' }, payloadAfter: { status: 'PAUSED' } } })
+    })
+    const engine = (await preview('enable-ads', { targetIds: ['t-c-w7'], campaignIds: ['c-w1'], includePeoplesPauses: true })).error
+    expect(engine).toMatch(/^Not queued: keyword "term c-w7" \(campaign "Test c-w7"\): a Nexus engine paused it \(automation:test-engine, .*\)\. Not switched back on, even with includePeoplesPauses — keyword "term c-w7" .*: Nexus cannot tell whether that engine would pause it again, so enable-ads does not switch it back on: a person does that in Nexus \(the campaign manager's Enable\)\.$/)
+    expect(engine).not.toMatch(/ask again/)
+  })
+
+  it('a plain approve does not run it; approved with the code it runs as the approver; undo asks pause-ads', async () => {
+    const asked = await ask('enable-ads', { campaignIds: ['c-w1'], includePeoplesPauses: true })
+    expect(asked.approvalId).toBeTruthy()
+    expect(((await approvalRow(asked.approvalId!)).preview as Row).stepUp).toMatchObject({ raises: ['Spend'] })
+    const plain = await approve(asked.approvalId!) as Row
+    expect(plain).toMatchObject({ ok: false, status: 'pending' })
+    expect(plain.error).toMatch(/^Not run: it switches back on 1 ad no Claude request paused, and that runs only when a person with settings\.security\.manage approved it with their authenticator code/)
+    expect(await statusOf('Campaign', 'c-w1')).toBe('PAUSED')
+    await withCode(asked.approvalId!)
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { enabled: 1, failed: 0 } })
+    expect(await statusOf('Campaign', 'c-w1')).toBe('ENABLED')
+    const [queued] = await sql<{ payload: Row }>(`SELECT payload FROM "OutboundSyncQueue" WHERE payload->>'entityId' = $1 ORDER BY "createdAt" DESC LIMIT 1`, ['c-w1'])
+    expect(queued.payload).toMatchObject({ actor: 'user:u-approver', fieldChanges: [{ field: 'status', oldValue: 'PAUSED', newValue: 'ENABLED' }] })
+    expect(queued.payload.reason).toMatch(/switching back on what no Claude request paused, approved with the approver's authenticator code$/)
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'pause-ads', args: { campaignIds: ['c-w1'] } } })
+  })
+
+  it('the Approvals page: no code → mfa_required; a person without settings.security.manage → refused; with the code → it runs at commit', async () => {
+    await personPause('c-w9')
+    const asked = await ask('enable-ads', { campaignIds: ['c-w9'], includePeoplesPauses: true })
+    const decide = (actor: UserPrincipal, code?: string) => inside(() => decideFleetApproval({ id: asked.approvalId!, decision: 'approve', actor, ...(code ? { code } : {}) }))
+    expect(await decide(people.approver.principal)).toMatchObject({ ok: false, code: 'mfa_required', httpStatus: 403, raises: ['Spend'], error: expect.stringMatching(/^Approving a change that switches back on 1 ad no Claude request paused needs the 6-digit code/) })
+    expect(await decide(people.limited.principal, codeOf(people.limited))).toMatchObject({ ok: false, code: 'forbidden', httpStatus: 403, error: expect.stringMatching(/needs the settings\.security\.manage permission/) })
+    expect((await approvalRow(asked.approvalId!)).status).toBe('pending')
+    expect(await decide(people.approver.principal, codeOf(people.approver))).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await approvalRow(asked.approvalId!)).toMatchObject({ status: 'scheduled', decisionVia: 'nexus-step-up', decidedByUserId: people.approver.id })
+    expect(await commitNow(asked.approvalId!)).toMatchObject({ ok: true })
+    expect(await statusOf('Campaign', 'c-w9')).toBe('ENABLED')
+  })
+
+  it('a change plan step: the plan carries the code; no code → mfa_required; with it the step runs', async () => {
+    await personPause('c-w10')
+    const queued = await inside(async () => {
+      const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
+      return queuePlan({ title: 'Test switch back on', steps: [{ tool: 'enable-ads', args: { campaignIds: ['c-w10'], includePeoplesPauses: true } }] }, claude, run.id)
+    })
+    expect(queued).toMatchObject({ ok: true, mode: 'queued' })
+    const planId = queued.approvalId!
+    expect(((await approvalRow(planId)).preview as Row).stepUp).toMatchObject({ what: 'switches back on 1 ad no Claude request paused', raises: ['Spend'], steps: [1] })
+    const decide = (code?: string) => inside(() => decideFleetApproval({ id: planId, decision: 'approve', actor: people.approver.principal, ...(code ? { code } : {}) }))
+    expect(await decide()).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect(await decide(codeOf(people.approver))).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await commitNow(planId)).toMatchObject({ ok: true, status: 'executing' })
+    expect(await inside(() => runPlan(planId))).toMatchObject({ finished: true, counts: { done: 1 } })
+    expect(await statusOf('Campaign', 'c-w10')).toBe('ENABLED')
+  })
+
+  it('confirm in Claude: the asker\'s code runs it when they hold settings.security.manage; without it, it does not run', async () => {
+    await inside(() => database.client.agentTool.create({ data: { name: 'enable-ads', riskTier: 'high', requiresApproval: true, claudeTrust: 'confirm' } }))
+    try {
+      for (const [campaignId, who, runs] of [['c-w11', people.asker, true], ['c-w12', people.limitedAsker, false]] as const) {
+        await personPause(campaignId)
+        const mcp = mcpOf(who.principal)
+        const asked = await viaGate(mcp, { campaignIds: [campaignId], includePeoplesPauses: true }) as Row
+        expect(asked).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'person', level: 'confirm', confirm: { planHash: expect.any(String) } } })
+        const confirmed = await inside(() => confirmByCode(mcp, { approvalId: asked.approvalId, planHash: asked.rule.confirm.planHash, code: codeOf(who) }, { runScope: true }))
+        expect(confirmed, campaignId).toMatchObject({ ok: true, data: { status: 'confirmed' } })
+        expect(await approvalRow(asked.approvalId)).toMatchObject({ status: 'scheduled', decisionVia: 'claude-confirm', decidedByUserId: who.id })
+        const ran = await commitNow(asked.approvalId)
+        if (runs) {
+          expect(ran, campaignId).toMatchObject({ ok: true })
+          expect(await statusOf('Campaign', campaignId)).toBe('ENABLED')
+        } else {
+          expect(ran, campaignId).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: it switches back on 1 ad no Claude request paused, and Test Limited Asker no longer holds settings\.security\.manage, which that needs\./) })
+          expect(await statusOf('Campaign', campaignId)).toBe('PAUSED')
+        }
+      }
+    } finally {
+      await inside(() => database.client.agentTool.deleteMany({ where: { name: 'enable-ads' } }))
+    }
+  })
+
+  it('never by rule, whatever the level and the limits: the limits refuse it, the gate does not schedule it, and execute refuses a rule\'s run', async () => {
+    const strategy = await inside(() => database.client.adsStrategy.create({ data: {
+      market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', updatedBy: 'user:test', claudeAutonomy: { enable: 'auto' },
+      claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 10, claudeMaxBudgetIncreasePerDayCents: 5000, maxBidCents: 100,
+    } }))
+    await inside(() => database.client.agentTool.create({ data: { name: 'enable-ads', riskTier: 'high', requiresApproval: true, claudeTrust: 'auto', claudeLimits: { maxItems: 5 } } }))
+    __claudeStrategyTest.reset()
+    const tool = getTool('enable-ads')!
+    const limits = tool.limits!.parse({ maxItems: 5 }) as Record<string, unknown>
+    const mcp = mcpOf(claude)
+    try {
+      // The control: Claude's own pause, inside the same strategy and limits, may run by rule.
+      const own = (await preview('enable-ads', { campaignIds: ['c-w5'], includePeoplesPauses: true })).preview as Row
+      expect(tool.withinLimits!(own, limits)).toBeNull()
+      // A preview stored before W4-2 (no needsCode: it could only lift Claude's own pauses then) is judged as before.
+      const { needsCode: _n, whoPaused: _w, raises: _r, ...older } = own
+      expect(tool.withinLimits!(older, limits)).toBeNull()
+      const ownAsked = await viaGate(mcp, { campaignIds: ['c-w5'], includePeoplesPauses: true })
+      expect(ownAsked).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'rule', level: 'auto' } })
+      await inside(() => database.client.agentApproval.update({ where: { id: ownAsked.approvalId! }, data: { status: 'rejected' } }))
+      // A pause no Claude request made: never.
+      const theirs = (await preview('enable-ads', { campaignIds: ['c-w2'], includePeoplesPauses: true })).preview
+      expect(tool.withinLimits!(theirs, limits)).toMatch(/^it switches back on 1 ad no Claude request paused: only a person approving with their authenticator code lifts that, never a rule; a person decides$/)
+      expect(tool.withinLimits!(theirs, tool.limits!.parse({ maxItems: 100, levels: ['campaign', 'adGroup', 'target', 'productAd'] }) as Record<string, unknown>)).toMatch(/never a rule/)
+      const theirsAsked = await viaGate(mcp, { campaignIds: ['c-w2'], includePeoplesPauses: true })
+      expect(theirsAsked).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'person', level: 'auto', why: expect.stringMatching(/1 ad no Claude request paused: only a person approving with their authenticator code lifts that, never a rule; a person approves it in Nexus$/) } })
+      expect((await approvalRow(theirsAsked.approvalId!)).status).toBe('pending')
+      // The last door: a run the rule decided is refused in execute too.
+      expect(await approveByRule(theirsAsked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/^Not run: it switches back on 1 ad no Claude request paused, which needs a person's authenticator code, never a rule\./) })
+      expect(await statusOf('Campaign', 'c-w2')).toBe('PAUSED')
+    } finally {
+      await inside(async () => {
+        await database.client.agentTool.deleteMany({ where: { name: 'enable-ads' } })
+        await database.client.adsStrategy.delete({ where: { id: strategy.id } })
+      })
+      __claudeStrategyTest.reset()
+    }
+  })
+
+  it('an approval stored before W4-2 (no whoPaused, needsCode or raises) still runs as before', async () => {
+    const paused = await ask('pause-ads', { campaignIds: ['c-w13'] })
+    await approve(paused.approvalId!)
+    const asked = await ask('enable-ads', { campaignIds: ['c-w13'] })
+    const { whoPaused: _w, needsCode: _n, raises: _r, ...older } = (await approvalRow(asked.approvalId!)).preview as Row
+    await inside(() => database.client.agentApproval.update({ where: { id: asked.approvalId! }, data: { preview: older } }))
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { enabled: 1 } })
+    expect(await statusOf('Campaign', 'c-w13')).toBe('ENABLED')
+  })
+
+  it('who paused it is frozen: a status change recorded after the approval refuses it, naming who paused it then and now', async () => {
+    await personPause('c-w8')
+    const args = { campaignIds: ['c-w8'], includePeoplesPauses: true }
+    const asked = await ask('enable-ads', args)
+    const stored = (await approvalRow(asked.approvalId!)).preview
+    // Someone else switches it on and pauses it again: still paused, by another person.
+    await personPause('c-w8', 'user:u-other', 'ENABLED')
+    await personPause('c-w8', 'user:u-other')
+    expect(await inside(() => previewStaleness('enable-ads', args, stored, asked.approvalId!))).toMatchObject({ stale: true, why: expect.stringMatching(/whoPaused changed/) })
+    await withCode(asked.approvalId!)
+    expect(await approve(asked.approvalId!)).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/^Not run: the status of campaign "Test c-w8" changed after it was approved: it was paused by a person in Nexus \(user:u-person, .*\), and now by a person in Nexus \(user:u-other, .*\)\. Ask for it again with the ads as they are now\.$/),
+    })
+    expect(await statusOf('Campaign', 'c-w8')).toBe('PAUSED')
+  })
+
+  it('undo-ad-change never switches back on a pause no Claude request made (it points to enable-ads); a Claude pause undoes as before', async () => {
+    await personPause('c-w14')
+    const [log] = await sql<{ id: string }>(`SELECT id FROM "AdvertisingActionLog" WHERE "entityId" = $1 ORDER BY "createdAt" DESC LIMIT 1`, ['c-w14'])
+    expect((await preview('undo-ad-change', { actionLogId: log.id })).error).toMatch(
+      /^Not undone: it would switch back on what no Claude request paused — campaign c-w14: a person paused it in Nexus \(user:u-person, .*\)\. Such a pause is lifted only with enable-ads and includePeoplesPauses: true: the preview says who paused it, and a person approves it with their authenticator code, never by rule\.$/)
+    const paused = await ask('pause-ads', { campaignIds: ['c-w15'] })
+    await approve(paused.approvalId!)
+    const undo = await preview('undo-ad-change', { changeSetId: paused.approvalId })
+    expect(undo.ok, undo.error).toBe(true)
+    expect(undo.preview).toMatchObject({ action: 'undo-ad-change', notJudgedByRule: [expect.stringMatching(/^puts back the status of campaign c-w15/)] })
   })
 })
 
