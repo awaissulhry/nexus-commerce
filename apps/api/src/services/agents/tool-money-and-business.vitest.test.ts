@@ -430,6 +430,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'cancel-queued-ad-write': (ids) => ({ changeSetId: ids.approvalId, why: 'money test cancel' }),
   // R14 — needs financials.adspend.view: a person without money is refused outright.
   'tune-ad-engine': () => ({ setting: 'breaker', breaker: { maxActionsPerHour: 100 } }),
+  // Ads autonomy W4-8 — need financials.adspend.view (rules, engines and their runs name money): refused outright without it.
+  'assign-ad-rules': (ids) => ({ ruleId: ids.automationRuleId, op: 'add', campaignIds: [ids.campaignId] }),
+  'set-coverage-set': () => ({ op: 'seed', portfolioId: 'MONEY-TEST-PORTFOLIO' }),
+  'run-ad-engine-now': () => ({ engine: 'rules' }),
   // R15 — a run now, previewed (no model call): no money in it.
   'steer-fleet': () => ({ action: 'run-now', charterKey: 'amazon-bid-tuner' }),
   // R17 — a new repricing rule, previewed: its range and what it would pick; no money field.

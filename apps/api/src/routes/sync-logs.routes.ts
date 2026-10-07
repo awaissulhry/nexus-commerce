@@ -41,12 +41,8 @@ import {
   subscribeSyncLogEvents,
   type SyncLogEvent,
 } from '../services/sync-logs-events.service.js'
-import {
-  CRON_REGISTRY,
-  isKnownCron,
-  listKnownCrons,
-} from '../jobs/cron-registry.js'
-import { recordCronRun, type CronCompletedStatus } from '../utils/cron-observability.js'
+import { listKnownCrons } from '../jobs/cron-registry.js'
+import { startCronByHand } from '../services/sync-logs/cron-trigger.service.js'
 import { inboundHandlerFor, inboundReceiptHandlerFor, canReplayInbound, ReplayUnsupported } from '../services/cx/ingress/handlers.js'
 import { completeInbound, deadLetterInbound, InboundDeferred, replayInbound } from '../services/cx/ingress/ledger.js'
 import { claimInbound, runWithInboundClaim } from '../services/cx/ingress/claims.js'
@@ -419,47 +415,19 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     '/sync-logs/cron/:jobName/trigger',
     async (request, reply) => {
       const { jobName } = request.params
-      if (!isKnownCron(jobName)) {
-        return reply.code(404).send({
-          error: `Unknown cron jobName '${jobName}'. See GET /sync-logs/cron/registry for the list.`,
-        })
-      }
-      const handler = CRON_REGISTRY[jobName]
-      // Fire-and-forget so the HTTP response returns immediately.
-      // recordCronRun will write a CronRun row that the hub picks
-      // up on its next 30s poll.
-      void recordCronRun(
-        jobName,
-        async () => {
-          /**
-           * ACR.1.2b — KEEP the handler's summary. This threw the result away and wrote the
-           * literal string "manual trigger", so every manually-triggered run in the platform
-           * recorded a row that said only that it had been triggered manually — which the
-           * `triggeredBy` column already says. Measured: a hand-run of
-           * `ads-structural-reconcile` landed `SUCCESS · "manual trigger"` beside scheduled
-           * rows carrying `campaigns=215 entities=7790 verified=6849 mismatch=731 …`.
-           *
-           * That is the whole value of a run: an operator presses the button precisely to
-           * find out what happened, and got the one row that could not tell them. The
-           * fallback is kept for handlers that genuinely return nothing.
-           */
-          const result = await handler()
-          if (typeof result === 'string' && result.trim()) return result
-          if (result && typeof result === 'object' && 'summary' in result) {
-            const s = (result as { summary?: unknown }).summary
-            // P1.8 review — a completed-but-not-green status (PARTIAL, NOT_CONFIGURED) travels with its
-            // summary; reducing the result to the string recorded a hand-run partial as SUCCESS.
-            if (typeof s === 'string' && s.trim()) return { summary: s, cronStatus: (result as { cronStatus?: CronCompletedStatus }).cronStatus }
-          }
-          return 'manual trigger'
-        },
-        { triggeredBy: 'manual' },
-      ).catch((err) => {
+      // ADS AUTONOMY W4-8 — the start lives in sync-logs/cron-trigger.service.ts (startCronByHand), shared with Claude's
+      // run-ad-engine-now; the answers are unchanged (cron-trigger-route-parity.vitest.test.ts).
+      const started = startCronByHand(jobName, (err) => {
         fastify.log.error(
           { err, jobName },
           '[sync-logs/cron/trigger] handler threw',
         )
       })
+      if (!started) {
+        return reply.code(404).send({
+          error: `Unknown cron jobName '${jobName}'. See GET /sync-logs/cron/registry for the list.`,
+        })
+      }
       return reply.code(202).send({ jobName, status: 'started' })
     },
   )
