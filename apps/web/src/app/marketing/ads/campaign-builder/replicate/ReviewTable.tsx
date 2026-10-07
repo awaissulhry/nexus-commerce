@@ -41,11 +41,11 @@ export interface TargetTableProps {
 
 const eur = (cents: number | null) => ((cents ?? 0) / 100).toFixed(2)
 
-/** A target's match type, without the negative marker the blueprint carries. */
+/** A target's match type, without the negative marker it carries (the blueprint's `_`, Amazon's `NEGATIVE_`). */
 export const matchLabel = (r: TargetView): string =>
   r.kind?.toUpperCase() === 'AUTO'
     ? (r.autoClause ?? 'auto').replace(/_/g, ' ').toLowerCase()
-    : (r.matchType ?? '').toUpperCase().replace(/^_/, '').toLowerCase()
+    : (r.matchType ?? '').toUpperCase().replace(/^(NEGATIVE)?_/, '').toLowerCase()
 
 /** Keyword rows take a match type; auto clauses and product targets do not. */
 const isKeyword = (r: TargetView) => (r.kind ?? 'KEYWORD').toUpperCase() === 'KEYWORD'

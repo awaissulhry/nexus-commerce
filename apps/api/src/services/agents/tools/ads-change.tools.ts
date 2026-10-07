@@ -1419,8 +1419,26 @@ async function createdByClaudeRequest(campaignId: string): Promise<{ approvalId:
     orderBy: { executedAt: 'asc' },
     select: { approvalId: true, executedAt: true },
   })
-  return made ? { approvalId: made.approvalId, at: made.executedAt.toISOString() } : null
+  if (made) return { approvalId: made.approvalId, at: made.executedAt.toISOString() }
+  // Builders for Claude (B-1..B-3) — a campaign one of Claude's builder tools made: its create carries the approval as
+  // its change set (AdvertisingActionLog.executionId). A playbook's campaigns are not among them: they go live only with
+  // the playbook's START, with the approver's code.
+  const created = await prisma.advertisingActionLog.findFirst({
+    where: { entityType: 'CAMPAIGN', entityId: campaignId, actionType: 'create_campaign', executionId: { not: null } },
+    orderBy: { createdAt: 'asc' },
+    select: { executionId: true },
+  })
+  if (!created?.executionId) return null
+  const built = await prisma.agentChange.findFirst({
+    where: { approvalId: created.executionId, toolName: { in: [...CLAUDE_BUILDER_TOOLS] } },
+    orderBy: { executedAt: 'asc' },
+    select: { approvalId: true, executedAt: true },
+  })
+  return built ? { approvalId: built.approvalId, at: built.executedAt.toISOString() } : null
 }
+
+/** The builder tools whose campaigns count as a Claude request's own for the allowlist (never apply-ads-playbook). */
+const CLAUDE_BUILDER_TOOLS = ['create-ai-goal-campaigns', 'build-sp-wizard-campaigns', 'replicate-ad-structure'] as const
 
 /** AA-W2-9 — campaigns put ON the allowlist by the business's rule in the last 24 hours (`excludeApprovalId`: this one). */
 async function allowlistedByRuleToday(excludeApprovalId?: string | null): Promise<number> {

@@ -599,4 +599,27 @@ describe('AA-W2-9 — stop, restore and the allowlist run by rule only inside th
     expect(on).toMatchObject({ status: 'runs_by_rule' })
     expect(((await approvalOf(on.approvalId)).preview as Answer)).toMatchObject({ createdBy: { approvalId: expect.any(String) }, onByRuleToday: 0 })
   })
+
+  it('on by rule also for a campaign one of Claude\'s builder tools made (its create carries the approval); never a playbook\'s', async () => {
+    await setLevel('set-campaign-live-writes', 'auto')
+    await market({ allowlist: 'auto' })
+    await setLimits('set-campaign-live-writes', { maxCampaignsOnPerDay: 5 })
+    await inside(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done' } })
+      for (const [id, tool] of [['c-built', 'build-sp-wizard-campaigns'], ['c-pb-built', 'apply-ads-playbook']] as const) {
+        await db().campaign.create({ data: { id, name: `Italy ${id}`, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: `EXT-${id}`, dailyBudget: '10.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: false } })
+        const made = await db().agentApproval.create({ data: { agentRunId: run.id, toolName: tool, riskTier: 'high', args: {}, status: 'executed', decidedAt: new Date() } })
+        await db().agentChange.create({ data: { approvalId: made.id, toolName: tool, via: 'claude', reversibility: 'none', before: {}, after: { applicationId: `run-${id}` } } })
+        // As every builder's create logs it: the campaign's create carries the approval as its change set.
+        await db().advertisingActionLog.create({ data: { executionId: made.id, actionType: 'create_campaign', entityType: 'CAMPAIGN', entityId: id, payloadBefore: {}, payloadAfter: {} } })
+      }
+    })
+    const built = (await call('set-campaign-live-writes', { campaignId: 'c-built', enabled: true })).answer
+    expect(built).toMatchObject({ status: 'runs_by_rule' })
+    expect(((await approvalOf(built.approvalId)).preview as Answer)).toMatchObject({ createdBy: { approvalId: expect.any(String) } })
+    // A playbook's campaign goes live only with its START (the approver's code): never on by rule here.
+    const playbook = (await call('set-campaign-live-writes', { campaignId: 'c-pb-built', enabled: true })).answer
+    expect(playbook).toMatchObject({ status: 'waiting_for_approval' })
+    expect(playbook.trust.why).toMatch(/only a campaign a Claude request created in this business goes on the live-write allowlist by rule/)
+  })
 })
