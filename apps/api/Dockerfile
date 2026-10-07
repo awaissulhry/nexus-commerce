@@ -35,13 +35,14 @@ COPY --from=prune /repo/out/full/ ./
 # - the API, compiled as `npm run build --workspace=@nexus/api` does but with `--noCheck`: src/services/presence/types.ts
 #   imports types from @nexus/web, which this pruned tree does not contain. Type-only imports leave no trace in the
 #   output (measured 2026-09-29: all 1,813 emitted .js and .map files byte-identical with and without the check), and
-#   CI's typecheck job checks the types;
+#   CI's typecheck job checks the types. The compiler's heap is 8 GB: at 4 GB the image build ran out of memory on
+#   2026-10-07 (about 4.5 GB resident on a Mac for this build; the GitHub runner has 16 GB);
 # - no dev dependencies and no test files (sources and compiled): nothing runs them in production, and their fake keys
 #   and database URLs would trip scripts/ci/check-image-secrets.sh.
 RUN npm rebuild @prisma/engines prisma @nexus/database \
  && npm run build --workspace=@nexus/shared \
  && npm run build --workspace=@nexus/events \
- && node --max-old-space-size=4096 node_modules/typescript/bin/tsc -p apps/api/tsconfig.json --noCheck \
+ && node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p apps/api/tsconfig.json --noCheck \
  && npm prune --omit=dev --ignore-scripts --no-audit --no-fund \
  && find apps packages -name node_modules -prune -o -type f -name '*.test.*' -exec rm -f {} +
 
