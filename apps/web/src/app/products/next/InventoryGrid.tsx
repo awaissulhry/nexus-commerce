@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ColGroupDef, IRowNode, ValueGetterParams, ValueSetterParams } from '@/design-system/grid'
 
 import { Pill } from '@/design-system/primitives'
-import { DeltaChip, GridDensityProvider, IdentityCell, NexusGrid, SkuTag, numericColumn, type ColDef, type GridApi, type GridReadyEvent, type ICellRendererParams } from '@/design-system/grid'
+import { DeltaChip, GridDensityProvider, IdentityCell, LockGlyph, NexusGrid, SkuTag, numericColumn, type ColDef, type GridApi, type GridReadyEvent, type ICellRendererParams } from '@/design-system/grid'
 
 import styles from './styles.module.css'
 import { gridDensity, gridGeometry } from '@/design-system/tokens/grid'
@@ -152,7 +152,7 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
             <span className={styles.ieOnHand} title={err ?? undefined}>
               {p.value}
               <DeltaChip delta={delta} />
-              {!loc.editable && <span className="nds-cell-lock-glyph" role="img" aria-label="Read-only">🔒</span>}
+              {!loc.editable && <LockGlyph />}
             </span>
           )
         },
