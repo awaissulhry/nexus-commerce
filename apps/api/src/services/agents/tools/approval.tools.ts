@@ -237,6 +237,9 @@ const AD_CHANGE_TOOLS = new Set([
   // W4-1 — an hourly plan change is Nexus only, but a switch-off, a delete or a removal gives back floored bids: each
   // give-back write carries the approval.
   'set-hourly-bid-plan',
+  // W4-7 — budgets: a schedule's give-backs, a pool's live rebalance and a restore to baseline are budget writes in the
+  // approval's change set; a plan (and a Nexus-only schedule or pool change) writes none, and reads "Approved and run."
+  'set-monthly-ad-budget', 'set-budget-schedule', 'set-budget-pool', 'restore-budget-baselines',
 ])
 
 export interface AdDelivery {

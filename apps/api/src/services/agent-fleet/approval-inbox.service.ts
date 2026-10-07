@@ -780,8 +780,15 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
      profile, or sandbox) are what the person approved. W4-4 — and the bid a run by rule writes (stepped to the largest
      change), and what auto-bid does with the bid afterwards (held as a person's, or handed back). */
   'set-target-bid': ['currentBidCents', 'effectiveBidCents', 'byRuleBidCents', 'afterwards', 'reach'],
-  // A6 — the budget or the adjustments it starts from, and where it lands.
-  'set-campaign-budget': ['currentBudgetCents', 'reach'],
+  // A6 — the budget or the adjustments it starts from, and where it lands. W4-7 — the list form: every campaign's budget
+  // now and asked (basis).
+  'set-campaign-budget': ['currentBudgetCents', 'basis', 'reach'],
+  // W4-7 — budgets: the plan, schedule or pool as it is (and every give-back, allocation or rebalance it makes), each
+  // budget a restore starts from and puts back, and where its writes land (Nexus only: none).
+  'set-monthly-ad-budget': ['basis', 'reach'],
+  'set-budget-schedule': ['basis', 'totals', 'reach'],
+  'set-budget-pool': ['basis', 'totals', 'reach'],
+  'restore-budget-baselines': ['basis', 'totals', 'reach'],
   'set-placement-multipliers': ['current', 'reach'],
   // A7 — how many change and why the rest do not, a fingerprint of every target's starting and new bid, where it lands.
   // W4-4 — the fingerprint holds the bids a run by rule writes too; and what auto-bid does with the bids afterwards.
