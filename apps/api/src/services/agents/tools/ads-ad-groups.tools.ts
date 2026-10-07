@@ -470,7 +470,7 @@ async function createPreview(raw: Record<string, unknown>, ctx: Pick<ToolContext
   if (playbook) return { ok: false, error: `Not queued: ${playbook}.` }
   if (!keywords.length === !targets.length) return { ok: false, error: 'Give either keywords or productTargets (Amazon takes one targeting kind per manual ad group), not both and not neither.' }
   if (keywords.length + negatives.length + negativeAsins.length + targets.length > LIST_MAX * 2) {
-    return { ok: false, error: `At most ${LIST_MAX * 2} keywords, targets and negatives in one ad group request: split it (add-ad-targets and add-negative-targets add more later).` }
+    return { ok: false, error: `At most ${LIST_MAX * 2} keywords, product targets and negatives in one new ad group: ask for it with fewer, and add the rest to it afterwards.` }
   }
   for (const [list, what] of [
     [keywords.map((k) => `${k.matchType} ${k.text}`), 'keywords'], [targets.map((t) => t.asin), 'product targets'],

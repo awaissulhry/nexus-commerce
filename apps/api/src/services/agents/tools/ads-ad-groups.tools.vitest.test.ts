@@ -316,6 +316,9 @@ describe('create-ad-group — approved', () => {
     expect(logs.map((l) => l.type)).toEqual(expect.arrayContaining(['create_ad_group', 'create_keyword', 'create_product_ad']))
     expect(logs.length).toBeGreaterThanOrEqual(5)
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'archive-ads', args: { adGroupIds: [id] } } })
+    // approval-status counts what it created (the ad group, its product ad, keywords and negative); sandbox: none at Amazon.
+    const s = (await inside(() => callTool(claude, 'approval-status', { approvalId: asked.approvalId! }))).visible.data as Row
+    expect(s).toMatchObject({ status: 'executed', ads: { reach: 'sandbox', created: { total: 5, atAmazon: 0 } }, change: { reversibility: 'partial' } })
     // The read shows it, held at its own floor, given back by set-ad-group op start.
     const read = (await preview('ad-groups', { adGroupId: id })).data.items[0]
     expect(read).toMatchObject({ floor: { by: 'user:u-asker', plannedDefaultBidCents: 40, givenBackBy: 'set-ad-group op start' }, targets: { keywords: 2, negatives: 1, heldAtFloor: 2 } })
