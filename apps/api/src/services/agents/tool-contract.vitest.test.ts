@@ -83,6 +83,9 @@ const AD_STRATEGY_AUTO: readonly string[] = [
   // B-2 — an AI goal, the create kind: only at the floor, off the allowlist, its rules and plan off (nothing spends until
   // restore-campaign); by default never by rule (maxCampaigns 0).
   'create-ai-goal-campaigns',
+  // W4-3 — campaign settings (the settings kind) and portfolios (the portfolio kind; an archive is the archive kind too):
+  // by default never by rule (maxItems 0 / no market listed); whatever adds spend needs the approver's code.
+  'set-campaign-settings', 'set-portfolio',
 ]
 
 /**
@@ -427,6 +430,16 @@ describe('C1 — every registered tool keeps the contract', () => {
       'apply-ads-playbook': { before: { op: 'build', playbookId: 'pb1', state: 'DRAFT', slots: [] }, after: { op: 'build', playbookId: 'pb1', applicationId: 'run1' } },
       // B-1 — a Replicate copy is archived (every campaign its run made).
       'replicate-ad-structure': { before: { applicationId: null, market: 'IT', productToken: 'TEST' }, after: { applicationId: 'run2' } },
+      // W4-3 — campaign settings go back through the tool, each campaign with its own values; a portfolio change through
+      // set-portfolio (a create is archived).
+      'set-campaign-settings': {
+        before: { changeSetId: 'ap1', campaigns: [{ campaignId: 'c1', portfolioId: 'PF-1', biddingStrategy: 'legacyForSales' }, { campaignId: 'c2', portfolioId: null, endDate: '2026-12-31' }] },
+        after: { campaigns: [{ campaignId: 'c1', portfolioId: 'PF-2', biddingStrategy: 'autoForSales' }, { campaignId: 'c2', portfolioId: 'PF-2', endDate: null }] },
+      },
+      'set-portfolio': {
+        before: { op: 'update', portfolioId: 'PF-1', market: 'IT', name: 'Old name', cap: { amountCents: 50000, currency: 'EUR', policy: 'monthly', startDate: null, endDate: null }, state: 'ENABLED', changeSetId: 'ap1' },
+        after: { op: 'update', portfolioId: 'PF-1', market: 'IT', name: 'New name', cap: { amountCents: 60000, currency: 'EUR', policy: 'monthly', startDate: null, endDate: null }, state: 'ENABLED' },
+      },
       // A7 — a bulk bid change is reversed as one change set by undo-ad-change.
       'bulk-ad-bid-change': { before: { changeSetId: 'ap1', bids: { t1: 30 } }, after: { bids: { t1: 35 } } },
       'undo-ad-change': { before: { changeSetId: 'ap2', undid: { mode: 'set', changeSetId: 'ap1' } }, after: { changeSetId: 'ap2', standing: 3 } },

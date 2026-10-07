@@ -262,6 +262,7 @@ const AMAZON_AD_TOOLS = new Set([
   'replicate-ad-structure',
   'create-ai-goal-campaigns',
   'build-sp-wizard-campaigns',
+  'set-campaign-settings', 'set-portfolio',
 ])
 
 /** A campaign page: Amazon's by its Nexus Campaign id, eBay's by its Nexus eBay campaign id. */
@@ -825,6 +826,31 @@ const READERS: Record<string, Reader> = {
       ],
     }
   },
+  // W4-3 — each campaign's settings from → to (one line per setting; the campaign named when there are several).
+  'set-campaign-settings': (p) => {
+    const lines = recs(p.changes)
+    const many = lines.length > 1 || (num(rec(p.totals)?.changing) ?? 0) > 1
+    const items = lines.flatMap((l) => recs(l.changes).map((c) => ({
+      sku: null,
+      name: text(l.label),
+      change: { label: many ? `${text(l.label) ?? '?'} · ${text(c.label) ?? '?'}` : text(c.label) ?? '?', from: text(c.from), to: text(c.to) },
+    })))
+    const first = lines[0]
+    return {
+      channel: 'AMAZON',
+      market: agreed(lines.map((l) => marketOf(l.market))),
+      changes: items.map((i) => i.change),
+      items,
+      changeCount: num(rec(p.totals)?.changing) ?? lines.length,
+      target: target('campaign', { id: text(first?.campaignId), name: text(first?.label), count: num(rec(p.totals)?.changing) ?? lines.length, href: campaignHref('set-campaign-settings', text(first?.campaignId)) }),
+    }
+  },
+  // W4-3 — a portfolio made, renamed, capped or archived: each value from → to.
+  'set-portfolio': (p) => ({
+    channel: 'AMAZON',
+    market: marketOf(p.market),
+    changes: recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.from), to: text(c.to) })),
+  }),
   // PB-5a — a build's campaigns and their daily budget, or an adopt's bindings (Nexus only).
   'apply-ads-playbook': (p, _a, ctx) => {
     // PB-9 — a phase switch: the phase, then each slot it floors or gives back and each hourly plan it switches.
