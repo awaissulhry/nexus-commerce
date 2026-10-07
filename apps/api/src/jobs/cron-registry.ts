@@ -111,6 +111,7 @@ import { runAmsSqsPoll } from './ams-sqs-poll.job.js'
 import { runSqpIngestOnce } from './sqp-ingest.job.js'
 import { runSqpCollectOnce } from './sqp-collect.job.js'
 import { runKtDigestOnce } from './kt-digest.job.js'
+import { runKeywordRankFeedOnce } from './keyword-rank-feed.job.js'
 import { runDaypartingOnce, daypartingSummaryLine } from './ad-dayparting.job.js'
 // AD.5 — cross-marketplace BudgetPool rebalancer.
 import { runBudgetPoolRebalanceOnce } from './budget-pool-rebalance.job.js'
@@ -296,6 +297,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'sqp-collect': () => runSqpCollectOnce(),
   // KT.7 — the Keyword Tracker digest, manually triggerable so its content can be read on demand.
   'kt-digest': () => runKtDigestOnce(),
+  // The Keyword Tracker's feed: search volume per bid-on keyword from Brand Analytics weeks Nexus holds (no Amazon call).
+  'keyword-rank-feed': () => runKeywordRankFeedOnce(),
   // 1c / 1e — the tick's own summary line: would-apply / waiting / deferred when the dial or the caps held changes back.
   'ad-dayparting': async () => daypartingSummaryLine(await runDaypartingOnce()),
   'budget-pool-rebalance': async () => {

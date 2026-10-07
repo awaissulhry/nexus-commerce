@@ -188,4 +188,17 @@ describe('AA-W2-11 — save-ad-rule by rule', () => {
     expect(ebay.ok).toBe(true)
     expect(tool().withinLimits!(ebay.preview, roomy())).toBe('only an Amazon ads rule may be saved by rule (the ads strategy covers Amazon); a person decides')
   })
+
+  it('a Keyword Tracker rule on organic rank is saved, and the plan says no automatic source fills it; one on search volume says nothing', async () => {
+    const kt = { ...amazonRule, name: 'TEST KT', trigger: 'KEYWORD_RANK_BID', actions: [{ type: 'bid_up', percent: 10 }] }
+    const onRank = await dry({ ...kt, conditions: [{ field: 'adTarget.organicRank', op: 'gt', value: 20 }] })
+    expect(onRank.ok).toBe(true)
+    expect(onRank.preview!.effect).toContain('Organic Rank has no automatic source: Amazon publishes no organic search position')
+    // the feed's real shape: a fresh reading with search volume and no rank does not change that
+    await inside(() => database.client.keywordRank.create({ data: { keyword: 'giacca moto', marketplace: 'IT', searchVolume: 6150, source: 'brand-analytics-sqp' } }))
+    expect((await dry({ ...kt, conditions: [{ field: 'adTarget.organicRank', op: 'gt', value: 20 }] })).preview!.effect).toContain('Organic Rank has no automatic source')
+    const onVolume = await dry({ ...kt, conditions: [{ field: 'adTarget.searchVolume', op: 'gte', value: 1000 }] })
+    expect(onVolume.ok).toBe(true)
+    expect(onVolume.preview!.effect).not.toContain('no automatic source')
+  })
 })

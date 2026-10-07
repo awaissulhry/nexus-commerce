@@ -6509,8 +6509,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=60')
     return { count: items.length, items }
   })
-  // POST — ingest rank snapshots (pluggable source: manual import now, a collector later). Each row is
-  // a point-in-time observation; we append (never overwrite) so the time-series + deltas stay intact.
+  // POST — ingest rank snapshots by hand (an import). The keyword-rank-feed cron writes the other source,
+  // search volume from Brand Analytics weeks (`source: brand-analytics-sqp`), and no automatic source fills
+  // organicRank / sponsoredRank — this route is the only way they arrive. Each row is a point-in-time
+  // observation; we append (never overwrite) so the time-series + deltas stay intact. searchVolume is
+  // searches per week, the unit the feed writes, so the two sources compare.
   fastify.post('/advertising/keyword-ranks', async (request, reply) => {
     const b = request.body as { ranks?: Array<{ keyword?: string; marketplace?: string; asin?: string; organicRank?: number; sponsoredRank?: number; searchVolume?: number; capturedAt?: string; source?: string }> }
     const list = Array.isArray(b?.ranks) ? b.ranks : []
