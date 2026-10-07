@@ -49,7 +49,7 @@ export async function loadMarket(market: string, opts: { now?: Date } = {}): Pro
       maxBidCents: c.maxBidCents, ownTargetAcos: (c.dynamicBidding as { targetAcos?: unknown } | null)?.targetAcos, allowlisted: c.liveBidWritesEnabled,
     })
   }
-  const empty = { market, dataDay, campaigns, adGroups: new Map(), targets: [], evidence: new Map(), prices: new Map(), newestReportAt: null }
+  const empty = { market, dataDay, campaigns, adGroups: new Map(), targets: [], evidence: new Map(), adSales30: new Map(), prices: new Map(), newestReportAt: null }
   if (![...campaigns.values()].some((c) => c.allowlisted)) return empty
 
   const groups = await prisma.adGroup.findMany({
@@ -80,27 +80,54 @@ export async function loadMarket(market: string, opts: { now?: Date } = {}): Pro
     bidsSuppressedFloorCents: g.bidsSuppressedFloorCents, bidsSuppressedBy: g.bidsSuppressedBy, families: [...(families.get(g.id) ?? [])].sort(),
   }]))
   const targetIds = targets.map((t) => t.id)
-  const [evidence, newestReportAt] = await Promise.all([loadEvidence(targetIds, window), newestReport(targetIds, now)])
-  return { market, dataDay, campaigns, adGroups, targets, evidence, prices, newestReportAt }
+  const [{ evidence, adSales30 }, newestReportAt] = await Promise.all([loadEvidence(targetIds, window), newestReport(targetIds, now)])
+  return { market, dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt }
 }
 
 /** The decayed sums per keyword over the settled window (one row per keyword with data). */
-export async function loadEvidence(targetIds: readonly string[], window: { since: Date; until: Date }): Promise<Map<string, Evidence>> {
-  if (!targetIds.length) return new Map()
-  const rows = await prisma.$queryRaw<Array<{ id: string; clicks: number; orders: number; sales: number; cost: number }>>(Prisma.sql`
+export async function loadEvidence(targetIds: readonly string[], window: { since: Date; until: Date }): Promise<{ evidence: Map<string, Evidence>; adSales30: Map<string, number> }> {
+  if (!targetIds.length) return { evidence: new Map(), adSales30: new Map() }
+  const rows = await prisma.$queryRaw<Array<{ id: string; clicks: number; orders: number; sales: number; cost: number; sales30: number }>>(Prisma.sql`
     SELECT d."localEntityId" AS id,
            SUM(d.clicks * d.w)::float8 AS clicks,
            SUM(COALESCE(d."orders7d", 0) * d.w)::float8 AS orders,
            SUM(COALESCE(d."sales7dCents", 0) * d.w)::float8 AS sales,
-           SUM(d."costMicros"::float8 / 10000 * d.w)::float8 AS cost
+           SUM(d."costMicros"::float8 / 10000 * d.w)::float8 AS cost,
+           SUM(CASE WHEN d.age < 30 THEN COALESCE(d."sales7dCents", 0) ELSE 0 END)::float8 AS sales30
       FROM (SELECT p."localEntityId", p.clicks, p."orders7d", p."sales7dCents", p."costMicros",
+                   (${isoDay(window.until)}::date - p.date) AS age,
                    power(0.5, (${isoDay(window.until)}::date - p.date)::float8 / 30) AS w
               FROM "AmazonAdsDailyPerformance" p
              WHERE p."entityType" = 'AD_TARGET' AND p."adProduct" = 'SPONSORED_PRODUCTS'
                AND p."localEntityId" = ANY(${[...targetIds]}::text[])
                AND p.date BETWEEN ${isoDay(window.since)}::date AND ${isoDay(window.until)}::date) d
      GROUP BY d."localEntityId"`)
-  return new Map(rows.map((r) => [r.id, { clicks: Number(r.clicks), orders: Number(r.orders), salesCents: Number(r.sales), costCents: Number(r.cost) }]))
+  return {
+    evidence: new Map(rows.map((r) => [r.id, { clicks: Number(r.clicks), orders: Number(r.orders), salesCents: Number(r.sales), costCents: Number(r.cost) }])),
+    adSales30: new Map(rows.map((r) => [r.id, Number(r.sales30)])),
+  }
+}
+
+/**
+ * BB-5 — TACoS: each family's Amazon sales in the market over the 30 settled days (DailySalesAggregate, every SKU of the
+ * family: the parent and its variations), in cents. Read only when a strategy target of the market is a TACoS one.
+ */
+export async function loadFamilySales(market: string, families: readonly string[], until: Date): Promise<Map<string, number>> {
+  if (!families.length) return new Map()
+  const products = await prisma.product.findMany({ where: { OR: [{ id: { in: [...families] } }, { parentId: { in: [...families] } }] }, select: { id: true, sku: true, parentId: true } })
+  const familyOfSku = new Map(products.map((p) => [p.sku, p.parentId && families.includes(p.parentId) ? p.parentId : p.id]))
+  if (!familyOfSku.size) return new Map()
+  const rows = await prisma.dailySalesAggregate.groupBy({
+    by: ['sku'],
+    where: { sku: { in: [...familyOfSku.keys()] }, channel: 'AMAZON', marketplace: market, day: { gt: new Date(until.getTime() - 30 * 86_400_000), lte: until } },
+    _sum: { grossRevenue: true },
+  })
+  const out = new Map<string, number>()
+  for (const r of rows) {
+    const family = familyOfSku.get(r.sku)
+    if (family) out.set(family, (out.get(family) ?? 0) + Math.round(Number(r._sum.grossRevenue ?? 0) * 100))
+  }
+  return out
 }
 
 /** The newest AD_TARGET report of these keywords' last 14 days (Amazon re-reports a day while its sales settle; null: none). */
@@ -130,13 +157,16 @@ export async function loadStrategy(market: string, adGroupIds: readonly string[]
   const view = await openStrategy(market)
   if (view.empty) return out
   for (const [id, e] of await view.forAdGroups(adGroupIds)) {
-    const t = e.resolved.fields.get('target')?.value as { targetKind?: unknown; targetPct?: unknown } | undefined
+    const t = e.resolved.fields.get('target')?.value as { targetKind?: unknown; targetPct?: unknown; targetLoPct?: unknown; targetHiPct?: unknown } | undefined
     const target = t && (t.targetKind === 'ACOS' || t.targetKind === 'TACOS') && typeof t.targetPct === 'number' ? { kind: t.targetKind, pct: t.targetPct } as const : null
+    // BB-5 — the band, in the target's own kind (either side may be empty).
+    const side = (v: unknown) => (typeof v === 'number' ? v : null)
+    const band = target && (side(t?.targetLoPct) != null || side(t?.targetHiPct) != null) ? { loPct: side(t?.targetLoPct), hiPct: side(t?.targetHiPct) } : null
     const goal = e.resolved.fields.get('goal')?.value
     out.set(id, {
       target,
       acosPct: e.values.targetAcosPct,
-      band: null,
+      band,
       goal: typeof goal === 'string' ? goal : null,
       minBidCents: e.values.minBidCents,
       maxBidCents: e.values.maxBidCents,
@@ -203,6 +233,10 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
     previousDecisions(targetIds, now),
   ])
   const accountDefaultPct = typeof owner.accountDefaultPct === 'number' ? owner.accountDefaultPct : null
+  // BB-5 — a TACoS target needs each family's total Amazon sales (read only when one is in force here).
+  const tacosGroups = groupIds.filter((id) => strategy.get(id)?.target?.kind === 'TACOS')
+  const tacosFamilies = [...new Set(tacosGroups.flatMap((id) => m.adGroups.get(id)?.families ?? []))]
+  const familySales = tacosFamilies.length ? await loadFamilySales(m.market, tacosFamilies, new Date(`${m.dataDay}T00:00:00Z`)) : new Map<string, number>()
   const lastSteps = new Map([...previous].flatMap(([id, p]) => (p.lastStep ? [[id, p.lastStep] as const] : [])))
   return {
     run: {
@@ -213,6 +247,7 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
       holds,
       enrollments: new Map(enrollments.map((e) => [e.campaignId, { mode: e.mode, heldBy: e.heldBy, heldUntil: e.heldUntil }])),
       lastSteps,
+      familySales,
     },
     lastWrites,
     previous,

@@ -40,6 +40,7 @@ import { normaliseTerm } from '../ads-negation-policy.js'
 import { STEP_UP_NEEDS } from '../../agents/step-up-approval.js'
 import type { RaiseWords } from '../../agents/claude-trust.service.js'
 import { accountDefaultFraction, readOwnerTargets, targetFraction } from '../ads-target-acos-resolver.js'
+import { BAND_ABOVE, BAND_BELOW } from '../bid-brain/goal.js'
 import {
   CLAUDE_ACTION_TYPES,
   CLAUDE_DAILY_FIELDS,
@@ -116,9 +117,12 @@ export const STRATEGY_VALUES_INPUT = z.object({
   goal: z.enum(STRATEGY_GOALS).nullable().optional().describe('LAUNCH, GROW, PROFIT, CLEAR_STOCK or DEFEND: what the ads should do here (descriptive: Claude reads it, no engine derives a number from it)'),
   goalNote: z.string().max(2000).nullable().optional().describe('the why, in the Owner\'s words (at most 2,000 characters)'),
   target: z.object({
-    kind: z.enum(TARGET_KINDS).describe('ACOS or TACOS (engines steer by ACoS only; a TACoS target is stored and shown)'),
-    pct: int('targetPct').describe(`a whole percent, 1–${MAX_TARGET_PCT} (25 = 25 %)`),
-  }).strict().nullable().optional().describe('the target, as one group'),
+    kind: z.enum(TARGET_KINDS).describe("ACOS or TACOS (today's engines steer by ACoS only and skip a TACoS target; the bid brain, in shadow, turns a TACoS target into an ACoS aim from the market's sales)"),
+    pct: int('targetPct').describe(`a whole percent, 1–${MAX_TARGET_PCT} (25 = 25 %): the aim`),
+    // BB-5 — the band around the aim (the bid brain leaves a bid alone inside it), in the target's own kind.
+    loPct: int('targetLoPct').nullable().optional().describe('the bottom of the band around the aim, a whole percent at or below pct; empty = 10 % below pct (20 → 18)'),
+    hiPct: int('targetHiPct').nullable().optional().describe('the top of the band, a whole percent at or above pct; empty = 15 % above pct (20 → 23)'),
+  }).strict().nullable().optional().describe("the target, as one group: its kind, the aim and the band around it (the bid brain, in shadow, leaves a bid alone while its expected ACoS is inside the band)"),
   monthlySpendCapCents: int('monthlySpendCapCents').nullable().optional().describe("the most this scope's ads may spend in a calendar month, in cents of the market's currency (at least 1; null = no cap)"),
   minBidCents: int('minBidCents').nullable().optional().describe('the lowest bid, in cents'),
   maxBidCents: int('maxBidCents').nullable().optional().describe('the highest bid, in cents'),
@@ -243,7 +247,11 @@ export function judgeChange(rule: RaiseRule, key: StrategyFieldKey, before: unkn
       const kind = (t: unknown) => ((t as Group | null)?.targetKind as string | undefined) ?? 'ACOS'
       const pct = (t: unknown) => numberOr((t as Group | null)?.targetPct, opts.fallbackTargetPct)
       if (kind(b) !== kind(a)) return 'raise'
-      return pct(a) > pct(b) ? 'raise' : pct(a) < pct(b) ? 'lower' : 'same'
+      // BB-5 — the aim and each side of the band (an empty side: the default band around the aim); any one up raises.
+      const sides = (t: unknown) => [pct(t), numberOr((t as Group | null)?.targetLoPct, pct(t) * BAND_BELOW), numberOr((t as Group | null)?.targetHiPct, pct(t) * BAND_ABOVE)]
+      const [from, to] = [sides(b), sides(a)]
+      if (to.some((v, i) => v > from[i] + 1e-9)) return 'raise'
+      return to.some((v, i) => v < from[i] - 1e-9) ? 'lower' : 'same'
     }
     case 'loosen': {
       // A group that goes loosens (the engines fall back); a new group only binds tighter (the stricter one wins).
@@ -315,7 +323,7 @@ function columnsOfInput(field: StrategyField, value: unknown): Columns {
   const v = value as Record<string, unknown>
   switch (field.key) {
     case 'target':
-      return { targetKind: v.kind, targetPct: v.pct }
+      return { targetKind: v.kind, targetPct: v.pct, targetLoPct: v.loPct ?? null, targetHiPct: v.hiPct ?? null }
     case 'harvest':
       return { harvestMinOrders: v.minOrders, harvestMinClicks: v.minClicks, harvestMaxAcosPct: v.maxAcosPct ?? null, harvestWindowDays: v.windowDays }
     case 'negate':
@@ -336,7 +344,7 @@ function inputOfColumns(field: StrategyField, row: Columns): unknown {
   if (!requiredColumns(field).every((c) => row[c] != null)) return null
   switch (field.key) {
     case 'target':
-      return { kind: row.targetKind, pct: row.targetPct }
+      return { kind: row.targetKind, pct: row.targetPct, loPct: row.targetLoPct ?? null, hiPct: row.targetHiPct ?? null }
     case 'harvest':
       return { minOrders: row.harvestMinOrders, minClicks: row.harvestMinClicks, maxAcosPct: row.harvestMaxAcosPct ?? null, windowDays: row.harvestWindowDays }
     case 'negate':
@@ -579,6 +587,14 @@ export async function planStrategyChange(raw: unknown, opts: PlanOptions = {}): 
     after = { ...(own ?? settingsOf({})!) }
     for (const field of given) Object.assign(after, columnsOfInput(field, (values as Record<string, unknown>)[field.key]))
   }
+  // BB-5 — the band holds the aim: bottom ≤ aim ≤ top.
+  if (after && typeof after.targetPct === 'number') {
+    const lo = after.targetLoPct
+    const hi = after.targetHiPct
+    if ((typeof lo === 'number' && lo > after.targetPct) || (typeof hi === 'number' && hi < after.targetPct)) {
+      return refuse(400, `target: the band must hold the aim — loPct at or below pct, hiPct at or above it (pct ${after.targetPct}${typeof lo === 'number' ? `, loPct ${lo}` : ''}${typeof hi === 'number' ? `, hiPct ${hi}` : ''}).`)
+    }
+  }
   if (after && typeof after.minBidCents === 'number' && typeof after.maxBidCents === 'number' && after.minBidCents > after.maxBidCents) {
     return refuse(400, `The lowest bid (minBidCents) is above the highest bid (maxBidCents) on this row: give a floor at or below the ceiling.`)
   }
@@ -735,7 +751,11 @@ function previewOf(p: {
   ].filter(Boolean).join(' ')
   const warnings = [
     p.changes.some((c) => c.field === 'target' && (c.to as Group | null)?.targetKind === 'TACOS')
-      ? 'A TACoS target is stored and shown, and Claude steers by it; Nexus\'s engines steer by ACoS only and use the next ACoS target down the chain.'
+      ? 'A TACoS target is stored and shown, and Claude steers by it; the bid brain (in shadow, writing nothing yet) turns it into an ACoS aim from the market\'s sales; Nexus\'s other engines steer by ACoS only and use the next ACoS target down the chain.'
+      : null,
+    // BB-5 — only the bid brain reads the band, and it writes nothing yet.
+    p.changes.some((c) => c.field === 'target' && ((c.to as Group | null)?.targetLoPct != null || (c.to as Group | null)?.targetHiPct != null || (c.from as Group | null)?.targetLoPct != null || (c.from as Group | null)?.targetHiPct != null))
+      ? 'The band is read by the bid brain only, which runs in shadow and writes nothing yet; the other engines steer to the aim itself.'
       : null,
     p.shadow.shadows.length && p.given.some((f) => f.key === 'target') && !p.campaignTargets.some((c) => c.toFraction == null)
       ? `${plural(p.shadow.shadows.length, 'campaign')} ${p.shadow.shadows.length === 1 ? 'has its' : 'have their'} own target ACoS, which keeps winning over the strategy${p.scope.level === 'MARKET' ? ' (clearCampaignTargets clears them in this change)' : ''}.`

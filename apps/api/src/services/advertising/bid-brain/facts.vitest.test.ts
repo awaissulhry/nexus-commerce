@@ -68,6 +68,14 @@ describe('goal', () => {
     expect(goalTarget(campaign('c'), undefined, 30).target).toEqual({ kind: 'ACOS', pct: 30 })
     expect(goalTarget(campaign('c', { ownTargetAcos: 9 }), undefined, null).target).toBeNull()
   })
+
+  it('BB-5 — passes the band on, and gives a TACoS target the family’s sales against its ad sales', () => {
+    const tacos = run({ strategy: new Map([['g1', { target: { kind: 'TACOS', pct: 10 }, acosPct: null, band: { loPct: 8, hiPct: 14 }, goal: null, minBidCents: null, maxBidCents: null, maxChangePct: null }]]), familySales: new Map([['famA', 600_000]]) })
+    const m = market({ adSales30: new Map([['t1', 100_000], ['t2', 50_000], ['t3', 90_000], ['t4', 7_000]]) })
+    const [t1] = buildFacts(m, tacos)
+    expect(t1.goal).toMatchObject({ target: { kind: 'TACOS', pct: 10 }, band: { loPct: 8, hiPct: 14 }, sales: { totalCents: 600_000, adCents: 240_000 } })
+    expect(buildFacts(market(), run())[0].goal.sales).toBeUndefined()
+  })
 })
 
 describe('overrides and brakes', () => {

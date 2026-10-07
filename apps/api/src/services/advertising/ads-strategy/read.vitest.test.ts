@@ -129,7 +129,7 @@ describe('the engines\' view (effective.ts)', () => {
       expect(it.orphans).toEqual([{ strategyId: ids.goneRow, level: 'PRODUCT', scopeId: ids.gone, label: 'TEST-W1-GONE (IT)', why: 'the product no longer exists or was deleted' }])
       const v = await it.forProducts([ids.v])
       expect(v.values).toMatchObject({ minBidCents: 13, maxBidCents: 121, targetAcosPct: 24, targetAcos: 0.24, maxActionsPerRun: 40 })
-      expect(v.resolved.fields.get('target')!.value).toEqual({ targetKind: 'TACOS', targetPct: 11 })
+      expect(v.resolved.fields.get('target')!.value).toEqual({ targetKind: 'TACOS', targetPct: 11, targetLoPct: null, targetHiPct: null })
       expect(v.resolved.fields.get('targetAcosPct')!.source).toMatchObject({ level: 'category', scopeId: ids.leaf, label: 'Test leaf (IT)' })
     })
   })

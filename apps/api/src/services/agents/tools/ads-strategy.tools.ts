@@ -80,7 +80,7 @@ const adsStrategy: AgentTool = {
   }),
   description:
     "Read the business's Amazon Ads strategy: what the Owner set per market, and per category or product inside a market "
-    + '(goal and why, target ACoS or TACoS, monthly spend cap, lowest and highest bid, largest bid change, most actions per '
+    + '(goal and why, target ACoS or TACoS and its band, monthly spend cap, lowest and highest bid, largest bid change, most actions per '
     + 'run, protection, harvest and negate thresholds, how a temporary stop works, what Claude may do alone per kind of '
     + "ad action, and the most changes, raises and budget increase Claude's ad changes may run by rule in a market a day — "
     + 'empty is 0). view effective (default) gives every number in force for a market, a category, a product, a campaign '
@@ -155,7 +155,8 @@ const setAdsStrategy: AgentTool = {
   description:
     "Change the business's Amazon Ads strategy for ONE scope: a market, or a category or a product inside one market "
     + '(level market | category | product; a parent covers its variations). values sets fields: goal and why, target '
-    + '(ACOS or TACOS, a whole percent), monthly spend cap, lowest and highest bid and stop bid (cents), largest bid change, '
+    + '(ACOS or TACOS, a whole percent: the aim, with an optional band loPct–hiPct around it that the bid brain, in shadow, '
+    + 'leaves a bid alone inside), monthly spend cap, lowest and highest bid and stop bid (cents), largest bid change, '
     + 'most actions per run, protection, harvest and negate thresholds, how a temporary stop works (low bids), what Claude '
     + 'may do alone per kind of ad action, review days, and (market only) the most changes, raises and budget increase '
     + "Claude's ad changes may run by the business's rule there in a day — empty or 0 means none runs by rule; a value "

@@ -192,7 +192,7 @@ describe('targets: ACoS steers, TACoS is shown', () => {
       row('PRODUCT', 'v', { targetKind: 'TACOS', targetPct: 12 }),
     ])
     const r = resolveProduct(index, product('v', 'p'), catalog())
-    expect(field(r, 'target')).toEqual({ value: { targetKind: 'TACOS', targetPct: 12 }, source: expect.objectContaining({ scopeId: 'v' }) })
+    expect(field(r, 'target')).toEqual({ value: { targetKind: 'TACOS', targetPct: 12, targetLoPct: null, targetHiPct: null }, source: expect.objectContaining({ scopeId: 'v' }) })
     expect(field(r, 'targetAcosPct')).toEqual({ value: 25, source: expect.objectContaining({ scopeId: 'leaf' }) })
     // What an engine takes: a FRACTION, never the TACoS.
     expect(valuesOf(r)).toMatchObject({ targetAcos: 0.25, targetAcosPct: 25 })

@@ -9142,6 +9142,8 @@ CREATE TABLE "AdsStrategy" (
     "goalNote" TEXT,
     "targetKind" TEXT,
     "targetPct" INTEGER,
+    "targetLoPct" INTEGER,
+    "targetHiPct" INTEGER,
     "monthlySpendCapCents" INTEGER,
     "minBidCents" INTEGER,
     "maxBidCents" INTEGER,
