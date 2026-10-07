@@ -49,6 +49,8 @@ export function useFamilyProjections(
   productId: string,
   market: string | null,
   locale?: string,
+  /** `order` — only the axes and the axis values, without the projection reads (the Information page's row order). */
+  view?: 'order',
 ): UseFamilyProjections {
   const [projections, setProjections] = useState<FamilyProjections>(EMPTY_PROJECTIONS)
   const [loading, setLoading] = useState(true)
@@ -65,7 +67,7 @@ export function useFamilyProjections(
     setError(null)
 
     const backend = getBackendUrl()
-    const studioUrl = `${backend}/api/products/${encodeURIComponent(productId)}/studio/family?market=${encodeURIComponent(market)}${locale ? `&locale=${encodeURIComponent(locale)}` : ''}`
+    const studioUrl = `${backend}/api/products/${encodeURIComponent(productId)}/studio/family?market=${encodeURIComponent(market)}${locale ? `&locale=${encodeURIComponent(locale)}` : ''}${view ? `&view=${view}` : ''}`
 
     const load = async (): Promise<FamilyProjections> => {
       const studio = await fetch(studioUrl, { credentials: 'include', cache: 'no-store', signal })
@@ -87,7 +89,7 @@ export function useFamilyProjections(
       .finally(() => { if (mine === request.current) setLoading(false) })
 
     return () => { abort.abort() }
-  }, [productId, market, locale, nonce])
+  }, [productId, market, locale, view, nonce])
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
   return { projections, loading, error, reload }

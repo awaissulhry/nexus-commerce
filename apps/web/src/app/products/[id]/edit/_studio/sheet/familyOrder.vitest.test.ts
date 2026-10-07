@@ -12,7 +12,7 @@ import type { FamilyAxis } from '../variants/family/projections'
 
 import { orderRows, withRowIdentity } from './channel/rows'
 import type { AliasGroup, StudioRow } from './channel/types'
-import { compareFamilyRank, familyAxes, familyAxisValues, familyRank, familyReadScope, sortByFamilyRank, type FamilyOrderSource } from './familyOrder'
+import { compareFamilyRank, familyAxes, familyAxisValues, familyRank, familyReadScope, sharedIdentityRows, sortByFamilyRank, type FamilyOrderSource } from './familyOrder'
 
 const PARENT = 'AIR-MESH-JACKET-MEN'
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
@@ -73,7 +73,7 @@ const alias = (id: string | null, position: number): AliasGroup => ({
 /** A market page with the main listing and one alias over the same SKUs, as `useChannelSheetAdapter` orders. */
 function marketRows(rows: StudioRow[], fam: FamilyOrderSource) {
   const server = [...rows.map((r) => ({ ...r, aliasId: 'alias-2' })), ...rows]
-  return orderRows(withRowIdentity(server, [alias(null, 0), alias('alias-2', 1)]), familyRank(fam, COLUMNS, server))
+  return orderRows(withRowIdentity(server, [alias(null, 0), alias('alias-2', 1)]), familyRank(fam, COLUMNS, sharedIdentityRows(server)))
 }
 
 describe('the Information page orders a family like the Matrix', () => {
@@ -123,6 +123,17 @@ describe('the Information page orders a family like the Matrix', () => {
     const matrix = matrixOrder(rows, fam)
     expect(matrix.indexOf(`${PARENT}-NERO-XS`)).toBe(matrix.indexOf(`${PARENT}-NERO-XL`) + 1)
     expect(sharedOrder(rows, fam)).toEqual(matrix)
+  })
+
+  it('ranks a market row by the SHARED values only — its own channel value cannot move it (reviewer D)', () => {
+    const fam = family()
+    const orphan = `${PARENT}-ORPHAN`
+    const master = [...sheetRows(), row(orphan)]
+    /* No shared size anywhere; the market's own cell says S, under the family axis key. */
+    const market = master.map((r) => (r.sku === orphan ? { ...r, axisValues: { Colore: 'Nero', Taglia: 'S' } } : r))
+    const matrix = matrixOrder(master, fam)
+    expect(matrix.at(-1)).toBe(orphan)
+    expect(marketRows(market, fam).filter((r) => r.aliasId === null).map((r) => r.sku)).toEqual(matrix)
   })
 
   it('orders by parent then SKU while the family read has not answered — the Matrix’s order in that moment too', () => {

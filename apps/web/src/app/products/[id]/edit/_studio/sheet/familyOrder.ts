@@ -7,8 +7,9 @@
  * a missing axis value last; then the SKU.
  *
  * 🔴 Before this file the Information page sorted by SKU — `L · M · S · XL · XS · XXL` beside the Matrix's
- * `XS · S · M · L · XL · XXL` for the same family. A market's OWN variation order is not used here on purpose
- * (Option B was rejected): every page follows the one shared order, so no page can disagree with the Matrix.
+ * `XS · S · M · L · XL · XXL` for the same family. The order is the family read's (`storedAxisOrder`: the first parent
+ * listing that stores one), the SAME on every page; a market page never orders by its own listing's order (Option B
+ * was rejected), so no page can disagree with the Matrix.
  *
  * 🔴 Nothing here links to the Variants page (`FamilyVariants.tsx`): the Owner plans to remove it (2026-10-07). This
  * reads only the family read and the pure rules beside it (`variants/family/coverage.ts`, `projections.ts`), which the
@@ -81,6 +82,17 @@ export function familyRank(family: FamilyOrderSource, columns: readonly FamilyAx
   }
   const ordered = orderByAxisValues(merged, familyAxes(family, columns, merged))
   return new Map(ordered.map((row, index) => [row.id, index]))
+}
+
+/**
+ * A market page's rows as the rank reads them: identity only.
+ *
+ * A channel row's own cells and axis values are that market's values, not the shared ones the Matrix reads. Left in,
+ * a child with no shared size and an Amazon `size` of S sat between S and M on the Amazon page and last on the Matrix
+ * (reviewer D, 2026-10-07). The family read already carries every shared value (the master cell, then both stores).
+ */
+export function sharedIdentityRows(rows: readonly FamilyOrderRow[]): FamilyOrderRow[] {
+  return rows.map((row) => ({ id: row.id, sku: row.sku, isParent: row.isParent, values: {} }))
 }
 
 /**

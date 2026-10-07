@@ -115,7 +115,9 @@ import { NewRowsControl } from '../newRows/NewRowsControl';
 import { aliasTarget, newRowsContextMenu, newRowsGridKey, newRowsPaste, useNewRows, variationTarget } from '../newRows/useNewRows';
 import { channelNewRow, lockedOnNewRows, newRowRefusal, unsavedOf, withNewRows } from '../newRows/newRowsGrid';
 import type { NewRowKind } from '../newRows/newRows';
+import { sharedIdentityRows } from '../familyOrder';
 import { useFamilyRank } from '../useFamilyRank';
+import { FamilyOrderNotice } from '../FamilyOrderNotice';
 /** Add rows — a channel scope adds variations or listings (aliases). */
 const CHANNEL_ROW_KINDS: readonly NewRowKind[] = ['variation', 'alias'];
 /** No rows yet — one constant, so the family rank is not rebuilt on every render while the sheet loads. */
@@ -216,8 +218,11 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const rowObjects = useRef(new WeakMap<object, ChannelSheetRow>());
     /* Owner 2026-10-07 (Option A) — the rows inside each alias block follow the Matrix's family order (`useFamilyRank`). */
     /* Ranked from every row the sheet read, before a listing is chosen: picking one alias must not read the family again. */
-    const familyOrder = useFamilyRank(productId, loadedData?.rows ?? NO_ROWS, loadedData?.columns);
-    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current), familyOrder.rank) : []), [data, familyOrder.rank]);
+    const rankRows = useMemo(() => sharedIdentityRows(loadedData?.rows ?? NO_ROWS), [loadedData]);
+    const familyOrder = useFamilyRank(productId, rankRows, loadedData?.columns);
+    /* Held until the family order is first read: rows that moved after the first paint would leave a focused cell on another SKU. */
+    const orderPending = !!data && !familyOrder.settled;
+    const rows = useMemo(() => (data && familyOrder.settled ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current), familyOrder.rank) : []), [data, familyOrder.settled, familyOrder.rank]);
     // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
     const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
     const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
@@ -1275,7 +1280,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const noAccount = !accountId && !data?.scope.connectionId && accounts.length === 0;
     return {
         scope: 'channel',
-        loading, switching, unavailable: unavailable,
+        loading: loading || orderPending, switching, unavailable: unavailable,
         errorLabel: `${channelLabel(channel)} · ${marketplace} information`,
         errorMessage: error,
         backendMissing: backendMissing, retry: reload,
@@ -1396,7 +1401,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerStart: <NewRowsControl {...newRows.control}/>, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the Shared product — every channel sees those edits`}>
               {crossChannelCols} of {data.columns.length} columns write the Shared product — every channel sees those edits
             </span>)}</>,
-        notice: <>{startsDraftHere && <Banner tone={noAccount ? 'warning' : 'info'} title={noAccount ? noAccountTitle(channel) : notListedTitle(channel, marketplace)}>{noAccount ? connectAccountSentence(channel, marketplace) : draftStartSentence(channel, 'edit')}</Banner>}
+        notice: <><FamilyOrderNotice error={familyOrder.error} onRetry={familyOrder.reload}/>{startsDraftHere && <Banner tone={noAccount ? 'warning' : 'info'} title={noAccount ? noAccountTitle(channel) : notListedTitle(channel, marketplace)}>{noAccount ? connectAccountSentence(channel, marketplace) : draftStartSentence(channel, 'edit')}</Banner>}
             {fieldsBanner}
             {problem && <Banner tone="warning" onDismiss={clearProblem}>{problem}</Banner>}
             {/* 2026-09-24 — never a silent short sheet: while the store's field list is not available, say so. The sheet reloads
@@ -1405,7 +1410,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
               Metafields and metaobject fields appear here as soon as Shopify answers. The sheet updates by itself.
             </Banner>}</>,
         grid: {
-            loading: loading,
+            loading: loading || orderPending,
             noRowsOverlayComponentParams: emptyState,
             ...shopifyClipboard,
             processDataFromClipboard: pasteIntoNewRows,
@@ -1471,7 +1476,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
             {control.element}
             {reloadConfirm.element}</>, afterPreferences: <>
     {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: selectedAlias ?? selected[0]?.aliasId ?? '' }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}
-    {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><SheetTransfer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); }}/>
+    {bulkFormulaRows && data && <FormulaBulkDialog rows={bulkFormulaRows} columns={data.columns} coordinate={{ scope: 'channel', channel, marketplace, market: marketplace, locale: data?.scope.locale ?? locale ?? '', channelConnectionId: data?.scope.connectionId ?? accountId ?? undefined, aliasKey: bulkFormulaRows[0]?.aliasKey ?? '' }} functions={formulas.functions} preview={(id, key, expr, signal) => formulas.preview(bulkFormulaRows.find(row => row.id === id)!.rowId, key, expr, signal)} candidatesFor={(id, fieldKey) => { const row = rows.find(row => row.rowId === bulkFormulaRows.find(item => item.id === id)?.rowId); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); void refresh(() => true); }}/>}</>, after: <><SheetTransfer open={transferOpen} intent={transferIntent} onClose={() => setTransferOpen(false)} productId={productId} market={marketplace} channel={channel} accountId={accountId} aliasKey={selectedAlias} locale={locale} selectedIds={selected.map(row => row.id)} onReference={() => onExport('view')} visibleFields={expandSlotListKeys(sheetColumns.visibleAttributeKeys(), gridColumns).flatMap(key => { const c = data?.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key, ...Object.values(c.channels ?? {}).flatMap(channel => [channel.key, channel.attribute])] : []; })} onApplied={() => { formulas.reload(); reload(); familyOrder.reload(); }}/>
         {mediaEditor.element}
         {shopifyEditor.element}
         {/* "Publish this listing…" (a band's ⋯): the studio's own Publish window, only this listing ticked. */}

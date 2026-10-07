@@ -84,6 +84,7 @@ import { lockedOnNewRows, newRowRefusal, sharedNewRow, unsavedOf, withNewRows } 
 import type { NewRowKind } from '../newRows/newRows';
 import { sortByFamilyRank } from '../familyOrder';
 import { useFamilyRank } from '../useFamilyRank';
+import { FamilyOrderNotice } from '../FamilyOrderNotice';
 /** Progress columns — a coordinate column's key, from its readiness column id (`ready:AMAZON:IT:acc:it` → `progress:…`). */
 /* A coordinate's progress column keeps ONE id whatever language is pressed (the trailing `:<language>` is dropped), so a
    layout that hides or pins it keeps doing so in every language. */
@@ -176,12 +177,14 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* The family read (`useFamily`, below) is refreshed after an accepted theme save — the family bar and "Add child" read
        the axes from it. A ref, because that read is created after this hook. */
     const reloadFamilyRef = useRef<() => void>(() => undefined);
+    /* The family ORDER read (`useFamilyRank`, below): read again when the axes or the family change on this page. */
+    const reloadOrderRef = useRef<() => void>(() => undefined);
     /* S11 — a Shared rename the server made: its sentence about the channels, and the studio's header shows the new SKU. */
     const skuRenamedRef = useRef<(renames: SkuRename[]) => void>(() => undefined);
     const studioSkuRenamed = useStudioSkuRenamed();
     const { sheet: loadedSheet, loading, switching, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
         productId, market, locale, locales: languageScope.locales, onWriteStart, onWriteEnd, onSettled,
-        onVariationThemeSaved: () => reloadFamilyRef.current(),
+        onVariationThemeSaved: () => { reloadFamilyRef.current(); reloadOrderRef.current(); },
         /* R-VT-15 — the server's refusal sentence, said the moment it arrives, through the ONE DS
            toast provider this route mounts (`_studio/StudioClient.tsx`; the root layout's is the old
            library's — `reference_ds_toast_two_providers`). `announceRefusals` is the shared
@@ -282,7 +285,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         const rest = contextMenuRef.current(p);
         return own.length ? [...own, 'separator', ...rest] : rest;
     }, []);
-    const onFamilyChanged = useCallback(() => { familyQuery.reload(); reload(); refreshReadinessSoon(); }, [familyQuery, reload, refreshReadinessSoon]);
+    const onFamilyChanged = useCallback(() => { familyQuery.reload(); reloadOrderRef.current(); reload(); refreshReadinessSoon(); }, [familyQuery, reload, refreshReadinessSoon]);
     onFamilyChangedRef.current = onFamilyChanged;
     const [classificationOpen, setClassificationOpen] = useState(false);
     const [formulaHistoryOpen, setFormulaHistoryOpen] = useState(false);
@@ -298,7 +301,10 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     }, [formulas.exprFor, formulas.errorFor, gridReady]);
     /* Owner 2026-10-07 (Option A) — the Shared product page lists the family in the Matrix's order (`useFamilyRank`). */
     const familyOrder = useFamilyRank(productId, sheet?.rows ?? NO_ROWS, sheet?.columns);
-    const rows = useMemo(() => (sheet ? sortByFamilyRank(sheet.rows, familyOrder.rank) : []), [sheet, familyOrder.rank]);
+    reloadOrderRef.current = familyOrder.reload;
+    /* Held until the family order is first read: rows that moved after the first paint would leave a focused cell on another SKU. */
+    const orderPending = !!sheet && !familyOrder.settled;
+    const rows = useMemo(() => (sheet && familyOrder.settled ? sortByFamilyRank(sheet.rows, familyOrder.rank) : []), [sheet, familyOrder.settled, familyOrder.rank]);
     const { saveStatus, refused, refusedRowIds } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     savedAtRef.current = saveStatus.saved;
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
@@ -923,7 +929,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     }, onReload);
     return {
         scope: 'master',
-        loading, switching, unavailable: !!error,
+        loading: loading || orderPending, switching, unavailable: !!error,
         errorLabel: 'shared product information',
         errorMessage: error,
         backendMissing: false, retry: reload,
@@ -991,7 +997,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     {conflicts.length > 0 && (<Button size="sm" variant="link" onClick={reload}>
                 {conflicts.length} {conflicts.length === 1 ? 'row' : 'rows'} changed elsewhere — refresh
               </Button>)}</>,
-        notice: <>{contractProblems.length > 0 && <Banner tone="warning" title="The sheet read did not match its contract">{contractProblems.join(" · ")}</Banner>}
+        notice: <><FamilyOrderNotice error={familyOrder.error} onRetry={familyOrder.reload}/>{contractProblems.length > 0 && <Banner tone="warning" title="The sheet read did not match its contract">{contractProblems.join(" · ")}</Banner>}
           {setupNotice}</>,
         grid: {
             noRowsOverlayComponentParams: emptyState,
@@ -1020,7 +1026,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             ...publishFenceProps,
             rowClassRules: rowClassRules,
             processDataFromClipboard: pasteIntoNewRows,
-            loading: loading,
+            loading: loading || orderPending,
             columnDialog: columnDialog,
             initialState: sheetColumns.initialState,
             onCellDoubleClicked: onCellDoubleClicked,
@@ -1045,7 +1051,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'master', market, locale }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); refresh(); }}/>}
     {bulkFormulaRows && <FormulaBulkDialog rows={bulkFormulaRows} columns={sheet?.columns ?? []} coordinate={{ scope: 'master', market, locale }} functions={formulas.functions} preview={formulas.preview} candidatesFor={(id, fieldKey) => { const row = rowsRef.current.find(row => row.id === id); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); refresh(); }}/>}</>, afterGrid: <>{chipBar.activeId === 'ai-drafts' && <AiDraftReview drafts={aiLayer.drafts} skuById={skuById} onApplied={reload}/>}</>, beforePreferences: <>
         <ClassificationDialog productId={productId} open={classificationOpen} onClose={() => setClassificationOpen(false)} onChanged={onFamilyChanged}/>
-    {sheet && (<SheetTransfer open={importOpen} intent={transferIntent} onClose={() => setImportOpen(false)} productId={productId} market={market} locale={locale} selectedIds={selectedRows.map(row => row.id)} visibleFields={sheetColumns.visibleAttributeKeys().flatMap(key => { const c = sheet.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key] : []; })} onReference={() => onExport('view')} onApplied={() => { formulas.reload(); reload(); familyQuery.reload(); }}/>)}
+    {sheet && (<SheetTransfer open={importOpen} intent={transferIntent} onClose={() => setImportOpen(false)} productId={productId} market={market} locale={locale} selectedIds={selectedRows.map(row => row.id)} visibleFields={sheetColumns.visibleAttributeKeys().flatMap(key => { const c = sheet.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key] : []; })} onReference={() => onExport('view')} onApplied={() => { formulas.reload(); reload(); familyQuery.reload(); familyOrder.reload(); }}/>)}
         {familyProductPicker.element}
         {/* The control's dialogs (Cell details, Clear or reset, Set every row) sit where the channel scope puts them: the
             footer unmounts while the sheet reloads (`ProductSheetSurface`), and an open window must not vanish and
