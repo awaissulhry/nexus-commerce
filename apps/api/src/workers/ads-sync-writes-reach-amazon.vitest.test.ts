@@ -41,17 +41,24 @@ vi.mock('../lib/queue.js', () => {
     redis: null,
   }
 })
-const gate = vi.hoisted(() => ({ seen: [] as GateContext[] }))
-vi.mock('../services/advertising/ads-write-gate.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/advertising/ads-write-gate.js')>()),
-  checkAdsWriteGate: async (ctx: GateContext): Promise<GateDecision> => {
-    gate.seen.push(ctx)
-    return { allowed: true, mode: 'live', profileId: 'P-TEST' }
-  },
-  logGateDeny: () => undefined,
-  recordSuccessfulWrite: async () => undefined,
-  recordCampaignLiveWrite: async () => undefined,
-}))
+const gate = vi.hoisted(() => ({ seen: [] as GateContext[], valueCap: false }))
+vi.mock('../services/advertising/ads-write-gate.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../services/advertising/ads-write-gate.js')>()
+  return {
+    ...real,
+    checkAdsWriteGate: async (ctx: GateContext): Promise<GateDecision> => {
+      gate.seen.push(ctx)
+      // W4-12b — the real gate's value-cap number, with its comparison, where a test asks for it.
+      if (gate.valueCap && ctx.payloadValueCents > real.maxWriteValueCents()) {
+        return { allowed: false, reason: `payload value ${ctx.payloadValueCents}¢ exceeds cap ${real.maxWriteValueCents()}¢`, deniedAt: 'value_cap' }
+      }
+      return { allowed: true, mode: 'live', profileId: 'P-TEST' }
+    },
+    logGateDeny: () => undefined,
+    recordSuccessfulWrite: async () => undefined,
+    recordCampaignLiveWrite: async () => undefined,
+  }
+})
 type Answer = { ok: boolean; rawResponse?: unknown; error?: string | null }
 const amazon = vi.hoisted(() => ({
   calls: [] as Array<{ fn: string; externalId: string; patch: Record<string, unknown> }>,
@@ -128,7 +135,7 @@ beforeAll(async () => {
   })
 }, 180_000)
 afterAll(async () => { await database?.close() })
-beforeEach(() => { gate.seen = []; amazon.calls = []; amazon.reads = []; amazon.answers = []; amazon.campaignsV3 = [] })
+beforeEach(() => { gate.seen = []; gate.valueCap = false; amazon.calls = []; amazon.reads = []; amazon.answers = []; amazon.campaignsV3 = [] })
 
 describe('CM-1 — bidding strategy', () => {
   it('is sent, with the placement lanes Amazon holds now (read first), so the lanes are not reset', async () => {
@@ -380,5 +387,44 @@ describe('W4-12b — a queued portfolio cap goes out whole', () => {
     const r = await inside(() => updatePortfolioById({ portfolioId: PF_MONTHLY, budget: { amount: 120, currencyCode: 'EUR', policy: 'monthlyRecurring' } }))
     expect(r).toMatchObject({ ok: true, mode: 'live' })
     expect(amazon.calls.map((c) => c.patch.budget)).toEqual([{ amount: 120, currencyCode: 'EUR', policy: 'monthlyRecurring' }])
+  })
+})
+
+/**
+ * W4-12b — a portfolio cap is in major units (AmazonAdsPortfolio.budgetAmount, as the action log's budget fields), so the
+ * write gate's value cap counts it ×100, as the Portfolios page's own push does. It was counted as cents: 100× too small.
+ */
+describe('W4-12b — the value cap counts a portfolio cap in minor units', () => {
+  beforeAll(async () => {
+    await inside(() => database.client.amazonAdsPortfolio.create({ data: { id: 'wr-cap-v', profileId: 'P-TEST', externalPortfolioId: '900012121212121', name: 'Valued cap', budgetAmount: '100.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'MONTHLY_RECURRING' } as never }))
+  })
+  const queueAmount = async (budgetAmount: number) => {
+    const r = await inside(() => updatePortfolioWithSync({ portfolioId: 'wr-cap-v', patch: { budgetAmount }, actor: USER, reason: 'bulksheet import test', applyImmediately: true }))
+    expect(r.ok, r.error ?? '').toBe(true)
+    return r.outboundQueueId!
+  }
+
+  it('a €3 cap is worth 300 cents to the gate', async () => {
+    await queueAmount(3)
+    await drain()
+    expect(gate.seen.map((c) => c.payloadValueCents)).toEqual([300])
+  })
+
+  it('a €600 cap is refused by the €500 value cap, and nothing reaches Amazon (it passed as 600 cents before)', async () => {
+    gate.valueCap = true
+    const q = await queueAmount(600)
+    const { rows } = await drain()
+    expect(gate.seen.map((c) => c.payloadValueCents)).toEqual([60_000])
+    expect(amazon.calls).toEqual([])
+    expect(rows.find((r) => r.id === q)).toMatchObject({ syncStatus: 'SKIPPED', errorCode: 'WRITE_GATE_DENIED' })
+    expect(rows.find((r) => r.id === q)?.errorMessage).toMatch(/value_cap/)
+  })
+
+  it('a €400 cap passes the same value cap and is sent', async () => {
+    gate.valueCap = true
+    await queueAmount(400)
+    await drain()
+    expect(gate.seen.map((c) => c.payloadValueCents)).toEqual([40_000])
+    expect(amazon.calls.map((c) => (c.patch.budget as { amount?: number }).amount)).toEqual([400])
   })
 })

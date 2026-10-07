@@ -80,7 +80,10 @@ function estimatePayloadValueCents(payload: AdMutationPayload): number {
     if (c.newValue == null || !VALUE_FIELDS.has(c.field)) continue
     const n = Number(c.newValue)
     if (!Number.isFinite(n)) continue
-    if (c.field === 'dailyBudget') {
+    // W4-12b — a portfolio's cap is in major units too (AmazonAdsPortfolio.budgetAmount, Decimal(12,2); the Portfolios
+    // page's own push counts it ×100, updatePortfolioById). It was counted as cents, so a €600 cap read as 600¢ and passed
+    // a €500 value cap.
+    if (c.field === 'dailyBudget' || c.field === 'budgetAmount') {
       // Stored as EUR (Campaign.dailyBudget is Decimal(10,2) EUR units)
       maxCents = Math.max(maxCents, Math.round(n * 100))
     } else {
