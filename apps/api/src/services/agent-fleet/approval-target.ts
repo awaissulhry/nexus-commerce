@@ -262,6 +262,7 @@ const AMAZON_AD_TOOLS = new Set([
   'replicate-ad-structure',
   'create-ai-goal-campaigns',
   'build-sp-wizard-campaigns',
+  'add-ad-targets', 'add-negative-targets', 'retire-negatives', 'harvest-search-term', 'set-harvest-destination',
 ])
 
 /** A campaign page: Amazon's by its Nexus Campaign id, eBay's by its Nexus eBay campaign id. */
@@ -784,6 +785,36 @@ const READERS: Record<string, Reader> = {
       ],
     }
   },
+  // W4-5 — targets added to one ad group (each at its bid, or born at the floor), negatives added or retired (each in its
+  // place), a harvest (its keyword and the source negative), a harvest destination (Nexus only): one line each, in words.
+  'add-ad-targets': (p, _a, _ctx, tool) => {
+    const lines = recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: null, to: text(c.toLabel) }))
+    const campaign = rec(p.campaign)
+    const adGroup = rec(p.adGroup)
+    return {
+      ...adCampaign(p, tool),
+      changes: lines,
+      changeCount: num(rec(p.totals)?.targets) ?? lines.length,
+      ...(text(campaign?.name) ? { target: target('campaign', { id: text(campaign?.id), name: `${text(campaign?.name)}${text(adGroup?.name) ? ` › ${text(adGroup?.name)}` : ''}`, href: campaignHref(tool, text(campaign?.id)) }) } : {}),
+    }
+  },
+  'add-negative-targets': (p) => {
+    const lines = recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: null, to: text(c.toLabel) }))
+    return { channel: 'AMAZON', market: marketOf(p.market) ?? agreed(recs(p.changes).map((c) => marketOf(c.marketplace))), changes: lines, changeCount: num(rec(p.totals)?.negatives) ?? lines.length }
+  },
+  'retire-negatives': (p) => {
+    const lines = recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.fromLabel), to: text(c.toLabel) }))
+    return { channel: 'AMAZON', market: marketOf(p.market) ?? agreed(recs(p.changes).map((c) => marketOf(c.marketplace))), changes: lines, changeCount: num(rec(p.totals)?.retiring) ?? lines.length }
+  },
+  'harvest-search-term': (p, _a, _ctx, tool) => ({
+    ...adCampaign(p, tool),
+    changes: recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.fromLabel) === 'none' ? null : text(c.fromLabel), to: text(c.toLabel) })),
+  }),
+  'set-harvest-destination': (p) => ({
+    channel: 'AMAZON',
+    market: marketOf(p.market),
+    changes: recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.fromLabel), to: text(c.toLabel) })),
+  }),
   // B-1 — a Replicate copy: what it builds for which product, and its daily budget.
   'replicate-ad-structure': (p) => {
     const totals = rec(p.totals) ?? {}

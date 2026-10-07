@@ -253,6 +253,8 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   enable: 'switching paused ads back on',
   archive: 'archiving ads (for good)',
   phase: "switching a product's playbook phase",
+  targeting: 'adding keywords and product or category targets',
+  retire: 'retiring negative keywords and targets',
 }
 const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'off', ask: 'ask', confirm: 'confirm in Claude', watch: 'watch', auto: 'run by rule' }
 

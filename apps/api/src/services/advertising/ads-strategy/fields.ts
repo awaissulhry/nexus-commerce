@@ -52,8 +52,10 @@ export const STOP_METHODS = ['LOW_BIDS', 'PAUSE'] as const
  */
 export const CLAUDE_ACTION_TOOLS = {
   bid: ['set-target-bid', 'bulk-ad-bid-change'],
-  negative: ['create-negative-keyword'],
-  harvest: ['graduate-keyword'],
+  // W4-5 — the list form of each (add-negative-targets; harvest-search-term, which negates its source too: claude.ts
+  // ARG_ACTIONS), and where a harvest lands (set-harvest-destination, Nexus only).
+  negative: ['create-negative-keyword', 'add-negative-targets'],
+  harvest: ['graduate-keyword', 'harvest-search-term', 'set-harvest-destination'],
   placement: ['set-placement-multipliers'],
   budget: ['set-campaign-budget'],
   target: ['set-campaign-target-acos'],
@@ -81,6 +83,10 @@ export const CLAUDE_ACTION_TOOLS = {
   // Owner decides per market, category or product whether a phase move may run alone. Listed after `create`: the tool's
   // own kind stays create (claude.ts reads the first kind a tool is listed under).
   phase: ['apply-ads-playbook'],
+  // W4-5 — keywords, product and category targets added to an ad group (they add spend), and negatives retired (a block
+  // lifted: it can add spend too) — each a kind of its own, so the Owner decides them apart from a negative or a harvest.
+  targeting: ['add-ad-targets'],
+  retire: ['retire-negatives'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]

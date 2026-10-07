@@ -24,6 +24,8 @@ import { ADS_REPLICATE_TOOLS } from './tools/ads-replicate.tools.js'
 import { ADS_AI_GOAL_TOOLS } from './tools/ads-ai-goal.tools.js'
 import { ADS_STATUS_TOOLS } from './tools/ads-status.tools.js'
 import { ADS_STOCK_TOOLS } from './tools/ads-stock.tools.js'
+import { ADS_TARGET_TOOLS } from './tools/ads-targets.tools.js'
+import { ADS_NEGATIVE_TOOLS } from './tools/ads-negatives.tools.js'
 import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
@@ -128,6 +130,10 @@ const ALL: AgentTool[] = [
   ...ADS_STATUS_TOOLS,
   // Ads autonomy W3-3 — stock-aware bids: which ad groups are short of stock; lower their bids, give them back (never FBA).
   ...ADS_STOCK_TOOLS,
+  // Ads autonomy W4-5 — keywords and product or category targets, harvests and their destination; negatives in the list
+  // form, and retiring any negative.
+  ...ADS_TARGET_TOOLS,
+  ...ADS_NEGATIVE_TOOLS,
   // Ads autonomy W3-2 — cancel an ad write Nexus queued and has not sent yet (a brake: nothing reaches Amazon).
   ...ADS_QUEUED_WRITE_TOOLS,
   ...EBAY_AD_TOOLS,

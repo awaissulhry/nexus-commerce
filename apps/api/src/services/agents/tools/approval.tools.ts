@@ -231,6 +231,9 @@ const AD_CHANGE_TOOLS = new Set([
   'create-ai-goal-campaigns',
   // B-3 — a one-off SP Super Wizard set: its creates run detached too; approval-status reads its run the same way.
   'build-sp-wizard-campaigns',
+  // W4-5 — targets, negatives and a harvest are created at once (approval-status counts them and how many Amazon holds); a
+  // retire is one queued archive per negative. (set-harvest-destination is Nexus only: no ad write to follow.)
+  'add-ad-targets', 'add-negative-targets', 'harvest-search-term', 'retire-negatives',
 ])
 
 export interface AdDelivery {
@@ -333,9 +336,14 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
     }
     return out
   }
-  const createdIds = toolName === 'create-negative-keyword'
+  // W4-5 — what the list tools and a harvest created (a harvest's undo op creates nothing).
+  const made = after as { targets?: Array<{ targetId?: unknown }>; keyword?: { targetId?: unknown } | null; negative?: { targetId?: unknown } | null } | null
+  const createdIds = toolName === 'create-negative-keyword' || toolName === 'add-negative-targets'
     ? (after?.negatives ?? []).map((n) => String(n.targetId ?? '')).filter(Boolean)
-    : toolName === 'graduate-keyword' && typeof after?.targetId === 'string' ? [after.targetId] : []
+    : toolName === 'graduate-keyword' && typeof after?.targetId === 'string' ? [after.targetId]
+      : toolName === 'add-ad-targets' ? (made?.targets ?? []).map((t) => String(t.targetId ?? '')).filter(Boolean)
+        : toolName === 'harvest-search-term' ? [made?.keyword?.targetId, made?.negative?.targetId].filter((id): id is string => typeof id === 'string')
+          : []
   if (createdIds.length) {
     const atAmazon = reach === 'live'
       ? await prisma.adTarget.count({ where: { id: { in: createdIds }, externalTargetId: { not: null } } })
