@@ -11,7 +11,7 @@
  *               each step names its recommendation (source) in its arguments and its preview
  *   override    a value of the caller's own is the value that lands, and the one the step's limits judge
  *   refusals    refused as a whole, each id with its reason, before anything waits: no longer recommended, share of
- *               voice, an autopilot id, an unknown id, a rule's suggestion already decided, a wrong override; a
+ *               voice, an autopilot id not found, an unknown id, a rule's suggestion already decided, a wrong override; a
  *               duplicate of a waiting request; a source that names another change
  *   settle      once the plan ran: the source is on each write's ads audit row, and each recommendation is settled —
  *               not offered again until the data the engines read is a day past the change
@@ -223,7 +223,8 @@ describe('W3-1 — apply-ad-recommendations', { timeout: TIMEOUT }, () => {
     expect(answer.error).toContain('bid:t-gone: its target is not found in this business')
     expect(answer.error).toContain('bid:t-low: no longer recommended — the data moved')
     expect(answer.error).toContain('sov:outbid:helmet: share of voice is information, not a change')
-    expect(answer.error).toContain('autopilot:d1: an autopilot decision or a keyword-tracker proposal is not carried out from here yet')
+    // W4-9 — an autopilot id is carried out now; one this business does not have is refused as not found.
+    expect(answer.error).toContain('autopilot:d1: not found in this business — an autopilot plan replaces its waiting decisions every 15 minutes')
     expect(answer.error).toContain('nonsense: not a recommendation id Nexus gives')
     expect(answer.error).toContain(`rule:${ids.decided}: no longer waiting (it is applied)`)
     expect(answer.error).toContain('bid:t-bb: it takes proposedBidCents, not proposedBudgetCents')
@@ -391,7 +392,7 @@ describe('W3-1 — mute-ad-recommendations', { timeout: TIMEOUT }, () => {
 
   it('refused before anything waits: a rule\'s suggestion, an id not recommended now, one not muted; by rule within its limits', async () => {
     const refusal = async (args: Record<string, unknown>) => (await call('mute-ad-recommendations', { why: 'test', ...args })).answer.error as string
-    expect(await refusal({ recommendationIds: [`rule:${ids.suggestion}`], op: 'mute' })).toContain('dismissed with decide-automation-suggestions')
+    expect(await refusal({ recommendationIds: [`rule:${ids.suggestion}`], op: 'mute' })).toContain('a rule\'s suggestion is dismissed (op dismiss) and restored (op restore), not muted — or decided with decide-automation-suggestions')
     expect(await refusal({ recommendationIds: ['bid:t-gone'], op: 'mute' })).toContain('bid:t-gone: its target is not found in this business')
     expect(await refusal({ recommendationIds: ['budget:c-sb'], op: 'mute' })).toContain('budget:c-sb: not recommended now — there is nothing to mute')
     expect(await refusal({ recommendationIds: ['bid:t-bb'], op: 'unmute' })).toContain('bid:t-bb: it is not muted')

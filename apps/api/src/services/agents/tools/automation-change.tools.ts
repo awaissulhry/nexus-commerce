@@ -27,7 +27,7 @@ import { RULE_DOMAINS, STOP_AREAS, applyStop, planStop, stopPermission, stopStat
 import type { ToolContext } from '../tool-types.js'
 import { STEER_ACTIONS, STEER_LEVELS, applySteer, assignmentStateNow, charterStateNow, planSteer, steerUndoOf, type SteerInput, type SteerRecord } from '../../agent-fleet/fleet-steer-plan.service.js'
 import { ENGINE_SETTINGS, SETTING_ARG, applyTune, planTune, restoreArgsOf, tuneStateNow, type EngineSetting, type TuneInput, type TuneRecord } from '../../advertising/ads-engine-tune.service.js'
-import type { DecisionItem } from '../../advertising/ads-suggestion-decide.service.js'
+import type { ClaudeDecisionInput, DecisionItem } from '../../advertising/ads-suggestion-decide.service.js'
 import type { StoredReach } from './ads-change-kit.js'
 import { SUGGESTION_LIMITS, suggestionLimitFacts, suggestionRefusal } from './suggestion-limits.js'
 import { SAVE_RULE_LIMITS, TUNE_LIMITS, TURN_UP_LIMITS, automationFacts, ruleSaveFacts, ruleSaveRefusal, tuneRefusal, turnUpRefusal } from './automation-limits.js'
@@ -361,6 +361,25 @@ export const DECIDE_UNDO: ToolUndo = {
   },
 }
 
+/** W4-9 — an apply's value of its own, in minor units of the campaign's currency (the Suggestions page's inline edit). */
+interface DecideArg { suggestionId: string; decide: 'apply' | 'dismiss' | 'restore'; override?: { bidCents?: number; dailyBudgetCents?: number } }
+
+/**
+ * The decisions as the Suggestions page's apply takes them (ApplyOverride: a bid in cents, a budget in currency units),
+ * or why an edited value cannot be read. Pure.
+ */
+function decisionsOf(args: Record<string, unknown>): { decisions: ClaudeDecisionInput[] } | { error: string } {
+  const out: ClaudeDecisionInput[] = []
+  for (const d of (args.decisions as DecideArg[]) ?? []) {
+    const o = d.override
+    if (!o || (o.bidCents == null && o.dailyBudgetCents == null)) { out.push({ suggestionId: d.suggestionId, decide: d.decide }); continue }
+    if (args.kind === 'ebay-ads') return { error: `${d.suggestionId}: a value of its own is taken for an Amazon suggestion only. Nothing was decided.` }
+    if (o.bidCents != null && o.dailyBudgetCents != null) return { error: `${d.suggestionId}: give a bid or a daily budget of its own, not both. Nothing was decided.` }
+    out.push({ suggestionId: d.suggestionId, decide: d.decide, override: o.bidCents != null ? { resultBidCents: o.bidCents } : { resultBudgetEur: (o.dailyBudgetCents as number) / 100 } })
+  }
+  return { decisions: out }
+}
+
 const decideSuggestions: AgentTool = {
   name: 'decide-automation-suggestions',
   title: 'Decide rule suggestions',
@@ -376,6 +395,8 @@ const decideSuggestions: AgentTool = {
     'or archives (a rule\'s change never does: dismiss it — a temporary stop is lower bids, and a real pause, an enable ' +
     'or an archive is its own request: pause-ads, enable-ads, archive-ads), one whose target is held at the floor by no-pause ' +
     'suppression, one already decided, one Amazon\'s write gate would refuse, anything while ads automation is halted. An ' +
+    'Amazon apply may carry a value of its own (override: a bid on one target, or a daily budget on one campaign, in minor ' +
+    'units of the campaign\'s currency), as the Suggestions page\'s edit: that value is what the limits judge and what lands. An ' +
     'applied Amazon suggestion is written as its rule, under this request: undo-change puts its bids, budgets and placements ' +
     'back and retires the negatives it created (undo-ad-change of its changeSetId); keywords it created stay. One decided by ' +
     'rule never takes a placement lane the hourly bid plans hold. One its rule passes over (such a lane, a protected product, ' +
@@ -402,10 +423,16 @@ const decideSuggestions: AgentTool = {
     decisions: z.array(z.object({
       suggestionId: ID.describe('the suggestion (Amazon) or proposal (eBay) id'),
       decide: z.enum(['apply', 'dismiss', 'restore']).describe('apply, dismiss, or restore a dismissed Amazon suggestion'),
+      override: z.object({
+        bidCents: z.coerce.number().int().min(5).max(100_000).optional().describe('a bid of its own for a bid suggestion on one target, in minor units of the campaign\'s currency'),
+        dailyBudgetCents: z.coerce.number().int().min(100).max(100_000_000).optional().describe('a daily budget of its own for a budget suggestion on one campaign, in minor units of the campaign\'s currency'),
+      }).optional().describe('Amazon apply only: the value that lands instead of the rule\'s (the Suggestions page\'s edit), judged by the limits as it lands'),
     })).min(1).max(100).describe('up to 100 decisions'),
   }),
   async handler(args, ctx) {
-    const decisions = args.decisions as Array<{ suggestionId: string; decide: 'apply' | 'dismiss' | 'restore' }>
+    const read = decisionsOf(args)
+    if ('error' in read) return { ok: false, error: read.error }
+    const decisions = read.decisions
     if (args.kind === 'ebay-ads') {
       const { planEbayProposalDecisions } = await import('../../marketing/ebay-ads-rule-crud.service.js')
       const planned = await planEbayProposalDecisions(decisions)
@@ -422,7 +449,9 @@ const decideSuggestions: AgentTool = {
     return { ok: true, preview: { ...decidePreview('amazon-ads', reached.items as unknown as Array<Record<string, unknown>>), ...byRule } }
   },
   async execute(args, ctx) {
-    const decisions = args.decisions as Array<{ suggestionId: string; decide: 'apply' | 'dismiss' | 'restore' }>
+    const read = decisionsOf(args)
+    if ('error' in read) return { ok: false, error: read.error }
+    const decisions = read.decisions
     const kind = args.kind as DecideKind
     let results: Array<{ suggestionId: string; ok: boolean; status: string; detail: string | null; skipped?: true }>
     let set: Pick<DecisionChange, 'changeSetId' | 'negatives'> | null = null

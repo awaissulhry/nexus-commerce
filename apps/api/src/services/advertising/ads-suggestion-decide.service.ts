@@ -33,6 +33,31 @@ export type { DecideResult }
  */
 export type ApplyOverride = { value?: number; resultBidCents?: number; resultBudgetEur?: number }
 
+/**
+ * The action an apply runs, with the operator's override (ApplyOverride) — the one translation every caller shares:
+ * W4-9 — Claude's decide-automation-suggestions judges its limits on this action, so the edited value is the one the
+ * limits judge and the one that lands. Moved unchanged out of applySuggestion. Pure.
+ */
+export function overriddenAction(proposed: unknown, ov: ApplyOverride = {}): { action: Record<string, unknown>; overridden: boolean; overrideRecord: Record<string, number> | null } {
+  let action = { ...((proposed ?? {}) as Record<string, unknown>) }
+  let overridden = false
+  let overrideRecord: Record<string, number> | null = null
+  if (typeof ov.resultBidCents === 'number' && Number.isFinite(ov.resultBidCents) && ov.resultBidCents > 0) {
+    action = { ...action, type: 'bid_apply', op: 'setValue', value: ov.resultBidCents / 100 }
+    overridden = true
+    overrideRecord = { resultBidCents: ov.resultBidCents }
+  } else if (typeof ov.resultBudgetEur === 'number' && Number.isFinite(ov.resultBudgetEur) && ov.resultBudgetEur > 0) {
+    action = { ...action, type: 'budget_apply', op: 'setValue', value: ov.resultBudgetEur }
+    overridden = true
+    overrideRecord = { resultBudgetEur: ov.resultBudgetEur }
+  } else if (typeof ov.value === 'number' && Number.isFinite(ov.value) && ov.value !== action.value) {
+    action.value = ov.value
+    overridden = true
+    overrideRecord = { value: ov.value }
+  }
+  return { action, overridden, overrideRecord }
+}
+
 /** The rule fields that decide WHAT a rule proposes; an edit to any of them makes its older proposals stale. */
 const PROPOSING_FIELDS: Record<string, string> = {
   trigger: 'trigger', conditions: 'conditions', actions: 'actions',
@@ -133,22 +158,7 @@ export async function applySuggestion(id: string, ov: ApplyOverride = {}, decide
   // S.5 — optional edit-before-apply: the operator may override the action's magnitude
   // (`value`) from the detail drawer. The handler still clamps to the action's own min/max
   // bounds (e.g. minEur/maxEur), so an override can't escape the rule's guardrails.
-  let action = { ...(sug.proposedAction as Record<string, unknown>) }
-  let overridden = false
-  let overrideRecord: Record<string, number> | null = null
-  if (typeof ov.resultBidCents === 'number' && Number.isFinite(ov.resultBidCents) && ov.resultBidCents > 0) {
-    action = { ...action, type: 'bid_apply', op: 'setValue', value: ov.resultBidCents / 100 }
-    overridden = true
-    overrideRecord = { resultBidCents: ov.resultBidCents }
-  } else if (typeof ov.resultBudgetEur === 'number' && Number.isFinite(ov.resultBudgetEur) && ov.resultBudgetEur > 0) {
-    action = { ...action, type: 'budget_apply', op: 'setValue', value: ov.resultBudgetEur }
-    overridden = true
-    overrideRecord = { resultBudgetEur: ov.resultBudgetEur }
-  } else if (typeof ov.value === 'number' && Number.isFinite(ov.value) && ov.value !== action.value) {
-    action.value = ov.value
-    overridden = true
-    overrideRecord = { value: ov.value }
-  }
+  const { action, overridden, overrideRecord } = overriddenAction(sug.proposedAction, ov)
   const handler = ACTION_HANDLERS[String(action.type)]
   if (!handler) return { ok: false, httpStatus: 422, error: `no handler for ${action.type}` }
   // 4e — `operatorApproved`: a person approved this change, so a placement lane the rank engine holds is written, not skipped.
@@ -290,6 +300,9 @@ export async function decideSuggestionsBulk(b: BulkDecideInput): Promise<Service
 
 export type ClaudeDecision = 'apply' | 'dismiss' | 'restore'
 
+/** One decision Claude asks for. W4-9 — an apply may carry an edited value (`override`), as the Suggestions page's edit. */
+export interface ClaudeDecisionInput { suggestionId: string; decide: ClaudeDecision; override?: ApplyOverride }
+
 export interface DecisionItem {
   suggestionId: string
   decide: ClaudeDecision
@@ -307,6 +320,8 @@ export interface DecisionItem {
    * single campaign. `term` is a negative's search term (keyword protection binds it).
    */
   landsOn?: { scope: 'campaign' | 'sweep'; campaignId: string | null; marketplace: string | null; term: string | null }
+  /** W4-9 — an apply's edited value: the action the limits judge and the apply runs is the edited one (overriddenAction). */
+  override?: ApplyOverride
 }
 
 /**
@@ -316,7 +331,7 @@ export interface DecisionItem {
  * never while ads automation is halted. Refused as a whole, naming each reason; nothing is written.
  */
 export async function planSuggestionDecisions(
-  decisions: Array<{ suggestionId: string; decide: ClaudeDecision }>,
+  decisions: ClaudeDecisionInput[],
   can: (family: string) => string | null,
 ): Promise<{ ok: true; items: DecisionItem[] } | { ok: false; error: string }> {
   const ids = [...new Set(decisions.map((d) => d.suggestionId))]
@@ -361,14 +376,22 @@ export async function planSuggestionDecisions(
   const items: DecisionItem[] = []
   for (const d of decisions) {
     const r = byId.get(d.suggestionId)!
-    const action = (r.proposedAction ?? {}) as Record<string, unknown>
     const family = familyOfRow(r)
     const label = `${r.ruleName ?? 'a rule'} on ${r.entityName ?? r.entityType}`
+    // W4-9 — an edited value fits an apply of one target's bid or one campaign's budget (the page's inline edit).
+    const edit = d.override && (d.override.resultBidCents != null || d.override.resultBudgetEur != null || d.override.value != null) ? d.override : null
+    if (edit) {
+      if (d.decide !== 'apply') problems.push(`${label}: only an apply takes a value of its own`)
+      else if (edit.resultBidCents != null && (family !== 'bids' || r.entityType !== 'AD_TARGET')) problems.push(`${label}: a bid of its own fits a bid suggestion on one target, and this is a ${family} suggestion`)
+      else if (edit.resultBudgetEur != null && (family !== 'budget' || r.entityType !== 'CAMPAIGN')) problems.push(`${label}: a daily budget of its own fits a budget suggestion on one campaign, and this is a ${family} suggestion`)
+    }
+    const action = (edit && d.decide === 'apply' ? overriddenAction(r.proposedAction, edit).action : (r.proposedAction ?? {})) as Record<string, unknown>
     const denied = can(family)
     if (denied) problems.push(`${label}: ${denied}`)
     if (d.decide === 'restore' ? !['dismissed', 'expired'].includes(r.status) : r.status !== 'pending') problems.push(`${label}: it is ${r.status}`)
     if (d.decide === 'apply') {
-      for (const refused of refusedActionsOf([String(action.type ?? '')])) problems.push(`${label}: ${refused.type} refused — ${refused.why}; dismiss it and use ${refused.instead}`)
+      const asked = String(((r.proposedAction ?? {}) as Record<string, unknown>).type ?? '')
+      for (const refused of refusedActionsOf([...new Set([asked, String(action.type ?? '')])])) problems.push(`${label}: ${refused.type} refused — ${refused.why}; dismiss it and use ${refused.instead}`)
       const target = r.entityType === 'AD_TARGET' ? targetById.get(r.entityId) : undefined
       if (target?.suppressedFromBidCents != null) problems.push(`${label}: its target is held at the floor bid by no-pause suppression — applying would lift it; dismiss it, or wait until its campaign resumes`)
       const stale = await staleRuleSentence(r) // 4l — refused before a person is asked, not after
@@ -376,7 +399,7 @@ export async function planSuggestionDecisions(
     }
     const current = r.entityType === 'AD_TARGET' ? targetById.get(r.entityId)?.bidCents ?? null : r.entityType === 'CAMPAIGN' ? budgetById.get(r.entityId) ?? null : null
     const projected = family === 'bids' ? projectBidCents(action, current) : family === 'budget' ? projectBudgetEur(action, current) : null
-    items.push({ suggestionId: r.id, decide: d.decide, rule: r.ruleName, entity: r.entityName ?? r.entityType, family, status: r.status, proposed: { type: action.type ?? null, op: action.op ?? null, value: action.value ?? null }, current, projected, ...(d.decide === 'apply' ? { landsOn: landsOn(r) } : {}) })
+    items.push({ suggestionId: r.id, decide: d.decide, rule: r.ruleName, entity: r.entityName ?? r.entityType, family, status: r.status, proposed: { type: action.type ?? null, op: action.op ?? null, value: action.value ?? null }, current, projected, ...(d.decide === 'apply' ? { landsOn: landsOn(r) } : {}), ...(edit && d.decide === 'apply' ? { override: edit } : {}) })
   }
   if (decisions.some((d) => d.decide === 'apply')) {
     const { isAutomationHalted } = await import('./ads-automation-state.service.js')
@@ -394,7 +417,7 @@ export async function planSuggestionDecisions(
  * (`negatives`, their Nexus rows) for it to retire.
  */
 export async function applySuggestionDecisions(
-  decisions: Array<{ suggestionId: string; decide: ClaudeDecision }>,
+  decisions: ClaudeDecisionInput[],
   approverId: string | null = null,
   as: ApplyAs = {},
 ): Promise<{ results: Array<{ suggestionId: string; decide: ClaudeDecision; ok: boolean; status: string; detail: string | null; skipped?: true }>; negatives: string[] }> {
@@ -402,7 +425,7 @@ export async function applySuggestionDecisions(
   const results = []
   const negatives: string[] = []
   for (const d of decisions) {
-    const result = d.decide === 'apply' ? await applySuggestion(d.suggestionId, {}, decidedBy, as) : d.decide === 'dismiss' ? await dismissSuggestion(d.suggestionId, decidedBy) : await restoreSuggestion(d.suggestionId)
+    const result = d.decide === 'apply' ? await applySuggestion(d.suggestionId, d.override ?? {}, decidedBy, as) : d.decide === 'dismiss' ? await dismissSuggestion(d.suggestionId, decidedBy) : await restoreSuggestion(d.suggestionId)
     for (const id of (result as { negatives?: string[] }).negatives ?? []) if (!negatives.includes(id)) negatives.push(id)
     const now = await prisma.adsRuleSuggestion.findUnique({ where: { id: d.suggestionId }, select: { status: true } })
     results.push({ suggestionId: d.suggestionId, decide: d.decide, ok: result.ok, status: now?.status ?? 'gone', detail: result.error ?? null, ...(result.skipped ? { skipped: true as const } : {}) })
@@ -417,6 +440,12 @@ export async function suggestionSubjects(ids: string[]): Promise<Array<{ id: str
     where: { id: { in: [...new Set(ids)] } },
     select: { id: true, ruleId: true, entityType: true, entityId: true, proposedAction: true, proposedKey: true },
   })
+}
+
+/** W4-9 — these suggestions as a dismissal or a restore names them: status, rule and what it acts on. */
+export async function suggestionLabels(ids: string[]): Promise<Array<{ id: string; status: string; ruleName: string | null; entityName: string | null; entityType: string }>> {
+  if (!ids.length) return []
+  return prisma.adsRuleSuggestion.findMany({ where: { id: { in: [...new Set(ids)] } }, select: { id: true, status: true, ruleName: true, entityName: true, entityType: true } })
 }
 
 /** The statuses of these suggestions now (undo compares them with what the decision left). */

@@ -348,3 +348,132 @@ export async function bulkDecide(ops: DecisionOp[]): Promise<{ okCount: number; 
   }
   return { okCount: results.filter((r) => r.ok).length, results }
 }
+
+// ── W4-9 — Claude: a decision read, carried out by an approved request, or dismissed by its identity ──────────
+//
+// Claude never approves a decision here (approveDecision writes as the plan and re-runs the optimizer when it is
+// applied, so the value that lands is not the value a person or the limits judged). Instead apply-ad-recommendations
+// freezes the decision's values into a change request of the existing change tools, and when that request runs, its
+// source settles the row (settleDecisionsCarried). The conductor's 15-minute tick replaces a plan's PROPOSED rows, so
+// a row may be gone by the time a person approves: its IDENTITY (the plan + module|campaign|action, the dismissal
+// fingerprint) is what a request keeps, with the facts frozen when it was asked.
+
+/** A decision as Claude's tools read and freeze it: the row, its plan, and whether the plan still runs. */
+export interface DecisionFacts {
+  id: string
+  planId: string
+  planName: string | null
+  /** The plan is enabled and not OFF: its proposals are current (a disabled plan's are stale, as approve says). */
+  planOn: boolean
+  cycle: string
+  module: string
+  campaignId: string | null
+  action: string
+  before: unknown
+  after: unknown
+  reason: string
+  status: string
+  source: string
+  at: string
+}
+
+/** These decisions as Claude reads them, by id (a row this business does not have is absent). Read only. */
+export async function decisionFacts(ids: string[]): Promise<Map<string, DecisionFacts>> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  const rows = unique.length
+    ? await prisma.autopilotDecision.findMany({ where: { id: { in: unique } }, include: { plan: { select: { name: true, enabled: true, autonomy: true } } } })
+    : []
+  return new Map(rows.map((r) => [r.id, {
+    id: r.id, planId: r.planId, planName: r.plan?.name ?? null, planOn: !!r.plan?.enabled && r.plan?.autonomy !== 'OFF',
+    cycle: r.cycle, module: r.module, campaignId: r.campaignId, action: r.action, before: r.before ?? null, after: r.after ?? null,
+    reason: r.reason, status: r.status, source: r.source, at: r.at.toISOString(),
+  }]))
+}
+
+/** Where a decision's identity stands now: waiting, dismissed, decided (applied, skipped, denied) or gone. */
+export type DecisionState = 'proposed' | 'dismissed' | 'decided' | 'gone'
+const stateOfStatus = (status: string): DecisionState => (status === 'PROPOSED' ? 'proposed' : status === 'DISMISSED' ? 'dismissed' : 'decided')
+
+/**
+ * A decision's identity now: its row by id; when the tick replaced it, the plan's current row of the same decision
+ * (module|campaign|action, waiting or dismissed) — `rowId` is the row a dismissal or a settle then acts on. Read only.
+ */
+export async function decisionStateNow(frozen: Pick<DecisionFacts, 'id' | 'planId' | 'module' | 'campaignId' | 'action'>): Promise<{ state: DecisionState; rowId: string | null; status: string | null }> {
+  const row = await prisma.autopilotDecision.findUnique({ where: { id: frozen.id }, select: { id: true, status: true } })
+  if (row) return { state: stateOfStatus(row.status), rowId: row.id, status: row.status }
+  const same = await prisma.autopilotDecision.findFirst({
+    where: { planId: frozen.planId, module: frozen.module, campaignId: frozen.campaignId, action: frozen.action, source: 'autopilot', status: { in: ['PROPOSED', 'DISMISSED'] } },
+    orderBy: { at: 'desc' },
+    select: { id: true, status: true },
+  })
+  return same ? { state: stateOfStatus(same.status), rowId: same.id, status: same.status } : { state: 'gone', rowId: null, status: null }
+}
+
+/** Dismiss the decision's identity now (its row, or the tick's re-proposal of it): the conductor stops proposing it for 7 days. */
+export async function dismissDecisionIdentity(frozen: Pick<DecisionFacts, 'id' | 'planId' | 'module' | 'campaignId' | 'action'>): Promise<DecideResult & { rowId?: string }> {
+  const now = await decisionStateNow(frozen)
+  if (now.state !== 'proposed' || !now.rowId) return { ok: false, error: 'No longer waiting — the plan re-evaluated it, or it was decided' }
+  const out = await dismissDecision(now.rowId)
+  return out.ok ? { ...out, rowId: now.rowId } : out
+}
+
+/**
+ * An approved request carried these decisions out (its change steps wrote the values frozen when it was asked): each
+ * row is settled APPLIED as approve settles one, its reason naming the request, `executionId` the request's change set
+ * (its writes carry it; undo-change of the request puts them back). A bid decision records how many bids it wrote.
+ * When the 15-minute tick replaced the row meanwhile, a decided row is created from the frozen facts under the same id
+ * (as approve recreates a row the tick deletes mid-apply), so the A.I. Bids tab's history holds and the id Claude and
+ * the person saw still names it. A row decided meanwhile is left as it is. Returns how many were settled.
+ */
+export async function settleDecisionsCarried(carried: Array<{ facts: DecisionFacts; targets?: number }>, approvalId: string): Promise<number> {
+  let settled = 0
+  for (const { facts, targets } of carried) {
+    const data = {
+      status: 'APPLIED',
+      reason: `${facts.reason} — carried out by request ${approvalId}`,
+      executionId: approvalId,
+      at: new Date(),
+      ...(facts.module === 'bid' && targets != null ? { after: { targets } } : {}),
+    }
+    const updated = await prisma.autopilotDecision.updateMany({ where: { id: facts.id, status: 'PROPOSED' }, data })
+    if (updated.count) { settled++; continue }
+    if (await prisma.autopilotDecision.findUnique({ where: { id: facts.id }, select: { id: true } })) continue
+    await prisma.autopilotDecision.create({
+      data: {
+        id: facts.id, planId: facts.planId, cycle: facts.cycle, module: facts.module, campaignId: facts.campaignId, action: facts.action, source: 'autopilot',
+        before: (facts.before ?? undefined) as object | undefined, after: (facts.after ?? undefined) as object | undefined, ...data,
+      },
+    })
+    settled++
+  }
+  return settled
+}
+
+/** The request that carried these decisions out was put back: their history says so (the change ran, then was undone). */
+export async function noteDecisionsUndone(ids: string[], approvalId: string): Promise<number> {
+  const rows = ids.length ? await prisma.autopilotDecision.findMany({ where: { id: { in: [...new Set(ids)] }, executionId: approvalId, status: 'APPLIED' }, select: { id: true, reason: true } }) : []
+  for (const r of rows) {
+    if (r.reason.endsWith(' — put back by an undo')) continue
+    await prisma.autopilotDecision.update({ where: { id: r.id }, data: { reason: `${r.reason} — put back by an undo` } })
+  }
+  return rows.length
+}
+
+/**
+ * W4-9 — the bids a BID decision moves now, as its plan's own apply computes them: planBidChanges at the plan's effective
+ * target (the campaign's signals, the plan's guardrails). Read only; null when its plan or campaign is not found.
+ */
+export async function decisionBidChanges(facts: Pick<DecisionFacts, 'planId' | 'campaignId'>): Promise<Awaited<ReturnType<typeof import('./apply.js').planBidChanges>> | null> {
+  const plan = await prisma.autopilotPlan.findUnique({ where: { id: facts.planId }, select: { goal: true, guardrails: true } })
+  if (!plan || !facts.campaignId) return null
+  // Lazy imports: the job module imports this file (the dismissal fingerprint).
+  const [{ planBidChanges }, { gatherSignals }] = await Promise.all([import('./apply.js'), import('../../../jobs/ad-autopilot.job.js')])
+  const own = (plan.guardrails ?? {}) as Partial<Guardrails>
+  const [signal] = await gatherSignals([facts.campaignId])
+  return planBidChanges({
+    campaignId: facts.campaignId, goal: plan.goal as Goal, guardrails: { ...DEFAULT_GUARDRAILS, ...own },
+    marginPct: signal?.marginPct ?? null,
+    // W0 — a target the plan stores itself is explicit (wins over the campaign's); the merged default is not.
+    planSetsTargetAcos: typeof own.targetAcosPct === 'number',
+  })
+}
