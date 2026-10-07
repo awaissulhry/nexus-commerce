@@ -12,7 +12,7 @@ import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { PLAN_TOOL, type AgentTool } from '../tool-types.js'
 import { planView } from '../change-plan.service.js'
-import { campaignStructureCounts } from '../../advertising/ads-entity-lookup.service.js'
+import { adGroupExternalIds, campaignStructureCounts } from '../../advertising/ads-entity-lookup.service.js'
 
 /** Each stored status, said plainly: the model repeats it to a person. */
 const MEANING: Record<string, string> = {
@@ -231,6 +231,9 @@ const AD_CHANGE_TOOLS = new Set([
   'create-ai-goal-campaigns',
   // B-3 — a one-off SP Super Wizard set: its creates run detached too; approval-status reads its run the same way.
   'build-sp-wizard-campaigns',
+  // W4-6 — a new ad group and product ads (created at once, not queued: approval-status counts them and how much of them
+  // Amazon holds); an ad group's default bid or name (queued), or its bids stopped or given back (sent at once).
+  'create-ad-group', 'add-product-ads', 'set-ad-group',
 ])
 
 export interface AdDelivery {
@@ -331,6 +334,20 @@ export async function adDeliveryOf(approvalId: string, toolName: string, preview
       const counts = await campaignStructureCounts(after.campaignId)
       out.created = { total: counts.total, atAmazon: reach === 'live' ? counts.withAmazonId : 0 }
     }
+    return out
+  }
+  if (toolName === 'create-ad-group' || toolName === 'add-product-ads') {
+    // W4-6 — the ad group (and every row in it) or the product ads the request made; "at Amazon" only when it went live.
+    const made = after as { adGroupId?: unknown; productAds?: Array<{ productAdId?: unknown }> } | null
+    const groupId = toolName === 'create-ad-group' && typeof made?.adGroupId === 'string' ? made.adGroupId : null
+    const adIds = toolName === 'add-product-ads' ? (made?.productAds ?? []).map((ad) => String(ad.productAdId ?? '')).filter(Boolean) : []
+    const [group, ads, targets] = await Promise.all([
+      groupId ? adGroupExternalIds([groupId]) : new Map<string, string | null>(),
+      groupId || adIds.length ? prisma.adProductAd.findMany({ where: groupId ? { adGroupId: groupId } : { id: { in: adIds } }, select: { externalAdId: true } }) : [],
+      groupId ? prisma.adTarget.findMany({ where: { adGroupId: groupId }, select: { externalTargetId: true } }) : [],
+    ])
+    const ids = [...group.values(), ...ads.map((a) => a.externalAdId), ...targets.map((t) => t.externalTargetId)]
+    if (ids.length) out.created = { total: ids.length, atAmazon: reach === 'live' ? ids.filter(Boolean).length : 0 }
     return out
   }
   const createdIds = toolName === 'create-negative-keyword'

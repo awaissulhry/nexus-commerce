@@ -28,6 +28,7 @@ import { buildLimitFacts, commonRefusal, LIMIT_FACTS_MONEY, limitsNote, type Kit
 import type { FieldPermission, ToolContext, ToolResult } from '../tool-types.js'
 import { adProductRefusal } from '@nexus/shared/ads-ad-product'
 import { stepClamp, strategyWords, limitWords, type StepClamp, type StrategyBidLimits } from '../../advertising/ads-strategy/bids.js'
+import type { ClaudeActionType } from '../../advertising/ads-strategy/fields.js'
 
 // ── Running as an approved request ────────────────────────────────────────────────────────────────
 
@@ -296,8 +297,10 @@ export async function ruleFactsFor(input: {
   tool: string; limits: z.ZodObject; items: readonly KitItem[]; writes: readonly RuleWrite[]; approvalId?: string | null
   /** AA-W2-12 — the change can add spend without adding a budget (an enable restarts bids): its month is projected too. */
   projectMonth?: boolean
+  /** W4-6 — the kind of this op of a tool with several (OP_ACTIONS, ads-strategy/claude.ts); absent: the tool's kind. */
+  action?: ClaudeActionType | null
 }): Promise<RuleFacts> {
-  const limitFacts = await buildLimitFacts({ tool: input.tool, items: input.items, approvalId: input.approvalId, projectMonth: input.projectMonth })
+  const limitFacts = await buildLimitFacts({ tool: input.tool, items: input.items, approvalId: input.approvalId, projectMonth: input.projectMonth, ...(input.action !== undefined ? { action: input.action } : {}) })
   const ruleGate = await ruleGateRefusal(input.writes)
   return { limitFacts, limitsNote: limitsNote(limitFacts, await toolLimitsHere(input.tool, input.limits)), ruleGate }
 }

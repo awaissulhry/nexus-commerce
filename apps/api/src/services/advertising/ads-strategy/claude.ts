@@ -61,6 +61,8 @@ export const OP_ACTIONS: Readonly<Record<string, Readonly<Record<string, ClaudeA
   // PB-6c — a hero creates one campaign (a create). PB-10 — a sync builds slots and adds keywords and product ads: the create kind; its negatives alone are a kind of their
   // own (op sync-negatives). PB-9 — a phase switch is its own kind.
   'apply-ads-playbook': { build: 'create', adopt: null, hero: 'create', start: ['restore', 'allowlist'], stop: 'stop', sync: 'create', 'sync-negatives': 'negative', phase: 'phase' },
+  // W4-6 — one ad group: its default bid and name (a bid), its bids stopped with low bids (a stop) or given back (a restore).
+  'set-ad-group': { edit: 'bid', stop: 'stop', start: 'restore' },
 }
 
 /** Every kind of ad action a tool is for these args (its own kind first); empty: the strategy never narrows it. */
@@ -323,6 +325,21 @@ export const PLACES: Readonly<Record<string, PlaceReader>> = {
   // W3-3 — a stock lowering and its give-back: each ad group and campaign it names.
   'lower-ad-bids-for-stock': byStatusArgs,
   'restore-ad-bids-after-stock': byStatusArgs,
+  // W4-6 — a new ad group lands in its campaign and on the products it advertises; product ads in their ad group and on
+  // their products; an ad group change on that ad group.
+  'create-ad-group': async (place, args, preview) => {
+    await place.campaignIds([str(args.campaignId)])
+    const market = marketOf(obj(preview?.campaign).marketplace)
+      ?? marketOf((await prisma.campaign.findFirst({ where: { id: str(args.campaignId) ?? '' }, select: { marketplace: true } }))?.marketplace)
+    if (market && strs(args.skus).length) await place.skus(market, strs(args.skus))
+  },
+  'add-product-ads': async (place, args, preview) => {
+    await place.adGroupIds([str(args.adGroupId)])
+    const market = marketOf(obj(preview?.campaign).marketplace)
+      ?? marketOf((await prisma.adGroup.findFirst({ where: { id: str(args.adGroupId) ?? '' }, select: { campaign: { select: { marketplace: true } } } }))?.campaign.marketplace)
+    if (market && strs(args.skus).length) await place.skus(market, strs(args.skus))
+  },
+  'set-ad-group': (place, args) => place.adGroupIds([str(args.adGroupId)]),
   // AA-W2-11 — an ads automation, where it acts: its products (through its campaigns), else its market.
   'turn-up-automation': async (place, args) => placeAutomation(place, await automationScope(String(args.automation ?? ''), str(args.rowId))),
   'tune-ad-engine': async (place, args) => {
