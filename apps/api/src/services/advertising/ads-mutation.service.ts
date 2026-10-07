@@ -336,7 +336,7 @@ const VALUE_FIELDS = new Set(['bid', 'defaultBid', 'dailyBudget', 'budgetAmount'
 
 /**
  * CM-10 — the money a write moves, in cents, for the write gate's value cap, computed as the ads worker computes it
- * (`estimatePayloadValueCents`): bids are cents, a daily budget is euros, and only money fields count.
+ * (`estimatePayloadValueCents`): bids are cents, a daily budget and a portfolio cap are euros, and only money fields count.
  */
 export function writeValueCents(fieldChanges: FieldChange[]): number {
   let maxCents = 0
@@ -344,7 +344,8 @@ export function writeValueCents(fieldChanges: FieldChange[]): number {
     if (c.newValue == null || !VALUE_FIELDS.has(c.field)) continue
     const n = Number(c.newValue)
     if (!Number.isFinite(n)) continue
-    maxCents = Math.max(maxCents, Math.round(c.field === 'dailyBudget' ? n * 100 : n))
+    // W4-12b — a portfolio's cap (budgetAmount) is in major units too, as the worker now counts it.
+    maxCents = Math.max(maxCents, Math.round(c.field === 'dailyBudget' || c.field === 'budgetAmount' ? n * 100 : n))
   }
   return maxCents
 }
@@ -775,6 +776,8 @@ const intColumn = (column: string): FieldColumn => ({ column, value: (v) => (v !
 const decimalColumn = (column: string): FieldColumn => ({ column, value: (v) => (v != null && v.trim() !== '' && Number.isFinite(Number(v)) ? v.trim() : undefined) })
 const textColumn = (column: string, nullable = false): FieldColumn => ({ column, value: (v) => (v != null ? v : nullable ? null : undefined) })
 const dateColumn = (column: string): FieldColumn => ({ column, value: (v) => (v == null ? null : Number.isNaN(Date.parse(v)) ? undefined : new Date(v)) })
+/** W4-12b — a decimal that may be empty: a portfolio with no cap had no amount, and that is the value put back. */
+const nullableDecimalColumn = (column: string): FieldColumn => ({ column, value: (v) => (v == null ? null : decimalColumn(column).value(v)) })
 /** Every field the update helpers below write locally, per entity, in their own vocabulary. */
 const LOCAL_COLUMNS: Partial<Record<AdEntityType, Record<string, FieldColumn>>> = {
   AD_TARGET: { bid: intColumn('bidCents'), status: textColumn('status') },
@@ -785,6 +788,12 @@ const LOCAL_COLUMNS: Partial<Record<AdEntityType, Record<string, FieldColumn>>> 
     dailyBudgetCurrency: textColumn('dailyBudgetCurrency'), endDate: dateColumn('endDate'),
   },
   PRODUCT_AD: { status: textColumn('status') },
+  // W4-12b — a portfolio (updatePortfolioWithSync): a refused or unsent cap no longer stays in Nexus until the next sync.
+  PORTFOLIO: {
+    name: textColumn('name'), budgetAmount: nullableDecimalColumn('budgetAmount'),
+    budgetCurrencyCode: textColumn('budgetCurrencyCode', true), budgetPolicy: textColumn('budgetPolicy', true),
+    startDate: dateColumn('startDate'), endDate: dateColumn('endDate'),
+  },
 }
 
 /**
@@ -795,7 +804,7 @@ const LOCAL_COLUMNS: Partial<Record<AdEntityType, Record<string, FieldColumn>>> 
  * and the day's budget movement can only be known at dispatch, so on every gate refusal the worker calls this and
  * each refused field goes back to the value the write replaced. One conditional update per field, matching on the
  * refused value: a newer change — a person, another writer, a sync from Amazon — is never overwritten. A field with
- * no column here (a portfolio's) is left as it is and named in `kept`. Same workspace context as the worker's job.
+ * no column here is left as it is and named in `kept`. Same workspace context as the worker's job.
  */
 export async function putBackRefusedWrite(payload: {
   entityType: string
@@ -821,6 +830,7 @@ export async function putBackRefusedWrite(payload: {
       case 'AD_GROUP': n = (await prisma.adGroup.updateMany({ where: where as Prisma.AdGroupWhereInput, data: data as Prisma.AdGroupUpdateManyMutationInput })).count; break
       case 'CAMPAIGN': n = (await prisma.campaign.updateMany({ where: where as Prisma.CampaignWhereInput, data: data as Prisma.CampaignUpdateManyMutationInput })).count; break
       case 'PRODUCT_AD': n = (await prisma.adProductAd.updateMany({ where: where as Prisma.AdProductAdWhereInput, data: data as Prisma.AdProductAdUpdateManyMutationInput })).count; break
+      case 'PORTFOLIO': n = (await prisma.amazonAdsPortfolio.updateMany({ where: where as Prisma.AmazonAdsPortfolioWhereInput, data: data as Prisma.AmazonAdsPortfolioUpdateManyMutationInput })).count; break
     }
     ;(n > 0 ? out.restored : out.kept).push(c.field)
   }

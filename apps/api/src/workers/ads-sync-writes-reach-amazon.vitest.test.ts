@@ -41,17 +41,24 @@ vi.mock('../lib/queue.js', () => {
     redis: null,
   }
 })
-const gate = vi.hoisted(() => ({ seen: [] as GateContext[] }))
-vi.mock('../services/advertising/ads-write-gate.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/advertising/ads-write-gate.js')>()),
-  checkAdsWriteGate: async (ctx: GateContext): Promise<GateDecision> => {
-    gate.seen.push(ctx)
-    return { allowed: true, mode: 'live', profileId: 'P-TEST' }
-  },
-  logGateDeny: () => undefined,
-  recordSuccessfulWrite: async () => undefined,
-  recordCampaignLiveWrite: async () => undefined,
-}))
+const gate = vi.hoisted(() => ({ seen: [] as GateContext[], valueCap: false }))
+vi.mock('../services/advertising/ads-write-gate.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../services/advertising/ads-write-gate.js')>()
+  return {
+    ...real,
+    checkAdsWriteGate: async (ctx: GateContext): Promise<GateDecision> => {
+      gate.seen.push(ctx)
+      // W4-12b — the real gate's value-cap number, with its comparison, where a test asks for it.
+      if (gate.valueCap && ctx.payloadValueCents > real.maxWriteValueCents()) {
+        return { allowed: false, reason: `payload value ${ctx.payloadValueCents}¢ exceeds cap ${real.maxWriteValueCents()}¢`, deniedAt: 'value_cap' }
+      }
+      return { allowed: true, mode: 'live', profileId: 'P-TEST' }
+    },
+    logGateDeny: () => undefined,
+    recordSuccessfulWrite: async () => undefined,
+    recordCampaignLiveWrite: async () => undefined,
+  }
+})
 type Answer = { ok: boolean; rawResponse?: unknown; error?: string | null }
 const amazon = vi.hoisted(() => ({
   calls: [] as Array<{ fn: string; externalId: string; patch: Record<string, unknown> }>,
@@ -128,7 +135,7 @@ beforeAll(async () => {
   })
 }, 180_000)
 afterAll(async () => { await database?.close() })
-beforeEach(() => { gate.seen = []; amazon.calls = []; amazon.reads = []; amazon.answers = []; amazon.campaignsV3 = [] })
+beforeEach(() => { gate.seen = []; gate.valueCap = false; amazon.calls = []; amazon.reads = []; amazon.answers = []; amazon.campaignsV3 = [] })
 
 describe('CM-1 — bidding strategy', () => {
   it('is sent, with the placement lanes Amazon holds now (read first), so the lanes are not reset', async () => {
@@ -308,5 +315,156 @@ describe('CM-23 — portfolio writes read Amazon\'s answer', () => {
     expect(r.error).toMatch(/DUPLICATE_NAME/)
     const row = await inside(() => database.client.amazonAdsPortfolio.findUniqueOrThrow({ where: { id: 'wr-port' }, select: { name: true } }))
     expect(row.name).toBe('Core')
+  })
+})
+
+/**
+ * W4-12b — a queued portfolio cap change (the bulk-sheet path: bulksheet/apply.ts → updatePortfolioWithSync) goes to
+ * Amazon as the WHOLE cap Amazon's v3 PUT /portfolios takes ({ amount, currencyCode, policy, startDate, endDate }); a row
+ * that changed only the amount used to go out as `{ amount }`, without its policy and currency.
+ */
+describe('W4-12b — a queued portfolio cap goes out whole', () => {
+  const PF_MONTHLY = '900011112222333' // made-up Amazon portfolio ids
+  const PF_RANGE = '900044445555666'
+  const PF_BARE = '900077778888999'
+  beforeAll(async () => {
+    await inside(async () => {
+      const db = database.client
+      await db.amazonAdsPortfolio.create({ data: { id: 'wr-cap-m', profileId: 'P-TEST', externalPortfolioId: PF_MONTHLY, name: 'Monthly cap', budgetAmount: '100.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'MONTHLY_RECURRING', startDate: new Date('2026-01-01T00:00:00Z') } as never })
+      await db.amazonAdsPortfolio.create({ data: { id: 'wr-cap-d', profileId: 'P-TEST', externalPortfolioId: PF_RANGE, name: 'Range cap', budgetAmount: '200.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'DATE_RANGE', startDate: new Date('2026-11-01T00:00:00Z'), endDate: new Date('2026-11-30T00:00:00Z') } as never })
+      await db.amazonAdsPortfolio.create({ data: { id: 'wr-cap-none', profileId: 'P-TEST', externalPortfolioId: PF_BARE, name: 'No cap yet' } as never })
+    })
+  })
+  const queueCap = async (portfolioId: string, patch: Parameters<typeof updatePortfolioWithSync>[0]['patch']) => {
+    const r = await inside(() => updatePortfolioWithSync({ portfolioId, patch, actor: USER, reason: 'bulksheet import test', applyImmediately: true }))
+    expect(r.ok, r.error ?? '').toBe(true)
+    return r.outboundQueueId!
+  }
+
+  it('an amount-only change is sent with the cap\'s policy and currency (read from the portfolio)', async () => {
+    const q = await queueCap('wr-cap-m', { budgetAmount: 150 })
+    const { rows } = await drain()
+    expect(amazon.calls).toHaveLength(1)
+    // Before W4-12b: { amount: 150 } — no policy, no currency.
+    expect(amazon.calls[0]!.patch.budget).toEqual({ amount: 150, currencyCode: 'EUR', policy: 'MONTHLY_RECURRING' })
+    // A monthly cap carries no dates unless the write changes them (as the Portfolios page sends none).
+    expect(amazon.calls[0]!.patch.budget).not.toHaveProperty('startDate')
+    expect(rows.find((r) => r.id === q)?.syncStatus).toBe('SUCCESS')
+  })
+
+  it('a date-range end date alone is sent with the amount, currency, policy and start date', async () => {
+    await queueCap('wr-cap-d', { endDate: '2026-12-15' })
+    await drain()
+    expect(amazon.calls.map((c) => c.patch.budget)).toEqual([
+      { amount: 200, currencyCode: 'EUR', policy: 'DATE_RANGE', startDate: '2026-11-01', endDate: '2026-12-15' },
+    ])
+  })
+
+  it('the policy as a bulk sheet spells it goes out in Amazon\'s v3 spelling', async () => {
+    await queueCap('wr-cap-m', { budgetAmount: 90, budgetPolicy: 'monthlyRecurring' })
+    await drain()
+    expect(amazon.calls.map((c) => c.patch.budget)).toEqual([{ amount: 90, currencyCode: 'EUR', policy: 'MONTHLY_RECURRING' }])
+  })
+
+  it('a cap Nexus cannot complete (no policy anywhere) is not sent: it fails for good, saying why', async () => {
+    const q = await queueCap('wr-cap-none', { budgetAmount: 60 })
+    const { rows } = await drain()
+    expect(amazon.calls).toEqual([])
+    const row = rows.find((r) => r.id === q)!
+    expect(row).toMatchObject({ syncStatus: 'FAILED', errorCode: 'AMAZON_PERMANENT_REJECTION' })
+    expect(row.errorMessage).toMatch(/not sent to Amazon: Nexus holds no budget policy/)
+    // Nexus's own copy is put back too (it showed the unsent amount until the next sync).
+    expect((await inside(() => database.client.amazonAdsPortfolio.findUniqueOrThrow({ where: { id: 'wr-cap-none' }, select: { budgetAmount: true } }))).budgetAmount).toBeNull()
+  })
+
+  it('a portfolio with no cap (NO_CAP) is not sent an amount or dates it would drop: it fails for good, saying to set a policy first', async () => {
+    await inside(() => database.client.amazonAdsPortfolio.create({ data: { id: 'wr-cap-nocap', profileId: 'P-TEST', externalPortfolioId: '900033334444555', name: 'No cap', budgetCurrencyCode: 'EUR', budgetPolicy: 'NO_CAP' } as never }))
+    const amountOnly = await queueCap('wr-cap-nocap', { budgetAmount: 80 })
+    const datesOnly = await queueCap('wr-cap-nocap', { endDate: '2026-12-31' })
+    const { rows } = await drain()
+    // Before the review: { amount: null, policy: 'NO_CAP' } went out, Amazon accepted it, the row read SUCCESS and the
+    // amount typed was gone.
+    expect(amazon.calls).toEqual([])
+    for (const q of [amountOnly, datesOnly]) {
+      const row = rows.find((r) => r.id === q)!
+      expect(row).toMatchObject({ syncStatus: 'FAILED', errorCode: 'AMAZON_PERMANENT_REJECTION' })
+      expect(row.errorMessage).toMatch(/has no cap \(NO_CAP\).*set a cap policy for this portfolio first/)
+    }
+    expect(await inside(() => database.client.amazonAdsPortfolio.findUniqueOrThrow({ where: { id: 'wr-cap-nocap' }, select: { budgetAmount: true, endDate: true } }))).toEqual({ budgetAmount: null, endDate: null })
+  })
+
+  it('a cap removed (policy NO_CAP alone) is sent as Amazon\'s no-cap: no amount', async () => {
+    await queueCap('wr-cap-d', { budgetPolicy: 'noCap' })
+    await drain()
+    expect(amazon.calls.map((c) => c.patch.budget)).toEqual([{ amount: null, currencyCode: 'EUR', policy: 'NO_CAP' }])
+  })
+
+  it('a rename alone still sends no budget at all', async () => {
+    await queueCap('wr-cap-m', { name: 'Monthly cap 2' })
+    await drain()
+    expect(amazon.calls).toHaveLength(1)
+    expect(amazon.calls[0]!.patch).toMatchObject({ portfolioId: PF_MONTHLY, name: 'Monthly cap 2' })
+    expect(amazon.calls[0]!.patch.budget).toBeUndefined()
+  })
+
+  // What the client then puts on the wire (the policy in Amazon's spelling) is pinned in ads-api-client.vitest.test.ts.
+  it('the Portfolios page\'s own push (updatePortfolioById) is unchanged here: it hands the client its cap as it builds it', async () => {
+    const r = await inside(() => updatePortfolioById({ portfolioId: PF_MONTHLY, budget: { amount: 120, currencyCode: 'EUR', policy: 'monthlyRecurring' } }))
+    expect(r).toMatchObject({ ok: true, mode: 'live' })
+    expect(amazon.calls.map((c) => c.patch.budget)).toEqual([{ amount: 120, currencyCode: 'EUR', policy: 'monthlyRecurring' }])
+  })
+})
+
+/**
+ * W4-12b — a portfolio cap is in major units (AmazonAdsPortfolio.budgetAmount, as the action log's budget fields), so the
+ * write gate's value cap counts it ×100, as the Portfolios page's own push does. It was counted as cents: 100× too small.
+ */
+describe('W4-12b — the value cap counts a portfolio cap in minor units', () => {
+  beforeAll(async () => {
+    await inside(() => database.client.amazonAdsPortfolio.create({ data: { id: 'wr-cap-v', profileId: 'P-TEST', externalPortfolioId: '900012121212121', name: 'Valued cap', budgetAmount: '100.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'MONTHLY_RECURRING' } as never }))
+  })
+  const queueAmount = async (budgetAmount: number) => {
+    const r = await inside(() => updatePortfolioWithSync({ portfolioId: 'wr-cap-v', patch: { budgetAmount }, actor: USER, reason: 'bulksheet import test', applyImmediately: true }))
+    expect(r.ok, r.error ?? '').toBe(true)
+    return r.outboundQueueId!
+  }
+
+  it('a €3 cap is worth 300 cents to the gate', async () => {
+    await queueAmount(3)
+    await drain()
+    expect(gate.seen.map((c) => c.payloadValueCents)).toEqual([300])
+  })
+
+  it('a €600 cap is refused by the €500 value cap, and nothing reaches Amazon (it passed as 600 cents before)', async () => {
+    gate.valueCap = true
+    const q = await queueAmount(600)
+    const { rows } = await drain()
+    expect(gate.seen.map((c) => c.payloadValueCents)).toEqual([60_000])
+    expect(amazon.calls).toEqual([])
+    expect(rows.find((r) => r.id === q)).toMatchObject({ syncStatus: 'SKIPPED', errorCode: 'WRITE_GATE_DENIED' })
+    expect(rows.find((r) => r.id === q)?.errorMessage).toMatch(/value_cap/)
+    // The refused cap is put back in Nexus's copy: the €3 the last sent write left.
+    expect(Number((await inside(() => database.client.amazonAdsPortfolio.findUniqueOrThrow({ where: { id: 'wr-cap-v' }, select: { budgetAmount: true } }))).budgetAmount)).toBe(3)
+  })
+
+  it('a policy- or dates-only edit is judged on the amount it sends (the stored one), not as 0', async () => {
+    await inside(() => database.client.amazonAdsPortfolio.create({ data: { id: 'wr-cap-big', profileId: 'P-TEST', externalPortfolioId: '900056565656565', name: 'Big range', budgetAmount: '700.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'DATE_RANGE', startDate: new Date('2026-11-01T00:00:00Z'), endDate: new Date('2026-11-30T00:00:00Z') } as never }))
+    gate.valueCap = true
+    const r = await inside(() => updatePortfolioWithSync({ portfolioId: 'wr-cap-big', patch: { endDate: '2026-12-31' }, actor: USER, reason: 'bulksheet import test', applyImmediately: true }))
+    const { rows } = await drain()
+    // The whole cap goes out (€700): the gate sees 70 000 cents, above the €500 cap. Counted as 0 before the review.
+    expect(gate.seen.map((c) => c.payloadValueCents)).toEqual([70_000])
+    expect(amazon.calls).toEqual([])
+    expect(rows.find((x) => x.id === r.outboundQueueId)).toMatchObject({ syncStatus: 'SKIPPED', errorCode: 'WRITE_GATE_DENIED' })
+    // The refused end date is put back in Nexus's copy.
+    expect((await inside(() => database.client.amazonAdsPortfolio.findUniqueOrThrow({ where: { id: 'wr-cap-big' }, select: { endDate: true } }))).endDate?.toISOString().slice(0, 10)).toBe('2026-11-30')
+  })
+
+  it('a €400 cap passes the same value cap and is sent', async () => {
+    gate.valueCap = true
+    await queueAmount(400)
+    await drain()
+    expect(gate.seen.map((c) => c.payloadValueCents)).toEqual([40_000])
+    expect(amazon.calls.map((c) => (c.patch.budget as { amount?: number }).amount)).toEqual([400])
   })
 })

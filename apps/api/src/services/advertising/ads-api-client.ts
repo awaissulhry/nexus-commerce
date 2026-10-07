@@ -848,9 +848,30 @@ export async function createPortfolio(ctx: ClientContext, input: { name: string;
   // W4-3 — no id: Amazon refused it (portfolios.error[]); its own words ride along. The answer is otherwise unchanged.
   return { ok: true, mode: 'live', externalId: id != null ? String(id) : null, ...(id == null ? { error: v3ErrorText(resp) ?? 'Amazon answered without a portfolio id' } : {}) }
 }
-// P3 — portfolio budget cap. v3 policy is 'monthlyRecurring' | 'dateRange' (dateRange needs
-// start+end). currencyCode must match the connection's marketplace (EUR for IT/DE/FR/ES).
-export interface PortfolioBudgetInput { amount: number; currencyCode: string; policy: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string }
+// P3 — portfolio budget cap (dateRange needs start+end). currencyCode must match the connection's marketplace (EUR for
+// IT/DE/FR/ES). W4-12b — the policy may come in the page's words (monthlyRecurring, dateRange) or Amazon's; it always
+// goes out in Amazon's (portfolioPolicyV3). `amount` null only with NO_CAP (no cap).
+export interface PortfolioBudgetInput {
+  amount: number | null; currencyCode: string
+  policy: 'monthlyRecurring' | 'dateRange' | 'MONTHLY_RECURRING' | 'DATE_RANGE' | 'NO_CAP'
+  startDate?: string; endDate?: string
+}
+
+/**
+ * W4-12b — a cap policy in Amazon's Portfolios 3.0 spelling. Amazon's Portfolios 3.0 OpenAPI (Portfolios_prod_3p.json,
+ * `PortfolioBudget.policy`, enum PolicyType): DATE_RANGE ("a budget for a specific period of time"), MONTHLY_RECURRING
+ * ("automatically renewed at the beginning of each month"), NO_CAP ("to remove budget, set budget amount, startDate,
+ * endDate to null and set policy to NO_CAP"). The Portfolios page and set-portfolio said monthlyRecurring / dateRange
+ * (the v2 words), the bulk sheet whatever was typed: each is read here and sent in the spec's spelling. Any other text is
+ * sent as it is, for Amazon to answer.
+ */
+export function portfolioPolicyV3(policy: string): string {
+  const key = policy.replace(/[^a-z]/gi, '').toUpperCase()
+  if (key === 'MONTHLYRECURRING') return 'MONTHLY_RECURRING'
+  if (key === 'DATERANGE') return 'DATE_RANGE'
+  if (key === 'NOCAP') return 'NO_CAP'
+  return policy
+}
 // P2/P3 — update a portfolio (v3 PUT /portfolios): rename + state (enabled/paused/archived) + budget.
 // Sandbox no-ops. 1a (CM-23) — Amazon answers a refused portfolio with HTTP 2xx and the reason in `portfolios.error[]`,
 // like the SP batch PUTs; that answer is read now (v3BatchResult) instead of reporting every write as accepted.
@@ -863,12 +884,17 @@ export async function updatePortfolio(ctx: ClientContext, input: { portfolioId: 
   if (input.name != null) pf.name = input.name
   if (input.state != null) pf.state = input.state.toUpperCase() // v3 requires UPPERCASE enum
   if (input.budget) {
+    // PortfolioBudget (Portfolios 3.0): amount a plain number in the currency, currencyCode (never null), policy in the
+    // spec's spelling (portfolioPolicyV3), dates YYYY-MM-DD. NO_CAP removes the cap: amount and both dates null.
     const b = input.budget
-    pf.budget = {
-      amount: b.amount, currencyCode: b.currencyCode, policy: b.policy,
-      ...(b.startDate ? { startDate: b.startDate } : {}),
-      ...(b.endDate ? { endDate: b.endDate } : {}),
-    }
+    const policy = portfolioPolicyV3(b.policy)
+    pf.budget = policy === 'NO_CAP'
+      ? { amount: null, currencyCode: b.currencyCode, policy, startDate: null, endDate: null }
+      : {
+        amount: b.amount, currencyCode: b.currencyCode, policy,
+        ...(b.startDate ? { startDate: b.startDate } : {}),
+        ...(b.endDate ? { endDate: b.endDate } : {}),
+      }
   }
   const response = await liveCall<unknown>({
     ...ctx, method: 'PUT', path: '/portfolios', body: { portfolios: [pf] },

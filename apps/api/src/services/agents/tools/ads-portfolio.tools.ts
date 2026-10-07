@@ -54,7 +54,7 @@ const hash = (value: unknown) => createHash('sha256').update(canonical(value)).d
 const today = () => new Date().toISOString().slice(0, 10)
 const quote = (name: string) => `"${name}"`
 
-/** Amazon's policy words (the page's and the client's: monthlyRecurring, dateRange) as Claude's tools say them. */
+/** A cap policy as Claude's tools say it; handed to the client in the page's words, which sends Amazon's (portfolioPolicyV3). */
 const POLICY_OF: Record<string, 'monthly' | 'dateRange'> = { MONTHLY_RECURRING: 'monthly', DATE_RANGE: 'dateRange' }
 const CLIENT_POLICY = { monthly: 'monthlyRecurring', dateRange: 'dateRange' } as const
 
@@ -223,7 +223,7 @@ const capInput = z.object({
   amountCents: z.coerce.number().int().min(1).max(100_000_000)
     .describe("the cap in minor units (cents) of the portfolio market's currency, never converted"),
   policy: z.enum(['monthly', 'dateRange'])
-    .describe('monthly: the cap renews every calendar month (Amazon\'s monthlyRecurring); dateRange: one cap from startDate to endDate'),
+    .describe('monthly: the cap renews every calendar month (Amazon\'s MONTHLY_RECURRING); dateRange: one cap from startDate to endDate'),
   startDate: DATE.optional().describe('dateRange: the first day (YYYY-MM-DD)'),
   endDate: DATE.optional().describe('dateRange: the last day (YYYY-MM-DD)'),
 })

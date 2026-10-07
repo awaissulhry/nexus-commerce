@@ -216,6 +216,8 @@ describe('a person\'s edit is refused at once, in the gate\'s words (CM-10)', ()
     expect(writeValueCents([{ field: 'portfolioId', oldValue: null, newValue: '123456789012345' }])).toBe(0)
     expect(writeValueCents([{ field: 'dailyBudget', oldValue: '20', newValue: '25.5' }, { field: 'name', oldValue: 'a', newValue: '2024' }])).toBe(2550)
     expect(writeValueCents([{ field: 'bid', oldValue: '45', newValue: '60' }])).toBe(60)
+    // W4-12b — a portfolio cap is euros too, as the worker counts it.
+    expect(writeValueCents([{ field: 'budgetAmount', oldValue: '100', newValue: '600' }])).toBe(60_000)
   })
 
   it('callers that do not ask (rules, engines) keep the queue-then-dispatch path', async () => {
