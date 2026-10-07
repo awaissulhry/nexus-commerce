@@ -98,6 +98,19 @@ export type ListingEvent =
       orderId?: string | null
       ts: number
     }
+  // Step 3 (cases) — sealed cases were counted at a location (`reason: 'count'`), or a SKU's case pack changed
+  // (`reason: 'case-pack'`, `locationId` and the counts null). Raised on the DURABLE lane by stock-cases.service.ts and
+  // fanned out here like inventory.stock_changed, so an open stock editor or Matrix re-reads. Mirrors the catalogue.
+  | {
+      type: 'inventory.cases_changed'
+      productId: string
+      locationId: string | null
+      casesBefore: number | null
+      casesAfter: number | null
+      unitsPerCase: number | null
+      reason: 'count' | 'case-pack'
+      ts: number
+    }
   | { type: 'ping'; ts: number }
 
 type Listener = (event: ListingEvent) => void
@@ -137,6 +150,8 @@ const LISTING_BUS_TYPES_LIST = [
   'listing.synced', 'listing.syncing', 'listing.updated', 'listing.created', 'listing.deleted', 'listing.values_changed',
   'wizard.submitted', 'product.updated', 'product.created', 'product.deleted', 'product.media.changed',
   'bulk.progress', 'bulk.completed', 'inventory.stock_changed', 'publication.status_changed', 'listing.publish_action_changed',
+  // Step 3 — durable like inventory.stock_changed; the bus is how a case count or a case pack reaches an open screen.
+  'inventory.cases_changed',
 ] as const satisfies readonly EventType[]
 
 const bus = createCrossReplicaBus<ListingEvent>({

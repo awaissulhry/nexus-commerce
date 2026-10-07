@@ -89,6 +89,22 @@ describe('inventory.stock_changed reaches the listing SSE bus', () => {
     off()
   })
 
+  // Step 3 (cases) — a sealed count or a case pack change is raised on the durable lane by stock-cases.service.ts;
+  // declaring the type on the bus is again the whole bridge to an open stock editor or Matrix.
+  it('delivers a relayed inventory.cases_changed (a count, and a case-pack change) with its payload', async () => {
+    const seen: any[] = []
+    const off = subscribeListingEvents((e) => seen.push(e))
+    await broker.publish([
+      envelope('inventory.cases_changed', { productId: 'p-3', locationId: 'loc-1', casesBefore: 4, casesAfter: 3, unitsPerCase: 12, reason: 'count' }),
+      envelope('inventory.cases_changed', { productId: 'p-4', locationId: null, casesBefore: null, casesAfter: null, unitsPerCase: null, reason: 'case-pack' }),
+    ])
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toMatchObject({ type: 'inventory.cases_changed', productId: 'p-3', locationId: 'loc-1', casesBefore: 4, casesAfter: 3, unitsPerCase: 12, reason: 'count' })
+    expect(seen[1]).toMatchObject({ type: 'inventory.cases_changed', productId: 'p-4', locationId: null, unitsPerCase: null, reason: 'case-pack' })
+    expect(typeof seen[0].ts).toBe('number')
+    off()
+  })
+
   it('unsubscribes cleanly', async () => {
     const before = getListenerCount()
     const off = subscribeListingEvents(() => {})

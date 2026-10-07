@@ -58,6 +58,7 @@ import marketplacesRoutes from "./routes/marketplaces.routes.js";
 import fulfillmentRoutes from "./routes/fulfillment.routes.js";
 import returnsRoutes from "./routes/returns.routes.js";
 import stockRoutes from "./routes/stock.routes.js";
+import stockCasesRoutes from "./routes/stock-cases.routes.js";
 import brandSettingsRoutes from "./routes/brand-settings.routes.js";
 import settingsAuditRoutes from "./routes/settings-audit.routes.js";
 import profileRoutes from "./routes/profile.routes.js";
@@ -623,6 +624,7 @@ app.register(marketplacesRoutes, { prefix: '/api' });
 app.register(fulfillmentRoutes, { prefix: '/api' });
 app.register(returnsRoutes, { prefix: '/api' });
 app.register(stockRoutes, { prefix: '/api' });
+app.register(stockCasesRoutes, { prefix: '/api' }); // Step 3 — PUT /api/stock/case-packs (case size, dims, FBA prep/label owner)
 app.register(brandSettingsRoutes, { prefix: '/api' });
 app.register(settingsAuditRoutes, { prefix: '/api' });
 app.register(profileRoutes, { prefix: '/api' });

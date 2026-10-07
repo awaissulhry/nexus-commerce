@@ -16,6 +16,7 @@
  *   - `price`: `ChannelListing.price` (the number the push reads); `sale`: `salePrice` + the two window columns.
  *   - `listing.selling` (build shape v2, P7): THE engine's selling state per coordinate (`destinationSellingStates`,
  *     the reader the sheet's Status column and the listing-action engine use) — from the rows already read, no query.
+ *   - `pack` (Step 3, the Case column): the member's own `ProductPackage`, sizes and weight as numbers (`casePackOf`).
  *
  * One query per table, joined in memory (two waves: the family's tables, then the tables keyed by listing id).
  * Amazon coordinates never touch the schema cache, so no live SP-API product-type call can be triggered here.
@@ -28,6 +29,7 @@ import {
   type CoordinateKey,
   type FulfilmentCell,
   type FulfilmentMethod,
+  type MatrixCasePack,
   type MatrixCells,
   type MatrixCoordinate,
   type MatrixFbaStock,
@@ -38,6 +40,7 @@ import {
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import type { SellingStateRead } from '@nexus/shared/listing-actions'
+import { isCaseOwner } from '@nexus/shared/stock-cases'
 import { destinationSellingStates, oldClosePauses } from '../listings/listing-action.service.js'
 import { ledgerInputs, loadMarketSources, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
 import { marketSourceKey, sellsFrom } from '../sync-control-core.js'
@@ -87,6 +90,26 @@ export const MATRIX_LISTING_SELECT = {
 export type MatrixListing = Prisma.ChannelListingGetPayload<{ select: typeof MATRIX_LISTING_SELECT }>
 type Member = Prisma.ProductGetPayload<{ select: typeof MEMBER_SELECT }>
 
+/** The `ProductPackage` columns the Case column reads. */
+const CASE_PACK_SELECT = {
+  productId: true, unitsPerCase: true, caseLengthCm: true, caseWidthCm: true, caseHeightCm: true, caseWeightKg: true,
+  fbaPrepOwner: true, fbaLabelOwner: true,
+} as const
+type CasePackRow = Prisma.ProductPackageGetPayload<{ select: typeof CASE_PACK_SELECT }>
+
+/** One case pack on the wire: Prisma's `Decimal` sizes and weight as numbers, an unknown owner string as not set. */
+export function casePackOf(row: Omit<CasePackRow, 'productId'>): MatrixCasePack {
+  return {
+    unitsPerCase: row.unitsPerCase ?? null,
+    caseLengthCm: decimalToNumber(row.caseLengthCm),
+    caseWidthCm: decimalToNumber(row.caseWidthCm),
+    caseHeightCm: decimalToNumber(row.caseHeightCm),
+    caseWeightKg: decimalToNumber(row.caseWeightKg),
+    fbaPrepOwner: isCaseOwner(row.fbaPrepOwner) ? row.fbaPrepOwner : null,
+    fbaLabelOwner: isCaseOwner(row.fbaLabelOwner) ? row.fbaLabelOwner : null,
+  }
+}
+
 const upper = (s: string | null | undefined) => String(s ?? '').toUpperCase()
 
 /**
@@ -132,7 +155,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
 
   // ── 2. wave 1 — one query per table keyed by the family ────────────────────────────────────
   const tWave1 = Date.now()
-  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots, warehouses, marketSources] = await Promise.all([
+  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots, warehouses, marketSources, casePacks] = await Promise.all([
     prisma.channelListing.findMany({ where: { productId: { in: memberIds } }, select: MATRIX_LISTING_SELECT }),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, currency: true, region: true } }),
     prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, isPrimary: true, workspaceId: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }),
@@ -148,7 +171,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     // "Sells from" (Step 2): this business's warehouses (the From cell's choices and its routes default) and the market lists.
     prisma.stockLocation.findMany({ where: { type: 'WAREHOUSE' }, select: { code: true, name: true, isActive: true, syncRoutes: true, warehouse: { select: { isDefault: true, isActive: true } } } }),
     loadMarketSources(prisma),
-  ]); queries += 14
+    // The Case column (Step 3): each member's case pack — units per case, case size and weight, FBA prep/label owner.
+    prisma.productPackage.findMany({ where: { productId: { in: memberIds } }, select: CASE_PACK_SELECT }),
+  ]); queries += 15
   const audienceRows = parentRow.productType
     ? await prisma.$queryRawUnsafe<Array<{ marketplace: string | null; audience: unknown }>>(AUDIENCE_SQL, parentRow.productType)
     : []
@@ -212,6 +237,8 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const newest = rows.reduce<Date | null>((m, r) => (r.at && (!m || r.at > m) ? r.at : m), null)
     return { units: rows.reduce((n, r) => n + r.units, 0), locations: [...byCode].map(([code, units]) => ({ code, units })), updatedAt: newest?.toISOString() ?? null }
   }
+  /* The Case column (Step 3): a member's own case pack; null = none set. A parent carries its own (normally none). */
+  const packOf = new Map(casePacks.map((p) => [p.productId, casePackOf(p)]))
   /* "Sells from": the warehouses in sale order (the default first, then by code — the loader's order). */
   const sourceLocations: Array<SourceLocation & { name: string }> = inSourceOrder(warehouses.map((w) => ({
     code: w.code, name: w.name, active: w.isActive !== false, syncRoutes: w.syncRoutes ?? [],
@@ -463,6 +490,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       id: member.id, sku: member.sku, role: isParent ? 'parent' : 'variant',
       stock: { available, uncounted, locations, source },
       fba: fbaStockOf(isParent ? children.map((c) => c.id) : [member.id]),
+      pack: packOf.get(member.id) ?? null,
       basePrice: decimalToNumber(member.basePrice), status: member.status, cells,
     }
   }
