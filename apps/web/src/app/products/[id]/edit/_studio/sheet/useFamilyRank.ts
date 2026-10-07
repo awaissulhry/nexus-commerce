@@ -7,7 +7,8 @@
  * pages) in its ORDER view — the same axes and axis values without the per-channel projection reads — and ranks this
  * page's rows with `familyRank`: the same axes (`familyAxes`) and the same rule (`orderByAxisValues`).
  *
- * - A product with no family (not a parent, no parent) has nothing to order: no read, the rank is ready at once.
+ * - A product with no family (not a parent, no parent, one product on the sheet) has nothing to order: no read, the
+ *   rank is ready at once. More than one product on the sheet counts as a family whatever the product's own flags say.
  * - `settled` is false until the FIRST read answers. The page holds its rows until then, so they never move under a
  *   focused cell (AG keeps focus by row index: a re-order after the first paint would leave the cursor on another SKU).
  * - A failed read keeps the last order that was read; before any, the rows fall back to parent then SKU — what the
@@ -34,13 +35,13 @@ export interface FamilyRankRead {
 
 export function useFamilyRank(productId: string, rows: readonly FamilyOrderRow[], columns: readonly FamilyAxisColumn[] | undefined): FamilyRankRead {
   const product = useStudioProduct()
-  const inFamily = product.isParent || !!product.parentId
-  const { market, locale } = familyReadScope(useStudioScope())
-  const { projections, loading, error, reload } = useFamilyProjections(inFamily ? productId : '', market, locale, 'order')
   /* A row added, deleted or imported changes the family: read it again, so a new variation takes its place at once.
      Not on every save — the family read builds a whole Shared sheet on the server. An empty list (the sheet between two
      reads) says nothing about the family and is skipped. */
   const members = useMemo(() => [...new Set(rows.map((r) => r.id))].sort().join('\n'), [rows])
+  const inFamily = product.isParent || !!product.parentId || members.includes('\n')
+  const { market, locale } = familyReadScope(useStudioScope())
+  const { projections, loading, error, reload } = useFamilyProjections(inFamily ? productId : '', market, locale, 'order')
   const seen = useRef('')
   useEffect(() => {
     if (!inFamily || !members || seen.current === members) return

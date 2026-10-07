@@ -182,7 +182,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     /* S11 — a Shared rename the server made: its sentence about the channels, and the studio's header shows the new SKU. */
     const skuRenamedRef = useRef<(renames: SkuRename[]) => void>(() => undefined);
     const studioSkuRenamed = useStudioSkuRenamed();
-    const { sheet: loadedSheet, loading, switching, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
+    const { sheet: loadedSheet, loading: sheetLoading, switching, error, contractProblems, reload, refresh, writer, tracker, conflicts, bindGrid } = useMasterSheet({
         productId, market, locale, locales: languageScope.locales, onWriteStart, onWriteEnd, onSettled,
         onVariationThemeSaved: () => { reloadFamilyRef.current(); reloadOrderRef.current(); },
         /* R-VT-15 — the server's refusal sentence, said the moment it arrives, through the ONE DS
@@ -304,6 +304,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     reloadOrderRef.current = familyOrder.reload;
     /* Held until the family order is first read: rows that moved after the first paint would leave a focused cell on another SKU. */
     const orderPending = !!sheet && !familyOrder.settled;
+    /* Everything that reads "loaded" — the toolbar, Export, the chips, the drawer — waits for the order too. */
+    const loading = sheetLoading || orderPending;
     const rows = useMemo(() => (sheet && familyOrder.settled ? sortByFamilyRank(sheet.rows, familyOrder.rank) : []), [sheet, familyOrder.settled, familyOrder.rank]);
     const { saveStatus, refused, refusedRowIds } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     savedAtRef.current = saveStatus.saved;
@@ -642,9 +644,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         const query = search.trim().toLowerCase();
         return query ? filterProductSheetRows(afterWaiting, row => (row.sku + ' ' + (row.name ?? '')).toLowerCase().includes(query) || Object.entries(row.values).some(([key, cell]) => referenceSearchText(cell?.value, columnByKeyRef.current.get(key)?.optionLabels).includes(query))) : afterWaiting;
     }, [rows, search, showRefusedOnly, refusedRowIds, schemaColumns, waitingOnly, publishCellsOf, publishActions.version]);
-    useSheetChips(sheet ? scopeRows : null, schemaColumns, { scope: 'master' });
+    useSheetChips(sheet && !orderPending ? scopeRows : null, schemaColumns, { scope: 'master' });
     const productIds = useMemo(() => rows.map((r) => r.id), [rows]);
-    const contentAiChip = useLanguageChips(sheet ? scopeRows : null, schemaColumns, false);
+    const contentAiChip = useLanguageChips(sheet && !orderPending ? scopeRows : null, schemaColumns, false);
     const aiLayer = useAiDraftLayer({ productIds, channel: null, marketplace: market, locale, locales: languageScope.locales, columnKeys: allColumnKeys }, contentAiChip);
     const skuById = useMemo(() => Object.fromEntries(rows.map((r) => [r.id, r.sku])), [rows]);
     detailsLive.current = {
@@ -929,7 +931,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
     }, onReload);
     return {
         scope: 'master',
-        loading: loading || orderPending, switching, unavailable: !!error,
+        loading: loading, switching, unavailable: !!error,
         errorLabel: 'shared product information',
         errorMessage: error,
         backendMissing: false, retry: reload,
@@ -1026,7 +1028,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             ...publishFenceProps,
             rowClassRules: rowClassRules,
             processDataFromClipboard: pasteIntoNewRows,
-            loading: loading || orderPending,
+            loading: loading,
             columnDialog: columnDialog,
             initialState: sheetColumns.initialState,
             onCellDoubleClicked: onCellDoubleClicked,

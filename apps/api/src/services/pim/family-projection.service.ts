@@ -491,7 +491,10 @@ export async function getFamilyRead(productId: string, market: string, locale?: 
   const tSheet = Date.now()
   let sheet: StudioSheet | null = null
   try {
-    sheet = await getStudioSheet({ productId: root.id, scope: 'master', market, locale, includeMapping: false })
+    // The order view of a product with no variations has nothing to order: no sheet (the Information page asks for it
+    // with every sheet it opens, before it knows whether the product has a family).
+    if (options.projections !== false || children.length > 0)
+      sheet = await getStudioSheet({ productId: root.id, scope: 'master', market, locale, includeMapping: false })
   } catch {
     // A missing schema for the product type must not take the whole page down: the grid can render identity,
     // axes and projections without readiness, and `readiness: null` says honestly that it was not computed.

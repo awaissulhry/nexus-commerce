@@ -12,15 +12,17 @@
 /** A prefetch nobody adopted is dropped after this long: a page that has not asked for it by then will not. */
 export const PREFETCH_TTL_MS = 15_000
 
-type Kind = 'sheet' | 'destination'
+type Kind = 'sheet' | 'destination' | 'family'
 interface Entry { url: string; response: Promise<Response>; controller: AbortController; timer: ReturnType<typeof setTimeout>; adopted?: boolean }
 
 const entries = new Map<Kind, Entry>()
 
-/** Which studio read a URL is — only these two are ever prefetched. */
+/** Which studio read a URL is — only these three are ever prefetched (the family read only in its order view). */
 export function prefetchKind(url: string): Kind | null {
-  let path: string
-  try { path = new URL(url, 'http://studio.invalid').pathname } catch { return null }
+  let parsed: URL
+  try { parsed = new URL(url, 'http://studio.invalid') } catch { return null }
+  const path = parsed.pathname
+  if (/\/studio\/family$/.test(path)) return parsed.searchParams.get('view') === 'order' ? 'family' : null
   return /\/studio\/sheet$/.test(path) ? 'sheet' : /\/studio\/destination$/.test(path) ? 'destination' : null
 }
 

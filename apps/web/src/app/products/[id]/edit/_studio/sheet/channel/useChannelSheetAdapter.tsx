@@ -141,7 +141,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const languageScope = useStudioScope();
     const { accounts, destination, setListing, registerScopeChangeGuard } = languageScope;
     const alternateAccount = !studioAccountAccess(accounts, accountId).supportsPrimaryTools;
-    const { data: loadedData, loading, switching, error, backendMissing, reload, refresh } = useChannelSheet({
+    const { data: loadedData, loading: sheetLoading, switching, error, backendMissing, reload, refresh } = useChannelSheet({
         productId,
         locales: languageScope.locales,
         schemaRevision: shopifySchema?.revision,
@@ -222,6 +222,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const familyOrder = useFamilyRank(productId, rankRows, loadedData?.columns);
     /* Held until the family order is first read: rows that moved after the first paint would leave a focused cell on another SKU. */
     const orderPending = !!data && !familyOrder.settled;
+    /* Everything that reads "loaded" — the toolbar, Export, the chips, the drawer — waits for the order too. */
+    const loading = sheetLoading || orderPending;
     const rows = useMemo(() => (data && familyOrder.settled ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current), familyOrder.rank) : []), [data, familyOrder.settled, familyOrder.rank]);
     // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
     const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
@@ -1100,8 +1102,8 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
                 : afterWaiting;
         return searchTerm ? filterProductSheetRows(afterPublish, matchesSearch) : afterPublish;
     }, [rows, searchTerm, matchesSearch, showRefusedOnly, refusedRowIds, showRejectedOnly, rejectedCount, rowPublicationStatus, offerDrafts, publishFilter, publishCellOf, publishActions.version]);
-    useLanguageChips(data ? scopeRows : null, gridColumns);
-    useSheetChips(data ? scopeRows : null, gridColumns, { scope: 'channel', mapping: true, warningsId: 'channel-warnings', mappingRun: data?.meta.mapping ?? null });
+    useLanguageChips(data && !orderPending ? scopeRows : null, gridColumns);
+    useSheetChips(data && !orderPending ? scopeRows : null, gridColumns, { scope: 'channel', mapping: true, warningsId: 'channel-warnings', mappingRun: data?.meta.mapping ?? null });
     const { activeId, active, setActive } = useViewChips();
     const visibleRows = useMemo(() => active ? filterProductSheetRows(scopeRows, row => (active.cells.byRow[productSheetRowKey(row)]?.length ?? 0) > 0) : scopeRows, [scopeRows, active]);
     /* Add rows — the empty rows after the rows on screen: a variation under the listing shown, a listing as a band of its own. */
@@ -1280,7 +1282,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     const noAccount = !accountId && !data?.scope.connectionId && accounts.length === 0;
     return {
         scope: 'channel',
-        loading: loading || orderPending, switching, unavailable: unavailable,
+        loading: loading, switching, unavailable: unavailable,
         errorLabel: `${channelLabel(channel)} · ${marketplace} information`,
         errorMessage: error,
         backendMissing: backendMissing, retry: reload,
@@ -1410,7 +1412,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
               Metafields and metaobject fields appear here as soon as Shopify answers. The sheet updates by itself.
             </Banner>}</>,
         grid: {
-            loading: loading || orderPending,
+            loading: loading,
             noRowsOverlayComponentParams: emptyState,
             ...shopifyClipboard,
             processDataFromClipboard: pasteIntoNewRows,

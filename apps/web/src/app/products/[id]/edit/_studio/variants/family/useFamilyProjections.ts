@@ -6,6 +6,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { isProjectionState, type ProjectionState } from '@/design-system/grid/renderers/projection'
 import { getBackendUrl } from '@/lib/backend-url'
 
+import { familyOrderUrl } from '../../sheetUrls'
+import { fetchStudioRead } from '../../studio-read'
+
 import {
   EMPTY_PROJECTIONS,
   type FamilyProjections,
@@ -67,10 +70,15 @@ export function useFamilyProjections(
     setError(null)
 
     const backend = getBackendUrl()
-    const studioUrl = `${backend}/api/products/${encodeURIComponent(productId)}/studio/family?market=${encodeURIComponent(market)}${locale ? `&locale=${encodeURIComponent(locale)}` : ''}${view ? `&view=${view}` : ''}`
+    /* The order view is the Information page's, started with its sheet when the page loaded (`studioPrefetch.ts`):
+       its URL comes from the one builder, and the read adopts that prefetch. */
+    const orderView = view === 'order' && locale
+    const studioUrl = orderView
+      ? familyOrderUrl(productId, market, locale)
+      : `${backend}/api/products/${encodeURIComponent(productId)}/studio/family?market=${encodeURIComponent(market)}${locale ? `&locale=${encodeURIComponent(locale)}` : ''}${view ? `&view=${view}` : ''}`
 
     const load = async (): Promise<FamilyProjections> => {
-      const studio = await fetch(studioUrl, { credentials: 'include', cache: 'no-store', signal })
+      const studio = orderView ? await fetchStudioRead(studioUrl, signal) : await fetch(studioUrl, { credentials: 'include', cache: 'no-store', signal })
       if (studio.ok) return fromStudio((await studio.json()) as StudioFamilyResponse)
       const body = await studio.json().catch(() => null)
       throw new Error(body?.message || body?.error || `Family read refused (HTTP ${studio.status})`)
