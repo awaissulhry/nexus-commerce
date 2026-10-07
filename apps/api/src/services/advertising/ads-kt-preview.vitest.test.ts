@@ -207,3 +207,34 @@ describe('previewKeywordTrackerRule', () => {
     expect(out.untranslatable).toContain('Share of Voice')
   })
 })
+
+/**
+ * The keyword feed fills Search Volume only (keyword-rank-feed.service.ts). A draft on Organic Rank then matches nothing
+ * whatever the keywords do, and the preview says why in words instead of showing an empty table.
+ */
+describe('previewKeywordTrackerRule — a rank no source fills', () => {
+  /** The feed's real shape: fresh readings carry search volume, none carries a rank. */
+  const volumeOnlyFeed = () => db.keywordRank.count.mockImplementation((async (args?: { where?: Record<string, unknown> }) =>
+    (args?.where && ('organicRank' in args.where || 'sponsoredRank' in args.where) ? 0 : 12)) as never)
+
+  it('a draft on Organic Rank says it has no automatic source, and the feed census shows why', async () => {
+    volumeOnlyFeed()
+    ctxs.push(ctx('t1', undefined, { searchVolume: 6150 }))
+    targetsAre([{ id: 't1', bidCents: 40 }])
+    const out = await previewKeywordTrackerRule(draft)
+    expect(out.matched).toBe(0)
+    expect(out.unsourced).toMatch(/^Organic Rank has no automatic source: Amazon publishes no organic search position/)
+    expect(out.feed.measured).toEqual({ maxAgeDays: 14, freshRows: 12, organicRank: 0, sponsoredRank: 0, searchVolume: 12 })
+  })
+
+  it('a draft on Search Volume matches on the feed and carries no such sentence; the row shows the volume', async () => {
+    volumeOnlyFeed()
+    ctxs.push(ctx('t1', undefined, { searchVolume: 6150 }), ctx('t2', undefined, { searchVolume: 300 }))
+    targetsAre([{ id: 't1', bidCents: 40 }, { id: 't2', bidCents: 40 }])
+    const onVolume = { ...draft, conditions: [{ conditions: [{ metric: 'Search Volume', op: 'gte', value: '1000' }], action: { op: 'set', value: '0.80' } }] }
+    const out = await previewKeywordTrackerRule(onVolume)
+    expect(out.unsourced).toBeUndefined()
+    expect(out.matched).toBe(1)
+    expect(out.rows.map((r) => [r.targetId, r.searchVolume, r.organicRank])).toEqual([['t1', 6150, null]])
+  })
+})

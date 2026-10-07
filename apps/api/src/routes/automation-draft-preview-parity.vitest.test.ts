@@ -8,6 +8,9 @@
  *
  * Ads wave 4c (F3): the share-of-voice branch now lists its markets from the connections (the live four first, in the
  * order the fixed list had them), so the four accounts below are seeded; the snapshot is unchanged.
+ *
+ * Keyword feed (2026-10-07): the keyword-tracker branch's `feed` gained one field, `measured` (fresh readings per
+ * field: what a rule can read now). The snapshot was rewritten for that line only; every other line is unchanged.
  */
 import Fastify, { type FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'

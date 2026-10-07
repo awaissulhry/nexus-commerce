@@ -100,13 +100,21 @@ export function PcWindowNote({ slug, days }: { slug: string; days?: number }) {
    * The LIVE numbers belong to the banner above (which reads `/keyword-tracker/feed-health`); this
    * says the shape, exactly as the SOV branch does. Two things it must state that the old one hid:
    * where a rank comes from, and what happens to a keyword that has none.
+   *
+   * Since the keyword feed (`keyword-rank-feed`, API) it also says which of the four has a source at
+   * all: Search Volume does (Amazon Brand Analytics, weekly); the three rank metrics do not.
    */
   if (slug === 'keyword-tracker') {
     return (
       <p className="h10-pc-winnote">
-        <b>Organic Rank</b>, <b>Sponsored Rank</b>, <b>Rank Change</b> and <b>Search Volume</b> are read
-        from the keyword-rank feed — the latest observation for each keyword in its own marketplace,
-        not an average over a window. <b>Rank Change</b> compares that observation with the previous
+        <b>Search Volume</b> is how many times shoppers searched the keyword in its own marketplace in
+        one week, from Amazon’s Brand Analytics search-query report — Nexus reads the newest week it holds
+        each day, for the keywords you bid on. <b>Organic Rank</b>, <b>Sponsored Rank</b> and{' '}
+        <b>Rank Change</b> have no automatic source: Amazon publishes no organic search position, and its
+        search-term impression rank is in the advertising console only. They are filled only by a hand
+        import, so a condition on one of them matches nothing until ranks are imported.{' '}
+        Each is the latest reading for the keyword, not an average over a window, and a reading older
+        than 14 days is not used. <b>Rank Change</b> compares the latest organic rank with the previous
         one for the same product; a keyword observed only once has no change and is left alone rather
         than counted as “unchanged”.{' '}
         Spend and ACOS cover {settledWindowText(30)}.{' '}
@@ -171,18 +179,30 @@ const METRICS_SOV = ['Share of Voice', 'Campaign Concentration', 'ACOS', 'Spend'
 // The four rank metrics stay — they are held, not removed, because they are real capabilities
 // awaiting a feed. `KEYWORD_RANK_METRICS` is the held set, and the builder reads it.
 const METRICS_RANK = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume', 'ACOS', 'Spend']
-/** KT-P1 — the metrics with no ingested source today. One declaration, read by the builder's banner. */
+/** KT-P1 — the four keyword-feed metrics. Since the keyword feed only Search Volume has an automatic source. */
 export const KEYWORD_RANK_METRICS = ['Organic Rank', 'Sponsored Rank', 'Rank Change', 'Search Volume']
+/**
+ * What the metric menu SAYS for a metric whose stored name would mislead: the value (what rules store and the adapter
+ * maps) never changes, only the words. Search Volume is a week's searches (Brand Analytics); the three ranks have no
+ * automatic source and fill only from a hand import.
+ */
+const METRIC_LABEL: Record<string, string> = {
+  'Organic Rank': 'Organic Rank (import only)',
+  'Sponsored Rank': 'Sponsored Rank (import only)',
+  'Rank Change': 'Rank Change (import only)',
+  'Search Volume': 'Search Volume (searches per week)',
+}
+const metricOption = (m: string) => ({ value: m, label: METRIC_LABEL[m] ?? m })
 const METRICS_PLACEMENT = ['ACOS', 'ROAS', 'Sales', 'Spend', 'Orders', 'CVR', 'CTR', 'CPC', 'Clicks', 'Impressions']
 // Mapped {value,label}[] forms — exported so RuleBuilder imports them drop-in (single source).
 export const PC_METRICS = METRICS_BASE.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_BUDGET = METRICS_BUDGET.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_BID = METRICS_BID.map((m) => ({ value: m, label: m }))
 export const PC_METRICS_SOV = METRICS_SOV.map((m) => ({ value: m, label: m }))
-export const PC_METRICS_RANK = METRICS_RANK.map((m) => ({ value: m, label: m }))
+export const PC_METRICS_RANK = METRICS_RANK.map(metricOption)
 export const PC_METRICS_PLACEMENT = METRICS_PLACEMENT.map((m) => ({ value: m, label: m }))
 export const pcMetricsFor = (slug: string): Array<{ value: string; label: string }> =>
-  (slug === 'sov' ? METRICS_SOV : slug === 'keyword-tracker' ? METRICS_RANK : slug === 'placement' ? METRICS_PLACEMENT : slug === 'bid' ? METRICS_BID : slug === 'budget' ? METRICS_BUDGET : METRICS_BASE).map((m) => ({ value: m, label: m }))
+  (slug === 'sov' ? METRICS_SOV : slug === 'keyword-tracker' ? METRICS_RANK : slug === 'placement' ? METRICS_PLACEMENT : slug === 'bid' ? METRICS_BID : slug === 'budget' ? METRICS_BUDGET : METRICS_BASE).map(metricOption)
 export const pcDefaultCondition = (slug: string): Condition =>
   // HP1 — 2, not 1: the SEARCH_TERM_CONVERTING emitter only surfaces terms with ≥2 orders
   // (NEXUS_CONVERTING_MIN_ORDERS), so a '≥1 order' default promised what the engine cannot do.

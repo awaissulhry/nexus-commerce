@@ -909,6 +909,8 @@ export function RuleBuilder({ slug }: { slug: string }) {
       suppressedMatched: number; suppressedUnflaggedMatched: number; campaignSuppressedMatched: number
       refusedSuppressed: number
       feed: { rows: number; keywords: number; markets: number; newestCapturedAt: string | null; coveredTargets: number; totalTargets: number }
+      /** The server's sentence when the draft reads a rank no source fills (Organic / Sponsored Rank, Rank Change). */
+      unsourced?: string | null
       readAt: string
     } | null
     error?: string
@@ -1084,7 +1086,7 @@ export function RuleBuilder({ slug }: { slug: string }) {
             matched: j.matched, noChange: j.noChange, suppressedMatched: j.suppressedMatched,
             suppressedUnflaggedMatched: j.suppressedUnflaggedMatched,
             campaignSuppressedMatched: j.campaignSuppressedMatched, refusedSuppressed: j.refusedSuppressed,
-            feed: j.feed, readAt: j.readAt,
+            feed: j.feed, unsourced: typeof j.unsourced === 'string' ? j.unsourced : null, readAt: j.readAt,
           },
         })
       } catch {
@@ -1563,11 +1565,14 @@ export function RuleBuilder({ slug }: { slug: string }) {
                 <div className="h10-rb-banner warn" role="status">
                   <AlertTriangle size={16} />
                   <span>
-                    <b>No keyword rank has ever been recorded, so this rule could not act.</b>{' '}
-                    Organic and paid rank come from the keyword-rank feed, and it is empty — 0 observations
-                    across 0 keywords, against {rankFeed?.totalTargets.toLocaleString('en-GB')} keyword targets
-                    in your campaigns. Amazon publishes no organic-position API, so this feed is filled by
-                    import; until it is, a Keyword Tracker rule would match nothing on every run.{' '}
+                    <b>No keyword reading has been recorded yet, so this rule could not act.</b>{' '}
+                    The keyword feed is empty — 0 readings across 0 keywords, against{' '}
+                    {rankFeed?.totalTargets.toLocaleString('en-GB')} keyword targets in your campaigns. Nexus
+                    fills Search Volume each day from Amazon’s weekly Brand Analytics report, for the keywords
+                    you bid on, once it holds a week that contains one of them. Organic and sponsored rank have
+                    no automatic source — Amazon publishes no organic position, and its search-term impression
+                    rank is in the advertising console only — so they come only from an import.
+                    Until a reading lands, a Keyword Tracker rule would match nothing on every run.{' '}
                     <b>Spend and ACOS are real</b> — but they reach this rule only through a keyword that has
                     a rank observation, so today they cannot be used here either. A Bid rule measures the
                     same two directly.
@@ -2020,9 +2025,9 @@ export function RuleBuilder({ slug }: { slug: string }) {
               <p className="h10-rb-heldnote ktp" role="status" ref={rankNoteRef}>
                 <AlertTriangle size={13} aria-hidden />
                 <span>
-                  This rule is not saved because it could never act: the keyword-rank feed holds no
-                  observations, so every run would match nothing. Nothing you can change on this form
-                  fixes that — the feed has to be filled first. To move bids on the evidence that{' '}
+                  This rule is not saved because it could never act: the keyword feed holds no readings
+                  yet, so every run would match nothing. Nothing you can change on this form fixes that —
+                  the feed has to be filled first. To move bids on the evidence that{' '}
                   <i>does</i> exist today, build a <b>Bid</b> rule (ACoS, spend, clicks, CPC, current
                   bid) or a <b>Share of Voice</b> rule.
                 </span>
@@ -2083,8 +2088,10 @@ export function RuleBuilder({ slug }: { slug: string }) {
                      them is "your criteria are too tight". Collapsing them into one sentence is
                      what let a builder over an EMPTY FEED read as a working rule with no matches. */
                   : !preview.rank || preview.rank.selected === 0 ? 'Add campaigns above to preview their keyword bids.'
-                  : preview.rank.feed.rows === 0 ? `No keyword rank has ever been recorded, so this rule matches nothing — and would match nothing on every run. The feed holds 0 observations against ${preview.rank.feed.totalTargets.toLocaleString('en-GB')} keyword targets in your campaigns. This is not a problem with your criteria.`
-                  : preview.rank.feed.coveredTargets === 0 ? `The rank feed holds ${preview.rank.feed.rows.toLocaleString('en-GB')} observation${preview.rank.feed.rows === 1 ? '' : 's'} across ${preview.rank.feed.keywords} keyword${preview.rank.feed.keywords === 1 ? '' : 's'}, but none of them matches a keyword you are bidding on, so no rule can reach any of your targets yet.`
+                  : preview.rank.feed.rows === 0 ? `No keyword reading has been recorded yet, so this rule matches nothing — and would match nothing on every run. The feed holds 0 readings against ${preview.rank.feed.totalTargets.toLocaleString('en-GB')} keyword targets in your campaigns. This is not a problem with your criteria.`
+                  : preview.rank.feed.coveredTargets === 0 ? `The keyword feed holds ${preview.rank.feed.rows.toLocaleString('en-GB')} reading${preview.rank.feed.rows === 1 ? '' : 's'} across ${preview.rank.feed.keywords} keyword${preview.rank.feed.keywords === 1 ? '' : 's'}, but none of them matches a keyword you are bidding on, so no rule can reach any of your targets yet.`
+                  /* The criteria read a rank no source fills: no keyword can match, and the server says why. */
+                  : preview.rank.unsourced ? preview.rank.unsourced
                   : preview.rank.measurable === 0 ? `${preview.rank.feed.coveredTargets} of your keyword targets have a rank observation, but none is in the campaigns you selected.`
                   : preview.rank.inScope === 0 ? `${preview.rank.measurable} of your keywords have a rank observation, but none is in ${scopeMarket === 'all' ? 'the chosen market' : scopeMarket}.`
                   : `No keyword matches these criteria right now — ${preview.rank.inScope} keyword${preview.rank.inScope === 1 ? ' was' : 's were'} measured against the latest rank observation. The rule is still valid; it will act when one does.`) : isSov ? (preview.error ? preview.error

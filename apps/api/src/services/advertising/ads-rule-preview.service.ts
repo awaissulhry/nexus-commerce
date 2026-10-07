@@ -553,6 +553,8 @@ export interface KeywordTrackerPreviewRow {
   organicRank: number | null
   sponsoredRank: number | null
   rankDelta: number | null
+  /** searches for the keyword in its market in one Brand Analytics week; null = no fresh reading */
+  searchVolume: number | null
   currentEur: number
   proposedEur: number
   /** 'flag' = carries `suppressedFromBidCents`; 'bid' = at or under 3¢ with no flag. */
@@ -579,6 +581,12 @@ export interface KeywordTrackerPreviewResult {
   campaignSuppressedMatched: number
   /** KT-P6 — of the matched, how many the engine REFUSED because they are switched off. */
   refusedSuppressed: number
+  /**
+   * Why this draft can match nothing whatever the keywords do: it reads Organic Rank, Sponsored Rank or Rank Change,
+   * and no fresh reading of that field exists (no automatic source fills them — keyword-rank-feed.service.ts).
+   * Absent when the draft reads none of them, or an import supplied one.
+   */
+  unsourced?: string
   /** 🔴 The rank feed itself — the difference between "nothing matched" and "nothing was measured". */
   feed: {
     rows: number
@@ -588,20 +596,27 @@ export interface KeywordTrackerPreviewResult {
     /** positive keyword targets whose text+market appears in the feed at all */
     coveredTargets: number
     totalTargets: number
+    /**
+     * Readings younger than the freshness limit (`maxAgeDays`), and how many of them carry each field — what a rule
+     * can read right now. The Brand Analytics feed fills `searchVolume` only; a rank count above 0 means an import.
+     */
+    measured: { maxAgeDays: number; freshRows: number; organicRank: number; sponsoredRank: number; searchVolume: number }
   }
   readAt: string
 }
 
 /** The rank feed's own census. Exported because the builder's banner states it before any draft exists. */
 export async function keywordRankFeedHealth(): Promise<KeywordTrackerPreviewResult['feed']> {
+  const { keywordRankFieldCensus, KEYWORD_RANK_MAX_AGE_DAYS } = await import('./keyword-rank-feed.service.js')
   const [rows, totalTargets] = await Promise.all([
     prisma.keywordRank.count(),
     prisma.adTarget.count({ where: { kind: 'KEYWORD', isNegative: false } }),
   ])
   if (rows === 0) {
-    return { rows: 0, keywords: 0, markets: 0, newestCapturedAt: null, coveredTargets: 0, totalTargets }
+    const measured = { maxAgeDays: KEYWORD_RANK_MAX_AGE_DAYS, freshRows: 0, organicRank: 0, sponsoredRank: 0, searchVolume: 0 }
+    return { rows: 0, keywords: 0, markets: 0, newestCapturedAt: null, coveredTargets: 0, totalTargets, measured }
   }
-  const [agg, distinct, covered] = await Promise.all([
+  const [agg, distinct, covered, measured] = await Promise.all([
     prisma.keywordRank.aggregate({ _max: { capturedAt: true } }),
     prisma.$queryRawUnsafe<Array<{ keywords: number; markets: number }>>(
       `SELECT count(DISTINCT lower(trim("keyword")))::int AS keywords, count(DISTINCT "marketplace")::int AS markets FROM "KeywordRank"`,
@@ -616,6 +631,7 @@ export async function keywordRankFeedHealth(): Promise<KeywordTrackerPreviewResu
                        WHERE lower(trim(k."keyword")) = lower(trim(t."expressionValue"))
                          AND k."marketplace" = c."marketplace")`,
     ),
+    keywordRankFieldCensus(),
   ])
   return {
     rows,
@@ -624,6 +640,7 @@ export async function keywordRankFeedHealth(): Promise<KeywordTrackerPreviewResu
     newestCapturedAt: agg._max.capturedAt ? agg._max.capturedAt.toISOString() : null,
     coveredTargets: covered[0]?.n ?? 0,
     totalTargets,
+    measured,
   }
 }
 
@@ -639,8 +656,16 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
   interface RankCtx {
     marketplace: string | null
     campaign: { id: string; name: string; [k: string]: unknown }
-    adTarget: { id: string; organicRank?: number; sponsoredRank?: number; rankDelta?: number; [k: string]: unknown }
+    adTarget: { id: string; organicRank?: number; sponsoredRank?: number; rankDelta?: number; searchVolume?: number; [k: string]: unknown }
   }
+
+  // A draft on a rank no source fills matches nothing whatever the keywords do — said once, in words, not left to an
+  // empty table. Read from the engine's own translation, so it names exactly the fields the rule will compare.
+  const { conditionFields, unsourcedRankNote } = await import('./keyword-rank-feed.service.js')
+  const unsourced = unsourcedRankNote(
+    conditionFields(maybeTranslateAdsRule({ id: PREVIEW_RULE_ID, actions: draft.actions, conditions: draft.conditions })),
+    feed.measured,
+  )
 
   const { buildKeywordRankBidContexts } = await import('../../jobs/advertising-rule-evaluator.job.js')
   const run = await runDraftPreview<RankCtx>(draft, {
@@ -766,6 +791,7 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
       organicRank: num(p.ctx.adTarget.organicRank),
       sponsoredRank: num(p.ctx.adTarget.sponsoredRank),
       rankDelta: num(p.ctx.adTarget.rankDelta),
+      searchVolume: num(p.ctx.adTarget.searchVolume),
       currentEur: p.currentCents / 100,
       proposedEur: p.proposedCents / 100,
       suppressed,
@@ -790,6 +816,7 @@ export async function previewKeywordTrackerRule(draft: BudgetPreviewDraft): Prom
     suppressedMatched: rows.filter((r) => r.suppressed !== null).length,
     suppressedUnflaggedMatched: rows.filter((r) => r.suppressed === 'bid').length,
     campaignSuppressedMatched: rows.filter((r) => r.campaignSuppressed).length,
+    ...(unsourced ? { unsourced } : {}),
     feed,
     readAt,
   }

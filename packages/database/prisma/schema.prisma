@@ -15424,11 +15424,11 @@ model KeywordRank {
   keyword       String
   marketplace   String // EU market code (DE, IT, FR, …)
   asin          String? // the product whose rank this tracks (optional)
-  organicRank   Int? // 1-based organic SERP position; null = outside tracked depth / unknown
-  sponsoredRank Int? // 1-based sponsored position; null = not running / unknown
-  searchVolume  Int? // est. monthly search volume from the source
-  capturedAt    DateTime @default(now()) // when this rank was observed
-  source        String   @default("manual") // manual | import | <collector-id>
+  organicRank   Int? // 1-based organic SERP position; null = outside tracked depth / unknown. No automatic source: import only
+  sponsoredRank Int? // 1-based sponsored position; null = not running / unknown. No automatic source: import only
+  searchVolume  Int? // searches over the source's period; brand-analytics-sqp = one Brand Analytics week
+  capturedAt    DateTime @default(now()) // when this rank was observed (brand-analytics-sqp: the week's end)
+  source        String   @default("manual") // manual | import | brand-analytics-sqp (keyword-rank-feed cron) | <collector-id>
   createdAt     DateTime @default(now())
 
   @@index([keyword, marketplace, capturedAt(sort: Desc)])

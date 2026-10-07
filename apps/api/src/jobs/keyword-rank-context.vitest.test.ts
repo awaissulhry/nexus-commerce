@@ -222,3 +222,59 @@ describe('buildKeywordRankBidContexts — readings expire after KEYWORD_RANK_MAX
     expect(ctx.adTarget.rankNote).toBe('Rank change not used: the reading before the newest is 40 days old, and readings older than 14 days are ignored.')
   })
 })
+
+/**
+ * The keyword feed (keyword-rank-feed.service.ts) writes search volume only — every rank NULL, asin NULL — dated at
+ * the Brand Analytics week's end. A hand import may carry a rank. Both sources in one table must not hide each other.
+ */
+describe('buildKeywordRankBidContexts — the weekly Brand Analytics feed beside a hand import', () => {
+  const daysAgo = (n: number) => new Date(Date.parse('2026-08-21T00:00:00Z') - n * 864e5)
+  const feed = (o: Partial<Record<string, unknown>> = {}) => rank({
+    id: 'f1', asin: null, organicRank: null, sponsoredRank: null, searchVolume: 6150, source: 'brand-analytics-sqp', capturedAt: daysAgo(3), ...o,
+  })
+
+  it('a feed reading hands the rule its search volume, and no rank of any kind', async () => {
+    db.keywordRank.findMany.mockResolvedValue([feed(), feed({ id: 'f0', searchVolume: 5800, capturedAt: daysAgo(10) })] as never)
+    db.adTarget.findMany.mockResolvedValue([target()] as never)
+    const ctx = await ctxOf()
+    expect(ctx.adTarget.searchVolume).toBe(6150)
+    for (const k of ['organicRank', 'sponsoredRank', 'rankDelta', 'rankNote']) expect(k in ctx.adTarget).toBe(false)
+    expect(applyOperator('gte', ctx.adTarget.searchVolume, 1000)).toBe(true)
+    // "Organic Rank > 20" never fires on a keyword nobody has a rank for
+    expect(applyOperator('gt', ctx.adTarget.organicRank, 20)).toBe(false)
+  })
+
+  it('🔴 a newer volume reading does not hide an imported rank: the rank comes from the import, the volume from the feed', async () => {
+    db.keywordRank.findMany.mockResolvedValue([
+      feed({ capturedAt: daysAgo(1) }),
+      rank({ id: 'm2', organicRank: 12, sponsoredRank: 4, searchVolume: null, capturedAt: daysAgo(5) }),
+      rank({ id: 'm1', organicRank: 18, sponsoredRank: 6, searchVolume: null, capturedAt: daysAgo(9) }),
+    ] as never)
+    db.adTarget.findMany.mockResolvedValue([target()] as never)
+    const ctx = await ctxOf()
+    expect(ctx.adTarget.organicRank).toBe(12)
+    expect(ctx.adTarget.sponsoredRank).toBe(4)
+    expect(ctx.adTarget.rankDelta).toBe(6)
+    expect(ctx.adTarget.searchVolume).toBe(6150)
+  })
+
+  it('a stale volume reading is absent, and the context says why', async () => {
+    db.keywordRank.findMany.mockResolvedValue([feed({ capturedAt: daysAgo(20) })] as never)
+    db.adTarget.findMany.mockResolvedValue([target()] as never)
+    const ctx = await ctxOf()
+    expect('searchVolume' in ctx.adTarget).toBe(false)
+    expect(ctx.adTarget.rankNote).toBe('Search volume not used: the newest reading for this keyword is 20 days old, and readings older than 14 days are ignored.')
+  })
+
+  it('a stale imported rank stays out while a fresh feed volume still reaches the rule', async () => {
+    db.keywordRank.findMany.mockResolvedValue([
+      feed({ capturedAt: daysAgo(2) }),
+      rank({ id: 'm1', organicRank: 18, searchVolume: null, capturedAt: daysAgo(30) }),
+    ] as never)
+    db.adTarget.findMany.mockResolvedValue([target()] as never)
+    const ctx = await ctxOf()
+    expect('organicRank' in ctx.adTarget).toBe(false)
+    expect(ctx.adTarget.searchVolume).toBe(6150)
+    expect(ctx.adTarget.rankNote).toBe('Rank not used: the newest rank reading for this keyword is 30 days old, and readings older than 14 days are ignored.')
+  })
+})
