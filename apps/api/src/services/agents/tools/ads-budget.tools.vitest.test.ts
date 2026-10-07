@@ -13,6 +13,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -233,6 +234,11 @@ describe('restore-budget-baselines', () => {
       limitFacts: { tool: 'restore-budget-baselines', action: 'budget', this: { items: 2, raises: 1, cuts: 1 } },
     })
     expect((r.preview as Row).stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('restore-budget-baselines'), the card asks for it.
+    __codeRuleTest.flip('restore-budget-baselines')
+    try {
+      expect(((await preview('restore-budget-baselines', { campaignIds: ['c-l1', 'c-l2', 'c-b3'] })).preview as Row).stepUp, 'restore-budget-baselines').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     expect((await preview('restore-budget-baselines', { campaignIds: ['c-b3'] })).error).toMatch(/^Nothing would change: campaign "Test c-b3" \(no baseline captured\)/)
     expect((await preview('restore-budget-baselines', { campaignIds: ['nope'] })).error).toBe('Not queued: campaign nope was not found in this business.')
   })
@@ -274,6 +280,11 @@ describe('set-monthly-ad-budget', () => {
       effect: expect.stringMatching(/ It ADDS SPEND \(the monthly budget rises from EUR 500\.00 to EUR 600\.00: .*\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/),
     })
     expect((raise.preview as Row).stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('set-monthly-ad-budget'), the card asks for it.
+    __codeRuleTest.flip('set-monthly-ad-budget')
+    try {
+      expect(((await preview('set-monthly-ad-budget', { market: 'IT', month, monthlyBudgetCents: 60_000 })).preview as Row).stepUp, 'set-monthly-ad-budget').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     const off = await preview('set-monthly-ad-budget', { market: 'IT', month, stopOverSpend: false })
     expect((off.preview as Row).raises).toEqual(['Stop Over Spend switched off: the engine gives back the bids it floored and floors none at the cap'])
     expect((off.preview as Row).stepUp).toBeUndefined()
@@ -354,6 +365,11 @@ describe('set-budget-schedule', () => {
       limitFacts: { tool: 'set-budget-schedule', action: 'budget', this: { items: 2, raises: 2 } },
     })
     expect((raising.preview as Row).stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('set-budget-schedule'), the card asks for it.
+    __codeRuleTest.flip('set-budget-schedule')
+    try {
+      expect(((await preview('set-budget-schedule', { op: 'create', name: 'Test raising', campaignIds: ['c-s1', 'c-s2'], windows: [window] })).preview as Row).stepUp, 'set-budget-schedule').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     expect((await preview('set-budget-schedule', { op: 'create', name: 'x', campaignIds: ['c-s1'], windows: [{ day: 1, start: '08:00', adj: 'incPct', value: 20 }] })).error).toMatch(/needs both start and end/)
     expect((await preview('set-budget-schedule', { op: 'create', name: 'x', campaignIds: ['c-s1'], windows: [{ day: 1, adj: 'set', value: 0.5 }] })).error).toMatch(/^Not queued: .*Set budget to/)
     expect((await preview('set-budget-schedule', { op: 'create', name: 'x', campaignIds: ['c-sb'], windows: [window] })).error).toMatch(/not a Sponsored Products/)
@@ -538,6 +554,11 @@ describe('set-budget-pool', () => {
       limitFacts: { this: { raises: 1 } },
     })
     expect((leave.preview as Row).stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('set-budget-pool'), the card asks for it.
+    __codeRuleTest.flip('set-budget-pool')
+    try {
+      expect(((await preview('set-budget-pool', { op: 'allocate', poolId, remove: ['c-p2'] })).preview as Row).stepUp, 'set-budget-pool').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     const asked = await ask('set-budget-pool', { op: 'allocate', poolId, remove: ['c-p2'] })
     expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { campaigns: 1 } })
     expect(await budgetOf('c-p2')).toBe(before)

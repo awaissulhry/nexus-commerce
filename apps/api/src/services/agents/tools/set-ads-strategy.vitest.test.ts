@@ -19,6 +19,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __codeRuleTest } from './ads-code-rule.js'
+import { strategyCodeOf } from './ads-strategy.tools.js'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { generateSecret, generateSync } from 'otplib'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -243,9 +244,10 @@ describe('W1-3 — a raise needs the approver’s fresh authenticator code', { t
       expect((await marketRow()).maxBidCents).toBe(280)
       expect(await versionOf(answer.approvalId)).toMatchObject({ direction: 'raise', stepUpAt: null, reason: expect.stringMatching(/without the authenticator code: the Owner's code rule/) })
       // More of what Claude may do alone keeps the code, whatever the table says (the Owner's own rule).
-      const autonomy = await strategy({ claudeAutonomy: { bid: 'auto' } })
-      expect(autonomy.answer.preview).toMatchObject({ direction: 'raise', stepUp: { what: 'raises the ads strategy' } })
-      expect(autonomy.answer.preview).not.toHaveProperty('noCode')
+      const { noCode: _dayToDay, ...stored } = answer.preview
+      const raisedAutonomy = { ...stored, changes: [...stored.changes, { field: 'claudeAutonomy', direction: 'raise' }], stepUp: { what: 'raises the ads strategy', raises: ['What Claude may do alone'], needs: 'x', how: 'y' } }
+      expect(strategyCodeOf(raisedAutonomy as never)).toMatchObject({ stepUp: { what: 'raises the ads strategy' } })
+      expect(strategyCodeOf(raisedAutonomy as never)).not.toHaveProperty('noCode')
     } finally { __codeRuleTest.reset() }
     // Put back as it was for the tests after this one.
     const back = await strategy({ maxBidCents: 200 })

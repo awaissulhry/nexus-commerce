@@ -207,6 +207,11 @@ describe('the Owner\'s code rule A — the big doors it added, through the Appro
       stepUp: { what: 'gives Test c-born, born at the floor, its planned bids (a new campaign starts spending)', raises: ['Bids', 'Spend'] },
       effect: expect.stringMatching(/It was born at the floor and has not spent at its planned bids yet: a new campaign starts spending, so approving it needs the approver's authenticator code\.$/),
     })
+    // Its line flipped, the card asks no code.
+    __codeRuleTest.flip('restore-campaign: born at the floor')
+    try {
+      expect((await preview('restore-campaign', { campaignId: 'c-born' })).preview).not.toHaveProperty('stepUp')
+    } finally { __codeRuleTest.reset() }
     const asked = await ask('restore-campaign', { campaignId: 'c-born' })
     expect(await approve(asked.approvalId)).toMatchObject({ ok: false, code: 'mfa_required', raises: ['Bids', 'Spend'] })
     expect(await bidOf('t-c-born')).toBe(2)

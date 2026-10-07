@@ -11,6 +11,7 @@
  * the default limits let nothing run alone.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -201,6 +202,11 @@ describe('each setting', () => {
       noCode: expect.stringMatching(/day-to-day/), effect: expect.stringMatching(/It ADDS SPEND \(campaign "Test c-end": its end date .* is removed: it keeps spending until stopped\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/),
     })
     expect(removed.preview.stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('set-campaign-settings'), the card asks for it.
+    __codeRuleTest.flip('set-campaign-settings')
+    try {
+      expect(((await preview({ campaignIds: ['c-end'], endDate: null })).preview).stepUp, 'set-campaign-settings').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     // Its limits still judge a run by rule (none by default).
     expect(judge(removed.preview)).toBeTypeOf('string')
     const asked = await ask({ campaignIds: ['c-end'], endDate: null })

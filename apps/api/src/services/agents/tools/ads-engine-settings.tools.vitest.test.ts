@@ -20,6 +20,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { generateSecret, generateSync } from 'otplib'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -286,6 +287,11 @@ describe('W4-8 assign-ad-rules — the market check, and the screens’ own path
       warnings: expect.arrayContaining(['It can raise spend: at Auto, the rule starts acting on 1 more campaign, and it can raise what they spend.']),
     })
     expect(answer.preview.stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('assign-ad-rules: a rule at Auto'), the card asks for it.
+    __codeRuleTest.flip('assign-ad-rules: a rule at Auto')
+    try {
+      expect(((await preview('assign-ad-rules', { ruleId: ids.auto, op: 'add', campaignIds: [ids.de2] })).preview).stepUp, 'assign-ad-rules: a rule at Auto').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     // By rule: never with allowRaise off (the default), whatever else is open.
     expect(judge('assign-ad-rules', answer.preview, { maxItems: 250, allowEngineOwned: true })).toMatch(/it can raise spend .*a person decides \(allowRaise is off\)$/)
     expect(await picks(ids.auto)).toEqual([ids.de1])
@@ -331,6 +337,11 @@ describe('W4-8 set-coverage-set — the cockpit’s own service', { timeout: TIM
       effect: expect.stringMatching(/It ADDS SPEND \("test term two": target share 20 → 30 %/),
     })
     expect(raise.preview.stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('set-coverage-set'), the card asks for it.
+    __codeRuleTest.flip('set-coverage-set')
+    try {
+      expect(((await preview('set-coverage-set', { op: 'edit-terms', setId: ids.set, terms: [{ termId: ids.t2, targetSharePct: 30 }, { termId: ids.t3, status: 'ACTIVE' }] })).preview).stepUp, 'set-coverage-set').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     expect(raise.preview.raises[0]).toBe('"test term two": target share 20 → 30 %, so the engine may raise its bid further')
     expect(raise.preview.raises[1]).toMatch(/^"test term three": it is active again, so the engine may raise its bid toward 15 % share/)
     expect(judge('set-coverage-set', raise.preview, { maxItems: 250, allowEngineOwned: true })).toMatch(/allowRaise is off/)
@@ -394,6 +405,11 @@ describe('W4-8 run-ad-engine-now — the Control Room’s Run now', { timeout: T
       preview: { level: 'AUTO', raises: [expect.stringMatching(/runs at Auto: it may raise bids or budgets on this run/)], noCode: expect.stringMatching(/day-to-day/), effect: expect.stringMatching(/It ADDS SPEND \(.* runs at Auto/) },
     })
     expect(answer.preview.stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('run-ad-engine-now'), the card asks for it.
+    __codeRuleTest.flip('run-ad-engine-now')
+    try {
+      expect(((await preview('run-ad-engine-now', { engine: 'auto-bid' })).preview).stepUp, 'run-ad-engine-now').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     expect(jobs.ran).not.toContain('ads-auto-bid')
     expect((await decide('owner', answer.approvalId, {})).statusCode).toBe(200)
     expect(await commit(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })

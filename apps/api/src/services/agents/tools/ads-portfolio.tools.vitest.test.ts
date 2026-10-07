@@ -11,6 +11,7 @@
  * let nothing run alone.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -219,6 +220,11 @@ describe('set-portfolio — update', () => {
       effect: expect.stringMatching(/It ADDS SPEND \(its cap rises from EUR 500\.00 a month to EUR 800\.00 a month\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/),
     })
     expect(r.preview.stepUp).toBeUndefined()
+    // The code table decides the code: its line flipped ('set-portfolio'), the card asks for it.
+    __codeRuleTest.flip('set-portfolio')
+    try {
+      expect(((await preview({ op: 'update', portfolioId: 'PF-CAP', cap: { amountCents: 80000, policy: 'monthly' } })).preview).stepUp, 'set-portfolio').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     // Its limits still judge a run by rule: none by default.
     expect(judge(r.preview)).toBeTypeOf('string')
     const asked = await ask({ op: 'update', portfolioId: 'PF-CAP', cap: { amountCents: 80000, policy: 'monthly' } })

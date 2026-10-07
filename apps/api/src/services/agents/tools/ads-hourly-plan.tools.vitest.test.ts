@@ -15,6 +15,7 @@
  *   pointers    turn-down-automation and automation-detail name the plan of a rank row
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -234,6 +235,11 @@ describe('set-hourly-bid-plan — create, paint, switch', () => {
     expect(p.raises[0]).toMatch(/^switches the plan on: from the hourly bid engine's next run it holds its week on 2 campaigns/)
     expect(p.stepUp).toBeUndefined()
     expect(p.noCode).toMatch(/^It can add spend \(listed in raises\), as a day-to-day change/)
+    // The code table decides the code: its line flipped ('set-hourly-bid-plan'), the card asks for it.
+    __codeRuleTest.flip('set-hourly-bid-plan')
+    try {
+      expect(((await preview({ op: 'switch', planId, on: true })).preview).stepUp, 'set-hourly-bid-plan').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     expect(p.effect).toMatch(/It ADDS SPEND \(switches the plan on: .*\): a day-to-day change — a person's approval sends it, with no authenticator code\.$/)
     expect(judge(p, { maxItems: 5, markets: ['IT'], campaignIds: ['c-h2', 'c-h3'] })).toMatch(/allowRaise is off\); a person decides$/)
     const plain = await ask({ op: 'switch', planId, on: true })

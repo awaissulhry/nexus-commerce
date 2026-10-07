@@ -14,6 +14,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { __codeRuleTest } from './ads-code-rule.js'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
 import { seedAdsFixture } from '../../../test-support/ads-fixtures.js'
@@ -382,6 +383,11 @@ describe('retire-negatives', () => {
       limitFacts: { action: 'retire', this: { items: 2, raises: 1, writes: 1 } },
     })
     expect(r.preview).not.toHaveProperty('stepUp')
+    // The code table decides the code: its line flipped ('retire-negatives'), the card asks for it.
+    __codeRuleTest.flip('retire-negatives')
+    try {
+      expect(((await preview('retire-negatives', { negativeIds: ['n-old'], negatives: [{ adGroupId: 'g-a1', text: 'local term' }] })).preview).stepUp, 'retire-negatives').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     expect(r.preview.changes.map((c: Row) => [c.label, c.toLabel, c.madeBy])).toEqual([
       ['negative exact "old term" · ad group "group g-a1" (campaign "Test c-a")', 'Retired: archived at Amazon', expect.stringMatching(/^no record in Nexus of who added it/)],
       ['negative phrase "local term" · ad group "group g-a1" (campaign "Test c-a")', 'Removed from Nexus (Amazon never had it)', expect.stringMatching(/^no record in Nexus/)],
@@ -450,6 +456,11 @@ describe('add-ad-targets', () => {
       sameProductClashes: [], reach: { reach: 'sandbox' }, limitFacts: { action: 'targeting', this: { items: 3, raises: 3 } },
     })
     expect(r.preview).not.toHaveProperty('stepUp')
+    // The code table decides the code: its line flipped ('add-ad-targets: at a bid'), the card asks for it.
+    __codeRuleTest.flip('add-ad-targets: at a bid')
+    try {
+      expect(((await preview('add-ad-targets', { adGroupId: 'g-a1', keywords: [{ text: 'new boots', matchType: 'EXACT', bidCents: 40 }], productTargets: [{ asin: 'B0OTHERCC1' }], categoryTargets: [{ categoryId: '123456' }], bidCents: 25 })).preview).stepUp, 'add-ad-targets: at a bid').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     // Its limits still judge a run by rule: at the defaults, none.
     expect(judge('add-ad-targets', r.preview, {})).toBeTypeOf('string')
     const floor = await preview('add-ad-targets', { adGroupId: 'g-a1', keywords: [{ text: 'new boots', matchType: 'EXACT', bidCents: 40 }], startAtFloor: true })
@@ -520,6 +531,11 @@ describe('harvest-search-term', () => {
     const r = await preview('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })
     expect(r.preview).toMatchObject({ negateSource: 'add', bidCents: 120, raises: ['exact keyword "wool jacket" at EUR 1.20'], limitFacts: { action: 'harvest', this: { items: 2, raises: 1, cuts: 1 } } })
     expect(r.preview).not.toHaveProperty('stepUp')
+    // The code table decides the code: its line flipped ('harvest-search-term'), the card asks for it.
+    __codeRuleTest.flip('harvest-search-term')
+    try {
+      expect(((await preview('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })).preview).stepUp, 'harvest-search-term').toMatchObject({ needs: expect.stringContaining('settings.security.manage') })
+    } finally { __codeRuleTest.reset() }
     const asked = await ask('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })
     // A report arrives before it is approved: the term's cost per click moves (to EUR 2.10). The bid it worked out is frozen
     // in the approval, so the request is not stale, and it runs at the EUR 1.20 the person approved.

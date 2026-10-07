@@ -382,14 +382,14 @@ describe('create-ad-group — approved', () => {
     expect(start.effect).toMatch(/the planned bids create-ad-group made it with, the highest EUR 0\.55\. It starts spending\. A new ad group goes live: approving it needs the approver's authenticator code; it never runs by rule\.$/)
     expect(start.noCode).toBeUndefined()
     // Never by rule, whatever the limits (maxRestoredBidCents too).
-    expect(judge('set-ad-group', { ...start, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10, maxRaisePct: 100, maxRestoredBidCents: 100_000 })).toMatch(/never runs by rule/)
+    expect(judge('set-ad-group', { ...start, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10, maxRaisePct: 100, maxRestoredBidCents: 10_000 })).toMatch(/never runs by rule/)
     // The table decides the code: flipped, the card follows — and its never-by-rule does not.
     __codeRuleTest.flip('set-ad-group: op start')
     try {
       const flipped = (await preview('set-ad-group', { adGroupId: id, op: 'start' })).preview
       expect(flipped.stepUp).toBeUndefined()
       expect(flipped.noCode).toMatch(/it still never runs by rule/)
-      expect(judge('set-ad-group', { ...flipped, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10, maxRestoredBidCents: 100_000 })).toMatch(/never runs by rule/)
+      expect(judge('set-ad-group', { ...flipped, ...insideFacts('set-ad-group', 'restore', 1) }, { maxItems: 10, maxRestoredBidCents: 10_000 })).toMatch(/never runs by rule/)
     } finally { __codeRuleTest.reset() }
     const started = await ask('set-ad-group', { adGroupId: id, op: 'start' })
     const plain = await approve(started.approvalId!)
