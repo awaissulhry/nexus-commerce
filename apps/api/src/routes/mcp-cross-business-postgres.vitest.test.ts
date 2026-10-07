@@ -1064,6 +1064,14 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'build-sp-wizard-campaigns': { structure: 'standard', keywords: { category: ['probe jacket'] }, dailyBudgetCents: 1500, defaultBidCents: 50, portfolioId: undefined },
   // A11 — a new campaign targets keywords (or ASINs); its bids fit under its budget.
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
+  // Ads autonomy W4-5 — targets and negatives name what they add; a retire names B's target (a keyword, not a negative:
+  // refused inside B by its name); a harvest names the ad group it ran in (B's), never an undo's ids; a harvest destination
+  // is set for B's campaign, to B's ad group.
+  'add-ad-targets': { keywords: [{ text: 'mcp8 probe', matchType: 'EXACT', bidCents: 50 }] },
+  'add-negative-targets': { keywords: [{ text: 'mcp8 probe' }], campaignIds: undefined, negatives: undefined },
+  get 'retire-negatives'() { return { negativeIds: [seeded.b.targetId], negatives: undefined } },
+  get 'harvest-search-term'() { return { sourceAdGroupId: seeded.b.adGroupId, destAdGroupId: undefined, changeSetId: undefined, keywordId: undefined, negativeId: undefined } },
+  'set-harvest-destination': { scope: 'campaign' },
   // B-1 — a copy reads its source campaign in the market it runs in (B's own); no portfolio (the loop would name an id).
   'replicate-ad-structure': { get sourceMarket() { return seeded.b.market }, portfolioId: undefined },
   // P9 — a file naming B's product by its SKU (built once B is seeded); the saved mapping maps its Name column.

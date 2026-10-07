@@ -52,6 +52,8 @@ import { commitScheduledApproval, decideFleetApproval } from '../../agent-fleet/
 import { queuePlan, runPlan } from '../change-plan.service.js'
 import { adDeliveryOf } from './approval.tools.js'
 import { STEP_UP_NEEDS } from '../step-up-approval.js'
+import type { McpPrincipal } from '../../mcp/mcp-auth.js'
+import { claudeGateRule } from '../../mcp/mcp-tool-call.js'
 import { __stepUpTest } from '../../../lib/auth/step-up.js'
 import { generateSecret, generateSync } from 'otplib'
 
@@ -159,6 +161,7 @@ beforeAll(async () => {
     await term('c-a', 'g-a1', 'warm jacket', { impressions: 80, clicks: 5, costCents: 250, orders: 0 })
     await term('c-a', 'g-a1', 'wool jacket', { impressions: 300, clicks: 10, costCents: 1_200, orders: 0 })
     await term('c-b', 'g-b1', 'red jacket', { impressions: 50, clicks: 2, costCents: 80, orders: 0 })
+    await term('c-b', 'g-b1', 'blue boots', { impressions: 30, clicks: 1, costCents: 40, orders: 0 })
     await db.adKeywordProtection.create({ data: { mode: 'WHITELIST', term: 'brandname', matchType: 'EXACT', reason: 'test brand' } })
   })
 }, 180_000)
@@ -302,7 +305,23 @@ describe('add-negative-targets', () => {
       expect(judge('add-negative-targets', asin, limits)).toMatch(/allowAsinNegatives is off/)
       const whole = (await preview('add-negative-targets', { scope: 'CAMPAIGN', campaignIds: ['c-a'], keywords: [{ text: 'warm jacket' }] })).preview
       expect(judge('add-negative-targets', whole, limits)).toMatch(/allowCampaignScope is off/)
+
+      // Through Claude's real door, the business at auto with these limits: the wasteful exact negative is scheduled by
+      // its rule; another product's place (allowOtherProducts) is never — it waits for a person.
+      await inside(() => database.client.agentTool.create({ data: { name: 'add-negative-targets', riskTier: 'high', requiresApproval: true, claudeTrust: 'auto', claudeLimits: limits } }))
+      const mcp = { ...claude, via: 'claude', business: { id: LEGACY_WORKSPACE_ID, name: 'Test business' }, scopes: ['nexus.read', 'nexus.write', 'nexus.run'], oauthGrantId: 'grant-w45' } as McpPrincipal
+      const viaGate = (args: Record<string, unknown>) => inside(async () => {
+        const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
+        return runOrQueueTool('add-negative-targets', args, mcp, run.id, { rule: claudeGateRule(mcp) }) as Promise<Row>
+      })
+      const byRule = await viaGate({ adGroupIds: ['g-a1'], keywords: [{ text: 'warm jacket' }] })
+      expect(byRule).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'rule', level: 'auto' } })
+      await inside(() => database.client.agentApproval.update({ where: { id: byRule.approvalId }, data: { status: 'rejected', decisionVia: null } }))
+      const theirs = await viaGate({ adGroupIds: ['g-b1'], keywords: [{ text: 'blue boots' }], product: 'TEST-W45-ONE', allowOtherProducts: true })
+      expect(theirs).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'person', level: 'auto', why: expect.stringMatching(/another product's ad group \(allowOtherProducts\): isolation is per product, a person's word, never a rule/) } })
+      expect((await inside(() => database.client.agentApproval.findUniqueOrThrow({ where: { id: theirs.approvalId } }))).status).toBe('pending')
     } finally {
+      await inside(() => database.client.agentTool.deleteMany({ where: { name: 'add-negative-targets' } }))
       await inside(() => database.client.adsStrategy.delete({ where: { id: strategy.id } }))
       __claudeStrategyTest.reset()
     }
