@@ -87,6 +87,11 @@ export const MAX_KIT_ITEMS = 250
  *                no value itself (the automation acts as itself, inside its own caps). PB-9 — `raises`: a Nexus-side
  *                change that adds spend by itself (a looser strategy number a phase switch writes, an hourly plan it
  *                switches on): counted as a raise (Claude's daily raises, the month), with no amount.
+ *   setting      W4-3 — a campaign's or a portfolio's settings (its name, portfolio, end date, bidding strategy; a
+ *                portfolio's name, budget cap, state), sent to Amazon: no bid or budget moves. `raises`: it can add
+ *                spend by itself (up-and-down bidding, an end date removed or moved later, a cap raised or let go);
+ *                `cuts`: it can only hold spend back (an end date set, a cap set or lowered). Neither: the same.
+ *                `setting` names what changes, `from` / `to` the values as a person reads them.
  */
 export type KitChange =
   | { field: 'bid'; fromCents: number | null; toCents: number; forced?: boolean }
@@ -98,6 +103,7 @@ export type KitChange =
   | { field: 'retire'; term: string; matchType?: string | null }
   | { field: 'liveWrites'; from: boolean; to: boolean }
   | { field: 'automation'; raises?: boolean }
+  | { field: 'setting'; setting: string; from: string | null; to: string | null; raises?: boolean; cuts?: boolean }
 
 export interface KitItem {
   entity: AdEntityRef
@@ -157,6 +163,8 @@ export function measure(change: KitChange): Measured {
       return { ...none, direction: 'same' }
     case 'automation':
       return { ...none, direction: change.raises ? 'raise' : 'same' }
+    case 'setting':
+      return { ...none, direction: change.raises ? 'raise' : change.cuts ? 'cut' : 'same' }
   }
 }
 
@@ -270,7 +278,9 @@ export interface WantedItem {
   /** A placement change: which placement (Amazon's code). */
   placement?: string
   from?: string | boolean | null
-  to?: string | boolean
+  to?: string | boolean | null
+  /** W4-3 — a setting change: what changes (name, portfolio, end date, bidding strategy, cap, state). */
+  setting?: string
   term?: string
   matchType?: string | null
 }
@@ -293,6 +303,8 @@ export function wantedOf(entity: string, change: KitChange, direction: Direction
       return { ...base, term: change.term, matchType: change.matchType ?? null }
     case 'automation':
       return base
+    case 'setting':
+      return { ...base, setting: change.setting, from: change.from, to: change.to }
   }
 }
 
@@ -417,6 +429,7 @@ const CUT_WORDS: Record<KitChange['field'], string> = {
   retire: 'retiring a negative',
   liveWrites: 'taking it off the live-write allowlist',
   automation: 'changing what acts on it',
+  setting: 'tightening its settings',
 }
 
 /**
@@ -619,6 +632,9 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   enable: 'switching paused ads back on',
   archive: 'archiving ads (for good)',
   phase: "switching a product's playbook phase",
+  settings: 'changing campaign settings (name, portfolio, end date, bidding strategy)',
+  portfolio: 'creating and changing portfolios',
+  hourly: 'changing hourly bid plans',
   targeting: 'adding keywords and product or category targets',
   retire: 'retiring negative keywords and targets',
 }

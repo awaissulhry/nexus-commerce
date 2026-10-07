@@ -584,9 +584,9 @@ const A8: AutomationAdapter = {
     return { kind: 'saved', subject: null, result: await computeBudgetEnforcement() }
   },
   // R16 — the engine's per-business switch (a brake: switched down, nothing catches the next over-spend). Its budget plans
-  // are set by a person in Nexus.
+  // are set in Nexus (the Budget Manager), or by a Claude request a person approves (W4-7: set-monthly-ad-budget).
   engine: 'budget-enforce',
-  noSwitch: 'its budget plans are set by a person in Nexus — the engine itself switches with no rowId',
+  noSwitch: 'its budget plans are set in Nexus (the Budget Manager) or with set-monthly-ad-budget — the engine itself switches with no rowId',
 }
 
 const A9: AutomationAdapter = {
@@ -701,7 +701,8 @@ const A10: AutomationAdapter = {
   },
   // R16 — the engine's per-business switch. Its plans and goal schedules are switched in Nexus.
   engine: 'rank-defend',
-  noSwitch: 'a rank plan or goal schedule is switched in Nexus, where switching it off also gives back the bids it floored (2a) — the engine itself switches with no rowId',
+  // W4-1 — ONE hourly bid plan (a rank-schedule group) switches with set-hourly-bid-plan op switch.
+  noSwitch: 'one hourly bid plan is switched with set-hourly-bid-plan op switch (its planId: ad-hourly-plans; switching it off gives back the bids it floored, 2a); a product rank plan is switched in Nexus — the engine itself switches with no rowId',
 }
 
 const A11: AutomationAdapter = {

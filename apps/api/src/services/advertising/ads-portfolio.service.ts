@@ -289,10 +289,41 @@ export async function getPortfolioOverview(opts: {
 
 const POLICY_TO_DB: Record<string, string> = { monthlyRecurring: 'MONTHLY_RECURRING', dateRange: 'DATE_RANGE' }
 
+/** What PATCH /advertising/portfolios/:id may ask: a rename, a state, a budget cap (the Portfolios page's three actions). */
+export interface PortfolioUpdateBody {
+  name?: string
+  state?: 'enabled' | 'paused' | 'archived'
+  budget?: { amount?: number; currencyCode?: string; policy?: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string }
+}
+
+/**
+ * W4-3 — the portfolio update's body check, the one place it is done (moved here from PATCH /advertising/portfolios/:id,
+ * answers unchanged; set-portfolio uses it too): a name is trimmed (blank = none); a cap needs an amount above 0 and a
+ * policy (monthlyRecurring or dateRange), a dateRange both dates; the currency defaults to EUR; at least one of the three.
+ */
+export function portfolioUpdateOf(body: PortfolioUpdateBody): { ok: true; value: { name?: string; state?: PortfolioUpdateBody['state']; budget?: PortfolioBudgetInput } } | { ok: false; error: string } {
+  const name = body.name?.trim() || undefined
+  let budget: PortfolioBudgetInput | undefined
+  if (body.budget) {
+    const b = body.budget
+    if (!(typeof b.amount === 'number' && b.amount > 0) || (b.policy !== 'monthlyRecurring' && b.policy !== 'dateRange')) {
+      return { ok: false, error: 'budget requires amount > 0 and policy monthlyRecurring|dateRange' }
+    }
+    if (b.policy === 'dateRange' && (!b.startDate || !b.endDate)) return { ok: false, error: 'dateRange budget requires startDate + endDate' }
+    budget = { amount: b.amount, currencyCode: b.currencyCode || 'EUR', policy: b.policy, startDate: b.startDate, endDate: b.endDate }
+  }
+  if (name == null && body.state == null && !budget) return { ok: false, error: 'name, state or budget required' }
+  return { ok: true, value: { name, state: body.state, budget } }
+}
+
 /** P2/P3 — rename / archive / set budget on a portfolio. Pushes to Amazon when the write gate is
  *  open (v3 PUT /portfolios), then mirrors the change locally. Keyed by externalPortfolioId.
  *  A budget cap can throttle delivery (it's the one field with spend impact) — hence gated. */
-export async function updatePortfolioById(args: { portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived'; budget?: PortfolioBudgetInput }): Promise<{ ok: boolean; mode: string; error?: string }> {
+export async function updatePortfolioById(args: {
+  portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived'; budget?: PortfolioBudgetInput
+  /** W4-3 — an approved Claude request (set-portfolio): the change is also written to the ads audit. The screen passes none. */
+  audit?: PortfolioAudit
+}): Promise<{ ok: boolean; mode: string; error?: string }> {
   const row = await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: args.portfolioId } })
   if (!row) return { ok: false, mode: 'local', error: 'portfolio not found' }
   let mode = 'local'
@@ -327,6 +358,10 @@ export async function updatePortfolioById(args: { portfolioId: string; name?: st
       } : {}),
     },
   })
+  if (args.audit) {
+    const after = await prisma.amazonAdsPortfolio.findUniqueOrThrow({ where: { id: row.id } })
+    await auditPortfolioWrite(args.audit, 'AD_PORTFOLIO_UPDATE', row.id, portfolioSnapshot(row), portfolioSnapshot(after), writeStatus(mode), mode === 'local' ? 'Kept in Nexus only: it did not reach Amazon' : null)
+  }
   return { ok: true, mode }
 }
 
@@ -337,9 +372,14 @@ export async function updatePortfolioById(args: { portfolioId: string; name?: st
  * AmazonAdsPortfolio row either way — a local id (`local-pf-…`) when Amazon was not reached. A portfolio belongs to one
  * market's profile (CC-5).
  */
-export async function createPortfolio(input: { name: string; marketplace: string }): Promise<{ portfolio: { portfolioId: string; name: string }; mode: string }> {
+export async function createPortfolio(input: {
+  name: string; marketplace: string
+  /** W4-3 — an approved Claude request (set-portfolio): the create is also written to the ads audit. The screen and a playbook build pass none. */
+  audit?: PortfolioAudit
+}): Promise<{ portfolio: { portfolioId: string; name: string }; mode: string; amazonRefused?: string }> {
   const { name, marketplace } = input
   let externalId: string | null = null, mode = 'local', profileId = `local-${marketplace}`
+  let refused: string | null = null
   const { adsClientContextFor } = await import('./ads-profile-resolver.js')
   const conn = await adsClientContextFor(marketplace)
   if (conn) {
@@ -347,13 +387,161 @@ export async function createPortfolio(input: { name: string; marketplace: string
     const region: AdsRegion = conn.region
     const { checkAdsWriteGate } = await import('./ads-write-gate.js')
     const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0 })
-    if (gate.allowed) { const r = await createAmazonPortfolio({ profileId, region }, { name, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
+    if (gate.allowed) {
+      const r = await createAmazonPortfolio({ profileId, region }, { name, state: 'enabled' })
+      externalId = r.externalId; mode = r.mode
+      // W4-3 — Amazon answered without an id: it refused the portfolio (its own words), and it is kept in Nexus only.
+      if (!r.externalId) refused = r.error ?? 'Amazon answered without a portfolio id'
+    }
   }
   if (!externalId) externalId = `local-pf-${profileId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24)}`
   const pf = await prisma.amazonAdsPortfolio.upsert({
     where: { profileId_externalPortfolioId: workspaceKey({ profileId, externalPortfolioId: externalId }) },
     update: { name }, create: { profileId, externalPortfolioId: externalId, name, state: 'ENABLED' },
   })
-  logger.warn('[ADS-PORTFOLIOS] created portfolio', { externalId, name, mode })
-  return { portfolio: { portfolioId: pf.externalPortfolioId, name: pf.name }, mode }
+  logger.warn('[ADS-PORTFOLIOS] created portfolio', { externalId, name, mode, ...(refused ? { amazonRefused: refused } : {}) })
+  if (input.audit) {
+    await auditPortfolioWrite(input.audit, 'AD_PORTFOLIO_CREATE', pf.id, {}, portfolioSnapshot(pf), refused ? 'FAILED' : writeStatus(mode), refused ? `Amazon refused it: ${refused}` : null)
+  }
+  // The page's answer is unchanged; an approved Claude request (audit) also hears why Amazon refused it.
+  return { portfolio: { portfolioId: pf.externalPortfolioId, name: pf.name }, mode, ...(input.audit && refused ? { amazonRefused: refused } : {}) }
+}
+
+// ── W4-3 — Claude's portfolio tools (set-portfolio, set-campaign-settings, ad-portfolios) ─────────────────────────
+
+/** Who an approved Claude request writes as, and its change set (the approval), for the ads audit. */
+export interface PortfolioAudit { actor: string; changeSetId: string }
+
+type PortfolioRow = { name: string; state: string | null; externalPortfolioId: string; budgetAmount: unknown; budgetCurrencyCode: string | null; budgetPolicy: string | null; startDate: Date | null; endDate: Date | null }
+
+/** A portfolio as the ads audit stores it (before / after a change). */
+function portfolioSnapshot(row: PortfolioRow) {
+  return {
+    portfolioId: row.externalPortfolioId, name: row.name, state: row.state,
+    budgetAmount: row.budgetAmount == null ? null : Number(row.budgetAmount), budgetCurrencyCode: row.budgetCurrencyCode, budgetPolicy: row.budgetPolicy,
+    startDate: row.startDate ? row.startDate.toISOString().slice(0, 10) : null, endDate: row.endDate ? row.endDate.toISOString().slice(0, 10) : null,
+  }
+}
+
+/** SUCCESS: Amazon took it (live), or sandbox recorded it; FAILED: live, but it stayed in Nexus (gate closed, no connection). */
+const writeStatus = (mode: string): 'SUCCESS' | 'FAILED' => (mode === 'local' && adsMode() === 'live' ? 'FAILED' : 'SUCCESS')
+
+/**
+ * One ads audit row for a portfolio write an approved Claude request made, its change set the approval (approval-status
+ * counts it, the Change Log shows it). The portfolio is its own entity (PORTFOLIO): the rollback service and the
+ * strategy's places leave it alone (an undo goes through set-portfolio; undo-ad-change refuses it). FAILED says why in
+ * the row's evidence note (Amazon's own words when Amazon refused it).
+ */
+async function auditPortfolioWrite(audit: PortfolioAudit, actionType: 'AD_PORTFOLIO_CREATE' | 'AD_PORTFOLIO_UPDATE', rowId: string, before: object, after: object, status: 'SUCCESS' | 'FAILED', note: string | null): Promise<void> {
+  await prisma.advertisingActionLog.create({
+    data: {
+      executionId: audit.changeSetId, userId: audit.actor, actionType, entityType: 'PORTFOLIO', entityId: rowId,
+      payloadBefore: before, payloadAfter: after, amazonResponseStatus: status,
+      ...(note ? { evidence: { note: note.slice(0, 500) } } : {}),
+    },
+  })
+}
+
+/**
+ * W4-3 — a stored cap policy in Amazon's v3 spelling, whoever wrote it: the sync stores Amazon's answer upper-cased, the
+ * Portfolios page MONTHLY_RECURRING / DATE_RANGE, the bulk sheet the text as typed (monthlyRecurring, dateRange). Null:
+ * none stored. Any other text comes back as it is: Nexus cannot read that cap, and Claude's tools count any change of it
+ * as one that may add spend (they fail closed).
+ */
+export function capPolicyOf(raw: string | null | undefined): string | null {
+  const text = (raw ?? '').trim()
+  if (!text) return null
+  const key = text.replace(/[^a-z]/gi, '').toUpperCase()
+  if (key === 'MONTHLYRECURRING' || key === 'MONTHLY') return 'MONTHLY_RECURRING'
+  if (key === 'DATERANGE') return 'DATE_RANGE'
+  if (key === 'NOCAP') return 'NO_CAP'
+  return text
+}
+
+/** A portfolio for Claude's tools: its row, its market, its budget cap and its campaigns. */
+export interface PortfolioDetail {
+  /** Amazon's portfolio id (Campaign.portfolioId holds it); `local-pf-…`: made in Nexus only, never at Amazon. */
+  portfolioId: string
+  name: string
+  state: string | null
+  profileId: string
+  /** The market of its profile (its connection, or a `local-<market>` profile), else the one market of its campaigns. */
+  market: string | null
+  atAmazon: boolean
+  /**
+   * Null: no cap (Amazon's NO_CAP, or neither a policy nor an amount stored). Otherwise the cap as stored: `policy` in
+   * Amazon's v3 spelling (capPolicyOf) — or the stored text when Nexus cannot read it, or null when only an amount is
+   * stored; `amountCents` null when only a policy is. Amounts in minor units of `currency`.
+   */
+  cap: { amountCents: number | null; currency: string | null; policy: string | null; startDate: string | null; endDate: string | null; inBudget: boolean } | null
+  /** Every campaign in it (by Campaign.portfolioId), archived ones too, by name. */
+  campaigns: Array<{ id: string; name: string; status: string; marketplace: string | null }>
+  lastSyncedAt: string | null
+}
+
+/**
+ * W4-3 — portfolios as Claude's tools read them, by Amazon's id or every one (of a market). Read-only; in the business of
+ * the call (row-level security). The Portfolios page's numbers (spend, counts) come from getPortfolioOverview.
+ */
+export async function portfolioDetails(opts: { portfolioIds?: readonly string[]; market?: string | null } = {}): Promise<PortfolioDetail[]> {
+  const ids = opts.portfolioIds ? [...new Set(opts.portfolioIds.filter(Boolean))] : null
+  if (ids && !ids.length) return []
+  const rows = await prisma.amazonAdsPortfolio.findMany({ where: ids ? { externalPortfolioId: { in: ids } } : {}, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
+  if (!rows.length) return []
+  // CM-21 — every connection, active or not: a portfolio is listed under its own profile's market.
+  const conns = await prisma.amazonAdsConnection.findMany({ select: { profileId: true, marketplace: true } })
+  const marketOfProfile = new Map(conns.map((c) => [c.profileId, c.marketplace]))
+  const members = await prisma.campaign.findMany({
+    where: { portfolioId: { in: rows.map((r) => r.externalPortfolioId) } },
+    select: { id: true, name: true, status: true, marketplace: true, portfolioId: true },
+    orderBy: [{ name: 'asc' }, { id: 'asc' }],
+  })
+  const { storedPortfolioMarket } = await import('./ads-portfolio-picker.js')
+  const out = rows.map((r): PortfolioDetail => {
+    const campaigns = members.filter((c) => c.portfolioId === r.externalPortfolioId).map((c) => ({ id: c.id, name: c.name, status: String(c.status), marketplace: c.marketplace }))
+    const theirs = [...new Set(campaigns.map((c) => c.marketplace).filter((m): m is string => !!m))]
+    const policy = capPolicyOf(r.budgetPolicy)
+    const capped = policy !== 'NO_CAP' && (policy != null || r.budgetAmount != null)
+    return {
+      portfolioId: r.externalPortfolioId, name: r.name, state: r.state ?? null, profileId: r.profileId,
+      market: storedPortfolioMarket(r.profileId, marketOfProfile) ?? (theirs.length === 1 ? theirs[0] : null),
+      atAmazon: !r.externalPortfolioId.startsWith('local-pf-'),
+      cap: capped
+        ? {
+          amountCents: r.budgetAmount == null ? null : Math.round(Number(r.budgetAmount) * 100), currency: r.budgetCurrencyCode ?? null, policy,
+          startDate: r.startDate ? r.startDate.toISOString().slice(0, 10) : null, endDate: r.endDate ? r.endDate.toISOString().slice(0, 10) : null, inBudget: r.inBudget,
+        }
+        : null,
+      campaigns,
+      lastSyncedAt: r.lastSyncedAt ? r.lastSyncedAt.toISOString() : null,
+    }
+  })
+  const market = opts.market?.trim().toUpperCase() || null
+  return market ? out.filter((p) => p.market === market) : out
+}
+
+/**
+ * W4-3 — where updatePortfolioById would send a change of this portfolio, asked now without writing: the same
+ * connection lookup and the same write gate (its value cap held against the cap amount). `nexusOnly`: it would change
+ * only Nexus's copy (made in Nexus only, or no active Amazon Ads connection for its profile) — Claude's tool refuses that.
+ */
+export async function portfolioWriteGate(portfolio: { portfolioId: string; profileId: string }, payloadValueCents: number): Promise<{ decision: import('./ads-write-gate.js').GateDecision } | { nexusOnly: string }> {
+  if (portfolio.portfolioId.startsWith('local-pf-')) return { nexusOnly: 'it was made in Nexus while writes were closed and Amazon has never seen it' }
+  const conn = await prisma.amazonAdsConnection.findFirst({ where: { profileId: portfolio.profileId, isActive: true }, select: { marketplace: true } })
+  if (!conn) return { nexusOnly: 'no active Amazon Ads connection holds its profile, so Nexus would change only its own copy' }
+  const { checkAdsWriteGate } = await import('./ads-write-gate.js')
+  return { decision: await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents }) }
+}
+
+/**
+ * W4-3 — where createPortfolio would make a portfolio in this market, asked now without writing: the same profile
+ * resolver (CM-29) and the same write gate. `nexusOnly`: it would be made in Nexus only (`local-pf-…`), which Amazon
+ * refuses as a campaign's portfolio — Claude's tool refuses that.
+ */
+export async function portfolioCreateGate(marketplace: string): Promise<{ decision: import('./ads-write-gate.js').GateDecision; profileId: string } | { nexusOnly: string }> {
+  const { adsClientContextFor } = await import('./ads-profile-resolver.js')
+  const conn = await adsClientContextFor(marketplace)
+  if (!conn) return { nexusOnly: `no Amazon Ads profile serves ${marketplace}, so it would be made in Nexus only` }
+  const { checkAdsWriteGate } = await import('./ads-write-gate.js')
+  return { decision: await checkAdsWriteGate({ marketplace, payloadValueCents: 0 }), profileId: conn.profileId }
 }

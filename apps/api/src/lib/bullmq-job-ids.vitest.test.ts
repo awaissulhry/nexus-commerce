@@ -51,12 +51,9 @@ function sources(dir: string, out: string[] = []): string[] {
 /** Ids on main before this work that BullMQ refuses: reported (their owners fix them), never added to. */
 const PRE_EXISTING = new Set([
   'routes/outbound-queue.routes.ts:`${row.channelListingId}:${row.syncType}:retry:${Date.now()}`',
-  'routes/outbound-queue.routes.ts:`ads-sync:${id}:retry:${Date.now()}`',
   'routes/outbound-queue.routes.ts:`${r.channelListingId}:${r.syncType}:retry:${Date.now()}`',
-  'routes/outbound-queue.routes.ts:`ads-sync:${r.id}:retry:${Date.now()}`',
   'services/pim/readiness-index.service.ts:`readiness:${rootId}`',
   'services/pim/matrix-write.service.ts:`${failed.channelListingId}:${failed.syncType}:retry:${Date.now()}`',
-  'services/advertising/ads-mutation.service.ts:`ads-sync:${queueRowId}`',
 ])
 
 describe('BullMQ job ids', () => {

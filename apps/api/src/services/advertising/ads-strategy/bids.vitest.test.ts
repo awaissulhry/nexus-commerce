@@ -261,7 +261,7 @@ describe('the step clamp: the lower of the campaign\'s and the strategy\'s large
     expect(await bid()).toBe(70)
     expect((await actionLog(sent.actionLogId!)).evidence).toMatchObject({
       sentPastOwnLimits: expect.stringContaining('ads strategy: TEST-W15-P2 (IT), product, v1'),
-      strategyWarning: expect.stringContaining('sent, because it is your own edit'),
+      strategyWarning: expect.stringContaining('sent, because a person made or approved it'),
     })
   })
 })

@@ -253,6 +253,9 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   enable: 'switching paused ads back on',
   archive: 'archiving ads (for good)',
   phase: "switching a product's playbook phase",
+  settings: 'changing campaign settings (name, portfolio, end date, bidding strategy)',
+  portfolio: 'creating and changing portfolios',
+  hourly: 'changing hourly bid plans',
   targeting: 'adding keywords and product or category targets',
   retire: 'retiring negative keywords and targets',
 }
