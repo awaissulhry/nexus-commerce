@@ -296,8 +296,10 @@ export async function ruleFactsFor(input: {
   tool: string; limits: z.ZodObject; items: readonly KitItem[]; writes: readonly RuleWrite[]; approvalId?: string | null
   /** AA-W2-12 — the change can add spend without adding a budget (an enable restarts bids): its month is projected too. */
   projectMonth?: boolean
+  /** W4-1 — the schedules C4 does not count as an engine that also moves it (the hourly plan being changed). */
+  exceptIds?: readonly string[]
 }): Promise<RuleFacts> {
-  const limitFacts = await buildLimitFacts({ tool: input.tool, items: input.items, approvalId: input.approvalId, projectMonth: input.projectMonth })
+  const limitFacts = await buildLimitFacts({ tool: input.tool, items: input.items, approvalId: input.approvalId, projectMonth: input.projectMonth, exceptIds: input.exceptIds })
   const ruleGate = await ruleGateRefusal(input.writes)
   return { limitFacts, limitsNote: limitsNote(limitFacts, await toolLimitsHere(input.tool, input.limits)), ruleGate }
 }

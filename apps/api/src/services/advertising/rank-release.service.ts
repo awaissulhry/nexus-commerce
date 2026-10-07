@@ -163,7 +163,9 @@ function plan(s: CampaignState | undefined): 'restore' | 'kept-by-others' | 'not
 export async function releaseCampaigns(
   targets: Array<{ campaignId: string; actor: AdsActor }>,
   // W1-5 — `holds`: the run's collector for a give-back a bound held below (or above) the remembered bid.
-  opts: { reason: string; guard: EngineGuard | null; waitWhy?: string | null; holds?: BidHoldLog },
+  // W4-1 — `changeSetId`: a Claude request's give-back (set-hourly-bid-plan) names its approval on every write, so
+  // approval-status counts them; absent for every other caller.
+  opts: { reason: string; guard: EngineGuard | null; waitWhy?: string | null; holds?: BidHoldLog; changeSetId?: string | null },
 ): Promise<ReleaseReport> {
   const report = emptyRelease()
   const states = await readStates(targets.map((t) => t.campaignId))
@@ -189,9 +191,10 @@ export async function releaseCampaigns(
     }
     let writes = 0
     try {
-      if (s!.floored) writes += await restoreCampaignBids(t.campaignId, { actor: t.actor, reason: opts.reason, holds: opts.holds })
+      const set = opts.changeSetId ? { changeSetId: opts.changeSetId } : {}
+      if (s!.floored) writes += await restoreCampaignBids(t.campaignId, { actor: t.actor, reason: opts.reason, holds: opts.holds, ...set })
       const after = await prisma.campaign.findUnique({ where: { id: t.campaignId }, select: { bidsSuppressedAt: true } })
-      if (!after?.bidsSuppressedAt && s!.deltaBids > 0) writes += await revertBaseBidDelta(t.campaignId, { actor: t.actor, reason: opts.reason, holds: opts.holds })
+      if (!after?.bidsSuppressedAt && s!.deltaBids > 0) writes += await revertBaseBidDelta(t.campaignId, { actor: t.actor, reason: opts.reason, holds: opts.holds, ...set })
     } catch (e) { logger.warn('[rank-release] give-back threw — kept for the next run', { campaignId: t.campaignId, error: (e as Error).message }) }
     opts.guard!.settle(permit, writes, nothingHeld())
     const left = (await readStates([t.campaignId])).get(t.campaignId)
@@ -235,9 +238,10 @@ export interface ScheduleMember { scheduleId: string; campaignId: string; window
  * A person stopped these schedules holding their campaigns (deleted, paused, disabled, or removed the campaign): give
  * back what each floored. A goal-mode schedule releases as rank-defend (`automation:rank-defend-<id>`, its caps), a
  * classic one as dayparting (`automation:dayparting-<id>`). Call it AFTER the schedule is gone or disabled, so a tick
- * that starts meanwhile cannot floor the campaign again.
+ * that starts meanwhile cannot floor the campaign again. W4-1 — `changeSetId`: the approval of the Claude request that
+ * stopped them (set-hourly-bid-plan), on every write of the give-back; the actor stays the schedule's, as on the screen.
  */
-export async function releaseScheduleMembers(members: ScheduleMember[], why: string): Promise<ReleaseReport> {
+export async function releaseScheduleMembers(members: ScheduleMember[], why: string, opts: { changeSetId?: string | null } = {}): Promise<ReleaseReport> {
   const report = emptyRelease()
   if (!members.length) return report
   try {
@@ -248,7 +252,7 @@ export async function releaseScheduleMembers(members: ScheduleMember[], why: str
       const waitWhy = engine === 'rank-defend' ? await rankSwitchedOff() : null
       const guard = waitWhy ? null : await openEngineGuard(engine)
       const targets = mine.map((m) => ({ campaignId: m.campaignId, actor: `automation:${engine}-${m.scheduleId}` as AdsActor }))
-      addRelease(report, await releaseCampaigns(targets, { reason: `rank release — ${why}`, guard, waitWhy }))
+      addRelease(report, await releaseCampaigns(targets, { reason: `rank release — ${why}`, guard, waitWhy, ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}) }))
     }
     return report
   } catch (e) {
@@ -278,11 +282,11 @@ export async function readScheduleMembers(where: { groupId: string; campaignIdNo
   return rows.map((r) => ({ scheduleId: r.id, campaignId: r.campaignId, windows: r.windows, defaultTargetKey: r.defaultTargetKey }))
 }
 
-/** A group was paused: give back what each member floored. */
-export async function releaseGroupMembers(groupId: string, why: string): Promise<ReleaseReport> {
+/** A group was paused: give back what each member floored. W4-1 — `changeSetId` as in releaseScheduleMembers. */
+export async function releaseGroupMembers(groupId: string, why: string, opts: { changeSetId?: string | null } = {}): Promise<ReleaseReport> {
   let members: ScheduleMember[]
   try { members = await readScheduleMembers({ groupId }) } catch (e) { return couldNotRun(0, e) }
-  return releaseScheduleMembers(members, why)
+  return releaseScheduleMembers(members, why, opts)
 }
 
 /**
@@ -409,8 +413,11 @@ function rankFloorSource(by: string | null): string {
   return floorOwnerWords(by)
 }
 
-/** Each campaign's bids now and what a give-back would set them to (the order of `ids` is kept). */
-async function describeOrphans(ids: string[]): Promise<EnabledOrphan[]> {
+/**
+ * Each campaign's bids now and what a give-back would set them to (the order of `ids` is kept). W4-1 — exported: Claude's
+ * set-hourly-bid-plan shows the same bid lines for what a switch-off, a delete or a removal gives back.
+ */
+export async function describeOrphans(ids: string[]): Promise<EnabledOrphan[]> {
   if (!ids.length) return []
   const [camps, groups, targets] = await Promise.all([
     prisma.campaign.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, marketplace: true, bidsSuppressedAt: true, bidsSuppressedBy: true, bidsSuppressedFloorCents: true } }),

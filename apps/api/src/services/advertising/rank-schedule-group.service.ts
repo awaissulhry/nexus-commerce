@@ -18,15 +18,17 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { done, refused, type ServiceOutcome } from '../automation/service-outcome.js'
+import { targetValuesOf, type TargetValues } from './hourly-plan-week.js'
 
 /** The group fields the lightweight PATCH sets, as the route always took them. */
 const LIGHT_FIELDS = ['name', 'windows', 'defaultTargetKey', 'targetOverrides', 'enabled', 'marketplace', 'portfolioId', 'timezone'] as const
 
 /**
  * PATCH /advertising/rank-schedule-groups/:id without `campaignIds`. `changedBy`: who the version row names (the route:
- * the `x-actor-id` header as `user:<id>`, else `user:anonymous`).
+ * the `x-actor-id` header as `user:<id>`, else `user:anonymous`). W4-1 — `opts.changeSetId`: a Claude request's switch-off
+ * names its approval on every write of the give-back (absent for the screen).
  */
-export async function patchRankScheduleGroup(id: string, b: Record<string, unknown>, changedBy: string): Promise<ServiceOutcome<unknown>> {
+export async function patchRankScheduleGroup(id: string, b: Record<string, unknown>, changedBy: string, opts: { changeSetId?: string | null } = {}): Promise<ServiceOutcome<unknown>> {
   const data: Record<string, unknown> = {}
   for (const k of LIGHT_FIELDS) if (b[k] !== undefined) data[k] = b[k]
   if (!Object.keys(data).length) return refused(400, { error: 'nothing to update' })
@@ -52,7 +54,7 @@ export async function patchRankScheduleGroup(id: string, b: Record<string, unkno
     let release: unknown
     if (b.enabled === false) {
       const { releaseGroupMembers } = await import('./rank-release.service.js')
-      release = await releaseGroupMembers(id, 'its rank schedule was paused')
+      release = await releaseGroupMembers(id, 'its rank schedule was paused', { changeSetId: opts.changeSetId ?? null })
     }
     /**
      * RD.P7 — the most consequential click on the page (Enable/Pause) took this lightweight
@@ -77,4 +79,215 @@ export async function patchRankScheduleGroup(id: string, b: Record<string, unkno
     } catch (e) { logger.warn('[RD.P7] version snapshot failed on lightweight PATCH', { id, error: (e as Error).message }) }
     return done(release ? { ...g, release } : g)
   } catch (e) { return refused(500, { error: (e as Error)?.message }) }
+}
+
+// ── W4-1 — the plans as Claude reads them (ad-hourly-plans) and set-hourly-bid-plan decides on them ───────────────────
+
+/** Claude's change tool for hourly bid plans: its recorded changes say which plans Claude changed last. */
+export const HOURLY_PLAN_TOOL = 'set-hourly-bid-plan'
+
+/** One plan as it stands: the group row and what its members hold (the rows the engine reads). */
+export interface PlanState {
+  planId: string
+  name: string
+  enabled: boolean
+  timezone: string
+  marketplace: string | null
+  portfolioId: string | null
+  windows: unknown[]
+  defaultTargetKey: string | null
+  /** Member campaign ids, sorted. */
+  members: string[]
+  /** Each member's own target values (campaignId → targetKey → values), only the members that hold any. */
+  overrides: Record<string, Record<string, Record<string, unknown>>>
+  updatedAt: string
+}
+
+/** The keys of PlanState: what a recorded change is compared on (a later save by anyone moves `updatedAt`). */
+export const PLAN_STATE_KEYS: ReadonlyArray<keyof PlanState> = ['planId', 'name', 'enabled', 'timezone', 'marketplace', 'portfolioId', 'windows', 'defaultTargetKey', 'members', 'overrides', 'updatedAt']
+
+const objOf = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {})
+
+/** The plans named (all when `planIds` is absent), as they stand. */
+export async function readPlanStates(planIds?: readonly string[]): Promise<PlanState[]> {
+  const groups = await prisma.rankScheduleGroup.findMany({ where: planIds ? { id: { in: [...planIds] } } : {}, orderBy: { name: 'asc' } })
+  if (!groups.length) return []
+  const members = await prisma.adSchedule.findMany({ where: { groupId: { in: groups.map((g) => g.id) } }, select: { groupId: true, campaignId: true, targetOverrides: true } })
+  return groups.map((g) => {
+    const mine = members.filter((m) => m.groupId === g.id).sort((a, b) => (a.campaignId < b.campaignId ? -1 : a.campaignId > b.campaignId ? 1 : 0))
+    const overrides: PlanState['overrides'] = {}
+    for (const m of mine) {
+      const o = objOf(m.targetOverrides)
+      if (Object.keys(o).length) overrides[m.campaignId] = o as Record<string, Record<string, unknown>>
+    }
+    return {
+      planId: g.id, name: g.name, enabled: g.enabled, timezone: g.timezone, marketplace: g.marketplace ?? null, portfolioId: g.portfolioId ?? null,
+      windows: Array.isArray(g.windows) ? (g.windows as unknown[]) : [], defaultTargetKey: g.defaultTargetKey ?? null,
+      members: mine.map((m) => m.campaignId), overrides, updatedAt: g.updatedAt.toISOString(),
+    }
+  })
+}
+
+/** A plan's state, the PlanState keys only (a recorded change's `after` carries more). */
+export function stateOnly(value: unknown): Partial<PlanState> {
+  const v = objOf(value)
+  return Object.fromEntries(PLAN_STATE_KEYS.filter((k) => k in v).map((k) => [k, v[k]])) as Partial<PlanState>
+}
+
+/** Who a plan is: the playbook's, Claude's (its last change was a Claude request and nothing moved since), or a person's. */
+export type PlanOwner =
+  | { by: 'playbook'; playbookId: string; key: string; words: string }
+  | { by: 'claude'; approvalId: string; at: string; approvedBy: string | null; words: string }
+  | { by: 'person'; who: string | null; at: string | null; words: string }
+
+/** The JSON of a value, keys sorted (jsonb re-orders keys). */
+function sorted(value: unknown): string {
+  const sort = (v: unknown): unknown => (Array.isArray(v) ? v.map(sort) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sort((v as Record<string, unknown>)[k])])) : v)
+  return JSON.stringify(sort(JSON.parse(JSON.stringify(value ?? null))))
+}
+
+/**
+ * Whose each plan is. A plan the ads playbook built (an AdsPlaybookLink rankGroup) is the playbook's. A plan is Claude's
+ * while the last set-hourly-bid-plan change recorded for it is exactly what stands (any later save — the screen, a
+ * template, a restore — makes it a person's again). Every other plan is a person's: who made or last changed it comes
+ * from its newest version row (the screen's saves may name no one).
+ */
+export async function planOwners(states: readonly PlanState[]): Promise<Map<string, PlanOwner>> {
+  const out = new Map<string, PlanOwner>()
+  if (!states.length) return out
+  const ids = states.map((s) => s.planId)
+  const [links, changes, versions] = await Promise.all([
+    prisma.adsPlaybookLink.findMany({ where: { kind: 'rankGroup', refId: { in: ids } }, select: { refId: true, key: true, playbookId: true } }),
+    prisma.agentChange.findMany({ where: { toolName: HOURLY_PLAN_TOOL }, orderBy: { executedAt: 'desc' }, take: 2000, select: { approvalId: true, executedAt: true, executedByUserId: true, after: true } }),
+    prisma.rankScheduleVersion.findMany({ where: { groupId: { in: ids } }, orderBy: { createdAt: 'desc' }, select: { groupId: true, changedBy: true, createdAt: true } }),
+  ])
+  const books = links.length ? await prisma.adsPlaybook.findMany({ where: { id: { in: [...new Set(links.map((l) => l.playbookId))] } }, select: { id: true, label: true, market: true } }) : []
+  const lastChange = new Map<string, (typeof changes)[number]>()
+  for (const c of changes) {
+    const planId = objOf(c.after).planId
+    if (typeof planId === 'string' && !lastChange.has(planId)) lastChange.set(planId, c)
+  }
+  const lastVersion = new Map<string, (typeof versions)[number]>()
+  for (const v of versions) if (!lastVersion.has(v.groupId)) lastVersion.set(v.groupId, v)
+  const groups = await prisma.rankScheduleGroup.findMany({ where: { id: { in: ids } }, select: { id: true, createdBy: true, createdAt: true } })
+  const made = new Map(groups.map((g) => [g.id, g]))
+  for (const s of states) {
+    const link = links.find((l) => l.refId === s.planId)
+    if (link) {
+      const book = books.find((b) => b.id === link.playbookId)
+      out.set(s.planId, { by: 'playbook', playbookId: link.playbookId, key: link.key, words: `the ads playbook's hourly plan (${link.key}${book ? `, ${book.label} in ${book.market}` : ''})` })
+      continue
+    }
+    const change = lastChange.get(s.planId)
+    if (change && sorted(stateOnly(change.after)) === sorted(stateOnly(s))) {
+      out.set(s.planId, {
+        by: 'claude', approvalId: change.approvalId, at: change.executedAt.toISOString(), approvedBy: change.executedByUserId ?? null,
+        words: `a Claude request (${change.approvalId}) approved by ${change.executedByUserId ? `user:${change.executedByUserId}` : 'a person'} on ${change.executedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC; nothing changed it since`,
+      })
+      continue
+    }
+    const v = lastVersion.get(s.planId)
+    const who = v?.changedBy ?? made.get(s.planId)?.createdBy ?? null
+    const at = (v?.createdAt ?? made.get(s.planId)?.createdAt ?? null)?.toISOString() ?? null
+    const name = !who ? 'a person (not named)' : who === 'user:anonymous' ? 'a person on the Hourly Bids page (not named)' : who.startsWith('user:') ? `a person (${who})` : who
+    out.set(s.planId, { by: 'person', who, at, words: `${name}${at ? ` — last changed ${at.slice(0, 16).replace('T', ' ')} UTC` : ''}${change ? ' (changed since Claude\'s last request)' : ''}` })
+  }
+  return out
+}
+
+/**
+ * The hourly plan a rank-defend row belongs to (automation-detail, turn-up / turn-down-automation): a member schedule's
+ * plan, or the plan itself when the id is a plan's. Null: neither (a product rank plan, a schedule of its own).
+ */
+export async function hourlyPlanOfRow(rowId: string): Promise<{ planId: string; name: string; enabled: boolean } | null> {
+  const direct = await prisma.rankScheduleGroup.findUnique({ where: { id: rowId }, select: { id: true, name: true, enabled: true } })
+  if (direct) return { planId: direct.id, name: direct.name, enabled: direct.enabled }
+  const schedule = await prisma.adSchedule.findUnique({ where: { id: rowId }, select: { groupId: true } })
+  if (!schedule?.groupId) return null
+  const group = await prisma.rankScheduleGroup.findUnique({ where: { id: schedule.groupId }, select: { id: true, name: true, enabled: true } })
+  return group ? { planId: group.id, name: group.name, enabled: group.enabled } : null
+}
+
+/** The rank targets' values (the Hourly Bids library), and the same with one campaign's own values on top. */
+export interface TargetLibrary {
+  /** Every rank target by key, as the library holds it. */
+  values: Map<string, TargetValues>
+  /** The values with a campaign's own target values applied, exactly as the engine applies them. */
+  withOverrides: (overrides: unknown) => Map<string, TargetValues>
+}
+
+/** The library, read once (the engine's spec, ad-rank-defend.job.ts toSpec / applyTargetOverrides). */
+export async function targetLibrary(): Promise<TargetLibrary> {
+  const { toSpec, applyTargetOverrides } = await import('../../jobs/ad-rank-defend.job.js')
+  const rows = await prisma.rankTarget.findMany({ orderBy: [{ sortOrder: 'asc' }, { key: 'asc' }] })
+  const specs = rows.map((r) => ({ name: r.name, spec: toSpec(r as never) }))
+  const values = new Map(specs.map(({ name, spec }) => [spec.key, targetValuesOf(spec, name)]))
+  return {
+    values,
+    withOverrides(overrides) {
+      const map = objOf(overrides)
+      if (!Object.keys(map).length) return values
+      return new Map(specs.map(({ name, spec }) => [spec.key, targetValuesOf(applyTargetOverrides(spec, map as never), name)]))
+    },
+  }
+}
+
+/** Is the rank engine running for this business now, and what that means for a plan change, in words. */
+export async function rankEngineNow(): Promise<{ on: boolean; words: string }> {
+  try {
+    const { engineEnv, engineMode } = await import('../automation/engine-switch.service.js')
+    const env = await engineEnv('rank-defend')
+    if (env.ceiling === 'OFF') return { on: false, words: `the hourly bid engine does not run on this server (${env.reason ?? 'its server switch is off'}), so nothing of it reaches Amazon until it does` }
+    const mode = await engineMode('rank-defend', env.ceiling)
+    if (mode.mode === 'OFF') return { on: false, words: `the hourly bid engine is switched off for this business${mode.note ? ` (${mode.note})` : ''}, so nothing of it reaches Amazon until it is switched on` }
+    return { on: true, words: 'the hourly bid engine applies it at Amazon from its next run (every 15 minutes), each write through Amazon\'s write gate' }
+  } catch (e) {
+    logger.warn('[W4-1] rank engine switch unreadable', { error: (e as Error).message })
+    return { on: false, words: 'whether the hourly bid engine runs could not be read just now' }
+  }
+}
+
+// ── W4-1 — the plan reads Claude's tools need, kept inside advertising (scripts/check-context-boundary.mjs) ────────────
+
+/** Who holds each campaign now: an hourly plan (its group), or a schedule of its own (planId null). */
+export async function campaignHolders(campaignIds: readonly string[]): Promise<Map<string, { scheduleId: string; planId: string | null; planName: string | null; enabled: boolean }>> {
+  const rows = campaignIds.length
+    ? await prisma.adSchedule.findMany({ where: { campaignId: { in: [...new Set(campaignIds)] } }, select: { id: true, campaignId: true, groupId: true, enabled: true, group: { select: { name: true } } } })
+    : []
+  return new Map(rows.map((r) => [r.campaignId, { scheduleId: r.id, planId: r.groupId ?? null, planName: r.group?.name ?? null, enabled: r.enabled }]))
+}
+
+/** A plan's member schedules (the rows the engine runs), with what each holds now. */
+export async function planSchedules(planId: string) {
+  return prisma.adSchedule.findMany({ where: { groupId: planId }, select: { id: true, campaignId: true, enabled: true, lastApplied: true, lastEvaluatedAt: true } })
+}
+
+/** Another plan of this name in the same scope (a portfolio, or none), or null. */
+export async function planNamedAlready(name: string, portfolioId: string | null, notId?: string): Promise<{ id: string } | null> {
+  return prisma.rankScheduleGroup.findFirst({ where: { name, portfolioId: portfolioId ?? null, ...(notId ? { NOT: { id: notId } } : {}) }, select: { id: true } })
+}
+
+/** The newest version row of a plan written at or after `since` (the one a change just wrote), or null. */
+export async function versionSince(planId: string, since: Date): Promise<{ id: string } | null> {
+  return prisma.rankScheduleVersion.findFirst({ where: { groupId: planId, createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, select: { id: true } })
+}
+
+/** A plan's dated events still to end, and its last versions. */
+export async function planHistory(planId: string, now: Date) {
+  const [events, versions] = await Promise.all([
+    prisma.rankScheduleEvent.findMany({ where: { groupId: planId, endsAt: { gt: now } }, orderBy: { startsAt: 'asc' }, take: 10, select: { name: true, startsAt: true, endsAt: true, enabled: true } }),
+    prisma.rankScheduleVersion.findMany({ where: { groupId: planId }, orderBy: { createdAt: 'desc' }, take: 5, select: { id: true, createdAt: true, changedBy: true, enabled: true, campaignCount: true, name: true } }),
+  ])
+  return { events, versions }
+}
+
+/**
+ * The campaigns an enabled product rank plan governed on its last run (read off `lastSummary`, as the schedules list
+ * reads them): the rank engine lets such a plan win over a schedule on the same campaign.
+ */
+export async function productPlanCampaigns(): Promise<Set<string>> {
+  const plans = await prisma.productRankPlan.findMany({ where: { enabled: true }, select: { lastSummary: true } })
+  const out = new Set<string>()
+  for (const p of plans) for (const d of (objOf(p.lastSummary).decisions as Array<{ campaignId?: string }> | undefined) ?? []) if (d?.campaignId) out.add(d.campaignId)
+  return out
 }
