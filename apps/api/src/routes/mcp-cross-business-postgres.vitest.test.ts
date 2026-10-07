@@ -222,6 +222,12 @@ interface Seeded {
   adsRunId: string
   /** Ads autonomy W4-1 — an hourly bid plan holding the campaign (ad-hourly-plans reads it, set-hourly-bid-plan changes it). */
   hourlyPlanId: string
+  /** A19 — auto-undo's judgement of the recorded bid write: clearly worse, not undone (what undo-worse-ad-change puts back). */
+  judgementId: string
+  /** BB-4 — a shadow bid brain decision on the target (what bid-brain reads). */
+  brainDecisionId: string
+  /** Health watchdog — one stored run of the daily platform checks (what platform-health-checks reads). */
+  healthRunId: string
 }
 const seeded = {} as Record<'a' | 'b', Seeded>
 /** Phase 3 T3 — the eBay category id each business has loaded (its details name the business's canary). */
@@ -461,6 +467,28 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         executionId: changeSetId, userId: 'user:mcp8', actionType: 'AD_BID_UPDATE', entityType: 'AD_TARGET', entityId: target.id,
         payloadBefore: { bidCents: 35, status: 'ENABLED' }, payloadAfter: { bidCents: 40, status: 'ENABLED' }, amazonResponseStatus: 'PENDING',
       },
+    })
+    // A19 — auto-undo judged that write (35 → 40, still standing: the target holds 40 and nothing wrote it since) clearly
+    // worse and has not put it back: undo-worse-ad-change asks for exactly that. Its preview names the target and campaign.
+    const judgement = await db.adsAutoUndoJudgement.create({
+      data: {
+        actionLogId: actionLog.id, actor: 'automation:mcp8-engine', origin: 'engine', originLabel: `${canary}-ENGINE`, entityType: 'AD_TARGET', entityId: target.id,
+        entityLabel: `${canary}-TARGET`, marketplace: market, lever: 'bid', direction: 'raise', fromValue: 35, toValue: 40, changedAt: new Date(Date.now() - 3 * 86_400_000),
+        verdict: 'worse', outcome: 'worse', evidence: { why: `${canary}-JUDGEMENT-WHY` }, action: 'would_undo', level: 'OBSERVE',
+      },
+    })
+    // BB-4 — the shadow bid brain's newest decision on the target, in a market the brain runs in (IT), so a read with no
+    // scope (every shadow market) would find it too: bid-brain names the target's keyword (the canary) and its why.
+    const brainDecision = await db.bidBrainDecision.create({
+      data: {
+        runId: `${mark}-BRAIN-${RUN}`, mode: 'SHADOW', kind: 'snapshot', marketplace: 'IT', campaignId: campaign.id, adGroupId: adGroup.id, targetId: target.id,
+        action: 'write', layer: 'goal', currentCents: 40, decidedCents: 36, goalBidCents: 36, dataDay: new Date(Date.now() - 86_400_000), why: `${canary}-BRAIN-WHY`,
+      },
+    })
+    // Health watchdog — one stored run of the daily checks with a failing check (platform-health-checks reads the newest run).
+    const healthRunId = `${mark}-HEALTH-${RUN}`
+    await db.platformHealthCheck.create({
+      data: { runId: healthRunId, checkId: 'plan-steps', subsystem: 'automation', status: 'fail', message: `${canary}-HEALTH-MESSAGE`, nextStep: `${canary}-HEALTH-STEP`, evidence: { note: `${canary}-HEALTH-EVIDENCE` } },
     })
     // W3-2 — a bid write Nexus queued and has not sent (its window is a day long here, so it stays cancellable).
     const queuedWrite = await db.outboundSyncQueue.create({
@@ -717,6 +745,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         adsRun.id,
         queuedWrite.id, buildRun.id,
         portfolio.id, portfolio.externalPortfolioId,
+        judgement.id, brainDecision.id, brainDecision.runId, healthRunId,
       ],
       agentRows: [run.id, first.id, spare.id, adsRun.id],
       changeId: change.id,
@@ -777,6 +806,9 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       sourcePresetId: sourcePreset.id,
       adsRunId: adsRun.id,
       hourlyPlanId: hourlyPlan.id,
+      judgementId: judgement.id,
+      brainDecisionId: brainDecision.id,
+      healthRunId,
     }
   })
 }
@@ -936,6 +968,8 @@ const B_VALUES: Record<string, () => unknown> = {
   changeSetId: () => seeded.b.changeSetId,
   // W3-2 — cancel-queued-ad-write names a queued ad write.
   outboundQueueId: () => seeded.b.outboundQueueId,
+  // A19 — undo-worse-ad-change names auto-undo's judgement of a write.
+  judgementId: () => seeded.b.judgementId,
   // A14 — the eBay change tools name the eBay campaign, one of its ad groups and an eBay item id.
   ebayCampaignId: () => seeded.b.ebayCampaignId,
   ebayAdGroupId: () => seeded.b.ebayAdGroupId,
@@ -1696,11 +1730,13 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
         (await rowsOf<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval" WHERE "workspaceId" = $1', [A]))[0].n
       const queuedBefore = await approvalsInA()
       const problems: string[] = []
+      const probed = new Set<string>()
       const changeTools = new Set<string>()
       let queuedInA = 0
       let queuedCreates = 0
       await withClaude(tokens.a.access, 'A', async (client) => {
         for (const [label, { tool, args }] of probes) {
+          probed.add(tool.name)
           // A's own name: the change passes the business check and is then refused by the tool, as not found.
           const result = await client.callTool({ name: tool.name, arguments: named(tool, args, A) })
           const outcome = outcomeOf(result)
@@ -1723,7 +1759,10 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
         }
       })
       expect(problems).toEqual([])
-      expect(changeTools.size).toBe(offered.filter((tool) => !tool.readOnly).length)
+      // Every tool offered was probed from A, read or change — by name, not by count: a tool the builder could not aim at
+      // B (named in the test above) is named here too, so the gap reads as the tool, never as "160 to be 161".
+      const unprobed = offered.filter((tool) => !probed.has(tool.name)).map((tool) => `${tool.name} (${tool.readOnly ? 'read' : 'change'})`)
+      expect(unprobed, `not probed from A — give each an entry in B_VALUES, B_FORMS or EXTRA:\n${unprobed.join('\n')}`).toEqual([])
       expect(changeTools.size).toBeGreaterThan(0)
       // Only the business-wide changes and the creations wait, each a change of A's own.
       expect(queuedInA).toBe([...BUSINESS_WIDE].filter((name) => changeTools.has(name)).length)
@@ -1795,7 +1834,7 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
     })
   })
 
-  describe('1b — the ad reads (MCP full control A2, A13, T4)', () => {
+  describe('1b — the ad reads (MCP full control A2, A13, T4; bid brain BB-4)', () => {
     /** Each read aimed at one of business B's ad rows by its id. */
     const aimed = (): Array<[string, Record<string, unknown>]> => [
       ['ad-changes', { channel: 'ebay', campaignId: seeded.b.ebayCampaignId }],
@@ -1814,6 +1853,8 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
       await withClaude(tokens.bOwn.access, 'B-control', async (client) => {
         const lists: Array<[string, Record<string, unknown>]> = [
           ['ad-campaigns', {}], ['ads-overview', {}], ['ad-campaigns', { channel: 'ebay' }], ['ads-overview', { channel: 'ebay' }],
+          // BB-4 — the bid brain with no scope reads every shadow market (IT, DE) by raw SQL: B's decision is in IT.
+          ['bid-brain', {}],
         ]
         for (const [name, args] of [...aimed(), ...lists]) {
           const result = await client.callTool({ name, arguments: args })
@@ -1838,6 +1879,8 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
           ['ad-changes', { channel: 'ebay' }, null], ['ad-recommendations', { channel: 'ebay' }, seeded.a.ebayCampaignId],
           // T4 — the eBay ad details open A's own live campaigns (control), never B's.
           ['ebay-ad-details', {}, seeded.a.ebayCampaignId],
+          // BB-4 — the bid brain's decisions in every shadow market: A's own target's (control), never B's (same market, IT).
+          ['bid-brain', {}, seeded.a.targetId],
         ]
         for (const [name, args, own] of lists) {
           const result = await client.callTool({ name, arguments: args })
