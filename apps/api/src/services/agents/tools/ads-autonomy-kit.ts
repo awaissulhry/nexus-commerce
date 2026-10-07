@@ -79,12 +79,19 @@ export const MAX_KIT_ITEMS = 250
  *   status       ENABLED / PAUSED / ARCHIVED; `dailyBudgetCents`: the campaign budget that starts (or stops) spending.
  *                AA-W2-9 — `from` LOW_BIDS: a campaign stopped with low bids (a restore restarts it, its budget in full).
  *   negative     a new negative keyword or target (it only lowers spend).
+ *   retire       W4-5 — a standing negative keyword or target retired (archived at Amazon, or a Nexus-only row removed):
+ *                a block lifted, so the searches it blocked can show the ads again — counted as a raise, with no amount.
  *   liveWrites   AA-W2-9 — a campaign on or off the live-write allowlist (a Nexus switch: it moves no bid or budget
  *                itself; every write it lets through is judged on its own).
  *   automation   AA-W2-11 — an ads rule saved, or an automation turned up or tuned, for this scope: Nexus only, it moves
  *                no value itself (the automation acts as itself, inside its own caps). PB-9 — `raises`: a Nexus-side
  *                change that adds spend by itself (a looser strategy number a phase switch writes, an hourly plan it
  *                switches on): counted as a raise (Claude's daily raises, the month), with no amount.
+ *   setting      W4-3 — a campaign's or a portfolio's settings (its name, portfolio, end date, bidding strategy; a
+ *                portfolio's name, budget cap, state), sent to Amazon: no bid or budget moves. `raises`: it can add
+ *                spend by itself (up-and-down bidding, an end date removed or moved later, a cap raised or let go);
+ *                `cuts`: it can only hold spend back (an end date set, a cap set or lowered). Neither: the same.
+ *                `setting` names what changes, `from` / `to` the values as a person reads them.
  */
 export type KitChange =
   | { field: 'bid'; fromCents: number | null; toCents: number; forced?: boolean }
@@ -93,8 +100,10 @@ export type KitChange =
   | { field: 'placementPct' | 'targetAcosPct'; fromPct: number | null; toPct: number; placement?: string }
   | { field: 'status'; from: string | null; to: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudgetCents?: number }
   | { field: 'negative'; term: string; matchType?: string | null }
+  | { field: 'retire'; term: string; matchType?: string | null }
   | { field: 'liveWrites'; from: boolean; to: boolean }
   | { field: 'automation'; raises?: boolean }
+  | { field: 'setting'; setting: string; from: string | null; to: string | null; raises?: boolean; cuts?: boolean }
 
 export interface KitItem {
   entity: AdEntityRef
@@ -148,10 +157,14 @@ export function measure(change: KitChange): Measured {
     }
     case 'negative':
       return { ...none, direction: 'cut' }
+    case 'retire':
+      return { ...none, direction: 'raise' }
     case 'liveWrites':
       return { ...none, direction: 'same' }
     case 'automation':
       return { ...none, direction: change.raises ? 'raise' : 'same' }
+    case 'setting':
+      return { ...none, direction: change.raises ? 'raise' : change.cuts ? 'cut' : 'same' }
   }
 }
 
@@ -265,7 +278,9 @@ export interface WantedItem {
   /** A placement change: which placement (Amazon's code). */
   placement?: string
   from?: string | boolean | null
-  to?: string | boolean
+  to?: string | boolean | null
+  /** W4-3 — a setting change: what changes (name, portfolio, end date, bidding strategy, cap, state). */
+  setting?: string
   term?: string
   matchType?: string | null
 }
@@ -284,9 +299,12 @@ export function wantedOf(entity: string, change: KitChange, direction: Direction
     case 'liveWrites':
       return { ...base, from: change.from, to: change.to }
     case 'negative':
+    case 'retire':
       return { ...base, term: change.term, matchType: change.matchType ?? null }
     case 'automation':
       return base
+    case 'setting':
+      return { ...base, setting: change.setting, from: change.from, to: change.to }
   }
 }
 
@@ -408,8 +426,10 @@ const CUT_WORDS: Record<KitChange['field'], string> = {
   targetAcosPct: 'lowering its target ACoS',
   status: 'stopping it',
   negative: 'negating',
+  retire: 'retiring a negative',
   liveWrites: 'taking it off the live-write allowlist',
   automation: 'changing what acts on it',
+  setting: 'tightening its settings',
 }
 
 /**
@@ -612,6 +632,11 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   enable: 'switching paused ads back on',
   archive: 'archiving ads (for good)',
   phase: "switching a product's playbook phase",
+  settings: 'changing campaign settings (name, portfolio, end date, bidding strategy)',
+  portfolio: 'creating and changing portfolios',
+  hourly: 'changing hourly bid plans',
+  targeting: 'adding keywords and product or category targets',
+  retire: 'retiring negative keywords and targets',
 }
 /** What a strategy level below auto allows, in W1-8's words (claude-trust.service.ts narrowedWhy). */
 const ALLOWS: Record<Exclude<ClaudeTrust, 'auto'>, (what: string) => string> = {

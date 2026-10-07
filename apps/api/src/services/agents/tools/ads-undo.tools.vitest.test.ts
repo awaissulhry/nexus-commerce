@@ -175,12 +175,18 @@ describe('AA-W2-9 — an undo is a change set of its own, and is judged row by r
       expect(raise).toMatchObject({ ruleGate: null, notJudgedByRule: [], limitFacts: { action: 'undo', this: { items: 1, raises: 1, cuts: 0 } } })
       expect(judged(raise)).toMatch(/^its largest raise is [\d.]+ %, more than the 0 % this tool's limits let run without a person/)
       expect(judged(raise, { maxRaisePct: 20 })).toBeNull()
-      // A status put back (here a pause made in Nexus) is not judged by rule: a person decides.
-      const paused = await inside(() => updateCampaignWithSync({ campaignId: 'c-it', patch: { status: 'PAUSED' }, actor: 'user:u-operator', changeSetId: 'set-pause' }))
-      expect(paused.ok).toBe(true)
-      const status = (await preview('undo-ad-change', { changeSetId: 'set-pause' })).preview as Row
+      // A status put back (here a person's enable in Nexus: its undo pauses it again) is not judged by rule: a person decides.
+      await inside(() => database.client.campaign.update({ where: { id: 'c-it' }, data: { status: 'PAUSED' } }))
+      const enabled = await inside(() => updateCampaignWithSync({ campaignId: 'c-it', patch: { status: 'ENABLED' }, actor: 'user:u-operator', changeSetId: 'set-enable' }))
+      expect(enabled.ok).toBe(true)
+      const status = (await preview('undo-ad-change', { changeSetId: 'set-enable' })).preview as Row
       expect(status.notJudgedByRule).toEqual(['puts back the status of campaign c-it'])
       expect(judged(status, { maxRaisePct: 20 })).toBe('it also puts back the status of campaign c-it, which a run by rule does not judge; a person decides')
+      // W4-2 — a pause a person made is not switched back on by an undo at all: enable-ads with includePeoplesPauses does
+      // that, with the approver's authenticator code.
+      const paused = await inside(() => updateCampaignWithSync({ campaignId: 'c-it', patch: { status: 'PAUSED' }, actor: 'user:u-operator', changeSetId: 'set-pause' }))
+      expect(paused.ok).toBe(true)
+      expect((await preview('undo-ad-change', { changeSetId: 'set-pause' })).error).toMatch(/^Not undone: it would switch back on what no Claude request paused — campaign c-it: a person paused it in Nexus \(user:u-operator, .*enable-ads and includePeoplesPauses: true/)
       // Retired negatives are the same: lifting a block is never judged by rule.
       expect(judged({ ...raise, notJudgedByRule: ['lifts a negative keyword it created (a block removed)'] }, { maxRaisePct: 20 })).toMatch(/^it also lifts a negative keyword/)
     } finally {

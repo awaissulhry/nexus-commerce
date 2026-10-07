@@ -28,6 +28,10 @@
  * preview and on the ads audit row, and once the write ran the recommendation is settled (not offered again until the
  * data shows what the change did).
  *
+ * ADS AUTONOMY W4-4 — `set-target-bid`: a person's approval sends the bid asked for, past the largest change per action
+ * after the card's warning (as a budget past the daily move, #401); a run by rule writes the stepped bid, as before
+ * (ads-change-kit.ts bidStepOf). `afterwards: 'auto-bid'` hands the bid back to auto-bid instead of holding it 60 days.
+ *
  * The protected-terms check is the write gate's own matcher (ads-negation-policy.ts, 5a): EXACT / PREFIX / CONTAINS, and
  * a phrase negative that a protected term contains; it is not re-invented. Amazon's text limits are checked there too.
  */
@@ -43,9 +47,9 @@ import { adGroupCampaigns, adGroupExternalIds, adGroupsByExternalId } from '../.
 import { loadDestinationGraph, resolveDestination, resolveStoredDestinations } from '../../advertising/harvest-destination.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf } from './ads-tool-guards.js'
-import { alsoChangedBy, approvedRun, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stepClampWords, storedReach, type StoredReach } from './ads-change-kit.js'
+import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stepClampWords, storedReach, withStepPast, type BidAfterwards, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type LimitFacts, type ScopeFacts } from './ads-autonomy-kit.js'
-import { bidLimitsFor, stepClamp } from '../../advertising/ads-strategy/bids.js'
+import { bidLimitsFor } from '../../advertising/ads-strategy/bids.js'
 import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
 import { DEFAULT_MIN_ORDERS, DEFAULT_WINDOW_DAYS, meetsHarvest } from '../../advertising/ads-harvest.service.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
@@ -412,7 +416,8 @@ const createNegativeKeyword: AgentTool = {
     + 'from. Refused, and not queued, '
     + 'for a protected term, a term already negated in the campaign, a campaign-level negative, or when Amazon\'s '
     + 'write gate would refuse it. A protected product\'s ASIN is never negated by rule. Once approved it is created at '
-    + 'once as the approver; undo-change retires it again.',
+    + 'once as the approver; undo-change retires it again. The list form — many negatives into many ad groups, campaign '
+    + 'negatives, negative ASINs — is add-negative-targets; retire-negatives retires any negative.',
   async handler(args, ctx) {
     return negativePreview(args, { rule: { approvalId: ctx.approvalId } })
   },
@@ -739,7 +744,8 @@ const graduateKeyword: AgentTool = {
     + 'shows the starting bid in the campaign\'s currency (default: the term\'s cost per click), the term\'s record, '
     + 'whether it lands live at Amazon or in sandbox, and each limit with where it comes from. Refused, and not queued, '
     + 'when the exact keyword exists, or when Amazon\'s write gate would refuse it. The source ad group is not negated. '
-    + 'Undo lowers the keyword to the 5-cent floor (it is never paused or archived).',
+    + 'Undo lowers the keyword to the 5-cent floor (it is never paused or archived). harvest-search-term does this and the '
+    + 'source negative in one step; add-ad-targets adds many keywords and product or category targets to one ad group.',
   async handler(args, ctx) {
     return graduationPreview(args, { rule: { approvalId: ctx.approvalId } })
   },
@@ -848,13 +854,18 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
   if (notSp) return { ok: false, error: notSp }
   // 4A (Owner decided 2026-10-06) — a pin does not stop it: it runs only once a person approves it, as his own click.
   const currentBidCents = target.bidCents ?? 0
-  // The bid that lands: the CPC ceiling first (as the bid routes apply it), then the campaign's max-change guardrail.
+  const currency = campaignCurrency(campaign)
+  // The bid that lands: the CPC ceiling first (as the bid routes apply it), then the largest change per action.
   // W1-5 — the largest change is the lower of the campaign's and the ads strategy's for the target's ad group, the same
   // step the write takes (stepClamp); the write gate below judges the band of the ad group's products.
+  // W4-4 — the step is his own limit: a person's approval sends the bid asked for (the card warns him past the step);
+  // a run by rule writes the stepped bid, as before (bidStepOf).
   const { entries, clamps } = await clampBidsByCeiling([{ adTargetId: target.id, bidCents: proposedBidCents }])
   const strategy = await bidLimitsFor({ marketplace: campaign.marketplace, adGroupId: target.adGroupId, campaignId: campaign.id })
-  const step = stepClamp(currentBidCents, entries[0].bidCents, campaign.dynamicBidding, strategy)
-  const effectiveBidCents = step.cents
+  const step = bidStepOf({ currentCents: currentBidCents, wantedCents: entries[0].bidCents, dynamicBidding: campaign.dynamicBidding, strategy, label: `"${target.expressionValue}"`, currency })
+  const effectiveBidCents = step.personCents
+  const byRuleBidCents = step.ruleCents
+  const afterwards = afterwardsOf(args.afterwards)
   // No-pause: a suppressed bid is never raised here; only restore-campaign lifts a suppression.
   const verdict = suppressionOf({ id: target.id, bidCents: currentBidCents, suppressedFromBidCents: target.suppressedFromBidCents }, effectiveBidCents)
   if (verdict === 'suppressed') {
@@ -870,17 +881,21 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
     changes: [{ field: 'bid', valueCents: effectiveBidCents }],
   })
   if (reach.reach === 'refused') return { ok: false, error: reachRefusal(reach) }
-  const currency = campaignCurrency(campaign)
-  const stored = storedReach(reach)
+  // W4-4 — past the largest change the card warns him, where it warns about his other own limits (#401).
+  const stored = withStepPast(storedReach(reach), [step.past])
   const bound = await alsoChangedBy(campaign.id)
-  // AA-W2-6 — the bid that lands, against the ads strategy of the target's ad group and Claude's limits, and the write
-  // gate as it judges a run by rule.
+  const stepped = byRuleBidCents !== effectiveBidCents ? stepClampWords(step.step, strategy) : null
+  // AA-W2-6 — the bid a run by rule writes (W4-4: the stepped one), against the ads strategy of the target's ad group
+  // and Claude's limits, and the write gate as it judges a run by rule. W4-4 — the gate is asked about the bid asked for
+  // too: a rule never decides a request whose card warns about another of his own limits; a person does.
   const rule = opts.rule
     ? await ruleFactsFor({
       tool: 'set-target-bid',
       limits: TARGET_BID_LIMITS,
-      items: [{ entity: { kind: 'target', id: target.id }, change: { field: 'bid', fromCents: currentBidCents, toCents: effectiveBidCents } }],
-      writes: [{ label: `campaign "${campaign.name}"`, campaignId: campaign.id, adGroupId: target.adGroupId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents: effectiveBidCents }] }],
+      items: [{ entity: { kind: 'target', id: target.id }, change: { field: 'bid', fromCents: currentBidCents, toCents: byRuleBidCents } }],
+      writes: [...new Set([byRuleBidCents, effectiveBidCents])].map((valueCents) => ({
+        label: `campaign "${campaign.name}"`, campaignId: campaign.id, adGroupId: target.adGroupId, marketplace: campaign.marketplace, changes: [{ field: 'bid', valueCents }],
+      })),
       approvalId: opts.rule.approvalId,
     })
     : null
@@ -893,21 +908,32 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
       currency,
       currentBidCents,
       proposedBidCents,
-      ...(effectiveBidCents !== proposedBidCents ? { effectiveBidCents, clampedBy: clamps.length ? 'the campaign\'s CPC ceiling' : stepClampWords(step, strategy) } : {}),
+      // W4-4 — always the bid a person's approval sends (a request stepped before W4-4 then reads "from €0.54 to €0.90").
+      effectiveBidCents,
+      ...(effectiveBidCents !== proposedBidCents ? { clampedBy: 'the campaign\'s CPC ceiling' } : {}),
       deltaCents: effectiveBidCents - currentBidCents,
+      // W4-4 — what a run by the business's rule writes instead: the bid stepped to the largest change (as before).
+      byRuleBidCents,
+      ...(stepped ? { byRuleSteppedBy: stepped } : {}),
       reach: stored,
       reachNote: reachNote(stored),
       alsoChangedBy: bound.automations,
       ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
       ...(rule ?? {}),
       ...sourcePreview(changeSource),
-      effect: `Moves "${target.expressionValue}" from ${amountLabel(currentBidCents, currency)} to ${amountLabel(effectiveBidCents, currency)} in ${campaign.name}.`,
+      afterwards,
+      afterwardsNote: afterwardsNote(afterwards),
+      effect: `Moves "${target.expressionValue}" from ${amountLabel(currentBidCents, currency)} to ${amountLabel(effectiveBidCents, currency)} in ${campaign.name}`
+        + (stepped ? `; run by the business's rule instead, only to ${amountLabel(byRuleBidCents, currency)} (${stepped}).` : '.'),
     },
   }
 }
 
-/** A4 — the starting values an approved bid change must still find (MATERIAL_PREVIEW_FIELDS holds the same list). */
-const TARGET_BID_MATERIAL = ['currentBidCents', 'effectiveBidCents', 'reach'] as const
+/**
+ * A4 — the starting values an approved bid change must still find (MATERIAL_PREVIEW_FIELDS holds the same list). W4-4 —
+ * and the bid a run by rule writes, and what auto-bid does with the bid afterwards.
+ */
+const TARGET_BID_MATERIAL = ['currentBidCents', 'effectiveBidCents', 'byRuleBidCents', 'afterwards', 'reach'] as const
 
 /**
  * C2 — undo of a bid change: set the bid it replaced, through set-target-bid itself (the same guards, preview,
@@ -938,6 +964,7 @@ const setTargetBid: AgentTool = {
     proposedBidCents: z.coerce.number().describe('new bid in minor units (cents) of the campaign\'s currency, at least 5'),
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the person who approves it and kept in the ads audit'),
     source: sourceArg,
+    afterwards: afterwardsArg, // W4-4
   }),
   requires: [F.adsBidsEdit, FIELDS.financialsAdspendView],
   restrictedFields: LIMIT_FACTS_MONEY as Readonly<Record<string, FieldPermission>>,
@@ -952,15 +979,20 @@ const setTargetBid: AgentTool = {
   maxClaudeTrust: 'auto',
   strategyBound: 'amazon-ads',
   limits: TARGET_BID_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits),
+  // W4-4 — a hand-back to auto-bid never runs by rule.
+  withinLimits: (preview, limits) => handBackRefusal(preview) ?? ruleRefusal(preview, limits),
   undo: SET_TARGET_BID_UNDO,
   description:
     'Change one keyword or target bid on an Amazon Sponsored Products campaign. Nothing changes until a person approves '
     + 'it: in Nexus, or the person who asked confirms it in Claude with their authenticator code when the business set it '
     + 'so — unless the business lets it run by its rule, inside its limits and the ads strategy where it lands (by '
     + 'default only a cut; a raise waits for a person). The preview shows the current and new bid in the campaign\'s '
-    + 'currency (after the campaign\'s CPC ceiling and max-change guardrail), whether it lands live at Amazon or in '
-    + 'sandbox, the rules that may move it again, and each limit with where it comes from. Refused, and not queued, when '
+    + 'currency (after the campaign\'s CPC ceiling), whether it lands live at Amazon or in '
+    + 'sandbox, the rules that may move it again, and each limit with where it comes from. A bid that moves more than '
+    + 'the largest bid change per action (the campaign\'s max-change guardrail or the ads strategy\'s, the lower one) is '
+    + 'warned on the approval card, and a person\'s approval sends it as asked; run by rule it moves only as far as the '
+    + 'largest change allows (byRuleBidCents). afterwards: "hold" (default) — auto-bid then leaves the bid alone for 60 '
+    + 'days, as a person\'s; "auto-bid" — handed back, auto-bid may move it from its next run. Refused, and not queued, when '
     + 'Amazon\'s write gate would refuse it, or when it would raise a suppressed (no-pause) bid. Run by rule, it is also '
     + 'held by the live-write allowlist, pins and the campaign\'s own bid bounds. Once approved it runs as the approver; '
     + 'undo-change puts the old bid back.',
@@ -971,11 +1003,18 @@ const setTargetBid: AgentTool = {
     const fresh = await targetBidPreview(args)
     const refusal = recheck(ctx, fresh, TARGET_BID_MATERIAL)
     if (refusal) return notRun(refusal)
-    const p = fresh.preview as { target: { id: string; expression: string }; currentBidCents: number; proposedBidCents: number; effectiveBidCents?: number; reach: unknown; effect: string; currency: string }
+    const p = fresh.preview as {
+      target: { id: string; expression: string }; currentBidCents: number; proposedBidCents: number; effectiveBidCents?: number; byRuleBidCents: number
+      afterwards: BidAfterwards; reach: unknown; effect: string; currency: string
+    }
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
-    const newBidCents = p.effectiveBidCents ?? p.proposedBidCents
+    // W4-4 — a person's approval (his manual mark, from the approval door) sends the bid asked for: the card warned him
+    // past the largest change. A run by rule writes the stepped bid, as before; the mutation layer steps any bid without
+    // his mark anyway, whatever is sent.
+    const newBidCents = run.manual ? (p.effectiveBidCents ?? p.proposedBidCents) : p.byRuleBidCents
     const changeSource = sourceOf(args.source)
+    const evidence = handBackEvidence(changeSource ? withSource(null, changeSource) : null, p.afterwards) // W3-1, W4-4
     const out = await updateAdTargetWithSync({
       adTargetId: p.target.id,
       patch: { bidCents: newBidCents },
@@ -984,7 +1023,7 @@ const setTargetBid: AgentTool = {
       changeSetId: run.changeSetId,
       manual: run.manual, // 4A
       confirmOwnLimits: run.confirmOwnLimits, // 4A
-      ...(changeSource ? { evidence: withSource(null, changeSource) } : {}), // W3-1
+      ...(evidence ? { evidence } : {}),
     })
     if (!out.ok) return notRun(`Not run: the bid write was refused (${out.error ?? 'unknown'}). Nothing changed.`)
     await settleSources([changeSource], run.changeSetId)
@@ -998,6 +1037,7 @@ const setTargetBid: AgentTool = {
         bidCents: after,
         currency: p.currency,
         reach: p.reach,
+        afterwards: p.afterwards,
         changeSetId: run.changeSetId,
         outboundQueueId: out.outboundQueueId,
         actionLogId: out.actionLogId,

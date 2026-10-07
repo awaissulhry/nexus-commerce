@@ -165,6 +165,8 @@ export function CampaignBindingRail({ row, loading }: { row: BindingCampaignRow 
               const from = payloadEur(w.payloadBefore)
               const to = payloadEur(w.payloadAfter)
               const pending = w.amazonResponseStatus === 'PENDING'
+              // W4-12 — a write Nexus did not send (refused, no connection), cancelled or replaced before it was sent.
+              const notSent = w.amazonResponseStatus === 'SKIPPED' || w.amazonResponseStatus === 'CANCELLED' || w.amazonResponseStatus === 'SUPERSEDED'
               return (
                 <li key={w.id}>
                   <span className="t">{stamp(w.createdAt)}</span>
@@ -174,6 +176,7 @@ export function CampaignBindingRail({ row, loading }: { row: BindingCampaignRow 
                   </span>
                   {/* In-flight, NOT failed. */}
                   {pending && <span className="p" title="Sent to Amazon and not yet acknowledged. The value above is the intended one.">in flight</span>}
+                  {notSent && <span className="p" title="Never sent to Amazon: refused before it was sent, cancelled, or replaced by a newer write. The value above was intended only.">not sent</span>}
                 </li>
               )
             })}

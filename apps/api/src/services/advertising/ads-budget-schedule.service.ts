@@ -27,6 +27,12 @@ import type { BSApplied } from '../../jobs/ad-budget-schedule.job.js'
 export interface BudgetScheduleRestore { restored: number; kept: number; refused: number }
 
 /**
+ * W4-7 — what Claude's set-budget-schedule adds to a save the screen makes the same way: the approval its give-backs
+ * carry as their change set. Absent on every screen save (the routes pass none), so their writes are unchanged.
+ */
+export interface ScheduleWriteOptions { changeSetId?: string }
+
+/**
  * W4 (2026-08-20) — a schedule being DELETED or DISABLED mid-window must give the budgets back.
  *
  * The executor's revert is convergent ("outside every window → base"), so it only reverts
@@ -46,7 +52,7 @@ export interface BudgetScheduleRestore { restored: number; kept: number; refused
  *     must not take on its own. It is counted as `kept`.
  * Best-effort per campaign, same as dayparting's resume.
  */
-export async function restoreBudgetScheduleBase(s: { id: string; campaigns: unknown; lastApplied: unknown }): Promise<BudgetScheduleRestore> {
+export async function restoreBudgetScheduleBase(s: { id: string; campaigns: unknown; lastApplied: unknown }, opts: ScheduleWriteOptions = {}): Promise<BudgetScheduleRestore> {
   const camps = Array.isArray(s.campaigns) ? s.campaigns as Array<{ id: string; dailyBudget?: number | null }> : []
   const last = (s.lastApplied as Record<string, BSApplied> | null) ?? {}
   let restored = 0, kept = 0, refused = 0
@@ -76,6 +82,8 @@ export async function restoreBudgetScheduleBase(s: { id: string; campaigns: unkn
         applyImmediately: true,
         // 3b — the entry this gives back, for the history (the gate reads the action log, not this).
         ...(prev?.windowKey ? { evidence: { giveBackOf: prev.windowKey.replace(/#restore$/, '') } } : {}),
+        // W4-7 — a give-back a Claude request caused carries its approval (delivery and undo find it); the screen's carry none.
+        ...(opts.changeSetId ? { changeSetId: opts.changeSetId } : {}),
       })
       // `.ok` is three-way: `no_changes` is ok:true and enqueues nothing, so counting it as a
       // restore would overstate what this route gave back. Same branch as the executor's.
@@ -151,9 +159,10 @@ const MULTIPLIER_VALUE = { words: 'Multiplier (×)', range: DECIMAL_RANGE.multip
  * "Set budget 15,50" put €1 (Amazon's floor) on every picked campaign. Now "15,50" is 15.5, a value that cannot be
  * read or is out of range refuses the whole save with a sentence naming the window, and each stored value is the
  * number it says (every reader — the executor, tune-ad-engine, the screen — then sees a number). `type` is the
- * schedule's, from the body or the stored row. Anything that is not a list of windows is left as it was.
+ * schedule's, from the body or the stored row. Anything that is not a list of windows is left as it was. W4-7 — exported:
+ * set-budget-schedule refuses at its preview what the save would refuse, in the same words.
  */
-function readScheduleWindows(windows: unknown, type: unknown): { windows: unknown } | { invalid: BudgetScheduleInvalid } {
+export function readScheduleWindows(windows: unknown, type: unknown): { windows: unknown } | { invalid: BudgetScheduleInvalid } {
   if (!Array.isArray(windows)) return { windows }
   const out: unknown[] = []
   for (const w of windows as Array<Record<string, unknown> | null>) {
@@ -172,10 +181,14 @@ function readScheduleWindows(windows: unknown, type: unknown): { windows: unknow
  * a new schedule is switched on, so a campaign already in another switched-on schedule refuses the create.
  * The route checks the name (400) before it calls this.
  */
-export async function createBudgetSchedule(b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule } | { conflict: BudgetScheduleConflict } | { invalid: BudgetScheduleInvalid }> {
+export async function createBudgetSchedule(b: Record<string, unknown>, actor: AdsActor, opts: { enabled?: boolean } = {}): Promise<{ schedule: BudgetSchedule } | { conflict: BudgetScheduleConflict } | { invalid: BudgetScheduleInvalid }> {
   const read = readScheduleWindows(b.windows, b.type) // 4b — before anything else is checked or written
   if ('invalid' in read) return read
-  const conflict = await budgetScheduleConflict(b.campaigns, null)
+  // W4-7 — Claude's set-budget-schedule may create one switched off, in this one write (no cron tick between a create and
+  // a pause): a switched-off schedule holds nothing, so the one-schedule rule does not bind it until it is switched on.
+  // The route passes no `opts`: its creates are switched on, as before.
+  const on = opts.enabled !== false
+  const conflict = on ? await budgetScheduleConflict(b.campaigns, null) : null
   if (conflict) return { conflict }
   const schedule = await prisma.budgetSchedule.create({ data: {
     name: String(b.name), kind: 'BUDGET', type: (b.type as string) ?? 'CAMPAIGN_BUDGET',
@@ -186,6 +199,7 @@ export async function createBudgetSchedule(b: Record<string, unknown>, actor: Ad
     // BSP.2 (§2.2) — only an ARRAY of ranges is a blackout list. The old `?? []` let the
     // builder's boolean `false` through into a Json column documented as `[{start,end}]`.
     neverExpire: b.neverExpire !== false, excludeDates: Array.isArray(b.excludeDates) ? b.excludeDates : [],
+    ...(on ? {} : { enabled: false }),
     /**
      * 🔴 BSP-B5 sweep — `autoRefill` is NOT read from the body any more.
      *
@@ -215,7 +229,7 @@ export async function createBudgetSchedule(b: Record<string, unknown>, actor: Ad
  * `conflict` = 3c's one-schedule rule refused the edit (the route's 409) and nothing was changed; `invalid` = 4b, a
  * window value that cannot be read or is out of range (the route's 400), and nothing was changed.
  */
-export async function patchBudgetSchedule(id: string, b: Record<string, unknown>, actor: AdsActor): Promise<{ schedule: BudgetSchedule; restore: BudgetScheduleRestore | null } | { conflict: BudgetScheduleConflict } | { invalid: BudgetScheduleInvalid } | null> {
+export async function patchBudgetSchedule(id: string, b: Record<string, unknown>, actor: AdsActor, opts: ScheduleWriteOptions = {}): Promise<{ schedule: BudgetSchedule; restore: BudgetScheduleRestore | null } | { conflict: BudgetScheduleConflict } | { invalid: BudgetScheduleInvalid } | null> {
   const data: Record<string, unknown> = {}
   // BSP-B5 sweep — `autoRefill` dropped from the accepted set for the reason given in createBudgetSchedule.
   for (const k of ['name', 'type', 'campaigns', 'windows', 'timezone', 'chartPrefs', 'neverExpire', 'excludeDates', 'enabled']) if (b[k] !== undefined) data[k] = b[k]
@@ -256,8 +270,8 @@ export async function patchBudgetSchedule(id: string, b: Record<string, unknown>
     const staying = new Set(editsCampaigns ? campaignsOf(data.campaigns).map((c) => c.id) : [])
     const removed = editsCampaigns && before ? campaignsOf(before.campaigns).filter((c) => !staying.has(c.id)) : []
     const restore = before?.enabled !== true ? null
-      : data.enabled === false ? await restoreBudgetScheduleBase(before)
-      : removed.length > 0 ? await restoreBudgetScheduleBase({ id, campaigns: removed, lastApplied: before.lastApplied })
+      : data.enabled === false ? await restoreBudgetScheduleBase(before, opts)
+      : removed.length > 0 ? await restoreBudgetScheduleBase({ id, campaigns: removed, lastApplied: before.lastApplied }, opts)
       : null
     await prisma.advertisingActionLog.create({
       data: {
@@ -272,14 +286,14 @@ export async function patchBudgetSchedule(id: string, b: Record<string, unknown>
 }
 
 /** DELETE /advertising/budget-schedules/:id. null = not found (the route's 404). */
-export async function deleteBudgetSchedule(id: string, actor: AdsActor): Promise<{ ok: true; restore: BudgetScheduleRestore | null } | null> {
+export async function deleteBudgetSchedule(id: string, actor: AdsActor, opts: ScheduleWriteOptions = {}): Promise<{ ok: true; restore: BudgetScheduleRestore | null } | null> {
   try {
     const gone = await prisma.budgetSchedule.delete({ where: { id } })
     // W4 — restore base AFTER the delete (the executor can no longer see the row, so it cannot
     // re-apply mid-restore). Before this, deleting a schedule mid-window left the boosted
     // budget in place forever — the one writer that knew the base was gone.
     // BSP-P3 — and the outcome is reported rather than assumed.
-    const restore = gone.enabled ? await restoreBudgetScheduleBase(gone) : null
+    const restore = gone.enabled ? await restoreBudgetScheduleBase(gone, opts) : null
     await prisma.advertisingActionLog.create({
       data: {
         userId: actor,
@@ -290,4 +304,61 @@ export async function deleteBudgetSchedule(id: string, actor: AdsActor): Promise
     }).catch(() => { /* best-effort */ })
     return { ok: true, restore }
   } catch { return null }
+}
+
+// ── W4-7 — reads for Claude's set-budget-schedule and ad-budgets (nothing here writes) ──────────────────────
+
+/** One budget schedule as Claude reads it, or null (not found, or not a budget schedule). */
+export async function readBudgetSchedule(id: string) {
+  return prisma.budgetSchedule.findFirst({
+    where: { id, kind: 'BUDGET' },
+    select: {
+      id: true, name: true, type: true, enabled: true, campaigns: true, windows: true, timezone: true, startDate: true, endDate: true,
+      neverExpire: true, excludeDates: true, lastApplied: true, lastEvaluatedAt: true, createdAt: true, updatedAt: true,
+    },
+  })
+}
+export type ClaudeBudgetSchedule = NonNullable<Awaited<ReturnType<typeof readBudgetSchedule>>>
+
+/** Every budget schedule of the business, by name. */
+export async function listBudgetSchedules() {
+  return prisma.budgetSchedule.findMany({
+    where: { kind: 'BUDGET' },
+    orderBy: { name: 'asc' },
+    select: {
+      id: true, name: true, type: true, enabled: true, campaigns: true, windows: true, timezone: true, startDate: true, endDate: true,
+      neverExpire: true, excludeDates: true, lastApplied: true, lastEvaluatedAt: true, createdAt: true, updatedAt: true,
+    },
+  })
+}
+
+/** What one campaign would get back if the schedule let go of it now (a pause, a delete, taken out of it). */
+export interface ScheduleGiveBack {
+  campaignId: string
+  /** giveBack: back to its base; kept: someone moved it since the schedule set it (their change stays); nothing: it holds nothing. */
+  act: 'giveBack' | 'kept' | 'nothing'
+  liveCents: number | null
+  baseCents: number | null
+}
+
+/**
+ * What letting go of these campaigns would give back now, per campaign — the very check the give-back makes
+ * (`giveBackCheck`, ad-budget-schedule.job.ts), read only. `only`: the campaigns let go (default: all of them). An
+ * archived or missing campaign gets nothing back, as in restoreBudgetScheduleBase.
+ */
+export async function scheduleGiveBacks(s: { campaigns: unknown; lastApplied: unknown }, only?: readonly string[]): Promise<ScheduleGiveBack[]> {
+  const wanted = only ? new Set(only) : null
+  const camps = campaignsOf(s.campaigns).filter((c) => !wanted || wanted.has(c.id))
+  if (!camps.length) return []
+  const last = (s.lastApplied as Record<string, BSApplied> | null) ?? {}
+  const { giveBackCheck } = await import('../../jobs/ad-budget-schedule.job.js')
+  const rows = await prisma.campaign.findMany({ where: { id: { in: camps.map((c) => c.id) } }, select: { id: true, dailyBudget: true, status: true } })
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  return camps.map((c) => {
+    const campaign = byId.get(c.id)
+    if (!campaign || campaign.status === 'ARCHIVED') return { campaignId: c.id, act: 'nothing' as const, liveCents: null, baseCents: null }
+    const liveCents = Math.round(Number(campaign.dailyBudget ?? 0) * 100)
+    const check = giveBackCheck(last[c.id], liveCents, c.dailyBudget != null ? Math.round(Number(c.dailyBudget) * 100) : null)
+    return { campaignId: c.id, act: check.act, liveCents, baseCents: check.baseCents }
+  })
 }

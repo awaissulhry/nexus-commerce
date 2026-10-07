@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseActor, unexplainedUndoReason } from './ads-changes.service.js'
+import { opDeliveryState, parseActor, unexplainedUndoReason } from './ads-changes.service.js'
 
 /**
  * HX.4 — every row in the change feed is classified by parseActor, and getting it wrong is not
@@ -117,3 +117,15 @@ describe('7d unexplainedUndoReason — every not-undoable history row says why',
   })
 })
 
+
+describe('W4-12 — opDeliveryState: never APPLIED unless Amazon took it', () => {
+  it('maps each action log status to a delivery state', () => {
+    expect(opDeliveryState('SUCCESS')).toBe('APPLIED')
+    expect(opDeliveryState('FAILED')).toBe('FAILED')
+    expect(opDeliveryState('PENDING')).toBe('PENDING')
+    expect(opDeliveryState('SKIPPED')).toBe('CANCELLED')
+    expect(opDeliveryState('CANCELLED')).toBe('CANCELLED')
+    expect(opDeliveryState('SUPERSEDED')).toBe('SUPERSEDED')
+    expect(opDeliveryState(null)).toBe('PENDING')
+  })
+})

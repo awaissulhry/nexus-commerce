@@ -450,7 +450,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       // writer not yet emitting it, which is most of them; absent is normal.
       evidence: (o.evidence ?? null) as Record<string, unknown> | null,
       delivery: o.amazonResponseStatus
-        ? { state: o.amazonResponseStatus === 'SUCCESS' ? 'APPLIED' : o.amazonResponseStatus, attempts: 1, lastError: after.error ?? null }
+        ? { state: opDeliveryState(o.amazonResponseStatus), attempts: 1, lastError: after.error ?? null }
         : null,
       /**
        * ACR.4.3 — these were hard-coded `false` while a working undo endpoint sat behind them.
@@ -508,6 +508,7 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
     // carrying bidCents 26 → 20, same units, same entity id.
     { fieldMatches: (f) => f === 'bid', actionType: 'AD_BID_UPDATE' },
   ]
+  const unsettled = new Map<ChangeRow, NonNullable<ChangeRow['delivery']>>()
   for (const pair of PAIRED) {
     const cand = ops.filter((o) => o.actionType === pair.actionType)
     if (!cand.length) continue
@@ -522,7 +523,14 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       const err = (best.payloadAfter as { error?: string } | null)?.error ?? null
       // Delivery keeps the looser nearest-in-time match it has always had: mis-attributing a
       // delivery chip is cosmetic, and tightening it here would regress rows that resolve today.
-      r.delivery = { state: best.amazonResponseStatus === 'FAILED' ? 'FAILED' : 'APPLIED', attempts: 1, lastError: err }
+      // W4-12 — only a settled op says it here. A write still queued (PENDING), refused at the gate (SKIPPED) or replaced
+      // before it was sent (SUPERSEDED) read APPLIED; the queued-path join below has its real state and the gate's
+      // reason, and this op's own state is the fallback when that join finds nothing.
+      if (best.amazonResponseStatus === 'SUCCESS' || best.amazonResponseStatus === 'FAILED') {
+        r.delivery = { state: opDeliveryState(best.amazonResponseStatus), attempts: 1, lastError: err }
+      } else {
+        unsettled.set(r, { state: opDeliveryState(best.amazonResponseStatus), attempts: best.amazonResponseStatus === 'PENDING' ? 1 : 0, lastError: err })
+      }
 
       /**
        * The UNDO handle is held to a much higher bar than the delivery chip, because the two
@@ -603,6 +611,16 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
       }
     } catch { /* best-effort — delivery enrichment must never blank the feed */ }
   }
+  for (const [r, delivery] of unsettled) if (!r.delivery) r.delivery = delivery
+  // W4-12 — a change that never reached Amazon (refused, cancelled, replaced before it was sent, failed) offers no undo,
+  // whatever its op's status says: an older op stayed PENDING when its write was refused or cancelled.
+  for (const r of items) {
+    if (r.undoable && r.delivery && !LANDED_OR_IN_FLIGHT.has(r.delivery.state)) {
+      r.undoable = false
+      r.undoActionLogId = null
+      r.undoBlockedReason = 'This change never reached Amazon, so there is nothing to reverse.'
+    }
+  }
 
   // Post-filters: these read derived fields (source/origin/delivery), so they cannot be pushed
   // into the queries above.
@@ -639,3 +657,17 @@ export async function listChanges(opts: ListChangesOpts = {}): Promise<{ items: 
   // otherwise narrowing to one campaign empties the picker you would need to widen it again.
   return { items, count: items.length, from, to, members: groupMembers }
 }
+
+/**
+ * W4-12 — an action log's amazonResponseStatus as a delivery state (the AdMutation words): SUCCESS is APPLIED; a write
+ * Nexus did not send (SKIPPED: the gate refused it, or no connection) reads CANCELLED, as a cancelled one; anything else
+ * as it is (PENDING, FAILED, CANCELLED, SUPERSEDED). Never APPLIED unless Amazon took it.
+ */
+export function opDeliveryState(status: string | null): string {
+  if (status === 'SUCCESS') return 'APPLIED'
+  if (status === 'SKIPPED') return 'CANCELLED'
+  return status ?? 'PENDING'
+}
+
+/** The delivery states of a write that reached Amazon or may still: only these can offer an undo. */
+const LANDED_OR_IN_FLIGHT: ReadonlySet<string> = new Set(['APPLIED', 'PENDING', 'IN_FLIGHT'])

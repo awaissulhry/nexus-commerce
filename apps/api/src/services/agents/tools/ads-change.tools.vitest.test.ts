@@ -267,8 +267,9 @@ describe('D4 — bulk-ad-bid-change stop rows: the stop bid in one move, never a
     expect(r.preview).toMatchObject({ totals: { asked: 3, changing: 1, excluded: { atStop: 2 } }, stopNote: expect.stringMatching(/never a pause.*does not apply to a stop, and a stop never raises a bid/) })
     expect((r.preview as Row).changes).toEqual([expect.objectContaining({ targetId: 'd4-high', fromCents: 48, toCents: 10, stop: true })])
     expect((r.preview as Row).excludedLines.map((e: Row) => e.why)).toEqual(['already at or below its stop bid (a stop never raises a bid)', 'already at or below its stop bid (a stop never raises a bid)'])
-    // The same move asked as a bid is a step of its pace: one 20 % step.
-    expect(((await preview('bulk-ad-bid-change', { bids: [{ targetId: 'd4-high', bidCents: 10 }] })).preview as Row).changes).toEqual([expect.objectContaining({ toCents: 38 })])
+    // The same move asked as a bid is a step of its pace: one 20 % step by rule (W4-4: a person's approval sends it as
+    // asked, after the card's warning).
+    expect(((await preview('bulk-ad-bid-change', { bids: [{ targetId: 'd4-high', bidCents: 10 }] })).preview as Row).changes).toEqual([expect.objectContaining({ toCents: 10, byRuleCents: 38 })])
     // Nothing but stops below the stop bid: nothing to do.
     expect((await preview('bulk-ad-bid-change', { bids: [{ targetId: 'd4-bot', stop: true }] })).error).toMatch(/^Nothing would change: 1 already at or below its stop bid/)
     // A row is a bid or a stop, never both, never neither.

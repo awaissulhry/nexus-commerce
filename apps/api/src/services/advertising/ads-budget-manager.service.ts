@@ -376,3 +376,23 @@ export async function upsertBudgetPlan(input: UpsertBudgetPlan) {
 export async function deleteBudgetPlan(id: string) {
   return prisma.adBudgetPlan.delete({ where: { id } }).catch(() => null)
 }
+
+// ── W4-7 — reads for Claude's set-monthly-ad-budget and ad-budgets (nothing here writes) ──────────────────
+
+/** One market's plan for one month (the market-level row, tag null), as the Budget Manager reads it; null: none. */
+export async function budgetPlanFor(marketplace: string, month: string) {
+  return prisma.adBudgetPlan.findFirst({
+    where: { marketplace, month, tag: null },
+    select: { id: true, marketplace: true, month: true, monthlyBudgetCents: true, autoPacing: true, stopOverSpend: true, calendar: true, updatedAt: true, createdBy: true },
+  })
+}
+export type ClaudeBudgetPlan = NonNullable<Awaited<ReturnType<typeof budgetPlanFor>>>
+
+/** The market-level plans of these months (optionally one market), by market then month. */
+export async function budgetPlansOf(months: readonly string[], marketplace?: string | null) {
+  return prisma.adBudgetPlan.findMany({
+    where: { month: { in: [...months] }, tag: null, ...(marketplace ? { marketplace } : {}) },
+    orderBy: [{ marketplace: 'asc' }, { month: 'asc' }],
+    select: { id: true, marketplace: true, month: true, monthlyBudgetCents: true, autoPacing: true, stopOverSpend: true, calendar: true, updatedAt: true, createdBy: true },
+  })
+}

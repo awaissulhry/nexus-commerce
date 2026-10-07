@@ -303,6 +303,13 @@ export interface AgentTool {
    */
   reversibility?: Reversibility
   /**
+   * W4-12 — what ONE request of this kind does, when its arguments make it narrower than the kind (`openWorld`,
+   * `reversibility` state the kind's worst case): e.g. a playbook adopt changes Nexus only and is undone in full. Read
+   * from the arguments by the tool's own code, never from the preview; it can only narrow the reach (openWorld false).
+   * Claude's answer (consequences) reads it; what the Approvals page and the trust gate decide is unchanged.
+   */
+  consequencesFor?: (args: Record<string, unknown>) => { openWorld?: false; reversibility?: Reversibility } | null
+  /**
    * C7 — arguments that are secrets (an authenticator code): never written to the run record, never echoed back.
    */
   secretArgs?: readonly string[]

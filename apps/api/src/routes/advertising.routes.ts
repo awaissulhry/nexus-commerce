@@ -71,11 +71,8 @@ import { attachSourceLinks, familyOfRow, projectBidCents, muteSuggestion, unmute
 import { applySuggestion, dismissSuggestion, restoreSuggestion, decideSuggestionsBulk, type ApplyOverride, type BulkDecideInput } from '../services/advertising/ads-suggestion-decide.service.js'
 import type { AdsRuleCreateInput, AdsRuleUpdateInput } from '../services/advertising/ads-rule-crud.service.js'
 import type { KeywordProtectionInput } from '../services/advertising/ads-guardrail.service.js'
+import type { PortfolioUpdateBody } from '../services/advertising/ads-portfolio.service.js'
 import { answer } from '../services/automation/service-outcome.js'
-import {
-  rebalanceAndAudit,
-  computeRebalance,
-} from '../services/advertising/budget-pool-rebalancer.service.js'
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
 // ADM-P6/DC — THE definition of ad-attributed sales. Fourteen readers open-coded it as
 // sales7dCents + sales14dCents, which double-counted the moment the 14-day window was populated.
@@ -750,32 +747,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const b = request.body as { campaignIds?: string[] }
     const ids = Array.isArray(b?.campaignIds) ? b.campaignIds.slice(0, 200) : []
     if (ids.length === 0) { reply.code(400); return { error: 'campaignIds required' } }
-    const rows = await prisma.campaign.findMany({
-      where: { id: { in: ids } },
-      select: { id: true, name: true, dailyBudget: true, budgetBaselineCents: true },
-    })
-    const actor = actorFromHeaders(request.headers as Record<string, unknown>)
-    const { updateCampaignWithSync } = await import('../services/advertising/ads-mutation.service.js')
-    const results: Array<{ id: string; name: string; outcome: 'restored' | 'skipped' | 'failed'; why?: string; fromCents?: number; toCents?: number }> = []
-    for (const c of rows) {
-      const currentCents = Math.round(Number(c.dailyBudget) * 100)
-      if (c.budgetBaselineCents == null) { results.push({ id: c.id, name: c.name, outcome: 'skipped', why: 'no baseline captured' }); continue }
-      if (c.budgetBaselineCents === currentCents) { results.push({ id: c.id, name: c.name, outcome: 'skipped', why: 'already at baseline' }); continue }
-      try {
-        const res = await updateCampaignWithSync({
-          campaignId: c.id,
-          patch: { dailyBudget: c.budgetBaselineCents / 100 },
-          actor,
-          reason: `restore to baseline €${(c.budgetBaselineCents / 100).toFixed(2)} (was €${(currentCents / 100).toFixed(2)})`,
-        } as never)
-        const ok = (res as { ok?: boolean }).ok !== false
-        results.push({ id: c.id, name: c.name, outcome: ok ? 'restored' : 'failed', why: (res as { error?: string }).error, fromCents: currentCents, toCents: c.budgetBaselineCents })
-      } catch (e) {
-        results.push({ id: c.id, name: c.name, outcome: 'failed', why: (e as Error).message, fromCents: currentCents, toCents: c.budgetBaselineCents })
-      }
-    }
-    const restored = results.filter((r) => r.outcome === 'restored').length
-    return { ok: true, restored, skipped: results.filter((r) => r.outcome === 'skipped').length, failed: results.filter((r) => r.outcome === 'failed').length, results, note: 'Each write passes the gate; acceptance here means ENQUEUED, and the worker may still refuse it — the change log is the delivery record.' }
+    // W4-7 — moved unchanged into ads-budget-baseline.service.ts (restore-budget-baselines runs the same code).
+    const { restoreBudgetBaselines } = await import('../services/advertising/ads-budget-baseline.service.js')
+    return restoreBudgetBaselines(ids, actorFromHeaders(request.headers as Record<string, unknown>))
   })
 
   /**
@@ -8681,57 +8655,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const b = request.body as Record<string, unknown>
     // Lightweight PATCH (e.g. bulk enable/pause) — no campaignIds → just update group fields + members' enabled.
+    // W4-1 — moved unchanged into rank-schedule-group.service.ts, which Claude's set-hourly-bid-plan also uses.
     if (!Array.isArray(b?.campaignIds)) {
-      const data: Record<string, unknown> = {}
-      for (const k of ['name', 'windows', 'defaultTargetKey', 'targetOverrides', 'enabled', 'marketplace', 'portfolioId', 'timezone']) if (b[k] !== undefined) data[k] = b[k]
-      if (!Object.keys(data).length) { reply.status(400); return { error: 'nothing to update' } }
-      // RDX/B2 — a rename must not manufacture the duplicate DPS.1 spent a phase eliminating.
-      // saveRankScheduleGroup adopts an existing (name, portfolioId) group rather than minting a
-      // rival, but this lightweight PATCH bypasses that path entirely — so without this guard,
-      // renaming "IT AIRMESH 2" to "IT AIRMESH" would recreate the exact collision by hand.
-      if (typeof data.name === 'string') {
-        const nm = String(data.name).trim()
-        if (!nm) { reply.status(400); return { error: 'name is required' } }
-        data.name = nm
-        const self = await prisma.rankScheduleGroup.findUnique({ where: { id }, select: { portfolioId: true } })
-        const twin = await prisma.rankScheduleGroup.findFirst({
-          where: { name: nm, portfolioId: self?.portfolioId ?? null, NOT: { id } },
-          select: { id: true },
-        })
-        if (twin) { reply.status(409); return { error: `Another schedule in this scope is already called "${nm}".` } }
-      }
-      try {
-        const g = await prisma.rankScheduleGroup.update({ where: { id }, data })
-        if (b.enabled !== undefined) await prisma.adSchedule.updateMany({ where: { groupId: id }, data: { enabled: !!b.enabled } })
-        // 2a (review 3.2) — pausing gives back what the group floored on every member, once the members say paused.
-        let release: unknown
-        if (b.enabled === false) {
-          const { releaseGroupMembers } = await import('../services/advertising/rank-release.service.js')
-          release = await releaseGroupMembers(id, 'its rank schedule was paused')
-        }
-        /**
-         * RD.P7 — the most consequential click on the page (Enable/Pause) took this lightweight
-         * path and wrote NO version, so the history could not answer "who paused this and when".
-         * Snapshot with the same meaningful-change comparison saveRankScheduleGroup uses; a
-         * failed snapshot warns and never fails the write it describes.
-         */
-        try {
-          const members = await prisma.adSchedule.count({ where: { groupId: id } })
-          const last = await prisma.rankScheduleVersion.findFirst({ where: { groupId: id }, orderBy: { createdAt: 'desc' }, select: { name: true, windows: true, defaultTargetKey: true, campaignCount: true, enabled: true } })
-          const changed = !last
-            || last.name !== g.name
-            || (last.defaultTargetKey ?? null) !== (g.defaultTargetKey ?? null)
-            || last.campaignCount !== members
-            || last.enabled !== g.enabled
-            || JSON.stringify(last.windows) !== JSON.stringify(g.windows)
-          if (changed) {
-            await prisma.rankScheduleVersion.create({
-              data: { groupId: id, name: g.name, windows: g.windows as never, defaultTargetKey: g.defaultTargetKey ?? null, campaignCount: members, enabled: g.enabled, changedBy: actorFromHeaders(request.headers as Record<string, unknown>) },
-            })
-          }
-        } catch (e) { logger.warn('[RD.P7] version snapshot failed on lightweight PATCH', { id, error: (e as Error).message }) }
-        return release ? { ...g, release } : g
-      } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
+      const { patchRankScheduleGroup } = await import('../services/advertising/rank-schedule-group.service.js')
+      return answer(reply, await patchRankScheduleGroup(id, b, actorFromHeaders(request.headers as Record<string, unknown>)))
     }
     if (b.name !== undefined && !String(b.name).trim()) { reply.status(400); return { error: 'name is required' } }
     const { saveRankScheduleGroup } = await import('../services/advertising/ads-create.service.js')
@@ -9124,25 +9051,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   // Portfolios P2/P3 — rename / archive / set budget-cap (gated live PUT to Amazon + local mirror).
   fastify.patch('/advertising/portfolios/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const body = request.body as {
-      name?: string
-      state?: 'enabled' | 'paused' | 'archived'
-      budget?: { amount?: number; currencyCode?: string; policy?: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string }
-    }
-    const name = body.name?.trim() || undefined
-    let budget: { amount: number; currencyCode: string; policy: 'monthlyRecurring' | 'dateRange'; startDate?: string; endDate?: string } | undefined
-    if (body.budget) {
-      const b = body.budget
-      if (!(typeof b.amount === 'number' && b.amount > 0) || (b.policy !== 'monthlyRecurring' && b.policy !== 'dateRange')) {
-        reply.status(400); return { error: 'budget requires amount > 0 and policy monthlyRecurring|dateRange' }
-      }
-      if (b.policy === 'dateRange' && (!b.startDate || !b.endDate)) { reply.status(400); return { error: 'dateRange budget requires startDate + endDate' } }
-      budget = { amount: b.amount, currencyCode: b.currencyCode || 'EUR', policy: b.policy, startDate: b.startDate, endDate: b.endDate }
-    }
-    if (name == null && body.state == null && !budget) { reply.status(400); return { error: 'name, state or budget required' } }
-    const { updatePortfolioById } = await import('../services/advertising/ads-portfolio.service.js')
+    // W4-3 — the body check lives in the service (portfolioUpdateOf), shared with Claude's set-portfolio.
+    const { portfolioUpdateOf, updatePortfolioById } = await import('../services/advertising/ads-portfolio.service.js')
+    const asked = portfolioUpdateOf(request.body as PortfolioUpdateBody)
+    if ('error' in asked) { reply.status(400); return { error: asked.error } }
+    const { name, state, budget } = asked.value
     try {
-      const r = await updatePortfolioById({ portfolioId: id, name, state: body.state, budget })
+      const r = await updatePortfolioById({ portfolioId: id, name, state, budget })
       if (!r.ok) reply.status(r.error === 'portfolio not found' ? 404 : r.mode === 'gated' ? 409 : 500)
       return r
     } catch (e) { reply.status(500); return { error: (e as Error)?.message ?? 'update failed' } }
@@ -10014,53 +9929,25 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   })
 
   // ── AD.5: BudgetPool routes ─────────────────────────────────────────
+  // W4-7 — each route's logic moved unchanged into ads-budget-pool.service.ts (Claude's set-budget-pool runs the same
+  // code); the routes parse, call it and answer as before (budget-pool-route-parity.vitest.test.ts).
 
   fastify.get('/advertising/budget-pools', async (_request, reply) => {
-    const items = await prisma.budgetPool.findMany({
-      orderBy: [{ enabled: 'desc' }, { name: 'asc' }],
-      include: {
-        allocations: {
-          select: {
-            id: true,
-            marketplace: true,
-            campaignId: true,
-            targetSharePct: true,
-            minDailyBudgetCents: true,
-            maxDailyBudgetCents: true,
-          },
-        },
-        _count: { select: { allocations: true, rebalances: true } },
-      },
-    })
+    const { listBudgetPools } = await import('../services/advertising/ads-budget-pool.service.js')
+    const out = await listBudgetPools()
     reply.header('Cache-Control', 'private, max-age=30')
-    return { items, count: items.length }
+    return out
   })
 
   fastify.get('/advertising/budget-pools/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const pool = await prisma.budgetPool.findUnique({
-      where: { id },
-      include: {
-        allocations: {
-          orderBy: [{ marketplace: 'asc' }],
-        },
-        rebalances: { orderBy: { createdAt: 'desc' }, take: 50 },
-      },
-    })
-    if (!pool) {
+    const { getBudgetPool } = await import('../services/advertising/ads-budget-pool.service.js')
+    const out = await getBudgetPool(id)
+    if (!out) {
       reply.code(404)
       return { error: 'not_found' }
     }
-    // Hydrate per-allocation current campaign budget so the visualizer
-    // can render "current vs target" without a second round-trip.
-    const campaignIds = pool.allocations
-      .map((a) => a.campaignId)
-      .filter((id): id is string => !!id)
-    const campaigns = await prisma.campaign.findMany({
-      where: { id: { in: campaignIds } },
-      select: { id: true, name: true, dailyBudget: true, status: true, marketplace: true },
-    })
-    return { pool, campaigns }
+    return out
   })
 
   fastify.post('/advertising/budget-pools', async (request, reply) => {
@@ -10073,25 +9960,13 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       coolDownMinutes?: number
       maxShiftPerRebalancePct?: number
     }
-    if (!body?.name || !body.totalDailyBudgetCents) {
+    const { createBudgetPool } = await import('../services/advertising/ads-budget-pool.service.js')
+    const out = await createBudgetPool(body)
+    if ('invalid' in out) {
       reply.code(400)
-      return { error: 'name + totalDailyBudgetCents required' }
+      return { error: out.invalid }
     }
-    const pool = await prisma.budgetPool.create({
-      data: {
-        name: body.name,
-        description: body.description ?? null,
-        currency: body.currency ?? 'EUR',
-        totalDailyBudgetCents: body.totalDailyBudgetCents,
-        strategy: body.strategy ?? 'STATIC',
-        coolDownMinutes: body.coolDownMinutes ?? 60,
-        maxShiftPerRebalancePct: body.maxShiftPerRebalancePct ?? 20,
-        enabled: false,
-        dryRun: true,
-        createdBy: 'user',
-      },
-    })
-    return { pool }
+    return out
   })
 
   fastify.patch('/advertising/budget-pools/:id', async (request, reply) => {
@@ -10118,12 +9993,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete('/advertising/budget-pools/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const existing = await prisma.budgetPool.findUnique({ where: { id } })
-    if (!existing) {
+    const { deleteBudgetPool } = await import('../services/advertising/ads-budget-pool.service.js')
+    if (!(await deleteBudgetPool(id))) {
       reply.code(404)
       return { error: 'not_found' }
     }
-    await prisma.budgetPool.delete({ where: { id } })
     return { ok: true }
   })
 
@@ -10136,49 +10010,24 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       minDailyBudgetCents?: number
       maxDailyBudgetCents?: number
     }
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: body.campaignId },
-      select: { id: true, marketplace: true },
-    })
-    if (!campaign?.marketplace) {
-      reply.code(400)
-      return { error: 'campaign_not_found_or_no_marketplace' }
+    const { addPoolAllocation } = await import('../services/advertising/ads-budget-pool.service.js')
+    const out = await addPoolAllocation(id, body)
+    if ('error' in out) {
+      reply.code(out.status)
+      return { error: out.error }
     }
-    try {
-      const allocation = await prisma.budgetPoolAllocation.create({
-        data: {
-          budgetPoolId: id,
-          marketplace: campaign.marketplace,
-          campaignId: campaign.id,
-          targetSharePct: body.targetSharePct ?? 0,
-          minDailyBudgetCents: body.minDailyBudgetCents ?? 100,
-          maxDailyBudgetCents: body.maxDailyBudgetCents ?? null,
-        },
-      })
-      return { allocation }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      if (msg.includes('Unique constraint')) {
-        reply.code(409)
-        return { error: 'campaign_already_in_a_pool' }
-      }
-      reply.code(500)
-      return { error: msg }
-    }
+    return out
   })
 
   fastify.delete(
     '/advertising/budget-pools/:id/allocations/:allocationId',
     async (request, reply) => {
       const { id, allocationId } = request.params as { id: string; allocationId: string }
-      const existing = await prisma.budgetPoolAllocation.findUnique({
-        where: { id: allocationId },
-      })
-      if (!existing || existing.budgetPoolId !== id) {
+      const { removePoolAllocation } = await import('../services/advertising/ads-budget-pool.service.js')
+      if (!(await removePoolAllocation(id, allocationId))) {
         reply.code(404)
         return { error: 'not_found' }
       }
-      await prisma.budgetPoolAllocation.delete({ where: { id: allocationId } })
       return { ok: true }
     },
   )
@@ -10190,38 +10039,23 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const q = request.query as { preview?: string }
     const actor = actorFromHeaders(request.headers as Record<string, unknown>)
-    if (q.preview === '1') {
-      const outcome = await computeRebalance({
-        poolId: id,
-        triggeredBy: `user:${actor.slice(5)}`,
-        ignoreCoolDown: true,
-      })
-      return { mode: 'preview', outcome }
-    }
-    const outcome = await rebalanceAndAudit({
-      poolId: id,
-      triggeredBy: `user:${actor.slice(5)}`,
-      ignoreCoolDown: true,
-      actor,
-    })
-    if (outcome.skipped) {
+    const { rebalanceBudgetPool } = await import('../services/advertising/ads-budget-pool.service.js')
+    const out = await rebalanceBudgetPool(id, { preview: q.preview === '1', actor })
+    if ('skipped' in out) {
       reply.code(409)
-      return { error: 'skipped', reason: outcome.skipped }
+      return { error: 'skipped', reason: out.skipped }
     }
-    return { mode: 'committed', outcome }
+    return out
   })
 
   fastify.get('/advertising/budget-pools/:id/history', async (request, reply) => {
     const { id } = request.params as { id: string }
     const q = request.query as { limit?: string }
     const limit = Math.min(Number(q.limit) || 50, 200)
-    const items = await prisma.budgetPoolRebalance.findMany({
-      where: { budgetPoolId: id },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    })
+    const { budgetPoolHistory } = await import('../services/advertising/ads-budget-pool.service.js')
+    const out = await budgetPoolHistory(id, limit)
     reply.header('Cache-Control', 'private, max-age=15')
-    return { items, count: items.length }
+    return out
   })
 
   fastify.get('/advertising/actions/:executionId/log', async (request, reply) => {
