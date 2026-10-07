@@ -297,8 +297,8 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         getGridApi()?.refreshCells({ force: true });
     }, [formulas.exprFor, formulas.errorFor, gridReady]);
     /* Owner 2026-10-07 (Option A) — the Shared product page lists the family in the Matrix's order (`useFamilyRank`). */
-    const familyRank = useFamilyRank(productId, sheet?.rows ?? NO_ROWS, sheet?.columns);
-    const rows = useMemo(() => (sheet ? sortByFamilyRank(sheet.rows, familyRank) : []), [sheet, familyRank]);
+    const familyOrder = useFamilyRank(productId, sheet?.rows ?? NO_ROWS, sheet?.columns);
+    const rows = useMemo(() => (sheet ? sortByFamilyRank(sheet.rows, familyOrder.rank) : []), [sheet, familyOrder.rank]);
     const { saveStatus, refused, refusedRowIds } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     savedAtRef.current = saveStatus.saved;
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */
@@ -558,6 +558,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         if (!impact) {
             newRows.store.clear();
             reload();
+            familyOrder.reload();
             refreshReadiness();
             return;
         }
@@ -567,8 +568,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         writer.discard();
         newRows.store.clear();
         reload();
+        familyOrder.reload();
         refreshReadiness();
-    }, [writer, refused, refusedRowIds, sheet, reporter, reload, reloadConfirm, refreshReadiness, newRows.store]);
+    }, [writer, refused, refusedRowIds, sheet, reporter, reload, familyOrder.reload, reloadConfirm, refreshReadiness, newRows.store]);
     /** "Refresh progress": the rows' own bars (a quiet re-read — edits in flight stay) and the channel · market bars. */
     const refreshProgress = useCallback(() => { refresh(); refreshReadiness(); }, [refresh, refreshReadiness]);
     const progressMenu = useCallback(() => {

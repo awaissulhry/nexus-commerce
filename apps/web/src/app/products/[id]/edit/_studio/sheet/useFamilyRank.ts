@@ -10,15 +10,34 @@
  * Until the family read answers, or when it fails, the rank is built from no axes: the parent first, then the SKU —
  * what the Matrix shows in that moment too.
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
 import { useStudioScope } from '../contracts'
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
 import { familyRank, familyReadScope, type FamilyAxisColumn, type FamilyOrderRow } from './familyOrder'
 
-export function useFamilyRank(productId: string, rows: readonly FamilyOrderRow[], columns: readonly FamilyAxisColumn[] | undefined): ReadonlyMap<string, number> {
+export interface FamilyRankRead {
+  /** Product id → place in the family order. */
+  rank: ReadonlyMap<string, number>
+  /** Read the family again — the page's Reload calls it, as the Matrix's Reload reads its family again. */
+  reload: () => void
+}
+
+export function useFamilyRank(productId: string, rows: readonly FamilyOrderRow[], columns: readonly FamilyAxisColumn[] | undefined): FamilyRankRead {
   const { market, locale } = familyReadScope(useStudioScope())
-  const { projections } = useFamilyProjections(productId, market, locale)
-  return useMemo(() => familyRank(projections, columns ?? [], rows), [projections, columns, rows])
+  const { projections, reload } = useFamilyProjections(productId, market, locale)
+  /* A row added, deleted or imported changes the family: read it again, so a new variation takes its place at once.
+     Not on every save — the family read builds a whole Shared sheet on the server. An empty list (the sheet between two
+     reads) says nothing about the family and is skipped. */
+  const members = useMemo(() => [...new Set(rows.map((r) => r.id))].sort().join('\n'), [rows])
+  const seen = useRef('')
+  useEffect(() => {
+    if (!members || seen.current === members) return
+    const known = seen.current
+    seen.current = members
+    if (known) reload()
+  }, [members, reload])
+  const rank = useMemo(() => familyRank(projections, columns ?? [], rows), [projections, columns, rows])
+  return { rank, reload }
 }

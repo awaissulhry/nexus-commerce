@@ -215,8 +215,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
        unchanged, never make AG re-render it, and an edit settled in place (`savedCellPatch.ts`) survives them. */
     const rowObjects = useRef(new WeakMap<object, ChannelSheetRow>());
     /* Owner 2026-10-07 (Option A) — the rows inside each alias block follow the Matrix's family order (`useFamilyRank`). */
-    const familyRank = useFamilyRank(productId, data?.rows ?? NO_ROWS, data?.columns);
-    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current), familyRank) : []), [data, familyRank]);
+    /* Ranked from every row the sheet read, before a listing is chosen: picking one alias must not read the family again. */
+    const familyOrder = useFamilyRank(productId, loadedData?.rows ?? NO_ROWS, loadedData?.columns);
+    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current), familyOrder.rank) : []), [data, familyOrder.rank]);
     // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
     const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
     const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
@@ -513,8 +514,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         writer.discard();
         newRows.store.clear();
         reload();
+        familyOrder.reload();
         refreshReadiness();
-    }, [writer, refused, rows, channel, marketplace, accountId, locale, writeInstanceId, reload, reloadConfirm.ask, refreshReadiness, newRows.store]);
+    }, [writer, refused, rows, channel, marketplace, accountId, locale, writeInstanceId, reload, familyOrder.reload, reloadConfirm.ask, refreshReadiness, newRows.store]);
     /** "Refresh progress": the rows' bars (a quiet re-read — edits in flight stay) and the scope's readiness. */
     const refreshProgress = useCallback(() => {
         refreshReadiness();
