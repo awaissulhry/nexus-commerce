@@ -82,6 +82,8 @@ import { NewRowsControl } from '../newRows/NewRowsControl';
 import { newRowsContextMenu, newRowsGridKey, newRowsPaste, useNewRows, variationTarget, type NewRowsStore } from '../newRows/useNewRows';
 import { lockedOnNewRows, newRowRefusal, sharedNewRow, unsavedOf, withNewRows } from '../newRows/newRowsGrid';
 import type { NewRowKind } from '../newRows/newRows';
+import { sortByFamilyRank } from '../familyOrder';
+import { useFamilyRank } from '../useFamilyRank';
 /** Progress columns — a coordinate column's key, from its readiness column id (`ready:AMAZON:IT:acc:it` → `progress:…`). */
 /* A coordinate's progress column keeps ONE id whatever language is pressed (the trailing `:<language>` is dropped), so a
    layout that hides or pins it keeps doing so in every language. */
@@ -127,6 +129,8 @@ interface SheetPageState {
 }
 const NO_VARIATION_AXES: readonly string[] = [];
 const NO_KEYS: readonly string[] = [];
+/** No rows yet — one constant, so the family rank is not rebuilt on every render while the sheet loads. */
+const NO_ROWS: readonly StudioRow[] = [];
 /** What the Shared scope is called on screen (the scope chip, the progress column). */
 const SHARED_SCOPE_LABEL = 'Shared product';
 /** Build shape v2, P9 — the shared scope reads the waiting Status and Action values of every market of the family. */
@@ -292,7 +296,9 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             return;
         getGridApi()?.refreshCells({ force: true });
     }, [formulas.exprFor, formulas.errorFor, gridReady]);
-    const rows = useMemo(() => sheet?.rows ?? [], [sheet]);
+    /* Owner 2026-10-07 (Option A) — the Shared product page lists the family in the Matrix's order (`useFamilyRank`). */
+    const familyRank = useFamilyRank(productId, sheet?.rows ?? NO_ROWS, sheet?.columns);
+    const rows = useMemo(() => (sheet ? sortByFamilyRank(sheet.rows, familyRank) : []), [sheet, familyRank]);
     const { saveStatus, refused, refusedRowIds } = useSheetSaveStatus(writer, tracker, rows, sheet?.columns);
     savedAtRef.current = saveStatus.saved;
     /* ⌘Z undoes a whole operation (a fill, a paste) in one step and one save, and still works after the sheet re-reads. */

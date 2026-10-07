@@ -103,7 +103,7 @@ import { useDeleteRows } from '../deleteRows/useDeleteRows';
 import { FamilySelectionVerbs } from '../master/FamilySelectionBar';
 import type { PublishActionChange } from '@nexus/shared/publish-actions';
 import { ExpandSlot, SELLING_ROW_MARK_CLASS, UNSAVED_ROW_CLASS, isUnsavedRowData, rowCarriesInactiveMark } from '@/design-system/grid';
-import { aliasKeyOf, wireAliasKey, type ChannelScopeChannel, type ChannelSheetRow, type StudioCellValue } from './types';
+import { aliasKeyOf, wireAliasKey, type ChannelScopeChannel, type ChannelSheetRow, type StudioCellValue, type StudioRow } from './types';
 import './channel-sheet.css';
 import { buildSheetColumns } from '../buildSheetColumns';
 import { useSheetControl } from '../useSheetControl';
@@ -115,8 +115,11 @@ import { NewRowsControl } from '../newRows/NewRowsControl';
 import { aliasTarget, newRowsContextMenu, newRowsGridKey, newRowsPaste, useNewRows, variationTarget } from '../newRows/useNewRows';
 import { channelNewRow, lockedOnNewRows, newRowRefusal, unsavedOf, withNewRows } from '../newRows/newRowsGrid';
 import type { NewRowKind } from '../newRows/newRows';
+import { useFamilyRank } from '../useFamilyRank';
 /** Add rows — a channel scope adds variations or listings (aliases). */
 const CHANNEL_ROW_KINDS: readonly NewRowKind[] = ['variation', 'alias'];
+/** No rows yet — one constant, so the family rank is not rebuilt on every render while the sheet loads. */
+const NO_ROWS: readonly StudioRow[] = [];
 export interface ChannelSheetProps {
     shopifySchema?: import('@nexus/shared/shopify-linked-products').ShopifyStoreSchema | null;
     accountId?: string;
@@ -211,7 +214,9 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
     /* P2 (I4-4) — a server row keeps its grid row object: reference names landing, or a read that returns the row
        unchanged, never make AG re-render it, and an edit settled in place (`savedCellPatch.ts`) survives them. */
     const rowObjects = useRef(new WeakMap<object, ChannelSheetRow>());
-    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current)) : []), [data]);
+    /* Owner 2026-10-07 (Option A) — the rows inside each alias block follow the Matrix's family order (`useFamilyRank`). */
+    const familyRank = useFamilyRank(productId, data?.rows ?? NO_ROWS, data?.columns);
+    const rows = useMemo(() => (data ? orderRows(withRowIdentity(data.rows, data.aliases, rowObjects.current), familyRank) : []), [data, familyRank]);
     // Read live (Owner, 2026-09-26) — one ⋯ item and its drawer; everything else lives in _studio/live-read.
     const liveRead = useLiveRead({ productId, channel, channelLabel: data?.scope.label ?? channel, marketplace, accountId, aliasKey: selectedAlias, rows });
     const channelRefusal = (key: string, row: ChannelSheetRow): string | null => {
