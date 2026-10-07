@@ -199,6 +199,33 @@ export interface ApplyPlan {
    * the structure" never quietly means "we copied most of the structure".
    */
   excluded: { keywords: number; negatives: number; productTargets: number; autoClauses: number }
+  /** W4-10 — present only for a copy given translations: each term from → to, and what is missing or unused. */
+  translation?: TranslationReport
+}
+
+/**
+ * W4-10 — a copy into another market's language: what one source keyword (or negative keyword) becomes. `from` is the
+ * term as the source campaigns hold it; `to` is the term in the target market's language, or `keep` copies it as it is
+ * (a brand or model name shoppers there search for unchanged). The product swap applies to both, exactly as to a term
+ * copied as it is: a source product token left in `to` becomes the target product's.
+ */
+export interface TermTranslation { from: string; to?: string; keep?: boolean }
+export interface TranslationRules {
+  keywords: TermTranslation[]
+  negatives: TermTranslation[]
+}
+
+/**
+ * W4-10 — what the translations did. Every keyword and negative keyword the copy carries must be translated or kept:
+ * one with neither is `missing` and blocks; a translation that names no term of the source is `unused` and blocks (a
+ * typo would otherwise be ignored and its term copied in the source's language). A term of an ad group that became the
+ * same keyword as an earlier one there is created once, at the earlier one's bid (`merged`: `keptFrom` is that one).
+ */
+export interface TranslationReport {
+  terms: Array<{ from: string; to: string; negative: boolean; kept: boolean }>
+  missing: Array<{ term: string; negative: boolean }>
+  unused: Array<{ term: string; negative: boolean }>
+  merged: Array<{ from: string; to: string; negative: boolean; keptFrom: string }>
 }
 
 /**
@@ -250,6 +277,12 @@ export interface ApplyOptions {
    * re-running is legitimate after a rollback, or to add a second market.
    */
   priorRun?: { when: string; status: string; campaigns: number }
+  /**
+   * W4-10 — a copy into another market's language (Claude's replicate-ad-structure): every keyword and negative keyword
+   * translated or kept, by its text in the source. A translated keyword is classified again against the target product
+   * (`edited`), as a keyword rewritten in the review step is. Absent: every term is copied as it is (the screen).
+   */
+  translations?: TranslationRules
 }
 
 /**
@@ -340,6 +373,82 @@ export function materialise(pattern: string, productToken: string): string {
   return pattern.split(PRODUCT_TOKEN).join(productToken)
 }
 
+/** W4-10 — a term's spacing as Amazon keeps it: trimmed, one space between words. */
+const spaced = (s: string): string => s.trim().replace(/\s+/g, ' ')
+/** W4-10 — a term's key for matching: its spacing and case aside ("Moto  Jacket" is "moto jacket"). */
+const termKey = (s: string): string => spaced(s).toLowerCase()
+
+/**
+ * W4-10 — the product's name swapped in a term Claude wrote: the source product's name only as a WORD of its own, in any
+ * case (letters and digits of any script bound it), so a name inside another word ("aria" in "variante") is left alone.
+ */
+export function swapProductWord(text: string, from: string, to: string): string {
+  if (!from.trim()) return text
+  const word = from.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return text.replace(new RegExp(`(^|[^\\p{L}\\p{N}])${word}(?=[^\\p{L}\\p{N}]|$)`, 'giu'), (_m, before: string) => `${before}${to}`)
+}
+
+/**
+ * W4-10 — the translations as the build reads them: each keyword and negative keyword looked up by its text in the
+ * source (case and spacing aside), and the report of what was translated, kept, missing, unused or merged.
+ */
+function translatorOf(rules: TranslationRules, sourceToken: string) {
+  const byText = (list: TermTranslation[]) => new Map(list.map((t) => [termKey(t.from), t] as const))
+  const lists = { keywords: byText(rules.keywords), negatives: byText(rules.negatives) }
+  const used = { keywords: new Set<string>(), negatives: new Set<string>() }
+  const side = (negative: boolean): 'negatives' | 'keywords' => (negative ? 'negatives' : 'keywords')
+  const terms = new Map<string, TranslationReport['terms'][number]>()
+  const missing = new Map<string, TranslationReport['missing'][number]>()
+  const merged: TranslationReport['merged'] = []
+  const sourceOf = new Map<string, string>()
+  return {
+    /** The term as the source holds it, and the translation given for it (null: none). */
+    lookup(pattern: string, negative: boolean) {
+      const source = materialise(pattern, sourceToken)
+      const entry = lists[side(negative)].get(termKey(source)) ?? null
+      if (entry) used[side(negative)].add(termKey(source))
+      return { source, entry }
+    },
+    /** A term the copy carries: what it became, or that it has neither a translation nor a keep. */
+    record(id: string, said: { source: string; entry: TermTranslation | null }, expression: string, negative: boolean) {
+      const key = `${side(negative)}|${termKey(said.source)}`
+      // Claude's own spelling of the source term where it gave one (the source's case; the doc keeps only a pattern).
+      const from = said.entry ? spaced(said.entry.from) : said.source
+      sourceOf.set(id, from)
+      if (!said.entry) missing.set(key, { term: said.source, negative })
+      else if (!terms.has(key)) terms.set(key, { from, to: expression, negative, kept: said.entry.keep === true })
+    },
+    /**
+     * One keyword per text, match type and side in an ad group: a term that became the same as an earlier one is dropped,
+     * and the earlier one (its bid) is created.
+     */
+    once(targets: PlannedTarget[]): PlannedTarget[] {
+      const first = new Map<string, PlannedTarget>()
+      return targets.filter((x) => {
+        if ((x.kind ?? '').toUpperCase() !== 'KEYWORD') return true
+        const match = x.isNegative ? negativeMatchOf(x.expressionType) : (x.expressionType ?? '').toUpperCase().replace(/^_/, '')
+        const key = `${x.isNegative}|${match}|${termKey(x.expression)}`
+        const earlier = first.get(key)
+        if (!earlier) { first.set(key, x); return true }
+        merged.push({ from: sourceOf.get(x.id) ?? x.expression, to: x.expression, negative: x.isNegative, keptFrom: sourceOf.get(earlier.id) ?? earlier.expression })
+        return false
+      })
+    },
+    report(): TranslationReport {
+      const unused = (negative: boolean) => [...lists[side(negative)].entries()]
+        .filter(([k]) => !used[side(negative)].has(k)).map(([, t]) => ({ term: t.from, negative }))
+      const order = <T extends { negative: boolean }>(xs: T[], text: (x: T) => string) =>
+        xs.sort((a, b) => Number(a.negative) - Number(b.negative) || text(a).localeCompare(text(b)))
+      return {
+        terms: order([...terms.values()], (t) => t.from),
+        missing: order([...missing.values()], (t) => t.term),
+        unused: order([...unused(false), ...unused(true)], (t) => t.term),
+        merged,
+      }
+    },
+  }
+}
+
 /**
  * AX3.4 — stage one: turn the doc into the campaigns it describes.
  *
@@ -352,11 +461,14 @@ export function buildPlanCampaigns(
   doc: BlueprintDoc,
   target: ApplyTarget,
   opts: ApplyOptions = {},
-): { campaigns: PlannedCampaign[]; excluded: ApplyPlan['excluded'] } {
+): { campaigns: PlannedCampaign[]; excluded: ApplyPlan['excluded']; translation?: TranslationReport } {
   const skip = new Set((opts.skipSharedTargets ?? []).map(norm))
   const shared = new Set(doc.sharedTargets.map((t) => norm(t.expression)))
   const scope: CopyScope = { ...FULL_COPY, ...(opts.include ?? {}) }
   const excluded = { keywords: 0, negatives: 0, productTargets: 0, autoClauses: 0 }
+  // W4-10 — a copy into another market's language: every keyword and negative keyword by its text in the source.
+  const tr = opts.translations ? translatorOf(opts.translations, doc.productToken) : null
+  const skipKeys = new Set((opts.skipSharedTargets ?? []).map(termKey))
 
   const campaigns: PlannedCampaign[] = doc.campaigns.map((c, ci) => {
     const dailyBudget = scope.budgets
@@ -366,8 +478,10 @@ export function buildPlanCampaigns(
       const defaultBidCents = scope.bids ? applyValuePolicy(g.defaultBidCents, opts.bidPolicy, FLOOR_CENTS) : g.defaultBidCents
       const targets: PlannedTarget[] = []
       g.targets.forEach((t, ti) => {
-        // Copy scope. Counted, so step 3 can say what was left behind.
         const kind = (t.kind ?? '').toUpperCase()
+        // W4-10 — looked up before the copy scope: the translation of a term the scope leaves out is not "unused".
+        const said = tr && kind === 'KEYWORD' ? tr.lookup(t.expression, t.isNegative) : null
+        // Copy scope. Counted, so step 3 can say what was left behind.
         if (t.isNegative) {
           if (!scope.negatives) { excluded.negatives++; return }
         } else if (kind === 'AUTO') {
@@ -376,7 +490,12 @@ export function buildPlanCampaigns(
           if (!scope.productTargets) { excluded.productTargets++; return }
         } else if (!scope.keywords) { excluded.keywords++; return }
 
-        const expression = materialise(t.expression, target.productToken)
+        const copied = materialise(t.expression, target.productToken)
+        // W4-10 — a translation (or the term kept, as Claude spelled it), spaced as Amazon keeps it, the source product's
+        // name swapped for the target's only where it is a word of its own.
+        const own = said?.entry ? (said.entry.keep ? said.entry.from : said.entry.to ?? said.entry.from) : null
+        const expression = own != null ? materialise(swapProductWord(spaced(own), doc.productToken, target.productToken), target.productToken) : copied
+        const edited = norm(expression) !== norm(copied)
         // A target's own bid follows the bid policy; with bids off it falls back
         // to the ad group default rather than to zero.
         const bidCents = scope.bids ? applyValuePolicy(t.bidCents, opts.bidPolicy, FLOOR_CENTS) : null
@@ -384,13 +503,20 @@ export function buildPlanCampaigns(
         // Only POSITIVE shared targets are gated. A negative is not a bid and
         // cannot compete; skipping one would silently widen the new campaign.
         const gated = !t.isNegative && shared.has(norm(t.expression))
-        if (gated && (skip.has(norm(t.expression)) || skip.has(norm(expression)))) return // operator removed it
+        if (said && !t.isNegative) {
+          // W4-10 — in a translated copy every keyword is gated in the target market (evaluatePlan): skipping one by its
+          // new text or its source text is the same choice.
+          if (skipKeys.has(termKey(expression)) || skipKeys.has(termKey(said.source))) return
+        } else if (gated && (skip.has(norm(t.expression)) || skip.has(norm(expression)))) return // operator removed it
+        const id = `c${ci}.g${gi}.t${ti}`
+        if (said) tr!.record(id, said, expression, t.isNegative)
 
         targets.push({
-          id: `c${ci}.g${gi}.t${ti}`,
+          id,
           expression, expressionType: t.expressionType, kind: t.kind,
           bidCents, isNegative: t.isNegative, negativeLevel: t.negativeLevel,
-          ...(gated ? { gated: true } : {}),
+          ...(gated && !edited ? { gated: true } : {}),
+          ...(edited ? { edited: true } : {}),
           ...(kind === 'AUTO' ? { autoClause: t.autoClause ?? null } : {}),
         })
       })
@@ -398,7 +524,8 @@ export function buildPlanCampaigns(
         id: `c${ci}.g${gi}`,
         name: applyNaming(materialise(g.namePattern, target.productToken), opts.naming),
         defaultBidCents,
-        targets,
+        // W4-10 — two terms translated into one keyword are created once (Amazon takes one per text and match type).
+        targets: tr ? tr.once(targets) : targets,
         asins: target.asins,
       }
     })
@@ -413,7 +540,7 @@ export function buildPlanCampaigns(
       placementBidding: scope.placementBidding ? (c.placementBidding ?? []) : [],
     }
   })
-  return { campaigns, excluded }
+  return { campaigns, excluded, ...(tr ? { translation: tr.report() } : {}) }
 }
 
 /**
@@ -576,7 +703,7 @@ export function planApplication(
 ): ApplyPlan {
   const built = buildPlanCampaigns(doc, target, opts)
   const edited = applyEdits(built.campaigns, edits, target)
-  return evaluatePlan(edited.campaigns, built.excluded, doc, target, existing, opts, edited.stale)
+  return evaluatePlan(edited.campaigns, built.excluded, doc, target, existing, opts, edited.stale, built.translation)
 }
 
 /**
@@ -595,6 +722,8 @@ export function evaluatePlan(
   existing: ExistingTarget[],
   opts: ApplyOptions = {},
   stale: StaleEditRef[] = [],
+  /** W4-10 — what the translations did (buildPlanCampaigns), for a copy given them. */
+  translation?: TranslationReport,
 ): ApplyPlan {
   const accept = new Set((opts.acceptSharedTargets ?? []).map(norm))
   const ownAsins = new Set(target.asins.map(normAsin))
@@ -629,8 +758,11 @@ export function evaluatePlan(
         // TARGET product: its own brand term is safe, anything else is treated as
         // shared and gated like a copied one. Without this, "add a keyword" — or
         // "rename this one" — would be a hole straight through the gate.
-        const gated = (t.added || t.edited)
-          ? !hasProductToken(t.expression, target.productToken) && (t.kind ?? 'KEYWORD').toUpperCase() === 'KEYWORD'
+        // W4-10 — a copy into another market's language gates EVERY keyword, translated or kept, its brand terms too: the
+        // product may already run in that market, and its own campaigns there may already buy the very same term.
+        const keyword = (t.kind ?? 'KEYWORD').toUpperCase() === 'KEYWORD'
+        const gated = translation ? keyword
+          : (t.added || t.edited) ? !hasProductToken(t.expression, target.productToken) && keyword
           : (t.gated ?? false)
         if (!gated) continue
         const key = norm(t.expression)
@@ -678,6 +810,27 @@ export function evaluatePlan(
       `${stale.length} of your edits point at campaigns, ad groups or keywords that are no longer in this plan `
       + '— the source or the copy settings changed after you made them. Review step 2 again.',
     )
+  }
+
+  // W4-10 — a copy into another market's language: a term with neither a translation nor a keep would be created in the
+  // source's language, and a translation that names no term of the source is a typo whose term would be.
+  if (translation) {
+    const list = (xs: Array<{ term: string }>) => `${xs.slice(0, 10).map((x) => `"${x.term}"`).join(', ')}${xs.length > 10 ? `, and ${xs.length - 10} more` : ''}`
+    const sides = (xs: Array<{ term: string; negative: boolean }>) => [
+      ...(xs.some((x) => !x.negative) ? [`keyword(s) ${list(xs.filter((x) => !x.negative))}`] : []),
+      ...(xs.some((x) => x.negative) ? [`negative keyword(s) ${list(xs.filter((x) => x.negative))}`] : []),
+    ].join('; ')
+    if (translation.missing.length) {
+      blockers.push(`${translation.missing.length} term(s) of the source have no translation: ${sides(translation.missing)}. Translate each, or keep it as it is (a brand term).`)
+    }
+    if (translation.unused.length) {
+      blockers.push(`${translation.unused.length} translation(s) name a term the source does not have: ${sides(translation.unused)}. Check each against the source's own text.`)
+    }
+    if (translation.merged.length) {
+      const m = translation.merged
+      warnings.push(`${m.length} term(s) became the same keyword as an earlier one of their ad group, which is created once: `
+        + `${m.slice(0, 3).map((x) => `"${x.from}" became "${x.to}", as "${x.keptFrom}" did: created once, at the bid of "${x.keptFrom}"`).join('; ')}${m.length > 3 ? '; …' : ''}.`)
+    }
   }
 
   // AX2.7 — a replication into a market that cannot receive writes would create
@@ -819,5 +972,6 @@ export function evaluatePlan(
     blockers,
     allowed: blockers.length === 0,
     excluded,
+    ...(translation ? { translation } : {}),
   }
 }

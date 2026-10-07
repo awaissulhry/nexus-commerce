@@ -185,8 +185,10 @@ interface Seeded {
   parentCategoryId: string
   /** R11 — a suggestion of that rule. */
   suggestionId: string
-  /** R14 — a budget pool, the row tune-ad-engine tunes by `subjectId`. */
+  /** R14 — a budget pool, the row tune-ad-engine tunes by `subjectId` (W4-7: and set-budget-pool by `poolId`). */
   budgetPoolId: string
+  /** W4-7 — a budget schedule of its campaign, the row set-budget-schedule changes by `scheduleId`. */
+  budgetScheduleId: string
   /** R15 — a fleet assignment, what steer-fleet runs or cancels by `assignmentId`. */
   assignmentId: string
   /** R17 — a repricing rule of the business's product, what save-price-rule edits by `priceRuleId`. */
@@ -505,6 +507,10 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     await db.adsSuggestionMute.create({ data: { scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: `budget:${campaign.id}`, entityName: `${canary}-MUTED-RECOMMENDATION`, createdBy: 'user:mcp8' } })
     // R14 — a budget pool: what tune-ad-engine tunes.
     const budgetPool = await db.budgetPool.create({ data: { name: `${canary}-BUDGET-POOL`, totalDailyBudgetCents: 5000 } })
+    // W4-7 — a budget schedule of its campaign, switched off: what set-budget-schedule changes.
+    const budgetSchedule = await db.budgetSchedule.create({
+      data: { name: `${canary}-BUDGET-SCHEDULE`, kind: 'BUDGET', type: 'campaign-budget', enabled: false, campaigns: [{ id: campaign.id, name: `${canary}-CAMPAIGN`, dailyBudget: 20 }], windows: [{ day: 1, start: '08:00', end: '12:00', adj: 'decPct', value: 10 }] },
+    })
     // R15 — an assignment of a fleet worker: what steer-fleet runs or cancels.
     const assignment = await db.agentAssignment.create({ data: { charterKey: 'amazon-bid-tuner', title: `${canary}-ASSIGNMENT` } })
     // R17 — a repricing rule on the business's own market: what save-price-rule edits.
@@ -746,6 +752,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       parentCategoryId: parentCategory.id,
       suggestionId: suggestion.id,
       budgetPoolId: budgetPool.id,
+      budgetScheduleId: budgetSchedule.id,
       assignmentId: assignment.id,
       priceRuleId: priceRule.id,
       opsRuleId: opsRule.id,
@@ -859,6 +866,9 @@ const B_VALUES: Record<string, () => unknown> = {
   scopeId: () => seeded.b.campaignId,
   // R14 — tune-ad-engine names the row it tunes by `subjectId` (its first setting, a budget pool).
   subjectId: () => seeded.b.budgetPoolId,
+  // W4-7 — set-budget-pool names a pool, set-budget-schedule a budget schedule.
+  poolId: () => seeded.b.budgetPoolId,
+  scheduleId: () => seeded.b.budgetScheduleId,
   // R15 — steer-fleet runs (its first action) or cancels an assignment by id.
   assignmentId: () => seeded.b.assignmentId,
   // R17 — save-price-rule edits a repricing rule by id (with B's product, channel and market, as the builder names them).
@@ -1083,6 +1093,14 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'create-ad-campaign': { keywords: [{ text: 'probe jacket', matchType: 'EXACT' }], dailyBudgetCents: 1500, defaultBidCents: 50 },
   // W4-3 — a rename of B's portfolio (its market is its own: the loop's market is left out).
   'set-portfolio': { op: 'update', name: 'MCP8 probe portfolio', market: undefined },
+  // Ads autonomy W4-5 — targets and negatives name what they add; a retire names B's target (a keyword, not a negative:
+  // refused inside B by its name); a harvest names the ad group it ran in (B's), never an undo's ids; a harvest destination
+  // is set for B's campaign, to B's ad group.
+  'add-ad-targets': { keywords: [{ text: 'mcp8 probe', matchType: 'EXACT', bidCents: 50 }] },
+  'add-negative-targets': { keywords: [{ text: 'mcp8 probe' }], campaignIds: undefined, negatives: undefined },
+  get 'retire-negatives'() { return { negativeIds: [seeded.b.targetId], negatives: undefined } },
+  get 'harvest-search-term'() { return { sourceAdGroupId: seeded.b.adGroupId, destAdGroupId: undefined, changeSetId: undefined, keywordId: undefined, negativeId: undefined } },
+  'set-harvest-destination': { scope: 'campaign' },
   // B-1 — a copy reads its source campaign in the market it runs in (B's own); no portfolio (the loop would name an id).
   'replicate-ad-structure': { get sourceMarket() { return seeded.b.market }, portfolioId: undefined },
   // Ads autonomy W4-1 — ONE hourly plan, by its id (`planId` is the FBA plan's for the loop): B's plan, read and renamed.
@@ -1098,6 +1116,17 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'set-ad-group': { defaultBidCents: 40 },
   // P9 — a file naming B's product by its SKU (built once B is seeded); the saved mapping maps its Name column.
   'import-catalog': () => ({ text: `SKU,Name\n${seeded.b.sku},MCP8 probe name` }),
+  // W4-7 — the single form of set-campaign-budget names its budget (the list form is the other way to name it).
+  'set-campaign-budget': { dailyBudgetCents: 1500 },
+  // W4-7 — a market's plan reaches B through the limits of B's campaign (the plan itself names no row); this month, no
+  // plan values (the builder's calendar would not add up).
+  'set-monthly-ad-budget': () => ({ month: undefined, monthlyBudgetCents: undefined, autoPacing: undefined, stopOverSpend: undefined, calendar: undefined, campaignLimits: [{ campaignId: seeded.b.campaignId, minCents: null, maxCents: 4000 }] }),
+  // W4-7 — B's schedule renamed (no campaigns, windows or dates of the builder's).
+  'set-budget-schedule': { op: 'update', name: 'MCP8 probe schedule', type: undefined, campaignIds: undefined, windows: undefined, timezone: undefined, startDate: undefined, endDate: undefined, excludeDates: undefined, enabled: undefined },
+  // W4-7 — B's pool given a description (no values, campaigns or currency of the builder's).
+  'set-budget-pool': { op: 'update', description: 'MCP8 probe pool', name: undefined, currency: undefined, totalDailyBudgetCents: undefined, strategy: undefined, coolDownMinutes: undefined, maxShiftPerRebalancePct: undefined, add: undefined, remove: undefined },
+  // W4-7 — every market: a pool with no campaigns is in none, and B's is one.
+  'ad-budgets': { market: undefined },
 }
 const extraOf = (name: string) => {
   const extra = EXTRA[name]

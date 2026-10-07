@@ -256,6 +256,8 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   settings: 'changing campaign settings (name, portfolio, end date, bidding strategy)',
   portfolio: 'creating and changing portfolios',
   hourly: 'changing hourly bid plans',
+  targeting: 'adding keywords and product or category targets',
+  retire: 'retiring negative keywords and targets',
 }
 const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'off', ask: 'ask', confirm: 'confirm in Claude', watch: 'watch', auto: 'run by rule' }
 

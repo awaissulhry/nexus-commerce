@@ -17,7 +17,12 @@
  *             archive-ads buildRunId; restore-campaign may give the bids back; Replicate's raise refuses it
  *   screen    the screen's run is unchanged: allowlisted at birth, placements written, no change set
  *   stopped   a run of Claude's a deploy killed is found by its change set and marked FAILED; a screen run is untouched
+ *   W4-10     into another market: every keyword and negative translated or kept (each listed from → to), the market's
+ *             checked limits, its production connection with writes and the product ACTIVE there required, category
+ *             targets refused, rule 3 judged on the translated text there, the currency stated; approved, the run builds
+ *             the translations (and refuses a term it has none for); through a change plan too
  */
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { formulaDatabase } from '../../../test-support/formula-database.js'
@@ -45,6 +50,13 @@ vi.mock('../../outbound-destination.js', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   resolveDestinations: async (_db: unknown, rows: unknown[]) => rows.map(() => ({ connectionId: null, reason: 'NO_ACCOUNT' })),
 }))
+/** W4-10 — Amazon's checked limits: `uk` stands a GBP row in for UK (none is checked today), so the currency rules are reached. */
+const limits = vi.hoisted(() => ({ uk: false }))
+vi.mock('@nexus/shared/ads-market-limits', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@nexus/shared/ads-market-limits')>()
+  const uk = { market: 'UK', currency: 'GBP', adProducts: { SPONSORED_PRODUCTS: { bid: { min: 2, max: 100_000 }, dailyBudget: { min: 100, max: 100_000_000 } } }, source: 'test' }
+  return { ...real, marketLimitsOf: (m: string | null | undefined) => (limits.uk && (m ?? '').trim().toUpperCase() === 'UK' ? uk : real.marketLimitsOf(m)) }
+})
 /** The placement write (a recorder) and the end-of-run portfolio read-back (a recorder of how it was asked). */
 const placements = vi.hoisted(() => ({ calls: [] as string[], portfolio: [] as Array<{ ids: string[]; opts: unknown }> }))
 vi.mock('../../advertising/ads-create.service.js', async (importOriginal) => ({
@@ -73,8 +85,12 @@ vi.mock('../../advertising/ads-api-client.js', async (importOriginal) => ({
   updateCampaign: async (_ctx: unknown, externalId: string, patch: Record<string, unknown>) => { amazon.updates.push({ externalId, patch }); return { ok: true, mode: 'live', rawResponse: {}, error: null } },
 }))
 
-import { callTool, type UserPrincipal } from '../call-tool.js'
+import { callTool, executeTool, type UserPrincipal } from '../call-tool.js'
 import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
+import { commitScheduledApproval, decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
+import { resolveRequest } from '../../agent-fleet/approval-target.js'
+import { runPlan } from '../change-plan.service.js'
+import { claudeGateRule } from '../../mcp/mcp-tool-call.js'
 import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
 
@@ -86,13 +102,15 @@ const person = (userId: string, via: 'claude' | 'app'): UserPrincipal => ({
 })
 const claude = person('u-asker', 'claude')
 const approver = person('u-approver', 'app')
+/** A person who belongs to the business (a change plan's commit checks that the approver still does). */
+const member = { userId: '' }
 type Row = Record<string, any>
 const db = () => database.client
 const preview = async (args: Record<string, unknown>, tool = 'replicate-ad-structure') => (await inside(() => callTool(claude, tool, args))).raw
-async function ask(args: Record<string, unknown>) {
+async function ask(args: Record<string, unknown>, tool = 'replicate-ad-structure') {
   return inside(async () => {
     const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
-    return runOrQueueTool('replicate-ad-structure', args, claude, run.id, { forceAsk: true })
+    return runOrQueueTool(tool, args, claude, run.id, { forceAsk: true })
   })
 }
 const approve = (approvalId: string) => inside(() => decideApproval(approvalId, 'approve', approver))
@@ -116,9 +134,17 @@ const copy = (extra: Record<string, unknown> = {}) => ({
 
 beforeAll(async () => {
   database = await formulaDatabase()
+  const role = await db().role.create({
+    data: { key: `W410_${randomUUID().slice(0, 8)}`, name: 'Copy tester', description: 'test', isSystem: false, permissions: [...Object.values(FEATURES), ...Object.values(FIELDS)] },
+  })
+  const profile = await db().userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active', displayName: 'Test approver' } })
+  member.userId = profile.id
+  await db().userRole.create({ data: { userId: profile.id, roleId: role.id } })
+  const membership = await db().workspaceMembership.create({ data: { workspaceId: LEGACY_WORKSPACE_ID, userId: profile.id, status: 'active' } })
+  await db().workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
   await inside(async () => {
     await seedAdsFixture(db())
-    for (const [code, currency] of [['IT', 'EUR'], ['UK', 'GBP'], ['DE', 'EUR']]) {
+    for (const [code, currency] of [['IT', 'EUR'], ['UK', 'GBP'], ['DE', 'EUR'], ['FR', 'EUR']]) {
       await db().marketplace.create({ data: { channel: 'AMAZON', code, name: `Amazon ${code}`, region: 'EU', currency, language: 'en' } })
     }
     await db().adSpendCeiling.create({ data: { grain: 'MARKET', scopeId: 'IT', label: 'the IT market', dailyCapCents: 5000 } })
@@ -152,6 +178,30 @@ beforeAll(async () => {
     await db().adGroup.create({ data: { id: 'g-own', campaignId: 'c-own', name: 'own boots group', externalAdGroupId: 'EXT-g-own' } })
     await db().adTarget.create({ data: { adGroupId: 'g-own', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'winter boots', bidCents: 25, externalTargetId: 'EXT-own-boots' } })
     await db().adProductAd.create({ data: { adGroupId: 'g-own', asin: 'B0NEWASN01', externalAdId: 'EXT-pa-own' } })
+
+    // W4-10 — the markets a copy goes to: DE (production, writes on, a spend ceiling), FR (sandbox: no writes).
+    await db().amazonAdsConnection.create({ data: { profileId: 'P-DE-TEST', marketplace: 'DE', region: 'EU', mode: 'production', writesEnabledAt: new Date(), isActive: true } })
+    await db().amazonAdsConnection.create({ data: { profileId: 'P-FR-TEST', marketplace: 'FR', region: 'EU', mode: 'sandbox', isActive: true } })
+    await db().adSpendCeiling.create({ data: { grain: 'MARKET', scopeId: 'DE', label: 'the DE market', dailyCapCents: 5000 } })
+    await product('TEST-DE-1', 'B0DEASN001', ['IT', 'DE', 'FR'])
+    await product('TEST-DE-3', 'B0DEASN003', ['DE'])
+    const pending = await product('TEST-DE-2', 'B0DEASN002', [])
+    await db().channelListing.create({ data: { productId: pending.id, channel: 'AMAZON', marketplace: 'DE', region: 'DE', channelMarket: 'AMAZON_DE', listingStatus: 'PENDING' } })
+    // In DE: TEST-DE-1's own older campaign buys "rennjacke"; another product's buys "winterstiefel" (rule 3, there).
+    const deCampaign = async (key: string, keyword: string, asin: string) => {
+      await db().campaign.create({ data: { id: `c-${key}`, name: `Fixture ${key} DE`, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'DE', externalCampaignId: `EXT-c-${key}`, dailyBudget: '5.00', startDate: new Date('2026-01-01T00:00:00Z') } })
+      await db().adGroup.create({ data: { id: `g-${key}`, campaignId: `c-${key}`, name: `${key} group`, externalAdGroupId: `EXT-g-${key}` } })
+      await db().adTarget.create({ data: { adGroupId: `g-${key}`, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: keyword, bidCents: 25, externalTargetId: `EXT-${key}-kw` } })
+      await db().adProductAd.create({ data: { adGroupId: `g-${key}`, asin, externalAdId: `EXT-pa-${key}` } })
+    }
+    await deCampaign('de-own', 'rennjacke', 'B0DEASN001')
+    await deCampaign('de-other', 'winterstiefel', 'B0OTHERDE1')
+    // A source in IT with a category target (Amazon's category ids are its own in each market).
+    await db().campaign.create({ data: { id: 'c-cat', name: 'TESTCAT Category IT', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: 'EXT-c-cat', dailyBudget: '6.00', startDate: new Date('2026-01-01T00:00:00Z'), targetingType: 'MANUAL' } })
+    await db().adGroup.create({ data: { id: 'g-cat', campaignId: 'c-cat', name: 'TESTCAT group', defaultBidCents: 30, externalAdGroupId: 'EXT-g-cat' } })
+    await db().adTarget.create({ data: { adGroupId: 'g-cat', kind: 'CATEGORY', expressionType: 'ASIN_CATEGORY_SAME_AS', expressionValue: '1234567890', bidCents: 30, externalTargetId: 'EXT-cat-1' } })
+    await db().adTarget.create({ data: { adGroupId: 'g-cat', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'track pants', bidCents: 30, externalTargetId: 'EXT-cat-kw' } })
+    await db().adProductAd.create({ data: { adGroupId: 'g-cat', asin: 'B0CATASN01', externalAdId: 'EXT-pa-cat' } })
   })
 }, 180_000)
 afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
@@ -201,14 +251,19 @@ describe('B-1 — the copy, and what refuses it', () => {
     expect(await error({ skus: ['TEST-NEW-1', 'NOT-OURS-9'] })).toBe('SKU not found: NOT-OURS-9.')
     expect(await error({ skus: ['TEST-UNLISTED'] })).toBe('Not queued: the copy of "TESTSRC Exact IT" would have nothing to advertise for one product — TEST-UNLISTED is not listed on Amazon in IT.')
     expect(await error({ market: 'DE', skus: ['TEST-NEW-1'] })).toMatch(/TEST-NEW-1 is not listed on Amazon in DE/)
-    expect(await error({ market: 'UK', skus: ['TEST-NEW-1'] })).toMatch(/^Not queued: the source campaigns are in EUR \(IT\) and the copy would be in GBP \(UK\): bids and budgets are never converted/)
-    expect(await error({ market: 'UK', skus: ['TEST-NEW-1'], bidPolicy: { mode: 'fixed', value: 50 }, budgetPolicy: { mode: 'fixed', value: 1000 } })).toMatch(/^Set a spend ceiling for this market first: UK/)
+    // W4-10 — a market without Amazon limits Nexus has checked takes no copy (UK has none today).
+    expect(await error({ market: 'UK', skus: ['TEST-NEW-1'] })).toMatch(/^Not queued: "TESTSRC Exact IT" cannot be copied into UK: Nexus has no checked Amazon limits there .*Markets with checked limits: IT, DE, FR, ES\.$/)
+    limits.uk = true
+    try {
+      expect(await error({ market: 'UK', skus: ['TEST-NEW-1'] })).toMatch(/^Not queued: the source campaigns are in EUR \(IT\) and the copy would be in GBP \(UK\): bids and budgets are never converted/)
+      expect(await error({ market: 'UK', skus: ['TEST-NEW-1'], bidPolicy: { mode: 'fixed', value: 50 }, budgetPolicy: { mode: 'fixed', value: 1000 } })).toMatch(/^Set a spend ceiling for this market first: UK/)
+      expect(await error({ market: 'UK', skus: ['TEST-NEW-1'], copy: { bids: false }, budgetPolicy: { mode: 'fixed', value: 1000 } })).toMatch(/never converted/)
+    } finally { limits.uk = false }
     expect(await error({ budgetPolicy: { mode: 'fixed', value: 6000 } })).toBe("Its daily budgets add up to EUR 60.00, above the IT market's spend ceiling of EUR 50.00 a day.")
     expect(await error({ bidPolicy: { mode: 'scale' } })).toBe('bidPolicy scale needs a value.')
     // A policy Replicate would silently ignore is refused, never half-applied.
     expect(await error({ copy: { bids: false }, bidPolicy: { mode: 'fixed', value: 30 } })).toMatch(/^Not queued: copy\.bids false keeps each ad group's default bid as the source has it and applies no bidPolicy/)
     expect(await error({ copy: { budgets: false } })).toMatch(/^Not queued: copy\.budgets false needs budgetPolicy fixed/)
-    expect(await error({ market: 'UK', skus: ['TEST-NEW-1'], copy: { bids: false }, budgetPolicy: { mode: 'fixed', value: 1000 } })).toMatch(/never converted/)
     // An archived source: left out (said); only archived ones: refused.
     expect(await error({ campaignIds: ['c-old'] })).toMatch(/^Not queued: "TESTSRC Old IT" is archived: name campaigns that run/)
     const mixed = (await preview(copy({ campaignIds: ['c-src', 'c-old'] }))).preview as Row
@@ -443,5 +498,247 @@ describe('B-1 — a run of Claude\'s that a deploy killed', () => {
     expect([...rows.find((r) => r.id === ids.claudeRun)!.createdCampaignIds].sort()).toEqual([ids.camp, ids.local].sort())
     expect((await sql('SELECT status FROM "Campaign" WHERE id = $1', [ids.local]))[0].status).toBe('ARCHIVED')
     expect(rows.find((r) => r.id === ids.screenRun)).toMatchObject({ status: 'RUNNING', createdCampaignIds: [] })
+  })
+})
+
+/** W4-10 — the IT source copied into DE for TEST-DE-1, every term translated (made-up German). */
+const WORDS = [
+  { from: 'testsrc jacket', to: 'testsrc jacke' },
+  { from: 'race jacket', to: 'renn jacke' },
+  { from: 'winter boots', to: 'winterstiefel' },
+]
+const deCopy = (extra: Record<string, unknown> = {}) => ({
+  sourceMarket: 'IT', campaignIds: ['c-src'], sourceProductToken: 'TESTSRC', market: 'DE', productToken: 'TESTDE', skus: ['TEST-DE-1'],
+  naming: { replacements: [{ from: ' IT', to: ' DE' }] },
+  translations: WORDS, negativeTranslations: [{ from: 'cheap', to: 'billig' }], ...extra,
+})
+const approvals = async () => (await sql<{ n: number }>('SELECT count(*)::int AS n FROM "AgentApproval"'))[0].n
+
+describe('W4-10 — a copy into another market, translated by Claude', () => {
+  it('previews each term from → to (the product swapped in), rule 3 judged in DE on the translated text, the currency stated', async () => {
+    const r = await preview(deCopy())
+    expect(r.ok, r.error).toBe(true)
+    expect(r.preview).toMatchObject({
+      action: 'replicate-ad-structure', market: 'DE', currency: 'EUR', productToken: 'TESTDE',
+      currencyNote: "Every bid and budget is in EUR, the currency of DE: the source's EUR amounts carry over as numbers (as bidPolicy and budgetPolicy say), never converted.",
+      source: { market: 'IT', campaigns: [{ campaignId: 'c-src', name: 'TESTSRC Exact IT' }] },
+      products: [{ sku: 'TEST-DE-1', asin: 'B0DEASN001' }],
+      campaigns: [{ name: 'TESTDE Exact DE', from: 'TESTSRC Exact IT', keywords: 3, negatives: 1, startBidCents: 60 }],
+      translation: {
+        from: 'IT', to: 'DE', counts: { keywords: { translated: 3, kept: 0 }, negatives: { translated: 1, kept: 0 } },
+        keywords: [{ from: 'race jacket', to: 'renn jacke' }, { from: 'testsrc jacket', to: 'TESTDE jacke' }, { from: 'winter boots', to: 'winterstiefel' }],
+        negatives: [{ from: 'cheap', to: 'billig' }],
+        note: expect.stringMatching(/Every keyword of the copy, translated or kept, brand terms too, was checked against what the product's own campaigns in DE already buy\. A copy into another market never runs by rule/),
+      },
+      // Rule 3 in DE: another product's campaign buys "winterstiefel": listed, allowed, never negated.
+      sharedWithOtherProducts: [{ expression: 'winterstiefel', existing: [{ campaignName: 'Fixture de-other DE', campaignId: 'c-de-other' }] }],
+      ceiling: { label: 'the DE market', dailyCapCents: 5000 }, reach: { reach: 'sandbox' }, liveWrites: false,
+      limitFacts: { tool: 'replicate-ad-structure', action: 'create' },
+      effect: expect.stringMatching(/^Copies the structure of "TESTSRC Exact IT" \(IT\) onto TESTDE in DE with Replicate Structure's own run, every keyword and negative keyword in DE's language as you translated it \(3 keywords translated; 1 negative keyword translated\): .*born ENABLED with every bid at the 2-cent floor/),
+    })
+    expect(r.preview.warnings.join(' ')).not.toMatch(/still says IT/)
+    // The approval card: the market it moves to beside the budget (a plan's step shows the first three), then the words.
+    const card = resolveRequest('replicate-ad-structure', deCopy(), r.preview, { masterCurrency: 'EUR' })
+    expect(card.changes.map((c) => [c.label, c.from, c.to])).toEqual([
+      ['Copies', null, '1 campaign for TESTDE, at the 2-cent floor, off the allowlist'],
+      ['Market', 'IT', 'DE'],
+      ['Daily budget', null, expect.stringMatching(/12\.00/)],
+      ['Keywords', null, '3 translated, 0 kept as they are'],
+      ['Negative keywords', null, '1 translated, 0 kept as they are'],
+    ])
+    // A brand term kept as it is: the product swapped in, as in a term copied as it is.
+    const kept = (await preview(deCopy({ translations: [{ from: 'TESTSRC JACKET', keep: true }, ...WORDS.slice(1)] }))).preview as Row
+    expect(kept.translation).toMatchObject({ counts: { keywords: { translated: 2, kept: 1 } }, keywords: expect.arrayContaining([{ from: 'TESTSRC JACKET', to: 'TESTDE JACKET', kept: true }]) })
+    // Lead decision B: into another market never by rule, whatever the limits (the markets they name included).
+    expect(judge(r.preview, { maxCampaigns: 5, maxDailyBudgetCents: 100_000, maxBidCents: 1000, markets: ['DE'] }))
+      .toBe("it copies into another market (IT → DE) with Claude's translations: a person always reads them, so it never runs by rule")
+  })
+
+  it("rule 3 on the translated text: a keyword the product's own campaigns in DE buy refuses it until skipped or accepted", async () => {
+    const own = deCopy({ translations: [WORDS[0], { from: 'race jacket', to: 'rennjacke' }, WORDS[2]] })
+    expect((await preview(own)).error).toMatch(/^Not queued: Replicate's gate refuses this copy — 1 keyword\(s\) would make TESTDE bid against campaigns you already run for it \("rennjacke"\).*already buy "rennjacke" \("Fixture de-own DE"\): name each in skipTerms/)
+    expect((await preview({ ...own, skipTerms: ['rennjacke'] })).preview).toMatchObject({ totals: { positives: 2, negatives: 1 } })
+    expect((await preview({ ...own, acceptTerms: ['rennjacke'] })).preview).toMatchObject({ acceptedTerms: ['rennjacke'] })
+  })
+
+  it('rule 3 for a brand term too: the product already running in DE with the term it is copied to is a clash (translated or kept)', async () => {
+    // TEST-DE-1's own DE campaign buying the brand term the copy makes ("TESTDE jacke").
+    await inside(async () => {
+      await db().campaign.create({ data: { id: 'c-de-brand', name: 'Fixture de-brand DE', type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'DE', externalCampaignId: 'EXT-c-de-brand', dailyBudget: '5.00', startDate: new Date('2026-01-01T00:00:00Z') } })
+      await db().adGroup.create({ data: { id: 'g-de-brand', campaignId: 'c-de-brand', name: 'de-brand group', externalAdGroupId: 'EXT-g-de-brand' } })
+      await db().adTarget.create({ data: { adGroupId: 'g-de-brand', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'TESTDE jacke', bidCents: 25, externalTargetId: 'EXT-de-brand-kw' } })
+      await db().adTarget.create({ data: { adGroupId: 'g-de-brand', kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: 'TESTDE jacket', bidCents: 25, externalTargetId: 'EXT-de-brand-kw2' } })
+      await db().adProductAd.create({ data: { adGroupId: 'g-de-brand', asin: 'B0DEASN001', externalAdId: 'EXT-pa-de-brand' } })
+    })
+    try {
+      expect((await preview(deCopy())).error).toMatch(/would make TESTDE bid against campaigns you already run for it \("TESTDE jacke"\).*already buy "TESTDE jacke" \("Fixture de-brand DE"\)/)
+      const kept = deCopy({ translations: [{ from: 'testsrc jacket', keep: true }, ...WORDS.slice(1)] })
+      expect((await preview(kept)).error).toMatch(/already buy "TESTDE jacket" \("Fixture de-brand DE"\)/)
+      expect((await preview({ ...deCopy(), skipTerms: ['TESTDE jacke'] })).preview).toMatchObject({ totals: { positives: 2 } })
+      // Another product's campaign with the term: listed, never blocked.
+      await inside(() => db().adProductAd.updateMany({ where: { adGroupId: 'g-de-brand' }, data: { asin: 'B0OTHERDE2' } }))
+      expect((await preview(deCopy())).preview).toMatchObject({ sharedWithOtherProducts: expect.arrayContaining([expect.objectContaining({ expression: 'TESTDE jacke' })]) })
+    } finally {
+      await inside(() => db().campaign.update({ where: { id: 'c-de-brand' }, data: { status: 'ARCHIVED' } }))
+    }
+  })
+
+  it('refuses, and queues nothing: a term untranslated or unknown, a term twice, translations in one market, a market without checked limits or writes, a product not ACTIVE there, category targets', async () => {
+    const before = await approvals()
+    const error = async (args: Record<string, unknown>) => (await preview(args)).error
+    expect(await error(deCopy({ translations: undefined, negativeTranslations: undefined }))).toBe(
+      "Not queued: a copy into DE needs every keyword and negative keyword in DE's language. 4 terms have neither a translation nor a keep "
+      + '(keywords "race jacket", "TESTSRC jacket", "winter boots"; negative keywords "cheap"): add each to translations (keywords) or negativeTranslations, '
+      + 'as { from, to } with your translation or { from, keep: true } for a brand or model name shoppers there search for unchanged.')
+    // The source's archived keyword is not copied: a translation of it names a term the copy does not have.
+    expect(await error(deCopy({ translations: [...WORDS, { from: 'old jacket', to: 'alte jacke' }] })))
+      .toMatch(/language\. 1 translation names a term the source does not have \(keywords "old jacket"\): check each against the source's own text \(ad-targets\)\.$/)
+    expect(await error(deCopy({ negativeTranslations: [{ from: 'cheap', to: 'billig' }, { from: 'Cheap', to: 'guenstig' }] })))
+      .toBe('Not queued: negativeTranslations names "Cheap" more than once: give each term one translation.')
+    // Neither a translation nor a keep for a term named: the door refuses the arguments.
+    await expect(preview(deCopy({ translations: [{ from: 'race jacket' }] }))).rejects.toThrow(/translations\.0: give to \(the translation\) or keep: true, one of the two/)
+    expect(await error(copy({ translations: [{ from: 'race jacket', to: 'giacca da corsa' }] }))).toMatch(/^Not queued: translations are for a copy into another market; in IT/)
+    expect(await error(deCopy({ market: 'NL' }))).toMatch(/^Not queued: "TESTSRC Exact IT" cannot be copied into NL: Nexus has no checked Amazon limits there/)
+    expect(await error(deCopy({ market: 'FR' }))).toBe('Not queued: "TESTSRC Exact IT" cannot be copied into FR: it has no production Amazon Ads connection with writes switched on, so the copy would be made in Nexus only and never reach Amazon. Connecting a profile there and switching its writes on stays with a person in Nexus (Amazon Ads connections).')
+    expect(await error(deCopy({ market: 'ES' }))).toMatch(/^Not queued: "TESTSRC Exact IT" cannot be copied into ES: it has no production Amazon Ads connection with writes switched on/)
+    expect(await error(deCopy({ skus: ['TEST-DE-2'] }))).toBe('Not queued: the copy of "TESTSRC Exact IT" would have nothing to advertise for one product — TEST-DE-2 is listed on Amazon in DE but not active there (pending).')
+    expect(await error(deCopy({ skus: ['TEST-NEW-2'] }))).toMatch(/TEST-NEW-2 is not listed on Amazon in DE/)
+    // Amazon's category ids are its own in each market: refused; left out (copy.productTargets false), the copy is made.
+    const cat = deCopy({ campaignIds: ['c-cat'], sourceProductToken: 'TESTCAT', naming: undefined, translations: [{ from: 'track pants', to: 'trainingshose' }], negativeTranslations: [] })
+    expect(await error(cat)).toBe("Not queued: the copy carries 1 category target, and Amazon's category ids are its own in each market: IT's mean nothing in DE. Leave product and category targets out (copy.productTargets false) and target DE's own categories once the copy runs.")
+    const left = (await preview({ ...cat, copy: { productTargets: false } })).preview as Row
+    expect(left).toMatchObject({ campaigns: [{ name: 'TESTDE Category IT', keywords: 1, productTargets: 0 }], excluded: { productTargets: 1 }, translation: { keywords: [{ from: 'track pants', to: 'trainingshose' }] } })
+    expect(left.warnings).toEqual(expect.arrayContaining(['"TESTDE Category IT" still says IT in its name: naming (prefix, suffix or replacements) renames it if it should say DE.']))
+    expect(await approvals()).toBe(before)
+  })
+
+  it('approved: the run builds the translations in DE, born safe, and records them; undo archives what it made', async () => {
+    const asked = await ask(deCopy({ why: 'the jacket structure for the German market' }))
+    expect(asked).toMatchObject({ ok: true, mode: 'queued' })
+    const done = await approve(asked.approvalId!)
+    expect(done).toMatchObject({ ok: true, status: 'executed', result: { status: 'RUNNING', changeSetId: asked.approvalId } })
+    const applicationId = (done as Row).result.applicationId
+    await finished(applicationId)
+    const [made] = await sql('SELECT id, marketplace, status, "liveBidWritesEnabled" AS live, "bidsSuppressedBy" AS by FROM "Campaign" WHERE name = $1', ['TESTDE Exact DE'])
+    expect(made).toMatchObject({ marketplace: 'DE', status: 'ENABLED', live: false, by: 'user:u-asker' })
+    const targets = await sql('SELECT t."expressionValue" AS text, t."isNegative" AS neg, t."bidCents" AS bid, t."suppressedFromBidCents" AS kept FROM "AdTarget" t JOIN "AdGroup" g ON g.id = t."adGroupId" WHERE g."campaignId" = $1 ORDER BY lower(t."expressionValue")', [made.id])
+    expect(targets).toEqual([
+      { text: 'billig', neg: true, bid: 0, kept: null },
+      { text: 'renn jacke', neg: false, bid: 2, kept: 45 },
+      { text: 'TESTDE jacke', neg: false, bid: 2, kept: 60 },
+      { text: 'winterstiefel', neg: false, bid: 2, kept: 30 },
+    ])
+    expect(await sql('SELECT a.asin FROM "AdProductAd" a JOIN "AdGroup" g ON g.id = a."adGroupId" WHERE g."campaignId" = $1', [made.id])).toEqual([{ asin: 'B0DEASN001' }])
+    const run = await inside(() => db().adBlueprintApplication.findUniqueOrThrow({ where: { id: applicationId } }))
+    expect(run).toMatchObject({ marketplace: 'DE', productToken: 'TESTDE', options: { source: 'claude', changeSetId: asked.approvalId, translations: { keywords: WORDS, negatives: [{ from: 'cheap', to: 'billig' }] } } })
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: 'archive-ads', args: { buildRunId: applicationId } } })
+    // Asked again, the name is taken in DE now: refused, not queued.
+    expect((await preview(deCopy())).error).toMatch(/already exist in this marketplace|already has a campaign named/)
+  })
+
+  it('the run plans the translations again: a term it has none for refuses the run, and nothing is made', async () => {
+    const { applyBlueprint } = await import('../../advertising/ads-blueprint-apply.service.js')
+    await expect(inside(() => applyBlueprint({
+      source: { campaignIds: ['c-src'], marketplace: 'IT', excludeArchivedTargets: true }, sourceProductToken: 'TESTSRC', target: { productToken: 'TESTRUN', asins: ['B0DEASN003'] },
+      marketplace: 'DE', options: { translations: { keywords: [{ from: 'race jacket', to: 'renn jacke' }], negatives: [] } }, launchMode: 'floor', dryRun: false, actor: 'user:u-approver',
+      bornSafe: { by: 'user:u-asker', changeSetId: 'cs-run-words' },
+    }))).rejects.toThrow(/^refused: .*3 term\(s\) of the source have no translation: keyword\(s\) "TESTSRC jacket", "winter boots"; negative keyword\(s\) "cheap"/)
+    expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "Campaign" WHERE name LIKE $1', ['TESTRUN%']))[0].n).toBe(0)
+  })
+
+  it('as a step of a change plan: the step keeps the translations it shows, and the plan builds them', async () => {
+    const args = deCopy({ productToken: 'TESTPLAN', skus: ['TEST-DE-3'] })
+    const asked = await ask({ title: 'A copy into DE as a plan', steps: [{ tool: 'replicate-ad-structure', args }] }, 'submit-change-plan')
+    expect(asked, JSON.stringify(asked)).toMatchObject({ ok: true, mode: 'queued' })
+    const step = await inside(() => db().agentPlanStep.findFirstOrThrow({ where: { approvalId: asked.approvalId! } }))
+    expect(step.preview).toMatchObject({ market: 'DE', translation: { counts: { keywords: { translated: 3 }, negatives: { translated: 1 } }, keywords: [{ from: 'race jacket', to: 'renn jacke' }, { from: 'testsrc jacket', to: 'TESTPLAN jacke' }, { from: 'winter boots', to: 'winterstiefel' }] } })
+    const parked = await inside(() => decideFleetApproval({ id: asked.approvalId!, decision: 'approve', actor: person(member.userId, 'app') }))
+    expect(parked, parked.error).toMatchObject({ ok: true, status: 'scheduled' })
+    await inside(() => db().agentApproval.update({ where: { id: asked.approvalId! }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+    expect(await inside(() => commitScheduledApproval(asked.approvalId!))).toMatchObject({ ok: true, status: 'executing' })
+    expect(await inside(() => runPlan(asked.approvalId!))).toMatchObject({ finished: true, counts: { done: 1 } })
+    const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId: asked.approvalId!, toolName: 'replicate-ad-structure' } }))
+    await finished((change.after as Row).applicationId)
+    const texts = await sql('SELECT t."expressionValue" AS text FROM "AdTarget" t JOIN "AdGroup" g ON g.id = t."adGroupId" JOIN "Campaign" c ON c.id = g."campaignId" WHERE c.name = $1 ORDER BY lower(t."expressionValue")', ['TESTPLAN Exact DE'])
+    expect(texts.map((t) => t.text)).toEqual(['billig', 'renn jacke', 'TESTPLAN jacke', 'winterstiefel'])
+  })
+})
+
+describe('W4-10 — a copy into another market never runs by rule (lead decision B)', () => {
+  /** Claude through its own door (the MCP rule), as a member who may run by rule. */
+  const mcp = () => ({ ...person(member.userId, 'claude'), business: { id: LEGACY_WORKSPACE_ID, name: 'Test business' }, scopes: ['nexus.read', 'nexus.write', 'nexus.run'], oauthGrantId: 'grant-w410' }) as never
+  const byDoor = (args: Record<string, unknown>, tool = 'replicate-ad-structure') => inside(async () => {
+    const principal = mcp()
+    const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: member.userId } })
+    return runOrQueueTool(tool, args, principal, run.id, { forceAsk: true, rule: claudeGateRule(principal) }) as Promise<Row>
+  })
+  const rule = { maxCampaigns: 5, maxDailyBudgetCents: 100_000, maxBidCents: 1000 }
+  const strategies: string[] = []
+  const rulePerson = () => person(member.userId, 'app')
+  /** A person approves it; then it is made to look decided by the business's rule, and the window's commit runs. */
+  const ruleCommit = async (approvalId: string) => {
+    const parked = await inside(() => decideFleetApproval({ id: approvalId, decision: 'approve', actor: rulePerson() }))
+    expect(parked, parked.error).toMatchObject({ ok: true, status: 'scheduled' })
+    await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { decisionVia: 'auto', executeAfter: new Date(Date.now() - 1000) } }))
+    return inside(() => commitScheduledApproval(approvalId))
+  }
+
+  beforeAll(async () => {
+    await inside(async () => {
+      // The business lets the tool run by rule, with room in its limits, inside the ads strategy of IT and DE.
+      await db().agentTool.upsert({
+        where: { name: 'replicate-ad-structure' },
+        create: { name: 'replicate-ad-structure', riskTier: 'high', requiresApproval: true, claudeTrust: 'auto', claudeLimits: rule },
+        update: { claudeTrust: 'auto', claudeLimits: rule },
+      })
+      for (const market of ['IT', 'DE']) {
+        strategies.push((await db().adsStrategy.create({ data: {
+          market, level: 'MARKET', scopeId: '*', label: `Test market (${market})`, updatedBy: 'user:test',
+          claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 10, claudeMaxBudgetIncreasePerDayCents: 50_000, maxBidCents: 100,
+        } })).id)
+      }
+      const p = await db().product.create({ data: { sku: 'TEST-RULE-1', name: 'Test TEST-RULE-1', basePrice: '99.00', amazonAsin: 'B0RULEASN1' } })
+      for (const market of ['IT', 'DE']) await db().channelListing.create({ data: { productId: p.id, channel: 'AMAZON', marketplace: market, region: market, channelMarket: `AMAZON_${market}`, listingStatus: 'ACTIVE' } })
+    })
+  })
+  afterAll(async () => {
+    await inside(async () => {
+      await db().adsStrategy.deleteMany({ where: { id: { in: strategies } } })
+      await db().agentTool.update({ where: { name: 'replicate-ad-structure' }, data: { claudeTrust: 'ask', claudeLimits: {} as never } })
+    })
+  })
+
+  let intoDe = ''
+  it('the door: at auto with room in its limits, a copy inside IT runs by rule; the same copy into DE waits for a person', async () => {
+    const same = await byDoor(copy({ productToken: 'TESTRULE', skus: ['TEST-RULE-1'] }))
+    expect(same, JSON.stringify(same)).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'rule', level: 'auto' } })
+    const other = await byDoor(deCopy({ productToken: 'TESTRULE', skus: ['TEST-RULE-1'] }))
+    expect(other, JSON.stringify(other)).toMatchObject({
+      ok: true, mode: 'queued', rule: { by: 'person', why: "it copies into another market (IT → DE) with Claude's translations: a person always reads them, so it never runs by rule; a person approves it in Nexus" },
+    })
+    intoDe = other.approvalId
+  })
+
+  it("the commit: a rule's decision is handed back to a person, and nothing is made", async () => {
+    await ruleCommit(intoDe)
+    const ap = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: intoDe } }))
+    expect(ap).toMatchObject({ status: 'pending', decisionVia: null, reason: expect.stringMatching(/^not run — .*it copies into another market \(IT → DE\) .*never runs by rule/) })
+    expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "Campaign" WHERE name LIKE $1', ['TESTRULE%DE']))[0].n).toBe(0)
+  })
+
+  it("execute itself refuses a rule's decision, whatever the limits and the strategy say", async () => {
+    const ap = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: intoDe } }))
+    const { raw } = await inside(() => executeTool(rulePerson(), 'replicate-ad-structure', ap.args as Record<string, unknown>, { approvalId: intoDe, approvedPreview: ap.preview ?? undefined, decidedVia: 'auto' }))
+    expect(raw).toMatchObject({ ok: false, error: "Not run: a copy into another market carries Claude's translations, and a person always reads them: it never runs by rule. Ask for it again; a person approves it." })
+    expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "Campaign" WHERE name LIKE $1', ['TESTRULE%DE']))[0].n).toBe(0)
+  })
+
+  it('a change plan with such a step waits for a person, and a rule deciding the plan is handed back', async () => {
+    const plan = await byDoor({ title: 'A copy into DE as a plan', steps: [{ tool: 'replicate-ad-structure', args: deCopy({ productToken: 'TESTRULE', skus: ['TEST-RULE-1'] }) }] }, 'submit-change-plan')
+    expect(plan, JSON.stringify(plan)).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'person', why: expect.stringMatching(/never runs by rule/) } })
+    await ruleCommit(plan.approvalId)
+    const ap = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: plan.approvalId } }))
+    expect(ap).toMatchObject({ status: 'pending', decisionVia: null, reason: expect.stringMatching(/^not run — .*it copies into another market \(IT → DE\) .*never runs by rule/) })
+    expect((await sql<{ n: number }>('SELECT count(*)::int AS n FROM "Campaign" WHERE name LIKE $1', ['TESTRULE%DE']))[0].n).toBe(0)
   })
 })

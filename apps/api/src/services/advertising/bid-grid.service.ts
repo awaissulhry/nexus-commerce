@@ -581,6 +581,28 @@ async function lastAuditedByTarget(): Promise<Map<string, { cents: number; at: D
 }
 
 /**
+ * W4-12 — the targets whose newest audited bid is a write Nexus put back: the gate refused it, Amazon rejected it for
+ * good, or it was cancelled, so it never reached Amazon and the bid went back to the value it replaced
+ * (putBackRefusedWrite writes no history row). Their bid disagrees with the newest audited value, but nothing moved it
+ * outside Nexus. Matched exactly on the typed mutation: this target's bid, from the bid it holds now to the audited one.
+ */
+async function refusedPutBacks(mismatched: Array<{ id: string; bidCents: number }>, audited: Map<string, { cents: number; at: Date }>): Promise<Set<string>> {
+  if (!mismatched.length) return new Set()
+  const rows = await prisma.adMutation.findMany({
+    where: { entityType: 'AD_TARGET', entityId: { in: mismatched.map((t) => t.id) }, field: 'bid', state: { in: ['CANCELLED', 'FAILED'] } },
+    select: { entityId: true, previousValue: true, intendedValue: true, createdAt: true },
+  }).catch(() => [])
+  const bid = new Map(mismatched.map((t) => [t.id, t.bidCents]))
+  const out = new Set<string>()
+  for (const m of rows) {
+    const a = audited.get(m.entityId)
+    if (!a || Math.abs(m.createdAt.getTime() - a.at.getTime()) > 60_000) continue
+    if (Number(m.previousValue) === bid.get(m.entityId) && Number(m.intendedValue) === a.cents) out.add(m.entityId)
+  }
+  return out
+}
+
+/**
  * BID.S2 — N points per entity, never N rows total.
  *
  * 🔴 The cap is per ENTITY on purpose. A flat `limit` over an ordered scan returns every point of
@@ -622,7 +644,9 @@ export async function getBidSeries(opts: { entityIds: string[]; perEntity?: numb
     const a = byEntityLogs.get(entityId)
     if (!a) return null
     const t = at.getTime()
-    for (const l of a) if (Math.abs(l.at - t) <= 5000) return l.status
+    // W4-12 — a write Nexus did not send (SKIPPED: refused, no connection) or cancelled never reached Amazon: it counts
+    // as not landed, like a failed one.
+    for (const l of a) if (Math.abs(l.at - t) <= 5000) return l.status === 'SKIPPED' || l.status === 'CANCELLED' ? 'FAILED' : l.status
     return null
   }
 
@@ -698,6 +722,7 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
 
   // BID.S2 — three reads that do not depend on each other, so they go together.
   const [bidders, audited] = await Promise.all([bidderByCampaign(), lastAuditedByTarget()])
+  const putBack = await refusedPutBacks(capped.filter((t) => { const a = audited.get(t.id); return a != null && a.cents !== t.bidCents }), audited)
 
   const all: BidTargetRow[] = capped.map((t) => {
     const p = pmap.get(t.id)
@@ -748,7 +773,7 @@ export async function getBidGrid(req: BidGridRequest): Promise<BidGridResult> {
       // bid write in 60 days had `updatedAt` move within 2 hours, because the hourly resync writes
       // `lastSyncedAt` on every row it sees and Prisma's @updatedAt follows. `updatedAt` is a sync
       // heartbeat; comparing values is the only honest drift signal.
-      unrecorded: (() => { const a = audited.get(t.id); return a != null && a.cents !== t.bidCents })(),
+      unrecorded: (() => { const a = audited.get(t.id); return a != null && a.cents !== t.bidCents && !putBack.has(t.id) })(),
       ...(() => { const e = effectiveMaxCpc(t.bidCents, c.dynamicBidding); return { effectiveMaxCpcCents: e.cents, placementPct: e.placementPct, biddingStrategy: e.strategy } })(),
     }
   })

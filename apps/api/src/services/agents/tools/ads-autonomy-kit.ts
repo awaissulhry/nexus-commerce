@@ -79,6 +79,8 @@ export const MAX_KIT_ITEMS = 250
  *   status       ENABLED / PAUSED / ARCHIVED; `dailyBudgetCents`: the campaign budget that starts (or stops) spending.
  *                AA-W2-9 — `from` LOW_BIDS: a campaign stopped with low bids (a restore restarts it, its budget in full).
  *   negative     a new negative keyword or target (it only lowers spend).
+ *   retire       W4-5 — a standing negative keyword or target retired (archived at Amazon, or a Nexus-only row removed):
+ *                a block lifted, so the searches it blocked can show the ads again — counted as a raise, with no amount.
  *   liveWrites   AA-W2-9 — a campaign on or off the live-write allowlist (a Nexus switch: it moves no bid or budget
  *                itself; every write it lets through is judged on its own).
  *   automation   AA-W2-11 — an ads rule saved, or an automation turned up or tuned, for this scope: Nexus only, it moves
@@ -98,6 +100,7 @@ export type KitChange =
   | { field: 'placementPct' | 'targetAcosPct'; fromPct: number | null; toPct: number; placement?: string }
   | { field: 'status'; from: string | null; to: 'ENABLED' | 'PAUSED' | 'ARCHIVED'; dailyBudgetCents?: number }
   | { field: 'negative'; term: string; matchType?: string | null }
+  | { field: 'retire'; term: string; matchType?: string | null }
   | { field: 'liveWrites'; from: boolean; to: boolean }
   | { field: 'automation'; raises?: boolean }
   | { field: 'setting'; setting: string; from: string | null; to: string | null; raises?: boolean; cuts?: boolean }
@@ -154,6 +157,8 @@ export function measure(change: KitChange): Measured {
     }
     case 'negative':
       return { ...none, direction: 'cut' }
+    case 'retire':
+      return { ...none, direction: 'raise' }
     case 'liveWrites':
       return { ...none, direction: 'same' }
     case 'automation':
@@ -294,6 +299,7 @@ export function wantedOf(entity: string, change: KitChange, direction: Direction
     case 'liveWrites':
       return { ...base, from: change.from, to: change.to }
     case 'negative':
+    case 'retire':
       return { ...base, term: change.term, matchType: change.matchType ?? null }
     case 'automation':
       return base
@@ -420,6 +426,7 @@ const CUT_WORDS: Record<KitChange['field'], string> = {
   targetAcosPct: 'lowering its target ACoS',
   status: 'stopping it',
   negative: 'negating',
+  retire: 'retiring a negative',
   liveWrites: 'taking it off the live-write allowlist',
   automation: 'changing what acts on it',
   setting: 'tightening its settings',
@@ -628,6 +635,8 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   settings: 'changing campaign settings (name, portfolio, end date, bidding strategy)',
   portfolio: 'creating and changing portfolios',
   hourly: 'changing hourly bid plans',
+  targeting: 'adding keywords and product or category targets',
+  retire: 'retiring negative keywords and targets',
 }
 /** What a strategy level below auto allows, in W1-8's words (claude-trust.service.ts narrowedWhy). */
 const ALLOWS: Record<Exclude<ClaudeTrust, 'auto'>, (what: string) => string> = {
