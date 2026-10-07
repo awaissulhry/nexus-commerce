@@ -19614,6 +19614,164 @@ model AdsPlaybookLink {
   @@index([workspaceId])
 }
 
+/// BID BRAIN BB-2 — one campaign's place in the bid brain (design BID-BRAIN-DESIGN.md §5, Owner 10-07). The env
+/// `NEXUS_BID_BRAIN_MODE` (off | shadow | live) is the ceiling; this row is the campaign's own mode under it.
+///   SHADOW  the brain decides and logs (BidBrainDecision), writes nothing
+///   LIVE    the brain is the campaign's one bid writer (BB-6; a big door — the approver's authenticator code)
+///   HELD    auto-undo or a person holds it: no raises, stops still apply (until `heldUntil`)
+/// No row = shadow while the campaign is on the live-write allowlist (BB-3). No foreign key: the history outlives a
+/// removed campaign, and the loaders join by id.
+model BidBrainEnrollment {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Campaign.id.
+  campaignId  String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// SHADOW | LIVE | HELD
+  mode        String @default("SHADOW")
+
+  /// HELD only: until when, by whom ('auto-undo', 'user:<id>') and why.
+  heldUntil  DateTime?
+  heldBy     String?
+  heldReason String?
+
+  /// The campaign's bids and placements when it joined: what "give back" restores (BB-6).
+  snapshot   Json?
+  /// 'user:<id>' or 'claude:<approvalId>' — who enrolled it.
+  enrolledBy String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, campaignId], name: "campaign_enrollment", map: "BidBrainEnrollment_workspaceId_campaignId_key")
+  @@index([mode])
+  @@index([workspaceId])
+}
+
+/// BID BRAIN BB-2 — one decision of the bid brain for one keyword or target, with its "why". In shadow (BB-3) it
+/// records what the brain WOULD set next to what today's writers actually set (`currentCents`, `lastWriter`), so the
+/// diff (BB-4) can count agree / higher / lower / hold / conflicts. Only rows that changed since the target's last
+/// decision are written, plus one daily snapshot (`kind`), and rows older than 30 days are deleted (Neon cost).
+model BidBrainDecision {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// One run of the brain (every decision of a run shares it).
+  runId       String
+  /// SHADOW | LIVE — the mode it was decided in.
+  mode        String
+  /// change (differs from the target's last decision) | snapshot (the day's first)
+  kind        String
+  marketplace String
+  campaignId  String
+  adGroupId   String?
+  /// AdTarget.id. No foreign key: the history outlives a removed target.
+  targetId    String
+
+  /// write | hold | brake
+  action String
+  /// brake | stop | pin | stock | freeze | phase | min_bid_hour | goal | band | limit | no_goal
+  layer  String
+
+  /// The bid today's writers had set when the brain decided, and the bid the brain decided (equal on a hold).
+  currentCents Int
+  decidedCents Int
+  /// What the goal alone asks; null without a goal or an order value.
+  goalBidCents Int?
+  /// The ACoS aim and band, and the ACoS expected at today's bid, as fractions (0.2 = 20 %).
+  aim          Decimal? @db.Decimal(8, 4)
+  bandLo       Decimal? @db.Decimal(8, 4)
+  bandHi       Decimal? @db.Decimal(8, 4)
+  expectedAcos Decimal? @db.Decimal(10, 4)
+  /// 0..1 — the share of the estimate resting on data.
+  confidence   Decimal? @db.Decimal(6, 4)
+  /// The newest settled day the evidence reads.
+  dataDay      DateTime @db.Date
+
+  /// The last writer of this target's bid before the decision (AdvertisingActionLog.userId) and when.
+  lastWriter  String?
+  lastWriteAt DateTime?
+
+  /// One line: the deciding layer, the aim, CR̂ with n, the factor and the clamp.
+  why      String @db.Text
+  /// { step, placements, clash, chain } — the parts of the decision a screen or the read tool shows.
+  evidence Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@index([targetId, createdAt(sort: Desc)])
+  @@index([runId])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
+/// BID BRAIN BB-2 — a hold on a campaign's or one target's bids, with an end date: a pin, a person's own bid, a
+/// Claude request a person approved (60 days, as today), or an auto-undo freeze. The brain leaves a held bid alone
+/// (a stop still applies); a hand-back ends it (`endedAt`). Replaces the skip lists' implicit holds (design §2).
+model BidHold {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  campaignId String
+  /// AdTarget.id; null = every bid of the campaign.
+  targetId   String?
+  /// PIN | PERSON | CLAUDE | AUTO_UNDO
+  kind       String
+  /// null = until handed back.
+  until      DateTime?
+  /// 'user:<id>', 'claude:<approvalId>', 'auto-undo'.
+  by         String
+  reason     String?
+
+  endedAt DateTime?
+  endedBy String?
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId, endedAt])
+  @@index([targetId])
+  @@index([workspaceId])
+}
+
+/// BID BRAIN BB-2 — a rule's bid action as an INPUT to the brain instead of a write (design §2, BB-9): a ceiling, a
+/// floor, a goal or a share floor on a campaign, a target or a placement lane. When directives overlap the lowest
+/// ceiling and the highest floor win; a floor above a ceiling loses and the clash is logged once.
+model BidDirective {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  campaignId String
+  /// AdTarget.id; null = every target of the campaign.
+  targetId   String?
+  /// TOP_OF_SEARCH | PRODUCT_PAGE | REST_OF_SEARCH for a placement directive; null for a bid.
+  lane       String?
+  /// CEILING | FLOOR | GOAL | SHARE_FLOOR
+  kind       String
+  /// A bid ceiling or floor in cents (or a placement cap in percent for a lane).
+  valueCents Int?
+  /// A GOAL's ACoS, integer percent.
+  valuePct   Int?
+  /// 'rule:<AutomationRule.id>', 'coverage', 'playbook' — who asked.
+  source     String
+  /// When it stops applying (bid_down: 7 days).
+  until      DateTime?
+  reason     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([targetId])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

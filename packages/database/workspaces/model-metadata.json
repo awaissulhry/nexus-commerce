@@ -6717,6 +6717,22 @@
       "fields": []
     },
     {
+      "name": "BidBrainEnrollment",
+      "fields": []
+    },
+    {
+      "name": "BidBrainDecision",
+      "fields": []
+    },
+    {
+      "name": "BidHold",
+      "fields": []
+    },
+    {
+      "name": "BidDirective",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },
