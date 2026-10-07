@@ -71,6 +71,9 @@
  *     a stopped worker resumes, two workers at once run every step exactly once, a stale step is skipped.
  *   · `services/advertising/ads-claude-bulk-postgres.vitest.test.ts` (MCP full control A7, 2026-10-02) — an approved
  *     bulk bid change and an engine write on one target: when the drain claims both at once, exactly one wins.
+ *   · `services/advertising/bid-brain/shadow-postgres.vitest.test.ts` (bid brain BB-3, 2026-10-07) — the shadow bid brain's
+ *     loaders (a decayed evidence aggregate, DISTINCT ON reads) and its run under row security: it decides allowlisted
+ *     IT/DE keywords, stores only changes and a daily snapshot, brakes on a halt or stale data, and writes nothing else.
  * Both therefore SKIP unless given a multi-connection server, which means a normal suite run verifies
  * nothing. This script supplies one.
  *
@@ -204,6 +207,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'a 200-step change plan (MCP full control C6: one approval, a stopped worker resumed, two workers at once, each step exactly once, a stale step skipped)', file: 'src/services/agents/change-plan-postgres.vitest.test.ts', expect: 2 },
   { name: 'identity: one channel item, two businesses, the same moment (MCP full control I12: report mode both succeed with one claim; enforce mode one wins)', file: 'src/services/identity/channel-item-claim-postgres.vitest.test.ts', expect: 2 },
   { name: 'Claude\'s approved bulk bid change and an engine write on one target (MCP full control A7: both queued, one claim wins, the other waits for it)', file: 'src/services/advertising/ads-claude-bulk-postgres.vitest.test.ts', expect: 2 },
+  { name: 'the shadow bid brain (BB-3: allowlisted IT/DE keywords only, no write path, changes and a daily snapshot stored, halt and stale-data brakes, 30-day prune, one business)', file: 'src/services/advertising/bid-brain/shadow-postgres.vitest.test.ts', expect: 5 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']
 const DEAD = 'postgresql://nobody@127.0.0.1:1/real_pg_no_stray_writes_test'
