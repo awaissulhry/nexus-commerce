@@ -841,6 +841,8 @@ async function labelsStep(ctx: Ctx): Promise<StepResult> {
     return 'continue'
   }
   const packing = ctx.row.packing as unknown as FbaPackingSnapshot | null
+  const startedAt = iso(ctx)
+  let boxCount = 0
   for (const row of rows) {
     const boxes = await amazon.allPages(async token => {
       const page = await read(ctx, () => amazon.listShipmentBoxes(accountId, planId, row.amazonShipmentId!, token))
@@ -849,8 +851,15 @@ async function labelsStep(ctx: Ctx): Promise<StepResult> {
     if (!boxes.length || boxes.some(b => !b.boxId)) throw new StillRunning('Amazon has not numbered the boxes yet')
     if (boxes.some(b => (b.quantity ?? 1) > 1)) logger.warn('[fba-inbound] Amazon lists a box record for several boxes; one entry is kept per record', { planRowId: ctx.id, shipmentId: row.amazonShipmentId })
     await prisma.fBAShipment.update({ where: { id: row.id }, data: { boxes: json(boxes.map(b => shipmentBoxOf(b, packing))) } })
+    boxCount += boxes.length
   }
-  await move(ctx, 'READY_TO_SHIP', 'TRACKING', ['LABELS'], { nextCheckAt: null })
+  // LABELS reads only (no Amazon operation), yet the drawer's "Labels" step needs its time like every other step:
+  // one SUCCESS entry without a call, written with the move to READY_TO_SHIP.
+  const done: FbaPlanStepEntry = {
+    step: 'LABELS', call: null, operationId: null, shipmentId: null, startedAt, finishedAt: iso(ctx), result: 'SUCCESS', problems: [],
+    note: `${boxCount} ${boxCount === 1 ? 'box' : 'boxes'} numbered`,
+  }
+  await mutate(ctx, row => ({ status: 'READY_TO_SHIP', currentStep: 'TRACKING', nextCheckAt: null, steps: json([...stepsOf(row), done]) }), ['LABELS'])
   return 'stop'
 }
 

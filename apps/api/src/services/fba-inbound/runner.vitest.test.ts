@@ -254,6 +254,11 @@ describe('a person\'s choice → READY_TO_SHIP', () => {
     ])
     expect(boxes(shipments[0]).every(b => b.boxId.startsWith(shipments[0].shipmentId))).toBe(true)
     expect((await events(id)).map(e => e.status).slice(-2)).toEqual(['LABELS', 'READY_TO_SHIP'])
+    // LABELS calls no Amazon operation, yet it leaves one SUCCESS entry with its time (the drawer's "Labels" step).
+    const boxTotal = shipments.reduce((n, s) => n + boxes(s).length, 0)
+    expect((await stepsOf(id)).filter(s => s.step === 'LABELS')).toEqual([expect.objectContaining({
+      call: null, operationId: null, result: 'SUCCESS', finishedAt: expect.any(String), note: `${boxTotal} boxes numbered`,
+    })])
 
     // A second run (the plan waits for the Shipped click) sends nothing.
     const before = fake.requests.length
