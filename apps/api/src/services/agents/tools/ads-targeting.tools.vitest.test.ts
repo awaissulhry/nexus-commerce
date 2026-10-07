@@ -336,7 +336,7 @@ describe('retire-negatives', () => {
       action: 'retire-negatives', market: 'IT', totals: { retiring: 2, atAmazon: 1, nexusOnly: 1 },
       raises: ['negative exact "old term" · ad group "group g-a1" (campaign "Test c-a")'],
       stepUp: { what: 'lifts 1 negative at Amazon (the searches it blocks can show the ads again)', raises: ['Spend'], needs: STEP_UP_NEEDS, how: expect.stringMatching(/authenticator code.*allowRetire/) },
-      limitFacts: { action: 'retire', this: { items: 2, raises: 2 } },
+      limitFacts: { action: 'retire', this: { items: 2, raises: 1, writes: 1 } },
     })
     expect(r.preview.changes.map((c: Row) => [c.label, c.toLabel, c.madeBy])).toEqual([
       ['negative exact "old term" · ad group "group g-a1" (campaign "Test c-a")', 'Retired: archived at Amazon', expect.stringMatching(/^no record in Nexus of who added it/)],

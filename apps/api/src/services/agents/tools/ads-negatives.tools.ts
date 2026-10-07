@@ -738,7 +738,10 @@ async function decideRetire(raw: Record<string, unknown>, ctx: Pick<ToolContext,
   const reached = writes.length ? await reachOver(writes) : { reach: { reach: 'sandbox' } as StoredReach }
   if ('refused' in reached) return refuse(`Not queued: ${reached.label}: ${gateRefusal(reached.refused)}`)
   const stored = reached.reach
-  const kit: KitItem[] = list.map((r) => ({ entity: { kind: 'target', id: r.id }, change: { field: 'retire', term: r.text, matchType: r.match }, ...(r.atAmazon ? {} : { nexusOnly: true }) }))
+  // A negative lifted at Amazon can add spend (a retire, a raise); a Nexus-only row removed moves nothing (Amazon never had it).
+  const kit: KitItem[] = list.map((r) => (r.atAmazon
+    ? { entity: { kind: 'target', id: r.id }, change: { field: 'retire', term: r.text, matchType: r.match } }
+    : { entity: { kind: 'target', id: r.id }, change: { field: 'automation' }, nexusOnly: true }))
   const facts = opts.rule ? await ruleFactsFor({ tool: TOOL.retire, limits: RETIRE_LIMITS, items: kit, writes, approvalId: ctx.approvalId ?? null }) : null
   const bound = await boundTo([...new Set(list.map((r) => r.campaign.id))])
   const lines = list.map((r) => ({
