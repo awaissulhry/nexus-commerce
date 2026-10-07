@@ -808,9 +808,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // decides again whether it raises).
   'set-hourly-bid-plan': ['op', 'basis', 'reach', 'gateRefused'],
   // AA-W2-12 — every ad named with its status (an enable: the pause it lifts, the budget and the bids that serve again),
-  // and where it lands.
+  // and where it lands. W4-2 — an enable: who paused each ad and when, frozen (a status change recorded since moves it).
   'pause-ads': ['basis', 'reach'],
-  'enable-ads': ['basis', 'reach'],
+  'enable-ads': ['basis', 'reach', 'whoPaused'],
   // AA-W2-13 — every ad named with its status, and where it lands.
   'archive-ads': ['basis', 'reach'],
   // W3-3 — every ad group named with its stock verdict, every bid it lowers or gives back, and where it lands.
