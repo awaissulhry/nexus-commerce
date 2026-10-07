@@ -191,7 +191,11 @@ export async function runDraftPreview<C extends CampaignCtx>(
   const windowDays = Math.max(7, Math.min(90, Math.round(raw)))
 
   const picked = builderDraftCampaignIds(draft.actions, opts.slug) ?? []
-  if (picked.length === 0 && !opts.emptyPickMeansScope) return blank(windowDays)
+  // An empty picker previews the rule's scope only where the engine reads it so — and only once the draft has
+  // conditions to judge: a draft still being built (no conditions yet) answers "nothing selected", as it always did,
+  // instead of an error the builder would show while the person is still typing.
+  const hasConditions = Array.isArray(draft.conditions) && draft.conditions.length > 0
+  if (picked.length === 0 && !(opts.emptyPickMeansScope && hasConditions)) return blank(windowDays)
 
   // ── the engine's own translation, so the conditions and the action are the real ones ──
   const translated = maybeTranslateAdsRule({ id: PREVIEW_RULE_ID, actions: draft.actions, conditions: draft.conditions })
