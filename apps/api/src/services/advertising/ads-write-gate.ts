@@ -389,6 +389,12 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         },
       })
     : null
+  // 6a — the broader refusal first (the pin-before-bounds order below): no allowlist entry makes an SB/SD campaign
+  // writable through Sponsored Products endpoints, so naming the allowlist — or Amazon's limits for an ad product the
+  // write is not sent to — would point the operator at the wrong fix. W4-11 — an SB/SD write Nexus sends to their own
+  // endpoints (the write says what it is) passes here.
+  const unsupportedCampaign = campaign ? adWriteRefusal(campaign, ctx.write, { unknown: 'allow' }) : null
+  if (unsupportedCampaign) return { allowed: false, reason: unsupportedCampaign, deniedAt: 'ad_product_unsupported' }
 
   // 6b — Amazon's own limits in this market (review G.5, Owner decision S10). Every amount behind this gate is in euro
   // cents, so a market without a checked row (UK, SE, PL, NL, …) is refused outright rather than converted, and a bid or
@@ -435,14 +441,7 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
         deniedAt: 'campaign_allowlist',
       }
     }
-    // (the campaign's row: read above, before Amazon's limits)
-    // 6a — the broader refusal first (the pin-before-bounds order below): no allowlist entry makes an SB/SD campaign
-    // writable through Sponsored Products endpoints, so naming the allowlist would point the operator at the wrong fix.
-    // W4-11 — an SB/SD write Nexus sends to their own endpoints (the write says what it is) passes here.
-    const unsupportedCampaign = adWriteRefusal(campaign, ctx.write, { unknown: 'allow' })
-    if (unsupportedCampaign) {
-      return { allowed: false, reason: unsupportedCampaign, deniedAt: 'ad_product_unsupported' }
-    }
+    // (the campaign's row and its ad product: read and judged above, before Amazon's limits)
     if (!campaign) {
       return { allowed: false, reason: `campaign ${ctx.campaignId} was not found — refusing an unattributable write`, deniedAt: 'campaign_allowlist' }
     }
