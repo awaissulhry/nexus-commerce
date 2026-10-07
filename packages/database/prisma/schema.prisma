@@ -21063,3 +21063,37 @@ model ChannelItemClaim {
   @@id([channel, marketplace, externalId])
   @@index([workspaceId])
 }
+
+/// Platform health watchdog (2026-10-07). The Owner's ads run by themselves, so a part that stops must be found by the
+/// platform, not by chance: eight faults ran silently for days that day (SQP requests refused every night under a SUCCESS
+/// cron row, the scheduler dying at 03:20 UTC, a graduation gate reading a sandbox connection, …). Once a day
+/// (`jobs/platform-health-watchdog.job.ts`, also "Run now") every check of `services/platform-health/` measures one part
+/// and leaves ONE row here: its verdict, in plain words, with the numbers it rests on. A failing check also keeps ONE
+/// open alert (AlertRule metric `platformHealth:<checkId>`), resolved when it passes again. Claude's
+/// `platform-health-checks` reads the newest run. Rows older than 60 days are removed by the watchdog itself.
+model PlatformHealthCheck {
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+  /// One watchdog run: every check it measured shares this id.
+  runId       String
+  /// The check (`cron-runs`, `sqp-feed`, …) and the part of the platform it watches (scheduler, data-feeds, …).
+  checkId     String
+  subsystem   String
+  /// ok | warn | fail | unknown (it could not measure: `message` says why — never counted as ok).
+  status      String
+  /// What is wrong, or that all is well, in plain words.
+  message     String
+  likelyCause String?
+  nextStep    String?
+  /// The numbers the verdict rests on (counts, dates, names; never money).
+  evidence    Json
+  /// cron | manual (a "Run now")
+  triggeredBy String   @default("cron")
+  measuredAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([checkId, measuredAt(sort: Desc)])
+  @@index([runId])
+  @@index([measuredAt])
+  @@index([workspaceId])
+}

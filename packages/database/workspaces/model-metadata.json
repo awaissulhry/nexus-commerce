@@ -7606,6 +7606,10 @@
           "relationOnDelete": "Restrict"
         }
       ]
+    },
+    {
+      "name": "PlatformHealthCheck",
+      "fields": []
     }
   ]
 }
