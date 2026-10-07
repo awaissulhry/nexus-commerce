@@ -146,6 +146,9 @@ describe('the build preview, and what refuses it', () => {
     expect(plans.map((a: Row) => [a.kind, a.key, a.does])).toEqual([['rankGroup', 'rank:performance', 'create'], ['rankGroup', 'rank:research', 'create']])
     expect(plans[0].summary).toMatch(/for the campaigns this build makes for exact-category, exact-brand .*switched OFF with its campaigns: nothing runs until START\.$/)
     expect(getTool('apply-ads-playbook')).toMatchObject({ alwaysAsk: true, maxClaudeTrust: 'auto', strategyBound: 'amazon-ads', reversibility: 'partial', openWorld: true, readOnly: false })
+    // W4-12 — an adopt binds in Nexus only and is undone in full; every other op keeps the kind's worst case.
+    expect(getTool('apply-ads-playbook')!.consequencesFor?.({ op: 'adopt' })).toEqual({ openWorld: false, reversibility: 'full' })
+    for (const op of ['build', 'start', 'stop', 'sync', 'sync-negatives', 'phase', 'hero']) expect(getTool('apply-ads-playbook')!.consequencesFor?.({ op })).toBeNull()
   })
 
   it('refused, and not queued: not enrolled, the row moved (expectVersion), one slot asked that is not in the playbook', async () => {

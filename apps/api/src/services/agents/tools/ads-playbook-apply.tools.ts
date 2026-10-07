@@ -837,6 +837,9 @@ const applyAdsPlaybook: AgentTool = {
   // A build is undone by archiving what it made (permanent at Amazon; what it spent stays spent); an adopt in full; a
   // start by a stop (what it spent stays spent), a stop by a start.
   reversibility: 'partial',
+  // An adopt only binds campaigns the product already runs to its slots, in Nexus: nothing reaches Amazon, and undo
+  // unbinds them in full.
+  consequencesFor: (args) => (args.op === 'adopt' ? { openWorld: false, reversibility: 'full' } : null),
   maxClaudeTrust: 'auto',
   limits: APPLY_LIMITS,
   withinLimits: applyRefusal,

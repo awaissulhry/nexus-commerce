@@ -213,17 +213,21 @@ export function claudeGateRule(principal: McpPrincipal): GateRule {
 /**
  * N4 — what a single change does once it runs, from the tool's own declared facts (the same facts the Approvals page
  * reads): whether it reaches beyond Nexus, and whether and how it can be put back. A plan has its own per-step summary
- * and an undo request is judged by the change it asks for, so neither gets this block.
+ * and an undo request is judged by the change it asks for, so neither gets this block. W4-12 — a request the tool's own
+ * code reads as narrower than its kind (`consequencesFor`, e.g. a playbook adopt: Nexus only, undone in full) says so.
  */
-export function consequencesOf(tool: Pick<AgentTool, 'control' | 'openWorld' | 'reversibility' | 'undo'>) {
+export function consequencesOf(tool: Pick<AgentTool, 'control' | 'openWorld' | 'reversibility' | 'undo' | 'consequencesFor'>, args: Record<string, unknown> = {}) {
   if (tool.control || !tool.reversibility) return null
+  const narrower = tool.consequencesFor?.(args) ?? null
+  const openWorld = narrower?.openWorld === false ? false : !!tool.openWorld
+  const reversibility = narrower?.reversibility ?? tool.reversibility
   return {
-    reaches: tool.openWorld ? 'beyond Nexus: a marketplace, a buyer or a supplier (the preview says which)' : 'Nexus only',
-    reversibility: tool.reversibility,
-    undo: tool.reversibility === 'none'
+    reaches: openWorld ? 'beyond Nexus: a marketplace, a buyer or a supplier (the preview says which)' : 'Nexus only',
+    reversibility,
+    undo: reversibility === 'none'
       ? 'it cannot be undone'
       : tool.undo
-        ? `undo-change can ask to put it back${tool.reversibility === 'partial' ? ' (partly: the preview says what stays)' : ''}`
+        ? `undo-change can ask to put it back${reversibility === 'partial' ? ' (partly: the preview says what stays)' : ''}`
         : 'no undo tool: a person puts it back in Nexus',
   }
 }
@@ -245,8 +249,8 @@ function watchShown(verdict: WatchVerdict) {
 }
 
 /** What Claude reads for each way the gate can end. */
-function answer(outcome: GateOutcome, principal: McpPrincipal, tool?: Pick<AgentTool, 'control' | 'openWorld' | 'reversibility' | 'undo'>): CallToolResult {
-  const consequences = tool && !outcome.plan && !outcome.undoes ? consequencesOf(tool) : null
+function answer(outcome: GateOutcome, principal: McpPrincipal, tool?: Pick<AgentTool, 'control' | 'openWorld' | 'reversibility' | 'undo' | 'consequencesFor'>, args: Record<string, unknown> = {}): CallToolResult {
+  const consequences = tool && !outcome.plan && !outcome.undoes ? consequencesOf(tool, args) : null
   switch (outcome.mode) {
     case 'queued':
       if (outcome.rule?.by === 'rule') {
@@ -400,7 +404,7 @@ export async function runToolForClaude(
         }
         const outcome = await runOrQueueTool(tool.name, toolArgs, principal, run.id, { forceAsk: !tool.readOnly && !tool.journal, rule: claudeGateRule(principal) })
         await finish(ending(outcome))
-        return answer(outcome, principal, tool)
+        return answer(outcome, principal, tool, toolArgs)
       } catch (error) {
         // An unexpected failure stays in the log and on the run; Claude gets no internals.
         const message = error instanceof Error ? error.message : String(error)

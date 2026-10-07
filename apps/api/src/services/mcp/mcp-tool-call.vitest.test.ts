@@ -180,6 +180,27 @@ describe('N4 — what a single change does once it runs', () => {
       .toEqual({ reaches: 'Nexus only', reversibility: 'none', undo: 'it cannot be undone' })
   })
 
+  it('W4-12 — a request the tool reads as narrower than its kind says so (a playbook adopt: Nexus only, in full); others keep the kind', async () => {
+    const perRequest = {
+      ...reaching,
+      name: 'apply-ads-playbook',
+      input: z.object({ op: z.string() }),
+      consequencesFor: (args: Record<string, unknown>) => (args.op === 'adopt' ? { openWorld: false, reversibility: 'full' } : null),
+    } as unknown as AgentTool
+    expect(answerOf(await runToolForClaude(principal, perRequest, { business: 'Xavia Racing', op: 'adopt' })).consequences)
+      .toEqual({ reaches: 'Nexus only', reversibility: 'full', undo: 'undo-change can ask to put it back' })
+    expect(answerOf(await runToolForClaude(principal, perRequest, { business: 'Xavia Racing', op: 'start' })).consequences)
+      .toEqual({
+        reaches: 'beyond Nexus: a marketplace, a buyer or a supplier (the preview says which)',
+        reversibility: 'partial',
+        undo: 'undo-change can ask to put it back (partly: the preview says what stays)',
+      })
+    // It can only narrow: a tool cannot claim a wider reach than its kind declares.
+    const widening = { ...perRequest, openWorld: false, consequencesFor: () => ({ openWorld: true }) } as unknown as AgentTool
+    expect(answerOf(await runToolForClaude(principal, widening, { business: 'Xavia Racing', op: 'adopt' })).consequences)
+      .toMatchObject({ reaches: 'Nexus only' })
+  })
+
   it('a plan and an undo request carry their own facts, not this block', async () => {
     gate.runOrQueueTool.mockResolvedValue({ ok: true, mode: 'queued', approvalId: 'approval-2', plan: { steps: 2 } })
     expect(answerOf(await runToolForClaude(principal, reaching, { business: 'Xavia Racing' }))).not.toHaveProperty('consequences')

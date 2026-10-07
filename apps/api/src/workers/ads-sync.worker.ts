@@ -11,7 +11,7 @@
  * was CANCELLED during the grace window, we skip without calling the
  * API.
  *
- * Idempotency: jobId is "ads-sync:<queueRowId>" so a duplicate enqueue
+ * Idempotency: jobId is "ads-sync-<queueRowId>" so a duplicate enqueue
  * for the same row collapses to one job (BullMQ deduplicates on jobId).
  */
 

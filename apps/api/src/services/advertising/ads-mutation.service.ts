@@ -1126,7 +1126,7 @@ async function enqueueBullMQJob(queueRowId: string, syncType: AdSyncType): Promi
   try {
     const { adsSyncQueue } = await import('../../lib/queue.js')
     const add = adsSyncQueue
-      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: `ads-sync:${queueRowId}` })
+      .add(syncType, { queueId: queueRowId, syncType }, { delay: GRACE_PERIOD_MS, jobId: `ads-sync-${queueRowId}` })
       .then(() => undefined)
       .catch((err: unknown) => {
         logger.warn('[ads-mutation] BullMQ enqueue failed (cron drain will handle)', {

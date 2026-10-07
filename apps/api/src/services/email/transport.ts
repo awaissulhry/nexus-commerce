@@ -61,6 +61,11 @@ function isReal(): boolean {
   return process.env.NEXUS_ENABLE_OUTBOUND_EMAILS === 'true'
 }
 
+/** Whether a value can go in an HTTP header as is: printable ASCII only (fetch refuses anything above 255). */
+function isHeaderSafe(value: string): boolean {
+  return /^[\x21-\x7e]+$/.test(value)
+}
+
 /** The sender when a message names none (Xavia's; every other business names its own, O3). */
 export function defaultFrom(): string {
   return process.env.NEXUS_EMAIL_FROM ?? 'Xavia <ship@xavia.it>'
@@ -99,6 +104,16 @@ export async function sendEmail(msg: EmailMessage): Promise<SendResult> {
       provider: 'resend',
       dryRun: false,
       error: 'RESEND_API_KEY not set',
+    }
+  }
+  // A key that cannot go in an HTTP header (a pasted, shortened placeholder) made fetch throw "Cannot convert
+  // argument to a ByteString" on every send. Say what is wrong instead; never echo the key.
+  if (!isHeaderSafe(apiKey)) {
+    return {
+      ok: false,
+      provider: 'resend',
+      dryRun: false,
+      error: 'RESEND_API_KEY is not a real key: it holds characters an API key never has (a shortened placeholder?) — paste the full key from Resend',
     }
   }
 

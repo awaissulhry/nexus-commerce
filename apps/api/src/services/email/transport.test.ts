@@ -98,6 +98,30 @@ test('sendEmail() in real mode without RESEND_API_KEY returns error', async () =
   }
 })
 
+test('sendEmail() in real mode with a placeholder RESEND_API_KEY says so, and never calls fetch', async () => {
+  const prevEnable = process.env.NEXUS_ENABLE_OUTBOUND_EMAILS
+  const prevKey = process.env.RESEND_API_KEY
+  const prevFetch = globalThis.fetch
+  let fetched = 0
+  globalThis.fetch = (async () => { fetched++; throw new Error('fetch must not run') }) as typeof fetch
+  process.env.NEXUS_ENABLE_OUTBOUND_EMAILS = 'true'
+  process.env.RESEND_API_KEY = 're_…'
+  try {
+    const r = await sendEmail({ to: 'a@b.com', subject: 'x', html: '<p>x</p>' })
+    assert(r.ok === false, 'ok=false')
+    assert(r.dryRun === false, 'dryRun=false')
+    assert(r.error?.includes('RESEND_API_KEY is not a real key') === true, 'names the placeholder key')
+    assert(!r.error?.includes('re_…'), 'never echoes the key')
+    assert(fetched === 0, 'fetch not called')
+  } finally {
+    globalThis.fetch = prevFetch
+    if (prevEnable === undefined) delete process.env.NEXUS_ENABLE_OUTBOUND_EMAILS
+    else process.env.NEXUS_ENABLE_OUTBOUND_EMAILS = prevEnable
+    if (prevKey === undefined) delete process.env.RESEND_API_KEY
+    else process.env.RESEND_API_KEY = prevKey
+  }
+})
+
 ;(async () => {
   let passed = 0
   let failed = 0
