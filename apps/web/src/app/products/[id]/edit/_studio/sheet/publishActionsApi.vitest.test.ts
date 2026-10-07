@@ -4,7 +4,7 @@
  * reader asks for one read after an event; a dropped read tells every reader to read again.
  */
 import { describe, expect, it } from 'vitest'
-import { PUBLISH_ACTIONS_READ_TTL_MS, PublishActionsReadCache, publishActionsReadKey, type PublishActionsCacheEvent, type PublishActionsDestination, type PublishActionsRead } from './publishActionsApi'
+import { PUBLISH_ACTIONS_READ_TTL_MS, PublishActionsReadCache, isSharedScopeDestination, publishActionsReadKey, publishActionsReadUrl, type PublishActionsCacheEvent, type PublishActionsDestination, type PublishActionsRead } from './publishActionsApi'
 
 const IT = { channel: 'EBAY', marketplace: 'IT', accountId: 'acc' }
 
@@ -123,5 +123,21 @@ describe('the shared publish-actions read', () => {
     expect(publishActionsReadKey('p', { channel: 'EBAY', marketplace: 'IT', accountId: 'acc', aliasKey: null })).toBe(publishActionsReadKey('p', IT))
     expect(publishActionsReadKey('p', { channel: '', marketplace: null })).toBe(publishActionsReadKey('p', {}))
     expect(publishActionsReadKey('p', { ...IT, aliasKey: '' })).not.toBe(publishActionsReadKey('p', IT))
+  })
+})
+
+/** The Matrix's Status columns (Owner 2026-10-07): every market at once, each as its own channel sheet reads it. */
+describe('the every-market read (newRows: every)', () => {
+  it('asks for every market\'s new rows, and is its own read — never the Shared scope\'s answer reused', () => {
+    expect(publishActionsReadUrl('p', { newRows: 'every' })).toMatch(/\/api\/products\/p\/studio\/publish-actions\?newRows=every$/)
+    expect(publishActionsReadUrl('p', {})).toMatch(/\/api\/products\/p\/studio\/publish-actions$/)
+    expect(publishActionsReadKey('p', { newRows: 'every' })).not.toBe(publishActionsReadKey('p', {}))
+    expect(publishActionsReadKey('p', { newRows: null })).toBe(publishActionsReadKey('p', {}))
+  })
+
+  it('🔴 its writes are each market\'s own: never sent as the Shared scope (allCoordinates)', () => {
+    expect(isSharedScopeDestination({ newRows: 'every' })).toBe(false)
+    expect(isSharedScopeDestination({})).toBe(true)
+    expect(isSharedScopeDestination(IT)).toBe(false)
   })
 })

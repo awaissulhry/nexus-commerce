@@ -255,6 +255,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   phase: "switching a product's playbook phase",
   settings: 'changing campaign settings (name, portfolio, end date, bidding strategy)',
   portfolio: 'creating and changing portfolios',
+  hourly: 'changing hourly bid plans',
 }
 const LEVEL_WORDS: Record<ClaudeTrust, string> = { off: 'off', ask: 'ask', confirm: 'confirm in Claude', watch: 'watch', auto: 'run by rule' }
 

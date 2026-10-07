@@ -234,6 +234,9 @@ const AD_CHANGE_TOOLS = new Set([
   // W4-3 — campaign settings: one queued write per campaign. A portfolio change: the Portfolios page's direct push, one
   // audit row per write (a new portfolio is counted as created, and as at Amazon when Amazon gave it an id).
   'set-campaign-settings', 'set-portfolio',
+  // W4-1 — an hourly plan change is Nexus only, but a switch-off, a delete or a removal gives back floored bids: each
+  // give-back write carries the approval.
+  'set-hourly-bid-plan',
 ])
 
 export interface AdDelivery {

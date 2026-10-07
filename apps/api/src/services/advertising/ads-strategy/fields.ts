@@ -85,6 +85,9 @@ export const CLAUDE_ACTION_TOOLS = {
   // or archived (set-portfolio op archive is the archive kind too: OP_ACTIONS, claude.ts).
   settings: ['set-campaign-settings'],
   portfolio: ['set-portfolio'],
+  // W4-1 — the hourly bid plans of the Hourly Bids page (create, paint, members, rename, switch, delete, per-campaign
+  // values): their own kind, so the Owner decides per market, category or product whether a plan change may run alone.
+  hourly: ['set-hourly-bid-plan'],
 } as const satisfies Record<string, readonly string[]>
 export type ClaudeActionType = keyof typeof CLAUDE_ACTION_TOOLS
 export const CLAUDE_ACTION_TYPES = Object.keys(CLAUDE_ACTION_TOOLS) as ClaudeActionType[]

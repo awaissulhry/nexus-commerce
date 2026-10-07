@@ -627,6 +627,7 @@ const ACTION_WORDS: Record<ClaudeActionType, string> = {
   phase: "switching a product's playbook phase",
   settings: 'changing campaign settings (name, portfolio, end date, bidding strategy)',
   portfolio: 'creating and changing portfolios',
+  hourly: 'changing hourly bid plans',
 }
 /** What a strategy level below auto allows, in W1-8's words (claude-trust.service.ts narrowedWhy). */
 const ALLOWS: Record<Exclude<ClaudeTrust, 'auto'>, (what: string) => string> = {
