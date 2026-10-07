@@ -1,0 +1,10 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`W4-8 — the manual cron trigger answers as before the move > every outcome, and the run row each leaves 1`] = `
+"404 {"error":"Unknown cron jobName 'no-such-job'. See GET /sync-logs/cron/registry for the list."}
+202 {"jobName":"parity-summary","status":"started"}
+  run {"status":"SUCCESS","triggeredBy":"manual","outputSummary":"parity run: 3 changed","errorMessage":null,"finished":true}
+202 {"jobName":"parity-throws","status":"started"}
+  run {"status":"FAILED","triggeredBy":"manual","outputSummary":null,"errorMessage":"parity run failed on purpose","finished":true}
+200 {"jobs":["parity-summary","parity-throws"]}"
+`;

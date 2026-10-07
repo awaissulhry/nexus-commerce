@@ -143,3 +143,14 @@ export async function automationEntity(scope: AutomationScope): Promise<import('
       : []
   return { kind: 'products', market: scope.market, productIds, label: productIds.length || !scope.campaignIds.length ? scope.label : `${scope.label} (its campaigns advertise no product Nexus knows: the market's strategy)` }
 }
+
+/**
+ * ADS AUTONOMY W4-8 — where a coverage-set seed lands (set-coverage-set op seed): the portfolio's set when it has one,
+ * else the portfolio's campaigns (the set the seed creates acts on them).
+ */
+export async function coverageSeedScope(portfolioId: string): Promise<AutomationScope> {
+  const set = await prisma.keywordCoverageSet.findFirst({ where: { portfolioId }, select: { id: true } })
+  if (set) return ofCoverageSet(set.id)
+  const campaigns = await prisma.campaign.findMany({ where: { portfolioId }, select: { id: true } })
+  return ofCampaigns(campaigns.map((c) => c.id), 'the coverage set a seed creates')
+}

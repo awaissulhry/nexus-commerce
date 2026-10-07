@@ -281,6 +281,8 @@ const AMAZON_AD_TOOLS = new Set([
   'add-ad-targets', 'add-negative-targets', 'retire-negatives', 'harvest-search-term', 'set-harvest-destination',
   // W4-6 — ad groups and product ads.
   'create-ad-group', 'add-product-ads', 'set-ad-group',
+  // ADS AUTONOMY W4-8 — engine settings: a rule's campaigns, a coverage set, an engine's Run now.
+  'assign-ad-rules', 'set-coverage-set', 'run-ad-engine-now',
 ])
 
 /** A campaign page: Amazon's by its Nexus Campaign id, eBay's by its Nexus eBay campaign id. */
@@ -999,6 +1001,44 @@ const READERS: Record<string, Reader> = {
         { label: 'Daily budget', from: null, to: adMoney(p.dailyBudgetCents, p.currency) },
         { label: 'Advertises', from: null, to: plural(recs(p.products).length, 'product') },
       ],
+    }
+  },
+  // W4-8 — which campaigns a rule acts on: how many before and after, added and taken off, and those outside its market.
+  'assign-ad-rules': (p) => {
+    const rule = rec(p.rule) ?? {}
+    const totals = rec(p.totals) ?? {}
+    const other = num(totals.otherMarketAfter) ?? 0
+    return {
+      channel: 'AMAZON',
+      market: marketOf(rule.market),
+      target: target('rule', { id: text(rule.id), name: text(rule.name) }),
+      changes: [
+        { label: 'Campaigns', from: plural(num(totals.before) ?? 0, 'campaign'), to: plural(num(totals.after) ?? 0, 'campaign') },
+        ...(num(totals.added) ? [{ label: 'Added', from: null, to: plural(num(totals.added)!, 'campaign') }] : []),
+        ...(num(totals.removed) ? [{ label: 'Taken off', from: null, to: plural(num(totals.removed)!, 'campaign') }] : []),
+        ...(other ? [{ label: 'Outside its market', from: null, to: `${plural(other, 'campaign')} (not ${text(rule.market) ?? '?'})` }] : []),
+      ],
+    }
+  },
+  // W4-8 — a coverage set's seed or term edits: the set, and each value from → to (the first lines).
+  'set-coverage-set': (p) => {
+    const set = rec(p.set) ?? {}
+    const portfolio = text(set.portfolioId)
+    return {
+      channel: 'AMAZON',
+      market: marketOf(set.marketplace),
+      target: target('other', { name: `Coverage set · ${text(set.name) ?? '?'}`, href: portfolio ? `/marketing/ads/portfolios/${seg(portfolio)}` : null }),
+      changes: recs(p.changes).slice(0, 20).map((c) => ({ label: `${text(c.term) ?? '?'} · ${text(c.field) ?? 'value'}`, from: c.from == null ? null : plainValue(c.from), to: c.to == null ? null : plainValue(c.to) })),
+    }
+  },
+  // W4-8 — an engine's Run now: the engine, what it may do, and when it last ran.
+  'run-ad-engine-now': (p) => {
+    const last = rec(p.lastRun)
+    return {
+      channel: 'AMAZON',
+      market: null,
+      target: target('other', { name: `Engine · ${text(p.name) ?? text(p.engine) ?? '?'}`, href: '/marketing/ads/rules-automation/control-room' }),
+      changes: [{ label: 'Run now', from: last ? `last ran ${text(last.at)?.slice(0, 16).replace('T', ' ') ?? '?'} UTC` : 'no run on record', to: `runs now, at ${text(p.level) ?? '?'}` }],
     }
   },
   // W4-3 — each campaign's settings from → to (one line per setting; the campaign named when there are several).

@@ -107,7 +107,7 @@ const tally = (labels: string[], say: (label: string) => string) => {
  * The callers ask only when a save sends `actions` or `scopeMarketplace`, so a toggle or rename is never refused, and
  * nothing here touches a stored rule: it keeps running exactly as stored until it is saved with a scope that can fire.
  */
-async function ruleScopeProblems(rule: { actions?: unknown; scopeMarketplace?: string | null }): Promise<string[]> {
+export async function ruleScopeProblems(rule: { actions?: unknown; scopeMarketplace?: string | null }): Promise<string[]> {
   const out: string[] = []
   const market = typeof rule.scopeMarketplace === 'string' && rule.scopeMarketplace.trim() ? rule.scopeMarketplace : null
   if (market) {

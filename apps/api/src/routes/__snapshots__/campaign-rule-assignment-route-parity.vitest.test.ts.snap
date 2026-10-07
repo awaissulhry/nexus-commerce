@@ -1,0 +1,12 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`W4-8 — the Apply Rules bulk route answers as before the move > every outcome, and the rows each leaves 1`] = `
+"400 {"error":"changes required"}
+  rows {"links":[],"builder":[{"type":"budget","campaigns":[{"id":"<id1>","name":"PARITY IT"}],"budgetFloor":1,"budgetCeiling":30}]}
+400 {"error":"unknown id","campaigns":["nope"],"rules":["no-such-rule"]}
+  rows {"links":[],"builder":[{"type":"budget","campaigns":[{"id":"<id1>","name":"PARITY IT"}],"budgetFloor":1,"budgetCeiling":30}]}
+200 {"ok":true,"kind":"budget","campaigns":2,"created":3,"removed":0,"rulesRewritten":1}
+  rows {"links":[{"campaignId":"IT","ruleId":"engine","kind":"budget","createdBy":"user:parity-user"},{"campaignId":"IT","ruleId":"builder","kind":"budget","createdBy":"user:parity-user"},{"campaignId":"DE","ruleId":"builder","kind":"budget","createdBy":"user:parity-user"}],"builder":[{"type":"budget","campaigns":[{"id":"<id1>","name":"PARITY IT","status":"ENABLED","adProduct":null,"dailyBudget":10,"marketplace":"IT","portfolioId":null,"targetingType":null},{"id":"<id2>","name":"PARITY DE","status":"ENABLED","adProduct":null,"dailyBudget":10,"marketplace":"DE","portfolioId":null,"targetingType":null}],"budgetFloor":1,"budgetCeiling":30}]}
+200 {"ok":true,"kind":"budget","campaigns":1,"created":0,"removed":2,"rulesRewritten":1}
+  rows {"links":[{"campaignId":"DE","ruleId":"builder","kind":"budget","createdBy":"user:parity-user"}],"builder":[{"type":"budget","campaigns":[{"id":"<id2>","name":"PARITY DE","status":"ENABLED","adProduct":null,"dailyBudget":10,"marketplace":"DE","portfolioId":null,"targetingType":null}],"budgetFloor":1,"budgetCeiling":30}]}"
+`;
