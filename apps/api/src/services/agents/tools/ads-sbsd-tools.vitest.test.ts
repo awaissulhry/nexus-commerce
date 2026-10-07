@@ -253,11 +253,13 @@ describe('add-negative-targets and retire-negatives', () => {
     expect(logs.length).toBe(2)
   })
 
-  it('retire-negatives lifts an SB negative keyword (for good: said plainly) and an SD negative product target (with the approver\'s code, as for SP), marked', async () => {
+  it('retire-negatives lifts an SB negative keyword (for good: said plainly) and an SD negative product target (a day-to-day change: no authenticator code, as for SP — code rule A), marked', async () => {
     const r = await preview('retire-negatives', { negativeIds: ['n-sb', 'n-sd'] })
     expect(r.ok, r.error).toBe(true)
+    // Code rule A (#479): lifting a negative is day-to-day — listed in raises, no authenticator code.
+    expect(r.preview).not.toHaveProperty('stepUp')
     expect(r.preview).toMatchObject({
-      totals: { retiring: 2, atAmazon: 2 }, stepUp: { raises: ['Spend'] },
+      totals: { retiring: 2, atAmazon: 2 },
       irreversible: ['negative exact "cheap brand" · ad group "group c-sb" (campaign "Italy brands")'],
       irreversibleNote: 'Amazon does not let a Sponsored Brands negative keyword archived in a campaign be added to that campaign again: these retires cannot be undone.',
       effect: expect.stringMatching(/To block that search again, a new negative is added\. For good: negative exact "cheap brand" .* — Amazon does not let a Sponsored Brands negative keyword archived in a campaign be added to that campaign again, so that search cannot be blocked there again, not even by an undo\./),
