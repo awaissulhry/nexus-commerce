@@ -318,6 +318,11 @@ async function finish(source: Record<string, unknown>, rows: UndoRow[], negative
   const { items, notJudged } = await undoItems(rows, negatives)
   const playbook = await playbookRaiseRefusal(items)
   if (playbook) return { ok: false, error: playbook }
+  // W4-3 — never a back door around set-campaign-settings' code (a setting put back that adds spend), nor around
+  // set-portfolio (a portfolio change is put back through undo-change of its request).
+  const { settingsUndoRefusal } = await import('./ads-campaign-settings.tools.js')
+  const settings = await settingsUndoRefusal(rows)
+  if (settings) return { ok: false, error: settings }
   const rule = await ruleFactsFor({ tool: 'undo-ad-change', limits: UNDO_LIMITS, items, writes, approvalId: ctx?.approvalId })
   const parts = [
     rows.length ? `restores ${total} recorded write${total === 1 ? '' : 's'} to the values before them` : '',
@@ -404,7 +409,9 @@ const undoAdChange: AgentTool = {
     + `retired. Nothing changes until it is approved. ${BY_RULE_WORDS}: each value it puts back no larger a move than its `
     + 'limits allow (a put-back that raises waits for a person by default), and never a status, an archive or a lifted '
     + 'negative keyword. The preview lists every write it reverses, where it lands (live or sandbox) and the ads '
-    + 'strategy\'s limits that apply; refused, and not queued, when Amazon\'s write gate would refuse it. Its own writes '
+    + 'strategy\'s limits that apply; refused, and not queued, when Amazon\'s write gate would refuse it, or when a '
+    + 'campaign setting it puts back would add spend (set-campaign-settings does that, with the approver\'s authenticator '
+    + 'code), or it holds a portfolio change (undo-change of that request). Its own writes '
     + 'are a change set of their own: undo-change of it puts back what it reversed (retired negatives are not created again).',
   async handler(args, ctx) {
     return undoPreview(args, ctx)

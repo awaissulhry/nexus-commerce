@@ -33,12 +33,24 @@ vi.mock('../../../lib/queue.js', () => {
   }
 })
 
+// Amazon's answer to a portfolio create, in live mode: a name with REFUSED is refused (no id, Amazon's words).
+vi.mock('../../advertising/ads-api-client.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../advertising/ads-api-client.js')>()
+  return {
+    ...actual,
+    createPortfolio: async (ctx: unknown, input: { name: string }) => (/REFUSED/.test(input.name)
+      ? { ok: true, mode: 'live', externalId: null, error: 'Amazon says: a test refusal' }
+      : actual.createPortfolio(ctx as never, input)),
+  }
+})
+
 import { callTool, type UserPrincipal } from '../call-tool.js'
 import { decideApproval, runOrQueueTool } from '../approval-gate.service.js'
 import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
 import { ruleFrom } from '../claude-trust.service.js'
-import { capMove } from './ads-portfolio.tools.js'
+import { capMove, capOf } from './ads-portfolio.tools.js'
+import { capPolicyOf } from '../../advertising/ads-portfolio.service.js'
 
 const TOOL = 'set-portfolio'
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -84,10 +96,15 @@ beforeAll(async () => {
     await pf('PF-EMPTY', 'Test empty')
     await pf('PF-ARCH', 'Test archived', { state: 'ARCHIVED' })
     await pf('PF-LIM', 'Test limits')
+    // Caps as the other writers store them: the bulk sheet (as typed), a sync of a camelCase answer, an unknown policy.
+    await pf('PF-BULK', 'Test bulk sheet', { budgetAmount: '500.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'dateRange', startDate: new Date('2026-01-01T00:00:00Z'), endDate: new Date(`${inAYear(200)}T00:00:00Z`) })
+    await pf('PF-SYNC', 'Test synced', { budgetAmount: '400.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'MONTHLYRECURRING' })
+    await pf('PF-ODD', 'Test odd', { budgetAmount: '400.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'weekly' })
     await db().amazonAdsPortfolio.create({ data: { profileId: 'local-IT', externalPortfolioId: 'local-pf-local-IT-test-local', name: 'Test local', state: 'ENABLED' } })
     // The fixture's IT campaign sits in the capped portfolio; another in the one to archive.
     await db().campaign.update({ where: { id: 'c-it' }, data: { portfolioId: 'PF-CAP' } })
     await db().campaign.update({ where: { id: 'c-pin' }, data: { portfolioId: 'PF-ARCHME' } })
+    await db().campaign.update({ where: { id: 'c-off' }, data: { portfolioId: 'PF-SYNC' } })
   })
 }, 180_000)
 afterAll(async () => { vi.unstubAllEnvs(); await database?.close() }, 30_000)
@@ -110,6 +127,33 @@ describe('the tools as the contract holds them', () => {
     expect(capMove(cap(100), cap(100)).direction).toBe('same')
     expect(capMove(cap(100), cap(50, { policy: 'dateRange', startDate: '2027-01-01', endDate: '2027-01-31' })).direction).toBe('raise')
     expect(capMove(cap(100, { policy: 'dateRange', startDate: '2027-01-01', endDate: '2027-01-31' }), cap(100, { policy: 'dateRange', startDate: '2027-01-01', endDate: '2027-02-28' })).direction).toBe('raise')
+    expect(capMove(cap(100), null).direction).toBe('raise')
+  })
+
+  it('every stored spelling of a cap policy reads as that policy; anything else, or a cap missing its amount or currency, fails closed', () => {
+    for (const raw of ['MONTHLY_RECURRING', 'monthlyRecurring', 'MONTHLYRECURRING', 'monthly_recurring']) expect(capPolicyOf(raw), raw).toBe('MONTHLY_RECURRING')
+    for (const raw of ['DATE_RANGE', 'dateRange', 'DATERANGE', 'date range']) expect(capPolicyOf(raw), raw).toBe('DATE_RANGE')
+    expect(capPolicyOf('noCap')).toBe('NO_CAP')
+    expect(capPolicyOf('weekly')).toBe('weekly')
+    expect(capPolicyOf(null)).toBeNull()
+    const held = (cap: Record<string, unknown>, fallback: string | null = null) => capOf({ cap: { amountCents: 1000, currency: 'EUR', policy: 'MONTHLY_RECURRING', startDate: null, endDate: null, inBudget: true, ...cap } as never }, fallback)
+    expect(held({})).toEqual({ amountCents: 1000, currency: 'EUR', policy: 'monthly', startDate: null, endDate: null })
+    expect(held({ currency: null }, 'EUR')).toMatchObject({ policy: 'monthly', currency: 'EUR' })
+    for (const [cap, why] of [
+      [{ policy: 'weekly' }, /its policy "weekly" is not one Nexus knows/],
+      [{ policy: null }, /an amount and no policy/],
+      [{ amountCents: null }, /a policy and no amount/],
+      [{ currency: null }, /Nexus does not know its currency/],
+      [{ policy: 'DATE_RANGE' }, /a date range without its dates/],
+    ] as const) {
+      const unread = held(cap)
+      expect(unread, JSON.stringify(cap)).toMatchObject({ unread: true, why: expect.stringMatching(why) })
+      // Fail closed: any change of it, letting it go, or a move to it counts as a raise.
+      expect(capMove(unread, { amountCents: 1, currency: 'EUR', policy: 'monthly', startDate: null, endDate: null }).direction).toBe('raise')
+      expect(capMove(unread, null).direction).toBe('raise')
+      expect(capMove(null, unread).direction).toBe('raise')
+      expect(capMove(unread, unread).direction).toBe('same')
+    }
   })
 })
 
@@ -139,7 +183,9 @@ describe('set-portfolio — create', () => {
       changes: [{ label: 'Portfolio', from: null, to: '"Test new" in IT' }],
       limitFacts: { tool: TOOL, action: 'portfolio', this: { items: 1, writes: 1, raises: 0 } },
     })
-    expect(r.preview.reachNote).toMatch(/no 5-minute cancel window/)
+    // Sandbox: recorded in Nexus only — never "sent to Amazon".
+    expect(r.preview.reachNote).toMatch(/^sandbox: /)
+    expect(r.preview.reachNote).not.toMatch(/Sent to Amazon/)
     const asked = await ask({ op: 'create', market: 'IT', name: 'Test new', why: 'a home for the gloves' })
     const done = await approve(asked.approvalId!)
     expect(done).toMatchObject({ ok: true, status: 'executed', result: { name: 'Test new', market: 'IT', mode: 'sandbox', atAmazon: true, changeSetId: asked.approvalId } })
@@ -225,6 +271,58 @@ describe('set-portfolio — archive', () => {
     expect((await portfolio('PF-ARCHME'))!.state).toBe('ARCHIVED')
     expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ error: expect.stringMatching(/cannot be brought back/) })
     expect((await preview({ op: 'archive', portfolioId: 'PF-ARCHME' })).error).toMatch(/^Nothing would change: portfolio "Test to archive" is archived already/)
+  })
+})
+
+describe('a stored cap in another spelling, or one Nexus cannot read: never read as no cap', () => {
+  it('the bulk sheet\'s dateRange: a raise is a raise (code)', async () => {
+    const end = (await portfolio('PF-BULK'))!.endDate.toISOString().slice(0, 10)
+    const r = await preview({ op: 'update', portfolioId: 'PF-BULK', cap: { amountCents: 80000, policy: 'dateRange', startDate: '2026-01-01', endDate: end } })
+    expect(r.preview).toMatchObject({
+      changes: [{ label: 'Budget cap', from: `EUR 500.00 from 2026-01-01 to ${end}`, to: `EUR 800.00 from 2026-01-01 to ${end}` }],
+      raises: [{ why: expect.stringMatching(/its cap rises/) }], stepUp: { raises: ['Portfolio budget cap'] },
+    })
+  })
+
+  it('a synced MONTHLYRECURRING cap holding a campaign: archiving it is a raise; so is any change of an unknown policy', async () => {
+    expect((await preview({ op: 'archive', portfolioId: 'PF-SYNC' })).preview).toMatchObject({ raises: [{ why: 'archiving it lets its 1 campaign spend without its cap (EUR 400.00 a month)' }], stepUp: expect.any(Object) })
+    const odd = await preview({ op: 'update', portfolioId: 'PF-ODD', cap: { amountCents: 100, policy: 'monthly' } })
+    expect(odd.preview).toMatchObject({
+      changes: [{ label: 'Budget cap', from: 'a cap Nexus cannot read (its policy "weekly" is not one Nexus knows)', to: 'EUR 1.00 a month' }],
+      raises: [{ why: expect.stringMatching(/Nexus cannot tell whether it lets more spend: it counts as a raise/) }], stepUp: expect.any(Object),
+    })
+    // A plain approve does not run it.
+    const asked = await ask({ op: 'update', portfolioId: 'PF-ODD', cap: { amountCents: 100, policy: 'monthly' } })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/it raises/) })
+    expect((await portfolio('PF-ODD'))!.budgetPolicy).toBe('weekly')
+    const read = (await call('ad-portfolios', { portfolioId: 'PF-ODD' })).data.items[0]
+    expect(read.cap).toMatchObject({ capCents: 40000, policy: 'unreadable', storedPolicy: 'weekly', note: expect.stringMatching(/counts as a raise/) })
+  })
+})
+
+describe('a create Amazon refused', () => {
+  it('is said so, in Amazon\'s words; its audit row is FAILED (approval-status: not sent); it exists in Nexus only and its undo says so', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    const asked = await ask({ op: 'create', market: 'IT', name: 'Test REFUSED', cap: { amountCents: 10000, policy: 'monthly' } })
+    const done = await approve(asked.approvalId!)
+    expect(done).toMatchObject({ ok: true, status: 'executed', result: { atAmazon: false, note: expect.stringMatching(/^Amazon refused it \(Amazon says: a test refusal\)/), capNote: expect.stringMatching(/not set: the portfolio is not at Amazon/) } })
+    const logs = await inside(() => db().advertisingActionLog.findMany({ where: { executionId: asked.approvalId } })) as Row[]
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toMatchObject({ actionType: 'AD_PORTFOLIO_CREATE', amazonResponseStatus: 'FAILED', evidence: { note: 'Amazon refused it: Amazon says: a test refusal' } })
+    // approval-status: one write, failed (not sent), and created in Nexus but not at Amazon.
+    const { adDeliveryOf } = await import('./approval.tools.js')
+    const row = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } })) as Row
+    expect(await inside(() => adDeliveryOf(asked.approvalId!, TOOL, row.preview))).toMatchObject({ reach: 'live', writes: 1, sent: 0, failed: 1, created: { total: 1, atAmazon: 0 } })
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ error: expect.stringMatching(/made in Nexus only; there is nothing at Amazon to archive/) })
+  })
+})
+
+describe('the other doors: undo-ad-change is no way around set-portfolio', () => {
+  it('refuses a portfolio change set and points to undo-change', async () => {
+    const asked = await ask({ op: 'update', portfolioId: 'PF-LIM', name: 'Test limits undo' })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await call('undo-ad-change', { changeSetId: asked.approvalId })).error).toMatch(/^Not undone: it holds a portfolio change \(set-portfolio\), which undo-ad-change cannot put back/)
+    expect(await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))).toMatchObject({ request: { tool: TOOL, args: { op: 'update', portfolioId: 'PF-LIM', name: 'Test limits' } } })
   })
 })
 

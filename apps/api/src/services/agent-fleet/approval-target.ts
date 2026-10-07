@@ -845,12 +845,19 @@ const READERS: Record<string, Reader> = {
       target: target('campaign', { id: text(first?.campaignId), name: text(first?.label), count: num(rec(p.totals)?.changing) ?? lines.length, href: campaignHref('set-campaign-settings', text(first?.campaignId)) }),
     }
   },
-  // W4-3 — a portfolio made, renamed, capped or archived: each value from → to.
-  'set-portfolio': (p) => ({
-    channel: 'AMAZON',
-    market: marketOf(p.market),
-    changes: recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.from), to: text(c.to) })),
-  }),
+  // W4-3 — a portfolio made, renamed, capped or archived: the portfolio (a new one by its name), each value from → to.
+  'set-portfolio': (p) => {
+    const changes = recs(p.changes).map((c) => ({ label: text(c.label) ?? '?', from: text(c.from), to: text(c.to) }))
+    const pf = rec(p.portfolio)
+    const created = recs(p.changes).find((c) => text(c.label) === 'Portfolio')
+    return {
+      channel: 'AMAZON',
+      market: marketOf(p.market),
+      changes,
+      changeCount: changes.length,
+      target: target('other', { id: text(pf?.portfolioId), name: pf ? `Portfolio “${text(pf.name) ?? '?'}”` : `New portfolio ${text(created?.to) ?? ''}`.trim(), href: '/marketing/ads/portfolios' }),
+    }
+  },
   // PB-5a — a build's campaigns and their daily budget, or an adopt's bindings (Nexus only).
   'apply-ads-playbook': (p, _a, ctx) => {
     // PB-9 — a phase switch: the phase, then each slot it floors or gives back and each hourly plan it switches.

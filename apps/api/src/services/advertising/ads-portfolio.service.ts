@@ -360,7 +360,7 @@ export async function updatePortfolioById(args: {
   })
   if (args.audit) {
     const after = await prisma.amazonAdsPortfolio.findUniqueOrThrow({ where: { id: row.id } })
-    await auditPortfolioWrite(args.audit, 'AD_PORTFOLIO_UPDATE', row.id, portfolioSnapshot(row), portfolioSnapshot(after), mode)
+    await auditPortfolioWrite(args.audit, 'AD_PORTFOLIO_UPDATE', row.id, portfolioSnapshot(row), portfolioSnapshot(after), writeStatus(mode), mode === 'local' ? 'Kept in Nexus only: it did not reach Amazon' : null)
   }
   return { ok: true, mode }
 }
@@ -376,9 +376,10 @@ export async function createPortfolio(input: {
   name: string; marketplace: string
   /** W4-3 — an approved Claude request (set-portfolio): the create is also written to the ads audit. The screen and a playbook build pass none. */
   audit?: PortfolioAudit
-}): Promise<{ portfolio: { portfolioId: string; name: string }; mode: string }> {
+}): Promise<{ portfolio: { portfolioId: string; name: string }; mode: string; amazonRefused?: string }> {
   const { name, marketplace } = input
   let externalId: string | null = null, mode = 'local', profileId = `local-${marketplace}`
+  let refused: string | null = null
   const { adsClientContextFor } = await import('./ads-profile-resolver.js')
   const conn = await adsClientContextFor(marketplace)
   if (conn) {
@@ -386,16 +387,24 @@ export async function createPortfolio(input: {
     const region: AdsRegion = conn.region
     const { checkAdsWriteGate } = await import('./ads-write-gate.js')
     const gate = await checkAdsWriteGate({ marketplace, payloadValueCents: 0 })
-    if (gate.allowed) { const r = await createAmazonPortfolio({ profileId, region }, { name, state: 'enabled' }); externalId = r.externalId; mode = r.mode }
+    if (gate.allowed) {
+      const r = await createAmazonPortfolio({ profileId, region }, { name, state: 'enabled' })
+      externalId = r.externalId; mode = r.mode
+      // W4-3 — Amazon answered without an id: it refused the portfolio (its own words), and it is kept in Nexus only.
+      if (!r.externalId) refused = r.error ?? 'Amazon answered without a portfolio id'
+    }
   }
   if (!externalId) externalId = `local-pf-${profileId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24)}`
   const pf = await prisma.amazonAdsPortfolio.upsert({
     where: { profileId_externalPortfolioId: workspaceKey({ profileId, externalPortfolioId: externalId }) },
     update: { name }, create: { profileId, externalPortfolioId: externalId, name, state: 'ENABLED' },
   })
-  logger.warn('[ADS-PORTFOLIOS] created portfolio', { externalId, name, mode })
-  if (input.audit) await auditPortfolioWrite(input.audit, 'AD_PORTFOLIO_CREATE', pf.id, {}, portfolioSnapshot(pf), mode)
-  return { portfolio: { portfolioId: pf.externalPortfolioId, name: pf.name }, mode }
+  logger.warn('[ADS-PORTFOLIOS] created portfolio', { externalId, name, mode, ...(refused ? { amazonRefused: refused } : {}) })
+  if (input.audit) {
+    await auditPortfolioWrite(input.audit, 'AD_PORTFOLIO_CREATE', pf.id, {}, portfolioSnapshot(pf), refused ? 'FAILED' : writeStatus(mode), refused ? `Amazon refused it: ${refused}` : null)
+  }
+  // The page's answer is unchanged; an approved Claude request (audit) also hears why Amazon refused it.
+  return { portfolio: { portfolioId: pf.externalPortfolioId, name: pf.name }, mode, ...(input.audit && refused ? { amazonRefused: refused } : {}) }
 }
 
 // ── W4-3 — Claude's portfolio tools (set-portfolio, set-campaign-settings, ad-portfolios) ─────────────────────────
@@ -414,19 +423,39 @@ function portfolioSnapshot(row: PortfolioRow) {
   }
 }
 
+/** SUCCESS: Amazon took it (live), or sandbox recorded it; FAILED: live, but it stayed in Nexus (gate closed, no connection). */
+const writeStatus = (mode: string): 'SUCCESS' | 'FAILED' => (mode === 'local' && adsMode() === 'live' ? 'FAILED' : 'SUCCESS')
+
 /**
  * One ads audit row for a portfolio write an approved Claude request made, its change set the approval (approval-status
  * counts it, the Change Log shows it). The portfolio is its own entity (PORTFOLIO): the rollback service and the
- * strategy's places leave it alone (an undo goes through set-portfolio). SUCCESS: Amazon took it (live), or sandbox
- * recorded it; FAILED: live, but it stayed in Nexus (the write gate closed meanwhile, or no connection).
+ * strategy's places leave it alone (an undo goes through set-portfolio; undo-ad-change refuses it). FAILED says why in
+ * the row's evidence note (Amazon's own words when Amazon refused it).
  */
-async function auditPortfolioWrite(audit: PortfolioAudit, actionType: 'AD_PORTFOLIO_CREATE' | 'AD_PORTFOLIO_UPDATE', rowId: string, before: object, after: object, mode: string): Promise<void> {
+async function auditPortfolioWrite(audit: PortfolioAudit, actionType: 'AD_PORTFOLIO_CREATE' | 'AD_PORTFOLIO_UPDATE', rowId: string, before: object, after: object, status: 'SUCCESS' | 'FAILED', note: string | null): Promise<void> {
   await prisma.advertisingActionLog.create({
     data: {
       executionId: audit.changeSetId, userId: audit.actor, actionType, entityType: 'PORTFOLIO', entityId: rowId,
-      payloadBefore: before, payloadAfter: after, amazonResponseStatus: mode === 'local' && adsMode() === 'live' ? 'FAILED' : 'SUCCESS',
+      payloadBefore: before, payloadAfter: after, amazonResponseStatus: status,
+      ...(note ? { evidence: { note: note.slice(0, 500) } } : {}),
     },
   })
+}
+
+/**
+ * W4-3 — a stored cap policy in Amazon's v3 spelling, whoever wrote it: the sync stores Amazon's answer upper-cased, the
+ * Portfolios page MONTHLY_RECURRING / DATE_RANGE, the bulk sheet the text as typed (monthlyRecurring, dateRange). Null:
+ * none stored. Any other text comes back as it is: Nexus cannot read that cap, and Claude's tools count any change of it
+ * as one that may add spend (they fail closed).
+ */
+export function capPolicyOf(raw: string | null | undefined): string | null {
+  const text = (raw ?? '').trim()
+  if (!text) return null
+  const key = text.replace(/[^a-z]/gi, '').toUpperCase()
+  if (key === 'MONTHLYRECURRING' || key === 'MONTHLY') return 'MONTHLY_RECURRING'
+  if (key === 'DATERANGE') return 'DATE_RANGE'
+  if (key === 'NOCAP') return 'NO_CAP'
+  return text
 }
 
 /** A portfolio for Claude's tools: its row, its market, its budget cap and its campaigns. */
@@ -439,8 +468,12 @@ export interface PortfolioDetail {
   /** The market of its profile (its connection, or a `local-<market>` profile), else the one market of its campaigns. */
   market: string | null
   atAmazon: boolean
-  /** Null: no cap (Amazon's NO_CAP, or none stored). Amounts in minor units of `currency`. */
-  cap: { amountCents: number; currency: string | null; policy: string; startDate: string | null; endDate: string | null; inBudget: boolean } | null
+  /**
+   * Null: no cap (Amazon's NO_CAP, or neither a policy nor an amount stored). Otherwise the cap as stored: `policy` in
+   * Amazon's v3 spelling (capPolicyOf) — or the stored text when Nexus cannot read it, or null when only an amount is
+   * stored; `amountCents` null when only a policy is. Amounts in minor units of `currency`.
+   */
+  cap: { amountCents: number | null; currency: string | null; policy: string | null; startDate: string | null; endDate: string | null; inBudget: boolean } | null
   /** Every campaign in it (by Campaign.portfolioId), archived ones too, by name. */
   campaigns: Array<{ id: string; name: string; status: string; marketplace: string | null }>
   lastSyncedAt: string | null
@@ -467,15 +500,15 @@ export async function portfolioDetails(opts: { portfolioIds?: readonly string[];
   const out = rows.map((r): PortfolioDetail => {
     const campaigns = members.filter((c) => c.portfolioId === r.externalPortfolioId).map((c) => ({ id: c.id, name: c.name, status: String(c.status), marketplace: c.marketplace }))
     const theirs = [...new Set(campaigns.map((c) => c.marketplace).filter((m): m is string => !!m))]
-    const policy = r.budgetPolicy ? r.budgetPolicy.toUpperCase() : null
-    const capped = r.budgetAmount != null && !!policy && policy !== 'NO_CAP'
+    const policy = capPolicyOf(r.budgetPolicy)
+    const capped = policy !== 'NO_CAP' && (policy != null || r.budgetAmount != null)
     return {
       portfolioId: r.externalPortfolioId, name: r.name, state: r.state ?? null, profileId: r.profileId,
       market: storedPortfolioMarket(r.profileId, marketOfProfile) ?? (theirs.length === 1 ? theirs[0] : null),
       atAmazon: !r.externalPortfolioId.startsWith('local-pf-'),
       cap: capped
         ? {
-          amountCents: Math.round(Number(r.budgetAmount) * 100), currency: r.budgetCurrencyCode ?? null, policy: policy!,
+          amountCents: r.budgetAmount == null ? null : Math.round(Number(r.budgetAmount) * 100), currency: r.budgetCurrencyCode ?? null, policy,
           startDate: r.startDate ? r.startDate.toISOString().slice(0, 10) : null, endDate: r.endDate ? r.endDate.toISOString().slice(0, 10) : null, inBudget: r.inBudget,
         }
         : null,

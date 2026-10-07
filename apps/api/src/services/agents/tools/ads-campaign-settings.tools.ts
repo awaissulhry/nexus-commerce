@@ -36,7 +36,7 @@ import { STEP_UP_NEEDS, stepUpApproval } from '../step-up-approval.js'
 import { checkLiveReach, type LiveReach } from './ads-tool-guards.js'
 import { approvedRun, BY_RULE_WORDS, canonical, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, type KitItem } from './ads-autonomy-kit.js'
-import { capMove, type Cap } from './ads-portfolio.tools.js'
+import { capMove, capOf, currencyOfMarket, type HeldCap } from './ads-portfolio.tools.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
 
 const TOOL = 'set-campaign-settings'
@@ -128,15 +128,18 @@ interface Item {
   playbookBuilt?: true
 }
 
-/** The cap a portfolio holds, in the shape capMove compares; null when none (or none Nexus can read). */
-function capOfPortfolio(pf: PortfolioDetail | undefined): Cap | null {
-  const policy = pf?.cap?.policy === 'MONTHLY_RECURRING' ? 'monthly' : pf?.cap?.policy === 'DATE_RANGE' ? 'dateRange' : null
-  if (!pf?.cap || !policy) return null
-  return { amountCents: pf.cap.amountCents, currency: pf.cap.currency ?? '', policy, startDate: pf.cap.startDate, endDate: pf.cap.endDate }
+/**
+ * The caps of these portfolios, in the shape capMove compares (null: none). FAIL CLOSED: a cap Nexus cannot read (an
+ * unknown policy, no amount or currency) is an UnreadCap, and any move into or out of it counts as a raise.
+ */
+async function capsOf(portfolios: ReadonlyMap<string, PortfolioDetail>): Promise<Map<string, HeldCap | null>> {
+  const out = new Map<string, HeldCap | null>()
+  for (const [id, pf] of portfolios) out.set(id, capOf(pf, pf.cap?.currency ?? (await currencyOfMarket(pf.market))))
+  return out
 }
 
 /** Pure — which way one setting moves spend, and why when it can add spend. */
-export function settingMove(setting: Setting, from: unknown, to: unknown, ctx: { fromCap?: Cap | null; toCap?: Cap | null; words: (s: Setting, v: unknown) => string }): { direction: 'raise' | 'cut' | 'same'; why: string | null } {
+export function settingMove(setting: Setting, from: unknown, to: unknown, ctx: { fromCap?: HeldCap | null; toCap?: HeldCap | null; words: (s: Setting, v: unknown) => string }): { direction: 'raise' | 'cut' | 'same'; why: string | null } {
   if (setting === 'biddingStrategy') {
     const a = STRATEGY_RANK[from as Strategy] ?? 0, b = STRATEGY_RANK[to as Strategy] ?? 0
     if (b > a) return { direction: 'raise', why: `its bidding strategy moves from ${ctx.words(setting, from)} to ${ctx.words(setting, to)}: Amazon may bid ${to === 'autoForSales' ? 'up to twice its bids' : 'its full bids, never lowering them'}` }
@@ -149,17 +152,17 @@ export function settingMove(setting: Setting, from: unknown, to: unknown, ctx: {
     return { direction: 'cut', why: null }
   }
   if (setting === 'portfolioId') {
-    const fromCap = ctx.fromCap ?? null, toCap = ctx.toCap ?? null
-    if (fromCap && !toCap) return { direction: 'raise', why: `it leaves ${ctx.words(setting, from)} and its budget cap for ${ctx.words(setting, to)}, which has none` }
-    if (!fromCap && toCap) return { direction: 'cut', why: null }
-    if (fromCap && toCap) {
-      const move = capMove(fromCap, toCap)
-      return move.direction === 'raise' ? { direction: 'raise', why: `it moves from ${ctx.words(setting, from)} to ${ctx.words(setting, to)}, whose budget cap may let more spend` } : { direction: move.direction, why: null }
-    }
-    return { direction: 'same', why: null }
+    // The budget caps it leaves and joins (capMove: a cap let go, a looser one, or one Nexus cannot read is a raise).
+    const move = capMove(ctx.fromCap ?? null, ctx.toCap ?? null)
+    return move.direction === 'raise'
+      ? { direction: 'raise', why: `it moves from ${ctx.words(setting, from)} to ${ctx.words(setting, to)}: ${move.why}` }
+      : { direction: move.direction, why: null }
   }
   return { direction: 'same', why: null }
 }
+
+/** A campaign's portfolio Nexus holds no row for: its cap is unknown, so leaving it counts as a raise (fail closed). */
+const UNKNOWN_PORTFOLIO: HeldCap = { unread: true, why: 'Nexus holds no copy of that portfolio', policy: null, amountCents: null, currency: null }
 
 /** Why Nexus cannot change this campaign's settings at all; null when it may. */
 function cannotChange(c: CampaignRow): string | null {
@@ -228,6 +231,7 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
     if ((pf.state ?? '').toUpperCase() === 'ARCHIVED') return refuse(`Not queued: portfolio "${pf.name}" is archived: no campaign can be moved into it.`)
   }
   const words = (s: Setting, v: unknown) => wordsOf(s, v, portfolios)
+  const caps = await capsOf(portfolios)
   const built = await playbookHolds(rows.map((r) => r.id))
 
   const items: Item[] = []
@@ -273,8 +277,9 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
     for (const [s, v] of Object.entries(set) as Array<[Setting, { from: unknown; to: unknown }]>) {
       const move = settingMove(s, v.from, v.to, {
         words,
-        fromCap: s === 'portfolioId' && v.from ? capOfPortfolio(portfolios.get(String(v.from))) : null,
-        toCap: s === 'portfolioId' && v.to ? capOfPortfolio(portfolios.get(String(v.to))) : null,
+        // A portfolio Nexus does not hold (synced away) has a cap it cannot read: fail closed.
+        fromCap: s === 'portfolioId' && v.from ? (caps.has(String(v.from)) ? caps.get(String(v.from))! : UNKNOWN_PORTFOLIO) : null,
+        toCap: s === 'portfolioId' && v.to ? caps.get(String(v.to)) ?? null : null,
       })
       if (move.direction === 'raise') { raisesWhy.push(move.why!); raising.push(s) }
       if (move.direction === 'cut') cuts = true
@@ -348,7 +353,7 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
         // Every campaign's change, compact (the limits judge all of them, not only the lines shown).
         items: items.map((i) => ({ campaignId: i.campaignId, market: i.market, set: i.set, direction: i.direction, ...(i.playbookBuilt ? { playbookBuilt: true } : {}) })),
         // Every campaign named with the values it starts from and gets: a move of any after approval is caught.
-        basis: hash({ items: items.map((i) => [i.campaignId, i.set]), already, caps: items.flatMap((i) => (i.set.portfolioId ? [capOfPortfolio(portfolios.get(String(i.set.portfolioId.from))), capOfPortfolio(portfolios.get(String(i.set.portfolioId.to)))] : [])) }),
+        basis: hash({ items: items.map((i) => [i.campaignId, i.set]), already, caps: items.flatMap((i) => (i.set.portfolioId ? [caps.get(String(i.set.portfolioId.from)) ?? null, caps.get(String(i.set.portfolioId.to)) ?? null] : [])) }),
         reach: stored,
         reachNote: reachNote(stored),
         effect,
@@ -357,6 +362,53 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
       },
     },
   }
+}
+
+// ── The other door: undo-ad-change ────────────────────────────────────────────────────────────────
+
+/**
+ * One rule for both doors: undo-ad-change puts a campaign's recorded settings back through the rollback service, with
+ * no code. What would add spend that way — a looser bidding strategy, an end date removed or moved later, a portfolio's
+ * cap let go (or one Nexus cannot read) — is refused there and asked of set-campaign-settings, which needs the approver's
+ * code; a portfolio change (set-portfolio, its own entity) only through undo-change of its request. Null: it may go on.
+ */
+export async function settingsUndoRefusal(rows: ReadonlyArray<{ entityType: string; entityId: string; wrote: unknown; restores: unknown }>): Promise<string | null> {
+  if (rows.some((r) => r.entityType === 'PORTFOLIO')) {
+    return 'Not undone: it holds a portfolio change (set-portfolio), which undo-ad-change cannot put back. undo-change of that request asks set-portfolio for the old name and cap (a raise needs the approver\'s authenticator code).'
+  }
+  const asked = rows.filter((r) => r.entityType === 'CAMPAIGN').map((r) => {
+    const before = (r.restores ?? {}) as Record<string, unknown>
+    const after = (r.wrote ?? {}) as Record<string, unknown>
+    const back: Values = {}
+    if ('biddingStrategy' in before && before.biddingStrategy !== after.biddingStrategy && API_NAME[String(before.biddingStrategy)]) back.biddingStrategy = API_NAME[String(before.biddingStrategy)]
+    if ('endDate' in before && before.endDate !== after.endDate) back.endDate = before.endDate ? String(before.endDate).slice(0, 10) : null
+    if ('portfolioId' in before && (before.portfolioId ?? null) !== (after.portfolioId ?? null)) back.portfolioId = (before.portfolioId as string | null | undefined) ?? null
+    return { campaignId: r.entityId, back }
+  }).filter((x) => Object.keys(x.back).length)
+  if (!asked.length) return null
+  const rows_ = await prisma.campaign.findMany({ where: { id: { in: asked.map((x) => x.campaignId) } }, select: CAMPAIGN_SELECT }) as CampaignRow[]
+  const byId = new Map(rows_.map((r) => [r.id, r]))
+  const ids = [...new Set(asked.flatMap((x) => [x.back.portfolioId, byId.get(x.campaignId)?.portfolioId]).filter((id): id is string => !!id))]
+  const portfolios = new Map((await portfolioDetails({ portfolioIds: ids })).map((p) => [p.portfolioId, p]))
+  const caps = await capsOf(portfolios)
+  const words = (s: Setting, v: unknown) => wordsOf(s, v, portfolios)
+  const raises: string[] = []
+  for (const x of asked) {
+    const c = byId.get(x.campaignId)
+    if (!c) continue
+    const now = valuesOf(c)
+    for (const [s, to] of Object.entries(x.back) as Array<[Setting, unknown]>) {
+      if (to === now[s]) continue
+      const move = settingMove(s, now[s], to, {
+        words,
+        fromCap: s === 'portfolioId' && now.portfolioId ? (caps.has(now.portfolioId) ? caps.get(now.portfolioId)! : UNKNOWN_PORTFOLIO) : null,
+        toCap: s === 'portfolioId' && to ? caps.get(String(to)) ?? null : null,
+      })
+      if (move.direction === 'raise') raises.push(`campaign "${c.name}": ${move.why}`)
+    }
+  }
+  if (!raises.length) return null
+  return `Not undone: putting these campaign settings back would add spend — ${named(raises, 2)}. set-campaign-settings does that, with the approver's authenticator code: ask for it there (undo-change of a Claude request asks it for you).`
 }
 
 // ── Limits: what may run by the business's rule ───────────────────────────────────────────────────
@@ -440,6 +492,11 @@ async function runApproved(args: Record<string, unknown>, ctx: ToolContext): Pro
   const refusal = recheck(ctx, fresh, ['basis'])
   if (refusal) return notRun(refusal)
   const p = fresh.preview as { raises: unknown[]; reach: StoredReach; effect: string }
+  // Never by rule: a portfolio move of a campaign an ads playbook built (withinLimits refuses it too; this holds the line
+  // whatever decided it).
+  if (ctx.decidedVia === 'auto' && items.some((i) => i.playbookBuilt)) {
+    return notRun('Not run: it moves a campaign an ads playbook built out of the playbook\'s portfolio, which never runs by rule: a person approves it.')
+  }
   // A raise runs only with the approver's code, or by the business's rule inside limits loosened with that code.
   if (p.raises.length && ctx.decidedVia !== 'auto') {
     const coded = await stepUpApproval(ctx)

@@ -45,6 +45,13 @@ import { undoRequestFor } from '../change-record.service.js'
 import { getTool } from '../tool-registry.js'
 import { ruleFrom } from '../claude-trust.service.js'
 import { settingMove } from './ads-campaign-settings.tools.js'
+import { randomUUID } from 'node:crypto'
+import { generateSecret, generateSync } from 'otplib'
+import { __stepUpTest } from '../../../lib/auth/step-up.js'
+import { commitScheduledApproval, decideFleetApproval } from '../../agent-fleet/approval-inbox.service.js'
+import { queuePlan, runPlan } from '../change-plan.service.js'
+import type { McpPrincipal } from '../../mcp/mcp-auth.js'
+import { claudeGateRule } from '../../mcp/mcp-tool-call.js'
 
 const TOOL = 'set-campaign-settings'
 const business = { workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -91,7 +98,15 @@ beforeAll(async () => {
     await db().amazonAdsPortfolio.create({ data: { profileId: 'P-UK-TEST', externalPortfolioId: 'PF-UK', name: 'Test UK', state: 'ENABLED' } })
     await db().amazonAdsPortfolio.create({ data: { profileId: 'local-IT', externalPortfolioId: 'local-pf-local-IT-test-local', name: 'Test local', state: 'ENABLED' } })
     await db().amazonAdsPortfolio.create({ data: { profileId: 'P-IT-TEST', externalPortfolioId: 'PF-ARCH', name: 'Test archived', state: 'ARCHIVED' } })
-    for (const id of ['c-m1', 'c-m2', 'c-m3', 'c-n1', 'c-e1', 'c-b1', 'c-lim']) await campaign(id)
+    for (const id of ['c-m1', 'c-m2', 'c-m3', 'c-n1', 'c-e1', 'c-b1', 'c-lim', 'c-ctl', 'c-u1', 'c-u2']) await campaign(id)
+    await campaign('c-plan', { endDate: new Date(`${inAYear()}T00:00:00Z`) })
+    // Caps as the other writers store them: a sync of a camelCase answer, the bulk sheet as typed, an unknown policy.
+    await db().amazonAdsPortfolio.create({ data: { profileId: 'P-IT-TEST', externalPortfolioId: 'PF-SYNC', name: 'Test synced', state: 'ENABLED', budgetAmount: '400.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'MONTHLYRECURRING' } })
+    await db().amazonAdsPortfolio.create({ data: { profileId: 'P-IT-TEST', externalPortfolioId: 'PF-BULK', name: 'Test bulk sheet', state: 'ENABLED', budgetAmount: '400.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'monthlyRecurring' } })
+    await db().amazonAdsPortfolio.create({ data: { profileId: 'P-IT-TEST', externalPortfolioId: 'PF-ODD', name: 'Test odd', state: 'ENABLED', budgetAmount: '400.00', budgetCurrencyCode: 'EUR', budgetPolicy: 'weekly' } })
+    await campaign('c-sync', { portfolioId: 'PF-SYNC' })
+    await campaign('c-bulk', { portfolioId: 'PF-BULK' })
+    await campaign('c-odd', { portfolioId: 'PF-ODD' })
     await campaign('c-capped', { portfolioId: 'PF-CAP' })
     await campaign('c-end', { endDate: new Date(`${inAYear()}T00:00:00Z`) })
     await campaign('c-built', { portfolioId: 'PF-OPEN' })
@@ -209,7 +224,7 @@ describe('each setting', () => {
 
   it('out of a capped portfolio adds spend (code); a campaign a playbook built may move, with a warning that never runs by rule', async () => {
     expect((await preview({ campaignIds: ['c-capped'], portfolioId: null })).preview).toMatchObject({
-      raises: [{ why: expect.stringMatching(/leaves portfolio "Test capped" and its budget cap for no portfolio/) }], stepUp: { raises: ['Portfolio'] },
+      raises: [{ why: 'it moves from portfolio "Test capped" to no portfolio: the cap EUR 500.00 a month no longer holds it' }], stepUp: { raises: ['Portfolio'] },
     })
     const built = (await preview({ campaignIds: ['c-built'], portfolioId: null })).preview as Row
     expect(built.warnings[0]).toMatch(/was built by an ads playbook: a portfolio move here leaves the playbook's own portfolio/)
@@ -223,6 +238,114 @@ describe('each setting', () => {
     expect((await preview({ campaignIds: ['c-arch'], biddingStrategy: 'manual' })).error).toMatch(/it is archived: Amazon does not change an archived campaign/)
     expect((await preview({ campaignIds: ['c-m1'] })).error).toMatch(/^Nothing to change for campaign "Test c-m1": give portfolioId, name, endDate or biddingStrategy/)
     expect((await preview({ campaignIds: ['c-m1'], campaigns: [{ campaignId: 'c-m2', biddingStrategy: 'manual' }] })).error).toMatch(/Name the campaigns one way/)
+  })
+})
+
+describe('a stored cap in another spelling, or one Nexus cannot read: leaving it is never "the same"', () => {
+  it('a synced MONTHLYRECURRING, the bulk sheet\'s monthlyRecurring and an unknown policy: each move out is a raise (code)', async () => {
+    for (const [id, why] of [
+      ['c-sync', 'it moves from portfolio "Test synced" to no portfolio: the cap EUR 400.00 a month no longer holds it'],
+      ['c-bulk', 'it moves from portfolio "Test bulk sheet" to no portfolio: the cap EUR 400.00 a month no longer holds it'],
+      ['c-odd', 'it moves from portfolio "Test odd" to no portfolio: the cap it holds now is a cap Nexus cannot read (its policy "weekly" is not one Nexus knows), so Nexus cannot tell whether it lets more spend: it counts as a raise'],
+    ] as const) {
+      expect((await preview({ campaignIds: [id], portfolioId: null })).preview, id).toMatchObject({ raises: [{ why }], stepUp: { raises: ['Portfolio'] } })
+    }
+    // Into a portfolio with a cap Nexus cannot read: a raise too (fail closed).
+    expect((await preview({ campaignIds: ['c-ctl'], portfolioId: 'PF-ODD' })).preview).toMatchObject({ raises: [{ why: expect.stringMatching(/the cap it gets is a cap Nexus cannot read/) }] })
+    const asked = await ask({ campaignIds: ['c-odd'], portfolioId: null })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: false, error: expect.stringMatching(/it raises/) })
+    expect((await campaignOf('c-odd')).portfolioId).toBe('PF-ODD')
+  })
+})
+
+/** Real people (a row, a role, a membership, an authenticator), for the real approve and commit paths. */
+const EVERYTHING = new Set<string>([...Object.values(FEATURES), ...Object.values(FIELDS)])
+type RealPerson = { id: string; secret: string; principal: UserPrincipal }
+async function realPerson(label: string): Promise<RealPerson> {
+  const client = db()
+  const secret = generateSecret()
+  const role = await client.role.create({ data: { key: `W43_${randomUUID().slice(0, 8)}`, name: label, description: 'test', isSystem: false, permissions: [...EVERYTHING] } })
+  const user = await client.userProfile.create({ data: { email: `${randomUUID()}@example.test`, status: 'active', displayName: label, twoFactorEnabledAt: new Date(), twoFactorSecret: secret } })
+  await client.userRole.create({ data: { userId: user.id, roleId: role.id } })
+  const membership = await client.workspaceMembership.create({ data: { workspaceId: LEGACY_WORKSPACE_ID, userId: user.id, status: 'active' } })
+  await client.workspaceMemberRole.create({ data: { membershipId: membership.id, roleId: role.id } })
+  return { id: user.id, secret, principal: { kind: 'user', userId: user.id, label, via: 'app', workspace: business, permissions: { isOwner: false, permissions: EVERYTHING } } }
+}
+const codeOf = (p: RealPerson) => { __stepUpTest.reset(); return generateSync({ secret: p.secret }) }
+const approvalRow = (id: string) => inside(() => db().agentApproval.findUniqueOrThrow({ where: { id } })) as Promise<Row>
+/** The undo window closes now, and the sweep's commit takes it (as the person who approved it, re-checked). */
+const commitNow = async (approvalId: string) => {
+  await inside(() => db().agentApproval.update({ where: { id: approvalId }, data: { executeAfter: new Date(Date.now() - 1000) } }))
+  return inside(() => commitScheduledApproval(approvalId))
+}
+
+describe('the real approve paths', () => {
+  let approverPerson: RealPerson
+  let asker: RealPerson
+  beforeAll(async () => {
+    approverPerson = await inside(() => realPerson('Test Approver'))
+    asker = await inside(() => realPerson('Test Asker'))
+  }, 60_000)
+
+  it('a change plan carries the step\'s code: no code → mfa_required; with it the step runs', async () => {
+    const queued = await inside(async () => {
+      const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: claude.userId } })
+      return queuePlan({ title: 'Test settings plan', steps: [{ tool: TOOL, args: { campaignIds: ['c-plan'], endDate: null } }] }, claude, run.id)
+    }) as Row
+    expect(queued).toMatchObject({ ok: true, mode: 'queued' })
+    const planId = queued.approvalId as string
+    expect((await approvalRow(planId)).preview.stepUp).toMatchObject({ what: 'changes settings that can add spend on 1 campaign', raises: ['End date'], steps: [1] })
+    const decide = (code?: string) => inside(() => decideFleetApproval({ id: planId, decision: 'approve', actor: approverPerson.principal, ...(code ? { code } : {}) }))
+    expect(await decide()).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect((await campaignOf('c-plan')).endDate).not.toBeNull()
+    expect(await decide(codeOf(approverPerson))).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await commitNow(planId)).toMatchObject({ ok: true, status: 'executing' })
+    expect(await inside(() => runPlan(planId))).toMatchObject({ finished: true, counts: { done: 1 } })
+    expect((await campaignOf('c-plan')).endDate).toBeNull()
+  })
+
+  it('never by rule: a playbook-built campaign\'s move waits for a person at the business\'s rule (auto), and is not run if a rule decided it', async () => {
+    const strategy = await inside(() => db().adsStrategy.create({ data: { market: 'IT', level: 'MARKET', scopeId: '*', label: 'Test market (IT)', updatedBy: 'user:test', claudeMaxChangesPerDay: 10, claudeMaxRaisesPerDay: 10, claudeMaxBudgetIncreasePerDayCents: 0 } }))
+    await inside(() => db().agentTool.create({ data: { name: TOOL, riskTier: 'high', requiresApproval: true, claudeTrust: 'auto', claudeLimits: { markets: ['IT'], maxItems: 5, allowEngineOwned: true } } }))
+    try {
+      const mcp = { ...asker.principal, via: 'claude', business: { id: LEGACY_WORKSPACE_ID, name: 'Test business' }, scopes: ['nexus.read', 'nexus.write', 'nexus.run'], oauthGrantId: 'grant-w43' } as McpPrincipal
+      const viaGate = (args: Record<string, unknown>) => inside(async () => {
+        const run = await db().agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: mcp.userId } })
+        return runOrQueueTool(TOOL, args, mcp, run.id, { rule: claudeGateRule(mcp) })
+      }) as Promise<Row>
+      // Control: a plain move inside every limit runs by the business's rule.
+      expect(await viaGate({ campaignIds: ['c-ctl'], portfolioId: 'PF-OPEN' })).toMatchObject({ ok: true, rule: { by: 'rule', level: 'auto' } })
+      // The playbook-built campaign: the same limits, and a person decides.
+      const built = await viaGate({ campaignIds: ['c-built'], portfolioId: null })
+      expect(built).toMatchObject({ ok: true, mode: 'queued', rule: { by: 'person', level: 'auto', why: expect.stringMatching(/an ads playbook built/) } })
+      expect((await approvalRow(built.approvalId)).status).toBe('pending')
+      // Should a rule ever decide it, execute refuses it.
+      await inside(() => db().agentApproval.update({ where: { id: built.approvalId }, data: { decisionVia: 'auto' } }))
+      expect(await inside(() => decideApproval(built.approvalId, 'approve', approver))).toMatchObject({ ok: false, error: expect.stringMatching(/never runs by rule: a person approves it/) })
+      expect((await campaignOf('c-built')).portfolioId).toBe('PF-OPEN')
+    } finally {
+      await inside(() => db().agentTool.deleteMany({ where: { name: TOOL } }))
+      await inside(() => db().adsStrategy.delete({ where: { id: strategy.id } }))
+    }
+  })
+})
+
+describe('the other doors: undo-ad-change and undo-change are no way around the code', () => {
+  it('undo-ad-change refuses to put back a setting that adds spend; undo-change asks set-campaign-settings, which needs the code', async () => {
+    const asked = await ask({ campaignIds: ['c-u1'], endDate: inAYear() })
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed' })
+    const back = await inside(() => callTool(claude, 'undo-ad-change', { changeSetId: asked.approvalId })) as Row
+    expect(back.raw.error).toMatch(/^Not undone: putting these campaign settings back would add spend — campaign "Test c-u1": its end date .* is removed: it keeps spending until stopped\. set-campaign-settings does that, with the approver's authenticator code/)
+    const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! })) as Row
+    expect(undo).toMatchObject({ request: { tool: TOOL, args: { campaigns: [{ campaignId: 'c-u1', endDate: null }] } } })
+    expect((await preview(undo.request.args)).preview).toMatchObject({ stepUp: { raises: ['End date'] } })
+  })
+
+  it('undo-ad-change still puts back a setting that lowers spend', async () => {
+    const asked = await ask({ campaignIds: ['c-u2'], biddingStrategy: 'autoForSales' })
+    expect(await approve(asked.approvalId!, 'nexus-step-up')).toMatchObject({ ok: true, status: 'executed' })
+    const back = await inside(() => callTool(claude, 'undo-ad-change', { changeSetId: asked.approvalId })) as Row
+    expect(back.raw.ok, back.raw.error).toBe(true)
   })
 })
 

@@ -58,26 +58,43 @@ const quote = (name: string) => `"${name}"`
 const POLICY_OF: Record<string, 'monthly' | 'dateRange'> = { MONTHLY_RECURRING: 'monthly', DATE_RANGE: 'dateRange' }
 const CLIENT_POLICY = { monthly: 'monthlyRecurring', dateRange: 'dateRange' } as const
 
-/** A cap as Claude's tools hold it: minor units of its currency, the policy, the dates of a dateRange. */
+/** A cap Nexus can read, as Claude's tools hold it: minor units of its currency, the policy, the dates of a dateRange. */
 export interface Cap { amountCents: number; currency: string; policy: 'monthly' | 'dateRange'; startDate: string | null; endDate: string | null }
+/**
+ * A cap stored in a form Nexus cannot read — a policy it does not know, a policy without an amount (or the reverse), no
+ * currency, a date range without dates. FAIL CLOSED: any change of it, or of what it holds, counts as one that may add
+ * spend (the approver's code).
+ */
+export interface UnreadCap { unread: true; why: string; policy: string | null; amountCents: number | null; currency: string | null }
+export type HeldCap = Cap | UnreadCap
+export const isUnread = (cap: HeldCap | null | undefined): cap is UnreadCap => !!cap && 'unread' in cap
 
-const capWords = (cap: Cap | null) => {
+export const capWords = (cap: HeldCap | null) => {
   if (!cap) return 'no cap'
+  if (isUnread(cap)) return `a cap Nexus cannot read (${cap.why})`
   return cap.policy === 'monthly'
     ? `${amountLabel(cap.amountCents, cap.currency)} a month`
     : `${amountLabel(cap.amountCents, cap.currency)} from ${cap.startDate} to ${cap.endDate}`
 }
 
-/** The cap a portfolio holds now, in Claude's words; null when none (or one Nexus cannot read: no currency). */
-function capOf(pf: PortfolioDetail, fallbackCurrency: string | null): Cap | null {
-  const policy = pf.cap ? POLICY_OF[pf.cap.policy] : undefined
-  const currency = pf.cap?.currency ?? fallbackCurrency
-  if (!pf.cap || !policy || !currency) return null
+/**
+ * The cap a portfolio holds now; null when none. The stored policy is read in every spelling Nexus's writers use
+ * (capPolicyOf: MONTHLY_RECURRING, monthlyRecurring, DATE_RANGE, dateRange …); anything else is an UnreadCap.
+ */
+export function capOf(pf: Pick<PortfolioDetail, 'cap'>, fallbackCurrency: string | null): HeldCap | null {
+  if (!pf.cap) return null
+  const policy = pf.cap.policy ? POLICY_OF[pf.cap.policy] : undefined
+  const currency = pf.cap.currency ?? fallbackCurrency
+  const unread = (why: string): UnreadCap => ({ unread: true, why, policy: pf.cap!.policy, amountCents: pf.cap!.amountCents, currency })
+  if (!policy) return unread(pf.cap.policy ? `its policy "${pf.cap.policy}" is not one Nexus knows` : 'it holds an amount and no policy')
+  if (pf.cap.amountCents == null) return unread('it holds a policy and no amount')
+  if (!currency) return unread('Nexus does not know its currency')
+  if (policy === 'dateRange' && (!pf.cap.startDate || !pf.cap.endDate)) return unread('it is a date range without its dates')
   return { amountCents: pf.cap.amountCents, currency, policy, startDate: pf.cap.startDate, endDate: pf.cap.endDate }
 }
 
 /** The currency of an Amazon market: as configured (Marketplace), else Amazon's checked limits for it; null: unknown. */
-async function currencyOfMarket(market: string | null): Promise<string | null> {
+export async function currencyOfMarket(market: string | null): Promise<string | null> {
   if (!market) return null
   try {
     return await marketCurrency('AMAZON', market)
@@ -87,12 +104,20 @@ async function currencyOfMarket(market: string | null): Promise<string | null> {
 }
 
 /**
- * Pure — how a cap change moves spend. A cap where there was none, or a lower one with the same policy and dates, holds
- * spend back (cut). A higher amount, another policy (the amounts no longer compare) or a date range that starts earlier
- * or ends later can let more spend (raise).
+ * Pure — how a cap change moves spend (a portfolio's own cap changed, or a campaign moving from one portfolio's cap to
+ * another's). A cap where there was none, or a lower one with the same policy and dates, holds spend back (cut). A cap
+ * let go, a higher amount, another policy (the amounts no longer compare) or a date range that starts earlier or ends
+ * later can let more spend (raise). A cap Nexus cannot read on either side: a raise (fail closed), unless nothing moves.
  */
-export function capMove(from: Cap | null, to: Cap): { direction: 'raise' | 'cut' | 'same'; why: string | null } {
+export function capMove(from: HeldCap | null, to: HeldCap | null): { direction: 'raise' | 'cut' | 'same'; why: string | null } {
+  if (isUnread(from) || isUnread(to)) {
+    if (canonical(from) === canonical(to)) return { direction: 'same', why: null }
+    const unread = (isUnread(from) ? from : to) as UnreadCap
+    return { direction: 'raise', why: `${isUnread(from) ? 'the cap it holds now' : 'the cap it gets'} is ${capWords(unread)}, so Nexus cannot tell whether it lets more spend: it counts as a raise` }
+  }
+  if (!from && !to) return { direction: 'same', why: null }
   if (!from) return { direction: 'cut', why: null }
+  if (!to) return { direction: 'raise', why: `the cap ${capWords(from)} no longer holds it` }
   const same = from.amountCents === to.amountCents && from.policy === to.policy && from.startDate === to.startDate && from.endDate === to.endDate
   if (same) return { direction: 'same', why: null }
   if (from.policy !== to.policy) return { direction: 'raise', why: `its cap changes from ${capWords(from)} to ${capWords(to)}: another kind of cap may let more spend` }
@@ -149,7 +174,7 @@ const adPortfolios: AgentTool = {
       const m = money.get(p.portfolioId)
       const currency = p.cap?.currency ?? (p.market ? currencies.get(p.market) ?? null : null)
       const counted = p.campaigns.filter((c) => c.status === 'ENABLED' || c.status === 'PAUSED')
-      const policy = p.cap ? POLICY_OF[p.cap.policy] ?? p.cap.policy : null
+      const held = capOf(p, currency)
       return {
         portfolioId: p.portfolioId,
         name: p.name,
@@ -157,7 +182,13 @@ const adPortfolios: AgentTool = {
         state: p.state,
         atAmazon: p.atAmazon,
         currency,
-        cap: p.cap ? { capCents: p.cap.amountCents, policy, startDate: p.cap.startDate, endDate: p.cap.endDate, inBudget: p.cap.inBudget } : null,
+        cap: p.cap
+          ? {
+            capCents: p.cap.amountCents, policy: held && !isUnread(held) ? held.policy : 'unreadable', storedPolicy: p.cap.policy,
+            startDate: p.cap.startDate, endDate: p.cap.endDate, inBudget: p.cap.inBudget,
+            ...(isUnread(held) ? { note: `Nexus cannot read this cap: ${held.why}. Any change of it, or of the campaigns it holds, counts as a raise.` } : {}),
+          }
+          : null,
         campaigns: {
           counted: counted.length,
           enabled: counted.filter((c) => c.status === 'ENABLED').length,
@@ -217,9 +248,9 @@ interface PortfolioPlan {
   op: Op
   market: string
   currency: string | null
-  portfolio: { portfolioId: string; profileId: string; name: string; state: string | null; campaigns: number; cap: Cap | null } | null
+  portfolio: { portfolioId: string; profileId: string; name: string; state: string | null; campaigns: number; cap: HeldCap | null } | null
   name: { from: string | null; to: string } | null
-  cap: { from: Cap | null; to: Cap } | null
+  cap: { from: HeldCap | null; to: Cap } | null
   archive: boolean
 }
 
@@ -379,7 +410,7 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
         // Every value it starts from and sets: a move of any of them after approval is caught (recheck).
         basis: hash({ op: plan.op, market: plan.market, portfolio: plan.portfolio, name: plan.name, cap: plan.cap, archive: plan.archive }),
         reach: stored,
-        reachNote: `${reachNote(stored)} ${DIRECT}`,
+        reachNote: stored.reach === 'live' ? `${reachNote(stored)} ${DIRECT}` : reachNote(stored),
         effect,
         undoNote: plan.op === 'create'
           ? 'Undo archives the new portfolio (set-portfolio op archive): permanent at Amazon, which keeps it as archived.'
@@ -432,7 +463,7 @@ function portfolioRefusal(preview: unknown, limits: Record<string, unknown>): st
 }
 
 /** What a change of this tool records: the portfolio, and its name and cap before / after (Claude's words). */
-interface PortfolioRecord { op: Op; portfolioId: string | null; market: string; name: string | null; cap: Cap | null; state?: string | null; atAmazon?: boolean }
+interface PortfolioRecord { op: Op; portfolioId: string | null; market: string; name: string | null; cap: HeldCap | null; state?: string | null; atAmazon?: boolean }
 
 /** Undo: create → archive it; update → the old name and cap (a cap that was none cannot be removed); archive → none. */
 export const SET_PORTFOLIO_UNDO: ToolUndo = {
@@ -442,7 +473,7 @@ export const SET_PORTFOLIO_UNDO: ToolUndo = {
     const [pf] = await portfolioDetails({ portfolioIds: [after.portfolioId] })
     if (!pf) return { ...after, name: null, state: 'NOT_FOUND' }
     // Only what the change set is compared: a cap it did not touch is recorded as null on both sides.
-    return { ...after, name: pf.name, cap: after.cap ? capOf(pf, after.cap.currency) : null, ...('state' in after ? { state: pf.state } : {}) }
+    return { ...after, name: pf.name, cap: after.cap ? capOf(pf, after.cap.currency ?? null) : null, ...('state' in after ? { state: pf.state } : {}) }
   },
   request(change) {
     const before = (change.before ?? {}) as Partial<PortfolioRecord>
@@ -453,8 +484,11 @@ export const SET_PORTFOLIO_UNDO: ToolUndo = {
       if (after.atAmazon === false) return { refusal: 'The portfolio was made in Nexus only; there is nothing at Amazon to archive.' }
       return { tool: TOOL, args: { op: 'archive', portfolioId: after.portfolioId, why: `undo of the portfolio "${after.name ?? '?'}" Claude created: archived (permanent at Amazon)` } }
     }
+    if (isUnread(before.cap) && canonical(before.cap) !== canonical(after.cap)) {
+      return { refusal: `The cap it replaced was ${capWords(before.cap)}: Nexus cannot set that back. Set the cap again on the Portfolios page, or ask set-portfolio for a cap you name.` }
+    }
     const name = before.name && before.name !== after.name ? before.name : undefined
-    const cap = before.cap && canonical(before.cap) !== canonical(after.cap) ? before.cap : undefined
+    const cap = before.cap && !isUnread(before.cap) && canonical(before.cap) !== canonical(after.cap) ? before.cap : undefined
     if (!name && !cap) {
       return { refusal: before.cap == null && after.cap ? 'The portfolio had no budget cap before, and Nexus cannot remove a cap (neither the Portfolios page nor its Amazon client can): remove it in Seller Central.' : 'This change does not record what it replaced.' }
     }
@@ -523,15 +557,18 @@ const setPortfolio: AgentTool = {
       const portfolioId = made.portfolio.portfolioId
       const atAmazon = !portfolioId.startsWith('local-pf-')
       let capProblem: string | null = null
-      if (plan.cap) {
+      if (plan.cap && !atAmazon) capProblem = 'not set: the portfolio is not at Amazon'
+      else if (plan.cap) {
         const out = await updatePortfolioById({ portfolioId, budget: budgetOf(plan.cap.to), audit })
         if (!out.ok) capProblem = out.error ?? 'refused'
       }
       const after: PortfolioRecord = { op: 'create', portfolioId, market: plan.market, name: made.portfolio.name, cap: plan.cap && !capProblem ? plan.cap.to : null, atAmazon }
       const data = {
         portfolioId, name: made.portfolio.name, market: plan.market, mode: made.mode, atAmazon, reach: p.reach, changeSetId: run.changeSetId,
-        ...(atAmazon ? {} : { note: 'Made in Nexus only: Amazon was not reached, so no campaign can be moved into it. Ask again once writes to this market are open.' }),
-        ...(capProblem ? { capNote: `The portfolio was made, but its budget cap was refused (${capProblem}): it has no cap. Ask for the cap again with op update.` } : {}),
+        ...(made.amazonRefused
+          ? { note: `Amazon refused it (${made.amazonRefused}): it exists in Nexus only, so no campaign can be moved into it. Nothing reached Amazon.` }
+          : atAmazon ? {} : { note: 'Made in Nexus only: Amazon was not reached (its write gate closed after approval), so no campaign can be moved into it. Ask again once writes to this market are open.' }),
+        ...(capProblem ? { capNote: `Its budget cap was not set (${capProblem}): it has no cap.${atAmazon ? ' Ask for the cap again with op update.' : ''}` } : {}),
       }
       return { ok: true, data, change: { before: { op: 'create', portfolioId: null, market: plan.market, name: null, cap: null, changeSetId: run.changeSetId }, after } }
     }
