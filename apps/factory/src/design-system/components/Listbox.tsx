@@ -6,7 +6,7 @@ import { ChevronDown } from 'lucide-react'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
 import type { Size } from '../primitives/size'
-import { ListboxPanel } from './ListboxPanel'
+import { ListboxPanel, type ListboxPanelOption } from './ListboxPanel'
 
 export interface ListboxOption {
   /** Additional searchable terms without repeating them in the visible option label. */
@@ -47,7 +47,13 @@ export interface ListboxProps {
    * could not adopt it.
    */
   size?: Extract<Size, 'xs' | 'sm' | 'md'>
-  options: ListboxOption[]
+  /**
+   * The panel's options, passed through as they are. A `ListboxPanelOption` may be HELD (`heldReason`: reachable,
+   * announced, never committed) and carry a `note` (a second line under its label) — the panel has drawn both since
+   * Step 4.3 / 2026-10-04, but this prop was typed `ListboxOption[]`, so a form picker could not list a held choice
+   * with its reason (the Matrix bulk Edit's field list, 2026-10-07). Every `ListboxOption[]` still fits.
+   */
+  options: ListboxPanelOption[]
   value?: string
   onChange: (value: string) => void
   placeholder?: string

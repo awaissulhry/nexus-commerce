@@ -1,3 +1,7 @@
+## Listbox: a held option with its reason in a form picker — 2026-10-07
+
+- **`ListboxProps.options`** is typed `ListboxPanelOption[]` (was `ListboxOption[]`): a picker can list a held option (`heldReason`: reachable, announced, never chosen) with its reason as the `note` line under the label, which the panel already drew; every `ListboxOption[]` still fits and nothing renders differently. First use: the Matrix bulk Edit's field list. Mirrored between Web and Factory (`Listbox.tsx`).
+
 ## LockGlyph: a locked cell's lock is an outline icon, not the 🔒 emoji — 2026-10-07
 
 - **`LockGlyph`** (`grid/renderers/cells.tsx`): the outline `Lock` (11px, the held Status and Action cells' icon) in the

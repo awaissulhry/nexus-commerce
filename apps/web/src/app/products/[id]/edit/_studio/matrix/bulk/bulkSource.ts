@@ -97,7 +97,6 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
 
   const apply = async (shown: BulkPreview): Promise<BulkResult> => {
     const payload = shown.payload as Payload
-    const field = shown.request.field
 
     if (payload.kind === 'verb') {
       const op = await doors.applyVerb(payload.preview)
