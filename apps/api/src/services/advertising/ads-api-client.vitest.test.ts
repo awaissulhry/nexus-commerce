@@ -359,6 +359,23 @@ describe('1a updateCampaign / updatePortfolio on the wire', () => {
     expect(r.error).toMatch(/DUPLICATE_VALUE/)
   })
 
+  it('W4-12b: a portfolio cap goes out in Amazon\'s Portfolios 3.0 shape — the policy in the spec\'s spelling, whoever asked', async () => {
+    // The Portfolios page and set-portfolio say monthlyRecurring / dateRange; the worker MONTHLY_RECURRING / NO_CAP.
+    await updatePortfolio(ctx, { portfolioId: 'pf-1', budget: { amount: 120, currencyCode: 'EUR', policy: 'monthlyRecurring' } })
+    await updatePortfolio(ctx, { portfolioId: 'pf-2', budget: { amount: 300.5, currencyCode: 'GBP', policy: 'dateRange', startDate: '2026-11-01', endDate: '2026-11-30' } })
+    await updatePortfolio(ctx, { portfolioId: 'pf-3', budget: { amount: 90, currencyCode: 'EUR', policy: 'MONTHLY_RECURRING' } })
+    await updatePortfolio(ctx, { portfolioId: 'pf-4', budget: { amount: null, currencyCode: 'EUR', policy: 'NO_CAP' } })
+    expect(h.calls.map((c) => [c.init.method, new URL(c.url).pathname])).toEqual(Array(4).fill(['PUT', '/portfolios']))
+    expect(h.calls[0].init.headers).toMatchObject({ 'Content-Type': 'application/vnd.spPortfolio.v3+json', Accept: 'application/vnd.spPortfolio.v3+json' })
+    expect(h.calls.map((c) => JSON.parse(String(c.init.body)))).toEqual([
+      { portfolios: [{ portfolioId: 'pf-1', budget: { amount: 120, currencyCode: 'EUR', policy: 'MONTHLY_RECURRING' } }] },
+      { portfolios: [{ portfolioId: 'pf-2', budget: { amount: 300.5, currencyCode: 'GBP', policy: 'DATE_RANGE', startDate: '2026-11-01', endDate: '2026-11-30' } }] },
+      { portfolios: [{ portfolioId: 'pf-3', budget: { amount: 90, currencyCode: 'EUR', policy: 'MONTHLY_RECURRING' } }] },
+      // "To remove budget, set budget amount, startDate, endDate to null and set policy to NO_CAP."
+      { portfolios: [{ portfolioId: 'pf-4', budget: { amount: null, currencyCode: 'EUR', policy: 'NO_CAP', startDate: null, endDate: null } }] },
+    ])
+  })
+
   it('CM-23: a portfolio Amazon accepts is ok', async () => {
     h.answers.push(() => new Response(JSON.stringify({ portfolios: { success: [{ index: 0, portfolioId: 'pf-1' }], error: [] } }), { status: 207 }))
     expect(await updatePortfolio(ctx, { portfolioId: 'pf-1', name: 'Core' })).toMatchObject({ ok: true, mode: 'live', error: null })
