@@ -6,8 +6,9 @@
  * inventory controls the operator turns.
  *
  *     [ 21 rows · 1 parent · 20 variants   Find…   chips   Views Customise Export ⋯ ]   40px
- *     [ PRODUCT │ SHARED             │ AMAZON EU · INVENTORY · IT DE │ AMAZON · IT │ … ]   30px
- *     [ Product │ Base price Stock Status │ Fulfilment Mode Qty Buffer Sync │ Listing Price Sale ] 28px
+ *     [ Selected 12 rows   Edit…   Stock source…   Clear ]          (while rows are ticked)
+ *     [ PRODUCT │ SHARED                 │ AMAZON EU · INVENTORY · IT DE │ AMAZON · IT │ … ]   30px
+ *     [ Product │ Base price Stock FBA qty │ Fulfilment Mode Qty Buffer Sync │ Listing Status Price Sale ] 28px
  *     [ … 36px rows … ]
  *     [ 21 rows · 20 variants · Amazon EU: quantity is shared by 4 markets · 2 pinned this session · Undo ]
  *
@@ -16,15 +17,15 @@
  * The ROWS are the master sheet's (`useMasterSheet` — identity, version, completeness, the writer
  * and the tracker), the axis values and face images the family read's (`useFamilyProjections`), the
  * CELLS the Matrix read's (`useMatrix`), the cell DEFINITIONS the engine's (`matrixColumnDef`, MX.G),
- * the toolbar `SheetToolbar`, the Customise dialog the ONE
- * `PreferencesModal`, the selection bar the DS `BulkActionBar`, the verbs `matrixActions` from ONE
- * declaration. ONE state: every coordinate at once; the scope bar FILTERS the groups
+ * the toolbar `SheetToolbar`, the Customise dialog the ONE `PreferencesModal`, and every change to the
+ * ticked rows ONE dialog (`bulk/`, Owner 2026-10-07: "Edit…" — any field, on the markets chosen, preview,
+ * apply, Undo). ONE state: every coordinate at once; the scope bar FILTERS the groups
  * (`filters.ts`). Nothing here derives a number — quantities, prices and states arrive on the read.
  *
  * 🔴 PREVIEW MODE (`read.source === 'preview'`, while `GET …/studio/matrix` answers 404): the banner
  * is on screen, every write and verb goes to `store.ts` in memory, and NOTHING reaches a server —
  * the Network panel is the proof (0 PATCH/POST to `/studio/matrix`; the sheet's own GET is the
- * positive control). The two master columns (`Base price`, `Status`) are held with the reason.
+ * positive control). The master column (`Base price`) is held with the reason.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -82,7 +83,7 @@ import { familyAxes, familyAxisValues, familyReadScope } from '../sheet/familyOr
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
 import { matrixChip, matrixChips } from './chips'
-import { BASE_PRICE_COL, buildMatrixColumns, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, parseMatrixColId, STATUS_COL, STOCK_COL } from './columns'
+import { BASE_PRICE_COL, buildMatrixColumns, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, parseMatrixColId, STOCK_COL } from './columns'
 import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
 import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
@@ -178,7 +179,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const matrix = useMatrix({ productId, accountId: accountId ?? null, locale, rows: previewRows, coordinates: coordinateSource, tracker, getApi: getApiForMatrix, can: has, onSettled: onMatrixSettled, onRefused })
   const read = matrix.read
   const previewMode = read?.source === 'preview'
-  const masterHeldReason = previewMode ? 'Preview data — Base price and Status are the Information sheet\'s; edit them there until the Matrix service lands.' : null
+  const masterHeldReason = previewMode ? 'Preview data — Base price is the Information sheet\'s; edit it there until the Matrix service lands.' : null
 
   /* ── the scope bar FILTERS the groups (filters.ts) ───────────────────────────────────────── */
 
@@ -614,7 +615,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   /* ── views: presets + saved views on the Matrix surface ─────────────────────────────────── */
 
   const allColIds = useMemo(() => {
-    const ids: string[] = [IDENTITY_COL, BASE_PRICE_COL, STOCK_COL, FBA_COL, STATUS_COL]
+    const ids: string[] = [IDENTITY_COL, BASE_PRICE_COL, STOCK_COL, FBA_COL]
     for (const c of visibleCoordinates) {
       if (!c.connected || c.cells.length === 0) ids.push(matrixColId(c.key, 'notListed'))
       else for (const k of c.cells) {
@@ -630,7 +631,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
       { id: ALL_VIEW_ID, label: 'Everything', description: 'Every coordinate, every cell', columns: allColIds },
       { id: 'inventory', label: 'Inventory', description: 'Stock, FBA qty and the inventory lane: Fulfilment · Mode · Qty · Buffer · Sync', columns: byKind(INVENTORY_KINDS, [STOCK_COL, FBA_COL]) },
       { id: 'pricing', label: 'Pricing', description: 'Base price and every coordinate\'s Price and Sale', columns: byKind(PRICING_KINDS, [BASE_PRICE_COL]) },
-      { id: 'listings', label: 'Listings', description: 'Status and every coordinate\'s Listing state and selling Status', columns: [...byKind(['listing'], [STATUS_COL]), ...allColIds.filter(isMatrixStatusColId)] },
+      { id: 'listings', label: 'Listings', description: 'Every market\'s Listing state and selling Status', columns: [...byKind(['listing'], []), ...allColIds.filter(isMatrixStatusColId)] },
     ]
   }, [allColIds])
 
@@ -691,7 +692,6 @@ export function MatrixSurface({ productId }: { productId: string }) {
       { key: BASE_PRICE_COL, label: 'Base price', group: 'Shared' },
       { key: STOCK_COL, label: 'Stock', group: 'Shared' },
       { key: FBA_COL, label: 'FBA qty', group: 'Shared' },
-      { key: STATUS_COL, label: 'Status', group: 'Shared' },
     ]
     for (const c of visibleCoordinates) {
       if (!c.connected || c.cells.length === 0) { out.push({ key: matrixColId(c.key, 'notListed'), label: MATRIX_COPY.notListed, group: c.label }); continue }
@@ -740,7 +740,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
     try {
       const r = exportGridCsv<StudioRow>(api, `${sheet?.family.sku ?? productId}-matrix`, {
         columns: 'displayed',
-        keyOf: (colId) => (parseMatrixColId(colId) || isMatrixStatusColId(colId) ? colId : colId === BASE_PRICE_COL ? 'basePrice' : colId === STATUS_COL ? 'status' : colId === STOCK_COL ? null : null),
+        keyOf: (colId) => (parseMatrixColId(colId) || isMatrixStatusColId(colId) ? colId : colId === BASE_PRICE_COL ? 'basePrice' : null),
         valueOf: (colId, row) => {
           if (isMatrixStatusColId(colId)) {
             /* The words the cell shows (the sheet's `statusCellText`): the waiting target, else the live state. */
