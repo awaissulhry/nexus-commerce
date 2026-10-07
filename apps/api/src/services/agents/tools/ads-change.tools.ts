@@ -58,7 +58,7 @@ import { restoreBidsFor, restoreCampaignBids, suppressCampaignBids, SUPPRESSION_
 import { stopBidsFor, strategySourceWords } from '../../advertising/ads-strategy/effective.js'
 import { playbookHoldOf, playbookHolds, startOnlyRefusal } from '../../advertising/ads-playbook/held.js'
 import { amountLabel, campaignCurrency, checkLiveReach, liftSuppressionRefusal, suppressionOf, type AdWriteIntent, type LiveReach } from './ads-tool-guards.js'
-import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, BY_RULE_WORDS, handBackEvidence, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stopBidOf, STOP_MIN_CENTS, storedReach, strategyFactsMoney, withStepPast, type BidAfterwards, type BidStep, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, BY_RULE_WORDS, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stopBidOf, STOP_MIN_CENTS, storedReach, strategyFactsMoney, withStepPast, type BidAfterwards, type BidStep, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, STEP_PCT_LIMITS, STEP_POINT_LIMITS, type KitItem } from './ads-autonomy-kit.js'
 import { strategyBidReader } from '../../advertising/ads-strategy/bids.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
@@ -1046,7 +1046,12 @@ async function bulkDecision(args: Record<string, unknown>, opts: { rule?: { appr
       // W4-4 — the rows a person's approval sends past the largest change, and what a run by rule writes instead.
       ...(stepped ? { stepNote: `${stepped} of these ${stepped === 1 ? 'bid moves' : 'bids move'} more than the largest bid change per action: a person's approval sends ${stepped === 1 ? 'it' : 'them'} as asked (the card warns first); run by the business's rule, ${stepped === 1 ? 'it moves' : 'they move'} only as far as the largest change allows (byRuleCents on each line).` } : {}),
       afterwards,
-      afterwardsNote: afterwardsNote(afterwards, going.length !== 1),
+      // W4-4 — a stop row is never handed back: auto-bid could raise it. It stays held, as a person's bid.
+      afterwardsNote: afterwards === 'auto-bid' && stopsGoing
+        ? stopsGoing === writes.length
+          ? `Every row is a stop, and a stop is never handed back to auto-bid (it could raise it): ${stopsGoing === 1 ? 'it stays' : 'they stay'} held as a person's bid for 60 days.`
+          : `${afterwardsNote(afterwards, writes.length - stopsGoing !== 1)} The ${stopsGoing} stop row${stopsGoing === 1 ? ' is' : 's are'} not handed back (auto-bid could raise ${stopsGoing === 1 ? 'it' : 'them'}): ${stopsGoing === 1 ? 'it stays' : 'they stay'} held as a person's bid for 60 days.`
+        : afterwardsNote(afterwards, going.length !== 1),
       effect: `Moves ${going.length} bid${going.length === 1 ? '' : 's'} (${Object.entries(byCurrency).map(([cur, v]) => `${v.deltaCents >= 0 ? '+' : '−'}${amountLabel(Math.abs(v.deltaCents), cur)} in total per click on ${v.targets}`).join('; ')})${stopsGoing ? `, ${stopsGoing} of them to the stop bid` : ''}${stepped ? `; run by the business's rule instead, ${stepped} of them move only as far as the largest bid change allows` : ''}${excluded.length ? `; ${excluded.length} left as they are` : ''}.`,
     },
   } }
@@ -1117,7 +1122,8 @@ const bulkAdBidChange: AgentTool = {
   maxClaudeTrust: 'auto',
   strategyBound: 'amazon-ads',
   limits: BULK_BID_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits),
+  // W4-4 — a hand-back to auto-bid never runs by rule.
+  withinLimits: (preview, limits) => handBackRefusal(preview) ?? ruleRefusal(preview, limits),
   undo: BULK_BID_UNDO,
   description:
     `Change many Amazon Sponsored Products bids in one request: a list of targets with their new bids (up to ${BULK_LIST_MAX}), `
@@ -1153,7 +1159,8 @@ const bulkAdBidChange: AgentTool = {
     const bidOf = (g: BulkWrite) => (run.manual ? g.toCents : g.ruleCents ?? g.toCents)
     const out = await bulkUpdateAdTargetBids({
       entries: going.map((g) => {
-        const evidence = handBackEvidence(g.source ? withSource(null, g.source) : null, p.afterwards) // W3-1, W4-4
+        // W3-1, W4-4 — a stop row is never handed back (auto-bid could raise it).
+        const evidence = handBackEvidence(g.source ? withSource(null, g.source) : null, g.stop ? 'hold' : p.afterwards)
         return { adTargetId: g.targetId, bidCents: bidOf(g), ...(evidence ? { evidence } : {}), ...(g.stop ? { stop: true } : {}) }
       }),
       actor: run.actor,

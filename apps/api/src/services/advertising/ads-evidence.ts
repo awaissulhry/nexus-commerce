@@ -68,8 +68,9 @@ export interface AdWriteEvidence {
   /**
    * ADS AUTONOMY W4-4 — an approved Claude bid request that hands the bid back to auto-bid (its `afterwards: 'auto-bid'`,
    * which the person saw on the card): bid-grid.service.ts personBidTargetIds does not count this write as a person's
-   * bid, so auto-bid may move it from its next run. Read only on a person's write (`user:`) that names an approved
-   * request as its change set; a person's own edit never carries it.
+   * bid, so auto-bid may move it from its next run. Honoured only on an operator's write whose change set
+   * (`executionId`) is a request a PERSON decided — never one the business's rule ran (the tools refuse that by rule
+   * too); a person's own edit never carries it.
    */
   handBack?: 'auto-bid'
 }

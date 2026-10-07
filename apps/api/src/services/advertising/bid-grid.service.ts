@@ -522,14 +522,16 @@ export const PERSON_BID_HOLD_DAYS = 60
  * `user:<approver>`). The one read of "a person set this bid": `bidderByCampaign` resolves it up to the campaign for
  * this page, auto-bid (ads-auto-bid.service.ts) leaves each such bid alone.
  *
- * ADS AUTONOMY W4-4 — unless the NEWEST of those writes handed the bid back to auto-bid: an approved Claude request
- * asked with `afterwards: 'auto-bid'`, whose action log row carries `evidence.handBack` and names the request as its
- * change set (`executionId`). It releases an earlier person's bid too; a person's later edit holds the bid again.
+ * ADS AUTONOMY W4-4 — unless the NEWEST of those writes handed the bid back to auto-bid: a Claude request asked with
+ * `afterwards: 'auto-bid'`, whose action log row carries `evidence.handBack` and names its request as the change set
+ * (`executionId`). The mark counts only when that request is one a PERSON decided (its AgentApproval, decided in Nexus
+ * or confirmed with a code, never by the business's rule): a mark on any other write releases nothing. A hand-back
+ * releases an earlier person's bid too; a person's later edit holds the bid again.
  */
 export async function personBidTargetIds(): Promise<Set<string>> {
   const since = new Date(Date.now() - PERSON_BID_HOLD_DAYS * 86400_000)
   const where = { actionType: 'AD_BID_UPDATE', createdAt: { gte: since } }
-  const [bidLogs, handBacks] = await Promise.all([
+  const [bidLogs, marked] = await Promise.all([
     prisma.advertisingActionLog.findMany({
       // No `userId` predicate in the query: the column cannot express "a human did this", so the
       // filtering happens in `parseActor` below where the vocabulary is actually understood.
@@ -538,9 +540,15 @@ export async function personBidTargetIds(): Promise<Set<string>> {
     }),
     prisma.advertisingActionLog.findMany({
       where: { ...where, executionId: { not: null }, evidence: { path: ['handBack'], equals: 'auto-bid' } },
-      select: { id: true },
+      select: { id: true, executionId: true },
     }),
   ])
+  // Only a request a person decided hands a bid back (`decisionVia` null or 'auto' never does).
+  const requestIds = [...new Set(marked.map((m) => m.executionId!))]
+  const decided = requestIds.length
+    ? new Set((await prisma.agentApproval.findMany({ where: { id: { in: requestIds }, decisionVia: { not: 'auto' } }, select: { id: true } })).map((a) => a.id))
+    : new Set<string>()
+  const handBacks = marked.filter((m) => decided.has(m.executionId!))
   const handedBack = new Set(handBacks.map((h) => h.id))
   // Per bid, the newest write a person made or approved decides; at the same instant a hold wins (the safer reading).
   const newest = new Map<string, { at: number; held: boolean }>()

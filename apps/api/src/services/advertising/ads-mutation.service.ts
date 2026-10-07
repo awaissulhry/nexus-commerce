@@ -1764,7 +1764,8 @@ export async function updateAdTargetWithSync(args: {
   // brake may stop automation, not second-guess his click. Engines and rules keep it.
   // W1-5 — the largest change is the LOWER of the campaign's and the ads strategy's (stepClamp, the same arithmetic as
   // Claude's preview, ads-change-kit.ts); a bid asked for inside the strategy band stays inside it. A person's own edit
-  // past the strategy's largest change is sent, with a warning (never rewritten, never held for a confirmation).
+  // past the strategy's largest change is sent, with a warning (never rewritten, never held for a confirmation). W4-4 — a
+  // Claude request a person approved carries his mark (approvedRun) and goes the same way: the card warned him first.
   if (!args.force && !stop && args.patch.bidCents != null && existing.bidCents > 0) {
     if (!person) {
       const step = stepClamp(existing.bidCents, args.patch.bidCents, campaignOfTarget?.dynamicBidding, strategy)
@@ -1773,7 +1774,7 @@ export async function updateAdTargetWithSync(args: {
       args.patch.bidCents = step.cents
     } else if (strategy.maxChangePct && stepClamp(existing.bidCents, args.patch.bidCents, null, { ...NO_LIMITS, maxChangePct: strategy.maxChangePct }).cents !== args.patch.bidCents) {
       const pct = Math.round((Math.abs(args.patch.bidCents - existing.bidCents) / existing.bidCents) * 100)
-      warnings.push(`a ${pct} % change (${existing.bidCents}¢ → ${args.patch.bidCents}¢) is more than the largest bid change ${strategy.maxChangePct.value} % (${strategyWords(strategy.maxChangePct.source)}); sent, because it is your own edit`)
+      warnings.push(`a ${pct} % change (${existing.bidCents}¢ → ${args.patch.bidCents}¢) is more than the largest bid change ${strategy.maxChangePct.value} % (${strategyWords(strategy.maxChangePct.source)}); sent, because a person made or approved it`)
     }
   }
 

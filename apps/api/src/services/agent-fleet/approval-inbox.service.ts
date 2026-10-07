@@ -1077,7 +1077,8 @@ export interface StalenessOptions {
   withFresh?: boolean
 }
 
-const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : String(c))
+// W4-4 — a value the fresh preview no longer carries reads "none", never "undefined".
+const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : c == null ? 'none' : String(c))
 
 /**
  * One text per value whatever the order of its keys, for comparing a stored preview with a fresh one.
@@ -1191,7 +1192,7 @@ export async function previewStaleness(
       moved.push(
         key.toLowerCase().includes('cents')
           ? `${key} changed from ${money(before[key])} to ${money(after[key])}`
-          : `${key} changed from ${JSON.stringify(before[key])} to ${JSON.stringify(after[key])}`,
+          : `${key} changed from ${JSON.stringify(before[key]) ?? 'none'} to ${JSON.stringify(after[key]) ?? 'none'}`,
       )
     }
   }

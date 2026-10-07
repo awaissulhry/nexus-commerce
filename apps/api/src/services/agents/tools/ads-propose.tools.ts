@@ -47,7 +47,7 @@ import { adGroupCampaigns, adGroupExternalIds, adGroupsByExternalId } from '../.
 import { loadDestinationGraph, resolveDestination, resolveStoredDestinations } from '../../advertising/harvest-destination.service.js'
 import { clampBidsByCeiling } from '../../advertising/ads-cpc-ceiling.js'
 import { amountLabel, campaignCurrency, checkLiveReach, suppressionOf } from './ads-tool-guards.js'
-import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, handBackEvidence, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stepClampWords, storedReach, withStepPast, type BidAfterwards, type StoredReach } from './ads-change-kit.js'
+import { afterwardsArg, afterwardsNote, afterwardsOf, alsoChangedBy, approvedRun, bidStepOf, handBackEvidence, handBackRefusal, notRun, reachNote, reachRefusal, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, stepClampWords, storedReach, withStepPast, type BidAfterwards, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, STEP_PCT_LIMITS, type LimitFacts, type ScopeFacts } from './ads-autonomy-kit.js'
 import { bidLimitsFor } from '../../advertising/ads-strategy/bids.js'
 import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
@@ -906,7 +906,9 @@ async function targetBidPreview(args: Record<string, unknown>, opts: { rule?: { 
       currency,
       currentBidCents,
       proposedBidCents,
-      ...(effectiveBidCents !== proposedBidCents ? { effectiveBidCents, clampedBy: 'the campaign\'s CPC ceiling' } : {}),
+      // W4-4 — always the bid a person's approval sends (a request stepped before W4-4 then reads "from €0.54 to €0.90").
+      effectiveBidCents,
+      ...(effectiveBidCents !== proposedBidCents ? { clampedBy: 'the campaign\'s CPC ceiling' } : {}),
       deltaCents: effectiveBidCents - currentBidCents,
       // W4-4 — what a run by the business's rule writes instead: the bid stepped to the largest change (as before).
       byRuleBidCents,
@@ -975,7 +977,8 @@ const setTargetBid: AgentTool = {
   maxClaudeTrust: 'auto',
   strategyBound: 'amazon-ads',
   limits: TARGET_BID_LIMITS,
-  withinLimits: (preview, limits) => ruleRefusal(preview, limits),
+  // W4-4 — a hand-back to auto-bid never runs by rule.
+  withinLimits: (preview, limits) => handBackRefusal(preview) ?? ruleRefusal(preview, limits),
   undo: SET_TARGET_BID_UNDO,
   description:
     'Change one keyword or target bid on an Amazon Sponsored Products campaign. Nothing changes until a person approves '

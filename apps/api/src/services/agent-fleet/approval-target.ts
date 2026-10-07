@@ -697,8 +697,11 @@ const READERS: Record<string, Reader> = {
   'set-ads-playbook': (p) => playbookPart(p),
   'set-target-bid': (p, _a, _ctx, tool) => {
     const from = adMoney(p.currentBidCents, p.currency)
-    const to = adMoney(num(p.effectiveBidCents) ?? p.proposedBidCents, p.currency)
-    return { ...adCampaign(p, tool), changes: from || to ? [{ label: 'Bid', from, to }] : [] }
+    const sent = num(p.effectiveBidCents) ?? num(p.proposedBidCents)
+    // W4-4 — past the largest change a run by rule writes the stepped bid: the line says both.
+    const rule = num(p.byRuleBidCents)
+    const to = adMoney(sent, p.currency)
+    return { ...adCampaign(p, tool), changes: from || to ? [{ label: 'Bid', from, to: to && rule != null && rule !== sent ? `${to} (by rule: ${adMoney(rule, p.currency)})` : to }] : [] }
   },
   'create-negative-keyword': (p, _a, _ctx, tool) => ({
     ...adCampaign(p, tool),
@@ -742,7 +745,8 @@ const READERS: Record<string, Reader> = {
     const lines = recs(p.changes).map((c) => ({
       sku: null,
       name: text(c.text),
-      change: { label: `“${text(c.text) ?? '?'}”${text(c.campaignName) ? ` · ${text(c.campaignName)}` : ''}`, from: adMoney(c.fromCents, c.currency), to: adMoney(c.toCents, c.currency) },
+      // W4-4 — a line past the largest change: what a run by rule writes instead.
+      change: { label: `“${text(c.text) ?? '?'}”${text(c.campaignName) ? ` · ${text(c.campaignName)}` : ''}`, from: adMoney(c.fromCents, c.currency), to: num(c.byRuleCents) != null ? `${adMoney(c.toCents, c.currency)} (by rule: ${adMoney(c.byRuleCents, c.currency)})` : adMoney(c.toCents, c.currency) },
     }))
     const changing = num(rec(p.totals)?.changing)
     const first = recs(p.changes)[0]
@@ -1096,8 +1100,9 @@ export function resolveRequest(toolName: string, args: unknown, preview: unknown
   const where = genericWhere(toolName, a, p)
   const said = own.summary !== undefined ? own.summary : (text(p.summary) ?? text(p.effect))
   // 4A + 3A (Owner decided 2026-10-06) — a request past his own limits says so on the card BEFORE he approves: his
-  // approval is his "Send anyway". First, so the 400-character card summary never cuts it off.
-  const pastReach = rec(p.reach)?.pastOwnLimits
+  // approval is his "Send anyway". First, so the 400-character card summary never cuts it off. W4-4 — a change plan
+  // carries its steps' on its own preview, each named by its step (change-plan.service.ts mergedPastOwnLimits).
+  const pastReach = rec(p.reach)?.pastOwnLimits ?? (toolName === PLAN_TOOL ? p.pastOwnLimits : undefined)
   const past = Array.isArray(pastReach) ? pastReach.map((l) => text(rec(l)?.reason)).filter((x): x is string => !!x) : []
   const warning = past.length ? `Warning — this goes past your own limits: ${past.join('; ')}. Approving it sends it anyway.` : null
   const summary = warning ? (said ? `${warning} ${said}` : warning) : said

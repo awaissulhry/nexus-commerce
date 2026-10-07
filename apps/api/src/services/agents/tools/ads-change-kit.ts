@@ -291,12 +291,14 @@ export function bidStepOf(input: {
   // Not stepped (no largest change, or inside it, or a step that ends on the band's edge anyway): nothing to warn about.
   if (step.cents === input.wantedCents || step.pct == null) return { ...base, past: null }
   const moves = Math.round((Math.abs(input.wantedCents - input.currentCents) / input.currentCents) * 10000) / 100
-  const whose = step.by === 'strategy' && input.strategy?.maxChangePct ? strategyWords(input.strategy.maxChangePct.source) : 'the campaign\'s own max-change guardrail'
+  // The strategy row without its version: the warning is compared at approval (reach is material), and a save of the
+  // strategy that keeps the number must not make every waiting request stale. The write's evidence keeps the version.
+  const whose = step.by === 'strategy' && input.strategy?.maxChangePct ? strategyWords(input.strategy.maxChangePct.source, { version: false }) : 'the campaign\'s own max-change guardrail'
   return {
     ...base,
     past: {
       limit: BID_STEP_LIMIT,
-      reason: `${input.label} moves ${moves} % (${amountLabel(input.currentCents, input.currency)} → ${amountLabel(input.wantedCents, input.currency)}), more than the largest bid change ${step.pct} % (${whose})`,
+      reason: `${input.label} moves ${moves} % (${amountLabel(input.currentCents, input.currency)} → ${amountLabel(input.wantedCents, input.currency)}), more than the largest bid change ${step.pct} % (${whose}); run by the business's rule instead it moves only to ${amountLabel(step.cents, input.currency)}`,
     },
   }
 }
@@ -313,8 +315,10 @@ export function withStepPast(reach: StoredReach, past: ReadonlyArray<{ limit: st
 /**
  * W4-4 — what auto-bid does with a bid an approved Claude request wrote. `hold` (the default, as before): it counts as a
  * person's bid, so auto-bid leaves it alone for 60 days (bid-grid.service.ts personBidTargetIds). `auto-bid`: handed
- * back — the write is marked (`evidence.handBack`), auto-bid does not count it as a person's, and may move the bid from
- * its next run, as it moves any bid nobody holds.
+ * back — the write is marked (`evidence.handBack`), and personBidTargetIds does not count it as a person's when its
+ * change set is a request a person decided; auto-bid may then move the bid from its next run, as it moves any bid nobody
+ * holds. A hand-back may release a person's earlier hold, so it never runs by rule (handBackRefusal), and a stop row is
+ * never handed back (auto-bid could raise it).
  */
 export type BidAfterwards = 'hold' | 'auto-bid'
 
@@ -338,6 +342,17 @@ export function afterwardsNote(afterwards: BidAfterwards, many = false): string 
 export function handBackEvidence(evidence: AdWriteEvidence | null | undefined, afterwards: BidAfterwards): AdWriteEvidence | null {
   if (afterwards !== 'auto-bid') return evidence ?? null
   return { ...(evidence ?? {}), handBack: 'auto-bid' }
+}
+
+/**
+ * W4-4 — a bid tool's `withinLimits`, before its own: a hand-back (`afterwards: "auto-bid"`) may release a person's hold
+ * on the bid, so it never runs by rule — the precedent of the SP Super Wizard's `sameProductTerms: 'accept'`. Pure.
+ */
+export function handBackRefusal(preview: unknown): string | null {
+  const afterwards = (preview as { afterwards?: unknown } | null | undefined)?.afterwards
+  if (afterwards === 'hold') return null
+  if (afterwards === 'auto-bid') return 'it hands the bid back to auto-bid (afterwards "auto-bid"), which may release a bid a person set: never by rule; a person decides'
+  return 'the preview does not say what auto-bid does with the bid afterwards; a person decides'
 }
 
 /** An approved run that could not run, as the gate expects it (ok:false; the request goes back to waiting). */
