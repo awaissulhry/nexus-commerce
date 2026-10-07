@@ -7,6 +7,9 @@
  * markets. So a write on an Amazon EU market lands on every EU row of the SKU on the same account and alias-free
  * coordinate whose offer is not closed (SCT.6: an EU-wide action never reopens a closed offer), in the Matrix's market
  * order. Any other listing (another channel, a non-EU market, an alias) is its own only target.
+ *
+ * `includeClosed` (Step 2, "Sells from"): a setting that writes nothing to Amazon and must hold on every EU row — the
+ * closed ones too, or a reopened market would sell from another list — takes every row, each version-checked.
  */
 import type { Prisma } from '@prisma/client'
 import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
@@ -24,6 +27,7 @@ export interface SharedInventoryPrimary {
 }
 export interface SharedInventorySibling { id: string; marketplace: string; version: number; offerClosedAt: unknown }
 export interface SharedInventoryTarget { id: string; marketplace: string; version: number }
+export interface SharedInventoryOptions { primary?: 'open-only' | 'always'; includeClosed?: boolean }
 
 /** Does a write on this listing reach the whole Amazon EU group? */
 export const sharesAmazonEuInventory = (l: Pick<SharedInventoryPrimary, 'channel' | 'marketplace' | 'aliasKey'>): boolean =>
@@ -33,18 +37,19 @@ export const sharesAmazonEuInventory = (l: Pick<SharedInventoryPrimary, 'channel
  * PURE — the targets among the group's rows (`siblings` = every EU row of the SKU on the account, the primary among
  * them). `conflict` = the primary moved since the caller read it (its current version), or is gone (0).
  * `primary: 'always'` keeps the primary even when its own offer is closed (the listings screen's quantity edit).
+ * `includeClosed` keeps every row of the group, closed offers included.
  */
 export function pickSharedInventoryTargets(
   primary: SharedInventoryPrimary,
   siblings: readonly SharedInventorySibling[],
-  options: { primary?: 'open-only' | 'always' } = {},
+  options: SharedInventoryOptions = {},
 ): { targets: SharedInventoryTarget[]; expandedTo?: string[] } | { conflict: number } {
   const own: SharedInventoryTarget = { id: primary.id, marketplace: primary.marketplace, version: primary.version }
   if (!sharesAmazonEuInventory(primary)) return { targets: [own] }
   const current = siblings.find((r) => r.id === primary.id)
   if (!current && options.primary !== 'always') return { conflict: 0 }
   if (current && current.version !== primary.version) return { conflict: current.version }
-  const open = siblings.filter((r) => !r.offerClosedAt || (options.primary === 'always' && r.id === primary.id))
+  const open = siblings.filter((r) => options.includeClosed || !r.offerClosedAt || (options.primary === 'always' && r.id === primary.id))
   const targets = open.map((r) => (r.id === primary.id ? own : { id: r.id, marketplace: r.marketplace, version: r.version }))
   if (options.primary === 'always' && !targets.some((t) => t.id === primary.id)) targets.push(own)
   targets.sort((a, b) => compareMarkets(a.marketplace, b.marketplace))
@@ -55,7 +60,7 @@ export function pickSharedInventoryTargets(
 export async function loadSharedInventoryTargets(
   db: Pick<Prisma.TransactionClient, 'channelListing'>,
   primary: SharedInventoryPrimary,
-  options: { primary?: 'open-only' | 'always' } = {},
+  options: SharedInventoryOptions = {},
 ): Promise<{ targets: SharedInventoryTarget[]; expandedTo?: string[] } | { conflict: number }> {
   if (!sharesAmazonEuInventory(primary)) return pickSharedInventoryTargets(primary, [], options)
   const siblings = await db.channelListing.findMany({

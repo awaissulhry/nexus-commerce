@@ -39,7 +39,8 @@ import {
 } from '@nexus/shared/matrix-contract'
 import type { SellingStateRead } from '@nexus/shared/listing-actions'
 import { destinationSellingStates, oldClosePauses } from '../listings/listing-action.service.js'
-import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
+import { ledgerInputs, loadMarketSources, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
+import { marketSourceKey, sellsFrom } from '../sync-control-core.js'
 import { loadChannelPolicies, parsePolicyKey, policyFor } from '../sync-control-policy.service.js'
 import { isOwnConnection } from '../connection-resolver.service.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
@@ -55,7 +56,7 @@ import { readSaleWindows } from './sale-window.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
   businessAbsence, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, flattenAudience, foldQueue, isAmazonEuMarket,
-  effectiveFulfilment, listingStateOf, priceCellOf, reportedFulfilment, withoutInventory, writableFor, type QueueRowFacts,
+  effectiveFulfilment, inSourceOrder, listingStateOf, priceCellOf, reportedFulfilment, sourceCellOf, withoutInventory, writableFor, type QueueRowFacts, type SourceLocation,
 } from './matrix-cells.js'
 
 export interface MatrixReadInput {
@@ -66,6 +67,8 @@ export interface MatrixReadInput {
   canEditPrice: boolean
   /** Only these coordinates' cells (the product sheet's stock columns read one or two); every coordinate is still listed. */
   only?: readonly CoordinateKey[]
+  /** `inventory.adjust` for the caller — the "Sells from" cell is held with the reason without it (Step 2). Absent = false. */
+  canAdjustStock?: boolean
 }
 
 export type MatrixReadWithMeta = MatrixRead & { meta: { tookMs: number; phases: Record<string, number>; queries: number } }
@@ -129,7 +132,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
 
   // ── 2. wave 1 — one query per table keyed by the family ────────────────────────────────────
   const tWave1 = Date.now()
-  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots] = await Promise.all([
+  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots, warehouses, marketSources] = await Promise.all([
     prisma.channelListing.findMany({ where: { productId: { in: memberIds } }, select: MATRIX_LISTING_SELECT }),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, currency: true, region: true } }),
     prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, isPrimary: true, workspaceId: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }),
@@ -142,7 +145,10 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     loadChannelPolicies(),
     prisma.cellFormula.findMany({ where: { productId: { in: memberIds }, scope: 'channel', fieldKey: 'price' }, select: { productId: true, channel: true, marketplace: true, aliasKey: true, expr: true } }),
     prisma.pricingSnapshot.findMany({ where: { sku: { in: skus }, fulfillmentMethod: null }, select: { sku: true, channel: true, marketplace: true, isClamped: true, clampedFrom: true, computedPrice: true } }),
-  ]); queries += 12
+    // "Sells from" (Step 2): this business's warehouses (the From cell's choices and its routes default) and the market lists.
+    prisma.stockLocation.findMany({ where: { type: 'WAREHOUSE' }, select: { code: true, name: true, isActive: true, syncRoutes: true, warehouse: { select: { isDefault: true, isActive: true } } } }),
+    loadMarketSources(prisma),
+  ]); queries += 14
   const audienceRows = parentRow.productType
     ? await prisma.$queryRawUnsafe<Array<{ marketplace: string | null; audience: unknown }>>(AUDIENCE_SQL, parentRow.productType)
     : []
@@ -206,6 +212,11 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const newest = rows.reduce<Date | null>((m, r) => (r.at && (!m || r.at > m) ? r.at : m), null)
     return { units: rows.reduce((n, r) => n + r.units, 0), locations: [...byCode].map(([code, units]) => ({ code, units })), updatedAt: newest?.toISOString() ?? null }
   }
+  /* "Sells from": the warehouses in sale order (the default first, then by code — the loader's order). */
+  const sourceLocations: Array<SourceLocation & { name: string }> = inSourceOrder(warehouses.map((w) => ({
+    code: w.code, name: w.name, active: w.isActive !== false, syncRoutes: w.syncRoutes ?? [],
+    isDefault: !!w.warehouse?.isDefault && w.warehouse.isActive !== false,
+  })))
   const suppressed = new Set(openSuppressions.map((s) => s.listingId))
   const fbaOfferOn = new Set(fbaOffers.map((o) => o.channelListingId))
   const queueByListing = new Map<string, QueueRowFacts[]>()
@@ -384,8 +395,14 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
         queue = foldQueue(rows.flatMap((l) => queueByListing.get(l.id) ?? []), r.sync)
       }
       if (coord.euMarkets && rows.length > 1) {
-        /* The push belt's own inputs (the STORED method), so the sentence matches what dispatch will refuse. */
-        const verdict = detectEuIntentConflict(rows.map((l) => ({ marketplace: l.marketplace, followMasterQuantity: l.followMasterQuantity, quantityOverride: l.quantityOverride, quantity: l.quantity, syncPaused: l.syncPaused, isFba: l.fulfillmentMethod === 'FBA', offerClosed: !!l.offerClosedAt })))
+        /* The push belt's own inputs (the STORED method), so the sentence matches what dispatch will refuse. Step 2: each
+           row's "Sells from" warehouses (`sellsFrom`) — two Follow rows from different warehouses send different sums. */
+        const product = syncLedgers.get(member.id)
+        const sourcesOf = (l: MatrixListing) => {
+          const { ledger, sourceLocationCodes } = ledgerInputs(product, l.sourceLocationCodes ?? [])
+          return sellsFrom({ ledger, channel: 'AMAZON', marketplace: l.marketplace, sourceLocationCodes }).codes
+        }
+        const verdict = detectEuIntentConflict(rows.map((l) => ({ marketplace: l.marketplace, followMasterQuantity: l.followMasterQuantity, quantityOverride: l.quantityOverride, quantity: l.quantity, syncPaused: l.syncPaused, isFba: l.fulfillmentMethod === 'FBA', offerClosed: !!l.offerClosedAt, sourceLocationCodes: l.sourceLocationCodes ?? [], sources: sourcesOf(l) })))
         if (verdict.conflict) extra.syncState = verdict.detail
       }
     }
@@ -411,10 +428,19 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       const s = draft.sale.value as { price: number; start: string; end: string } | null
       sale.waiting = s ? { value: s.price, start: s.start, end: s.end } : { value: null, start: null, end: null }
     }
-    const gate = writableFor({ role: isParent ? 'parent' : 'variant', cells: coord.cells, sync, fulfilment: fulfilment ? { method: fulfilment.method, guard: fulfilment.guard } : null, price, canEditPrice: input.canEditPrice, sharedFrom: sourceOf(member.id)?.lenderName ?? null })
+    const sharedFrom = sourceOf(member.id)?.lenderName ?? null
+    const gate = writableFor({ role: isParent ? 'parent' : 'variant', cells: coord.cells, sync, fulfilment: fulfilment ? { method: fulfilment.method, guard: fulfilment.guard } : null, price, canEditPrice: input.canEditPrice, sharedFrom })
+    /* "Sells from" (Step 2): one per group that carries the quantity — once on Amazon EU (its primary row's list; the door
+       writes the same list on every EU row). */
+    const source = serves('syncQty') ? sourceCellOf({
+      role: isParent ? 'parent' : 'variant', channel: coord.channel, market: upper(primary.marketplace), own: primary.sourceLocationCodes ?? [],
+      ledger: syncLedgers.get(member.id)?.ledger, marketSources, locations: sourceLocations,
+      isFba: sync?.kind === 'FBA_EXCLUDED', sharedFrom, canAdjustStock: input.canAdjustStock === true,
+    }) : null
     return {
       listingId: primary.id, version: primary.version, listing, fulfilment, sync, queue, price, sale,
       writable: gate.writable, writeBlockedReason: { ...gate.writeBlockedReason, ...extra },
+      ...(source ? { source } : {}),
     }
   }
 
@@ -458,7 +484,13 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     generatedAt: new Date().toISOString(),
     coordinates: coordinates.map(({ rowsOf: _r, euMarkets: _e, ...c }) => c),
     rows,
-    policies: [...policies.entries()].map(([k, v]) => ({ ...parsePolicyKey(k), pushesPaused: v.pushesPaused })),
+    policies: [...policies.entries()].map(([k, v]) => {
+      const key = parsePolicyKey(k)
+      /* "Sells from": the market's list rides on the rows that name no account (`loadMarketSources`). */
+      const list = key.accountId == null && key.market !== '*' ? marketSources.get(marketSourceKey(key.channel, key.market)) : undefined
+      return { ...key, pushesPaused: v.pushesPaused, ...(list?.length ? { sourceLocationCodes: [...list] } : {}) }
+    }),
+    locations: sourceLocations.map((l) => ({ code: l.code, name: l.name, active: l.active, isDefault: l.isDefault })),
     meta: { tookMs: Date.now() - t0, phases, queries },
   }
 }

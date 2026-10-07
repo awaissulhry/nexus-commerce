@@ -184,7 +184,7 @@ export const EVENTS = {
   'listing.values_changed': defineEvent({
     type: 'listing.values_changed',
     context: 'catalog',
-    description: "Listing values a person sees (mode, quantity, buffer, sync state, fulfilment, price, offer, ASIN) changed in one family; the sheet and the Matrix re-read those rows.",
+    description: "Listing values a person sees (mode, quantity, buffer, sync state, fulfilment, price, offer, ASIN, sells from) changed in one family; the sheet and the Matrix re-read those rows.",
     schema: z.strictObject({
       /** The family root. */
       productId: z.string().min(1),
@@ -196,6 +196,8 @@ export const EVENTS = {
       fields: z.array(z.enum([
         'quantityMode', 'quantity', 'stockBuffer', 'syncState', 'fulfilment', 'price', 'salePrice',
         'externalListingId', 'offer', 'fulfilmentSettings', 'offerDraft',
+        /** "Sells from" (Step 2): the warehouses a listing sells from, in sale order. */
+        'stockSource',
       ])).min(1),
       reason: z.string().optional(),
     }),

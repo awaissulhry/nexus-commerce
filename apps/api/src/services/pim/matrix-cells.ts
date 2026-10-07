@@ -27,11 +27,12 @@ import {
   type PriceCell,
   type QueueCell,
   type QueueState,
+  type SourceCell,
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
 import { amazonFulfilmentCodes, describeAmazonFulfilmentCode, isFbaFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
-import type { IntendedResolution } from '../sync-control-core.js'
+import { locationServes, marketSourceKey, sellsFrom, type IntendedResolution, type MarketSources, type SyncLedger } from '../sync-control-core.js'
 
 /* ── coordinates ───────────────────────────────────────────────────────────────────────────── */
 
@@ -383,6 +384,63 @@ export function writableFor(input: WritableInput): Pick<MatrixCells, 'writable' 
     writable[k] = true
   }
   return { writable, writeBlockedReason }
+}
+
+/* ── "Sells from" (Step 2, Owner 2026-10-07) ───────────────────────────────────────────────── */
+
+/** One of this business's WAREHOUSE locations as the From cell needs it. */
+export interface SourceLocation { code: string; active: boolean; isDefault: boolean; syncRoutes: readonly string[] }
+
+/** Sale order when no list decides: the default warehouse first, then by code (the loader's own order). */
+export const inSourceOrder = <T extends { code: string; isDefault?: boolean }>(locations: readonly T[]): T[] =>
+  [...locations].sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
+
+export interface SourceFacts {
+  role: 'parent' | 'variant'
+  channel: string
+  /** The listing's market (an EU group: its primary row's market — every EU row carries the same list). */
+  market: string
+  /** The listing's stored `sourceLocationCodes`. */
+  own: readonly string[]
+  /** The product's ledger (`loadSyncLedgers`); undefined = none read. */
+  ledger: SyncLedger | undefined
+  /** The business's lists per market (`loadMarketSources`). */
+  marketSources: MarketSources
+  /** This business's WAREHOUSE locations (any order). */
+  locations: readonly SourceLocation[]
+  /** The listing's FBA verdict (`listingQuantityVerdict`). */
+  isFba: boolean
+  /** Shared stock by SKU: the lender's name, or null. */
+  sharedFrom: string | null
+  /** `inventory.adjust` for the caller. */
+  canAdjustStock: boolean
+}
+
+/**
+ * PURE — the From cell. The default is the market's list (`marketSourceKey`), or — with none — the ACTIVE warehouses whose
+ * routes allow the market, in sale order. `effective` is the core's own choice (`sellsFrom`, the rows every push reads):
+ * a list's codes in its order, or (routes) the default, each with this SKU's available there (0 without a stock row).
+ * Not writable, with the sentence, on the parent, an FBA listing, a SKU that sells from another business's stock, and for
+ * a caller without `inventory.adjust` — in that order.
+ */
+export function sourceCellOf(f: SourceFacts): SourceCell {
+  const list = f.marketSources.get(marketSourceKey(f.channel, f.market)) ?? []
+  const routed = inSourceOrder(f.locations.filter((l) => l.active && locationServes([...l.syncRoutes], f.channel, f.market))).map((l) => l.code)
+  const marketDefault = list.length ? [...list] : routed
+  const pooled = !!f.sharedFrom
+  const own = f.role === 'parent' ? [] : f.own.map((c) => c.trim()).filter(Boolean)
+  const chosen = f.ledger && f.role !== 'parent'
+    ? sellsFrom({ ledger: f.ledger, channel: f.channel, marketplace: f.market, sourceLocationCodes: pooled ? [] : [...own] })
+    : null
+  const availableAt = new Map<string, number>((chosen?.rows ?? f.ledger ?? []).map((r): [string, number] => [r.locationCode.trim().toUpperCase(), r.available]))
+  const codes = !chosen ? (own.length ? own : marketDefault) : chosen.origin === 'routes' && !pooled ? marketDefault : chosen.codes
+  const effective = f.role === 'parent' ? [] : codes.map((code) => ({ code, available: availableAt.get(code.trim().toUpperCase()) ?? 0 }))
+  const blockedReason = f.role === 'parent' ? MATRIX_COPY.sourceParent
+    : f.isFba ? MATRIX_COPY.sourceFba
+      : f.sharedFrom ? sharedStockReason(f.sharedFrom)
+        : !f.canAdjustStock ? MATRIX_COPY.sourcePermission
+          : null
+  return { own, marketDefault, defaultOrigin: list.length ? 'market' : 'routes', effective, writable: blockedReason === null, blockedReason }
 }
 
 /** Which coordinate carries a target's INVENTORY cells — the region group for an EU market (mirrors the preview's rule). */

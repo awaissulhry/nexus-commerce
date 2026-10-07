@@ -15,6 +15,8 @@
  *   syncBuffer         → `setStockBuffer`
  *   fulfilment         → `fulfillment-method.service.ts` (Add 4(a))
  *   price / salePrice  → `channel-price-write.service.ts` (Add 4(b); `products.price.edit` enforced here too, Add 4(d))
+ *   source             → "Sells from" (Step 2): `ChannelListing.sourceLocationCodes` under the same CAS bump, audited,
+ *                        announced (`stockSource`) and re-pushed (`recascadeAfterSyncControlChange`); `inventory.adjust`
  *
  * A REGION cell (`AMAZON:EU`) lands on EVERY EU row of the SKU inside one transaction — every row's version is
  * checked, every row is bumped, or nothing is written (never a partial EU write) — and answers `expandedTo`.
@@ -29,13 +31,14 @@
 import { createOutboundRow } from '../outbound-rows.js'
 import prisma from '../../db.js'
 import type { Prisma } from '@prisma/client'
-import { inventoryCoordinate, previewVerb, type AmazonFulfilmentFacts, type PreviewContext } from '@nexus/shared/matrix-preview'
+import { inventoryCoordinate, previewVerb, sameSourceCodes, sellsFromCodes, SOURCE_PERMISSION, sourceCodesProblem, type AmazonFulfilmentFacts, type PreviewContext } from '@nexus/shared/matrix-preview'
 import {
   MATRIX_COPY,
   type CoordinateKey,
   type FulfilmentMethod,
   type MatrixCells,
   type MatrixCoordinate,
+  type MatrixDoorKind,
   type MatrixListingVersion,
   type MatrixRead,
   type MatrixRowRead,
@@ -66,7 +69,7 @@ import { getMatrixRead } from './matrix.service.js'
 import { roundCents } from '@nexus/shared/listing-price'
 import type { ListingCoordinate } from '../../lib/listing-coordinate.js'
 import { PRICE_PERMISSION_REASON, sharedStockReason } from './matrix-cells.js'
-import { loadSharedInventoryTargets } from './shared-inventory-targets.js'
+import { loadSharedInventoryTargets, type SharedInventoryOptions } from './shared-inventory-targets.js'
 import { announceListingValues } from '../listing-values-events.js'
 import { SELLING_PAUSED_SENTENCE } from '@nexus/shared/push-lock'
 
@@ -106,7 +109,7 @@ export function locate(read: MatrixRead, rowId: string, key: CoordinateKey): Loc
  * one EU rule (`loadSharedInventoryTargets`). The region cell's own `listingId`/`version` is the PRIMARY market's; its
  * fresh version must still match.
  */
-export async function targetsOf(read: MatrixRead, hit: Located, expectedVersion: number): Promise<{ targets: Target[]; expandedTo?: CoordinateKey[] } | { conflict: number }> {
+export async function targetsOf(read: MatrixRead, hit: Located, expectedVersion: number, options: SharedInventoryOptions = {}): Promise<{ targets: Target[]; expandedTo?: CoordinateKey[] } | { conflict: number }> {
   if (!hit.coord.sharedInventoryWith) return { targets: [{ id: hit.cells.listingId!, marketplace: hit.coord.market, version: expectedVersion }] }
   // The primary's own market: the market coordinate of this row that holds the same listing (read in memory).
   const own = read.coordinates.find((c) => c.channel === hit.coord.channel && !c.alias && c.key !== hit.coord.key
@@ -116,7 +119,7 @@ export async function targetsOf(read: MatrixRead, hit: Located, expectedVersion:
   const resolved = await loadSharedInventoryTargets(prisma, {
     id: hit.cells.listingId!, productId: hit.row.id, channel: hit.coord.channel, marketplace: own,
     channelConnectionId: hit.coord.accountId, aliasKey: '', version: expectedVersion,
-  })
+  }, options)
   if ('conflict' in resolved) return resolved
   return { targets: resolved.targets, expandedTo: (resolved.expandedTo ?? []).map((m) => `${hit.coord.channel}:${m}`) }
 }
@@ -217,6 +220,8 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
   if (!hit || !hit.cells.listingId) return { ...base, outcome: 'refused', reason: 'No listing on this coordinate', version: hit?.cells.version ?? 0 }
   const { row, coord, cells } = hit
   if (cells.version !== w.expectedVersion) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: cells.version }
+  /* "Sells from" is not one of the cell kinds: its own gate (`cells.source`), its own write. */
+  if (w.cell === 'source') return applySource(read, hit, w, ctx)
   if (cells.writable[w.cell] !== true) return { ...base, outcome: 'refused', reason: cells.writeBlockedReason[w.cell] ?? 'This cell cannot be changed here', version: cells.version }
   const refuse = (reason: string): MatrixWriteOutcome => ({ ...base, outcome: 'refused', reason, version: cells.version })
   const noop = (): MatrixWriteOutcome => ({ ...base, outcome: 'noop', version: cells.version })
@@ -337,9 +342,65 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
   return refuse('This cell cannot be changed here')
 }
 
+/**
+ * Step 2 — "Sells from": the warehouses a listing sells from, in sale order (Owner 2026-10-07: a default per market for the
+ * business, per-product exceptions here; sum only; list order = sale order; Amazon EU = ONE choice for the whole group).
+ *   - `inventory.adjust`; the read's own gate (parent, FBA, shared stock) — and FBA and shared stock asked again now;
+ *   - the codes: at most 20, never twice, ACTIVE warehouses of this business (read now, stored in their own spelling);
+ *   - a list equal to the market default is stored `[]` (an exception exists only when it differs); the same list → noop;
+ *   - Amazon EU: the same list on EVERY EU row of the SKU, closed offers included (a reopened market must not sell from
+ *     another list), each row version-checked in one transaction (`includeClosed`);
+ *   - audited per row (`SyncControlAudit` LISTING · `sourceLocationCodes`), announced (`stockSource`, `quantity`) and
+ *     re-pushed in the background (`recascadeAfterSyncControlChange`, the Sync Control route's own re-push).
+ */
+async function applySource(read: MatrixRead, hit: Located, w: MatrixWriteCell, ctx: DoorContext): Promise<MatrixWriteOutcome> {
+  const { row, coord, cells } = hit
+  const base = { rowId: w.rowId, coordinateKey: w.coordinateKey, cell: 'source' as const }
+  const refuse = (reason: string): MatrixWriteOutcome => ({ ...base, outcome: 'refused', reason, version: cells.version })
+  if (!ctx.can(SOURCE_PERMISSION)) return refuse(MATRIX_COPY.sourcePermission)
+  const src = cells.source
+  if (!src) return refuse(MATRIX_COPY.sourceNone)
+  if (!src.writable) return refuse(src.blockedReason ?? MATRIX_COPY.sourceNone)
+  if (!Array.isArray(w.value) || w.value.some((c) => typeof c !== 'string')) return refuse('Sells from is a list of location codes')
+  const chosen = (w.value as string[]).map((c) => c.trim()).filter(Boolean)
+  const warehouses = await prisma.stockLocation.findMany({ where: { type: 'WAREHOUSE' }, select: { code: true, name: true, isActive: true } })
+  const problem = sourceCodesProblem(chosen, warehouses.map((l) => ({ code: l.code, name: l.name, active: l.isActive !== false })))
+  if (problem) return refuse(problem)
+  const spelled = chosen.map((c) => warehouses.find((l) => l.code.trim().toUpperCase() === c.toUpperCase())!.code)
+  const to = sellsFromCodes(spelled, src.marketDefault)
+  if (sameSourceCodes(to, src.own)) return { ...base, outcome: 'noop', version: cells.version }
+  const lender = await sharedStockLender(row.id)
+  if (lender) return refuse(sharedStockReason(lender))
+
+  try {
+    const resolved = await targetsOf(read, hit, w.expectedVersion, { includeClosed: true })
+    if ('conflict' in resolved) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: resolved.conflict }
+    const { targets, expandedTo } = resolved
+    if (coord.channel === 'AMAZON' && (await amazonManagedListingIds(targets.map((t) => t.id))).size > 0) return refuse(MATRIX_COPY.sourceFba)
+    const before = new Map((await prisma.channelListing.findMany({ where: { id: { in: targets.map((t) => t.id) } }, select: { id: true, sourceLocationCodes: true } })).map((l) => [l.id, l.sourceLocationCodes]))
+    await bumpTx(targets, { sourceLocationCodes: to })
+    await prisma.syncControlAudit.createMany({
+      data: targets.map((t) => ({
+        actor: ctx.actor, scopeType: 'LISTING', scopeId: t.id, scopeName: `${row.sku}@${coord.channel}:${t.marketplace}`, field: 'sourceLocationCodes',
+        before: { sourceLocationCodes: before.get(t.id) ?? [] }, after: { sourceLocationCodes: to }, reason: 'matrix',
+      })),
+    }).catch((err) => logger.warn('matrix: sells-from audit write failed', { productId: row.id, error: err instanceof Error ? err.message : String(err) }))
+    announceListingValues(targets.map((t) => t.id), ['stockSource', 'quantity'], 'matrix')
+    void recascadeAfterSyncControlChange([row.id], ctx.actor).then((r) => logger.info('matrix: recascade after sells-from change', { ...r, productId: row.id, actor: ctx.actor }))
+    return { ...base, outcome: 'applied', version: cells.version + 1, ...(expandedTo ? { expandedTo } : {}), listings: targets.map((t) => ({ listingId: t.id, productId: row.id, version: t.version + 1 })) }
+  } catch (err) {
+    if (err instanceof Conflict) return { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: err.version }
+    throw err
+  }
+}
+
+/** The read the door works on: the caller's account, and the caller's price and stock rights (they gate the cells). */
+const doorRead = (ctx: DoorContext) =>
+  getMatrixRead({ productId: ctx.productId, accountId: ctx.accountId ?? null, canEditPrice: ctx.can(PRICE_PERMISSION), canAdjustStock: ctx.can(SOURCE_PERMISSION) })
+
 /** The one door: every cell write, in order, each CAS-checked on its own listing version; the read is taken once. */
 export async function writeMatrixCells(ctx: DoorContext, cells: readonly MatrixWriteCell[]): Promise<MatrixWriteResult> {
-  const read = await getMatrixRead({ productId: ctx.productId, accountId: ctx.accountId ?? null, canEditPrice: ctx.can(PRICE_PERMISSION) })
+  const read = await doorRead(ctx)
   const results: MatrixWriteOutcome[] = []
   const versions = new Map<string, number>()
   for (const w of cells) {
@@ -449,6 +510,7 @@ export function paramsForChange(verb: MatrixVerbId, change: VerbChange): MatrixV
     case 'set-follow': return { verb: 'set-follow' }
     case 'set-fulfilment': return change.to === 'FBA' || change.to === 'FBM' || change.to === 'MCF' ? { verb: 'set-fulfilment', method: change.to } : null
     case 'pause-sync': case 'resume-sync': case 'push-now': case 'retry-sync': return { verb }
+    case 'set-source': return Array.isArray(change.to) && change.to.every((c) => typeof c === 'string') ? { verb: 'set-source', codes: [...(change.to as string[])] } : null
   }
 }
 
@@ -520,7 +582,7 @@ async function amazonFulfilmentFacts(read: MatrixRead, req: MatrixVerbRequest & 
 }
 
 export async function runMatrixVerb(ctx: DoorContext, req: MatrixVerbRequest & { preview?: VerbPreview }): Promise<VerbPreview | VerbCommitResult> {
-  const read = await getMatrixRead({ productId: ctx.productId, accountId: ctx.accountId ?? null, canEditPrice: ctx.can(PRICE_PERMISSION) })
+  const read = await doorRead(ctx)
   const pctx: PreviewContext = { can: ctx.can, simulated: false, ebayZeroAllowed: await ebayZeroAllowed(read, req), amazonFulfilment: await amazonFulfilmentFacts(read, req) }
   if (!req.commit) return previewVerb(read, { ...req, commit: false }, pctx)
   const verb = req.params.verb
@@ -544,13 +606,13 @@ export async function runMatrixVerb(ctx: DoorContext, req: MatrixVerbRequest & {
     const same = fresh?.changes.find((c) => c.rowId === ch.rowId && c.coordinateKey === ch.coordinateKey && c.cell === ch.cell && canonical(c.to) === canonical(ch.to))
     if (!same) {
       const reason = fresh?.refusals.find((r) => r.rowId === ch.rowId)?.reason ?? 'Changed since the preview — reload and run the verb again'
-      results.push({ rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell === 'syncState' ? 'syncMode' : (ch.cell as MatrixWritableKind), outcome: 'refused', reason, version: read.rows.find((r) => r.id === ch.rowId)?.cells[ch.coordinateKey]?.version ?? 0 })
+      results.push({ rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell === 'syncState' ? 'syncMode' : (ch.cell as MatrixDoorKind), outcome: 'refused', reason, version: read.rows.find((r) => r.id === ch.rowId)?.cells[ch.coordinateKey]?.version ?? 0 })
       continue
     }
     const cells = locate(read, ch.rowId, ch.coordinateKey)?.cells
     const outcome = ch.cell === 'syncState' || STATE_VERBS.has(verb)
       ? await applySyncState(read, ch, verb, ctx)
-      : await applyCell(read, { rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell as MatrixWritableKind, value: ch.to, expectedVersion: cells?.version ?? 0 }, verb === 'set-fulfilment' ? { ...ctx, conversion: 'matrix-verb' } : ctx)
+      : await applyCell(read, { rowId: ch.rowId, coordinateKey: ch.coordinateKey, cell: ch.cell as MatrixDoorKind, value: ch.to, expectedVersion: cells?.version ?? 0 }, verb === 'set-fulfilment' ? { ...ctx, conversion: 'matrix-verb' } : ctx)
     if (outcome.outcome === 'applied' && cells) cells.version = outcome.version
     results.push(outcome)
   }
@@ -580,8 +642,8 @@ export class OperationNotRevertibleError extends Error {
 interface StoredOp { kind?: string; verb?: MatrixVerbId; productId?: string; before?: VerbOperation['before']; changes?: VerbChange[]; outcomes?: MatrixWriteOutcome[]; phase?: string }
 
 /** The cell writes that take `live` back to `before`, in the order the door must run them. */
-export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixCells, live: MatrixCells): Array<{ kind: 'state'; verb: 'pause-sync' | 'resume-sync' } | { kind: 'cell'; cell: MatrixWritableKind; value: unknown }> {
-  const out: Array<{ kind: 'state'; verb: 'pause-sync' | 'resume-sync' } | { kind: 'cell'; cell: MatrixWritableKind; value: unknown }> = []
+export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixCells, live: MatrixCells): Array<{ kind: 'state'; verb: 'pause-sync' | 'resume-sync' } | { kind: 'cell'; cell: MatrixDoorKind; value: unknown }> {
+  const out: Array<{ kind: 'state'; verb: 'pause-sync' | 'resume-sync' } | { kind: 'cell'; cell: MatrixDoorKind; value: unknown }> = []
   const b = before, l = live
   if (b.sync && l.sync) {
     if (b.sync.kind === 'PAUSED' && b.sync.via === 'LISTING' && l.sync.kind !== 'PAUSED') out.push({ kind: 'state', verb: 'pause-sync' })
@@ -599,6 +661,8 @@ export function restoreWrites(rowId: string, key: CoordinateKey, before: MatrixC
     else if (b.price.source === 'master' && l.price.source === 'override') out.push({ kind: 'cell', cell: 'price', value: null })
   }
   if (b.sale && l.sale && (b.sale.value !== l.sale.value || b.sale.start !== l.sale.start || b.sale.end !== l.sale.end)) out.push({ kind: 'cell', cell: 'salePrice', value: { ...b.sale } })
+  /* "Sells from": back to the listing's own list as it was (`[]` = the market default again). */
+  if (b.source && l.source && !sameSourceCodes(b.source.own, l.source.own)) out.push({ kind: 'cell', cell: 'source', value: [...b.source.own] })
   void rowId
   return out
 }
@@ -614,7 +678,7 @@ export async function revertMatrixOperation(ctx: DoorContext, operationId: strin
   const claimed = await prisma.bulkOperation.updateMany({ where: { id: op.id, status: op.status }, data: { status: 'RUNNING' } })
   if (claimed.count !== 1) throw new OperationNotRevertibleError(409, 'This operation is already being reverted')
 
-  const read = await getMatrixRead({ productId: ctx.productId, accountId: ctx.accountId ?? null, canEditPrice: ctx.can(PRICE_PERMISSION) })
+  const read = await doorRead(ctx)
   const results: MatrixWriteOutcome[] = []
   try {
     for (const b of stored.before ?? []) {

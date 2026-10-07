@@ -167,6 +167,26 @@ export interface SaleCell {
   waiting?: { value: number | null; start: string | null; end: string | null } | null
 }
 
+/**
+ * "Sells from" (Step 2, Owner 2026-10-07): which of this business's warehouses a coordinate's listing sells from, IN SALE
+ * ORDER (a sale takes stock from the first that has it; the listing shows the SUM). One per market group — once on the
+ * Amazon EU inventory group, for every EU market. Carried beside the inventory cells, never a `MatrixCellKind` (the Status
+ * column's precedent): the page renders it as the group's From column and writes it through the door as `cell: 'source'`.
+ */
+export interface SourceCell {
+  /** This listing's own choice in sale order; `[]` = it follows the market default. A choice equal to the default is stored `[]`. */
+  own: readonly string[]
+  /** The market's list (`marketSourceKey`), or — when the market has none yet — the active warehouses its routes allow (default first, then by code). */
+  marketDefault: readonly string[]
+  /** `market` = the business set a list for this market; `routes` = none yet, `syncRoutes` decide. */
+  defaultOrigin: 'market' | 'routes'
+  /** What sells now, in sale order, with this SKU's available units per location. */
+  effective: ReadonlyArray<{ code: string; available: number }>
+  writable: boolean
+  /** The sentence when `writable` is false (parent, FBA, shared stock, no `inventory.adjust`); null when writable. */
+  blockedReason: string | null
+}
+
 /** Everything one row says about one coordinate. */
 export interface MatrixCells {
   /** The listing row this coordinate's cells belong to; null on a coordinate with no listing for this row. */
@@ -183,6 +203,8 @@ export interface MatrixCells {
   writable: Partial<Record<MatrixCellKind, boolean>>
   /** The sentence for every `writable: false` the operator can see — never a silent lock. */
   writeBlockedReason: Partial<Record<MatrixCellKind, string>>
+  /** "Sells from" — on a coordinate whose cells include `syncQty` (absent elsewhere and on an older server). */
+  source?: SourceCell | null
 }
 
 /* ── coordinates ────────────────────────────────────────────────────────────────────────────── */
@@ -264,17 +286,27 @@ export interface MatrixRead {
   generatedAt: string
   coordinates: MatrixCoordinate[]
   rows: MatrixRowRead[]
-  policies: ReadonlyArray<{ channel: string; market: string; pushesPaused: boolean }>
+  /** `sourceLocationCodes` = the market's "Sells from" list (Step 2), in sale order; absent or `[]` = none (routes decide). */
+  policies: ReadonlyArray<{ channel: string; market: string; pushesPaused: boolean; sourceLocationCodes?: readonly string[] }>
+  /**
+   * "Sells from" (Step 2): this business's WAREHOUSE locations — the ones a Sells from list may name. `active: false` =
+   * switched off (never chosen, never sold from). `isDefault` = the business's default warehouse. Absent = an older server.
+   */
+  locations?: ReadonlyArray<MatrixLocation>
 }
+
+export interface MatrixLocation { code: string; name: string; active: boolean; isDefault?: boolean }
 
 /* ── writes: one door ───────────────────────────────────────────────────────────────────────── */
 
 export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice'>
+/** What the one door writes: the writable cell kinds plus "Sells from" (`value`: the codes in sale order; `[]` = the market default). */
+export type MatrixDoorKind = MatrixWritableKind | 'source'
 
 export interface MatrixWriteCell {
   rowId: string
   coordinateKey: CoordinateKey
-  cell: MatrixWritableKind
+  cell: MatrixDoorKind
   value: unknown
   expectedVersion: number
   /** The listing the caller saw on this coordinate (`MatrixCells.listingId`); another listing there now is a `conflict`. */
@@ -289,7 +321,7 @@ export type WriteOutcome = 'applied' | 'refused' | 'noop' | 'conflict'
 export interface MatrixWriteOutcome {
   rowId: string
   coordinateKey: CoordinateKey
-  cell: MatrixWritableKind
+  cell: MatrixDoorKind
   outcome: WriteOutcome
   reason?: string
   /** The listing's version AFTER the write (unchanged on refused/noop; the CURRENT one on conflict). */
@@ -311,12 +343,14 @@ export type MatrixVerbId =
   | 'pin-quantity' | 'set-follow' | 'set-buffer'
   | 'pause-sync' | 'resume-sync' | 'push-now' | 'retry-sync'
   | 'set-fulfilment'
+  | 'set-source'
 
 export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'set-price': 'Set price…', 'adjust-prices': 'Adjust prices by %…', 'copy-prices': 'Copy prices from…',
   'pin-quantity': 'Pin quantity…', 'set-follow': 'Set to Follow', 'set-buffer': 'Set buffer…',
   'pause-sync': 'Hold stock sync', 'resume-sync': 'Release stock sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
   'set-fulfilment': 'Set fulfilment…',
+  'set-source': 'Set sells from…',
 }
 
 export interface MatrixVerbTarget { rowId: string; coordinateKey: CoordinateKey }
@@ -333,6 +367,8 @@ export type MatrixVerbParams =
   | { verb: 'push-now' }
   | { verb: 'retry-sync' }
   | { verb: 'set-fulfilment'; method: FulfilmentMethod }
+  /** "Sells from" in sale order; `[]` = use the market default. */
+  | { verb: 'set-source'; codes: string[] }
 
 export interface MatrixVerbRequest { params: MatrixVerbParams; targets: MatrixVerbTarget[]; commit: boolean }
 
@@ -342,7 +378,8 @@ export interface VerbChange {
   rowId: string
   sku: string
   coordinateKey: CoordinateKey
-  cell: MatrixCellKind
+  /** `source` = "Sells from" (`set-source`; from/to are code lists, `[]` = the market default). */
+  cell: MatrixCellKind | 'source'
   from: unknown
   to: unknown
   /** The operator-facing rendering of `from` → `to` (`€105.00 → €99.75`, `Follow 403 → Pinned 10`). */
@@ -441,6 +478,18 @@ export const MATRIX_COPY = {
   fulfilmentNexusOnly: 'Nexus only — nothing is sent to the channel; the quantity pushes follow the new method',
   /** A direct write of an Amazon Fulfilment cell (not the confirmed verb). */
   fulfilmentViaVerb: 'On Amazon the method is changed with Set fulfilment… (type the method to confirm): it converts the offer on Amazon',
+  /* "Sells from" (Step 2, 2026-10-07): why the From cell cannot be changed, and the door's refusals. */
+  sourceParent: 'Set on the variants — the parent has no listing of its own',
+  sourceFba: 'Amazon-managed — Amazon ships FBA orders from its own stock',
+  sourcePermission: 'You do not have permission to change where stock sells from (inventory.adjust)',
+  sourceNone: 'This coordinate carries no inventory',
+  sourceTooMany: 'At most 20 locations',
+  sourceTwice: (code: string) => `${code} is listed twice`,
+  sourceUnknown: (code: string) => `${code} is not a warehouse of this business`,
+  sourceInactive: (code: string) => `${code} is switched off — switch it on in Locations first`,
+  /** The change's label for a verb row: `Default (IT-MAIN)` or the own list. */
+  sourceLabel: (own: readonly string[], marketDefault: readonly string[]) =>
+    own.length ? own.join(' + ') : `Default (${marketDefault.join(' + ') || 'none'})`,
 } as const
 
 const hhmm = (iso: string): string => {

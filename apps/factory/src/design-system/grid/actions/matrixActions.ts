@@ -1,5 +1,5 @@
 /**
- * MX.G — the Matrix's eleven verbs, declared ONCE (`MATRIX_VERB_LABELS`, design §3.8).
+ * MX.G — the Matrix's verbs (eleven, plus Step 2's `Set sells from…`), declared ONCE (`MATRIX_VERB_LABELS`, design §3.8).
  *
  * Two layers, both pure:
  *
@@ -29,6 +29,8 @@ export type MatrixVerbField =
   | { kind: 'percent'; label: string }
   | { kind: 'coordinate'; label: string }
   | { kind: 'fulfilment'; label: string }
+  /** "Sells from" (Step 2): this business's active warehouses, ticked and ordered (list order = sale order). */
+  | { kind: 'locations'; label: string }
 
 export interface MatrixVerbSpec {
   id: MatrixVerbId
@@ -51,6 +53,8 @@ export interface MatrixActionsContext {
   /** A parent-only selection offers nothing: a parent has no listing of its own. */
   parentOnly: boolean
   canEditPrices: boolean
+  /** `inventory.adjust` — "Sells from" needs it. Absent = not known here (the preview refuses per row). */
+  canAdjustStock?: boolean
   currency: string
   coordinateOptions: ReadonlyArray<{ value: string; label: string }>
 }
@@ -61,8 +65,9 @@ export const MATRIX_NO_PRICE_REASON = 'Nothing in this selection carries a price
 export const MATRIX_NO_PRICE_PERMISSION_REASON = 'You do not have permission to change prices (products.edit)'
 export const MATRIX_NO_FAILURE_REASON = 'Nothing in this selection has failed'
 export const MATRIX_NO_SOURCE_COORDINATE_REASON = 'No other coordinate to copy from'
+export const MATRIX_NO_STOCK_PERMISSION_REASON = 'You do not have permission to change where stock sells from (inventory.adjust)'
 
-/** The eleven verbs, declared ONCE. The page renders `collect`; this declares it. */
+/** The verbs, declared ONCE. The page renders `collect`; this declares it. */
 export function matrixActions(ctx: MatrixActionsContext): MatrixVerbSpec[] {
   const hidden = ctx.parentOnly
   const parent = hidden ? MATRIX_PARENT_ONLY_REASON : null
@@ -70,6 +75,7 @@ export function matrixActions(ctx: MatrixActionsContext): MatrixVerbSpec[] {
   const noPrice = parent ?? (!ctx.canEditPrices ? MATRIX_NO_PRICE_PERMISSION_REASON : ctx.hasPrice ? null : MATRIX_NO_PRICE_REASON)
   const noFailure = parent ?? (ctx.hasQueueFailure ? null : MATRIX_NO_FAILURE_REASON)
   const noSource = ctx.coordinateOptions.length ? null : MATRIX_NO_SOURCE_COORDINATE_REASON
+  const noStockRight = noInventory ?? (ctx.canAdjustStock === false ? MATRIX_NO_STOCK_PERMISSION_REASON : null)
   const label = (id: MatrixVerbId) => MATRIX_VERB_LABELS[id]
   return [
     { id: 'set-price', label: label('set-price'), row: false, collect: { kind: 'number', label: 'Price', min: 0, step: 0.01, currency: ctx.currency }, unavailable: noPrice, hidden },
@@ -83,6 +89,7 @@ export function matrixActions(ctx: MatrixActionsContext): MatrixVerbSpec[] {
     { id: 'push-now', label: label('push-now'), row: true, collect: null, unavailable: noInventory, hidden },
     { id: 'retry-sync', label: label('retry-sync'), row: true, collect: null, unavailable: noFailure, hidden },
     { id: 'set-fulfilment', label: label('set-fulfilment'), row: true, collect: { kind: 'fulfilment', label: 'Method' }, unavailable: noInventory, hidden },
+    { id: 'set-source', label: label('set-source'), row: false, collect: { kind: 'locations', label: 'Sells from' }, unavailable: noStockRight, hidden },
   ]
 }
 
@@ -94,6 +101,8 @@ export type MatrixVerbCollected =
   | { percent: number }
   | { fromCoordinateKey: string }
   | { method: FulfilmentMethod }
+  /** "Sells from" in sale order; `[]` = the market default. */
+  | { codes: string[] }
 
 export interface MatrixVerbHost<T> {
   /** COLLECT — the page's parameter form. Resolves `null` when the operator cancelled. */
@@ -142,7 +151,7 @@ export function matrixImpact(preview: VerbPreview, label: string): ActionImpact 
   }
 }
 
-/** The registry sees ONE `GridAction` per (verb × scope): SELECTION for all eleven, ROW for the three. */
+/** The registry sees ONE `GridAction` per (verb × scope): SELECTION for every verb, ROW for the three. */
 export function matrixGridActions<T>(ctx: MatrixActionsContext, host: MatrixVerbHost<T>): GridAction<T>[] {
   const out: GridAction<T>[] = []
   for (const spec of matrixActions(ctx)) {

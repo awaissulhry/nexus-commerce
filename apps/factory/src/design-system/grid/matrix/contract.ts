@@ -142,6 +142,20 @@ export interface SaleCell {
   waiting?: { value: number | null; start: string | null; end: string | null } | null
 }
 
+/**
+ * "Sells from" (Step 2, 2026-10-07): which warehouses a coordinate's listing sells from, IN SALE ORDER (the listing shows
+ * the sum; a sale takes stock from the first that has it). Beside the inventory cells, never a `MatrixCellKind`.
+ */
+export interface SourceCell {
+  /** This listing's own choice; `[]` = it follows the market default. */
+  own: readonly string[]
+  marketDefault: readonly string[]
+  defaultOrigin: 'market' | 'routes'
+  effective: ReadonlyArray<{ code: string; available: number }>
+  writable: boolean
+  blockedReason: string | null
+}
+
 /** Everything one row says about one coordinate. */
 export interface MatrixCells {
   listingId: string | null
@@ -155,6 +169,8 @@ export interface MatrixCells {
   sale: SaleCell | null
   writable: Partial<Record<MatrixCellKind, boolean>>
   writeBlockedReason: Partial<Record<MatrixCellKind, string>>
+  /** "Sells from" — on a coordinate whose cells include `syncQty`. */
+  source?: SourceCell | null
 }
 
 /* ── coordinates ────────────────────────────────────────────────────────────────────────────── */
@@ -185,11 +201,13 @@ export interface MatrixCoordinate {
 /* ── writes: one door ───────────────────────────────────────────────────────────────────────── */
 
 export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice'>
+/** What the one door writes: the writable kinds plus "Sells from" (`value`: codes in sale order; `[]` = the market default). */
+export type MatrixDoorKind = MatrixWritableKind | 'source'
 
 export interface MatrixWriteCell {
   rowId: string
   coordinateKey: CoordinateKey
-  cell: MatrixWritableKind
+  cell: MatrixDoorKind
   value: unknown
   expectedVersion: number
   /** The listing the caller saw on this coordinate (`MatrixCells.listingId`); another listing there now is a conflict. */
@@ -203,12 +221,14 @@ export type MatrixVerbId =
   | 'pin-quantity' | 'set-follow' | 'set-buffer'
   | 'pause-sync' | 'resume-sync' | 'push-now' | 'retry-sync'
   | 'set-fulfilment'
+  | 'set-source'
 
 export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'set-price': 'Set price…', 'adjust-prices': 'Adjust prices by %…', 'copy-prices': 'Copy prices from…',
   'pin-quantity': 'Pin quantity…', 'set-follow': 'Set to Follow', 'set-buffer': 'Set buffer…',
   'pause-sync': 'Hold stock sync', 'resume-sync': 'Release stock sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
   'set-fulfilment': 'Set fulfilment…',
+  'set-source': 'Set sells from…',
 }
 
 export interface MatrixVerbTarget { rowId: string; coordinateKey: CoordinateKey }
@@ -223,7 +243,8 @@ export interface VerbChange {
   rowId: string
   sku: string
   coordinateKey: CoordinateKey
-  cell: MatrixCellKind
+  /** `source` = "Sells from" (`set-source`). */
+  cell: MatrixCellKind | 'source'
   from: unknown
   to: unknown
   fromLabel: string

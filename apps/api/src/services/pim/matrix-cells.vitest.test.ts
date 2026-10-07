@@ -14,7 +14,9 @@ import { MATRIX_COPY, type SyncCell } from '@nexus/shared/matrix-contract'
 import {
   channelRank, channelShape, circled, compareMarkets, deriveFulfilment, foldQueue, listingStateOf, priceCellOf,
   reportedFulfilment, syncCellOf, withoutInventory, writableFor, FORMULA_REASON, PARENT_PRICE_REASON, PARENT_REASON, PINNED_BUFFER_REASON, PRICE_PERMISSION_REASON,
+  inSourceOrder, sharedStockReason, sourceCellOf,
 } from './matrix-cells.js'
+import { syncLedgerOf } from '../sync-control-core.js'
 import { businessAbsence, effectiveFulfilment, flattenAudience } from './matrix-cells.js'
 import { destinationSellingStates, type SellingStateListing } from '../listings/listing-action.service.js'
 
@@ -222,5 +224,62 @@ describe('effectiveFulfilment — ONE rule for the sheet cell, the Matrix and th
   it('nothing says anything → null, so a new listing must still choose', () => {
     expect(effectiveFulfilment({})).toBeNull()
     expect(effectiveFulfilment({ typed: '', platformAttributes: { fulfillmentChannel: 'weird' }, productMethod: null })).toBeNull()
+  })
+})
+
+/**
+ * Step 2 (Owner 2026-10-07) — the From cell ("Sells from"). The default is the market's list, or — with none — the ACTIVE
+ * warehouses whose routes allow the market, default first; `effective` is the core's own choice (`sellsFrom`) with this
+ * SKU's available per location; the parent, FBA, shared stock and a missing `inventory.adjust` hold it, in that order.
+ */
+describe('sourceCellOf — the From cell', () => {
+  const LOCS = [
+    { code: 'MI-3PL', active: true, isDefault: false, syncRoutes: [] },
+    { code: 'IT-MAIN', active: true, isDefault: true, syncRoutes: [] },
+    { code: 'DE-ONLY', active: true, isDefault: false, syncRoutes: ['AMAZON:DE'] },
+    { code: 'OLD', active: false, isDefault: false, syncRoutes: [] },
+  ]
+  const ROWS = [
+    { locationCode: 'IT-MAIN', available: 12, syncRoutes: [] },
+    { locationCode: 'MI-3PL', available: 4, syncRoutes: [] },
+  ]
+  const of = (over: Partial<Parameters<typeof sourceCellOf>[0]> = {}, lists: Array<[string, string[]]> = []) => {
+    const marketSources = new Map(lists)
+    return sourceCellOf({
+      role: 'variant', channel: 'AMAZON', market: 'IT', own: [], ledger: syncLedgerOf(ROWS, { marketSources }), marketSources,
+      locations: LOCS, isFba: false, sharedFrom: null, canAdjustStock: true, ...over,
+    })
+  }
+
+  it('no list anywhere: the routes decide — active warehouses that serve the market, the default first, then by code', () => {
+    expect(of()).toEqual({
+      own: [], marketDefault: ['IT-MAIN', 'MI-3PL'], defaultOrigin: 'routes',
+      effective: [{ code: 'IT-MAIN', available: 12 }, { code: 'MI-3PL', available: 4 }], writable: true, blockedReason: null,
+    })
+    // DE-ONLY routes to Amazon DE only; OLD is switched off
+    expect(of({ market: 'DE' }).marketDefault).toEqual(['IT-MAIN', 'DE-ONLY', 'MI-3PL'])
+    expect(inSourceOrder(LOCS).map((l) => l.code)).toEqual(['IT-MAIN', 'DE-ONLY', 'MI-3PL', 'OLD'])
+  })
+
+  it('the market list is the default, in its order; a listing list replaces it — exactly those codes, 0 where the SKU holds none', () => {
+    const market = of({}, [['AMAZON:IT', ['MI-3PL', 'IT-MAIN']]])
+    expect(market).toMatchObject({ own: [], marketDefault: ['MI-3PL', 'IT-MAIN'], defaultOrigin: 'market', effective: [{ code: 'MI-3PL', available: 4 }, { code: 'IT-MAIN', available: 12 }] })
+    const own = of({ own: ['MI-3PL', 'DE-ONLY'] }, [['AMAZON:IT', ['IT-MAIN']]])
+    expect(own).toMatchObject({ own: ['MI-3PL', 'DE-ONLY'], marketDefault: ['IT-MAIN'], defaultOrigin: 'market', effective: [{ code: 'MI-3PL', available: 4 }, { code: 'DE-ONLY', available: 0 }] })
+    // another market's list does not leak (eBay IT is its own key)
+    expect(of({ channel: 'EBAY' }, [['AMAZON:IT', ['MI-3PL']]]).defaultOrigin).toBe('routes')
+  })
+
+  it('held with the sentence: the parent, FBA, shared stock, no inventory.adjust — in that order; writable otherwise', () => {
+    expect(of({ role: 'parent', isFba: true, own: ['MI-3PL'] })).toMatchObject({ writable: false, blockedReason: MATRIX_COPY.sourceParent, own: [], effective: [] })
+    expect(of({ isFba: true, sharedFrom: 'Lender' })).toMatchObject({ writable: false, blockedReason: MATRIX_COPY.sourceFba })
+    expect(of({ sharedFrom: 'Lender', canAdjustStock: false })).toMatchObject({ writable: false, blockedReason: sharedStockReason('Lender') })
+    expect(of({ canAdjustStock: false })).toMatchObject({ writable: false, blockedReason: MATRIX_COPY.sourcePermission })
+    expect(of()).toMatchObject({ writable: true, blockedReason: null })
+  })
+
+  it('a pooled SKU shows the lent rows (its own list is ignored, as the push ignores it)', () => {
+    const pool = syncLedgerOf([{ locationCode: 'LENDER-WH', available: 9, syncRoutes: [] }])
+    expect(of({ sharedFrom: 'Lender', ledger: pool, own: ['MI-3PL'] }).effective).toEqual([{ code: 'LENDER-WH', available: 9 }])
   })
 })

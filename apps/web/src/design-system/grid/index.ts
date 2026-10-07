@@ -52,6 +52,7 @@ export { PARAMETERISED_VERB_ORDER } from './actions/registry'
 export {
   matrixActions, matrixGridActions, matrixImpact, matrixImpactTitle,
   MATRIX_PARENT_ONLY_REASON, MATRIX_NO_INVENTORY_REASON, MATRIX_NO_PRICE_REASON, MATRIX_NO_PRICE_PERMISSION_REASON, MATRIX_NO_FAILURE_REASON, MATRIX_NO_SOURCE_COORDINATE_REASON,
+  MATRIX_NO_STOCK_PERMISSION_REASON,
   type MatrixVerbField, type MatrixVerbSpec, type MatrixActionsContext, type MatrixVerbHost, type MatrixVerbCollected,
 } from './actions/matrixActions'
 // The engine's declaration of the Matrix shapes (parity-gated against the wire contract). Explicit,
@@ -62,7 +63,7 @@ export {
   MATRIX_CELL_KINDS, INVENTORY_CELL_KINDS, WRITABLE_CELL_KINDS, MATRIX_CELL_LABELS, MATRIX_CELL_WIDTHS, MATRIX_VERB_LABELS,
   type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixCopy, type CoordinateKey, type CoordinateKind,
   type ListingState, type FulfilmentMethod, type SyncKind, type SyncMode, type QueueState, type PriceSource,
-  type MatrixWriteCell, type MatrixWritableKind, type MatrixVerbId, type MatrixVerbTarget,
+  type MatrixWriteCell, type MatrixWritableKind, type MatrixDoorKind, type SourceCell, type MatrixVerbId, type MatrixVerbTarget,
   type VerbPreview, type VerbChange, type VerbRefusal, type RefusalKind,
 } from './matrix/contract'
 // The SEQUENCE a verb runs in, and the two React pieces around it. Exported from the barrel so a

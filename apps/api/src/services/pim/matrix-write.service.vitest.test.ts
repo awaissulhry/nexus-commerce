@@ -8,8 +8,15 @@ import type { MatrixCells, VerbChange } from '@nexus/shared/matrix-contract'
 
 // The door's version bump runs in a transaction: a stand-in that lets every compare-and-set through (one row each).
 // No product here sells from another business's stock (shared stock by SKU: `sharedStockLender` asks the link).
-const h = vi.hoisted(() => ({ findMany: vi.fn(), updateMany: vi.fn(async () => ({ count: 1 })) }))
-vi.mock('../../db.js', () => ({ default: { $transaction: async (work: (tx: unknown) => unknown) => work({ channelListing: { updateMany: h.updateMany } }), channelListing: { findMany: h.findMany }, stockPoolLink: { findFirst: async () => null } } }))
+const h = vi.hoisted(() => ({
+  findMany: vi.fn(), updateMany: vi.fn(async () => ({ count: 1 })),
+  // Step 2 ("Sells from"): the business's warehouses, the audit, and the shared-stock link the door asks again.
+  locations: vi.fn(async () => [] as Array<{ code: string; name: string; isActive: boolean }>), audit: vi.fn(async () => ({ count: 0 })), link: vi.fn(async () => null as unknown),
+}))
+vi.mock('../../db.js', () => ({ default: {
+  $transaction: async (work: (tx: unknown) => unknown) => work({ channelListing: { updateMany: h.updateMany, findUnique: async () => ({ version: 9 }) } }),
+  channelListing: { findMany: h.findMany }, stockPoolLink: { findFirst: h.link }, stockLocation: { findMany: h.locations }, syncControlAudit: { createMany: h.audit },
+} }))
 vi.mock('../../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null }))
 vi.mock('../follow-master.service.js', () => ({ setFollowMasterQuantity: vi.fn(), setStockBuffer: vi.fn(), amazonManagedListingIds: vi.fn(async () => new Set<string>()) }))
 vi.mock('../stock-movement.service.js', () => ({ recascadeAfterSyncControlChange: vi.fn() }))
@@ -24,12 +31,15 @@ vi.mock('../listing-values-events.js', () => ({ announceListingValues: vi.fn() }
 
 import { applyCell, paramsForChange, restoreWrites, writeMatrixCells } from './matrix-write.service.js'
 import { writeChannelPrices, type PriceWriteTarget } from './channel-price-write.service.js'
-import { setFollowMasterQuantity, setStockBuffer } from '../follow-master.service.js'
+import { amazonManagedListingIds, setFollowMasterQuantity, setStockBuffer } from '../follow-master.service.js'
+import { recascadeAfterSyncControlChange } from '../stock-movement.service.js'
+import { announceListingValues } from '../listing-values-events.js'
 import { setFulfillmentMethod } from './fulfillment-method.service.js'
 import { convertAmazonFulfilment } from './fulfilment-conversion.service.js'
 import { getMatrixRead } from './matrix.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
 import { MATRIX_COPY } from '@nexus/shared/matrix-contract'
+import { sharedStockReason } from './matrix-cells.js'
 
 const change = (over: Partial<VerbChange>): VerbChange => ({ rowId: 'r', sku: 'S', coordinateKey: 'AMAZON:EU', cell: 'syncQty', from: 1, to: 2, fromLabel: '', toLabel: '', ...over })
 
@@ -46,6 +56,12 @@ describe('paramsForChange — the server rebuilds the params that reproduce ONE 
   it('a carried change whose value is not what the verb takes cannot be rebuilt — so it cannot be applied', () => {
     expect(paramsForChange('set-price', change({ cell: 'price', to: 'free' }))).toBeNull()
     expect(paramsForChange('set-fulfilment', change({ cell: 'fulfilment', to: 'DROPSHIP' }))).toBeNull()
+  })
+  it('Sells from re-runs with the carried list ([] = the market default); anything but a list of codes cannot be rebuilt', () => {
+    expect(paramsForChange('set-source', change({ cell: 'source', from: [], to: ['MI-3PL', 'IT-MAIN'] }))).toEqual({ verb: 'set-source', codes: ['MI-3PL', 'IT-MAIN'] })
+    expect(paramsForChange('set-source', change({ cell: 'source', from: ['MI-3PL'], to: [] }))).toEqual({ verb: 'set-source', codes: [] })
+    expect(paramsForChange('set-source', change({ cell: 'source', to: 'IT-MAIN' }))).toBeNull()
+    expect(paramsForChange('set-source', change({ cell: 'source', to: [3] }))).toBeNull()
   })
 })
 
@@ -86,6 +102,12 @@ describe('restoreWrites — the writes that take a live cell back to its capture
       { kind: 'cell', cell: 'price', value: null },
       { kind: 'cell', cell: 'salePrice', value: { value: null, start: null, end: null } },
     ])
+  })
+  it('Sells from is restored to the listing\'s own list as it was ([] = the market default again); the same list needs nothing', () => {
+    const src = (own: string[]) => ({ own, marketDefault: ['IT-MAIN'], defaultOrigin: 'routes' as const, effective: [], writable: true, blockedReason: null })
+    expect(restoreWrites('r', 'AMAZON:EU', cells({ source: src([]) }), cells({ source: src(['MI-3PL', 'IT-MAIN']) }))).toEqual([{ kind: 'cell', cell: 'source', value: [] }])
+    expect(restoreWrites('r', 'AMAZON:EU', cells({ source: src(['MI-3PL']) }), cells({ source: src([]) }))).toEqual([{ kind: 'cell', cell: 'source', value: ['MI-3PL'] }])
+    expect(restoreWrites('r', 'AMAZON:EU', cells({ source: src(['MI-3PL']) }), cells({ source: src(['mi-3pl']) }))).toEqual([])
   })
   it('an identical live cell needs nothing; a formula-owned price and an FBA row are left alone', () => {
     expect(restoreWrites('r', 'AMAZON:EU', cells({}), cells({}))).toEqual([])
@@ -254,5 +276,120 @@ describe('the door answers the listings it moved, refuses a listing it did not e
     expect(getMatrixRead).toHaveBeenLastCalledWith(expect.objectContaining({ productId: 'root', accountId: 'acc-2' }))
     await writeMatrixCells(ctx, [])
     expect(getMatrixRead).toHaveBeenLastCalledWith(expect.objectContaining({ productId: 'root', accountId: null }))
+  })
+})
+
+/**
+ * Step 2 (Owner 2026-10-07) — "Sells from" through the one door: `inventory.adjust`, the read's own gate, the codes checked
+ * against this business's warehouses NOW, a list equal to the market default stored as [], the same list a noop, and on
+ * Amazon EU the SAME list on every EU row of the SKU — closed offers included — each version-checked, then audited,
+ * announced (`stockSource`, `quantity`) and re-pushed.
+ */
+describe('applyCell — Sells from (cell: source)', () => {
+  const EU_ROWS = [
+    { id: 'l-it', marketplace: 'IT', version: 3, offerClosedAt: null },
+    { id: 'l-de', marketplace: 'DE', version: 5, offerClosedAt: new Date('2026-10-01T00:00:00Z') },
+    { id: 'l-fr', marketplace: 'FR', version: 2, offerClosedAt: null },
+  ]
+  const WAREHOUSES = [
+    { code: 'IT-MAIN', name: 'Italy main', isActive: true },
+    { code: 'MI-3PL', name: 'Milan 3PL', isActive: true },
+    { code: 'OLD', name: 'Old store', isActive: false },
+  ]
+  const source = (over: Partial<NonNullable<MatrixCells['source']>> = {}): NonNullable<MatrixCells['source']> => ({
+    own: [], marketDefault: ['IT-MAIN'], defaultOrigin: 'routes', effective: [{ code: 'IT-MAIN', available: 12 }], writable: true, blockedReason: null, ...over,
+  })
+  const read = (src: MatrixCells['source'] = source(), role: 'parent' | 'variant' = 'variant') => ({
+    version: 1, productId: 'root',
+    rows: [{ id: 'row', sku: 'GALE-M', role, cells: {
+      'AMAZON:EU': { ...cells({}), listingId: 'l-it', version: 3, writable: { syncMode: true, syncQty: true, syncBuffer: true }, source: src },
+      'AMAZON:IT': { ...cells({ fulfilment: null, sync: null }), listingId: 'l-it', version: 3, writable: { price: true } },
+      'EBAY:IT': { ...cells({ fulfilment: null }), listingId: 'l-eb', version: 7, writable: { syncMode: true, syncQty: true }, source: src },
+    } }],
+    coordinates: [
+      { key: 'AMAZON:EU', kind: 'region-inventory', channel: 'AMAZON', market: 'EU', label: 'Amazon EU', region: 'EU', accountId: 'acc', sharedInventoryWith: ['IT', 'DE', 'FR'], vocabulary: { fulfilment: ['FBA', 'FBM'] } },
+      { key: 'AMAZON:IT', kind: 'market', channel: 'AMAZON', market: 'IT', label: 'Amazon · IT', region: 'EU', accountId: 'acc', sharedInventoryWith: null, inventoryOn: 'AMAZON:EU', vocabulary: { fulfilment: ['FBA', 'FBM'] } },
+      { key: 'EBAY:IT', kind: 'market', channel: 'EBAY', market: 'IT', label: 'eBay · IT', region: null, accountId: 'e1', sharedInventoryWith: null, vocabulary: { fulfilment: ['FBM', 'MCF'] } },
+    ],
+  }) as never
+  const STOCK = 'inventory.adjust'
+  const ctx = { productId: 'root', actor: 'tester', can: (p: string) => p === STOCK }
+  const write = (value: unknown, over: { key?: string; version?: number; read?: unknown; ctx?: typeof ctx } = {}) =>
+    applyCell((over.read ?? read()) as never, { rowId: 'row', coordinateKey: over.key ?? 'AMAZON:EU', cell: 'source', value, expectedVersion: over.version ?? (over.key === 'EBAY:IT' ? 7 : 3) }, over.ctx ?? ctx)
+
+  beforeEach(() => {
+    h.findMany.mockReset().mockImplementation(async (args: { select?: Record<string, unknown> }) =>
+      args?.select?.sourceLocationCodes ? EU_ROWS.map((r) => ({ id: r.id, sourceLocationCodes: r.id === 'l-de' ? ['OLD'] : [] })) : EU_ROWS)
+    h.updateMany.mockReset().mockResolvedValue({ count: 1 })
+    h.locations.mockReset().mockResolvedValue(WAREHOUSES)
+    h.audit.mockReset().mockResolvedValue({ count: 3 })
+    h.link.mockReset().mockResolvedValue(null)
+    vi.mocked(amazonManagedListingIds).mockReset().mockResolvedValue(new Set())
+    vi.mocked(announceListingValues).mockReset()
+    vi.mocked(recascadeAfterSyncControlChange).mockReset().mockResolvedValue({ ok: 1, noLedger: 0, failed: 0, heldPricesSent: 0 })
+  })
+
+  it('Amazon EU: the same list lands on EVERY EU row — the closed DE offer too — each version-checked; audited, announced, re-pushed', async () => {
+    const out = await write(['mi-3pl', 'IT-MAIN'])
+    expect(out).toMatchObject({ cell: 'source', outcome: 'applied', version: 4, expandedTo: ['AMAZON:IT', 'AMAZON:DE', 'AMAZON:FR'] })
+    expect(out.listings).toEqual([{ listingId: 'l-it', productId: 'row', version: 4 }, { listingId: 'l-de', productId: 'row', version: 6 }, { listingId: 'l-fr', productId: 'row', version: 3 }])
+    /* stored in the warehouse's own spelling, in the chosen order */
+    for (const [id, version] of [['l-it', 3], ['l-de', 5], ['l-fr', 2]] as const) {
+      expect(h.updateMany).toHaveBeenCalledWith({ where: { id, version }, data: { sourceLocationCodes: ['MI-3PL', 'IT-MAIN'], version: { increment: 1 } } })
+    }
+    const audit = (h.audit.mock.calls[0] as unknown as [{ data: Array<Record<string, unknown>> }])[0].data
+    expect(audit).toHaveLength(3)
+    expect(audit.find((a) => a.scopeId === 'l-de')).toMatchObject({ scopeType: 'LISTING', field: 'sourceLocationCodes', scopeName: 'GALE-M@AMAZON:DE', before: { sourceLocationCodes: ['OLD'] }, after: { sourceLocationCodes: ['MI-3PL', 'IT-MAIN'] }, reason: 'matrix', actor: 'tester' })
+    expect(announceListingValues).toHaveBeenCalledWith(['l-it', 'l-de', 'l-fr'], ['stockSource', 'quantity'], 'matrix')
+    expect(recascadeAfterSyncControlChange).toHaveBeenCalledWith(['row'], 'tester')
+  })
+
+  it('a list equal to the market default is stored as []; the list the listing already has is a noop that spends nothing', async () => {
+    expect(await write(['IT-MAIN'], { read: read(source({ own: ['MI-3PL'] })) })).toMatchObject({ outcome: 'applied' })
+    expect(h.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { sourceLocationCodes: [], version: { increment: 1 } } }))
+    h.updateMany.mockClear()
+    expect(await write([])).toMatchObject({ outcome: 'noop', version: 3 }) // [] already follows the default
+    expect(await write(['IT-MAIN'])).toMatchObject({ outcome: 'noop', version: 3 })
+    expect(await write(['MI-3PL'], { read: read(source({ own: ['MI-3PL'] })) })).toMatchObject({ outcome: 'noop' })
+    expect(h.updateMany).not.toHaveBeenCalled(); expect(announceListingValues).toHaveBeenCalledTimes(1)
+  })
+
+  it('one market (eBay IT) writes its own listing only', async () => {
+    const out = await write(['MI-3PL'], { key: 'EBAY:IT' })
+    expect(out).toMatchObject({ outcome: 'applied', version: 8, listings: [{ listingId: 'l-eb', productId: 'row', version: 8 }] })
+    expect(h.updateMany).toHaveBeenCalledTimes(1)
+    expect(h.updateMany).toHaveBeenCalledWith({ where: { id: 'l-eb', version: 7 }, data: { sourceLocationCodes: ['MI-3PL'], version: { increment: 1 } } })
+  })
+
+  it.each([
+    ['no inventory.adjust', () => write(['MI-3PL'], { ctx: { ...ctx, can: () => false } }), MATRIX_COPY.sourcePermission],
+    ['the parent (the read holds it)', () => write(['MI-3PL'], { read: read(source({ writable: false, blockedReason: MATRIX_COPY.sourceParent }), 'parent') }), MATRIX_COPY.sourceParent],
+    ['FBA (the read holds it)', () => write(['MI-3PL'], { read: read(source({ writable: false, blockedReason: MATRIX_COPY.sourceFba })) }), MATRIX_COPY.sourceFba],
+    ['a pooled SKU (the read holds it)', () => write(['MI-3PL'], { read: read(source({ writable: false, blockedReason: sharedStockReason('Lender A') })) }), sharedStockReason('Lender A')],
+    ['no source cell on the coordinate', () => write(['MI-3PL'], { read: read(null) }), MATRIX_COPY.sourceNone],
+    ['an unknown code', () => write(['NOPE']), MATRIX_COPY.sourceUnknown('NOPE')],
+    ['a switched-off warehouse', () => write(['OLD']), MATRIX_COPY.sourceInactive('OLD')],
+    ['a code twice', () => write(['IT-MAIN', 'it-main']), MATRIX_COPY.sourceTwice('it-main')],
+    ['more than 20', () => write(Array.from({ length: 21 }, (_, i) => `L${i}`)), MATRIX_COPY.sourceTooMany],
+    ['not a list', () => write('IT-MAIN'), 'Sells from is a list of location codes'],
+  ])('refuses %s by name and writes nothing', async (_name, run, reason) => {
+    expect(await run()).toMatchObject({ cell: 'source', outcome: 'refused', reason })
+    expect(h.updateMany).not.toHaveBeenCalled()
+    expect(announceListingValues).not.toHaveBeenCalled()
+  })
+
+  it('asks FBA and shared stock AGAIN at write time: an Amazon-managed EU row or an active pool link refuses the whole write', async () => {
+    vi.mocked(amazonManagedListingIds).mockResolvedValueOnce(new Set(['l-de']))
+    expect(await write(['MI-3PL'])).toMatchObject({ outcome: 'refused', reason: MATRIX_COPY.sourceFba })
+    h.link.mockResolvedValueOnce({ grant: { ownerWorkspace: { name: 'Lender A' } } })
+    expect(await write(['MI-3PL'])).toMatchObject({ outcome: 'refused', reason: sharedStockReason('Lender A') })
+    expect(h.updateMany).not.toHaveBeenCalled()
+  })
+
+  it('a stale version, or an EU row that moved, is a conflict — nothing announced, nothing re-pushed', async () => {
+    expect(await write(['MI-3PL'], { version: 2 })).toMatchObject({ outcome: 'conflict', version: 3 })
+    h.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 })
+    expect(await write(['MI-3PL'])).toMatchObject({ outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere })
+    expect(announceListingValues).not.toHaveBeenCalled(); expect(recascadeAfterSyncControlChange).not.toHaveBeenCalled()
   })
 })

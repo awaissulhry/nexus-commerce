@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   bulkFindUnique: vi.fn(),
   refresh: vi.fn(),
   announce: vi.fn(),
+  locations: vi.fn(),
 }))
 vi.mock('../db.js', () => ({
   default: {
@@ -42,6 +43,8 @@ vi.mock('../db.js', () => ({
     outboundSyncQueue: { findFirst: vi.fn().mockResolvedValue(null), update: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     // Shared stock by SKU (#230): no product here sells from another business's stock (`sharedStockLender`).
     stockPoolLink: { findFirst: vi.fn().mockResolvedValue(null) },
+    // Step 2 ("Sells from"): the business's warehouses the door checks the chosen codes against.
+    stockLocation: { findMany: (...a: unknown[]) => mocks.locations(...a) },
   },
 }))
 vi.mock('../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
@@ -108,6 +111,7 @@ beforeEach(() => {
   mocks.refresh.mockResolvedValue(undefined)
   mocks.bulkCreate.mockResolvedValue({ id: 'op-1', createdAt: new Date('2026-09-13T10:00:00.000Z') })
   mocks.bulkFindUnique.mockResolvedValue(null)
+  mocks.locations.mockResolvedValue([{ code: 'IT-MAIN', name: 'Italy main', isActive: true }, { code: 'MI-3PL', name: 'Milan 3PL', isActive: true }])
 })
 
 const LISTING = new Set(['listed', 'draft', 'excluded', 'not-set-up', 'needs-value', 'suppressed', 'closed', 'error', 'ended'])
@@ -154,6 +158,10 @@ describe('GET /products/:id/studio/matrix', () => {
     /* control: a person without products.price.edit is read without it */
     await app.inject({ method: 'GET', url: '/products/root/studio/matrix?accountId=acc&locale=it', headers: { 'x-test-permissions': NO_PRICE_EDIT } })
     expect(mocks.read).toHaveBeenLastCalledWith(expect.objectContaining({ canEditPrice: false }))
+    /* Step 2: the "Sells from" cell is gated by inventory.adjust — read with it only for a person who has it */
+    expect(mocks.read).toHaveBeenLastCalledWith(expect.objectContaining({ canAdjustStock: false }))
+    await app.inject({ method: 'GET', url: '/products/root/studio/matrix', headers: { 'x-test-permissions': [F.productsView, F.inventoryAdjust].join(',') } })
+    expect(mocks.read).toHaveBeenLastCalledWith(expect.objectContaining({ canAdjustStock: true, canEditPrice: false }))
     /* the validator has teeth: a read with a held cell and no sentence is a problem */
     const broken = read(); broken.rows[1]!.cells['AMAZON:IT']!.writable.price = false
     expect(assertMatrixShape(broken)).toEqual(['CHILD-1/AMAZON:IT: price held without a sentence'])
@@ -203,7 +211,7 @@ describe('PATCH /products/:id/studio/matrix — the door', () => {
   it('refuses a malformed body at the boundary', async () => {
     expect((await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells: [{ rowId: 'c1' }] } })).statusCode).toBe(400)
   })
-  it('🔴 the FBA qty column has no door: a write naming it (or any kind outside the writable six) is refused whole', async () => {
+  it('🔴 the FBA qty column has no door: a write naming it (or any kind outside the door kinds: the writable six + Sells from) is refused whole', async () => {
     for (const cell of ['fba', 'shared.fba', 'fbaQty']) {
       const res = await write([{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell, value: 5, expectedVersion: 3 }])
       expect(res.statusCode).toBe(400)
@@ -284,5 +292,70 @@ describe('POST …/verbs and …/verbs/:id/revert', () => {
   it('an unknown operation cannot be reverted, by name', async () => {
     const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs/nope/revert' })
     expect(res.statusCode).toBe(404); expect(res.json().error).toBe('operation_not_revertible')
+  })
+})
+
+/**
+ * Step 2 (Owner 2026-10-07) — "Sells from" through the routes: the door takes `cell: 'source'`, Amazon EU lands on every EU
+ * row (a closed offer too), and the `set-source` verb previews, commits as ONE operation, and its Undo restores the list
+ * by value through the same door.
+ */
+describe('Sells from — the door, the verb and its Undo', () => {
+  const STOCK = [F.productsView, F.productsEdit, F.inventoryAdjust].join(',')
+  const withSource = (own: string[], version = 3): MatrixRead => {
+    const r = read()
+    r.locations = [{ code: 'IT-MAIN', name: 'Italy main', active: true, isDefault: true }, { code: 'MI-3PL', name: 'Milan 3PL', active: true }]
+    r.rows[1]!.stock.locations = [{ code: 'IT-MAIN', available: 10 }, { code: 'MI-3PL', available: 4 }]
+    for (const k of ['AMAZON:EU', 'AMAZON:IT'] as const) r.rows[1]!.cells[k]!.version = version
+    r.rows[1]!.cells['AMAZON:EU']!.source = { own, marketDefault: ['IT-MAIN'], defaultOrigin: 'routes', effective: (own.length ? own : ['IT-MAIN']).map((code) => ({ code, available: code === 'IT-MAIN' ? 10 : 4 })), writable: true, blockedReason: null }
+    return r
+  }
+  const EU = (it: number, de: number) => [{ id: 'l-c1-it', marketplace: 'IT', version: it, offerClosedAt: null }, { id: 'l-c1-de', marketplace: 'DE', version: de, offerClosedAt: new Date('2026-10-01T00:00:00Z') }]
+  beforeEach(() => {
+    mocks.read.mockImplementation(async () => withSource([]))
+    mocks.findMany.mockResolvedValue(EU(3, 5))
+  })
+
+  it('PATCH cell source: the closed DE offer gets the list too; without inventory.adjust it is refused by name', async () => {
+    const held = await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', payload: { cells: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'source', value: ['MI-3PL'], expectedVersion: 3 }] } })
+    expect(held.statusCode).toBe(200)
+    expect(held.json().results[0]).toMatchObject({ cell: 'source', outcome: 'refused', reason: expect.stringContaining('inventory.adjust') })
+    expect(mocks.updateMany).not.toHaveBeenCalled()
+    const ok = await app.inject({ method: 'PATCH', url: '/products/root/studio/matrix', headers: { 'x-test-permissions': STOCK }, payload: { cells: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'source', value: ['MI-3PL', 'IT-MAIN'], expectedVersion: 3 }] } })
+    expect(ok.json().results[0]).toMatchObject({ cell: 'source', outcome: 'applied', version: 4, expandedTo: ['AMAZON:IT', 'AMAZON:DE'] })
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: 'l-c1-de', version: 5 }, data: { sourceLocationCodes: ['MI-3PL', 'IT-MAIN'], version: { increment: 1 } } })
+    expect(mocks.announce).toHaveBeenCalledWith(['l-c1-it', 'l-c1-de'], ['stockSource', 'quantity'], 'matrix')
+  })
+
+  it('set-source: preview → commit as one operation → Undo puts the market default back ([]) through the same door', async () => {
+    const req = { params: { verb: 'set-source', codes: ['MI-3PL', 'IT-MAIN'] }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }] }
+    const preview = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', headers: { 'x-test-permissions': STOCK }, payload: { ...req, commit: false } })
+    expect(preview.json()).toMatchObject({ verb: 'set-source', confirm: 'confirm', changes: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['MI-3PL', 'IT-MAIN'], fromLabel: 'Default (IT-MAIN)', toLabel: 'MI-3PL + IT-MAIN', note: 'Follow shows 14' }] })
+    expect(preview.json().notices).toContain('Amazon EU: this covers IT DE')
+
+    const commit = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', headers: { 'x-test-permissions': STOCK }, payload: { params: { verb: 'set-source' }, targets: req.targets, commit: true, preview: preview.json() } })
+    expect(commit.json().results).toEqual([expect.objectContaining({ cell: 'source', outcome: 'applied', version: 4 })])
+    expect(commit.json().operation).toMatchObject({ id: 'op-1', verb: 'set-source', applied: 1, refused: 0 })
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: 'l-c1-it', version: 3 }, data: { sourceLocationCodes: ['MI-3PL', 'IT-MAIN'], version: { increment: 1 } } })
+
+    /* Undo: the stored operation, a fresh read that holds the new list, and the EU rows at their new versions. */
+    const stored = (mocks.bulkCreate.mock.calls[0]![0] as { data: { changes: unknown } }).data.changes
+    mocks.bulkFindUnique.mockResolvedValue({ id: 'op-1', status: 'COMPLETED', createdAt: new Date(), expiresAt: new Date(Date.now() + 3600_000), changes: stored })
+    mocks.read.mockImplementation(async () => withSource(['MI-3PL', 'IT-MAIN'], 4))
+    mocks.findMany.mockResolvedValue(EU(4, 6))
+    mocks.updateMany.mockClear(); mocks.announce.mockClear()
+    const undo = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs/op-1/revert', headers: { 'x-test-permissions': STOCK } })
+    expect(undo.statusCode).toBe(200)
+    expect(undo.json().results).toEqual([expect.objectContaining({ cell: 'source', outcome: 'applied', version: 5 })])
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: 'l-c1-it', version: 4 }, data: { sourceLocationCodes: [], version: { increment: 1 } } })
+    expect(mocks.updateMany).toHaveBeenCalledWith({ where: { id: 'l-c1-de', version: 6 }, data: { sourceLocationCodes: [], version: { increment: 1 } } })
+    expect(mocks.announce).toHaveBeenCalledWith(['l-c1-it', 'l-c1-de'], ['stockSource', 'quantity'], 'matrix')
+  })
+
+  it('a carried set-source change the fresh read does not reproduce is refused — nothing written', async () => {
+    const carried = { verb: 'set-source', changes: [{ rowId: 'c1', sku: 'CHILD-1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['NOPE'], fromLabel: '', toLabel: '' }], refusals: [], notices: [], confirm: 'confirm', confirmWord: null, simulated: false }
+    const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', headers: { 'x-test-permissions': STOCK }, payload: { params: { verb: 'set-source' }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU' }], commit: true, preview: carried } })
+    expect(res.json().results[0]).toMatchObject({ cell: 'source', outcome: 'refused', reason: 'NOPE is not a warehouse of this business' })
+    expect(mocks.updateMany).not.toHaveBeenCalled()
   })
 })
