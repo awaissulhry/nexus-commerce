@@ -330,6 +330,10 @@
 
 /* on-hand cells */
 .ieOnHand { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; width: 100%; }
+/* The grid's key wrapper (Esc in a cell editor stays in the grid): no box of its own. */
+.ieGridKeys { display: contents; }
+/* Cases cells: "4 + 3" — the sealed count, then the loose units, muted. */
+.ieLoose { color: var(--nds-text-muted); font-weight: var(--nds-font-weight-normal); }
 
 /* The editor's modal: the grid card sits at the page's own inset (18px), not the DS body's 28px —
    at the Spacious tier the 56px thumbnail widens the identity column, and those 20px are what

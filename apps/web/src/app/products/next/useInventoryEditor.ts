@@ -4,7 +4,8 @@
  * The inventory editor's data: ONE model (variations × locations, or a single product as a
  * one-row family) and ONE write — the batch. The server derives every delta from a fresh read
  * and refuses FBA / Shopify / invalid values per change; the result comes back per change so the
- * grid can keep a refused cell pending and clear the confirmed ones.
+ * grid can keep a refused cell pending and clear the confirmed ones. Step 3: the read carries each
+ * product's units per case and each level's sealed cases; a change may carry an absolute `cases`.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -12,7 +13,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import type { ProductRow } from '@/app/products/_types'
 
-import { buildMatrixModel, buildSingleModel, editorModeForRow, type MatrixModel, type RawLocation } from './inventoryEditor.logic'
+import { buildMatrixModel, buildSingleModel, editorModeForRow, type CellChange, type MatrixModel, type RawLocation } from './inventoryEditor.logic'
 
 /** What the editor needs from the row that opened it: a Products page row, or a Matrix row (Stock cell). */
 export type InventoryEditorTarget = Pick<ProductRow, 'id' | 'sku' | 'name' | 'isParent'> & Partial<Pick<ProductRow, 'imageUrl' | 'lowStockThreshold'>>
@@ -24,12 +25,15 @@ interface State {
 }
 const EMPTY: State = { loading: false, error: null, model: null }
 
-export interface BatchChange { productId: string; locationId: string; value: number }
+/** One cell: an absolute on-hand (`value`), an absolute sealed count (`cases`), or both — saved in one transaction. */
+export type BatchChange = CellChange
 export interface BatchResult {
   productId: string
   locationId: string
   ok: boolean
   noop?: boolean
+  /** The sealed count after the change, when it named `cases`. */
+  cases?: number
   error?: string
   code?: string
 }
@@ -64,7 +68,7 @@ export function useInventoryEditor(row: InventoryEditorTarget | null) {
         const lData = await lRes.json()
         const active = (lData.locations as Array<RawLocation & { isActive: boolean }>).filter((l) => l.isActive)
         const model = buildSingleModel(
-          { id: row.id, sku: row.sku, name: row.name, thumbnailUrl: row.imageUrl ?? null, lowStockThreshold: row.lowStockThreshold },
+          { id: row.id, sku: row.sku, name: row.name, thumbnailUrl: row.imageUrl ?? null, lowStockThreshold: row.lowStockThreshold, unitsPerCase: pData.product?.unitsPerCase ?? null },
           pData.stockLevels,
           active,
         )

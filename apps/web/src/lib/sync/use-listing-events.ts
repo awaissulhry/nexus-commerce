@@ -37,6 +37,8 @@
 //   listing.values_changed → invalidation 'listing.values_changed' (Amazon sheet gaps — the sheet and the Matrix
 //                       stay in step; payload in meta)
 //   inventory.stock_changed → invalidation 'inventory.stock_changed' (narrow: NOT 'stock.adjusted')
+//   inventory.cases_changed → invalidation 'inventory.stock_changed' with meta.subtype 'cases' (Step 3 — sealed cases
+//                       counted, or a SKU's case pack changed; the Matrix re-reads like a stock move)
 //   listing.publish_action_changed → invalidation 'listing.updated' with meta.subtype 'listing.publish_action_changed'
 //                       (build shape v2, P8 — a waiting Status or Action value changed; other open sheets of the
 //                       family read their Status and Action columns again. Nothing was sent to a channel.)
@@ -135,6 +137,11 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
           // stock pages refresh whole grids on that). `id` = the product whose stock moved; the sheet and the Matrix
           // re-read a family's quantities when it is one of theirs.
           emitInvalidation({ type: 'inventory.stock_changed', id: parsed.productId, meta: { source: 'sse', productId: parsed.productId } })
+        } else if (parsed.type === 'inventory.cases_changed') {
+          // Step 3 (cases) — sealed cases were counted at a location, or a SKU's case pack changed (`locationId` null).
+          // No new invalidation type: it is a stock fact of one product, so it rides the narrow stock type and the
+          // Matrix re-reads (its Case column included). Never 'stock.adjusted'.
+          emitInvalidation({ type: 'inventory.stock_changed', id: parsed.productId, meta: { source: 'sse', productId: parsed.productId, subtype: 'cases' } })
         } else if (parsed.type === 'listing.values_changed') {
           // Amazon sheet gaps — Mode, Qty, Buffer, price, fulfilment or ASIN changed on listings of one family
           // (`productId` = the family root). The sheet and the Matrix decide from the payload whether to re-read.
@@ -190,6 +197,7 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
       'listing.deleted',
       'listing.values_changed',
       'inventory.stock_changed',
+      'inventory.cases_changed',
       'wizard.submitted',
       'bulk.progress',
       'bulk.completed',

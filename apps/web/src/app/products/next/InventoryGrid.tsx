@@ -5,7 +5,9 @@
  *
  * Rows are the products being edited (a family's variations, or one product); columns are the
  * locations, each a group of three: On hand (the number you edit), Reserved (held by open
- * orders), Available (the difference — what the products grid shows). Pending edits live in the
+ * orders), Available (the difference — what the products grid shows). A warehouse adds Cases
+ * right after On hand when some row has a case size: sealed cases + loose units ("4 + 3"), the
+ * sealed count edited like On hand (Tab walks On hand → Cases). Pending edits live in the
  * modal (`pending`) and sit over the server's numbers through the value getters here; the grid
  * itself holds no stock figure it did not get from one or the other.
  *
@@ -15,22 +17,29 @@
  * keystroke are the same edit — and a locked column refuses all of them in the column
  * definition, not in a renderer.
  */
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ColGroupDef, IRowNode, ValueGetterParams, ValueSetterParams } from '@/design-system/grid'
 
 import { Pill } from '@/design-system/primitives'
-import { DeltaChip, GridDensityProvider, IdentityCell, LockGlyph, NexusGrid, SkuTag, numericColumn, type ColDef, type GridApi, type GridReadyEvent, type ICellRendererParams } from '@/design-system/grid'
+import { DeltaChip, GridDensityProvider, IdentityCell, LockGlyph, NexusGrid, SkuTag, composeCellTooltip, numericColumn, type ColDef, type GridApi, type GridReadyEvent, type ICellRendererParams } from '@/design-system/grid'
+import { CASE_COPY } from '@nexus/shared/stock-cases'
 
 import styles from './styles.module.css'
 import { gridDensity, gridGeometry } from '@/design-system/tokens/grid'
 import type { DensityMode } from './density'
 import {
-  availableOf, deltaOf, onHandOf, pendingKey, rowSyncStatus, rowTotalAvailable, stockLevelOf, totalsOf,
-  type LevelCell, type MatrixModel, type MatrixRow, type PendingEdits,
+  availableOf, casesFailKey, casesOf, CASES_EDITOR_COPY, countsCases, deltaOf, hasCaseColumns, onHandOf, pendingKey, rowSyncStatus,
+  rowTotalAvailable, sharedCaseSize, stockLevelOf, totalsOf,
+  type LevelCell, type MatrixModel, type MatrixRow, type PendingCases, type PendingEdits,
 } from './inventoryEditor.logic'
 
 /** The pinned totals row. Same `cells` shape as a product row so one value getter serves both. */
-interface TotalsRow { __total: true; productId: '__total'; sku: string; name: ''; thumbnailUrl: null; lowStockThreshold: number; cells: Record<string, LevelCell>; totalAvailable: number }
+interface TotalsRow {
+  __total: true; productId: '__total'; sku: string; name: ''; thumbnailUrl: null; lowStockThreshold: number; unitsPerCase: null
+  cells: Record<string, LevelCell>; totalAvailable: number
+  /** Σ sealed + Σ loose per warehouse ("12 + 9"). */
+  cases: Record<string, { sealed: number; loose: number } | null>
+}
 type GridRow = MatrixRow | TotalsRow
 const isTotals = (d: GridRow | undefined): d is TotalsRow => !!d && (d as TotalsRow).__total === true
 
@@ -41,11 +50,26 @@ const MAX_GRID_HEIGHT = 480
 const STRIP_PX = gridGeometry.stripH
 /** Identity column at the Compact thumbnail; wider tiers add the thumbnail's extra width. */
 const IDENTITY_BASE_PX = gridGeometry.identityW
+/**
+ * A phone — the Matrix's rule (`identityWidthFor` in the Matrix columns): at 390px the grid is ~310px wide and the
+ * 320px PINNED identity covered all of it, so no number was ever on screen. The pinned band gives way on a narrow
+ * grid, leaving at least 160px for the location columns to scroll in, and never goes under 160px (the SKU truncates).
+ * A wide grid keeps its full width.
+ */
+const IDENTITY_MIN_PX = 160
+const IDENTITY_MIN_SCROLL_PX = 160
+export function identityWidthFor(room: number, full: number): number {
+  if (!Number.isFinite(room) || room <= 0) return full
+  return Math.max(IDENTITY_MIN_PX, Math.min(full, Math.floor(room - IDENTITY_MIN_SCROLL_PX)))
+}
 
 /** The columns an operator may hide from the Columns control; `onhand` and the identity never hide. */
-export const OPTIONAL_COLUMN_KINDS = ['reserved', 'available', 'totalAvailable', 'sync'] as const
+export const OPTIONAL_COLUMN_KINDS = ['cases', 'reserved', 'available', 'totalAvailable', 'sync'] as const
 export type OptionalColumnKind = (typeof OPTIONAL_COLUMN_KINDS)[number]
-export const OPTIONAL_COLUMN_LABELS: Record<OptionalColumnKind, string> = { reserved: 'Reserved', available: 'Available', totalAvailable: 'Total available', sync: 'Sync state' }
+export const OPTIONAL_COLUMN_LABELS: Record<OptionalColumnKind, string> = { cases: 'Cases', reserved: 'Reserved', available: 'Available', totalAvailable: 'Total available', sync: 'Sync state' }
+/** The kinds this model has: Cases only when some row has a case size at a warehouse. */
+export const optionalKindsOf = (model: MatrixModel): OptionalColumnKind[] =>
+  OPTIONAL_COLUMN_KINDS.filter((k) => k !== 'cases' || hasCaseColumns(model))
 
 export interface InventoryGridProps {
   model: MatrixModel
@@ -54,9 +78,11 @@ export interface InventoryGridProps {
   /** Column kinds the operator has hidden (see OPTIONAL_COLUMN_KINDS). */
   hiddenKinds: readonly OptionalColumnKind[]
   pending: PendingEdits
-  /** Cells the server refused on the last Apply, with its reason. */
+  /** Typed sealed counts (Cases), keyed like `pending`. */
+  pendingCases: PendingCases
+  /** Cells the server refused on the last Apply, with its reason: On hand by `pendingKey`, Cases by `casesFailKey`. */
   failed: ReadonlyMap<string, string>
-  onEdit: (row: MatrixRow, locationId: string, value: unknown) => void
+  onEdit: (row: MatrixRow, locationId: string, value: unknown, kind: 'onhand' | 'cases') => void
   onSelectionChanged: (productIds: string[]) => void
   onReady: (api: GridApi<GridRow>) => void
   onHistoryChanged: (h: { undo: number; redo: number }) => void
@@ -78,27 +104,38 @@ function SyncCell({ data }: ICellRendererParams<GridRow>) {
   return <Pill tone={s === 'FAILED' ? 'danger' : s === 'PENDING' ? 'warning' : 'success'} size="sm">{s.toLowerCase()}</Pill>
 }
 
-export function InventoryGrid({ model, density, hiddenKinds, pending, failed, onEdit, onSelectionChanged, onReady, onHistoryChanged, quickFilterText, single }: InventoryGridProps) {
+export function InventoryGrid({ model, density, hiddenKinds, pending, pendingCases, failed, onEdit, onSelectionChanged, onReady, onHistoryChanged, quickFilterText, single }: InventoryGridProps) {
   // The value getters read these through refs so the column definitions stay STABLE — a new
   // column definition per keystroke would make AG rebuild its columns on every edit. The effect
   // below tells AG to re-read the cells when the pending set changes.
   const pendingRef = useRef(pending); pendingRef.current = pending
+  const pendingCasesRef = useRef(pendingCases); pendingCasesRef.current = pendingCases
   const failedRef = useRef(failed); failedRef.current = failed
   const apiRef = useRef<GridApi<GridRow> | null>(null)
+  const withCases = hasCaseColumns(model)
+  // The identity's full width at this density (the thumbnail's extra width at the wider tiers), then the phone rule.
+  const identityFull = IDENTITY_BASE_PX + (gridDensity[density].thumb - gridDensity.compact.thumb)
+  const [identityRoom, setIdentityRoom] = useState(0)
+  const identityW = identityWidthFor(identityRoom, identityFull)
+  const onGridSizeChanged = useCallback((e: { clientWidth: number; api: GridApi<GridRow> }) => {
+    const otherPinned = e.api.getDisplayedLeftColumns().filter((c) => c.getColId() !== 'product').reduce((n, c) => n + c.getActualWidth(), 0)
+    setIdentityRoom(e.clientWidth - otherPinned)
+  }, [])
+  const caseSize = sharedCaseSize(model)
 
   const totals = useMemo<TotalsRow>(() => {
-    const t = totalsOf(model, pending)
-    return { __total: true, productId: '__total', sku: single ? 'Total' : 'Family total', name: '', thumbnailUrl: null, lowStockThreshold: 0, cells: t.cells, totalAvailable: t.totalAvailable }
-  }, [model, pending, single])
+    const t = totalsOf(model, pending, pendingCases)
+    return { __total: true, productId: '__total', sku: single ? 'Total' : 'Family total', name: '', thumbnailUrl: null, lowStockThreshold: 0, unitsPerCase: null, cells: t.cells, totalAvailable: t.totalAvailable, cases: t.cases }
+  }, [model, pending, pendingCases, single])
 
   useEffect(() => {
     const api = apiRef.current
     if (!api || api.isDestroyed()) return
     api.setGridOption('pinnedBottomRowData', [totals])
     api.refreshCells({ force: true })
-  }, [pending, failed, totals])
+  }, [pending, pendingCases, failed, totals])
 
-  /** Hidden kinds → column visibility, by colId prefix (`reserved:<loc>`, `totalAvailable`, `sync`). */
+  /** Hidden kinds → column visibility, by colId prefix (`cases:<loc>`, `reserved:<loc>`, `totalAvailable`, `sync`). */
   const applyHidden = useCallback((api: GridApi<GridRow>) => {
     const state = api.getColumnState().map((s) => {
       const kind = s.colId.split(':')[0] as OptionalColumnKind
@@ -106,10 +143,6 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
     })
     api.applyColumnState({ state })
   }, [hiddenKinds])
-  useEffect(() => {
-    const api = apiRef.current
-    if (api && !api.isDestroyed()) applyHidden(api)
-  }, [applyHidden])
 
   const columnDefs = useMemo<(ColDef<GridRow> | ColGroupDef<GridRow>)[]>(() => {
     const identity: ColDef<GridRow> = {
@@ -120,8 +153,8 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
       lockPinned: true,
       suppressMovable: true,
       // 34-character SKUs are normal in this catalogue; the thumbnail and the mono SKU need 320px
-      // at the Compact thumbnail, and the thumbnail's extra width at the wider tiers.
-      width: IDENTITY_BASE_PX + (gridDensity[density].thumb - gridDensity.compact.thumb),
+      // at the Compact thumbnail, and the thumbnail's extra width at the wider tiers (less on a phone).
+      width: identityW,
       cellRenderer: RowIdentity,
       getQuickFilterText: (p) => `${p.data?.sku ?? ''} ${p.data?.name ?? ''}`,
       cellClass: 'nds-ag-cell',
@@ -140,22 +173,24 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
           if (!p.data || isTotals(p.data)) return false
           const n = Number(String(p.newValue ?? '').trim())
           const valid = Number.isFinite(n) && Number.isInteger(n) && n >= 0
-          if (valid) onEdit(p.data, loc.locationId, n)
+          if (valid) onEdit(p.data, loc.locationId, n, 'onhand')
           return valid
         },
         cellRenderer: (p: ICellRendererParams<GridRow>) => {
           if (!p.data) return null
           if (isTotals(p.data)) return <span>{p.value}</span>
           const delta = deltaOf(p.data, loc.locationId, pendingRef.current)
-          const err = failedRef.current.get(pendingKey(p.data.productId, loc.locationId))
           return (
-            <span className={styles.ieOnHand} title={err ?? undefined}>
+            <span className={styles.ieOnHand}>
               {p.value}
               <DeltaChip delta={delta} />
               {!loc.editable && <LockGlyph />}
             </span>
           )
         },
+        // The refusal reason in the grid's one tooltip (never a native `title` on the renderer).
+        tooltipValueGetter: (p) =>
+          !p.data || isTotals(p.data) ? undefined : failedRef.current.get(pendingKey(p.data.productId, loc.locationId)),
         cellClassRules: {
           'nds-cell-is-pending': (p) => !!p.data && !isTotals(p.data) && deltaOf(p.data, loc.locationId, pendingRef.current) !== 0,
           'nds-cell-is-refused': (p) => !!p.data && !isTotals(p.data) && failedRef.current.has(pendingKey(p.data.productId, loc.locationId)),
@@ -165,6 +200,61 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
         ...numericColumn,
         sortable: false,
       }
+      // Cases — a warehouse only (FBA and Shopify stay units). Sealed + loose, the sealed count editable.
+      const cases: ColDef<GridRow> | null = withCases && countsCases(loc) ? {
+        colId: `cases:${loc.locationId}`,
+        headerName: CASES_EDITOR_COPY.header,
+        headerTooltip: CASES_EDITOR_COPY.headerTooltip(caseSize),
+        width: 92,
+        editable: (p) => !p.node.rowPinned && !!p.data && !isTotals(p.data) && p.data.unitsPerCase !== null,
+        cellEditor: 'agNumberCellEditor',
+        cellEditorParams: { min: 0, precision: 0, step: 1, showStepperButtons: false },
+        valueGetter: (p: ValueGetterParams<GridRow>) => {
+          if (!p.data) return null
+          if (isTotals(p.data)) return p.data.cases[loc.locationId]?.sealed ?? null
+          return p.data.unitsPerCase === null ? null : casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current).sealed
+        },
+        valueSetter: (p: ValueSetterParams<GridRow>) => {
+          if (!p.data || isTotals(p.data) || p.data.unitsPerCase === null) return false
+          const n = Number(String(p.newValue ?? '').trim())
+          const valid = Number.isFinite(n) && Number.isInteger(n) && n >= 0
+          if (valid) onEdit(p.data, loc.locationId, n, 'cases')
+          return valid
+        },
+        cellRenderer: (p: ICellRendererParams<GridRow>) => {
+          if (!p.data) return null
+          if (isTotals(p.data)) {
+            const t = p.data.cases[loc.locationId]
+            return t ? <span className={styles.ieOnHand}>{t.sealed}<span className={styles.ieLoose}>+ {t.loose}</span></span> : null
+          }
+          if (p.data.unitsPerCase === null) return <span className={styles.ieOnHand}>—</span>
+          const v = casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current)
+          return (
+            <span className={styles.ieOnHand}>
+              {v.sealed}
+              {v.loose !== null && <span className={styles.ieLoose}>+ {v.loose}</span>}
+              <DeltaChip delta={v.delta} />
+            </span>
+          )
+        },
+        // One tooltip: the refusal first, then a case the pending On hand opens, then the case size.
+        tooltipValueGetter: (p) => {
+          if (!p.data || isTotals(p.data)) return undefined
+          if (p.data.unitsPerCase === null) return CASE_COPY.noSize
+          const v = casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current)
+          const reason = failedRef.current.get(casesFailKey(p.data.productId, loc.locationId)) ?? v.problem
+          return composeCellTooltip(reason, v.opens > 0 ? CASES_EDITOR_COPY.opens(v.opens) : null, CASE_COPY.perCase(p.data.unitsPerCase))
+        },
+        cellClassRules: {
+          'nds-cell-is-pending': (p) => !!p.data && !isTotals(p.data) && casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current).typed,
+          'nds-cell-is-refused': (p) => !!p.data && !isTotals(p.data) && (failedRef.current.has(casesFailKey(p.data.productId, loc.locationId))
+            || casesOf(p.data, loc.locationId, pendingRef.current, pendingCasesRef.current).problem !== null),
+          'nds-cell-is-locked': (p) => !!p.data && !isTotals(p.data) && p.data.unitsPerCase === null,
+          'nds-cell-is-editable': (p) => !p.node.rowPinned && !!p.data && !isTotals(p.data) && p.data.unitsPerCase !== null,
+        },
+        ...numericColumn,
+        sortable: false,
+      } : null
       const reserved: ColDef<GridRow> = {
         colId: `reserved:${loc.locationId}`,
         headerName: 'Reserved',
@@ -193,7 +283,7 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
         headerName: loc.editable ? loc.locationCode : `${loc.locationCode} · locked`,
         headerClass: loc.editable ? undefined : styles.ieGroupLocked,
         marryChildren: true,
-        children: [onHand, reserved, available],
+        children: cases ? [onHand, cases, reserved, available] : [onHand, reserved, available],
       }
     })
     const totalAvailable: ColDef<GridRow> = {
@@ -208,9 +298,14 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
     }
     const sync: ColDef<GridRow> = { colId: 'sync', headerName: 'Sync', width: 76, cellRenderer: SyncCell, sortable: false, cellClass: 'nds-ag-cell' }
     return [identity, ...groups, totalAvailable, sync]
-    // `onEdit` is stable (the modal memoises it); the columns depend on the locations and density.
+    // `onEdit` is stable (the modal memoises it); the columns depend on the locations, density and case sizes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model.columns, single, density])
+  }, [model.columns, single, density, withCases, caseSize, identityW])
+  // After the columns are (re)built — a child's effect, so AG already holds them — hide what the operator hid.
+  useEffect(() => {
+    const api = apiRef.current
+    if (api && !api.isDestroyed()) applyHidden(api)
+  }, [applyHidden, columnDefs])
 
   const onGridReady = useCallback((e: GridReadyEvent<GridRow>) => {
     apiRef.current = e.api
@@ -240,6 +335,19 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
   const getRowId = useCallback((p: { data: GridRow }) => p.data.productId, [])
   const onSel = useCallback((e: { api: GridApi<GridRow> }) => onSelectionChanged(e.api.getSelectedNodes().map((n) => n.data!.productId).filter((id) => id !== '__total')), [onSelectionChanged])
 
+  // Esc in a cell editor reverts that cell (AG) — it must not ALSO close the dialog. The DS Modal listens on the
+  // document and skips a key already handled, so mark it handled when it arrived while a cell was being edited
+  // (read in the capture phase: by the bubble phase AG has already stopped editing). Esc on a cell that is not
+  // being edited still closes the dialog (or asks to discard).
+  const editingAtEsc = useRef(false)
+  const onKeyDownCapture = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') editingAtEsc.current = (apiRef.current?.getEditingCells().length ?? 0) > 0
+  }, [])
+  const onKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape' && editingAtEsc.current) e.preventDefault()
+    editingAtEsc.current = false
+  }, [])
+
   const rowPx = gridDensity[density].rowMedia
   // The location strip, the header, the rows, and a totals row the height of the header — the
   // page's header is shorter than its rows, and the totals row reads as a footer, not a row.
@@ -249,37 +357,42 @@ export function InventoryGrid({ model, density, hiddenKinds, pending, failed, on
 
   return (
     <GridDensityProvider value={density}>
-      <NexusGrid<GridRow>
-        height={height}
-        density={density}
-        rows="media"
-        groupHeaderHeight={STRIP_PX}
-        rowData={model.rows}
-        getRowId={getRowId}
-        columnDefs={columnDefs}
-        defaultColDef={defaultColDef}
-        quickFilterText={quickFilterText}
-        // Spreadsheet behaviour: a focused cell takes keystrokes, Enter walks down the column.
-        suppressCellFocus={false}
-        enterNavigatesVertically
-        enterNavigatesVerticallyAfterEdit
-        stopEditingWhenCellsLoseFocus
-        undoRedoCellEditing
-        undoRedoCellEditingLimit={100}
-        cellSelection={cellSelection}
-        rowSelection={rowSelection}
-        selectionColumnDef={selectionColumnDef}
-        onSelectionChanged={onSel}
-        // After Apply the model reloads and the rows are replaced; the selection the modal shows
-        // must be what the grid holds now, not what it held before.
-        onRowDataUpdated={onSel}
-        onGridReady={onGridReady}
-        onCellValueChanged={onHistory}
-        onUndoEnded={onHistory}
-        onRedoEnded={onHistory}
-        onPasteEnd={onHistory}
-        onFillEnd={onHistory}
-      />
+      <div className={styles.ieGridKeys} onKeyDownCapture={onKeyDownCapture} onKeyDown={onKeyDown}>
+        <NexusGrid<GridRow>
+          height={height}
+          density={density}
+          rows="media"
+          groupHeaderHeight={STRIP_PX}
+          rowData={model.rows}
+          getRowId={getRowId}
+          columnDefs={columnDefs}
+          defaultColDef={defaultColDef}
+          quickFilterText={quickFilterText}
+          // Spreadsheet behaviour: a focused cell takes keystrokes, Enter walks down the column.
+          suppressCellFocus={false}
+          enterNavigatesVertically
+          enterNavigatesVerticallyAfterEdit
+          stopEditingWhenCellsLoseFocus
+          undoRedoCellEditing
+          undoRedoCellEditingLimit={100}
+          // A refused cell's reason and the Cases words are tooltips: shown at the sheet's pace, not AG's 2 s.
+          tooltipShowDelay={300}
+          cellSelection={cellSelection}
+          rowSelection={rowSelection}
+          selectionColumnDef={selectionColumnDef}
+          onSelectionChanged={onSel}
+          // After Apply the model reloads and the rows are replaced; the selection the modal shows
+          // must be what the grid holds now, not what it held before.
+          onRowDataUpdated={onSel}
+          onGridReady={onGridReady}
+          onGridSizeChanged={onGridSizeChanged}
+          onCellValueChanged={onHistory}
+          onUndoEnded={onHistory}
+          onRedoEnded={onHistory}
+          onPasteEnd={onHistory}
+          onFillEnd={onHistory}
+        />
+      </div>
     </GridDensityProvider>
   )
 }
