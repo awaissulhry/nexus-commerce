@@ -29,10 +29,10 @@
  *                            nothing is sent to Amazon; the harvest rules, harvest-search-term and graduate-keyword read
  *                            it. Undo: the destination it replaced, set again (or removed).
  *
- * Every one follows ads-change-kit.ts — previewed first; refused, and not queued, when the write gate would refuse it;
- * run only as an approved request, as the approver, with changeSetId = the approval on every write and every row it
- * makes; re-checked in `execute` — and is strategy-bound (ads-autonomy-kit.ts): by default nothing runs alone (maxItems
- * 0, no market listed).
+ * Every one follows ads-change-kit.ts — previewed first; refused, and not queued, when the write gate would refuse it
+ * (set-harvest-destination is Nexus only: no gate is asked, its basis is compared again in `execute`); run only as an
+ * approved request, as the approver, with changeSetId = the approval on every write and every row it makes; re-checked
+ * in `execute` — and is strategy-bound (ads-autonomy-kit.ts): by default nothing runs alone (maxItems 0, no market).
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -52,11 +52,11 @@ import {
   type HvCreateType, type HvDestGrain,
 } from '../../advertising/harvest-destination.service.js'
 import { STEP_UP_NEEDS } from '../step-up-approval.js'
-import { alsoChangedBy, approvedRun, BY_RULE_WORDS, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, STOP_MIN_CENTS, type RuleWrite, type StoredReach } from './ads-change-kit.js'
+import { alsoChangedBy, approvedRun, BY_RULE_WORDS, canonical, gateRefusal, notRun, reachNote, recheck, ruleFactsFor, ruleRefusal, spOnlyRefusal, STOP_MIN_CENTS, type RuleWrite, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, LIMIT_FACTS_MONEY, limitFactsOf, type KitItem } from './ads-autonomy-kit.js'
 import { amountLabel, campaignCurrency } from './ads-tool-guards.js'
 import { convertingWords, fingerprint, named, otherProductWords, placeWords, plural, productRootsOf, reachOver, spendGate, termRulesFor, WINDOW_DAYS } from './ads-targeting-kit.js'
-import type { AgentTool, FieldPermission, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import { PLAN_TOOL, type AgentTool, type FieldPermission, type ToolChange, type ToolContext, type ToolResult, type ToolUndo } from '../tool-types.js'
 
 const TOOL = { add: 'add-ad-targets', harvest: 'harvest-search-term', destination: 'set-harvest-destination' } as const
 /** The most targets one request adds (the tool contract's bound for a list), as ONE step. */
@@ -184,7 +184,8 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
   if (floored && a.startAtFloor !== true) {
     return refuse(`Not queued: the bids of ${floored} are at the floor (a temporary stop, by ${(g.campaign.bidsSuppressedAt ? g.campaign.bidsSuppressedBy : g.bidsSuppressedBy) ?? 'an unrecorded writer'}): a target at its bid would spend while the rest is stopped. Ask with startAtFloor: true, or restore its bids first (restore-campaign).`)
   }
-  const fallback = a.bidCents ?? (g.defaultBidCents > 0 ? g.defaultBidCents : null)
+  // The ad group's default bid, when it is one a bid change can work from (a floored default is no bid to plan with).
+  const fallback = a.bidCents ?? (g.defaultBidCents >= FLOOR_CENTS ? g.defaultBidCents : null)
   const missingBid = asked.filter((x) => x.bid == null && fallback == null)
   if (missingBid.length) return refuse(`Not queued: name a bid (bidCents): ${placeWords(g)} has no default bid for ${named(missingBid.map(targetWords))}.`)
 
@@ -567,8 +568,10 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
     }
   }
 
-  // The starting bid: the one asked, else the harvest's own (the term's cost per click in its source), never below 5.
-  const bidCents = a.bidCents ?? (record.clicks > 0 ? Math.max(FLOOR_CENTS, Math.round(record.spendCents / record.clicks)) : 50)
+  // The starting bid: the one asked, else the harvest's own (the term's cost per click in its source), never below 5. A
+  // bid it worked out itself moves with every report: an approval's re-check keeps the one the person approved (frozen).
+  const frozen = a.bidCents == null ? await approvedBid(ctx.approvalId ?? null, raw) : null
+  const bidCents = a.bidCents ?? frozen ?? (record.clicks > 0 ? Math.max(FLOOR_CENTS, Math.round(record.spendCents / record.clicks)) : 50)
   const writes: Array<RuleWrite & { label: string }> = [
     { campaignId: dest.campaign.id, adGroupId: dest.id, marketplace: dest.campaign.marketplace, changes: [{ field: 'bid', valueCents: bidCents }], label: `campaign "${dest.campaign.name}"` },
     ...(negate === 'add' ? [{ campaignId: source.campaign.id, marketplace: source.campaign.marketplace, changes: [{ field: 'negativeKeyword', valueCents: null }], isNegation: true, keywordText: query, label: `campaign "${source.campaign.name}"` }] : []),
@@ -609,7 +612,9 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
         raises: [`${created} at ${amountLabel(bidCents, currency)}`],
         alsoChangedBy: bound.automations,
         ...(bound.note ? { alsoChangedByNote: bound.note } : {}),
-        basis: fingerprint({ query: normaliseNegTerm(query), match, source: source.id, dest: dest.id, bidCents, negate }),
+        // The term, its source and destination, the bid asked for and the negative plan (a bid worked out from the report is
+        // frozen in the approval instead: it moves with every report).
+        basis: fingerprint({ query: normaliseNegTerm(query), match, source: source.id, dest: dest.id, bidCents: a.bidCents ?? null, negate }),
         reach: stored,
         reachNote: reachNote(stored),
         effect,
@@ -618,6 +623,28 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
       },
     },
   }
+}
+
+/**
+ * The starting bid an approval of this harvest froze, when the request named none (its cost per click then): Nexus re-runs
+ * the dry run before an approved request runs (approval-inbox previewStaleness; a plan's step: its own preview), naming
+ * the approval. Null for a new request, or when the approval holds none.
+ */
+async function approvedBid(approvalId: string | null, raw: Record<string, unknown>): Promise<number | null> {
+  if (!approvalId) return null
+  const ap = await prisma.agentApproval.findUnique({ where: { id: approvalId }, select: { toolName: true, preview: true } })
+  const bidOf = (preview: unknown) => {
+    const b = (preview as { op?: unknown; bidCents?: unknown } | null)?.bidCents
+    return typeof b === 'number' && Number.isFinite(b) ? b : null
+  }
+  if (ap?.toolName === TOOL.harvest) return bidOf(ap.preview)
+  if (ap?.toolName !== PLAN_TOOL) return null
+  // The step whose arguments are these (each read as the tool reads them, defaults filled).
+  const asRead = (value: unknown) => { const parsed = HARVEST_INPUT.safeParse(value); return parsed.success ? canonical(parsed.data) : null }
+  const wanted = asRead(raw)
+  const steps = await prisma.agentPlanStep.findMany({ where: { approvalId, toolName: TOOL.harvest }, select: { args: true, preview: true } })
+  const step = wanted ? steps.find((x) => asRead(x.args) === wanted) : undefined
+  return step ? bidOf(step.preview) : null
 }
 
 /**

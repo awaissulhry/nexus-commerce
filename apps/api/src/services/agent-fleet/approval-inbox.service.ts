@@ -821,10 +821,11 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   // A10 — what the undo restores (each write and the value it puts back), the negatives it retires, where it lands.
   'undo-ad-change': ['source', 'rows', 'negatives', 'reach'],
   // W4-5 — every target or negative with its place and bids (a harvest: its term, source, destination, bid and negative
-  // plan; a retire: every negative with who made it), where it lands; for negatives also the other products' places and
-  // the proven handovers they would close. A harvest destination (Nexus only): the destination from → to.
+  // plan, a bid it worked out itself frozen in the approval; a retire: every negative with who made it), where it lands;
+  // for negatives also the other products' places and the proven handovers they would close (never the numbers, which
+  // move with every report). A harvest destination (Nexus only): the destination from → to.
   'add-ad-targets': ['basis', 'reach'],
-  'add-negative-targets': ['basis', 'reach', 'otherProducts', 'handovers'],
+  'add-negative-targets': ['basis', 'reach', 'otherProductPlaces', 'handovers'],
   'retire-negatives': ['basis', 'reach'],
   'harvest-search-term': ['basis', 'reach'],
   'set-harvest-destination': ['basis'],

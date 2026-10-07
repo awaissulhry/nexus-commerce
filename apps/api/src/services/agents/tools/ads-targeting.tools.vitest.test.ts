@@ -366,6 +366,18 @@ describe('retire-negatives', () => {
     expect(undo).toMatchObject({ request: { tool: 'add-negative-targets', args: { negatives: [{ adGroupId: 'g-a1', text: 'old term', matchType: 'NEGATIVE_EXACT' }], allowOtherProducts: true } } })
   })
 
+  it("rule 2 — never retire-and-re-add a converting term: the undo's re-add is checked again, and refused once the term converts there", async () => {
+    // A negative of "blue jacket" in g-a3, retired; meanwhile the term converts in g-a3.
+    await inside(() => database.client.adTarget.create({ data: { id: 'n-blue', adGroupId: 'g-a3', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'blue jacket', bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: 'EXT-n-blue' } }))
+    const asked = await ask('retire-negatives', { negativeIds: ['n-blue'] })
+    await withCode(asked.approvalId!)
+    expect(await approve(asked.approvalId!)).toMatchObject({ ok: true, status: 'executed', result: { retired: 1 } })
+    await inside(() => term('c-a', 'g-a3', 'blue jacket', { impressions: 60, clicks: 4, costCents: 200, orders: 1 }))
+    const undo = await inside(() => undoRequestFor({ approvalId: asked.approvalId! }))
+    expect(undo.request).toMatchObject({ tool: 'add-negative-targets', args: { negatives: [{ adGroupId: 'g-a3', text: 'blue jacket', matchType: 'NEGATIVE_EXACT' }] } })
+    expect((await preview(undo.request!.tool, undo.request!.args)).error).toMatch(/^Not queued: a negative there would block a search term that converts — "blue jacket" in ad group "group g-a3" .*: 1 order over the last 60 days/)
+  })
+
   it('the Approvals page: approving without the code is refused (mfa_required); with it, it runs at commit', async () => {
     await inside(() => database.client.adTarget.create({ data: { id: 'n-page', adGroupId: 'g-a3', kind: 'KEYWORD', expressionType: 'NEGATIVE_EXACT', expressionValue: 'page term', bidCents: 0, isNegative: true, negativeLevel: 'AD_GROUP', externalTargetId: 'EXT-n-page' } }))
     const boss = await inside(() => realPerson('Test Approver'))
@@ -458,6 +470,10 @@ describe('harvest-search-term', () => {
     expect(r.preview).toMatchObject({ negateSource: 'add', bidCents: 120, raises: ['exact keyword "wool jacket" at EUR 1.20'], limitFacts: { action: 'harvest', this: { items: 2, raises: 1, cuts: 1 } } })
     expect(r.preview).not.toHaveProperty('stepUp')
     const asked = await ask('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })
+    // A report arrives before it is approved: the term's cost per click moves (to EUR 2.10). The bid it worked out is frozen
+    // in the approval, so the request is not stale, and it runs at the EUR 1.20 the person approved.
+    await inside(() => term('c-a', 'g-a1', 'wool jacket', { impressions: 100, clicks: 10, costCents: 3_000, orders: 0 }))
+    expect((await preview('harvest-search-term', { query: 'wool jacket', sourceAdGroupId: 'g-a1', destAdGroupId: 'g-a3' })).preview.bidCents).toBe(210)
     const done = await approve(asked.approvalId!)
     expect(done).toMatchObject({ ok: true, status: 'executed', result: { keyword: { bidCents: 120, reachedAmazon: true }, sourceNegative: { targetId: expect.any(String) } } })
     const keywordId = done.result.keyword.targetId as string

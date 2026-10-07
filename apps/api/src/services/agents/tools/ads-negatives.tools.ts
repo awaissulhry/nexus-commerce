@@ -382,9 +382,11 @@ async function decideAdd(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'a
         raises: [],
         windowDays: rules.windowDays,
         ...(rules.productFor ? { productFor: rules.productFor } : {}),
-        // Rule 3 — the places of another product it blocks (only with allowOtherProducts); frozen: a product that starts
-        // buying the term before it runs stops the run.
+        // Rule 3 — the places of another product it blocks (only with allowOtherProducts), with what each bought there.
         otherProducts: rules.otherProducts,
+        // Frozen: which places those are (never their numbers, which move with every report): a product that starts buying
+        // a term before it runs stops the run.
+        otherProductPlaces: rules.otherProducts.map((h) => `${h.key}|${h.adGroupId}`).sort(),
         handovers: rules.handovers,
         ...(checked.warnings.length ? { warnings: checked.warnings } : {}),
         alsoChangedBy: bound.automations,
@@ -476,7 +478,7 @@ function negateGroupRefusal(preview: unknown, limits: Record<string, unknown>): 
 }
 
 /** add-negative-targets' material fields: every negative and where it blocks, where it lands, the other products it blocks. */
-const ADD_MATERIAL = ['basis', 'reach', 'otherProducts', 'handovers'] as const
+const ADD_MATERIAL = ['basis', 'reach', 'otherProductPlaces', 'handovers'] as const
 /** retire-negatives' material fields: every negative it lifts, with who made it, and where it lands. */
 const RETIRE_MATERIAL = ['basis', 'reach'] as const
 
