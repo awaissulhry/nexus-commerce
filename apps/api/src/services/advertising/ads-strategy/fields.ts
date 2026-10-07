@@ -246,8 +246,9 @@ export const READERS = {
   gate: "the write gate (refuses an engine's or a rule's bid outside it; a person's own edit, or a Claude request he approves, is warned and goes when he confirms)",
   hourly: 'hourly bid plans (the base bid)',
   restores: 'restores after a stop (and base-bid give-backs)',
-  stepClamp: "the step clamp on engine, rule and Claude bid changes (not a person's own edit)",
-  claudePreview: "Claude's bid previews (the bid an approval writes)",
+  // W4-4 — a Claude bid request a person approves is his click: warned past the step, never stepped.
+  stepClamp: "the step clamp on engine and rule bid changes and on Claude bid changes run by rule (not a person's own edit, nor a Claude request he approves: the card warns him and approving sends it)",
+  claudePreview: "Claude's bid previews (the warning past it, and the bid a run by rule writes)",
   // AA-W2-2b — the strategy-bound ad tools' common checks (agents/tools/ads-autonomy-kit.ts, C5) in Claude's door.
   claudeByRule: "Claude's door, for an ad change that may run by the business's rule in this market (an ad tool set to run by rule, where its code allows it)",
 } as const

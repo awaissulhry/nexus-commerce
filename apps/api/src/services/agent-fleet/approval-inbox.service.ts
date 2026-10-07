@@ -776,14 +776,16 @@ async function handPlanToWorker(id: string, decidedBy: string): Promise<{ ok: bo
  */
 export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   /* The fleet's three ads tools, shared with Claude (MCP full control d1 = A). A4: set-target-bid executes —
-     the bid it starts from, the bid that lands (after the CPC ceiling and max-change clamps) and where it lands
-     (live on which Amazon Ads profile, or sandbox) are what the person approved. */
-  'set-target-bid': ['currentBidCents', 'effectiveBidCents', 'reach'],
+     the bid it starts from, the bid that lands (after the CPC ceiling) and where it lands (live on which Amazon Ads
+     profile, or sandbox) are what the person approved. W4-4 — and the bid a run by rule writes (stepped to the largest
+     change), and what auto-bid does with the bid afterwards (held as a person's, or handed back). */
+  'set-target-bid': ['currentBidCents', 'effectiveBidCents', 'byRuleBidCents', 'afterwards', 'reach'],
   // A6 — the budget or the adjustments it starts from, and where it lands.
   'set-campaign-budget': ['currentBudgetCents', 'reach'],
   'set-placement-multipliers': ['current', 'reach'],
   // A7 — how many change and why the rest do not, a fingerprint of every target's starting and new bid, where it lands.
-  'bulk-ad-bid-change': ['totals', 'basis', 'reach'],
+  // W4-4 — the fingerprint holds the bids a run by rule writes too; and what auto-bid does with the bids afterwards.
+  'bulk-ad-bid-change': ['totals', 'basis', 'afterwards', 'reach'],
   // A8 — what a suppression floors; whose suppression a restore lifts and every bid it puts back.
   'suppress-campaign': ['moves', 'reach'],
   'restore-campaign': ['suppressedBy', 'basis', 'reach'],
@@ -1083,7 +1085,8 @@ export interface StalenessOptions {
   withFresh?: boolean
 }
 
-const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : String(c))
+// W4-4 — a value the fresh preview no longer carries reads "none", never "undefined".
+const money = (c: unknown) => (typeof c === 'number' ? `€${(c / 100).toFixed(2)}` : c == null ? 'none' : String(c))
 
 /**
  * One text per value whatever the order of its keys, for comparing a stored preview with a fresh one.
@@ -1197,7 +1200,7 @@ export async function previewStaleness(
       moved.push(
         key.toLowerCase().includes('cents')
           ? `${key} changed from ${money(before[key])} to ${money(after[key])}`
-          : `${key} changed from ${JSON.stringify(before[key])} to ${JSON.stringify(after[key])}`,
+          : `${key} changed from ${JSON.stringify(before[key]) ?? 'none'} to ${JSON.stringify(after[key]) ?? 'none'}`,
       )
     }
   }

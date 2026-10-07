@@ -18,11 +18,16 @@
  *                  and the approval sweep expires it (approval-inbox.service.ts).
  *   stale          `execute` re-runs the dry run and refuses when a starting value the person approved has moved.
  *   SP only        phase 1 changes Sponsored Products campaigns only.
+ *   bid step       W4-4 — a bid request a person approves sends the bid asked for, past the largest change per action
+ *                  after the card's warning; a run by rule is stepped as before (bidStepOf). `afterwards` says whether
+ *                  auto-bid then leaves the bid alone (a person's) or may move it (handed back).
  */
-import type { z } from 'zod'
+import { z } from 'zod'
 import prisma from '../../../db.js'
 import type { AdsActor } from '../../advertising/ads-mutation.service.js'
-import { boundAutomationsFor, checkLiveReach, claudeActor, claudeReason, type AdWriteIntent, type BoundAutomation, type LiveReach } from './ads-tool-guards.js'
+import type { AdWriteEvidence } from '../../advertising/ads-evidence.js'
+import { PERSON_BID_HOLD_DAYS } from '../../advertising/bid-grid.service.js'
+import { amountLabel, boundAutomationsFor, checkLiveReach, claudeActor, claudeReason, type AdWriteIntent, type BoundAutomation, type LiveReach } from './ads-tool-guards.js'
 import { FIELDS } from '@nexus/shared/permissions'
 import { buildLimitFacts, commonRefusal, LIMIT_FACTS_MONEY, limitsNote, type KitItem, type LimitFacts } from './ads-autonomy-kit.js'
 import type { FieldPermission, ToolContext, ToolResult } from '../tool-types.js'
@@ -146,12 +151,10 @@ export function gateRefusal(reach: Extract<LiveReach, { reach: 'refused' }>): st
 export function approvedReachOf(approvedPreview: unknown): StoredReach | null {
   const reach = (approvedPreview as { reach?: unknown } | null | undefined)?.reach as StoredReach | undefined
   if (!reach || typeof reach !== 'object') return null
-  if (reach.reach === 'live' && typeof reach.profileId === 'string') {
-    // 4A + 3A — the own limits the card warned about are part of what he approved.
-    const past = Array.isArray(reach.pastOwnLimits) && reach.pastOwnLimits.length ? { pastOwnLimits: reach.pastOwnLimits } : {}
-    return { reach: 'live', profileId: reach.profileId, ...past }
-  }
-  if (reach.reach === 'sandbox') return { reach: 'sandbox' }
+  // 4A + 3A — the own limits the card warned about are part of what he approved (W4-4: in sandbox too, the bid step).
+  const past = Array.isArray(reach.pastOwnLimits) && reach.pastOwnLimits.length ? { pastOwnLimits: reach.pastOwnLimits } : {}
+  if (reach.reach === 'live' && typeof reach.profileId === 'string') return { reach: 'live', profileId: reach.profileId, ...past }
+  if (reach.reach === 'sandbox') return { reach: 'sandbox', ...past }
   return null
 }
 
@@ -244,6 +247,112 @@ export function stepClampWords(step: StepClamp, strategy?: StrategyBidLimits | n
   if (step.bandHeld) return limitWords(step.bandHeld.side, step.bandHeld.limit)
   if (step.by === 'strategy' && strategy?.maxChangePct) return `the largest bid change ${step.pct} % (${strategyWords(strategy.maxChangePct.source)})`
   return 'the campaign\'s max-change guardrail'
+}
+
+// ── W4-4 — the largest change per action: a person's approval sends the bid, a run by rule is stepped ─────────────
+
+/** W4-4 — the own limit a bid request past the largest change names on the card (`reach.pastOwnLimits`). */
+export const BID_STEP_LIMIT = 'bid_step'
+
+/** One bid request against the largest change per action (bidStepOf). */
+export interface BidStep {
+  /** What a person's approval sends: the bid asked for (after the CPC ceiling). The step never rewrites his click. */
+  personCents: number
+  /** What a run by rule writes: stepped exactly as the mutation layer steps an engine's or a rule's bid (stepClamp). */
+  ruleCents: number
+  step: StepClamp
+  /** Past the largest change: the card's warning, carried like the gate's own limits; null when the bid is inside it. */
+  past: { limit: typeof BID_STEP_LIMIT; reason: string } | null
+}
+
+/**
+ * W4-4 (Owner 10-07) — the largest change per action (stepClamp: the lower of the campaign's max-change guardrail and
+ * the ads strategy's largest bid change) is one of the Owner's own limits, so a Claude bid request meets it as #401 has
+ * a budget meet the daily budget-move limit ("his own limits warn; an approved Claude request is his click"):
+ *   person   a request a PERSON approves sends the bid asked for. The card warns him first (`past`, which the tool puts
+ *            in `reach.pastOwnLimits`, where the card reads the budget's warning), and approving sends it. The write
+ *            carries his manual mark from the approval door (approvedRun), never from the tool's arguments; the
+ *            mutation layer steps any bid write without it (ads-mutation.service.ts updateAdTargetWithSync).
+ *   by rule  a request the business's rule runs writes `ruleCents`, stepped exactly as before: the value its limits
+ *            are judged on.
+ * Engines, rules and schedules are untouched: the mutation layer steps them as always. Pure.
+ */
+export function bidStepOf(input: {
+  currentCents: number
+  wantedCents: number
+  dynamicBidding: unknown
+  strategy?: StrategyBidLimits | null
+  /** The bid as a person names it, e.g. `"race jacket"`. */
+  label: string
+  currency: string
+}): BidStep {
+  const step = stepClamp(input.currentCents, input.wantedCents, input.dynamicBidding, input.strategy)
+  const base = { personCents: input.wantedCents, ruleCents: step.cents, step }
+  // Not stepped (no largest change, or inside it, or a step that ends on the band's edge anyway): nothing to warn about.
+  if (step.cents === input.wantedCents || step.pct == null) return { ...base, past: null }
+  const moves = Math.round((Math.abs(input.wantedCents - input.currentCents) / input.currentCents) * 10000) / 100
+  // The strategy row without its version: the warning is compared at approval (reach is material), and a save of the
+  // strategy that keeps the number must not make every waiting request stale. The write's evidence keeps the version.
+  const whose = step.by === 'strategy' && input.strategy?.maxChangePct ? strategyWords(input.strategy.maxChangePct.source, { version: false }) : 'the campaign\'s own max-change guardrail'
+  return {
+    ...base,
+    past: {
+      limit: BID_STEP_LIMIT,
+      reason: `${input.label} moves ${moves} % (${amountLabel(input.currentCents, input.currency)} → ${amountLabel(input.wantedCents, input.currency)}), more than the largest bid change ${step.pct} % (${whose}); run by the business's rule instead it moves only to ${amountLabel(step.cents, input.currency)}`,
+    },
+  }
+}
+
+/** W4-4 — a stored reach with the bid step's warning added to the own limits it goes past (live or sandbox). */
+export function withStepPast(reach: StoredReach, past: ReadonlyArray<{ limit: string; reason: string } | null>): StoredReach {
+  const add = past.filter((p): p is { limit: string; reason: string } => !!p)
+  if (!add.length) return reach
+  return { ...reach, pastOwnLimits: [...(reach.pastOwnLimits ?? []), ...add] }
+}
+
+// ── W4-4 — afterwards: hold the bid, or hand it back to auto-bid ──────────────────────────────────────────────────
+
+/**
+ * W4-4 — what auto-bid does with a bid an approved Claude request wrote. `hold` (the default, as before): it counts as a
+ * person's bid, so auto-bid leaves it alone for 60 days (bid-grid.service.ts personBidTargetIds). `auto-bid`: handed
+ * back — the write is marked (`evidence.handBack`), and personBidTargetIds does not count it as a person's when its
+ * change set is a request a person decided; auto-bid may then move the bid from its next run, as it moves any bid nobody
+ * holds. A hand-back may release a person's earlier hold, so it never runs by rule (handBackRefusal), and a stop row is
+ * never handed back (auto-bid could raise it).
+ */
+export type BidAfterwards = 'hold' | 'auto-bid'
+
+export const afterwardsArg = z.enum(['hold', 'auto-bid']).optional().describe(
+  'what auto-bid does with the bid afterwards: "hold" (default) — it counts as a person\'s bid and auto-bid leaves it alone '
+  + 'for 60 days; "auto-bid" — handed back: auto-bid may move it from its next run (e.g. a reset meant to give the bid back to auto-bid)',
+)
+
+/** The option as the preview stores it: anything but "auto-bid" is the default hold. */
+export const afterwardsOf = (value: unknown): BidAfterwards => (value === 'auto-bid' ? 'auto-bid' : 'hold')
+
+/** The preview's sentence for it (one bid, or several). */
+export function afterwardsNote(afterwards: BidAfterwards, many = false): string {
+  const it = many ? 'these bids' : 'this bid'
+  return afterwards === 'auto-bid'
+    ? `Afterwards ${it} ${many ? 'are' : 'is'} handed back to auto-bid: it may move ${many ? 'them' : 'it'} from its next run (only toward a target ACoS you set, and not where an hourly plan, a goal plan or a pin holds the campaign), even if a person set ${many ? 'them' : 'it'} earlier. A person's later edit holds ${many ? 'them' : 'it'} again.`
+    : `Afterwards auto-bid leaves ${it} alone for ${PERSON_BID_HOLD_DAYS} days: a bid an approved request writes counts as a person's. Ask with afterwards "auto-bid" to hand ${many ? 'them' : 'it'} back to auto-bid instead.`
+}
+
+/** The write's evidence with the hand-back mark when the request asked for it (nothing else changes). */
+export function handBackEvidence(evidence: AdWriteEvidence | null | undefined, afterwards: BidAfterwards): AdWriteEvidence | null {
+  if (afterwards !== 'auto-bid') return evidence ?? null
+  return { ...(evidence ?? {}), handBack: 'auto-bid' }
+}
+
+/**
+ * W4-4 — a bid tool's `withinLimits`, before its own: a hand-back (`afterwards: "auto-bid"`) may release a person's hold
+ * on the bid, so it never runs by rule — the precedent of the SP Super Wizard's `sameProductTerms: 'accept'`. Pure.
+ */
+export function handBackRefusal(preview: unknown): string | null {
+  const afterwards = (preview as { afterwards?: unknown } | null | undefined)?.afterwards
+  if (afterwards === 'hold') return null
+  if (afterwards === 'auto-bid') return 'it hands the bid back to auto-bid (afterwards "auto-bid"), which may release a bid a person set: never by rule; a person decides'
+  return 'the preview does not say what auto-bid does with the bid afterwards; a person decides'
 }
 
 /** An approved run that could not run, as the gate expects it (ok:false; the request goes back to waiting). */
