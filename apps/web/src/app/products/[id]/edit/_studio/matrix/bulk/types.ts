@@ -15,10 +15,11 @@
  *   Quantity        the verbs set-follow · pin-quantity
  *   Buffer          the verb set-buffer
  *   Stock sync      the verbs pause-sync · resume-sync · push-now · retry-sync
+ *   Sells from      the verb set-source (Step 2): the warehouses each listing sells from, in sale order
  */
-import type { CoordinateKey } from '../contract'
+import type { CoordinateKey, MatrixLocation } from '../contract'
 
-export type BulkFieldId = 'basePrice' | 'price' | 'salePrice' | 'listingStatus' | 'fulfilment' | 'quantity' | 'buffer' | 'stockSync'
+export type BulkFieldId = 'basePrice' | 'price' | 'salePrice' | 'listingStatus' | 'fulfilment' | 'quantity' | 'buffer' | 'stockSync' | 'stockSource'
 
 /** The headings the field list is grouped under. */
 export type BulkGroup = 'Prices' | 'Listing' | 'Stock'
@@ -31,6 +32,7 @@ export type BulkModeId =
   | 'follow' | 'pin' // Quantity
   | 'buffer' // Buffer
   | 'hold' | 'release' | 'push' | 'retry' // Stock sync
+  | 'sources' | 'default' // Sells from: the warehouses ticked, or the market default again
 
 /**
  * What a mode needs from the operator:
@@ -40,8 +42,9 @@ export type BulkModeId =
  *   integer     a whole number, 0 or more
  *   choice      one of `choicesFor(...)` (a status, a method, a market to copy from)
  *   sale        a sale price, a start date and an end date (YYYY-MM-DD)
+ *   locations   warehouses ticked in sale order (`SellsFromPicker`)
  */
-export type BulkInputKind = 'none' | 'money' | 'percent' | 'integer' | 'choice' | 'sale'
+export type BulkInputKind = 'none' | 'money' | 'percent' | 'integer' | 'choice' | 'sale' | 'locations'
 
 export interface BulkModeSpec {
   id: BulkModeId
@@ -83,6 +86,8 @@ export interface BulkInput {
   percent?: number
   choice?: string
   sale?: { value: number; start: string; end: string }
+  /** Sells from: warehouse codes in sale order. */
+  codes?: string[]
 }
 
 /** One change the operator asked for. The rows are the page's (the ticked rows, bound when the dialog opened). */
@@ -168,6 +173,8 @@ export interface BulkEditSource {
   choicesFor: (field: BulkFieldId, mode: BulkModeId, coordinateKeys: readonly CoordinateKey[]) => readonly BulkChoiceOption[]
   /** The currency of a money input on these markets (`EUR` when they disagree or none is chosen). */
   currencyFor: (field: BulkFieldId, coordinateKeys: readonly CoordinateKey[]) => string
+  /** The business's warehouses, for a `locations` input (Sells from). */
+  locations: readonly MatrixLocation[]
   preview: (request: BulkRequest) => Promise<BulkPreview>
   apply: (preview: BulkPreview) => Promise<BulkResult>
 }

@@ -25,8 +25,10 @@ export interface BulkRaw {
   /** The sale's dates, ISO `YYYY-MM-DD` (the date fields give ISO whatever they show). */
   start: string
   end: string
+  /** Sells from: the warehouses ticked, in sale order. */
+  codes: readonly string[]
 }
-export const EMPTY_RAW: BulkRaw = Object.freeze({ text: '', choice: '', start: '', end: '' })
+export const EMPTY_RAW: BulkRaw = Object.freeze({ text: '', choice: '', start: '', end: '', codes: Object.freeze([]) as readonly string[] })
 
 /**
  * `empty`    nothing entered yet: Apply waits, no error under the field
@@ -109,6 +111,7 @@ function readSale(raw: BulkRaw): ParseResult {
  *   integer  a whole number, 0 or more (as `amount`)
  *   choice   one of `choices` (when given: a choice no longer offered is not read)
  *   sale     a sale price as money, and a start and an end date with start ≤ end
+ *   locations  at least one warehouse ticked (as `codes`, in sale order)
  *   none     always read
  */
 export function parseInput(kind: BulkInputKind, raw: BulkRaw, choices?: readonly BulkChoiceOption[]): ParseResult {
@@ -123,6 +126,7 @@ export function parseInput(kind: BulkInputKind, raw: BulkRaw, choices?: readonly
       return ok({ choice: c })
     }
     case 'sale': return readSale(raw)
+    case 'locations': return raw.codes.length === 0 ? fail('empty', 'Tick at least one warehouse.') : ok({ codes: [...raw.codes] })
   }
 }
 
@@ -133,7 +137,8 @@ export function rawFromInput(kind: BulkInputKind, input: BulkInput | undefined):
     case 'money': case 'integer': return { ...EMPTY_RAW, text: input.amount != null ? String(input.amount) : '' }
     case 'percent': return { ...EMPTY_RAW, text: input.percent != null ? String(input.percent) : '' }
     case 'choice': return { ...EMPTY_RAW, choice: input.choice ?? '' }
-    case 'sale': return input.sale ? { text: String(input.sale.value), choice: '', start: input.sale.start, end: input.sale.end } : EMPTY_RAW
+    case 'sale': return input.sale ? { ...EMPTY_RAW, text: String(input.sale.value), start: input.sale.start, end: input.sale.end } : EMPTY_RAW
+    case 'locations': return { ...EMPTY_RAW, codes: [...(input.codes ?? [])] }
     case 'none': return EMPTY_RAW
   }
 }
@@ -144,7 +149,7 @@ export const currencySymbol = (code: string): string => SYMBOLS[code.trim().toUp
 
 /** An input's label when its mode names none. */
 export const DEFAULT_INPUT_LABEL: Readonly<Record<BulkInputKind, string>> = {
-  none: '', money: 'Amount', percent: 'Change by', integer: 'Number', choice: 'Choose', sale: 'Sale price',
+  none: '', money: 'Amount', percent: 'Change by', integer: 'Number', choice: 'Choose', sale: 'Sale price', locations: 'Warehouses',
 }
 
 // ── What the dialog opens on ──────────────────────────────────────────────────────────────────────────────────────
@@ -219,6 +224,8 @@ export function requestKey(r: BulkRequest | null): string | null {
   return JSON.stringify([
     r.field, r.mode, i.amount ?? null, i.percent ?? null, i.choice ?? null,
     i.sale ? [i.sale.value, i.sale.start, i.sale.end] : null,
+    // Sells from: the order is the sale order, so it is part of the request (never sorted).
+    i.codes ?? null,
     [...r.coordinateKeys].sort(),
   ])
 }
@@ -334,7 +341,7 @@ export function effectiveFilter(lines: readonly BulkLine[], filter: LineFilter):
 export function previewPrompt(s: { field: Pick<BulkFieldSpec, 'held' | 'perMarket'> | null; kind: BulkInputKind; parsed: ParseResult; ticked: number }): string {
   if (!s.field) return 'Choose what to change.'
   if (s.field.held) return s.field.held
-  if (s.parsed.state !== 'ok') return s.kind === 'choice' ? 'Choose a value to see what would change.' : 'Enter a value to see what would change.'
+  if (s.parsed.state !== 'ok') return s.kind === 'choice' ? 'Choose a value to see what would change.' : s.kind === 'locations' ? 'Tick a warehouse to see what would change.' : 'Enter a value to see what would change.'
   if (s.field.perMarket && s.ticked === 0) return 'Tick a market to see what would change.'
   return 'Working out the changes…'
 }

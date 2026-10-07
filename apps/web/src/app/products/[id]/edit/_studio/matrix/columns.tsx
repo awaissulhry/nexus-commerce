@@ -35,6 +35,7 @@ import type { AxisSummary } from '../variants/family/coverage'
 
 import { MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixRowRead } from './contract'
 import { refusedTooltip } from './refusals'
+import { FROM_COL_W, FROM_LABEL, fromBefore, fromCellText, fromCellView, isMatrixFromColId, matrixFromColId } from './sellsFrom'
 import styles from './matrix.module.css'
 
 /**
@@ -83,11 +84,12 @@ export const matrixColId = (key: CoordinateKey, kind: MatrixCellKind | 'notListe
  */
 export const matrixStatusColId = (key: CoordinateKey): string => `${key}.status`
 export const isMatrixStatusColId = (colId: string | null | undefined): boolean => !!colId && colId.lastIndexOf('.') > 0 && colId.endsWith('.status')
-/** The market group a column belongs to (its coordinate key): a Matrix cell's, or a market's Status; null for the rest. */
+/** The market group a column belongs to (its coordinate key): a Matrix cell's, a market's Status or From; null for the rest. */
 export function matrixGroupKeyOf(colId: string | null | undefined): CoordinateKey | null {
   const parsed = parseMatrixColId(colId)
   if (parsed) return parsed.key
-  return isMatrixStatusColId(colId) ? colId!.slice(0, colId!.lastIndexOf('.')) : null
+  // A market's Status and From columns belong to its group too.
+  return isMatrixStatusColId(colId) || isMatrixFromColId(colId) ? colId!.slice(0, colId!.lastIndexOf('.')) : null
 }
 /** A market that draws a Status column: one with a Listing cell (a listed market, or an alias), never a region's inventory. */
 export const hasMatrixStatus = (coord: Pick<MatrixCoordinate, 'connected' | 'cells'>): boolean => coord.connected && coord.cells.includes('listing')
@@ -237,6 +239,34 @@ export function fbaTooltip(row: Pick<MatrixRowRead, 'role' | 'fba'> | null | und
   return lines.join(' · ')
 }
 
+/* ── the From cell ("Sells from", Step 2) ─────────────────────────────────────────────────────── */
+
+/** The From cell's door: the "Sells from" pop-up for this row on this market group. */
+export const FROM_EDIT_COPY = { label: 'Sells from', detail: 'Enter or F2 opens the warehouses it sells from.' } as const
+export const FROM_HEADER_TIP = 'The warehouses this market sells from, in sale order. Listings show the sum.'
+
+interface FromCellParams {
+  coordinate: MatrixCoordinate
+  rowOf: (id: string) => MatrixRowRead | null
+  cellsOf: (rowId: string, key: CoordinateKey) => MatrixCells | null
+  onOpenFrom?: (rowId: string, key: CoordinateKey, anchor: HTMLElement | null) => void
+}
+
+function FromCell(p: ICellRendererParams<StudioRow> & Partial<FromCellParams>) {
+  const d = p.data
+  if (!d || !p.coordinate || !p.rowOf || !p.cellsOf) return null
+  const coord = p.coordinate
+  const v = fromCellView(p.rowOf(d.id), p.cellsOf(d.id, coord.key), coord)
+  if (v.look === 'none') return null
+  if (v.look === 'shared') return <span className="nds-cell-value"><Pill tone="info">{v.text}</Pill></span>
+  const open = v.door && p.onOpenFrom
+    ? <CellAction label={FROM_EDIT_COPY.label} description={FROM_EDIT_COPY.detail} onActivate={(anchor) => p.onOpenFrom?.(d.id, coord.key, anchor)}
+        onFocusCell={() => { const col = p.column?.getColId(); if (p.node.rowIndex != null && col) p.api.setFocusedCell(p.node.rowIndex, col) }} />
+    : null
+  // Muted while it follows the market default; normal weight once this product has its own choice.
+  return <span className="nds-cell-value"><span className={`nds-cell-value-text${v.look === 'own' ? '' : ' nds-cell-muted'}`}>{v.text}</span>{open}</span>
+}
+
 function NotListedCell() {
   return <span className="nds-cell-value nds-cell-muted"><span className="nds-cell-value-text">{MATRIX_COPY.notListed}</span></span>
 }
@@ -268,6 +298,8 @@ export interface BuildMatrixColumnsOptions {
   statusColumnOf?: (coord: MatrixCoordinate) => ColDef<StudioRow> | null
   /** The Stock cell opens the stock per location for a row (absent = no door: preview, or no right to adjust stock). */
   onOpenStock?: (rowId: string) => void
+  /** A market's From cell opens "Sells from" (absent = no door: preview, or no right to adjust stock). */
+  onOpenFrom?: (rowId: string, key: CoordinateKey, anchor: HTMLElement | null) => void
 }
 
 const rowId = (r: StudioRow) => r.id
@@ -361,8 +393,32 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     { groupId: 'grp-shared', headerName: 'Shared', children: [{ ...basePrice, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W }, stock, fba] },
   ]
 
+  /* A market group's From column ("Sells from", Step 2): read-only here — the pop-up is its only writer. */
+  const fromColumn = (coord: MatrixCoordinate): ColDef<StudioRow> => {
+    const colId = matrixFromColId(coord.key)
+    const view = (data: StudioRow | undefined) => (data ? fromCellView(rowOf(data.id), cellsOf(data.id, coord.key), coord) : null)
+    return {
+      colId,
+      headerName: FROM_LABEL,
+      headerTooltip: FROM_HEADER_TIP,
+      width: FROM_COL_W, minWidth: 96,
+      editable: false, suppressMovable: true, suppressHeaderMenuButton: true, suppressFillHandle: true, suppressPaste: true, sortable: false, resizable: true,
+      cellClass: ['nds-ag-cell', 'nds-reveal-row'],
+      valueGetter: (p) => (p.data ? fromCellText(rowOf(p.data.id), cellsOf(p.data.id, coord.key), coord) : null),
+      cellRenderer: FromCell,
+      cellRendererParams: { coordinate: coord, rowOf, cellsOf, onOpenFrom: opts.onOpenFrom,
+        suppressMouseEventHandling: (p: { event: MouseEvent }) => p.event.target instanceof Element && !!p.event.target.closest('[data-nds-cell-action]') },
+      tooltipValueGetter: (p) => {
+        const mark = p.data ? tracker?.get(rowId(p.data), colId) : undefined
+        return refusedTooltip(mark?.state === 'refused' ? mark.reason : undefined, view(p.data)?.tooltip)
+      },
+      getQuickFilterText: (p) => view(p.data)?.text ?? '',
+    }
+  }
+
   for (const coord of coordinates) {
     const children: ColDef<StudioRow>[] = []
+    const fromAt = fromBefore(coord)
     if (!coord.connected || coord.cells.length === 0) {
       /* ONE `Not listed` column — never eight empty cells (§3.1 rule 6). */
       children.push({
@@ -377,6 +433,8 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
       })
     } else {
       for (const kind of coord.cells) {
+        // Fulfilment · From · Mode · Qty · Buffer · Sync
+        if (kind === fromAt) children.push(fromColumn(coord))
         const o: MatrixColumnOptions<StudioRow> = {
           colId: matrixColId(coord.key, kind),
           coordinate: coord,

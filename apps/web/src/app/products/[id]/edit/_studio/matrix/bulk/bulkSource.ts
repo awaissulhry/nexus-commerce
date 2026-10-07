@@ -76,6 +76,12 @@ export function verbSentence(preview: Pick<VerbPreview, 'verb' | 'changes'>, app
     case 'resume-sync': return `Stock sync released on ${listings}${s}.`
     case 'push-now': return `${plural(applied, 'quantity push', 'quantity pushes')} sent${s}.`
     case 'retry-sync': return `${plural(applied, 'failed push', 'failed pushes')} sent again${s}.`
+    case 'set-source': {
+      // `to` is a code list; `[]` = the market default again (each market keeps its own default).
+      const chosen = preview.changes.map((c) => c.to).find((t): t is string[] => Array.isArray(t) && t.length > 0)
+      if (!chosen) return `${listings} ${applied === 1 ? 'uses its market default' : 'use their market default'} again${s}.`
+      return `${listings} ${applied === 1 ? 'sells' : 'sell'} from ${chosen.join(' + ')}${s}.`
+    }
   }
 }
 
@@ -216,6 +222,7 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
     defaultMarkets: (field) => bulkDefaultMarkets(doors.context(), field),
     choicesFor: (field, mode, keys) => bulkChoices(doors.context(), field, mode, keys),
     currencyFor: (field, keys) => bulkCurrency(doors.context(), field, keys),
+    locations: ctx0.locations ?? [],
     preview,
     apply,
   }

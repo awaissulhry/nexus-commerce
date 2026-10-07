@@ -39,6 +39,8 @@ function applyOne(read: MatrixRead, w: MatrixWriteCell): { read: MatrixRead; out
   const base = { rowId: w.rowId, coordinateKey: w.coordinateKey, cell: w.cell }
   if (!row || !cells) return { read, outcome: { ...base, outcome: 'refused', reason: 'No listing on this coordinate', version: cells?.version ?? 0 } }
   if (cells.version !== w.expectedVersion) return { read, outcome: { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: cells.version } }
+  /* Step 2: "Sells from" is read-only on preview data (Part D owns the From cell). */
+  if (w.cell === 'source') return { read, outcome: { ...base, outcome: 'refused', reason: MATRIX_COPY.simulated, version: cells.version } }
   if (cells.writable[w.cell] !== true) return { read, outcome: { ...base, outcome: 'refused', reason: cells.writeBlockedReason[w.cell] ?? 'This cell cannot be changed here', version: cells.version } }
   const next = clone(cells)
   let changed = false

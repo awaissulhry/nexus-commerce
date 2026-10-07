@@ -28,6 +28,7 @@ import {
   requestKey, resolveInitial, skipGroupLine, type BulkFormState, type BulkPhase, type BulkRaw, type LineFilter,
 } from './dialogModel'
 import type { BulkEditSource, BulkInitial, BulkLine, BulkPreview, BulkResult } from './types'
+import { SellsFromPicker } from '../SellsFromPicker'
 import styles from './bulkEdit.module.css'
 
 export interface BulkEditDialogProps {
@@ -300,6 +301,14 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
           <Field label="Ends" error={errorAt('end')}>
             <DateField value={form.raw.end} onChange={(v) => setRaw({ end: v })} min={form.raw.start || undefined} placeholder="Choose a date" clearable={false} />
           </Field>
+        </div>
+      )
+      // Sells from: the From pop-up's own picker (ticked = sells, top first).
+      case 'locations': return (
+        <div className="nds-field-w">
+          <span className="nds-field-lbl" aria-hidden="true">{inputLabel}</span>
+          <SellsFromPicker label={`${inputLabel}, in sale order`} locations={source?.locations ?? []} value={form.raw.codes}
+            onChange={(codes) => setRaw({ codes })} disabled={locked} />
         </div>
       )
       case 'none': return null

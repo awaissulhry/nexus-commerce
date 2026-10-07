@@ -9,7 +9,8 @@
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import type { StatusTarget } from '@nexus/shared/listing-actions'
 
-import type { CoordinateKey, MatrixCellKind, MatrixCells, MatrixCoordinate, MatrixVerbParams, MatrixVerbTarget, VerbPreview } from '../contract'
+import { MATRIX_COPY, type CoordinateKey, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixLocation, type MatrixVerbParams, type MatrixVerbTarget, type VerbPreview } from '../contract'
+import { activeWarehouses } from '../sellsFrom'
 import type { BulkChoiceOption, BulkFieldId, BulkFieldSpec, BulkInput, BulkLine, BulkMarketOption, BulkModeId, BulkModeSpec } from './types'
 
 /* ── words ────────────────────────────────────────────────────────────────────────────────── */
@@ -23,6 +24,7 @@ export const BULK_BASE_PRICE_NOTICE = 'Markets that follow the base price get th
 export const BULK_STATUS_NEW_ROW = 'Not on this market yet. Choose its Status in the grid to create the listing'
 export const BULK_STATUS_NOTICE = 'Nothing is sent now. Publish sends each new status to its market.'
 export const BULK_SALE_NOTICE = 'Amazon runs a sale between its two dates. Nexus sends it about 30 seconds after saving.'
+export const BULK_NO_WAREHOUSE = 'No active warehouse to sell from'
 
 const STATUS_WORD: Record<StatusTarget, string> = { active: 'Active', inactive: 'Inactive', ended: 'Ended', not_listed: 'Not listed' }
 const STATUS_ORDER: readonly StatusTarget[] = ['active', 'inactive', 'ended', 'not_listed']
@@ -62,6 +64,10 @@ const MODES: Record<BulkFieldId, readonly BulkModeSpec[]> = {
     { id: 'push', label: 'Push quantity now', input: 'none', hint: 'Sends the quantity the market should show now.' },
     { id: 'retry', label: 'Retry', input: 'none', hint: 'Sends a failed push again.' },
   ],
+  stockSource: [
+    { id: 'sources', label: 'Set to', input: 'locations', inputLabel: 'Warehouses', hint: 'Ticked warehouses sell, the top one first. Listings show the sum.' },
+    { id: 'default', label: 'Use the default', input: 'none', hint: 'Each listing sells from its market\'s default again.' },
+  ],
 }
 
 const FIELDS: ReadonlyArray<Omit<BulkFieldSpec, 'modes' | 'held'>> = [
@@ -73,11 +79,14 @@ const FIELDS: ReadonlyArray<Omit<BulkFieldSpec, 'modes' | 'held'>> = [
   { id: 'quantity', label: 'Quantity', group: 'Stock', perMarket: true },
   { id: 'buffer', label: 'Buffer', group: 'Stock', perMarket: true },
   { id: 'stockSync', label: 'Stock sync', group: 'Stock', perMarket: true },
+  { id: 'stockSource', label: 'Sells from', group: 'Stock', perMarket: true },
 ]
 
 /** The Matrix cell a per-market field lives in: a market offers the field when its group serves that cell. */
 const CELL_OF: Partial<Record<BulkFieldId, MatrixCellKind>> = {
   price: 'price', salePrice: 'salePrice', fulfilment: 'fulfilment', quantity: 'syncMode', buffer: 'syncBuffer', stockSync: 'syncState',
+  // Sells from: once per group that carries the quantity (Amazon EU's region group, not its markets).
+  stockSource: 'syncQty',
 }
 const PRICE_FIELDS: readonly BulkFieldId[] = ['basePrice', 'price', 'salePrice']
 
@@ -106,6 +115,10 @@ export interface BulkContext {
   canDelete: boolean
   /** The market group the operator was in (the focused cell), or null. */
   focusedKey: CoordinateKey | null
+  /** The business's warehouses (`MatrixRead.locations`) — Sells from; absent = an older server. */
+  locations?: readonly MatrixLocation[]
+  /** May the viewer change where stock sells from (`inventory.adjust`)? Absent = allowed (the server's preview refuses per row). */
+  canStock?: boolean
 }
 
 const variants = (ctx: BulkContext) => ctx.rows.filter((r) => !r.isParent)
@@ -124,6 +137,7 @@ function rowOn(ctx: BulkContext, field: BulkFieldId, rowId: string, c: MatrixCoo
   if (field === 'price') return !!cells.price
   if (field === 'salePrice') return !!cells.price || !!cells.sale
   if (field === 'fulfilment') return !!cells.fulfilment
+  if (field === 'stockSource') return !!cells.source
   return !!cells.sync
 }
 
@@ -135,6 +149,8 @@ export function bulkFields(ctx: BulkContext): BulkFieldSpec[] {
     if (PRICE_FIELDS.includes(f.id) && !ctx.canPrice) held = BULK_PRICE_PERMISSION
     else if (f.id === 'basePrice') held = ctx.masterHeld
     else if (f.id === 'listingStatus' && ctx.statusHeld) held = ctx.statusHeld
+    else if (f.id === 'stockSource' && ctx.canStock === false) held = MATRIX_COPY.sourcePermission
+    else if (f.id === 'stockSource' && activeWarehouses(ctx.locations).length === 0) held = BULK_NO_WAREHOUSE
     else if (f.perMarket && parentOnly && f.id !== 'listingStatus') held = BULK_PARENT_ONLY
     else if (f.perMarket) {
       const markets = bulkMarkets(ctx, f.id)
@@ -228,6 +244,10 @@ export function verbParams(field: BulkFieldId, mode: BulkModeId, input: BulkInpu
       return input.amount != null ? { verb: 'set-buffer', value: input.amount } : null
     case 'stockSync':
       return mode === 'hold' ? { verb: 'pause-sync' } : mode === 'release' ? { verb: 'resume-sync' } : mode === 'push' ? { verb: 'push-now' } : mode === 'retry' ? { verb: 'retry-sync' } : null
+    case 'stockSource':
+      // `[]` = the market default again (the shared normaliser stores a choice equal to the default as `[]` too).
+      if (mode === 'default') return { verb: 'set-source', codes: [] }
+      return mode === 'sources' && input.codes?.length ? { verb: 'set-source', codes: [...input.codes] } : null
     default:
       return null
   }
@@ -372,6 +392,7 @@ export function bulkNoun(field: BulkFieldId, n: number): string {
   const one: Record<BulkFieldId, [string, string]> = {
     basePrice: ['base price', 'base prices'], price: ['price', 'prices'], salePrice: ['sale', 'sales'], listingStatus: ['status', 'statuses'],
     fulfilment: ['fulfilment method', 'fulfilment methods'], quantity: ['quantity', 'quantities'], buffer: ['buffer', 'buffers'], stockSync: ['listing', 'listings'],
+    stockSource: ['listing', 'listings'],
   }
   return `${n} ${one[field][n === 1 ? 0 : 1]}`
 }

@@ -36,7 +36,7 @@ import {
   type MatrixRead,
   type MatrixRowRead,
   type MatrixVerbRequest,
-  type MatrixWritableKind,
+  type MatrixDoorKind,
   type MatrixWriteCell,
   type MatrixWriteOutcome,
   type VerbOperation,
@@ -47,8 +47,11 @@ import { previewVerb } from './preview'
 import { fetchMatrix, patchMatrix, previewCoordinateInputs, previewRowInputs, type CoordinateSourceOptions, type MatrixSource } from './source'
 import { applyCells, applyVerb, revertOperation } from './store'
 import { afterLiveWrite } from './refusals'
+import { matrixFromColId } from './sellsFrom'
 
 export const matrixColId = (key: CoordinateKey, kind: string): string => `${key}.${kind}`
+/** The column a door write marks: its cell's, and "Sells from" (`source`) the group's From column. */
+const doorColId = (key: CoordinateKey, cell: MatrixDoorKind): string => (cell === 'source' ? matrixFromColId(key) : matrixColId(key, cell))
 
 export interface UseMatrixOptions {
   productId: string
@@ -77,8 +80,9 @@ export interface MatrixState {
   reload: () => void
   /** Read again QUIETLY (the live re-read): the grid keeps its read; it waits for an open editor or a write in flight. */
   refresh: () => void
-  /** The one door. Per-cell outcomes are painted through the tracker; the read is replaced. */
-  write: (cells: readonly MatrixWriteCell[]) => Promise<MatrixWriteOutcome[]>
+  /** The one door. Per-cell outcomes are painted through the tracker; the read is replaced. `quiet`: a refusal is not
+   *  said by the page (the caller says it — the From pop-up keeps it on screen). */
+  write: (cells: readonly MatrixWriteCell[], opts?: { quiet?: boolean }) => Promise<MatrixWriteOutcome[]>
   previewVerbRun: (req: MatrixVerbRequest) => Promise<VerbPreview>
   /** The operation, and each cell's outcome (a cell refused at the run says why). */
   applyVerbRun: (preview: VerbPreview) => Promise<VerbOperation & { results?: readonly MatrixWriteOutcome[] }>
@@ -94,9 +98,9 @@ export interface MatrixState {
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T
 
 /** The `listing.values_changed` fields a cell write moves — the words the server's write services announce with. */
-const FIELDS_OF: Readonly<Record<MatrixWritableKind, readonly string[]>> = {
+const FIELDS_OF: Readonly<Record<MatrixDoorKind, readonly string[]>> = {
   syncMode: ['quantityMode', 'quantity'], syncQty: ['quantityMode', 'quantity'], syncBuffer: ['stockBuffer', 'quantity'],
-  fulfilment: ['fulfilment'], price: ['price'], salePrice: ['salePrice'],
+  fulfilment: ['fulfilment'], price: ['price'], salePrice: ['salePrice'], source: ['stockSource', 'quantity'],
 }
 
 /** Each cell names the listing it was read from (the PRISTINE read), so a write onto another listing is a conflict. */
@@ -286,11 +290,11 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     if (node) api.refreshCells({ rowNodes: [node], columns: [colId], force: true })
   }, [getApi])
 
-  const mark = useCallback((outcomes: readonly MatrixWriteOutcome[]) => {
+  const mark = useCallback((outcomes: readonly MatrixWriteOutcome[], quiet = false) => {
     const savedAt = new Date().toISOString()
     let anyOk = false
     for (const o of outcomes) {
-      const colId = matrixColId(o.coordinateKey, o.cell)
+      const colId = doorColId(o.coordinateKey, o.cell)
       if (o.outcome === 'applied' || o.outcome === 'noop') {
         anyOk = anyOk || o.outcome === 'applied'
         tracker.set(o.rowId, colId, 'saved')
@@ -299,7 +303,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
         /* A conflict is never retried: the cell says so (its hover leads with the reason, then the fresh read). */
         const reason = o.reason ?? (o.outcome === 'conflict' ? MATRIX_COPY.changedElsewhere : 'Refused')
         tracker.set(o.rowId, colId, 'refused', reason)
-        if (o.outcome === 'refused') optsRef.current.onRefused?.(reason)
+        if (o.outcome === 'refused' && !quiet) optsRef.current.onRefused?.(reason)
       }
       repaint(o.rowId, colId)
     }
@@ -308,10 +312,11 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
 
   /* ── the one door ───────────────────────────────────────────────────────────────────────── */
 
-  const write = useCallback(async (cells: readonly MatrixWriteCell[]): Promise<MatrixWriteOutcome[]> => {
+  const write = useCallback(async (cells: readonly MatrixWriteCell[], wopts?: { quiet?: boolean }): Promise<MatrixWriteOutcome[]> => {
     const current = readRef.current
+    const quiet = wopts?.quiet === true
     if (!current || cells.length === 0) return []
-    for (const c of cells) { tracker.set(c.rowId, matrixColId(c.coordinateKey, c.cell), 'saving'); repaint(c.rowId, matrixColId(c.coordinateKey, c.cell)) }
+    for (const c of cells) { tracker.set(c.rowId, doorColId(c.coordinateKey, c.cell), 'saving'); repaint(c.rowId, doorColId(c.coordinateKey, c.cell)) }
     if (current.source === 'preview') {
       /* Pins are remembered BEFORE the store moves, so the footer's Undo can restore by value. */
       const pinned: Array<{ rowId: string; coordinateKey: CoordinateKey; before: MatrixCells }> = []
@@ -325,7 +330,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       const applied = new Set(result.results.filter((r) => r.outcome === 'applied').map((r) => `${r.rowId}|${r.coordinateKey}`))
       const kept = pinned.filter((p) => applied.has(`${p.rowId}|${p.coordinateKey}`))
       if (kept.length) setPins((p) => [...p, ...kept])
-      mark(result.results)
+      mark(result.results, quiet)
       return result.results
     }
     live.begin()
@@ -345,7 +350,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
       }
       const changed = changedListings(result.results, current)
       for (const c of changed) liveVersions.current.set(c.listingId, Math.max(liveVersions.current.get(c.listingId) ?? -1, c.version))
-      mark(result.results)
+      mark(result.results, quiet)
       if (changed.length) {
         /* The other windows of this browser move at once, server stream or not; this tab already holds these versions. */
         const fields = [...new Set(result.results.filter((o) => o.outcome === 'applied').flatMap((o) => FIELDS_OF[o.cell] ?? []))]
@@ -355,7 +360,7 @@ export function useMatrix(opts: UseMatrixOptions): MatrixState {
     } catch (e) {
       /* A transport failure is an UNKNOWN outcome, not a refusal: say so, and ask for a re-read. */
       const reason = e instanceof Error ? e.message : String(e)
-      for (const c of cells) { const colId = matrixColId(c.coordinateKey, c.cell); tracker.set(c.rowId, colId, 'unknown', `Connection lost — refresh to see whether this saved. (${reason})`); repaint(c.rowId, colId) }
+      for (const c of cells) { const colId = doorColId(c.coordinateKey, c.cell); tracker.set(c.rowId, colId, 'unknown', `Connection lost — refresh to see whether this saved. (${reason})`); repaint(c.rowId, colId) }
       optsRef.current.onSettled?.({ ok: false, savedAt: new Date().toISOString() })
       return cells.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey, cell: c.cell, outcome: 'refused' as const, reason, version: c.expectedVersion }))
     } finally {

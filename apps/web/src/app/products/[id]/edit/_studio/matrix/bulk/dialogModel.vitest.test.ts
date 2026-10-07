@@ -88,6 +88,10 @@ describe('parseInput — choice, none', () => {
   it('a mode that needs nothing is always read', () => {
     expect(parseInput('none', EMPTY_RAW)).toMatchObject({ state: 'ok', input: {} })
   })
+  it('Sells from: at least one warehouse ticked, read in sale order', () => {
+    expect(parseInput('locations', EMPTY_RAW)).toMatchObject({ state: 'empty', input: null, reason: 'Tick at least one warehouse.' })
+    expect(parseInput('locations', { ...EMPTY_RAW, codes: ['MI-3PL', 'IT-MAIN'] })).toMatchObject({ state: 'ok', input: { codes: ['MI-3PL', 'IT-MAIN'] } })
+  })
 })
 
 describe('parseInput — sale', () => {
@@ -117,7 +121,8 @@ describe('rawFromInput — an opening value back on screen', () => {
     expect(rawFromInput('integer', { amount: 4 }).text).toBe('4')
     expect(rawFromInput('percent', { percent: -5 }).text).toBe('-5')
     expect(rawFromInput('choice', { choice: 'FBM' }).choice).toBe('FBM')
-    expect(rawFromInput('sale', { sale: { value: 9, start: '2026-11-01', end: '2026-11-02' } })).toEqual({ text: '9', choice: '', start: '2026-11-01', end: '2026-11-02' })
+    expect(rawFromInput('sale', { sale: { value: 9, start: '2026-11-01', end: '2026-11-02' } })).toEqual({ text: '9', choice: '', start: '2026-11-01', end: '2026-11-02', codes: [] })
+    expect(rawFromInput('locations', { codes: ['MI-3PL', 'IT-MAIN'] }).codes).toEqual(['MI-3PL', 'IT-MAIN'])
     expect(rawFromInput('money', undefined)).toEqual(EMPTY_RAW)
   })
 })
@@ -295,6 +300,9 @@ describe('buildRequest and requestKey', () => {
     expect(k({ coordinateKeys: ['A', 'B'] })).not.toBe(base)
     expect(k({ field: 'basePrice' })).not.toBe(base)
     expect(requestKey(null)).toBeNull()
+    // Sells from: the order is the sale order — a reorder is a different request.
+    const src = (codes: string[]) => requestKey({ field: 'stockSource', mode: 'sources', input: { codes }, coordinateKeys: ['AMAZON:EU'] })
+    expect(src(['IT-MAIN', 'MI-3PL'])).not.toBe(src(['MI-3PL', 'IT-MAIN']))
   })
 })
 
@@ -306,5 +314,6 @@ describe('previewPrompt — what the table area says before there is anything to
     expect(previewPrompt({ field, kind: 'money', parsed: money(''), ticked: 1 })).toBe('Enter a value to see what would change.')
     expect(previewPrompt({ field, kind: 'choice', parsed: parseInput('choice', EMPTY_RAW), ticked: 1 })).toBe('Choose a value to see what would change.')
     expect(previewPrompt({ field, kind: 'money', parsed: money('1'), ticked: 0 })).toBe('Tick a market to see what would change.')
+    expect(previewPrompt({ field, kind: 'locations', parsed: parseInput('locations', EMPTY_RAW), ticked: 1 })).toBe('Tick a warehouse to see what would change.')
   })
 })

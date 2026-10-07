@@ -28,8 +28,8 @@ describe('liveRefreshNeeded — listing.values_changed', () => {
   it('a listing the view never read counts as not seen', () => {
     expect(liveRefreshNeeded(values({ productId: 'root', listings: [listing('L3', 'v2', 1)], fields: ['stockBuffer'] }), scope())).toBe('stock')
   })
-  it('only Mode / Qty / Buffer / Sync fields → stock', () => {
-    for (const fields of [['quantityMode', 'quantity'], ['stockBuffer', 'quantity'], ['syncState']]) {
+  it('only Mode / Qty / Buffer / Sync / Sells from fields → stock', () => {
+    for (const fields of [['quantityMode', 'quantity'], ['stockBuffer', 'quantity'], ['syncState'], ['stockSource', 'quantity']]) {
       expect(liveRefreshNeeded(values({ productId: 'root', listings: [listing('L1', 'v1', 5)], fields }), scope())).toBe('stock')
     }
   })

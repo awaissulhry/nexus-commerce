@@ -23,6 +23,7 @@ import {
   MATRIX_ENDPOINTS,
   type MatrixCellKind,
   type MatrixCoordinate,
+  type MatrixLocation,
   type MatrixRead,
   type MatrixRowRead,
   type MatrixWriteCell,
@@ -166,8 +167,18 @@ export function parseMatrixRead(body: unknown, productId: string): { read: Matri
       coordinates,
       rows,
       policies: Array.isArray(b.policies) ? (b.policies as MatrixRead['policies']) : [],
+      ...(Array.isArray(b.locations) ? { locations: locationsOf(b.locations) } : {}),
     },
   }
+}
+
+/** "Sells from" (Step 2): the business's warehouses; a malformed entry is dropped (absent on an older server). */
+function locationsOf(raw: unknown[]): MatrixLocation[] {
+  return raw.flatMap((x) => {
+    const l = x as Record<string, unknown> | null
+    if (!l || typeof l.code !== 'string' || !l.code.trim()) return []
+    return [{ code: l.code, name: typeof l.name === 'string' ? l.name : l.code, active: l.active !== false, ...(l.isDefault === true ? { isDefault: true } : {}) }]
+  })
 }
 
 /* ── the write (live mode only; preview goes to `store.applyCells`) ────────────────────────── */
@@ -195,6 +206,74 @@ export async function patchMatrix(
   if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `The Matrix write was refused (HTTP ${res.status})`)
   return (body ?? { results: [], version: 0 }) as MatrixWriteResult
 }
+
+/* ── "Sells from" for every product: the market default (Step 2) ───────────────────────────── */
+
+/** `POST /api/stock/sync-control/market-sources` — one market's warehouses, in sale order, for every product of the business. */
+export interface MarketSourcesRequest {
+  channel: string
+  /** A market code, or `EU` for Amazon's EU group (the only way to name an Amazon EU market). */
+  marketplace: string
+  /** In sale order; `[]` removes the market's list (each warehouse's routes decide again). */
+  codes: readonly string[]
+  dryRun?: boolean
+}
+
+/** What the route answers: the list now per market (`before`), the listings that follow it and the products that keep their own. */
+export interface MarketSourcesAnswer {
+  channel: string
+  marketplace: string
+  markets: string[]
+  codes: string[]
+  before: Record<string, string[]>
+  listings: number
+  products: number
+  exceptions: number
+  dryRun?: boolean
+  noop?: boolean
+  recascadeQueued?: number
+}
+
+/** Posts (or dry-runs) a market's default. A refusal throws with the server's own sentence. */
+export async function postMarketSources(
+  body: MarketSourcesRequest,
+  opts: { fetchImpl?: typeof fetch; baseUrl?: string; signal?: AbortSignal } = {},
+): Promise<MarketSourcesAnswer> {
+  const base = opts.baseUrl ?? getBackendUrl()
+  const doFetch = opts.fetchImpl ?? fetch
+  const res = await doFetch(`${base}/api/stock/sync-control/market-sources`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...body, codes: [...body.codes] }),
+    signal: opts.signal,
+  })
+  const answer = (await res.json().catch(() => null)) as Record<string, unknown> | null
+  if (!res.ok || !answer) {
+    const said = answer && (typeof answer.error === 'string' ? answer.error : typeof answer.message === 'string' ? answer.message : null)
+    throw new Error(said ?? `The default was not saved (HTTP ${res.status})`)
+  }
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((c): c is string => typeof c === 'string') : [])
+  const before: Record<string, string[]> = {}
+  if (answer.before && typeof answer.before === 'object') for (const [m, codes] of Object.entries(answer.before as Record<string, unknown>)) before[m] = list(codes)
+  return {
+    channel: typeof answer.channel === 'string' ? answer.channel : body.channel,
+    marketplace: typeof answer.marketplace === 'string' ? answer.marketplace : body.marketplace,
+    markets: list(answer.markets),
+    codes: list(answer.codes),
+    before,
+    listings: num(answer.listings),
+    products: num(answer.products),
+    exceptions: num(answer.exceptions),
+    ...(answer.dryRun === true ? { dryRun: true } : {}),
+    ...(answer.noop === true ? { noop: true } : {}),
+    ...(typeof answer.recascadeQueued === 'number' ? { recascadeQueued: answer.recascadeQueued } : {}),
+  }
+}
+
+/** The market list before a save (the group's first market: every EU market holds the same list). */
+export const listBefore = (a: Pick<MarketSourcesAnswer, 'before' | 'markets'>): string[] => a.before[a.markets[0] ?? ''] ?? Object.values(a.before)[0] ?? []
 
 /* ── the PREVIEW projections: real rows, real coordinates, fixture cells ────────────────────── */
 
