@@ -53,11 +53,16 @@ vi.mock('../../../jobs/cron-registry.js', () => {
 })
 // The Control Room's answer for a lever (its level, and whether its drawer offers Run now), as the test sets it.
 const lever = vi.hoisted(() => ({ mode: 'AUTO', available: true, why: null as string | null }))
+const LEVERS: Record<string, { job: string; schedule: string }> = {
+  'auto-bid': { job: 'ads-auto-bid', schedule: 'every 6 h' },
+  'rank-defend': { job: 'ad-rank-defend', schedule: 'every 15 min' },
+  'budget-pools': { job: 'budget-pool-rebalance', schedule: 'every 15 min' },
+}
 vi.mock('../../advertising/ads-control-room.service.js', () => ({
-  getEngineLevers: async () => ({ levers: [{ key: 'auto-bid', mode: lever.mode, modeReason: 'test reason' }], global: {} }),
+  getEngineLevers: async () => ({ levers: Object.entries(LEVERS).map(([key, l]) => ({ key, mode: lever.mode, modeReason: 'test reason', schedule: l.schedule })), global: {} }),
 }))
 vi.mock('../../advertising/ads-control-room-detail.service.js', () => ({
-  getEngineDetail: async (key: string) => (key === 'auto-bid' ? { key, run: { available: lever.available, jobName: lever.available ? 'ads-auto-bid' : null, why: lever.why }, runs: [] } : null),
+  getEngineDetail: async (key: string) => (LEVERS[key] ? { key, run: { available: lever.available, jobName: lever.available ? LEVERS[key].job : null, why: lever.why }, runs: [] } : null),
 }))
 
 import { __stepUpTest } from '../../../lib/auth/step-up.js'
@@ -66,7 +71,10 @@ import { commitScheduledApproval, scheduleApproval } from '../../agent-fleet/app
 import type { McpPrincipal } from '../../mcp/mcp-auth.js'
 import { runToolForClaude } from '../../mcp/mcp-tool-call.js'
 import { createWorkspaceService } from '../../workspace.service.js'
-import { callTool, type UserPrincipal } from '../call-tool.js'
+import { callTool, executeTool, type UserPrincipal } from '../call-tool.js'
+import { setClaudeRule } from '../claude-trust.service.js'
+import { runPlan } from '../change-plan.service.js'
+import { nameMarket } from '../../advertising/ads-rule-assign.service.js'
 import { getTool } from '../tool-registry.js'
 import { setEngineLockStoreForTests } from '../../advertising/ads-engine-lock.js'
 import agentFleetRoutes from '../../../routes/agent-fleet.routes.js'
@@ -231,7 +239,7 @@ describe('W4-8 assign-ad-rules — the market check, and the screens’ own path
 
   it('approved, a builder rule’s list is saved by the rule drawer’s path (its audit row names the request; the column mirrors it); undo puts it back', async () => {
     const { answer } = await call('assign-ad-rules', { ruleId: ids.budget, op: 'add', campaignIds: [ids.de2], why: 'test: add de2' })
-    expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval', consequences: { reaches: 'Nexus only', reversibility: 'full' } })
+    expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval', consequences: { reaches: 'Nexus only', reversibility: 'partial' } })
     expect((await decide('owner', answer.approvalId, {})).statusCode).toBe(200)
     expect(await commit(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
     expect(await picks(ids.budget)).toEqual([ids.de1, ids.de2].sort())
@@ -241,6 +249,8 @@ describe('W4-8 assign-ad-rules — the market check, and the screens’ own path
     expect(JSON.stringify(audit.evidence)).toContain(`Claude request ${answer.approvalId}: test: add de2`)
     const change = await inside(() => db().agentChange.findFirstOrThrow({ where: { approvalId: answer.approvalId } }))
     expect(change.before).toMatchObject({ ruleId: ids.budget, binding: 'picker', campaignIds: [ids.de1] })
+    // A rename since does not stop the undo: it goes by the rule's id.
+    await inside(() => db().automationRule.update({ where: { id: ids.budget }, data: { name: 'Trim spend renamed — DE' } }))
     const undo = await call('undo-change', { changeId: change.id })
     expect(undo.answer, JSON.stringify(undo.answer)).toMatchObject({ status: 'waiting_for_approval', preview: { action: 'assign-ad-rules', op: 'replace', totals: { removed: 1, after: 1 } } })
     expect((await decide('owner', undo.answer.approvalId, {})).statusCode).toBe(200)
@@ -288,6 +298,27 @@ describe('W4-8 assign-ad-rules — the market check, and the screens’ own path
     expect((await decide('owner', answer.approvalId, { code: codeOf() })).statusCode).toBe(200)
     expect(await commit(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
     expect(await picks(ids.auto)).toEqual([ids.de1, ids.de2].sort())
+  })
+
+  it('never by rule: a campaign outside the rule’s market is refused at the commit, and by execute itself', async () => {
+    const { answer } = await call('assign-ad-rules', { ruleId: ids.budget, op: 'add', campaignIds: [ids.it1] })
+    expect(answer.preview.totals.otherMarketAfter).toBe(1)
+    // As if the business's rule had decided it (an old or edited request): the commit's fresh check hands it back.
+    expect(await inside(() => scheduleApproval({ id: answer.approvalId, actor: viewer('owner'), via: 'auto' }))).toMatchObject({ ok: true })
+    expect(await commit(answer.approvalId)).toMatchObject({ ok: false })
+    expect((await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: answer.approvalId } }))).status).not.toBe('executed')
+    expect(await picks(ids.budget)).not.toContain(ids.it1)
+    // And execute refuses a run the business's rule decided, whatever reached it.
+    const out = (await inside(() => executeTool(viewer('owner'), 'assign-ad-rules', { ruleId: ids.budget, op: 'add', campaignIds: [ids.it1] }, { approvalId: answer.approvalId, decidedVia: 'auto', via: 'claude' }))).raw
+    expect(out).toMatchObject({ ok: false, error: expect.stringMatching(/outside the rule's market, and that never runs by rule/) })
+    expect(await picks(ids.budget)).not.toContain(ids.it1)
+  })
+
+  it('a market in a rule’s name is a separate capital token after a dash', () => {
+    expect(nameMarket('Trim spend — DE')).toBe('DE')
+    expect(nameMarket('Trim spend - GB')).toBe('UK')
+    expect(nameMarket('Trim spend –IT')).toBe('IT')
+    for (const name of ['pause it', 'let it be', 'Trim spend IT', 'Trim spend - it', 'Trim spend — XX', 'Trim (DE)']) expect(nameMarket(name), name).toBeNull()
   })
 
   it('a change plan carries the step’s stepUp', async () => {
@@ -339,16 +370,17 @@ describe('W4-8 run-ad-engine-now — the Control Room’s Run now', { timeout: T
       basis: { lastRunAt: null },
     })
     expect(r.preview.effect).toMatch(/It last ran 3 h ago, at .* UTC \(on its schedule, success: rules=2 matched=1 \(earlier\)\)\. It runs on its own every 15 min\./)
-    expect(r.preview.warning).toMatch(/^A second run on the same data takes one more step/)
+    expect(r.preview).toMatchObject({ steps: true, warning: expect.stringMatching(/^A second run on the same data acts again: each rule acts on what matches it now/) })
+    expect(r.preview.warnings).toContain('Amazon ads rules (the rules evaluator, harvesting included): it has no lock: a scheduled run that starts in the same moment can overlap it; each rule\'s own daily caps still hold across both.')
   })
 
   it('refuses while the engine runs, with when it should end: an open run row, or its lock held', async () => {
     const open = await inside(() => db().cronRun.create({ data: { jobName: 'advertising-rule-evaluator', status: 'RUNNING', triggeredBy: 'cron', startedAt: new Date(Date.now() - 60_000) } }))
     try {
-      expect((await preview('run-ad-engine-now', { engine: 'rules' })).error).toMatch(/^Not queued: .* is running now, and two runs never overlap\. It started at .* UTC; its runs usually take about 2 min, so it should end around .* UTC\. Ask again after that\.$/)
+      expect((await preview('run-ad-engine-now', { engine: 'rules' })).error).toMatch(/^Not queued: .* is running now: a run started at .* UTC and its record is still open\. Its runs usually take about 2 min, so it should end around .* UTC\. If that run died, its record stays open until the stale-run sweep closes it, by .* UTC at the latest\. Ask again after that\.$/)
     } finally { await inside(() => db().cronRun.delete({ where: { id: open.id } })) }
     setEngineLockStoreForTests({ status: 'ready', eval: async () => 45_000 })
-    expect((await preview('run-ad-engine-now', { engine: 'auto-bid' })).error).toMatch(/^Not queued: Bid optimiser \(auto-bid\) is running now.*Its lock is held by a run in progress/)
+    expect((await preview('run-ad-engine-now', { engine: 'auto-bid' })).error).toBe('Not queued: Bid optimiser (auto-bid) is running now: its lock is held by a run in progress. The lock lets go when that run ends — or, if the run died, about 90 seconds after it stopped renewing it. Ask again after that.')
   })
 
   it('refuses where the Control Room does not offer Run now', async () => {
@@ -362,6 +394,13 @@ describe('W4-8 run-ad-engine-now — the Control Room’s Run now', { timeout: T
     const { answer } = await call('run-ad-engine-now', { engine: 'auto-bid', why: 'test: run now' })
     expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval', preview: { level: 'AUTO', stepUp: { raises: ['Bids', 'Budgets'] } }, consequences: { reversibility: 'none' } })
     expect((await decide('owner', answer.approvalId, {})).statusCode).toBe(403)
+    // A plain approve (no code) that reached the commit some other way never starts it.
+    const plain = await call('run-ad-engine-now', { engine: 'auto-bid' })
+    expect(await inside(() => scheduleApproval({ id: plain.answer.approvalId, actor: viewer('owner'), via: 'nexus' }))).toMatchObject({ ok: true })
+    const refused = await commit(plain.answer.approvalId)
+    expect(refused).toMatchObject({ ok: false })
+    expect(refused.error).toContain('a raise runs only when a person with settings.security.manage approved it with their authenticator code')
+    expect(jobs.ran).not.toContain('ads-auto-bid')
     expect((await decide('owner', answer.approvalId, { code: codeOf() })).statusCode).toBe(200)
     expect(await commit(answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
     await vi.waitFor(async () => {
@@ -381,8 +420,56 @@ describe('W4-8 run-ad-engine-now — the Control Room’s Run now', { timeout: T
     expect(r.preview.raises).toEqual([])
     expect(r.preview.stepUp).toBeUndefined()
     expect(judge('run-ad-engine-now', r.preview)).toMatch(/maxItems 0: every run waits for a person/)
+    expect(judge('run-ad-engine-now', r.preview, { maxItems: 1 })).toMatch(/is not on the engines Claude may run now by rule \(engines is empty\)/)
     expect(judge('run-ad-engine-now', r.preview, { maxItems: 1, engines: ['auto-bid'] })).toMatch(/is not on the engines Claude may run now by rule/)
-    expect(judge('run-ad-engine-now', r.preview, { maxItems: 1, minHoursSinceLastRun: 2 })).toBeNull()
-    expect(judge('run-ad-engine-now', r.preview, { maxItems: 1, minHoursSinceLastRun: 12 })).toMatch(/last ran 3 h ago, less than the 12 h/)
+    expect(judge('run-ad-engine-now', r.preview, { maxItems: 1, engines: ['rules'], minHoursSinceLastRun: 2 })).toBeNull()
+    expect(judge('run-ad-engine-now', r.preview, { maxItems: 1, engines: ['rules'], minHoursSinceLastRun: 12 })).toMatch(/last ran 3 h ago, less than the 12 h/)
+  })
+
+  it('per engine: the hourly bid plans set the same values again; a pool in its cool-down is skipped and has no lock', async () => {
+    const rank = await preview('run-ad-engine-now', { engine: 'rank-defend' })
+    expect(rank.preview).toMatchObject({ steps: false, schedule: 'every 15 min', basis: { lastRunAt: null }, warning: expect.stringMatching(/^A second run in the same hour sets the same values again/) })
+    expect(rank.preview.raises).toEqual(['Hourly bid plans (rank-defend) runs at Auto: it may raise bids or budgets on this run, as on any of its runs'])
+    expect(rank.preview.warnings.join(' ')).not.toMatch(/no lock/)
+    const pool = await preview('run-ad-engine-now', { engine: 'pool' })
+    expect(pool.preview).toMatchObject({ steps: true, warning: expect.stringMatching(/^A pool inside its cool-down is skipped\. A pool past it rebalances again on the same data: one more shift/) })
+    expect(pool.preview.warnings[1]).toMatch(/it has no lock: a scheduled run that starts in the same moment can overlap it/)
+  })
+
+  it('a change plan carries the run’s stepUp; approved with the code, the plan starts the engine', async () => {
+    setEngineLockStoreForTests({ status: 'ready', eval: async () => -2 })
+    const { answer } = await call('submit-change-plan', { title: 'Test run plan', steps: [{ tool: 'run-ad-engine-now', args: { engine: 'auto-bid' } }] })
+    expect(answer, JSON.stringify(answer)).toMatchObject({ status: 'waiting_for_approval', preview: { stepUp: { steps: [1], raises: ['Bids', 'Budgets'] } } })
+    expect((await decide('owner', answer.approvalId, {})).statusCode).toBe(403)
+    const before = jobs.ran.filter((j) => j === 'ads-auto-bid').length
+    expect((await decide('owner', answer.approvalId, { code: codeOf() })).statusCode).toBe(200)
+    expect(await commit(answer.approvalId)).toMatchObject({ ok: true })
+    expect(await inside(() => runPlan(answer.approvalId))).toMatchObject({ finished: true, counts: { done: 1 } })
+    await vi.waitFor(() => expect(jobs.ran.filter((j) => j === 'ads-auto-bid').length).toBe(before + 1))
+  })
+
+  it('by rule through the real commit: only for an engine the limits list, and then it starts', async () => {
+    const owner = { userId: people.owner.id, label: 'Olga Owner', canManage: true }
+    // It cannot be undone: its level and its limits are raised one at a time, each with its own code.
+    expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { level: 'auto', code: codeOf() }))).toMatchObject({ ok: true })
+    try {
+      __stepUpTest.reset()
+      expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { limits: { maxItems: 1, engines: ['auto-bid'], minHoursSinceLastRun: 2 }, code: codeOf() }))).toMatchObject({ ok: true })
+      const waits = await call('run-ad-engine-now', { engine: 'rules' })
+      expect(waits.answer, JSON.stringify(waits.answer)).toMatchObject({ status: 'waiting_for_approval', trust: { why: expect.stringContaining('is not on the engines Claude may run now by rule') } })
+      __stepUpTest.reset()
+      expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { limits: { maxItems: 1, engines: ['rules'], minHoursSinceLastRun: 2 }, code: codeOf() }))).toMatchObject({ ok: true })
+      const runs = await call('run-ad-engine-now', { engine: 'rules' })
+      expect(runs.answer, JSON.stringify(runs.answer)).toMatchObject({ status: 'runs_by_rule', preview: { level: 'PROPOSE', raises: [] } })
+      expect(await commit(runs.answer.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+      await vi.waitFor(async () => {
+        const row = await inside(() => db().cronRun.findFirst({ where: { jobName: 'advertising-rule-evaluator', triggeredBy: 'manual' } }))
+        expect(row?.status).toBe('SUCCESS')
+      })
+      expect(jobs.ran).toContain('advertising-rule-evaluator')
+    } finally {
+      __stepUpTest.reset()
+      expect(await inside(() => setClaudeRule(owner, 'run-ad-engine-now', { level: 'ask', limits: null, code: codeOf() }))).toMatchObject({ ok: true })
+    }
   })
 })

@@ -112,10 +112,11 @@ const IRREVERSIBLE_AUTO: Readonly<Record<string, unknown>> = {
     },
   },
   // W4-8 — an engine's Run now cannot be called back (its changes are the engine's own): the bid optimiser, last run long
-  // ago, with the strategy's facts for a run that names no item. Refused at the default count 0.
+  // ago, with the strategy's facts for a run that names no item. Refused by its defaults (count 0, no engine listed); it
+  // runs once its limits are open (IRREVERSIBLE_OPEN below).
   'run-ad-engine-now': {
     action: 'run-ad-engine-now', engine: 'auto-bid', name: 'Bid optimiser (auto-bid)', level: 'AUTO',
-    lastRun: { at: '2026-01-01T00:00:00.000Z', status: 'SUCCESS', by: 'schedule', summary: null, minutes: 2 },
+    lastRun: { at: '2026-01-01T00:00:00.000Z', status: 'SUCCESS', by: 'schedule', summary: null, minutes: 2 }, steps: true,
     raises: ['it may raise bids'],
     limitFacts: {
       v: 1, tool: 'run-ad-engine-now', action: 'automation', markets: {}, scopes: {}, entityScopes: {}, labels: {},
@@ -126,6 +127,14 @@ const IRREVERSIBLE_AUTO: Readonly<Record<string, unknown>> = {
       today: {}, perEntityToday: { maxChangesByRule: 0, entity: null }, unplaced: [], engineOwned: [], protectedHit: [],
     },
   },
+}
+
+/**
+ * W4-8 — what besides a count above 0 opens an irreversible tool's own limits for its sample (the lists test): a tool
+ * whose defaults refuse by more than the count (run-ad-engine-now: no engine is listed by default).
+ */
+const IRREVERSIBLE_OPEN: Readonly<Record<string, Record<string, unknown>>> = {
+  'run-ad-engine-now': { engines: ['auto-bid'] },
 }
 
 /**
@@ -673,15 +682,16 @@ describe('C1 — every registered tool keeps the contract', () => {
     for (const name of Object.keys(IRREVERSIBLE_AUTO)) {
       const tool = byName.get(name)
       expect(tool?.reversibility === 'none' && aboveAsk(tool), `${name}: irreversible and above ask, or off IRREVERSIBLE_AUTO`).toBe(true)
-      // The sample is inside the strategy: with a count above 0 the tool's own limits let it run (rule 7c's refusal is
-      // the default count, not a broken sample).
-      expect(tool!.withinLimits!(IRREVERSIBLE_AUTO[name], tool!.limits!.parse({ maxItems: 1 }) as Record<string, unknown>), name).toBeNull()
+      // The sample is inside the strategy: with a count above 0 (and, W4-8, what IRREVERSIBLE_OPEN names) the tool's own
+      // limits let it run (rule 7c's refusal is the defaults, not a broken sample).
+      expect(tool!.withinLimits!(IRREVERSIBLE_AUTO[name], tool!.limits!.parse({ maxItems: 1, ...(IRREVERSIBLE_OPEN[name] ?? {}) }) as Record<string, unknown>), name).toBeNull()
     }
     for (const name of Object.keys(ALWAYS_ASK_ABOVE_ASK)) {
       const tool = byName.get(name)
       expect(tool?.alwaysAsk && aboveAsk(tool) && !tool.strategyBound, `${name}: alwaysAsk above ask (not strategy-bound), or off ALWAYS_ASK_ABOVE_ASK`).toBe(true)
     }
     expect(AD_STRATEGY_AUTO.filter((name) => name in ALWAYS_ASK_ABOVE_ASK)).toEqual([])
+    expect(Object.keys(IRREVERSIBLE_OPEN).filter((name) => !(name in IRREVERSIBLE_AUTO))).toEqual([])
   })
 
   it('N3 (AA-W2-1) — an ad tool at ask that says it always waits for a person is caught the day its ceiling rises', () => {

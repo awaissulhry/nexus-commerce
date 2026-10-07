@@ -190,6 +190,12 @@ export async function syncBuilderRuleFromAssignments(
 export interface CampaignRuleAssignmentsBody { kind?: string; changes?: Array<{ campaignId?: string; ruleIds?: string[] }> }
 
 /**
+ * ADS AUTONOMY W4-8 — one rule bound to more campaigns or taken off some (Claude's assign-ad-rules): each campaign's set
+ * is read INSIDE the Apply's transaction and only this rule moves in it, so a link another rule gained meanwhile stays.
+ */
+export interface RuleDelta { ruleId: string; add: string[]; remove: string[] }
+
+/**
  * ── D3 — the global Apply ─────────────────────────────────────────────────────────────────────
  *
  * Commits STAGED assignment changes for many campaigns at once. The operator's study: selecting
@@ -209,9 +215,13 @@ export interface CampaignRuleAssignmentsBody { kind?: string; changes?: Array<{ 
 export async function applyCampaignRuleAssignments(
   b: CampaignRuleAssignmentsBody,
   actor: string,
+  delta?: RuleDelta,
 ): Promise<{ status: 200 | 400; body: Record<string, unknown> }> {
   const kind = b.kind || 'budget'
-  const changes = (b.changes ?? []).filter((c) => typeof c.campaignId === 'string' && Array.isArray(c.ruleIds))
+  // W4-8 — a delta names its campaigns and its one rule; each campaign's set is decided inside the transaction below.
+  const changes = delta
+    ? [...new Set([...delta.add, ...delta.remove])].map((campaignId) => ({ campaignId, ruleIds: [delta.ruleId] }))
+    : (b.changes ?? []).filter((c) => typeof c.campaignId === 'string' && Array.isArray(c.ruleIds))
   if (changes.length === 0) return { status: 400, body: { error: 'changes required' } }
 
   // Validate BEFORE writing: an unknown campaign or rule id would otherwise fail at the foreign
@@ -242,11 +252,11 @@ export async function applyCampaignRuleAssignments(
   const affectedRuleIds = new Set<string>(ruleIds)
   await prisma.$transaction(async (tx) => {
     for (const c of changes) {
-      const want = new Set(c.ruleIds as string[])
       const have = await tx.campaignRuleAssignment.findMany({
         where: { campaignId: c.campaignId as string, kind },
         select: { id: true, ruleId: true },
       })
+      const want = delta ? deltaSet(have.map((h) => h.ruleId), delta, c.campaignId as string) : new Set(c.ruleIds as string[])
       for (const h of have) affectedRuleIds.add(h.ruleId)
       const haveIds = new Set(have.map((h) => h.ruleId))
       const toRemove = have.filter((h) => !want.has(h.ruleId)).map((h) => h.id)
@@ -283,6 +293,14 @@ export async function applyCampaignRuleAssignments(
   }
   logger.warn('[ADS-RULE-ASSIGNMENT]', { kind, campaigns: changes.length, created, removed, actor, rulesRewritten: rulesRewritten.length })
   return { status: 200, body: { ok: true, kind, campaigns: changes.length, created, removed, rulesRewritten: rulesRewritten.length } }
+}
+
+/** W4-8 — a campaign's rules after a delta: what it holds now, with the one rule added or taken off. */
+function deltaSet(have: string[], delta: RuleDelta, campaignId: string): Set<string> {
+  const out = new Set(have)
+  if (delta.add.includes(campaignId)) out.add(delta.ruleId)
+  if (delta.remove.includes(campaignId)) out.delete(delta.ruleId)
+  return out
 }
 
 /**

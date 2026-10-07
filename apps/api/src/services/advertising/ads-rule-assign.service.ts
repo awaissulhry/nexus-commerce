@@ -58,13 +58,14 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {})
 
 /**
- * The market a rule's NAME ends with ("… — DE", "… (FR)", "… IT"), when it is a market code Nexus knows; null otherwise.
- * Pure. It only warns: the rule's scope, when set, is what the engine reads.
+ * The market a rule's NAME ends with, as a separate token after a dash ("… — DE", "… - IT"), when it is a market code
+ * Nexus knows, in capitals; null otherwise — so "pause it" or "let it be" name no market. Pure. It only warns: the rule's
+ * scope, when set, is what the engine reads.
  */
 export function nameMarket(name: string): string | null {
-  const m = /(?:^|[\s\-–—(\[|·:/])([A-Za-z]{2})\s*[)\]]?\s*$/.exec(name.trim())
+  const m = /[-–—]\s*([A-Z]{2})$/.exec(name.trim())
   if (!m) return null
-  const code = m[1].toUpperCase()
+  const code = m[1]
   return MARKET_CODES.has(code) ? (code === 'GB' ? 'UK' : code) : null
 }
 
@@ -359,14 +360,9 @@ export async function applyRuleAssign(input: AssignInput, actor: AdsActor, note:
     }
   } else {
     // Set-replacement per campaign: each keeps every other budget rule it is bound to.
-    const touched = sorted([...plan.added, ...plan.removed])
-    const links = await prisma.campaignRuleAssignment.findMany({ where: { campaignId: { in: touched }, kind: 'budget' }, select: { campaignId: true, ruleId: true } })
-    const changes = touched.map((campaignId) => {
-      const others = links.filter((l) => l.campaignId === campaignId && l.ruleId !== plan.rule.id).map((l) => l.ruleId)
-      return { campaignId, ruleIds: plan.added.includes(campaignId) ? [...others, plan.rule.id] : others }
-    })
+    // Only this rule moves on each campaign; its other rules are read inside the Apply's own transaction and kept.
     const { applyCampaignRuleAssignments } = await import('./rule-campaign-binding.service.js')
-    const out = await applyCampaignRuleAssignments({ kind: 'budget', changes }, actor)
+    const out = await applyCampaignRuleAssignments({ kind: 'budget' }, actor, { ruleId: plan.rule.id, add: plan.added, remove: plan.removed })
     if (out.status !== 200) return { error: `The Apply Rules write refused it — ${String(out.body.error ?? 'refused')}` }
   }
   const now = await ruleBindingNow(plan.rule.id)

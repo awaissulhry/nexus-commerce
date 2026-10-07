@@ -94,9 +94,17 @@ async function assignFacts(plan: AssignPlan, approvalId?: string | null) {
   return buildLimitFacts({ tool: 'assign-ad-rules', items, approvalId, exceptIds: [plan.rule.id] })
 }
 
-/** C2 — the undo asks this tool again for the list the rule had (replace); a rule that acted on every campaign is a person's edit. */
+/**
+ * C2 — the undo asks this tool again for the list the rule had (replace), by the rule's id: a rename since does not stop
+ * it (the name is the record's, not compared). A rule that had no campaigns picked (it acted on every campaign) is not
+ * emptied again by Claude: a person's edit — hence reversibility partial.
+ */
 export const ASSIGN_UNDO: ToolUndo = {
-  current: async (change) => ruleBindingNow((change.after as BindingState).ruleId),
+  async current(change) {
+    const after = change.after as BindingState
+    const now = await ruleBindingNow(after.ruleId)
+    return now ? { ...now, name: after.name } : null
+  },
   request(change) {
     const before = change.before as BindingState
     if (before.all) return { refusal: `Before this change "${before.name}" had no campaigns picked and acted on every campaign in its scope. Putting that back empties its list: a rule edit a person makes in the rule drawer in Nexus.` }
@@ -121,14 +129,17 @@ const assignAdRules: AgentTool = {
     + 'Refused, and not queued: a rule that is not bound to campaigns (its scope decides: save-ad-rule), one the autopilot binds, '
     + 'a campaign not found, picks the rule drawer would refuse (outside the rule\'s market scope, a Placement pick that is not '
     + 'Sponsored Products), a request that would empty a Bid, SOV, Keyword Tracker or Placement rule (empty means every '
-    + 'campaign: turn the rule down instead). undo-change puts the list back.',
+    + 'campaign: turn the rule down instead). undo-change puts the list back (a rule that had no campaigns picked and acted on '
+    + 'every campaign is not emptied again: a person edits that one).',
   riskTier: 'medium',
   readOnly: false,
   requiresApprovalDefault: true,
   // Nexus only: the rule's campaign list. The rule acts on its next run, at its own level.
   openWorld: false,
   requires: [F.adsAutomationManage, F.adsCampaignsManage, FIELDS.financialsAdspendView],
-  reversibility: 'full',
+  // The list it replaced is put back — except a rule that had no campaigns picked (it acted on every campaign): Claude
+  // never empties a Bid, SOV, Keyword Tracker or Placement rule's list, so that one is a person's edit.
+  reversibility: 'partial',
   maxClaudeTrust: 'auto',
   strategyBound: 'amazon-ads',
   limits: ASSIGN_LIMITS,
@@ -309,25 +320,27 @@ const setCoverageSet: AgentTool = {
 // ── run-ad-engine-now ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Limits, by the irreversible tools' convention (tool-contract rule 7c: the default COUNT refuses): `maxItems` 0 — every
- * run waits for a person until he types 1; then only the engines he leaves on `engines`, and not sooner after the
- * engine's last run than `minHoursSinceLastRun` (a run on the same data takes one more step).
+ * Limits that refuse by default: `maxItems` 0 (the irreversible tools' count, tool-contract rule 7c) and `engines` empty
+ * — a run starts by rule only once the Owner types 1 AND lists the engine; and not sooner after the engine's last run than
+ * `minHoursSinceLastRun` (for an engine that steps, a run on the same data takes one more step).
  */
 const RUN_LIMITS = z.object({
   maxItems: z.number().int().min(0).max(1).default(0)
     .describe('the most engine runs one request may start by rule (a request starts one); 0 = every run waits for a person'),
-  engines: z.array(z.enum(RUN_NOW_ENGINE_KEYS)).max(RUN_NOW_ENGINE_KEYS.length).default([...RUN_NOW_ENGINE_KEYS])
-    .describe(`the engines Claude may run now by rule once maxItems is 1 (${RUN_NOW_ENGINE_KEYS.join(', ')}); fewer is tighter`),
+  engines: z.array(z.enum(RUN_NOW_ENGINE_KEYS)).max(RUN_NOW_ENGINE_KEYS.length).default([])
+    .describe(`the engines Claude may run now by rule (${RUN_NOW_ENGINE_KEYS.join(', ')}); empty = none`),
   minHoursSinceLastRun: z.number().min(0).max(168).default(6)
-    .describe('by rule only when the engine last ran at least this many hours ago: a run on the same data takes one more step'),
+    .describe('by rule only when the engine last ran at least this many hours ago (for an engine that steps, a run on the same data takes one more step)'),
 })
 
 /**
  * ONE place decides what a run raises (the Owner's open question: it can flip here). At Auto an engine's run can raise
- * bids or budgets as any of its runs can — and on the same data it takes one more step; below Auto nothing reaches Amazon.
+ * bids or budgets as any of its runs can — and an engine that steps takes one more step on the same data; below Auto
+ * nothing reaches Amazon.
  */
-export function runRaises(plan: Pick<EnginePlan, 'level' | 'name'>): string[] {
-  return plan.level === 'AUTO' ? [`${plan.name} runs at Auto: it may raise bids or budgets on this run, and on the same data as its last run it takes one more step`] : []
+export function runRaises(plan: Pick<EnginePlan, 'level' | 'name' | 'steps'>): string[] {
+  if (plan.level !== 'AUTO') return []
+  return [`${plan.name} runs at Auto: it may raise bids or budgets on this run${plan.steps ? ', and on the same data as its last run it takes one more step' : ', as on any of its runs'}`]
 }
 
 type RunPreview = EnginePlan & { raises?: string[]; limitFacts?: unknown; stepUp?: StepUp }
@@ -340,7 +353,7 @@ function runRefusal(preview: unknown, limits: Record<string, unknown>, now = new
   const listed = Array.isArray(limits.engines) ? (limits.engines as string[]) : []
   if (!listed.includes(p.engine)) return `${p.name} is not on the engines Claude may run now by rule (engines${listed.length ? `: ${listed.join(', ')}` : ' is empty'}); ${A_PERSON}`
   const min = typeof limits.minHoursSinceLastRun === 'number' ? limits.minHoursSinceLastRun : 6
-  if (p.lastRun) {
+  if (p.lastRun && p.steps !== false) {
     const hours = (now.getTime() - new Date(p.lastRun.at).getTime()) / 3600_000
     if (hours < min) return `${p.name} last ran ${Math.round(hours * 10) / 10} h ago, less than the ${min} h this tool's limits want between runs by rule (a run on the same data takes one more step); ${A_PERSON}`
   }
@@ -356,12 +369,13 @@ const runAdEngineNow: AgentTool = {
     + 'the Ads Control Room\'s own Run now (and the Sync Logs hub\'s). Harvesting runs as Keyword Harvesting rules (rules); budget '
     + 'pacing is budget-enforce. The run is the engine\'s own: its level, limits and Amazon\'s write gate decide every change, as on '
     + 'its scheduled run, and its changes are its own in the Change Log. The preview says what the engine may do now, when it last '
-    + 'ran and how often it runs, and that a second run on the same data takes one more step (it does not remember that it just '
-    + 'moved a bid). Refused, and not queued: while the engine runs (with when that run should end), and wherever the Control Room '
+    + 'ran and how often it runs, and what a second run on the same data does for that engine (the bid optimiser, top-of-search '
+    + 'defense, a rule and a pool past its cool-down take one more step; the hourly bid plans, dayparting and budget enforcement '
+    + 'set the same values again). Refused, and not queued: while the engine runs (with when that run should end), and wherever the Control Room '
     + 'does not offer Run now (the engine off, or a live run its switch or the server would refuse). A person approves it in Nexus, '
     + 'or confirms it in Claude with their code when the business set it so — or it runs by the business\'s rule only once its '
-    + 'limits allow a run (maxItems 1; none by default), for the engines they list, and not sooner than minHoursSinceLastRun after '
-    + 'the engine\'s last run. A run at '
+    + 'limits allow a run (maxItems 1) for an engine they list (none by default), and for an engine that steps not sooner than '
+    + 'minHoursSinceLastRun after its last run. A run at '
     + 'Auto can raise spend: approving it needs the approver\'s authenticator code. It cannot be called back.',
   riskTier: 'high',
   readOnly: false,
