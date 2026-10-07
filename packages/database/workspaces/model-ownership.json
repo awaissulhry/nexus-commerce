@@ -270,6 +270,7 @@
     "FbaRestockReport",
     "FbaRestockRow",
     "FbaInboundPlanV2",
+    "FbaInboundPlanLine",
     "Tag",
     "AssetTag",
     "ProductTag",

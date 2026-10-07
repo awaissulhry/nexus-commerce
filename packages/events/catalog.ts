@@ -468,6 +468,26 @@ export const EVENTS = {
     schema: z.strictObject({ shipmentId: z.string().min(1) }),
     subject: (p) => p.shipmentId,
   }),
+  // Step 4 Send to FBA (2026-10-07). Published in the transaction that moves the plan (publishEvent(tx, …)): the runner
+  // at each status / step change, the send service (create, cancel, choice), the ship service (Shipped) and the
+  // 15-min status poll (SHIPPED → AT_AMAZON → CLOSED). The web maps it to a Matrix re-read of the FBA cell and the
+  // plans drawer. `status` / `step` are @nexus/shared/fba-send's FBA_PLAN_STATUSES / FBA_PLAN_STEPS words.
+  'fba.plan_changed': defineEvent({
+    type: 'fba.plan_changed',
+    context: 'fulfillment',
+    description: 'A Send to FBA plan changed status or step (created, a step ran, waiting for a choice, confirmed, shipped, at Amazon, failed, cancelled).',
+    schema: z.strictObject({
+      /** FbaInboundPlanV2.id */
+      planId: z.string().min(1),
+      /** The plan's status after the change. */
+      status: z.string().min(1).max(40),
+      /** The step running or next; null when none. */
+      step: z.string().min(1).max(40).nullable(),
+      /** The SKUs (product ids) in the plan, so pages showing them re-read. */
+      productIds: z.array(z.string().min(1)).max(200),
+    }),
+    subject: (p) => p.planId,
+  }),
   // Source: outbound-events.service.ts
   'shipment.created': defineEvent({
     type: 'shipment.created',

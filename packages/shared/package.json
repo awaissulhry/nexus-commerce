@@ -182,6 +182,10 @@
       "types": "./dist/stock-cases.d.ts",
       "default": "./dist/stock-cases.js"
     },
+    "./fba-send": {
+      "types": "./dist/fba-send.d.ts",
+      "default": "./dist/fba-send.js"
+    },
     "./master-sheet": {
       "types": "./dist/master-sheet.d.ts",
       "default": "./dist/master-sheet.js"

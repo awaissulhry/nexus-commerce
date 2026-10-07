@@ -3859,6 +3859,37 @@
       }
     ]
   },
+  "FbaInboundPlanLine": {
+    "scalar": {},
+    "compound": {
+      "planRowId_productId": [
+        "planRowId",
+        "productId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "plan",
+        "model": "FbaInboundPlanV2",
+        "from": [
+          "planRowId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
   "Tag": {
     "scalar": {
       "name": "workspace_name"

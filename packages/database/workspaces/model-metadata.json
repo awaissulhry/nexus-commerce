@@ -458,6 +458,12 @@
           "kind": "object",
           "type": "ProductPackage",
           "relationFromFields": []
+        },
+        {
+          "name": "fbaPlanLines",
+          "kind": "object",
+          "type": "FbaInboundPlanLine",
+          "relationFromFields": []
         }
       ]
     },
@@ -4730,6 +4736,35 @@
             "inboundShipmentId"
           ],
           "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "lines",
+          "kind": "object",
+          "type": "FbaInboundPlanLine",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "FbaInboundPlanLine",
+      "fields": [
+        {
+          "name": "plan",
+          "kind": "object",
+          "type": "FbaInboundPlanV2",
+          "relationFromFields": [
+            "planRowId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
         }
       ]
     },

@@ -20,6 +20,8 @@
  * 🔴 Pure types and constants only — no React, no AG, no fetch, no Prisma — so this module is reachable from
  * both workspaces' node-only vitest and from the API's services.
  */
+import type { FbaPlanStatus } from './fba-send.js'
+
 /* ── cells ─────────────────────────────────────────────────────────────────────────────────── */
 
 /** The eight cell kinds a coordinate group may serve. Order = default column order inside a group. */
@@ -271,9 +273,39 @@ export interface MatrixRowRead {
    * (normally null); the page sums up its variations. Sealed counts are not here (the stock editor shows them).
    */
   pack?: MatrixCasePack | null
+  /**
+   * Inbound to Amazon FBA (Step 4): Amazon's own inbound numbers for this SKU (`FbaInventoryDetail` rows with
+   * `condition = 'INBOUND'`, `fulfillmentCenterId = 'ALL'`) and the units in open Nexus Send-to-FBA plans not shipped yet.
+   * The FBA qty cell shows "92 +24": `fba.units` stays the value, `units` is the muted "+N". A parent: the family sum.
+   * `null` = nothing inbound and nothing planned; absent = an older server that did not read it.
+   */
+  fbaInbound?: MatrixFbaInbound | null
   basePrice: number | null
   status: string
   cells: Record<CoordinateKey, MatrixCells>
+}
+
+/** One SKU's inbound to Amazon FBA (Step 4). Amazon owns every number but `planned`; Nexus never writes FBA quantities. */
+export interface MatrixFbaInbound {
+  /** Amazon's inbound units = working + shipped + receiving. */
+  units: number
+  working: number
+  shipped: number
+  receiving: number
+  /** ISO time of Amazon's last read of these numbers; null = never read. */
+  readAt: string | null
+  /** Units in open Nexus plans (not CLOSED / CANCELLED) not marked Shipped yet: Σ (quantity − shippedQuantity). */
+  planned: number
+}
+
+/** An open Send-to-FBA plan of this family (Step 4) — the toolbar's "FBA plans · N" and the FBA cell's tooltip. */
+export interface MatrixFbaPlan {
+  /** FbaInboundPlanV2.id */
+  id: string
+  name: string
+  status: FbaPlanStatus
+  /** Units of this family in the plan. */
+  units: number
 }
 
 /** One SKU's case pack as the Matrix reads it (`ProductPackage`). Sizes in cm, weight in kg; owners null = not set. */
@@ -310,6 +342,11 @@ export interface MatrixRead {
    * switched off (never chosen, never sold from). `isDefault` = the business's default warehouse. Absent = an older server.
    */
   locations?: ReadonlyArray<MatrixLocation>
+  /**
+   * Send to FBA (Step 4): this family's OPEN plans (not CLOSED / CANCELLED), newest first. `[]` = none; absent = an
+   * older server. The drawer reads the full plans from `GET /api/fba/inbound/plans?productId=<family root>&open=1`.
+   */
+  fbaPlans?: ReadonlyArray<MatrixFbaPlan>
 }
 
 export interface MatrixLocation { code: string; name: string; active: boolean; isDefault?: boolean }

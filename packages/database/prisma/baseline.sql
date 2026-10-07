@@ -1155,6 +1155,14 @@ CREATE TABLE "FBAShipment" (
     "destinationFC" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "planRowId" TEXT,
+    "amazonShipmentId" TEXT,
+    "sourceLocationId" TEXT,
+    "boxes" JSONB,
+    "transport" JSONB,
+    "tracking" JSONB,
+    "shippedAt" TIMESTAMP(3),
+    "shippedBy" TEXT,
 
     CONSTRAINT "FBAShipment_pkey" PRIMARY KEY ("id")
 );
@@ -5594,8 +5602,44 @@ CREATE TABLE "FbaInboundPlanV2" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "lastError" TEXT,
     "lastErrorAt" TIMESTAMP(3),
+    "channelConnectionId" TEXT,
+    "marketplaceId" TEXT,
+    "sourceLocationId" TEXT,
+    "sourceAddress" JSONB,
+    "readyToShipOn" TIMESTAMP(3),
+    "mixedBox" JSONB,
+    "packing" JSONB,
+    "options" JSONB,
+    "choice" JSONB,
+    "steps" JSONB,
+    "nextCheckAt" TIMESTAMP(3),
+    "confirmedBy" TEXT,
+    "confirmedAt" TIMESTAMP(3),
+    "cancelledAt" TIMESTAMP(3),
+    "source" TEXT,
 
     CONSTRAINT "FbaInboundPlanV2_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FbaInboundPlanLine" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "planRowId" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "msku" TEXT NOT NULL,
+    "quantity" INTEGER NOT NULL,
+    "cases" INTEGER NOT NULL DEFAULT 0,
+    "unitsPerCase" INTEGER,
+    "looseUnits" INTEGER NOT NULL DEFAULT 0,
+    "prepOwner" TEXT NOT NULL,
+    "labelOwner" TEXT NOT NULL,
+    "reservationId" TEXT,
+    "shippedQuantity" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FbaInboundPlanLine_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -10705,6 +10749,9 @@ CREATE INDEX "StockLog_workspaceId_idx" ON "StockLog"("workspaceId");
 CREATE INDEX "FBAShipment_workspaceId_idx" ON "FBAShipment"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "FBAShipment_planRowId_idx" ON "FBAShipment"("planRowId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "FBAShipment_workspace_shipmentId_key" ON "FBAShipment"("workspaceId", "shipmentId");
 
 -- CreateIndex
@@ -13120,6 +13167,9 @@ CREATE INDEX "FbaInboundPlanV2_planId_idx" ON "FbaInboundPlanV2"("planId");
 CREATE INDEX "FbaInboundPlanV2_status_idx" ON "FbaInboundPlanV2"("status");
 
 -- CreateIndex
+CREATE INDEX "FbaInboundPlanV2_status_nextCheckAt_idx" ON "FbaInboundPlanV2"("status", "nextCheckAt");
+
+-- CreateIndex
 CREATE INDEX "FbaInboundPlanV2_inboundShipmentId_idx" ON "FbaInboundPlanV2"("inboundShipmentId");
 
 -- CreateIndex
@@ -13130,6 +13180,15 @@ CREATE INDEX "FbaInboundPlanV2_workspaceId_idx" ON "FbaInboundPlanV2"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "FbaInboundPlanV2_workspace_planId_key" ON "FbaInboundPlanV2"("workspaceId", "planId");
+
+-- CreateIndex
+CREATE INDEX "FbaInboundPlanLine_workspaceId_idx" ON "FbaInboundPlanLine"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "FbaInboundPlanLine_productId_idx" ON "FbaInboundPlanLine"("productId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FbaInboundPlanLine_planRowId_productId_key" ON "FbaInboundPlanLine"("workspaceId", "planRowId", "productId");
 
 -- CreateIndex
 CREATE INDEX "Tag_workspaceId_idx" ON "Tag"("workspaceId");
@@ -15992,6 +16051,12 @@ ALTER TABLE "FbaRestockRow" ADD CONSTRAINT "FbaRestockRow_reportId_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "FbaInboundPlanV2" ADD CONSTRAINT "FbaInboundPlanV2_inboundShipmentId_fkey" FOREIGN KEY ("inboundShipmentId") REFERENCES "InboundShipment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FbaInboundPlanLine" ADD CONSTRAINT "FbaInboundPlanLine_planRowId_fkey" FOREIGN KEY ("planRowId") REFERENCES "FbaInboundPlanV2"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FbaInboundPlanLine" ADD CONSTRAINT "FbaInboundPlanLine_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "AssetTag" ADD CONSTRAINT "AssetTag_assetId_fkey" FOREIGN KEY ("assetId") REFERENCES "DigitalAsset"("id") ON DELETE CASCADE ON UPDATE CASCADE;

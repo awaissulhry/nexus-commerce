@@ -452,6 +452,8 @@ model Product {
   shopifyColourSyncs    ShopifyColourSync[]
   /// Step 3 — this SKU's case pack and FBA prep/label owner (at most one row; array because the unique is compound).
   casePacks             ProductPackage[]
+  /// Step 4 — this SKU's lines in Send to FBA plans.
+  fbaPlanLines          FbaInboundPlanLine[]
 
   @@unique([workspaceId, sku], name: "workspace_sku", map: "Product_workspace_sku_key")
   @@index([gtin])
@@ -2875,8 +2877,27 @@ model FBAShipment {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
+  // ── Step 4 Send to FBA (2026-10-07). Nullable scalars only (no new FK). For these rows `shipmentId` is Amazon's
+  // shipmentConfirmationId (FBA15…), so the 15-min status poll reads them unchanged. Json shapes: @nexus/shared/fba-send.
+  /// The Send to FBA plan (FbaInboundPlanV2.id) this shipment belongs to. Scalar, no FK.
+  planRowId        String?
+  /// Amazon's v2024-03-20 shipment id (sh…).
+  amazonShipmentId String?
+  /// The From warehouse (StockLocation.id) the units leave at "Shipped". Scalar, no FK.
+  sourceLocationId String?
+  /// Box ids + contents, case or mixed (FbaShipmentBox[]).
+  boxes            Json?
+  /// Carrier, transport option and delivery window chosen (FbaShipmentTransport).
+  transport        Json?
+  /// Tracking per box and when it reached Amazon (FbaShipmentTracking).
+  tracking         Json?
+  /// When a person marked it Shipped (set once: compare-and-set where null).
+  shippedAt        DateTime?
+  shippedBy        String?
+
   @@unique([workspaceId, shipmentId], name: "workspace_shipmentId", map: "FBAShipment_workspace_shipmentId_key")
   @@index([workspaceId])
+  @@index([planRowId])
 }
 
 model FBAShipmentItem {
@@ -12503,6 +12524,10 @@ model FbaRestockRow {
 //     → TRANSPORT_OPTIONS_LISTED → TRANSPORT_CONFIRMING → TRANSPORT_CONFIRMED
 //     → LABELS_READY (terminal-success)
 //   FAILED (terminal-failure, lastError populated)
+//
+// Step 4 Send to FBA (2026-10-07) plans (source 'matrix' | 'claude') use the vocabulary of @nexus/shared/fba-send
+// instead: QUEUED → CREATING → PACKING → BOXES → PLACING → QUOTING → WAITING_FOR_CHOICE → CONFIRMING → LABELS →
+// READY_TO_SHIP → SHIPPED → AT_AMAZON → CLOSED; FAILED, HELD, CANCELLING → CANCELLED.
 // ─────────────────────────────────────────────────────────────────────
 model FbaInboundPlanV2 {
   // Business ownership comes from verified database context.
@@ -12558,12 +12583,82 @@ model FbaInboundPlanV2 {
   lastError   String?
   lastErrorAt DateTime?
 
+  // ── Step 4 Send to FBA (Matrix, 2026-10-07) — the job's state. Nullable scalars only: no new FK on this table, so
+  // its policy and reference trigger are unchanged. `status` / `currentStep` take the vocabulary of
+  // `@nexus/shared/fba-send` (FBA_PLAN_STATUSES / FBA_PLAN_STEPS) for these plans; the Json shapes are typed there.
+  /// The Amazon account (ChannelConnection.id) the plan is created on. Scalar, no FK.
+  channelConnectionId String?
+  /// The destination Amazon marketplace id (one plan = one marketplace, e.g. amazon.it).
+  marketplaceId       String?
+  /// The From warehouse (StockLocation.id, a WAREHOUSE): the holds and the Shipped movement are there. Scalar, no FK.
+  sourceLocationId    String?
+  /// Amazon's AddressInput sent with createInboundPlan (FbaSourceAddress).
+  sourceAddress       Json?
+  /// The day the boxes are ready (Amazon's readyToShipWindow.start).
+  readyToShipOn       DateTime?
+  /// The mixed box the loose units go in (FbaMixedBox).
+  mixedBox            Json?
+  /// The packing option, its groups and the boxes sent (FbaPackingSnapshot).
+  packing             Json?
+  /// Placement options → shipments, FCs, fees, transport options, delivery windows, expiry (FbaPlanOptions).
+  options             Json?
+  /// The Owner's pick (FbaChoiceRequest).
+  choice              Json?
+  /// The step log, one entry per Amazon operation; operation ids are written BEFORE polling (FbaPlanStepEntry[]).
+  steps               Json?
+  /// Lease + resume clock: the runner claims a plan when this is null or past, and bumps it after every call.
+  nextCheckAt         DateTime?
+  /// The person whose click confirmed the placement (final at Amazon). CONFIRMING never starts without it.
+  confirmedBy         String?
+  confirmedAt         DateTime?
+  cancelledAt         DateTime?
+  /// 'matrix' | 'claude' — where the plan was created. null = an older (wizard) plan.
+  source              String?
+  lines               FbaInboundPlanLine[]
+
   @@unique([workspaceId, planId], name: "workspace_planId", map: "FbaInboundPlanV2_workspace_planId_key")
   @@index([planId])
   @@index([status])
+  @@index([status, nextCheckAt])
   @@index([inboundShipmentId])
   @@index([createdAt])
   @@index([workspaceId])
+}
+
+/// Step 4 Send to FBA — one SKU of a plan: what it sends (sealed cases + loose units), who preps and labels, and the
+/// hold at the From warehouse (StockReservation reason FBA_SEND) until the units are marked Shipped or the plan is
+/// cancelled. quantity = cases × unitsPerCase + looseUnits.
+model FbaInboundPlanLine {
+  // Business ownership comes from verified database context.
+  workspaceId     String           @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id              String           @id @default(cuid())
+  planRowId       String
+  plan            FbaInboundPlanV2 @relation(fields: [planRowId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// The Amazon seller SKU sent (the listing's SKU in the plan's market).
+  msku            String
+  /// Units in total: cases × unitsPerCase + looseUnits.
+  quantity        Int
+  /// Sealed cases sent as identical case boxes.
+  cases           Int              @default(0)
+  /// The case size when the plan was made (null = no case size).
+  unitsPerCase    Int?
+  /// Units packed in mixed boxes.
+  looseUnits      Int              @default(0)
+  /// AMAZON | SELLER (Amazon's ItemInput prepOwner / labelOwner).
+  prepOwner       String
+  labelOwner      String
+  /// The hold at the From warehouse (StockReservation.id); null = none (released, or not held yet).
+  reservationId   String?
+  /// Units marked Shipped so far (across the plan's shipments).
+  shippedQuantity Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([workspaceId, planRowId, productId], name: "planRowId_productId", map: "FbaInboundPlanLine_planRowId_productId_key")
+  @@index([workspaceId])
+  @@index([productId])
 }
 
 // ─────────────────────────────────────────────────────────────────────
