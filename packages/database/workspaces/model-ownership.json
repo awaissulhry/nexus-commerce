@@ -460,6 +460,7 @@
     "BidDirective",
     "AdsBrainEnrollment",
     "AdsBrainOverride",
+    "AdsBrainHourProposal",
     "AdsNativeRuleSnapshot",
     "AmazonAdsHourlyPlacement",
     "AmazonAdsHourlyArrival",

@@ -9,10 +9,14 @@
  *            the known gaps (harvest vs negate, a harvest with no destination, sibling products on one keyword, and —
  *            AB-4 — Amazon's own rules on brain campaigns, from the daily read: brain/native-rules.ts)
  *   setup    the tools that are not set up or are held off, with what starts them, and the brain's own setup
+ *   hours    AB-13 — one product's hourly research and painted plan (brain/hours-proposal.ts brainHours): the market's
+ *            hourly dynamics pooled product → category → market with its confidence, the before / after grid, the
+ *            expected effect and the status of its approval; decided now (stored nowhere) when nothing is stored yet
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
 import { BRAIN_MAP_VIEWS, brainClashes, brainMap, brainSetup, DEFAULT_EVIDENCE_DAYS, MAX_EVIDENCE_DAYS } from '../../advertising/brain/read-map.js'
+import { brainHours } from '../../advertising/brain/hours-proposal.js'
 import type { AgentTool, FieldPermission } from '../tool-types.js'
 
 const ID = z.string().trim().min(1).max(64)
@@ -21,6 +25,8 @@ const ID = z.string().trim().min(1).max(64)
 const BRAIN_MAP_MONEY: Readonly<Record<string, FieldPermission>> = Object.fromEntries(
   ['portfolioCapCents', 'dailyBudgetCents', 'amountCents'].map((key) => [key, FIELDS.financialsAdspendView]),
 )
+/** AB-13 — the hours view keeps every amount, ACoS and sentence naming one under a `money` key: hidden whole without it. */
+const HOURS_VIEW_MONEY: Readonly<Record<string, FieldPermission>> = { money: FIELDS.financialsAdspendView }
 
 const adsBrain: AgentTool = {
   name: 'ads-brain',
@@ -29,13 +35,13 @@ const adsBrain: AgentTool = {
   riskTier: 'low',
   readOnly: true,
   requires: [F.adsView],
-  restrictedFields: BRAIN_MAP_MONEY,
+  restrictedFields: { ...BRAIN_MAP_MONEY, ...HOURS_VIEW_MONEY },
   input: z.object({
     view: z.enum(BRAIN_MAP_VIEWS).default('map')
-      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix'),
+      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; hours: one product\'s hourly research and painted plan with its approval (market and productId)'),
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
-      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes: required'),
-    productId: ID.optional().describe('map / clashes: one product (a variation names its parent), its Nexus id'),
+      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes and hours: required'),
+    productId: ID.optional().describe('map / clashes / hours: one product (a variation names its parent), its Nexus id'),
     campaignId: ID.optional().describe('map: one Amazon campaign, its Nexus id (ad-campaigns)'),
     days: z.coerce.number().int().min(1).max(MAX_EVIDENCE_DAYS).default(DEFAULT_EVIDENCE_DAYS)
       .describe(`map / clashes: how many days of the action log count as evidence of who wrote (default ${DEFAULT_EVIDENCE_DAYS}, max ${MAX_EVIDENCE_DAYS})`),
@@ -58,12 +64,20 @@ const adsBrain: AgentTool = {
     + '(no API read Nexus could verify). Safety owners (retail guard, budget enforcement, auto-undo, the write reconcile) always pass and are '
     + 'never a clash. view setup: the engines that are not set up or are held off, with what starts them, and the '
     + 'brain\'s own setup (its server switch, products LIVE one campaign at a time but not enrolled). The portfolio cap '
-    + 'amount is ad-spend money. Nexus only: it reads what Nexus stored and asks Amazon nothing.',
+    + 'amount is ad-spend money. view hours (market and productId): the brain\'s research of the market\'s hourly dynamics '
+    + 'for that product — traffic, cost per click and conversion by hour of the week, pooled product → category → market '
+    + 'with how sure it is, weekday against weekend, the trend, the lanes — and the hourly plan it painted from it: the '
+    + 'before / after grid (Monday first, a letter per hour; changed and locked hours marked), each hour that moves and '
+    + 'why, the expected effect with its range, and the status (shadow, proposed and waiting for a person as '
+    + 'apply-brain-hourly-plan, applied as a new plan version, rejected, expired, held and why); with nothing stored '
+    + 'yet, decided now and stored nowhere. Amounts and ACoS sit under money keys, hidden without ad-spend money. '
+    + 'Nexus only: it reads what Nexus stored and asks Amazon nothing.',
   handler: async (args) => {
     const a = args as { view?: string; market?: string; productId?: string; campaignId?: string; days?: number }
     const out = a.view === 'clashes' ? await brainClashes(a)
       : a.view === 'setup' ? await brainSetup(a)
-        : await brainMap(a)
+        : a.view === 'hours' ? await brainHours(a)
+          : await brainMap(a)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
   },
 }

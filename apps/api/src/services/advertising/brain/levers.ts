@@ -11,7 +11,8 @@
  *             OWNS a lever at PROPOSE or AUTO (design §3 point 3: the gate then refuses every other engine).
  *   default   every lever starts OBSERVE (design §0.13), per product and per campaign, until the Owner overrides it.
  *   now       a level is offered only once code runs it (LEVER_LEVELS_NOW). AB-1: the bids lever takes OBSERVE and AUTO
- *             (the live bid brain, BB-6); every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
+ *             (the live bid brain, BB-6); AB-13: the hours lever OFF, OBSERVE and PROPOSE (a painted plan always asks, D3);
+ *             every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
  *             shadow is not built yet records the intent: it starts watching when its shadow lands; nothing is written.
  *   settings  the caps of §5 and the N1–N4 settings of §9 (Owner yes 10-08), each with the design's default and safety
  *             bounds (Amazon's own where it has one); the Owner may set any value inside them, per product, and per
@@ -50,8 +51,9 @@ const OFF_OBSERVE: readonly BrainLevel[] = ['OFF', 'OBSERVE']
 export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[]; others: string }> = {
   bids: { levels: ['OBSERVE', 'AUTO'], others: 'the bid brain decides every allowlisted campaign in shadow (no OFF) and has no proposal path (no PROPOSE)' },
   adGroupBids: { levels: OFF_OBSERVE, others: 'ad group default bids wait for the product cycle (design §2.2, AB-14)' },
-  hours: { levels: OFF_OBSERVE, others: 'the painted hourly plan waits for AB-13' },
-  placements: { levels: OFF_OBSERVE, others: 'placements per hour wait for AB-13' },
+  // AB-13 (D3 = B+) — the brain researches the market's hours, paints the plan and asks: a plan change is PROPOSE always.
+  hours: { levels: ['OFF', 'OBSERVE', 'PROPOSE'], others: 'the brain researches the market\'s hours weekly and paints the hourly plan; OBSERVE keeps the painting in shadow, PROPOSE asks a person to approve each painted plan, and no plan changes alone (D3: never AUTO; ads-brain view hours)' },
+  placements: { levels: OFF_OBSERVE, others: 'placement % per hour come with the painted hourly plan\'s targets (the hours lever, AB-13), which keeps every lane the Owner locked; a placements writer of its own waits for the product cycle (AB-14)' },
   state: { levels: OFF_OBSERVE, others: 'pause and resume wait for AB-12' },
   budgets: { levels: OFF_OBSERVE, others: 'campaign budgets wait for AB-7 (shadow) and AB-8 (live)' },
   portfolioCap: { levels: OFF_OBSERVE, others: 'the Amazon portfolio cap waits for AB-8' },
@@ -96,6 +98,9 @@ export const BRAIN_SETTINGS = {
   minBidEntriesPerDay: { type: 'int', default: 2, min: 0, max: 24, scopes: BOTH, what: 'Min-bid hour entries per campaign per day (§2.3)' },
   hourCellMovePct: { type: 'int', default: 30, min: 0, max: 100, scopes: PRODUCT, what: 'largest move of an hour cell per painted plan, % (§2.3)' },
   hourProposalsPerWeek: { type: 'int', default: 1, min: 0, max: 7, scopes: PRODUCT, what: 'painted hourly plan proposals per week (§2.3)' },
+  // AB-13 — the research window, and the Owner's own painted plan as the limit of each hour (BRAIN-UPGRADES U4-D1).
+  hourResearchWeeks: { type: 'int', default: 4, min: 2, max: 8, scopes: PRODUCT, what: 'weeks of hourly data the brain researches before it paints the hourly plan (§2.3)' },
+  hourPlanAsLimits: { type: 'boolean', default: false, scopes: PRODUCT, what: 'the Owner\'s own painted hourly plan is the limit of each hour: the brain may lower an hour or keep it, never raise it above his target or placement %, and his Min-bid hours stay (§2.3, U4-D1)' },
   biddingStrategySwitchDays: { type: 'int', default: 14, min: 1, max: 365, scopes: BOTH, what: 'days between two bidding-strategy switches of a campaign (§2.11)' },
   budgetUsePct: { type: 'int', default: 70, min: 10, max: 100, scopes: BOTH, what: 'expected budget use a campaign budget is sized for, % (§2.5)' },
   intradayLadderMaxPct: { type: 'int', default: 100, min: 0, max: 100, scopes: BOTH, what: 'largest intraday budget raise, % of the base budget — Amazon spends at most 2× a day (§2.5)' },

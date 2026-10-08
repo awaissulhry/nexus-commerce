@@ -6241,6 +6241,11 @@
     "compound": {},
     "relations": []
   },
+  "AdsBrainHourProposal": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "AdsNativeRuleSnapshot": {
     "scalar": {},
     "compound": {

@@ -35,7 +35,8 @@ import {
   type CampaignNativeRules,
 } from './native-rules.js'
 
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup'] as const
+/** AB-13 — `hours` is brain/hours-proposal.ts brainHours: the product's hour research and painted plan (the tool routes it). */
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'hours'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
 /** The days of action-log evidence a view reads by default, and at most. */
@@ -356,6 +357,8 @@ export function configuredWriters(c: CampaignRow & { market: string | null; prod
       if (lever === 'bids') continue
       const l = settings.levers[lever]
       if (l.effective === 'OBSERVE') add(lever, { who: 'the brain', kind: 'brain', state: 'watches', why: `OBSERVE: ${LEVER_LEVELS_NOW[lever].others}` })
+      // AB-13 — a lever at PROPOSE: the brain asks a person for each change (the hours lever: its painted plan).
+      else if (l.effective === 'PROPOSE') add(lever, { who: 'the brain', kind: 'brain', state: 'asks', why: `PROPOSE: ${LEVER_LEVELS_NOW[lever].others}` })
     }
   }
   // The Owner: a lock (the brain's override), pinned bids, holds on keywords.
