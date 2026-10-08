@@ -20,6 +20,7 @@ import { ADS_BID_BRAIN_ENROLLMENT_TOOLS } from './tools/ads-bid-brain-enrollment
 import { ADS_BRAIN_TOOLS } from './tools/ads-brain.tools.js'
 import { ADS_BRAIN_HARVEST_TOOLS } from './tools/ads-brain-harvest.tools.js'
 import { ADS_BRAIN_KILL_TOOLS } from './tools/ads-brain-kill.tools.js'
+import { ADS_BRAIN_RETIRE_TOOLS } from './tools/ads-brain-retire.tools.js'
 import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
 import { ADS_MANAGER_TOOLS } from './tools/ads-manager.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
@@ -144,6 +145,8 @@ const ALL: AgentTool[] = [
   ...ADS_BRAIN_HARVEST_TOOLS,
   // One brain AB-15 — the kill switch per lever: stop one lever of the brain for one product or every product.
   ...ADS_BRAIN_KILL_TOOLS,
+  // One brain AB-20 — the duplicate writers of a product switched off once its brain runs every lever, and given back.
+  ...ADS_BRAIN_RETIRE_TOOLS,
   // Ads playbook PB-2 — how a product's ads are built and run (templates, rows per market, category and product), read.
   ...ADS_PLAYBOOK_TOOLS,
   // Ads autonomy W4-1 — the daily Claude ads run reports itself (bell + one e-mail a day), and its history.

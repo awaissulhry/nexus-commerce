@@ -870,6 +870,8 @@ export async function startScheduler(): Promise<void> {
     const { startBrainStructureCron } = await import('../jobs/ads-brain-structure.job.js');
     // ONE BRAIN AB-14 — the product cycle: each enrolled product's levers in order (only while NEXUS_ADS_BRAIN_CYCLE=on).
     const { startBrainCycleCron } = await import('../jobs/ads-brain-cycle.job.js');
+    // ONE BRAIN AB-20 — the writers a product's brain retired: given back once the retirement no longer holds (asks only under NEXUS_ADS_BRAIN_RETIRE=ask).
+    const { startBrainRetireCron } = await import('../jobs/ads-brain-retire.job.js');
     // RS.5 — rank-defend loop (self-gated on NEXUS_ENABLE_RANK_DEFEND=1).
     const { startAdsRetentionCron } = await import('../jobs/ads-retention.job.js');
     const { startRankDefendCron } = await import('../jobs/ad-rank-defend.job.js');
@@ -924,6 +926,7 @@ export async function startScheduler(): Promise<void> {
     startBrainHarvestCron();
     startBrainStructureCron();
     startBrainCycleCron();
+    startBrainRetireCron();
     startRankDefendCron();
     // HX.11 — prunes the ads history tables. OFF unless NEXUS_ENABLE_ADS_RETENTION=1, because it deletes.
     startAdsRetentionCron();

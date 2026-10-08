@@ -20,6 +20,8 @@ import { BRAIN_LEVERS, type BrainLever } from '../../advertising/brain/levers.js
 import { endBrainKill, killScopeWords, killStanding, killTarget, killWords, setBrainKill, type BrainKill } from '../../advertising/brain/kill-switch.js'
 import { productFamily } from '../../advertising/brain/ownership.js'
 import { resolveBrainSettings, type OverrideRow } from '../../advertising/brain/settings.js'
+import { runRetireTick } from '../../advertising/brain/retire-run.js'
+import { logger } from '../../../utils/logger.js'
 import { approvedRun, notRun } from './ads-change-kit.js'
 import { isLiveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
@@ -154,9 +156,20 @@ const setBrainKillSwitch: AgentTool = {
       kill = out.ended
     }
     const after: KillChange = { op: p.op, ...target, killed: p.op === 'kill', reason: p.op === 'kill' ? kill.reason : null }
+    // AB-20 — a stopped lever is no longer the brain's to run: each writer the brain retired there is given back at once (a
+    // product with nothing retired reads nothing more).
+    let gaveBackWriters: Array<{ productId: string; market: string; rows: Array<{ writer: string; targetId: string; act: string }> }> = []
+    if (p.op === 'kill') {
+      try { gaveBackWriters = (await runRetireTick({ by: run.actor })).gaveBack } catch (err) {
+        logger.warn('[ads-brain] the writers retired under a killed lever could not be given back now — the 15-minute tick does it', { lever: target.lever, error: err instanceof Error ? err.message : String(err) })
+      }
+    }
     return {
       ok: true,
-      data: { op: p.op, lever: kill.lever, productId: kill.productId, market: strategyMarket(kill.market) ?? kill.market, words: p.op === 'kill' ? killWords(kill) : `the kill switch on the ${kill.lever} lever of ${killScopeWords(kill)} ended`, by: run.actor },
+      data: {
+        op: p.op, lever: kill.lever, productId: kill.productId, market: strategyMarket(kill.market) ?? kill.market, words: p.op === 'kill' ? killWords(kill) : `the kill switch on the ${kill.lever} lever of ${killScopeWords(kill)} ended`, by: run.actor,
+        ...(gaveBackWriters.length ? { gaveBackWriters } : {}),
+      },
       change: { before, after },
     }
   },

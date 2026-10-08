@@ -43,9 +43,11 @@ import {
  * `hours` is brain/hours-proposal.ts brainHours: the product's hour research and painted plan (the tool routes it). AB-10 —
  * `negatives` is brain/negatives-read.ts: the product's day of negatives, every entity against the limit, its log. AB-11 —
  * `harvest` is brain/harvest-read.ts: the product's harvests, their destinations, sources, requests and judgements. AB-14 —
- * `report` is brain/cycle-read.ts: the day's product report the product cycle stored (the tool routes it).
+ * `report` is brain/cycle-read.ts: the day's product report the product cycle stored (the tool routes it). AB-20 — `retire` is
+ * brain/retire-run.ts brainRetire: the writers a product's brain would retire (and has), each with why; `proof` is
+ * brain/proof-read.ts brainProof: the A/B proof against matched comparison products (the tool routes both).
  */
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report', 'structure'] as const
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report', 'structure', 'retire', 'proof'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
 /** The days of action-log evidence a view reads by default, and at most. */

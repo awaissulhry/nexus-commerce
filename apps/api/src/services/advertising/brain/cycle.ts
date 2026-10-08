@@ -190,6 +190,8 @@ export interface ReportInput {
   moneyInOut: MoneyInOut | null
   /** Hourly state passes after the cycle that did something, oldest first. */
   later: Array<{ at: string; line: string }>
+  /** AB-20 — one line about the A/B proof of the brain on this product (brain/proof-read.ts proofLine): no amounts. */
+  proof?: string | null
 }
 
 export interface ProductReport {
@@ -211,6 +213,8 @@ export interface ProductReport {
   clashes: string[]
   problems: string[]
   later: Array<{ at: string; line: string }>
+  /** AB-20 — the A/B proof's status in one line, no amounts (null: not read). */
+  proof: string | null
   /** Every amount, and every sentence naming one (ad-spend money: hidden whole without the permission). */
   money: { currency: string | null; inOut: MoneyInOut | null; lines: string[] }
 }
@@ -271,7 +275,7 @@ export function buildReport(input: ReportInput): { report: ProductReport; summar
   const money = { currency: input.moneyInOut?.currency ?? null, inOut: input.moneyInOut, lines: [...moneyLines(input.moneyInOut, input.dataDay), ...CYCLE_STEPS.flatMap((s) => input.records[s]?.did?.money?.lines ?? [])] }
   const report: ProductReport = {
     v: 1, productId: input.productId, name: input.name, market: input.market, dataDay: input.dataDay, changeSetId: input.changeSetId, status: input.status,
-    attempts: input.attempts, at: input.now.toISOString(), headline, levers, waitsForOwner, heldByOwner, clashes, problems, later: input.later, money,
+    attempts: input.attempts, at: input.now.toISOString(), headline, levers, waitsForOwner, heldByOwner, clashes, problems, later: input.later, proof: input.proof ?? null, money,
   }
   const lines = [
     headline,
@@ -280,6 +284,7 @@ export function buildReport(input: ReportInput): { report: ProductReport; summar
     ...(clashes.length ? [`Clashes: ${clashes.join(' ')}`] : []),
     ...(heldByOwner.length ? [`Held by your choices: ${heldByOwner.join(' ')}`] : []),
     ...input.later.map((l) => `Later (${l.at.slice(11, 16)} UTC): ${l.line}`),
+    ...(input.proof ? [input.proof] : []),
     `Change set ${input.changeSetId}: every write of this cycle carries it.`,
   ]
   return { report, summary: lines.join('\n') }

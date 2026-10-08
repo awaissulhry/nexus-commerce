@@ -9977,6 +9977,33 @@ CREATE TABLE "AdsBrainStructure" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainRetirement" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "writer" TEXT NOT NULL,
+    "targetId" TEXT NOT NULL,
+    "targetName" TEXT NOT NULL,
+    "campaignIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "levers" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "before" JSONB NOT NULL,
+    "after" JSONB NOT NULL,
+    "why" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'RETIRED',
+    "approvalId" TEXT,
+    "retiredBy" TEXT NOT NULL,
+    "retiredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "givenBackAt" TIMESTAMP(3),
+    "givenBackBy" TEXT,
+    "givenBackWhy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainRetirement_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15944,6 +15971,18 @@ CREATE INDEX "AdsBrainStructure_workspaceId_idx" ON "AdsBrainStructure"("workspa
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdsBrainStructure_workspaceId_marketplace_key_key" ON "AdsBrainStructure"("workspaceId", "marketplace", "key");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainRetirement_productId_marketplace_status_idx" ON "AdsBrainRetirement"("productId", "marketplace", "status");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainRetirement_writer_targetId_status_idx" ON "AdsBrainRetirement"("writer", "targetId", "status");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainRetirement_status_idx" ON "AdsBrainRetirement"("status");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainRetirement_workspaceId_idx" ON "AdsBrainRetirement"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

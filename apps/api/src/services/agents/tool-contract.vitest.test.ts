@@ -719,6 +719,8 @@ describe('C1 — every registered tool keeps the contract', () => {
       'apply-brain-harvest': { before: { changeSetId: 'ap1', op: 'harvest', harvestId: 'h1', keyword: null, negatives: [] }, after: { op: 'harvest', harvestId: 'h1', keywordTargetId: 't1', negatives: ['n1'] } },
       // AB-15 — a kill switch is ended by its undo, and an ended one set again.
       'set-brain-kill-switch': { before: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: false, reason: null }, after: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: true, reason: 'test stop' } },
+      // AB-20 — a retirement of a product's duplicate writers is given back by its undo (and a give-back retired again).
+      'retire-ads-writers': { before: { op: 'give-back', productId: 'p1', market: 'IT', retirementIds: ['r1'], rows: [] }, after: { op: 'retire', productId: 'p1', market: 'IT', retirementIds: ['r1'], rows: [{ writer: 'rule', id: 'x1', name: 'test rule' }] } },
       // BB-6 — a campaign's place in the bid brain put back (LIVE → the op that returns it).
       'set-bid-brain-enrollment': { before: { campaignId: 'c1', mode: 'SHADOW' }, after: { campaignId: 'c1', mode: 'LIVE' } },
       // One brain — the Owner's choice put back through the same tool (here: the product's budgets level ended again).

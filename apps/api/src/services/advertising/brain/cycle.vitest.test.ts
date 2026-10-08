@@ -152,6 +152,18 @@ describe('AB-14 — the day\'s product report', () => {
     expect(summary).not.toMatch(/€|\d+[.,]\d{2}/)
   })
 
+  it('AB-20 — the proof\'s status is one line of the report and of its summary, before the change set; none read, none said', () => {
+    const line = 'Proof (A/B, ad profit): not enough data yet — 12 of 28 settled days since the brain started on 2026-09-21 (4 full weeks needed).'
+    const { report, summary } = buildReport(input({ proof: line }))
+    expect(report.proof).toBe(line)
+    const lines = summary.split('\n')
+    expect(lines.at(-2)).toBe(line)
+    expect(lines.at(-1)).toBe('Change set cyc-IT-2026-10-02-prod-1: every write of this cycle carries it.')
+    const none = buildReport(input())
+    expect(none.report.proof).toBeNull()
+    expect(none.summary).not.toContain('Proof')
+  })
+
   it('an excluded product, a cycle not finished, nothing waiting, no report row yet', () => {
     const { report, summary } = buildReport(input({ status: 'PARTIAL', attempts: 2, excluded: { by: 'the Owner\'s product override (user:owner, 2026-10-01)', reason: 'not now' }, holds: [], moneyInOut: null, later: [], records: { state: rec('off') } }))
     expect(report.headline).toMatch(/cycle not finished \(run 2 of 3\) — 0 levers decided, all in shadow or off; 0 requests waiting for you/)

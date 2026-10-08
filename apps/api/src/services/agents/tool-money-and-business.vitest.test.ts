@@ -149,6 +149,7 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'add-photo-from-url': 'it fetches a web link and stores the file (Cloudinary), neither of which this suite has (photos-link.tools test)',
   'plan-fba-shipment': 'a Send to FBA plan needs an Amazon account selling in the market, a warehouse with its address and the SKU\'s Amazon listing, none of which this seed has (fba-plan-tools test)',
   'set-bid-brain-enrollment': 'a campaign goes LIVE under the bid brain only from the live-write allowlist, which the seeded campaign is not on (bid-brain/live-postgres test)',
+  'retire-ads-writers': 'a retirement needs a product enrolled in the brain with every lever AUTO or the Owner\'s choice under the live server switch, which this seed has not (brain/retire-postgres test)',
 }
 
 /**
@@ -268,6 +269,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'apply-brain-harvest': () => ({ harvestId: 'none' }),
   // AB-15 — the kill switch of one lever of the seeded product (Nexus only; nothing seeded is money).
   'set-brain-kill-switch': (ids) => ({ op: 'kill', lever: 'budgets', productId: ids.productId, market: 'IT', why: 'test stop' }),
+  // AB-20 — the duplicate writers of the seeded product (Nexus only; it is not enrolled, so a refusal naming it either way).
+  'retire-ads-writers': (ids) => ({ op: 'retire', productId: ids.productId, market: 'IT' }),
   // A6 — campaign budget and placements (they need money: refused for a person without it).
   'set-campaign-budget': (ids) => ({ campaignId: ids.campaignId, dailyBudgetCents: 2500 }),
   'set-placement-multipliers': (ids) => ({ campaignId: ids.campaignId, topOfSearchPct: 30 }),

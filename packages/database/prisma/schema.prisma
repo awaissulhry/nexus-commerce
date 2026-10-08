@@ -20877,6 +20877,55 @@ model AdsBrainStructure {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-20 — one configuration row of a duplicate writer the brain retired for one product × market (one-brain
+/// DESIGN.md §3, §8 row AB-20; BID-BRAIN-DESIGN.md §6 BB-12; services/advertising/brain/retire*.ts). Once every lever of the
+/// product is AUTO or the Owner's own choice, a person approves the retirement (retire-ads-writers) and each row whose whole
+/// reach is the product's own campaigns, and whose every lever the brain (or the Owner's lock) holds there, is switched off —
+/// never deleted. The record keeps what the row was and what retirement set, so the give-back switches it on again (the
+/// product leaves the brain, a lever goes back from AUTO, a kill, the server switch no longer live, or a person's
+/// give-back) — unless a person changed the row since (LEFT: left as it is). No foreign key: the history outlives the row.
+///   writer  rule · budgetSchedule · budgetPool · dayparting · coverageSet · autopilotPlan
+///   status  RETIRED (switched off by the brain) · GIVEN_BACK (switched on again) · LEFT (changed by a person since: left as
+///           it is) · GONE (the row no longer exists)
+model AdsBrainRetirement {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Product.id of the family root.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  writer      String
+  /// The row's id (AutomationRule, BudgetSchedule, BudgetPool, AdSchedule, KeywordCoverageSet or AutopilotPlan).
+  targetId    String
+  targetName  String
+  /// The campaigns it reached when it was retired: each one the product's own.
+  campaignIds String[] @default([])
+  /// The levers it writes: each held by the brain (or the Owner's lock) on every campaign above.
+  levers      String[] @default([])
+  /// What retirement changed and the row's version then: { field, value, updatedAt } before and after.
+  before      Json
+  after       Json
+  why         String   @db.Text
+  status      String   @default("RETIRED")
+  /// The approval it ran under (retire-ads-writers op retire).
+  approvalId  String?
+  retiredBy   String
+  retiredAt   DateTime @default(now())
+  givenBackAt  DateTime?
+  givenBackBy  String?
+  givenBackWhy String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId, marketplace, status])
+  @@index([writer, targetId, status])
+  @@index([status])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could
