@@ -117,14 +117,17 @@ describe('overrides and brakes', () => {
     expect(mergeFloors(capOnCampaign, null)).toEqual(capOnCampaign)
   })
 
-  it('pins pinned bids, a hold and a person’s bid; freezes a HELD enrollment; brakes a paused campaign', () => {
+  it('pins pinned bids, a hold and a person’s bid; caps the raises of a HELD enrollment; brakes a paused campaign', () => {
     const m = market({ campaigns: new Map([['c1', campaign('c1', { pinBids: true, pinnedBy: 'user:owner' })], ['c2', campaign('c2', { allowlisted: false })]]) })
     expect(buildFacts(m, run())[0].overrides?.pin).toEqual({ by: 'bids pinned by user:owner' })
     const held = buildFacts(market(), run({ holds: [{ campaignId: 'c1', targetId: 't2', kind: 'CLAUDE', by: 'claude:appr_1', until: new Date('2026-12-01T00:00:00Z') }] }))
     expect(held[0].overrides?.pin).toBeUndefined()
     expect(held[1].overrides?.pin).toEqual({ by: 'claude hold by claude:appr_1', until: '2026-12-01' })
     expect(buildFacts(market(), run({ personHeld: new Set(['t1']) }))[0].overrides?.pin?.by).toMatch(/a person/)
-    expect(buildFacts(market(), run({ enrollments: new Map([['c1', { mode: 'HELD', heldBy: 'auto-undo', heldUntil: null }]]) }))[0].overrides?.freeze).toEqual({ by: 'auto-undo' })
+    // BB-10 review — HELD is a raise cap inside the goal path, not a freeze walking bids down.
+    const heldFacts = buildFacts(market(), run({ enrollments: new Map([['c1', { mode: 'HELD', heldBy: 'auto-undo', heldUntil: null }]]) }))[0]
+    expect(heldFacts.overrides?.freeze).toBeUndefined()
+    expect(heldFacts.raiseCap).toBe('the campaign is held by auto-undo')
     const paused = market({ campaigns: new Map([['c1', campaign('c1', { status: 'PAUSED' })], ['c2', campaign('c2', { allowlisted: false })]]) })
     expect(buildFacts(paused, run({ marketBrakes: ['halted: test'] }))[0].brakes).toEqual(['halted: test', 'campaign paused'])
   })

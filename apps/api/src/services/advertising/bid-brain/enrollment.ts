@@ -218,26 +218,28 @@ export const liveTakesEffect = (): boolean => brainLiveCeiling()
  * mode until `until`: the brain raises nothing there (a stop still lowers, and lowering is still allowed); past
  * `until` the loader reads it as LIVE again (load.ts). Auto-undo decides; the brain never undoes itself.
  *
- *   holdCampaigns  LIVE → HELD until `until`; a campaign already HELD keeps the later end of the two (and its first
- *                  holder). SHADOW or not enrolled: nothing to hold (left out of the answer).
+ *   holdCampaigns  LIVE → HELD until `until`; a campaign HELD now keeps the later end of the two (and its holder); a
+ *                  HELD whose end has passed is held anew (the new holder and reason). SHADOW or not enrolled: nothing to
+ *                  hold (left out of the answer). Compare-and-set on the row as read: a person's op in between wins.
  *   releaseHold    HELD → LIVE. Anything else: left as it is.
  * Both answer the campaigns they changed.
  */
-export async function holdCampaigns(args: { campaignIds: readonly string[]; until: Date; by: string; reason: string }): Promise<string[]> {
+export async function holdCampaigns(args: { campaignIds: readonly string[]; until: Date; by: string; reason: string; now?: Date }): Promise<string[]> {
   if (!args.campaignIds.length) return []
+  const now = args.now ?? new Date()
   const rows = await prisma.bidBrainEnrollment.findMany({
     where: { campaignId: { in: [...new Set(args.campaignIds)] }, mode: { in: ['LIVE', 'HELD'] } },
     select: { id: true, campaignId: true, mode: true, heldUntil: true },
   })
   const held: string[] = []
   for (const r of rows) {
-    const until = r.mode === 'HELD' && r.heldUntil && r.heldUntil > args.until ? r.heldUntil : args.until
-    if (r.mode === 'HELD' && r.heldUntil && r.heldUntil >= until) continue
-    await prisma.bidBrainEnrollment.update({
-      where: { id: r.id },
-      data: { mode: 'HELD', heldUntil: until, ...(r.mode === 'LIVE' ? { heldBy: args.by, heldReason: args.reason.slice(0, 500) } : {}) },
+    const active = r.mode === 'HELD' && r.heldUntil != null && r.heldUntil > now
+    if (active && r.heldUntil! >= args.until) continue
+    const moved = await prisma.bidBrainEnrollment.updateMany({
+      where: { id: r.id, mode: r.mode, heldUntil: r.heldUntil },
+      data: { mode: 'HELD', heldUntil: args.until, ...(active ? {} : { heldBy: args.by, heldReason: args.reason.slice(0, 500) }) },
     })
-    held.push(r.campaignId)
+    if (moved.count) held.push(r.campaignId)
   }
   if (held.length) logger.info('[bid-brain] campaigns held', { by: args.by, until: args.until.toISOString(), campaignIds: held, reason: args.reason.slice(0, 200) })
   return held
@@ -246,9 +248,13 @@ export async function holdCampaigns(args: { campaignIds: readonly string[]; unti
 export async function releaseHold(args: { campaignIds: readonly string[]; by: string }): Promise<string[]> {
   if (!args.campaignIds.length) return []
   const rows = await prisma.bidBrainEnrollment.findMany({ where: { campaignId: { in: [...new Set(args.campaignIds)] }, mode: 'HELD' }, select: { id: true, campaignId: true } })
-  for (const r of rows) await prisma.bidBrainEnrollment.update({ where: { id: r.id }, data: { mode: 'LIVE', heldUntil: null, heldBy: null, heldReason: null } })
-  if (rows.length) logger.info('[bid-brain] hold released', { by: args.by, campaignIds: rows.map((r) => r.campaignId) })
-  return rows.map((r) => r.campaignId)
+  const released: string[] = []
+  for (const r of rows) {
+    const moved = await prisma.bidBrainEnrollment.updateMany({ where: { id: r.id, mode: 'HELD' }, data: { mode: 'LIVE', heldUntil: null, heldBy: null, heldReason: null } })
+    if (moved.count) released.push(r.campaignId)
+  }
+  if (released.length) logger.info('[bid-brain] hold released', { by: args.by, campaignIds: released })
+  return released
 }
 
 /**

@@ -27,6 +27,11 @@ describe('the raise cap: this hour against the same hour of the last 7 days', ()
     expect(spendGuardWhy({ spentCents: 500, minutesIntoHour: 30, sameHourCents: [100, 0, 0, 100, 0, 0, 0] })).toBeNull()
     expect(spendGuardWhy({ spentCents: 50, minutesIntoHour: 30, sameHourCents: [10, 12, 15, 9, 11] })).toBeNull()
   })
+  it('review — the last full hour above 1.5 × its own same-hour average caps too (the :00 tick of a new hour sees ~0)', () => {
+    expect(spendGuardWhy({ spentCents: 0, minutesIntoHour: 0, sameHourCents: week, previous: { spentCents: 200, sameHourCents: week } })).toBe('the last hour spent €2.00, more than 1.5 × its 7-day same-hour average €1.00')
+    expect(spendGuardWhy({ spentCents: 0, minutesIntoHour: 0, sameHourCents: week, previous: { spentCents: 140, sameHourCents: week } })).toBeNull()
+  })
+
   it('the first minutes of an hour project from 15 minutes at least', () => {
     // 30¢ after 5 minutes reads as 30 × 60 ÷ 15 = €1.20, not €3.60.
     expect(spendGuardWhy({ spentCents: 30, minutesIntoHour: 5, sameHourCents: week })).toBeNull()
@@ -42,6 +47,16 @@ const facts = (over: Partial<TargetFacts> = {}): TargetFacts => ({
 })
 
 describe('decide under the raise cap', () => {
+  it('review — a held campaign: an in-band keyword does not move, and a raise waits inside the goal path', () => {
+    // In band (expected ACoS inside 30–40 %): held or not, nothing moves — a hold is no freeze walking bids down.
+    const inBand = facts({ currentCents: 84, servingCents: 30 })
+    expect(decide(inBand)).toMatchObject({ action: 'hold', layer: 'band' })
+    expect(decide({ ...inBand, raiseCap: 'the campaign is held by automation:auto-undo' })).toMatchObject({ action: 'hold', layer: 'band', bidCents: 84 })
+    // Already stepped on this data day: still one step a day, held or not.
+    const stepped = facts({ currentCents: 37, lastStep: { dataDay: '2026-10-01', fromCents: 30, toCents: 37 } })
+    expect(decide({ ...stepped, raiseCap: 'held' })).toMatchObject({ action: 'hold', bidCents: 37 })
+  })
+
   it('a goal raise waits and says why; a cut still goes', () => {
     const free = decide(facts())
     expect(free).toMatchObject({ action: 'write', layer: 'goal' })

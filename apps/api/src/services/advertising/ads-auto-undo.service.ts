@@ -74,22 +74,38 @@ export const STOP_BID_CENTS = 5
 export const JUDGED_ENGINES: ReadonlySet<EngineKey> = new Set<EngineKey>(['auto-bid', 'rank-defend', 'autopilot', 'tos-defense', 'coverage-engine', 'budget-pools', 'bid-brain'])
 
 /**
- * BID BRAIN BB-10 — a bid brain change auto-undo puts back (itself at AUTO, or a person's approved request) holds its
- * campaign for this many days: HELD, the brain raises nothing there (lowering still goes), so it does not write the same
- * change again on the next data day. Auto-undo decides; the brain never undoes itself. The hold ends by itself.
+ * BID BRAIN BB-10 — a bid brain change auto-undo puts back (itself at AUTO, or a person's approved request) is kept for
+ * this many days: the keyword it put back is PINNED (a BidHold kind PIN, by auto-undo, the judgement as its reason — a cut
+ * and a raise alike), so the brain does not write the same change again on the next tick; and the campaign is HELD (the
+ * brain raises nothing there). Auto-undo decides; the brain never undoes itself. Both end by themselves.
  */
 export const BRAIN_HOLD_AFTER_UNDO_DAYS = 7
 
-/** BB-10 — hold the campaign of an undone bid brain write (bid-brain/enrollment.ts holdCampaigns). Never fails the undo. */
-async function holdBrainAfterUndo(actor: string | null | undefined, campaignId: string | null | undefined, by: string, why: string, now: Date = new Date()): Promise<string[]> {
+/** BB-10 — pin the keyword and hold the campaign of an undone bid brain write. Never fails the undo. */
+export async function holdBrainAfterUndo(args: {
+  actor: string | null | undefined
+  entityType: string
+  entityId: string
+  /** Known by the caller (the AUTO run's entity read); else read here — only for a brain write. */
+  campaignId?: string | null
+  by: string
+  /** The judgement, in words: the pin's reason. */
+  why: string
+  now?: Date
+}): Promise<void> {
   const { BRAIN_ACTOR } = await import('./bid-brain/live.js')
-  if (actor !== BRAIN_ACTOR || !campaignId) return []
+  if (args.actor !== BRAIN_ACTOR) return
+  const now = args.now ?? new Date()
   try {
+    const campaignId = args.campaignId ?? (await entitiesNow([{ entityType: args.entityType, entityId: args.entityId }])).get(`${args.entityType}:${args.entityId}`)?.campaignId
+    if (!campaignId) return
+    const until = new Date(now.getTime() + BRAIN_HOLD_AFTER_UNDO_DAYS * DAY_MS)
+    const reason = `auto-undo put back a bid brain change: ${args.why}`.slice(0, 500)
+    if (args.entityType === 'AD_TARGET') await prisma.bidHold.create({ data: { campaignId, targetId: args.entityId, kind: 'PIN', until, by: args.by, reason } })
     const { holdCampaigns } = await import('./bid-brain/enrollment.js')
-    return await holdCampaigns({ campaignIds: [campaignId], until: new Date(now.getTime() + BRAIN_HOLD_AFTER_UNDO_DAYS * DAY_MS), by, reason: `auto-undo put back a bid brain change: ${why}` })
+    await holdCampaigns({ campaignIds: [campaignId], until, by: args.by, reason, now })
   } catch (error) {
-    logger.warn('[ads-auto-undo] could not hold the bid brain on the campaign it undid', { campaignId, error: String(error).slice(0, 200) })
-    return []
+    logger.warn('[ads-auto-undo] could not keep the bid brain off the change it undid', { entityId: args.entityId, error: String(error).slice(0, 200) })
   }
 }
 
@@ -724,8 +740,8 @@ export async function runAutoUndo(opts: { now?: Date; dryRun?: boolean } = {}): 
         if ('reason' in done) { action = 'held'; reason = done.reason }
         else {
           undoActionLogId = done.actionLogId
-          // BB-10 — a bid brain change put back: the brain holds that campaign (no raises) for a week.
-          await holdBrainAfterUndo(d.userId, entity?.campaignId, AUTO_UNDO_ACTOR, judged.why, now)
+          // BB-10 — a bid brain change put back: its keyword pinned and its campaign held for a week.
+          await holdBrainAfterUndo({ actor: d.userId, entityType: d.entityType, entityId: d.entityId, campaignId: entity?.campaignId, by: AUTO_UNDO_ACTOR, why: `judgement ${row.id}: ${judged.why}`, now })
         }
       }
       if (!acted && (undoApprovalId !== (prior?.undoApprovalId ?? null) || undoActionLogId !== (prior?.undoActionLogId ?? null) || action !== data.action)) {
@@ -909,9 +925,8 @@ export async function runJudgedUndo(judgementId: string, run: { actor: `user:${s
   const { reverseJudgedWrite } = await import('./rollback.service.js')
   const out = await reverseJudgedWrite({ actionLogId: j.actionLogId, actor: run.actor, reason: run.reason, manual: run.manual, changeSetId: run.changeSetId })
   if ('reason' in out) return { ok: false, error: out.reason }
-  // BB-10 — a bid brain change put back on a person's word: the brain holds that campaign too.
-  const entity = (await entitiesNow([{ entityType: j.entityType, entityId: j.entityId }])).get(`${j.entityType}:${j.entityId}`)
-  await holdBrainAfterUndo(j.actor, entity?.campaignId, run.actor, `request ${run.changeSetId}`)
+  // BB-10 — a bid brain change put back on a person's word: its keyword pinned and its campaign held too.
+  await holdBrainAfterUndo({ actor: j.actor, entityType: j.entityType, entityId: j.entityId, by: run.actor, why: `judgement ${judgementId}, request ${run.changeSetId}` })
   await prisma.adsAutoUndoJudgement.update({
     where: { id: judgementId },
     data: { action: 'undone', actionAt: new Date(), actionReason: `a person approved request ${run.changeSetId}`, undoApprovalId: run.changeSetId, undoActionLogId: out.actionLogId, final: true },

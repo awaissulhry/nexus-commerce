@@ -22,6 +22,7 @@ import { publishEvent } from '../../../lib/events/publish.js'
 import { engineGuardNote, openEngineGuard, type EngineGuard, type EngineGuardReport } from '../ads-engine-guard.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { decide, type Decision, type TargetFacts } from './decide.js'
+import { applyLaneDirectives } from './recipe.js'
 import { buildFacts, isPlanFloorMark, type CampaignRow } from './facts.js'
 import { BRAIN_ACTOR, brainOwnedCampaignIds } from './live.js'
 import { placementReportWords, writeOwnedDecisions, writeOwnedPlacements, writeReportWords, type PlacementReport, type PlacementWrite, type WriteReport } from './live-writer.js'
@@ -136,6 +137,12 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   }
 }
 
+/** A bid write's recorded `bidCents` (an action log's payload), or null. */
+const bidOf = (payload: unknown): number | null => {
+  const v = payload && typeof payload === 'object' ? Number((payload as { bidCents?: unknown }).bidCents) : NaN
+  return Number.isFinite(v) ? v : null
+}
+
 /** BB-10 — what this market's run sent: each queued keyword bid (its action-log row) and each placement write. Pure. */
 export function brainWriteRecords(decisions: readonly Decision[], sent: WriteReport | null, placed: PlacementReport | null, campaignOf: (targetId: string) => string): BrainWriteRecord[] {
   const out: BrainWriteRecord[] = []
@@ -171,8 +178,10 @@ export function placementWrites(rows: { market: string; campaigns: ReadonlyMap<s
   for (const [campaignId, e] of byCampaign) {
     const hour = hours?.get(campaignId)
     const c = rows.campaigns.get(campaignId)
-    if (!hour?.key || !e.f.lanes?.length || e.floored || e.braked || !c || c.status !== 'ENABLED') continue
-    out.push({ campaignId, market: rows.market, lanes: e.f.lanes, current: c.placements ?? [], maxBidCents: e.maxBid, key: hour.key, note: e.f.planNote ?? `hourly plan ${hour.name}`, dataDay: e.f.dataDay, raiseCap: e.f.raiseCap ?? null })
+    // BB-9's placement rules shape the plan's lanes first (as decide does); a rule's floor may add a lane on its own.
+    const lanes = applyLaneDirectives(e.f.lanes ?? [], e.f.laneDirectives)
+    if ((!hour?.key && !e.f.laneDirectives?.length) || !lanes.length || e.floored || e.braked || !c || c.status !== 'ENABLED') continue
+    out.push({ campaignId, market: rows.market, lanes, current: c.placements ?? [], maxBidCents: e.maxBid, key: hour?.key ?? 'placement-rules', note: e.f.planNote ?? (hour ? `hourly plan ${hour.name}` : 'placement rules'), dataDay: e.f.dataDay, raiseCap: e.f.raiseCap ?? null })
   }
   return out
 }
@@ -288,10 +297,23 @@ export async function runShadowOnce(opts: { now?: Date; mode?: BrainMode; onlyOw
   // BB-10 — what the run wrote, for auto-undo and every other reader (packages/events/catalog.ts, hard rule 8).
   const writes = out.markets.flatMap((m) => m.brainWrites ?? [])
   if (writes.length) {
-    await publishEvent(prisma, 'ads.bid-brain.run-completed', {
-      runId, mode, campaignIds: [...new Set(writes.map((w) => w.campaignId))].sort(),
-      writes: writes.map(({ actionLogId, entityId, field, from, to }) => ({ actionLogId, entityId, field, from, to })),
-    }).catch((err) => logger.warn('[bid-brain] could not publish the run-completed event', { runId, error: err instanceof Error ? err.message : String(err) }))
+    try {
+      // BB-10 review — `from` / `to` as the bid write recorded them (its action-log row): the bid actually written, after the
+      // mutation layer's own clamps, not the decision.
+      const logIds = writes.map((w) => w.actionLogId).filter((id): id is string => !!id)
+      const logged = new Map((logIds.length ? await prisma.advertisingActionLog.findMany({ where: { id: { in: logIds } }, select: { id: true, payloadBefore: true, payloadAfter: true } }) : [])
+        .map((l) => [l.id, { from: bidOf(l.payloadBefore), to: bidOf(l.payloadAfter) }]))
+      for (const w of writes) {
+        const l = w.actionLogId ? logged.get(w.actionLogId) : undefined
+        if (l) { w.from = l.from ?? w.from; w.to = l.to ?? w.to }
+      }
+      await publishEvent(prisma, 'ads.bid-brain.run-completed', {
+        runId, mode, campaignIds: [...new Set(writes.map((w) => w.campaignId))].sort(),
+        writes: writes.map(({ actionLogId, entityId, field, from, to }) => ({ actionLogId, entityId, field, from, to })),
+      })
+    } catch (err) {
+      logger.warn('[bid-brain] could not publish the run-completed event', { runId, error: err instanceof Error ? err.message : String(err) })
+    }
   }
   return out
 }
