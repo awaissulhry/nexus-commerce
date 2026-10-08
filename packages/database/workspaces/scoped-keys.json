@@ -6237,6 +6237,16 @@
     "compound": {},
     "relations": []
   },
+  "BidBrainHourFactor": {
+    "scalar": {},
+    "compound": {
+      "hour_factor_product": [
+        "productId",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
   "AdsBrainEnrollment": {
     "scalar": {},
     "compound": {

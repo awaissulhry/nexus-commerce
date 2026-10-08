@@ -6863,6 +6863,10 @@
       "fields": []
     },
     {
+      "name": "BidBrainHourFactor",
+      "fields": []
+    },
+    {
       "name": "AdsBrainEnrollment",
       "fields": []
     },
