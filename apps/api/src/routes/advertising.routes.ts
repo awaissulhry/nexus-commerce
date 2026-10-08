@@ -6442,7 +6442,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const { crossMatchNegations } = await import('../services/advertising/ads-keyword-funnel.service.js')
     try {
-      const out = await crossMatchNegations(b.productId, b.apply === true, personActor(request), market)
+      // Batch 2 fix — a person's own click: his mark goes to the gate (the halt still holds it, as before).
+      const out = await crossMatchNegations(b.productId, b.apply === true, personActor(request), market, { manual: true })
       if ('refused' in out) { reply.status(409); return { error: out.refused } }
       return out
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }

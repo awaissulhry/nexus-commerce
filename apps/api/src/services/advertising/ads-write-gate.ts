@@ -514,6 +514,26 @@ export async function brainStateNotOwnedRefusal(target: { campaignId: string; na
   }
 }
 
+/**
+ * ACR.0.7 — the account halt's refusal (the anomaly breaker, the operator's Stop, autonomy OFF, the deploy kill switch),
+ * for a write the halt holds; null when nothing is stopped. The gate asks it for every write but a lowering and a person's
+ * own (1e); batch 2 fix — the AME.16 cross-match asks it itself for a person's apply, whose halt rule was kept when it
+ * gained the person mark (ads-playbook/isolation-run.ts). Live mode only: the sandbox returns before it.
+ */
+export async function automationHaltRefusal(): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const { getAutomationState } = await import('./ads-automation-state.service.js')
+  const state = await getAutomationState()
+  if (!state.effectivelyStopped) return null
+  const why = state.haltReason
+    ? `halted: ${state.haltReason}`
+    : state.autonomy === 'OFF' ? 'account autonomy is OFF' : 'automation is stopped'
+  return {
+    allowed: false,
+    reason: `ads automation is stopped (${why}) — resume in the Control Room to allow writes`,
+    deniedAt: 'automation_halted',
+  }
+}
+
 export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision> {
   // 6a — Sponsored Products only (Owner decision S8; review G.1). Before the sandbox return: an SB/SD write would go to
   // a Sponsored Products endpoint in either mode, and suppression is not exempt — its bid would land there too.
@@ -579,8 +599,6 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
    * (NEXUS_ADS_AUTOMATION_KILL, the same test as envKill in the state service) still binds
    * everyone: it is set in Railway, not from a screen.
    */
-  const { getAutomationState } = await import('./ads-automation-state.service.js')
-  const state = await getAutomationState()
   const personPasses = ctx.manual === true && process.env.NEXUS_ADS_AUTOMATION_KILL !== '1'
   // 3A — a person's write past one of his own limits is collected here instead of refused (see OwnLimitKind).
   const own: OwnLimit[] = protectedProduct ? [protectedProduct] : []
@@ -589,15 +607,9 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     own.push({ limit: d.deniedAt as OwnLimitKind, reason: d.reason })
     return null
   }
-  if (state.effectivelyStopped && !ctx.isSuppression && !personPasses) {
-    const why = state.haltReason
-      ? `halted: ${state.haltReason}`
-      : state.autonomy === 'OFF' ? 'account autonomy is OFF' : 'automation is stopped'
-    return {
-      allowed: false,
-      reason: `ads automation is stopped (${why}) — resume in the Control Room to allow writes`,
-      deniedAt: 'automation_halted',
-    }
+  if (!ctx.isSuppression && !personPasses) {
+    const halted = await automationHaltRefusal()
+    if (halted) return halted
   }
 
   // Env says live, but operator must also enable per-connection writes.

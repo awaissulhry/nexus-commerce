@@ -101,7 +101,14 @@ const SLOT_ROLE = (g: ScopeGroup | undefined): MatchRole => (g?.role === 'exact'
  * applied. Now: one market; only a product enrolled in a playbook there (refused by name otherwise); the playbook's
  * slots, the planner's checks and the write service; `applied` = what reached Amazon.
  */
-export async function crossMatchNegations(productId: string, apply: boolean, actor: string, market: string): Promise<{
+export async function crossMatchNegations(productId: string, apply: boolean, actor: string, market: string, opts: {
+  /**
+   * Batch 2 fix — a person's own click (the route): the gate judges each negative as a person's (a product's brain owning
+   * the negatives lever, the allowlist and the pins let him through, as every person's own add). The account halt still
+   * holds his apply, as before it carried the mark (isolation-run.ts writeAll).
+   */
+  manual?: boolean
+} = {}): Promise<{
   proposals: NegationProposal[]; applied: number; errors: string[]; local: number; alreadyStanding: number
   leftAlone: Array<{ text: string; adGroupId: string | null; why: string }>; excluded: Array<{ slot: string; campaignId: string; adGroupId: string | null; why: string }>
   /** ONE BRAIN — the negatives left because a product's brain runs (or the Owner holds) their campaign's negatives lever. */
@@ -129,7 +136,7 @@ export async function crossMatchNegations(productId: string, apply: boolean, act
   const compiled = await compileIsolationFor(row.id)
   if ('problems' in compiled) return { refused: compiled.problems.join('; ') }
   if (compiled.compiled.problems.length) return { refused: compiled.compiled.problems.join('; ') }
-  const run = await isolateProduct({ action: compiled.compiled.action, actor, dryRun: !apply })
+  const run = await isolateProduct({ action: compiled.compiled.action, actor, dryRun: !apply, ...(opts.manual === true ? { manual: true } : {}) })
   if ('refused' in run) return run
   const groupOf = new Map(run.scope.groups.map((g) => [g.adGroupId, g]))
   const proposals = run.chosen.map((a): NegationProposal => ({
