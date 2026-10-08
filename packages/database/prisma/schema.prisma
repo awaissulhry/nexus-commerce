@@ -4023,6 +4023,41 @@ model AdsDailyVintage {
   @@index([workspaceId])
 }
 
+/// BID BRAIN BB-15 (2026-10-08, design BRAIN-UPGRADES-DESIGN.md U1b) — the attribution lag curve L(a) of one market, or of
+/// one product in it with enough orders of its own: the expected share of a day's final 7-day orders and sales that a copy
+/// pulled at age a days holds (a = 0..14). Fitted each night from the AdsDailyVintage copies, seeded from the settled 1-day
+/// ÷ 7-day ratio (bid-brain/lag-curve.ts); replaced by each fit, no history. Read by the bid brain's nowcast and by the
+/// `bid-brain` read tool (view calibration). Nothing else writes it.
+model AdsLagCurve {
+  // Business ownership comes from verified database context.
+  workspaceId String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String   @id @default(cuid())
+
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// SPONSORED_PRODUCTS (the bid brain's ad product).
+  adProduct   String   @default("SPONSORED_PRODUCTS")
+  /// '*' for the market; a product family (Product.parentId ?? Product.id) with its own curve.
+  scopeId     String   @default("*")
+  /// prior | seed | vintages — what the curve rests on.
+  source      String
+  /// The shares by age 0..14: { "orders": number[15], "sales": number[15] }, each non-decreasing in (0, 1].
+  shares      Json
+  /// The brain may nowcast with it: it rests on a 1d/7d seed or on 14 days of vintages (design U1 guardrails).
+  usable      Boolean  @default(false)
+  /// What it rests on: vintage days, campaign-days and their final orders; the seed's first-day shares; the prior.
+  basis       Json
+  /// How a curve fitted without the newest settled days nowcast them (per age: mean absolute error, against no nowcast).
+  calibration Json?
+  fittedAt    DateTime
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([workspaceId, marketplace, adProduct, scopeId], name: "lag_curve_scope", map: "AdsLagCurve_scope_key")
+  @@index([workspaceId])
+}
+
 // CD.11 — hourly grain (Amazon Marketing Stream). Mirrors the daily table but
 // keyed additionally by `hour` (0-23, UTC) so dayparting (which hour×weekday
 // converts) and hourly share-of-voice become possible — the genuine edge over

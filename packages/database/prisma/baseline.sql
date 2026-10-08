@@ -1707,6 +1707,25 @@ CREATE TABLE "AdsDailyVintage" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsLagCurve" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "adProduct" TEXT NOT NULL DEFAULT 'SPONSORED_PRODUCTS',
+    "scopeId" TEXT NOT NULL DEFAULT '*',
+    "source" TEXT NOT NULL,
+    "shares" JSONB NOT NULL,
+    "usable" BOOLEAN NOT NULL DEFAULT false,
+    "basis" JSONB NOT NULL,
+    "calibration" JSONB,
+    "fittedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsLagCurve_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AmazonAdsHourlyPerformance" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -11272,6 +11291,12 @@ CREATE INDEX "AdsDailyVintage_workspaceId_idx" ON "AdsDailyVintage"("workspaceId
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdsDailyVintage_pull_key" ON "AdsDailyVintage"("workspaceId", "profileId", "adProduct", "entityType", "entityId", "date", "pulledAt");
+
+-- CreateIndex
+CREATE INDEX "AdsLagCurve_workspaceId_idx" ON "AdsLagCurve"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsLagCurve_scope_key" ON "AdsLagCurve"("workspaceId", "marketplace", "adProduct", "scopeId");
 
 -- CreateIndex
 CREATE INDEX "AmazonAdsHourlyPerformance_localEntityId_date_idx" ON "AmazonAdsHourlyPerformance"("localEntityId", "date");

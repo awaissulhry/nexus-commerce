@@ -1749,6 +1749,10 @@
       "fields": []
     },
     {
+      "name": "AdsLagCurve",
+      "fields": []
+    },
+    {
       "name": "AmazonAdsHourlyPerformance",
       "fields": []
     },

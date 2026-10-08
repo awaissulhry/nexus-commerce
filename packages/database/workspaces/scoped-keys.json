@@ -6115,6 +6115,17 @@
     },
     "relations": []
   },
+  "AdsLagCurve": {
+    "scalar": {},
+    "compound": {
+      "lag_curve_scope": [
+        "marketplace",
+        "adProduct",
+        "scopeId"
+      ]
+    },
+    "relations": []
+  },
   "AdSpendCeiling": {
     "scalar": {},
     "compound": {
