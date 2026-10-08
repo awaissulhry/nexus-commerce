@@ -150,10 +150,10 @@ export async function planPromotion(args: {
     // button, not after — D5, decided two sessions ago.
     let blocked: PromotePlanRow['blocked'] = null
     if (promotableShape) {
-      const kw = await checkAdsWriteGate({ marketplace: r.market, payloadValueCents: bid.bidCents, campaignId: chosen!.campaignId } as never) as { allowed: boolean; reason?: string; deniedAt?: string }
+      const kw = await checkAdsWriteGate({ marketplace: r.market, payloadValueCents: bid.bidCents, campaignId: chosen!.campaignId, dimension: 'keywords' } as never) as { allowed: boolean; reason?: string; deniedAt?: string }
       if (!kw.allowed) blocked = { deniedAt: String(kw.deniedAt), reason: String(kw.reason), half: 'keyword' }
       else if (d!.wouldNegateAtSource) {
-        const neg = await checkAdsWriteGate({ marketplace: r.market, payloadValueCents: 0, campaignId: r.campaign.id ?? undefined, isNegation: true, keywordText: r.term } as never) as { allowed: boolean; reason?: string; deniedAt?: string }
+        const neg = await checkAdsWriteGate({ marketplace: r.market, payloadValueCents: 0, campaignId: r.campaign.id ?? undefined, isNegation: true, keywordText: r.term, dimension: 'negatives' } as never) as { allowed: boolean; reason?: string; deniedAt?: string }
         if (!neg.allowed) blocked = { deniedAt: String(neg.deniedAt), reason: String(neg.reason), half: 'negative' }
       }
     }
