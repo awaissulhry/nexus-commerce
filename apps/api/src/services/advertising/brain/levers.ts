@@ -70,7 +70,9 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   // AUTO: the brain never creates, splits or moves a campaign without a person's approval (D1 = B, D2 = A).
   structure: { levels: ['OFF', 'OBSERVE', 'PROPOSE'], others: 'AB-16: single-keyword campaigns for key terms, the split of a shared campaign into one per product and the move of the product\'s campaigns into its one portfolio — OBSERVE logs each proposal in shadow (ads-brain view structure), PROPOSE asks a person for each build, its go-live (a normal approval inside the caps, D1 = B) and each move; never AUTO: the brain never creates, splits or moves a campaign without a person\'s approval' },
   biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
-  offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },
+  // AB-18 — read side only: OBSERVE watches the lane in the placement report and raises a line for the Owner; no PROPOSE or
+  // AUTO because Nexus could not verify an Amazon Ads API setting to limit off-Amazon spend (brain/off-amazon.ts).
+  offAmazon: { levels: OFF_OBSERVE, others: 'AB-18: OBSERVE watches the off-Amazon lane in the placement report (its share of spend, its ACoS against the band top over 14 settled days: ads-brain view money) and raises a line for the Owner when it stays above; no PROPOSE or AUTO — Nexus could not verify an Amazon Ads API setting for "Limit off-Amazon spend", so the brain can neither ask for it nor write it (Amazon\'s console only)' },
 }
 
 /** Why a lever cannot be set to this level today; null when it can. */

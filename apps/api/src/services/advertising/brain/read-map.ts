@@ -48,6 +48,9 @@ import {
 export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report', 'structure'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
+/** AB-18 — who runs the off-Amazon setting of a campaign, as the map says it (brain/off-amazon.ts OFF_AMAZON_CAPABILITY). */
+export const OFF_AMAZON_OWNER = 'could not measure: Nexus could not verify an Amazon Ads API setting for "Limit off-Amazon spend", so nobody in Nexus reads or writes it (Amazon\'s console only); the lane\'s share of spend and its ACoS against the band are in ads-brain view money (AB-18)'
+
 /** The days of action-log evidence a view reads by default, and at most. */
 export const DEFAULT_EVIDENCE_DAYS = 14
 export const MAX_EVIDENCE_DAYS = 60
@@ -479,8 +482,8 @@ async function campaignLevers(campaigns: readonly CampaignRow[], owners: Readonl
           ...(evidence.get(c.id)?.get(lever) ?? []),
         ]
         return [lever, {
-          // Nexus does not model the off-Amazon lane (its setting and its report): nobody can say who runs it.
-          owner: lever === 'offAmazon' ? 'could not measure: Nexus does not model the off-Amazon lane yet (AB-18)' : leverOwner(writers, { excluded: !!settings?.excluded.value, brainNote: brainNoteOf(writers) }),
+          // AB-18 — the off-Amazon setting has no Amazon Ads API field Nexus could verify: nobody in Nexus reads or writes it.
+          owner: lever === 'offAmazon' ? OFF_AMAZON_OWNER : leverOwner(writers, { excluded: !!settings?.excluded.value, brainNote: brainNoteOf(writers) }),
           // A shared campaign is no product's brain's (D2: split it); its exclusions and locks still hold (in the writers).
           ...(o?.owner.kind === 'shared' ? { brain: 'SHARED', brainWhy: 'a shared campaign: no product\'s brain owns its levers (the brain proposes a split, D2)' }
             : settings ? { brain: settings.levers[lever].effective, brainWhy: settings.levers[lever].why } : {}),
