@@ -29,6 +29,10 @@
  *             keywords decided again with them (intradayEffects); the decisions and every write stay the ones without, the
  *             stored why of one a brake would change gains " · intraday (shadow): would …", and the run's line counts them.
  *             on: the brakes are in the facts (facts.ts), and the line counts what they changed
+ *   BB-22     NEXUS_BID_BRAIN_HOUR_FACTORS=shadow (the default): each full run learns the hour factors of the products of
+ *             the owned campaigns whose plan holds an hour (once a day, hour-factors-store.ts) and says beside the plan's
+ *             what the learned one would do to this hour's cell; on: the cell's lanes move inside its limits where the
+ *             product's brain owns the hours lever; off: nothing read
  *   BB-19     NEXUS_BID_BRAIN_RESPONSE=shadow (the default): each full run also finds each keyword's profit-best bid inside
  *             its band and the marginal ACoS of the last euro (response-explore.ts); the decisions stay the goal's, the
  *             stored why gains " · profit-best …", `evidence.response` the numbers, the run's line the count
@@ -60,6 +64,7 @@ import { strategySwitchesToday } from './stop-memory.js'
 import { loadMarket, loadNowcastEvidence, loadRun, SHADOW_MARKETS, type LastWrite, type LoadedMarket, type PreviousDecision } from './load.js'
 import { compareNowcast, nowcastLastSteps, nowcastMode, nowcastOnNotes, nowcastSummaryWords, runForRows, youngPctOf, type NowcastShadowSummary } from './nowcast.js'
 import { anyBrake, compareIntraday, intradaySummaryWords, type IntradaySummary } from './intraday.js'
+import { hourFactorsForRun } from './hour-factors-store.js'
 import { upgradesShadow, type UpgradesSummary } from './response-explore.js'
 import { responseSummaryWords } from './response.js'
 import { exploreSummaryWords } from './explore.js'
@@ -150,7 +155,11 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   const anchored = runForRows(rows, loaded.run)
   // AB-14 — the raises an earlier step of the product cycle holds (a pause it makes, a budget it cuts, the money brake),
   // beside the brain's own spend guard: decide.ts lets no goal raise through, and no placement % rises.
-  const run = ctx.raiseCaps?.size ? { ...anchored, spendGuard: mergeRaiseCaps(anchored.spendGuard, ctx.raiseCaps) } : anchored
+  const capped = ctx.raiseCaps?.size ? { ...anchored, spendGuard: mergeRaiseCaps(anchored.spendGuard, ctx.raiseCaps) } : anchored
+  // BB-22 — the learned hour factors (NEXUS_BID_BRAIN_HOUR_FACTORS off · shadow, the default: their moves said in the why,
+  // nothing changed · on: the approved plan's lanes moved inside each cell's limits where the product's brain owns hours).
+  const hourFactors = await hourFactorsForRun(market, capped, { now: ctx.now, clockNow: ctx.clockNow ?? ctx.now, light: !!rows.light })
+  const run = hourFactors.run
   const groupOf = new Map(rows.targets.map((t) => [t.id, t.adGroupId]))
   const campaignOf = (targetId: string): string => {
     const adGroupId = groupOf.get(targetId)
@@ -217,7 +226,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
       mode: owned.has(campaignId) ? 'LIVE' : 'SHADOW', kind, marketplace: market, campaignId, adGroupId, targetId: d.targetId,
       action: d.action, layer: d.layer, currentCents: d.currentCents, decidedCents: d.bidCents, goalBidCents: d.goalBidCents,
       aim: dec(d.goal?.aim), bandLo: dec(d.goal?.lo), bandHi: dec(d.goal?.hi), expectedAcos: dec(d.expectedAcos), confidence: dec(d.confidence),
-      dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(withNote(withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, upgrades?.notes.get(d.targetId)), nowcast?.notes.get(d.targetId)), intraday?.notes.get(d.targetId)),
+      dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(withNote(withNote(withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, upgrades?.notes.get(d.targetId)), nowcast?.notes.get(d.targetId)), hourFactors.notes.get(campaignId)), intraday?.notes.get(d.targetId)),
       evidence: { step: d.step, lastStep: carriedStep(d, run.lastSteps.get(d.targetId)), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, ...upgrades?.evidence.get(d.targetId) } as unknown as Prisma.InputJsonObject,
       createdAt: ctx.now,
     }]

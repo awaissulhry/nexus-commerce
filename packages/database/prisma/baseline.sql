@@ -9616,6 +9616,23 @@ CREATE TABLE "BidDirective" (
 );
 
 -- CreateTable
+CREATE TABLE "BidBrainHourFactor" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "campaignIds" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "windowFrom" TEXT,
+    "windowTo" TEXT,
+    "factors" JSONB NOT NULL,
+    "learnedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "BidBrainHourFactor_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsBrainEnrollment" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15747,6 +15764,15 @@ CREATE INDEX "BidDirective_targetId_idx" ON "BidDirective"("targetId");
 
 -- CreateIndex
 CREATE INDEX "BidDirective_workspaceId_idx" ON "BidDirective"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "BidBrainHourFactor_marketplace_idx" ON "BidBrainHourFactor"("marketplace");
+
+-- CreateIndex
+CREATE INDEX "BidBrainHourFactor_workspaceId_idx" ON "BidBrainHourFactor"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "BidBrainHourFactor_product_key" ON "BidBrainHourFactor"("workspaceId", "productId", "marketplace");
 
 -- CreateIndex
 CREATE INDEX "AdsBrainEnrollment_marketplace_idx" ON "AdsBrainEnrollment"("marketplace");
