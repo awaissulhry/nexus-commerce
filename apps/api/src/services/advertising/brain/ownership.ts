@@ -9,9 +9,11 @@
  *   none     no ad ties to a product (no ad, or only ads Nexus cannot tie) → today's engines run it, as now
  *
  * An ad ties to a product by its productId (a live product), else its SKU (Product.sku: the advertised seller SKU names
- * one product row), else its ASIN (Product.amazonAsin, any case). An ASIN that live products of two families carry ties
- * the ad to both (the campaign is then shared, and the ASIN is named in `ambiguous`). Archived ads and the ads of
- * archived ad groups do not count: they serve nothing.
+ * one product row), else its ASIN (Product.amazonAsin, any case — or the ASIN a live product's Amazon listing carries,
+ * ChannelListing.externalListingId: a size added later can hold its true ASIN only there, e.g. a row that copied a
+ * sibling's amazonAsin). An ASIN that live products of two families carry ties the ad to both (the campaign is then
+ * shared, and the ASIN is named in `ambiguous`). Archived ads and the ads of archived ad groups do not count: they serve
+ * nothing.
  *
  * The family: a variation rolls up to its parent (Product.parentId ?? Product.id — one level deep, as everywhere in
  * Nexus; the product studio refuses a deeper tree). A product with no parent whose ASIN a variation carries (the same
@@ -129,7 +131,10 @@ export function tieCampaigns(campaignIds: readonly string[], ads: readonly AdRef
   }]))
 }
 
-/** The live product rows these ads may name (one query), and the variations whose ASIN a parentless row carries (one more). */
+/**
+ * The live product rows these ads may name (one query), the rows whose Amazon listing carries an ad's ASIN (one more),
+ * and the variations whose ASIN a parentless row carries (one more).
+ */
 async function loadCatalog(ads: readonly AdRef[]): Promise<Catalog> {
   const ids = [...new Set(ads.map((a) => a.productId).filter((v): v is string => !!v))]
   const skus = [...new Set(ads.map((a) => a.sku?.trim()).filter((v): v is string => !!v))]
@@ -146,7 +151,25 @@ async function loadCatalog(ads: readonly AdRef[]): Promise<Catalog> {
     },
     select: { id: true, parentId: true, amazonAsin: true, sku: true },
   })
-  return buildCatalog(rows, await variationsCarrying(rows))
+  const listed = await listingAsinRows(asins, rows)
+  // The listing rows go first: a product's own row (later) keeps its byId / bySku place; the listing ASIN only adds to byAsin.
+  return buildCatalog([...listed, ...rows], await variationsCarrying(rows))
+}
+
+/**
+ * A live product whose Amazon listing carries one of these ASINs while its own amazonAsin does not (a size added later,
+ * or a row that copied a sibling's ASIN): the product row as if it carried the listing's ASIN. ASINs a product's own
+ * amazonAsin already ties are left out, so nothing changes for them.
+ */
+async function listingAsinRows(asins: readonly string[], tied: readonly ProductRow[]): Promise<ProductRow[]> {
+  const known = new Set(tied.flatMap((r) => (r.amazonAsin?.trim() ? [asinOf(r.amazonAsin)] : [])))
+  const open = asins.filter((a) => !known.has(a))
+  if (!open.length) return []
+  const listings = await prisma.channelListing.findMany({
+    where: { channel: 'AMAZON', externalListingId: { in: asinForms(open) }, product: { deletedAt: null } },
+    select: { externalListingId: true, product: { select: { id: true, parentId: true, sku: true } } },
+  })
+  return listings.flatMap((l) => (l.externalListingId?.trim() ? [{ ...l.product, amazonAsin: asinOf(l.externalListingId) }] : []))
 }
 
 /** The live variations that carry the ASIN of a parentless row (RD.10h: the same Amazon product under a second SKU). */
@@ -158,8 +181,9 @@ async function variationsCarrying(rows: readonly ProductRow[]): Promise<Array<{ 
 }
 
 /**
- * Who owns each of these campaigns (ids not in this business are left out). Four queries at most: the campaigns, their
- * serving ads, the products the ads name, and the variations that carry a parentless product's ASIN.
+ * Who owns each of these campaigns (ids not in this business are left out). Five queries at most: the campaigns, their
+ * serving ads, the products the ads name, the products whose Amazon listing carries an ad's ASIN, and the variations
+ * that carry a parentless product's ASIN.
  */
 export async function resolveCampaignOwnership(campaignIds: readonly string[]): Promise<Map<string, CampaignOwnership>> {
   const ids = [...new Set(campaignIds.filter(Boolean))]
@@ -207,7 +231,9 @@ export async function productCampaigns(productId: string, market: string): Promi
   if (!family) return null
   const memberIds = family.members.map((m) => m.id)
   const skus = family.members.map((m) => m.sku)
-  const asins = [...new Set(family.members.map((m) => m.amazonAsin?.trim()).filter((a): a is string => !!a).map(asinOf))]
+  // The members' own ASINs and the ASINs their Amazon listings carry (a size whose true ASIN lives only on its listing).
+  const listed = await prisma.channelListing.findMany({ where: { channel: 'AMAZON', productId: { in: memberIds }, externalListingId: { not: null } }, select: { externalListingId: true } })
+  const asins = [...new Set([...family.members.map((m) => m.amazonAsin), ...listed.map((l) => l.externalListingId)].filter((a): a is string => !!a?.trim()).map(asinOf))]
   const candidates = await prisma.campaign.findMany({
     where: {
       adProduct: 'SPONSORED_PRODUCTS',
