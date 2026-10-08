@@ -1727,6 +1727,10 @@
       "fields": []
     },
     {
+      "name": "AdsDailyVintage",
+      "fields": []
+    },
+    {
       "name": "AmazonAdsHourlyPerformance",
       "fields": []
     },

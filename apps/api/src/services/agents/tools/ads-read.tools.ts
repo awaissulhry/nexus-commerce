@@ -59,6 +59,7 @@ import { reportSummary } from '../../advertising/ads-report-summary.service.js'
 import { getAutomationState } from '../../advertising/ads-automation-state.service.js'
 import { getEngineLevers } from '../../advertising/ads-control-room.service.js'
 import { pipelineHealth } from '../../advertising/ads-pipeline-health.service.js'
+import { dataVintageByMarket, type MarketVintage } from '../../advertising/ads-report-settle.service.js'
 import { adsProfileFor } from '../../advertising/ads-profile-resolver.js'
 import { getBidGrid, type BidTargetRow } from '../../advertising/bid-grid.service.js'
 import { previewHarvest, type HarvestCandidate } from '../../advertising/ads-harvest.service.js'
@@ -146,6 +147,8 @@ const AD_MONEY = {
   replaced: ADSPEND,
   wrote: ADSPEND,
   estimatedImpact: ADSPEND,
+  // BB-13 — how much more the settled copy of a day sold than its first copy: a ratio of ad sales.
+  salesGapPct: ADSPEND,
 } as const
 
 /** Amazon restates the last 3 days of a report for up to 72 hours. */
@@ -401,6 +404,29 @@ function automationSummary(state: Awaited<ReturnType<typeof getAutomationState>>
 }
 
 /** W4-1 — also the figures of report-ads-run (ads-manager.tools.ts): a report states the numbers this read states. */
+/** BB-13 — a market's settled days and the first-copy gap, in the words ads-overview gives. */
+function vintageOf(v: MarketVintage | undefined) {
+  if (!v) return null
+  return {
+    settledThrough: v.settledThrough,
+    stillFillingFrom: v.stillFillingFrom,
+    note: v.settledThrough
+      ? `Days up to ${v.settledThrough} hold Amazon's settled numbers; later days are still filling (Amazon adds a click's purchase to its day for 7 days, 14 for Brands and Display).`
+      : 'No day holds a settled copy yet: every day may still gain sales (Amazon adds a click\'s purchase to its day for 7 days, 14 for Brands and Display).',
+    gap: v.measured
+      ? {
+          days: v.measured.days,
+          campaignDays: v.measured.campaignDays,
+          firstCopy: v.measured.firstCopy,
+          settled: v.measured.settled,
+          salesGapPct: v.measured.salesGapPct,
+          ordersGapPct: v.measured.ordersGapPct,
+          meaning: 'Over the window\'s settled campaign days: what Nexus first stored (asked the next morning) against the settled copy. A positive gap is sales and orders that arrived late.',
+        }
+      : null,
+  }
+}
+
 export async function amazonOverview(args: { market?: string; days: number }) {
   const { range, window } = windowOf(args.days)
   const campaigns = await prisma.campaign.findMany({
@@ -410,12 +436,13 @@ export async function amazonOverview(args: { market?: string; days: number }) {
   const markets = [...new Set(campaigns.map((c) => c.marketplace).filter((m): m is string => !!m))].sort()
   const unplaced = campaigns.filter((c) => !c.marketplace).length
 
-  const [fresh, list, state, levers, health] = await Promise.all([
+  const [fresh, list, state, levers, health, vintage] = await Promise.all([
     performanceAsOf(markets),
     markets.length ? listAmazonCampaigns({ windowDays: String(args.days), limit: String(CAMPAIGN_READ_CAP), ...(args.market ? { marketplace: args.market } : {}) }) : Promise.resolve({ items: [] as never[] }),
     getAutomationState(),
     getEngineLevers(),
     pipelineHealth(),
+    dataVintageByMarket(markets, range.sinceStr, range.untilStr),
   ])
 
   const perMarket = await Promise.all(markets.map(async (market) => {
@@ -467,6 +494,7 @@ export async function amazonOverview(args: { market?: string; days: number }) {
         return { date, provisional: date >= window.provisionalFrom, impressions: t.impressions, clicks: t.clicks, orders: t.orders, spendCents: t.spendCents, salesCents: t.salesCents }
       }),
       topCampaigns: top,
+      dataVintage: vintageOf(vintage.get(market)),
     }
   }))
 
@@ -508,7 +536,9 @@ const adsOverview: AgentTool = {
     + 'their own (writingOnTheirOwn; enginesOnAuto lists every engine on Auto, whether or not it writes), every engine in '
     + 'a plain group (engineGroups: changes Amazon on its own, ready with nothing set up, off by a server switch, held back '
     + 'in Nexus, never changes Amazon by itself) with why and what it did in 7 days, and the health of the data '
-    + 'feeds (late, failing, contradictions). dataAsOf is the newest day of performance data.' + MONEY_WORDS
+    + 'feeds (late, failing, contradictions). dataAsOf is the newest day of performance data. dataVintage per market: '
+    + 'the newest day holding Amazon\'s settled numbers (later days still gain late sales) and, over the window, the ad '
+    + 'sales and orders Nexus first stored against the settled copy (gap).' + MONEY_WORDS
     + ' Each market\'s totals are in that market\'s currency; markets are never added together.'
     + ' eBay (channel ebay): per marketplace the ad fees (as spend), sales and sold units for the window and the one '
     + 'before, each day, the campaigns that cost most with their account, the eBay accounts in use, campaign counts, '

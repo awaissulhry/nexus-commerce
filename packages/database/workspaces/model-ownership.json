@@ -441,6 +441,7 @@
     "AdsHarvestPolicy",
     "AdsHarvestDestination",
     "SqpReportRequest",
+    "AdsDailyVintage",
     "AdSpendCeiling",
     "AdBidPolicy",
     "AdsStrategy",

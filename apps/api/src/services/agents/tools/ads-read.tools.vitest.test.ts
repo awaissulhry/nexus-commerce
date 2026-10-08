@@ -618,3 +618,32 @@ describe('A2 — a cursor belongs to one list, one set of filters and one busine
     }
   })
 })
+
+// ── BB-13 data vintage (last: it adds an ads profile, which earlier tests read as absent) ─────────────────────
+
+describe('BB-13 — ads-overview dataVintage', () => {
+  it('per market: the newest settled day, and the first copy against the settled copy; amounts hidden without the money permission', async () => {
+    const day = ymd(dayBefore(12))
+    await inside(A, async () => {
+      const db = database.client
+      await db.amazonAdsProfile.create({ data: { profileId: 'P1', marketplace: 'IT', currencyCode: 'EUR' } })
+      // Last night's ranged pull (asked at 01:15 on TODAY, the window's last day): it settles the oldest day of its span.
+      const asked = new Date(dayBefore(0).getTime() + 75 * 60_000)
+      await db.amazonAdsReportJob.create({ data: { profileId: 'P1', adProduct: 'SPONSORED_PRODUCTS', reportTypeId: 'spCampaigns', externalReportId: 'r-v', startDate: dayBefore(8), endDate: dayBefore(1), configuration: {}, status: 'COMPLETED', createdAt: asked, ingestedAt: asked } })
+      const vintage = (pulledAt: Date, ageDays: number, sales7dCents: number, orders7d: number) =>
+        db.adsDailyVintage.create({ data: { profileId: 'P1', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', entityType: 'CAMPAIGN', entityId: 'EXT-C1', date: new Date(`${day}T00:00:00.000Z`), pulledAt, ageDays, impressions: 500, clicks: 11, costMicros: 4_320_000n, sales7dCents, orders7d } })
+      await vintage(dayBefore(11), 0, 2000, 1)
+      await vintage(asked, 11, 2468, 2)
+    })
+    const it_ = (await call('ads-overview', { market: 'IT', days: 30 })).data!.markets[0]
+    expect(it_.dataVintage).toMatchObject({
+      settledThrough: ymd(dayBefore(8)),
+      stillFillingFrom: ymd(dayBefore(7)),
+      gap: { days: 1, campaignDays: 1, firstCopy: { salesCents: 2000, orders: 1 }, settled: { salesCents: 2468, orders: 2 }, salesGapPct: 23.4, ordersGapPct: 100 },
+    })
+    const hidden = (await call('ads-overview', { market: 'IT', days: 30 }, operator())).data!.markets[0].dataVintage
+    expect(hidden.gap.firstCopy).toEqual({ orders: 1 })
+    expect(hidden.gap.salesGapPct).toBeUndefined()
+    expect(hidden.gap.ordersGapPct).toBe(100)
+  })
+})

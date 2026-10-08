@@ -1669,6 +1669,34 @@ CREATE TABLE "AmazonAdsDailyPerformance" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsDailyVintage" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "profileId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "adProduct" TEXT NOT NULL,
+    "entityType" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "pulledAt" TIMESTAMP(3) NOT NULL,
+    "ageDays" INTEGER NOT NULL,
+    "source" TEXT NOT NULL DEFAULT 'pull',
+    "reportRunId" TEXT,
+    "impressions" INTEGER NOT NULL,
+    "clicks" INTEGER NOT NULL,
+    "costMicros" BIGINT NOT NULL,
+    "sales1dCents" INTEGER,
+    "sales7dCents" INTEGER,
+    "sales14dCents" INTEGER,
+    "orders1d" INTEGER,
+    "orders7d" INTEGER,
+    "orders14d" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdsDailyVintage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AmazonAdsHourlyPerformance" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -11059,6 +11087,18 @@ CREATE INDEX "AmazonAdsDailyPerformance_workspaceId_idx" ON "AmazonAdsDailyPerfo
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AmazonAdsDailyPerformance_profileId_adProduct_entityT_4f88ac473" ON "AmazonAdsDailyPerformance"("workspaceId", "profileId", "adProduct", "entityType", "entityId", "date");
+
+-- CreateIndex
+CREATE INDEX "AdsDailyVintage_marketplace_date_idx" ON "AdsDailyVintage"("marketplace", "date");
+
+-- CreateIndex
+CREATE INDEX "AdsDailyVintage_createdAt_idx" ON "AdsDailyVintage"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsDailyVintage_workspaceId_idx" ON "AdsDailyVintage"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsDailyVintage_pull_key" ON "AdsDailyVintage"("workspaceId", "profileId", "adProduct", "entityType", "entityId", "date", "pulledAt");
 
 -- CreateIndex
 CREATE INDEX "AmazonAdsHourlyPerformance_localEntityId_date_idx" ON "AmazonAdsHourlyPerformance"("localEntityId", "date");
