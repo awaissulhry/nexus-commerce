@@ -1,10 +1,10 @@
 /**
- * MX — PREVIEW fixtures: deterministic Matrix cells on REAL rows, until the Matrix service exists.
+ * MX — Matrix FIXTURES for the grid lab and the tests: deterministic Matrix cells on given rows.
  *
- * The page's identity column, axis values, images and row order come from the sheet and the family read
- * (real). Only the CELLS are fixtures — generated from a stable hash of `sku + coordinate`, so a reload
- * paints the same picture and a screenshot can be compared to itself. The page states this on screen
- * (`MATRIX_COPY.previewBanner`) and `MatrixRead.source === 'preview'` is how every consumer knows.
+ * 🔴 Never the page's (Owner 2026-10-08: the Matrix page has no preview mode — a failed read is the load-error state, never
+ * these numbers). The `/design` grid lab (`MatrixScenario.tsx`) and the node tests build reads from here. The cells are
+ * generated from a stable hash of `sku + coordinate`, so the same rows paint the same picture; the read says
+ * `source: 'preview'`.
  *
  * 🔴 PREVIEW-ONLY knowledge lives here and nowhere else: the EU shared-market set mirrors
  * `apps/api/src/services/amazon-eu-quantity-guard.ts:24` so the preview can group the region the way the live

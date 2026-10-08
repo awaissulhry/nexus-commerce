@@ -1902,6 +1902,8 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-matrix-marks .nds-cell-prov { margin-right: 0; }
 .nds-matrix-warn { color: var(--nds-warning-text); font-weight: var(--nds-font-weight-bold); line-height: 1; }
 .nds-matrix-reported { color: var(--nds-text-2); font-weight: var(--nds-font-weight-bold); line-height: 1; }
+/* 2026-10-08 — ✗ on a Qty or Price cell whose newest push of its lane failed (the Sync column folded into the cells). */
+.nds-matrix-failed { color: var(--nds-danger-text); font-weight: var(--nds-font-weight-bold); line-height: 1; }
 /* The ⏸ glyph: `--nds-font-size-xs` so it sits level with the 12.5px word rather than above it. */
 .nds-matrix-pause { display: inline-block; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); margin-right: var(--nds-space-4); line-height: 1; }
 /* The Sync cell is a BUTTON (click = Needs attention). It fills the cell and inherits its type. */

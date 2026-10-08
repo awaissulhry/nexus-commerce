@@ -58,7 +58,7 @@ function groups(onOpenFrom?: (rowId: string, key: string, anchor: HTMLElement | 
   return buildMatrixColumns({
     coordinates: [EU, IT, EBAY], cellsOf: (id: string, key: string) => CELLS[`${id}|${key}`] ?? null, rowOf: (id: string) => ROWS[id] ?? null,
     tracker: { get: () => undefined } as never, sheetColumns: [], locale: 'it', market: 'IT',
-    axesRef: { current: [] }, rowMenuRef: { current: () => [] }, masterHeldReason: null, onJump: () => undefined, onPickFulfilment: () => undefined, rowsRef: { current: [] },
+    axesRef: { current: [] }, rowMenuRef: { current: () => [] }, onPickFulfilment: () => undefined, rowsRef: { current: [] },
     onOpenFrom,
   } as never) as Def[]
 }
@@ -72,9 +72,10 @@ const render = (d: Def, id: string) => {
 describe('the From column', () => {
   it('sits after Fulfilment on every group that carries the quantity — once on Amazon EU, never on its markets', () => {
     const g = groups()
-    expect(idsOf(g, 'AMAZON:EU')).toEqual(['AMAZON:EU.fulfilment', 'AMAZON:EU.from', 'AMAZON:EU.syncMode', 'AMAZON:EU.syncQty', 'AMAZON:EU.syncBuffer', 'AMAZON:EU.syncState'])
+    /* No Sync column (Owner 2026-10-08): the group serves the kind, the page does not draw it. */
+    expect(idsOf(g, 'AMAZON:EU')).toEqual(['AMAZON:EU.fulfilment', 'AMAZON:EU.from', 'AMAZON:EU.syncMode', 'AMAZON:EU.syncQty', 'AMAZON:EU.syncBuffer'])
     expect(idsOf(g, 'AMAZON:IT')).not.toContain('AMAZON:IT.from')
-    expect(idsOf(g, 'EBAY:IT')).toEqual(['EBAY:IT.listing', 'EBAY:IT.from', 'EBAY:IT.syncMode', 'EBAY:IT.syncQty', 'EBAY:IT.syncBuffer', 'EBAY:IT.syncState', 'EBAY:IT.price'])
+    expect(idsOf(g, 'EBAY:IT')).toEqual(['EBAY:IT.listing', 'EBAY:IT.from', 'EBAY:IT.syncMode', 'EBAY:IT.syncQty', 'EBAY:IT.syncBuffer', 'EBAY:IT.price'])
     expect(fromBefore(IT)).toBeNull()
     expect(fromBefore(coord('X:Y', ['syncQty'], { connected: false }))).toBeNull()
   })

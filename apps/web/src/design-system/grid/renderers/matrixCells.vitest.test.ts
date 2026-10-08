@@ -40,6 +40,7 @@ import {
   matrixCompare,
   matrixFillAllowed,
   matrixMoney,
+  matrixPushFailedLine,
   matrixQueueGlyph,
   type MatrixCellState,
 } from './matrixCells'
@@ -321,11 +322,26 @@ describe('matrixCellTooltip — Appendix A through MATRIX_COPY, plus the blocked
     expect(matrixCellTooltip('syncQty', STATE_FIXTURES['offer-closed'].c, COORD)).toBe(MATRIX_CELL_COPY.closedHint)
     expect(matrixCellTooltip('syncQty', STATE_FIXTURES.oversold.c, COORD)).toContain(MATRIX_OVERSOLD_SENTENCE)
   })
-  it('the EU region sentence rides on the inventory kinds of a region coordinate and nowhere else', () => {
+  it('🔴 no cell repeats the Amazon EU sentence (Owner 2026-10-08: the group label and the Edit preview say it once each)', () => {
     const eu = MATRIX_CELL_COPY.sharedEu(['IT', 'DE'])
-    for (const kind of ['fulfilment', 'syncMode', 'syncQty', 'syncBuffer'] as const) expect(matrixCellTooltip(kind, cells(), EU)).toContain(eu)
-    expect(matrixCellTooltip('price', cells(), EU)).not.toContain(eu)
-    expect(matrixCellTooltip('syncQty', cells(), COORD)).not.toContain(eu)
+    for (const kind of ['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price'] as const) {
+      expect(matrixCellTooltip(kind, cells(), EU) ?? '').not.toContain(eu)
+      expect(matrixCellTooltip(kind, cells(), COORD) ?? '').not.toContain(eu)
+    }
+  })
+  it('🔴 a failed push LEADS the Qty / Price tooltip, reason first; the EU conflict follows it; success says nothing (2026-10-08)', () => {
+    const failed = { reason: 'eBay: 25002 — the item is not active on this site', at: '2026-09-13T03:02:00.000Z', final: true, markets: [] as string[] }
+    expect(matrixPushFailedLine(failed, 'stock', NOW)).toBe('eBay: 25002 — the item is not active on this site · last stock push failed 2 h ago')
+    expect(matrixPushFailedLine({ ...failed, final: false, markets: ['IT', 'DE'] }, 'price', NOW))
+      .toBe('eBay: 25002 — the item is not active on this site · last price push failed on IT DE 2 h ago · it is tried again by itself')
+    const qty = matrixCellTooltip('syncQty', cells({ sync: { pushFailed: failed, euConflict: 'EU shared-quantity conflict: IT follow the pool while DE is pinned at 0' } }), EU, MATRIX_CELL_COPY, NOW)!
+    expect(qty.startsWith(failed.reason)).toBe(true)
+    expect(qty).toBe(`${matrixPushFailedLine(failed, 'stock', NOW)} · EU shared-quantity conflict: IT follow the pool while DE is pinned at 0 · Follows the pool · 403 available at IT-MAIN − 0 buffer`)
+    /* Only the Qty cell carries the stock lane's failure — Mode and Buffer say their own facts. */
+    expect(matrixCellTooltip('syncMode', cells({ sync: { pushFailed: failed } }), COORD, MATRIX_CELL_COPY, NOW)).not.toContain(failed.reason)
+    expect(matrixCellTooltip('price', cells({ price: { pushFailed: failed } }), COORD, MATRIX_CELL_COPY, NOW)).toBe(`${matrixPushFailedLine(failed, 'price', NOW)} · Follows the base price €105.00`)
+    /* No failure sent → no line: the server's verdict, never the folded queue (a `dead` queue alone says nothing here). */
+    expect(matrixCellTooltip('syncQty', cells({ queue: { state: 'dead', reason: 'MAX_RETRIES_EXCEEDED' } }), COORD, MATRIX_CELL_COPY, NOW)).toBe('Follows the pool · 403 available at IT-MAIN − 0 buffer')
   })
   it('Price: Set here · Follows the base price · Formula · Clamped · the sale line', () => {
     expect(matrixCellTooltip('price', STATE_FIXTURES['price-master'].c, COORD)).toBe('Follows the base price €105.00')
@@ -482,7 +498,16 @@ describe('the eight renderers draw what the rules decided', () => {
     expect(html('fulfilment', STATE_FIXTURES['fulfilment-derived'].c)).toContain('nds-cell-prov-inherited')
     expect(html('fulfilment', STATE_FIXTURES['fulfilment-guard-differs'].c)).toContain('nds-matrix-warn')
     expect(html('fulfilment', STATE_FIXTURES['fulfilment-reported-differs'].c)).toContain('nds-matrix-reported')
-    expect(html('fulfilment', cells({ fulfilment: { method: 'FBM', guard: 'FBA', reported: 'AFN' } }))).toMatch(/nds-matrix-warn.*nds-matrix-reported/s)
+    /* Owner 2026-10-08: ⚠ and ⇄ from ONE fact (Amazon reports AFN, so the fail-closed guard reads FBA) → ⚠ alone… */
+    const oneFact = html('fulfilment', cells({ fulfilment: { method: 'FBM', guard: 'FBA', reported: 'AFN' } }))
+    expect(oneFact).toContain('nds-matrix-warn')
+    expect(oneFact).not.toContain('nds-matrix-reported')
+    /* …while the tooltip still says both. */
+    expect(matrixCellTooltip('fulfilment', cells({ fulfilment: { method: 'FBM', guard: 'FBA', reported: 'AFN' } }), COORD)).toMatch(/Guard reads FBA.*Amazon reports AFN/)
+    /* The other direction is one fact too (Amazon reports MFN, the guard reads FBM): ⚠ alone. */
+    const other = html('fulfilment', cells({ fulfilment: { method: 'FBA', guard: 'FBM', reported: 'MFN' } }))
+    expect(other).toContain('nds-matrix-warn')
+    expect(other).not.toContain('nds-matrix-reported')
     expect(html('fulfilment', cells({ writable: { fulfilment: false } }))).not.toContain('nds-ag-chev')
     expect(html('fulfilment', cells({ fulfilment: null }))).toContain(MATRIX_DASH)
   })
@@ -509,6 +534,19 @@ describe('the eight renderers draw what the rules decided', () => {
     expect(html('syncQty', STATE_FIXTURES.uncounted.c)).not.toContain('nds-matrix-warn"')
     expect(html('syncQty', STATE_FIXTURES.oversold.c)).toMatch(/nds-matrix-warn/)
     expect(html('syncQty', STATE_FIXTURES.oversold.c)).toContain(MATRIX_OVERSOLD_SENTENCE)
+  })
+  it('🔴 Qty ✗ on a failed stock push, ⚠ on the Amazon EU conflict; Price ✗ on a failed price push — only what the server sent (2026-10-08)', () => {
+    const failed = { reason: 'Refused by the Amazon EU guard', at: null, final: true, markets: ['IT'] }
+    const qty = html('syncQty', cells({ sync: { pushFailed: failed } }))
+    expect(qty).toMatch(/>403<.*nds-matrix-failed.*✗/s)
+    /* No title of its own: the AG tooltip leads with the reason. */
+    expect(qty).not.toMatch(/nds-matrix-failed"[^>]*title=/)
+    expect(html('syncQty', cells({ sync: { euConflict: 'EU shared-quantity conflict: …' } }))).toMatch(/nds-matrix-warn[^>]*>⚠/)
+    expect(html('price', cells({ price: { pushFailed: failed } }))).toMatch(/>€105\.00<.*nds-matrix-failed/s)
+    /* Success, and a failed folded queue the server did not turn into a lane failure, show nothing. */
+    expect(html('syncQty', cells())).not.toContain('nds-matrix-failed')
+    expect(html('syncQty', cells({ queue: { state: 'dead' } }))).not.toContain('nds-matrix-failed')
+    expect(html('price', cells())).not.toContain('nds-matrix-failed')
   })
   it('Buffer: the number, muted dash on Pinned', () => {
     expect(html('syncBuffer', cells({ sync: { buffer: 3 } }))).toContain('>3<')
@@ -601,7 +639,12 @@ describe('the Listing cell — health words first, then the selling word (build 
     const h = html('listing', sell('paused', null, 'closed'))
     expect(h).toContain('>Inactive<')
     expect(h).toContain(`data-tone="${readinessMeta('missing', 'row').tone}"`)
-    expect(html('listing', sell('active'))).toContain('>Active<')
+    /* Owner 2026-10-08: "Active" is the Status column's word beside it — the Listing cell shows the id alone… */
+    const active = html('listing', sell('active'))
+    expect(active).not.toContain('>Active<')
+    expect(active).toContain('B0FXD0620C')
+    /* …while its text (copy, export, filter) still says it. */
+    expect(matrixCellText('listing', sell('active'), COORD)).toBe('Active')
     expect(html('listing', cells({ listing: { state: 'suppressed', selling: { state: 'active', reason: null } } }))).toContain('>Suppressed<')
   })
   it('counts Inactive, Mixed and Ended for the Inactive chip — and nothing else (Not listed is not counted)', () => {

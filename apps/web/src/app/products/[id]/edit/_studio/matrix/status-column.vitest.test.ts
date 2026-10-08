@@ -142,7 +142,7 @@ describe('where the Matrix places a market\'s Status column', () => {
   const statusColumnOf = vi.fn((coord: MatrixCoordinate) => ({ colId: matrixStatusColId(coord.key), headerName: 'Status' }))
   const groups = buildMatrixColumns({
     coordinates: coords, cellsOf: () => null, rowOf: () => null, tracker: new CellSaveTracker(), sheetColumns: [], locale: 'it', market: 'IT',
-    axesRef: { current: [] }, rowMenuRef: { current: () => [] }, masterHeldReason: null, onJump: () => undefined, onPickFulfilment: () => undefined,
+    axesRef: { current: [] }, rowMenuRef: { current: () => [] }, onPickFulfilment: () => undefined,
     rowsRef: { current: [] as StudioRow[] }, statusColumnOf,
   }) as Array<{ groupId?: string; children?: Array<{ colId?: string }> }>
   const idsOf = (key: string) => groups.find((g) => g.groupId === `grp-${key}`)!.children!.map((c) => c.colId)

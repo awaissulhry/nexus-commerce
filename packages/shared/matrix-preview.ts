@@ -376,10 +376,13 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
     }
   }
 
-  const priceVerb = verb === 'set-price' || verb === 'adjust-prices' || verb === 'copy-prices'
   const big = changes.length >= 100 || (verb === 'adjust-prices' && req.params.verb === 'adjust-prices' && req.params.percent <= -30)
-  const confirm: VerbPreview['confirm'] = verb === 'set-fulfilment' ? 'type-to-confirm' : big ? 'type-to-confirm' : priceVerb || verb === 'pause-sync' || verb === 'resume-sync' || verb === 'push-now' || verb === 'set-source' ? 'confirm' : 'none'
-  const confirmWord = confirm === 'type-to-confirm' ? (req.params.verb === 'set-fulfilment' ? req.params.method : 'APPLY') : null
+  /* Typed confirmation (Owner 2026-10-08), the only level besides none: an AMAZON fulfilment change (it converts the offer
+     on Amazon — the method is the word), and a big change (100 changes or more, or a price cut of 30 % or more — APPLY).
+     An eBay fulfilment change is Nexus only, with this preview and Undo: no word to type. */
+  const amazonFulfilment = req.params.verb === 'set-fulfilment' && changes.some((c) => read.coordinates.find((x) => x.key === c.coordinateKey)?.channel === 'AMAZON')
+  const confirm: VerbPreview['confirm'] = amazonFulfilment || big ? 'type-to-confirm' : 'none'
+  const confirmWord = confirm === 'type-to-confirm' ? (amazonFulfilment && req.params.verb === 'set-fulfilment' ? req.params.method : 'APPLY') : null
   if (ctx.simulated) notices.add(MATRIX_COPY.simulated)
   return { verb, changes, refusals, notices: [...notices], confirm, confirmWord, simulated: ctx.simulated }
 }

@@ -20,7 +20,7 @@
   min-width: 0;
 }
 
-/* The toolbar already counts variants. The shared-quantity cell keeps the EU explanation.
+/* The toolbar already counts variants; the Not listed coordinates stay one tick away in Customise (2026-10-08).
    Leave the phone footer's space for the saved row count and an actionable refusal. */
 @media (max-width: 600px) {
   .footerDetails { display: none; }

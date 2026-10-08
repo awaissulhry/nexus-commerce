@@ -52,7 +52,7 @@ function ctx(over: Partial<BulkContext> = {}): BulkContext {
     coordinates: [EU, IT, EBAY],
     cellsOf: (rowId, key) => table[`${rowId}|${key}`] ?? null,
     statusCellOf: (rowId, c) => (c.key === 'AMAZON:IT' ? statusCell({ listingId: `L-${rowId}`, sku: rowId.toUpperCase() }) : null),
-    canPrice: true, masterHeld: null, statusHeld: null, canDelete: false, focusedKey: null, locations: LOCATIONS,
+    canPrice: true, statusHeld: null, canDelete: false, focusedKey: null, locations: LOCATIONS,
     ...over,
   }
 }

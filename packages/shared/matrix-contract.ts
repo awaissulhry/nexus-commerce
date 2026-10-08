@@ -127,6 +127,32 @@ export interface SyncCell {
   fbaAtAmazon: number | null
   /** The channel holds more than the pool can back. */
   oversold: boolean
+  /**
+   * 2026-10-08 (Owner: the Sync column folds into Qty): this listing's newest STOCK push failed. Null/absent = it did not
+   * (success shows nothing). Never sent on an Amazon-managed, held or Inactive listing — nothing is pushed there.
+   */
+  pushFailed?: PushFailure | null
+  /**
+   * Amazon EU: the EU markets' quantity settings disagree, so the push guard refuses the stock push (the sentence, whole).
+   * Only on the region inventory cell; null/absent = they agree.
+   */
+  euConflict?: string | null
+}
+
+/**
+ * The newest push of ONE lane (stock or price) of a listing, when it FAILED — the queue row's own outcome, read per lane
+ * (`QUANTITY_UPDATE` · `PRICE_UPDATE`), eBay's shared-stock pushes (saved without a listing id) matched by product, item
+ * and market. Amazon EU's region cell: the markets whose newest stock push failed, the newest failure's words.
+ */
+export interface PushFailure {
+  /** The server's failure sentence. */
+  reason: string
+  /** ISO time the push failed, when known. */
+  at: string | null
+  /** `true` = no retry is left; `false` = it is tried again by itself. */
+  final: boolean
+  /** Amazon EU region cell: the markets whose newest stock push failed. `[]` elsewhere (the cell is one market). */
+  markets: readonly string[]
 }
 
 export type QueueState = 'sent' | 'queued' | 'sending' | 'failed' | 'dead' | 'paused' | 'never'
@@ -158,6 +184,8 @@ export interface PriceCell {
    * cell keeps showing `value`, the live price (`MATRIX_COPY.waitingForPublish`). `value: null` = back to the base price.
    */
   waiting?: { value: number | null } | null
+  /** 2026-10-08: this listing's newest PRICE push failed. Null/absent = it did not (success shows nothing). */
+  pushFailed?: PushFailure | null
 }
 
 export interface SaleCell {
@@ -336,7 +364,10 @@ export interface MatrixRead {
   /** `Product.version` of the family root — the CAS discriminator for master cells. */
   version: number
   productId: string
-  /** `live` = the Matrix service answered; `preview` = deterministic fixture cells on the real rows (the banner says so). */
+  /**
+   * `live` = the Matrix service answered — the only value the page's read boundary produces. `preview` = the grid lab's
+   * and the tests' deterministic fixture (`_studio/matrix/fixtures.ts`); the page has no preview mode (Owner 2026-10-08).
+   */
   source: 'live' | 'preview'
   generatedAt: string
   coordinates: MatrixCoordinate[]
@@ -450,7 +481,8 @@ export interface VerbChange {
 
 export interface VerbRefusal { rowId: string; sku: string; coordinateKey: CoordinateKey; kind: RefusalKind; reason: string }
 
-export type ConfirmLevel = 'none' | 'confirm' | 'type-to-confirm'
+/** 2026-10-08: two levels — the old `confirm` was read by no dialog (the Edit dialog asks only for a typed word). */
+export type ConfirmLevel = 'none' | 'type-to-confirm'
 
 export interface VerbPreview {
   verb: MatrixVerbId
@@ -488,7 +520,6 @@ export const MATRIX_ENDPOINTS = {
 /* ── copy (Appendix A, verbatim) ────────────────────────────────────────────────────────────── */
 
 export const MATRIX_COPY = {
-  previewBanner: 'Preview data — the Matrix service is not built yet. Rows are this family; every cell below is a fixture and nothing is sent to a channel.',
   amazonManaged: 'Amazon-managed',
   uncounted: 'Uncounted',
   /** Build shape v2: the Sync cell of a listing whose selling is paused (the wire's CLOSED). Selling words, not sync words. */
@@ -496,6 +527,8 @@ export const MATRIX_COPY = {
   notListed: 'Not listed',
   sharedEu: (markets: readonly string[]) => `Shared by ${markets.join(' ')} — one quantity per SKU on Amazon EU`,
   euNotice: (markets: readonly string[]) => `Amazon EU: this covers ${markets.join(' ')}`,
+  /** The region Qty cell's ⚠ (`SyncCell.euConflict`): the guard's own detail (`detectEuIntentConflict`), whole. */
+  euConflict: (detail: string) => `EU shared-quantity conflict: ${detail}. The stock push is refused until the EU markets agree`,
   followsPool: (n: number, locations: readonly string[], buffer: number) => `Follows the pool · ${n} available at ${locations.join(', ') || 'no routed location'} − ${buffer} buffer`,
   pinnedAt: (n: number) => `Pinned at ${n}`,
   pausedBy: (via: 'POLICY' | 'LISTING', would: number | null) => `Stock sync held by ${via === 'POLICY' ? 'the channel policy' : 'this listing'} — would push ${would ?? '—'} · Release to push`,
@@ -516,9 +549,10 @@ export const MATRIX_COPY = {
   absentSaleEtsy: 'Etsy has no sale price on a listing; sales are set on Etsy (Marketing → Sales and discounts)',
   absentFulfilmentShopify: 'Shopify has no fulfilment method',
   absentFulfilment: (channelLabel: string) => `${channelLabel} has no fulfilment method`,
-  absentBusiness: (pt: string, market: string) => `Amazon has not enabled business pricing for this account (checked against the ${pt} schema on ${market})`,
-  absentBusinessUnchecked: (market: string) => `Business pricing could not be checked on ${market} — no product-type schema is cached for this family`,
-  absentBusinessNotBuilt: (pt: string, market: string) => `Amazon allows business pricing here (the ${pt} schema on ${market}) — the B2B cells are not built yet`,
+  /* 2026-10-08: the sentence names no market — it is said per coordinate, and Customise groups the markets that share it. */
+  absentBusiness: (pt: string) => `Amazon has not enabled business pricing for this account (checked against the ${pt} schema)`,
+  absentBusinessUnchecked: () => 'Business pricing could not be checked — no product-type schema is cached for this family',
+  absentBusinessNotBuilt: (pt: string) => `Amazon allows business pricing here (the ${pt} schema) — the B2B cells are not built yet`,
   noListingYet: 'No listing on this coordinate yet',
   /** A write whose listing moved since the caller read it (CAS on `ChannelListing.version`, or another listing there now). */
   changedElsewhere: 'Changed elsewhere — reloaded',
@@ -527,7 +561,6 @@ export const MATRIX_COPY = {
   /** The tooltip line of a Price or Sale cell whose product sheet change waits for Publish (`PriceCell.waiting`). */
   waitingForPublish: (value: string) => `Product sheet change waits for Publish: ${value}`,
   noAccountConnected: 'No account is connected',
-  pinnedThisSession: (n: number) => `${n} pinned this session · Undo`,
   simulated: 'Preview — nothing is sent',
   /** The Fulfilment cell's one tooltip line for the newest conversion Nexus sent Amazon (2026-10-07). */
   conversion: (c: FulfilmentConversionStatus) => conversionLine(c),

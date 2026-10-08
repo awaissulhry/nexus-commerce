@@ -18,7 +18,7 @@ type Def = Record<string, unknown>
 function stockDef(onOpenStock?: (rowId: string) => void): Def {
   const defs = buildMatrixColumns({
     coordinates: [], cellsOf: () => null, rowOf: (id: string) => ROWS[id] ?? null, tracker: null, sheetColumns: [], locale: 'it', market: 'IT',
-    axesRef: { current: [] }, rowMenuRef: { current: () => [] }, masterHeldReason: null, onJump: () => undefined, onPickFulfilment: () => undefined, rowsRef: { current: [] },
+    axesRef: { current: [] }, rowMenuRef: { current: () => [] }, onPickFulfilment: () => undefined, rowsRef: { current: [] },
     onOpenStock,
   } as never) as Def[]
   return (defs.find((g) => g.groupId === 'grp-shared')!.children as Def[]).find((d) => d.colId === STOCK_COL)!

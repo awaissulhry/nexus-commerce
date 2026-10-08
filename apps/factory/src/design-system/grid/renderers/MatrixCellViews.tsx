@@ -103,8 +103,15 @@ function Value({ children, muted, marks, className, version }: { children: React
   )
 }
 
-const Warn = ({ title }: { title: string }) => (
+const Warn = ({ title }: { title?: string }) => (
   <span className="nds-cell-prov nds-matrix-warn" aria-hidden title={title}>⚠</span>
+)
+/**
+ * 2026-10-08 — the ✗ of a cell whose newest push of its lane failed (`pushFailed`). No title of its own: the cell's AG
+ * tooltip LEADS with the reason (`matrixCellTooltip`), and a second, native tooltip over it would be noise.
+ */
+const Failed = () => (
+  <span className="nds-cell-prov nds-matrix-failed" aria-hidden>✗</span>
 )
 const Reported = ({ title }: { title: string }) => (
   <span className="nds-cell-prov nds-matrix-reported" aria-hidden title={title}>⇄</span>
@@ -124,8 +131,11 @@ const listingFacts = (params: ICellRendererParams): ProjectionFacts | null => {
   const l = cells?.listing
   if (!l) return null
   /* The mono id leads, the note takes the right edge — `ProjectionCell`'s own order. The word is the health word, else
-     the sheet's selling word (`matrixListingProjection`, build shape v2). */
-  return { state: matrixListingProjection(l), detail: l.externalId ?? undefined, note: l.detail ?? undefined }
+     the sheet's selling word (`matrixListingProjection`, build shape v2) — except "Active" (Owner 2026-10-08): the
+     market's Status column beside it already says it, so an active listing shows its id alone. The cell's text (copy,
+     export, filter) and its tooltip still say Active. */
+  const shown = matrixListingProjection(l)
+  return { state: shown === 'active' ? null : shown, detail: l.externalId ?? undefined, note: l.detail ?? undefined }
 }
 
 export const ListingStateCell = memo(function ListingStateCell(p: MatrixCellProps) {
@@ -142,10 +152,12 @@ export const FulfilmentCell = memo(function FulfilmentCell(p: MatrixCellProps) {
   if (!cells) return null
   const f = cells.fulfilment
   if (!f || f.method == null) return <Value muted>{MATRIX_DASH}</Value>
-  /* Both marks are independent facts (the guard AND the report can disagree at once), so they are
-     read from the two predicates rather than from the one-word state, which has a precedence. */
+  /* Both marks are read from the two predicates rather than from the one-word state, which has a precedence. With two
+     methods, a guard and a report that BOTH differ from the method point the same way — ONE fact (the fail-closed guard
+     reads FBA because Amazon reports AFN): ⚠ stands alone (Owner 2026-10-08), and the tooltip still says both lines. ⇄
+     shows on its own when the report disagrees and the guard does not. */
   const guard = matrixGuardDiffers(f.method, f.guard)
-  const reported = matrixReportedDiffers(f.method, f.reported)
+  const reported = matrixReportedDiffers(f.method, f.reported) && !guard
   return (
     <Value
       marks={[
@@ -216,6 +228,10 @@ export const SyncQtyCell = memo(function SyncQtyCell(p: MatrixCellProps) {
         (state === 'follow' || (state === 'oversold' && s.kind === 'FOLLOW')) && <ProvenanceMark provenance="inherited" tooltip="Follows the pool" />,
         (state === 'pinned' || (state === 'oversold' && s.kind === 'PINNED')) && <ProvenanceMark provenance="pinned" tooltip="Pinned" />,
         state === 'oversold' && <Warn title={MATRIX_OVERSOLD_SENTENCE} />,
+        /* 2026-10-08 (the Sync column folded in): ⚠ the Amazon EU guard refuses the push; ✗ the newest stock push failed.
+           Only what the server sent — success shows nothing. The reasons lead the cell's tooltip. */
+        !!s.euConflict && <Warn />,
+        !!s.pushFailed && <Failed />,
       ]}
     >
       {text}
@@ -286,6 +302,8 @@ export const PriceCell = memo(function PriceCell(p: MatrixCellProps) {
         price.source === 'override' && <ProvenanceMark provenance="pinned" tooltip={copy.setHere} />,
         price.source === 'formula' && <ProvenanceMark provenance="formula" tooltip={copy.formula(price.formula ?? '')} />,
         price.clamped && <Warn title={copy.clamped(price.clamped)} />,
+        /* 2026-10-08: the newest price push failed — the reason leads the cell's tooltip. */
+        !!price.pushFailed && <Failed />,
       ]}
     >
       {text}

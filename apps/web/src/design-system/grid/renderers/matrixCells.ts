@@ -39,6 +39,7 @@ import {
   type MatrixCells,
   type MatrixCoordinate,
   type MatrixCopy,
+  type PushFailure,
   type SaleCell,
   type SyncCell,
 } from '../matrix/contract'
@@ -308,6 +309,17 @@ export function matrixAgo(iso: string | null | undefined, now: number = Date.now
   if (s < 3600) return `${Math.round(s / 60)} min`
   if (s < 86_400) return `${Math.round(s / 3600)} h`
   return `${Math.round(s / 86_400)} d`
+}
+
+/**
+ * 2026-10-08 (Owner: the Sync column folds into Qty and Price) — the tooltip line of a cell whose newest push of its lane
+ * FAILED (`SyncCell.pushFailed` · `PriceCell.pushFailed`), REASON FIRST: `eBay: 25002 … · last stock push failed 2 h ago`.
+ * The server decides that a push failed; this only words it. Success has no line: a cell at rest says nothing.
+ */
+export function matrixPushFailedLine(f: PushFailure, lane: 'stock' | 'price', now: number = Date.now()): string {
+  const ago = matrixAgo(f.at, now)
+  const where = f.markets.length ? ` on ${f.markets.join(' ')}` : ''
+  return `${f.reason} · last ${lane} push failed${where}${ago ? ` ${ago} ago` : ''}${f.final ? '' : ' · it is tried again by itself'}`
 }
 
 /** `€89.00 · 12 Sep → 30 Sep` (Appendix A). An open-ended window prints only the side it has. */
@@ -589,6 +601,10 @@ export const MATRIX_CELL_CLASSES: readonly string[] = [
  *
  * A `writeBlockedReason` is appended for any cell the operator cannot write, whatever else it says
  * — a held control must carry its reason in the DOM (`scripts/check-silent-disabled.mjs`).
+ *
+ * 2026-10-08 (Owner): a failed push (✗) and the Amazon EU conflict (⚠) LEAD the Qty and Price tooltips — the reason
+ * first. The Amazon EU shared-quantity fact is said once by the group's label and once in the Edit preview, so no
+ * cell repeats it.
  */
 export function matrixCellTooltip(
   kind: MatrixCellKind,
@@ -600,7 +616,6 @@ export function matrixCellTooltip(
   if (!cells) return null
   const lines: string[] = []
   const s = cells.sync
-  const region = coord.sharedInventoryWith?.length ? copy.sharedEu(coord.sharedInventoryWith) : null
 
   switch (kind) {
     case 'listing': {
@@ -629,13 +644,14 @@ export function matrixCellTooltip(
       lines.push(coord.channel === 'AMAZON'
         ? 'Changing this converts the offer on Amazon (type the method to confirm) and checks Amazon\'s report'
         : 'Changing this re-points the pool behind the quantity — Nexus only, nothing is sent to the channel')
-      if (region) lines.push(region)
       break
     }
     case 'syncMode':
     case 'syncQty':
     case 'syncBuffer': {
       if (!s) break
+      if (kind === 'syncQty' && s.pushFailed) lines.push(matrixPushFailedLine(s.pushFailed, 'stock', now))
+      if (kind === 'syncQty' && s.euConflict) lines.push(s.euConflict)
       switch (s.kind) {
         case 'FBA_EXCLUDED':
           lines.push(`${copy.amazonManaged}${s.fbaAtAmazon == null ? '' : ` · ${s.fbaAtAmazon} at Amazon`}`)
@@ -659,7 +675,6 @@ export function matrixCellTooltip(
           break
       }
       if (s.oversold) lines.push(MATRIX_OVERSOLD_SENTENCE)
-      if (region) lines.push(region)
       break
     }
     case 'syncState': {
@@ -674,6 +689,7 @@ export function matrixCellTooltip(
       const p = cells.price
       if (!p) break
       const currency = p.currency || coord.currency
+      if (p.pushFailed) lines.push(matrixPushFailedLine(p.pushFailed, 'price', now))
       if (p.source === 'formula' && p.formula) lines.push(copy.formula(p.formula))
       else if (p.source === 'override') lines.push(copy.setHere)
       else lines.push(copy.followsBase(matrixMoney(p.value, currency)))

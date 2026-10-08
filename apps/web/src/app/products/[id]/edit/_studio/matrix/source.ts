@@ -1,20 +1,19 @@
 /**
  * MX.P — the Matrix's READ, and the ONE parse boundary between the wire and the page.
  *
- * `GET /api/products/:id/studio/matrix` does not exist yet (the backend is a later session), so this
- * module is where "live or preview" is DECIDED, once, on the probe's own status — never inferred
- * later by a consumer:
+ * "Live or not" is DECIDED here, once, on the read's own status — never inferred later by a consumer:
  *
  *   200            → parse HERE into a `MatrixRead` with `source: 'live'`. A body that does not carry
  *                    `coordinates` and `rows` is REFUSED with a sentence; the page shows the sentence
  *                    rather than half a Matrix. (`reference_wire_parse_boundary_rules`.)
- *   404 / 501      → `preview`: the service is not built. The caller builds `buildPreviewMatrix` from
- *                    the REAL sheet rows and the REAL scope coordinates, and the page says so on
- *                    screen (`MATRIX_COPY.previewBanner`).
  *   anything else  → `error`, with the server's own words, and the shared `SheetLoadError` on screen.
  *
- * 🔴 Pure except for `fetchMatrix` itself: no React and no AG, so the parse boundary and both
- * projections are reachable from this workspace's node-only vitest (`source.vitest.test.ts`).
+ * 🔴 Preview mode is gone (Owner 2026-10-08): a 404 used to paint fixture cells on the real rows. The read answers 404 for
+ * a product it cannot find (`studio-matrix.routes.ts`), so that drew made-up numbers for a real product; now every failed
+ * read is the load-error state, and no number on the page is one the server did not send.
+ *
+ * 🔴 Pure except for `fetchMatrix` itself: no React and no AG, so the parse boundary is reachable from this workspace's
+ * node-only vitest (`source.vitest.test.ts`).
  */
 import { getBackendUrl } from '@/lib/backend-url'
 
@@ -30,15 +29,12 @@ import {
   type MatrixWriteRequest,
   type MatrixWriteResult,
 } from './contract'
-import type { PreviewCoordinateInput, PreviewRowInput } from './fixtures'
 import { parseFbaInbound, parseFbaPlans } from './fba/sendToFba'
 
 /* ── the read ───────────────────────────────────────────────────────────────────────────────── */
 
 export type MatrixSource =
   | { kind: 'live'; read: MatrixRead }
-  /** The service is not built. `reason` is what the probe actually saw — never a guess. */
-  | { kind: 'preview'; reason: string }
   | { kind: 'error'; message: string }
 
 export interface FetchMatrixOptions {
@@ -49,9 +45,6 @@ export interface FetchMatrixOptions {
   fetchImpl?: typeof fetch
   baseUrl?: string
 }
-
-/** The statuses that mean "this route is not built here", as opposed to "this read failed". */
-const NOT_BUILT = new Set([404, 501])
 
 export async function fetchMatrix(productId: string, opts: FetchMatrixOptions = {}): Promise<MatrixSource> {
   const base = opts.baseUrl ?? getBackendUrl()
@@ -64,11 +57,9 @@ export async function fetchMatrix(productId: string, opts: FetchMatrixOptions = 
   try {
     res = await doFetch(url, { credentials: 'include', cache: 'no-store', signal: opts.signal })
   } catch (e) {
-    /* 🔴 A transport failure is an UNKNOWN outcome, not a verdict about the route. It is NEVER
-       degraded to `preview`: that would put fixture numbers on screen because the network blinked. */
+    /* 🔴 A transport failure is an UNKNOWN outcome: the load-error state, never a picture of cells. */
     return { kind: 'error', message: e instanceof Error ? e.message : String(e) }
   }
-  if (NOT_BUILT.has(res.status)) return { kind: 'preview', reason: `The Matrix service answered HTTP ${res.status}` }
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     const said = (body && typeof body === 'object' && ((body as Record<string, unknown>).message ?? (body as Record<string, unknown>).error)) || null
@@ -199,7 +190,7 @@ function locationsOf(raw: unknown[]): MatrixLocation[] {
   })
 }
 
-/* ── the write (live mode only; preview goes to `store.applyCells`) ────────────────────────── */
+/* ── the write ────────────────────────────────────────────────────────────────────────────────── */
 
 /**
  * `accountId` is the account the READ used (`fetchMatrix`'s), so the server resolves the same listings it showed; each
@@ -292,68 +283,3 @@ export async function postMarketSources(
 
 /** The market list before a save (the group's first market: every EU market holds the same list). */
 export const listBefore = (a: Pick<MarketSourcesAnswer, 'before' | 'markets'>): string[] => a.before[a.markets[0] ?? ''] ?? Object.values(a.before)[0] ?? []
-
-/* ── the PREVIEW projections: real rows, real coordinates, fixture cells ────────────────────── */
-
-/** Stable ordering (design D-MX12): Amazon · eBay · Shopify · WooCommerce · Etsy, then the rest. */
-const CHANNEL_ORDER = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY']
-
-const channelRank = (channel: string): number => {
-  const i = CHANNEL_ORDER.indexOf(channel)
-  return i === -1 ? CHANNEL_ORDER.length : i
-}
-
-/** The sheet's rows, narrowed to what the preview needs. Identity stays the sheet's. */
-export function previewRowInputs(
-  rows: ReadonlyArray<{ id: string; sku: string; isParent: boolean; basePrice: number | null; status: string }>,
-): PreviewRowInput[] {
-  return rows.map((r) => ({ id: r.id, sku: r.sku, isParent: r.isParent, basePrice: r.basePrice, status: r.status }))
-}
-
-export interface CoordinateSourceOptions {
-  /** `useStudioScope().options.channels` — the CONNECTED channels and the markets each serves. */
-  channels: ReadonlyArray<{ id: string; label: string; markets: string[] }>
-  /** `useStudioScope().marketplaces` — every configured row, connected or not, with its accounts. */
-  marketplaces: ReadonlyArray<{ channel: string; code: string; name?: string; connected?: boolean; accounts?: ReadonlyArray<{ id: string; primary: boolean }> }>
-}
-
-/**
- * The coordinates the preview shows — derived from the LIVE marketplace table, never a list here.
- *
- * 🔴 Connected FIRST, unconnected LAST, so `previewCoordinates()` (which preserves input order after
- * folding the Amazon EU region group to the front) yields design §3.3's order: Amazon (EU inventory,
- * then its markets) · eBay · Shopify · WooCommerce · Etsy · then the `Not listed` singles.
- *
- * 🔴 `connected` is a CHANNEL fact in this frame, not a market one — `studio-data.ts:120` sets it
- * from the set of channels that have an active account, so every market of a connected channel is
- * connected and every market of a channel with no account is not. Measured, not assumed; a lane that
- * read it as per-market would draw `Not listed` over markets that are simply unlisted.
- */
-export function previewCoordinateInputs(opts: CoordinateSourceOptions): PreviewCoordinateInput[] {
-  const connectedChannels = new Set(opts.channels.map((c) => c.id))
-  const labelOf = new Map(opts.channels.map((c) => [c.id, c.label]))
-  const seen = new Set<string>()
-  const out: PreviewCoordinateInput[] = []
-  for (const m of opts.marketplaces) {
-    const key = `${m.channel}:${m.code}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    const connected = m.connected !== false && connectedChannels.has(m.channel)
-    const account = m.accounts?.find((a) => a.primary) ?? m.accounts?.[0] ?? null
-    out.push({
-      channel: m.channel,
-      market: m.code,
-      label: m.name ?? `${labelOf.get(m.channel) ?? m.channel} · ${m.code}`,
-      connected,
-      accountId: account?.id ?? null,
-    })
-  }
-  /* Markets keep the MARKETPLACE TABLE's own order inside a channel (design D-MX12: "markets in
-     `Marketplace` order") — the sort is stable, so no tiebreak on the code. An alphabetical tiebreak
-     here put the preview alias on `eBay · DE` instead of the first eBay market the table lists. */
-  return out.sort((a, b) =>
-    Number(b.connected) - Number(a.connected) ||
-    channelRank(a.channel) - channelRank(b.channel) ||
-    a.channel.localeCompare(b.channel),
-  )
-}

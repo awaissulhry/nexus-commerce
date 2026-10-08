@@ -12,7 +12,13 @@
  *     unconnected/unlisted coordinates KEPT with `cells: []` so the absence is visible (`Not listed`).
  *   - `sync`: `resolveIntendedQuantity` with the inputs the Sync Control page builds (WAREHOUSE ledger routed by
  *     `syncRoutes`, `policyFor`, `offerClosedAt`, `isFba` = `isFbaListing`'s fail-closed verdict) — verbatim.
- *   - `queue`: the newest non-cancelled `OutboundSyncQueue` row per (listing, QUANTITY_UPDATE | PRICE_UPDATE), folded.
+ *   - `queue`: the newest non-cancelled `OutboundSyncQueue` row per (listing, QUANTITY_UPDATE | PRICE_UPDATE), folded
+ *     (the MCP read and the Retry verb read it; the page draws no Sync column since 2026-10-08).
+ *   - `sync.pushFailed` / `price.pushFailed` (2026-10-08, the Qty and Price cells' ✗): the newest push of EACH lane of the
+ *     listing, read on its own — the same queue rows, plus eBay's shared-stock pushes, which are saved without a listing
+ *     id (`ebay-shared-fanout.service.ts`) and matched by what they carry: product, item id and market. The listing's own
+ *     `lastSyncStatus` is not per lane (any row and Publish write it) and the shared lane never writes it.
+ *   - `sync.euConflict`: the Amazon EU guard's verdict on the region cell (`detectEuIntentConflict`), whole.
  *   - `price`: `ChannelListing.price` (the number the push reads); `sale`: `salePrice` + the two window columns.
  *   - `listing.selling` (build shape v2, P7): THE engine's selling state per coordinate (`destinationSellingStates`,
  *     the reader the sheet's Status column and the listing-action engine use) — from the rows already read, no query.
@@ -66,7 +72,7 @@ import { FBA_ALL_CENTRES } from '../fba-pan-eu.service.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
   businessAbsence, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, flattenAudience, foldQueue, isAmazonEuMarket,
-  effectiveFulfilment, inSourceOrder, listingStateOf, priceCellOf, reportedFulfilment, sourceCellOf, withoutInventory, writableFor, type QueueRowFacts, type SourceLocation,
+  effectiveFulfilment, inSourceOrder, lanePushFailure, listingStateOf, priceCellOf, reportedFulfilment, sourceCellOf, withoutInventory, writableFor, type QueueRowFacts, type SourceLocation,
 } from './matrix-cells.js'
 
 export interface MatrixReadInput {
@@ -201,7 +207,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   // ── 3. wave 2 — the tables keyed by listing id ─────────────────────────────────────────────
   const tWave2 = Date.now()
   const listingIds = listings.map((l) => l.id)
-  const [openSuppressions, queueRows, fbaOffers, saleWindows, excluded, conversions] = await Promise.all([
+  /* eBay's shared-stock pushes (the Trading fan-out) carry no listing id: the item ids of this family's eBay listings. */
+  const ebayItemIds = [...new Set(listings.flatMap((l) => (upper(l.channel) === 'EBAY' && l.externalListingId?.trim() ? [l.externalListingId.trim()] : [])))]
+  const [openSuppressions, queueRows, fbaOffers, saleWindows, excluded, conversions, sharedPushRows] = await Promise.all([
     prisma.amazonSuppression.findMany({ where: { listingId: { in: listingIds }, resolvedAt: null }, select: { listingId: true } }),
     prisma.outboundSyncQueue.findMany({
       where: { channelListingId: { in: listingIds }, syncType: { in: ['QUANTITY_UPDATE', 'PRICE_UPDATE'] }, syncStatus: { not: 'CANCELLED' } },
@@ -214,7 +222,17 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     readExcludedListingIds(listingIds),
     // Amazon fulfilment conversions (2026-10-07): the newest runs sent for these listings (the Fulfilment cell's status).
     loadConversionRecords(listings.filter((l) => l.channel === 'AMAZON').map((l) => l.id)),
-  ]); queries += 6
+    /* 2026-10-08 — the newest eBay shared-stock push per (product, item, market): saved without a listing id, so the
+       listing rows above never see it (the eBay stock lane's real-time pushes). */
+    ebayItemIds.length
+      ? prisma.outboundSyncQueue.findMany({
+        where: { channelListingId: null, targetChannel: 'EBAY', syncType: 'QUANTITY_UPDATE', productId: { in: memberIds }, externalListingId: { in: ebayItemIds }, syncStatus: { not: 'CANCELLED' } },
+        orderBy: [{ createdAt: 'desc' }],
+        distinct: ['productId', 'externalListingId', 'targetRegion'],
+        select: { productId: true, externalListingId: true, targetRegion: true, syncType: true, syncStatus: true, isDead: true, errorMessage: true, syncedAt: true, updatedAt: true, createdAt: true },
+      })
+      : Promise.resolve([]),
+  ]); queries += ebayItemIds.length ? 7 : 6
   mark('wave2', tWave2)
 
   // ── 4. indexes ─────────────────────────────────────────────────────────────────────────────
@@ -325,10 +343,24 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   const suppressed = new Set(openSuppressions.map((s) => s.listingId))
   const fbaOfferOn = new Set(fbaOffers.map((o) => o.channelListingId))
   const queueByListing = new Map<string, QueueRowFacts[]>()
+  const rowFacts = (q: { syncType: string; syncStatus: string; isDead: boolean; errorMessage: string | null; syncedAt: Date | null; updatedAt: Date; createdAt: Date }): QueueRowFacts => ({
+    syncType: q.syncType, syncStatus: q.syncStatus, isDead: q.isDead, errorMessage: q.errorMessage,
+    at: (q.syncedAt ?? q.updatedAt ?? q.createdAt)?.toISOString() ?? null, createdAt: q.createdAt?.toISOString() ?? null,
+  })
   for (const q of queueRows) {
     if (!q.channelListingId) continue
-    const at = (q.syncedAt ?? q.updatedAt ?? q.createdAt)?.toISOString() ?? null
-    queueByListing.set(q.channelListingId, [...(queueByListing.get(q.channelListingId) ?? []), { syncType: q.syncType, syncStatus: q.syncStatus, isDead: q.isDead, errorMessage: q.errorMessage, at }])
+    queueByListing.set(q.channelListingId, [...(queueByListing.get(q.channelListingId) ?? []), rowFacts(q)])
+  }
+  /* eBay shared-stock pushes by what they carry: the product, the item id and the market (a listing's own row has the
+     same three: `productId`, `externalListingId`, `marketplace`). */
+  const sharedKey = (productId: string | null, itemId: string | null, market: string | null) => `${productId ?? ''}|${(itemId ?? '').trim()}|${upper(market)}`
+  const sharedPushOf = new Map<string, QueueRowFacts>()
+  for (const q of sharedPushRows) sharedPushOf.set(sharedKey(q.productId, q.externalListingId, q.targetRegion), rowFacts(q))
+  /** Every push row a listing's lanes read: its own rows, and (eBay) the shared-stock push for its item. */
+  const laneRowsOf = (l: MatrixListing): QueueRowFacts[] => {
+    const own = queueByListing.get(l.id) ?? []
+    const shared = upper(l.channel) === 'EBAY' && l.externalListingId ? sharedPushOf.get(sharedKey(l.productId, l.externalListingId, l.marketplace)) : undefined
+    return shared ? [...own, shared] : own
   }
   const formulaByCell = new Map(formulas.map((f) => [`${f.productId}|${upper(f.channel)}|${upper(f.marketplace)}|${f.aliasKey ?? ''}`, f.expr]))
   const snapshotByCell = new Map(snapshots.map((s) => [`${s.sku}|${upper(s.channel)}|${upper(s.marketplace)}`, s]))
@@ -485,7 +517,6 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     let sync: SyncCell | null = null
     let fulfilment: FulfilmentCell | null = null
     let queue: QueueCell | null = null
-    const extra: MatrixCells['writeBlockedReason'] = {}
     /* The PARENT has no listing of its own (MX.P's live reading): no inventory facts, no price — only the listing word
        with its `n listing(s)` detail, and every cell held with the reason. */
     if (inventory && !isParent) {
@@ -499,6 +530,15 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
         /* The region folds every EU row's queue (one quantity per SKU); a market folds its own listing's. */
         queue = foldQueue(rows.flatMap((l) => queueByListing.get(l.id) ?? []), r.sync)
       }
+      /* 2026-10-08 — the Qty cell's ✗: this listing's newest stock push failed. Only where the stock lane runs: an
+         Amazon-managed listing never pushes a quantity, a held or Inactive one says so itself (⏸ / Inactive), and a
+         listing not on the channel (a draft) is sent nothing — an old failure there says nothing about the channel. The
+         region cell reads the EU markets that sell (published, offer open), and names the ones that failed. */
+      if (sync && serves('syncQty') && sync.kind !== 'FBA_EXCLUDED' && sync.kind !== 'PAUSED' && sync.kind !== 'CLOSED') {
+        const selling = (coord.euMarkets ? rows : [primary]).filter((l) => l.isPublished && !l.offerClosedAt)
+        const pushFailed = lanePushFailure(selling.map((l) => ({ market: l.marketplace, rows: laneRowsOf(l) })), 'QUANTITY_UPDATE', !!coord.euMarkets)
+        if (pushFailed) sync = { ...sync, pushFailed }
+      }
       if (coord.euMarkets && rows.length > 1) {
         /* The push belt's own inputs (the STORED method), so the sentence matches what dispatch will refuse. Step 2: each
            row's "Sells from" warehouses (`sellsFrom`) — two Follow rows from different warehouses send different sums. */
@@ -508,7 +548,8 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
           return sellsFrom({ ledger, channel: 'AMAZON', marketplace: l.marketplace, sourceLocationCodes }).codes
         }
         const verdict = detectEuIntentConflict(rows.map((l) => ({ marketplace: l.marketplace, followMasterQuantity: l.followMasterQuantity, quantityOverride: l.quantityOverride, quantity: l.quantity, syncPaused: l.syncPaused, isFba: l.fulfillmentMethod === 'FBA', offerClosed: !!l.offerClosedAt, sourceLocationCodes: l.sourceLocationCodes ?? [], sources: sourcesOf(l) })))
-        if (verdict.conflict) extra.syncState = verdict.detail
+        /* The stock cell carries it (the Qty cell's ⚠) — the guard refuses the push until the markets agree. */
+        if (verdict.conflict && sync) sync = { ...sync, euConflict: MATRIX_COPY.euConflict(verdict.detail) }
       }
     }
     const listing = serves('listing') ? {
@@ -529,6 +570,10 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const draft = coord.channel === 'AMAZON' && !isParent ? readAmazonOfferDraft(primary.platformAttributes)?.leaves : undefined
     const ourPrice = draft?.our_price?.value as { pin?: number; follow?: true } | null | undefined
     if (price && ourPrice) price.waiting = { value: typeof ourPrice.pin === 'number' ? ourPrice.pin : null }
+    /* 2026-10-08 — the Price cell's ✗: this listing's newest price push failed (a held price is a skip, not a failure). A
+       listing not on the channel (a draft) is sent nothing, so it carries none. */
+    const pricePushFailed = price && !isParent && primary.isPublished ? lanePushFailure([{ market: primary.marketplace, rows: laneRowsOf(primary) }], 'PRICE_UPDATE') : null
+    if (price && pricePushFailed) price.pushFailed = pricePushFailed
     if (sale && draft?.sale) {
       const s = draft.sale.value as { price: number; start: string; end: string } | null
       sale.waiting = s ? { value: s.price, start: s.start, end: s.end } : { value: null, start: null, end: null }
@@ -544,7 +589,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     }) : null
     return {
       listingId: primary.id, version: primary.version, listing, fulfilment, sync, queue, price, sale,
-      writable: gate.writable, writeBlockedReason: { ...gate.writeBlockedReason, ...extra },
+      writable: gate.writable, writeBlockedReason: gate.writeBlockedReason,
       ...(source ? { source } : {}),
     }
   }

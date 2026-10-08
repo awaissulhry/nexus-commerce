@@ -244,13 +244,20 @@ describe('matrixColumnDef — coordinateOf: a coordinate per row (the product sh
   const SHARED_LINE = 'Shared by IT DE — one quantity per SKU on Amazon EU'
   type CoordRow = Row & { coord?: MatrixCoordinate | null }
 
-  it('🔴 coordinateOf drives the tooltip: an EU row carries the Shared line, an alias row on the same column does not', () => {
+  it('🔴 coordinateOf drives the tooltip: the row\'s own channel words; no cell repeats the Amazon EU sentence (Owner 2026-10-08)', () => {
     const d = matrixColumnDef<CoordRow>('syncQty', { ...opts({ colId: 'stock_qty' }), coordinateOf: (r) => r?.coord } as MatrixColumnOptions<CoordRow>) as Required<ColDef<CoordRow>>
     const tip = (coord: MatrixCoordinate | null | undefined) => call(d.tooltipValueGetter, { data: { ...row(), coord } })
-    expect(tip(EU)).toBe(`Follows the pool · 403 available at IT-MAIN − 0 buffer · ${SHARED_LINE}`)
+    /* The EU group says it once in its label (and the Edit preview once more) — never on every cell. */
+    expect(tip(EU)).toBe('Follows the pool · 403 available at IT-MAIN − 0 buffer')
+    expect(tip(EU)).not.toContain(SHARED_LINE)
     expect(tip(ALIAS)).toBe('Follows the pool · 403 available at IT-MAIN − 0 buffer')
     /* No coordinate for the row → the column's own. */
     expect(tip(null)).toBe('Follows the pool · 403 available at IT-MAIN − 0 buffer')
+    /* The row's coordinate still decides the words that depend on it: the fulfilment line names its channel. */
+    const f = matrixColumnDef<CoordRow>('fulfilment', { ...opts({ colId: 'fulfilment' }), coordinateOf: (r) => r?.coord } as MatrixColumnOptions<CoordRow>) as Required<ColDef<CoordRow>>
+    const ftip = (coord: MatrixCoordinate | null | undefined) => call(f.tooltipValueGetter, { data: { ...row(), coord } })
+    expect(ftip({ ...EU, channel: 'AMAZON' })).toContain('converts the offer on Amazon')
+    expect(ftip({ ...ALIAS, channel: 'EBAY' })).toContain('Nexus only')
   })
 
   it('coordinateOf drives the text too (the currency a price falls back to)', () => {
@@ -264,7 +271,7 @@ describe('matrixColumnDef — coordinateOf: a coordinate per row (the product sh
   it('without coordinateOf every row reads the column coordinate — the Matrix page looks exactly as before', () => {
     const d = def('syncQty', { coordinate: EU })
     const tip = call(d.tooltipValueGetter, { data: row() })
-    expect(tip).toBe(`Follows the pool · 403 available at IT-MAIN − 0 buffer · ${SHARED_LINE}`)
+    expect(tip).toBe('Follows the pool · 403 available at IT-MAIN − 0 buffer')
     /* The column-level pieces still read the column coordinate. */
     expect(d.headerTooltip).toBe('Qty — Amazon EU · Inventory · IT DE')
     expect((d.cellRendererParams as { coordinate: MatrixCoordinate }).coordinate).toBe(EU)

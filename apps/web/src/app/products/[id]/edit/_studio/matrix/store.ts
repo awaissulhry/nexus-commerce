@@ -1,10 +1,10 @@
 /**
- * MX — the in-memory PREVIEW store: cell writes and verb operations applied to a `MatrixRead`, with versions,
- * compare-and-set and restore-by-value — the same semantics the service will have, so the page's write path is
- * exercised end to end today and swaps to the endpoint without a redesign. Pure: every function returns a new read.
+ * MX — an in-memory Matrix store for the grid lab and the tests: cell writes and verb operations applied to a
+ * `MatrixRead`, with versions, compare-and-set and restore-by-value. Pure: every function returns a new read.
  *
- * Preview-only derivations (a FOLLOW number is pool − buffer) mirror `resolveIntendedQuantity`; in live mode the
- * server's verdict arrives on the wire and nothing here runs.
+ * 🔴 Never the page's (Owner 2026-10-08: the Matrix page has no preview mode). The page writes through the server only
+ * (`useMatrix` → `PATCH …/studio/matrix`); `/design` grid lab (`MatrixScenario.tsx`) and the node tests drive this store.
+ * Its derivations (a FOLLOW number is pool − buffer) mirror `resolveIntendedQuantity`.
  */
 import {
   MATRIX_COPY,

@@ -279,7 +279,7 @@ describe('POST …/verbs and …/verbs/:id/revert', () => {
     const carried = { verb: 'set-price', changes: [
       { rowId: 'c1', sku: 'CHILD-1', coordinateKey: 'AMAZON:IT', cell: 'price', from: 100, to: 80, fromLabel: '€100.00', toLabel: '€80.00' },
       { rowId: 'root', sku: 'PARENT', coordinateKey: 'AMAZON:IT', cell: 'price', from: null, to: 80, fromLabel: '—', toLabel: '€80.00' },
-    ], refusals: [], notices: [], confirm: 'confirm', confirmWord: null, simulated: false }
+    ], refusals: [], notices: [], confirm: 'none', confirmWord: null, simulated: false }
     const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', payload: { params: { verb: 'set-price' }, targets: carried.changes.map((c) => ({ rowId: c.rowId, coordinateKey: c.coordinateKey })), commit: true, preview: carried } })
     expect(res.statusCode).toBe(200)
     const body = res.json()
@@ -330,7 +330,7 @@ describe('Sells from — the door, the verb and its Undo', () => {
   it('set-source: preview → commit as one operation → Undo puts the market default back ([]) through the same door', async () => {
     const req = { params: { verb: 'set-source', codes: ['MI-3PL', 'IT-MAIN'] }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }] }
     const preview = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', headers: { 'x-test-permissions': STOCK }, payload: { ...req, commit: false } })
-    expect(preview.json()).toMatchObject({ verb: 'set-source', confirm: 'confirm', changes: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['MI-3PL', 'IT-MAIN'], fromLabel: 'Default (IT-MAIN)', toLabel: 'MI-3PL + IT-MAIN', note: 'Follow shows 14' }] })
+    expect(preview.json()).toMatchObject({ verb: 'set-source', confirm: 'none', changes: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['MI-3PL', 'IT-MAIN'], fromLabel: 'Default (IT-MAIN)', toLabel: 'MI-3PL + IT-MAIN', note: 'Follow shows 14' }] })
     expect(preview.json().notices).toContain('Amazon EU: this covers IT DE')
 
     const commit = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', headers: { 'x-test-permissions': STOCK }, payload: { params: { verb: 'set-source' }, targets: req.targets, commit: true, preview: preview.json() } })
@@ -353,7 +353,7 @@ describe('Sells from — the door, the verb and its Undo', () => {
   })
 
   it('a carried set-source change the fresh read does not reproduce is refused — nothing written', async () => {
-    const carried = { verb: 'set-source', changes: [{ rowId: 'c1', sku: 'CHILD-1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['NOPE'], fromLabel: '', toLabel: '' }], refusals: [], notices: [], confirm: 'confirm', confirmWord: null, simulated: false }
+    const carried = { verb: 'set-source', changes: [{ rowId: 'c1', sku: 'CHILD-1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['NOPE'], fromLabel: '', toLabel: '' }], refusals: [], notices: [], confirm: 'none', confirmWord: null, simulated: false }
     const res = await app.inject({ method: 'POST', url: '/products/root/studio/matrix/verbs', headers: { 'x-test-permissions': STOCK }, payload: { params: { verb: 'set-source' }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:EU' }], commit: true, preview: carried } })
     expect(res.json().results[0]).toMatchObject({ cell: 'source', outcome: 'refused', reason: 'NOPE is not a warehouse of this business' })
     expect(mocks.updateMany).not.toHaveBeenCalled()

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { MATRIX_ENDPOINTS } from './contract'
-import { fetchMatrix, parseMatrixRead, patchMatrix, previewCoordinateInputs, previewRowInputs } from './source'
+import { fetchMatrix, parseMatrixRead, patchMatrix } from './source'
 
 const ok = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 const fetchOnce = (res: Response | Error, seen: Array<{ url: string; init?: RequestInit }> = []): typeof fetch =>
@@ -61,7 +61,7 @@ describe('parseMatrixRead — the ONE parse boundary refuses half a Matrix', () 
   })
 })
 
-describe('fetchMatrix — live / preview / error decided on the probe\'s own status', () => {
+describe('fetchMatrix — live / error decided on the read\'s own status (no preview mode, Owner 2026-10-08)', () => {
   it('200 → live, with credentials and no-store, at the contract endpoint', async () => {
     const seen: Array<{ url: string; init?: RequestInit }> = []
     const r = await fetchMatrix('p', { baseUrl: 'http://api', accountId: 'acc', locale: 'it', fetchImpl: fetchOnce(ok(LIVE), seen) })
@@ -70,11 +70,13 @@ describe('fetchMatrix — live / preview / error decided on the probe\'s own sta
     expect(seen[0]!.init?.credentials).toBe('include')
     expect(seen[0]!.init?.cache).toBe('no-store')
   })
-  it('404 and 501 → preview, naming the status it saw', async () => {
+  it('🔴 404 and 501 → error (the load-error state), never fixture cells — the read answers 404 for a product it cannot find', async () => {
     for (const status of [404, 501]) {
       const r = await fetchMatrix('p', { baseUrl: 'http://api', fetchImpl: fetchOnce(new Response('', { status })) })
-      expect(r).toEqual({ kind: 'preview', reason: `The Matrix service answered HTTP ${status}` })
+      expect(r).toEqual({ kind: 'error', message: `The Matrix read was refused (HTTP ${status})` })
     }
+    const said = await fetchMatrix('p', { baseUrl: 'http://api', fetchImpl: fetchOnce(ok({ error: 'Product not found' }, 404)) })
+    expect(said).toEqual({ kind: 'error', message: 'Product not found' })
   })
   it('any other failing status → error with the server\'s own words; 200 with a half body → error, never preview', async () => {
     const r = await fetchMatrix('p', { baseUrl: 'http://api', fetchImpl: fetchOnce(ok({ message: 'Access denied' }, 403)) })
@@ -82,7 +84,7 @@ describe('fetchMatrix — live / preview / error decided on the probe\'s own sta
     const half = await fetchMatrix('p', { baseUrl: 'http://api', fetchImpl: fetchOnce(ok({ rows: [] })) })
     expect(half.kind).toBe('error')
   })
-  it('🔴 a transport failure is an UNKNOWN outcome → error, never degraded to preview', async () => {
+  it('🔴 a transport failure is an UNKNOWN outcome → error, never a picture of cells', async () => {
     const r = await fetchMatrix('p', { baseUrl: 'http://api', fetchImpl: fetchOnce(new Error('net::ERR_CONNECTION_REFUSED')) })
     expect(r).toEqual({ kind: 'error', message: 'net::ERR_CONNECTION_REFUSED' })
   })
@@ -115,29 +117,5 @@ describe('patchMatrix — the live write door', () => {
   })
   it('a refused write throws the server\'s sentence', async () => {
     await expect(patchMatrix('p', [], { baseUrl: 'http://api', fetchImpl: fetchOnce(ok({ message: 'Version conflict' }, 409)) })).rejects.toThrow('Version conflict')
-  })
-})
-
-describe('preview projections — real rows, real coordinates, contract order', () => {
-  it('previewRowInputs narrows the sheet rows to what the fixture needs', () => {
-    expect(previewRowInputs([{ id: 'a', sku: 'A', isParent: true, basePrice: 1, status: 'ACTIVE' }])).toEqual([{ id: 'a', sku: 'A', isParent: true, basePrice: 1, status: 'ACTIVE' }])
-  })
-  it('🔴 connected FIRST then channel order Amazon · eBay · Shopify · WooCommerce · Etsy; markets in TABLE order inside a channel; unconnected LAST; duplicates dropped; connected is a CHANNEL fact', () => {
-    const out = previewCoordinateInputs({
-      channels: [{ id: 'EBAY', label: 'eBay', markets: ['IT'] }, { id: 'AMAZON', label: 'Amazon', markets: ['IT', 'DE'] }],
-      marketplaces: [
-        { channel: 'ETSY', code: 'GLOBAL', name: 'Etsy', connected: false },
-        { channel: 'EBAY', code: 'IT', name: 'eBay · IT', connected: true, accounts: [{ id: 'e2', primary: false }, { id: 'e1', primary: true }] },
-        /* IT before DE in the table → IT before DE on the page (never re-sorted alphabetically). */
-        { channel: 'AMAZON', code: 'IT', name: 'Amazon · IT', connected: true },
-        { channel: 'AMAZON', code: 'DE', name: 'Amazon · DE', connected: true },
-        { channel: 'AMAZON', code: 'IT', name: 'Amazon · IT (dup)', connected: true },
-        /* Configured, flagged connected by the row, but its CHANNEL has no active account → not connected. */
-        { channel: 'SHOPIFY', code: 'GLOBAL', name: 'Shopify', connected: true },
-      ],
-    })
-    expect(out.map(c => `${c.channel}:${c.market}:${c.connected}`)).toEqual(['AMAZON:IT:true', 'AMAZON:DE:true', 'EBAY:IT:true', 'SHOPIFY:GLOBAL:false', 'ETSY:GLOBAL:false'])
-    expect(out.find(c => c.channel === 'EBAY')!.accountId).toBe('e1')
-    expect(out.filter(c => c.channel === 'AMAZON' && c.market === 'IT').length).toBe(1)
   })
 })

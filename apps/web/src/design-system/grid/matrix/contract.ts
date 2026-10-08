@@ -110,6 +110,20 @@ export interface SyncCell {
   routedLocations: readonly string[]
   fbaAtAmazon: number | null
   oversold: boolean
+  /** 2026-10-08: this listing's newest STOCK push failed (the Qty cell's ✗). Null/absent = it did not. */
+  pushFailed?: PushFailure | null
+  /** Amazon EU region cell: the markets' quantities disagree, so the stock push is refused (the Qty cell's ⚠). */
+  euConflict?: string | null
+}
+
+/** The newest push of one lane (stock or price) of a listing, when it FAILED. */
+export interface PushFailure {
+  reason: string
+  at: string | null
+  /** `true` = no retry is left. */
+  final: boolean
+  /** Amazon EU region cell: the markets whose newest stock push failed; `[]` elsewhere. */
+  markets: readonly string[]
 }
 
 export type QueueState = 'sent' | 'queued' | 'sending' | 'failed' | 'dead' | 'paused' | 'never'
@@ -132,6 +146,8 @@ export interface PriceCell {
   clamped: 'floor' | 'ceiling' | null
   /** A product sheet change that goes to Amazon only on Publish; tooltip only (`value: null` = back to the base price). */
   waiting?: { value: number | null } | null
+  /** 2026-10-08: this listing's newest PRICE push failed (the Price cell's ✗). Null/absent = it did not. */
+  pushFailed?: PushFailure | null
 }
 
 export interface SaleCell {
@@ -254,7 +270,8 @@ export interface VerbChange {
 
 export interface VerbRefusal { rowId: string; sku: string; coordinateKey: CoordinateKey; kind: RefusalKind; reason: string }
 
-export type ConfirmLevel = 'none' | 'confirm' | 'type-to-confirm'
+/** 2026-10-08: two levels — the old `confirm` was read by no dialog (the Edit dialog asks only for a typed word). */
+export type ConfirmLevel = 'none' | 'type-to-confirm'
 
 export interface VerbPreview {
   verb: MatrixVerbId

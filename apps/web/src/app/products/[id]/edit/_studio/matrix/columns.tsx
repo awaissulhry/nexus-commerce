@@ -15,10 +15,10 @@
  * since 2026-10-04 (Owner) it is the Products list's catalog status, not a selling state, and the
  * Information page's Shared scope dropped it — each market's own Status column says whether it sells.
  *
- * What is genuinely this page's: the group shape, the strip tag, the `Not listed` column, the
- * `Stock` column (a read of `MatrixRowRead.stock`, never a number derived here), the `Case` column (a read of
- * `MatrixRowRead.pack`, Step 3), the locked `FBA qty` column (a read of `MatrixRowRead.fba`) and the preview-mode hold
- * on the master column.
+ * What is genuinely this page's: the group shape, the strip tag, the `Not listed` column (hidden at first, Owner
+ * 2026-10-08: one footer line names those coordinates, `notListedLine`), the `Stock` column (a read of
+ * `MatrixRowRead.stock`, never a number derived here), the `Case` column (a read of `MatrixRowRead.pack`, Step 3) and the
+ * locked `FBA qty` column (a read of `MatrixRowRead.fba`). No Sync column (Owner 2026-10-08, `drawnCells`).
  */
 import type { MutableRefObject } from 'react'
 
@@ -38,7 +38,7 @@ import { VariantIdentity as SharedVariantIdentity } from '../variants/VariantIde
 import { sharedProgressColumn } from '../sheet/progressColumns'
 import type { AxisSummary } from '../variants/family/coverage'
 
-import { MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixFbaPlan, type MatrixRowRead } from './contract'
+import { MATRIX_ABSENT_CELL_LABELS, MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixAbsentCellKind, type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixFbaPlan, type MatrixRowRead } from './contract'
 import { refusedTooltip } from './refusals'
 import { CASE_EDIT_COPY, CASE_HEADER_TIP, CASE_LABEL, caseCellView, type CaseCellView } from './casePack'
 import { FROM_COL_W, FROM_LABEL, fromBefore, fromCellText, fromCellView, isMatrixFromColId, matrixFromColId } from './sellsFrom'
@@ -103,6 +103,14 @@ export function matrixGroupKeyOf(colId: string | null | undefined): CoordinateKe
 /** A market that draws a Status column: one with a Listing cell (a listed market, or an alias), never a region's inventory. */
 export const hasMatrixStatus = (coord: Pick<MatrixCoordinate, 'connected' | 'cells'>): boolean => coord.connected && coord.cells.includes('listing')
 
+/**
+ * The cells a group DRAWS: every kind it serves but `syncState` (Owner 2026-10-08). The Sync column folded into the Qty
+ * and Price cells (a failed push is their ✗, the Amazon EU conflict the Qty cell's ⚠); the server still serves the kind,
+ * because the Edit dialog's "Stock sync" (hold · release · push · retry) is offered where a group serves it.
+ * Columns, presets, Customise, saved views and the export all read this list.
+ */
+export const drawnCells = (coord: Pick<MatrixCoordinate, 'cells'>): MatrixCellKind[] => coord.cells.filter((k) => k !== 'syncState')
+
 /** `AMAZON:IT.price` → `{ key: 'AMAZON:IT', kind: 'price' }`; a non-Matrix id → null. Keys carry no `.`. */
 export function parseMatrixColId(colId: string | undefined | null): { key: CoordinateKey; kind: MatrixCellKind } | null {
   if (!colId) return null
@@ -150,7 +158,55 @@ function MatrixIdentity(p: ICellRendererParams<StudioRow> & Partial<IdentityPara
 export function notListedTitle(c: MatrixCoordinate): string {
   if (!c.connected) return `${c.label} — ${MATRIX_COPY.noAccountConnected}`
   if (c.cells.length === 0) return `${c.label} — ${MATRIX_COPY.noListingYet}`
-  return `${c.label} — ${c.cells.length} ${c.cells.length === 1 ? 'cell' : 'cells'}${c.sharedInventoryWith ? ` · ${MATRIX_COPY.sharedEu(c.sharedInventoryWith)}` : ''}`
+  const n = drawnCells(c).length
+  return `${c.label} — ${n} ${n === 1 ? 'cell' : 'cells'}${c.sharedInventoryWith ? ` · ${MATRIX_COPY.sharedEu(c.sharedInventoryWith)}` : ''}`
+}
+
+/** `Amazon · IT` → `IT`, `eBay · IT ②` → `IT ②`, `WooCommerce` → `` — a coordinate's place inside its channel. */
+const placeOf = (c: Pick<MatrixCoordinate, 'label'>): string => (c.label.includes(' · ') ? c.label.split(' · ').slice(1).join(' · ') : '')
+
+/** `Amazon IT DE FR · eBay IT` — coordinates said by channel, in the read's order (each channel once). */
+export function placesText(coords: ReadonlyArray<Pick<MatrixCoordinate, 'label'>>): string {
+  const byChannel = new Map<string, string[]>()
+  for (const c of coords) {
+    const name = c.label.includes(' · ') ? c.label.split(' · ')[0]! : c.label
+    const places = byChannel.get(name) ?? []
+    const place = placeOf(c)
+    if (place && !places.includes(place)) places.push(place)
+    byChannel.set(name, places)
+  }
+  return [...byChannel.entries()].map(([name, places]) => (places.length ? `${name} ${places.join(' ')}` : name)).join(' · ')
+}
+
+/**
+ * The footer's ONE line for the coordinates this family is not listed on (Owner 2026-10-08) — their `Not listed` columns
+ * start hidden, and Customise shows them: `Not listed: Amazon NL BE PL · eBay FR ES`. Null when every coordinate is listed.
+ */
+export function notListedLine(coords: readonly MatrixCoordinate[]): string | null {
+  const gone = coords.filter((c) => !c.connected || c.cells.length === 0)
+  return gone.length ? `Not listed: ${placesText(gone)}` : null
+}
+
+/**
+ * Customise's hint (Owner 2026-10-08): the cells a coordinate has no store for, GROUPED BY CELL — `B2B price, Tiers —
+ * Amazon IT DE FR: <reason> · Sale — eBay IT: <reason>; Etsy: <reason> · Fulfilment — Shopify: …` — instead of one line
+ * per coordinate and cell. Inside a cell, the places that share a reason are said once; cells whose places and reasons
+ * are the same (B2B price and Tiers) are one group. The server's own sentences are kept whole. Null when nothing is absent.
+ */
+export function absentHint(coords: readonly MatrixCoordinate[]): string | null {
+  const byCell = new Map<MatrixAbsentCellKind, Map<string, MatrixCoordinate[]>>()
+  for (const c of coords) for (const a of c.absent) {
+    const reasons = byCell.get(a.cell) ?? new Map<string, MatrixCoordinate[]>()
+    reasons.set(a.reason, [...(reasons.get(a.reason) ?? []), c])
+    byCell.set(a.cell, reasons)
+  }
+  const groups = new Map<string, MatrixAbsentCellKind[]>()
+  for (const [cell, reasons] of byCell) {
+    const body = [...reasons].map(([reason, cs]) => `${placesText(cs)}: ${reason}`).join('; ')
+    groups.set(body, [...(groups.get(body) ?? []), cell])
+  }
+  const lines = [...groups].map(([body, cells]) => `${cells.map((cell) => MATRIX_ABSENT_CELL_LABELS[cell]).join(', ')} — ${body}`)
+  return lines.length ? `Not offered here: ${lines.join(' · ')}` : null
 }
 
 /**
@@ -353,9 +409,6 @@ export interface BuildMatrixColumnsOptions {
   market: string
   axesRef: MutableRefObject<AxisSummary[]>
   rowMenuRef: MutableRefObject<(row: StudioRow) => MenuItemDef[]>
-  /** Preview mode: the master column (Base price) is read-only, and this is the sentence it carries. */
-  masterHeldReason: string | null
-  onJump: (params: ICellRendererParams) => void
   /** The fulfilment select's CHOICE — the engine's setter routes it here and writes nothing (§3.4). */
   onPickFulfilment: (method: FulfilmentMethod, params: ICellRendererParams) => void
   rowsRef: MutableRefObject<StudioRow[]>
@@ -363,11 +416,11 @@ export interface BuildMatrixColumnsOptions {
   identityWidth?: number
   /** A market's Status column (the page builds it with `statusColumn`), placed right after its Listing; null = none. */
   statusColumnOf?: (coord: MatrixCoordinate) => ColDef<StudioRow> | null
-  /** The Stock cell opens the stock per location for a row (absent = no door: preview, or no right to adjust stock). */
+  /** The Stock cell opens the stock per location for a row (absent = no door: no right to adjust stock). */
   onOpenStock?: (rowId: string) => void
-  /** A market's From cell opens "Sells from" (absent = no door: preview, or no right to adjust stock). */
+  /** A market's From cell opens "Sells from" (absent = no door: no right to adjust stock, or no warehouse). */
   onOpenFrom?: (rowId: string, key: CoordinateKey, anchor: HTMLElement | null) => void
-  /** The Case cell opens the Case pop-up for a row (absent = no door: preview, or no right to adjust stock). */
+  /** The Case cell opens the Case pop-up for a row (absent = no door: no right to adjust stock). */
   onOpenCase?: (rowId: string, anchor: HTMLElement | null) => void
   /** Send to FBA (Step 4): this family's open plans, read at PAINT time (the FBA qty tooltip names them). */
   fbaPlansOf?: () => readonly MatrixFbaPlan[]
@@ -376,7 +429,7 @@ export interface BuildMatrixColumnsOptions {
 const rowId = (r: StudioRow) => r.id
 
 export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<StudioRow> | ColGroupDef<StudioRow>)[] {
-  const { coordinates, cellsOf, rowOf, tracker, sheetColumns, locale, market, axesRef, rowMenuRef, masterHeldReason, onJump, onPickFulfilment, rowsRef } = opts
+  const { coordinates, cellsOf, rowOf, tracker, sheetColumns, locale, market, axesRef, rowMenuRef, onPickFulfilment, rowsRef } = opts
   const identityWidth = opts.identityWidth ?? IDENTITY_COL_W
 
   const identity: ColDef<StudioRow> = {
@@ -400,24 +453,11 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     rowsRef,
   ) as ColDef<StudioRow>[]
   const byId = new Map(sheetDefs.map((c) => [(c.colId ?? '').toLowerCase(), c]))
-  const held = (def: ColDef<StudioRow> | undefined, fallback: ColDef<StudioRow>): ColDef<StudioRow> => {
-    const base = def ?? fallback
-    if (!masterHeldReason) return { ...base, suppressMovable: true }
-    /* Preview mode: read-only with the reason on the cell — the lock class the sheet uses, and the
-       sentence where the tooltip already lives. An `editable:false` with no reason is a silent hold. */
-    return {
-      ...base,
-      suppressMovable: true,
-      editable: false,
-      suppressFillHandle: true,
-      cellClassRules: { ...(base.cellClassRules ?? {}), 'nds-cell-is-locked': () => true },
-      tooltipValueGetter: () => masterHeldReason,
-    }
-  }
-  const basePrice = held(byId.get(BASE_PRICE_COL.toLowerCase()), {
+  const basePriceFallback: ColDef<StudioRow> = {
     colId: BASE_PRICE_COL, headerName: 'Base price', width: BASE_PRICE_COL_W, minWidth: BASE_PRICE_COL_W, editable: false,
     valueGetter: (p) => p.data?.basePrice ?? null, cellClass: 'nds-ag-cell nds-cell-num',
-  })
+  }
+  const basePrice: ColDef<StudioRow> = { ...(byId.get(BASE_PRICE_COL.toLowerCase()) ?? basePriceFallback), suppressMovable: true }
   const stock: ColDef<StudioRow> = {
     colId: STOCK_COL,
     headerName: 'Stock',
@@ -513,11 +553,14 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
     const children: ColDef<StudioRow>[] = []
     const fromAt = fromBefore(coord)
     if (!coord.connected || coord.cells.length === 0) {
-      /* ONE `Not listed` column — never eight empty cells (§3.1 rule 6). */
+      /* ONE `Not listed` column — never eight empty cells (§3.1 rule 6) — HIDDEN at first (Owner 2026-10-08): the footer
+         names these coordinates in one line, and Customise shows the column. `initialHide`, so a column the operator
+         showed stays shown when the column model is rebuilt. */
       children.push({
         colId: matrixColId(coord.key, 'notListed'),
         headerName: MATRIX_COPY.notListed,
         headerTooltip: notListedTitle(coord),
+        initialHide: true,
         width: NOT_LISTED_W, minWidth: NOT_LISTED_W,
         editable: false, sortable: false, suppressMovable: true, suppressHeaderMenuButton: true, suppressFillHandle: true,
         cellClass: 'nds-ag-cell nds-cell-muted',
@@ -525,8 +568,8 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
         cellRenderer: NotListedCell,
       })
     } else {
-      for (const kind of coord.cells) {
-        // Fulfilment · From · Mode · Qty · Buffer · Sync
+      for (const kind of drawnCells(coord)) {
+        // Fulfilment · From · Mode · Qty · Buffer
         if (kind === fromAt) children.push(fromColumn(coord))
         const o: MatrixColumnOptions<StudioRow> = {
           colId: matrixColId(coord.key, kind),
@@ -534,7 +577,6 @@ export function buildMatrixColumns(opts: BuildMatrixColumnsOptions): (ColDef<Stu
           cells: (data) => (data ? cellsOf(data.id, coord.key) : null),
           tracker,
           rowIdOf: rowId,
-          onJump,
           onPickFulfilment,
           /* The app's copy table, verbatim (Appendix A) — the engine asks, the page supplies. */
           copy: MATRIX_COPY,

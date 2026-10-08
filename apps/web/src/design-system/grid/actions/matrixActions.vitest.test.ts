@@ -39,7 +39,7 @@ const preview = (over: Partial<VerbPreview> = {}): VerbPreview => ({
     { rowId: 'r4', sku: 'GALE-XL', coordinateKey: 'AMAZON:IT', kind: 'formula', reason: 'A formula owns this cell — edit the formula' },
   ],
   notices: ['Amazon EU: this covers IT DE FR ES', 'Preview — nothing is sent'],
-  confirm: 'confirm',
+  confirm: 'none',
   confirmWord: null,
   simulated: true,
   ...over,
@@ -122,7 +122,7 @@ describe('matrixImpact — the preview becomes the registry’s impact, Appendix
     expect(validateImpact(i)).toEqual([])
   })
   it('a preview with nothing to change is level none and says so — never a confirm over nothing', () => {
-    const i = matrixImpact(preview({ changes: [], confirm: 'confirm' }), 'Set to Follow')
+    const i = matrixImpact(preview({ changes: [], confirm: 'type-to-confirm', confirmWord: 'APPLY' }), 'Set to Follow')
     expect(i.level).toBe('none')
     expect(i.unavailable).toBe('Nothing in this selection would change')
     expect(validateImpact(i)).toEqual([])
@@ -162,7 +162,8 @@ describe('matrixGridActions — the registry adapter runs COLLECT → PREFLIGHT 
     const impact = await adjust.preflight!([{ id: 'r1' }])
     expect(h.collect).toHaveBeenCalledTimes(1)
     expect(h.preview).toHaveBeenCalledWith(expect.objectContaining({ id: 'adjust-prices' }), [{ id: 'r1' }], { percent: -5 })
-    expect(impact.level).toBe('confirm')
+    /* The preview's own level (2026-10-08: none or type-to-confirm — no middle "confirm" level). */
+    expect(impact.level).toBe('none')
     const result = await adjust.run([{ id: 'r1' }], impact)
     expect(result).toEqual({ ok: true })
     expect(h.apply).toHaveBeenCalledWith(expect.objectContaining({ id: 'adjust-prices' }), impact.payload, [{ id: 'r1' }])

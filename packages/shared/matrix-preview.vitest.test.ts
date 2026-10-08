@@ -176,14 +176,15 @@ describe('matrix-preview — set-source (Sells from)', () => {
     expect(sourceCodesProblem(['ANY'], undefined)).toBeNull()
   })
 
-  it('an EU market target lands on the region group, with the EU notice, a confirm and the Follow number after it', () => {
+  it('an EU market target lands on the region group, with the EU notice, no typed word and the Follow number after it', () => {
     const p = run(withSource(), ['MI-3PL', 'IT-MAIN'])
     expect(p.changes).toEqual([{
       rowId: 'c1', sku: 'CHILD-1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['MI-3PL', 'IT-MAIN'],
       fromLabel: 'Default (IT-MAIN)', toLabel: 'MI-3PL + IT-MAIN', note: 'Follow shows 14',
     }])
     expect(p.notices).toContain('Amazon EU: this covers IT DE')
-    expect(p.confirm).toBe('confirm')
+    /* 2026-10-08: none or a typed word — the Edit dialog's Apply confirms a small change. */
+    expect(p.confirm).toBe('none')
     expect(followFromCodes(['MI-3PL'], [{ code: 'IT-MAIN', available: 10 }, { code: 'MI-3PL', available: 4 }], 1)).toBe(3)
     expect(followFromCodes(['X'], [{ code: 'IT-MAIN', available: 10 }], 0)).toBeNull()
   })

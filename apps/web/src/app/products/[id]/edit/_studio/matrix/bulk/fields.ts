@@ -107,8 +107,6 @@ export interface BulkContext {
   statusCellOf: (rowId: string, coordinate: MatrixCoordinate) => PublishActionCell | null
   /** `products.edit` + `products.price.edit`: the server refuses every price write without both. */
   canPrice: boolean
-  /** Why Base price cannot be written here now (preview data), or null. */
-  masterHeld: string | null
   /** Why the markets' Status cannot be set here now (not read, read failed, the role cannot publish), or null. */
   statusHeld: string | null
   /** May the viewer end listings (`products.delete`)? */
@@ -147,7 +145,6 @@ export function bulkFields(ctx: BulkContext): BulkFieldSpec[] {
   return FIELDS.map((f) => {
     let held: string | null = null
     if (PRICE_FIELDS.includes(f.id) && !ctx.canPrice) held = BULK_PRICE_PERMISSION
-    else if (f.id === 'basePrice') held = ctx.masterHeld
     else if (f.id === 'listingStatus' && ctx.statusHeld) held = ctx.statusHeld
     else if (f.id === 'stockSource' && ctx.canStock === false) held = MATRIX_COPY.sourcePermission
     else if (f.id === 'stockSource' && activeWarehouses(ctx.locations).length === 0) held = BULK_NO_WAREHOUSE

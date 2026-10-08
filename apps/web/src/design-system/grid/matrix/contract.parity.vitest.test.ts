@@ -54,6 +54,8 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     expect(bothWays<engine.SyncKind, wire.SyncKind>(true)).toBe(true)
     expect(bothWays<engine.SyncMode, wire.SyncMode>(true)).toBe(true)
     expect(bothWays<engine.SyncCell, wire.SyncCell>(true)).toBe(true)
+    /* 2026-10-08 — a lane's failed push (the Qty / Price cell's ✗). */
+    expect(bothWays<engine.PushFailure, wire.PushFailure>(true)).toBe(true)
     expect(bothWays<engine.QueueState, wire.QueueState>(true)).toBe(true)
     expect(bothWays<engine.QueueCell, wire.QueueCell>(true)).toBe(true)
     expect(bothWays<engine.PriceSource, wire.PriceSource>(true)).toBe(true)

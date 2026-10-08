@@ -87,7 +87,8 @@ describe('preview — every change labelled, every refusal named, inventory verb
     expect(p.refusals.filter(x => x.kind === 'formula')).toHaveLength(formula.length)
     expect(p.changes.length + formula.length).toBe(20)
     expect(p.changes[0]!.toLabel).toBe('€99.75'); expect(p.changes[0]!.to).toBe(99.75)
-    expect(p.confirm).toBe('confirm'); expect(p.notices).toContain('Preview — nothing is sent')
+    /* A small price change is confirmed by the Edit dialog's Apply alone: no level between none and a typed word (2026-10-08). */
+    expect(p.confirm).toBe('none'); expect(p.notices).toContain('Preview — nothing is sent')
   })
   it('−30 % escalates to type-to-confirm; the parent row is refused as not applicable', () => {
     const r = read(); const p = previewVerb(r, { params: { verb: 'adjust-prices', percent: -30 }, targets: [{ rowId: 'p', coordinateKey: 'AMAZON:IT' }, { rowId: 'BLACK-XS', coordinateKey: 'AMAZON:IT' }], commit: false }, ctx)
@@ -122,10 +123,19 @@ describe('preview — every change labelled, every refusal named, inventory verb
     const p = previewVerb(paused, { params: { verb: 'set-follow' }, targets: [{ rowId: row.id, coordinateKey: 'AMAZON:EU' }], commit: false }, ctx)
     expect(p.changes).toEqual([]); expect(p.refusals).toEqual([])
   })
-  it('set-fulfilment is type-to-confirm with the method as the word, and the guard refuses FBA→FBM while FBA stock is on hand', () => {
+  it('set-fulfilment on Amazon is type-to-confirm with the method as the word; on eBay (Nexus only) there is no word; the guard refuses FBA→FBM while FBA stock is on hand', () => {
     const r = read(); const fba = r.rows.find(x => x.role === 'variant' && x.cells['AMAZON:EU']!.sync?.kind === 'FBA_EXCLUDED')!
     const p = previewVerb(r, { params: { verb: 'set-fulfilment', method: 'FBM' }, targets: [{ rowId: fba.id, coordinateKey: 'AMAZON:IT' }], commit: false }, ctx)
-    expect(p.confirm).toBe('type-to-confirm'); expect(p.confirmWord).toBe('FBM'); expect(p.refusals[0]?.kind).toBe('guard')
+    /* Refused, so nothing would change and there is nothing to confirm. */
+    expect(p.refusals[0]?.kind).toBe('guard'); expect(p.changes).toEqual([]); expect(p.confirm).toBe('none')
+    /* An Amazon change that WOULD run: the method is the word (it converts the offer on Amazon). */
+    const fbm = firstFbm(r)
+    const toFba = previewVerb(r, { params: { verb: 'set-fulfilment', method: 'FBA' }, targets: [{ rowId: fbm.id, coordinateKey: 'AMAZON:IT' }], commit: false }, ctx)
+    expect(toFba.changes).toHaveLength(1); expect(toFba.confirm).toBe('type-to-confirm'); expect(toFba.confirmWord).toBe('FBA')
+    /* Owner 2026-10-08: an eBay fulfilment change is Nexus only, with this preview and Undo — no word to type. */
+    const ebay = r.rows.find(x => x.role === 'variant' && x.cells['EBAY:IT']?.fulfilment?.method === 'FBM')!
+    const toMcf = previewVerb(r, { params: { verb: 'set-fulfilment', method: 'MCF' }, targets: [{ rowId: ebay.id, coordinateKey: 'EBAY:IT' }], commit: false }, ctx)
+    expect(toMcf.changes).toHaveLength(1); expect(toMcf.confirm).toBe('none'); expect(toMcf.confirmWord).toBeNull()
     const q = previewVerb(r, { params: { verb: 'set-fulfilment', method: 'MCF' }, targets: [{ rowId: fba.id, coordinateKey: 'AMAZON:IT' }], commit: false }, ctx)
     expect(q.refusals[0]?.reason).toContain('not a method')
   })

@@ -37,13 +37,30 @@ describe('matrixChips — counts from the read, null before it, cells keyed <key
   it('keys every tinted cell as <coordinateKey>.<kind> and names only the cells that earned the row its place', () => {
     const chips = matrixChips(read())
     for (const chip of chips) for (const [, cols] of Object.entries(chip.cells.byRow)) for (const col of cols) {
-      expect(col).toMatch(/^[A-Z]+:[A-Z]+(#[\w-]+)?\.(listing|syncMode|syncQty|syncBuffer|syncState)$/)
+      expect(col).toMatch(/^[A-Z]+:[A-Z]+(#[\w-]+)?\.(listing|syncMode|syncQty|syncBuffer|price)$/)
     }
     const paused = chips.find(c => c.id === 'matrix-paused')!
     const anyRow = Object.values(paused.cells.byRow)[0]
     expect(anyRow?.some(c => c.endsWith('.syncMode'))).toBe(true)
     const issues = chips.find(c => c.id === 'matrix-sync-issues')!
-    for (const cols of Object.values(issues.cells.byRow)) for (const col of cols) expect(col.endsWith('.syncState')).toBe(true)
+    for (const cols of Object.values(issues.cells.byRow)) for (const col of cols) expect(col.endsWith('.syncQty') || col.endsWith('.price')).toBe(true)
+  })
+  it('🔴 Sync issues reads the Qty and Price cells (Owner 2026-10-08: no Sync column) — a failed lane push or the EU conflict, never the folded queue', () => {
+    const r = read()
+    const [a, b, c, d] = r.rows.filter(row => row.role === 'variant')
+    const failed = { reason: 'eBay refused the call', at: null, final: true, markets: [] }
+    /* A dead folded queue alone puts NO row on the chip: the server did not say a lane failed. */
+    for (const row of r.rows) for (const cells of Object.values(row.cells)) { cells.queue = cells.queue ? { ...cells.queue, state: 'dead' } : cells.queue; if (cells.sync) delete cells.sync.pushFailed; if (cells.price) delete cells.price.pushFailed }
+    expect(matrixChip(matrixChips(r), 'matrix-sync-issues')!.count).toEqual({ n: 0, unit: 'variants' })
+    a!.cells['EBAY:IT']!.sync!.pushFailed = failed
+    b!.cells['AMAZON:IT']!.price!.pushFailed = failed
+    c!.cells['AMAZON:EU']!.sync!.euConflict = 'EU shared-quantity conflict: …'
+    void d
+    const issues = matrixChip(matrixChips(r), 'matrix-sync-issues')!
+    expect(issues.count).toEqual({ n: 3, unit: 'variants' })
+    expect(issues.cells.byRow[a!.id]).toEqual(['EBAY:IT.syncQty'])
+    expect(issues.cells.byRow[b!.id]).toEqual(['AMAZON:IT.price'])
+    expect(issues.cells.byRow[c!.id]).toEqual(['AMAZON:EU.syncQty'])
   })
   it('narrows to the coordinates on screen when a visible set is given (the scope-bar filter)', () => {
     const r = read()

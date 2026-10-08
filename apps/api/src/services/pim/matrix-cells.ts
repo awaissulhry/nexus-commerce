@@ -25,6 +25,7 @@ import {
   type MatrixCellKind,
   type MatrixCells,
   type PriceCell,
+  type PushFailure,
   type QueueCell,
   type QueueState,
   type SourceCell,
@@ -93,10 +94,10 @@ export type BusinessAbsence = { cell: 'businessPrice' | 'businessTiers'; reason:
  */
 export function businessAbsence(input: { productType: string | null; market: string; audience: readonly string[] | null }): BusinessAbsence[] {
   const reason = input.audience === null || !input.productType
-    ? MATRIX_COPY.absentBusinessUnchecked(input.market)
+    ? MATRIX_COPY.absentBusinessUnchecked()
     : input.audience.includes('B2B')
-      ? MATRIX_COPY.absentBusinessNotBuilt(input.productType, input.market)
-      : MATRIX_COPY.absentBusiness(input.productType, input.market)
+      ? MATRIX_COPY.absentBusinessNotBuilt(input.productType)
+      : MATRIX_COPY.absentBusiness(input.productType)
   return [{ cell: 'businessPrice', reason }, { cell: 'businessTiers', reason }]
 }
 
@@ -275,6 +276,8 @@ export interface QueueRowFacts {
   errorMessage: string | null
   /** The newest of syncedAt / updatedAt / createdAt, ISO. */
   at: string | null
+  /** The row's `createdAt`, ISO — which push of a lane is the newest (`lanePushFailure`). */
+  createdAt?: string | null
 }
 
 const QUEUE_RANK: Record<QueueState, number> = { dead: 6, failed: 5, sending: 4, queued: 3, paused: 2, sent: 1, never: 0 }
@@ -305,6 +308,57 @@ export function foldQueue(rows: readonly QueueRowFacts[], sync: SyncCell | null)
     if (!best || QUEUE_RANK[state] > QUEUE_RANK[best.state]) best = cell
   }
   return best ?? { state: 'never', at: null, reason: null, syncType: null, via: null }
+}
+
+/* ── per-lane push failure (2026-10-08, Owner: the Sync column folds into Qty and Price) ─────── */
+
+/**
+ * The words a push refusal is saved with when the dispatcher answered a CODE rather than a sentence (`error` lands on the
+ * row's `errorMessage`): the Qty cell leads with the reason, so it says what the code means.
+ */
+const PUSH_CODE_SENTENCES: Readonly<Record<string, string>> = {
+  'eu-shared-qty-conflict': 'Refused by the Amazon EU guard — the EU markets ask for different quantities',
+  'eu-shared-qty-guard-unavailable': 'Held — the Amazon EU quantity guard could not be checked',
+  'sync-paused-policy': 'Held — the channel policy holds pushes on this market (Sync Control)',
+  'offer-suppressed': 'Not sent — the offer is suppressed',
+}
+
+/** A failed row's reason as the cell says it: the server's sentence, a known code in words, never empty. */
+export function pushFailureReason(errorMessage: string | null | undefined): string {
+  const said = String(errorMessage ?? '').trim()
+  if (!said) return 'The channel refused the change'
+  return PUSH_CODE_SENTENCES[said] ?? said
+}
+
+/**
+ * PURE — did the newest push of ONE lane fail? Per listing: its newest row of the lane (by `createdAt`) decides — FAILED
+ * (dead-lettered, or failed and waiting for its next try) is a failure; SUCCESS, a push on its way (PENDING / IN_PROGRESS)
+ * or a deliberate skip (SKIPPED: nothing was sent, by design — a held price, a dry run, a lane another lane owns) is not.
+ * Several listings (Amazon EU's region cell): the markets whose newest push failed (`named`), the newest failure's words.
+ * `null` = no failure: success shows nothing.
+ */
+export function lanePushFailure(
+  listings: ReadonlyArray<{ market: string; rows: readonly QueueRowFacts[] }>,
+  lane: 'QUANTITY_UPDATE' | 'PRICE_UPDATE',
+  named = false,
+): PushFailure | null {
+  const failures: Array<{ market: string; row: QueueRowFacts }> = []
+  for (const l of listings) {
+    let newest: QueueRowFacts | null = null
+    for (const r of l.rows) {
+      if (r.syncType !== lane) continue
+      if (!newest || String(r.createdAt ?? r.at ?? '') > String(newest.createdAt ?? newest.at ?? '')) newest = r
+    }
+    if (newest && newest.syncStatus.toUpperCase() === 'FAILED') failures.push({ market: l.market.toUpperCase(), row: newest })
+  }
+  if (failures.length === 0) return null
+  const last = failures.reduce((a, b) => (String(b.row.at ?? '') > String(a.row.at ?? '') ? b : a))
+  return {
+    reason: pushFailureReason(last.row.errorMessage),
+    at: last.row.at,
+    final: last.row.isDead,
+    markets: named ? [...new Set(failures.map((f) => f.market))].sort(compareMarkets) : [],
+  }
 }
 
 /* ── price ─────────────────────────────────────────────────────────────────────────────────── */

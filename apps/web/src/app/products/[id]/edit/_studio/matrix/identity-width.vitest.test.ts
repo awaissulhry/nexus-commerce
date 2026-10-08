@@ -16,7 +16,7 @@ describe('the pinned identity column on a narrow grid', () => {
   })
   it('the identity column def takes the width it is given, as a fixed slot', () => {
     const defs = buildMatrixColumns({ coordinates: [], cellsOf: () => null, rowOf: () => null, tracker: null, sheetColumns: [], locale: 'it', market: 'IT',
-      axesRef: { current: [] }, rowMenuRef: { current: () => [] }, masterHeldReason: null, onJump: () => undefined, onPickFulfilment: () => undefined, rowsRef: { current: [] }, identityWidth: 162 } as never)
+      axesRef: { current: [] }, rowMenuRef: { current: () => [] }, onPickFulfilment: () => undefined, rowsRef: { current: [] }, identityWidth: 162 } as never)
     // The identity sits inside the PRODUCT group: walk the tree, not the top level.
     const flat = (list: readonly unknown[]): Array<Record<string, unknown>> => list.flatMap((d) => { const r = d as Record<string, unknown>; return Array.isArray(r.children) ? flat(r.children) : [r] })
     expect(flat(defs).find((d) => d.colId === IDENTITY_COL)).toMatchObject({ width: 162, minWidth: 162, maxWidth: 162, pinned: 'left' })
