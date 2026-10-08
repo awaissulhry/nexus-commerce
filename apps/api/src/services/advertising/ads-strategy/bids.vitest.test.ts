@@ -136,7 +136,7 @@ describe('the target chain in the optimiser, per ad group', () => {
     // Own target 40 %: a 40¢ CPC (40 % of €1.00 a click), bought at 48¢ — it pays 50¢ at its 60¢ bid (r̂ 0.83, review
     // 2026-10-08 A); one 30 % step would reach 42¢, so it lands on the goal. Band 10–80¢ (market floor, category ceiling).
     expect(of(list, 't-own')).toMatchObject({
-      proposedBidCents: 48, targetAcosUsed: 0.4, targetSource: 'campaign', reason: 'ACOS 50% > target 40% (campaign target) — lower toward 48¢ (40% of €1.00 sales a click ÷ r̂ 0.83 (paid CPC ÷ bid: its own, 20 clicks))',
+      proposedBidCents: 48, targetAcosUsed: 0.4, targetSource: 'campaign', reason: 'exp.ACOS 50% at 60¢ > target 40% (campaign target) — lower toward 48¢ (40% of €1.00 sales a click ÷ r̂ 0.83 (paid CPC ÷ bid: its own, 20 clicks))',
       sources: {
         targetAcosPct: { level: 'campaign', value: 40 },
         minBidCents: source('market', 'Test market (IT)', 10),
@@ -148,7 +148,7 @@ describe('the target chain in the optimiser, per ad group', () => {
     // step → 42¢.
     expect(of(list, 't-strat')).toMatchObject({
       proposedBidCents: 42, targetAcosUsed: 0.2, targetSource: 'strategy',
-      reason: 'ACOS 50% > target 20% (ads strategy: Test leaf (IT), category, v1) — lower toward 24¢ (20% of €1.00 sales a click ÷ r̂ 0.83 (paid CPC ÷ bid: its own, 20 clicks))',
+      reason: 'exp.ACOS 50% at 60¢ > target 20% (ads strategy: Test leaf (IT), category, v1) — lower toward 24¢ (20% of €1.00 sales a click ÷ r̂ 0.83 (paid CPC ÷ bid: its own, 20 clicks))',
       sources: { targetAcosPct: source('category', 'Test leaf (IT)', 20) },
     })
     // A market without a strategy: the account default 45 %, no strategy source, as W0 (its goal a 45¢ CPC, bought at 54¢).

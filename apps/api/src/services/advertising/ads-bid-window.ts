@@ -12,12 +12,18 @@
  *   once a data day     a target moves at most once per settled data day, whichever automatic writer moved it first
  *                       (auto-bid, a rule, an autopilot plan, an hourly plan): they do not undo each other in one day
  *   no quick reversal   a move against this optimiser's own last move (its writes carry their data day) waits
- *                       REVERSAL_WAIT_DATA_DAYS data days, while the bid is still where that move left it
+ *                       REVERSAL_WAIT_DATA_DAYS data days, while the bid is still where that move left it — except a
+ *                       safety cut: a cut while the bid it has now is expected to run over SAFETY_CUT_ACOS_MULTIPLE ×
+ *                       the target (review follow-up 2026-10-08). The zero-sales cut has no expected ACoS and still
+ *                       waits: an order leaving the window is the very flip the wait is for.
  */
 import { ENGINE_FLOOR_CENTS } from './bid-brain/recipe.js'
 
 /** A move against the optimiser's own last move waits this many settled data days. */
 export const REVERSAL_WAIT_DATA_DAYS = 3
+
+/** A cut does not wait as a reversal when the bid it has now is expected to run over this multiple of the target ACoS. */
+export const SAFETY_CUT_ACOS_MULTIPLE = 1.5
 
 const DAY_MS = 86_400_000
 
@@ -137,4 +143,13 @@ export function reversalWait(dataDay: string, currentCents: number, proposedCent
   const age = dataDaysBetween(last.dataDay, dataDay)
   if (age >= REVERSAL_WAIT_DATA_DAYS) return null
   return `would reverse its own ${lastUp ? 'raise' : 'cut'} ${last.fromCents} → ${last.toCents}¢ of data day ${last.dataDay} — a reversal waits ${REVERSAL_WAIT_DATA_DAYS} data days (${REVERSAL_WAIT_DATA_DAYS - age} to go)`
+}
+
+/**
+ * A safety cut: a cut (`proposedCents` under `currentCents`) while the bid it has now is expected to run over
+ * SAFETY_CUT_ACOS_MULTIPLE × the target. It does not wait as a reversal of the optimiser's own raise. `nowAcos` null (no
+ * value a click is known, the zero-sales cut) is never one.
+ */
+export function isSafetyCut(currentCents: number, proposedCents: number, nowAcos: number | null, targetAcos: number): boolean {
+  return proposedCents < currentCents && nowAcos != null && targetAcos > 0 && nowAcos > SAFETY_CUT_ACOS_MULTIPLE * targetAcos
 }
