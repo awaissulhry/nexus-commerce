@@ -15,6 +15,11 @@
  *
  * AB-8 — a logged plan carries what the money writer did with it (`actions`: written, asked, held — each with its why);
  * who set each portfolio's cap and Amazon's usage of it (a run reads it; a dry run reads no Amazon, and says so).
+ *
+ * AB-18 — `offAmazon`: the off-Amazon lane (brain/off-amazon.ts) — with productId its share of the product's spend, its
+ * ACoS against the band top over the settled 14 days and the verdict, with the line for the Owner (the brain cannot read or
+ * write the "Limit off-Amazon spend" setting: could not verify it in the Amazon Ads API); with market alone each
+ * product's share. Its figures sit under `money` too.
  */
 import prisma from '../../../db.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
@@ -24,6 +29,8 @@ import { MONEY_BRAKES } from './budget-pace.js'
 import { loadMarketMoney } from './budget-load.js'
 import { planProductMoney, type ProductMoneyPlan } from './budget-plan.js'
 import { MONEY_DECISION_DAYS_KEPT, newestMoneyDecisions } from './budget-shadow.js'
+import { offAmazonShare, offAmazonView } from './off-amazon.js'
+import { marketOffAmazon, productOffAmazon } from './off-amazon-read.js'
 
 /** MCP.12 — the words every tool uses for a product that is deleted or not in this business (read-map.ts). */
 const PRODUCT_NOT_FOUND = 'Product not found'
@@ -107,19 +114,27 @@ export async function brainMoney(args: { productId?: string; market?: string; no
     const facts = mm?.facts.get(family.root)
     if (!mm || !facts) return { error: `${market} is not a market code` }
     const plan = planProductMoney(facts, budgetDayMoveBounds)
+    const lever = facts.settings.levers.offAmazon
+    const offAmazon = await productOffAmazon({
+      productId: family.root, name: facts.name, market, currency: facts.currency, now,
+      campaigns: facts.campaigns.map((c) => ({ campaignId: c.campaignId, name: c.name, owner: c.owner, excluded: c.excluded })),
+      bandTop: facts.band.goal ? { hi: facts.band.goal.hi, words: facts.band.goal.words } : null,
+      lever: { effective: lever.effective, lock: lever.lock ? { value: lever.lock.value, by: lever.lock.by } : null },
+    })
     return {
       data: {
         view: 'money', scope: { productId: family.root, market }, dryRun: true,
         note: 'decided now from what Nexus holds — not stored and nothing sent, and Amazon\'s usage of the portfolio caps is not read in a dry run; the run logs a plan for a product whose budgets lever is OBSERVE or higher, and at PROPOSE / AUTO (server switch live) asks or writes it (AB-8)',
         plan: moneyView(plan),
         logged: last ? { at: last.createdAt.toISOString(), kind: last.kind, mode: last.mode, runId: last.runId, rowsKept: kept, keptDays: MONEY_DECISION_DAYS_KEPT, plan: moneyView(last.plan) } : null,
+        offAmazon: offAmazonView(offAmazon),
       },
     }
   }
   const mm = await loadMarketMoney(market, { now, plan: [] })
   if (!mm) return { error: `${market} is not a market code` }
   const ids = [...mm.split.envelopes.keys()]
-  const stored = await newestMoneyDecisions(market, ids)
+  const [stored, lanes] = await Promise.all([newestMoneyDecisions(market, ids), marketOffAmazon(market, ids, now, mm.currency)])
   return {
     data: {
       view: 'money', scope: { market }, month: mm.clock.month, day: mm.clock.day, dataThrough: mm.dataThrough,
@@ -128,13 +143,15 @@ export async function brainMoney(args: { productId?: string; market?: string; no
         const e = mm.split.envelopes.get(id)!
         const p = mm.products.get(id)
         const last = stored.get(id)
+        const lane = lanes.get(id)
         return {
           productId: id, name: p?.name ?? null, sku: p?.sku ?? null, envelopeSource: e.source,
           logged: last ? { at: last.createdAt.toISOString(), kind: last.kind, brake: last.plan.brake.level } : null,
+          ...(lane ? { offAmazon: offAmazonShare(lane) } : {}),
           money: { envelopeCents: e.cents, why: e.why, ...(last ? { logged: { pacePct: last.plan.pace.pacePct, projectedCents: last.plan.pace.projectedCents } } : {}) },
         }
       }),
-      next: 'Read one product with productId and market: its plan now (dry run) and the newest the shadow logged.',
+      next: 'Read one product with productId and market: its plan now (dry run), the newest the shadow logged, and its off-Amazon lane judged against its band.',
     },
   }
 }

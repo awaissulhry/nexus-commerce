@@ -6863,6 +6863,10 @@
       "fields": []
     },
     {
+      "name": "BidBrainHourFactor",
+      "fields": []
+    },
+    {
       "name": "BidProbe",
       "fields": []
     },
@@ -6916,6 +6920,18 @@
     },
     {
       "name": "AdsBrainStructure",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainStrategyDecision",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainStrategyTest",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainLeverClock",
       "fields": []
     },
     {

@@ -20153,6 +20153,40 @@ model BidDirective {
   @@index([workspaceId])
 }
 
+/// BID BRAIN BB-22 — the hour factors the bid brain learned for one product (family root) in one market: per hour of the
+/// week a smooth conversion curve pooled product → category → market, a cost-per-unit-of-bid curve from the product's own
+/// hours, the factor they give with its 90 % interval, each of its campaigns' plans against it (the move the factor asks
+/// of each approved cell), and top of search's pooled conversion with the placement cap it sets
+/// (services/advertising/bid-brain/hour-factors.ts). Learned at most once a day in the bid brain's full run (and when a
+/// plan changes), replaced by each learning (no history). Read by the bid brain under NEXUS_BID_BRAIN_HOUR_FACTORS
+/// (shadow by default: words in the why, nothing changed) and by the bid-brain read tool's hour-factors view.
+model BidBrainHourFactor {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Product.id of the family root.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// The product's own campaigns with an hourly plan the learning covers (Campaign.id).
+  campaignIds String[] @default([])
+  /// The research window's first and last local day (YYYY-MM-DD, the plan's time zone).
+  windowFrom  String?
+  windowTo    String?
+  /// hour-factors-store.ts LearnedHourFactors: the curves (168 hours each), the plans, the top-of-search cap, the
+  /// confidence and the findings in words.
+  factors     Json
+  learnedAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, productId, marketplace], name: "hour_factor_product", map: "BidBrainHourFactor_product_key")
+  @@index([marketplace])
+  @@index([workspaceId])
+}
+
 /// BID BRAIN BB-21 — one switchback probe of one keyword (2026-10-08, design 2026-10-07-hands-off/BRAIN-UPGRADES-DESIGN.md
 /// U2 "Learning ε", U3 "Switchback probes"; services/advertising/bid-brain/probe.ts, probe-store.ts). 12 serving days (the
 /// market's own zone) in four periods of 3 on two bids around the brain's own (center ± δ, symmetric: budget-neutral),
@@ -20902,6 +20936,149 @@ model AdsBrainStructure {
   @@index([approvalId])
   @@index([liveApprovalId])
   @@index([checkedAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-17 — the bidding-strategy lever's log (one-brain DESIGN.md §2.11, §5, §8 row AB-17, §10 N4;
+/// services/advertising/brain/bidding-mode*.ts): which of Amazon's bidding strategies (fixed, down only, up and down) each
+/// campaign of a product should run, decided weekly, and what became of it. One row per campaign when its decision changes
+/// (decisionHash), plus the UTC day's first for a campaign whose switchback test runs or whose request waits. Only for a
+/// campaign whose biddingStrategy lever is OBSERVE or higher; rows older than 30 days are deleted. Nothing here writes to
+/// Amazon: the AUTO level writes through the normal campaign path (queue → write gate → gateway).
+model AdsBrainStrategyDecision {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// One run of the lever (every campaign of a run shares it).
+  runId        String
+  /// SHADOW (decided and logged) | PROPOSE (asked a person) | LIVE (written as the brain).
+  mode         String
+  /// change (the decision differs from the campaign's last one) | snapshot (the UTC day's first, for a test or a request)
+  kind         String
+  /// Product.id of the family root.
+  productId    String
+  /// Short market code ('IT', 'DE').
+  marketplace  String
+  /// Campaign.id.
+  campaignId   String
+  /// The lever's effective level on the campaign when decided (OBSERVE, PROPOSE, AUTO, LOCKED, EXCLUDED, OFF).
+  level        String
+  /// switch | revert | keep | test | hold | skip
+  action       String
+  /// What happened: shadow | asked | queued | waiting | held | refused | none
+  outcome      String
+  /// The rule that chose the strategy: exact | new | thin | launch | tos | default | test | none
+  rule         String
+  /// Campaign.biddingStrategy when decided, and the strategy the decision sets or would set (null: none).
+  fromStrategy String?
+  toStrategy   String?
+  /// The approval request a switch or a revert asked for, when one was asked or is waiting.
+  approvalId   String?
+  /// The switch and its switchback test (AdsBrainStrategyTest.id) the decision belongs to.
+  testId       String?
+
+  /// The fingerprint of the decision (bidding-mode.ts modeDecisionHash).
+  decisionHash String
+  /// The whole decision (bidding-mode.ts ModeDecision): the rule's evidence, the holds, the N4 clock, the spacing.
+  decision     Json
+  /// One line.
+  why          String @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@index([productId, marketplace, createdAt(sort: Desc)])
+  @@index([marketplace, createdAt])
+  @@index([runId])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-17 — one switch of a campaign's Amazon bidding strategy the brain made or asked for, outside a stop, and
+/// its switchback test (one-brain DESIGN.md §2.11): the switch runs for whole weeks, then the same days of the week after
+/// it are compared with as many before it (ACoS, spend, sales — AB-15's judge, and the product's ACoS band) and the
+/// strategy is kept or switched back. A stop's down only (the stop recipe, AB-2) is never one.
+///   status  ASKED (a request waits for a person) · DECLINED (rejected or expired) · REFUSED (not queued: the gate or the
+///           tool said no) · TESTING (in Nexus's copy since switchedAt, the test running) · KEPT · REVERT_ASKED (the switch
+///           back waits for a person) · REVERTED · ENDED (closed with no verdict: someone else changed the strategy, the
+///           lever left, a person's hold) · FAILED (the switch did not land at Amazon)
+/// Closed rows older than 180 days are deleted. No foreign key: the history outlives a removed campaign.
+model AdsBrainStrategyTest {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Product.id of the family root; short market code ('IT'); Campaign.id.
+  productId         String
+  marketplace       String
+  campaignId        String
+  /// The strategy before the switch and the one tested (MANUAL, LEGACY_FOR_SALES, AUTO_FOR_SALES).
+  fromStrategy      String
+  toStrategy        String
+  /// The rule that chose it: exact | new | thin | launch | tos | default.
+  rule              String
+  /// The lever's level it was decided at: PROPOSE | AUTO.
+  level             String
+  /// See the model's comment.
+  status            String
+  /// The request a person decides for the switch (null: written as the brain).
+  approvalId        String?
+  /// When the switch reached Nexus's copy (day 0 of the test), and its action-log row.
+  switchedAt        DateTime?
+  actionLogId       String?
+  /// The days the verdict compares (whole weeks, the same weekdays on both sides).
+  baselineFrom      DateTime? @db.Date
+  baselineTo        DateTime? @db.Date
+  testFrom          DateTime? @db.Date
+  testTo            DateTime? @db.Date
+  /// keep | revert (and when it was reached).
+  verdict           String?
+  verdictAt         DateTime?
+  /// The figures before and after and the thresholds the verdict read (amounts in minor units).
+  figures           Json?
+  /// The switch back after a verdict to revert: its request, when it reached Nexus's copy, its action-log row.
+  revertApprovalId  String?
+  revertedAt        DateTime?
+  revertActionLogId String?
+  /// One line: why it was switched, and what became of it.
+  why               String    @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId, createdAt(sort: Desc)])
+  @@index([productId, marketplace, status])
+  @@index([status])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-17 — since when a lever of a product's brain has been the brain's (PROPOSE or AUTO) in a market: the clock
+/// of N4 (one-brain DESIGN.md §10: "bidding-strategy switches need approval for 30 days, then run alone"). One row per
+/// product × market × lever while the lever is owned on the product or one of its campaigns; removed once it is not, so a
+/// later enrollment starts a new clock. The Owner moves the period with set-ads-brain (strategyApprovalDays,
+/// strategySwitchMode).
+model AdsBrainLeverClock {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Product.id of the family root; short market code ('IT'); the lever (levers.ts BRAIN_LEVERS).
+  productId   String
+  marketplace String
+  lever       String
+  /// When the lever became the brain's: the Owner's choice that made it so (its createdAt), else the run that first saw it.
+  since       DateTime
+  /// Whose choice it was ('user:<id>', 'claude:<approvalId>'), or the brain's run when no choice names it.
+  by          String
+  /// The newest run that saw the lever owned.
+  seenAt      DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, lever], name: "product_market_lever", map: "AdsBrainLeverClock_workspaceId_productId_marketplace_lever_key")
   @@index([workspaceId])
 }
 

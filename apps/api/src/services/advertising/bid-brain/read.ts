@@ -12,6 +12,9 @@
  *   calibration  BB-15 — the attribution lag curve per market (and per product with a curve of its own): the share of a
  *            day's final orders and sales a copy pulled at each age holds, what it rests on, and how well a curve fitted
  *            without the newest settled days nowcast them (mean absolute error per age, against no nowcast)
+ *   hour-factors  BB-22 — per product and market, the learned hour factor of each hour of the week against the approved
+ *            plan's, with its interval and confidence, what it would apply inside each cell's limits now, the top-of-search
+ *            cap (hour-factors-read.ts)
  *   probes   BB-21 — the switchback probes of a scope (probe-store.ts readProbes): arms, days, what each measured, and ε
  *            per product from their readings
  */
@@ -30,7 +33,7 @@ import { YOUNG_SHARE_MAX } from './estimator.js'
 import { nowcastMode, runForRows } from './nowcast.js'
 import { readProbes } from './probe-store.js'
 
-export const BRAIN_VIEWS = ['why', 'what-if', 'diff', 'calibration', 'probes'] as const
+export const BRAIN_VIEWS = ['why', 'what-if', 'diff', 'calibration', 'hour-factors', 'probes'] as const
 export type BrainView = (typeof BRAIN_VIEWS)[number]
 
 export interface BrainReadArgs {
@@ -321,6 +324,7 @@ export async function readBidBrain(args: BrainReadArgs): Promise<{ data: unknown
   if (view === 'what-if') return whatIfView(args)
   if (view === 'diff') return diffView(args)
   if (view === 'calibration') return calibrationView(args)
+  if (view === 'hour-factors') return (await import('./hour-factors-read.js')).hourFactorsView(args)
   if (view === 'probes') {
     const scope = await scopeTargets(args)
     return scope.error ? { error: scope.error } : readProbes(scope, { limit: args.limit })

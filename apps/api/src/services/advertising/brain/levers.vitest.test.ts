@@ -27,8 +27,9 @@ describe('levels', () => {
     expect(levelRefusal('bids', 'OBSERVE')).toBeNull()
     expect(levelRefusal('bids', 'PROPOSE')).toMatch(/no proposal path/)
     expect(levelRefusal('bids', 'OFF')).toMatch(/decides every allowlisted campaign in shadow/)
-    // AB-8 — the money levers have their writer; AB-12 — the state lever too; AB-10 — the negatives lever too: every level.
-    for (const lever of ['budgets', 'portfolioCap', 'state', 'negatives', 'harvest'] as const) {
+    // AB-8 — the money levers have their writer; AB-12 — the state lever too; AB-10 — the negatives lever too; AB-17 — the
+    // bidding-strategy lever too: every level.
+    for (const lever of ['budgets', 'portfolioCap', 'state', 'negatives', 'harvest', 'biddingStrategy'] as const) {
       for (const level of ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'] as const) expect(levelRefusal(lever, level), `${lever} ${level}`).toBeNull()
     }
     // AB-13 — the hours lever paints and asks (D3 = B+): PROPOSE yes, AUTO never.
@@ -39,7 +40,7 @@ describe('levels', () => {
     expect(levelRefusal('structure', 'PROPOSE')).toBeNull()
     expect(levelRefusal('structure', 'OFF')).toBeNull()
     expect(levelRefusal('structure', 'AUTO')).toMatch(/takes OFF or OBSERVE or PROPOSE today, not AUTO: AB-16: .*never AUTO: the brain never creates, splits or moves a campaign without a person's approval/)
-    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'state' && l !== 'hours' && l !== 'negatives' && l !== 'harvest' && l !== 'structure')) {
+    for (const lever of BRAIN_LEVERS.filter((l) => l !== 'bids' && l !== 'budgets' && l !== 'portfolioCap' && l !== 'state' && l !== 'hours' && l !== 'negatives' && l !== 'harvest' && l !== 'structure' && l !== 'biddingStrategy')) {
       expect(levelRefusal(lever, 'OFF')).toBeNull()
       expect(levelRefusal(lever, 'OBSERVE')).toBeNull()
       expect(levelRefusal(lever, 'AUTO')).toMatch(/takes OFF or OBSERVE today, not AUTO: .*AB-\d+/)
@@ -70,6 +71,11 @@ describe('settings', () => {
     expect(settingRefusal('portfolioCapOn', 'yes', 'PRODUCT')).toMatch(/true or false/)
     expect(settingRefusal('strategySwitchMode', 'ALWAYS_PROPOSE', 'CAMPAIGN')).toBeNull()
     expect(settingRefusal('strategySwitchMode', 'SOMETIMES', 'PRODUCT')).toMatch(/PROPOSE_THEN_AUTO or ALWAYS_PROPOSE/)
+    // AB-17 — N4's 30 days are the Owner's own number, per product (0: AUTO switches alone at once).
+    expect(settingDefaults().strategyApprovalDays).toBe(30)
+    expect(settingRefusal('strategyApprovalDays', 0, 'PRODUCT')).toBeNull()
+    expect(settingRefusal('strategyApprovalDays', 400, 'PRODUCT')).toMatch(/from 0 to 365/)
+    expect(settingRefusal('strategyApprovalDays', 10, 'CAMPAIGN')).toMatch(/set per product, not per campaign/)
     expect(settingRefusal('paceTargetPct', 80, 'CAMPAIGN')).toMatch(/set per product, not per campaign/)
     expect(settingRefusal('mystery', 1, 'PRODUCT')).toMatch(/not a setting/)
     expect(settingRefusal('hourResearchWeeks', 9, 'PRODUCT')).toMatch(/from 2 to 8, not 9/)
