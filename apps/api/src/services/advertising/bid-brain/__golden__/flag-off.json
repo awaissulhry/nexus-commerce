@@ -1,0 +1,4402 @@
+{
+ "weigh": [
+  [
+   {
+    "clicks": 547.1468436373214,
+    "orders": 19.872062995796835,
+    "salesCents": 162319.72091836864,
+    "costCents": 17299.01975303385
+   },
+   {
+    "clicks": 184.556652035901,
+    "orders": 5.201890547668224,
+    "salesCents": 54295.158806592466,
+    "costCents": 5334.64507978063
+   },
+   {
+    "clicks": 218.94272228694092,
+    "orders": 7.673504172708596,
+    "salesCents": 64338.183603512225,
+    "costCents": 6598.262934464359
+   }
+  ],
+  [
+   {
+    "clicks": 452.25692659308993,
+    "orders": 16.491014899587867,
+    "salesCents": 169636.72761412497,
+    "costCents": 16439.650553247113
+   },
+   {
+    "clicks": 106.42563494323615,
+    "orders": 6.251706284237743,
+    "salesCents": 53568.76734420966,
+    "costCents": 4868.219672401651
+   },
+   {
+    "clicks": 157.9181713756065,
+    "orders": 7.438981333812991,
+    "salesCents": 65042.28938186855,
+    "costCents": 6330.488028007157
+   }
+  ],
+  [
+   {
+    "clicks": 532.4065806775588,
+    "orders": 19.97227971485478,
+    "salesCents": 157601.47901048433,
+    "costCents": 16472.842136442534
+   },
+   {
+    "clicks": 108.99566931566278,
+    "orders": 6.178365226595171,
+    "salesCents": 38841.21966877998,
+    "costCents": 5102.23645818171
+   },
+   {
+    "clicks": 184.74682148321315,
+    "orders": 8.322656313561172,
+    "salesCents": 55697.405997822796,
+    "costCents": 6379.94142350447
+   }
+  ]
+ ],
+ "markets": [
+  {
+   "facts": 36,
+   "decisions": [
+    {
+     "targetId": "g1-t0",
+     "currentCents": 37,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 37,
+     "expectedAcos": 0.17746393884535552,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 37,
+     "why": "goal: already moved for data day 2026-10-01 — waits for a new day (aim 20% (band 18%–28%, PROFIT); CR 1.61% (keyword, 131 clicks) × AOV 92.22 ÷ CPC/bid 0.71; goal bid 42¢; step ≤25% from 30¢)"
+    },
+    {
+     "targetId": "g1-t1",
+     "currentCents": 57,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 43,
+     "expectedAcos": 0.269619711566493,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 57¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 20% (band 18%–28%, PROFIT); CR 1.75% (adGroup, 301 clicks) × AOV 87.23 ÷ CPC/bid 0.72; goal bid 42¢; step ≤25% from 57¢)"
+    },
+    {
+     "targetId": "g1-t2",
+     "currentCents": 7,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 7,
+      "toCents": 9
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 9,
+     "expectedAcos": 0.026669152498217406,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 9,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 2.07% (adGroup, 301 clicks) × AOV 91.43 ÷ CPC/bid 0.72; ceiling 45¢ (rule \"ceiling\"); goal bid 45¢; step ≤25% from 7¢; 7¢ → 9¢"
+    },
+    {
+     "targetId": "g1-t3",
+     "currentCents": 13,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 13,
+      "toCents": 16
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 16,
+     "expectedAcos": 0.06134638124003592,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 16,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1.75% (adGroup, 301 clicks) × AOV 87.23 ÷ CPC/bid 0.72; goal bid 42¢; step ≤25% from 13¢; 13¢ → 16¢"
+    },
+    {
+     "targetId": "g1-t4",
+     "currentCents": 25,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 25,
+      "toCents": 31
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 31,
+     "expectedAcos": 0.14885474215943387,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 31,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1.72% (keyword, 131 clicks) × AOV 97.59 ÷ CPC/bid 1.00; held at the parent's bid (no orders of its own); goal bid 31¢; 25¢ → 31¢"
+    },
+    {
+     "targetId": "g1-t5",
+     "currentCents": 50,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 45,
+     "expectedAcos": 0.19249358364145747,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 50¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 20% (band 18%–28%, PROFIT); CR 1.89% (adGroup, 301 clicks) × AOV 82.37 ÷ CPC/bid 0.60; ceiling 45¢ (rule \"ceiling\"); goal bid 45¢)"
+    },
+    {
+     "targetId": "g2-t0",
+     "currentCents": 43,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 54,
+     "expectedAcos": 0.20692195342582512,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 43,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 43¢ → 54¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 2.1% (keyword, 174 clicks) × AOV 99.01 ÷ CPC/bid 1.00; goal bid 62¢; step ≤25% from 43¢; 43¢ → 54¢)"
+    },
+    {
+     "targetId": "g2-t1",
+     "currentCents": 46,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 57,
+     "expectedAcos": 0.14915316105872967,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "pin",
+     "bidCents": 46,
+     "why": "pin: held by a person (their bid of the last 60 days) — left alone"
+    },
+    {
+     "targetId": "g2-t2",
+     "currentCents": 35,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 44,
+     "expectedAcos": 0.15939611633424394,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 35,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 35¢ → 44¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 2.2% (keyword, 174 clicks) × AOV 100.00 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 63¢; step ≤25% from 35¢; 35¢ → 44¢)"
+    },
+    {
+     "targetId": "g2-t3",
+     "currentCents": 28,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 35,
+     "expectedAcos": 0.23330901782630192,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 28,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 28¢ → 35¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 1.31% (adGroup, 264 clicks) × AOV 91.56 ÷ CPC/bid 1.00; goal bid 36¢; step ≤25% from 28¢; 28¢ → 35¢)"
+    },
+    {
+     "targetId": "g2-t4",
+     "currentCents": 36,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 45,
+     "expectedAcos": 0.2066693346579961,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.998,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 36,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 36¢ → 45¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 1.75% (adGroup, 264 clicks) × AOV 96.72 ÷ CPC/bid 0.97; goal bid 52¢; step ≤25% from 36¢; 36¢ → 45¢)"
+    },
+    {
+     "targetId": "g2-t5",
+     "currentCents": 21,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 26,
+     "expectedAcos": 0.16040399914812628,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 21,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 21¢ → 26¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 1.35% (adGroup, 264 clicks) × AOV 96.84 ÷ CPC/bid 1.00; goal bid 39¢; step ≤25% from 21¢; 21¢ → 26¢)"
+    },
+    {
+     "targetId": "g3-t0",
+     "currentCents": 22,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 22,
+      "toCents": 27
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 27,
+     "expectedAcos": 0.07327434146687803,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 27,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 2.61% (adGroup, 460 clicks) × AOV 114.91 ÷ CPC/bid 1.00; goal bid 52¢; step ≤25% from 22¢; 22¢ → 27¢"
+    },
+    {
+     "targetId": "g3-t1",
+     "currentCents": 44,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 48,
+     "expectedAcos": 0.15760571057793993,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 44,
+     "why": "in band: expected ACoS 15.8% at 44¢ is inside 13.5%–17.3% — no change (aim 17.3% (default band 13.5%–17.3%, GROW); CR 2.59% (adGroup, 460 clicks) × AOV 107.78 ÷ CPC/bid 1.00; goal bid 48¢)"
+    },
+    {
+     "targetId": "g3-t2",
+     "currentCents": 29,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 36,
+     "expectedAcos": 0.09646581549743577,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.998,
+     "action": "hold",
+     "layer": "pin",
+     "bidCents": 29,
+     "why": "pin: held by pin hold by user:owner until 2026-12-01 — left alone"
+    },
+    {
+     "targetId": "g3-t3",
+     "currentCents": 9,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 11,
+     "expectedAcos": 0.03856416420154303,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 10,
+     "why": "limit: 9¢ is outside the strategy lowest bid → 10¢"
+    },
+    {
+     "targetId": "g3-t4",
+     "currentCents": 53,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 53,
+      "toCents": 59
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 59,
+     "expectedAcos": 0.13063730753584143,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 59,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 2.45% (adGroup, 460 clicks) × AOV 147.20 ÷ CPC/bid 0.89; raise held where the cautious ACoS meets the band top; goal bid 59¢; 53¢ → 59¢"
+    },
+    {
+     "targetId": "g3-t5",
+     "currentCents": 37,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 37,
+      "toCents": 46
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 46,
+     "expectedAcos": 0.11987497712737043,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 46,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 2.47% (adGroup, 460 clicks) × AOV 125.13 ÷ CPC/bid 1.00; held at the parent's bid (no orders of its own); goal bid 53¢; step ≤25% from 37¢; 37¢ → 46¢"
+    },
+    {
+     "targetId": "g5-t0",
+     "currentCents": 45,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 45,
+      "toCents": 34
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 34,
+     "expectedAcos": 0.4076767031959242,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 34,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.19% (adGroup, 282 clicks) × AOV 92.77 ÷ CPC/bid 1.00; goal bid 11¢; step ≤25% from 45¢; 45¢ → 34¢"
+    },
+    {
+     "targetId": "g5-t1",
+     "currentCents": 31,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 31,
+      "toCents": 23
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 23,
+     "expectedAcos": 0.2992606100471037,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 23,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.03% (adGroup, 282 clicks) × AOV 100.91 ÷ CPC/bid 1.00; goal bid 10¢; step ≤25% from 31¢; 31¢ → 23¢"
+    },
+    {
+     "targetId": "g5-t2",
+     "currentCents": 61,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 46,
+     "expectedAcos": 0.8244215145010407,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 61¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.83% (adGroup, 282 clicks) × AOV 88.96 ÷ CPC/bid 1.00; goal bid 7¢; step ≤25% from 61¢)"
+    },
+    {
+     "targetId": "g5-t3",
+     "currentCents": 33,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 33,
+      "toCents": 25
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 25,
+     "expectedAcos": 0.2603585735100338,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "restore",
+     "bidCents": 25,
+     "why": "restore: the stop layer no longer applies → back to 25¢ from the 33¢ it held (the bid before it: 33¢; goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.02% (adGroup, 282 clicks) × AOV 92.18 ÷ CPC/bid 0.74; held at the parent's bid (no orders of its own); goal bid 10¢; step ≤25% from 33¢; 33¢ → 25¢)"
+    },
+    {
+     "targetId": "g5-t4",
+     "currentCents": 11,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 11,
+      "toCents": 8
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 8,
+     "expectedAcos": 0.17520296185570797,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 8,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.73% (adGroup, 282 clicks) × AOV 86.52 ÷ CPC/bid 1.00; goal bid 6¢; step ≤25% from 11¢; 11¢ → 8¢"
+    },
+    {
+     "targetId": "g5-t5",
+     "currentCents": 47,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 35,
+     "expectedAcos": 0.5755935332097609,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 47¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.7% (adGroup, 282 clicks) × AOV 90.76 ÷ CPC/bid 0.78; goal bid 8¢; step ≤25% from 47¢)"
+    },
+    {
+     "targetId": "g6-t0",
+     "currentCents": 47,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 53,
+     "expectedAcos": 0.24355520128573038,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 37,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t1",
+     "currentCents": 9,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 13,
+     "expectedAcos": 0.08017087721705296,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.998,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 9,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t2",
+     "currentCents": 27,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 31,
+     "expectedAcos": 0.2585169784007247,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 22,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t3",
+     "currentCents": 38,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 41,
+     "expectedAcos": 0.2797969667635393,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 29,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t4",
+     "currentCents": 36,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 41,
+     "expectedAcos": 0.2648543597822606,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "stop",
+     "bidCents": 29,
+     "why": "stop: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7 (also: stop by a stop (its 40¢ bid remembered) → 36¢)"
+    },
+    {
+     "targetId": "g6-t5",
+     "currentCents": 56,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 65,
+     "expectedAcos": 0.2599348962586213,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "stop",
+     "bidCents": 46,
+     "why": "stop: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7 (also: stop by a stop (its 40¢ bid remembered) → 56¢)"
+    },
+    {
+     "targetId": "g7-t0",
+     "currentCents": 28,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 35,
+     "expectedAcos": 0.3229685460127221,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 28,
+     "why": "in band: expected ACoS 32.3% at 28¢ is inside 18%–42.6% — no change (aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 0.71% (adGroup, 432 clicks) × AOV 95.12 ÷ CPC/bid 0.78; goal bid 37¢; step ≤25% from 28¢)"
+    },
+    {
+     "targetId": "g7-t1",
+     "currentCents": 25,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 31,
+     "expectedAcos": 0.1327975897982797,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stop",
+     "bidCents": 25,
+     "why": "stop: stop by a stop (its 40¢ bid remembered) → 25¢"
+    },
+    {
+     "targetId": "g7-t2",
+     "currentCents": 18,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 18,
+      "toCents": 22
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 22,
+     "expectedAcos": 0.16870495113144182,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 22,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 0.93% (adGroup, 432 clicks) × AOV 96.73 ÷ CPC/bid 0.84; goal bid 45¢; step ≤25% from 18¢; 18¢ → 22¢"
+    },
+    {
+     "targetId": "g7-t3",
+     "currentCents": 24,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 30,
+     "expectedAcos": 0.33075306624138984,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 24,
+     "why": "in band: expected ACoS 33.1% at 24¢ is inside 18%–42.6% — no change (aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 0.77% (adGroup, 432 clicks) × AOV 93.46 ÷ CPC/bid 0.99; goal bid 31¢; step ≤25% from 24¢)"
+    },
+    {
+     "targetId": "g7-t4",
+     "currentCents": 38,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 46,
+     "expectedAcos": 0.35450614749452003,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 38,
+     "why": "in band: expected ACoS 35.5% at 38¢ is inside 18%–42.6% — no change (aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 0.69% (adGroup, 432 clicks) × AOV 93.46 ÷ CPC/bid 0.60; goal bid 46¢)"
+    },
+    {
+     "targetId": "g7-t5",
+     "currentCents": 41,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 51,
+     "expectedAcos": 0.3406159720076447,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stop",
+     "bidCents": 41,
+     "why": "stop: stop by a stop (its 40¢ bid remembered) → 41¢"
+    }
+   ]
+  },
+  {
+   "facts": 36,
+   "decisions": [
+    {
+     "targetId": "g1-t0",
+     "currentCents": 18,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 30,
+      "toCents": 31
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 31,
+     "expectedAcos": 0.11744094533405706,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 31,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1.5% (adGroup, 695 clicks) × AOV 102.43 ÷ CPC/bid 1.00; goal bid 31¢; 18¢ → 31¢"
+    },
+    {
+     "targetId": "g1-t1",
+     "currentCents": 46,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 35,
+     "expectedAcos": 0.2646126550147361,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 46¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 20% (band 18%–28%, PROFIT); CR 1.02% (adGroup, 695 clicks) × AOV 102.43 ÷ CPC/bid 0.60; goal bid 35¢)"
+    },
+    {
+     "targetId": "g1-t2",
+     "currentCents": 48,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 45,
+     "expectedAcos": 0.15666343254296525,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 48¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 20% (band 18%–28%, PROFIT); CR 1.55% (keyword, 403 clicks) × AOV 118.77 ÷ CPC/bid 0.60; ceiling 45¢ (rule \"ceiling\"); goal bid 45¢)"
+    },
+    {
+     "targetId": "g1-t3",
+     "currentCents": 23,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 23,
+      "toCents": 29
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 29,
+     "expectedAcos": 0.10575094594952655,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 29,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1.79% (adGroup, 695 clicks) × AOV 92.42 ÷ CPC/bid 0.76; goal bid 43¢; step ≤25% from 23¢; 23¢ → 29¢"
+    },
+    {
+     "targetId": "g1-t4",
+     "currentCents": 61,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 46,
+     "expectedAcos": 0.38070715000822486,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 61¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 20% (band 18%–28%, PROFIT); CR 0.94% (adGroup, 695 clicks) × AOV 102.43 ÷ CPC/bid 0.60; goal bid 32¢; step ≤25% from 61¢)"
+    },
+    {
+     "targetId": "g1-t5",
+     "currentCents": 51,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 38,
+     "expectedAcos": 0.3054677897665696,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 51¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 20% (band 18%–28%, PROFIT); CR 1.71% (adGroup, 695 clicks) × AOV 97.36 ÷ CPC/bid 1.00; goal bid 33¢; step ≤25% from 51¢)"
+    },
+    {
+     "targetId": "g2-t0",
+     "currentCents": 51,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 55,
+     "expectedAcos": 0.21691672680326662,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 51,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 51¢ → 55¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 2.21% (target, 165 clicks) × AOV 106.20 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 55¢; 51¢ → 55¢)"
+    },
+    {
+     "targetId": "g2-t1",
+     "currentCents": 21,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 26,
+     "expectedAcos": 0.19842124295667637,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "pin",
+     "bidCents": 21,
+     "why": "pin: held by a person (their bid of the last 60 days) — left alone"
+    },
+    {
+     "targetId": "g2-t2",
+     "currentCents": 44,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 44,
+      "toCents": 33
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 33,
+     "expectedAcos": 0.4273111182419373,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 33,
+     "why": "goal: aim 30% (default band 27%–34.5%, PROFIT); CR 0.9% (adGroup, 576 clicks) × AOV 107.62 ÷ CPC/bid 0.94; goal bid 31¢; step ≤25% from 44¢; 44¢ → 33¢"
+    },
+    {
+     "targetId": "g2-t3",
+     "currentCents": 48,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.2094849970014694,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 48,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 48¢ → 60¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 1.53% (adGroup, 576 clicks) × AOV 107.92 ÷ CPC/bid 0.72; held at the parent's bid (no orders of its own); goal bid 63¢; step ≤25% from 48¢; 48¢ → 60¢)"
+    },
+    {
+     "targetId": "g2-t4",
+     "currentCents": 31,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 39,
+     "expectedAcos": 0.21660928209150632,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 31,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 31¢ → 39¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 1.33% (adGroup, 576 clicks) × AOV 107.62 ÷ CPC/bid 1.00; goal bid 43¢; step ≤25% from 31¢; 31¢ → 39¢)"
+    },
+    {
+     "targetId": "g2-t5",
+     "currentCents": 29,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 36,
+     "expectedAcos": 0.229619524211028,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 29,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 29¢ → 36¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 1.17% (keyword, 161 clicks) × AOV 107.61 ÷ CPC/bid 1.00; goal bid 38¢; step ≤25% from 29¢; 29¢ → 36¢)"
+    },
+    {
+     "targetId": "g3-t0",
+     "currentCents": 7,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 10,
+     "expectedAcos": 0.11681078209466675,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 10,
+     "why": "limit: 7¢ is outside the strategy lowest bid → 10¢"
+    },
+    {
+     "targetId": "g3-t1",
+     "currentCents": 28,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 24,
+     "expectedAcos": 0.16882173176986118,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 28,
+     "why": "in band: expected ACoS 16.9% at 28¢ is inside 13.5%–17.3% — no change (aim 17.3% (default band 13.5%–17.3%, GROW); CR 1.71% (adGroup, 424 clicks) × AOV 97.26 ÷ CPC/bid 1.00; held at the parent's bid (one order of its own); goal bid 24¢)"
+    },
+    {
+     "targetId": "g3-t2",
+     "currentCents": 49,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 37,
+     "expectedAcos": 0.363897381517243,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stop",
+     "bidCents": 49,
+     "why": "stop: stop by a stop (its 40¢ bid remembered) → 49¢"
+    },
+    {
+     "targetId": "g3-t3",
+     "currentCents": 43,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 43,
+      "toCents": 32
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 32,
+     "expectedAcos": 0.4878443796952214,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 32,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 0.85% (adGroup, 424 clicks) × AOV 103.80 ÷ CPC/bid 1.00; goal bid 15¢; step ≤25% from 43¢; 43¢ → 32¢"
+    },
+    {
+     "targetId": "g3-t4",
+     "currentCents": 24,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 24,
+      "toCents": 19
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 19,
+     "expectedAcos": 0.21782664391677703,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 19,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 0.87% (adGroup, 424 clicks) × AOV 109.77 ÷ CPC/bid 0.86; held at the parent's bid (no orders of its own); goal bid 19¢; 24¢ → 19¢"
+    },
+    {
+     "targetId": "g3-t5",
+     "currentCents": 63,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 47,
+     "expectedAcos": 0.41041129715742036,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 60,
+     "why": "limit: 63¢ is outside the campaign's highest bid → 60¢"
+    },
+    {
+     "targetId": "g5-t0",
+     "currentCents": 13,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 13,
+     "expectedAcos": 0.07891382368007403,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 13,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.64% (adGroup, 481 clicks) × AOV 100.38 ÷ CPC/bid 1.00; held at the parent's bid (no orders of its own); goal bid 13¢; 13¢ → 13¢ is too small a change"
+    },
+    {
+     "targetId": "g5-t1",
+     "currentCents": 52,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 39,
+     "expectedAcos": 0.22621913892851905,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 52¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.69% (keyword, 169 clicks) × AOV 104.32 ÷ CPC/bid 0.77; raise held where the cautious ACoS meets the band top; goal bid 21¢; step ≤25% from 52¢)"
+    },
+    {
+     "targetId": "g5-t2",
+     "currentCents": 33,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 33,
+      "toCents": 25
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 25,
+     "expectedAcos": 0.24525922911674003,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 25,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.31% (adGroup, 481 clicks) × AOV 96.53 ÷ CPC/bid 0.94; goal bid 13¢; step ≤25% from 33¢; 33¢ → 25¢"
+    },
+    {
+     "targetId": "g5-t3",
+     "currentCents": 16,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 33,
+      "toCents": 25
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 20,
+     "expectedAcos": 0.0758277142360925,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "restore",
+     "bidCents": 25,
+     "why": "restore: the stop layer no longer applies → back to 25¢ from the 16¢ it held (the bid before it: 33¢; goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.23% (adGroup, 481 clicks) × AOV 102.73 ÷ CPC/bid 0.60; goal bid 21¢; step ≤25% from 33¢; 33¢ → 25¢)"
+    },
+    {
+     "targetId": "g5-t4",
+     "currentCents": 35,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 35,
+      "toCents": 26
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 26,
+     "expectedAcos": 0.21404911397307796,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 26,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.96% (adGroup, 481 clicks) × AOV 102.73 ÷ CPC/bid 0.60; goal bid 16¢; step ≤25% from 35¢; 35¢ → 26¢"
+    },
+    {
+     "targetId": "g5-t5",
+     "currentCents": 64,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 48,
+     "expectedAcos": 0.37347542789303617,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 64¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.97% (target, 227 clicks) × AOV 106.30 ÷ CPC/bid 0.60; goal bid 17¢; step ≤25% from 64¢)"
+    },
+    {
+     "targetId": "g6-t0",
+     "currentCents": 38,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 37,
+     "expectedAcos": 0.30207255526336785,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 26,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t1",
+     "currentCents": 27,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 17,
+     "expectedAcos": 0.47018375210878544,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 12,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t2",
+     "currentCents": 50,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 30,
+     "expectedAcos": 0.5024247158478898,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 21,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t3",
+     "currentCents": 13,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 19,
+     "expectedAcos": 0.07944122454251105,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 13,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t4",
+     "currentCents": 43,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 29,
+     "expectedAcos": 0.44017942209927646,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "stop",
+     "bidCents": 20,
+     "why": "stop: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7 (also: stop by a stop (its 40¢ bid remembered) → 43¢)"
+    },
+    {
+     "targetId": "g6-t5",
+     "currentCents": 64,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 79,
+     "expectedAcos": 0.22125466815016823,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 55,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g7-t0",
+     "currentCents": 40,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 40,
+      "toCents": 50
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 50,
+     "expectedAcos": 0.14994860159040493,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 50,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 3.17% (keyword, 471 clicks) × AOV 84.07 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 109¢; step ≤25% from 40¢; 40¢ → 50¢"
+    },
+    {
+     "targetId": "g7-t1",
+     "currentCents": 18,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 18,
+      "toCents": 22
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 22,
+     "expectedAcos": 0.08305158144024281,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 22,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 1.92% (adGroup, 666 clicks) × AOV 104.13 ÷ CPC/bid 0.92; held at the parent's bid (no orders of its own); goal bid 90¢; step ≤25% from 18¢; 18¢ → 22¢"
+    },
+    {
+     "targetId": "g7-t2",
+     "currentCents": 6,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 8,
+     "expectedAcos": 0.030128662527534555,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 8,
+     "why": "limit: 6¢ is outside the campaign's lowest bid → 8¢"
+    },
+    {
+     "targetId": "g7-t3",
+     "currentCents": 59,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.3566023469954897,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stop",
+     "bidCents": 59,
+     "why": "stop: stop by a stop (its 40¢ bid remembered) → 59¢"
+    },
+    {
+     "targetId": "g7-t4",
+     "currentCents": 11,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 11,
+      "toCents": 14
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 14,
+     "expectedAcos": 0.05846511803397597,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 14,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 1.88% (adGroup, 666 clicks) × AOV 100.06 ÷ CPC/bid 1.00; goal bid 80¢; step ≤25% from 11¢; 11¢ → 14¢"
+    },
+    {
+     "targetId": "g7-t5",
+     "currentCents": 34,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 42,
+     "expectedAcos": 0.14647448649657904,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stop",
+     "bidCents": 34,
+     "why": "stop: stop by a stop (its 40¢ bid remembered) → 34¢"
+    }
+   ]
+  },
+  {
+   "facts": 36,
+   "decisions": [
+    {
+     "targetId": "g1-t0",
+     "currentCents": 25,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 23,
+     "expectedAcos": 0.2130901376772579,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 25,
+     "why": "in band: expected ACoS 21.3% at 25¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 1.11% (adGroup, 366 clicks) × AOV 106.05 ÷ CPC/bid 1.00; goal bid 23¢)"
+    },
+    {
+     "targetId": "g1-t1",
+     "currentCents": 34,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 28,
+     "expectedAcos": 0.2412753355361432,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.998,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 34,
+     "why": "in band: expected ACoS 24.1% at 34¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 1.4% (adGroup, 366 clicks) × AOV 100.42 ÷ CPC/bid 1.00; goal bid 28¢)"
+    },
+    {
+     "targetId": "g1-t2",
+     "currentCents": 20,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 15,
+     "expectedAcos": 0.26925175860477085,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 20,
+     "why": "in band: expected ACoS 26.9% at 20¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 0.78% (keyword, 220 clicks) × AOV 95.26 ÷ CPC/bid 1.00; goal bid 15¢; step ≤25% from 20¢)"
+    },
+    {
+     "targetId": "g1-t3",
+     "currentCents": 29,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 29,
+      "toCents": 36
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 36,
+     "expectedAcos": 0.10490415404048709,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 36,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 2.65% (target, 120 clicks) × AOV 104.40 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; ceiling 45¢ (rule \"ceiling\"); goal bid 45¢; step ≤25% from 29¢; 29¢ → 36¢"
+    },
+    {
+     "targetId": "g1-t4",
+     "currentCents": 60,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 45,
+     "expectedAcos": 0.7859763167743411,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 60¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 20% (band 18%–28%, PROFIT); CR 0.54% (keyword, 206 clicks) × AOV 100.42 ÷ CPC/bid 0.71; goal bid 15¢; step ≤25% from 60¢)"
+    },
+    {
+     "targetId": "g1-t5",
+     "currentCents": 40,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 40,
+      "toCents": 30
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 30,
+     "expectedAcos": 0.33584017111896164,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 30,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1.28% (keyword, 220 clicks) × AOV 93.24 ÷ CPC/bid 1.00; held at the parent's bid (no orders of its own); goal bid 23¢; step ≤25% from 40¢; 40¢ → 30¢"
+    },
+    {
+     "targetId": "g2-t0",
+     "currentCents": 45,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 45,
+      "toCents": 34
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 34,
+     "expectedAcos": 0.9473701465462071,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.997,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 34,
+     "why": "goal: aim 30% (default band 27%–34.5%, PROFIT); CR 0.47% (adGroup, 449 clicks) × AOV 100.62 ÷ CPC/bid 1.00; goal bid 14¢; step ≤25% from 45¢; 45¢ → 34¢"
+    },
+    {
+     "targetId": "g2-t1",
+     "currentCents": 61,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 46,
+     "expectedAcos": 0.5632661402735485,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.997,
+     "action": "hold",
+     "layer": "pin",
+     "bidCents": 61,
+     "why": "pin: held by a person (their bid of the last 60 days) — left alone"
+    },
+    {
+     "targetId": "g2-t2",
+     "currentCents": 64,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 64,
+      "toCents": 48
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 48,
+     "expectedAcos": 1.009991435693701,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.997,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 48,
+     "why": "goal: aim 30% (default band 27%–34.5%, PROFIT); CR 0.38% (adGroup, 449 clicks) × AOV 100.62 ÷ CPC/bid 0.60; goal bid 19¢; step ≤25% from 64¢; 64¢ → 48¢"
+    },
+    {
+     "targetId": "g2-t3",
+     "currentCents": 50,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 50,
+      "toCents": 38
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 38,
+     "expectedAcos": 0.651621231811021,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.997,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 38,
+     "why": "goal: aim 30% (default band 27%–34.5%, PROFIT); CR 0.51% (adGroup, 449 clicks) × AOV 100.62 ÷ CPC/bid 0.67; goal bid 23¢; step ≤25% from 50¢; 50¢ → 38¢"
+    },
+    {
+     "targetId": "g2-t4",
+     "currentCents": 44,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 44,
+      "toCents": 33
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 33,
+     "expectedAcos": 0.973966708271428,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.997,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 33,
+     "why": "goal: aim 30% (default band 27%–34.5%, PROFIT); CR 0.44% (adGroup, 449 clicks) × AOV 100.62 ÷ CPC/bid 0.99; goal bid 14¢; step ≤25% from 44¢; 44¢ → 33¢"
+    },
+    {
+     "targetId": "g2-t5",
+     "currentCents": 37,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 30,
+     "expectedAcos": 0.3180195503695196,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.998,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 37,
+     "why": "in band: expected ACoS 31.8% at 37¢ is inside 27%–34.5% — no change (aim 30% (default band 27%–34.5%, PROFIT); CR 0.77% (adGroup, 449 clicks) × AOV 99.88 ÷ CPC/bid 0.66; held at the parent's bid (no orders of its own); goal bid 30¢)"
+    },
+    {
+     "targetId": "g3-t0",
+     "currentCents": 46,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 46,
+      "toCents": 57
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 57,
+     "expectedAcos": 0.09069779838867562,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 57,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 3% (keyword, 158 clicks) × AOV 105.21 ÷ CPC/bid 0.62; goal bid 87¢; step ≤25% from 46¢; 46¢ → 57¢"
+    },
+    {
+     "targetId": "g3-t1",
+     "currentCents": 15,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 15,
+      "toCents": 19
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 19,
+     "expectedAcos": 0.04491228654586464,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 19,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 3.5% (keyword, 158 clicks) × AOV 95.38 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 56¢; step ≤25% from 15¢; 15¢ → 19¢"
+    },
+    {
+     "targetId": "g3-t2",
+     "currentCents": 40,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 50,
+     "expectedAcos": 0.13597237680741378,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "pin",
+     "bidCents": 40,
+     "why": "pin: held by pin hold by user:owner until 2026-12-01 — left alone"
+    },
+    {
+     "targetId": "g3-t3",
+     "currentCents": 46,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 46,
+      "toCents": 57
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 57,
+     "expectedAcos": 0.11377893763073525,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 57,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 2.94% (adGroup, 363 clicks) × AOV 120.24 ÷ CPC/bid 0.87; raise held where the cautious ACoS meets the band top; goal bid 62¢; step ≤25% from 46¢; 46¢ → 57¢"
+    },
+    {
+     "targetId": "g3-t4",
+     "currentCents": 38,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 38,
+      "toCents": 47
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 47,
+     "expectedAcos": 0.12466909010059624,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 47,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 2.89% (adGroup, 363 clicks) × AOV 105.38 ÷ CPC/bid 1.00; goal bid 53¢; step ≤25% from 38¢; 38¢ → 47¢"
+    },
+    {
+     "targetId": "g3-t5",
+     "currentCents": 20,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 20,
+      "toCents": 25
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 25,
+     "expectedAcos": 0.06966076604280298,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 25,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 2.99% (adGroup, 363 clicks) × AOV 95.93 ÷ CPC/bid 1.00; goal bid 50¢; step ≤25% from 20¢; 20¢ → 25¢"
+    },
+    {
+     "targetId": "g5-t0",
+     "currentCents": 43,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 43,
+      "toCents": 32
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 32,
+     "expectedAcos": 0.5544081326044816,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.994,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 32,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.82% (product, 681 clicks) × AOV 94.05 ÷ CPC/bid 1.00; goal bid 8¢; step ≤25% from 43¢; 43¢ → 32¢"
+    },
+    {
+     "targetId": "g5-t1",
+     "currentCents": 28,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 28,
+      "toCents": 21
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 21,
+     "expectedAcos": 0.22535895455935634,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.994,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 21,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.38% (product, 681 clicks) × AOV 90.12 ÷ CPC/bid 1.00; goal bid 12¢; step ≤25% from 28¢; 28¢ → 21¢"
+    },
+    {
+     "targetId": "g5-t2",
+     "currentCents": 50,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 38,
+     "expectedAcos": 0.4300160484632374,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.996,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 50¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.9% (product, 681 clicks) × AOV 95.17 ÷ CPC/bid 0.73; goal bid 12¢; step ≤25% from 50¢)"
+    },
+    {
+     "targetId": "g5-t3",
+     "currentCents": 10,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 33,
+      "toCents": 25
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 12,
+     "expectedAcos": 0.0587963363403907,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.996,
+     "action": "write",
+     "layer": "restore",
+     "bidCents": 25,
+     "why": "restore: the stop layer no longer applies → back to 25¢ from the 10¢ it held (the bid before it: 33¢; goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.94% (product, 681 clicks) × AOV 87.55 ÷ CPC/bid 1.00; held at the parent's bid (one order of its own); goal bid 13¢; step ≤25% from 33¢; 33¢ → 25¢)"
+    },
+    {
+     "targetId": "g5-t4",
+     "currentCents": 9,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 8,
+     "expectedAcos": 0.11495933565340738,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.994,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 9,
+     "why": "in band: expected ACoS 11.5% at 9¢ is inside 8%–14% — no change (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.83% (product, 681 clicks) × AOV 94.05 ÷ CPC/bid 1.00; goal bid 8¢)"
+    },
+    {
+     "targetId": "g5-t5",
+     "currentCents": 39,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 39,
+      "toCents": 29
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 29,
+     "expectedAcos": 0.44156212011617996,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.993,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 29,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.94% (product, 681 clicks) × AOV 94.05 ÷ CPC/bid 1.00; goal bid 9¢; step ≤25% from 39¢; 39¢ → 29¢"
+    },
+    {
+     "targetId": "g6-t0",
+     "currentCents": 29,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 43,
+     "expectedAcos": 0.09864244742679783,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 29,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 29¢ → 30¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t1",
+     "currentCents": 46,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 69,
+     "expectedAcos": 0.11431782145098228,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 46,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 46¢ → 48¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t2",
+     "currentCents": 47,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 70,
+     "expectedAcos": 0.17348080280394237,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 47,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 47¢ → 49¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t3",
+     "currentCents": 14,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 21,
+     "expectedAcos": 0.04767457180971271,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 14,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 14¢ → 15¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t4",
+     "currentCents": 57,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 70,
+     "expectedAcos": 0.24277307311955393,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 49,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t5",
+     "currentCents": 6,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 9,
+     "expectedAcos": 0.025989502852191017,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 6,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g7-t0",
+     "currentCents": 50,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 50,
+      "toCents": 42
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 42,
+     "expectedAcos": 0.5103017389444113,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 42,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 1.05% (adGroup, 351 clicks) × AOV 93.57 ÷ CPC/bid 1.00; goal bid 42¢; 50¢ → 42¢"
+    },
+    {
+     "targetId": "g7-t1",
+     "currentCents": 47,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 47,
+      "toCents": 35
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 35,
+     "expectedAcos": 0.9805948921808371,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 35,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 0.54% (keyword, 206 clicks) × AOV 88.26 ÷ CPC/bid 1.00; goal bid 20¢; step ≤25% from 47¢; 47¢ → 35¢"
+    },
+    {
+     "targetId": "g7-t2",
+     "currentCents": 39,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 44,
+     "expectedAcos": 0.30414723057185844,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 39,
+     "why": "in band: expected ACoS 30.4% at 39¢ is inside 18%–42.6% — no change (aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 1.44% (keyword, 220 clicks) × AOV 89.01 ÷ CPC/bid 1.00; held at the parent's bid (one order of its own); goal bid 44¢)"
+    },
+    {
+     "targetId": "g7-t3",
+     "currentCents": 18,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 18,
+      "toCents": 14
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 14,
+     "expectedAcos": 0.5432785257061518,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 14,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 0.38% (keyword, 206 clicks) × AOV 88.26 ÷ CPC/bid 1.00; goal bid 14¢; 18¢ → 14¢"
+    },
+    {
+     "targetId": "g7-t4",
+     "currentCents": 58,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 49,
+     "expectedAcos": 0.3265294379685642,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 58,
+     "why": "in band: expected ACoS 32.7% at 58¢ is inside 18%–42.6% — no change (aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 2.07% (adGroup, 351 clicks) × AOV 85.67 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 49¢)"
+    },
+    {
+     "targetId": "g7-t5",
+     "currentCents": 6,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 8,
+     "expectedAcos": 0.05851625210584635,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.998,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 8,
+     "why": "limit: 6¢ is outside the campaign's lowest bid → 8¢"
+    }
+   ]
+  },
+  {
+   "facts": 36,
+   "decisions": [
+    {
+     "targetId": "g1-t0",
+     "currentCents": 13,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 30,
+      "toCents": 35
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 35,
+     "expectedAcos": 0.06718109910699496,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 35,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1.98% (adGroup, 1,085 clicks) × AOV 97.77 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 35¢; 13¢ → 35¢"
+    },
+    {
+     "targetId": "g1-t1",
+     "currentCents": 22,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 22,
+      "toCents": 27
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 27,
+     "expectedAcos": 0.13497527872489673,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 27,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1.83% (adGroup, 1,085 clicks) × AOV 88.92 ÷ CPC/bid 1.00; goal bid 33¢; step ≤25% from 22¢; 22¢ → 27¢"
+    },
+    {
+     "targetId": "g1-t2",
+     "currentCents": 21,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 18,
+     "expectedAcos": 0.2394291743715972,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 21,
+     "why": "in band: expected ACoS 23.9% at 21¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 0.94% (target, 249 clicks) × AOV 93.38 ÷ CPC/bid 1.00; goal bid 18¢)"
+    },
+    {
+     "targetId": "g1-t3",
+     "currentCents": 55,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 41,
+     "expectedAcos": 0.25893932004695197,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 55¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 20% (band 18%–28%, PROFIT); CR 1.78% (target, 208 clicks) × AOV 103.12 ÷ CPC/bid 0.86; raise held where the cautious ACoS meets the band top; goal bid 41¢; step ≤25% from 55¢)"
+    },
+    {
+     "targetId": "g1-t4",
+     "currentCents": 32,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 32,
+      "toCents": 40
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 40,
+     "expectedAcos": 0.1354135852027551,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 40,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 2.32% (keyword, 175 clicks) × AOV 101.79 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; ceiling 45¢ (rule \"ceiling\"); goal bid 45¢; step ≤25% from 32¢; 32¢ → 40¢"
+    },
+    {
+     "targetId": "g1-t5",
+     "currentCents": 28,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 28,
+      "toCents": 35
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 35,
+     "expectedAcos": 0.08950607259681397,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 35,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 2.31% (target, 233 clicks) × AOV 83.77 ÷ CPC/bid 0.62; ceiling 45¢ (rule \"ceiling\"); goal bid 45¢; step ≤25% from 28¢; 28¢ → 35¢"
+    },
+    {
+     "targetId": "g2-t0",
+     "currentCents": 32,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 40,
+     "expectedAcos": 0.17225247545732264,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 32,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 32¢ → 40¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 1.09% (keyword, 180 clicks) × AOV 109.71 ÷ CPC/bid 0.65; goal bid 56¢; step ≤25% from 32¢; 32¢ → 40¢)"
+    },
+    {
+     "targetId": "g2-t1",
+     "currentCents": 36,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 45,
+     "expectedAcos": 0.1096079095486028,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "pin",
+     "bidCents": 36,
+     "why": "pin: held by a person (their bid of the last 60 days) — left alone"
+    },
+    {
+     "targetId": "g2-t2",
+     "currentCents": 12,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 15,
+     "expectedAcos": 0.03800461450025234,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 12,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 12¢ → 15¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 2.58% (keyword, 296 clicks) × AOV 122.48 ÷ CPC/bid 1.00; goal bid 95¢; step ≤25% from 12¢; 12¢ → 15¢)"
+    },
+    {
+     "targetId": "g2-t3",
+     "currentCents": 25,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 31,
+     "expectedAcos": 0.14081035295834834,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stop",
+     "bidCents": 25,
+     "why": "stop: stop by a stop (its 40¢ bid remembered) → 25¢"
+    },
+    {
+     "targetId": "g2-t4",
+     "currentCents": 27,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 34,
+     "expectedAcos": 0.06985634456317065,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 27,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 27¢ → 34¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 3.1% (target, 282 clicks) × AOV 124.79 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 106¢; step ≤25% from 27¢; 27¢ → 34¢)"
+    },
+    {
+     "targetId": "g2-t5",
+     "currentCents": 9,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 11,
+     "expectedAcos": 0.04898307020359839,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stop",
+     "bidCents": 9,
+     "why": "stop: stop by a stop (its 40¢ bid remembered) → 9¢"
+    },
+    {
+     "targetId": "g3-t0",
+     "currentCents": 51,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 51,
+      "toCents": 38
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 38,
+     "expectedAcos": 0.45320963969074696,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 38,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 1.2% (keyword, 149 clicks) × AOV 93.40 ÷ CPC/bid 1.00; goal bid 19¢; step ≤25% from 51¢; 51¢ → 38¢"
+    },
+    {
+     "targetId": "g3-t1",
+     "currentCents": 20,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 20,
+      "toCents": 17
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 17,
+     "expectedAcos": 0.20540237965005656,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 17,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 1.06% (keyword, 149 clicks) × AOV 91.94 ÷ CPC/bid 1.00; goal bid 17¢; 20¢ → 17¢"
+    },
+    {
+     "targetId": "g3-t2",
+     "currentCents": 61,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 46,
+     "expectedAcos": 0.26051684532992686,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "pin",
+     "bidCents": 61,
+     "why": "pin: held by pin hold by user:owner until 2026-12-01 — left alone"
+    },
+    {
+     "targetId": "g3-t3",
+     "currentCents": 11,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 11,
+      "toCents": 14
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 14,
+     "expectedAcos": 0.04578394917685776,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 14,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 2.33% (adGroup, 851 clicks) × AOV 103.10 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 33¢; step ≤25% from 11¢; 11¢ → 14¢"
+    },
+    {
+     "targetId": "g3-t4",
+     "currentCents": 26,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 32,
+     "expectedAcos": 0.1407182551615842,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stop",
+     "bidCents": 26,
+     "why": "stop: stop by a stop (its 40¢ bid remembered) → 26¢"
+    },
+    {
+     "targetId": "g3-t5",
+     "currentCents": 43,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 48,
+     "expectedAcos": 0.15511543141178577,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 43,
+     "why": "in band: expected ACoS 15.5% at 43¢ is inside 13.5%–17.3% — no change (aim 17.3% (default band 13.5%–17.3%, GROW); CR 1.91% (adGroup, 851 clicks) × AOV 97.33 ÷ CPC/bid 0.67; goal bid 48¢)"
+    },
+    {
+     "targetId": "g5-t0",
+     "currentCents": 41,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 41,
+      "toCents": 31
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 31,
+     "expectedAcos": 0.27894671024828094,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 31,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.28% (adGroup, 389 clicks) × AOV 103.42 ÷ CPC/bid 0.90; held at the parent's bid (no orders of its own); goal bid 14¢; step ≤25% from 41¢; 41¢ → 31¢"
+    },
+    {
+     "targetId": "g5-t1",
+     "currentCents": 33,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 33,
+      "toCents": 25
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 25,
+     "expectedAcos": 0.28016269127258225,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 25,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.14% (adGroup, 389 clicks) × AOV 102.92 ÷ CPC/bid 1.00; goal bid 12¢; step ≤25% from 33¢; 33¢ → 25¢"
+    },
+    {
+     "targetId": "g5-t2",
+     "currentCents": 10,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 12,
+     "expectedAcos": 0.08451769409723384,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 10,
+     "why": "in band: expected ACoS 8.5% at 10¢ is inside 8%–14% — no change (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.15% (adGroup, 389 clicks) × AOV 102.92 ÷ CPC/bid 1.00; goal bid 12¢)"
+    },
+    {
+     "targetId": "g5-t3",
+     "currentCents": 58,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 33,
+      "toCents": 25
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 44,
+     "expectedAcos": 0.7255890970712942,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "restore",
+     "bidCents": 25,
+     "why": "restore: the stop layer no longer applies → back to 25¢ from the 58¢ it held (the bid before it: 33¢; goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.76% (adGroup, 389 clicks) × AOV 102.92 ÷ CPC/bid 1.00; goal bid 8¢; step ≤25% from 33¢; 33¢ → 25¢)"
+    },
+    {
+     "targetId": "g5-t4",
+     "currentCents": 48,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 36,
+     "expectedAcos": 0.25993799734346573,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 48¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.08% (keyword, 180 clicks) × AOV 103.03 ÷ CPC/bid 0.60; held at the parent's bid (one order of its own); goal bid 18¢; step ≤25% from 48¢)"
+    },
+    {
+     "targetId": "g5-t5",
+     "currentCents": 40,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 40,
+      "toCents": 30
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 30,
+     "expectedAcos": 0.22489221153246536,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 30,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.97% (adGroup, 389 clicks) × AOV 90.44 ÷ CPC/bid 1.00; held at the parent's bid (one order of its own); goal bid 16¢; step ≤25% from 40¢; 40¢ → 30¢"
+    },
+    {
+     "targetId": "g6-t0",
+     "currentCents": 51,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 76,
+     "expectedAcos": 0.13397473348801966,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 51,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 51¢ → 53¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t1",
+     "currentCents": 27,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 40,
+     "expectedAcos": 0.09481015415452972,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 27,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 27¢ → 28¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t2",
+     "currentCents": 31,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 46,
+     "expectedAcos": 0.19752723114166412,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 31,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 31¢ → 32¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t3",
+     "currentCents": 26,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 39,
+     "expectedAcos": 0.10537144527495655,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 26,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 26¢ → 27¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t4",
+     "currentCents": 56,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 62,
+     "expectedAcos": 0.2724047507213769,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 43,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t5",
+     "currentCents": 9,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 13,
+     "expectedAcos": 0.027402828719415476,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 9,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g7-t0",
+     "currentCents": 53,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.1789352072289663,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stop",
+     "bidCents": 53,
+     "why": "stop: stop by a stop (its 40¢ bid remembered) → 53¢"
+    },
+    {
+     "targetId": "g7-t1",
+     "currentCents": 61,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.17932666333279879,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 60,
+     "why": "limit: 61¢ is outside the campaign's highest bid → 60¢"
+    },
+    {
+     "targetId": "g7-t2",
+     "currentCents": 64,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.160175141108601,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 60,
+     "why": "limit: 64¢ is outside the campaign's highest bid → 60¢"
+    },
+    {
+     "targetId": "g7-t3",
+     "currentCents": 40,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 40,
+      "toCents": 50
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 50,
+     "expectedAcos": 0.15146970813154875,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 50,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 2.22% (adGroup, 679 clicks) × AOV 117.52 ÷ CPC/bid 0.99; raise held where the cautious ACoS meets the band top; goal bid 106¢; step ≤25% from 40¢; 40¢ → 50¢"
+    },
+    {
+     "targetId": "g7-t4",
+     "currentCents": 64,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.25033081014024905,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 60,
+     "why": "limit: 64¢ is outside the campaign's highest bid → 60¢"
+    },
+    {
+     "targetId": "g7-t5",
+     "currentCents": 13,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 13,
+      "toCents": 16
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 16,
+     "expectedAcos": 0.053511355576370524,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 16,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 2.14% (keyword, 354 clicks) × AOV 113.66 ÷ CPC/bid 1.00; goal bid 104¢; step ≤25% from 13¢; 13¢ → 16¢"
+    }
+   ]
+  },
+  {
+   "facts": 36,
+   "decisions": [
+    {
+     "targetId": "g1-t0",
+     "currentCents": 36,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 28,
+     "expectedAcos": 0.2088654058060087,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 36,
+     "why": "in band: expected ACoS 20.9% at 36¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 1.23% (adGroup, 538 clicks) × AOV 102.56 ÷ CPC/bid 0.73; held at the parent's bid (one order of its own); goal bid 28¢)"
+    },
+    {
+     "targetId": "g1-t1",
+     "currentCents": 62,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 47,
+     "expectedAcos": 0.47045036473715734,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 62¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 20% (band 18%–28%, PROFIT); CR 0.86% (adGroup, 538 clicks) × AOV 95.84 ÷ CPC/bid 0.62; goal bid 26¢; step ≤25% from 62¢)"
+    },
+    {
+     "targetId": "g1-t2",
+     "currentCents": 35,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 35,
+      "toCents": 44
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 44,
+     "expectedAcos": 0.15030729429635167,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 44,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1.61% (adGroup, 538 clicks) × AOV 111.32 ÷ CPC/bid 0.77; held at the parent's bid (no orders of its own); ceiling 45¢ (rule \"ceiling\"); goal bid 45¢; step ≤25% from 35¢; 35¢ → 44¢"
+    },
+    {
+     "targetId": "g1-t3",
+     "currentCents": 8,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 8,
+      "toCents": 10
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 10,
+     "expectedAcos": 0.13163002746672323,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 10,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 0.63% (adGroup, 538 clicks) × AOV 95.84 ÷ CPC/bid 1.00; goal bid 12¢; step ≤25% from 8¢; 8¢ → 10¢"
+    },
+    {
+     "targetId": "g1-t4",
+     "currentCents": 33,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 33,
+      "toCents": 25
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 25,
+     "expectedAcos": 0.2861559330274677,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 25,
+     "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 0.9% (keyword, 243 clicks) × AOV 128.01 ÷ CPC/bid 1.00; goal bid 23¢; step ≤25% from 33¢; 33¢ → 25¢"
+    },
+    {
+     "targetId": "g1-t5",
+     "currentCents": 29,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 22,
+     "expectedAcos": 0.24753695735407133,
+     "goal": {
+      "aim": 0.2,
+      "lo": 0.18,
+      "hi": 0.28
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 29,
+     "why": "in band: expected ACoS 24.8% at 29¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 1.46% (adGroup, 538 clicks) × AOV 80.13 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 20¢; step ≤25% from 29¢)"
+    },
+    {
+     "targetId": "g2-t0",
+     "currentCents": 7,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 9,
+     "expectedAcos": 0.09293298984638985,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 7,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 7¢ → 9¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 0.66% (adGroup, 667 clicks) × AOV 114.63 ÷ CPC/bid 1.00; goal bid 23¢; step ≤25% from 7¢; 7¢ → 9¢)"
+    },
+    {
+     "targetId": "g2-t1",
+     "currentCents": 51,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 41,
+     "expectedAcos": 0.37750329807937777,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "pin",
+     "bidCents": 51,
+     "why": "pin: held by a person (their bid of the last 60 days) — left alone"
+    },
+    {
+     "targetId": "g2-t2",
+     "currentCents": 12,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 15,
+     "expectedAcos": 0.1535675969912332,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 12,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 12¢ → 15¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 0.68% (target, 167 clicks) × AOV 114.63 ÷ CPC/bid 1.00; goal bid 23¢; step ≤25% from 12¢; 12¢ → 15¢)"
+    },
+    {
+     "targetId": "g2-t3",
+     "currentCents": 51,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 64,
+     "expectedAcos": 0.17548684431269349,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 51,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 51¢ → 64¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 2.22% (target, 183 clicks) × AOV 130.78 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 68¢; step ≤25% from 51¢; 51¢ → 64¢)"
+    },
+    {
+     "targetId": "g2-t4",
+     "currentCents": 31,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 39,
+     "expectedAcos": 0.08383170818795911,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "goal",
+     "bidCents": 31,
+     "why": "goal: raise held — the campaign is held by auto-undo until 2026-10-20; 31¢ → 39¢ waits (goal: aim 30% (default band 27%–34.5%, PROFIT); CR 2.67% (target, 139 clicks) × AOV 107.18 ÷ CPC/bid 0.77; raise held where the cautious ACoS meets the band top; goal bid 88¢; step ≤25% from 31¢; 31¢ → 39¢)"
+    },
+    {
+     "targetId": "g2-t5",
+     "currentCents": 54,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 58,
+     "expectedAcos": 0.2776816292804646,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 54,
+     "why": "in band: expected ACoS 27.8% at 54¢ is inside 27%–34.5% — no change (aim 30% (default band 27%–34.5%, PROFIT); CR 1.22% (adGroup, 667 clicks) × AOV 95.62 ÷ CPC/bid 0.60; goal bid 58¢)"
+    },
+    {
+     "targetId": "g3-t0",
+     "currentCents": 62,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 57,
+     "expectedAcos": 0.13101450672810355,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 60,
+     "why": "limit: 62¢ is outside the campaign's highest bid → 60¢"
+    },
+    {
+     "targetId": "g3-t1",
+     "currentCents": 35,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 35,
+      "toCents": 26
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 26,
+     "expectedAcos": 0.3526079048381054,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 26,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 1% (keyword, 141 clicks) × AOV 99.52 ÷ CPC/bid 1.00; goal bid 17¢; step ≤25% from 35¢; 35¢ → 26¢"
+    },
+    {
+     "targetId": "g3-t2",
+     "currentCents": 36,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 36,
+     "expectedAcos": 0.14196933394870095,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "pin",
+     "bidCents": 36,
+     "why": "pin: held by pin hold by user:owner until 2026-12-01 — left alone"
+    },
+    {
+     "targetId": "g3-t3",
+     "currentCents": 59,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 59,
+      "toCents": 48
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 48,
+     "expectedAcos": 0.2129540073009544,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 48,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 1.62% (adGroup, 470 clicks) × AOV 102.33 ÷ CPC/bid 0.60; goal bid 48¢; 59¢ → 48¢"
+    },
+    {
+     "targetId": "g3-t4",
+     "currentCents": 37,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 37,
+      "toCents": 28
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 28,
+     "expectedAcos": 0.22699178036581155,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 28,
+     "why": "goal: aim 17.3% (default band 13.5%–17.3%, GROW); CR 1.08% (keyword, 111 clicks) × AOV 112.95 ÷ CPC/bid 0.75; goal bid 28¢; 37¢ → 28¢"
+    },
+    {
+     "targetId": "g3-t5",
+     "currentCents": 5,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 10,
+     "expectedAcos": 0.024567191612495775,
+     "goal": {
+      "aim": 0.1725,
+      "lo": 0.135,
+      "hi": 0.1725
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 10,
+     "why": "limit: 5¢ is outside the strategy lowest bid → 10¢"
+    },
+    {
+     "targetId": "g5-t0",
+     "currentCents": 32,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 32,
+      "toCents": 24
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 24,
+     "expectedAcos": 0.2611101222600607,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 24,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.27% (adGroup, 486 clicks) × AOV 87.70 ÷ CPC/bid 0.91; goal bid 12¢; step ≤25% from 32¢; 32¢ → 24¢"
+    },
+    {
+     "targetId": "g5-t1",
+     "currentCents": 36,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 36,
+      "toCents": 27
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 27,
+     "expectedAcos": 0.524128090184231,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 27,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.78% (adGroup, 486 clicks) × AOV 87.70 ÷ CPC/bid 1.00; goal bid 7¢; step ≤25% from 36¢; 36¢ → 27¢"
+    },
+    {
+     "targetId": "g5-t2",
+     "currentCents": 55,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 41,
+     "expectedAcos": 0.3925345030774958,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "limit",
+     "bidCents": 45,
+     "why": "rule input: 55¢ is outside the ceiling 45¢ (rule \"ceiling\") → 45¢ (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.45% (adGroup, 486 clicks) × AOV 87.70 ÷ CPC/bid 0.91; goal bid 14¢; step ≤25% from 55¢)"
+    },
+    {
+     "targetId": "g5-t3",
+     "currentCents": 56,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 33,
+      "toCents": 25
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 42,
+     "expectedAcos": 0.2717892785950491,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "restore",
+     "bidCents": 25,
+     "why": "restore: the stop layer no longer applies → back to 25¢ from the 56¢ it held (the bid before it: 33¢; goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 1.4% (target, 104 clicks) × AOV 88.52 ÷ CPC/bid 0.64; goal bid 19¢; step ≤25% from 33¢; 33¢ → 25¢)"
+    },
+    {
+     "targetId": "g5-t4",
+     "currentCents": 43,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 43,
+      "toCents": 32
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 32,
+     "expectedAcos": 0.4673919154657157,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 32,
+     "why": "goal: aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 0.89% (target, 193 clicks) × AOV 83.55 ÷ CPC/bid 0.81; goal bid 9¢; step ≤25% from 43¢; 43¢ → 32¢"
+    },
+    {
+     "targetId": "g5-t5",
+     "currentCents": 22,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 23,
+     "expectedAcos": 0.09370285005410099,
+     "goal": {
+      "aim": 0.1,
+      "lo": 0.08,
+      "hi": 0.14
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 22,
+     "why": "in band: expected ACoS 9.4% at 22¢ is inside 8%–14% — no change (aim 10% (band 8%–14%, PROFIT); TACoS 10% × sales ratio 1; CR 2.95% (target, 159 clicks) × AOV 79.58 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 23¢)"
+    },
+    {
+     "targetId": "g6-t0",
+     "currentCents": 24,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 36,
+     "expectedAcos": 0.1579363900507289,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 24,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 24¢ → 25¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t1",
+     "currentCents": 16,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 24,
+     "expectedAcos": 0.16882997792030868,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 16,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 16¢ → 17¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t2",
+     "currentCents": 39,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 58,
+     "expectedAcos": 0.12351314328791149,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 1,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 39,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 39¢ → 41¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g6-t3",
+     "currentCents": 49,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 39,
+     "expectedAcos": 0.37911474614649177,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 27,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t4",
+     "currentCents": 40,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 37,
+     "expectedAcos": 0.32346625995124656,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "stock",
+     "bidCents": 26,
+     "why": "stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7"
+    },
+    {
+     "targetId": "g6-t5",
+     "currentCents": 12,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 18,
+     "expectedAcos": 0.09481898505763336,
+     "goal": {
+      "aim": 0.3,
+      "lo": 0.27,
+      "hi": 0.345
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "stock",
+     "bidCents": 12,
+     "why": "stock: raise held — the campaign is held by auto-undo until 2026-10-20; 12¢ → 13¢ waits (stock: low stock cover (low stock: 5 days of cover against a 14-day line) → goal bid ×0.7)"
+    },
+    {
+     "targetId": "g7-t0",
+     "currentCents": 17,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 17,
+      "toCents": 21
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 21,
+     "expectedAcos": 0.0518980399604516,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 1,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 21,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 2.23% (target, 157 clicks) × AOV 147.16 ÷ CPC/bid 1.00; raise held where the cautious ACoS meets the band top; goal bid 94¢; step ≤25% from 17¢; 17¢ → 21¢"
+    },
+    {
+     "targetId": "g7-t1",
+     "currentCents": 52,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.18485743504955418,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 52,
+     "why": "in band: expected ACoS 18.5% at 52¢ is inside 18%–42.6% — no change (aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 2.57% (adGroup, 405 clicks) × AOV 109.60 ÷ CPC/bid 1.00; goal bid 120¢; step ≤25% from 52¢; held to the campaign's highest bid)"
+    },
+    {
+     "targetId": "g7-t2",
+     "currentCents": 36,
+     "dataDay": "2026-10-01",
+     "step": {
+      "dataDay": "2026-10-01",
+      "fromCents": 36,
+      "toCents": 33
+     },
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 33,
+     "expectedAcos": 0.47140703964017727,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "write",
+     "layer": "goal",
+     "bidCents": 33,
+     "why": "goal: aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 0.58% (target, 178 clicks) × AOV 132.27 ÷ CPC/bid 1.00; goal bid 33¢; 36¢ → 33¢"
+    },
+    {
+     "targetId": "g7-t3",
+     "currentCents": 56,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.3352798729277432,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 56,
+     "why": "in band: expected ACoS 33.5% at 56¢ is inside 18%–42.6% — no change (aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 1.07% (adGroup, 405 clicks) × AOV 132.27 ÷ CPC/bid 0.85; goal bid 71¢; step ≤25% from 56¢; held to the campaign's highest bid)"
+    },
+    {
+     "targetId": "g7-t4",
+     "currentCents": 50,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.3025978554852737,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 50,
+     "why": "in band: expected ACoS 30.3% at 50¢ is inside 18%–42.6% — no change (aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 1.06% (adGroup, 405 clicks) × AOV 132.27 ÷ CPC/bid 0.85; goal bid 70¢; step ≤25% from 50¢; held to the campaign's highest bid)"
+    },
+    {
+     "targetId": "g7-t5",
+     "currentCents": 60,
+     "dataDay": "2026-10-01",
+     "step": null,
+     "placements": [],
+     "clash": null,
+     "goalBidCents": 60,
+     "expectedAcos": 0.3910815586340183,
+     "goal": {
+      "aim": 0.4264,
+      "lo": 0.18,
+      "hi": 0.4264
+     },
+     "confidence": 0.999,
+     "action": "hold",
+     "layer": "band",
+     "bidCents": 60,
+     "why": "in band: expected ACoS 39.1% at 60¢ is inside 18%–42.6% — no change (aim 42.6% (default band 18%–42.6%, LAUNCH); launch ramp day 3 of 28; CR 1% (adGroup, 405 clicks) × AOV 132.27 ÷ CPC/bid 0.86; goal bid 65¢; held to the campaign's highest bid)"
+    }
+   ]
+  }
+ ],
+ "worked": [
+  {
+   "targetId": "kw-3",
+   "currentCents": 3,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 5,
+   "expectedAcos": 0.03314756614683722,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "limit",
+   "bidCents": 5,
+   "why": "limit: 3¢ is outside the 5¢ engine floor → 5¢"
+  },
+  {
+   "targetId": "kw-8",
+   "currentCents": 8,
+   "dataDay": "2026-09-29",
+   "step": {
+    "dataDay": "2026-09-29",
+    "fromCents": 8,
+    "toCents": 10
+   },
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 10,
+   "expectedAcos": 0.08839350972489925,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "goal",
+   "bidCents": 10,
+   "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; step ≤25% from 8¢; 8¢ → 10¢"
+  },
+  {
+   "targetId": "kw-14",
+   "currentCents": 14,
+   "dataDay": "2026-09-29",
+   "step": {
+    "dataDay": "2026-09-29",
+    "fromCents": 14,
+    "toCents": 17
+   },
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 17,
+   "expectedAcos": 0.15468864201857369,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "goal",
+   "bidCents": 17,
+   "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; step ≤25% from 14¢; 14¢ → 17¢"
+  },
+  {
+   "targetId": "kw-16",
+   "currentCents": 16,
+   "dataDay": "2026-09-29",
+   "step": {
+    "dataDay": "2026-09-29",
+    "fromCents": 16,
+    "toCents": 18
+   },
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 18,
+   "expectedAcos": 0.1767870194497985,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "goal",
+   "bidCents": 18,
+   "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; 16¢ → 18¢"
+  },
+  {
+   "targetId": "kw-19",
+   "currentCents": 19,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 18,
+   "expectedAcos": 0.2099345855966357,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "hold",
+   "layer": "band",
+   "bidCents": 19,
+   "why": "in band: expected ACoS 21% at 19¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢)"
+  },
+  {
+   "targetId": "kw-22",
+   "currentCents": 22,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 18,
+   "expectedAcos": 0.24308215174347292,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "hold",
+   "layer": "band",
+   "bidCents": 22,
+   "why": "in band: expected ACoS 24.3% at 22¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢)"
+  },
+  {
+   "targetId": "kw-25",
+   "currentCents": 25,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 19,
+   "expectedAcos": 0.27622971789031014,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "hold",
+   "layer": "band",
+   "bidCents": 25,
+   "why": "in band: expected ACoS 27.6% at 25¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; step ≤25% from 25¢)"
+  },
+  {
+   "targetId": "kw-33",
+   "currentCents": 33,
+   "dataDay": "2026-09-29",
+   "step": {
+    "dataDay": "2026-09-29",
+    "fromCents": 33,
+    "toCents": 25
+   },
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 25,
+   "expectedAcos": 0.3646232276152094,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "goal",
+   "bidCents": 25,
+   "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; step ≤25% from 33¢; 33¢ → 25¢"
+  },
+  {
+   "targetId": "kw-45",
+   "currentCents": 45,
+   "dataDay": "2026-09-29",
+   "step": {
+    "dataDay": "2026-09-29",
+    "fromCents": 45,
+    "toCents": 34
+   },
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 34,
+   "expectedAcos": 0.4972134922025583,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "goal",
+   "bidCents": 34,
+   "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; step ≤25% from 45¢; 45¢ → 34¢"
+  },
+  {
+   "targetId": "kw-60",
+   "currentCents": 60,
+   "dataDay": "2026-09-29",
+   "step": {
+    "dataDay": "2026-09-29",
+    "fromCents": 60,
+    "toCents": 45
+   },
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 45,
+   "expectedAcos": 0.6629513229367443,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "goal",
+   "bidCents": 45,
+   "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; step ≤25% from 60¢; 60¢ → 45¢"
+  },
+  {
+   "targetId": "kw-90",
+   "currentCents": 90,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 68,
+   "expectedAcos": 0.9944269844051166,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "limit",
+   "bidCents": 80,
+   "why": "limit: 90¢ is outside the strategy highest bid → 80¢"
+  },
+  {
+   "targetId": "kw-25",
+   "currentCents": 25,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 25,
+   "expectedAcos": 0.27622971789031014,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "hold",
+   "layer": "band",
+   "bidCents": 25,
+   "why": "in band: expected ACoS 27.6% at 25¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; step ≤25% from 33¢)"
+  },
+  {
+   "targetId": "kw-33",
+   "currentCents": 33,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 25,
+   "expectedAcos": 0.3646232276152094,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "stop",
+   "bidCents": 2,
+   "why": "stop: stop by suppress-campaign → 2¢"
+  },
+  {
+   "targetId": "kw-33",
+   "currentCents": 33,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 25,
+   "expectedAcos": 0.3646232276152094,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "stock",
+   "bidCents": 3,
+   "why": "stock: Min-bid hour → 3¢ (also: low stock cover (stock cover) → goal bid ×0.5)"
+  },
+  {
+   "targetId": "kw-10",
+   "currentCents": 10,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 12,
+   "expectedAcos": 0.11049188715612407,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "hold",
+   "layer": "freeze",
+   "bidCents": 10,
+   "why": "freeze: auto-undo freeze (auto-undo): no raise"
+  },
+  {
+   "targetId": "kw-2",
+   "currentCents": 2,
+   "dataDay": "2026-09-29",
+   "step": {
+    "dataDay": "2026-09-29",
+    "fromCents": 30,
+    "toCents": 23
+   },
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 5,
+   "expectedAcos": 0.02209837743122481,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "restore",
+   "bidCents": 23,
+   "why": "restore: the stop layer no longer applies → back to 23¢ from the 2¢ it held (the bid before it: 30¢; goal: aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; step ≤25% from 30¢; 30¢ → 23¢)"
+  },
+  {
+   "targetId": "kw-14",
+   "currentCents": 14,
+   "dataDay": "2026-09-29",
+   "step": {
+    "dataDay": "2026-09-29",
+    "fromCents": 14,
+    "toCents": 17
+   },
+   "placements": [
+    {
+     "lane": "TOP_OF_SEARCH",
+     "planPct": 300,
+     "pct": 223,
+     "held": "the top-of-search CPC ceiling 55¢"
+    },
+    {
+     "lane": "PRODUCT_PAGE",
+     "planPct": 50,
+     "pct": 50,
+     "held": null
+    }
+   ],
+   "clash": null,
+   "goalBidCents": 17,
+   "expectedAcos": 0.15468864201857369,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "goal",
+   "bidCents": 17,
+   "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢; step ≤25% from 14¢; 14¢ → 17¢"
+  },
+  {
+   "targetId": "kw-14",
+   "currentCents": 14,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": "rule:B floor 15¢ is above rule:A ceiling 12¢ — the ceiling wins",
+   "goalBidCents": 12,
+   "expectedAcos": 0.15468864201857369,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "write",
+   "layer": "limit",
+   "bidCents": 12,
+   "why": "rule input: 14¢ is outside the ceiling 12¢ (rule:A) → 12¢ (aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; ceiling 12¢ (rule:A); goal bid 12¢)"
+  },
+  {
+   "targetId": "kw-16",
+   "currentCents": 16,
+   "dataDay": "2026-09-29",
+   "step": {
+    "dataDay": "2026-09-29",
+    "fromCents": 16,
+    "toCents": 31
+   },
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 31,
+   "expectedAcos": 0.06962162162162162,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.943,
+   "action": "write",
+   "layer": "goal",
+   "bidCents": 31,
+   "why": "goal: aim 20% (band 18%–28%, PROFIT); CR 2.5% (product, 2,000 clicks) × AOV 80.43 ÷ CPC/bid 0.88; raise held where the cautious ACoS meets the band top; goal bid 45¢; step ≤94% from 16¢; 16¢ → 31¢"
+  },
+  {
+   "targetId": "kw-20",
+   "currentCents": 20,
+   "dataDay": "2026-09-29",
+   "step": null,
+   "placements": [],
+   "clash": null,
+   "goalBidCents": 18,
+   "expectedAcos": 0.22098377431224814,
+   "goal": {
+    "aim": 0.2,
+    "lo": 0.18,
+    "hi": 0.28
+   },
+   "confidence": 0.998,
+   "action": "hold",
+   "layer": "band",
+   "bidCents": 20,
+   "why": "in band: expected ACoS 22.1% at 20¢ is inside 18%–28% — no change (aim 20% (band 18%–28%, PROFIT); CR 1% (product, 2,000 clicks) × AOV 80.04 ÷ CPC/bid 0.88; goal bid 18¢)"
+  }
+ ]
+}
