@@ -53,7 +53,7 @@
  *                harvested on. WORSE: 0 orders in the clicks that make "it stopped converting" a 95 % call at its
  *                harvest-time CR̂, or an ACoS above the band top and clearly worse than before. Then the undo — the pair put
  *                back as a pair (harvest-write.ts undoHarvest: the source negatives retired, then the keyword paused) — is
- *                proposed to a person here; auto-undo (AB-15) puts it back alone at AUTO through harvest-undo.ts.
+ *                proposed to a person here; auto-undo (AB-15, brain/harvest-undo.ts) puts it back alone at its AUTO.
  *   words        no money and no ACoS figure in a `why` (the read tool strips the numbers by key, so the words never carry one).
  */
 import { crLowerBound80, DEFAULT_CPC_RATIO } from '../bid-brain/estimator.js'
