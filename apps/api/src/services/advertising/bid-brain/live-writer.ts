@@ -26,9 +26,9 @@
  *            (the lanes live before it saved first, stop-memory.ts), and switches "up and down" to "down only"; when it
  *            ends the lanes come back in one write (the plan's own lanes over the saved ones) and so does the strategy —
  *            through the campaign write every bidding-strategy change takes (updateCampaignWithSync with askGate: the
- *            gate before Nexus's copy, the 5-minute queue, the gate at dispatch, the channel gateway). A lever held is
- *            never written — the Owner's lock (AB-1) of the placements or one lane or of the strategy, or the campaign's own
- *            placements or bids pin — each said in the report
+ *            gate before Nexus's copy, the 5-minute queue, the gate at dispatch, the channel gateway). A stop lowers past
+ *            the Owner's lock (AB-1), as it beats a pinned bid; its give-back puts his value back. The campaign's own pins
+ *            hold every write; unreadable locks hold the give-back a tick — each said in the report, no memory dropped
  */
 import type { AdWriteEvidence } from '../ads-evidence.js'
 import { allowChange, nothingHeld, type ChangeKind, type EngineGuard } from '../ads-engine-guard.js'
@@ -190,11 +190,19 @@ export interface PlacementWrite {
   recipe?: 'stop' | 'restore'
   /** AB-2 restore — the lanes saved when the stop began, every managed lane listed (stop-recipe.ts fullLanes). */
   base?: ReadonlyArray<{ placement: string; percentage: number }>
+  /** AB-2 restore — the lanes the Owner locked (LaneName): back to `base`, whatever the hour's plan sets around them. */
+  fixedLanes?: readonly string[]
   /**
-   * AB-2 — what holds the lanes (shadow.ts placementLocks: the Owner's locks, brain/owner-brakes.ts, and the campaign's
-   * placements pin): the whole placements lever is not written, a locked lane keeps its %.
+   * AB-2 — the hour's plan only: the Owner's locks (brain/owner-brakes.ts): a placements lever he locked is not written, a
+   * locked lane keeps its %. (A stop passes them; its give-back carries his value in `base`.)
    */
   locks?: LeverLocks | null
+  /** AB-2 — the campaign's placements pin, in words: no lane is written (the gate would refuse it); a memory is kept. */
+  pinned?: string | null
+  /** AB-2 — why this write waits this tick (the Owner's locks could not be read): nothing written, nothing dropped. */
+  wait?: string | null
+  /** AB-2 — the stop recipe's words for the why of the campaign's decisions (shadow.ts recipeWords). */
+  recipeWhy?: string
 }
 
 /**
@@ -204,7 +212,7 @@ export interface PlacementWrite {
  * AB-2 — `base`: what the lanes the hour does not set go back to (the lanes saved when a stop began; else the live ones),
  * and what the raise cap measures a raise from (a give-back is no raise); `locks`: a lane the Owner locked keeps its %.
  */
-export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'maxBidCents' | 'raiseCap'> & Partial<Pick<PlacementWrite, 'base' | 'locks'>>): { adjustments: Array<{ placement: string; percentage: number }>; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; kept: Array<{ lane: string; pct: number }>; locked: Array<{ lane: string; pct: number; by: string }> } | null {
+export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'maxBidCents' | 'raiseCap'> & Partial<Pick<PlacementWrite, 'base' | 'locks' | 'fixedLanes'>>): { adjustments: Array<{ placement: string; percentage: number }>; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; kept: Array<{ lane: string; pct: number }>; locked: Array<{ lane: string; pct: number; by: string }> } | null {
   const base = w.base ?? w.current
   if (!w.lanes.length && !w.base) return null
   // The CR cap of placementsFor waits for the placement report (crRatio null): only the CPC ceilings hold here.
@@ -219,7 +227,15 @@ export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'max
   let adjustments = blended
     ? buildBlendedAdjustments([...base], requested)
     : [...base.filter((c) => !requested.some((r) => r.placement === c.placement)), ...requested]
-  // AB-2 — a lane the Owner locked keeps the % it has now, whatever the hour or the stop asks.
+  // AB-2 — after a stop, a lane the Owner locked goes back to its value before it (`base`), whatever the hour's plan sets.
+  for (const p of MANAGED_PLACEMENTS) {
+    if (!w.fixedLanes?.includes(laneOf(p))) continue
+    const back = valueOf(base, p)
+    adjustments = adjustments.some((a) => a.placement === p)
+      ? adjustments.map((a) => (a.placement === p ? { placement: p, percentage: back } : a))
+      : back > 0 ? [...adjustments, { placement: p, percentage: back }] : adjustments
+  }
+  // AB-2 — on the hour's plan, a lane the Owner locked keeps the % it has now.
   const locked: Array<{ lane: string; pct: number; by: string }> = []
   for (const p of MANAGED_PLACEMENTS) {
     const by = w.locks?.lanes.get(laneOf(p))
@@ -246,10 +262,12 @@ export interface PlacementReport {
   written: number
   refused: number
   deferred: number
-  /** AB-2 — campaigns whose whole placements lever is held (the Owner's lock, the placements pin): nothing written. */
+  /** AB-2 — campaigns whose placements are held (the placements pin; the Owner's lock on the hour's plan): nothing written. */
   locked: number
+  /** AB-2 — writes that wait this tick (the Owner's locks could not be read): nothing written, nothing dropped. */
+  waiting: number
   reasons: string[]
-  byCampaign: Map<string, { sent: 'written' | 'refused' | 'deferred' | 'would-apply' | 'locked'; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; reason?: string }>
+  byCampaign: Map<string, { sent: 'written' | 'refused' | 'deferred' | 'would-apply' | 'locked' | 'waiting'; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; reason?: string }>
 }
 
 const valueIn = (list: ReadonlyArray<{ placement: string; percentage: number }> | undefined, p: string): number => list?.find((x) => x.placement === p)?.percentage ?? 0
@@ -259,20 +277,28 @@ const noteReason = (out: { reasons: string[] }, reason: string) => { if (out.rea
  * Write each owned campaign's hour placements, inside the dial and the brain's caps (one change per campaign). AB-2 — the
  * stop recipe's lanes too: a stop's zeroing saves the lanes live first (no zeroing without that memory) and is a floor;
  * the give-back after it is a restore (no cap holds it; it lands under SUGGEST), or a forward move where the hour's own
- * lanes go above the saved ones; once it is written — or nothing is left to give back — the memory goes. A placements
- * lever held (the Owner's lock, the placements pin) is never written (a stop's memory is then dropped: the lever is his).
+ * lanes go above the saved ones (a lane the Owner locked goes back to his value: shadow.ts puts it in `base`); once it is
+ * written — or nothing is left to give back — the memory goes. The placements pin holds every write, and the Owner's lock
+ * the hour's own plan; locks that cannot be read hold the write for a tick. None of these drops a memory.
  */
 export async function writeOwnedPlacements(list: readonly PlacementWrite[], ctx: { runId: string; guard: EngineGuard }): Promise<PlacementReport> {
-  const out: PlacementReport = { written: 0, refused: 0, deferred: 0, locked: 0, reasons: [], byCampaign: new Map() }
+  const out: PlacementReport = { written: 0, refused: 0, deferred: 0, locked: 0, waiting: 0, reasons: [], byCampaign: new Map() }
   const { updatePlacementBidding } = await import('../ads-create.service.js')
   const forget = async (campaignId: string) => {
     try { await forgetLanes(campaignId) } catch (err) { logger.warn('[bid-brain] could not drop the stop\'s saved placements — the next tick tries again', { campaignId, error: err instanceof Error ? err.message : String(err) }) }
   }
   for (const w of list) {
-    if (w.locks?.placements) {
+    // AB-2 — held, never dropped: the pin (the gate would refuse), and the Owner's lock on the hour's own plan.
+    const holder = w.pinned ?? (!w.recipe && w.locks?.placements ? w.locks.placements.words : null)
+    if (holder) {
       out.locked++
-      out.byCampaign.set(w.campaignId, { sent: 'locked', changes: [], reason: `placements ${w.locks.placements}: not written` })
-      if (w.recipe === 'restore') await forget(w.campaignId)
+      out.byCampaign.set(w.campaignId, { sent: 'locked', changes: [], reason: `placements ${holder}: not written` })
+      continue
+    }
+    // AB-2 — the Owner's locks could not be read: this tick writes nothing and drops nothing; the next tick tries again.
+    if (w.wait) {
+      out.waiting++
+      out.byCampaign.set(w.campaignId, { sent: 'waiting', changes: [], reason: w.wait })
       continue
     }
     const plan = placementPlan(w)
@@ -349,6 +375,7 @@ export function placementReportWords(r: PlacementReport | null | undefined): str
     r.deferred ? `placements-deferred=${r.deferred}` : '',
     r.refused ? `placements-refused=${r.refused} (${r.reasons.join('; ')})` : '',
     r.locked ? `placements-locked=${r.locked}` : '',
+    r.waiting ? `placements-waiting=${r.waiting} (${[...r.byCampaign.values()].find((b) => b.sent === 'waiting')?.reason ?? ''})` : '',
   ].filter(Boolean).join(' ')
 }
 

@@ -16,9 +16,14 @@
  *               remembered stop — by stock (not buyable: out of stock, no Buy Box) or by the hourly plan's Min-bid hour
  *               (counted with the plan's hour, as since #515). An ad group floored on its own leaves the campaign serving,
  *               and its lanes and strategy as they are
- *   Owner locks AB-1 (brain/settings.ts): a LOCK of the campaign's placements — the whole lever, or one lane — or of its
- *               bidding strategy is not written; nor is a lever the campaign's own pin holds (pinPlacement; pinBids, the
- *               strategy being a bids setting — the gate would refuse it). The why says so, and what may still lift the floor
+ *   Owner locks AB-1 (brain/settings.ts) — a stop LOWERS past them (lanes to 0 %, down only), as a stop beats a pinned
+ *               bid; only the give-back obeys them: a locked lever goes back to the Owner's value (the lock's, else what it
+ *               held before the stop), never to the brain's plan. Locks that cannot be read hold the give-back (nothing is
+ *               dropped; the next tick tries again). The campaign's own pins (pinPlacement; pinBids, the strategy being a bids
+ *               setting) hold both ways: the gate refuses those writes, so none is asked. The why says each
+ *   a person    a person's own strategy (his edit or a request he approved) is a STRATEGY hold for 60 days, like his bid
+ *               (design §2.10): the brain leaves the strategy alone — no switch down — until it ends; then the recipe
+ *               applies again if the stop still runs. A stop that ends under his hold drops its saved strategy
  *   anti-flap   a strategy switch at most MAX_STRATEGY_SWITCHES_PER_DAY times a UTC day per campaign (a stop on and off).
  *               The switch down is the stop's brake and is never held back; once the campaign has switched twice today
  *               the switch back up waits: it stays down only until the next UTC day, and the why says so
@@ -26,8 +31,9 @@
  *               the stop ends, its memory dropped
  *   the stack   while the memory is kept, the brain measures the bid stack from it (facts.ts: the strategy and the lanes
  *               the campaign serves with), so the limits and the give-back are those of the campaign without the stop
- *   hand-back   the memory is read only while the brain owns the campaign: give-back also puts the strategy back, op shadow
- *               leaves it down only and says so, going LIVE drops an old memory (enrollment.ts)
+ *   rollback    the memory is read only while the brain owns the campaign; whatever ends that gives it back and clears it:
+ *               op shadow and give-back (as the approver), op live (first, or it is refused), and — the server switch
+ *               off, a product leaving the brain — the restore path every stop's owner already runs (restoreCampaignBids)
  *
  * Pure: shadow.ts assembles, live-writer.ts writes, stop-memory.ts keeps the memory.
  */
@@ -120,8 +126,14 @@ export interface StrategyFacts {
   current: string | null
   /** Campaign.suppressedFromBiddingStrategy: what a stop switched it from. */
   saved: string | null
-  /** The Owner's lock of the campaign's bidding strategy, in words ("locked by the Owner's campaign override (…)"); null: none. */
-  locked: string | null
+  /** The Owner's lock of the strategy (AB-1): its words and his value (null: as it was). A stop passes it; the give-back obeys it. */
+  lock?: { words: string; value: string | null } | null
+  /** The Owner's locks could not be read this tick: the give-back waits (nothing dropped). */
+  locksUnreadable?: boolean
+  /** The campaign's bids pin (pinBids), in words: the gate refuses an automatic strategy write there, so none is asked. */
+  pinned?: string | null
+  /** A person's own strategy (a STRATEGY hold, design §2.10), in words: the brain leaves it until the hold ends. */
+  held?: string | null
   /** The campaign's strategy switches by the brain this UTC day. */
   switchesToday: number
 }
@@ -129,24 +141,53 @@ export interface StrategyFacts {
 export type StrategyStep =
   /** Switch: `floor` down only for a stop (`remember` the strategy first, when no memory holds one), `restore` back after it. */
   | { do: 'switch'; to: string; kind: 'floor' | 'restore'; remember: string | null; why: string }
-  /** Drop the memory, write nothing (locked, changed meanwhile, or already back). */
+  /** Drop the memory, write nothing (a person's strategy, someone changed it meanwhile, or already back). */
   | { do: 'forget'; why: string }
-  /** Write nothing, keep the memory (locked during a stop, the anti-flap). */
+  /** Write nothing, keep the memory (a person's hold or the pin during a stop, unreadable locks, the anti-flap). */
   | { do: 'hold'; why: string }
 
-/** The strategy step of one campaign; null: nothing to do or say. Pure. */
+const ABOVE_FLOOR = 'Amazon may still add up to +100 % at the top of search over the floor'
+
+/**
+ * The strategy step of one campaign; null: nothing to do or say. Pure.
+ *   during a stop   up and down → down only, past the Owner's lock (a stop beats a pinned bid: the same precedent); not
+ *                   past a person's own strategy (his hold) or the bids pin (the gate would refuse it) — each said
+ *   after it        back to the strategy saved — to the Owner's locked value where he locked it (his lock wins over the
+ *                   anti-flap) — unless a person set his own since (the memory is dropped), the locks could not be read
+ *                   (it waits), the pin holds (it waits), or the anti-flap holds it to tomorrow
+ */
 export function strategyStep(s: StrategyFacts): StrategyStep | null {
   if (s.stop) {
     if (s.current !== UP_AND_DOWN) return null
-    if (s.locked) return { do: 'hold', why: `the bidding strategy is ${s.locked}: kept up and down — Amazon may still add up to +100 % at the top of search over the floor` }
-    return { do: 'switch', to: DOWN_ONLY, kind: 'floor', remember: s.saved ? null : s.current, why: `bidding strategy up and down → down only while ${stopNoun(s.stop)} lasts (Amazon then never raises the floor)` }
+    if (s.held) return { do: 'hold', why: `the bidding strategy is a person's own (held by ${s.held}): kept up and down — ${ABOVE_FLOOR}` }
+    if (s.pinned) return { do: 'hold', why: `the bidding strategy is ${s.pinned}: kept up and down — ${ABOVE_FLOOR}` }
+    const passes = s.lock ? ` — the stop passes the Owner's lock (${s.lock.words}), as a stop passes a pinned bid; his value comes back when it ends` : ''
+    return { do: 'switch', to: DOWN_ONLY, kind: 'floor', remember: s.saved ? null : s.current, why: `bidding strategy up and down → down only while ${stopNoun(s.stop)} lasts (Amazon then never raises the floor)${passes}` }
   }
   if (!s.saved) return null
-  if (s.locked) return { do: 'forget', why: `the bidding strategy is ${s.locked}: left ${strategyWords(s.current)} as it is (the ${strategyWords(s.saved)} the stop saved is dropped)` }
+  if (s.held) return { do: 'forget', why: `the bidding strategy is a person's own (held by ${s.held}): left ${strategyWords(s.current)} (the ${strategyWords(s.saved)} the stop saved is dropped)` }
+  if (s.locksUnreadable) return { do: 'hold', why: 'the Owner\'s locks could not be read: the bidding strategy\'s give-back waits for the next tick (the saved strategy is kept)' }
+  if (s.pinned) return { do: 'hold', why: `the bidding strategy is ${s.pinned}: left ${strategyWords(s.current)} until the pin is lifted (the ${strategyWords(s.saved)} the stop saved is kept)` }
+  if (s.lock) {
+    const target = s.lock.value ?? s.saved
+    if (s.current === target) return { do: 'forget', why: `the bidding strategy is the Owner's value (${strategyWords(target)}) again` }
+    return { do: 'switch', to: target, kind: 'restore', remember: null, why: `the stop ended: the bidding strategy goes back to the Owner's value, ${strategyWords(target)} (${s.lock.words})` }
+  }
   if (s.current === s.saved) return { do: 'forget', why: `the bidding strategy is ${strategyWords(s.saved)} again` }
   if (s.current !== DOWN_ONLY) return { do: 'forget', why: `the bidding strategy changed during the stop (now ${strategyWords(s.current)}): left as it is` }
   if (s.switchesToday >= MAX_STRATEGY_SWITCHES_PER_DAY) {
     return { do: 'hold', why: `bidding strategy kept down only until tomorrow (UTC): it switched ${s.switchesToday} times today, at most ${MAX_STRATEGY_SWITCHES_PER_DAY} a day (one stop on and off)` }
   }
   return { do: 'switch', to: s.saved, kind: 'restore', remember: null, why: `the stop ended: bidding strategy back to ${strategyWords(s.saved)}` }
+}
+
+/**
+ * What a stop's memory still owes the campaign: the lanes (saved, and the live ones differ) and the strategy (saved, and
+ * the campaign still runs on the stop's down only). Settled memory owes nothing. Pure.
+ */
+export function stopMemoryOwed(c: { placements?: readonly Placement[] | null; biddingStrategy?: string | null; savedPlacements?: readonly Placement[] | null; savedStrategy?: string | null }): { lanes: boolean; strategy: boolean } {
+  const live = (p: string) => Math.max(0, c.placements?.find((x) => x.placement === p)?.percentage ?? 0)
+  const lanes = !!c.savedPlacements && fullLanes(c.savedPlacements).some((l) => (MANAGED_PLACEMENTS as readonly string[]).includes(l.placement) && l.percentage !== live(l.placement))
+  const strategy = !!c.savedStrategy && c.biddingStrategy === DOWN_ONLY && c.savedStrategy !== DOWN_ONLY
+  return { lanes, strategy }
 }

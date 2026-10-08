@@ -252,6 +252,11 @@ export const UNDO_PIN_KIND = 'UNDO_PIN'
 /** Pre-go-live — a campaign-wide stop declared over another owner's stop (ads-bid-suppression.service.ts). */
 export const STOP_HOLD_KIND = 'STOP'
 /**
+ * ONE BRAIN AB-2 — a person's own bidding strategy on a campaign the brain owns (brain-holds.ts recordStrategyHold): a
+ * campaign-wide hold of the strategy lever, not of the bids — the stop recipe leaves the strategy alone until it ends.
+ */
+export const STRATEGY_HOLD_KIND = 'STRATEGY'
+/**
  * #513 follow-up — the floor a STOP hold's owner declared: its own column (`BidHold.floorCents`), else — a STOP written
  * before that column — the head of its reason ("<n>¢ floor: …", as #513 wrote it). Null: neither.
  */
@@ -392,7 +397,8 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       if (o.stop) overrides.stop = mergeFloors({ stop: overrides.stop }, { stop: o.stop }).stop
       if (o.phase) overrides.phase = o.phase
     }
-    const holds = run.holds.filter((h) => h.campaignId === campaign.id && (h.targetId == null || h.targetId === t.id))
+    // AB-2 — a STRATEGY hold holds the bidding strategy, not the bids (shadow.ts strategyHolds reads it).
+    const holds = run.holds.filter((h) => h.campaignId === campaign.id && h.kind !== STRATEGY_HOLD_KIND && (h.targetId == null || h.targetId === t.id))
     // BB-8 — an auto-undo hold freezes (lowering still allowed); every other hold pins.
     // BB-10 re-review — a person's (or Claude's) hold before auto-undo's own pin: a floor may override that one (decide.ts).
     const hold = holds.find((h) => h.kind !== 'AUTO_UNDO' && h.kind !== UNDO_PIN_KIND && h.kind !== STOP_HOLD_KIND) ?? holds.find((h) => h.kind === UNDO_PIN_KIND)

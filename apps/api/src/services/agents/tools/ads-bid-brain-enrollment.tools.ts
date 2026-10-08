@@ -13,7 +13,8 @@ import { FEATURES as F } from '@nexus/shared/permissions'
 import prisma from '../../../db.js'
 import { inDatabaseTransaction } from '../../../lib/database-context.js'
 import { logger } from '../../../utils/logger.js'
-import { updateAdGroupWithSync, updateAdTargetWithSync, updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
+import { updateAdGroupWithSync, updateAdTargetWithSync } from '../../advertising/ads-mutation.service.js'
+import { giveBackStopMemory } from '../../advertising/bid-brain/stop-memory.js'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
 import { recordCampaignBidsChoice } from '../../advertising/brain/enrollment.js'
 import {
@@ -52,19 +53,24 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
   if (f.ceiling !== 'live' && (to === 'LIVE' || to === 'HELD')) warnings.push(`The server switch NEXUS_BID_BRAIN_MODE is ${f.ceiling}: the brain owns ${c.name} only once that switch is live; until then it stays in shadow and today's engines keep writing.`)
   if (c.status !== 'ENABLED' && to === 'LIVE') warnings.push(`${c.name} is ${c.status.toLowerCase()}: the brain writes nothing while it does not run.`)
   if (c.pinBids && to === 'LIVE') warnings.push(`${c.name}'s bids are pinned by hand: the brain leaves pinned bids alone until the pin is lifted.`)
-  // AB-2 — a stop switched the bidding strategy to down only: op shadow writes nothing, so it stays so.
-  if (op === 'shadow' && f.stopStrategy && f.stopStrategy.now === 'LEGACY_FOR_SALES') warnings.push(`${c.name}'s bidding strategy stays down only: a stop switched it from ${f.stopStrategy.saved === 'AUTO_FOR_SALES' ? 'up and down' : f.stopStrategy.saved} and op shadow writes nothing at Amazon — op give-back puts it back.`)
   const back = op === 'give-back' && f.enrollment?.snapshot ? await giveBackPlan(c.id, f.enrollment.snapshot) : null
   const holdDays = op === 'hold' ? Math.max(1, Math.min(60, Number(args.holdDays ?? DEFAULT_HOLD_DAYS))) : null
+  // AB-2 — what a stop's memory still owes the campaign: op shadow and op live give it back (as the approver) before the
+  // campaign changes hands; give-back puts the LIVE-time placements back itself and the saved strategy from the memory.
+  const owed = op === 'shadow' || op === 'live' ? f.stopMemory ?? null : null
+  const owedBack = owed ? ` First it puts back what a stop saved, as the person who approves it: ${[owed.lanes ? 'the placements it set to 0 %' : '', owed.strategy ? `the bidding strategy, ${owed.savedStrategy === 'AUTO_FOR_SALES' ? 'up and down' : owed.savedStrategy} (it is down only now)` : ''].filter(Boolean).join(' and ')}.` : ''
   // AB-2 — up and down given back is a raise of its own (Amazon may then lift a bid up to +100 %), said apart.
-  const upAndDown = back?.biddingStrategy?.to === 'AUTO_FOR_SALES' ? 1 : 0
-  const bidRaises = (back?.raises ?? 0) - upAndDown
-  const raises = back && back.raises
-    ? [...(bidRaises ? [`${plural(bidRaises, 'bid or placement')} back up to ${bidRaises === 1 ? 'its' : 'their'} value when the campaign went LIVE`] : []), ...(upAndDown ? ['the bidding strategy back to up and down (Amazon may raise a bid up to +100 %)'] : [])]
-    : op === 'release' ? ['the brain may raise bids again'] : []
+  const upAndDown = back?.biddingStrategy?.to === 'AUTO_FOR_SALES' || (owed?.strategy && owed.savedStrategy === 'AUTO_FOR_SALES') ? 1 : 0
+  const bidRaises = (back?.raises ?? 0) - (back?.biddingStrategy?.to === 'AUTO_FOR_SALES' ? 1 : 0)
+  const raises = [
+    ...(bidRaises ? [`${plural(bidRaises, 'bid or placement')} back up to ${bidRaises === 1 ? 'its' : 'their'} value when the campaign went LIVE`] : []),
+    ...(owed?.lanes ? ['the placements a stop set to 0 % back to their value before it'] : []),
+    ...(upAndDown ? ['the bidding strategy back to up and down (Amazon may raise a bid up to +100 %)'] : []),
+    ...(op === 'release' ? ['the brain may raise bids again'] : []),
+  ]
   const effect = {
-    live: `Puts ${c.name} (${c.market ?? c.marketplace ?? '?'}) under the bid brain: from its next run it is the campaign's one bid writer — keyword bids toward the goal at most once per new data day, inside the limits; auto-bid, rules and other engines leave the campaign, and a person's own edit still passes and holds that bid. Every bid and placement is kept now for a give-back.`,
-    shadow: `Takes ${c.name} back to shadow: the brain stops writing; every bid stays where it is and today's engines resume. When its product is enrolled in the brain, this is kept as a campaign choice there (the product's bids lever leaves it in shadow).`,
+    live: `Puts ${c.name} (${c.market ?? c.marketplace ?? '?'}) under the bid brain: from its next run it is the campaign's one bid writer — keyword bids toward the goal at most once per new data day, inside the limits; auto-bid, rules and other engines leave the campaign, and a person's own edit still passes and holds that bid. Every bid and placement is kept now for a give-back.${owedBack}`,
+    shadow: `Takes ${c.name} back to shadow: the brain stops writing; every bid stays where it is and today's engines resume. When its product is enrolled in the brain, this is kept as a campaign choice there (the product's bids lever leaves it in shadow).${owedBack}`,
     'give-back': `Takes ${c.name} back to shadow and puts back what it held when it went LIVE: ${plural(back?.targets.length ?? 0, 'keyword bid')}, ${plural(back?.adGroups.length ?? 0, 'ad group default bid')}${back?.placements ? ' and its placements' : ''}${back?.biddingStrategy ? `, and the bidding strategy a stop switched to down only back to ${back.biddingStrategy.to === 'AUTO_FOR_SALES' ? 'up and down' : back.biddingStrategy.to}` : ''}, as the person who approves it.`,
     hold: `Holds ${c.name} for ${plural(holdDays ?? DEFAULT_HOLD_DAYS, 'day')}: the brain raises no bid (a stop still lowers); then it runs again.`,
     release: `Releases the hold on ${c.name}: the brain runs it again, raises included.`,
@@ -85,7 +91,9 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
       ...(warnings.length ? { warnings } : {}),
       ...code,
       ...(code.stepUp ? {} : { noCode: raises.length ? DAY_TO_DAY_NO_CODE : ADDS_NO_SPEND }),
-      reachNote: op === 'give-back' ? `It writes bids${back?.biddingStrategy ? ', placements and the bidding strategy' : ' and placements'} at Amazon (the write gate judges each).` : 'Nexus only: nothing is sent to Amazon by this change; the brain\'s own runs write afterwards.',
+      reachNote: op === 'give-back' ? `It writes bids${back?.biddingStrategy ? ', placements and the bidding strategy' : ' and placements'} at Amazon (the write gate judges each).`
+        : owed ? `It writes ${[owed.lanes ? 'the placements' : '', owed.strategy ? 'the bidding strategy' : ''].filter(Boolean).join(' and ')} a stop saved at Amazon (the write gate judges each); the rest is Nexus only.`
+          : 'Nexus only: nothing is sent to Amazon by this change; the brain\'s own runs write afterwards.',
       effect: `${effect}${code.stepUp ? ' A new bid writer going live: approving it needs the approver\'s authenticator code.' : ''}`,
     },
   }
@@ -111,12 +119,11 @@ async function putBack(campaignId: string, plan: Awaited<ReturnType<typeof giveB
     if (r.mode !== 'blocked') sent++
     else if (refused.length < 3) refused.push(r.reason ?? 'placements refused')
   }
-  // AB-2 — the bidding strategy a stop switched to down only, back to what it was (the campaign write the screens use).
-  if (plan.biddingStrategy) {
-    const r = await updateCampaignWithSync({ campaignId, patch: { biddingStrategy: plan.biddingStrategy.to as 'LEGACY_FOR_SALES' | 'AUTO_FOR_SALES' | 'MANUAL' }, ...common })
-    if (r.ok) sent++
-    else if (refused.length < 3) refused.push(r.error ?? 'bidding strategy refused')
-  }
+  // AB-2 — the bidding strategy a stop switched to down only back to what it was (the campaign write the screens use), and
+  // the stop's memory cleared: the LIVE-time placements above stand for its saved lanes (cleared once they are back).
+  const memory = await giveBackStopMemory(campaignId, { actor: run.actor, reason: common.reason, changeSetId: run.changeSetId, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, lanes: false })
+  sent += memory.sent
+  for (const r of memory.refused) if (refused.length < 3) refused.push(r)
   return { sent, refused }
 }
 
@@ -161,7 +168,8 @@ const setBidBrainEnrollment: AgentTool = {
     + 'bids toward the goal at most once per new data day, inside the limits; auto-bid, rules and other engines leave the '
     + 'campaign, and a person\'s own edit still passes and holds that bid. Every bid and placement is kept for a give-back. '
     + 'Going LIVE is a big door: approving it needs the approver\'s authenticator code. op hold: the brain raises nothing for '
-    + 'some days; op release ends a hold; op shadow: the brain stops, bids stay; op give-back: back to shadow and the bids '
+    + 'some days; op release ends a hold; op shadow: the brain stops, bids stay (what a stop saved — its placements, its '
+    + 'bidding strategy — goes back); op give-back: back to shadow and the bids '
     + 'and placements put back as they were when it went LIVE. LIVE (and release) needs the campaign not kept off the bid brain by '
     + 'the Owner in its product\'s brain (an exclusion or a lock of its bids), on the live-write allowlist, its '
     + 'bids serving (not held at a floor), and no classic dayparting schedule, running autopilot plan or older family rank '
@@ -192,7 +200,13 @@ const setBidBrainEnrollment: AgentTool = {
     const record = (level: 'AUTO' | 'OBSERVE') => recordCampaignBidsChoice({ campaignId: p.campaign.id, level, by: run.actor, reason: `set-bid-brain-enrollment op ${p.op}: ${run.reason}` })
     const warnings: string[] = []
     let set: Awaited<ReturnType<typeof setEnrollment>>
+    // AB-2 — what a stop's memory still owes the campaign goes back before it changes hands: op live first (refused while
+    // any of it is still owed, so it is never dropped unseen), op shadow just after (the brain no longer runs it).
+    const memoryBack = () => giveBackStopMemory(p.campaign.id, { actor: run.actor, reason: `bid brain op ${p.op} — ${run.reason}`, changeSetId: run.changeSetId, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits })
+    let gaveMemory: Awaited<ReturnType<typeof giveBackStopMemory>> | null = null
     if (p.op === 'live') {
+      gaveMemory = await memoryBack()
+      if (gaveMemory.owed) return notRun(`Not run: ${p.campaign.name} still holds what a stop saved, and it could not be put back (${gaveMemory.refused.join('; ')}). The bid brain was not put on it.`)
       try {
         set = await inDatabaseTransaction(prisma, async () => {
           const moved = await move()
@@ -214,6 +228,10 @@ const setBidBrainEnrollment: AgentTool = {
         }
       }
     }
+    if (p.op === 'shadow') {
+      gaveMemory = await memoryBack()
+      if (gaveMemory.owed) warnings.push(`${p.campaign.name} is back in shadow, but what a stop saved could not all be put back (${gaveMemory.refused.join('; ')}): the next restore of its stop gives it back (restoreCampaignBids), or op give-back.`)
+    }
     let gaveBack: { sent: number; refused: string[] } | null = null
     if (p.op === 'give-back') {
       const row = await prisma.bidBrainEnrollment.findFirst({ where: { campaignId: p.campaign.id }, select: { snapshot: true } })
@@ -222,7 +240,7 @@ const setBidBrainEnrollment: AgentTool = {
     }
     return {
       ok: true,
-      data: { campaignId: p.campaign.id, mode: set.to, from: set.from, changeSetId: run.changeSetId, ...(gaveBack ? { gaveBack } : {}), ...(warnings.length ? { warnings } : {}) },
+      data: { campaignId: p.campaign.id, mode: set.to, from: set.from, changeSetId: run.changeSetId, ...(gaveBack ? { gaveBack } : {}), ...(gaveMemory && (gaveMemory.sent || gaveMemory.refused.length) ? { stopMemoryBack: gaveMemory } : {}), ...(warnings.length ? { warnings } : {}) },
       change: { before: { campaignId: p.campaign.id, mode: set.from }, after: { campaignId: p.campaign.id, mode: set.to, ...(warnings.length ? { warnings } : {}) } },
     }
   },

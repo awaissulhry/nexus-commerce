@@ -82,15 +82,18 @@ describe('AB-2 — ownerLeverLocks: what the stop recipe may not write', () => {
   it('a campaign\'s own locks — the placements lever, one lane, the strategy — in words, with no ownership read', async () => {
     db.adsBrainOverride.findMany.mockResolvedValue([
       row({ productId: 'p-1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'LOCK', key: 'placements', reason: 'my own lanes' }),
+      row({ productId: 'p-1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c-4', kind: 'LOCK', key: 'placements', value: { TOP_OF_SEARCH: 40 } }),
       row({ productId: 'p-1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c-2', kind: 'LOCK', key: 'placements', ref: 'lane:TOP_OF_SEARCH' }),
       row({ productId: 'p-1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c-2', kind: 'LOCK', key: 'biddingStrategy', value: 'AUTO_FOR_SALES' }),
       // A stored lock that no longer validates (no such lane) is ignored.
       row({ productId: 'p-1', marketplace: 'IT', scope: 'CAMPAIGN', campaignId: 'c-3', kind: 'LOCK', key: 'placements', ref: 'lane:SIDEBAR' }),
     ])
-    const locks = await ownerLeverLocks(['c-1', 'c-2', 'c-3'])
+    const locks = await ownerLeverLocks(['c-1', 'c-2', 'c-3', 'c-4'])
+    // His own value goes with the lock: what the lever goes back to after a stop.
+    expect(locks.get('c-4')?.placements?.value).toEqual({ TOP_OF_SEARCH: 40 })
     expect(owners).not.toHaveBeenCalled()
-    expect(locks.get('c-1')).toEqual({ placements: 'locked by the Owner\'s campaign override (user:owner, 2026-10-08) ("my own lanes")', lanes: new Map(), biddingStrategy: null })
-    expect(locks.get('c-2')).toEqual({ placements: null, lanes: new Map([['TOP_OF_SEARCH', 'locked by the Owner\'s campaign override (user:owner, 2026-10-08)']]), biddingStrategy: 'locked by the Owner\'s campaign override (user:owner, 2026-10-08)' })
+    expect(locks.get('c-1')).toEqual({ placements: { words: 'locked by the Owner\'s campaign override (user:owner, 2026-10-08) ("my own lanes")', value: null }, lanes: new Map(), biddingStrategy: null })
+    expect(locks.get('c-2')).toEqual({ placements: null, lanes: new Map([['TOP_OF_SEARCH', 'locked by the Owner\'s campaign override (user:owner, 2026-10-08)']]), biddingStrategy: { words: 'locked by the Owner\'s campaign override (user:owner, 2026-10-08)', value: 'AUTO_FOR_SALES' } })
     expect(locks.has('c-3')).toBe(false)
   })
 
@@ -99,8 +102,8 @@ describe('AB-2 — ownerLeverLocks: what the stop recipe may not write', () => {
     db.adsBrainOverride.findMany.mockResolvedValue([row({ productId: 'p-1', marketplace: 'IT', scope: 'PRODUCT', kind: 'LOCK', key: 'biddingStrategy' })])
     const locks = await ownerLeverLocks(['c-own', 'c-shared', 'c-other'])
     expect(owners).toHaveBeenCalledWith(['c-own', 'c-shared', 'c-other'])
-    expect(locks.get('c-own')?.biddingStrategy).toBe('locked by the Owner\'s product override (user:owner, 2026-10-08)')
-    expect(locks.get('c-shared')?.biddingStrategy).toMatch(/^locked by the Owner's product override/)
+    expect(locks.get('c-own')?.biddingStrategy).toEqual({ words: 'locked by the Owner\'s product override (user:owner, 2026-10-08)', value: null })
+    expect(locks.get('c-shared')?.biddingStrategy?.words).toMatch(/^locked by the Owner's product override/)
     expect(locks.has('c-other')).toBe(false)
   })
 })

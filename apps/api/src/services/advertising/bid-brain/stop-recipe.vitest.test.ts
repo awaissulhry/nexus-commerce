@@ -7,7 +7,11 @@
  *   60¢ case     a 3¢ stop at 900 % top of search under "up and down" may cost 60¢: the recipe zeroes the lanes and switches
  *                to down only (→ 3¢); when the stop ends the bids, the lanes and the strategy come back exactly
  *   plan hour    the hour's own lanes over the saved ones; the raise cap measures from the saved lanes, not the zeros
- *   locks        the Owner's lock of the placements (the lever, one lane) or of the strategy is not written; the why says so
+ *   D, locks     a stop lowers past the Owner's lock (lanes 0 %, down only), as it beats a pinned bid; the give-back puts
+ *                his value back (his lock's, else the saved one), never the plan's; the hour's own plan leaves it alone
+ *   A            locks that cannot be read hold the give-back a tick — nothing written, nothing dropped — logged once
+ *   C            a person's own strategy (a STRATEGY hold) is left alone until the hold ends
+ *   pins         the campaign's own pins hold both ways (the gate would refuse); nothing dropped
  *   anti-flap    the switch down is never held; the switch back waits once a campaign switched twice today (UTC)
  *   not owned    a campaign the brain does not own gets nothing
  *   writers      the memory first, then the write (none without it); given back → the memory goes; SUGGEST lets only the
@@ -27,10 +31,13 @@ vi.mock('./stop-memory.js', () => ({
   forgetStrategy: async (id: string) => { order.calls.push(`forgetStrategy ${id}`) },
   strategySwitchesToday: async () => new Map(),
 }))
-vi.mock('../../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+const warn = vi.hoisted(() => vi.fn())
+vi.mock('../../../utils/logger.js', () => ({ logger: { warn, info: vi.fn(), error: vi.fn() } }))
+const lockRead = vi.hoisted(() => vi.fn())
+vi.mock('../brain/owner-brakes.js', async (importOriginal) => ({ ...(await importOriginal<object>()), ownerLeverLocks: (...a: unknown[]) => lockRead(...a) }))
 
 const { campaignStopOf, keywordStop, stackMaxCents, strategyStep, fullLanes, readSavedLanes, MAX_STRATEGY_SWITCHES_PER_DAY } = await import('./stop-recipe.js')
-const { campaignStates, placementWrites, strategyWrites, recipeWords, restoreCandidates, placementLocks, strategyLock } = await import('./shadow.js')
+const { campaignStates, placementWrites, strategyWrites, recipeWords, restoreCandidates, placementPin, strategyPin, strategyHolds, readLeverLocks } = await import('./shadow.js')
 const { placementPlan, writeOwnedPlacements, writeOwnedStrategies, strategyReportWords, placementReportWords } = await import('./live-writer.js')
 const { decide } = await import('./decide.js')
 const { planFacts } = await import('./plan-hour.js')
@@ -69,12 +76,12 @@ const locks = (over: Partial<LeverLocks> = {}): Map<string, LeverLocks> => new M
 const BY = 'locked by the Owner\'s campaign override (user:owner, 2026-10-08)'
 
 /** One tick of the recipe for one campaign: the decisions, the lanes and the strategy step. */
-function tick(c: CampaignRow, fs: TargetFacts[], opts: { hours?: Map<string, PlanHour>; locks?: Map<string, LeverLocks>; switches?: number; owned?: Set<string> } = {}) {
+function tick(c: CampaignRow, fs: TargetFacts[], opts: { hours?: Map<string, PlanHour>; locks?: Map<string, LeverLocks>; switches?: number; owned?: Set<string>; held?: Map<string, string> } = {}) {
   const ds = fs.map((f) => decide(f))
   const owned = opts.owned ?? OWNED
   const states = campaignStates(fs, ds, owned, one, opts.hours)
   const lanes = placementWrites(market(c), fs, ds, owned, one, opts.hours, { states, locks: opts.locks })
-  const strategy = strategyWrites(market(c), states, opts.locks ?? new Map(), new Map([['c1', opts.switches ?? 0]]))
+  const strategy = strategyWrites(market(c), states, opts.locks ?? new Map(), new Map([['c1', opts.switches ?? 0]]), opts.held ?? new Map())
   return { ds, states, lanes, strategy, plan: lanes[0] ? placementPlan(lanes[0]) : null, words: recipeWords(lanes, strategy).get('c1') }
 }
 
@@ -182,55 +189,128 @@ describe('when the stop ends inside a plan hour', () => {
   })
 })
 
-describe('the Owner\'s locks (AB-1) are not written, and the why says so', () => {
+describe('D — a stop lowers past the Owner\'s lock (as it beats a pinned bid); only the give-back obeys it', () => {
   const LIVE: P[] = [{ placement: TOP, percentage: 900 }, { placement: PRODUCT, percentage: 50 }]
+  const zeroed = (over: Partial<CampaignRow> = {}) => campaign({ biddingStrategy: 'LEGACY_FOR_SALES', placements: [{ placement: TOP, percentage: 0 }, { placement: PRODUCT, percentage: 0 }], savedPlacements: LIVE, savedStrategy: 'AUTO_FOR_SALES', ...over })
 
-  it('a locked placements lever: no lane write, no memory; the why names the lock', async () => {
-    const t = tick(campaign({ placements: LIVE }), [stopped()], { locks: locks({ placements: BY }) })
-    expect(t.words).toMatch(/^stop recipe: placements locked by the Owner's campaign override \(user:owner, 2026-10-08\): not set to 0 %/)
+  it('during the stop: a locked placements lever, a locked lane and a locked strategy are all lowered — the why says the stop passes his lock', async () => {
+    const t = tick(campaign({ placements: LIVE }), [stopped()], { locks: locks({ placements: { words: BY, value: null }, lanes: new Map([['TOP_OF_SEARCH', BY]]), biddingStrategy: { words: BY, value: 'AUTO_FOR_SALES' } }) })
+    expect(t.plan!.adjustments).toEqual([{ placement: TOP, percentage: 0 }, { placement: REST, percentage: 0 }, { placement: PRODUCT, percentage: 0 }])
+    expect(t.strategy[0].step).toMatchObject({ do: 'switch', to: 'LEGACY_FOR_SALES', kind: 'floor', why: expect.stringMatching(new RegExp(`the stop passes the Owner's lock \\(${BY.replace(/[()]/g, '\\$&')}\\), as a stop passes a pinned bid; his value comes back when it ends`)) })
+    expect(t.words).toMatch(/^stop recipe: every placement at 0 % — the stop passes the Owner's lock, as a stop passes a pinned bid; his value comes back when it ends/)
     const r = await writeOwnedPlacements(t.lanes, { runId: 'r', guard: guard() })
+    expect(r).toMatchObject({ written: 1, locked: 0 })
+    expect(order.calls[0]).toBe(`rememberLanes c1 ${JSON.stringify(LIVE)}`)
+  })
+
+  it('after it: a locked lever goes back to the Owner\'s value — his lock\'s, else what it held before the stop — never the plan\'s', () => {
+    const allOut = spec({ lanes: [{ placement: TOP, biasPct: 150 }, { placement: PRODUCT, biasPct: 25 }] })
+    const p = planFacts(hour(allOut), { biddingStrategy: 'AUTO_FOR_SALES' }, { entriesToday: 0, inMinBid: false, maxEntries: 2 })!
+    const serve = (l: Map<string, LeverLocks>) => tick(zeroed(), [facts({ currentCents: 30, lanes: p.lanes, planNote: p.note })], { hours: new Map([['c1', hour(allOut)]]), locks: l, switches: 1 })
+    // The whole lever, with his value for top of search: his 40 %, the other lanes as saved; the plan's 150 % / 25 % not applied.
+    const whole = serve(locks({ placements: { words: BY, value: { TOP_OF_SEARCH: 40 } } }))
+    expect(whole.plan!.adjustments).toEqual([{ placement: TOP, percentage: 40 }, { placement: REST, percentage: 0 }, { placement: PRODUCT, percentage: 50 }])
+    expect(whole.words).toContain(`stop ended: the placements go back to the Owner's value (${BY})`)
+    // The whole lever "as it was": the saved lanes exactly.
+    expect(serve(locks({ placements: { words: BY, value: null } })).plan!.adjustments).toEqual([{ placement: TOP, percentage: 900 }, { placement: REST, percentage: 0 }, { placement: PRODUCT, percentage: 50 }])
+    // One lane locked: it goes back to its saved %, the plan sets the others.
+    const lane = serve(locks({ lanes: new Map([['TOP_OF_SEARCH', BY]]) }))
+    expect(lane.plan!.adjustments).toEqual([{ placement: TOP, percentage: 900 }, { placement: REST, percentage: 0 }, { placement: PRODUCT, percentage: 25 }])
+    expect(lane.words).toContain(`top-of-search ${BY}: back to its value before the stop`)
+    // The strategy: his locked value now — his lock wins over the anti-flap; "as it was" is the saved one.
+    expect(tick(zeroed(), [facts()], { locks: locks({ biddingStrategy: { words: BY, value: 'MANUAL' } }), switches: 5 }).strategy[0].step).toMatchObject({ do: 'switch', to: 'MANUAL', kind: 'restore', why: `the stop ended: the bidding strategy goes back to the Owner's value, fixed (${BY})` })
+    expect(tick(zeroed(), [facts()], { locks: locks({ biddingStrategy: { words: BY, value: null } }), switches: 5 }).strategy[0].step).toMatchObject({ do: 'switch', to: 'AUTO_FOR_SALES', kind: 'restore' })
+  })
+
+  it('the hour\'s own plan (no stop, no memory) still leaves a locked lever alone: not written, a locked lane keeps its %', async () => {
+    const allOut = spec({ lanes: [{ placement: TOP, biasPct: 150 }, { placement: PRODUCT, biasPct: 25 }] })
+    const p = planFacts(hour(allOut), { biddingStrategy: 'LEGACY_FOR_SALES' }, { entriesToday: 0, inMinBid: false, maxEntries: 2 })!
+    const run = (l: Map<string, LeverLocks>) => tick(campaign({ biddingStrategy: 'LEGACY_FOR_SALES', placements: LIVE }), [facts({ currentCents: 30, lanes: p.lanes, planNote: p.note })], { hours: new Map([['c1', hour(allOut)]]), locks: l })
+    const r = await writeOwnedPlacements(run(locks({ placements: { words: BY, value: null } })).lanes, { runId: 'r', guard: guard() })
     expect(r).toMatchObject({ locked: 1, written: 0 })
-    expect(r.byCampaign.get('c1')).toMatchObject({ sent: 'locked', reason: `placements ${BY}: not written` })
     expect(updatePlacement).not.toHaveBeenCalled()
-    expect(order.calls).toEqual([])
-    expect(placementReportWords(r)).toBe('placements-locked=1')
-  })
-
-  it('a lock set during the stop: when it ends nothing is written and the saved lanes are dropped (the lever is his)', async () => {
-    const t = tick(campaign({ biddingStrategy: 'LEGACY_FOR_SALES', savedPlacements: LIVE }), [facts()], { locks: locks({ placements: BY }) })
-    expect(t.words).toMatch(/^stop ended: placements locked by .*: left as they are/)
-    await writeOwnedPlacements(t.lanes, { runId: 'r', guard: guard() })
-    expect(updatePlacement).not.toHaveBeenCalled()
-    expect(order.calls).toEqual(['forgetLanes c1'])
-  })
-
-  it('one locked lane keeps its %; the others go to 0 %', () => {
-    const t = tick(campaign({ placements: LIVE }), [stopped()], { locks: locks({ lanes: new Map([['TOP_OF_SEARCH', BY]]) }) })
-    expect(t.plan!.adjustments).toEqual([{ placement: TOP, percentage: 900 }, { placement: REST, percentage: 0 }, { placement: PRODUCT, percentage: 0 }])
-    expect(t.plan!.changes).toEqual([{ lane: 'product-page', from: 50, to: 0, held: null }])
-    expect(t.plan!.locked).toEqual([{ lane: 'top-of-search', pct: 900, by: BY }])
-    expect(t.words).toContain(`every placement at 0 % (top-of-search ${BY}: left as it is)`)
-  })
-
-  it('a locked bidding strategy stays up and down during the stop (said, with what may still lift the floor); after it the memory goes', () => {
-    const t = tick(campaign({ placements: LIVE }), [stopped()], { locks: locks({ biddingStrategy: BY }) })
-    expect(t.strategy[0].step).toEqual({ do: 'hold', why: `the bidding strategy is ${BY}: kept up and down — Amazon may still add up to +100 % at the top of search over the floor` })
-    expect(t.words).toContain('kept up and down')
-    expect(strategyStep({ stop: null, current: 'LEGACY_FOR_SALES', saved: 'AUTO_FOR_SALES', locked: BY, switchesToday: 0 })).toMatchObject({ do: 'forget', why: expect.stringMatching(/left down only as it is \(the up and down the stop saved is dropped\)/) })
+    expect(run(locks({ lanes: new Map([['TOP_OF_SEARCH', BY]]) })).plan!.adjustments.find((a) => a.placement === TOP)).toEqual({ placement: TOP, percentage: 900 })
   })
 })
 
-describe('a campaign\'s own pins hold the levers too (the gate would refuse the write: none is sent)', () => {
+describe('A — the Owner\'s locks cannot be read: the give-back waits, nothing is dropped, logged once', () => {
   const LIVE: P[] = [{ placement: TOP, percentage: 900 }, { placement: PRODUCT, percentage: 50 }]
-  it('the placements pin: no lane write; the bids pin: the strategy stays (said); the Owner\'s lock wins where both hold', () => {
+  const UNREADABLE = new Map([['c1', { unreadable: true as const, placements: null, lanes: new Map<string, string>(), biddingStrategy: null }]])
+
+  it('on the tick the stop ends: no write, no forget — the lanes and the strategy wait for the next tick (the probe: was forgetLanes, forgetStrategy)', async () => {
+    const after = campaign({ biddingStrategy: 'LEGACY_FOR_SALES', placements: [{ placement: TOP, percentage: 0 }], savedPlacements: LIVE, savedStrategy: 'AUTO_FOR_SALES' })
+    const t = tick(after, [facts()], { locks: UNREADABLE, switches: 1 })
+    expect(t.strategy[0].step).toEqual({ do: 'hold', why: 'the Owner\'s locks could not be read: the bidding strategy\'s give-back waits for the next tick (the saved strategy is kept)' })
+    const placed = await writeOwnedPlacements(t.lanes, { runId: 'r', guard: guard() })
+    const switched = await writeOwnedStrategies(t.strategy, { runId: 'r', guard: guard() })
+    expect(order.calls).toEqual([])
+    expect(updatePlacement).not.toHaveBeenCalled()
+    expect(updateCampaign).not.toHaveBeenCalled()
+    expect(placed).toMatchObject({ waiting: 1, written: 0 })
+    expect(placementReportWords(placed)).toMatch(/^placements-waiting=1 \(the Owner's locks could not be read: the give-back waits for the next tick/)
+    expect(switched).toMatchObject({ held: 1 })
+    // The next tick reads them: the give-back lands.
+    const next = tick(after, [facts()], { switches: 1 })
+    await writeOwnedPlacements(next.lanes, { runId: 'r', guard: guard() })
+    await writeOwnedStrategies(next.strategy, { runId: 'r', guard: guard() })
+    expect(order.calls).toEqual(['updatePlacement', 'forgetLanes c1', 'updateCampaign', 'forgetStrategy c1'])
+  })
+
+  it('a stop still lowers (it passes a lock, read or not)', () => {
+    const t = tick(campaign({ placements: LIVE }), [stopped()], { locks: UNREADABLE })
+    expect(t.plan!.adjustments.every((a) => a.percentage === 0)).toBe(true)
+    expect(t.strategy[0].step).toMatchObject({ do: 'switch', to: 'LEGACY_FOR_SALES' })
+  })
+
+  it('readLeverLocks: a failed read marks every campaign unreadable and is logged once until a read succeeds', async () => {
+    lockRead.mockRejectedValue(new Error('db down'))
+    const first = await readLeverLocks(['c1', 'c2'])
+    expect(first.get('c1')).toEqual({ unreadable: true, placements: null, lanes: new Map(), biddingStrategy: null })
+    await readLeverLocks(['c1'])
+    expect(warn.mock.calls.filter((c) => String(c[0]).includes('could not read the Owner')).length).toBe(1)
+    lockRead.mockResolvedValue(new Map())
+    expect((await readLeverLocks(['c1'])).size).toBe(0)
+    lockRead.mockRejectedValue(new Error('db down again'))
+    await readLeverLocks(['c1'])
+    expect(warn.mock.calls.filter((c) => String(c[0]).includes('could not read the Owner')).length).toBe(2)
+  })
+})
+
+describe('C — a person\'s own strategy is a hold: the brain leaves it until it ends', () => {
+  const HELD = new Map([['c1', 'user:owner until 2026-12-07']])
+  it('during a stop: up and down stays (said); when the hold ends the recipe applies again; a stop that ends under it drops its saved strategy', () => {
+    const t = tick(campaign({ placements: [{ placement: TOP, percentage: 300 }] }), [stopped()], { held: HELD })
+    expect(t.strategy[0].step).toEqual({ do: 'hold', why: 'the bidding strategy is a person\'s own (held by user:owner until 2026-12-07): kept up and down — Amazon may still add up to +100 % at the top of search over the floor' })
+    // The lanes are not his: they still go to 0 %.
+    expect(t.plan!.adjustments.every((a) => a.percentage === 0)).toBe(true)
+    expect(tick(campaign(), [stopped()]).strategy[0].step).toMatchObject({ do: 'switch', to: 'LEGACY_FOR_SALES' })
+    expect(tick(campaign({ biddingStrategy: 'LEGACY_FOR_SALES', savedStrategy: 'AUTO_FOR_SALES' }), [facts()], { held: HELD }).strategy[0].step).toMatchObject({ do: 'forget', why: expect.stringMatching(/a person's own \(held by user:owner until 2026-12-07\): left down only \(the up and down the stop saved is dropped\)/) })
+  })
+
+  it('strategyHolds reads only an open campaign-wide STRATEGY hold', () => {
+    const until = new Date('2026-12-07T10:00:00Z')
+    expect(strategyHolds([
+      { campaignId: 'c1', targetId: null, kind: 'STRATEGY', by: 'user:owner', until },
+      { campaignId: 'c2', targetId: null, kind: 'STOP', by: 'automation:budget-manager', until: null },
+      { campaignId: 'c3', targetId: 't1', kind: 'PERSON', by: 'user:owner', until },
+    ])).toEqual(new Map([['c1', 'user:owner until 2026-12-07']]))
+  })
+})
+
+describe('a campaign\'s own pins hold both ways (the gate would refuse the write: none is sent, nothing dropped)', () => {
+  const LIVE: P[] = [{ placement: TOP, percentage: 900 }, { placement: PRODUCT, percentage: 50 }]
+  it('the placements pin: no lane write in a stop or after it; the bids pin: the strategy stays, its memory kept', async () => {
     const t = tick(campaign({ placements: LIVE, pinPlacement: true, pinBids: true, pinnedBy: 'user:owner' }), [stopped()])
-    expect(t.lanes[0].locks).toEqual({ placements: 'held by its placements pin (user:owner)', lanes: new Map(), biddingStrategy: null })
+    expect(t.lanes[0]).toMatchObject({ pinned: 'held by its placements pin (user:owner)' })
     expect(t.strategy[0].step).toMatchObject({ do: 'hold', why: expect.stringMatching(/^the bidding strategy is held by its bids pin \(user:owner\): kept up and down/) })
     expect(t.words).toMatch(/^stop recipe: placements held by its placements pin \(user:owner\): not set to 0 %/)
-    expect(placementLocks({ pinPlacement: false, pinnedBy: null }, undefined)).toBeNull()
-    expect(placementLocks({ pinPlacement: true, pinnedBy: null }, { placements: BY, lanes: new Map(), biddingStrategy: null })?.placements).toBe(BY)
-    expect(strategyLock({ pinBids: true, pinnedBy: null }, { placements: null, lanes: new Map(), biddingStrategy: BY })).toBe(BY)
-    expect(strategyLock({ pinBids: false, pinnedBy: null }, undefined)).toBeNull()
+    const after = tick(campaign({ biddingStrategy: 'LEGACY_FOR_SALES', placements: [{ placement: TOP, percentage: 0 }], savedPlacements: LIVE, savedStrategy: 'AUTO_FOR_SALES', pinPlacement: true, pinBids: true, pinnedBy: null }), [facts()], { switches: 1 })
+    expect(after.strategy[0].step).toMatchObject({ do: 'hold', why: expect.stringMatching(/held by its bids pin: left down only until the pin is lifted/) })
+    expect(await writeOwnedPlacements(after.lanes, { runId: 'r', guard: guard() })).toMatchObject({ locked: 1 })
+    await writeOwnedStrategies(after.strategy, { runId: 'r', guard: guard() })
+    expect(order.calls).toEqual([])
+    expect(placementPin({ pinPlacement: false, pinnedBy: null })).toBeNull()
+    expect(strategyPin({ pinBids: true, pinnedBy: null })).toBe('held by its bids pin')
   })
 })
 

@@ -184,6 +184,8 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-6 — the live bid brain: one writ
     // AB-2 — the strategy the stop switched from is back, as the approver, through the campaign write.
     expect(await rows('SELECT "biddingStrategy" b FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ b: 'AUTO_FOR_SALES' }])
     expect(await rows('SELECT "userId", "payloadAfter" ->> \'biddingStrategy\' AS s FROM "AdvertisingActionLog" WHERE "entityId" = \'c-it\' AND "actionType" = \'AD_BIDDING_STRATEGY_UPDATE\'')).toEqual([{ userId: 'user:u-approver', s: 'AUTO_FOR_SALES' }])
+    // AB-2 B2 — and the stop's memory is cleared: the campaign handed back is clean.
+    expect(await rows('SELECT "suppressedFromBiddingStrategy" s, "suppressedFromPlacements" p FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ s: null, p: null }])
     // Back in shadow, the engines take the campaign again.
     expect((await inside(() => autoBidHolders(['c-it']))).get('c-it')).not.toBe('bidBrain')
   })
