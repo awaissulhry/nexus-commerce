@@ -219,8 +219,11 @@ export function campaignNativeRules(input: { campaignId: string; snapshot: { fet
   }
 }
 
-/** A rule that acts, with when it was seen and whether only an older read saw it. */
-export type ActingRule = NativeRule & { seenAt: string | null; stale: boolean }
+/**
+ * A rule that acts, with when it was seen and whether only an older read saw it (`stale`: the newest read failed or is old;
+ * `failedWhy` says how).
+ */
+export type ActingRule = NativeRule & { seenAt: string | null; stale: boolean; failedWhy?: string }
 
 /**
  * The rules that act on the campaign: those read, and those the last good read saw when the newest read failed or is old
@@ -231,7 +234,7 @@ export function actingRules(c: CampaignNativeRules | undefined): ActingRule[] {
   return NATIVE_RULE_KINDS.flatMap((k): ActingRule[] => {
     const r = c.kinds[k]
     if (r.state === 'read') return r.rules.filter((x) => x.acts).map((x) => ({ ...x, seenAt: r.at, stale: false }))
-    return (r.lastSeen?.rules ?? []).filter((x) => x.acts).map((x) => ({ ...x, seenAt: r.lastSeen!.at, stale: true }))
+    return (r.lastSeen?.rules ?? []).filter((x) => x.acts).map((x) => ({ ...x, seenAt: r.lastSeen!.at, stale: true, failedWhy: r.why }))
   })
 }
 
@@ -264,6 +267,27 @@ export function campaignNativeView(c: CampaignNativeRules | undefined): {
   return { acting, idle, couldNotRead }
 }
 
+/** How a newest read failed, short: Amazon's status when it answered, else the reason. */
+function failureStatus(why: string): string {
+  const status = /Amazon answered (\d{3})/.exec(why)
+  if (status) return `Amazon answered ${status[1]}`
+  if (/more than two days ago/.test(why)) return 'no read reached it for more than two days'
+  return why.length > 140 ? `${why.slice(0, 140)}…` : why
+}
+
+/**
+ * One line per Amazon rule that acts on this lever of one campaign. A rule only the last good read saw says so: the read
+ * that saw it, how the reads since failed, and the two ways out (it keeps refusing: cautious until a read says it is gone).
+ */
+export function nativeRuleLines(c: CampaignNativeRules | undefined, lever: BrainLever, where = ''): string[] {
+  return actingRules(c).filter((r) => r.levers.includes(lever)).map((r) => {
+    const label = `${NATIVE_RULE_CAPABILITY[r.kind].label} "${r.name}" ${where}`.trimEnd()
+    return r.stale
+      ? `${label} (${r.detail}; last read OK on ${r.seenAt}; reads since then failed (${failureStatus(r.failedWhy ?? 'the read failed')}); detach it in Amazon or wait for a good read)`
+      : `${label} (${r.detail}${r.seenAt ? `; read ${r.seenAt}` : ''})`
+  })
+}
+
 /**
  * Why these levers cannot go AUTO on these campaigns: an Amazon rule acts on that lever there (design §2.12: two brains on
  * one lever). Null when nothing read acts on them. "Could not read" refuses nothing.
@@ -272,11 +296,11 @@ export function nativeAutoRefusal(asks: ReadonlyArray<{ campaignId: string; name
   const byLever = new Map<BrainLever, string[]>()
   const seen = new Set<string>()
   for (const a of asks) {
-    for (const r of actingRules(readings.get(a.campaignId)).filter((x) => x.levers.includes(a.lever))) {
-      const key = `${a.lever}\u0000${a.campaignId}\u0000${r.kind}\u0000${r.name}`
+    for (const line of nativeRuleLines(readings.get(a.campaignId), a.lever, `on campaign ${a.name} `)) {
+      const key = `${a.lever}\u0000${a.campaignId}\u0000${line}`
       if (seen.has(key)) continue
       seen.add(key)
-      byLever.set(a.lever, [...(byLever.get(a.lever) ?? []), `${NATIVE_RULE_CAPABILITY[r.kind].label} "${r.name}" on campaign ${a.name} (${r.detail}${r.seenAt ? `; read ${r.seenAt}` : ''})`])
+      byLever.set(a.lever, [...(byLever.get(a.lever) ?? []), line])
     }
   }
   if (!byLever.size) return null

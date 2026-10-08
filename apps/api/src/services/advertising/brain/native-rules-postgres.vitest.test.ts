@@ -15,12 +15,16 @@
  *   refuse    ending the adopted OBSERVE on a campaign whose bids Amazon runs (it would go LIVE: bids to AUTO) is
  *             refused with the rule's name and the way out, and changes nothing; a budget rule does not refuse the bids
  *             lever; once the strategy is back to one Nexus knows, the same change passes
+ *   rollback  (follow-up) a give-back of a LIVE campaign whose bids Amazon runs is approved and runs; a product's change
+ *             that would put a campaign LIVE only as a side effect (its own AUTO, sitting in shadow) skips it by name
+ *             while Amazon runs its bids, and the rest of the plan runs — a step back to shadow included
  *
  * Values are made up (public repo).
  */
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { concurrentDatabase, concurrentDatabaseUrl } from '../../../test-support/concurrent-database.js'
 import { withWorkspace } from '../../../lib/workspace-context.js'
 
@@ -47,7 +51,8 @@ vi.mock('../../../lib/queue.js', () => {
 })
 
 const { readNativeRulesOnce } = await import('./native-rules.js')
-const { enrollProduct, endOverride, planOverride } = await import('./enrollment.js')
+const { brainSettings, enrollProduct, endOverride, planOverride, setLever } = await import('./enrollment.js')
+const { decideApproval, runOrQueueTool } = await import('../../agents/approval-gate.service.js')
 const { parseCampaignBudgetRules } = await import('../ads-api-client.js')
 const { ADS_BRAIN_TOOLS } = await import('../../agents/tools/ads-brain.tools.js')
 
@@ -66,6 +71,10 @@ const NOW = new Date('2026-10-08T04:35:00Z')
 const TABLE = 'AdsNativeRuleSnapshot'
 
 type Data = Record<string, any>
+const person = (userId: string, via: 'claude' | 'app') => ({
+  kind: 'user' as const, userId, label: `Person ${userId}`, via, workspace: scope(W),
+  permissions: { isOwner: false, permissions: new Set<string>([...Object.values(FEATURES), ...Object.values(FIELDS)]) },
+})
 const tool = (args: Record<string, unknown>) => inW(() => ADS_BRAIN_TOOLS[0].handler!(args, {} as never)) as Promise<{ ok: boolean; data?: Data; error?: string }>
 
 // Amazon, stubbed: the fixture's four rules on the budget campaign, none elsewhere; every ask recorded.
@@ -221,5 +230,40 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-4 — Amazon\'s own rules on brain
     await database.pool.query('UPDATE "Campaign" SET "dynamicBidding" = \'{"strategy":"LEGACY_FOR_SALES"}\' WHERE id = $1', [C('b-rule')])
     expect(await inW(() => planOverride({ productId: P, market: 'IT', end: endAdopted('b-rule').override }))).toMatchObject({ ok: true })
     expect(await amazonRows()).toBe(0)
+  })
+  it('follow-up: a give-back of a LIVE campaign whose bids Amazon runs is approved and runs — a way back is never refused for Amazon\'s rule', async () => {
+    await database.pool.query('UPDATE "Campaign" SET "dynamicBidding" = \'{"strategy":"RULE_BASED"}\' WHERE id = $1', [C('a-live')])
+    const decided = await inW(async () => {
+      const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: 'u-asker' } })
+      const asked = await runOrQueueTool('set-bid-brain-enrollment', { campaignId: C('a-live'), op: 'give-back', why: 'AB-4 follow-up rollback' }, person('u-asker', 'claude'), run.id)
+      expect(asked).toMatchObject({ ok: true, mode: 'queued' })
+      return decideApproval(asked.approvalId!, 'approve', person('u-approver', 'app'))
+    })
+    expect(decided).toMatchObject({ ok: true, status: 'executed' })
+    expect((await modes())[C('a-live')]).toBe('SHADOW')
+    // Recorded as the Owner's campaign choice through the product's brain: the change to OBSERVE was not refused.
+    expect((await inW(() => brainSettings(P, 'IT', C('a-live'))))?.levers.bids).toMatchObject({ level: { value: 'OBSERVE', source: 'campaign' }, effective: 'OBSERVE' })
+  })
+
+  it('follow-up: a campaign the product\'s change would put LIVE only as a side effect is skipped by name while Amazon runs its bids; the rest of the plan runs', async () => {
+    const db = database.client
+    // b-rule: its own campaign AUTO, sitting in shadow (it could not go LIVE when it was set); Amazon now runs its bids.
+    await database.pool.query('UPDATE "AdsBrainOverride" SET "endedAt" = now(), "endedBy" = \'user:owner\' WHERE "workspaceId" = $1 AND "campaignId" = $2 AND "endedAt" IS NULL', [W, C('b-rule')])
+    await inW(() => db.adsBrainOverride.create({ data: { productId: P, marketplace: 'IT', scope: 'CAMPAIGN', campaignId: C('b-rule'), kind: 'LEVEL', key: 'bids', value: 'AUTO', by: 'user:owner', reason: 'its own choice; it could not go LIVE then' } }))
+    await database.pool.query('UPDATE "Campaign" SET "dynamicBidding" = \'{"strategy":"RULE_BASED"}\' WHERE id = ANY($1)', [[C('b-rule'), C('c-budget')]])
+    // c-budget: LIVE (by hand) under its adopted OBSERVE, with Amazon running its bids too: the plan takes it back to shadow.
+    await inW(() => db.bidBrainEnrollment.create({ data: { campaignId: C('c-budget'), marketplace: 'IT', mode: 'LIVE', enrolledBy: 'user:owner-1008', snapshot: { takenAt: '2026-10-08T10:56:00.000Z', adGroups: [], targets: [], placements: [] } } }))
+    const r = await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE', by: 'user:owner', now: NOW }))
+    expect(r).toMatchObject({ ok: true })
+    const steps = (r as { plan: { steps: Array<Record<string, unknown>>; goesLive: string[] } }).plan
+    expect(steps.goesLive).toEqual([])
+    expect(steps.steps).toEqual(expect.arrayContaining([
+      { campaignId: C('b-rule'), name: 'b-rule', op: 'skip', why: expect.stringMatching(/^an Amazon rule acts on it: Amazon-run bidding strategy "RULE_BASED" \(Amazon's rule-based bidding .*\) — it stays in shadow$/) },
+      expect.objectContaining({ campaignId: C('c-budget'), op: 'shadow' }),
+    ]))
+    const now = await modes()
+    expect(now[C('c-budget')]).toBe('SHADOW')
+    expect(now[C('b-rule')]).toBeUndefined()
+    expect((await inW(() => brainSettings(P, 'IT')))?.levers.bids).toMatchObject({ level: { value: 'OBSERVE', source: 'product' } })
   })
 })

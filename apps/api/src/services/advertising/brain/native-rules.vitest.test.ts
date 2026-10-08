@@ -2,7 +2,9 @@
  * ONE BRAIN AB-4 — Amazon's own rules on brain campaigns (brain/native-rules.ts): how a budget rule, a bidding strategy
  * and a stored reading are said; what acts; the refusal of AUTO over a rule; and the daily read with the database and
  * Amazon stubbed — the no-op path asks Amazon nothing, a failed read keeps what the last good read saw, a spent quota
- * stops the rest of the market, sandbox asks nothing. Values are made up (public repo).
+ * stops the rest of the market, sandbox asks nothing, a campaign that left the brain loses its row; and (follow-up) a rule
+ * only the last good read saw says how the reads since failed, and a 429 from the real liveCall and gateway inside the
+ * daily read skips the rest of that market without a crash. Values are made up (public repo).
  */
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,13 +41,29 @@ vi.mock('../../../db.js', () => ({
     },
   },
 }))
+// The follow-up's 429 case drives the REAL liveCall and gateway with `fetch` stubbed (gateway/ads.p12.vitest.test.ts).
+vi.mock('../../gateway/account.js', () => import('../../../test-support/gateway-stubs.js').then((m) => m.accountModule))
+vi.mock('../../gateway/ledger.js', () => import('../../../test-support/gateway-stubs.js').then((m) => m.ledgerModule))
+vi.mock('../../../lib/workspace-context.js', async (original) => ({ ...(await original<object>()), requireWorkspace: () => ({ workspaceId: 'ws' }) }))
+vi.mock('../../connection-resolver.service.js', async (original) => ({
+  ...(await original<object>()),
+  resolveConnectionForProfile: vi.fn(async () => ({ id: 'ads-1', connectionMetadata: {} })),
+}))
+vi.mock('../../cx/apps.service.js', () => ({ getChannelApp: vi.fn(async () => ({ clientId: 'amzn1.application-oa2-client.x' })) }))
+vi.mock('../../cx/token.service.js', () => ({ getAccessToken: vi.fn(async () => 'ads-token') }))
+vi.mock('../../outbound-api-call-log.service.js', async (original) => ({
+  ...(await original<object>()),
+  recordApiCall: async (_ctx: unknown, run: () => Promise<unknown>) => run(),
+}))
 vi.mock('./ownership.js', () => ({
   productCampaigns: vi.fn(async (productId: string) => ({ root: productId, owned: [{ campaignId: 'c-own' }], shared: [{ campaignId: 'c-shared' }] })),
 }))
 
 import type { AmazonBudgetRule } from '../ads-api-client.js'
+import { gatewayLedger } from '../../../test-support/gateway-stubs.js'
+import { __rateTest } from '../../gateway/rate.js'
 import {
-  actingRules, amazonDayOf, budgetRuleOf, campaignNativeRules, campaignNativeView, NATIVE_RULE_CAPABILITY, nativeAutoRefusal, nativeRuleWriters,
+  actingRules, amazonDayOf, budgetRuleOf, campaignNativeRules, campaignNativeView, NATIVE_RULE_CAPABILITY, nativeAutoRefusal, nativeRuleLines, nativeRuleWriters,
   notReadableKinds, readNativeRulesOnce, storedBudgetReading, strategyReading, type CampaignNativeRules,
 } from './native-rules.js'
 
@@ -174,7 +192,20 @@ describe('AB-4 nativeAutoRefusal — a lever does not go AUTO where Amazon\'s ow
   it('"could not read" refuses nothing; a rule only the last good read saw still refuses', () => {
     expect(nativeAutoRefusal([{ campaignId: 'c-unread', name: 'U', lever: 'bids' }, { campaignId: 'not-read', name: 'N', lever: 'budgets' }], readings)).toBeNull()
     const failed = campaignNativeRules({ campaignId: 'c-f', snapshot: { fetchedAt: NOW, readings: { budgetRules: { state: 'could_not_read', why: 'the read failed', lastRead: { at: '2026-10-07T04:35:00.000Z', rules: [rule()] } } } }, strategy: 'MANUAL', strategyAt: null }, NOW)
-    expect(nativeAutoRefusal([{ campaignId: 'c-f', name: 'F', lever: 'budgets' }], new Map([['c-f', failed]]))).toMatch(/Weekend boost.*read 2026-10-07T04:35:00.000Z/)
+    expect(nativeAutoRefusal([{ campaignId: 'c-f', name: 'F', lever: 'budgets' }], new Map([['c-f', failed]]))).toMatch(/Weekend boost.*last read OK on 2026-10-07T04:35:00.000Z/)
+  })
+  it('follow-up: a rule only the last good read saw says when that read was, how the reads since failed, and the two ways out', () => {
+    const lines = (stored: unknown, fetchedAt = NOW) => nativeRuleLines(campaignNativeRules({ campaignId: 'c', snapshot: { fetchedAt, readings: stored }, strategy: 'MANUAL', strategyAt: null }, NOW), 'budgets', 'on campaign F')
+    const failed = { budgetRules: { state: 'could_not_read', why: 'the read failed: Amazon answered 500: [ADS-LIVE] GET … → 500: boom', lastRead: { at: '2026-10-06T04:35:00.000Z', rules: [rule()] } } }
+    expect(lines(failed)).toEqual(['Amazon budget rule "Weekend boost" on campaign F (raises the daily budget by 25 %; from 2026-10-01; last read OK on 2026-10-06T04:35:00.000Z; reads since then failed (Amazon answered 500); detach it in Amazon or wait for a good read)'])
+    // No read reached it for more than two days.
+    const old = new Date(NOW.getTime() - 3 * 86_400_000)
+    expect(lines({ budgetRules: { state: 'read', rules: [rule()] } }, old)[0]).toContain(`last read OK on ${old.toISOString()}; reads since then failed (no read reached it for more than two days); detach it in Amazon or wait for a good read)`)
+    // A read that failed without Amazon's status keeps its own short reason.
+    expect(lines({ budgetRules: { state: 'could_not_read', why: 'no advertising profile serves IT', lastRead: { at: '2026-10-06T04:35:00.000Z', rules: [rule()] } } })[0]).toContain('reads since then failed (no advertising profile serves IT)')
+    // A fresh read: no such words.
+    expect(lines({ budgetRules: { state: 'read', rules: [rule()] } })).toEqual([`Amazon budget rule "Weekend boost" on campaign F (raises the daily budget by 25 %; from 2026-10-01; read ${NOW.toISOString()})`])
+    expect(nativeRuleLines(undefined, 'bids')).toEqual([])
   })
   it('one line per rule, however many times it is asked; long lists are cut', () => {
     const many = new Map(Array.from({ length: 7 }, (_, i) => [`c${i}`, reading(`c${i}`, { strategy: 'RULE_BASED' })]))
@@ -253,5 +284,45 @@ describe('AB-4 readNativeRulesOnce — the daily read (database and Amazon stubb
     expect(await readNativeRulesOnce({ now: NOW, listBudgetRules, contextFor, mode: () => 'sandbox' })).toMatchObject({ calls: 0, read: 0, couldNotRead: 3 })
     expect(listBudgetRules).not.toHaveBeenCalled()
     expect((db.snapshots.get('a')?.readings as { budgetRules: { why: string } }).budgetRules.why).toMatch(/sandbox mode.*nothing was asked/)
+  })
+})
+
+describe('AB-4 follow-up — a 429 from Amazon through the real liveCall and gateway, inside the daily read', () => {
+  const calls: string[] = []
+  beforeEach(() => {
+    __rateTest.useMemory()
+    calls.length = 0; gatewayLedger.length = 0
+    db.enrolled = 0; db.enrollments = []; db.snapshots.clear(); db.calls = []
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+    vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1'); vi.stubEnv('NEXUS_AMAZON_ADS_QUOTA_MODE', 'off')
+    // Amazon throttles the first IT campaign every time; every other campaign answers "no rule".
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(new URL(String(url)).pathname)
+      return String(url).includes('/EXT-a/')
+        ? new Response('{"code":"THROTTLED"}', { status: 429, headers: { 'retry-after': '0' } })
+        : new Response(JSON.stringify({ associatedRules: [] }), { status: 200 })
+    }))
+  })
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); __rateTest.reset() })
+
+  it('liveCall retries the 429 its own way, then throws; the rest of that market is not asked, another market still is; nothing crashes', async () => {
+    db.bidRows = [{ campaignId: 'a' }, { campaignId: 'b' }, { campaignId: 'c' }, { campaignId: 'd' }]
+    db.campaigns = [
+      { id: 'a', name: 'a', externalCampaignId: 'EXT-a', marketplace: 'IT' },
+      { id: 'b', name: 'b', externalCampaignId: 'EXT-b', marketplace: 'IT' },
+      { id: 'c', name: 'c', externalCampaignId: 'EXT-c', marketplace: 'IT' },
+      { id: 'd', name: 'd', externalCampaignId: 'EXT-d', marketplace: 'DE' },
+    ]
+    const contextFor = async (m: string | null) => ({ profileId: m === 'DE' ? 'p-de' : 'p-it', region: 'EU' as const })
+    const s = await readNativeRulesOnce({ now: NOW, contextFor })
+    expect(s).toMatchObject({ ran: true, campaigns: 4, read: 1, couldNotRead: 3, calls: 2 })
+    // Three sends for the throttled campaign (liveCall's own 429 policy), one for the other market; each through the gateway.
+    expect(calls).toEqual(['/sp/campaigns/EXT-a/budgetRules', '/sp/campaigns/EXT-a/budgetRules', '/sp/campaigns/EXT-a/budgetRules', '/sp/campaigns/EXT-d/budgetRules'])
+    expect(gatewayLedger.map((r) => [r.channel, r.statusCode])).toEqual([['AMAZON_ADS', 429], ['AMAZON_ADS', 429], ['AMAZON_ADS', 429], ['AMAZON_ADS', 200]])
+    const why = (id: string) => (db.snapshots.get(id)?.readings as { budgetRules: { state: string; why?: string } }).budgetRules
+    expect(why('a')).toEqual({ state: 'could_not_read', why: expect.stringMatching(/^the read failed: Amazon answered 429/) })
+    for (const id of ['b', 'c']) expect(why(id)).toEqual({ state: 'could_not_read', why: expect.stringMatching(/^not asked: Amazon's request quota was spent earlier in this read \(Amazon answered 429/) })
+    expect(why('d')).toEqual({ state: 'read', rules: [] })
   })
 })
