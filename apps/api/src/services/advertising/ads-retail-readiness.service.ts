@@ -13,8 +13,9 @@
  */
 
 import prisma from '../../db.js'
-import { suppressCampaignBids } from './ads-bid-suppression.service.js'
+import { openStopHolds, restoreCampaignBids, suppressCampaignBids } from './ads-bid-suppression.service.js'
 import { adsActorOf } from './ads-actor.js'
+import { brainOwnedCampaignIds } from './bid-brain/live.js'
 import { logger } from '../../utils/logger.js'
 import { loadSyncLedgers, type ProductLedger } from '../stock-pool/sync-ledgers.js'
 import { stopBidsFor, strategySourceWords } from './ads-strategy/effective.js'
@@ -134,16 +135,21 @@ export async function analyzeRetailReadiness(opts: { marketplace?: string; campa
  *  Goes through the gated, audited write path. (`paused` = guarded count, kept for
  *  the existing intel-routes display.)
  *  ADS AUTONOMY W1-6 — the floor is the ads strategy's stop bid for the campaign (its market, the lower across its
- *  products) when one is set, else the 2¢ floor. */
+ *  products) when one is set, else the 2¢ floor.
+ *  #513 review — `sellable`: the campaigns the caller's analysis no longer flags (its own analysis, with no list): on a
+ *  campaign the bid brain owns, the guard's own declared stop lifts there (liftOwnedStops). */
 export async function applyRetailGuard(args: {
   campaignIds?: string[]; actor?: string; marketplace?: string
   /** AA-W2-10 (D7) — the change set every floored bid joins (an approval that carries a rule suggestion out); optional. */
   changeSetId?: string | null
-}): Promise<{ paused: string[]; skipped: number }> {
+  sellable?: readonly string[]
+}): Promise<{ paused: string[]; skipped: number; lifted: string[] }> {
   let ids = args.campaignIds
+  let sellable = args.sellable ?? []
   if (!ids) {
     const analysis = await analyzeRetailReadiness({ marketplace: args.marketplace })
     ids = analysis.campaigns.filter((c) => c.verdict === 'pause').map((c) => c.campaignId)
+    sellable = analysis.campaigns.filter((c) => c.verdict !== 'pause').map((c) => c.campaignId)
   }
   const paused: string[] = []
   let skipped = 0
@@ -159,8 +165,33 @@ export async function applyRetailGuard(args: {
     const named = stop?.source ? ` at ${stop.cents}¢ (${strategySourceWords(stop.source)})` : ''
     try { await suppressCampaignBids(id, { actor: adsActorOf(args.actor, 'retail-guard'), floorCents: stop?.cents ?? null, reason: `Retail-readiness guard: products unsellable → bids floored${named} (no-pause)`, ...(args.changeSetId ? { changeSetId: args.changeSetId } : {}) }); paused.push(id) } catch { skipped++ }
   }
-  logger.info('[AX3.1] applyRetailGuard', { paused: paused.length, skipped })
-  return { paused, skipped }
+  const flagged = new Set(ids)
+  const lifted = await liftOwnedStops(sellable.filter((id) => !flagged.has(id)), adsActorOf(args.actor, 'retail-guard'))
+  logger.info('[AX3.1] applyRetailGuard', { paused: paused.length, skipped, lifted: lifted.length })
+  return { paused, skipped, lifted }
+}
+
+/**
+ * #513 review — the guard declares its stop again on every run it flags a campaign, and a campaign the bid brain owns
+ * only gets its bids back when the stop's owner lifts it. So each run lifts the guard's own stop (its mark, or its STOP
+ * hold behind another owner's mark) on every owned campaign it no longer flags; the brain then gives the bids back.
+ * Another owner's stop stays. A campaign not owned is left as before. Answers the campaigns lifted.
+ */
+async function liftOwnedStops(sellable: readonly string[], actor: ReturnType<typeof adsActorOf>): Promise<string[]> {
+  const owned = [...await brainOwnedCampaignIds(sellable)]
+  if (!owned.length) return []
+  const [marked, held] = await Promise.all([
+    prisma.campaign.findMany({ where: { id: { in: owned }, bidsSuppressedAt: { not: null }, bidsSuppressedBy: actor }, select: { id: true } }),
+    openStopHolds(owned),
+  ])
+  const mine = owned.filter((id) => marked.some((c) => c.id === id) || (held.get(id) ?? []).includes(actor))
+  const lifted: string[] = []
+  for (const id of mine) {
+    try { await restoreCampaignBids(id, { actor, reason: 'Retail-readiness guard: products sellable again → stop lifted' }); lifted.push(id) } catch (err) {
+      logger.warn('[AX3.1] retail guard could not lift its stop', { campaignId: id, error: String(err) })
+    }
+  }
+  return lifted
 }
 
 /** Cron entry: analyse + (optionally) auto-pause. Auto-apply is opt-in via
@@ -170,7 +201,8 @@ export async function runRetailGuardOnce(): Promise<{ flagged: number; paused: n
   const flagged = analysis.campaigns.filter((c) => c.verdict === 'pause').map((c) => c.campaignId)
   const apply = process.env.NEXUS_ADS_RETAIL_GUARD_APPLY === '1'
   let paused = 0
-  if (apply && flagged.length) { const r = await applyRetailGuard({ campaignIds: flagged, actor: 'retail-guard-cron' }); paused = r.paused.length }
+  // #513 review — run with nothing flagged too: a campaign the brain owns gets the guard's own stop lifted when it sells again.
+  if (apply) { const r = await applyRetailGuard({ campaignIds: flagged, sellable: analysis.campaigns.filter((c) => c.verdict !== 'pause').map((c) => c.campaignId), actor: 'retail-guard-cron' }); paused = r.paused.length }
   logger.info('[AX3.1] runRetailGuardOnce', { flagged: flagged.length, paused, applied: apply })
   return { flagged: flagged.length, paused, applied: apply }
 }

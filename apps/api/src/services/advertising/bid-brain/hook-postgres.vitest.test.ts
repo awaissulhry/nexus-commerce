@@ -37,6 +37,7 @@ const { holdCampaigns, releaseHold, setEnrollment } = await import('./enrollment
 const { setAutonomy } = await import('../ads-automation-state.service.js')
 const { runJudgedUndo, holdBrainAfterUndo, AUTO_UNDO_ACTOR, BRAIN_HOLD_AFTER_UNDO_DAYS } = await import('../ads-auto-undo.service.js')
 const { reverseJudgedWrite } = await import('../rollback.service.js')
+const { restoreCampaignBids, suppressCampaignBids } = await import('../ads-bid-suppression.service.js')
 
 const W = `bb10_hook_${randomBytes(4).toString('hex')}`
 const business = { workspaceId: W, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -156,9 +157,19 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-10 — the bid brain\'s auto-undo 
     // The undo raises the cut back inside auto-undo's own raise limits (the strategy's largest change: 25 %, A19).
     const restored = await bid()
     expect(restored).toBeGreaterThan(cut.after)
-    // The next owned tick, and the full run after it: the bid stays where the undo put it (pinned), and says so.
-    await inside(() => runShadowOnce({ now: at(11), mode: 'live', onlyOwned: true }))
+    // Pre-go-live 2 — the very first tick after the put-back is a floor (a stop: it wins over auto-undo's pin), and its
+    // owner lifts it (clearing the saved bid): the give-back writes the pinned bid — not the cut auto-undo put back, which
+    // is still the newest decision the brain did not lower — though the campaign is HELD.
+    const BUDGET = 'automation:budget-manager-cron'
+    await inside(() => suppressCampaignBids('c-cut', { actor: BUDGET as never, floorCents: 2, reason: 'monthly cap reached' }))
+    await inside(() => runShadowOnce({ now: at(11), mode: 'live' }))
+    expect(await bid()).toBe(2)
+    await inside(() => restoreCampaignBids('c-cut', { actor: BUDGET as never, reason: 'back under cap' }))
     await inside(() => runShadowOnce({ now: at(12), mode: 'live' }))
+    expect(await bid()).toBe(restored)
+    // The next owned tick, and the full run after it: the bid stays where the undo put it (pinned), and says so.
+    await inside(() => runShadowOnce({ now: at(13), mode: 'live', onlyOwned: true }))
+    await inside(() => runShadowOnce({ now: at(14), mode: 'live' }))
     expect(await bid()).toBe(restored)
     const [last] = await rows<{ layer: string; action: string }>('SELECT layer, action FROM "BidBrainDecision" WHERE "targetId" = \'t-cut\' ORDER BY "createdAt" DESC LIMIT 1')
     expect(last).toEqual({ layer: 'pin', action: 'hold' })

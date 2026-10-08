@@ -117,6 +117,8 @@ export async function writeOwnedDecisions(writes: readonly BrainWrite[], ctx: { 
           reason: `bid brain — ${d.why}`.slice(0, 480),
           evidence: writeEvidence(d, ctx.runId),
           askGate: true,
+          // Pre-go-live — a give-back refused earlier on this data day: sent again, its refusal not recorded again.
+          ...(d.quietRefusal ? { quietRefusal: true } : {}),
           // A floor lands exactly (below the 5¢ engine floor, past the step clamp); the gate sees a forced lowering. A
           // give-back lands exactly too; the gate judges it as a raise (isSuppressionWrite: not every value goes down).
           ...(isExactWrite(d) ? { force: true } : {}),

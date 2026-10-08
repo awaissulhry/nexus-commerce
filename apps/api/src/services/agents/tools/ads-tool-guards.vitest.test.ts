@@ -133,6 +133,16 @@ describe('suppression guard', () => {
       .toBe('its bids were suppressed by an unrecorded actor; only a suppression a person set may be lifted here')
     expect(liftSuppressionRefusal({ bidsSuppressedAt: null, bidsSuppressedBy: null })).toBe('its bids are not suppressed')
   })
+
+  it('#513 review — a stop declared as a STOP hold is a suppression too: a person\'s may be lifted, an engine\'s is refused', () => {
+    const at = new Date('2026-09-30T10:00:00Z')
+    expect(liftSuppressionRefusal({ bidsSuppressedAt: null, bidsSuppressedBy: null }, ['user:u-1'])).toBeNull()
+    expect(liftSuppressionRefusal({ bidsSuppressedAt: null, bidsSuppressedBy: null }, ['automation:retail-guard']))
+      .toBe('its bids were suppressed by automation:retail-guard; only a suppression a person set may be lifted here')
+    // A person's restore ends every declared stop: another owner's beside his is refused.
+    expect(liftSuppressionRefusal({ bidsSuppressedAt: at, bidsSuppressedBy: 'user:u-1' }, ['automation:budget-manager-cron']))
+      .toBe('its bids were suppressed by automation:budget-manager-cron; only a suppression a person set may be lifted here')
+  })
 })
 
 describe('currency, actor and reason', () => {

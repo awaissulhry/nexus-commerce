@@ -57,7 +57,8 @@ const { setEnrollment } = await import('./enrollment.js')
 const { BRAIN_ACTOR } = await import('./live.js')
 const { setAutonomy } = await import('../ads-automation-state.service.js')
 const { runRankDefendOnce } = await import('../../../jobs/ad-rank-defend.job.js')
-const { restoreCampaignBids } = await import('../ads-bid-suppression.service.js')
+const { restoreCampaignBids, suppressCampaignBids } = await import('../ads-bid-suppression.service.js')
+const { applyRetailGuard } = await import('../ads-retail-readiness.service.js')
 const { ADS_BID_BRAIN_ENROLLMENT_TOOLS } = await import('../../agents/tools/ads-bid-brain-enrollment.tools.js')
 const { loadMarket } = await import('./load.js')
 
@@ -228,7 +229,38 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     expect(await bidOf('t-it')).toBe(before)
     // Refused at dispatch: the worker puts the floor back.
     await database.pool.query('UPDATE "AdTarget" SET "bidCents" = $1 WHERE id = \'t-it\'', [floor])
+    // Pre-go-live 1 — a give-back still waiting at the floor: op shadow is refused (no engine would give it back).
+    const waiting = await inside(() => ADS_BID_BRAIN_ENROLLMENT_TOOLS[0].handler({ campaignId: 'c-it', op: 'shadow' }, {} as never))
+    expect(waiting).toMatchObject({ ok: false, error: expect.stringMatching(/cannot go back to shadow now: 1 keyword sits at a floor/) })
     await inside(() => runShadowOnce({ now: at(NOW, 24), mode: 'live', onlyOwned: true, clockNow: at(NOON, 180) }))
+    expect(await bidOf('t-it')).toBe(before)
+  })
+
+  it('pre-go-live 3 — a monthly-cap stop declared during a Min-bid hour is still in force after the hour; a second owner\'s stop outlives the first', async () => {
+    const BUDGET = 'automation:budget-manager-cron'
+    const RETAIL = 'automation:retail-guard'
+    const before = await bidOf('t-it')
+    const night = new Date(NIGHT.getTime() + DAY)
+    const noon = new Date(NOON.getTime() + DAY)
+    await inside(() => runShadowOnce({ now: at(NOW, 25), mode: 'live', onlyOwned: true, clockNow: night }))
+    expect(await bidOf('t-it')).toBe(3)
+    // The cap is reached while the brain's Min-bid floor holds the mark: the stop lands (it takes the mark).
+    expect(await inside(() => suppressCampaignBids('c-it', { actor: BUDGET as never, floorCents: 2, reason: 'monthly cap reached' }))).toBe(0)
+    expect(await rows('SELECT "bidsSuppressedBy", "bidsSuppressedFloorCents" FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ bidsSuppressedBy: BUDGET, bidsSuppressedFloorCents: 2 }])
+    await inside(() => runShadowOnce({ now: at(NOW, 26), mode: 'live', onlyOwned: true, clockNow: at(night, 15) }))
+    expect(await bidOf('t-it')).toBe(2)
+    // The Min-bid hour ends: the stop is still in force.
+    await inside(() => runShadowOnce({ now: at(NOW, 27), mode: 'live', onlyOwned: true, clockNow: noon }))
+    expect(await bidOf('t-it')).toBe(2)
+    // A second owner's stop on top: kept as a STOP hold; the first owner's lift leaves it in force.
+    await inside(() => suppressCampaignBids('c-it', { actor: RETAIL as never, floorCents: 2, reason: 'unsellable' }))
+    expect(await rows('SELECT kind, by FROM "BidHold" WHERE "campaignId" = \'c-it\' AND "endedAt" IS NULL AND "targetId" IS NULL')).toEqual([{ kind: 'STOP', by: RETAIL }])
+    await inside(() => restoreCampaignBids('c-it', { actor: BUDGET as never, reason: 'back under cap' }))
+    await inside(() => runShadowOnce({ now: at(NOW, 28), mode: 'live', onlyOwned: true, clockNow: at(noon, 15) }))
+    expect(await bidOf('t-it')).toBe(2)
+    // The second owner lifts too: the bid comes back.
+    await inside(() => restoreCampaignBids('c-it', { actor: RETAIL as never, reason: 'sellable again' }))
+    await inside(() => runShadowOnce({ now: at(NOW, 29), mode: 'live', onlyOwned: true, clockNow: at(noon, 30) }))
     expect(await bidOf('t-it')).toBe(before)
   })
 
@@ -242,6 +274,37 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     await inside(() => runShadowOnce({ now: at(NOW, 31), mode: 'live', onlyOwned: true, clockNow: at(tomorrowNight, 15) }))
     expect(await bidOf('t-it')).toBe(before)
     expect(await rows('SELECT "bidsSuppressedAt" AS at FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ at: null }])
+  })
+
+  it('#513 review — the second owner\'s STOP hold takes the mark when the first lifts (its own 2¢ floor, not the strategy\'s 4¢); the retail guard lifts it once it no longer flags the campaign', async () => {
+    const BUDGET = 'automation:budget-manager-cron'
+    const RETAIL = 'automation:retail-guard'
+    await database.pool.query('UPDATE "AdsStrategy" SET "stopMethod" = \'LOW_BIDS\', "stopBidCents" = 4 WHERE market = \'IT\' AND level = \'MARKET\'')
+    try {
+      const before = await bidOf('t-it')
+      const noon = new Date(NOON.getTime() + 2 * DAY)
+      await inside(() => suppressCampaignBids('c-it', { actor: BUDGET as never, floorCents: 5, reason: 'monthly cap reached' }))
+      await inside(() => runShadowOnce({ now: at(NOW, 32), mode: 'live', onlyOwned: true, clockNow: noon }))
+      expect(await bidOf('t-it')).toBe(5)
+      // The guard's stop on top, at its own 2¢: a STOP hold, and the lower floor wins (not the strategy's 4¢ stop bid).
+      await inside(() => suppressCampaignBids('c-it', { actor: RETAIL as never, floorCents: 2, reason: 'unsellable' }))
+      await inside(() => runShadowOnce({ now: at(NOW, 33), mode: 'live', onlyOwned: true, clockNow: at(noon, 15) }))
+      expect(await bidOf('t-it')).toBe(2)
+      // The cap's owner lifts: the guard's stop takes the mark at its own floor; the hold ends; the saved bid stays.
+      await inside(() => restoreCampaignBids('c-it', { actor: BUDGET as never, reason: 'back under cap' }))
+      expect(await rows('SELECT "bidsSuppressedBy", "bidsSuppressedFloorCents" FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ bidsSuppressedBy: RETAIL, bidsSuppressedFloorCents: 2 }])
+      expect(await rows('SELECT count(*)::int AS n FROM "BidHold" WHERE "campaignId" = \'c-it\' AND kind = \'STOP\' AND "endedAt" IS NULL')).toEqual([{ n: 0 }])
+      expect(await rows('SELECT "suppressedFromBidCents" AS m FROM "AdTarget" WHERE id = \'t-it\'')).toEqual([{ m: before }])
+      await inside(() => runShadowOnce({ now: at(NOW, 34), mode: 'live', onlyOwned: true, clockNow: at(noon, 30) }))
+      expect(await bidOf('t-it')).toBe(2)
+      // The guard no longer flags it: its run lifts its own stop, and the brain gives the bid back.
+      expect(await inside(() => applyRetailGuard({ campaignIds: [], sellable: ['c-it'], actor: 'retail-guard' }))).toMatchObject({ lifted: ['c-it'] })
+      expect(await rows('SELECT "bidsSuppressedAt" AS at FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ at: null }])
+      await inside(() => runShadowOnce({ now: at(NOW, 35), mode: 'live', onlyOwned: true, clockNow: at(noon, 45) }))
+      expect(await bidOf('t-it')).toBe(before)
+    } finally {
+      await database.pool.query('UPDATE "AdsStrategy" SET "stopMethod" = NULL, "stopBidCents" = NULL WHERE market = \'IT\' AND level = \'MARKET\'')
+    }
   })
 
   it('review 7 — a between-slots tick reads the owned campaigns only, no evidence, and stores no goal-less rows', async () => {

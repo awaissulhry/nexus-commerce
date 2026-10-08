@@ -21,6 +21,7 @@ import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
+import { STOP_HOLD_KIND } from './facts.js'
 import { brainLiveCeiling } from './live.js'
 import { bidBrainMode } from './shadow.js'
 
@@ -105,15 +106,18 @@ export async function brainBlockers(campaignId: string, opts: { plansJoin?: bool
 /**
  * BB-7 — why the campaign cannot go LIVE right now: a floor in force (a Min-bid hour, a stop, the stock check). The
  * snapshot would keep the floored bids, and only the floor's old owner would lift it. Null: its bids serve.
+ * #513 review — a stop still declared as a STOP hold counts too: going LIVE would floor the campaign at once.
  */
 export async function flooredNow(campaignId: string): Promise<string | null> {
-  const [campaign, flooredGroups, flooredTargets] = await Promise.all([
+  const [campaign, flooredGroups, flooredTargets, stops] = await Promise.all([
     prisma.campaign.findFirst({ where: { id: campaignId }, select: { bidsSuppressedAt: true, bidsSuppressedBy: true } }),
     prisma.adGroup.count({ where: { campaignId, bidsSuppressedAt: { not: null } } }),
     prisma.adTarget.count({ where: { adGroup: { campaignId }, suppressedFromBidCents: { not: null }, retiredAt: null } }),
+    prisma.bidHold.findMany({ where: { campaignId, targetId: null, kind: STOP_HOLD_KIND, endedAt: null }, select: { by: true }, orderBy: { createdAt: 'asc' } }),
   ])
-  if (!campaign?.bidsSuppressedAt && !flooredGroups && !flooredTargets) return null
-  return `its bids are held at a floor now${campaign?.bidsSuppressedBy ? ` (by ${campaign.bidsSuppressedBy})` : ''}: put it under the brain while its bids serve (after a Min-bid hour, a stop or the stock check gave them back)`
+  if (!campaign?.bidsSuppressedAt && !flooredGroups && !flooredTargets && !stops.length) return null
+  const by = [...new Set([...(campaign?.bidsSuppressedAt && campaign.bidsSuppressedBy ? [campaign.bidsSuppressedBy] : []), ...stops.map((h) => h.by)])]
+  return `its bids are held at a floor now${by.length ? ` (by ${by.join(', ')})` : ''}: put it under the brain while its bids serve (after a Min-bid hour, a stop or the stock check gave them back)`
 }
 
 /** Everything the enrollment tool shows and checks; null when the campaign is not in this business. */
@@ -207,6 +211,16 @@ export async function setEnrollment(args: {
   }
   if (row) await prisma.bidBrainEnrollment.update({ where: { id: row.id }, data })
   else await prisma.bidBrainEnrollment.create({ data: { campaignId: args.campaignId, marketplace: args.marketplace, enrolledBy: args.by, ...data } })
+  // #513 review — leaving the brain (op shadow, give-back), a stop still declared as a STOP hold is never left to the brain
+  // alone: with the mark free it takes the mark (handMarkToStopHold), which today's engines, the screens and its owner's
+  // lift all read; one behind another owner's mark stays declared and takes the mark when that owner lifts.
+  if (next.to === 'SHADOW') {
+    const mark = await prisma.campaign.findFirst({ where: { id: args.campaignId }, select: { bidsSuppressedAt: true } })
+    if (mark && !mark.bidsSuppressedAt) {
+      const { handMarkToStopHold } = await import('../ads-bid-suppression.service.js')
+      await handMarkToStopHold(args.campaignId, args.by)
+    }
+  }
   return { from, to: next.to, snapshot }
 }
 
@@ -259,23 +273,41 @@ export async function releaseHold(args: { campaignIds: readonly string[]; by: st
 
 /**
  * BB-7 review — the keywords the brain holds at a floor (its newest decision lowered them by a stop, stock, the phase or a
- * Min-bid hour, and the bid still sits there) that no engine would give back after a hand-back: no memory of their bid
+ * Min-bid hour, and the bid still sits there) — floors it wrote itself — that no engine would give back after a hand-back: no memory of their bid
  * before (`AdTarget.suppressedFromBidCents`), or a memory no owner's mark points at (neither the campaign nor the ad
- * group is marked floored — a stock or phase floor the brain read from its source sets none). `op: shadow` refuses
- * while any is left; give-back puts back the snapshot instead.
+ * group is marked floored — a stock or phase floor the brain read from its source sets none). A give-back still waiting
+ * (its newest decision a `restore`, the bid still at the floor it left — refused at the gate) counts too. `op: shadow`
+ * refuses while any is left; give-back puts back the snapshot instead.
  */
 export async function floorsWithoutMemory(campaignId: string): Promise<number> {
+  // Only floors the brain wrote itself (a floor or give-back write since the keyword's last decision no override lowered):
+  // a stop someone else wrote, which the brain only held, is that owner's to give back, and a hand-back changes nothing.
+  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze']
   const rows = await prisma.$queryRaw<Array<{ n: number }>>(Prisma.sql`
-    SELECT count(*)::int AS n FROM (
-      SELECT DISTINCT ON (d."targetId") d."targetId", d.layer, d."decidedCents"
+    WITH last AS (
+      SELECT DISTINCT ON (d."targetId") d."targetId", d.layer, d."decidedCents", d."currentCents"
         FROM "BidBrainDecision" d
        WHERE d."campaignId" = ${campaignId}
-       ORDER BY d."targetId", d."createdAt" DESC) last
+       ORDER BY d."targetId", d."createdAt" DESC),
+    unlowered AS (
+      SELECT d."targetId", max(d."createdAt") AS at FROM "BidBrainDecision" d
+       WHERE d."campaignId" = ${campaignId} AND d.layer = ANY(${kept}::text[])
+       GROUP BY d."targetId"),
+    wrote AS (
+      SELECT DISTINCT d."targetId" FROM "BidBrainDecision" d
+        LEFT JOIN unlowered u ON u."targetId" = d."targetId"
+       WHERE d."campaignId" = ${campaignId} AND d.action = 'write'
+         AND d.layer IN ('stop', 'stock', 'phase', 'min_bid_hour', 'restore')
+         AND (u.at IS NULL OR d."createdAt" > u.at))
+    SELECT count(*)::int AS n FROM last
+      JOIN wrote w ON w."targetId" = last."targetId"
       JOIN "AdTarget" t ON t.id = last."targetId"
       JOIN "AdGroup" g ON g.id = t."adGroupId"
       JOIN "Campaign" c ON c.id = g."campaignId"
-     WHERE last.layer IN ('stop', 'stock', 'phase', 'min_bid_hour')
-       AND t."bidCents" <= last."decidedCents" AND t."retiredAt" IS NULL
+     WHERE ((last.layer IN ('stop', 'stock', 'phase', 'min_bid_hour') AND t."bidCents" <= last."decidedCents")
+            -- a give-back still waiting (refused at the gate): the keyword sits at the floor it left
+            OR (last.layer = 'restore' AND t."bidCents" <= last."currentCents"))
+       AND t."retiredAt" IS NULL
        AND (t."suppressedFromBidCents" IS NULL OR (c."bidsSuppressedAt" IS NULL AND g."bidsSuppressedAt" IS NULL))`)
   return rows[0]?.n ?? 0
 }

@@ -141,3 +141,32 @@ describe('re-review 6 — under HELD no layer raises; only the give-back after t
     expect(decide(facts({ currentCents: 3, raiseCap: held, restore: { layer: 'min_bid_hour', heldCents: 3, beforeCents: 40 } }))).toMatchObject({ action: 'write', layer: 'restore' })
   })
 })
+
+describe('pre-go-live 2 — under auto-undo\'s pin the give-back goes to the bid the floor found, never the undone change', () => {
+  const undoPin = { by: 'auto-undo pin by automation:auto-undo', until: '2026-10-15', soft: true as const }
+  const held = 'the campaign is held by automation:auto-undo'
+  it('an undone raise (40 put back to 30), then a floor 30 → 3: the give-back writes 30, not 40 — HELD or not', () => {
+    const f = facts({ currentCents: 3, overrides: { pin: undoPin }, restore: { layer: 'stop', heldCents: 3, beforeCents: 40, foundCents: 30 } })
+    expect(decide(f)).toMatchObject({ action: 'write', layer: 'restore', bidCents: 30 })
+    expect(decide({ ...f, raiseCap: held })).toMatchObject({ action: 'write', layer: 'restore', bidCents: 30 })
+  })
+  it('an undone cut (31 put back to 39), then a floor 39 → 2: the give-back writes 39, not the cut again', () => {
+    expect(decide(facts({ currentCents: 2, overrides: { pin: undoPin }, restore: { layer: 'min_bid_hour', heldCents: 2, beforeCents: 31, foundCents: 39 } }))).toMatchObject({ layer: 'restore', bidCents: 39 })
+  })
+  it('the saved bid stands in when the floor decision is gone; the bid before only when neither is known', () => {
+    expect(decide(facts({ currentCents: 3, savedCents: 30, overrides: { pin: undoPin }, restore: { layer: 'stock', heldCents: 3, beforeCents: 40 } })).bidCents).toBe(30)
+    expect(decide(facts({ currentCents: 3, overrides: { pin: undoPin }, restore: { layer: 'stock', heldCents: 3, beforeCents: 40 } })).bidCents).toBe(40)
+  })
+  it('the nit — a give-back retried on the data day it was refused is quiet; on a new data day it is logged again', () => {
+    const r = { layer: 'restore' as const, heldCents: 3, beforeCents: 40, retryDataDay: '2026-10-01' }
+    expect(decide(facts({ currentCents: 3, restore: r }))).toMatchObject({ layer: 'restore', action: 'write', quietRefusal: true })
+    expect(decide(facts({ currentCents: 3, dataDay: '2026-10-02', restore: r })).quietRefusal).toBeUndefined()
+  })
+})
+
+describe('pre-go-live — a give-back with no unlowered decision kept still knows the bid', () => {
+  it('the bid the brain\'s first floor found, else the saved bid — never "no bid to give back"', () => {
+    expect(decide(facts({ currentCents: 2, chain: [], restore: { layer: 'stock', heldCents: 2, beforeCents: null, foundCents: 50 } }))).toMatchObject({ action: 'write', layer: 'restore', bidCents: 50 })
+    expect(decide(facts({ currentCents: 2, chain: [], savedCents: 45, restore: { layer: 'stock', heldCents: 2, beforeCents: null } }))).toMatchObject({ layer: 'restore', bidCents: 45 })
+  })
+})
