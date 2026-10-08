@@ -6863,6 +6863,14 @@
       "fields": []
     },
     {
+      "name": "AdsBrainTerm",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainTermLead",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },

@@ -20166,6 +20166,111 @@ model AdsBrainBudgetDecision {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-9 — the term ledger: ONE decision per term of one product in one market (one-brain DESIGN.md §1, §2.7,
+/// §2.8, §4). Every customer search term the product's own campaigns saw in the window and every keyword or ASIN they
+/// target or negate, normalised (lower case, single spaces). The unique key makes a second decision on one term
+/// impossible: a term is never harvested and negated at once. SHADOW (services/advertising/brain/terms-shadow.ts): the
+/// daily run decides and logs; nothing here writes to Amazon. A changed decision rewrites its row (the state before and
+/// since when are kept); an unchanged one is only stamped with the run; a term that left the window is removed; rows no
+/// run checked for 30 days are deleted. No foreign key: the product id is the family root, as AdsBrainEnrollment's.
+model AdsBrainTerm {
+  // Business ownership comes from verified database context.
+  workspaceId   String    @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id            String    @id @default(cuid())
+
+  /// Product.id of the family root; short market code ('IT').
+  productId     String
+  marketplace   String
+  /// The term, normalised (an ASIN in lower case).
+  term          String
+  isAsin        Boolean   @default(false)
+  /// TARGETED | HARVEST_CANDIDATE | OWNED_BY_SIBLING | PROTECTED | NEGATED | NEGATE_CANDIDATE | WATCH (brain/terms.ts)
+  state         String
+  previousState String?
+  /// Since when the term holds this state.
+  stateSince    DateTime
+  /// protected-term | brand | winner — why no negative may touch it; null: none.
+  protection    String?
+  /// The market arbiter's lead when sibling products meet on the term (AdsBrainTermLead); null: not contested.
+  leadProductId String?
+  /// Why the brain would not act on it even once the lever writes (lever off or locked, the Owner's lock, past the cap).
+  heldBy        String?
+  capped        Boolean   @default(false)
+  /// A negative candidate a person decides (it has an order in the window: §2.7 PROPOSE).
+  askFirst      Boolean   @default(false)
+  /// How many clashes this decision removes (evidence.clashes).
+  clashCount    Int       @default(0)
+
+  /// The product's own campaigns over the window (`windowDays`, settled days ending at `dataDay`).
+  impressions   Int       @default(0)
+  clicks        Int       @default(0)
+  orders        Int       @default(0)
+  spendCents    Int       @default(0)
+  salesCents    Int       @default(0)
+  windowDays    Int
+  dataDay       DateTime  @db.Date
+
+  /// One line: the deciding rule with its numbers (no money).
+  why           String    @db.Text
+  /// { targets, negatives, destination, lead, wouldLower, clashes, tests } — what the read tool shows.
+  evidence      Json
+  /// Hash of the decision: an unchanged decision is not rewritten.
+  digest        String
+  /// The last run that decided it, when it was checked, and when its decision last changed.
+  runId         String
+  checkedAt     DateTime
+  changedAt     DateTime
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, term], name: "product_market_term", map: "AdsBrainTerm_workspaceId_productId_marketplace_term_key")
+  @@index([marketplace, term])
+  @@index([productId, marketplace, state])
+  @@index([checkedAt])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-9 — the market arbiter's lead on one term sibling products meet on in one market (one-brain DESIGN.md §1:
+/// pinned, else the brand word, else the highest pooled profit per click, then orders, clicks, id). The others never
+/// harvest it and bid at most 0.8 × the lead's bid on it. SHADOW: decided and logged daily for the terms a due product
+/// holds; nothing here writes to Amazon. Rows no run checked for 30 days are deleted.
+model AdsBrainTermLead {
+  // Business ownership comes from verified database context.
+  workspaceId           String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id                    String   @id @default(cuid())
+
+  /// Short market code ('IT'); the term, normalised.
+  marketplace           String
+  term                  String
+  /// Product.id of the lead's family root.
+  leadProductId         String
+  previousLeadProductId String?
+  leadSince             DateTime
+  /// pinned | brand | profit | orders | clicks | id
+  rule                  String
+  /// The lead's bid on the term and the most a sibling may bid (0.8 ×); null while the lead has no keyword on it.
+  leadBidCents          Int?
+  maxBidCents           Int?
+  /// [{ productId, lead, targets, wants, orders, clicks, profitPerClickCents, bidCents, brandWord }]
+  contenders            Json
+  /// Sibling keywords above the most they may bid: [{ productId, targetId, campaignId, adGroupId, bidCents, toBidCents }]
+  wouldLower            Json
+  why                   String   @db.Text
+  digest                String
+  runId                 String
+  checkedAt             DateTime
+  changedAt             DateTime
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([workspaceId, marketplace, term], name: "market_term", map: "AdsBrainTermLead_workspaceId_marketplace_term_key")
+  @@index([leadProductId])
+  @@index([checkedAt])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

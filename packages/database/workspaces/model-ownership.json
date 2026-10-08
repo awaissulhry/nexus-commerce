@@ -462,6 +462,8 @@
     "AdsBrainOverride",
     "AdsNativeRuleSnapshot",
     "AdsBrainBudgetDecision",
+    "AdsBrainTerm",
+    "AdsBrainTermLead",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",

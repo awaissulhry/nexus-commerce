@@ -35,8 +35,11 @@ import {
   type CampaignNativeRules,
 } from './native-rules.js'
 
-/** AB-7 — `money` is brain/budget-read.ts: the product's money plan in shadow (the tool routes it). */
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money'] as const
+/**
+ * AB-7 — `money` is brain/budget-read.ts: the product's money plan in shadow (the tool routes it). AB-9 — `terms` is
+ * brain/terms-read.ts: the product's term ledger and the market arbiter's leads, in shadow (the tool routes it).
+ */
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
 
 /** The days of action-log evidence a view reads by default, and at most. */
@@ -644,7 +647,7 @@ export async function brainClashes(args: { market?: string; productId?: string; 
         harvestVersusNegate: blocking.map((b) => ({ ...b, meaning: `the keyword "${b.text}" is targeted and blocked in the same place (${b.negative}): it never serves there` })),
         harvestWithoutDestination: noDestination.map((n) => ({ ...n, meaning: `rule "${n.rule}" can harvest in ${n.campaigns.length} campaign${n.campaigns.length === 1 ? '' : 's'} with no stored destination: the keyword goes back into the ad group that found it and that source is never negated (set-harvest-destination fixes it)` })),
         ...(destinations.some((d) => d.scopeGrain === 'line') ? { caveat: 'product-line destinations exist and are not resolved here: a campaign named under harvestWithoutDestination may be covered by one' } : {}),
-        siblingKeywords: siblings.map((s) => ({ ...s, meaning: `${s.products.length} products bid on "${s.text}" in ${market}: the market arbiter (AB-9) will name a lead; today they compete` })),
+        siblingKeywords: siblings.map((s) => ({ ...s, meaning: `${s.products.length} products bid on "${s.text}" in ${market}: the market arbiter (AB-9, view terms) names a lead in shadow; until AB-10/AB-11 write, they compete` })),
         amazonRules: amazonRulesGap(rows, native),
       },
       ...(cfg.engines ? {} : { notMeasured: ['the engines\' modes could not be read: every engine counts as configured to act'] }),
