@@ -7,8 +7,9 @@
 -- FBAShipment (exists): nullable columns for the plan link, Amazon's v2 shipment id, From warehouse, boxes, transport,
 --   tracking and the Shipped click. Its shipmentId stays Amazon's shipmentConfirmationId (FBA15…), so the 15-min status
 --   poll reads these rows unchanged. No new FK.
--- FbaInboundPlanLine (new, business-owned): one SKU of a plan — msku, units (cases × unitsPerCase + loose), prep/label
---   owner, the hold at the From warehouse (reservationId) and the units shipped so far.
+-- FbaInboundPlanLine (new, business-owned): one SKU of a plan — msku, units (Σ cases × unitsPerCase + loose), the sealed
+--   cases per case size (caseCounts), prep/label owner, the hold at the From warehouse (reservationId) and the units
+--   shipped so far.
 -- Additive only: no existing column changes, no NOT NULL on an existing table; production has 0 plans, and with no new
 -- rows every current screen, push and job behaves exactly as before.
 --
@@ -50,8 +51,7 @@ CREATE TABLE "FbaInboundPlanLine" (
     "productId" TEXT NOT NULL,
     "msku" TEXT NOT NULL,
     "quantity" INTEGER NOT NULL,
-    "cases" INTEGER NOT NULL DEFAULT 0,
-    "unitsPerCase" INTEGER,
+    "caseCounts" JSONB NOT NULL DEFAULT '[]',
     "looseUnits" INTEGER NOT NULL DEFAULT 0,
     "prepOwner" TEXT NOT NULL,
     "labelOwner" TEXT NOT NULL,

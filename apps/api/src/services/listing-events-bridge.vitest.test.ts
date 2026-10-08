@@ -95,12 +95,12 @@ describe('inventory.stock_changed reaches the listing SSE bus', () => {
     const seen: any[] = []
     const off = subscribeListingEvents((e) => seen.push(e))
     await broker.publish([
-      envelope('inventory.cases_changed', { productId: 'p-3', locationId: 'loc-1', casesBefore: 4, casesAfter: 3, unitsPerCase: 12, reason: 'count' }),
-      envelope('inventory.cases_changed', { productId: 'p-4', locationId: null, casesBefore: null, casesAfter: null, unitsPerCase: null, reason: 'case-pack' }),
+      envelope('inventory.cases_changed', { productId: 'p-3', locationId: 'loc-1', counts: [{ unitsPerCase: 12, before: 4, after: 3 }], sizes: [12], reason: 'count' }),
+      envelope('inventory.cases_changed', { productId: 'p-4', locationId: null, counts: [], sizes: [], reason: 'case-pack' }),
     ])
     expect(seen).toHaveLength(2)
-    expect(seen[0]).toMatchObject({ type: 'inventory.cases_changed', productId: 'p-3', locationId: 'loc-1', casesBefore: 4, casesAfter: 3, unitsPerCase: 12, reason: 'count' })
-    expect(seen[1]).toMatchObject({ type: 'inventory.cases_changed', productId: 'p-4', locationId: null, unitsPerCase: null, reason: 'case-pack' })
+    expect(seen[0]).toMatchObject({ type: 'inventory.cases_changed', productId: 'p-3', locationId: 'loc-1', counts: [{ unitsPerCase: 12, before: 4, after: 3 }], sizes: [12], reason: 'count' })
+    expect(seen[1]).toMatchObject({ type: 'inventory.cases_changed', productId: 'p-4', locationId: null, counts: [], sizes: [], reason: 'case-pack' })
     expect(typeof seen[0].ts).toBe('number')
     off()
   })

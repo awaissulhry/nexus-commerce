@@ -105,9 +105,8 @@ export type ListingEvent =
       type: 'inventory.cases_changed'
       productId: string
       locationId: string | null
-      casesBefore: number | null
-      casesAfter: number | null
-      unitsPerCase: number | null
+      counts: Array<{ unitsPerCase: number; before: number; after: number }>
+      sizes: number[]
       reason: 'count' | 'case-pack'
       ts: number
     }

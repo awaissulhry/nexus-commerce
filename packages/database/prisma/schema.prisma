@@ -450,8 +450,10 @@ model Product {
   /// Shopify colour products of this family (one per value of its split axis, per store).
   shopifyColourProducts ShopifyColourProduct[]
   shopifyColourSyncs    ShopifyColourSync[]
-  /// Step 3 — this SKU's case pack and FBA prep/label owner (at most one row; array because the unique is compound).
+  /// Step 3 — this SKU's FBA prep/label owner (at most one row; array because the unique is compound).
   casePacks             ProductPackage[]
+  /// Step 3 — this SKU's case sizes (several: 12 / case, 6 / case, …).
+  caseSizes             ProductCaseSize[]
   /// Step 4 — this SKU's lines in Send to FBA plans.
   fbaPlanLines          FbaInboundPlanLine[]
 
@@ -9536,7 +9538,7 @@ model StockLevel {
 
   createdAt     DateTime           @default(now())
   binQuantities StockBinQuantity[] @relation("StockLevelBinQuantities")
-  /// Step 3 — sealed cases at this level (at most one row; array because the unique is compound).
+  /// Step 3 — sealed cases at this level (one row per case size).
   caseCounts    StockCaseCount[]
 
   // The DB-level UNIQUE is enforced by two partial indexes (variationId
@@ -9873,21 +9875,15 @@ model StockBinQuantity {
   @@index([workspaceId])
 }
 
-/// Step 3 (Owner D2 = B) — one SKU's case pack and FBA prep/label owner. Nexus is the source: Amazon has no API for
-/// case-pack templates. Absent row = no case size. Written only by stock/stock-cases.service.ts (setCasePacks).
+/// Step 3 (Owner D2 = B) — one SKU's FBA prep/label owner (Amazon's createInboundPlan prepOwner / labelOwner). Its case
+/// sizes are ProductCaseSize. Written only by stock/stock-cases.service.ts (setCasePacks, setFbaOwnersIfUnset).
 model ProductPackage {
   // Business ownership comes from verified database context.
   workspaceId   String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id            String   @id @default(cuid())
   productId     String
   product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  /// Units in one sealed case; null = no case size (the row may still hold prep/label owners).
-  unitsPerCase  Int?
-  caseLengthCm  Decimal? @db.Decimal(6, 1)
-  caseWidthCm   Decimal? @db.Decimal(6, 1)
-  caseHeightCm  Decimal? @db.Decimal(6, 1)
-  caseWeightKg  Decimal? @db.Decimal(6, 2)
-  /// AMAZON | SELLER (Amazon's createInboundPlan prepOwner / labelOwner). null = not set.
+  /// AMAZON | SELLER. null = not set.
   fbaPrepOwner  String?
   fbaLabelOwner String?
   updatedBy     String?
@@ -9898,21 +9894,48 @@ model ProductPackage {
   @@index([workspaceId])
 }
 
-/// Step 3 — sealed cases at one StockLevel (the StockBinQuantity pattern). StockLevel.quantity stays the UNIT total;
-/// loose = quantity − cases × unitsPerCase. Invariant: cases × unitsPerCase ≤ quantity, kept by keepCasesInTx.
-/// Only WAREHOUSE levels have rows. Written only by stock/stock-cases.service.ts, under lockProductStock.
+/// Step 3 (Owner 2026-10-08: several case sizes per SKU) — one case size of a SKU: units in one sealed case, the case's
+/// size and weight. Nexus is the source: Amazon has no API for case-pack templates. No row = no case size. The units
+/// identify the size within its SKU (unique). Written only by stock/stock-cases.service.ts (setCasePacks).
+model ProductCaseSize {
+  // Business ownership comes from verified database context.
+  workspaceId  String           @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String           @id @default(cuid())
+  productId    String
+  product      Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  unitsPerCase Int
+  caseLengthCm Decimal?         @db.Decimal(6, 1)
+  caseWidthCm  Decimal?         @db.Decimal(6, 1)
+  caseHeightCm Decimal?         @db.Decimal(6, 1)
+  caseWeightKg Decimal?         @db.Decimal(6, 2)
+  updatedBy    String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  counts       StockCaseCount[]
+
+  @@unique([workspaceId, productId, unitsPerCase], name: "productId_unitsPerCase", map: "ProductCaseSize_productId_unitsPerCase_key")
+  @@index([workspaceId])
+}
+
+/// Step 3 — sealed cases of one case size at one StockLevel (the StockBinQuantity pattern). StockLevel.quantity stays the
+/// UNIT total; loose = quantity − Σ cases × unitsPerCase. Invariant: Σ cases × unitsPerCase ≤ quantity, kept by
+/// keepCasesInTx. Only WAREHOUSE levels have rows. Written only by stock/stock-cases.service.ts, under lockProductStock.
+/// A removed case size removes its counts (ON DELETE CASCADE): those cases become loose units.
 model StockCaseCount {
   // Business ownership comes from verified database context.
-  workspaceId  String     @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
-  id           String     @id @default(cuid())
+  workspaceId  String          @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String          @id @default(cuid())
   stockLevelId String
-  stockLevel   StockLevel @relation(fields: [stockLevelId], references: [id], onDelete: Cascade)
-  cases        Int        @default(0)
+  stockLevel   StockLevel      @relation(fields: [stockLevelId], references: [id], onDelete: Cascade)
+  caseSizeId   String
+  caseSize     ProductCaseSize @relation(fields: [caseSizeId], references: [id], onDelete: Cascade)
+  cases        Int             @default(0)
   updatedBy    String?
-  updatedAt    DateTime   @updatedAt
+  updatedAt    DateTime        @updatedAt
 
-  @@unique([workspaceId, stockLevelId], name: "workspace_stockLevelId", map: "StockCaseCount_stockLevelId_key")
+  @@unique([workspaceId, stockLevelId, caseSizeId], name: "stockLevelId_caseSizeId", map: "StockCaseCount_stockLevelId_caseSizeId_key")
   @@index([workspaceId])
+  @@index([caseSizeId])
 }
 
 // L.4 — Lot recall lifecycle. One row per recall instance; partial
@@ -12638,12 +12661,11 @@ model FbaInboundPlanLine {
   product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   /// The Amazon seller SKU sent (the listing's SKU in the plan's market).
   msku            String
-  /// Units in total: cases × unitsPerCase + looseUnits.
+  /// Units in total: Σ cases × unitsPerCase + looseUnits.
   quantity        Int
-  /// Sealed cases sent as identical case boxes.
-  cases           Int              @default(0)
-  /// The case size when the plan was made (null = no case size).
-  unitsPerCase    Int?
+  /// Sealed cases sent, per case size: [{ unitsPerCase, cases }] (`CaseCount[]`, biggest case first); [] = none.
+  /// Each size goes as identical case boxes.
+  caseCounts      Json             @default("[]")
   /// Units packed in mixed boxes.
   looseUnits      Int              @default(0)
   /// AMAZON | SELLER (Amazon's ItemInput prepOwner / labelOwner).

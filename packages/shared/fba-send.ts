@@ -5,8 +5,9 @@
  * Pure: no I/O, no clock — a `today` / `now` is passed in.
  *
  * Owner decisions (final, 2026-10-07):
- *  - Whole sealed cases go as identical case boxes; loose units go in MIXED boxes, first-fit within 23 kg (incl. the
- *    empty box) and 63.5 cm a side. A mixed box over those limits is never built; a case pack over them is a warning.
+ *  - Whole sealed cases go as identical case boxes, one kind per case size (a SKU may have several, Owner 2026-10-08);
+ *    loose units go in MIXED boxes, first-fit within 23 kg (incl. the empty box) and 63.5 cm a side. A mixed box over
+ *    those limits is never built; a case pack over them is a warning.
  *  - Units are HELD at the From warehouse at "Create plan" (StockReservation reason FBA_SEND) and released on cancel.
  *  - Confirming the placement (final at Amazon) is ONE person's click that shows Amazon's fees.
  *  - Prep / label owner is asked once in the dialog when "not set" and remembered for those SKUs.
@@ -16,7 +17,7 @@
  * CLOSED. Side states: FAILED (a step failed; "Try again" re-runs it), HELD (writes switched off / sign-in / rate wait —
  * resumes by itself), CANCELLING → CANCELLED.
  */
-import { AMAZON_EU_BOX, CASE_COPY, isCaseOwner, type CaseOwner } from './stock-cases.js'
+import { AMAZON_EU_BOX, CASE_COPY, isCaseOwner, type CaseCount, type CaseOwner } from './stock-cases.js'
 
 /* ── states and steps ─────────────────────────────────────────────────────────────────────────── */
 
@@ -161,6 +162,13 @@ export interface FbaSendMarket {
   accountId: string
 }
 
+/** One case size of a SKU as the box rule needs it (`ProductCaseSize`). */
+export interface FbaCaseSize {
+  unitsPerCase: number
+  /** The case's size and weight, when all four are set; null = not all set. */
+  case: { lengthCm: number; widthCm: number; heightCm: number; weightKg: number } | null
+}
+
 /** What the box rule needs to know about one SKU. Sizes in cm, weights in kg; null = unknown. */
 export interface FbaBoxSku {
   productId: string
@@ -168,9 +176,8 @@ export interface FbaBoxSku {
   sku: string
   /** The Amazon seller SKU in the plan's market; null = no Amazon listing there. */
   msku: string | null
-  unitsPerCase: number | null
-  /** The case's size and weight, when all four are set (`ProductPackage`). */
-  case: { lengthCm: number; widthCm: number; heightCm: number; weightKg: number } | null
+  /** The SKU's case sizes, biggest first; [] = no case size. */
+  caseSizes: FbaCaseSize[]
   /** One unit's weight (`Product.weightValue` in kg, see `unitWeightKg`). */
   unitWeightKg: number | null
   /** One unit's size (`Product.dim*` in cm, see `lengthCm`). */
@@ -184,8 +191,8 @@ export interface FbaSendSku extends FbaBoxSku {
   onHand: number
   /** Units free at From (StockLevel.available: on hand − holds). */
   free: number
-  /** `caseSplit` at From: sealed cases free to send, and loose units free. */
-  freeSealed: number
+  /** `caseSplit` at From: sealed cases free to send per case size (biggest first), and loose units free. */
+  freeSealed: CaseCount[]
   freeLoose: number
   /** `ProductPackage` owners; null = "not set" (the dialog asks once, Nexus remembers). */
   prepOwner: CaseOwner | null
@@ -215,10 +222,11 @@ export interface FbaSendDraft {
   skus: FbaSendSku[]
 }
 
-/** One SKU the person sends: sealed cases (identical case boxes) and loose units (mixed boxes). */
+/** One SKU the person sends: sealed cases per case size (identical case boxes per size) and loose units (mixed boxes). */
 export interface FbaSendLine {
   productId: string
-  cases: number
+  /** Whole sealed cases per case size; sizes with 0 may be left out. */
+  cases: CaseCount[]
   looseUnits: number
 }
 /** Prep / label owner the dialog asked for the SKUs that had none ("Saved for these SKUs"). */
@@ -445,8 +453,8 @@ export interface FbaPlanLineView {
   sku: string
   msku: string
   quantity: number
-  cases: number
-  unitsPerCase: number | null
+  /** Sealed cases sent per case size (`FbaInboundPlanLine.caseCounts`). */
+  cases: CaseCount[]
   looseUnits: number
   prepOwner: string
   labelOwner: string
@@ -547,7 +555,9 @@ export const FBA_SEND_COPY = {
   owner: { AMAZON: 'Amazon', SELLER: 'Seller' } as Record<CaseOwner, string>,
   ownersHint: 'Saved for these SKUs',
   columns: { sku: 'SKU', free: 'Free', cases: 'Cases', units: 'Units', boxes: 'Boxes', check: 'Check' },
-  free: (free: number, freeSealed: number) => (freeSealed > 0 ? `${free} · ${plural(freeSealed, 'case', 'cases')}` : `${free}`),
+  /** `48`, `48 · 4 cases` (one size), `48 · 2×12 + 1×6` (several sizes). */
+  free: (free: number, freeSealed: readonly CaseCount[]) =>
+    (freeSealed.some(c => c.cases > 0) ? `${free} · ${CASE_COPY.cases(freeSealed)}` : `${free}`),
   mixedLine: (boxes: number, box: FbaMixedBox) => `Loose units go in ${plural(boxes, 'mixed box', 'mixed boxes')} · ${sizeText(box)}`,
   changeBox: 'Change box size',
   metrics: { skus: 'SKUs', units: 'Units', boxes: 'Boxes', weight: 'Weight' },
@@ -648,12 +658,13 @@ export const FBA_SEND_COPY = {
     tooManyUnits: (sku: string) => `${sku}: at most ${FBA_SEND_MAX_UNITS_PER_SKU} units per SKU in one plan`,
     listedTwice: (sku: string) => `${sku}: listed twice`,
     overFree: (sku: string, asked: number, free: number, from: string) => `${sku}: ${asked} units asked; ${free} free at ${from}`,
-    overFreeCases: (sku: string, asked: number, free: number, from: string) =>
-      `${sku}: ${plural(asked, 'sealed case', 'sealed cases')} asked; ${free} free at ${from}`,
+    overFreeCases: (sku: string, unitsPerCase: number, asked: number, free: number, from: string) =>
+      `${sku}: ${plural(asked, 'sealed case', 'sealed cases')} of ${unitsPerCase} asked; ${free} free at ${from}`,
     noListing: (sku: string, market: string) => `${sku}: no Amazon listing in ${market}`,
     noOwners: (sku: string) => `${sku}: choose who preps and labels (Prep by / Labels by)`,
-    noCaseSize: (sku: string) => `${sku}: ${CASE_COPY.noSize}`,
-    noCaseDimensions: (sku: string) => `${sku}: the case needs its size and weight — set them in the Matrix (Case column)`,
+    noCaseSize: (sku: string, unitsPerCase: number) => `${sku}: ${CASE_COPY.noSizeOf(unitsPerCase)}`,
+    noCaseDimensions: (sku: string, unitsPerCase: number) =>
+      `${sku}: the ${unitsPerCase} / case size needs its case size and weight — set them in the Matrix (Case column)`,
     caseOverLimit: (sku: string) => `${sku}: ${CASE_COPY.boxLimit} Amazon may refuse this case.`,
     noUnitWeight: (sku: string) => `${sku}: no unit weight — loose units need it to fill mixed boxes. Send whole cases, or set the weight.`,
     noUnitSize: (sku: string) => `${sku}: no unit size — the mixed boxes are counted by weight only`,
@@ -722,10 +733,30 @@ export function addressMissing(address: Partial<FbaSourceAddress> | null | undef
     return typeof value !== 'string' || value.trim() === ''
   })
 }
-/** Units of one line: cases × unitsPerCase + looseUnits (no case size → loose only). */
-export function lineUnits(line: Pick<FbaSendLine, 'cases' | 'looseUnits'>, unitsPerCase: number | null): number {
-  const size = typeof unitsPerCase === 'number' && Number.isInteger(unitsPerCase) && unitsPerCase >= 1 ? unitsPerCase : 0
-  return (Number.isFinite(line.cases) ? line.cases : 0) * size + (Number.isFinite(line.looseUnits) ? line.looseUnits : 0)
+/** Sealed cases of a line, all sizes together. */
+export function lineCases(line: Pick<FbaSendLine, 'cases'>): number {
+  return (line.cases ?? []).reduce((n, c) => n + (Number.isFinite(c.cases) ? c.cases : 0), 0)
+}
+/** Units of one line: Σ cases × unitsPerCase + looseUnits. */
+export function lineUnits(line: Pick<FbaSendLine, 'cases' | 'looseUnits'>): number {
+  const sealed = (line.cases ?? []).reduce((n, c) => {
+    const size = Number.isInteger(c.unitsPerCase) && c.unitsPerCase >= 1 ? c.unitsPerCase : 0
+    return n + (Number.isFinite(c.cases) ? c.cases : 0) * size
+  }, 0)
+  return sealed + (Number.isFinite(line.looseUnits) ? line.looseUnits : 0)
+}
+/** A line's case counts are valid: whole numbers ≥ 0, each size named once. */
+function validCases(cases: unknown): cases is CaseCount[] {
+  if (!Array.isArray(cases)) return false
+  const seen = new Set<number>()
+  for (const c of cases) {
+    if (!c || typeof c !== 'object') return false
+    const { unitsPerCase, cases: n } = c as CaseCount
+    if (!Number.isInteger(unitsPerCase) || unitsPerCase < 1 || seen.has(unitsPerCase)) return false
+    if (!Number.isInteger(n) || n < 0) return false
+    seen.add(unitsPerCase)
+  }
+  return true
 }
 /** The SKU's owners for the plan: its own, else the dialog's answer; null when still not set. */
 export function effectiveOwners(sku: Pick<FbaSendSku, 'prepOwner' | 'labelOwner'>, owners: FbaSendOwners | null | undefined):
@@ -753,8 +784,9 @@ interface OpenBox { groupId: string | null; usedG: number; usedV: number; items:
 
 /**
  * The boxes for these lines.
- * - Whole cases → ONE `FbaBoxPlan` per SKU with `quantity` = cases (identical boxes): the case's size and weight, content
- *   = unitsPerCase of the SKU. No case size → NO_CASE_SIZE; no case size/weight → NO_CASE_DIMENSIONS (both blocking).
+ * - Whole cases → ONE `FbaBoxPlan` per SKU and case size with `quantity` = cases (identical boxes): that case's size
+ *   and weight, content = its unitsPerCase. A size the SKU does not have → NO_CASE_SIZE; no case size/weight →
+ *   NO_CASE_DIMENSIONS (both blocking).
  *   A case over 63.5 cm / 23 kg → CASE_OVER_LIMIT, a WARNING (Amazon may refuse it; the case box is still planned).
  * - Loose units → MIXED boxes of `mixedBox`, first-fit decreasing (heaviest units first): a unit goes in the first open
  *   box (of its packing group) whose weight stays ≤ maxKg including the empty box and whose units' volume stays
@@ -794,8 +826,8 @@ export function planBoxes(
     const sku = bySku.get(line.productId)
     if (!sku) return
     const whole = (n: number) => Number.isInteger(n) && n >= 0
-    if (!whole(line.cases) || !whole(line.looseUnits)) return
-    if (line.cases === 0 && line.looseUnits === 0) return
+    if (!validCases(line.cases) || !whole(line.looseUnits)) return
+    if (lineCases(line) === 0 && line.looseUnits === 0) return
     const msku = sku.msku ?? sku.sku
     const groupId = groupOf(msku)
     if (groupId === undefined) {
@@ -803,21 +835,23 @@ export function planBoxes(
       return
     }
 
-    if (line.cases > 0) {
-      const size = sku.unitsPerCase
-      if (!(typeof size === 'number' && Number.isInteger(size) && size >= 1)) {
-        add('NO_CASE_SIZE', FBA_SEND_COPY.problem.noCaseSize(sku.sku), sku.productId, true)
-      } else if (!sku.case) {
-        add('NO_CASE_DIMENSIONS', FBA_SEND_COPY.problem.noCaseDimensions(sku.sku), sku.productId, true)
+    // Biggest case first, so the boxes read in the same order everywhere.
+    for (const count of [...line.cases].sort((a, b) => b.unitsPerCase - a.unitsPerCase)) {
+      if (count.cases === 0) continue
+      const size = (sku.caseSizes ?? []).find(s => s.unitsPerCase === count.unitsPerCase)
+      if (!size) {
+        add('NO_CASE_SIZE', FBA_SEND_COPY.problem.noCaseSize(sku.sku, count.unitsPerCase), sku.productId, true)
+      } else if (!size.case) {
+        add('NO_CASE_DIMENSIONS', FBA_SEND_COPY.problem.noCaseDimensions(sku.sku, count.unitsPerCase), sku.productId, true)
       } else {
-        const c = sku.case
+        const c = size.case
         if ([c.lengthCm, c.widthCm, c.heightCm].some(side => side > AMAZON_EU_BOX.maxSideCm) || c.weightKg > AMAZON_EU_BOX.maxKg) {
           add('CASE_OVER_LIMIT', FBA_SEND_COPY.problem.caseOverLimit(sku.sku), sku.productId, false)
         }
         caseBoxes.push({
-          kind: 'case', packingGroupId: groupId, quantity: line.cases,
+          kind: 'case', packingGroupId: groupId, quantity: count.cases,
           lengthCm: c.lengthCm, widthCm: c.widthCm, heightCm: c.heightCm, weightKg: c.weightKg,
-          items: [{ productId: sku.productId, msku, quantity: size }],
+          items: [{ productId: sku.productId, msku, quantity: size.unitsPerCase }],
         })
       }
     }
@@ -971,20 +1005,25 @@ function evaluate(draft: FbaSendDraft, choice: FbaSendChoice): FbaSendSummary {
     if (seen.has(line.productId)) { add('INVALID_QUANTITY', FBA_SEND_COPY.problem.listedTwice(sku.sku), sku.productId, true); continue }
     seen.add(line.productId)
     const whole = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0
-    if (!whole(line.cases) || !whole(line.looseUnits)) { add('INVALID_QUANTITY', FBA_SEND_COPY.problem.invalidQuantity(sku.sku), sku.productId, true); continue }
-    // Cases of a SKU with no case size count 0 units here; planBoxes refuses them (NO_CASE_SIZE).
-    const lineTotal = lineUnits(line, sku.unitsPerCase)
-    if (line.cases === 0 && line.looseUnits === 0) continue
+    if (!validCases(line.cases) || !whole(line.looseUnits)) { add('INVALID_QUANTITY', FBA_SEND_COPY.problem.invalidQuantity(sku.sku), sku.productId, true); continue }
+    // Cases of a size the SKU does not have still count their units here; planBoxes refuses them (NO_CASE_SIZE).
+    const lineTotal = lineUnits(line)
+    const lineCaseCount = lineCases(line)
+    if (lineCaseCount === 0 && line.looseUnits === 0) continue
     withUnits += 1
     counted.push(line)
     units += lineTotal
-    cases += line.cases
+    cases += lineCaseCount
     looseUnits += line.looseUnits
     if (lineTotal > FBA_SEND_MAX_UNITS_PER_SKU) add('INVALID_QUANTITY', FBA_SEND_COPY.problem.tooManyUnits(sku.sku), sku.productId, true)
     if (sku.msku === null) add('NO_LISTING', FBA_SEND_COPY.problem.noListing(sku.sku, draft.market), sku.productId, true)
     if (!effectiveOwners(sku, choice.owners)) add('NO_OWNERS', FBA_SEND_COPY.problem.noOwners(sku.sku), sku.productId, true)
-    if (sku.unitsPerCase !== null && line.cases > sku.freeSealed) {
-      add('OVER_FREE_CASES', FBA_SEND_COPY.problem.overFreeCases(sku.sku, line.cases, sku.freeSealed, fromCode ?? '—'), sku.productId, true)
+    for (const count of line.cases) {
+      if (count.cases === 0 || !(sku.caseSizes ?? []).some(s => s.unitsPerCase === count.unitsPerCase)) continue
+      const free = (sku.freeSealed ?? []).find(f => f.unitsPerCase === count.unitsPerCase)?.cases ?? 0
+      if (count.cases > free) {
+        add('OVER_FREE_CASES', FBA_SEND_COPY.problem.overFreeCases(sku.sku, count.unitsPerCase, count.cases, free, fromCode ?? '—'), sku.productId, true)
+      }
     }
     if (lineTotal > sku.free) add('OVER_FREE', FBA_SEND_COPY.problem.overFree(sku.sku, lineTotal, sku.free, fromCode ?? '—'), sku.productId, true)
     if (sku.openPlanUnits > 0) add('IN_OPEN_PLAN', FBA_SEND_COPY.problem.inOpenPlan(sku.sku, sku.openPlanUnits), sku.productId, false)

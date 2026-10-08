@@ -460,6 +460,12 @@
           "relationFromFields": []
         },
         {
+          "name": "caseSizes",
+          "kind": "object",
+          "type": "ProductCaseSize",
+          "relationFromFields": []
+        },
+        {
           "name": "fbaPlanLines",
           "kind": "object",
           "type": "FbaInboundPlanLine",
@@ -3757,6 +3763,26 @@
       ]
     },
     {
+      "name": "ProductCaseSize",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "counts",
+          "kind": "object",
+          "type": "StockCaseCount",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
       "name": "StockCaseCount",
       "fields": [
         {
@@ -3765,6 +3791,15 @@
           "type": "StockLevel",
           "relationFromFields": [
             "stockLevelId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "caseSize",
+          "kind": "object",
+          "type": "ProductCaseSize",
+          "relationFromFields": [
+            "caseSizeId"
           ],
           "relationOnDelete": "Cascade"
         }

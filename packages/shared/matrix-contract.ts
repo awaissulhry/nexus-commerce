@@ -296,9 +296,10 @@ export interface MatrixRowRead {
    */
   fba?: MatrixFbaStock | null
   /**
-   * Case pack (Step 3, Owner D2 = B): this SKU's units per case, case size and weight, and who preps and labels for FBA
-   * (`ProductPackage`). `null` = none set; absent = an older server that did not read it. A parent carries its own row
-   * (normally null); the page sums up its variations. Sealed counts are not here (the stock editor shows them).
+   * Case pack (Step 3, Owner D2 = B; several sizes, Owner 2026-10-08): this SKU's case sizes (units per case, case size
+   * and weight) and who preps and labels for FBA. `null` = none set; absent = an older server that did not read it. A
+   * parent carries its own row (normally null); the page sums up its variations. Sealed counts are not here (the stock
+   * editor shows them).
    */
   pack?: MatrixCasePack | null
   /**
@@ -342,13 +343,21 @@ export interface MatrixFbaPlan {
   units: number
 }
 
-/** One SKU's case pack as the Matrix reads it (`ProductPackage`). Sizes in cm, weight in kg; owners null = not set. */
-export interface MatrixCasePack {
-  unitsPerCase: number | null
+/** One case size of a SKU (`ProductCaseSize`). The units per case name the size. Sizes in cm, weight in kg; null = not set. */
+export interface MatrixCaseSize {
+  unitsPerCase: number
   caseLengthCm: number | null
   caseWidthCm: number | null
   caseHeightCm: number | null
   caseWeightKg: number | null
+}
+
+/**
+ * One SKU's case pack as the Matrix reads it: its case sizes (`ProductCaseSize`, biggest first; [] = no case size) and
+ * its FBA prep / label owner (`ProductPackage`; null = not set).
+ */
+export interface MatrixCasePack {
+  sizes: MatrixCaseSize[]
   fbaPrepOwner: 'AMAZON' | 'SELLER' | null
   fbaLabelOwner: 'AMAZON' | 'SELLER' | null
 }

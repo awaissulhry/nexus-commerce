@@ -3,211 +3,211 @@ import {
   AMAZON_EU_BOX,
   CASE_COPY,
   CASE_OWNERS,
-  type CasePackValues,
+  type CaseCount,
+  type CaseSizeValues,
+  MAX_CASE_SIZES,
   MAX_UNITS_PER_CASE,
   amazonBoxWarning,
   caseCountProblem,
   caseSplit,
   casesAfterMove,
+  countsFor,
   isCaseOwner,
-  packProblem,
+  ownersProblem,
   sealedCases,
+  sealedUnits,
+  sizeProblem,
+  sizesProblem,
+  withCounts,
 } from './stock-cases'
 
-const pack = (over: Partial<CasePackValues> = {}): CasePackValues => ({
-  unitsPerCase: 12,
-  caseLengthCm: 60,
-  caseWidthCm: 40,
-  caseHeightCm: 35,
-  caseWeightKg: 14.5,
-  fbaPrepOwner: 'SELLER',
-  fbaLabelOwner: 'SELLER',
-  ...over,
+const c = (unitsPerCase: number, cases: number): CaseCount => ({ unitsPerCase, cases })
+const size = (over: Partial<CaseSizeValues> = {}): CaseSizeValues => ({
+  unitsPerCase: 12, caseLengthCm: 60, caseWidthCm: 40, caseHeightCm: 35, caseWeightKg: 14.5, ...over,
 })
 
 describe('sealedCases — what a reader shows', () => {
-  it('never more sealed cases than the units allow', () => {
-    expect(sealedCases(4, 51, 12)).toBe(4)
-    expect(sealedCases(4, 48, 12)).toBe(4)
-    expect(sealedCases(4, 47, 12)).toBe(3)
-    expect(sealedCases(4, 11, 12)).toBe(0)
-    expect(sealedCases(4, 0, 12)).toBe(0)
+  it('one size: never more sealed cases than the units allow', () => {
+    expect(sealedCases([c(12, 4)], 51)).toEqual([c(12, 4)])
+    expect(sealedCases([c(12, 4)], 48)).toEqual([c(12, 4)])
+    expect(sealedCases([c(12, 4)], 47)).toEqual([c(12, 3)])
+    expect(sealedCases([c(12, 4)], 11)).toEqual([c(12, 0)])
+    expect(sealedCases([c(12, 4)], 0)).toEqual([c(12, 0)])
   })
 
-  it('no case size (or a broken one) → 0; a negative stored or quantity reads as 0', () => {
-    expect(sealedCases(4, 51, null)).toBe(0)
-    expect(sealedCases(4, 51, 0)).toBe(0)
-    expect(sealedCases(4, 51, 2.5)).toBe(0)
-    expect(sealedCases(-2, 51, 12)).toBe(0)
-    expect(sealedCases(4, -5, 12)).toBe(0)
+  it('several sizes: biggest first, a shortfall opens the smallest case first', () => {
+    // 2×12 + 1×6 + 3 loose = 33.
+    expect(sealedCases([c(6, 1), c(12, 2)], 33)).toEqual([c(12, 2), c(6, 1)])
+    expect(sealedCases([c(12, 2), c(6, 1)], 30)).toEqual([c(12, 2), c(6, 1)])
+    expect(sealedCases([c(12, 2), c(6, 1)], 29)).toEqual([c(12, 2), c(6, 0)])
+    expect(sealedCases([c(12, 2), c(6, 1)], 23)).toEqual([c(12, 1), c(6, 1)])
+    expect(sealedCases([c(12, 2), c(6, 1)], 5)).toEqual([c(12, 0), c(6, 0)])
+  })
+
+  it('a valid split comes back unchanged', () => {
+    expect(sealedCases([c(10, 1), c(6, 2), c(3, 1)], 25)).toEqual([c(10, 1), c(6, 2), c(3, 1)])
+  })
+
+  it('a broken size is dropped; a size named twice keeps its first count; negatives read as 0', () => {
+    expect(sealedCases([c(0, 4), c(2.5, 1), c(12, 4)], 51)).toEqual([c(12, 4)])
+    expect(sealedCases([c(12, 1), c(12, 3)], 51)).toEqual([c(12, 1)])
+    expect(sealedCases([c(12, -2)], 51)).toEqual([c(12, 0)])
+    expect(sealedCases([c(12, 4)], -5)).toEqual([c(12, 0)])
+    expect(sealedCases([], 51)).toEqual([])
   })
 })
 
-describe('casesAfterMove — the clamp: loose units first, then a case opens', () => {
+describe('countsFor / withCounts / sealedUnits', () => {
+  it('countsFor: every size of the SKU, the stored count or 0, biggest first', () => {
+    expect(countsFor([6, 12], [c(12, 3)])).toEqual([c(12, 3), c(6, 0)])
+    expect(countsFor([], [c(12, 3)])).toEqual([])
+  })
+  it('withCounts: the typed sizes absolute, the others kept', () => {
+    expect(withCounts([c(12, 3), c(6, 1)], [c(6, 4)])).toEqual([c(12, 3), c(6, 4)])
+  })
+  it('sealedUnits: Σ cases × units', () => {
+    expect(sealedUnits([c(12, 2), c(6, 1)])).toBe(30)
+    expect(sealedUnits([])).toBe(0)
+  })
+})
+
+describe('casesAfterMove — the clamp: loose units first, then the smallest case opens', () => {
   // 4 cases + 3 loose at 12 / case = 51 units.
   it.each([
     { label: 'sell 3: the 3 loose go, every case stays sealed', quantityAfter: 48, cases: 4, opened: 0 },
     { label: 'sell 4: a case opens, 11 loose', quantityAfter: 47, cases: 3, opened: 1 },
-    { label: 'sell 15: one case opens', quantityAfter: 36, cases: 3, opened: 1 },
     { label: 'sell 16: two cases open', quantityAfter: 35, cases: 2, opened: 2 },
     { label: 'sell everything: every case opens', quantityAfter: 0, cases: 0, opened: 4 },
     { label: 'a negative balance opens every case', quantityAfter: -3, cases: 0, opened: 4 },
-  ])('$label', ({ quantityAfter, cases, opened }) => {
-    expect(casesAfterMove({ cases: 4, quantityAfter, unitsPerCase: 12 })).toEqual({ cases, opened })
+  ])('one size — $label', ({ quantityAfter, cases, opened }) => {
+    expect(casesAfterMove({ cases: [c(12, 4)], quantityAfter })).toEqual({ cases: [c(12, cases)], opened })
   })
 
-  it('a unit increase never touches the count (received units arrive loose)', () => {
-    expect(casesAfterMove({ cases: 4, quantityAfter: 100, unitsPerCase: 12 })).toEqual({ cases: 4, opened: 0 })
-    expect(casesAfterMove({ cases: 0, quantityAfter: 100, unitsPerCase: 12 })).toEqual({ cases: 0, opened: 0 })
+  it('several sizes: the small case opens, the big ones stay sealed', () => {
+    // 2×12 + 1×6 + 3 loose = 33; sell 4 → 29.
+    expect(casesAfterMove({ cases: [c(12, 2), c(6, 1)], quantityAfter: 29 })).toEqual({ cases: [c(12, 2), c(6, 0)], opened: 1 })
+    // Sell 10 → 23: the units force a big case open, the small one stays.
+    expect(casesAfterMove({ cases: [c(12, 2), c(6, 1)], quantityAfter: 23 })).toEqual({ cases: [c(12, 1), c(6, 1)], opened: 1 })
   })
 
-  it('a stored count already above the units (a pool door before its settle) clamps down', () => {
-    expect(casesAfterMove({ cases: 5, quantityAfter: 40, unitsPerCase: 12 })).toEqual({ cases: 3, opened: 2 })
+  it('a unit increase never touches a count (received units arrive loose)', () => {
+    expect(casesAfterMove({ cases: [c(12, 4), c(6, 1)], quantityAfter: 100 })).toEqual({ cases: [c(12, 4), c(6, 1)], opened: 0 })
   })
 
-  it('no case size is refused', () => {
-    expect(casesAfterMove({ cases: 4, quantityAfter: 47, unitsPerCase: 0 })).toEqual({ refused: { code: 'NO_CASE_SIZE', message: CASE_COPY.noSize } })
-  })
-})
-
-describe('casesAfterMove — explicit whole cases (Step 4)', () => {
-  it('🔴 4 cases + 30 loose, 2 whole cases leave → 2 cases (the clamp alone would keep 4)', () => {
-    // 78 units → 54 after 24 left as two cases.
-    expect(casesAfterMove({ cases: 4, quantityAfter: 54, unitsPerCase: 12 })).toEqual({ cases: 4, opened: 0 })
-    expect(casesAfterMove({ cases: 4, quantityAfter: 54, unitsPerCase: 12, casesChange: -2 })).toEqual({ cases: 2, opened: 0 })
+  it('whole cases leave per size: 4×12 + 30 loose, send 2 cases → 2 stay', () => {
+    expect(casesAfterMove({ cases: [c(12, 4)], quantityAfter: 54, casesChange: [{ unitsPerCase: 12, change: -2 }] }))
+      .toEqual({ cases: [c(12, 2)], opened: 0 })
   })
 
-  it('whole cases plus more loose units than are loose: one more case opens', () => {
-    // 4 cases + 3 loose (51); 2 cases + 5 units leave → 22 units: 1 case + 10 loose.
-    expect(casesAfterMove({ cases: 4, quantityAfter: 22, unitsPerCase: 12, casesChange: -2 })).toEqual({ cases: 1, opened: 1 })
+  it('cases of two sizes leave in one move', () => {
+    // 3×12 + 2×6 + 4 loose = 52; 1×12 + 1×6 + 4 loose leave (22) → 30 = 2×12 + 1×6.
+    expect(casesAfterMove({ cases: [c(12, 3), c(6, 2)], quantityAfter: 30, casesChange: [{ unitsPerCase: 12, change: -1 }, { unitsPerCase: 6, change: -1 }] }))
+      .toEqual({ cases: [c(12, 2), c(6, 1)], opened: 0 })
   })
 
-  it('more cases cannot leave than are sealed', () => {
-    const r = casesAfterMove({ cases: 1, quantityAfter: 0, unitsPerCase: 12, casesChange: -2 })
-    expect(r).toMatchObject({ refused: { code: 'INVALID_CASES' } })
+  it('loose units that leave with whole cases may open one more (the clamp after the change)', () => {
+    // 4×12 + 3 loose = 51; 2 cases + 5 loose leave (29) → 22: 2 cases would need 24 → one opens.
+    expect(casesAfterMove({ cases: [c(12, 4)], quantityAfter: 22, casesChange: [{ unitsPerCase: 12, change: -2 }] }))
+      .toEqual({ cases: [c(12, 1)], opened: 1 })
   })
 
-  it('whole cases that arrive sealed add to the count; units that do not cover them are refused', () => {
-    expect(casesAfterMove({ cases: 1, quantityAfter: 40, unitsPerCase: 12, casesChange: 2 })).toEqual({ cases: 3, opened: 0 })
-    expect(casesAfterMove({ cases: 1, quantityAfter: 30, unitsPerCase: 12, casesChange: 2 })).toEqual({
-      refused: { code: 'CASES_EXCEED_UNITS', message: CASE_COPY.exceeds(3, 12, 30) },
-    })
+  it('refusals: more cases leave than are sealed, a size the SKU lacks, not a whole number, too many arrive, no size', () => {
+    expect(casesAfterMove({ cases: [c(12, 1)], quantityAfter: 0, casesChange: [{ unitsPerCase: 12, change: -2 }] })).toMatchObject({ refused: { code: 'INVALID_CASES' } })
+    expect(casesAfterMove({ cases: [c(12, 1)], quantityAfter: 6, casesChange: [{ unitsPerCase: 6, change: -1 }] })).toMatchObject({ refused: { code: 'NO_CASE_SIZE', message: CASE_COPY.noSizeOf(6) } })
+    expect(casesAfterMove({ cases: [c(12, 1)], quantityAfter: 12, casesChange: [{ unitsPerCase: 12, change: 0.5 }] })).toMatchObject({ refused: { code: 'INVALID_CASES' } })
+    expect(casesAfterMove({ cases: [c(12, 1)], quantityAfter: 20, casesChange: [{ unitsPerCase: 12, change: 1 }] })).toMatchObject({ refused: { code: 'CASES_EXCEED_UNITS' } })
+    expect(casesAfterMove({ cases: [], quantityAfter: 20 })).toMatchObject({ refused: { code: 'NO_CASE_SIZE' } })
   })
 
-  it('a casesChange that is not a whole number is refused; 0 is the clamp', () => {
-    expect(casesAfterMove({ cases: 4, quantityAfter: 51, unitsPerCase: 12, casesChange: 0.5 })).toMatchObject({ refused: { code: 'INVALID_CASES' } })
-    expect(casesAfterMove({ cases: 4, quantityAfter: 47, unitsPerCase: 12, casesChange: 0 })).toEqual({ cases: 3, opened: 1 })
+  it('cases that arrive sealed and fit are counted', () => {
+    expect(casesAfterMove({ cases: [c(12, 1), c(6, 0)], quantityAfter: 30, casesChange: [{ unitsPerCase: 6, change: 2 }] }))
+      .toEqual({ cases: [c(12, 1), c(6, 2)], opened: 0 })
   })
 })
 
-describe('caseSplit — sealed, loose, and what holds leave free (a hold takes loose units first)', () => {
-  it('no holds: everything is free', () => {
-    expect(caseSplit({ quantity: 51, reserved: 0, cases: 4, unitsPerCase: 12 })).toEqual({ sealed: 4, loose: 3, freeSealed: 4, freeLoose: 3 })
+describe('caseSplit — sealed, loose and what holds leave free', () => {
+  it('no hold: everything is free', () => {
+    expect(caseSplit({ quantity: 51, reserved: 0, cases: [c(12, 4)] })).toEqual({ sealed: [c(12, 4)], loose: 3, freeSealed: [c(12, 4)], freeLoose: 3 })
   })
-
-  it('a hold within the loose units leaves every case free', () => {
-    expect(caseSplit({ quantity: 51, reserved: 2, cases: 4, unitsPerCase: 12 })).toEqual({ sealed: 4, loose: 3, freeSealed: 4, freeLoose: 1 })
-    expect(caseSplit({ quantity: 51, reserved: 3, cases: 4, unitsPerCase: 12 })).toEqual({ sealed: 4, loose: 3, freeSealed: 4, freeLoose: 0 })
+  it('a hold takes loose units first', () => {
+    expect(caseSplit({ quantity: 51, reserved: 3, cases: [c(12, 4)] })).toEqual({ sealed: [c(12, 4)], loose: 3, freeSealed: [c(12, 4)], freeLoose: 0 })
   })
-
-  it('a hold beyond the loose units takes whole cases (rounded up)', () => {
-    expect(caseSplit({ quantity: 51, reserved: 5, cases: 4, unitsPerCase: 12 })).toEqual({ sealed: 4, loose: 3, freeSealed: 3, freeLoose: 0 })
-    expect(caseSplit({ quantity: 51, reserved: 15, cases: 4, unitsPerCase: 12 })).toEqual({ sealed: 4, loose: 3, freeSealed: 3, freeLoose: 0 })
-    expect(caseSplit({ quantity: 51, reserved: 16, cases: 4, unitsPerCase: 12 })).toEqual({ sealed: 4, loose: 3, freeSealed: 2, freeLoose: 0 })
-    expect(caseSplit({ quantity: 51, reserved: 51, cases: 4, unitsPerCase: 12 })).toEqual({ sealed: 4, loose: 3, freeSealed: 0, freeLoose: 0 })
+  it('a bigger hold opens a case; what it leaves of that case is free and loose', () => {
+    // 51 − 5 = 46 free = 3×12 + 10.
+    expect(caseSplit({ quantity: 51, reserved: 5, cases: [c(12, 4)] })).toEqual({ sealed: [c(12, 4)], loose: 3, freeSealed: [c(12, 3)], freeLoose: 10 })
   })
-
-  it('the stored count is clamped by the units; no case size = everything loose', () => {
-    expect(caseSplit({ quantity: 47, reserved: 0, cases: 4, unitsPerCase: 12 })).toEqual({ sealed: 3, loose: 11, freeSealed: 3, freeLoose: 11 })
-    expect(caseSplit({ quantity: 51, reserved: 5, cases: 4, unitsPerCase: null })).toEqual({ sealed: 0, loose: 51, freeSealed: 0, freeLoose: 46 })
+  it('several sizes: a hold opens the smallest case first', () => {
+    // 2×12 + 1×6 + 0 = 30, hold 4 → 26 free = 2×12 + 2.
+    expect(caseSplit({ quantity: 30, reserved: 4, cases: [c(12, 2), c(6, 1)] }))
+      .toEqual({ sealed: [c(12, 2), c(6, 1)], loose: 0, freeSealed: [c(12, 2), c(6, 0)], freeLoose: 2 })
   })
-})
-
-describe('caseCountProblem — an absolute sealed count', () => {
-  const at = (cases: number, over: Partial<{ quantity: number; unitsPerCase: number | null; locationType: string }> = {}) =>
-    caseCountProblem({ cases, quantity: 51, unitsPerCase: 12, locationType: 'WAREHOUSE', ...over })
-
-  it('allowed while the cases fit the units', () => {
-    expect(at(0)).toBeNull()
-    expect(at(3)).toBeNull()
-    expect(at(4)).toBeNull()
+  it('more held than on hand: nothing is free', () => {
+    expect(caseSplit({ quantity: 10, reserved: 15, cases: [c(6, 1)] })).toEqual({ sealed: [c(6, 1)], loose: 4, freeSealed: [c(6, 0)], freeLoose: 0 })
   })
-
-  it('more cases than units → CASES_EXCEED_UNITS, with the operator sentence', () => {
-    expect(at(5)).toEqual({ code: 'CASES_EXCEED_UNITS', message: '5 cases need 60 units; on hand is 51' })
-  })
-
-  it('only at own warehouses: FBA and Shopify stay units', () => {
-    expect(at(1, { locationType: 'AMAZON_FBA' })).toEqual({ code: 'NOT_A_WAREHOUSE', message: CASE_COPY.notHere })
-    expect(at(0, { locationType: 'SHOPIFY_LOCATION' })).toEqual({ code: 'NOT_A_WAREHOUSE', message: CASE_COPY.notHere })
-  })
-
-  it('no case size → NO_CASE_SIZE (0 is still allowed: it can never break the invariant)', () => {
-    expect(at(1, { unitsPerCase: null })).toEqual({ code: 'NO_CASE_SIZE', message: CASE_COPY.noSize })
-    expect(at(0, { unitsPerCase: null })).toBeNull()
-  })
-
-  it('a count that is not a whole number of 0 or more → INVALID_CASES', () => {
-    expect(at(-1)).toMatchObject({ code: 'INVALID_CASES' })
-    expect(at(1.5)).toMatchObject({ code: 'INVALID_CASES' })
-    expect(at(Number.NaN)).toMatchObject({ code: 'INVALID_CASES' })
+  it('no case size: everything is loose', () => {
+    expect(caseSplit({ quantity: 51, reserved: 1, cases: [] })).toEqual({ sealed: [], loose: 51, freeSealed: [], freeLoose: 50 })
   })
 })
 
-describe('packProblem — what a case pack may hold', () => {
-  it('a full pack and an empty one are fine', () => {
-    expect(packProblem(pack())).toBeNull()
-    expect(packProblem({ unitsPerCase: null, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null, fbaPrepOwner: null, fbaLabelOwner: null })).toBeNull()
+describe('caseCountProblem — an absolute count at one location', () => {
+  const at = (cases: CaseCount[], quantity = 51, sizes = [12, 6], locationType = 'WAREHOUSE') => caseCountProblem({ cases, quantity, sizes, locationType })
+  it('allowed: counts the units hold, all 0', () => {
+    expect(at([c(12, 3), c(6, 2)])).toBeNull()
+    expect(at([c(12, 0), c(6, 0)], 0, [])).toBeNull()
   })
-
-  it('units per case: a whole number from 1 to 10000', () => {
-    expect(packProblem(pack({ unitsPerCase: 1 }))).toBeNull()
-    expect(packProblem(pack({ unitsPerCase: MAX_UNITS_PER_CASE }))).toBeNull()
-    for (const bad of [0, -1, 1.5, MAX_UNITS_PER_CASE + 1, Number.NaN]) {
-      expect(packProblem(pack({ unitsPerCase: bad }))).toBe('Units per case must be a whole number from 1 to 10000')
-    }
+  it('refused: not a warehouse, not whole, a size the SKU lacks, more than the units', () => {
+    expect(at([c(12, 0)], 51, [12], 'AMAZON_FBA')?.code).toBe('NOT_A_WAREHOUSE')
+    expect(at([c(12, -1)])?.code).toBe('INVALID_CASES')
+    expect(at([c(12, 1.5)])?.code).toBe('INVALID_CASES')
+    expect(at([c(8, 1)])).toEqual({ code: 'NO_CASE_SIZE', message: CASE_COPY.noSizeOf(8) })
+    expect(at([c(12, 1)], 51, [])).toEqual({ code: 'NO_CASE_SIZE', message: CASE_COPY.noSize })
+    expect(at([c(12, 4), c(6, 1)])).toEqual({ code: 'CASES_EXCEED_UNITS', message: '4×12 + 1×6 need 54 units; on hand is 51' })
+    expect(at([c(12, 5)], 51, [12])).toEqual({ code: 'CASES_EXCEED_UNITS', message: '5 cases need 60 units; on hand is 51' })
   })
+})
 
-  it('each side more than 0 and at most 300 cm; weight more than 0 and at most 1000 kg', () => {
-    expect(packProblem(pack({ caseLengthCm: 300 }))).toBeNull()
-    expect(packProblem(pack({ caseLengthCm: 0 }))).toBe('Case length must be more than 0 and at most 300 cm')
-    expect(packProblem(pack({ caseWidthCm: 300.1 }))).toBe('Case width must be more than 0 and at most 300 cm')
-    expect(packProblem(pack({ caseHeightCm: -1 }))).toBe('Case height must be more than 0 and at most 300 cm')
-    expect(packProblem(pack({ caseWeightKg: 1000 }))).toBeNull()
-    expect(packProblem(pack({ caseWeightKg: 0 }))).toBe('Case weight must be more than 0 and at most 1000 kg')
-    expect(packProblem(pack({ caseWeightKg: Number.POSITIVE_INFINITY }))).toBe('Case weight must be more than 0 and at most 1000 kg')
+describe('the words', () => {
+  it('sizes, split and cases', () => {
+    expect(CASE_COPY.sizes([6, 12])).toBe('12 · 6 / case')
+    expect(CASE_COPY.sizes([12])).toBe('12 / case')
+    expect(CASE_COPY.sizes([])).toBe('')
+    expect(CASE_COPY.split([c(12, 4)], 3)).toBe('4 + 3')
+    expect(CASE_COPY.split([c(12, 2), c(6, 1)], 3)).toBe('2×12 + 1×6 + 3')
+    expect(CASE_COPY.split([c(12, 2), c(6, 0)], 5)).toBe('2×12 + 5')
+    expect(CASE_COPY.split([c(12, 0), c(6, 0)], 5)).toBe('0 + 5')
+    expect(CASE_COPY.cases([c(12, 1)])).toBe('1 case')
   })
+})
 
-  it('prep and label owners: Amazon or Seller', () => {
+describe('case sizes and owners — what a save accepts', () => {
+  it('a full size passes; units 1..10000 whole; sides 0 < cm ≤ 300; 0 < kg ≤ 1000; nulls allowed', () => {
+    expect(sizeProblem(size())).toBeNull()
+    expect(sizeProblem(size({ caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null }))).toBeNull()
+    expect(sizeProblem(size({ unitsPerCase: 0 }))).toMatch(/Units per case/)
+    expect(sizeProblem(size({ unitsPerCase: MAX_UNITS_PER_CASE + 1 }))).toMatch(/Units per case/)
+    expect(sizeProblem(size({ unitsPerCase: 2.5 }))).toMatch(/Units per case/)
+    expect(sizeProblem(size({ caseWidthCm: 0 }))).toMatch(/Case width/)
+    expect(sizeProblem(size({ caseHeightCm: 301 }))).toMatch(/Case height/)
+    expect(sizeProblem(size({ caseWeightKg: 1001 }))).toMatch(/Case weight/)
+  })
+  it('a list: at most MAX_CASE_SIZES, no units per case twice, every size valid', () => {
+    expect(sizesProblem([size(), size({ unitsPerCase: 6 })])).toBeNull()
+    expect(sizesProblem([])).toBeNull()
+    expect(sizesProblem([size(), size()])).toBe(CASE_COPY.sameSize(12))
+    expect(sizesProblem(Array.from({ length: MAX_CASE_SIZES + 1 }, (_, k) => size({ unitsPerCase: k + 1 })))).toBe(CASE_COPY.tooManySizes)
+    expect(sizesProblem([size(), size({ unitsPerCase: 0 })])).toMatch(/Units per case/)
+  })
+  it('owners: Amazon | Seller | not set', () => {
     expect(CASE_OWNERS).toEqual(['AMAZON', 'SELLER'])
-    expect(packProblem(pack({ fbaPrepOwner: 'NONE' as never }))).toBe('Prep by must be Amazon or Seller')
-    expect(packProblem(pack({ fbaLabelOwner: 'seller' as never }))).toBe('Labels by must be Amazon or Seller')
-    expect(isCaseOwner('AMAZON')).toBe(true)
+    expect(isCaseOwner('SELLER')).toBe(true)
     expect(isCaseOwner('seller')).toBe(false)
-    expect(isCaseOwner(null)).toBe(false)
+    expect(ownersProblem({ fbaPrepOwner: 'AMAZON', fbaLabelOwner: null })).toBeNull()
+    expect(ownersProblem({ fbaPrepOwner: 'X' as never })).toMatch(/Prep by/)
+    expect(ownersProblem({ fbaLabelOwner: 'X' as never })).toMatch(/Labels by/)
   })
-})
-
-describe('amazonBoxWarning — Amazon EU box limits, a warning only', () => {
-  it('within 63.5 cm a side and 23 kg → none', () => {
-    expect(amazonBoxWarning(pack())).toBeNull()
-    expect(amazonBoxWarning(pack({ caseLengthCm: AMAZON_EU_BOX.maxSideCm, caseWeightKg: AMAZON_EU_BOX.maxKg }))).toBeNull()
-    expect(amazonBoxWarning(pack({ caseLengthCm: null, caseWeightKg: null }))).toBeNull()
-  })
-
-  it('a side over 63.5 cm or a weight over 23 kg → the warning', () => {
-    expect(amazonBoxWarning(pack({ caseHeightCm: 63.6 }))).toBe(CASE_COPY.boxLimit)
-    expect(amazonBoxWarning(pack({ caseWeightKg: 23.01 }))).toBe(CASE_COPY.boxLimit)
-    // A warning, not a refusal: the pack still saves.
-    expect(packProblem(pack({ caseHeightCm: 80, caseWeightKg: 30 }))).toBeNull()
-  })
-})
-
-describe('CASE_COPY — the operator words', () => {
-  it('reads as the screens show it', () => {
-    expect(CASE_COPY.perCase(12)).toBe('12 / case')
-    expect(CASE_COPY.split(4, 3)).toBe('4 + 3')
-    expect(CASE_COPY.sealedOpen(1, 'IT-MAIN')).toBe('1 sealed case at IT-MAIN becomes loose units. Count them again under Stock.')
-    expect(CASE_COPY.sealedOpen(4, 'IT-MAIN')).toBe('4 sealed cases at IT-MAIN become loose units. Count them again under Stock.')
+  it('Amazon EU box limit: a warning over 63.5 cm or 23 kg', () => {
+    expect(amazonBoxWarning(size())).toBeNull()
+    expect(amazonBoxWarning(size({ caseLengthCm: AMAZON_EU_BOX.maxSideCm + 0.1 }))).toBe(CASE_COPY.boxLimit)
+    expect(amazonBoxWarning(size({ caseWeightKg: 23.5 }))).toBe(CASE_COPY.boxLimit)
   })
 })

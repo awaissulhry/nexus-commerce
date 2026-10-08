@@ -213,6 +213,7 @@
     "StockBin",
     "StockBinQuantity",
     "ProductPackage",
+    "ProductCaseSize",
     "StockCaseCount",
     "LotRecall",
     "YearEndSnapshot",
