@@ -74,8 +74,8 @@ const SPENT = { clicks: 20, spendCents: 1000, salesCents: 2000, ordersCount: 2 }
 const HELD = ['c-hourly', 'c-plan', 'c-auto', 'c-person', 'c-goal'] as const
 /** The extra keywords: c-person's and c-goal's that no person touched, and c-goal's one a Claude request changed. */
 const MORE: Array<[string, string]> = [['t-person2', 'c-person'], ['t-goal2', 'c-goal'], ['t-goal-claude', 'c-goal']]
-const bidLog = (entityId: string, userId: string) =>
-  db().advertisingActionLog.create({ data: { userId, actionType: 'AD_BID_UPDATE', entityType: 'AD_TARGET', entityId, payloadBefore: { bidCents: 55 }, payloadAfter: { bidCents: 50 } } })
+const bidLog = (entityId: string, userId: string, createdAt = new Date()) =>
+  db().advertisingActionLog.create({ data: { userId, actionType: 'AD_BID_UPDATE', entityType: 'AD_TARGET', entityId, payloadBefore: { bidCents: 55 }, payloadAfter: { bidCents: 50 }, createdAt } })
 
 beforeAll(async () => {
   database = await formulaDatabase()
@@ -105,7 +105,8 @@ beforeAll(async () => {
     await bidLog('t-person', 'user:u-test')
     await bidLog('t-goal', 'user:u-test')
     await bidLog('t-goal-claude', claudeActor('u-approver'))
-    await bidLog('t-goal2', 'automation:auto-bid')
+    // Two days ago: an engine's move of TODAY's data day would hold the bid until the next one (review 2026-10-08, B).
+    await bidLog('t-goal2', 'automation:auto-bid', new Date(Date.now() - 2 * 86_400_000))
     await setBidAutomation('c-goal', { targetAcos: 0.4 })
   })
 }, 180_000)

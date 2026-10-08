@@ -12,7 +12,7 @@ vi.mock('./ads-mutation.service.js', () => ({
 }))
 
 import { bulkUpdateAdTargetBids } from './ads-mutation.service.js'
-import { applyBidOptimization } from './ads-bid-optimizer.service.js'
+import { applyBidOptimization, currentDataDay } from './ads-bid-optimizer.service.js'
 
 const bulk = vi.mocked(bulkUpdateAdTargetBids)
 
@@ -29,10 +29,12 @@ describe('applyBidOptimization', () => {
         { targetId: 't2', proposedBidCents: 45 },
       ],
     })
+    // Review 2026-10-08 (B) — every entry carries the settled data day it was decided on (today's, without its own).
+    const dataDay = currentDataDay()
     expect(bulk).toHaveBeenCalledWith({
       entries: [
-        { adTargetId: 't1', bidCents: 30 },
-        { adTargetId: 't2', bidCents: 45 },
+        { adTargetId: 't1', bidCents: 30, evidence: { dataDay } },
+        { adTargetId: 't2', bidCents: 45, evidence: { dataDay } },
       ],
       actor: 'automation:bid-optimizer',
       reason: 'AX.8 target-ACOS optimization',
@@ -50,7 +52,13 @@ describe('applyBidOptimization', () => {
   it('W1-5 — a proposal\'s sources ride on its entry as evidence (which level supplied each number)', async () => {
     const sources = { targetAcosPct: { level: 'campaign', value: 25 }, maxBidCents: { level: 'market', value: 90, label: 'Test market (IT)', version: 2 } }
     await applyBidOptimization({ changes: [{ targetId: 't1', proposedBidCents: 30, sources }, { targetId: 't2', proposedBidCents: 45 }] })
-    expect(bulk.mock.calls[0]![0]!.entries).toEqual([{ adTargetId: 't1', bidCents: 30, evidence: { sources } }, { adTargetId: 't2', bidCents: 45 }])
+    const dataDay = currentDataDay()
+    expect(bulk.mock.calls[0]![0]!.entries).toEqual([{ adTargetId: 't1', bidCents: 30, evidence: { sources, dataDay } }, { adTargetId: 't2', bidCents: 45, evidence: { dataDay } }])
+  })
+
+  it("review 2026-10-08 (B) — a proposal's own data day rides on its entry; one without it gets today's", async () => {
+    await applyBidOptimization({ changes: [{ targetId: 't1', proposedBidCents: 30, dataDay: '2026-09-30' }, { targetId: 't2', proposedBidCents: 45 }] })
+    expect(bulk.mock.calls[0]![0]!.entries.map((e) => e.evidence)).toEqual([{ dataDay: '2026-09-30' }, { dataDay: currentDataDay() }])
   })
 
   it('passes a user: actor through untouched', async () => {
