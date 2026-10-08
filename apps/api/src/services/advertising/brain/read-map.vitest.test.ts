@@ -155,7 +155,7 @@ describe('configuredWriters and leverOwner — the GALE IT shape', () => {
 
   it('what the brain does where it only watches: the bid brain\'s shadow, or a lever whose shadow is not built yet', () => {
     expect(brainNoteOf(configuredWriters(campaign('c-free'), cfg, settings('c-free')).bids)).toBe('the brain watches in shadow')
-    expect(brainNoteOf(configuredWriters(campaign('c-free'), cfg, settings('c-free')).budgets)).toBe('the brain is set to watch; campaign budgets wait for AB-7 (shadow) and AB-8 (live)')
+    expect(brainNoteOf(configuredWriters(campaign('c-free'), cfg, settings('c-free')).budgets)).toBe('the brain is set to watch; campaign budgets are planned in shadow (AB-7: OBSERVE logs the money plan, ads-brain view money); writing them waits for AB-8')
     expect(brainNoteOf([])).toBeNull()
     expect(serverVariables('NEXUS_ENABLE_AMAZON_ADS_CRON is off. NEXUS_ENABLE_RANK_DEFEND is not 1; NEXUS_ENABLE_AMAZON_ADS_CRON again')).toEqual(['NEXUS_ENABLE_AMAZON_ADS_CRON', 'NEXUS_ENABLE_RANK_DEFEND'])
   })

@@ -30,7 +30,7 @@ import { adProductOf, adWriteRefusal, type AdWrite } from '@nexus/shared/ads-ad-
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { marketLimitsRefusal } from '@nexus/shared/ads-market-limits'
 import { normalizeMarketplaceCode } from '../../utils/marketplace-code.js'
-import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack } from './ads-budget-giveback.js'
+import { GIVE_BACK_LOOKBACK, budgetLogStepOf, budgetScheduleIdOf, dayOpeningCents, isBudgetGiveBack, type BudgetLogStep } from './ads-budget-giveback.js'
 import { bidLimitsFor, strategyWords, type StrategyBidLimits, type StrategyLimit } from './ads-strategy/bids.js'
 
 export type GateDeniedAt =
@@ -1165,6 +1165,38 @@ const pctEnv = (name: string, fallback: number): number => {
   return Number.isFinite(v) && v > 0 && v < 100 ? v : fallback
 }
 
+/** The day-move bound around one day's opening budget: the lowest and highest budget the day may reach, and the limits in force. */
+export interface BudgetDayMoveBounds { floorCents: number; ceilCents: number; dropPct: number; risePct: number; riseAbsCents: number }
+
+/**
+ * ONE BRAIN AB-7 — the day-move bound's numbers, pure: −`NEXUS_ADS_BUDGET_DAY_DROP_PCT` (30) and the greater of
+ * +`NEXUS_ADS_BUDGET_DAY_RISE_PCT` (50) or +`NEXUS_ADS_BUDGET_DAY_RISE_ABS_CENTS` (€10) around the day's opening. The gate
+ * below and the brain's money plan (brain/budget-campaigns.ts) read the same bound.
+ */
+export function budgetDayMoveBounds(openingCents: number): BudgetDayMoveBounds {
+  const dropPct = pctEnv('NEXUS_ADS_BUDGET_DAY_DROP_PCT', 30)
+  const risePct = pctEnv('NEXUS_ADS_BUDGET_DAY_RISE_PCT', 50)
+  const riseAbs = Number(process.env.NEXUS_ADS_BUDGET_DAY_RISE_ABS_CENTS)
+  const riseAbsCents = Number.isFinite(riseAbs) && riseAbs >= 0 ? riseAbs : 1_000 // €10
+  return {
+    floorCents: Math.round(openingCents * (1 - dropPct / 100)),
+    ceilCents: Math.max(Math.round(openingCents * (1 + risePct / 100)), openingCents + riseAbsCents),
+    dropPct, risePct, riseAbsCents,
+  }
+}
+
+/**
+ * ONE BRAIN AB-7 — the day's opening budget as the bound reads it, from the budget log (pure): the `before` of today's
+ * earliest row; when the day opened on a budget schedule's row, the earliest that is not a give-back (`dayOpeningCents`,
+ * which then needs the rows before today, newest first). Null: no row today — the caller falls back to the budget it
+ * holds. The gate below and the brain's money plan (brain/budget-load.ts) read one opening.
+ */
+export function loggedDayOpeningCents(todayOldestFirst: readonly BudgetLogStep[], beforeTodayNewestFirst: readonly BudgetLogStep[]): number | null {
+  const first = todayOldestFirst[0]
+  if (!first) return null
+  return budgetScheduleIdOf(first.actor) ? dayOpeningCents(todayOldestFirst, beforeTodayNewestFirst) : first.beforeCents
+}
+
 export async function budgetDayMoveDenial(args: {
   campaignId: string
   /** The campaign row's budget — in the worker already the NEW value (N1), so only the last fallback. */
@@ -1177,11 +1209,6 @@ export async function budgetDayMoveDenial(args: {
   /** 3d — the campaign's market, passed to `budgetDayStart` (the same 00:00 UTC in every market today). */
   marketplace?: string | null
 }): Promise<GateDecision | null> {
-  const dropPct = pctEnv('NEXUS_ADS_BUDGET_DAY_DROP_PCT', 30)
-  const risePct = pctEnv('NEXUS_ADS_BUDGET_DAY_RISE_PCT', 50)
-  const riseAbs = Number(process.env.NEXUS_ADS_BUDGET_DAY_RISE_ABS_CENTS)
-  const riseAbsCents = Number.isFinite(riseAbs) && riseAbs >= 0 ? riseAbs : 1_000 // €10
-
   const midnightUtc = budgetDayStart(new Date(), args.marketplace) // 3d — the budget day (ads-budget-day.ts)
   const previousCents = Number.isFinite(args.previousValueCents ?? NaN) ? (args.previousValueCents as number) : null
   // This campaign's budget history, without this write's own row. NULL-safe on purpose: a bare
@@ -1214,22 +1241,19 @@ export async function budgetDayMoveDenial(args: {
     select,
   })
   // EUROS in the payload — budgetLogStepOf converts (see the note above).
-  let loggedOpening = first ? budgetLogStepOf(first).beforeCents : null
   // 6.1 — only a schedule's row can be a give-back, so only a day that opened on one is read in full.
-  if (first && budgetScheduleIdOf(first.userId)) {
-    const today = await prisma.advertisingActionLog.findMany({
-      where: { ...history, createdAt: { gte: midnightUtc } }, orderBy: { createdAt: 'asc' }, select,
-    })
-    const beforeToday = await prisma.advertisingActionLog.findMany({
-      where: { ...history, createdAt: { lt: midnightUtc } }, orderBy: { createdAt: 'desc' }, take: GIVE_BACK_LOOKBACK, select,
-    })
-    loggedOpening = dayOpeningCents(today.map(budgetLogStepOf), beforeToday.map(budgetLogStepOf))
-  }
+  const opensOnSchedule = !!first && !!budgetScheduleIdOf(first.userId)
+  const today = opensOnSchedule
+    ? await prisma.advertisingActionLog.findMany({ where: { ...history, createdAt: { gte: midnightUtc } }, orderBy: { createdAt: 'asc' }, select })
+    : first ? [first] : []
+  const beforeToday = opensOnSchedule
+    ? await prisma.advertisingActionLog.findMany({ where: { ...history, createdAt: { lt: midnightUtc } }, orderBy: { createdAt: 'desc' }, take: GIVE_BACK_LOOKBACK, select })
+    : []
+  const loggedOpening = loggedDayOpeningCents(today.map(budgetLogStepOf), beforeToday.map(budgetLogStepOf))
   const openingCents = loggedOpening ?? previousCents ?? args.currentBudgetCents
   if (openingCents <= 0) return null // nothing to measure a move against
 
-  const floorCents = Math.round(openingCents * (1 - dropPct / 100))
-  const ceilCents = Math.max(Math.round(openingCents * (1 + risePct / 100)), openingCents + riseAbsCents)
+  const { floorCents, ceilCents, dropPct, risePct, riseAbsCents } = budgetDayMoveBounds(openingCents)
   const eur = (c: number) => `€${(c / 100).toFixed(2)}`
 
   if (args.intendedCents < floorCents) {
