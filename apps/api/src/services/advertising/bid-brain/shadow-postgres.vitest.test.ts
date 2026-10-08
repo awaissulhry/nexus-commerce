@@ -13,6 +13,8 @@
  *   business   another business's run sees none of these rows
  *   BB-8       the overrides read from their sources (an out-of-stock product, a playbook not started) and the bids
  *              going back once the stock is back
+ *   BB-9       a rule's bid action on a campaign the brain owns is stored as its input (one row per rule, replaced when it
+ *              says it again; none for a campaign it does not own) and the brain's next decision obeys it, named
  *
  * Values are made up (public repo).
  */
@@ -38,6 +40,7 @@ vi.mock('../../../lib/queue.js', () => {
 
 const { runShadowOnce } = await import('./shadow.js')
 const { readBidBrain } = await import('./read.js')
+const { ruleBrainInput } = await import('./rule-directives.js')
 
 const W = `bb3_shadow_${randomBytes(4).toString('hex')}`
 const OTHER = `bb3_other_${randomBytes(4).toString('hex')}`
@@ -201,6 +204,46 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-3 — the shadow bid brain (real P
     expect([back.layer, back.action]).toEqual(['restore', 'write'])
     expect(back.decidedCents).toBeGreaterThan(2)
     expect(back.why).toMatch(/^restore: the stock layer no longer applies → the goal bid \d+¢ \(no bid before it is known; aim 20%/)
+  })
+
+  it('BB-9 — a rule on a campaign the brain owns becomes its input, and the next decision obeys it, named', async () => {
+    const noDryRun = async () => { throw new Error('bid_down asks without a dry run') }
+    const rule = await inside(async () => {
+      const db = database.client
+      for (const id of ['c-rule', 'c-free']) {
+        await db.campaign.create({ data: { id, name: `Italy ${id}`, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: `EXT-${id}`, dailyBudget: '20.00', startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: true } })
+        await db.adGroup.create({ data: { id: `g-${id}`, campaignId: id, name: `group ${id}`, externalAdGroupId: `EXT-g-${id}` } })
+        await db.adTarget.create({ data: { id: `t-${id}`, adGroupId: `g-${id}`, kind: 'KEYWORD', expressionType: 'EXACT', expressionValue: `giacca ${id}`, bidCents: 40, externalTargetId: `EXT-t-${id}` } })
+      }
+      await db.bidBrainEnrollment.create({ data: { campaignId: 'c-rule', marketplace: 'IT', mode: 'LIVE', enrolledBy: 'user:test' } })
+      return db.automationRule.create({ data: { name: 'BB9 — lower on clicks without sales', trigger: 'KEYWORD_WASTED_SPEND', domain: 'advertising' } })
+    })
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+    try {
+      const meta = { ruleId: rule.id, trigger: 'KEYWORD_WASTED_SPEND', dryRun: false }
+      // Twice, as a rule matching every 15 minutes does: one row, replaced.
+      for (let i = 0; i < 2; i++) {
+        const r = await inside(() => ruleBrainInput({ type: 'bid_down', percent: 50 }, { adTarget: { id: 't-c-rule' } }, meta, noDryRun))
+        expect(r).toMatchObject({ ok: true, output: { campaignId: 'c-rule', bidBrain: { directives: 1 } } })
+      }
+      // A campaign the brain does not own: the rule runs as before.
+      expect(await inside(() => ruleBrainInput({ type: 'bid_down', percent: 50 }, { adTarget: { id: 't-c-free' } }, meta, noDryRun))).toBeNull()
+    } finally {
+      vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
+    }
+    const stored = await rows<{ campaignId: string; targetId: string; kind: string; valueCents: number; source: string; days: number }>(
+      'SELECT "campaignId", "targetId", kind, "valueCents", source, round(extract(epoch FROM (until - "createdAt")) / 86400)::int days FROM "BidDirective" WHERE "workspaceId" = $1', [W])
+    expect(stored).toEqual([{ campaignId: 'c-rule', targetId: 't-c-rule', kind: 'CEILING', valueCents: 20, source: `rule:${rule.id}`, days: 7 }])
+    // Another business sees no input.
+    expect(await inside(() => database.client.bidDirective.count(), OTHER)).toBe(0)
+
+    await inside(() => runShadowOnce({ now: NOW, mode: 'shadow' }))
+    const decided = await rows<{ targetId: string; layer: string; action: string; decidedCents: number; why: string }>(
+      'SELECT DISTINCT ON ("targetId") "targetId", layer, action, "decidedCents", why FROM "BidBrainDecision" WHERE "targetId" IN ($1, $2) ORDER BY "targetId", "createdAt" DESC', ['t-c-free', 't-c-rule'])
+    const byId = Object.fromEntries(decided.map((d) => [d.targetId, d]))
+    expect(byId['t-c-rule']).toMatchObject({ layer: 'limit', action: 'write', decidedCents: 20 })
+    expect(byId['t-c-rule'].why).toMatch(/^rule input: 40¢ is outside the ceiling 20¢ \(rule "BB9 — lower on clicks without sales"\) → 20¢ \(aim 20%/)
+    expect(byId['t-c-free'].why).not.toMatch(/rule/)
   })
 
   it('does nothing with the switch off', async () => {

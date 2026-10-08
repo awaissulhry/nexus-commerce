@@ -6,7 +6,6 @@
  *   dial       SUGGEST sends nothing and counts would-apply; a used cap defers the rest of the run
  *   ceiling    `live` only (live.ts); BRAIN_HOLD_DAYS stays the person's 60 days (bid-grid.service.ts)
  *   modes      what each enrollment op leads to, and from where it is refused
- *   rules      a bid action on an owned campaign is left to the brain; any other action, or a shadow ceiling, runs
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
@@ -28,7 +27,6 @@ const { makeEngineGuard } = await import('../ads-engine-guard.js')
 const { brainLiveCeiling, BRAIN_ACTOR } = await import('./live.js')
 const { BRAIN_HOLD_DAYS } = await import('./brain-holds.js')
 const { nextMode } = await import('./enrollment.js')
-const { ruleBrainSkip } = await import('./rule-skip.js')
 import type { Decision } from './decide.js'
 
 const decision = (over: Partial<Decision> = {}): Decision => ({
@@ -121,25 +119,5 @@ describe('the ceiling, the hold days and the enrollment modes', () => {
     expect(nextMode('shadow', 'HELD')).toEqual({ to: 'SHADOW' })
     expect(nextMode('give-back', 'LIVE')).toEqual({ to: 'SHADOW' })
     expect(nextMode('give-back', null)).toMatchObject({ refusal: expect.stringMatching(/nothing to give back/) })
-  })
-})
-
-describe('ruleBrainSkip', () => {
-  it('leaves a bid action on an owned campaign to the brain; anything else runs', async () => {
-    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
-    enrollmentFindMany.mockResolvedValue([{ campaignId: 'c1' }])
-    expect(await ruleBrainSkip({ type: 'bid_down' }, { campaign: { id: 'c1' } })).toMatch(/left to the bid brain: it runs campaign c1/)
-    adGroupFindUnique.mockResolvedValue({ campaignId: 'c1' })
-    expect(await ruleBrainSkip({ type: 'placement_apply' }, { adGroup: { id: 'g1' } })).toMatch(/left to the bid brain/)
-    expect(await ruleBrainSkip({ type: 'notify' }, { campaign: { id: 'c1' } })).toBeNull()
-    expect(await ruleBrainSkip({ type: 'add_negative_exact' }, { campaign: { id: 'c1' } })).toBeNull()
-    enrollmentFindMany.mockResolvedValue([])
-    expect(await ruleBrainSkip({ type: 'bid_down' }, { campaign: { id: 'c2' } })).toBeNull()
-  })
-
-  it('reads nothing under a shadow ceiling', async () => {
-    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
-    expect(await ruleBrainSkip({ type: 'bid_down' }, { campaign: { id: 'c1' } })).toBeNull()
-    expect(enrollmentFindMany).not.toHaveBeenCalled()
   })
 })

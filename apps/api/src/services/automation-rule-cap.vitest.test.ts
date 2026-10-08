@@ -20,6 +20,9 @@ const ruleUpdate = vi.fn(async () => ({}))
 const ruleFindUnique = vi.fn(async () => RULE)
 /** CAP — the write cap counts AdvertisingActionLog by ACTOR. */
 const actionLogCount = vi.fn(async () => 0)
+/** BB-9 — today's refusal counter: a rule that does not write is counted once a day. */
+const refusalFind = vi.fn(async (): Promise<{ count: number } | null> => null)
+const refusalUpsert = vi.fn(async () => ({}))
 
 vi.mock('../db.js', () => ({
   default: {
@@ -34,8 +37,17 @@ vi.mock('../db.js', () => ({
     advertisingActionLog: {
       get count() { return actionLogCount },
     },
+    automationRefusalDaily: {
+      get findUnique() { return refusalFind },
+      get upsert() { return refusalUpsert },
+    },
   },
 }))
+
+// BB-9 — a rule action on a campaign the bid brain owns becomes its input; null (the default here) runs it as before.
+const brainInput = vi.fn(async (): Promise<unknown> => null)
+vi.mock('./advertising/bid-brain/rule-directives.js', () => ({ ruleBrainInput: brainInput }))
+const publish = vi.fn()
 
 // ADX.2 — the Propose pipeline. genSuggestions is the artifact an operator actually reviews.
 const genSuggestions = vi.fn(async () => 1)
@@ -47,7 +59,7 @@ vi.mock('./advertising/ads-rule-adapter.service.js', () => ({
   // 1f — the run-time AUTO ceiling (ads-graduation.ts) reads it; without it the ceiling fails closed.
   BUILDER_SLUG_ACTIONS: {},
 }))
-vi.mock('./ads-execution-events.service.js', () => ({ publishAdsExecution: vi.fn() }))
+vi.mock('./ads-execution-events.service.js', () => ({ publishAdsExecution: (...a: unknown[]) => publish(...a) }))
 
 /** The suggestion call is fire-and-forget behind a dynamic import; let the microtasks drain. */
 const flush = () => new Promise((r) => setTimeout(r, 0))
@@ -67,7 +79,7 @@ const RULE = {
   scopeMarketplace: null,
 }
 
-const { evaluateRule } = await import('./automation-rule.service.js')
+const { evaluateRule, ACTION_HANDLERS } = await import('./automation-rule.service.js')
 
 beforeEach(() => {
   execCreate.mockClear()
@@ -77,6 +89,12 @@ beforeEach(() => {
   genSuggestions.mockClear()
   actionLogCount.mockClear()
   actionLogCount.mockResolvedValue(0)
+  refusalFind.mockReset()
+  refusalFind.mockResolvedValue(null)
+  refusalUpsert.mockClear()
+  brainInput.mockReset()
+  brainInput.mockResolvedValue(null)
+  publish.mockClear()
 })
 
 /**
@@ -360,3 +378,73 @@ describe('ADX.2 — a dry-run must produce a reviewable proposal', () => {
     expect(genSuggestions).not.toHaveBeenCalled()
   })
 })
+
+describe('BB-9 — a rule that does not write is refused once a day, not once per match', () => {
+  const at = { ruleId: 'rule-1', context: { trigger: 'SOV_BID', marketplace: 'IT', adTarget: { id: 'k-7' } } }
+
+  it("a PROPOSE rule's first refusal of the day is recorded and published; every later one that day is silent", async () => {
+    execCount.mockResolvedValue(2) // at its cap of 2
+    expect((await evaluateRule(at)).status).toBe('CAP_EXCEEDED')
+    expect(refusalUpsert).toHaveBeenCalledTimes(1)
+    expect((refusalUpsert.mock.calls[0] as unknown as [{ create: { reason: string; lastReason: string } }])[0].create).toMatchObject({ reason: 'DAILY_CAP_EXCEEDED', lastReason: expect.stringMatching(/It proposes and does not write, so it is counted once a day\.$/) })
+    await flush()
+    expect(publish).toHaveBeenCalledTimes(1)
+
+    refusalFind.mockResolvedValue({ count: 1 })
+    for (let i = 0; i < 3; i++) expect((await evaluateRule(at)).status).toBe('CAP_EXCEEDED')
+    await flush()
+    expect(refusalUpsert).toHaveBeenCalledTimes(1)
+    expect(publish).toHaveBeenCalledTimes(1)
+    expect(execCreate).not.toHaveBeenCalled() // still no execution row (ADX.1)
+    execCount.mockResolvedValue(0)
+  })
+
+  it('an AUTO rule still counts each refusal: there the count is the reach its cap takes away', async () => {
+    ruleFindUnique.mockResolvedValue({ ...RULE, dryRun: false, autonomyLevel: 'AUTO' })
+    execCount.mockResolvedValue(2)
+    refusalFind.mockResolvedValue({ count: 5 })
+    await evaluateRule(at)
+    await evaluateRule(at)
+    expect(refusalUpsert).toHaveBeenCalledTimes(2)
+    expect(refusalFind).not.toHaveBeenCalled()
+    ruleFindUnique.mockResolvedValue(RULE)
+    execCount.mockResolvedValue(0)
+  })
+})
+
+describe('BB-9 — the rule engine hands an owned campaign\'s bid action to the bid brain', () => {
+  const handler = vi.fn(async () => ({ type: 'test_bid', ok: true, output: { newBidCents: 40 } }))
+  const BID_RULE = { ...RULE, trigger: 'KEYWORD_HIGH_ACOS', actions: [{ type: 'test_bid' }], dryRun: false, autonomyLevel: 'AUTO', maxExecutionsPerDay: null }
+  beforeEach(() => {
+    ACTION_HANDLERS.test_bid = handler as never
+    handler.mockClear()
+    ruleFindUnique.mockResolvedValue(BID_RULE)
+  })
+
+  it('its input is recorded in place of the write; the handler is only offered as the dry run that says what the rule asks', async () => {
+    brainInput.mockResolvedValueOnce({ type: 'test_bid', ok: true, output: { bidBrain: { directives: 1 } } })
+    const r = await evaluateRule({ ruleId: 'rule-1', context: { trigger: 'KEYWORD_HIGH_ACOS', adTarget: { id: 'k-1' } } })
+    expect(r.actionResults).toEqual([{ type: 'test_bid', ok: true, output: { bidBrain: { directives: 1 } } }])
+    expect(handler).not.toHaveBeenCalled()
+    const [action, , meta, dry] = brainInput.mock.calls[0] as unknown as [unknown, unknown, unknown, (a: unknown) => Promise<unknown>]
+    expect(action).toEqual({ type: 'test_bid' })
+    // The run's own dryRun (here the AUTO ceiling demotes the test rule to a dry run) — the input then writes nothing.
+    expect(meta).toEqual({ ruleId: 'rule-1', trigger: 'KEYWORD_HIGH_ACOS', dryRun: r.status === 'DRY_RUN' })
+    await dry({ type: 'test_bid' })
+    expect(handler).toHaveBeenCalledWith({ type: 'test_bid' }, expect.anything(), { dryRun: true, ruleId: 'rule-1', preview: true })
+    ruleFindUnique.mockResolvedValue(RULE)
+  })
+
+  it('any other campaign: the action runs as before; a failed input is a failed action, never a fall-through to the write', async () => {
+    const r = await evaluateRule({ ruleId: 'rule-1', context: { trigger: 'KEYWORD_HIGH_ACOS', adTarget: { id: 'k-2' } } })
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(r.actionResults[0]).toMatchObject({ ok: true, output: { newBidCents: 40 } })
+    handler.mockClear()
+    brainInput.mockRejectedValueOnce(new Error('database gone'))
+    const failed = await evaluateRule({ ruleId: 'rule-1', context: { trigger: 'KEYWORD_HIGH_ACOS', adTarget: { id: 'k-3' } } })
+    expect(failed.actionResults).toEqual([{ type: 'test_bid', ok: false, error: 'bid brain input: database gone' }])
+    expect(handler).not.toHaveBeenCalled()
+    ruleFindUnique.mockResolvedValue(RULE)
+  })
+})
+

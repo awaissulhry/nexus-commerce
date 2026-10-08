@@ -90,6 +90,19 @@ describe('overrides and brakes', () => {
     expect(buildFacts(floored, run())[0].overrides?.stop).toEqual({ bidCents: 2, by: 'a stop (its 50¢ bid remembered)' })
   })
 
+  it('a playbook STOP and a stop already in force: the lower floor wins, whichever it is', () => {
+    const at = new Date()
+    const g = (floorCents: number, label: string) => ({ kind: 'stopped' as const, floorCents, label })
+    const floored = (campaignFloor: number, playbookFloor: number) => {
+      const m = market({ targets: [target('t1', 'g1', 'race jacket', 5)] })
+      const c = m.campaigns.get('c1')!
+      m.campaigns.set('c1', { ...c, bidsSuppressedAt: at, bidsSuppressedFloorCents: campaignFloor, bidsSuppressedBy: 'automation:budget-enforce' })
+      return buildFacts(m, run({ playbook: new Map([['c1', g(playbookFloor, 'PB')]]) }))[0].overrides?.stop
+    }
+    expect(floored(5, 2)).toEqual({ bidCents: 2, by: 'a playbook STOP (PB)' })
+    expect(floored(2, 5)).toEqual({ bidCents: 2, by: 'automation:budget-enforce' })
+  })
+
   it('BB-8 — a campaign floor and its ad group floor of the same kind: the lower wins; different kinds both stay', () => {
     const at = new Date()
     const capOnCampaign = floorOverride('automation:budget-enforce', 5, at)

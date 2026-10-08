@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest'
 import { LATE_SALES_NOTE, SETTLED_EXCLUDE_LABEL, settledWindowText } from './ruleWindowCopy'
 
 describe('rule window copy', () => {
-  it('names the window length and where it ends, per ad product', () => {
-    expect(settledWindowText(30)).toBe('the last 30 days, ending 7 days ago (14 for Sponsored Brands and Display)')
-    expect(settledWindowText(7)).toBe('the last 7 days, ending 7 days ago (14 for Sponsored Brands and Display)')
+  it('names the window length and where it ends, per ad product (BB-14: the newest settled day)', () => {
+    expect(settledWindowText(30)).toBe('the last 30 days, ending at the newest day Amazon has settled (normally 8 days ago; 15 for Sponsored Brands and Display)')
+    expect(settledWindowText(7)).toBe('the last 7 days, ending at the newest day Amazon has settled (normally 8 days ago; 15 for Sponsored Brands and Display)')
   })
 
   it('says why in plain words, and no longer promises a 2-day cut', () => {

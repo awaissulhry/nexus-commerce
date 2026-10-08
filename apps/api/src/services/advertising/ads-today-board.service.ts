@@ -30,6 +30,7 @@ import { pricePendingProposals } from './ads-proposal-pricing.service.js'
 import { getGraduationBoard } from './ads-graduation-readiness.service.js'
 import { allowlistedBidBounds, campaignCensus } from './ads-census.service.js'
 import { settledEndText, settledWhere } from './ads-settled-window.js'
+import { primeSettledWindow } from './ads-settled-facts.js'
 import { ENGINE_ACTORS } from './ads-engine-actors.js'
 import { engineActivity } from './ads-control-room.service.js'
 
@@ -165,6 +166,8 @@ async function unboundedRankModes(): Promise<{ modes: { key: string; name: strin
 }
 
 export async function getTodayBoard(): Promise<TodayBoard> {
+  // BB-14 — the settled window ends at the newest day Amazon has settled for this business: read it first.
+  await primeSettledWindow()
   const now = new Date()
   const since48h = new Date(now.getTime() - 2 * DAY)
   const since24h = new Date(now.getTime() - DAY)
