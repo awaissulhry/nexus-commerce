@@ -141,7 +141,11 @@ describe('validateOverride', () => {
   it('checks the identity and the value of each kind', () => {
     expect(validateOverride({ scope: 'PRODUCT', kind: 'LEVEL', key: 'bids', value: 'AUTO' })).toEqual({ override: { scope: 'PRODUCT', campaignId: null, kind: 'LEVEL', key: 'bids', ref: '', value: 'AUTO' } })
     expect(validateOverride({ scope: 'PRODUCT', kind: 'LEVEL', key: 'bids', value: 'ON' })).toEqual({ refusal: expect.stringContaining('OFF, OBSERVE, PROPOSE or AUTO') })
-    expect(validateOverride({ scope: 'CAMPAIGN', kind: 'LEVEL', key: 'budgets', value: 'AUTO', campaignId: 'c-1' })).toEqual({ refusal: expect.stringContaining('AB-7') })
+    expect(validateOverride({ scope: 'CAMPAIGN', kind: 'LEVEL', key: 'structure', value: 'AUTO', campaignId: 'c-1' })).toEqual({ refusal: expect.stringContaining('AB-16') })
+    // AB-10 — the negatives lever takes every level.
+    expect(validateOverride({ scope: 'CAMPAIGN', kind: 'LEVEL', key: 'negatives', value: 'AUTO', campaignId: 'c-1' })).toMatchObject({ override: { key: 'negatives', value: 'AUTO' } })
+    // AB-8 — the money levers take every level.
+    expect(validateOverride({ scope: 'CAMPAIGN', kind: 'LEVEL', key: 'budgets', value: 'AUTO', campaignId: 'c-1' })).toMatchObject({ override: { key: 'budgets', value: 'AUTO' } })
     expect(validateOverride({ scope: 'CAMPAIGN', kind: 'EXCLUDE', key: '*' })).toEqual({ refusal: 'a campaign override names its campaign (campaignId)' })
     expect(validateOverride({ scope: 'PRODUCT', kind: 'EXCLUDE', key: '*', campaignId: 'c-1' })).toEqual({ refusal: 'a product override names no campaign' })
     expect(validateOverride({ scope: 'CAMPAIGN', campaignId: 'c-1', kind: 'EXCLUDE', key: '*', value: true })).toEqual({ refusal: 'an exclusion takes no value' })

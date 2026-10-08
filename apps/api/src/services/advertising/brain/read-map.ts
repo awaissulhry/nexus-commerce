@@ -323,8 +323,8 @@ const isSafetyActor = (actor: string) => BRAIN_SAFETY_ACTOR_PREFIXES.some((p) =>
 export function writerOfActor(userId: string | null, ruleNames: ReadonlyMap<string, string>): Omit<Writer, 'basis'> {
   if (userId && isSafetyActor(userId)) return { who: `safety: ${userId.replace(/^automation:/, '')}`, kind: 'safety', state: 'acts', why: 'a safety owner (always passes)' }
   const c = classifyActor(userId)
-  if (c.kind === 'engine') return c.engine === 'bid-brain'
-    ? { who: 'the brain', kind: 'brain', state: 'acts', why: 'the bid brain wrote' }
+  if (c.kind === 'engine') return c.engine === 'bid-brain' || c.engine === 'brain-money'
+    ? { who: 'the brain', kind: 'brain', state: 'acts', why: c.engine === 'bid-brain' ? 'the bid brain wrote' : 'the brain\'s money writer wrote (AB-8)' }
     : { who: engineLabel(c.engine), kind: 'engine', state: 'acts', why: `${engineLabel(c.engine)} wrote` }
   if (c.kind === 'rule-candidate') {
     const name = ruleNames.get(c.ruleId)
@@ -361,6 +361,12 @@ export function configuredWriters(c: CampaignRow & { market: string | null; prod
       if (lever === 'bids') continue
       const l = settings.levers[lever]
       if (l.effective === 'OBSERVE') add(lever, { who: 'the brain', kind: 'brain', state: 'watches', why: `OBSERVE: ${LEVER_LEVELS_NOW[lever].others}` })
+      // AB-8 — the money levers have a writer: AUTO acts and PROPOSE asks under a live switch; otherwise the brain only plans.
+      else if ((lever === 'budgets' || lever === 'portfolioCap') && (l.effective === 'AUTO' || l.effective === 'PROPOSE')) {
+        add(lever, cfg.ceilingLive
+          ? { who: 'the brain', kind: 'brain', state: l.effective === 'AUTO' ? 'acts' : 'asks', why: `${l.effective}: ${l.effective === 'AUTO' ? 'the brain\'s money writer sets it inside the pace (AB-8)' : 'the brain asks a person for each change in the Approvals page (AB-8)'}` }
+          : { who: 'the brain', kind: 'brain', state: 'watches', why: `${l.effective}, but NEXUS_BID_BRAIN_MODE is ${cfg.ceiling}: the brain plans it in shadow` })
+      }
     }
   }
   // The Owner: a lock (the brain's override), pinned bids, holds on keywords.

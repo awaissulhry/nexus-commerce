@@ -94,6 +94,28 @@ describe('the target and today\'s step', () => {
   })
 })
 
+describe('AB-8 — a budget that stands on the brain\'s ladder', () => {
+  const ready = (over: Partial<CampaignMoneyFacts> = {}) => camp('l', { avgDailySpendCents: 1_000, usage: 0.82, settled: { spendCents: 9_000, salesCents: 36_000, orders: 4 }, ...over })
+
+  it('today\'s rung on top of today\'s base: no base move undoes it, and the rung is not given twice', () => {
+    const c = one(ready({ todayCents: 2_250, ladderNow: { baseCents: 1_500, fromDay: 'today' }, stepToday: 1_500, ladderedTodayPct: 50 }))
+    expect(c).toMatchObject({ action: 'keep', stepCents: 1_500, ladder: null })
+    expect(c.ladderWhy).toBe('on the ladder at +50 % already today (this hour\'s rung +50 %)')
+  })
+
+  it('an earlier day\'s ladder is given back: kept means back at its base, a lowering', () => {
+    const c = one(ready({ todayCents: 3_000, openingCents: 1_500, ladderNow: { baseCents: 1_500, fromDay: 'before' }, avgDailySpendCents: 1_050, usage: null }))
+    expect(c).toMatchObject({ action: 'lower', stepCents: 1_500, targetCents: 1_500 })
+    expect(c.why).toContain('it still stands on the brain\'s ladder of an earlier day (€30.00): given back to its base €15.00 first')
+  })
+
+  it('a rung on a base outside the day-move bound is planned as not allowed (never written)', () => {
+    const c = one(ready({ todayCents: 2_600, openingCents: 1_500, stepToday: 2_600 }))
+    expect(c.ladder).toMatchObject({ pct: 50, allowed: false, exception: false })
+    expect(c.ladder!.why).toContain('the base itself is outside the day-move bound')
+  })
+})
+
 describe('the intraday ladder (Adbrew, inside the band, on the Rome clock)', () => {
   const ready = (over: Partial<CampaignMoneyFacts> = {}, ovs: OverrideRow[] = []) => camp('l', { avgDailySpendCents: 1_000, usage: 0.82, settled: { spendCents: 9_000, salesCents: 36_000, orders: 4 }, ...over }, ovs)
 
@@ -104,7 +126,7 @@ describe('the intraday ladder (Adbrew, inside the band, on the Rome clock)', () 
   it('82 % used at 10:45 inside the band: +50 % on top of today\'s base', () => {
     const c = one(ready())
     expect(c).toMatchObject({ action: 'keep', targetCents: 1_429, stepCents: 1_500, band: 'in', bandFrom: 'campaign', acosPct: 25, usagePct: 82 })
-    expect(c.ladder).toEqual({ pct: 50, cents: 750, exception: false, why: `82 % used, ACoS 25 % (campaign) is inside the band — ${BAND.goal!.words}: +50 % of today's €15.00 = €22.50 (the rung before 12:00); inside the day-move bound` })
+    expect(c.ladder).toEqual({ pct: 50, cents: 750, exception: false, allowed: true, why: `82 % used, ACoS 25 % (campaign) is inside the band — ${BAND.goal!.words}: +50 % of today's €15.00 = €22.50 (the rung before 12:00); inside the day-move bound` })
   })
 
   it('bounds: the Owner\'s largest raise, the campaign\'s maximum budget; above the day-move ceiling it needs the intraday give-back', () => {
@@ -112,7 +134,7 @@ describe('the intraday ladder (Adbrew, inside the band, on the Rome clock)', () 
     expect(one(ready({ maxCents: 2_000 })).ladder).toMatchObject({ pct: 50, cents: 500 })
     // 19:00 Rome, already +50 % today: +100 % → €30, past the €25 ceiling → the give-back exception.
     const late = one(ready({ ladderedTodayPct: 50 }), { ladderHour: 19 })
-    expect(late.ladder).toMatchObject({ pct: 100, cents: 1_500, exception: true })
+    expect(late.ladder).toMatchObject({ pct: 100, cents: 1_500, exception: true, allowed: true })
     expect(late.ladder!.why).toContain('allowed as an intraday give-back')
     expect(one(ready({}, [ov('VALUE', 'intradayLadderMaxPct', 0, 'l')])).ladderWhy).toBe('no ladder: the Owner set its largest raise to 0 % (user:owner)')
   })

@@ -6115,6 +6115,17 @@
     },
     "relations": []
   },
+  "AdsLagCurve": {
+    "scalar": {},
+    "compound": {
+      "lag_curve_scope": [
+        "marketplace",
+        "adProduct",
+        "scopeId"
+      ]
+    },
+    "relations": []
+  },
   "AdSpendCeiling": {
     "scalar": {},
     "compound": {
@@ -6283,6 +6294,30 @@
         "productId",
         "marketplace",
         "key"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsHourlyPlacement": {
+    "scalar": {},
+    "compound": {
+      "grain": [
+        "campaignId",
+        "adGroupId",
+        "placement",
+        "date",
+        "hour"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsHourlyArrival": {
+    "scalar": {},
+    "compound": {
+      "bucket": [
+        "grainId",
+        "kind",
+        "ageHours"
       ]
     },
     "relations": []

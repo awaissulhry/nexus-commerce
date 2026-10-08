@@ -9,6 +9,9 @@
  *   diff     per day: the brain against what today's writers set (agree, higher, lower, held by an override, braked)
  *            and, from the action log, conflicts (two automatic writers on one keyword within 24 hours) and churn
  *            (bid writes per keyword per day)
+ *   calibration  BB-15 — the attribution lag curve per market (and per product with a curve of its own): the share of a
+ *            day's final orders and sales a copy pulled at each age holds, what it rests on, and how well a curve fitted
+ *            without the newest settled days nowcast them (mean absolute error per age, against no nowcast)
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -19,8 +22,12 @@ import { buildFacts } from './facts.js'
 import { loadMarket, loadRun, SHADOW_MARKETS } from './load.js'
 import { BRAIN_ACTOR, brainOwnedCampaignIds } from './live.js'
 import { bidBrainMode } from './shadow.js'
+import { CALIBRATION_DAYS, CURVE_MAX_AGE_DAYS, curveWords, MARKET_SCOPE, storedCurves, type StoredCurve } from './lag-curve-store.js'
+import { LAG_AGES, MIN_MATURITY, NOWCAST_MAX_FACTOR } from './lag-curve.js'
+import { YOUNG_SHARE_MAX } from './estimator.js'
+import { nowcastMode } from './nowcast.js'
 
-export const BRAIN_VIEWS = ['why', 'what-if', 'diff'] as const
+export const BRAIN_VIEWS = ['why', 'what-if', 'diff', 'calibration'] as const
 export type BrainView = (typeof BRAIN_VIEWS)[number]
 
 export interface BrainReadArgs {
@@ -238,9 +245,77 @@ async function diffView(args: BrainReadArgs) {
   }
 }
 
+/** BB-15 — one stored curve as the calibration view shows it (shares in percent, ages 0..14). Pure. */
+export function curveView(c: StoredCurve, now: Date) {
+  const p = (x: number) => Math.round(x * 1000) / 10
+  const ageDays = Math.floor((now.getTime() - c.fittedAt.getTime()) / DAY)
+  const seed = c.basis?.seed
+  return {
+    scope: c.scopeId === MARKET_SCOPE ? 'market' : 'product',
+    ...(c.scopeId === MARKET_SCOPE ? {} : { productId: c.scopeId }),
+    words: curveWords(c),
+    source: c.source,
+    usable: c.usable,
+    fittedAt: c.fittedAt.toISOString(),
+    stale: ageDays > CURVE_MAX_AGE_DAYS,
+    sharesPct: {
+      ages: Array.from({ length: LAG_AGES }, (_, a) => a),
+      orders: c.shares.orders.map(p),
+      sales: c.shares.sales.map(p),
+    },
+    basis: {
+      vintageDays: c.basis?.vintageDays ?? 0,
+      campaignDays: c.basis?.campaignDays ?? 0,
+      finalOrders: c.basis?.finalOrders ?? 0,
+      seed: seed ? { ordersSharePct: p(seed.ordersShare), salesSharePct: p(seed.salesShare), days: seed.days, orders7d: seed.orders7d } : null,
+      pooledToward: c.basis?.priorFrom ?? 'prior',
+      priorOrders: c.basis?.priorOrders ?? 0,
+    },
+    calibration: c.calibration,
+  }
+}
+
+/** The product family of a product (a variation's parent), or the product itself. */
+async function familyOf(productId: string): Promise<string | null> {
+  const p = await prisma.product.findUnique({ where: { id: productId }, select: { id: true, parentId: true } })
+  return p ? p.parentId ?? p.id : null
+}
+
+async function calibrationView(args: BrainReadArgs) {
+  const scope = await scopeTargets(args)
+  if (scope.error) return { error: scope.error }
+  const now = new Date()
+  const curves = await storedCurves(scope.markets)
+  const family = args.productId ? await familyOf(args.productId) : null
+  const markets = scope.markets.map((market) => {
+    const own = curves.find((c) => c.market === market && c.scopeId === MARKET_SCOPE)
+    const products = curves.filter((c) => c.market === market && c.scopeId !== MARKET_SCOPE && (!family || c.scopeId === family))
+    return {
+      market,
+      curve: own ? curveView(own, now) : null,
+      products: products.map((c) => curveView(c, now)),
+      ...(!own ? { missing: 'no curve fitted for this market yet (the nightly fit has not run, or there are no Sponsored Products vintages and settled rows): the nowcast ignores young days here' } : {}),
+      ...(family && own && !products.length ? { productNote: `product ${family} has no curve of its own (too few final orders behind it): its keywords read the market's curve` } : {}),
+    }
+  })
+  const mode = nowcastMode()
+  return {
+    data: {
+      view: 'calibration', mode: bidBrainMode(), nowcast: mode, markets,
+      note: `L(a) is the share of a day's final 7-day orders (and sales) that a copy of the day pulled at age a days already holds (age 0 = asked the morning after). `
+        + `It is fitted each night from the kept copies of every campaign day (seeded from the settled 1-day ÷ 7-day ratio, pooled to the market for a product with few orders), monotone and at most 100 %. `
+        + `Calibration: a curve fitted WITHOUT the newest ${CALIBRATION_DAYS} settled days nowcasts each of them from its young copies (copy ÷ L(a)); maeOrders is the mean absolute error in orders per day, maeOrdersRaw the error of reading the young copy as final (no nowcast); errorPct and salesErrorPct are Σ|error| ÷ Σ final. `
+        + `The brain's nowcast (NEXUS_BID_BRAIN_NOWCAST: ${mode}${mode === 'shadow' ? ' — decisions stay on settled days; differences are written in the why' : mode === 'on' ? ' — decisions use it' : ' — not computed'}) weights every keyword-day by L(the age its copy was pulled at): its clicks count L(a), its orders as observed, `
+        + `a copy below ${Math.round(MIN_MATURITY * 100)} % is left out (its numbers would be multiplied by more than ${NOWCAST_MAX_FACTOR}), and the days newer than the settled window carry at most ${Math.round(YOUNG_SHARE_MAX * 100)} % of a keyword's clicks. `
+        + 'A curve that is not usable (only the prior) or older than two weeks is not used: young days are then ignored, as before.',
+    },
+  }
+}
+
 export async function readBidBrain(args: BrainReadArgs): Promise<{ data: unknown } | { error: string }> {
   const view = args.view ?? 'why'
   if (view === 'what-if') return whatIfView(args)
   if (view === 'diff') return diffView(args)
+  if (view === 'calibration') return calibrationView(args)
   return whyView(args)
 }
