@@ -10,6 +10,10 @@
  *                                phase switch that raises
  *   someone else's pause lifted  enable-ads with includePeoplesPauses (a person, Seller Central, an unknown writer, a
  *                                rule now off), set-ads-brain op leave resuming the brain's own pauses (the brain going off)
+ *   the brain let loose          (lead decision on batch 2's review, 2026-10-08) set-ads-brain op set-value RAISING a
+ *                                product's portfolio cap limit (portfolioCapLimitCents: a larger monthly cap may then be
+ *                                written, the only hard limit Amazon enforces), and set-brain-kill-switch op end (the brain
+ *                                writes that lever again). Lowering the limit, or setting a kill, stays a normal approval.
  *
  * ONE BRAIN AB-16 (D1 = B, Owner 2026-10-08) — one exception to "a new structure going live": a campaign the ads brain
  * built for an enrolled product (its own approved build, brain/structure-golive.ts), going live INSIDE its caps (its first
@@ -51,6 +55,10 @@ export const CODE_RULE = {
   'set-ads-brain: a lever to AUTO': true,
   // Batch 2 fix — set-ads-brain op leave lifting the brain's own pauses: an automation's pause lifted (the brain going off).
   'set-ads-brain: leave lifts the brain\'s pauses': true,
+  // Batch 2 review fix (lead decision) — a raise of a product's portfolio cap limit: a larger monthly cap may be written.
+  'set-ads-brain: a portfolio cap limit raised': true,
+  // Batch 2 review fix (lead decision) — ending a kill switch: the brain writes that lever again.
+  'set-brain-kill-switch: end': true,
   // ── Day-to-day: listed in raises, warned, a normal approval ──
   // ONE BRAIN AB-16 (D1 = B) — a brain-built campaign of an enrolled product going live inside its caps (goLiveDoor).
   'brain structure go-live: inside an enrolled product, inside caps': false,
@@ -88,7 +96,8 @@ export const __codeRuleTest = {
 /** What a preview says (`noCode`) when it can add spend and approving it needs no code. */
 export const DAY_TO_DAY_NO_CODE = 'It can add spend (listed in raises), as a day-to-day change: a person\'s approval sends it, with no '
   + 'authenticator code (the Owner\'s code rule keeps the code for new structures going live, new product ads, a strategy or '
-  + 'playbook raise and lifting someone else\'s pause). Where it goes past the business\'s own limits, the card warns.'
+  + 'playbook raise, lifting someone else\'s pause, the ads brain to AUTO, a raise of its portfolio cap limit and ending its '
+  + 'kill switch). Where it goes past the business\'s own limits, the card warns.'
 
 /** AB-16 (D1 = B) — the brain's go-live line. */
 export const BRAIN_GO_LIVE: CodeDoor = 'brain structure go-live: inside an enrolled product, inside caps'

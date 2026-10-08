@@ -269,7 +269,7 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
     expect((await preview({ op: 'include', productId: P, market: 'IT', campaignId: C('c-off') })).preview).toMatchObject({ needsCode: true })
   })
 
-  it('set-value — inside its bounds per product and per campaign, a raise said with no code; out of bounds, the wrong scope, a level a lever does not take and nothing-changes refused', async () => {
+  it('set-value — inside its bounds per product and per campaign, a raise said with no code; a raised portfolio cap limit a big door, a lower one not; out of bounds, the wrong scope, a level a lever does not take and nothing-changes refused', async () => {
     expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'paceTargetPct', value: 150 })).error).toMatch(/paceTargetPct .* takes a whole number from 10 to 100/)
     expect((await preview({ op: 'set-value', productId: P, market: 'IT', campaignId: C('b-shadow'), key: 'portfolioCapPct', value: 120 })).error).toMatch(/is set per product, not per campaign/)
     expect((await preview({ op: 'set-level', productId: P, market: 'IT', lever: 'offAmazon', level: 'PROPOSE' })).error).toMatch(/the offAmazon lever takes OFF or OBSERVE today, not PROPOSE: AB-18: OBSERVE watches the off-Amazon lane .* Nexus could not verify an Amazon Ads API setting/)
@@ -284,6 +284,20 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
     expect(campaignRow(m, 'a-live').ownSettings).toEqual({ longStopUntil: expect.objectContaining({ longStopUntil: '2026-11-02', source: 'campaign' }) })
     expect(campaignRow(m, 'b-shadow').ownSettings).toBeUndefined()
     expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'paceTargetPct', value: 95 })).error).toMatch(/^Not queued: nothing would change — paceTargetPct on Test jacket .* is already 95/)
+    // Batch 2 review fix (lead decision, code rule A) — raising the product's portfolio cap limit is a big door: a plain
+    // approve runs nothing, the approver's code runs it; a lower limit is a normal approval.
+    const raise = await ask({ op: 'set-value', productId: P, market: 'IT', key: 'portfolioCapLimitCents', value: 900_000 })
+    expect(raise.preview).toMatchObject({ needsCode: true, stepUp: { raises: ['Portfolio cap limit'], what: expect.stringMatching(/^raises the ads brain's limit \(the product's portfolio cap limit raised from \d+¢ to 900000¢ a month/) } })
+    expect(raise.preview.effect).toMatch(/Raising the portfolio cap limit is a big door: approving it needs the approver's authenticator code/)
+    expect((await approve(raise.approvalId)).status).not.toBe('executed')
+    expect((await inW(() => brainSettings(P1, 'IT')))!.values.portfolioCapLimitCents.value).toBeNull()
+    expect(await approve(raise.approvalId, { code: true })).toMatchObject({ ok: true, status: 'executed' })
+    expect((await inW(() => brainSettings(P1, 'IT')))!.values.portfolioCapLimitCents.value).toBe(900_000)
+    const lower = await ask({ op: 'set-value', productId: P, market: 'IT', key: 'portfolioCapLimitCents', value: 800_000 })
+    expect(lower.preview).toMatchObject({ needsCode: false, bigDoor: [] })
+    expect(lower.preview.stepUp).toBeUndefined()
+    expect(await approve(lower.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await inW(() => brainSettings(P1, 'IT')))!.values.portfolioCapLimitCents.value).toBe(800_000)
   })
 
   it('the keyword bids — OBSERVE takes the LIVE campaign back to shadow (a normal approval, bids stay); AUTO puts it LIVE again (the code), the adopted and the excluded campaigns named as not reached', async () => {

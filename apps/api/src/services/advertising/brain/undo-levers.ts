@@ -34,9 +34,10 @@
  * give-back, a person's own change and a request a person approved (they write as the person, never as the brain).
  *
  *   asymmetry   an undo that only lowers spend (a re-pause, a budget or cap back down, a harvest put back) may run alone at
- *               AUTO; one that adds spend or lifts an automatic pause (a resume, a strategy back) or that may stop a whole
- *               portfolio (a cap back) always asks a person (`ceiling` PROPOSE). A revive lets one term serve again: AB-10
- *               revives alone at AUTO on the same kind of evidence, so does auto-undo.
+ *               AUTO; one that adds spend or lifts an automatic pause (a resume, a strategy back, a revive) or that may stop
+ *               a whole portfolio (a cap back) always asks a person (`ceiling` PROPOSE). Batch 2 review fix — a revive lets a
+ *               term serve again at its sources' full bids: it adds spend. Design §2.7 revives at a low bid; the retire path
+ *               has no bid to set (a retired negative serves at whatever the source bids), so auto-undo asks a person.
  *   kill        a lever the Owner's kill switch stopped is never written by auto-undo alone either: at AUTO it asks him.
  *   levels      auto-undo's own level (OBSERVE records, PROPOSE asks, AUTO acts — its switch under the env and the dial) and
  *               the same daily cap per market as the bid brain's undos (one count).
@@ -120,8 +121,8 @@ export const BRAIN_UNDO_RULES: Readonly<Record<BrainUndoLever | 'state:pause' | 
     metric: 'the negated term\'s orders and ACoS on the other products\' campaigns of the market — a sibling, or the market — in the settled days since it landed',
     minDays: 7, maxDays: 14, lookbackDays: 30,
     worse: 'the term converts elsewhere: at least 2 orders on the other products\' campaigns of the market since it landed, at an ACoS inside the product\'s band top',
-    undo: 'revive it: the negative is retired (archived at Amazon) through the retire path, so the term can serve again',
-    holdDays: 30, hold: 'the brain does not negate that term in the product again for 30 days', ceiling: 'AUTO',
+    undo: 'revive it: the negative is retired (archived at Amazon) through the retire path, so the term can serve again — always a person: it adds spend, and the retire path cannot revive it at a low bid (design §2.7)',
+    holdDays: 30, hold: 'the brain does not negate that term in the product again for 30 days', ceiling: 'PROPOSE',
   },
   harvest: {
     judges: 'a harvest pair the brain made (AB-11): the exact keyword in its destination and the negative exact in its sources',

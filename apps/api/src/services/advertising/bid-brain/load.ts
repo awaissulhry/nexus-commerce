@@ -481,7 +481,7 @@ export interface PreviousDecision {
   currentCents: number
   decidedCents: number
   createdAt: Date
-  lastStep: { dataDay: string; fromCents: number; toCents: number } | null
+  lastStep: { dataDay: string; fromCents: number; toCents: number; nowcast?: boolean } | null
   /** Pre-go-live — the data day it decided on, and what became of its write (`evidence.sent.sent`: queued, refused, …). */
   dataDay?: string
   sent?: string | null
@@ -508,8 +508,11 @@ export async function previousDecisions(targetIds: readonly string[], now: Date)
      WHERE d."targetId" = ANY(${[...targetIds]}::text[]) AND d."createdAt" >= ${new Date(now.getTime() - 30 * 86_400_000)}
      ORDER BY d."targetId", d."createdAt" DESC`)
   return new Map(rows.map((r) => {
-    const s = r.lastStep as { dataDay?: unknown; fromCents?: unknown; toCents?: unknown } | null
-    const lastStep = s && typeof s.dataDay === 'string' && typeof s.fromCents === 'number' && typeof s.toCents === 'number' ? { dataDay: s.dataDay, fromCents: s.fromCents, toCents: s.toCents } : null
+    const s = r.lastStep as { dataDay?: unknown; fromCents?: unknown; toCents?: unknown; nowcast?: unknown } | null
+    // Batch 2 review fix — a step taken with the nowcast on keeps its mark (nowcast.ts nowcastLastSteps never re-keys it).
+    const lastStep = s && typeof s.dataDay === 'string' && typeof s.fromCents === 'number' && typeof s.toCents === 'number'
+      ? { dataDay: s.dataDay, fromCents: s.fromCents, toCents: s.toCents, ...(s.nowcast === true ? { nowcast: true } : {}) }
+      : null
     return [r.targetId, { action: r.action, layer: r.layer, currentCents: r.currentCents, decidedCents: r.decidedCents, createdAt: r.createdAt, lastStep, dataDay: r.dataDay, sent: r.sent }]
   }))
 }

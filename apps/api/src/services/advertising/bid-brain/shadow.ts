@@ -65,7 +65,7 @@ import { campaignKills, killWords } from '../brain/kill-switch.js'
 import { campaignStopOf, fullLanes, strategyStep, type CampaignStop } from './stop-recipe.js'
 import { strategySwitchesToday } from './stop-memory.js'
 import { loadMarket, loadNowcastEvidence, loadRun, SHADOW_MARKETS, type LastWrite, type LoadedMarket, type PreviousDecision } from './load.js'
-import { compareNowcast, nowcastLastSteps, nowcastMode, nowcastOnNotes, nowcastSummaryWords, runForRows, youngPctOf, type NowcastShadowSummary } from './nowcast.js'
+import { compareNowcast, nowcastLastSteps, nowcastMode, nowcastOnNotes, nowcastSummaryWords, runForRows, stepToStore, youngPctOf, type NowcastShadowSummary } from './nowcast.js'
 import { anyBrake, compareIntraday, intradaySummaryWords, type IntradaySummary } from './intraday.js'
 import { hourFactorsForRun } from './hour-factors-store.js'
 import { upgradesShadow, type UpgradesSummary } from './response-explore.js'
@@ -120,16 +120,6 @@ function count(rows: readonly Decision[], key: 'action' | 'layer'): Record<strin
 export function rowKind(d: Decision, prev: PreviousDecision | undefined, now: Date): 'change' | 'snapshot' | null {
   if (!prev || prev.action !== d.action || prev.layer !== d.layer || prev.currentCents !== d.currentCents || prev.decidedCents !== d.bidCents) return 'change'
   return prev.createdAt.toISOString().slice(0, 10) !== now.toISOString().slice(0, 10) ? 'snapshot' : null
-}
-
-/**
- * The step the next run anchors on: this decision's own, else the last one of the same data day. BB-15 follow-up — the
- * last one as the run read it (`run.lastSteps`: the previous decision's, re-keyed to the nowcast's data day when the rows
- * were read with the nowcast on), so a step re-keyed on the day the switch goes on is carried, not dropped.
- */
-function carriedStep(d: Decision, last: { dataDay: string; fromCents: number; toCents: number } | undefined) {
-  if (d.step) return d.step
-  return last && last.dataDay === d.dataDay ? last : null
 }
 
 const dec = (x: number | null | undefined, places = 4) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10 ** places) / 10 ** places)
@@ -231,7 +221,8 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
       action: d.action, layer: d.layer, currentCents: d.currentCents, decidedCents: d.bidCents, goalBidCents: d.goalBidCents,
       aim: dec(d.goal?.aim), bandLo: dec(d.goal?.lo), bandHi: dec(d.goal?.hi), expectedAcos: dec(d.expectedAcos), confidence: dec(d.confidence),
       dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(withNote(withNote(withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, upgrades?.notes.get(d.targetId)), nowcast?.notes.get(d.targetId)), hourFactors.notes.get(campaignId)), intraday?.notes.get(d.targetId)),
-      evidence: { step: d.step, lastStep: carriedStep(d, run.lastSteps.get(d.targetId)), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, ...upgrades?.evidence.get(d.targetId) } as unknown as Prisma.InputJsonObject,
+      // The step the next run anchors on (nowcast.ts stepToStore): marked when the rows were read with the nowcast on.
+      evidence: { step: d.step, lastStep: stepToStore(d, run.lastSteps.get(d.targetId), !!rows.nowcast), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome, ...upgrades?.evidence.get(d.targetId) } as unknown as Prisma.InputJsonObject,
       createdAt: ctx.now,
     }]
   })

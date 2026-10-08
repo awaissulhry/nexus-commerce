@@ -164,6 +164,9 @@ describe('the Owner\'s code rule A — the table', () => {
       'set-bid-brain-enrollment: live': true,
       'set-ads-brain: a lever to AUTO': true,
       'set-ads-brain: leave lifts the brain\'s pauses': true,
+      // Batch 2 review fix (lead decision) — the brain let loose: a raised portfolio cap limit, a kill switch ended.
+      'set-ads-brain: a portfolio cap limit raised': true,
+      'set-brain-kill-switch: end': true,
       // Day-to-day: listed in raises, said in the effect, warned past his own limits, a normal approval.
       // AB-16 (D1 = B): a campaign the ads brain built for an enrolled product, going live inside its caps.
       'brain structure go-live: inside an enrolled product, inside caps': false,
@@ -186,6 +189,36 @@ describe('the Owner\'s code rule A — the table', () => {
 })
 
 describe('the Owner\'s code rule A — the big doors it added, through the Approvals inbox', () => {
+  it('set-brain-kill-switch end (batch 2 review fix): without the code mfa_required and the kill stands; with it, it ends — a kill itself needs none', async () => {
+    const { setBrainKill, killStanding } = await import('../../advertising/brain/kill-switch.js')
+    const target = { lever: 'budgets' as const, productId: null, market: 'IT' }
+    // A kill is a normal approval: no stepUp, a plain approve runs it.
+    const kill = await ask('set-brain-kill-switch', { op: 'kill', lever: 'budgets', market: 'IT', why: 'test: stop the budgets lever' })
+    expect(kill).toMatchObject({ ok: true, mode: 'queued' })
+    expect((await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: kill.approvalId } }))).preview.stepUp).toBeUndefined()
+    expect(await approve(kill.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await commit(kill.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await inside(() => killStanding(target))).toMatchObject({ reason: 'test: stop the budgets lever' })
+    // Ending it lets the brain write the lever again: the approver's code.
+    const end = await ask('set-brain-kill-switch', { op: 'end', lever: 'budgets', market: 'IT' })
+    const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: end.approvalId } }))
+    expect(stored.preview).toMatchObject({ op: 'end', stepUp: { raises: ['Brain lever'], what: expect.stringMatching(/^ends the kill switch on the ads brain's budgets lever/) }, effect: expect.stringMatching(/Ending a kill switch is a big door/) })
+    expect(await approve(end.approvalId)).toMatchObject({ ok: false, code: 'mfa_required', raises: ['Brain lever'] })
+    expect(await inside(() => killStanding(target))).not.toBeNull()
+    expect(await approve(end.approvalId, code())).toMatchObject({ ok: true, status: 'scheduled' })
+    const done = await commit(end.approvalId)
+    expect(done, JSON.stringify(done)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await inside(() => killStanding(target))).toBeNull()
+    // The line flipped: an end without the code runs on a plain approve.
+    await inside(() => setBrainKill({ ...target, reason: 'test: stop it again', by: 'user:test' }))
+    __codeRuleTest.flip('set-brain-kill-switch: end', false)
+    const plain = await ask('set-brain-kill-switch', { op: 'end', lever: 'budgets', market: 'IT' })
+    expect((await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: plain.approvalId } }))).preview.stepUp).toBeUndefined()
+    expect(await approve(plain.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await commit(plain.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await inside(() => killStanding(target))).toBeNull()
+  })
+
   it('set-campaign-live-writes on: without the code mfa_required and nothing changes; with it, it runs at commit', async () => {
     const asked = await ask('set-campaign-live-writes', { campaignId: 'c-off', enabled: true })
     expect(asked).toMatchObject({ ok: true, mode: 'queued' })

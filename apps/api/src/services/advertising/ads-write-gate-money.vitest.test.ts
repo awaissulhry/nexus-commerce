@@ -134,6 +134,55 @@ describe('AB-8 — the money actors write only a lever the brain owns', () => {
   })
 })
 
+/**
+ * Batch 2 review fix — the brain's harvest writer (BRAIN_HARVEST_ACTOR) writes only where a product's brain OWNS the
+ * campaign's harvest lever, for both halves of its pair: the keyword in the destination and the negative in a source.
+ */
+describe('AB-11 review fix — the harvest actor writes only a harvest lever the brain owns', () => {
+  const leverHolds = (levers: CampaignLeverOwners['levers']) =>
+    campaignLeverOwners.mockResolvedValue(new Map<string, CampaignLeverOwners>([['c1', { campaignId: 'c1', name: ROW.name, market: 'IT', levers }]]))
+  /** The keyword of the pair, as createKeywordLocal hands it to the gate. */
+  const keyword = (actor: string) => checkAdsWriteGate({ marketplace: 'IT', campaignId: 'c1', payloadValueCents: 40, field: 'bid', intendedValueCents: 40, dimension: 'keywords', actor } as never)
+  /** A source's negative of the pair, as the one negative write service hands it to the gate. */
+  const negative = (actor: string) => checkAdsWriteGate({ marketplace: 'IT', campaignId: 'c1', payloadValueCents: 0, isNegation: true, keywordText: 'test term', negativeMatchType: 'NEGATIVE_EXACT', dimension: 'negatives', actor } as never)
+
+  it('is the harvest module\'s own actor', async () => {
+    const { BRAIN_HARVEST_ACTOR } = await import('./ads-write-gate.js')
+    const { HARVEST_ACTOR } = await import('./brain/harvest.js')
+    expect(BRAIN_HARVEST_ACTOR).toBe(HARVEST_ACTOR)
+  })
+
+  it('owned: the keyword and the source negative pass', async () => {
+    const { BRAIN_HARVEST_ACTOR } = await import('./ads-write-gate.js')
+    leverHolds({ harvest: owned(), negatives: owned() })
+    expect(await keyword(BRAIN_HARVEST_ACTOR)).toMatchObject({ allowed: true })
+    expect(await negative(BRAIN_HARVEST_ACTOR)).toMatchObject({ allowed: true })
+  })
+
+  it('a harvest lever no brain holds there: both halves refused as not the brain\'s, a rule\'s create as before', async () => {
+    const { BRAIN_HARVEST_ACTOR } = await import('./ads-write-gate.js')
+    // The source's negatives lever is the brain's, its harvest lever nobody's (the Owner turned it off there).
+    leverHolds({ negatives: owned() })
+    const k = await keyword(BRAIN_HARVEST_ACTOR)
+    expect(k).toMatchObject({ allowed: false, deniedAt: 'brain_not_owner' })
+    expect((k as { reason: string }).reason).toMatch(/automation:ads-brain-harvest writes only a lever the brain owns: the new keywords and targets of campaign "Product A exact" \(c1\) is not the brain's — no enrolled product's brain holds it/)
+    expect(await negative(BRAIN_HARVEST_ACTOR)).toMatchObject({ allowed: false, deniedAt: 'brain_not_owner' })
+    leverHolds({})
+    expect(await keyword('automation:rule-x')).toMatchObject({ allowed: true })
+    expect(await negative('automation:rule-x')).toMatchObject({ allowed: true })
+  })
+
+  it('a server switch not live: refused; the Owner\'s lock: refused in his words first', async () => {
+    const { BRAIN_HARVEST_ACTOR } = await import('./ads-write-gate.js')
+    leverHolds({ harvest: owned(), negatives: owned() })
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
+    expect(await keyword(BRAIN_HARVEST_ACTOR)).toMatchObject({ allowed: false, deniedAt: 'brain_not_owner', reason: expect.stringMatching(/NEXUS_BID_BRAIN_MODE is not live/) })
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+    leverHolds({ harvest: locked(), negatives: owned() })
+    expect(await keyword(BRAIN_HARVEST_ACTOR)).toMatchObject({ allowed: false, deniedAt: 'owner_locked' })
+  })
+})
+
 describe('AB-8 — the intraday ladder\'s give-back exception (the day-move bound)', () => {
   it('a rung above the ceiling: up to +100 % of today\'s base passes for the brain; beyond it, refused', async () => {
     // No write today: the day opened at €40, the ceiling is €60, the base is €40 → the ladder may reach €80.

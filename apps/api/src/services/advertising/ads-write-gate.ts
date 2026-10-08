@@ -396,6 +396,13 @@ export const PRODUCT_BRAIN_ACTOR = 'automation:ads-brain'
  */
 export const BRAIN_NEGATIVES_ACTOR = `${PRODUCT_BRAIN_ACTOR}-negatives` as const
 /**
+ * ONE BRAIN AB-11 — the brain's harvest writer (brain/harvest.ts HARVEST_ACTOR: the keyword in its destination and the
+ * negative exact in its sources, one pair). Batch 2 review fix — it writes only where a product's brain OWNS the campaign's
+ * harvest lever (brainWriterRefusal), like the money and negatives writers: on a campaign no brain holds, the AB-5 rule
+ * alone would let it through as an automatic writer.
+ */
+export const BRAIN_HARVEST_ACTOR = `${PRODUCT_BRAIN_ACTOR}-harvest` as const
+/**
  * ONE BRAIN AB-12 — the brain's state writer (D4 = A: it pauses alone for a stop of several days and resumes when the stop
  * ends; brain/state-run.ts). A writer of PRODUCT_BRAIN_ACTOR's family, so an owned state lever passes it as the brain; on
  * top of that it lands only where a product's brain OWNS the campaign's state lever (brainStateNotOwnedRefusal).
@@ -1531,16 +1538,20 @@ async function brainBudgetDayMoveDenial(
  * non-live server switch the brain owns nothing, so they are refused; a lever nobody holds, or one the Owner locked, is
  * refused too (the lock in the Owner's words, by the AB-5 check before this one). AB-10 — the negatives writer's actor
  * (BRAIN_NEGATIVES_ACTOR) holds the same rule on the campaign's negatives lever, AB-17's bidding-strategy writer
- * (BRAIN_STRATEGY_ACTOR) on its biddingStrategy lever. It holds only these actors: every other
- * writer, the brain's other actors included, is judged as before. A failed read of the holders goes out of the gate as an
- * error (try again later), as productBrainRefusal's does.
+ * (BRAIN_STRATEGY_ACTOR) on its biddingStrategy lever. Batch 2 review fix — and the harvest writer's actor
+ * (BRAIN_HARVEST_ACTOR) on the campaign's HARVEST lever, for every write of its pair: the keyword in the destination and the
+ * negative in each source (the pair's level is the lowest of those campaigns' harvest levers, so each must be the brain's).
+ * It holds only these actors: every other writer, the brain's other actors included, is judged as before. A failed read of
+ * the holders goes out of the gate as an error (try again later), as productBrainRefusal's does.
  */
 async function brainWriterRefusal(target: { campaignId: string; name?: string | null } | { portfolioId: string }, ctx: GateContext): Promise<Extract<GateDecision, { allowed: false }> | null> {
   const negatives = ctx.actor === BRAIN_NEGATIVES_ACTOR && 'campaignId' in target
   // AB-17 — the bidding-strategy writer on the campaign's biddingStrategy lever, the same rule.
   const strategy = ctx.actor === BRAIN_STRATEGY_ACTOR && 'campaignId' in target
-  if ((!isMoneyActor(ctx.actor) && !negatives && !strategy) || ctx.manual === true) return null
-  const lever: BrainLever = negatives ? 'negatives' : strategy ? 'biddingStrategy' : 'campaignId' in target ? 'budgets' : 'portfolioCap'
+  // Batch 2 review fix — the harvest writer on the campaign's harvest lever, the same rule.
+  const harvest = ctx.actor === BRAIN_HARVEST_ACTOR && 'campaignId' in target
+  if ((!isMoneyActor(ctx.actor) && !negatives && !strategy && !harvest) || ctx.manual === true) return null
+  const lever: BrainLever = negatives ? 'negatives' : strategy ? 'biddingStrategy' : harvest ? 'harvest' : 'campaignId' in target ? 'budgets' : 'portfolioCap'
   const where = 'campaignId' in target ? `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}` : `portfolio ${target.portfolioId}`
   const refuse = (why: string): Extract<GateDecision, { allowed: false }> => ({
     allowed: false,

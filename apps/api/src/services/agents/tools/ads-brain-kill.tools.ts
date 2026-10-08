@@ -9,8 +9,10 @@
  *                           that lever again as its level says. Kept with who, when and why; the ads-brain map shows each.
  *
  * Nexus only (nothing is sent to Amazon by the switch itself). A person approves every op in Nexus (Claude asks with the
- * Owner's word); ending a kill needs no authenticator code (like resume-automation: the levels the brain returns to were
- * set with their own approvals). Its undo is the opposite op.
+ * Owner's word). Batch 2 review fix (lead decision, code rule A: ads-code-rule.ts 'set-brain-kill-switch: end') — ending a
+ * kill is a BIG DOOR: it lets the brain write that lever again, so approving it needs the approver's authenticator code (the
+ * preview's `stepUp`, checked again on the fresh dry run in `execute`); setting a kill stays a normal approval. Its undo is
+ * the opposite op (an undo that ends a kill asks for the code too).
  */
 import { z } from 'zod'
 import { FEATURES as F } from '@nexus/shared/permissions'
@@ -23,6 +25,8 @@ import { resolveBrainSettings, type OverrideRow } from '../../advertising/brain/
 import { runRetireTick } from '../../advertising/brain/retire-run.js'
 import { logger } from '../../../utils/logger.js'
 import { approvedRun, notRun } from './ads-change-kit.js'
+import { codeGate, needsCode } from './ads-code-rule.js'
+import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { isLiveProduct, PRODUCT_NOT_FOUND } from './live-product.js'
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
 
@@ -72,6 +76,11 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
       + 'The brain\'s other levers, a person\'s own edits, the safety checks and every other engine are as before. Nothing is sent to Amazon by the switch itself.'
     : `Ends the kill switch on the ${t.lever} lever for ${where} (set by ${standing!.by} on ${standing!.at.slice(0, 10)}: "${standing!.reason}"): the brain writes that lever again as its level says`
       + `${acting.length ? ` — ${acting.map((p) => `${p.productId} in ${p.market} at ${p.level}`).slice(0, 5).join(', ')}${acting.length > 5 ? ` and ${acting.length - 5} more` : ''}` : ' — no reached product has it at PROPOSE or AUTO now, so nothing writes yet'}. Nothing is sent to Amazon by the switch itself.`
+  // Code rule A (batch 2 review fix, lead decision) — ending a kill lets the brain write the lever again: a big door.
+  const coded = op === 'end' && needsCode('set-brain-kill-switch: end')
+  const stepUp: StepUp | null = coded
+    ? { what: `ends the kill switch on the ads brain's ${t.lever} lever for ${where} (the brain writes it again)`, raises: ['Brain lever'], needs: STEP_UP_NEEDS, how: 'A person with settings.security.manage approves it in Nexus with their authenticator code.' }
+    : null
   return {
     ok: true,
     preview: {
@@ -83,7 +92,8 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
       // What the approval runs on: a change of the standing kill since the request refuses the run.
       basis: `${op}|${t.lever}|${productId ?? '*'}|${t.market ?? '*'}|${standing?.id ?? 'none'}`,
       summary: op === 'kill' ? `Stop the brain's ${t.lever} lever for ${where}.` : `End the kill switch on the brain's ${t.lever} lever for ${where}.`,
-      effect,
+      effect: coded ? `${effect} Ending a kill switch is a big door: approving it needs the approver's authenticator code.` : effect,
+      ...(stepUp ? { stepUp } : {}),
     },
   }
 }
@@ -99,7 +109,8 @@ const setBrainKillSwitch: AgentTool = {
     + 'once. The brain then writes and asks nothing on that lever (each lever\'s run holds and names the kill) and Amazon\'s write gate '
     + 'refuses the brain\'s own writer on it, a lowering by the brain included; the brain\'s other levers, a person\'s own edits, the '
     + 'safety checks and every other engine are as before. Say why (why): it is kept with who and when, and shown in the ads-brain map. '
-    + 'op end: the kill ends and the brain writes that lever again as its level says. Nothing is sent to Amazon by the switch itself. '
+    + 'op end: the kill ends and the brain writes that lever again as its level says — a big door: approving it needs the '
+    + 'approver\'s authenticator code (a kill itself is a normal approval). Nothing is sent to Amazon by the switch itself. '
     + 'A person approves every op in Nexus; nothing changes until then. Its undo is the opposite op.',
   input: z.object({
     op: z.enum(OPS).describe('kill: stop the lever; end: end the kill (the brain writes the lever again as its level says)'),
@@ -141,6 +152,9 @@ const setBrainKillSwitch: AgentTool = {
     const p = fresh.preview as { op: Op; kill: { lever: BrainLever; productId: string | null; market: string | null; reason: string }; standing: { reason: string } | null; basis: string; effect: string }
     const approved = ctx.approvedPreview as { basis?: unknown } | undefined
     if (approved?.basis && approved.basis !== p.basis) return notRun('Not run: the kill switch of that lever changed since it was approved. Nothing changed.')
+    // Code rule A — ending a kill runs only with the approver's fresh code (the fresh dry run's stepUp).
+    const gate = await codeGate(ctx, fresh.preview)
+    if ('refusal' in gate) return notRun(gate.refusal)
     const run = approvedRun(ctx, String(args.why ?? '') || p.effect)
     if ('refusal' in run) return notRun(`Not run: ${run.refusal}.`)
     const target = { lever: p.kill.lever, productId: p.kill.productId, market: p.kill.market }

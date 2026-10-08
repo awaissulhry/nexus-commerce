@@ -114,7 +114,7 @@ describe('batch 2 fix — the undo is a pair: both halves asked of the gate firs
 
   it('whole: the gate asked for every half first, the source negatives retired, then the keyword paused (a deliberate pause)', async () => {
     const u = await undoHarvest('hv-1', { actor: 'automation:auto-undo', manual: false, changeSetId: null, reason: 'worse' })
-    expect(u).toEqual({ paused: true, retired: 2, problems: [], complete: true, actionLogIds: ['log-pause', 'log-n1', 'log-n2'] })
+    expect(u).toEqual({ paused: true, retired: 2, problems: [], complete: true, actionLogIds: ['log-pause', 'log-n1', 'log-n2'], alreadyBack: 0 })
     expect(h.gate.mock.calls.map(([c]) => [c.campaignId, c.dimension ?? null, c.isSuppression ?? false, c.actor])).toEqual([
       ['c-n1', 'negatives', false, 'automation:auto-undo'], ['c-n2', 'negatives', false, 'automation:auto-undo'], ['c-exact', null, true, 'automation:auto-undo'],
     ])
@@ -132,18 +132,18 @@ describe('batch 2 fix — the undo is a pair: both halves asked of the gate firs
   it('a retire that fails: the keyword is left running (the term never without a home); sent again, only what is left is written', async () => {
     h.retire.mockImplementationOnce(async (a: { adTargetIds: string[] }) => ({ outcomes: [{ adTargetId: a.adTargetIds[0], kind: 'retired', actionLogId: 'log-n1' }, { adTargetId: a.adTargetIds[1], kind: 'failed', reason: 'Amazon timed out' }] }))
     const half = await undoHarvest('hv-1', { actor: 'automation:auto-undo', manual: false, changeSetId: null, reason: 'worse' })
-    expect(half).toMatchObject({ paused: false, retired: 1, complete: false })
+    expect(half).toMatchObject({ paused: false, retired: 1, complete: false, alreadyBack: 0 })
     expect(half.problems).toEqual([expect.stringMatching(/Amazon timed out/), expect.stringMatching(/the keyword was left running: a source still blocks the term/)])
     expect(h.pause).not.toHaveBeenCalled()
     h.targets = [kw, { ...neg('n1'), status: 'ARCHIVED' }, neg('n2')]
     h.order = []
-    expect(await undoHarvest('hv-1', { actor: 'automation:auto-undo', manual: false, changeSetId: null, reason: 'worse' })).toMatchObject({ paused: true, retired: 1, complete: true })
+    expect(await undoHarvest('hv-1', { actor: 'automation:auto-undo', manual: false, changeSetId: null, reason: 'worse' })).toMatchObject({ paused: true, retired: 1, complete: true, alreadyBack: 1 })
     expect(h.order).toEqual(['retire:n2', 'pause:k1'])
   })
 
   it('nothing left of it: complete, nothing asked, nothing written', async () => {
     h.targets = [{ ...kw, status: 'PAUSED' }, { ...neg('n1'), status: 'ARCHIVED' }, { ...neg('n2'), status: 'ARCHIVED' }]
-    expect(await undoHarvest('hv-1', { actor: 'automation:auto-undo', manual: false, changeSetId: null, reason: 'worse' })).toEqual({ paused: false, retired: 0, problems: [], complete: true, actionLogIds: [] })
+    expect(await undoHarvest('hv-1', { actor: 'automation:auto-undo', manual: false, changeSetId: null, reason: 'worse' })).toEqual({ paused: false, retired: 0, problems: [], complete: true, actionLogIds: [], alreadyBack: 3 })
     expect(h.gate).not.toHaveBeenCalled()
   })
 })

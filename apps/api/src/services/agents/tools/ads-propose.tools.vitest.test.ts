@@ -298,14 +298,38 @@ describe('A5 — graduate-keyword: into the named or resolved ad group, executed
     expect(r.preview).toMatchObject({ query: 'giacca pelle', suggestedBidCents: 168, destination: { id: 'c-it' }, destinationAdGroup: { id: 'g-c-it', why: 'named in the request' }, currency: 'EUR', reach: { reach: 'sandbox' } })
   })
 
-  it('without a named ad group it takes the stored harvest destination — another campaign, in its own currency', async () => {
-    await inside(() => database.client.adsHarvestDestination.create({ data: { scopeGrain: 'campaign', scopeId: 'c-it', matchType: 'EXACT', adGroupId: 'g-c-uk', updatedBy: 'test' } }))
+  it('without a named ad group it takes the stored harvest destination — another campaign of the market; one gone or in another market is refused by name (batch 2 re-review fix)', async () => {
+    await inside(() => database.client.adsHarvestDestination.create({ data: { scopeGrain: 'campaign', scopeId: 'c-it', matchType: 'EXACT', adGroupId: 'g-c-pin', updatedBy: 'test' } }))
     const r = await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it' })
-    expect(r.preview).toMatchObject({ destination: { id: 'c-uk' }, destinationAdGroup: { id: 'g-c-uk', externalAdGroupId: 'EXT-g-c-uk', why: 'the harvest destination stored for this scope' }, currency: 'GBP' })
+    expect(r.preview).toMatchObject({ destination: { id: 'c-pin' }, destinationAdGroup: { id: 'g-c-pin', externalAdGroupId: 'EXT-g-c-pin', why: 'the harvest destination stored for this scope' }, currency: 'EUR' })
     // A named destination campaign that is not where the stored destination is: refused, name the ad group.
     expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it', destExternalCampaignId: 'EXT-c-it' })).error)
-      .toMatch(/harvest destination for this term is in UK exact/)
+      .toMatch(/harvest destination for this term is in Italy pinned/)
+    // His stored destination in another market, or gone: refused by name, never the resolver's own pick.
+    await inside(() => database.client.adsHarvestDestination.updateMany({ data: { adGroupId: 'g-c-uk' } }))
+    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it' })).error)
+      .toMatch(/^The harvest destination stored for this match type \(at the campaign grain\), “group c-uk”, is in UK, but this search term is from IT, so nothing was created\..* Or name one: destExternalAdGroupId\./)
+    await inside(() => database.client.adsHarvestDestination.updateMany({ data: { adGroupId: 'g-no-such-group' } }))
+    expect((await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it' })).error)
+      .toMatch(/^The harvest destination stored for this match type \(at the campaign grain\) no longer exists, so nothing was created/)
     await inside(() => database.client.adsHarvestDestination.deleteMany({}))
+  })
+
+  it('the destination stored for the source\'s product line is taken (batch 2 re-review fix: the line grain, as the Keyword Harvest page and the brain read it)', async () => {
+    const line = await inside(() => database.client.product.create({ data: { sku: 'TEST-B2RF-LINE', name: 'Test line', basePrice: '10.00', amazonAsin: 'B0TESTLINE' } }))
+    await inside(async () => {
+      await database.client.adProductAd.create({ data: { adGroupId: 'g-c-it', productId: line.id, asin: 'B0TESTLINE' } })
+      await database.client.adsHarvestDestination.create({ data: { scopeGrain: 'line', scopeId: line.id, matchType: 'EXACT', adGroupId: 'g-c-pin', updatedBy: 'test' } })
+    })
+    try {
+      const r = await preview('graduate-keyword', { query: 'giacca pelle', sourceExternalCampaignId: 'EXT-c-it', sourceExternalAdGroupId: 'EXT-g-c-it' })
+      expect(r.preview, r.error).toMatchObject({ destination: { id: 'c-pin' }, destinationAdGroup: { id: 'g-c-pin', why: 'the harvest destination stored for this scope' } })
+    } finally {
+      await inside(async () => {
+        await database.client.adsHarvestDestination.deleteMany({})
+        await database.client.adProductAd.deleteMany({ where: { asin: 'B0TESTLINE' } })
+      })
+    }
   })
 
   it('refuses no ad group to go to, an existing exact keyword, a non-SP destination (a pin no longer, 4A)', async () => {

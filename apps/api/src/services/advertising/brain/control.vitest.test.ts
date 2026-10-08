@@ -22,7 +22,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('../../../db.js', () => ({ default: {} }))
 
 const {
-  controlUndoRequest, effectiveWord, leverDoes, leverMoves, overridesAfter, releasedLevers, settingRaise, shapeRefusal, SPEND_RATINGS, startLines, turnsAutoOf,
+  controlUndoRequest, effectiveWord, leverDoes, leverMoves, limitRaise, overridesAfter, releasedLevers, settingRaise, shapeRefusal, SPEND_RATINGS, startLines, turnsAutoOf,
 } = await import('./control.js')
 const { resolveBrainSettings } = await import('./settings.js')
 const { BRAIN_LEVERS, BRAIN_SETTING_KEYS } = await import('./levers.js')
@@ -77,6 +77,23 @@ describe('spend — what a change of a setting can add', () => {
     expect(settingRaise('portfolioCapLimitCents', 100_000, null)).toMatch(/empty = the server's limit, which may be higher/)
     expect(settingRaise('portfolioCapLimitCents', 300_000, 200_000)).toBeNull()
     expect(settingRaise('portfolioCapLimitCents', 300_000, 300_000)).toBeNull()
+  })
+  it('batch 2 review fix (lead decision) — a big door only where the limit IN FORCE rises: the server\'s where none is set', () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS', '200000')
+    try {
+      expect(limitRaise('portfolioCapLimitCents', 200_000, 300_000)).toBe('the product\'s portfolio cap limit raised from 200000¢ to 300000¢ a month: a larger Amazon portfolio cap may then be written')
+      expect(limitRaise('portfolioCapLimitCents', null, 300_000)).toMatch(/raised from 200000¢ to 300000¢/)
+      // A reset to the server's limit: a raise only when the server's is higher than the product's own.
+      expect(limitRaise('portfolioCapLimitCents', 100_000, null)).toMatch(/raised from 100000¢ to 200000¢ a month \(the server's limit\)/)
+      expect(limitRaise('portfolioCapLimitCents', 300_000, null)).toBeNull()
+      // Lower, the same, or below the server's from none: a normal approval.
+      expect(limitRaise('portfolioCapLimitCents', 300_000, 200_000)).toBeNull()
+      expect(limitRaise('portfolioCapLimitCents', 300_000, 300_000)).toBeNull()
+      expect(limitRaise('portfolioCapLimitCents', null, 150_000)).toBeNull()
+      expect(limitRaise('portfolioCapLimitCents', null, 200_000)).toBeNull()
+      // Another setting is never this door.
+      expect(limitRaise('portfolioCapCents', 100_000, 300_000)).toBeNull()
+    } finally { vi.unstubAllEnvs() }
   })
   it('a raise only in its direction', () => {
     expect(settingRaise('paceTargetPct', 90, 95)).toMatch(/^paceTargetPct 90 → 95: the pace aims at more/)

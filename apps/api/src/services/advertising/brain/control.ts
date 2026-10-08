@@ -33,9 +33,11 @@
  *
  *   big door   code rule A: a change that takes any lever to AUTO — on the product or one of its own campaigns, by a level,
  *              an unlock, an include, a reset or an enrollment (an adopted AUTO included) — or that puts a campaign under
- *              the bid brain, needs the approver's authenticator code (`needsCode`, with each reason in `bigDoor`).
- *              Everything else (OBSERVE, PROPOSE, OFF, locks, exclusions, values, leave) is a normal approval; what can add
- *              spend is listed in `raises` and said in the effect, never silently.
+ *              the bid brain, needs the approver's authenticator code (`needsCode`, with each reason in `bigDoor`). Batch 2
+ *              review fix (lead decision) — so does a value that RAISES the product's portfolio cap limit
+ *              (portfolioCapLimitCents, the limit in force before → after, the server's where none is set: limitRaise).
+ *              Everything else (OBSERVE, PROPOSE, OFF, locks, exclusions, other values, a lower limit, leave) is a normal
+ *              approval; what can add spend is listed in `raises` and said in the effect, never silently.
  *   refusals   a level a lever does not take yet, a value outside its bounds or the wrong scope, a lock ref the lever has
  *              no such thing for, a lever to AUTO while one of Amazon's own rules acts on it there (AB-4), a campaign that
  *              does not advertise the product, and a change that changes nothing — each said, nothing queued.
@@ -67,6 +69,7 @@ import {
   type OverrideRow, type Provenance,
 } from './settings.js'
 import { brainPausesInForce } from './state-load.js'
+import { PORTFOLIO_CAP_LIMIT_SETTING, serverPortfolioCapLimitCents } from './portfolio-cap-limit.js'
 
 export const CONTROL_TOOL = 'set-ads-brain'
 export const CONTROL_OPS = ['enroll', 'set-level', 'lock', 'unlock', 'exclude', 'include', 'set-value', 'leave'] as const
@@ -318,6 +321,20 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   longStopUntil: { when: 'cleared-or-earlier', words: 'the Owner\'s long stop ends sooner: the brain resumes the campaigns sooner' },
 }
 
+/**
+ * Batch 2 review fix (lead decision, code rule A) — a change of the product's portfolio cap limit that RAISES the limit in
+ * force: from → to as the gate reads them (a value that is not a whole number above 0 is the server's limit,
+ * NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS). Its big-door words, or null (lower, the same, or another setting). Pure but for
+ * the env.
+ */
+export function limitRaise(key: string, from: SettingValue, to: SettingValue): string | null {
+  if (key !== PORTFOLIO_CAP_LIMIT_SETTING) return null
+  const server = serverPortfolioCapLimitCents()
+  const inForce = (v: SettingValue) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : server)
+  const [was, will] = [inForce(from), inForce(to)]
+  return will > was ? `the product's portfolio cap limit raised from ${was}¢ to ${will}¢ a month${to === null ? ' (the server\'s limit)' : ''}: a larger Amazon portfolio cap may then be written` : null
+}
+
 /** The raise line of a setting changed from → to; null when it adds no spend. Pure. */
 export function settingRaise(key: string, from: SettingValue, to: SettingValue): string | null {
   if (!isSetting(key)) return null
@@ -561,9 +578,11 @@ async function previewOverride(ctx: Ctx): Promise<ControlOutcome> {
   const own = ctx.own.map((c) => ({ campaignId: c.campaignId, name: c.name }))
   const turnsAuto = turnsAutoOf(b, a, own)
   const live = plan.goesLive
+  const raisedLimit = kind === 'VALUE' ? limitRaise(key, b(scopeId).values[key as BrainSetting].value, a(scopeId).values[key as BrainSetting].value) : null
   const bigDoor = [
     ...turnsAuto.map((t) => `${leverWord(t.lever)} to AUTO on ${t.where}`),
     ...(live.length ? [`${plural(live.length, 'campaign')} under the bid brain (${names(all.filter((c) => live.includes(c.campaignId)))})`] : []),
+    ...(raisedLimit ? [raisedLimit] : []),
   ]
   const needsCode = bigDoor.length > 0
 

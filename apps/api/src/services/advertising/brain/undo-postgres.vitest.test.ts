@@ -53,6 +53,8 @@ vi.mock('../../../lib/queue.js', () => {
 })
 
 const { runAutoUndo, autoUndoSummaryLine } = await import('../ads-auto-undo.service.js')
+const { registerHarvestUndo } = await import('./undo-run.js')
+const { harvestUndo } = await import('./harvest-undo.js')
 const { setEngineSwitch } = await import('../../automation/engine-switch.service.js')
 const { setAutonomy } = await import('../ads-automation-state.service.js')
 const { enrollProduct, setLever } = await import('./enrollment.js')
@@ -287,6 +289,15 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-15 — auto-undo per lever and the
       const run = await db.agentRun.create({ data: { agentKey: 'ads-brain-harvest', trigger: 'schedule', status: 'done' } })
       await db.agentApproval.create({ data: { id: id('ab11-undo'), agentRunId: run.id, toolName: 'apply-brain-harvest', riskTier: 'high', args: { op: 'undo', harvestId: id('harvest') }, status: 'pending' } })
     })
+    // Batch 2 review fix — a pair put back only in part (harvest-undo.ts says `retry`): held this run, its judgement left
+    // open (not final), and the undo is sent again at the next run.
+    registerHarvestUndo({ ...harvestUndo, undo: async () => ({ ok: false, retry: true, reason: 'test: the pair was put back in part; the rest is sent again at the next run' }) })
+    try {
+      fresh()
+      const part = await undo()
+      expect(part.brain!.items.find((i) => i.lever === 'harvest')).toMatchObject({ action: 'held', reason: expect.stringMatching(/^test: the pair was put back in part/) })
+      expect((await judgements()).find((j) => j.lever === 'harvest')).toMatchObject({ action: 'held', final: false })
+    } finally { registerHarvestUndo(null) }
     fresh()
     const out = await undo()
     const h = out.brain!.items.find((i) => i.lever === 'harvest')!

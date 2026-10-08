@@ -95,7 +95,8 @@ export interface HarvestUndoFact {
 /** AB-11's side of a harvest undo: its judgements, its own undo of the pair, its request, and whether a pair was put back. */
 export interface HarvestUndoProvider {
   judged(since: Date): Promise<HarvestUndoFact[]>
-  undo(id: string, run: { actor: string; reason: string }): Promise<{ ok: true; actionLogId: string | null } | { ok: false; reason: string }>
+  /** `retry`: put back in part — the judgement stays open and the undo is sent again at the next run (batch 2 review fix). */
+  undo(id: string, run: { actor: string; reason: string }): Promise<{ ok: true; actionLogId: string | null } | { ok: false; reason: string; retry?: boolean }>
   propose(id: string, why: string): Promise<{ approvalId: string } | { error: string }>
   isUndone(id: string): Promise<boolean>
 }
@@ -681,6 +682,8 @@ async function harvestPass(ctx: PassCtx, run: BrainUndoRun): Promise<BrainUndoIt
     let undoApprovalId: string | null = null
     let undoActionLogId: string | null = null
     let judgementId: string | null = prior?.id ?? null
+    // Batch 2 review fix — an undo put back in part is held this run and sent again at the next (its judgement stays open).
+    let retry = false
     if (!ctx.dryRun) {
       const data = {
         actor: 'automation:ads-brain-harvest', origin: 'brain', originLabel: LEVER_LABEL.harvest, approvalId: null, entityType: 'HARVEST', entityId: h.id,
@@ -696,10 +699,10 @@ async function harvestPass(ctx: PassCtx, run: BrainUndoRun): Promise<BrainUndoIt
         else { action = 'held'; reason = `the request to undo it could not be queued: ${asked.error}` }
       } else if (action === 'undone') {
         const done = await p.undo(h.id, { actor: AUTO_UNDO_ACTOR, reason: `Auto-undo ${row.id}: ${h.why}` })
-        if ('reason' in done) { action = 'held'; reason = done.reason }
+        if ('reason' in done) { action = 'held'; reason = done.reason; retry = done.retry === true }
         else undoActionLogId = done.actionLogId
       }
-      await prisma.adsAutoUndoJudgement.update({ where: { id: row.id }, data: { action, actionReason: reason, undoApprovalId, undoActionLogId, final: action !== 'proposed' && (action === 'undone' || action === 'held' || h.verdict === 'KEPT') } })
+      await prisma.adsAutoUndoJudgement.update({ where: { id: row.id }, data: { action, actionReason: reason, undoApprovalId, undoActionLogId, final: action !== 'proposed' && (action === 'undone' || (action === 'held' && !retry) || h.verdict === 'KEPT') } })
     }
     if (action === 'would_undo') { run.counts.wouldUndo++; count(run, 'harvest', 'wouldUndo') }
     else if (action === 'proposed') { run.counts.proposed++; count(run, 'harvest', 'proposed') }

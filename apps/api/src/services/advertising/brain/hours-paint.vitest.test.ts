@@ -40,9 +40,10 @@ describe('the ladder', () => {
     expect(ladderOf({ windows: [{ days: EVERY, startHour: 0, endHour: 4, targetKey: 'gone' }], defaultTargetKey: 'own' }, T)).toEqual({ serving: ['own'], minBid: 'pause', missing: ['gone'] })
   })
 
-  it('moves the furthest step within the cap, one step at least; Min bid from anywhere; out of it to the lowest', () => {
+  it('moves the furthest step within the cap — up never past it, down one step at least; Min bid from anywhere; out of it to the lowest', () => {
     const ladder = { serving: ['rest', 'defend', 'own', 'allout'], minBid: 'pause' }
-    expect(stepFrom('rest', 'up', ladder, T, 0.3)).toBe('defend') // +50 % > 30 %: one step anyway
+    expect(stepFrom('rest', 'up', ladder, T, 0.3)).toBe('rest') // +50 % > 30 %: a raise never passes the cap (batch 2 review fix)
+    expect(stepFrom('rest', 'up', ladder, T, 0.5)).toBe('defend') // +50 % fits, +100 % does not
     expect(stepFrom('own', 'up', ladder, T, 0.3)).toBe('allout') // +25 %
     expect(stepFrom('allout', 'down', ladder, T, 0.3)).toBe('own') // −20 %, then −40 % stops
     expect(stepFrom('rest', 'up', ladder, T, 1)).toBe('own') // +100 % fits, +150 % does not
@@ -51,6 +52,12 @@ describe('the ladder', () => {
     expect(stepFrom('pause', 'up', ladder, T, 0.3)).toBe('rest')
     expect(stepFrom('pause', 'down', ladder, T, 0.3)).toBe('pause')
     expect(stepFrom('own', 'up', ladder, T, 0)).toBe('own') // 0 % moves nothing
+    // A 0 % → +100 % plan (the Owner's two targets): up would double the bid multiplier, so at the 30 % cap the hour stays;
+    // down is a cut and takes its one step.
+    const twoStep = { serving: ['rest', 'own'], minBid: 'pause' }
+    expect(stepFrom('rest', 'up', twoStep, T, 0.3)).toBe('rest')
+    expect(stepFrom('rest', 'up', twoStep, T, 1)).toBe('own')
+    expect(stepFrom('own', 'down', twoStep, T, 0.3)).toBe('rest')
   })
 })
 
@@ -90,16 +97,21 @@ describe('each block\'s rule', () => {
 describe('painting', () => {
   it('a weak evening steps down, a strong morning steps up, the rest stays; windows read back exactly', () => {
     const research = researchWith({ block: (d, p) => (d === 1 && p === 4 ? { crIndex: 0.55, crShape: 20 } : d === 1 && p === 2 ? { crIndex: 1.7, crShape: 20 } : {}) })
-    const out = paintPlan(input({ research }))
+    // A 50 % cap: rest (×1) → defend (×1.5) fits, and so does own (×2) → rest (×1, −50 %).
+    const out = paintPlan(input({ research, settings: { hourCellMovePct: 50, minBidEntriesPerDay: 2 } }))
     expect(out.held).toBeNull()
-    // Monday 16–19: own → defend (16–19 are own top in the plan; 16–20 is the block). Monday 08–11: rest → defend.
+    // Monday 16–19: own → rest (16–19 are own top in the plan; 16–20 is the block). Monday 08–11: rest → defend.
     expect(out.changes.map((c) => [c.cell, c.from, c.to])).toEqual([
       ...[8, 9, 10, 11].map((h) => [cellRef(1, h), 'rest', 'defend']),
-      ...[16, 17, 18, 19].map((h) => [cellRef(1, h), 'own', 'defend']),
+      ...[16, 17, 18, 19].map((h) => [cellRef(1, h), 'own', 'rest']),
     ])
     expect(weekOf({ windows: out.windows, defaultTargetKey: out.defaultTargetKey })).toEqual(out.week.after)
     expect(out.defaultTargetKey).toBe('rest')
     expect(out.summary[0]).toMatch(/Paints 8 hours of the week \(4 up, 4 down\)/)
+    // Batch 2 review fix — at the default 30 % cap the morning's raise (+50 %) is past it: the morning stays; the evening's
+    // cut (×2 → ×1.5, −25 %) still goes.
+    const capped = paintPlan(input({ research }))
+    expect(capped.changes.map((c) => [c.cell, c.from, c.to])).toEqual([16, 17, 18, 19].map((h) => [cellRef(1, h), 'own', 'defend']))
   })
 
   it('Min-bid hours where conversion is near zero and the spend is real', () => {

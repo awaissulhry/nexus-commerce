@@ -11,7 +11,10 @@
  *            marks the harvest UNDONE: the term then waits AB-11's cooldown (GRADUATION_COOLDOWN_DAYS) before the brain
  *            decides it again. That cooldown is the hold. Batch 2 fix — AB-11's own undo request for the same harvest that
  *            still waits for a person is withdrawn with it (one undo, never two), and a harvest a person's approved undo put
- *            back meanwhile is not put back again.
+ *            back meanwhile is not put back again. Batch 2 review fix — UNDONE only when the whole pair is back
+ *            (`complete`): a pair put back in part (a source negative retired, the keyword left running) keeps its status,
+ *            says what is back and what is not, and is sent again at the next run (`retry`: its judgement is not closed);
+ *            so is a retry that puts nothing more back while the pair is still half put back (`alreadyBack`).
  *
  * A harvest a person declined to undo (undoDeclined) is left as he decided; one already UNDONE is not read. Read in the
  * business of the call.
@@ -50,12 +53,26 @@ export const harvestUndo: HarvestUndoProvider = {
       if (before.status === 'UNDONE') return { ok: false, reason: 'it was put back already (a person\'s approved undo ran first)' }
       const { HARVEST_TOOL, undoHarvest } = await import('./harvest-write.js')
       const out = await undoHarvest(id, { actor: run.actor, manual: false, changeSetId: null, reason: run.reason.slice(0, 480) })
-      if (!out.paused && !out.retired) return { ok: false, reason: `nothing of the harvest was put back${out.problems.length ? `: ${out.problems.join('; ')}` : ''}` }
+      if (!out.paused && !out.retired) {
+        // Batch 2 re-review fix — half put back by an earlier run and nothing more went back now: kept open, sent again.
+        if (!out.complete && out.alreadyBack > 0) {
+          const problems = out.problems.join('; ')
+          await prisma.adsBrainHarvest.update({ where: { id }, data: { lastError: `auto-undo: the pair is still half put back (${out.alreadyBack} of its halves back already); nothing more went back this run, so it is sent again at the next run: ${problems}`.slice(0, 2000), changedAt: new Date() } })
+          return { ok: false, retry: true, reason: `the pair is still half put back (${out.alreadyBack} of its halves back already); nothing more went back this run, so it is sent again at the next run${problems ? `: ${problems}` : ''}` }
+        }
+        return { ok: false, reason: `nothing of the harvest was put back${out.problems.length ? `: ${out.problems.join('; ')}` : ''}` }
+      }
       const done = [out.retired ? `${out.retired} source negative${out.retired === 1 ? '' : 's'} retired` : '', out.paused ? 'the keyword paused' : ''].filter(Boolean).join(', ')
       const now = new Date()
+      // Batch 2 review fix — a pair put back in part is not UNDONE: the rest is sent again at the next run.
+      if (!out.complete) {
+        const problems = out.problems.join('; ')
+        await prisma.adsBrainHarvest.update({ where: { id }, data: { lastError: `auto-undo put back part of the pair (${done}); the rest is sent again at the next run: ${problems}`.slice(0, 2000), changedAt: now } })
+        return { ok: false, retry: true, reason: `the pair was put back in part (${done}); the rest is sent again at the next run: ${problems}` }
+      }
       await prisma.adsBrainHarvest.update({
         where: { id },
-        data: { status: 'UNDONE', why: `put back by auto-undo: ${done}`, lastError: out.problems.length ? out.problems.join('; ').slice(0, 2000) : null, changedAt: now },
+        data: { status: 'UNDONE', why: `put back by auto-undo: ${done}`, lastError: null, changedAt: now },
       })
       // Batch 2 fix — AB-11's own undo request for this harvest that still waits is withdrawn: one undo, never two.
       await prisma.agentApproval.updateMany({

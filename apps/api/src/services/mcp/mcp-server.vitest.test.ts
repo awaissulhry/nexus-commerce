@@ -36,7 +36,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
-  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
+  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'apply-brain-hourly-plan', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
   'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
   'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ad-group',
   'create-ai-goal-campaigns',
@@ -138,10 +138,16 @@ describe('C3 — the server and every change tool name the business', () => {
       'ads-brain (read only; views map, clashes, setup, money, terms, state, hours, negatives, harvest, report, structure, bidding, retire, proof)',
       // AB-11 — the brain's harvest request, a person's decision.
       'person for is apply-brain-harvest (the keyword and its source negatives in one change set',
+      // AB-13 (batch 2 review fix) — the brain's painted hourly plan, named, and that it reaches Amazon through the engine.
+      'An hourly plan the brain painted is applied with apply-brain-hourly-plan',
+      'bid engine applies at Amazon from its next run; a person approves it in Nexus, never by rule',
       // One brain — the Owner's control tool; a lever to AUTO is a big door.
       'The Owner controls a product\'s brain with set-ads-brain', 'lever to AUTO needs the approver\'s authenticator code',
       // AB-15 — the kill switch per lever, a person's decision.
       'One lever of the brain is stopped at once, for one product or every product, with set-brain-kill-switch',
+      // Batch 2 review fix (lead decision, code rule A) — two more big doors: a raised portfolio cap limit, a kill ended.
+      'and so does raising the product\'s portfolio cap limit',
+      'ending one lets the brain write that lever again and needs the approver\'s authenticator code',
       // AB-20 — the duplicate writers retired and given back (a person's decision), and the views that show them and the proof.
       'retire-ads-writers (op retire, or op give-back; never deleted; a person approves it): ads-brain view retire lists what',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.

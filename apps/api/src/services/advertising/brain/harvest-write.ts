@@ -216,6 +216,11 @@ export interface UndoOutcome {
   problems: string[]
   /** Nothing of the harvest stands any more: the keyword not enabled and no source negative standing. */
   complete: boolean
+  /**
+   * Batch 2 re-review fix — the halves of the pair already back before this call (a source negative no longer standing, the
+   * keyword no longer enabled): above 0 with `complete` false, the pair is half put back (auto-undo keeps it open).
+   */
+  alreadyBack: number
   /** The action-log rows the undo wrote (the keyword's pause first, then each retire). */
   actionLogIds: string[]
 }
@@ -237,7 +242,8 @@ export async function undoHarvest(id: string, who: Who): Promise<UndoOutcome> {
     : []
   const keyword = rows.find((t) => t.id === r.keywordTargetId && !t.isNegative && String(t.status) === 'ENABLED') ?? null
   const standing = rows.filter((t) => t.isNegative && String(t.status) !== 'ARCHIVED')
-  const out: UndoOutcome = { paused: false, retired: 0, problems: [], complete: false, actionLogIds: [] }
+  const alreadyBack = negatives.filter((n) => !standing.some((t) => t.id === n)).length + (r.keywordTargetId && !keyword ? 1 : 0)
+  const out: UndoOutcome = { paused: false, retired: 0, problems: [], complete: false, actionLogIds: [], alreadyBack }
   if (!keyword && !standing.length) return { ...out, complete: true }
 
   // Both halves asked of the gate first, as the writer that will run them (nothing is written).

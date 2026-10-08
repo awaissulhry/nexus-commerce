@@ -111,8 +111,9 @@ const applyBrainHourlyPlan: AgentTool = {
     + 'and ACoS with its range, and the hours the Owner locked. A person approves it in Nexus, always — never by rule and '
     + 'never confirmed in Claude. Approved, it runs as that person through the Hourly Bids page\'s own save; rejected or '
     + 'expired, the plan stays as it is. Refused when the plan, the hours lever or the Owner\'s locks changed since the '
-    + 'brain painted it, or when the brain\'s request for it already waits. Nexus only: the hourly bid engine applies the '
-    + 'plan from its next run. undo-change asks set-hourly-bid-plan to paint the week it replaced back.',
+    + 'brain painted it, or when the brain\'s request for it already waits. The plan is saved in Nexus, and the hourly bid '
+    + 'engine applies it at Amazon from its next run (each write through the ads write gate). undo-change asks '
+    + 'set-hourly-bid-plan to paint the week it replaced back.',
   input: z.object({
     planId: z.string().trim().min(1).max(64).describe('the hourly plan the brain painted (planId in ads-brain view hours, or ad-hourly-plans)'),
     why: z.string().trim().max(300).optional().describe('why, in a sentence: shown to the approver and kept in the plan\'s history'),
@@ -123,8 +124,9 @@ const applyBrainHourlyPlan: AgentTool = {
   readOnly: false,
   alwaysAsk: true,
   requiresApprovalDefault: true,
-  // Nexus only: the plan is saved; the engine writes at Amazon later, through its own gate.
-  openWorld: false,
+  // Batch 2 review fix — the saved plan reaches Amazon: the hourly bid engine writes it from its next run (through its own
+  // gate), as set-hourly-bid-plan's own save does (openWorld there too).
+  openWorld: true,
   // Undo paints the replaced week back; what the engine did at Amazon in between stays.
   reversibility: 'partial',
   // D3: a painted plan applies only after a person's approval in Nexus.
