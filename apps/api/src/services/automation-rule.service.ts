@@ -970,6 +970,15 @@ export async function evaluateRule(args: EvaluateRuleArgs): Promise<EvaluateRule
       }
     }
 
+    // BID BRAIN BB-6 — a bid or placement action on a campaign the brain owns is left to the brain (one writer per
+    // campaign): skipped with its reason, not failed. Inert unless the brain's ceiling is live.
+    const brainSkip = await import('./advertising/bid-brain/rule-skip.js').then((m) => m.ruleBrainSkip(action, args.context)).catch(() => null)
+    if (brainSkip) {
+      actionResults.push({ type: action.type, ok: true, output: { skipped: brainSkip } })
+      anyOk = true
+      continue
+    }
+
     try {
       const result = await handler(action, args.context, { dryRun, ruleId: rule.id, ...(args.noPersist ? { preview: true } : {}) })
       actionResults.push(result)

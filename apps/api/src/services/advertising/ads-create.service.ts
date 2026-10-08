@@ -1788,7 +1788,8 @@ export async function updatePlacementBidding(input: PlacementBiddingInput): Prom
       // has no fieldChanges for the gate to derive a dimension from. It names its own.
       // Without this the placement pin would be the one pin that never bound anything —
       // and placement bias is the rank engine's primary actuator, running to +900%.
-      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0, dimension: 'placement', manual: isPersonEdit(input.manual, input.actor) })
+      // BB-6 — and who writes it, so the bid brain's one-writer check can judge a placement change (ads-write-gate.ts).
+      const gate = await checkAdsWriteGate({ marketplace: c.marketplace, campaignId: input.campaignId, payloadValueCents: 0, dimension: 'placement', manual: isPersonEdit(input.manual, input.actor), actor: input.actor ?? input.userId ?? null })
       if (!gate.allowed) {
         gateDenial = (gate as { reason?: string }).reason ?? 'write gate denied'
         gateDeniedAt = (gate as { deniedAt?: string }).deniedAt ?? null

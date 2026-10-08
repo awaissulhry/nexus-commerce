@@ -1974,6 +1974,13 @@ export async function updateAdTargetWithSync(args: {
     outboundQueueId,
   })
 
+  // BID BRAIN BB-6 — a person's bid (or a request a person approved) on a campaign the brain owns becomes its hold; a
+  // hand-back ends it. Inert unless the brain owns the campaign; never fails this write.
+  if (args.patch.bidCents != null && person) {
+    const { recordBrainHold } = await import('./bid-brain/brain-holds.js')
+    await recordBrainHold({ campaignId: existing.adGroup?.campaign?.id, targetId: args.adTargetId, actor: args.actor, manual: person, changeSetId: args.changeSetId ?? null, handBack: args.evidence?.handBack === 'auto-bid', reason: args.reason ?? null })
+  }
+
   await enqueueBullMQJob(outboundQueueId, syncType)
   return { ok: true, outboundQueueId, bidHistoryIds, actionLogId, error: null, ...(warnings.length ? { warnings } : {}) }
 }

@@ -21,6 +21,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
+import { brainOwnedCampaignIds } from './bid-brain/live.js'
 
 /** The wire shape services/bidding-engine consumes. Do not reshape casually. */
 export interface BidContext {
@@ -75,7 +76,7 @@ export interface BidTargetRow {
   spendCents: number
   salesCents: number
   ordersCount: number | null
-  adGroup: { campaign: { marketplace: string | null; dynamicBidding: unknown } | null } | null
+  adGroup: { campaignId?: string; campaign: { marketplace: string | null; dynamicBidding: unknown } | null } | null
 }
 
 /** PURE: one target row + its resolved profile → one context. */
@@ -136,9 +137,11 @@ export async function getBidContexts(
     select: {
       id: true, externalTargetId: true, bidCents: true, clicks: true, spendCents: true,
       salesCents: true, ordersCount: true,
-      adGroup: { select: { campaign: { select: { marketplace: true, dynamicBidding: true } } } },
+      adGroup: { select: { campaignId: true, campaign: { select: { marketplace: true, dynamicBidding: true } } } },
     },
   })
+  // BID BRAIN BB-6 — a campaign the brain owns has one bid writer, the brain: the external engine never sees its keywords.
+  const brainOwned = await brainOwnedCampaignIds([...new Set(targets.map((t) => t.adGroup?.campaignId).filter((id): id is string => !!id))])
 
   // Resolve the advertising profile per marketplace once, not per target.
   const connections = await prisma.amazonAdsConnection.findMany({
@@ -148,6 +151,7 @@ export async function getBidContexts(
   const profileByMarketplace = new Map(connections.map((c) => [c.marketplace, c.profileId]))
 
   return (targets as BidTargetRow[]).flatMap((target) => {
+    if (target.adGroup?.campaignId && brainOwned.has(target.adGroup.campaignId)) return []
     const marketplace = target.adGroup?.campaign?.marketplace ?? null
     const accountRef = marketplace ? profileByMarketplace.get(marketplace) : undefined
     // No profile or no external id means the engine could not act on it anyway.

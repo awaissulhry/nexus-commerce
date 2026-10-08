@@ -1,6 +1,7 @@
 /**
- * BID BRAIN BB-4 — `bid-brain`: Claude reads what the (shadow) bid brain decides. Read only: it changes nothing, in
- * Nexus or at Amazon. Today the brain runs in shadow (NEXUS_BID_BRAIN_MODE), so every answer is what it WOULD set.
+ * BID BRAIN BB-4 — `bid-brain`: Claude reads what the bid brain decides. Read only: it changes nothing, in Nexus or at
+ * Amazon. BB-6 — a campaign enrolled LIVE (while NEXUS_BID_BRAIN_MODE is live) is written by the brain; every other
+ * answer is what it WOULD set (shadow).
  *
  *   why      why this bid: each keyword's newest decision with its one-line why (the deciding layer, the aim and band,
  *            the pooled conversion rate with its clicks, the order value, the step and the limit that held it)
@@ -23,7 +24,7 @@ const BRAIN_MONEY: Readonly<Record<string, FieldPermission>> = Object.fromEntrie
 
 const bidBrain: AgentTool = {
   name: 'bid-brain',
-  title: 'Bid brain (shadow)',
+  title: 'Bid brain',
   category: 'insights',
   riskTier: 'low',
   readOnly: true,
@@ -46,14 +47,17 @@ const bidBrain: AgentTool = {
   description:
     "Read the bid brain: the one engine that will decide every Amazon Sponsored Products keyword bid from the business's "
     + 'goal (goal bid × hour factor, then placements, inside the limits, unless a stop, a pin or stock says otherwise). It '
-    + 'runs in SHADOW now: every 6 hours it decides the keywords of the allowlisted campaigns in IT and DE and logs what it '
-    + 'would set next to what today\'s writers set; it writes nothing. view why (default): each keyword\'s newest decision — '
+    + 'decides every 6 hours the keywords of the allowlisted campaigns in IT and DE: in SHADOW it logs what it would set '
+    + 'next to what today\'s writers set and writes nothing; for a campaign set-bid-brain-enrollment put LIVE (while the '
+    + 'server switch is live) it is the one bid writer and its decisions are sent (mode LIVE, and sent: what became of each; '
+    + 'owned lists those campaigns). view why (default): each keyword\'s newest decision — '
     + 'write, hold or brake, the deciding layer (brake, stop, pin, stock, freeze, phase, min_bid_hour, goal, band, limit, '
     + 'no_goal), today\'s bid and the brain\'s, the goal bid, the aim and band, the expected ACoS at today\'s bid, how much '
     + 'of the estimate rests on data — and a one-line why. view what-if: the same keywords decided again now with '
     + 'targetAcosPct (and bandLoPct / bandHiPct): what the brain would set, not stored and not sent (set-ads-strategy '
     + 'changes the real target). view diff: per day, agree / higher / lower / hold / brake against today\'s bids, conflicts '
-    + '(keywords two different automatic writers changed within 24 hours) and churn (bid writes per keyword). Scope: a '
+    + '(keywords two different automatic writers changed within 24 hours), churn (bid writes per keyword) and the brain\'s own '
+    + 'writes. Scope: a '
     + 'keyword (targetId), a campaign, a product, or a market. Bids, targets and the why are ad-spend money: hidden from a '
     + 'person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {

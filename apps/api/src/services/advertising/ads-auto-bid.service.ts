@@ -35,6 +35,7 @@ import { allowChange, engineCapsText, engineGuardNote, nothingHeld, openEngineGu
 import type { TargetAcosSource } from './ads-target-acos-resolver.js'
 import { bidderByCampaign, personBidTargetIds } from './bid-grid.service.js'
 import { rankOwnedCampaignIds } from './rank-release.service.js'
+import { brainOwnedCampaignIds } from './bid-brain/live.js'
 
 // Skip immaterial moves — protects the Amazon API rate budget + per-campaign
 // daily write caps from churn on sub-cent noise.
@@ -58,8 +59,8 @@ export const AUTO_BID_SCOPE_WORDS = 'it moves only bids where you set a target A
  */
 const OWNER_TARGET_SOURCES: ReadonlySet<TargetAcosSource> = new Set<TargetAcosSource>(['explicit', 'campaign', 'strategy', 'account'])
 
-/** Who else holds a campaign's bids, for auto-bid (autoBidHolders). */
-export type AutoBidHolder = 'pinned' | 'hourlyPlan' | 'goalPlan'
+/** Who else holds a campaign's bids, for auto-bid (autoBidHolders). BB-6 — `bidBrain`: the bid brain owns it. */
+export type AutoBidHolder = 'pinned' | 'hourlyPlan' | 'goalPlan' | 'bidBrain'
 /**
  * Why a bid cannot reach Amazon, so auto-bid does not move it (cannotReachAmazon): its campaign or ad group is paused or
  * archived, or its campaign is off the live-write allowlist.
@@ -79,10 +80,11 @@ const LEFT_ALONE_WORDS: Record<keyof AutoBidLeftAlone, string> = {
   goalPlan: 'a goal plan holds',
   person: 'a person holds',
   pinned: 'a pin holds',
+  bidBrain: 'the bid brain runs',
 }
 
 export function noneLeftAlone(): AutoBidLeftAlone {
-  return { noTargetSetByYou: 0, notRunning: 0, notOnAllowlist: 0, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0 }
+  return { noTargetSetByYou: 0, notRunning: 0, notOnAllowlist: 0, hourlyPlan: 0, goalPlan: 0, person: 0, pinned: 0, bidBrain: 0 }
 }
 
 export function leftAloneTotal(l: AutoBidLeftAlone | null | undefined): number {
@@ -111,17 +113,20 @@ export async function autoBidHolders(campaignIds: string[], personTargets?: Read
   const out = new Map<string, AutoBidHolder>()
   if (!campaignIds.length) return out
   const { RUNNING_AUTOPILOT_PLANS } = await import('../../jobs/ad-autopilot.job.js')
-  const [bidders, rankHeld, plans, pinned] = await Promise.all([
+  const [bidders, rankHeld, plans, pinned, brain] = await Promise.all([
     bidderByCampaign(personTargets),
     rankOwnedCampaignIds(),
     prisma.autopilotPlan.findMany({ where: RUNNING_AUTOPILOT_PLANS, select: { campaignIds: true } }),
     prisma.campaign.findMany({ where: { id: { in: campaignIds }, pinBids: true }, select: { id: true } }),
+    // BB-6 — a campaign the bid brain owns has one bid writer, the brain: auto-bid leaves it first of all.
+    brainOwnedCampaignIds(campaignIds),
   ])
   const pins = new Set(pinned.map((c) => c.id))
   const planHeld = new Set(plans.flatMap((p) => (Array.isArray(p.campaignIds) ? (p.campaignIds as unknown[]).map(String) : [])))
   for (const id of campaignIds) {
     const bidder = bidders.get(id)?.kind
-    const holder: AutoBidHolder | null = pins.has(id) ? 'pinned'
+    const holder: AutoBidHolder | null = brain.has(id) ? 'bidBrain'
+      : pins.has(id) ? 'pinned'
       : bidder === 'schedule' || rankHeld.has(id) ? 'hourlyPlan'
         : planHeld.has(id) ? 'goalPlan' : null
     if (holder) out.set(id, holder)

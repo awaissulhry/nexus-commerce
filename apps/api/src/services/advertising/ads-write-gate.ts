@@ -22,6 +22,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
+import { BRAIN_ACTOR, brainLiveCeiling, brainOwnedCampaignIds } from './bid-brain/live.js'
 import { protectedNegativeRefusal } from './ads-negation-policy.js'
 import { adProductOf, adWriteRefusal, type AdWrite } from '@nexus/shared/ads-ad-product'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
@@ -62,6 +63,9 @@ export type GateDeniedAt =
   | 'market_limits'
   // 3A (Owner decided 2026-10-06) — a PERSON's own write goes past one of HIS limits: it waits for his "Send anyway".
   | 'needs_confirmation'
+  // BID BRAIN BB-6 — the campaign's bids and placements are the bid brain's (one writer per campaign): another
+  // automatic writer's change is refused (brainYieldsTo).
+  | 'brain_owned'
 
 /**
  * 3A (Owner decided 2026-10-06) — the limits that are HIS: his campaign's bid and budget bounds and his bid policies
@@ -246,6 +250,57 @@ export function utcDayKey(d: Date = new Date()): string {
  * worker still calls ads-api-client which itself short-circuits, so
  * the DB-side writes complete but no external HTTP fires.
  */
+/**
+ * BID BRAIN BB-6 — the automatic writers a campaign the brain owns still takes besides the brain: the safety owners and
+ * the repairs that resend Nexus's own value. Matched exactly or as `<prefix>-…` (a cron's or a rule's own suffix).
+ *   automation:retail-guard   the out-of-stock check (ads-retail-readiness.service.ts) — its floor and its give-back
+ *   automation:budget-manager budget enforcement's stop over spend (ads-budget-enforce.service.ts) and its give-back
+ *   automation:budget-enforce the same engine's older actor
+ *   automation:auto-undo      A19 puts back an automatic change that made results clearly worse (the brain's too)
+ *   automation:reconcile, automation:ads-write-reconcile, automation:resync-bids   resend what Nexus already holds
+ */
+export const BRAIN_SAFETY_ACTOR_PREFIXES: readonly string[] = [
+  'automation:retail-guard',
+  'automation:budget-manager',
+  'automation:budget-enforce',
+  'automation:auto-undo',
+  'automation:reconcile',
+  'automation:ads-write-reconcile',
+  'automation:resync-bids',
+]
+
+/**
+ * BID BRAIN BB-6 — whose change to an owned campaign's bids or placements the gate lets through: the brain itself; a
+ * person's own edit and a Claude request a person approved (`manual` — never read from the free-text actor; the
+ * mutation layer makes either a BidHold the brain leaves alone); a forced lowering (a floor never waits for an
+ * owner); and the safety owners above. A Claude request the business's rule ran is automation here: refused. Pure.
+ */
+export function brainYieldsTo(ctx: Pick<GateContext, 'actor' | 'manual' | 'isSuppression'>): boolean {
+  const actor = ctx.actor ?? ''
+  if (actor === BRAIN_ACTOR) return true
+  if (ctx.manual === true) return true
+  if (ctx.isSuppression === true) return true
+  return BRAIN_SAFETY_ACTOR_PREFIXES.some((p) => actor === p || actor.startsWith(`${p}-`))
+}
+
+/** BB-6 — the refusal for an automatic change to a campaign the brain owns; null when the brain does not own it. */
+async function brainOwnedRefusal(campaignId: string, actor: string | null): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  let owned: Set<string>
+  try {
+    owned = await brainOwnedCampaignIds([campaignId])
+  } catch (err) {
+    // Fail closed: under a live ceiling, an automatic change to a campaign whose owner cannot be read waits.
+    logger.warn('[ads-write-gate] could not read the bid brain enrollment — automatic change refused', { campaignId, error: String(err) })
+    return { allowed: false, deniedAt: 'brain_owned', reason: `could not read whether the bid brain owns campaign ${campaignId} — an automatic change to its bids or placements waits (one writer per campaign)` }
+  }
+  if (!owned.has(campaignId)) return null
+  return {
+    allowed: false,
+    deniedAt: 'brain_owned',
+    reason: `campaign ${campaignId} is run by the bid brain (one writer per campaign): ${actor || 'an unnamed automatic writer'} may not change its bids or placements — the brain decides them. A person's edit, a request a person approved, a stop that lowers bids and the safety checks still pass; set-bid-brain-enrollment gives the campaign back.`,
+  }
+}
+
 export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision> {
   // 6a — Sponsored Products only (Owner decision S8; review G.1). Before the sandbox return: an SB/SD write would go to
   // a Sponsored Products endpoint in either mode, and suppression is not exempt — its bid would land there too.
@@ -481,6 +536,16 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     })
     if (pinned) {
       return { allowed: false, reason: pinned.reason, deniedAt: 'authority_pin' }
+    }
+
+    // BID BRAIN BB-6 — one writer per campaign, after the pins (a pin is the broader refusal) and before the bounds. A
+    // change to the bids or placements of a campaign the brain owns (bid-brain/live.ts) passes only from the writers
+    // it yields to (brainYieldsTo). Judged for a CHANGE, which every change path names the actor of (the worker, the
+    // mutation layer's own ask, the placement write); a create — a new keyword's first bid — and a tool's preview name
+    // none and are not judged here. Read only under a live ceiling, so it costs nothing while the brain is in shadow.
+    if (ctx.actor !== undefined && brainLiveCeiling() && (dimensions.includes('bids') || dimensions.includes('placement')) && !brainYieldsTo(ctx)) {
+      const refusal = await brainOwnedRefusal(ctx.campaignId, ctx.actor)
+      if (refusal) return refusal
     }
 
     // ADX A1 / BID.S5 / BUD.2 — the entity's own bid and budget bounds (entityBoundsDenial below). 4k — the

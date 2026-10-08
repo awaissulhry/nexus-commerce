@@ -158,6 +158,7 @@ describe('the Owner\'s code rule A — the table', () => {
       'set-ads-playbook: adds spend': true,
       'set-ads-strategy: a raise': true,
       'enable-ads: includePeoplesPauses': true,
+      'set-bid-brain-enrollment: live': true,
       // Day-to-day: listed in raises, said in the effect, warned past his own limits, a normal approval.
       'set-hourly-bid-plan': false,
       'set-portfolio': false,

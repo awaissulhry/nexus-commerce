@@ -103,7 +103,7 @@ export interface LadderFacts {
   held: string | null
   campaign: {
     liveWrites: boolean
-    holder: 'pinned' | 'hourlyPlan' | 'goalPlan' | null
+    holder: 'pinned' | 'hourlyPlan' | 'goalPlan' | 'bidBrain' | null
     /** Its slot plays the performance rank role. */
     performance: boolean
     /** Its slot is a research one: Auto, Broad, Phrase. */
@@ -127,6 +127,7 @@ export interface LadderRung { step: Exclude<WinnerStep, 'none' | 'closeOldPlace'
 
 const HOLDER_WORDS: Record<NonNullable<LadderFacts['campaign']['holder']>, string> = {
   pinned: 'a pin holds its bids', hourlyPlan: 'an hourly plan holds its bids', goalPlan: 'a goal plan holds its bids',
+  bidBrain: 'the bid brain runs its bids (one writer per campaign)',
 }
 const RANK_HELD = "an hourly plan holds its campaign, or its slot plays the performance role: the Owner's Hourly Bids own its bids and placements — reported only"
 

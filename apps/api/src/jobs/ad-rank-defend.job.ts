@@ -41,6 +41,7 @@ import { isOutOfBudget, outOfBudgetWords } from '../services/advertising/deliver
 import { engineActorWhere } from '../services/advertising/ads-engine-actors.js'
 import { MAX_MIN_BID_ENTRIES_PER_DAY, noWrites, type RankWriteCounts } from '../services/advertising/rank-write-projection.js'
 import { NO_LIMITS, clampToStrategy, holdNote, limitWords, newHoldLog, strategyBidReader, strategyWords, type BidHoldLog } from '../services/advertising/ads-strategy/bids.js'
+import { brainOwnedCampaignIds } from '../services/advertising/bid-brain/live.js'
 
 // Clock source for time-of-day window resolution: the DATABASE clock, not the container's process
 // clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
@@ -176,7 +177,8 @@ export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: num
 // 2c — `writes` (live runs only): the run's changes by kind, the give-backs of `release` included in `restore`;
 // `keptServing`: campaigns the anti-flap kept serving through a Min-bid hour.
 // W1-5 — `holds`: the bids a limit held this run (the ads strategy band on a base bid; a bound on a give-back), for the run line.
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog }
+// BB-6 — `brainOwned`: campaigns of its plans and schedules the bid brain owns, left to the brain (one writer per campaign).
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog; brainOwned?: number }
 
 interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[]; marketplace?: string | null }
 interface RankCampaignResult { decision: RankDefendDecision; applied: number; held: HeldBack; writes: RankWriteCounts; keptServing: boolean }
@@ -717,6 +719,11 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
 
   // Union of schedule + plan campaigns → one campaign load + one signal pass.
   const unionIds = [...new Set([...schedules.map((s) => s.campaignId), ...governed])]
+  // BID BRAIN BB-6 — a campaign the brain owns has one writer, the brain: this engine neither writes it nor gives back
+  // what it floored there (the brain takes its hours, BB-7). Counted as governed, so the schedules and the orphan sweep
+  // leave it too; the plans skip it below.
+  const brainOwned = await brainOwnedCampaignIds(unionIds)
+  for (const id of brainOwned) governed.add(id)
   const campaigns = await prisma.campaign.findMany({ where: { id: { in: unionIds } }, select: { id: true, name: true, marketplace: true, status: true, externalCampaignId: true, dynamicBidding: true, biddingStrategy: true, acos: true, spend: true, bidsSuppressedAt: true, bidsSuppressedFloorCents: true, bidsSuppressedBy: true, deliveryReasons: true } })
   const campById = new Map(campaigns.map((c) => [c.id, c]))
   // RTC — per-campaign (campaign-scope) target overrides for every campaign in play.
@@ -772,7 +779,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
     const write = !dryRun && PLAN_ALLOW_APPLY && (!plan.manualOnly || !!opts.force)
     if (write && (!key || !targetByKey.get(key))) {
       const why = key ? `its plan names "${key}", which no longer exists` : 'its plan holds nothing at this hour'
-      for (const fc of famCamps) idle.push({ campaignId: fc.id, actor: `automation:rank-plan-${plan.id}`, why })
+      for (const fc of famCamps) if (!brainOwned.has(fc.id)) idle.push({ campaignId: fc.id, actor: `automation:rank-plan-${plan.id}`, why })
     }
     if (key) {
       const target = targetByKey.get(key)
@@ -788,6 +795,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
         planConflicts = sc.conflicts
         const baselineTarget = plan.defaultTargetKey ? targetByKey.get(plan.defaultTargetKey) : undefined
         for (const fc of famCamps) {
+          if (brainOwned.has(fc.id)) continue
           const camp = campById.get(fc.id); if (!camp) continue
           const oos = readinessByCamp.get(fc.id) === 'pause'
           const demote = sc.demoted.has(fc.id) && !!baselineTarget && plan.defaultTargetKey !== key
@@ -906,7 +914,7 @@ async function rankDefendTick(opts: { dryRun?: boolean; onlyPlanId?: string; for
   }
 
   if (release) writes.restore += release.writes
-  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}), ...(holds.holds.length ? { holds } : {}) }
+  return { evaluated: decisions.length, applied, decisions, plans: planSummaries, ...(guard ? { guard: guard.report(), writes, keptServing } : {}), ...(release ? { release } : {}), ...(holds.holds.length ? { holds } : {}), ...(brainOwned.size ? { brainOwned: brainOwned.size } : {}) }
 }
 
 interface IdleCampaign { campaignId: string; actor: AdsActor; why: string }
@@ -954,7 +962,7 @@ export function rankWritesNote(r: Pick<RankDefendSummary, 'writes' | 'keptServin
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function rankDefendSummaryLine(r: RankDefendSummary): string {
   if (r.skipped) return `skipped: ${r.skipped}`
-  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}`
+  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}`
 }
 
 export async function runRankDefendCron(): Promise<void> {
