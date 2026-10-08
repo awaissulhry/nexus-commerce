@@ -429,7 +429,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     if (plan?.minBidHour && (!overrides.minBidHour || plan.minBidHour.floorCents < overrides.minBidHour.floorCents)) overrides.minBidHour = plan.minBidHour
     // BB-18 — the most a click can cost against the base bid: the placements that served and those the plan sets.
     const served = (campaign.savedPlacements ?? campaign.placements ?? []).map((p) => ({ planPct: p.percentage, dynamic: laneHeadroom(strategy.biddingStrategy, p.placement), lane: laneOf(p.placement) }))
-    const ratioCeiling = stackCeiling([...served, ...(plan?.lanes ?? []), { planPct: 0, dynamic: laneHeadroom(strategy.biddingStrategy, 'PLACEMENT_TOP') }])
+    const ratioCeiling = stackCeiling([...served, ...(plan?.ceilingLanes ?? plan?.lanes ?? []), { planPct: 0, dynamic: laneHeadroom(strategy.biddingStrategy, 'PLACEMENT_TOP') }])
 
     const brakes = [...run.marketBrakes]
     if (campaign.status !== 'ENABLED') brakes.push(`campaign ${campaign.status.toLowerCase()}`)

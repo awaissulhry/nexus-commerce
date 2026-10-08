@@ -459,6 +459,7 @@
     "BidBrainDecision",
     "BidHold",
     "BidDirective",
+    "BidBrainHourFactor",
     "AdsBrainEnrollment",
     "AdsBrainOverride",
     "AdsBrainHourProposal",
