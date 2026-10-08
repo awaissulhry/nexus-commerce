@@ -500,6 +500,10 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
     await db.platformHealthCheck.create({
       data: { runId: healthRunId, checkId: 'plan-steps', subsystem: 'automation', status: 'fail', message: `${canary}-HEALTH-MESSAGE`, nextStep: `${canary}-HEALTH-STEP`, evidence: { note: `${canary}-HEALTH-EVIDENCE` } },
     })
+    // Best Sellers Rank — one stored read of the product (what sales-rank reads), its category named with the canary.
+    await db.amazonSalesRank.create({
+      data: { marketplace: market, asin: `B0${mark[0]}${RUN.slice(0, 7).toUpperCase()}`, productId: product.id, classificationRanks: [{ id: '900001', title: `${canary}-RANK`, rank: 7 }], displayGroupRanks: [], bestRank: 7, runId: `${mark}-RANK-${RUN}` },
+    })
     // W3-2 — a bid write Nexus queued and has not sent (its window is a day long here, so it stays cancellable).
     const queuedWrite = await db.outboundSyncQueue.create({
       data: {

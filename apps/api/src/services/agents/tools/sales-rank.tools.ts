@@ -18,6 +18,9 @@ import { liveProduct } from './live-product.js'
 import { safeText } from './claude-safe.js'
 import { SALES_RANK_FEED_DEFAULT_SCHEDULE } from '../../amazon/sales-rank-schedule.js'
 
+/** With no product, SKU or ASIN: the business's best-ranked ASINs, this many, over at most this many days. */
+const OVERVIEW_ASINS = 50
+const OVERVIEW_DAYS = 8
 const SCHEDULE_WORDS = `every 3 hours (cron ${SALES_RANK_FEED_DEFAULT_SCHEDULE}, UTC)`
 
 const salesRank: AgentTool = {
@@ -28,7 +31,7 @@ const salesRank: AgentTool = {
     'Amazon\'s Best Sellers Rank of this business\'s products, as Nexus reads it from Amazon every 3 hours (Catalog '
     + 'Items salesRanks) for every live Amazon listing: per market, the rank in each sub-category (a browse node) and in '
     + 'the whole department. Name a product (a family parent covers its variations), a SKU or an ASIN, optionally one '
-    + 'market (IT, DE, …). Answers the best ASIN per category now (bestPerCategory: rank, which ASIN, captured when, '
+    + 'market (IT, DE, …); name none for the business\'s 50 best-ranked ASINs now (no daily history). Answers the best ASIN per category now (bestPerCategory: rank, which ASIN, captured when, '
     + 'change against ~24 h and ~7 days ago — a lower rank is better, so a positive change is a climb), and each ASIN\'s '
     + 'newest ranks with the best rank of each UTC day over the window (default 14 days, at most 90). Stored reads only: a '
     + 'read is kept when a rank changed, plus one a day. Read only.',
@@ -48,13 +51,14 @@ const salesRank: AgentTool = {
     const market = typeof args.market === 'string' && args.market.trim() ? args.market.trim().toUpperCase() : undefined
     const now = new Date()
 
-    let scope: { productIds?: string[]; asin?: string; product?: { productId: string; sku: string; variations: number } }
+    let scope: { productIds?: string[]; asin?: string; product?: { productId: string; sku: string; variations: number }; overview?: true }
+    const id = typeof args.productId === 'string' ? args.productId.trim() : ''
+    const sku = typeof args.sku === 'string' ? args.sku.trim() : ''
     if (typeof args.asin === 'string' && args.asin.trim()) {
       scope = { asin: args.asin.trim().toUpperCase() }
+    } else if (!id && !sku) {
+      scope = { overview: true }
     } else {
-      const id = typeof args.productId === 'string' ? args.productId.trim() : ''
-      const sku = typeof args.sku === 'string' ? args.sku.trim() : ''
-      if (!id && !sku) return { ok: false, error: 'Name a product (productId or sku) or an ASIN.' }
       const product = await prisma.product.findFirst({
         where: id ? liveProduct(id) : { sku, deletedAt: null },
         select: { id: true, sku: true },
@@ -64,8 +68,10 @@ const salesRank: AgentTool = {
       scope = { productIds: [product.id, ...children.map((c) => c.id)], product: { productId: product.id, sku: product.sku, variations: children.length } }
     }
 
-    const reads = await service.loadSalesRankReads({ productIds: scope.productIds, asin: scope.asin, market, days, now })
-    const scopeOut = { ...(scope.product ?? { asin: scope.asin }), market: market ?? 'every market', days }
+    // The overview reads 8 days at most: enough for the 24-hour and 7-day trend of every ASIN, without its daily history.
+    const window = scope.overview ? Math.min(days, OVERVIEW_DAYS) : days
+    const reads = await service.loadSalesRankReads({ productIds: scope.productIds, asin: scope.asin, market, days: window, now })
+    const scopeOut = { ...(scope.product ?? (scope.asin ? { asin: scope.asin } : { every: 'every live Amazon listing of the business' })), market: market ?? 'every market', days: window }
     if (!reads.length) {
       const newest = await service.newestSalesRankRead()
       return {
@@ -87,7 +93,10 @@ const salesRank: AgentTool = {
       data: {
         scope: scopeOut,
         bestPerCategory: summary.bestPerCategory.map((b) => ({ ...b, title: title(b.title) })),
-        asins: summary.asins.map((a) => ({ ...a, categories: a.categories.map((c) => ({ ...c, title: title(c.title) })) })),
+        asins: scope.overview
+          ? summary.asins.slice(0, OVERVIEW_ASINS).map((a) => ({ ...a, categories: a.categories.map(({ history: _history, ...c }) => ({ ...c, title: title(c.title) })) }))
+          : summary.asins.map((a) => ({ ...a, categories: a.categories.map((c) => ({ ...c, title: title(c.title) })) })),
+        ...(scope.overview && summary.asins.length > OVERVIEW_ASINS ? { more: summary.asins.length - OVERVIEW_ASINS } : {}),
         note: `Amazon's rank: 1 is the best seller. change24h / change7d = the rank then minus the rank now (positive = climbed). The feed reads Amazon ${SCHEDULE_WORDS}.`,
       },
     }

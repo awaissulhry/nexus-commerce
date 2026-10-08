@@ -5,7 +5,7 @@
  * one call per market; a row names the product its listing sells; the same ranks are not stored twice within a day,
  * a changed rank or a day-old heartbeat is; an ASIN with no rank writes nothing; rows past 180 days are pruned; an
  * account whose call was not sent is not asked again in the run; another business's rows are never read or pruned; and
- * the tool answers a family with its best ASIN per category and the trend. Fake ASINs and numbers only.
+ * the tool answers a family with its best ASIN per category and the trend, or — nothing named — the business's best ASINs. Fake ASINs and numbers only.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { formulaDatabase } from '../../test-support/formula-database.js'
@@ -156,7 +156,12 @@ describe('the sales-rank tool', () => {
     const none = await inside(() => tool.handler({ sku: 'SR-OTHER' }, {} as never))
     expect((none as { data: { hint: string } }).data.hint).toMatch(/^No rank stored for this scope/)
     expect(await inside(() => tool.handler({ productId: 'nope' }, {} as never))).toEqual({ ok: false, error: 'Product not found' })
-    expect(await inside(() => tool.handler({}, {} as never))).toMatchObject({ ok: false })
+    // Nothing named: the business's best-ranked ASINs now, without the daily history.
+    const overview = (await inside(() => tool.handler({ market: 'IT' }, {} as never))) as { ok: boolean; data: { scope: Record<string, unknown>; asins: Array<{ asin: string; categories: Array<Record<string, unknown>> }> } }
+    expect(overview.ok).toBe(true)
+    expect(overview.data.scope).toMatchObject({ market: 'IT', days: 8 })
+    expect(overview.data.asins.length).toBeGreaterThan(20)
+    expect(overview.data.asins[0].categories[0]).not.toHaveProperty('history')
   })
 
   it('another business sees none of these ranks', async () => {

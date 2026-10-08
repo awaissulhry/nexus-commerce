@@ -327,20 +327,29 @@ export function summariseSalesRank(reads: readonly StoredRead[], now: Date) {
   }
 }
 
-/** The stored reads of a scope over the last `days`: product ids (a family's), or one ASIN; optionally one market. */
+/**
+ * The stored reads of a scope over the last `days`: product ids (a family's), one ASIN, or — neither — every ASIN of the
+ * business; optionally one market. A read of a deleted product is left out (MCP.12: a deleted product is not found).
+ */
 export async function loadSalesRankReads(scope: { productIds?: readonly string[]; asin?: string; market?: string; days: number; now: Date }): Promise<StoredRead[]> {
   const since = new Date(scope.now.getTime() - scope.days * DAY_MS)
   const rows = await prisma.amazonSalesRank.findMany({
     where: {
       capturedAt: { gte: since },
       ...(scope.market ? { marketplace: scope.market } : {}),
-      ...(scope.asin ? { asin: scope.asin } : { productId: { in: [...(scope.productIds ?? [])] } }),
+      ...(scope.asin ? { asin: scope.asin } : scope.productIds ? { productId: { in: [...scope.productIds] } } : {}),
     },
     orderBy: { capturedAt: 'desc' },
     take: 20_000,
     select: { asin: true, marketplace: true, productId: true, classificationRanks: true, displayGroupRanks: true, capturedAt: true },
   })
-  return rows.map((r) => ({ asin: r.asin, marketplace: r.marketplace, productId: r.productId, ranks: asRanks(r.classificationRanks, r.displayGroupRanks), capturedAt: r.capturedAt }))
+  const productIds = [...new Set(rows.map((r) => r.productId).filter((id): id is string => !!id))]
+  const deleted = productIds.length
+    ? new Set((await prisma.product.findMany({ where: { id: { in: productIds }, deletedAt: { not: null } }, select: { id: true } })).map((p) => p.id))
+    : new Set<string>()
+  return rows
+    .filter((r) => !r.productId || !deleted.has(r.productId))
+    .map((r) => ({ asin: r.asin, marketplace: r.marketplace, productId: r.productId, ranks: asRanks(r.classificationRanks, r.displayGroupRanks), capturedAt: r.capturedAt }))
 }
 
 /** The newest read the business holds at all (any ASIN), to say when the feed last ran when a scope has none. */
