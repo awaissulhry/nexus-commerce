@@ -9638,6 +9638,29 @@ CREATE TABLE "AdsBrainOverride" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainHourProposal" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "planId" TEXT,
+    "level" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "why" TEXT NOT NULL,
+    "approvalId" TEXT,
+    "planBasis" TEXT,
+    "research" JSONB NOT NULL,
+    "paint" JSONB,
+    "versionId" TEXT,
+    "decidedBy" TEXT,
+    "decidedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainHourProposal_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsNativeRuleSnapshot" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15608,6 +15631,18 @@ CREATE INDEX "AdsBrainOverride_campaignId_endedAt_idx" ON "AdsBrainOverride"("ca
 
 -- CreateIndex
 CREATE INDEX "AdsBrainOverride_workspaceId_idx" ON "AdsBrainOverride"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHourProposal_productId_marketplace_createdAt_idx" ON "AdsBrainHourProposal"("productId", "marketplace", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHourProposal_planId_createdAt_idx" ON "AdsBrainHourProposal"("planId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHourProposal_approvalId_idx" ON "AdsBrainHourProposal"("approvalId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHourProposal_workspaceId_idx" ON "AdsBrainHourProposal"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "AdsNativeRuleSnapshot_workspaceId_idx" ON "AdsNativeRuleSnapshot"("workspaceId");

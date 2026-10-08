@@ -6867,6 +6867,10 @@
       "fields": []
     },
     {
+      "name": "AdsBrainHourProposal",
+      "fields": []
+    },
+    {
       "name": "AdsNativeRuleSnapshot",
       "fields": []
     },
