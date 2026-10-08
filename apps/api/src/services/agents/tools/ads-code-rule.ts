@@ -41,6 +41,8 @@ export const CODE_RULE = {
   'enable-ads: includePeoplesPauses': true,
   // BID BRAIN BB-6 — a campaign under the bid brain: a new bid writer going live.
   'set-bid-brain-enrollment: live': true,
+  // ONE BRAIN — set-ads-brain: a lever of a product's brain to AUTO (or a campaign under the bid brain), whichever op does it.
+  'set-ads-brain: a lever to AUTO': true,
   // ── Day-to-day: listed in raises, warned, a normal approval ──
   'set-hourly-bid-plan': false,
   'set-portfolio': false,

@@ -46,7 +46,7 @@ const OPEN_WORLD = [
   'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign', 'resume-automation',
   'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
-  'set-ad-group', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
+  'set-ad-group', 'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
   'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion', 'set-hourly-bid-plan',
   'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers',
   'set-portfolio', 'set-price',
@@ -135,6 +135,8 @@ describe('C3 — the server and every change tool name the business', () => {
       "needs the approver's authenticator code; its diff view",
       // AB-3 — the brain's map, read only.
       'ads-brain (read only; views map, clashes, setup, money, terms, state)',
+      // One brain — the Owner's control tool; a lever to AUTO is a big door.
+      'The Owner controls a product\'s brain with set-ads-brain', 'lever to AUTO needs the approver\'s authenticator code',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
       'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
       "a start needs the approver's authenticator code",

@@ -710,6 +710,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       'set-ads-report-time': { before: { expected: { time: '08:00', timeZone: 'Europe/Rome' } }, after: { expected: { time: '08:30', timeZone: 'Europe/Rome' } } },
       // BB-6 — a campaign's place in the bid brain put back (LIVE → the op that returns it).
       'set-bid-brain-enrollment': { before: { campaignId: 'c1', mode: 'SHADOW' }, after: { campaignId: 'c1', mode: 'LIVE' } },
+      // One brain — the Owner's choice put back through the same tool (here: the product's budgets level ended again).
+      'set-ads-brain': {
+        before: { op: 'set-level', productId: 'p1', market: 'IT', scope: 'PRODUCT', campaignId: null, kind: 'LEVEL', key: 'budgets', ref: '', open: false, value: null },
+        after: { op: 'set-level', productId: 'p1', market: 'IT', scope: 'PRODUCT', campaignId: null, kind: 'LEVEL', key: 'budgets', ref: '', open: true, value: 'PROPOSE' },
+      },
       // W4-8 — a rule's campaigns put back (replace); a coverage term's values put back through the same tool.
       'assign-ad-rules': { before: { ruleId: 'r1', name: 'Rule — DE', binding: 'picker', campaignIds: ['c1'] }, after: { ruleId: 'r1', name: 'Rule — DE', binding: 'picker', campaignIds: ['c1', 'c2'] } },
       'set-coverage-set': {

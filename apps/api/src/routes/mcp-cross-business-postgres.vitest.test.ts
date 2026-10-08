@@ -1156,6 +1156,9 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   'ad-hourly-plans': { get planId() { return seeded.b.hourlyPlanId }, campaignId: undefined, market: undefined },
   // AB-13 — the brain's painting of B's hourly plan, by its id.
   'apply-brain-hourly-plan': { get planId() { return seeded.b.hourlyPlanId } },
+  // One brain — set-ads-brain enrolls B's product in a real Amazon market code (the loop's market is not one), the whole
+  // product (enroll names no campaign): inside B the preview names the product; from A it is "Product not found".
+  'set-ads-brain': { op: 'enroll', market: 'IT', campaignId: undefined },
   'set-hourly-bid-plan': {
     op: 'rename', get planId() { return seeded.b.hourlyPlanId }, name: 'MCP8 probe plan', market: undefined, campaignIds: undefined, add: undefined,
     remove: undefined, move: undefined, windows: undefined, days: undefined, defaultTargetKey: undefined, timezone: undefined, on: undefined, values: undefined,

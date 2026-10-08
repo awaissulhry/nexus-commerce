@@ -850,6 +850,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   /* One brain AB-13 — the brain's painting of one hourly plan: which painting, the plan and week it stands on (basis), and
      where the engine's writes land. */
   'apply-brain-hourly-plan': ['proposalId', 'basis', 'reach', 'gateRefused'],
+  /* One brain — set-ads-brain: the op, the plan it was approved on (what it stores and ends, each campaign's place in the
+     bid brain) and the version of the product's brain. */
+  'set-ads-brain': ['op', 'basis', 'version'],
   // W4-5 — every target or negative with its place and bids (a harvest: its term, source, destination, bid and negative
   // plan, a bid it worked out itself frozen in the approval; a retire: every negative with who made it), where it lands;
   // for negatives also the other products' places and the proven handovers they would close (never the numbers, which

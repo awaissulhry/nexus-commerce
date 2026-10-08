@@ -339,6 +339,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'set-hourly-bid-plan': (ids) => ({ op: 'rename', planId: ids.hourlyPlanId, name: 'Money plan renamed' }),
   // AB-13 — the brain's painting of the seeded plan (none stored: refused, and it needs money).
   'apply-brain-hourly-plan': (ids) => ({ planId: ids.hourlyPlanId }),
+  // One brain — enrolling the seeded product in IT (a preview, nothing written; it needs money: the brain decides budgets).
+  'set-ads-brain': (ids) => ({ op: 'enroll', productId: ids.productId, market: 'IT' }),
   // W4-6 — the ad groups of the seeded campaign (default bids and metrics are money, stripped for a person without it);
   // a new ad group, product ads and an ad group change name bids (they need money: refused for a person without it).
   'ad-groups': (ids) => ({ campaignId: ids.campaignId, status: 'all' }),
