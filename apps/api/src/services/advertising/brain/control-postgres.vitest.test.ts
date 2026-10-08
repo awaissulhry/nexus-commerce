@@ -272,7 +272,7 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
   it('set-value — inside its bounds per product and per campaign, a raise said with no code; out of bounds, the wrong scope, a level a lever does not take and nothing-changes refused', async () => {
     expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'paceTargetPct', value: 150 })).error).toMatch(/paceTargetPct .* takes a whole number from 10 to 100/)
     expect((await preview({ op: 'set-value', productId: P, market: 'IT', campaignId: C('b-shadow'), key: 'portfolioCapPct', value: 120 })).error).toMatch(/is set per product, not per campaign/)
-    expect((await preview({ op: 'set-level', productId: P, market: 'IT', lever: 'offAmazon', level: 'PROPOSE' })).error).toMatch(/the offAmazon lever takes OFF or OBSERVE today, not PROPOSE: the off-Amazon lane waits for AB-18/)
+    expect((await preview({ op: 'set-level', productId: P, market: 'IT', lever: 'offAmazon', level: 'PROPOSE' })).error).toMatch(/the offAmazon lever takes OFF or OBSERVE today, not PROPOSE: AB-18: OBSERVE watches the off-Amazon lane .* Nexus could not verify an Amazon Ads API setting/)
     const pace = await ask({ op: 'set-value', productId: P, market: 'IT', key: 'paceTargetPct', value: 95, why: 'test pace closer' })
     expect(pace.preview).toMatchObject({ needsCode: false, noCode: DAY_TO_DAY_NO_CODE, raises: [expect.stringMatching(/^paceTargetPct 90 → 95: the pace aims at more/)], campaigns: [], reachNote: expect.stringMatching(/^Nexus only/) })
     expect(pace.preview.effect).toMatch(/ADDS SPEND .* a day-to-day change/)
