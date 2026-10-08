@@ -9,6 +9,9 @@
  *   freshness   the newest AD_TARGET report of the market's keywords' last 14 days: older than 48 hours is a brake
  *   run         the strategy per ad group, the campaign targets and account default, the holds (pins, a person's bid
  *               of the last 60 days, BidHold rows), enrollments, each keyword's last writer and the brain's last step
+ *   BB-8        the overrides' sources (loadOverrideSources): each ad group's stock (ads-stock-risk.service.ts), what a
+ *               playbook holds on each campaign, the break-even ACoS of the products advertised, a LAUNCH row's day,
+ *               and for a keyword the brain last lowered by an override, the bid of its last decision before it
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -19,7 +22,13 @@ import { readOwnerTargets } from '../ads-target-acos-resolver.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { openStrategy } from '../ads-strategy/effective.js'
 import { MAX_WINDOW_DAYS, type Evidence } from './estimator.js'
-import type { AdGroupRow, CampaignRow, MarketRows, RunRows, StrategyRead, TargetRow } from './facts.js'
+import { stockFactOf, type AdGroupRow, type CampaignRow, type MarketRows, type PlaybookFact, type RunRows, type StockFact, type StrategyRead, type TargetRow } from './facts.js'
+import { LOWERING_LAYERS, type DecisionLayer } from './decide.js'
+import { readStockAdGroups } from '../ads-stock-risk.service.js'
+import { breakevenByProduct } from '../ads-target-acos.service.js'
+import { DEFAULT_STOP_BID_CENTS } from '../ads-strategy/fields.js'
+import { PHASE_FLOOR_KIND } from '../ads-playbook/phase.js'
+import { STOP_FLOOR_KIND } from '../ads-playbook/held.js'
 
 /** The markets the shadow decides for (Owner, 2026-10-07: shadow on IT and DE first). */
 export const SHADOW_MARKETS = ['IT', 'DE'] as const
@@ -68,16 +77,19 @@ export async function loadMarket(market: string, opts: { now?: Date } = {}): Pro
     }),
   ])
   const families = new Map<string, Set<string>>()
+  const productIdsOf = new Map<string, Set<string>>()
   const prices = new Map<string, number>()
   for (const pa of productAds) {
     const family = pa.product?.parentId ?? pa.productId!
     families.set(pa.adGroupId, (families.get(pa.adGroupId) ?? new Set()).add(family))
+    productIdsOf.set(pa.adGroupId, (productIdsOf.get(pa.adGroupId) ?? new Set()).add(pa.productId!))
     const price = Math.round(Number(pa.product?.basePrice ?? 0) * 100)
     if (price > 0 && !prices.has(family)) prices.set(family, price)
   }
   const adGroups = new Map<string, AdGroupRow>(groups.map((g) => [g.id, {
     id: g.id, campaignId: g.campaignId, status: String(g.status), bidsSuppressedAt: g.bidsSuppressedAt,
     bidsSuppressedFloorCents: g.bidsSuppressedFloorCents, bidsSuppressedBy: g.bidsSuppressedBy, families: [...(families.get(g.id) ?? [])].sort(),
+    productIds: [...(productIdsOf.get(g.id) ?? [])].sort(),
   }]))
   const targetIds = targets.map((t) => t.id)
   const [{ evidence, adSales30 }, newestReportAt] = await Promise.all([loadEvidence(targetIds, window), newestReport(targetIds, now)])
@@ -151,8 +163,9 @@ export async function marketBrakes(newestReportAt: Date | null, now: Date): Prom
 }
 
 /** The strategy per ad group, as the brain reads it. */
-export async function loadStrategy(market: string, adGroupIds: readonly string[]): Promise<Map<string, StrategyRead>> {
+export async function loadStrategy(market: string, adGroupIds: readonly string[], now: Date = new Date()): Promise<Map<string, StrategyRead>> {
   const out = new Map<string, StrategyRead>()
+  const launchRows = new Map<string, string>()
   if (!adGroupIds.length) return out
   const view = await openStrategy(market)
   if (view.empty) return out
@@ -171,7 +184,146 @@ export async function loadStrategy(market: string, adGroupIds: readonly string[]
       minBidCents: e.values.minBidCents,
       maxBidCents: e.values.maxBidCents,
       maxChangePct: e.values.maxChangePct,
+      // BB-8 — the stop bid (a stock or playbook floor lands there); a LAUNCH row's day is set below.
+      stopBidCents: e.values.stop?.bidCents ?? null,
+      ...(goal === 'LAUNCH' ? { launchDay: null } : {}),
     })
+    const row = goal === 'LAUNCH' ? e.resolved.fields.get('goal')?.source?.strategyId : null
+    if (row) launchRows.set(id, row)
+  }
+  // BB-8 — a LAUNCH product's day of its ramp: since the row that sets the goal last changed it to LAUNCH.
+  if (launchRows.size) {
+    const since = await launchSince([...new Set(launchRows.values())])
+    for (const [id, row] of launchRows) {
+      const at = since.get(row)
+      if (at) out.get(id)!.launchDay = Math.max(0, Math.floor((now.getTime() - at.getTime()) / 86_400_000))
+    }
+  }
+  return out
+}
+
+/** BB-8 — per strategy row, when its goal last became LAUNCH (the newest version whose changes set it). */
+export async function launchSince(strategyIds: readonly string[]): Promise<Map<string, Date>> {
+  if (!strategyIds.length) return new Map()
+  const versions = await prisma.adsStrategyVersion.findMany({
+    where: { strategyId: { in: [...strategyIds] } },
+    orderBy: { createdAt: 'desc' },
+    select: { strategyId: true, changes: true, values: true, op: true, createdAt: true },
+  })
+  const out = new Map<string, Date>()
+  for (const v of versions) {
+    if (out.has(v.strategyId)) continue
+    const changes = Array.isArray(v.changes) ? (v.changes as Array<{ field?: unknown; to?: unknown }>) : []
+    const goalTo = changes.find((c) => c?.field === 'goal')?.to
+    if (goalTo === 'LAUNCH' || (goalTo == null && (v.values as { goal?: unknown } | null)?.goal === 'LAUNCH' && v.op === 'create')) out.set(v.strategyId, v.createdAt)
+  }
+  return out
+}
+
+/** BB-8 — the overrides' sources for the allowlisted campaigns of one market (see the header). */
+export async function loadOverrideSources(
+  m: MarketRows,
+  q: { campaignIds: readonly string[]; groupIds: readonly string[]; strategy: ReadonlyMap<string, StrategyRead>; previous: ReadonlyMap<string, PreviousDecision>; marketplaces: readonly string[] },
+): Promise<Pick<RunRows, 'stock' | 'playbook' | 'lowered' | 'breakEven'>> {
+  const stopOf = (adGroupId: string) => q.strategy.get(adGroupId)?.stopBidCents ?? DEFAULT_STOP_BID_CENTS
+  const [stock, playbook, lowered, breakEven] = await Promise.all([
+    loadStockFacts(q.campaignIds, stopOf),
+    loadPlaybookFacts(m, q.campaignIds, q.groupIds, stopOf),
+    loadLowered(q.previous),
+    loadBreakEven(m, q.groupIds, q.marketplaces),
+  ])
+  return { stock, playbook, lowered, breakEven }
+}
+
+async function loadStockFacts(campaignIds: readonly string[], stopOf: (adGroupId: string) => number): Promise<Map<string, StockFact>> {
+  const out = new Map<string, StockFact>()
+  if (!campaignIds.length) return out
+  const { adGroups } = await readStockAdGroups({ campaignIds })
+  for (const g of adGroups) {
+    const f = stockFactOf(g, stopOf(g.id))
+    if (f) out.set(g.id, f)
+  }
+  return out
+}
+
+/**
+ * What a playbook holds on each campaign: a slot it BUILT while the playbook does not run (stopped → a STOP, never
+ * started → its PHASE floor); a slot its phase floors (PHASE_FLOOR_KIND); a floor its STOP took over (STOP_FLOOR_KIND).
+ * The floor: the campaign's own stamp, else the lowest stop bid of its ad groups.
+ */
+async function loadPlaybookFacts(m: MarketRows, campaignIds: readonly string[], groupIds: readonly string[], stopOf: (adGroupId: string) => number): Promise<Map<string, PlaybookFact>> {
+  const out = new Map<string, PlaybookFact>()
+  if (!campaignIds.length) return out
+  const links = await prisma.adsPlaybookLink.findMany({
+    where: { refId: { in: [...campaignIds] }, OR: [{ kind: 'slot', origin: 'built' }, { kind: PHASE_FLOOR_KIND }, { kind: STOP_FLOOR_KIND }] },
+    select: { kind: true, refId: true, playbookId: true },
+  })
+  if (!links.length) return out
+  const books = new Map((await prisma.adsPlaybook.findMany({ where: { id: { in: [...new Set(links.map((l) => l.playbookId))] } }, select: { id: true, label: true, state: true } })).map((b) => [b.id, b]))
+  const groupsOf = new Map<string, string[]>()
+  for (const id of groupIds) {
+    const g = m.adGroups.get(id)
+    if (g) groupsOf.set(g.campaignId, [...(groupsOf.get(g.campaignId) ?? []), id])
+  }
+  const floorOf = (campaignId: string) => {
+    const stops = (groupsOf.get(campaignId) ?? []).map(stopOf)
+    return m.campaigns.get(campaignId)?.bidsSuppressedFloorCents ?? (stops.length ? Math.min(...stops) : DEFAULT_STOP_BID_CENTS)
+  }
+  const rank = { stopped: 3, notStarted: 2, phaseFloor: 1 } as const
+  for (const l of links) {
+    const book = books.get(l.playbookId)
+    if (!book) continue
+    const kind: PlaybookFact['kind'] | null = l.kind === STOP_FLOOR_KIND
+      ? 'stopped'
+      : l.kind === PHASE_FLOOR_KIND
+        ? 'phaseFloor'
+        : book.state === 'RUNNING' ? null : book.state === 'STOPPED' ? 'stopped' : 'notStarted'
+    if (!kind) continue
+    const had = out.get(l.refId)
+    if (had && rank[had.kind] >= rank[kind]) continue
+    out.set(l.refId, { kind, floorCents: floorOf(l.refId), label: book.label })
+  }
+  return out
+}
+
+/** For each keyword the brain last lowered by an override: that override and the bid of its last decision before it. */
+async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Promise<Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null }>> {
+  const out = new Map<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null }>()
+  // A give-back that found no bid to go back to (a restore hold) still waits for one: it stays a candidate.
+  const ids = [...previous].filter(([, p]) => (LOWERING_LAYERS as readonly string[]).includes(p.layer) || (p.layer === 'restore' && p.action === 'hold')).map(([id]) => id)
+  if (!ids.length) return out
+  // The bid before: a decision no override lowered (a give-back that wrote counts; one that held at the floor does not).
+  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze']
+  const rows = await prisma.$queryRaw<Array<{ targetId: string; decidedCents: number }>>(Prisma.sql`
+    SELECT DISTINCT ON (d."targetId") d."targetId", d."decidedCents" FROM "BidBrainDecision" d
+     WHERE d."targetId" = ANY(${ids}::text[]) AND (d.layer = ANY(${kept}::text[]) OR (d.layer = 'restore' AND d.action = 'write'))
+     ORDER BY d."targetId", d."createdAt" DESC`)
+  const before = new Map(rows.map((r) => [r.targetId, r.decidedCents]))
+  for (const id of ids) {
+    const p = previous.get(id)!
+    out.set(id, { layer: p.layer as DecisionLayer, heldCents: p.decidedCents, beforeCents: before.get(id) ?? null })
+  }
+  return out
+}
+
+/** Each ad group's break-even ACoS: its products' (with usable profit data), weighted by their revenue. */
+async function loadBreakEven(m: MarketRows, groupIds: readonly string[], marketplaces: readonly string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  const products = [...new Set(groupIds.flatMap((id) => m.adGroups.get(id)?.productIds ?? []))]
+  if (!products.length) return out
+  const be = await breakevenByProduct(products, marketplaces)
+  if (!be.size) return out
+  for (const id of groupIds) {
+    let w = 0
+    let sum = 0
+    for (const p of m.adGroups.get(id)?.productIds ?? []) {
+      const r = be.get(p)
+      if (!r) continue
+      const weight = Math.max(1, r.grossRevenueCents)
+      sum += r.breakevenAcos * weight
+      w += weight
+    }
+    if (w > 0) out.set(id, Math.round((sum / w) * 10_000) / 10_000)
   }
   return out
 }
@@ -221,14 +373,16 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
   const targetIds = m.targets.filter((t) => groupSet.has(t.adGroupId)).map((t) => t.id)
   const [brakes, strategy, owner, personHeld, holds, enrollments, lastWrites, previous] = await Promise.all([
     marketBrakes(m.newestReportAt, now),
-    loadStrategy(m.market, groupIds),
+    loadStrategy(m.market, groupIds, now),
     readOwnerTargets([]),
     personBidTargetIds(),
     prisma.bidHold.findMany({
       where: { campaignId: { in: campaignIds }, endedAt: null, OR: [{ until: null }, { until: { gt: now } }] },
       select: { campaignId: true, targetId: true, kind: true, by: true, until: true },
     }),
-    prisma.bidBrainEnrollment.findMany({ where: { campaignId: { in: campaignIds } }, select: { campaignId: true, mode: true, heldBy: true, heldUntil: true } }),
+    // BB-8 — a HELD enrollment past its `heldUntil` no longer holds (read as LIVE).
+    prisma.bidBrainEnrollment.findMany({ where: { campaignId: { in: campaignIds } }, select: { campaignId: true, mode: true, heldBy: true, heldUntil: true } })
+      .then((rows) => rows.map((e) => (e.mode === 'HELD' && e.heldUntil && e.heldUntil <= now ? { ...e, mode: 'LIVE' } : e))),
     lastBidWrites(targetIds, now),
     previousDecisions(targetIds, now),
   ])
@@ -238,8 +392,11 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
   const tacosFamilies = [...new Set(tacosGroups.flatMap((id) => m.adGroups.get(id)?.families ?? []))]
   const familySales = tacosFamilies.length ? await loadFamilySales(m.market, tacosFamilies, new Date(`${m.dataDay}T00:00:00Z`)) : new Map<string, number>()
   const lastSteps = new Map([...previous].flatMap(([id, p]) => (p.lastStep ? [[id, p.lastStep] as const] : [])))
+  // Profit rows carry the market's code ('IT'), as the roll-up writes them.
+  const sources = await loadOverrideSources(m, { campaignIds, groupIds, strategy, previous, marketplaces: [m.market] })
   return {
     run: {
+      ...sources,
       marketBrakes: brakes,
       strategy,
       accountDefaultPct,
