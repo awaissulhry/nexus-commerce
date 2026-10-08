@@ -3947,6 +3947,49 @@ model AmazonAdsDailyPerformance {
   @@index([workspaceId])
 }
 
+/// BID BRAIN BB-13 (2026-10-08, design BRAIN-UPGRADES-DESIGN.md U1a) — the copies of one campaign day as Amazon
+/// filled it in. Amazon keeps adding attributed sales to a day for 7 days (Sponsored Products) or 14 (Brands,
+/// Display); the daily reports now re-read the last 8 / 15 days every night, and AmazonAdsDailyPerformance keeps only
+/// the newest copy. Each pull whose numbers differ from the previous copy is kept here, so Nexus can show how much a
+/// first copy under-counts (the platform health check `ads-data-settled`) and learn how fast a day fills.
+///   ageDays  whole days from the END of `date` to the pull (0 = pulled the next morning; 7 = complete for SP)
+///   source   pull   = a report Nexus ingested
+///            stored = the copy the table already held before a re-pull replaced it (its first pull, kept once)
+/// CAMPAIGN grain only (about 20 live campaigns): keyword grain would cost rows for no extra signal. Kept 120 days.
+model AdsDailyVintage {
+  // Business ownership comes from verified database context.
+  workspaceId  String   @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String   @id @default(cuid())
+  profileId    String
+  marketplace  String
+  adProduct    String
+  entityType   String
+  /// Amazon's campaign id.
+  entityId     String
+  date         DateTime @db.Date
+  /// When the numbers were asked of Amazon (the report job's createdAt; for `stored`, the old copy's report time).
+  pulledAt     DateTime
+  ageDays      Int
+  source       String   @default("pull")
+  /// AmazonAdsReportJob.id of the pull (null when unknown).
+  reportRunId  String?
+  impressions  Int
+  clicks       Int
+  costMicros   BigInt
+  sales1dCents Int?
+  sales7dCents Int?
+  sales14dCents Int?
+  orders1d     Int?
+  orders7d     Int?
+  orders14d    Int?
+  createdAt    DateTime @default(now())
+
+  @@unique([workspaceId, profileId, adProduct, entityType, entityId, date, pulledAt], name: "vintage_pull", map: "AdsDailyVintage_pull_key")
+  @@index([marketplace, date])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
 // CD.11 — hourly grain (Amazon Marketing Stream). Mirrors the daily table but
 // keyed additionally by `hour` (0-23, UTC) so dayparting (which hour×weekday
 // converts) and hourly share-of-voice become possible — the genuine edge over
