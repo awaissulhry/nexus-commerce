@@ -7,7 +7,7 @@
  * Per ad product the fact is the OLDEST newest-settled day over every account and report the decisions read (campaign,
  * search term, targeting) that ran in the last 14 days: a window must not reach a day one market has not settled. A
  * report with recent jobs and no settled day at all makes the fact null (the window keeps the clock rule and says the
- * newest days may still be filling).
+ * newest days may still be filling); a group with no report at all is 'no-reports' (nothing to wait for).
  *
  * `primeSettledWindow` runs before every scheduled job (utils/cron-observability.ts) and before the screens and tools that
  * show a window; it reads at most once per 15 minutes per business and process, and never fails its caller.
@@ -16,7 +16,7 @@ import { LEGACY_WORKSPACE_ID, workspaceContext } from '@nexus/database/workspace
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { settledThrough, type PullJob } from './ads-report-settle.js'
-import { setSettledFacts, type SettledFacts } from './ads-settled-window.js'
+import { setSettledFacts, type SettledFacts, type SettledThrough } from './ads-settled-window.js'
 
 const DAY = 86_400_000
 /** The reports a decision window reads, per ad-product group. */
@@ -33,13 +33,14 @@ const PRIME_EVERY_MS = 15 * 60_000
 /** Pure: the newest settled day the decision windows may use, per group, from `jobs`. */
 export function settledFactsOf(jobs: readonly PullJob[], now: Date): SettledFacts {
   const activeSince = now.getTime() - ACTIVE_DAYS * DAY
-  const through = (reportTypes: readonly string[]): Date | null => {
+  const through = (reportTypes: readonly string[]): SettledThrough => {
     const groups = new Map<string, { profileId: string; adProduct: string; reportTypeId: string }>()
     for (const j of jobs) {
       if (!reportTypes.includes(j.reportTypeId) || j.createdAt.getTime() < activeSince) continue
       groups.set(`${j.profileId}|${j.adProduct}|${j.reportTypeId}`, { profileId: j.profileId, adProduct: j.adProduct, reportTypeId: j.reportTypeId })
     }
-    if (!groups.size) return null
+    // No report of the group ran: 'no-reports', never "not settled" (a business with only Sponsored Products).
+    if (!groups.size) return 'no-reports'
     let oldest: Date | null = null
     for (const key of groups.values()) {
       const s = settledThrough(jobs, key)

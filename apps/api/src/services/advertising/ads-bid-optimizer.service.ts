@@ -345,6 +345,7 @@ export async function previewBidOptimization(
   /** Review 2026-10-08 (B) — moves that wait: another automatic move on this data day, or a quick reversal of its own. */
   waiting: WaitingMove[]
 }> {
+  await (await import('./ads-settled-facts.js')).primeSettledWindow() // BB-14 — the settled day the scheduler reads, here too
   const flatTargetAcos = opts.fallbackTargetAcos ?? 0.3 // 30% default fallback
   const explicit = targetFraction(opts.targetAcos)
   const profitMode = opts.profitMode ?? false

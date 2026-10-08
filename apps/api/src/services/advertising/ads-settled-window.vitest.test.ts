@@ -127,6 +127,15 @@ describe('BB-14 — the window ends at the newest day Amazon has settled for the
     expect(settledEnd('SPONSORED_PRODUCTS', { now: NOW }).stillFilling).toBe(true)
   })
 
+  it('a business with only Sponsored Products is never told Brands and Display are still filling', () => {
+    setSettledFacts({ spThrough: d('2026-09-26'), otherThrough: 'no-reports' }, NOW.getTime())
+    expect(settledEnd('SPONSORED_BRANDS', { now: NOW })).toMatchObject({ shiftDays: 0, stillFilling: false, known: true })
+    expect(settledEndText({ now: NOW })).toBe('ending 8 days ago (14 for Sponsored Brands and Display), the newest days Amazon has settled')
+    // Reports that ran and settled nothing are a different thing: still filling.
+    setSettledFacts({ spThrough: d('2026-09-26'), otherThrough: null }, NOW.getTime())
+    expect(settledEndText({ now: NOW })).toContain('may still be filling')
+  })
+
   it('facts belong to one business: another business keeps the clock rule', () => {
     withWorkspace({ workspaceId: 'ws_settled_a', actorUserId: null, membershipId: null, roleKeys: [] }, () =>
       setSettledFacts({ spThrough: d('2026-09-26'), otherThrough: d('2026-09-19') }, NOW.getTime()))

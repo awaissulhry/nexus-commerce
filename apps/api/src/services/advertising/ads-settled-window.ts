@@ -64,12 +64,19 @@ export interface SettledOpts {
 
 // ── BB-14: what the report jobs say has settled ──────────────────────────────────────────────────────
 
-/** The newest settled day per ad-product group, for one business, and when it was read. */
+/**
+ * The newest settled day of one ad-product group: a day; null when its reports ran and nothing is settled (the newest
+ * days may still be filling); 'no-reports' when no report of the group ran (nothing is waiting: a business with only
+ * Sponsored Products is never told Brands and Display are still filling).
+ */
+export type SettledThrough = Date | null | 'no-reports'
+
+/** The newest settled day per ad-product group, for one business. */
 export interface SettledFacts {
   /** Sponsored Products. */
-  spThrough: Date | null
+  spThrough: SettledThrough
   /** Sponsored Brands and Display (the older of the two). */
-  otherThrough: Date | null
+  otherThrough: SettledThrough
 }
 
 /** A fact older than this is not used (the clock rule applies, said as "still filling"). */
@@ -117,6 +124,8 @@ export function settledEnd(adProduct: string | null = 'SPONSORED_PRODUCTS', opts
   if (lag === 'provisional' || !facts) return { until: clock, settledThrough: null, shiftDays: 0, stillFilling: lag === 'provisional', known: false }
   const fresh = now.getTime() - facts.readAt <= SETTLED_FACTS_TTL_MS
   const through = fresh ? (adProduct === 'SPONSORED_PRODUCTS' ? facts.spThrough : facts.otherThrough) : null
+  // No report of this ad product ran: no data to wait for, so nothing is "still filling" (the clock rule, unsaid).
+  if (through === 'no-reports') return { until: clock, settledThrough: null, shiftDays: 0, stillFilling: false, known: true }
   if (!through) return { until: clock, settledThrough: null, shiftDays: 0, stillFilling: true, known: true }
   const shift = dayIndex(clock) - dayIndex(through)
   if (shift <= 0) return { until: clock, settledThrough: through, shiftDays: 0, stillFilling: false, known: true }

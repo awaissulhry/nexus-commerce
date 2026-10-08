@@ -28,7 +28,7 @@ describe('settledFactsOf', () => {
       pull('p-de', 'spCampaigns', '2026-10-07'), // DE's settling pull of last night has not landed yet
     ], NOW)
     expect(facts.spThrough).toEqual(d('2026-09-29'))
-    expect(facts.otherThrough).toBeNull() // no Brands/Display report ran
+    expect(facts.otherThrough).toBe('no-reports') // no Brands/Display report ran: nothing to wait for, not "unsettled"
   })
 
   it('a report that ran recently and settled nothing makes the fact unknown (null)', () => {
@@ -45,7 +45,7 @@ describe('settledFactsOf', () => {
       { ...pull('p-it', 'sbCampaigns', '2026-09-20'), ingestedAt: null, status: 'FAILED' },
     ], NOW)
     expect(facts.spThrough).toEqual(d('2026-09-30'))
-    expect(facts.otherThrough).toBeNull()
+    expect(facts.otherThrough).toBe('no-reports')
   })
 
   it('Brands and Display settle on their own 14-day window', () => {

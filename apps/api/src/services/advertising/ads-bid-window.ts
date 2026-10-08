@@ -123,10 +123,19 @@ export function windowBidCents(currentCents: number, moves: readonly BidMove[], 
   return { cents: end > start ? sum / (end - start) : bid, basis: 'time' }
 }
 
-/** Once a data day: why a target waits because an automatic writer already moved its bid on this data day, or null. */
+/**
+ * Once a data day: why a target waits because an automatic writer already moved its bid on this data day — or on a
+ * NEWER one — or null. BB-14: the data day can step back one day (a 00:20 run before any settled day is known reads the
+ * clock rule's 10-02; the 06:20 run after the night's re-read reads the settled 10-01; the same when the window falls
+ * back to the clock rule and returns). A move made on 10-02 already used the evidence of 10-01, so 10-01 must not move
+ * the target again. YYYY-MM-DD strings compare as days.
+ */
 export function movedThisDataDay(dataDay: string, moves: readonly AutoMove[]): string | null {
-  const m = moves.find((x) => x.dataDay === dataDay && isServingMove(x.fromCents, x.toCents))
-  return m ? `already moved on data day ${dataDay} (${m.fromCents} → ${m.toCents}¢ by ${m.by}) — one move per data day` : null
+  const m = moves.find((x) => x.dataDay >= dataDay && isServingMove(x.fromCents, x.toCents))
+  if (!m) return null
+  return m.dataDay === dataDay
+    ? `already moved on data day ${dataDay} (${m.fromCents} → ${m.toCents}¢ by ${m.by}) — one move per data day`
+    : `already moved on data day ${m.dataDay}, newer than this run's ${dataDay} (${m.fromCents} → ${m.toCents}¢ by ${m.by}) — one move per data day`
 }
 
 /**
