@@ -7025,5 +7025,10 @@
     "scalar": {},
     "compound": {},
     "relations": []
+  },
+  "AmazonSalesRank": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
   }
 }

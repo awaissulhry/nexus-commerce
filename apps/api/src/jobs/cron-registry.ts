@@ -112,6 +112,7 @@ import { runSqpIngestOnce } from './sqp-ingest.job.js'
 import { runSqpCollectOnce } from './sqp-collect.job.js'
 import { runKtDigestOnce } from './kt-digest.job.js'
 import { runKeywordRankFeedOnce } from './keyword-rank-feed.job.js'
+import { runSalesRankFeedOnce } from './sales-rank-feed.job.js'
 import { runDaypartingOnce, daypartingSummaryLine } from './ad-dayparting.job.js'
 // AD.5 — cross-marketplace BudgetPool rebalancer.
 import { runBudgetPoolRebalanceOnce } from './budget-pool-rebalance.job.js'
@@ -299,6 +300,8 @@ export const CRON_REGISTRY: Record<string, () => Promise<unknown>> = {
   'kt-digest': () => runKtDigestOnce(),
   // The Keyword Tracker's feed: search volume per bid-on keyword from Brand Analytics weeks Nexus holds (no Amazon call).
   'keyword-rank-feed': () => runKeywordRankFeedOnce(),
+  // Amazon Best Sellers Rank of every live Amazon listing (catalog salesRanks through the gateway).
+  'sales-rank-feed': () => runSalesRankFeedOnce(),
   // 1c / 1e — the tick's own summary line: would-apply / waiting / deferred when the dial or the caps held changes back.
   'ad-dayparting': async () => daypartingSummaryLine(await runDaypartingOnce()),
   'budget-pool-rebalance': async () => {

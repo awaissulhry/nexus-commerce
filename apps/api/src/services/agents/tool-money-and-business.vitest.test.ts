@@ -393,6 +393,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'ai-usage': () => ({}),
   // Platform health watchdog — the newest daily run of the checks (none stored here: says so), and one check live.
   'platform-health-checks': () => ({}),
+  // Best Sellers Rank — the product's stored reads (a family parent covers its variations).
+  'sales-rank': (ids) => ({ productId: ids.productId }),
   // MCP full control P7 — previews of the organizing changes.
   'set-product-tags': (ids) => ({ productId: ids.productId, tags: ['MONEY tag'] }),
   'move-workflow-stage': (ids) => ({ productId: ids.productId, stageId: ids.stageId }),
@@ -610,6 +612,10 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
         // MCP.10 — a saved attribute, so bulk-attribute-change has one it may set.
         categoryAttributes: { lining_note: `${mark} mesh` },
       },
+    })
+    // Best Sellers Rank — one stored read of the product (what sales-rank reads), its category named with the mark.
+    await db.amazonSalesRank.create({
+      data: { marketplace: 'IT', asin: `B0${mark.slice(0, 4)}RANK1`.slice(0, 10), productId: product.id, classificationRanks: [{ id: '900001', title: `${mark} jackets`, rank: 7 }], displayGroupRanks: [], bestRank: 7, runId: `${mark}-rank-run` },
     })
     const order = await db.order.create({
       data: {

@@ -1530,6 +1530,43 @@ export class AmazonSpApiClient {
   }
 
   /**
+   * Catalog Items API — the Best Sellers Rank of up to 20 ASINs in one marketplace (searchCatalogItems by ASIN,
+   * includedData=salesRanks). Read-only; the sales-rank feed (services/amazon/sales-rank.service.ts) parses `body`.
+   * Through the gateway like every call of this client. `heldOrRefused`: nothing was sent (the account needs sign-in,
+   * the gateway refused), so the caller stops asking for this account in this run.
+   */
+  async searchCatalogSalesRanks(asins: readonly string[], marketplaceId: string): Promise<{
+    success: boolean
+    httpStatus: number
+    body?: unknown
+    error?: string
+    heldOrRefused?: boolean
+  }> {
+    try {
+      const accessToken = await this.getAccessToken()
+      const url = new URL(`https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion(this.boundAccount?.id)}.amazon.com/catalog/2022-04-01/items`)
+      url.searchParams.set('identifiers', asins.join(','))
+      url.searchParams.set('identifiersType', 'ASIN')
+      url.searchParams.set('marketplaceIds', marketplaceId)
+      url.searchParams.set('includedData', 'salesRanks')
+      url.searchParams.set('pageSize', String(Math.min(Math.max(asins.length, 1), 20)))
+      const response = await this.fetchWithRetry(
+        url.toString(),
+        { method: 'GET', headers: { 'x-amzn-requestid': `nexus-${Date.now()}`, 'x-amz-access-token': accessToken } },
+        `searchCatalogItems(salesRanks)`,
+      )
+      const body = (await response.json().catch(() => ({}))) as unknown
+      if (response.status >= 400) {
+        return { success: false, httpStatus: response.status, error: this.parseErrors(body as never) ?? JSON.stringify(body).slice(0, 300) }
+      }
+      return { success: true, httpStatus: response.status, body }
+    } catch (error) {
+      const { GatewayRefusal } = await import('../services/gateway/gateway.js')
+      return { success: false, httpStatus: 0, error: error instanceof Error ? error.message : String(error), heldOrRefused: error instanceof GatewayRefusal }
+    }
+  }
+
+  /**
    * Batch submit multiple listings
    * Respects rate limiting for each request
    */
