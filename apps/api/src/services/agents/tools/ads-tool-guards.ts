@@ -146,11 +146,17 @@ export function splitBySuppression<W extends { target: BidTarget; newBidCents: n
   return { allowed, suppressed, lowUnflagged, counts: { allowed: allowed.length, suppressed: suppressed.length, lowUnflagged: lowUnflagged.length } }
 }
 
-/** Null when a restore may lift this campaign's suppression; else why not. Only a person's (`user:…`) may be lifted. */
-export function liftSuppressionRefusal(campaign: { bidsSuppressedAt: Date | null; bidsSuppressedBy: string | null }): string | null {
-  if (!campaign.bidsSuppressedAt) return 'its bids are not suppressed'
-  if (campaign.bidsSuppressedBy?.startsWith('user:')) return null
-  return `its bids were suppressed by ${campaign.bidsSuppressedBy || 'an unrecorded actor'}; only a suppression a person set may be lifted here`
+/**
+ * Null when a restore may lift this campaign's suppression; else why not. Only a person's (`user:…`) may be lifted.
+ * #513 review — `stopHolds`: the owners of the stops declared as STOP holds (a campaign the bid brain owns): each is a
+ * suppression too, and a person's restore ends every one, so each must be a person's.
+ */
+export function liftSuppressionRefusal(campaign: { bidsSuppressedAt: Date | null; bidsSuppressedBy: string | null }, stopHolds: readonly string[] = []): string | null {
+  const owners = [...(campaign.bidsSuppressedAt ? [campaign.bidsSuppressedBy] : []), ...stopHolds]
+  if (!owners.length) return 'its bids are not suppressed'
+  const other = owners.find((by) => !by?.startsWith('user:'))
+  if (other === undefined) return null
+  return `its bids were suppressed by ${other || 'an unrecorded actor'}; only a suppression a person set may be lifted here`
 }
 
 // ── Currency ────────────────────────────────────────────────────────────────────────────────────

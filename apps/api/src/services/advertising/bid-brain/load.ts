@@ -437,7 +437,7 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
     personBidTargetIds(),
     prisma.bidHold.findMany({
       where: { campaignId: { in: campaignIds }, endedAt: null, OR: [{ until: null }, { until: { gt: now } }] },
-      select: { campaignId: true, targetId: true, kind: true, by: true, until: true },
+      select: { campaignId: true, targetId: true, kind: true, by: true, until: true, reason: true },
     }),
     // BB-8 — a HELD enrollment past its `heldUntil` no longer holds (read as LIVE).
     prisma.bidBrainEnrollment.findMany({ where: { campaignId: { in: campaignIds } }, select: { campaignId: true, mode: true, heldBy: true, heldUntil: true } })

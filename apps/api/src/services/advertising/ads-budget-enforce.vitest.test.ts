@@ -172,6 +172,31 @@ describe('the preview — what the engine would do now', () => {
     expect(campaign(market(await inA(() => computeBudgetEnforcement({ month })), 'IT'), ids.cRank)).toMatchObject({ suppress: false, currentlySuppressed: true })
   })
 
+  it('#513 review — on a campaign the brain owns, another owner\'s mark is not this engine\'s stop: over the cap it declares its own; its STOP hold is its stop, and given back under the cap', async () => {
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+    try {
+      await inA(() => db().bidBrainEnrollment.create({ data: { campaignId: ids.cRank, marketplace: 'IT', mode: 'LIVE', enrolledBy: 'user:test' } }))
+      await inA(() => db().campaign.update({ where: { id: ids.cRank }, data: { bidsSuppressedBy: 'automation:retail-guard' } }))
+      // Over the cap: the guard's mark does not stop this engine's stop from landing; the screen shows it stopped.
+      expect(campaign(market(await inA(() => computeBudgetEnforcement({ month })), 'IT'), ids.cRank)).toMatchObject({ suppress: true, restore: false, currentlySuppressed: true })
+      // Its stop declared behind the guard's mark (a STOP hold): its own stop now — not declared again.
+      await inA(() => db().bidHold.create({ data: { campaignId: ids.cRank, kind: 'STOP', by: 'automation:budget-manager-cron', reason: '9¢ floor: monthly cap' } }))
+      expect(campaign(market(await inA(() => computeBudgetEnforcement({ month })), 'IT'), ids.cRank)).toMatchObject({ suppress: false, restore: false, currentlySuppressed: true })
+      // The cap gone: its stop is given back (the guard's mark stays: restoreCampaignBids lifts only this engine's own).
+      await inA(() => db().adsStrategy.update({ where: { id: ids.marketRow }, data: { monthlySpendCapCents: null } }))
+      try {
+        expect(campaign(market(await inA(() => computeBudgetEnforcement({ month })), 'IT'), ids.cRank)).toMatchObject({ suppress: false, restore: true, currentlySuppressed: true })
+      } finally {
+        await inA(() => db().adsStrategy.update({ where: { id: ids.marketRow }, data: { monthlySpendCapCents: 5_000 } }))
+      }
+    } finally {
+      vi.stubEnv('NEXUS_BID_BRAIN_MODE', '')
+      await inA(() => db().bidHold.deleteMany({ where: { campaignId: ids.cRank } }))
+      await inA(() => db().bidBrainEnrollment.deleteMany({ where: { campaignId: ids.cRank } }))
+      await inA(() => db().campaign.update({ where: { id: ids.cRank }, data: { bidsSuppressedBy: 'automation:rank-defend-test' } }))
+    }
+  })
+
   it('a market whose cap is gone still gets this engine\'s floors back — never another engine\'s', async () => {
     const de = market(await inA(() => computeBudgetEnforcement({ month })), 'DE')
     expect(de).toMatchObject({ stopCapCents: null, stopBy: null, strategyCap: null, planCapCents: null, stopOverSpend: false, capReached: false })

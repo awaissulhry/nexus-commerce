@@ -29,11 +29,14 @@ vi.mock('../ads-mutation.service.js', async (importOriginal) => ({
 }))
 
 import { lowerAdGroupBids, refloorCampaignBids, restoreAdGroupBids, restoreCampaignBids, suppressAdGroupBids, suppressCampaignBids } from '../ads-bid-suppression.service.js'
+import { flooredNow, setEnrollment } from './enrollment.js'
 
 const A = 'bb8_declared_alpha'
 const inA = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const db = () => database.client
 const BUDGET = 'automation:budget-manager-cron' as const
+const RETAIL = 'automation:retail-guard' as const
+const openHolds = (campaignId: string) => inA(() => db().bidHold.findMany({ where: { campaignId, endedAt: null }, select: { kind: true, by: true, reason: true }, orderBy: { createdAt: 'asc' } }))
 const ids = { owned: '', other: '', ownedGroup: '', otherGroup: '' }
 
 async function state(campaignId: string) {
@@ -61,6 +64,7 @@ beforeEach(async () => {
   vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
   await inA(async () => {
     await db().bidBrainEnrollment.deleteMany({})
+    await db().bidHold.deleteMany({})
     await db().adTarget.deleteMany({})
     await db().adGroup.deleteMany({})
     await db().campaign.deleteMany({})
@@ -101,6 +105,48 @@ describe('a campaign the brain owns', () => {
     expect(await inA(() => lowerAdGroupBids(ids.ownedGroup, { actor: 'user:u1', reason: 'out of stock', floorCents: 2 }))).toEqual({ moved: 0, failed: 0 })
     expect((await state(ids.owned)).groups).toEqual([[40, null, 'user:u1', 2]])
     expect(writes).toEqual([])
+  })
+
+  it('#513 review — a second owner\'s stop is a STOP hold with its own floor; the first owner\'s lift hands it the mark and keeps the saved bids', async () => {
+    await inA(() => suppressCampaignBids(ids.owned, { actor: BUDGET, floorCents: 5 }))
+    await inA(() => suppressCampaignBids(ids.owned, { actor: RETAIL, floorCents: 2, reason: 'unsellable' }))
+    expect(await openHolds(ids.owned)).toEqual([{ kind: 'STOP', by: RETAIL, reason: '2¢ floor: unsellable' }])
+    // The brain floored the keyword and kept its bid (shadow.ts rememberFloors), as on a live run.
+    await inA(() => db().adTarget.updateMany({ where: { adGroupId: ids.ownedGroup }, data: { bidCents: 2, suppressedFromBidCents: 55 } }))
+    const declared = (await inA(() => db().bidHold.findFirst({ where: { campaignId: ids.owned, kind: 'STOP' }, select: { createdAt: true } })))!.createdAt
+    expect(await inA(() => restoreCampaignBids(ids.owned, { actor: BUDGET }))).toBe(0)
+    expect(await state(ids.owned)).toEqual({ marks: { by: RETAIL, floor: 2 }, groups: [[40, null, null, null]], targets: [[2, 55]] })
+    expect((await inA(() => db().campaign.findUnique({ where: { id: ids.owned }, select: { bidsSuppressedAt: true } })))!.bidsSuppressedAt).toEqual(declared)
+    expect(await openHolds(ids.owned)).toEqual([])
+    // Its owner lifts it: the marks and the memory go (the brain gives the bid back from its own record).
+    await inA(() => restoreCampaignBids(ids.owned, { actor: RETAIL }))
+    expect(await state(ids.owned)).toEqual({ marks: null, groups: [[40, null, null, null]], targets: [[2, null]] })
+    expect(writes).toEqual([])
+  })
+
+  it('#513 review — leaving the brain (op shadow) with a stop declared and the mark free: the stop takes the mark; LIVE is refused while one is open', async () => {
+    await inA(() => db().bidHold.create({ data: { campaignId: ids.owned, kind: 'STOP', by: RETAIL, reason: '3¢ floor: unsellable' } }))
+    expect(await inA(() => flooredNow(ids.owned))).toMatch(/held at a floor now \(by automation:retail-guard\)/)
+    await inA(() => setEnrollment({ campaignId: ids.owned, marketplace: 'IT', op: 'shadow', by: 'user:test' }))
+    expect((await state(ids.owned)).marks).toEqual({ by: RETAIL, floor: 3 })
+    expect(await openHolds(ids.owned)).toEqual([])
+  })
+
+  it('#513 review — op give-back with a stop declared behind another owner\'s mark: it stays declared, LIVE is refused, and it takes the mark when that owner lifts (bids stay floored)', async () => {
+    await inA(() => suppressCampaignBids(ids.owned, { actor: BUDGET, floorCents: 2 }))
+    await inA(() => suppressCampaignBids(ids.owned, { actor: RETAIL, floorCents: 2, reason: 'unsellable' }))
+    await inA(() => db().adTarget.updateMany({ where: { adGroupId: ids.ownedGroup }, data: { bidCents: 2, suppressedFromBidCents: 55 } }))
+    await inA(() => setEnrollment({ campaignId: ids.owned, marketplace: 'IT', op: 'give-back', by: 'user:test' }))
+    expect(await openHolds(ids.owned)).toEqual([{ kind: 'STOP', by: RETAIL, reason: '2¢ floor: unsellable' }])
+    expect(await inA(() => flooredNow(ids.owned))).toMatch(/\(by automation:budget-manager-cron, automation:retail-guard\)/)
+    // Not owned any more: today's give-back runs, and the stop still declared takes the mark instead — nothing written.
+    expect(await inA(() => restoreCampaignBids(ids.owned, { actor: BUDGET }))).toBe(0)
+    expect(await state(ids.owned)).toEqual({ marks: { by: RETAIL, floor: 2 }, groups: [[40, null, null, null]], targets: [[2, 55]] })
+    expect(writes).toEqual([])
+    // A person's restore lifts every stop and gives the bids back.
+    expect(await inA(() => restoreCampaignBids(ids.owned, { actor: 'user:u1', manual: true }))).toBe(1)
+    expect(await state(ids.owned)).toEqual({ marks: null, groups: [[40, null, null, null]], targets: [[55, null]] })
+    expect(await openHolds(ids.owned)).toEqual([])
   })
 
   it('a HELD enrollment is still owned (no raises; the brain is still the one writer)', async () => {

@@ -42,7 +42,7 @@
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { updateCampaignWithSync, type AdsActor } from './ads-mutation.service.js'
-import { suppressCampaignBids, restoreCampaignBids, suppressAdGroupBids, restoreAdGroupBids } from './ads-bid-suppression.service.js'
+import { suppressCampaignBids, restoreCampaignBids, suppressAdGroupBids, restoreAdGroupBids, openStopHolds } from './ads-bid-suppression.service.js'
 import { currentMonth } from './ads-budget-manager.service.js'
 import { EXCLUDE_AMS_DAILY } from '../ads-core/ams-daily.js'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
@@ -215,13 +215,19 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
 
   // W1-6 — three things put a market in the run: a plan with Auto Pacing or Stop Over Spend, an ads strategy cap (a
   // standing stop, no plan needed; W1-6b: the market's, a category's or a product's), or floors this engine set — on a
-  // campaign or on an ad group — where no cap is in force any more (given back).
-  const [plans, strategyMarketList, ownFloors, ownGroupFloors] = await Promise.all([
+  // campaign or on an ad group — where no cap is in force any more (given back). #513 review — its stop declared as a
+  // STOP hold (a campaign the bid brain owns, another owner's mark on it) counts as its floor too.
+  const { STOP_HOLD_KIND } = await import('./bid-brain/facts.js')
+  const [plans, strategyMarketList, ownFloors, ownGroupFloors, ownHeld] = await Promise.all([
     prisma.adBudgetPlan.findMany({ where: { month, tag: null } }),
     capMarkets(),
     prisma.campaign.findMany({ where: { status: 'ENABLED', bidsSuppressedAt: { not: null }, bidsSuppressedBy: { startsWith: BUDGET_ACTOR_PREFIX }, marketplace: { not: null } }, select: { marketplace: true }, distinct: ['marketplace'] }),
     prisma.adGroup.findMany({ where: { bidsSuppressedAt: { not: null }, bidsSuppressedBy: { startsWith: BUDGET_ACTOR_PREFIX }, campaign: { status: 'ENABLED', marketplace: { not: null } } }, select: { campaign: { select: { marketplace: true } } } }),
+    prisma.bidHold.findMany({ where: { kind: STOP_HOLD_KIND, targetId: null, endedAt: null, by: { startsWith: BUDGET_ACTOR_PREFIX } }, select: { campaignId: true }, distinct: ['campaignId'] }),
   ])
+  const ownHeldMarkets = ownHeld.length
+    ? await prisma.campaign.findMany({ where: { id: { in: ownHeld.map((h) => h.campaignId) }, status: 'ENABLED', marketplace: { not: null } }, select: { marketplace: true }, distinct: ['marketplace'] })
+    : []
   const planByMkt = new Map(plans.map((p) => [p.marketplace, p]))
   const strategyMarkets = new Set(strategyMarketList)
   const markets = [...new Set([
@@ -229,6 +235,7 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
     ...strategyMarkets,
     ...ownFloors.map((c) => c.marketplace as string),
     ...ownGroupFloors.map((g) => g.campaign.marketplace as string),
+    ...ownHeldMarkets.map((c) => c.marketplace as string),
   ])].sort()
   if (markets.length === 0) return empty
 
@@ -302,9 +309,13 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
     const camps = await prisma.campaign.findMany({ where: { marketplace, status: 'ENABLED' }, select: { id: true, name: true, dailyBudget: true, bidsSuppressedAt: true, bidsSuppressedBy: true, minBudgetCents: true, maxBudgetCents: true } })
     // BID BRAIN pre-go-live — the brain's own Min-bid floor mark on a campaign it owns is no stop: over the cap, the stop
     // is declared over it (suppressCampaignBids lands it), never skipped as "already floored" and lost at the hour's end.
+    // #513 review — on a campaign the brain owns, a stop is declared: the mark, or a STOP hold behind another owner's mark.
+    // This engine counts only its own as its stop (another owner's mark no longer keeps its stop from landing); the screen
+    // (`currentlySuppressed`) shows any.
     const { brainOwnedCampaignIds } = await import('./bid-brain/live.js')
     const { isPlanFloorMark } = await import('./bid-brain/facts.js')
-    const brainOwned = await brainOwnedCampaignIds(camps.filter((c) => c.bidsSuppressedAt && isPlanFloorMark(c.bidsSuppressedBy)).map((c) => c.id))
+    const brainOwned = await brainOwnedCampaignIds(camps.map((c) => c.id))
+    const stopHolds = await openStopHolds([...brainOwned])
     const curById = new Map(camps.map((c) => [c.id, Math.round(Number(c.dailyBudget ?? 0) * 100)]))
     const curTotal = camps.reduce((s, c) => s + (curById.get(c.id) ?? 0), 0)
     const spendTotal = camps.reduce((s, c) => s + (mtdByCamp.get(c.id) ?? 0), 0)
@@ -329,7 +340,11 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
         if (t < FLOOR_CENTS) { t = FLOOR_CENTS; clamp = 'floor' }
         target = t
       }
-      const currentlySuppressed = !!c.bidsSuppressedAt && !brainOwned.has(c.id)
+      const owned = brainOwned.has(c.id)
+      const held = stopHolds.get(c.id) ?? []
+      const marked = !!c.bidsSuppressedAt && !(owned && isPlanFloorMark(c.bidsSuppressedBy))
+      const currentlySuppressed = marked || held.length > 0
+      const ownStop = owned ? (marked && isBudgetFloor(c.bidsSuppressedBy)) || held.some(isBudgetFloor) : currentlySuppressed
       // Only this engine's own suppressions may be restored. `bidsSuppressedAt` is shared
       // state — the rank engine's Min-bid windows, dayparting and the retail guard all set
       // it — so "suppressed and under cap" is not evidence that budget enforcement did it.
@@ -338,8 +353,8 @@ export async function computeBudgetEnforcement(opts: { month?: string } = {}): P
       // owner predates the column and is read as NOT MINE, so legacy rows are left alone.
       // W1-6 — given back whenever the market is under its stop cap: also when no stop is in force any more (the
       // cap removed, Stop Over Spend switched off, last month's plan gone), so a floor never outlives its cap.
-      const suppress = stopNow && !currentlySuppressed
-      const restore = !stopNow && currentlySuppressed && isBudgetFloor(c.bidsSuppressedBy)
+      const suppress = stopNow && !ownStop
+      const restore = !stopNow && (owned ? ownStop : currentlySuppressed && isBudgetFloor(c.bidsSuppressedBy))
       return { id: c.id, name: c.name, currentDailyCents: cur, targetDailyCents: target, deltaCents: target != null ? target - cur : 0, clamp, suppress, restore, currentlySuppressed }
     })
 

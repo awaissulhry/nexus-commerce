@@ -1123,6 +1123,8 @@ ACTION_HANDLERS.retail_guard = async (action, _context, meta): Promise<ActionRes
   }
   const result = await applyRetailGuard({
     campaignIds: toPause.map((c) => c.campaignId),
+    // #513 review — the campaigns it no longer flags: its own stop lifts there on a campaign the bid brain owns.
+    sellable: analysis.campaigns.filter((c) => !toPause.includes(c)).map((c) => c.campaignId),
     actor: RULE_ACTOR(meta.ruleId),
     marketplace,
     changeSetId: meta.approval?.changeSetId ?? null, // AA-W2-10 (D7)

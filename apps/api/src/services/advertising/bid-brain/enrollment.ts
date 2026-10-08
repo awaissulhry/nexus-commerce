@@ -21,6 +21,7 @@ import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
+import { STOP_HOLD_KIND } from './facts.js'
 import { brainLiveCeiling } from './live.js'
 import { bidBrainMode } from './shadow.js'
 
@@ -105,15 +106,18 @@ export async function brainBlockers(campaignId: string, opts: { plansJoin?: bool
 /**
  * BB-7 — why the campaign cannot go LIVE right now: a floor in force (a Min-bid hour, a stop, the stock check). The
  * snapshot would keep the floored bids, and only the floor's old owner would lift it. Null: its bids serve.
+ * #513 review — a stop still declared as a STOP hold counts too: going LIVE would floor the campaign at once.
  */
 export async function flooredNow(campaignId: string): Promise<string | null> {
-  const [campaign, flooredGroups, flooredTargets] = await Promise.all([
+  const [campaign, flooredGroups, flooredTargets, stops] = await Promise.all([
     prisma.campaign.findFirst({ where: { id: campaignId }, select: { bidsSuppressedAt: true, bidsSuppressedBy: true } }),
     prisma.adGroup.count({ where: { campaignId, bidsSuppressedAt: { not: null } } }),
     prisma.adTarget.count({ where: { adGroup: { campaignId }, suppressedFromBidCents: { not: null }, retiredAt: null } }),
+    prisma.bidHold.findMany({ where: { campaignId, targetId: null, kind: STOP_HOLD_KIND, endedAt: null }, select: { by: true }, orderBy: { createdAt: 'asc' } }),
   ])
-  if (!campaign?.bidsSuppressedAt && !flooredGroups && !flooredTargets) return null
-  return `its bids are held at a floor now${campaign?.bidsSuppressedBy ? ` (by ${campaign.bidsSuppressedBy})` : ''}: put it under the brain while its bids serve (after a Min-bid hour, a stop or the stock check gave them back)`
+  if (!campaign?.bidsSuppressedAt && !flooredGroups && !flooredTargets && !stops.length) return null
+  const by = [...new Set([...(campaign?.bidsSuppressedAt && campaign.bidsSuppressedBy ? [campaign.bidsSuppressedBy] : []), ...stops.map((h) => h.by)])]
+  return `its bids are held at a floor now${by.length ? ` (by ${by.join(', ')})` : ''}: put it under the brain while its bids serve (after a Min-bid hour, a stop or the stock check gave them back)`
 }
 
 /** Everything the enrollment tool shows and checks; null when the campaign is not in this business. */
@@ -207,6 +211,16 @@ export async function setEnrollment(args: {
   }
   if (row) await prisma.bidBrainEnrollment.update({ where: { id: row.id }, data })
   else await prisma.bidBrainEnrollment.create({ data: { campaignId: args.campaignId, marketplace: args.marketplace, enrolledBy: args.by, ...data } })
+  // #513 review — leaving the brain (op shadow, give-back), a stop still declared as a STOP hold is never left to the brain
+  // alone: with the mark free it takes the mark (handMarkToStopHold), which today's engines, the screens and its owner's
+  // lift all read; one behind another owner's mark stays declared and takes the mark when that owner lifts.
+  if (next.to === 'SHADOW') {
+    const mark = await prisma.campaign.findFirst({ where: { id: args.campaignId }, select: { bidsSuppressedAt: true } })
+    if (mark && !mark.bidsSuppressedAt) {
+      const { handMarkToStopHold } = await import('../ads-bid-suppression.service.js')
+      await handMarkToStopHold(args.campaignId, args.by)
+    }
+  }
   return { from, to: next.to, snapshot }
 }
 
