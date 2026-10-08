@@ -1248,6 +1248,107 @@ export async function listCampaignsServing(ctx: ClientContext, opts: { campaignI
   return out
 }
 
+// ── ONE BRAIN AB-4 — Amazon's own budget rules on one SP campaign (read only) ──────────────────────────────────────
+//
+// Amazon Ads API, Sponsored Products budget rules: GET /sp/campaigns/{campaignId}/budgetRules (operation
+// ListAssociatedBudgetRulesForSPCampaigns). Its answer is SPListAssociatedBudgetRulesResponse { associatedRules:
+// SPCampaignBudgetRule[] }: ruleId, ruleState ACTIVE | PAUSED, ruleStatus, ruleDetails { name, ruleType SCHEDULE |
+// PERFORMANCE, budgetIncreaseBy { type PERCENT, value }, duration { dateRangeTypeRuleDuration { startDate, endDate } |
+// eventTypeRuleDuration { eventId, eventName, startDate, endDate } }, recurrence { type DAILY, daysOfWeek[],
+// intraDaySchedule[] }, performanceMeasureCondition { metricName ACOS | CTR | CVR | ROAS, comparisonOperator, threshold } }.
+// No paging; application/json both ways. Checked 2026-10-08 against two mirrors of Amazon's published OpenAPI
+// (python-amazon-ad-api sp/budget_rules; amz-ad.apifox.cn, operation ListAssociatedBudgetRulesForSPCampaigns); not yet
+// called live from Nexus. A GET, so the channel gateway counts it a read (account state, rate bucket, call ledger), and
+// liveCall's quota and 429/423/5xx retries apply as to every Ads read.
+
+/** One budget rule Amazon runs on a campaign, as Nexus keeps it. Dates are Amazon's YYYYMMDD. */
+export interface AmazonBudgetRule {
+  ruleId: string | null
+  name: string | null
+  /** SCHEDULE | PERFORMANCE */
+  ruleType: string | null
+  /** ACTIVE | PAUSED */
+  ruleState: string | null
+  /** Amazon's own evaluation status (free text in the spec). */
+  ruleStatus: string | null
+  /** budgetIncreaseBy.value when its type is PERCENT (Amazon's only type: budget rules raise, never lower). */
+  increasePct: number | null
+  startDate: string | null
+  endDate: string | null
+  /** A rule tied to an Amazon event (eventTypeRuleDuration). */
+  eventName: string | null
+  recurrence: string | null
+  daysOfWeek: string[]
+  /** A PERFORMANCE rule's condition: ACOS | CTR | CVR | ROAS, the operator and the threshold. */
+  metric: string | null
+  comparison: string | null
+  threshold: number | null
+}
+
+export const budgetRulesPath = (externalCampaignId: string): string => `/sp/campaigns/${encodeURIComponent(externalCampaignId)}/budgetRules`
+
+const ruleText = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : null)
+const ruleNumber = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() && Number.isFinite(Number(v)) ? Number(v) : null)
+const ruleObject = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {})
+
+/**
+ * Amazon's answer, read. An answer without the `associatedRules` list is not understood: Nexus then cannot say whether a
+ * rule is attached, so it says so (never "no rules"). A bare array is read as the list.
+ */
+export function parseCampaignBudgetRules(response: unknown): { rules: AmazonBudgetRule[] } | { error: string } {
+  const list = Array.isArray(response) ? response : ruleObject(response).associatedRules
+  if (!Array.isArray(list)) return { error: 'Amazon\'s answer carries no associatedRules list, so Nexus cannot say whether a budget rule is attached' }
+  return {
+    rules: list.map((raw) => {
+      const r = ruleObject(raw)
+      const d = ruleObject(r.ruleDetails)
+      const by = ruleObject(d.budgetIncreaseBy)
+      const duration = ruleObject(d.duration)
+      const range = ruleObject(duration.dateRangeTypeRuleDuration)
+      const event = ruleObject(duration.eventTypeRuleDuration)
+      const recurrence = ruleObject(d.recurrence)
+      const condition = ruleObject(d.performanceMeasureCondition)
+      return {
+        ruleId: ruleText(r.ruleId),
+        name: ruleText(d.name),
+        ruleType: ruleText(d.ruleType),
+        ruleState: ruleText(r.ruleState),
+        ruleStatus: ruleText(r.ruleStatus),
+        increasePct: (ruleText(by.type) ?? 'PERCENT').toUpperCase() === 'PERCENT' ? ruleNumber(by.value) : null,
+        startDate: ruleText(range.startDate) ?? ruleText(event.startDate),
+        endDate: ruleText(range.endDate) ?? ruleText(event.endDate),
+        eventName: ruleText(event.eventName) ?? ruleText(event.eventId),
+        recurrence: ruleText(recurrence.type),
+        daysOfWeek: Array.isArray(recurrence.daysOfWeek) ? recurrence.daysOfWeek.map(ruleText).filter((x): x is string => !!x) : [],
+        metric: ruleText(condition.metricName),
+        comparison: ruleText(condition.comparisonOperator),
+        threshold: ruleNumber(condition.threshold),
+      }
+    }),
+  }
+}
+
+/** Thrown when Amazon answered but its answer was not understood (parseCampaignBudgetRules). */
+export class AmazonAnswerNotUnderstood extends Error {
+  constructor(message: string) { super(message); this.name = 'AmazonAnswerNotUnderstood' }
+}
+
+/**
+ * The budget rules Amazon runs on one Sponsored Products campaign (its Amazon id). Null in sandbox mode: nothing is asked,
+ * and nothing is made up. Throws when the call fails (the caller records "could not read" with the reason) or when the
+ * answer is not understood.
+ */
+export async function listCampaignBudgetRules(ctx: ClientContext, externalCampaignId: string): Promise<AmazonBudgetRule[] | null> {
+  if (adsMode() === 'sandbox') return null
+  const response = await liveCall<unknown>({
+    profileId: ctx.profileId, region: ctx.region, method: 'GET', path: budgetRulesPath(externalCampaignId),
+    acceptHeader: 'application/json',
+  })
+  const parsed = parseCampaignBudgetRules(response)
+  if ('error' in parsed) throw new AmazonAnswerNotUnderstood(parsed.error)
+  return parsed.rules
+}
+
 // ── Apex C.1 — Amazon theme-based bid recommendations ──────────────────────
 // POST /sp/targets/bid/recommendations returns themed bid candidates per
 // targeting expression (theme = CONVERSION_OPPORTUNITIES | SPECIAL_DAYS …),
