@@ -20,6 +20,9 @@
  *              BidHold → AUTO-UNDO FREEZE (no raise) rather than a pin; a LAUNCH product's day of its ramp and the
  *              break-even ACoS of the ad group's products (goal.ts); and, when the last decision lowered the bid by an
  *              override, the bid before it (decide.ts `restore`)
+ *   money      batch 2 fix — the money brain's brake where the product's budgets lever is PROPOSE or AUTO (money-brake.ts):
+ *              hold_raises → a raise cap; cut_bids → MONEY (a step down a day); stop_weakest → STOP on its weakest
+ *              campaigns (unless the Owner pins their bids), MONEY on the others
  */
 import type { TargetFacts, Overrides, DecisionLayer } from './decide.js'
 import type { Directive, LaneDirective, LaneName } from './recipe.js'
@@ -29,6 +32,7 @@ import { laneOf, planFacts, type PlanHour } from './plan-hour.js'
 import { stackCeiling } from './recipe.js'
 import { laneHeadroom } from '../rank-controller.js'
 import { MAX_MIN_BID_ENTRIES_PER_DAY } from '../rank-write-projection.js'
+import type { MoneyBrakeFact } from './money-brake.js'
 
 export interface CampaignRow {
   id: string
@@ -153,6 +157,11 @@ export interface RunRows {
   breakEven?: ReadonlyMap<string, number>
   /** BB-9 — per campaign: the rules' active inputs (BidDirective rows, rule-directives.ts). */
   directives?: ReadonlyMap<string, readonly DirectiveRow[]>
+  /**
+   * Batch 2 fix — per campaign whose product's budgets lever is the brain's (PROPOSE or AUTO): today's money brake
+   * (money-brake.ts). Absent: none (OBSERVE, OFF, no brake) — the bids decide as before.
+   */
+  moneyBrakes?: ReadonlyMap<string, MoneyBrakeFact>
 }
 
 /** BB-9 — one active BidDirective as the brain reads it; `label` names who asked ('rule "GALE IT — share of voice"'). */
@@ -419,6 +428,16 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     // and once per data day still apply, so an in-band keyword does not move); it is not a freeze walking bids down.
     const heldWhy = enrollment?.mode === 'HELD' ? `the campaign is held by ${enrollment.heldBy ?? 'a hold'}${enrollment.heldUntil ? ` until ${day(enrollment.heldUntil)}` : ''}` : null
     if (undoHold) overrides.freeze = { by: `${undoHold.by}${undoHold.until ? ` until ${day(undoHold.until)}` : ''}` }
+    // Batch 2 fix — the money brain's brake (money-brake.ts), after the Owner's pin is known: one of the weakest campaigns
+    // stops at the stop bid (a STOP, given back when it lifts) unless he pins its bids; every other campaign under the brake
+    // steps down a day (MONEY, after every other override); hold_raises holds the raises (the raise cap below).
+    const brake = run.moneyBrakes?.get(campaign.id)
+    if (brake && brake.level !== 'hold_raises') {
+      if (brake.floor && (!overrides.pin || overrides.pin.soft)) {
+        overrides.stop = mergeFloors({ stop: overrides.stop }, { stop: { bidCents: s?.stopBidCents ?? 2, by: `${brake.why}: one of its weakest campaigns stops until back on pace` } }).stop
+      } else overrides.money = { stepPct: brake.stepPct, by: brake.why }
+    }
+    const moneyHold = brake?.level === 'hold_raises' ? `${brake.why}: no raises` : null
 
     // AB-2 — the stop recipe's memory stands for the campaign as it serves: a stop (or a Min-bid hour) holds its lanes at
     // 0 % and its strategy at down only only while it lasts, and the tick that ends it puts both back. So the bid stack —
@@ -446,7 +465,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       ratioCeiling,
       ...(plan?.lanes.length ? { lanes: plan.lanes } : {}),
       ...(plan ? { planNote: plan.note } : {}),
-      ...(heldWhy || run.spendGuard?.has(campaign.id) ? { raiseCap: [heldWhy, run.spendGuard?.get(campaign.id)].filter(Boolean).join('; ') } : {}),
+      ...(heldWhy || run.spendGuard?.has(campaign.id) || moneyHold ? { raiseCap: [heldWhy, run.spendGuard?.get(campaign.id), moneyHold].filter(Boolean).join('; ') } : {}),
       listPriceCents: group.families.map((f) => m.prices.get(f)).find((p) => p != null && p > 0) ?? null,
       goal,
       limits: {

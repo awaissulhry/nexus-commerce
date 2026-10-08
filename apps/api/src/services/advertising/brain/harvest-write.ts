@@ -20,6 +20,8 @@
  *   requests        PROPOSE asks a person through the normal approval gate, as auto-undo does: apply-brain-harvest for a
  *                   pair or its undo, create-ad-campaign (a Nexus builder) for a new campaign — always a person, never by
  *                   rule (D1 = B).
+ *   undo            the pair put back as a pair (undoHarvest): the gate asked for both halves first, the source negatives
+ *                   retired, then the keyword paused — never a keyword paused while a source still blocks the term.
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -208,37 +210,72 @@ export async function executeClaimedPair(id: string, who: Who, now: Date, opts: 
 
 // ── Undo ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export interface UndoOutcome { paused: boolean; retired: number; problems: string[] }
+export interface UndoOutcome {
+  paused: boolean
+  retired: number
+  problems: string[]
+  /** Nothing of the harvest stands any more: the keyword not enabled and no source negative standing. */
+  complete: boolean
+  /** The action-log rows the undo wrote (the keyword's pause first, then each retire). */
+  actionLogIds: string[]
+}
 
 /**
- * Put a harvest back (a person approved it): the new keyword paused (a person's decision; it stays at Amazon) and every
- * source negative it made retired, so the term runs where it ran before. Through the mutation layer (the queue) and the
- * negative retire service, as the approver, the approval the change set.
+ * Put a harvest back AS A PAIR (batch 2 fix; Owner 10-08: the safety net restores the source): every source negative it
+ * made retired, so the term runs where it ran before, then the new keyword paused (it stays at Amazon). Both halves are
+ * asked of the write gate first, as the writer they run as — any refusal and neither is written. The keyword is paused only
+ * once every source runs the term again: a retire that fails leaves the keyword running (the term is never left without a
+ * home), named, and the undo can be sent again (it writes only what is left). Through the mutation layer (the queue) and
+ * the negative retire service: as the approver (his approval the change set), or as auto-undo (a safety owner at the gate).
  */
 export async function undoHarvest(id: string, who: Who): Promise<UndoOutcome> {
   const r = await prisma.adsBrainHarvest.findUniqueOrThrow({ where: { id } })
-  const problems: string[] = []
-  let paused = false
-  if (r.keywordTargetId) {
-    const t = await prisma.adTarget.findUnique({ where: { id: r.keywordTargetId }, select: { status: true } })
-    if (t && String(t.status) === 'ENABLED') {
-      const { updateAdTargetWithSync } = await import('../ads-mutation.service.js')
-      const out = await updateAdTargetWithSync({ adTargetId: r.keywordTargetId, patch: { status: 'PAUSED' }, actor: who.actor as never, reason: who.reason, changeSetId: who.changeSetId, manual: who.manual, letsGo: true, askGate: true })
-      if (out.ok) paused = true
-      else problems.push(`the keyword was not paused (${out.error ?? 'refused'})`)
-    }
-  }
   const negatives = sourcesOf(r.sources).map((s) => s.negativeTargetId).filter((x): x is string => !!x)
-  let retired = 0
-  if (negatives.length) {
-    const { retireNegatives } = await import('../negatives-retire.service.js')
-    const out = await retireNegatives({ adTargetIds: negatives, actor: who.actor as never, retireReason: who.reason, changeSetId: who.changeSetId, manual: who.manual })
-    for (const o of out.outcomes) {
-      if (o.kind === 'retired' || o.kind === 'removed_local') retired++
-      else if (o.kind !== 'skipped') problems.push(`a source negative was not retired (${o.reason ?? o.kind})`)
+  const ids = [...(r.keywordTargetId ? [r.keywordTargetId] : []), ...negatives]
+  const rows = ids.length
+    ? await prisma.adTarget.findMany({ where: { id: { in: ids } }, select: { id: true, isNegative: true, status: true, adGroup: { select: { campaignId: true, campaign: { select: { name: true, marketplace: true, adProduct: true } } } } } })
+    : []
+  const keyword = rows.find((t) => t.id === r.keywordTargetId && !t.isNegative && String(t.status) === 'ENABLED') ?? null
+  const standing = rows.filter((t) => t.isNegative && String(t.status) !== 'ARCHIVED')
+  const out: UndoOutcome = { paused: false, retired: 0, problems: [], complete: false, actionLogIds: [] }
+  if (!keyword && !standing.length) return { ...out, complete: true }
+
+  // Both halves asked of the gate first, as the writer that will run them (nothing is written).
+  const person = who.manual ? { manual: true, ...(who.confirmOwnLimits ? { confirmOwnLimits: true } : {}) } : {}
+  const halves = [
+    ...standing.map((t) => ({ half: 'the source negative', t, ctx: { dimension: 'negatives' } })),
+    ...(keyword ? [{ half: 'the keyword\'s pause', t: keyword, ctx: { isSuppression: true } }] : []),
+  ]
+  for (const { half, t, ctx } of halves) {
+    const g = t.adGroup
+    const gate = await checkAdsWriteGate({
+      marketplace: g?.campaign.marketplace ?? null, campaignId: g?.campaignId ?? null, payloadValueCents: 0, field: 'status', fields: ['status'],
+      adProduct: g?.campaign.adProduct ?? null, actor: who.actor, ...ctx, ...person,
+    } as never)
+    if (gate.allowed === false) {
+      return { ...out, problems: [`nothing was put back — the write gate refuses ${half} in campaign "${g?.campaign.name ?? '?'}" (${gate.deniedAt}: ${gate.reason}): the undo is written whole or not at all`] }
     }
   }
-  return { paused, retired, problems }
+
+  // 1. The source negatives retired: the term runs where it ran before.
+  if (standing.length) {
+    const { retireNegatives } = await import('../negatives-retire.service.js')
+    const res = await retireNegatives({ adTargetIds: standing.map((t) => t.id), actor: who.actor as never, retireReason: who.reason, changeSetId: who.changeSetId, manual: who.manual })
+    for (const o of res.outcomes) {
+      if (o.kind === 'retired' || o.kind === 'removed_local') { out.retired++; if (o.actionLogId) out.actionLogIds.push(o.actionLogId) }
+      else if (o.kind !== 'skipped') out.problems.push(`a source negative was not retired (${o.reason ?? o.kind})`)
+    }
+  }
+  // 2. The keyword paused, only once every source runs the term again (never left without a home).
+  if (keyword && out.problems.length) out.problems.push('the keyword was left running: a source still blocks the term, so pausing it now would leave the term without a home — send the undo again')
+  else if (keyword) {
+    const { updateAdTargetWithSync } = await import('../ads-mutation.service.js')
+    const res = await updateAdTargetWithSync({ adTargetId: keyword.id, patch: { status: 'PAUSED' }, actor: who.actor as never, reason: who.reason, changeSetId: who.changeSetId, manual: who.manual, letsGo: true, askGate: true })
+    if (res.ok) { out.paused = true; if (res.actionLogId) out.actionLogIds.unshift(res.actionLogId) }
+    else out.problems.push(`the keyword was not paused (${res.error ?? 'refused'}): the term runs in its sources and its exact keyword until the undo is sent again`)
+  }
+  out.complete = !out.problems.length
+  return out
 }
 
 // ── Requests a person decides ───────────────────────────────────────────────────────────────────────────────────

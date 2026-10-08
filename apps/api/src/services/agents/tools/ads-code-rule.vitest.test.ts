@@ -160,6 +160,7 @@ describe('the Owner\'s code rule A — the table', () => {
       'enable-ads: includePeoplesPauses': true,
       'set-bid-brain-enrollment: live': true,
       'set-ads-brain: a lever to AUTO': true,
+      'set-ads-brain: leave lifts the brain\'s pauses': true,
       // Day-to-day: listed in raises, said in the effect, warned past his own limits, a normal approval.
       'set-hourly-bid-plan': false,
       'set-portfolio': false,

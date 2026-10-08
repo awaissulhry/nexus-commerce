@@ -6,8 +6,9 @@
  *   OBSERVE   logged only (SHADOW): what the brain would pause, resume or propose to archive
  *   PROPOSE   an approval request per product and action, through the normal approval gate (the auto-undo pattern,
  *             ads-auto-undo.service.ts proposeUndo): pause-ads, enable-ads (with includePeoplesPauses when it lifts the
- *             brain's own AUTO pause — that needs the approver's code) or archive-ads, asked as "Nexus ads brain"; a
- *             request still waiting is never asked twice; a person approves or declines it in Nexus
+ *             brain's own AUTO pause — Nexus's own request: a person's normal approval lifts it, batch 2 fix) or
+ *             archive-ads, asked as "Nexus ads brain"; a request still waiting is never asked twice; a person approves or
+ *             declines it in Nexus
  *   AUTO      the status written as the brain (BRAIN_STATE_ACTOR) through the normal campaign path —
  *             updateCampaignWithSync asks the write gate before anything is written (askGate), then the queue, the gate
  *             again at dispatch, the channel gateway (hard rule 4). The gate lets it through only where a product's brain

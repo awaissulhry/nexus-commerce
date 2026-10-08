@@ -55,7 +55,7 @@ const bidBrain: AgentTool = {
     + 'next to what today\'s writers set and writes nothing; for a campaign set-bid-brain-enrollment put LIVE (while the '
     + 'server switch is live) it is the one bid writer and its decisions are sent (mode LIVE, and sent: what became of each; '
     + 'owned lists those campaigns). view why (default): each keyword\'s newest decision — '
-    + 'write, hold or brake, the deciding layer (brake, stop, pin, stock, freeze, phase, min_bid_hour, restore — the bids going back after a stop lifted —, goal, band, limit, '
+    + 'write, hold or brake, the deciding layer (brake, stop, pin, stock, freeze, phase, min_bid_hour, money — the money brain\'s step down above its pace —, restore — the bids going back after a stop lifted —, goal, band, limit, '
     + 'no_goal), today\'s bid and the brain\'s, the goal bid, the aim and band, the expected ACoS at today\'s bid, how much '
     + 'of the estimate rests on data — and a one-line why. view what-if: the same keywords decided again now with '
     + 'targetAcosPct (and bandLoPct / bandHiPct): what the brain would set, not stored and not sent (set-ads-strategy '

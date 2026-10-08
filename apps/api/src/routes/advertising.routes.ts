@@ -80,6 +80,7 @@ import { adSalesCents } from '../services/ads-core/ad-sales.js'
 // A1 (MCP full control) — route-only logic moved to services so Claude's ad tools share it.
 import { listAmazonCampaigns, type AmazonCampaignListQuery } from '../services/advertising/ads-campaign-list.service.js'
 import { clampBidsByCeiling } from '../services/advertising/ads-cpc-ceiling.js'
+import { serverPortfolioCapLimitCents } from '../services/advertising/brain/portfolio-cap-limit.js'
 // AX-IE.2 — the bulksheet grammar. Shared with apps/web so the browser's
 // pre-validation and this server-side gate cannot drift apart.
 import {
@@ -6441,7 +6442,8 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const { crossMatchNegations } = await import('../services/advertising/ads-keyword-funnel.service.js')
     try {
-      const out = await crossMatchNegations(b.productId, b.apply === true, personActor(request), market)
+      // Batch 2 fix — a person's own click: his mark goes to the gate (the halt still holds it, as before).
+      const out = await crossMatchNegations(b.productId, b.apply === true, personActor(request), market, { manual: true })
       if ('refused' in out) { reply.status(409); return { error: out.refused } }
       return out
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
@@ -9443,6 +9445,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
           'Bid/budget/status PATCHes will hit Amazon Ads API (after the 5-min holdUntil grace).',
           'The liquidate_aged_stock composite action will create RetailEvents + pause/boost campaigns for real.',
           `Per-write blast radius capped at €${(Number(process.env.NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS ?? 50000) / 100).toFixed(0)} via NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS.`,
+          `A portfolio's monthly budget cap is capped at €${(serverPortfolioCapLimitCents() / 100).toFixed(0)} via NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS (or a product brain's own portfolioCapLimitCents).`,
           'Operator-initiated rollback available within 24h of each action.',
         ],
       },

@@ -547,13 +547,16 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
   // BB-18 — the bid that served each keyword's window clicks; BB-7 — the hourly plan's hour of each owned campaign.
   const ownedHere = campaignIds.filter((id) => opts.owned?.has(id))
   const { minBidEntriesToday } = ownedHere.length ? await import('../../../jobs/ad-rank-defend.job.js') : { minBidEntriesToday: null }
-  const [servingBids, planHours, minBidEntries, spendGuard] = await Promise.all([
+  // Batch 2 fix — the money brain's brake on each campaign whose product's budgets lever is the brain's (money-brake.ts).
+  const { loadMoneyBrakes } = await import('./money-brake.js')
+  const [servingBids, planHours, minBidEntries, spendGuard, moneyBrakes] = await Promise.all([
     // BB-15 — under the nowcast, the bid that served its window (to yesterday).
     m.light ? Promise.resolve(new Map<string, number>()) : loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), m.window ?? settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
     loadPlanHours(ownedHere, opts.clockNow ?? now),
     minBidEntriesToday ? minBidEntriesToday(ownedHere, opts.clockNow ?? now, ['rank-defend', 'bid-brain']) : Promise.resolve(new Map<string, number>()),
     // BB-10 — the brain's own raise cap: this hour's spend against the same hour of the last 7 days.
     loadSpendGuard(ownedHere, opts.clockNow ?? now),
+    loadMoneyBrakes(campaignIds, m.market, opts.clockNow ?? now),
   ])
   return {
     run: {
@@ -571,6 +574,7 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
       planHours,
       minBidEntries,
       spendGuard,
+      ...(moneyBrakes.size ? { moneyBrakes } : {}),
       owned: new Set(ownedHere),
     },
     lastWrites,

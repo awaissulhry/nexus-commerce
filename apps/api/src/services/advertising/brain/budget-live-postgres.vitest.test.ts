@@ -20,9 +20,11 @@
  *   give-back the next budget day A1's ladder goes back to its base through the real gate (the day opens at the base);
  *             Amazon's usage of the cap is read and kept in the plan
  *   owner     a lock on A2's budget: not written, and the gate refuses the brain there; the Owner's cap amount: the cap
- *             never above it; an amount below the month's spend: not written; a cap above the per-write value cap is
- *             neither written nor asked (checked before: no doomed write reaches the gate) — the person's own portfolio
- *             path is refused above it too (verified here), so nothing in Nexus could set it: said once a month
+ *             never above it; an amount below the month's spend: not written; a cap above the portfolio cap limit (Owner
+ *             decision 2A: the Owner's own for the product here) is neither written nor asked (checked before: no doomed
+ *             write reaches the gate) — the person's own portfolio path is refused above it too (verified here), so nothing
+ *             in Nexus could set it: said once a month. With his limit ended the server's €2,000 applies: the brain writes
+ *             a cap above the €500 per-write cap, a person's €1,500 cap passes and a €2,500 one is refused with the reason
  *   race      six runs asking one request at once: one claim lands, one request is made
  *   usage     Amazon's usage of the caps: one call at a full slot for a product acting on its money; none at a 15-minute
  *             tick; none at OBSERVE
@@ -71,7 +73,7 @@ vi.mock('../ads-api-client.js', async (importOriginal) => ({
 const { runMoneyShadowOnce, moneyLiveProducts } = await import('./budget-shadow.js')
 const { askOnce } = await import('./budget-live.js')
 const { updatePortfolioById } = await import('../ads-portfolio.service.js')
-const { enrollProduct, setLever, setOverride } = await import('./enrollment.js')
+const { endOverride, enrollProduct, setLever, setOverride } = await import('./enrollment.js')
 const { forgetLeverOwners } = await import('./lever-owners.js')
 const { setAutonomy } = await import('../ads-automation-state.service.js')
 const { updateCampaignWithSync } = await import('../ads-mutation.service.js')
@@ -169,8 +171,10 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-8 — the money writer through the
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
     vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
     vi.stubEnv('NEXUS_AMAZON_ADS_MODE', 'live')
-    // A monthly cap is a month's money: above the €500 default per-write value cap. The last test runs with the default.
-    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '500000')
+    // Owner decision 2A — a monthly cap is judged against the portfolio cap limit (default €2,000), never the €500 per-write
+    // cap: every test here runs with both at their defaults.
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '')
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS', '')
     database = await concurrentDatabase()
     for (const w of [W, W2]) await database.pool.query('INSERT INTO "Workspace" (id,name,status,"createdByUserId","creationKey","updatedAt") VALUES ($1,$1,\'active\',\'test\',$1,now())', [w])
     await inW(async () => { await seed(); await setAutonomy('AUTO', 'test') })
@@ -269,7 +273,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-8 — the money writer through the
     expect(plan.campaigns.find((c: Data) => c.name === 'Campaign A1').why).toContain('it still stands on the brain\'s ladder of an earlier day (€26.25): given back to its base €15.00 first')
   })
 
-  it('owner: his lock on A2 — not written, the gate refuses the brain there; his cap amount bounds the cap; one below the month\'s spend is not written; the value cap refuses a cap above it', async () => {
+  it('owner: his lock on A2 — not written, the gate refuses the brain there; his cap amount bounds the cap; one below the month\'s spend is not written; the portfolio cap limit (his own, then the server\'s €2,000) refuses a cap above it, never the €500 per-write cap', async () => {
     expect(await inW(() => setOverride({ productId: A, market: 'IT', by: 'user:owner', reason: 'my own budget', override: { scope: 'CAMPAIGN', campaignId: C('a2'), kind: 'LOCK', key: 'budgets', value: { dailyBudgetCents: 2_200 } } }))).toMatchObject({ ok: true })
     expect(await inW(() => setOverride({ productId: A, market: 'IT', by: 'user:owner', reason: 'a tighter backstop', override: { scope: 'PRODUCT', kind: 'VALUE', key: 'portfolioCapCents', value: 60_000 } }))).toMatchObject({ ok: true })
     forgetLeverOwners()
@@ -288,21 +292,34 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-8 — the money writer through the
     await run(new Date(DAY3.getTime() + 3_600_000))
     expect(await portfolio(PF_X)).toEqual({ budgetPolicy: 'MONTHLY_RECURRING', amount: '600.00' })
     expect((await decisions()).at(-1)!.plan.actions.portfolios[0]).toMatchObject({ sent: 'held', why: expect.stringMatching(/is not above this month's spend in it plus one day/) })
-    // The per-write value cap at its default: a cap above it is checked BEFORE the write — held, never sent to the gate.
-    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '')
+    // Owner decision 2A — the cap meets the portfolio cap limit, here the Owner's own for the product (€650): a €700 cap is
+    // checked BEFORE the write — held, never sent to the gate.
+    expect(await inW(() => setOverride({ productId: A, market: 'IT', by: 'user:owner', reason: 'my own cap limit', override: { scope: 'PRODUCT', kind: 'VALUE', key: 'portfolioCapLimitCents', value: 65_000 } }))).toMatchObject({ ok: true })
     expect(await inW(() => setOverride({ productId: A, market: 'IT', by: 'user:owner', reason: 'test', override: { scope: 'PRODUCT', kind: 'VALUE', key: 'portfolioCapCents', value: 70_000 } }))).toMatchObject({ ok: true })
-    const refusalsBefore = await rows<{ n: number }>('SELECT count(*)::int AS n FROM "AdWriteRefusal" WHERE "workspaceId" = $1 AND "deniedAt" = \'value_cap\'', [W])
+    const refusalsBefore = await rows<{ n: number }>('SELECT count(*)::int AS n FROM "AdWriteRefusal" WHERE "workspaceId" = $1 AND "deniedAt" IN (\'value_cap\', \'portfolio_cap_limit\')', [W])
     await run(new Date(DAY3.getTime() + 2 * 3_600_000))
     await run(new Date(DAY3.getTime() + 2 * 3_600_000 + 60_000))
     expect(await portfolio(PF_X)).toEqual({ budgetPolicy: 'MONTHLY_RECURRING', amount: '600.00' })
-    expect((await decisions()).at(-1)!.plan.actions.portfolios[0]).toMatchObject({ sent: 'held', why: expect.stringMatching(/above the per-write value cap .* the gate refuses it for every writer/) })
-    expect(await rows('SELECT count(*)::int AS n FROM "AdWriteRefusal" WHERE "workspaceId" = $1 AND "deniedAt" = \'value_cap\'', [W])).toEqual(refusalsBefore)
+    expect((await decisions()).at(-1)!.plan.actions.portfolios[0]).toMatchObject({ sent: 'held', why: expect.stringMatching(/above the Owner's portfolio cap limit for product .* the gate refuses it for every writer/) })
+    expect(await rows('SELECT count(*)::int AS n FROM "AdWriteRefusal" WHERE "workspaceId" = $1 AND "deniedAt" IN (\'value_cap\', \'portfolio_cap_limit\')', [W])).toEqual(refusalsBefore)
     // Said once this month, whatever the number of runs; no request was made for it.
     expect(await rows('SELECT kind, status, "approvalId" FROM "AdsBrainAsk" WHERE "workspaceId" = $1 AND key LIKE \'cap-over:%\'', [W])).toEqual([{ kind: 'portfolioCapOverValue', status: 'blocked', approvalId: null }])
     // Verified: the person's own path (the Portfolios page; an approved set-portfolio runs the same) is refused above the
-    // value cap as well — a portfolio write carries no "send anyway" — so a request for it could never run.
-    expect(await inW(() => updatePortfolioById({ portfolioId: PF_X, budget: { amount: 700, currencyCode: 'EUR', policy: 'monthlyRecurring' } }))).toMatchObject({ ok: false, mode: 'gated', error: expect.stringMatching(/exceeds cap 50000¢/) })
-    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '500000')
+    // limit as well — a portfolio write carries no "send anyway" — so a request for it could never run.
+    expect(await inW(() => updatePortfolioById({ portfolioId: PF_X, budget: { amount: 700, currencyCode: 'EUR', policy: 'monthlyRecurring' } }))).toMatchObject({ ok: false, mode: 'gated', error: expect.stringMatching(/portfolio cap 70000¢ exceeds the Owner's portfolio cap limit for product .*, 65000¢ a month/) })
+    // His limit ended: the server's €2,000 applies. The brain writes the €700 cap (above the €500 per-write cap, which
+    // stays for every other write); a person's €1,500 cap passes; a €2,500 one is refused with the reason.
+    expect(await inW(() => endOverride({ productId: A, market: 'IT', by: 'user:owner', reason: 'test', override: { scope: 'PRODUCT', kind: 'VALUE', key: 'portfolioCapLimitCents' } }))).toMatchObject({ ok: true })
+    await run(new Date(DAY3.getTime() + 3 * 3_600_000))
+    expect(await portfolio(PF_X)).toEqual({ budgetPolicy: 'MONTHLY_RECURRING', amount: '700.00' })
+    expect(await inW(() => updatePortfolioById({ portfolioId: PF_X, budget: { amount: 1_500, currencyCode: 'EUR', policy: 'monthlyRecurring' } }))).toMatchObject({ ok: true })
+    expect(await portfolio(PF_X)).toEqual({ budgetPolicy: 'MONTHLY_RECURRING', amount: '1500.00' })
+    expect(await inW(() => updatePortfolioById({ portfolioId: PF_X, budget: { amount: 2_500, currencyCode: 'EUR', policy: 'monthlyRecurring' } }))).toMatchObject({ ok: false, mode: 'gated', error: expect.stringMatching(/portfolio cap 250000¢ exceeds the server's portfolio cap limit \(NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS, default 200000¢ a month\), 200000¢ a month — nothing was changed/) })
+    expect(await portfolio(PF_X)).toEqual({ budgetPolicy: 'MONTHLY_RECURRING', amount: '1500.00' })
+    // Every other write still meets the €500 per-write cap: a €600 daily budget of A3, asked by a person, waits for his "send anyway".
+    const budget600 = await inW(() => updateCampaignWithSync({ campaignId: C('a3'), patch: { dailyBudget: 600 }, actor: 'user:owner' as never, manual: true, askGate: true }))
+    expect(budget600).toMatchObject({ ok: false })
+    expect(budget600.error).toMatch(/exceeds cap 50000¢ \(NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS\)/)
     // Product Z's campaigns (the bid brain's) never moved.
     expect(await budgetsOf()).toMatchObject({ z1: '12.00', z2: '12.00', b1: '10.00', shared: '10.00' })
   })

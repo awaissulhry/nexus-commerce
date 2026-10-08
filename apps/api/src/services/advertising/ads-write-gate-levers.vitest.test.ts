@@ -25,8 +25,9 @@ vi.mock('../../db.js', () => ({
     adProductAd: { findMany: vi.fn(async () => []) },
     adWriteRefusal: { create: vi.fn(async () => ({})) },
     adsStrategy: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) },
-    // ONE BRAIN AB-15 — the kill switches the gate reads for the brain's own actors: none open here.
-    adsBrainOverride: { findMany: vi.fn(async () => []) },
+    // ONE BRAIN AB-15 — the kill switches the gate reads for the brain's own actors: none open here. Owner decision 2A — a
+    // portfolio's cap meets its own limit: no product holds an own limit here (the server's applies).
+    adsBrainOverride: { findMany: vi.fn(async () => []), findFirst: vi.fn(async () => null) },
   },
 }))
 vi.mock('./ads-api-client.js', () => ({ adsMode: () => 'live' }))
