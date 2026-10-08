@@ -11,12 +11,16 @@
  *   caps     the brain's own engine caps (ads-engine-actors.ts `bid-brain`) and each market's own "most actions per
  *            run", asked once per campaign before its first write, so a campaign is never split; the rest go next run
  *   kind     a LOWERING by a stop, stock, the phase or a Min-bid hour is a floor (forced, so the 5¢ engine floor and the
- *            step clamp do not hold it up — the gate judges it as the lowering it is); every other move is forward
+ *            step clamp do not hold it up — the gate judges it as the lowering it is). A give-back (`restore`: the bid
+ *            going back where it was before a floor) is a restore: no cap holds it and it still runs under SUGGEST, as
+ *            rank-defend's and the stops' give-backs do (Owner decision S2), and it is forced too — the step clamp would
+ *            bring a keyword back from a 2¢ floor 25 % a write; decide() already holds it inside the limits and the gate
+ *            judges it as the raise it is. Every other move is forward
  *   once     decide() moves a keyword at most once per new settled data day (its lastStep anchor): a rerun on the same
  *            evidence asks nothing
  */
 import type { AdWriteEvidence } from '../ads-evidence.js'
-import { allowChange, nothingHeld, type EngineGuard } from '../ads-engine-guard.js'
+import { allowChange, nothingHeld, type ChangeKind, type EngineGuard } from '../ads-engine-guard.js'
 import { updateAdTargetWithSync } from '../ads-mutation.service.js'
 import { logger } from '../../../utils/logger.js'
 import type { Decision } from './decide.js'
@@ -54,6 +58,16 @@ export function isFloorWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCe
   return FLOOR_LAYERS.has(d.layer) && d.bidCents < d.currentCents
 }
 
+/** The engine guard's kind of a decision's write: a floor, a give-back after one (restore), or a forward move. */
+export function writeKind(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents'>): ChangeKind {
+  return isFloorWrite(d) ? 'floor' : d.layer === 'restore' ? 'restore' : 'forward'
+}
+
+/** A write the mutation layer must take exactly: a floor, or a give-back after one (no step clamp, no 5¢ lift). */
+export function isExactWrite(d: Pick<Decision, 'layer' | 'bidCents' | 'currentCents'>): boolean {
+  return writeKind(d) !== 'forward'
+}
+
 /** The evidence one write carries: the run, the deciding layer, the data day, the aim and the why. */
 export function writeEvidence(d: Decision, runId: string): AdWriteEvidence {
   return {
@@ -81,7 +95,7 @@ export async function writeOwnedDecisions(writes: readonly BrainWrite[], ctx: { 
     const held = nothingHeld()
     let changes = 0
     for (const { decision: d } of list) {
-      const kind = isFloorWrite(d) ? 'floor' : 'forward'
+      const kind = writeKind(d)
       if (!allowChange(true, permit, held, kind)) {
         const why = ctx.guard.posture === 'suggest' ? 'the account ads dial is SUGGEST' : permit.capped || permit.marketCapped ? 'the bid brain\'s caps for this run are used: it goes next run' : 'the account ads automation is stopped'
         if (ctx.guard.posture === 'suggest') { out.wouldApply++; out.byTarget.set(d.targetId, { sent: 'would-apply', why }) }
@@ -96,8 +110,9 @@ export async function writeOwnedDecisions(writes: readonly BrainWrite[], ctx: { 
           reason: `bid brain — ${d.why}`.slice(0, 480),
           evidence: writeEvidence(d, ctx.runId),
           askGate: true,
-          // A floor lands exactly (below the 5¢ engine floor, past the step clamp); the gate sees a forced lowering.
-          ...(kind === 'floor' ? { force: true } : {}),
+          // A floor lands exactly (below the 5¢ engine floor, past the step clamp); the gate sees a forced lowering. A
+          // give-back lands exactly too; the gate judges it as a raise (isSuppressionWrite: not every value goes down).
+          ...(isExactWrite(d) ? { force: true } : {}),
         })
         if (r.ok && r.outboundQueueId) { out.queued++; changes++; out.byTarget.set(d.targetId, { sent: 'queued', outboundQueueId: r.outboundQueueId, actionLogId: r.actionLogId }) }
         else if (r.ok) { out.unchanged++; out.byTarget.set(d.targetId, { sent: 'unchanged' }) }
