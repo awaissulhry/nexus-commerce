@@ -42,6 +42,9 @@ import {
   type FbaSourceAddress, type FbaTransportOption,
 } from '@nexus/shared/fba-send'
 import { FBA_LEASE_MS, FBA_POLL_SECONDS, FBA_POST_SPACING_MS, FBA_RECHECK_MS, type FbaRunOutcome } from './contract.js'
+import { lineCaseCounts } from './read.service.js'
+import { caseSizesOf } from '../stock/stock-cases.service.js'
+import type { CaseCount } from '@nexus/shared/stock-cases'
 
 /** HELD for writes off / sign-in: look again after this long (the resume job re-dispatches it). */
 export const FBA_HELD_RECHECK_MS = 15 * 60_000
@@ -63,7 +66,7 @@ const PLAN_SELECT = {
   steps: true, nextCheckAt: true, confirmedBy: true, cancelledAt: true, source: true, createdAt: true, updatedAt: true, lastError: true,
 } as const
 type PlanRow = Prisma.FbaInboundPlanV2GetPayload<{ select: typeof PLAN_SELECT }>
-interface Line { productId: string; msku: string; quantity: number; cases: number; unitsPerCase: number | null; looseUnits: number; prepOwner: string; labelOwner: string }
+interface Line { productId: string; msku: string; quantity: number; caseCounts: CaseCount[]; looseUnits: number; prepOwner: string; labelOwner: string }
 
 interface Ctx {
   id: string
@@ -397,20 +400,28 @@ const windowOf = (w: amazon.DeliveryWindowOption): FbaDeliveryWindowOption => ({
 const net = (o: { fees?: amazon.AmazonIncentive[]; discounts?: amazon.AmazonIncentive[] }) =>
   (o.fees ?? []).reduce((s, f) => s + (f.value?.amount ?? 0), 0) - (o.discounts ?? []).reduce((s, f) => s + (f.value?.amount ?? 0), 0)
 
-/** What the box rule needs per line: the case pack frozen on the line, the case and unit sizes as they are now. */
+/** What the box rule needs per line: the case sizes the line sent (frozen on the line, `caseCounts`) with each size's
+ *  case size and weight as they are now, and the unit size. A size removed since the plan → NO_CASE_SIZE (planBoxes). */
 async function boxSkusOf(ctx: Ctx): Promise<FbaBoxSku[]> {
   const ids = ctx.lines.map(l => l.productId)
   const products = await prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true, sku: true, weightValue: true, weightUnit: true, dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true } })
-  const packages = await prisma.productPackage.findMany({ where: { productId: { in: ids } }, select: { productId: true, caseLengthCm: true, caseWidthCm: true, caseHeightCm: true, caseWeightKg: true } })
+  const sizesOf = await caseSizesOf(prisma, ids)
   const num = (v: unknown) => (v === null || v === undefined ? null : Number(v))
   return ctx.lines.map(line => {
     const p = products.find(x => x.id === line.productId)
-    const pkg = packages.find(x => x.productId === line.productId)
-    const caseSides = pkg ? [num(pkg.caseLengthCm), num(pkg.caseWidthCm), num(pkg.caseHeightCm), num(pkg.caseWeightKg)] : []
+    const sizes = sizesOf.get(line.productId) ?? []
     const unit = p ? [lengthCm(num(p.dimLength), p.dimUnit), lengthCm(num(p.dimWidth), p.dimUnit), lengthCm(num(p.dimHeight), p.dimUnit)] : []
     return {
-      productId: line.productId, sku: p?.sku ?? line.msku, msku: line.msku, unitsPerCase: line.unitsPerCase,
-      case: caseSides.length === 4 && caseSides.every(v => typeof v === 'number' && v > 0) ? { lengthCm: caseSides[0]!, widthCm: caseSides[1]!, heightCm: caseSides[2]!, weightKg: caseSides[3]! } : null,
+      productId: line.productId, sku: p?.sku ?? line.msku, msku: line.msku,
+      caseSizes: line.caseCounts.flatMap(sent => {
+        const size = sizes.find(s => s.unitsPerCase === sent.unitsPerCase)
+        if (!size) return []
+        const sides = [size.caseLengthCm, size.caseWidthCm, size.caseHeightCm, size.caseWeightKg]
+        return [{
+          unitsPerCase: size.unitsPerCase,
+          case: sides.every(v => typeof v === 'number' && v > 0) ? { lengthCm: sides[0]!, widthCm: sides[1]!, heightCm: sides[2]!, weightKg: sides[3]! } : null,
+        }]
+      }),
       unitWeightKg: p ? unitWeightKg(num(p.weightValue), p.weightUnit) : null,
       unit: unit.length === 3 && unit.every(v => typeof v === 'number') ? { lengthCm: unit[0]!, widthCm: unit[1]!, heightCm: unit[2]! } : null,
     }
@@ -577,7 +588,7 @@ async function boxesStep(ctx: Ctx): Promise<StepResult> {
   }
   const skus = await boxSkusOf(ctx)
   const result = planBoxes(
-    ctx.lines.map(l => ({ productId: l.productId, cases: l.cases, looseUnits: l.looseUnits })),
+    ctx.lines.map(l => ({ productId: l.productId, cases: l.caseCounts, looseUnits: l.looseUnits })),
     skus,
     mixedBoxOf(ctx.row),
     packing.groups.map(g => ({ packingGroupId: g.packingGroupId, mskus: g.items.map(i => i.msku) })),
@@ -1043,8 +1054,8 @@ export async function runFbaPlanWith(planRowId: string, deps: FbaRunnerDeps = {}
   const lines = (await prisma.fbaInboundPlanLine.findMany({
     where: { planRowId },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { productId: true, msku: true, quantity: true, cases: true, unitsPerCase: true, looseUnits: true, prepOwner: true, labelOwner: true },
-  })).filter(l => l.quantity > 0)
+    select: { productId: true, msku: true, quantity: true, caseCounts: true, looseUnits: true, prepOwner: true, labelOwner: true },
+  })).filter(l => l.quantity > 0).map(l => ({ ...l, caseCounts: lineCaseCounts(l.caseCounts) }))
   const ctx: Ctx = {
     id: planRowId, row, lines, productIds: [...new Set(lines.map(l => l.productId))], now,
     sleep: deps.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms))),

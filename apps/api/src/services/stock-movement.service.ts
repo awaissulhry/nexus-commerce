@@ -17,6 +17,7 @@ import { outboundEnqueuePriority } from './sync-priority.js'
 import { productReadCacheService } from './product-read-cache.service.js'
 import { lockProductStock } from './stock-lock.js'
 import { keepCasesInTx } from './stock/stock-cases.service.js'
+import type { CaseChange } from '@nexus/shared/stock-cases'
 import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { pooledNow, PooledProductError } from './stock-pool/pool-guard.js'
 import { StockLocationUnresolved } from './default-stock-location.js'
@@ -244,12 +245,12 @@ export type StockMovementInput = {
    *  receives separately via createLot). */
   lotId?: string
   /**
-   * Step 3 cases — whole sealed cases that move with these units (Step 4's Send to FBA: −2 = two cases leave
-   * sealed). Without it a decrease takes loose units first, then opens a case (the clamp in keepCasesInTx).
-   * Refused (CaseCountError, the movement rolls back) when more cases leave than are sealed, the SKU has no case
-   * size, or the location is not a warehouse.
+   * Step 3 cases — whole sealed cases that move with these units, per case size (Step 4's Send to FBA:
+   * [{ unitsPerCase: 12, change: −2 }] = two cases of 12 leave sealed). Without it a decrease takes loose units first,
+   * then opens the smallest case (the clamp in keepCasesInTx). Refused (CaseCountError, the movement rolls back) when
+   * more cases of a size leave than are sealed, the SKU has no such case size, or the location is not a warehouse.
    */
-  casesChange?: number
+  casesChange?: CaseChange[]
   /**
    * P0/B4 — caller's outer transaction. When set, the stock write,
    * StockLevel ledger update, totalStock recompute, ChannelListing

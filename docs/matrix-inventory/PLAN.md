@@ -116,3 +116,8 @@ Research notes (private, with file paths and line numbers): `~/nexus-archive/202
   the Matrix (recommended). B: per product only.
 - **D2 — cases.** CHOSEN: B. A: count units only; cases are worked out (48 units = 4 cases) (recommended, faster).
   B: count sealed cases and loose units separately per location (exact, more work, more counting).
+
+## Several case sizes per SKU (Owner 2026-10-08) — DONE locally
+The Owner asked for several case sizes per SKU (12 / case, 6 / case, …), wired end to end and real time. Lead's
+choices: a sale opens the smallest case first; at most 5 sizes; the units per case name a size. Contract and screens:
+`docs/matrix-inventory/CASE-SIZES.md`.

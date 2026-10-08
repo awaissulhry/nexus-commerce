@@ -20,7 +20,8 @@ import { resolveAtpAcrossChannels } from '../atp-channel.service.js'
 import { listLayers } from '../cost-layers.service.js'
 import { loadPoolSources, summarizePoolSources, type PoolSource } from '../stock-pool/pool-sources.js'
 import { lentUsage } from '../stock-pool/lent-usage.js'
-import { sealedByLevel } from './stock-cases.service.js'
+import { caseSizesOf, sealedByLevel } from './stock-cases.service.js'
+import type { CaseCount } from '@nexus/shared/stock-cases'
 
 /** A query number: the fallback when absent or not a number (as the stock routes read them). */
 function safeNum(v: unknown, fallback?: number): number | undefined {
@@ -189,26 +190,24 @@ export async function listStockLocations() {
 }
 
 /**
- * Step 3 (cases) — for the stock editor: each product's units per case and the sealed cases each level shows. Three
- * small queries whatever the family size: the products' case packs, then `sealedByLevel` (the one reader rule).
+ * Step 3 (cases; several sizes, Owner 2026-10-08) — for the stock editor: each product's case sizes (units per case,
+ * biggest first) and the sealed cases of each size each level shows. A few small queries whatever the family size: the
+ * products' case sizes, then `sealedByLevel` (the one reader rule).
  */
 async function readCaseSizes(
   productId: string,
   children: ReadonlyArray<{ id: string; stockLevels: ReadonlyArray<{ id: string; quantity: number }> }>,
   ownLevels: ReadonlyArray<{ id: string; quantity: number }>,
-): Promise<{ unitsPerCase: Map<string, number>; sealed: Map<string, number> }> {
+): Promise<{ caseSizes: Map<string, number[]>; sealed: Map<string, CaseCount[]> }> {
   const levels = [
     ...ownLevels.map((l) => ({ id: l.id, productId, quantity: l.quantity })),
     ...children.flatMap((c) => c.stockLevels.map((l) => ({ id: l.id, productId: c.id, quantity: l.quantity }))),
   ]
-  const [packs, sealed] = await Promise.all([
-    prisma.productPackage.findMany({
-      where: { productId: { in: [productId, ...children.map((c) => c.id)] }, unitsPerCase: { not: null } },
-      select: { productId: true, unitsPerCase: true },
-    }),
+  const [sizes, sealed] = await Promise.all([
+    caseSizesOf(prisma, [productId, ...children.map((c) => c.id)]),
     sealedByLevel(prisma, levels),
   ])
-  return { unitsPerCase: new Map(packs.map((p) => [p.productId, p.unitsPerCase as number])), sealed }
+  return { caseSizes: new Map([...sizes].map(([id, list]) => [id, list.map((s) => s.unitsPerCase)])), sealed }
 }
 
 export async function readProductStock(productId: string, opts: { family: boolean }) {
@@ -316,13 +315,13 @@ export async function readProductStock(productId: string, opts: { family: boolea
       totalStock: number; totalReserved: number; totalAvailable: number
       /** Shared stock step 5 — the pool this variation sells from, or null (own stock). */
       poolSource: PoolSource | null
-      /** Step 3 — units in one sealed case (`ProductPackage`); null = no case size. */
-      unitsPerCase: number | null
+      /** Step 3 — the case sizes (units per case, biggest first; [] = no case size). */
+      caseSizes: number[]
       stockLevels: Array<{
         locationId: string; locationCode: string; locationType: string
         quantity: number; reserved: number; available: number
-        /** Step 3 — sealed cases here, clamped by the units (0 without a case size or a count). */
-        cases: number
+        /** Step 3 — sealed cases of each size here, clamped by the units, biggest first ([] without a case size). */
+        cases: CaseCount[]
         lastUpdatedAt: string
         syncStatus: string
       }>
@@ -353,7 +352,7 @@ export async function readProductStock(productId: string, opts: { family: boolea
     }),
   ]) : null
 
-  // Step 3 (cases) — the case size of this product and its variations, and the sealed cases each level shows
+  // Step 3 (cases) — the case sizes of this product and its variations, and the sealed cases each level shows
   // (stored, clamped by the units: a screen never shows more sealed cases than units).
   const caseSizes = await readCaseSizes(product.id, familyRead?.[0] ?? [], stockLevels)
 
@@ -376,7 +375,7 @@ export async function readProductStock(productId: string, opts: { family: boolea
         totalReserved:  c.stockLevels.reduce((s, sl) => s + sl.reserved, 0),
         totalAvailable: c.stockLevels.reduce((s, sl) => s + sl.available, 0),
         poolSource: childPools.get(c.id) ?? null,
-        unitsPerCase: caseSizes.unitsPerCase.get(c.id) ?? null,
+        caseSizes: caseSizes.caseSizes.get(c.id) ?? [],
         stockLevels: c.stockLevels.map((sl) => ({
           locationId:   sl.location.id,
           locationCode: sl.location.code,
@@ -384,7 +383,7 @@ export async function readProductStock(productId: string, opts: { family: boolea
           quantity:     sl.quantity,
           reserved:     sl.reserved,
           available:    sl.available,
-          cases:        caseSizes.sealed.get(sl.id) ?? 0,
+          cases:        caseSizes.sealed.get(sl.id) ?? [],
           lastUpdatedAt: sl.lastUpdatedAt.toISOString(),
           syncStatus:   sl.syncStatus,
         })),
@@ -417,8 +416,8 @@ export async function readProductStock(productId: string, opts: { family: boolea
       basePrice: product.basePrice == null ? null : Number(product.basePrice),
       costPrice: product.costPrice == null ? null : Number(product.costPrice),
       thumbnailUrl: product.images?.[0]?.url ?? null,
-      /** Step 3 — units in one sealed case (`ProductPackage`); null = no case size. */
-      unitsPerCase: caseSizes.unitsPerCase.get(product.id) ?? null,
+      /** Step 3 — the case sizes (units per case, biggest first; [] = no case size). */
+      caseSizes: caseSizes.caseSizes.get(product.id) ?? [],
     },
     stockLevels: stockLevels.map((sl) => ({
       id: sl.id,
@@ -426,8 +425,8 @@ export async function readProductStock(productId: string, opts: { family: boolea
       quantity: sl.quantity,
       reserved: sl.reserved,
       available: sl.available,
-      /** Step 3 — sealed cases here, clamped by the units (0 without a case size or a count). */
-      cases: caseSizes.sealed.get(sl.id) ?? 0,
+      /** Step 3 — sealed cases of each size here, clamped by the units, biggest first ([] without a case size). */
+      cases: caseSizes.sealed.get(sl.id) ?? [],
       reorderThreshold: sl.reorderThreshold,
       lastUpdatedAt: sl.lastUpdatedAt,
       lastSyncedAt: sl.lastSyncedAt,

@@ -6,7 +6,7 @@
  * and the product locks, per product of the shipment —
  *   release the plan line's hold → re-hold what the line still has to send (other shipments) →
  *   FBA_TRANSFER_OUT of the shipped units at the From WAREHOUSE, with `casesChange` = −(the sealed case boxes of the
- *   SKU in this shipment), so sealed cases leave sealed and loose units leave loose →
+ *   SKU in this shipment, per case size), so sealed cases leave sealed and loose units leave loose →
  *   `shippedQuantity += units`.
  * `available` does not move (the units were held); `quantity` drops; following FBM listings are re-advertised by the
  * movement's own cascade. The FBA quantity is never written: the movement is at the From warehouse only, and
@@ -23,7 +23,8 @@ import { lockProductStock } from '../stock-lock.js'
 import { releaseReservationInTx, reserveStockInTx } from '../stock-level.service.js'
 import { afterStockMovementCommit, applyStockMovementInTx, InsufficientStockError, type StockMovementTxResult } from '../stock-movement.service.js'
 import { sealedByLevel } from '../stock/stock-cases.service.js'
-import { planViewIn, readPlan } from './read.service.js'
+import type { CaseChange, CaseCount } from '@nexus/shared/stock-cases'
+import { lineCaseCounts, planViewIn, readPlan } from './read.service.js'
 import { dispatchSoon, FBA_SEND_HOLD_TTL_MS, lockPlan, publishPlanChanged } from './send.service.js'
 import { FbaSendError, type FbaActor } from './contract.js'
 
@@ -49,14 +50,13 @@ function trackingOf(req: FbaShippedRequest, boxes: FbaShipmentBox[]): Array<{ bo
   return ids.map((id) => rows.find((row) => row.boxId === id)!)
 }
 
-/** Is this box one sealed case of the line? Amazon's own boxes say `kind`; an unknown kind with exactly one case's
- *  worth of one SKU counts as a case. */
-function isCaseBox(box: FbaShipmentBox, line: { msku: string; unitsPerCase: number | null; cases: number }): boolean {
-  if (line.cases <= 0 || !line.unitsPerCase) return false
+/** Which of the line's case sizes this box is one sealed case of, or null. A case box holds one SKU, exactly one case's
+ *  worth of one size the line sent; Amazon's own boxes say `kind` (a mixed box is never a case), an unknown kind counts. */
+function caseSizeOfBox(box: FbaShipmentBox, line: { msku: string; caseCounts: readonly CaseCount[] }): number | null {
+  if (box.kind === 'mixed') return null
   const only = box.items.length === 1 ? box.items[0] : null
-  if (!only || only.msku !== line.msku) return false
-  if (box.kind === 'case') return true
-  return box.kind === null && only.quantity === line.unitsPerCase
+  if (!only || only.msku !== line.msku) return null
+  return line.caseCounts.find((c) => c.unitsPerCase === only.quantity)?.unitsPerCase ?? null
 }
 
 /** "Mark shipped" for one Amazon shipment (`shipmentId` = FBAShipment.id). See the file header. */
@@ -107,7 +107,7 @@ export async function markShipped(shipmentId: string, req: FbaShippedRequest, wh
       await lockProductStock(tx, productIds)
       const lines = await tx.fbaInboundPlanLine.findMany({
         where: { planRowId, productId: { in: productIds } },
-        select: { id: true, productId: true, msku: true, quantity: true, cases: true, unitsPerCase: true, shippedQuantity: true, reservationId: true },
+        select: { id: true, productId: true, msku: true, quantity: true, caseCounts: true, shippedQuantity: true, reservationId: true },
       })
       const committed: Array<{ productId: string; result: StockMovementTxResult }> = []
       for (const productId of productIds) {
@@ -132,11 +132,17 @@ export async function markShipped(shipmentId: string, req: FbaShippedRequest, wh
             logger.warn('[fba-ship] the rest of a line could not be held again', { planRowId, productId, remaining, error: error.message })
           }
         }
-        // Whole sealed cases leave sealed — never more than are sealed now (a count may have changed since the plan).
+        // Whole sealed cases leave sealed, per case size — never more than are sealed now (a count may have changed
+        // since the plan).
         const level = await tx.stockLevel.findFirst({ where: { productId, locationId: from, variationId: null }, select: { id: true, quantity: true } })
-        const sealedNow = level ? (await sealedByLevel(tx, [{ id: level.id, productId, quantity: level.quantity }])).get(level.id) ?? 0 : 0
-        const caseBoxes = boxes.filter((box) => isCaseBox(box, line)).length
-        const casesOut = Math.min(caseBoxes, sealedNow)
+        const sealedNow = level ? (await sealedByLevel(tx, [{ id: level.id, productId, quantity: level.quantity }])).get(level.id) ?? [] : []
+        const sent = { msku: line.msku, caseCounts: lineCaseCounts(line.caseCounts) }
+        const casesChange: CaseChange[] = sent.caseCounts.flatMap((size) => {
+          const boxesOfSize = boxes.filter((box) => caseSizeOfBox(box, sent) === size.unitsPerCase).length
+          const out = Math.min(boxesOfSize, sealedNow.find((c) => c.unitsPerCase === size.unitsPerCase)?.cases ?? 0)
+          return out > 0 ? [{ unitsPerCase: size.unitsPerCase, change: -out }] : []
+        })
+        const casesOut = casesChange.map((c) => ({ unitsPerCase: c.unitsPerCase, cases: -c.change }))
         const result = await applyStockMovementInTx(tx, {
           productId,
           locationId: from,
@@ -144,9 +150,9 @@ export async function markShipped(shipmentId: string, req: FbaShippedRequest, wh
           reason: 'FBA_TRANSFER_OUT',
           referenceType: 'FbaInboundShipment',
           referenceId: shipment.id,
-          notes: `Sent to Amazon FBA: shipment ${shipment.shipmentId}${casesOut > 0 ? ` · ${casesOut} sealed ${casesOut === 1 ? 'case' : 'cases'}` : ''} · plan ${plan.name ?? plan.id}`,
+          notes: `Sent to Amazon FBA: shipment ${shipment.shipmentId}${casesOut.length > 0 ? ` · sealed cases ${casesOut.map((c) => `${c.cases}×${c.unitsPerCase}`).join(' + ')}` : ''} · plan ${plan.name ?? plan.id}`,
           actor: who.actor,
-          ...(casesOut > 0 ? { casesChange: -casesOut } : {}),
+          ...(casesChange.length > 0 ? { casesChange } : {}),
         })
         committed.push({ productId, result })
         await tx.fbaInboundPlanLine.update({ where: { id: line.id }, data: { shippedQuantity: line.shippedQuantity + qty, reservationId } })

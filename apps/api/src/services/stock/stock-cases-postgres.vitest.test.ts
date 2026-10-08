@@ -1,5 +1,5 @@
 /**
- * Step 3 cases — the sealed-case invariant (sealed cases × units per case ≤ units) under concurrency, on a REAL
+ * Step 3 cases — the sealed-case invariant (Σ sealed cases × units per case ≤ units) under concurrency, on a REAL
  * multi-connection PostgreSQL, through the real services (applyStockMovement, setCasesInTx, setCasePacks).
  *
  * Why a real server: no database CHECK holds the invariant (test and fresh databases carry none); the case keeper
@@ -54,31 +54,36 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 3 cases — the sealed-case inva
     await q(`INSERT INTO "Product" (id,"workspaceId",sku,name,"basePrice","totalStock","updatedAt") VALUES ($1,$2,$3,$3,10,$4,now())`, [productId, WS, sku, quantity])
     const levelId = randomUUID()
     await q(`INSERT INTO "StockLevel" (id,"workspaceId","locationId","productId",quantity,reserved,available,"lastUpdatedAt") VALUES ($1,$2,$3,$4,$5,0,$5,now())`, [levelId, WS, locationId, productId, quantity])
-    await q(`INSERT INTO "ProductPackage" (id,"workspaceId","productId","unitsPerCase","updatedAt") VALUES ($1,$2,$3,$4,now())`, [randomUUID(), WS, productId, UPC])
-    if (sealed !== undefined) await q(`INSERT INTO "StockCaseCount" (id,"workspaceId","stockLevelId",cases,"updatedAt") VALUES ($1,$2,$3,$4,now())`, [randomUUID(), WS, levelId, sealed])
+    const sizeId = randomUUID()
+    await q(`INSERT INTO "ProductCaseSize" (id,"workspaceId","productId","unitsPerCase","updatedAt") VALUES ($1,$2,$3,$4,now())`, [sizeId, WS, productId, UPC])
+    if (sealed !== undefined) await q(`INSERT INTO "StockCaseCount" (id,"workspaceId","stockLevelId","caseSizeId",cases,"updatedAt") VALUES ($1,$2,$3,$4,$5,now())`, [randomUUID(), WS, levelId, sizeId, sealed])
     return { productId, sku, levelId }
   }
-  /** The level's units, its STORED sealed count (null = no row) and the case size now. */
+  /** The level's units, its STORED sealed cases (null = no row) and the case size now (one size in these races). */
   const state = async (p: { productId: string; levelId: string }) => {
-    const [row] = await q<{ quantity: number; cases: number | null; upc: number | null }>(
-      `SELECT l.quantity, c.cases, (SELECT "unitsPerCase" FROM "ProductPackage" WHERE "productId" = l."productId") AS upc
-       FROM "StockLevel" l LEFT JOIN "StockCaseCount" c ON c."stockLevelId" = l.id WHERE l.id = $1`, [p.levelId])
+    const [row] = await q<{ quantity: number; cases: number | null; upc: number | null; sealedUnits: number }>(
+      `SELECT l.quantity,
+              (SELECT SUM(c.cases)::int FROM "StockCaseCount" c WHERE c."stockLevelId" = l.id) AS cases,
+              (SELECT MAX("unitsPerCase") FROM "ProductCaseSize" WHERE "productId" = l."productId") AS upc,
+              (SELECT COALESCE(SUM(c.cases * s."unitsPerCase"), 0)::int FROM "StockCaseCount" c JOIN "ProductCaseSize" s ON s.id = c."caseSizeId" WHERE c."stockLevelId" = l.id) AS "sealedUnits"
+       FROM "StockLevel" l WHERE l.id = $1`, [p.levelId])
     return row
   }
-  /** The ledger agrees with itself and the stored count never claims more units than the level holds. */
+  /** The ledger agrees with itself and the stored counts never claim more units than the level holds. */
   const holds = async (p: { productId: string; levelId: string }, start: number) => {
-    const s = await state(p)
+    const { sealedUnits, ...s } = await state(p)
     const [{ moved }] = await q<{ moved: string }>(`SELECT COALESCE(SUM(change),0)::text AS moved FROM "StockMovement" WHERE "productId"=$1`, [p.productId])
     expect(s.quantity).toBe(start + Number(moved))
-    expect((s.cases ?? 0) * (s.upc ?? 0)).toBeLessThanOrEqual(s.quantity)
+    expect(sealedUnits).toBeLessThanOrEqual(s.quantity)
     return s
   }
   const sell = (productId: string, units: number) =>
     inBusiness(() => movement.applyStockMovement({ productId, locationId, change: -units, reason: 'ORDER_PLACED' }))
   const count = (productId: string, value: number) =>
-    inBusiness(() => database.client.$transaction((tx) => cases.setCasesInTx(tx, { productId, locationId, cases: value, reason: 'INVENTORY_COUNT', actor: 'race' })))
+    inBusiness(() => database.client.$transaction((tx) => cases.setCasesInTx(tx, { productId, locationId, cases: [{ unitsPerCase: UPC, cases: value }], reason: 'INVENTORY_COUNT', actor: 'race' })))
+  /** Replace the SKU's case size with another (the old size's sealed cases open). */
   const resize = (productId: string, unitsPerCase: number) =>
-    inBusiness(() => cases.setCasePacks({ productIds: [productId], values: { unitsPerCase, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null, fbaPrepOwner: null, fbaLabelOwner: null }, openSealedCases: true, actor: 'race' }))
+    inBusiness(() => cases.setCasePacks({ productIds: [productId], sizes: [{ unitsPerCase, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null }], openSealedCases: true, actor: 'race' }))
   /** Run `first` inside a transaction that keeps the product lock for `holdMs` after it, and start `second` meanwhile. */
   const forced = async <T>(first: (tx: any) => Promise<unknown>, second: () => Promise<T>, holdMs = 400) => {
     let pending: Promise<{ ok: true; value: T } | { ok: false; error: any }> | null = null
@@ -132,7 +137,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 3 cases — the sealed-case inva
     expect(await holds(a, 51)).toEqual({ quantity: 46, cases: null, upc: UPC })
     // FORCED, count first: the sale waits, then opens one of the 4 counted cases (46 = 3 + 10).
     const b = await seed(51)
-    const afterCount = await forced((tx) => cases.setCasesInTx(tx, { productId: b.productId, locationId, cases: 4, reason: 'INVENTORY_COUNT', actor: 'race' }), () => sell(b.productId, 5))
+    const afterCount = await forced((tx) => cases.setCasesInTx(tx, { productId: b.productId, locationId, cases: [{ unitsPerCase: UPC, cases: 4 }], reason: 'INVENTORY_COUNT', actor: 'race' }), () => sell(b.productId, 5))
     expect(afterCount.ok).toBe(true)
     expect(await holds(b, 51)).toEqual({ quantity: 46, cases: 3, upc: UPC })
     // Plain pairs: either outcome, never a broken invariant.
@@ -148,11 +153,11 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 3 cases — the sealed-case inva
     expect(outcomes).toHaveLength(8)
   }, 60_000)
 
-  it('3. a case-size change racing a sale: the change opens exactly the cases the sale left sealed, and the sale never writes a count for the old size', async () => {
+  it('3. a case size replaced while a sale runs: the change opens exactly the cases the sale left sealed, and the sale never writes a count for the old size', async () => {
     // FORCED, sale first: the size change waits, then sees 3 sealed (41 = 3 + 5) and opens those 3.
     const a = await seed(51, 4)
     const afterSale = await forced((tx) => movement.applyStockMovementInTx(tx, { productId: a.productId, locationId, change: -10, reason: 'ORDER_PLACED' }), () => resize(a.productId, 6))
-    expect(afterSale).toEqual({ ok: true, value: [{ productId: a.productId, ok: true, opened: [{ locationCode: 'IT-MAIN', cases: 3 }] }] })
+    expect(afterSale).toEqual({ ok: true, value: [{ productId: a.productId, ok: true, opened: [{ locationCode: 'IT-MAIN', unitsPerCase: UPC, cases: 3 }] }] })
     expect(await holds(a, 51)).toEqual({ quantity: 41, cases: null, upc: 6 })
     // FORCED, size first: a holder keeps the product lock while the size change queues on it, then the sale queues
     // behind the change. The change opens all 4; the sale then finds no case row and writes none.
@@ -167,7 +172,7 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 3 cases — the sealed-case inva
       sold = settled(sell(b.productId, 10))
       await sleep(250)
     }, { timeout: 20_000 }))
-    expect(await resized!).toEqual({ ok: true, value: [{ productId: b.productId, ok: true, opened: [{ locationCode: 'IT-MAIN', cases: 4 }] }] })
+    expect(await resized!).toEqual({ ok: true, value: [{ productId: b.productId, ok: true, opened: [{ locationCode: 'IT-MAIN', unitsPerCase: UPC, cases: 4 }] }] })
     expect((await sold!).ok).toBe(true)
     expect(await holds(b, 51)).toEqual({ quantity: 41, cases: null, upc: 6 })
     // Plain pairs: both always succeed; no case row survives; the units are the sale's.

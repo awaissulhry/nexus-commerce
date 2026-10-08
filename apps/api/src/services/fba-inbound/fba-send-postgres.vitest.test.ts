@@ -7,7 +7,7 @@
  *      refused); a cancel racing a sale of the free units: both land, nothing stays held.
  *   3. "Mark shipped" twice at once (a double-click, two tabs): one FBA_TRANSFER_OUT, the units leave once.
  *   4. "Mark shipped" racing a sale on the same SKU: the units, the holds and the sealed cases end right in either order
- *      (sealed cases × units per case never exceed the units).
+ *      (Σ sealed cases × units per case never exceed the units).
  *
  * Why a real server: on PGlite (one connection) every transaction queues, so none of these can race there.
  * Part B's job (dispatchFbaPlan) is a spy: nothing reaches Amazon.
@@ -90,14 +90,16 @@ describe.skipIf(!concurrentDatabaseUrl())(`Step 4 Send to FBA — races on a rea
     await q(`INSERT INTO "Product" (id,"workspaceId",sku,name,"basePrice","totalStock","weightValue","weightUnit","updatedAt") VALUES ($1,$2,$3,$3,10,$4,0.5,'kg',now())`, [productId, WS, sku, quantity])
     const levelId = randomUUID()
     await q(`INSERT INTO "StockLevel" (id,"workspaceId","locationId","productId",quantity,reserved,available,"lastUpdatedAt") VALUES ($1,$2,$3,$4,$5,0,$5,now())`, [levelId, WS, locationId, productId, quantity])
-    await q(`INSERT INTO "ProductPackage" (id,"workspaceId","productId","unitsPerCase","caseLengthCm","caseWidthCm","caseHeightCm","caseWeightKg","fbaPrepOwner","fbaLabelOwner","updatedAt") VALUES ($1,$2,$3,$4,40,30,30,7,'SELLER','SELLER',now())`, [randomUUID(), WS, productId, UPC])
-    if (sealed > 0) await q(`INSERT INTO "StockCaseCount" (id,"workspaceId","stockLevelId",cases,"updatedAt") VALUES ($1,$2,$3,$4,now())`, [randomUUID(), WS, levelId, sealed])
+    await q(`INSERT INTO "ProductPackage" (id,"workspaceId","productId","fbaPrepOwner","fbaLabelOwner","updatedAt") VALUES ($1,$2,$3,'SELLER','SELLER',now())`, [randomUUID(), WS, productId])
+    const sizeId = randomUUID()
+    await q(`INSERT INTO "ProductCaseSize" (id,"workspaceId","productId","unitsPerCase","caseLengthCm","caseWidthCm","caseHeightCm","caseWeightKg","updatedAt") VALUES ($1,$2,$3,$4,40,30,30,7,now())`, [sizeId, WS, productId, UPC])
+    if (sealed > 0) await q(`INSERT INTO "StockCaseCount" (id,"workspaceId","stockLevelId","caseSizeId",cases,"updatedAt") VALUES ($1,$2,$3,$4,$5,now())`, [randomUUID(), WS, levelId, sizeId, sealed])
     await inBusiness(() => database.client.channelListing.create({ data: {
       productId, channel: 'AMAZON', marketplace: 'IT', region: 'IT', channelMarket: 'AMAZON_IT', channelConnectionId: s.account, aliasKey: '',
       listingStatus: 'ACTIVE', isPublished: true, fulfillmentMethod: 'FBA' } as never }))
     return { productId, sku, levelId }
   }
-  const createBody = (productId: string, cases = 2, looseUnits = 3) => ({ from: 'IT-MAIN', market: 'IT', readyToShipOn: nextWorkingDay(send.romeToday()), lines: [{ productId, cases, looseUnits }] })
+  const createBody = (productId: string, cases = 2, looseUnits = 3) => ({ from: 'IT-MAIN', market: 'IT', readyToShipOn: nextWorkingDay(send.romeToday()), lines: [{ productId, cases: [{ unitsPerCase: UPC, cases }], looseUnits }] })
   /** The level's units and holds, its STORED sealed count, and the ledger agreeing with itself. */
   const state = async (p: { productId: string; levelId: string }, start = 51) => {
     const [row] = await q<{ quantity: number; reserved: number; available: number; cases: number | null }>(

@@ -1,10 +1,11 @@
 /**
- * Step 3 (cases, Owner D2 = B) — the Matrix read carries each row's case pack (`MatrixRowRead.pack`) for the Case column.
+ * Step 3 (cases, Owner D2 = B; several case sizes per SKU, Owner 2026-10-08) — the Matrix read carries each row's case
+ * pack (`MatrixRowRead.pack`) for the Case column.
  *
- * The real Matrix read over a real PostgreSQL in-process (PGlite): a variation with a case pack reads its units per case,
- * its case size and weight as NUMBERS (Prisma returns Decimal; the wire carries numbers) and its FBA prep/label owners; a
- * variation without one reads `null`; the parent carries its own (none here, so null); an owner string the column does
- * not know reads as "not set". Sealed counts are not in the Matrix read.
+ * The real Matrix read over a real PostgreSQL in-process (PGlite): a variation with case sizes reads them biggest first,
+ * each case size and weight as NUMBERS (Prisma returns Decimal; the wire carries numbers), and its FBA prep/label owners;
+ * a variation with neither reads `null`; the parent carries its own (none here, so null); an owner string the column
+ * does not know reads as "not set". Sealed counts are not in the Matrix read.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -31,10 +32,11 @@ beforeAll(() => scoped(async () => {
   for (const [id, sku] of [['case-red', 'TEST-SKU-CASE-RED'], ['case-blue', 'TEST-SKU-CASE-BLUE'], ['case-odd', 'TEST-SKU-CASE-ODD']] as const) {
     await prisma.product.create({ data: { id, sku, name: sku, basePrice: 10, parentId: 'case-parent' } })
   }
-  await prisma.productPackage.create({ data: {
+  await prisma.productCaseSize.create({ data: { productId: 'case-red', unitsPerCase: 6 } })
+  await prisma.productCaseSize.create({ data: {
     productId: 'case-red', unitsPerCase: 12, caseLengthCm: '60.5', caseWidthCm: '40.0', caseHeightCm: '35.2', caseWeightKg: '14.55',
-    fbaPrepOwner: 'SELLER', fbaLabelOwner: 'AMAZON',
   } })
+  await prisma.productPackage.create({ data: { productId: 'case-red', fbaPrepOwner: 'SELLER', fbaLabelOwner: 'AMAZON' } })
   // A row with only owners (no case size yet), one of them a word the column does not know.
   await prisma.productPackage.create({ data: { productId: 'case-odd', fbaPrepOwner: 'NONE', fbaLabelOwner: 'SELLER' } })
 }), 120_000)
@@ -46,19 +48,34 @@ describe('the Matrix rows carry the case pack', () => {
     const pack = (id: string) => read.rows.find((r) => r.id === id)!.pack
     expect(read.rows.map((r) => r.id)).toEqual(expect.arrayContaining(['case-parent', 'case-red', 'case-blue', 'case-odd']))
     expect(pack('case-red')).toEqual({
-      unitsPerCase: 12, caseLengthCm: 60.5, caseWidthCm: 40, caseHeightCm: 35.2, caseWeightKg: 14.55, fbaPrepOwner: 'SELLER', fbaLabelOwner: 'AMAZON',
+      sizes: [
+        { unitsPerCase: 12, caseLengthCm: 60.5, caseWidthCm: 40, caseHeightCm: 35.2, caseWeightKg: 14.55 },
+        { unitsPerCase: 6, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null },
+      ],
+      fbaPrepOwner: 'SELLER', fbaLabelOwner: 'AMAZON',
     })
-    for (const key of ['caseLengthCm', 'caseWidthCm', 'caseHeightCm', 'caseWeightKg'] as const) expect(typeof pack('case-red')![key]).toBe('number')
+    for (const key of ['caseLengthCm', 'caseWidthCm', 'caseHeightCm', 'caseWeightKg'] as const) expect(typeof pack('case-red')!.sizes[0][key]).toBe('number')
     expect(pack('case-blue')).toBeNull()
     expect(pack('case-parent')).toBeNull()
-    expect(pack('case-odd')).toEqual({ unitsPerCase: null, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null, fbaPrepOwner: null, fbaLabelOwner: 'SELLER' })
+    expect(pack('case-odd')).toEqual({ sizes: [], fbaPrepOwner: null, fbaLabelOwner: 'SELLER' })
     // The wire is plain JSON: no Decimal object survives a round trip as anything but its number.
     expect(JSON.parse(JSON.stringify(read.rows.find((r) => r.id === 'case-red')!.pack))).toEqual(pack('case-red'))
   }))
 
-  it('casePackOf: Decimal-like values become numbers, nulls stay null', () => {
+  it('casePackOf: Decimal-like values become numbers, nulls stay null, sizes biggest first; no owners and no sizes is null', () => {
     const decimal = (v: string) => ({ toNumber: () => Number(v), toString: () => v })
-    expect(casePackOf({ unitsPerCase: 6, caseLengthCm: decimal('63.5') as never, caseWidthCm: null, caseHeightCm: null, caseWeightKg: decimal('23.00') as never, fbaPrepOwner: 'AMAZON', fbaLabelOwner: null }))
-      .toEqual({ unitsPerCase: 6, caseLengthCm: 63.5, caseWidthCm: null, caseHeightCm: null, caseWeightKg: 23, fbaPrepOwner: 'AMAZON', fbaLabelOwner: null })
+    expect(casePackOf({ fbaPrepOwner: 'AMAZON', fbaLabelOwner: null }, [
+      { unitsPerCase: 6, caseLengthCm: decimal('63.5') as never, caseWidthCm: null, caseHeightCm: null, caseWeightKg: decimal('23.00') as never },
+      { unitsPerCase: 10, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null },
+    ])).toEqual({
+      sizes: [
+        { unitsPerCase: 10, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null },
+        { unitsPerCase: 6, caseLengthCm: 63.5, caseWidthCm: null, caseHeightCm: null, caseWeightKg: 23 },
+      ],
+      fbaPrepOwner: 'AMAZON', fbaLabelOwner: null,
+    })
+    expect(casePackOf(undefined, [])).toBeNull()
+    expect(casePackOf(undefined, [{ unitsPerCase: 4, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null }]))
+      .toEqual({ sizes: [{ unitsPerCase: 4, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null }], fbaPrepOwner: null, fbaLabelOwner: null })
   })
 })

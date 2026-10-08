@@ -69,14 +69,16 @@
  * reservations. Detected like StockLevel writes: <x>.stockReservation.<write>( and raw
  * INSERT INTO / UPDATE / DELETE FROM "StockReservation".
  *
- * ONE OWNER OF CASE COUNTS (Step 3 cases, 2026-10-07)
- * Sealed cases at a level (StockCaseCount) and a SKU's case pack (ProductPackage) carry an invariant no database
- * CHECK holds: sealed cases × units per case ≤ the level's units. One service keeps it on every stock path, under
- * the product lock: apps/api/src/services/stock/stock-cases.service.ts. "caseFiles" lists it with its exact
- * write-site count; a file listed with `"lock": true` must call `lockProductStock(`. Detected like the others:
- * <x>.stockCaseCount.<write>( / <x>.productPackage.<write>(, raw INSERT INTO / UPDATE / DELETE FROM / MERGE INTO
- * "StockCaseCount" or "ProductPackage", and the nested relations `caseCounts` (StockLevel) and `casePacks` (Product).
- * Case rows are written with the scalar stockLevelId: a nested `stockLevel: { connect }` counts as a StockLevel write.
+ * ONE OWNER OF CASE COUNTS (Step 3 cases, 2026-10-07; several case sizes per SKU, 2026-10-08)
+ * Sealed cases at a level (StockCaseCount, one row per case size), a SKU's case sizes (ProductCaseSize) and its FBA
+ * prep/label owner (ProductPackage) carry an invariant no database CHECK holds: Σ sealed cases × units per case ≤ the
+ * level's units. One service keeps it on every stock path, under the product lock:
+ * apps/api/src/services/stock/stock-cases.service.ts. "caseFiles" lists it with its exact write-site count; a file
+ * listed with `"lock": true` must call `lockProductStock(`. Detected like the others: <x>.stockCaseCount.<write>( /
+ * <x>.productCaseSize.<write>( / <x>.productPackage.<write>(, raw INSERT INTO / UPDATE / DELETE FROM / MERGE INTO
+ * "StockCaseCount", "ProductCaseSize" or "ProductPackage", and the nested relations `caseCounts` (StockLevel),
+ * `caseSizes` and `casePacks` (Product). Case rows are written with the scalar stockLevelId / caseSizeId: a nested
+ * `stockLevel: { connect }` counts as a StockLevel write.
  *
  * SCOPE
  * Runtime code: apps/*\/src and packages/*\/src. Tests (*.test.*, __tests__/, test-support/) and
@@ -99,19 +101,19 @@ const listFlag = args.indexOf('--list')
 const LIST = JSON.parse(readFileSync(listFlag >= 0 ? args[listFlag + 1] : fileURLToPath(new URL('./stock-writer-lock.json', import.meta.url)), 'utf8'))
 
 const WRITE_METHODS = new Set(['update', 'updateMany', 'updateManyAndReturn', 'upsert', 'create', 'createMany', 'createManyAndReturn', 'delete', 'deleteMany'])
-const DELEGATES = new Set(['stockLevel', 'stockReservation', 'stockCaseCount', 'productPackage'])
+const DELEGATES = new Set(['stockLevel', 'stockReservation', 'stockCaseCount', 'productCaseSize', 'productPackage'])
 // Step 3 cases: the delegates whose writes are case writes (the "caseFiles" owner).
-const CASE_DELEGATES = new Set(['stockCaseCount', 'productPackage'])
+const CASE_DELEGATES = new Set(['stockCaseCount', 'productCaseSize', 'productPackage'])
 // Quoted or not, schema-qualified or not, ONLY or not (review B3: public."StockReservation" passed).
 const tableWrite = (table) => new RegExp(`\\b(UPDATE|INSERT\\s+INTO|DELETE\\s+FROM|MERGE\\s+INTO)\\s+(?:ONLY\\s+)?(?:"?public"?\\s*\\.\\s*)?"?${table}"?(?![A-Za-z0-9_])`, 'gi')
 const RAW_WRITE = tableWrite('StockLevel')
 const RAW_RESERVATION_WRITE = tableWrite('StockReservation')
-const RAW_CASE_WRITES = [tableWrite('StockCaseCount'), tableWrite('ProductPackage')]
+const RAW_CASE_WRITES = [tableWrite('StockCaseCount'), tableWrite('ProductCaseSize'), tableWrite('ProductPackage')]
 const RAW_MOVEMENT_INSERT = /\b(INSERT\s+INTO|MERGE\s+INTO)\s+(?:ONLY\s+)?(?:"?public"?\s*\.\s*)?"?StockMovement"?(?![A-Za-z0-9_])/i
 const RAW_MOVEMENT_UPDATE = /\bUPDATE\s+(?:ONLY\s+)?(?:"?public"?\s*\.\s*)?"?StockMovement"?(?![A-Za-z0-9_])/i
 const ORDER_REASON_TEXT = /'(ORDER_PLACED|ORDER_CANCELLED|RESERVATION_CONSUMED)'/
 // Nested relation writes (re-review 2026-09-26): the relation field → what it writes.
-const NESTED_RELATIONS = new Map([['stockLevels', 'level'], ['stockLevel', 'level'], ['reservations', 'reservation'], ['stockMovements', 'movement'], ['movements', 'movement'], ['caseCounts', 'case'], ['casePacks', 'case']])
+const NESTED_RELATIONS = new Map([['stockLevels', 'level'], ['stockLevel', 'level'], ['reservations', 'reservation'], ['stockMovements', 'movement'], ['movements', 'movement'], ['caseCounts', 'case'], ['caseSizes', 'case'], ['casePacks', 'case']])
 const NESTED_WRITES = new Set(['create', 'createMany', 'update', 'updateMany', 'upsert', 'delete', 'deleteMany', 'connectOrCreate', 'connect', 'disconnect', 'set'])
 // Order movements (R2): a movement with one of these reasons is the order lifecycle's — only the
 // stock service may write it. Detected on the movement primitives' calls and on stockMovement writes.
@@ -204,7 +206,7 @@ function inspect(file) {
   const text = readFileSync(file, 'utf8')
   const result = { writes: [], reservationWrites: [], orderMovements: [], caseWrites: [], lockCalls: 0 }
   // Cheap pre-filter; the AST decides.
-  if (!/stockLevel|StockLevel|lockProductStock|stockReservation|StockReservation|ORDER_PLACED|ORDER_CANCELLED|RESERVATION_CONSUMED|StockMovement|reservations|stockMovements|stockCaseCount|StockCaseCount|productPackage|ProductPackage|caseCounts|casePacks/.test(text)) return result
+  if (!/stockLevel|StockLevel|lockProductStock|stockReservation|StockReservation|ORDER_PLACED|ORDER_CANCELLED|RESERVATION_CONSUMED|StockMovement|reservations|stockMovements|stockCaseCount|StockCaseCount|productCaseSize|ProductCaseSize|productPackage|ProductPackage|caseCounts|caseSizes|casePacks/.test(text)) return result
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
   const line = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
   // A delegate reached another way than `x.stockLevel.update(`: destructured (`const { stockLevel } =
@@ -284,7 +286,7 @@ function inspect(file) {
       }
       for (const pattern of RAW_CASE_WRITES) {
         for (const match of node.text.matchAll(pattern)) {
-          result.caseWrites.push({ line: line(node), kind: `raw ${match[1].replace(/\s+/g, ' ').toUpperCase()} "${match[0].includes('ProductPackage') ? 'ProductPackage' : 'StockCaseCount'}"` })
+          result.caseWrites.push({ line: line(node), kind: `raw ${match[1].replace(/\s+/g, ' ').toUpperCase()} "${['ProductPackage', 'ProductCaseSize'].find((table) => match[0].includes(table)) ?? 'StockCaseCount'}"` })
         }
       }
     }
@@ -356,7 +358,7 @@ for (const [path, r] of found) {
   const entry = CASE_LIST[path]
   const sites = r.caseWrites.map((w) => `${path}:${w.line} ${w.kind}`).join('\n      ')
   if (!entry) {
-    failures.push(`${path} writes StockCaseCount or ProductPackage, but only the case keeper may (Step 3 cases: sealed cases × units per case ≤ units, kept under the product lock):\n      ${sites}\n    Count cases or change a case pack through apps/api/src/services/stock/stock-cases.service.ts instead.`)
+    failures.push(`${path} writes StockCaseCount, ProductCaseSize or ProductPackage, but only the case keeper may (Step 3 cases: Σ sealed cases × units per case ≤ units, kept under the product lock):\n      ${sites}\n    Count cases or change a case pack through apps/api/src/services/stock/stock-cases.service.ts instead.`)
     continue
   }
   if (r.caseWrites.length !== entry.writes) failures.push(`${path} has ${r.caseWrites.length} case write site(s); the list approves ${entry.writes}:\n      ${sites}\n    ${r.caseWrites.length > entry.writes ? 'A new write site needs review: show it holds the product lock, then update the count.' : 'A write site was removed: lower the count so the list describes the tree.'}`)
@@ -364,7 +366,7 @@ for (const [path, r] of found) {
   if (entry.lock !== true) failures.push(`${path} writes case counts without "lock": true in "caseFiles" — a case count read without the product lock races the sale that opens a case.`)
 }
 for (const path of Object.keys(CASE_LIST)) {
-  if (!found.get(path)?.caseWrites.length) failures.push(`${path} is in "caseFiles" but writes no StockCaseCount or ProductPackage — remove it from the list.`)
+  if (!found.get(path)?.caseWrites.length) failures.push(`${path} is in "caseFiles" but writes no StockCaseCount, ProductCaseSize or ProductPackage — remove it from the list.`)
 }
 if (Object.keys(CASE_LIST).length > 0 && totalCaseWrites === 0) failures.push('found ZERO case write sites although an approved case writer exists — the scanner is not seeing them')
 
@@ -459,7 +461,7 @@ if (!CHECK || failures.length === 0) {
   console.log(`stock-reservation owner: ${totalReservationWrites} StockReservation write site(s)`)
   for (const [path, r] of found) if (r.reservationWrites.length) console.log(`  ${String(r.reservationWrites.length).padStart(2)}  ${path}`)
   for (const [fn, r] of sqlReservationFound) console.log(`  ${String(r.writes).padStart(2)}  ${r.file} ${fn}()`)
-  console.log(`case owner: ${totalCaseWrites} StockCaseCount / ProductPackage write site(s)`)
+  console.log(`case owner: ${totalCaseWrites} StockCaseCount / ProductCaseSize / ProductPackage write site(s)`)
   for (const [path, r] of found) if (r.caseWrites.length) console.log(`  ${String(r.caseWrites.length).padStart(2)}  ${path}${r.lockCalls ? `  (lockProductStock ×${r.lockCalls})` : ''}`)
 }
 if (CHECK && failures.length > 0) {
@@ -467,4 +469,4 @@ if (CHECK && failures.length > 0) {
   for (const f of failures) console.error(`  • ${f}`)
   process.exit(1)
 }
-if (CHECK) console.log('✓ stock-writer lock: every StockLevel write is approved and locked; StockReservation is written only by the stock service and the pool doors; case counts and case packs only by the case keeper')
+if (CHECK) console.log('✓ stock-writer lock: every StockLevel write is approved and locked; StockReservation is written only by the stock service and the pool doors; case counts, case sizes and case packs only by the case keeper')

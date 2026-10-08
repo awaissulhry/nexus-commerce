@@ -13,7 +13,8 @@
 
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
-import { FBA_SEND_COPY, lineUnits, sendSummary, type FbaCreateRequest, type FbaPlanView, type FbaSendDraft, type FbaSendLine } from '@nexus/shared/fba-send'
+import { FBA_SEND_COPY, lineCases, lineUnits, sendSummary, type FbaCreateRequest, type FbaPlanView, type FbaSendDraft, type FbaSendLine } from '@nexus/shared/fba-send'
+import { CASE_COPY, type CaseCount } from '@nexus/shared/stock-cases'
 import prisma from '../../../db.js'
 import type { AgentTool, ToolResult } from '../tool-types.js'
 import { amazonSkusInMarket } from '../../listings/reported-sku.js'
@@ -38,15 +39,34 @@ interface Prepared {
 
 /** The request the Matrix would send, checked by the same rule (`sendSummary`). Owners are never Claude's to choose. */
 async function prepare(args: Record<string, unknown>): Promise<Prepared | Refusal> {
-  const asked = (args.lines ?? []) as Array<{ productId: string; cases?: number; units?: number; quantity?: number }>
+  const asked = (args.lines ?? []) as Array<{ productId: string; cases?: number | CaseCount[]; units?: number; quantity?: number }>
   const ids = asked.map((line) => line.productId)
   if (new Set(ids).size !== ids.length) return { error: 'A product is on two lines: give each product one line.' }
-  const lines: FbaSendLine[] = asked.map((line) => ({ productId: line.productId, cases: line.cases ?? 0, looseUnits: line.units ?? line.quantity ?? 0 }))
   let draft: FbaSendDraft
   try {
     draft = await readSendDraft({ productIds: ids, from: (args.from as string | undefined) ?? null, market: String(args.marketplace ?? '') })
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) }
+  }
+  // Sealed cases per case size. A plain number stands for the SKU's ONE case size; a SKU with several names each size.
+  const lines: FbaSendLine[] = []
+  for (const line of asked) {
+    const sku = draft.skus.find((s) => s.productId === line.productId)
+    const looseUnits = line.units ?? line.quantity ?? 0
+    if (Array.isArray(line.cases) || line.cases === undefined || line.cases === 0) {
+      lines.push({ productId: line.productId, cases: Array.isArray(line.cases) ? line.cases : [], looseUnits })
+      continue
+    }
+    const sizes = sku?.caseSizes ?? []
+    if (sizes.length !== 1) {
+      const name = sku?.sku ?? line.productId
+      return {
+        error: sizes.length === 0
+          ? `${name}: ${CASE_COPY.noSize}. Nothing was sent to Amazon.`
+          : `${name} has ${CASE_COPY.sizes(sizes.map((size) => size.unitsPerCase))}: give the cases of each size as [{ unitsPerCase, cases }]. Nothing was sent to Amazon.`,
+      }
+    }
+    lines.push({ productId: line.productId, cases: [{ unitsPerCase: sizes[0].unitsPerCase, cases: line.cases }], looseUnits })
   }
   const readyToShipOn = typeof args.readyToShipOn === 'string' && args.readyToShipOn ? args.readyToShipOn : draft.readyToShipOn
   const summary = sendSummary(draft, { lines, readyToShipOn, mixedBox: null, owners: null })
@@ -76,7 +96,13 @@ const planFbaShipment: AgentTool = {
     marketplace: z.preprocess(upper, z.string().min(2).max(20)).describe('the Amazon market the stock goes to, e.g. IT'),
     lines: z.array(z.object({
       productId: z.string().trim().min(1).max(64).describe('Nexus product id of a SKU (a parent stands for its variations: name them)'),
-      cases: z.coerce.number().int().min(0).max(10_000).optional().describe('sealed cases to send, as identical case boxes (needs the SKU\'s case size and case dimensions)'),
+      cases: z.union([
+        z.array(z.object({
+          unitsPerCase: z.coerce.number().int().min(1).max(10_000).describe('the case size: units in one sealed case'),
+          cases: z.coerce.number().int().min(0).max(10_000).describe('sealed cases of that size'),
+        })).max(5),
+        z.coerce.number().int().min(0).max(10_000),
+      ]).optional().describe('sealed cases to send, as identical case boxes per case size: [{ unitsPerCase, cases }], or a number when the SKU has one case size (needs each case size\'s dimensions and weight)'),
       units: z.coerce.number().int().min(0).max(10_000).optional().describe('loose units to send, packed in mixed boxes (needs the SKU\'s unit weight)'),
       quantity: z.coerce.number().int().min(0).max(10_000).optional().describe('older name for units'),
     })).min(1).max(PLAN_MAX_SKUS).describe(`the SKUs, 1 to ${PLAN_MAX_SKUS}`),
@@ -106,7 +132,7 @@ const planFbaShipment: AgentTool = {
     const { draft, lines } = plan
     const summary = sendSummary(draft, { lines, readyToShipOn: plan.request.readyToShipOn, mixedBox: null, owners: null })
     const skuOf = new Map(draft.skus.map((sku) => [sku.productId, sku]))
-    const sent = lines.filter((line) => line.cases > 0 || line.looseUnits > 0)
+    const sent = lines.filter((line) => lineCases(line) > 0 || line.looseUnits > 0)
     return {
       ok: true,
       preview: {
@@ -119,9 +145,9 @@ const planFbaShipment: AgentTool = {
           return {
             sku: sku.msku ?? sku.sku,
             ...(sku.msku && sku.msku !== sku.sku ? { productSku: sku.sku } : {}),
-            cases: line.cases,
+            cases: line.cases.filter((c) => c.cases > 0),
             units: line.looseUnits,
-            quantity: lineUnits(line, sku.unitsPerCase),
+            quantity: lineUnits(line),
             freeNow: sku.free,
             prepBy: sku.prepOwner,
             labelsBy: sku.labelOwner,
@@ -140,7 +166,7 @@ const planFbaShipment: AgentTool = {
       const { planId } = await createSendPlan(plan.request, { actor: ctx.userId ?? 'claude', userId: ctx.userId ?? null }, 'claude')
       return {
         ok: true,
-        data: { planId, held: { from: plan.request.from, units: plan.lines.reduce((n, l) => n + lineUnits(l, plan.draft.skus.find((s) => s.productId === l.productId)?.unitsPerCase ?? null), 0) }, next: PERSON_CONFIRMS },
+        data: { planId, held: { from: plan.request.from, units: plan.lines.reduce((n, l) => n + lineUnits(l), 0) }, next: PERSON_CONFIRMS },
         change: { before: { marketplace: plan.request.market }, after: { planId } },
       }
     } catch (error) {

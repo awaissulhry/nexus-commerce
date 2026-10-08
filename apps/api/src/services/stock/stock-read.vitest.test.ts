@@ -7,7 +7,7 @@
  *   cycle counts (`GET /api/fulfillment/cycle-counts`, `/:id`). (Also checked once by hand on 2026-10-01: the full
  *   answers of 18 requests, ids and times normalised, were byte-identical before and after the move.)
  *   Tools: Claude's eight stock reads, through the one door (call-tool.ts), on the same rows; none writes anything.
- *   Step 3 (cases): the product read carries each product's units per case and the sealed cases each level shows.
+ *   Step 3 (cases): the product read carries each product's case sizes and the sealed cases of each size each level shows.
  *
  * Real SQL (PGlite with the production schema); the real route plugins in a Fastify app.
  */
@@ -308,7 +308,7 @@ describe("08 S3 — Claude's stock reads", () => {
 
 // ── Step 3: the stock editor reads case sizes and sealed cases ──────────────────────────────────────────
 
-describe('Step 3 — GET /api/stock/product/:id carries the case size and the sealed cases each level shows', () => {
+describe('Step 3 — GET /api/stock/product/:id carries the case sizes and the sealed cases of each size each level shows', () => {
   const box = { parent: '', red: '', blue: '', single: '' }
   const levelId = async (productId: string, locationId: string) =>
     (await database.client.stockLevel.findFirstOrThrow({ where: { productId, locationId }, select: { id: true } })).id
@@ -324,36 +324,40 @@ describe('Step 3 — GET /api/stock/product/:id carries the case size and the se
       for (const [productId, locationId, quantity] of [[box.red, ids.main, 27], [box.red, ids.fba, 12], [box.blue, ids.main, 5], [box.single, ids.main, 30]] as const) {
         await db.stockLevel.create({ data: { productId, locationId, quantity, reserved: 0, available: quantity } })
       }
-      await db.productPackage.create({ data: { productId: box.red, unitsPerCase: 12, caseLengthCm: '60.0', caseWeightKg: '14.50', fbaPrepOwner: 'SELLER' } })
-      await db.productPackage.create({ data: { productId: box.single, unitsPerCase: 10 } })
-      // Stored counts written straight (the keeper's job in production): red 2 of 12 fit 27; single 5 stored but only 3 fit
-      // 30 at 10 / case (a sale between a pool door and its settle) — a reader clamps. Blue has a count but no case size.
-      await db.stockCaseCount.create({ data: { stockLevelId: await levelId(box.red, ids.main), cases: 2 } })
-      await db.stockCaseCount.create({ data: { stockLevelId: await levelId(box.single, ids.main), cases: 5 } })
-      await db.stockCaseCount.create({ data: { stockLevelId: await levelId(box.blue, ids.main), cases: 1 } })
+      const red6 = (await db.productCaseSize.create({ data: { productId: box.red, unitsPerCase: 6 } })).id
+      const red12 = (await db.productCaseSize.create({ data: { productId: box.red, unitsPerCase: 12, caseLengthCm: '60.0', caseWeightKg: '14.50' } })).id
+      const single10 = (await db.productCaseSize.create({ data: { productId: box.single, unitsPerCase: 10 } })).id
+      // Stored counts written straight (the keeper's job in production): red 1×12 + 2×6 fit 27; single 5 stored but only
+      // 3 fit 30 at 10 / case (a sale between a pool door and its settle) — a reader clamps. Blue has no case size.
+      await db.stockCaseCount.create({ data: { stockLevelId: await levelId(box.red, ids.main), caseSizeId: red12, cases: 1 } })
+      await db.stockCaseCount.create({ data: { stockLevelId: await levelId(box.red, ids.main), caseSizeId: red6, cases: 2 } })
+      await db.stockCaseCount.create({ data: { stockLevelId: await levelId(box.single, ids.main), caseSizeId: single10, cases: 5 } })
     })
   })
 
-  it('a single product: product.unitsPerCase and stockLevels[].cases, clamped by the units', async () => {
+  it('a single product: product.caseSizes and stockLevels[].cases, clamped by the units', async () => {
     const { status, body } = await get(`/api/stock/product/${box.single}`)
     expect(status).toBe(200)
-    expect(body.product.unitsPerCase).toBe(10)
-    expect(body.stockLevels.map((l: Json) => [l.location.code, l.quantity, l.cases])).toEqual([['TEST-MAIN', 30, 3]])
+    expect(body.product.caseSizes).toEqual([10])
+    expect(body.stockLevels.map((l: Json) => [l.location.code, l.quantity, l.cases])).toEqual([['TEST-MAIN', 30, [{ unitsPerCase: 10, cases: 3 }]]])
   })
 
-  it('a product with no case size: unitsPerCase null and 0 sealed everywhere', async () => {
+  it('a product with no case size: caseSizes [] and no sealed cases anywhere', async () => {
     const { body } = await get(`/api/stock/product/${ids.jacket}`)
-    expect(body.product.unitsPerCase).toBeNull()
-    expect(body.stockLevels.map((l: Json) => l.cases)).toEqual([0, 0, 0])
+    expect(body.product.caseSizes).toEqual([])
+    expect(body.stockLevels.map((l: Json) => l.cases)).toEqual([[], [], []])
   })
 
-  it('a family: children[].unitsPerCase and children[].stockLevels[].cases (0 at FBA and without a case size)', async () => {
+  it('a family: children[].caseSizes (biggest first) and children[].stockLevels[].cases per size (0 at FBA, [] without a case size)', async () => {
     const { status, body } = await get(`/api/stock/product/${box.parent}?family=true`)
     expect(status).toBe(200)
-    expect(body.product.unitsPerCase).toBeNull()
-    expect(body.family.children.map((c: Json) => [c.sku, c.unitsPerCase, c.stockLevels.map((l: Json) => [l.locationCode, l.quantity, l.cases])])).toEqual([
-      ['TEST-SKU-S3C-BLUE', null, [['TEST-MAIN', 5, 0]]],
-      ['TEST-SKU-S3C-RED', 12, [['TEST-MAIN', 27, 2], ['TEST-FBA', 12, 0]]],
+    expect(body.product.caseSizes).toEqual([])
+    expect(body.family.children.map((c: Json) => [c.sku, c.caseSizes, c.stockLevels.map((l: Json) => [l.locationCode, l.quantity, l.cases])])).toEqual([
+      ['TEST-SKU-S3C-BLUE', [], [['TEST-MAIN', 5, []]]],
+      ['TEST-SKU-S3C-RED', [12, 6], [
+        ['TEST-MAIN', 27, [{ unitsPerCase: 12, cases: 1 }, { unitsPerCase: 6, cases: 2 }]],
+        ['TEST-FBA', 12, [{ unitsPerCase: 12, cases: 0 }, { unitsPerCase: 6, cases: 0 }]],
+      ]],
     ])
     expect(Object.keys(body.family.children[0].stockLevels[0]).sort()).toEqual([
       'available', 'cases', 'lastUpdatedAt', 'locationCode', 'locationId', 'locationType', 'quantity', 'reserved', 'syncStatus',

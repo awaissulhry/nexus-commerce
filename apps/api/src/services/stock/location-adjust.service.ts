@@ -4,7 +4,8 @@
  * routes' answers): a fresh server-side read, the delta derived here, never from the caller; FBA and Shopify locations
  * are read-only (computeLocationAdjustment); one audited movement through applyStockMovementInTx.
  *
- * Step 3 (cases): the stock editor also sends the absolute SEALED case count of the same cell (`cases`). Units and cases
+ * Step 3 (cases): the stock editor also sends the absolute SEALED case counts of the same cell, per case size
+ * (`cases: [{ unitsPerCase, cases }]`; sizes not named keep theirs). Units and cases
  * of one cell run in ONE transaction under the product's stock lock: the fresh read sits inside the lock, the unit
  * movement first, then `setCasesInTx` checks the count against the NEW units. A refused count rolls the units back too,
  * so the cell is either saved whole or not at all. A caller that sends no `cases` (Claude's set-stock, the products-grid
@@ -16,6 +17,7 @@ import { computeLocationAdjustment } from '../location-adjustment.js'
 import { summarizeProductStock } from '../stock-summary.js'
 import { lockProductStock } from '../stock-lock.js'
 import { setCasesInTx } from './stock-cases.service.js'
+import type { CaseCount } from '@nexus/shared/stock-cases'
 
 export const ALLOWED_ADJUST_REASONS = ['MANUAL_ADJUSTMENT', 'INVENTORY_COUNT', 'WRITE_OFF'] as const
 export type AdjustReason = (typeof ALLOWED_ADJUST_REASONS)[number]
@@ -29,8 +31,8 @@ export interface AdjustOneLocationInput {
   locationId: string
   /** The absolute on-hand. Omitted = leave the units as they are (a case-only count); at least one of value/cases. */
   value?: number
-  /** Step 3 — the absolute sealed case count at this location. Omitted = leave the cases as they are. */
-  cases?: number
+  /** Step 3 — the absolute sealed case counts at this location, per named size. Omitted = leave the cases as they are. */
+  cases?: CaseCount[]
   reason: AdjustReason
   notes?: string
   actor: string
@@ -81,7 +83,7 @@ export async function adjustOneLocation(input: AdjustOneLocationInput) {
     quantity: level?.quantity ?? 0,
     reserved: level?.reserved ?? 0,
     available: level?.available ?? 0,
-    /** Only when the call named `cases`: the sealed count after it (absent otherwise — the answer as before). */
+    /** Only when the call named `cases`: the sealed counts after it, every size (absent otherwise — the answer as before). */
     ...(done.counted ? { cases: done.counted.after } : {}),
   }
 }

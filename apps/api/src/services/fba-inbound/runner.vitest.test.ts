@@ -77,8 +77,8 @@ async function newPlan(over: Record<string, unknown> = {}): Promise<string> {
         createdBy: 'owner@example.test', ...over,
       } as never,
     })
-    await db().fbaInboundPlanLine.create({ data: { planRowId: plan.id, productId: ids.a, msku: 'TEST-FBA-A-IT', quantity: 12, cases: 2, unitsPerCase: 6, looseUnits: 0, prepOwner: 'SELLER', labelOwner: 'SELLER' } })
-    await db().fbaInboundPlanLine.create({ data: { planRowId: plan.id, productId: ids.b, msku: 'TEST-FBA-B-IT', quantity: 5, cases: 0, unitsPerCase: null, looseUnits: 5, prepOwner: 'AMAZON', labelOwner: 'AMAZON' } })
+    await db().fbaInboundPlanLine.create({ data: { planRowId: plan.id, productId: ids.a, msku: 'TEST-FBA-A-IT', quantity: 12, caseCounts: [{ unitsPerCase: 6, cases: 2 }], looseUnits: 0, prepOwner: 'SELLER', labelOwner: 'SELLER' } })
+    await db().fbaInboundPlanLine.create({ data: { planRowId: plan.id, productId: ids.b, msku: 'TEST-FBA-B-IT', quantity: 5, caseCounts: [], looseUnits: 5, prepOwner: 'AMAZON', labelOwner: 'AMAZON' } })
     return plan.id
   })
 }
@@ -111,7 +111,10 @@ beforeAll(async () => {
   await inside(async () => {
     ids.a = (await db().product.create({ data: { sku: 'TEST-FBA-A', name: 'Test jacket A', basePrice: '100.00', totalStock: 40, weightValue: '0.5', weightUnit: 'kg', dimLength: '20', dimWidth: '15', dimHeight: '10', dimUnit: 'cm' } as never })).id
     ids.b = (await db().product.create({ data: { sku: 'TEST-FBA-B', name: 'Test gloves B', basePrice: '30.00', totalStock: 20, weightValue: '800', weightUnit: 'g', dimLength: '30', dimWidth: '20', dimHeight: '10', dimUnit: 'cm' } as never })).id
-    await db().productPackage.create({ data: { productId: ids.a, unitsPerCase: 6, caseLengthCm: '40', caseWidthCm: '30', caseHeightCm: '25', caseWeightKg: '4.2', fbaPrepOwner: 'SELLER', fbaLabelOwner: 'SELLER' } as never })
+    await db().productPackage.create({ data: { productId: ids.a, fbaPrepOwner: 'SELLER', fbaLabelOwner: 'SELLER' } as never })
+    await db().productCaseSize.create({ data: { productId: ids.a, unitsPerCase: 6, caseLengthCm: '40', caseWidthCm: '30', caseHeightCm: '25', caseWeightKg: '4.2' } as never })
+    // A second size the plan did not send: its boxes never appear.
+    await db().productCaseSize.create({ data: { productId: ids.a, unitsPerCase: 12, caseLengthCm: '50', caseWidthCm: '40', caseHeightCm: '25', caseWeightKg: '8' } as never })
   })
 })
 afterAll(async () => {

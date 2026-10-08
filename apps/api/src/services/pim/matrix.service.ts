@@ -22,7 +22,8 @@
  *   - `price`: `ChannelListing.price` (the number the push reads); `sale`: `salePrice` + the two window columns.
  *   - `listing.selling` (build shape v2, P7): THE engine's selling state per coordinate (`destinationSellingStates`,
  *     the reader the sheet's Status column and the listing-action engine use) — from the rows already read, no query.
- *   - `pack` (Step 3, the Case column): the member's own `ProductPackage`, sizes and weight as numbers (`casePackOf`).
+ *   - `pack` (Step 3, the Case column): the member's own case sizes (`ProductCaseSize`, biggest first; sizes and weight
+ *     as numbers) and FBA prep/label owner (`ProductPackage`) — `casePackOf`.
  *   - `fbaInbound` / `fbaPlans` (Step 4, "Inbound +N"): Amazon's inbound per seller SKU as the FBA sweep stored it
  *     (`FbaInventoryDetail` INBOUND, fulfilment centre 'ALL') and the family's open Send-to-FBA plan lines. Read only:
  *     the FBA number (`fba`) stays Amazon's fulfillable units; inbound is never added to it.
@@ -103,23 +104,31 @@ export const MATRIX_LISTING_SELECT = {
 export type MatrixListing = Prisma.ChannelListingGetPayload<{ select: typeof MATRIX_LISTING_SELECT }>
 type Member = Prisma.ProductGetPayload<{ select: typeof MEMBER_SELECT }>
 
-/** The `ProductPackage` columns the Case column reads. */
-const CASE_PACK_SELECT = {
+/** The `ProductCaseSize` columns the Case column reads. */
+const CASE_SIZE_SELECT = {
   productId: true, unitsPerCase: true, caseLengthCm: true, caseWidthCm: true, caseHeightCm: true, caseWeightKg: true,
-  fbaPrepOwner: true, fbaLabelOwner: true,
 } as const
-type CasePackRow = Prisma.ProductPackageGetPayload<{ select: typeof CASE_PACK_SELECT }>
+type CaseSizeRow = Prisma.ProductCaseSizeGetPayload<{ select: typeof CASE_SIZE_SELECT }>
+/** The `ProductPackage` columns the Case column reads (the FBA prep / label owner). */
+const CASE_OWNER_SELECT = { productId: true, fbaPrepOwner: true, fbaLabelOwner: true } as const
+type CaseOwnerRow = Prisma.ProductPackageGetPayload<{ select: typeof CASE_OWNER_SELECT }>
 
-/** One case pack on the wire: Prisma's `Decimal` sizes and weight as numbers, an unknown owner string as not set. */
-export function casePackOf(row: Omit<CasePackRow, 'productId'>): MatrixCasePack {
+/**
+ * One SKU's case pack on the wire: its sizes biggest first (Prisma's `Decimal` sizes and weight as numbers) and its
+ * owners (an unknown owner string as not set). null = no size and no owners row.
+ */
+export function casePackOf(owners: Omit<CaseOwnerRow, 'productId'> | null | undefined, sizes: ReadonlyArray<Omit<CaseSizeRow, 'productId'>>): MatrixCasePack | null {
+  if (!owners && sizes.length === 0) return null
   return {
-    unitsPerCase: row.unitsPerCase ?? null,
-    caseLengthCm: decimalToNumber(row.caseLengthCm),
-    caseWidthCm: decimalToNumber(row.caseWidthCm),
-    caseHeightCm: decimalToNumber(row.caseHeightCm),
-    caseWeightKg: decimalToNumber(row.caseWeightKg),
-    fbaPrepOwner: isCaseOwner(row.fbaPrepOwner) ? row.fbaPrepOwner : null,
-    fbaLabelOwner: isCaseOwner(row.fbaLabelOwner) ? row.fbaLabelOwner : null,
+    sizes: [...sizes].sort((a, b) => b.unitsPerCase - a.unitsPerCase).map((row) => ({
+      unitsPerCase: row.unitsPerCase,
+      caseLengthCm: decimalToNumber(row.caseLengthCm),
+      caseWidthCm: decimalToNumber(row.caseWidthCm),
+      caseHeightCm: decimalToNumber(row.caseHeightCm),
+      caseWeightKg: decimalToNumber(row.caseWeightKg),
+    })),
+    fbaPrepOwner: isCaseOwner(owners?.fbaPrepOwner) ? owners!.fbaPrepOwner as MatrixCasePack['fbaPrepOwner'] : null,
+    fbaLabelOwner: isCaseOwner(owners?.fbaLabelOwner) ? owners!.fbaLabelOwner as MatrixCasePack['fbaLabelOwner'] : null,
   }
 }
 
@@ -168,7 +177,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
 
   // ── 2. wave 1 — one query per table keyed by the family ────────────────────────────────────
   const tWave1 = Date.now()
-  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots, warehouses, marketSources, casePacks, fbaInboundRows, fbaPlanLines] = await Promise.all([
+  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots, warehouses, marketSources, caseOwners, caseSizes, fbaInboundRows, fbaPlanLines] = await Promise.all([
     prisma.channelListing.findMany({ where: { productId: { in: memberIds } }, select: MATRIX_LISTING_SELECT }),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, currency: true, region: true } }),
     prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, isPrimary: true, workspaceId: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }),
@@ -184,8 +193,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     // "Sells from" (Step 2): this business's warehouses (the From cell's choices and its routes default) and the market lists.
     prisma.stockLocation.findMany({ where: { type: 'WAREHOUSE' }, select: { code: true, name: true, isActive: true, syncRoutes: true, warehouse: { select: { isDefault: true, isActive: true } } } }),
     loadMarketSources(prisma),
-    // The Case column (Step 3): each member's case pack — units per case, case size and weight, FBA prep/label owner.
-    prisma.productPackage.findMany({ where: { productId: { in: memberIds } }, select: CASE_PACK_SELECT }),
+    // The Case column (Step 3): each member's FBA prep/label owner and its case sizes (units per case, size, weight).
+    prisma.productPackage.findMany({ where: { productId: { in: memberIds } }, select: CASE_OWNER_SELECT }),
+    prisma.productCaseSize.findMany({ where: { productId: { in: memberIds } }, select: CASE_SIZE_SELECT }),
     // "Inbound +N" (Step 4): Amazon's inbound per seller SKU (the FBA sweep's rows; a row names its product when the sweep
     // matched one, else only its SKU) and the members' lines in Send-to-FBA plans not closed or cancelled.
     prisma.fbaInventoryDetail.findMany({
@@ -196,7 +206,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       where: { productId: { in: memberIds }, plan: { status: { notIn: [...FBA_CLOSED_STATUSES] } } },
       select: { productId: true, quantity: true, shippedQuantity: true, plan: { select: { id: true, name: true, status: true, createdAt: true } } },
     }),
-  ]); queries += 17
+  ]); queries += 18
   const audienceRows = parentRow.productType
     ? await prisma.$queryRawUnsafe<Array<{ marketplace: string | null; audience: unknown }>>(AUDIENCE_SQL, parentRow.productType)
     : []
@@ -273,7 +283,8 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     return { units: rows.reduce((n, r) => n + r.units, 0), locations: [...byCode].map(([code, units]) => ({ code, units })), updatedAt: newest?.toISOString() ?? null }
   }
   /* The Case column (Step 3): a member's own case pack; null = none set. A parent carries its own (normally none). */
-  const packOf = new Map(casePacks.map((p) => [p.productId, casePackOf(p)]))
+  const ownersOf = new Map(caseOwners.map((p) => [p.productId, p]))
+  const packOf = new Map(memberIds.map((id) => [id, casePackOf(ownersOf.get(id), caseSizes.filter((s) => s.productId === id))]))
   /* "Inbound +N" (Step 4). Amazon's side: a member's INBOUND rows (its seller SKUs) from ONE marketplace — the one read
      last — so a Pan-EU pool reported under two marketplaces is never counted twice. Nexus's side: units in open plans
      not marked Shipped yet, and units marked Shipped in plans Amazon is not receiving yet — READY_TO_SHIP (a plan with

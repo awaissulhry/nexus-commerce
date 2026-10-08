@@ -210,7 +210,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'identity: one channel item, two businesses, the same moment (MCP full control I12: report mode both succeed with one claim; enforce mode one wins)', file: 'src/services/identity/channel-item-claim-postgres.vitest.test.ts', expect: 2 },
   { name: 'Claude\'s approved bulk bid change and an engine write on one target (MCP full control A7: both queued, one claim wins, the other waits for it)', file: 'src/services/advertising/ads-claude-bulk-postgres.vitest.test.ts', expect: 2 },
   { name: 'Sells from: a sale takes stock from the first listed location with enough (Step 2)', file: 'src/services/stock/sale-location-postgres.vitest.test.ts', expect: 6 },
-  { name: 'sealed cases under concurrency (Step 3: ten sales at once end at floor(units / case size), a case count racing a sale, a case-size change racing a sale)', file: 'src/services/stock/stock-cases-postgres.vitest.test.ts', expect: 3 },
+  { name: 'sealed cases under concurrency (Step 3: ten sales at once end at floor(units / case size), a case count racing a sale, a case size replaced while a sale runs)', file: 'src/services/stock/stock-cases-postgres.vitest.test.ts', expect: 3 },
   { name: 'Send to FBA races (Step 4: a double-click on Create plan makes one plan and one set of holds, cancel releases the holds once, Mark shipped twice moves once, Mark shipped racing a sale keeps units and sealed cases right)', file: 'src/services/fba-inbound/fba-send-postgres.vitest.test.ts', expect: 4 },
 ]
 const IMAGES = ['pgvector/pgvector:pg17', 'postgres:17', 'postgres:17-alpine']

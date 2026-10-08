@@ -103,8 +103,10 @@ beforeAll(async () => {
     await d.stockLevel.create({ data: { productId: ids.b, locationId: ids.main, quantity: 10, reserved: 0, available: 10 } })
     await d.stockLevel.create({ data: { productId: ids.c, locationId: ids.main, quantity: 5, reserved: 0, available: 5 } })
     await d.stockLevel.create({ data: { productId: ids.a, locationId: ids.fba, quantity: 5, reserved: 0, available: 5 } })
-    await d.productPackage.create({ data: { productId: ids.a, unitsPerCase: 12, caseLengthCm: '40', caseWidthCm: '30', caseHeightCm: '30', caseWeightKg: '7', fbaPrepOwner: 'SELLER', fbaLabelOwner: 'SELLER' } })
-    await d.stockCaseCount.create({ data: { stockLevelId: levelA.id, cases: 4 } })
+    await d.productPackage.create({ data: { productId: ids.a, fbaPrepOwner: 'SELLER', fbaLabelOwner: 'SELLER' } })
+    const a12 = await d.productCaseSize.create({ data: { productId: ids.a, unitsPerCase: 12, caseLengthCm: '40', caseWidthCm: '30', caseHeightCm: '30', caseWeightKg: '7' } })
+    await d.productCaseSize.create({ data: { productId: ids.a, unitsPerCase: 6, caseLengthCm: '30', caseWidthCm: '20', caseHeightCm: '30', caseWeightKg: '3.6' } })
+    await d.stockCaseCount.create({ data: { stockLevelId: levelA.id, caseSizeId: a12.id, cases: 4 } })
     const listing = (productId: string, data: Record<string, unknown> = {}) => d.channelListing.create({ data: {
       productId, channel: 'AMAZON', marketplace: 'IT', region: 'IT', channelMarket: 'AMAZON_IT', channelConnectionId: ids.account, aliasKey: '',
       listingStatus: 'ACTIVE', isPublished: true, fulfillmentMethod: 'FBA', ...data } as never })
@@ -119,7 +121,7 @@ beforeEach(() => { vi.mocked(dispatchFbaPlan).mockClear(); vi.mocked(recascadePr
 afterAll(async () => { vi.unstubAllEnvs(); await database?.close() })
 
 describe('readSendDraft — the dialog\'s facts', () => {
-  it('a parent stands for its variations; From = the default warehouse; per SKU the Amazon SKU, free units and cases, the pack, weight, size, owners', async () => {
+  it('a parent stands for its variations; From = the default warehouse; per SKU the Amazon SKU, free units and cases per size, the case sizes, weight, size, owners', async () => {
     const draft = await inside(() => send.readSendDraft({ productIds: [ids.parent] }))
     expect(draft.from).toMatchObject({ id: ids.main, code: 'TEST-MAIN', town: 'Testville', country: 'IT', isDefault: true })
     expect(draft.locations.map((l) => l.code)).toEqual(['TEST-MAIN', 'TEST-SPARE'])
@@ -134,10 +136,15 @@ describe('readSendDraft — the dialog\'s facts', () => {
     expect(draft.skus.map((sku) => sku.sku)).toEqual(['TEST-FBA-A', 'TEST-FBA-B', 'TEST-FBA-C'])
     const [a, b, c] = draft.skus
     expect(a).toMatchObject({
-      productId: ids.a, msku: 'A-IT', unitsPerCase: 12, case: { lengthCm: 40, widthCm: 30, heightCm: 30, weightKg: 7 }, unitWeightKg: 0.5,
-      unit: { lengthCm: 30, widthCm: 20, heightCm: 10 }, onHand: 51, free: 51, freeSealed: 4, freeLoose: 3, prepOwner: 'SELLER', labelOwner: 'SELLER', openPlanUnits: 0,
+      productId: ids.a, msku: 'A-IT', unitWeightKg: 0.5,
+      caseSizes: [
+        { unitsPerCase: 12, case: { lengthCm: 40, widthCm: 30, heightCm: 30, weightKg: 7 } },
+        { unitsPerCase: 6, case: { lengthCm: 30, widthCm: 20, heightCm: 30, weightKg: 3.6 } },
+      ],
+      unit: { lengthCm: 30, widthCm: 20, heightCm: 10 }, onHand: 51, free: 51, freeSealed: [{ unitsPerCase: 12, cases: 4 }, { unitsPerCase: 6, cases: 0 }], freeLoose: 3,
+      prepOwner: 'SELLER', labelOwner: 'SELLER', openPlanUnits: 0,
     })
-    expect(b).toMatchObject({ msku: 'TEST-FBA-B', unitsPerCase: null, case: null, unitWeightKg: 1, unit: null, free: 10, freeSealed: 0, freeLoose: 10, prepOwner: null, labelOwner: null })
+    expect(b).toMatchObject({ msku: 'TEST-FBA-B', caseSizes: [], unitWeightKg: 1, unit: null, free: 10, freeSealed: [], freeLoose: 10, prepOwner: null, labelOwner: null })
     expect(c).toMatchObject({ msku: null, free: 5 })
   })
 
@@ -158,17 +165,21 @@ describe('readSendDraft — the dialog\'s facts', () => {
 })
 
 describe('createSendPlan — "Create plan"', () => {
-  const request = () => ({ from: 'TEST-MAIN', market: 'IT', readyToShipOn: nextWorkingDay(send.romeToday()), lines: [{ productId: ids.a, cases: 2, looseUnits: 3 }, { productId: ids.b, cases: 0, looseUnits: 4 }] })
+  const request = () => ({ from: 'TEST-MAIN', market: 'IT', readyToShipOn: nextWorkingDay(send.romeToday()), lines: [{ productId: ids.a, cases: [{ unitsPerCase: 12, cases: 2 }], looseUnits: 3 }, { productId: ids.b, cases: [], looseUnits: 4 }] })
 
   it('refuses by the shared rule and writes nothing: owners not set, no listing, more than free, no ship-from address', async () => {
     await company({ companyName: 'Test Company', contactPhone: '+39 000 000' })
     const owners = await caught(() => inside(() => send.createSendPlan(request(), person, 'matrix')))
     expect(owners).toMatchObject({ name: 'FbaSendError', code: 'REFUSED', message: FBA_SEND_COPY.problem.noOwners('TEST-FBA-B') })
     expect(owners!.problems.map((p) => p.code)).toEqual(['NO_OWNERS'])
-    const noListing = await caught(() => inside(() => send.createSendPlan({ ...request(), lines: [{ productId: ids.c, cases: 0, looseUnits: 1 }], owners: { prepOwner: 'SELLER', labelOwner: 'SELLER' } }, person, 'matrix')))
+    const noListing = await caught(() => inside(() => send.createSendPlan({ ...request(), lines: [{ productId: ids.c, cases: [], looseUnits: 1 }], owners: { prepOwner: 'SELLER', labelOwner: 'SELLER' } }, person, 'matrix')))
     expect(noListing!.problems.map((p) => p.code)).toEqual(['NO_LISTING'])
-    const tooMany = await caught(() => inside(() => send.createSendPlan({ ...request(), lines: [{ productId: ids.a, cases: 5, looseUnits: 0 }] }, person, 'matrix')))
+    const tooMany = await caught(() => inside(() => send.createSendPlan({ ...request(), lines: [{ productId: ids.a, cases: [{ unitsPerCase: 12, cases: 5 }], looseUnits: 0 }] }, person, 'matrix')))
     expect(tooMany!.problems.map((p) => p.code)).toEqual(['OVER_FREE_CASES', 'OVER_FREE'])
+    const noSix = await caught(() => inside(() => send.createSendPlan({ ...request(), lines: [{ productId: ids.a, cases: [{ unitsPerCase: 6, cases: 1 }], looseUnits: 0 }] }, person, 'matrix')))
+    expect(noSix!.problems.map((p) => [p.code, p.message])).toEqual([['OVER_FREE_CASES', 'TEST-FBA-A: 1 sealed case of 6 asked; 0 free at TEST-MAIN']])
+    const older = await caught(() => inside(() => send.createSendPlan({ ...request(), lines: [{ productId: ids.a, cases: 2 as never, looseUnits: 0 }] }, person, 'matrix')))
+    expect(older!.problems.map((p) => p.code)).toEqual(['INVALID_QUANTITY', 'NO_UNITS']) // an older page's plain number is refused, never read as 0
     await company({ companyName: 'Test Company', contactPhone: null })
     const address = await caught(() => inside(() => send.createSendPlan({ ...request(), owners: { prepOwner: 'SELLER', labelOwner: 'AMAZON' } }, person, 'matrix')))
     expect(address).toMatchObject({ code: 'REFUSED', message: FBA_SEND_COPY.problem.noAddress(['phoneNumber'], 'TEST-MAIN') })
@@ -192,9 +203,9 @@ describe('createSendPlan — "Create plan"', () => {
       sourceAddress: { name: 'Test Company', companyName: 'Test Company', addressLine1: 'Via Test 1', city: 'Testville', postalCode: '00000', countryCode: 'IT', phoneNumber: '+39 000 000' },
     })
     expect(plan.readyToShipOn?.toISOString().slice(0, 10)).toBe(nextWorkingDay(send.romeToday()))
-    expect(plan.lines.map((l) => ({ productId: l.productId, msku: l.msku, quantity: l.quantity, cases: l.cases, unitsPerCase: l.unitsPerCase, looseUnits: l.looseUnits, prepOwner: l.prepOwner, labelOwner: l.labelOwner, shippedQuantity: l.shippedQuantity }))).toEqual([
-      { productId: ids.a, msku: 'A-IT', quantity: 27, cases: 2, unitsPerCase: 12, looseUnits: 3, prepOwner: 'SELLER', labelOwner: 'SELLER', shippedQuantity: 0 },
-      { productId: ids.b, msku: 'TEST-FBA-B', quantity: 4, cases: 0, unitsPerCase: null, looseUnits: 4, prepOwner: 'SELLER', labelOwner: 'AMAZON', shippedQuantity: 0 },
+    expect(plan.lines.map((l) => ({ productId: l.productId, msku: l.msku, quantity: l.quantity, caseCounts: l.caseCounts, looseUnits: l.looseUnits, prepOwner: l.prepOwner, labelOwner: l.labelOwner, shippedQuantity: l.shippedQuantity }))).toEqual([
+      { productId: ids.a, msku: 'A-IT', quantity: 27, caseCounts: [{ unitsPerCase: 12, cases: 2 }], looseUnits: 3, prepOwner: 'SELLER', labelOwner: 'SELLER', shippedQuantity: 0 },
+      { productId: ids.b, msku: 'TEST-FBA-B', quantity: 4, caseCounts: [], looseUnits: 4, prepOwner: 'SELLER', labelOwner: 'AMAZON', shippedQuantity: 0 },
     ])
     // The holds: at From, HARD, FBA_SEND, 45 days; available drops, units stay; the FBA level is untouched.
     const [holdA] = await holdsOf(ids.a)
@@ -203,11 +214,12 @@ describe('createSendPlan — "Create plan"', () => {
     expect(await levelOf(ids.a)).toEqual({ quantity: 51, reserved: 27, available: 24 })
     expect(await levelOf(ids.b)).toEqual({ quantity: 10, reserved: 4, available: 6 })
     expect(await levelOf(ids.a, ids.fba)).toEqual(before.fba)
-    // Owners: only B had none — its case pack row holds the owners and nothing else; A keeps its own.
-    expect(await inside(() => db().productPackage.findFirst({ where: { productId: ids.b }, select: { unitsPerCase: true, caseWeightKg: true, fbaPrepOwner: true, fbaLabelOwner: true } })))
-      .toEqual({ unitsPerCase: null, caseWeightKg: null, fbaPrepOwner: 'SELLER', fbaLabelOwner: 'AMAZON' })
-    expect(await inside(() => db().productPackage.findFirst({ where: { productId: ids.a }, select: { unitsPerCase: true, fbaPrepOwner: true, fbaLabelOwner: true } })))
-      .toEqual({ unitsPerCase: 12, fbaPrepOwner: 'SELLER', fbaLabelOwner: 'SELLER' })
+    // Owners: only B had none — it gets an owners row and no case size; A keeps its own.
+    expect(await inside(() => db().productPackage.findFirst({ where: { productId: ids.b }, select: { fbaPrepOwner: true, fbaLabelOwner: true } })))
+      .toEqual({ fbaPrepOwner: 'SELLER', fbaLabelOwner: 'AMAZON' })
+    expect(await inside(() => db().productCaseSize.count({ where: { productId: ids.b } }))).toBe(0)
+    expect(await inside(() => db().productPackage.findFirst({ where: { productId: ids.a }, select: { fbaPrepOwner: true, fbaLabelOwner: true } })))
+      .toEqual({ fbaPrepOwner: 'SELLER', fbaLabelOwner: 'SELLER' })
     // The event in the same transaction; the job dispatched; the held products re-advertised.
     const events = await inside(() => db().eventOutbox.findMany({ where: { type: 'fba.plan_changed' } }))
     expect(events.map((e) => e.payload)).toContainEqual(expect.objectContaining({ planId, status: 'QUEUED', step: 'CREATE', productIds: [ids.a, ids.b] }))
@@ -215,7 +227,7 @@ describe('createSendPlan — "Create plan"', () => {
     await vi.waitFor(() => expect(vi.mocked(recascadeProduct).mock.calls.map((c) => c[0])).toEqual([ids.a, ids.b]))
     // The dialog now sees the hold: free units and free sealed cases drop, the units count as in an open plan.
     const draft = await inside(() => send.readSendDraft({ productIds: [ids.a] }))
-    expect(draft.skus[0]).toMatchObject({ onHand: 51, free: 24, freeSealed: 2, freeLoose: 0, openPlanUnits: 27 })
+    expect(draft.skus[0]).toMatchObject({ onHand: 51, free: 24, freeSealed: [{ unitsPerCase: 12, cases: 2 }, { unitsPerCase: 6, cases: 0 }], freeLoose: 0, openPlanUnits: 27 })
   })
 
   it('readPlans / readPlan: the plan as the drawer reads it, by family root and open; an older wizard plan is not a Send-to-FBA plan', async () => {
@@ -307,7 +319,7 @@ describe('retryPlan and cancelPlan', () => {
 
     // A new plan Amazon never saw (QUEUED, no Amazon id, no create call, no lease): CANCELLED at once, no job.
     vi.mocked(dispatchFbaPlan).mockClear()
-    const { planId: fresh } = await inside(() => send.createSendPlan({ from: 'TEST-MAIN', market: 'IT', readyToShipOn: nextWorkingDay(send.romeToday()), lines: [{ productId: ids.b, cases: 0, looseUnits: 2 }] }, person, 'claude'))
+    const { planId: fresh } = await inside(() => send.createSendPlan({ from: 'TEST-MAIN', market: 'IT', readyToShipOn: nextWorkingDay(send.romeToday()), lines: [{ productId: ids.b, cases: [], looseUnits: 2 }] }, person, 'claude'))
     expect(await levelOf(ids.b)).toEqual({ quantity: 10, reserved: 2, available: 8 })
     vi.mocked(dispatchFbaPlan).mockClear()
     expect(await inside(() => send.cancelPlan(fresh, person))).toMatchObject({ status: 'CANCELLED', source: 'claude', nextCheckAt: null })

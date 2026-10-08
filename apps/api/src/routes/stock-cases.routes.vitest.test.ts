@@ -1,13 +1,14 @@
 /**
- * Step 3 (cases, Owner D2 = B) — `PUT /api/stock/case-packs`, the Matrix Case pop-up's save.
+ * Step 3 (cases, Owner D2 = B; several case sizes per SKU, Owner 2026-10-08) — `PUT /api/stock/case-packs`, the Matrix
+ * Case pop-up's save.
  *
- *   validation  every refusal is a 400 by code before anything is written (ids, too many, a value not named, the
- *               shared `packProblem` sentences).
- *   save        absolute values, numbers stored as the columns keep them; the same save again is a noop; an Amazon EU
- *               box-limit warning never refuses.
+ *   validation  every refusal is a 400 by code before anything is written (ids, too many, nothing named, a size value
+ *               not named, the shared `sizesProblem` / owner sentences).
+ *   save        a size list replaces the SKU's sizes (numbers stored as the columns keep them); the same save again is a
+ *               noop; an owner alone saves alone; an Amazon EU box-limit warning never refuses.
  *   family      one call writes every named variation; an unknown id answers for itself, the others still save.
- *   409         a units-per-case change while sealed cases are in stock: 409 SEALED_CASES with the list, nothing
- *               written; the same call with `openSealedCases` opens them (units unchanged).
+ *   409         removing a size with sealed cases in stock: 409 SEALED_CASES with the list, nothing written; the same
+ *               call with `openSealedCases` opens them (units unchanged).
  *   permission  the real RBAC gate (enforce): `inventory.view` alone is refused, `inventory.adjust` may save.
  *
  * Real SQL (PGlite with the production schema), the real route plugin, the real case service (one spy lets a test make
@@ -68,9 +69,12 @@ async function put(payload: unknown, permissions = ADJUSTER): Promise<{ status: 
   const response = await app.inject({ method: 'PUT', url: '/api/stock/case-packs', headers: { 'x-test-permissions': permissions }, payload: payload as never })
   return { status: response.statusCode, body: response.json() }
 }
-const PACK = { unitsPerCase: 12, caseLengthCm: 60.5, caseWidthCm: 40, caseHeightCm: 35.2, caseWeightKg: 14.55, fbaPrepOwner: 'SELLER', fbaLabelOwner: 'AMAZON' }
-const NONE = { unitsPerCase: null, caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null, fbaPrepOwner: null, fbaLabelOwner: null }
-const packRow = (productId: string) => inside(() => database.client.productPackage.findFirst({ where: { productId } }))
+const SIZE = { unitsPerCase: 12, caseLengthCm: 60.5, caseWidthCm: 40, caseHeightCm: 35.2, caseWeightKg: 14.55 }
+const NO_DIMS = { caseLengthCm: null, caseWidthCm: null, caseHeightCm: null, caseWeightKg: null }
+const PACK = { sizes: [SIZE], fbaPrepOwner: 'SELLER', fbaLabelOwner: 'AMAZON' }
+const ownersRow = (productId: string) => inside(() => database.client.productPackage.findFirst({ where: { productId } }))
+const sizeRows = (productId: string) => inside(() => database.client.productCaseSize.findMany({ where: { productId }, orderBy: { unitsPerCase: 'desc' } }))
+const unitsOf = async (productId: string) => (await sizeRows(productId)).map((row: Json) => row.unitsPerCase)
 const caseRows = (productId: string) => inside(() => database.client.stockCaseCount.findMany({ where: { stockLevel: { productId } }, select: { cases: true } }))
 
 beforeAll(async () => {
@@ -111,43 +115,54 @@ describe('PUT /api/stock/case-packs', () => {
     expect((await put({ ...PACK, productIds: [ids.red, 7] })).body.code).toBe('MISSING_FIELDS')
     const many = Array.from({ length: MAX_CASE_PACK_PRODUCTS + 1 }, (_, i) => `p-${i}`)
     expect(await put({ ...PACK, productIds: many })).toEqual({ status: 400, body: { ok: false, code: 'TOO_MANY', error: 'At most 200 products per save' } })
-    const { caseWeightKg: _w, fbaLabelOwner: _l, ...partial } = PACK
-    expect(await put({ ...partial, productIds: [ids.red] })).toEqual({ status: 400, body: { ok: false, code: 'MISSING_FIELDS', error: 'Name every value (null clears it); missing: caseWeightKg, fbaLabelOwner' } })
-    const refusal = async (change: Record<string, unknown>) => (await put({ ...PACK, ...change, productIds: [ids.red] }))
+    expect(await put({ productIds: [ids.red] })).toEqual({ status: 400, body: { ok: false, code: 'MISSING_FIELDS', error: 'Name the case sizes or an owner to save' } })
+    const { caseWeightKg: _w, ...partial } = SIZE
+    expect(await put({ sizes: [partial], productIds: [ids.red] })).toEqual({ status: 400, body: { ok: false, code: 'MISSING_FIELDS', error: 'Name every value of a case size (null clears it); missing: caseWeightKg' } })
+    expect((await put({ sizes: 12, productIds: [ids.red] })).body).toEqual({ ok: false, code: 'INVALID_PACK', error: '`sizes` must be a list' })
+    const refusal = async (change: Record<string, unknown>) => (await put({ ...PACK, sizes: [{ ...SIZE, ...change }], productIds: [ids.red] }))
     expect(await refusal({ unitsPerCase: 0 })).toEqual({ status: 400, body: { ok: false, code: 'INVALID_PACK', error: 'Units per case must be a whole number from 1 to 10000' } })
     expect((await refusal({ unitsPerCase: 2.5 })).body.error).toBe('Units per case must be a whole number from 1 to 10000')
+    expect((await refusal({ unitsPerCase: null })).body.error).toBe('Units per case must be a whole number from 1 to 10000')
     expect((await refusal({ caseLengthCm: 301 })).body.error).toBe('Case length must be more than 0 and at most 300 cm')
     expect((await refusal({ caseHeightCm: 'tall' })).body.error).toBe('Case height must be more than 0 and at most 300 cm')
     expect((await refusal({ caseWeightKg: 0 })).body.error).toBe('Case weight must be more than 0 and at most 1000 kg')
-    expect((await refusal({ fbaPrepOwner: 'BOTH' })).body.error).toBe('Prep by must be Amazon or Seller')
-    expect((await refusal({ fbaLabelOwner: 'seller' })).body.error).toBe('Labels by must be Amazon or Seller')
+    expect((await put({ sizes: [SIZE, SIZE], productIds: [ids.red] })).body.error).toBe(CASE_COPY.sameSize(12))
+    expect((await put({ sizes: [1, 2, 3, 4, 5, 6].map((unitsPerCase) => ({ ...SIZE, unitsPerCase })), productIds: [ids.red] })).body.error).toBe(CASE_COPY.tooManySizes)
+    expect((await put({ ...PACK, fbaPrepOwner: 'BOTH', productIds: [ids.red] })).body.error).toBe('Prep by must be Amazon or Seller')
+    expect((await put({ ...PACK, fbaLabelOwner: 'seller', productIds: [ids.red] })).body.error).toBe('Labels by must be Amazon or Seller')
     expect(vi.mocked(setCasePacks)).not.toHaveBeenCalled()
-    expect(await packRow(ids.red)).toBeNull()
+    expect(await sizeRows(ids.red)).toEqual([])
   })
 
-  it('parseCasePackBody: numeric strings read as numbers, ids are de-duplicated, openSealedCases only when true', () => {
-    expect(parseCasePackBody({ ...NONE, unitsPerCase: ' 12 ', caseWeightKg: '14.5', productIds: [' a ', 'a', 'b'], openSealedCases: 'yes' }))
-      .toEqual({ ok: true, productIds: ['a', 'b'], values: { ...NONE, unitsPerCase: 12, caseWeightKg: 14.5 }, openSealedCases: false })
+  it('parseCasePackBody: numeric strings read as numbers, ids are de-duplicated, an absent owner is kept, openSealedCases only when true', () => {
+    expect(parseCasePackBody({ sizes: [{ ...NO_DIMS, unitsPerCase: ' 12 ', caseWeightKg: '14.5' }], fbaLabelOwner: null, productIds: [' a ', 'a', 'b'], openSealedCases: 'yes' }))
+      .toEqual({ ok: true, productIds: ['a', 'b'], sizes: [{ ...NO_DIMS, unitsPerCase: 12, caseWeightKg: 14.5 }], fbaLabelOwner: null, openSealedCases: false })
+    expect(parseCasePackBody({ fbaPrepOwner: 'AMAZON', productIds: ['a'] })).toEqual({ ok: true, productIds: ['a'], fbaPrepOwner: 'AMAZON', openSealedCases: false })
   })
 
-  it('saves absolute values (numbers stored as the columns keep them); the same save again is a noop; a box-limit warning never refuses', async () => {
+  it('saves the size list (numbers stored as the columns keep them); the same save again is a noop; a box-limit warning never refuses; owners save alone', async () => {
     const saved = await put({ ...PACK, productIds: [ids.red] })
     expect(saved.status).toBe(200)
     expect(saved.body).toMatchObject({ ok: true, results: [{ productId: ids.red, ok: true }], warning: null })
     expect(vi.mocked(setCasePacks)).toHaveBeenCalledWith(expect.objectContaining({ productIds: [ids.red], actor: 'case@example.test', userId: 'u-case', openSealedCases: false }))
-    const row = await packRow(ids.red)
-    expect([row?.unitsPerCase, Number(row?.caseLengthCm), Number(row?.caseWidthCm), Number(row?.caseHeightCm), Number(row?.caseWeightKg), row?.fbaPrepOwner, row?.fbaLabelOwner])
-      .toEqual([12, 60.5, 40, 35.2, 14.55, 'SELLER', 'AMAZON'])
+    const [row] = await sizeRows(ids.red)
+    expect([row?.unitsPerCase, Number(row?.caseLengthCm), Number(row?.caseWidthCm), Number(row?.caseHeightCm), Number(row?.caseWeightKg)]).toEqual([12, 60.5, 40, 35.2, 14.55])
+    expect(await ownersRow(ids.red)).toMatchObject({ fbaPrepOwner: 'SELLER', fbaLabelOwner: 'AMAZON' })
     expect((await put({ ...PACK, productIds: [ids.red] })).body).toMatchObject({ ok: true, results: [{ productId: ids.red, ok: true, noop: true }] })
-    const big = await put({ ...PACK, caseLengthCm: 70, productIds: [ids.blue] })
+    const big = await put({ sizes: [{ ...SIZE, caseLengthCm: 70 }], productIds: [ids.blue] })
     expect(big).toMatchObject({ status: 200, body: { ok: true, warning: CASE_COPY.boxLimit } })
-    // Owners may stay "not set".
-    expect((await put({ ...NONE, unitsPerCase: 6, productIds: [ids.blue] })).body).toMatchObject({ ok: true, warning: null })
-    expect(await packRow(ids.blue)).toMatchObject({ unitsPerCase: 6, caseLengthCm: null, fbaPrepOwner: null, fbaLabelOwner: null })
+    // A second size; owners may stay "not set".
+    expect((await put({ sizes: [{ ...NO_DIMS, unitsPerCase: 6 }, { ...SIZE, caseLengthCm: 70 }], productIds: [ids.blue] })).body).toMatchObject({ ok: true })
+    expect(await unitsOf(ids.blue)).toEqual([12, 6])
+    expect(await ownersRow(ids.blue)).toBeNull()
+    // An owner alone keeps the sizes.
+    expect((await put({ fbaPrepOwner: 'AMAZON', productIds: [ids.blue] })).body).toMatchObject({ ok: true, warning: null })
+    expect(await ownersRow(ids.blue)).toMatchObject({ fbaPrepOwner: 'AMAZON', fbaLabelOwner: null })
+    expect(await unitsOf(ids.blue)).toEqual([12, 6])
   })
 
   it('a family: one call writes every named variation; an unknown id answers for itself', async () => {
-    const out = await put({ ...PACK, unitsPerCase: 12, productIds: [ids.red, ids.blue, 'nope'] })
+    const out = await put({ sizes: [SIZE], productIds: [ids.red, ids.blue, 'nope'] })
     expect(out.status).toBe(200)
     expect(out.body.ok).toBe(false)
     expect(out.body.results).toEqual([
@@ -155,41 +170,43 @@ describe('PUT /api/stock/case-packs', () => {
       expect.objectContaining({ productId: ids.blue, ok: true }),
       { productId: 'nope', ok: false, error: 'Product not found' },
     ])
-    expect((await packRow(ids.blue))?.unitsPerCase).toBe(12)
-    expect((await packRow(ids.red))?.unitsPerCase).toBe(12)
+    expect(await unitsOf(ids.blue)).toEqual([12])
+    expect(await unitsOf(ids.red)).toEqual([12])
   })
 
-  it('409 SEALED_CASES: a size change with sealed cases in stock is refused with the list; confirmed, it opens them (units unchanged)', async () => {
+  it('409 SEALED_CASES: removing a size with sealed cases in stock is refused with the list; confirmed, it opens them (units unchanged)', async () => {
     const { adjustOneLocation } = await import('../services/stock/location-adjust.service.js')
-    expect(await inside(() => adjustOneLocation({ productId: ids.red, locationId: ids.main, cases: 2, reason: 'INVENTORY_COUNT', actor: 'test' }))).toMatchObject({ cases: 2, quantity: 30 })
-    const refused = await put({ ...PACK, unitsPerCase: 6, productIds: [ids.red, ids.blue] })
+    expect(await inside(() => adjustOneLocation({ productId: ids.red, locationId: ids.main, cases: [{ unitsPerCase: 12, cases: 2 }], reason: 'INVENTORY_COUNT', actor: 'test' })))
+      .toMatchObject({ cases: [{ unitsPerCase: 12, cases: 2 }], quantity: 30 })
+    const refused = await put({ sizes: [{ ...SIZE, unitsPerCase: 6 }], productIds: [ids.red, ids.blue] })
     expect(refused).toEqual({ status: 409, body: {
       ok: false, code: 'SEALED_CASES', error: CASE_COPY.sealedOpen(2, 'TEST-MAIN'),
-      sealed: [{ productId: ids.red, sku: 'TEST-SKU-CP-RED', locationCode: 'TEST-MAIN', cases: 2 }],
+      sealed: [{ productId: ids.red, sku: 'TEST-SKU-CP-RED', locationCode: 'TEST-MAIN', unitsPerCase: 12, cases: 2 }],
     } })
-    expect((await packRow(ids.red))?.unitsPerCase).toBe(12)
-    expect((await packRow(ids.blue))?.unitsPerCase).toBe(12)
+    expect(await unitsOf(ids.red)).toEqual([12])
+    expect(await unitsOf(ids.blue)).toEqual([12])
     expect(await caseRows(ids.red)).toEqual([{ cases: 2 }])
 
-    const opened = await put({ ...PACK, unitsPerCase: 6, productIds: [ids.red, ids.blue], openSealedCases: true })
+    const opened = await put({ sizes: [{ ...SIZE, unitsPerCase: 6 }], productIds: [ids.red, ids.blue], openSealedCases: true })
     expect(opened.status).toBe(200)
-    expect(opened.body.results[0]).toMatchObject({ productId: ids.red, ok: true, opened: [{ locationCode: 'TEST-MAIN', cases: 2 }] })
-    expect((await packRow(ids.red))?.unitsPerCase).toBe(6)
-    expect((await packRow(ids.blue))?.unitsPerCase).toBe(6)
-    expect((await caseRows(ids.red)).every((r: Json) => r.cases === 0)).toBe(true)
+    expect(opened.body.results[0]).toMatchObject({ productId: ids.red, ok: true, opened: [{ locationCode: 'TEST-MAIN', unitsPerCase: 12, cases: 2 }] })
+    expect(await unitsOf(ids.red)).toEqual([6])
+    expect(await unitsOf(ids.blue)).toEqual([6])
+    expect(await caseRows(ids.red)).toEqual([])
     expect((await inside(() => database.client.stockLevel.findFirst({ where: { productId: ids.red, locationId: ids.main } })))?.quantity).toBe(30)
   })
 
-  it('clearing every value removes the case pack (null clears)', async () => {
-    expect((await put({ ...NONE, productIds: [ids.blue] })).body).toMatchObject({ ok: true, results: [{ productId: ids.blue, ok: true }] })
-    expect(await packRow(ids.blue)).toBeNull()
+  it('an empty size list removes the sizes; null owners clear the owners row', async () => {
+    expect((await put({ sizes: [], fbaPrepOwner: null, fbaLabelOwner: null, productIds: [ids.blue] })).body).toMatchObject({ ok: true, results: [{ productId: ids.blue, ok: true }] })
+    expect(await sizeRows(ids.blue)).toEqual([])
+    expect(await ownersRow(ids.blue)).toBeNull()
   })
 
   it('the permission: `inventory.view` alone is refused by the gate, nothing written; the route maps to inventory.adjust', async () => {
     expect(permissionForRoute('PUT', '/api/stock/case-packs')).toBe(F.inventoryAdjust)
-    const before = await packRow(ids.red)
-    expect(await put({ ...PACK, unitsPerCase: 4, productIds: [ids.red] }, F.inventoryView)).toEqual({ status: 403, body: { error: 'Access denied', code: 'forbidden', required: F.inventoryAdjust } })
-    expect(await packRow(ids.red)).toEqual(before)
+    const before = await sizeRows(ids.red)
+    expect(await put({ sizes: [{ ...SIZE, unitsPerCase: 4 }], productIds: [ids.red] }, F.inventoryView)).toEqual({ status: 403, body: { error: 'Access denied', code: 'forbidden', required: F.inventoryAdjust } })
+    expect(await sizeRows(ids.red)).toEqual(before)
   })
 
   it('a refusal the service throws keeps its code (400); an unexpected failure is a 500', async () => {

@@ -18,13 +18,13 @@
 import type { Prisma } from '@prisma/client'
 import {
   FBA_SEND_COPY, FBA_SEND_HOLD, FBA_SEND_MAX_SKUS, FBA_STEP_STATUS, FBA_EVENT_MAX_PRODUCTS,
-  MIXED_BOX_DEFAULT, effectiveOwners, fbaAmazonPlanName, fbaPlanCan, isFbaPlanStep, lengthCm, lineUnits, nextWorkingDay,
+  MIXED_BOX_DEFAULT, effectiveOwners, fbaAmazonPlanName, fbaPlanCan, isFbaPlanStep, lengthCm, lineCases, lineUnits, nextWorkingDay,
   sendProblems, unitWeightKg,
   type FbaChoiceRequest, type FbaCreateAnswer, type FbaCreateRequest, type FbaMixedBox, type FbaPlanOptions,
   type FbaPlanStatus, type FbaPlanStep, type FbaPlanStepEntry, type FbaPlanView, type FbaSendDraft, type FbaSendLine,
   type FbaSendLocation, type FbaSendMarket, type FbaSendOwners, type FbaSendSku,
 } from '@nexus/shared/fba-send'
-import { caseSplit, isCaseOwner } from '@nexus/shared/stock-cases'
+import { caseSplit, countsFor, isCaseOwner } from '@nexus/shared/stock-cases'
 import prisma from '../../db.js'
 import { publishEvent } from '../../lib/events/publish.js'
 import { logger } from '../../utils/logger.js'
@@ -34,7 +34,7 @@ import { amazonAccountIdFor, amazonSkusInMarket } from '../listings/reported-sku
 import { lockProductStock } from '../stock-lock.js'
 import { releaseReservationInTx, reserveStockInTx, StockLevelMissingError } from '../stock-level.service.js'
 import { InsufficientStockError } from '../stock-movement.service.js'
-import { sealedByLevel, setFbaOwnersIfUnset } from '../stock/stock-cases.service.js'
+import { caseSizesOf, sealedByLevel, setFbaOwnersIfUnset } from '../stock/stock-cases.service.js'
 import { requireShipFromAddress, shipFromAddress, type WarehouseAddress } from './address.js'
 import { openPlanUnits, planViewIn } from './read.service.js'
 import { FbaSendError, type FbaActor, type FbaPerson, type FbaPlanSource, type FbaSendDraftQuery } from './contract.js'
@@ -91,7 +91,7 @@ export async function lockPlan(tx: Tx, planId: string) {
     select: {
       id: true, name: true, status: true, currentStep: true, source: true, planId: true, steps: true, options: true,
       nextCheckAt: true, sourceLocationId: true,
-      lines: { select: { id: true, productId: true, msku: true, quantity: true, cases: true, unitsPerCase: true, shippedQuantity: true, reservationId: true } },
+      lines: { select: { id: true, productId: true, msku: true, quantity: true, caseCounts: true, shippedQuantity: true, reservationId: true } },
     },
   })
   if (!row || row.source === null) throw new FbaSendError('NOT_FOUND', 'FBA plan not found')
@@ -170,14 +170,13 @@ async function draftFacts(query: FbaSendDraftQuery): Promise<DraftFacts> {
   const today = romeToday()
   const { check } = await shipFromAddress(warehouse)
 
-  // Per SKU at From: units, holds, sealed cases, the case pack, unit weight and size, owners, the Amazon SKU, open plans.
+  // Per SKU at From: units, holds, sealed cases per size, the case sizes, unit weight and size, owners, the Amazon SKU,
+  // open plans.
   const ids = products.map((product) => product.id)
-  const [levels, packs, inPlans, amazon] = await Promise.all([
+  const [levels, packs, sizesOf, inPlans, amazon] = await Promise.all([
     prisma.stockLevel.findMany({ where: { locationId: from?.id ?? '', productId: { in: from ? ids : [] }, variationId: null }, select: { id: true, productId: true, quantity: true, reserved: true, available: true } }),
-    prisma.productPackage.findMany({
-      where: { productId: { in: ids } },
-      select: { productId: true, unitsPerCase: true, caseLengthCm: true, caseWidthCm: true, caseHeightCm: true, caseWeightKg: true, fbaPrepOwner: true, fbaLabelOwner: true },
-    }),
+    prisma.productPackage.findMany({ where: { productId: { in: ids } }, select: { productId: true, fbaPrepOwner: true, fbaLabelOwner: true } }),
+    caseSizesOf(prisma, ids),
     openPlanUnits(prisma, ids),
     markets.some((m) => m.code === market)
       ? amazonSkusInMarket(prisma as unknown as Tx, { accountId, marketplace: market, products: products.map((product) => ({ id: product.id, sku: product.sku })) })
@@ -190,11 +189,9 @@ async function draftFacts(query: FbaSendDraftQuery): Promise<DraftFacts> {
   const skus: FbaSendSku[] = products.map((product) => {
     const level = levelOf.get(product.id)
     const pack = packOf.get(product.id)
-    const unitsPerCase = pack?.unitsPerCase ?? null
-    const split = caseSplit({ quantity: level?.quantity ?? 0, reserved: level?.reserved ?? 0, cases: level ? sealed.get(level.id) ?? 0 : 0, unitsPerCase })
-    const caseDims = pack && pack.caseLengthCm !== null && pack.caseWidthCm !== null && pack.caseHeightCm !== null && pack.caseWeightKg !== null
-      ? { lengthCm: Number(pack.caseLengthCm), widthCm: Number(pack.caseWidthCm), heightCm: Number(pack.caseHeightCm), weightKg: Number(pack.caseWeightKg) }
-      : null
+    const sizes = sizesOf.get(product.id) ?? []
+    const stored = (level ? sealed.get(level.id) : undefined) ?? countsFor(sizes.map((size) => size.unitsPerCase), [])
+    const split = caseSplit({ quantity: level?.quantity ?? 0, reserved: level?.reserved ?? 0, cases: stored })
     const sides = [product.dimLength, product.dimWidth, product.dimHeight].map((value) => lengthCm(value?.toString() ?? null, product.dimUnit))
     const listing = (amazon as Map<string, { ok: boolean; sku?: string }>).get(product.id)
     return {
@@ -202,8 +199,12 @@ async function draftFacts(query: FbaSendDraftQuery): Promise<DraftFacts> {
       sku: product.sku,
       name: product.name,
       msku: listing && listing.ok ? listing.sku ?? null : null,
-      unitsPerCase,
-      case: caseDims,
+      caseSizes: sizes.map((size) => ({
+        unitsPerCase: size.unitsPerCase,
+        case: size.caseLengthCm !== null && size.caseWidthCm !== null && size.caseHeightCm !== null && size.caseWeightKg !== null
+          ? { lengthCm: size.caseLengthCm, widthCm: size.caseWidthCm, heightCm: size.caseHeightCm, weightKg: size.caseWeightKg }
+          : null,
+      })),
       unitWeightKg: unitWeightKg(product.weightValue?.toString() ?? null, product.weightUnit),
       unit: sides.every((side): side is number => side !== null) ? { lengthCm: sides[0], widthCm: sides[1], heightCm: sides[2] } : null,
       onHand: level?.quantity ?? 0,
@@ -242,7 +243,12 @@ function parseCreate(req: FbaCreateRequest): { lines: FbaSendLine[]; mixedBox: F
   if (req.lines.length > FBA_SEND_MAX_SKUS) throw new FbaSendError('REFUSED', FBA_SEND_COPY.problem.tooManySkus, [{ code: 'TOO_MANY_SKUS', message: FBA_SEND_COPY.problem.tooManySkus, productId: null, blocking: true }])
   const lines: FbaSendLine[] = req.lines.map((line) => {
     if (!line || typeof line !== 'object' || typeof line.productId !== 'string' || !line.productId.trim()) throw bad('Every line names a productId')
-    return { productId: line.productId.trim(), cases: line.cases ?? 0, looseUnits: line.looseUnits ?? 0 }
+    // Sealed cases per case size: [{ unitsPerCase, cases }]. Anything else is kept as sent, and the shared rule refuses
+    // it (INVALID_QUANTITY) — never read as "no cases".
+    const cases = line.cases == null ? [] : Array.isArray(line.cases)
+      ? line.cases.map((c) => ({ unitsPerCase: (c as { unitsPerCase?: unknown })?.unitsPerCase as number, cases: (c as { cases?: unknown })?.cases as number }))
+      : line.cases
+    return { productId: line.productId.trim(), cases, looseUnits: line.looseUnits ?? 0 }
   })
   let mixedBox: FbaMixedBox | null = null
   if (req.mixedBox != null) {
@@ -282,10 +288,11 @@ export async function createSendPlan(req: FbaCreateRequest, who: FbaActor, sourc
   const mixedBox = parsed.mixedBox ?? draft.mixedBox
   const skuOf = new Map(draft.skus.map((sku) => [sku.productId, sku]))
   const sending = parsed.lines
-    .filter((line) => line.cases > 0 || line.looseUnits > 0)
+    .filter((line) => lineCases(line) > 0 || line.looseUnits > 0)
     .map((line) => {
       const sku = skuOf.get(line.productId)!
-      return { line, sku, owners: effectiveOwners(sku, parsed.owners)!, quantity: lineUnits(line, sku.unitsPerCase) }
+      const caseCounts = line.cases.filter((c) => c.cases > 0).sort((a, b) => b.unitsPerCase - a.unitsPerCase)
+      return { line, sku, caseCounts, owners: effectiveOwners(sku, parsed.owners)!, quantity: lineUnits(line) }
     })
   const productIds = sending.map((s) => s.sku.productId)
   const ownersToSave = parsed.owners ? sending.filter((s) => s.sku.prepOwner === null || s.sku.labelOwner === null).map((s) => s.sku.productId) : []
@@ -315,8 +322,8 @@ export async function createSendPlan(req: FbaCreateRequest, who: FbaActor, sourc
         })
         await tx.fbaInboundPlanLine.create({
           data: {
-            planRowId: plan.id, productId: s.sku.productId, msku: s.sku.msku!, quantity: s.quantity, cases: s.line.cases,
-            unitsPerCase: s.sku.unitsPerCase, looseUnits: s.line.looseUnits, prepOwner: s.owners.prepOwner, labelOwner: s.owners.labelOwner,
+            planRowId: plan.id, productId: s.sku.productId, msku: s.sku.msku!, quantity: s.quantity,
+            caseCounts: s.caseCounts as unknown as Prisma.InputJsonValue, looseUnits: s.line.looseUnits, prepOwner: s.owners.prepOwner, labelOwner: s.owners.labelOwner,
             reservationId: hold.id,
           },
         })

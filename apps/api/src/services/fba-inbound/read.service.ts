@@ -13,6 +13,7 @@ import {
   type FbaPlanStepEntry, type FbaPlanView, type FbaShipmentBox, type FbaShipmentTracking, type FbaShipmentTransport,
   type FbaShipmentView,
 } from '@nexus/shared/fba-send'
+import { isCaseSize, type CaseCount } from '@nexus/shared/stock-cases'
 import prisma from '../../db.js'
 import type { FbaPlansQuery } from './contract.js'
 
@@ -27,13 +28,22 @@ export const PLAN_VIEW_SELECT = {
   createdAt: true, createdBy: true, confirmedAt: true, confirmedBy: true, cancelledAt: true,
   lines: {
     select: {
-      productId: true, msku: true, quantity: true, cases: true, unitsPerCase: true, looseUnits: true, prepOwner: true,
+      productId: true, msku: true, quantity: true, caseCounts: true, looseUnits: true, prepOwner: true,
       labelOwner: true, shippedQuantity: true, reservationId: true, createdAt: true, product: { select: { sku: true } },
     },
     orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
   },
 } satisfies Prisma.FbaInboundPlanV2Select
 export type PlanViewRow = Prisma.FbaInboundPlanV2GetPayload<{ select: typeof PLAN_VIEW_SELECT }>
+
+/** A plan line's `caseCounts` (Json) as the sealed cases per size it sent: whole counts > 0 only, biggest size first. */
+export function lineCaseCounts(value: unknown): CaseCount[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((c) => ({ unitsPerCase: Number((c as { unitsPerCase?: unknown })?.unitsPerCase), cases: Number((c as { cases?: unknown })?.cases) }))
+    .filter((c) => isCaseSize(c.unitsPerCase) && Number.isInteger(c.cases) && c.cases > 0)
+    .sort((a, b) => b.unitsPerCase - a.unitsPerCase)
+}
 
 const iso = (value: Date | null | undefined): string | null => (value ? value.toISOString() : null)
 const day = (value: Date | null | undefined): string | null => (value ? value.toISOString().slice(0, 10) : null)
@@ -91,8 +101,7 @@ export async function planViews(db: Db, rows: PlanViewRow[], now: Date = new Dat
       sku: line.product.sku,
       msku: line.msku,
       quantity: line.quantity,
-      cases: line.cases,
-      unitsPerCase: line.unitsPerCase,
+      cases: lineCaseCounts(line.caseCounts),
       looseUnits: line.looseUnits,
       prepOwner: line.prepOwner,
       labelOwner: line.labelOwner,

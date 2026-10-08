@@ -52,12 +52,16 @@ const cases = {
   'a hold written through a level relation': [TS, "export const f = (tx: any) => tx.product.update({ where: { id: 'p' }, data: { stockLevels: { update: { where: { id: 'l' }, data: { reservations: { create: { quantity: 1 } } } } } } })\n", 'StockReservation'],
   'an order movement written through a product relation': [TS, "export const f = (tx: any) => tx.product.update({ where: { id: 'p' }, data: { stockMovements: { create: { change: -1, reason: 'ORDER_CANCELLED' } } } })\n", 'order stock movement'],
   'a delegate behind a cast': [TS, "export const f = (tx: any) => (tx.stockReservation as any).update({ where: { id: 'x' }, data: {} })\n", 'StockReservation'],
-  // Step 3 cases (2026-10-07): sealed case counts and case packs have one owner, under the product lock.
+  // Step 3 cases (2026-10-07): sealed case counts, case sizes and case packs have one owner, under the product lock.
   'an unlisted case count write': [TS, "export const f = (tx: any) => tx.stockCaseCount.update({ where: { id: 'x' }, data: { cases: 0 } })\n", 'StockCaseCount'],
   'a raw case count write': [TS, 'export const f = (tx: any) => tx.$executeRaw`UPDATE "StockCaseCount" SET cases = 0`\n', 'StockCaseCount'],
   'an unlisted case pack write': [TS, "export const f = (tx: any) => tx.productPackage.upsert({ where: { productId: 'p' }, create: { productId: 'p' }, update: {} })\n", 'ProductPackage'],
-  'a case pack written through a product relation': [TS, "export const f = (tx: any) => tx.product.update({ where: { id: 'p' }, data: { casePacks: { create: { unitsPerCase: 12 } } } })\n", 'StockCaseCount or ProductPackage'],
-  'a case count written through a level relation': [TS, "export const f = (tx: any) => tx.warehouse.update({ where: { id: 'w' }, data: { stock: { update: { where: { id: 'l' }, data: { caseCounts: { create: { cases: 4 } } } } } } })\n", 'StockCaseCount or ProductPackage'],
+  'a case pack written through a product relation': [TS, "export const f = (tx: any) => tx.product.update({ where: { id: 'p' }, data: { casePacks: { create: { fbaPrepOwner: 'SELLER' } } } })\n", 'StockCaseCount, ProductCaseSize or ProductPackage'],
+  'a case count written through a level relation': [TS, "export const f = (tx: any) => tx.warehouse.update({ where: { id: 'w' }, data: { stock: { update: { where: { id: 'l' }, data: { caseCounts: { create: { cases: 4 } } } } } } })\n", 'StockCaseCount, ProductCaseSize or ProductPackage'],
+  // Several case sizes per SKU (2026-10-08): the sizes have the same one owner.
+  'an unlisted case size write': [TS, "export const f = (tx: any) => tx.productCaseSize.deleteMany({ where: { productId: 'p' } })\n", 'ProductCaseSize'],
+  'a raw case size write': [TS, 'export const f = (tx: any) => tx.$executeRaw`DELETE FROM "ProductCaseSize" WHERE id = 1`\n', 'ProductCaseSize'],
+  'a case size written through a product relation': [TS, "export const f = (tx: any) => tx.product.update({ where: { id: 'p' }, data: { caseSizes: { create: { unitsPerCase: 6 } } } })\n", 'StockCaseCount, ProductCaseSize or ProductPackage'],
   'a function defined only in a migration': ['packages/database/prisma/migrations/20990101a_probe/migration.sql', 'CREATE OR REPLACE FUNCTION public.probe_migration() RETURNS void LANGUAGE plpgsql AS $$ BEGIN INSERT INTO "StockReservation" (id) VALUES (\'x\'); END $$;\n', 'probe_migration'],
 }
 test('fails on a listed case writer that does not take the product lock', () => {

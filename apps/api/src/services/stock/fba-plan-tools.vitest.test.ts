@@ -123,10 +123,15 @@ describe('08 S13 — FBA plans through the Send to FBA services', () => {
       .toBe('TEST-SKU-S13-BOOTS: choose who preps and labels (Prep by / Labels by) — Set Prep by / Labels by in the Matrix Case column first. Nothing was sent to Amazon.')
     expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, units: 20 }] })).error)
       .toBe('TEST-SKU-S13-FBA: 20 units asked; 12 free at TEST-MAIN. Nothing was sent to Amazon.')
+    // Cases name their size; a plain number stands for the SKU's one case size — the jacket has none.
+    expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, cases: 1 }] })).error)
+      .toBe('TEST-SKU-S13-FBA: No case size — set it in the Matrix (Case column). Nothing was sent to Amazon.')
+    expect((await run('plan-fba-shipment', { marketplace: 'IT', lines: [{ productId: ids.jacket, cases: [{ unitsPerCase: 6, cases: 1 }] }] })).error)
+      .toBe('TEST-SKU-S13-FBA: No 6 / case size — set it in the Matrix (Case column). Nothing was sent to Amazon.')
     const dry = await run('plan-fba-shipment', { marketplace: 'it', lines: [{ productId: ids.jacket, quantity: 6 }] })
     expect(dry, dry.error).toMatchObject({ ok: true, preview: {
       marketplace: 'IT', from: { code: 'TEST-MAIN', town: 'Testville' },
-      lines: [{ sku: 'TEST-SKU-S13-FBA', cases: 0, units: 6, quantity: 6, freeNow: 12, prepBy: 'SELLER', labelsBy: 'SELLER' }],
+      lines: [{ sku: 'TEST-SKU-S13-FBA', cases: [], units: 6, quantity: 6, freeNow: 12, prepBy: 'SELLER', labelsBy: 'SELLER' }],
       totals: { skus: 1, units: 6, boxes: 1, mixedBoxes: 1 }, note: expect.stringContaining('Claude cannot confirm'),
     } })
     expect(await inside(() => database.client.fbaInboundPlanV2.count())).toBe(0)
