@@ -34,6 +34,7 @@ import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
 import { approvedRun, notRun } from './ads-change-kit.js'
 import { ADDS_NO_SPEND, addsSpendWords, codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
 import { putBack } from './ads-bid-brain-enrollment.tools.js'
+import { giveBackWhatBroke, type GiveBackResult } from '../../advertising/brain/retire-run.js'
 import { updateCampaignWithSync } from '../../advertising/ads-mutation.service.js'
 import type { AgentTool, PlanEntities, ToolContext, ToolResult } from '../tool-types.js'
 
@@ -238,11 +239,19 @@ const setAdsBrain: AgentTool = {
         warnings.push(`campaign ${campaignId} is back in shadow, but what a stop saved could not be given back (${err instanceof Error ? err.message : String(err)}).`)
       }
     }
+    // AB-20 — a change that ends what a retirement stood on (leaving the brain, a lever back from AUTO or from the Owner's
+    // choice, an unlock, an exclusion) gives back at once each writer the brain retired there; nothing retired, one count.
+    let gaveBackWriters: GiveBackResult[] = []
+    try { gaveBackWriters = await giveBackWhatBroke(p.brain.productId, p.brain.market, run.actor) } catch (err) {
+      logger.warn('[ads-brain] the retired writers could not be checked after a change of the brain — the 15-minute tick does it', { productId: p.brain.productId, market: p.brain.market, error: err instanceof Error ? err.message : String(err) })
+      warnings.push('the writers this product\'s brain retired could not be checked now: the 15-minute tick gives back what no longer holds.')
+    }
     return {
       ok: true,
       data: {
         op: p.op, productId: p.brain.productId, market: p.brain.market, version: done.version, summary: p.summary, changeSetId: run.changeSetId,
         ...(gaveBack.length ? { gaveBack } : {}), ...(resumed.length ? { resumed } : {}), ...(done.withdrawn?.length ? { withdrawn: done.withdrawn } : {}), ...(warnings.length ? { warnings } : {}),
+        ...(gaveBackWriters.length ? { gaveBackWriters: gaveBackWriters.map((g) => ({ writer: g.writer, id: g.targetId, name: g.name, did: g.act, why: g.why })) } : {}),
         note: 'ads-brain view map shows the product\'s brain with every setting and where it comes from.',
       },
       change: { before: done.before, after: done.after },

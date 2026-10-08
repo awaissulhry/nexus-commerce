@@ -72,7 +72,8 @@ import { amountLabel, liveReachOf } from './ads-tool-guards.js'
 import { approvedRun, canonical, notRun, reachNote, reachRefusal, recheck, requesterOf, storedReach, strategyFactsMoney, type StoredReach } from './ads-change-kit.js'
 import { adKitLimits, buildLimitFacts, commonRefusal, limitFactsOf, limitsNote, type KitChange, type KitItem } from './ads-autonomy-kit.js'
 import { STEP_UP_NEEDS } from '../step-up-approval.js'
-import { codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-code-rule.js'
+import { codeGate, DAY_TO_DAY_NO_CODE, goLiveDoor, needsCode } from './ads-code-rule.js'
+import { structureGoLive } from '../../advertising/brain/structure-golive.js'
 import { executeSync, syncPreview, syncRefusal, syncUndoCurrent, syncUndoRequest, type SyncAfter, type SyncArgsIn } from './ads-playbook-sync.js'
 import type { AgentTool, FieldPermission, ToolContext, ToolDoor, ToolResult, ToolUndo } from '../tool-types.js'
 
@@ -330,6 +331,9 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
   const campaigns = p.campaigns.map((c) => campaignOpLine(op, c))
   // The playbook's hourly plans a START switches on raise bids too (top of search): part of what the code approves.
   const rankOn = p.artifacts.filter((l) => l.kind === 'rankGroup' && l.does === 'enable').length
+  // AB-16 (D1 = B) — a START of campaigns the ads brain built (a hero it asked for), inside their caps and nothing else
+  // switched on or given back: the brain's line, a normal approval. Anything more: the playbook's START line (the code).
+  const brainGoLive = op === 'start' && acting.length && !switching && !p.heldFloors.length && !p.syncedBids.length ? await structureGoLive(acting.map((c) => c.campaignId)) : null
   const paused = p.campaigns.filter((c) => c.paused).length
   const effect = op === 'start'
     ? `Starts ${p.product.sku}'s playbook in ${p.market}: ${plural(acting.length, 'campaign')} it built ${acting.length === 1 ? 'goes' : 'go'} on the live-write allowlist with ${acting.length === 1 ? 'its' : 'their'} planned bids and placements back — `
@@ -371,10 +375,11 @@ async function startPreview(a: Args, ctx: Pick<ToolContext, 'approvalId'>): Prom
         ...(p.artifactErrors.length ? { artifactErrors: p.artifactErrors } : {}),
         warnings: p.warnings,
         // The Owner's code rule (ads-code-rule.ts): a playbook START is a big door.
+        ...(brainGoLive ? { brainStructure: { inside: brainGoLive.inside, why: brainGoLive.why } } : {}),
         ...(op === 'start'
-          ? needsCode('apply-ads-playbook: start')
+          ? needsCode(goLiveDoor('apply-ads-playbook: start', brainGoLive))
             ? { stepUp: { what: `starts spending on ${plural(p.spending, 'campaign')}${rankOn ? ` and switches on ${plural(rankOn, 'hourly bid plan')}` : ''}`, raises: ['Bids', 'Spend', ...(rankOn ? ['Hourly bid plans'] : [])], needs: STEP_UP_NEEDS, how: START_HOW } }
-            : { noCode: DAY_TO_DAY_NO_CODE }
+            : { noCode: brainGoLive?.inside ? brainGoLive.why : DAY_TO_DAY_NO_CODE }
           : { noCode: 'A stop lowers spend: it needs no authenticator code.' }),
         basis: hash({ op, row: [p.playbook.id, p.playbook.version], campaigns: p.campaigns, untouched: p.untouched, heldFloors: p.heldFloors, floorsTaken: p.floorsTaken, artifacts: p.artifacts, syncedBids: p.syncedBids }),
         reach: stored,

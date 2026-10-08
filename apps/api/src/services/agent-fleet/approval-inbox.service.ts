@@ -858,6 +858,9 @@ export const MATERIAL_PREVIEW_FIELDS: Record<string, string[]> = {
   'apply-brain-harvest': ['basis', 'reach'],
   /* ONE BRAIN AB-15 — the kill switch of one lever: which op, which lever and whose, and the kill it stands on (basis). */
   'set-brain-kill-switch': ['op', 'kill', 'basis'],
+  /* ONE BRAIN AB-20 — the duplicate writers of one product: which op, exactly what is switched off (or on again) and the
+     plan it stands on (basis). */
+  'retire-ads-writers': ['op', 'switchesOff', 'givesBack', 'basis'],
   // W4-5 — every target or negative with its place and bids (a harvest: its term, source, destination, bid and negative
   // plan, a bid it worked out itself frozen in the approval; a retire: every negative with who made it), where it lands;
   // for negatives also the other products' places and the proven handovers they would close (never the numbers, which

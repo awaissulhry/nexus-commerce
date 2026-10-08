@@ -25,8 +25,9 @@
  *              HELD are given back (default: their bids and placements as they were when they went LIVE — the bid brain's
  *              own give-back), taken back to shadow with their bids where they are, or kept running one by one. Batch 2
  *              fix — what the brain still holds goes with it: every request it asked for that still waits for a person
- *              (its budgets, cap, pauses, negatives, harvests, painted hourly plans) is withdrawn in the same transaction (an
- *              approved one would run as the approver after the product left), and each campaign its own pause holds is
+ *              (its budgets, cap, pauses, negatives, harvests, painted hourly plans, bidding-strategy switches) is withdrawn
+ *              in the same transaction (an approved one would run as the approver after the product left), and each
+ *              campaign its own pause holds is
  *              resumed after the commit, as the approver (`pauses`: resume, the default — lifting an automation's pause is a
  *              big door under code rule A, so the approver's code; or keep: they stay paused, each named, a normal approval).
  *
@@ -215,7 +216,7 @@ export const LEVER_DECIDES: Record<BrainLever, string> = {
   portfolioCap: 'the Amazon portfolio cap, monthly, never below this month\'s spend',
   negatives: 'where and what to negate (waste, the product set, isolation) inside each campaign\'s negative budget, and revives',
   harvest: 'converting search terms graduated to exact keywords, each with its source negatives',
-  structure: 'new campaigns, built as proposals',
+  structure: 'single-keyword campaigns for key terms, splits of shared campaigns and moves into the product\'s one portfolio, each a proposal a person approves',
   biddingStrategy: 'each campaign\'s Amazon bidding strategy',
   offAmazon: 'the off-Amazon setting',
 }
@@ -272,6 +273,7 @@ const AUTO_RAISES: Partial<Record<BrainLever, string>> = {
   budgets: 'the brain may raise campaign budgets inside the pace and the day\'s move limit, and add the intraday ladder',
   state: 'the brain may resume campaigns it paused once their stop ends (spend restarts)',
   harvest: 'the brain may add new exact keywords from converting search terms, each starting to spend',
+  biddingStrategy: 'after the approval days (N4) the brain may switch a campaign to up and down, where top of search converts well and the CPC ceiling holds it: Amazon may then raise each bid up to +100 %',
 }
 
 /**
@@ -289,6 +291,8 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   newCampaignsPerWeek: { when: 'up', words: 'more new campaigns a week, each with its own budget' },
   skcMax: { when: 'up', words: 'more single-keyword campaigns, each with its own budget' },
   firstBudgetPctOfEnvelope: { when: 'up', words: 'a new campaign starts with a larger budget' },
+  skcOrderSharePct: { when: 'down', words: 'more terms qualify for a single-keyword campaign of their own, each with its own budget' },
+  skcHourCurvePct: { when: 'down', words: 'more terms qualify for a single-keyword campaign of their own, each with its own budget' },
   minBidEntriesPerDay: { when: 'down', words: 'fewer Min-bid hours a day: campaigns bid normally in more hours' },
   hourCellMovePct: { when: 'up', words: 'a painted hour may move further, raises included' },
   hourProposalsPerWeek: { when: 'never', words: 'how often the brain asks; each plan still waits for a person' },
@@ -297,6 +301,12 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   biddingStrategySwitchDays: { when: 'down', words: 'bidding-strategy switches (up and down lets Amazon raise a bid up to +100 %) may come more often' },
   budgetUsePct: { when: 'down', words: 'a campaign budget is sized for a lower use, so budgets come out larger' },
   intradayLadderMaxPct: { when: 'up', words: 'a larger intraday budget raise' },
+  intradaySpendHoldPct: { when: 'up', words: 'the bid brain keeps raising on a day whose spend runs further above its plan' },
+  intradaySpendCutPct: { when: 'up', words: 'the bid brain cuts the bids later on a day whose spend runs above its plan' },
+  intradaySpendCutStepPct: { when: 'down', words: 'a smaller intraday cut of the bids on a day whose spend runs above its plan' },
+  intradayCpcSpikePct: { when: 'up', words: 'the bid brain pays a higher cost per click in a lane before its spike brake holds it' },
+  intradayCpcMinClicks: { when: 'up', words: 'a lane needs more clicks before its cost-per-click spike is braked' },
+  intradayBudgetSlowMinPct: { when: 'up', words: 'a gentler slowdown of the low-value hours when a budget would run out early' },
   paceTargetPct: { when: 'up', words: 'the pace aims at more of the month\'s budget by month end' },
   portfolioCapOn: { when: 'off', words: 'the Amazon portfolio cap — the only hard limit Amazon enforces — is no longer set by the brain' },
   portfolioCapPct: { when: 'up', words: 'a higher Amazon portfolio cap (the hard backstop)' },
@@ -305,6 +315,7 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   portfolioCapLimitCents: { when: 'up-or-cleared', words: 'a higher limit for this product\'s Amazon portfolio caps: a larger cap may be asked for, written by the brain or set by a person (empty = the server\'s limit, which may be higher)' },
   ownPortfolio: { when: 'never', words: 'where the brain proposes to put the product\'s campaigns' },
   strategySwitchMode: { when: { from: 'ALWAYS_PROPOSE', to: 'PROPOSE_THEN_AUTO' }, words: 'bidding-strategy switches may run alone after 30 days (up and down lets Amazon raise a bid up to +100 %)' },
+  strategyApprovalDays: { when: 'down', words: 'bidding-strategy switches may run alone sooner (up and down lets Amazon raise a bid up to +100 %)' },
   pauseMinDays: { when: 'never', words: 'a shorter stop stays on low bids instead of a pause' },
   archiveDeadWeeks: { when: 'never', words: 'an archive is only ever a proposal' },
   longStopUntil: { when: 'cleared-or-earlier', words: 'the Owner\'s long stop ends sooner: the brain resumes the campaigns sooner' },
@@ -822,12 +833,14 @@ const refusalList = (r: readonly string[]) => (r.length === 1 ? `Not queued: ${r
  */
 export async function brainRequestsWaiting(productId: string, market: string): Promise<Array<{ approvalId: string; tool: string; lever: string; requestedAt: string }>> {
   const where = { productId, marketplace: market }
-  const [asks, negatives, states, harvests, hours] = await Promise.all([
+  const [asks, negatives, states, harvests, hours, strategies] = await Promise.all([
     prisma.adsBrainAsk.findMany({ where: { ...where, approvalId: { not: null } }, select: { approvalId: true, kind: true } }),
     prisma.adsBrainNegative.findMany({ where: { ...where, approvalId: { not: null } }, select: { approvalId: true } }),
     prisma.adsBrainStateDecision.findMany({ where: { ...where, approvalId: { not: null } }, select: { approvalId: true } }),
     prisma.adsBrainHarvest.findMany({ where: { ...where, OR: [{ approvalId: { not: null } }, { undoApprovalId: { not: null } }] }, select: { approvalId: true, undoApprovalId: true } }),
     prisma.adsBrainHourProposal.findMany({ where: { ...where, approvalId: { not: null } }, select: { approvalId: true } }),
+    // AB-17 — the bidding-strategy lever's requests: a switch, and a switch back after its test.
+    prisma.adsBrainStrategyTest.findMany({ where: { ...where, OR: [{ approvalId: { not: null } }, { revertApprovalId: { not: null } }] }, select: { approvalId: true, revertApprovalId: true } }),
   ])
   const lever = new Map<string, string>()
   for (const a of asks) lever.set(a.approvalId!, a.kind === 'portfolioCap' ? 'portfolioCap' : 'budgets')
@@ -835,6 +848,7 @@ export async function brainRequestsWaiting(productId: string, market: string): P
   for (const s of states) lever.set(s.approvalId!, 'state')
   for (const h of harvests) for (const id of [h.approvalId, h.undoApprovalId]) if (id) lever.set(id, 'harvest')
   for (const h of hours) lever.set(h.approvalId!, 'hours')
+  for (const t of strategies) for (const id of [t.approvalId, t.revertApprovalId]) if (id) lever.set(id, 'biddingStrategy')
   if (!lever.size) return []
   const pending = await prisma.agentApproval.findMany({ where: { id: { in: [...lever.keys()] }, status: 'pending' }, select: { id: true, toolName: true, requestedAt: true }, orderBy: { requestedAt: 'asc' } })
   return pending.map((a) => ({ approvalId: a.id, tool: a.toolName, lever: lever.get(a.id)!, requestedAt: a.requestedAt.toISOString() }))

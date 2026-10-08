@@ -252,9 +252,11 @@ export async function runCycleTick(opts: { now?: Date; runners?: Partial<CycleRu
   }
 
   async function reportOf(c: Claimed, status: 'DONE' | 'PARTIAL'): Promise<{ report: ProductReport; summary: string }> {
-    const [product, money] = await Promise.all([
+    const [product, money, proof] = await Promise.all([
       prisma.product.findFirst({ where: { id: c.productId }, select: { name: true } }),
       c.records.money?.status === 'done' ? import('./budget-shadow.js').then((m) => m.newestMoneyDecisions(c.market, [c.productId])) : Promise.resolve(new Map()),
+      // AB-20 — the A/B proof's line (never throws: a failed read is said in the line).
+      import('./proof-read.js').then((m) => m.proofStatusLine(c.productId, c.market, dataDay)),
     ])
     const plan = money.get(c.productId)?.plan ?? null
     const month: MoneyInOut['month'] = plan ? { spentCents: plan.pace.spentNowCents, envelopeCents: plan.envelope.cents, projectedCents: plan.pace.projectedCents, pacePct: plan.pace.pacePct, brake: plan.brake.level } : null
@@ -262,7 +264,7 @@ export async function runCycleTick(opts: { now?: Date; runners?: Partial<CycleRu
     const excluded = c.settings.excluded.value ? { by: c.settings.excluded.by ? describeProvenance(c.settings.excluded) : null, reason: c.settings.excluded.reason } : null
     return buildReport({
       productId: c.productId, name: product?.name ?? null, market: c.market, dataDay, changeSetId: c.row.changeSetId, status, attempts: c.row.attempts, now,
-      records: c.records, excluded, holds: ownerHoldsOf(c.productId, c.market, overrides), moneyInOut: inOut, later: c.row.laterOf,
+      records: c.records, excluded, holds: ownerHoldsOf(c.productId, c.market, overrides), moneyInOut: inOut, later: c.row.laterOf, proof,
     })
   }
 

@@ -14,6 +14,9 @@
  *               code runs on a plain approve; a retire with the code needs it (each door's own file flips its line too)
  *   plan        a big door as a step of a change plan: the plan carries its stepUp; no code mfa_required, with it it runs
  *   confirm     a big door set to confirm in Claude: the person who asked confirms it with confirm-change and their code
+ *   D1 = B      ONE BRAIN AB-16: a campaign the ads brain built for an enrolled product goes live — set-campaign-live-writes
+ *               on, then restore-campaign of its birth floor — with a plain approve while it is inside its caps; above the
+ *               first-budget cap, or once the Owner takes the structure lever back, the approver's code as before
  *
  * PGlite, production schema; the job queue a stub. Made-up ids, names and values (public repo).
  */
@@ -95,12 +98,12 @@ const campaignRow = (id: string) => inside(() => db().campaign.findUniqueOrThrow
 const bidOf = async (id: string) => (await inside(() => db().adTarget.findUniqueOrThrow({ where: { id } }))).bidCents as number
 
 /** A campaign as a builder leaves it — or, `stoppedLater`, one made two days ago and stopped with low bids today. */
-async function flooredCampaign(id: string, opts: { stoppedLater?: boolean } = {}) {
+async function flooredCampaign(id: string, opts: { stoppedLater?: boolean; dailyBudget?: string } = {}) {
   const c = database.client as any
   const madeAt = opts.stoppedLater ? new Date(Date.now() - 2 * 86_400_000) : new Date()
   await c.campaign.create({
     data: {
-      id, name: `Test ${id}`, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: `EXT-${id}`, dailyBudget: '10.00',
+      id, name: `Test ${id}`, type: 'SP', adProduct: 'SPONSORED_PRODUCTS', marketplace: 'IT', externalCampaignId: `EXT-${id}`, dailyBudget: opts.dailyBudget ?? '10.00',
       startDate: new Date('2026-01-01T00:00:00Z'), liveBidWritesEnabled: false, createdAt: madeAt,
       bidsSuppressedAt: new Date(), bidsSuppressedBy: `user:${people.asker}`, bidsSuppressedFloorCents: 2,
     },
@@ -165,6 +168,8 @@ describe('the Owner\'s code rule A — the table', () => {
       'set-ads-brain: a portfolio cap limit raised': true,
       'set-brain-kill-switch: end': true,
       // Day-to-day: listed in raises, said in the effect, warned past his own limits, a normal approval.
+      // AB-16 (D1 = B): a campaign the ads brain built for an enrolled product, going live inside its caps.
+      'brain structure go-live: inside an enrolled product, inside caps': false,
       'set-hourly-bid-plan': false,
       'set-portfolio': false,
       'set-campaign-settings': false,
@@ -274,6 +279,70 @@ describe('the Owner\'s code rule A — the big doors it added, through the Appro
     expect(refused).toMatchObject({ ok: false })
     expect(String(refused.error)).toMatch(/and that runs only when a person with settings\.security\.manage approved it with their authenticator code .*Ask for it again/)
     expect((await campaignRow('c-off')).liveBidWritesEnabled).toBe(false)
+  })
+})
+
+describe('ONE BRAIN AB-16 (D1 = B) — a campaign the ads brain built goes live with a normal approval inside its caps', () => {
+  const PRODUCT = 'ab16-jacket'
+  /** The brain's record of a single-keyword campaign its approved build made (brain/structure-run.ts). */
+  async function brainBuilt(campaignId: string, term: string) {
+    const now = new Date()
+    await inside(() => db().adsBrainStructure.create({ data: {
+      productId: PRODUCT, marketplace: 'IT', kind: 'SKC', key: `skc:${PRODUCT}:${term}`, status: 'BUILT', level: 'PROPOSE', builder: 'create-ad-campaign', term,
+      builtCampaignIds: [campaignId], plan: {}, evidence: {}, why: 'test', digest: 'd', runId: 'r', decidedAt: now, checkedAt: now, changedAt: now,
+    } }))
+  }
+  beforeAll(async () => {
+    await inside(async () => {
+      // Inside the caps: no money plan, so the first-budget cap is Amazon's lowest (one unit a day); outside: ten.
+      await flooredCampaign('c-brain-in', { dailyBudget: '1.00' })
+      await flooredCampaign('c-brain-out', { dailyBudget: '10.00' })
+      await db().adsBrainEnrollment.create({ data: { productId: PRODUCT, marketplace: 'IT', enrolledBy: 'user:owner', updatedBy: 'user:owner' } })
+    })
+    await brainBuilt('c-brain-in', 'test term in')
+    await brainBuilt('c-brain-out', 'test term out')
+  })
+
+  it('the allowlist and the restore of its birth floor: no code inside the caps — a plain approve runs each; the card says why', async () => {
+    const asked = await ask('set-campaign-live-writes', { campaignId: 'c-brain-in', enabled: true })
+    expect(asked).toMatchObject({ ok: true, mode: 'queued' })
+    const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
+    expect(stored.preview.stepUp).toBeUndefined()
+    expect(stored.preview).toMatchObject({ brainStructure: { inside: true }, noCode: expect.stringMatching(/a person's normal approval sends it \(D1 = B\)/) })
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
+    expect(await commit(asked.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect((await campaignRow('c-brain-in')).liveBidWritesEnabled).toBe(true)
+    const restore = await ask('restore-campaign', { campaignId: 'c-brain-in' })
+    const card = (await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: restore.approvalId } }))).preview as Row
+    expect(card).toMatchObject({ bornAtFloor: { since: expect.any(String) }, brainStructure: { inside: true } })
+    expect(card.stepUp).toBeUndefined()
+    expect(await approve(restore.approvalId)).toMatchObject({ ok: true, status: 'scheduled' })
+    const done = await commit(restore.approvalId)
+    expect(done, JSON.stringify(done)).toMatchObject({ ok: true, status: 'executed' })
+    expect(await bidOf('t-c-brain-in')).toBe(60)
+  })
+
+  it('outside the caps (a budget above the first-budget cap): the code as before — mfa_required without it', async () => {
+    const asked = await ask('set-campaign-live-writes', { campaignId: 'c-brain-out', enabled: true })
+    const stored = await inside(() => db().agentApproval.findUniqueOrThrow({ where: { id: asked.approvalId } }))
+    expect(stored.preview).toMatchObject({ brainStructure: { inside: false, why: expect.stringMatching(/above the first-budget cap/) }, stepUp: { raises: ['Live writes'] } })
+    expect(await approve(asked.approvalId)).toMatchObject({ ok: false, code: 'mfa_required' })
+    expect((await campaignRow('c-brain-out')).liveBidWritesEnabled).toBe(false)
+  })
+
+  it('the Owner takes the structure lever back (OFF): the code again; the line flipped, the brain\'s campaign needs it too', async () => {
+    const off = await inside(() => db().adsBrainOverride.create({ data: { productId: PRODUCT, marketplace: 'IT', scope: 'PRODUCT', kind: 'LEVEL', key: 'structure', ref: '', value: 'OFF', by: 'user:owner', reason: 'mine' } }))
+    try {
+      const p = await preview('restore-campaign', { campaignId: 'c-brain-out' })
+      expect(p.preview).toMatchObject({ brainStructure: { inside: false, why: expect.stringMatching(/structure lever is OFF/) }, stepUp: { raises: ['Bids', 'Spend'] } })
+    } finally { await inside(() => db().adsBrainOverride.delete({ where: { id: off.id } })) }
+    __codeRuleTest.flip('brain structure go-live: inside an enrolled product, inside caps', true)
+    try {
+      await inside(() => db().campaign.update({ where: { id: 'c-brain-in' }, data: { liveBidWritesEnabled: false } }))
+      expect((await preview('set-campaign-live-writes', { campaignId: 'c-brain-in', enabled: true })).preview).toMatchObject({ brainStructure: { inside: true }, stepUp: { raises: ['Live writes'] } })
+    } finally { __codeRuleTest.reset() }
+    // A campaign the brain did not build is judged by its own line: c-door-plan is nobody's structure.
+    expect((await preview('set-campaign-live-writes', { campaignId: 'c-door-plan', enabled: true })).preview).not.toHaveProperty('brainStructure')
   })
 })
 

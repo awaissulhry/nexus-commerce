@@ -6,10 +6,11 @@
  *
  *   order       one product × market, once per new settled data day, in the design's order (a higher step fixes the
  *               facts for the lower ones): ① stops and state → ② the term ledger → ③ negatives → ④ harvest (negatives
- *               first: a term is never harvested and negated at once) → ⑤ money: budgets and the portfolio cap (budget
+ *               first: a term is never harvested and negated at once) → structure (AB-16, §4 ③: weekly, the structure
+ *               module says when it decides; its requests every day) → ⑤ money: budgets and the portfolio cap (budget
  *               before bid: a bid raise never fights a budget cut) → ⑥ bids (the bid brain on the product's own
- *               campaigns) → ⑦ hours (the painted hourly plan; weekly, the hours module says when it is due). Structure
- *               (§4 ⑤, weekly) waits for AB-16.
+ *               campaigns) → ⑦ hours (the painted hourly plan; weekly, the hours module says when it is due) → ⑧ the
+ *               bidding strategy (AB-17: new switches on the weekly run, a switchback test's verdict any day).
  *   sees        each step gets what the steps before it decided: a pause the state step makes and a budget the money step
  *               cuts (or its brake) hold the bid raises on those campaigns (`holds` → the bid brain's raise cap); the
  *               negatives are logged before the harvest reads them.
@@ -28,7 +29,7 @@
  */
 import type { BrainLever } from './levers.js'
 
-export const CYCLE_STEPS = ['state', 'terms', 'negatives', 'harvest', 'money', 'bids', 'hours'] as const
+export const CYCLE_STEPS = ['state', 'terms', 'negatives', 'harvest', 'structure', 'money', 'bids', 'hours', 'bidding'] as const
 export type CycleStep = (typeof CYCLE_STEPS)[number]
 export const isCycleStep = (v: unknown): v is CycleStep => typeof v === 'string' && (CYCLE_STEPS as readonly string[]).includes(v)
 
@@ -38,19 +39,28 @@ export const STEP_WORDS: Record<CycleStep, string> = {
   terms: 'the term ledger',
   negatives: 'negatives',
   harvest: 'harvest',
+  structure: 'structure (new campaigns, splits and portfolio moves)',
   money: 'money (campaign budgets and the portfolio cap)',
   bids: 'bids',
   hours: 'the hourly plan',
+  bidding: 'the bidding strategy',
 }
 
-/** The levers whose level says whether a step acts (owns the lever: PROPOSE or AUTO). The term ledger never acts. */
+/**
+ * The levers whose level says whether a step acts (owns the lever: PROPOSE or AUTO). The term ledger never acts. AB-16 —
+ * neither does structure here: every build, go-live and move it asks waits for a person, so nothing it does changes what
+ * Amazon holds this data day, and its failure never holds the money, bids or hours after it.
+ */
 export const STEP_LEVERS: Record<CycleStep, readonly BrainLever[]> = {
-  state: ['state'], terms: [], negatives: ['negatives'], harvest: ['harvest'], money: ['budgets', 'portfolioCap'], bids: ['bids'], hours: ['hours'],
+  state: ['state'], terms: [], negatives: ['negatives'], harvest: ['harvest'], structure: [], money: ['budgets', 'portfolioCap'], bids: ['bids'], hours: ['hours'],
+  bidding: ['biddingStrategy'],
 }
 
 /** What a step reads from an earlier one: it never runs without it, at any level. */
 export const STEP_READS: Record<CycleStep, readonly CycleStep[]> = {
-  state: [], terms: [], negatives: ['terms'], harvest: ['terms', 'negatives'], money: [], bids: [], hours: [],
+  state: [], terms: [], negatives: ['terms'], harvest: ['terms', 'negatives'], structure: [], money: [], bids: [], hours: [],
+  // AB-17 — the pauses the state step makes are stops: the bidding strategy never switches under one.
+  bidding: ['state'],
 }
 
 /** A data day's cycle runs at most this many times (the first and two retries of what failed). */
@@ -185,6 +195,8 @@ export interface ReportInput {
   moneyInOut: MoneyInOut | null
   /** Hourly state passes after the cycle that did something, oldest first. */
   later: Array<{ at: string; line: string }>
+  /** AB-20 — one line about the A/B proof of the brain on this product (brain/proof-read.ts proofLine): no amounts. */
+  proof?: string | null
 }
 
 export interface ProductReport {
@@ -206,6 +218,8 @@ export interface ProductReport {
   clashes: string[]
   problems: string[]
   later: Array<{ at: string; line: string }>
+  /** AB-20 — the A/B proof's status in one line, no amounts (null: not read). */
+  proof: string | null
   /** Every amount, and every sentence naming one (ad-spend money: hidden whole without the permission). */
   money: { currency: string | null; inOut: MoneyInOut | null; lines: string[] }
 }
@@ -266,7 +280,7 @@ export function buildReport(input: ReportInput): { report: ProductReport; summar
   const money = { currency: input.moneyInOut?.currency ?? null, inOut: input.moneyInOut, lines: [...moneyLines(input.moneyInOut, input.dataDay), ...CYCLE_STEPS.flatMap((s) => input.records[s]?.did?.money?.lines ?? [])] }
   const report: ProductReport = {
     v: 1, productId: input.productId, name: input.name, market: input.market, dataDay: input.dataDay, changeSetId: input.changeSetId, status: input.status,
-    attempts: input.attempts, at: input.now.toISOString(), headline, levers, waitsForOwner, heldByOwner, clashes, problems, later: input.later, money,
+    attempts: input.attempts, at: input.now.toISOString(), headline, levers, waitsForOwner, heldByOwner, clashes, problems, later: input.later, proof: input.proof ?? null, money,
   }
   const lines = [
     headline,
@@ -275,6 +289,7 @@ export function buildReport(input: ReportInput): { report: ProductReport; summar
     ...(clashes.length ? [`Clashes: ${clashes.join(' ')}`] : []),
     ...(heldByOwner.length ? [`Held by your choices: ${heldByOwner.join(' ')}`] : []),
     ...input.later.map((l) => `Later (${l.at.slice(11, 16)} UTC): ${l.line}`),
+    ...(input.proof ? [input.proof] : []),
     `Change set ${input.changeSetId}: every write of this cycle carries it.`,
   ]
   return { report, summary: lines.join('\n') }

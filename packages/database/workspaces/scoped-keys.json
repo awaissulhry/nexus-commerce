@@ -6237,6 +6237,26 @@
     "compound": {},
     "relations": []
   },
+  "BidBrainHourFactor": {
+    "scalar": {},
+    "compound": {
+      "hour_factor_product": [
+        "productId",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "BidProbe": {
+    "scalar": {},
+    "compound": {
+      "target_start": [
+        "targetId",
+        "startDay"
+      ]
+    },
+    "relations": []
+  },
   "AdsBrainEnrollment": {
     "scalar": {},
     "compound": {
@@ -6314,6 +6334,21 @@
     },
     "relations": []
   },
+  "AdsBrainStructure": {
+    "scalar": {},
+    "compound": {
+      "market_key": [
+        "marketplace",
+        "key"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainRetirement": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "AdsBrainNegative": {
     "scalar": {},
     "compound": {
@@ -6371,6 +6406,27 @@
   "AdsBrainStateDecision": {
     "scalar": {},
     "compound": {},
+    "relations": []
+  },
+  "AdsBrainStrategyDecision": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdsBrainStrategyTest": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdsBrainLeverClock": {
+    "scalar": {},
+    "compound": {
+      "product_market_lever": [
+        "productId",
+        "marketplace",
+        "lever"
+      ]
+    },
     "relations": []
   },
   "AdWriteRefusal": {

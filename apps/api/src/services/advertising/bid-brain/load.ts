@@ -18,6 +18,9 @@
  *               maturity of its copy (the age it was pulled at) under its product's or its market's lag curve — read
  *               for the decisions only with NEXUS_BID_BRAIN_NOWCAST=on and a usable curve (nowcast.ts); off and shadow
  *               read the settled window above, unchanged
+ *   BB-17       the intraday brakes of the campaigns it owns (intraday-load.ts: today's Marketing Stream hours against the
+ *               day's planned spend, the lanes' CPC against their 14-day median, the budget against the best hours) — in
+ *               the facts only with NEXUS_BID_BRAIN_INTRADAY=on; shadow reads and compares them, off reads nothing
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -39,6 +42,7 @@ import { STOP_FLOOR_KIND } from '../ads-playbook/held.js'
 import { loadPlanHours } from './plans.js'
 import { loadServingBids } from './serving.js'
 import { loadSpendGuard } from './spend-guard.js'
+import { loadIntraday } from './intraday-load.js'
 import { readSavedLanes } from './stop-recipe.js'
 import { LAG_AGES } from './lag-curve.js'
 import { curveWords, nowcastCurves } from './lag-curve-store.js'
@@ -415,7 +419,9 @@ async function loadLowered(previous: ReadonlyMap<string, PreviousDecision>): Pro
   const ids = [...previous].filter(([, p]) => (LOWERING_LAYERS as readonly string[]).includes(p.layer) || p.layer === 'restore').map(([id]) => id)
   if (!ids.length) return out
   // The bid before: a decision no override lowered (a give-back that wrote counts; one that held at the floor does not).
-  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze']
+  // BB-21 — a LIVE probe's arm too: a Min-bid hour's give-back returns to the day's arm, not to the bid before the probe.
+  // BB-20 — an explore or revive step too (batch 3 review): a brake after it steps from the explored bid, not from the one before.
+  const kept = ['goal', 'band', 'limit', 'no_goal', 'pin', 'freeze', 'probe', 'explore', 'revive']
   const rows = await prisma.$queryRaw<Array<{ targetId: string; decidedCents: number }>>(Prisma.sql`
     SELECT DISTINCT ON (d."targetId") d."targetId", d."decidedCents" FROM "BidBrainDecision" d
      WHERE d."targetId" = ANY(${ids}::text[]) AND (d.layer = ANY(${kept}::text[]) OR (d.layer = 'restore' AND d.action = 'write'))
@@ -552,7 +558,7 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
   const { minBidEntriesToday } = ownedHere.length ? await import('../../../jobs/ad-rank-defend.job.js') : { minBidEntriesToday: null }
   // Batch 2 fix — the money brain's brake on each campaign whose product's budgets lever is the brain's (money-brake.ts).
   const { loadMoneyBrakes } = await import('./money-brake.js')
-  const [servingBids, planHours, minBidEntries, spendGuard, moneyBrakes] = await Promise.all([
+  const [servingBids, planHours, minBidEntries, spendGuard, moneyBrakes, intraday] = await Promise.all([
     // BB-15 — under the nowcast, the bid that served its window (to yesterday).
     m.light ? Promise.resolve(new Map<string, number>()) : loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), m.window ?? settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
     loadPlanHours(ownedHere, opts.clockNow ?? now),
@@ -560,6 +566,8 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
     // BB-10 — the brain's own raise cap: this hour's spend against the same hour of the last 7 days.
     loadSpendGuard(ownedHere, opts.clockNow ?? now),
     loadMoneyBrakes(campaignIds, m.market, opts.clockNow ?? now),
+    // BB-17 — the intraday brakes (spend, CPC spike, budget) of the campaigns it owns; NEXUS_BID_BRAIN_INTRADAY=off: none.
+    loadIntraday(m, ownedHere, opts.clockNow ?? now),
   ])
   return {
     run: {
@@ -579,6 +587,7 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
       spendGuard,
       ...(moneyBrakes.size ? { moneyBrakes } : {}),
       owned: new Set(ownedHere),
+      ...(intraday ? { intraday } : {}),
     },
     lastWrites,
     previous,

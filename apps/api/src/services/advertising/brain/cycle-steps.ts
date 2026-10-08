@@ -12,6 +12,9 @@
  *   negatives  brain/negatives-run.ts runNegativesOnce for the product (its negatives lever OBSERVE+).
  *   harvest    brain/harvest-run.ts runHarvestOnce for the product (its harvest lever OBSERVE+), after its negatives; a pair
  *              the module left half done is a clash in the report.
+ *   structure  brain/structure-run.ts runStructureOnce for the product (its structure lever OBSERVE, PROPOSE or locked): every
+ *              day what its earlier requests became (built, its go-live asked, live); its new proposals on the weekly day
+ *              (Monday in the market's time zone). Never acts on the day's facts: each request waits for a person (AB-16).
  *   money      brain/budget-shadow.ts runMoneyShadowOnce for the product (its budgets lever OBSERVE+). Where the budgets lever
  *              acts, the brake that holds raises (and stronger) holds every own campaign's bid raises, and a campaign whose
  *              budget steps down holds its own: budget before bid, a raise never fights a cut. In shadow the same holds are
@@ -19,11 +22,15 @@
  *   bids       bid-brain/shadow.ts runShadowOnce on the product's own campaigns in its market (the market read whole, so
  *              every pooled estimate is the full run's), with the holds above as raise caps.
  *   hours      brain/hours-proposal.ts runHoursOnce for the product (weekly; it says when it is due, never AUTO).
+ *   bidding    AB-17 — brain/bidding-mode-run.ts runBiddingModeOnce for the product (its biddingStrategy lever, or one
+ *              campaign's, OBSERVE+): new switches on the weekly run (Monday, Europe/Rome), a switchback test's verdict and
+ *              its switch back on any run; a campaign the state step pauses now is a stop, never switched.
  */
 import prisma from '../../../db.js'
 import { EXCLUDE_AMS_DAILY } from '../../ads-core/ams-daily.js'
 import { bidBrainMode, runShadowOnce } from '../bid-brain/shadow.js'
 import type { StateWatched } from './state-load.js'
+import type { ModeWatched } from './bidding-mode-load.js'
 import type { MoneyShadowProduct } from './budget-shadow.js'
 import type { DueProduct } from './terms-shadow.js'
 import { raiseHoldsFor, STEP_WORDS, type CycleStep, type MoneyInOut, type StepOutcome, type StepRecords, type Waiting } from './cycle.js'
@@ -61,9 +68,11 @@ export interface CycleRunners {
   terms: TermsRunner
   negatives: StepRunner
   harvest: StepRunner
+  structure: StepRunner
   money: StepRunner
   bids: StepRunner
   hours: StepRunner
+  bidding: StepRunner
 }
 
 const ACTS: readonly string[] = ['OBSERVE', 'PROPOSE', 'AUTO']
@@ -217,6 +226,68 @@ export const harvestStep: StepRunner = async (ctx) => {
   return harvestStepOf(runHarvestOnce, halfDoneOf)(ctx)
 }
 
+// ── structure (weekly, AB-16) ────────────────────────────────────────────────────────────────────────────────────
+
+/** The part of AB-16's run summary (brain/structure-run.ts StructureRunSummary) the cycle reads. */
+export interface StructureRunLike {
+  ran: boolean
+  why: string
+  runId?: string
+  decided: { skc: number; split: number; portfolio: number; held: number }
+  acted: { logged: number; proposed: number }
+  pending: { built: number; liveAsked: number; live: number; retireAsked: number; done: number; declined: number; failed: number }
+  notDue: number
+  skipped: Array<{ productId: string; market: string; why: string }>
+  failed: Array<{ productId: string; market: string; error: string }>
+}
+
+/**
+ * The structure step from AB-16's run, for the product alone: what its requests became every day, its proposals on the
+ * weekly day. `waitingOf` names the requests that wait for a person (the build or move, the go-live, a split's low bids).
+ */
+export function structureStepOf(
+  due: (productId: string, market: string) => Promise<{ due: boolean; why: string; products: unknown[] }>,
+  run: (opts: { now: Date; due: { due: boolean; why: string; products: unknown[] } }) => Promise<StructureRunLike>,
+  waitingOf: (productId: string, market: string) => Promise<Waiting[]> = async () => [],
+): StepRunner {
+  return async (ctx) => {
+    const d = await due(ctx.productId, ctx.market)
+    if (!d.due) return { status: 'off', why: 'the structure lever is OFF or excluded for the product: no structure decided' }
+    const s = await run({ now: ctx.tick.now, due: d })
+    const failed = s.failed.find((x) => x.productId === ctx.productId)
+    if (failed) return { status: 'failed', why: `the structure run failed: ${failed.error}`, runId: s.runId ?? null }
+    const skipped = s.skipped.find((x) => x.productId === ctx.productId)
+    if (skipped) return { status: 'skipped', why: skipped.why, runId: s.runId ?? null }
+    const counts = { skc: s.decided.skc, split: s.decided.split, portfolio: s.decided.portfolio, held: s.decided.held, logged: s.acted.logged, proposed: s.acted.proposed, built: s.pending.built, liveAsked: s.pending.liveAsked, live: s.pending.live, done: s.pending.done, declined: s.pending.declined }
+    const waiting = await waitingOf(ctx.productId, ctx.market)
+    const weekly = s.notDue ? 'not the weekly day (Monday in the market\'s time zone): no new proposal; what earlier requests became, synced' : `decided: ${countsLine(counts) || 'nothing to propose'}`
+    return {
+      status: 'done', why: weekly, runId: s.runId ?? null, waiting,
+      did: { lines: [`structure: ${weekly}${s.acted.logged && !s.acted.proposed ? ' (shadow: nothing asked, nothing at Amazon)' : ''}`], counts },
+    }
+  }
+}
+
+/** The structure requests of a product that wait for a person. */
+async function structureWaiting(productId: string, market: string): Promise<Waiting[]> {
+  const rows = await prisma.adsBrainStructure.findMany({ where: { productId, marketplace: market, status: { in: ['PROPOSED', 'LIVE_PROPOSED', 'LIVE'] } }, select: { kind: true, key: true, term: true, status: true, approvalId: true, liveApprovalId: true, retireApprovalId: true } })
+  const what = (r: (typeof rows)[number]) => (r.kind === 'SKC' ? `the single-keyword campaign for "${r.term}"` : r.kind === 'SPLIT' ? 'the split of a shared campaign' : 'the move into the product\'s portfolio')
+  return rows.flatMap((r) => r.status === 'PROPOSED' ? [{ what: `build ${what(r)}`, approvalId: r.approvalId }]
+    : r.status === 'LIVE_PROPOSED' ? [{ what: `go-live of ${what(r)}`, approvalId: r.liveApprovalId }]
+      : r.retireApprovalId ? [{ what: 'the shared campaign\'s low bids (the split\'s last step)', approvalId: r.retireApprovalId }] : [])
+}
+
+/** structure: AB-16's module (brain/structure-run.ts), loaded at the step. */
+export const structureStep: StepRunner = async (ctx) => {
+  const { structureDue } = await import('./structure-load.js')
+  const { runStructureOnce } = await import('./structure-run.js')
+  return structureStepOf(
+    (productId, market) => structureDue({ productId, market }),
+    (opts) => runStructureOnce(opts as Parameters<typeof runStructureOnce>[0]),
+    structureWaiting,
+  )(ctx)
+}
+
 // ── ⑤ money ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const HOLDING_BRAKES: readonly string[] = ['hold_raises', 'cut_bids', 'stop_weakest']
@@ -311,7 +382,39 @@ export const hoursStep: StepRunner = async (ctx) => {
   }
 }
 
-export const CYCLE_RUNNERS: CycleRunners = { state: stateStep, terms: termsStep, negatives: negativesStep, harvest: harvestStep, money: moneyStep, bids: bidsStep, hours: hoursStep }
+// ── ⑧ the bidding strategy ───────────────────────────────────────────────────────────────────────────────────────
+
+/** The products the bidding-strategy lever watches, read once per tick (the tick object keys it). */
+const modeWatchOfTick = new WeakMap<TickFacts, Promise<ModeWatched[]>>()
+
+export const biddingStep: StepRunner = async (ctx) => {
+  const { modeWatchProducts } = await import('./bidding-mode-load.js')
+  if (!modeWatchOfTick.has(ctx.tick)) modeWatchOfTick.set(ctx.tick, modeWatchProducts())
+  const watched = (await modeWatchOfTick.get(ctx.tick)!).find((w) => w.productId === ctx.productId && w.market === ctx.market)
+  if (!watched) return { status: 'off', why: 'the bidding-strategy lever is OFF, locked or excluded for the product and each of its campaigns: no strategy decided' }
+  const { runBiddingModeOnce } = await import('./bidding-mode-run.js')
+  // A pause the state step makes (queued, asked or waiting) is a stop: the strategy is the stop's then.
+  const stopping = new Map((ctx.records.state?.holds ?? []).map(([id, why]) => [id, `the product cycle's stops and state step: ${why}`]))
+  const run = await runBiddingModeOnce({ now: ctx.tick.now, products: [watched], stopping })
+  const failed = run.failed.find((f) => f.productId === ctx.productId)
+  if (failed) return { status: 'failed', why: `the bidding-strategy run failed: ${failed.error}`, runId: run.runId }
+  const mine = run.campaigns.filter((c) => c.productId === ctx.productId)
+  const counts: Record<string, number> = {}
+  for (const c of mine) { const k = c.action === 'switch' || c.action === 'revert' ? `${c.action} ${c.outcome}` : c.action; counts[k] = (counts[k] ?? 0) + 1 }
+  const waiting: Waiting[] = mine.filter((c) => (c.outcome === 'asked' || c.outcome === 'waiting') && c.approvalId).map((c) => ({ what: `${c.action === 'revert' ? 'switch back' : 'bidding strategy of'} ${nameOf(ctx, c.campaignId)}`, approvalId: c.approvalId ?? null }))
+  const moves = mine.filter((c) => c.action === 'switch' || c.action === 'revert')
+  const lines = [
+    ...(moves.length ? moves.map((c) => `${nameOf(ctx, c.campaignId)}: ${c.outcome === 'shadow' ? `would ${c.action} (shadow)` : `${c.action} ${c.outcome}`} — ${c.why}`) : [`${plural(mine.length, 'campaign')} decided: ${countsLine(counts) || 'nothing to change'}`]),
+    ...run.tests.filter((t) => mine.some((c) => c.campaignId === t.campaignId)).map((t) => `${nameOf(ctx, t.campaignId)}: test ${t.status} — ${t.why}`),
+    ...(run.weekly ? [] : ['new switches are decided on the weekly run (Monday, Europe/Rome)']),
+  ]
+  return {
+    status: 'done', why: `${watched.level}${run.weekly ? ' (weekly)' : ''}: ${countsLine(counts) || 'no campaign'}`, runId: run.runId, waiting,
+    did: { lines, counts: { ...counts, stored: mine.filter((c) => c.stored).length, acted: mine.filter((c) => c.outcome === 'queued' || c.outcome === 'asked').length, tests: run.tests.length } },
+  }
+}
+
+export const CYCLE_RUNNERS: CycleRunners = { state: stateStep, terms: termsStep, negatives: negativesStep, harvest: harvestStep, structure: structureStep, money: moneyStep, bids: bidsStep, hours: hoursStep, bidding: biddingStep }
 
 // ── The report's money ───────────────────────────────────────────────────────────────────────────────────────────
 

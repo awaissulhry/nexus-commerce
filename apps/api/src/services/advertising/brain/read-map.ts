@@ -43,10 +43,15 @@ import {
  * `hours` is brain/hours-proposal.ts brainHours: the product's hour research and painted plan (the tool routes it). AB-10 —
  * `negatives` is brain/negatives-read.ts: the product's day of negatives, every entity against the limit, its log. AB-11 —
  * `harvest` is brain/harvest-read.ts: the product's harvests, their destinations, sources, requests and judgements. AB-14 —
- * `report` is brain/cycle-read.ts: the day's product report the product cycle stored (the tool routes it).
+ * `report` is brain/cycle-read.ts: the day's product report the product cycle stored (the tool routes it). AB-20 — `retire` is
+ * brain/retire-run.ts brainRetire: the writers a product's brain would retire (and has), each with why; `proof` is
+ * brain/proof-read.ts brainProof: the A/B proof against matched comparison products (the tool routes both).
  */
-export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report'] as const
+export const BRAIN_MAP_VIEWS = ['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report', 'structure', 'bidding', 'retire', 'proof'] as const
 export type BrainMapView = (typeof BRAIN_MAP_VIEWS)[number]
+
+/** AB-18 — who runs the off-Amazon setting of a campaign, as the map says it (brain/off-amazon.ts OFF_AMAZON_CAPABILITY). */
+export const OFF_AMAZON_OWNER = 'could not measure: Nexus could not verify an Amazon Ads API setting for "Limit off-Amazon spend", so nobody in Nexus reads or writes it (Amazon\'s console only); the lane\'s share of spend and its ACoS against the band are in ads-brain view money (AB-18)'
 
 /** The days of action-log evidence a view reads by default, and at most. */
 export const DEFAULT_EVIDENCE_DAYS = 14
@@ -328,8 +333,8 @@ const isSafetyActor = (actor: string) => BRAIN_SAFETY_ACTOR_PREFIXES.some((p) =>
 export function writerOfActor(userId: string | null, ruleNames: ReadonlyMap<string, string>): Omit<Writer, 'basis'> {
   if (userId && isSafetyActor(userId)) return { who: `safety: ${userId.replace(/^automation:/, '')}`, kind: 'safety', state: 'acts', why: 'a safety owner (always passes)' }
   const c = classifyActor(userId)
-  if (c.kind === 'engine') return c.engine === 'bid-brain' || c.engine === 'brain-money' || c.engine === 'brain-state'
-    ? { who: 'the brain', kind: 'brain', state: 'acts', why: c.engine === 'bid-brain' ? 'the bid brain wrote' : c.engine === 'brain-money' ? 'the brain\'s money writer wrote (AB-8)' : 'the brain\'s state writer paused or resumed it (AB-12)' }
+  if (c.kind === 'engine') return c.engine === 'bid-brain' || c.engine === 'brain-money' || c.engine === 'brain-state' || c.engine === 'brain-strategy'
+    ? { who: 'the brain', kind: 'brain', state: 'acts', why: c.engine === 'bid-brain' ? 'the bid brain wrote' : c.engine === 'brain-money' ? 'the brain\'s money writer wrote (AB-8)' : c.engine === 'brain-strategy' ? 'the brain\'s bidding-strategy writer switched it (AB-17)' : 'the brain\'s state writer paused or resumed it (AB-12)' }
     : { who: engineLabel(c.engine), kind: 'engine', state: 'acts', why: `${engineLabel(c.engine)} wrote` }
   if (c.kind === 'rule-candidate') {
     const name = ruleNames.get(c.ruleId)
@@ -479,8 +484,8 @@ async function campaignLevers(campaigns: readonly CampaignRow[], owners: Readonl
           ...(evidence.get(c.id)?.get(lever) ?? []),
         ]
         return [lever, {
-          // Nexus does not model the off-Amazon lane (its setting and its report): nobody can say who runs it.
-          owner: lever === 'offAmazon' ? 'could not measure: Nexus does not model the off-Amazon lane yet (AB-18)' : leverOwner(writers, { excluded: !!settings?.excluded.value, brainNote: brainNoteOf(writers) }),
+          // AB-18 — the off-Amazon setting has no Amazon Ads API field Nexus could verify: nobody in Nexus reads or writes it.
+          owner: lever === 'offAmazon' ? OFF_AMAZON_OWNER : leverOwner(writers, { excluded: !!settings?.excluded.value, brainNote: brainNoteOf(writers) }),
           // A shared campaign is no product's brain's (D2: split it); its exclusions and locks still hold (in the writers).
           ...(o?.owner.kind === 'shared' ? { brain: 'SHARED', brainWhy: 'a shared campaign: no product\'s brain owns its levers (the brain proposes a split, D2)' }
             : settings ? { brain: settings.levers[lever].effective, brainWhy: settings.levers[lever].why } : {}),

@@ -58,16 +58,32 @@ export async function recordBrainHold(args: {
 }
 
 /**
+ * ONE BRAIN AB-17 — the agent run key of the bidding-strategy lever's requests (brain/bidding-mode-run.ts): a switch the brain
+ * asked for, which a person approves. The request runs as that person, but the switch is the brain's own (its switchback
+ * test), never a person's own strategy.
+ */
+export const BRAIN_STRATEGY_AGENT_KEY = 'ads-brain-strategy'
+
+/** AB-17 — the change set is a request the brain's bidding-strategy lever asked for (its approval's run). */
+async function isBrainStrategyRequest(changeSetId: string | null | undefined): Promise<boolean> {
+  if (!changeSetId) return false
+  return !!(await prisma.agentApproval.findFirst({ where: { id: changeSetId, agentRun: { agentKey: BRAIN_STRATEGY_AGENT_KEY } }, select: { id: true } }))
+}
+
+/**
  * ONE BRAIN AB-2 — a person's own bidding strategy on a campaign the brain owns (his edit, or a Claude request he approved:
  * `manual`) becomes a STRATEGY hold for BRAIN_HOLD_DAYS, as his bid does (design §2.10): the stop recipe leaves the
  * strategy alone — no switch to down only — until it ends (stop-recipe.ts). A newer one replaces the open one. Only on a
  * campaign the brain owns now; it never fails the write that called it.
+ * AB-17 — a switch the brain's bidding-strategy lever asked for (`changeSetId` its approval) is the brain's own, not a
+ * person's strategy: no hold (else the stop recipe would leave an up-and-down campaign up and down through its stops).
  */
-export async function recordStrategyHold(args: { campaignId: string; actor: string; manual: boolean; reason?: string | null; now?: Date }): Promise<BrainHoldOutcome> {
+export async function recordStrategyHold(args: { campaignId: string; actor: string; manual: boolean; reason?: string | null; changeSetId?: string | null; now?: Date }): Promise<BrainHoldOutcome> {
   if (!args.manual) return null
   try {
     const owned = await brainOwnedCampaignIds([args.campaignId])
     if (!owned.has(args.campaignId)) return null
+    if (await isBrainStrategyRequest(args.changeSetId)) return null
     const now = args.now ?? new Date()
     await prisma.bidHold.updateMany({ where: { campaignId: args.campaignId, targetId: null, kind: STRATEGY_HOLD_KIND, endedAt: null }, data: { endedAt: now, endedBy: args.actor } })
     await prisma.bidHold.create({

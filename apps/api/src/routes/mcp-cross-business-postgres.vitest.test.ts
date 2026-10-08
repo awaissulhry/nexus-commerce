@@ -1175,6 +1175,9 @@ const EXTRA: Record<string, Record<string, unknown> | (() => Record<string, unkn
   // AB-15 — the kill switch of one lever of B's product, in a real Amazon market code: inside B the preview names the
   // product; from A it is "Product not found".
   'set-brain-kill-switch': { op: 'kill', market: 'IT', why: 'mcp8 probe stop' },
+  // AB-20 — the duplicate writers of B's product, in a real Amazon market code: inside B the refusal names the product (it
+  // is not enrolled); from A it is "Product not found".
+  'retire-ads-writers': { op: 'retire', market: 'IT', retirementIds: undefined },
   'set-hourly-bid-plan': {
     op: 'rename', get planId() { return seeded.b.hourlyPlanId }, name: 'MCP8 probe plan', market: undefined, campaignIds: undefined, add: undefined,
     remove: undefined, move: undefined, windows: undefined, days: undefined, defaultTargetKey: undefined, timezone: undefined, on: undefined, values: undefined,

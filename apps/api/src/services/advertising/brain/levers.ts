@@ -15,6 +15,8 @@
  *             AB-11: the harvest lever every level; every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
  *             shadow is not built yet records the intent: it starts watching when its shadow lands; nothing is written.
  *             AB-12: the state lever takes every level (brain/state*.ts); it still starts OBSERVE like every lever.
+ *             AB-16: the structure lever OFF, OBSERVE and PROPOSE (never AUTO: every build, go-live and move asks a person).
+ *             AB-17: the biddingStrategy lever takes every level (brain/bidding-mode*.ts), starting OBSERVE.
  *   settings  the caps of §5 and the N1–N4 settings of §9 (Owner yes 10-08), each with the design's default and safety
  *             bounds (Amazon's own where it has one); the Owner may set any value inside them, per product, and per
  *             campaign where the setting means something for one campaign.
@@ -65,9 +67,14 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   negatives: { levels: BRAIN_LEVELS, others: 'the negatives module (AB-10, ads-brain view negatives) takes every level' },
   // AB-11 — the harvest module: OBSERVE logs each harvest, PROPOSE asks a person for the pair, AUTO writes it.
   harvest: { levels: BRAIN_LEVELS, others: 'AB-11: OBSERVE logs each harvest in shadow, PROPOSE asks a person for the keyword and its source negatives as one change set, AUTO writes it (under NEXUS_ADS_BRAIN_HARVEST_MODE=live); a new campaign is always a request a person approves (ads-brain view harvest)' },
-  structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
-  biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
-  offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },
+  // AB-16 — structure: OBSERVE logs each proposal in shadow, PROPOSE asks a person for each build, go-live and move. Never
+  // AUTO: the brain never creates, splits or moves a campaign without a person's approval (D1 = B, D2 = A).
+  structure: { levels: ['OFF', 'OBSERVE', 'PROPOSE'], others: 'AB-16: single-keyword campaigns for key terms, the split of a shared campaign into one per product and the move of the product\'s campaigns into its one portfolio — OBSERVE logs each proposal in shadow (ads-brain view structure), PROPOSE asks a person for each build, its go-live (a normal approval inside the caps, D1 = B) and each move; never AUTO: the brain never creates, splits or moves a campaign without a person\'s approval' },
+  // AB-17 — every level: OBSERVE logs, PROPOSE asks a person for each switch, AUTO switches alone after the N4 approval days.
+  biddingStrategy: { levels: BRAIN_LEVELS, others: 'AB-17: each campaign\'s Amazon bidding strategy (fixed where the brain\'s hourly plan steers the placements, down only by default, up and down only where top of search converts at least 1.3× the average over 30 orders and the CPC ceiling holds Amazon\'s raise), decided weekly, at most one switch per 14 days, each switch tested (switchback) and kept or switched back; OBSERVE logs it, PROPOSE asks a person, AUTO asks for the first strategyApprovalDays (30, N4) and then switches alone — never during a stop (ads-brain view bidding)' },
+  // AB-18 — read side only: OBSERVE watches the lane in the placement report and raises a line for the Owner; no PROPOSE or
+  // AUTO because Nexus could not verify an Amazon Ads API setting to limit off-Amazon spend (brain/off-amazon.ts).
+  offAmazon: { levels: OFF_OBSERVE, others: 'AB-18: OBSERVE watches the off-Amazon lane in the placement report (its share of spend, its ACoS against the band top over 14 settled days: ads-brain view money) and raises a line for the Owner when it stays above; no PROPOSE or AUTO — Nexus could not verify an Amazon Ads API setting for "Limit off-Amazon spend", so the brain can neither ask for it nor write it (Amazon\'s console only)' },
 }
 
 /** Why a lever cannot be set to this level today; null when it can. */
@@ -105,6 +112,9 @@ export const BRAIN_SETTINGS = {
   newCampaignsPerWeek: { type: 'int', default: 2, min: 0, max: 20, scopes: PRODUCT, what: 'new campaigns per product per week (§2.9)' },
   skcMax: { type: 'int', default: 20, min: 0, max: 200, scopes: PRODUCT, what: 'single-keyword campaigns per product (§2.9)' },
   firstBudgetPctOfEnvelope: { type: 'int', default: 10, min: 1, max: 100, scopes: PRODUCT, what: 'a new campaign\'s first budget, % of the envelope (§2.9)' },
+  // AB-16 — the single-keyword-campaign rule's own numbers (§2.9 b): the Owner's own number wins.
+  skcOrderSharePct: { type: 'int', default: 15, min: 5, max: 100, scopes: PRODUCT, what: 'a term with at least this share of the product\'s ad orders over 30 settled days gets a single-keyword campaign proposed, % (§2.9)' },
+  skcHourCurvePct: { type: 'int', default: 30, min: 10, max: 200, scopes: PRODUCT, what: 'a term whose hourly conversion curve differs from its campaign\'s by at least this much in one part of the day gets a single-keyword campaign proposed, percentage points of the index (§2.9)' },
   minBidEntriesPerDay: { type: 'int', default: 2, min: 0, max: 24, scopes: BOTH, what: 'Min-bid hour entries per campaign per day (§2.3)' },
   hourCellMovePct: { type: 'int', default: 30, min: 0, max: 100, scopes: PRODUCT, what: 'largest move of an hour cell per painted plan, % (§2.3)' },
   hourProposalsPerWeek: { type: 'int', default: 1, min: 0, max: 7, scopes: PRODUCT, what: 'painted hourly plan proposals per week (§2.3)' },
@@ -114,6 +124,13 @@ export const BRAIN_SETTINGS = {
   biddingStrategySwitchDays: { type: 'int', default: 14, min: 1, max: 365, scopes: BOTH, what: 'days between two bidding-strategy switches of a campaign (§2.11)' },
   budgetUsePct: { type: 'int', default: 70, min: 10, max: 100, scopes: BOTH, what: 'expected budget use a campaign budget is sized for, % (§2.5)' },
   intradayLadderMaxPct: { type: 'int', default: 100, min: 0, max: 100, scopes: BOTH, what: 'largest intraday budget raise, % of the base budget — Amazon spends at most 2× a day (§2.5)' },
+  // BB-17 — the bid brain's intraday brakes (bid-brain/intraday.ts, §2.6 intraday pacing, U1c); NEXUS_BID_BRAIN_INTRADAY switches them.
+  intradaySpendHoldPct: { type: 'int', default: 130, min: 100, max: 1000, scopes: BOTH, what: 'intraday spend brake: today\'s projected spend above this % of the day\'s planned spend → no bid or placement raises today (§2.6)' },
+  intradaySpendCutPct: { type: 'int', default: 160, min: 100, max: 1000, scopes: BOTH, what: 'intraday spend brake: today\'s projected spend above this % of the day\'s planned spend → the bids step down for the rest of the budget day, given back at 00:00 UTC (§2.6)' },
+  intradaySpendCutStepPct: { type: 'int', default: 10, min: 1, max: 50, scopes: BOTH, what: 'intraday spend brake: how far the bids step down, % of the bid before (§2.6)' },
+  intradayCpcSpikePct: { type: 'int', default: 200, min: 110, max: 1000, scopes: BOTH, what: 'intraday CPC spike: a lane\'s cost per click over the last two hours above this % of its 14-day median for those hours → no raises, its dearest click held to that multiple while it lasts (U1c)' },
+  intradayCpcMinClicks: { type: 'int', default: 5, min: 1, max: 1000, scopes: BOTH, what: 'intraday CPC spike: the clicks a lane needs in the last two hours before its cost per click is judged (U1c)' },
+  intradayBudgetSlowMinPct: { type: 'int', default: 50, min: 10, max: 100, scopes: BOTH, what: 'intraday budget brake: the lowest a low-value hour\'s bids slow to, % of the bid, when the budget would run out before the best hours — 100 = only no raises (§2.6)' },
   // §2.6 money and §9 N1–N4 (Owner yes 10-08)
   paceTargetPct: { type: 'int', default: 90, min: 10, max: 100, scopes: PRODUCT, what: 'the pacing limit: month-end spend the pace aims at, % of the envelope (§2.6)' },
   portfolioCapOn: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N1: the Amazon portfolio cap is set as the hard backstop' },
@@ -123,6 +140,8 @@ export const BRAIN_SETTINGS = {
   portfolioCapLimitCents: { type: 'intOrNull', default: null, min: 100, max: 100_000_000, scopes: PRODUCT, what: 'the limit of this product\'s Amazon portfolio caps a month, in cents, for every writer (the brain, set-portfolio, the Portfolios page): it replaces the server\'s NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS (default 200,000 = €2,000) for a portfolio that holds only this product\'s campaigns; empty = the server\'s' },
   ownPortfolio: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N2: the brain proposes one portfolio per product and market' },
   strategySwitchMode: { type: 'enum', default: 'PROPOSE_THEN_AUTO', values: ['PROPOSE_THEN_AUTO', 'ALWAYS_PROPOSE'], scopes: BOTH, what: 'N4: a bidding-strategy switch waits for approval for 30 days, then runs alone (PROPOSE_THEN_AUTO), or always waits (ALWAYS_PROPOSE)' },
+  // AB-17 — N4's 30 days as the Owner's own number (0: AUTO switches alone at once).
+  strategyApprovalDays: { type: 'int', default: 30, min: 0, max: 365, scopes: PRODUCT, what: 'N4: the days after the bidding-strategy lever became the brain\'s on the product during which every switch at AUTO waits for approval (0: at once alone)' },
   // AB-12 — the state lever (§2.4, D4 = A)
   pauseMinDays: { type: 'int', default: 3, min: 3, max: 60, scopes: BOTH, what: 'a stop expected to last at least this many days is a pause; a shorter one stays on low bids, never a pause (§2.4, D4)' },
   archiveDeadWeeks: { type: 'int', default: 4, min: 2, max: 52, scopes: BOTH, what: 'weeks without an impression before the brain proposes to archive a campaign — only ever a proposal (§2.4)' },

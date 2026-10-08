@@ -50,6 +50,17 @@ export interface PlanHour {
    * own ceiling still caps its placement %.
    */
   dayMaxCpcCents?: number | null
+  /**
+   * BB-22 — the learned hour factor this hour carries out (NEXUS_BID_BRAIN_HOUR_FACTORS=on, hour-factors-store.ts): the
+   * spec's lanes are already the learned ones, inside the approved cell's limits; these words join the plan's note.
+   */
+  learned?: string | null
+  /**
+   * BB-22 — the approved cell's spec when `spec` holds the learned lanes: BB-18's stack ceiling (the most a click can cost
+   * against the base bid, facts.ts) still reads the approved cell, so the learned factor moves the placements only, never
+   * the keyword bids.
+   */
+  approved?: RankTargetSpec | null
 }
 
 /** The lowest CPC ceiling among a day's serving targets (a Min-bid hour sets none). Pure. */
@@ -82,6 +93,8 @@ export interface PlanFacts {
   note: string
   /** The hour sets a base bid the brain does not carry out (said in the why). */
   baseBidIgnored: boolean
+  /** BB-22 — the approved cell's lanes when `lanes` are the learned ones (the stack ceiling reads these); absent: `lanes`. */
+  ceilingLanes?: Lane[]
 }
 
 /**
@@ -91,7 +104,7 @@ export interface PlanFacts {
 export function planFacts(hour: PlanHour, campaign: { biddingStrategy?: string | null }, opts: { entriesToday: number; inMinBid: boolean; maxEntries: number }): PlanFacts | null {
   const spec = hour.spec
   if (!spec) return null
-  const named = `hourly plan ${hour.name}${hour.event ? ` (event ${hour.event})` : ''}: ${spec.key}`
+  const named = `hourly plan ${hour.name}${hour.event ? ` (event ${hour.event})` : ''}: ${spec.key}${hour.learned ? ` — ${hour.learned}` : ''}`
   if (isMinBidSpec(spec)) {
     if (!opts.inMinBid && opts.entriesToday >= opts.maxEntries) {
       return { lanes: [], minBidHour: null, note: `${named} — kept serving: it entered Min bid ${opts.entriesToday === 1 ? 'once' : `${opts.entriesToday} times`} today (UTC), at most ${opts.maxEntries} a day`, baseBidIgnored: false }
@@ -114,6 +127,8 @@ export function planFacts(hour: PlanHour, campaign: { biddingStrategy?: string |
     dynamic: laneHeadroom(campaign.biddingStrategy, p),
   }))
   const baseBidIgnored = setsBaseBid(spec)
-  return { lanes, minBidHour: null, note: `${named}${baseBidIgnored ? ' (its base bid is not applied: the brain sets the bids from the goal)' : ''}`, baseBidIgnored }
+  // BB-22 — learned lanes: the approved cell's lanes stay what the stack ceiling reads.
+  const ceilingLanes = hour.approved ? planFacts({ ...hour, spec: hour.approved, approved: null, learned: null }, campaign, opts)?.lanes : undefined
+  return { lanes, minBidHour: null, note: `${named}${baseBidIgnored ? ' (its base bid is not applied: the brain sets the bids from the goal)' : ''}`, baseBidIgnored, ...(ceilingLanes ? { ceilingLanes } : {}) }
 }
 
