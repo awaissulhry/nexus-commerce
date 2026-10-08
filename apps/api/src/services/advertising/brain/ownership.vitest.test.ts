@@ -4,7 +4,8 @@
  *   single      every ad of one product → that product's brain owns the campaign
  *   variations  ads of two variations roll up to their parent: one owner
  *   ties        an ad with no productId ties by its SKU, else its ASIN (any case); a parentless row whose ASIN a
- *               variation carries (FBA beside FBM) belongs to that variation's family
+ *               variation carries (FBA beside FBM) belongs to that variation's family; an ASIN only a product's Amazon
+ *               listing carries (a size added later whose row copied a sibling's ASIN) ties to that product
  *   shared      ads of two families; or one family plus an ad Nexus cannot tie (fail closed); or an ASIN two families
  *               carry (named as ambiguous)
  *   none        no ad, or only ads Nexus cannot tie
@@ -18,6 +19,7 @@ const db = vi.hoisted(() => ({
   campaign: { findMany: vi.fn() },
   adProductAd: { findMany: vi.fn() },
   product: { findMany: vi.fn(), findFirst: vi.fn() },
+  channelListing: { findMany: vi.fn() },
 }))
 vi.mock('../../../db.js', () => ({ default: db }))
 
@@ -114,6 +116,8 @@ describe('resolveCampaignOwnership (batched)', () => {
     expect(db.campaign.findMany).toHaveBeenCalledTimes(1)
     expect(db.adProductAd.findMany).toHaveBeenCalledTimes(1)
     expect(db.product.findMany).toHaveBeenCalledTimes(2)
+    // Every ad ASIN is already a product's own: no listing query.
+    expect(db.channelListing.findMany).not.toHaveBeenCalled()
     expect(db.adProductAd.findMany.mock.calls[0][0].where).toMatchObject({ status: { not: 'ARCHIVED' }, adGroup: { status: { not: 'ARCHIVED' } } })
     expect(db.product.findMany.mock.calls[0][0].where).toMatchObject({ deletedAt: null })
     expect(out.size).toBe(60)
@@ -128,5 +132,36 @@ describe('resolveCampaignOwnership (batched)', () => {
     db.campaign.findMany.mockResolvedValue([])
     expect((await resolveCampaignOwnership(['c-other'])).size).toBe(0)
     expect(db.adProductAd.findMany).not.toHaveBeenCalled()
+  })
+
+  it('ties an ad whose ASIN only a product\'s Amazon listing carries (its row copied a sibling\'s ASIN): owned, not shared', async () => {
+    db.campaign.findMany.mockResolvedValue([{ id: 'c-x', name: 'Exact', marketplace: 'APJ6JRA9NG5V4', adProduct: 'SPONSORED_PRODUCTS', status: 'ENABLED' }])
+    db.adProductAd.findMany.mockResolvedValue([
+      { productId: null, asin: 'B0JACKETS1', sku: null, adGroup: { campaignId: 'c-x' } },
+      { productId: null, asin: 'B0JACKETXX', sku: null, adGroup: { campaignId: 'c-x' } },
+    ])
+    // The XXS row copied the S row's ASIN; its true ASIN lives only on its Amazon listing.
+    db.product.findMany
+      .mockResolvedValueOnce([products[1], { id: 'p-xxs', parentId: 'p-parent', amazonAsin: 'B0JACKETS1', sku: 'JACKET-XXS' }])
+    db.channelListing.findMany.mockResolvedValue([{ externalListingId: 'b0jacketxx', product: { id: 'p-xxs', parentId: 'p-parent', sku: 'JACKET-XXS' } }])
+    const out = await resolveCampaignOwnership(['c-x'])
+    expect(db.channelListing.findMany).toHaveBeenCalledTimes(1)
+    // Only the ASIN no product row carries is asked for, on Amazon listings of live products.
+    expect(db.channelListing.findMany.mock.calls[0][0].where).toMatchObject({ channel: 'AMAZON', product: { deletedAt: null } })
+    expect(db.channelListing.findMany.mock.calls[0][0].where.externalListingId.in).toEqual(expect.arrayContaining(['B0JACKETXX']))
+    expect(db.channelListing.findMany.mock.calls[0][0].where.externalListingId.in).not.toContain('B0JACKETS1')
+    expect(out.get('c-x')).toMatchObject({ market: 'IT', productIds: ['p-parent'], unresolved: [], owner: { kind: 'product', productId: 'p-parent' } })
+  })
+
+  it('an ASIN neither a product nor an Amazon listing carries still leaves the campaign shared (fail closed)', async () => {
+    db.campaign.findMany.mockResolvedValue([{ id: 'c-y', name: 'Auto', marketplace: 'APJ6JRA9NG5V4', adProduct: 'SPONSORED_PRODUCTS', status: 'ENABLED' }])
+    db.adProductAd.findMany.mockResolvedValue([
+      { productId: 'p-s', asin: null, sku: null, adGroup: { campaignId: 'c-y' } },
+      { productId: null, asin: 'B0NOWHERE1', sku: null, adGroup: { campaignId: 'c-y' } },
+    ])
+    db.product.findMany.mockResolvedValueOnce([products[1]])
+    db.channelListing.findMany.mockResolvedValue([])
+    const out = await resolveCampaignOwnership(['c-y'])
+    expect(out.get('c-y')).toMatchObject({ unresolved: ['B0NOWHERE1'], owner: { kind: 'shared', productIds: ['p-parent'] } })
   })
 })
