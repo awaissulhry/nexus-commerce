@@ -223,9 +223,9 @@ export async function loadNegativesFacts(m: MarketFacts, decided: MarketDecision
   const acted = logRows.filter((r) => r.actedAt && r.actedAt >= today && COUNTED.includes(r.status))
   const approvalIds = [...new Set(logRows.map((r) => r.approvalId).filter((x): x is string => !!x))]
   const approvals = new Map<string, ApprovalFact>(approvalIds.length
-    ? (await prisma.agentApproval.findMany({ where: { id: { in: approvalIds } }, select: { id: true, status: true, decidedAt: true, expiresAt: true } }))
-      // A pending request past its expiry waits for nobody: asked again.
-      .map((a) => [a.id, { status: a.status === 'pending' && a.expiresAt && a.expiresAt.getTime() < now.getTime() ? 'expired' : a.status, decidedAt: a.decidedAt ?? null }])
+    // The request's own status, as the approval sweep keeps it (an unanswered one turns `expired` there: asked again).
+    ? (await prisma.agentApproval.findMany({ where: { id: { in: approvalIds } }, select: { id: true, status: true, decidedAt: true } }))
+      .map((a) => [a.id, { status: a.status, decidedAt: a.decidedAt ?? null }])
     : [])
   const estimate = productEstimate(ctx.pool)
   const decisions = decided.byProduct.get(root) ?? []

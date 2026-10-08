@@ -57,8 +57,8 @@ import { blockedPositive, type Positive } from '../ads-winner-lock.js'
 import { SIZE_RE } from '../negatives-ngrams.service.js'
 import { addEvidence, brandWordIn, negateClicksNeeded, NO_TERM_EVIDENCE, SPEND_GATE_CPAS, termKey, type LeverEffective, type TermDecision, type TermEvidence } from './terms.js'
 
-/** The brain's own actor on the negatives lever (the gate's PRODUCT_BRAIN_ACTOR `-<what>` form: it passes an owned lever). */
-export const BRAIN_NEGATIVES_ACTOR = 'automation:ads-brain-negatives' as const
+/** The brain's own actor on the negatives lever (the gate's PRODUCT_BRAIN_ACTOR `-<what>` form: it passes an owned lever only). */
+export { BRAIN_NEGATIVES_ACTOR } from '../ads-write-gate.js'
 /** Amazon's negatives per campaign and per ad group the design plans for (sources conflict: 1,000 vs 10,000, §2.7). */
 export const AMAZON_ENTITY_LIMIT = 1000
 /** The fewest clicks a wasted word needs across terms, whatever the pooled test asks (Scale Insights' floor, §2.7). */
@@ -666,10 +666,11 @@ function consolidateDrafts(f: Facts, entities: Map<string, { standing: number; w
 // ── Levels, the budget and the caps ──────────────────────────────────────────────────────────────────────────────
 
 export function shadowState(gates: NegativesInput['gates'], now: Date): NegativesPlan['shadow'] {
-  const daysRun = gates.shadowSince ? Math.floor((now.getTime() - gates.shadowSince.getTime()) / DAY_MS) : null
+  // A start after `now` (a clock between the database and this process) counts as 0 days run, never as minus.
+  const daysRun = gates.shadowSince ? Math.max(0, Math.floor((now.getTime() - gates.shadowSince.getTime()) / DAY_MS)) : null
   if (!gates.ceilingLive) return { inShadow: true, why: 'the server switch NEXUS_BID_BRAIN_MODE is not live: the brain decides and logs, and writes and asks nothing', daysRun, days: gates.shadowDays, ceilingLive: false }
   if (daysRun == null || daysRun < gates.shadowDays) {
-    return { inShadow: true, why: `the negatives lever runs ${plural(gates.shadowDays, 'day')} in shadow first (§10; the Owner's negativesShadowDays changes it): ${daysRun == null ? 'not started' : `${plural(Math.max(0, daysRun), 'day')} run`}`, daysRun, days: gates.shadowDays, ceilingLive: true }
+    return { inShadow: true, why: `the negatives lever runs ${plural(gates.shadowDays, 'day')} in shadow first (§10; the Owner's negativesShadowDays changes it): ${daysRun == null ? 'not started' : `${plural(daysRun, 'day')} run`}`, daysRun, days: gates.shadowDays, ceilingLive: true }
   }
   return { inShadow: false, why: null, daysRun, days: gates.shadowDays, ceilingLive: true }
 }
