@@ -9680,6 +9680,67 @@ CREATE TABLE "AdsBrainBudgetDecision" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainTerm" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "term" TEXT NOT NULL,
+    "isAsin" BOOLEAN NOT NULL DEFAULT false,
+    "state" TEXT NOT NULL,
+    "previousState" TEXT,
+    "stateSince" TIMESTAMP(3) NOT NULL,
+    "protection" TEXT,
+    "leadProductId" TEXT,
+    "heldBy" TEXT,
+    "capped" BOOLEAN NOT NULL DEFAULT false,
+    "askFirst" BOOLEAN NOT NULL DEFAULT false,
+    "clashCount" INTEGER NOT NULL DEFAULT 0,
+    "impressions" INTEGER NOT NULL DEFAULT 0,
+    "clicks" INTEGER NOT NULL DEFAULT 0,
+    "orders" INTEGER NOT NULL DEFAULT 0,
+    "spendCents" INTEGER NOT NULL DEFAULT 0,
+    "salesCents" INTEGER NOT NULL DEFAULT 0,
+    "windowDays" INTEGER NOT NULL,
+    "dataDay" DATE NOT NULL,
+    "why" TEXT NOT NULL,
+    "evidence" JSONB NOT NULL,
+    "digest" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "checkedAt" TIMESTAMP(3) NOT NULL,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainTerm_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainTermLead" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "term" TEXT NOT NULL,
+    "leadProductId" TEXT NOT NULL,
+    "previousLeadProductId" TEXT,
+    "leadSince" TIMESTAMP(3) NOT NULL,
+    "rule" TEXT NOT NULL,
+    "leadBidCents" INTEGER,
+    "maxBidCents" INTEGER,
+    "contenders" JSONB NOT NULL,
+    "wouldLower" JSONB NOT NULL,
+    "why" TEXT NOT NULL,
+    "digest" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "checkedAt" TIMESTAMP(3) NOT NULL,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainTermLead_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15497,6 +15558,33 @@ CREATE INDEX "AdsBrainBudgetDecision_createdAt_idx" ON "AdsBrainBudgetDecision"(
 
 -- CreateIndex
 CREATE INDEX "AdsBrainBudgetDecision_workspaceId_idx" ON "AdsBrainBudgetDecision"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTerm_marketplace_term_idx" ON "AdsBrainTerm"("marketplace", "term");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTerm_productId_marketplace_state_idx" ON "AdsBrainTerm"("productId", "marketplace", "state");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTerm_checkedAt_idx" ON "AdsBrainTerm"("checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTerm_workspaceId_idx" ON "AdsBrainTerm"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainTerm_workspaceId_productId_marketplace_term_key" ON "AdsBrainTerm"("workspaceId", "productId", "marketplace", "term");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTermLead_leadProductId_idx" ON "AdsBrainTermLead"("leadProductId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTermLead_checkedAt_idx" ON "AdsBrainTermLead"("checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainTermLead_workspaceId_idx" ON "AdsBrainTermLead"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainTermLead_workspaceId_marketplace_term_key" ON "AdsBrainTermLead"("workspaceId", "marketplace", "term");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

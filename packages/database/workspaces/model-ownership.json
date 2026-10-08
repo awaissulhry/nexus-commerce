@@ -465,6 +465,8 @@
     "AdsBrainBudgetDecision",
     "AmazonAdsHourlyPlacement",
     "AmazonAdsHourlyArrival",
+    "AdsBrainTerm",
+    "AdsBrainTermLead",
     "AdWriteRefusal",
     "AutomationRefusalDaily",
     "KeywordBidProposal",

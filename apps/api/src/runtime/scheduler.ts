@@ -856,6 +856,8 @@ export async function startScheduler(): Promise<void> {
     const { startNativeRulesCron } = await import('../jobs/ads-native-rules.job.js');
     // BID BRAIN BB-15 — the nightly fit of the attribution lag curves the brain's nowcast reads (Nexus rows only).
     const { startLagCurveCron } = await import('../jobs/ads-lag-curve.job.js');
+    // ONE BRAIN AB-9 — the term ledger and the market arbiter in shadow (only for products whose negatives or harvest lever is OBSERVE+).
+    const { startBrainTermsCron } = await import('../jobs/ads-brain-terms.job.js');
     // RS.5 — rank-defend loop (self-gated on NEXUS_ENABLE_RANK_DEFEND=1).
     const { startAdsRetentionCron } = await import('../jobs/ads-retention.job.js');
     const { startRankDefendCron } = await import('../jobs/ad-rank-defend.job.js');
@@ -903,6 +905,7 @@ export async function startScheduler(): Promise<void> {
     startBidBrainCron();
     startNativeRulesCron();
     startLagCurveCron();
+    startBrainTermsCron();
     startRankDefendCron();
     // HX.11 — prunes the ads history tables. OFF unless NEXUS_ENABLE_ADS_RETENTION=1, because it deletes.
     startAdsRetentionCron();

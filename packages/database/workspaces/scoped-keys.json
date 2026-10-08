@@ -6266,6 +6266,27 @@
     "compound": {},
     "relations": []
   },
+  "AdsBrainTerm": {
+    "scalar": {},
+    "compound": {
+      "product_market_term": [
+        "productId",
+        "marketplace",
+        "term"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainTermLead": {
+    "scalar": {},
+    "compound": {
+      "market_term": [
+        "marketplace",
+        "term"
+      ]
+    },
+    "relations": []
+  },
   "AmazonAdsHourlyPlacement": {
     "scalar": {},
     "compound": {
