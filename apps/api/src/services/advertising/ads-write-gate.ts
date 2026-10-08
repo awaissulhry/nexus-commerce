@@ -24,6 +24,7 @@ import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, leverDimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
 import { BRAIN_ACTOR, brainLiveCeiling, brainOwnedCampaignIds } from './bid-brain/live.js'
 import { campaignLeverOwners, portfolioCapHold, type LeverHold } from './brain/lever-owners.js'
+import { brainDayMoveVerdict, brainDayOpeningCents, isMoneyActor, ladderBaseCents, LADDER_GATE_MAX_PCT, MONEY_BUDGETS_ACTOR, moneyLogStepOf } from './brain/budget-ladder.js'
 import type { BrainLever } from './brain/levers.js'
 import { protectedNegativeRefusal } from './ads-negation-policy.js'
 import { adProductOf, adWriteRefusal, type AdWrite } from '@nexus/shared/ads-ad-product'
@@ -72,9 +73,10 @@ export type GateDeniedAt =
   | 'brain_owned'
   // ONE BRAIN AB-5 — the Owner locked the whole lever at his own value: every automatic writer is refused, the brain too.
   | 'owner_locked'
-  // ONE BRAIN AB-12 — the brain's own pause or resume (BRAIN_STATE_ACTOR) on a campaign whose state lever no product's
-  // brain owns now (OBSERVE, OFF, excluded, shared, nothing enrolled), or under a shadow ceiling: refused.
-  | 'brain_lever_not_owned'
+  // ONE BRAIN AB-8 — the brain's money writer (brain/budget-ladder.ts MONEY_ACTORS) on a lever the brain does not own: a
+  // server switch not live, a product not enrolled, a lever at OFF or OBSERVE, a campaign excluded or shared. AB-12 — and the
+  // brain's own pause or resume (BRAIN_STATE_ACTOR) on a campaign whose state lever it does not own, the same way.
+  | 'brain_not_owner'
 
 /**
  * 3A (Owner decided 2026-10-06) — the limits that are HIS: his campaign's bid and budget bounds and his bid policies
@@ -473,13 +475,13 @@ async function productBrainRefusal(target: { campaignId: string; name?: string |
 export async function brainStateNotOwnedRefusal(target: { campaignId: string; name?: string | null }): Promise<Extract<GateDecision, { allowed: false }> | null> {
   const where = `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}`
   if (!brainLiveCeiling()) {
-    return { allowed: false, deniedAt: 'brain_lever_not_owned', reason: `${BRAIN_STATE_ACTOR} changes the state of ${where} only while the brain's server switch is live (NEXUS_BID_BRAIN_MODE=live): it is not, so the brain only watches. Nothing was changed.` }
+    return { allowed: false, deniedAt: 'brain_not_owner', reason: `${BRAIN_STATE_ACTOR} changes the state of ${where} only while the brain's server switch is live (NEXUS_BID_BRAIN_MODE=live): it is not, so the brain only watches. Nothing was changed.` }
   }
   const hold = (await campaignLeverOwners([target.campaignId])).get(target.campaignId)?.levers.state
   if (hold?.kind === 'owned') return null
   return {
     allowed: false,
-    deniedAt: 'brain_lever_not_owned',
+    deniedAt: 'brain_not_owner',
     reason: `no product's brain owns the state (pause, enable, archive) of ${where}${hold ? ` (${hold.why})` : ''}: the brain pauses and resumes only a campaign whose state lever it owns — enrolled, the lever at PROPOSE or AUTO, not excluded, not locked. Nothing was changed.`,
   }
 }
@@ -749,6 +751,9 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       const refusal = await productBrainRefusal({ campaignId: ctx.campaignId, name: campaign.name }, brainLeversOfWrite(levers, fieldList), ctx)
       if (refusal) return refusal
     }
+    // ONE BRAIN AB-8 — the money writer's actor writes only a budgets lever the brain owns (whatever the switch says).
+    const notOwner = await moneyActorRefusal({ campaignId: ctx.campaignId, name: campaign.name }, ctx)
+    if (notOwner) return notOwner
     // ONE BRAIN AB-12 — the brain's own pause and resume: only where a product's brain owns the campaign's state lever, under
     // the live ceiling (brainStateNotOwnedRefusal). Every other writer is judged exactly as before.
     if (ctx.actor === BRAIN_STATE_ACTOR) {
@@ -850,6 +855,12 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       const refusal = await productBrainRefusal({ portfolioId: ctx.portfolioId }, ['portfolioCap'], ctx)
       if (refusal) return refusal
     }
+  }
+  // ONE BRAIN AB-8 — the money writer's actor on a portfolio: only the cap of a portfolio the brain owns; it makes none.
+  if (ctx.campaignId === undefined && isMoneyActor(ctx.actor) && ctx.manual !== true) {
+    if (!ctx.portfolioId) return { allowed: false, deniedAt: 'brain_not_owner', reason: `${ctx.actor} writes only a lever the brain owns: it names no campaign and no portfolio here (the brain makes no portfolio). Nothing was changed.` }
+    const notOwner = await moneyActorRefusal({ portfolioId: ctx.portfolioId }, ctx)
+    if (notOwner) return notOwner
   }
 
   // Value cap: blast-radius limit per write. Composite actions are
@@ -1272,6 +1283,10 @@ export async function budgetDayMoveDenial(args: {
     }
   }
 
+  // ONE BRAIN AB-8 — the brain's own budget writes: the day opens at the base after its ladder, and its ladder may pass
+  // the ceiling (the intraday give-back). Every other writer goes on below, unchanged.
+  if (args.actor === MONEY_BUDGETS_ACTOR) return brainBudgetDayMoveDenial(args, history, midnightUtc, previousCents)
+
   const first = await prisma.advertisingActionLog.findFirst({
     where: { ...history, createdAt: { gte: midnightUtc } },
     orderBy: { createdAt: 'asc' },
@@ -1310,6 +1325,86 @@ export async function budgetDayMoveDenial(args: {
     }
   }
   return null
+}
+
+/**
+ * ONE BRAIN AB-8 — the day-move bound for the brain's own budget writes (MONEY_BUDGETS_ACTOR, brain/budget-ladder.ts).
+ * The bound itself is the same (budgetDayMoveBounds) and so is everything around it; two things differ, both read from
+ * the campaign's budget log and its evidence, never from the write:
+ *   opening    after a ladder that ended an earlier day the day opens at the base it climbed from (the ladder is given
+ *              back at the next budget day), else exactly as for every writer (loggedDayOpeningCents)
+ *   ceiling    a write above it passes only as the brain's ladder: at most +LADDER_GATE_MAX_PCT % of today's base, the
+ *              base inside the bound. The floor holds as for everyone.
+ * The gate reaches here only after the brain's ownership of the campaign's budgets lever was checked (moneyActorRefusal):
+ * the exception never applies on a campaign the brain does not own.
+ */
+async function brainBudgetDayMoveDenial(
+  args: { campaignId: string; currentBudgetCents: number; intendedCents: number },
+  history: Prisma.AdvertisingActionLogWhereInput,
+  midnightUtc: Date,
+  previousCents: number | null,
+): Promise<GateDecision | null> {
+  const select = { userId: true, payloadBefore: true, payloadAfter: true, evidence: true, amazonResponseStatus: true } as const
+  const [todayRows, beforeRows] = await Promise.all([
+    prisma.advertisingActionLog.findMany({ where: { ...history, createdAt: { gte: midnightUtc } }, orderBy: { createdAt: 'asc' }, select }),
+    prisma.advertisingActionLog.findMany({ where: { ...history, createdAt: { lt: midnightUtc } }, orderBy: { createdAt: 'desc' }, take: GIVE_BACK_LOOKBACK, select }),
+  ])
+  const today = todayRows.map(moneyLogStepOf)
+  const before = beforeRows.map(moneyLogStepOf)
+  const standardOpening = loggedDayOpeningCents(todayRows.map(budgetLogStepOf), beforeRows.map(budgetLogStepOf))
+  const currentCents = previousCents ?? args.currentBudgetCents
+  const { openingCents, carried } = brainDayOpeningCents({ todayOldestFirst: today, beforeTodayNewestFirst: before, currentCents, standardOpening })
+  if (openingCents == null || openingCents <= 0) return null // nothing to measure a move against
+  const { floorCents, ceilCents, dropPct, risePct, riseAbsCents } = budgetDayMoveBounds(openingCents)
+  const baseCents = ladderBaseCents(openingCents, today)
+  const verdict = brainDayMoveVerdict({ intendedCents: args.intendedCents, floorCents, ceilCents, baseCents })
+  const eur = (c: number) => `€${(c / 100).toFixed(2)}`
+  if (verdict.allowed) {
+    if (verdict.exception) {
+      logger.info('[ads-write-gate] the brain\'s intraday ladder — exempt from the day-move ceiling only', {
+        campaignId: args.campaignId, openingCents, baseCents, ceilCents, toCents: args.intendedCents, limitCents: verdict.limitCents,
+      })
+    }
+    return null
+  }
+  const opened = `the day opened at ${eur(openingCents)}${carried ? ' (the base of the brain\'s ladder of an earlier day: it is given back at the next budget day)' : ''}`
+  if (args.intendedCents < floorCents) {
+    return {
+      allowed: false,
+      deniedAt: 'budget_day_move',
+      reason: `this would move today's budget on ${args.campaignId} to ${eur(args.intendedCents)} — past the ${dropPct}%/day limit on total movement: ${opened}, and no writer, the brain included, may take it below ${eur(floorCents)} today. It resets at 00:00 UTC.`,
+    }
+  }
+  return {
+    allowed: false,
+    deniedAt: 'budget_day_move',
+    reason: `this would move today's budget on ${args.campaignId} to ${eur(args.intendedCents)} — past the ${risePct}%/day limit on total movement (or ${eur(riseAbsCents)}, whichever is larger; today's ceiling ${eur(ceilCents)}): ${opened}. The brain's intraday ladder may pass the ceiling only up to +${LADDER_GATE_MAX_PCT}% of today's base ${eur(baseCents)}${verdict.limitCents != null ? ` (${eur(verdict.limitCents)})` : ', and only while that base is inside the bound'}. It resets at 00:00 UTC.`,
+  }
+}
+
+/**
+ * ONE BRAIN AB-8 — the money writer's actors (MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR) write only a lever the brain
+ * OWNS: the campaign's budgets lever, or the portfolio cap of a portfolio every campaign of which is the brain's. Under a
+ * non-live server switch the brain owns nothing, so they are refused; a lever nobody holds, or one the Owner locked, is
+ * refused too (the lock in the Owner's words, by the AB-5 check before this one). It holds only these two actors: every
+ * other writer, the brain's other actors included, is judged as before. A failed read of the holders goes out of the gate
+ * as an error (try again later), as productBrainRefusal's does.
+ */
+async function moneyActorRefusal(target: { campaignId: string; name?: string | null } | { portfolioId: string }, ctx: GateContext): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  if (!isMoneyActor(ctx.actor) || ctx.manual === true) return null
+  const lever: BrainLever = 'campaignId' in target ? 'budgets' : 'portfolioCap'
+  const where = 'campaignId' in target ? `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}` : `portfolio ${target.portfolioId}`
+  const refuse = (why: string): Extract<GateDecision, { allowed: false }> => ({
+    allowed: false,
+    deniedAt: 'brain_not_owner',
+    reason: `${ctx.actor} writes only a lever the brain owns: the ${LEVER_WORDS[lever]} of ${where} is not the brain's — ${why}. Nothing was changed.`,
+  })
+  if (!brainLiveCeiling()) return refuse('the server switch NEXUS_BID_BRAIN_MODE is not live, so the brain owns no lever')
+  const hold = 'campaignId' in target
+    ? (await campaignLeverOwners([target.campaignId])).get(target.campaignId)?.levers.budgets ?? null
+    : await portfolioCapHold(target.portfolioId)
+  if (hold?.kind === 'owned') return null
+  return refuse(hold ? `the Owner locked it (${hold.why})` : 'no enrolled product\'s brain holds it at PROPOSE or AUTO there')
 }
 
 /**

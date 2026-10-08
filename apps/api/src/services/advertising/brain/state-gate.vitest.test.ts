@@ -33,6 +33,7 @@ vi.mock('./lever-owners.js', () => ({ campaignLeverOwners, portfolioCapHold: vi.
 
 const { checkAdsWriteGate, BRAIN_STATE_ACTOR, PRODUCT_BRAIN_ACTOR } = await import('../ads-write-gate.js')
 const { isBrainStatePause, brainStatePatchRefusal, isAutomatedPause } = await import('../ads-mutation.service.js')
+const { classifyActor, engineCaps, engineLabel } = await import('../ads-engine-actors.js')
 
 const ROW = {
   liveBidWritesEnabled: true, dynamicBidding: null, liveBidWritesToday: 0, liveBidWritesDay: null,
@@ -79,7 +80,7 @@ describe('AB-12 — the brain\'s state writer at the write gate', () => {
     for (const levers of [{}, { budgets: owned }, { negatives: locked }] as Array<Partial<Record<BrainLever, LeverHold>>>) {
       holds(levers)
       const r = await state(BRAIN_STATE_ACTOR)
-      expect(r, JSON.stringify(levers)).toMatchObject({ allowed: false, deniedAt: 'brain_lever_not_owned' })
+      expect(r, JSON.stringify(levers)).toMatchObject({ allowed: false, deniedAt: 'brain_not_owner' })
       expect((r as { reason: string }).reason).toMatch(/^no product's brain owns the state \(pause, enable, archive\) of campaign "Jacket exact" \(c1\): the brain pauses and resumes only a campaign whose state lever it owns .* Nothing was changed\.$/)
     }
   })
@@ -88,7 +89,7 @@ describe('AB-12 — the brain\'s state writer at the write gate', () => {
     vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
     holds({ state: owned })
     const r = await state(BRAIN_STATE_ACTOR)
-    expect(r).toMatchObject({ allowed: false, deniedAt: 'brain_lever_not_owned' })
+    expect(r).toMatchObject({ allowed: false, deniedAt: 'brain_not_owner' })
     expect((r as { reason: string }).reason).toMatch(/only while the brain's server switch is live \(NEXUS_BID_BRAIN_MODE=live\)/)
     expect(campaignLeverOwners).not.toHaveBeenCalled()
   })
@@ -133,5 +134,14 @@ describe('AB-12 — the mutation layer: the one exception to "no automation paus
     expect(brainStatePatchRefusal(BRAIN_STATE_ACTOR, { status: 'PAUSED', dailyBudget: 20 })).toBe('brain_state_writes_status_only')
     expect(brainStatePatchRefusal(BRAIN_STATE_ACTOR, { biddingStrategy: 'MANUAL' })).toBe('brain_state_writes_status_only')
     expect(brainStatePatchRefusal('automation:rule-abc', { status: 'ARCHIVED' })).toBeNull()
+  })
+})
+
+describe('AB-12 — the anomaly breaker names the brain\'s writers (never "no known author")', () => {
+  it('the state writer is the engine "Brain pauses" with caps of its own; the money writer stays "Brain budgets"', () => {
+    expect(classifyActor(BRAIN_STATE_ACTOR)).toEqual({ kind: 'engine', engine: 'brain-state' })
+    expect(engineLabel('brain-state')).toBe('Brain pauses')
+    expect(engineCaps('brain-state')).toEqual({ perTick: 50, perDay: 100, breakerPerHour: 50 })
+    for (const actor of ['automation:ads-brain-budgets', 'automation:ads-brain-portfolio']) expect(classifyActor(actor), actor).toEqual({ kind: 'engine', engine: 'brain-money' })
   })
 })

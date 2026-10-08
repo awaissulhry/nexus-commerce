@@ -7,6 +7,8 @@
  *            the pooled conversion rate with its clicks, the order value, the step and the limit that held it)
  *   what-if  the same keywords decided again now with another target ACoS (and band) — not stored, nothing sent
  *   diff     per day, the brain against what today's writers set, and conflicts and churn from the action log
+ *   calibration  BB-15 — the attribution lag curve per market (and product): how much of a day's final orders a young copy
+ *            holds at each age, what the curve rests on, and the nowcast's mean absolute error on the newest settled days
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -32,7 +34,7 @@ const bidBrain: AgentTool = {
   restrictedFields: BRAIN_MONEY,
   input: z.object({
     view: z.enum(BRAIN_VIEWS).default('why')
-      .describe('why (default): each keyword\'s newest decision and why; what-if: decided again now with targetAcosPct (and a band); diff: per day, the brain against what today\'s writers set, with conflicts and churn'),
+      .describe('why (default): each keyword\'s newest decision and why; what-if: decided again now with targetAcosPct (and a band); diff: per day, the brain against what today\'s writers set, with conflicts and churn; calibration: the attribution lag curve per market (and product) and how well its nowcast predicted the newest settled days'),
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
       .describe('one Amazon market code (the shadow runs on IT and DE); omit with no campaign, keyword or product for both'),
     campaignId: ID.optional().describe('one Amazon campaign, its Nexus id (ad-campaigns)'),
@@ -57,7 +59,11 @@ const bidBrain: AgentTool = {
     + 'targetAcosPct (and bandLoPct / bandHiPct): what the brain would set, not stored and not sent (set-ads-strategy '
     + 'changes the real target). view diff: per day, agree / higher / lower / hold / brake against today\'s bids, conflicts '
     + '(keywords two different automatic writers changed within 24 hours), churn (bid writes per keyword) and the brain\'s own '
-    + 'writes. Scope: a '
+    + 'writes. view calibration: the attribution lag curve L(a) per market (and per product with enough orders of its own) — '
+    + 'the share of a day\'s final 7-day orders and sales a copy pulled a days after the day already holds, what it rests on '
+    + '(vintage days, the 1d/7d seed), and how well a curve fitted without the newest settled days nowcast them (mean '
+    + 'absolute error per age, against reading the young copy as final); the brain\'s nowcast weights young days by it '
+    + '(NEXUS_BID_BRAIN_NOWCAST: shadow by default — the decisions stay on settled days and the why names any difference). Scope: a '
     + 'keyword (targetId), a campaign, a product, or a market. Bids, targets and the why are ad-spend money: hidden from a '
     + 'person without permission to see ad spend. Nexus only; reads nothing from Amazon.',
   handler: async (args) => {

@@ -13,6 +13,10 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * API pointing at their AWS resources (see docs/MARKETING-OS.md); until
  * then this endpoint simply has nothing pushed to it. Sandbox/manual posts
  * exercise it end-to-end.
+ *
+ * BB-16 (2026-10-08): after the campaign-grain loop below (unchanged), the same Sponsored Products records are also
+ * written at ad group × placement grain with the real 1-day and 7-day conversions (AmazonAdsHourlyPlacement, and their
+ * arrival times in AmazonAdsHourlyArrival) — see ams-grain.service.ts.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -20,6 +24,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { liveCall, adsMode, type AdsRegion } from './ads-api-client.js'
 import { AMS_ALL_DATASETS, familyOf, adProductOf } from '../ads-core/ams-dataset.js'
+import { grainSummary, ingestPlacementGrain, type GrainIngestResult } from './ams-grain.service.js'
 
 // AME.9 — the AWS destination Amazon pushes AMS messages to (an SQS queue ARN
 // or a Firehose delivery-stream ARN the operator provisions + grants Amazon
@@ -116,7 +121,13 @@ interface AmsTrafficMsg { dataset_id?: string; marketplace_id?: string; currency
 interface AmsConversionMsg { dataset_id?: string; campaign_id?: string; profileId?: string; time_window_start?: string; attributed_sales_1d?: number; attributed_conversions_1d?: number; attributed_units_ordered_1d?: number }
 export type AmsMessage = AmsTrafficMsg & AmsConversionMsg & { marketplace?: string }
 
-export interface AmsIngestResult { received: number; upserted: number; skipped: number }
+export interface AmsIngestResult {
+  received: number
+  upserted: number
+  skipped: number
+  /** BB-16 — the same records at ad group × placement grain (AmazonAdsHourlyPlacement); absent when switched off. */
+  grain?: GrainIngestResult
+}
 
 // Diagnostic ring buffer — the last few raw messages + ingest results seen, so
 // we can confirm the real AMS field shape once data flows (the ingest field
@@ -150,7 +161,7 @@ export function normalizeAmsMarketplace(raw: string | null | undefined): string 
   return AMS_MARKETPLACE_IDS[raw] ?? raw
 }
 
-export async function ingestMarketingStream(messages: AmsMessage[]): Promise<AmsIngestResult> {
+export async function ingestMarketingStream(messages: AmsMessage[], opts: { arrivedAt?: Date } = {}): Promise<AmsIngestResult> {
   const result: AmsIngestResult = { received: messages.length, upserted: 0, skipped: 0 }
   // Capture a couple of raw samples for diagnostics (cap 5).
   try { if (messages.length) { _amsDebug.samples = [...messages.slice(0, 5)]; _amsDebug.lastAt = new Date().toISOString() } } catch { /* ignore */ }
@@ -260,7 +271,12 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
       result.upserted++
     } catch (e) { logger.warn('[AX.12] AMS ingest row failed', { campaignId, error: (e as Error).message }); result.skipped++ }
   }
-  logger.info('[AX.12] AMS ingest', result)
+  // BB-16 — the same records again, at ad group × placement grain with the real 7-day conversions, into their own table.
+  // The loop above and the campaign-grain table it writes are untouched; a failure here is counted in `grain`, never thrown.
+  const grain = await ingestPlacementGrain(messages as unknown as Array<Record<string, unknown>>, { arrivedAt: opts.arrivedAt, marketplaceOf: normalizeAmsMarketplace })
+    .catch((e: unknown) => { logger.warn('[BB-16] AMS grain ingest failed', { error: e instanceof Error ? e.message : String(e) }); return null })
+  if (grain) result.grain = grain
+  logger.info('[AX.12] AMS ingest', { received: result.received, upserted: result.upserted, skipped: result.skipped, ...(grain ? { grain: grainSummary(grain) } : {}) })
   _amsDebug.lastResult = result
   return result
 }

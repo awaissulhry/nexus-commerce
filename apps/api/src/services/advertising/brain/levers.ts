@@ -54,11 +54,12 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   hours: { levels: OFF_OBSERVE, others: 'the painted hourly plan waits for AB-13' },
   placements: { levels: OFF_OBSERVE, others: 'placements per hour wait for AB-13' },
   // AB-12 — every level: OBSERVE logs, PROPOSE asks a person, AUTO pauses and resumes alone (D4 = A, brain/state*.ts).
-  state: { levels: ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'], others: 'each pause, resume and archive proposal it would make is logged in shadow (ads-brain view state); PROPOSE asks a person, AUTO pauses and resumes alone inside the caps — an archive is only ever a proposal (AB-12)' },
-  budgets: { levels: OFF_OBSERVE, others: 'campaign budgets are planned in shadow (AB-7: OBSERVE logs the money plan, ads-brain view money); writing them waits for AB-8' },
-  portfolioCap: { levels: OFF_OBSERVE, others: 'the Amazon portfolio cap is planned in shadow (AB-7, ads-brain view money); writing it waits for AB-8' },
-  negatives: { levels: OFF_OBSERVE, others: 'negatives wait for AB-10' },
-  harvest: { levels: OFF_OBSERVE, others: 'harvest waits for AB-11' },
+  state: { levels: BRAIN_LEVELS, others: 'each pause, resume and archive proposal it would make is logged in shadow (ads-brain view state); PROPOSE asks a person, AUTO pauses and resumes alone inside the caps — an archive is only ever a proposal (AB-12)' },
+  // AB-8 — the money writer: OBSERVE plans and logs (AB-7), PROPOSE asks a person for each change, AUTO writes inside the pace.
+  budgets: { levels: BRAIN_LEVELS, others: 'campaign budgets: OBSERVE plans and logs them (ads-brain view money), PROPOSE asks a person for the day\'s moves, AUTO writes them and the intraday ladder (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
+  portfolioCap: { levels: BRAIN_LEVELS, others: 'the Amazon portfolio cap: OBSERVE plans it, PROPOSE asks a person, AUTO writes it — monthly, never below this month\'s spend, never a cap removed (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
+  negatives: { levels: OFF_OBSERVE, others: 'the term ledger decides negatives in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-10' },
+  harvest: { levels: OFF_OBSERVE, others: 'the term ledger decides harvests in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-11' },
   structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
   biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
   offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },
@@ -111,7 +112,7 @@ export const BRAIN_SETTINGS = {
   ownPortfolio: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N2: the brain proposes one portfolio per product and market' },
   strategySwitchMode: { type: 'enum', default: 'PROPOSE_THEN_AUTO', values: ['PROPOSE_THEN_AUTO', 'ALWAYS_PROPOSE'], scopes: BOTH, what: 'N4: a bidding-strategy switch waits for approval for 30 days, then runs alone (PROPOSE_THEN_AUTO), or always waits (ALWAYS_PROPOSE)' },
   // AB-12 — the state lever (§2.4, D4 = A)
-  pauseMinDays: { type: 'int', default: 3, min: 3, max: 60, scopes: BOTH, what: 'a stop expected to last at least this many days is a pause; a shorter one stays on the stop recipe at 3¢ (§2.4, D4)' },
+  pauseMinDays: { type: 'int', default: 3, min: 3, max: 60, scopes: BOTH, what: 'a stop expected to last at least this many days is a pause; a shorter one stays on low bids, never a pause (§2.4, D4)' },
   archiveDeadWeeks: { type: 'int', default: 4, min: 2, max: 52, scopes: BOTH, what: 'weeks without an impression before the brain proposes to archive a campaign — only ever a proposal (§2.4)' },
   longStopUntil: { type: 'dayOrNull', default: null, scopes: BOTH, what: 'the Owner\'s long stop: the brain pauses through this day (YYYY-MM-DD, UTC) and resumes after it; empty = none (§2.4)' },
 } as const satisfies Record<string, SettingSpec>
