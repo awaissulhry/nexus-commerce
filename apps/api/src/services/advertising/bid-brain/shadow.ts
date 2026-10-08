@@ -20,10 +20,12 @@ import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
 import { engineGuardNote, openEngineGuard, type EngineGuard, type EngineGuardReport } from '../ads-engine-guard.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
-import { decide, type Decision } from './decide.js'
-import { buildFacts } from './facts.js'
-import { brainOwnedCampaignIds } from './live.js'
-import { writeOwnedDecisions, writeReportWords, type WriteReport } from './live-writer.js'
+import { decide, type Decision, type TargetFacts } from './decide.js'
+import { buildFacts, isPlanFloorMark, type CampaignRow } from './facts.js'
+import { BRAIN_ACTOR, brainOwnedCampaignIds } from './live.js'
+import { placementReportWords, writeOwnedDecisions, writeOwnedPlacements, writeReportWords, type PlacementReport, type PlacementWrite, type WriteReport } from './live-writer.js'
+import type { PlanHour } from './plan-hour.js'
+import { stampPlanReceipts } from './plans.js'
 import { loadMarket, loadRun, SHADOW_MARKETS, type LastWrite, type PreviousDecision } from './load.js'
 
 export type BrainMode = 'off' | 'shadow' | 'live'
@@ -40,7 +42,7 @@ export interface ShadowRun {
   runId: string
   mode: BrainMode
   /** BB-6 — `owned`: the market's campaigns the brain owns this run; `writes`: what became of their write decisions. */
-  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; owned?: number; writes?: WriteReport | null }>
+  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; owned?: number; writes?: WriteReport | null; placements?: PlacementReport }>
   pruned: number
   /** BB-6 — the dial and the caps the live writes ran under (absent: nothing owned had to move). */
   guard?: EngineGuardReport
@@ -66,26 +68,45 @@ function carriedStep(d: Decision, prev: PreviousDecision | undefined) {
 
 const dec = (x: number | null | undefined, places = 4) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10 ** places) / 10 ** places)
 
-/** Decide and store one market; BB-6 — and send the write decisions of the campaigns the brain owns. */
-export async function shadowMarket(market: string, ctx: { runId: string; mode: BrainMode; now: Date; guard?: () => Promise<EngineGuard> }): Promise<ShadowRun['markets'][number]> {
-  const rows = await loadMarket(market, { now: ctx.now })
+/**
+ * Decide and store one market; BB-6 — and send the write decisions of the campaigns the brain owns. BB-7 — their hourly
+ * plan's hour too: its placement % (one write per campaign), its Min-bid floors (an entry recorded for the anti-flap),
+ * and the plan's receipt. `onlyOwned`: a between-slots tick decides only the campaigns the brain owns.
+ */
+export async function shadowMarket(market: string, ctx: { runId: string; mode: BrainMode; now: Date; clockNow?: Date; onlyOwned?: boolean; guard?: () => Promise<EngineGuard> }): Promise<ShadowRun['markets'][number]> {
+  // BB-7 review — a between-slots tick reads the campaigns the brain owns only, and no evidence (load.ts loadMarket).
+  const ownedAll = ctx.onlyOwned ? await brainOwnedCampaignIds() : null
+  if (ownedAll && !ownedAll.size) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
+  const rows = await loadMarket(market, { now: ctx.now, ...(ownedAll ? { campaignIds: ownedAll, light: true } : {}) })
   if (!rows.targets.length) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
-  const { run, lastWrites, previous } = await loadRun(rows, ctx.now)
-  const facts = buildFacts(rows, run)
-  const decisions = facts.map((f) => decide(f))
+  // BB-6 — the campaigns the brain owns write their decisions; every other campaign stays shadow, whatever the env says.
+  const allowlisted = [...rows.campaigns.values()].filter((c) => c.allowlisted).map((c) => c.id)
+  const owned = ctx.mode === 'live' && allowlisted.length ? await brainOwnedCampaignIds(allowlisted) : new Set<string>()
+  if (ctx.onlyOwned && !owned.size) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
+  const { run, lastWrites, previous } = await loadRun(rows, ctx.now, { owned, clockNow: ctx.clockNow })
   const groupOf = new Map(rows.targets.map((t) => [t.id, t.adGroupId]))
   const campaignOf = (targetId: string): string => {
     const adGroupId = groupOf.get(targetId)
     return adGroupId ? rows.adGroups.get(adGroupId)?.campaignId ?? '' : ''
   }
-  // BB-6 — the campaigns the brain owns write their decisions; every other campaign stays shadow, whatever the env says.
-  const allowlisted = [...rows.campaigns.values()].filter((c) => c.allowlisted).map((c) => c.id)
-  const owned = ctx.mode === 'live' && allowlisted.length ? await brainOwnedCampaignIds(allowlisted) : new Set<string>()
+  const facts = buildFacts(rows, run).filter((f) => !ctx.onlyOwned || owned.has(campaignOf(f.targetId)))
+  const decisions = facts.map((f) => decide(f))
   const toWrite = owned.size
     ? decisions.filter((d) => d.action === 'write' && owned.has(campaignOf(d.targetId))).map((decision) => ({ campaignId: campaignOf(decision.targetId), market, decision }))
     : []
-  const sent = toWrite.length && ctx.guard ? await writeOwnedDecisions(toWrite, { runId: ctx.runId, guard: await ctx.guard() }) : null
+  const guard = owned.size && ctx.guard ? await ctx.guard() : null
+  const sent = toWrite.length && guard ? await writeOwnedDecisions(toWrite, { runId: ctx.runId, guard }) : null
+  // BB-7 — the plan's hour of each owned campaign: its placements (none while braked, paused or in a Min-bid hour) …
+  const placed = guard && !run.marketBrakes.length ? await writeOwnedPlacements(placementWrites(rows, facts, decisions, owned, campaignOf, run.planHours), { runId: ctx.runId, guard }) : null
+  // … a new Min-bid entry for each campaign the brain floored this run (rank-defend's anti-flap, its count shared) …
+  if (sent) await recordMinBidEntries(rows, decisions, sent, run, campaignOf)
+  // … the floors' memory, where the old engines' give-back reads it, so a hand-back never strands a bid at the floor …
+  if (sent) await rememberFloors(rows, decisions, sent, run.planHours, campaignOf, ctx.clockNow ?? ctx.now)
+  // … and the plan's receipt (what it holds now), as rank-defend stamps its own.
+  if (run.planHours?.size) await stampPlanReceipts(run.planHours, ctx.clockNow ?? ctx.now)
   const data = decisions.flatMap((d) => {
+    // A light tick has no goal: its no_goal holds say nothing new and are not stored (the full run's decision stands).
+    if (rows.light && d.layer === 'no_goal') return []
     const prev = previous.get(d.targetId)
     const kind = rowKind(d, prev, ctx.now)
     if (!kind) return []
@@ -106,21 +127,120 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   if (data.length) await prisma.bidBrainDecision.createMany({ data })
   return {
     market, decided: decisions.length, stored: data.length, byAction: count(decisions, 'action'), byLayer: count(decisions, 'layer'), brakes: run.marketBrakes as string[],
-    ...(owned.size ? { owned: owned.size, writes: sent } : {}),
+    ...(owned.size ? { owned: owned.size, writes: sent, ...(placed && (placed.written || placed.refused || placed.deferred) ? { placements: placed } : {}) } : {}),
   }
 }
 
-/** BB-6 — the markets a run decides: IT and DE, and every market of a campaign the brain owns. */
-export async function brainMarkets(): Promise<string[]> {
-  const owned = await brainOwnedCampaignIds()
-  if (!owned.size) return [...SHADOW_MARKETS]
-  const campaigns = await prisma.campaign.findMany({ where: { id: { in: [...owned] } }, select: { marketplace: true } })
-  const extra = campaigns.map((c) => strategyMarket(c.marketplace)).filter((m): m is string => !!m)
-  return [...new Set<string>([...SHADOW_MARKETS, ...extra])]
+/** BB-7 — each owned campaign whose hourly plan sets placements this hour, with its highest base bid after this run. */
+export function placementWrites(rows: { market: string; campaigns: ReadonlyMap<string, CampaignRow> }, facts: readonly TargetFacts[], decisions: readonly Decision[], owned: ReadonlySet<string>, campaignOf: (targetId: string) => string, hours: ReadonlyMap<string, PlanHour> | undefined): PlacementWrite[] {
+  const out: PlacementWrite[] = []
+  const byCampaign = new Map<string, { f: TargetFacts; maxBid: number; floored: boolean; braked: boolean }>()
+  facts.forEach((f, i) => {
+    const campaignId = campaignOf(f.targetId)
+    if (!owned.has(campaignId)) return
+    const d = decisions[i]
+    // The higher of today's bid and the decided one: a lowering waits in the 5-minute queue (or is refused), and the
+    // placement must stay within the ceiling against the bid Amazon may still hold.
+    const bid = d.action === 'write' ? Math.max(d.currentCents, d.bidCents) : d.currentCents
+    const e = byCampaign.get(campaignId)
+    const floored = d.layer === 'min_bid_hour' || !!f.overrides?.minBidHour
+    // A paused ad group brakes its own keywords only: the campaign's placements wait only when every keyword is braked.
+    const braked = !!f.brakes?.length
+    if (!e) byCampaign.set(campaignId, { f, maxBid: bid, floored, braked })
+    else { e.maxBid = Math.max(e.maxBid, bid); e.floored ||= floored; e.braked &&= braked }
+  })
+  for (const [campaignId, e] of byCampaign) {
+    const hour = hours?.get(campaignId)
+    const c = rows.campaigns.get(campaignId)
+    if (!hour?.key || !e.f.lanes?.length || e.floored || e.braked || !c || c.status !== 'ENABLED') continue
+    out.push({ campaignId, market: rows.market, lanes: e.f.lanes, current: c.placements ?? [], maxBidCents: e.maxBid, key: hour.key, note: e.f.planNote ?? `hourly plan ${hour.name}`, dataDay: e.f.dataDay })
+  }
+  return out
 }
 
-/** One run over the brain's markets, then the 30-day prune. */
-export async function runShadowOnce(opts: { now?: Date; mode?: BrainMode } = {}): Promise<ShadowRun> {
+/** The layers whose write floors a keyword: the bid before is remembered for a give-back. */
+const FLOORING_LAYERS: ReadonlySet<string> = new Set(['min_bid_hour', 'stop', 'stock', 'phase'])
+
+/**
+ * BB-7 review — the floors' memory, kept where the old engines' give-back reads it, so handing a campaign back (op shadow,
+ * give-back, or the server switch off / shadow) never strands its bids at 2–3¢:
+ *   floored    each keyword the brain floored this run remembers its bid before (`AdTarget.suppressedFromBidCents`,
+ *              the no-pause memory `restoreCampaignBids` puts back; an older memory is kept); a Min-bid floor also marks
+ *              the campaign as floored by its plan's schedule (`bidsSuppressedAt` / `…FloorCents` / `…By =
+ *              automation:rank-defend-<schedule>`), so rank-defend's serving hour, once it runs the campaign again,
+ *              gives every bid back (firstWriteIntent `restore`). A stop's floor keeps its owner's mark (BB-8): its owner's
+ *              lift gives the bids back from this memory after a hand-back, and clears it while the brain still runs.
+ *   given back each keyword the brain gave back forgets it; when every keyword the plan floored was given back this run
+ *              (none still at a Min-bid floor, no give-back left waiting), the plan's floor mark goes too. A keyword's
+ *              own older stop keeps its memory and its owner.
+ * While the brain runs the campaign, facts.ts reads the plan's own mark and memory as its record (the plan's hour
+ * decides). Never fails the run.
+ */
+async function rememberFloors(rows: { campaigns: ReadonlyMap<string, CampaignRow> }, decisions: readonly Decision[], sent: WriteReport, hours: ReadonlyMap<string, PlanHour> | undefined, campaignOf: (targetId: string) => string, now: Date): Promise<void> {
+  try {
+    const flooredCampaigns = new Map<string, number>()
+    const gaveBack = new Set<string>()
+    for (const d of decisions) {
+      if (sent.byTarget.get(d.targetId)?.sent !== 'queued') continue
+      if (FLOORING_LAYERS.has(d.layer) && d.bidCents < d.currentCents) {
+        await prisma.adTarget.updateMany({ where: { id: d.targetId, suppressedFromBidCents: null }, data: { suppressedFromBidCents: d.currentCents } })
+        if (d.layer === 'min_bid_hour') flooredCampaigns.set(campaignOf(d.targetId), d.bidCents)
+      } else if (d.layer === 'restore') {
+        await prisma.adTarget.updateMany({ where: { id: d.targetId, suppressedFromBidCents: { not: null } }, data: { suppressedFromBidCents: null } })
+        gaveBack.add(campaignOf(d.targetId))
+      }
+    }
+    for (const [campaignId, floorCents] of flooredCampaigns) {
+      const hour = hours?.get(campaignId)
+      if (!hour) continue
+      await prisma.campaign.updateMany({ where: { id: campaignId, bidsSuppressedAt: null }, data: { bidsSuppressedAt: now, bidsSuppressedFloorCents: floorCents, bidsSuppressedBy: `automation:rank-defend-${hour.scheduleId}` } })
+    }
+    for (const campaignId of gaveBack) {
+      const c = rows.campaigns.get(campaignId)
+      if (!c?.bidsSuppressedAt || !isPlanFloorMark(c.bidsSuppressedBy) || flooredCampaigns.has(campaignId)) continue
+      const mine = decisions.filter((d) => campaignOf(d.targetId) === campaignId)
+      const waiting = mine.some((d) => d.layer === 'min_bid_hour' || (d.layer === 'restore' && d.bidCents !== d.currentCents && sent.byTarget.get(d.targetId)?.sent !== 'queued'))
+      if (!waiting) await prisma.campaign.updateMany({ where: { id: campaignId, bidsSuppressedBy: c.bidsSuppressedBy }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } })
+    }
+  } catch (err) {
+    logger.warn('[bid-brain] could not keep the floors\' memory', { error: err instanceof Error ? err.message : String(err) })
+  }
+}
+
+/** BB-7 — record a Min-bid entry for each owned campaign that entered a Min-bid hour this run (its floors were queued). */
+async function recordMinBidEntries(rows: { adGroups: ReadonlyMap<string, { campaignId: string }>; targets: ReadonlyArray<{ id: string; adGroupId: string }> }, decisions: readonly Decision[], sent: WriteReport, run: { lowered?: ReadonlyMap<string, { layer: string }>; minBidEntries?: ReadonlyMap<string, number> }, campaignOf: (targetId: string) => string): Promise<void> {
+  const entered = new Map<string, number>()
+  for (const d of decisions) {
+    if (d.layer !== 'min_bid_hour' || sent.byTarget.get(d.targetId)?.sent !== 'queued') continue
+    entered.set(campaignOf(d.targetId), d.bidCents)
+  }
+  if (!entered.size) return
+  const already = new Set(rows.targets.filter((t) => run.lowered?.get(t.id)?.layer === 'min_bid_hour').map((t) => rows.adGroups.get(t.adGroupId)?.campaignId))
+  const { recordMinBidEntry } = await import('../../../jobs/ad-rank-defend.job.js')
+  for (const [campaignId, floorCents] of entered) {
+    if (already.has(campaignId)) continue
+    await recordMinBidEntry(campaignId, BRAIN_ACTOR, floorCents, (run.minBidEntries?.get(campaignId) ?? 0) + 1)
+  }
+}
+
+/**
+ * BB-6 — the markets a run decides: IT and DE, and every market of a campaign the brain owns. BB-7 — `onlyOwned`: the
+ * markets of the campaigns it owns only (a between-slots tick).
+ */
+export async function brainMarkets(opts: { onlyOwned?: boolean } = {}): Promise<string[]> {
+  const owned = await brainOwnedCampaignIds()
+  if (!owned.size) return opts.onlyOwned ? [] : [...SHADOW_MARKETS]
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: [...owned] } }, select: { marketplace: true } })
+  const extra = campaigns.map((c) => strategyMarket(c.marketplace)).filter((m): m is string => !!m)
+  return [...new Set<string>([...(opts.onlyOwned ? [] : SHADOW_MARKETS), ...extra])]
+}
+
+/**
+ * One run over the brain's markets, then the 30-day prune. BB-7 — `onlyOwned`: a between-slots tick (every 15 minutes,
+ * ads-bid-brain.job.ts) that decides only the campaigns the brain owns, so their hourly plan's hours are carried out on
+ * time; it prunes nothing. `clockNow`: the database clock a plan's hour is read on.
+ */
+export async function runShadowOnce(opts: { now?: Date; mode?: BrainMode; onlyOwned?: boolean; clockNow?: Date } = {}): Promise<ShadowRun> {
   const now = opts.now ?? new Date()
   const mode = opts.mode ?? bidBrainMode()
   const runId = `bb-${now.toISOString().slice(0, 16)}-${randomUUID().slice(0, 8)}`
@@ -129,17 +249,21 @@ export async function runShadowOnce(opts: { now?: Date; mode?: BrainMode } = {})
   // BB-6 — the dial and the brain's own caps, read once per run and only when an owned campaign has a write to ask.
   let guard: EngineGuard | null = null
   const openGuard = async (): Promise<EngineGuard> => (guard ??= await openEngineGuard('bid-brain', { now }))
-  const markets = mode === 'live' ? await brainMarkets() : [...SHADOW_MARKETS]
+  const onlyOwned = opts.onlyOwned === true
+  if (onlyOwned && mode !== 'live') return out
+  const markets = mode === 'live' ? await brainMarkets({ onlyOwned }) : [...SHADOW_MARKETS]
   for (const market of markets) {
     try {
-      out.markets.push(await shadowMarket(market, { runId, mode, now, guard: openGuard }))
+      out.markets.push(await shadowMarket(market, { runId, mode, now, clockNow: opts.clockNow, onlyOwned, guard: openGuard }))
     } catch (err) {
       logger.error('[bid-brain] market run failed', { market, error: err instanceof Error ? err.message : String(err) })
       out.markets.push({ market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [`failed: ${err instanceof Error ? err.message : String(err)}`] })
     }
   }
-  const pruned = await prisma.bidBrainDecision.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - DECISION_DAYS_KEPT * 86_400_000) } } })
-  out.pruned = pruned.count
+  if (!onlyOwned) {
+    const pruned = await prisma.bidBrainDecision.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - DECISION_DAYS_KEPT * 86_400_000) } } })
+    out.pruned = pruned.count
+  }
   const report = (guard as EngineGuard | null)?.report()
   if (report) out.guard = report
   return out
@@ -152,7 +276,8 @@ export function shadowSummaryLine(r: ShadowRun): string {
   if (r.mode === 'off') return 'mode=off (NEXUS_BID_BRAIN_MODE) — nothing decided'
   const parts = r.markets.map((m) => {
     const actions = Object.entries(m.byAction).map(([k, v]) => `${k}=${v}`).join(' ')
-    const live = m.owned ? ` owned=${m.owned}${writeReportWords(m.writes) ? ` ${writeReportWords(m.writes)}` : ''}` : ''
+    const words = [writeReportWords(m.writes), placementReportWords(m.placements)].filter(Boolean).join(' ')
+    const live = m.owned ? ` owned=${m.owned}${words ? ` ${words}` : ''}` : ''
     return `${m.market} decided=${m.decided} stored=${m.stored}${actions ? ` ${actions}` : ''}${live}${m.brakes.length ? ` brakes: ${m.brakes.join('; ')}` : ''}`
   })
   const owned = r.markets.reduce((n, m) => n + (m.owned ?? 0), 0)

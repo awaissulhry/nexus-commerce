@@ -69,6 +69,15 @@ describe('writeOwnedDecisions', () => {
     expect(isFloorWrite({ layer: 'goal', bidCents: 10, currentCents: 20 })).toBe(false)
   })
 
+  it('BB-7 — forces a give-back after a floor, so the step clamp does not bring it back 25 % a write', async () => {
+    await writeOwnedDecisions([{ campaignId: 'c1', market: 'IT', decision: decision({ layer: 'restore' as Decision['layer'], currentCents: 3, bidCents: 45 }) }], { runId: 'r', guard: guard() })
+    expect(update.mock.calls[0][0]).toMatchObject({ patch: { bidCents: 45 }, force: true })
+    update.mockClear()
+    // An ordinary raise is not forced: the mutation layer's step clamp still holds it.
+    await writeOwnedDecisions([{ campaignId: 'c1', market: 'IT', decision: decision({ currentCents: 30, bidCents: 36 }) }], { runId: 'r', guard: guard() })
+    expect(update.mock.calls[0][0].force).toBeUndefined()
+  })
+
   it('counts a refusal with its reason, and a write with nothing to change as unchanged', async () => {
     update.mockResolvedValueOnce({ ok: false, outboundQueueId: null, actionLogId: null, bidHistoryIds: [], error: 'Not sent to Amazon: refused' })
       .mockResolvedValueOnce({ ok: true, outboundQueueId: null, actionLogId: null, bidHistoryIds: [], error: null })

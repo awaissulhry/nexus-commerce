@@ -69,6 +69,8 @@
  *     a halt in one business never stops another, and the legacy business keeps its old row id.
  *   · `services/advertising/bid-brain/live-postgres.vitest.test.ts` (bid brain BB-6, 2026-10-08) — the live bid brain: one
  *     writer per campaign through the real write gate under row security, a person's bid held, give-back restored.
+ *   · `services/advertising/bid-brain/plans-postgres.vitest.test.ts` (bid brain BB-7, 2026-10-08) — an owned campaign's hourly
+ *     plan carried out by the brain: placements inside the CPC ceiling, Min-bid floors with the anti-flap, the bids given back.
  *   · `services/agents/change-plan-postgres.vitest.test.ts` (MCP full control C6, 2026-10-01) — a 200-step change plan:
  *     a stopped worker resumes, two workers at once run every step exactly once, a stale step is skipped.
  *   · `services/advertising/ads-claude-bulk-postgres.vitest.test.ts` (MCP full control A7, 2026-10-02) — an approved
@@ -201,6 +203,7 @@ const SUITES = flag('--suites') ? JSON.parse(flag('--suites')) : [
   { name: 'Amazon Ads drift closes on evidence, per profile (structural reconcile under row security)', file: 'src/services/advertising/ads-structural-reconcile-postgres.vitest.test.ts', expect: 1 },
   { name: 'automation brakes per business (ads dial and halt, fleet halt, review mailer pause, the breaker / target ACOS / halt Claude tunes, and the R16 engine switches: one business never stops another; legacy ids kept)', file: 'src/services/automation-state-two-business-postgres.vitest.test.ts', expect: 5 },
   { name: 'the live bid brain (BB-6: an owned campaign gets exactly the brain\'s writes and a shadow one none, a rerun writes nothing, another engine refused by the gate, a stop and a person pass, the person\'s bid held, engines leave it, give-back restores the snapshot, LIVE needs the approver\'s code)', file: 'src/services/advertising/bid-brain/live-postgres.vitest.test.ts', expect: 6 },
+  { name: 'an owned campaign\'s hourly plan through the brain (BB-7: placements once inside the CPC ceiling, rank-defend leaves it, the receipt; a Min-bid hour floors every keyword with one anti-flap entry; the hour after gives the bids back in one write; the floors\' memory and a hand-back given back by rank-defend; op shadow refused without memory; light ticks; out of stock and back, a refused give-back, a plan switched off during its floor)', file: 'src/services/advertising/bid-brain/plans-postgres.vitest.test.ts', expect: 9 },
   { name: '"New attribute" race (sheet pop-up A3: two creates of one name leave one attribute and one family link)', file: 'src/services/pim/own-axis-attribute-postgres.vitest.test.ts', expect: 1 },
   { name: 'Shopify sheet draft saves racing (Lane B: one winner per cell, nothing lost, a refused save is not in the draft)', file: 'src/services/shopify/channel-sheet-race-postgres.vitest.test.ts', expect: 2 },
   { name: 'Shopify sheet root-creation proof (one action across 1,000-cell requests; business, account, family, alias and actor bounds; recreated roots; current cell state; expiry; refusal, rollback and a forced first-create race; lost answer)', file: 'src/services/shopify/channel-sheet-root-proof-postgres.vitest.test.ts', expect: 18 },

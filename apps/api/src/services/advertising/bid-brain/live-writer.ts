@@ -18,13 +18,20 @@
  *            judges it as the raise it is. Every other move is forward
  *   once     decide() moves a keyword at most once per new settled data day (its lastStep anchor): a rerun on the same
  *            evidence asks nothing
+ *   BB-7     the hourly plan's placement % of an owned campaign: one placement write per campaign when the hour's % (capped
+ *            so that its highest base bid × (1 + p) × Amazon's dynamic bidding stays within the lane's CPC ceiling)
+ *            differs from what is live — through updatePlacementBidding as the brain (the gate judges it, Amazon's
+ *            current array is read and merged first)
  */
 import type { AdWriteEvidence } from '../ads-evidence.js'
 import { allowChange, nothingHeld, type ChangeKind, type EngineGuard } from '../ads-engine-guard.js'
 import { updateAdTargetWithSync } from '../ads-mutation.service.js'
+import { buildBlendedAdjustments, MANAGED_PLACEMENTS } from '../ads-placement-math.js'
 import { logger } from '../../../utils/logger.js'
 import type { Decision } from './decide.js'
 import { BRAIN_ACTOR } from './live.js'
+import { placementOf } from './plan-hour.js'
+import { laneWords, placementsFor, type Lane } from './recipe.js'
 
 export interface BrainWrite {
   campaignId: string
@@ -146,4 +153,109 @@ export function writeReportWords(r: WriteReport | null | undefined): string {
     r.refused ? `refused=${r.refused} (${r.refusedReasons.join('; ')})` : '',
   ].filter(Boolean)
   return parts.join(' ')
+}
+
+/** BB-7 — one owned campaign's placements as its hourly plan sets them this hour. */
+export interface PlacementWrite {
+  campaignId: string
+  market: string
+  /** The lanes the hour sets: all three for a blended target (an undeclared one at 0), else the one. */
+  lanes: readonly Lane[]
+  /** The placement % live now (Campaign.dynamicBidding.placementBidding). */
+  current: ReadonlyArray<{ placement: string; percentage: number }>
+  /** The campaign's highest base bid after this run's decisions: the bid each lane's ceiling is measured against. */
+  maxBidCents: number
+  /** The plan's target key this hour, and the plan in words (the why). */
+  key: string
+  note: string
+  dataDay: string
+}
+
+/** What one campaign's placements become, and which lanes change; null when nothing changes. Pure. */
+export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'maxBidCents'>): { adjustments: Array<{ placement: string; percentage: number }>; changes: Array<{ lane: string; from: number; to: number; held: string | null }> } | null {
+  if (!w.lanes.length) return null
+  // The CR cap of placementsFor waits for the placement report (crRatio null): only the CPC ceilings hold here.
+  const decided = placementsFor(w.maxBidCents, w.lanes, { aim: 1, hi: 1 })
+  const requested = decided.map((d) => ({ placement: placementOf(d.lane), percentage: d.pct }))
+  const blended = w.lanes.length > 1
+  const adjustments = blended
+    ? buildBlendedAdjustments([...w.current], requested)
+    : [...w.current.filter((c) => !requested.some((r) => r.placement === c.placement)), ...requested]
+  const valueOf = (list: ReadonlyArray<{ placement: string; percentage: number }>, p: string) => list.find((x) => x.placement === p)?.percentage ?? 0
+  const changes = MANAGED_PLACEMENTS.flatMap((p) => {
+    const from = valueOf(w.current, p)
+    const to = valueOf(adjustments, p)
+    if (from === to) return []
+    const d = decided.find((x) => placementOf(x.lane) === p)
+    return [{ lane: laneWords(d?.lane ?? 'REST_OF_SEARCH'), from, to, held: d?.held ?? null }]
+  })
+  return changes.length ? { adjustments, changes } : null
+}
+
+export interface PlacementReport {
+  written: number
+  refused: number
+  deferred: number
+  reasons: string[]
+  byCampaign: Map<string, { sent: 'written' | 'refused' | 'deferred' | 'would-apply'; changes: Array<{ lane: string; from: number; to: number; held: string | null }>; reason?: string }>
+}
+
+/** Write each owned campaign's hour placements, inside the dial and the brain's caps (one change per campaign). */
+export async function writeOwnedPlacements(list: readonly PlacementWrite[], ctx: { runId: string; guard: EngineGuard }): Promise<PlacementReport> {
+  const out: PlacementReport = { written: 0, refused: 0, deferred: 0, reasons: [], byCampaign: new Map() }
+  const { updatePlacementBidding } = await import('../ads-create.service.js')
+  for (const w of list) {
+    const plan = placementPlan(w)
+    if (!plan) continue
+    const permit = ctx.guard.permit({ market: w.market })
+    const held = nothingHeld()
+    const raises = plan.changes.some((c) => c.to > c.from)
+    if (!allowChange(true, permit, held, raises ? 'forward' : 'floor')) {
+      const sent = ctx.guard.posture === 'suggest' ? 'would-apply' as const : 'deferred' as const
+      if (sent === 'deferred') out.deferred++
+      out.byCampaign.set(w.campaignId, { sent, changes: plan.changes })
+      ctx.guard.settle(permit, 0, held)
+      continue
+    }
+    const words = plan.changes.map((c) => `${c.lane} ${c.from}% → ${c.to}%${c.held ? ` (held by ${c.held})` : ''}`).join(', ')
+    try {
+      const r = await updatePlacementBidding({
+        campaignId: w.campaignId,
+        adjustments: plan.adjustments,
+        actor: BRAIN_ACTOR,
+        reason: `bid brain — ${w.note}: ${words}`.slice(0, 480),
+        targetKey: w.key,
+        evidence: { metric: 'placementBidding', note: `${w.note}: ${words}`.slice(0, 1_000), source: { kind: 'bid-brain', id: ctx.runId }, brain: { runId: ctx.runId, layer: 'plan', dataDay: w.dataDay, goalBidCents: null } },
+      }) as { ok?: boolean; mode?: string; reason?: string }
+      if (r.mode === 'blocked' || r.ok === false) {
+        const reason = r.reason ?? 'placement write refused'
+        out.refused++
+        if (out.reasons.length < 3 && !out.reasons.includes(reason)) out.reasons.push(reason)
+        out.byCampaign.set(w.campaignId, { sent: 'refused', changes: plan.changes, reason })
+        ctx.guard.settle(permit, 0, held)
+      } else {
+        out.written++
+        out.byCampaign.set(w.campaignId, { sent: 'written', changes: plan.changes })
+        ctx.guard.settle(permit, 1, held)
+      }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err)
+      out.refused++
+      if (out.reasons.length < 3 && !out.reasons.includes(reason)) out.reasons.push(reason)
+      out.byCampaign.set(w.campaignId, { sent: 'refused', changes: plan.changes, reason })
+      ctx.guard.settle(permit, 0, held)
+      logger.warn('[bid-brain] a placement write failed', { campaignId: w.campaignId, error: reason })
+    }
+  }
+  return out
+}
+
+/** "placements=2 placements-refused=1 (…)" — the run line's placement part; '' when none moved. */
+export function placementReportWords(r: PlacementReport | null | undefined): string {
+  if (!r) return ''
+  return [
+    r.written ? `placements=${r.written}` : '',
+    r.deferred ? `placements-deferred=${r.deferred}` : '',
+    r.refused ? `placements-refused=${r.refused} (${r.reasons.join('; ')})` : '',
+  ].filter(Boolean).join(' ')
 }

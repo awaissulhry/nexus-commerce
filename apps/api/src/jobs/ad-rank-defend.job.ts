@@ -38,7 +38,7 @@ import { resolveMaxBaseBidByCampaign } from '../services/advertising/ads-placeme
 import { DRY_RUN, allowChange, engineGuardNote, nothingHeld, openEngineGuard, type CampaignPermit, type EngineGuard, type EngineGuardReport, type HeldBack } from '../services/advertising/ads-engine-guard.js'
 import { addRelease, emptyRelease, floorOwnerWords, isRankOwnedFloor, releaseCampaigns, sweepOrphanReleases, type ReleaseReport } from '../services/advertising/rank-release.service.js'
 import { isOutOfBudget, outOfBudgetWords } from '../services/advertising/delivery-reasons.js'
-import { engineActorWhere } from '../services/advertising/ads-engine-actors.js'
+import { engineActorWhere, type EngineKey } from '../services/advertising/ads-engine-actors.js'
 import { MAX_MIN_BID_ENTRIES_PER_DAY, noWrites, type RankWriteCounts } from '../services/advertising/rank-write-projection.js'
 import { NO_LIMITS, clampToStrategy, holdNote, limitWords, newHoldLog, strategyBidReader, strategyWords, type BidHoldLog } from '../services/advertising/ads-strategy/bids.js'
 import { brainOwnedCampaignIds } from '../services/advertising/bid-brain/live.js'
@@ -47,7 +47,8 @@ import { brainOwnedCampaignIds } from '../services/advertising/bid-brain/live.js
 // clock. Railway cron containers have exhibited multi-hour clock skew (the process clock ran ~2h
 // behind real time while Postgres stayed correct), which silently shifted every rank/dayparting
 // window. Sourcing "now" from Postgres makes window selection immune to container clock drift.
-async function dbNow(): Promise<Date> {
+// BB-7 — exported (keyword only) so the bid brain resolves an hourly plan's hour on the same clock.
+export async function dbNow(): Promise<Date> {
   try {
     const rows = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT now() as now`
     const n = rows?.[0]?.now
@@ -60,7 +61,8 @@ async function dbNow(): Promise<Date> {
 // RD.8 — leadMinutes shifts the evaluation clock forward so a plan starts converging
 // BEFORE a window opens (Amazon bid changes propagate with lag → arrive at-rank, not late).
 // baseNow: the authoritative clock (pass dbNow()); defaults to the process clock only as a fallback.
-function nowInTz(tz: string, leadMinutes = 0, baseNow?: Date): { day: number; hour: number } {
+// BB-7 — exported (keyword only): the bid brain resolves an hourly plan's hour with the same rule.
+export function nowInTz(tz: string, leadMinutes = 0, baseNow?: Date): { day: number; hour: number } {
   const baseMs = (baseNow ?? new Date()).getTime()
   const at = leadMinutes ? new Date(baseMs + leadMinutes * 60_000) : new Date(baseMs)
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(at)
@@ -72,7 +74,7 @@ function nowInTz(tz: string, leadMinutes = 0, baseNow?: Date): { day: number; ho
   return { day: dayIdx < 0 ? 0 : dayIdx, hour }
 }
 
-interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents?: number | null; allOut: boolean; jumpStartPct?: number | null; stepUpPct?: number | null; stepDownPct?: number | null; maxBiasPct?: number | null; keepClimbing?: boolean; lanes?: unknown; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
+export interface RankTargetRow { key: string; placement: string; targetISPct: number | null; acosCapPct: number | null; maxCpcCents: number | null; biasPct: number | null; pause: boolean; floorBidCents?: number | null; allOut: boolean; jumpStartPct?: number | null; stepUpPct?: number | null; stepDownPct?: number | null; maxBiasPct?: number | null; keepClimbing?: boolean; lanes?: unknown; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
 // RD.P2 — exported (keyword only, no behaviour change) so the Rank & Dayparting page can derive
 // its Mode column from the ENGINE's spec mapping rather than a second copy of it. A duplicate is
 // free to drift from the loop that actually decides, which is the defect that page exists to fix.
@@ -81,7 +83,7 @@ export const toSpec = (t: RankTargetRow): RankTargetSpec => ({ key: t.key, place
 // RTC — merge per-scope target overrides onto a spec, keyed by the spec's own target
 // key. Maps apply in order, so later (more specific) wins: product then campaign.
 type TargetOverride = { biasPct?: number; targetISPct?: number; acosCapPct?: number; maxCpcCents?: number; floorBidCents?: number; jumpStartPct?: number; stepUpPct?: number; stepDownPct?: number; maxBiasPct?: number; keepClimbing?: boolean; lanes?: LaneSpec[]; bidMode?: string | null; bidValueCents?: number | null; bidDeltaPct?: number | null }
-type TargetOverrideMap = Record<string, TargetOverride> | null | undefined
+export type TargetOverrideMap = Record<string, TargetOverride> | null | undefined
 export function applyTargetOverrides(spec: RankTargetSpec, ...maps: TargetOverrideMap[]): RankTargetSpec {
   let out = spec
   for (const m of maps) {
@@ -369,14 +371,16 @@ export const firstKeptServingNoticeToday = oncePerUtcDay()
  */
 const MIN_BID_ENTRY_MARK = 'rankMinBidEntry'
 const utcMidnight = (now: Date): Date => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-async function minBidEntriesToday(campaignIds: string[], now: Date): Promise<Map<string, number>> {
+// BB-7 — exported, and counted for the bid brain too (`engines`): a campaign the brain took over today keeps the entries
+// rank-defend made, and the brain's own count toward the same limit.
+export async function minBidEntriesToday(campaignIds: string[], now: Date, engines: readonly EngineKey[] = ['rank-defend']): Promise<Map<string, number>> {
   const out = new Map<string, number>()
   if (!campaignIds.length) return out
   try {
     const rows = await prisma.advertisingActionLog.groupBy({
       by: ['entityId'],
       where: {
-        ...engineActorWhere('rank-defend'), actionType: 'custom_event', entityType: 'CAMPAIGN', entityId: { in: campaignIds },
+        OR: engines.flatMap((e) => engineActorWhere(e).OR), actionType: 'custom_event', entityType: 'CAMPAIGN', entityId: { in: campaignIds },
         createdAt: { gte: utcMidnight(now) }, payloadAfter: { path: [MIN_BID_ENTRY_MARK], equals: true },
       },
       _count: { _all: true },
@@ -388,7 +392,8 @@ async function minBidEntriesToday(campaignIds: string[], now: Date): Promise<Map
   }
   return out
 }
-async function recordMinBidEntry(campaignId: string, actor: string, floorCents: number, entry: number): Promise<void> {
+// BB-7 — exported: the bid brain records its entries the same way (one custom_event row per entry).
+export async function recordMinBidEntry(campaignId: string, actor: string, floorCents: number, entry: number): Promise<void> {
   try {
     await prisma.advertisingActionLog.create({
       data: {
@@ -398,7 +403,7 @@ async function recordMinBidEntry(campaignId: string, actor: string, floorCents: 
     })
   } catch (e) { logger.warn('[rank-defend] could not record a Min-bid entry — it will not count toward today\'s limit', { campaignId, error: (e as Error).message }) }
 }
-const keptServingWords = (entries: number): string =>
+export const keptServingWords = (entries: number): string =>
   `kept serving: this campaign already entered Min bid ${entries === 1 ? 'once' : `${entries} times`} today (UTC) — a campaign is floored at most ${MAX_MIN_BID_ENTRIES_PER_DAY} times a day, so its bids stay as they are until tomorrow`
 
 async function decideAndMaybeApply(

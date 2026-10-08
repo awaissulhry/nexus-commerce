@@ -10,11 +10,14 @@
  *   release    HELD → LIVE.
  *
  * Before LIVE, the campaign must be Sponsored Products, on the live-write allowlist, and free of a writer the brain
- * does not yet take over: a classic dayparting schedule or a running autopilot plan (switch it off first). An hourly
- * plan joins as the brain's input from BB-7; until then a campaign an hourly plan holds stays SHADOW.
+ * does not take over: a classic dayparting schedule, a running autopilot plan or an older family plan (ProductRankPlan)
+ * — switch it off first. BB-7 — an hourly bid plan joins as the brain's input (bid-brain/plan-hour.ts), unless one of
+ * its hours sets the ad groups' base bid (the brain sets the bids from the goal). And it must be serving: a campaign a
+ * Min-bid hour, a stop or the stock check holds at its floor right now waits until its bids are given back (the
+ * snapshot is then the serving bids, and no floor is left that only its old owner would lift).
  */
 import { createHash } from 'node:crypto'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { brainLiveCeiling } from './live.js'
@@ -42,6 +45,10 @@ export interface EnrollmentFacts {
   ceiling: 'off' | 'shadow' | 'live'
   /** Writers the brain does not take over yet: each refuses LIVE until it is switched off. */
   blockers: string[]
+  /** BB-7 — a floor in force now (flooredNow): refuses LIVE until the bids serve again. */
+  floored?: string | null
+  /** BB-7 review — keywords at a floor the brain set with no memory of their bid (floorsWithoutMemory): refuses op shadow. */
+  floorsWithoutMemory?: number
 }
 
 const placementsOf = (dynamicBidding: unknown): Array<{ placement: string; percentage: number }> =>
@@ -57,24 +64,55 @@ export function readSnapshot(raw: unknown): EnrollmentSnapshot | null {
 }
 
 /**
- * Writers the brain does not take over yet on this campaign. BB-7 — an hourly plan becomes the brain's input, so it no
- * longer blocks (`plansJoin`); a classic dayparting schedule and a running autopilot plan still do.
+ * Writers the brain does not take over on this campaign, and why it cannot go LIVE now. BB-7 — an hourly plan becomes
+ * the brain's input, so it no longer blocks (`plansJoin`), unless an hour of it sets a base bid; a classic dayparting
+ * schedule, a running autopilot plan and an older family plan still do, and so does a floor in force now.
  */
 export async function brainBlockers(campaignId: string, opts: { plansJoin?: boolean } = {}): Promise<string[]> {
   const out: string[] = []
-  const schedules = await prisma.adSchedule.findMany({ where: { campaignId, enabled: true }, select: { windows: true, defaultTargetKey: true } })
-  const { isGoalMode } = await import('../../../jobs/ad-rank-defend.job.js')
+  const schedules = await prisma.adSchedule.findMany({ where: { campaignId, enabled: true }, select: { windows: true, defaultTargetKey: true, targetOverrides: true } })
+  const { applyTargetOverrides, isGoalMode, toSpec } = await import('../../../jobs/ad-rank-defend.job.js')
   const goal = schedules.filter((s) => isGoalMode(s.windows, s.defaultTargetKey))
   if (schedules.length > goal.length) out.push('a classic dayparting schedule runs it: switch that schedule off first (the brain does not take classic dayparting over)')
   if (!opts.plansJoin) {
     const { rankOwnedCampaignIds } = await import('../rank-release.service.js')
     if (goal.length || (await rankOwnedCampaignIds()).has(campaignId)) out.push('an hourly bid plan holds it: a campaign joins the brain with its hourly plan from BB-7 (the plan becomes the brain\'s input)')
+  } else {
+    // BB-7 — every target the plan's week names (its windows and its baseline), with this campaign's overrides.
+    const keys = new Set<string>()
+    for (const s of goal) {
+      if (s.defaultTargetKey) keys.add(s.defaultTargetKey)
+      for (const w of Array.isArray(s.windows) ? (s.windows as Array<{ targetKey?: unknown }>) : []) if (typeof w?.targetKey === 'string') keys.add(w.targetKey)
+    }
+    const targets = keys.size ? await prisma.rankTarget.findMany({ where: { key: { in: [...keys] } } }) : []
+    const { setsBaseBid } = await import('./plan-hour.js')
+    const baseBid = targets.filter((t) => goal.some((s) => setsBaseBid(applyTargetOverrides(toSpec(t as never), s.targetOverrides as never))))
+    if (baseBid.length) out.push(`its hourly plan sets the ad groups' base bid in some hours (${baseBid.map((t) => t.key).join(', ')}): the brain sets the bids from the goal — change those hours to hold the base bid first`)
+    // The older family plan (ProductRankPlan): the brain reads only the hourly plans of the Hourly Bids page.
+    const family = await prisma.productRankPlan.findMany({ where: { enabled: true }, select: { lastSummary: true } })
+    if (family.some((p) => ((p.lastSummary as { decisions?: Array<{ campaignId?: string }> } | null)?.decisions ?? []).some((d) => d?.campaignId === campaignId))) {
+      out.push('an older family rank plan runs it: switch that plan off or leave this campaign out of it first (the brain reads the hourly plans of the Hourly Bids page)')
+    }
   }
   const { RUNNING_AUTOPILOT_PLANS } = await import('../../../jobs/ad-autopilot.job.js')
   const plans = await prisma.autopilotPlan.findMany({ where: RUNNING_AUTOPILOT_PLANS, select: { name: true, campaignIds: true } })
   const plan = plans.find((p) => Array.isArray(p.campaignIds) && (p.campaignIds as unknown[]).map(String).includes(campaignId))
   if (plan) out.push(`the autopilot plan "${plan.name}" runs it: switch that plan off first`)
   return out
+}
+
+/**
+ * BB-7 — why the campaign cannot go LIVE right now: a floor in force (a Min-bid hour, a stop, the stock check). The
+ * snapshot would keep the floored bids, and only the floor's old owner would lift it. Null: its bids serve.
+ */
+export async function flooredNow(campaignId: string): Promise<string | null> {
+  const [campaign, flooredGroups, flooredTargets] = await Promise.all([
+    prisma.campaign.findFirst({ where: { id: campaignId }, select: { bidsSuppressedAt: true, bidsSuppressedBy: true } }),
+    prisma.adGroup.count({ where: { campaignId, bidsSuppressedAt: { not: null } } }),
+    prisma.adTarget.count({ where: { adGroup: { campaignId }, suppressedFromBidCents: { not: null }, retiredAt: null } }),
+  ])
+  if (!campaign?.bidsSuppressedAt && !flooredGroups && !flooredTargets) return null
+  return `its bids are held at a floor now${campaign?.bidsSuppressedBy ? ` (by ${campaign.bidsSuppressedBy})` : ''}: put it under the brain while its bids serve (after a Min-bid hour, a stop or the stock check gave them back)`
 }
 
 /** Everything the enrollment tool shows and checks; null when the campaign is not in this business. */
@@ -91,6 +129,8 @@ export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: bo
     enrollment: row ? { mode: row.mode as EnrollMode, heldUntil: row.heldUntil?.toISOString() ?? null, heldBy: row.heldBy, snapshot: readSnapshot(row.snapshot), updatedAt: row.updatedAt.toISOString() } : null,
     ceiling: mode,
     blockers: await brainBlockers(c.id, opts),
+    floored: await flooredNow(c.id),
+    floorsWithoutMemory: row && row.mode !== 'SHADOW' ? await floorsWithoutMemory(c.id) : 0,
   }
 }
 
@@ -171,3 +211,26 @@ export async function setEnrollment(args: {
 
 /** True when LIVE takes effect now (the env ceiling is `live`). */
 export const liveTakesEffect = (): boolean => brainLiveCeiling()
+
+/**
+ * BB-7 review — the keywords the brain holds at a floor (its newest decision lowered them by a stop, stock, the phase or a
+ * Min-bid hour, and the bid still sits there) that no engine would give back after a hand-back: no memory of their bid
+ * before (`AdTarget.suppressedFromBidCents`), or a memory no owner's mark points at (neither the campaign nor the ad
+ * group is marked floored — a stock or phase floor the brain read from its source sets none). `op: shadow` refuses
+ * while any is left; give-back puts back the snapshot instead.
+ */
+export async function floorsWithoutMemory(campaignId: string): Promise<number> {
+  const rows = await prisma.$queryRaw<Array<{ n: number }>>(Prisma.sql`
+    SELECT count(*)::int AS n FROM (
+      SELECT DISTINCT ON (d."targetId") d."targetId", d.layer, d."decidedCents"
+        FROM "BidBrainDecision" d
+       WHERE d."campaignId" = ${campaignId}
+       ORDER BY d."targetId", d."createdAt" DESC) last
+      JOIN "AdTarget" t ON t.id = last."targetId"
+      JOIN "AdGroup" g ON g.id = t."adGroupId"
+      JOIN "Campaign" c ON c.id = g."campaignId"
+     WHERE last.layer IN ('stop', 'stock', 'phase', 'min_bid_hour')
+       AND t."bidCents" <= last."decidedCents" AND t."retiredAt" IS NULL
+       AND (t."suppressedFromBidCents" IS NULL OR (c."bidsSuppressedAt" IS NULL AND g."bidsSuppressedAt" IS NULL))`)
+  return rows[0]?.n ?? 0
+}

@@ -25,6 +25,10 @@ import type { TargetFacts, Overrides, DecisionLayer } from './decide.js'
 import type { Directive, LaneDirective, LaneName } from './recipe.js'
 import { NO_EVIDENCE, type Evidence, type PoolNode } from './estimator.js'
 import { BRAIN_PHASES, type BrainPhase, type GoalInputs } from './goal.js'
+import { laneOf, planFacts, type PlanHour } from './plan-hour.js'
+import { stackCeiling } from './recipe.js'
+import { laneHeadroom } from '../rank-controller.js'
+import { MAX_MIN_BID_ENTRIES_PER_DAY } from '../rank-write-projection.js'
 
 export interface CampaignRow {
   id: string
@@ -40,6 +44,10 @@ export interface CampaignRow {
   ownTargetAcos: unknown
   /** On the live-write allowlist: the brain decides only for these. */
   allowlisted: boolean
+  /** BB-18 — Amazon's bidding strategy of the campaign (LEGACY_FOR_SALES, AUTO_FOR_SALES, MANUAL); null: not known. */
+  biddingStrategy?: string | null
+  /** BB-18 — the campaign's placement % now (Campaign.dynamicBidding.placementBidding), the bidding-API placements. */
+  placements?: ReadonlyArray<{ placement: string; percentage: number }>
 }
 
 export interface AdGroupRow {
@@ -93,6 +101,8 @@ export interface PlaybookFact { kind: 'notStarted' | 'phaseFloor' | 'stopped'; f
 export interface MarketRows {
   market: string
   dataDay: string
+  /** BB-7 review — a between-slots tick: no evidence was read, so no keyword has a goal (overrides and placements only). */
+  light?: boolean
   campaigns: ReadonlyMap<string, CampaignRow>
   adGroups: ReadonlyMap<string, AdGroupRow>
   targets: readonly TargetRow[]
@@ -119,10 +129,18 @@ export interface RunRows {
   familySales?: ReadonlyMap<string, number>
   /** BB-8 — per ad group: its stock (absent: nothing to say). */
   stock?: ReadonlyMap<string, StockFact>
+  /** BB-18 — per keyword: the bid that served its window's clicks (absent: today's bid served them all). */
+  servingBids?: ReadonlyMap<string, number>
+  /** BB-7 — per campaign the brain owns: its hourly plan's hour (absent: no plan). */
+  planHours?: ReadonlyMap<string, PlanHour>
+  /** BB-7 — per campaign: its Min-bid entries this UTC day (rank-defend's and the brain's). */
+  minBidEntries?: ReadonlyMap<string, number>
   /** BB-8 — per campaign: what a playbook holds on it. */
   playbook?: ReadonlyMap<string, PlaybookFact>
   /** BB-8 — per keyword: the brain's last decision lowered it by an override; the bid of its last decision before. */
-  lowered?: ReadonlyMap<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null }>
+  lowered?: ReadonlyMap<string, { layer: DecisionLayer; heldCents: number; beforeCents: number | null; wrote?: boolean }>
+  /** BB-7 review — the campaigns the brain owns this run: a plan's floor mark on one is the brain's record. */
+  owned?: ReadonlySet<string>
   /** BB-8 — per ad group: the revenue-weighted break-even ACoS of its products with usable profit data (a fraction). */
   breakEven?: ReadonlyMap<string, number>
   /** BB-9 — per campaign: the rules' active inputs (BidDirective rows, rule-directives.ts). */
@@ -205,10 +223,10 @@ const keywordKey = (t: TargetRow) => `${t.kind}|${t.expressionType}|${t.expressi
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
 
 /**
- * The ad group's paid CPC ÷ bid, with today's bids standing in for the bids of the window: null under 10 clicks (the
- * estimator then takes 0.85).
+ * The ad group's paid CPC ÷ bid: null under 10 clicks (the estimator then takes 0.85). BB-18 — each keyword's bid is the
+ * one that served its window's clicks (`serving`), today's bid where none moved.
  */
-export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Evidence): number | null {
+export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Evidence, serving?: ReadonlyMap<string, number>): number | null {
   let cost = 0
   let clicks = 0
   let bidClicks = 0
@@ -216,10 +234,13 @@ export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Ev
     const e = ev(t.id)
     cost += e.costCents
     clicks += e.clicks
-    bidClicks += e.clicks * t.bidCents
+    bidClicks += e.clicks * (serving?.get(t.id) ?? t.bidCents)
   }
   return clicks >= 10 && bidClicks > 0 ? cost / bidClicks : null
 }
+
+/** BB-7 review — a floor mark an hourly plan's Min-bid hour set (rank-defend's own prefixes, which the brain writes too). */
+export const isPlanFloorMark = (by: string | null | undefined): boolean => !!by && /^automation:(rank-defend|rank-plan|dayparting)-/.test(by)
 
 /** Who floored a campaign or ad group, read as an override. Null: not floored. */
 export function floorOverride(by: string | null, floorCents: number | null, at: Date | null): Partial<Overrides> | null {
@@ -274,6 +295,15 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
   const familyEvidence = new Map([...groupsByFamily].map(([fam, ids]) => [fam, sum(ids.map((id) => groupEvidence.get(id)!))]))
   const market = sum(m.targets.map((t) => ev(t.id)))
 
+  // BB-7 — a campaign already sitting in a Min-bid hour the brain floored (a keyword's last decision lowered it there):
+  // this hour is no new entry for the anti-flap.
+  const inMinBid = new Set<string>()
+  for (const t of m.targets) {
+    if (run.lowered?.get(t.id)?.layer !== 'min_bid_hour') continue
+    const c = m.adGroups.get(t.adGroupId)?.campaignId
+    if (c) inMinBid.add(c)
+  }
+
   const out: TargetFacts[] = []
   for (const t of m.targets) {
     const group = m.adGroups.get(t.adGroupId)
@@ -314,9 +344,18 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     }
 
     // Overrides.
-    const overrides: Overrides = mergeFloors(floorOverride(campaign.bidsSuppressedBy, campaign.bidsSuppressedFloorCents, campaign.bidsSuppressedAt), floorOverride(group.bidsSuppressedBy, group.bidsSuppressedFloorCents, group.bidsSuppressedAt))
-    // A keyword a stop floored on its own keeps its remembered bid: the stop decides until it lifts.
-    if (!overrides.stop && !overrides.stock && !overrides.minBidHour && t.suppressedFromBidCents != null) {
+    // BB-7 review — on a campaign the brain owns, a plan's Min-bid floor mark is the brain's own record of that floor
+    // (shadow.ts rememberFloors: kept for rank-defend to give back after a hand-back) — with or without a plan hour now,
+    // so a plan switched off during its floor gives the bids back: the plan's hour (or none) decides, never the mark.
+    const hour = run.planHours?.get(campaign.id)
+    const planFloor = !!run.owned?.has(campaign.id) && !!campaign.bidsSuppressedAt && isPlanFloorMark(campaign.bidsSuppressedBy)
+    const overrides: Overrides = mergeFloors(planFloor ? null : floorOverride(campaign.bidsSuppressedBy, campaign.bidsSuppressedFloorCents, campaign.bidsSuppressedAt), floorOverride(group.bidsSuppressedBy, group.bidsSuppressedFloorCents, group.bidsSuppressedAt))
+    // A keyword a stop floored on its own keeps its remembered bid: the stop decides until it lifts. BB-7 review — a bid the
+    // brain saved itself is its record, not a stop: the keyword's newest decision is a give-back, or a floor the brain
+    // wrote (Min-bid, stop, stock, phase) since its last unlowered decision. A floor someone else wrote keeps its stop.
+    const low = run.lowered?.get(t.id)
+    const brainMemory = !!low && (low.layer === 'restore' || low.wrote === true)
+    if (!brainMemory && !overrides.stop && !overrides.stock && !overrides.minBidHour && t.suppressedFromBidCents != null) {
       overrides.stop = { bidCents: t.bidCents, by: `a stop (its ${t.suppressedFromBidCents}¢ bid remembered)` }
     }
     // BB-8 — stock from its source (an ad group's products), unless a retail-guard floor already says so.
@@ -341,6 +380,13 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     if (enrollment?.mode === 'HELD') overrides.freeze = { by: enrollment.heldBy ?? 'a hold' }
     else if (undoHold) overrides.freeze = { by: `${undoHold.by}${undoHold.until ? ` until ${day(undoHold.until)}` : ''}` }
 
+    // BB-7 — the campaign's hourly plan, where the brain owns it: its lanes, a Min-bid floor (the lower floor wins), the why.
+    const plan = hour ? planFacts(hour, campaign, { entriesToday: run.minBidEntries?.get(campaign.id) ?? 0, inMinBid: inMinBid.has(campaign.id), maxEntries: MAX_MIN_BID_ENTRIES_PER_DAY }) : null
+    if (plan?.minBidHour && (!overrides.minBidHour || plan.minBidHour.floorCents < overrides.minBidHour.floorCents)) overrides.minBidHour = plan.minBidHour
+    // BB-18 — the most a click can cost against the base bid: the placements that served and those the plan sets.
+    const served = (campaign.placements ?? []).map((p) => ({ planPct: p.percentage, dynamic: laneHeadroom(campaign.biddingStrategy, p.placement), lane: laneOf(p.placement) }))
+    const ratioCeiling = stackCeiling([...served, ...(plan?.lanes ?? []), { planPct: 0, dynamic: laneHeadroom(campaign.biddingStrategy, 'PLACEMENT_TOP') }])
+
     const brakes = [...run.marketBrakes]
     if (campaign.status !== 'ENABLED') brakes.push(`campaign ${campaign.status.toLowerCase()}`)
     if (group.status !== 'ENABLED') brakes.push(`ad group ${group.status.toLowerCase()}`)
@@ -348,8 +394,13 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     out.push({
       targetId: t.id,
       currentCents: t.bidCents,
-      chain,
-      parentCpcRatio: cpcRatioOf(byGroup.get(group.id) ?? [], ev),
+      // BB-7 review — a between-slots tick read no evidence: no chain, so no goal (decide holds with no_goal).
+      chain: m.light ? [] : chain,
+      parentCpcRatio: cpcRatioOf(byGroup.get(group.id) ?? [], ev, run.servingBids),
+      servingCents: run.servingBids?.get(t.id) ?? null,
+      ratioCeiling,
+      ...(plan?.lanes.length ? { lanes: plan.lanes } : {}),
+      ...(plan ? { planNote: plan.note } : {}),
       listPriceCents: group.families.map((f) => m.prices.get(f)).find((p) => p != null && p > 0) ?? null,
       goal,
       limits: {
@@ -358,6 +409,8 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
         maxChangePct: s?.maxChangePct ?? null,
         campaignMinCents: campaign.minBidCents,
         campaignMaxCents: campaign.maxBidCents,
+        // BB-7 review — the plan's day ceiling binds in every hour of an owned campaign with a plan.
+        ...(hour?.dayMaxCpcCents != null ? { planCeilingCents: Math.floor(hour.dayMaxCpcCents / laneHeadroom(campaign.biddingStrategy, 'PLACEMENT_TOP')) } : {}),
       },
       dataDay: m.dataDay,
       lastStep: run.lastSteps.get(t.id) ?? null,

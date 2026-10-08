@@ -17,7 +17,7 @@
  * the newest data day (`lastStep`), so a rerun on unchanged evidence never compounds (C3: 33→25→19→14¢ in six hours).
  * Pure: no database, no clock.
  */
-import { cpcRatio, estimate, type Estimate, type PoolNode } from './estimator.js'
+import { estimate, laneCpcRatio, type Estimate, type PoolNode } from './estimator.js'
 import { goalWords, isGoal, resolveGoal, type Goal, type GoalInputs, type GoalRefusal } from './goal.js'
 import {
   applyDirectives,
@@ -76,7 +76,14 @@ export interface TargetFacts {
   goalBy?: string | null
   /** The hourly plan's lowest serving factor of the day (1 without a plan; BB-7). */
   hourFactor?: number
+  /** BB-7 — the campaign's placement lanes this hour, as its hourly plan shapes them (absent: no plan, placements untouched). */
   lanes?: readonly Lane[]
+  /** BB-7 — the hourly plan and its hour in words, for the why ("hourly plan IT GALE JACKET: all-out"). */
+  planNote?: string | null
+  /** BB-18 — the bid that served the window's clicks (absent: today's bid), so r̂ does not follow the bid's own moves. */
+  servingCents?: number | null
+  /** BB-18 — the most a click can cost against the base bid (recipe.ts stackCeiling); absent: 1. */
+  ratioCeiling?: number | null
   /** The newest settled day in the evidence, 'YYYY-MM-DD'. */
   dataDay: string
   /** The brain's last step on this target: the data day it was for, and from → to. */
@@ -157,9 +164,9 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
   const est = estimate(f.chain, { rootCr: f.rootCr, listPriceCents: f.listPriceCents })
   const aov = est.node.aovCents
   if (aov == null || aov <= 0) return { reason: 'no order value known (no sales and no listing price)' }
-  const ratio = cpcRatio(f.chain[0].evidence, f.currentCents, f.parentCpcRatio)
+  const ratio = laneCpcRatio(f.chain[0].evidence, f.servingCents ?? f.currentCents, f.parentCpcRatio, f.ratioCeiling ?? 1)
   const parts: string[] = [`${goalWords(goal)}${f.goalBy ? ` (the goal of ${f.goalBy})` : ''}${goal.notes.length ? `; ${goal.notes.join('; ')}` : ''}`]
-  parts.push(`CR ${pct2(est.node.cr)} (${est.basis.level}, ${n0(est.basis.clicks)} clicks) × AOV ${money(aov)} ÷ CPC/bid ${ratio.toFixed(2)}`)
+  parts.push(`CR ${pct2(est.node.cr)} (${est.basis.level}, ${n0(est.basis.clicks)} clicks) × AOV ${money(aov)} ÷ CPC/bid ${ratio.toFixed(2)}${ratio > 1 ? ' (placements lift the paid CPC above the bid)' : ''}`)
 
   let want = bidForAcos(goal.aim, est.node.cr, aov, ratio)
   // A new or thin keyword starts at, and stays at, its parent's bid until it earns a raise.
@@ -174,6 +181,8 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
     want *= factor
     parts.push(`hour factor ×${factor}`)
   }
+  // BB-7 — the hour's plan shapes the placements; the keyword bid stays the goal's (the day's lowest serving factor).
+  if (f.planNote && f.lanes?.length) parts.push(f.planNote)
   const range = limitRange(f.limits, f.lanes)
   const topBid = bidForAcos(goal.hi, est.node.cr, aov, ratio)
   // BB-9 — a share floor (share of voice, rank) may reach hi × 1.25; the highest bid still holds it below (limits).
@@ -183,7 +192,8 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
   parts.push(...dir.applied, `goal bid ${Math.round(want)}¢`)
 
   // The step: from the bid before this data day's first step, unless someone else moved the bid since.
-  const sameDay = f.lastStep && f.lastStep.dataDay === f.dataDay && f.lastStep.toCents === f.currentCents
+  // `>=`: a step recorded for this data day or a newer one (the window moved back) is the day's step (ads-bid-window.ts).
+  const sameDay = f.lastStep && f.lastStep.dataDay >= f.dataDay && f.lastStep.toCents === f.currentCents
   const anchor = sameDay ? f.lastStep!.fromCents : f.currentCents
   const maxPct = f.limits.maxChangePct ?? DEFAULT_MAX_CHANGE_PCT
   const stepped = opts.noStep ? { cents: want, held: false } : stepFrom(anchor, want, maxPct, est.confidence)
@@ -241,7 +251,7 @@ export function decide(f: TargetFacts): Decision {
         }
       } else if (k === 'freeze') bids.push({ key: k, cents: ok ? Math.min(ok.cents, f.currentCents) : f.currentCents, words: `auto-undo freeze (${o.freeze!.by}): no raise` })
       else if (k === 'phase') bids.push({ key: k, cents: o.phase!.floorCents, words: `${o.phase!.by ?? 'phase not started'} → ${o.phase!.floorCents}¢` })
-      else if (k === 'minBidHour') bids.push({ key: k, cents: o.minBidHour!.floorCents, words: `Min-bid hour → ${o.minBidHour!.floorCents}¢` })
+      else if (k === 'minBidHour') bids.push({ key: k, cents: o.minBidHour!.floorCents, words: `Min-bid hour${f.planNote ? ` (${f.planNote})` : ''} → ${o.minBidHour!.floorCents}¢` })
     }
     if (bids.length) {
       const lowest = bids.reduce((a, b) => (b.cents < a.cents ? b : a))
@@ -259,13 +269,18 @@ export function decide(f: TargetFacts): Decision {
     // `restore`: an earlier give-back found no bid to go back to; it is tried again on every run until it does.
     const lifted = r.layer === 'restore' ? 'restore: the stop that lowered it no longer applies' : `restore: the ${r.layer.replace('_', '-')} layer no longer applies`
     if (r.beforeCents != null) {
-      // As if the stop never happened: today's decision taken from the bid before it.
-      const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: null, restore: null, overrides: {}, brakes: [] })
-      const cents = asIf.bidCents
+      // As if the stop never happened: today's decision taken from the bid before it. BB-7 review — with the day's step
+      // anchor kept when it is for this data day or a newer one (ads-bid-window.ts movedThisDataDay reads `>=` too), so
+      // a second Min-bid exit on the same data day lands where the first did and takes no new step (C3's slide).
+      const keep = f.lastStep && f.lastStep.dataDay >= f.dataDay ? f.lastStep : null
+      const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [] })
+      // BB-7 review — held inside today's limits (the strategy's highest bid, the campaign's bounds, the plan's day ceiling):
+      // a between-slots tick has no goal, and the bid before may sit above a limit set since.
+      const cents = clampToRange(asIf.bidCents, limitRange(f.limits, f.lanes)).cents
       const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${r.beforeCents}¢; ${asIf.why})`
       return {
         ...base, ...known, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
-        step: { dataDay: f.dataDay, fromCents: r.beforeCents, toCents: cents }, placements: placements(cents), why,
+        step: asIf.step ?? keep ?? { dataDay: f.dataDay, fromCents: r.beforeCents, toCents: cents }, placements: placements(cents), why,
       }
     }
     const g0 = ok ? goalBid(f, { noStep: true }) : null
@@ -305,7 +320,7 @@ export function decide(f: TargetFacts): Decision {
   }
   const delta = Math.abs(ok.cents - f.currentCents)
   if (delta < MIN_WRITE_CENTS || delta < f.currentCents * MIN_WRITE_SHARE) {
-    const already = f.lastStep?.dataDay === f.dataDay && f.lastStep.toCents === f.currentCents
+    const already = !!f.lastStep && f.lastStep.dataDay >= f.dataDay && f.lastStep.toCents === f.currentCents
     const why = already ? `goal: already moved for data day ${f.dataDay} — waits for a new day (${recipe})` : `goal: ${recipe}; ${f.currentCents}¢ → ${ok.cents}¢ is too small a change`
     return { ...base, ...known, action: 'hold', layer: 'goal', bidCents: f.currentCents, placements: placements(f.currentCents), why }
   }

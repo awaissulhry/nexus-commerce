@@ -169,6 +169,19 @@ export function cpcRatio(own: Pick<Evidence, 'clicks' | 'costCents'>, bidCents: 
   return Math.min(CPC_RATIO_MAX, Math.max(CPC_RATIO_MIN, Number.isFinite(raw) ? raw : DEFAULT_CPC_RATIO))
 }
 
+/**
+ * BB-18 — paid CPC ÷ bid when placements can lift the price above the bid. A placement uplift (an hourly plan up to
+ * +300 %) and Amazon's dynamic bidding make the paid CPC larger than the base bid: IT_BMM_Gale paid 28¢ and 36¢ on base
+ * bids of 26¢ and 22¢. So the ratio is held between CPC_RATIO_MIN and `ceiling` — the stack's highest multiple
+ * (recipe.ts stackCeiling) — rather than 1. `servingCents` is the bid that served the window's clicks (ads-bid-window.ts
+ * windowBidCents), so the ratio does not follow the bid's own later moves. With `ceiling` 1 it is `cpcRatio`.
+ */
+export function laneCpcRatio(own: Pick<Evidence, 'clicks' | 'costCents'>, servingCents: number, parentRatio?: number | null, ceiling = CPC_RATIO_MAX): number {
+  const top = Math.max(CPC_RATIO_MAX, Number.isFinite(ceiling) ? ceiling : CPC_RATIO_MAX)
+  const raw = own.clicks >= CPC_RATIO_MIN_CLICKS && servingCents > 0 ? own.costCents / own.clicks / servingCents : parentRatio ?? DEFAULT_CPC_RATIO
+  return Math.min(top, Math.max(CPC_RATIO_MIN, Number.isFinite(raw) ? raw : DEFAULT_CPC_RATIO))
+}
+
 /** z for a one-sided 80 % bound. */
 const Z80 = 0.8416
 
