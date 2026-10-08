@@ -10,7 +10,7 @@
  *   limits     the strategy's lowest and highest bid and largest change, and the campaign's own bounds
  *   overrides  a stop floor (budget or a stop by Claude), or a keyword floored with its bid remembered → STOP; a retail-guard floor → STOCK (not buyable); a Min-bid
  *              window → MIN-BID HOUR; pinned bids, a person's bid of the last 60 days or a BidHold row → PIN; a HELD
- *              enrollment → AUTO-UNDO FREEZE
+ *              enrollment → a raise cap (BB-10 review)
  *   brakes     the engine posture stopped (kill switch, halt, dial OFF), data older than 48 hours, a paused campaign or
  *              ad group
  *   BB-8       the overrides from their sources too, so the brain can carry them out where it is the one bid writer:
@@ -122,7 +122,7 @@ export interface RunRows {
   personHeld: ReadonlySet<string>
   /** Active BidHold rows: campaign-wide (targetId null) or per target. */
   holds: ReadonlyArray<{ campaignId: string; targetId: string | null; kind: string; by: string; until: Date | null }>
-  /** Enrollment mode per campaign (HELD → freeze). */
+  /** Enrollment mode per campaign (HELD → a raise cap, BB-10 review). */
   enrollments: ReadonlyMap<string, { mode: string; heldBy: string | null; heldUntil: Date | null }>
   lastSteps: ReadonlyMap<string, { dataDay: string; fromCents: number; toCents: number }>
   /** BB-5 — each family's total Amazon sales in the market over the 30 settled days, in cents (read for TACoS only). */
@@ -135,6 +135,8 @@ export interface RunRows {
   planHours?: ReadonlyMap<string, PlanHour>
   /** BB-7 — per campaign: its Min-bid entries this UTC day (rank-defend's and the brain's). */
   minBidEntries?: ReadonlyMap<string, number>
+  /** BB-10 — per owned campaign whose spend this hour heads above 1.5 × its same-hour average: why its raises wait. */
+  spendGuard?: ReadonlyMap<string, string>
   /** BB-8 — per campaign: what a playbook holds on it. */
   playbook?: ReadonlyMap<string, PlaybookFact>
   /** BB-8 — per keyword: the brain's last decision lowered it by an override; the bid of its last decision before. */
@@ -238,6 +240,9 @@ export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Ev
   }
   return clicks >= 10 && bidClicks > 0 ? cost / bidClicks : null
 }
+
+/** BB-10 re-review — the BidHold kind auto-undo pins a keyword with after it put back a bid brain change. */
+export const UNDO_PIN_KIND = 'UNDO_PIN'
 
 /** BB-7 review — a floor mark an hourly plan's Min-bid hour set (rank-defend's own prefixes, which the brain writes too). */
 export const isPlanFloorMark = (by: string | null | undefined): boolean => !!by && /^automation:(rank-defend|rank-plan|dayparting)-/.test(by)
@@ -371,14 +376,17 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     }
     const holds = run.holds.filter((h) => h.campaignId === campaign.id && (h.targetId == null || h.targetId === t.id))
     // BB-8 — an auto-undo hold freezes (lowering still allowed); every other hold pins.
-    const hold = holds.find((h) => h.kind !== 'AUTO_UNDO')
+    // BB-10 re-review — a person's (or Claude's) hold before auto-undo's own pin: a floor may override that one (decide.ts).
+    const hold = holds.find((h) => h.kind !== 'AUTO_UNDO' && h.kind !== UNDO_PIN_KIND) ?? holds.find((h) => h.kind === UNDO_PIN_KIND)
     const undoHold = holds.find((h) => h.kind === 'AUTO_UNDO')
     if (campaign.pinBids) overrides.pin = { by: campaign.pinnedBy ? `bids pinned by ${campaign.pinnedBy}` : 'pinned bids' }
-    else if (hold) overrides.pin = { by: `${hold.kind.toLowerCase()} hold by ${hold.by}`, until: day(hold.until) }
+    else if (hold) overrides.pin = { by: `${hold.kind === UNDO_PIN_KIND ? 'auto-undo pin' : `${hold.kind.toLowerCase()} hold`} by ${hold.by}`, until: day(hold.until), ...(hold.kind === UNDO_PIN_KIND ? { soft: true as const } : {}) }
     else if (run.personHeld.has(t.id)) overrides.pin = { by: 'a person (their bid of the last 60 days)' }
     const enrollment = run.enrollments.get(campaign.id)
-    if (enrollment?.mode === 'HELD') overrides.freeze = { by: enrollment.heldBy ?? 'a hold' }
-    else if (undoHold) overrides.freeze = { by: `${undoHold.by}${undoHold.until ? ` until ${day(undoHold.until)}` : ''}` }
+    // BB-10 review — a HELD campaign raises nothing (decide's raise cap, inside the goal path: the band, the minimum change
+    // and once per data day still apply, so an in-band keyword does not move); it is not a freeze walking bids down.
+    const heldWhy = enrollment?.mode === 'HELD' ? `the campaign is held by ${enrollment.heldBy ?? 'a hold'}${enrollment.heldUntil ? ` until ${day(enrollment.heldUntil)}` : ''}` : null
+    if (undoHold) overrides.freeze = { by: `${undoHold.by}${undoHold.until ? ` until ${day(undoHold.until)}` : ''}` }
 
     // BB-7 — the campaign's hourly plan, where the brain owns it: its lanes, a Min-bid floor (the lower floor wins), the why.
     const plan = hour ? planFacts(hour, campaign, { entriesToday: run.minBidEntries?.get(campaign.id) ?? 0, inMinBid: inMinBid.has(campaign.id), maxEntries: MAX_MIN_BID_ENTRIES_PER_DAY }) : null
@@ -401,6 +409,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       ratioCeiling,
       ...(plan?.lanes.length ? { lanes: plan.lanes } : {}),
       ...(plan ? { planNote: plan.note } : {}),
+      ...(heldWhy || run.spendGuard?.has(campaign.id) ? { raiseCap: [heldWhy, run.spendGuard?.get(campaign.id)].filter(Boolean).join('; ') } : {}),
       listPriceCents: group.families.map((f) => m.prices.get(f)).find((p) => p != null && p > 0) ?? null,
       goal,
       limits: {

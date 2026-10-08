@@ -19,6 +19,7 @@
 import { createHash } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
+import { logger } from '../../../utils/logger.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { brainLiveCeiling } from './live.js'
 import { bidBrainMode } from './shadow.js'
@@ -211,6 +212,50 @@ export async function setEnrollment(args: {
 
 /** True when LIVE takes effect now (the env ceiling is `live`). */
 export const liveTakesEffect = (): boolean => brainLiveCeiling()
+
+/**
+ * BID BRAIN BB-10 — the auto-undo hook (design §5): hold campaigns the brain owns, and release them. A hold is the HELD
+ * mode until `until`: the brain raises nothing there (a stop still lowers, and lowering is still allowed); past
+ * `until` the loader reads it as LIVE again (load.ts). Auto-undo decides; the brain never undoes itself.
+ *
+ *   holdCampaigns  LIVE → HELD until `until`; a campaign HELD now keeps the later end of the two (and its holder); a
+ *                  HELD whose end has passed is held anew (the new holder and reason). SHADOW or not enrolled: nothing to
+ *                  hold (left out of the answer). Compare-and-set on the row as read: a person's op in between wins.
+ *   releaseHold    HELD → LIVE. Anything else: left as it is.
+ * Both answer the campaigns they changed.
+ */
+export async function holdCampaigns(args: { campaignIds: readonly string[]; until: Date; by: string; reason: string; now?: Date }): Promise<string[]> {
+  if (!args.campaignIds.length) return []
+  const now = args.now ?? new Date()
+  const rows = await prisma.bidBrainEnrollment.findMany({
+    where: { campaignId: { in: [...new Set(args.campaignIds)] }, mode: { in: ['LIVE', 'HELD'] } },
+    select: { id: true, campaignId: true, mode: true, heldUntil: true },
+  })
+  const held: string[] = []
+  for (const r of rows) {
+    const active = r.mode === 'HELD' && r.heldUntil != null && r.heldUntil > now
+    if (active && r.heldUntil! >= args.until) continue
+    const moved = await prisma.bidBrainEnrollment.updateMany({
+      where: { id: r.id, mode: r.mode, heldUntil: r.heldUntil },
+      data: { mode: 'HELD', heldUntil: args.until, ...(active ? {} : { heldBy: args.by, heldReason: args.reason.slice(0, 500) }) },
+    })
+    if (moved.count) held.push(r.campaignId)
+  }
+  if (held.length) logger.info('[bid-brain] campaigns held', { by: args.by, until: args.until.toISOString(), campaignIds: held, reason: args.reason.slice(0, 200) })
+  return held
+}
+
+export async function releaseHold(args: { campaignIds: readonly string[]; by: string }): Promise<string[]> {
+  if (!args.campaignIds.length) return []
+  const rows = await prisma.bidBrainEnrollment.findMany({ where: { campaignId: { in: [...new Set(args.campaignIds)] }, mode: 'HELD' }, select: { id: true, campaignId: true } })
+  const released: string[] = []
+  for (const r of rows) {
+    const moved = await prisma.bidBrainEnrollment.updateMany({ where: { id: r.id, mode: 'HELD' }, data: { mode: 'LIVE', heldUntil: null, heldBy: null, heldReason: null } })
+    if (moved.count) released.push(r.campaignId)
+  }
+  if (released.length) logger.info('[bid-brain] hold released', { by: args.by, campaignIds: released })
+  return released
+}
 
 /**
  * BB-7 review — the keywords the brain holds at a floor (its newest decision lowered them by a stop, stock, the phase or a
