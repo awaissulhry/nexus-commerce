@@ -121,7 +121,7 @@ export interface RunRows {
   /** Targets a person set (or approved) a bid for in the last 60 days. */
   personHeld: ReadonlySet<string>
   /** Active BidHold rows: campaign-wide (targetId null) or per target. */
-  holds: ReadonlyArray<{ campaignId: string; targetId: string | null; kind: string; by: string; until: Date | null; reason?: string | null }>
+  holds: ReadonlyArray<{ campaignId: string; targetId: string | null; kind: string; by: string; until: Date | null; reason?: string | null; floorCents?: number | null }>
   /** Enrollment mode per campaign (HELD → a raise cap, BB-10 review). */
   enrollments: ReadonlyMap<string, { mode: string; heldBy: string | null; heldUntil: Date | null }>
   lastSteps: ReadonlyMap<string, { dataDay: string; fromCents: number; toCents: number }>
@@ -246,12 +246,12 @@ export const UNDO_PIN_KIND = 'UNDO_PIN'
 /** Pre-go-live — a campaign-wide stop declared over another owner's stop (ads-bid-suppression.service.ts). */
 export const STOP_HOLD_KIND = 'STOP'
 /**
- * #513 review — the floor a STOP hold's owner declared, kept at the head of the hold's reason (no new column): written
- * by stopHoldReason, read back by stopHoldFloor. Null: a reason without it.
+ * #513 follow-up — the floor a STOP hold's owner declared: its own column (`BidHold.floorCents`), else — a STOP written
+ * before that column — the head of its reason ("<n>¢ floor: …", as #513 wrote it). Null: neither.
  */
-export const stopHoldReason = (floorCents: number, reason: string): string => `${floorCents}¢ floor: ${reason}`.slice(0, 500)
-export function stopHoldFloor(reason: string | null | undefined): number | null {
-  const m = /^(\d+)¢ floor: /.exec(reason ?? '')
+export function declaredStopFloor(h: { floorCents?: number | null; reason?: string | null }): number | null {
+  if (h.floorCents != null) return h.floorCents
+  const m = /^(\d+)¢ floor: /.exec(h.reason ?? '')
   return m ? Number(m[1]) : null
 }
 
@@ -391,11 +391,11 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     // BB-10 re-review — a person's (or Claude's) hold before auto-undo's own pin: a floor may override that one (decide.ts).
     const hold = holds.find((h) => h.kind !== 'AUTO_UNDO' && h.kind !== UNDO_PIN_KIND && h.kind !== STOP_HOLD_KIND) ?? holds.find((h) => h.kind === UNDO_PIN_KIND)
     // Pre-go-live — each stop declared while another owner's stop held the mark (ads-bid-suppression.service.ts
-    // declareOwnedStop): a STOP too, at the floor its owner declared (#513 review: stopHoldFloor; the strategy's stop bid,
-    // else 2¢, only for a hold that names none); with two stops the lower floor wins (decide.ts).
+    // declareOwnedStop): a STOP too, at the floor its owner declared (declaredStopFloor; the strategy's stop bid, else 2¢,
+    // only for a hold that names none); with two stops the lower floor wins (decide.ts).
     for (const h of holds) {
       if (h.kind !== STOP_HOLD_KIND || h.targetId != null) continue
-      const cents = stopHoldFloor(h.reason) ?? s?.stopBidCents ?? 2
+      const cents = declaredStopFloor(h) ?? s?.stopBidCents ?? 2
       if (!overrides.stop || cents < overrides.stop.bidCents) overrides.stop = { bidCents: cents, by: `a stop by ${h.by}` }
     }
     const undoHold = holds.find((h) => h.kind === 'AUTO_UNDO')

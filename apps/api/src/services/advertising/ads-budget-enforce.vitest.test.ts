@@ -180,7 +180,7 @@ describe('the preview — what the engine would do now', () => {
       // Over the cap: the guard's mark does not stop this engine's stop from landing; the screen shows it stopped.
       expect(campaign(market(await inA(() => computeBudgetEnforcement({ month })), 'IT'), ids.cRank)).toMatchObject({ suppress: true, restore: false, currentlySuppressed: true })
       // Its stop declared behind the guard's mark (a STOP hold): its own stop now — not declared again.
-      await inA(() => db().bidHold.create({ data: { campaignId: ids.cRank, kind: 'STOP', by: 'automation:budget-manager-cron', reason: '9¢ floor: monthly cap' } }))
+      await inA(() => db().bidHold.create({ data: { campaignId: ids.cRank, kind: 'STOP', by: 'automation:budget-manager-cron', floorCents: 9, reason: 'monthly cap' } }))
       expect(campaign(market(await inA(() => computeBudgetEnforcement({ month })), 'IT'), ids.cRank)).toMatchObject({ suppress: false, restore: false, currentlySuppressed: true })
       // The cap gone: its stop is given back (the guard's mark stays: restoreCampaignBids lifts only this engine's own).
       await inA(() => db().adsStrategy.update({ where: { id: ids.marketRow }, data: { monthlySpendCapCents: null } }))

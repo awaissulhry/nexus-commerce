@@ -1106,10 +1106,15 @@ ACTION_HANDLERS.set_placement_multiplier = async (action, context, meta): Promis
 // campaigns, and resume_campaign undoes it when conditions clear.
 ACTION_HANDLERS.retail_guard = async (action, _context, meta): Promise<ActionResult> => {
   const marketplace = typeof action.marketplace === 'string' ? action.marketplace : undefined
-  const { analyzeRetailReadiness, applyRetailGuard } = await import('./ads-retail-readiness.service.js')
+  const { analyzeRetailReadiness, applyRetailGuard, ownedStopsToLift } = await import('./ads-retail-readiness.service.js')
   const analysis = await analyzeRetailReadiness({ marketplace })
   const toPause = analysis.campaigns.filter((c) => c.verdict === 'pause' && c.status === 'ENABLED')
+  // #513 review — the campaigns it no longer flags: its own stop lifts there on a campaign the bid brain owns.
+  const sellable = analysis.campaigns.filter((c) => !toPause.includes(c)).map((c) => c.campaignId)
   if (meta.dryRun) {
+    // #513 follow-up — the preview names the stops the run would lift too: a lift gives the bids back, so spend rises.
+    const lifts = await ownedStopsToLift(sellable, RULE_ACTOR(meta.ruleId))
+    const named = (id: string) => ({ id, name: analysis.campaigns.find((c) => c.campaignId === id)?.name ?? id })
     return {
       type: action.type,
       ok: true,
@@ -1118,13 +1123,16 @@ ACTION_HANDLERS.retail_guard = async (action, _context, meta): Promise<ActionRes
         wouldPause: toPause.length,
         sample: toPause.slice(0, 8).map((c) => ({ id: c.campaignId, name: c.name, reason: c.reason })),
         watched: analysis.summary.watch,
+        wouldLift: lifts.lift.length,
+        liftSample: lifts.lift.slice(0, 8).map(named),
+        ...(lifts.lift.length ? { liftNote: `Lifts this guard's own stop on ${lifts.lift.length} campaign${lifts.lift.length === 1 ? '' : 's'} the bid brain runs (products sellable again): the brain puts the bids back, so these campaigns spend more.` } : {}),
+        ...(lifts.waiting.length ? { liftWaiting: lifts.waiting.length, liftWaitingNote: 'Stops younger than 2 hours stay until they are 2 hours old, even when the products sell again.' } : {}),
       },
     }
   }
   const result = await applyRetailGuard({
     campaignIds: toPause.map((c) => c.campaignId),
-    // #513 review — the campaigns it no longer flags: its own stop lifts there on a campaign the bid brain owns.
-    sellable: analysis.campaigns.filter((c) => !toPause.includes(c)).map((c) => c.campaignId),
+    sellable,
     actor: RULE_ACTOR(meta.ruleId),
     marketplace,
     changeSetId: meta.approval?.changeSetId ?? null, // AA-W2-10 (D7)
@@ -1136,6 +1144,9 @@ ACTION_HANDLERS.retail_guard = async (action, _context, meta): Promise<ActionRes
       paused: result.paused.length,
       skipped: result.skipped,
       pausedIds: result.paused.slice(0, 10),
+      lifted: result.lifted.length,
+      liftedIds: result.lifted.slice(0, 10),
+      ...(result.waiting.length ? { liftWaiting: result.waiting.length } : {}),
     },
   }
 }

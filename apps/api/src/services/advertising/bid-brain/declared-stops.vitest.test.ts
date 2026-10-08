@@ -30,13 +30,24 @@ vi.mock('../ads-mutation.service.js', async (importOriginal) => ({
 
 import { lowerAdGroupBids, refloorCampaignBids, restoreAdGroupBids, restoreCampaignBids, suppressAdGroupBids, suppressCampaignBids } from '../ads-bid-suppression.service.js'
 import { flooredNow, setEnrollment } from './enrollment.js'
+import { applyRetailGuard, RETAIL_LIFT_MIN_AGE_MS } from '../ads-retail-readiness.service.js'
+import { ACTION_HANDLERS } from '../../automation-rule.service.js'
+import '../automation-action-handlers.js' // fills ACTION_HANDLERS, retail_guard among them
 
 const A = 'bb8_declared_alpha'
 const inA = <T>(work: () => Promise<T>) => withWorkspace({ workspaceId: A, actorUserId: null, membershipId: null, roleKeys: [] }, work)
 const db = () => database.client
 const BUDGET = 'automation:budget-manager-cron' as const
 const RETAIL = 'automation:retail-guard' as const
-const openHolds = (campaignId: string) => inA(() => db().bidHold.findMany({ where: { campaignId, endedAt: null }, select: { kind: true, by: true, reason: true }, orderBy: { createdAt: 'asc' } }))
+const openHolds = (campaignId: string) => inA(() => db().bidHold.findMany({ where: { campaignId, endedAt: null }, select: { kind: true, by: true, reason: true, floorCents: true }, orderBy: { createdAt: 'asc' } }))
+/** Moves a stop's start back by `ms`: its mark and its holds (the 2-hour damping reads their age). */
+const age = (campaignId: string, ms: number) => inA(async () => {
+  const c = await db().campaign.findUnique({ where: { id: campaignId }, select: { bidsSuppressedAt: true } })
+  if (c?.bidsSuppressedAt) await db().campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: new Date(c.bidsSuppressedAt.getTime() - ms) } })
+  for (const h of await db().bidHold.findMany({ where: { campaignId }, select: { id: true, createdAt: true } })) {
+    await db().bidHold.update({ where: { id: h.id }, data: { createdAt: new Date(h.createdAt.getTime() - ms) } })
+  }
+})
 const ids = { owned: '', other: '', ownedGroup: '', otherGroup: '' }
 
 async function state(campaignId: string) {
@@ -110,7 +121,7 @@ describe('a campaign the brain owns', () => {
   it('#513 review — a second owner\'s stop is a STOP hold with its own floor; the first owner\'s lift hands it the mark and keeps the saved bids', async () => {
     await inA(() => suppressCampaignBids(ids.owned, { actor: BUDGET, floorCents: 5 }))
     await inA(() => suppressCampaignBids(ids.owned, { actor: RETAIL, floorCents: 2, reason: 'unsellable' }))
-    expect(await openHolds(ids.owned)).toEqual([{ kind: 'STOP', by: RETAIL, reason: '2¢ floor: unsellable' }])
+    expect(await openHolds(ids.owned)).toEqual([{ kind: 'STOP', by: RETAIL, reason: 'unsellable', floorCents: 2 }])
     // The brain floored the keyword and kept its bid (shadow.ts rememberFloors), as on a live run.
     await inA(() => db().adTarget.updateMany({ where: { adGroupId: ids.ownedGroup }, data: { bidCents: 2, suppressedFromBidCents: 55 } }))
     const declared = (await inA(() => db().bidHold.findFirst({ where: { campaignId: ids.owned, kind: 'STOP' }, select: { createdAt: true } })))!.createdAt
@@ -125,6 +136,7 @@ describe('a campaign the brain owns', () => {
   })
 
   it('#513 review — leaving the brain (op shadow) with a stop declared and the mark free: the stop takes the mark; LIVE is refused while one is open', async () => {
+    // A hold written before BidHold.floorCents: its floor is read from the head of its reason.
     await inA(() => db().bidHold.create({ data: { campaignId: ids.owned, kind: 'STOP', by: RETAIL, reason: '3¢ floor: unsellable' } }))
     expect(await inA(() => flooredNow(ids.owned))).toMatch(/held at a floor now \(by automation:retail-guard\)/)
     await inA(() => setEnrollment({ campaignId: ids.owned, marketplace: 'IT', op: 'shadow', by: 'user:test' }))
@@ -137,7 +149,7 @@ describe('a campaign the brain owns', () => {
     await inA(() => suppressCampaignBids(ids.owned, { actor: RETAIL, floorCents: 2, reason: 'unsellable' }))
     await inA(() => db().adTarget.updateMany({ where: { adGroupId: ids.ownedGroup }, data: { bidCents: 2, suppressedFromBidCents: 55 } }))
     await inA(() => setEnrollment({ campaignId: ids.owned, marketplace: 'IT', op: 'give-back', by: 'user:test' }))
-    expect(await openHolds(ids.owned)).toEqual([{ kind: 'STOP', by: RETAIL, reason: '2¢ floor: unsellable' }])
+    expect(await openHolds(ids.owned)).toEqual([{ kind: 'STOP', by: RETAIL, reason: 'unsellable', floorCents: 2 }])
     expect(await inA(() => flooredNow(ids.owned))).toMatch(/\(by automation:budget-manager-cron, automation:retail-guard\)/)
     // Not owned any more: today's give-back runs, and the stop still declared takes the mark instead — nothing written.
     expect(await inA(() => restoreCampaignBids(ids.owned, { actor: BUDGET }))).toBe(0)
@@ -147,6 +159,46 @@ describe('a campaign the brain owns', () => {
     expect(await inA(() => restoreCampaignBids(ids.owned, { actor: 'user:u1', manual: true }))).toBe(1)
     expect(await state(ids.owned)).toEqual({ marks: null, groups: [[40, null, null, null]], targets: [[55, null]] })
     expect(await openHolds(ids.owned)).toEqual([])
+  })
+
+  it('#513 follow-up — the retail guard flapping (flag, unflag, flag): a stop younger than 2 hours stays; once older it lifts', async () => {
+    const guard = (flagged: string[]) => inA(() => applyRetailGuard({ campaignIds: flagged, sellable: [ids.owned].filter((id) => !flagged.includes(id)), actor: 'retail-guard' }))
+    await guard([ids.owned])
+    expect((await state(ids.owned)).marks).toEqual({ by: RETAIL, floor: 2 })
+    // 15 minutes later it sells again: the stop is young, so it stays (no floor-and-give-back each run).
+    expect(await guard([])).toMatchObject({ lifted: [], waiting: [ids.owned] })
+    expect((await state(ids.owned)).marks).toEqual({ by: RETAIL, floor: 2 })
+    // Flagged again: the same stop, nothing new.
+    await guard([ids.owned])
+    expect((await state(ids.owned)).marks).toEqual({ by: RETAIL, floor: 2 })
+    // Two hours on and sellable: lifted.
+    await age(ids.owned, RETAIL_LIFT_MIN_AGE_MS)
+    expect(await guard([])).toMatchObject({ lifted: [ids.owned], waiting: [] })
+    expect((await state(ids.owned)).marks).toBeNull()
+    // Its STOP hold behind another owner's mark is damped the same way; the other owner's mark stays.
+    await inA(() => suppressCampaignBids(ids.owned, { actor: BUDGET, floorCents: 3 }))
+    await guard([ids.owned])
+    expect(await openHolds(ids.owned)).toEqual([{ kind: 'STOP', by: RETAIL, reason: expect.any(String), floorCents: 2 }])
+    expect(await guard([])).toMatchObject({ lifted: [], waiting: [ids.owned] })
+    await age(ids.owned, RETAIL_LIFT_MIN_AGE_MS)
+    expect(await guard([])).toMatchObject({ lifted: [ids.owned] })
+    expect(await openHolds(ids.owned)).toEqual([])
+    expect((await state(ids.owned)).marks).toEqual({ by: BUDGET, floor: 3 })
+    expect(writes).toEqual([])
+  })
+
+  it('#513 follow-up — the retail guard rule\'s dry run lists the stops it would lift (spend rises) and the ones still damped', async () => {
+    await inA(() => db().campaign.updateMany({ data: { status: 'ENABLED' } }))
+    const RULE = 'automation:rule-test'
+    await inA(() => suppressCampaignBids(ids.owned, { actor: RULE, floorCents: 2 }))
+    const preview = () => inA(() => ACTION_HANDLERS.retail_guard({ type: 'retail_guard', marketplace: 'IT' } as never, {} as never, { dryRun: true, ruleId: 'rule-test' } as never))
+    expect((await preview()).output).toMatchObject({ dryRun: true, wouldPause: 0, wouldLift: 0, liftWaiting: 1, liftWaitingNote: expect.stringMatching(/younger than 2 hours/) })
+    await age(ids.owned, RETAIL_LIFT_MIN_AGE_MS)
+    const out = (await preview()).output as Record<string, unknown>
+    expect(out).toMatchObject({ wouldLift: 1, liftSample: [{ id: ids.owned, name: 'Owned' }], liftNote: expect.stringMatching(/spend more/) })
+    expect(out.liftWaiting).toBeUndefined()
+    // A preview only: the stop is still there.
+    expect((await state(ids.owned)).marks).toEqual({ by: RULE, floor: 2 })
   })
 
   it('a HELD enrollment is still owned (no raises; the brain is still the one writer)', async () => {

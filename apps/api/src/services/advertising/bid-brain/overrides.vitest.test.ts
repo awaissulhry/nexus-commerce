@@ -153,6 +153,18 @@ describe('the facts builder reads the sources', () => {
     expect(buildFacts(market(), run({ playbook: stopped }))[0].overrides?.stop).toEqual({ bidCents: 2, by: 'a playbook STOP (GALE IT)' })
   })
 
+  it('#513 follow-up — a STOP hold at the floor its owner declared: its column, else the old reason head, else the strategy\'s stop bid; the lowest wins', () => {
+    const stop = (by: string, extra: { floorCents?: number | null; reason?: string | null }) => ({ campaignId: 'c1', targetId: null, kind: 'STOP', by, until: null, ...extra })
+    const at = (holds: RunRows['holds']) => buildFacts(market(), run({ holds }))[0].overrides?.stop
+    expect(at([stop('automation:retail-guard', { floorCents: 2, reason: 'unsellable' })])).toEqual({ bidCents: 2, by: 'a stop by automation:retail-guard' })
+    // Written before the column: the floor at the head of its reason.
+    expect(at([stop('automation:retail-guard', { floorCents: null, reason: '4¢ floor: unsellable' })])).toEqual({ bidCents: 4, by: 'a stop by automation:retail-guard' })
+    // Neither: the strategy's stop bid (3¢ here).
+    expect(at([stop('automation:retail-guard', { reason: 'unsellable' })])).toEqual({ bidCents: 3, by: 'a stop by automation:retail-guard' })
+    // Two holds: the lower floor, whichever comes first.
+    expect(at([stop('automation:budget-manager-cron', { floorCents: 5 }), stop('automation:retail-guard', { floorCents: 2 })])).toEqual({ bidCents: 2, by: 'a stop by automation:retail-guard' })
+  })
+
   it('an auto-undo hold freezes; a person’s hold pins and wins over it', () => {
     const undo = { campaignId: 'c1', targetId: null, kind: 'AUTO_UNDO', by: 'auto-undo', until: new Date('2026-10-05T00:00:00Z') }
     const facts = buildFacts(market(), run({ holds: [undo] }))

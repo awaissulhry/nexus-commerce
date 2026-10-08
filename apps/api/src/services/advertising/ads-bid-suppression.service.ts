@@ -39,7 +39,7 @@ import { NO_LIMITS, bidSideWords, clampBid, clampToStrategy, limitWords, strateg
 import { brainOwnedCampaignIds } from './bid-brain/live.js'
 // BID BRAIN pre-go-live — STOP_HOLD_KIND: a stop declared while another owner's stop holds the campaign's mark is kept as
 // a campaign-wide BidHold of this kind (declareOwnedStop); the brain reads it as a stop (facts.ts).
-import { isPlanFloorMark, STOP_HOLD_KIND, stopHoldFloor, stopHoldReason } from './bid-brain/facts.js'
+import { declaredStopFloor, isPlanFloorMark, STOP_HOLD_KIND } from './bid-brain/facts.js'
 
 /**
  * BID BRAIN pre-go-live — on a campaign the brain owns, a stop always lands (it was lost while the brain's Min-bid floor
@@ -55,8 +55,8 @@ async function declareOwnedStop(campaignId: string, mark: { bidsSuppressedAt: Da
     await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: new Date(), bidsSuppressedFloorCents: floor, bidsSuppressedBy: opts.actor } })
   } else if (mark.bidsSuppressedBy !== opts.actor) {
     const open = await prisma.bidHold.findFirst({ where: { campaignId, targetId: null, kind: STOP_HOLD_KIND, by: opts.actor, endedAt: null }, select: { id: true } })
-    // #513 review — the floor this owner declared goes with it (stopHoldReason): the brain applies that floor, not another.
-    if (!open) await prisma.bidHold.create({ data: { campaignId, targetId: null, kind: STOP_HOLD_KIND, by: opts.actor, until: null, reason: stopHoldReason(floor, opts.reason ?? 'a stop') } })
+    // #513 review — the floor this owner declared goes with it (`floorCents`): the brain applies that floor, not another.
+    if (!open) await prisma.bidHold.create({ data: { campaignId, targetId: null, kind: STOP_HOLD_KIND, by: opts.actor, until: null, floorCents: floor, reason: (opts.reason ?? 'a stop').slice(0, 500) } })
   }
   logger.info('[no-pause] stop declared on a campaign the bid brain owns — the brain floors its bids', { campaignId, floor, by: opts.actor, over: mark.bidsSuppressedBy })
 }
@@ -73,10 +73,10 @@ export async function handMarkToStopHold(campaignId: string, endedBy: string): P
   const hold = await prisma.bidHold.findFirst({
     where: { campaignId, targetId: null, kind: STOP_HOLD_KIND, endedAt: null },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, by: true, reason: true, createdAt: true },
+    select: { id: true, by: true, reason: true, floorCents: true, createdAt: true },
   })
   if (!hold) return false
-  const floor = normaliseFloorCents(stopHoldFloor(hold.reason))
+  const floor = normaliseFloorCents(declaredStopFloor(hold))
   await prisma.campaign.update({ where: { id: campaignId }, data: { bidsSuppressedAt: hold.createdAt, bidsSuppressedFloorCents: floor, bidsSuppressedBy: hold.by } })
   await prisma.bidHold.update({ where: { id: hold.id }, data: { endedAt: new Date(), endedBy } })
   logger.info('[no-pause] a stop still declared takes the campaign\'s mark — the bids stay at the floor', { campaignId, by: hold.by, floor, liftedBy: endedBy })

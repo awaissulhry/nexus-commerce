@@ -19776,6 +19776,9 @@ model BidHold {
   /// 'user:<id>', 'claude:<approvalId>', 'auto-undo'.
   by         String
   reason     String?
+  /// STOP only: the floor its owner declared, in cents (the brain applies the lowest). Null on other kinds and on a
+  /// STOP written before this column (its reason then starts "<n>¢ floor: ").
+  floorCents Int?
 
   endedAt DateTime?
   endedBy String?
