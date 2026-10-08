@@ -10,21 +10,28 @@
  *              joins its variation's family; two products, or one plus an ad Nexus cannot tie → shared; only an
  *              untied ad → none; archived campaigns, archived ads, other markets and Sponsored Brands left out
  *   adopt      enrolling a product whose campaign the bid brain already runs (GALE IT, 10-08) sets its bids lever AUTO
- *              by an "adopted" product override and writes no BidBrainEnrollment row (the LIVE one keeps its snapshot)
- *   bids AUTO  re-applying AUTO puts the own campaigns LIVE that may (each with its snapshot), skips the one off the
- *              allowlist with the reason, leaves the LIVE and the shared one; a rerun writes nothing
- *   Owner      excluding a campaign, or locking its bids, takes it out of the bid brain (and it never goes back LIVE
- *              while it lasts); ending the exclusion re-applies the product's level; settings resolve campaign >
- *              product > default with who and when; a campaign override applies to that campaign only
+ *              by an "adopted" product override, keeps each own campaign in shadow with an "adopted" campaign OBSERVE,
+ *              and writes no BidBrainEnrollment row (the LIVE one keeps its snapshot)
+ *   brakes     re-applying AUTO moves nothing past an adopted OBSERVE; ending one puts the campaign LIVE — a big door
+ *              (needsCode) — and runs only on the basis it was approved on (an allowlist moved since: refused)
+ *   Owner      excluding a campaign, or locking its bids, takes it out of the bid brain, and the per-campaign tool then
+ *              refuses op live with the override's words; ending the exclusion re-applies the product's level (a big
+ *              door); an exclusion of a SHARED LIVE campaign takes it back to shadow and ending it never puts it LIVE
+ *   by hand    the per-campaign tool's op shadow, approved by a person, is kept as a campaign override: a product
+ *              re-apply leaves the campaign in shadow
+ *   settings   campaign > product > default with who and when; a campaign override applies to that campaign only;
+ *              the negatives warning level never above the maximum (product and campaign)
  *   one writer two changes made on one version: exactly one wins, the other is refused, nothing half-written
- *   refusals   a level levers.ts does not offer, a stale version, a campaign not advertising the product: nothing changes
- *   OBSERVE    the product's bids lever back to OBSERVE takes every own campaign back to shadow; the shared stays LIVE
+ *   refusals   a level levers.ts does not offer, a stale version, a campaign not advertising the product, a change run
+ *              inside a weaker outer transaction: nothing changes
+ *   OBSERVE    the product's bids lever back to OBSERVE takes every own campaign back to shadow, a HELD one included
  *   rows map   today's LIVE rows by product (a read)
  *
  * Values are made up (public repo).
  */
 import { randomBytes } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { FEATURES, FIELDS } from '@nexus/shared/permissions'
 import { concurrentDatabase, concurrentDatabaseUrl } from '../../../test-support/concurrent-database.js'
 import { withWorkspace } from '../../../lib/workspace-context.js'
 
@@ -52,7 +59,11 @@ vi.mock('../../../lib/queue.js', () => {
 })
 
 const { productCampaigns, resolveCampaignOwnership } = await import('./ownership.js')
-const { bidBrainRowsByProduct, brainSettings, brainView, endOverride, enrollProduct, planOverride, setLever, setOverride } = await import('./enrollment.js')
+const { bidBrainRowsByProduct, brainSettings, brainView, endOverride, enrollProduct, planOverride, recordCampaignBidsChoice, setLever, setOverride } = await import('./enrollment.js')
+const { holdCampaigns, setEnrollment } = await import('../bid-brain/enrollment.js')
+const { inDatabaseTransaction } = await import('../../../lib/database-context.js')
+const { ADS_BID_BRAIN_ENROLLMENT_TOOLS } = await import('../../agents/tools/ads-bid-brain-enrollment.tools.js')
+const { decideApproval, runOrQueueTool } = await import('../../agents/approval-gate.service.js')
 
 const hex = randomBytes(4).toString('hex')
 /** Amazon writes ASINs in capitals. */
@@ -68,6 +79,14 @@ const P = id('p'), P1 = id('p1'), P2 = id('p2'), P2F = id('p2f'), Q = id('q'), Q
 const C = (s: string) => id(`c-${s}`)
 const TABLES = ['AdsBrainEnrollment', 'AdsBrainOverride']
 const NOW = new Date('2026-10-08T12:00:00Z')
+const business = scope(W)
+const person = (userId: string, via: 'claude' | 'app') => ({
+  kind: 'user' as const, userId, label: `Person ${userId}`, via, workspace: business,
+  permissions: { isOwner: false, permissions: new Set<string>([...Object.values(FEATURES), ...Object.values(FIELDS)]) },
+})
+/** The per-campaign tool's preview: what it would refuse. */
+const toolPreview = (campaignId: string, op: string) => inW(() => ADS_BID_BRAIN_ENROLLMENT_TOOLS[0].handler!({ campaignId, op }, {} as never)) as Promise<{ ok: boolean; error?: string }>
+const campaignOverride = (campaignId: string) => ({ scope: 'CAMPAIGN' as const, campaignId, kind: 'LEVEL' as const, key: 'bids' })
 
 const modes = async () => Object.fromEntries((await rows<{ campaignId: string; mode: string }>('SELECT "campaignId", mode FROM "BidBrainEnrollment" WHERE "workspaceId" = $1', [W])).map((r) => [r.campaignId, r.mode]))
 const amazonRows = async () => (await rows<{ n: number }>(
@@ -167,42 +186,49 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-1 — a product\'s brain: enrollme
     expect(await inW(() => productCampaigns('no-such-product', 'IT'))).toBeNull()
   })
 
-  it('enrolling adopts the bids lever from the campaigns (an "adopted" product override) and writes no campaign row', async () => {
+  it('enrolling adopts the bids lever, keeps each own campaign in shadow with an adopted OBSERVE, and writes no campaign row', async () => {
     const before = await rows('SELECT * FROM "BidBrainEnrollment" WHERE "workspaceId" = $1 ORDER BY id', [W])
     const r = await inW(() => enrollProduct({ productId: P2, market: 'it', by: 'user:owner', now: NOW }))
-    expect(r).toMatchObject({ ok: true, productId: P, market: 'IT', bids: 'AUTO', version: 1, adoptedLive: [C('a-live')] })
+    expect(r).toMatchObject({ ok: true, productId: P, market: 'IT', bids: 'AUTO', version: 1, adoptedLive: [C('a-live')], keptInShadow: ['b-asin', 'c-fba', 'd-off'].map(C) })
     expect(await rows('SELECT * FROM "BidBrainEnrollment" WHERE "workspaceId" = $1 ORDER BY id', [W])).toEqual(before)
     const s = await inW(() => brainSettings(P1, 'IT'))
     expect(s?.levers.bids).toMatchObject({ level: { value: 'AUTO', source: 'product', by: 'user:owner' }, effective: 'AUTO', owned: true })
     expect(s?.levers.bids.level.reason).toMatch(/adopted at enrollment: the bid brain already runs 1 own campaign LIVE/)
     expect(s?.levers.negatives).toMatchObject({ level: { value: 'OBSERVE', source: 'default' }, effective: 'OBSERVE' })
+    expect((await inW(() => brainSettings(P, 'IT', C('b-asin'))))?.levers.bids).toMatchObject({ level: { value: 'OBSERVE', source: 'campaign', reason: expect.stringContaining('in shadow when the product enrolled') }, effective: 'OBSERVE' })
     expect(await inW(() => enrollProduct({ productId: P, market: 'IT', by: 'user:owner' }))).toEqual({ ok: false, refusal: 'the product is already enrolled in the brain for IT' })
     // A product with no own campaign the bid brain runs starts OBSERVE (the glove sits only in the shared campaign).
-    expect(await inW(() => enrollProduct({ productId: Q1, market: 'IT', by: 'user:owner' }))).toMatchObject({ ok: true, productId: Q, bids: 'OBSERVE', adoptedLive: [] })
+    expect(await inW(() => enrollProduct({ productId: Q1, market: 'IT', by: 'user:owner' }))).toMatchObject({ ok: true, productId: Q, bids: 'OBSERVE', adoptedLive: [], keptInShadow: [] })
     expect(await amazonRows()).toBe(0)
   })
 
-  it('bids AUTO again puts the own campaigns LIVE that may, skips the one off the allowlist, leaves the LIVE and the shared; a rerun writes nothing', async () => {
-    const [aLive] = await rows<{ updatedAt: Date; snapshot: unknown }>('SELECT "updatedAt", snapshot FROM "BidBrainEnrollment" WHERE "campaignId" = $1', [C('a-live')])
-    const preview = await inW(() => planOverride({ productId: P, market: 'IT', set: { scope: 'PRODUCT', kind: 'LEVEL', key: 'bids', value: 'AUTO' } }))
-    expect(preview.ok && preview.plan.set).toBeNull()
-    const r = await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'AUTO', by: 'user:owner', expectVersion: 1, now: NOW }))
-    expect(r.ok).toBe(true)
-    if (!r.ok) return
-    expect(r.version).toBe(2)
-    expect(r.plan.set).toBeNull() // the adopted AUTO already says it: no new override row, only the campaigns move
-    expect(r.plan.steps?.map((s) => [s.campaignId, s.op])).toEqual([[C('a-live'), 'keep'], [C('b-asin'), 'live'], [C('c-fba'), 'live'], [C('d-off'), 'skip']])
-    expect(r.plan.steps?.find((s) => s.op === 'skip')).toMatchObject({ why: expect.stringContaining('not on the live-write allowlist') })
-    expect(await modes()).toEqual({ [C('a-live')]: 'LIVE', [C('b-asin')]: 'LIVE', [C('c-fba')]: 'LIVE', [C('e-shared')]: 'LIVE' })
-    const fresh = await rows<{ campaignId: string; snapshot: { targets: Array<{ bidCents: number }> }; enrolledBy: string }>('SELECT "campaignId", snapshot, "enrolledBy" FROM "BidBrainEnrollment" WHERE "campaignId" = ANY($1) ORDER BY "campaignId"', [[C('b-asin'), C('c-fba')]])
-    expect(fresh.map((f) => [f.enrolledBy, f.snapshot.targets[0].bidCents])).toEqual([['user:owner', 40], ['user:owner', 40]])
-    const [aAfter] = await rows<{ updatedAt: Date; snapshot: unknown }>('SELECT "updatedAt", snapshot FROM "BidBrainEnrollment" WHERE "campaignId" = $1', [C('a-live')])
-    expect(aAfter).toEqual(aLive)
-    const [snap] = await rows<{ snapshots: { bids: { data: unknown } } }>('SELECT snapshots FROM "AdsBrainEnrollment" WHERE "workspaceId" = $1 AND "productId" = $2', [W, P])
-    expect(snap.snapshots.bids.data).toEqual({ enrolled: [C('b-asin'), C('c-fba')], alreadyLive: [C('a-live')], skipped: [{ campaignId: C('d-off'), why: expect.stringContaining('allowlist') }] })
+  it('adopted brakes hold: re-applying AUTO moves nothing; ending one is a big door and runs only on the basis it was approved on', async () => {
+    const v = await version()
     const again = await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'AUTO', by: 'user:owner' }))
-    expect(again).toMatchObject({ ok: true, version: 2, plan: { unchanged: true } })
-    expect(await version()).toBe(2)
+    expect(again).toMatchObject({ ok: true, version: v, plan: { unchanged: true, needsCode: false, goesLive: [] } })
+    expect(await modes()).toEqual({ [C('a-live')]: 'LIVE', [C('e-shared')]: 'LIVE' })
+    // Ending b-asin's adopted OBSERVE puts it LIVE: the preview says it is a big door, and the change runs on its basis.
+    const preview = await inW(() => planOverride({ productId: P, market: 'IT', end: campaignOverride(C('b-asin')) }))
+    expect(preview).toMatchObject({ ok: true, plan: { goesLive: [C('b-asin')], needsCode: true, steps: [{ campaignId: C('b-asin'), op: 'live' }] } })
+    if (!preview.ok) return
+    const ended = await inW(() => endOverride({ productId: P, market: 'IT', override: campaignOverride(C('b-asin')), by: 'user:owner', expectVersion: v, expectBasis: preview.plan.basis, now: NOW }))
+    expect(ended).toMatchObject({ ok: true, version: v + 1, plan: { needsCode: true } })
+    const [b] = await rows<{ mode: string; snapshot: { targets: Array<{ bidCents: number }> }; enrolledBy: string }>('SELECT mode, snapshot, "enrolledBy" FROM "BidBrainEnrollment" WHERE "campaignId" = $1', [C('b-asin')])
+    expect([b.mode, b.enrolledBy, b.snapshot.targets[0].bidCents]).toEqual(['LIVE', 'user:owner', 40])
+    // An approval made on a plan that has moved since (the allowlist of d-off changed: a skip became a live step) runs nothing.
+    const stale = await inW(() => planOverride({ productId: P, market: 'IT', end: campaignOverride(C('d-off')) }))
+    expect(stale).toMatchObject({ ok: true, plan: { needsCode: false, steps: [{ campaignId: C('d-off'), op: 'skip', why: expect.stringContaining('allowlist') }] } })
+    if (!stale.ok) return
+    await database.pool.query('UPDATE "Campaign" SET "liveBidWritesEnabled" = true WHERE id = $1', [C('d-off')])
+    expect(await inW(() => endOverride({ productId: P, market: 'IT', override: campaignOverride(C('d-off')), by: 'user:owner', expectBasis: stale.plan.basis }))).toEqual({ ok: false, refusal: expect.stringContaining('changed since it was approved') })
+    await database.pool.query('UPDATE "Campaign" SET "liveBidWritesEnabled" = false WHERE id = $1', [C('d-off')])
+    expect(await version()).toBe(v + 1)
+    expect((await modes())[C('d-off')]).toBeUndefined()
+    // Ending c-fba's: LIVE, and the lever's snapshot names it.
+    expect(await inW(() => endOverride({ productId: P, market: 'IT', override: campaignOverride(C('c-fba')), by: 'user:owner', now: NOW }))).toMatchObject({ ok: true, plan: { goesLive: [C('c-fba')] } })
+    expect(await modes()).toEqual({ [C('a-live')]: 'LIVE', [C('b-asin')]: 'LIVE', [C('c-fba')]: 'LIVE', [C('e-shared')]: 'LIVE' })
+    const [snap] = await rows<{ snapshots: { bids: { data: unknown } } }>('SELECT snapshots FROM "AdsBrainEnrollment" WHERE "workspaceId" = $1 AND "productId" = $2', [W, P])
+    expect(snap.snapshots.bids.data).toEqual({ enrolled: [C('c-fba')], alreadyLive: [], skipped: [] })
     expect(await amazonRows()).toBe(0)
   })
 
@@ -214,39 +240,75 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-1 — a product\'s brain: enrollme
     })
   })
 
-  it('the Owner: an excluded or bids-locked campaign leaves the bid brain and never comes back while it lasts; ending it re-applies', async () => {
-    const out = await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'CAMPAIGN', campaignId: C('b-asin'), kind: 'EXCLUDE', key: '*' }, by: 'user:owner', reason: 'my own campaign', expectVersion: 2, now: NOW }))
-    expect(out).toMatchObject({ ok: true, version: 3, plan: { steps: [{ campaignId: C('b-asin'), op: 'shadow', why: expect.stringContaining('excluded by the Owner') }] } })
+  it('the Owner: an excluded or bids-locked campaign leaves the bid brain, the per-campaign tool refuses it, and ending the exclusion is a big door', async () => {
+    const v = await version()
+    const out = await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'CAMPAIGN', campaignId: C('b-asin'), kind: 'EXCLUDE', key: '*' }, by: 'user:owner', reason: 'my own campaign', expectVersion: v, now: NOW }))
+    expect(out).toMatchObject({ ok: true, version: v + 1, plan: { needsCode: false, steps: [{ campaignId: C('b-asin'), op: 'shadow', why: expect.stringContaining('excluded by the Owner') }] } })
     const lock = await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'CAMPAIGN', campaignId: C('c-fba'), kind: 'LOCK', key: 'bids' }, by: 'user:owner', now: NOW }))
-    expect(lock).toMatchObject({ ok: true, version: 4, plan: { steps: [{ campaignId: C('c-fba'), op: 'shadow', why: expect.stringContaining('locked') }] } })
+    expect(lock).toMatchObject({ ok: true, version: v + 2, plan: { steps: [{ campaignId: C('c-fba'), op: 'shadow', why: expect.stringContaining('locked') }] } })
     expect(await modes()).toMatchObject({ [C('a-live')]: 'LIVE', [C('b-asin')]: 'SHADOW', [C('c-fba')]: 'SHADOW', [C('e-shared')]: 'LIVE' })
-    // Re-applying the product's AUTO never puts them back.
-    const again = await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'AUTO', by: 'user:owner' }))
-    expect(again).toMatchObject({ ok: true, plan: { unchanged: true } })
+    // Re-applying the product's AUTO never puts them back, and the per-campaign tool refuses them with the override's words.
+    expect(await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'AUTO', by: 'user:owner' }))).toMatchObject({ ok: true, plan: { unchanged: true } })
+    expect(await toolPreview(C('b-asin'), 'live')).toEqual({ ok: false, error: expect.stringMatching(/^b-asin cannot go LIVE: it is excluded from the brain by the Owner's campaign override \(user:owner, \d{4}-\d{2}-\d{2}\): "my own campaign"\. The bid brain stays off it/) })
+    expect(await toolPreview(C('c-fba'), 'live')).toEqual({ ok: false, error: expect.stringContaining('its bids are locked at the Owner\'s own value by the Owner\'s campaign override (user:owner, ') })
     const view = await inW(() => brainView(P, 'IT'))
     const b = view!.campaigns.find((c) => c.campaignId === C('b-asin'))!
     expect(b).toMatchObject({ owner: 'product', mode: 'SHADOW', excluded: { value: true, source: 'campaign', by: 'user:owner', reason: 'my own campaign' }, bids: { effective: 'EXCLUDED' }, overrides: 1 })
     expect(view!.campaigns.find((c) => c.campaignId === C('c-fba'))!.bids).toMatchObject({ effective: 'LOCKED', lock: { source: 'campaign' } })
-    expect(view!.drift).toEqual([
-      expect.stringContaining(`not LIVE although bids resolve to AUTO (d-off)`),
-      expect.stringContaining('1 shared campaign is LIVE by a per-campaign enrollment (e-shared)'),
-    ])
-    // Ending the exclusion: the product's AUTO applies again and the campaign goes LIVE (a new snapshot).
+    expect(view!.drift).toEqual([expect.stringContaining('1 shared campaign is LIVE by a per-campaign enrollment (e-shared)')])
+    // Ending the exclusion: the product's AUTO applies again and the campaign goes LIVE — a live step, so a big door.
     const back = await inW(() => endOverride({ productId: P, market: 'IT', override: { scope: 'CAMPAIGN', campaignId: C('b-asin'), kind: 'EXCLUDE', key: '*' }, by: 'user:owner', now: NOW }))
-    expect(back).toMatchObject({ ok: true, version: 5, plan: { set: null, steps: [{ campaignId: C('b-asin'), op: 'live' }] } })
+    expect(back).toMatchObject({ ok: true, version: v + 3, plan: { set: null, needsCode: true, steps: [{ campaignId: C('b-asin'), op: 'live' }] } })
     expect((await modes())[C('b-asin')]).toBe('LIVE')
     const history = await rows<{ endedAt: Date | null; endedBy: string | null }>('SELECT "endedAt", "endedBy" FROM "AdsBrainOverride" WHERE "workspaceId" = $1 AND kind = \'EXCLUDE\'', [W])
     expect(history).toEqual([{ endedAt: expect.any(Date), endedBy: 'user:owner' }])
     expect(await amazonRows()).toBe(0)
   })
 
-  it('settings resolve campaign > product > default with who and when; a setting change moves no campaign', async () => {
-    const pace = await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'PRODUCT', kind: 'VALUE', key: 'negativesPerEntityMax', value: 900 }, by: 'user:owner', reason: 'tighter' }))
-    expect(pace.ok).toBe(true)
-    expect(pace.ok && pace.plan).toMatchObject({ set: { kind: 'VALUE', key: 'negativesPerEntityMax', value: 900 }, ends: null, unchanged: false })
-    expect(pace.ok && 'steps' in pace.plan).toBe(false)
-    await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'CAMPAIGN', campaignId: C('a-live'), kind: 'VALUE', key: 'negativesPerEntityMax', value: 500 }, by: 'user:owner-2' }))
-    await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'PRODUCT', kind: 'VALUE', key: 'portfolioCapOn', value: false }, by: 'user:owner' }))
+  it('an exclusion wins on a shared campaign: the LIVE shared campaign goes back to shadow, the tool refuses it, ending it never puts it LIVE', async () => {
+    const out = await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'CAMPAIGN', campaignId: C('e-shared'), kind: 'EXCLUDE', key: '*' }, by: 'user:owner', reason: 'not with the gloves', now: NOW }))
+    expect(out).toMatchObject({ ok: true, plan: { steps: [{ campaignId: C('e-shared'), op: 'shadow', why: expect.stringContaining('a shared campaign') }] } })
+    expect((await modes())[C('e-shared')]).toBe('SHADOW')
+    expect(await toolPreview(C('e-shared'), 'live')).toEqual({ ok: false, error: expect.stringContaining('excluded from the brain by the Owner\'s campaign override') })
+    const back = await inW(() => endOverride({ productId: P, market: 'IT', override: { scope: 'CAMPAIGN', campaignId: C('e-shared'), kind: 'EXCLUDE', key: '*' }, by: 'user:owner', now: NOW }))
+    expect(back).toMatchObject({ ok: true, plan: { steps: [], goesLive: [], needsCode: false } })
+    expect((await modes())[C('e-shared')]).toBe('SHADOW')
+    expect(await amazonRows()).toBe(0)
+  })
+
+  it('by hand: the per-campaign tool\'s op shadow, approved by a person, is kept as a campaign choice the product\'s AUTO leaves alone; op live too', async () => {
+    // Nothing to record when the campaign already resolves to what was done by hand.
+    expect(await inW(() => recordCampaignBidsChoice({ campaignId: C('a-live'), level: 'AUTO', by: 'user:owner' }))).toBeNull()
+    const result = await inW(async () => {
+      const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: 'u-asker' } })
+      const asked = await runOrQueueTool('set-bid-brain-enrollment', { campaignId: C('a-live'), op: 'shadow', why: 'test by hand' }, person('u-asker', 'claude'), run.id)
+      expect(asked).toMatchObject({ ok: true, mode: 'queued' })
+      return decideApproval(asked.approvalId!, 'approve', person('u-approver', 'app'))
+    })
+    expect(result).toMatchObject({ ok: true, status: 'executed' })
+    expect((await modes())[C('a-live')]).toBe('SHADOW')
+    expect((await inW(() => brainSettings(P, 'IT', C('a-live'))))?.levers.bids).toMatchObject({ level: { value: 'OBSERVE', source: 'campaign', reason: expect.stringContaining('set-bid-brain-enrollment op shadow') }, effective: 'OBSERVE' })
+    expect(await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'AUTO', by: 'user:owner' }))).toMatchObject({ ok: true, plan: { unchanged: true } })
+    expect((await modes())[C('a-live')]).toBe('SHADOW')
+    // Op live by hand is kept too — the tool's own transaction (a big door: the approver's code), run here directly.
+    await inW(() => inDatabaseTransaction(database.client as never, async () => {
+      await setEnrollment({ campaignId: C('a-live'), marketplace: 'IT', op: 'live', by: 'user:owner', now: NOW })
+      return recordCampaignBidsChoice({ campaignId: C('a-live'), level: 'AUTO', by: 'user:owner', reason: 'set-bid-brain-enrollment op live: test' })
+    }, { isolationLevel: 'Serializable' }))
+    expect((await modes())[C('a-live')]).toBe('LIVE')
+    expect((await inW(() => brainSettings(P, 'IT', C('a-live'))))?.levers.bids).toMatchObject({ level: { value: 'AUTO', source: 'campaign' }, effective: 'AUTO' })
+    expect((await rows<{ n: number }>('SELECT count(*)::int n FROM "AdsBrainOverride" WHERE "workspaceId" = $1 AND "campaignId" = $2 AND kind = \'LEVEL\' AND "endedAt" IS NULL', [W, C('a-live')]))[0].n).toBe(1)
+    expect(await amazonRows()).toBe(0)
+  })
+
+  it('settings resolve campaign > product > default with who and when; the warning level never above the maximum; a setting moves no campaign', async () => {
+    const set = (override: Parameters<typeof setOverride>[0]['override'], by = 'user:owner', reason?: string) => inW(() => setOverride({ productId: P, market: 'IT', override, by, reason }))
+    expect(await set({ scope: 'PRODUCT', kind: 'VALUE', key: 'negativesPerEntityWarn', value: 400 }, 'user:owner', 'warn early')).toMatchObject({ ok: true })
+    const max = await set({ scope: 'PRODUCT', kind: 'VALUE', key: 'negativesPerEntityMax', value: 900 }, 'user:owner', 'tighter')
+    expect(max.ok && max.plan).toMatchObject({ set: { kind: 'VALUE', key: 'negativesPerEntityMax', value: 900 }, ends: null, unchanged: false, needsCode: false })
+    expect(max.ok && 'steps' in max.plan).toBe(false)
+    expect(await set({ scope: 'CAMPAIGN', campaignId: C('a-live'), kind: 'VALUE', key: 'negativesPerEntityMax', value: 500 }, 'user:owner-2')).toMatchObject({ ok: true })
+    expect(await set({ scope: 'PRODUCT', kind: 'VALUE', key: 'portfolioCapOn', value: false })).toMatchObject({ ok: true })
     const forA = await inW(() => brainSettings(P, 'IT', C('a-live')))
     const forD = await inW(() => brainSettings(P, 'IT', C('d-off')))
     expect(forA?.values.negativesPerEntityMax).toMatchObject({ value: 500, source: 'campaign', by: 'user:owner-2', at: expect.any(String) })
@@ -254,9 +316,14 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-1 — a product\'s brain: enrollme
     expect(forD?.values.portfolioCapOn).toMatchObject({ value: false, source: 'product' })
     expect(forD?.values.paceTargetPct).toMatchObject({ value: 90, source: 'default' })
     // A second choice of the same thing replaces the first (one open row per thing).
-    await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'PRODUCT', kind: 'VALUE', key: 'negativesPerEntityMax', value: 850 }, by: 'user:owner' }))
+    expect(await set({ scope: 'PRODUCT', kind: 'VALUE', key: 'negativesPerEntityMax', value: 850 })).toMatchObject({ ok: true })
     expect((await rows<{ n: number }>('SELECT count(*)::int n FROM "AdsBrainOverride" WHERE "workspaceId" = $1 AND key = \'negativesPerEntityMax\' AND scope = \'PRODUCT\' AND "endedAt" IS NULL', [W]))[0].n).toBe(1)
     expect((await inW(() => brainSettings(P, 'IT', C('d-off'))))?.values.negativesPerEntityMax.value).toBe(850)
+    // The warning level never above the maximum: for the product, and for a campaign with its own value.
+    const v = await version()
+    expect(await set({ scope: 'PRODUCT', kind: 'VALUE', key: 'negativesPerEntityWarn', value: 950 })).toEqual({ ok: false, refusal: expect.stringMatching(/^negativesPerEntityWarn \(950, .*\) would be above negativesPerEntityMax \(850, the Owner's product override/) })
+    expect(await set({ scope: 'CAMPAIGN', campaignId: C('a-live'), kind: 'VALUE', key: 'negativesPerEntityMax', value: 300 })).toEqual({ ok: false, refusal: expect.stringContaining(`on campaign ${C('a-live')}`) })
+    expect(await version()).toBe(v)
     expect(await amazonRows()).toBe(0)
   })
 
@@ -281,18 +348,26 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-1 — a product\'s brain: enrollme
     expect(await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE', by: 'user:owner', expectVersion: v - 1 }))).toEqual({ ok: false, refusal: expect.stringContaining('changed since it was read') })
     expect(await inW(() => setOverride({ productId: P, market: 'IT', override: { scope: 'CAMPAIGN', campaignId: C('g-none'), kind: 'EXCLUDE', key: '*' }, by: 'user:owner' }))).toEqual({ ok: false, refusal: expect.stringContaining('does not advertise this product') })
     expect(await inW(() => setLever({ productId: 'no-such-product', market: 'IT', lever: 'bids', level: 'AUTO', by: 'user:owner' }))).toMatchObject({ ok: false })
+    // Never at a weaker level: inside an outer transaction that is not Serializable, a change refuses to run.
+    await expect(inW(() => inDatabaseTransaction(database.client as never, () => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE', by: 'user:owner' }), { isolationLevel: 'RepeatableRead' })))
+      .rejects.toThrow(/isolation does not match/)
     expect(await version()).toBe(v)
     expect(await modes()).toEqual(before)
   })
 
-  it('the product\'s bids lever back to OBSERVE takes every own campaign back to shadow; the shared one stays LIVE', async () => {
+  it('the product\'s bids lever back to OBSERVE takes every own campaign back to shadow, a HELD one included; a campaign\'s own AUTO stays', async () => {
+    expect(await inW(() => holdCampaigns({ campaignIds: [C('b-asin')], until: new Date(Date.now() + 7 * 86_400_000), by: 'auto-undo', reason: 'test hold' }))).toEqual([C('b-asin')])
+    expect((await modes())[C('b-asin')]).toBe('HELD')
     const r = await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE', by: 'user:owner', now: NOW }))
-    expect(r.ok && r.plan.steps?.filter((s) => s.op === 'shadow').map((s) => s.campaignId).sort()).toEqual(['a-live', 'b-asin'].map(C).sort())
-    expect(await modes()).toEqual({ [C('a-live')]: 'SHADOW', [C('b-asin')]: 'SHADOW', [C('c-fba')]: 'SHADOW', [C('e-shared')]: 'LIVE' })
+    expect(r.ok && r.plan.steps?.filter((s) => s.op === 'shadow').map((s) => s.campaignId)).toEqual([C('b-asin')])
+    expect(r.ok && r.plan.needsCode).toBe(false)
+    // a-live keeps its own AUTO (a campaign choice beats the product's level).
+    expect(await modes()).toEqual({ [C('a-live')]: 'LIVE', [C('b-asin')]: 'SHADOW', [C('c-fba')]: 'SHADOW', [C('e-shared')]: 'SHADOW' })
+    expect((await rows<{ heldUntil: Date | null; heldBy: string | null }>('SELECT "heldUntil", "heldBy" FROM "BidBrainEnrollment" WHERE "campaignId" = $1', [C('b-asin')]))[0]).toEqual({ heldUntil: null, heldBy: null })
     const s = await inW(() => brainSettings(P, 'IT'))
     expect(s?.levers.bids).toMatchObject({ level: { value: 'OBSERVE', source: 'product', by: 'user:owner' }, effective: 'OBSERVE' })
     // The adopted AUTO is history now, ended by this change.
-    expect((await rows<{ n: number }>('SELECT count(*)::int n FROM "AdsBrainOverride" WHERE "workspaceId" = $1 AND kind = \'LEVEL\' AND key = \'bids\' AND "productId" = $2 AND "endedAt" IS NOT NULL', [W, P]))[0].n).toBe(1)
+    expect((await rows<{ n: number }>('SELECT count(*)::int n FROM "AdsBrainOverride" WHERE "workspaceId" = $1 AND kind = \'LEVEL\' AND key = \'bids\' AND scope = \'PRODUCT\' AND "productId" = $2 AND "endedAt" IS NOT NULL', [W, P]))[0].n).toBe(1)
     expect(await amazonRows()).toBe(0)
   })
 })

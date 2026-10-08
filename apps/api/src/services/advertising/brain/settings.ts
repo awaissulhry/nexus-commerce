@@ -133,7 +133,10 @@ export interface BrainSettings {
 const DEFAULT: Provenance = { source: 'default', overrideId: null, by: null, at: null, reason: null }
 const iso = (d: Date | string) => (d instanceof Date ? d.toISOString() : String(d))
 const provenanceOf = (o: OverrideRow): Provenance => ({ source: o.scope === 'CAMPAIGN' ? 'campaign' : 'product', overrideId: o.id, by: o.by, at: iso(o.createdAt), reason: o.reason })
-const who = (p: Provenance) => (p.source === 'default' ? 'the brain\'s default' : `the Owner's ${p.source} override${p.by ? ` (${p.by}${p.at ? `, ${p.at.slice(0, 10)}` : ''})` : ''}`)
+/** "the Owner's campaign override (user:x, 2026-10-08)" — who set a resolved value, and when. */
+export const describeProvenance = (p: Provenance): string =>
+  p.source === 'default' ? 'the brain\'s default' : `the Owner's ${p.source} override${p.by ? ` (${p.by}${p.at ? `, ${p.at.slice(0, 10)}` : ''})` : ''}`
+const who = describeProvenance
 
 /**
  * Resolve the brain's settings for a product in a market, and for one campaign when given. `overrides` may hold any
@@ -191,4 +194,24 @@ export function resolveBrainSettings(input: { productId: string; market: string;
     values[key] = row ? { value: row.value as SettingValue, ...provenanceOf(row) } : { value: defaults[key], ...DEFAULT }
   }
   return { productId: input.productId, market: input.market, campaignId, enrolled: input.enrolled, excluded, levers, values, ignored }
+}
+
+/**
+ * Why the Owner keeps the bid brain off this campaign (its exclusion, or a lock of its whole bids lever), naming the
+ * override, who set it, when and why; null when nothing does. What set-bid-brain-enrollment refuses op live and release by.
+ */
+export function ownerBrakeOf(s: Pick<BrainSettings, 'excluded' | 'levers'>): string | null {
+  const reason = (p: Provenance) => (p.reason ? `: "${p.reason}"` : '')
+  if (s.excluded.value) return `it is excluded from the brain by ${describeProvenance(s.excluded)}${reason(s.excluded)}`
+  const lock = s.levers.bids.lock
+  if (lock) return `its bids are locked at the Owner's own value by ${describeProvenance(lock)}${reason(lock)}`
+  return null
+}
+
+/** Two settings checked against each other: the warning level never above the maximum (where each comes from named). */
+export function settingsPairRefusal(values: Pick<BrainSettings['values'], 'negativesPerEntityWarn' | 'negativesPerEntityMax'>, where = ''): string | null {
+  const warn = values.negativesPerEntityWarn
+  const max = values.negativesPerEntityMax
+  if (Number(warn.value) <= Number(max.value)) return null
+  return `negativesPerEntityWarn (${warn.value}, ${describeProvenance(warn)}) would be above negativesPerEntityMax (${max.value}, ${describeProvenance(max)})${where}: the warning must come before the maximum`
 }
