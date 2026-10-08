@@ -8,9 +8,11 @@
  *     Send to FBA · 6 SKUs                                         ✕
  *     From [IT-MAIN · Rimini]   To [Amazon IT]   Ready [08/10/2026]
  *     Prep by [Amazon|Seller]   Labels by [Amazon|Seller]   Saved for these SKUs    ← only when one is "not set"
- *     SKU        Free          Cases   Units   Boxes        Check
- *     GALE-M     48 · 4 cases  [- 2 +] [- 0 +] 2            Ready
- *     GALE-L     12            —       [- 5 +] 1 mixed      Ready
+ *     SKU        Free             Cases         Units   Boxes        Check
+ *     GALE-M     48 · 4 cases     [- 2 +]       [- 0 +] 2            Ready
+ *     GALE-S     36 · 2×12 + 1×6  [- 2 ×12 +]   [- 0 +] 3            Ready     ← several case sizes: one stepper each
+ *                                 [- 1 ×6 +]
+ *     GALE-L     12               —             [- 5 +] 1 mixed      Ready
  *     Loose units go in 1 mixed box · 60 × 40 × 40 cm   ▸ Change box size
  *     [ SKUs 2 | Units 29 | Boxes 3 | Weight 31.4 kg ]
  *     ⚠ one Banner per kind of problem
@@ -18,12 +20,12 @@
  *     → Done: "Plan sent to Amazon. …"   [Undo]            [Follow it] [Done]
  */
 import {
-  FBA_SEND_COPY, FBA_SEND_MAX_SKUS, MIXED_BOX_DEFAULT, isFbaPlanOpen, isFbaPlanStatus, sendSummary,
-  type FbaBoxResult, type FbaCreateRequest, type FbaMixedBox, type FbaPlanView, type FbaSendChoice, type FbaSendDraft,
+  FBA_SEND_COPY, FBA_SEND_MAX_SKUS, MIXED_BOX_DEFAULT, isFbaPlanOpen, isFbaPlanStatus, lineCases, sendSummary,
+  type FbaBoxResult, type FbaCaseSize, type FbaCreateRequest, type FbaMixedBox, type FbaPlanView, type FbaSendChoice, type FbaSendDraft,
   type FbaSendLine, type FbaSendLocation, type FbaSendMarket, type FbaSendOwners, type FbaSendProblem, type FbaSendProblemCode,
   type FbaSendSku, type FbaSendSummary,
 } from '@nexus/shared/fba-send'
-import type { CaseOwner } from '@nexus/shared/stock-cases'
+import type { CaseCount, CaseOwner } from '@nexus/shared/stock-cases'
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { commandConflictMessage, sendCommand, type CommandKey } from '@/lib/command-key'
@@ -100,7 +102,7 @@ export const OWNER_OPTIONS: ReadonlyArray<{ value: CaseOwner; label: string }> =
 /** A SKU of this send has no prep or label owner: the dialog asks once, and the server saves the answer for those SKUs. */
 export const ownersAsked = (draft: Pick<FbaSendDraft, 'skus'>): boolean => draft.skus.some((s) => s.prepOwner === null || s.labelOwner === null)
 
-const zero = (productId: string): FbaSendLine => ({ productId, cases: 0, looseUnits: 0 })
+const zero = (productId: string): FbaSendLine => ({ productId, cases: [], looseUnits: 0 })
 
 /** Every SKU at 0 (the Owner's default), keeping what was typed for a SKU still in the new draft (From / To changed). */
 export function startLines(draft: Pick<FbaSendDraft, 'skus'>, keep?: SendLines): Record<string, FbaSendLine> {
@@ -137,7 +139,8 @@ export function createRequest(draft: FbaSendDraft, form: SendForm): FbaCreateReq
     from: draft.from.code,
     market: draft.market,
     readyToShipOn: form.readyToShipOn,
-    lines: choice.lines.filter((l) => l.cases > 0 || l.looseUnits > 0).map((l) => ({ productId: l.productId, cases: l.cases, looseUnits: l.looseUnits })),
+    lines: choice.lines.filter((l) => lineCases(l) > 0 || l.looseUnits > 0)
+      .map((l) => ({ productId: l.productId, cases: l.cases.filter((c) => c.cases > 0), looseUnits: l.looseUnits })),
     mixedBox: choice.mixedBox ?? null,
     owners: choice.owners ?? null,
   }
@@ -154,9 +157,24 @@ export function primaryOf(summary: FbaSendSummary, busy: 'reading' | 'creating' 
 
 /** A SKU's Units stepper may go up to its free units (the shared check still names a total over free). */
 export const unitsMax = (sku: Pick<FbaSendSku, 'free'>): number => Math.max(0, sku.free)
-/** A SKU's Cases stepper: up to its free sealed cases; null = no case size (no stepper). */
-export const casesMax = (sku: Pick<FbaSendSku, 'unitsPerCase' | 'freeSealed'>): number | null =>
-  typeof sku.unitsPerCase === 'number' && sku.unitsPerCase >= 1 ? Math.max(0, sku.freeSealed) : null
+/** A Cases stepper of one case size: up to that size's free sealed cases at From. */
+export const casesMax = (sku: Pick<FbaSendSku, 'freeSealed'>, unitsPerCase: number): number =>
+  Math.max(0, sku.freeSealed.find((c) => c.unitsPerCase === unitsPerCase)?.cases ?? 0)
+
+/** A SKU's Cases steppers: one per case size, biggest first, each with its max; [] = no case size (no stepper). */
+export function caseSteppers(sku: Pick<FbaSendSku, 'caseSizes' | 'freeSealed'>): Array<{ unitsPerCase: number; max: number }> {
+  return [...sku.caseSizes].sort((a, b) => b.unitsPerCase - a.unitsPerCase).map((c) => ({ unitsPerCase: c.unitsPerCase, max: casesMax(sku, c.unitsPerCase) }))
+}
+
+/** The cases of one size a line sends (0 when it names none). */
+export const casesOf = (line: Pick<FbaSendLine, 'cases'> | undefined, unitsPerCase: number): number =>
+  line?.cases.find((c) => c.unitsPerCase === unitsPerCase)?.cases ?? 0
+
+/** The line with `n` cases of this size (the other sizes kept), biggest size first. */
+export function withCases(line: FbaSendLine, unitsPerCase: number, n: number): FbaSendLine {
+  const cases = [...line.cases.filter((c) => c.unitsPerCase !== unitsPerCase), { unitsPerCase, cases: n }]
+  return { ...line, cases: cases.sort((a, b) => b.unitsPerCase - a.unitsPerCase) }
+}
 
 /** The Boxes column of one SKU: `3` case boxes, `2 mixed` (the mixed boxes its loose units are in), `3 + 2 mixed`, `—`. */
 export function skuBoxes(plan: Pick<FbaBoxResult, 'boxes'>, productId: string): string {
@@ -179,7 +197,7 @@ export function skuCheck(summary: Pick<FbaSendSummary, 'problems'>, productId: s
   const mine = summary.problems.filter((p) => p.productId === productId)
   const first = mine.find((p) => p.blocking) ?? mine[0]
   if (first) return { tone: first.blocking ? 'danger' : 'warning', text: FBA_SEND_COPY.problemTitle[first.code], message: first.message }
-  return line && (line.cases > 0 || line.looseUnits > 0) ? { tone: 'success', text: 'Ready', message: null } : null
+  return line && (lineCases(line) > 0 || line.looseUnits > 0) ? { tone: 'success', text: 'Ready', message: null } : null
 }
 
 export interface ProblemBanner {
@@ -276,6 +294,33 @@ const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Numb
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 const owner = (v: unknown): CaseOwner | null => (v === 'AMAZON' || v === 'SELLER' ? v : null)
 
+const isSize = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1
+
+/** A SKU's case sizes as sent (biggest first); a size with no whole units per case, or named twice, is dropped. */
+function parseCaseSizes(raw: unknown): FbaCaseSize[] {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<number>()
+  return raw.flatMap((x): FbaCaseSize[] => {
+    const c = x as Record<string, unknown> | null
+    if (!c || !isSize(c.unitsPerCase) || seen.has(c.unitsPerCase)) return []
+    seen.add(c.unitsPerCase)
+    const d = c.case as Record<string, unknown> | null | undefined
+    return [{
+      unitsPerCase: c.unitsPerCase,
+      case: d && typeof d === 'object' ? { lengthCm: num(d.lengthCm), widthCm: num(d.widthCm), heightCm: num(d.heightCm), weightKg: num(d.weightKg) } : null,
+    }]
+  }).sort((a, b) => b.unitsPerCase - a.unitsPerCase)
+}
+
+/** Free sealed cases per size as sent; malformed entries dropped, a count below 0 read as 0. */
+function parseCaseCounts(raw: unknown): CaseCount[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((x): CaseCount[] => {
+    const c = x as Record<string, unknown> | null
+    return c && isSize(c.unitsPerCase) ? [{ unitsPerCase: c.unitsPerCase, cases: Math.max(0, Math.floor(num(c.cases))) }] : []
+  }).sort((a, b) => b.unitsPerCase - a.unitsPerCase)
+}
+
 /** The draft as the dialog reads it: a body without `skus` is refused; anything optional falls back to "none". */
 export function parseSendDraft(body: unknown): FbaSendDraft {
   const b = body && typeof body === 'object' ? (body as Record<string, unknown>) : null
@@ -313,20 +358,18 @@ export function parseSendDraft(body: unknown): FbaSendDraft {
     skus: b.skus.flatMap((raw): FbaSendSku[] => {
       const s = raw as Record<string, unknown> | null
       if (!s || typeof s.productId !== 'string') return []
-      const c = s.case as Record<string, unknown> | null | undefined
       const u = s.unit as Record<string, unknown> | null | undefined
       return [{
         productId: s.productId,
         sku: str(s.sku) ?? s.productId,
         msku: str(s.msku),
-        unitsPerCase: typeof s.unitsPerCase === 'number' && s.unitsPerCase >= 1 ? s.unitsPerCase : null,
-        case: c && typeof c === 'object' ? { lengthCm: num(c.lengthCm), widthCm: num(c.widthCm), heightCm: num(c.heightCm), weightKg: num(c.weightKg) } : null,
+        caseSizes: parseCaseSizes(s.caseSizes),
         unitWeightKg: typeof s.unitWeightKg === 'number' && s.unitWeightKg > 0 ? s.unitWeightKg : null,
         unit: u && typeof u === 'object' ? { lengthCm: num(u.lengthCm), widthCm: num(u.widthCm), heightCm: num(u.heightCm) } : null,
         name: str(s.name) ?? '',
         onHand: num(s.onHand),
         free: num(s.free),
-        freeSealed: num(s.freeSealed),
+        freeSealed: parseCaseCounts(s.freeSealed),
         freeLoose: num(s.freeLoose),
         prepOwner: owner(s.prepOwner),
         labelOwner: owner(s.labelOwner),

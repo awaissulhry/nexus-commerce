@@ -11,9 +11,9 @@ import { MatrixSelectionActions } from '../MatrixSelectionActions'
 import type { MatrixRead } from '../contract'
 import { isFbaPlanEvent } from './plansDrawer'
 import {
-  OWNERS_DEFAULT, SEND_HELD, casesMax, choiceOf, createRequest, draftUrl, errorSentence, fetchSendDraft, hasAmazonListing, openPlans, ownersAsked,
+  OWNERS_DEFAULT, SEND_HELD, caseSteppers, casesMax, casesOf, choiceOf, createRequest, draftUrl, errorSentence, fetchSendDraft, hasAmazonListing, openPlans, ownersAsked,
   parseSendDraft, parseSide, postCancelPlan, postSendPlan, primaryOf, problemBanners, problemsOf, sendDescription, sendHeld, sendProductIds,
-  skuBoxes, skuCheck, startForm, startLines, summarize, summaryLine, unitsMax, type SendForm,
+  skuBoxes, skuCheck, startForm, startLines, summarize, summaryLine, unitsMax, withCases, type SendForm,
 } from './sendToFba'
 
 /**
@@ -23,10 +23,16 @@ import {
  */
 
 const sku = (over: Partial<FbaSendSku> & Pick<FbaSendSku, 'productId' | 'sku'>): FbaSendSku => ({
-  msku: over.sku, unitsPerCase: null, case: null, unitWeightKg: 0.9, unit: { lengthCm: 30, widthCm: 20, heightCm: 10 },
-  name: '', onHand: 50, free: 50, freeSealed: 0, freeLoose: 50, prepOwner: 'SELLER', labelOwner: 'SELLER', openPlanUnits: 0, ...over,
+  msku: over.sku, caseSizes: [], unitWeightKg: 0.9, unit: { lengthCm: 30, widthCm: 20, heightCm: 10 },
+  name: '', onHand: 50, free: 50, freeSealed: [], freeLoose: 50, prepOwner: 'SELLER', labelOwner: 'SELLER', openPlanUnits: 0, ...over,
 })
-const GALE_M = sku({ productId: 'p-m', sku: 'GALE-M', unitsPerCase: 12, case: { lengthCm: 60, widthCm: 40, heightCm: 35, weightKg: 14.5 }, free: 48, freeSealed: 4, freeLoose: 0 })
+const GALE_M = sku({ productId: 'p-m', sku: 'GALE-M', caseSizes: [{ unitsPerCase: 12, case: { lengthCm: 60, widthCm: 40, heightCm: 35, weightKg: 14.5 } }], free: 48, freeSealed: [{ unitsPerCase: 12, cases: 4 }], freeLoose: 0 })
+// Two case sizes: 2×12 + 1×6 sealed and free, 3 loose (39 units).
+const GALE_S = sku({
+  productId: 'p-s', sku: 'GALE-S', free: 39, freeLoose: 3,
+  caseSizes: [{ unitsPerCase: 6, case: { lengthCm: 30, widthCm: 40, heightCm: 35, weightKg: 7.4 } }, { unitsPerCase: 12, case: { lengthCm: 60, widthCm: 40, heightCm: 35, weightKg: 14.5 } }],
+  freeSealed: [{ unitsPerCase: 12, cases: 2 }, { unitsPerCase: 6, cases: 1 }],
+})
 const GALE_L = sku({ productId: 'p-l', sku: 'GALE-L', free: 12, freeLoose: 12 })
 const draftOf = (over: Partial<FbaSendDraft> = {}): FbaSendDraft => ({
   from: { id: 'loc-1', code: 'IT-MAIN', name: 'Main warehouse', town: 'Rimini', country: 'IT', isDefault: true },
@@ -40,9 +46,17 @@ const draftOf = (over: Partial<FbaSendDraft> = {}): FbaSendDraft => ({
   skus: [GALE_M, GALE_L],
   ...over,
 })
-const withLines = (form: SendForm, lines: Record<string, { cases?: number; looseUnits?: number }>): SendForm => ({
+/** `cases: 2` = two cases of 12 (GALE-M's one size); a list names the sizes. */
+const withLines = (form: SendForm, lines: Record<string, { cases?: number | Array<{ unitsPerCase: number; cases: number }>; looseUnits?: number }>): SendForm => ({
   ...form,
-  lines: { ...form.lines, ...Object.fromEntries(Object.entries(lines).map(([id, l]) => [id, { productId: id, cases: l.cases ?? 0, looseUnits: l.looseUnits ?? 0 }])) },
+  lines: {
+    ...form.lines,
+    ...Object.fromEntries(Object.entries(lines).map(([id, l]) => [id, {
+      productId: id,
+      cases: Array.isArray(l.cases) ? l.cases : l.cases ? [{ unitsPerCase: 12, cases: l.cases }] : [],
+      looseUnits: l.looseUnits ?? 0,
+    }])),
+  },
 })
 
 describe('the toolbar: who is sent and when it is offered', () => {
@@ -98,7 +112,7 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
   it('opens at 0 units, on the server\'s ready day and box, owners Seller; Create plan is held "Add units to send"', () => {
     const draft = draftOf()
     const form = startForm(draft)
-    expect(form.lines).toEqual({ 'p-m': { productId: 'p-m', cases: 0, looseUnits: 0 }, 'p-l': { productId: 'p-l', cases: 0, looseUnits: 0 } })
+    expect(form.lines).toEqual({ 'p-m': { productId: 'p-m', cases: [], looseUnits: 0 }, 'p-l': { productId: 'p-l', cases: [], looseUnits: 0 } })
     expect(form.readyToShipOn).toBe('2026-10-08')
     expect(form.mixedBox).toEqual(MIXED_BOX_DEFAULT)
     expect(form.owners).toEqual(OWNERS_DEFAULT)
@@ -124,7 +138,7 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     expect(skuBoxes(summary.plan, 'nobody')).toBe('—')
     expect(summary.mixedLine).toBe('Loose units go in 1 mixed box · 60 × 40 × 40 cm')
     expect(skuCheck(summary, 'p-m', form.lines['p-m'])).toEqual({ tone: 'success', text: 'Ready', message: null })
-    expect(skuCheck(summary, 'p-l', { productId: 'p-l', cases: 0, looseUnits: 0 })).toBeNull()
+    expect(skuCheck(summary, 'p-l', { productId: 'p-l', cases: [], looseUnits: 0 })).toBeNull()
   })
 
   it('a SKU with cases AND loose units shows both box kinds', () => {
@@ -134,8 +148,9 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
   })
 
   it('the steppers: Cases only with a case size, up to the free sealed cases; Units up to the free units', () => {
-    expect(casesMax(GALE_M)).toBe(4)
-    expect(casesMax(GALE_L)).toBeNull()
+    expect(caseSteppers(GALE_M)).toEqual([{ unitsPerCase: 12, max: 4 }])
+    expect(casesMax(GALE_M, 12)).toBe(4)
+    expect(caseSteppers(GALE_L)).toEqual([])
     expect(unitsMax(GALE_L)).toBe(12)
     expect(unitsMax({ free: -3 })).toBe(0)
   })
@@ -159,7 +174,7 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     const summary = summarize(draft, withLines(startForm(draft), { 'p-l': { looseUnits: 2 } }))
     expect(problemBanners(summary.problems)).toEqual([{ code: 'IN_OPEN_PLAN', title: FBA_SEND_COPY.problemTitle.IN_OPEN_PLAN, tone: 'warning', messages: [FBA_SEND_COPY.problem.inOpenPlan('GALE-L', 4)], whole: false }])
     expect(primaryOf(summary, null).held).toBeNull()
-    expect(skuCheck(summary, 'p-l', { productId: 'p-l', cases: 0, looseUnits: 2 })).toMatchObject({ tone: 'warning' })
+    expect(skuCheck(summary, 'p-l', { productId: 'p-l', cases: [], looseUnits: 2 })).toMatchObject({ tone: 'warning' })
   })
 
   it('a mixed box over 63.5 cm is refused (EU limit) and no mixed box is built', () => {
@@ -186,14 +201,14 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
   it('From / To changed: the new draft keeps what was typed for the SKUs still there', () => {
     const draft = draftOf()
     const typed = withLines(startForm(draft), { 'p-m': { cases: 2 }, 'p-l': { looseUnits: 4 } }).lines
-    expect(startLines(draftOf({ skus: [GALE_L] }), typed)).toEqual({ 'p-l': { productId: 'p-l', cases: 0, looseUnits: 4 } })
+    expect(startLines(draftOf({ skus: [GALE_L] }), typed)).toEqual({ 'p-l': { productId: 'p-l', cases: [], looseUnits: 4 } })
   })
 
   it('the request: From by code, the market, the day, ONLY the SKUs with units; the box only when changed', () => {
     const draft = draftOf()
     const form = withLines(startForm(draft), { 'p-l': { looseUnits: 5 } })
     expect(createRequest(draft, form)).toEqual({
-      from: 'IT-MAIN', market: 'IT', readyToShipOn: '2026-10-08', lines: [{ productId: 'p-l', cases: 0, looseUnits: 5 }], mixedBox: null, owners: null,
+      from: 'IT-MAIN', market: 'IT', readyToShipOn: '2026-10-08', lines: [{ productId: 'p-l', cases: [], looseUnits: 5 }], mixedBox: null, owners: null,
     })
     const box = { ...MIXED_BOX_DEFAULT, heightCm: 30 }
     expect(createRequest(draft, { ...form, mixedBox: box })?.mixedBox).toEqual(box)
@@ -204,6 +219,58 @@ describe('the dialog: defaults, table, counts and the button — the shared rule
     const summary = summarize(draftOf(), withLines(startForm(draftOf()), { 'p-l': { looseUnits: 1 } }))
     expect(primaryOf(summary, 'reading')).toEqual({ label: 'Create plan · 1 unit', held: 'Reading the warehouse…' })
     expect(primaryOf(summary, 'creating')).toEqual({ label: 'Creating…', held: 'Creating…' })
+  })
+})
+
+describe('several case sizes: one Cases stepper per size', () => {
+  it('one stepper per size, biggest first, each up to that size\'s free sealed cases', () => {
+    expect(caseSteppers(GALE_S)).toEqual([{ unitsPerCase: 12, max: 2 }, { unitsPerCase: 6, max: 1 }])
+    expect(casesMax(GALE_S, 6)).toBe(1)
+    expect(casesMax(GALE_S, 8)).toBe(0)
+  })
+
+  it('a stepper changes its own size only; the line keeps the sizes biggest first', () => {
+    const line = withCases(withCases({ productId: 'p-s', cases: [], looseUnits: 3 }, 6, 1), 12, 2)
+    expect(line).toEqual({ productId: 'p-s', cases: [{ unitsPerCase: 12, cases: 2 }, { unitsPerCase: 6, cases: 1 }], looseUnits: 3 })
+    expect(casesOf(line, 12)).toBe(2)
+    expect(casesOf(line, 6)).toBe(1)
+    expect(casesOf(undefined, 6)).toBe(0)
+    expect(withCases(line, 12, 0).cases).toEqual([{ unitsPerCase: 12, cases: 0 }, { unitsPerCase: 6, cases: 1 }])
+  })
+
+  it('the counts, the boxes and the request: cases of both sizes, the 0s left out of the request', () => {
+    const draft = draftOf({ skus: [GALE_S, GALE_L] })
+    const form = withLines(startForm(draft), { 'p-s': { cases: [{ unitsPerCase: 12, cases: 2 }, { unitsPerCase: 6, cases: 1 }], looseUnits: 0 } })
+    const summary = summarize(draft, form)
+    expect(summary).toMatchObject({ units: 30, cases: 3, caseBoxes: 3, held: null })
+    expect(skuBoxes(summary.plan, 'p-s')).toBe('3')
+    expect(skuCheck(summary, 'p-s', form.lines['p-s'])).toEqual({ tone: 'success', text: 'Ready', message: null })
+    const zeroSix = withLines(startForm(draft), { 'p-s': { cases: [{ unitsPerCase: 12, cases: 1 }, { unitsPerCase: 6, cases: 0 }] } })
+    expect(createRequest(draft, zeroSix)?.lines).toEqual([{ productId: 'p-s', cases: [{ unitsPerCase: 12, cases: 1 }], looseUnits: 0 }])
+  })
+
+  it('more cases of one size than free: that size is named, the other size is fine', () => {
+    const draft = draftOf({ skus: [GALE_S] })
+    const summary = summarize(draft, withLines(startForm(draft), { 'p-s': { cases: [{ unitsPerCase: 12, cases: 1 }, { unitsPerCase: 6, cases: 2 }] } }))
+    expect(problemBanners(summary.problems)).toEqual([{
+      code: 'OVER_FREE_CASES', title: FBA_SEND_COPY.problemTitle.OVER_FREE_CASES, tone: 'danger', whole: false,
+      messages: [FBA_SEND_COPY.problem.overFreeCases('GALE-S', 6, 2, 1, 'IT-MAIN')],
+    }])
+  })
+
+  it('the Free column names the free cases of each size', () => {
+    expect(FBA_SEND_COPY.free(GALE_S.free, GALE_S.freeSealed)).toBe('39 · 2×12 + 1×6')
+    expect(FBA_SEND_COPY.free(GALE_M.free, GALE_M.freeSealed)).toBe('48 · 4 cases')
+  })
+
+  it('the draft reads every size and its free sealed cases, biggest first; a size named twice is dropped', () => {
+    const d = parseSendDraft({ skus: [{
+      productId: 'p-s', sku: 'GALE-S',
+      caseSizes: [{ unitsPerCase: 6, case: { lengthCm: 30, widthCm: 40, heightCm: 35, weightKg: 7.4 } }, { unitsPerCase: 12, case: null }, { unitsPerCase: 6, case: null }],
+      freeSealed: [{ unitsPerCase: 6, cases: 1 }, { unitsPerCase: 12, cases: 2 }],
+    }] })
+    expect(d.skus[0].caseSizes).toEqual([{ unitsPerCase: 12, case: null }, { unitsPerCase: 6, case: { lengthCm: 30, widthCm: 40, heightCm: 35, weightKg: 7.4 } }])
+    expect(d.skus[0].freeSealed).toEqual([{ unitsPerCase: 12, cases: 2 }, { unitsPerCase: 6, cases: 1 }])
   })
 })
 
@@ -226,9 +293,9 @@ describe('the routes', () => {
   })
 
   it('a draft with missing optional parts reads as "none", never a guess', () => {
-    const d = parseSendDraft({ skus: [{ productId: 'x', sku: 'X', unitsPerCase: 0, unitWeightKg: -1, prepOwner: 'ME' }] })
+    const d = parseSendDraft({ skus: [{ productId: 'x', sku: 'X', caseSizes: [{ unitsPerCase: 0 }, 'no'], freeSealed: 3, unitWeightKg: -1, prepOwner: 'ME' }] })
     expect(d).toMatchObject({ from: null, locations: [], markets: [], market: 'IT', mixedBox: MIXED_BOX_DEFAULT, address: { missing: [], summary: null } })
-    expect(d.skus[0]).toMatchObject({ msku: null, unitsPerCase: null, unitWeightKg: null, prepOwner: null, free: 0, case: null })
+    expect(d.skus[0]).toMatchObject({ msku: null, caseSizes: [], freeSealed: [], unitWeightKg: null, prepOwner: null, free: 0 })
   })
 
   it('POST plans: one Idempotency-Key per intent, the request as JSON; 202 → the plan id; 400 → the server\'s reasons', async () => {

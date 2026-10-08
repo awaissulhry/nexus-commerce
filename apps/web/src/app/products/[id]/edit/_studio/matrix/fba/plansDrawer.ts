@@ -9,8 +9,9 @@
 import {
   FBA_JOB_STATUSES, FBA_SEND_COPY,
   type FbaChoiceRequest, type FbaDeliveryWindowOption, type FbaFee, type FbaMoney, type FbaPlacementOption, type FbaPlacementShipment,
-  type FbaPlanStatus, type FbaPlanStep, type FbaPlanView, type FbaShipmentView, type FbaShippedRequest, type FbaTransportOption,
+  type FbaPlanLineView, type FbaPlanStatus, type FbaPlanStep, type FbaPlanView, type FbaShipmentView, type FbaShippedRequest, type FbaTransportOption,
 } from '@nexus/shared/fba-send'
+import { CASE_COPY } from '@nexus/shared/stock-cases'
 import type { Tone } from '@/design-system/primitives'
 import { commandConflictMessage, type CommandConflict } from '@/lib/command-key'
 import type { InvalidationEvent } from '@/lib/sync/invalidation-channel'
@@ -32,7 +33,7 @@ export const DRAWER_COPY = {
   skus: (n: number) => plural(n, 'SKU'),
   boxes: (n: number) => plural(n, 'box', 'boxes'),
   linesTitle: (n: number) => plural(n, 'SKU'),
-  lineColumns: ['SKU', 'Units', 'Shipped'] as const,
+  lineColumns: ['SKU', 'Units', 'Packed', 'Shipped'] as const,
   choiceLegend: 'Where it goes',
   validUntil: (time: string) => `Options valid until ${time}`,
   carrier: (fc: string) => `${fc} carrier`,
@@ -511,8 +512,21 @@ export function shippedText(s: Pick<FbaShipmentView, 'shippedAt' | 'tracking' | 
 
 /* ── the plan's SKUs ──────────────────────────────────────────────────────────────────────────── */
 
-export function lineRows(plan: Pick<FbaPlanView, 'lines'>): Array<{ id: string; cells: [string, string, string] }> {
-  return plan.lines.map(l => ({ id: l.productId, cells: [l.sku, String(l.quantity), String(l.shippedQuantity)] }))
+/**
+ * How a line is packed: `8 loose`, `1 case of 12`, `2 cases of 12 + 3 loose`, `2×12 + 1×6 + 3 loose` (several case
+ * sizes; a size with 0 cases left out), `—` when nothing.
+ */
+export function packedText(line: Pick<FbaPlanLineView, 'cases' | 'looseUnits'>): string {
+  const sealed = (line.cases ?? []).filter(c => c.cases > 0)
+  const parts: string[] = []
+  if (sealed.length === 1) parts.push(`${plural(sealed[0].cases, 'case')} of ${sealed[0].unitsPerCase}`)
+  else if (sealed.length > 1) parts.push(CASE_COPY.cases(sealed))
+  if (line.looseUnits > 0) parts.push(`${line.looseUnits.toLocaleString('en-GB')} loose`)
+  return parts.length ? parts.join(' + ') : '—'
+}
+
+export function lineRows(plan: Pick<FbaPlanView, 'lines'>): Array<{ id: string; cells: [string, string, string, string] }> {
+  return plan.lines.map(l => ({ id: l.productId, cells: [l.sku, String(l.quantity), packedText(l), String(l.shippedQuantity)] }))
 }
 
 /* ── the routes (Part C, `routes/fba-send.routes.ts`) ─────────────────────────────────────────── */

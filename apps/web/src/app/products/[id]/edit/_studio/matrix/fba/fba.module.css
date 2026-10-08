@@ -44,6 +44,15 @@
   font-size: var(--nds-font-size-sm);
 }
 
+/* A SKU with several case sizes: its Cases steppers one under the other (the row grows: every column is autoHeight). */
+.steppers {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  padding-block: var(--nds-space-2);
+}
+
 /* The ONE summary line: `2 SKUs · 29 units · 3 boxes · 31.4 kg`. */
 .totals {
   margin: 0;

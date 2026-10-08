@@ -9,7 +9,7 @@ import {
 
 import {
   DRAWER_COPY, FBA_ROUTES, amazonWord, arriveText, canPrintLabels, canShip, choiceHeld, choicePayload, clockText, commandSlot, dayRange,
-  defaultPicks, feesText, fillDown, isFbaPlanEvent, isRunning, lineRows, moneyText, newestFirst, offeredPlacements, placementLines,
+  defaultPicks, feesText, fillDown, isFbaPlanEvent, isRunning, lineRows, moneyText, newestFirst, offeredPlacements, packedText, placementLines,
   placementTitle, planFacts, planName, planProductIds, readLabelsAnswer, readOnePlanAnswer, readPlanAnswer, readPlansAnswer, rereadDelay,
   REREAD_IDLE_MS, REREAD_RUNNING_MS, shipmentTitle, shipmentTransportText, shippedConfirmText, shippedPayload, shippedText, shownPlanId,
   statusText, statusTone, timelineItems, trackingHeld, trackingRows, transportText, windowText, withTransport, withWindow,
@@ -42,9 +42,9 @@ const plan = (over: Partial<FbaPlanView> = {}): FbaPlanView => ({
   market: 'IT', marketplaceId: 'APJ6JRA9NG5V4', from: { locationId: 'loc-1', code: 'IT-MAIN', name: 'Main warehouse' },
   readyToShipOn: '2026-10-08', mixedBox: null, skus: 3, units: 24, shippedUnits: 0,
   lines: [
-    { productId: 'p-m', sku: 'GALE-M', msku: 'GALE-M', quantity: 12, cases: 1, unitsPerCase: 12, looseUnits: 0, prepOwner: 'SELLER', labelOwner: 'SELLER', shippedQuantity: 0, held: true },
-    { productId: 'p-l', sku: 'GALE-L', msku: 'GALE-L', quantity: 8, cases: 0, unitsPerCase: null, looseUnits: 8, prepOwner: 'SELLER', labelOwner: 'SELLER', shippedQuantity: 0, held: true },
-    { productId: 'p-s', sku: 'GALE-S', msku: 'GALE-S', quantity: 4, cases: 0, unitsPerCase: null, looseUnits: 4, prepOwner: 'SELLER', labelOwner: 'SELLER', shippedQuantity: 0, held: true },
+    { productId: 'p-m', sku: 'GALE-M', msku: 'GALE-M', quantity: 12, cases: [{ unitsPerCase: 12, cases: 1 }], looseUnits: 0, prepOwner: 'SELLER', labelOwner: 'SELLER', shippedQuantity: 0, held: true },
+    { productId: 'p-l', sku: 'GALE-L', msku: 'GALE-L', quantity: 8, cases: [], looseUnits: 8, prepOwner: 'SELLER', labelOwner: 'SELLER', shippedQuantity: 0, held: true },
+    { productId: 'p-s', sku: 'GALE-S', msku: 'GALE-S', quantity: 4, cases: [], looseUnits: 4, prepOwner: 'SELLER', labelOwner: 'SELLER', shippedQuantity: 0, held: true },
   ],
   steps: [], options: null, choice: null, shipments: [], problems: [], message: null, nextCheckAt: null,
   createdAt: T('08:00'), createdBy: 'owner@example.com', confirmedAt: null, confirmedBy: null, cancelledAt: null,
@@ -326,8 +326,16 @@ describe('the shipments: labels, one tracking number per box, Mark shipped', () 
   })
 
   it('the plan\'s SKUs for the table and the stock hint', () => {
-    expect(lineRows(plan())[0]).toEqual({ id: 'p-m', cells: ['GALE-M', '12', '0'] })
+    expect(lineRows(plan())[0]).toEqual({ id: 'p-m', cells: ['GALE-M', '12', '1 case of 12', '0'] })
+    expect(lineRows(plan())[1]).toEqual({ id: 'p-l', cells: ['GALE-L', '8', '8 loose', '0'] })
     expect(planProductIds(plan())).toEqual(['p-m', 'p-l', 'p-s'])
+  })
+
+  it('how a line is packed: cases per size, then the loose units', () => {
+    expect(packedText({ cases: [{ unitsPerCase: 12, cases: 2 }], looseUnits: 3 })).toBe('2 cases of 12 + 3 loose')
+    expect(packedText({ cases: [{ unitsPerCase: 12, cases: 2 }, { unitsPerCase: 6, cases: 1 }], looseUnits: 3 })).toBe('2×12 + 1×6 + 3 loose')
+    expect(packedText({ cases: [{ unitsPerCase: 12, cases: 2 }, { unitsPerCase: 6, cases: 0 }], looseUnits: 0 })).toBe('2 cases of 12')
+    expect(packedText({ cases: [], looseUnits: 0 })).toBe('—')
   })
 })
 

@@ -8,6 +8,8 @@
  *     From [IT-MAIN · Rimini]   To [Amazon IT]   Ready [08/10/2026]
  *     Prep by [Amazon|Seller]   Labels by [Amazon|Seller]          ← only when a SKU has "not set"; saved for those SKUs
  *     SKU · Free · Cases · Units · Boxes · Check                      ← ONE table, 0 by default, Tab / Enter move down
+ *                                                                       (a SKU with several case sizes: one Cases stepper
+ *                                                                       per size, biggest first, each marked ×12 / ×6)
  *     Loose units go in 2 mixed boxes · 60 × 40 × 40 cm   ▸ Change box size
  *     one Banner per kind of problem (the shared `sendProblems`): the plan's under From / To (account, address, day,
  *     box), the SKUs' under the table (listing, free units, EU box limits 63.5 cm / 23 kg, unit weight, …)
@@ -31,8 +33,8 @@ import { Button, Input, NumberStepper, Pill, SegmentedControl, Skeleton } from '
 import { useCommandKey } from '@/lib/command-key'
 
 import {
-  DONE_COPY, OWNER_OPTIONS, casesMax, createRequest, fetchSendDraft, locationOption, marketOption, ownersAsked, parseSide, postCancelPlan,
-  postSendPlan, primaryOf, problemBanners, skuBoxes, skuCheck, startForm, startLines, summarize, summaryLine, unitsMax,
+  DONE_COPY, OWNER_OPTIONS, caseSteppers, casesOf, createRequest, fetchSendDraft, locationOption, marketOption, ownersAsked, parseSide, postCancelPlan,
+  postSendPlan, primaryOf, problemBanners, skuBoxes, skuCheck, startForm, startLines, summarize, summaryLine, unitsMax, withCases,
   type CancelOutcome, type CreateOutcome, type DraftQuery, type SendForm,
 } from './sendToFba'
 import styles from './fba.module.css'
@@ -140,8 +142,8 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
   const asked = draft ? ownersAsked(draft) : false
   const banners = useMemo(() => (summary ? problemBanners(summary.problems) : []), [summary])
 
-  const setLine = (productId: string, patch: Partial<FbaSendLine>) => {
-    setForm((f) => (f ? { ...f, lines: { ...f.lines, [productId]: { ...(f.lines[productId] ?? { productId, cases: 0, looseUnits: 0 }), ...patch, productId } } } : f))
+  const setLine = (productId: string, change: (line: FbaSendLine) => FbaSendLine) => {
+    setForm((f) => (f ? { ...f, lines: { ...f.lines, [productId]: { ...change(f.lines[productId] ?? { productId, cases: [], looseUnits: 0 }), productId } } } : f))
     setFailure(null)
   }
   const setSide = (side: Side, text: string) => {
@@ -151,7 +153,8 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
     setFailure(null)
   }
 
-  /* Tab / Enter move DOWN a column (the Available pop-up's spreadsheet feel); Shift goes up; past the ends, Tab is Tab. */
+  /* Tab / Enter move DOWN a column (the Available pop-up's spreadsheet feel); Shift goes up; past the ends, Tab is Tab.
+     The Cases column counts its steppers in order: a SKU's sizes, then the next SKU's. */
   const moveDown = (e: KeyboardEvent<HTMLInputElement>, column: 'cases' | 'units', index: number) => {
     if ((e.key !== 'Tab' && e.key !== 'Enter') || e.altKey || e.ctrlKey || e.metaKey || e.nativeEvent.isComposing) return
     const next = bodyRef.current?.querySelector<HTMLInputElement>(`[data-fba-step="${column}-${index + (e.shiftKey ? -1 : 1)}"]`)
@@ -201,21 +204,36 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
   /* ── the table ── */
 
   const indexOf = useMemo(() => new Map((draft?.skus ?? []).map((s, i) => [s.productId, i])), [draft])
+  /* The first Cases stepper of each SKU, counted down the column. */
+  const caseIndexOf = useMemo(() => {
+    const out = new Map<string, number>()
+    let next = 0
+    for (const s of draft?.skus ?? []) { out.set(s.productId, next); next += s.caseSizes.length }
+    return out
+  }, [draft])
+  const severalSizes = (draft?.skus ?? []).some((s) => s.caseSizes.length > 1)
   const columns: Column<FbaSendSku>[] = [
     { key: 'sku', label: FBA_SEND_COPY.columns.sku, width: 250, render: (s) => <span className={styles.sku}>{s.sku}</span> },
-    { key: 'free', label: FBA_SEND_COPY.columns.free, width: 96, numeric: true, render: (s) => FBA_SEND_COPY.free(s.free, s.freeSealed) },
+    { key: 'free', label: FBA_SEND_COPY.columns.free, width: severalSizes ? 128 : 96, numeric: true, render: (s) => FBA_SEND_COPY.free(s.free, s.freeSealed) },
     {
-      key: 'cases', label: FBA_SEND_COPY.columns.cases, width: 128,
+      key: 'cases', label: FBA_SEND_COPY.columns.cases, width: severalSizes ? 148 : 128,
       render: (s) => {
-        const max = casesMax(s)
-        if (max === null) return <span className={styles.muted}>—</span>
+        const steppers = caseSteppers(s)
+        if (steppers.length === 0) return <span className={styles.muted}>—</span>
         const line = form?.lines[s.productId]
-        return (
-          <NumberStepper size="sm" min={0} max={max} value={line?.cases ?? 0} disabled={creating || !!created}
-            aria-label={`Cases of ${s.sku}`} decrementLabel={`One case less of ${s.sku}`} incrementLabel={`One case more of ${s.sku}`}
-            data-fba-step={`cases-${indexOf.get(s.productId) ?? 0}`} onKeyDown={(e) => moveDown(e, 'cases', indexOf.get(s.productId) ?? 0)}
-            onFocus={(e) => e.currentTarget.select()} onChange={(n) => setLine(s.productId, { cases: n })} />
-        )
+        const one = steppers.length === 1
+        const first = caseIndexOf.get(s.productId) ?? 0
+        // One case size: the stepper exactly as before. Several: one per size, stacked, each marked with its size.
+        const list = steppers.map(({ unitsPerCase, max }, k) => (
+          <NumberStepper key={unitsPerCase} size="sm" min={0} max={max} value={casesOf(line, unitsPerCase)} disabled={creating || !!created}
+            suffix={one ? undefined : `×${unitsPerCase}`}
+            aria-label={one ? `Cases of ${s.sku}` : `Cases of ${unitsPerCase} (${s.sku})`}
+            decrementLabel={one ? `One case less of ${s.sku}` : `One case of ${unitsPerCase} less (${s.sku})`}
+            incrementLabel={one ? `One case more of ${s.sku}` : `One case of ${unitsPerCase} more (${s.sku})`}
+            data-fba-step={`cases-${first + k}`} onKeyDown={(e) => moveDown(e, 'cases', first + k)}
+            onFocus={(e) => e.currentTarget.select()} onChange={(n) => setLine(s.productId, (l) => withCases(l, unitsPerCase, n))} />
+        ))
+        return one ? list[0] : <span className={styles.steppers}>{list}</span>
       },
     },
     {
@@ -224,7 +242,7 @@ export function SendToFbaDialog(p: SendToFbaDialogProps) {
         <NumberStepper size="sm" min={0} max={unitsMax(s)} value={form?.lines[s.productId]?.looseUnits ?? 0} disabled={creating || !!created}
           aria-label={`Loose units of ${s.sku}`} decrementLabel={`One unit less of ${s.sku}`} incrementLabel={`One unit more of ${s.sku}`}
           data-fba-step={`units-${indexOf.get(s.productId) ?? 0}`} onKeyDown={(e) => moveDown(e, 'units', indexOf.get(s.productId) ?? 0)}
-          onFocus={(e) => e.currentTarget.select()} onChange={(n) => setLine(s.productId, { looseUnits: n })} />
+          onFocus={(e) => e.currentTarget.select()} onChange={(n) => setLine(s.productId, (l) => ({ ...l, looseUnits: n }))} />
       ),
     },
     { key: 'boxes', label: FBA_SEND_COPY.columns.boxes, width: 96, numeric: true, render: (s) => (summary ? skuBoxes(summary.plan, s.productId) : '—') },
