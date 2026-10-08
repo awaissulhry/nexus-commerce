@@ -17,6 +17,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { packEvidence, type AdWriteEvidence } from './ads-evidence.js'
+import type { AdsActor } from './ads-mutation.service.js'
 import { resolveRange } from '../ads-core/date-range.js'
 import { campaignWindowMoney } from './ads-campaign-window.js'
 import { adsMode, createPortfolio as createAmazonPortfolio, listPortfolios, listCampaignsV3, updatePortfolio, type AdsRegion, type AdsPortfolioDTO, type PortfolioBudgetInput } from './ads-api-client.js'
@@ -323,25 +325,41 @@ export async function updatePortfolioById(args: {
   portfolioId: string; name?: string; state?: 'enabled' | 'paused' | 'archived'; budget?: PortfolioBudgetInput
   /** W4-3 — an approved Claude request (set-portfolio): the change is also written to the ads audit. The screen passes none. */
   audit?: PortfolioAudit
+  /**
+   * ONE BRAIN AB-8 — an automatic writer names itself (the brain's money writer, brain/budget-live.ts): the gate then
+   * judges who owns the portfolio's cap lever (one owner per lever) as for every queued write. A person's paths (the
+   * screen, an approved set-portfolio) name none, as before.
+   */
+  actor?: AdsActor
 }): Promise<{ ok: boolean; mode: string; error?: string }> {
   const row = await prisma.amazonAdsPortfolio.findFirst({ where: { externalPortfolioId: args.portfolioId } })
   if (!row) return { ok: false, mode: 'local', error: 'portfolio not found' }
   let mode = 'local'
   const conn = await prisma.amazonAdsConnection.findFirst({ where: { profileId: row.profileId, isActive: true }, select: { region: true, marketplace: true } })
+  // AB-8 — an automatic writer never changes only Nexus's copy: what it asks reaches Amazon or nothing changes.
+  if (args.actor && (!conn || row.externalPortfolioId.startsWith('local-pf-'))) {
+    return { ok: false, mode: 'local', error: !conn ? 'no active Amazon Ads connection holds its profile: nothing changed' : 'it was made in Nexus only and Amazon has never seen it: nothing changed' }
+  }
   if (conn && !row.externalPortfolioId.startsWith('local-pf-')) {
     const { checkAdsWriteGate } = await import('./ads-write-gate.js')
     // The budget amount is the write's blast-radius value for the gate's value cap.
     const payloadValueCents = args.budget ? Math.round(args.budget.amount * 100) : 0
     // ONE BRAIN AB-5 — the portfolio lever, named. Its callers are persons (the screen, an approved set-portfolio) and name
     // no actor: the gate judges no brain's ownership here (a queued portfolio write through the worker is judged).
-    const gate = await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents, dimension: 'portfolio', portfolioId: args.portfolioId })
+    const gate = await checkAdsWriteGate({ marketplace: conn.marketplace, payloadValueCents, dimension: 'portfolio', portfolioId: args.portfolioId, ...(args.actor ? { actor: args.actor } : {}) })
     if (gate.allowed) {
       const r = await updatePortfolio({ profileId: row.profileId, region: regionOf(conn.region) }, { portfolioId: args.portfolioId, name: args.name, state: args.state, budget: args.budget })
       mode = r.mode
       // 1a (CM-23) — Amazon refused it: nothing changes in Nexus, and the caller gets Amazon's reason.
       if (!r.ok) return { ok: false, mode, error: r.error ?? 'Amazon refused the portfolio change' }
-    } else if (args.budget) {
-      // Budget caps are spend-affecting — never record a cap we couldn't actually push to Amazon.
+    } else if (args.budget || args.actor) {
+      // Budget caps are spend-affecting — never record a cap we couldn't actually push to Amazon. AB-8 — nor anything an
+      // automatic writer asked for: its refusal is the answer, recorded by the gate.
+      if (args.actor) {
+        const { logGateDeny } = await import('./ads-write-gate.js')
+        const denied = gate as { reason: string; deniedAt: import('./ads-write-gate.js').GateDeniedAt }
+        logGateDeny({ queueId: null, marketplace: conn.marketplace, payloadValueCents, entityType: 'PORTFOLIO', entityId: row.id }, denied.reason, denied.deniedAt)
+      }
       return { ok: false, mode: 'gated', error: (gate as { reason?: string }).reason || 'write gate closed' }
     }
     // name/state are harmless metadata — they still mirror locally even if the gate is closed.
@@ -412,8 +430,11 @@ export async function createPortfolio(input: {
 
 // ── W4-3 — Claude's portfolio tools (set-portfolio, set-campaign-settings, ad-portfolios) ─────────────────────────
 
-/** Who an approved Claude request writes as, and its change set (the approval), for the ads audit. */
-export interface PortfolioAudit { actor: string; changeSetId: string }
+/**
+ * Who an approved Claude request writes as, and its change set (the approval), for the ads audit. AB-8 — the brain's
+ * money writer audits its cap as itself, with no change set and with its evidence (run, layer, data day, why).
+ */
+export interface PortfolioAudit { actor: string; changeSetId: string | null; evidence?: AdWriteEvidence | null }
 
 type PortfolioRow = { name: string; state: string | null; externalPortfolioId: string; budgetAmount: unknown; budgetCurrencyCode: string | null; budgetPolicy: string | null; startDate: Date | null; endDate: Date | null }
 
@@ -436,11 +457,12 @@ const writeStatus = (mode: string): 'SUCCESS' | 'FAILED' => (mode === 'local' &&
  * the row's evidence note (Amazon's own words when Amazon refused it).
  */
 async function auditPortfolioWrite(audit: PortfolioAudit, actionType: 'AD_PORTFOLIO_CREATE' | 'AD_PORTFOLIO_UPDATE', rowId: string, before: object, after: object, status: 'SUCCESS' | 'FAILED', note: string | null): Promise<void> {
+  const evidence = packEvidence({ ...(audit.evidence ?? {}), ...(note ? { note: note.slice(0, 500) } : {}) })
   await prisma.advertisingActionLog.create({
     data: {
       executionId: audit.changeSetId, userId: audit.actor, actionType, entityType: 'PORTFOLIO', entityId: rowId,
       payloadBefore: before, payloadAfter: after, amazonResponseStatus: status,
-      ...(note ? { evidence: { note: note.slice(0, 500) } } : {}),
+      ...(evidence ? { evidence: evidence as object } : {}),
     },
   })
 }
