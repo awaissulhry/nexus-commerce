@@ -14,9 +14,14 @@
  *               and for a keyword the brain last lowered by an override, the bid of its last decision before it
  *   BB-9        the rules' active inputs per campaign (loadDirectives: BidDirective rows not past `until`), each named by
  *               its rule
+ *   BB-15       the nowcast's evidence (loadNowcastEvidence): the window ends yesterday, every keyword-day weighted by the
+ *               maturity of its copy (the age it was pulled at) under its product's or its market's lag curve — read
+ *               for the decisions only with NEXUS_BID_BRAIN_NOWCAST=on and a usable curve (nowcast.ts); off and shadow
+ *               read the settled window above, unchanged
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
+import { logger } from '../../../utils/logger.js'
 import { personBidTargetIds } from '../bid-grid.service.js'
 import { readEnginePosture } from '../ads-engine-guard.js'
 import { settledBounds } from '../ads-settled-window.js'
@@ -35,6 +40,9 @@ import { loadPlanHours } from './plans.js'
 import { loadServingBids } from './serving.js'
 import { loadSpendGuard } from './spend-guard.js'
 import { readSavedLanes } from './stop-recipe.js'
+import { LAG_AGES } from './lag-curve.js'
+import { curveWords, nowcastCurves } from './lag-curve-store.js'
+import { nowcastEvidence, nowcastMode, type NowcastEvidence, type NowcastGroup } from './nowcast.js'
 
 /** The markets the shadow decides for (Owner, 2026-10-07: shadow on IT and DE first). */
 export const SHADOW_MARKETS = ['IT', 'DE'] as const
@@ -58,7 +66,12 @@ export function placementsOf(dynamicBidding: unknown): Array<{ placement: string
  * those campaigns only and no evidence: keyword goal bids move only on a new data day, at the full runs, so the tick
  * carries out overrides only (Min-bid floors, the give-backs after them, stops) and the placements (Neon reads).
  */
-export async function loadMarket(market: string, opts: { now?: Date; campaignIds?: ReadonlySet<string>; light?: boolean } = {}): Promise<MarketRows & { newestReportAt: Date | null }> {
+/**
+ * BB-15 — `evidence`: 'nowcast' reads the nowcast's evidence (the window to yesterday, maturity-weighted) when the market has
+ * a usable curve, else the settled window as before; the default follows NEXUS_BID_BRAIN_NOWCAST (only `on` reads it).
+ * With the nowcast the rows carry its window and data day (yesterday), and `nowcast` says which curve and how young.
+ */
+export async function loadMarket(market: string, opts: { now?: Date; campaignIds?: ReadonlySet<string>; light?: boolean; evidence?: 'settled' | 'nowcast' } = {}): Promise<LoadedMarket> {
   const now = opts.now ?? new Date()
   const window = settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })
   const dataDay = isoDay(window.until)
@@ -119,11 +132,80 @@ export async function loadMarket(market: string, opts: { now?: Date; campaignIds
     productIds: [...(productIdsOf.get(g.id) ?? [])].sort(),
   }]))
   const targetIds = targets.map((t) => t.id)
+  // BB-15 — the nowcast's evidence, only when asked (NEXUS_BID_BRAIN_NOWCAST=on) and the market has a usable curve.
+  const wantNowcast = !opts.light && (opts.evidence ?? (nowcastMode() === 'on' ? 'nowcast' : 'settled')) === 'nowcast'
+  // A failed read: the settled window, as before BB-15 (logged).
+  const nc = wantNowcast
+    ? await loadNowcastEvidence({ market, targets, adGroups }, { now, settledUntil: window.until }).catch((err) => {
+      logger.warn('[bid-brain] nowcast evidence could not be read — the settled window is read instead', { market, error: err instanceof Error ? err.message : String(err) })
+      return null
+    })
+    : null
   const [{ evidence, adSales30 }, newestReportAt] = await Promise.all([
-    opts.light ? Promise.resolve({ evidence: new Map<string, Evidence>(), adSales30: new Map<string, number>() }) : loadEvidence(targetIds, window),
+    opts.light ? Promise.resolve({ evidence: new Map<string, Evidence>(), adSales30: new Map<string, number>() }) : nc ? Promise.resolve(nc) : loadEvidence(targetIds, window),
     newestReport(targetIds, now),
   ])
+  if (nc) return { market, dataDay: nc.dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, window: nc.window, nowcast: { curve: nc.curve, youngShare: nc.youngShare, totals: nc.totals } }
   return { market, dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, ...(opts.light ? { light: true } : {}) }
+}
+
+/** One market as loadMarket reads it. BB-15 — `window` / `nowcast`: present when the nowcast's evidence was read. */
+export type LoadedMarket = MarketRows & {
+  newestReportAt: Date | null
+  window?: { since: Date; until: Date }
+  nowcast?: { curve: string; youngShare: Map<string, number>; totals: NowcastEvidence['totals'] }
+}
+
+/** BB-15 — the nowcast's window: MAX_WINDOW_DAYS days ending yesterday (UTC). */
+export function nowcastWindow(now: Date): { since: Date; until: Date } {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  return { since: new Date(today - MAX_WINDOW_DAYS * 86_400_000), until: new Date(today - 1) }
+}
+
+/**
+ * BB-15 — the nowcast's evidence of a market's keywords: AD_TARGET rows of the window that ends yesterday, decayed from
+ * yesterday (30-day half-life), summed per keyword, pull age (`reportedAt` − the day's end: the copy the row holds now) and
+ * youth (newer than the settled window's end) in SQL — a few rows per keyword cross the wire — then matured per keyword
+ * under its product's curve (an ad group of one family with a curve of its own) else its market's (nowcast.ts). Null when
+ * the market has no usable curve: the caller reads the settled window, as before BB-15.
+ */
+export async function loadNowcastEvidence(
+  m: { market: string; targets: readonly TargetRow[]; adGroups: ReadonlyMap<string, AdGroupRow> },
+  opts: { now: Date; settledUntil: Date },
+): Promise<(NowcastEvidence & { dataDay: string; window: { since: Date; until: Date }; curve: string }) | null> {
+  if (!m.targets.length) return null
+  const curves = await nowcastCurves(m.market, opts.now)
+  if (!curves) return null
+  const window = nowcastWindow(opts.now)
+  const until = isoDay(window.until)
+  const rows = await prisma.$queryRaw<Array<{ id: string; age: number; young: boolean; clicks: number; orders: number; sales: number; cost: number; sales30: number }>>(Prisma.sql`
+    SELECT d."localEntityId" AS id, d.age, d.young,
+           SUM(d.clicks * d.w)::float8 AS clicks,
+           SUM(COALESCE(d."orders7d", 0) * d.w)::float8 AS orders,
+           SUM(COALESCE(d."sales7dCents", 0) * d.w)::float8 AS sales,
+           SUM(d."costMicros"::float8 / 10000 * d.w)::float8 AS cost,
+           SUM(CASE WHEN d.ago < 30 THEN COALESCE(d."sales7dCents", 0) ELSE 0 END)::float8 AS sales30
+      FROM (SELECT p."localEntityId", p.clicks, p."orders7d", p."sales7dCents", p."costMicros",
+                   (${until}::date - p.date) AS ago,
+                   power(0.5, (${until}::date - p.date)::float8 / 30) AS w,
+                   LEAST(${LAG_AGES}, GREATEST(0, p."reportedAt"::date - p.date - 1))::int AS age,
+                   (p.date > ${isoDay(opts.settledUntil)}::date) AS young
+              FROM "AmazonAdsDailyPerformance" p
+             WHERE p."entityType" = 'AD_TARGET' AND p."adProduct" = 'SPONSORED_PRODUCTS'
+               AND p."localEntityId" = ANY(${m.targets.map((t) => t.id)}::text[])
+               AND p.date BETWEEN ${isoDay(window.since)}::date AND ${until}::date) d
+     GROUP BY d."localEntityId", d.age, d.young`)
+  const groups: NowcastGroup[] = rows.map((r) => ({
+    targetId: r.id, pullAge: Number(r.age), young: !!r.young,
+    clicks: Number(r.clicks), orders: Number(r.orders), salesCents: Number(r.sales), costCents: Number(r.cost), sales30: Number(r.sales30),
+  }))
+  const groupOf = new Map(m.targets.map((t) => [t.id, t.adGroupId]))
+  const curveOf = (targetId: string) => {
+    const families = m.adGroups.get(groupOf.get(targetId) ?? '')?.families ?? []
+    return (families.length === 1 ? curves.products.get(families[0])?.shares : undefined) ?? curves.market.shares
+  }
+  const products = curves.products.size ? ` (+${curves.products.size} product curve${curves.products.size === 1 ? '' : 's'})` : ''
+  return { ...nowcastEvidence(groups, curveOf), dataDay: until, window, curve: `${curveWords(curves.market)}${products}` }
 }
 
 /** The decayed sums per keyword over the settled window (one row per keyword with data). */
@@ -428,7 +510,7 @@ export async function previousDecisions(targetIds: readonly string[], now: Date)
  * BB-7 — `owned`: the campaigns the brain owns this run (their hourly plan's hour and today's Min-bid entries are read);
  * `clockNow`: the database clock the plan's hour is read on (rank-defend's), else `now`.
  */
-export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, now: Date, opts: { owned?: ReadonlySet<string>; clockNow?: Date } = {}): Promise<{ run: RunRows; lastWrites: Map<string, LastWrite>; previous: Map<string, PreviousDecision> }> {
+export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: ReadonlySet<string>; clockNow?: Date } = {}): Promise<{ run: RunRows; lastWrites: Map<string, LastWrite>; previous: Map<string, PreviousDecision> }> {
   const campaignIds = [...m.campaigns.values()].filter((c) => c.allowlisted).map((c) => c.id)
   const campaignSet = new Set(campaignIds)
   const groupIds = [...m.adGroups.values()].filter((g) => campaignSet.has(g.campaignId)).map((g) => g.id)
@@ -462,7 +544,8 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
   const ownedHere = campaignIds.filter((id) => opts.owned?.has(id))
   const { minBidEntriesToday } = ownedHere.length ? await import('../../../jobs/ad-rank-defend.job.js') : { minBidEntriesToday: null }
   const [servingBids, planHours, minBidEntries, spendGuard] = await Promise.all([
-    m.light ? Promise.resolve(new Map<string, number>()) : loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
+    // BB-15 — under the nowcast, the bid that served its window (to yesterday).
+    m.light ? Promise.resolve(new Map<string, number>()) : loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), m.window ?? settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
     loadPlanHours(ownedHere, opts.clockNow ?? now),
     minBidEntriesToday ? minBidEntriesToday(ownedHere, opts.clockNow ?? now, ['rank-defend', 'bid-brain']) : Promise.resolve(new Map<string, number>()),
     // BB-10 — the brain's own raise cap: this hour's spend against the same hour of the last 7 days.

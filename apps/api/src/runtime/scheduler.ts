@@ -854,6 +854,8 @@ export async function startScheduler(): Promise<void> {
     const { startBidBrainCron } = await import('../jobs/ads-bid-brain.job.js');
     // ONE BRAIN AB-4 — the daily read of Amazon's own rules on brain campaigns (only while the brain is live or a product is enrolled).
     const { startNativeRulesCron } = await import('../jobs/ads-native-rules.job.js');
+    // BID BRAIN BB-15 — the nightly fit of the attribution lag curves the brain's nowcast reads (Nexus rows only).
+    const { startLagCurveCron } = await import('../jobs/ads-lag-curve.job.js');
     // ONE BRAIN AB-9 — the term ledger and the market arbiter in shadow (only for products whose negatives or harvest lever is OBSERVE+).
     const { startBrainTermsCron } = await import('../jobs/ads-brain-terms.job.js');
     // ONE BRAIN AB-11 — the harvest module (only for products whose harvest lever is OBSERVE+; writes only under NEXUS_ADS_BRAIN_HARVEST_MODE=live).
@@ -904,6 +906,7 @@ export async function startScheduler(): Promise<void> {
     startAutopilotCron();
     startBidBrainCron();
     startNativeRulesCron();
+    startLagCurveCron();
     startBrainTermsCron();
     startBrainHarvestCron();
     startRankDefendCron();

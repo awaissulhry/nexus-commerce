@@ -479,3 +479,66 @@ export async function budgetUsageSamplingSince(): Promise<Date | null> {
   const first = await prisma.adBudgetUsageSample.aggregate({ _min: { firstSeenAt: true } })
   return first._min.firstSeenAt ?? null
 }
+
+// ── ONE BRAIN AB-8 — portfolio budget usage ─────────────────────────────────
+
+/**
+ * Amazon's budget usage of a PORTFOLIO's cap (the same family as the campaign query above: a POST that only reads,
+ * synchronous, up to 100 ids, each answer with Amazon's own cap and the time of its reading). Amazon documents budget
+ * usage for campaigns and portfolios, IT/DE/FR/ES included (INDUSTRY-2026-10 [AMZ-8]); the path and media type below are
+ * Amazon's published ones and were NOT measured on this account yet (inference) — so a failed read is "unread", never a
+ * zero, and the money plan says so and goes on without it.
+ */
+const PORTFOLIO_USAGE_PATH = '/portfolios/budget/usage'
+const PORTFOLIO_USAGE_MIME = 'application/vnd.portfoliobudgetusage.v1+json'
+const MAX_PORTFOLIO_IDS_PER_CALL = 100
+
+interface AmazonPortfolioUsageRow { portfolioId?: string; budget?: number; budgetUsagePercent?: number; usageUpdatedTimestamp?: string }
+interface AmazonPortfolioUsageError { portfolioId?: string; code?: string; details?: string }
+
+/** One portfolio's reading: Amazon's percent as a FRACTION of its cap, the cap it measured against (cents), its time. */
+export interface PortfolioUsageReading { portfolioId: string; fraction: number; budgetCents: number; asOf: Date }
+
+export type PortfolioUsageRead =
+  | { state: 'read'; readings: Map<string, PortfolioUsageReading>; refused: number }
+  /** Not asked: sandbox mode, no active connection for the market, or no capped portfolio to ask about. */
+  | { state: 'not-asked'; why: string }
+  | { state: 'unread'; why: string }
+
+/**
+ * Amazon's usage of these portfolios' caps (Amazon's portfolio ids) in one market, through the channel gateway (liveCall).
+ * Read only: no write gate, nothing stored. Never throws: a failure is `unread` with its reason (logged).
+ */
+export async function readPortfolioBudgetUsage(market: string, portfolioIds: readonly string[]): Promise<PortfolioUsageRead> {
+  const ids = [...new Set(portfolioIds.filter((id) => id && !id.startsWith('local-pf-')))]
+  if (!ids.length) return { state: 'not-asked', why: 'no capped portfolio to ask about' }
+  if (adsMode() === 'sandbox') return { state: 'not-asked', why: 'ads mode is sandbox — no live reading' }
+  try {
+    const conn = await prisma.amazonAdsConnection.findFirst({ where: { marketplace: market, isActive: true }, select: { profileId: true, region: true } })
+    if (!conn) return { state: 'not-asked', why: `${market}: no active ads connection` }
+    const region = (conn.region === 'NA' || conn.region === 'FE' ? conn.region : 'EU') as AdsRegion
+    const readings = new Map<string, PortfolioUsageReading>()
+    let refused = 0
+    for (let i = 0; i < ids.length; i += MAX_PORTFOLIO_IDS_PER_CALL) {
+      const chunk = ids.slice(i, i + MAX_PORTFOLIO_IDS_PER_CALL)
+      const res = await liveCall<{ success?: AmazonPortfolioUsageRow[]; error?: AmazonPortfolioUsageError[] }>({
+        profileId: conn.profileId, region, method: 'POST', path: PORTFOLIO_USAGE_PATH, body: { portfolioIds: chunk },
+        contentType: PORTFOLIO_USAGE_MIME, acceptHeader: PORTFOLIO_USAGE_MIME,
+      })
+      for (const r of res?.success ?? []) {
+        const pct = Number(r.budgetUsagePercent)
+        const budget = Number(r.budget)
+        const stamp = r.usageUpdatedTimestamp ? new Date(r.usageUpdatedTimestamp) : null
+        // As for campaigns: a row missing any of the three cannot be placed, so it is not a reading.
+        if (!r.portfolioId || !Number.isFinite(pct) || !Number.isFinite(budget) || budget <= 0 || !stamp || Number.isNaN(stamp.getTime())) { refused++; continue }
+        readings.set(String(r.portfolioId), { portfolioId: String(r.portfolioId), fraction: pct / 100, budgetCents: Math.round(budget * 100), asOf: stamp })
+      }
+      refused += (res?.error ?? []).length
+    }
+    return { state: 'read', readings, refused }
+  } catch (err) {
+    const why = (err instanceof Error ? err.message : String(err)).slice(0, 200)
+    logger.warn('[ads-budget-usage] portfolio budget usage could not be read — the money plan goes on without it', { market, portfolios: ids.length, error: why })
+    return { state: 'unread', why }
+  }
+}

@@ -54,10 +54,12 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   hours: { levels: OFF_OBSERVE, others: 'the painted hourly plan waits for AB-13' },
   placements: { levels: OFF_OBSERVE, others: 'placements per hour wait for AB-13' },
   state: { levels: OFF_OBSERVE, others: 'pause and resume wait for AB-12' },
-  budgets: { levels: OFF_OBSERVE, others: 'campaign budgets are planned in shadow (AB-7: OBSERVE logs the money plan, ads-brain view money); writing them waits for AB-8' },
-  portfolioCap: { levels: OFF_OBSERVE, others: 'the Amazon portfolio cap is planned in shadow (AB-7, ads-brain view money); writing it waits for AB-8' },
+  // AB-8 — the money writer: OBSERVE plans and logs (AB-7), PROPOSE asks a person for each change, AUTO writes inside the pace.
+  budgets: { levels: BRAIN_LEVELS, others: 'campaign budgets: OBSERVE plans and logs them (ads-brain view money), PROPOSE asks a person for the day\'s moves, AUTO writes them and the intraday ladder (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
+  portfolioCap: { levels: BRAIN_LEVELS, others: 'the Amazon portfolio cap: OBSERVE plans it, PROPOSE asks a person, AUTO writes it — monthly, never below this month\'s spend, never a cap removed (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
   negatives: { levels: OFF_OBSERVE, others: 'the term ledger decides negatives in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-10' },
-  harvest: { levels: ['OFF', 'OBSERVE', 'PROPOSE', 'AUTO'], others: 'AB-11: OBSERVE logs each harvest in shadow, PROPOSE asks a person for the keyword and its source negatives as one change set, AUTO writes it (under NEXUS_ADS_BRAIN_HARVEST_MODE=live); a new campaign is always a request a person approves (ads-brain view harvest)' },
+  // AB-11 — the harvest module: OBSERVE logs each harvest, PROPOSE asks a person for the pair, AUTO writes it.
+  harvest: { levels: BRAIN_LEVELS, others: 'AB-11: OBSERVE logs each harvest in shadow, PROPOSE asks a person for the keyword and its source negatives as one change set, AUTO writes it (under NEXUS_ADS_BRAIN_HARVEST_MODE=live); a new campaign is always a request a person approves (ads-brain view harvest)' },
   structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
   biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
   offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },

@@ -16,6 +16,11 @@
  *   days      spend counts every complete day the daily report covers (cost does not wait for attribution); ACoS reads
  *             the settled window (ads-settled-window.ts), where sales have stopped arriving. The month's spend counts only
  *             days from the 1st (the stream's days after the newest reported day included).
+ *   AB-8      the budget log as the money writer and the gate read it (brain/budget-ladder.ts): each campaign's day opening
+ *             as the BRAIN's writes are measured (after its ladder of an earlier day, the base), the ladder its budget
+ *             stands on, what the brain asked today and who else moved it today; who set each portfolio's cap today (the
+ *             brain or anyone else); and — when the run asks (`readPortfolioUsage`) — Amazon's usage of the caps, read
+ *             through the channel gateway (ads-budget-usage.service.ts readPortfolioBudgetUsage). A dry run reads no Amazon.
  */
 import { Prisma } from '@prisma/client'
 import { budgetDayStart } from '@nexus/shared/ads-budget-day'
@@ -24,8 +29,10 @@ import prisma from '../../../db.js'
 import { EXCLUDE_AMS_DAILY } from '../../ads-core/ams-daily.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { openStrategy, strategySourceWords } from '../ads-strategy/effective.js'
-import { readCurrentBudgetUsage } from '../ads-budget-usage.service.js'
-import { budgetLogStepOf, budgetScheduleIdOf, GIVE_BACK_LOOKBACK, type BudgetLogStep } from '../ads-budget-giveback.js'
+import { readCurrentBudgetUsage, readPortfolioBudgetUsage, type PortfolioUsageRead } from '../ads-budget-usage.service.js'
+import { budgetLogStepOf, GIVE_BACK_LOOKBACK, type BudgetLogStep } from '../ads-budget-giveback.js'
+import { brainAskedToday, brainDayOpeningCents, campaignTodayOf, ladderNowOf, MONEY_PORTFOLIO_ACTOR, moneyLogStepOf, type CampaignTodayFacts, type MoneyLogStep } from './budget-ladder.js'
+import { brainLiveCeiling } from '../bid-brain/live.js'
 import { loggedDayOpeningCents } from '../ads-write-gate.js'
 import { MARKET_TIME_ZONE } from '../ads-market-time.js'
 import { settledBounds } from '../ads-settled-window.js'
@@ -37,7 +44,7 @@ import { resolveBrainSettings, type OverrideRow } from './settings.js'
 import { SHARE_WINDOW_DAYS, splitEnvelopes, type EnvelopeProduct, type MarketSplit } from './budget-envelope.js'
 import { averageDaily, dayWeights, HOUR_CURVE_DAYS, hourCurve, moneyClock, monthStart, RUN_RATE_DAYS, type MoneyClock } from './budget-pace.js'
 import { SPEND_WINDOW_DAYS, type BandFacts, type CampaignMoneyFacts } from './budget-campaigns.js'
-import type { PortfolioFacts } from './budget-portfolio.js'
+import type { PortfolioFacts, PortfolioUsage } from './budget-portfolio.js'
 import type { ProductMoneyFacts, ProductMoneyPlan } from './budget-plan.js'
 
 const DAY_MS = 86_400_000
@@ -63,6 +70,13 @@ export interface MarketMoney {
   facts: Map<string, ProductMoneyFacts>
 }
 
+/** AB-8 — the rung the brain asked today on a campaign (its highest ladder row, any outcome), % of today's base step. */
+function askedRungPct(todayOldestFirst: readonly MoneyLogStep[], stepCents: number | null): number {
+  const asked = brainAskedToday(todayOldestFirst).ladderAskedCents
+  if (asked == null || !stepCents || stepCents <= 0) return asked != null ? 100 : 0
+  return Math.max(0, Math.round((asked / stepCents - 1) * 100))
+}
+
 /** Sum a campaign's days into a product's (or a portfolio's) days. */
 function sumDays(maps: ReadonlyArray<ReadonlyMap<string, Day> | undefined>): Map<string, Day> {
   const out = new Map<string, Day>()
@@ -83,7 +97,7 @@ const between = (m: ReadonlyMap<string, Day>, from: string, to: string) => {
  * The money facts of one market at `now`, and the full facts of the products in `plan` (family roots). Read only.
  * `previous`: each planned product's newest stored plan of today (its ladder rungs), when the caller read them.
  */
-export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan: readonly string[]; previous?: ReadonlyMap<string, Pick<ProductMoneyPlan, 'day' | 'campaigns'>> }): Promise<MarketMoney | null> {
+export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan: readonly string[]; previous?: ReadonlyMap<string, Pick<ProductMoneyPlan, 'day' | 'campaigns'>>; /** AB-8 — read Amazon's usage of the caps (a run, never a dry run). */ readPortfolioUsage?: boolean }): Promise<MarketMoney | null> {
   const market = strategyMarket(marketIn)
   if (!market || !/^[A-Z]{2}$/.test(market)) return null
   const now = opts.now
@@ -202,33 +216,79 @@ export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan:
        WHERE d."campaignId" = ANY(${ownIds}::text[]) AND d."createdAt" >= ${new Date(now.getTime() - 2 * DAY_MS)}
        ORDER BY d."targetId", d."createdAt" DESC`) : Promise.resolve([]),
     ownIds.length ? prisma.adGroup.findMany({ where: { campaignId: { in: ownIds }, status: { not: 'ARCHIVED' } }, select: { id: true, campaignId: true } }) : Promise.resolve([]),
-    portfolioIds.length ? prisma.amazonAdsPortfolio.findMany({ where: { externalPortfolioId: { in: portfolioIds } }, select: { externalPortfolioId: true, name: true, budgetAmount: true, budgetPolicy: true, inBudget: true } }) : Promise.resolve([]),
+    portfolioIds.length ? prisma.amazonAdsPortfolio.findMany({ where: { externalPortfolioId: { in: portfolioIds } }, select: { id: true, externalPortfolioId: true, name: true, budgetAmount: true, budgetPolicy: true, inBudget: true } }) : Promise.resolve([]),
     portfolioIds.length ? prisma.campaign.findMany({ where: { portfolioId: { in: portfolioIds }, status: { not: 'ARCHIVED' } }, select: { id: true, portfolioId: true } }) : Promise.resolve([]),
     // Today's budget log of these campaigns (rolled back rows left out), oldest first: the gate's day opening.
     touchedIds.length ? prisma.advertisingActionLog.findMany({
       where: { actionType: 'AD_BUDGET_UPDATE', entityType: 'CAMPAIGN', entityId: { in: touchedIds }, rolledBackAt: null, createdAt: { gte: dayStart } },
-      orderBy: { createdAt: 'asc' }, select: { entityId: true, userId: true, payloadBefore: true, payloadAfter: true },
+      orderBy: { createdAt: 'asc' }, select: { entityId: true, userId: true, payloadBefore: true, payloadAfter: true, evidence: true, amazonResponseStatus: true },
     }) : Promise.resolve([]),
   ])
-  // The day's opening of each campaign, as the gate reads it; a day that opened on a budget schedule's row needs the rows
-  // before today too (a give-back sets no opening) — read in one statement for those campaigns only.
+  // The day's opening of each campaign, as the gate reads it for the BRAIN's writes (AB-8, budget-ladder.ts): the standard
+  // opening (a day that opened on a budget schedule's row reads the rows before today: a give-back sets no opening), and
+  // after the brain's ladder of an earlier day, the base it climbed from. The rows before today are read in one statement
+  // (the newest GIVE_BACK_LOOKBACK of each campaign) — only when a campaign has a budget log at all.
   const todaySteps = new Map<string, BudgetLogStep[]>()
-  for (const r of budgetLog) todaySteps.set(r.entityId, [...(todaySteps.get(r.entityId) ?? []), budgetLogStepOf(r)])
-  const scheduleOpened = [...todaySteps].filter(([, steps]) => budgetScheduleIdOf(steps[0]?.actor)).map(([id]) => id)
+  const todayMoney = new Map<string, MoneyLogStep[]>()
+  for (const r of budgetLog) {
+    todaySteps.set(r.entityId, [...(todaySteps.get(r.entityId) ?? []), budgetLogStepOf(r)])
+    todayMoney.set(r.entityId, [...(todayMoney.get(r.entityId) ?? []), moneyLogStepOf(r)])
+  }
   const beforeSteps = new Map<string, BudgetLogStep[]>()
-  if (scheduleOpened.length) {
-    const rows = await prisma.$queryRaw<Array<{ entityId: string; userId: string | null; payloadBefore: unknown; payloadAfter: unknown }>>(Prisma.sql`
-      SELECT "entityId", "userId", "payloadBefore", "payloadAfter" FROM (
-        SELECT l."entityId", l."userId", l."payloadBefore", l."payloadAfter", l."createdAt",
+  const beforeMoney = new Map<string, MoneyLogStep[]>()
+  if (touchedIds.length) {
+    const rows = await prisma.$queryRaw<Array<{ entityId: string; userId: string | null; payloadBefore: unknown; payloadAfter: unknown; evidence: unknown; amazonResponseStatus: string | null }>>(Prisma.sql`
+      SELECT "entityId", "userId", "payloadBefore", "payloadAfter", "evidence", "amazonResponseStatus" FROM (
+        SELECT l."entityId", l."userId", l."payloadBefore", l."payloadAfter", l."evidence", l."amazonResponseStatus", l."createdAt",
                row_number() OVER (PARTITION BY l."entityId" ORDER BY l."createdAt" DESC) AS n
           FROM "AdvertisingActionLog" l
-         WHERE l."actionType" = 'AD_BUDGET_UPDATE' AND l."entityType" = 'CAMPAIGN' AND l."entityId" = ANY(${scheduleOpened}::text[])
+         WHERE l."actionType" = 'AD_BUDGET_UPDATE' AND l."entityType" = 'CAMPAIGN' AND l."entityId" = ANY(${touchedIds}::text[])
            AND l."rolledBackAt" IS NULL AND l."createdAt" < ${dayStart}) x
        WHERE x.n <= ${GIVE_BACK_LOOKBACK}
        ORDER BY "entityId", "createdAt" DESC`)
-    for (const r of rows) beforeSteps.set(r.entityId, [...(beforeSteps.get(r.entityId) ?? []), budgetLogStepOf(r)])
+    for (const r of rows) {
+      beforeSteps.set(r.entityId, [...(beforeSteps.get(r.entityId) ?? []), budgetLogStepOf(r)])
+      beforeMoney.set(r.entityId, [...(beforeMoney.get(r.entityId) ?? []), moneyLogStepOf(r)])
+    }
   }
-  const openingOf = (c: CampaignRow) => loggedDayOpeningCents(todaySteps.get(c.id) ?? [], beforeSteps.get(c.id) ?? []) ?? decimalCents(c.dailyBudget) ?? 0
+  const brainOpening = (c: CampaignRow) => brainDayOpeningCents({
+    todayOldestFirst: todayMoney.get(c.id) ?? [], beforeTodayNewestFirst: beforeMoney.get(c.id) ?? [],
+    currentCents: decimalCents(c.dailyBudget), standardOpening: loggedDayOpeningCents(todaySteps.get(c.id) ?? [], beforeSteps.get(c.id) ?? []),
+  })
+  const openingOf = (c: CampaignRow) => brainOpening(c).openingCents ?? 0
+  const ladderOf = (c: CampaignRow) => {
+    const o = brainOpening(c)
+    return o.openingCents == null ? null : ladderNowOf({ todayOldestFirst: todayMoney.get(c.id) ?? [], beforeTodayNewestFirst: beforeMoney.get(c.id) ?? [], currentCents: decimalCents(c.dailyBudget) ?? 0, openingCents: o.openingCents, carried: o.carried })
+  }
+  // AB-8 — who set each portfolio's cap today: the brain's money writer when its newest write of that portfolio set this
+  // very cap (same amount, monthly), else anyone else. And Amazon's usage of the caps, when the run asks (never a dry run).
+  const portfolioWrites = portfolioRows.length ? await prisma.$queryRaw<Array<{ entityId: string; userId: string | null; payloadAfter: unknown }>>(Prisma.sql`
+    SELECT DISTINCT ON ("entityId") "entityId", "userId", "payloadAfter" FROM "AdvertisingActionLog"
+     WHERE "actionType" = 'AD_PORTFOLIO_UPDATE' AND "entityType" = 'PORTFOLIO' AND "entityId" = ANY(${portfolioRows.map((p) => p.id)}::text[])
+       AND "rolledBackAt" IS NULL AND "amazonResponseStatus" = 'SUCCESS'
+     ORDER BY "entityId", "createdAt" DESC`) : []
+  const lastWrite = new Map(portfolioWrites.map((r) => [r.entityId, r]))
+  const capped = portfolioRows.filter((p) => p.budgetPolicy && p.budgetPolicy !== 'NO_CAP' && decimalCents(p.budgetAmount) != null)
+  const usageRead: PortfolioUsageRead | null = opts.readPortfolioUsage && capped.length ? await readPortfolioBudgetUsage(market, capped.map((p) => p.externalPortfolioId)) : null
+  const monthFromMs = thisMonth.getTime()
+  const usageOf = (pid: string): PortfolioUsage | null => {
+    if (!usageRead) return null
+    const row = capped.find((p) => p.externalPortfolioId === pid)
+    if (!row) return { state: 'not-asked', fraction: null, budgetCents: null, asOf: null, why: 'no cap: nothing to read' }
+    if (usageRead.state !== 'read') return { state: usageRead.state, fraction: null, budgetCents: null, asOf: null, why: usageRead.why }
+    const r = usageRead.readings.get(pid)
+    if (!r) return { state: 'unread', fraction: null, budgetCents: null, asOf: null, why: 'Amazon gave no reading for this portfolio' }
+    const live = r.asOf.getTime() >= monthFromMs
+    return { state: live ? 'live' : 'stale', fraction: r.fraction, budgetCents: r.budgetCents, asOf: r.asOf.toISOString(), why: live ? `Amazon's reading of ${r.asOf.toISOString()}` : `Amazon's newest reading is of an earlier month (${r.asOf.toISOString()})` }
+  }
+  const setByOf = (row: { id: string; budgetAmount: unknown; budgetPolicy: string | null }): 'brain' | 'other' | null => {
+    const amount = decimalCents(row.budgetAmount)
+    if (!row.budgetPolicy || row.budgetPolicy === 'NO_CAP' || amount == null) return null
+    const w = lastWrite.get(row.id)
+    const after = (w?.payloadAfter ?? null) as { budgetAmount?: unknown; budgetPolicy?: unknown } | null
+    const same = after != null && decimalCents(after.budgetAmount) === amount && String(after.budgetPolicy ?? '') === row.budgetPolicy
+    return w?.userId === MONEY_PORTFOLIO_ACTOR && same ? 'brain' : 'other'
+  }
   const strategyByGroup = groups.length ? await loadStrategy(market, groups.map((g) => g.id), now) : new Map()
   const enrolled = new Set(enrollments.map((e) => e.productId))
 
@@ -298,7 +358,8 @@ export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan:
     // Today's earlier plan: the base step it decided (one base move a day) and the ladder's rungs already given.
     const prev = opts.previous?.get(root)
     const earlier = prev && prev.day === today ? prev.campaigns : []
-    const rungOf = new Map(earlier.map((c) => [c.campaignId, c.ladder?.pct ?? 0]))
+    // AB-8 — the rung in force today: this plan's, or one an earlier plan of today gave (ladderTodayPct).
+    const rungOf = new Map(earlier.map((c) => [c.campaignId, Math.max(c.ladderTodayPct ?? 0, c.ladder?.pct ?? 0)]))
     const stepOf = new Map(earlier.filter((c) => c.action === 'raise' || c.action === 'lower' || c.action === 'keep').map((c) => [c.campaignId, c.stepCents]))
     const campaignFacts: CampaignMoneyFacts[] = [...own.map((c) => ({ c, owner: 'product' as const })), ...shared.map((c) => ({ c, owner: 'shared' as const }))]
       .sort((a, b) => a.c.name.localeCompare(b.c.name) || a.c.id.localeCompare(b.c.id))
@@ -316,7 +377,10 @@ export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan:
           settled: { spendCents: st.cost, salesCents: st.sales, orders: st.orders },
           usage: u && (u.state === 'live' || u.state === 'derived') && u.fraction != null ? u.fraction : null,
           spikeWhy: spikes.get(c.id) ?? null,
-          ladderedTodayPct: rungOf.get(c.id) ?? 0,
+          // AB-8 — where the brain writes the ladder (AUTO, switch live), the rung in force is the one it asked today (the
+          // budget log); elsewhere the shadow's memory of today's earlier plans.
+          ladderedTodayPct: brainLiveCeiling() && cs.levers.budgets.effective === 'AUTO' ? askedRungPct(todayMoney.get(c.id) ?? [], stepOf.get(c.id) ?? null) : rungOf.get(c.id) ?? 0,
+          ladderNow: ladderOf(c),
           excluded: cs.excluded.value,
           budgets: { effective: cs.levers.budgets.effective, lock: cs.levers.budgets.lock, why: cs.levers.budgets.why },
           budgetUsePct: cs.values.budgetUsePct,
@@ -336,7 +400,8 @@ export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan:
         otherCampaigns: pid ? inPortfolios.filter((x) => x.portfolioId === pid && !list.some((c) => c.id === x.id)).length : 0,
         lastMonthSpendCents: between(days, lastMonthFrom, lastMonthTo).cost,
         monthSpendCents: between(days, monthFrom, dataThrough ?? '').cost + (streamLive ? streamIn : 0),
-        today: row ? { policy: row.budgetPolicy ?? null, amountCents: decimalCents(row.budgetAmount), inBudget: row.inBudget } : null,
+        today: row ? { policy: row.budgetPolicy ?? null, amountCents: decimalCents(row.budgetAmount), inBudget: row.inBudget, setBy: setByOf(row) } : null,
+        ...(usageRead && pid ? { usage: usageOf(pid) } : {}),
       }
     })
 
@@ -357,6 +422,7 @@ export async function loadMarketMoney(marketIn: string, opts: { now: Date; plan:
       portfolios, campaigns: campaignFacts, band,
       limits: limitsRow?.adProducts.SPONSORED_PRODUCTS ? { minCents: limitsRow.adProducts.SPONSORED_PRODUCTS.dailyBudget.min, maxCents: limitsRow.adProducts.SPONSORED_PRODUCTS.dailyBudget.max } : null,
       warnings,
+      today: Object.fromEntries(campaignFacts.map((c): [string, CampaignTodayFacts] => [c.campaignId, campaignTodayOf(todayMoney.get(c.campaignId) ?? [])])),
     })
   }
   return { market, currency, clock, split, dataThrough, products, facts }
