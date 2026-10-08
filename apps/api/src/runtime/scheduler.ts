@@ -68,6 +68,7 @@ import { startOutboundQueueJanitorCron } from "../jobs/outbound-queue-janitor.jo
 import { startEbayItemStatusReconcileCron } from "../jobs/ebay-item-status-reconcile.job.js";
 import { startAmazonQtyReadbackCron } from "../jobs/amazon-qty-readback.job.js";
 import { startAmazonAsinFillCron } from "../jobs/amazon-asin-fill.job.js";
+import { startSalesRankFeedCron } from "../jobs/sales-rank-feed.job.js";
 import { startIdentityChannelSweepCron } from "../jobs/identity-channel-sweep.job.js";
 import { startEbayReadbackCron } from "../jobs/ebay-readback.job.js";
 import { startShopifyQtyReadbackCron } from "../jobs/shopify-qty-readback.job.js";
@@ -572,6 +573,9 @@ export async function startScheduler(): Promise<void> {
   // Published Amazon listings read their ASIN once Amazon makes them visible (Publish reads it once, at promotion).
   // Default-ON; opt out via NEXUS_AMAZON_ASIN_FILL=0.
   startAmazonAsinFillCron();
+  // Amazon Best Sellers Rank of every live Amazon listing, every 3 hours (catalog salesRanks, read only).
+  // Default-ON; opt out via NEXUS_SALES_RANK_FEED=off.
+  startSalesRankFeedCron();
   // MCP full control I6 — what each channel account holds (identity audit #3, #4, #12).
   // Default-OFF; NEXUS_IDENTITY_SWEEP=1 turns it on.
   startIdentityChannelSweepCron();
