@@ -248,6 +248,63 @@ describe('the door answers the listings it moved, refuses a listing it did not e
     expect(outcome).toMatchObject({ outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: 4, listings: EU_AFTER })
   })
 
+  /* GALE 2026-10-08: sizes converted FBA → FBM on Amazon IT, their DE offer closed, an SE row still a never-published
+     draft that reads FBA. The preview showed Follow; the commit refused "Amazon-managed" because the draft voted. */
+  describe('a never-published draft does not vote in the FBA verdict; a live FBA offer still refuses the whole write', () => {
+    const GROUP = [
+      { id: 'l-it', marketplace: 'IT', version: 3, offerClosedAt: null },
+      { id: 'l-de', marketplace: 'DE', version: 5, offerClosedAt: new Date('2026-10-07T00:00:00Z') },
+      { id: 'l-se', marketplace: 'SE', version: 1, offerClosedAt: null },
+    ]
+    const live = (ids: string[]) => (args: { where?: { isPublished?: boolean; id?: { in?: string[] } } }) =>
+      args?.where?.isPublished ? (args.where.id?.in ?? []).filter((id) => ids.includes(id)).map((id) => ({ id })) : GROUP
+    const fbaAmong = (fba: string[]) => async (ids: readonly string[]) => new Set(ids.filter((id) => fba.includes(id)))
+
+    it('closed FBA DE + FBM IT + draft FBA SE → Follow applied; the verdict asks about the live IT offer only', async () => {
+      h.findMany.mockReset().mockImplementation(async (args: never) => live(['l-it'])(args))
+      vi.mocked(amazonManagedListingIds).mockReset().mockImplementation(fbaAmong(['l-de', 'l-se']))
+      vi.mocked(setFollowMasterQuantity).mockReset().mockResolvedValue({ ...done, results: [
+        { listingId: 'l-it', sku: 'S', channel: 'AMAZON', marketplace: 'IT', action: 'FOLLOW', quantity: 41 },
+        { listingId: 'l-se', sku: 'S', channel: 'AMAZON', marketplace: 'SE', action: 'SKIPPED_FBA', quantity: null },
+      ] })
+      const read = euRead()
+      ;(read as { rows: Array<{ cells: Record<string, { sync: unknown }> }> }).rows[0]!.cells['AMAZON:EU']!.sync = { ...cells({}).sync!, kind: 'PINNED', mode: 'PINNED' }
+      const outcome = await applyCell(read, { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncMode', value: 'FOLLOW', expectedVersion: 3 } as never, ctx)
+      expect(outcome).toMatchObject({ outcome: 'applied', version: 4, expandedTo: ['AMAZON:IT', 'AMAZON:SE'] })
+      expect(vi.mocked(amazonManagedListingIds).mock.calls[0]![0]).toEqual(['l-it'])
+      expect(vi.mocked(setFollowMasterQuantity).mock.calls[0]![0]).toMatchObject({ follow: true, markets: ['IT', 'SE'] })
+    })
+
+    it('the same holds for a buffer: a draft the primitive skips as FBA does not refuse it', async () => {
+      h.findMany.mockReset().mockImplementation(async (args: never) => live(['l-it'])(args))
+      vi.mocked(amazonManagedListingIds).mockReset().mockImplementation(fbaAmong(['l-se']))
+      vi.mocked(setStockBuffer).mockReset().mockResolvedValue({ ...done, results: [{ listingId: 'l-se', sku: 'S', channel: 'AMAZON', marketplace: 'SE', action: 'SKIPPED_FBA', buffer: 0, quantity: null }] })
+      const outcome = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncBuffer', value: 2, expectedVersion: 3 } as never, ctx)
+      expect(outcome).toMatchObject({ outcome: 'applied', version: 4 })
+    })
+
+    it('an OPEN, published FBA DE offer beside FBM IT still refuses the whole write before anything is staged', async () => {
+      const open = GROUP.map((r) => (r.id === 'l-de' ? { ...r, offerClosedAt: null } : r))
+      h.findMany.mockReset().mockImplementation(async (args: { where?: { isPublished?: boolean; id?: { in?: string[] } } }) =>
+        args?.where?.isPublished ? (args.where.id?.in ?? []).filter((id) => id !== 'l-se').map((id) => ({ id })) : open)
+      h.updateMany.mockClear()
+      vi.mocked(amazonManagedListingIds).mockReset().mockImplementation(fbaAmong(['l-de']))
+      vi.mocked(setFollowMasterQuantity).mockReset().mockResolvedValue(done)
+      const outcome = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3 } as never, ctx)
+      expect(outcome).toMatchObject({ outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: 3 })
+      expect(h.updateMany).not.toHaveBeenCalled()
+      expect(setFollowMasterQuantity).not.toHaveBeenCalled()
+    })
+
+    it('a LIVE offer the primitive skips as FBA still refuses (staged), as before', async () => {
+      h.findMany.mockReset().mockImplementation(async (args: never) => live(['l-it', 'l-se'])(args))
+      vi.mocked(amazonManagedListingIds).mockReset().mockResolvedValue(new Set())
+      vi.mocked(setFollowMasterQuantity).mockReset().mockResolvedValue({ ...done, results: [{ listingId: 'l-se', sku: 'S', channel: 'AMAZON', marketplace: 'SE', action: 'SKIPPED_FBA', quantity: null }] })
+      const outcome = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3 } as never, ctx)
+      expect(outcome).toMatchObject({ outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: 4 })
+    })
+  })
+
   it('another listing on the coordinate than the caller saw is a conflict carrying the current version; nothing is written', async () => {
     const outcome = await applyCell(euRead(), { rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', value: 7, expectedVersion: 3, expectedListingId: 'l-other-account' } as never, ctx)
     expect(outcome).toEqual({ rowId: 'row', coordinateKey: 'AMAZON:EU', cell: 'syncQty', outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: 3 })

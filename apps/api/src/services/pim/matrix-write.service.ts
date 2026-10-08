@@ -152,17 +152,46 @@ async function bumpTx(targets: readonly Target[], extra?: Prisma.ChannelListingU
 const asInt = (v: unknown): number | null => { const n = typeof v === 'number' ? v : Number(v); return Number.isInteger(n) ? n : null }
 
 /**
+ * The listings among these that are live Amazon offers — published, not ended or removed: the push layer's own rule
+ * (`readEuIntentRows`) and Sync Control's EU check. A never-published draft (an SE row prepared beside a Pan-EU group)
+ * has no offer at Amazon, so it holds no Amazon-managed quantity and never votes in the FBA verdict of a quantity write.
+ */
+async function liveAmazonOfferIds(listingIds: readonly string[]): Promise<Set<string>> {
+  if (!listingIds.length) return new Set()
+  const rows = await prisma.channelListing.findMany({
+    where: { id: { in: [...listingIds] }, isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+    select: { id: true },
+  })
+  return new Set(rows.map((r) => r.id))
+}
+
+/** Owner rule (FBA quantity untouchable): does any LIVE Amazon offer among the targets read Amazon-managed? */
+async function liveAmazonManaged(channel: string, targets: readonly Target[]): Promise<boolean> {
+  if (channel !== 'AMAZON') return false
+  const live = await liveAmazonOfferIds(targets.map((t) => t.id))
+  return (await amazonManagedListingIds(targets.filter((t) => live.has(t.id)).map((t) => t.id))).size > 0
+}
+
+/** A row the primitive skipped as FBA refuses the write — on Amazon only when it is a live offer (a draft is not one). */
+async function skippedLiveFba(channel: string, results: ReadonlyArray<{ listingId: string; action: string }>): Promise<boolean> {
+  const skipped = results.filter((x) => x.action === 'SKIPPED_FBA').map((x) => x.listingId)
+  if (!skipped.length) return false
+  if (channel !== 'AMAZON') return true
+  return (await liveAmazonOfferIds(skipped)).size > 0
+}
+
+/**
  * The quantity MODE writes of the matrix's Mode and Qty cells — ONE implementation for every screen that changes how a
  * listing's quantity is set (the Studio matrix, the listings grid's stock cell, the listing drawer's and the bulk
  * bar's follow toggles, the reset to master, 2026-10-01), so they cannot drift:
- *   1. Owner rule: FBA quantity is untouchable. Any Amazon-managed target refuses the whole write BEFORE anything is
- *      staged (`amazonManagedListingIds`, the primitive's own verdict), so neither the FBA row nor half of an EU group
- *      is written. `staged: false`.
+ *   1. Owner rule: FBA quantity is untouchable. Any Amazon-managed target that is a live offer refuses the whole write
+ *      BEFORE anything is staged (`amazonManagedListingIds`, the primitive's own verdict), so neither the FBA row nor
+ *      half of an EU group is written. `staged: false`. A never-published draft is no offer: it does not vote.
  *   2. Every target's version is bumped under CAS — with a typed quantity staged into `quantity` (D-MX3) — and a lost
  *      one throws `Conflict`.
  *   3. The follow/pin primitive (`setFollowMasterQuantity`): FOLLOW rejoins the stock and publishes it; PIN snapshots
- *      the (typed) quantity into the three quantity columns. Either queues the QUANTITY_UPDATE. A target it still skips
- *      as FBA refuses with `staged: true`.
+ *      the (typed) quantity into the three quantity columns. Either queues the QUANTITY_UPDATE. A live offer it still
+ *      skips as FBA refuses with `staged: true`; a draft it skips is left as it is (nothing at Amazon to protect).
  *   4. (Checked before 2.) A PIN on a SKU that sells from another business's stock is refused with the Matrix's
  *      sentence (`sharedStockReason`), `staged: false` — the shared-stock rule of #230.
  * `coordinates` narrows the primitive to exactly the target listings (the listing screens); the matrix narrows by markets.
@@ -191,7 +220,7 @@ export async function writeQuantityMode(input: {
   actor: string
   coordinates?: ListingCoordinate[]
 }): Promise<{ refused?: string; staged?: boolean }> {
-  if (input.channel === 'AMAZON' && (await amazonManagedListingIds(input.targets.map((t) => t.id))).size > 0) return { refused: MATRIX_COPY.amazonManaged, staged: false }
+  if (await liveAmazonManaged(input.channel, input.targets)) return { refused: MATRIX_COPY.amazonManaged, staged: false }
   // 4. Shared stock by SKU (#230): a SKU that sells from another business's stock gets no fixed number — neither a PIN
   //    of what it shows nor a typed one (the Matrix holds its Qty and Mode cells the same way). Back to Follow is fine.
   //    Refused before anything is staged; the database refuses it too (nexus_stock_pool_quantity_guard).
@@ -201,7 +230,7 @@ export async function writeQuantityMode(input: {
   }
   await bumpTx(input.targets, !input.follow && input.quantity !== undefined ? { quantity: input.quantity } : undefined)
   const r = await setFollowMasterQuantity({ productIds: [input.productId], channel: input.channel as 'AMAZON' | 'EBAY', markets: input.targets.map((t) => t.marketplace), follow: input.follow, actor: input.actor, ...(input.coordinates ? { coordinates: input.coordinates } : {}) })
-  if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return { refused: MATRIX_COPY.amazonManaged, staged: true }
+  if (await skippedLiveFba(input.channel, r.results)) return { refused: MATRIX_COPY.amazonManaged, staged: true }
   return {}
 }
 
@@ -240,9 +269,10 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
   const markets = targets.map((t) => t.marketplace)
   /* Owner rule: FBA quantity is untouchable. An inventory cell lands on every target — on Amazon EU, every open EU row
      of the SKU — and the staging below writes them BEFORE the primitive skips an FBA row. So an Amazon-managed target
-     refuses the cell here, with the primitive's own verdict (`amazonManagedListingIds`) and the pin step's sentence,
-     and nothing is written: not the FBA row, and not half of the group either. */
-  const amazonManaged = async () => channel === 'AMAZON' && (await amazonManagedListingIds(targets.map((t) => t.id))).size > 0
+     that is a live offer refuses the cell here, with the primitive's own verdict (`amazonManagedListingIds`) and the pin
+     step's sentence, and nothing is written: not the FBA row, and not half of the group either. A never-published draft
+     (no offer at Amazon) does not vote. */
+  const amazonManaged = () => liveAmazonManaged(channel, targets)
   const managedRefusal = (): MatrixWriteOutcome => ({ ...base, outcome: 'refused', reason: MATRIX_COPY.amazonManaged, version: cells.version })
 
   try {
@@ -280,7 +310,7 @@ export async function applyCell(read: MatrixRead, w: MatrixWriteCell, ctx: DoorC
         if (await amazonManaged()) return managedRefusal()
         await bumpTx(targets)
         const r = await setStockBuffer({ productIds: [row.id], channel, markets, buffer: n, actor: ctx.actor })
-        if (r.results.some((x) => x.action === 'SKIPPED_FBA')) return stagedRefusal(MATRIX_COPY.amazonManaged)
+        if (await skippedLiveFba(channel, r.results)) return stagedRefusal(MATRIX_COPY.amazonManaged)
         return applied()
       }
       case 'fulfilment': {
