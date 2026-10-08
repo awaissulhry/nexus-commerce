@@ -6,7 +6,7 @@
  *   which changes   AdvertisingActionLog rows that reached Amazon in the last `lookbackDays`, each a bid (a target's or
  *                   an ad group's default), a campaign's daily budget or its placements, written by
  *                     · an engine that decides by itself: auto-bid, the hourly bid plans (rank-defend), autopilot,
- *                       top-of-search defense, the coverage engine, budget pools (JUDGED_ENGINES)
+ *                       top-of-search defense, the coverage engine, budget pools, the bid brain (JUDGED_ENGINES)
  *                     · an Amazon ads rule at AUTO: its actor `automation:<ruleId>` AND a live (not dry-run) run of that
  *                       rule at that moment (AutomationRuleExecution) — a rule's suggestion a person applied writes as the
  *                       rule too, but no live run covers it: that is a person's decision, left alone
@@ -71,7 +71,27 @@ export const SHOWN = 50
 export const STOP_BID_CENTS = 5
 
 /** The engines whose changes are their own decisions: judged. */
-export const JUDGED_ENGINES: ReadonlySet<EngineKey> = new Set<EngineKey>(['auto-bid', 'rank-defend', 'autopilot', 'tos-defense', 'coverage-engine', 'budget-pools'])
+export const JUDGED_ENGINES: ReadonlySet<EngineKey> = new Set<EngineKey>(['auto-bid', 'rank-defend', 'autopilot', 'tos-defense', 'coverage-engine', 'budget-pools', 'bid-brain'])
+
+/**
+ * BID BRAIN BB-10 — a bid brain change auto-undo puts back (itself at AUTO, or a person's approved request) holds its
+ * campaign for this many days: HELD, the brain raises nothing there (lowering still goes), so it does not write the same
+ * change again on the next data day. Auto-undo decides; the brain never undoes itself. The hold ends by itself.
+ */
+export const BRAIN_HOLD_AFTER_UNDO_DAYS = 7
+
+/** BB-10 — hold the campaign of an undone bid brain write (bid-brain/enrollment.ts holdCampaigns). Never fails the undo. */
+async function holdBrainAfterUndo(actor: string | null | undefined, campaignId: string | null | undefined, by: string, why: string, now: Date = new Date()): Promise<string[]> {
+  const { BRAIN_ACTOR } = await import('./bid-brain/live.js')
+  if (actor !== BRAIN_ACTOR || !campaignId) return []
+  try {
+    const { holdCampaigns } = await import('./bid-brain/enrollment.js')
+    return await holdCampaigns({ campaignIds: [campaignId], until: new Date(now.getTime() + BRAIN_HOLD_AFTER_UNDO_DAYS * DAY_MS), by, reason: `auto-undo put back a bid brain change: ${why}` })
+  } catch (error) {
+    logger.warn('[ads-auto-undo] could not hold the bid brain on the campaign it undid', { campaignId, error: String(error).slice(0, 200) })
+    return []
+  }
+}
 
 export type LeftAlone = 'person' | 'person-approved' | 'brake' | 'schedule' | 'retry' | 'own' | 'unknown' | 'not-a-lever' | 'stop'
 export const LEFT_ALONE_WORDS: Record<LeftAlone, string> = {
@@ -702,7 +722,11 @@ export async function runAutoUndo(opts: { now?: Date; dryRun?: boolean } = {}): 
       } else if (!acted && action === 'undone') {
         const done = await undoNow(d.id, row.id, judged.why)
         if ('reason' in done) { action = 'held'; reason = done.reason }
-        else undoActionLogId = done.actionLogId
+        else {
+          undoActionLogId = done.actionLogId
+          // BB-10 — a bid brain change put back: the brain holds that campaign (no raises) for a week.
+          await holdBrainAfterUndo(d.userId, entity?.campaignId, AUTO_UNDO_ACTOR, judged.why, now)
+        }
       }
       if (!acted && (undoApprovalId !== (prior?.undoApprovalId ?? null) || undoActionLogId !== (prior?.undoActionLogId ?? null) || action !== data.action)) {
         await prisma.adsAutoUndoJudgement.update({ where: { id: row.id }, data: { action, actionReason: reason, undoApprovalId, undoActionLogId, final: action === 'held' ? !!longest?.complete : final } })
@@ -880,11 +904,14 @@ export async function planJudgedUndo(judgementId: string, approvalId?: string | 
 
 /** A person approved it: put the value back as the approved request (its change set), and record it on the judgement. */
 export async function runJudgedUndo(judgementId: string, run: { actor: `user:${string}` | `automation:${string}`; reason: string; manual: boolean; changeSetId: string }): Promise<{ ok: true; actionLogId: string | null } | { ok: false; error: string }> {
-  const j = await prisma.adsAutoUndoJudgement.findUnique({ where: { id: judgementId }, select: { actionLogId: true } })
+  const j = await prisma.adsAutoUndoJudgement.findUnique({ where: { id: judgementId }, select: { actionLogId: true, actor: true, entityType: true, entityId: true } })
   if (!j) return { ok: false, error: 'That auto-undo judgement is not found in this business.' }
   const { reverseJudgedWrite } = await import('./rollback.service.js')
   const out = await reverseJudgedWrite({ actionLogId: j.actionLogId, actor: run.actor, reason: run.reason, manual: run.manual, changeSetId: run.changeSetId })
   if ('reason' in out) return { ok: false, error: out.reason }
+  // BB-10 — a bid brain change put back on a person's word: the brain holds that campaign too.
+  const entity = (await entitiesNow([{ entityType: j.entityType, entityId: j.entityId }])).get(`${j.entityType}:${j.entityId}`)
+  await holdBrainAfterUndo(j.actor, entity?.campaignId, run.actor, `request ${run.changeSetId}`)
   await prisma.adsAutoUndoJudgement.update({
     where: { id: judgementId },
     data: { action: 'undone', actionAt: new Date(), actionReason: `a person approved request ${run.changeSetId}`, undoApprovalId: run.changeSetId, undoActionLogId: out.actionLogId, final: true },

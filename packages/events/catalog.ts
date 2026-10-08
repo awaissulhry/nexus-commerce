@@ -883,6 +883,27 @@ export const EVENTS = {
     }),
     subject: (p) => p.ruleId,
   }),
+  // Source: apps/api/src/services/advertising/bid-brain/shadow.ts (BID BRAIN BB-10)
+  'ads.bid-brain.run-completed': defineEvent({
+    type: 'ads.bid-brain.run-completed',
+    context: 'advertising',
+    description:
+      'A bid brain run wrote to the campaigns it owns: each keyword bid and placement write it queued or sent, with the ' +
+      'action-log row auto-undo judges later. Published only when the run wrote something; the brain never undoes itself.',
+    schema: z.strictObject({
+      runId: z.string().min(1),
+      mode: z.enum(['off', 'shadow', 'live']),
+      campaignIds: z.array(z.string().min(1)),
+      writes: z.array(z.strictObject({
+        actionLogId: z.string().min(1).nullable(),
+        entityId: z.string().min(1),
+        field: z.enum(['bid', 'placementBidding']),
+        from: z.number().nullable(),
+        to: z.number().nullable(),
+      })),
+    }),
+    subject: (p) => p.runId,
+  }),
 
   // ── purchasing ────────────────────────────────────────────────────────────
   // Source: po-events.service.ts

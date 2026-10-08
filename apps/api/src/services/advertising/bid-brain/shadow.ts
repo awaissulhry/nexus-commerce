@@ -18,6 +18,7 @@ import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { logger } from '../../../utils/logger.js'
+import { publishEvent } from '../../../lib/events/publish.js'
 import { engineGuardNote, openEngineGuard, type EngineGuard, type EngineGuardReport } from '../ads-engine-guard.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { decide, type Decision, type TargetFacts } from './decide.js'
@@ -29,6 +30,9 @@ import { stampPlanReceipts } from './plans.js'
 import { loadMarket, loadRun, SHADOW_MARKETS, type LastWrite, type PreviousDecision } from './load.js'
 
 export type BrainMode = 'off' | 'shadow' | 'live'
+
+/** BB-10 — one write the brain sent to a campaign it owns, as the run-completed event carries it (auto-undo's interface). */
+export interface BrainWriteRecord { campaignId: string; actionLogId: string | null; entityId: string; field: 'bid' | 'placementBidding'; from: number | null; to: number | null }
 /** Decisions are kept this many days. */
 export const DECISION_DAYS_KEPT = 30
 
@@ -42,7 +46,7 @@ export interface ShadowRun {
   runId: string
   mode: BrainMode
   /** BB-6 — `owned`: the market's campaigns the brain owns this run; `writes`: what became of their write decisions. */
-  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; owned?: number; writes?: WriteReport | null; placements?: PlacementReport }>
+  markets: Array<{ market: string; decided: number; stored: number; byAction: Record<string, number>; byLayer: Record<string, number>; brakes: string[]; owned?: number; writes?: WriteReport | null; placements?: PlacementReport; brainWrites?: BrainWriteRecord[] }>
   pruned: number
   /** BB-6 — the dial and the caps the live writes ran under (absent: nothing owned had to move). */
   guard?: EngineGuardReport
@@ -121,7 +125,22 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   return {
     market, decided: decisions.length, stored: data.length, byAction: count(decisions, 'action'), byLayer: count(decisions, 'layer'), brakes: run.marketBrakes as string[],
     ...(owned.size ? { owned: owned.size, writes: sent, ...(placed && (placed.written || placed.refused || placed.deferred) ? { placements: placed } : {}) } : {}),
+    ...(owned.size ? { brainWrites: brainWriteRecords(decisions, sent, placed, campaignOf) } : {}),
   }
+}
+
+/** BB-10 — what this market's run sent: each queued keyword bid (its action-log row) and each placement write. Pure. */
+export function brainWriteRecords(decisions: readonly Decision[], sent: WriteReport | null, placed: PlacementReport | null, campaignOf: (targetId: string) => string): BrainWriteRecord[] {
+  const out: BrainWriteRecord[] = []
+  for (const d of decisions) {
+    const o = sent?.byTarget.get(d.targetId)
+    if (o?.sent !== 'queued') continue
+    out.push({ campaignId: campaignOf(d.targetId), actionLogId: o.actionLogId, entityId: d.targetId, field: 'bid', from: d.currentCents, to: d.bidCents })
+  }
+  for (const [campaignId, p] of placed?.byCampaign ?? []) {
+    if (p.sent === 'written') out.push({ campaignId, actionLogId: null, entityId: campaignId, field: 'placementBidding', from: null, to: null })
+  }
+  return out
 }
 
 /** BB-7 — each owned campaign whose hourly plan sets placements this hour, with its highest base bid after this run. */
@@ -144,7 +163,7 @@ export function placementWrites(rows: { market: string; campaigns: ReadonlyMap<s
     const hour = hours?.get(campaignId)
     const c = rows.campaigns.get(campaignId)
     if (!hour?.key || !e.f.lanes?.length || e.floored || e.braked || !c || c.status !== 'ENABLED') continue
-    out.push({ campaignId, market: rows.market, lanes: e.f.lanes, current: c.placements ?? [], maxBidCents: e.maxBid, key: hour.key, note: e.f.planNote ?? `hourly plan ${hour.name}`, dataDay: e.f.dataDay })
+    out.push({ campaignId, market: rows.market, lanes: e.f.lanes, current: c.placements ?? [], maxBidCents: e.maxBid, key: hour.key, note: e.f.planNote ?? `hourly plan ${hour.name}`, dataDay: e.f.dataDay, raiseCap: e.f.raiseCap ?? null })
   }
   return out
 }
@@ -208,6 +227,14 @@ export async function runShadowOnce(opts: { now?: Date; mode?: BrainMode; onlyOw
   }
   const report = (guard as EngineGuard | null)?.report()
   if (report) out.guard = report
+  // BB-10 — what the run wrote, for auto-undo and every other reader (packages/events/catalog.ts, hard rule 8).
+  const writes = out.markets.flatMap((m) => m.brainWrites ?? [])
+  if (writes.length) {
+    await publishEvent(prisma, 'ads.bid-brain.run-completed', {
+      runId, mode, campaignIds: [...new Set(writes.map((w) => w.campaignId))].sort(),
+      writes: writes.map(({ actionLogId, entityId, field, from, to }) => ({ actionLogId, entityId, field, from, to })),
+    }).catch((err) => logger.warn('[bid-brain] could not publish the run-completed event', { runId, error: err instanceof Error ? err.message : String(err) }))
+  }
   return out
 }
 

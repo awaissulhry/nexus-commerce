@@ -163,14 +163,21 @@ export interface PlacementWrite {
   key: string
   note: string
   dataDay: string
+  /** BB-10 — why raises wait this hour (spend-guard.ts): a lane only comes down, never up. */
+  raiseCap?: string | null
 }
 
 /** What one campaign's placements become, and which lanes change; null when nothing changes. Pure. */
-export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'maxBidCents'>): { adjustments: Array<{ placement: string; percentage: number }>; changes: Array<{ lane: string; from: number; to: number; held: string | null }> } | null {
+export function placementPlan(w: Pick<PlacementWrite, 'lanes' | 'current' | 'maxBidCents' | 'raiseCap'>): { adjustments: Array<{ placement: string; percentage: number }>; changes: Array<{ lane: string; from: number; to: number; held: string | null }> } | null {
   if (!w.lanes.length) return null
   // The CR cap of placementsFor waits for the placement report (crRatio null): only the CPC ceilings hold here.
   const decided = placementsFor(w.maxBidCents, w.lanes, { aim: 1, hi: 1 })
-  const requested = decided.map((d) => ({ placement: placementOf(d.lane), percentage: d.pct }))
+  const liveOf = (p: string) => w.current.find((x) => x.placement === p)?.percentage ?? 0
+  // BB-10 — under the raise cap a lane may come down, never go up: it keeps what it has.
+  const requested = decided.map((d) => {
+    const placement = placementOf(d.lane)
+    return { placement, percentage: w.raiseCap && d.pct > liveOf(placement) ? liveOf(placement) : d.pct }
+  })
   const blended = w.lanes.length > 1
   const adjustments = blended
     ? buildBlendedAdjustments([...w.current], requested)

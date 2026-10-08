@@ -132,6 +132,8 @@ export interface RunRows {
   planHours?: ReadonlyMap<string, PlanHour>
   /** BB-7 — per campaign: its Min-bid entries this UTC day (rank-defend's and the brain's). */
   minBidEntries?: ReadonlyMap<string, number>
+  /** BB-10 — per owned campaign whose spend this hour heads above 1.5 × its same-hour average: why its raises wait. */
+  spendGuard?: ReadonlyMap<string, string>
   /** BB-8 — per campaign: what a playbook holds on it. */
   playbook?: ReadonlyMap<string, PlaybookFact>
   /** BB-8 — per keyword: the brain's last decision lowered it by an override; the bid of its last decision before. */
@@ -335,6 +337,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
       ratioCeiling,
       ...(plan?.lanes.length ? { lanes: plan.lanes } : {}),
       ...(plan ? { planNote: plan.note } : {}),
+      ...(run.spendGuard?.has(campaign.id) ? { raiseCap: run.spendGuard.get(campaign.id)! } : {}),
       listPriceCents: group.families.map((f) => m.prices.get(f)).find((p) => p != null && p > 0) ?? null,
       goal,
       limits: {

@@ -78,6 +78,8 @@ export interface TargetFacts {
   servingCents?: number | null
   /** BB-18 — the most a click can cost against the base bid (recipe.ts stackCeiling); absent: 1. */
   ratioCeiling?: number | null
+  /** BB-10 — the brain's own raise cap (spend-guard.ts): why a goal raise waits this run; absent: none. */
+  raiseCap?: string | null
   /** The newest settled day in the evidence, 'YYYY-MM-DD'. */
   dataDay: string
   /** The brain's last step on this target: the data day it was for, and from → to. */
@@ -293,6 +295,10 @@ export function decide(f: TargetFacts): Decision {
     const already = f.lastStep?.dataDay === f.dataDay && f.lastStep.toCents === f.currentCents
     const why = already ? `goal: already moved for data day ${f.dataDay} — waits for a new day (${recipe})` : `goal: ${recipe}; ${f.currentCents}¢ → ${ok.cents}¢ is too small a change`
     return { ...base, ...known, action: 'hold', layer: 'goal', bidCents: f.currentCents, placements: placements(f.currentCents), why }
+  }
+  // BB-10 — this hour's spend heads above 1.5 × its same-hour average: a goal raise waits (a cut still goes).
+  if (f.raiseCap && ok.cents > f.currentCents) {
+    return { ...base, ...known, action: 'hold', layer: 'goal', bidCents: f.currentCents, placements: placements(f.currentCents), why: `goal: raise held — ${f.raiseCap}; ${f.currentCents}¢ → ${ok.cents}¢ waits (${recipe})` }
   }
   return {
     ...base,
