@@ -630,6 +630,8 @@ describe('BB-13 — ads-overview dataVintage', () => {
       // Last night's ranged pull (asked at 01:15 on TODAY, the window's last day): it settles the oldest day of its span.
       const asked = new Date(dayBefore(0).getTime() + 75 * 60_000)
       await db.amazonAdsReportJob.create({ data: { profileId: 'P1', adProduct: 'SPONSORED_PRODUCTS', reportTypeId: 'spCampaigns', externalReportId: 'r-v', startDate: dayBefore(8), endDate: dayBefore(1), configuration: {}, status: 'COMPLETED', createdAt: asked, ingestedAt: asked } })
+      // The catch-up has re-read part of the older days so far: dayBefore(20)..dayBefore(9); dayBefore(29)..dayBefore(21) wait.
+      await db.amazonAdsReportJob.create({ data: { profileId: 'P1', adProduct: 'SPONSORED_PRODUCTS', reportTypeId: 'spCampaigns', externalReportId: 'r-c', startDate: dayBefore(20), endDate: dayBefore(9), configuration: {}, status: 'COMPLETED', createdAt: asked, ingestedAt: asked } })
       const vintage = (pulledAt: Date, ageDays: number, sales7dCents: number, orders7d: number) =>
         db.adsDailyVintage.create({ data: { profileId: 'P1', marketplace: 'IT', adProduct: 'SPONSORED_PRODUCTS', entityType: 'CAMPAIGN', entityId: 'EXT-C1', date: new Date(`${day}T00:00:00.000Z`), pulledAt, ageDays, impressions: 500, clicks: 11, costMicros: 4_320_000n, sales7dCents, orders7d } })
       await vintage(dayBefore(11), 0, 2000, 1)
@@ -639,6 +641,9 @@ describe('BB-13 — ads-overview dataVintage', () => {
     expect(it_.dataVintage).toMatchObject({
       settledThrough: ymd(dayBefore(8)),
       stillFillingFrom: ymd(dayBefore(7)),
+      // Counted day by day: the newest settled day says nothing about the 9 older days the catch-up has not reached.
+      unsettledDays: { stillFilling: 8, notReread: 9 },
+      note: `The newest settled day is ${ymd(dayBefore(8))}; 8 days of this window after it are still filling (Amazon adds a click's purchase to its day for 7 days, 14 for Brands and Display). 9 days of this window before it have no settled copy yet: still being re-read (the first re-read takes 2-3 nights), or older than the 60 days the re-read reaches.`,
       gap: { days: 1, campaignDays: 1, firstCopy: { salesCents: 2000, orders: 1 }, settled: { salesCents: 2468, orders: 2 }, salesGapPct: 23.4, ordersGapPct: 100 },
     })
     const hidden = (await call('ads-overview', { market: 'IT', days: 30 }, operator())).data!.markets[0].dataVintage

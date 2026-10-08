@@ -403,16 +403,21 @@ function automationSummary(state: Awaited<ReturnType<typeof getAutomationState>>
   }
 }
 
-/** W4-1 — also the figures of report-ads-run (ads-manager.tools.ts): a report states the numbers this read states. */
 /** BB-13 — a market's settled days and the first-copy gap, in the words ads-overview gives. */
 function vintageOf(v: MarketVintage | undefined) {
   if (!v) return null
+  const days = (n: number) => `${n} day${n === 1 ? '' : 's'}`
+  const why = 'Amazon adds a click\'s purchase to its day for 7 days, 14 for Brands and Display'
+  const notReread = v.unsettled.notReread
+    ? ` ${days(v.unsettled.notReread)} of this window before it ${v.unsettled.notReread === 1 ? 'has' : 'have'} no settled copy yet: still being re-read (the first re-read takes 2-3 nights), or older than the 60 days the re-read reaches.`
+    : ''
   return {
     settledThrough: v.settledThrough,
     stillFillingFrom: v.stillFillingFrom,
+    unsettledDays: v.unsettled,
     note: v.settledThrough
-      ? `Days up to ${v.settledThrough} hold Amazon's settled numbers; later days are still filling (Amazon adds a click's purchase to its day for 7 days, 14 for Brands and Display).`
-      : 'No day holds a settled copy yet: every day may still gain sales (Amazon adds a click\'s purchase to its day for 7 days, 14 for Brands and Display).',
+      ? `The newest settled day is ${v.settledThrough}; ${days(v.unsettled.stillFilling)} of this window after it ${v.unsettled.stillFilling === 1 ? 'is' : 'are'} still filling (${why}).${notReread}`
+      : `No day holds a settled copy yet: every day of this window may still gain sales (${why}).`,
     gap: v.measured
       ? {
           days: v.measured.days,
@@ -427,6 +432,7 @@ function vintageOf(v: MarketVintage | undefined) {
   }
 }
 
+/** W4-1 — also the figures of report-ads-run (ads-manager.tools.ts): a report states the numbers this read states. */
 export async function amazonOverview(args: { market?: string; days: number }) {
   const { range, window } = windowOf(args.days)
   const campaigns = await prisma.campaign.findMany({
