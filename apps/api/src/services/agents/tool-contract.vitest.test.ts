@@ -5,7 +5,8 @@
  *   1. name kebab-case `verb-noun`; a short title; a change tool's description says it waits for a person — and, when
  *      its ceiling lets the business confirm it in Claude or run it by rule, never that it ALWAYS waits for a person in
  *      Nexus, nor that a person approves it in Nexus without the other way (in Claude; by rule); at `auto`, never that
- *      it always waits for, or needs, a person at all (N3, widened in AA-W2-1).
+ *      it always waits for, or needs, a person at all (N3, widened in AA-W2-1); at `ask`, never that it can be confirmed in
+ *      Claude (batch 2 fix).
  *   2. `requires` names real permissions (ai.run is added by the door).
  *   3. `input` is a zod object; every argument is described; every list is bounded (≤ 250); a `channel`
  *      argument is an enum; NO argument names a business or workspace — the business comes from the caller.
@@ -205,6 +206,8 @@ const ALWAYS_IN_NEXUS = /\balways waits for a person(?: to approve it)?\s+in Nex
 const ALWAYS_A_PERSON = /\balways (?:waits for|needs|asks for) a person\b|\ba person always (?:approves|decides)\b|\bevery (?:change|move|request|step) waits for a person\b/i
 const A_PERSON_IN_NEXUS =
   /\b(?:waits for a person|a person approves (?:it|this|the change)|nothing (?:changes|is created) until a person approves (?:it|this))\b[^.;]*\bin Nexus\b|\brequires approval\b/i
+/** Batch 2 fix — the claim that a person may confirm it in Claude (not "never confirmed in Claude"). */
+const CONFIRMED_IN_CLAUDE = /\b(?:or|and) (?:the person who asked )?confirms? it in Claude\b|\bor confirmed in Claude\b/i
 const THE_OTHER_WAY = {
   confirm: /\bin Claude\b/i,
   auto: /\bby (?:its|their|the business(?:'|’)?s?) rule\b|\bitself\b|\blets it run\b|\brun inside\b/i,
@@ -268,6 +271,10 @@ function contractProblems(tool: AgentTool, material: Record<string, string[]> = 
       bad(1, `says a person approves it in Nexus, but not that it can be ${can}`)
     }
   }
+
+  // Batch 2 fix — the other way round: at `ask` (never confirmed in Claude, never by rule), never that it can be confirmed
+  // in Claude (set-bid-brain-enrollment said it while its ceiling was ask).
+  if (change && ceiling === 'ask' && CONFIRMED_IN_CLAUDE.test(tool.description)) bad(1, 'says it can be confirmed in Claude, but its ceiling is ask')
 
   // 2 — permissions
   if (!tool.requires?.length || !tool.requires.every(isValidPermission)) bad(2, 'requires an unknown permission')
@@ -843,6 +850,7 @@ describe('C1 — each rule can fail', () => {
     [{ description: 'Changes an example. Always waits for a person in Nexus.', maxClaudeTrust: 'confirm' }, 'says it always waits for a person in Nexus'],
     [{ description: 'Changes an example. Waits for a person to approve it in Nexus.', maxClaudeTrust: 'confirm' }, 'says a person approves it in Nexus, but not that it can be confirmed in Claude'],
     [{ description: 'Changes an example. A person approves it in Nexus first.', maxClaudeTrust: 'confirm' }, 'but not that it can be confirmed in Claude'],
+    [{ description: 'Changes an example. A person approves it in Nexus (or confirms it in Claude with their code).', maxClaudeTrust: 'ask' }, 'says it can be confirmed in Claude, but its ceiling is ask'],
     [{ description: 'Changes an example (requires approval).', maxClaudeTrust: 'auto', ...facts }, 'but not that it can be run by the business\'s rule'],
     [{ description: 'Changes an example. Waits for a person: approved in Nexus, or confirmed in Claude.', maxClaudeTrust: 'auto', ...facts }, 'but not that it can be run by the business\'s rule'],
     [{ description: 'Changes an example. Nothing changes until a person approves it in Nexus; it always waits for a person.', maxClaudeTrust: 'auto', ...facts }, 'says it always waits for (or needs) a person'],

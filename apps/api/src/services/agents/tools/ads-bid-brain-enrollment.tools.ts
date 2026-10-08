@@ -27,7 +27,8 @@ import { ADDS_NO_SPEND, codeGate, DAY_TO_DAY_NO_CODE, needsCode } from './ads-co
 import type { AgentTool, ToolContext, ToolResult } from '../tool-types.js'
 
 const TOOL = 'set-bid-brain-enrollment'
-const BIG_DOOR_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code, or the person who asked confirms it in Claude with theirs.'
+// Batch 2 fix — its ceiling is ask: never confirmed in Claude, so the card names only the Approvals page.
+const BIG_DOOR_HOW = 'A person with settings.security.manage approves it in Nexus with their authenticator code.'
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 
@@ -183,8 +184,8 @@ const setBidBrainEnrollment: AgentTool = {
     + 'the Owner in its product\'s brain (an exclusion or a lock of its bids), on the live-write allowlist, its '
     + 'bids serving (not held at a floor), and no classic dayparting schedule, running autopilot plan or older family rank '
     + 'plan on it; its hourly bid plan joins the brain (each hour\'s placement % and Min-bid floors, inside the brain\'s '
-    + 'limits) unless an hour sets a base bid. A person approves every op in Nexus (or confirms it '
-    + 'in Claude with their code); nothing changes until then.',
+    + 'limits) unless an hour sets a base bid. A person approves every op in Nexus (never confirmed in this chat, '
+    + 'never by rule); nothing changes until then.',
   async handler(args) {
     return preview(args)
   },

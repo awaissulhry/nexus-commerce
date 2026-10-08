@@ -61,12 +61,22 @@ describe('shapeRefusal — each op names what it needs', () => {
     expect(shapeRefusal({ ...base, op: 'set-level', lever: 'bids', level: 'AUTO', levels: { budgets: 'AUTO' } })).toMatch(/starting levels of op enroll/)
     expect(shapeRefusal({ ...base, op: 'lock', lever: 'budgets', reset: true })).toMatch(/unlock ends a lock/)
     expect(shapeRefusal({ ...base, op: 'enroll', bids: 'keep' })).toMatch(/what op leave does/)
+    expect(shapeRefusal({ ...base, op: 'set-level', lever: 'state', level: 'OFF', pauses: 'resume' })).toMatch(/pauses says what op leave does with the campaigns the brain's own pause holds/)
+    expect(shapeRefusal({ ...base, op: 'leave', pauses: 'keep' })).toBeNull()
   })
 })
 
 describe('spend — what a change of a setting can add', () => {
   it('every setting of the brain is rated (a setting added later fails here until it is)', () => {
     expect(BRAIN_SETTING_KEYS.filter((k) => !SPEND_RATINGS[k])).toEqual([])
+  })
+
+  it('Owner decision 2A — the portfolio cap limit: a higher value, a value set over the server\'s, or a reset to the server\'s may raise; a lower value does not', () => {
+    expect(settingRaise('portfolioCapLimitCents', 200_000, 300_000)).toMatch(/a higher limit for this product's Amazon portfolio caps/)
+    expect(settingRaise('portfolioCapLimitCents', null, 300_000)).toMatch(/higher limit/)
+    expect(settingRaise('portfolioCapLimitCents', 100_000, null)).toMatch(/empty = the server's limit, which may be higher/)
+    expect(settingRaise('portfolioCapLimitCents', 300_000, 200_000)).toBeNull()
+    expect(settingRaise('portfolioCapLimitCents', 300_000, 300_000)).toBeNull()
   })
   it('a raise only in its direction', () => {
     expect(settingRaise('paceTargetPct', 90, 95)).toMatch(/^paceTargetPct 90 → 95: the pace aims at more/)
@@ -177,7 +187,7 @@ describe('controlUndoRequest — the op that puts a choice back', () => {
     ['an include', { op: 'include', scope: 'PRODUCT', campaignId: null, kind: 'EXCLUDE', key: '*', ref: '', open: true, value: null }, { op: 'exclude' }],
     ['a value set', { op: 'set-value', scope: 'PRODUCT', campaignId: null, kind: 'VALUE', key: 'paceTargetPct', ref: '', open: true, value: 85 }, { op: 'set-value', key: 'paceTargetPct', value: 85 }],
     ['a value reset', { op: 'set-value', scope: 'PRODUCT', campaignId: null, kind: 'VALUE', key: 'longStopUntil', ref: '', open: false, value: null }, { op: 'set-value', key: 'longStopUntil', reset: true }],
-    ['an enrollment', { op: 'enroll', enrolled: false }, { op: 'leave', bids: 'keep' }],
+    ['an enrollment', { op: 'enroll', enrolled: false }, { op: 'leave', bids: 'keep', pauses: 'keep' }],
     ['a leave', { op: 'leave', enrolled: true, levels: { bids: 'AUTO', budgets: 'PROPOSE', hours: 'OBSERVE' } }, { op: 'enroll', levels: { budgets: 'PROPOSE', hours: 'OBSERVE' } }],
   ]
   for (const [what, before, want] of cases) {

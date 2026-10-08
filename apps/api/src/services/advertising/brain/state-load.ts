@@ -185,6 +185,40 @@ export interface ProductStateFacts {
 /** A JSON object's field, or undefined. */
 const field = <T,>(o: unknown, k: string): T | undefined => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] as T : undefined)
 
+/** One pause of the brain's own that holds a campaign now (brainPausesInForce). */
+export interface BrainPauseInForce { campaignId: string; name: string; memory: PauseMemory }
+
+/**
+ * Batch 2 fix (set-ads-brain op leave) — the campaigns of these that the brain's own pause holds NOW: paused, the last
+ * status change on record is the brain's (its writer, or a request it asked for that a person approved — changerOf), no
+ * change made outside Nexus since (Amazon's report), and the brain's memory of that pause on its newest log row. A person's
+ * pause, another engine's, or one Amazon reported changed since is never the brain's. A fixed number of reads.
+ */
+export async function brainPausesInForce(campaignIds: readonly string[]): Promise<BrainPauseInForce[]> {
+  const ids = [...new Set(campaignIds)]
+  if (!ids.length) return []
+  const newest = await newestStateDecisions(ids)
+  const withMemory = ids.filter((id) => !!field<PauseMemory | null>(newest.get(id)?.decision, 'memory'))
+  if (!withMemory.length) return []
+  const [rows, changes, drift] = await Promise.all([
+    prisma.campaign.findMany({ where: { id: { in: withMemory } }, select: { id: true, name: true, status: true } }),
+    lastStatusChanges(withMemory),
+    externalStatusChanges([{ entityType: 'CAMPAIGN', ids: withMemory }]),
+  ])
+  const out: BrainPauseInForce[] = []
+  for (const row of rows) {
+    if (String(row.status) !== 'PAUSED') continue
+    const memory = field<PauseMemory>(newest.get(row.id)!.decision, 'memory')!
+    const logged = changes.get(row.id)
+    if (!logged || logged.to !== 'PAUSED') continue
+    if (drift.some((d) => d.entityId === row.id && d.lastDetectedAt.getTime() > logged.at.getTime())) continue
+    const brainApprovals = new Set([memory.approvalId].filter((x): x is string => !!x))
+    if (changerOf(logged, brainApprovals).by !== 'brain') continue
+    out.push({ campaignId: row.id, name: row.name, memory })
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name))
+}
+
 /** The facts of every campaign of one product in one market (`productId` may be a variation: its family root is used). Null: no product or no market. */
 export async function loadProductStateFacts(productId: string, marketIn: string, opts: { now: Date }): Promise<ProductStateFacts | null> {
   const now = opts.now
