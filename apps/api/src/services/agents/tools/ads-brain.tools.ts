@@ -31,6 +31,10 @@
  *   harvest  AB-11 — a product's harvests (brain/harvest-read.ts): each harvest candidate's destination and how it was
  *            chosen, its sources and their negatives, its start bid, the request a person decides, the pair's state and
  *            the judgement after the attribution window + 72 h; the caps used; the gaps; with market alone, the market's
+ *   report   AB-14 — the day's product report the product cycle stored (brain/cycle-read.ts): what each lever did, or
+ *            would do in shadow, and why, in the cycle's order; ad sales against spend; what waits for the Owner; clashes;
+ *            what his locks hold; the change set every write of the cycle carries. With market alone, each product's
+ *            newest report in one line
  */
 import { z } from 'zod'
 import { FEATURES as F, FIELDS } from '@nexus/shared/permissions'
@@ -43,6 +47,7 @@ import { brainState } from '../../advertising/brain/state-read.js'
 import { brainHours } from '../../advertising/brain/hours-proposal.js'
 import { brainHarvest, DEFAULT_HARVEST_LIMIT, MAX_HARVEST_LIMIT } from '../../advertising/brain/harvest-read.js'
 import { HARVEST_STATUSES } from '../../advertising/brain/harvest.js'
+import { brainReport } from '../../advertising/brain/cycle-read.js'
 import type { AgentTool, FieldPermission } from '../tool-types.js'
 
 const ID = z.string().trim().min(1).max(64)
@@ -68,10 +73,11 @@ const adsBrain: AgentTool = {
   restrictedFields: BRAIN_MAP_MONEY,
   input: z.object({
     view: z.enum(BRAIN_MAP_VIEWS).default('map')
-      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets — or a market\'s split; terms: a product\'s term ledger in shadow — one decision per search term, the market arbiter\'s leads, the clashes it removes — or a market\'s ledgers; state: each campaign\'s pause, resume or archive proposal decided now, with its cause and horizon, beside what the brain logged; hours: one product\'s hourly research and painted plan with its approval (market and productId); negatives: a product\'s negatives — the day\'s adds, retirements and revives with their level and outcome, every campaign and ad group against the limit — or a market\'s logs; harvest: a product\'s harvests — destination, sources and their negatives, start bid, the request a person decides, the judgement after the attribution window + 72 h — or a market\'s'),
+      .describe('map (default): who owns each lever of each campaign today; clashes: two automatic writers on one campaign\'s lever, and the known gaps; setup: what is not set up or held off, with the fix; money: a product\'s money plan in shadow — envelope, pace, brake, portfolio cap, campaign budgets — or a market\'s split; terms: a product\'s term ledger in shadow — one decision per search term, the market arbiter\'s leads, the clashes it removes — or a market\'s ledgers; state: each campaign\'s pause, resume or archive proposal decided now, with its cause and horizon, beside what the brain logged; hours: one product\'s hourly research and painted plan with its approval (market and productId); negatives: a product\'s negatives — the day\'s adds, retirements and revives with their level and outcome, every campaign and ad group against the limit — or a market\'s logs; harvest: a product\'s harvests — destination, sources and their negatives, start bid, the request a person decides, the judgement after the attribution window + 72 h — or a market\'s; report: the day\'s product report the product cycle stored — what each lever did or would do in shadow, ad sales against spend, what waits for the Owner, clashes, his locks — or a market\'s newest reports'),
     market: z.string().trim().toUpperCase().min(2).max(20).optional()
-      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes, money, terms, state, hours, negatives and harvest: required'),
-    productId: ID.optional().describe('map / clashes / money / terms / state / hours / negatives / harvest: one product (a variation names its parent), its Nexus id'),
+      .describe('one Amazon market code (business-overview). map: with productId; alone, or omitted, the products the brain knows there (or in every market); clashes, money, terms, state, hours, negatives, harvest and report: required'),
+    productId: ID.optional().describe('map / clashes / money / terms / state / hours / negatives / harvest / report: one product (a variation names its parent), its Nexus id'),
+    day: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('report: the data day (YYYY-MM-DD) of the cycle to read; omitted, the newest'),
     campaignId: ID.optional().describe('map: one Amazon campaign, its Nexus id (ad-campaigns)'),
     days: z.coerce.number().int().min(1).max(MAX_EVIDENCE_DAYS).default(DEFAULT_EVIDENCE_DAYS)
       .describe(`map / clashes: how many days of the action log count as evidence of who wrote (default ${DEFAULT_EVIDENCE_DAYS}, max ${MAX_EVIDENCE_DAYS})`),
@@ -162,9 +168,19 @@ const adsBrain: AgentTool = {
     + 'source negative the brain sends again), and the judgement after the attribution window + 72 h (worse: an undo is '
     + 'proposed); the caps used today and this week; the gaps. Stored by the daily run, else decided now (a dry run, never '
     + 'stored). With market alone, the products with harvests there. '
+    + 'view report (market, optionally productId and day): the day\'s product report the product cycle stored (only while '
+    + 'NEXUS_ADS_BRAIN_CYCLE is on; it runs each enrolled product\'s levers in the design\'s order once per new settled data '
+    + 'day — stops and state, the term ledger, negatives, harvest, money, bids, hours — and its stops every hour): its status, '
+    + 'the change set every write of the cycle carries in its evidence, each step\'s outcome (done, off, skipped, blocked by '
+    + 'an earlier step it depends on, failed) with its why, and the report — what each lever did, or would do in shadow, and '
+    + 'why; what waits for the Owner (each request with its approval id); clashes (a step in shadow that would hold raises '
+    + 'where the bids raised); what his locks and exclusions hold; problems; what the hourly state passes did later; ad '
+    + 'sales against spend for the data day, its week and the month\'s pace, under money keys — with the plain-words '
+    + 'summary (no amounts) and the earlier days. With market alone, each product\'s newest report in one line. Nothing is '
+    + 'decided now: a report exists only for a cycle that ran. '
     + 'Nexus only: it reads what Nexus stored and asks Amazon nothing.',
   handler: async (args) => {
-    const a = args as { view?: string; market?: string; productId?: string; campaignId?: string; days?: number; state?: string; status?: string; limit?: number }
+    const a = args as { view?: string; market?: string; productId?: string; campaignId?: string; days?: number; state?: string; status?: string; limit?: number; day?: string }
     const out = a.view === 'clashes' ? await brainClashes(a)
       : a.view === 'setup' ? await brainSetup(a)
         : a.view === 'money' ? await brainMoney(a)
@@ -173,7 +189,8 @@ const adsBrain: AgentTool = {
               : a.view === 'negatives' ? await brainNegatives(a)
                 : a.view === 'hours' ? await brainHours(a)
                   : a.view === 'harvest' ? await brainHarvest(a)
-                    : await brainMap(a)
+                    : a.view === 'report' ? await brainReport(a)
+                      : await brainMap(a)
     return 'error' in out ? { ok: false, error: out.error } : { ok: true, data: out.data }
   },
 }

@@ -20645,6 +20645,55 @@ model AdsBrainStateDecision {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-14 — one product cycle (one-brain DESIGN.md §4, §5, §6, §8 row AB-14; services/advertising/brain/cycle*.ts):
+/// a product × market on one settled data day, its levers run in the design's order — stops and state, the term ledger,
+/// negatives, harvest, money (budgets and caps), bids, hours — each step seeing what the steps before it decided. One
+/// cycle is one change set: `changeSetId` rides in the evidence of every write the cycle makes (AdWriteEvidence.cycle).
+/// Idempotent: one row per product × market × data day, and a step that ended is never run again that day, so a rerun
+/// writes nothing. The day's product report rides on the row.
+///   status  RUNNING (a run holds it until leaseUntil) · DONE (every step ended: done, off or skipped) · PARTIAL (a step
+///           failed, or waited for one that failed: tried again on a later tick, at most 3 runs a data day)
+///   steps   per step (brain/cycle.ts StepRecord): done · off · skipped · blocked · failed, why, whether its lever acts,
+///           the module's run id, what it did in words, the raises it holds for the bids, when
+/// Rows older than 90 days are deleted by the cycle's tick. No foreign key: the history outlives a removed product.
+model AdsBrainCycle {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Product.id of the family root.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// The newest settled Sponsored Products day the cycle decided on (UTC).
+  dataDay     DateTime @db.Date
+  /// The change set every write of the cycle carries in its evidence: cyc-<market>-<data day>-<product>.
+  changeSetId String
+  /// RUNNING | DONE | PARTIAL
+  status      String
+  /// Runs of this cycle so far (a PARTIAL one is tried again while below 3).
+  attempts    Int       @default(0)
+  /// A run holds the cycle until then; a run that died frees it when the time passes.
+  leaseUntil  DateTime?
+  /// Per step: brain/cycle.ts StepRecord.
+  steps       Json
+  /// The day's product report (brain/cycle.ts ProductReport): what each lever did, or would do in shadow, and why; ad
+  /// sales against spend; what waits for the Owner; clashes; what his locks hold. Null until a run ends.
+  report      Json?
+  /// The report in plain words, without amounts.
+  summary     String?   @db.Text
+  finishedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, productId, marketplace, dataDay], name: "product_market_day", map: "AdsBrainCycle_workspaceId_productId_marketplace_dataDay_key")
+  @@index([productId, marketplace, dataDay(sort: Desc)])
+  @@index([marketplace, dataDay(sort: Desc)])
+  @@index([createdAt])
+  @@index([workspaceId])
+}
+
 /// ONE BRAIN AB-11 — one harvest of one term of one product in one market (one-brain DESIGN.md §2.8, §2.9, §4 step 4, §5,
 /// §8 row AB-11). The term ledger (AdsBrainTerm) names a HARVEST_CANDIDATE; the harvest module (services/advertising/brain/
 /// harvest.ts) chooses where it goes (an existing exact ad group of the product, or a new campaign built through a Nexus

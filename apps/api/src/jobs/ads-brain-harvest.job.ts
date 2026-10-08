@@ -27,7 +27,12 @@ export async function runBrainHarvestTick(now: Date = new Date()): Promise<Harve
     // Loaded at the tick, not when the scheduler boots (runtime/module-load-order.vitest.test.ts).
     const { harvestDue } = await import('../services/advertising/brain/harvest-load.js')
     const { runHarvestOnce, harvestSummaryLine } = await import('../services/advertising/brain/harvest-run.js')
-    const due = await harvestDue()
+    const all = await harvestDue()
+    // AB-14 — a product the product cycle runs (NEXUS_ADS_BRAIN_CYCLE=on) gets its harvest step there, after its negatives:
+    // left here (brain/cycle-switch.ts). Off (the default): every due product, as before.
+    const { withoutOrchestrated, CYCLE_RUNS_IT } = await import('../services/advertising/brain/cycle-switch.js')
+    const left = await withoutOrchestrated(all.products)
+    const due = left.skipped.length ? { ...all, ...(left.kept.length ? { products: left.kept } : { due: false, why: `${left.skipped.length} due product${left.skipped.length === 1 ? '' : 's'}: ${CYCLE_RUNS_IT}`, products: [] }) } : all
     // Nothing due: only the prune runs, and no run is recorded.
     if (!due.due) return await runHarvestOnce({ now, due })
     let summary: HarvestRunSummary | null = null

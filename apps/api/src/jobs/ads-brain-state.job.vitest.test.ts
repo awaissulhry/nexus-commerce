@@ -3,7 +3,7 @@
  * is OBSERVE or higher, on the database clock, inside its own recorded run; no such product (production today) → nothing
  * recorded, the 30-day prune still runs; a failure is logged and never thrown; scheduled through the clustered cron.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({
   products: [] as Array<{ productId: string; market: string; level: string }>,
@@ -20,12 +20,16 @@ vi.mock('../utils/cron-observability.js', () => ({
   recordCronRun: vi.fn(async (job: string, run: () => Promise<unknown>) => { const summary = await run(); h.recorded.push({ job, summary }); return summary }),
 }))
 vi.mock('../lib/cron/clustered.js', () => ({ default: { schedule: h.schedule } }))
+// AB-14 — the enrollments the product cycle's switch reads (only while it is on).
+const enrolled = vi.hoisted(() => ({ rows: [] as Array<{ productId: string; marketplace: string }>, reads: 0 }))
+vi.mock('../db.js', () => ({ default: { adsBrainEnrollment: { findMany: vi.fn(async () => { enrolled.reads++; return enrolled.rows }) } } }))
 
 import { BRAIN_STATE_JOB, BRAIN_STATE_SCHEDULE, runBrainStateTick, startBrainStateCron } from './ads-brain-state.job.js'
 
 const PRODUCT = { productId: 'product-a', market: 'IT', level: 'OBSERVE' }
 
-beforeEach(() => { h.recorded = []; h.run.mockClear(); h.prune.mockClear(); h.products = [] })
+beforeEach(() => { h.recorded = []; h.run.mockClear(); h.prune.mockClear(); h.products = []; enrolled.rows = []; enrolled.reads = 0 })
+afterEach(() => { vi.unstubAllEnvs() })
 
 describe('AB-12 — the state brain\'s cron', () => {
   it('a tick with a watched product: one recorded run on the database clock', async () => {
@@ -57,5 +61,30 @@ describe('AB-12 — the state brain\'s cron', () => {
     expect(h.schedule).toHaveBeenCalledTimes(1)
     expect(h.schedule.mock.calls[0][0]).toBe(BRAIN_STATE_SCHEDULE)
     expect(BRAIN_STATE_SCHEDULE).toBe('50 * * * *')
+  })
+
+  it('AB-14 — off (the default): the cycle\'s switch reads nothing and the run gets every watched product, as before', async () => {
+    h.products = [PRODUCT]
+    enrolled.rows = [{ productId: 'product-a', marketplace: 'IT' }]
+    await runBrainStateTick()
+    expect(h.run).toHaveBeenCalledWith({ now: h.dbNow, products: [PRODUCT] })
+    expect(enrolled.reads).toBe(0)
+  })
+
+  it('AB-14 — the product cycle on: a product it runs is left here (its state step runs there, hourly); the others as before', async () => {
+    vi.stubEnv('NEXUS_ADS_BRAIN_CYCLE', 'on')
+    const other = { productId: 'product-b', market: 'IT', level: 'AUTO' }
+    h.products = [PRODUCT, other]
+    enrolled.rows = [{ productId: 'product-a', marketplace: 'IT' }]
+    await runBrainStateTick()
+    expect(h.run).toHaveBeenCalledWith({ now: h.dbNow, products: [other] })
+    // Every watched product the cycle's: nothing decided or recorded here, the prune still runs.
+    h.run.mockClear()
+    h.recorded = []
+    enrolled.rows = [{ productId: 'product-a', marketplace: 'IT' }, { productId: 'product-b', marketplace: 'IT' }]
+    await runBrainStateTick()
+    expect(h.run).not.toHaveBeenCalled()
+    expect(h.recorded).toEqual([])
+    expect(h.prune).toHaveBeenCalledWith(h.dbNow)
   })
 })

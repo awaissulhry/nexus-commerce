@@ -16,7 +16,29 @@
  * write that fired on fewer than N days of data".
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type { WriteSources } from './ads-strategy/bids.js'
+
+/**
+ * ONE BRAIN AB-14 — the product cycle a write belongs to (brain/cycle-run.ts): its change set (one per product × market ×
+ * data day) and the step that wrote it (state, negatives, harvest, money, bids, hours).
+ */
+export interface CycleStamp { changeSetId: string; step: string }
+
+const cycleScope = new AsyncLocalStorage<CycleStamp>()
+
+/**
+ * AB-14 — run one step of a product cycle: every ads write packed while it runs (packEvidence — the action log of a
+ * bid, budget, status, placement, negative or portfolio write) carries the cycle's change set, whatever module wrote it.
+ */
+export function inBrainCycle<T>(stamp: CycleStamp, work: () => Promise<T>): Promise<T> {
+  return cycleScope.run(stamp, work)
+}
+
+/** AB-14 — the product cycle step running in this async context, or null. */
+export function brainCycleStamp(): CycleStamp | null {
+  return cycleScope.getStore() ?? null
+}
 
 export interface AdWriteEvidence {
   /** The RankTarget key or rule identity the decision was serving, e.g. 'own-top'. */
@@ -85,14 +107,24 @@ export interface AdWriteEvidence {
    * A record for the reader (the Change Log, auto-undo, the read tool): no gate trusts it.
    */
   brain?: { runId: string; layer: string; dataDay: string; goalBidCents: number | null }
+  /**
+   * ONE BRAIN AB-14 — the product cycle that made this write: its change set (cyc-<market>-<data day>-<product>) and the
+   * step. Stamped by packEvidence while the step runs (inBrainCycle); a record for the reader (the Change Log, auto-undo,
+   * the day's product report): no gate trusts it.
+   */
+  cycle?: CycleStamp
 }
 
 /**
  * Strip undefined keys so the stored JSON stays small and comparable, and return null
  * when there is nothing worth recording — a column full of `{}` is worse than a null,
  * because it looks like evidence was captured when it wasn't.
+ * AB-14 — inside a product cycle's step every write carries the cycle's change set (a write with no evidence of its own
+ * gets just that); a stamp the caller set itself is kept.
  */
 export function packEvidence(e: AdWriteEvidence | null | undefined): AdWriteEvidence | null {
+  const stamp = cycleScope.getStore()
+  if (stamp && !e?.cycle) e = { ...(e ?? {}), cycle: { changeSetId: stamp.changeSetId, step: stamp.step } }
   if (!e) return null
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(e)) {

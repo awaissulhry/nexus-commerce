@@ -9,6 +9,8 @@
  * no run. Its own lever levels decide, not the bid brain's switch (AUTO still writes only while NEXUS_BID_BRAIN_MODE is
  * live: the gate judges the brain's writes only then). The clock is the database's (rank-defend's dbNow: a container
  * clock once ran two hours late). A failure is logged, never thrown.
+ * AB-14 — while the product cycle is on (NEXUS_ADS_BRAIN_CYCLE=on) it leaves the products the cycle runs: their state step
+ * runs there, every hour (brain/cycle-switch.ts). Off (the default): as before.
  * Cluster-safe through lib/cron/clustered.ts (hard rule 7); with business profiles on it runs once per business, inside
  * that business.
  */
@@ -25,8 +27,10 @@ export async function runBrainStateTick(at?: Date): Promise<void> {
     // Loaded at the tick, not when the scheduler boots (runtime/module-load-order.vitest.test.ts).
     const { runStateBrainOnce, stateSummaryLine, pruneStateDecisions } = await import('../services/advertising/brain/state-run.js')
     const { stateWatchProducts } = await import('../services/advertising/brain/state-load.js')
+    const { withoutOrchestrated } = await import('../services/advertising/brain/cycle-switch.js')
     const now = at ?? await (await import('./ad-rank-defend.job.js')).dbNow()
-    const products = await stateWatchProducts()
+    // AB-14 — a product the product cycle runs (NEXUS_ADS_BRAIN_CYCLE=on) gets its state step there, hourly: left here.
+    const products = (await withoutOrchestrated(await stateWatchProducts())).kept
     // Nothing watched: the old decisions still go after 30 days (a product that left the brain leaves none behind).
     if (!products.length) { await pruneStateDecisions(now); return }
     await recordCronRun(BRAIN_STATE_JOB, async () => stateSummaryLine(await runStateBrainOnce({ now, products })))
