@@ -1806,6 +1806,20 @@ CREATE TABLE "AmazonAdsHourlyArrival" (
 );
 
 -- CreateTable
+CREATE TABLE "AmazonAdsGrainCap" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "kind" TEXT NOT NULL,
+    "cap" INTEGER NOT NULL,
+    "refused" INTEGER NOT NULL DEFAULT 0,
+    "firstAt" TIMESTAMP(3) NOT NULL,
+    "lastAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AmazonAdsGrainCap_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdBudgetUsageSample" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -9703,6 +9717,26 @@ CREATE TABLE "AdsBrainBudgetDecision" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainAsk" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "portfolioId" TEXT,
+    "day" DATE NOT NULL,
+    "status" TEXT NOT NULL,
+    "approvalId" TEXT,
+    "toCents" INTEGER,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainAsk_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsBrainTerm" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -11567,6 +11601,12 @@ CREATE INDEX "AmazonAdsHourlyArrival_workspaceId_date_idx" ON "AmazonAdsHourlyAr
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AmazonAdsHourlyArrival_bucket_key" ON "AmazonAdsHourlyArrival"("workspaceId", "grainId", "kind", "ageHours");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsGrainCap_workspaceId_date_idx" ON "AmazonAdsGrainCap"("workspaceId", "date");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AmazonAdsGrainCap_day_kind_key" ON "AmazonAdsGrainCap"("workspaceId", "date", "kind");
 
 -- CreateIndex
 CREATE INDEX "AdBudgetUsageSample_campaign_reading_idx" ON "AdBudgetUsageSample"("campaignId", "usageUpdatedAt");
@@ -15701,6 +15741,15 @@ CREATE INDEX "AdsBrainBudgetDecision_createdAt_idx" ON "AdsBrainBudgetDecision"(
 
 -- CreateIndex
 CREATE INDEX "AdsBrainBudgetDecision_workspaceId_idx" ON "AdsBrainBudgetDecision"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainAsk_productId_marketplace_day_idx" ON "AdsBrainAsk"("productId", "marketplace", "day");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainAsk_workspaceId_idx" ON "AdsBrainAsk"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainAsk_workspaceId_key_key" ON "AdsBrainAsk"("workspaceId", "key");
 
 -- CreateIndex
 CREATE INDEX "AdsBrainTerm_marketplace_term_idx" ON "AdsBrainTerm"("marketplace", "term");

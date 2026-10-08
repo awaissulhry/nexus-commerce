@@ -6338,6 +6338,25 @@
     },
     "relations": []
   },
+  "AmazonAdsGrainCap": {
+    "scalar": {},
+    "compound": {
+      "day_kind": [
+        "date",
+        "kind"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainAsk": {
+    "scalar": {},
+    "compound": {
+      "ask_key": [
+        "key"
+      ]
+    },
+    "relations": []
+  },
   "AdsBrainStateDecision": {
     "scalar": {},
     "compound": {},

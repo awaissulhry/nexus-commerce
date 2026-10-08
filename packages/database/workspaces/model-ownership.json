@@ -466,6 +466,8 @@
     "AdsBrainBudgetDecision",
     "AmazonAdsHourlyPlacement",
     "AmazonAdsHourlyArrival",
+    "AmazonAdsGrainCap",
+    "AdsBrainAsk",
     "AdsBrainTerm",
     "AdsBrainTermLead",
     "AdsBrainHarvest",

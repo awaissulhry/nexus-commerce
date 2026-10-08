@@ -8,7 +8,8 @@
  * SQS consumer; gated on its own queue URL so it stays dormant until configured.
  */
 
-import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from '@aws-sdk/client-sqs'
+import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand, type Message } from '@aws-sdk/client-sqs'
+import { sentTimeOf } from './advertising/ams-grain.js'
 
 /**
  * Derive the SQS HTTPS URL from an SQS ARN, so the operator doesn't have to set
@@ -73,6 +74,19 @@ export interface AmsRawMessage {
    * batch that routes each record to its own business profile.
    */
   messageId: string
+  /**
+   * BB-16 follow-up — when Amazon put the message on the queue (SQS's SentTimestamp; null when SQS gave none or it is
+   * not a plausible past instant). The grain's arrival ages are measured from it, so the time a message waited in the
+   * queue (a poller that was down) does not age its deltas.
+   */
+  sentAt: Date | null
+}
+
+/** The queue's answer as the poller keeps it: messages with a receipt and a body, their id and sent time. Pure. */
+export function amsRawMessagesOf(messages: readonly Message[] | undefined, now: Date = new Date()): AmsRawMessage[] {
+  return (messages ?? [])
+    .filter((m) => m.ReceiptHandle && m.Body)
+    .map((m) => ({ receiptHandle: m.ReceiptHandle as string, body: m.Body as string, messageId: m.MessageId ?? '', sentAt: sentTimeOf(m.Attributes?.SentTimestamp, now) }))
 }
 
 export async function pollAmsRaw(maxMessages = 10): Promise<AmsRawMessage[]> {
@@ -84,10 +98,10 @@ export async function pollAmsRaw(maxMessages = 10): Promise<AmsRawMessage[]> {
     MaxNumberOfMessages: Math.min(10, Math.max(1, maxMessages)),
     WaitTimeSeconds: 1,
     VisibilityTimeout: 30,
+    // BB-16 follow-up — when each message was put on the queue: the grain's arrival time.
+    MessageSystemAttributeNames: ['SentTimestamp'],
   }))
-  return (res.Messages ?? [])
-    .filter((m) => m.ReceiptHandle && m.Body)
-    .map((m) => ({ receiptHandle: m.ReceiptHandle as string, body: m.Body as string, messageId: m.MessageId ?? '' }))
+  return amsRawMessagesOf(res.Messages)
 }
 
 export async function deleteAmsMessage(receiptHandle: string): Promise<void> {

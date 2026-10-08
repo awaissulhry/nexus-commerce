@@ -12,7 +12,10 @@
  *                pinned   the Owner pinned a lead (and it is a contender)
  *                brand    the term holds the brand or hero word of exactly one contender (playbook terms.brand, §1.4)
  *                profit   the highest expected profit per click, CR̂ × AOV̂ × margin − CPC, all pooled (§1.2); a contender
- *                         whose profit cannot be measured (no margin and no target, no order value) is not compared
+ *                         whose profit cannot be measured (no margin and no target, no order value) is not compared.
+ *                         Profit decides only when one contender's measured profit is 0 or more, or when no unmeasured
+ *                         contender has orders: a measured LOSS (profit < 0) never outranks a contender that sells on the
+ *                         term but whose profit cannot be measured — then the orders decide, among them all
  *                orders   the most orders on the term (§1.2 "ties go to the product with more orders on the term")
  *                clicks   the most clicks on the term
  *                id       the lowest product id — deterministic, and said so
@@ -108,18 +111,24 @@ export function pickLead(contenders: readonly Claim[], pinned?: string | null): 
   if (brands.length === 1) return { lead: brands[0], rule: 'brand', why: `the term holds its brand word "${brands[0].brandWord}" and no sibling's` }
   let pool: Claim[] = sorted
   const unmeasured = sorted.filter((c) => c.profitPerClickCents == null)
-  const byProfit = best(pool, (c) => c.profitPerClickCents)
+  // A measured loss must not outrank a seller whose profit is unknown: with no measured profit ≥ 0 and an unmeasured
+  // contender that has orders, profit decides nothing and the orders decide among them all.
+  const anyGain = sorted.some((c) => c.profitPerClickCents != null && c.profitPerClickCents >= 0)
+  const unmeasuredSellers = unmeasured.filter((c) => c.orders > 0)
+  const profitDecides = anyGain || !unmeasuredSellers.length
+  const byProfit = profitDecides ? best(pool, (c) => c.profitPerClickCents) : null
   if (byProfit && byProfit.length === 1) {
     return { lead: byProfit[0], rule: 'profit', why: `the highest expected profit per click (pooled CR̂ × AOV̂ × margin − CPC)${unmeasured.length ? `; not measured for ${unmeasured.map((c) => c.productId).join(', ')} (no margin, target or order value)` : ''}` }
   }
   if (byProfit) pool = byProfit
+  const lossWords = profitDecides ? '' : `no measured profit per click is 0 or more, and ${unmeasuredSellers.map((c) => c.productId).join(', ')} sell${unmeasuredSellers.length === 1 ? 's' : ''} on the term with profit not measured: a measured loss does not outrank ${unmeasuredSellers.length === 1 ? 'it' : 'them'}; `
   const byOrders = best(pool, (c) => c.orders)
-  if (byOrders && byOrders.length === 1) return { lead: byOrders[0], rule: 'orders', why: `${byProfit ? 'equal profit per click; ' : ''}the most orders on the term (${byOrders[0].orders})` }
+  if (byOrders && byOrders.length === 1) return { lead: byOrders[0], rule: 'orders', why: `${byProfit ? 'equal profit per click; ' : lossWords}the most orders on the term (${byOrders[0].orders})` }
   if (byOrders) pool = byOrders
   const byClicks = best(pool, (c) => c.clicks)
-  if (byClicks && byClicks.length === 1) return { lead: byClicks[0], rule: 'clicks', why: `equal on profit and orders; the most clicks on the term (${byClicks[0].clicks})` }
+  if (byClicks && byClicks.length === 1) return { lead: byClicks[0], rule: 'clicks', why: `${lossWords}equal on profit and orders; the most clicks on the term (${byClicks[0].clicks})` }
   if (byClicks) pool = byClicks
-  return { lead: pool[0], rule: 'id', why: 'equal on profit, orders and clicks: the lowest product id leads (deterministic)' }
+  return { lead: pool[0], rule: 'id', why: `${lossWords}equal on profit, orders and clicks: the lowest product id leads (deterministic)` }
 }
 
 /**

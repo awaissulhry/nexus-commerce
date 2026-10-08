@@ -9,6 +9,7 @@ import { listTools } from '../agents/tool-registry.js'
 import { offeredOn } from '../agents/call-tool.js'
 import { mcpInputSchema, mcpInstructions, mcpServerInfo, requiredScope, toolAnnotations } from './mcp-server.js'
 import { inputJsonSchema } from '../agents/tool-loop.service.js'
+import { BRAIN_MAP_VIEWS } from '../advertising/brain/read-map.js'
 
 /** Call OUR AI provider: offered in the app only. */
 const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-content', 'draft-seo', 'translate-content']
@@ -133,8 +134,8 @@ describe('C3 — the server and every change tool name the business', () => {
       // BB-4 — the bid brain's read tool; BB-6 — it writes only for a campaign put LIVE, with the approver's code.
       'bid-brain (read only; the bid', 'writes only for a campaign set-bid-brain-enrollment put LIVE',
       "needs the approver's authenticator code; its diff view",
-      // AB-3 — the brain's map, read only.
-      'ads-brain (read only; views map, clashes, setup, money, terms, state, negatives, harvest)',
+      // AB-3 — the brain's map, read only; every view it has (AB-7 money, AB-9 terms, AB-12 state, AB-13 hours, AB-10 negatives, AB-11 harvest).
+      'ads-brain (read only; views map, clashes, setup, money, terms, state, hours, negatives, harvest)',
       // AB-11 — the brain's harvest request, a person's decision.
       'person for is apply-brain-harvest (the keyword and its source negatives in one change set',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
@@ -148,6 +149,11 @@ describe('C3 — the server and every change tool name the business', () => {
       'read platform-health-checks first in a daily or unattended run']) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
+  })
+
+  it('the instructions name every view of ads-brain, in the tool\'s own order (a new view cannot be left out)', () => {
+    expect(mcpInstructions(business)).toContain(`ads-brain (read only; views ${BRAIN_MAP_VIEWS.join(', ')}).`)
+    expect([...BRAIN_MAP_VIEWS]).toEqual(['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives'])
   })
 
   it('W4-14 — the instructions name every Wave 4 Amazon ads tool, and each is a registered tool', () => {
