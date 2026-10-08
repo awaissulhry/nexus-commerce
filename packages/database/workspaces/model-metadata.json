@@ -6737,6 +6737,14 @@
       "fields": []
     },
     {
+      "name": "AdsBrainEnrollment",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainOverride",
+      "fields": []
+    },
+    {
       "name": "AdWriteRefusal",
       "fields": []
     },

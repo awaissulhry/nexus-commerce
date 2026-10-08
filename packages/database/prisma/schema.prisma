@@ -19823,6 +19823,89 @@ model BidDirective {
   @@index([workspaceId])
 }
 
+/// ONE BRAIN AB-1 — one product's brain in one market (one-brain DESIGN.md §1, §3, §6, §10; Owner 10-08). The product is
+/// the family root (a parent, or a product with no parent); its campaigns come from the products they advertise
+/// (services/advertising/brain/ownership.ts) — a campaign that advertises another product too is shared and no product's
+/// brain owns it. This row says the product is enrolled and is the one point every change of its brain goes through
+/// (`version`, compare-and-set). Every setting is a brain default (brain/levers.ts) the Owner may override per product or
+/// per campaign (AdsBrainOverride). The bids lever drives BidBrainEnrollment (the rows the live bid brain reads, BB-6…
+/// BB-10). No row = not enrolled: today's engines run it. No foreign key: the history outlives a removed product.
+model AdsBrainEnrollment {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// Product.id of the family root (a parent, or a product with no parent): its variations belong to it.
+  productId   String
+  /// Short market code ('IT', 'DE').
+  marketplace String
+  /// +1 on every change of this brain (an override set or ended, a lever's campaigns moved): an approval made on
+  /// another version does not run.
+  version     Int    @default(1)
+
+  /// Per lever, what it held when it last went live: { "<lever>": { takenAt, by, data } } (the bids lever: which
+  /// campaigns it put LIVE, which were LIVE already, which it skipped and why; each campaign's bids are in its
+  /// BidBrainEnrollment.snapshot).
+  snapshots  Json?
+  /// 'user:<id>' or 'claude:<approvalId>' — who enrolled it.
+  enrolledBy String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  /// Who changed it last.
+  updatedBy String
+
+  @@unique([workspaceId, productId, marketplace], name: "product_market", map: "AdsBrainEnrollment_workspaceId_productId_marketplace_key")
+  @@index([marketplace])
+  @@index([workspaceId])
+}
+
+/// ONE BRAIN AB-1 — one choice of the Owner over a brain default (one-brain DESIGN.md §10, Owner 10-08: "I should be
+/// able to control it individually as well"). Precedence: a CAMPAIGN override > a PRODUCT override > the brain default
+/// (brain/settings.ts resolveBrainSettings); an exclusion wins over every lever. Each row keeps who, when and why, so
+/// every resolved value names its source. Rows are never deleted: a new choice ends the one it replaces (`endedAt`),
+/// and ending a choice falls back to the next level. At most one open row per (scope, campaign, kind, key, ref) — the
+/// writer ends the old one in the same transaction.
+///   LEVEL    a lever's level (key = lever; value = "OFF" | "OBSERVE" | "PROPOSE" | "AUTO")
+///   LOCK     a lever held at the Owner's own value (key = lever; ref "" = the whole lever, else one thing in it such as
+///            "hourCell:d1h14", "lane:TOP_OF_SEARCH", "term:<text>"; value = his value, null = as it is now): the brain
+///            never writes it and only recommends
+///   EXCLUDE  out of the brain completely (key "*"): a campaign stays with today's engines; a product leaves the brain
+///   VALUE    a setting (key = a cap or an N1–N4 setting such as "portfolioCapOn", "paceTargetPct"; value = its value)
+model AdsBrainOverride {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  /// The enrollment it was set under (Product.id of the family root, short market code).
+  productId   String
+  marketplace String
+  /// PRODUCT | CAMPAIGN
+  scope       String
+  /// Campaign.id for a CAMPAIGN override (it applies to that campaign); null for a PRODUCT one.
+  campaignId  String?
+  /// LEVEL | LOCK | EXCLUDE | VALUE
+  kind        String
+  /// The lever (LEVEL, LOCK), the setting (VALUE), "*" (EXCLUDE).
+  key         String
+  /// LOCK only: "" = the whole lever, else the one thing it holds ("<kind>:<what>").
+  ref         String  @default("")
+  /// The level, the Owner's own value or the setting's value; null where the kind takes none.
+  value       Json?
+  /// 'user:<id>' or 'claude:<approvalId>' — whose choice it is.
+  by          String
+  reason      String?
+
+  createdAt DateTime  @default(now())
+  /// When a newer choice replaced it or it was ended; null = in force.
+  endedAt   DateTime?
+  endedBy   String?
+
+  @@index([productId, marketplace, endedAt])
+  @@index([campaignId, endedAt])
+  @@index([workspaceId])
+}
+
 /// AUTO.A7 / substrate S5 — the durable record of a write-gate refusal.
 ///
 /// Until now `logGateDeny` wrote to the application log and NOWHERE ELSE, so no surface could

@@ -9438,6 +9438,43 @@ CREATE TABLE "BidDirective" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainEnrollment" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "version" INTEGER NOT NULL DEFAULT 1,
+    "snapshots" JSONB,
+    "enrolledBy" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedBy" TEXT NOT NULL,
+
+    CONSTRAINT "AdsBrainEnrollment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainOverride" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "scope" TEXT NOT NULL,
+    "campaignId" TEXT,
+    "kind" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "ref" TEXT NOT NULL DEFAULT '',
+    "value" JSONB,
+    "by" TEXT NOT NULL,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "endedAt" TIMESTAMP(3),
+    "endedBy" TEXT,
+
+    CONSTRAINT "AdsBrainOverride_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdWriteRefusal" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -15165,6 +15202,24 @@ CREATE INDEX "BidDirective_targetId_idx" ON "BidDirective"("targetId");
 
 -- CreateIndex
 CREATE INDEX "BidDirective_workspaceId_idx" ON "BidDirective"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainEnrollment_marketplace_idx" ON "AdsBrainEnrollment"("marketplace");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainEnrollment_workspaceId_idx" ON "AdsBrainEnrollment"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainEnrollment_workspaceId_productId_marketplace_key" ON "AdsBrainEnrollment"("workspaceId", "productId", "marketplace");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainOverride_productId_marketplace_endedAt_idx" ON "AdsBrainOverride"("productId", "marketplace", "endedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainOverride_campaignId_endedAt_idx" ON "AdsBrainOverride"("campaignId", "endedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainOverride_workspaceId_idx" ON "AdsBrainOverride"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

@@ -6098,6 +6098,21 @@
     "compound": {},
     "relations": []
   },
+  "AdsBrainEnrollment": {
+    "scalar": {},
+    "compound": {
+      "product_market": [
+        "productId",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainOverride": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "AdWriteRefusal": {
     "scalar": {},
     "compound": {},
