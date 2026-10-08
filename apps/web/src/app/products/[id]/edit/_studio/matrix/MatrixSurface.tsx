@@ -6,11 +6,11 @@
  * inventory controls the operator turns.
  *
  *     [ 21 rows · 1 parent · 20 variants   Find…   chips   Views Customise Export ⋯ ]   40px
- *     [ Selected 12 rows   Edit…   Stock source…   Clear ]          (while rows are ticked)
+ *     [ Selected 12 rows   Edit…   Stock source…   Send to FBA…   Clear ]          (while rows are ticked)
  *     [ PRODUCT │ SHARED                 │ AMAZON EU · INVENTORY · IT DE │ AMAZON · IT │ … ]   30px
- *     [ Product │ Base price Stock FBA qty │ Fulfilment Mode Qty Buffer Sync │ Listing Status Price Sale ] 28px
+ *     [ Product │ Base price Stock Case FBA qty │ Fulfilment From Mode Qty Buffer │ Listing Status Price Sale ] 28px
  *     [ … 36px rows … ]
- *     [ 21 rows · 20 variants · Amazon EU: quantity is shared by 4 markets · 2 pinned this session · Undo ]
+ *     [ 21 rows · 20 variants · Not listed: Amazon NL BE · eBay FR ]
  *
  * ## What this file composes, and what it refuses to re-implement
  *
@@ -22,15 +22,15 @@
  * apply, Undo). ONE state: every coordinate at once; the scope bar FILTERS the groups
  * (`filters.ts`). Nothing here derives a number — quantities, prices and states arrive on the read.
  *
- * 🔴 PREVIEW MODE (`read.source === 'preview'`, while `GET …/studio/matrix` answers 404): the banner
- * is on screen, every write and verb goes to `store.ts` in memory, and NOTHING reaches a server —
- * the Network panel is the proof (0 PATCH/POST to `/studio/matrix`; the sheet's own GET is the
- * positive control). The master column (`Base price`) is held with the reason.
+ * Owner 2026-10-08: no Sync column — a failed push is the Qty / Price cell's ✗ and the Amazon EU conflict the Qty cell's
+ * ⚠ (`matrixCells.ts`); no preview mode — a failed read is the load-error state, never fixture numbers; the Amazon EU
+ * shared quantity is said by the group's label and the Edit preview only; `Not listed` columns start hidden (one footer
+ * line names them, Customise shows them).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Banner, useToast, type MenuItemDef } from '@/design-system/components'
-import { Button } from '@/design-system/primitives'
+import { Button, InfoTip } from '@/design-system/primitives'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
 import {
   ALL_VIEW_ID,
@@ -64,12 +64,19 @@ import {
 } from '@/design-system/grid'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { getBackendUrl } from '@/lib/backend-url'
+import Link from '@/lib/workspaces/Link'
+import { FBA_SEND_COPY } from '@nexus/shared/fba-send'
+import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
+import { InventoryEditorModal } from '@/app/products/next/InventoryEditorModal'
+import type { InventoryEditorTarget } from '@/app/products/next/useInventoryEditor'
+import { DEFAULT_DENSITY } from '@/app/products/next/density'
 
 import { useRegisterViewChip, useSaveReporter, useStudioScope, useViewChips } from '../contracts'
 import { SHEET_STATE_OVERLAYS, sheetEmptyState } from '../sheet/sheetGridStates'
 import { SheetLoadError } from '../sheet/SheetLoadError'
 import { useMasterSheet } from '../sheet/master/useMasterSheet'
 import { useReferenceNames } from '../sheet/useReferenceNames'
+import { useUnpinOnNarrowSheet } from '../sheet/useNarrowSheet'
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
 import { usePublishActions } from '../sheet/usePublishActions'
 import type { PublishActionsDestination } from '../sheet/publishActionsApi'
@@ -83,19 +90,26 @@ import { familyAxes, familyAxisValues, familyReadScope } from '../sheet/familyOr
 import { useFamilyProjections } from '../variants/family/useFamilyProjections'
 
 import { matrixChip, matrixChips } from './chips'
-import { BASE_PRICE_COL, buildMatrixColumns, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, IDENTITY_COL_W, identityWidthFor, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, parseMatrixColId, STOCK_COL } from './columns'
+import { absentHint, absentLine, BASE_PRICE_COL, buildMatrixColumns, CASE_COL, caseViewOf, channelTone, drawnCells, FBA_COL, fbaUnitsOf, hasMatrixStatus, IDENTITY_COL, isMatrixStatusColId, matrixColId, matrixGroupKeyOf, matrixStatusColId, MATRIX_GROUP_TONES, notListedLine, parseMatrixColId, STOCK_COL } from './columns'
 import { SCOPE_PROGRESS_COLUMN } from '../sheet/progressColumns'
-import { MATRIX_ABSENT_CELL_LABELS, MATRIX_CELL_LABELS, MATRIX_COPY, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate } from './contract'
+import { MATRIX_CELL_LABELS, MATRIX_COPY, type CoordinateKey, type FulfilmentMethod, type MatrixCellKind, type MatrixCoordinate, type MatrixWriteOutcome } from './contract'
 import { filterCoordinates, filterNote, visibleCoordinateKeys } from './filters'
-import { MatrixBanner } from './MatrixBanner'
 import { MatrixSelectionActions } from './MatrixSelectionActions'
 import { StockSourceDialog, type StockSourceSwitched, type StockSourceTarget } from './StockSourceDialog'
 import { sharingApi } from '@/app/settings/sharing/sharingApi'
 import { MatrixToolbar, type MatrixPageState } from './MatrixToolbar'
 import { useMatrix } from './useMatrix'
-import { clearsNothing, matrixStatusCell, publishCellsByPlace, savedBeforeMatrixStatus } from './statusCells'
+import { clearsNothing, matrixStatusCell, publishCellsByPlace, savedBeforeMatrixCase, savedBeforeMatrixFrom, savedBeforeMatrixStatus } from './statusCells'
+import { FROM_LABEL, fromBefore, fromCellText, fromCellView, fromGroupKey, isMatrixFromColId, matrixFromColId } from './sellsFrom'
+import { SellsFromDialog, type SellsFromSaved, type SellsFromTarget } from './SellsFromDialog'
+import { CaseDialog, type CaseSaved, type CaseTarget } from './CaseDialog'
+import { allVariants, CASE_MIXED } from './casePack'
 import { refusalLead, refusedRowIds, type RefusedMark } from './refusals'
 import { BulkEditDialog } from './bulk/BulkEditDialog'
+import { SendToFbaDialog, type SendToFbaAdded, type SendToFbaTarget } from './fba/SendToFbaDialog'
+import { DONE_COPY, deleteDraft, fbaPageHref, footerLinks, hasAmazonListing, openPlans, postDraftAdd, sendDescription, sendHeld, sendProductIds, underWayPlans } from './fba/sendToFba'
+import { FBA_ROUTES, readOnePlanAnswer } from './fba/plansDrawer'
+import { FbaPlansDrawer } from './fba/FbaPlansDrawer'
 import { createBulkSource, type BulkDoors } from './bulk/bulkSource'
 import type { BulkContext } from './bulk/fields'
 import type { BulkEditSource, BulkInitial } from './bulk/types'
@@ -106,7 +120,7 @@ export const MATRIX_VIEWS_SURFACE = 'product-edit:views:matrix'
 export const MATRIX_LAYOUT_SURFACE = 'product-edit:matrix'
 const PERSIST_KEYS = ['columnSizing', 'columnPinning', 'sort'] as const
 
-const INVENTORY_KINDS: readonly MatrixCellKind[] = ['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'syncState']
+const INVENTORY_KINDS: readonly MatrixCellKind[] = ['fulfilment', 'syncMode', 'syncQty', 'syncBuffer']
 const PRICING_KINDS: readonly MatrixCellKind[] = ['price', 'salePrice']
 
 /** The Status columns' read: every market, each as its own channel sheet reads it (new rows on each main listing). */
@@ -121,7 +135,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const { has, status: authStatus } = useAuth()
   const toast = useToast()
   const studioScope = useStudioScope()
-  const { scope, market, locale, accountId, options, marketplaces, setTab, setScope } = studioScope
+  const { scope, market, locale, accountId } = studioScope
   /* The family read's market and language — the Information page asks with the same rule (`familyReadScope`). */
   const { market: marketOrFirst, locale: localeOrFirst } = familyReadScope(studioScope)
 
@@ -159,8 +173,6 @@ export function MatrixSurface({ productId }: { productId: string }) {
 
   /* ── the Matrix read ─────────────────────────────────────────────────────────────────────── */
 
-  const previewRows = useMemo(() => (sheet ? rows.map((r) => ({ id: r.id, sku: r.sku, isParent: r.isParent, basePrice: r.basePrice, status: r.status })) : null), [sheet, rows])
-  const coordinateSource = useMemo(() => ({ channels: options.channels, marketplaces }), [options.channels, marketplaces])
   const getApiForMatrix = useCallback(() => getGridApi() as GridApi<{ id: string }> | null, [getGridApi])
   /* A server refusal is said the way the page says its own (`sayReason`, defined below with the verbs). */
   const sayRefusal = useRef<(reason: string) => void>(() => {})
@@ -176,10 +188,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
     if (statusReread.current) clearTimeout(statusReread.current)
     statusReread.current = setTimeout(() => { statusReread.current = null; readStatusAgain.current() }, 400)
   }, [onSettled])
-  const matrix = useMatrix({ productId, accountId: accountId ?? null, locale, rows: previewRows, coordinates: coordinateSource, tracker, getApi: getApiForMatrix, can: has, onSettled: onMatrixSettled, onRefused })
+  const matrix = useMatrix({ productId, accountId: accountId ?? null, locale, tracker, getApi: getApiForMatrix, onSettled: onMatrixSettled, onRefused })
   const read = matrix.read
-  const previewMode = read?.source === 'preview'
-  const masterHeldReason = previewMode ? 'Preview data — Base price is the Information sheet\'s; edit it there until the Matrix service lands.' : null
 
   /* ── the scope bar FILTERS the groups (filters.ts) ───────────────────────────────────────── */
 
@@ -187,7 +197,8 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const visibleCoordinates = useMemo(() => (read ? filterCoordinates(read.coordinates, filter) : []), [read, filter])
   const visibleKeys = useMemo(() => (read ? visibleCoordinateKeys(read.coordinates, filter) : null), [read, filter])
   const scopeNote = useMemo(() => (read ? filterNote(read.coordinates, filter, channelLabelOf) : null), [read, filter])
-  const euGroups = useMemo(() => visibleCoordinates.filter((c) => c.kind === 'region-inventory' && c.sharedInventoryWith), [visibleCoordinates])
+  /* Owner 2026-10-08: the coordinates with no listing start hidden — ONE footer line names them (Customise shows them). */
+  const notListed = useMemo(() => notListedLine(visibleCoordinates), [visibleCoordinates])
 
   /* ── chips ───────────────────────────────────────────────────────────────────────────────── */
 
@@ -207,7 +218,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   useEffect(() => {
     const collect = () => {
       const marks: RefusedMark[] = []
-      for (const row of rowsRef.current) for (const c of visibleCoordinates) for (const k of c.cells) {
+      for (const row of rowsRef.current) for (const c of visibleCoordinates) for (const k of drawnCells(c)) {
         const m = tracker.get(row.id, matrixColId(c.key, k))
         if (m?.state === 'refused') marks.push({ rowId: row.id, coordinate: c, kind: k, reason: m.reason })
       }
@@ -223,17 +234,23 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const refusalReason = refusedMarks.find((mark) => mark.reason)?.reason ?? refusalExample
 
   const [search, setSearch] = useState('')
+  /* The parent's chevron (the Information page's tree control): the variants fold away under it and come back. */
+  const [variantsCollapsed, setVariantsCollapsed] = useState(false)
+  const variantsCollapsedRef = useRef(false)
+  variantsCollapsedRef.current = variantsCollapsed
+  const onToggleVariants = useCallback(() => setVariantsCollapsed((v) => !v), [])
   const visibleRows = useMemo(() => {
     const chipRows = chipBar.active?.cells.byRow
     const needle = search.trim().toLowerCase()
     return ordered.filter((row) => {
+      if (variantsCollapsed && !row.isParent) return false
       if (showRefusedOnly && refusedIds.size > 0 && !refusedIds.has(row.id)) return false
       if (chipRows && !(row.id in chipRows)) return false
       if (!needle) return true
       const line = axesRef.current.map((a) => String(row.axisValues?.[a.key] ?? '')).join(' ')
       return `${row.sku} ${row.name ?? ''} ${line}`.toLowerCase().includes(needle)
     })
-  }, [ordered, chipBar.active, search, showRefusedOnly, refusedIds])
+  }, [ordered, chipBar.active, search, showRefusedOnly, refusedIds, variantsCollapsed])
 
   /* ── the bulk Edit: one dialog for every change (Owner 2026-10-07) ─────────────────────────── */
 
@@ -251,6 +268,137 @@ export function MatrixSurface({ productId }: { productId: string }) {
   // Shared stock by SKU (2026-10-01): "Stock source…" — the ticked SKUs, or the whole family when the parent is ticked.
   const [stockSourceTargets, setStockSourceTargets] = useState<StockSourceTarget[] | null>(null)
   const canSwitchStock = has('inventory.adjust')
+  /* Stock per location (Owner 2026-10-07): the Stock cell opens the Products page's inventory editor — the SAME
+     component — for its row: a parent opens the family, a variant its own SKU. */
+  const [stockRow, setStockRow] = useState<InventoryEditorTarget | null>(null)
+  const openStock = useCallback((rowId: string) => {
+    const r = rowsRef.current.find((x) => x.id === rowId)
+    const m = matrix.rowOf(rowId)
+    if (!r || !m) return
+    // A variant often has no name of its own: the editor's title is then the family's name.
+    const parent = rowsRef.current.find((x) => matrix.rowOf(x.id)?.role === 'parent')
+    const name = r.name?.trim() || parent?.name?.trim() || r.sku
+    setStockRow({ id: r.id, sku: r.sku, name, isParent: m.role === 'parent', imageUrl: r.imageUrl ?? null })
+  }, [matrix])
+  const stockDoor = canSwitchStock ? openStock : undefined
+  // The editor's Apply says `stock.adjusted` (this tab and the others): the Matrix re-reads its numbers quietly.
+  useInvalidationChannel('stock.adjusted', () => { matrix.refresh() })
+  /* "Sells from" (Step 2, Owner 2026-10-07): each market group's From cell opens one small pop-up — this product's
+     warehouses, or the market default for every product. Read through refs so the door stays one function. */
+  const readRef = useRef(read)
+  readRef.current = read
+  const [fromTarget, setFromTarget] = useState<SellsFromTarget | null>(null)
+  const openFrom = useCallback((rowId: string, key: CoordinateKey, anchor: HTMLElement | null) => {
+    const r = rowsRef.current.find((x) => x.id === rowId)
+    const coord = readRef.current?.coordinates.find((c) => c.key === key)
+    if (!r || !coord || !matrix.cellsOf(rowId, key)?.source?.writable) return
+    setFromTarget({ rowId, sku: r.sku, coordinate: coord, anchor })
+  }, [matrix.cellsOf])
+  const fromDoor = canSwitchStock && (read?.locations?.length ?? 0) > 0 ? openFrom : undefined
+  /** This product's choice, through the Matrix door at the cell's current version; quiet: the pop-up says a refusal. */
+  const writeSource = useCallback(async (rowId: string, key: CoordinateKey, codes: string[]): Promise<MatrixWriteOutcome | null> => {
+    const cells = matrix.cellsOf(rowId, key)
+    if (!cells?.source || !cells.listingId) return null
+    const [outcome] = await matrix.write([{ rowId, coordinateKey: key, cell: 'source', value: codes, expectedVersion: cells.version, expectedListingId: cells.listingId }], { quiet: true })
+    return outcome ?? null
+  }, [matrix])
+  /** After a save: one toast with Undo (the bulk Edit's pattern). A market default re-pushes in the background: read again now and once more soon. */
+  const onFromSaved = useCallback((saved: SellsFromSaved) => {
+    const soon = () => { if (saved.scope === 'market') { matrix.refresh(); setTimeout(() => matrix.refresh(), 1500) } }
+    let used = false
+    const undo = async () => {
+      if (used) return
+      used = true
+      try { toast.toast(await saved.undo(), 'info') } catch (e) { toast.toast(e instanceof Error ? e.message : String(e), 'danger') } finally { soon() }
+    }
+    toast.toast(
+      <span className="nds-matrix-toast">{saved.sentence} <Button size="sm" variant="link" onClick={() => { void undo() }}>Undo</Button></span>,
+      'success',
+      { duration: 12000 },
+    )
+    soon()
+  }, [toast, matrix])
+  /* The Case pop-up (Step 3, Owner 2026-10-07): units per case, case size and weight, FBA prep and labels. A variant
+     writes its own SKU; the parent every variant at once. */
+  const [caseTarget, setCaseTarget] = useState<CaseTarget | null>(null)
+  const openCase = useCallback((rowId: string, anchor: HTMLElement | null) => {
+    const r = rowsRef.current.find((x) => x.id === rowId)
+    const m = matrix.rowOf(rowId)
+    if (!r || !m || !caseViewOf(rowId, matrix.rowOf, rowsRef.current).door) return
+    if (m.role !== 'parent') { setCaseTarget({ rowId, label: r.sku, members: [{ id: r.id, sku: r.sku, pack: m.pack }], anchor }); return }
+    const members = rowsRef.current.flatMap((x) => { const v = x.id === rowId ? null : matrix.rowOf(x.id); return v && v.role !== 'parent' ? [{ id: x.id, sku: x.sku, pack: v.pack }] : [] })
+    setCaseTarget({ rowId, label: allVariants(members.length), subtitle: r.sku, members, anchor })
+  }, [matrix])
+  const caseDoor = canSwitchStock ? openCase : undefined
+  /** After a save: the Matrix (and every page that shows stock) reads again, and one toast with Undo. */
+  const onCaseSaved = useCallback((saved: CaseSaved) => {
+    const reread = () => emitInvalidation({ type: 'stock.adjusted', id: productId, meta: { productId, source: 'matrix-case', subtype: 'cases' } })
+    let used = false
+    const undo = saved.undo
+      ? async () => {
+          if (used) return
+          used = true
+          try { toast.toast(await saved.undo!(), 'info') } catch (e) { toast.toast(e instanceof Error ? e.message : String(e), 'danger') } finally { reread() }
+        }
+      : null
+    toast.toast(
+      undo ? <span className="nds-matrix-toast">{saved.sentence} <Button size="sm" variant="link" onClick={() => { void undo() }}>Undo</Button></span> : saved.sentence,
+      'success',
+      { duration: undo ? 12000 : undefined },
+    )
+    reread()
+  }, [toast, productId])
+  /* Send to FBA (Step 4, Owner 2026-10-07; drafts 2026-10-08): the toolbar's `Send to FBA…` opens ONE dialog on the ticked
+     SKUs; "Add to draft" puts them into the open draft for that From + To (no hold, no Amazon call); the FBA shipments
+     page (Fulfillment › Outbound) sends it. The footer links to the page; the FBA qty cell shows Amazon's inbound "+N" and
+     opens the plans drawer. Nexus never writes the FBA quantity. */
+  const canInbound = has('inbound.manage')
+  const [fbaSend, setFbaSend] = useState<SendToFbaTarget | null>(null)
+  /** The plans drawer: open on one plan (`Follow it`), or on the family's open plans (`planId: null`). */
+  const [plansDrawer, setPlansDrawer] = useState<{ planId: string | null } | null>(null)
+  /** The FBA cell's "in Nexus plan": the plans under way only (a draft holds nothing yet). */
+  const fbaPlansOf = useCallback(() => underWayPlans(readRef.current), [])
+  /** A draft changed: the Matrix (its footer link) and the drawer read again — the same hint the event bridge gives. */
+  const onFbaChanged = useCallback((planId: string, productIds: readonly string[]) => {
+    for (const id of new Set([productId, ...productIds])) {
+      emitInvalidation({ type: 'inventory.stock_changed', id, meta: { source: 'matrix-fba-send', subtype: 'fba-plan', planId, productId: id } })
+    }
+  }, [productId])
+  /** Closed after "Add to draft": one toast with Open (the FBA shipments page on the draft) and Undo. */
+  const onFbaClosed = useCallback((added: SendToFbaAdded | null) => {
+    setFbaSend(null)
+    if (!added) return
+    onFbaChanged(added.planId, added.productIds)
+    let used = false
+    const undo = async () => {
+      if (used) return
+      used = true
+      try {
+        const outcome = await postDraftAdd(added.undo)
+        if (!outcome.ok) { toast.toast(outcome.message, 'danger'); return }
+        // This add made the draft: when the Undo left it empty, it goes too.
+        if (added.made) {
+          const read = await fetch(`${getBackendUrl()}${FBA_ROUTES.plan(added.planId)}`)
+          const plan = readOnePlanAnswer(read.status, await read.json().catch(() => null))
+          if (plan && plan.status === 'DRAFT' && plan.units === 0) await deleteDraft(added.planId)
+        }
+        toast.toast(DONE_COPY.undoneToast, 'info')
+      } catch (e) {
+        toast.toast(e instanceof Error ? e.message : String(e), 'danger')
+      } finally {
+        onFbaChanged(added.planId, added.productIds)
+      }
+    }
+    toast.toast(
+      <span className="nds-matrix-toast">
+        {DONE_COPY.added(added.units)}{' '}
+        <Button asChild size="sm" variant="link"><Link href={fbaPageHref({ plan: added.planId })}>{DONE_COPY.open}</Link></Button>{' '}
+        <Button size="sm" variant="link" onClick={() => { void undo() }}>{FBA_SEND_COPY.undo}</Button>
+      </span>,
+      'success',
+      { duration: 12000 },
+    )
+  }, [toast, onFbaChanged])
   const onReloadRef = useRef<() => void>(() => {})
 
   /**
@@ -271,26 +419,6 @@ export function MatrixSurface({ productId }: { productId: string }) {
 
   /* ── the grid ────────────────────────────────────────────────────────────────────────────── */
 
-  const selfInflicted = useRef(false)
-
-  /**
-   * `syncState` click → Needs attention (Errors & Sync) on that listing's channel.
-   *
-   * 🔴 ONE merged URL patch, through the frame's own resolvers: `setScope(channel)` re-resolves the
-   * market (kept when the channel serves it, else the channel's first) and CLEARS the locale so the
-   * frame picks the scope's own; `setTab('errors')` adds the tab. Measured 17:2x: `setTab('errors',
-   * channel)` alone carried the master locale (`it`) onto `Amazon · DE` and landed on the scope-error
-   * state ("Choose a supported content language for this scope: de"). The frame merges same-tick
-   * patches (later keys win), so the two calls are one navigation.
-   */
-  const onJump = useCallback((params: ICellRendererParams) => {
-    const parsed = parseMatrixColId(params.colDef?.colId)
-    const coord = parsed ? read?.coordinates.find((c) => c.key === parsed.key) : null
-    if (!coord) return
-    setScope(coord.channel)
-    setTab('errors')
-  }, [read, setScope, setTab])
-
   /* The Fulfilment cell's select: the choice opens the Edit dialog on that row and market, method chosen — the same
      preview, confirm word and Undo as a change made for many rows (§3.4: the cell itself writes nothing). */
   const onPickFulfilment = useCallback((method: FulfilmentMethod, params: ICellRendererParams) => {
@@ -301,23 +429,27 @@ export function MatrixSurface({ productId }: { productId: string }) {
     openBulkRef.current([row], { field: 'fulfilment', mode: 'method', input: { choice: method }, coordinateKeys: [coord.key] })
   }, [read])
 
-  /* A phone: the pinned identity gives way so a coordinate column can be on screen (`identityWidthFor`). The room it
-     shares is the grid's width less the OTHER pinned columns (the selection checkbox). Changes only when the grid
-     crosses a width that changes the answer, so a desktop resize rebuilds nothing. */
-  const [identityWidth, setIdentityWidth] = useState(IDENTITY_COL_W)
-  const onGridSizeChanged = useCallback((e: { clientWidth: number; api: GridApi<StudioRow> }) => {
-    const otherPinned = e.api.getDisplayedLeftColumns().filter((c) => c.getColId() !== IDENTITY_COL).reduce((n, c) => n + c.getActualWidth(), 0)
-    const next = identityWidthFor(e.clientWidth - otherPinned)
-    setIdentityWidth((prev) => (prev === next ? prev : next))
+  /* A phone: the Product column is unpinned, as on the Information page (its own hook), so it scrolls away with the row
+     and keeps its whole SKU. */
+  const [gridReady, setGridReady] = useState(0)
+  useUnpinOnNarrowSheet(getGridApi, gridReady)
+  /* The parent's chevron reads the fold at paint time: redraw the Product cells when it turns. */
+  useEffect(() => {
+    const api = getGridApi()
+    if (api && !api.isDestroyed()) api.refreshCells({ columns: [IDENTITY_COL], force: true })
+  }, [variantsCollapsed, getGridApi])
+  /* The group colours' start edge follows the columns on screen (a hidden first column hands its edge to the next one):
+     AG keeps a header cell's classes until the header is redrawn. */
+  const onDisplayedColumnsChanged = useCallback((e: { api: GridApi<StudioRow> }) => {
+    setTimeout(() => { if (!e.api.isDestroyed()) e.api.refreshHeader() }, 0)
   }, [])
   /* ── Status per market (Owner 2026-10-07): the Information page's Status column itself, once per market ──────────────
      The values are the publish actions' — ONE read of every market, each exactly as that market's own sheet reads it
      (`newRows: 'every'`), kept live by the same store: a change on the Information page (any tab) reads again, and one
      made here reaches it the same way. Edits, fills, pastes and Delete go through the sheet's own editing
-     (`usePublishCellEditing`): staged, written per value, one toast — and Publish sends them. Not in preview mode
-     (fixture listings have no publish actions). */
+     (`usePublishCellEditing`): staged, written per value, one toast — and Publish sends them. */
 
-  const publishActions = usePublishActions(productId, previewMode ? null : MATRIX_PUBLISH_DESTINATION, { familyId: sheet?.family.id ?? null })
+  const publishActions = usePublishActions(productId, MATRIX_PUBLISH_DESTINATION, { familyId: sheet?.family.id ?? null })
   const publishActionsRef = useRef(publishActions)
   publishActionsRef.current = publishActions
   readStatusAgain.current = () => { void publishActionsRef.current.reload() }
@@ -338,7 +470,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
   publishReadRef.current = publishRead
   const canDeleteRef = useRef(false)
   canDeleteRef.current = has('products.delete')
-  const statusCoordinates = useMemo(() => (previewMode ? [] : visibleCoordinates.filter(hasMatrixStatus)), [previewMode, visibleCoordinates])
+  const statusCoordinates = useMemo(() => visibleCoordinates.filter(hasMatrixStatus), [visibleCoordinates])
   const statusCoordinatesRef = useRef(statusCoordinates)
   statusCoordinatesRef.current = statusCoordinates
   const statusColIds = useMemo(() => statusCoordinates.map((c) => matrixStatusColId(c.key)), [statusCoordinates])
@@ -400,9 +532,11 @@ export function MatrixSurface({ productId }: { productId: string }) {
   /* ── the bulk Edit's doors ──────────────────────────────────────────────────────────────────
      Read at every preview and Apply through refs: a write moves cells and versions while the dialog is open. */
 
-  const bulkLive = useRef({ visibleCoordinates, focusedKey, masterHeldReason, publishRead, previewMode, canPrice: false, canDelete: false })
+  const bulkLive = useRef({ visibleCoordinates, focusedKey, publishRead, canPrice: false, canDelete: false, canStock: false })
   bulkLive.current = {
-    visibleCoordinates, focusedKey, masterHeldReason, publishRead, previewMode,
+    visibleCoordinates, focusedKey, publishRead,
+    // "Sells from" needs `inventory.adjust` (the server's preview refuses it per row too).
+    canStock: has('inventory.adjust'),
     // The server refuses every price write without both (`products.edit` on the route, `products.price.edit` in the service).
     canPrice: has('products.edit') && has('products.price.edit'),
     canDelete: has('products.delete'),
@@ -422,12 +556,12 @@ export function MatrixSurface({ productId }: { productId: string }) {
         cellsOf: (rowId, key) => cellsOfRef.current(rowId, key),
         statusCellOf: (rowId, coord) => { const row = now.get(rowId); return row ? statusCellOf(row, coord) : null },
         canPrice: live.canPrice,
-        masterHeld: live.masterHeldReason,
-        statusHeld: live.previewMode ? 'Preview data — the markets\' Status is set on each market\'s own sheet until the Matrix service lands.'
-          : !live.publishRead.loaded ? 'The markets\' Status is still being read. Try again in a moment.'
-            : live.publishRead.failed ? STATUS_READ_FAILED : live.publishRead.lockedReason,
+        statusHeld: !live.publishRead.loaded ? 'The markets\' Status is still being read. Try again in a moment.'
+          : live.publishRead.failed ? STATUS_READ_FAILED : live.publishRead.lockedReason,
         canDelete: live.canDelete,
         focusedKey: live.focusedKey,
+        locations: readRef.current?.locations,
+        canStock: live.canStock,
       }
     }
     return {
@@ -494,7 +628,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
     const family = sheet?.family.sku ?? ''
     const total = rowsRef.current.filter((r) => !r.isParent).length
     const base = createBulkSource(bulkDoors(rows), {
-      title: rows.length === 1 ? `Edit ${rows[0]!.sku}` : `Edit ${rows.length} rows`,
+      title: rows.length === 1 ? `Edit · ${rows[0]!.sku}` : `Edit · ${rows.length} rows`,
       subtitle: [family, rows.length === 1 && rows[0]!.isParent ? 'the parent row' : `${variantsTicked} of ${total} ${total === 1 ? 'variant' : 'variants'}`].filter(Boolean).join(' · '),
     })
     bulkUndo.current = null
@@ -551,10 +685,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
     () => buildMatrixColumns({
       coordinates: visibleCoordinates, cellsOf: matrix.cellsOf, rowOf: matrix.rowOf, tracker,
       sheetColumns: sheet?.columns ?? [], locale: localeOrFirst, market: marketOrFirst,
-      axesRef, rowMenuRef, masterHeldReason, onJump, onPickFulfilment, rowsRef, identityWidth,
-      statusColumnOf: previewMode ? undefined : statusColumnOf,
+      axesRef, rowMenuRef, onPickFulfilment, rowsRef, variantsCollapsedRef, onToggleVariants,
+      statusColumnOf, onOpenStock: stockDoor, onOpenFrom: fromDoor, onOpenCase: caseDoor, fbaPlansOf,
     }),
-    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, masterHeldReason, onJump, onPickFulfilment, identityWidth, previewMode, statusColumnOf],
+    [visibleCoordinates, matrix.cellsOf, matrix.rowOf, tracker, sheet?.columns, localeOrFirst, marketOrFirst, onPickFulfilment, onToggleVariants, statusColumnOf, stockDoor, fromDoor, caseDoor, fbaPlansOf],
   )
   const defaultColDef = useMemo<ColDef<StudioRow>>(() => ({ sortable: true, resizable: true }), [])
   const rowSelection = useMemo(() => gridSelection<StudioRow>(), [])
@@ -569,12 +703,12 @@ export function MatrixSurface({ productId }: { productId: string }) {
       const colId = e.colDef.colId
       /* A market's Status column never writes here: its setter stages the value (`usePublishCellEditing`) and returns
          false, so AG fires no change — and should one arrive anyway, it is not a Matrix or a master cell. */
-      if (isMatrixStatusColId(colId)) return
-      if (!writeGate({ colId, source: e.source, selfInflicted: selfInflicted.current, oldValue: e.oldValue, newValue: e.newValue }).write) return
+      if (isMatrixStatusColId(colId) || isMatrixFromColId(colId) || colId === CASE_COL) return
+      if (!writeGate({ colId, source: e.source, oldValue: e.oldValue, newValue: e.newValue }).write) return
       const parsed = parseMatrixColId(colId)
       if (!parsed) {
-        /* A SHARED column (`Base price`, `Status`): the sheet's own write path, held in preview mode. */
-        if (masterHeldReason || !colId) return
+        /* A SHARED column (`Base price`): the sheet's own write path. */
+        if (!colId) return
         writer.set(e.data.id, colId, e.newValue, { row: e.data })
         return
       }
@@ -594,7 +728,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
       }
       void matrix.write([decision.cell])
     },
-    [matrix, writer, tracker, masterHeldReason, getGridApi, sayReason],
+    [matrix, writer, tracker, getGridApi, sayReason],
   )
 
   /* ── a held cell EXPLAINS itself on an open gesture (the sheet's `explainRefusal` rule) ──── */
@@ -603,6 +737,13 @@ export function MatrixSurface({ productId }: { productId: string }) {
     const colId = e.colDef?.colId
     /* The FBA qty column is locked on every row: an open gesture says why, as any held Matrix cell does. */
     if (colId === FBA_COL && e.data) { sayReason(MATRIX_COPY.fbaLocked, 'info'); return true }
+    /* A From cell that cannot open says why (the parent, FBA, shared stock, no right to adjust stock). */
+    if (isMatrixFromColId(colId) && e.data) {
+      const coord = read?.coordinates.find((c) => c.key === fromGroupKey(colId!))
+      const held = coord ? fromCellView(matrix.rowOf(e.data.id), matrix.cellsOf(e.data.id, coord.key), coord).held : null
+      if (held) { sayReason(held, 'info'); return true }
+      return false
+    }
     const parsed = parseMatrixColId(colId)
     if (!parsed || !e.data || !colId) return false
     const marked = tracker.get(e.data.id, colId)
@@ -611,8 +752,40 @@ export function MatrixSurface({ productId }: { productId: string }) {
     if (held.editable || !held.reason) return false
     sayReason(held.reason, 'info')
     return true
-  }, [tracker, matrix, sayReason])
-  const onCellDoubleClicked = useCallback((e: { data?: StudioRow; colDef?: { colId?: string } }) => { explainHeld(e) }, [explainHeld])
+  }, [tracker, matrix, sayReason, read])
+  /** The From door on an open gesture (double-click, Enter, F2), when the cell has one; anchored on the cell. */
+  const openFromCell = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null }): boolean => {
+    const colId = e.colDef?.colId
+    if (!isMatrixFromColId(colId) || !e.data || !fromDoor) return false
+    const key = fromGroupKey(colId!)
+    if (!matrix.cellsOf(e.data.id, key)?.source?.writable || matrix.rowOf(e.data.id)?.stock.source) return false
+    const target = e.event?.target
+    fromDoor(e.data.id, key, target instanceof Element ? target.closest<HTMLElement>('[role="gridcell"]') : null)
+    return true
+  }, [fromDoor, matrix])
+  /** The FBA qty cell on an open gesture (double-click, Enter, F2): a row with inbound or planned units, or a family with
+   *  open plans, opens the plans drawer; otherwise the locked sentence, as before (`explainHeld`). */
+  const openFbaCell = useCallback((e: { data?: StudioRow; colDef?: { colId?: string } }): boolean => {
+    if (e.colDef?.colId !== FBA_COL || !e.data || !canInbound) return false
+    const inbound = matrix.rowOf(e.data.id)?.fbaInbound
+    if (!((inbound?.units ?? 0) > 0 || (inbound?.planned ?? 0) > 0 || openPlans(readRef.current).length > 0)) return false
+    setPlansDrawer({ planId: null })
+    return true
+  }, [canInbound, matrix])
+  /** The Case door on an open gesture (double-click, Enter, F2), when the cell has one; anchored on the cell. */
+  const openCaseCell = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null }): boolean => {
+    if (e.colDef?.colId !== CASE_COL || !e.data || !caseDoor) return false
+    const target = e.event?.target
+    caseDoor(e.data.id, target instanceof Element ? target.closest<HTMLElement>('[role="gridcell"]') : null)
+    return true
+  }, [caseDoor])
+  const onCellDoubleClicked = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null }) => {
+    if (e.colDef?.colId === STOCK_COL && e.data && stockDoor) { stockDoor(e.data.id); return }
+    if (openCaseCell(e)) return
+    if (openFromCell(e)) return
+    if (openFbaCell(e)) return
+    explainHeld(e)
+  }, [explainHeld, stockDoor, openFromCell, openCaseCell, openFbaCell])
   /* AG's union includes a full-width variant without `colDef`; both are typed loosely and guarded. */
   const onCellKeyDown = useCallback((e: { data?: StudioRow; colDef?: { colId?: string }; event?: Event | null; column?: { getColId(): string } | null }) => {
     /* Delete / Backspace on a market's Status: the selected Status cells go back to "no change" (the sheet's rule). */
@@ -622,39 +795,48 @@ export function MatrixSurface({ productId }: { productId: string }) {
     })) return
     const key = e.event as KeyboardEvent | undefined
     if (!key || key.altKey || key.ctrlKey || key.metaKey) return
+    if ((key.key === 'Enter' || key.key === 'F2') && e.colDef?.colId === STOCK_COL && e.data && stockDoor) { stockDoor(e.data.id); return }
+    if ((key.key === 'Enter' || key.key === 'F2') && openFromCell(e)) return
+    if ((key.key === 'Enter' || key.key === 'F2') && openCaseCell(e)) return
+    if ((key.key === 'Enter' || key.key === 'F2') && openFbaCell(e)) return
     const opens = key.key === 'Enter' || key.key === 'F2' || (key.key.length === 1 && key.key !== ' ')
     if (opens) explainHeld(e)
-  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf])
+  }, [explainHeld, clearStatusCells, getGridApi, statusPlaceOf, stockDoor, openFromCell, openCaseCell, openFbaCell])
 
   /* ── views: presets + saved views on the Matrix surface ─────────────────────────────────── */
 
   const allColIds = useMemo(() => {
-    const ids: string[] = [IDENTITY_COL, BASE_PRICE_COL, STOCK_COL, FBA_COL]
+    const ids: string[] = [IDENTITY_COL, BASE_PRICE_COL, STOCK_COL, CASE_COL, FBA_COL]
     for (const c of visibleCoordinates) {
       if (!c.connected || c.cells.length === 0) ids.push(matrixColId(c.key, 'notListed'))
-      else for (const k of c.cells) {
+      else for (const k of drawnCells(c)) {
+        if (k === fromBefore(c)) ids.push(matrixFromColId(c.key))
         ids.push(matrixColId(c.key, k))
         if (k === 'listing' && statusColIds.includes(matrixStatusColId(c.key))) ids.push(matrixStatusColId(c.key))
       }
     }
     return ids
   }, [visibleCoordinates, statusColIds])
+  /* `Not listed` columns are not in any preset (Owner 2026-10-08): they start hidden, the footer names them, and Customise
+     shows them. */
+  const listedColIds = useMemo(() => allColIds.filter((id) => !id.endsWith('.notListed')), [allColIds])
   const presets = useMemo<GridViewPreset[]>(() => {
     const byKind = (kinds: readonly MatrixCellKind[], shared: readonly string[]) => [IDENTITY_COL, ...shared, ...allColIds.filter((id) => { const p = parseMatrixColId(id); return !!p && kinds.includes(p.kind) })]
     return [
-      { id: ALL_VIEW_ID, label: 'Everything', description: 'Every coordinate, every cell', columns: allColIds },
-      { id: 'inventory', label: 'Inventory', description: 'Stock, FBA qty and the inventory lane: Fulfilment · Mode · Qty · Buffer · Sync', columns: byKind(INVENTORY_KINDS, [STOCK_COL, FBA_COL]) },
+      /* "All columns" and its count, as the Information page's Columns menu says it (audit 2026-10-08). */
+      { id: ALL_VIEW_ID, label: 'All columns', description: 'Every listed coordinate, every cell', columns: listedColIds },
+      { id: 'inventory', label: 'Inventory', description: 'Stock, Case, FBA qty and the inventory lane: Fulfilment · From · Mode · Qty · Buffer', columns: [...byKind(INVENTORY_KINDS, [STOCK_COL, CASE_COL, FBA_COL]), ...allColIds.filter(isMatrixFromColId)] },
       { id: 'pricing', label: 'Pricing', description: 'Base price and every coordinate\'s Price and Sale', columns: byKind(PRICING_KINDS, [BASE_PRICE_COL]) },
       { id: 'listings', label: 'Listings', description: 'Every market\'s Listing state and selling Status', columns: [...byKind(['listing'], []), ...allColIds.filter(isMatrixStatusColId)] },
     ]
-  }, [allColIds])
+  }, [allColIds, listedColIds])
 
   const visibleColIds = useCallback((): string[] => {
     const api = getGridApi()
     return api ? api.getAllDisplayedColumns().map((c) => c.getColId()).filter((id) => allColIds.includes(id)) : allColIds
   }, [getGridApi, allColIds])
   const [activePresetId, setActivePresetId] = useState<string | null>(ALL_VIEW_ID)
-  const applyVisible = useCallback((keys: readonly string[], savedBeforeStatus = false) => {
+  const applyVisible = useCallback((keys: readonly string[], savedBefore: { status?: boolean; from?: boolean; case?: boolean } = {}) => {
     const api = getGridApi()
     if (!api) return
     /* The progress column is kept like the Product cell: every saved view and preset predates it, and a view that
@@ -662,13 +844,18 @@ export function MatrixSurface({ productId }: { productId: string }) {
     const want = new Set([IDENTITY_COL, SCOPE_PROGRESS_COLUMN, ...keys])
     /* A view saved before the markets' Status columns existed (`MATRIX_STATUS_SINCE`) could not name them: it shows the
        Status of each Listing it shows, rather than hiding them all. A view saved since keeps exactly what it names. */
-    if (savedBeforeStatus && !keys.some(isMatrixStatusColId))
+    if (savedBefore.status && !keys.some(isMatrixStatusColId))
       for (const colId of allColIds) if (isMatrixStatusColId(colId) && want.has(matrixColId(colId.slice(0, colId.lastIndexOf('.')), 'listing'))) want.add(colId)
+    /* The same for the From columns (Step 2): a view saved before them shows From wherever it shows that group's Qty. */
+    if (savedBefore.from && !keys.some(isMatrixFromColId))
+      for (const colId of allColIds) if (isMatrixFromColId(colId) && want.has(matrixColId(fromGroupKey(colId), 'syncQty'))) want.add(colId)
+    /* And the Case column (Step 3): a view saved before it shows Case wherever it shows Stock. */
+    if (savedBefore.case && !keys.includes(CASE_COL) && want.has(STOCK_COL)) want.add(CASE_COL)
     api.applyColumnState({ state: allColIds.map((colId) => ({ colId, hide: !want.has(colId) })) })
   }, [getGridApi, allColIds])
   const applyPreset = useCallback((preset: GridViewPreset) => { applyVisible(preset.columns); setActivePresetId(preset.id); views.markActive(null) }, [applyVisible]) // eslint-disable-line react-hooks/exhaustive-deps
   const applyColumnsView = useCallback((payload: ColumnsViewPayload, view?: { updatedAt?: string }) => {
-    applyVisible(payload.columns, savedBeforeMatrixStatus(view?.updatedAt))
+    applyVisible(payload.columns, { status: savedBeforeMatrixStatus(view?.updatedAt), from: savedBeforeMatrixFrom(view?.updatedAt), case: savedBeforeMatrixCase(view?.updatedAt) })
     setActivePresetId(null)
   }, [applyVisible])
   const getPageState = useCallback((): MatrixPageState => ({ search }), [search])
@@ -687,12 +874,12 @@ export function MatrixSurface({ productId }: { productId: string }) {
     views.markActive(id)
     return id
   }, [views, visibleColIds, chipBar.activeId])
-  /* A default saved COLUMNS view lands once the grid is up; the ground state stays Everything. */
+  /* A default saved COLUMNS view lands once the grid is up; the ground state stays All columns. */
   const landedDefault = useRef<string | null>(null)
   useEffect(() => {
     const v = views.defaultView
     if (!v || !getGridApi() || landedDefault.current === v.id) return
-    if (v.payload && isColumnsViewPayload(v.payload)) { landedDefault.current = v.id; applyColumnsView(v.payload); views.markActive(v.id) }
+    if (v.payload && isColumnsViewPayload(v.payload)) { landedDefault.current = v.id; applyColumnsView(v.payload, v); views.markActive(v.id) }
   }, [views, applyColumnsView, getGridApi])
 
   /* ── Customise: the ONE PreferencesModal ────────────────────────────────────────────────── */
@@ -702,29 +889,30 @@ export function MatrixSurface({ productId }: { productId: string }) {
   const preferenceColumns = useMemo<PreferencesColumnSpec[]>(() => {
     const out: PreferencesColumnSpec[] = [
       { key: IDENTITY_COL, label: 'Product', locked: true, group: 'Product' },
-      { key: SCOPE_PROGRESS_COLUMN, label: 'Shared product (progress)', group: 'Product' },
-      { key: BASE_PRICE_COL, label: 'Base price', group: 'Shared' },
-      { key: STOCK_COL, label: 'Stock', group: 'Shared' },
-      { key: FBA_COL, label: 'FBA qty', group: 'Shared' },
+      /* The groups as the grid draws them, in their colours (Owner 2026-10-08: Progress is its own group there). */
+      { key: SCOPE_PROGRESS_COLUMN, label: 'Shared product (progress)', group: 'Progress', groupTone: MATRIX_GROUP_TONES.progress },
+      { key: BASE_PRICE_COL, label: 'Base price', group: 'Shared', groupTone: MATRIX_GROUP_TONES.shared },
+      { key: STOCK_COL, label: 'Stock', group: 'Shared', groupTone: MATRIX_GROUP_TONES.shared },
+      { key: CASE_COL, label: 'Case', group: 'Shared', groupTone: MATRIX_GROUP_TONES.shared },
+      { key: FBA_COL, label: 'FBA qty', group: 'Shared', groupTone: MATRIX_GROUP_TONES.shared },
     ]
     for (const c of visibleCoordinates) {
-      if (!c.connected || c.cells.length === 0) { out.push({ key: matrixColId(c.key, 'notListed'), label: MATRIX_COPY.notListed, group: c.label }); continue }
-      for (const k of c.cells) {
-        out.push({ key: matrixColId(c.key, k), label: MATRIX_CELL_LABELS[k], group: c.label })
-        if (k === 'listing' && statusColIds.includes(matrixStatusColId(c.key))) out.push({ key: matrixStatusColId(c.key), label: STATUS_COLUMN_LABEL, group: c.label })
+      const at = { group: c.label, groupTone: channelTone(c.channel) }
+      if (!c.connected || c.cells.length === 0) { out.push({ key: matrixColId(c.key, 'notListed'), label: MATRIX_COPY.notListed, ...at }); continue }
+      for (const k of drawnCells(c)) {
+        if (k === fromBefore(c)) out.push({ key: matrixFromColId(c.key), label: FROM_LABEL, ...at })
+        out.push({ key: matrixColId(c.key, k), label: MATRIX_CELL_LABELS[k], ...at })
+        if (k === 'listing' && statusColIds.includes(matrixStatusColId(c.key))) out.push({ key: matrixStatusColId(c.key), label: STATUS_COLUMN_LABEL, ...at })
       }
     }
     return out
   }, [visibleCoordinates, statusColIds])
-  /* The kinds a coordinate has NO store for, with their sentences — greyed in the dialog's hint,
-     since the DS list has no per-row "absent" slot (honest absence: §3.1 rule 6). */
-  const absentHint = useMemo(() => {
-    /* MX.F: the label table covers the reserved business cells too (`B2B price` · `Tiers`, design §3.11), so the server's
-       derived B2B absence renders with its sentence rather than as `undefined`. */
-    const lines = visibleCoordinates.flatMap((c) => c.absent.map((a) => `${c.label} · ${MATRIX_ABSENT_CELL_LABELS[a.cell]} — ${a.reason}`))
-    return lines.length ? `Not offered here: ${lines.join(' · ')}` : null
-  }, [visibleCoordinates])
-  const defaultPrefs = useMemo<PreferencesValue>(() => ({ visibleColumns: preferenceColumns.map((c) => c.key), lockedColumns: [], stickyFirstColumn: true, stickyLastColumn: false, pageSize: 0, sortBy: '', sortDir: 'asc' }), [preferenceColumns])
+  /* The kinds a coordinate has NO store for, with their sentences — in the dialog's hint, since the DS list has no per-row
+     "absent" slot (honest absence: §3.1 rule 6). Grouped by cell (Owner 2026-10-08), not one line per coordinate. */
+  const absent = useMemo(() => { const line = absentLine(visibleCoordinates); return line ? { line, why: absentHint(visibleCoordinates) ?? line } : null }, [visibleCoordinates])
+  /* The ground state: every column but the `Not listed` ones (Customise shows them). */
+  const defaultVisible = useMemo(() => preferenceColumns.map((c) => c.key).filter((k) => !k.endsWith('.notListed')), [preferenceColumns])
+  const defaultPrefs = useMemo<PreferencesValue>(() => ({ visibleColumns: defaultVisible, lockedColumns: [], stickyFirstColumn: true, stickyLastColumn: false, pageSize: 0, sortBy: '', sortDir: 'asc' }), [defaultVisible])
   const bridge = useMemo(() => ({ columns: preferenceColumns.map((c) => ({ key: c.key, locked: c.locked })) }), [preferenceColumns])
   const openCustomise = useCallback(() => {
     const api = getGridApi()
@@ -754,14 +942,19 @@ export function MatrixSurface({ productId }: { productId: string }) {
     try {
       const r = exportGridCsv<StudioRow>(api, `${sheet?.family.sku ?? productId}-matrix`, {
         columns: 'displayed',
-        keyOf: (colId) => (parseMatrixColId(colId) || isMatrixStatusColId(colId) ? colId : colId === BASE_PRICE_COL ? 'basePrice' : null),
+        keyOf: (colId) => (parseMatrixColId(colId) || isMatrixStatusColId(colId) || isMatrixFromColId(colId) ? colId : colId === BASE_PRICE_COL ? 'basePrice' : null),
         valueOf: (colId, row) => {
           if (isMatrixStatusColId(colId)) {
             /* The words the cell shows (the sheet's `statusCellText`): the waiting target, else the live state. */
             const coord = statusCoordinatesRef.current.find((c) => matrixStatusColId(c.key) === colId)
             return coord ? statusCellText(statusCellValue(statusCellOf(row, coord), publishReadRef.current)) || null : null
           }
+          if (isMatrixFromColId(colId)) {
+            const coord = read.coordinates.find((c) => c.key === fromGroupKey(colId))
+            return coord ? fromCellText(matrix.rowOf(row.id), matrix.cellsOf(row.id, coord.key), coord) : null
+          }
           const p = parseMatrixColId(colId)
+          if (colId === CASE_COL) { const v = caseViewOf(row.id, matrix.rowOf, rowsRef.current); return v.value ?? (v.look === 'mixed' ? CASE_MIXED : null) }
           if (!p) return colId === STOCK_COL ? matrix.rowOf(row.id)?.stock.available ?? null : colId === FBA_COL ? fbaUnitsOf(matrix.rowOf(row.id)) : undefined
           const coord = read.coordinates.find((c) => c.key === p.key)
           return coord ? matrixCellText(p.kind, matrix.cellsOf(row.id, p.key), coord, MATRIX_COPY) : null
@@ -769,15 +962,15 @@ export function MatrixSurface({ productId }: { productId: string }) {
         leading: [{ colId: '__export_sku', header: 'SKU', key: 'sku', value: (row) => row.sku }],
         narrowed: !!search.trim() || !!chipBar.activeId,
       })
-      toast.toast(`Exported ${r.rows} ${r.rows === 1 ? 'row' : 'rows'} · ${r.columns} columns${previewMode ? ' · preview data' : ''}`, 'success')
+      toast.toast(`Exported ${r.rows} ${r.rows === 1 ? 'row' : 'rows'} · ${r.columns} columns`, 'success')
     } catch (e) {
       toast.toast(e instanceof GridExportRefused ? e.message : e instanceof Error ? e.message : String(e), 'danger')
     }
-  }, [getGridApi, read, sheet, productId, matrix, search, chipBar.activeId, toast, previewMode, statusCellOf])
+  }, [getGridApi, read, sheet, productId, matrix, search, chipBar.activeId, toast, statusCellOf])
 
   /* ── lifecycle ───────────────────────────────────────────────────────────────────────────── */
 
-  const onGridReady = useCallback((e: GridReadyEvent<StudioRow>) => { bindGridApi(e.api); bindGrid(e.api); views.bind(e.api as unknown as GridApi) }, [bindGridApi, bindGrid, views])
+  const onGridReady = useCallback((e: GridReadyEvent<StudioRow>) => { bindGridApi(e.api); bindGrid(e.api); views.bind(e.api as unknown as GridApi); setGridReady((n) => n + 1) }, [bindGridApi, bindGrid, views])
   const onGridPreDestroyed = useCallback((e: { api: GridApi<StudioRow> }) => { releaseGrid(e); bindGrid(null) }, [releaseGrid, bindGrid])
   const onReload = useCallback(() => { matrix.reload(); reload(); projectionsQuery.reload() }, [matrix, reload, projectionsQuery])
   onReloadRef.current = onReload
@@ -806,6 +999,18 @@ export function MatrixSurface({ productId }: { productId: string }) {
       onSelect: () => setStockSourceTargets(family.map((r) => ({ id: r.id, sku: r.sku, source: matrix.rowOf(r.id)?.stock.source ?? null }))),
     }
   }, [selectedRows, rows, matrix])
+  // Send to FBA: the ticked SKUs (a ticked parent = every variation); a person who may manage inbound, a family on Amazon.
+  const sendToFba = useMemo(() => {
+    if (selectedRows.length === 0 || !canInbound || !hasAmazonListing(read)) return null
+    const productIds = sendProductIds(selectedRows, rows)
+    const wholeFamily = selectedRows.some((r) => r.isParent)
+    return {
+      description: sendDescription(productIds.length, wholeFamily),
+      held: sendHeld({ loading: !read || busy, productIds }),
+      onSelect: () => setFbaSend({ productIds, subtitle: sheet?.family.sku }),
+    }
+  }, [selectedRows, rows, canInbound, read, busy, sheet])
+  const fbaLinks = useMemo(() => (canInbound ? footerLinks(read) : []), [canInbound, read])
 
   // After a switch: the Matrix re-reads now, and once more when the background has sent the new numbers.
   const reloadSoonAgain = useCallback(() => { onReloadRef.current(); setTimeout(() => onReloadRef.current(), 1500) }, [])
@@ -837,10 +1042,11 @@ export function MatrixSurface({ productId }: { productId: string }) {
     reloadSoonAgain()
   }, [toast, undoStockSource, reloadSoonAgain])
 
-  const viewsEmptyLabel = `Custom (${visibleColIds().length})`
+  const shownColumns = visibleColIds().length
+  const viewsEmptyLabel = `Custom (${shownColumns})`
 
   return (
-    <div className={styles.surface} data-matrix-surface data-matrix-source={read?.source ?? 'loading'}>
+    <div className={styles.surface} data-matrix-surface data-matrix-source={read ? 'live' : matrix.status}>
       <GridSheet
         toolbar={
           <MatrixToolbar
@@ -850,10 +1056,10 @@ export function MatrixSurface({ productId }: { productId: string }) {
             search={search} onSearch={setSearch}
             chips={chipBar.chips} activeChipId={chipBar.activeId} onChipToggle={chipBar.setActive}
             views={views} presets={presets} activePresetId={activePresetId} onApplyPreset={applyPreset}
-            onSaveCurrentView={saveCurrentView} onUpdateCurrentView={updateCurrentView} viewsEmptyLabel={viewsEmptyLabel}
+            onSaveCurrentView={saveCurrentView} onUpdateCurrentView={updateCurrentView} viewsEmptyLabel={viewsEmptyLabel} activeCount={shownColumns}
             onCustomise={openCustomise} onExport={onExport} exportDisabled={!read || busy} onReload={onReload}
             /* Selection in the TOOLBAR, as on the sheet and the Variants tab (Owner, 2026-09-26). */
-            selectionActions={<MatrixSelectionActions onEdit={() => openBulk(selectedRows)} editHeld={!read || busy ? 'The Matrix is still loading' : null} stockSource={stockSource} />}
+            selectionActions={<MatrixSelectionActions onEdit={() => openBulk(selectedRows)} editHeld={!read || busy ? 'The Matrix is still loading' : null} stockSource={stockSource} sendToFba={sendToFba} />}
             onClearSelection={() => getGridApi()?.deselectAll()}
           />
         }
@@ -873,20 +1079,14 @@ export function MatrixSurface({ productId }: { productId: string }) {
                     />
                   </span>
                 )}
-                <span className={styles.footerDetails}>
-                  <span className="nds-cell-muted">{variants} {variants === 1 ? 'variant' : 'variants'}</span>
-                  {euGroups.map((g) => (
-                    <span key={g.key} className="nds-cell-muted" title={MATRIX_COPY.sharedEu(g.sharedInventoryWith!)}>Amazon EU: quantity is shared by {g.sharedInventoryWith!.length} markets</span>
-                  ))}
-                </span>
-                {matrix.pinnedThisSession > 0 && matrix.undoLastPin && (
-                  <span className="nds-cell-muted">
-                    {MATRIX_COPY.pinnedThisSession(matrix.pinnedThisSession).replace(/ · Undo$/, '')}
-                    {' · '}
-                    <Button size="sm" variant="link" onClick={matrix.undoLastPin}>Undo</Button>
-                  </span>
-                )}
+                {/* The variants are counted once, on the toolbar ("21 rows · 1 parent · 20 variants"). */}
+                {notListed && <span className={styles.footerDetails}><span className="nds-cell-muted">{notListed}</span></span>}
                 {scopeNote && <span className="nds-cell-muted" title={scopeNote}>{scopeNote.split(' — ')[0]}</span>}
+                {/* Send to FBA: the family's draft and its plans under way, one click to the FBA shipments page (the FBA qty
+                    cell opens the plans drawer). */}
+                {fbaLinks.map((l) => (
+                  <Button key={l.key} asChild size="sm" variant="link" title={l.title}><Link href={l.href}>{l.label}</Link></Button>
+                ))}
                 {conflicts.length > 0 && (
                   <Button size="sm" variant="link" onClick={reload}>{conflicts.length} {conflicts.length === 1 ? 'row' : 'rows'} changed elsewhere — refresh</Button>
                 )}
@@ -901,7 +1101,6 @@ export function MatrixSurface({ productId }: { productId: string }) {
           <SheetLoadError label="the Matrix" onRetry={onReload} />
         ) : (
           <>
-            <MatrixBanner read={read} note={matrix.probeNote} />
             {contractProblems.length > 0 && <Banner tone="warning" title="The family read did not match its contract">{contractProblems.join(' · ')}</Banner>}
             {projectionsQuery.error && (
               <Banner tone="warning" title="The family's axis values could not be read" action={<Button size="sm" onClick={projectionsQuery.reload}>Try again</Button>}>
@@ -925,7 +1124,7 @@ export function MatrixSurface({ productId }: { productId: string }) {
               rowSelection={rowSelection}
               onSelectionChanged={onSelectionChanged}
               onGridReady={onGridReady}
-              onGridSizeChanged={onGridSizeChanged}
+              onDisplayedColumnsChanged={onDisplayedColumnsChanged}
               onGridPreDestroyed={onGridPreDestroyed}
               onCellValueChanged={onCellValueChanged}
               {...statusOperationProps}
@@ -948,6 +1147,31 @@ export function MatrixSurface({ productId }: { productId: string }) {
         onSwitched={onStockSourceSwitched}
       />
 
+      <InventoryEditorModal row={stockRow} density={DEFAULT_DENSITY} onClose={() => setStockRow(null)}
+        title={stockRow ? `Stock · ${stockRow.sku}` : undefined} subtitle={stockRow?.name} />
+
+      {fromTarget && (
+        <SellsFromDialog
+          target={fromTarget}
+          cellsOf={matrix.cellsOf}
+          rowOf={matrix.rowOf}
+          locations={read?.locations ?? []}
+          writeSource={writeSource}
+          onClose={() => setFromTarget(null)}
+          onSaved={onFromSaved}
+        />
+      )}
+
+      {caseTarget && <CaseDialog target={caseTarget} onClose={() => setCaseTarget(null)} onSaved={onCaseSaved} />}
+
+      {fbaSend && <SendToFbaDialog target={fbaSend} onClose={onFbaClosed} />}
+
+      {/* The plans drawer (Part E2): it reads only while open, and after its own clicks it tells the stock pages (the
+          Matrix included) to read again. */}
+      {canInbound && (
+        <FbaPlansDrawer open={!!plansDrawer} onClose={() => setPlansDrawer(null)} productId={read?.productId ?? productId} planId={plansDrawer?.planId ?? null} />
+      )}
+
       <BulkEditDialog
         open={!!bulk}
         source={bulk?.source ?? null}
@@ -961,14 +1185,14 @@ export function MatrixSurface({ productId }: { productId: string }) {
         value={prefs ?? defaultPrefs}
         onConfirm={applyPrefs}
         allColumns={preferenceColumns}
-        defaultVisible={preferenceColumns.map((c) => c.key)}
+        defaultVisible={defaultVisible}
         pageSizeChoices={[]}
         sortFieldOptions={[]}
         showSticky={false}
         groupToggles
         inViewCount
         title="Customise columns"
-        listHint={absentHint ?? 'Choose the coordinates and cells on screen. Save the arrangement as a view to keep it.'}
+        listHint={absent ? <span className={styles.hintLine}>{absent.line}<InfoTip tip={absent.why} /></span> : 'Choose the coordinates and cells on screen. Save the arrangement as a view to keep it.'}
         viewSave={viewSave}
       />
     </div>

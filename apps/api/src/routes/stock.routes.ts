@@ -5,6 +5,8 @@ import { applyStockMovement, listStockMovements, ProtectedLocationError } from '
 import { LocationAdjustmentError } from '../services/location-adjustment.js'
 import { listStockLocations, listStockReservations, listStockRows, listStockTransfers, readProductStock } from '../services/stock/stock-read.service.js'
 import { adjustOneLocation, adjustReasonOf, NoLocationError } from '../services/stock/location-adjust.service.js'
+import { CaseCountError } from '../services/stock/stock-cases.service.js'
+import type { CaseCount } from '@nexus/shared/stock-cases'
 import { placeHold, PooledHoldRefusal, releaseHold } from '../services/stock/stock-hold.service.js'
 import { createStockLocation, deactivateStockLocation, LocationWriteError, updateStockLocation } from '../services/stock/location-write.service.js'
 import {
@@ -115,6 +117,26 @@ function safeNum(v: unknown, fallback?: number): number | undefined {
   if (v == null) return fallback
   const n = Number(v)
   return Number.isFinite(n) ? n : fallback
+}
+
+/**
+ * The absolute values of one set-on-hand change. Without `cases` (null or absent) the value is read exactly as before
+ * (`Number(value)`: a missing one is refused INVALID_VALUE). With `cases` (Step 3, the sealed count) the value may be
+ * left out — a case-only count; a `cases` that is not a number is refused INVALID_CASES by the service.
+ */
+function adjustValuesOf(raw: { value?: unknown; cases?: unknown }): { value?: number; cases?: CaseCount[] } {
+  if (raw?.cases == null) return { value: Number(raw?.value) }
+  // Step 3 — the sealed counts per size: [{ unitsPerCase, cases }]. Anything else reads as an invalid count
+  // (INVALID_CASES from the shared rule), never as "no change".
+  const list = Array.isArray(raw.cases) ? raw.cases : [raw.cases]
+  const cases = list.map((c) => {
+    const o = (c ?? {}) as { unitsPerCase?: unknown; cases?: unknown }
+    return {
+      unitsPerCase: typeof o.unitsPerCase === 'number' ? o.unitsPerCase : Number.NaN,
+      cases: typeof o.cases === 'number' ? o.cases : Number.NaN,
+    }
+  })
+  return { ...(raw.value == null ? {} : { value: Number(raw.value) }), cases }
 }
 
 const stockRoutes: FastifyPluginAsync = async (fastify) => {
@@ -2308,19 +2330,22 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   //
   // The body is ONE function so the batch route below cannot drift from
   // it: `adjustOneLocation` is the single cell, the batch is a loop.
+  // Step 3: optional absolute `cases` (sealed cases per size:
+  // [{ unitsPerCase, cases }]) are saved with the units in the same
+  // transaction; the answer then carries `cases` (every size after it).
   fastify.post('/stock/adjust-location', async (request, reply) => {
     try {
-      const body = (request.body ?? {}) as { productId?: string; locationId?: string; value?: number; reason?: string; notes?: string }
+      const body = (request.body ?? {}) as { productId?: string; locationId?: string; value?: number; cases?: unknown; reason?: string; notes?: string }
       const productId = typeof body.productId === 'string' ? body.productId : ''
       const locationId = typeof body.locationId === 'string' ? body.locationId : ''
       if (!productId || !locationId) {
         return reply.code(400).send({ error: 'productId and locationId are required', code: 'MISSING_FIELDS' })
       }
-      const r = await adjustOneLocation({ productId, locationId, value: Number(body.value), reason: adjustReasonOf(body.reason), notes: body.notes, actor: 'products-grid-location-edit' })
-      return { ok: true, noop: r.noop, movement: r.movement, totals: r.totals }
+      const r = await adjustOneLocation({ productId, locationId, ...adjustValuesOf(body), reason: adjustReasonOf(body.reason), notes: body.notes, actor: 'products-grid-location-edit' })
+      return { ok: true, noop: r.noop, movement: r.movement, totals: r.totals, ...(r.cases === undefined ? {} : { cases: r.cases }) }
     } catch (error: any) {
       if (error instanceof NoLocationError) return reply.code(404).send({ error: error.message, code: error.code })
-      if (error instanceof LocationAdjustmentError) {
+      if (error instanceof LocationAdjustmentError || error instanceof CaseCountError) {
         return reply.code(400).send({ error: error.message, code: error.code })
       }
       fastify.log.error({ err: error }, '[stock/adjust-location] failed')
@@ -2336,6 +2361,12 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // row per movement — and answers for ITSELF, so the grid keeps a
   // refused cell pending and clears the confirmed ones. A refusal is a
   // result, not an HTTP error; only a malformed body is a 400.
+  //
+  // Step 3 (cases): a change may carry `cases` (the absolute sealed counts
+  // per size, [{ unitsPerCase, cases }]) beside or instead of `value`. Units and cases of one cell are saved in
+  // ONE transaction; a refused count (NO_CASE_SIZE, NOT_A_WAREHOUSE,
+  // INVALID_CASES, CASES_EXCEED_UNITS) leaves the cell's units unsaved too.
+  // A change that named `cases` answers with the sealed counts after it.
   fastify.post('/stock/adjust-locations', async (request, reply) => {
     const body = (request.body ?? {}) as { reason?: string; notes?: string; changes?: unknown }
     if (!Array.isArray(body.changes)) return reply.code(400).send({ error: '`changes` must be an array', code: 'MISSING_FIELDS' })
@@ -2344,16 +2375,16 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     const reason = adjustReasonOf(body.reason)
     const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : undefined
 
-    const results: Array<{ productId: string; locationId: string; ok: boolean; noop?: boolean; quantity?: number; reserved?: number; available?: number; error?: string; code?: string }> = []
-    for (const raw of body.changes as Array<{ productId?: unknown; locationId?: unknown; value?: unknown }>) {
+    const results: Array<{ productId: string; locationId: string; ok: boolean; noop?: boolean; quantity?: number; reserved?: number; available?: number; cases?: CaseCount[]; error?: string; code?: string }> = []
+    for (const raw of body.changes as Array<{ productId?: unknown; locationId?: unknown; value?: unknown; cases?: unknown }>) {
       const productId = typeof raw?.productId === 'string' ? raw.productId : ''
       const locationId = typeof raw?.locationId === 'string' ? raw.locationId : ''
       if (!productId || !locationId) { results.push({ productId, locationId, ok: false, error: 'productId and locationId are required', code: 'MISSING_FIELDS' }); continue }
       try {
-        const r = await adjustOneLocation({ productId, locationId, value: Number(raw.value), reason, notes, actor: 'products-next-inventory-editor' })
-        results.push({ productId, locationId, ok: true, noop: r.noop, quantity: r.quantity, reserved: r.reserved, available: r.available })
+        const r = await adjustOneLocation({ productId, locationId, ...adjustValuesOf(raw), reason, notes, actor: 'products-next-inventory-editor' })
+        results.push({ productId, locationId, ok: true, noop: r.noop, quantity: r.quantity, reserved: r.reserved, available: r.available, ...(r.cases === undefined ? {} : { cases: r.cases }) })
       } catch (error: any) {
-        const code = error instanceof NoLocationError || error instanceof LocationAdjustmentError ? error.code : 'FAILED'
+        const code = error instanceof NoLocationError || error instanceof LocationAdjustmentError || error instanceof CaseCountError ? error.code : 'FAILED'
         if (code === 'FAILED') fastify.log.error({ err: error, productId, locationId }, '[stock/adjust-locations] change failed')
         results.push({ productId, locationId, ok: false, error: error?.message ?? String(error), code })
       }

@@ -3,13 +3,22 @@
  * actually reach the channel … make sure that it is certain").
  *
  * The Matrix's set-fulfilment on an Amazon coordinate (the cell, the Set fulfilment… verb, Claude's set-listing-stock
- * set-fulfilment, and the revert of any of them) is a REAL conversion: one Listings Items patch per open marketplace of
+ * set-fulfilment, and the revert of any of them) is a REAL conversion: ONE Listings Items patch per open marketplace of
  * the coordinate (the Amazon EU group: every open EU market of the seller SKU), through the channel gateway
- * (`amazonSpApiClient.submitListingPayload`), replacing `/attributes/fulfillment_availability`:
+ * (`amazonSpApiClient.submitListingPayload`), that adds the new fulfilment record and deletes the old one
+ * (`conversionPatches`, Owner 2026-10-08 "Option B"):
  *
- *   FBA → FBM  [{ fulfillment_channel_code: 'DEFAULT', quantity: N, lead_time_to_ship_max_days: H }]   (H only when known)
- *   FBM → FBA  [{ fulfillment_channel_code: 'AMAZON_EU' }]                                              (never a quantity)
+ *   FBA → FBM  add    [{ fulfillment_channel_code: 'DEFAULT', quantity: N, lead_time_to_ship_max_days: H }]   (H only when known)
+ *              delete [{ fulfillment_channel_code: 'AMAZON_EU' }]
+ *   FBM → FBA  add    [{ fulfillment_channel_code: 'AMAZON_EU' }]                                             (never a quantity)
+ *              delete [{ fulfillment_channel_code: 'DEFAULT' }]
  *
+ * Why add + delete (not one `replace`): Amazon keys `fulfillment_availability` records by `fulfillment_channel_code`
+ * ("an array that accepts one or more distinct fulfillment records, each keyed by the fulfillment_channel_code"; DEFAULT
+ * and AMAZON_xx can live side by side, FBA stock sold first), so a `replace [{DEFAULT}]` only sets the DEFAULT record and
+ * leaves AMAZON_EU in place (selling-partner-api-models #2061; the 12 GALE sizes of 2026-10-07 stayed AFN). Amazon's own
+ * channel switch is `add` the new code + `delete` the old one in one patch
+ * (developer-docs.amazon/sp-api/docs/additional-functionality-fulfillment-inbound); FBA → FBM is the same pair, mirrored.
  * Entries carry no `marketplace_id`: the market is the request's `marketplaceIds` (`offer-attributes.ts`).
  *
  * Order, so the stock cascade never sends Amazon a number for the wrong method:
@@ -18,12 +27,15 @@
  *     Nexus manages the merchant quantity (the product's FBA mark moves when no FBA units or active FBA offer remain; an
  *     untyped Amazon listing that relied on that mark is first set FBA explicitly, so nothing else loses its guard).
  *     All refused = Nexus stays FBA. Refused markets are named.
- *   - FBM → FBA: Nexus writes FBA first (the guard closes) and cancels the listing's waiting quantity pushes → the patch
- *     per market → a market Amazon refused gets its method back through the same door; all refused = everything back,
- *     the product's mark too.
- * The FBA hard block lets the FBM patch through only against its SENDING record (`fulfilment-conversion-guard.ts`).
+ *   - FBM → FBA: Nexus writes FBA first (the guard closes: from here the push layer, `send-quantity.ts` step 1 and
+ *     `buildAmazonListingPatch`, sends this listing no merchant quantity) and cancels the listing's waiting quantity
+ *     pushes → the patch per market, whose `delete DEFAULT` takes the last merchant quantity off Amazon → a market Amazon
+ *     refused gets its method back through the same door (the product's FBA mark stays while another market is FBA, so
+ *     no market of the SKU pushes a merchant quantity); all refused = everything back, the product's mark too.
+ * The FBA hard block lets the FBM patch through only when it is exactly the patch its SENDING record holds
+ * (`fulfilment-conversion-guard.ts`); a delete of AMAZON_* passes nowhere else.
  *
- * Amazon does not document an API conversion, so an accepted patch is SENT, not done: the confirmation job
+ * An accepted patch is SENT, not done ("accepted for processing"): the confirmation job
  * (`jobs/fulfilment-conversion-confirm.job.ts`) reads the merchant listings report's fulfillment-channel column and
  * moves each record to CONFIRMED, STILL_OLD or NOT_IN_REPORT; the Matrix's Fulfilment cell shows the newest run.
  */
@@ -124,12 +136,18 @@ export const CONVERSION_RECORD_SELECT = {
 /**
  * PURE — the Fulfilment cell's `conversion`: the newest run among `records` (any order), folded over its markets. A run
  * that reached Amazon somewhere reads by its accepted markets (refused ones named in `message`): STILL_OLD, then
- * NOT_IN_REPORT, then SENDING, then SENT, else CONFIRMED; a run refused everywhere reads REFUSED.
+ * NOT_IN_REPORT, then SENDING, then SENT, else CONFIRMED; a run refused everywhere reads REFUSED. A record still SENDING or
+ * SENT after the confirmation window (24 h: the job reads it no more) is no longer on its way: it reads STILL_OLD, so the
+ * same change can be sent again instead of "Already sent" forever (the 2026-10-07 GALE records).
  */
-export function conversionStatusOf(records: readonly ConversionRecordFacts[]): FulfilmentConversionStatus | null {
+export function conversionStatusOf(records: readonly ConversionRecordFacts[], now: Date = new Date()): FulfilmentConversionStatus | null {
   if (records.length === 0) return null
   const newest = [...records].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0]!
-  const run = records.filter((r) => r.runId === newest.runId).sort((a, b) => compareMarkets(a.marketplace, b.marketplace))
+  const unconfirmed = (r: ConversionRecordFacts): ConversionRecordFacts =>
+    (r.status === 'SENT' || r.status === 'SENDING') && now.getTime() - r.createdAt.getTime() > CONFIRM_WINDOW_MS
+      ? { ...r, status: 'STILL_OLD', lastReportAt: r.lastReportAt ?? r.sentAt ?? r.createdAt, message: UNCONFIRMED_AFTER_WINDOW }
+      : r
+  const run = records.filter((r) => r.runId === newest.runId).map(unconfirmed).sort((a, b) => compareMarkets(a.marketplace, b.marketplace))
   const refused = run.filter((r) => r.status === 'REFUSED')
   const reached = run.filter((r) => r.status !== 'REFUSED')
   const to = (newest.toMethod === 'FBA' ? 'FBA' : 'FBM') as 'FBA' | 'FBM'
@@ -165,9 +183,10 @@ export async function loadConversionRecords(listingIds: readonly string[]): Prom
 /**
  * The plan of one Amazon coordinate: the rows the conversion would send to and every fact its preview refuses or tells
  * by. `primaryListingId` = the coordinate's own listing; `targetIds` = the Matrix door's open targets for it
- * (`targetsOf`: the open Amazon EU group, or the listing alone). Null = the primary listing is gone.
+ * (`targetsOf`: the open Amazon EU group, or the listing alone). `to` = the method asked for: with it, every refusal a
+ * person can fix is said at once (`conversionRefusals`), not one per try. Null = the primary listing is gone.
  */
-export async function loadConversionPlan(input: { primaryListingId: string; targetIds: readonly string[] }): Promise<ConversionPlan | null> {
+export async function loadConversionPlan(input: { primaryListingId: string; targetIds: readonly string[]; to?: ConversionMethod }): Promise<ConversionPlan | null> {
   const primary = await prisma.channelListing.findUnique({ where: { id: input.primaryListingId }, select: CONVERSION_LISTING_SELECT })
   if (!primary || primary.channel !== 'AMAZON') return null
   const group: ConversionListing[] = sharesAmazonEuInventory(primary)
@@ -191,19 +210,26 @@ export async function loadConversionPlan(input: { primaryListingId: string; targ
 
   const [policies, ledgers, records] = await Promise.all([loadChannelPolicies(), loadSyncLedgers(prisma as never, [primary.productId]), loadConversionRecords(group.map((l) => l.id))])
   const ledger = ledgers.get(primary.productId)
-  const locks: string[] = []
+  // The send locks, each said ONCE with every market it holds (a pause on DE FR is one line, not two).
+  const locks = new Map<string, { markets: string[]; say: (markets: string) => string }>()
+  const lock = (key: string, mk: string, say: (markets: string) => string) => {
+    const at = locks.get(key) ?? { markets: [], say }
+    if (!at.markets.includes(mk)) at.markets.push(mk)
+    locks.set(key, at)
+  }
   const rows: ConversionPlanRow[] = []
   const quantities: Array<{ market: string; quantity: number | null; refusal: string | null }> = []
   let keptCodeReason: string | null = null
   for (const l of live) {
     const mk = l.marketplace.toUpperCase()
-    const lock = assertPushAllowed(l)
-    if (lock) locks.push(`Amazon ${mk}: ${lock.sentence}`)
-    if (policyFor(policies, 'AMAZON', mk, l.channelConnectionId)?.pushesPaused) locks.push(`Pushes to Amazon ${mk} are paused by the Sync Control policy — release them before converting`)
+    // (A closed offer is skipped above, so the lock's "Inactive here" sentence never applies to a market sent to.)
+    const pushLock = assertPushAllowed(l)
+    if (pushLock) lock(`push:${pushLock.sentence}`, mk, (m) => `Amazon ${m}: ${pushLock.sentence}`)
+    if (policyFor(policies, 'AMAZON', mk, l.channelConnectionId)?.pushesPaused) lock('policy', mk, policyPausedSentence)
     const held = listingSendSku({ ...l, channel: 'AMAZON' }, productSku, productSku)
-    if (held.sku === null) locks.push(`Amazon ${mk}: ${held.refusal}`)
+    if (held.sku === null) lock(`sku:${held.refusal}`, mk, (m) => `Amazon ${m}: ${held.refusal}`)
     const marketplaceId = marketplaceCodeToId(mk === 'GB' ? 'UK' : mk)
-    if (!marketplaceId) locks.push(`Amazon ${mk} has no marketplace id in Nexus, so nothing can be sent there`)
+    if (!marketplaceId) lock('marketplace-id', mk, (m) => `Amazon ${m}: no marketplace id in Nexus, so nothing can be sent there`)
     const kept = keptAmazonFulfilmentCodes(l.platformAttributes)[0]
     if (kept && !keptCodeReason) keptCodeReason = describeAmazonFulfilmentCode(kept).readOnlyReason
     // The FBM number: the cell's intended quantity, read as if the listing were FBM (Follow: pool − buffer; Pinned: the pin).
@@ -231,6 +257,7 @@ export async function loadConversionPlan(input: { primaryListingId: string; targ
   const disagree = distinct.length > 1 && !firstRefusal ? `the open EU markets would send different quantities (${quantities.map((q) => `${q.market} ${q.quantity}`).join(' · ')}); Amazon EU keeps one per SKU — set one quantity first` : null
   const quantity = firstRefusal || disagree ? null : distinct[0] ?? null
   const units = (await readFbaUnits([primary.productId], [productSku, ...rows.map((r) => r.sellerSku)])).get(primary.productId) ?? { onHand: 0, reserved: 0, inbound: 0 }
+  const lockLines = [...locks.values()].map((x) => x.say(x.markets.join(' ')))
   const facts: AmazonFulfilmentFacts = {
     markets: rows.map((r) => r.marketplace),
     skipped,
@@ -240,10 +267,63 @@ export async function loadConversionPlan(input: { primaryListingId: string; targ
     activeFbaOffer: live.some((l) => l.offers.some((o) => o.isActive && o.fulfillmentMethod === 'FBA')),
     keptCodeReason,
     notListed: !anyLive,
-    locked: locks[0] ?? null,
+    locked: null,
     latest: conversionStatusOf(group.flatMap((l) => records.get(l.id) ?? [])),
   }
+  facts.locked = allRefusalsLine(conversionRefusals(facts, lockLines, input.to ?? null)) ?? lockLines[0] ?? null
   return { facts, rows: rows.map((r) => ({ ...r, quantity })), productId: primary.productId, productSku, productFlag: primary.product?.fulfillmentMethod ?? null }
+}
+
+/** A Sync Control pause on markets the conversion sends to: what it is and what to do, in one line. */
+export const policyPausedSentence = (markets: string): string =>
+  `Pushes to Amazon ${markets} are paused — release them in Sync Control, or set ${markets} Inactive in the product sheet if you do not sell there`
+
+/** A cell that is never a no-change, so the shared rule says every refusal it holds (`conversionRefusals`). */
+const PROBE_CELL: Pick<FulfilmentCell, 'method' | 'source' | 'guard' | 'reported'> = { method: null, source: 'derived', guard: null, reported: null }
+
+/**
+ * PURE — every refusal of one conversion a person can fix, each once, so the preview and the run say them ALL at once
+ * instead of one per try (the shared `amazonConversionRefusal` returns the first). The send locks are `lockLines`
+ * (Nexus's own sentences); the FBA units, an active FBA offer and the FBM quantity are asked of the shared rule one fact
+ * at a time, so their words stay the preview's own. A refusal that leaves nothing to fix — not listed, an Amazon-only
+ * code, no open market — or a change already on its way is said alone by the shared rule, before this list is read.
+ * `to` null = only the locks (the method is not known).
+ */
+export function conversionRefusals(facts: AmazonFulfilmentFacts, lockLines: readonly string[], to: ConversionMethod | null): string[] {
+  const out = [...lockLines]
+  if (!to) return out
+  const clear: AmazonFulfilmentFacts = {
+    ...facts, latest: null, notListed: false, keptCodeReason: null, markets: facts.markets.length ? facts.markets : ['—'], locked: null,
+    fbaUnits: { onHand: 0, reserved: 0, inbound: 0 }, activeFbaOffer: false, quantity: facts.quantity ?? 0, quantityRefusal: null,
+  }
+  const ask = (over: Partial<AmazonFulfilmentFacts>) => {
+    const v = amazonConversionRefusal({ ...clear, ...over }, to, PROBE_CELL)
+    if (v && v !== 'noop') out.push(v.reason)
+  }
+  const u = facts.fbaUnits
+  if (u.onHand > 0) ask({ fbaUnits: { onHand: u.onHand, reserved: 0, inbound: 0 } })
+  if (u.reserved > 0) ask({ fbaUnits: { onHand: 0, reserved: u.reserved, inbound: 0 } })
+  if (u.inbound > 0) ask({ fbaUnits: { onHand: 0, reserved: 0, inbound: u.inbound } })
+  if (facts.activeFbaOffer) ask({ activeFbaOffer: true })
+  if (facts.quantity == null) ask({ quantity: null, quantityRefusal: facts.quantityRefusal })
+  return out
+}
+
+/**
+ * PURE — two or more refusals as ONE line: "Refused — 2 things to fix: 1) … 2) …". What repeats is said once: the
+ * "Refused — " lead and any clause an earlier item already said (the FBA units' shared "Amazon must hold no FBA units …").
+ * Null = fewer than two (the shared rule's own sentence is used then).
+ */
+export function allRefusalsLine(reasons: readonly string[]): string | null {
+  if (reasons.length < 2) return null
+  const seen = new Set<string>()
+  const items = reasons.map((r) => r.replace(/^Refused — /, '').split('; ').filter((clause) => {
+    const key = clause.trim().toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).join('; ')).filter(Boolean)
+  return items.length < 2 ? `Refused — ${items[0] ?? ''}` : `Refused — ${items.length} things to fix: ${items.map((x, i) => `${i + 1}) ${x}`).join(' ')}`
 }
 
 /* ── the run ────────────────────────────────────────────────────────────────────────────────── */
@@ -267,14 +347,14 @@ type Sent = { ok: boolean; submissionId?: string | null; status?: string | null;
 class ClaimLost extends Error { constructor(readonly listingId: string) { super('claim lost') } }
 
 /** One patch to one market, through the gateway; the answer in Nexus's words. */
-async function sendOne(row: ConversionPlanRow, value: Array<Record<string, unknown>>, conversionId: string, sellerId: string): Promise<Sent> {
-  const payload = { productType: row.productType, patches: [{ op: 'replace', path: '/attributes/fulfillment_availability', value }] }
+async function sendOne(row: ConversionPlanRow, patches: ConversionPatch[], conversionId: string, sellerId: string): Promise<Sent> {
+  const payload = { productType: row.productType, patches }
   try {
     const r = await amazonSpApiClient.submitListingPayload({
       sellerId, sku: row.sellerSku, marketplaceId: row.marketplaceId, payload, conversionId, ...(row.channelConnectionId ? { accountId: row.channelConnectionId } : {}),
     })
     if (r.dryRun) return { ok: false, reason: 'Amazon publishing is not live on this server (gated or dry run), so nothing reached Amazon' }
-    if (r.status === 'SKIPPED_FBA_HARD_BLOCK') return { ok: false, reason: 'Nexus\'s FBA guard stripped the merchant quantity (FBA units or no confirmed conversion), so nothing reached Amazon' }
+    if (r.status === 'SKIPPED_FBA_HARD_BLOCK') return { ok: false, reason: 'Nexus\'s FBA guard stripped the conversion patch (FBA units at Amazon now, or it is not the patch this conversion recorded), so nothing reached Amazon' }
     if (!r.success) return { ok: false, reason: `Amazon refused it: ${r.error ?? 'no reason given'}`, issues: (r.rawResponse as { issues?: unknown } | undefined)?.issues ?? null }
     const raw = (r.rawResponse ?? {}) as { submissionId?: unknown; status?: unknown }
     return { ok: true, submissionId: typeof raw.submissionId === 'string' ? raw.submissionId : null, status: typeof raw.status === 'string' ? raw.status : r.status ?? null }
@@ -283,9 +363,21 @@ async function sendOne(row: ConversionPlanRow, value: Array<Record<string, unkno
   }
 }
 
-const AMAZON_FBM_ENTRY = (row: ConversionPlanRow): Record<string, unknown> => ({
-  fulfillment_channel_code: 'DEFAULT', quantity: row.quantity, ...(row.leadTime != null ? { lead_time_to_ship_max_days: row.leadTime } : {}),
-})
+export const FULFILMENT_PATH = '/attributes/fulfillment_availability'
+export interface ConversionPatch { op: 'add' | 'delete'; path: typeof FULFILMENT_PATH; value: Array<Record<string, unknown>> }
+
+/**
+ * PURE — the ONE patch a conversion sends to one marketplace: add the new fulfilment record, delete the old one, in that
+ * order (Amazon's documented channel switch). `fbaCode` = the account region's Amazon code (`AMAZON_EU` / `_NA` / `_JP`).
+ * A delete names the record by its key alone, as Amazon's example does. FBM carries the merchant quantity (the Amazon EU
+ * group's one number) and the handling time when known; FBA never carries a quantity.
+ */
+export function conversionPatches(to: ConversionMethod, row: Pick<ConversionPlanRow, 'quantity' | 'leadTime'>, fbaCode: string): ConversionPatch[] {
+  const merchant = { fulfillment_channel_code: 'DEFAULT', quantity: row.quantity, ...(row.leadTime != null ? { lead_time_to_ship_max_days: row.leadTime } : {}) }
+  return to === 'FBM'
+    ? [{ op: 'add', path: FULFILMENT_PATH, value: [merchant] }, { op: 'delete', path: FULFILMENT_PATH, value: [{ fulfillment_channel_code: fbaCode }] }]
+    : [{ op: 'add', path: FULFILMENT_PATH, value: [{ fulfillment_channel_code: fbaCode }] }, { op: 'delete', path: FULFILMENT_PATH, value: [{ fulfillment_channel_code: 'DEFAULT' }] }]
+}
 
 /**
  * Convert one Amazon coordinate's offer to `to`, fresh checks first (the preview's own refusals, re-read now), then the
@@ -301,7 +393,7 @@ export async function convertAmazonFulfilment(input: {
   origin: ConversionOrigin
 }): Promise<ConversionOutcome> {
   const none = { listings: [], accepted: [], refused: [] }
-  const plan = await loadConversionPlan({ primaryListingId: input.primaryListingId, targetIds: input.targets.map((t) => t.id) })
+  const plan = await loadConversionPlan({ primaryListingId: input.primaryListingId, targetIds: input.targets.map((t) => t.id), to: input.to })
   if (!plan) return { outcome: 'refused', reason: 'No Amazon listing on this coordinate any more', ...none }
   const verdict = amazonConversionRefusal(plan.facts, input.to, input.cell)
   if (verdict === 'noop') return { outcome: 'noop', ...none }
@@ -329,7 +421,7 @@ export async function convertAmazonFulfilment(input: {
 
   const runId = randomUUID()
   const fbaCode = `AMAZON_${({ eu: 'EU', na: 'NA', fe: 'JP' } as const)[await getAmazonRegion(plan.rows[0]?.channelConnectionId ?? undefined).catch(() => 'eu' as const)]}`
-  const valueOf = (row: ConversionPlanRow): Array<Record<string, unknown>> => (input.to === 'FBM' ? [AMAZON_FBM_ENTRY(row)] : [{ fulfillment_channel_code: fbaCode }])
+  const patchesOf = (row: ConversionPlanRow): ConversionPatch[] => conversionPatches(input.to, row, fbaCode)
   const from: ConversionMethod = input.to === 'FBM' ? 'FBA' : 'FBM'
   const records = new Map<string, string>()
   for (const row of plan.rows) {
@@ -337,7 +429,7 @@ export async function convertAmazonFulfilment(input: {
       data: {
         channelListingId: row.id, productId: plan.productId, runId, channelConnectionId: row.channelConnectionId, sku: row.sellerSku,
         marketplace: row.marketplace, marketplaceId: row.marketplaceId, fromMethod: input.cell.method === 'FBA' || input.cell.method === 'FBM' ? input.cell.method : from,
-        toMethod: input.to, quantity: input.to === 'FBM' ? row.quantity : null, payload: valueOf(row) as Prisma.InputJsonValue,
+        toMethod: input.to, quantity: input.to === 'FBM' ? row.quantity : null, payload: patchesOf(row) as unknown as Prisma.InputJsonValue,
         status: 'SENDING', operatorConfirmed: true, origin: input.origin, actor: input.actor,
       },
       select: { id: true },
@@ -358,7 +450,7 @@ export async function convertAmazonFulfilment(input: {
     for (const row of plan.rows) {
       const id = records.get(row.id)!
       let sent: Sent
-      try { sent = await sendOne(row, valueOf(row), id, await sellerOf(row)) } catch (err) { sent = { ok: false, reason: `Not sent: ${err instanceof Error ? err.message : String(err)}` } }
+      try { sent = await sendOne(row, patchesOf(row), id, await sellerOf(row)) } catch (err) { sent = { ok: false, reason: `Not sent: ${err instanceof Error ? err.message : String(err)}` } }
       if (sent.ok) {
         accepted.push(row)
         await prisma.fulfilmentConversion.update({ where: { id }, data: { status: 'SENT', sentAt: new Date(), submissionId: sent.submissionId, submissionStatus: sent.status, message: `Amazon accepted the patch (${sent.status ?? 'ACCEPTED'}) — waiting for Amazon's report` } })
@@ -465,6 +557,8 @@ async function putBackProductMark(plan: ConversionPlan, actor: string): Promise<
 
 /** The confirmation window: records older than this are no longer read. */
 export const CONFIRM_WINDOW_MS = 24 * 3_600_000
+/** A send the report never confirmed within the window. */
+export const UNCONFIRMED_AFTER_WINDOW = 'Amazon\'s report did not confirm it within 24 h — check Seller Central → Manage Inventory'
 /** STILL_OLD after this many pulls AND this long since the send. */
 export const STILL_OLD_AFTER_PULLS = 3
 export const STILL_OLD_AFTER_MS = 4 * 3_600_000

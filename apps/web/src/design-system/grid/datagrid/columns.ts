@@ -128,6 +128,8 @@ export interface BuildColDefsInput<T> {
   /** The operator's sticky toggles, gating the developer's flags (DataGrid.tsx:450-453). */
   pinLeft: boolean
   pinRight: boolean
+  /** `false`: no header menu (no ⋮ button, no right-click menu) — a table of a few rows has nothing to sort, pin or hide. */
+  headerMenus?: boolean
   /** The sort in force at definition time — `initialSort` on that column; later changes are applied as column state. */
   sort: { key: string; dir: 'asc' | 'desc' } | null
   /** Persisted header resizes (additive to the legacy shape). */
@@ -150,7 +152,7 @@ const stickyClasses = (sticky: boolean, stickyRight: boolean): string[] =>
  * in render order, then every hidden column.
  */
 export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
-  const { visible, hidden, selectable, pinLeft, pinRight, sort, widths, lockedColumns = [], components } = input
+  const { visible, hidden, selectable, pinLeft, pinRight, sort, widths, lockedColumns = [], components, headerMenus = true } = input
   const defs: ColDef[] = []
   if (selectable) {
     defs.push({
@@ -194,6 +196,7 @@ export function buildColDefs<T>(input: BuildColDefsInput<T>): ColDef[] {
       pinned: sticky ? 'left' : stickyRight ? 'right' : null,
       lockPinned: true,
       suppressMovable: sticky || stickyRight,
+      ...(headerMenus ? {} : { suppressHeaderMenuButton: true, suppressHeaderContextMenu: true }),
       autoHeight: true,
       cellRenderer: components.value,
       cellClass: ['nds-dg-td', align, c.numeric ? 'num' : '', c.className ?? '', ...stickyClasses(sticky, stickyRight)].filter(Boolean),

@@ -54,12 +54,16 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     expect(bothWays<engine.SyncKind, wire.SyncKind>(true)).toBe(true)
     expect(bothWays<engine.SyncMode, wire.SyncMode>(true)).toBe(true)
     expect(bothWays<engine.SyncCell, wire.SyncCell>(true)).toBe(true)
+    /* 2026-10-08 — a lane's failed push (the Qty / Price cell's ✗). */
+    expect(bothWays<engine.PushFailure, wire.PushFailure>(true)).toBe(true)
     expect(bothWays<engine.QueueState, wire.QueueState>(true)).toBe(true)
     expect(bothWays<engine.QueueCell, wire.QueueCell>(true)).toBe(true)
     expect(bothWays<engine.PriceSource, wire.PriceSource>(true)).toBe(true)
     expect(bothWays<engine.PriceCell, wire.PriceCell>(true)).toBe(true)
     expect(bothWays<engine.SaleCell, wire.SaleCell>(true)).toBe(true)
     expect(bothWays<engine.MatrixCells, wire.MatrixCells>(true)).toBe(true)
+    /* Step 2 — "Sells from", beside the inventory cells. */
+    expect(bothWays<engine.SourceCell, wire.SourceCell>(true)).toBe(true)
   })
 
   it('every coordinate, write and verb type is bidirectionally assignable', () => {
@@ -68,6 +72,7 @@ describe('the engine Matrix contract equals the wire Matrix contract', () => {
     /* MX.F: the absent slot's widened kind (the eight + the reserved business cells). */
     expect(bothWays<engine.MatrixAbsentCellKind, wire.MatrixAbsentCellKind>(true)).toBe(true)
     expect(bothWays<engine.MatrixWritableKind, wire.MatrixWritableKind>(true)).toBe(true)
+    expect(bothWays<engine.MatrixDoorKind, wire.MatrixDoorKind>(true)).toBe(true)
     expect(bothWays<engine.MatrixWriteCell, wire.MatrixWriteCell>(true)).toBe(true)
     expect(bothWays<engine.MatrixVerbId, wire.MatrixVerbId>(true)).toBe(true)
     expect(bothWays<engine.MatrixVerbTarget, wire.MatrixVerbTarget>(true)).toBe(true)

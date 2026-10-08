@@ -12,6 +12,7 @@ import { memo } from 'react'
 import { AlertCircle, Clock, History, CornerDownRight, Layers, Link2, Pencil, Share2, Sigma, SparkleIcon, Sparkles, Store } from 'lucide-react'
 
 import { provenanceLabel, provenanceTooltip, type CellProvenance } from './provenance'
+import { WarnGlyph } from './cells'
 
 /* The words live in `provenance.ts` (`provenanceLabel`, pure and typed per member); the glyph and the class live here. */
 const MARKS = {
@@ -92,14 +93,14 @@ export const ProvenanceMark = memo(function ProvenanceMark({ provenance, from, t
    * #780 — a refused formula wears a WARNING in place of the ƒ, never beside it.
    *
    * Beside it would say "calculated, and also refused", which is the same false claim in two marks.
-   * `⚠` for the same reason `ƒ` is a character: every member of this vocabulary is an unboxed glyph,
-   * and the warning triangle at 11px is the one shape an operator reads without a legend.
+   * The warning triangle at 11px is the one shape an operator reads without a legend. Drawn as the outline `WarnGlyph`
+   * (2026-10-08), not the text `⚠`, which a phone may draw as a colour emoji.
    */
   if (provenance === 'refused') {
     // The server's reason and nothing else (#780) — no label prefix, here or in the accessible name.
     return (
       <span className="nds-cell-prov nds-cell-prov-refused" role="img" aria-label={text} title={text}>
-        ⚠
+        <WarnGlyph />
       </span>
     )
   }

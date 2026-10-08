@@ -6,9 +6,9 @@
 import { describe, expect, it } from 'vitest'
 import type { PublishActionCell } from '@nexus/shared/publish-actions'
 
-import type { MatrixCells, MatrixCoordinate } from '../contract'
+import { MATRIX_COPY, type MatrixCells, type MatrixCoordinate, type SourceCell } from '../contract'
 import {
-  BULK_PARENT_ONLY, BULK_PRICE_PERMISSION, basePriceLines, bulkChoices, bulkDefaultMarkets, bulkFields, bulkMarkets, largeChangeWord,
+  BULK_NO_WAREHOUSE, BULK_PARENT_ONLY, BULK_PRICE_PERMISSION, basePriceLines, bulkChoices, bulkDefaultMarkets, bulkFields, bulkMarkets, largeChangeWord,
   saleLines, statusLines, verbLines, verbNotices, verbParams, verbTargets, BULK_HOLD_NOTICE, BULK_STATUS_NEW_ROW, type BulkContext,
 } from './fields'
 import { verbSentence } from './bulkSource'
@@ -25,7 +25,9 @@ const cells = (over: Partial<MatrixCells> = {}): MatrixCells => ({
   listingId: 'L', version: 1, listing: null, fulfilment: null, sync: null, queue: null, price: null, sale: null, writable: {}, writeBlockedReason: {}, ...over,
 })
 const priced = (value: number, sale: MatrixCells['sale'] = null) => cells({ price: { value, currency: 'EUR', source: 'override', formula: null, clamped: null }, sale, writable: { salePrice: true, price: true } })
-const synced = () => cells({ fulfilment: { method: 'FBA', source: 'set', guard: null, reported: null }, sync: { kind: 'FBA_EXCLUDED', via: null, mode: 'FOLLOW', intended: null, held: null, buffer: 0, poolAvailable: 6, routedLocations: [], fbaAtAmazon: 0, oversold: false } })
+const SRC: SourceCell = { own: [], marketDefault: ['IT-MAIN'], defaultOrigin: 'routes', effective: [{ code: 'IT-MAIN', available: 6 }], writable: true, blockedReason: null }
+const LOCATIONS = [{ code: 'IT-MAIN', name: 'Main', active: true, isDefault: true }, { code: 'MI-3PL', name: 'Milan', active: true }, { code: 'OLD', name: 'Old', active: false }]
+const synced = () => cells({ source: SRC, fulfilment: { method: 'FBA', source: 'set', guard: null, reported: null }, sync: { kind: 'FBA_EXCLUDED', via: null, mode: 'FOLLOW', intended: null, held: null, buffer: 0, poolAvailable: 6, routedLocations: [], fbaAtAmazon: 0, oversold: false } })
 
 const statusCell = (over: Partial<PublishActionCell> = {}): PublishActionCell => ({
   listingId: 'L1', productId: 'p', sku: 'S', channel: 'AMAZON', marketplace: 'IT', accountId: 'a', aliasKey: '', state: 'active', stateReason: null,
@@ -50,17 +52,17 @@ function ctx(over: Partial<BulkContext> = {}): BulkContext {
     coordinates: [EU, IT, EBAY],
     cellsOf: (rowId, key) => table[`${rowId}|${key}`] ?? null,
     statusCellOf: (rowId, c) => (c.key === 'AMAZON:IT' ? statusCell({ listingId: `L-${rowId}`, sku: rowId.toUpperCase() }) : null),
-    canPrice: true, masterHeld: null, statusHeld: null, canDelete: false, focusedKey: null,
+    canPrice: true, statusHeld: null, canDelete: false, focusedKey: null, locations: LOCATIONS,
     ...over,
   }
 }
 
 describe('bulkFields', () => {
-  it('lists the eight fields in their groups, every one offered for these rows except the markets they are not on', () => {
+  it('lists the nine fields in their groups, every one offered for these rows except the markets they are not on', () => {
     const fields = bulkFields(ctx())
     expect(fields.map((f) => [f.group, f.label])).toEqual([
       ['Prices', 'Base price'], ['Prices', 'Price'], ['Prices', 'Sale price'], ['Listing', 'Status'], ['Listing', 'Fulfilment'],
-      ['Stock', 'Quantity'], ['Stock', 'Buffer'], ['Stock', 'Stock sync'],
+      ['Stock', 'Quantity'], ['Stock', 'Buffer'], ['Stock', 'Stock sync'], ['Stock', 'Sells from'],
     ])
     expect(fields.every((f) => f.held === null)).toBe(true)
   })
@@ -74,6 +76,13 @@ describe('bulkFields', () => {
     expect(fields.find((f) => f.id === 'basePrice')!.held).toBeNull()
     expect(fields.find((f) => f.id === 'fulfilment')!.held).toBe(BULK_PARENT_ONLY)
   })
+  it('Sells from: held without the right to adjust stock, or with no active warehouse (an older server sends none)', () => {
+    const of = (c: BulkContext) => bulkFields(c).find((f) => f.id === 'stockSource')!.held
+    expect(of(ctx({ canStock: false }))).toBe(MATRIX_COPY.sourcePermission)
+    expect(of(ctx({ locations: undefined }))).toBe(BULK_NO_WAREHOUSE)
+    expect(of(ctx({ locations: [{ code: 'OLD', name: 'Old', active: false }] }))).toBe(BULK_NO_WAREHOUSE)
+    expect(of(ctx())).toBeNull()
+  })
   it('holds Status with the read\'s own reason', () => {
     expect(bulkFields(ctx({ statusHeld: 'Your role cannot publish' })).find((f) => f.id === 'listingStatus')!.held).toBe('Your role cannot publish')
   })
@@ -84,6 +93,8 @@ describe('markets', () => {
     expect(bulkMarkets(ctx(), 'fulfilment').map((m) => [m.key, m.held])).toEqual([['AMAZON:EU', null], ['EBAY:IT', 'None of these rows is on this market']])
     expect(bulkMarkets(ctx(), 'price').map((m) => m.key)).toEqual(['AMAZON:IT', 'EBAY:IT'])
     expect(bulkMarkets(ctx(), 'basePrice')).toEqual([])
+    // Sells from: once per group that carries the quantity — Amazon EU's region group, never its markets.
+    expect(bulkMarkets(ctx(), 'stockSource').map((m) => [m.key, m.held])).toEqual([['AMAZON:EU', null], ['EBAY:IT', 'None of these rows is on this market']])
   })
   it('ticks the focused market when it serves the field, else every market the rows are on', () => {
     expect(bulkDefaultMarkets(ctx({ focusedKey: 'AMAZON:EU' }), 'fulfilment')).toEqual(['AMAZON:EU'])
@@ -110,6 +121,11 @@ describe('verbs', () => {
     expect(verbParams('price', 'adjust', { percent: -5 })).toEqual({ verb: 'adjust-prices', percent: -5 })
     expect(verbParams('stockSync', 'hold', {})).toEqual({ verb: 'pause-sync' })
     expect(verbParams('price', 'set', {})).toBeNull()
+    // Sells from: the codes in sale order; "Use the default" sends [] (the market default again); nothing ticked = no verb.
+    expect(verbParams('stockSource', 'sources', { codes: ['MI-3PL', 'IT-MAIN'] })).toEqual({ verb: 'set-source', codes: ['MI-3PL', 'IT-MAIN'] })
+    expect(verbParams('stockSource', 'default', {})).toEqual({ verb: 'set-source', codes: [] })
+    expect(verbParams('stockSource', 'sources', { codes: [] })).toBeNull()
+    expect(verbTargets(ctx(), 'stockSource', ['AMAZON:EU', 'EBAY:IT'])).toEqual([{ rowId: 'a', coordinateKey: 'AMAZON:EU' }, { rowId: 'b', coordinateKey: 'AMAZON:EU' }])
   })
   it('targets every ticked variant on every chosen market where it has the field', () => {
     expect(verbTargets(ctx(), 'fulfilment', ['AMAZON:EU', 'EBAY:IT'])).toEqual([{ rowId: 'a', coordinateKey: 'AMAZON:EU' }, { rowId: 'b', coordinateKey: 'AMAZON:EU' }])
@@ -127,9 +143,12 @@ describe('verbs', () => {
     expect(verbNotices({ verb: 'pause-sync', notices: [] })).toEqual([BULK_HOLD_NOTICE])
   })
   it('says the result in words, counting what the server applied', () => {
-    expect(verbSentence({ verb: 'set-fulfilment', changes: [{ toLabel: 'FBM', coordinateKey: 'AMAZON:EU' } as never] }, 10, 2)).toBe('10 listings sent to Amazon as FBM · 2 skipped. Amazon\'s report confirms it within about 15 minutes — the Fulfilment cell shows it.')
+    expect(verbSentence({ verb: 'set-fulfilment', changes: [{ toLabel: 'FBM', coordinateKey: 'AMAZON:EU' } as never] }, 10, 2)).toBe('10 listings sent to Amazon as FBM · 2 skipped. The Fulfilment cell says Confirmed when Amazon\'s report shows it (read every 15 min, up to 24 h).')
     expect(verbSentence({ verb: 'set-fulfilment', changes: [{ toLabel: 'MCF', coordinateKey: 'EBAY:IT' } as never] }, 1, 0)).toBe('1 listing set to MCF in Nexus.')
     expect(verbSentence({ verb: 'set-price', changes: [] }, 1, 0)).toBe('1 price changed. Nexus sends it in about 30 seconds.')
+    expect(verbSentence({ verb: 'set-source', changes: [{ to: ['MI-3PL', 'IT-MAIN'] } as never] }, 3, 1)).toBe('3 listings sell from MI-3PL + IT-MAIN · 1 skipped.')
+    expect(verbSentence({ verb: 'set-source', changes: [{ to: [] } as never] }, 1, 0)).toBe('1 listing uses its market default again.')
+    expect(verbSentence({ verb: 'set-source', changes: [{ to: [] } as never] }, 2, 0)).toBe('2 listings use their market default again.')
   })
 })
 

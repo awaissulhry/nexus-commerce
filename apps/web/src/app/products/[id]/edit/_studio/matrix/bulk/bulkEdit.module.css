@@ -99,17 +99,6 @@
   gap: var(--nds-space-10);
   min-height: 168px;
 }
-.prompt {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 168px;
-  padding: var(--nds-space-12);
-  border: 1px dashed var(--nds-border);
-  border-radius: var(--nds-radius-lg);
-  color: var(--nds-text-2);
-  text-align: center;
-}
 
 /* Table cells: the grid sizes the columns (Column.width); these only shape the text inside a cell. */
 .mono {

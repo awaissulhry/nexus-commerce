@@ -1,4 +1,5 @@
 import { workspaceKey } from '@nexus/database/workspace-context'
+import { FBA_SEND_COPY } from '@nexus/shared/fba-send'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { Prisma } from '@prisma/client'
 import { draftLineCosts } from '../services/supply/draft-line-costs.service.js'
@@ -193,7 +194,6 @@ import {
   uploadBufferToCloudinary,
 } from '../services/cloudinary.service.js'
 import {
-  createInboundShipmentPlan as fbaCreateInboundShipmentPlan,
   getInboundShipmentLabels as fbaGetLabels,
   isFbaInboundConfigured,
   // F.6.6: fbaPutTransport + FbaShipmentType removed — v0 putTransport
@@ -251,8 +251,8 @@ import { channelSkuCreateRefusal } from '../services/listings/channel-sku-rename
 //               POST /fulfillment/inbound/:id/receive         (mark items received → stock)
 //               POST /fulfillment/inbound/:id/close
 //
-// FBA           POST /fulfillment/fba/plan-shipment           (Send-to-Amazon plan)
-//               POST /fulfillment/fba/create-shipment         (commit plan to FBA)
+// FBA           POST /fulfillment/fba/plan-shipment           (410 — Send to FBA runs from the Matrix, /api/fba/inbound/plans)
+//               POST /fulfillment/fba/create-shipment         (410 — same)
 //               GET  /fulfillment/fba/shipments
 //               POST /fulfillment/fba/shipments/:id/labels    (FNSKU + carton labels)
 //               POST /fulfillment/fba/shipments/:id/transport (ASN + booking)
@@ -4028,121 +4028,13 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // FBA Send-to-Amazon (B.6 scaffold)
   // ═══════════════════════════════════════════════════════════════════
 
-  // H.8a — real SP-API createInboundShipmentPlan. v0 endpoint
-  // (deprecated but functional; 2024-03-20 multi-step flow lands in
-  // a future migration — see TECH_DEBT). Returns Amazon-issued
-  // shipment plans grouped by destination FC. 503 with a clear
-  // message when SP-API isn't configured rather than silently
-  // falling back to a stub.
-  fastify.post('/fulfillment/fba/plan-shipment', async (request, reply) => {
-    try {
-      const body = request.body as {
-        items?: Array<{ sku: string; quantity: number; asin?: string; condition?: string; quantityInCase?: number }>
-        labelPrepPreference?: 'SELLER_LABEL' | 'AMAZON_LABEL_ONLY' | 'AMAZON_LABEL_PREFERRED'
-      }
-      const items = Array.isArray(body.items) ? body.items : []
-      if (items.length === 0) return reply.code(400).send({ error: 'items[] required' })
-
-      if (!(await isFbaInboundConfigured())) {
-        return reply.code(503).send({
-          error: 'Connect or verify your Amazon Seller account in Settings → Channels.',
-        })
-      }
-
-      const result = await fbaCreateInboundShipmentPlan({
-        items: items.map((it) => ({
-          sellerSku: it.sku,
-          quantity: it.quantity,
-          asin: it.asin,
-          condition: it.condition as any,
-          quantityInCase: it.quantityInCase,
-        })),
-        labelPrepPreference: body.labelPrepPreference,
-      })
-
-      // Return a shape compatible with the existing UI wizard. The
-      // legacy stub returned { planId, shipmentPlans[] } where
-      // shipmentPlans[i] = { shipmentId, destinationFC, items[] }.
-      // We map Amazon's PascalCase response onto the same lowercase
-      // keys so the wizard doesn't need to change in this commit.
-      return {
-        planId: `PLAN-${result.shipmentPlans.map((p) => p.ShipmentId).join('-')}`,
-        shipmentPlans: result.shipmentPlans.map((p) => ({
-          shipmentId: p.ShipmentId,
-          destinationFC: p.DestinationFulfillmentCenterId,
-          labelPrepType: p.LabelPrepType,
-          shipToAddress: p.ShipToAddress,
-          items: p.Items.map((it) => ({
-            sku: it.SellerSKU,
-            quantity: it.Quantity,
-            fnsku: it.FulfillmentNetworkSKU ?? null,
-            prepDetails: it.PrepDetailsList ?? [],
-          })),
-        })),
-      }
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[fba/plan-shipment] failed')
-      // Surface the SP-API error message intact — operator-facing UI
-      // benefits from seeing "InvalidSellerSKU" etc. rather than a
-      // generic 500.
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
-  })
-
-  fastify.post('/fulfillment/fba/create-shipment', async (request, reply) => {
-    try {
-      const body = request.body as {
-        shipmentId: string // from plan
-        destinationFC: string
-        name?: string
-        items: Array<{ productId?: string; sku: string; quantity: number; fnsku?: string }>
-      }
-      if (!body.shipmentId || !body.destinationFC) {
-        return reply.code(400).send({ error: 'shipmentId + destinationFC required' })
-      }
-
-      const fbaShipment = await prisma.fBAShipment.create({
-        data: {
-          shipmentId: body.shipmentId,
-          name: body.name ?? null,
-          status: 'WORKING',
-          destinationFC: body.destinationFC,
-          items: {
-            create: body.items
-              .filter((it) => it.productId)
-              .map((it) => ({
-                productId: it.productId!,
-                quantitySent: it.quantity,
-                quantityReceived: 0,
-              })),
-          },
-        },
-        include: { items: true },
-      })
-
-      // Mirror as InboundShipment (type=FBA) so it shows in /fulfillment/inbound
-      await prisma.inboundShipment.create({
-        data: {
-          type: 'FBA',
-          status: 'DRAFT',
-          fbaShipmentId: fbaShipment.shipmentId,
-          reference: `Send-to-Amazon ${body.shipmentId}`,
-          items: {
-            create: body.items.map((it) => ({
-              productId: it.productId ?? null,
-              sku: it.sku,
-              quantityExpected: it.quantity,
-            })),
-          },
-        },
-      })
-
-      return fbaShipment
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[fba/create-shipment] failed')
-      return reply.code(500).send({ error: error?.message ?? String(error) })
-    }
-  })
+  // Step 4 Send to FBA (2026-10-07) — the v0 plan / create routes are retired. plan-shipment called Amazon's removed v0
+  // createInboundShipmentPlan; create-shipment wrote local FBAShipment + InboundShipment rows only, and an open FBA
+  // InboundShipment counts as incoming supply in ATP. Sending stock into FBA runs from the Matrix now
+  // (/api/fba/inbound/plans): 410 Gone with the sentence the web shows, like the v0 transport route below.
+  const fbaSendMoved = { error: 'gone', message: FBA_SEND_COPY.movedToMatrix, replacement: '/api/fba/inbound/plans' }
+  fastify.post('/fulfillment/fba/plan-shipment', async (_request, reply) => reply.code(410).send(fbaSendMoved))
+  fastify.post('/fulfillment/fba/create-shipment', async (_request, reply) => reply.code(410).send(fbaSendMoved))
 
   fastify.get('/fulfillment/fba/shipments', async (_request, reply) => {
     try {

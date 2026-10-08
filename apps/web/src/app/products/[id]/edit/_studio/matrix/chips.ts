@@ -36,7 +36,19 @@ interface ChipRule {
   cells: (cells: NonNullable<MatrixRead['rows'][number]['cells'][string]>) => readonly string[]
 }
 
-const INVENTORY = ['syncMode', 'syncQty', 'syncBuffer', 'syncState'] as const
+const INVENTORY = ['syncMode', 'syncQty', 'syncBuffer'] as const
+
+/**
+ * Owner 2026-10-08 (the Sync column folded into the cells): the cells that put a row on "Sync issues" — the Qty cell whose
+ * newest stock push failed (✗) or whose Amazon EU markets disagree (⚠), the Price cell whose newest price push failed.
+ * The server's per-lane verdict (`pushFailed`, `euConflict`), never the folded queue.
+ */
+function syncIssueCells(c: NonNullable<MatrixRead['rows'][number]['cells'][string]>): string[] {
+  const out: string[] = []
+  if (c.sync?.pushFailed || c.sync?.euConflict) out.push('syncQty')
+  if (c.price?.pushFailed) out.push('price')
+  return out
+}
 
 const RULES: readonly ChipRule[] = [
   { id: 'matrix-pinned', label: 'Pinned', tone: 'info', note: 'Variants whose quantity is pinned on at least one coordinate',
@@ -45,8 +57,8 @@ const RULES: readonly ChipRule[] = [
     cells: (c) => (c.sync?.kind === 'PAUSED' ? INVENTORY : []) },
   { id: 'matrix-oversold', label: 'Oversold', tone: 'danger', note: 'The channel holds more than the pool can back',
     cells: (c) => (c.sync?.oversold ? ['syncQty'] : []) },
-  { id: 'matrix-sync-issues', label: 'Sync issues', tone: 'danger', note: 'A quantity or price push that failed or is dead-lettered',
-    cells: (c) => (c.queue?.state === 'failed' || c.queue?.state === 'dead' ? ['syncState'] : []) },
+  { id: 'matrix-sync-issues', label: 'Sync issues', tone: 'danger', note: 'A stock or price push that failed, or Amazon EU markets that disagree on the quantity',
+    cells: syncIssueCells },
   { id: 'matrix-suppressed', label: 'Suppressed', tone: 'danger', note: 'Listings Amazon has suppressed, or that carry an error',
     cells: (c) => (c.listing?.state === 'suppressed' || c.listing?.state === 'error' ? ['listing'] : []) },
   { id: 'matrix-not-selling', label: 'Inactive', tone: 'warning', note: 'Listings that are Inactive, Mixed or Ended — set Active in the sheet\'s Status column and Publish',

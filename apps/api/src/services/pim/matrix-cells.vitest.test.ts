@@ -12,9 +12,11 @@
 import { describe, expect, it } from 'vitest'
 import { MATRIX_COPY, type SyncCell } from '@nexus/shared/matrix-contract'
 import {
-  channelRank, channelShape, circled, compareMarkets, deriveFulfilment, foldQueue, listingStateOf, priceCellOf,
+  channelRank, channelShape, circled, compareMarkets, deriveFulfilment, foldQueue, lanePushFailure, listingStateOf, priceCellOf, pushFailureReason,
   reportedFulfilment, syncCellOf, withoutInventory, writableFor, FORMULA_REASON, PARENT_PRICE_REASON, PARENT_REASON, PINNED_BUFFER_REASON, PRICE_PERMISSION_REASON,
+  inSourceOrder, sharedStockReason, sourceCellOf,
 } from './matrix-cells.js'
+import { syncLedgerOf } from '../sync-control-core.js'
 import { businessAbsence, effectiveFulfilment, flattenAudience } from './matrix-cells.js'
 import { destinationSellingStates, type SellingStateListing } from '../listings/listing-action.service.js'
 
@@ -72,6 +74,51 @@ describe('listing state — one vocabulary with the engine (the Shopify pause bu
       .toMatchObject({ state: 'closed', detail: null, selling: { state: 'paused' } })
     expect(listingStateOf(facts({ selling: family([{ productId: 'root', platformAttributes: { status: 'ARCHIVED' } }, { productId: 's' }]).get('s')! })))
       .toMatchObject({ state: 'ended', selling: { state: 'ended' } })
+  })
+})
+
+describe('per-lane push failure (2026-10-08: the Sync column folds into Qty and Price) — each lane\'s NEWEST push decides', () => {
+  const row = (syncType: string, syncStatus: string, createdAt: string, over: Partial<{ isDead: boolean; errorMessage: string | null; at: string | null }> = {}) =>
+    ({ syncType, syncStatus, isDead: false, errorMessage: null, at: createdAt, createdAt, ...over })
+  const JULY = '2026-07-19T10:00:00.000Z', TODAY = '2026-10-08T09:00:00.000Z', LATER = '2026-10-08T09:30:00.000Z'
+  it('a lane whose newest push FAILED is a failure, with the reason, its time and whether a retry is left', () => {
+    expect(lanePushFailure([{ market: 'IT', rows: [row('QUANTITY_UPDATE', 'FAILED', TODAY, { isDead: true, errorMessage: 'eBay: 21916750 — the listing has ended' })] }], 'QUANTITY_UPDATE'))
+      .toEqual({ reason: 'eBay: 21916750 — the listing has ended', at: TODAY, final: true, markets: [] })
+    expect(lanePushFailure([{ market: 'IT', rows: [row('PRICE_UPDATE', 'FAILED', TODAY, { errorMessage: 'Circuit open' })] }], 'PRICE_UPDATE'))
+      .toMatchObject({ final: false })
+  })
+  it('🔴 a newer success, a push on its way or a deliberate skip clears an older failure (the July dead row the Sync column kept)', () => {
+    const dead = row('QUANTITY_UPDATE', 'FAILED', JULY, { isDead: true, errorMessage: 'eBay publish circuit open' })
+    expect(lanePushFailure([{ market: 'IT', rows: [dead] }], 'QUANTITY_UPDATE')).not.toBeNull() // positive control
+    for (const status of ['SUCCESS', 'PENDING', 'IN_PROGRESS', 'SKIPPED']) {
+      expect(lanePushFailure([{ market: 'IT', rows: [dead, row('QUANTITY_UPDATE', status, TODAY)] }], 'QUANTITY_UPDATE')).toBeNull()
+    }
+    /* The order of the rows does not matter — the newest by its creation time decides. */
+    expect(lanePushFailure([{ market: 'IT', rows: [row('QUANTITY_UPDATE', 'SUCCESS', TODAY), dead] }], 'QUANTITY_UPDATE')).toBeNull()
+  })
+  it('🔴 the lanes are separate: a failed PRICE push never marks the stock lane, and the reverse (the Sync column showed price pushes in the stock lane)', () => {
+    const rows = [row('QUANTITY_UPDATE', 'SUCCESS', TODAY), row('PRICE_UPDATE', 'FAILED', TODAY, { errorMessage: 'Amazon: 8541' })]
+    expect(lanePushFailure([{ market: 'IT', rows }], 'QUANTITY_UPDATE')).toBeNull()
+    expect(lanePushFailure([{ market: 'IT', rows }], 'PRICE_UPDATE')).toMatchObject({ reason: 'Amazon: 8541' })
+  })
+  it('Amazon EU: each market\'s own newest push; the failing markets named, the newest failure\'s words', () => {
+    const out = lanePushFailure([
+      { market: 'DE', rows: [row('QUANTITY_UPDATE', 'FAILED', TODAY, { errorMessage: 'older' })] },
+      { market: 'IT', rows: [row('QUANTITY_UPDATE', 'FAILED', LATER, { isDead: true, errorMessage: 'eu-shared-qty-conflict' })] },
+      { market: 'FR', rows: [row('QUANTITY_UPDATE', 'SUCCESS', LATER)] },
+    ], 'QUANTITY_UPDATE', true)
+    expect(out).toEqual({ reason: pushFailureReason('eu-shared-qty-conflict'), at: LATER, final: true, markets: ['IT', 'DE'] })
+    expect(out!.reason).toContain('Amazon EU guard')
+  })
+  it('a code saved as the error reads as words; an empty one is never an empty reason', () => {
+    expect(pushFailureReason('sync-paused-policy')).toContain('channel policy')
+    expect(pushFailureReason('eBay: 25002 — the item is not active')).toBe('eBay: 25002 — the item is not active')
+    expect(pushFailureReason(null)).toBe('The channel refused the change')
+    expect(pushFailureReason('  ')).toBe('The channel refused the change')
+  })
+  it('nothing pushed on the lane → no failure', () => {
+    expect(lanePushFailure([], 'QUANTITY_UPDATE')).toBeNull()
+    expect(lanePushFailure([{ market: 'IT', rows: [row('PRICE_UPDATE', 'FAILED', TODAY)] }], 'QUANTITY_UPDATE')).toBeNull()
   })
 })
 
@@ -177,23 +224,25 @@ describe('business pricing absence — derived from the cached schema, three hon
     expect(flattenAudience([])).toEqual([])
     expect(flattenAudience(null)).toEqual([])
   })
-  it('a cached schema without B2B → MX.1\'s sentence naming the schema and the market, on BOTH reserved cells', () => {
+  it('a cached schema without B2B → MX.1\'s sentence naming the schema, on BOTH reserved cells (the market is the coordinate\'s, 2026-10-08)', () => {
     const out = businessAbsence({ productType: 'OUTERWEAR', market: 'IT', audience: ['ALL'] })
     expect(out.map((a) => a.cell)).toEqual(['businessPrice', 'businessTiers'])
-    for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusiness('OUTERWEAR', 'IT'))
-    expect(out[0]!.reason).toContain('checked against the OUTERWEAR schema on IT')
+    for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusiness('OUTERWEAR'))
+    expect(out[0]!.reason).toContain('checked against the OUTERWEAR schema')
+    /* One sentence for every market that shares it — Customise groups the markets (`absentHint`). */
+    expect(businessAbsence({ productType: 'OUTERWEAR', market: 'DE', audience: ['ALL'] })[0]!.reason).toBe(out[0]!.reason)
   })
   it('no cached schema for (productType, market) → the unchecked sentence, never a false "checked against"', () => {
     const out = businessAbsence({ productType: 'OUTERWEAR', market: 'PL', audience: null })
-    for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusinessUnchecked('PL'))
+    for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusinessUnchecked())
     expect(out[0]!.reason).not.toContain('checked against')
     /* A family with no product type has nothing to check against either. */
-    expect(businessAbsence({ productType: null, market: 'IT', audience: ['ALL'] })[0]!.reason).toBe(MATRIX_COPY.absentBusinessUnchecked('IT'))
+    expect(businessAbsence({ productType: null, market: 'IT', audience: ['ALL'] })[0]!.reason).toBe(MATRIX_COPY.absentBusinessUnchecked())
   })
   it('a schema WITH the B2B audience → still absent, saying the cells are not built (positive control for the enum test)', () => {
     const out = businessAbsence({ productType: 'OUTERWEAR', market: 'DE', audience: ['ALL', 'B2B'] })
-    for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusinessNotBuilt('OUTERWEAR', 'DE'))
-    expect(out[0]!.reason).not.toBe(MATRIX_COPY.absentBusiness('OUTERWEAR', 'DE'))
+    for (const a of out) expect(a.reason).toBe(MATRIX_COPY.absentBusinessNotBuilt('OUTERWEAR'))
+    expect(out[0]!.reason).not.toBe(MATRIX_COPY.absentBusiness('OUTERWEAR'))
   })
 })
 
@@ -222,5 +271,62 @@ describe('effectiveFulfilment — ONE rule for the sheet cell, the Matrix and th
   it('nothing says anything → null, so a new listing must still choose', () => {
     expect(effectiveFulfilment({})).toBeNull()
     expect(effectiveFulfilment({ typed: '', platformAttributes: { fulfillmentChannel: 'weird' }, productMethod: null })).toBeNull()
+  })
+})
+
+/**
+ * Step 2 (Owner 2026-10-07) — the From cell ("Sells from"). The default is the market's list, or — with none — the ACTIVE
+ * warehouses whose routes allow the market, default first; `effective` is the core's own choice (`sellsFrom`) with this
+ * SKU's available per location; the parent, FBA, shared stock and a missing `inventory.adjust` hold it, in that order.
+ */
+describe('sourceCellOf — the From cell', () => {
+  const LOCS = [
+    { code: 'MI-3PL', active: true, isDefault: false, syncRoutes: [] },
+    { code: 'IT-MAIN', active: true, isDefault: true, syncRoutes: [] },
+    { code: 'DE-ONLY', active: true, isDefault: false, syncRoutes: ['AMAZON:DE'] },
+    { code: 'OLD', active: false, isDefault: false, syncRoutes: [] },
+  ]
+  const ROWS = [
+    { locationCode: 'IT-MAIN', available: 12, syncRoutes: [] },
+    { locationCode: 'MI-3PL', available: 4, syncRoutes: [] },
+  ]
+  const of = (over: Partial<Parameters<typeof sourceCellOf>[0]> = {}, lists: Array<[string, string[]]> = []) => {
+    const marketSources = new Map(lists)
+    return sourceCellOf({
+      role: 'variant', channel: 'AMAZON', market: 'IT', own: [], ledger: syncLedgerOf(ROWS, { marketSources }), marketSources,
+      locations: LOCS, isFba: false, sharedFrom: null, canAdjustStock: true, ...over,
+    })
+  }
+
+  it('no list anywhere: the routes decide — active warehouses that serve the market, the default first, then by code', () => {
+    expect(of()).toEqual({
+      own: [], marketDefault: ['IT-MAIN', 'MI-3PL'], defaultOrigin: 'routes',
+      effective: [{ code: 'IT-MAIN', available: 12 }, { code: 'MI-3PL', available: 4 }], writable: true, blockedReason: null,
+    })
+    // DE-ONLY routes to Amazon DE only; OLD is switched off
+    expect(of({ market: 'DE' }).marketDefault).toEqual(['IT-MAIN', 'DE-ONLY', 'MI-3PL'])
+    expect(inSourceOrder(LOCS).map((l) => l.code)).toEqual(['IT-MAIN', 'DE-ONLY', 'MI-3PL', 'OLD'])
+  })
+
+  it('the market list is the default, in its order; a listing list replaces it — exactly those codes, 0 where the SKU holds none', () => {
+    const market = of({}, [['AMAZON:IT', ['MI-3PL', 'IT-MAIN']]])
+    expect(market).toMatchObject({ own: [], marketDefault: ['MI-3PL', 'IT-MAIN'], defaultOrigin: 'market', effective: [{ code: 'MI-3PL', available: 4 }, { code: 'IT-MAIN', available: 12 }] })
+    const own = of({ own: ['MI-3PL', 'DE-ONLY'] }, [['AMAZON:IT', ['IT-MAIN']]])
+    expect(own).toMatchObject({ own: ['MI-3PL', 'DE-ONLY'], marketDefault: ['IT-MAIN'], defaultOrigin: 'market', effective: [{ code: 'MI-3PL', available: 4 }, { code: 'DE-ONLY', available: 0 }] })
+    // another market's list does not leak (eBay IT is its own key)
+    expect(of({ channel: 'EBAY' }, [['AMAZON:IT', ['MI-3PL']]]).defaultOrigin).toBe('routes')
+  })
+
+  it('held with the sentence: the parent, FBA, shared stock, no inventory.adjust — in that order; writable otherwise', () => {
+    expect(of({ role: 'parent', isFba: true, own: ['MI-3PL'] })).toMatchObject({ writable: false, blockedReason: MATRIX_COPY.sourceParent, own: [], effective: [] })
+    expect(of({ isFba: true, sharedFrom: 'Lender' })).toMatchObject({ writable: false, blockedReason: MATRIX_COPY.sourceFba })
+    expect(of({ sharedFrom: 'Lender', canAdjustStock: false })).toMatchObject({ writable: false, blockedReason: sharedStockReason('Lender') })
+    expect(of({ canAdjustStock: false })).toMatchObject({ writable: false, blockedReason: MATRIX_COPY.sourcePermission })
+    expect(of()).toMatchObject({ writable: true, blockedReason: null })
+  })
+
+  it('a pooled SKU shows the lent rows (its own list is ignored, as the push ignores it)', () => {
+    const pool = syncLedgerOf([{ locationCode: 'LENDER-WH', available: 9, syncRoutes: [] }])
+    expect(of({ sharedFrom: 'Lender', ledger: pool, own: ['MI-3PL'] }).effective).toEqual([{ code: 'LENDER-WH', available: 9 }])
   })
 })

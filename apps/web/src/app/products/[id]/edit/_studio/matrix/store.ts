@@ -1,10 +1,10 @@
 /**
- * MX — the in-memory PREVIEW store: cell writes and verb operations applied to a `MatrixRead`, with versions,
- * compare-and-set and restore-by-value — the same semantics the service will have, so the page's write path is
- * exercised end to end today and swaps to the endpoint without a redesign. Pure: every function returns a new read.
+ * MX — an in-memory Matrix store for the grid lab and the tests: cell writes and verb operations applied to a
+ * `MatrixRead`, with versions, compare-and-set and restore-by-value. Pure: every function returns a new read.
  *
- * Preview-only derivations (a FOLLOW number is pool − buffer) mirror `resolveIntendedQuantity`; in live mode the
- * server's verdict arrives on the wire and nothing here runs.
+ * 🔴 Never the page's (Owner 2026-10-08: the Matrix page has no preview mode). The page writes through the server only
+ * (`useMatrix` → `PATCH …/studio/matrix`); `/design` grid lab (`MatrixScenario.tsx`) and the node tests drive this store.
+ * Its derivations (a FOLLOW number is pool − buffer) mirror `resolveIntendedQuantity`.
  */
 import {
   MATRIX_COPY,
@@ -39,6 +39,8 @@ function applyOne(read: MatrixRead, w: MatrixWriteCell): { read: MatrixRead; out
   const base = { rowId: w.rowId, coordinateKey: w.coordinateKey, cell: w.cell }
   if (!row || !cells) return { read, outcome: { ...base, outcome: 'refused', reason: 'No listing on this coordinate', version: cells?.version ?? 0 } }
   if (cells.version !== w.expectedVersion) return { read, outcome: { ...base, outcome: 'conflict', reason: MATRIX_COPY.changedElsewhere, version: cells.version } }
+  /* Step 2: "Sells from" is read-only on preview data (Part D owns the From cell). */
+  if (w.cell === 'source') return { read, outcome: { ...base, outcome: 'refused', reason: MATRIX_COPY.simulated, version: cells.version } }
   if (cells.writable[w.cell] !== true) return { read, outcome: { ...base, outcome: 'refused', reason: cells.writeBlockedReason[w.cell] ?? 'This cell cannot be changed here', version: cells.version } }
   const next = clone(cells)
   let changed = false

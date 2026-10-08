@@ -5,13 +5,14 @@
  * this page's count, presets and one stated absence.
  *
  *   count      `21 rows · 1 parent · 20 variants` (§3.9, verbatim)
- *   views      the ONE views menu — presets `Everything · Inventory · Pricing · Listings` and the
+ *   views      the ONE views menu — presets `All columns · Inventory · Pricing · Listings` and the
  *              operator's saved views on surface `product-edit:views:matrix`
  *   chips      the six Matrix chips, registered by the surface through `useRegisterViewChip`
  *   Customise  the ONE `PreferencesModal`, opened by the surface
  *   Export     what is on screen (D15.2 key row: `sku` + `<key>.<kind>`)
- *   Import     HELD, with the reason — the toolbar's own `absent` contract renders the sentence as a
- *              disabled overflow item; a bare `disabled` Import button would be a silent hold
+ *   Import     not on this page, with the reason — the toolbar's own `absent` contract renders the sentence as a
+ *              disabled overflow item: a workbook is imported on the Information page (Owner 2026-10-08: the old
+ *              "Import lands with the Matrix service" was no longer true)
  *   ⋯          Reload
  */
 import type { ReactNode } from 'react'
@@ -23,7 +24,7 @@ import { SheetToolbar, type AbsentControl } from '../sheet/SheetToolbar'
 
 /** The one omission, and its reason — rendered in the DOM by `SheetToolbar`. */
 export const MATRIX_IMPORT_HELD: readonly AbsentControl[] = [
-  { control: 'import', reason: 'Import lands with the Matrix service' },
+  { control: 'import', reason: 'Import a workbook on the Information page' },
 ]
 
 export interface MatrixPageState { search: string }
@@ -48,6 +49,8 @@ export interface MatrixToolbarProps {
   onSaveCurrentView: (name: string) => Promise<unknown>
   onUpdateCurrentView: (view: SavedGridView<MatrixPageState>) => Promise<unknown>
   viewsEmptyLabel: string
+  /** The columns on screen — the count beside the Columns menu, as on the Information page. */
+  activeCount?: number | null
   onCustomise: () => void
   onExport: () => void
   exportDisabled: boolean
@@ -77,6 +80,7 @@ export function MatrixToolbar(p: MatrixToolbarProps) {
       onSaveCurrentView={p.onSaveCurrentView}
       onUpdateCurrentView={p.onUpdateCurrentView}
       viewsEmptyLabel={p.viewsEmptyLabel}
+      activeCount={p.activeCount}
       chips={p.chips}
       activeChipId={p.activeChipId}
       onChipToggle={p.onChipToggle}

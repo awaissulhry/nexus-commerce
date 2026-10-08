@@ -206,8 +206,8 @@ export interface PreferencesModalProps {
    * Doubles as the fallback heading for any column that declares no `group`.
    */
   listLabel?: string
-  /** The hint under the tick-list legend. */
-  listHint?: string
+  /** The hint under the tick-list legend (a line, or a line with its info tip). */
+  listHint?: ReactNode
   /** Extra left-panel content (workspace-specific preferences). */
   workspaceSlot?: ReactNode
   /** Quick picks above the tick-list. Absent ⇒ nothing renders; every existing caller is unchanged. */
@@ -358,7 +358,8 @@ export function usePreferencesPanes({
       if (bucket) bucket.push(c)
       else byHeading.set(heading, [c])
     }
-    return [...byHeading.entries()].map(([heading, columns]) => ({ key: heading, heading, columns, tone: undefined as string | undefined }))
+    // A heading wears its group's colour here too (the Matrix, 2026-10-08): the first of its columns that names one.
+    return [...byHeading.entries()].map(([heading, columns]) => ({ key: heading, heading, columns, tone: columns.find((c) => c.groupTone)?.groupTone }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allColumns, listLabel, attributeGroups, attributeSections])
 

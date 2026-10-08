@@ -71,6 +71,8 @@ vi.mock('../db.js', () => ({
     channelConnection: { findMany: vi.fn(async () => [{ id: 'conn-A', displayName: 'Primary shop', externalAccountId: 'a' }, { id: 'conn-B', displayName: 'Second shop', externalAccountId: 'b' }]) },
     stockLevel: { findMany: vi.fn(async ({ where }: any) => ((where?.productId?.in ?? ['p1']).map((productId: string) => ({ productId, quantity: 50, available: 50, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } })))), aggregate: vi.fn(async () => null) },
     stockPoolLink: { findMany: vi.fn(async () => []) },
+    // Step 2 — the loader reads the business's "Sells from" lists (none here).
+    syncChannelPolicy: { findMany: async () => [] },
     offer: { findFirst: vi.fn(async () => null) },
     product: { findUnique: vi.fn(async () => ({ minPrice: null, maxPrice: null })), findUniqueOrThrow: vi.fn() },
     syncHealthLog: { findFirst: (...a: unknown[]) => h.findFirstLog(...a) },

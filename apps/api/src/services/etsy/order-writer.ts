@@ -17,7 +17,8 @@
  *   7. stock, by the one model every channel follows (docs/channel-connections/2026-09-26-STOCK-MODEL.md):
  *      Owner rulings (S1, changed 2026-09-26) — each product of the receipt is HELD once for the units of
  *      all its lines as soon as the receipt arrives, payment processing included; given back if the
- *      payment fails (Etsy cancels the receipt); the holds are TAKEN OUT when the WHOLE receipt has shipped (capped to what
+ *      payment fails (Etsy cancels the receipt); a new hold is made at the first location of the shop's "Sells from"
+ *      list with enough stock (Step 2: never split; IT-MAIN or the default warehouse when no list decides); the holds are TAKEN OUT when the WHOLE receipt has shipped (capped to what
  *      the order owes); a partial shipment keeps the holds and tells the owners; a cancellation or a
  *      full refund gives open holds back; after (part of) a shipment (C1) the lines Etsy says shipped
  *      are taken, the rest given back, nothing that shipped is put back, and the owners are told (R4). A stock problem on a line (no product, no warehouse, not enough stock,
@@ -37,9 +38,10 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { mergeStatus, type NormalizedEtsyReceipt, type NormalizedMoney } from './receipt-normalizer.js'
 import {
-  addAfter, afterOrderHoldsCommit, consumeOpenOrderInTx, nothingAfter, reserveOpenOrderInTx, resolveLocationByCode,
+  addAfter, afterOrderHoldsCommit, consumeOpenOrderInTx, nothingAfter, reserveOpenOrderInTx,
   StockLevelMissingError, unitsPerProduct, type OrderHoldsAfterCommit,
 } from '../stock-level.service.js'
+import { fallbackSaleLocationInTx, saleLocationInTx } from '../stock/sale-location.service.js'
 import { InsufficientStockError } from '../stock-movement.service.js'
 import { PooledProductError } from '../stock-pool/pool-guard.js'
 import { raiseChannelAlertInTx } from '../cx/channel-alerts.service.js'
@@ -67,8 +69,9 @@ export interface EtsyReceiptWrite {
   /** A SIGNED order.delivered event for this receipt. Believed only when the receipt read shows it shipped. */
   deliveredEvent?: boolean
   /**
-   * The business's warehouse, when the caller resolved it once for a run of receipts (the poller: one
-   * lookup per run, not one per receipt). Omitted, the writer resolves it; `null` means "none".
+   * The warehouse a product is held at when "Sells from" does not decide (a pooled product, nothing routed).
+   * Omitted (every caller since Step 2), the writer resolves it inside its transaction, once per receipt that holds:
+   * IT-MAIN, else the default warehouse. `null` means "none" (then only a "Sells from" list can name a warehouse).
    */
   locationId?: string | null
 }
@@ -161,8 +164,6 @@ async function noticeStockProblems(tx: Prisma.TransactionClient, args: {
 /** Write one normalised Etsy receipt. See the file header for exactly what happens, in what order. */
 export async function writeEtsyReceipt(input: EtsyReceiptWrite): Promise<EtsyWriteOutcome> {
   const { receipt } = input
-  // A read, outside the transaction: the business's own warehouse (with the default fallback).
-  const locationId = input.locationId !== undefined ? input.locationId : await resolveLocationByCode('IT-MAIN')
 
   const result = await prisma.$transaction(async (tx): Promise<WriteResult> => {
     // 1. The account, re-checked inside the transaction (KEY SHARE: it cannot be deleted under us).
@@ -304,14 +305,24 @@ export async function writeEtsyReceipt(input: EtsyReceiptWrite): Promise<EtsyWri
     // Held when paid; a receipt that ended AFTER it wholly shipped is held (only what is still owed)
     // so its shipped units are taken below — they left the shelf.
     if (perProduct.length > 0 && (HOLDING.has(status) || (ended && wholeShipped))) {
-      if (!locationId) {
-        for (const product of perProduct) setLines(product.lines, 'no_stock_location')
-        warnings.push({ code: 'no_stock_location', detail: 'This business has no warehouse to hold Etsy stock in (IT-MAIN or the default one): nothing was held. Nexus holds it on the next read once one exists.' })
-      } else {
-        for (const product of perProduct) {
+      // Step 2 — "Sells from": a NEW hold goes to the first location of the shop's list with enough stock for the
+      // product's units (never split; none has enough → the first, which reports the shortfall), picked inside
+      // reserveOpenOrderInTx under the lock above. A product the lists do not decide (pooled, nothing routed) is held
+      // where it always was: IT-MAIN, else the default warehouse — looked up once per receipt, in this transaction.
+      const sale = { channel: 'ETSY', channelConnectionId: input.connectionId }
+      const fallback = input.locationId !== undefined ? input.locationId : await fallbackSaleLocationInTx(tx)
+      for (const product of perProduct) {
+        // No fallback warehouse: only a list can name one.
+        const locationId = fallback ?? (await saleLocationInTx(tx, { ...sale, productId: product.productId, quantity: product.quantity }))?.locationId ?? null
+        if (!locationId) {
+          setLines(product.lines, 'no_stock_location')
+          if (!warnings.some((w) => w.code === 'no_stock_location')) {
+            warnings.push({ code: 'no_stock_location', detail: 'This business has no warehouse to hold Etsy stock in (IT-MAIN or the default one): nothing was held. Nexus holds it on the next read once one exists.' })
+          }
+        } else {
           let effect: EtsyLineStock = 'held'
           try {
-            const held = await reserveOpenOrderInTx(tx, { orderId: order.id, productId: product.productId, locationId, quantity: product.quantity, actor: ACTOR })
+            const held = await reserveOpenOrderInTx(tx, { orderId: order.id, productId: product.productId, locationId, quantity: product.quantity, actor: ACTOR, sale })
             addAfter(after, held.after)
             if (held.via === 'refused') {
               effect = 'pool_refused'

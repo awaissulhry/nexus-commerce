@@ -242,9 +242,15 @@ function cellOf(cell: MatrixCells) {
     sync: cell.sync ? {
       kind: cell.sync.kind, via: cell.sync.via, mode: cell.sync.mode, intended: cell.sync.intended, held: cell.sync.held,
       buffer: cell.sync.buffer, poolAvailable: cell.sync.poolAvailable, fbaAtAmazon: cell.sync.fbaAtAmazon, oversold: cell.sync.oversold,
+      // 2026-10-08: the newest stock push failed (the Qty cell's ✗), and the Amazon EU guard's conflict (its ⚠).
+      ...(cell.sync.pushFailed ? { lastPushFailed: { reason: clip(cell.sync.pushFailed.reason), at: cell.sync.pushFailed.at, final: cell.sync.pushFailed.final, ...(cell.sync.pushFailed.markets.length ? { markets: cell.sync.pushFailed.markets } : {}) } } : {}),
+      ...(cell.sync.euConflict ? { euConflict: clip(cell.sync.euConflict) } : {}),
     } : null,
     queue: cell.queue && cell.queue.state !== 'never' ? { state: cell.queue.state, at: cell.queue.at, reason: clip(cell.queue.reason), lane: cell.queue.syncType } : null,
-    price: cell.price ? { value: cell.price.value, currency: cell.price.currency, source: cell.price.source, formula: cell.price.formula, clamped: cell.price.clamped } : null,
+    price: cell.price ? {
+      value: cell.price.value, currency: cell.price.currency, source: cell.price.source, formula: cell.price.formula, clamped: cell.price.clamped,
+      ...(cell.price.pushFailed ? { lastPushFailed: { reason: clip(cell.price.pushFailed.reason), at: cell.price.pushFailed.at, final: cell.price.pushFailed.final } } : {}),
+    } : null,
     sale: cell.sale && cell.sale.value != null ? cell.sale : null,
     writable: Object.entries(cell.writable ?? {}).filter(([, yes]) => yes).map(([kind]) => kind),
     ...(blocked.length ? { blocked: Object.fromEntries(blocked.map(([kind, reason]) => [kind, clip(reason)])) } : {}),
@@ -291,7 +297,9 @@ const listingMatrix: AgentTool = {
     + 'state the product sheet\'s Status column shows — active (Active), paused (Inactive), mixed (Mixed: its variations '
     + 'differ), ended (Ended: eBay or Shopify only), draft or not_listed (Not listed: never sent, or deleted by Nexus) — '
     + 'with its reason), sync (FOLLOW the master stock or PINNED, '
-    + 'the quantity it would send, the one the channel holds, the buffer), price and sale, fulfilment (FBA quantities are '
+    + 'the quantity it would send, the one the channel holds, the buffer; lastPushFailed when the newest stock push failed, '
+    + 'euConflict when the Amazon EU markets disagree on the quantity), price (lastPushFailed when the newest price push '
+    + 'failed) and sale, fulfilment (FBA quantities are '
     + 'Amazon\'s and never set from Nexus), what can be written there and why not. A change names rowId and coordinate key.',
   async handler(args, ctx) {
     // A deleted product is not found, as in every other tool (the Matrix read finds deleted variations' families).

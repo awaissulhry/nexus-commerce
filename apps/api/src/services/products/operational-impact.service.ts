@@ -2,6 +2,7 @@ import prisma from '../../db.js'
 import { identityHeld, sellingRisk } from '@nexus/shared/listing-risk'
 import { whereCoordinate, type ListingCoordinate } from '../../lib/listing-coordinate.js'
 import { fbaPosture } from '../presence/fba-posture.js'
+import { FBA_ALL_CENTRES } from '../fba-pan-eu.service.js'
 import type { ImpactCheck, NamedCoordinate, OperationalImpactResponse } from '../presence/types.js'
 
 export const OPERATIONAL_IMPACT_TARGET_CAP = 200
@@ -135,7 +136,10 @@ function checksFor(s: Sources, target: Target, verb: string): OperationalImpactR
   const product = s.products.rows.find(row => row.id === target.productId)
   const asins = strings(localListings.filter(row => row.channel === 'AMAZON').map(row => row.externalListingId))
   const stockRows = forProduct(s.stock, target)
-  const fba = fbaPosture({ product, listings: localListings, inventory: s.inventory.rows, stock: stockRows, markets: s.markets.rows, target,
+  // Step 4: the 15-min sweep's marketplace-wide INBOUND rows (centre 'ALL') are no fulfilment centre's snapshot, and
+  // Amazon's sellable units are in StockLevel, not here: alone they would read as "0 sellable". The posture skips them.
+  const centreRows = s.inventory.rows.filter(row => row.fulfillmentCenterId !== FBA_ALL_CENTRES)
+  const fba = fbaPosture({ product, listings: localListings, inventory: centreRows, stock: stockRows, markets: s.markets.rows, target,
     namedCoordinates: localListings.map(namedListing), error: s.products.error ?? s.listings.error ?? s.inventory.error ?? s.stock.error ?? s.markets.error })
   const stockHolds = check(s.stock, 'product', ['productId', 'variationId'], ['StockLevel', 'StockReservation'], coordinate || !destructive ? [] : stockRows, false)
   stockHolds.asOf = latest(stockRows, 'lastSyncedAt')

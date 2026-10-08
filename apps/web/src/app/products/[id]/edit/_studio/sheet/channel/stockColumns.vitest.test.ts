@@ -89,9 +89,10 @@ describe('stockColumnDef — the Matrix column, on the sheet\'s row', () => {
     const tracker = new CellSaveTracker()
     const def = stockColumnDef(QTY, { tracker, scope })
     const data = row(cells())
-    const matrix = matrixCellTooltip('syncQty', data.stock!.cells, EU, MATRIX_COPY)
+    /* The Matrix's cell words, then this sheet's own EU line (the Matrix says it once, in its EU group's label). */
+    const matrix = `${matrixCellTooltip('syncQty', data.stock!.cells, EU, MATRIX_COPY)} · Shared by IT DE FR — one quantity per SKU on Amazon EU`
     expect(call(def, 'tooltipValueGetter', { data })).toBe(matrix)
-    expect(matrix).toContain('Shared by IT DE FR — one quantity per SKU on Amazon EU')
+    expect(matrixCellTooltip('syncQty', data.stock!.cells, EU, MATRIX_COPY)).not.toContain('Shared by')
     tracker.set('primary:v1', 'stock_qty', 'refused', 'Shared stock — this SKU sells from Moto Lender\'s stock')
     expect(call(def, 'tooltipValueGetter', { data })).toBe(`Shared stock — this SKU sells from Moto Lender's stock · ${matrix}`)
     tracker.clear('primary:v1', 'stock_qty')

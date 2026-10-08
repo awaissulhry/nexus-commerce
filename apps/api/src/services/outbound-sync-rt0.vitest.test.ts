@@ -34,6 +34,8 @@ vi.mock('../db.js', () => ({
     channelConnection: { findFirst: (...a: unknown[]) => connectionFindFirst(...a) },
     // Shared stock — the dispatch re-read goes through loadSyncLedgers: no product is pooled here.
     stockPoolLink: { findMany: vi.fn().mockResolvedValue([]) },
+    // Step 2 — the loader reads the business's "Sells from" lists (none here).
+    syncChannelPolicy: { findMany: async () => [] },
     $queryRaw: vi.fn().mockResolvedValue([]),
   },
 }))

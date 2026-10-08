@@ -219,6 +219,19 @@ export const publicationBatchQueue: Queue = new Queue('publication-batch', {
   },
 })
 
+// Step 4 Send to FBA — one job per plan run (services/fba-inbound/runner.ts; jobId "fba-plan-<planRowId>", no ":").
+// attempts 1: the runner claims the plan and resumes from its step log, so a retry is the resume job's
+// (jobs/fba-inbound-resume.job.ts re-queues a plan whose nextCheckAt is due). Removed when done or failed, so the
+// next dispatch can use the same job id again (a kept job would swallow it).
+export const fbaInboundQueue: Queue = new Queue('fba-inbound', {
+  connection: redis.connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: true,
+    removeOnFail: true,
+  },
+})
+
 // AD.2 — Trading Desk mutation queue. Separate from outbound-sync
 // because Campaign/AdGroup/AdTarget rows aren't tied to a Product
 // or ChannelListing FK; the worker reads OutboundSyncQueue row by id
@@ -429,6 +442,7 @@ export async function closeQueue() {
     await searchIndexQueue.close()
     await bulkJobQueue.close()
     await publicationBatchQueue.close()
+    await fbaInboundQueue.close()
     await adsSyncQueue.close()
     await ebayOrderNoticeQueue.close()
     await queueEvents.close()

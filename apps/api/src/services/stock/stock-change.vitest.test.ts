@@ -5,6 +5,9 @@
  *   /api/stock/reserve`, `/release/:id`) and locations (`POST /api/stock/locations`, `PATCH`/`DELETE /:id`) keep their
  *   answers now that their work lives in `services/stock/` (location-adjust, stock-hold, location-write services).
  *   Written against the routes BEFORE the move and unchanged after it.
+ *   Step 3 (cases): the same batch counts sealed cases per case size (`cases: [{ unitsPerCase, cases }]`) with the units
+ *   of one cell, in ONE transaction; a refused count leaves the cell's units unsaved; a call without `cases` answers
+ *   exactly as before.
  *   Tools: Claude's six stock changes through the doors a person uses (runOrQueueTool, then the Approvals page's
  *   schedule and commit): what each previews, what it changes once approved, how undo puts it back (a NEW request
  *   through the same gate), the staleness check when stock moved since the approval, and that Amazon FBA and Shopify
@@ -16,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import { FEATURES, FIELDS } from '@nexus/shared/permissions'
+import { CASE_COPY } from '@nexus/shared/stock-cases'
 import { formulaDatabase } from '../../test-support/formula-database.js'
 import { LEGACY_WORKSPACE_ID, withWorkspace } from '../../lib/workspace-context.js'
 
@@ -156,7 +160,9 @@ describe('08 S6 — the stock change routes answer as before', () => {
     expect(renamed.body.location).toMatchObject({ name: 'Third renamed', isActive: false })
     expect(await send('PATCH', `/api/stock/locations/${ids.main}`, { isActive: false })).toEqual({ status: 409, body: { error: 'Choose another default warehouse before deactivating this location.' } })
     expect(await send('PATCH', '/api/stock/locations/nope', { name: 'x' })).toEqual({ status: 404, body: { error: 'Location not found' } })
-    expect(await send('DELETE', `/api/stock/locations/${ids.second}`)).toEqual({ status: 200, body: { ok: true } })
+    // Step 2 — a location that still holds units is not switched off (a switched-off warehouse feeds no listing).
+    expect(await send('DELETE', `/api/stock/locations/${ids.second}`)).toEqual({ status: 409, body: { error: 'TEST-SECOND still holds 3 units: move or count them out first. A location is switched off only at 0.' } })
+    expect(await send('DELETE', `/api/stock/locations/${id}`)).toEqual({ status: 200, body: { ok: true } })
     expect(await send('DELETE', `/api/stock/locations/${ids.main}`)).toEqual({ status: 409, body: { error: 'Built-in location TEST-MAIN cannot be deactivated here' } })
     expect(await send('DELETE', '/api/stock/locations/nope')).toEqual({ status: 404, body: { error: 'Location not found' } })
     await inside(() => database.client.stockLocation.update({ where: { id: ids.second }, data: { isActive: true } }))
@@ -320,3 +326,118 @@ describe("08 S6 — Claude's stock changes, approved, run and undone", { timeout
   })
 })
 
+
+// ── Step 3: sealed cases in the same batch ─────────────────────────────────────────────────────────────
+
+describe('Step 3 — sealed cases are counted in the batch, with the units of the same cell', () => {
+  const box = { id: '', loose: '' }
+  const batch = (changes: unknown[]) => send('POST', '/api/stock/adjust-locations', { reason: 'INVENTORY_COUNT', notes: 'TEST cases', changes })
+  /** The STORED sealed count at one level (null = no row). */
+  const stored = (productId: string, locationId: string) => inside(async () => {
+    const lvl = await database.client.stockLevel.findFirst({ where: { productId, locationId }, select: { id: true } })
+    return lvl ? ((await database.client.stockCaseCount.findFirst({ where: { stockLevelId: lvl.id }, select: { cases: true } }))?.cases ?? null) : null
+  })
+  /** Sealed cases of the 12 / case size, as the wire carries them. */
+  const c = (n: number) => [{ unitsPerCase: 12, cases: n }]
+  const movements = (productId: string) => inside(() => database.client.stockMovement.count({ where: { productId } }))
+
+  beforeAll(async () => {
+    await inside(async () => {
+      const db = database.client
+      box.id = (await db.product.create({ data: { sku: 'TEST-SKU-S3C-BOX', name: 'Test box', basePrice: '9.00', totalStock: 24 } })).id
+      box.loose = (await db.product.create({ data: { sku: 'TEST-SKU-S3C-LOOSE', name: 'Test loose', basePrice: '9.00' } })).id
+      await db.stockLevel.create({ data: { productId: box.id, locationId: ids.main, quantity: 24, reserved: 0, available: 24 } })
+      await db.stockLevel.create({ data: { productId: box.id, locationId: ids.fba, quantity: 12, reserved: 0, available: 12 } })
+      await db.productCaseSize.create({ data: { productId: box.id, unitsPerCase: 12 } })
+    })
+  })
+
+  it('a case-only count: the sealed cases are saved, no unit moves, one 0-unit movement logs it; the answer carries `cases`', async () => {
+    const before = await movements(box.id)
+    const out = await batch([{ productId: box.id, locationId: ids.main, cases: c(1) }])
+    expect(out).toEqual({ status: 200, body: { ok: true, results: [{ productId: box.id, locationId: ids.main, ok: true, noop: false, quantity: 24, reserved: 0, available: 24, cases: c(1) }] } })
+    expect(await stored(box.id, ids.main)).toBe(1)
+    expect((await level(box.id, ids.main))?.quantity).toBe(24)
+    expect(await movements(box.id)).toBe(before + 1)
+    const logged = await inside(() => database.client.stockMovement.findFirst({ where: { productId: box.id, referenceType: 'CaseCount' }, orderBy: { createdAt: 'desc' } }))
+    expect(logged).toMatchObject({ change: 0, reason: 'INVENTORY_COUNT', locationId: ids.main, actor: 'products-next-inventory-editor' })
+    // The same count again changes nothing.
+    expect((await batch([{ productId: box.id, locationId: ids.main, value: 24, cases: c(1) }])).body.results[0]).toMatchObject({ ok: true, noop: true, cases: c(1) })
+    expect(await movements(box.id)).toBe(before + 1)
+  })
+
+  it('ONE transaction: the count is checked against the NEW units, and a refused count leaves the units unsaved too', async () => {
+    // 3 cases need 36 units: refused at today's 24, allowed with the 36 counted in the same cell.
+    const up = await batch([{ productId: box.id, locationId: ids.main, value: 36, cases: c(3) }])
+    expect(up.body.results).toEqual([{ productId: box.id, locationId: ids.main, ok: true, noop: false, quantity: 36, reserved: 0, available: 36, cases: c(3) }])
+    expect(await stored(box.id, ids.main)).toBe(3)
+    const before = await movements(box.id)
+    const refused = await batch([{ productId: box.id, locationId: ids.main, value: 30, cases: c(3) }])
+    expect(refused.body).toEqual({ ok: false, results: [{ productId: box.id, locationId: ids.main, ok: false, code: 'CASES_EXCEED_UNITS', error: CASE_COPY.exceeds(c(3), 30) }] })
+    expect((await level(box.id, ids.main))?.quantity).toBe(36)
+    expect(await stored(box.id, ids.main)).toBe(3)
+    expect(await movements(box.id)).toBe(before)
+  })
+
+  it('lowering the units opens a case (loose first): a units-only change answers as before, and the count follows', async () => {
+    const out = await batch([{ productId: box.id, locationId: ids.main, value: 35 }])
+    expect(out.body.results).toEqual([{ productId: box.id, locationId: ids.main, ok: true, noop: false, quantity: 35, reserved: 0, available: 35 }])
+    expect(await stored(box.id, ids.main)).toBe(2) // 3 × 12 = 36 > 35 → one case opened
+  })
+
+  it('each refusal by its code, each change answering for itself', async () => {
+    const out = await batch([
+      { productId: box.loose, locationId: ids.main, cases: c(1) },
+      { productId: box.id, locationId: ids.fba, cases: c(1) },
+      { productId: box.id, locationId: ids.shop, cases: c(1) },
+      { productId: box.id, locationId: ids.fba, value: 3, cases: c(0) },
+      { productId: box.id, locationId: ids.main, cases: c(-1) },
+      { productId: box.id, locationId: ids.main, cases: c(1.5) },
+      { productId: box.id, locationId: ids.main, cases: 2 },
+      { productId: box.id, locationId: 'nope', cases: c(1) },
+      { productId: box.loose, locationId: ids.second, cases: c(0) },
+      { productId: box.id, locationId: ids.main, cases: [{ unitsPerCase: 6, cases: 1 }] },
+    ])
+    expect(out.status).toBe(200)
+    expect(out.body.ok).toBe(false)
+    expect(out.body.results.map((r: Json) => [r.ok, r.code ?? null])).toEqual([
+      [false, 'NO_CASE_SIZE'],
+      [false, 'NOT_A_WAREHOUSE'],
+      [false, 'NOT_A_WAREHOUSE'],
+      [false, 'FBA_READ_ONLY'],
+      [false, 'INVALID_CASES'],
+      [false, 'INVALID_CASES'],
+      [false, 'INVALID_CASES'],
+      [false, 'NO_LOCATION'],
+      [true, null],
+      [false, 'NO_CASE_SIZE'],
+    ])
+    expect(out.body.results[0].error).toBe(CASE_COPY.noSize)
+    expect(out.body.results[1].error).toBe(CASE_COPY.notHere)
+    expect(out.body.results[4].error).toBe(CASE_COPY.invalidCases)
+    expect(out.body.results[6].error).toBe('Each sealed count names its case size (units per case)') // an older page's plain number
+    expect(out.body.results[9].error).toBe(CASE_COPY.noSizeOf(6))
+    // 0 sealed cases is always allowed at a warehouse — even without a case size; nothing to change.
+    expect(out.body.results[8]).toEqual({ productId: box.loose, locationId: ids.second, ok: true, noop: true, quantity: 0, reserved: 0, available: 0, cases: [] })
+    expect(await stored(box.id, ids.main)).toBe(2)
+    expect(await inside(() => database.client.stockMovement.count({ where: { productId: box.id, locationId: ids.fba } }))).toBe(0)
+  })
+
+  it('the single cell route takes `cases` too; a call without `cases` answers exactly as before (Claude\'s set-stock, the products grid)', async () => {
+    const single = await send('POST', '/api/stock/adjust-location', { productId: box.id, locationId: ids.main, cases: c(1) })
+    expect(single.status).toBe(200)
+    expect(single.body).toMatchObject({ ok: true, noop: false, movement: null, cases: c(1) })
+    expect(Object.keys(single.body).sort()).toEqual(['cases', 'movement', 'noop', 'ok', 'totals'])
+    expect(await send('POST', '/api/stock/adjust-location', { productId: box.id, locationId: ids.main, cases: c(9) })).toEqual({ status: 400, body: { error: CASE_COPY.exceeds(c(9), 35), code: 'CASES_EXCEED_UNITS' } })
+    expect(await send('POST', '/api/stock/adjust-location', { productId: box.id, locationId: ids.main, value: 30, cases: c(9) })).toMatchObject({ status: 400, body: { code: 'CASES_EXCEED_UNITS' } })
+    expect((await level(box.id, ids.main))?.quantity).toBe(35)
+
+    const { adjustOneLocation } = await import('./location-adjust.service.js')
+    const mcp = await inside(() => adjustOneLocation({ productId: box.id, locationId: ids.main, value: 34, reason: 'INVENTORY_COUNT', actor: 'agent:set-stock' }))
+    expect(Object.keys(mcp).sort()).toEqual(['available', 'movement', 'noop', 'quantity', 'reserved', 'totals'])
+    expect(mcp).toMatchObject({ noop: false, quantity: 34, movement: { change: -1, reason: 'INVENTORY_COUNT', actor: 'agent:set-stock' } })
+    expect(await stored(box.id, ids.main)).toBe(1)
+    const unitsOnly = await send('POST', '/api/stock/adjust-location', { productId: box.id, locationId: ids.main, value: 34 })
+    expect(Object.keys(unitsOnly.body).sort()).toEqual(['movement', 'noop', 'ok', 'totals'])
+  })
+})

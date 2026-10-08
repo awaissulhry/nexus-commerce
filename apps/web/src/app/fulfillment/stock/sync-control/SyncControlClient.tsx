@@ -59,7 +59,8 @@ interface Overview {
     servesMarketplaces: string[]
     stockUnits: number
   }>
-  policies: Array<{ channel: string; marketplace: string; pushesPaused: boolean; newListingDefaultMode: string }>
+  /** `sourceLocationCodes` (Step 2 "Sells from"): a market's own warehouse list, on the row with no account. */
+  policies: Array<{ channel: string; marketplace: string; pushesPaused: boolean; newListingDefaultMode: string; channelConnectionId?: string | null; sourceLocationCodes?: string[] }>
   audit: Array<{ id: string; createdAt: string; actor: string; scopeType: string; scopeName: string | null; field: string }>
   uploadVsPool?: Array<{ id: string; createdAt: string; channel: string; errorMessage: string; resolutionStatus: string }>
 }
@@ -372,6 +373,17 @@ export default function SyncControlClient() {
   const s = overview?.summary
   const pages = Math.max(1, Math.ceil(total / pageSize))
   const pausedPolicies = (overview?.policies ?? []).filter((p) => p.pushesPaused)
+  /* Step 2 "Sells from": the markets that sell from a warehouse list of their own (chosen in the Matrix, From) — the
+     routes below do not decide them. `Amazon BE DE ES FR IT · eBay IT`. */
+  const ownListMarkets = (() => {
+    const by = new Map<string, Set<string>>()
+    for (const p of overview?.policies ?? []) {
+      if (p.channelConnectionId || !(p.sourceLocationCodes?.length)) continue
+      by.set(p.channel, (by.get(p.channel) ?? new Set<string>()).add(p.marketplace))
+    }
+    const word: Record<string, string> = { AMAZON: 'Amazon', EBAY: 'eBay', SHOPIFY: 'Shopify', ETSY: 'Etsy', WOOCOMMERCE: 'WooCommerce' }
+    return [...by].map(([channel, markets]) => `${word[channel] ?? channel} ${[...markets].sort().join(' ')}`).join(' · ')
+  })()
 
   // ── SCG.1 — DataGrid plumbing ─────────────────────────────────────────
   // Selection source of truth stays the Map<string, Row> (runAction needs the
@@ -656,6 +668,11 @@ export default function SyncControlClient() {
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
           <div className="border-b border-zinc-200 px-3 py-2 text-sm font-semibold dark:border-zinc-800">Location routing</div>
+          {ownListMarkets && (
+            <Banner tone="info" title="Some markets choose their own warehouses">
+              {ownListMarkets}: set in the Matrix (From). These routes apply to the other markets.
+            </Banner>
+          )}
           <table className="w-full text-sm">
             <thead className="bg-zinc-50 text-left text-[11px] uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
               <tr>

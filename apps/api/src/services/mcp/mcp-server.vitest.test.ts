@@ -23,13 +23,14 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 // 08 S6 — a stock change moves what listings that follow stock show: the cascade queues the new quantity to channels.
 // 08 S12 — a promotion's sales and a scheduled master price reach the channels when they run.
 // 08 S9 — sending a purchase order e-mails the supplier. 08 S10 — a receive raises what listings that follow stock show.
-// 08 S13 — an eBay promotion and an FBA plan reach the marketplace; FBA options are read live from Amazon.
+// 08 S13 — an eBay promotion and an FBA plan reach the marketplace. (Step 4: FBA options are read from what Nexus stored, not live.)
 // T11 — the three content tools that read a channel live (a Shopify store, a listing on its channel) are open world too.
 // I8/I9 — channel-identity-check reads the marketplace live; link-channel-id verifies on the channel before it asks.
 // L8 — stock and price per listing reach the channels (the Matrix door queues the pushes); a revert sends the old values.
 // L9 — closing and reopening a listing changes it on the channel. Phase 3 (T1) — so do ending, relisting and deleting it.
 // Phase 3 T3 — ebay-categories reads eBay's category suggestions and a category's details live (it stores nothing).
 // Ads autonomy W3-1 — apply-ad-recommendations asks for a plan whose steps reach Amazon.
+// FBA shipment drafts (Owner 2026-10-08) — plan-fba-shipment fills a draft in Nexus only; a person's "Send to Amazon" reaches Amazon.
 // Ads autonomy (auto-undo, A19) — undo-worse-ad-change puts a bid, budget or placement back at Amazon.
 
 const OPEN_WORLD = [
@@ -39,8 +40,8 @@ const OPEN_WORLD = [
   'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ad-group',
   'create-ai-goal-campaigns',
   'create-ebay-campaign', 'create-negative-keyword', 'decide-automation-suggestions', 'delete-listing', 'dispose-return-items',
-  'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'fba-shipment-options', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
-  'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'plan-fba-shipment', 'promote-ebay-listings', 'publish-listing',
+  'ebay-categories', 'ebay-keywords-change', 'email-supplier', 'enable-ads', 'end-listing', 'graduate-keyword', 'harvest-search-term', 'import-catalog', 'issue-refund',
+  'link-channel-id', 'listing-live-content', 'lower-ad-bids-for-stock', 'pause-ads', 'promote-ebay-listings', 'publish-listing',
   'publish-review', 'receive-stock', 'reconcile-stock-count', 'relist-listing', 'reopen-listing', 'replicate-ad-structure', 'reply-to-review', 'request-review', 'resend-prices',
   'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign', 'resume-automation',
   'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',

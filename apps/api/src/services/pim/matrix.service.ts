@@ -12,10 +12,21 @@
  *     unconnected/unlisted coordinates KEPT with `cells: []` so the absence is visible (`Not listed`).
  *   - `sync`: `resolveIntendedQuantity` with the inputs the Sync Control page builds (WAREHOUSE ledger routed by
  *     `syncRoutes`, `policyFor`, `offerClosedAt`, `isFba` = `isFbaListing`'s fail-closed verdict) — verbatim.
- *   - `queue`: the newest non-cancelled `OutboundSyncQueue` row per (listing, QUANTITY_UPDATE | PRICE_UPDATE), folded.
+ *   - `queue`: the newest non-cancelled `OutboundSyncQueue` row per (listing, QUANTITY_UPDATE | PRICE_UPDATE), folded
+ *     (the MCP read and the Retry verb read it; the page draws no Sync column since 2026-10-08).
+ *   - `sync.pushFailed` / `price.pushFailed` (2026-10-08, the Qty and Price cells' ✗): the newest push of EACH lane of the
+ *     listing, read on its own — the same queue rows, plus eBay's shared-stock pushes, which are saved without a listing
+ *     id (`ebay-shared-fanout.service.ts`) and matched by what they carry: product, item id and market. The listing's own
+ *     `lastSyncStatus` is not per lane (any row and Publish write it) and the shared lane never writes it.
+ *   - `sync.euConflict`: the Amazon EU guard's verdict on the region cell (`detectEuIntentConflict`), whole.
  *   - `price`: `ChannelListing.price` (the number the push reads); `sale`: `salePrice` + the two window columns.
  *   - `listing.selling` (build shape v2, P7): THE engine's selling state per coordinate (`destinationSellingStates`,
  *     the reader the sheet's Status column and the listing-action engine use) — from the rows already read, no query.
+ *   - `pack` (Step 3, the Case column): the member's own case sizes (`ProductCaseSize`, biggest first; sizes and weight
+ *     as numbers) and FBA prep/label owner (`ProductPackage`) — `casePackOf`.
+ *   - `fbaInbound` / `fbaPlans` (Step 4, "Inbound +N"): Amazon's inbound per seller SKU as the FBA sweep stored it
+ *     (`FbaInventoryDetail` INBOUND, fulfilment centre 'ALL') and the family's open Send-to-FBA plan lines. Read only:
+ *     the FBA number (`fba`) stays Amazon's fulfillable units; inbound is never added to it.
  *
  * One query per table, joined in memory (two waves: the family's tables, then the tables keyed by listing id).
  * Amazon coordinates never touch the schema cache, so no live SP-API product-type call can be triggered here.
@@ -28,8 +39,11 @@ import {
   type CoordinateKey,
   type FulfilmentCell,
   type FulfilmentMethod,
+  type MatrixCasePack,
   type MatrixCells,
   type MatrixCoordinate,
+  type MatrixFbaInbound,
+  type MatrixFbaPlan,
   type MatrixFbaStock,
   type MatrixRead,
   type MatrixRowRead,
@@ -38,8 +52,11 @@ import {
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import type { SellingStateRead } from '@nexus/shared/listing-actions'
+import { FBA_CLOSED_STATUSES, isFbaPlanOpen, isFbaPlanUnderWay, type FbaPlanStatus } from '@nexus/shared/fba-send'
+import { isCaseOwner } from '@nexus/shared/stock-cases'
 import { destinationSellingStates, oldClosePauses } from '../listings/listing-action.service.js'
-import { loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
+import { ledgerInputs, loadMarketSources, loadSyncLedgers } from '../stock-pool/sync-ledgers.js'
+import { marketSourceKey, sellsFrom } from '../sync-control-core.js'
 import { loadChannelPolicies, parsePolicyKey, policyFor } from '../sync-control-policy.service.js'
 import { isOwnConnection } from '../connection-resolver.service.js'
 import { detectEuIntentConflict } from '../amazon-eu-quantity-guard.js'
@@ -52,10 +69,11 @@ import { completeAxisValueOrder } from './shared-variation-values.js'
 import { decimalToNumber } from './sheet-rows.service.js'
 import { conversionStatusOf, loadConversionRecords } from './fulfilment-conversion.service.js'
 import { readSaleWindows } from './sale-window.js'
+import { FBA_ALL_CENTRES } from '../fba-pan-eu.service.js'
 import { axisValuesOf, buildFamilyAxes, FAMILY_MEMBER_SELECT, readExcludedListingIds, resolveFamilyRoot, type FamilyAxis } from './family-projection.service.js'
 import {
   businessAbsence, channelLabel, channelRank, channelShape, circled, compareMarkets, deriveFulfilment, flattenAudience, foldQueue, isAmazonEuMarket,
-  effectiveFulfilment, listingStateOf, priceCellOf, reportedFulfilment, withoutInventory, writableFor, type QueueRowFacts,
+  effectiveFulfilment, inSourceOrder, lanePushFailure, listingStateOf, priceCellOf, reportedFulfilment, sourceCellOf, withoutInventory, writableFor, type QueueRowFacts, type SourceLocation,
 } from './matrix-cells.js'
 
 export interface MatrixReadInput {
@@ -66,6 +84,8 @@ export interface MatrixReadInput {
   canEditPrice: boolean
   /** Only these coordinates' cells (the product sheet's stock columns read one or two); every coordinate is still listed. */
   only?: readonly CoordinateKey[]
+  /** `inventory.adjust` for the caller — the "Sells from" cell is held with the reason without it (Step 2). Absent = false. */
+  canAdjustStock?: boolean
 }
 
 export type MatrixReadWithMeta = MatrixRead & { meta: { tookMs: number; phases: Record<string, number>; queries: number } }
@@ -83,6 +103,34 @@ export const MATRIX_LISTING_SELECT = {
 
 export type MatrixListing = Prisma.ChannelListingGetPayload<{ select: typeof MATRIX_LISTING_SELECT }>
 type Member = Prisma.ProductGetPayload<{ select: typeof MEMBER_SELECT }>
+
+/** The `ProductCaseSize` columns the Case column reads. */
+const CASE_SIZE_SELECT = {
+  productId: true, unitsPerCase: true, caseLengthCm: true, caseWidthCm: true, caseHeightCm: true, caseWeightKg: true,
+} as const
+type CaseSizeRow = Prisma.ProductCaseSizeGetPayload<{ select: typeof CASE_SIZE_SELECT }>
+/** The `ProductPackage` columns the Case column reads (the FBA prep / label owner). */
+const CASE_OWNER_SELECT = { productId: true, fbaPrepOwner: true, fbaLabelOwner: true } as const
+type CaseOwnerRow = Prisma.ProductPackageGetPayload<{ select: typeof CASE_OWNER_SELECT }>
+
+/**
+ * One SKU's case pack on the wire: its sizes biggest first (Prisma's `Decimal` sizes and weight as numbers) and its
+ * owners (an unknown owner string as not set). null = no size and no owners row.
+ */
+export function casePackOf(owners: Omit<CaseOwnerRow, 'productId'> | null | undefined, sizes: ReadonlyArray<Omit<CaseSizeRow, 'productId'>>): MatrixCasePack | null {
+  if (!owners && sizes.length === 0) return null
+  return {
+    sizes: [...sizes].sort((a, b) => b.unitsPerCase - a.unitsPerCase).map((row) => ({
+      unitsPerCase: row.unitsPerCase,
+      caseLengthCm: decimalToNumber(row.caseLengthCm),
+      caseWidthCm: decimalToNumber(row.caseWidthCm),
+      caseHeightCm: decimalToNumber(row.caseHeightCm),
+      caseWeightKg: decimalToNumber(row.caseWeightKg),
+    })),
+    fbaPrepOwner: isCaseOwner(owners?.fbaPrepOwner) ? owners!.fbaPrepOwner as MatrixCasePack['fbaPrepOwner'] : null,
+    fbaLabelOwner: isCaseOwner(owners?.fbaLabelOwner) ? owners!.fbaLabelOwner as MatrixCasePack['fbaLabelOwner'] : null,
+  }
+}
 
 const upper = (s: string | null | undefined) => String(s ?? '').toUpperCase()
 
@@ -129,7 +177,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
 
   // ── 2. wave 1 — one query per table keyed by the family ────────────────────────────────────
   const tWave1 = Date.now()
-  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots] = await Promise.all([
+  const [listings, marketplaces, connections, aliases, syncLedgers, fbaDetail, fbaLevels, policies, formulas, snapshots, warehouses, marketSources, caseOwners, caseSizes, fbaInboundRows, fbaPlanLines] = await Promise.all([
     prisma.channelListing.findMany({ where: { productId: { in: memberIds } }, select: MATRIX_LISTING_SELECT }),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, currency: true, region: true } }),
     prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, isPrimary: true, workspaceId: true }, orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] }),
@@ -142,7 +190,23 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     loadChannelPolicies(),
     prisma.cellFormula.findMany({ where: { productId: { in: memberIds }, scope: 'channel', fieldKey: 'price' }, select: { productId: true, channel: true, marketplace: true, aliasKey: true, expr: true } }),
     prisma.pricingSnapshot.findMany({ where: { sku: { in: skus }, fulfillmentMethod: null }, select: { sku: true, channel: true, marketplace: true, isClamped: true, clampedFrom: true, computedPrice: true } }),
-  ]); queries += 12
+    // "Sells from" (Step 2): this business's warehouses (the From cell's choices and its routes default) and the market lists.
+    prisma.stockLocation.findMany({ where: { type: 'WAREHOUSE' }, select: { code: true, name: true, isActive: true, syncRoutes: true, warehouse: { select: { isDefault: true, isActive: true } } } }),
+    loadMarketSources(prisma),
+    // The Case column (Step 3): each member's FBA prep/label owner and its case sizes (units per case, size, weight).
+    prisma.productPackage.findMany({ where: { productId: { in: memberIds } }, select: CASE_OWNER_SELECT }),
+    prisma.productCaseSize.findMany({ where: { productId: { in: memberIds } }, select: CASE_SIZE_SELECT }),
+    // "Inbound +N" (Step 4): Amazon's inbound per seller SKU (the FBA sweep's rows; a row names its product when the sweep
+    // matched one, else only its SKU) and the members' lines in Send-to-FBA plans not closed or cancelled.
+    prisma.fbaInventoryDetail.findMany({
+      where: { condition: 'INBOUND', fulfillmentCenterId: FBA_ALL_CENTRES, OR: [{ productId: { in: memberIds } }, { productId: null, sku: { in: skus } }] },
+      select: { productId: true, sku: true, marketplaceId: true, quantity: true, rawData: true, lastSyncedAt: true },
+    }),
+    prisma.fbaInboundPlanLine.findMany({
+      where: { productId: { in: memberIds }, plan: { source: { not: null }, status: { notIn: [...FBA_CLOSED_STATUSES] } } },
+      select: { productId: true, quantity: true, shippedQuantity: true, plan: { select: { id: true, name: true, status: true, createdAt: true } } },
+    }),
+  ]); queries += 18
   const audienceRows = parentRow.productType
     ? await prisma.$queryRawUnsafe<Array<{ marketplace: string | null; audience: unknown }>>(AUDIENCE_SQL, parentRow.productType)
     : []
@@ -153,7 +217,9 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   // ── 3. wave 2 — the tables keyed by listing id ─────────────────────────────────────────────
   const tWave2 = Date.now()
   const listingIds = listings.map((l) => l.id)
-  const [openSuppressions, queueRows, fbaOffers, saleWindows, excluded, conversions] = await Promise.all([
+  /* eBay's shared-stock pushes (the Trading fan-out) carry no listing id: the item ids of this family's eBay listings. */
+  const ebayItemIds = [...new Set(listings.flatMap((l) => (upper(l.channel) === 'EBAY' && l.externalListingId?.trim() ? [l.externalListingId.trim()] : [])))]
+  const [openSuppressions, queueRows, fbaOffers, saleWindows, excluded, conversions, sharedPushRows] = await Promise.all([
     prisma.amazonSuppression.findMany({ where: { listingId: { in: listingIds }, resolvedAt: null }, select: { listingId: true } }),
     prisma.outboundSyncQueue.findMany({
       where: { channelListingId: { in: listingIds }, syncType: { in: ['QUANTITY_UPDATE', 'PRICE_UPDATE'] }, syncStatus: { not: 'CANCELLED' } },
@@ -166,7 +232,17 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     readExcludedListingIds(listingIds),
     // Amazon fulfilment conversions (2026-10-07): the newest runs sent for these listings (the Fulfilment cell's status).
     loadConversionRecords(listings.filter((l) => l.channel === 'AMAZON').map((l) => l.id)),
-  ]); queries += 6
+    /* 2026-10-08 — the newest eBay shared-stock push per (product, item, market): saved without a listing id, so the
+       listing rows above never see it (the eBay stock lane's real-time pushes). */
+    ebayItemIds.length
+      ? prisma.outboundSyncQueue.findMany({
+        where: { channelListingId: null, targetChannel: 'EBAY', syncType: 'QUANTITY_UPDATE', productId: { in: memberIds }, externalListingId: { in: ebayItemIds }, syncStatus: { not: 'CANCELLED' } },
+        orderBy: [{ createdAt: 'desc' }],
+        distinct: ['productId', 'externalListingId', 'targetRegion'],
+        select: { productId: true, externalListingId: true, targetRegion: true, syncType: true, syncStatus: true, isDead: true, errorMessage: true, syncedAt: true, updatedAt: true, createdAt: true },
+      })
+      : Promise.resolve([]),
+  ]); queries += ebayItemIds.length ? 7 : 6
   mark('wave2', tWave2)
 
   // ── 4. indexes ─────────────────────────────────────────────────────────────────────────────
@@ -206,13 +282,98 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const newest = rows.reduce<Date | null>((m, r) => (r.at && (!m || r.at > m) ? r.at : m), null)
     return { units: rows.reduce((n, r) => n + r.units, 0), locations: [...byCode].map(([code, units]) => ({ code, units })), updatedAt: newest?.toISOString() ?? null }
   }
+  /* The Case column (Step 3): a member's own case pack; null = none set. A parent carries its own (normally none). */
+  const ownersOf = new Map(caseOwners.map((p) => [p.productId, p]))
+  const packOf = new Map(memberIds.map((id) => [id, casePackOf(ownersOf.get(id), caseSizes.filter((s) => s.productId === id))]))
+  /* "Inbound +N" (Step 4). Amazon's side: a member's INBOUND rows (its seller SKUs) from ONE marketplace — the one read
+     last — so a Pan-EU pool reported under two marketplaces is never counted twice. Nexus's side: units in open plans
+     not marked Shipped yet, and units marked Shipped in plans Amazon is not receiving yet — READY_TO_SHIP (a plan with
+     several shipments, some marked) or SHIPPED — (`sent`). A parent: its variations' sum (as
+     `fba`). Nothing inbound, nothing planned and nothing sent → null. */
+  const memberIdBySku = new Map(members.map((m) => [m.sku, m.id]))
+  const inboundRowsOf = new Map<string, typeof fbaInboundRows>()
+  for (const r of fbaInboundRows) {
+    const id = r.productId ?? memberIdBySku.get(r.sku)
+    if (id && memberById.has(id)) inboundRowsOf.set(id, [...(inboundRowsOf.get(id) ?? []), r])
+  }
+  const bucket = (raw: unknown, key: 'working' | 'shipped' | 'receiving'): number => {
+    const v = raw && typeof raw === 'object' ? (raw as Record<string, unknown>)[key] : null
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0
+  }
+  const amazonInboundOf = (id: string) => {
+    const all = inboundRowsOf.get(id) ?? []
+    if (all.length === 0) return null
+    const lastRead = all.reduce((a, b) => (b.lastSyncedAt > a.lastSyncedAt ? b : a)).marketplaceId
+    const rows = all.filter((r) => r.marketplaceId === lastRead)
+    return {
+      units: rows.reduce((n, r) => n + Math.max(0, r.quantity), 0),
+      working: rows.reduce((n, r) => n + bucket(r.rawData, 'working'), 0),
+      shipped: rows.reduce((n, r) => n + bucket(r.rawData, 'shipped'), 0),
+      receiving: rows.reduce((n, r) => n + bucket(r.rawData, 'receiving'), 0),
+      // The oldest contributing read: a fresh row must not make a stale one look fresh.
+      readAt: rows.reduce((m, r) => (r.lastSyncedAt < m ? r.lastSyncedAt : m), rows[0]!.lastSyncedAt),
+    }
+  }
+  const openLines = fbaPlanLines.filter((l) => isFbaPlanOpen(l.plan.status))
+  /* "Planned": units of plans UNDER WAY (sent to Amazon's steps, holds standing). A DRAFT (Owner 2026-10-08) holds
+     nothing: it shows only as a plan of the family (`fbaPlans`, status DRAFT) — the footer's "FBA draft · N units". */
+  const plannedOf = new Map<string, number>()
+  for (const l of openLines) if (isFbaPlanUnderWay(l.plan.status)) plannedOf.set(l.productId, (plannedOf.get(l.productId) ?? 0) + Math.max(0, l.quantity - l.shippedQuantity))
+  /* "Sent" (Owner 2026-10-07): units Nexus marked Shipped in plans still SHIPPED — Amazon has not started receiving all
+     of them, so its next read may not count them yet. The cell shows the bigger of this and Amazon's `units`
+     (`fbaInboundShown`), never the sum. AT_AMAZON and later plans are Amazon's number only. */
+  const sentOf = new Map<string, number>()
+  for (const l of openLines) if (l.plan.status === 'SHIPPED' || l.plan.status === 'READY_TO_SHIP') sentOf.set(l.productId, (sentOf.get(l.productId) ?? 0) + Math.max(0, l.shippedQuantity))
+  const fbaInboundOf = (ids: readonly string[]): MatrixFbaInbound | null => {
+    const out = { units: 0, working: 0, shipped: 0, receiving: 0, planned: 0, sent: 0 }
+    let readAt: Date | null = null
+    for (const id of ids) {
+      const amazon = amazonInboundOf(id)
+      if (amazon) {
+        out.units += amazon.units; out.working += amazon.working; out.shipped += amazon.shipped; out.receiving += amazon.receiving
+        if (!readAt || amazon.readAt < readAt) readAt = amazon.readAt
+      }
+      out.planned += plannedOf.get(id) ?? 0
+      out.sent += sentOf.get(id) ?? 0
+    }
+    return out.units === 0 && out.planned === 0 && out.sent === 0 ? null : { ...out, readAt: readAt?.toISOString() ?? null }
+  }
+  /* The family's open plans (its DRAFT included), newest first; `units` = this family's units in each. */
+  const plansById = new Map<string, MatrixFbaPlan & { createdAt: Date }>()
+  for (const l of openLines) {
+    const plan = plansById.get(l.plan.id) ?? { id: l.plan.id, name: l.plan.name || `#${l.plan.id.slice(-6)}`, status: l.plan.status as FbaPlanStatus, units: 0, createdAt: l.plan.createdAt }
+    plan.units += Math.max(0, l.quantity)
+    plansById.set(l.plan.id, plan)
+  }
+  const fbaPlans: MatrixFbaPlan[] = [...plansById.values()]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))
+    .map(({ createdAt: _c, ...plan }) => plan)
+  /* "Sells from": the warehouses in sale order (the default first, then by code — the loader's order). */
+  const sourceLocations: Array<SourceLocation & { name: string }> = inSourceOrder(warehouses.map((w) => ({
+    code: w.code, name: w.name, active: w.isActive !== false, syncRoutes: w.syncRoutes ?? [],
+    isDefault: !!w.warehouse?.isDefault && w.warehouse.isActive !== false,
+  })))
   const suppressed = new Set(openSuppressions.map((s) => s.listingId))
   const fbaOfferOn = new Set(fbaOffers.map((o) => o.channelListingId))
   const queueByListing = new Map<string, QueueRowFacts[]>()
+  const rowFacts = (q: { syncType: string; syncStatus: string; isDead: boolean; errorMessage: string | null; syncedAt: Date | null; updatedAt: Date; createdAt: Date }): QueueRowFacts => ({
+    syncType: q.syncType, syncStatus: q.syncStatus, isDead: q.isDead, errorMessage: q.errorMessage,
+    at: (q.syncedAt ?? q.updatedAt ?? q.createdAt)?.toISOString() ?? null, createdAt: q.createdAt?.toISOString() ?? null,
+  })
   for (const q of queueRows) {
     if (!q.channelListingId) continue
-    const at = (q.syncedAt ?? q.updatedAt ?? q.createdAt)?.toISOString() ?? null
-    queueByListing.set(q.channelListingId, [...(queueByListing.get(q.channelListingId) ?? []), { syncType: q.syncType, syncStatus: q.syncStatus, isDead: q.isDead, errorMessage: q.errorMessage, at }])
+    queueByListing.set(q.channelListingId, [...(queueByListing.get(q.channelListingId) ?? []), rowFacts(q)])
+  }
+  /* eBay shared-stock pushes by what they carry: the product, the item id and the market (a listing's own row has the
+     same three: `productId`, `externalListingId`, `marketplace`). */
+  const sharedKey = (productId: string | null, itemId: string | null, market: string | null) => `${productId ?? ''}|${(itemId ?? '').trim()}|${upper(market)}`
+  const sharedPushOf = new Map<string, QueueRowFacts>()
+  for (const q of sharedPushRows) sharedPushOf.set(sharedKey(q.productId, q.externalListingId, q.targetRegion), rowFacts(q))
+  /** Every push row a listing's lanes read: its own rows, and (eBay) the shared-stock push for its item. */
+  const laneRowsOf = (l: MatrixListing): QueueRowFacts[] => {
+    const own = queueByListing.get(l.id) ?? []
+    const shared = upper(l.channel) === 'EBAY' && l.externalListingId ? sharedPushOf.get(sharedKey(l.productId, l.externalListingId, l.marketplace)) : undefined
+    return shared ? [...own, shared] : own
   }
   const formulaByCell = new Map(formulas.map((f) => [`${f.productId}|${upper(f.channel)}|${upper(f.marketplace)}|${f.aliasKey ?? ''}`, f.expr]))
   const snapshotByCell = new Map(snapshots.map((s) => [`${s.sku}|${upper(s.channel)}|${upper(s.marketplace)}`, s]))
@@ -308,7 +469,7 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
   for (const rows of amazonEuRows.values()) rows.sort((a, b) => compareMarkets(a.marketplace, b.marketplace))
   const region: Coord | null = euMarkets.length > 0 ? {
     key: 'AMAZON:EU', kind: 'region-inventory', channel: 'AMAZON', market: 'EU',
-    label: `Amazon EU · Inventory · ${euMarkets.join(' ')}`, region: 'EU', alias: null,
+    label: `Amazon · EU inventory · ${euMarkets.join(' ')}`, region: 'EU', alias: null,
     accountId: listed.find((c) => c.channel === 'AMAZON' && c.inventoryOn === 'AMAZON:EU')?.accountId ?? null,
     currency: euCandidates[0]?.currency ?? 'EUR', connected: true, listed: null, draft: null,
     cells: [...INVENTORY_CELL_KINDS], absent: [], sharedInventoryWith: euMarkets, inventoryOn: null,
@@ -369,7 +530,6 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     let sync: SyncCell | null = null
     let fulfilment: FulfilmentCell | null = null
     let queue: QueueCell | null = null
-    const extra: MatrixCells['writeBlockedReason'] = {}
     /* The PARENT has no listing of its own (MX.P's live reading): no inventory facts, no price — only the listing word
        with its `n listing(s)` detail, and every cell held with the reason. */
     if (inventory && !isParent) {
@@ -383,10 +543,26 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
         /* The region folds every EU row's queue (one quantity per SKU); a market folds its own listing's. */
         queue = foldQueue(rows.flatMap((l) => queueByListing.get(l.id) ?? []), r.sync)
       }
+      /* 2026-10-08 — the Qty cell's ✗: this listing's newest stock push failed. Only where the stock lane runs: an
+         Amazon-managed listing never pushes a quantity, a held or Inactive one says so itself (⏸ / Inactive), and a
+         listing not on the channel (a draft) is sent nothing — an old failure there says nothing about the channel. The
+         region cell reads the EU markets that sell (published, offer open), and names the ones that failed. */
+      if (sync && serves('syncQty') && sync.kind !== 'FBA_EXCLUDED' && sync.kind !== 'PAUSED' && sync.kind !== 'CLOSED') {
+        const selling = (coord.euMarkets ? rows : [primary]).filter((l) => l.isPublished && !l.offerClosedAt)
+        const pushFailed = lanePushFailure(selling.map((l) => ({ market: l.marketplace, rows: laneRowsOf(l) })), 'QUANTITY_UPDATE', !!coord.euMarkets)
+        if (pushFailed) sync = { ...sync, pushFailed }
+      }
       if (coord.euMarkets && rows.length > 1) {
-        /* The push belt's own inputs (the STORED method), so the sentence matches what dispatch will refuse. */
-        const verdict = detectEuIntentConflict(rows.map((l) => ({ marketplace: l.marketplace, followMasterQuantity: l.followMasterQuantity, quantityOverride: l.quantityOverride, quantity: l.quantity, syncPaused: l.syncPaused, isFba: l.fulfillmentMethod === 'FBA', offerClosed: !!l.offerClosedAt })))
-        if (verdict.conflict) extra.syncState = verdict.detail
+        /* The push belt's own inputs (the STORED method), so the sentence matches what dispatch will refuse. Step 2: each
+           row's "Sells from" warehouses (`sellsFrom`) — two Follow rows from different warehouses send different sums. */
+        const product = syncLedgers.get(member.id)
+        const sourcesOf = (l: MatrixListing) => {
+          const { ledger, sourceLocationCodes } = ledgerInputs(product, l.sourceLocationCodes ?? [])
+          return sellsFrom({ ledger, channel: 'AMAZON', marketplace: l.marketplace, sourceLocationCodes }).codes
+        }
+        const verdict = detectEuIntentConflict(rows.map((l) => ({ marketplace: l.marketplace, followMasterQuantity: l.followMasterQuantity, quantityOverride: l.quantityOverride, quantity: l.quantity, syncPaused: l.syncPaused, isFba: l.fulfillmentMethod === 'FBA', offerClosed: !!l.offerClosedAt, sourceLocationCodes: l.sourceLocationCodes ?? [], sources: sourcesOf(l) })))
+        /* The stock cell carries it (the Qty cell's ⚠) — the guard refuses the push until the markets agree. */
+        if (verdict.conflict && sync) sync = { ...sync, euConflict: MATRIX_COPY.euConflict(verdict.detail) }
       }
     }
     const listing = serves('listing') ? {
@@ -407,14 +583,27 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     const draft = coord.channel === 'AMAZON' && !isParent ? readAmazonOfferDraft(primary.platformAttributes)?.leaves : undefined
     const ourPrice = draft?.our_price?.value as { pin?: number; follow?: true } | null | undefined
     if (price && ourPrice) price.waiting = { value: typeof ourPrice.pin === 'number' ? ourPrice.pin : null }
+    /* 2026-10-08 — the Price cell's ✗: this listing's newest price push failed (a held price is a skip, not a failure). A
+       listing not on the channel (a draft) is sent nothing, so it carries none. */
+    const pricePushFailed = price && !isParent && primary.isPublished ? lanePushFailure([{ market: primary.marketplace, rows: laneRowsOf(primary) }], 'PRICE_UPDATE') : null
+    if (price && pricePushFailed) price.pushFailed = pricePushFailed
     if (sale && draft?.sale) {
       const s = draft.sale.value as { price: number; start: string; end: string } | null
       sale.waiting = s ? { value: s.price, start: s.start, end: s.end } : { value: null, start: null, end: null }
     }
-    const gate = writableFor({ role: isParent ? 'parent' : 'variant', cells: coord.cells, sync, fulfilment: fulfilment ? { method: fulfilment.method, guard: fulfilment.guard } : null, price, canEditPrice: input.canEditPrice, sharedFrom: sourceOf(member.id)?.lenderName ?? null })
+    const sharedFrom = sourceOf(member.id)?.lenderName ?? null
+    const gate = writableFor({ role: isParent ? 'parent' : 'variant', cells: coord.cells, sync, fulfilment: fulfilment ? { method: fulfilment.method, guard: fulfilment.guard } : null, price, canEditPrice: input.canEditPrice, sharedFrom })
+    /* "Sells from" (Step 2): one per group that carries the quantity — once on Amazon EU (its primary row's list; the door
+       writes the same list on every EU row). */
+    const source = serves('syncQty') ? sourceCellOf({
+      role: isParent ? 'parent' : 'variant', channel: coord.channel, market: upper(primary.marketplace), own: primary.sourceLocationCodes ?? [],
+      ledger: syncLedgers.get(member.id)?.ledger, marketSources, locations: sourceLocations,
+      isFba: sync?.kind === 'FBA_EXCLUDED', sharedFrom, canAdjustStock: input.canAdjustStock === true,
+    }) : null
     return {
       listingId: primary.id, version: primary.version, listing, fulfilment, sync, queue, price, sale,
-      writable: gate.writable, writeBlockedReason: { ...gate.writeBlockedReason, ...extra },
+      writable: gate.writable, writeBlockedReason: gate.writeBlockedReason,
+      ...(source ? { source } : {}),
     }
   }
 
@@ -437,6 +626,8 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
       id: member.id, sku: member.sku, role: isParent ? 'parent' : 'variant',
       stock: { available, uncounted, locations, source },
       fba: fbaStockOf(isParent ? children.map((c) => c.id) : [member.id]),
+      pack: packOf.get(member.id) ?? null,
+      fbaInbound: fbaInboundOf(isParent ? children.map((c) => c.id) : [member.id]),
       basePrice: decimalToNumber(member.basePrice), status: member.status, cells,
     }
   }
@@ -458,7 +649,14 @@ export async function getMatrixRead(input: MatrixReadInput): Promise<MatrixReadW
     generatedAt: new Date().toISOString(),
     coordinates: coordinates.map(({ rowsOf: _r, euMarkets: _e, ...c }) => c),
     rows,
-    policies: [...policies.entries()].map(([k, v]) => ({ ...parsePolicyKey(k), pushesPaused: v.pushesPaused })),
+    policies: [...policies.entries()].map(([k, v]) => {
+      const key = parsePolicyKey(k)
+      /* "Sells from": the market's list rides on the rows that name no account (`loadMarketSources`). */
+      const list = key.accountId == null && key.market !== '*' ? marketSources.get(marketSourceKey(key.channel, key.market)) : undefined
+      return { ...key, pushesPaused: v.pushesPaused, ...(list?.length ? { sourceLocationCodes: [...list] } : {}) }
+    }),
+    locations: sourceLocations.map((l) => ({ code: l.code, name: l.name, active: l.active, isDefault: l.isDefault })),
+    fbaPlans,
     meta: { tookMs: Date.now() - t0, phases, queries },
   }
 }

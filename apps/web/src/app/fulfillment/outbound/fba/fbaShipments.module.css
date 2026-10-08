@@ -1,0 +1,30 @@
+/* FBA shipments page (Fulfillment › Outbound, Owner 2026-10-08). Layout and domain text only; every control is the
+   design system's. */
+.page { display: flex; flex-direction: column; gap: var(--nds-space-14); padding: var(--nds-space-16); min-width: 0; font-size: var(--nds-font-size-base); }
+.panel { display: flex; flex-direction: column; gap: var(--nds-space-10); min-width: 0; }
+.name { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); overflow-wrap: anywhere; }
+.row { cursor: pointer; }
+.open { background: var(--nds-grid-selected-bg); }
+.more { display: flex; justify-content: center; }
+
+/* The side panel's draft. */
+.draft { display: flex; flex-direction: column; gap: var(--nds-space-14); min-width: 0; }
+.draft p { margin: 0; }
+.tableActions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
+.loading { display: flex; flex-direction: column; gap: var(--nds-space-10); }
+.footer { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); width: 100%; }
+.saved { color: var(--nds-text-3); font-size: var(--nds-font-size-sm); }
+.muted { color: var(--nds-text-3); font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.overlayTitle { margin: 0; font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.overlayBody { display: flex; flex-direction: column; gap: var(--nds-space-8); }
+.overlayBody p { margin: 0; }
+.overlayActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nds-space-8); }
+
+@media (max-width: 599px) {
+  .page { padding: var(--nds-space-12); }
+  /* The panel is full screen here and the floating Ask AI button sits bottom-left: the footer's buttons go right and
+     keep clear of it (the button is square: its reserve across equals its reserve up, the shell's token). */
+  .footer { justify-content: flex-end; }
+  .footer > :global(.grow) { display: none; }
+  :root:has([data-nds-fab]) .footer { padding-inline-start: var(--nds-fab-reserve-block); }
+}

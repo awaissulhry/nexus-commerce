@@ -9,7 +9,6 @@
  *      draws its group's edge — there is no band row (the Owner: Customise manages what shows).
  */
 import { SHEET_GROUPS, isSheetGroupKey, sheetGroupRank, type SheetGroupDef, type SheetTone } from '@nexus/shared/sheet-groups'
-import type { ColDef, ColGroupDef } from '@/design-system/grid'
 import type { ColumnsViewPayload } from '@/design-system/grid/views/viewPayload'
 
 /** The media column's key (`media/productMediaColumn.tsx`), restated so this file stays free of the media editor. */
@@ -76,34 +75,8 @@ export function insertInNaturalOrder(keys: readonly string[], extra: readonly st
 
 /* ── the header ─────────────────────────────────────────────────────────────────────────────────────────────── */
 
-type HeaderClassFn = Extract<NonNullable<ColDef['headerClass']>, (...args: never[]) => unknown>
-export type SheetHeaderClassParams = Parameters<HeaderClassFn>[0]
-export interface SheetHeaderGroup { group: string; tone?: string }
-
-/** The classes a column name takes: its group's tint and indent, and the group's edge on the first column of a group. */
-export function sheetHeaderClasses(params: SheetHeaderClassParams, groupOf: (colId: string) => SheetHeaderGroup | undefined): string[] {
-  const column = params.column
-  if (!column) return []
-  const here = groupOf(column.getColId())
-  if (!here?.tone) return []
-  const before = params.api.getDisplayedColBefore(column)
-  const previous = before ? groupOf(before.getColId()) : undefined
-  return ['nds-ag-head-tone', `nds-ag-head-tone--${here.tone}`, ...(previous?.group === here.group ? [] : ['nds-ag-head-tone--start'])]
-}
-
-const asList = (value: string | string[] | null | undefined): string[] => (value == null ? [] : Array.isArray(value) ? value : [value])
-
-/** The sheet's column defs, each name also carrying its group's classes (a def's own header class is kept). */
-export function withGroupHeaderClass<T>(defs: ReadonlyArray<ColDef<T> | ColGroupDef<T>>, groupClasses: (params: SheetHeaderClassParams) => string[]): Array<ColDef<T> | ColGroupDef<T>> {
-  return defs.map((def) => {
-    if ('children' in def) return { ...def, children: withGroupHeaderClass(def.children, groupClasses) }
-    const own = def.headerClass
-    return {
-      ...def,
-      headerClass: (params: SheetHeaderClassParams) => [
-        ...asList(typeof own === 'function' ? (own as HeaderClassFn)(params as never) as string | string[] | undefined : own),
-        ...groupClasses(params),
-      ],
-    } as ColDef<T>
-  })
-}
+/* The classes a column name takes (its group's tint and indent, the group's edge on a group's first column) are the DS
+   grid's ONE helper (`design-system/grid/columns/groupTone.ts`), shared with the Matrix — restated here under the names
+   the sheet has always used. */
+export { groupToneHeaderClasses as sheetHeaderClasses, withGroupHeaderClass } from '@/design-system/grid'
+export type { GroupHeaderClassParams as SheetHeaderClassParams, HeaderGroupTone as SheetHeaderGroup } from '@/design-system/grid'

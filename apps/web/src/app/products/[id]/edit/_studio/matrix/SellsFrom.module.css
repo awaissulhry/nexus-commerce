@@ -1,0 +1,55 @@
+/* "Sells from" (Step 2) — the From pop-up and its picker (also the bulk Edit's). Layout only; every control is the
+   design system's (Modal, SegmentedControl, OrderedList, Checkbox, Button, Banner). */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  font-size: var(--nds-font-size-base);
+}
+
+/* One picker row: the tick + code, the name, and this SKU's units on the right. */
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  width: 100%;
+}
+
+.code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text-2);
+}
+
+.units {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+}
+
+/* An unticked warehouse sells nothing here: it reads quieter than the ones that do. */
+.off .code,
+.off .name,
+.off .units {
+  color: var(--nds-text-3);
+}
+
+.hint {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.status {
+  color: var(--nds-text-2);
+  min-width: 0;
+}

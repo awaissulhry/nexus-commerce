@@ -169,7 +169,10 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
       Icon: PackageOpen,
       badge: n(counts.operations?.pendingOrders),
       indicator: (counts.operations?.pendingOrders ?? 0) > 0 ? 'action' : undefined,
-      children: [{ label: 'Outbound Analytics', href: '/fulfillment/outbound/analytics' }],
+      children: [
+        { label: 'FBA shipments', href: '/fulfillment/outbound/fba' },
+        { label: 'Outbound Analytics', href: '/fulfillment/outbound/analytics' },
+      ],
     },
     { label: 'Replenishment', href: '/fulfillment/replenishment', Icon: RefreshCw },
     { label: 'Purchase Orders', href: '/fulfillment/purchase-orders', Icon: ShoppingCart },

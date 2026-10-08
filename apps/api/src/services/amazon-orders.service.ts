@@ -973,6 +973,8 @@ export class AmazonOrdersService {
         items: createdItems,
         newlyShipped,
         summary,
+        accountId,
+        marketplace,
       })
     }
   }
@@ -994,7 +996,11 @@ export class AmazonOrdersService {
     items: Array<{ productId: string | null; quantity: number; sku: string }>
     newlyShipped: boolean
     summary: SyncSummary
+    /** Step 2 — the account and market of the order: its holds follow that market's "Sells from" list. */
+    accountId?: string
+    marketplace?: string | null
   }): Promise<void> {
+    // The fallback: a pooled product, or one "Sells from" does not decide, is held here as before.
     const itMainId = await resolveLocationByCode('IT-MAIN')
     if (!itMainId) {
       logger.error('amazon-orders: IT-MAIN location missing — cannot reserve FBM stock', {
@@ -1021,6 +1027,8 @@ export class AmazonOrdersService {
           locationId: itMainId,
           quantity: it.quantity,
           actor: 'amazon-orders-sync',
+          // Step 2 — held at the first location of this market's "Sells from" list with enough stock.
+          sale: { channel: 'AMAZON', marketplace: args.marketplace ?? null, channelConnectionId: args.accountId ?? null },
         })
         const after = await prisma.stockReservation.count({
           where: {

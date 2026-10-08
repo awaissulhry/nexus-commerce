@@ -83,11 +83,16 @@ export function stockColumnDef(col: SheetColumn, deps: StockColumnDeps): ColDef<
       return serverWritable(p.data) ? classes : classes.split(' ').filter((c) => c !== 'nds-cell-is-editable').join(' ')
     },
     ...(kind === 'syncMode' ? { cellClassRules: { ...(def.cellClassRules as Record<string, unknown>), [SELECT_CELL_CLASS]: editable } as ColDef<ChannelSheetRow>['cellClassRules'] } : {}),
-    /* A refused cell's hover leads with WHY (the Matrix page's rule); a held row (no cells) carries the server's sentence. */
+    /* A refused cell's hover leads with WHY (the Matrix page's rule); a held row (no cells) carries the server's sentence.
+       The Amazon EU sharing sentence is this sheet's own line (2026-10-08): the Matrix says it once in its EU group's label,
+       so the engine's cells no longer repeat it — and this sheet has no such label, so its stock cells still say it. */
     tooltipValueGetter: (p) => {
       const row = p.data
       const mark = row ? deps.tracker.get(rowIdOf(row), col.key) : undefined
-      const base = cellTooltip(p) ?? (row?.stock?.cells ? undefined : row?.values?.[col.key]?.writeBlockedReason ?? undefined)
+      const matrix = cellTooltip(p)
+      const shared = row?.stock?.cells ? row.stock.coordinate?.sharedInventoryWith : null
+      const withEu = matrix && shared?.length ? `${matrix} · ${MATRIX_COPY.sharedEu(shared)}` : matrix
+      const base = withEu ?? (row?.stock?.cells ? undefined : row?.values?.[col.key]?.writeBlockedReason ?? undefined)
       return refusedTooltip(mark?.state === 'refused' ? mark.reason : undefined, base)
     },
     cellEditorSelector: undefined,

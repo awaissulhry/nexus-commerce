@@ -18,10 +18,12 @@ import {
   type FulfilmentConversionStatus,
   type MatrixCells,
   type MatrixCoordinate,
+  type MatrixLocation,
   type MatrixRead,
   type MatrixRowRead,
   type MatrixVerbId,
   type MatrixVerbRequest,
+  type SourceCell,
   type SyncCell,
   type VerbChange,
   type VerbPreview,
@@ -127,8 +129,8 @@ export function amazonConversionNote(facts: AmazonFulfilmentFacts, method: 'FBA'
   const where = facts.markets.join(' ')
   const skips = facts.skipped.length ? ` — skips ${skippedWords(facts.skipped)}` : ''
   return method === 'FBM'
-    ? `${lead}Sends Amazon FBM (DEFAULT) with quantity ${facts.quantity ?? '—'} on ${where}${skips}`
-    : `${lead}Sends Amazon FBA (AMAZON_EU) on ${where}, no quantity — out of stock until Amazon receives units${skips}`
+    ? `${lead}Sends Amazon FBM (adds DEFAULT, quantity ${facts.quantity ?? '—'}; removes AMAZON_EU) on ${where}${skips}`
+    : `${lead}Sends Amazon FBA (adds AMAZON_EU, no quantity; removes DEFAULT) on ${where} — out of stock until Amazon receives units${skips}`
 }
 
 export const EBAY_ZERO_REFUSAL = 'Refused — eBay ends a listing pinned at 0 unless the account\'s out-of-stock option is ON, and it is OFF '
@@ -157,6 +159,65 @@ export const syncLabel = (s: SyncCell | null | undefined): string => {
 export const followQty = (s: Pick<SyncCell, 'poolAvailable' | 'buffer'>): number | null =>
   s.poolAvailable == null ? null : Math.max(0, s.poolAvailable - Math.max(0, s.buffer))
 
+/* ── "Sells from" (Step 2, Owner 2026-10-07) ─────────────────────────────────────────────────── */
+
+/** The permission a "Sells from" change needs — the same one the stock pages ask (`inventory.adjust`). */
+export const SOURCE_PERMISSION = 'inventory.adjust'
+/** At most this many locations in one list. */
+export const MAX_SOURCE_CODES = 20
+
+const codeKey = (c: string): string => c.trim().toUpperCase()
+
+/** Two "Sells from" lists are the same list: the same codes in the same order (order = sale order). */
+export const sameSourceCodes = (a: readonly string[], b: readonly string[]): boolean =>
+  a.length === b.length && a.every((c, i) => codeKey(c) === codeKey(b[i]!))
+
+/**
+ * PURE — the list a listing STORES for a chosen "Sells from": `[]` when it equals the market default (an exception exists
+ * only when it differs — Owner 2026-10-07), else the chosen codes, trimmed, in the chosen order. `[]` chosen = the default.
+ * One normaliser for the page and the server.
+ */
+export function sellsFromCodes(chosen: readonly string[], marketDefault: readonly string[]): string[] {
+  const codes = chosen.map((c) => c.trim()).filter(Boolean)
+  return codes.length === 0 || sameSourceCodes(codes, marketDefault) ? [] : codes
+}
+
+/**
+ * PURE — why a chosen list cannot be stored, or null: more than 20, a code twice, a code that is not one of this business's
+ * warehouses, a warehouse that is switched off. `locations` absent (an older server's read) = only the shape is checked;
+ * the server checks the codes against the database again.
+ */
+export function sourceCodesProblem(codes: readonly string[], locations: ReadonlyArray<MatrixLocation> | undefined): string | null {
+  if (codes.length > MAX_SOURCE_CODES) return MATRIX_COPY.sourceTooMany
+  const seen = new Set<string>()
+  for (const raw of codes) {
+    const k = codeKey(raw)
+    if (!k) continue
+    if (seen.has(k)) return MATRIX_COPY.sourceTwice(raw.trim())
+    seen.add(k)
+    if (!locations) continue
+    const loc = locations.find((l) => codeKey(l.code) === k)
+    if (!loc) return MATRIX_COPY.sourceUnknown(raw.trim())
+    if (!loc.active) return MATRIX_COPY.sourceInactive(loc.code)
+  }
+  return null
+}
+
+/** The units a Follow listing would show selling from `codes`: the SKU's available there, summed, minus the buffer; null = none of them holds a row (Uncounted). */
+export function followFromCodes(codes: readonly string[], locations: ReadonlyArray<{ code: string; available: number }>, buffer: number): number | null {
+  const wanted = new Set(codes.map(codeKey))
+  const hits = locations.filter((l) => wanted.has(codeKey(l.code)))
+  if (hits.length === 0) return null
+  return Math.max(0, hits.reduce((n, l) => n + l.available, 0) - Math.max(0, buffer))
+}
+
+/** The note a set-source change carries: what Follow would show after it. */
+function sourceNote(row: MatrixRowRead, src: SourceCell, to: readonly string[], sync: SyncCell | null): string {
+  const n = followFromCodes(to.length ? to : src.marketDefault, row.stock.locations, sync?.buffer ?? 0)
+  const shows = n == null ? MATRIX_COPY.uncounted : String(n)
+  return sync?.mode === 'PINNED' ? `Pinned — the quantity stays; Follow would show ${shows}` : `Follow shows ${shows}`
+}
+
 function target(read: MatrixRead, t: { rowId: string; coordinateKey: CoordinateKey }): { row: MatrixRowRead; coord: MatrixCoordinate; cells: MatrixCells } | null {
   const row = read.rows.find(r => r.id === t.rowId)
   const coord = read.coordinates.find(c => c.key === t.coordinateKey)
@@ -181,7 +242,7 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
 
   for (const t of req.targets) {
     /* Inventory verbs act on the coordinate that CARRIES the inventory — the region group for an EU market. */
-    const inventoryVerb = ['pin-quantity', 'set-follow', 'set-buffer', 'pause-sync', 'resume-sync', 'push-now', 'set-fulfilment', 'retry-sync'].includes(verb)
+    const inventoryVerb = ['pin-quantity', 'set-follow', 'set-buffer', 'pause-sync', 'resume-sync', 'push-now', 'set-fulfilment', 'retry-sync', 'set-source'].includes(verb)
     const key = inventoryVerb ? inventoryCoordinate(read, t.coordinateKey) : t.coordinateKey
     const dedupe = `${t.rowId}|${key}`
     if (seen.has(dedupe)) continue
@@ -293,13 +354,35 @@ export function previewVerb(read: MatrixRead, req: MatrixVerbRequest, ctx: Previ
         changes.push({ rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'fulfilment', from: f.method, to: p.method, fromLabel: f.method ?? '—', toLabel: p.method, note: after })
         break
       }
+      case 'set-source': {
+        /* "Sells from" — on Amazon EU the region group's ONE choice (the door writes it on every EU row, closed ones too). */
+        if (!ctx.can(SOURCE_PERMISSION)) { refuse(row, key, 'permission', MATRIX_COPY.sourcePermission); break }
+        const src = cells.source
+        if (!src) { refuse(row, key, 'not-applicable', MATRIX_COPY.sourceNone); break }
+        if (cells.sync?.kind === 'FBA_EXCLUDED') { refuse(row, key, 'amazon-managed', MATRIX_COPY.sourceFba); break }
+        if (!src.writable) { refuse(row, key, 'not-applicable', src.blockedReason ?? MATRIX_COPY.sourceNone); break }
+        if (!Array.isArray(p.codes) || p.codes.some((c) => typeof c !== 'string')) { refuse(row, key, 'not-applicable', 'Sells from is a list of location codes'); break }
+        const problem = sourceCodesProblem(p.codes, read.locations)
+        if (problem) { refuse(row, key, 'not-applicable', problem); break }
+        const to = sellsFromCodes(p.codes, src.marketDefault)
+        if (sameSourceCodes(to, src.own)) break
+        changes.push({
+          rowId: row.id, sku: row.sku, coordinateKey: key, cell: 'source', from: [...src.own], to,
+          fromLabel: MATRIX_COPY.sourceLabel(src.own, src.marketDefault), toLabel: MATRIX_COPY.sourceLabel(to, src.marketDefault),
+          note: sourceNote(row, src, to, cells.sync),
+        })
+        break
+      }
     }
   }
 
-  const priceVerb = verb === 'set-price' || verb === 'adjust-prices' || verb === 'copy-prices'
   const big = changes.length >= 100 || (verb === 'adjust-prices' && req.params.verb === 'adjust-prices' && req.params.percent <= -30)
-  const confirm: VerbPreview['confirm'] = verb === 'set-fulfilment' ? 'type-to-confirm' : big ? 'type-to-confirm' : priceVerb || verb === 'pause-sync' || verb === 'resume-sync' || verb === 'push-now' ? 'confirm' : 'none'
-  const confirmWord = confirm === 'type-to-confirm' ? (req.params.verb === 'set-fulfilment' ? req.params.method : 'APPLY') : null
+  /* Typed confirmation (Owner 2026-10-08), the only level besides none: an AMAZON fulfilment change (it converts the offer
+     on Amazon — the method is the word), and a big change (100 changes or more, or a price cut of 30 % or more — APPLY).
+     An eBay fulfilment change is Nexus only, with this preview and Undo: no word to type. */
+  const amazonFulfilment = req.params.verb === 'set-fulfilment' && changes.some((c) => read.coordinates.find((x) => x.key === c.coordinateKey)?.channel === 'AMAZON')
+  const confirm: VerbPreview['confirm'] = amazonFulfilment || big ? 'type-to-confirm' : 'none'
+  const confirmWord = confirm === 'type-to-confirm' ? (amazonFulfilment && req.params.verb === 'set-fulfilment' ? req.params.method : 'APPLY') : null
   if (ctx.simulated) notices.add(MATRIX_COPY.simulated)
   return { verb, changes, refusals, notices: [...notices], confirm, confirmWord, simulated: ctx.simulated }
 }

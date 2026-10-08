@@ -25,13 +25,15 @@ import {
   type MatrixCellKind,
   type MatrixCells,
   type PriceCell,
+  type PushFailure,
   type QueueCell,
   type QueueState,
+  type SourceCell,
   type SyncCell,
 } from '@nexus/shared/matrix-contract'
 import { AMAZON_EU_SHARED_MARKETS } from '../amazon-eu-quantity-guard.js'
 import { amazonFulfilmentCodes, describeAmazonFulfilmentCode, isFbaFulfilmentCode } from '../../lib/amazon-fulfilment-programme.js'
-import type { IntendedResolution } from '../sync-control-core.js'
+import { locationServes, marketSourceKey, sellsFrom, type IntendedResolution, type MarketSources, type SyncLedger } from '../sync-control-core.js'
 
 /* ── coordinates ───────────────────────────────────────────────────────────────────────────── */
 
@@ -92,10 +94,10 @@ export type BusinessAbsence = { cell: 'businessPrice' | 'businessTiers'; reason:
  */
 export function businessAbsence(input: { productType: string | null; market: string; audience: readonly string[] | null }): BusinessAbsence[] {
   const reason = input.audience === null || !input.productType
-    ? MATRIX_COPY.absentBusinessUnchecked(input.market)
+    ? MATRIX_COPY.absentBusinessUnchecked()
     : input.audience.includes('B2B')
-      ? MATRIX_COPY.absentBusinessNotBuilt(input.productType, input.market)
-      : MATRIX_COPY.absentBusiness(input.productType, input.market)
+      ? MATRIX_COPY.absentBusinessNotBuilt(input.productType)
+      : MATRIX_COPY.absentBusiness(input.productType)
   return [{ cell: 'businessPrice', reason }, { cell: 'businessTiers', reason }]
 }
 
@@ -274,6 +276,8 @@ export interface QueueRowFacts {
   errorMessage: string | null
   /** The newest of syncedAt / updatedAt / createdAt, ISO. */
   at: string | null
+  /** The row's `createdAt`, ISO — which push of a lane is the newest (`lanePushFailure`). */
+  createdAt?: string | null
 }
 
 const QUEUE_RANK: Record<QueueState, number> = { dead: 6, failed: 5, sending: 4, queued: 3, paused: 2, sent: 1, never: 0 }
@@ -304,6 +308,57 @@ export function foldQueue(rows: readonly QueueRowFacts[], sync: SyncCell | null)
     if (!best || QUEUE_RANK[state] > QUEUE_RANK[best.state]) best = cell
   }
   return best ?? { state: 'never', at: null, reason: null, syncType: null, via: null }
+}
+
+/* ── per-lane push failure (2026-10-08, Owner: the Sync column folds into Qty and Price) ─────── */
+
+/**
+ * The words a push refusal is saved with when the dispatcher answered a CODE rather than a sentence (`error` lands on the
+ * row's `errorMessage`): the Qty cell leads with the reason, so it says what the code means.
+ */
+const PUSH_CODE_SENTENCES: Readonly<Record<string, string>> = {
+  'eu-shared-qty-conflict': 'Refused by the Amazon EU guard — the EU markets ask for different quantities',
+  'eu-shared-qty-guard-unavailable': 'Held — the Amazon EU quantity guard could not be checked',
+  'sync-paused-policy': 'Held — the channel policy holds pushes on this market (Sync Control)',
+  'offer-suppressed': 'Not sent — the offer is suppressed',
+}
+
+/** A failed row's reason as the cell says it: the server's sentence, a known code in words, never empty. */
+export function pushFailureReason(errorMessage: string | null | undefined): string {
+  const said = String(errorMessage ?? '').trim()
+  if (!said) return 'The channel refused the change'
+  return PUSH_CODE_SENTENCES[said] ?? said
+}
+
+/**
+ * PURE — did the newest push of ONE lane fail? Per listing: its newest row of the lane (by `createdAt`) decides — FAILED
+ * (dead-lettered, or failed and waiting for its next try) is a failure; SUCCESS, a push on its way (PENDING / IN_PROGRESS)
+ * or a deliberate skip (SKIPPED: nothing was sent, by design — a held price, a dry run, a lane another lane owns) is not.
+ * Several listings (Amazon EU's region cell): the markets whose newest push failed (`named`), the newest failure's words.
+ * `null` = no failure: success shows nothing.
+ */
+export function lanePushFailure(
+  listings: ReadonlyArray<{ market: string; rows: readonly QueueRowFacts[] }>,
+  lane: 'QUANTITY_UPDATE' | 'PRICE_UPDATE',
+  named = false,
+): PushFailure | null {
+  const failures: Array<{ market: string; row: QueueRowFacts }> = []
+  for (const l of listings) {
+    let newest: QueueRowFacts | null = null
+    for (const r of l.rows) {
+      if (r.syncType !== lane) continue
+      if (!newest || String(r.createdAt ?? r.at ?? '') > String(newest.createdAt ?? newest.at ?? '')) newest = r
+    }
+    if (newest && newest.syncStatus.toUpperCase() === 'FAILED') failures.push({ market: l.market.toUpperCase(), row: newest })
+  }
+  if (failures.length === 0) return null
+  const last = failures.reduce((a, b) => (String(b.row.at ?? '') > String(a.row.at ?? '') ? b : a))
+  return {
+    reason: pushFailureReason(last.row.errorMessage),
+    at: last.row.at,
+    final: last.row.isDead,
+    markets: named ? [...new Set(failures.map((f) => f.market))].sort(compareMarkets) : [],
+  }
 }
 
 /* ── price ─────────────────────────────────────────────────────────────────────────────────── */
@@ -383,6 +438,63 @@ export function writableFor(input: WritableInput): Pick<MatrixCells, 'writable' 
     writable[k] = true
   }
   return { writable, writeBlockedReason }
+}
+
+/* ── "Sells from" (Step 2, Owner 2026-10-07) ───────────────────────────────────────────────── */
+
+/** One of this business's WAREHOUSE locations as the From cell needs it. */
+export interface SourceLocation { code: string; active: boolean; isDefault: boolean; syncRoutes: readonly string[] }
+
+/** Sale order when no list decides: the default warehouse first, then by code (the loader's own order). */
+export const inSourceOrder = <T extends { code: string; isDefault?: boolean }>(locations: readonly T[]): T[] =>
+  [...locations].sort((a, b) => Number(!!b.isDefault) - Number(!!a.isDefault) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
+
+export interface SourceFacts {
+  role: 'parent' | 'variant'
+  channel: string
+  /** The listing's market (an EU group: its primary row's market — every EU row carries the same list). */
+  market: string
+  /** The listing's stored `sourceLocationCodes`. */
+  own: readonly string[]
+  /** The product's ledger (`loadSyncLedgers`); undefined = none read. */
+  ledger: SyncLedger | undefined
+  /** The business's lists per market (`loadMarketSources`). */
+  marketSources: MarketSources
+  /** This business's WAREHOUSE locations (any order). */
+  locations: readonly SourceLocation[]
+  /** The listing's FBA verdict (`listingQuantityVerdict`). */
+  isFba: boolean
+  /** Shared stock by SKU: the lender's name, or null. */
+  sharedFrom: string | null
+  /** `inventory.adjust` for the caller. */
+  canAdjustStock: boolean
+}
+
+/**
+ * PURE — the From cell. The default is the market's list (`marketSourceKey`), or — with none — the ACTIVE warehouses whose
+ * routes allow the market, in sale order. `effective` is the core's own choice (`sellsFrom`, the rows every push reads):
+ * a list's codes in its order, or (routes) the default, each with this SKU's available there (0 without a stock row).
+ * Not writable, with the sentence, on the parent, an FBA listing, a SKU that sells from another business's stock, and for
+ * a caller without `inventory.adjust` — in that order.
+ */
+export function sourceCellOf(f: SourceFacts): SourceCell {
+  const list = f.marketSources.get(marketSourceKey(f.channel, f.market)) ?? []
+  const routed = inSourceOrder(f.locations.filter((l) => l.active && locationServes([...l.syncRoutes], f.channel, f.market))).map((l) => l.code)
+  const marketDefault = list.length ? [...list] : routed
+  const pooled = !!f.sharedFrom
+  const own = f.role === 'parent' ? [] : f.own.map((c) => c.trim()).filter(Boolean)
+  const chosen = f.ledger && f.role !== 'parent'
+    ? sellsFrom({ ledger: f.ledger, channel: f.channel, marketplace: f.market, sourceLocationCodes: pooled ? [] : [...own] })
+    : null
+  const availableAt = new Map<string, number>((chosen?.rows ?? f.ledger ?? []).map((r): [string, number] => [r.locationCode.trim().toUpperCase(), r.available]))
+  const codes = !chosen ? (own.length ? own : marketDefault) : chosen.origin === 'routes' && !pooled ? marketDefault : chosen.codes
+  const effective = f.role === 'parent' ? [] : codes.map((code) => ({ code, available: availableAt.get(code.trim().toUpperCase()) ?? 0 }))
+  const blockedReason = f.role === 'parent' ? MATRIX_COPY.sourceParent
+    : f.isFba ? MATRIX_COPY.sourceFba
+      : f.sharedFrom ? sharedStockReason(f.sharedFrom)
+        : !f.canAdjustStock ? MATRIX_COPY.sourcePermission
+          : null
+  return { own, marketDefault, defaultOrigin: list.length ? 'market' : 'routes', effective, writable: blockedReason === null, blockedReason }
 }
 
 /** Which coordinate carries a target's INVENTORY cells — the region group for an EU market (mirrors the preview's rule). */

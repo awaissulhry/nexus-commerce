@@ -1,0 +1,46 @@
+/* Step 4 Send to FBA — the FBA plans drawer. Layout and domain text only; every control is the design system's. */
+.body { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+.body p { margin: 0; }
+
+.list { display: flex; flex-direction: column; gap: var(--nds-space-8); margin: 0; padding: 0; list-style: none; }
+.rowFacts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+
+.plan { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+.section { display: flex; flex-direction: column; gap: var(--nds-space-10); min-width: 0; }
+
+.text { color: var(--nds-text); overflow-wrap: anywhere; }
+.strong { color: var(--nds-text-strong); font-weight: var(--nds-font-weight-semibold); overflow-wrap: anywhere; }
+.muted { color: var(--nds-text-3); font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.running { display: inline-flex; align-items: center; gap: var(--nds-space-6); }
+
+.problems { margin: 0; padding-left: var(--nds-space-18); display: grid; gap: var(--nds-space-4); overflow-wrap: anywhere; }
+
+/* The placement options: one column in a 480 px drawer and on a phone. */
+.choices { display: flex; flex-direction: column; gap: var(--nds-space-8); margin: 0; padding: 0; border: 0; min-width: 0; }
+.legend { padding: 0; margin-bottom: var(--nds-space-4); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.lines { display: flex; flex-direction: column; gap: var(--nds-space-2); }
+.pickers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: var(--nds-space-8); min-width: 0; }
+
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); min-width: 0; }
+
+.shipment { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.shipHead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--nds-space-8); }
+.tracking { display: flex; flex-direction: column; gap: var(--nds-space-8); margin: 0; padding: 0; border: 0; min-width: 0; }
+
+.link { color: var(--nds-text-link); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.link:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; border-radius: var(--nds-radius-pill); }
+
+.overlayTitle { margin: 0; font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.overlayBody { display: flex; flex-direction: column; gap: var(--nds-space-8); }
+.overlayBody p { margin: 0; }
+.footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nds-space-8); }
+
+/* The heading takes focus on open so a reader names the drawer; it is not a control, so it draws no ring. */
+.heading:focus { outline: none; }
+
+/* A phone: the drawer is full screen and the floating Ask AI button sits bottom-left — the last line ("Open in FBA
+   shipments") keeps clear of it, as the FBA shipments page's footer does. */
+@media (max-width: 599px) {
+  :root:has([data-nds-fab]) .body { padding-bottom: var(--nds-fab-reserve-block); }
+}

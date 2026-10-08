@@ -5,6 +5,7 @@ import { initializeChannelSyncWorker } from '../workers/channel-sync.worker.js'
 import { initializeBulkListWorker } from '../workers/bulk-list.worker.js'
 import { initializeBulkJobWorker } from '../workers/bulk-job.worker.js'
 import { initializePublicationBatchWorker } from '../workers/publication-batch.worker.js'
+import { initializeFbaInboundWorker } from '../workers/fba-inbound.worker.js'
 import { initializeReadCacheWorker } from '../workers/read-cache.worker.js'
 import { initializeReadinessWorker } from '../workers/readiness.worker.js'
 import { initializeAgentPlanWorker } from '../workers/agent-plan.worker.js'
@@ -40,7 +41,7 @@ export async function startWorker(): Promise<() => Promise<void>> {
   }
   try {
     await initializeQueue()
-    for (const initialize of [initializeBullMQWorker, initializeChannelSyncWorker, initializeBulkListWorker, initializeBulkJobWorker, initializeReadCacheWorker, initializeReadinessWorker, initializePublicationBatchWorker, initializeAgentPlanWorker, initializeEbayOrderNoticeWorker]) {
+    for (const initialize of [initializeBullMQWorker, initializeChannelSyncWorker, initializeBulkListWorker, initializeBulkJobWorker, initializeReadCacheWorker, initializeReadinessWorker, initializePublicationBatchWorker, initializeFbaInboundWorker, initializeAgentPlanWorker, initializeEbayOrderNoticeWorker]) {
       workers.push(initialize())
     }
     if (process.env.SEARCH_ENGINE_ENABLED === '1') workers.push(initializeSearchIndexWorker())

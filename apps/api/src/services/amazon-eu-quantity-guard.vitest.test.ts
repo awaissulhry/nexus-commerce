@@ -93,3 +93,29 @@ describe('projectActionAndDetect — the pre-write projection', () => {
     expect(v.conflict).toBe(false)
   })
 })
+
+describe('Step 2 "Sells from" — Follow rows must sell from the same warehouses', () => {
+  it('two Follow markets with different warehouse sets = CONFLICT (two sums for one EU quantity)', () => {
+    const v = detectEuIntentConflict([follow('IT', { sources: ['IT-MAIN'] }), follow('DE', { sources: ['IT-MAIN', 'MI-3PL'] })])
+    expect(v.conflict).toBe(true)
+    expect(v.detail).toMatch(/follow the pool from different warehouses \(IT from IT-MAIN, DE from IT-MAIN \+ MI-3PL\)/)
+  })
+
+  it('the same set in another order agrees (the quantity is a sum); a row with no known set is not compared', () => {
+    expect(detectEuIntentConflict([follow('IT', { sources: ['MI-3PL', 'IT-MAIN'] }), follow('DE', { sources: ['it-main', 'MI-3PL'] })]).conflict).toBe(false)
+    expect(detectEuIntentConflict([follow('IT', { sources: ['IT-MAIN'] }), follow('DE'), follow('FR', { sources: null })]).conflict).toBe(false)
+  })
+
+  it('rows that express no intent (paused, closed, FBA) never fight over warehouses', () => {
+    expect(detectEuIntentConflict([
+      follow('IT', { sources: ['IT-MAIN'] }),
+      follow('DE', { sources: ['MI-3PL'], syncPaused: true }),
+      follow('FR', { sources: ['MI-3PL'], offerClosed: true }),
+      follow('ES', { sources: ['MI-3PL'], isFba: true }),
+    ]).conflict).toBe(false)
+  })
+
+  it('without sets (no caller knows them) the verdict is what it always was', () => {
+    expect(detectEuIntentConflict([follow('IT'), follow('DE'), follow('FR')]).conflict).toBe(false)
+  })
+})

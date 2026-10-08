@@ -14,7 +14,7 @@
  */
 import { memo, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ChevronDown, ChevronRight, ExternalLink, Lock, MoreHorizontal } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Lock, MoreHorizontal, Pause, TriangleAlert } from 'lucide-react'
 import type { ICellRendererParams, IRowNode } from 'ag-grid-community'
 
 import { Button, InfoTip, Pill, TagGlyph, Tooltip, type Tone } from '../../primitives'
@@ -126,6 +126,20 @@ export interface LockedCellParams {
  */
 export function LockGlyph({ reason }: { reason?: string | null }) {
   return <Lock size={11} strokeWidth={2.25} className="nds-cell-lock-glyph" role="img" aria-label={reason || 'Read-only'} />
+}
+
+/**
+ * The warning triangle beside a value (Matrix audit 2026-10-08: the text "⚠" is drawn as a COLOUR EMOJI on Windows and
+ * Android) — an outline icon like `LockGlyph`, in its holder's ink. Decorative: its holder's title, or the cell's
+ * tooltip, says why.
+ */
+export function WarnGlyph() {
+  return <TriangleAlert size={12} strokeWidth={2.25} className="nds-cell-glyph" aria-hidden />
+}
+
+/** The pause beside a stock number whose sync is held — an outline icon for the same reason as `WarnGlyph` ("⏸"). */
+export function PauseGlyphIcon() {
+  return <Pause size={11} strokeWidth={2.5} className="nds-cell-glyph" aria-hidden />
 }
 
 export const LockedCell = memo(function LockedCell(p: ICellRendererParams & LockedCellParams) {

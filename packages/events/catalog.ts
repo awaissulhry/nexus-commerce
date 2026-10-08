@@ -184,7 +184,7 @@ export const EVENTS = {
   'listing.values_changed': defineEvent({
     type: 'listing.values_changed',
     context: 'catalog',
-    description: "Listing values a person sees (mode, quantity, buffer, sync state, fulfilment, price, offer, ASIN) changed in one family; the sheet and the Matrix re-read those rows.",
+    description: "Listing values a person sees (mode, quantity, buffer, sync state, fulfilment, price, offer, ASIN, sells from) changed in one family; the sheet and the Matrix re-read those rows.",
     schema: z.strictObject({
       /** The family root. */
       productId: z.string().min(1),
@@ -196,6 +196,8 @@ export const EVENTS = {
       fields: z.array(z.enum([
         'quantityMode', 'quantity', 'stockBuffer', 'syncState', 'fulfilment', 'price', 'salePrice',
         'externalListingId', 'offer', 'fulfilmentSettings', 'offerDraft',
+        /** "Sells from" (Step 2): the warehouses a listing sells from, in sale order. */
+        'stockSource',
       ])).min(1),
       reason: z.string().optional(),
     }),
@@ -237,6 +239,30 @@ export const EVENTS = {
       poolTotal: z.number().int().nonnegative(),
       reason: z.string().min(1),
       orderId: z.string().min(1).nullable().optional(),
+    }),
+    subject: (p) => p.productId,
+  }),
+  // Step 3 (Owner D2 = B; several case sizes per SKU, Owner 2026-10-08). Published in the transaction (outbox) by
+  // stock/stock-cases.service.ts: setCasesInTx (sealed counts at one location, reason 'count') and setCasePacks /
+  // setFbaOwnersIfUnset (a SKU's case pack, reason 'case-pack', locationId null, counts []). A sale that opens a case
+  // does not publish it: inventory.stock_changed already says the units moved.
+  'inventory.cases_changed': defineEvent({
+    type: 'inventory.cases_changed',
+    context: 'inventory',
+    description: 'Sealed cases were counted at a location, or a SKU\'s case pack (case sizes, case size and weight, FBA prep/label owner) changed.',
+    schema: z.strictObject({
+      productId: z.string().min(1),
+      /** null = the case pack changed (no one location). */
+      locationId: z.string().min(1).nullable(),
+      /** A count: each case size whose sealed count changed at the location, before → after; [] for a case-pack change. */
+      counts: z.array(z.strictObject({
+        unitsPerCase: z.number().int().positive(),
+        before: z.number().int().nonnegative(),
+        after: z.number().int().nonnegative(),
+      })),
+      /** The SKU's case sizes after the change (units per case, biggest first); [] = no case size. */
+      sizes: z.array(z.number().int().positive()),
+      reason: z.enum(['count', 'case-pack']),
     }),
     subject: (p) => p.productId,
   }),
@@ -445,6 +471,26 @@ export const EVENTS = {
     description: 'An inbound shipment was cancelled.',
     schema: z.strictObject({ shipmentId: z.string().min(1) }),
     subject: (p) => p.shipmentId,
+  }),
+  // Step 4 Send to FBA (2026-10-07). Published in the transaction that moves the plan (publishEvent(tx, …)): the runner
+  // at each status / step change, the send service (create, cancel, choice), the ship service (Shipped) and the
+  // 15-min status poll (SHIPPED → AT_AMAZON → CLOSED). The web maps it to a Matrix re-read of the FBA cell and the
+  // plans drawer. `status` / `step` are @nexus/shared/fba-send's FBA_PLAN_STATUSES / FBA_PLAN_STEPS words.
+  'fba.plan_changed': defineEvent({
+    type: 'fba.plan_changed',
+    context: 'fulfillment',
+    description: 'A Send to FBA plan changed status or step (created, a step ran, waiting for a choice, confirmed, shipped, at Amazon, failed, cancelled).',
+    schema: z.strictObject({
+      /** FbaInboundPlanV2.id */
+      planId: z.string().min(1),
+      /** The plan's status after the change. */
+      status: z.string().min(1).max(40),
+      /** The step running or next; null when none. */
+      step: z.string().min(1).max(40).nullable(),
+      /** The SKUs (product ids) in the plan, so pages showing them re-read. */
+      productIds: z.array(z.string().min(1)).max(200),
+    }),
+    subject: (p) => p.planId,
   }),
   // Source: outbound-events.service.ts
   'shipment.created': defineEvent({

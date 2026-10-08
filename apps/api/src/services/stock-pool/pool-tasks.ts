@@ -6,6 +6,7 @@ import { logger } from '../../utils/logger.js'
 import { listenUrlFrom, startWakeListener } from '../../lib/pg-wake-listener.js'
 import { publishEvent } from '../../lib/events/publish.js'
 import { lockProductStock } from '../stock-lock.js'
+import { keepCasesInTx } from '../stock/stock-cases.service.js'
 import { consumeLayersInTx } from '../cost-layers.service.js'
 import { recascadeProduct } from '../stock-movement.service.js'
 import { handleMovementStockoutTransition } from '../stockout-detector.service.js'
@@ -183,7 +184,7 @@ export async function settlePoolMovement(movementId: string): Promise<void> {
     if (!m || m.poolSettledAt) return null
 
     const level = m.locationId
-      ? await tx.stockLevel.findFirst({ where: { productId: m.productId, locationId: m.locationId, variationId: null }, select: { available: true } })
+      ? await tx.stockLevel.findFirst({ where: { productId: m.productId, locationId: m.locationId, variationId: null }, select: { id: true, quantity: true, available: true } })
       : null
     const product = await tx.product.findUnique({ where: { id: m.productId }, select: { totalStock: true, sku: true } })
     const reservation = m.reservationId
@@ -199,6 +200,13 @@ export async function settlePoolMovement(movementId: string): Promise<void> {
       } catch (error) {
         logger.warn('[stock-pool] cost-layer consume failed (continuing without COGS)', { movementId, error: messageOf(error) })
       }
+    }
+
+    // Step 3 cases — a borrower's sale took units from this lent level: loose units first, then a sealed case opens
+    // (the clamp, at the lender's level). Clamped at the movement's own balanceAfter, not today's quantity, so a
+    // put-back between the door and this settle cannot seal an opened case again. Readers clamp meanwhile.
+    if (m.change < 0 && level) {
+      await keepCasesInTx(tx, [{ stockLevelId: level.id, quantityAfter: Math.min(level.quantity, m.balanceAfter) }])
     }
 
     if (m.change !== 0 && m.locationId) {

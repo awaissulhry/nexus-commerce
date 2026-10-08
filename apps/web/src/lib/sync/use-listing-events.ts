@@ -37,6 +37,11 @@
 //   listing.values_changed → invalidation 'listing.values_changed' (Amazon sheet gaps — the sheet and the Matrix
 //                       stay in step; payload in meta)
 //   inventory.stock_changed → invalidation 'inventory.stock_changed' (narrow: NOT 'stock.adjusted')
+//   inventory.cases_changed → invalidation 'inventory.stock_changed' with meta.subtype 'cases' (Step 3 — sealed cases
+//                       counted, or a SKU's case pack changed; the Matrix re-reads like a stock move)
+//   fba.plan_changed → invalidation 'inventory.stock_changed' per product of the plan, meta.subtype 'fba-plan' + planId
+//                       (Step 4 Send to FBA — a plan moved: the Matrix re-reads its FBA qty "+N" and the plans drawer
+//                       its plans; holds and shipped units move the stock the same way)
 //   listing.publish_action_changed → invalidation 'listing.updated' with meta.subtype 'listing.publish_action_changed'
 //                       (build shape v2, P8 — a waiting Status or Action value changed; other open sheets of the
 //                       family read their Status and Action columns again. Nothing was sent to a channel.)
@@ -46,7 +51,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { emitInvalidation } from './invalidation-channel'
+import { emitInvalidation, type InvalidationEvent } from './invalidation-channel'
 
 interface ListingEvent {
   type: string
@@ -58,6 +63,24 @@ interface ListingEvent {
   durationMs?: number
   ts: number
   [key: string]: any
+}
+
+/**
+ * Step 4 (Send to FBA) — `fba.plan_changed` ({ planId, status, step, productIds }): a plan changed status or step. No new
+ * invalidation type: for each of its products it is a stock fact (units held, inbound, shipped), so it rides the narrow
+ * stock type — one `inventory.stock_changed` per product, `meta.subtype 'fba-plan'` + `meta.planId`. The Matrix re-reads
+ * (its live rule coalesces the burst) and the plans drawer matches the subtype. A plan with no product still reaches the
+ * drawer (`id` = the plan). Never 'stock.adjusted'.
+ */
+export function fbaPlanInvalidations(event: { planId?: unknown; status?: unknown; step?: unknown; productIds?: unknown }): Array<Omit<InvalidationEvent, 'origin'>> {
+  if (typeof event.planId !== 'string' || !event.planId) return []
+  const meta = {
+    source: 'sse', subtype: 'fba-plan', planId: event.planId,
+    status: typeof event.status === 'string' ? event.status : null, step: typeof event.step === 'string' ? event.step : null,
+  }
+  const productIds = Array.isArray(event.productIds) ? [...new Set(event.productIds.filter((id): id is string => typeof id === 'string' && id.length > 0))] : []
+  if (productIds.length === 0) return [{ type: 'inventory.stock_changed', id: event.planId, meta }]
+  return productIds.map((productId) => ({ type: 'inventory.stock_changed' as const, id: productId, meta: { ...meta, productId } }))
 }
 
 export interface UseListingEventsResult {
@@ -135,6 +158,13 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
           // stock pages refresh whole grids on that). `id` = the product whose stock moved; the sheet and the Matrix
           // re-read a family's quantities when it is one of theirs.
           emitInvalidation({ type: 'inventory.stock_changed', id: parsed.productId, meta: { source: 'sse', productId: parsed.productId } })
+        } else if (parsed.type === 'inventory.cases_changed') {
+          // Step 3 (cases) — sealed cases were counted at a location, or a SKU's case pack changed (`locationId` null).
+          // No new invalidation type: it is a stock fact of one product, so it rides the narrow stock type and the
+          // Matrix re-reads (its Case column included). Never 'stock.adjusted'.
+          emitInvalidation({ type: 'inventory.stock_changed', id: parsed.productId, meta: { source: 'sse', productId: parsed.productId, subtype: 'cases' } })
+        } else if (parsed.type === 'fba.plan_changed') {
+          for (const e of fbaPlanInvalidations(parsed)) emitInvalidation(e)
         } else if (parsed.type === 'listing.values_changed') {
           // Amazon sheet gaps — Mode, Qty, Buffer, price, fulfilment or ASIN changed on listings of one family
           // (`productId` = the family root). The sheet and the Matrix decide from the payload whether to re-read.
@@ -190,6 +220,8 @@ export function useListingEvents(enabled = true): UseListingEventsResult {
       'listing.deleted',
       'listing.values_changed',
       'inventory.stock_changed',
+      'inventory.cases_changed',
+      'fba.plan_changed',
       'wizard.submitted',
       'bulk.progress',
       'bulk.completed',

@@ -843,6 +843,12 @@
   white-space: nowrap;
 }
 .nds-prefs-locked {
+  /* The lock glyph and its word on ONE line (Matrix audit 2026-10-08: they stacked in a narrow pick row). */
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
   font-size: var(--nds-font-size-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -924,6 +930,11 @@
 }
 .nds-prefs-pick.locked {
   background: var(--nds-surface-sunken);
+}
+/* A locked column's NAME is a fact, not a greyed-out choice: only its tick is held (Matrix audit 2026-10-08 — the
+   disabled text colour measured 1.8:1 light, 2.89:1 dark). The sunken row and the LOCKED tag say it cannot change. */
+.nds-prefs-pick.locked .nds-check.disabled {
+  color: var(--nds-text);
 }
 /* The primitive is an inline-flex label; stretch it so the whole row is the hit target rather
    than just the 15px box and the text. */

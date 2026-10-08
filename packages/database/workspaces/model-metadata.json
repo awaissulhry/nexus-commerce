@@ -452,6 +452,24 @@
           "kind": "object",
           "type": "ShopifyColourSync",
           "relationFromFields": []
+        },
+        {
+          "name": "casePacks",
+          "kind": "object",
+          "type": "ProductPackage",
+          "relationFromFields": []
+        },
+        {
+          "name": "caseSizes",
+          "kind": "object",
+          "type": "ProductCaseSize",
+          "relationFromFields": []
+        },
+        {
+          "name": "fbaPlanLines",
+          "kind": "object",
+          "type": "FbaInboundPlanLine",
+          "relationFromFields": []
         }
       ]
     },
@@ -3454,6 +3472,12 @@
           "kind": "object",
           "type": "StockBinQuantity",
           "relationFromFields": []
+        },
+        {
+          "name": "caseCounts",
+          "kind": "object",
+          "type": "StockCaseCount",
+          "relationFromFields": []
         }
       ]
     },
@@ -3725,6 +3749,63 @@
             "binId"
           ],
           "relationOnDelete": "Restrict"
+        }
+      ]
+    },
+    {
+      "name": "ProductPackage",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        }
+      ]
+    },
+    {
+      "name": "ProductCaseSize",
+      "fields": [
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "counts",
+          "kind": "object",
+          "type": "StockCaseCount",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "StockCaseCount",
+      "fields": [
+        {
+          "name": "stockLevel",
+          "kind": "object",
+          "type": "StockLevel",
+          "relationFromFields": [
+            "stockLevelId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "caseSize",
+          "kind": "object",
+          "type": "ProductCaseSize",
+          "relationFromFields": [
+            "caseSizeId"
+          ],
+          "relationOnDelete": "Cascade"
         }
       ]
     },
@@ -4694,6 +4775,35 @@
             "inboundShipmentId"
           ],
           "relationOnDelete": "SetNull"
+        },
+        {
+          "name": "lines",
+          "kind": "object",
+          "type": "FbaInboundPlanLine",
+          "relationFromFields": []
+        }
+      ]
+    },
+    {
+      "name": "FbaInboundPlanLine",
+      "fields": [
+        {
+          "name": "plan",
+          "kind": "object",
+          "type": "FbaInboundPlanV2",
+          "relationFromFields": [
+            "planRowId"
+          ],
+          "relationOnDelete": "Cascade"
+        },
+        {
+          "name": "product",
+          "kind": "object",
+          "type": "Product",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationOnDelete": "Cascade"
         }
       ]
     },

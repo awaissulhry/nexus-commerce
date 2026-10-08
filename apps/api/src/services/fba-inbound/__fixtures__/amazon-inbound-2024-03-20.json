@@ -1,0 +1,2496 @@
+{
+  "source": {
+    "model": "https://github.com/amzn/selling-partner-api-models/blob/main/models/fulfillment-inbound-api-model/fulfillmentInbound_2024-03-20.json",
+    "commitDate": "2026-08-21",
+    "sha256": "a4d4cdd08dd3f381f27154d7f9f503d45e0486d416c629598341bbd23c7ff487",
+    "extractedBy": "apps/api/scripts/fba-inbound-fixtures.mjs"
+  },
+  "operations": {
+    "listInboundPlans": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans",
+      "body": null,
+      "query": [
+        "pageSize",
+        "paginationToken",
+        "status",
+        "sortBy",
+        "sortOrder"
+      ],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {},
+            "query": {
+              "status": "ACTIVE",
+              "sortBy": "LAST_UPDATED_TIME",
+              "sortOrder": "ASC",
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "inboundPlans": [
+              {
+                "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+                "name": "FBA (03/08/2023, 01:15 PM)",
+                "createdAt": "2023-03-08T13:15:30Z",
+                "lastUpdatedAt": "2023-03-08T13:15:30Z",
+                "status": "ACTIVE",
+                "marketplaceIds": [
+                  "A2EUQ1WTGCTBG2"
+                ],
+                "sourceAddress": {
+                  "name": "name",
+                  "companyName": "Acme",
+                  "addressLine1": "123 example street",
+                  "addressLine2": "Unit 102",
+                  "city": "Toronto",
+                  "countryCode": "CA",
+                  "stateOrProvinceCode": "ON",
+                  "postalCode": "M1M1M1",
+                  "phoneNumber": "1234567890",
+                  "email": "email@email.com"
+                }
+              },
+              {
+                "inboundPlanId": "wf2234abcd-1234-abcd-5678-1234abcd5678",
+                "name": "FBA (03/08/2023, 01:15 PM)",
+                "createdAt": "2023-03-08T13:15:30Z",
+                "lastUpdatedAt": "2023-03-08T13:15:30Z",
+                "status": "ACTIVE",
+                "marketplaceIds": [
+                  "A2EUQ1WTGCTBG2"
+                ],
+                "sourceAddress": {
+                  "name": "name",
+                  "companyName": "TheCompany",
+                  "addressLine1": "1111 street name",
+                  "addressLine2": "Apartment 12B",
+                  "city": "Ann Arbor",
+                  "districtOrCounty": "Washtenaw",
+                  "stateOrProvinceCode": "MI",
+                  "postalCode": "11564",
+                  "countryCode": "US",
+                  "phoneNumber": "1234567890",
+                  "email": "email@email.com"
+                }
+              }
+            ],
+            "pagination": {
+              "nextToken": "nextPaginationToken"
+            }
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {},
+            "query": {
+              "status": "badStatus",
+              "sortBy": "LAST_UPDATED_TIME",
+              "sortOrder": "ASC",
+              "pageSize": 5
+            },
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The status is invalid."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "createInboundPlan": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans",
+      "body": "CreateInboundPlanRequest",
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {},
+            "query": {},
+            "body": {
+              "name": "FBA (03/20/2024, 12:01 PM)",
+              "sourceAddress": {
+                "name": "name",
+                "companyName": "Acme",
+                "addressLine1": "123 example street",
+                "addressLine2": "Unit 102",
+                "city": "Toronto",
+                "countryCode": "CA",
+                "stateOrProvinceCode": "ON",
+                "postalCode": "M1M1M1",
+                "phoneNumber": "1234567890",
+                "email": "email@email.com"
+              },
+              "destinationMarketplaces": [
+                "A2EUQ1WTGCTBG2"
+              ],
+              "items": [
+                {
+                  "msku": "msku",
+                  "prepOwner": "AMAZON",
+                  "labelOwner": "AMAZON",
+                  "quantity": 2,
+                  "expiration": "2024-01-01",
+                  "manufacturingLotCode": "lotCode"
+                }
+              ]
+            }
+          },
+          "response": {
+            "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 202,
+          "request": {
+            "path": {},
+            "query": {},
+            "body": {
+              "name": "FBA (03/20/2024, 12:01 PM)",
+              "sourceAddress": {
+                "name": "name",
+                "companyName": "TheCompany",
+                "addressLine1": "1111 street name",
+                "addressLine2": "Apartment 12B",
+                "city": "Ann Arbor",
+                "districtOrCounty": "Washtenaw",
+                "stateOrProvinceCode": "MI",
+                "postalCode": "11564",
+                "countryCode": "US",
+                "phoneNumber": "1234567890",
+                "email": "email@email.com"
+              },
+              "destinationMarketplaces": [
+                "BADATVPDKIKX0DER"
+              ],
+              "items": [
+                {
+                  "msku": "msku",
+                  "prepOwner": "AMAZON",
+                  "labelOwner": "AMAZON",
+                  "quantity": 2,
+                  "expiration": "2024-01-01",
+                  "manufacturingLotCode": "lotCode"
+                }
+              ]
+            }
+          },
+          "response": {
+            "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {},
+            "query": {},
+            "body": {
+              "name": "FBA (03/20/2024, 12:01 PM)",
+              "sourceAddress": {
+                "name": "name",
+                "companyName": "Acme",
+                "addressLine1": "123 example street",
+                "addressLine2": "Unit 102",
+                "city": "Toronto",
+                "countryCode": "CA",
+                "stateOrProvinceCode": "ON",
+                "postalCode": "M1M1M1",
+                "phoneNumber": "1234567890",
+                "email": "email@email.com"
+              },
+              "destinationMarketplaces": [
+                "badMarketplace"
+              ],
+              "items": [
+                {
+                  "msku": "msku",
+                  "prepOwner": "AMAZON",
+                  "labelOwner": "AMAZON",
+                  "quantity": 2,
+                  "expiration": "2024-01-01",
+                  "manufacturingLotCode": "lotCode"
+                }
+              ]
+            }
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "Invalid destinationMarketplace provided."
+              }
+            ]
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {},
+            "query": {},
+            "body": {
+              "name": "FBA (03/20/2024, 12:01 PM)",
+              "sourceAddress": {
+                "name": "name",
+                "companyName": "TheCompany",
+                "addressLine1": "1111 street name",
+                "addressLine2": "Apartment 12B",
+                "city": "Ann Arbor",
+                "districtOrCounty": "Washtenaw",
+                "stateOrProvinceCode": "MI",
+                "postalCode": "11564",
+                "countryCode": "US",
+                "phoneNumber": "1234567890",
+                "email": "email@email.com"
+              },
+              "destinationMarketplaces": [
+                "badMarketplace"
+              ],
+              "items": [
+                {
+                  "msku": "msku",
+                  "prepOwner": "AMAZON",
+                  "labelOwner": "AMAZON",
+                  "quantity": 2,
+                  "expiration": "2024-01-01",
+                  "manufacturingLotCode": "lotCode"
+                }
+              ]
+            }
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "Invalid destinationMarketplace provided."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "getInboundOperationStatus": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/operations/{operationId}",
+      "body": null,
+      "query": [],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "operationId": "a440f2ff-cb08-416a-99e1-67a04eee88f6",
+            "operation": "operationName",
+            "operationStatus": "SUCCESS",
+            "operationProblems": [
+              {
+                "code": "DimensionMismatch",
+                "message": "The dimension does not match what is expected.",
+                "details": "",
+                "severity": "WARNING"
+              }
+            ]
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "operationId": "bad4abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The operationId is malformed."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "cancelInboundPlan": {
+      "method": "PUT",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/cancellation",
+      "body": null,
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wfbad4abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The inbound plan is already cancelled."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "generatePackingOptions": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions",
+      "body": null,
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wfbad4abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The inbound plan is not in a valid state to generate packing options."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "listPackingOptions": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions",
+      "body": null,
+      "query": [
+        "pageSize",
+        "paginationToken"
+      ],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "packingOptions": [
+              {
+                "packingOptionId": "po1234abcd-1234-abcd-5678-1234abcd5678",
+                "packingGroups": [
+                  "pg1234abcd-1234-abcd-5678-1234abcd5678"
+                ],
+                "fees": [
+                  {
+                    "value": {
+                      "code": "USD",
+                      "amount": 1
+                    },
+                    "type": "FEE",
+                    "target": "Placement Services",
+                    "description": "description"
+                  }
+                ],
+                "discounts": [
+                  {
+                    "value": {
+                      "code": "USD",
+                      "amount": 1
+                    },
+                    "type": "DISCOUNT",
+                    "target": "Placement Services",
+                    "description": "description"
+                  }
+                ],
+                "expiration": "2024-01-01T00:00:00.000Z",
+                "status": "OFFERED",
+                "supportedShippingConfigurations": [
+                  {
+                    "shippingSolution": "AMAZON_PARTNERED_CARRIER",
+                    "shippingMode": "GROUND_SMALL_PARCEL"
+                  }
+                ],
+                "supportedConfigurations": [
+                  {
+                    "boxPackingMethods": [
+                      "BOX_CONTENT_PROVIDED"
+                    ],
+                    "boxRequirements": {
+                      "weight": {
+                        "unit": "KG",
+                        "minimum": 1,
+                        "maximum": 25
+                      }
+                    },
+                    "shippingRequirements": [
+                      {
+                        "solution": "USE_YOUR_OWN_CARRIER",
+                        "modes": [
+                          "FREIGHT_LTL",
+                          "GROUND_SMALL_PARCEL"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "boxPackingMethods": [
+                      "MANUAL_PROCESS",
+                      "BARCODE_2D"
+                    ],
+                    "boxRequirements": {
+                      "weight": {
+                        "unit": "KG",
+                        "minimum": 1,
+                        "maximum": 15
+                      }
+                    },
+                    "shippingRequirements": [
+                      {
+                        "solution": "USE_YOUR_OWN_CARRIER",
+                        "modes": [
+                          "FREIGHT_LTL",
+                          "GROUND_SMALL_PARCEL"
+                        ]
+                      },
+                      {
+                        "solution": "AMAZON_PARTNERED_CARRIER",
+                        "modes": [
+                          "GROUND_SMALL_PARCEL"
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "pagination": {
+              "nextToken": "nextPaginationToken"
+            }
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested inbound plan does not exist."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "listPackingGroupItems": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingGroups/{packingGroupId}/items",
+      "body": null,
+      "query": [
+        "pageSize",
+        "paginationToken"
+      ],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "packingGroupId": "pg1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "items": [
+              {
+                "quantity": 5,
+                "prepInstructions": [
+                  {
+                    "prepType": "ITEM_POLYBAGGING",
+                    "prepOwner": "AMAZON",
+                    "fee": {
+                      "code": "USD",
+                      "amount": 10
+                    }
+                  }
+                ],
+                "msku": "msku",
+                "asin": "asin",
+                "fnsku": "fnsku",
+                "labelOwner": "AMAZON"
+              }
+            ],
+            "pagination": {
+              "nextToken": "nextPaginationToken"
+            }
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "packingGroupId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested packingGroupId does not exist for the specified inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "confirmPackingOption": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingOptions/{packingOptionId}/confirmation",
+      "body": null,
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "packingOptionId": "po1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "packingOptionId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested packingOptionId does not exist for the given inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "setPackingInformation": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/packingInformation",
+      "body": "SetPackingInformationRequest",
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "packageGroupings": [
+                {
+                  "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+                  "packingGroupId": "pg1234abcd-1234-abcd-5678-1234abcd5678",
+                  "boxes": [
+                    {
+                      "items": [
+                        {
+                          "msku": "msku",
+                          "quantity": 5,
+                          "expiration": "2024-01-01",
+                          "prepOwner": "AMAZON",
+                          "labelOwner": "AMAZON",
+                          "manufacturingLotCode": "manufacturingLotCode"
+                        }
+                      ],
+                      "contentInformationSource": "BOX_CONTENT_PROVIDED",
+                      "weight": {
+                        "unit": "KG",
+                        "value": 5.5
+                      },
+                      "dimensions": {
+                        "unitOfMeasurement": "CM",
+                        "length": 3,
+                        "width": 4,
+                        "height": 5
+                      },
+                      "quantity": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "packageGroupings": [
+                {
+                  "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+                  "packingGroupId": "bad234abcd-1234-abcd-5678-1234abcd5678",
+                  "boxes": [
+                    {
+                      "items": [
+                        {
+                          "msku": "msku",
+                          "quantity": 5,
+                          "expiration": "2024-01-01",
+                          "prepOwner": "AMAZON",
+                          "labelOwner": "AMAZON",
+                          "manufacturingLotCode": "manufacturingLotCode"
+                        }
+                      ],
+                      "contentInformationSource": "BOX_CONTENT_PROVIDED",
+                      "weight": {
+                        "unit": "KG",
+                        "value": 5.5
+                      },
+                      "dimensions": {
+                        "unitOfMeasurement": "CM",
+                        "length": 3,
+                        "width": 4,
+                        "height": 5
+                      },
+                      "quantity": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested packingGroupId does not exist for the specified inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "generatePlacementOptions": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions",
+      "body": "GeneratePlacementOptionsRequest",
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "customPlacement": [
+                {
+                  "warehouseId": "warehouseId",
+                  "items": [
+                    {
+                      "msku": "msku",
+                      "prepOwner": "AMAZON",
+                      "labelOwner": "AMAZON",
+                      "quantity": 2,
+                      "expiration": "2024-01-01",
+                      "manufacturingLotCode": "lotCode"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "customPlacement": [
+                {
+                  "warehouseId": "badWarehouseId",
+                  "items": [
+                    {
+                      "msku": "msku",
+                      "prepOwner": "AMAZON",
+                      "labelOwner": "AMAZON",
+                      "quantity": 2,
+                      "expiration": "2024-01-01",
+                      "manufacturingLotCode": "lotCode"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The inbound plan is not in a valid state to generate placement options."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "listPlacementOptions": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions",
+      "body": null,
+      "query": [
+        "pageSize",
+        "paginationToken"
+      ],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "placementOptions": [
+              {
+                "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678",
+                "status": "OFFERED",
+                "fees": [
+                  {
+                    "value": {
+                      "code": "USD",
+                      "amount": 1
+                    },
+                    "type": "FEE",
+                    "target": "Placement Services",
+                    "description": "description"
+                  }
+                ],
+                "discounts": [
+                  {
+                    "value": {
+                      "code": "USD",
+                      "amount": 1
+                    },
+                    "type": "DISCOUNT",
+                    "target": "Placement Services",
+                    "description": "description"
+                  }
+                ],
+                "expiration": "2024-01-01T00:00:00.000Z",
+                "shipmentIds": [
+                  "sh1234abcd-1234-abcd-5678-1234abcd5678"
+                ]
+              }
+            ],
+            "pagination": {
+              "nextToken": "nextPaginationToken"
+            }
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested inbound plan does not exist."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "confirmPlacementOption": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/placementOptions/{placementOptionId}/confirmation",
+      "body": null,
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "placementOptionId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested placementOptionId does not exist for the given inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "getShipment": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}",
+      "body": null,
+      "query": [],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678",
+            "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+            "shipmentConfirmationId": "FBA1234ABCD",
+            "amazonReferenceId": "amazonReferenceId",
+            "selectedTransportationOptionId": "to1234abcd-1234-abcd-5678-1234abcd5678",
+            "selectedDeliveryWindow": {
+              "startDate": "2024-01-01T00:00:00.000Z",
+              "endDate": "2024-01-01T06:00:00.000Z",
+              "editableUntil": "2024-01-01T06:00:00.000Z",
+              "availabilityType": "AVAILABLE",
+              "deliveryWindowOptionId": "dw1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "name": "FBA (10/02/2023 20:07)-ABC1",
+            "source": {
+              "sourceType": "SELLER_FACILITY",
+              "address": {
+                "name": "name",
+                "companyName": "Acme",
+                "addressLine1": "123 example street",
+                "addressLine2": "Unit 102",
+                "city": "Toronto",
+                "countryCode": "CA",
+                "stateOrProvinceCode": "ON",
+                "postalCode": "M1M1M1",
+                "phoneNumber": "1234567890",
+                "email": "email@email.com"
+              }
+            },
+            "destination": {
+              "destinationType": "AMAZON_WAREHOUSE",
+              "address": {
+                "name": "name",
+                "companyName": "Acme",
+                "addressLine1": "123 example street",
+                "addressLine2": "Unit 102",
+                "city": "Toronto",
+                "countryCode": "CA",
+                "stateOrProvinceCode": "ON",
+                "postalCode": "M1M1M1",
+                "phoneNumber": "1234567890",
+                "email": "email@email.com"
+              },
+              "warehouseId": "YYZ5"
+            },
+            "dates": {
+              "readyToShipWindow": {
+                "start": "2024-01-01T00:00Z",
+                "end": "2024-01-08T00:00Z",
+                "editableUntil": "2024-01-07T00:00Z"
+              }
+            },
+            "status": "WORKING",
+            "trackingDetails": {
+              "spdTrackingDetail": {
+                "spdTrackingItems": [
+                  {
+                    "boxId": "boxId",
+                    "trackingId": "trackingId",
+                    "trackingNumberValidationStatus": "VALIDATED"
+                  }
+                ]
+              },
+              "ltlTrackingDetail": {
+                "freightBillNumber": [
+                  "freightBillNumber1"
+                ],
+                "billOfLadingNumber": "billOfLadingNumber"
+              }
+            },
+            "freightInformation": {
+              "freightClass": "FC_50",
+              "declaredValue": {
+                "code": "USD",
+                "amount": 500
+              }
+            },
+            "contactInformation": {
+              "name": "name",
+              "phoneNumber": "1234567890",
+              "email": "email@email.com"
+            },
+            "selfShipAppointmentDetails": [
+              {
+                "appointmentId": 1,
+                "appointmentSlotTime": {
+                  "startTime": "2024-01-01T00:00:00.000Z",
+                  "endTime": "2024-01-01T00:00:00.000Z"
+                },
+                "appointmentStatus": "appointmentStatus"
+              }
+            ]
+          }
+        },
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "inboundPlanId": "wfotherbcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "shotherbcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678",
+            "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+            "shipmentConfirmationId": "FBA1234ABCD",
+            "amazonReferenceId": "amazonReferenceId",
+            "selectedTransportationOptionId": "to1234abcd-1234-abcd-5678-1234abcd5678",
+            "selectedDeliveryWindow": {
+              "startDate": "2024-01-01T00:00:00.000Z",
+              "endDate": "2024-01-01T06:00:00.000Z",
+              "editableUntil": "2024-01-01T06:00:00.000Z",
+              "availabilityType": "AVAILABLE",
+              "deliveryWindowOptionId": "dw1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "name": "FBA (10/02/2023 20:07)-ABC1",
+            "source": {
+              "sourceType": "SELLER_FACILITY",
+              "address": {
+                "name": "name",
+                "companyName": "TheCompany",
+                "addressLine1": "1111 street name",
+                "addressLine2": "Apartment 12B",
+                "city": "Ann Arbor",
+                "districtOrCounty": "Washtenaw",
+                "stateOrProvinceCode": "MI",
+                "postalCode": "11564",
+                "countryCode": "US",
+                "phoneNumber": "1234567890",
+                "email": "email@email.com"
+              }
+            },
+            "destination": {
+              "destinationType": "AMAZON_WAREHOUSE",
+              "address": {
+                "name": "name",
+                "companyName": "TheCompany",
+                "addressLine1": "1111 street name",
+                "addressLine2": "Apartment 12B",
+                "city": "Ann Arbor",
+                "districtOrCounty": "Washtenaw",
+                "stateOrProvinceCode": "MI",
+                "postalCode": "11564",
+                "countryCode": "US",
+                "phoneNumber": "1234567890",
+                "email": "email@email.com"
+              },
+              "warehouseId": "ABE2"
+            },
+            "dates": {
+              "readyToShipWindow": {
+                "start": "2024-01-01T00:00Z",
+                "end": "2024-01-08T00:00Z",
+                "editableUntil": "2024-01-07T00:00Z"
+              }
+            },
+            "status": "WORKING",
+            "trackingDetails": {
+              "spdTrackingDetail": {
+                "spdTrackingItems": [
+                  {
+                    "boxId": "boxId",
+                    "trackingId": "trackingId",
+                    "trackingNumberValidationStatus": "VALIDATED"
+                  }
+                ]
+              },
+              "ltlTrackingDetail": {
+                "freightBillNumber": [
+                  "freightBillNumber1"
+                ],
+                "billOfLadingNumber": "billOfLadingNumber"
+              }
+            },
+            "freightInformation": {
+              "freightClass": "FC_50",
+              "declaredValue": {
+                "code": "USD",
+                "amount": 500
+              }
+            },
+            "contactInformation": {
+              "name": "name",
+              "phoneNumber": "1234567890",
+              "email": "email@email.com"
+            },
+            "selfShipAppointmentDetails": [
+              {
+                "appointmentId": 1,
+                "appointmentSlotTime": {
+                  "startTime": "2024-01-01T00:00:00.000Z",
+                  "endTime": "2024-01-01T00:00:00.000Z"
+                },
+                "appointmentStatus": "appointmentStatus"
+              }
+            ]
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested shipment does not exist for the provided inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "listShipmentItems": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/items",
+      "body": null,
+      "query": [
+        "pageSize",
+        "paginationToken"
+      ],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "items": [
+              {
+                "quantity": 5,
+                "expiration": "2024-01-01",
+                "manufacturingLotCode": "manufacturingLotCode",
+                "prepInstructions": [
+                  {
+                    "prepType": "ITEM_POLYBAGGING",
+                    "prepOwner": "AMAZON",
+                    "fee": {
+                      "code": "USD",
+                      "amount": 10
+                    }
+                  }
+                ],
+                "msku": "msku",
+                "asin": "asin",
+                "fnsku": "fnsku",
+                "labelOwner": "AMAZON"
+              }
+            ],
+            "pagination": {
+              "nextToken": "nextPaginationToken"
+            }
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wfbad4abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 1,
+              "paginationToken": ""
+            },
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested inbound plan does not exist."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "listShipmentBoxes": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/boxes",
+      "body": null,
+      "query": [
+        "pageSize",
+        "paginationToken"
+      ],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "boxes": [
+              {
+                "packageId": "pk1234abcd-1234-abcd-5678-1234abcd5678",
+                "weight": {
+                  "unit": "KG",
+                  "value": 5.5
+                },
+                "dimensions": {
+                  "unitOfMeasurement": "CM",
+                  "length": 3,
+                  "width": 4,
+                  "height": 5
+                },
+                "quantity": 2,
+                "boxId": "boxId",
+                "templateName": "templateName",
+                "items": [
+                  {
+                    "quantity": 5,
+                    "expiration": "2024-01-01",
+                    "manufacturingLotCode": "manufacturingLotCode",
+                    "prepInstructions": [
+                      {
+                        "prepType": "ITEM_POLYBAGGING",
+                        "prepOwner": "AMAZON",
+                        "fee": {
+                          "code": "USD",
+                          "amount": 10
+                        }
+                      }
+                    ],
+                    "msku": "msku",
+                    "asin": "asin",
+                    "fnsku": "fnsku",
+                    "labelOwner": "AMAZON"
+                  }
+                ],
+                "destinationRegion": {
+                  "countryCode": "US",
+                  "state": "CA",
+                  "warehouseId": "ABC1"
+                },
+                "contentInformationSource": "BOX_CONTENT_PROVIDED",
+                "externalContainerIdentifier": "001962990007752988",
+                "externalContainerIdentifierType": "SSCC"
+              }
+            ],
+            "pagination": {
+              "nextToken": "nextPaginationToken"
+            }
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "bad234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested inboundPlanId does not exist."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "generateTransportationOptions": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions",
+      "body": "GenerateTransportationOptionsRequest",
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentTransportationConfigurations": [
+                {
+                  "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+                  "readyToShipWindow": {
+                    "start": "2024-01-01T00:00Z"
+                  },
+                  "contactInformation": {
+                    "name": "name",
+                    "phoneNumber": "1234567890",
+                    "email": "email@email.com"
+                  },
+                  "freightInformation": {
+                    "freightClass": "FC_50",
+                    "declaredValue": {
+                      "code": "USD",
+                      "amount": 500
+                    }
+                  },
+                  "pallets": [
+                    {
+                      "stackability": "STACKABLE",
+                      "weight": {
+                        "unit": "KG",
+                        "value": 5.5
+                      },
+                      "dimensions": {
+                        "unitOfMeasurement": "CM",
+                        "length": 3,
+                        "width": 4,
+                        "height": 5
+                      },
+                      "quantity": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentTransportationConfigurations": [
+                {
+                  "shipmentId": "bad234abcd-1234-abcd-5678-1234abcd5678",
+                  "readyToShipWindow": {
+                    "start": "2024-01-01T00:00Z"
+                  },
+                  "contactInformation": {
+                    "name": "name",
+                    "phoneNumber": "1234567890",
+                    "email": "email@email.com"
+                  },
+                  "freightInformation": {
+                    "freightClass": "FC_50",
+                    "declaredValue": {
+                      "code": "USD",
+                      "amount": 500
+                    }
+                  },
+                  "pallets": [
+                    {
+                      "stackability": "STACKABLE",
+                      "weight": {
+                        "unit": "KG",
+                        "value": 5.5
+                      },
+                      "dimensions": {
+                        "unitOfMeasurement": "CM",
+                        "length": 3,
+                        "width": 4,
+                        "height": 5
+                      },
+                      "quantity": 2
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested shipmentId does not exist under the provided placement option."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "listTransportationOptions": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions",
+      "body": null,
+      "query": [
+        "pageSize",
+        "paginationToken",
+        "placementOptionId",
+        "shipmentId"
+      ],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "transportationOptions": [
+              {
+                "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+                "transportationOptionId": "to1234abcd-1234-abcd-5678-1234abcd5678",
+                "shippingSolution": "AMAZON_PARTNERED_CARRIER",
+                "carrier": {
+                  "name": "name",
+                  "alphaCode": "USPS"
+                },
+                "shippingMode": "GROUND_SMALL_PARCEL",
+                "quote": {
+                  "cost": {
+                    "code": "USD",
+                    "amount": 500
+                  },
+                  "voidableUntil": "2024-01-01T00:00:00.000Z",
+                  "expiration": "2024-01-01T00:00:00.000Z"
+                },
+                "carrierAppointment": {
+                  "startTime": "2024-01-01T00:00:00.000Z",
+                  "endTime": "2024-01-02T00:00:00.000Z"
+                },
+                "preconditions": [
+                  "CONFIRMED_DELIVERY_WINDOW"
+                ]
+              }
+            ],
+            "pagination": {
+              "nextToken": "nextPaginationToken"
+            }
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "bad234abcd-1234-abcd-5678-1234abcd5678",
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested shipmentId does not exist for the specified inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "confirmTransportationOptions": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/transportationOptions/confirmation",
+      "body": "ConfirmTransportationOptionsRequest",
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "transportationSelections": [
+                {
+                  "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+                  "transportationOptionId": "to1234abcd-1234-abcd-5678-1234abcd5678",
+                  "contactInformation": {
+                    "name": "name",
+                    "phoneNumber": "1234567890",
+                    "email": "email@email.com"
+                  }
+                }
+              ]
+            }
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wfbad4abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "transportationSelections": [
+                {
+                  "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+                  "transportationOptionId": "bad234abcd-1234-abcd-5678-1234abcd5678",
+                  "contactInformation": {
+                    "name": "name",
+                    "phoneNumber": "1234567890",
+                    "email": "email@email.com"
+                  }
+                }
+              ]
+            }
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested transportationOptionId does not exist under the associated shipment."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "generateDeliveryWindowOptions": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions",
+      "body": null,
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The provided shipmentId is not valid for the specified inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "listDeliveryWindowOptions": {
+      "method": "GET",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions",
+      "body": null,
+      "query": [
+        "pageSize",
+        "paginationToken"
+      ],
+      "examples": [
+        {
+          "status": 200,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "deliveryWindowOptions": [
+              {
+                "deliveryWindowOptionId": "dw1234abcd-1234-abcd-5678-1234abcd5678",
+                "startDate": "2024-01-01T00:00:00.000Z",
+                "endDate": "2024-01-01T06:00:00.000Z",
+                "availabilityType": "AVAILABLE",
+                "validUntil": "2024-01-01T06:00:00.000Z"
+              }
+            ],
+            "pagination": {
+              "nextToken": "nextPaginationToken"
+            }
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {
+              "pageSize": 2,
+              "paginationToken": "paginationToken"
+            },
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested shipmentId does not exist for the specified inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "confirmDeliveryWindowOptions": {
+      "method": "POST",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/deliveryWindowOptions/{deliveryWindowOptionId}/confirmation",
+      "body": null,
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+              "deliveryWindowOptionId": "dw1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "bad234abcd-1234-abcd-5678-1234abcd5678",
+              "deliveryWindowOptionId": "dw1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": null
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested shipmentId does not exist under the associated inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "updateShipmentTrackingDetails": {
+      "method": "PUT",
+      "path": "/inbound/fba/2024-03-20/inboundPlans/{inboundPlanId}/shipments/{shipmentId}/trackingDetails",
+      "body": "UpdateShipmentTrackingDetailsRequest",
+      "query": [],
+      "examples": [
+        {
+          "status": 202,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "trackingDetails": {
+                "ltlTrackingDetail": {
+                  "freightBillNumber": [
+                    "freightBillNumber1"
+                  ],
+                  "billOfLadingNumber": "billOfLadingNumber"
+                },
+                "spdTrackingDetail": {
+                  "spdTrackingItems": [
+                    {
+                      "boxId": "boxId",
+                      "trackingId": "trackingId"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "response": {
+            "operationId": "1234abcd-1234-abcd-5678-1234abcd5678"
+          }
+        },
+        {
+          "status": 400,
+          "request": {
+            "path": {
+              "inboundPlanId": "wf1234abcd-1234-abcd-5678-1234abcd5678",
+              "shipmentId": "bad234abcd-1234-abcd-5678-1234abcd5678"
+            },
+            "query": {},
+            "body": {
+              "trackingDetails": {
+                "ltlTrackingDetail": {
+                  "freightBillNumber": [
+                    "freightBillNumber1"
+                  ],
+                  "billOfLadingNumber": "billOfLadingNumber"
+                },
+                "spdTrackingDetail": {
+                  "spdTrackingItems": [
+                    {
+                      "boxId": "boxId",
+                      "trackingId": "trackingId"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "response": {
+            "errors": [
+              {
+                "code": "BadRequest",
+                "message": "The requested shipmentId does not exist for the specified inbound plan."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "schemas": {
+    "AddressInput": {
+      "required": [
+        "addressLine1",
+        "city",
+        "countryCode",
+        "name",
+        "phoneNumber",
+        "postalCode"
+      ],
+      "refs": {},
+      "enums": {}
+    },
+    "BoxInput": {
+      "required": [
+        "contentInformationSource",
+        "dimensions",
+        "quantity",
+        "weight"
+      ],
+      "refs": {
+        "dimensions": {
+          "def": "Dimensions",
+          "array": false
+        },
+        "items": {
+          "def": "ItemInput",
+          "array": true
+        },
+        "weight": {
+          "def": "Weight",
+          "array": false
+        }
+      },
+      "enums": {
+        "contentInformationSource": [
+          "BOX_CONTENT_PROVIDED",
+          "MANUAL_PROCESS",
+          "BARCODE_2D"
+        ]
+      }
+    },
+    "ConfirmTransportationOptionsRequest": {
+      "required": [
+        "transportationSelections"
+      ],
+      "refs": {
+        "transportationSelections": {
+          "def": "TransportationSelection",
+          "array": true
+        }
+      },
+      "enums": {}
+    },
+    "ContactInformation": {
+      "required": [
+        "name",
+        "phoneNumber"
+      ],
+      "refs": {},
+      "enums": {}
+    },
+    "CreateInboundPlanRequest": {
+      "required": [
+        "destinationMarketplaces",
+        "items",
+        "sourceAddress"
+      ],
+      "refs": {
+        "items": {
+          "def": "ItemInput",
+          "array": true
+        },
+        "sourceAddress": {
+          "def": "AddressInput",
+          "array": false
+        }
+      },
+      "enums": {}
+    },
+    "Currency": {
+      "required": [
+        "amount",
+        "code"
+      ],
+      "refs": {},
+      "enums": {}
+    },
+    "CustomPlacementInput": {
+      "required": [
+        "items",
+        "warehouseId"
+      ],
+      "refs": {
+        "items": {
+          "def": "ItemInput",
+          "array": true
+        }
+      },
+      "enums": {}
+    },
+    "Dimensions": {
+      "required": [
+        "height",
+        "length",
+        "unitOfMeasurement",
+        "width"
+      ],
+      "refs": {},
+      "enums": {
+        "unitOfMeasurement": [
+          "IN",
+          "CM"
+        ]
+      }
+    },
+    "FreightInformation": {
+      "required": [],
+      "refs": {
+        "declaredValue": {
+          "def": "Currency",
+          "array": false
+        }
+      },
+      "enums": {}
+    },
+    "GeneratePlacementOptionsRequest": {
+      "required": [],
+      "refs": {
+        "customPlacement": {
+          "def": "CustomPlacementInput",
+          "array": true
+        }
+      },
+      "enums": {}
+    },
+    "GenerateTransportationOptionsRequest": {
+      "required": [
+        "placementOptionId",
+        "shipmentTransportationConfigurations"
+      ],
+      "refs": {
+        "shipmentTransportationConfigurations": {
+          "def": "ShipmentTransportationConfiguration",
+          "array": true
+        }
+      },
+      "enums": {}
+    },
+    "ItemInput": {
+      "required": [
+        "labelOwner",
+        "msku",
+        "prepOwner",
+        "quantity"
+      ],
+      "refs": {},
+      "enums": {
+        "labelOwner": [
+          "AMAZON",
+          "SELLER",
+          "NONE"
+        ],
+        "prepOwner": [
+          "AMAZON",
+          "SELLER",
+          "NONE"
+        ]
+      }
+    },
+    "LtlTrackingDetailInput": {
+      "required": [
+        "freightBillNumber"
+      ],
+      "refs": {},
+      "enums": {}
+    },
+    "PackageGroupingInput": {
+      "required": [
+        "boxes"
+      ],
+      "refs": {
+        "boxes": {
+          "def": "BoxInput",
+          "array": true
+        }
+      },
+      "enums": {}
+    },
+    "PalletInput": {
+      "required": [
+        "quantity"
+      ],
+      "refs": {
+        "dimensions": {
+          "def": "Dimensions",
+          "array": false
+        },
+        "weight": {
+          "def": "Weight",
+          "array": false
+        }
+      },
+      "enums": {
+        "stackability": [
+          "STACKABLE",
+          "NON_STACKABLE"
+        ]
+      }
+    },
+    "SetPackingInformationRequest": {
+      "required": [
+        "packageGroupings"
+      ],
+      "refs": {
+        "packageGroupings": {
+          "def": "PackageGroupingInput",
+          "array": true
+        }
+      },
+      "enums": {}
+    },
+    "ShipmentTransportationConfiguration": {
+      "required": [
+        "readyToShipWindow",
+        "shipmentId"
+      ],
+      "refs": {
+        "contactInformation": {
+          "def": "ContactInformation",
+          "array": false
+        },
+        "freightInformation": {
+          "def": "FreightInformation",
+          "array": false
+        },
+        "pallets": {
+          "def": "PalletInput",
+          "array": true
+        },
+        "readyToShipWindow": {
+          "def": "WindowInput",
+          "array": false
+        }
+      },
+      "enums": {}
+    },
+    "SpdTrackingDetailInput": {
+      "required": [
+        "spdTrackingItems"
+      ],
+      "refs": {
+        "spdTrackingItems": {
+          "def": "SpdTrackingItemInput",
+          "array": true
+        }
+      },
+      "enums": {}
+    },
+    "SpdTrackingItemInput": {
+      "required": [
+        "boxId",
+        "trackingId"
+      ],
+      "refs": {},
+      "enums": {}
+    },
+    "TrackingDetailsInput": {
+      "required": [],
+      "refs": {
+        "ltlTrackingDetail": {
+          "def": "LtlTrackingDetailInput",
+          "array": false
+        },
+        "spdTrackingDetail": {
+          "def": "SpdTrackingDetailInput",
+          "array": false
+        }
+      },
+      "enums": {}
+    },
+    "TransportationSelection": {
+      "required": [
+        "shipmentId",
+        "transportationOptionId"
+      ],
+      "refs": {
+        "contactInformation": {
+          "def": "ContactInformation",
+          "array": false
+        }
+      },
+      "enums": {}
+    },
+    "UpdateShipmentTrackingDetailsRequest": {
+      "required": [
+        "trackingDetails"
+      ],
+      "refs": {
+        "trackingDetails": {
+          "def": "TrackingDetailsInput",
+          "array": false
+        }
+      },
+      "enums": {}
+    },
+    "Weight": {
+      "required": [
+        "unit",
+        "value"
+      ],
+      "refs": {},
+      "enums": {
+        "unit": [
+          "LB",
+          "KG"
+        ]
+      }
+    },
+    "WindowInput": {
+      "required": [
+        "start"
+      ],
+      "refs": {},
+      "enums": {}
+    }
+  },
+  "v0": {
+    "getLabels": {
+      "method": "GET",
+      "path": "/fba/inbound/v0/shipments/{shipmentId}/labels",
+      "source": "Hand-written from the v0 model (GetLabelsResponse → payload: LabelDownloadURL { DownloadURL }); not an Amazon sandbox pair.",
+      "request": {
+        "path": {
+          "shipmentId": "FBA1234ABCD"
+        },
+        "query": {
+          "PageType": "PackageLabel_A4_4",
+          "LabelType": "UNIQUE",
+          "PackageLabelsToPrint": "FBA1234ABCDU000001,FBA1234ABCDU000002"
+        }
+      },
+      "response": {
+        "payload": {
+          "DownloadURL": "https://example.com/fba-inbound/labels/FBA1234ABCD.pdf"
+        }
+      }
+    }
+  },
+  "eu": {
+    "note": "Amazon's examples with EU values: amazon.it, EUR, CM/KG, own carrier first, two placement options (1 shipment to MXP5; 2 shipments to MXP5 + FCO1), one FAILED operation. Shapes unchanged.",
+    "marketplaceId": "APJ6JRA9NG5V4",
+    "currency": "EUR",
+    "fulfilmentCentres": [
+      {
+        "warehouseId": "MXP5",
+        "city": "Castel San Giovanni",
+        "stateOrProvinceCode": "PC",
+        "postalCode": "29015"
+      },
+      {
+        "warehouseId": "FCO1",
+        "city": "Passo Corese",
+        "stateOrProvinceCode": "RI",
+        "postalCode": "02032"
+      }
+    ],
+    "packingOption": {
+      "packingOptionId": "po1234abcd-1234-abcd-5678-1234abcd5678",
+      "packingGroups": [
+        "pg1234abcd-1234-abcd-5678-1234abcd5678"
+      ],
+      "fees": [
+        {
+          "value": {
+            "code": "EUR",
+            "amount": 0
+          },
+          "type": "FEE",
+          "target": "Placement Services",
+          "description": "description"
+        }
+      ],
+      "discounts": [],
+      "expiration": "2024-01-01T00:00:00.000Z",
+      "status": "OFFERED",
+      "supportedShippingConfigurations": [
+        {
+          "shippingSolution": "USE_YOUR_OWN_CARRIER",
+          "shippingMode": "GROUND_SMALL_PARCEL"
+        },
+        {
+          "shippingSolution": "AMAZON_PARTNERED_CARRIER",
+          "shippingMode": "GROUND_SMALL_PARCEL"
+        }
+      ],
+      "supportedConfigurations": [
+        {
+          "boxPackingMethods": [
+            "BOX_CONTENT_PROVIDED"
+          ],
+          "boxRequirements": {
+            "weight": {
+              "unit": "KG",
+              "minimum": 0.15,
+              "maximum": 23
+            }
+          },
+          "shippingRequirements": [
+            {
+              "solution": "USE_YOUR_OWN_CARRIER",
+              "modes": [
+                "FREIGHT_LTL",
+                "GROUND_SMALL_PARCEL"
+              ]
+            }
+          ]
+        },
+        {
+          "boxPackingMethods": [
+            "MANUAL_PROCESS",
+            "BARCODE_2D"
+          ],
+          "boxRequirements": {
+            "weight": {
+              "unit": "KG",
+              "minimum": 0.15,
+              "maximum": 23
+            }
+          },
+          "shippingRequirements": [
+            {
+              "solution": "USE_YOUR_OWN_CARRIER",
+              "modes": [
+                "FREIGHT_LTL",
+                "GROUND_SMALL_PARCEL"
+              ]
+            },
+            {
+              "solution": "AMAZON_PARTNERED_CARRIER",
+              "modes": [
+                "GROUND_SMALL_PARCEL"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "placementOption": {
+      "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678",
+      "status": "OFFERED",
+      "fees": [
+        {
+          "value": {
+            "code": "EUR",
+            "amount": 0
+          },
+          "type": "FEE",
+          "target": "Placement Services",
+          "description": "description"
+        }
+      ],
+      "discounts": [],
+      "expiration": "2024-01-01T00:00:00.000Z",
+      "shipmentIds": [
+        "sh1234abcd-1234-abcd-5678-1234abcd5678"
+      ]
+    },
+    "placementShipmentCounts": [
+      1,
+      2
+    ],
+    "shipment": {
+      "placementOptionId": "pl1234abcd-1234-abcd-5678-1234abcd5678",
+      "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+      "shipmentConfirmationId": "FBA1234ABCD",
+      "amazonReferenceId": "amazonReferenceId",
+      "selectedTransportationOptionId": "to1234abcd-1234-abcd-5678-1234abcd5678",
+      "selectedDeliveryWindow": {
+        "startDate": "2024-01-01T00:00:00.000Z",
+        "endDate": "2024-01-01T06:00:00.000Z",
+        "editableUntil": "2024-01-01T06:00:00.000Z",
+        "availabilityType": "AVAILABLE",
+        "deliveryWindowOptionId": "dw1234abcd-1234-abcd-5678-1234abcd5678"
+      },
+      "name": "FBA (10/02/2023 20:07)-ABC1",
+      "source": {
+        "sourceType": "SELLER_FACILITY",
+        "address": {
+          "name": "Test Sender",
+          "companyName": "Test Company",
+          "addressLine1": "Via Prova 1",
+          "city": "Testville",
+          "countryCode": "IT",
+          "postalCode": "00000",
+          "phoneNumber": "+390000000000",
+          "email": "ship@example.test"
+        }
+      },
+      "destination": {
+        "destinationType": "AMAZON_WAREHOUSE",
+        "address": {
+          "name": "Amazon MXP5",
+          "companyName": "Amazon",
+          "addressLine1": "123 example street",
+          "addressLine2": "Unit 102",
+          "city": "Castel San Giovanni",
+          "countryCode": "IT",
+          "stateOrProvinceCode": "PC",
+          "postalCode": "29015",
+          "phoneNumber": "1234567890",
+          "email": "email@email.com"
+        },
+        "warehouseId": "MXP5"
+      },
+      "dates": {
+        "readyToShipWindow": {
+          "start": "2024-01-01T00:00Z",
+          "end": "2024-01-08T00:00Z",
+          "editableUntil": "2024-01-07T00:00Z"
+        }
+      },
+      "status": "WORKING",
+      "trackingDetails": {
+        "spdTrackingDetail": {
+          "spdTrackingItems": [
+            {
+              "boxId": "boxId",
+              "trackingId": "trackingId",
+              "trackingNumberValidationStatus": "VALIDATED"
+            }
+          ]
+        }
+      },
+      "freightInformation": {
+        "freightClass": "FC_50",
+        "declaredValue": {
+          "code": "EUR",
+          "amount": 500
+        }
+      },
+      "contactInformation": {
+        "name": "name",
+        "phoneNumber": "1234567890",
+        "email": "email@email.com"
+      }
+    },
+    "transportationOptions": {
+      "ownCarrier": {
+        "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+        "transportationOptionId": "to1234abcd-1234-abcd-5678-1234abcd5678",
+        "shippingSolution": "USE_YOUR_OWN_CARRIER",
+        "carrier": {
+          "name": "UPS",
+          "alphaCode": "UPSN"
+        },
+        "shippingMode": "GROUND_SMALL_PARCEL",
+        "preconditions": [
+          "CONFIRMED_DELIVERY_WINDOW"
+        ]
+      },
+      "partnered": {
+        "shipmentId": "sh1234abcd-1234-abcd-5678-1234abcd5678",
+        "transportationOptionId": "to1234abcd-1234-abcd-5678-1234abcd5678",
+        "shippingSolution": "AMAZON_PARTNERED_CARRIER",
+        "carrier": {
+          "name": "UPS",
+          "alphaCode": "UPSN"
+        },
+        "shippingMode": "GROUND_SMALL_PARCEL",
+        "quote": {
+          "cost": {
+            "code": "EUR",
+            "amount": 24.5
+          },
+          "voidableUntil": "2024-01-01T00:00:00.000Z",
+          "expiration": "2024-01-01T00:00:00.000Z"
+        },
+        "preconditions": []
+      }
+    },
+    "deliveryWindowOption": {
+      "deliveryWindowOptionId": "dw1234abcd-1234-abcd-5678-1234abcd5678",
+      "startDate": "2024-01-01T00:00:00.000Z",
+      "endDate": "2024-01-01T06:00:00.000Z",
+      "availabilityType": "AVAILABLE",
+      "validUntil": "2024-01-01T06:00:00.000Z"
+    },
+    "box": {
+      "packageId": "pk1234abcd-1234-abcd-5678-1234abcd5678",
+      "weight": {
+        "unit": "KG",
+        "value": 5.5
+      },
+      "dimensions": {
+        "unitOfMeasurement": "CM",
+        "length": 3,
+        "width": 4,
+        "height": 5
+      },
+      "quantity": 1,
+      "boxId": "boxId",
+      "templateName": "templateName",
+      "items": [
+        {
+          "quantity": 5,
+          "expiration": "2024-01-01",
+          "manufacturingLotCode": "manufacturingLotCode",
+          "prepInstructions": [
+            {
+              "prepType": "ITEM_POLYBAGGING",
+              "prepOwner": "AMAZON",
+              "fee": {
+                "code": "USD",
+                "amount": 10
+              }
+            }
+          ],
+          "msku": "msku",
+          "asin": "asin",
+          "fnsku": "fnsku",
+          "labelOwner": "AMAZON"
+        }
+      ],
+      "destinationRegion": {
+        "countryCode": "IT",
+        "warehouseId": "MXP5"
+      },
+      "contentInformationSource": "BOX_CONTENT_PROVIDED"
+    },
+    "failedOperation": {
+      "operationId": "a440f2ff-cb08-416a-99e1-67a04eee88f6",
+      "operation": "generatePlacementOptions",
+      "operationStatus": "FAILED",
+      "operationProblems": [
+        {
+          "code": "DimensionMismatch",
+          "message": "The dimension does not match what is expected.",
+          "details": "",
+          "severity": "ERROR"
+        }
+      ]
+    }
+  }
+}

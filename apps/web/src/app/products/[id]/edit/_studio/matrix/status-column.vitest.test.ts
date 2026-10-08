@@ -142,7 +142,7 @@ describe('where the Matrix places a market\'s Status column', () => {
   const statusColumnOf = vi.fn((coord: MatrixCoordinate) => ({ colId: matrixStatusColId(coord.key), headerName: 'Status' }))
   const groups = buildMatrixColumns({
     coordinates: coords, cellsOf: () => null, rowOf: () => null, tracker: new CellSaveTracker(), sheetColumns: [], locale: 'it', market: 'IT',
-    axesRef: { current: [] }, rowMenuRef: { current: () => [] }, masterHeldReason: null, onJump: () => undefined, onPickFulfilment: () => undefined,
+    axesRef: { current: [] }, rowMenuRef: { current: () => [] }, onPickFulfilment: () => undefined,
     rowsRef: { current: [] as StudioRow[] }, statusColumnOf,
   }) as Array<{ groupId?: string; children?: Array<{ colId?: string }> }>
   const idsOf = (key: string) => groups.find((g) => g.groupId === `grp-${key}`)!.children!.map((c) => c.colId)
@@ -150,7 +150,8 @@ describe('where the Matrix places a market\'s Status column', () => {
   it('right after Listing, on every listed market and alias — never on a region\'s inventory or an unlisted market', () => {
     expect(idsOf('AMAZON:IT')).toEqual(['AMAZON:IT.listing', 'AMAZON:IT.status', 'AMAZON:IT.fulfilment', 'AMAZON:IT.price'])
     expect(idsOf('EBAY:IT')).toEqual(['EBAY:IT.listing', 'EBAY:IT.status', 'EBAY:IT.syncMode', 'EBAY:IT.price'])
-    expect(idsOf('EBAY:IT#al-1')).toEqual(['EBAY:IT#al-1.listing', 'EBAY:IT#al-1.status', 'EBAY:IT#al-1.syncQty'])
+    // An alias that carries a quantity has its From column ("Sells from", Step 2) before Qty; Status stays after Listing.
+    expect(idsOf('EBAY:IT#al-1')).toEqual(['EBAY:IT#al-1.listing', 'EBAY:IT#al-1.status', 'EBAY:IT#al-1.from', 'EBAY:IT#al-1.syncQty'])
     expect(idsOf('AMAZON:EU')).not.toContain('AMAZON:EU.status')
     expect(idsOf('ETSY:GLOBAL')).toEqual([matrixColId('ETSY:GLOBAL', 'notListed')])
     expect(statusColumnOf.mock.calls.map(([c]) => c.key)).toEqual(['AMAZON:IT', 'EBAY:IT', 'EBAY:IT#al-1'])

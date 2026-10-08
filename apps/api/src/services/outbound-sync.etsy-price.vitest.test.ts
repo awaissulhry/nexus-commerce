@@ -22,6 +22,8 @@ vi.mock('../db.js', () => ({ default: {
   // The stock ledger a stock row's send-time ceiling reads (stock-pool/sync-ledgers.ts): warehouse rows, no pool.
   stockLevel: { findMany: m.levels },
   stockPoolLink: { findMany: vi.fn(async () => []) },
+  // Step 2 — the loader reads the business's "Sells from" lists (none here).
+  syncChannelPolicy: { findMany: async () => [] },
   // The account's Etsy order-import activation (EtsyReceiptIngest), which a stock row needs.
   etsyReceiptIngest: { findUnique: m.ingest },
   // S5 — an extra listing's own SKU (read only for a row with an alias).

@@ -72,6 +72,13 @@
       "why": "Marks that one kept pool hold released, lender only, after the borrower's order is cancelled or refunded."
     }
   },
+  "caseFiles": {
+    "apps/api/src/services/stock/stock-cases.service.ts": {
+      "writes": 11,
+      "lock": true,
+      "why": "The one owner of case counts, case sizes and case packs (Step 3 cases; several case sizes per SKU, 2026-10-08): keepCasesInTx clamps or moves a level's sealed cases per size (update, create; the caller — applyStockMovementInTx, the import chunk, the pool settle — holds the product lock), setCasesInTx sets absolute counts per size (upsert, after lockProductStock), setCasePacks replaces a SKU's case sizes and owners (productCaseSize deleteMany, update, createMany — a removed size's counts go with it by cascade — and productPackage deleteMany / upsert, after lockProductStock), setFbaOwnersIfUnset (Step 4 Send to FBA) writes only the null prep/label owner columns (a createMany and two updateMany, after lockProductStock)."
+    }
+  },
   "orderMovementFiles": {
     "apps/api/src/services/stock-level.service.ts": {
       "writes": 4,

@@ -204,7 +204,7 @@ export function matrixColumnDef<T>(kind: MatrixCellKind, opts: MatrixColumnOptio
     cellDataType: false,
     /* `nds-cell-is-locked` is a RULE below, never in `cellClass`: a class present in both is added
        and removed in the same paint (VT.2's measured mechanism). */
-    cellClass: (p) => ['nds-ag-cell', numeric ? 'nds-ag-num' : '', editable(data(p)) ? 'nds-cell-is-editable' : ''].filter(Boolean).join(' '),
+    cellClass: (p) => ['nds-ag-cell', numeric ? 'nds-ag-num' : '', kind === 'listing' ? 'nds-matrix-listing' : '', editable(data(p)) ? 'nds-cell-is-editable' : ''].filter(Boolean).join(' '),
     cellClassRules: classRules,
     cellRenderer: MATRIX_CELL_RENDERERS[kind],
     cellRendererParams: rendererParams,

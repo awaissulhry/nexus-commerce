@@ -57,7 +57,8 @@ interface SubmitListingPayloadOptions {
   accountId?: string
   /**
    * Amazon fulfilment conversion (2026-10-07): the `FulfilmentConversion` row an operator-confirmed FBA → FBM run created
-   * for THIS patch. The FBA hard block lets the merchant quantity through only against it (`conversionLetsThrough`).
+   * for THIS patch. The FBA hard block lets its own patch (the merchant quantity + the delete of the Amazon record) through
+   * only against it (`conversionLetsThrough`).
    */
   conversionId?: string
   /** P0b 2026-07-20 — REQUIRED query param for patchListingsItem. Omitting it
@@ -381,19 +382,26 @@ export class AmazonSpApiClient {
 
   /**
    * FBA-flip hard block — last line of defense, independent of every upstream
-   * guard. Scans a Listings PATCH body for the dangerous shape (a
-   * fulfillment_availability with fulfillment_channel_code:'DEFAULT' AND a
-   * quantity) and, if the SKU is actually FBA (FBA stock on hand or
-   * Product.fulfillmentMethod==='FBA'), strips those patches so they never reach
-   * Amazon — that payload is exactly what flips an FBA offer to FBM. Fail-closed:
-   * a lookup error blocks. A genuinely-FBM SKU (no FBA evidence) is left untouched
-   * so its merchant quantity still syncs. Returns the (possibly filtered) payload.
+   * guard. Scans a Listings PATCH body for the three dangerous shapes on
+   * `/attributes/fulfillment_availability`:
+   *   - a merchant record (`DEFAULT`) WITH a quantity — for an FBA SKU (FBA stock
+   *     on hand or Product.fulfillmentMethod==='FBA'; a lookup error counts as
+   *     FBA) that is exactly what flips the offer to FBM (the June 2026 incident);
+   *   - a `delete` of an Amazon record (`AMAZON_EU` …) — what takes the offer off
+   *     FBA; refused for every SKU;
+   *   - a quantity under an Amazon code — the FBA quantity, which Nexus never
+   *     writes; refused always, no exception.
+   * It strips those patches so they never reach Amazon and keeps every other one;
+   * a genuinely-FBM SKU's merchant quantity still syncs. Returns the (possibly
+   * filtered) payload.
    *
-   * The ONE exception (Amazon fulfilment conversion, 2026-10-07): a call carrying a
-   * `conversionId` whose row is an operator-confirmed FBA → FBM conversion of this
-   * SKU and marketplace with this quantity, SENDING, under 10 minutes old, while no
-   * FBA units are mirrored now (`conversionLetsThrough`). Every other case strips
-   * exactly as before; a failed lookup strips.
+   * The ONE exception (Amazon fulfilment conversion, 2026-10-07; add + delete since
+   * 2026-10-08): a call carrying a `conversionId` whose row is an operator-confirmed
+   * FBA → FBM conversion of this SKU and marketplace with this quantity and EXACTLY
+   * these fulfilment patches (its recorded `payload`), SENDING, under 10 minutes
+   * old, while no FBA units are mirrored now (`conversionLetsThrough`). A conversion
+   * call the check refuses loses ALL its fulfilment patches — never a lone
+   * `delete AMAZON_EU`, never a lone merchant quantity. A failed lookup strips.
    */
   private async guardFbaQtyFlip(
     sku: string,
@@ -402,66 +410,87 @@ export class AmazonSpApiClient {
   ): Promise<{ payload: any; blocked: boolean }> {
     const patches = payload?.patches
     if (!Array.isArray(patches)) return { payload, blocked: false }
-    const isFlip = (p: any): boolean => {
-      if (p?.path !== '/attributes/fulfillment_availability') return false
-      const vals = Array.isArray(p.value) ? p.value : []
-      return vals.some(
-        (v: any) =>
-          String(v?.fulfillment_channel_code ?? '').toUpperCase() === 'DEFAULT' &&
-          v?.quantity != null,
-      )
-    }
-    if (!patches.some(isFlip)) return { payload, blocked: false }
+    const FULFILMENT = '/attributes/fulfillment_availability'
+    const entries = (p: any): any[] => (Array.isArray(p?.value) ? p.value : [])
+    const codeOf = (v: any): string => String(v?.fulfillment_channel_code ?? '').trim().toUpperCase()
+    const isDelete = (p: any): boolean => String(p?.op ?? '').toLowerCase() === 'delete'
+    const isFulfilment = (p: any): boolean => p?.path === FULFILMENT
+    const isFlip = (p: any): boolean =>
+      isFulfilment(p) && entries(p).some((v: any) => codeOf(v) === 'DEFAULT' && v?.quantity != null)
+    const dropsFba = (p: any): boolean => isFulfilment(p) && isDelete(p) && entries(p).some((v: any) => codeOf(v).startsWith('AMAZON'))
+    const writesFbaQty = (p: any): boolean =>
+      isFulfilment(p) && !isDelete(p) && entries(p).some((v: any) => codeOf(v).startsWith('AMAZON') && v?.quantity != null)
+    if (!patches.some((p: any) => isFlip(p) || dropsFba(p) || writesFbaQty(p))) return { payload, blocked: false }
 
-    // Dangerous shape present — is this SKU actually FBA?
+    // 1 — the FBA quantity is Amazon's: never sent, whatever the call.
+    let kept: any[] = patches
+    if (kept.some(writesFbaQty)) {
+      kept = kept.filter((p: any) => !writesFbaQty(p))
+      logger.error('🔴 FBA HARD BLOCK — refused a quantity under an Amazon fulfilment code (the FBA quantity is Amazon-managed)', { critical: true, sku })
+    }
+    const done = (list: any[], blocked: boolean) => ({ payload: list === patches ? payload : { ...payload, patches: list }, blocked })
+    const flips = kept.some(isFlip)
+    const drops = kept.some(dropsFba)
+    if (!flips && !drops) return done(kept, kept !== patches)
+
+    // 2 — a merchant quantity is dangerous only for an FBA SKU: is this one?
     let isFba = false
-    try {
-      const product = await prisma.product.findUnique({
-        where: { workspace_sku: workspaceKey({ sku: sku }) },
-        select: { id: true, fulfillmentMethod: true },
-      })
-      if (!product) return { payload, blocked: false } // unknown SKU — upstream guards own it
-      if (String(product.fulfillmentMethod ?? '').toUpperCase() === 'FBA') {
-        isFba = true
-      } else {
-        const agg = await prisma.stockLevel.aggregate({
-          where: { productId: product.id, location: { code: 'AMAZON-EU-FBA' } },
-          _sum: { quantity: true },
+    if (flips) {
+      try {
+        const product = await prisma.product.findUnique({
+          where: { workspace_sku: workspaceKey({ sku: sku }) },
+          select: { id: true, fulfillmentMethod: true },
         })
-        if ((agg._sum.quantity ?? 0) > 0) isFba = true
+        // An unknown SKU: upstream guards own its merchant quantity (as before).
+        if (product && String(product.fulfillmentMethod ?? '').toUpperCase() === 'FBA') {
+          isFba = true
+        } else if (product) {
+          const agg = await prisma.stockLevel.aggregate({
+            where: { productId: product.id, location: { code: 'AMAZON-EU-FBA' } },
+            _sum: { quantity: true },
+          })
+          if ((agg._sum.quantity ?? 0) > 0) isFba = true
+        }
+      } catch (err) {
+        // Can't determine → fail closed: a missed merchant-qty sync is benign; a
+        // flip to FBM is catastrophic.
+        isFba = true
+        logger.warn('guardFbaQtyFlip: FBA lookup failed — failing closed (blocking)', {
+          sku,
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
-    } catch (err) {
-      // Can't determine → fail closed: a missed merchant-qty sync is benign; a
-      // flip to FBM is catastrophic.
-      isFba = true
-      logger.warn('guardFbaQtyFlip: FBA lookup failed — failing closed (blocking)', {
-        sku,
-        error: err instanceof Error ? err.message : String(err),
-      })
     }
-    if (!isFba) return { payload, blocked: false } // genuine FBM — allow merchant qty
+    // A genuine FBM SKU's merchant quantity, with no Amazon record removed: allowed.
+    if (!drops && !isFba) return done(kept, kept !== patches)
 
+    // 3 — the one exception: an operator-confirmed conversion's own patch.
     if (conversion?.conversionId) {
-      const quantities = patches.filter(isFlip).flatMap((p: any) => (Array.isArray(p.value) ? p.value : [])
-        .filter((v: any) => String(v?.fulfillment_channel_code ?? '').toUpperCase() === 'DEFAULT' && v?.quantity != null)
+      const quantities = kept.filter(isFlip).flatMap((p: any) => entries(p)
+        .filter((v: any) => codeOf(v) === 'DEFAULT' && v?.quantity != null)
         .map((v: any) => Number(v.quantity)))
       let verdict: { pass: boolean; reason: string }
       try {
         const { conversionLetsThrough } = await import('../services/pim/fulfilment-conversion-guard.js')
-        verdict = await conversionLetsThrough(conversion.conversionId, { sku, marketplaceId: conversion.marketplaceId, quantities })
+        verdict = await conversionLetsThrough(conversion.conversionId, { sku, marketplaceId: conversion.marketplaceId, quantities, patches: kept.filter(isFulfilment) })
       } catch (err) {
         verdict = { pass: false, reason: `the conversion check failed (${err instanceof Error ? err.message : String(err)})` }
       }
       if (verdict.pass) {
-        logger.warn('FBA guard: an operator-confirmed FBA → FBM conversion sends its merchant quantity', { sku, marketplaceId: conversion.marketplaceId, conversionId: conversion.conversionId, quantities })
-        return { payload, blocked: false }
+        logger.warn('FBA guard: an operator-confirmed FBA → FBM conversion sends its own patch (merchant quantity + delete of the Amazon record)', { sku, marketplaceId: conversion.marketplaceId, conversionId: conversion.conversionId, quantities })
+        return done(kept, kept !== patches)
       }
-      logger.error('FBA guard: a conversion patch was NOT let through — stripped as every other merchant quantity for an FBA SKU', { sku, conversionId: conversion.conversionId, reason: verdict.reason })
+      logger.error('FBA guard: a conversion patch was NOT let through — every fulfilment patch of the call is stripped', { sku, conversionId: conversion.conversionId, reason: verdict.reason })
     }
 
-    const safePatches = patches.filter((p: any) => !isFlip(p))
+    // 4 — strip. A conversion call loses every fulfilment patch (never half a conversion); any other call loses the
+    // Amazon-record deletes, and the merchant quantity when the SKU is FBA.
+    const strip = conversion?.conversionId
+      ? isFulfilment
+      : (p: any) => dropsFba(p) || (isFba && isFlip(p))
+    const safePatches = kept.filter((p: any) => !strip(p))
     logger.error(
-      '🔴 FBA HARD BLOCK — refused a merchant DEFAULT+quantity fulfillment_availability for an FBA SKU (would flip the offer to FBM)',
+      '🔴 FBA HARD BLOCK — refused a merchant DEFAULT+quantity or a delete of the Amazon fulfilment record outside an operator-confirmed conversion (would flip the offer between FBA and FBM)',
       { critical: true, sku, strippedPatches: patches.length - safePatches.length },
     )
     return { payload: { ...payload, patches: safePatches }, blocked: true }

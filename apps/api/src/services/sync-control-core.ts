@@ -14,10 +14,23 @@
  *   3. Listing pause  → PAUSED (syncPaused / membership followPool=false)
  *   4. Pinned         → PINNED at the pinned value (no pool derivation;
  *                       memberships: pinnedQuantity, shared stock step 3)
- *   5. Follow         → routed-ledger math:
- *        routed rows = WAREHOUSE rows whose location routes to this
- *        channel+market (StockLocation.syncRoutes; empty list = routes
- *        everywhere) ∩ listing sourceLocationCodes (empty = no override).
+ *   5. Follow         → routed-ledger math over the rows `sellsFrom` picks
+ *        ("Sells from", Step 2 — the first rule that has a list decides):
+ *          a. the listing's own sourceLocationCodes → exactly those rows, in
+ *             that order (they REPLACE the routes; before Step 2 they only
+ *             narrowed them);
+ *          b. the business's list for this channel+market
+ *             (SyncChannelPolicy.sourceLocationCodes, carried on the ledger
+ *             as `marketSources`) → exactly those rows, in that order;
+ *          c. otherwise the WAREHOUSE rows whose location routes here
+ *             (StockLocation.syncRoutes; empty list = routes everywhere), in
+ *             the ledger's order (the loader's sale order: the default
+ *             warehouse first, then by code) — the same rows, so the same
+ *             numbers, as before Step 2.
+ *        A pooled product's ledger carries no lists and its listings' codes are
+ *        blanked (`ledgerInputs`): the lent rows route everywhere.
+ *        The order never changes the quantity (sum only); it is the order a
+ *        sale takes stock in.
  *        ZERO routed rows → UNCOUNTED (never manufacture a zero — the P0
  *        guard applied per-listing to the ROUTED set: stock counted only in
  *        unrouted locations still means "unknown here"), except for a product
@@ -69,9 +82,27 @@ declare const SYNC_LEDGER: unique symbol
  * scripts/check-sync-ledger-source.mjs keeps it to the loader, the stock import's own planned rows,
  * and tests.
  */
-export type SyncLedger = ReadonlyArray<RoutedLedgerRow> & { readonly [SYNC_LEDGER]: true }
-export function syncLedgerOf(rows: ReadonlyArray<RoutedLedgerRow>): SyncLedger {
-  return rows as SyncLedger
+export type SyncLedger = ReadonlyArray<RoutedLedgerRow> & {
+  readonly [SYNC_LEDGER]: true
+  /**
+   * Step 2 — "Sells from": the business's ordered list of StockLocation codes per channel+market
+   * (key `marketSourceKey`), from SyncChannelPolicy.sourceLocationCodes rows that name no account.
+   * Only non-empty lists are kept. Absent on a pooled product's ledger (the pool's rows are the lender's).
+   */
+  readonly marketSources?: MarketSources
+}
+
+/** Step 2 — `marketSourceKey(channel, market)` → the ordered StockLocation codes that market sells from. */
+export type MarketSources = ReadonlyMap<string, readonly string[]>
+
+export function syncLedgerOf(rows: ReadonlyArray<RoutedLedgerRow>, opts?: { marketSources?: MarketSources }): SyncLedger {
+  const marketSources = opts?.marketSources
+  if (!marketSources || marketSources.size === 0) return rows as SyncLedger
+  // A copy, so the caller's array is never changed; the lists ride along non-enumerable, so a ledger still
+  // compares (and serialises) as the plain array of its rows.
+  const ledger = [...rows]
+  Object.defineProperty(ledger, 'marketSources', { value: marketSources, enumerable: false })
+  return ledger as unknown as SyncLedger
 }
 
 export interface SyncControlInputs {
@@ -86,7 +117,7 @@ export interface SyncControlInputs {
   /** Listing's current pinned value (ChannelListing.quantity when pinned). */
   pinnedQuantity: number | null
   stockBuffer: number
-  /** Listing-level routing override; empty = no override (all routed locations). */
+  /** The listing's own "Sells from" list, in sale order; empty = follows the market's list, else the routes (`sellsFrom`). */
   sourceLocationCodes: string[]
   channelPolicy?: { pushesPaused: boolean } | null
   ledger: SyncLedger
@@ -177,9 +208,63 @@ export function validateServesTokens(
   return out
 }
 
+/** Step 2 — the key of one market's "Sells from" list: `CHANNEL:MARKET` ('EBAY_IT' → 'EBAY:IT'). */
+export function marketSourceKey(channel: string, marketplace: string): string {
+  return `${norm(channel)}:${normalizeMarket(channel, marketplace)}`
+}
+
+/** Where a listing's rows come from: its own list, its market's list, or the locations' routes. */
+export type SellsFromOrigin = 'product' | 'market' | 'routes'
+
+export interface SellsFrom {
+  origin: SellsFromOrigin
+  /** The chosen StockLocation codes in sale order (a list as stored, without repeats; for 'routes' the routed rows' codes). */
+  codes: string[]
+  /** The ledger rows those codes pick, in sale order. Empty = nothing routed here (UNCOUNTED). */
+  rows: RoutedLedgerRow[]
+}
+
+/** A list as the router reads it: trimmed, no blanks, no repeats (the first one keeps its place). */
+function listOf(codes: ReadonlyArray<string> | null | undefined): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of codes ?? []) {
+    const code = String(raw ?? '').trim()
+    if (!code || seen.has(norm(code))) continue
+    seen.add(norm(code))
+    out.push(code)
+  }
+  return out
+}
+
 /**
- * P4.3d — the ledger rows routed to one channel+market: the listing's own source
- * pins first, then each location's `syncRoutes`.
+ * Step 2 — "Sells from": THE choice of the rows one listing (or shared membership) sells from, and their sale order.
+ * The first rule with a list decides: the listing's own codes ('product'), then the business's list for the market
+ * ('market'), then each location's syncRoutes ('routes', empty = everywhere — exactly the pre-Step-2 behaviour).
+ * A list picks exactly the rows of its codes, in its order, whatever their routes say. The quantity is the sum over
+ * `rows`; the order is the order a sale takes stock in.
+ */
+export function sellsFrom(i: {
+  ledger: SyncLedger
+  channel: string
+  marketplace: string
+  sourceLocationCodes: string[]
+}): SellsFrom {
+  const pick = (origin: SellsFromOrigin, codes: string[]): SellsFrom => ({
+    origin,
+    codes,
+    rows: codes.flatMap((code) => i.ledger.filter((row) => norm(row.locationCode) === norm(code))),
+  })
+  const own = listOf(i.sourceLocationCodes)
+  if (own.length > 0) return pick('product', own)
+  const market = listOf(i.ledger.marketSources?.get(marketSourceKey(i.channel, i.marketplace)))
+  if (market.length > 0) return pick('market', market)
+  const rows = i.ledger.filter((row) => locationServes(row.syncRoutes, i.channel, i.marketplace))
+  return { origin: 'routes', codes: listOf(rows.map((row) => row.locationCode)), rows }
+}
+
+/**
+ * P4.3d — the ledger rows routed to one channel+market: `sellsFrom(i).rows`.
  *
  * 🔴 This is THE routing filter, and it has two readers on purpose.
  * `resolveIntendedQuantity` derives the quantity a listing may promise from it,
@@ -195,12 +280,7 @@ export function routedLedgerRows(i: {
   marketplace: string
   sourceLocationCodes: string[]
 }): ReadonlyArray<RoutedLedgerRow> {
-  const override = new Set(i.sourceLocationCodes.map(norm).filter(Boolean))
-  return i.ledger.filter((row) => {
-    if (!locationServes(row.syncRoutes, i.channel, i.marketplace)) return false
-    if (override.size > 0 && !override.has(norm(row.locationCode))) return false
-    return true
-  })
+  return sellsFrom(i).rows
 }
 
 /**

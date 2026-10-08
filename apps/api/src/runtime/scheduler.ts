@@ -86,6 +86,7 @@ import { startSavedViewAlertsCron } from "../jobs/saved-view-alerts.job.js";
 import { startSyncDriftDetectionCron } from "../jobs/sync-drift-detection.job.js";
 import { startStockPushHealCron } from "../jobs/stock-push-heal.job.js";
 import { startFbaStatusPollCron } from "../jobs/fba-status-poll.job.js";
+import { startFbaInboundResumeCron } from "../jobs/fba-inbound-resume.job.js";
 import { startForecastAccuracyCron } from "../jobs/forecast-accuracy.job.js";
 import { startAutoPoCron } from "../jobs/auto-po-replenishment.job.js";
 import { startLeadTimeStatsCron } from "../jobs/lead-time-stats.job.js";
@@ -681,6 +682,10 @@ export async function startScheduler(): Promise<void> {
   if (process.env.NEXUS_ENABLE_FBA_STATUS_POLL_CRON !== '0') {
     startFbaStatusPollCron();
   }
+
+  // Step 4 Send to FBA — every minute, queue the plans whose next look is due (an Amazon operation still running, a
+  // hold, a run that stopped mid-way, tracking to send). Off with NEXUS_FBA_INBOUND_RESUME=0 (checked inside).
+  startFbaInboundResumeCron();
 
   // R.1 — forecast accuracy (MAPE) cron. Daily at 04:00 UTC, after
   // sales-ingest (02:00) + forecast (03:30). For each (sku, channel,

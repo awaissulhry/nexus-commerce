@@ -1155,6 +1155,14 @@ CREATE TABLE "FBAShipment" (
     "destinationFC" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "planRowId" TEXT,
+    "amazonShipmentId" TEXT,
+    "sourceLocationId" TEXT,
+    "boxes" JSONB,
+    "transport" JSONB,
+    "tracking" JSONB,
+    "shippedAt" TIMESTAMP(3),
+    "shippedBy" TEXT,
 
     CONSTRAINT "FBAShipment_pkey" PRIMARY KEY ("id")
 );
@@ -4357,6 +4365,50 @@ CREATE TABLE "StockBinQuantity" (
 );
 
 -- CreateTable
+CREATE TABLE "ProductPackage" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "fbaPrepOwner" TEXT,
+    "fbaLabelOwner" TEXT,
+    "updatedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ProductPackage_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ProductCaseSize" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "unitsPerCase" INTEGER NOT NULL,
+    "caseLengthCm" DECIMAL(6,1),
+    "caseWidthCm" DECIMAL(6,1),
+    "caseHeightCm" DECIMAL(6,1),
+    "caseWeightKg" DECIMAL(6,2),
+    "updatedBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ProductCaseSize_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "StockCaseCount" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "stockLevelId" TEXT NOT NULL,
+    "caseSizeId" TEXT NOT NULL,
+    "cases" INTEGER NOT NULL DEFAULT 0,
+    "updatedBy" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "StockCaseCount_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "LotRecall" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -5593,8 +5645,43 @@ CREATE TABLE "FbaInboundPlanV2" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "lastError" TEXT,
     "lastErrorAt" TIMESTAMP(3),
+    "channelConnectionId" TEXT,
+    "marketplaceId" TEXT,
+    "sourceLocationId" TEXT,
+    "sourceAddress" JSONB,
+    "readyToShipOn" TIMESTAMP(3),
+    "mixedBox" JSONB,
+    "packing" JSONB,
+    "options" JSONB,
+    "choice" JSONB,
+    "steps" JSONB,
+    "nextCheckAt" TIMESTAMP(3),
+    "confirmedBy" TEXT,
+    "confirmedAt" TIMESTAMP(3),
+    "cancelledAt" TIMESTAMP(3),
+    "source" TEXT,
 
     CONSTRAINT "FbaInboundPlanV2_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "FbaInboundPlanLine" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "planRowId" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "msku" TEXT,
+    "quantity" INTEGER NOT NULL,
+    "caseCounts" JSONB NOT NULL DEFAULT '[]',
+    "looseUnits" INTEGER NOT NULL DEFAULT 0,
+    "prepOwner" TEXT,
+    "labelOwner" TEXT,
+    "reservationId" TEXT,
+    "shippedQuantity" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FbaInboundPlanLine_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -8417,6 +8504,7 @@ CREATE TABLE "SyncChannelPolicy" (
     "pushesPaused" BOOLEAN NOT NULL DEFAULT false,
     "newListingDefaultMode" TEXT NOT NULL DEFAULT 'FOLLOW',
     "newListingModeSetAt" TIMESTAMP(3),
+    "sourceLocationCodes" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "channelConnectionId" TEXT,
@@ -10883,6 +10971,9 @@ CREATE INDEX "StockLog_workspaceId_idx" ON "StockLog"("workspaceId");
 CREATE INDEX "FBAShipment_workspaceId_idx" ON "FBAShipment"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "FBAShipment_planRowId_idx" ON "FBAShipment"("planRowId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "FBAShipment_workspace_shipmentId_key" ON "FBAShipment"("workspaceId", "shipmentId");
 
 -- CreateIndex
@@ -12626,6 +12717,27 @@ CREATE INDEX "StockBinQuantity_workspaceId_idx" ON "StockBinQuantity"("workspace
 CREATE UNIQUE INDEX "StockBinQuantity_stockLevelId_binId_key" ON "StockBinQuantity"("workspaceId", "stockLevelId", "binId");
 
 -- CreateIndex
+CREATE INDEX "ProductPackage_workspaceId_idx" ON "ProductPackage"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProductPackage_productId_key" ON "ProductPackage"("workspaceId", "productId");
+
+-- CreateIndex
+CREATE INDEX "ProductCaseSize_workspaceId_idx" ON "ProductCaseSize"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProductCaseSize_productId_unitsPerCase_key" ON "ProductCaseSize"("workspaceId", "productId", "unitsPerCase");
+
+-- CreateIndex
+CREATE INDEX "StockCaseCount_workspaceId_idx" ON "StockCaseCount"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "StockCaseCount_caseSizeId_idx" ON "StockCaseCount"("caseSizeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "StockCaseCount_stockLevelId_caseSizeId_key" ON "StockCaseCount"("workspaceId", "stockLevelId", "caseSizeId");
+
+-- CreateIndex
 CREATE INDEX "LotRecall_lotId_idx" ON "LotRecall"("lotId");
 
 -- CreateIndex
@@ -13298,6 +13410,9 @@ CREATE INDEX "FbaInboundPlanV2_planId_idx" ON "FbaInboundPlanV2"("planId");
 CREATE INDEX "FbaInboundPlanV2_status_idx" ON "FbaInboundPlanV2"("status");
 
 -- CreateIndex
+CREATE INDEX "FbaInboundPlanV2_status_nextCheckAt_idx" ON "FbaInboundPlanV2"("status", "nextCheckAt");
+
+-- CreateIndex
 CREATE INDEX "FbaInboundPlanV2_inboundShipmentId_idx" ON "FbaInboundPlanV2"("inboundShipmentId");
 
 -- CreateIndex
@@ -13308,6 +13423,15 @@ CREATE INDEX "FbaInboundPlanV2_workspaceId_idx" ON "FbaInboundPlanV2"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "FbaInboundPlanV2_workspace_planId_key" ON "FbaInboundPlanV2"("workspaceId", "planId");
+
+-- CreateIndex
+CREATE INDEX "FbaInboundPlanLine_workspaceId_idx" ON "FbaInboundPlanLine"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "FbaInboundPlanLine_productId_idx" ON "FbaInboundPlanLine"("productId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FbaInboundPlanLine_planRowId_productId_key" ON "FbaInboundPlanLine"("workspaceId", "planRowId", "productId");
 
 -- CreateIndex
 CREATE INDEX "Tag_workspaceId_idx" ON "Tag"("workspaceId");
@@ -16094,6 +16218,18 @@ ALTER TABLE "StockBinQuantity" ADD CONSTRAINT "StockBinQuantity_stockLevelId_fke
 ALTER TABLE "StockBinQuantity" ADD CONSTRAINT "StockBinQuantity_binId_fkey" FOREIGN KEY ("binId") REFERENCES "StockBin"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProductPackage" ADD CONSTRAINT "ProductPackage_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProductCaseSize" ADD CONSTRAINT "ProductCaseSize_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StockCaseCount" ADD CONSTRAINT "StockCaseCount_stockLevelId_fkey" FOREIGN KEY ("stockLevelId") REFERENCES "StockLevel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StockCaseCount" ADD CONSTRAINT "StockCaseCount_caseSizeId_fkey" FOREIGN KEY ("caseSizeId") REFERENCES "ProductCaseSize"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "LotRecall" ADD CONSTRAINT "LotRecall_lotId_fkey" FOREIGN KEY ("lotId") REFERENCES "Lot"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -16248,6 +16384,12 @@ ALTER TABLE "FbaRestockRow" ADD CONSTRAINT "FbaRestockRow_reportId_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "FbaInboundPlanV2" ADD CONSTRAINT "FbaInboundPlanV2_inboundShipmentId_fkey" FOREIGN KEY ("inboundShipmentId") REFERENCES "InboundShipment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FbaInboundPlanLine" ADD CONSTRAINT "FbaInboundPlanLine_planRowId_fkey" FOREIGN KEY ("planRowId") REFERENCES "FbaInboundPlanV2"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FbaInboundPlanLine" ADD CONSTRAINT "FbaInboundPlanLine_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "AssetTag" ADD CONSTRAINT "AssetTag_assetId_fkey" FOREIGN KEY ("assetId") REFERENCES "DigitalAsset"("id") ON DELETE CASCADE ON UPDATE CASCADE;

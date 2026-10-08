@@ -145,6 +145,11 @@ export interface FBAInventoryRow {
   fnsku: string | null
   fulfillableQuantity: number  // what Amazon will actually ship today
   inboundQuantity: number      // working + shipped + receiving (in-flight to FC)
+  /** Step 4 — Amazon's three inbound buckets, kept apart (their sum is `inboundQuantity`). The sweep stores them as
+   *  the SKU's INBOUND `FbaInventoryDetail` row (the Matrix "Inbound +N"); none of them is ever FBA stock. */
+  inboundWorkingQuantity: number    // in a shipment plan Amazon has not seen leave yet
+  inboundShippedQuantity: number    // on the way to the fulfilment centre
+  inboundReceivingQuantity: number  // arrived, being received
   reservedQuantity: number     // pending orders + transshipment + FC processing
   unfulfillableQuantity: number
   totalQuantity: number        // sum of all buckets — equals SP-API field
@@ -1159,10 +1164,11 @@ export class AmazonService {
           if (!s.sellerSku) continue
           const det = s.inventoryDetails ?? {}
           const fulfillable = det.fulfillableQuantity ?? 0
-          const inbound =
-            (det.inboundWorkingQuantity ?? 0) +
-            (det.inboundShippedQuantity ?? 0) +
-            (det.inboundReceivingQuantity ?? 0)
+          // Step 4 — the three inbound buckets stay apart (the Matrix shows them); `inbound` is still their sum.
+          const working = det.inboundWorkingQuantity ?? 0
+          const shipped = det.inboundShippedQuantity ?? 0
+          const receiving = det.inboundReceivingQuantity ?? 0
+          const inbound = working + shipped + receiving
           const reserved = det.reservedQuantity?.totalReservedQuantity ?? 0
           // unfulfillableQuantity in the SP-API model is sometimes an
           // object with totalUnfulfillableQuantity, sometimes a number.
@@ -1176,6 +1182,9 @@ export class AmazonService {
           if (existing) {
             existing.fulfillableQuantity += fulfillable
             existing.inboundQuantity += inbound
+            existing.inboundWorkingQuantity += working
+            existing.inboundShippedQuantity += shipped
+            existing.inboundReceivingQuantity += receiving
             existing.reservedQuantity += reserved
             existing.unfulfillableQuantity += unfulfillable
             existing.totalQuantity += s.totalQuantity ?? 0
@@ -1194,6 +1203,9 @@ export class AmazonService {
               fnsku: s.fnSku ?? null,
               fulfillableQuantity: fulfillable,
               inboundQuantity: inbound,
+              inboundWorkingQuantity: working,
+              inboundShippedQuantity: shipped,
+              inboundReceivingQuantity: receiving,
               reservedQuantity: reserved,
               unfulfillableQuantity: unfulfillable,
               totalQuantity: s.totalQuantity ?? 0,

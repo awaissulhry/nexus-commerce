@@ -35,6 +35,13 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 
+/**
+ * Step 4 — the `fulfillmentCenterId` of a row that is NOT one fulfilment centre's: the 15-min FBA sweep
+ * (`amazon-inventory.service.ts`) stores Amazon's marketplace-wide inbound per SKU under it (`condition = 'INBOUND'`).
+ * The per-FC readers here skip it, so their buckets stay per FC.
+ */
+export const FBA_ALL_CENTRES = 'ALL'
+
 export interface PanEuRawRow {
   sku: string
   asin?: string
@@ -207,6 +214,8 @@ export async function listPerFcTotals(): Promise<Array<{
   researching: number
 }>> {
   const rows = await prisma.fbaInventoryDetail.findMany({
+    // The sweep's marketplace-wide inbound rows are no fulfilment centre's (Step 4).
+    where: { fulfillmentCenterId: { not: FBA_ALL_CENTRES } },
     select: {
       marketplaceId: true,
       fulfillmentCenterId: true,

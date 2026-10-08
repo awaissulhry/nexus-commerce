@@ -413,6 +413,8 @@ export async function handleOrderCreate(payload: ShopifyWebhookPayload, context?
 
     // S.2.5 — reserve at IT-MAIN. Idempotent: re-runs of the same
     // webhook (Shopify retries on 5xx) skip already-reserved lines.
+    // Step 2 — "Sells from": a new hold goes to the first location of this store's list with enough stock
+    // (picked inside the hold's transaction); IT-MAIN stays the fallback (pooled, nothing routed).
     const itMainId = await resolveLocationByCode('IT-MAIN');
     if (!itMainId) {
       logger.error('[ShopifyWebhooks] IT-MAIN missing — cannot reserve Shopify stock', { shopifyOrderId });
@@ -426,6 +428,7 @@ export async function handleOrderCreate(payload: ShopifyWebhookPayload, context?
             locationId: itMainId,
             quantity: it.quantity,
             actor: 'shopify-webhooks:order-create',
+            sale: { channel: 'SHOPIFY', channelConnectionId: context?.connectionId ?? null },
           });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);

@@ -39,13 +39,6 @@ vi.mock('../../db.js', async () => {
   }
 })
 
-// 08 S13 — Amazon's FBA inbound API is outside: its options (with Amazon's fees, money) come from this stand-in.
-vi.mock('../../clients/amazon-fba-inbound-v2.client.js', () => ({
-  listPackingOptions: vi.fn(async () => ({ packingOptions: [{ packingOptionId: 'TEST-PACK-1', status: 'OFFERED', packingGroups: ['g1'], packingFeatures: [], fees: [{ type: 'FBA_PREP', value: { amount: 4141.41, currencyCode: 'EUR' } }] }] })),
-  listPlacementOptions: vi.fn(async () => ({ placementOptions: [] })),
-  listTransportationOptions: vi.fn(async () => ({ transportationOptions: [] })),
-  createInboundPlan: vi.fn(), getInboundOperation: vi.fn(), confirmPackingOption: vi.fn(), confirmPlacementOption: vi.fn(), confirmTransportationOptions: vi.fn(), getShipmentLabels: vi.fn(),
-}))
 // The live channel reads never leave this machine: channel logins are sealed with the production key, and a test must
 // never reach a marketplace. The Shopify scope of the sheet is not configured here (no Shopify market), so it refuses.
 vi.mock('../live-read/index.js', () => ({
@@ -154,6 +147,7 @@ const REFUSED_WITHOUT_A_CHANNEL: Record<string, string> = {
   'relist-listing': 'a Relist needs an Ended eBay or Shopify listing on its account (listing-lifecycle.tools test)',
   'delete-listing': 'a Delete needs a listing on its account and the channel\'s gate (listing-lifecycle.tools test)',
   'add-photo-from-url': 'it fetches a web link and stores the file (Cloudinary), neither of which this suite has (photos-link.tools test)',
+  'plan-fba-shipment': 'a Send to FBA plan needs an Amazon account selling in the market, a warehouse with its address and the SKU\'s Amazon listing, none of which this seed has (fba-plan-tools test)',
   'set-bid-brain-enrollment': 'a campaign goes LIVE under the bid brain only from the live-write allowlist, which the seeded campaign is not on (bid-brain/live-postgres test)',
 }
 
@@ -505,10 +499,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   'update-inbound-shipment': (ids) => ({ shipmentId: ids.inboundShipmentId, notes: 'Money note' }),
   'set-product-costs': (ids) => ({ costs: [{ productId: ids.productId, costPrice: 4300 }] }),
   'replenishment-action': (ids) => ({ productIds: [ids.productId] }),
-  // 08 S13 — an eBay markdown, tier prices, an FBA plan and its options (dry runs and a mocked Amazon read).
+  // 08 S13 — an eBay markdown, tier prices, an FBA plan and its options (dry runs; Step 4: the options Nexus stored).
   'set-ebay-price-promotion': (ids) => ({ listingIds: [ids.listingId], discountValue: 10 }),
   'set-tier-prices': (ids) => ({ productId: ids.productId, tiers: [{ minQty: 10, price: 17 }] }),
-  'plan-fba-shipment': (ids) => ({ marketplace: 'IT', lines: [{ productId: ids.productId, quantity: 2 }], sourceAddress: { name: 'Money sender', addressLine1: 'Via Test 1', city: 'Testville', stateOrProvinceCode: 'TS', postalCode: '00000', countryCode: 'IT' } }),
+  'plan-fba-shipment': (ids) => ({ marketplace: 'IT', lines: [{ productId: ids.productId, units: 2 }] }),
   'fba-shipment-options': (ids) => ({ planId: ids.planId }),
   // I8 — the seeded listing names no account: nothing is read from a channel here.
   'channel-identity-check': (ids) => ({ productId: ids.productId }),
@@ -927,9 +921,17 @@ async function seedBusiness(workspaceId: string, mark: string): Promise<Seeded> 
         items: { create: [{ productId: product.id, sku: product.sku, quantityExpected: 5, unitCostCents: 3131, purchaseOrderItemId: (await db.purchaseOrderItem.findFirstOrThrow({ where: { purchaseOrderId: purchaseOrder.id } })).id }] },
       },
     })
-    // 08 S13 — the Amazon market an FBA plan goes to, and a plan created at Amazon (its options are read, mocked above).
+    // 08 S13 — the Amazon market an FBA plan goes to, and a Send to FBA plan waiting for a choice: Amazon's options as the
+    // job stored them (Step 4), with Amazon's fees and a carrier quote (money).
     await db.marketplace.create({ data: { channel: 'AMAZON', code: 'IT', name: 'Italy', currency: 'EUR', region: 'EU', language: 'it', languages: ['it'], marketplaceId: 'TEST-MKT-IT' } as never })
-    const fbaPlan = await db.fbaInboundPlanV2.create({ data: { name: `${mark} FBA plan`, planId: `${mark}-PLAN-1`, status: 'ACTIVE', currentStep: 'LIST_PACKING' } })
+    const fbaOptions = {
+      readAt: '2026-10-07T10:00:00.000Z', expiresAt: '2099-01-01T00:00:00.000Z',
+      placements: [{ placementOptionId: 'TEST-PLACE-1', status: 'OFFERED', expiresAt: null,
+        fees: [{ type: 'FEE', target: 'Placement Services', description: null, value: { amount: 4141.41, currency: 'EUR' } }], discounts: [],
+        shipments: [{ shipmentId: 'TEST-SH-1', destinationFc: 'MXP5', destinationTown: null, deliveryWindows: [],
+          transport: [{ transportationOptionId: 'TEST-TR-1', shipmentId: 'TEST-SH-1', carrierName: 'TEST carrier', carrierCode: 'TST', shippingMode: 'GROUND_SMALL_PARCEL', shippingSolution: 'AMAZON_PARTNERED_CARRIER', quote: { cost: { amount: 4242.42, currency: 'EUR' }, expiresAt: null, voidableUntil: null }, preconditions: [] }] }] }],
+    }
+    const fbaPlan = await db.fbaInboundPlanV2.create({ data: { name: `${mark} FBA plan`, planId: `${mark}-PLAN-1`, status: 'WAITING_FOR_CHOICE', currentStep: 'CONFIRM', source: 'matrix', marketplaceId: 'TEST-MKT-IT', options: fbaOptions as never } })
     // MCP full control P9 — a finished bulk price job (19.90 is what it wrote and what is stored), so its undo previews.
     const bulkJob = await db.bulkActionJob.create({
       data: { jobName: `${mark} price rise`, actionType: 'PRICING_UPDATE', targetProductIds: [product.id], targetVariationIds: [], actionPayload: {}, status: 'COMPLETED', totalItems: 1, completedAt: new Date('2026-09-30T08:00:00Z') },

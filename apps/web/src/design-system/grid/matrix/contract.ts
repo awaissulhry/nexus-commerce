@@ -110,6 +110,20 @@ export interface SyncCell {
   routedLocations: readonly string[]
   fbaAtAmazon: number | null
   oversold: boolean
+  /** 2026-10-08: this listing's newest STOCK push failed (the Qty cell's ✗). Null/absent = it did not. */
+  pushFailed?: PushFailure | null
+  /** Amazon EU region cell: the markets' quantities disagree, so the stock push is refused (the Qty cell's ⚠). */
+  euConflict?: string | null
+}
+
+/** The newest push of one lane (stock or price) of a listing, when it FAILED. */
+export interface PushFailure {
+  reason: string
+  at: string | null
+  /** `true` = no retry is left. */
+  final: boolean
+  /** Amazon EU region cell: the markets whose newest stock push failed; `[]` elsewhere. */
+  markets: readonly string[]
 }
 
 export type QueueState = 'sent' | 'queued' | 'sending' | 'failed' | 'dead' | 'paused' | 'never'
@@ -132,6 +146,8 @@ export interface PriceCell {
   clamped: 'floor' | 'ceiling' | null
   /** A product sheet change that goes to Amazon only on Publish; tooltip only (`value: null` = back to the base price). */
   waiting?: { value: number | null } | null
+  /** 2026-10-08: this listing's newest PRICE push failed (the Price cell's ✗). Null/absent = it did not. */
+  pushFailed?: PushFailure | null
 }
 
 export interface SaleCell {
@@ -140,6 +156,20 @@ export interface SaleCell {
   end: string | null
   /** As `PriceCell.waiting`: the saved sale, sent on Publish (`value: null` = remove the sale). Tooltip only. */
   waiting?: { value: number | null; start: string | null; end: string | null } | null
+}
+
+/**
+ * "Sells from" (Step 2, 2026-10-07): which warehouses a coordinate's listing sells from, IN SALE ORDER (the listing shows
+ * the sum; a sale takes stock from the first that has it). Beside the inventory cells, never a `MatrixCellKind`.
+ */
+export interface SourceCell {
+  /** This listing's own choice; `[]` = it follows the market default. */
+  own: readonly string[]
+  marketDefault: readonly string[]
+  defaultOrigin: 'market' | 'routes'
+  effective: ReadonlyArray<{ code: string; available: number }>
+  writable: boolean
+  blockedReason: string | null
 }
 
 /** Everything one row says about one coordinate. */
@@ -155,6 +185,8 @@ export interface MatrixCells {
   sale: SaleCell | null
   writable: Partial<Record<MatrixCellKind, boolean>>
   writeBlockedReason: Partial<Record<MatrixCellKind, string>>
+  /** "Sells from" — on a coordinate whose cells include `syncQty`. */
+  source?: SourceCell | null
 }
 
 /* ── coordinates ────────────────────────────────────────────────────────────────────────────── */
@@ -185,11 +217,13 @@ export interface MatrixCoordinate {
 /* ── writes: one door ───────────────────────────────────────────────────────────────────────── */
 
 export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice'>
+/** What the one door writes: the writable kinds plus "Sells from" (`value`: codes in sale order; `[]` = the market default). */
+export type MatrixDoorKind = MatrixWritableKind | 'source'
 
 export interface MatrixWriteCell {
   rowId: string
   coordinateKey: CoordinateKey
-  cell: MatrixWritableKind
+  cell: MatrixDoorKind
   value: unknown
   expectedVersion: number
   /** The listing the caller saw on this coordinate (`MatrixCells.listingId`); another listing there now is a conflict. */
@@ -203,12 +237,14 @@ export type MatrixVerbId =
   | 'pin-quantity' | 'set-follow' | 'set-buffer'
   | 'pause-sync' | 'resume-sync' | 'push-now' | 'retry-sync'
   | 'set-fulfilment'
+  | 'set-source'
 
 export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'set-price': 'Set price…', 'adjust-prices': 'Adjust prices by %…', 'copy-prices': 'Copy prices from…',
   'pin-quantity': 'Pin quantity…', 'set-follow': 'Set to Follow', 'set-buffer': 'Set buffer…',
   'pause-sync': 'Hold stock sync', 'resume-sync': 'Release stock sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
   'set-fulfilment': 'Set fulfilment…',
+  'set-source': 'Set sells from…',
 }
 
 export interface MatrixVerbTarget { rowId: string; coordinateKey: CoordinateKey }
@@ -223,7 +259,8 @@ export interface VerbChange {
   rowId: string
   sku: string
   coordinateKey: CoordinateKey
-  cell: MatrixCellKind
+  /** `source` = "Sells from" (`set-source`). */
+  cell: MatrixCellKind | 'source'
   from: unknown
   to: unknown
   fromLabel: string
@@ -233,7 +270,8 @@ export interface VerbChange {
 
 export interface VerbRefusal { rowId: string; sku: string; coordinateKey: CoordinateKey; kind: RefusalKind; reason: string }
 
-export type ConfirmLevel = 'none' | 'confirm' | 'type-to-confirm'
+/** 2026-10-08: two levels — the old `confirm` was read by no dialog (the Edit dialog asks only for a typed word). */
+export type ConfirmLevel = 'none' | 'type-to-confirm'
 
 export interface VerbPreview {
   verb: MatrixVerbId

@@ -20,6 +20,8 @@
  * 🔴 Pure types and constants only — no React, no AG, no fetch, no Prisma — so this module is reachable from
  * both workspaces' node-only vitest and from the API's services.
  */
+import type { FbaPlanStatus } from './fba-send.js'
+
 /* ── cells ─────────────────────────────────────────────────────────────────────────────────── */
 
 /** The eight cell kinds a coordinate group may serve. Order = default column order inside a group. */
@@ -125,6 +127,32 @@ export interface SyncCell {
   fbaAtAmazon: number | null
   /** The channel holds more than the pool can back. */
   oversold: boolean
+  /**
+   * 2026-10-08 (Owner: the Sync column folds into Qty): this listing's newest STOCK push failed. Null/absent = it did not
+   * (success shows nothing). Never sent on an Amazon-managed, held or Inactive listing — nothing is pushed there.
+   */
+  pushFailed?: PushFailure | null
+  /**
+   * Amazon EU: the EU markets' quantity settings disagree, so the push guard refuses the stock push (the sentence, whole).
+   * Only on the region inventory cell; null/absent = they agree.
+   */
+  euConflict?: string | null
+}
+
+/**
+ * The newest push of ONE lane (stock or price) of a listing, when it FAILED — the queue row's own outcome, read per lane
+ * (`QUANTITY_UPDATE` · `PRICE_UPDATE`), eBay's shared-stock pushes (saved without a listing id) matched by product, item
+ * and market. Amazon EU's region cell: the markets whose newest stock push failed, the newest failure's words.
+ */
+export interface PushFailure {
+  /** The server's failure sentence. */
+  reason: string
+  /** ISO time the push failed, when known. */
+  at: string | null
+  /** `true` = no retry is left; `false` = it is tried again by itself. */
+  final: boolean
+  /** Amazon EU region cell: the markets whose newest stock push failed. `[]` elsewhere (the cell is one market). */
+  markets: readonly string[]
 }
 
 export type QueueState = 'sent' | 'queued' | 'sending' | 'failed' | 'dead' | 'paused' | 'never'
@@ -156,6 +184,8 @@ export interface PriceCell {
    * cell keeps showing `value`, the live price (`MATRIX_COPY.waitingForPublish`). `value: null` = back to the base price.
    */
   waiting?: { value: number | null } | null
+  /** 2026-10-08: this listing's newest PRICE push failed. Null/absent = it did not (success shows nothing). */
+  pushFailed?: PushFailure | null
 }
 
 export interface SaleCell {
@@ -165,6 +195,26 @@ export interface SaleCell {
   end: string | null
   /** As `PriceCell.waiting`: the saved sale, sent on Publish (`value: null` = remove the sale). Tooltip only. */
   waiting?: { value: number | null; start: string | null; end: string | null } | null
+}
+
+/**
+ * "Sells from" (Step 2, Owner 2026-10-07): which of this business's warehouses a coordinate's listing sells from, IN SALE
+ * ORDER (a sale takes stock from the first that has it; the listing shows the SUM). One per market group — once on the
+ * Amazon EU inventory group, for every EU market. Carried beside the inventory cells, never a `MatrixCellKind` (the Status
+ * column's precedent): the page renders it as the group's From column and writes it through the door as `cell: 'source'`.
+ */
+export interface SourceCell {
+  /** This listing's own choice in sale order; `[]` = it follows the market default. A choice equal to the default is stored `[]`. */
+  own: readonly string[]
+  /** The market's list (`marketSourceKey`), or — when the market has none yet — the active warehouses its routes allow (default first, then by code). */
+  marketDefault: readonly string[]
+  /** `market` = the business set a list for this market; `routes` = none yet, `syncRoutes` decide. */
+  defaultOrigin: 'market' | 'routes'
+  /** What sells now, in sale order, with this SKU's available units per location. */
+  effective: ReadonlyArray<{ code: string; available: number }>
+  writable: boolean
+  /** The sentence when `writable` is false (parent, FBA, shared stock, no `inventory.adjust`); null when writable. */
+  blockedReason: string | null
 }
 
 /** Everything one row says about one coordinate. */
@@ -183,6 +233,8 @@ export interface MatrixCells {
   writable: Partial<Record<MatrixCellKind, boolean>>
   /** The sentence for every `writable: false` the operator can see — never a silent lock. */
   writeBlockedReason: Partial<Record<MatrixCellKind, string>>
+  /** "Sells from" — on a coordinate whose cells include `syncQty` (absent elsewhere and on an older server). */
+  source?: SourceCell | null
 }
 
 /* ── coordinates ────────────────────────────────────────────────────────────────────────────── */
@@ -198,7 +250,7 @@ export interface MatrixCoordinate {
   channel: string
   /** A market code, a region code for `region-inventory`, or `GLOBAL`. */
   market: string
-  /** Strip label — Appendix A: `Amazon · IT`, `Amazon EU · Inventory · IT DE FR ES`, `eBay · IT ①`. */
+  /** Strip label — Appendix A: `Amazon · IT`, `Amazon · EU inventory · IT DE FR ES` (Owner 2026-10-08: one wording, channel first), `eBay · IT ①`. */
   label: string
   region: string | null
   alias: { id: string; label: string; position: number } | null
@@ -243,9 +295,71 @@ export interface MatrixRowRead {
    * `null` = no FBA stock row for this SKU, never `0`; absent = an older server that did not read it.
    */
   fba?: MatrixFbaStock | null
+  /**
+   * Case pack (Step 3, Owner D2 = B; several sizes, Owner 2026-10-08): this SKU's case sizes (units per case, case size
+   * and weight) and who preps and labels for FBA. `null` = none set; absent = an older server that did not read it. A
+   * parent carries its own row (normally null); the page sums up its variations. Sealed counts are not here (the stock
+   * editor shows them).
+   */
+  pack?: MatrixCasePack | null
+  /**
+   * Inbound to Amazon FBA (Step 4): Amazon's own inbound numbers for this SKU (`FbaInventoryDetail` rows with
+   * `condition = 'INBOUND'`, `fulfillmentCenterId = 'ALL'`) and the units in open Nexus Send-to-FBA plans not shipped yet.
+   * The FBA qty cell shows "92 +24": `fba.units` stays the value, `units` is the muted "+N". A parent: the family sum.
+   * `null` = nothing inbound and nothing planned; absent = an older server that did not read it.
+   */
+  fbaInbound?: MatrixFbaInbound | null
   basePrice: number | null
   status: string
   cells: Record<CoordinateKey, MatrixCells>
+}
+
+/** One SKU's inbound to Amazon FBA (Step 4). Amazon owns every number but `planned`; Nexus never writes FBA quantities. */
+export interface MatrixFbaInbound {
+  /** Amazon's inbound units = working + shipped + receiving. */
+  units: number
+  working: number
+  shipped: number
+  receiving: number
+  /** ISO time of Amazon's last read of these numbers; null = never read. */
+  readAt: string | null
+  /** Units in open Nexus plans (not CLOSED / CANCELLED) not marked Shipped yet: Σ (quantity − shippedQuantity). */
+  planned: number
+  /**
+   * Units Nexus marked Shipped in plans Amazon is not receiving yet (status READY_TO_SHIP — some of several shipments
+   * marked — or SHIPPED): Σ shippedQuantity of their lines. The "+N" is the bigger of this and `units` (`fbaInboundShown`), so it shows right
+   * after "Mark shipped", before Amazon's next read. Absent = an older server that did not send it.
+   */
+  sent?: number
+}
+
+/** An open Send-to-FBA plan of this family (Step 4) — the toolbar's "FBA plans · N" and the FBA cell's tooltip. */
+export interface MatrixFbaPlan {
+  /** FbaInboundPlanV2.id */
+  id: string
+  name: string
+  status: FbaPlanStatus
+  /** Units of this family in the plan. */
+  units: number
+}
+
+/** One case size of a SKU (`ProductCaseSize`). The units per case name the size. Sizes in cm, weight in kg; null = not set. */
+export interface MatrixCaseSize {
+  unitsPerCase: number
+  caseLengthCm: number | null
+  caseWidthCm: number | null
+  caseHeightCm: number | null
+  caseWeightKg: number | null
+}
+
+/**
+ * One SKU's case pack as the Matrix reads it: its case sizes (`ProductCaseSize`, biggest first; [] = no case size) and
+ * its FBA prep / label owner (`ProductPackage`; null = not set).
+ */
+export interface MatrixCasePack {
+  sizes: MatrixCaseSize[]
+  fbaPrepOwner: 'AMAZON' | 'SELLER' | null
+  fbaLabelOwner: 'AMAZON' | 'SELLER' | null
 }
 
 export interface MatrixFbaStock {
@@ -259,22 +373,40 @@ export interface MatrixRead {
   /** `Product.version` of the family root — the CAS discriminator for master cells. */
   version: number
   productId: string
-  /** `live` = the Matrix service answered; `preview` = deterministic fixture cells on the real rows (the banner says so). */
+  /**
+   * `live` = the Matrix service answered — the only value the page's read boundary produces. `preview` = the grid lab's
+   * and the tests' deterministic fixture (`_studio/matrix/fixtures.ts`); the page has no preview mode (Owner 2026-10-08).
+   */
   source: 'live' | 'preview'
   generatedAt: string
   coordinates: MatrixCoordinate[]
   rows: MatrixRowRead[]
-  policies: ReadonlyArray<{ channel: string; market: string; pushesPaused: boolean }>
+  /** `sourceLocationCodes` = the market's "Sells from" list (Step 2), in sale order; absent or `[]` = none (routes decide). */
+  policies: ReadonlyArray<{ channel: string; market: string; pushesPaused: boolean; sourceLocationCodes?: readonly string[] }>
+  /**
+   * "Sells from" (Step 2): this business's WAREHOUSE locations — the ones a Sells from list may name. `active: false` =
+   * switched off (never chosen, never sold from). `isDefault` = the business's default warehouse. Absent = an older server.
+   */
+  locations?: ReadonlyArray<MatrixLocation>
+  /**
+   * Send to FBA (Step 4): this family's OPEN plans (not CLOSED / CANCELLED), newest first. `[]` = none; absent = an
+   * older server. The drawer reads the full plans from `GET /api/fba/inbound/plans?productId=<family root>&open=1`.
+   */
+  fbaPlans?: ReadonlyArray<MatrixFbaPlan>
 }
+
+export interface MatrixLocation { code: string; name: string; active: boolean; isDefault?: boolean }
 
 /* ── writes: one door ───────────────────────────────────────────────────────────────────────── */
 
 export type MatrixWritableKind = Extract<MatrixCellKind, 'fulfilment' | 'syncMode' | 'syncQty' | 'syncBuffer' | 'price' | 'salePrice'>
+/** What the one door writes: the writable cell kinds plus "Sells from" (`value`: the codes in sale order; `[]` = the market default). */
+export type MatrixDoorKind = MatrixWritableKind | 'source'
 
 export interface MatrixWriteCell {
   rowId: string
   coordinateKey: CoordinateKey
-  cell: MatrixWritableKind
+  cell: MatrixDoorKind
   value: unknown
   expectedVersion: number
   /** The listing the caller saw on this coordinate (`MatrixCells.listingId`); another listing there now is a `conflict`. */
@@ -289,7 +421,7 @@ export type WriteOutcome = 'applied' | 'refused' | 'noop' | 'conflict'
 export interface MatrixWriteOutcome {
   rowId: string
   coordinateKey: CoordinateKey
-  cell: MatrixWritableKind
+  cell: MatrixDoorKind
   outcome: WriteOutcome
   reason?: string
   /** The listing's version AFTER the write (unchanged on refused/noop; the CURRENT one on conflict). */
@@ -311,12 +443,14 @@ export type MatrixVerbId =
   | 'pin-quantity' | 'set-follow' | 'set-buffer'
   | 'pause-sync' | 'resume-sync' | 'push-now' | 'retry-sync'
   | 'set-fulfilment'
+  | 'set-source'
 
 export const MATRIX_VERB_LABELS: Readonly<Record<MatrixVerbId, string>> = {
   'set-price': 'Set price…', 'adjust-prices': 'Adjust prices by %…', 'copy-prices': 'Copy prices from…',
   'pin-quantity': 'Pin quantity…', 'set-follow': 'Set to Follow', 'set-buffer': 'Set buffer…',
   'pause-sync': 'Hold stock sync', 'resume-sync': 'Release stock sync', 'push-now': 'Push quantity now', 'retry-sync': 'Retry',
   'set-fulfilment': 'Set fulfilment…',
+  'set-source': 'Set sells from…',
 }
 
 export interface MatrixVerbTarget { rowId: string; coordinateKey: CoordinateKey }
@@ -333,6 +467,8 @@ export type MatrixVerbParams =
   | { verb: 'push-now' }
   | { verb: 'retry-sync' }
   | { verb: 'set-fulfilment'; method: FulfilmentMethod }
+  /** "Sells from" in sale order; `[]` = use the market default. */
+  | { verb: 'set-source'; codes: string[] }
 
 export interface MatrixVerbRequest { params: MatrixVerbParams; targets: MatrixVerbTarget[]; commit: boolean }
 
@@ -342,7 +478,8 @@ export interface VerbChange {
   rowId: string
   sku: string
   coordinateKey: CoordinateKey
-  cell: MatrixCellKind
+  /** `source` = "Sells from" (`set-source`; from/to are code lists, `[]` = the market default). */
+  cell: MatrixCellKind | 'source'
   from: unknown
   to: unknown
   /** The operator-facing rendering of `from` → `to` (`€105.00 → €99.75`, `Follow 403 → Pinned 10`). */
@@ -353,7 +490,8 @@ export interface VerbChange {
 
 export interface VerbRefusal { rowId: string; sku: string; coordinateKey: CoordinateKey; kind: RefusalKind; reason: string }
 
-export type ConfirmLevel = 'none' | 'confirm' | 'type-to-confirm'
+/** 2026-10-08: two levels — the old `confirm` was read by no dialog (the Edit dialog asks only for a typed word). */
+export type ConfirmLevel = 'none' | 'type-to-confirm'
 
 export interface VerbPreview {
   verb: MatrixVerbId
@@ -391,7 +529,6 @@ export const MATRIX_ENDPOINTS = {
 /* ── copy (Appendix A, verbatim) ────────────────────────────────────────────────────────────── */
 
 export const MATRIX_COPY = {
-  previewBanner: 'Preview data — the Matrix service is not built yet. Rows are this family; every cell below is a fixture and nothing is sent to a channel.',
   amazonManaged: 'Amazon-managed',
   uncounted: 'Uncounted',
   /** Build shape v2: the Sync cell of a listing whose selling is paused (the wire's CLOSED). Selling words, not sync words. */
@@ -399,6 +536,8 @@ export const MATRIX_COPY = {
   notListed: 'Not listed',
   sharedEu: (markets: readonly string[]) => `Shared by ${markets.join(' ')} — one quantity per SKU on Amazon EU`,
   euNotice: (markets: readonly string[]) => `Amazon EU: this covers ${markets.join(' ')}`,
+  /** The region Qty cell's ⚠ (`SyncCell.euConflict`): the guard's own detail (`detectEuIntentConflict`), whole. */
+  euConflict: (detail: string) => `EU shared-quantity conflict: ${detail}. The stock push is refused until the EU markets agree`,
   followsPool: (n: number, locations: readonly string[], buffer: number) => `Follows the pool · ${n} available at ${locations.join(', ') || 'no routed location'} − ${buffer} buffer`,
   pinnedAt: (n: number) => `Pinned at ${n}`,
   pausedBy: (via: 'POLICY' | 'LISTING', would: number | null) => `Stock sync held by ${via === 'POLICY' ? 'the channel policy' : 'this listing'} — would push ${would ?? '—'} · Release to push`,
@@ -419,9 +558,10 @@ export const MATRIX_COPY = {
   absentSaleEtsy: 'Etsy has no sale price on a listing; sales are set on Etsy (Marketing → Sales and discounts)',
   absentFulfilmentShopify: 'Shopify has no fulfilment method',
   absentFulfilment: (channelLabel: string) => `${channelLabel} has no fulfilment method`,
-  absentBusiness: (pt: string, market: string) => `Amazon has not enabled business pricing for this account (checked against the ${pt} schema on ${market})`,
-  absentBusinessUnchecked: (market: string) => `Business pricing could not be checked on ${market} — no product-type schema is cached for this family`,
-  absentBusinessNotBuilt: (pt: string, market: string) => `Amazon allows business pricing here (the ${pt} schema on ${market}) — the B2B cells are not built yet`,
+  /* 2026-10-08: the sentence names no market — it is said per coordinate, and Customise groups the markets that share it. */
+  absentBusiness: (pt: string) => `Amazon has not enabled business pricing for this account (checked against the ${pt} schema)`,
+  absentBusinessUnchecked: () => 'Business pricing could not be checked — no product-type schema is cached for this family',
+  absentBusinessNotBuilt: (pt: string) => `Amazon allows business pricing here (the ${pt} schema) — the B2B cells are not built yet`,
   noListingYet: 'No listing on this coordinate yet',
   /** A write whose listing moved since the caller read it (CAS on `ChannelListing.version`, or another listing there now). */
   changedElsewhere: 'Changed elsewhere — reloaded',
@@ -430,17 +570,28 @@ export const MATRIX_COPY = {
   /** The tooltip line of a Price or Sale cell whose product sheet change waits for Publish (`PriceCell.waiting`). */
   waitingForPublish: (value: string) => `Product sheet change waits for Publish: ${value}`,
   noAccountConnected: 'No account is connected',
-  pinnedThisSession: (n: number) => `${n} pinned this session · Undo`,
   simulated: 'Preview — nothing is sent',
   /** The Fulfilment cell's one tooltip line for the newest conversion Nexus sent Amazon (2026-10-07). */
   conversion: (c: FulfilmentConversionStatus) => conversionLine(c),
   /** Set fulfilment on Amazon: what the run does, said once above the table. */
-  fulfilmentSent: (markets: readonly string[]) => `Sent to Amazon on ${markets.join(' ')}: each market's offer is converted, then checked against Amazon's merchant listings report within minutes — the Fulfilment cell shows when Amazon confirms it`,
+  fulfilmentSent: (markets: readonly string[]) => `Sent to Amazon on ${markets.join(' ')}: Amazon accepts first and applies later — the Fulfilment cell says Confirmed when Amazon's report shows it (read every 15 min, up to 24 h)`,
   fulfilmentEuQuantity: 'Amazon EU keeps ONE merchant quantity per SKU: the FBM quantity sent sells on every open EU market',
   fulfilmentFbaOutOfStock: 'After the switch to FBA the offer shows out of stock on Amazon until Amazon receives units at its fulfilment centres',
   fulfilmentNexusOnly: 'Nexus only — nothing is sent to the channel; the quantity pushes follow the new method',
   /** A direct write of an Amazon Fulfilment cell (not the confirmed verb). */
   fulfilmentViaVerb: 'On Amazon the method is changed with Set fulfilment… (type the method to confirm): it converts the offer on Amazon',
+  /* "Sells from" (Step 2, 2026-10-07): why the From cell cannot be changed, and the door's refusals. */
+  sourceParent: 'Set on the variants — the parent has no listing of its own',
+  sourceFba: 'Amazon-managed — Amazon ships FBA orders from its own stock',
+  sourcePermission: 'You do not have permission to change where stock sells from (inventory.adjust)',
+  sourceNone: 'This coordinate carries no inventory',
+  sourceTooMany: 'At most 20 locations',
+  sourceTwice: (code: string) => `${code} is listed twice`,
+  sourceUnknown: (code: string) => `${code} is not a warehouse of this business`,
+  sourceInactive: (code: string) => `${code} is switched off — switch it on in Locations first`,
+  /** The change's label for a verb row: `Default (IT-MAIN)` or the own list. */
+  sourceLabel: (own: readonly string[], marketDefault: readonly string[]) =>
+    own.length ? own.join(' + ') : `Default (${marketDefault.join(' + ') || 'none'})`,
 } as const
 
 const hhmm = (iso: string): string => {

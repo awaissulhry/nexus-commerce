@@ -28,7 +28,9 @@ import {
   requestKey, resolveInitial, skipGroupLine, type BulkFormState, type BulkPhase, type BulkRaw, type LineFilter,
 } from './dialogModel'
 import type { BulkEditSource, BulkInitial, BulkLine, BulkPreview, BulkResult } from './types'
+import { SellsFromPicker } from '../SellsFromPicker'
 import styles from './bulkEdit.module.css'
+import dialogs from '../dialogs.module.css'
 
 export interface BulkEditDialogProps {
   open: boolean
@@ -278,7 +280,7 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
         return choiceOptions.length <= SEGMENT_CHOICES_MAX ? (
           <div className="nds-field-w">
             <span className="nds-field-lbl" aria-hidden="true">{inputLabel}</span>
-            <SegmentedControl ariaLabel={inputLabel} size="sm" wrap value={form.raw.choice} onChange={(v) => setRaw({ choice: v })} options={choiceOptions} />
+            <SegmentedControl ariaLabel={inputLabel} size="sm" className={dialogs.seg} value={form.raw.choice} onChange={(v) => setRaw({ choice: v })} options={choiceOptions} />
           </div>
         ) : (
           <div className={styles.change}>
@@ -300,6 +302,14 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
           <Field label="Ends" error={errorAt('end')}>
             <DateField value={form.raw.end} onChange={(v) => setRaw({ end: v })} min={form.raw.start || undefined} placeholder="Choose a date" clearable={false} />
           </Field>
+        </div>
+      )
+      // Sells from: the From pop-up's own picker (ticked = sells, top first).
+      case 'locations': return (
+        <div className="nds-field-w">
+          <span className="nds-field-lbl" aria-hidden="true">{inputLabel}</span>
+          <SellsFromPicker label={`${inputLabel}, in sale order`} locations={source?.locations ?? []} value={form.raw.codes}
+            onChange={(codes) => setRaw({ codes })} disabled={locked} />
         </div>
       )
       case 'none': return null
@@ -365,7 +375,7 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
         {field && field.modes.length > 1 && (
           <div className="nds-field-w">
             <span className="nds-field-lbl" aria-hidden="true">How</span>
-            <SegmentedControl ariaLabel="How" size="sm" wrap value={form.mode ?? ''} onChange={chooseMode}
+            <SegmentedControl ariaLabel="How" size="sm" className={dialogs.seg} value={form.mode ?? ''} onChange={chooseMode}
               options={field.modes.map((m) => ({ value: m.id, label: m.label }))} />
           </div>
         )}
@@ -377,7 +387,8 @@ export function BulkEditDialog(p: BulkEditDialogProps) {
         {pv.error && phase === 'form' && key !== null && <Banner tone="danger" title="The changes could not be worked out">{pv.error}</Banner>}
         {notices}
         {phase === 'form' && key === null ? (
-          <div className={styles.prompt}>{previewPrompt({ field, kind, parsed, ticked: form.markets.length })}</div>
+          // One quiet line until there is something to work out — no empty box (Matrix polish, Owner 2026-10-08).
+          <p className={styles.hint} role="status">{previewPrompt({ field, kind, parsed, ticked: form.markets.length })}</p>
         ) : firstLoad ? (
           <div className={styles.loading} role="status" aria-label="Working out the changes">
             <Skeleton height={14} /><Skeleton height={14} width="90%" /><Skeleton height={14} width="75%" /><Skeleton height={14} width="85%" /><Skeleton height={14} width="60%" />

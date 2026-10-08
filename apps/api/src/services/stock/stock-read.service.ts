@@ -20,6 +20,8 @@ import { resolveAtpAcrossChannels } from '../atp-channel.service.js'
 import { listLayers } from '../cost-layers.service.js'
 import { loadPoolSources, summarizePoolSources, type PoolSource } from '../stock-pool/pool-sources.js'
 import { lentUsage } from '../stock-pool/lent-usage.js'
+import { caseSizesOf, sealedByLevel } from './stock-cases.service.js'
+import type { CaseCount } from '@nexus/shared/stock-cases'
 
 /** A query number: the fallback when absent or not a number (as the stock routes read them). */
 function safeNum(v: unknown, fallback?: number): number | undefined {
@@ -187,6 +189,27 @@ export async function listStockLocations() {
   return { locations: summaries }
 }
 
+/**
+ * Step 3 (cases; several sizes, Owner 2026-10-08) — for the stock editor: each product's case sizes (units per case,
+ * biggest first) and the sealed cases of each size each level shows. A few small queries whatever the family size: the
+ * products' case sizes, then `sealedByLevel` (the one reader rule).
+ */
+async function readCaseSizes(
+  productId: string,
+  children: ReadonlyArray<{ id: string; stockLevels: ReadonlyArray<{ id: string; quantity: number }> }>,
+  ownLevels: ReadonlyArray<{ id: string; quantity: number }>,
+): Promise<{ caseSizes: Map<string, number[]>; sealed: Map<string, CaseCount[]> }> {
+  const levels = [
+    ...ownLevels.map((l) => ({ id: l.id, productId, quantity: l.quantity })),
+    ...children.flatMap((c) => c.stockLevels.map((l) => ({ id: l.id, productId: c.id, quantity: l.quantity }))),
+  ]
+  const [sizes, sealed] = await Promise.all([
+    caseSizesOf(prisma, [productId, ...children.map((c) => c.id)]),
+    sealedByLevel(prisma, levels),
+  ])
+  return { caseSizes: new Map([...sizes].map(([id, list]) => [id, list.map((s) => s.unitsPerCase)])), sealed }
+}
+
 export async function readProductStock(productId: string, opts: { family: boolean }) {
   // family=true → fetch children's stock for parent rows so the drawer
   // shows a Variants breakdown instead of the (empty) parent's own stock.
@@ -292,40 +315,49 @@ export async function readProductStock(productId: string, opts: { family: boolea
       totalStock: number; totalReserved: number; totalAvailable: number
       /** Shared stock step 5 — the pool this variation sells from, or null (own stock). */
       poolSource: PoolSource | null
+      /** Step 3 — the case sizes (units per case, biggest first; [] = no case size). */
+      caseSizes: number[]
       stockLevels: Array<{
         locationId: string; locationCode: string; locationType: string
         quantity: number; reserved: number; available: number
+        /** Step 3 — sealed cases of each size here, clamped by the units, biggest first ([] without a case size). */
+        cases: CaseCount[]
         lastUpdatedAt: string
         syncStatus: string
       }>
     }>
   } = null
 
-  if (wantFamily && product.isParent) {
-    const [children, activeLocations] = await Promise.all([
-      prisma.product.findMany({
-        where: { parentId: productId, isParent: false },
-        select: {
-          id: true, sku: true, name: true, abcClass: true, lowStockThreshold: true,
-          images: { select: { url: true }, take: 1 },
-          stockLevels: {
-            select: {
-              quantity: true, reserved: true, available: true,
-              lastUpdatedAt: true, syncStatus: true,
-              location: { select: { id: true, code: true, name: true, type: true } },
-            },
-            orderBy: { quantity: 'desc' },
+  const familyRead = wantFamily && product.isParent ? await Promise.all([
+    prisma.product.findMany({
+      where: { parentId: productId, isParent: false },
+      select: {
+        id: true, sku: true, name: true, abcClass: true, lowStockThreshold: true,
+        images: { select: { url: true }, take: 1 },
+        stockLevels: {
+          select: {
+            id: true, quantity: true, reserved: true, available: true,
+            lastUpdatedAt: true, syncStatus: true,
+            location: { select: { id: true, code: true, name: true, type: true } },
           },
+          orderBy: { quantity: 'desc' },
         },
-        orderBy: { sku: 'asc' },
-      }),
-      prisma.stockLocation.findMany({
-        where: { isActive: true },
-        select: { id: true, code: true, name: true, type: true },
-        orderBy: [{ type: 'asc' }, { code: 'asc' }],
-      }),
-    ])
+      },
+      orderBy: { sku: 'asc' },
+    }),
+    prisma.stockLocation.findMany({
+      where: { isActive: true },
+      select: { id: true, code: true, name: true, type: true },
+      orderBy: [{ type: 'asc' }, { code: 'asc' }],
+    }),
+  ]) : null
 
+  // Step 3 (cases) — the case sizes of this product and its variations, and the sealed cases each level shows
+  // (stored, clamped by the units: a screen never shows more sealed cases than units).
+  const caseSizes = await readCaseSizes(product.id, familyRead?.[0] ?? [], stockLevels)
+
+  if (familyRead) {
+    const [children, activeLocations] = familyRead
     const childPools = await loadPoolSources(prisma, children.map((c) => c.id))
     family = {
       totalStock:     children.reduce((s, c) => s + c.stockLevels.reduce((ss, sl) => ss + sl.quantity, 0), 0),
@@ -343,6 +375,7 @@ export async function readProductStock(productId: string, opts: { family: boolea
         totalReserved:  c.stockLevels.reduce((s, sl) => s + sl.reserved, 0),
         totalAvailable: c.stockLevels.reduce((s, sl) => s + sl.available, 0),
         poolSource: childPools.get(c.id) ?? null,
+        caseSizes: caseSizes.caseSizes.get(c.id) ?? [],
         stockLevels: c.stockLevels.map((sl) => ({
           locationId:   sl.location.id,
           locationCode: sl.location.code,
@@ -350,6 +383,7 @@ export async function readProductStock(productId: string, opts: { family: boolea
           quantity:     sl.quantity,
           reserved:     sl.reserved,
           available:    sl.available,
+          cases:        caseSizes.sealed.get(sl.id) ?? [],
           lastUpdatedAt: sl.lastUpdatedAt.toISOString(),
           syncStatus:   sl.syncStatus,
         })),
@@ -382,6 +416,8 @@ export async function readProductStock(productId: string, opts: { family: boolea
       basePrice: product.basePrice == null ? null : Number(product.basePrice),
       costPrice: product.costPrice == null ? null : Number(product.costPrice),
       thumbnailUrl: product.images?.[0]?.url ?? null,
+      /** Step 3 — the case sizes (units per case, biggest first; [] = no case size). */
+      caseSizes: caseSizes.caseSizes.get(product.id) ?? [],
     },
     stockLevels: stockLevels.map((sl) => ({
       id: sl.id,
@@ -389,6 +425,8 @@ export async function readProductStock(productId: string, opts: { family: boolea
       quantity: sl.quantity,
       reserved: sl.reserved,
       available: sl.available,
+      /** Step 3 — sealed cases of each size here, clamped by the units, biggest first ([] without a case size). */
+      cases: caseSizes.sealed.get(sl.id) ?? [],
       reorderThreshold: sl.reorderThreshold,
       lastUpdatedAt: sl.lastUpdatedAt,
       lastSyncedAt: sl.lastSyncedAt,

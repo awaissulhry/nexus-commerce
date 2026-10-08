@@ -575,6 +575,8 @@
 .nds-cell-locked { color: var(--nds-grid-locked-fg); display: inline-flex; align-items: center; gap: 6px; }
 /* The outline lock (`LockGlyph`): the held Status cell's icon and ink (`.nds-selling-lock`), so the app has one lock. */
 .nds-cell-lock-glyph { flex: none; color: var(--nds-grid-muted-fg); }
+/* `WarnGlyph` / `PauseGlyphIcon` (2026-10-08): outline icons in their holder's ink, sitting on the text's middle. */
+.nds-cell-glyph { flex: none; display: inline-block; vertical-align: -2px; }
 
 /* the delta chip on a pending edit */
 .nds-cell-delta {
@@ -677,6 +679,10 @@
    not a re-reading of this comment. **A comment must state what WAS measured, never what should
    be.** */
 .nds-ag-wrap .ag-cell.nds-cell-is-pinned { background: color-mix(in srgb, var(--nds-primary) 7%, transparent); }
+/* 2026-10-08 — a Matrix value that FOLLOWS a layer above it (a quantity following the pool, a price following the base
+   price): plain ground, muted text (`--nds-grid-muted-fg`, 7:1), its 🔗 mark. Only an OWN value is tinted (the pinned
+   rule above), so the two can no longer be told apart by a 1 % difference in a blue (Matrix audit). */
+.nds-ag-wrap .ag-cell.nds-cell-is-following { color: var(--nds-grid-muted-fg); }
 .nds-ag-wrap .ag-cell.nds-cell-is-ai-draft { background: var(--nds-grid-ai-draft-bg); font-style: italic; }
 /* italic overhang — see `.nds-cell-required` */
 .nds-ag-wrap .ag-cell.nds-cell-is-ai-draft .nds-cell-value-text { padding-inline-end: 2px; }
@@ -699,7 +705,7 @@
 .nds-cell-prov-via { color: var(--nds-prov-inherited-fg); }
 .nds-ag-wrap .ag-cell.nds-cell-is-inherited-override { background: color-mix(in srgb, var(--nds-primary) 5%, transparent); }
 /* Shared stock by SKU (2026-10-01): a quantity that follows ANOTHER business profile's lent stock (the Matrix's Qty and
-   Mode cells of such a SKU). After the inherited tint above, which a following cell also carries, so this one shows; the
+   Mode cells of such a SKU). After the following rule above, which such a cell also carries, so this one shows; the
    text keeps the cell's normal colour. Never colour alone: the cell's tooltip names the business, the row says "Shared". */
 .nds-ag-wrap .ag-cell.nds-cell-is-shared-stock { color: var(--nds-grid-cell-fg); background: var(--nds-grid-shared-stock-bg); }
 .nds-cell-prov-pinned { color: var(--nds-prov-inherited-fg); }
@@ -1111,6 +1117,11 @@
    is how a design system grows two gutters for one idea. */
 .nds-grid-footstrip { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--nds-border); }
 .nds-grid-footstrip-grow { flex: 1; }
+/* A phone: the strip wraps instead of pushing its last button past the edge (the sheet's fixed-height status strip
+   keeps its one line). */
+@media (max-width: 599px) {
+  .nds-grid-footstrip:not(.nds-grid-sheet-status) { flex-wrap: wrap; row-gap: var(--nds-space-8); }
+}
 
 /* the toolbar's swapping halves (`../toolbars/GridSelectionActions`). The search field is 36px, an
    `sm` button 28: the cluster holds the toolbar's height on the first tick and never wraps —
@@ -1696,6 +1707,11 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
 .nds-projcell-note {
   margin-left: auto;
 }
+/* The Matrix's Listing cell (`nds-matrix-listing`, audit 2026-10-08): the id always LEADS. Without a note after it the
+   rule above sent it to the right edge, so one column's ASINs sat left on some rows and right on others. */
+.nds-matrix-listing .nds-projcell-detail:last-child {
+  margin-left: 0;
+}
 .nds-projcell-note {
   flex: 0 1 auto;
   min-width: 0;
@@ -1895,15 +1911,18 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
    SUNK ground + the secondary text. Distinct from `locked` (nothing can be written) and from
    `inherited` (the value is somebody else's) — a paused cell is the operator's own, merely held. */
 .nds-ag-wrap .ag-cell.nds-cell-is-paused { background: var(--nds-surface-sunken); color: var(--nds-text-2); }
-/* The trailing marks: 🔗 ✎ ƒ are `.nds-cell-prov` (their own colours); ⚠ ⇄ ⏸ are the Matrix's three. */
-/* 2px gaps and a 3px lead. `FBM ✎ ⚠ ⇄ ⌄` is 107px with the cell's padding: the contract's Fulfilment width is 112
-   (measured 2026-10-07 — at 96 the method itself was cut to `F…` on every row with both marks). */
-.nds-matrix-marks { display: inline-flex; align-items: center; gap: 2px; margin-left: 3px; flex: none; }
+/* The trailing marks: 🔗 ✎ ƒ are `.nds-cell-prov` (their own colours); the warning, ⇄ and the pause are the Matrix's three. */
+/* 4px gaps and a 4px lead (2026-10-08, Matrix audit: at 2px `FBM ✎ ⚠ ⌄` read as one crowded smudge). ⚠ and ⇄ never show
+   together any more (the guard's ⚠ stands alone), so the widest Fulfilment cell is `FBM ✎ ⚠ ⌄` — inside the
+   contract's 112 (measured 2026-10-07 — at 96 the method itself was cut to `F…` on every row with both marks). */
+.nds-matrix-marks { display: inline-flex; align-items: center; gap: var(--nds-space-4); margin-left: var(--nds-space-4); flex: none; }
 .nds-matrix-marks .nds-cell-prov { margin-right: 0; }
 .nds-matrix-warn { color: var(--nds-warning-text); font-weight: var(--nds-font-weight-bold); line-height: 1; }
 .nds-matrix-reported { color: var(--nds-text-2); font-weight: var(--nds-font-weight-bold); line-height: 1; }
-/* The ⏸ glyph: `--nds-font-size-xs` so it sits level with the 12.5px word rather than above it. */
-.nds-matrix-pause { display: inline-block; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); margin-right: var(--nds-space-4); line-height: 1; }
+/* 2026-10-08 — ✗ on a Qty or Price cell whose newest push of its lane failed (the Sync column folded into the cells). */
+.nds-matrix-failed { color: var(--nds-danger-text); font-weight: var(--nds-font-weight-bold); line-height: 1; }
+/* The pause: an outline icon (`PauseGlyphIcon`, 2026-10-08 — the text ⏸ is a colour emoji on some phones), level with the word. */
+.nds-matrix-pause { display: inline-flex; align-items: center; color: var(--nds-text-2); margin-right: var(--nds-space-4); line-height: 1; }
 /* The Sync cell is a BUTTON (click = Needs attention). It fills the cell and inherits its type. */
 .nds-matrix-syncbtn {
   display: inline-flex; align-items: center; gap: 6px; min-width: 0; width: 100%; height: 100%;
@@ -2028,6 +2047,20 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); o
   padding-left: var(--nds-grid-group-indent);
 }
 .nds-ag-nexus .ag-header-cell.nds-ag-head-tone--start {
+  box-shadow: inset 2px 0 0 var(--nds-ag-tone-rule);
+}
+/* 2026-10-08 — a grid with a band row (the Matrix: one group per channel and market, Owner "colour the groups just like
+   the product information page") puts the same classes on its GROUP header cells: the band wears the group's tint and
+   edge too, and its label starts at the group's edge like the names under it. */
+.nds-ag-nexus .ag-header-group-cell.nds-ag-head-tone {
+  background: var(--nds-ag-tone-bg);
+  color: var(--nds-ag-tone-fg);
+}
+.nds-ag-nexus .ag-header-group-cell.nds-ag-head-tone .ag-header-group-cell-label {
+  justify-content: flex-start;
+  padding-left: var(--nds-grid-group-indent);
+}
+.nds-ag-nexus .ag-header-group-cell.nds-ag-head-tone--start {
   box-shadow: inset 2px 0 0 var(--nds-ag-tone-rule);
 }
 .nds-ag-head-tone--slate { --nds-ag-tone-bg: var(--nds-grid-tone-slate-bg); --nds-ag-tone-fg: var(--nds-grid-tone-slate-fg); --nds-ag-tone-rule: var(--nds-grid-tone-slate-rule); }

@@ -33,8 +33,8 @@ export interface LiveScope {
 /** The invalidation types the live rule reads. */
 export const LIVE_EVENT_TYPES: InvalidationType[] = ['listing.values_changed', 'inventory.stock_changed', 'publication.status_changed']
 
-/** Fields whose change moves only the stock cells. Anything else, or no field list at all, is a full re-read. */
-export const STOCK_ONLY_FIELDS: readonly string[] = ['quantityMode', 'quantity', 'stockBuffer', 'syncState']
+/** Fields whose change moves only the stock cells (`stockSource` = "Sells from", Step 2). Anything else, or no field list at all, is a full re-read. */
+export const STOCK_ONLY_FIELDS: readonly string[] = ['quantityMode', 'quantity', 'stockBuffer', 'syncState', 'stockSource']
 
 export const LIVE_COALESCE_MS = 400
 export const LIVE_AWAY_MS = 60_000

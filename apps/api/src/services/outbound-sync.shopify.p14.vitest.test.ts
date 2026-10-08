@@ -35,6 +35,8 @@ vi.mock('../db.js', () => ({
     // location, and this business has no pool link, so the pool door is never asked.
     stockLevel: { findMany: vi.fn(async ({ where }: any) => ((where?.productId?.in ?? ['p1']).map((productId: string) => ({ productId, quantity: h.warehouse, available: h.warehouse, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } })))) },
     stockPoolLink: { findMany: vi.fn(async () => []) },
+    // Step 2 — the loader reads the business's "Sells from" lists (none here).
+    syncChannelPolicy: { findMany: async () => [] },
     channelPublishAttempt: { create: vi.fn(async () => ({})) },
     // S5 — an extra listing's own SKU (read only for a row with an alias).
     productListingAlias: { findUnique: vi.fn(async () => h.alias) },

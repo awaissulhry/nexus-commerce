@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { MATRIX_COPY, MATRIX_VERB_LABELS, type MatrixRead } from './matrix-contract.js'
-import { STILL_HELD, followQty, inventoryCoordinate, previewVerb, syncLabel } from './matrix-preview.js'
+import { STILL_HELD, followFromCodes, followQty, inventoryCoordinate, previewVerb, sellsFromCodes, sourceCodesProblem, syncLabel } from './matrix-preview.js'
 
 const read = (): MatrixRead => ({
   version: 1, productId: 'p', source: 'live', generatedAt: '2026-09-13T00:00:00.000Z', policies: [],
@@ -134,5 +134,88 @@ describe('matrix-preview — eBay pin to 0', () => {
     expect(previewVerb(ebay(), pin(3), counting).changes).toHaveLength(1)
     expect(previewVerb(ebay(), pin(0, 'AMAZON:IT'), counting).changes).toHaveLength(1)
     expect(asked).toBe(0)
+  })
+})
+
+/**
+ * Step 2 (Owner 2026-10-07) — "Sells from": one choice per market group (once for Amazon EU), sum only, list order = sale
+ * order, a choice equal to the market default is stored as [].
+ */
+describe('matrix-preview — set-source (Sells from)', () => {
+  const LOCATIONS = [
+    { code: 'IT-MAIN', name: 'Italy main', active: true, isDefault: true },
+    { code: 'MI-3PL', name: 'Milan 3PL', active: true },
+    { code: 'OLD', name: 'Old store', active: false },
+  ]
+  const withSource = (over: Partial<NonNullable<MatrixRead['rows'][number]['cells'][string]['source']>> = {}): MatrixRead => {
+    const r = read()
+    r.locations = LOCATIONS
+    r.rows[1].stock.locations = [{ code: 'IT-MAIN', available: 10 }, { code: 'MI-3PL', available: 4 }]
+    r.rows[1].cells['AMAZON:EU'].source = {
+      own: [], marketDefault: ['IT-MAIN'], defaultOrigin: 'routes', effective: [{ code: 'IT-MAIN', available: 10 }], writable: true, blockedReason: null, ...over,
+    }
+    return r
+  }
+  const ctx = { can: () => true, simulated: false }
+  const run = (r: MatrixRead, codes: string[], c: { can: (p: string) => boolean; simulated: boolean } = ctx) =>
+    previewVerb(r, { params: { verb: 'set-source', codes }, targets: [{ rowId: 'c1', coordinateKey: 'AMAZON:IT' }], commit: false }, c)
+
+  it('the normaliser: a choice equal to the default (same order) is [], any other order is an exception', () => {
+    expect(sellsFromCodes(['IT-MAIN'], ['IT-MAIN'])).toEqual([])
+    expect(sellsFromCodes([], ['IT-MAIN'])).toEqual([])
+    expect(sellsFromCodes([' MI-3PL ', 'IT-MAIN'], ['IT-MAIN', 'MI-3PL'])).toEqual(['MI-3PL', 'IT-MAIN'])
+    expect(sellsFromCodes(['it-main', 'mi-3pl'], ['IT-MAIN', 'MI-3PL'])).toEqual([])
+  })
+
+  it('the code check: at most 20, never twice, only this business\'s active warehouses', () => {
+    expect(sourceCodesProblem(['IT-MAIN', 'MI-3PL'], LOCATIONS)).toBeNull()
+    expect(sourceCodesProblem(['IT-MAIN', 'it-main'], LOCATIONS)).toBe(MATRIX_COPY.sourceTwice('it-main'))
+    expect(sourceCodesProblem(['NOPE'], LOCATIONS)).toBe(MATRIX_COPY.sourceUnknown('NOPE'))
+    expect(sourceCodesProblem(['OLD'], LOCATIONS)).toBe(MATRIX_COPY.sourceInactive('OLD'))
+    expect(sourceCodesProblem(Array.from({ length: 21 }, (_, i) => `L${i}`), undefined)).toBe(MATRIX_COPY.sourceTooMany)
+    expect(sourceCodesProblem(['ANY'], undefined)).toBeNull()
+  })
+
+  it('an EU market target lands on the region group, with the EU notice, no typed word and the Follow number after it', () => {
+    const p = run(withSource(), ['MI-3PL', 'IT-MAIN'])
+    expect(p.changes).toEqual([{
+      rowId: 'c1', sku: 'CHILD-1', coordinateKey: 'AMAZON:EU', cell: 'source', from: [], to: ['MI-3PL', 'IT-MAIN'],
+      fromLabel: 'Default (IT-MAIN)', toLabel: 'MI-3PL + IT-MAIN', note: 'Follow shows 14',
+    }])
+    expect(p.notices).toContain('Amazon EU: this covers IT DE')
+    /* 2026-10-08: none or a typed word — the Edit dialog's Apply confirms a small change. */
+    expect(p.confirm).toBe('none')
+    expect(followFromCodes(['MI-3PL'], [{ code: 'IT-MAIN', available: 10 }, { code: 'MI-3PL', available: 4 }], 1)).toBe(3)
+    expect(followFromCodes(['X'], [{ code: 'IT-MAIN', available: 10 }], 0)).toBeNull()
+  })
+
+  it('back to the default stores [] and says so; the same list again is no change', () => {
+    const own = withSource({ own: ['MI-3PL'], effective: [{ code: 'MI-3PL', available: 4 }] })
+    expect(run(own, ['IT-MAIN']).changes[0]).toMatchObject({ from: ['MI-3PL'], to: [], fromLabel: 'MI-3PL', toLabel: 'Default (IT-MAIN)', note: 'Follow shows 10' })
+    expect(run(own, []).changes[0]).toMatchObject({ to: [] })
+    const same = run(own, ['MI-3PL'])
+    expect(same.changes).toEqual([]); expect(same.refusals).toEqual([])
+    expect(run(withSource(), ['IT-MAIN']).changes).toEqual([])
+  })
+
+  it('refuses by name: no inventory.adjust, no source cell, FBA, a held cell, an unknown or switched-off code', () => {
+    const asked: string[] = []
+    expect(run(withSource(), ['MI-3PL'], { can: (perm) => { asked.push(perm); return false }, simulated: false }).refusals[0]).toMatchObject({ kind: 'permission', reason: MATRIX_COPY.sourcePermission })
+    expect(asked).toEqual(['inventory.adjust'])
+    expect(run(read(), ['MI-3PL']).refusals[0]).toMatchObject({ kind: 'not-applicable', reason: MATRIX_COPY.sourceNone })
+    const fba = withSource({ writable: false, blockedReason: MATRIX_COPY.sourceFba })
+    fba.rows[1].cells['AMAZON:EU'].sync!.kind = 'FBA_EXCLUDED'
+    expect(run(fba, ['MI-3PL']).refusals[0]).toMatchObject({ kind: 'amazon-managed', reason: MATRIX_COPY.sourceFba })
+    expect(run(withSource({ writable: false, blockedReason: 'Shared stock' }), ['MI-3PL']).refusals[0]).toMatchObject({ kind: 'not-applicable', reason: 'Shared stock' })
+    expect(run(withSource(), ['NOPE']).refusals[0]).toMatchObject({ reason: MATRIX_COPY.sourceUnknown('NOPE') })
+    expect(run(withSource(), ['OLD']).refusals[0]).toMatchObject({ reason: MATRIX_COPY.sourceInactive('OLD') })
+  })
+
+  it('the parent is refused before anything else (it has no listing of its own)', () => {
+    const r = withSource()
+    r.rows[0].cells['AMAZON:EU'] = { ...r.rows[1].cells['AMAZON:EU'] }
+    const p = previewVerb(r, { params: { verb: 'set-source', codes: ['MI-3PL'] }, targets: [{ rowId: 'p', coordinateKey: 'AMAZON:EU' }], commit: false }, ctx)
+    expect(p.refusals[0]).toMatchObject({ rowId: 'p', kind: 'not-applicable' })
+    expect(MATRIX_VERB_LABELS['set-source']).toBe('Set sells from…')
   })
 })

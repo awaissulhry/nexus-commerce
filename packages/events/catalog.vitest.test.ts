@@ -125,6 +125,47 @@ describe('listing.values_changed — the live-sync hint of the sheet and the Mat
   })
 })
 
+describe('inventory.cases_changed (Step 3 cases)', () => {
+  it('carries a count at one location and a case-pack change (no location), partitioned by product', () => {
+    const count = parseEventPayload('inventory.cases_changed', { productId: 'p1', locationId: 'loc1', counts: [{ unitsPerCase: 12, before: 4, after: 3 }], sizes: [12, 6], reason: 'count' })
+    expect(deriveSubject('inventory.cases_changed', count)).toBe('p1')
+    expect(getEventDefinition('inventory.cases_changed').context).toBe('inventory')
+    const pack = parseEventPayload('inventory.cases_changed', { productId: 'p1', locationId: null, counts: [], sizes: [], reason: 'case-pack' })
+    expect(pack.locationId).toBeNull()
+  })
+
+  it('refuses an unknown key, a negative or fractional count, a zero case size and an unknown reason', () => {
+    const valid = { productId: 'p1', locationId: 'loc1', counts: [{ unitsPerCase: 12, before: 4, after: 3 }], sizes: [12], reason: 'count' }
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, sku: 'S' })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, counts: [{ unitsPerCase: 12, before: 4, after: -1 }] })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, counts: [{ unitsPerCase: 12, before: 1.5, after: 3 }] })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, sizes: [0] })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('inventory.cases_changed', { ...valid, reason: 'sale' })).toThrow(/Invalid payload/)
+  })
+})
+
+describe('fba.plan_changed (Step 4 Send to FBA)', () => {
+  it('carries the plan, its status and step and its SKUs, partitioned by plan', () => {
+    const changed = parseEventPayload('fba.plan_changed', { planId: 'pl1', status: 'CREATING', step: 'CREATE', productIds: ['p1'] })
+    expect(deriveSubject('fba.plan_changed', changed)).toBe('pl1')
+    expect(getEventDefinition('fba.plan_changed').context).toBe('fulfillment')
+    const closed = parseEventPayload('fba.plan_changed', { planId: 'pl1', status: 'CANCELLED', step: null, productIds: [] })
+    expect(closed.step).toBeNull()
+  })
+
+  it('refuses an unknown key, an empty plan or status, a missing step and more than 200 SKUs', () => {
+    const valid = { planId: 'pl1', status: 'QUEUED', step: 'CREATE', productIds: ['p1'] }
+    expect(() => parseEventPayload('fba.plan_changed', { ...valid, sku: 'S' })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('fba.plan_changed', { ...valid, planId: '' })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('fba.plan_changed', { ...valid, status: '' })).toThrow(/Invalid payload/)
+    const { step: _step, ...noStep } = valid
+    expect(() => parseEventPayload('fba.plan_changed', noStep)).toThrow(/Invalid payload/)
+    const many = Array.from({ length: 201 }, (_, i) => `p${i}`)
+    expect(() => parseEventPayload('fba.plan_changed', { ...valid, productIds: many })).toThrow(/Invalid payload/)
+    expect(() => parseEventPayload('fba.plan_changed', { ...valid, productIds: many.slice(0, 200) })).not.toThrow()
+  })
+})
+
 describe('subject derivation', () => {
   it('derives a non-empty subject for every event from a minimal payload', () => {
     // Every definition must be able to produce a partition key. A definition
@@ -153,6 +194,7 @@ describe('subject derivation', () => {
         productId: 'p1', locationId: 'loc1', movementId: 'm1', change: -1,
         quantityBefore: 5, quantityAfter: 4, available: 4, poolTotal: 4, reason: 'ORDER_PLACED',
       },
+      'inventory.cases_changed': { productId: 'p1', locationId: 'loc1', counts: [{ unitsPerCase: 12, before: 4, after: 3 }], sizes: [12], reason: 'count' },
       'inventory.reserved': {
         productId: 'p1', reservationId: 'rs1', locationId: 'loc1', quantity: 2, kind: 'HARD', availableAfter: 2,
       },
@@ -175,6 +217,7 @@ describe('subject derivation', () => {
       'inbound.received': { shipmentId: 's1' },
       'inbound.discrepancy': { shipmentId: 's1' },
       'inbound.cancelled': { shipmentId: 's1' },
+      'fba.plan_changed': { planId: 'pl1', status: 'WAITING_FOR_CHOICE', step: 'CONFIRM', productIds: ['p1', 'p2'] },
       'shipment.created': { shipmentId: 's1' },
       'shipment.updated': { shipmentId: 's1' },
       'shipment.deleted': { shipmentId: 's1' },

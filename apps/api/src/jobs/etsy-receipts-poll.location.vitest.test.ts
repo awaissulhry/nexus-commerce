@@ -1,9 +1,11 @@
 /**
- * CX Etsy E5 — a poll run resolves the business's warehouse ONCE and hands it to every receipt it writes.
+ * Step 2 "Sells from" — a poll run no longer chooses a warehouse for its receipts.
  *
- * The writer used to look it up per receipt, outside its transaction: one extra statement transaction for
- * every receipt of a page (an N+1 on the poller's path; a 230-receipt reconciliation paid 230 lookups of
- * the same row). The webhook path writes one receipt and still resolves it in the writer.
+ * Before Step 2 the run looked up IT-MAIN once and handed it to every receipt (CX Etsy E5: one lookup per run instead
+ * of one statement transaction per receipt). A sale now takes its stock from the first location of the shop's
+ * "Sells from" list that has enough for the product's units, so the location is a per-PRODUCT answer: the writer
+ * picks it inside each receipt's transaction, after its order-stock lock (and looks up the IT-MAIN / default fallback
+ * there, in the same transaction — still no extra transaction per receipt). The poller passes nothing.
  */
 import { beforeEach, expect, it, vi } from 'vitest'
 
@@ -16,6 +18,7 @@ vi.mock('../db.js', () => ({
   },
 }))
 vi.mock('../lib/cron/clustered.js', () => ({ default: { validate: () => true, schedule: () => ({ stop() {} }) } }))
+// Any warehouse lookup by the poller would land here.
 vi.mock('../services/stock-level.service.js', () => ({ resolveLocationByCode: h.resolve }))
 vi.mock('../services/etsy/receipts.service.js', () => ({
   ETSY_MAX_OFFSET: 12_000, ETSY_RECEIPTS_PAGE: 100,
@@ -39,17 +42,23 @@ beforeEach(() => {
   h.pages = [[{ receipt_id: 1 }, { receipt_id: 2 }, { receipt_id: 3 }], []]
 })
 
-it('resolves the warehouse once per run and passes it to every receipt', async () => {
+it('looks up no warehouse for the run and hands none to the receipts: the writer picks per product', async () => {
   const outcome = await pollEtsyConnection('conn-1')
   expect(outcome.counts.written).toBe(3)
-  expect(h.resolve).toHaveBeenCalledTimes(1)
-  expect(h.resolve).toHaveBeenCalledWith('IT-MAIN')
-  expect(h.ingest.mock.calls.map(([args]) => args.locationId)).toEqual(['loc-main', 'loc-main', 'loc-main'])
+  expect(h.resolve).not.toHaveBeenCalled()
+  expect(h.ingest).toHaveBeenCalledTimes(3)
+  for (const [args] of h.ingest.mock.calls) {
+    expect(args).toMatchObject({ connectionId: 'conn-1', source: 'poll' })
+    // Not even `locationId: undefined` with the key present: the writer's "omitted" branch is what runs.
+    expect('locationId' in args).toBe(false)
+  }
 })
 
-it('a business with no warehouse passes that null answer on, not "resolve it again"', async () => {
+it('a business with no warehouse is the writer\'s to report (per product, no_stock_location), not the poller\'s', async () => {
   h.resolve.mockResolvedValue(null)
-  await pollEtsyConnection('conn-1')
-  expect(h.resolve).toHaveBeenCalledTimes(1)
-  expect(h.ingest.mock.calls.map(([args]) => args.locationId)).toEqual([null, null, null])
+  h.ingest.mockResolvedValue({ kind: 'written', created: true, stock: { '1': 'no_stock_location' } })
+  const outcome = await pollEtsyConnection('conn-1')
+  expect(outcome.error).toBeNull()
+  expect(outcome.counts.written).toBe(3)
+  expect(h.resolve).not.toHaveBeenCalled()
 })

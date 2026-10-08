@@ -16,6 +16,8 @@ import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundEnqueuePriority } from './sync-priority.js'
 import { productReadCacheService } from './product-read-cache.service.js'
 import { lockProductStock } from './stock-lock.js'
+import { keepCasesInTx } from './stock/stock-cases.service.js'
+import type { CaseChange } from '@nexus/shared/stock-cases'
 import { ledgerInputs, loadSyncLedgers } from './stock-pool/sync-ledgers.js'
 import { pooledNow, PooledProductError } from './stock-pool/pool-guard.js'
 import { StockLocationUnresolved } from './default-stock-location.js'
@@ -243,6 +245,13 @@ export type StockMovementInput = {
    *  receives separately via createLot). */
   lotId?: string
   /**
+   * Step 3 cases — whole sealed cases that move with these units, per case size (Step 4's Send to FBA:
+   * [{ unitsPerCase: 12, change: −2 }] = two cases of 12 leave sealed). Without it a decrease takes loose units first,
+   * then opens the smallest case (the clamp in keepCasesInTx). Refused (CaseCountError, the movement rolls back) when
+   * more cases of a size leave than are sealed, the SKU has no such case size, or the location is not a warehouse.
+   */
+  casesChange?: CaseChange[]
+  /**
    * P0/B4 — caller's outer transaction. When set, the stock write,
    * StockLevel ledger update, totalStock recompute, ChannelListing
    * cascade, audit row, and OutboundSyncQueue inserts all run in
@@ -382,10 +391,20 @@ const MANUAL_REASON_WORDS: Record<string, string> = {
   MANUAL_ADJUSTMENT: 'an adjustment', INVENTORY_COUNT: 'a stock count', WRITE_OFF: 'a write-off', TRANSFER_OUT: 'a transfer', TRANSFER_IN: 'a transfer',
 }
 
+/**
+ * Step 4 Send to FBA — the reasons of units sent into FBA. The Shipped movement leaves the From WAREHOUSE
+ * (FBA_TRANSFER_OUT); Nexus never writes the FBA quantity, so neither reason may land on the FBA mirror (Amazon's
+ * number, written only by the FBA inventory sync) or on a Shopify location (Shopify's own number).
+ */
+export const FBA_TRANSFER_REASONS: ReadonlySet<string> = new Set(['FBA_TRANSFER_OUT', 'FBA_TRANSFER_IN'])
+
 /** F7 — the refusal for a movement of `reason` at a location of `locationType`, or null when it may be written. */
 export function protectedLocationRefusal(reason: string, locationId: string, locationType: string | null | undefined): ProtectedLocationError | null {
   if (MANUAL_STOCK_REASONS.has(reason) && (locationType === 'AMAZON_FBA' || locationType === 'SHOPIFY_LOCATION')) {
     return new ProtectedLocationError(locationId, locationType, MANUAL_REASON_WORDS[reason] ?? 'a manual change')
+  }
+  if (FBA_TRANSFER_REASONS.has(reason) && (locationType === 'AMAZON_FBA' || locationType === 'SHOPIFY_LOCATION')) {
+    return new ProtectedLocationError(locationId, locationType, 'an FBA transfer')
   }
   if (reason === 'CHANNEL_STOCK_RECONCILIATION' && locationType === 'AMAZON_FBA') {
     return new ProtectedLocationError(locationId, locationType, 'a channel stock event')
@@ -443,7 +462,8 @@ export async function applyStockMovementInTx(
   })
 
   // 08 S2 (F7) — a person's change never lands on the FBA mirror or a Shopify location; no channel event changes FBA.
-  if (MANUAL_STOCK_REASONS.has(reason) || reason === 'CHANNEL_STOCK_RECONCILIATION') {
+  // Step 4 — neither does an FBA transfer (the Send to FBA movement leaves the From warehouse only).
+  if (MANUAL_STOCK_REASONS.has(reason) || FBA_TRANSFER_REASONS.has(reason) || reason === 'CHANNEL_STOCK_RECONCILIATION') {
     const target = await tx.stockLocation.findUnique({ where: { id: resolvedLocationId }, select: { type: true } })
     const refusal = protectedLocationRefusal(reason, resolvedLocationId, target?.type)
     if (refusal) throw refusal
@@ -476,6 +496,7 @@ export async function applyStockMovementInTx(
   const reserved = existing?.reserved ?? 0
   const newAvailable = newQuantity - reserved
 
+  let stockLevelId = existing?.id ?? null
   if (existing) {
     await tx.stockLevel.update({
       where: { id: existing.id },
@@ -486,7 +507,7 @@ export async function applyStockMovementInTx(
       },
     })
   } else {
-    await tx.stockLevel.create({
+    stockLevelId = (await tx.stockLevel.create({
       data: {
         locationId: resolvedLocationId,
         productId,
@@ -497,7 +518,15 @@ export async function applyStockMovementInTx(
         syncStatus: 'SYNCED',
         lastSyncedAt: new Date(),
       },
-    })
+      select: { id: true },
+    })).id
+  }
+
+  // Step 3 cases — loose units leave first, then a sealed case opens: after a decrease the sealed count is clamped to
+  // what the units still fill. Units that arrive (receives, returns, transfers in) arrive loose and change no count,
+  // and a new level has no case row. Whole cases moved say so (`casesChange`). Under the product lock taken above.
+  if (stockLevelId && ((existing && change < 0) || input.casesChange !== undefined)) {
+    await keepCasesInTx(tx, [{ stockLevelId, quantityAfter: newQuantity, casesChange: input.casesChange }])
   }
 
   const balanceAfter = newQuantity

@@ -39,7 +39,6 @@ interface StockLocation {
   name: string
   type: LocationType
   isActive: boolean
-  servesMarketplaces: string[]
   address?: LocationAddress | null
   skuCount: number
   totalQuantity: number
@@ -51,7 +50,6 @@ interface FormState {
   name: string
   code: string
   type: 'WAREHOUSE' | 'AMAZON_FBA'
-  servesMarketplaces: string
   isActive: boolean
   street: string
   city: string
@@ -62,7 +60,6 @@ const BLANK_FORM: FormState = {
   name: '',
   code: '',
   type: 'WAREHOUSE',
-  servesMarketplaces: '',
   isActive: true,
   street: '',
   city: '',
@@ -131,7 +128,6 @@ function LocationsInner() {
       name: loc.name,
       code: loc.code,
       type: (EDITABLE_TYPES.includes(loc.type) ? loc.type : 'WAREHOUSE') as 'WAREHOUSE' | 'AMAZON_FBA',
-      servesMarketplaces: loc.servesMarketplaces.join(', '),
       isActive: loc.isActive,
       street: (loc.address?.street ?? ''),
       city: (loc.address?.city ?? ''),
@@ -147,15 +143,11 @@ function LocationsInner() {
 
   async function handleSave() {
     setFormError(null)
-    const serves = form.servesMarketplaces
-      .split(/[\s,]+/)
-      .map((s) => s.toUpperCase().trim())
-      .filter(Boolean)
-
+    /* Step 2 "Sells from" (2026-10-07): which markets a warehouse sells to is chosen per market in the Matrix (From),
+       so the free-text "serves marketplaces" list is no longer edited here; a save leaves the stored one as it is. */
     const body = editingId
       ? {
           name: form.name.trim(),
-          servesMarketplaces: serves,
           isActive: form.isActive,
           address:
             form.street || form.city || form.country
@@ -166,7 +158,6 @@ function LocationsInner() {
           name: form.name.trim(),
           code: form.code.trim(),
           type: form.type,
-          servesMarketplaces: serves,
           isActive: form.isActive,
           address:
             form.street || form.city || form.country
@@ -247,19 +238,6 @@ function LocationsInner() {
           {t(`stock.locations.type.${row.type}` as any) || row.type}
         </Tag>
       ),
-    },
-    {
-      key: 'serves',
-      label: t('stock.locations.col.serves'),
-      width: 160,
-      render: (row) =>
-        row.servesMarketplaces.length > 0 ? (
-          <span className="text-sm text-secondary">
-            {row.servesMarketplaces.join(', ')}
-          </span>
-        ) : (
-          <span className="text-sm text-tertiary">—</span>
-        ),
     },
     {
       key: 'skus',
@@ -453,18 +431,6 @@ function LocationsInner() {
                 </div>
               </>
             )}
-
-            <div className="flex flex-col gap-1 col-span-2">
-              <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                {t('stock.locations.form.serves')}
-              </label>
-              <Input
-                placeholder={t('stock.locations.form.servesPlaceholder')}
-                value={form.servesMarketplaces}
-                onChange={(e) => setField('servesMarketplaces', e.target.value)}
-              />
-              <span className="text-xs text-slate-500">{t('stock.locations.form.servesHint')}</span>
-            </div>
           </div>
 
           <div className="border-t border-default pt-3">

@@ -189,9 +189,10 @@ export async function companyIdentity(): Promise<LegalIdentity> {
   }
 }
 
-/** What a document prints of the seller, so what it cannot be printed without. */
-export type CompanyField = 'name' | 'address' | 'vat'
-const FIELD_WORDS: Record<CompanyField, string> = { name: 'name', address: 'full address (street, postal code, town)', vat: 'P.IVA' }
+/** What a document prints of the seller, so what it cannot be printed without. `phone`: Amazon's FBA ship-from address
+ *  requires one (Step 4 Send to FBA, services/fba-inbound/address.ts). */
+export type CompanyField = 'name' | 'address' | 'vat' | 'phone'
+const FIELD_WORDS: Record<CompanyField, string> = { name: 'name', address: 'full address (street, postal code, town)', vat: 'P.IVA', phone: 'phone' }
 
 /**
  * The company identity a document needs, or a MissingBusinessIdentityError that says what to fill in. `document` names
@@ -202,7 +203,8 @@ export async function requireCompanyIdentity(needs: CompanyField[], document: st
   const lacking = needs.filter((field) =>
     field === 'name' ? !identity.name
       : field === 'vat' ? !identity.vatNumber
-        : identity.postalLines.length < 2 || !identity.postalLines.some((line) => HAS_POSTAL_CODE.test(line)))
+        : field === 'phone' ? !identity.phone
+          : identity.postalLines.length < 2 || !identity.postalLines.some((line) => HAS_POSTAL_CODE.test(line)))
   if (lacking.length) {
     throw new MissingBusinessIdentityError(
       `Fill in the company ${lacking.map((field) => FIELD_WORDS[field]).join(' and ')} in Settings › Company: ${document} is never printed ` +

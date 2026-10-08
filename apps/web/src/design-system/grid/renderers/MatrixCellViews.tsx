@@ -61,6 +61,7 @@ import {
   matrixReportedDiffers,
   matrixSaleText,
 } from './matrixCells'
+import { EmptyValue, PauseGlyphIcon, WarnGlyph } from './cells'
 import { ProjectionCell, type ProjectionCellParams, type ProjectionFacts } from './ProjectionCell'
 import { ProvenanceMark } from './provenanceMark'
 
@@ -103,15 +104,23 @@ function Value({ children, muted, marks, className, version }: { children: React
   )
 }
 
-const Warn = ({ title }: { title: string }) => (
-  <span className="nds-cell-prov nds-matrix-warn" aria-hidden title={title}>⚠</span>
+/* An outline icon, not the text "⚠" a phone may draw as a colour emoji (Matrix audit 2026-10-08). */
+const Warn = ({ title }: { title?: string }) => (
+  <span className="nds-cell-prov nds-matrix-warn" aria-hidden title={title}><WarnGlyph /></span>
+)
+/**
+ * 2026-10-08 — the ✗ of a cell whose newest push of its lane failed (`pushFailed`). No title of its own: the cell's AG
+ * tooltip LEADS with the reason (`matrixCellTooltip`), and a second, native tooltip over it would be noise.
+ */
+const Failed = () => (
+  <span className="nds-cell-prov nds-matrix-failed" aria-hidden>✗</span>
 )
 const Reported = ({ title }: { title: string }) => (
   <span className="nds-cell-prov nds-matrix-reported" aria-hidden title={title}>⇄</span>
 )
 /** The ⏸ carries the LEVER on its title: at the contract's 96px a `· paused (listing)` suffix truncated the word (measured). */
 const PauseGlyph = ({ via }: { via: 'POLICY' | 'LISTING' | null }) => (
-  <span className="nds-matrix-pause" aria-hidden title={via === 'POLICY' ? 'Stock sync held by the channel policy' : 'Stock sync held by this listing'}>⏸</span>
+  <span className="nds-matrix-pause" aria-hidden title={via === 'POLICY' ? 'Stock sync held by the channel policy' : 'Stock sync held by this listing'}><PauseGlyphIcon /></span>
 )
 
 /* ── Listing ────────────────────────────────────────────────────────────────────────────── */
@@ -124,11 +133,17 @@ const listingFacts = (params: ICellRendererParams): ProjectionFacts | null => {
   const l = cells?.listing
   if (!l) return null
   /* The mono id leads, the note takes the right edge — `ProjectionCell`'s own order. The word is the health word, else
-     the sheet's selling word (`matrixListingProjection`, build shape v2). */
-  return { state: matrixListingProjection(l), detail: l.externalId ?? undefined, note: l.detail ?? undefined }
+     the sheet's selling word (`matrixListingProjection`, build shape v2) — except "Active" (Owner 2026-10-08): the
+     market's Status column beside it already says it, so an active listing shows its id alone. The cell's text (copy,
+     export, filter) and its tooltip still say Active. */
+  const shown = matrixListingProjection(l)
+  return { state: shown === 'active' ? null : shown, detail: l.externalId ?? undefined, note: l.detail ?? undefined }
 }
 
 export const ListingStateCell = memo(function ListingStateCell(p: MatrixCellProps) {
+  /* A row with no listing here draws the grid's empty cell (the Matrix: the muted dash; an editing sheet: nothing), like
+     every other kind — never a bare blank beside dashes (Matrix audit 2026-10-08). */
+  if (!p.facts(p)?.listing) return <EmptyValue />
   /* `value: null` is what makes the tick ABSENT (see the file header). */
   const host: ListingHostParams = { ...p, value: null, facts: listingFacts, matrixFacts: p.facts }
   return <ProjectionCell {...host} />
@@ -139,13 +154,15 @@ export const ListingStateCell = memo(function ListingStateCell(p: MatrixCellProp
 export const FulfilmentCell = memo(function FulfilmentCell(p: MatrixCellProps) {
   const copy = p.copy ?? MATRIX_CELL_COPY
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const f = cells.fulfilment
   if (!f || f.method == null) return <Value muted>{MATRIX_DASH}</Value>
-  /* Both marks are independent facts (the guard AND the report can disagree at once), so they are
-     read from the two predicates rather than from the one-word state, which has a precedence. */
+  /* Both marks are read from the two predicates rather than from the one-word state, which has a precedence. With two
+     methods, a guard and a report that BOTH differ from the method point the same way — ONE fact (the fail-closed guard
+     reads FBA because Amazon reports AFN): ⚠ stands alone (Owner 2026-10-08), and the tooltip still says both lines. ⇄
+     shows on its own when the report disagrees and the guard does not. */
   const guard = matrixGuardDiffers(f.method, f.guard)
-  const reported = matrixReportedDiffers(f.method, f.reported)
+  const reported = matrixReportedDiffers(f.method, f.reported) && !guard
   return (
     <Value
       marks={[
@@ -167,7 +184,7 @@ export const FulfilmentCell = memo(function FulfilmentCell(p: MatrixCellProps) {
 
 export const SyncModeCell = memo(function SyncModeCell(p: MatrixCellProps) {
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const s = cells.sync
   if (!s) return <Value muted>{MATRIX_DASH}</Value>
   const state = matrixCellState('syncMode', cells)
@@ -194,7 +211,7 @@ export const SyncModeCell = memo(function SyncModeCell(p: MatrixCellProps) {
 export const SyncQtyCell = memo(function SyncQtyCell(p: MatrixCellProps) {
   const copy = p.copy ?? MATRIX_CELL_COPY
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const s = cells.sync
   if (!s) return <Value muted>{MATRIX_DASH}</Value>
   const state = matrixCellState('syncQty', cells)
@@ -216,6 +233,10 @@ export const SyncQtyCell = memo(function SyncQtyCell(p: MatrixCellProps) {
         (state === 'follow' || (state === 'oversold' && s.kind === 'FOLLOW')) && <ProvenanceMark provenance="inherited" tooltip="Follows the pool" />,
         (state === 'pinned' || (state === 'oversold' && s.kind === 'PINNED')) && <ProvenanceMark provenance="pinned" tooltip="Pinned" />,
         state === 'oversold' && <Warn title={MATRIX_OVERSOLD_SENTENCE} />,
+        /* 2026-10-08 (the Sync column folded in): ⚠ the Amazon EU guard refuses the push; ✗ the newest stock push failed.
+           Only what the server sent — success shows nothing. The reasons lead the cell's tooltip. */
+        !!s.euConflict && <Warn />,
+        !!s.pushFailed && <Failed />,
       ]}
     >
       {text}
@@ -227,7 +248,7 @@ export const SyncQtyCell = memo(function SyncQtyCell(p: MatrixCellProps) {
 
 export const SyncBufferCell = memo(function SyncBufferCell(p: MatrixCellProps) {
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const s = cells.sync
   /* `—` on Pinned / FBA / closed (§3.4) — the pure text rule decides, this only mutes the dash. */
   const text = !s || s.kind === 'FBA_EXCLUDED' || s.kind === 'CLOSED' || s.mode === 'PINNED' ? MATRIX_DASH : String(s.buffer)
@@ -241,7 +262,7 @@ export const SyncStateCell = memo(function SyncStateCell(p: MatrixCellProps) {
   /* Hook before any early return — the rules of hooks, and this cell has two returns below. */
   const onClick = useCallback(() => jump?.(p), [jump, p])
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const q = cells.queue
   if (!q) return <Value muted>{MATRIX_DASH}</Value>
   const now = p.now?.() ?? Date.now()
@@ -274,7 +295,7 @@ export const SyncStateCell = memo(function SyncStateCell(p: MatrixCellProps) {
 export const PriceCell = memo(function PriceCell(p: MatrixCellProps) {
   const copy = p.copy ?? MATRIX_CELL_COPY
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const price = cells.price
   if (!price) return <Value muted>{MATRIX_DASH}</Value>
   const text = matrixMoney(price.value, price.currency || p.coordinate.currency)
@@ -286,6 +307,8 @@ export const PriceCell = memo(function PriceCell(p: MatrixCellProps) {
         price.source === 'override' && <ProvenanceMark provenance="pinned" tooltip={copy.setHere} />,
         price.source === 'formula' && <ProvenanceMark provenance="formula" tooltip={copy.formula(price.formula ?? '')} />,
         price.clamped && <Warn title={copy.clamped(price.clamped)} />,
+        /* 2026-10-08: the newest price push failed — the reason leads the cell's tooltip. */
+        !!price.pushFailed && <Failed />,
       ]}
     >
       {text}
@@ -297,7 +320,7 @@ export const PriceCell = memo(function PriceCell(p: MatrixCellProps) {
 
 export const SaleCell = memo(function SaleCell(p: MatrixCellProps) {
   const cells = p.facts(p)
-  if (!cells) return null
+  if (!cells) return <EmptyValue />
   const text = matrixSaleText(cells.sale, cells.price?.currency ?? p.coordinate.currency)
   return <Value muted={text === MATRIX_DASH}>{text}</Value>
 })

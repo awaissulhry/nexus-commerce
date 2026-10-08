@@ -89,6 +89,38 @@ describe('inventory.stock_changed reaches the listing SSE bus', () => {
     off()
   })
 
+  // Step 3 (cases) — a sealed count or a case pack change is raised on the durable lane by stock-cases.service.ts;
+  // declaring the type on the bus is again the whole bridge to an open stock editor or Matrix.
+  it('delivers a relayed inventory.cases_changed (a count, and a case-pack change) with its payload', async () => {
+    const seen: any[] = []
+    const off = subscribeListingEvents((e) => seen.push(e))
+    await broker.publish([
+      envelope('inventory.cases_changed', { productId: 'p-3', locationId: 'loc-1', counts: [{ unitsPerCase: 12, before: 4, after: 3 }], sizes: [12], reason: 'count' }),
+      envelope('inventory.cases_changed', { productId: 'p-4', locationId: null, counts: [], sizes: [], reason: 'case-pack' }),
+    ])
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toMatchObject({ type: 'inventory.cases_changed', productId: 'p-3', locationId: 'loc-1', counts: [{ unitsPerCase: 12, before: 4, after: 3 }], sizes: [12], reason: 'count' })
+    expect(seen[1]).toMatchObject({ type: 'inventory.cases_changed', productId: 'p-4', locationId: null, counts: [], sizes: [], reason: 'case-pack' })
+    expect(typeof seen[0].ts).toBe('number')
+    off()
+  })
+
+  // Step 4 (Send to FBA) — a plan's move is raised on the durable lane in the transaction that moves it; declaring the
+  // type on the bus is the whole bridge to an open Matrix ("Inbound +N") and the plans drawer.
+  it('delivers a relayed fba.plan_changed with its payload (the plan, its status and step, its SKUs)', async () => {
+    const seen: any[] = []
+    const off = subscribeListingEvents((e) => seen.push(e))
+    await broker.publish([
+      { ...envelope('fba.plan_changed', { planId: 'plan-1', status: 'WAITING_FOR_CHOICE', step: 'CONFIRM', productIds: ['p-5', 'p-6'] }), subject: 'plan-1' },
+      { ...envelope('fba.plan_changed', { planId: 'plan-2', status: 'CANCELLED', step: null, productIds: [] }), subject: 'plan-2' },
+    ])
+    expect(seen).toHaveLength(2)
+    expect(seen[0]).toMatchObject({ type: 'fba.plan_changed', planId: 'plan-1', status: 'WAITING_FOR_CHOICE', step: 'CONFIRM', productIds: ['p-5', 'p-6'] })
+    expect(seen[1]).toMatchObject({ type: 'fba.plan_changed', planId: 'plan-2', status: 'CANCELLED', step: null, productIds: [] })
+    expect(typeof seen[0].ts).toBe('number')
+    off()
+  })
+
   it('unsubscribes cleanly', async () => {
     const before = getListenerCount()
     const off = subscribeListingEvents(() => {})

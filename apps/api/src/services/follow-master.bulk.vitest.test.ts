@@ -61,6 +61,8 @@ const state = vi.hoisted(() => {
         (where.productId.in as string[]).map((productId) => ({ productId, available: 10, quantity: 10, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } })),
     },
     stockPoolLink: { findMany: async () => [] },
+    // Step 2 — the loader reads the business's "Sells from" lists (none here).
+    syncChannelPolicy: { findMany: async () => [] },
     $queryRaw: async () => [],
   }
   let txCount = 0

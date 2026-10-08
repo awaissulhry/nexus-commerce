@@ -106,7 +106,14 @@ export function DataGrid<T>({
   onCustomizeOpenChange,
   customizeTitle,
   prefsSortFields,
-}: DataGridProps<T>) {
+  headerMenus = true,
+}: DataGridProps<T> & {
+  /**
+   * `false`: no header menu on any column (no ⋮, no right-click menu). For a small working table inside a dialog — the
+   * Send to FBA SKUs (1–5 rows) — where sort, pin and hide have nothing to do (Matrix polish, Owner 2026-10-08).
+   */
+  headerMenus?: boolean
+}) {
   type Row = DgRow<T>
   const geometry = geometryFor(size)
   const geometryRef = useRef(geometry); geometryRef.current = geometry
@@ -303,11 +310,11 @@ export function DataGrid<T>({
   const widthsSig = JSON.stringify(prefs.widths ?? {})
   const locksSig = JSON.stringify(customizable ? prefs.lockedColumns ?? [] : [])
   const columnDefs = useMemo<ColDef[]>(
-    () => buildColDefs({ visible: colsRef.current, hidden: hiddenColsRef.current, selectable: !!selectable, pinLeft, pinRight, sort: sortRef.current, widths: prefsRef.current.widths, lockedColumns: customizable ? prefsRef.current.lockedColumns : undefined, components: RENDERERS }),
+    () => buildColDefs({ visible: colsRef.current, hidden: hiddenColsRef.current, selectable: !!selectable, pinLeft, pinRight, sort: sortRef.current, widths: prefsRef.current.widths, lockedColumns: customizable ? prefsRef.current.lockedColumns : undefined, components: RENDERERS, headerMenus }),
     // `columns` / `cols` / `sort` are deliberately NOT dependencies — the signatures stand for the structure, and
     // a header click must not rebuild the model (rule 1 in the file header).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [colSig, visibleSig, hiddenSig, !!selectable, pinLeft, pinRight, widthsSig, locksSig],
+    [colSig, visibleSig, hiddenSig, !!selectable, pinLeft, pinRight, widthsSig, locksSig, headerMenus],
   )
 
   // ── stable AG options ─────────────────────────────────────────────────────────────────────────

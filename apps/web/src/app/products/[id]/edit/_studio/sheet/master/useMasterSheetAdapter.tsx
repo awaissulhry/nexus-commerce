@@ -1007,7 +1007,6 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
             getContextMenuItems: menuWithNewRows,
             flatTree: true,
             groupDefaultExpanded: -1,
-            tooltipShowDelay: 300,
             rowData: loading ? [] : gridRows,
             onFirstDataRendered: remeasureSoon,
             onRowDataUpdated: remeasureSoon,

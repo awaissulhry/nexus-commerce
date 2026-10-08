@@ -47,7 +47,8 @@ function sendError(reply: FastifyReply, err: unknown, log: { error: (o: unknown,
   return reply.code(500).send({ error: 'matrix_request_failed', message: err instanceof Error ? err.message : String(err) })
 }
 
-const WRITABLE = new Set(['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice'])
+/** The door's cell kinds — the writable cells plus "Sells from" (Step 2, `inventory.adjust` checked in the service). */
+const WRITABLE = new Set(['fulfilment', 'syncMode', 'syncQty', 'syncBuffer', 'price', 'salePrice', 'source'])
 
 const isId = (v: unknown): v is string => typeof v === 'string' && v.length > 0
 
@@ -88,7 +89,7 @@ const studioMatrixRoutes: FastifyPluginAsync = async (fastify) => {
     const q = request.query as { accountId?: string; locale?: string }
     const can = permissionCheckerFor(request)
     try {
-      return await getMatrixRead({ productId: id, accountId: q.accountId ?? null, locale: q.locale ?? null, canEditPrice: can(F.productsPriceEdit) })
+      return await getMatrixRead({ productId: id, accountId: q.accountId ?? null, locale: q.locale ?? null, canEditPrice: can(F.productsPriceEdit), canAdjustStock: can(F.inventoryAdjust) })
     } catch (err) { return sendError(reply, err, request.log, { id, route: 'matrix.read' }) }
   })
 

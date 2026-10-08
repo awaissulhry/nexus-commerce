@@ -65,7 +65,7 @@ export function verbSentence(preview: Pick<VerbPreview, 'verb' | 'changes'>, app
       // An Amazon coordinate is a real conversion (sent per market, confirmed from Amazon's report); eBay's is Nexus only.
       const amazon = preview.changes.length > 0 && preview.changes.every((c) => c.coordinateKey.startsWith('AMAZON:'))
       const some = preview.changes.some((c) => c.coordinateKey.startsWith('AMAZON:'))
-      if (amazon) return `${listings} sent to Amazon as ${to ?? 'the new method'}${s}. Amazon's report confirms it within about 15 minutes — the Fulfilment cell shows it.`
+      if (amazon) return `${listings} sent to Amazon as ${to ?? 'the new method'}${s}. The Fulfilment cell says Confirmed when Amazon's report shows it (read every 15 min, up to 24 h).`
       if (some) return `${listings} set to ${to ?? 'the new method'}${s}. The Amazon ones are sent to Amazon and confirmed from its report; eBay's is set in Nexus.`
       return `${listings} set to ${to ?? 'the new method'} in Nexus${s}.`
     }
@@ -76,6 +76,12 @@ export function verbSentence(preview: Pick<VerbPreview, 'verb' | 'changes'>, app
     case 'resume-sync': return `Stock sync released on ${listings}${s}.`
     case 'push-now': return `${plural(applied, 'quantity push', 'quantity pushes')} sent${s}.`
     case 'retry-sync': return `${plural(applied, 'failed push', 'failed pushes')} sent again${s}.`
+    case 'set-source': {
+      // `to` is a code list; `[]` = the market default again (each market keeps its own default).
+      const chosen = preview.changes.map((c) => c.to).find((t): t is string[] => Array.isArray(t) && t.length > 0)
+      if (!chosen) return `${listings} ${applied === 1 ? 'uses its market default' : 'use their market default'} again${s}.`
+      return `${listings} ${applied === 1 ? 'sells' : 'sell'} from ${chosen.join(' + ')}${s}.`
+    }
   }
 }
 
@@ -216,6 +222,7 @@ export function createBulkSource(doors: BulkDoors, opening: { title: string; sub
     defaultMarkets: (field) => bulkDefaultMarkets(doors.context(), field),
     choicesFor: (field, mode, keys) => bulkChoices(doors.context(), field, mode, keys),
     currencyFor: (field, keys) => bulkCurrency(doors.context(), field, keys),
+    locations: ctx0.locations ?? [],
     preview,
     apply,
   }

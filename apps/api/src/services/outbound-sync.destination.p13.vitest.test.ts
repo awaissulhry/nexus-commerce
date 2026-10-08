@@ -28,6 +28,8 @@ vi.mock('../db.js', () => ({
     // location, and this business has no pool link, so the pool door is never asked.
     stockLevel: { findMany: vi.fn(async ({ where }: any) => ((where?.productId?.in ?? ['p1']).map((productId: string) => ({ productId, quantity: 5, available: 5, location: { type: 'WAREHOUSE', code: 'IT-MAIN', syncRoutes: [] } })))), aggregate: vi.fn(async () => null) },
     stockPoolLink: { findMany: vi.fn(async () => []) },
+    // Step 2 — the loader reads the business's "Sells from" lists (none here).
+    syncChannelPolicy: { findMany: async () => [] },
     offer: { findFirst: vi.fn(async () => null) },
     product: { findUniqueOrThrow: vi.fn() },
     outboundApiCallLog: { create: vi.fn(async () => ({})) },
