@@ -546,12 +546,13 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
   } else {
     const [graph, stored] = await Promise.all([
       loadDestinationGraph(),
-      resolveStoredDestinations({ market: source.campaign.marketplace ?? 'all', campaign: source.campaign.id, adGroup: source.id }),
+      // Batch 2 review fix — the whole chain, the portfolio grain included (where the Owner stores his destinations).
+      resolveStoredDestinations({ market: source.campaign.marketplace ?? 'all', portfolio: source.campaign.portfolioId ?? null, campaign: source.campaign.id, adGroup: source.id }),
     ])
     const createType: HvCreateType = product ? 'PRODUCT' : match
     const resolved = resolveDestination({ graph, stored, sourceAdGroupId: source.id, sourceAdGroupName: source.name, term: query, kind: product ? 'product' : 'keyword', createType })
     if (!resolved.chosen) {
-      return refuse(`Not queued: no destination ad group is decided for "${query}" (${resolved.source === 'resolved-ambiguous' ? `${resolved.shortlist.length} could take it` : 'none fits'}). Name one (destAdGroupId), or store one with set-harvest-destination.`)
+      return refuse(`Not queued: no destination ad group is decided for "${query}" (${resolved.source === 'resolved-ambiguous' ? `${resolved.shortlist.length} could take it` : resolved.source === 'resolved-paused' ? `the only one that could take it does not serve: ${resolved.refusal}` : 'none fits'}). Name one (destAdGroupId), or store one with set-harvest-destination.`)
     }
     dest = await groupById(resolved.chosen.adGroupId)
     if (!dest) return refuse('Not queued: the resolved destination ad group was not found.')

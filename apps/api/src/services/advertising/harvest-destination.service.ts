@@ -47,6 +47,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * as the override. It is the other way round for this account, and the numbers above are why.
  */
 
+import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 // One product → ad-group walk for the whole codebase. Exported by HV.3 (one keyword, no behaviour
 // change) rather than copied, so this page and the funnel can never disagree about which ad groups
@@ -64,7 +65,7 @@ export const HV_DEST_ACCOUNT = '*'
  * How a destination came to be what it is. C9: a surface rendering a change shows its evidence, or
  * says explicitly that it has none.
  */
-export type HvDestSource = 'stored' | 'resolved-unique' | 'resolved-ambiguous' | 'none'
+export type HvDestSource = 'stored' | 'resolved-unique' | 'resolved-ambiguous' | 'resolved-paused' | 'none'
 
 /**
  * The candidate's status **relative to its destination**, which is a different question from
@@ -94,6 +95,8 @@ export interface DestinationCandidate {
   campaignId: string
   campaignName: string
   campaignStatus: string | null
+  /** Batch 2 review fix — the ad group's own status: a paused ad group in an enabled campaign serves nothing either. */
+  adGroupStatus: string | null
   role: HvMatchRole | null
   /** why this one is ranked where it is — shown in the picker, never inferred by the client */
   why: string
@@ -111,6 +114,11 @@ export interface ResolvedDestination {
   chosen: DestinationCandidate | null
   /** every ad group the resolver considered plausible, best first */
   shortlist: DestinationCandidate[]
+  /**
+   * Batch 2 review fix — `resolved-paused`: why the one ad group the resolver found was not chosen (its campaign or its ad
+   * group is not ENABLED, so a keyword there would not serve), in words a refusal can carry. Absent otherwise.
+   */
+  refusal?: string
   status: HvDestStatus
   /**
    * 🔴 The §4.1 coupling, decided rather than described. False whenever the keyword would land in
@@ -181,6 +189,8 @@ export interface DestinationGraph {
   adGroups: Map<string, {
     id: string; name: string; campaignId: string
     campaignName: string; marketplace: string | null; targetingType: string | null; campaignStatus: string | null
+    /** Batch 2 review fix — the ad group's own status (AdGroup.status). */
+    adGroupStatus: string | null
     maxBidCents: number | null; minBidCents: number | null
     role: HvMatchRole | null
   }>
@@ -190,21 +200,69 @@ export interface DestinationGraph {
   holdersOfTerm: Map<string, Array<{ adGroupId: string; atAmazon: boolean }>>
 }
 
-export async function loadDestinationGraph(): Promise<DestinationGraph> {
-  const [ags, ads, positives] = await Promise.all([
-    prisma.adGroup.findMany({
-      select: {
-        id: true, name: true, campaignId: true,
-        campaign: { select: { name: true, marketplace: true, targetingType: true, status: true, maxBidCents: true, minBidCents: true } },
-        targets: { select: { expressionType: true, isNegative: true } },
-      },
-    }),
-    prisma.adProductAd.findMany({ where: { productId: { not: null } }, select: { productId: true, adGroupId: true } }),
-    prisma.adTarget.findMany({
-      where: { isNegative: false, kind: { in: ['KEYWORD', 'PRODUCT'] } },
-      select: { adGroupId: true, kind: true, expressionType: true, expressionValue: true, externalTargetId: true },
-    }),
-  ])
+/**
+ * Batch 2 review fix — the part of the graph one harvest needs. A harvest asks the resolver only about its sources, and
+ * rankDestinations only ever offers an ad group in a source's market that advertises one of its products: so only those
+ * are read (and the sources themselves, and `alsoAdGroupIds` — the Owner's stored destinations of the sources, which may
+ * lie outside the product, and are judged by id). A rule's harvest runs every 15 minutes: unscoped, every ad group, every
+ * target and every product ad of the business were read on each run that had an unnamed destination.
+ */
+export interface DestinationGraphScope {
+  /** The source ad groups (AdGroup.ids) the resolver will be asked about. */
+  sourceAdGroupIds: readonly string[]
+  /** Ad groups read whatever their product or market (AdGroup.ids): the stored destinations in play. */
+  alsoAdGroupIds?: readonly string[]
+}
+
+/** The ad groups a scoped graph reads (see DestinationGraphScope), as one where clause. */
+export async function destinationGraphWhere(scope: DestinationGraphScope): Promise<Prisma.AdGroupWhereInput> {
+  const sourceIds = [...new Set(scope.sourceAdGroupIds)]
+  const byId = [...new Set([...sourceIds, ...(scope.alsoAdGroupIds ?? [])])]
+  const [sources, ads] = sourceIds.length
+    ? await Promise.all([
+      prisma.adGroup.findMany({ where: { id: { in: sourceIds } }, select: { campaign: { select: { marketplace: true } } } }),
+      prisma.adProductAd.findMany({ where: { adGroupId: { in: sourceIds }, productId: { not: null } }, select: { productId: true } }),
+    ])
+    : [[], []]
+  const productIds = [...new Set(ads.map((a) => a.productId).filter((p): p is string => !!p))]
+  const markets = [...new Set(sources.map((s) => s.campaign?.marketplace ?? null))]
+  const or: Prisma.AdGroupWhereInput[] = [{ id: { in: byId } }]
+  if (productIds.length) {
+    const productAds = { some: { productId: { in: productIds } } }
+    const named = markets.filter((m): m is string => m != null)
+    if (named.length) or.push({ productAds, campaign: { marketplace: { in: named } } })
+    if (markets.includes(null)) or.push({ productAds, campaign: { marketplace: null } })
+  }
+  return { OR: or }
+}
+
+/**
+ * The graph the resolver ranks on. With no scope: every ad group of the business (the Keyword Harvest page, which resolves
+ * many sources at once). With a scope: only the ad groups one harvest can need (DestinationGraphScope), their product ads
+ * and their positive targets — the same answer for the sources it names.
+ */
+export async function loadDestinationGraph(scope?: DestinationGraphScope): Promise<DestinationGraph> {
+  const where = scope ? await destinationGraphWhere(scope) : null
+  const agSelect = {
+    id: true, name: true, campaignId: true, status: true,
+    campaign: { select: { name: true, marketplace: true, targetingType: true, status: true, maxBidCents: true, minBidCents: true } },
+    targets: { select: { expressionType: true, isNegative: true } },
+  } as const
+  const adsOf = (ids: string[] | null) => prisma.adProductAd.findMany({ where: { productId: { not: null }, ...(ids ? { adGroupId: { in: ids } } : {}) }, select: { productId: true, adGroupId: true } })
+  const positivesOf = (ids: string[] | null) => prisma.adTarget.findMany({
+    where: { isNegative: false, kind: { in: ['KEYWORD', 'PRODUCT'] }, ...(ids ? { adGroupId: { in: ids } } : {}) },
+    select: { adGroupId: true, kind: true, expressionType: true, expressionValue: true, externalTargetId: true },
+  })
+  let ags: Array<Prisma.AdGroupGetPayload<{ select: typeof agSelect }>>
+  let ads: Awaited<ReturnType<typeof adsOf>>
+  let positives: Awaited<ReturnType<typeof positivesOf>>
+  if (where) {
+    ags = await prisma.adGroup.findMany({ where, select: agSelect })
+    const ids = ags.map((a) => a.id)
+    ;[ads, positives] = ids.length ? await Promise.all([adsOf(ids), positivesOf(ids)]) : [[], []]
+  } else {
+    ;[ags, ads, positives] = await Promise.all([prisma.adGroup.findMany({ select: agSelect }), adsOf(null), positivesOf(null)])
+  }
 
   const adGroups = new Map<string, DestinationGraph['adGroups'] extends Map<string, infer V> ? V : never>()
   for (const a of ags) {
@@ -212,6 +270,7 @@ export async function loadDestinationGraph(): Promise<DestinationGraph> {
       id: a.id, name: a.name, campaignId: a.campaignId,
       campaignName: a.campaign?.name ?? '', marketplace: a.campaign?.marketplace ?? null,
       targetingType: a.campaign?.targetingType ?? null, campaignStatus: a.campaign?.status ?? null,
+      adGroupStatus: a.status ?? null,
       maxBidCents: a.campaign?.maxBidCents ?? null, minBidCents: a.campaign?.minBidCents ?? null,
       role: roleOf(a.name, a.targets),
     })
@@ -296,7 +355,7 @@ export async function resolveStoredDestinations(scope: DestScopeRequest): Promis
  *
  * The ranking is the whole value, because the set is usually 5–21 long:
  *   1. it already holds sibling keywords of this product's set — it is the ad group in use
- *   2. its campaign is ENABLED
+ *   2. it serves: its campaign and its ad group are ENABLED (batch 2 review fix: the ad group too)
  *   3. its role came from the NAME rather than the majority fallback — a deliberate structure
  *   4. name, for stability, so the order never changes between two reads
  */
@@ -333,21 +392,34 @@ export function rankDestinations(
     const why = [
       holdsTerm ? 'already holds this term' : null,
       ag.campaignStatus === 'ENABLED' ? 'campaign enabled' : `campaign ${String(ag.campaignStatus ?? 'unknown').toLowerCase()}`,
+      ag.adGroupStatus != null && ag.adGroupStatus !== 'ENABLED' ? `ad group ${ag.adGroupStatus.toLowerCase()}` : null,
       nameRole ? `role “${ag.role}” from the name` : `role “${ag.role}” inferred from its keywords`,
       'advertises the same product',
     ].filter(Boolean).join(' · ')
 
     out.push({
       adGroupId: id, adGroupName: ag.name, campaignId: ag.campaignId, campaignName: ag.campaignName,
-      campaignStatus: ag.campaignStatus, role: ag.role, why,
+      campaignStatus: ag.campaignStatus, adGroupStatus: ag.adGroupStatus, role: ag.role, why,
       maxBidCents: ag.maxBidCents, minBidCents: ag.minBidCents,
       holdsTerm, holdsTermAtAmazon: holdsTerm ? (holderIds.get(id) ?? false) : false,
     })
   }
 
   const score = (c: DestinationCandidate) =>
-    (c.holdsTerm ? 4 : 0) + (c.campaignStatus === 'ENABLED' ? 2 : 0) + (/AUTO|EXACT|PHRASE|BROAD/.test(c.adGroupName.toUpperCase()) ? 1 : 0)
+    (c.holdsTerm ? 4 : 0) + (notServingWhy(c) == null ? 2 : 0) + (/AUTO|EXACT|PHRASE|BROAD/.test(c.adGroupName.toUpperCase()) ? 1 : 0)
   return out.sort((a, b) => score(b) - score(a) || a.adGroupName.localeCompare(b.adGroupName))
+}
+
+/**
+ * Batch 2 review fix — why a destination cannot serve a new keyword now: its campaign or its ad group is not ENABLED (a
+ * status the graph does not know counts as not enabled). Null when both are ENABLED. Pure.
+ */
+export function notServingWhy(c: Pick<DestinationCandidate, 'campaignStatus' | 'adGroupStatus'>): string | null {
+  const off = [
+    c.campaignStatus !== 'ENABLED' ? `its campaign is ${String(c.campaignStatus ?? 'of unknown status').toLowerCase()}` : null,
+    c.adGroupStatus !== 'ENABLED' ? `the ad group is ${String(c.adGroupStatus ?? 'of unknown status').toLowerCase()}` : null,
+  ].filter(Boolean)
+  return off.length ? off.join(' and ') : null
 }
 
 /**
@@ -373,10 +445,19 @@ export function resolveDestination(args: {
 
   let source: HvDestSource
   let chosen: DestinationCandidate | null
+  // Batch 2 review fix — the resolver's only candidate is taken only when it serves (campaign AND ad group ENABLED): a
+  // keyword created in a paused campaign or ad group never serves, and its source would be negated, so the term would stop
+  // serving anywhere. The Owner's stored destination is his choice and stays chosen whatever its status.
+  const pausedWhy = !storedCand && shortlist.length === 1 ? notServingWhy(shortlist[0]) : null
   if (storedCand) { source = 'stored'; chosen = storedCand }
-  else if (shortlist.length === 1) { source = 'resolved-unique'; chosen = shortlist[0] }
+  else if (shortlist.length === 1 && !pausedWhy) { source = 'resolved-unique'; chosen = shortlist[0] }
+  else if (shortlist.length === 1) { source = 'resolved-paused'; chosen = null }
   else if (shortlist.length > 1) { source = 'resolved-ambiguous'; chosen = null }
   else { source = 'none'; chosen = null }
+  const only = shortlist[0]
+  const refusal = pausedWhy
+    ? `The only ad group that could take it, “${only.adGroupName}” in “${only.campaignName}”, does not serve: ${pausedWhy}. A keyword there would not run, so none was chosen — enable it, or store a destination with set-harvest-destination.`
+    : undefined
 
   // ── the §4.1 coupling ───────────────────────────────────────────────────────────────────────
   // `applyHarvest` negates the source ONLY when the keyword lands somewhere else. With no chosen
@@ -387,7 +468,9 @@ export function resolveDestination(args: {
   const wouldNegateAtSource = landsElsewhere && negateFlag
 
   let negateReason: string
-  if (!chosen && source === 'none') {
+  if (source === 'resolved-paused') {
+    negateReason = `No — ${refusal}`
+  } else if (!chosen && source === 'none') {
     negateReason = `No destination exists, so nothing would be promoted and nothing negated. There is no manual ${createType.toLowerCase()} ad group advertising this product in ${graph.adGroups.get(sourceAdGroupId ?? '')?.marketplace ?? 'this market'}.`
   } else if (!chosen) {
     negateReason = `No — no destination is set, so the keyword would be created back in “${sourceAdGroupName}”, the ad group that discovered it. applyHarvest negates the source only when the keyword lands elsewhere, so that ad group would keep competing for this term.`
@@ -416,7 +499,7 @@ export function resolveDestination(args: {
     .map((h) => { const ag = graph.adGroups.get(h.adGroupId); return ag ? { id: ag.id, name: ag.name, campaignName: ag.campaignName } : null })
     .filter((x): x is { id: string; name: string; campaignName: string } => !!x)
 
-  return { createType, source, chosen, shortlist, status, wouldNegateAtSource, negateReason, competingAdGroups }
+  return { createType, source, chosen, shortlist, ...(refusal ? { refusal } : {}), status, wouldNegateAtSource, negateReason, competingAdGroups }
 }
 
 function toCandidate(graph: DestinationGraph, adGroupId: string, term: string, kind: 'keyword' | 'product'): DestinationCandidate | null {
@@ -426,7 +509,7 @@ function toCandidate(graph: DestinationGraph, adGroupId: string, term: string, k
   const h = holders.find((x) => x.adGroupId === adGroupId)
   return {
     adGroupId, adGroupName: ag.name, campaignId: ag.campaignId, campaignName: ag.campaignName,
-    campaignStatus: ag.campaignStatus, role: ag.role,
+    campaignStatus: ag.campaignStatus, adGroupStatus: ag.adGroupStatus, role: ag.role,
     // A stored destination that the resolver would NOT have offered is a legitimate operator
     // decision, and the page says so rather than quietly dropping it back to the shortlist.
     why: 'stored for this scope — chosen by hand, outside the resolver’s shortlist',

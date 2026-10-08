@@ -134,7 +134,8 @@ export interface RunRows {
   holds: ReadonlyArray<{ campaignId: string; targetId: string | null; kind: string; by: string; until: Date | null; reason?: string | null; floorCents?: number | null }>
   /** Enrollment mode per campaign (HELD → a raise cap, BB-10 review). */
   enrollments: ReadonlyMap<string, { mode: string; heldBy: string | null; heldUntil: Date | null }>
-  lastSteps: ReadonlyMap<string, { dataDay: string; fromCents: number; toCents: number }>
+  /** `nowcast`: a step taken with the rows read through the nowcast (nowcast.ts stepToStore). */
+  lastSteps: ReadonlyMap<string, { dataDay: string; fromCents: number; toCents: number; nowcast?: boolean }>
   /** BB-5 — each family's total Amazon sales in the market over the 30 settled days, in cents (read for TACoS only). */
   familySales?: ReadonlyMap<string, number>
   /** BB-8 — per ad group: its stock (absent: nothing to say). */

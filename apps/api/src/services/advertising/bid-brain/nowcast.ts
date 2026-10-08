@@ -11,7 +11,10 @@
  *     on      the window ends yesterday and every day counts with its copy's maturity: the decisions use it
  *   steps     a keyword moves once per data day (decide.ts lastStep). The nowcast's data day is newer than the settled
  *             one, so a step keyed to today's settled day is re-keyed to the nowcast's (nowcastLastSteps): no second
- *             step on the same day — not in shadow's comparison, and not on the day the switch goes on
+ *             step on the same day — not in shadow's comparison, and not on the day the switch goes on. Batch 2 review
+ *             fix — only a step dated exactly the settled day, and never one taken with the nowcast on (stored marked
+ *             `nowcast: true`, stepToStore): such a step is dated the nowcast's own day, and re-keying it to the next
+ *             day's nowcast day made the keyword move once and then hold for good (yesterday's step read as today's)
  *   With no usable curve for the market (none fitted yet, only the prior, or a fit older than two weeks), the young days
  *   are ignored (design U1 guardrails): shadow compares nothing and on reads the settled window exactly as off.
  *
@@ -145,18 +148,36 @@ export function nowcastSummaryWords(s: NowcastShadowSummary | null | undefined):
 /** The young days' share of matured clicks, in percent with one decimal. */
 export const youngPctOf = (t: NowcastEvidence['totals']): number => (t.clicks > 0 ? Math.round((t.youngClicks / t.clicks) * 1000) / 10 : 0)
 
+/** A step anchor as a decision stores it (`evidence.lastStep`); `nowcast`: taken with the rows read through the nowcast. */
+export interface StepAnchor { dataDay: string; fromCents: number; toCents: number; nowcast?: boolean }
+
 /**
  * The run's step anchors as the nowcast reads them (BB-15 follow-up). decide() moves a keyword once per data day: a step
  * recorded for the decision's data day (or a newer one) is the day's step, and the next move waits for a new day. A step
- * keyed to the settled data day `settledDay` (or newer) was taken on this run's day — whose nowcast data day is
- * `nowcastDay` — so it is re-keyed to it: the nowcast then takes no second step on a keyword the settled run already
- * stepped today (in shadow that would count a false "differ"; switched on it would allow one extra step on the day the
- * switch goes on). An older step keeps its day: a new data day, a new step, exactly as settled. Pure; a new map.
+ * keyed to the settled data day `settledDay` was taken on this run's day — whose nowcast data day is `nowcastDay` — so it
+ * is re-keyed to it: the nowcast then takes no second step on a keyword the settled run already stepped today (in shadow
+ * that would count a false "differ"; switched on it would allow one extra step on the day the switch goes on). Batch 2
+ * review fix — ONLY a step dated exactly the settled day and not taken with the nowcast on: a step of the nowcast is dated
+ * its own (newer) data day, and re-keying it moved yesterday's step onto today, so the keyword held for good. Every other
+ * step keeps its day: a new data day, a new step, exactly as settled. Pure; a new map.
  */
-export function nowcastLastSteps<T extends { dataDay: string }>(lastSteps: ReadonlyMap<string, T>, settledDay: string, nowcastDay: string): Map<string, T> {
+export function nowcastLastSteps<T extends { dataDay: string; nowcast?: boolean }>(lastSteps: ReadonlyMap<string, T>, settledDay: string, nowcastDay: string): Map<string, T> {
   const out = new Map<string, T>()
-  for (const [id, s] of lastSteps) out.set(id, s.dataDay >= settledDay && s.dataDay < nowcastDay ? { ...s, dataDay: nowcastDay } : s)
+  for (const [id, s] of lastSteps) out.set(id, !s.nowcast && s.dataDay === settledDay && settledDay < nowcastDay ? { ...s, dataDay: nowcastDay } : s)
   return out
+}
+
+/**
+ * The step a decision stores for the next run (`evidence.lastStep`): its own, else the last one of the same data day
+ * (carried, so a later run of the same data day still anchors on it — the run's anchor as it read it, re-keyed on the day
+ * the switch goes on). Batch 2 review fix — decided from rows read with the nowcast on (`nowcastOn`), it is marked
+ * `nowcast: true`, so nowcastLastSteps never re-keys it: the next data day is a new day and a new step. Pure.
+ */
+export function stepToStore(d: { dataDay: string; step: StepAnchor | null }, last: StepAnchor | undefined, nowcastOn: boolean): StepAnchor | null {
+  const s = d.step ?? (last && last.dataDay === d.dataDay ? last : null)
+  if (!s) return null
+  const { nowcast: _was, ...plain } = s
+  return nowcastOn ? { ...plain, nowcast: true } : plain
 }
 
 /**

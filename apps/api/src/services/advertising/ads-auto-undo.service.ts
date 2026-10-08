@@ -435,6 +435,8 @@ export interface AutoUndoRun {
   notes: string[]
   /** AB-15 — the brain's own levers (brain/undo-run.ts); absent when no product is enrolled. */
   brain?: BrainUndoRun
+  /** Batch 2 review fix — the brain levers' pass failed this run (its error); the rest of the answer stands. */
+  brainError?: string
 }
 
 interface Candidate {
@@ -785,10 +787,22 @@ export async function runAutoUndo(opts: { now?: Date; dryRun?: boolean } = {}): 
   items.sort((a, b) => order[a.action] - order[b.action] || (a.verdict === 'worse' ? 0 : 1) - (b.verdict === 'worse' ? 0 : 1) || b.at.localeCompare(a.at))
   if (items.length > SHOWN) notes.push(`The first ${SHOWN} of ${items.length} judgements are listed; the counts cover all of them.`)
   // AB-15 — the brain's own levers, in their own pass, at the same level and inside the same daily cap. No product enrolled:
-  // nothing (one remembered query) and this answer exactly as before.
-  const { runBrainLeverUndo } = await import('./brain/undo-run.js')
-  const brain = await runBrainLeverUndo({ now, dryRun, level, today })
-  return brain ? { ...answer(items.slice(0, SHOWN)), brain } : answer(items.slice(0, SHOWN))
+  // nothing (one remembered query) and this answer exactly as before. Batch 2 review fix — a failed brain pass (an
+  // enrollment read, a lever's read) never loses the bid pass above: what it judged and did is answered and summarised, the
+  // failure said in a note and logged, and the brain's levers are judged again at the next run.
+  let brain: BrainUndoRun | null = null
+  let brainError: string | null = null
+  try {
+    const { runBrainLeverUndo } = await import('./brain/undo-run.js')
+    brain = await runBrainLeverUndo({ now, dryRun, level, today })
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error)
+    brainError = why.slice(0, 200)
+    logger.warn('[ads-auto-undo] the brain levers\' pass failed — the bid pass\'s answer stands', { error: why.slice(0, 300) })
+    notes.push(`The brain levers' pass failed (${why.slice(0, 200)}): the changes above were judged and acted on as listed; the brain's own levers are judged again at the next run.`)
+  }
+  const out = answer(items.slice(0, SHOWN))
+  return brain ? { ...out, brain } : brainError ? { ...out, brainError } : out
 }
 
 /** The run's one line (CronRun summary). */
@@ -796,6 +810,7 @@ export function autoUndoSummaryLine(run: AutoUndoRun): string {
   const c = run.counts
   if (run.level === 'OFF') return `skipped: ${run.levelWhy}`
   const line = `level=${run.level} read=${c.read} judged=${c.judged} worse=${c.worse} would_undo=${c.wouldUndo} proposed=${c.proposed} undone=${c.undone} held=${c.held} superseded=${c.superseded} waiting=${c.waiting} not_enough_data=${c.notEnoughData} left_alone=${c.leftAlone}`
+  if (run.brainError) return `${line} · brain: failed (${run.brainError})`
   if (!run.brain) return line
   const b = run.brain.counts
   return `${line} · brain: read=${b.read} judged=${b.judged} worse=${b.worse} would_undo=${b.wouldUndo} proposed=${b.proposed} undone=${b.undone} held=${b.held} superseded=${b.superseded} waiting=${b.waiting} followed=${b.followed}`

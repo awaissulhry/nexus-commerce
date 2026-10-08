@@ -40,7 +40,8 @@ import { destinationAdGroups, resolveDestination, type HarvestDestination, type 
  * 5d (review 7.4) — the source ad group is a fallback destination only when it can take a keyword or product
  * target: a manual Sponsored Products campaign. An automatic one cannot, so the create failed and left a local row.
  */
-const SOURCE_SELECT = { id: true, externalAdGroupId: true, campaignId: true, campaign: { select: { targetingType: true, adProduct: true, type: true, marketplace: true } } } as const
+// Batch 2 review fix — and its campaign's portfolio: the Owner's harvest destination may be stored at the portfolio grain.
+const SOURCE_SELECT = { id: true, externalAdGroupId: true, campaignId: true, campaign: { select: { targetingType: true, adProduct: true, type: true, marketplace: true, portfolioId: true } } } as const
 const takesTargets = (ag: { campaign: { targetingType: string | null; adProduct: string | null; type: string | null } | null } | null): boolean =>
   !!ag?.campaign && ag.campaign.targetingType === 'MANUAL' && adProductOf(ag.campaign) === SPONSORED_PRODUCTS
 const NO_DESTINATION = 'No destination was given for this match type, and the ad group this term came from is not in a manual Sponsored Products campaign, so it cannot take it. Nothing was created.'
@@ -52,9 +53,19 @@ const NO_DESTINATION = 'No destination was given for this match type, and the ad
  * created: a keyword is never graduated back into the ad group that found it, where its source could never be negated.
  * The Owner's stored destination may still BE the source (his choice), or say negateAtSource off: both are kept.
  */
-const unresolved = (r: { source: string; shortlist: unknown[] }, gm: string) => r.source === 'resolved-ambiguous'
+const unresolved = (r: { source: string; shortlist: unknown[]; refusal?: string }, gm: string) => r.source === 'resolved-ambiguous'
   ? `No destination is set for this match type, and ${r.shortlist.length} ad groups of this product could take it, so none was chosen. Nothing was created — never back into the ad group that found it, whose source negative could then never fire; store one with set-harvest-destination.`
-  : `No destination is set for this match type and no manual ${gm === 'PRODUCT' ? 'product-target' : gm.toLowerCase()} ad group advertises this product here, so nothing was created — never back into the ad group that found it, whose source negative could then never fire.`
+  : r.source === 'resolved-paused'
+    // Batch 2 review fix — the only candidate does not serve (its campaign or ad group is not ENABLED).
+    ? `No destination is set for this match type. ${r.refusal ?? 'The only ad group that could take it does not serve.'} Nothing was created.`
+    : `No destination is set for this match type and no manual ${gm === 'PRODUCT' ? 'product-target' : gm.toLowerCase()} ad group advertises this product here, so nothing was created — never back into the ad group that found it, whose source negative could then never fire.`
+/**
+ * Batch 2 review fix — the Owner's stored destination is his choice whole (as accountWideLanding and the brain's harvest
+ * hold it): one that no longer exists, or that lies in another market than the term, refuses the harvest by name — it never
+ * falls back to the resolver's own pick.
+ */
+const STORED_GONE = (grain: string) => `The harvest destination stored for this match type (at the ${grain} grain) no longer exists, so nothing was created. Choose a destination again with set-harvest-destination (or on the Keyword Harvest tab).`
+const STORED_ELSEWHERE = (grain: string, name: string, theirs: string, ours: string) => `The harvest destination stored for this match type (at the ${grain} grain), “${name}”, is in ${theirs}, but this search term is from ${ours}, so nothing was created. Store a destination for ${ours} with set-harvest-destination.`
 /** PB-6a — a source whose own plan names no destination for a match type (the wizard could not tell its theme). */
 const UNROUTED = 'Two or more of this rule\'s campaigns take this match type, and which one fits this source (brand, competitor or category) could not be told, so no destination was chosen for it. Nothing was created; set the destination on the rule.'
 /** PB-6b — a stored destination no ad group can be read from (a router missing one of its ad groups, or an ASIN sent to it). */
@@ -424,7 +435,7 @@ export interface HarvestRuleLock {
   criteria: HarvestCriteria
 }
 
-type SourceRow = { id: string; externalAdGroupId: string | null; campaignId?: string | null; campaign: { targetingType: string | null; adProduct: string | null; type: string | null; marketplace: string | null } | null }
+type SourceRow = { id: string; externalAdGroupId: string | null; campaignId?: string | null; campaign: { targetingType: string | null; adProduct: string | null; type: string | null; marketplace: string | null; portfolioId?: string | null } | null }
 
 interface Lock {
   /** Each candidate's source ad group, by Amazon's ad-group id. */
@@ -477,6 +488,10 @@ function landingOf(gm: string, query: string, src: SourceRow | null, row: Harves
 /**
  * AB-11 — the destinations of the graduations that name none (no plan row destination, no call destination for the match
  * type): resolved once for the batch through the Keyword Harvest page's own resolver (harvest-destination.service.ts).
+ * Batch 2 review fix — the stored destination is looked up along the whole chain the Keyword Harvest tab and
+ * set-harvest-destination save to, the source campaign's portfolio included (as accountWideLanding and the brain's harvest
+ * read it): the Owner's destinations are stored at the portfolio grain. And the graph is read for the batch's sources only
+ * (their products in their markets, and the stored destinations), not the whole business (a rule runs every 15 minutes).
  */
 async function resolveUnnamed(lock: Lock, items: ReadonlyArray<{ query: string; externalAdGroupId: string; matches: readonly string[] }>, plan: HarvestPlan | undefined, destinations: Record<string, string> | undefined): Promise<void> {
   const asks: Array<{ query: string; gm: string; src: SourceRow }> = []
@@ -491,17 +506,30 @@ async function resolveUnnamed(lock: Lock, items: ReadonlyArray<{ query: string; 
   }
   if (!asks.length) return
   const { loadDestinationGraph, resolveStoredDestinations, resolveDestination } = await import('./harvest-destination.service.js')
-  const graph = await loadDestinationGraph()
   const storedBy = new Map<string, Awaited<ReturnType<typeof resolveStoredDestinations>>>()
+  for (const { src } of asks) {
+    if (storedBy.has(src.id)) continue
+    storedBy.set(src.id, await resolveStoredDestinations({
+      market: src.campaign?.marketplace ?? 'all', portfolio: src.campaign?.portfolioId ?? null, campaign: src.campaignId ?? null, adGroup: src.id,
+    }))
+  }
+  const graph = await loadDestinationGraph({
+    sourceAdGroupIds: [...storedBy.keys()],
+    alsoAdGroupIds: [...storedBy.values()].flatMap((m) => [...m.values()].map((d) => d.adGroupId)),
+  })
   for (const a of asks) {
-    let stored = storedBy.get(a.src.id)
-    if (!stored) storedBy.set(a.src.id, (stored = await resolveStoredDestinations({ market: a.src.campaign?.marketplace ?? 'all', campaign: a.src.campaignId ?? null, adGroup: a.src.id })))
+    const stored = storedBy.get(a.src.id)!
     const createType = (a.gm === 'PRODUCT' ? 'PRODUCT' : a.gm) as 'EXACT' | 'PHRASE' | 'BROAD' | 'PRODUCT'
     const r = resolveDestination({ graph, stored, sourceAdGroupId: a.src.id, sourceAdGroupName: '', term: a.query, kind: createType === 'PRODUCT' ? 'product' : 'keyword', createType })
     const key = resolvedKey(a.src.id, a.gm, a.query)
+    const st = stored.get(createType)
+    if (st && r.source !== 'stored') { lock.resolved.set(key, { deniedAt: 'no_destination', why: STORED_GONE(st.grain) }); continue }
+    const at = r.chosen ? graph.adGroups.get(r.chosen.adGroupId)?.marketplace ?? null : null
+    const ours = a.src.campaign?.marketplace ?? null
+    if (r.source === 'stored' && r.chosen && at && ours && strategyMarketOf(at) !== strategyMarketOf(ours)) { lock.resolved.set(key, { deniedAt: 'no_destination', why: STORED_ELSEWHERE(st!.grain, r.chosen.adGroupName, at, ours) }); continue }
     if (!r.chosen) { lock.resolved.set(key, { deniedAt: 'no_destination', why: unresolved(r, a.gm) }); continue }
     // The Owner's stored destination may be the source itself, or keep the source: his choice, kept.
-    lock.resolved.set(key, { adGroupId: r.chosen.adGroupId, keepSource: r.chosen.adGroupId === a.src.id || stored.get(createType)?.negateAtSource === false })
+    lock.resolved.set(key, { adGroupId: r.chosen.adGroupId, keepSource: r.chosen.adGroupId === a.src.id || st?.negateAtSource === false })
   }
 }
 

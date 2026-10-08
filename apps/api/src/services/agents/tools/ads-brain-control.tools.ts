@@ -8,9 +8,10 @@
  * THE OWNER'S CODE RULE A (ads-code-rule.ts 'set-ads-brain: a lever to AUTO') — a change that takes any lever to AUTO (on
  * the product or one of its own campaigns, whichever op does it, an enrollment with an adopted AUTO included) or puts a
  * campaign under the bid brain is a BIG DOOR: approving it needs the approver's authenticator code (the preview's
- * `stepUp`, checked again on the fresh dry run in `execute`). Everything else is day-to-day: a person's normal approval,
- * with what can add spend listed in `raises` and said in the effect. Every op waits for a person: never by rule, never
- * confirmed in Claude (ceiling ask).
+ * `stepUp`, checked again on the fresh dry run in `execute`). Batch 2 review fix (lead decision) — so is op set-value
+ * RAISING the product's portfolio cap limit (portfolioCapLimitCents; 'set-ads-brain: a portfolio cap limit raised'); a lower
+ * limit is a normal approval. Everything else is day-to-day: a person's normal approval, with what can add spend listed in
+ * `raises` and said in the effect. Every op waits for a person: never by rule, never confirmed in Claude (ceiling ask).
  *
  * Approved, it runs as the person who approved it, on the basis it was approved on (the brain's version and the plan's
  * basis): anything moved since refuses it. op leave gives back, after the commit, the bids and placements of each own
@@ -64,18 +65,26 @@ async function decide(args: Record<string, unknown>): Promise<ToolResult> {
   const out = await previewControl(inputOf(args))
   if ('refusal' in out) return { ok: false, error: out.refusal === PRODUCT_NOT_FOUND || out.refusal.startsWith('Not queued') ? out.refusal : `Not queued: ${out.refusal}` }
   const p = out.preview
-  // Code rule A — two doors: a lever to AUTO (or a campaign under the bid brain), and op leave lifting the brain's own pauses.
-  const door = p.op === 'leave' ? 'set-ads-brain: leave lifts the brain\'s pauses' as const : 'set-ads-brain: a lever to AUTO' as const
+  // Code rule A — three doors: a lever to AUTO (or a campaign under the bid brain), op leave lifting the brain's own pauses,
+  // and (batch 2 review fix, lead decision) op set-value raising the product's portfolio cap limit.
+  const door = p.op === 'leave' ? 'set-ads-brain: leave lifts the brain\'s pauses' as const
+    : p.op === 'set-value' ? 'set-ads-brain: a portfolio cap limit raised' as const
+      : 'set-ads-brain: a lever to AUTO' as const
   const coded = p.needsCode && needsCode(door)
   const stepUp: StepUp | null = coded
     ? p.op === 'leave'
       ? { what: `takes the product out of the ads brain and ${p.bigDoor.join('; ')}`, raises: ['Campaign state'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW }
-      : { what: `takes the ads brain to AUTO (${p.bigDoor.join('; ')})`, raises: ['Brain level'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW }
+      : p.op === 'set-value'
+        ? { what: `raises the ads brain's limit (${p.bigDoor.join('; ')})`, raises: ['Portfolio cap limit'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW }
+        : { what: `takes the ads brain to AUTO (${p.bigDoor.join('; ')})`, raises: ['Brain level'], needs: STEP_UP_NEEDS, how: BIG_DOOR_HOW }
     : null
+  const doorWords = p.op === 'leave' ? ' Lifting the brain\'s own pauses is a big door: approving it needs the approver\'s authenticator code (leave with pauses: "keep" needs none).'
+    : p.op === 'set-value' ? ' Raising the portfolio cap limit is a big door: approving it needs the approver\'s authenticator code (a lower limit needs none).'
+      : ' A lever going to AUTO is a big door: approving it needs the approver\'s authenticator code.'
   const effect = [
     p.summary,
     ...p.starts.map((s) => `${s[0].toUpperCase()}${s.slice(1)}.`),
-  ].join(' ') + addsSpendWords(p.raises, coded) + (coded ? (p.op === 'leave' ? ' Lifting the brain\'s own pauses is a big door: approving it needs the approver\'s authenticator code (leave with pauses: "keep" needs none).' : ' A lever going to AUTO is a big door: approving it needs the approver\'s authenticator code.') : '') + ` ${p.reachNote}`
+  ].join(' ') + addsSpendWords(p.raises, coded) + (coded ? doorWords : '') + ` ${p.reachNote}`
   return {
     ok: true,
     preview: {
@@ -120,8 +129,9 @@ const setAdsBrain: AgentTool = {
     + 'each change from → to, what the brain will start doing lever by lever, what can add spend, and the refusals: a '
     + 'level a lever does not take yet, a value outside its bounds, a lever to AUTO while one of Amazon\'s own rules acts on '
     + 'it, a change that changes nothing. Any change that takes a lever to AUTO (or puts a campaign under the bid brain) is '
-    + 'a big door: approving it needs the approver\'s authenticator code; OBSERVE, PROPOSE, OFF, locks, exclusions, values '
-    + 'and leave are a normal approval, with what adds spend said. A person approves every change in Nexus; nothing '
+    + 'a big door: approving it needs the approver\'s authenticator code, and so does a value that raises the product\'s '
+    + 'portfolio cap limit (portfolioCapLimitCents); OBSERVE, PROPOSE, OFF, locks, exclusions, other values (a lower limit '
+    + 'included) and leave are a normal approval, with what adds spend said. A person approves every change in Nexus; nothing '
     + 'changes until then, and an approved change runs only on the facts it was approved on. ads-brain view map shows '
     + 'every setting with its source afterwards.',
   input: z.object({

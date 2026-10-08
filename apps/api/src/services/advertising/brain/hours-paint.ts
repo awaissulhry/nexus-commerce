@@ -18,9 +18,11 @@
  *                          click (its own is the floor's)
  *                 keep     anything else — thin data keeps the plan (design §2.3: "fall back when data is thin"), as the
  *                          wide interval of a thin product rarely clears a rule
- *   cells       each hour moves from ITS OWN target in its block's direction: up or down by the furthest step whose bid
- *               multiplier (1 + placement %) moves at most hourCellMovePct (default 30 %, §5), and at least one step;
- *               into Min bid from any target (a cut); out of Min bid to the lowest serving target. 0 % moves nothing.
+ *   cells       each hour moves from ITS OWN target in its block's direction by the furthest step whose bid multiplier
+ *               (1 + placement %) moves at most hourCellMovePct (default 30 %, §5). Up never past that cap: when even the
+ *               next step up is beyond it the hour stays (batch 2 review fix — a 0 % → +100 % plan doubled a bid in one
+ *               paint); down at least one step (a cut). Into Min bid from any target (a cut); out of Min bid to the lowest
+ *               serving target. 0 % moves nothing.
  *   kept        a locked hour cell (hours lever, "hourCell:dXhY", the product's or a member campaign's) never changes; an
  *               hour the plan holds no target in stays so; a target that would change a locked lane (placements lever)
  *               is not taken; with hourPlanAsLimits the Owner's own painted plan caps each hour — never above his target
@@ -223,7 +225,8 @@ export function stepFrom(current: string, dir: Direction, ladder: { serving: str
   const f0 = factor(t)
   const within = (k: string) => Math.abs(factor(targets.get(k)!) / f0 - 1) <= cap + 1e-9
   if (dir === 'up') {
-    if (i + 1 >= ladder.serving.length) return current
+    // Batch 2 review fix — a raise stays inside the cap: when the next step up is already beyond it, the hour stays.
+    if (i + 1 >= ladder.serving.length || !within(ladder.serving[i + 1])) return current
     let j = i + 1
     while (j + 1 < ladder.serving.length && within(ladder.serving[j + 1])) j++
     return ladder.serving[j]

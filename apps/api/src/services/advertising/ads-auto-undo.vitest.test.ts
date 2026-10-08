@@ -302,6 +302,20 @@ describe('auto-undo — a whole run', { timeout: TIMEOUT }, () => {
     expect(await judgements()).toEqual([])
   })
 
+  it('a failed brain levers\' pass never loses the bid pass: its answer and line stand, the failure said (batch 2 review fix)', async () => {
+    vi.doMock('./brain/undo-run.js', () => ({ runBrainLeverUndo: async () => { throw new Error('test: the enrollment read failed') } }))
+    try {
+      const out = await run(true)
+      expect(out).toMatchObject({ level: 'OBSERVE', dryRun: true, brainError: 'test: the enrollment read failed' })
+      expect(out.counts).toMatchObject({ judged: 5, worse: 3, wouldUndo: 3, notWorse: 1, notEnoughData: 1, superseded: 1 })
+      expect(out.items.length).toBeGreaterThan(0)
+      expect(out.notes).toEqual(expect.arrayContaining([expect.stringMatching(/^The brain levers' pass failed \(test: the enrollment read failed\): the changes above were judged/)]))
+      expect('brain' in out).toBe(false)
+      expect(autoUndoSummaryLine(out)).toMatch(/^level=OBSERVE read=\d+ judged=5 .* · brain: failed \(test: the enrollment read failed\)$/)
+      expect(await judgements()).toEqual([])
+    } finally { vi.doUnmock('./brain/undo-run.js') }
+  })
+
   it('born OBSERVE: each judgement is recorded with its numbers; it would undo the clearly worse ones and changes nothing at Amazon', async () => {
     const out = await run()
     expect(out.level).toBe('OBSERVE')

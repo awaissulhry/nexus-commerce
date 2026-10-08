@@ -238,6 +238,10 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-13 — the brain\'s hourly researc
     // The brain's request is the only one: asking again by hand is refused while it waits.
     const again = await inW(() => getTool(HOURS_TOOL)!.handler({ planId: row.planId }, { can: () => true, via: 'claude' } as never))
     expect(again).toMatchObject({ ok: false, error: expect.stringMatching(/already waits for a person/) })
+    // Batch 2 review fix — the saved plan reaches Amazon through the hourly bid engine: the tool says so (openWorld), as
+    // set-hourly-bid-plan does, and always waits for a person.
+    expect(getTool(HOURS_TOOL)).toMatchObject({ openWorld: true, alwaysAsk: true, maxClaudeTrust: 'ask' })
+    expect(getTool('set-hourly-bid-plan')!.openWorld).toBe(true)
   })
 
   it('reject: the plan stays exactly as it was; the row and the view say REJECTED', async () => {

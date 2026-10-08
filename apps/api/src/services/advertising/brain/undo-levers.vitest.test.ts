@@ -123,12 +123,15 @@ describe('AB-15 — what auto-undo does (pure)', () => {
     expect(at('AUTO', { capLeft: 0 })).toBe('held')
     expect(at('OBSERVE', { capLeft: 0 })).toBe('held')
   })
-  it('the ceilings: an undo that only lowers spend may run alone; a resume, a cap back and a strategy back always ask', () => {
+  it('the ceilings: an undo that only lowers spend may run alone; a resume, a revive, a cap back and a strategy back always ask', () => {
     expect(Object.fromEntries(Object.entries(BRAIN_UNDO_RULES).map(([k, r]) => [k, r.ceiling]))).toEqual({
-      budgets: 'AUTO', portfolioCap: 'PROPOSE', state: 'PROPOSE', 'state:pause': 'PROPOSE', 'state:resume': 'AUTO', negatives: 'AUTO', harvest: 'AUTO', biddingStrategy: 'PROPOSE',
+      budgets: 'AUTO', portfolioCap: 'PROPOSE', state: 'PROPOSE', 'state:pause': 'PROPOSE', 'state:resume': 'AUTO', negatives: 'PROPOSE', harvest: 'AUTO', biddingStrategy: 'PROPOSE',
     })
     expect(ruleOf('state', 'pause').ceiling).toBe('PROPOSE')
     expect(ruleOf('state', 'resume').ceiling).toBe('AUTO')
+    // Batch 2 review fix — a revive adds spend (the term serves again at its sources' bids): at AUTO it asks a person.
+    expect(decideBrainAction({ verdict: 'worse', level: 'AUTO', rule: ruleOf('negatives', 'add'), kill: null, capLeft: 5, cap: 5, market: 'IT' })).toMatchObject({ action: 'proposed', reason: expect.stringMatching(/always goes to a person \(it adds spend/) })
+    expect(ruleOf('negatives', 'add').undo).toMatch(/always a person: it adds spend/)
   })
 })
 

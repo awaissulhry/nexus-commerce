@@ -72,6 +72,8 @@ interface CampaignRow {
   pinBids: boolean
   pinBudget: boolean
   pinNote: string | null
+  /** Batch 2 review fix — where the Owner's harvest destination may be stored (the portfolio grain). */
+  portfolioId: string | null
 }
 
 async function campaignByExternalId(externalCampaignId: string): Promise<CampaignRow | null> {
@@ -89,6 +91,7 @@ async function campaignByExternalId(externalCampaignId: string): Promise<Campaig
       pinBids: true,
       pinBudget: true,
       pinNote: true,
+      portfolioId: true,
     },
   }) as Promise<CampaignRow | null>
 }
@@ -484,11 +487,12 @@ async function destinationAdGroup(args: Record<string, unknown>, query: string, 
   if (!sourceGroup) return { refusal: `ad group ${sourceGroupExt} not found in ${source.name}` }
   const [graph, stored] = await Promise.all([
     loadDestinationGraph(),
-    resolveStoredDestinations({ market: source.marketplace ?? 'all', campaign: source.id, adGroup: sourceGroup.id }),
+    // Batch 2 review fix — the whole chain, the portfolio grain included (where the Owner stores his destinations).
+    resolveStoredDestinations({ market: source.marketplace ?? 'all', portfolio: source.portfolioId ?? null, campaign: source.id, adGroup: sourceGroup.id }),
   ])
   const resolved = resolveDestination({ graph, stored, sourceAdGroupId: sourceGroup.id, sourceAdGroupName: sourceGroup.name, term: query, kind: 'keyword', createType: 'EXACT' })
   if (!resolved.chosen) {
-    return { refusal: `No destination ad group is decided for this term (${resolved.source === 'resolved-ambiguous' ? `${resolved.shortlist.length} could take it` : 'none fits'}). Name one: destExternalAdGroupId.` }
+    return { refusal: `No destination ad group is decided for this term (${resolved.source === 'resolved-ambiguous' ? `${resolved.shortlist.length} could take it` : resolved.source === 'resolved-paused' ? `the only one that could take it does not serve: ${resolved.refusal}` : 'none fits'}). Name one: destExternalAdGroupId.` }
   }
   if (destNamed && resolved.chosen.campaignId !== dest.id) {
     return { refusal: `The harvest destination for this term is in ${resolved.chosen.campaignName}, not ${dest.name}: name the ad group (destExternalAdGroupId).` }

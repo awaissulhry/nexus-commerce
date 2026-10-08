@@ -9,11 +9,14 @@ import prisma from '../../db.js'
 export const TARGETING_CAMPAIGN_SELECT = {
   id: true, name: true, type: true, adProduct: true, status: true, marketplace: true, externalCampaignId: true, dailyBudgetCurrency: true, targetingType: true,
   bidsSuppressedAt: true, bidsSuppressedBy: true,
+  // Batch 2 review fix — the portfolio, where the Owner's harvest destination may be stored (harvest-search-term).
+  portfolioId: true,
 } as const
 
 export interface TargetingCampaign {
   id: string; name: string; type: unknown; adProduct: string | null; status: unknown; marketplace: string | null; externalCampaignId: string | null
   dailyBudgetCurrency: string | null; targetingType: string | null; bidsSuppressedAt: Date | null; bidsSuppressedBy: string | null
+  portfolioId?: string | null
 }
 
 /** An ad group as a target or a negative is judged there: its state, its default bid, its floor, its campaign. */
