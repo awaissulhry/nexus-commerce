@@ -32,10 +32,13 @@
  *             kind changed, never raised above a cap someone else set (the Owner's cap stands: the brain may only
  *             lower it), unless the Owner's own amount (portfolioCapCents) is what the plan applies.
  *   value cap the gate's per-write value cap (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS, unchanged for everyone) is checked
- *             before anything is asked or written: a budget or a cap above it is held, never sent to a doomed write. A
- *             cap above it cannot be set from Nexus by anyone — the gate refuses the brain, an approved set-portfolio and
- *             the Portfolios page alike (a portfolio write carries no person's "send anyway") — so no request is made
- *             either: the brain says so once a month per portfolio (AdsBrainAsk `cap-over:`), and holds it each run.
+ *             before a campaign budget is asked or written: a budget above it is held, never sent to a doomed write.
+ *   cap limit Owner decision 2A — a portfolio cap is judged against its own monthly limit instead (brain/portfolio-cap-limit.ts:
+ *             the product's portfolioCapLimitCents, else NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS, default €2,000), checked
+ *             before anything is asked or written. A cap above it cannot be set from Nexus by anyone — the gate refuses
+ *             the brain, an approved set-portfolio and the Portfolios page alike (a portfolio write carries no person's "send
+ *             anyway") — so no request is made either: the brain says so once a month per portfolio (AdsBrainAsk
+ *             `cap-over:`), and holds it each run.
  *   brakes    the account dial and the brain's own engine caps (ads-engine-actors.ts `brain-money`), asked once per
  *             campaign before its first write (never split); under SUGGEST nothing new is written and only an earlier
  *             day's ladder is given back (a restore, as the bid brain's give-backs).
@@ -46,6 +49,7 @@
 import { Prisma } from '@prisma/client'
 import type { AdWriteEvidence } from '../ads-evidence.js'
 import { maxWriteValueCents } from '../ads-write-gate.js'
+import { productPortfolioCapLimit, raiseLimitWords, type PortfolioCapLimit } from './portfolio-cap-limit.js'
 import { allowChange, nothingHeld, type ChangeKind, type EngineGuard } from '../ads-engine-guard.js'
 import type { AdsActor } from '../ads-mutation.service.js'
 import prisma from '../../../db.js'
@@ -68,7 +72,7 @@ export type CampaignStep =
   | { campaignId: string; name: string; level: string; do: 'ask'; fromCents: number; toCents: number; why: string }
   | { campaignId: string; name: string; level: string; do: 'hold'; why: string }
 
-/** One portfolio's step this run (pure: moneyStepsOf). `over-value`: above the per-write value cap — said once a month, never asked. */
+/** One portfolio's step this run (pure: moneyStepsOf). `over-value`: above the portfolio cap limit — said once a month, never asked. */
 export type CapStep =
   | { portfolioId: string; name: string | null; level: string; do: 'write' | 'ask' | 'over-value'; fromCents: number | null; toCents: number; why: string }
   | { portfolioId: string | null; name: string | null; level: string; do: 'hold'; why: string }
@@ -144,8 +148,10 @@ const NOT_LIVE = 'the server switch NEXUS_BID_BRAIN_MODE is not live: the brain 
 export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFacts, 'campaigns' | 'today' | 'currency'>, ctx: {
   live: boolean
   native?: ReadonlyMap<string, readonly string[]>
-  /** The gate's per-write value cap (cents); absent: not checked here. */
+  /** The gate's per-write value cap (cents), for campaign budgets; absent: not checked here. */
   valueCapCents?: number | null
+  /** Owner decision 2A — the limit of a portfolio's cap (the product's own, else the server's); absent: not checked here. */
+  capLimit?: PortfolioCapLimit | null
   /** AB-15 — the Owner's kill switch, or the hold after an auto-undo, on a campaign's budget or a portfolio's cap: in words. */
   holds?: { budget: (campaignId: string) => string | null; cap: (portfolioId: string) => string | null }
 }): { campaigns: CampaignStep[]; portfolios: CapStep[] } {
@@ -217,8 +223,9 @@ export function moneyStepsOf(plan: ProductMoneyPlan, facts: Pick<ProductMoneyFac
       if (e.todayPolicy !== 'MONTHLY_RECURRING') { hold(`a ${String(e.todayPolicy ?? 'unknown').toLowerCase().replace(/_/g, ' ')} cap someone else set stands: the brain never changes a cap's kind or removes one`); continue }
       if (e.todayCapCents == null || e.capCents > e.todayCapCents) { hold(`the cap${e.todayCapCents != null ? ` ${w(e.todayCapCents)}` : ''} someone else set stands: the brain may lower it, never raise it (it would plan ${w(e.capCents)})`); continue }
     }
-    if (overValue(e.capCents)) {
-      portfolios.push({ ...head, portfolioId: e.portfolioId, do: 'over-value', fromCents: e.todayCapCents, toCents: e.capCents, why: `a cap of ${w(e.capCents)} is above the per-write value cap ${w(cap!)} (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS): the gate refuses it for every writer — the brain, an approved set-portfolio and the Portfolios page alike (a portfolio write carries no "send anyway") — so it is neither written nor asked; set it in Seller Central, or raise the value cap` })
+    const limit = ctx.capLimit ?? null
+    if (limit && e.capCents > limit.cents) {
+      portfolios.push({ ...head, portfolioId: e.portfolioId, do: 'over-value', fromCents: e.todayCapCents, toCents: e.capCents, why: `a cap of ${w(e.capCents)} is above ${limit.words}, ${w(limit.cents)} a month: the gate refuses it for every writer — the brain, an approved set-portfolio and the Portfolios page alike (a portfolio write carries no "send anyway") — so it is neither written nor asked; ${raiseLimitWords(limit)}` })
       continue
     }
     portfolios.push({ ...head, portfolioId: e.portfolioId, do: level === 'PROPOSE' ? 'ask' : 'write', fromCents: e.todayCapCents, toCents: e.capCents, why: `${plan.portfolioCap.why}; ${e.why}` })
@@ -347,7 +354,7 @@ export async function askOnce(spec: AskSpec): Promise<MoneyProposal> {
 }
 
 /**
- * A cap above the per-write value cap (moneyStepsOf `over-value`): nobody in Nexus can set it, so nothing is asked. It is
+ * A cap above the portfolio cap limit (moneyStepsOf `over-value`): nobody in Nexus can set it, so nothing is asked. It is
  * said once a month per portfolio (the claim `cap-over:…:<month>`, logged when it lands) and held with its reason each run.
  */
 export async function noticeOverValueCap(spec: { productId: string; market: string; portfolioId: string; day: string; toCents: number; why: string }): Promise<MoneyProposal> {
@@ -358,7 +365,7 @@ export async function noticeOverValueCap(spec: { productId: string; market: stri
     VALUES (gen_random_uuid()::text, ${key}, 'portfolioCapOverValue', ${spec.productId}, ${spec.market}, ${spec.portfolioId}, ${`${month}-01`}::date, 'blocked', ${spec.toCents}::int, ${spec.why}, now())
     ON CONFLICT ("workspaceId", "key") DO NOTHING
     RETURNING "id"`)
-  if (landed.length) logger.warn('[brain-money] a portfolio cap above the per-write value cap: not written, not asked (said once a month)', { productId: spec.productId, market: spec.market, portfolioId: spec.portfolioId, toCents: spec.toCents })
+  if (landed.length) logger.warn('[brain-money] a portfolio cap above the portfolio cap limit: not written, not asked (said once a month)', { productId: spec.productId, market: spec.market, portfolioId: spec.portfolioId, toCents: spec.toCents })
   return { kind: 'portfolioCap', key, approvalId: null, status: 'blocked', fresh: landed.length > 0, why: `${spec.why}${landed.length ? '' : ' (said already this month)'}` }
 }
 
@@ -395,10 +402,12 @@ export async function runMoneyActions(plan: ProductMoneyPlan, facts: ProductMone
     const readings = await loadNativeRules(candidates)
     native = new Map(candidates.map((id) => [id, nativeRuleLines(readings.get(id), 'budgets')]))
   }
-  // The gate's per-write value cap, checked before anything is asked or written (no doomed write). AB-15 — the kill switch
-  // and the holds after auto-undo's undos (brain/lever-holds.ts): a held campaign or cap is not written.
+  // The gate's per-write value cap (budgets) and the portfolio cap limit (caps, Owner decision 2A), checked before anything
+  // is asked or written (no doomed write). AB-15 — the kill switch and the holds after auto-undo's undos
+  // (brain/lever-holds.ts): a held campaign or cap is not written.
+  const capLimit = productPortfolioCapLimit(facts.settings.values.portfolioCapLimitCents?.value, plan.productId, plan.market)
   const { moneyHolds } = await import('./lever-holds.js')
-  const steps = moneyStepsOf(plan, facts, { live: ctx.live, native, valueCapCents: maxWriteValueCents(), holds: await moneyHolds(plan.productId, plan.market) })
+  const steps = moneyStepsOf(plan, facts, { live: ctx.live, native, valueCapCents: maxWriteValueCents(), capLimit, holds: await moneyHolds(plan.productId, plan.market) })
   const byCampaign = new Map<string, CampaignStep[]>()
   for (const s of steps.campaigns) byCampaign.set(s.campaignId, [...(byCampaign.get(s.campaignId) ?? []), s])
   const decision = new Map(plan.campaigns.map((c) => [c.campaignId, c]))

@@ -22,7 +22,9 @@
  *   stale      a change approved on another version of the brain does not run
  *   Amazon     a lever refused AUTO by name on a campaign where Amazon's own budget rule acts (AB-4); nothing queued
  *   leave      every lever back to OFF, levels and values ended, his locks and exclusion kept, the LIVE campaign's bid given
- *              back as the approver; undo asks to enroll again (a big door: its AUTO levels)
+ *              back as the approver; undo asks to enroll again (a big door: its AUTO levels). Batch 2 fix: the brain's
+ *              request still waiting is withdrawn (one a person decided is left), and the campaign its own pause holds is
+ *              resumed as the approver — a big door (the approver's code); with pauses "keep" it stays paused, no code
  *   another    another business finds no product and changes nothing
  *
  * Values are made up (public repo).
@@ -330,19 +332,59 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
     expect((await rows('SELECT id FROM "AgentApproval" WHERE "workspaceId" = $1', [W])).length).toBe(before)
   })
 
-  it('leave — every lever back to OFF, levels and values ended, his locks and exclusion kept, the LIVE campaign\'s bid given back as the approver; undo asks to enroll again (a big door)', async () => {
+  it('leave — every lever back to OFF, levels and values ended, his locks and exclusion kept, the LIVE campaign\'s bid given back as the approver; the brain\'s waiting request withdrawn and its pause lifted (a big door); undo asks to enroll again (a big door)', async () => {
     // The bid brain moved the keyword again since it went LIVE (its snapshot holds 55).
     await database.pool.query('UPDATE "AdTarget" SET "bidCents" = 60 WHERE id = $1', [`t-${C('a-live')}`])
+    // Batch 2 fix — what the brain still holds: its own pause of b-shadow (a stock stop), a budget request still waiting for
+    // a person, and one a person already refused.
+    const pausedAt = new Date(Date.now() - 3 * 86_400_000)
+    await inW(async () => {
+      const db = database.client
+      await db.campaign.update({ where: { id: C('b-shadow') }, data: { status: 'PAUSED' } })
+      await db.advertisingActionLog.create({ data: { userId: 'automation:ads-brain-state', actionType: 'AD_CAMPAIGN_UPDATE', entityType: 'CAMPAIGN', entityId: C('b-shadow'), payloadBefore: { status: 'ENABLED' }, payloadAfter: { status: 'PAUSED' }, amazonResponseStatus: 'SUCCESS', createdAt: pausedAt } })
+      await db.adsBrainStateDecision.create({ data: {
+        runId: 'run-test', mode: 'LIVE', kind: 'change', productId: P, marketplace: 'IT', campaignId: C('b-shadow'), level: 'AUTO', action: 'keep', outcome: 'none', cause: 'stock', status: 'PAUSED', decisionHash: 'h1', why: 'test pause',
+        decision: { memory: { pausedAt: pausedAt.toISOString(), via: 'auto', approvalId: null, statusBefore: 'ENABLED', causes: ['stock'], expectedEndAt: null, stop: {} } },
+      } })
+      const run = await db.agentRun.create({ data: { agentKey: 'ads-brain-money', trigger: 'schedule', status: 'done' } })
+      for (const [key, status] of [['budgets:waiting', 'pending'], ['budgets:refused', 'rejected']] as const) {
+        const a = await db.agentApproval.create({ data: { agentRunId: run.id, toolName: 'set-campaign-budget', riskTier: 'high', args: {}, status } })
+        await db.adsBrainAsk.create({ data: { key: `${key}:${hex}`, kind: 'budgets', productId: P, marketplace: 'IT', day: new Date('2026-10-08T00:00:00Z'), status: 'asked', approvalId: a.id } })
+      }
+    })
+    const [waiting] = await rows<{ id: string }>('SELECT a.id FROM "AgentApproval" a JOIN "AdsBrainAsk" k ON k."approvalId" = a.id WHERE k."workspaceId" = $1 AND a.status = \'pending\'', [W])
+    // Leave keeping the pauses: a normal approval, the pause named with its cause.
+    const keep = await preview({ op: 'leave', productId: P1, market: 'IT', pauses: 'keep' })
+    expect(keep.preview).toMatchObject({ op: 'leave', needsCode: false, leave: { pauses: 'keep', brainPauses: [expect.objectContaining({ campaignId: C('b-shadow'), causes: ['stock'], resumes: false })] } })
+    expect(keep.preview!.stepUp).toBeUndefined()
+    expect(keep.preview!.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/Jacket b-shadow stays paused \(Jacket b-shadow: paused since .* for stock\)/)]))
     const left = await ask({ op: 'leave', productId: P1, market: 'IT', why: 'test take it out' })
     expect(left.preview).toMatchObject({
-      op: 'leave', needsCode: false, brain: { enrolled: true },
-      leave: { bids: 'give-back', giveBack: [expect.objectContaining({ campaignId: C('a-live'), keywordBids: 1, raises: 0 })], toShadow: [], keepLive: [] },
+      op: 'leave', needsCode: true, brain: { enrolled: true },
+      leave: {
+        bids: 'give-back', giveBack: [expect.objectContaining({ campaignId: C('a-live'), keywordBids: 1, raises: 0 })], toShadow: [], keepLive: [],
+        pauses: 'resume', brainPauses: [expect.objectContaining({ campaignId: C('b-shadow'), resumes: true })],
+        withdraws: [{ approvalId: waiting.id, tool: 'set-campaign-budget', lever: 'budgets', requestedAt: expect.any(String) }],
+      },
     })
-    expect(left.preview.stepUp).toBeUndefined()
+    expect(left.preview.bigDoor).toEqual([expect.stringMatching(/lifts the brain's own pause on Jacket b-shadow/)])
+    expect(left.preview.stepUp).toMatchObject({ what: expect.stringMatching(/^takes the product out of the ads brain and lifts the brain's own pause/) })
+    expect(left.preview.raises).toEqual(expect.arrayContaining([expect.stringMatching(/the brain's own pause lifted on Jacket b-shadow \(spend restarts\)/)]))
     expect(left.preview.leave.keeps.map((k: Data) => `${k.kind}:${k.key}:${k.campaignId ?? 'product'}`).sort()).toEqual([`EXCLUDE:*:${C('c-off')}`, `LOCK:budgets:${C('a-live')}`, 'LOCK:hours:product'])
-    expect(left.preview.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/locks and exclusions stay/)]))
-    expect(left.preview.summary).toMatch(/^Takes Test jacket .* out of the brain for IT: every lever back to OFF/)
-    expect(await approve(left.approvalId)).toMatchObject({ ok: true, status: 'executed' })
+    expect(left.preview.warnings).toEqual(expect.arrayContaining([expect.stringMatching(/locks and exclusions stay/), expect.stringMatching(/1 request the brain asked for still waits .*: withdrawn as the product leaves/)]))
+    expect(left.preview.summary).toMatch(/^Takes Test jacket .* out of the brain for IT: every lever back to OFF.* 1 request the brain asked for is withdrawn\. 1 campaign the brain paused is resumed\.$/)
+    // A plain approve of the big door runs nothing; with the code it runs.
+    const plain = await approve(left.approvalId)
+    expect(plain.status).not.toBe('executed')
+    expect(plain.error).toMatch(/authenticator code/)
+    expect(await enrollmentRow()).not.toBeNull()
+    expect(await approve(left.approvalId, { code: true })).toMatchObject({ ok: true, status: 'executed' })
+    // The brain's waiting request is withdrawn; the one a person decided is his.
+    expect(await rows('SELECT status, reason FROM "AgentApproval" WHERE id = $1', [waiting.id])).toEqual([{ status: 'rejected', reason: 'withdrawn: the product left the ads brain (set-ads-brain op leave)' }])
+    expect(await rows('SELECT a.status FROM "AgentApproval" a JOIN "AdsBrainAsk" k ON k."approvalId" = a.id WHERE k."workspaceId" = $1 ORDER BY a.status', [W])).toEqual([{ status: 'rejected' }, { status: 'rejected' }])
+    // The brain's pause lifted as the approver.
+    expect(await rows('SELECT status::text AS status FROM "Campaign" WHERE id = $1', [C('b-shadow')])).toEqual([{ status: 'ENABLED' }])
+    expect(await rows('SELECT "userId", "payloadAfter" ->> \'status\' AS s FROM "AdvertisingActionLog" WHERE "entityId" = $1 ORDER BY "createdAt" DESC LIMIT 1', [C('b-shadow')])).toEqual([{ userId: 'user:u-approver', s: 'ENABLED' }])
 
     expect(await enrollmentRow()).toBeNull()
     expect((await openOverrides()).map((o) => `${o.kind}:${o.key}:${o.campaignId ?? 'product'}`).sort()).toEqual([`EXCLUDE:*:${C('c-off')}`, `LOCK:budgets:${C('a-live')}`, 'LOCK:hours:product'])

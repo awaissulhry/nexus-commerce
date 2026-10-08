@@ -103,7 +103,7 @@ export interface AdWriteEvidence {
   dataDay?: string
   /**
    * BID BRAIN BB-6 — a write of the bid brain (actor `automation:bid-brain`): the run that decided it, the deciding layer
-   * (goal, band, limit, stop, stock, freeze, phase, min_bid_hour), the newest settled data day it read and the goal bid.
+   * (goal, band, limit, stop, stock, freeze, phase, min_bid_hour, money), the newest settled data day it read and the goal bid.
    * A record for the reader (the Change Log, auto-undo, the read tool): no gate trusts it.
    */
   brain?: { runId: string; layer: string; dataDay: string; goalBidCents: number | null }

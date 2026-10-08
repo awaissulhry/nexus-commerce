@@ -48,6 +48,7 @@ import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import { resolveAutonomy } from '../../advertising/ads-autonomy.js'
 import { STATUS_CAMPAIGN_SELECT, adGroupStatuses, adGroupsForStatus, externalStatusChanges, highestServingBids, servingUnder } from '../../advertising/ads-status-lookup.service.js'
 import type { AgentTool, ToolChange, ToolContext, ToolResult, ToolUndo } from '../tool-types.js'
+import { BRAIN_STATE_ACTOR } from '../../advertising/ads-write-gate.js'
 
 /** The most ads one request names. */
 const MAX_ADS = 100
@@ -242,6 +243,12 @@ type PausedBy =
   | { by: 'rule'; actor: string | null; at: Date; rule: PausingRule | null }
   | { by: 'amazon'; approvalId: string; at: Date; seenAt: Date }
   | { by: 'none'; lastRecorded: string | null }
+  /**
+   * Batch 2 fix — the ads brain's own pause (its state lever at AUTO, BRAIN_STATE_ACTOR). `own`: this request is Nexus's
+   * own (the system door: the brain asking for its resume at PROPOSE, or auto-undo putting its pause back) — a person's
+   * normal approval lifts it. Anyone else (Claude, a screen) lifts someone else's pause: code rule A's big door.
+   */
+  | { by: 'brain'; actor: string; at: Date; own: boolean }
 type RulePause = Extract<PausedBy, { by: 'rule' }>
 
 /** A bare rule id after `automation:` (the shape ad-budget-schedule.job.ts classifyOverride reads): an engine's actor is not one. */
@@ -256,6 +263,7 @@ const RULE_ID = /^c[a-z0-9]{20,}$/
  */
 function liftOf(p: PausedBy): 'free' | 'code' | 'refused' {
   if (p.by === 'claude') return 'free'
+  if (p.by === 'brain') return p.own ? 'free' : 'code'
   if (p.by === 'rule') return p.rule && p.rule.state !== 'on' ? 'code' : 'refused'
   return 'code'
 }
@@ -319,6 +327,11 @@ async function pausesOnRecord(ads: ReadonlyArray<Pick<Ad, 'level' | 'id'>>): Pro
       continue
     }
     const actor = log.userId ?? null
+    // Batch 2 fix — the ads brain's own pause: lifted freely by its own resume (decide sets `own`), else a big door.
+    if (actor === BRAIN_STATE_ACTOR) {
+      out.set(`${ad.level}:${ad.id}`, { by: 'brain', actor, at: log.createdAt, own: false })
+      continue
+    }
     if (actor?.startsWith('automation:')) {
       out.set(`${ad.level}:${ad.id}`, { by: 'rule', actor, at: log.createdAt, rule: rules.get(actor.slice('automation:'.length)) ?? null })
       continue
@@ -339,6 +352,9 @@ function pausedByWords(p: PausedBy): string {
       ? `a Nexus rule paused it (${p.actor}, ${when(p.at)}); that rule no longer exists`
       : `the Nexus rule "${p.rule.name}" paused it (${p.actor}, ${when(p.at)}); the rule is ${p.rule.state} now`
     case 'unrecorded': return `it was paused by a writer Nexus did not record (${when(p.at)})`
+    case 'brain': return p.own
+      ? `the ads brain paused it (its state lever, ${when(p.at)}); this is Nexus's own request to lift it — a person's approval switches it back on`
+      : `the ads brain paused it alone (its state lever, ${when(p.at)}): lifting the brain's pause is someone else's pause lifted`
     case 'none': return p.lastRecorded
       ? `the last status Nexus recorded for it is ${STATUS_WORDS[p.lastRecorded] ?? p.lastRecorded}: it was paused at Amazon (Seller Central) since`
       : 'Nexus has no record of who paused it: it was paused at Amazon (Seller Central), or before Nexus kept a record'
@@ -367,6 +383,7 @@ function pausedFacts(p: PausedBy): Record<string, string | null> {
     case 'claude':
     case 'amazon': return { by: p.by, approvalId: p.approvalId, at: p.at.toISOString() }
     case 'none': return { by: p.by, lastRecorded: p.lastRecorded }
+    case 'brain': return { by: p.by, actor: p.actor, at: p.at.toISOString(), own: String(p.own) }
     // The rule as it is now (on, off, deleted; `engine` when it is no rule): switching it on or off after the approval moves it.
     case 'rule': return { by: p.by, actor: p.actor, at: p.at.toISOString(), rule: p.rule?.state ?? 'engine' }
     default: return { by: p.by, actor: p.actor, at: p.at.toISOString() }
@@ -422,7 +439,7 @@ async function reachOf(ads: Ad[], kind: Kind): Promise<{ reach: StoredReach } | 
 }
 
 /** A request decided: its preview, and every ad it changes (all of them, not only the lines shown). */
-async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'>): Promise<{ result: ToolResult; changing: Ad[] }> {
+async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolContext, 'approvalId'> & Partial<Pick<ToolContext, 'via'>>): Promise<{ result: ToolResult; changing: Ad[] }> {
   const refuse = (error: string) => ({ result: { ok: false, error } as ToolResult, changing: [] as Ad[] })
   let a = args as StatusArgs
   if (kind === 'archive' && a.buildRunId) {
@@ -460,6 +477,9 @@ async function decide(kind: Kind, args: Record<string, unknown>, ctx: Pick<ToolC
   // enable-ads — what a Claude request paused. W4-2 — asked with includePeoplesPauses, also a pause no Claude request made
   // (liftOf): approved only with the approver's code. Never a pause of a rule that is still on, or of an engine.
   const pausedBy = kind === 'enable' ? await pausesOnRecord(changing) : new Map<string, PausedBy>()
+  // Batch 2 fix — the brain's own pause, lifted by Nexus's own request (the system door: the brain's resume a person approves
+  // at PROPOSE, auto-undo's put-back) with a normal approval; by anyone else, only as someone else's pause (the code).
+  if (ctx.via === 'system') for (const [key, p] of pausedBy) if (p.by === 'brain') pausedBy.set(key, { ...p, own: true })
   const whoPaused = (ad: Ad): PausedBy => pausedBy.get(`${ad.level}:${ad.id}`) ?? { by: 'none', lastRecorded: null }
   const notClaude = kind === 'enable' ? changing.filter((ad) => liftOf(whoPaused(ad)) !== 'free') : []
   const blocked = notClaude.filter((ad) => liftOf(whoPaused(ad)) === 'refused')
