@@ -189,6 +189,21 @@ export function floorOverride(by: string | null, floorCents: number | null, at: 
   return { stop: { bidCents: cents, by: who } }
 }
 
+/**
+ * BB-8 — a campaign's floor and its ad group's floor together: when both say the same kind (two stops, say the monthly
+ * cap on the campaign and a product cap on the ad group), the lower floor wins, as for any two overrides.
+ */
+export function mergeFloors(campaign: Partial<Overrides> | null, group: Partial<Overrides> | null): Overrides {
+  const out: Overrides = { ...campaign }
+  if (!group) return out
+  const lower = <T>(a: T | null | undefined, b: T | null | undefined, cents: (x: T) => number): T | null | undefined =>
+    a == null ? b : b == null ? a : cents(b) < cents(a) ? b : a
+  if (group.stop !== undefined) out.stop = lower(out.stop, group.stop, (x) => x.bidCents)
+  if (group.minBidHour !== undefined) out.minBidHour = lower(out.minBidHour, group.minBidHour, (x) => x.floorCents)
+  if (group.stock !== undefined) out.stock = lower(out.stock, group.stock, (x) => ('notBuyable' in x ? x.stopBidCents : Number.MAX_SAFE_INTEGER))
+  return out
+}
+
 /** The target as the goal resolver reads it: the campaign's own, else the strategy's as written, else the account default. */
 export function goalTarget(campaign: CampaignRow, s: StrategyRead | undefined, accountDefaultPct: number | null): Pick<GoalInputs, 'target' | 'acosFallbackPct'> {
   const own = campaign.ownTargetAcos
@@ -250,7 +265,7 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     }
 
     // Overrides.
-    const overrides: Overrides = { ...floorOverride(campaign.bidsSuppressedBy, campaign.bidsSuppressedFloorCents, campaign.bidsSuppressedAt), ...floorOverride(group.bidsSuppressedBy, group.bidsSuppressedFloorCents, group.bidsSuppressedAt) }
+    const overrides: Overrides = mergeFloors(floorOverride(campaign.bidsSuppressedBy, campaign.bidsSuppressedFloorCents, campaign.bidsSuppressedAt), floorOverride(group.bidsSuppressedBy, group.bidsSuppressedFloorCents, group.bidsSuppressedAt))
     // A keyword a stop floored on its own keeps its remembered bid: the stop decides until it lifts.
     if (!overrides.stop && !overrides.stock && !overrides.minBidHour && t.suppressedFromBidCents != null) {
       overrides.stop = { bidCents: t.bidCents, by: `a stop (its ${t.suppressedFromBidCents}¢ bid remembered)` }
