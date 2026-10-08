@@ -287,10 +287,15 @@ export async function runHarvestOnce(opts: { now?: Date; due?: HarvestDue } = {}
   for (const [market, list] of [...byMarket].sort(([a], [b]) => a.localeCompare(b))) {
     const m = await loadHarvestMarket(market, list, now)
     for (const k of m.skipped) skipped.push({ ...k, market })
+    // The market's weekly cap of new campaigns is shared: what one product takes in this run counts for the next.
+    let marketTaken = 0
     for (const [productId, p] of m.products) {
       products++
       await pendingWork(productId, market, p.facts, now, s)
-      for (const d of decideHarvests(p.candidates, p.facts, now, m.terms.windowDays)) await actOn(productId, market, d, runId, now, s)
+      const facts = { ...p.facts, used: { ...p.facts.used, marketCampaignsThisWeek: p.facts.used.marketCampaignsThisWeek + marketTaken } }
+      const decisions = decideHarvests(p.candidates, facts, now, m.terms.windowDays)
+      marketTaken += decisions.filter((d) => d.outcome === 'new-campaign').length
+      for (const d of decisions) await actOn(productId, market, d, runId, now, s)
     }
   }
   const pruned = await pruneHarvests(now)

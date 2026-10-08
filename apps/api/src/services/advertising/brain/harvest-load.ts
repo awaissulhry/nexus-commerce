@@ -29,7 +29,7 @@ import { resolveBrainSettings, type OverrideRow } from './settings.js'
 import { decideMarket, loadTermsMarket, type DueProduct, type MarketFacts } from './terms-shadow.js'
 import { isAsin } from '../ads-negation-policy.js'
 import {
-  AMAZON_MIN_BUDGET_CENTS, ENDED_STATUSES, GRADUATION_COOLDOWN_DAYS, isHarvestStatus, MARKET_NEW_CAMPAIGNS_PER_WEEK,
+  AMAZON_MIN_BUDGET_CENTS, cooldownDays, ENDED_STATUSES, isHarvestStatus, MARKET_NEW_CAMPAIGNS_PER_WEEK,
   type GroupRole, type HarvestCampaignSettings, type HarvestCandidateFacts, type HarvestGroup, type HarvestProductFacts, type HarvestRecordLite,
   type HarvestStatus, type SlotFact, type StoredDestinationFact,
 } from './harvest.js'
@@ -235,4 +235,4 @@ export async function loadHarvestMarket(market: string, due: readonly DueProduct
 
 /** Ended harvests still inside the cooldown (the decision skips them): for the read view. */
 export const inCooldown = (r: { status: string; changedAt: Date }, now: Date) =>
-  (ENDED_STATUSES as readonly string[]).includes(r.status) && now.getTime() - r.changedAt.getTime() < GRADUATION_COOLDOWN_DAYS * 86_400_000
+  (ENDED_STATUSES as readonly string[]).includes(r.status) && now.getTime() - r.changedAt.getTime() < cooldownDays(r.status as HarvestStatus) * 86_400_000

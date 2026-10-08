@@ -141,14 +141,15 @@ export async function brainHarvest(args: { productId?: string; market?: string; 
     const checked = await prisma.adsBrainHarvest.aggregate({ where, _max: { checkedAt: true } })
     source = { kind: 'stored', checkedAt: checked._max.checkedAt?.toISOString() ?? null }
   } else {
-    const due = { productId: root, market, settings }
+    // As if enrolled at its levels (the default OBSERVE where the Owner set none): what the harvest would do.
+    const due = { productId: root, market, settings: resolveBrainSettings({ productId: root, market, campaignId: null, enrolled: true, overrides }) }
     const m = await loadHarvestMarket(market, [due], now)
     const p = m.products.get(root)
     if (!p) return { data: { view: 'harvest', scope: { productId: root, market }, note, ceiling, product, source: { kind: 'dryRun' }, counts: {}, harvests: [], why: m.skipped[0]?.why ?? 'no harvest to decide' } }
     // A dry run never asks or writes: every decision shows as SHADOW (or HELD), whatever its level.
     rows = decideHarvests(p.candidates, { ...p.facts, ceiling: { live: false, why: 'a dry run' } }, now, m.terms.windowDays).map(dryRow)
     if (args.status) rows = rows.filter((r) => r.status === args.status)
-    source = { kind: 'dryRun', decidedAt: now.toISOString(), note: 'decided now from what Nexus holds — not stored, nothing asked or written; the daily run stores a harvest only for an enrolled product whose harvest lever is OBSERVE or higher' }
+    source = { kind: 'dryRun', decidedAt: now.toISOString(), note: `decided now from what Nexus holds${enrollment ? '' : ', as if the product were enrolled at its levels'} — not stored, nothing asked or written; the daily run stores a harvest only for an enrolled product whose harvest lever is OBSERVE or higher` }
   }
   const all = sortRows(rows)
   const counts = Object.fromEntries(HARVEST_STATUSES.map((s) => [s, all.filter((r) => r.status === s).length]))

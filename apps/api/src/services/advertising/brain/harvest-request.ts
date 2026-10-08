@@ -33,7 +33,7 @@ export type HarvestFacts =
 /** The facts of one request (op harvest or undo), as they are now; or why it cannot be asked for. */
 export async function harvestRequestFacts(harvestId: string, op: 'harvest' | 'undo'): Promise<HarvestFacts> {
   const record = await findHarvest(harvestId)
-  if (!record) return { error: `Not queued: no ads brain harvest ${harvestId} in this business (ads-brain view harvest lists them).` }
+  if (!record) return { error: `Not queued: ads brain harvest ${harvestId} was not found in this business (ads-brain view harvest lists them).` }
   const place = { id: true, name: true, campaign: { select: { id: true, name: true, marketplace: true } } } as const
   if (op === 'undo') {
     if (!['DONE', 'HALF_DONE', 'UNDO_PROPOSED'].includes(record.status) || !record.keywordTargetId) return { error: `Not queued: harvest ${record.id} of "${record.term}" is ${record.status}: there is nothing of it to put back.` }

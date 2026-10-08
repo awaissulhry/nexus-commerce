@@ -226,6 +226,8 @@ interface Seeded {
   judgementId: string
   /** BB-4 — a shadow bid brain decision on the target (what bid-brain reads). */
   brainDecisionId: string
+  /** AB-11 — an ads brain harvest asked of a person, into the ad group (what apply-brain-harvest writes). */
+  harvestId: string
   /** Health watchdog — one stored run of the daily platform checks (what platform-health-checks reads). */
   healthRunId: string
 }
@@ -475,6 +477,14 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
         actionLogId: actionLog.id, actor: 'automation:mcp8-engine', origin: 'engine', originLabel: `${canary}-ENGINE`, entityType: 'AD_TARGET', entityId: target.id,
         entityLabel: `${canary}-TARGET`, marketplace: market, lever: 'bid', direction: 'raise', fromValue: 35, toValue: 40, changedAt: new Date(Date.now() - 3 * 86_400_000),
         verdict: 'worse', outcome: 'worse', evidence: { why: `${canary}-JUDGEMENT-WHY` }, action: 'would_undo', level: 'OBSERVE',
+      },
+    })
+    // AB-11 — the ads brain's harvest of a term into the ad group, asked of a person (apply-brain-harvest names it).
+    const harvest = await db.adsBrainHarvest.create({
+      data: {
+        productId: product.id, marketplace: market, term: `${canary}-harvest`.toLowerCase(), status: 'PROPOSED', level: 'PROPOSE', destinationKind: 'EXISTING', destHow: 'own',
+        destCampaignId: campaign.id, destAdGroupId: adGroup.id, bidCents: 40, sources: [], why: `${canary}-HARVEST-WHY`, evidence: {}, digest: 'd', runId: `${mark}-HARVEST-${RUN}`,
+        decidedAt: new Date(), checkedAt: new Date(), changedAt: new Date(),
       },
     })
     // BB-4 — the shadow bid brain's newest decision on the target, in a market the brain runs in (IT), so a read with no
@@ -809,6 +819,7 @@ async function seedBusiness(workspaceId: string, mark: 'ALPHA' | 'BRAVO', canary
       hourlyPlanId: hourlyPlan.id,
       judgementId: judgement.id,
       brainDecisionId: brainDecision.id,
+      harvestId: harvest.id,
       healthRunId,
     }
   })
@@ -971,6 +982,8 @@ const B_VALUES: Record<string, () => unknown> = {
   outboundQueueId: () => seeded.b.outboundQueueId,
   // A19 — undo-worse-ad-change names auto-undo's judgement of a write.
   judgementId: () => seeded.b.judgementId,
+  // AB-11 — apply-brain-harvest names an ads brain harvest.
+  harvestId: () => seeded.b.harvestId,
   // A14 — the eBay change tools name the eBay campaign, one of its ad groups and an eBay item id.
   ebayCampaignId: () => seeded.b.ebayCampaignId,
   ebayAdGroupId: () => seeded.b.ebayAdGroupId,

@@ -44,7 +44,8 @@
  *   caps         §5: at most `harvestPerDay` new keywords per product per day (proposals included), at most
  *                `newCampaignsPerWeek` new campaigns per product per week, MARKET_NEW_CAMPAIGNS_PER_WEEK per market, at most
  *                `skcMax` harvest campaigns per product; one graduation per term per GRADUATION_COOLDOWN_DAYS (a term a person
- *                declined, or one put back, waits as long).
+ *                declined, or one put back, waits as long; one the gate refused or Amazon failed, which never graduated,
+ *                is decided again the next day).
  *   judge        after the attribution window (7 days SP) + 72 hours for keyword changes to take full effect [TEC-6] — never
  *                the next day: the keyword's own record since it landed against the evidence it was harvested on. WORSE: 0
  *                orders in the clicks that make "it stopped converting" a 95 % call at its harvest-time CR̂, or an ACoS above
@@ -84,6 +85,10 @@ export const MIN_JUDGE_CLICKS = 20
 export const WORSE_ACOS_FACTOR = 1.25
 /** §2.8: ≤ 1 graduation per term per 30 days (a declined or undone harvest waits as long). */
 export const GRADUATION_COOLDOWN_DAYS = 30
+/** A harvest the gate refused or Amazon failed never graduated: it is decided again the next day. */
+export const RETRY_AFTER_DAYS = 1
+/** How long an ended harvest's term waits before it is decided again. */
+export const cooldownDays = (status: HarvestStatus): number => (status === 'REFUSED' || status === 'FAILED' ? RETRY_AFTER_DAYS : GRADUATION_COOLDOWN_DAYS)
 /** §2.9 / §5: ≤ 6 new campaigns per market per week. */
 export const MARKET_NEW_CAMPAIGNS_PER_WEEK = 6
 /** Amazon's lowest daily budget (minor units): a new campaign's first budget never goes below it. */
@@ -435,7 +440,7 @@ export function decideHarvests(candidates: readonly HarvestCandidateFacts[], fac
     const d = c.decision
     const record = facts.records.get(d.term)
     if (record && STANDING_STATUSES.includes(record.status)) continue
-    if (record && ENDED_STATUSES.includes(record.status) && now.getTime() - record.changedAt.getTime() < GRADUATION_COOLDOWN_DAYS * 86_400_000) continue
+    if (record && ENDED_STATUSES.includes(record.status) && now.getTime() - record.changedAt.getTime() < cooldownDays(record.status) * 86_400_000) continue
     const evidence = harvestEvidence(d, windowDays)
     const held = (why: string, heldBy: string, destination: HarvestDestinationPlan = { kind: 'NONE', why: heldBy }, sources: SourcePlan[] = [], bid: HarvestDecision['bid'] = null, level: Level | null = null): HarvestDecision =>
       ({ term: d.term, isAsin: d.isAsin, outcome: 'held', act: 'none', level, destination, sources, bid, heldBy, why: `held: ${heldBy}${why ? `; ${why}` : ''}`, evidence })

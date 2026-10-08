@@ -232,6 +232,11 @@ describe('AB-11 — the size-scaled threshold, the levels and the caps', () => {
       ['gamma jacket', { term: 'gamma jacket', status: 'UNDONE' as const, changedAt: new Date(NOW.getTime() - 40 * 86_400_000), landedAt: null }],
     ])
     expect(decideHarvests(many, productFacts({ records }), NOW, 60).map((d) => d.term)).toEqual(['gamma jacket'])
+    // One the gate refused (or Amazon failed) never graduated: it is decided again the next day, not after 30.
+    const refused = new Map([['alpha jacket', { term: 'alpha jacket', status: 'REFUSED' as const, changedAt: new Date(NOW.getTime() - 2 * 86_400_000), landedAt: null }]])
+    expect(decideHarvests([many[0]], productFacts({ records: refused }), NOW, 60).map((d) => d.term)).toEqual(['alpha jacket'])
+    const today = new Map([['alpha jacket', { term: 'alpha jacket', status: 'FAILED' as const, changedAt: new Date(NOW.getTime() - 3_600_000), landedAt: null }]])
+    expect(decideHarvests([many[0]], productFacts({ records: today }), NOW, 60)).toEqual([])
   })
 
   it('the ledger\'s own holds stand (the lever, the Owner\'s term lock); a sibling\'s lead is never harvested', () => {
