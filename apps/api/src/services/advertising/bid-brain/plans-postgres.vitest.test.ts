@@ -50,6 +50,9 @@ const { setEnrollment } = await import('./enrollment.js')
 const { BRAIN_ACTOR } = await import('./live.js')
 const { setAutonomy } = await import('../ads-automation-state.service.js')
 const { runRankDefendOnce } = await import('../../../jobs/ad-rank-defend.job.js')
+const { restoreCampaignBids } = await import('../ads-bid-suppression.service.js')
+const { ADS_BID_BRAIN_ENROLLMENT_TOOLS } = await import('../../agents/tools/ads-bid-brain-enrollment.tools.js')
+const { loadMarket } = await import('./load.js')
 
 const W = `bb7_plans_${randomBytes(4).toString('hex')}`
 const business = { workspaceId: W, actorUserId: null, membershipId: null, roleKeys: [] }
@@ -96,7 +99,8 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
   afterAll(async () => { await database?.close(); vi.unstubAllEnvs() }, 60_000)
 
   it('a serving hour: the plan\'s placements written once, as the brain, inside the 120¢ ceiling; rank-defend leaves it', async () => {
-    const r = await inside(() => runShadowOnce({ now: at(NOW, 1), mode: 'live', onlyOwned: true, clockNow: NOON }))
+    // A full run (the goal moves happen there); the ticks after it are the light between-slots ones.
+    const r = await inside(() => runShadowOnce({ now: at(NOW, 1), mode: 'live', clockNow: NOON }))
     const it = r.markets.find((m) => m.market === 'IT')!
     expect(it.placements).toMatchObject({ written: 1, refused: 0 })
     expect(amz.puts).toHaveLength(1)
@@ -128,6 +132,10 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     expect(await bidOf('t-low')).toBe(3)
     const floors = await rows<{ userId: string; n: number }>('SELECT "userId", count(*)::int n FROM "AdvertisingActionLog" WHERE "entityId" IN (\'t-it\', \'t-low\') AND "createdAt" > now() - interval \'1 minute\' AND "payloadAfter" ->> \'bidCents\' = \'3\' GROUP BY "userId"')
     expect(floors).toEqual([{ userId: BRAIN_ACTOR, n: 2 }])
+    // Review 2 — the floors' memory, where rank-defend's and the stops' give-back read it.
+    const [schedule] = await rows<{ id: string }>('SELECT id FROM "AdSchedule" WHERE "campaignId" = \'c-it\'')
+    expect(await rows('SELECT "bidsSuppressedBy", "bidsSuppressedFloorCents" FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ bidsSuppressedBy: `automation:rank-defend-${schedule.id}`, bidsSuppressedFloorCents: 3 }])
+    expect(await rows('SELECT id, "suppressedFromBidCents" AS m FROM "AdTarget" WHERE id IN (\'t-it\', \'t-low\') ORDER BY id')).toEqual([{ id: 't-it', m: before['t-it'] }, { id: 't-low', m: before['t-low'] }])
     const entries = () => rows<{ n: number }>('SELECT count(*)::int n FROM "AdvertisingActionLog" WHERE "entityId" = \'c-it\' AND "actionType" = \'custom_event\' AND ("payloadAfter" ->> \'rankMinBidEntry\')::boolean')
     expect(await entries()).toEqual([{ n: 1 }])
     const queued = (await rows<{ n: number }>('SELECT count(*)::int n FROM "OutboundSyncQueue" WHERE "workspaceId" = $1', [W]))[0].n
@@ -148,5 +156,45 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     const [last] = await rows<{ layer: string; why: string }>('SELECT layer, why FROM "BidBrainDecision" WHERE "targetId" = \'t-it\' ORDER BY "createdAt" DESC LIMIT 1')
     expect(last.layer).toBe('restore')
     expect(last.why).toMatch(/back to/)
+    // The memory goes with the give-back, and the plan's floor mark with the last of it.
+    expect(await rows('SELECT "suppressedFromBidCents" AS m FROM "AdTarget" WHERE id IN (\'t-it\', \'t-low\')')).toEqual([{ m: null }, { m: null }])
+    expect(await rows('SELECT "bidsSuppressedAt" AS at FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ at: null }])
+  })
+
+  it('review 2 — handed back in a Min-bid hour (switch to shadow): the plan\'s own engine gives every bid back from the memory', async () => {
+    const before = { 't-it': await bidOf('t-it'), 't-low': await bidOf('t-low') }
+    await inside(() => runShadowOnce({ now: at(NOW, 6), mode: 'live', onlyOwned: true, clockNow: at(NIGHT, 30) }))
+    expect(await bidOf('t-it')).toBe(3)
+    const [schedule] = await rows<{ id: string }>('SELECT id FROM "AdSchedule" WHERE "campaignId" = \'c-it\'')
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'shadow')
+    try {
+      // Rank-defend runs the campaign again (its dry run takes it) …
+      const rank = await inside(() => runRankDefendOnce({ dryRun: true }))
+      expect(rank.decisions.map((d) => (d as { campaignId?: string }).campaignId)).toContain('c-it')
+      // … and its serving-hour give-back (restoreCampaignBids, as the plan's schedule) puts every bid back.
+      await inside(() => restoreCampaignBids('c-it', { actor: `automation:rank-defend-${schedule.id}` as never, reason: 'test: serving hour' }))
+      expect(await bidOf('t-it')).toBe(before['t-it'])
+      expect(await bidOf('t-low')).toBe(before['t-low'])
+      expect(await rows('SELECT "bidsSuppressedAt" AS at FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ at: null }])
+    } finally {
+      vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+    }
+  })
+
+  it('review 2 — op shadow is refused while a floor the brain set has no memory, and points to give-back', async () => {
+    const tool = ADS_BID_BRAIN_ENROLLMENT_TOOLS[0]
+    await database.pool.query('UPDATE "AdTarget" SET "bidCents" = 3, "suppressedFromBidCents" = NULL WHERE id = \'t-low\'')
+    const refused = await inside(() => tool.handler({ campaignId: 'c-it', op: 'shadow' }, {} as never))
+    expect(refused).toMatchObject({ ok: false, error: expect.stringMatching(/cannot go back to shadow now: 1 keyword sits at a floor the bid brain set with no memory of the bid before.*Use op give-back/) })
+    await database.pool.query('UPDATE "AdTarget" SET "suppressedFromBidCents" = 5 WHERE id = \'t-low\'')
+    expect(await inside(() => tool.handler({ campaignId: 'c-it', op: 'shadow' }, {} as never))).toMatchObject({ ok: true })
+  })
+
+  it('review 7 — a between-slots tick reads the owned campaigns only, no evidence, and stores no goal-less rows', async () => {
+    const light = await inside(() => loadMarket('IT', { now: NOW, campaignIds: new Set(['c-it']), light: true }))
+    expect([...light.campaigns.keys()]).toEqual(['c-it'])
+    expect(light.evidence.size).toBe(0)
+    expect(light.light).toBe(true)
+    expect(await rows('SELECT count(*)::int n FROM "BidBrainDecision" WHERE layer = \'no_goal\'')).toEqual([{ n: 0 }])
   })
 })

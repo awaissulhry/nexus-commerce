@@ -38,11 +38,22 @@ export interface BidLimits {
   campaignMaxCents?: number | null
 }
 
-/** A rule's bid action as an input (BB-9): a ceiling or a floor on this target. */
+/**
+ * A rule's bid action as an input (BB-9): a ceiling or a floor on this target. A SHARE_FLOOR (share of voice, rank) is a
+ * floor held to hi × 1.25 instead of the band top.
+ */
 export interface Directive {
-  kind: 'CEILING' | 'FLOOR'
+  kind: 'CEILING' | 'FLOOR' | 'SHARE_FLOOR'
   cents: number
   /** Who asked: "rule:Lower bids on clicks without sales". */
+  source: string
+}
+
+/** BB-9 — a placement rule as an input: a cap or a floor on one lane's placement %. */
+export interface LaneDirective {
+  lane: LaneName
+  kind: 'CEILING' | 'FLOOR'
+  pct: number
   source: string
 }
 
@@ -59,6 +70,8 @@ export interface Lane {
   crRatio?: number | null
   /** BB-18 — Amazon's dynamic bidding on this lane (rank-controller.ts laneHeadroom): 1, 1.5 or 2. Absent: 1. */
   dynamic?: number | null
+  /** BB-7 review — the ceiling the keyword bid holds (the day's lowest of the plan's hours); absent: `maxCpcCents`. */
+  baseCeilingCents?: number | null
 }
 
 /** BB-18 — a lane's dynamic-bidding multiple, never below 1. */
@@ -89,21 +102,25 @@ export function raiseCap(args: { wantCents: number; parentCents: number; node: N
 }
 
 /** The lowest ceiling and the highest floor win; a floor above a ceiling loses to it, and the clash is named. */
-export function applyDirectives(cents: number, directives: readonly Directive[] = [], floorCapCents?: number | null): { cents: number; applied: string[]; clash: string | null } {
+export function applyDirectives(cents: number, directives: readonly Directive[] = [], floorCapCents?: number | null, shareCapCents?: number | null): { cents: number; applied: string[]; clash: string | null } {
   const ceilings = directives.filter((d) => d.kind === 'CEILING' && d.cents > 0)
-  const floors = directives.filter((d) => d.kind === 'FLOOR' && d.cents > 0)
+  // A floor never sits above the band top (design §2: no higher than the top of the band); a share floor (BB-9) never
+  // above hi × 1.25. Each is held to its own cap first, then the highest wins.
+  const capped = (d: Directive): Directive => {
+    const cap = d.kind === 'SHARE_FLOOR' ? shareCapCents ?? floorCapCents : floorCapCents
+    return cap != null && d.cents > cap ? { ...d, cents: Math.floor(cap) } : d
+  }
+  const floors = directives.filter((d) => (d.kind === 'FLOOR' || d.kind === 'SHARE_FLOOR') && d.cents > 0).map(capped)
   const ceiling = ceilings.length ? ceilings.reduce((a, b) => (b.cents < a.cents ? b : a)) : null
   let floor = floors.length ? floors.reduce((a, b) => (b.cents > a.cents ? b : a)) : null
-  // A floor never sits above the band top (design §2: no higher than the top of the band).
-  if (floor && floorCapCents != null && floor.cents > floorCapCents) floor = { ...floor, cents: Math.floor(floorCapCents) }
   const applied: string[] = []
   let out = cents
   let clash: string | null = null
   if (floor && ceiling && floor.cents > ceiling.cents) {
-    clash = `${floor.source} floor ${floor.cents}¢ is above ${ceiling.source} ceiling ${ceiling.cents}¢ — the ceiling wins`
+    clash = `${floor.source} ${floor.kind === 'SHARE_FLOOR' ? 'share floor' : 'floor'} ${floor.cents}¢ is above ${ceiling.source} ceiling ${ceiling.cents}¢ — the ceiling wins`
     floor = null
   }
-  if (floor && out < floor.cents) { out = floor.cents; applied.push(`floor ${floor.cents}¢ (${floor.source})`) }
+  if (floor && out < floor.cents) { out = floor.cents; applied.push(`${floor.kind === 'SHARE_FLOOR' ? 'share floor' : 'floor'} ${floor.cents}¢ (${floor.source})`) }
   if (ceiling && out > ceiling.cents) { out = ceiling.cents; applied.push(`ceiling ${ceiling.cents}¢ (${ceiling.source})`) }
   return { cents: out, applied, clash }
 }
@@ -131,7 +148,11 @@ export function limitRange(limits: BidLimits, lanes: readonly Lane[] = []): { lo
     [limits.maxBidCents, 'the strategy highest bid'],
     [limits.campaignMaxCents, "the campaign's highest bid"],
     // BB-18 — at 0 % placement Amazon can still add its dynamic bidding: the base bid × that stays within the ceiling.
-    ...lanes.map((l): [number | null | undefined, string] => [l.maxCpcCents != null ? Math.floor(l.maxCpcCents / dynamicOf(l)) : null, `the ${laneWords(l.lane)} CPC ceiling${dynamicOf(l) > 1 ? ` (÷${dynamicOf(l)} Amazon dynamic bidding)` : ''}`]),
+    ...lanes.map((l): [number | null | undefined, string] => {
+      const cap = l.baseCeilingCents ?? l.maxCpcCents
+      const day = l.baseCeilingCents != null && l.baseCeilingCents !== l.maxCpcCents ? ' (the day\'s lowest of the hourly plan)' : ''
+      return [cap != null ? Math.floor(cap / dynamicOf(l)) : null, `the ${laneWords(l.lane)} CPC ceiling${day}${dynamicOf(l) > 1 ? ` (÷${dynamicOf(l)} Amazon dynamic bidding)` : ''}`]
+    }),
   ]
   for (const [v, from] of uppers) {
     if (v != null && v > 0 && (upper == null || v < upper)) { upper = v; upperFrom = from }
@@ -172,6 +193,31 @@ export function placementsFor(bidCents: number, lanes: readonly Lane[], goal: { 
     }
     return { lane: l.lane, planPct: l.planPct, pct, held }
   })
+}
+
+/**
+ * BB-9 — the placement rules' caps and floors on the plan's lanes: the lowest cap and the highest floor of each lane win,
+ * and a floor above a cap loses to it. A floor on a lane the plan does not shape adds that lane (from 0 %). Pure.
+ */
+export function applyLaneDirectives(lanes: readonly Lane[] = [], directives: readonly LaneDirective[] = []): Lane[] {
+  if (!directives.length) return [...lanes]
+  const out = new Map<LaneName, Lane>(lanes.map((l) => [l.lane, { ...l }]))
+  const names = new Set<LaneName>(directives.map((d) => d.lane))
+  for (const name of names) {
+    const mine = directives.filter((d) => d.lane === name && Number.isFinite(d.pct) && d.pct >= 0)
+    const caps = mine.filter((d) => d.kind === 'CEILING').map((d) => d.pct)
+    const floors = mine.filter((d) => d.kind === 'FLOOR').map((d) => d.pct)
+    const cap = caps.length ? Math.min(...caps) : null
+    let floor = floors.length ? Math.max(...floors) : null
+    if (floor != null && cap != null && floor > cap) floor = null
+    const lane = out.get(name) ?? (floor != null ? { lane: name, planPct: 0 } : null)
+    if (!lane) continue
+    let pct = Math.max(0, lane.planPct)
+    if (floor != null && pct < floor) pct = floor
+    if (cap != null && pct > cap) pct = cap
+    out.set(name, { ...lane, planPct: pct })
+  }
+  return [...out.values()]
 }
 
 /**

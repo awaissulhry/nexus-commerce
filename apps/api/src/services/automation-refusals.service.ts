@@ -95,6 +95,24 @@ export async function recordAutomationRefusal(args: RecordRefusalArgs): Promise<
 }
 
 /**
+ * BB-9 — whether this actor's refusal for `reason` is already recorded today (UTC). A rule that does not write is counted
+ * once a day (automation-rule.service.ts): its later refusals that day are not recorded again. A failed read answers
+ * false, so the refusal is recorded rather than lost.
+ */
+export async function refusalRecordedToday(actorId: string, reason: RefusalReason, opts: { actorKind?: 'rule' | 'engine'; at?: Date } = {}): Promise<boolean> {
+  try {
+    const row = await prisma.automationRefusalDaily.findUnique({
+      where: { actorKind_actorId_dayUtc_reason: workspaceKey({ actorKind: opts.actorKind ?? 'rule', actorId, dayUtc: refusalDayUtc(opts.at ?? new Date()), reason }) },
+      select: { count: true },
+    })
+    return (row?.count ?? 0) > 0
+  } catch (err) {
+    logger.warn('[automation-refusal] could not read today\'s refusal record — recording this one', { actorId, reason, error: err instanceof Error ? err.message : String(err) })
+    return false
+  }
+}
+
+/**
  * Refusal counts per actor over a window of UTC days, for the surfaces that render a ceiling.
  *
  * Returns a map keyed by actorId so a caller holding a list of rules can attach counts without an

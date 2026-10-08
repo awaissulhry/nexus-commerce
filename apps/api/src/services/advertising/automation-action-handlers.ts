@@ -43,8 +43,11 @@ import { NO_LIMITS, limitSources, limitWords, strategyBidReader, strategySource,
 import { fractionToPct } from './ads-strategy/fields.js'
 // P1 — the harvest thresholds this file falls back to, shared with the Rules grid that renders them.
 import { BID_WINDOW_MAX, BID_WINDOW_MIN, HARVEST_DEFAULTS, TRIGGER_WINDOW } from '@nexus/shared/ads-rule-window'
-import { settledWhere } from './ads-settled-window.js'
+import { settledBounds, settledWhere } from './ads-settled-window.js'
 import { withinGoal } from './ads-bid-goal.js'
+import { bidForAcos, expectedAcos } from './bid-brain/recipe.js'
+import { cpcRatio } from './bid-brain/estimator.js'
+import { isSafetyCut, isServingMove, movedThisDataDay, reversalWait, SAFETY_CUT_ACOS_MULTIPLE, windowBidCents, type BidMove, type WindowBidBasis } from './ads-bid-window.js'
 import { microsToCents } from '../ads-core/metrics-math.js'
 // NEG.0(a) — the reader for `protectConverting`. Until this import existed, the builder's headline
 // safety promise was written into every negation rule's action JSON and consulted by nothing.
@@ -1977,7 +1980,7 @@ async function targetClicks(adTargetId: string, trigger: string, overrideDays?: 
  * not finished arriving. Returns null where there is no signal: a CPC needs a
  * click, and an ACoS needs a sale. Acting on a keyword with no clicks is guessing.
  */
-async function targetPerformance(adTargetId: string, trigger: string, overrideDays?: number | null): Promise<{ cpcEur: number; acos: number | null; clicks: number; salesCents: number; days: number } | null> {
+async function targetPerformance(adTargetId: string, trigger: string, overrideDays?: number | null): Promise<{ cpcEur: number; acos: number | null; clicks: number; spendCents: number; salesCents: number; days: number } | null> {
   const days = bidWindowDays(trigger, overrideDays)
   const settled = settledWhere(days) // 6c — ends at the ad product's attribution lag
   const perf = await prisma.amazonAdsDailyPerformance.aggregate({
@@ -1995,9 +1998,49 @@ async function targetPerformance(adTargetId: string, trigger: string, overrideDa
     // denominator must not become "infinitely efficient" and double the bid.
     acos: salesCents > 0 ? spendCents / salesCents : null,
     clicks,
+    spendCents,
     salesCents,
     days,
   }
+}
+
+/** The ops that steer a keyword's bid toward a target ACoS (their goal is ÷ r̂, and they wait as auto-bid does). */
+const TARGET_ACOS_OPS = new Set(['targetAcos', 'curBidTargetAcos'])
+
+/**
+ * Review 2026-10-08 (A, rules) — the bid that served one keyword's clicks over the rule's settled window
+ * (ads-bid-window.ts windowBidCents): its bid moves from the bid history since the window began, weighed by its daily
+ * clicks. No move: today's bid served them all.
+ */
+async function ruleServingBid(adTargetId: string, currentCents: number, days: number): Promise<{ cents: number; basis: WindowBidBasis }> {
+  const window = settledBounds(days, 'SPONSORED_PRODUCTS')
+  const rows = await prisma.campaignBidHistory.findMany({
+    where: { entityType: 'AD_TARGET', field: 'bid', entityId: adTargetId, changedAt: { gte: window.since } },
+    select: { oldValue: true, newValue: true, changedAt: true },
+  })
+  const moves: BidMove[] = rows.map((r) => ({ at: r.changedAt, fromCents: Number(r.oldValue), toCents: Number(r.newValue) })).filter((m) => isServingMove(m.fromCents, m.toCents))
+  const clickDays = moves.length
+    ? await prisma.amazonAdsDailyPerformance.findMany({ where: { entityType: 'AD_TARGET', localEntityId: adTargetId, clicks: { gt: 0 }, ...settledWhere(days) }, select: { date: true, clicks: true } })
+    : []
+  return windowBidCents(currentCents, moves, clickDays, window)
+}
+
+/**
+ * Review 2026-10-08 (B, rules) — why a target-ACoS op's move waits, or null: another automatic writer (auto-bid, a rule,
+ * a plan) already moved this keyword on the current settled data day, or the move would reverse auto-bid's own last move
+ * within its wait (ads-bid-window.ts movedThisDataDay / reversalWait, auto-bid's own reads). A safety cut — the bid it
+ * has now is expected to run over SAFETY_CUT_ACOS_MULTIPLE × the target (`nowAcos`: the ACoS at that bid, as auto-bid
+ * reads it since #508) — is not held as a reversal; it still waits for the next data day after another automatic move.
+ */
+async function ruleBidWait(adTargetId: string, currentCents: number, proposedCents: number, acos: { nowAcos: number | null; targetAcos: number }): Promise<{ why: string | null; safety: boolean }> {
+  const { currentDataDay, recentAutoMoves } = await import('./ads-bid-optimizer.service.js')
+  const dataDay = currentDataDay()
+  const moves = (await recentAutoMoves([adTargetId])).get(adTargetId) ?? []
+  const today = movedThisDataDay(dataDay, moves)
+  if (today) return { why: today, safety: false }
+  const reversal = reversalWait(dataDay, currentCents, proposedCents, moves)
+  if (reversal && isSafetyCut(currentCents, proposedCents, acos.nowAcos, acos.targetAcos)) return { why: null, safety: true }
+  return { why: reversal, safety: false }
 }
 function applyBuilderOp(op: BuilderOp | string, current: number, value: number): number {
   switch (op) {
@@ -2274,6 +2317,10 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
    * success that changed nothing ([[reference_four_inert_ads_rules]]).
    */
   let computedEur: number | null = null
+  // Review 2026-10-08 (A, rules) — the target-ACoS ops' r̂ and goal, for the output (see below).
+  let paid: { ratio: number; servedBidCents: number; basis: string; goalCpcCents: number; goalBidCents: number; nowAcosPct: number | null; targetAcosPct: number } | null = null
+  // The same two ACoS as fractions, unrounded, for the safety cut's 1.5 × test.
+  let acosNow: { nowAcos: number | null; targetAcos: number } | null = null
   const trigger = String(getFieldPath(context, 'trigger') ?? '')
   const windowDays = action.windowDays != null ? Number(action.windowDays) : null
   let measured: { clicks: number; days: number } | null = null
@@ -2327,7 +2374,24 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
       // `targetAcos` op sets it. `curBidTargetAcos` steps from the current bid by H10's ratio, but never past that goal
       // and not at all within GOAL_TOLERANCE of it (or when the goal lies the other way): the window's ACoS barely moves
       // between two firings, so the bare ratio multiplied into the bid again on every firing (ads-bid-goal.ts).
-      const goalEur = perf.cpcEur * ((targetPct / 100) / perf.acos)
+      //
+      // Review 2026-10-08 (A, rules) — that goal is a CPC, and Amazon charges less than the bid. The bid that buys it is
+      // the CPC ÷ r̂ (paid CPC ÷ the bid that SERVED the window's clicks — ads-bid-window.ts, as auto-bid since #504),
+      // with the bid brain's arithmetic (recipe.ts bidForAcos, estimator.ts cpcRatio: 0.6–1.0, 0.85 under 10 clicks).
+      // Before, the rule set the CPC itself as the bid: "normal slider auto" at a 44¢ bid paying 62 % of it was cut to
+      // 34¢ by this op while auto-bid raised it toward 55¢ — a daily tug-of-war. This changes the rule's named formula
+      // from "CPC × target / ACoS" to "CPC × target / ACoS ÷ r̂"; `curBidTargetAcos`'s step (current bid × target / ACoS)
+      // is already a bid and is unchanged — only the goal it stops at moves.
+      const served = await ruleServingBid(id, t.bidCents ?? 0, perf.days)
+      const ratio = cpcRatio({ clicks: perf.clicks, costCents: perf.spendCents }, served.cents)
+      const goalEur = bidForAcos(targetPct / 100, 1, perf.salesCents / perf.clicks, ratio) / 100
+      // The ACoS at the bid it has now (not the window's): the safety cut below reads it, as auto-bid does (#508).
+      const nowAcos = expectedAcos(t.bidCents ?? 0, 1, perf.salesCents / perf.clicks, ratio)
+      acosNow = { nowAcos, targetAcos: targetPct / 100 }
+      paid = {
+        ratio: Math.round(ratio * 100) / 100, servedBidCents: Math.round(served.cents), basis: served.basis, goalCpcCents: Math.round(goalEur * ratio * 100), goalBidCents: Math.round(goalEur * 100),
+        nowAcosPct: nowAcos == null ? null : Math.round(nowAcos * 1000) / 10, targetAcosPct: Math.round(targetPct * 10) / 10,
+      }
       if (action.op === 'curBidTargetAcos') {
         const steppedEur = currentEur * ((targetPct / 100) / perf.acos)
         const towardGoal = (steppedEur < currentEur) === (goalEur < currentEur) && !withinGoal(currentEur * 100, goalEur * 100)
@@ -2355,10 +2419,20 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   const oldCents = t.bidCents ?? 0
   const raiseWindow = nextCents > oldCents ? (measured ?? await targetClicks(id, trigger, windowDays)) : null
   const spend = bidExtraSpend({ oldBidCents: oldCents, newBidCents: nextCents, clicks: raiseWindow?.clicks ?? 0, windowDays: raiseWindow?.days ?? 1 })
-  const spendOut = { extraSpendPerDayCents: spend.extraCentsPerDay, spendEstimate: spend.basis }
+  const spendOut = { extraSpendPerDayCents: spend.extraCentsPerDay, spendEstimate: spend.basis, ...(paid ? { goal: paid } : {}) }
+  // Review 2026-10-08 (B, rules) — the target-ACoS ops wait as auto-bid does (ads-bid-window.ts): one move per settled
+  // data day, whichever automatic writer moved the keyword first, and no reversal of auto-bid's own move within its wait.
+  // Said before the dry run returns, so a preview and a proposal say it too. A person's approval of the change is that
+  // person's decision (4e) and is not held back.
+  let safetyCut: string | null = null
+  if (TARGET_ACOS_OPS.has(String(action.op)) && nextCents !== oldCents && !meta.operatorApproved && paid && acosNow) {
+    const wait = await ruleBidWait(id, oldCents, nextCents, acosNow)
+    if (wait.why) return { type: action.type, ok: true, output: { skipped: 'waits_for_evidence', why: wait.why, adTargetId: id, bidCents: oldCents, wouldBe: nextCents, goal: paid } }
+    if (wait.safety) safetyCut = `a safety cut: not held as a reversal of auto-bid's raise, the bid now runs at ${paid.nowAcosPct}% ACoS, over ${SAFETY_CUT_ACOS_MULTIPLE} × the ${paid.targetAcosPct}% target`
+  }
   // 5.10 — a dry run that would change nothing says so (as placement and budget do), so a 5¢ → 5¢ card never reaches
   // the suggestion queue. `wouldChange` stays beside it for the preview.
-  if (meta.dryRun) return { type: action.type, ok: true, estimatedValueCentsEur: spend.extraCentsPerDay, output: { dryRun: true, adTargetId: id, wouldChange: `${t.bidCents}¢ → ${nextCents}¢`, ...spendOut, ...strategyOut, ...(nextCents === t.bidCents ? { noChange: true } : {}) } }
+  if (meta.dryRun) return { type: action.type, ok: true, estimatedValueCentsEur: spend.extraCentsPerDay, output: { dryRun: true, adTargetId: id, wouldChange: `${t.bidCents}¢ → ${nextCents}¢`, ...spendOut, ...strategyOut, ...(safetyCut ? { safetyCut } : {}), ...(nextCents === t.bidCents ? { noChange: true } : {}) } }
   if (nextCents === t.bidCents) return { type: action.type, ok: true, output: { adTargetId: id, noChange: true } }
   // Only a raise can spend more; a cut is never stopped by the spend ceiling.
   if (spend.extraCentsPerDay > 0) {
@@ -2367,11 +2441,11 @@ ACTION_HANDLERS.bid_apply = async (action, context, meta): Promise<ActionResult>
   }
   const evidence = ctxEvidence(context)
   const res = await updateAdTargetWithSync({
-    adTargetId: id, patch: { bidCents: nextCents }, ...ruleWrite(meta, (action.reason as string) ?? `bid_apply via rule ${meta.ruleId}`),
+    adTargetId: id, patch: { bidCents: nextCents }, ...ruleWrite(meta, `${(action.reason as string) ?? `bid_apply via rule ${meta.ruleId}`}${safetyCut ? ` — ${safetyCut}` : ''}`),
     // W1-5 — which level supplied the target and the strategy limits this bid was held to.
     evidence: Object.keys(sources).length ? { ...(evidence ?? {}), sources } : evidence,
   })
-  return { type: action.type, ok: res.ok, error: res.error ?? undefined, estimatedValueCentsEur: spend.extraCentsPerDay, output: { adTargetId: id, newBidCents: nextCents, outboundQueueId: res.outboundQueueId, ...spendOut, ...strategyOut } }
+  return { type: action.type, ok: res.ok, error: res.error ?? undefined, estimatedValueCentsEur: spend.extraCentsPerDay, output: { adTargetId: id, newBidCents: nextCents, outboundQueueId: res.outboundQueueId, ...spendOut, ...strategyOut, ...(safetyCut ? { safetyCut } : {}) } }
 }
 
 /**

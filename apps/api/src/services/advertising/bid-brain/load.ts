@@ -12,6 +12,8 @@
  *   BB-8        the overrides' sources (loadOverrideSources): each ad group's stock (ads-stock-risk.service.ts), what a
  *               playbook holds on each campaign, the break-even ACoS of the products advertised, a LAUNCH row's day,
  *               and for a keyword the brain last lowered by an override, the bid of its last decision before it
+ *   BB-9        the rules' active inputs per campaign (loadDirectives: BidDirective rows not past `until`), each named by
+ *               its rule
  */
 import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
@@ -22,7 +24,7 @@ import { readOwnerTargets } from '../ads-target-acos-resolver.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { openStrategy } from '../ads-strategy/effective.js'
 import { MAX_WINDOW_DAYS, type Evidence } from './estimator.js'
-import { stockFactOf, type AdGroupRow, type CampaignRow, type MarketRows, type PlaybookFact, type RunRows, type StockFact, type StrategyRead, type TargetRow } from './facts.js'
+import { stockFactOf, type DirectiveRow, type AdGroupRow, type CampaignRow, type MarketRows, type PlaybookFact, type RunRows, type StockFact, type StrategyRead, type TargetRow } from './facts.js'
 import { LOWERING_LAYERS, type DecisionLayer } from './decide.js'
 import { readStockAdGroups } from '../ads-stock-risk.service.js'
 import { breakevenByProduct } from '../ads-target-acos.service.js'
@@ -50,12 +52,17 @@ export function placementsOf(dynamicBidding: unknown): Array<{ placement: string
 }
 
 /** One market's campaigns, ad groups, keywords, evidence and listing prices. */
-export async function loadMarket(market: string, opts: { now?: Date } = {}): Promise<MarketRows & { newestReportAt: Date | null }> {
+/**
+ * BB-7 review — `campaignIds` + `light`: a between-slots tick (the plan's hours of the campaigns the brain owns) reads
+ * those campaigns only and no evidence: keyword goal bids move only on a new data day, at the full runs, so the tick
+ * carries out overrides only (Min-bid floors, the give-backs after them, stops) and the placements (Neon reads).
+ */
+export async function loadMarket(market: string, opts: { now?: Date; campaignIds?: ReadonlySet<string>; light?: boolean } = {}): Promise<MarketRows & { newestReportAt: Date | null }> {
   const now = opts.now ?? new Date()
   const window = settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })
   const dataDay = isoDay(window.until)
   const all = await prisma.campaign.findMany({
-    where: { adProduct: 'SPONSORED_PRODUCTS', marketplace: { not: null } },
+    where: { adProduct: 'SPONSORED_PRODUCTS', marketplace: { not: null }, ...(opts.campaignIds ? { id: { in: [...opts.campaignIds] } } : {}) },
     select: {
       id: true, marketplace: true, status: true, liveBidWritesEnabled: true, pinBids: true, pinnedBy: true, bidsSuppressedAt: true,
       bidsSuppressedFloorCents: true, bidsSuppressedBy: true, minBidCents: true, maxBidCents: true, dynamicBidding: true,
@@ -108,8 +115,11 @@ export async function loadMarket(market: string, opts: { now?: Date } = {}): Pro
     productIds: [...(productIdsOf.get(g.id) ?? [])].sort(),
   }]))
   const targetIds = targets.map((t) => t.id)
-  const [{ evidence, adSales30 }, newestReportAt] = await Promise.all([loadEvidence(targetIds, window), newestReport(targetIds, now)])
-  return { market, dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt }
+  const [{ evidence, adSales30 }, newestReportAt] = await Promise.all([
+    opts.light ? Promise.resolve({ evidence: new Map<string, Evidence>(), adSales30: new Map<string, number>() }) : loadEvidence(targetIds, window),
+    newestReport(targetIds, now),
+  ])
+  return { market, dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, ...(opts.light ? { light: true } : {}) }
 }
 
 /** The decayed sums per keyword over the settled window (one row per keyword with data). */
@@ -414,11 +424,12 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
   const lastSteps = new Map([...previous].flatMap(([id, p]) => (p.lastStep ? [[id, p.lastStep] as const] : [])))
   // Profit rows carry the market's code ('IT'), as the roll-up writes them.
   const sources = await loadOverrideSources(m, { campaignIds, groupIds, strategy, previous, marketplaces: [m.market] })
+  const directives = await loadDirectives(campaignIds, now)
   // BB-18 — the bid that served each keyword's window clicks; BB-7 — the hourly plan's hour of each owned campaign.
   const ownedHere = campaignIds.filter((id) => opts.owned?.has(id))
   const { minBidEntriesToday } = ownedHere.length ? await import('../../../jobs/ad-rank-defend.job.js') : { minBidEntriesToday: null }
   const [servingBids, planHours, minBidEntries, spendGuard] = await Promise.all([
-    loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
+    m.light ? Promise.resolve(new Map<string, number>()) : loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
     loadPlanHours(ownedHere, opts.clockNow ?? now),
     minBidEntriesToday ? minBidEntriesToday(ownedHere, opts.clockNow ?? now, ['rank-defend', 'bid-brain']) : Promise.resolve(new Map<string, number>()),
     // BB-10 — the brain's own raise cap: this hour's spend against the same hour of the last 7 days.
@@ -427,6 +438,7 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
   return {
     run: {
       ...sources,
+      directives,
       marketBrakes: brakes,
       strategy,
       accountDefaultPct,
@@ -444,3 +456,24 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
     previous,
   }
 }
+
+/** BB-9 — the rules' active inputs per campaign, each named by who asked (a rule by its name). */
+export async function loadDirectives(campaignIds: readonly string[], now: Date = new Date()): Promise<Map<string, DirectiveRow[]>> {
+  const out = new Map<string, DirectiveRow[]>()
+  if (!campaignIds.length) return out
+  const rows = await prisma.bidDirective.findMany({
+    where: { campaignId: { in: [...campaignIds] }, OR: [{ until: null }, { until: { gt: now } }] },
+    select: { campaignId: true, targetId: true, lane: true, kind: true, valueCents: true, valuePct: true, source: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (!rows.length) return out
+  const ruleIds = [...new Set(rows.flatMap((r) => (r.source.startsWith('rule:') ? [r.source.slice(5)] : [])))]
+  const names = new Map(ruleIds.length ? (await prisma.automationRule.findMany({ where: { id: { in: ruleIds } }, select: { id: true, name: true } })).map((r) => [r.id, r.name]) : [])
+  for (const r of rows) {
+    const rule = r.source.startsWith('rule:') ? r.source.slice(5) : null
+    const label = rule ? `rule "${names.get(rule) ?? rule}"` : r.source
+    out.set(r.campaignId, [...(out.get(r.campaignId) ?? []), { targetId: r.targetId, lane: r.lane, kind: r.kind, valueCents: r.valueCents, valuePct: r.valuePct, label }])
+  }
+  return out
+}
+

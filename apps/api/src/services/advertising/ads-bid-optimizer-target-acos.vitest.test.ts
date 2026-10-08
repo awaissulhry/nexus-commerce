@@ -204,6 +204,23 @@ describe('W0 — every caller of the optimiser', () => {
     expect(of(await preview({ targetAcos: 0.25, profitMode: true }), 't-it')).toMatchObject({ targetAcosUsed: 0.25, targetSource: 'explicit' })
   })
 
+  it('BID BRAIN — an account-wide rule leaves the keywords of a campaign the bid brain owns (one writer per campaign)', async () => {
+    await inside(() => setBidAutomation('c-it', { targetAcos: 0.4 }))
+    const run = () => inside(() => ACTION_HANDLERS.bid_to_target_acos({ type: 'bid_to_target_acos', targetAcos: 0.2 }, {} as never, { dryRun: true, ruleId: 'r-test' } as never))
+    const ids = (r: Awaited<ReturnType<typeof run>>) => (r.output as { sample: Array<{ targetId: string }> }).sample.map((x) => x.targetId)
+    expect(ids(await run())).toContain('t-it')
+    vi.stubEnv('NEXUS_BID_BRAIN_MODE', 'live')
+    try {
+      await inside(() => (database.client as any).bidBrainEnrollment.create({ data: { campaignId: 'c-it', marketplace: 'IT', mode: 'LIVE', enrolledBy: 'user:test' } }))
+      const owned = await run()
+      expect(ids(owned)).not.toContain('t-it')
+      expect(owned.output).toMatchObject({ brainOwned: 1 })
+    } finally {
+      vi.unstubAllEnvs()
+      await inside(() => (database.client as any).bidBrainEnrollment.deleteMany({ where: { campaignId: 'c-it' } }))
+    }
+  })
+
   it('an autopilot plan: its own stored target wins; without one, its goal default comes last; the decision records which', async () => {
     const plan = { planId: 'plan-test', goal: 'BALANCED' as const, marketplace: 'IT', guardrails: DEFAULT_GUARDRAILS, signals: [], actions: [{ module: 'bid' as const, campaignId: 'c-it', action: 'BID_LOWER' as const, reason: 'test', priority: 60 }] }
     // No campaign target, no target of the plan's own: its goal default (30 % at BALANCED with the default guardrails).

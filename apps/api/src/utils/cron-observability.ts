@@ -90,6 +90,13 @@ async function runCronRunInner<T extends CronHandlerResult>(
     })
   }
 
+  // BB-14 — every ads decision reads its days through ads-settled-window.ts, which ends at the newest day Amazon has
+  // settled for this business once it knows it. Hand it that fact before the job runs (at most one read per 15 min per
+  // business; never fails the cron). Loaded lazily: the module is read once, then each tick is a cached check.
+  await import('../services/advertising/ads-settled-facts.js')
+    .then((m) => m.primeSettledWindow())
+    .catch(() => undefined)
+
   const startMs = Date.now()
   try {
     const result = await handler()

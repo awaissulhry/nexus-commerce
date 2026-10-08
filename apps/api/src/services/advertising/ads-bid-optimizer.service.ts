@@ -345,6 +345,7 @@ export async function previewBidOptimization(
   /** Review 2026-10-08 (B) — moves that wait: another automatic move on this data day, or a quick reversal of its own. */
   waiting: WaitingMove[]
 }> {
+  await (await import('./ads-settled-facts.js')).primeSettledWindow() // BB-14 — the settled day the scheduler reads, here too
   const flatTargetAcos = opts.fallbackTargetAcos ?? 0.3 // 30% default fallback
   const explicit = targetFraction(opts.targetAcos)
   const profitMode = opts.profitMode ?? false
@@ -703,12 +704,19 @@ ACTION_HANDLERS.bid_to_target_acos = async (action, _context, meta): Promise<Act
   const bayesian = action.bayesian === true || action.bayesian === 'true'
   const preview = await previewBidOptimization({ targetAcos, targetAcosFrom: "this rule's target", campaignId, profitMode, mode, bayesian })
   // W1-5 — the rule's own Min/Max and the ads strategy's band both bind: the stricter wins.
-  const proposals = holdToStrategy(clampProposalsToRuleBounds(preview.proposals, action.minBidEur, action.maxBidEur))
+  const bounded = holdToStrategy(clampProposalsToRuleBounds(preview.proposals, action.minBidEur, action.maxBidEur))
+  // BID BRAIN — a keyword of a campaign the brain owns is the brain's (one writer per campaign): an account-wide rule leaves
+  // it. One read, and only while the brain's switch is live.
+  const { brainLiveCeiling, brainOwnedCampaignIds } = await import('./bid-brain/live.js')
+  const campaignOf = new Map((brainLiveCeiling() && bounded.length ? await prisma.adTarget.findMany({ where: { id: { in: bounded.map((p) => p.targetId) } }, select: { id: true, adGroup: { select: { campaignId: true } } } }) : []).map((t) => [t.id, t.adGroup.campaignId]))
+  const brainOwned = await brainOwnedCampaignIds([...new Set(campaignOf.values())])
+  const proposals = bounded.filter((p) => !brainOwned.has(campaignOf.get(p.targetId) ?? ''))
   // W1-7 — the cuts left alone because the ads strategy protects the product, said rather than dropped silently.
   const held = {
     ...(preview.held.length ? { protectedHeld: preview.held.length, protectedSample: preview.held.slice(0, 5) } : {}),
     // Review 2026-10-08 (B) — the moves that wait for the next data day, said rather than dropped silently.
     ...(preview.waiting.length ? { waiting: preview.waiting.length, waitingSample: preview.waiting.slice(0, 5) } : {}),
+    ...(bounded.length > proposals.length ? { brainOwned: bounded.length - proposals.length } : {}),
   }
   if (meta.dryRun) return { type: action.type, ok: true, output: { dryRun: true, wouldChange: proposals.length, sample: proposals.slice(0, 5), ...held } }
   const r = await applyBidOptimization({ changes: proposals.map((p) => ({ targetId: p.targetId, proposedBidCents: p.proposedBidCents, sources: p.sources, dataDay: p.dataDay })), actor: `automation:${meta.ruleId}` })

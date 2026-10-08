@@ -22,7 +22,7 @@ import { publishEvent } from '../../../lib/events/publish.js'
 import { engineGuardNote, openEngineGuard, type EngineGuard, type EngineGuardReport } from '../ads-engine-guard.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { decide, type Decision, type TargetFacts } from './decide.js'
-import { buildFacts, type CampaignRow } from './facts.js'
+import { buildFacts, isPlanFloorMark, type CampaignRow } from './facts.js'
 import { BRAIN_ACTOR, brainOwnedCampaignIds } from './live.js'
 import { placementReportWords, writeOwnedDecisions, writeOwnedPlacements, writeReportWords, type PlacementReport, type PlacementWrite, type WriteReport } from './live-writer.js'
 import type { PlanHour } from './plan-hour.js'
@@ -78,7 +78,10 @@ const dec = (x: number | null | undefined, places = 4) => (x == null || !Number.
  * and the plan's receipt. `onlyOwned`: a between-slots tick decides only the campaigns the brain owns.
  */
 export async function shadowMarket(market: string, ctx: { runId: string; mode: BrainMode; now: Date; clockNow?: Date; onlyOwned?: boolean; guard?: () => Promise<EngineGuard> }): Promise<ShadowRun['markets'][number]> {
-  const rows = await loadMarket(market, { now: ctx.now })
+  // BB-7 review — a between-slots tick reads the campaigns the brain owns only, and no evidence (load.ts loadMarket).
+  const ownedAll = ctx.onlyOwned ? await brainOwnedCampaignIds() : null
+  if (ownedAll && !ownedAll.size) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
+  const rows = await loadMarket(market, { now: ctx.now, ...(ownedAll ? { campaignIds: ownedAll, light: true } : {}) })
   if (!rows.targets.length) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
   // BB-6 — the campaigns the brain owns write their decisions; every other campaign stays shadow, whatever the env says.
   const allowlisted = [...rows.campaigns.values()].filter((c) => c.allowlisted).map((c) => c.id)
@@ -101,9 +104,13 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   const placed = guard && !run.marketBrakes.length ? await writeOwnedPlacements(placementWrites(rows, facts, decisions, owned, campaignOf, run.planHours), { runId: ctx.runId, guard }) : null
   // … a new Min-bid entry for each campaign the brain floored this run (rank-defend's anti-flap, its count shared) …
   if (sent) await recordMinBidEntries(rows, decisions, sent, run, campaignOf)
+  // … the floors' memory, where the old engines' give-back reads it, so a hand-back never strands a bid at the floor …
+  if (sent) await rememberFloors(rows, decisions, sent, run.planHours, campaignOf, ctx.clockNow ?? ctx.now)
   // … and the plan's receipt (what it holds now), as rank-defend stamps its own.
   if (run.planHours?.size) await stampPlanReceipts(run.planHours, ctx.clockNow ?? ctx.now)
   const data = decisions.flatMap((d) => {
+    // A light tick has no goal: its no_goal holds say nothing new and are not stored (the full run's decision stands).
+    if (rows.light && d.layer === 'no_goal') return []
     const prev = previous.get(d.targetId)
     const kind = rowKind(d, prev, ctx.now)
     if (!kind) return []
@@ -151,7 +158,9 @@ export function placementWrites(rows: { market: string; campaigns: ReadonlyMap<s
     const campaignId = campaignOf(f.targetId)
     if (!owned.has(campaignId)) return
     const d = decisions[i]
-    const bid = d.action === 'write' ? d.bidCents : d.currentCents
+    // The higher of today's bid and the decided one: a lowering waits in the 5-minute queue (or is refused), and the
+    // placement must stay within the ceiling against the bid Amazon may still hold.
+    const bid = d.action === 'write' ? Math.max(d.currentCents, d.bidCents) : d.currentCents
     const e = byCampaign.get(campaignId)
     const floored = d.layer === 'min_bid_hour' || !!f.overrides?.minBidHour
     // A paused ad group brakes its own keywords only: the campaign's placements wait only when every keyword is braked.
@@ -166,6 +175,55 @@ export function placementWrites(rows: { market: string; campaigns: ReadonlyMap<s
     out.push({ campaignId, market: rows.market, lanes: e.f.lanes, current: c.placements ?? [], maxBidCents: e.maxBid, key: hour.key, note: e.f.planNote ?? `hourly plan ${hour.name}`, dataDay: e.f.dataDay, raiseCap: e.f.raiseCap ?? null })
   }
   return out
+}
+
+/** The layers whose write floors a keyword: the bid before is remembered for a give-back. */
+const FLOORING_LAYERS: ReadonlySet<string> = new Set(['min_bid_hour', 'stop', 'stock', 'phase'])
+
+/**
+ * BB-7 review — the floors' memory, kept where the old engines' give-back reads it, so handing a campaign back (op shadow,
+ * give-back, or the server switch off / shadow) never strands its bids at 2–3¢:
+ *   floored    each keyword the brain floored this run remembers its bid before (`AdTarget.suppressedFromBidCents`,
+ *              the no-pause memory `restoreCampaignBids` puts back; an older memory is kept); a Min-bid floor also marks
+ *              the campaign as floored by its plan's schedule (`bidsSuppressedAt` / `…FloorCents` / `…By =
+ *              automation:rank-defend-<schedule>`), so rank-defend's serving hour, once it runs the campaign again,
+ *              gives every bid back (firstWriteIntent `restore`). A stop's floor keeps its owner's mark (BB-8): its owner's
+ *              lift gives the bids back from this memory after a hand-back, and clears it while the brain still runs.
+ *   given back each keyword the brain gave back forgets it; when every keyword the plan floored was given back this run
+ *              (none still at a Min-bid floor, no give-back left waiting), the plan's floor mark goes too. A keyword's
+ *              own older stop keeps its memory and its owner.
+ * While the brain runs the campaign, facts.ts reads the plan's own mark and memory as its record (the plan's hour
+ * decides). Never fails the run.
+ */
+async function rememberFloors(rows: { campaigns: ReadonlyMap<string, CampaignRow> }, decisions: readonly Decision[], sent: WriteReport, hours: ReadonlyMap<string, PlanHour> | undefined, campaignOf: (targetId: string) => string, now: Date): Promise<void> {
+  try {
+    const flooredCampaigns = new Map<string, number>()
+    const gaveBack = new Set<string>()
+    for (const d of decisions) {
+      if (sent.byTarget.get(d.targetId)?.sent !== 'queued') continue
+      if (FLOORING_LAYERS.has(d.layer) && d.bidCents < d.currentCents) {
+        await prisma.adTarget.updateMany({ where: { id: d.targetId, suppressedFromBidCents: null }, data: { suppressedFromBidCents: d.currentCents } })
+        if (d.layer === 'min_bid_hour') flooredCampaigns.set(campaignOf(d.targetId), d.bidCents)
+      } else if (d.layer === 'restore') {
+        await prisma.adTarget.updateMany({ where: { id: d.targetId, suppressedFromBidCents: { not: null } }, data: { suppressedFromBidCents: null } })
+        gaveBack.add(campaignOf(d.targetId))
+      }
+    }
+    for (const [campaignId, floorCents] of flooredCampaigns) {
+      const hour = hours?.get(campaignId)
+      if (!hour) continue
+      await prisma.campaign.updateMany({ where: { id: campaignId, bidsSuppressedAt: null }, data: { bidsSuppressedAt: now, bidsSuppressedFloorCents: floorCents, bidsSuppressedBy: `automation:rank-defend-${hour.scheduleId}` } })
+    }
+    for (const campaignId of gaveBack) {
+      const c = rows.campaigns.get(campaignId)
+      if (!c?.bidsSuppressedAt || !isPlanFloorMark(c.bidsSuppressedBy) || flooredCampaigns.has(campaignId)) continue
+      const mine = decisions.filter((d) => campaignOf(d.targetId) === campaignId)
+      const waiting = mine.some((d) => d.layer === 'min_bid_hour' || (d.layer === 'restore' && d.bidCents !== d.currentCents && sent.byTarget.get(d.targetId)?.sent !== 'queued'))
+      if (!waiting) await prisma.campaign.updateMany({ where: { id: campaignId, bidsSuppressedBy: c.bidsSuppressedBy }, data: { bidsSuppressedAt: null, bidsSuppressedFloorCents: null, bidsSuppressedBy: null } })
+    }
+  } catch (err) {
+    logger.warn('[bid-brain] could not keep the floors\' memory', { error: err instanceof Error ? err.message : String(err) })
+  }
 }
 
 /** BB-7 — record a Min-bid entry for each owned campaign that entered a Min-bid hour this run (its floors were queued). */

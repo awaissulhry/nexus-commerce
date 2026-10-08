@@ -21,6 +21,7 @@ import { estimate, laneCpcRatio, type Estimate, type PoolNode } from './estimato
 import { goalWords, isGoal, resolveGoal, type Goal, type GoalInputs, type GoalRefusal } from './goal.js'
 import {
   applyDirectives,
+  applyLaneDirectives,
   bidForAcos,
   clampToRange,
   DEFAULT_MAX_CHANGE_PCT,
@@ -34,6 +35,7 @@ import {
   type BidLimits,
   type Directive,
   type Lane,
+  type LaneDirective,
   type PlacementDecision,
 } from './recipe.js'
 
@@ -68,6 +70,10 @@ export interface TargetFacts {
   goal: GoalInputs
   limits: BidLimits
   directives?: readonly Directive[]
+  /** BB-9 — the placement rules' caps and floors on the lanes (recipe.ts applyLaneDirectives). */
+  laneDirectives?: readonly LaneDirective[]
+  /** BB-9 — the goal is a rule's (a GOAL directive): who set it, for the "why". */
+  goalBy?: string | null
   /** The hourly plan's lowest serving factor of the day (1 without a plan; BB-7). */
   hourFactor?: number
   /** BB-7 — the campaign's placement lanes this hour, as its hourly plan shapes them (absent: no plan, placements untouched). */
@@ -96,6 +102,9 @@ export interface TargetFacts {
 }
 
 export type DecisionLayer = 'brake' | 'stop' | 'pin' | 'stock' | 'freeze' | 'phase' | 'min_bid_hour' | 'restore' | 'goal' | 'band' | 'limit' | 'no_goal'
+
+/** BB-9 — a share floor (share of voice, rank, coverage) may reach the bid of this × the band top (design §2). */
+export const SHARE_FLOOR_HI_FACTOR = 1.25
 
 /** BB-8 — the override layers that lower a bid and whose end gives the bids back (`restore`). */
 export const LOWERING_LAYERS: readonly DecisionLayer[] = ['stop', 'stock', 'phase', 'min_bid_hour']
@@ -144,6 +153,8 @@ interface GoalBid {
   clash: string | null
   limitHeld: string | null
   range: ReturnType<typeof limitRange>
+  /** BB-9 — the caps a rule's floor and share floor are held to (the band top; hi × 1.25). */
+  floorCaps: { floor: number; share: number }
 }
 
 /** The recipe for one target, or why there is none. `noStep`: the goal bid itself, inside the limits (a give-back with no bid to start from). */
@@ -156,7 +167,7 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
   const aov = est.node.aovCents
   if (aov == null || aov <= 0) return { reason: 'no order value known (no sales and no listing price)' }
   const ratio = laneCpcRatio(f.chain[0].evidence, f.servingCents ?? f.currentCents, f.parentCpcRatio, f.ratioCeiling ?? 1)
-  const parts: string[] = [`${goalWords(goal)}${goal.notes.length ? `; ${goal.notes.join('; ')}` : ''}`]
+  const parts: string[] = [`${goalWords(goal)}${f.goalBy ? ` (the goal of ${f.goalBy})` : ''}${goal.notes.length ? `; ${goal.notes.join('; ')}` : ''}`]
   parts.push(`CR ${pct2(est.node.cr)} (${est.basis.level}, ${n0(est.basis.clicks)} clicks) × AOV ${money(aov)} ÷ CPC/bid ${ratio.toFixed(2)}${ratio > 1 ? ' (placements lift the paid CPC above the bid)' : ''}`)
 
   let want = bidForAcos(goal.aim, est.node.cr, aov, ratio)
@@ -176,19 +187,22 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
   if (f.planNote && f.lanes?.length) parts.push(f.planNote)
   const range = limitRange(f.limits, f.lanes)
   const topBid = bidForAcos(goal.hi, est.node.cr, aov, ratio)
-  const dir = applyDirectives(want, f.directives, topBid)
+  // BB-9 — a share floor (share of voice, rank) may reach hi × 1.25; the highest bid still holds it below (limits).
+  const shareTop = bidForAcos(goal.hi * SHARE_FLOOR_HI_FACTOR, est.node.cr, aov, ratio)
+  const dir = applyDirectives(want, f.directives, topBid, shareTop)
   want = dir.cents
   parts.push(...dir.applied, `goal bid ${Math.round(want)}¢`)
 
   // The step: from the bid before this data day's first step, unless someone else moved the bid since.
-  const sameDay = f.lastStep && f.lastStep.dataDay === f.dataDay && f.lastStep.toCents === f.currentCents
+  // `>=`: a step recorded for this data day or a newer one (the window moved back) is the day's step (ads-bid-window.ts).
+  const sameDay = f.lastStep && f.lastStep.dataDay >= f.dataDay && f.lastStep.toCents === f.currentCents
   const anchor = sameDay ? f.lastStep!.fromCents : f.currentCents
   const maxPct = f.limits.maxChangePct ?? DEFAULT_MAX_CHANGE_PCT
   const stepped = opts.noStep ? { cents: want, held: false } : stepFrom(anchor, want, maxPct, est.confidence)
   if (stepped.held) parts.push(`step ≤${Math.round(maxPct * est.confidence)}% from ${anchor}¢`)
   const clamped = clampToRange(Math.round(stepped.cents), range)
   if (clamped.held) parts.push(`held to ${clamped.held}`)
-  return { cents: clamped.cents, goal, est, ratio, anchor, parts, clash: dir.clash, limitHeld: clamped.held, range }
+  return { cents: clamped.cents, goal, est, ratio, anchor, parts, clash: dir.clash, limitHeld: clamped.held, range, floorCaps: { floor: topBid, share: shareTop } }
 }
 
 export function decide(f: TargetFacts): Decision {
@@ -214,7 +228,9 @@ export function decide(f: TargetFacts): Decision {
     confidence: ok ? Math.round(ok.est.confidence * 1000) / 1000 : null,
     clash: ok?.clash ?? null,
   }
-  const placements = (bid: number) => (ok && f.lanes?.length ? placementsFor(bid, f.lanes, ok.goal) : [])
+  // BB-9 — the placement rules' caps and floors shape the plan's lanes first; the lane CPC ceilings still hold them.
+  const lanes = applyLaneDirectives(f.lanes, f.laneDirectives)
+  const placements = (bid: number) => (ok && lanes.length ? placementsFor(bid, lanes, ok.goal) : [])
 
   // ── Overrides: the first that applies decides; the lower bid wins, except a pin. ──
   const o = f.overrides ?? {}
@@ -255,13 +271,16 @@ export function decide(f: TargetFacts): Decision {
     // `restore`: an earlier give-back found no bid to go back to; it is tried again on every run until it does.
     const lifted = r.layer === 'restore' ? 'restore: the stop that lowered it no longer applies' : `restore: the ${r.layer.replace('_', '-')} layer no longer applies`
     if (r.beforeCents != null) {
-      // As if the stop never happened: today's decision taken from the bid before it.
-      const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: null, restore: null, overrides: {}, brakes: [] })
+      // As if the stop never happened: today's decision taken from the bid before it. BB-7 review — with the day's step
+      // anchor kept when it is for this data day or a newer one (ads-bid-window.ts movedThisDataDay reads `>=` too), so
+      // a second Min-bid exit on the same data day lands where the first did and takes no new step (C3's slide).
+      const keep = f.lastStep && f.lastStep.dataDay >= f.dataDay ? f.lastStep : null
+      const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [] })
       const cents = asIf.bidCents
       const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${r.beforeCents}¢; ${asIf.why})`
       return {
         ...base, ...known, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
-        step: { dataDay: f.dataDay, fromCents: r.beforeCents, toCents: cents }, placements: placements(cents), why,
+        step: asIf.step ?? keep ?? { dataDay: f.dataDay, fromCents: r.beforeCents, toCents: cents }, placements: placements(cents), why,
       }
     }
     const g0 = ok ? goalBid(f, { noStep: true }) : null
@@ -287,12 +306,21 @@ export function decide(f: TargetFacts): Decision {
     const cents = outside.cents
     return { ...base, ...known, action: 'write', layer: 'limit', bidCents: cents, placements: placements(cents), why: `limit: ${f.currentCents}¢ is outside ${outside.held} → ${cents}¢` }
   }
+  // BB-9 — a rule's ceiling or floor binds like a limit: a bid outside it is brought inside it, in the band or not (the
+  // rule asked for that bid; today's rule action writes it at once).
+  if (f.directives?.length) {
+    const ruled = applyDirectives(f.currentCents, f.directives, ok.floorCaps.floor, ok.floorCaps.share)
+    const cents = clampToRange(ruled.cents, ok.range).cents
+    if (cents !== f.currentCents) {
+      return { ...base, ...known, action: 'write', layer: 'limit', bidCents: cents, placements: placements(cents), why: `rule input: ${f.currentCents}¢ is outside the ${ruled.applied.join('; ')} → ${cents}¢ (${recipe})` }
+    }
+  }
   if (expNow != null && expNow >= ok.goal.lo && expNow <= ok.goal.hi) {
     return { ...base, ...known, action: 'hold', layer: 'band', bidCents: f.currentCents, placements: placements(f.currentCents), why: `in band: expected ACoS ${pct(expNow)} at ${f.currentCents}¢ is inside ${pct(ok.goal.lo)}–${pct(ok.goal.hi)} — no change (${recipe})` }
   }
   const delta = Math.abs(ok.cents - f.currentCents)
   if (delta < MIN_WRITE_CENTS || delta < f.currentCents * MIN_WRITE_SHARE) {
-    const already = f.lastStep?.dataDay === f.dataDay && f.lastStep.toCents === f.currentCents
+    const already = !!f.lastStep && f.lastStep.dataDay >= f.dataDay && f.lastStep.toCents === f.currentCents
     const why = already ? `goal: already moved for data day ${f.dataDay} — waits for a new day (${recipe})` : `goal: ${recipe}; ${f.currentCents}¢ → ${ok.cents}¢ is too small a change`
     return { ...base, ...known, action: 'hold', layer: 'goal', bidCents: f.currentCents, placements: placements(f.currentCents), why }
   }

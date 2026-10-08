@@ -9,8 +9,8 @@
  *              writes nothing
  *   one writer another engine's bid change on the owned campaign is refused by the gate (no local change, no queue row);
  *              a stop's forced lowering passes; a person's own bid passes and becomes a BidHold the brain then leaves
- *   engines    auto-bid's holders name the brain, a rule's bid action is left to it, and the external engine never sees
- *              the owned keywords
+ *   engines    auto-bid's holders name the brain, and the external engine never sees the owned keywords (rules: BB-9's
+ *              rule-directives tests)
  *   give-back  the enrollment tool, approved by a person, puts back the bids the campaign had when it went LIVE and
  *              returns it to shadow
  *   big door   going LIVE through the tool needs the approver's authenticator code: a plain approve runs nothing
@@ -40,7 +40,6 @@ vi.mock('../../../lib/queue.js', () => {
 
 const { runShadowOnce } = await import('./shadow.js')
 const { setEnrollment } = await import('./enrollment.js')
-const { ruleBrainSkip } = await import('./rule-skip.js')
 const { BRAIN_ACTOR } = await import('./live.js')
 const { setAutonomy } = await import('../ads-automation-state.service.js')
 const { updateAdTargetWithSync } = await import('../ads-mutation.service.js')
@@ -157,13 +156,10 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-6 — the live bid brain: one writ
     expect(await bidOf('t-it')).toBe(50)
   })
 
-  it('engines leave it: auto-bid\'s holders name the brain, a rule\'s bid action is left to it, the external engine never sees it', async () => {
+  it('engines leave it: auto-bid\'s holders name the brain, the external engine never sees it', async () => {
     const holders = await inside(() => autoBidHolders(['c-it', 'c-sh']))
     expect(holders.get('c-it')).toBe('bidBrain')
     expect(holders.get('c-sh')).toBeUndefined()
-    expect(await inside(() => ruleBrainSkip({ type: 'bid_down' }, { adTarget: { id: 't-low' } }))).toMatch(/left to the bid brain/)
-    expect(await inside(() => ruleBrainSkip({ type: 'bid_down' }, { adTarget: { id: 't-sh' } }))).toBeNull()
-    expect(await inside(() => ruleBrainSkip({ type: 'add_negative_keyword' }, { adTarget: { id: 't-low' } }))).toBeNull()
     // The external engine reads keywords with clicks on their own row.
     await database.pool.query('UPDATE "AdTarget" SET clicks = 10 WHERE id IN (\'t-it\', \'t-sh\')')
     const contexts = await inside(() => getBidContexts({ marketplace: 'IT' }))
