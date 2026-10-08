@@ -58,6 +58,7 @@ Rule units — the guard catches only some mistakes, so write each in its own un
 
 - Before proposing a rule, preview what it would do now (eBay: the draft; Amazon: see §2) and show it.
 - Several changes: ONE `submit-change-plan`. Show the table: automation, from → to level (or setting from → to), why, and whether it can raise spend.
+- **The ads brain** (`ads-brain`: `view: "map"`, `"clashes"`, `"setup"`, `"report"`). For a product it runs, every engine and rule leaves each lever the brain owns (`PROPOSE` or `AUTO`): it skips it and counts why. Never propose turning up an engine, or a rule, as the fix for a lever the brain owns there: explain what the brain does instead, and name its clashes and the tools not set up. Its levels, locks, exclusions and kill switch are the Owner's own (`set-ads-brain`, `set-brain-kill-switch`): only when he asks.
 - Never edit a worker's prompt, the AI providers, budgets or the kill switch: those stay a person's own settings in Nexus. The eBay dial, monthly ceilings and kill switch have no Claude tool either.
 
 ## 4. After
