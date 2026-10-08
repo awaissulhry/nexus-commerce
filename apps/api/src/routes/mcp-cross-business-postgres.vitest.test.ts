@@ -1834,7 +1834,7 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
     })
   })
 
-  describe('1b — the ad reads (MCP full control A2, A13, T4; bid brain BB-4)', () => {
+  describe('1b — the ad reads (MCP full control A2, A13, T4; bid brain BB-4; ads brain AB-3)', () => {
     /** Each read aimed at one of business B's ad rows by its id. */
     const aimed = (): Array<[string, Record<string, unknown>]> => [
       ['ad-changes', { channel: 'ebay', campaignId: seeded.b.ebayCampaignId }],
@@ -1846,6 +1846,8 @@ describe.skipIf(!concurrentDatabaseUrl())('MCP.8 — a Claude connection for one
       ['ad-changes', { campaignId: seeded.b.campaignId }],
       ['ad-changes', { targetId: seeded.b.targetId }],
       ['ad-recommendations', { campaignId: seeded.b.campaignId }],
+      // AB-3 — the brain's map of one campaign (its levers' owners, its writers and the action log's evidence).
+      ['ads-brain', { view: 'map', campaignId: seeded.b.campaignId }],
     ]
 
     it("business B's campaign, ad group and target ids read as not found from A, and B's Amazon and eBay lists never show in A; inside B they read (control)", async () => {

@@ -132,6 +132,8 @@ describe('C3 — the server and every change tool name the business', () => {
       // BB-4 — the bid brain's read tool; BB-6 — it writes only for a campaign put LIVE, with the approver's code.
       'bid-brain (read only; the bid', 'writes only for a campaign set-bid-brain-enrollment put LIVE',
       "needs the approver's authenticator code; its diff view",
+      // AB-3 — the brain's map, read only.
+      'ads-brain (read only; views map, clashes, setup)',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
       'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
       "a start needs the approver's authenticator code",

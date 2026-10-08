@@ -78,6 +78,8 @@ What reads which target: Nexus's bid optimiser (auto-bid, autopilot plans and `b
 
 The bid brain (`bid-brain`, read only) decides each keyword bid of an allowlisted campaign in IT and DE from this target. In shadow it writes nothing. A campaign `set-bid-brain-enrollment` put LIVE (`op: "live"`, a big door: the approver's authenticator code; it takes effect only while the server switch is live) has one bid writer, the brain: auto-bid, rules and other engines leave it, and a person's own bid there holds that keyword for 60 days. Its hourly bid plan (the Hourly Bids page) keeps running, through the brain: each hour's placement % and Min-bid floors, inside the brain's limits. `op: "hold"` stops its raises for some days, `op: "shadow"` hands the bids back where they are, `op: "give-back"` puts back the bids and placements it had when it went LIVE. Before proposing a new target, `bid-brain` `view: "what-if"` with `targetAcosPct` shows what it would do to the bids; `view: "why"` explains a bid, `view: "diff"` sets the brain against what today's writers set.
 
+One brain per product and market will run every lever (bids, hours, placements, budgets, negatives, harvest, structure and the rest). `ads-brain` (read only) shows who runs each lever of each campaign today — the brain, an engine, a rule by name, the Owner (a lock, pinned bids) or nobody — with the brain's settings and where each comes from (`view: "map"`, by product and market or one campaign), where two automatic writers clash and the known gaps (`view: "clashes"`), and what is not set up, with the fix (`view: "setup"`). Read it before proposing a change to a campaign a product's brain may run.
+
 ## 6. Propose ONE change plan
 
 | To | Tool |

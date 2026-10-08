@@ -314,6 +314,8 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // Ads autonomy W1-2 — the strategy for the seeded campaign's market: its targets, bids and caps are money.
   'ads-strategy': (ids) => ({ market: 'IT', campaignId: ids.campaignId }),
   'bid-brain': (ids) => ({ view: 'why', campaignId: ids.campaignId }),
+  // AB-3 — the brain's map of one campaign (every lever's owner, the writers set up and those that wrote).
+  'ads-brain': (ids) => ({ view: 'map', campaignId: ids.campaignId }),
   // Ads playbook PB-2 — the seeded product's playbook in IT: its daily budget and base bid are money, and so are the
   // strategy's numbers shown beside it.
   'ads-playbook': (ids) => ({ market: 'IT', productId: ids.productId }),
