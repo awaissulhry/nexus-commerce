@@ -705,7 +705,7 @@ ACTION_HANDLERS.reroute_marketplace_budget = async (action, _context, meta): Pro
           ? { applied: outcome.applied.applied, failed: outcome.applied.failed }
           : { dryRun: true },
         warnings: outcome.warnings,
-        // ONE BRAIN AB-6 — the campaigns the rebalance left to a product's brain (or the Owner's lock).
+        // ONE BRAIN AB-6 — the campaigns the rebalance left to their budget's holder, per holder.
         ...(outcome.leverHeld ? { brainSkips: { counts: outcome.leverHeld.counts, ...(outcome.leverHeld.unread ? { unread: true } : {}) } } : {}),
       },
     }
@@ -2661,8 +2661,7 @@ ACTION_HANDLERS.dayparting_apply = async (action, context, meta): Promise<Action
   const holds = await ruleLeverHolds(meta, due.filter((c) => !bidBrain.has(c.id)).map((c) => c.id))
   const leftToBrain: import('./brain/engine-skips.js').LeverSkip[] = []
   const toChange = due.filter((c) => {
-    if (bidBrain.has(c.id)) { holds.count('bids'); return false }
-    const skip = holds.skip(c.id, 'adGroupBids')
+    const skip = bidBrain.has(c.id) ? holds.skipBidBrain(c.id, c.name) : holds.skip(c.id, 'adGroupBids')
     if (skip) leftToBrain.push(skip)
     return !skip
   })

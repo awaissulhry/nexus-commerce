@@ -87,7 +87,7 @@ describe('AB-6 — applyPlanActions', () => {
     h.campaignLeverOwners.mockClear()
     await apply({ leverHolds })
     expect(h.campaignLeverOwners).not.toHaveBeenCalled()
-    expect(leverHolds.counts()).toEqual({ budgets: 1 })
+    expect(leverHolds.counts()).toEqual({ productBrain: { budgets: 1 } })
   })
 
   it('nothing enrolled (production today): every decision applied as before', async () => {

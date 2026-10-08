@@ -42,7 +42,7 @@ import { engineActorWhere, type EngineKey } from '../services/advertising/ads-en
 import { MAX_MIN_BID_ENTRIES_PER_DAY, noWrites, type RankWriteCounts } from '../services/advertising/rank-write-projection.js'
 import { NO_LIMITS, clampToStrategy, holdNote, limitWords, newHoldLog, strategyBidReader, strategyWords, type BidHoldLog } from '../services/advertising/ads-strategy/bids.js'
 import { brainOwnedCampaignIds } from '../services/advertising/bid-brain/live.js'
-import { leverSkipNote, readLeverHolds, type LeverSkipCounts } from '../services/advertising/brain/engine-skips.js'
+import { leverHeldNote, readLeverHolds, type LeverHeld } from '../services/advertising/brain/engine-skips.js'
 import type { BrainLever } from '../services/advertising/brain/levers.js'
 
 /**
@@ -191,7 +191,7 @@ export type RankReleaseSummary = Omit<ReleaseReport, 'campaigns'> & { swept: num
 // BB-6 — `brainOwned`: campaigns of its plans and schedules the bid brain owns, left to the brain (one writer per campaign).
 // ONE BRAIN AB-6 — `leverHeld`: campaigns left because a product's brain owns (or the Owner holds) their placements or
 // ad-group default bids, per lever; `leverHoldsUnread`: who holds them could not be read (the write gate decided).
-export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog; brainOwned?: number; leverHeld?: LeverSkipCounts; leverHoldsUnread?: boolean }
+export interface RankDefendSummary { evaluated: number; applied: number; decisions: RankDefendDecision[]; plans?: RankPlanRunSummary[]; guard?: EngineGuardReport; skipped?: string; release?: RankReleaseSummary; writes?: RankWriteCounts; keptServing?: number; holds?: BidHoldLog; brainOwned?: number; leverHeld?: LeverHeld; leverHoldsUnread?: boolean }
 
 interface CampRow { id: string; name: string; status: string; dynamicBidding: unknown; biddingStrategy?: string | null; bidsSuppressedAt?: Date | null; bidsSuppressedFloorCents?: number | null; bidsSuppressedBy?: string | null; deliveryReasons?: string[]; marketplace?: string | null }
 interface RankCampaignResult { decision: RankDefendDecision; applied: number; held: HeldBack; writes: RankWriteCounts; keptServing: boolean }
@@ -990,7 +990,7 @@ export function rankWritesNote(r: Pick<RankDefendSummary, 'writes' | 'keptServin
 /** 1c — the run's summary line: the counts, plus what the dial or the caps held back (nothing extra on a normal run). */
 export function rankDefendSummaryLine(r: RankDefendSummary): string {
   if (r.skipped) return `skipped: ${r.skipped}`
-  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}${leverSkipNote(r.leverHeld, r.leverHoldsUnread)}`
+  return `evaluated=${r.evaluated} applied=${r.applied}${rankWritesNote(r)}${engineGuardNote(r.guard)}${rankReleaseNote(r.release)}${holdNote(r.holds)}${r.brainOwned ? ` brain-owned=${r.brainOwned} (the bid brain runs them)` : ''}${leverHeldNote(r.leverHeld, r.leverHoldsUnread)}`
 }
 
 export async function runRankDefendCron(): Promise<void> {

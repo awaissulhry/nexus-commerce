@@ -19,8 +19,25 @@ import { cronRunsFact, lowest, type AutomationAdapter, type AutomationLevel, typ
 
 export const MAX_EXPLAIN_DAYS = 30
 const CAP_REASONS = ['DAILY_CAP_EXCEEDED', 'WRITE_CAP_REACHED', 'VALUE_CAP_EXCEEDED']
-/** ONE BRAIN AB-6 — a write left on a lever a product's brain owns or the Owner holds (`LEVER_HELD:<lever>`). */
-const LEVER_HELD = 'LEVER_HELD:'
+/**
+ * ONE BRAIN AB-6 — a write left on a lever another owner holds, each named as what it is (follow-up of #527):
+ * `BRAIN_OWNED:<lever>` a product's brain, `OWNER_LOCKED:<lever>` the Owner's lock, `BID_BRAIN:bids` the bid brain. Rows
+ * recorded before the holders were told apart read `LEVER_HELD:<lever>`: the keyword bids were only ever the bid brain's;
+ * any other lever is said as either, which is all such a row knows.
+ */
+const HELD_PREFIXES: ReadonlyArray<[string, string]> = [
+  ['BRAIN_OWNED:', 'a product\'s brain owns'],
+  ['OWNER_LOCKED:', 'the Owner\'s lock holds'],
+  ['BID_BRAIN:', 'the bid brain runs'],
+]
+const LEGACY_HELD = 'LEVER_HELD:'
+/** Who held the lever of a held-lever reason, in words, and the lever; null when the reason is not one. Pure. */
+function heldReason(reason: string): { who: string; lever: string } | null {
+  for (const [prefix, who] of HELD_PREFIXES) if (reason.startsWith(prefix)) return { who, lever: reason.slice(prefix.length) }
+  if (!reason.startsWith(LEGACY_HELD)) return null
+  const lever = reason.slice(LEGACY_HELD.length)
+  return { who: lever === 'bids' ? 'the bid brain runs' : 'a product\'s brain or the Owner\'s lock holds (recorded before they were told apart)', lever }
+}
 
 export type VerdictCode = 'never-written' | 'not-written-in-window' | 'capped' | 'lever-held' | 'refused' | 'not-running' | 'no-runs' | 'failing' | 'acting'
 
@@ -69,14 +86,19 @@ export function verdictsOf(level: AutomationLevel | null, levelReason: string, f
     const detail = capReasons.map(([reason, count]) => `${reason} ${count}`).join(', ')
     out.push({ code: 'capped', says: `Its own caps stopped it ${capRefusals} times in ${days} days${detail ? ` (${detail})` : ''}: the cap, not the rule, decides how much it reaches.` })
   }
-  // ONE BRAIN AB-6 — one owner per lever: what it left to a product's brain (or to the Owner's lock), per lever. Said
-  // apart from a refusal, because nothing is wrong with the rule: the lever has another owner.
-  const leverHeld = Object.entries(facts.refusals?.byReason ?? {}).filter(([reason]) => reason.startsWith(LEVER_HELD))
+  // ONE BRAIN AB-6 — one owner per lever: what it left to each lever's holder, each named as what it is. Said apart from
+  // a refusal, because nothing is wrong with the rule: the lever has another owner.
+  const leverHeld = Object.entries(facts.refusals?.byReason ?? {}).flatMap(([reason, count]) => {
+    const held = heldReason(reason)
+    return held ? [{ ...held, count }] : []
+  })
   if (leverHeld.length) {
-    const n = leverHeld.reduce((sum, [, c]) => sum + c, 0)
-    out.push({ code: 'lever-held', says: `It left ${n} write${n === 1 ? '' : 's'} alone in ${days} days on levers a product's brain owns or the Owner holds at his own value (${leverHeld.map(([r, c]) => `${r.slice(LEVER_HELD.length)} ${c}`).join(', ')}): one owner per lever, not a failure.` })
+    const n = leverHeld.reduce((sum, h) => sum + h.count, 0)
+    const byWho = new Map<string, string[]>()
+    for (const h of leverHeld) byWho.set(h.who, [...(byWho.get(h.who) ?? []), `${h.lever} ${h.count}`])
+    out.push({ code: 'lever-held', says: `It left ${n} write${n === 1 ? '' : 's'} alone in ${days} days on levers another owner holds — ${[...byWho].map(([who, parts]) => `${who} ${parts.join(', ')}`).join('; ')}: one owner per lever, not a failure.` })
   }
-  const otherRefusals = Object.entries(facts.refusals?.byReason ?? {}).filter(([reason]) => !CAP_REASONS.includes(reason) && !reason.startsWith(LEVER_HELD))
+  const otherRefusals = Object.entries(facts.refusals?.byReason ?? {}).filter(([reason]) => !CAP_REASONS.includes(reason) && !heldReason(reason))
   if (otherRefusals.length) {
     out.push({ code: 'refused', says: `It was refused ${otherRefusals.reduce((n, [, c]) => n + c, 0)} times (${otherRefusals.map(([r, c]) => `${r} ${c}`).join(', ')}).` })
   }

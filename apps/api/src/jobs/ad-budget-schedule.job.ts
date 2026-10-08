@@ -55,7 +55,7 @@ import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { updateCampaignWithSync } from '../services/advertising/ads-mutation.service.js'
 import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
-import { leverSkipNote, readLeverHolds, type LeverSkipCounts } from '../services/advertising/brain/engine-skips.js'
+import { leverHeldNote, readLeverHolds, type LeverHeld } from '../services/advertising/brain/engine-skips.js'
 import { budgetDayKey, budgetDayStart } from '@nexus/shared/ads-budget-day'
 import { parseDecimalInput } from '@nexus/shared/ads-number'
 
@@ -432,7 +432,7 @@ export function classifyOverride(actor: string | null | undefined): { kind: BSOv
 // 1d — `guard`: the dial posture and the caps this run ran under, and what they held back.
 // ONE BRAIN AB-6 — `leverHeld`: the writes it left because a product's brain owns the campaign's daily budget (or the
 // Owner holds it at his own value), per lever; `leverHoldsUnread`: who holds them could not be read (the gate decided).
-export interface BSTick { evaluated: number; changed: number; yielded: number; refused: number; guard?: EngineGuardReport; leverHeld?: LeverSkipCounts; leverHoldsUnread?: boolean }
+export interface BSTick { evaluated: number; changed: number; yielded: number; refused: number; guard?: EngineGuardReport; leverHeld?: LeverHeld; leverHoldsUnread?: boolean }
 
 export async function runBudgetScheduleOnce(now: Date = new Date()): Promise<BSTick> {
   const schedules = await prisma.budgetSchedule.findMany({
@@ -686,7 +686,7 @@ export function budgetScheduleSummaryLine(r: BSTick): string {
   return `evaluated=${r.evaluated} changed=${r.changed} yielded=${r.yielded} refused=${r.refused}${engineGuardNote(r.guard, {
     suggest: 'no window is entered; a budget it set is still given back when its window closes',
     stopped: 'nothing is written; windows and give-backs wait for Resume',
-  })}${leverSkipNote(r.leverHeld, r.leverHoldsUnread)}`
+  })}${leverHeldNote(r.leverHeld, r.leverHoldsUnread)}`
 }
 
 export async function runBudgetScheduleCron(): Promise<void> {

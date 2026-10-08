@@ -18,7 +18,7 @@ import { runConductorCycle, type PlanModules } from '../services/advertising/aut
 import { DEFAULT_GUARDRAILS, type CampaignSignals, type Goal, type Guardrails } from '../services/advertising/autopilot/presets.js'
 import { syncLinkedRules, mirrorRuleDecisions } from '../services/advertising/autopilot/coordination.js'
 import { applyPlanActions, autopilotActionLever, type AppliedDecision } from '../services/advertising/autopilot/apply.js'
-import { addLeverSkipCounts, leverSkipNote, readLeverHolds, type LeverSkipCounts } from '../services/advertising/brain/engine-skips.js'
+import { addLeverHeld, leverHeldNote, readLeverHolds, type LeverHeld } from '../services/advertising/brain/engine-skips.js'
 import type { ProposedAction } from '../services/advertising/autopilot/modules.js'
 import { allowChange, engineGuardNote, nothingHeld, openEngineGuard, type EngineGuardReport } from '../services/advertising/ads-engine-guard.js'
 import { suppressDismissed, DISMISS_SUPPRESSION_MS } from '../services/advertising/autopilot/decisions.js'
@@ -109,7 +109,7 @@ function appliedChanges(decisions: AppliedDecision[]): number {
 // 1d — `guard`: the dial posture and the caps this run ran under, and what they held back (AUTO plans only).
 // ONE BRAIN AB-6 — `leverHeld`: the decisions left (not applied, not proposed) because a product's brain owns the lever or
 // the Owner holds it, per lever; `leverHoldsUnread`: who holds them could not be read (the write gate decided).
-export interface AutopilotTick { plans: number; decisions: number; guard?: EngineGuardReport; leverHeld?: LeverSkipCounts; leverHoldsUnread?: boolean }
+export interface AutopilotTick { plans: number; decisions: number; guard?: EngineGuardReport; leverHeld?: LeverHeld; leverHoldsUnread?: boolean }
 
 /** The plans this cron runs: enabled and not OFF. Auto-bid leaves their campaigns' bids to them (ads-auto-bid.service.ts). */
 export const RUNNING_AUTOPILOT_PLANS = { enabled: true, autonomy: { not: 'OFF' } }
@@ -117,7 +117,7 @@ export const RUNNING_AUTOPILOT_PLANS = { enabled: true, autonomy: { not: 'OFF' }
 export async function runAutopilotOnce(): Promise<AutopilotTick> {
   const plans = await prisma.autopilotPlan.findMany({ where: RUNNING_AUTOPILOT_PLANS })
   let decisions = 0
-  const leverHeld: LeverSkipCounts = {}
+  const leverHeld: LeverHeld = {}
   let leverHoldsUnread = false
   // 1d — the account dial and this engine's caps, read once per run when an AUTO plan could write.
   const guard = plans.some((p) => p.autonomy === 'AUTO') ? await openEngineGuard('autopilot') : null
@@ -208,7 +208,7 @@ export async function runAutopilotOnce(): Promise<AutopilotTick> {
     }
     // Coordinate with the Rule-Setting session's harvest/negate engine: provision the linked
     // rules for this plan + mirror their pending decisions into our unified feed (real-time sync).
-    addLeverSkipCounts(leverHeld, leverHolds.counts())
+    addLeverHeld(leverHeld, leverHolds.counts())
     let links: Awaited<ReturnType<typeof syncLinkedRules>> = []
     try { links = await syncLinkedRules(plan); await mirrorRuleDecisions(plan, links) } catch { /* best-effort coordination */ }
     await prisma.autopilotPlan.update({
@@ -228,7 +228,7 @@ export function autopilotSummaryLine(r: AutopilotTick): string {
   return `plans=${r.plans} decisions=${r.decisions}${engineGuardNote(r.guard, {
     suggest: 'AUTO plans record proposals and write nothing',
     stopped: 'AUTO plans record proposals and write nothing until Resume',
-  })}${leverSkipNote(r.leverHeld, r.leverHoldsUnread)}`
+  })}${leverHeldNote(r.leverHeld, r.leverHoldsUnread)}`
 }
 
 export async function runAutopilotCron(): Promise<void> {

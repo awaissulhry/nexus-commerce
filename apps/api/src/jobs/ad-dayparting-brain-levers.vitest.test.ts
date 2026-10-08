@@ -48,8 +48,8 @@ describe('AB-6 — classic dayparting', () => {
     const r = await runDaypartingOnce()
     expect(h.suppress).toHaveBeenCalledTimes(1)
     expect(h.suppress.mock.calls[0][0]).toBe('c-misano')
-    expect(r).toMatchObject({ evaluated: 1, leverHeld: { adGroupBids: 1 } })
-    expect(daypartingSummaryLine(r)).toBe('evaluated=1 changed=1 brain-levers=adGroupBids:1 (left to a product\'s brain or the Owner\'s lock)')
+    expect(r).toMatchObject({ evaluated: 1, leverHeld: { ownerLock: { adGroupBids: 1 } } })
+    expect(daypartingSummaryLine(r)).toBe('evaluated=1 changed=1 brain-levers=the Owner\'s lock: adGroupBids 1 (one owner per lever)')
   })
 
   it('nothing enrolled (production today): both floored, the line unchanged', async () => {

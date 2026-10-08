@@ -51,8 +51,8 @@ describe('AB-6 — autopilot under SUGGEST', () => {
     const r = await runAutopilotOnce()
     expect(proposed()).toEqual(['bid:c-gale', 'budget:c-misano'])
     expect(h.campaignLeverOwners).toHaveBeenCalledTimes(1)
-    expect(r).toMatchObject({ decisions: 2, leverHeld: { budgets: 1 } })
-    expect(autopilotSummaryLine(r)).toBe('plans=1 decisions=2 brain-levers=budgets:1 (left to a product\'s brain or the Owner\'s lock)')
+    expect(r).toMatchObject({ decisions: 2, leverHeld: { productBrain: { budgets: 1 } } })
+    expect(autopilotSummaryLine(r)).toBe('plans=1 decisions=2 brain-levers=a product\'s brain: budgets 1 (one owner per lever)')
   })
 
   it('nothing enrolled (production today): every proposal as before, the line unchanged', async () => {

@@ -8,7 +8,7 @@
  *              a pool's rebalance write exactly as before, and nothing is recorded as left
  *   owned      GALE enrolled in IT with its budgets lever at AUTO (the levels a lever takes are widened here, as each
  *              lever's own PR will): the rule's action on GALE's campaign is a named skip (no action log, no queue row),
- *              counted LEVER_HELD:budgets in the rule's refusal record; on MISANO's campaign it writes; the schedule
+ *              counted BRAIN_OWNED:budgets in the rule's refusal record; on MISANO's campaign it writes; the schedule
  *              enters its window on MISANO's campaign only and says so in its line; the pool keeps GALE's budget and
  *              shares the rest
  *   lock       the Owner's lock of GALE's budgets: the same skip, in the lock's words
@@ -69,7 +69,7 @@ const NOW = new Date('2026-10-08T12:00:00Z')
 const budgetWrites = async (workspaceId: string, campaignId: string) =>
   (await rows<{ n: number }>('SELECT count(*)::int n FROM "AdvertisingActionLog" WHERE "workspaceId" = $1 AND "entityId" = $2 AND "actionType" = \'AD_BUDGET_UPDATE\'', [workspaceId, campaignId]))[0].n
 const leverHeld = async (ruleId: string) =>
-  rows<{ reason: string; count: number; lastReason: string }>('SELECT reason, count, "lastReason" FROM "AutomationRefusalDaily" WHERE "workspaceId" = $1 AND "actorId" = $2 AND reason LIKE \'LEVER_HELD:%\'', [W, ruleId])
+  rows<{ reason: string; count: number; lastReason: string }>('SELECT reason, count, "lastReason" FROM "AutomationRefusalDaily" WHERE "workspaceId" = $1 AND "actorId" = $2 AND (reason LIKE \'BRAIN_OWNED:%\' OR reason LIKE \'OWNER_LOCKED:%\' OR reason LIKE \'BID_BRAIN:%\')', [W, ruleId])
 
 async function seed(prefix = '') {
   const db = database.client
@@ -123,11 +123,11 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-6 — engines leave a lever a prod
     expect(left.status).toBe('SUCCESS')
     expect(left.actionResults).toEqual([expect.objectContaining({
       type: 'adjust_ad_budget', ok: true,
-      output: expect.objectContaining({ skipped: 'brain-lever', brainSkip: expect.objectContaining({ lever: 'budgets', kind: 'owned', campaignId: 'c-it', productId: P, market: 'IT' }) }),
+      output: expect.objectContaining({ skipped: 'brain-lever', brainSkip: expect.objectContaining({ lever: 'budgets', holder: 'productBrain', campaignId: 'c-it', productId: P, market: 'IT' }) }),
     })])
     expect(String((left.actionResults[0].output as { why: string }).why)).toBe(`left alone: a product's brain runs the daily budget of campaign "Italy exact" (c-it) — product ${P} in IT (one owner per lever); a person's own edit still passes`)
     expect(await budgetWrites(W, 'c-it')).toBe(before)
-    expect(await leverHeld(rule.id)).toEqual([expect.objectContaining({ reason: 'LEVER_HELD:budgets', count: 1 })])
+    expect(await leverHeld(rule.id)).toEqual([expect.objectContaining({ reason: 'BRAIN_OWNED:budgets', count: 1 })])
 
     const free = await inW(() => runRule(rule.id, 'c-off'))
     expect(free.actionResults[0]).toMatchObject({ ok: true, output: { campaignId: 'c-off' } })
@@ -143,8 +143,8 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-6 — engines leave a lever a prod
     const tick = await inW(() => runBudgetScheduleOnce(now))
     expect(await budgetWrites(W, 'c-it')).toBe(before.it)
     expect(await budgetWrites(W, 'c-off')).toBe(before.off + 1)
-    expect(tick).toMatchObject({ changed: 1, leverHeld: { budgets: 1 } })
-    expect(budgetScheduleSummaryLine(tick)).toContain('brain-levers=budgets:1')
+    expect(tick).toMatchObject({ changed: 1, leverHeld: { productBrain: { budgets: 1 } } })
+    expect(budgetScheduleSummaryLine(tick)).toContain('brain-levers=a product\'s brain: budgets 1 (one owner per lever)')
   })
 
   it('owned: a live pool keeps GALE\'s budget and shares the rest of its total', async () => {
@@ -161,7 +161,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-6 — engines leave a lever a prod
     const off = out.proposed.find((p) => p.campaignId === 'c-off')!
     expect(it).toMatchObject({ shiftCents: 0, proposedBudgetCents: itBudget, heldBy: expect.stringContaining('a product\'s brain runs the daily budget of campaign "Italy exact" (c-it)') })
     expect(off.proposedBudgetCents).toBe(6_000 - itBudget)
-    expect(out.leverHeld).toEqual({ counts: { budgets: 1 } })
+    expect(out.leverHeld).toEqual({ counts: { productBrain: { budgets: 1 } } })
     expect(await budgetWrites(W, 'c-it')).toBe(before.it)
     expect(await budgetWrites(W, 'c-off')).toBe(before.off + 1)
   })
@@ -171,7 +171,8 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-6 — engines leave a lever a prod
     expect(await inW(() => setOverride({ productId: P, market: 'IT', by: 'user:owner', reason: 'my own budget', now: NOW, override: { scope: 'PRODUCT', kind: 'LOCK', key: 'budgets' } }))).toMatchObject({ ok: true })
     const rule = await inW(() => budgetRule('AB6 lock'))
     const left = await inW(() => runRule(rule.id, 'c-it'))
-    expect(left.actionResults[0]).toMatchObject({ output: { skipped: 'brain-lever', brainSkip: { lever: 'budgets', kind: 'locked' } } })
+    expect(left.actionResults[0]).toMatchObject({ output: { skipped: 'brain-lever', brainSkip: { lever: 'budgets', holder: 'ownerLock' } } })
+    expect(await leverHeld(rule.id)).toEqual([expect.objectContaining({ reason: 'OWNER_LOCKED:budgets', count: 1 })])
     expect(String((left.actionResults[0].output as { why: string }).why)).toContain('the Owner holds the daily budget of campaign "Italy exact" (c-it) at his own value')
     // Ending the lock (the lever at OBSERVE) lets the rule write again.
     expect(await inW(() => endOverride({ productId: P, market: 'IT', by: 'user:owner', now: NOW, override: { scope: 'PRODUCT', kind: 'LOCK', key: 'budgets' } }))).toMatchObject({ ok: true })

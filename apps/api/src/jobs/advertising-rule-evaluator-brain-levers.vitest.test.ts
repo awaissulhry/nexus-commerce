@@ -17,7 +17,7 @@ vi.mock('../services/advertising/brain/lever-owners.js', () => ({
 const { applyMarketplaceScope } = await import('./advertising-rule-evaluator.job.js')
 
 const ctx = (id: string) => ({ trigger: 'CAMPAIGN_PERFORMANCE_BUDGET', marketplace: 'IT', campaign: { id, name: id } })
-const skip = (lever: string) => ({ type: 'adjust_ad_budget', ok: true, output: { skipped: 'brain-lever', brainSkip: { lever } } })
+const skip = (lever: string) => ({ type: 'adjust_ad_budget', ok: true, output: { skipped: 'brain-lever', brainSkip: { lever, holder: 'productBrain' } } })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -39,7 +39,7 @@ describe('AB-6 — applyMarketplaceScope', () => {
     expect(h.campaignLeverOwners).toHaveBeenCalledTimes(1)
     expect(new Set(h.campaignLeverOwners.mock.calls[0][0] as string[])).toEqual(new Set(['c-gale', 'c-misano', 'c-moss']))
     expect(h.campaignLeverOwners.mock.invocationCallOrder[0]).toBeLessThan(h.evalAll.mock.invocationCallOrder[0])
-    expect(r).toMatchObject({ evaluations: 3, matches: 3, leverHeld: { budgets: 1 } })
+    expect(r).toMatchObject({ evaluations: 3, matches: 3, leverHeld: { productBrain: { budgets: 1 } } })
   })
 
   it('nothing enrolled (production today): no holders read, nothing counted, the result as before', async () => {

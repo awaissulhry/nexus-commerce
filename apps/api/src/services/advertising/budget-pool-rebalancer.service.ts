@@ -22,7 +22,7 @@
 
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { readLeverHolds, type EngineWriter, type LeverSkip, type LeverSkipCounts } from './brain/engine-skips.js'
+import { readLeverHolds, type EngineWriter, type LeverSkip, type LeverHeld } from './brain/engine-skips.js'
 
 const HARD_FLOOR_CENTS = 100 // €1 minimum per campaign
 
@@ -63,7 +63,7 @@ export interface RebalanceOutcome {
   skipped?: 'cooldown' | 'disabled' | 'pool_not_found' | 'no_allocations'
   inputs: Record<string, unknown>
   /** ONE BRAIN AB-6 — the campaigns left to a product's brain or the Owner's lock, per lever; `unread`: holders not read. */
-  leverHeld?: { counts: LeverSkipCounts; unread?: true }
+  leverHeld?: { counts: LeverHeld; unread?: true }
 }
 
 interface InternalAllocation {

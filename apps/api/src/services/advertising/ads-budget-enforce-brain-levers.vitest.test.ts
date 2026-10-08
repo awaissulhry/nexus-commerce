@@ -78,7 +78,7 @@ describe('AB-6 — budget enforcement\'s pacing leaves a held daily budget; its 
     const run = await inW(() => applyBudgetEnforcement({ month, dryRun: false, actor: 'automation:budget-manager-cron' }))
     expect(h.update.mock.calls.map(([a]) => a.campaignId)).toEqual([ids.misano])
     expect(new Set(h.suppress.mock.calls.map(([id]) => id))).toEqual(new Set([ids.gale, ids.misano]))
-    expect(run).toMatchObject({ budgetApplied: 1, suppressed: 2, leverHeld: { budgets: 1 } })
+    expect(run).toMatchObject({ budgetApplied: 1, suppressed: 2, leverHeld: { productBrain: { budgets: 1 } } })
     expect(h.campaignLeverOwners).toHaveBeenCalledTimes(1)
   })
 

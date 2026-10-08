@@ -67,9 +67,9 @@ describe('AB-6 — budget schedules leave a held daily budget', () => {
     expect(h.campaignLeverOwners).toHaveBeenCalledWith(['c-gale', 'c-misano'])
     expect(h.update).toHaveBeenCalledTimes(1)
     expect(h.update.mock.calls[0][0]).toMatchObject({ campaignId: 'c-misano', patch: { dailyBudget: 15 } })
-    expect(r).toMatchObject({ changed: 1, leverHeld: { budgets: 1 } })
+    expect(r).toMatchObject({ changed: 1, leverHeld: { productBrain: { budgets: 1 } } })
     expect(lastOf()).not.toHaveProperty('c-gale') // nothing committed: the window is entered on the first run allowed to
-    expect(budgetScheduleSummaryLine(r)).toBe('evaluated=1 changed=1 yielded=0 refused=0 brain-levers=budgets:1 (left to a product\'s brain or the Owner\'s lock)')
+    expect(budgetScheduleSummaryLine(r)).toBe('evaluated=1 changed=1 yielded=0 refused=0 brain-levers=a product\'s brain: budgets 1 (one owner per lever)')
   })
 
   it('a give-back owed on a held campaign waits: the memo is carried unchanged, nothing written', async () => {
@@ -80,7 +80,7 @@ describe('AB-6 — budget schedules leave a held daily budget', () => {
     const r = await runBudgetScheduleOnce(TUESDAY)
     expect(h.update).not.toHaveBeenCalled()
     expect(lastOf()['c-gale']).toEqual(entered)
-    expect(r.leverHeld).toEqual({ budgets: 1 })
+    expect(r.leverHeld).toEqual({ ownerLock: { budgets: 1 } })
   })
 
   it('nothing enrolled (production today): both written as before, the line unchanged', async () => {

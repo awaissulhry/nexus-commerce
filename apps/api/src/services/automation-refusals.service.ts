@@ -38,9 +38,13 @@ export type RefusalReason =
    *  with a NULL errorMessage, which is how `Reduce bids on ACOS spike` logged 1,029 refusals as
    *  failures in eight days and looked catastrophically broken instead of switched off. */
   | 'VALUE_CAP_EXCEEDED'
-  /** ONE BRAIN AB-6 — the rule left a write on a lever a product's brain owns, or the Owner holds at his own value
-   *  (brain/rule-skips.ts), one reason per lever. Not a failure and not a cap: the lever has another owner. */
-  | `LEVER_HELD:${BrainLever}`
+  /** ONE BRAIN AB-6 — the rule left a write on a lever another owner holds (brain/rule-skips.ts), one reason per holder
+   *  and lever, each named as what it is: a product's brain owns it (BRAIN_OWNED), the Owner holds it at his own value
+   *  (OWNER_LOCKED), the bid brain runs the keyword bids (BID_BRAIN). Not a failure and not a cap. Rows recorded before
+   *  the holders were told apart read `LEVER_HELD:<lever>` (automation-explain.service.ts reads both). */
+  | `BRAIN_OWNED:${BrainLever}`
+  | `OWNER_LOCKED:${BrainLever}`
+  | 'BID_BRAIN:bids'
 
 export interface RecordRefusalArgs {
   actorKind?: 'rule' | 'engine'
