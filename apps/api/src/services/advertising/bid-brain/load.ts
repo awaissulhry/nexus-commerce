@@ -51,12 +51,17 @@ export function placementsOf(dynamicBidding: unknown): Array<{ placement: string
 }
 
 /** One market's campaigns, ad groups, keywords, evidence and listing prices. */
-export async function loadMarket(market: string, opts: { now?: Date } = {}): Promise<MarketRows & { newestReportAt: Date | null }> {
+/**
+ * BB-7 review — `campaignIds` + `light`: a between-slots tick (the plan's hours of the campaigns the brain owns) reads
+ * those campaigns only and no evidence: keyword goal bids move only on a new data day, at the full runs, so the tick
+ * carries out overrides only (Min-bid floors, the give-backs after them, stops) and the placements (Neon reads).
+ */
+export async function loadMarket(market: string, opts: { now?: Date; campaignIds?: ReadonlySet<string>; light?: boolean } = {}): Promise<MarketRows & { newestReportAt: Date | null }> {
   const now = opts.now ?? new Date()
   const window = settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })
   const dataDay = isoDay(window.until)
   const all = await prisma.campaign.findMany({
-    where: { adProduct: 'SPONSORED_PRODUCTS', marketplace: { not: null } },
+    where: { adProduct: 'SPONSORED_PRODUCTS', marketplace: { not: null }, ...(opts.campaignIds ? { id: { in: [...opts.campaignIds] } } : {}) },
     select: {
       id: true, marketplace: true, status: true, liveBidWritesEnabled: true, pinBids: true, pinnedBy: true, bidsSuppressedAt: true,
       bidsSuppressedFloorCents: true, bidsSuppressedBy: true, minBidCents: true, maxBidCents: true, dynamicBidding: true,
@@ -109,8 +114,11 @@ export async function loadMarket(market: string, opts: { now?: Date } = {}): Pro
     productIds: [...(productIdsOf.get(g.id) ?? [])].sort(),
   }]))
   const targetIds = targets.map((t) => t.id)
-  const [{ evidence, adSales30 }, newestReportAt] = await Promise.all([loadEvidence(targetIds, window), newestReport(targetIds, now)])
-  return { market, dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt }
+  const [{ evidence, adSales30 }, newestReportAt] = await Promise.all([
+    opts.light ? Promise.resolve({ evidence: new Map<string, Evidence>(), adSales30: new Map<string, number>() }) : loadEvidence(targetIds, window),
+    newestReport(targetIds, now),
+  ])
+  return { market, dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, ...(opts.light ? { light: true } : {}) }
 }
 
 /** The decayed sums per keyword over the settled window (one row per keyword with data). */
@@ -420,7 +428,7 @@ export async function loadRun(m: MarketRows & { newestReportAt: Date | null }, n
   const ownedHere = campaignIds.filter((id) => opts.owned?.has(id))
   const { minBidEntriesToday } = ownedHere.length ? await import('../../../jobs/ad-rank-defend.job.js') : { minBidEntriesToday: null }
   const [servingBids, planHours, minBidEntries] = await Promise.all([
-    loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
+    m.light ? Promise.resolve(new Map<string, number>()) : loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
     loadPlanHours(ownedHere, opts.clockNow ?? now),
     minBidEntriesToday ? minBidEntriesToday(ownedHere, opts.clockNow ?? now, ['rank-defend', 'bid-brain']) : Promise.resolve(new Map<string, number>()),
   ])

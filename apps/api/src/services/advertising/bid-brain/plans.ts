@@ -4,7 +4,7 @@
  */
 import prisma from '../../../db.js'
 import { resolveActiveTargetKey, type ScheduleWindow } from '../rank-controller.js'
-import type { PlanHour } from './plan-hour.js'
+import { dayCeilingCents, type PlanHour } from './plan-hour.js'
 
 /**
  * Each owned campaign's plan hour now (`clockNow`: the database clock, as rank-defend reads it). Campaigns without a
@@ -31,21 +31,30 @@ export async function loadPlanHours(campaignIds: readonly string[], clockNow: Da
   const resolved = schedules.map((s) => {
     const ev = s.groupId ? eventByGroup.get(s.groupId) : undefined
     const { day, hour } = nowInTz(s.timezone || 'Europe/Rome', 0, clockNow)
-    const key = resolveActiveTargetKey((ev ? ev.windows : s.windows) as ScheduleWindow[], ev ? ev.defaultTargetKey : s.defaultTargetKey, day, hour)
-    return { s, ev, key }
+    const windows = (ev ? ev.windows : s.windows) as ScheduleWindow[]
+    const baseline = ev ? ev.defaultTargetKey : s.defaultTargetKey
+    const key = resolveActiveTargetKey(windows, baseline, day, hour)
+    // BB-7 review — every hour of today in the plan's time zone: the keyword bid holds the day's lowest ceiling.
+    const dayKeys = Array.from({ length: 24 }, (_, h) => resolveActiveTargetKey(windows, baseline, day, h)).filter((k): k is string => !!k)
+    return { s, ev, key, dayKeys }
   })
-  const keys = [...new Set(resolved.map((r) => r.key).filter((k): k is string => !!k))]
+  const keys = [...new Set(resolved.flatMap((r) => [r.key, ...r.dayKeys]).filter((k): k is string => !!k))]
   const targets = keys.length ? await prisma.rankTarget.findMany({ where: { key: { in: keys } } }) : []
   const targetByKey = new Map(targets.map((t) => [t.key, t]))
-  for (const { s, ev, key } of resolved) {
+  for (const { s, ev, key, dayKeys } of resolved) {
     if (out.has(s.campaignId)) continue
+    const specOf = (k: string) => {
+      const t = targetByKey.get(k)
+      return t ? applyTargetOverrides(toSpec(t as never), s.targetOverrides as never) : null
+    }
     const target = key ? targetByKey.get(key) : undefined
     out.set(s.campaignId, {
       scheduleId: s.id,
       name: s.group?.name ?? s.name,
       key,
-      spec: target ? applyTargetOverrides(toSpec(target as never), s.targetOverrides as never) : null,
+      spec: target ? specOf(key!) : null,
       event: ev?.name ?? null,
+      dayMaxCpcCents: dayCeilingCents([...new Set(dayKeys)].map(specOf)),
     })
   }
   return out

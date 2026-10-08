@@ -12,11 +12,13 @@
  */
 import { describe, expect, it } from 'vitest'
 import { laneHeadroom, type RankTargetSpec } from '../rank-controller.js'
-import { planFacts, type PlanHour } from './plan-hour.js'
+import { dayCeilingCents, planFacts, type PlanHour } from './plan-hour.js'
 import { bidForAcos, limitRange, placementsFor, stackCeiling, type Lane } from './recipe.js'
 import { cpcRatio, laneCpcRatio } from './estimator.js'
 import { decide, type TargetFacts } from './decide.js'
 import { placementPlan } from './live-writer.js'
+import { placementWrites } from './shadow.js'
+import type { Decision } from './decide.js'
 import { isFullSlot } from '../../../jobs/ads-bid-brain.job.js'
 
 const spec = (over: Partial<RankTargetSpec> = {}): RankTargetSpec => ({
@@ -30,9 +32,9 @@ describe('BB-7 — the plan hour as the brain\'s input', () => {
     const blended = spec({ lanes: [{ placement: 'PLACEMENT_TOP', biasPct: 150 }, { placement: 'PLACEMENT_PRODUCT_PAGE', biasPct: 50 }] })
     const f = planFacts(hour(blended), { biddingStrategy: 'AUTO_FOR_SALES' }, flap)!
     expect(f.lanes).toEqual([
-      { lane: 'TOP_OF_SEARCH', planPct: 150, maxCpcCents: 55, dynamic: 2 },
-      { lane: 'REST_OF_SEARCH', planPct: 0, maxCpcCents: 55, dynamic: 1.5 },
-      { lane: 'PRODUCT_PAGE', planPct: 50, maxCpcCents: 55, dynamic: 1.5 },
+      { lane: 'TOP_OF_SEARCH', planPct: 150, maxCpcCents: 55, baseCeilingCents: 55, dynamic: 2 },
+      { lane: 'REST_OF_SEARCH', planPct: 0, maxCpcCents: 55, baseCeilingCents: 55, dynamic: 1.5 },
+      { lane: 'PRODUCT_PAGE', planPct: 50, maxCpcCents: 55, baseCeilingCents: 55, dynamic: 1.5 },
     ])
     expect(f.minBidHour).toBeNull()
     expect(f.note).toBe('hourly plan IT GALE JACKET: all-out')
@@ -40,7 +42,17 @@ describe('BB-7 — the plan hour as the brain\'s input', () => {
 
   it('a single-placement target sets its lane only; a legacy campaign has no dynamic uplift', () => {
     const f = planFacts(hour(spec({ placement: 'PLACEMENT_REST_OF_SEARCH', biasPct: 40 })), { biddingStrategy: 'LEGACY_FOR_SALES' }, flap)!
-    expect(f.lanes).toEqual([{ lane: 'REST_OF_SEARCH', planPct: 40, maxCpcCents: 55, dynamic: 1 }])
+    expect(f.lanes).toEqual([{ lane: 'REST_OF_SEARCH', planPct: 40, maxCpcCents: 55, baseCeilingCents: 55, dynamic: 1 }])
+  })
+
+  it('review 6 — the keyword bid holds the day\'s lowest ceiling of the plan; each hour\'s own ceiling caps its placements', () => {
+    expect(dayCeilingCents([spec({ maxCpcCents: 60 }), spec({ key: 'min', pause: true, maxCpcCents: 10 }), spec({ maxCpcCents: 45 }), null, spec({ maxCpcCents: null })])).toBe(45)
+    expect(dayCeilingCents([spec({ maxCpcCents: null })])).toBeNull()
+    const f = planFacts(hour(spec({ maxCpcCents: 60 }), { dayMaxCpcCents: 45 }), { biddingStrategy: 'LEGACY_FOR_SALES' }, flap)!
+    expect(f.lanes[0]).toMatchObject({ maxCpcCents: 60, baseCeilingCents: 45 })
+    // The base bid is held at 45¢ all day (not 60¢ this hour, 45¢ the next); the placement is capped by this hour's 60¢.
+    expect(limitRange({}, f.lanes)).toMatchObject({ upper: 45, upperFrom: "the top-of-search CPC ceiling (the day's lowest of the hourly plan)" })
+    expect(placementsFor(40, f.lanes, { aim: 0.2, hi: 0.28 })[0]).toMatchObject({ pct: 50, held: 'the top-of-search CPC ceiling 60¢' })
   })
 
   it('a Min-bid hour floors every keyword (its own floor, else 2¢); base bid "suppress" is a Min-bid hour too', () => {
@@ -163,5 +175,34 @@ describe('the cadence', () => {
     expect(isFullSlot(new Date('2026-10-08T18:45:00Z'))).toBe(true)
     expect(isFullSlot(new Date('2026-10-08T06:30:00Z'))).toBe(false)
     expect(isFullSlot(new Date('2026-10-08T07:45:00Z'))).toBe(false)
+  })
+})
+
+describe('review 3 — two Min-bid windows on one data day', () => {
+  const base = (over: Partial<TargetFacts> = {}) => facts({ currentCents: 3, overrides: {}, ...over })
+  it('each exit gives the bid back where the day\'s step left it, never a fresh step from it', () => {
+    // Day D: the goal stepped 40 → 50 (25 %), then a Min-bid hour floored it; the bid before the floor is 50¢.
+    const lastStep = { dataDay: '2026-10-01', fromCents: 40, toCents: 50 }
+    const first = decide(base({ lastStep, restore: { layer: 'min_bid_hour', heldCents: 3, beforeCents: 50 } }))
+    expect(first).toMatchObject({ action: 'write', layer: 'restore', bidCents: 50 })
+    expect(first.step).toEqual(lastStep)
+    // The second window of the same data day: the same bid again (no 50 → 62 → 78 slide).
+    const second = decide(base({ lastStep: first.step, restore: { layer: 'min_bid_hour', heldCents: 3, beforeCents: 50 } }))
+    expect(second).toMatchObject({ layer: 'restore', bidCents: 50 })
+    // A new data day: one step from the bid before.
+    const next = decide(base({ dataDay: '2026-10-02', lastStep, restore: { layer: 'min_bid_hour', heldCents: 3, beforeCents: 50 } }))
+    expect(next.bidCents).toBeGreaterThan(50)
+    expect(next.bidCents).toBeLessThanOrEqual(63)
+  })
+})
+
+describe('review 5 — the placement ceiling against the bid Amazon may still hold', () => {
+  it('a lowering still in the queue: the ceiling is measured against today\'s higher bid', () => {
+    const lanes: Lane[] = [{ lane: 'TOP_OF_SEARCH', planPct: 150, maxCpcCents: 60, dynamic: 1 }]
+    const f = { ...facts({ targetId: 't1', currentCents: 40 }), lanes, planNote: 'hourly plan P: all-out' }
+    const cut = { targetId: 't1', action: 'write', layer: 'goal', currentCents: 40, bidCents: 20 } as Decision
+    const [w] = placementWrites({ market: 'IT', campaigns: new Map([['c1', { id: 'c1', status: 'ENABLED', placements: [] } as never]]) }, [f], [cut], new Set(['c1']), () => 'c1', new Map([['c1', { scheduleId: 's1', name: 'P', key: 'all-out', spec: null, event: null }]]))
+    expect(w.maxBidCents).toBe(40)
+    expect(placementPlan(w)!.adjustments).toEqual([{ placement: 'PLACEMENT_TOP', percentage: 50 }])
   })
 })

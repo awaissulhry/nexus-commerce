@@ -101,6 +101,8 @@ export interface PlaybookFact { kind: 'notStarted' | 'phaseFloor' | 'stopped'; f
 export interface MarketRows {
   market: string
   dataDay: string
+  /** BB-7 review — a between-slots tick: no evidence was read, so no keyword has a goal (overrides and placements only). */
+  light?: boolean
   campaigns: ReadonlyMap<string, CampaignRow>
   adGroups: ReadonlyMap<string, AdGroupRow>
   targets: readonly TargetRow[]
@@ -235,6 +237,9 @@ export function cpcRatioOf(targets: readonly TargetRow[], ev: (id: string) => Ev
   return clicks >= 10 && bidClicks > 0 ? cost / bidClicks : null
 }
 
+/** BB-7 review — a floor mark an hourly plan's Min-bid hour set (rank-defend's own prefixes, which the brain writes too). */
+export const isPlanFloorMark = (by: string | null | undefined): boolean => !!by && /^automation:(rank-defend|rank-plan|dayparting)-/.test(by)
+
 /** Who floored a campaign or ad group, read as an override. Null: not floored. */
 export function floorOverride(by: string | null, floorCents: number | null, at: Date | null): Partial<Overrides> | null {
   if (!at) return null
@@ -337,9 +342,16 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     }
 
     // Overrides.
-    const overrides: Overrides = mergeFloors(floorOverride(campaign.bidsSuppressedBy, campaign.bidsSuppressedFloorCents, campaign.bidsSuppressedAt), floorOverride(group.bidsSuppressedBy, group.bidsSuppressedFloorCents, group.bidsSuppressedAt))
-    // A keyword a stop floored on its own keeps its remembered bid: the stop decides until it lifts.
-    if (!overrides.stop && !overrides.stock && !overrides.minBidHour && t.suppressedFromBidCents != null) {
+    // BB-7 review — on a campaign the brain runs with its hourly plan, a Min-bid floor mark is the brain's own record of
+    // the plan's floor (shadow.ts rememberFloors: kept for rank-defend to give back after a hand-back), and so is the
+    // keywords' remembered bid under it: the plan's hour decides, never the mark.
+    const hour = run.planHours?.get(campaign.id)
+    const planFloor = !!hour && !!campaign.bidsSuppressedAt && isPlanFloorMark(campaign.bidsSuppressedBy)
+    const overrides: Overrides = mergeFloors(planFloor ? null : floorOverride(campaign.bidsSuppressedBy, campaign.bidsSuppressedFloorCents, campaign.bidsSuppressedAt), floorOverride(group.bidsSuppressedBy, group.bidsSuppressedFloorCents, group.bidsSuppressedAt))
+    // A keyword a stop floored on its own keeps its remembered bid: the stop decides until it lifts. The memory the plan's
+    // floor wrote (the brain's last decision floored this keyword for a Min-bid hour) is the brain's record, not a stop.
+    const planMemory = planFloor && run.lowered?.get(t.id)?.layer === 'min_bid_hour'
+    if (!planMemory && !overrides.stop && !overrides.stock && !overrides.minBidHour && t.suppressedFromBidCents != null) {
       overrides.stop = { bidCents: t.bidCents, by: `a stop (its ${t.suppressedFromBidCents}¢ bid remembered)` }
     }
     // BB-8 — stock from its source (an ad group's products), unless a retail-guard floor already says so.
@@ -365,7 +377,6 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     else if (undoHold) overrides.freeze = { by: `${undoHold.by}${undoHold.until ? ` until ${day(undoHold.until)}` : ''}` }
 
     // BB-7 — the campaign's hourly plan, where the brain owns it: its lanes, a Min-bid floor (the lower floor wins), the why.
-    const hour = run.planHours?.get(campaign.id)
     const plan = hour ? planFacts(hour, campaign, { entriesToday: run.minBidEntries?.get(campaign.id) ?? 0, inMinBid: inMinBid.has(campaign.id), maxEntries: MAX_MIN_BID_ENTRIES_PER_DAY }) : null
     if (plan?.minBidHour && (!overrides.minBidHour || plan.minBidHour.floorCents < overrides.minBidHour.floorCents)) overrides.minBidHour = plan.minBidHour
     // BB-18 — the most a click can cost against the base bid: the placements that served and those the plan sets.
@@ -379,7 +390,8 @@ export function buildFacts(m: MarketRows, run: RunRows): TargetFacts[] {
     out.push({
       targetId: t.id,
       currentCents: t.bidCents,
-      chain,
+      // BB-7 review — a between-slots tick read no evidence: no chain, so no goal (decide holds with no_goal).
+      chain: m.light ? [] : chain,
       parentCpcRatio: cpcRatioOf(byGroup.get(group.id) ?? [], ev, run.servingBids),
       servingCents: run.servingBids?.get(t.id) ?? null,
       ratioCeiling,

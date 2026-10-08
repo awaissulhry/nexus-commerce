@@ -45,6 +45,8 @@ function refusalOf(f: EnrollmentFacts, op: EnrollOp): string | null {
     if (f.blockers.length) return `${c.name} cannot go LIVE yet: ${f.blockers.join('; ')}.`
   }
   if (op === 'live' && f.floored) return `${c.name} cannot go LIVE now: ${f.floored}.`
+  // BB-7 review — back to shadow only when every floor the brain holds can be given back by the engines that take over.
+  if (op === 'shadow' && f.floorsWithoutMemory) return `${c.name} cannot go back to shadow now: ${plural(f.floorsWithoutMemory, 'keyword')} ${f.floorsWithoutMemory === 1 ? 'sits' : 'sit'} at a floor the bid brain set with no memory of the bid before, so no engine would give ${f.floorsWithoutMemory === 1 ? 'it' : 'them'} back. Use op give-back (it puts back the bids and placements the campaign had when it went LIVE), or try again once the floor has lifted.`
   if (op === 'give-back' && !f.enrollment?.snapshot) return `${c.name} has no snapshot to give back (it never went LIVE).`
   return null
 }

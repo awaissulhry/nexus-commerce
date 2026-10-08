@@ -192,7 +192,8 @@ function goalBid(f: TargetFacts, opts: { noStep?: boolean } = {}): GoalBid | { r
   parts.push(...dir.applied, `goal bid ${Math.round(want)}¢`)
 
   // The step: from the bid before this data day's first step, unless someone else moved the bid since.
-  const sameDay = f.lastStep && f.lastStep.dataDay === f.dataDay && f.lastStep.toCents === f.currentCents
+  // `>=`: a step recorded for this data day or a newer one (the window moved back) is the day's step (ads-bid-window.ts).
+  const sameDay = f.lastStep && f.lastStep.dataDay >= f.dataDay && f.lastStep.toCents === f.currentCents
   const anchor = sameDay ? f.lastStep!.fromCents : f.currentCents
   const maxPct = f.limits.maxChangePct ?? DEFAULT_MAX_CHANGE_PCT
   const stepped = opts.noStep ? { cents: want, held: false } : stepFrom(anchor, want, maxPct, est.confidence)
@@ -268,13 +269,16 @@ export function decide(f: TargetFacts): Decision {
     // `restore`: an earlier give-back found no bid to go back to; it is tried again on every run until it does.
     const lifted = r.layer === 'restore' ? 'restore: the stop that lowered it no longer applies' : `restore: the ${r.layer.replace('_', '-')} layer no longer applies`
     if (r.beforeCents != null) {
-      // As if the stop never happened: today's decision taken from the bid before it.
-      const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: null, restore: null, overrides: {}, brakes: [] })
+      // As if the stop never happened: today's decision taken from the bid before it. BB-7 review — with the day's step
+      // anchor kept when it is for this data day or a newer one (ads-bid-window.ts movedThisDataDay reads `>=` too), so
+      // a second Min-bid exit on the same data day lands where the first did and takes no new step (C3's slide).
+      const keep = f.lastStep && f.lastStep.dataDay >= f.dataDay ? f.lastStep : null
+      const asIf = decide({ ...f, currentCents: r.beforeCents, lastStep: keep, restore: null, overrides: {}, brakes: [] })
       const cents = asIf.bidCents
       const why = `${lifted} → back to ${cents}¢ from the ${f.currentCents}¢ it held (the bid before it: ${r.beforeCents}¢; ${asIf.why})`
       return {
         ...base, ...known, action: cents !== f.currentCents ? 'write' : 'hold', layer: 'restore', bidCents: cents,
-        step: { dataDay: f.dataDay, fromCents: r.beforeCents, toCents: cents }, placements: placements(cents), why,
+        step: asIf.step ?? keep ?? { dataDay: f.dataDay, fromCents: r.beforeCents, toCents: cents }, placements: placements(cents), why,
       }
     }
     const g0 = ok ? goalBid(f, { noStep: true }) : null
@@ -314,7 +318,7 @@ export function decide(f: TargetFacts): Decision {
   }
   const delta = Math.abs(ok.cents - f.currentCents)
   if (delta < MIN_WRITE_CENTS || delta < f.currentCents * MIN_WRITE_SHARE) {
-    const already = f.lastStep?.dataDay === f.dataDay && f.lastStep.toCents === f.currentCents
+    const already = !!f.lastStep && f.lastStep.dataDay >= f.dataDay && f.lastStep.toCents === f.currentCents
     const why = already ? `goal: already moved for data day ${f.dataDay} — waits for a new day (${recipe})` : `goal: ${recipe}; ${f.currentCents}¢ → ${ok.cents}¢ is too small a change`
     return { ...base, ...known, action: 'hold', layer: 'goal', bidCents: f.currentCents, placements: placements(f.currentCents), why }
   }

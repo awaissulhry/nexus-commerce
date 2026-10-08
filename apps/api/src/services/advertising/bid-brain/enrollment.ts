@@ -17,7 +17,7 @@
  * snapshot is then the serving bids, and no floor is left that only its old owner would lift).
  */
 import { createHash } from 'node:crypto'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import prisma from '../../../db.js'
 import { strategyMarket } from '../ads-strategy/bids.js'
 import { brainLiveCeiling } from './live.js'
@@ -47,6 +47,8 @@ export interface EnrollmentFacts {
   blockers: string[]
   /** BB-7 — a floor in force now (flooredNow): refuses LIVE until the bids serve again. */
   floored?: string | null
+  /** BB-7 review — keywords at a floor the brain set with no memory of their bid (floorsWithoutMemory): refuses op shadow. */
+  floorsWithoutMemory?: number
 }
 
 const placementsOf = (dynamicBidding: unknown): Array<{ placement: string; percentage: number }> =>
@@ -128,6 +130,7 @@ export async function enrollmentFacts(campaignId: string, opts: { plansJoin?: bo
     ceiling: mode,
     blockers: await brainBlockers(c.id, opts),
     floored: await flooredNow(c.id),
+    floorsWithoutMemory: row && row.mode !== 'SHADOW' ? await floorsWithoutMemory(c.id) : 0,
   }
 }
 
@@ -208,3 +211,22 @@ export async function setEnrollment(args: {
 
 /** True when LIVE takes effect now (the env ceiling is `live`). */
 export const liveTakesEffect = (): boolean => brainLiveCeiling()
+
+/**
+ * BB-7 review — the keywords the brain holds at a floor (its newest decision lowered them by a stop, stock, the phase or a
+ * Min-bid hour, and the bid still sits there) with no memory of their bid before (`AdTarget.suppressedFromBidCents`).
+ * Handed back like this, no engine would give them back: `op: shadow` refuses until they have one (shadow.ts
+ * rememberFloors keeps it for every floor the brain writes) — give-back puts back the snapshot instead.
+ */
+export async function floorsWithoutMemory(campaignId: string): Promise<number> {
+  const rows = await prisma.$queryRaw<Array<{ n: number }>>(Prisma.sql`
+    SELECT count(*)::int AS n FROM (
+      SELECT DISTINCT ON (d."targetId") d."targetId", d.layer, d."decidedCents"
+        FROM "BidBrainDecision" d
+       WHERE d."campaignId" = ${campaignId}
+       ORDER BY d."targetId", d."createdAt" DESC) last
+      JOIN "AdTarget" t ON t.id = last."targetId"
+     WHERE last.layer IN ('stop', 'stock', 'phase', 'min_bid_hour')
+       AND t."bidCents" <= last."decidedCents" AND t."suppressedFromBidCents" IS NULL AND t."retiredAt" IS NULL`)
+  return rows[0]?.n ?? 0
+}

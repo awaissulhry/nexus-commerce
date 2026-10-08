@@ -70,6 +70,8 @@ export interface Lane {
   crRatio?: number | null
   /** BB-18 — Amazon's dynamic bidding on this lane (rank-controller.ts laneHeadroom): 1, 1.5 or 2. Absent: 1. */
   dynamic?: number | null
+  /** BB-7 review — the ceiling the keyword bid holds (the day's lowest of the plan's hours); absent: `maxCpcCents`. */
+  baseCeilingCents?: number | null
 }
 
 /** BB-18 — a lane's dynamic-bidding multiple, never below 1. */
@@ -146,7 +148,11 @@ export function limitRange(limits: BidLimits, lanes: readonly Lane[] = []): { lo
     [limits.maxBidCents, 'the strategy highest bid'],
     [limits.campaignMaxCents, "the campaign's highest bid"],
     // BB-18 — at 0 % placement Amazon can still add its dynamic bidding: the base bid × that stays within the ceiling.
-    ...lanes.map((l): [number | null | undefined, string] => [l.maxCpcCents != null ? Math.floor(l.maxCpcCents / dynamicOf(l)) : null, `the ${laneWords(l.lane)} CPC ceiling${dynamicOf(l) > 1 ? ` (÷${dynamicOf(l)} Amazon dynamic bidding)` : ''}`]),
+    ...lanes.map((l): [number | null | undefined, string] => {
+      const cap = l.baseCeilingCents ?? l.maxCpcCents
+      const day = l.baseCeilingCents != null && l.baseCeilingCents !== l.maxCpcCents ? ' (the day\'s lowest of the hourly plan)' : ''
+      return [cap != null ? Math.floor(cap / dynamicOf(l)) : null, `the ${laneWords(l.lane)} CPC ceiling${day}${dynamicOf(l) > 1 ? ` (÷${dynamicOf(l)} Amazon dynamic bidding)` : ''}`]
+    }),
   ]
   for (const [v, from] of uppers) {
     if (v != null && v > 0 && (upper == null || v < upper)) { upper = v; upperFrom = from }

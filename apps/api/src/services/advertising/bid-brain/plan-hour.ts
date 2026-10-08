@@ -39,6 +39,18 @@ export interface PlanHour {
   spec: RankTargetSpec | null
   /** The dated event that replaced the week, by name. */
   event: string | null
+  /**
+   * BB-7 review — the lowest CPC ceiling of today's serving hours of the plan (null: none sets one). The keyword bid holds
+   * it all day, so a lower ceiling at one hour and a higher one at the next do not move the bids down and up; each hour's
+   * own ceiling still caps its placement %.
+   */
+  dayMaxCpcCents?: number | null
+}
+
+/** The lowest CPC ceiling among a day's serving targets (a Min-bid hour sets none). Pure. */
+export function dayCeilingCents(specs: ReadonlyArray<Pick<RankTargetSpec, 'pause' | 'bidMode' | 'maxCpcCents'> | null>): number | null {
+  const caps = specs.filter((s): s is NonNullable<typeof s> => !!s && !isMinBidSpec(s) && s.maxCpcCents != null && s.maxCpcCents > 0).map((s) => s.maxCpcCents!)
+  return caps.length ? Math.min(...caps) : null
 }
 
 const LANE_OF: Record<string, LaneName> = { [PLACEMENT_TOP]: 'TOP_OF_SEARCH', [PLACEMENT_PRODUCT]: 'PRODUCT_PAGE' }
@@ -85,6 +97,8 @@ export function planFacts(hour: PlanHour, campaign: { biddingStrategy?: string |
     lane: laneOf(p),
     planPct: Math.max(0, Math.min(900, Math.round(declared.get(p) ?? 0))),
     maxCpcCents: spec.maxCpcCents ?? null,
+    // The keyword bid's ceiling: the day's lowest (hour.dayMaxCpcCents), else this hour's.
+    baseCeilingCents: hour.dayMaxCpcCents ?? spec.maxCpcCents ?? null,
     dynamic: laneHeadroom(campaign.biddingStrategy, p),
   }))
   const baseBidIgnored = setsBaseBid(spec)
