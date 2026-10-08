@@ -268,8 +268,9 @@ export interface FbaCreateAnswer {
 
 /**
  * POST /api/fba/inbound/drafts — "Add to draft" (the Matrix dialog, Claude's tool): these lines go into the ONE open
- * draft for this From + To (made when none). A SKU already in it takes the new numbers; a line with 0 units takes the SKU
- * out. No Amazon call, no hold. → 200 FbaCreateAnswer (the draft's planId).
+ * draft for this From + To (made when none; `lines: []` makes or finds it empty — the page's "New draft"). A SKU already
+ * in it takes the new numbers; a line with 0 units takes the SKU out. No Amazon call, no hold. Owners given are saved for
+ * those SKUs at once (`setFbaOwnersIfUnset`). → 200 FbaCreateAnswer (the draft's planId).
  */
 export interface FbaDraftAddRequest {
   from: string
@@ -280,8 +281,9 @@ export interface FbaDraftAddRequest {
   owners?: FbaSendOwners | null
 }
 /**
- * PATCH /api/fba/inbound/plans/:id — edit a DRAFT on the page. Each field absent = keep. `lines` replaces every line
- * (0-unit lines dropped). A From + To that already has another open draft → 409 DRAFT_EXISTS. → 200 FbaPlanView.
+ * PATCH /api/fba/inbound/plans/:id — edit a DRAFT on the page (it saves as you type). Each field absent = keep. `lines`
+ * replaces every line; a 0-unit line stays in the draft (a SKU added, its numbers to come) and is left out at Send. A From
+ * + To that already has another open draft → 409 DRAFT_EXISTS. → 200 FbaPlanView.
  */
 export interface FbaDraftUpdateRequest {
   from?: string
