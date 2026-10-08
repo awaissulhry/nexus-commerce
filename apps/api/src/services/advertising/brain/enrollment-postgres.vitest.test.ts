@@ -33,6 +33,8 @@
  *              family root was deleted (its record fails: a warning, in the result and the change record), and a
  *              plain one (recorded as the Owner's campaign choice): the mode flips and the snapshot comes back
  *   rows map   today's LIVE rows by product (a read)
+ *   AB-2       a stop's saved settings still owed: the product's AUTO skips that campaign by name (not a failed change);
+ *              its way back to shadow gives them back
  *
  * Values are made up (public repo).
  */
@@ -469,5 +471,34 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-1 — a product\'s brain: enrollme
     expect(await bid('s-live')).toBe(77)
     const [change] = await rows<{ after: { warnings?: string[] } }>('SELECT after FROM "AgentChange" WHERE "approvalId" = $1', [broken.approvalId])
     expect(change.after.warnings?.[0]).toMatch(/could not record/)
+  })
+
+  it('AB-2 follow-up — a stop\'s saved settings on a campaign: the product\'s AUTO skips it by name (no failed change); its way back to shadow gives them back', async () => {
+    const owe = () => database.pool.query('UPDATE "Campaign" SET "biddingStrategy" = \'LEGACY_FOR_SALES\', "suppressedFromBiddingStrategy" = \'AUTO_FOR_SALES\' WHERE id = $1', [C('b-asin')])
+    const memory = async () => (await rows<{ b: string; s: string | null }>('SELECT "biddingStrategy" b, "suppressedFromBiddingStrategy" s FROM "Campaign" WHERE id = $1', [C('b-asin')]))[0]
+    expect((await modes())[C('b-asin')]).toBe('SHADOW')
+    // Down only with up and down still owed: LIVE would refuse it (never dropped unseen), so it is a named skip.
+    await owe()
+    const live = await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'AUTO', by: 'user:owner', now: NOW }))
+    expect(live.ok).toBe(true)
+    expect(live.ok && live.plan.steps?.find((s) => s.campaignId === C('b-asin'))).toMatchObject({ op: 'skip', why: expect.stringMatching(/b-asin cannot go LIVE yet: a stop's saved settings are still owed: the bidding strategy it switched to down only \(up and down saved\) — set-bid-brain-enrollment op live gives them back first/) })
+    expect((await modes())[C('b-asin')]).toBe('SHADOW')
+    expect(await memory()).toEqual({ b: 'LEGACY_FOR_SALES', s: 'AUTO_FOR_SALES' })
+    // Settled (up and down again): it goes LIVE with the product's AUTO, the old memory dropped.
+    await database.pool.query('UPDATE "Campaign" SET "biddingStrategy" = \'AUTO_FOR_SALES\' WHERE id = $1', [C('b-asin')])
+    const v = await version()
+    const again = await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'AUTO', by: 'user:owner', now: NOW, expectVersion: v }))
+    expect(again.ok && again.plan.steps?.find((s) => s.campaignId === C('b-asin'))).toMatchObject({ op: 'live' })
+    expect((await modes())[C('b-asin')]).toBe('LIVE')
+    expect(await memory()).toEqual({ b: 'AUTO_FOR_SALES', s: null })
+    // A stop's memory while LIVE, then the product's lever back to OBSERVE: the shadow step gives the strategy back.
+    await owe()
+    const before = await amazonRows()
+    const back = await inW(() => setLever({ productId: P, market: 'IT', lever: 'bids', level: 'OBSERVE', by: 'user:owner', now: NOW }))
+    expect(back.ok && back.plan.steps?.find((s) => s.campaignId === C('b-asin'))).toMatchObject({ op: 'shadow' })
+    expect((await modes())[C('b-asin')]).toBe('SHADOW')
+    expect(await memory()).toEqual({ b: 'AUTO_FOR_SALES', s: null })
+    expect(await rows('SELECT "userId", "payloadAfter" ->> \'biddingStrategy\' AS s FROM "AdvertisingActionLog" WHERE "entityId" = $1 AND "actionType" = \'AD_BIDDING_STRATEGY_UPDATE\'', [C('b-asin')])).toEqual([{ userId: 'user:owner', s: 'AUTO_FOR_SALES' }])
+    expect(await amazonRows()).toBeGreaterThan(before)
   })
 })

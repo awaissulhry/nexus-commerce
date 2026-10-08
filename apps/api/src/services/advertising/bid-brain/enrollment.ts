@@ -175,6 +175,8 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 export function enrollRefusal(f: EnrollmentFacts, op: EnrollOp): string | null {
   const c = f.campaign
   if (c.adProduct && c.adProduct !== 'SPONSORED_PRODUCTS') return `${c.name} is not a Sponsored Products campaign: the bid brain decides Sponsored Products keyword bids only.`
+  // AB-2 follow-up — a give-back whose placement write was refused kept a stop's saved lanes: it may run again from shadow.
+  if (op === 'give-back' && giveBackAgain(f)) return null
   const next = nextMode(op, f.enrollment?.mode ?? null)
   if ('refusal' in next) return `${c.name}: ${next.refusal}.`
   if (op === 'live' || op === 'release') {
@@ -187,6 +189,14 @@ export function enrollRefusal(f: EnrollmentFacts, op: EnrollOp): string | null {
   if (op === 'shadow' && f.floorsWithoutMemory) return `${c.name} cannot go back to shadow now: ${plural(f.floorsWithoutMemory, 'keyword')} ${f.floorsWithoutMemory === 1 ? 'sits' : 'sit'} at a floor the bid brain set that no engine would give back after it (no memory of the bid before, or none an owner's floor mark points at). Use op give-back (it puts back the bids and placements the campaign had when it went LIVE), or try again once the floor has lifted.`
   if (op === 'give-back' && !f.enrollment?.snapshot) return `${c.name} has no snapshot to give back (it never went LIVE).`
   return null
+}
+
+/**
+ * AB-2 follow-up — a give-back may run again on a campaign already back in shadow while a stop's saved lanes are still
+ * owed (its placement write was refused: the lanes kept at 0 %, their memory kept) and the LIVE-time snapshot is there.
+ */
+export function giveBackAgain(f: Pick<EnrollmentFacts, 'enrollment' | 'stopMemory'>): boolean {
+  return f.enrollment?.mode === 'SHADOW' && !!f.enrollment.snapshot && !!f.stopMemory?.lanes
 }
 
 /** The mode an op leads to, or why it cannot from here. */

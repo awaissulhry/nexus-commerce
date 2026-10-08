@@ -14,7 +14,8 @@
  *                  does not own and a shadow ceiling get nothing; a second stop the same UTC day keeps down only until the
  *                  next day; C: a person's own strategy during a stop is a hold the brain leaves until it ends; B4: with
  *                  the switch off, the stop owner's restore (or a person's Restore) gives the lanes and the strategy back;
- *                  B1/B2: op shadow, approved, puts them back and clears them; B3: op live is refused while one is owed
+ *                  B1/B2: op shadow, approved, puts them back and clears them; B3: op live is refused while one is owed;
+ *                  a give-back whose placement write is refused keeps the saved lanes, says so, and runs again
  *
  * Values are made up (public repo).
  */
@@ -39,12 +40,15 @@ vi.mock('../../../lib/queue.js', () => {
   }
 })
 /** Amazon, as a recorder: the campaign's current placements, and every placement PUT. */
-const amz = vi.hoisted(() => ({ placements: [] as Array<{ placement: string; percentage: number }>, puts: [] as Array<{ externalId: string; patch: Record<string, unknown> }> }))
+const amz = vi.hoisted(() => ({ placements: [] as Array<{ placement: string; percentage: number }>, puts: [] as Array<{ externalId: string; patch: Record<string, unknown> }>, readFails: false }))
 vi.mock('../ads-api-client.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../ads-api-client.js')>()
   return {
     ...real,
-    listCampaignsV3: async (_ctx: unknown, q: { campaignIds?: string[] }) => (q.campaignIds ?? []).map((id) => ({ campaignId: id, dynamicBidding: { strategy: 'LEGACY_FOR_SALES', placementBidding: amz.placements } })),
+    listCampaignsV3: async (_ctx: unknown, q: { campaignIds?: string[] }) => {
+      if (amz.readFails) throw new Error('Amazon read timed out')
+      return (q.campaignIds ?? []).map((id) => ({ campaignId: id, dynamicBidding: { strategy: 'LEGACY_FOR_SALES', placementBidding: amz.placements } }))
+    },
     updateCampaign: async (_ctx: unknown, externalId: string, patch: Record<string, unknown>) => {
       amz.puts.push({ externalId, patch })
       amz.placements = (patch.placementBidding as typeof amz.placements | undefined) ?? amz.placements
@@ -562,5 +566,44 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-7 — an owned campaign\'s hourly 
     await database.pool.query('UPDATE "Campaign" SET "biddingStrategy" = \'AUTO_FOR_SALES\' WHERE id = \'c-it\'')
     await inside(() => setEnrollment({ campaignId: 'c-it', marketplace: 'IT', op: 'live', by: 'user:test', now: NOW }))
     expect(await rows('SELECT "suppressedFromBiddingStrategy" s, "suppressedFromPlacements" p FROM "Campaign" WHERE id = \'c-it\'')).toEqual([{ s: null, p: null }])
+  })
+
+  it('AB-2 follow-up b — a give-back whose placement write is refused keeps the saved lanes, says so, and runs again', async () => {
+    const BUDGET = 'automation:budget-manager-cron'
+    const LIVE = [{ placement: 'PLACEMENT_TOP', percentage: 900 }, { placement: 'PLACEMENT_PRODUCT_PAGE', percentage: 50 }]
+    const tool = ADS_BID_BRAIN_ENROLLMENT_TOOLS[0]
+    const memory = async () => (await rows<{ b: string; p: unknown; s: string | null }>('SELECT "biddingStrategy" b, "suppressedFromPlacements" p, "suppressedFromBiddingStrategy" s FROM "Campaign" WHERE id = \'c-it\''))[0]
+    const giveBack = () => inside(async () => {
+      const run = await database.client.agentRun.create({ data: { agentKey: 'mcp', trigger: 'manual', status: 'done', via: 'claude', userId: 'u-asker' } })
+      const asked = await runOrQueueTool('set-bid-brain-enrollment', { campaignId: 'c-it', op: 'give-back', why: 'test give-back' }, person('u-asker', 'claude'), run.id)
+      expect(asked).toMatchObject({ ok: true, mode: 'queued' })
+      return decideApproval(asked.approvalId!, 'approve', person('u-approver', 'app'))
+    })
+    // c-it LIVE (the last test), up and down, its lanes as they were when it went LIVE; a cap's stop: 0 %, down only, saved.
+    await inside(() => suppressCampaignBids('c-it', { actor: BUDGET as never, floorCents: 3, reason: 'monthly cap reached' }))
+    await inside(() => runShadowOnce({ now: at(NOW, 64), mode: 'live', onlyOwned: true, clockNow: new Date(NOW.getTime() + 5 * DAY) }))
+    expect(await memory()).toEqual({ b: 'LEGACY_FOR_SALES', p: LIVE, s: 'AUTO_FOR_SALES' })
+    // Amazon's placements cannot be read: the give-back's placement write is refused. The saved lanes stay; it says so.
+    amz.readFails = true
+    const puts = amz.puts.length
+    try {
+      const first = await giveBack()
+      expect(first).toMatchObject({ ok: true, status: 'executed', result: { mode: 'SHADOW', gaveBack: { placementsNotRestored: expect.stringMatching(/^placements not restored: Amazon's current placement settings .* — the lanes a stop saved are kept; run give-back again$/) } } })
+      expect((first.result as { warnings?: string[] }).warnings).toEqual([expect.stringMatching(/^Italy exact: placements not restored: .*run give-back again\.$/)])
+    } finally {
+      amz.readFails = false
+    }
+    expect(amz.puts.length).toBe(puts)
+    // The strategy came back (its own write); the saved lanes are kept, owed — never dropped with the lanes at 0 %.
+    expect(await memory()).toEqual({ b: 'AUTO_FOR_SALES', p: LIVE, s: null })
+    // Run again: allowed from shadow while the lanes are owed; this time the placements come back and the memory goes.
+    const card = await inside(() => tool.handler({ campaignId: 'c-it', op: 'give-back' }, {} as never)) as { ok: boolean; preview: { effect: string; enrollment: { from: string; to: string } } }
+    expect(card).toMatchObject({ ok: true, preview: { enrollment: { from: 'SHADOW', to: 'SHADOW' }, effect: expect.stringMatching(/^Runs the give-back of .* again \(its placements were not restored the last time; it is in shadow already\)/) } })
+    expect(await giveBack()).toMatchObject({ ok: true, status: 'executed', result: { mode: 'SHADOW' } })
+    expect(amz.puts.at(-1)!.patch.placementBidding).toEqual(LIVE)
+    expect(await memory()).toEqual({ b: 'AUTO_FOR_SALES', p: null, s: null })
+    // Nothing owed any more: a third give-back from shadow is refused as before.
+    expect(await inside(() => tool.handler({ campaignId: 'c-it', op: 'give-back' }, {} as never))).toMatchObject({ ok: false, error: expect.stringMatching(/in shadow: the brain wrote nothing to give back/) })
+    await inside(() => restoreCampaignBids('c-it', { actor: BUDGET as never, reason: 'back under cap' }))
   })
 })

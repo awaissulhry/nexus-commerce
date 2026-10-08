@@ -18,7 +18,7 @@ import { giveBackStopMemory } from '../../advertising/bid-brain/stop-memory.js'
 import { updatePlacementBidding } from '../../advertising/ads-create.service.js'
 import { recordCampaignBidsChoice } from '../../advertising/brain/enrollment.js'
 import {
-  DEFAULT_HOLD_DAYS, ENROLL_OPS, enrollRefusal as refusalOf, enrollmentBasis, enrollmentFacts, giveBackPlan, nextMode, PLANS_JOIN_THE_BRAIN, readSnapshot,
+  DEFAULT_HOLD_DAYS, ENROLL_OPS, enrollRefusal as refusalOf, enrollmentBasis, enrollmentFacts, giveBackAgain, giveBackPlan, nextMode, PLANS_JOIN_THE_BRAIN, readSnapshot,
   setEnrollment, type EnrollMode, type EnrollOp,
 } from '../../advertising/bid-brain/enrollment.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
@@ -47,7 +47,9 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
   const refusal = refusalOf(f, op)
   if (refusal) return { ok: false, error: refusal }
   const from = f.enrollment?.mode ?? null
-  const to = (nextMode(op, from) as { to: EnrollMode }).to
+  // AB-2 follow-up — a give-back run again from shadow (its placement write was refused; the saved lanes kept): stays SHADOW.
+  const again = op === 'give-back' && giveBackAgain(f)
+  const to = again ? 'SHADOW' : (nextMode(op, from) as { to: EnrollMode }).to
   const c = f.campaign
   const warnings: string[] = []
   if (f.ceiling !== 'live' && (to === 'LIVE' || to === 'HELD')) warnings.push(`The server switch NEXUS_BID_BRAIN_MODE is ${f.ceiling}: the brain owns ${c.name} only once that switch is live; until then it stays in shadow and today's engines keep writing.`)
@@ -71,7 +73,7 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
   const effect = {
     live: `Puts ${c.name} (${c.market ?? c.marketplace ?? '?'}) under the bid brain: from its next run it is the campaign's one bid writer — keyword bids toward the goal at most once per new data day, inside the limits; auto-bid, rules and other engines leave the campaign, and a person's own edit still passes and holds that bid. Every bid and placement is kept now for a give-back.${owedBack}`,
     shadow: `Takes ${c.name} back to shadow: the brain stops writing; every bid stays where it is and today's engines resume. When its product is enrolled in the brain, this is kept as a campaign choice there (the product's bids lever leaves it in shadow).${owedBack}`,
-    'give-back': `Takes ${c.name} back to shadow and puts back what it held when it went LIVE: ${plural(back?.targets.length ?? 0, 'keyword bid')}, ${plural(back?.adGroups.length ?? 0, 'ad group default bid')}${back?.placements ? ' and its placements' : ''}${back?.biddingStrategy ? `, and the bidding strategy a stop switched to down only back to ${back.biddingStrategy.to === 'AUTO_FOR_SALES' ? 'up and down' : back.biddingStrategy.to}` : ''}, as the person who approves it.`,
+    'give-back': `${again ? `Runs the give-back of ${c.name} again (its placements were not restored the last time; it is in shadow already) and puts back` : `Takes ${c.name} back to shadow and puts back`} what it held when it went LIVE: ${plural(back?.targets.length ?? 0, 'keyword bid')}, ${plural(back?.adGroups.length ?? 0, 'ad group default bid')}${back?.placements ? ' and its placements' : ''}${back?.biddingStrategy ? `, and the bidding strategy a stop switched to down only back to ${back.biddingStrategy.to === 'AUTO_FOR_SALES' ? 'up and down' : back.biddingStrategy.to}` : ''}, as the person who approves it.`,
     hold: `Holds ${c.name} for ${plural(holdDays ?? DEFAULT_HOLD_DAYS, 'day')}: the brain raises no bid (a stop still lowers); then it runs again.`,
     release: `Releases the hold on ${c.name}: the brain runs it again, raises included.`,
   }[op]
@@ -83,6 +85,7 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
       op,
       campaign: { id: c.id, name: c.name, market: c.market, marketplace: c.market ?? c.marketplace, status: c.status },
       enrollment: { from, to },
+      ...(again ? { giveBackAgain: true } : {}),
       basis: enrollmentBasis(f),
       ceiling: f.ceiling,
       ...(holdDays ? { holdDays } : {}),
@@ -114,17 +117,23 @@ async function putBack(campaignId: string, plan: Awaited<ReturnType<typeof giveB
     if (r.ok) sent++
     else if (refused.length < 3) refused.push(r.error ?? 'refused')
   }
+  let placementsRefused: string | null = null
   if (plan.placements) {
     const r = await updatePlacementBidding({ campaignId, adjustments: plan.placements.to, actor: run.actor, reason: common.reason, changeSetId: run.changeSetId, manual: run.manual }) as { mode?: string; reason?: string }
     if (r.mode !== 'blocked') sent++
-    else if (refused.length < 3) refused.push(r.reason ?? 'placements refused')
+    else {
+      placementsRefused = r.reason ?? 'placements refused'
+      if (refused.length < 3) refused.push(placementsRefused)
+    }
   }
   // AB-2 — the bidding strategy a stop switched to down only back to what it was (the campaign write the screens use), and
-  // the stop's memory cleared: the LIVE-time placements above stand for its saved lanes (cleared once they are back).
-  const memory = await giveBackStopMemory(campaignId, { actor: run.actor, reason: common.reason, changeSetId: run.changeSetId, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, lanes: false })
+  // the stop's memory cleared: the LIVE-time placements above stand for its saved lanes — cleared only once they were sent
+  // (or none had to be). AB-2 follow-up — a refused placement write keeps the saved lanes (owed), so the give-back can run
+  // again and the restore path still finds them: the lanes are never left at 0 % with nothing to bring them back.
+  const memory = await giveBackStopMemory(campaignId, { actor: run.actor, reason: common.reason, changeSetId: run.changeSetId, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, lanes: placementsRefused ? 'keep' : false })
   sent += memory.sent
   for (const r of memory.refused) if (refused.length < 3) refused.push(r)
-  return { sent, refused }
+  return { sent, refused, ...(placementsRefused ? { placementsNotRestored: `placements not restored: ${placementsRefused} — the lanes a stop saved are kept; run give-back again` } : {}) }
 }
 
 const setBidBrainEnrollment: AgentTool = {
@@ -182,7 +191,8 @@ const setBidBrainEnrollment: AgentTool = {
   async execute(args, ctx: ToolContext) {
     const fresh = await preview(args)
     if (!fresh.ok) return notRun(`Not run: ${fresh.error}`)
-    const p = fresh.preview as { op: EnrollOp; campaign: { id: string; name: string; market: string | null }; enrollment: { from: EnrollMode | null; to: EnrollMode }; basis: string; holdDays?: number; effect: string }
+    const p = fresh.preview as { op: EnrollOp; campaign: { id: string; name: string; market: string | null }; enrollment: { from: EnrollMode | null; to: EnrollMode }; giveBackAgain?: boolean; basis: string; holdDays?: number; effect: string }
+    const again = p.op === 'give-back' && p.giveBackAgain === true
     const approved = ctx.approvedPreview as { basis?: unknown } | undefined
     if (approved?.basis && approved.basis !== p.basis) return notRun(`Not run: ${p.campaign.name}'s place in the bid brain changed since it was approved. Nothing changed.`)
     const gate = await codeGate(ctx, fresh.preview)
@@ -204,9 +214,11 @@ const setBidBrainEnrollment: AgentTool = {
     // any of it is still owed, so it is never dropped unseen), op shadow just after (the brain no longer runs it).
     const memoryBack = () => giveBackStopMemory(p.campaign.id, { actor: run.actor, reason: `bid brain op ${p.op} — ${run.reason}`, changeSetId: run.changeSetId, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits })
     let gaveMemory: Awaited<ReturnType<typeof giveBackStopMemory>> | null = null
+    // AB-2 follow-up — an op live that gave something back first says so when it then stops: never "nothing changed".
+    const givenFirst = (g: { given: string[] } | null) => (g?.given.length ? ` What a stop saved was given back first, as the approver: ${g.given.join(' and ')}.` : ' Nothing changed.')
     if (p.op === 'live') {
       gaveMemory = await memoryBack()
-      if (gaveMemory.owed) return notRun(`Not run: ${p.campaign.name} still holds what a stop saved, and it could not be put back (${gaveMemory.refused.join('; ')}). The bid brain was not put on it.`)
+      if (gaveMemory.owed) return notRun(`Not run: ${p.campaign.name} still holds what a stop saved, and it could not all be put back (${gaveMemory.refused.join('; ')}). ${p.campaign.name} is not LIVE.${givenFirst(gaveMemory)}`)
       try {
         set = await inDatabaseTransaction(prisma, async () => {
           const moved = await move()
@@ -214,8 +226,11 @@ const setBidBrainEnrollment: AgentTool = {
           return moved
         }, { isolationLevel: 'Serializable' })
       } catch (e) {
-        return notRun(`Not run: ${(e as Error).message}. Nothing changed.`)
+        return notRun(`Not run: ${(e as Error).message}. ${p.campaign.name} is not LIVE.${givenFirst(gaveMemory)}`)
       }
+    } else if (again) {
+      // AB-2 follow-up — the give-back again: the campaign is in shadow already; only the put-back runs.
+      set = { from: 'SHADOW', to: 'SHADOW', snapshot: null }
     } else {
       set = await move()
       if (p.op === 'shadow' || p.op === 'give-back') {
@@ -232,11 +247,12 @@ const setBidBrainEnrollment: AgentTool = {
       gaveMemory = await memoryBack()
       if (gaveMemory.owed) warnings.push(`${p.campaign.name} is back in shadow, but what a stop saved could not all be put back (${gaveMemory.refused.join('; ')}): the next restore of its stop gives it back (restoreCampaignBids), or op give-back.`)
     }
-    let gaveBack: { sent: number; refused: string[] } | null = null
+    let gaveBack: Awaited<ReturnType<typeof putBack>> | null = null
     if (p.op === 'give-back') {
       const row = await prisma.bidBrainEnrollment.findFirst({ where: { campaignId: p.campaign.id }, select: { snapshot: true } })
       const snapshot = readSnapshot(row?.snapshot)
       if (snapshot) gaveBack = await putBack(p.campaign.id, await giveBackPlan(p.campaign.id, snapshot), run)
+      if (gaveBack?.placementsNotRestored) warnings.push(`${p.campaign.name}: ${gaveBack.placementsNotRestored}.`)
     }
     return {
       ok: true,
