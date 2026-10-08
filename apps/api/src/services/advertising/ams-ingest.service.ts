@@ -10,6 +10,11 @@
  * Each record goes to the profile that owns its Amazon Ads account (`amsRecordAdvertiser` →
  * `verifiedChannelWorkspace`). A record naming no account, or an account no active profile owns, is
  * counted in `unrouted` and logged — never written into a guessed profile.
+ *
+ * BB-16 follow-up — `sentAt`: when the forwarder's batch left Amazon's queue (its SQS SentTimestamp, when the forwarder
+ * sends one), handed to the ingest as the records' arrival time, so the grain's arrival ages leave out the time the
+ * records waited in the queue and in the forwarder. A record's own SentTimestamp wins (ams-grain.ts recordSentAt); with
+ * neither, the arrival is now, as before.
  */
 import { logger } from '../../utils/logger.js'
 import { WorkspaceError } from '../../lib/workspace-context.js'
@@ -44,9 +49,9 @@ function addCounts<T extends object>(total: T | undefined, next: T): T {
 
 interface GroupResult { perf: AmsIngestResult | null; change: ChangeIngestResult | null; budget: BudgetIngestResult | null }
 
-async function ingestGroup(records: AmsRecord[]): Promise<GroupResult> {
+async function ingestGroup(records: AmsRecord[], arrivedAt: Date | undefined): Promise<GroupResult> {
   const routed = routeRecords(records)
-  const perf = routed.performance.length ? await ingestMarketingStream(routed.performance as never) : null
+  const perf = routed.performance.length ? await ingestMarketingStream(routed.performance as never, arrivedAt ? { arrivedAt } : {}) : null
   const change = routed.change.length ? await ingestEntityChanges(routed.change) : null
   const budget = routed.budget.length ? await ingestBudgetUsage(routed.budget) : null
   // Invalidate the ads read cache of the profile just written, while that profile is in scope. The
@@ -59,7 +64,8 @@ async function ingestGroup(records: AmsRecord[]): Promise<GroupResult> {
   return { perf, change, budget }
 }
 
-export async function ingestAmsBatch(records: AmsRecord[]): Promise<AmsBatchResult> {
+export async function ingestAmsBatch(records: AmsRecord[], opts: { sentAt?: Date | null } = {}): Promise<AmsBatchResult> {
+  const arrivedAt = opts.sentAt ?? undefined
   const routed = routeRecords(records)
   const result: AmsBatchResult = {
     received: records.length,
@@ -77,7 +83,7 @@ export async function ingestAmsBatch(records: AmsRecord[]): Promise<AmsBatchResu
   }
 
   if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') {
-    absorb(await ingestGroup(records))
+    absorb(await ingestGroup(records, arrivedAt))
     return result
   }
 
@@ -103,6 +109,6 @@ export async function ingestAmsBatch(records: AmsRecord[]): Promise<AmsBatchResu
   if (result.unrouted) {
     logger.warn('[ams-ingest] records not saved: no active business profile owns their Amazon Ads account', { unrouted: result.unrouted, accounts: [...unroutedAccounts] })
   }
-  for (const [workspaceId, group] of groups) absorb(await withIngressWorkspace(workspaceId, () => ingestGroup(group)))
+  for (const [workspaceId, group] of groups) absorb(await withIngressWorkspace(workspaceId, () => ingestGroup(group, arrivedAt)))
   return result
 }

@@ -9,6 +9,7 @@ import { listTools } from '../agents/tool-registry.js'
 import { offeredOn } from '../agents/call-tool.js'
 import { mcpInputSchema, mcpInstructions, mcpServerInfo, requiredScope, toolAnnotations } from './mcp-server.js'
 import { inputJsonSchema } from '../agents/tool-loop.service.js'
+import { BRAIN_MAP_VIEWS } from '../advertising/brain/read-map.js'
 
 /** Call OUR AI provider: offered in the app only. */
 const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-content', 'draft-seo', 'translate-content']
@@ -35,7 +36,7 @@ const AI_DRAFTS = ['draft-alt-text', 'draft-customer-message', 'draft-listing-co
 
 const OPEN_WORLD = [
   'add-ad-targets', 'add-negative-targets', 'add-photo-from-url', 'add-product-ads', 'advance-purchase-order',
-  'apply-ad-recommendations', 'apply-ads-playbook', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
+  'apply-ad-recommendations', 'apply-ads-playbook', 'apply-brain-harvest', 'archive-ads', 'build-sp-wizard-campaigns', 'bulk-ad-bid-change',
   'bulk-listing-price-change', 'bulk-listing-stock', 'bulk-price-change', 'buy-shipping-label', 'cancel-order',
   'channel-identity-check', 'close-listing', 'confirm-shipment', 'create-ad-campaign', 'create-ad-group',
   'create-ai-goal-campaigns',
@@ -46,7 +47,7 @@ const OPEN_WORLD = [
   'reserve-stock', 'restore-ad-bids-after-stock', 'restore-budget-baselines', 'restore-campaign', 'resume-automation',
   'retire-negatives', 'revert-listing-change', 'rollback-bulk-operation', 'run-ad-engine-now',
   'save-channel-mapping', 'save-price-rule', 'schedule-pickup', 'schedule-price-change', 'send-customer-message',
-  'set-ad-group', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
+  'set-ad-group', 'set-ads-brain', 'set-bid-brain-enrollment', 'set-budget-pool', 'set-budget-schedule', 'set-campaign-budget', 'set-campaign-settings',
   'set-ebay-ad-rates', 'set-ebay-campaign-budget', 'set-ebay-price-promotion', 'set-hourly-bid-plan',
   'set-listing-price', 'set-listing-stock', 'set-master-prices', 'set-monthly-ad-budget', 'set-placement-multipliers',
   'set-portfolio', 'set-price',
@@ -133,8 +134,12 @@ describe('C3 — the server and every change tool name the business', () => {
       // BB-4 — the bid brain's read tool; BB-6 — it writes only for a campaign put LIVE, with the approver's code.
       'bid-brain (read only; the bid', 'writes only for a campaign set-bid-brain-enrollment put LIVE',
       "needs the approver's authenticator code; its diff view",
-      // AB-3 — the brain's map, read only.
-      'ads-brain (read only; views map, clashes, setup, money, terms, state, negatives, report)',
+      // AB-3 — the brain's map, read only; every view it has (AB-7 money, AB-9 terms, AB-12 state, AB-13 hours, AB-10 negatives, AB-11 harvest, AB-14 report).
+      'ads-brain (read only; views map, clashes, setup, money, terms, state, hours, negatives, harvest, report)',
+      // AB-11 — the brain's harvest request, a person's decision.
+      'person for is apply-brain-harvest (the keyword and its source negatives in one change set',
+      // One brain — the Owner's control tool; a lever to AUTO is a big door.
+      'The Owner controls a product\'s brain with set-ads-brain', 'lever to AUTO needs the approver\'s authenticator code',
       // PB-11 — where the playbook lives, and that a start needs the approver's code.
       'read it with ads-playbook, change it with', 'start, stop or sync its campaigns, switch its phase',
       "a start needs the approver's authenticator code",
@@ -146,6 +151,11 @@ describe('C3 — the server and every change tool name the business', () => {
       'read platform-health-checks first in a daily or unattended run']) {
       expect(mcpInstructions(business), rule).toContain(rule)
     }
+  })
+
+  it('the instructions name every view of ads-brain, in the tool\'s own order (a new view cannot be left out)', () => {
+    expect(mcpInstructions(business)).toContain(`ads-brain (read only; views ${BRAIN_MAP_VIEWS.join(', ')}).`)
+    expect([...BRAIN_MAP_VIEWS]).toEqual(['map', 'clashes', 'setup', 'money', 'terms', 'state', 'hours', 'negatives', 'harvest', 'report'])
   })
 
   it('W4-14 — the instructions name every Wave 4 Amazon ads tool, and each is a registered tool', () => {

@@ -22,7 +22,9 @@
  *             budget cut, the money brake) beside the spend guard; the run counts its moves by direction (`moves`)
  *   BB-15     NEXUS_BID_BRAIN_NOWCAST=shadow (the default): each full run also decides the same keywords from the window
  *             that ends yesterday, maturity-weighted (nowcast.ts); the decisions and every write stay the settled ones,
- *             and where the two differ the stored why gains " · nowcast to …: would …" and the run's line counts them
+ *             and where the two differ the stored why gains " · nowcast to …: would …" and the run's line counts them.
+ *             The nowcast reads the run's step anchors re-keyed to its own data day (nowcast.ts nowcastLastSteps): a
+ *             keyword the settled run already stepped today takes no second step there — in shadow, nor switched on
  */
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
@@ -45,7 +47,7 @@ import { ownerLeverLocks, type LeverLocks } from '../brain/owner-brakes.js'
 import { campaignStopOf, fullLanes, strategyStep, type CampaignStop } from './stop-recipe.js'
 import { strategySwitchesToday } from './stop-memory.js'
 import { loadMarket, loadNowcastEvidence, loadRun, SHADOW_MARKETS, type LastWrite, type LoadedMarket, type PreviousDecision } from './load.js'
-import { compareNowcast, nowcastMode, nowcastOnNotes, nowcastSummaryWords, youngPctOf, type NowcastShadowSummary } from './nowcast.js'
+import { compareNowcast, nowcastLastSteps, nowcastMode, nowcastOnNotes, nowcastSummaryWords, runForRows, youngPctOf, type NowcastShadowSummary } from './nowcast.js'
 
 export type BrainMode = 'off' | 'shadow' | 'live'
 
@@ -96,10 +98,14 @@ export function rowKind(d: Decision, prev: PreviousDecision | undefined, now: Da
   return prev.createdAt.toISOString().slice(0, 10) !== now.toISOString().slice(0, 10) ? 'snapshot' : null
 }
 
-/** The step the next run anchors on: this decision's own, else the last one of the same data day. */
-function carriedStep(d: Decision, prev: PreviousDecision | undefined) {
+/**
+ * The step the next run anchors on: this decision's own, else the last one of the same data day. BB-15 follow-up — the
+ * last one as the run read it (`run.lastSteps`: the previous decision's, re-keyed to the nowcast's data day when the rows
+ * were read with the nowcast on), so a step re-keyed on the day the switch goes on is carried, not dropped.
+ */
+function carriedStep(d: Decision, last: { dataDay: string; fromCents: number; toCents: number } | undefined) {
   if (d.step) return d.step
-  return prev?.lastStep && prev.lastStep.dataDay === d.dataDay ? prev.lastStep : null
+  return last && last.dataDay === d.dataDay ? last : null
 }
 
 const dec = (x: number | null | undefined, places = 4) => (x == null || !Number.isFinite(x) ? null : Math.round(x * 10 ** places) / 10 ** places)
@@ -125,9 +131,11 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
   if (ctx.onlyOwned && !owned.size) return { market, decided: 0, stored: 0, byAction: {}, byLayer: {}, brakes: [] }
   const loaded = await loadRun(rows, ctx.now, { owned, clockNow: ctx.clockNow })
   const { lastWrites, previous } = loaded
+  // BB-15 follow-up — read with the nowcast on, the step anchors are re-keyed to its data day (no second step that day).
+  const anchored = runForRows(rows, loaded.run)
   // AB-14 — the raises an earlier step of the product cycle holds (a pause it makes, a budget it cuts, the money brake),
   // beside the brain's own spend guard: decide.ts lets no goal raise through, and no placement % rises.
-  const run = ctx.raiseCaps?.size ? { ...loaded.run, spendGuard: mergeRaiseCaps(loaded.run.spendGuard, ctx.raiseCaps) } : loaded.run
+  const run = ctx.raiseCaps?.size ? { ...anchored, spendGuard: mergeRaiseCaps(anchored.spendGuard, ctx.raiseCaps) } : anchored
   const groupOf = new Map(rows.targets.map((t) => [t.id, t.adGroupId]))
   const campaignOf = (targetId: string): string => {
     const adGroupId = groupOf.get(targetId)
@@ -179,7 +187,7 @@ export async function shadowMarket(market: string, ctx: { runId: string; mode: B
       action: d.action, layer: d.layer, currentCents: d.currentCents, decidedCents: d.bidCents, goalBidCents: d.goalBidCents,
       aim: dec(d.goal?.aim), bandLo: dec(d.goal?.lo), bandHi: dec(d.goal?.hi), expectedAcos: dec(d.expectedAcos), confidence: dec(d.confidence),
       dataDay: new Date(`${d.dataDay}T00:00:00Z`), lastWriter: last?.actor ?? null, lastWriteAt: last?.at ?? null, why: withNote(recipe.has(campaignId) ? `${d.why} · ${recipe.get(campaignId)}` : d.why, nowcast?.notes.get(d.targetId)),
-      evidence: { step: d.step, lastStep: carriedStep(d, prev), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome } as unknown as Prisma.InputJsonObject,
+      evidence: { step: d.step, lastStep: carriedStep(d, run.lastSteps.get(d.targetId)), clash: d.clash, placements: d.placements.length ? d.placements : undefined, sent: outcome } as unknown as Prisma.InputJsonObject,
       createdAt: ctx.now,
     }]
   })
@@ -222,7 +230,10 @@ async function nowcastShadow(rows: LoadedMarket, run: RunRows, facts: readonly T
     const nc = await loadNowcastEvidence(rows, { now, settledUntil: new Date(`${rows.dataDay}T00:00:00Z`) })
     if (!nc) return null
     const wanted = new Set(facts.map((f) => f.targetId))
-    const nowFacts = buildFacts({ ...rows, evidence: nc.evidence, dataDay: nc.dataDay }, run).filter((f) => wanted.has(f.targetId))
+    // The step anchors keyed to the settled day are this run-day's steps: re-keyed to the nowcast's day, so a keyword the
+    // settled run already stepped today takes no second step here (it would count as a false "differ").
+    const nowRun = { ...run, lastSteps: nowcastLastSteps(run.lastSteps, rows.dataDay, nc.dataDay) }
+    const nowFacts = buildFacts({ ...rows, evidence: nc.evidence, dataDay: nc.dataDay }, nowRun).filter((f) => wanted.has(f.targetId))
     const youngPct = youngPctOf(nc.totals)
     return compareNowcast(
       facts.map((f, i) => ({ facts: f, decision: decisions[i] })),

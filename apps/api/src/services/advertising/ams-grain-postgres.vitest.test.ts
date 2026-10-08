@@ -7,6 +7,7 @@
  *               raw SQL, refused without a business, row-level security forced with the business policy and the
  *               reference guard
  *   businesses  the same Amazon ids in two businesses are two rows; the row-count guard counts one business's rows only
+ *               (in memory, per business and day, read once); the capped-day mark is the capped business's alone
  *   at once     one record delivered on eight connections at once adds once; twenty different records on one new row
  *               at once all add (one row created, no update lost)
  *   forced      a redelivery that waits on the first delivery's uncommitted row sees the key once that commits and adds
@@ -102,6 +103,13 @@ describe.skipIf(!concurrentDatabaseUrl())('BB-16 — the Marketing Stream at ad 
       // W2 has none: the same ids are its own rows, and W's full day does not stop it.
       expect(await inW2(() => grain([traffic({ ad_group_id: 'b-1' }), traffic({ ad_group_id: 'b-2' })]))).toMatchObject({ created: 2, capped: 0 })
       expect((await rows<{ w: string }>('SELECT "workspaceId" AS w FROM "AmazonAdsHourlyPlacement" WHERE "adGroupId" = \'b-1\' ORDER BY 1')).map((r) => r.w).sort()).toEqual([W, W2].sort())
+      // BB-16 follow-up — the refusal is marked, for W only: its reader sees the day capped, W2's does not.
+      expect(await rows('SELECT "workspaceId" AS w, kind, refused FROM "AmazonAdsGrainCap" ORDER BY 1')).toEqual([{ w: W, kind: 'rows', refused: 1 }])
+      expect(await inW2(() => database.client.amazonAdsGrainCap.findMany())).toEqual([])
+      for (const table of ['AmazonAdsGrainCap', 'AdsBrainAsk']) {
+        expect(await rows('SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = $1', [table])).toEqual([{ relrowsecurity: true, relforcerowsecurity: true }])
+        expect(await rows('SELECT policyname FROM pg_policies WHERE tablename = $1', [table])).toEqual([{ policyname: 'nexus_workspace_isolation' }])
+      }
     } finally { vi.unstubAllEnvs(); vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1') }
   })
 

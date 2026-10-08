@@ -12,7 +12,7 @@
  *   default   every lever starts OBSERVE (design §0.13), per product and per campaign, until the Owner overrides it.
  *   now       a level is offered only once code runs it (LEVER_LEVELS_NOW). AB-1: the bids lever takes OBSERVE and AUTO
  *             (the live bid brain, BB-6); AB-13: the hours lever OFF, OBSERVE and PROPOSE (a painted plan always asks, D3);
- *             every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
+ *             AB-11: the harvest lever every level; every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
  *             shadow is not built yet records the intent: it starts watching when its shadow lands; nothing is written.
  *             AB-12: the state lever takes every level (brain/state*.ts); it still starts OBSERVE like every lever.
  *   settings  the caps of §5 and the N1–N4 settings of §9 (Owner yes 10-08), each with the design's default and safety
@@ -63,7 +63,8 @@ export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[
   // AB-10 — the negatives module: OBSERVE logs the day's negatives, PROPOSE asks a person once a day, AUTO writes them as the
   // brain (inside the caps, after the shadow days of negativesShadowDays, under the live server switch).
   negatives: { levels: BRAIN_LEVELS, others: 'the negatives module (AB-10, ads-brain view negatives) takes every level' },
-  harvest: { levels: OFF_OBSERVE, others: 'the term ledger decides harvests in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-11' },
+  // AB-11 — the harvest module: OBSERVE logs each harvest, PROPOSE asks a person for the pair, AUTO writes it.
+  harvest: { levels: BRAIN_LEVELS, others: 'AB-11: OBSERVE logs each harvest in shadow, PROPOSE asks a person for the keyword and its source negatives as one change set, AUTO writes it (under NEXUS_ADS_BRAIN_HARVEST_MODE=live); a new campaign is always a request a person approves (ads-brain view harvest)' },
   structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
   biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
   offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },

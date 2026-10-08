@@ -6266,8 +6266,10 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // 2026-09-16 — this route has no business profile; each record is saved in the profile that owns
     // its Amazon Ads account (services/advertising/ams-ingest.service.ts).
     const { ingestAmsBatch } = await import('../services/advertising/ams-ingest.service.js')
+    // BB-16 follow-up — the batch's SQS SentTimestamp, when the forwarder sends one: the grain's arrival time.
+    const { sentTimeOf } = await import('../services/advertising/ams-grain.js')
     try {
-      const result = await ingestAmsBatch(messages as Array<Record<string, unknown>>)
+      const result = await ingestAmsBatch(messages as Array<Record<string, unknown>>, { sentAt: sentTimeOf(b?.SentTimestamp ?? b?.sentTimestamp, new Date()) })
       if (result.routed.unknownDataset) {
         // Visible, not invisible: an unrecognised dataset means Amazon added one, and we should
         // learn it from a log rather than from a hole in the data months later.

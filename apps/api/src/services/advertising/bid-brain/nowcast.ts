@@ -9,6 +9,9 @@
  *             two decisions differ the stored why says so (" · nowcast to …: would …"); the run's line counts them.
  *             Nothing more is written, nothing is sent.
  *     on      the window ends yesterday and every day counts with its copy's maturity: the decisions use it
+ *   steps     a keyword moves once per data day (decide.ts lastStep). The nowcast's data day is newer than the settled
+ *             one, so a step keyed to today's settled day is re-keyed to the nowcast's (nowcastLastSteps): no second
+ *             step on the same day — not in shadow's comparison, and not on the day the switch goes on
  *   With no usable curve for the market (none fitted yet, only the prior, or a fit older than two weeks), the young days
  *   are ignored (design U1 guardrails): shadow compares nothing and on reads the settled window exactly as off.
  *
@@ -18,6 +21,7 @@
  *             corrects the old days the 60-day re-read never reached (their only copy is the morning-after one).
  */
 import type { Decision, TargetFacts } from './decide.js'
+import type { RunRows } from './facts.js'
 import { estimate, matureSum, type Evidence } from './estimator.js'
 import { maturityOf, type LagShares } from './lag-curve.js'
 
@@ -140,6 +144,28 @@ export function nowcastSummaryWords(s: NowcastShadowSummary | null | undefined):
 
 /** The young days' share of matured clicks, in percent with one decimal. */
 export const youngPctOf = (t: NowcastEvidence['totals']): number => (t.clicks > 0 ? Math.round((t.youngClicks / t.clicks) * 1000) / 10 : 0)
+
+/**
+ * The run's step anchors as the nowcast reads them (BB-15 follow-up). decide() moves a keyword once per data day: a step
+ * recorded for the decision's data day (or a newer one) is the day's step, and the next move waits for a new day. A step
+ * keyed to the settled data day `settledDay` (or newer) was taken on this run's day — whose nowcast data day is
+ * `nowcastDay` — so it is re-keyed to it: the nowcast then takes no second step on a keyword the settled run already
+ * stepped today (in shadow that would count a false "differ"; switched on it would allow one extra step on the day the
+ * switch goes on). An older step keeps its day: a new data day, a new step, exactly as settled. Pure; a new map.
+ */
+export function nowcastLastSteps<T extends { dataDay: string }>(lastSteps: ReadonlyMap<string, T>, settledDay: string, nowcastDay: string): Map<string, T> {
+  const out = new Map<string, T>()
+  for (const [id, s] of lastSteps) out.set(id, s.dataDay >= settledDay && s.dataDay < nowcastDay ? { ...s, dataDay: nowcastDay } : s)
+  return out
+}
+
+/**
+ * The run's facts for rows read with the nowcast switched on (load.ts sets `nowcast.settledDay`): the step anchors re-keyed
+ * to the nowcast's data day (nowcastLastSteps). Rows read from the settled window: the run unchanged (the same object).
+ */
+export function runForRows<R extends Pick<RunRows, 'lastSteps'>>(rows: { dataDay: string; nowcast?: { settledDay: string } }, run: R): R {
+  return rows.nowcast ? { ...run, lastSteps: nowcastLastSteps(run.lastSteps, rows.nowcast.settledDay, rows.dataDay) } : run
+}
 
 /** The layers whose decision rests on the evidence (an override's does not): where `on` names the young days in the why. */
 const EVIDENCE_LAYERS: ReadonlySet<string> = new Set(['goal', 'band', 'limit', 'restore'])

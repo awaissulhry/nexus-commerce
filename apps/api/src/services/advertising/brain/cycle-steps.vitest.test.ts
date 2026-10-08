@@ -19,6 +19,8 @@ const m = vi.hoisted(() => ({
   bids: vi.fn(),
   bidMode: 'shadow' as 'off' | 'shadow' | 'live',
   hours: vi.fn(),
+  harvest: vi.fn(),
+  halfDone: vi.fn(async () => 0),
   lastProposal: null as null | { id: string; status: string; approvalId: string | null; why: string },
   daily: [] as Array<{ date: Date; currencyCode: string; _sum: { costMicros: bigint; sales7dCents: number; orders7d: number } }>,
 }))
@@ -28,14 +30,16 @@ vi.mock('./negatives-run.js', () => ({ runNegativesOnce: m.negatives }))
 vi.mock('./budget-shadow.js', () => ({ runMoneyShadowOnce: m.money, newestMoneyDecisions: m.newestMoney }))
 vi.mock('../bid-brain/shadow.js', () => ({ runShadowOnce: m.bids, bidBrainMode: () => m.bidMode }))
 vi.mock('./hours-proposal.js', () => ({ runHoursOnce: m.hours }))
+vi.mock('./harvest-run.js', () => ({ runHarvestOnce: m.harvest }))
 vi.mock('../../../db.js', () => ({
   default: {
     adsBrainHourProposal: { findFirst: vi.fn(async () => m.lastProposal) },
+    adsBrainHarvest: { count: m.halfDone },
     amazonAdsDailyPerformance: { groupBy: vi.fn(async () => m.daily) },
   },
 }))
 
-import { bidsStep, harvestNotBuilt, harvestStepOf, hoursStep, moneyStep, negativesStep, readMoneyInOut, stateStep, termsStep, type StepContext, type TickFacts } from './cycle-steps.js'
+import { bidsStep, harvestStep, harvestStepOf, hoursStep, moneyStep, negativesStep, readMoneyInOut, stateStep, termsStep, type StepContext, type TickFacts } from './cycle-steps.js'
 import { CYCLE_STEPS, type CycleStep, type StepRecord } from './cycle.js'
 
 const NOW = new Date('2026-10-09T06:55:00Z')
@@ -130,13 +134,23 @@ describe('AB-14 — ③ negatives and ④ harvest', () => {
     expect(await negativesStep(ctxOf())).toMatchObject({ status: 'skipped' })
   })
 
-  it('harvest: until AB-11 lands the step is off and says so; plugged in, the module for the product alone, a half-done pair a clash', async () => {
-    expect(await harvestNotBuilt(ctxOf())).toMatchObject({ status: 'off', why: expect.stringMatching(/not in this build yet \(AB-11\)/) })
-    const run = vi.fn(async () => ({ ran: true, why: '', runId: 'hv-1', decided: { pairs: 1, newCampaigns: 0, held: 0 }, acted: { logged: 1, proposed: 0, written: 0, campaignsProposed: 0 }, pending: { synced: 0, completed: 0, retried: 0, judged: 0, undoProposed: 0 }, skipped: [], halfDone: 1 }))
-    const out = await harvestStepOf(run)(ctxOf())
+  it('harvest: the module for the product alone after its negatives; off below OBSERVE; a pair left half done a clash', async () => {
+    const summary = { ran: true, why: '', runId: 'hv-1', decided: { pairs: 1, newCampaigns: 0, held: 0 }, acted: { logged: 1, proposed: 0, written: 0, campaignsProposed: 0 }, pending: { synced: 0, completed: 0, retried: 0, judged: 0, undoProposed: 0 }, skipped: [] }
+    const run = vi.fn(async () => summary)
+    const half = vi.fn(async () => 1)
+    const out = await harvestStepOf(run, half)(ctxOf())
     expect(run).toHaveBeenCalledWith({ now: NOW, due: { due: true, why: 'the product cycle', products: [due('jacket')] } })
-    expect(out).toMatchObject({ status: 'done', runId: 'hv-1', did: { clashes: [expect.stringMatching(/^1 harvest pair half done/)] } })
+    expect(half).toHaveBeenCalledWith('jacket', 'IT')
+    expect(out).toMatchObject({ status: 'done', runId: 'hv-1', did: { lines: ['harvest: pairs 1, logged 1 (shadow: nothing at Amazon)'], clashes: [expect.stringMatching(/^1 harvest pair half done/)] } })
+    expect(await harvestStepOf(run)(ctxOf())).not.toHaveProperty('did.clashes')
     expect(await harvestStepOf(run)(ctxOf({ tick: tickOf({ termsDue: [due('jacket', { negatives: { effective: 'OBSERVE' }, harvest: { effective: 'OFF' } })] }) }))).toMatchObject({ status: 'off' })
+    run.mockResolvedValueOnce({ ...summary, skipped: [{ productId: 'jacket', market: 'IT', why: 'the run failed for it: timeout' }] })
+    expect(await harvestStepOf(run)(ctxOf())).toMatchObject({ status: 'failed' })
+    // Wired: AB-11's own run, and its HALF_DONE harvests of the product counted.
+    m.harvest.mockResolvedValue(summary)
+    m.halfDone.mockResolvedValue(0)
+    expect(await harvestStep(ctxOf())).toMatchObject({ status: 'done', runId: 'hv-1' })
+    expect(m.halfDone).toHaveBeenCalledWith({ where: { productId: 'jacket', marketplace: 'IT', status: 'HALF_DONE' } })
   })
 })
 

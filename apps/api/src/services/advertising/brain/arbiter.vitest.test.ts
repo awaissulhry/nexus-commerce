@@ -55,6 +55,21 @@ describe('AB-9 — the market arbiter', () => {
     expect(arbitrate([claim('p-a', { wants: true, orders: 9 }), claim('p-b', { wants: true, orders: 1 })]).get('racing jacket')).toMatchObject({ leadProductId: 'p-a', rule: 'orders' })
   })
 
+  it('a measured LOSS never outranks a seller whose profit is unmeasured: then the orders decide, said so', () => {
+    // p-a sells on the term (9 orders) with no margin known; p-b's profit is measured, and negative.
+    const loss = arbitrate([claim('p-a', { wants: true, orders: 9 }), claim('p-b', { wants: true, profitPerClickCents: -5, orders: 1 })]).get('racing jacket')!
+    expect(loss).toMatchObject({ leadProductId: 'p-a', rule: 'orders' })
+    expect(loss.why).toMatch(/no measured profit per click is 0 or more, and p-a sells on the term with profit not measured: a measured loss does not outrank it; the most orders on the term \(9\)/)
+    // The orders decide among them all: the measured loss with more orders still leads, by its orders.
+    expect(arbitrate([claim('p-a', { wants: true, orders: 2 }), claim('p-b', { wants: true, profitPerClickCents: -5, orders: 4 })]).get('racing jacket')).toMatchObject({ leadProductId: 'p-b', rule: 'orders' })
+    // Equal orders: clicks, then the id — never the loss's "profit".
+    expect(arbitrate([claim('p-b', { wants: true, orders: 3, clicks: 10 }), claim('p-a', { wants: true, profitPerClickCents: -1, orders: 3, clicks: 5 })]).get('racing jacket')).toMatchObject({ leadProductId: 'p-b', rule: 'clicks' })
+    // A break-even or better measured profit still outranks the unmeasured seller (a known gain beats an unknown).
+    expect(arbitrate([claim('p-a', { wants: true, orders: 9 }), claim('p-b', { wants: true, profitPerClickCents: 0, orders: 1 })]).get('racing jacket')).toMatchObject({ leadProductId: 'p-b', rule: 'profit' })
+    // Two measured losses and an unmeasured contender with no orders: profit still orders the losses (least loss leads).
+    expect(arbitrate([claim('p-a', { wants: true }), claim('p-b', { wants: true, profitPerClickCents: -5 }), claim('p-c', { wants: true, profitPerClickCents: -2 })]).get('racing jacket')).toMatchObject({ leadProductId: 'p-c', rule: 'profit' })
+  })
+
   it('seeing a term is no claim: one claimant is no contest; a product\'s claims are merged', () => {
     expect(arbitrate([claim('p-a', { targets: [kw('a1', 40)] }), claim('p-b', { orders: 0, clicks: 900 })]).size).toBe(0)
     const merged = arbitrate([claim('p-a', { targets: [kw('a1', 40)] }), claim('p-a', { targets: [kw('a2', 45)], orders: 1 }), claim('p-b', { wants: true, profitPerClickCents: -5 })])

@@ -102,8 +102,8 @@ async function preview(args: Record<string, unknown>): Promise<ToolResult> {
   }
 }
 
-/** Put the snapshot back, as the person who approved it (the write gate judges each write). */
-async function putBack(campaignId: string, plan: Awaited<ReturnType<typeof giveBackPlan>>, run: { actor: `user:${string}` | `automation:${string}`; reason: string; changeSetId: string; manual: boolean; confirmOwnLimits: boolean }) {
+/** Put the snapshot back, as the person who approved it (the write gate judges each write). Also set-ads-brain op leave's give-back. */
+export async function putBack(campaignId: string, plan: Awaited<ReturnType<typeof giveBackPlan>>, run: { actor: `user:${string}` | `automation:${string}`; reason: string; changeSetId: string; manual: boolean; confirmOwnLimits: boolean }) {
   let sent = 0
   const refused: string[] = []
   const common = { actor: run.actor, reason: `bid brain give-back — ${run.reason}`.slice(0, 480), changeSetId: run.changeSetId, manual: run.manual, confirmOwnLimits: run.confirmOwnLimits, applyImmediately: true }

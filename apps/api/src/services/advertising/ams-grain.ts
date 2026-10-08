@@ -17,6 +17,8 @@
  *              whole days below 14 days, whole weeks after): the delta-arrival log keeps one row per bucket.
  *   late       a row whose first delta arrives more than 12 hours after its hour ended may miss earlier deltas (the
  *              hour predates the grain, or the feed had a gap): it is created marked `lateStart`.
+ *   sent       "arrival" is when the record left Amazon's queue: SQS's SentTimestamp (sentTimeOf), not when Nexus read
+ *              it, so a queue that waited (a slow forwarder, a poller that was down) does not age the deltas.
  *
  * Amazon's placement labels are mapped to the bidding enums the rest of Nexus uses (ads-placement-math.ts); an
  * unknown label is kept under its own name ("OTHER:<label>") — never folded into a managed lane, never dropped.
@@ -63,6 +65,32 @@ export function ageBucketHours(windowStart: Date, arrivedAt: Date): number {
   if (age < 48) return age
   if (age < 14 * 24) return Math.floor(age / 24) * 24
   return Math.floor(age / 168) * 168
+}
+
+/** SQS keeps a message at most 14 days: an older "sent" time is not a queue's. */
+const SENT_MAX_AGE_MS = 14 * DAY_MS
+/** A sent time this far after `now` is still taken (two clocks); later is not a sent time. */
+const SENT_CLOCK_SLACK_MS = 5 * 60_000
+
+/**
+ * A message's sent time: SQS's SentTimestamp (epoch milliseconds, as a number or a string of digits) or an ISO time.
+ * Null unless it is a plausible past instant (not after `now` beyond a few minutes of clock slack, not older than SQS
+ * keeps a message): then the caller's own arrival time stands. Pure.
+ */
+export function sentTimeOf(raw: unknown, now: Date): Date | null {
+  let ms: number
+  if (typeof raw === 'number') ms = raw
+  else if (typeof raw === 'string' && /^\d{10,16}$/.test(raw.trim())) ms = Number(raw.trim())
+  else if (typeof raw === 'string' && raw.trim()) ms = Date.parse(raw.trim())
+  else return null
+  if (!Number.isFinite(ms)) return null
+  if (ms > now.getTime() + SENT_CLOCK_SLACK_MS || ms < now.getTime() - SENT_MAX_AGE_MS) return null
+  return new Date(Math.min(ms, now.getTime()))
+}
+
+/** The sent time a record carries itself (a forwarder may copy its SQS message's SentTimestamp onto each record). Pure. */
+export function recordSentAt(rec: Record<string, unknown>, now: Date): Date | null {
+  return sentTimeOf(rec.SentTimestamp ?? rec.sentTimestamp, now)
 }
 
 /** The dedupe key: the first 8 bytes of sha256(dataset|idempotency id), as a signed 64-bit integer. Stable. */

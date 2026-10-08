@@ -1765,6 +1765,10 @@
       "fields": []
     },
     {
+      "name": "AmazonAdsGrainCap",
+      "fields": []
+    },
+    {
       "name": "AdBudgetUsageSample",
       "fields": []
     },
@@ -6879,6 +6883,10 @@
       "fields": []
     },
     {
+      "name": "AdsBrainAsk",
+      "fields": []
+    },
+    {
       "name": "AdsBrainTerm",
       "fields": []
     },
@@ -6896,6 +6904,10 @@
     },
     {
       "name": "AdsBrainCycle",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainHarvest",
       "fields": []
     },
     {

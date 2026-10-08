@@ -145,15 +145,19 @@ export async function loadMarket(market: string, opts: { now?: Date; campaignIds
     opts.light ? Promise.resolve({ evidence: new Map<string, Evidence>(), adSales30: new Map<string, number>() }) : nc ? Promise.resolve(nc) : loadEvidence(targetIds, window),
     newestReport(targetIds, now),
   ])
-  if (nc) return { market, dataDay: nc.dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, window: nc.window, nowcast: { curve: nc.curve, youngShare: nc.youngShare, totals: nc.totals } }
+  if (nc) return { market, dataDay: nc.dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, window: nc.window, nowcast: { curve: nc.curve, youngShare: nc.youngShare, totals: nc.totals, settledDay: dataDay } }
   return { market, dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, ...(opts.light ? { light: true } : {}) }
 }
 
-/** One market as loadMarket reads it. BB-15 — `window` / `nowcast`: present when the nowcast's evidence was read. */
+/**
+ * One market as loadMarket reads it. BB-15 — `window` / `nowcast`: present when the nowcast's evidence was read;
+ * `nowcast.settledDay`: the settled window's data day of the same run (the step anchors keyed to it are re-keyed to the
+ * nowcast's day, nowcast.ts nowcastLastSteps).
+ */
 export type LoadedMarket = MarketRows & {
   newestReportAt: Date | null
   window?: { since: Date; until: Date }
-  nowcast?: { curve: string; youngShare: Map<string, number>; totals: NowcastEvidence['totals'] }
+  nowcast?: { curve: string; youngShare: Map<string, number>; totals: NowcastEvidence['totals']; settledDay: string }
 }
 
 /** BB-15 — the nowcast's window: MAX_WINDOW_DAYS days ending yesterday (UTC). */

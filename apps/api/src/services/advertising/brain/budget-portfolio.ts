@@ -16,6 +16,9 @@
  *              first" while ownPortfolio is on (the brain proposes one portfolio per product); with it off they get none.
  *   spend      a planned cap below the portfolio's spend this month (plus one day) would stop every campaign in it at
  *              once: the brain's own amount is raised to that floor; the Owner's own amount is kept and warned about.
+ *              The month's spend is the larger of Nexus's count and Amazon's own reading of the cap read in the same
+ *              run (amazonSpentCents): Amazon counts in real time, the daily report lags, so a lowered cap never lands
+ *              below what Amazon has already counted.
  *   today      what Amazon holds now (the synced portfolio): a cap already equal to the plan is "keep".
  *   AB-8       who set today's cap (the brain's money writer, or anyone else: a person, Seller Central, an approved
  *              request), and Amazon's own usage of it (portfolioUsageOf): Amazon's count of this month's spend in a
@@ -174,13 +177,17 @@ export function planPortfolioCaps(input: {
     if (p.otherCampaigns > 0) {
       return { ...head, capCents: cap, action: n2 ? 'move-first' : 'none', why: n2 ? `the portfolio also holds ${p.otherCampaigns} other campaign${p.otherCampaigns === 1 ? '' : 's'} (another product's, shared or untied): a cap would stop them too — move this product's campaigns into its own portfolio first (N2)` : `the portfolio also holds ${p.otherCampaigns} other campaign${p.otherCampaigns === 1 ? '' : 's'} and the Owner keeps today's portfolios (N2 off): no cap` }
     }
-    const floor = p.monthSpendCents + Math.round((input.runRateCents ?? 0) * (wsum > 0 ? weights[i] / wsum : 1))
+    // The month's spend so far: Nexus's count, or Amazon's own reading of the cap when it is ahead (the same run's read).
+    const amazon = amazonSpentCents(p)
+    const spent = Math.max(p.monthSpendCents, amazon ?? 0)
+    const counted = amazon != null && amazon > p.monthSpendCents ? ` (Amazon counts ${words(amazon)} spent this month, Nexus ${words(p.monthSpendCents)})` : ''
+    const floor = spent + Math.round((input.runRateCents ?? 0) * (wsum > 0 ? weights[i] / wsum : 1))
     let belowSpend: boolean | undefined
     let note = ''
     if (cap < floor) {
       belowSpend = true
-      if (owner) note = `; ⚠ below this month's spend in it plus one day (${words(floor)}): Amazon would stop every campaign in it at once — the Owner's amount is kept`
-      else { note = `; raised to this month's spend in it plus one day (${words(floor)}): a lower cap would stop every campaign in it at once`; cap = floor }
+      if (owner) note = `; ⚠ below this month's spend in it plus one day (${words(floor)}${counted}): Amazon would stop every campaign in it at once — the Owner's amount is kept`
+      else { note = `; raised to this month's spend in it plus one day (${words(floor)}${counted}): a lower cap would stop every campaign in it at once`; cap = floor }
     }
     const same = p.today?.policy === 'MONTHLY_RECURRING' && p.today.amountCents === cap
     return {

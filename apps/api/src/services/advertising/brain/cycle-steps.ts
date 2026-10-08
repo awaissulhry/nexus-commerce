@@ -10,8 +10,8 @@
  *   terms      brain/terms-shadow.ts, per MARKET: the arbiter needs every due product of the market together (its leads are
  *              stored per market), so the ledger is decided for all of them and stored for the products whose step runs.
  *   negatives  brain/negatives-run.ts runNegativesOnce for the product (its negatives lever OBSERVE+).
- *   harvest    a seam: AB-11's module is not in this build. `harvestStepOf(runHarvestOnce)` is how the integration plugs it in
- *              (the same due rule, after negatives, inside the change set; a pair left half done is a clash in the report).
+ *   harvest    brain/harvest-run.ts runHarvestOnce for the product (its harvest lever OBSERVE+), after its negatives; a pair
+ *              the module left half done is a clash in the report.
  *   money      brain/budget-shadow.ts runMoneyShadowOnce for the product (its budgets lever OBSERVE+). Where the budgets lever
  *              acts, the brake that holds raises (and stronger) holds every own campaign's bid raises, and a campaign whose
  *              budget steps down holds its own: budget before bid, a raise never fights a cut. In shadow the same holds are
@@ -170,12 +170,7 @@ export const negativesStep: StepRunner = async (ctx) => {
   }
 }
 
-// ── ④ harvest: the seam AB-11 plugs into ─────────────────────────────────────────────────────────────────────────
-
-/** Until AB-11 lands: the step runs nothing, says so, and never holds the cycle. */
-export const harvestNotBuilt: StepRunner = async () => ({
-  status: 'off', why: 'the harvest module is not in this build yet (AB-11): nothing decided — the cycle runs it here, after negatives, when it lands',
-})
+// ── ④ harvest ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The part of AB-11's run summary (brain/harvest-run.ts HarvestRunSummary) the cycle reads. */
 export interface HarvestRunLike {
@@ -186,16 +181,18 @@ export interface HarvestRunLike {
   acted: { logged: number; proposed: number; written: number; campaignsProposed: number }
   pending: { synced: number; completed: number; retried: number; judged: number; undoProposed: number }
   skipped: Array<{ productId: string; market: string; why: string }>
-  /** Pairs whose harvest landed and whose source negative did not (sent again by the module's next run). */
-  halfDone?: number
 }
 
 /**
- * The harvest step from AB-11's run (`harvestStepOf(runHarvestOnce)`): the product's harvest lever OBSERVE or higher, run
- * for it alone inside the change set, after negatives. The pair (the exact keyword and its source's negative) is the
- * module's own one set; one left half done is a clash the report names until the module sends the rest.
+ * The harvest step from AB-11's run: the product's harvest lever OBSERVE or higher, run for it alone inside the change
+ * set, after negatives. The pair (the exact keyword and the negative exact in its sources) is the module's own one change
+ * set; one left half done (`halfDone`: the module's HALF_DONE harvests of the product after the run) is a clash the report
+ * names until the module sends the rest.
  */
-export function harvestStepOf(run: (opts: { now: Date; due: { due: boolean; why: string; products: DueProduct[] } }) => Promise<HarvestRunLike>): StepRunner {
+export function harvestStepOf(
+  run: (opts: { now: Date; due: { due: boolean; why: string; products: DueProduct[] } }) => Promise<HarvestRunLike>,
+  halfDone: (productId: string, market: string) => Promise<number> = async () => 0,
+): StepRunner {
   return async (ctx) => {
     const d = ctx.tick.termsDue.find((p) => p.productId === ctx.productId && p.market === ctx.market)
     if (!d || !ACTS.includes(d.settings.levers.harvest.effective)) return { status: 'off', why: 'the harvest lever is OFF, locked or excluded: no harvest decided' }
@@ -203,12 +200,21 @@ export function harvestStepOf(run: (opts: { now: Date; due: { due: boolean; why:
     const skipped = s.skipped.find((k) => k.productId === ctx.productId)
     if (skipped) return /fail/.test(skipped.why) ? { status: 'failed', why: skipped.why, runId: s.runId ?? null } : { status: 'skipped', why: skipped.why, runId: s.runId ?? null }
     const counts = { pairs: s.decided.pairs, newCampaigns: s.decided.newCampaigns, held: s.decided.held, logged: s.acted.logged, proposed: s.acted.proposed, written: s.acted.written, retried: s.pending.retried, judged: s.pending.judged }
-    const halfDone = s.halfDone ?? 0
+    const half = await halfDone(ctx.productId, ctx.market)
     return {
       status: 'done', why: `${d.settings.levers.harvest.effective}: ${countsLine(counts) || 'nothing to harvest'}`, runId: s.runId ?? null,
-      did: { lines: [`harvest: ${countsLine(counts) || 'nothing to harvest'}`], counts, ...(halfDone ? { clashes: [`${plural(halfDone, 'harvest pair')} half done: the keyword landed, its source negative did not — the harvest sends it again on its next run`] } : {}) },
+      did: { lines: [`harvest: ${countsLine(counts) || 'nothing to harvest'}${d.settings.levers.harvest.effective === 'OBSERVE' ? ' (shadow: nothing at Amazon)' : ''}`], counts, ...(half ? { clashes: [`${plural(half, 'harvest pair')} half done: the keyword landed, a source negative did not — the harvest sends it again on its next run`] } : {}) },
     }
   }
+}
+
+/** The harvests of a product left half done (the keyword landed, a source negative did not). */
+const halfDoneOf = (productId: string, market: string) => prisma.adsBrainHarvest.count({ where: { productId, marketplace: market, status: 'HALF_DONE' } })
+
+/** ④ harvest: AB-11's module (brain/harvest-run.ts), loaded at the step. */
+export const harvestStep: StepRunner = async (ctx) => {
+  const { runHarvestOnce } = await import('./harvest-run.js')
+  return harvestStepOf(runHarvestOnce, halfDoneOf)(ctx)
 }
 
 // ── ⑤ money ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -305,7 +311,7 @@ export const hoursStep: StepRunner = async (ctx) => {
   }
 }
 
-export const CYCLE_RUNNERS: CycleRunners = { state: stateStep, terms: termsStep, negatives: negativesStep, harvest: harvestNotBuilt, money: moneyStep, bids: bidsStep, hours: hoursStep }
+export const CYCLE_RUNNERS: CycleRunners = { state: stateStep, terms: termsStep, negatives: negativesStep, harvest: harvestStep, money: moneyStep, bids: bidsStep, hours: hoursStep }
 
 // ── The report's money ───────────────────────────────────────────────────────────────────────────────────────────
 

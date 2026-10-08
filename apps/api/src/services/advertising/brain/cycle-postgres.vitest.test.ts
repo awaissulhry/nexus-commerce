@@ -7,11 +7,11 @@
  *   table      AdsBrainCycle: invisible to another business through Prisma and raw SQL, refused without a business,
  *              row-level security forced with the business policy and the reference guard
  *   off        NEXUS_ADS_BRAIN_CYCLE off (the default): the tick runs nothing; the state cron runs the enrolled JACKET as before
- *   skip       on: every lever's own cron leaves JACKET — the state cron, the term ledger's and the negatives' crons, the money
+ *   skip       on: every lever's own cron leaves JACKET — the state cron, the term ledger's, negatives' and harvest's crons, the money
  *              at the bid brain's full slot — and the bid brain's full run leaves JACKET's own campaigns (it decides the
  *              pinned campaign no product owns, as before)
  *   cycle      on: one cycle for JACKET in IT, every step ended in the design's order — the state lever's shadow pauses (the
- *              Owner's long stop), the ledger, negatives, money and hours logged in shadow, harvest off (AB-11 not in this build), the
+ *              Owner's long stop), the ledger, negatives, harvest, money and hours logged in shadow, the
  *              bid brain on JACKET's own campaigns only; the day's report through the ads-brain view report
  *   rerun      the same data day again: no step runs, no row of any lever and no cycle row changes
  *   sees       the state lever at PROPOSE: the next data day's cycle asks for the pauses (the real approval queue) and the
@@ -63,6 +63,7 @@ const { ADS_BRAIN_TOOLS } = await import('../../agents/tools/ads-brain.tools.js'
 const { runBrainStateTick } = await import('../../../jobs/ads-brain-state.job.js')
 const { runBrainTermsTick } = await import('../../../jobs/ads-brain-terms.job.js')
 const { runBrainNegativesTick } = await import('../../../jobs/ads-brain-negatives.job.js')
+const { runBrainHarvestTick } = await import('../../../jobs/ads-brain-harvest.job.js')
 const { runBidBrainCron } = await import('../../../jobs/ads-bid-brain.job.js')
 
 const hex = randomBytes(4).toString('hex')
@@ -93,6 +94,7 @@ const counts = async () => (await rows<Data>(`SELECT
   (SELECT count(*)::int FROM "AdsBrainBudgetDecision" WHERE "workspaceId" = $1) money,
   (SELECT count(*)::int FROM "AdsBrainTerm" WHERE "workspaceId" = $1) terms,
   (SELECT count(*)::int FROM "AdsBrainNegative" WHERE "workspaceId" = $1) negatives,
+  (SELECT count(*)::int FROM "AdsBrainHarvest" WHERE "workspaceId" = $1) harvests,
   (SELECT count(*)::int FROM "AdsBrainHourProposal" WHERE "workspaceId" = $1) hours,
   (SELECT count(*)::int FROM "AgentApproval" WHERE "workspaceId" = $1) approvals,
   (SELECT count(*)::int FROM "OutboundSyncQueue" WHERE "workspaceId" = $1) queued`, [W]))[0]
@@ -175,6 +177,7 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-14 — the product cycle (real Pos
     await inW(() => runBrainStateTick(NOW))
     expect(await inW(() => runBrainTermsTick(NOW))).toMatchObject({ ran: false, why: expect.stringMatching(/the product cycle runs it/) })
     expect(await inW(() => runBrainNegativesTick(NOW))).toMatchObject({ ran: false })
+    expect(await inW(() => runBrainHarvestTick(NOW))).toMatchObject({ ran: false, why: expect.stringMatching(/the product cycle runs it/) })
     await inW(() => runBidBrainCron(FULL_SLOT))
     const after = await counts()
     expect({ ...after, bids: 0 }).toEqual({ ...before, bids: 0 })
@@ -190,10 +193,10 @@ describe.skipIf(!concurrentDatabaseUrl())('AB-14 — the product cycle (real Pos
     const [row] = await cycles()
     expect(row).toMatchObject({ productId: P, marketplace: 'IT', changeSetId: changeSetIdOf(P, 'IT', day), status: 'DONE', attempts: 1, leaseUntil: null })
     const status = Object.fromEntries(Object.entries(row.steps as Data).map(([k, v]) => [k, (v as Data).status]))
-    expect(status).toMatchObject({ state: 'done', money: 'done', bids: 'done', harvest: 'off' })
-    expect(['done', 'skipped']).toContain(status.terms)
+    expect(status).toMatchObject({ state: 'done', money: 'done', bids: 'done' })
+    for (const s of ['terms', 'negatives', 'harvest', 'hours']) expect(['done', 'skipped'], s).toContain(status[s])
     expect(row.steps.state.why).toMatch(/^OBSERVE: pause 2/)
-    expect(row.steps.harvest.why).toMatch(/AB-11/)
+    expect(row.steps.harvest.acts).toBe(false)
     // The bid brain decided JACKET's own campaigns only, in the cycle's bids run.
     expect((await rows('SELECT DISTINCT "campaignId", "runId" FROM "BidBrainDecision" WHERE "workspaceId" = $1', [W])).map((x) => [x.campaignId, x.runId])).toEqual([['c-it', row.steps.bids.runId]])
     expect((await rows('SELECT "campaignId", outcome FROM "AdsBrainStateDecision" WHERE "workspaceId" = $1 ORDER BY "campaignId"', [W])).map((x) => [x.campaignId, x.outcome])).toEqual([['c-it', 'shadow'], ['c-two', 'shadow']])

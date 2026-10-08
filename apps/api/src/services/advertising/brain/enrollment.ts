@@ -209,16 +209,16 @@ function marketOf(market: string): string | null {
 
 const OVERRIDE_SELECT = { id: true, productId: true, marketplace: true, scope: true, campaignId: true, kind: true, key: true, ref: true, value: true, by: true, reason: true, createdAt: true, endedAt: true } as const
 
-/** The open overrides of a product × market and of these campaigns (one query). */
-async function openOverrides(productId: string, market: string, campaignIds: readonly string[]): Promise<OverrideRow[]> {
+/** The open overrides of a product × market and of these campaigns (one query). Also read by brain/control.ts. */
+export async function openOverrides(productId: string, market: string, campaignIds: readonly string[]): Promise<OverrideRow[]> {
   return prisma.adsBrainOverride.findMany({
     where: { endedAt: null, OR: [{ scope: 'PRODUCT', productId, marketplace: market }, ...(campaignIds.length ? [{ scope: 'CAMPAIGN', campaignId: { in: [...campaignIds] } }] : [])] },
     select: OVERRIDE_SELECT,
   })
 }
 
-/** The product's own and shared campaigns in the market, with each one's BidBrainEnrollment mode. */
-async function campaignsOf(productId: string, market: string) {
+/** The product's own and shared campaigns in the market, with each one's BidBrainEnrollment mode. Also read by brain/control.ts. */
+export async function campaignsOf(productId: string, market: string) {
   const found = await productCampaigns(productId, market)
   if (!found) return null
   const ids = [...found.owned, ...found.shared].map((c) => c.campaignId)

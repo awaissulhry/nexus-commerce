@@ -35,6 +35,9 @@ describe('every engine actor the code writes maps to its engine', () => {
     ['automation:autopilot', 'autopilot'], // autopilot/apply.ts (its top-of-search step)
     ['automation:reconcile', 'write-reconcile'], // ads-write-reconcile.service.ts (bids)
     ['automation:ads-write-reconcile', 'write-reconcile'], // ads-write-reconcile.service.ts (placements)
+    ['automation:bid-brain', 'bid-brain'], // bid-brain/live-writer.ts
+    ['automation:ads-brain-budgets', 'brain-money'], // brain/budget-live.ts (MONEY_BUDGETS_ACTOR)
+    ['automation:ads-brain-portfolio', 'brain-money'], // brain/budget-live.ts (MONEY_PORTFOLIO_ACTOR)
   ])('%s → %s', (actor, engine) => {
     expect(engineForActor(actor)).toBe(engine)
     expect(classifyActor(actor)).toEqual({ kind: 'engine', engine })
@@ -72,6 +75,19 @@ describe('countWritesByEngine', () => {
     expect(counts.dayparting).toBe(7)
     expect(counts.unknown).toBe(8)
     expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(529)
+  })
+})
+
+describe('AB-8 — the money writer\'s actors are the brain-money engine, never unknown to the breaker', () => {
+  it('both actors the code writes with (budget-ladder.ts) count under brain-money with its own hourly limit', async () => {
+    const { MONEY_ACTORS, MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR } = await import('./brain/budget-ladder.js')
+    expect([...MONEY_ACTORS].sort()).toEqual([MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR].sort())
+    for (const actor of MONEY_ACTORS) expect(classifyActor(actor)).toEqual({ kind: 'engine', engine: 'brain-money' })
+    const counts = countWritesByEngine([{ userId: MONEY_BUDGETS_ACTOR, count: 7 }, { userId: MONEY_PORTFOLIO_ACTOR, count: 1 }], new Set())
+    expect(counts['brain-money']).toBe(8)
+    expect(counts.unknown).toBe(0)
+    expect(engineActorWhere('brain-money')).toEqual({ OR: [{ userId: { in: [MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR] } }] })
+    expect(breakerLimits()['brain-money']).toBe(200)
   })
 })
 

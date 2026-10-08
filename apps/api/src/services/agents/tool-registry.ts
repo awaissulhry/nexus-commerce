@@ -18,6 +18,7 @@ import { ADS_STRATEGY_TOOLS } from './tools/ads-strategy.tools.js'
 import { ADS_BID_BRAIN_TOOLS } from './tools/ads-bid-brain.tools.js'
 import { ADS_BID_BRAIN_ENROLLMENT_TOOLS } from './tools/ads-bid-brain-enrollment.tools.js'
 import { ADS_BRAIN_TOOLS } from './tools/ads-brain.tools.js'
+import { ADS_BRAIN_HARVEST_TOOLS } from './tools/ads-brain-harvest.tools.js'
 import { ADS_PLAYBOOK_TOOLS } from './tools/ads-playbook.tools.js'
 import { ADS_MANAGER_TOOLS } from './tools/ads-manager.tools.js'
 import { ADS_CREATE_TOOLS } from './tools/ads-create.tools.js'
@@ -42,6 +43,8 @@ import { ADS_QUEUED_WRITE_TOOLS } from './tools/ads-queued-write.tools.js'
 import { ADS_AUTO_UNDO_TOOLS } from './tools/ads-auto-undo.tools.js'
 // One brain AB-13 — the brain's painted hourly plan, applied only after a person's approval.
 import { ADS_BRAIN_HOURS_TOOLS } from './tools/ads-brain-hours.tools.js'
+// One brain — the Owner's control of a product's brain (enroll, levels, locks, exclusions, values, leave).
+import { ADS_BRAIN_CONTROL_TOOLS } from './tools/ads-brain-control.tools.js'
 import { EBAY_AD_TOOLS } from './tools/ebay-ads.tools.js'
 import { APPROVAL_TOOLS } from './tools/approval.tools.js'
 import { CHANNEL_TOOLS } from './tools/channel.tools.js'
@@ -137,6 +140,7 @@ const ALL: AgentTool[] = [
   ...ADS_BID_BRAIN_ENROLLMENT_TOOLS,
   // One brain AB-3 — the brain's map: who owns each lever of each campaign, the clashes and what is not set up, read.
   ...ADS_BRAIN_TOOLS,
+  ...ADS_BRAIN_HARVEST_TOOLS,
   // Ads playbook PB-2 — how a product's ads are built and run (templates, rows per market, category and product), read.
   ...ADS_PLAYBOOK_TOOLS,
   // Ads autonomy W4-1 — the daily Claude ads run reports itself (bell + one e-mail a day), and its history.
@@ -175,6 +179,8 @@ const ALL: AgentTool[] = [
   ...ADS_AUTO_UNDO_TOOLS,
   // One brain AB-13 — the week the brain painted for one hourly plan, saved as a new version once a person approves it.
   ...ADS_BRAIN_HOURS_TOOLS,
+  // One brain — set-ads-brain: the Owner's control of a product's brain; a lever to AUTO needs the approver's code.
+  ...ADS_BRAIN_CONTROL_TOOLS,
   ...EBAY_AD_TOOLS,
   // MCP.7 — what became of a queued change (Claude follows up; only a person decides).
   ...APPROVAL_TOOLS,

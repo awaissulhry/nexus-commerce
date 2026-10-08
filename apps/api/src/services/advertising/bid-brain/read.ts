@@ -25,7 +25,7 @@ import { bidBrainMode } from './shadow.js'
 import { CALIBRATION_DAYS, CURVE_MAX_AGE_DAYS, curveWords, MARKET_SCOPE, storedCurves, type StoredCurve } from './lag-curve-store.js'
 import { LAG_AGES, MIN_MATURITY, NOWCAST_MAX_FACTOR } from './lag-curve.js'
 import { YOUNG_SHARE_MAX } from './estimator.js'
-import { nowcastMode } from './nowcast.js'
+import { nowcastMode, runForRows } from './nowcast.js'
 
 export const BRAIN_VIEWS = ['why', 'what-if', 'diff', 'calibration'] as const
 export type BrainView = (typeof BRAIN_VIEWS)[number]
@@ -129,7 +129,8 @@ async function whatIfView(args: BrainReadArgs) {
   for (const market of scope.markets.slice(0, 5)) {
     const rows = await loadMarket(market, { now })
     if (!rows.targets.length) continue
-    const { run } = await loadRun(rows, now)
+    // BB-15 follow-up — with the nowcast on, the step anchors as the run reads them (re-keyed to its data day).
+    const run = runForRows(rows, (await loadRun(rows, now)).run)
     for (const f of buildFacts(rows, run)) {
       if (wanted && !wanted.has(f.targetId)) continue
       const goal = {
