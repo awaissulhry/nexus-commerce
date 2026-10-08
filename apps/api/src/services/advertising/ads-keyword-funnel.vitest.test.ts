@@ -74,4 +74,21 @@ describe('crossMatchNegations — inside one product\'s playbook in one market',
     expect(out).toMatchObject({ applied: 1, local: 2, errors: ['test y: Ads writes are halted.', 'test z: Amazon gave no id'] })
     expect(h.isolateProduct).toHaveBeenCalledWith({ action: ACTION, actor: 'user:u1', dryRun: false })
   })
+
+  it('batch 2 fix — a person\'s click (the route) carries his mark to the isolation run', async () => {
+    await crossMatchNegations('p-child', true, 'user:u1', 'DE', { manual: true })
+    expect(h.isolateProduct).toHaveBeenCalledWith({ action: ACTION, actor: 'user:u1', dryRun: false, manual: true })
+  })
+
+  it('a negative left to a product\'s brain is said with its reason and counted, never dropped from the answer', async () => {
+    const skip = { lever: 'negatives', holder: 'productBrain', campaignId: 'c-gb', campaignName: 'TEST | IT | Broad', productId: 'p-parent', market: 'DE', reason: 'a product\'s brain runs the negatives of campaign "TEST | IT | Broad" (c-gb) — product p-parent in DE' }
+    h.isolateProduct.mockResolvedValue({ ...runOf(null), leftToBrain: [skip], leftToBrainItems: [{ text: 'test w', adGroupId: 'gb', why: `left alone: ${skip.reason} (one owner per lever)` }] })
+    const out = await crossMatchNegations('p-child', false, 'user:u1', 'DE')
+    if ('refused' in out) throw new Error(out.refused)
+    expect(out.leftAlone).toEqual([{ text: 'test w', adGroupId: 'gb', why: expect.stringMatching(/^left alone: a product's brain runs the negatives of campaign .* \(one owner per lever\)$/) }])
+    expect(out.brainSkips).toMatchObject({ counts: { productBrain: { negatives: 1 } } })
+    // Nothing left to a brain: no brainSkips, as before.
+    h.isolateProduct.mockResolvedValue(runOf(null))
+    expect(await crossMatchNegations('p-child', false, 'user:u1', 'DE')).not.toHaveProperty('brainSkips')
+  })
 })

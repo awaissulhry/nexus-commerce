@@ -189,3 +189,55 @@ describe('minimum data', () => {
     expect(noValue.why).toMatch(/no order value known/)
   })
 })
+
+describe('batch 2 fix — the money brain\'s brake in the bid decision (hold raises, step down, floor)', () => {
+  const BY = 'the money brake of product p-jacket (cut_bids: projected 102 % of its monthly budget, above 100 %)'
+
+  it('hold raises: a raise waits with the brake named; a cut still goes', () => {
+    const hold = 'the money brake of product p-jacket (hold_raises: projected 97 % of its monthly budget, above 95 %): no raises'
+    const up = decide(example(10, { raiseCap: hold }))
+    expect(up).toMatchObject({ action: 'hold', bidCents: 10 })
+    expect(up.why).toMatch(/^goal: raise held — the money brake of product p-jacket \(hold_raises: projected 97 % .*\): no raises; 10¢ → \d+¢ waits/)
+    const down = decide(example(40, { raiseCap: hold }))
+    expect(down).toMatchObject({ action: 'write', layer: 'goal' })
+    expect(down.bidCents).toBeLessThan(40)
+  })
+
+  it('step down: every keyword one step a data day (an in-band one too), the step recorded; a rerun on the same data day holds', () => {
+    const first = decide(example(20, { overrides: { money: { stepPct: 10, by: BY } } }))
+    expect(first).toMatchObject({ action: 'write', layer: 'money', bidCents: 18, step: { dataDay: '2026-09-29', fromCents: 20, toCents: 18 } })
+    expect(first.why).toBe(`money: ${BY}: bids step down 10 % a day — 20¢ → 18¢`)
+    const again = decide(example(18, { lastStep: first.step, overrides: { money: { stepPct: 10, by: BY } } }))
+    expect(again).toMatchObject({ action: 'hold', layer: 'money', bidCents: 18 })
+    expect(again.why).toMatch(/this data day's step, taken once/)
+    // The next data day: one more step.
+    expect(decide(example(18, { dataDay: '2026-09-30', lastStep: first.step, overrides: { money: { stepPct: 10, by: BY } } })).bidCents).toBe(16)
+  })
+
+  it('step down never below the limits; a goal that asks lower goes lower', () => {
+    expect(decide(example(5, { overrides: { money: { stepPct: 10, by: BY } } })).bidCents).toBe(5) // the 5¢ engine floor
+    const high = decide(example(60, { overrides: { money: { stepPct: 10, by: BY } } }))
+    expect(high.bidCents).toBe(Math.min(54, high.goalBidCents!))
+    expect(high.why).toMatch(/the goal asks lower/)
+  })
+
+  it('the override order holds: the Owner\'s pin holds against it; a lower floor (Min-bid hour, stock) wins; after a Min-bid hour the step is from the bid before, not the floor', () => {
+    expect(decide(example(20, { overrides: { pin: { by: 'bids pinned by the Owner' }, money: { stepPct: 10, by: BY } } }))).toMatchObject({ action: 'hold', layer: 'pin', bidCents: 20 })
+    expect(decide(example(20, { overrides: { minBidHour: { floorCents: 2 }, money: { stepPct: 10, by: BY } } }))).toMatchObject({ layer: 'min_bid_hour', bidCents: 2 })
+    expect(decide(example(20, { overrides: { stock: { notBuyable: true, stopBidCents: 2, by: 'out of stock' }, money: { stepPct: 10, by: BY } } }))).toMatchObject({ layer: 'stock', bidCents: 2 })
+    const after = decide(example(2, { restore: { layer: 'min_bid_hour', heldCents: 2, beforeCents: 20 }, overrides: { money: { stepPct: 10, by: BY } } }))
+    expect(after).toMatchObject({ action: 'write', layer: 'money', bidCents: 18, step: { fromCents: 20, toCents: 18 } })
+  })
+
+  it('floor (stop_weakest): one of the weakest campaigns takes the stop bid as a STOP — named — and is given back when it lifts', () => {
+    const by = 'the money brake of product p-jacket (stop_weakest: projected 108 % of its monthly budget, above 105 %): one of its weakest campaigns stops until back on pace'
+    const d = decide(example(20, { overrides: { stop: { bidCents: 3, by } } }))
+    expect(d).toMatchObject({ action: 'write', layer: 'stop', bidCents: 3 })
+    expect(d.why).toBe(`stop: stop by ${by} → 3¢`)
+    expect(decide(example(3, { restore: { layer: 'stop', heldCents: 3, beforeCents: 20 } })).layer).toBe('restore')
+  })
+
+  it('OBSERVE (no brake in the facts): every decision exactly as before', () => {
+    for (const c of [5, 10, 14, 19, 33, 60]) expect(decide(example(c, { overrides: {} }))).toEqual(decide(example(c)))
+  })
+})

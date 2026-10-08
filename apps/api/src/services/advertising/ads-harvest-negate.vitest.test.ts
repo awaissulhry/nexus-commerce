@@ -45,6 +45,17 @@ vi.mock('./ads-protect-converting.js', () => ({
   normaliseNegTerm: (s: string) => s.trim().toLowerCase(),
 }))
 vi.mock('../../utils/logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }))
+// AB-11 — a graduation with no destination named gets the harvest destination the Keyword Harvest page's resolver gives.
+let resolved: { chosen: { adGroupId: string } | null; source: string; shortlist: unknown[] } = { chosen: null, source: 'none', shortlist: [] }
+let storedDest = new Map<string, { adGroupId: string; negateAtSource: boolean }>()
+vi.mock('./harvest-destination.service.js', async (importOriginal) => ({
+  loadDestinationGraph: vi.fn(async () => ({ adGroups: new Map(), productsOfAdGroup: new Map(), holdersOfTerm: new Map() })),
+  resolveStoredDestinations: vi.fn(async () => storedDest),
+  resolveDestination: vi.fn(() => resolved),
+  sourceLines: vi.fn(async (ids: string[]) => new Map(ids.map((id) => [id, null]))),
+  // Batch 2 re-review fix — the real rule: a stored destination gone or in another market refuses by name.
+  storedDestinationRefusal: (await importOriginal<typeof import('./harvest-destination.service.js')>()).storedDestinationRefusal,
+}))
 // PB-6a — the lock reads the batch's source ad groups (by Amazon's id) and the positives near them once.
 const findTargets = vi.fn(async (..._a: unknown[]) => [] as unknown[])
 const searchTerms = vi.fn(async (..._a: unknown[]) => [] as unknown[])
@@ -90,6 +101,8 @@ const result = (over: Record<string, unknown>) => ({
 const NO_ID = 'Amazon returned no id and a read-back did not find it, so this term is NOT negated at Amazon. Nothing was recorded here; retrying is safe.'
 
 beforeEach(() => {
+  resolved = { chosen: null, source: 'none', shortlist: [] }
+  storedDest = new Map()
   writeNegativeKeyword.mockReset()
   writeNegativeProductTarget.mockReset()
   createKeywordLocal.mockReset()
@@ -219,21 +232,55 @@ describe('5d — the harvest apply path treats an ASIN as a product', () => {
   })
 })
 
-/** 5d (review 7.4) — the source ad group is a fallback destination only when it can take the target. */
-describe('5d — no destination and an automatic source: refused, nothing created', () => {
-  it('names the refusal on the outcome and creates nothing; a manual Sponsored Products source still takes it', async () => {
+/**
+ * 5d (review 7.4) and ONE BRAIN AB-11 — "a harvest with no destination never negates its source", fixed: with no
+ * destination named, the harvest destination is resolved (stored for the source's scope, else the resolver's only one);
+ * when none resolves nothing is created — never back into the ad group that found it, whatever its campaign.
+ */
+describe('5d / AB-11 — no destination named: resolved, or refused; never back into the source', () => {
+  it('none resolves: refused by name, nothing created — an automatic source and a manual one alike', async () => {
+    resolved = { chosen: null, source: 'none', shortlist: [] }
     const r = await applyHarvest({ graduations: [{ ...(candidate as object), orders: 3 } as never] })
     expect(createKeywordLocal).not.toHaveBeenCalled()
     expect(r.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'no_destination' } })
     expect(r.keywordsGraduated).toBe(0)
-    expect(r.errors[0]).toMatch(/not in a manual Sponsored Products campaign/)
+    expect(r.errors[0]).toMatch(/never back into the ad group that found it/)
 
     findAdGroup.mockResolvedValueOnce({ id: 'ag1', campaign: { targetingType: 'MANUAL', adProduct: 'SPONSORED_PRODUCTS', type: 'SP' } })
-    createKeywordLocal.mockResolvedValue({ id: 'k1', externalTargetId: 'AMZ-K1' })
+    resolved = { chosen: null, source: 'resolved-ambiguous', shortlist: [{}, {}, {}] }
     const manual = await applyHarvest({ graduations: [{ ...(candidate as object), orders: 3 } as never] })
+    expect(createKeywordLocal).not.toHaveBeenCalled()
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(manual.outcomes[0]).toMatchObject({ outcome: 'refused', refusal: { deniedAt: 'no_destination', reason: expect.stringMatching(/3 ad groups of this product could take it/) } })
+  })
+
+  it('one resolves elsewhere: the keyword lands there and the source is negated (the defect closed)', async () => {
+    resolved = { chosen: { adGroupId: 'dst-exact' }, source: 'resolved-unique', shortlist: [{}] }
+    createKeywordLocal.mockResolvedValue({ id: 'k1', externalTargetId: 'AMZ-K1' })
+    writeNegativeKeyword.mockResolvedValue(result({ externalTargetId: 'AMZ-N1', reachedAmazon: true, adTargetId: 'n1' }))
+    const r = await applyHarvest({ graduations: [{ ...(candidate as object), orders: 3 } as never] })
+    expect(createKeywordLocal).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'dst-exact', matchType: 'EXACT' }))
+    expect(writeNegativeKeyword).toHaveBeenCalledWith(expect.objectContaining({ scope: 'AD_GROUP', externalAdGroupId: 'EAG1', keywordText: 'giacca moto', matchType: 'EXACT' }))
+    expect(r.outcomes[0]).toMatchObject({ outcome: 'acted', destinationAdGroupId: 'dst-exact', negative: { reachedAmazon: true } })
+  })
+
+  it('the Owner\'s stored destination is the source itself, or says negateAtSource off: kept as he chose', async () => {
+    findAdGroup.mockResolvedValue({ id: 'ag1', campaign: { targetingType: 'MANUAL', adProduct: 'SPONSORED_PRODUCTS', type: 'SP' } })
+    createKeywordLocal.mockResolvedValue({ id: 'k1', externalTargetId: 'AMZ-K1' })
+    resolved = { chosen: { adGroupId: 'ag1' }, source: 'stored', shortlist: [] }
+    const home = await applyHarvest({ graduations: [{ ...(candidate as object), orders: 3 } as never] })
     expect(createKeywordLocal).toHaveBeenCalledWith(expect.objectContaining({ adGroupId: 'ag1' }))
-    expect(writeNegativeKeyword).not.toHaveBeenCalled() // it landed in its own source: a negative there would cancel it
-    expect(manual.outcomes[0].outcome).toBe('acted')
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(home.outcomes[0].outcome).toBe('acted')
+
+    resolved = { chosen: { adGroupId: 'dst-exact' }, source: 'stored', shortlist: [] }
+    storedDest = new Map([['EXACT', { adGroupId: 'dst-exact', negateAtSource: false }]])
+    const kept = await applyHarvest({ graduations: [{ ...(candidate as object), orders: 3 } as never] })
+    expect(createKeywordLocal).toHaveBeenLastCalledWith(expect.objectContaining({ adGroupId: 'dst-exact' }))
+    expect(writeNegativeKeyword).not.toHaveBeenCalled()
+    expect(kept.outcomes[0].outcome).toBe('acted')
+    storedDest = new Map()
+    findAdGroup.mockResolvedValue({ id: 'ag1', campaign: { targetingType: 'AUTO', adProduct: 'SPONSORED_PRODUCTS', type: 'SP', marketplace: 'IT' } })
   })
 })
 

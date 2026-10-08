@@ -265,6 +265,9 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // A10 — undo of an ad change set (it needs money: refused for a person without it).
   'undo-ad-change': () => ({ changeSetId: 'none' }),
   'undo-worse-ad-change': () => ({ judgementId: 'none' }),
+  'apply-brain-harvest': () => ({ harvestId: 'none' }),
+  // AB-15 — the kill switch of one lever of the seeded product (Nexus only; nothing seeded is money).
+  'set-brain-kill-switch': (ids) => ({ op: 'kill', lever: 'budgets', productId: ids.productId, market: 'IT', why: 'test stop' }),
   // A6 — campaign budget and placements (they need money: refused for a person without it).
   'set-campaign-budget': (ids) => ({ campaignId: ids.campaignId, dailyBudgetCents: 2500 }),
   'set-placement-multipliers': (ids) => ({ campaignId: ids.campaignId, topOfSearchPct: 30 }),
@@ -337,6 +340,10 @@ const ARGS: Record<string, (ids: Seeded) => Record<string, unknown>> = {
   // money; business B's plan never shows from A); a plan change needs money (refused for a person without it).
   'ad-hourly-plans': (ids) => ({ campaignId: ids.campaignId }),
   'set-hourly-bid-plan': (ids) => ({ op: 'rename', planId: ids.hourlyPlanId, name: 'Money plan renamed' }),
+  // AB-13 — the brain's painting of the seeded plan (none stored: refused, and it needs money).
+  'apply-brain-hourly-plan': (ids) => ({ planId: ids.hourlyPlanId }),
+  // One brain — enrolling the seeded product in IT (a preview, nothing written; it needs money: the brain decides budgets).
+  'set-ads-brain': (ids) => ({ op: 'enroll', productId: ids.productId, market: 'IT' }),
   // W4-6 — the ad groups of the seeded campaign (default bids and metrics are money, stripped for a person without it);
   // a new ad group, product ads and an ad group change name bids (they need money: refused for a person without it).
   'ad-groups': (ids) => ({ campaignId: ids.campaignId, status: 'all' }),

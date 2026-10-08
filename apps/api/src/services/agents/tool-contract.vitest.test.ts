@@ -5,7 +5,8 @@
  *   1. name kebab-case `verb-noun`; a short title; a change tool's description says it waits for a person — and, when
  *      its ceiling lets the business confirm it in Claude or run it by rule, never that it ALWAYS waits for a person in
  *      Nexus, nor that a person approves it in Nexus without the other way (in Claude; by rule); at `auto`, never that
- *      it always waits for, or needs, a person at all (N3, widened in AA-W2-1).
+ *      it always waits for, or needs, a person at all (N3, widened in AA-W2-1); at `ask`, never that it can be confirmed in
+ *      Claude (batch 2 fix).
  *   2. `requires` names real permissions (ai.run is added by the door).
  *   3. `input` is a zod object; every argument is described; every list is bounded (≤ 250); a `channel`
  *      argument is an enum; NO argument names a business or workspace — the business comes from the caller.
@@ -205,6 +206,8 @@ const ALWAYS_IN_NEXUS = /\balways waits for a person(?: to approve it)?\s+in Nex
 const ALWAYS_A_PERSON = /\balways (?:waits for|needs|asks for) a person\b|\ba person always (?:approves|decides)\b|\bevery (?:change|move|request|step) waits for a person\b/i
 const A_PERSON_IN_NEXUS =
   /\b(?:waits for a person|a person approves (?:it|this|the change)|nothing (?:changes|is created) until a person approves (?:it|this))\b[^.;]*\bin Nexus\b|\brequires approval\b/i
+/** Batch 2 fix — the claim that a person may confirm it in Claude (not "never confirmed in Claude"). */
+const CONFIRMED_IN_CLAUDE = /\b(?:or|and) (?:the person who asked )?confirms? it in Claude\b|\bor confirmed in Claude\b/i
 const THE_OTHER_WAY = {
   confirm: /\bin Claude\b/i,
   auto: /\bby (?:its|their|the business(?:'|’)?s?) rule\b|\bitself\b|\blets it run\b|\brun inside\b/i,
@@ -268,6 +271,10 @@ function contractProblems(tool: AgentTool, material: Record<string, string[]> = 
       bad(1, `says a person approves it in Nexus, but not that it can be ${can}`)
     }
   }
+
+  // Batch 2 fix — the other way round: at `ask` (never confirmed in Claude, never by rule), never that it can be confirmed
+  // in Claude (set-bid-brain-enrollment said it while its ceiling was ask).
+  if (change && ceiling === 'ask' && CONFIRMED_IN_CLAUDE.test(tool.description)) bad(1, 'says it can be confirmed in Claude, but its ceiling is ask')
 
   // 2 — permissions
   if (!tool.requires?.length || !tool.requires.every(isValidPermission)) bad(2, 'requires an unknown permission')
@@ -466,6 +473,11 @@ describe('C1 — every registered tool keeps the contract', () => {
       [`set-hourly-bid-plan`]: {
         before: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [{ days: [1], startHour: 0, endHour: 6, targetKey: 'test-floor' }], defaultTargetKey: 'test-top', members: ['c1'], overrides: {} },
         after: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [], defaultTargetKey: 'test-top', members: ['c1'], overrides: {}, versionId: 'v2' },
+      },
+      // AB-13 — the brain's painted week is put back by set-hourly-bid-plan painting the week it replaced.
+      'apply-brain-hourly-plan': {
+        before: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [{ days: [1], startHour: 0, endHour: 6, targetKey: 'test-floor' }], defaultTargetKey: 'test-top', members: ['c1'], overrides: {} },
+        after: { op: 'update-windows', planId: 'rg1', name: 'Test plan', enabled: true, windows: [{ days: [1], startHour: 0, endHour: 4, targetKey: 'test-floor' }], defaultTargetKey: 'test-top', members: ['c1'], overrides: {}, versionId: 'v3', proposalId: 'hp1' },
       },
       // B-2 — an AI goal is put back (in part) by archiving every campaign it made at Amazon.
       'create-ai-goal-campaigns': { before: { goalId: null, campaignIds: [] }, after: { goalId: 'g1', planId: 'pl1', market: 'IT', name: 'Test goal', campaignIds: ['c1', 'c2'], notAtAmazon: [] } },
@@ -703,8 +715,17 @@ describe('C1 — every registered tool keeps the contract', () => {
       'report-ads-run': { before: { runId: 'r1', status: 'running', withdrawn: false }, after: { runId: 'r1', status: 'done', withdrawn: false } },
       // W4-2 — the expected report time it replaced, set again.
       'set-ads-report-time': { before: { expected: { time: '08:00', timeZone: 'Europe/Rome' } }, after: { expected: { time: '08:30', timeZone: 'Europe/Rome' } } },
+      // AB-11 — an ads brain harvest put back by its own op undo (the keyword paused, the source negatives retired).
+      'apply-brain-harvest': { before: { changeSetId: 'ap1', op: 'harvest', harvestId: 'h1', keyword: null, negatives: [] }, after: { op: 'harvest', harvestId: 'h1', keywordTargetId: 't1', negatives: ['n1'] } },
+      // AB-15 — a kill switch is ended by its undo, and an ended one set again.
+      'set-brain-kill-switch': { before: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: false, reason: null }, after: { op: 'kill', lever: 'budgets', productId: 'p1', market: 'IT', killed: true, reason: 'test stop' } },
       // BB-6 — a campaign's place in the bid brain put back (LIVE → the op that returns it).
       'set-bid-brain-enrollment': { before: { campaignId: 'c1', mode: 'SHADOW' }, after: { campaignId: 'c1', mode: 'LIVE' } },
+      // One brain — the Owner's choice put back through the same tool (here: the product's budgets level ended again).
+      'set-ads-brain': {
+        before: { op: 'set-level', productId: 'p1', market: 'IT', scope: 'PRODUCT', campaignId: null, kind: 'LEVEL', key: 'budgets', ref: '', open: false, value: null },
+        after: { op: 'set-level', productId: 'p1', market: 'IT', scope: 'PRODUCT', campaignId: null, kind: 'LEVEL', key: 'budgets', ref: '', open: true, value: 'PROPOSE' },
+      },
       // W4-8 — a rule's campaigns put back (replace); a coverage term's values put back through the same tool.
       'assign-ad-rules': { before: { ruleId: 'r1', name: 'Rule — DE', binding: 'picker', campaignIds: ['c1'] }, after: { ruleId: 'r1', name: 'Rule — DE', binding: 'picker', campaignIds: ['c1', 'c2'] } },
       'set-coverage-set': {
@@ -831,6 +852,7 @@ describe('C1 — each rule can fail', () => {
     [{ description: 'Changes an example. Always waits for a person in Nexus.', maxClaudeTrust: 'confirm' }, 'says it always waits for a person in Nexus'],
     [{ description: 'Changes an example. Waits for a person to approve it in Nexus.', maxClaudeTrust: 'confirm' }, 'says a person approves it in Nexus, but not that it can be confirmed in Claude'],
     [{ description: 'Changes an example. A person approves it in Nexus first.', maxClaudeTrust: 'confirm' }, 'but not that it can be confirmed in Claude'],
+    [{ description: 'Changes an example. A person approves it in Nexus (or confirms it in Claude with their code).', maxClaudeTrust: 'ask' }, 'says it can be confirmed in Claude, but its ceiling is ask'],
     [{ description: 'Changes an example (requires approval).', maxClaudeTrust: 'auto', ...facts }, 'but not that it can be run by the business\'s rule'],
     [{ description: 'Changes an example. Waits for a person: approved in Nexus, or confirmed in Claude.', maxClaudeTrust: 'auto', ...facts }, 'but not that it can be run by the business\'s rule'],
     [{ description: 'Changes an example. Nothing changes until a person approves it in Nexus; it always waits for a person.', maxClaudeTrust: 'auto', ...facts }, 'says it always waits for (or needs) a person'],

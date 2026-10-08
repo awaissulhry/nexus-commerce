@@ -41,6 +41,12 @@
  *   record          one AdsAutoUndoJudgement per change judged (the numbers it stands on, the verdict, what was done and
  *                   why); superseded and waiting changes are counted in the run's summary, and a stored one is closed.
  *
+ *   brain       ONE BRAIN AB-15 — after this pass, the brain's own levers (budgets and portfolio caps, pauses and resumes,
+ *               negatives, harvests, bidding-strategy switches) in their own pass (brain/undo-run.ts, rules brain/undo-levers.ts):
+ *               the same level, the same daily cap, the same record (origin `brain`). Its writes are left alone here (`brain`).
+ *               No product enrolled: that pass is one remembered query and adds nothing — this run's answer and its line are
+ *               as before. The bid brain's keyword bids stay judged HERE, exactly as before (BB-10's pin and hold).
+ *
  * In the business the call runs in (row-level security). `dryRun` (preview-automation) computes the same and writes
  * nothing: no judgement, no request, no undo.
  */
@@ -53,6 +59,7 @@ import { LEVELS, lowest, type AutomationLevel } from '../automation/automation-l
 import type { WatchOutcome, WatchWindow } from '../agents/ads-watch-week.service.js'
 import { autoUndoThresholds, AUTO_UNDO_BY_MARKET, AUTO_UNDO_DEFAULTS, type AutoUndoThresholds } from './ads-auto-undo-thresholds.js'
 import { classifyActor, engineLabel, NON_CHANGE_ACTION_TYPES, type EngineKey } from './ads-engine-actors.js'
+import type { BrainUndoRun } from './brain/undo-run.js'
 
 // The watch-week measurement and the approval gate load where used: their module graphs are wide (load order).
 const watchWeek = () => import('../agents/ads-watch-week.service.js')
@@ -110,7 +117,7 @@ export async function holdBrainAfterUndo(args: {
   }
 }
 
-export type LeftAlone = 'person' | 'person-approved' | 'brake' | 'schedule' | 'retry' | 'own' | 'unknown' | 'not-a-lever' | 'stop'
+export type LeftAlone = 'person' | 'person-approved' | 'brake' | 'schedule' | 'retry' | 'own' | 'unknown' | 'not-a-lever' | 'stop' | 'brain'
 export const LEFT_ALONE_WORDS: Record<LeftAlone, string> = {
   person: "a person's own change",
   'person-approved': 'a change a person approved (their decision)',
@@ -121,10 +128,13 @@ export const LEFT_ALONE_WORDS: Record<LeftAlone, string> = {
   unknown: 'no engine, rule or request Nexus knows wrote it',
   'not-a-lever': 'not a bid, budget or placement move auto-undo judges (a status change, a create, an archive)',
   stop: 'a stop or a suppression (a bid to the floor, the no-pause floor, its restore): never auto-undone',
+  brain: 'a write of one of the brain\'s own levers (budgets, caps, pauses, negatives, harvests): judged in the brain\'s own pass, per lever (AB-15)',
 }
 const ENGINES_LEFT_ALONE: Partial<Record<EngineKey, LeftAlone>> = {
   'budget-enforce': 'brake', dayparting: 'schedule', 'budget-schedules': 'schedule', 'write-reconcile': 'retry',
 }
+/** AB-15 — the product brain's writers (automation:ads-brain, automation:ads-brain-…): the brain's own pass judges them. */
+const isProductBrainWriter = (actor: string | null) => !!actor && (actor === 'automation:ads-brain' || actor.startsWith('automation:ads-brain-'))
 
 export type ChangeOrigin = 'engine' | 'rule' | 'claude-rule'
 export type JudgeVerdict = 'not_enough_data' | 'not_worse' | 'worse' | 'superseded'
@@ -239,6 +249,7 @@ export function originOf(row: { userId: string | null; executionId: string | nul
     return { leftAlone: 'person-approved', why: `request ${row.executionId} was approved by a person: that is their decision` }
   }
   if (row.queuedForce) return { leftAlone: 'stop', why: 'a forced write (a suppression, a stop or its restore): never auto-undone' }
+  if (isProductBrainWriter(row.userId)) return { leftAlone: 'brain', why: LEFT_ALONE_WORDS.brain }
   const actor = classifyActor(row.userId)
   if (actor.kind === 'engine') {
     if (JUDGED_ENGINES.has(actor.engine)) return { origin: 'engine', label: engineLabel(actor.engine), approvalId: null }
@@ -422,6 +433,10 @@ export interface AutoUndoRun {
   /** The judgements of this run, the clearly worse first (SHOWN). */
   items: AutoUndoItem[]
   notes: string[]
+  /** AB-15 — the brain's own levers (brain/undo-run.ts); absent when no product is enrolled. */
+  brain?: BrainUndoRun
+  /** Batch 2 review fix — the brain levers' pass failed this run (its error); the rest of the answer stands. */
+  brainError?: string
 }
 
 interface Candidate {
@@ -771,14 +786,34 @@ export async function runAutoUndo(opts: { now?: Date; dryRun?: boolean } = {}): 
   const order: Record<UndoAction, number> = { undone: 0, proposed: 1, would_undo: 2, held: 3, none: 4 }
   items.sort((a, b) => order[a.action] - order[b.action] || (a.verdict === 'worse' ? 0 : 1) - (b.verdict === 'worse' ? 0 : 1) || b.at.localeCompare(a.at))
   if (items.length > SHOWN) notes.push(`The first ${SHOWN} of ${items.length} judgements are listed; the counts cover all of them.`)
-  return answer(items.slice(0, SHOWN))
+  // AB-15 — the brain's own levers, in their own pass, at the same level and inside the same daily cap. No product enrolled:
+  // nothing (one remembered query) and this answer exactly as before. Batch 2 review fix — a failed brain pass (an
+  // enrollment read, a lever's read) never loses the bid pass above: what it judged and did is answered and summarised, the
+  // failure said in a note and logged, and the brain's levers are judged again at the next run.
+  let brain: BrainUndoRun | null = null
+  let brainError: string | null = null
+  try {
+    const { runBrainLeverUndo } = await import('./brain/undo-run.js')
+    brain = await runBrainLeverUndo({ now, dryRun, level, today })
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error)
+    brainError = why.slice(0, 200)
+    logger.warn('[ads-auto-undo] the brain levers\' pass failed — the bid pass\'s answer stands', { error: why.slice(0, 300) })
+    notes.push(`The brain levers' pass failed (${why.slice(0, 200)}): the changes above were judged and acted on as listed; the brain's own levers are judged again at the next run.`)
+  }
+  const out = answer(items.slice(0, SHOWN))
+  return brain ? { ...out, brain } : brainError ? { ...out, brainError } : out
 }
 
 /** The run's one line (CronRun summary). */
 export function autoUndoSummaryLine(run: AutoUndoRun): string {
   const c = run.counts
   if (run.level === 'OFF') return `skipped: ${run.levelWhy}`
-  return `level=${run.level} read=${c.read} judged=${c.judged} worse=${c.worse} would_undo=${c.wouldUndo} proposed=${c.proposed} undone=${c.undone} held=${c.held} superseded=${c.superseded} waiting=${c.waiting} not_enough_data=${c.notEnoughData} left_alone=${c.leftAlone}`
+  const line = `level=${run.level} read=${c.read} judged=${c.judged} worse=${c.worse} would_undo=${c.wouldUndo} proposed=${c.proposed} undone=${c.undone} held=${c.held} superseded=${c.superseded} waiting=${c.waiting} not_enough_data=${c.notEnoughData} left_alone=${c.leftAlone}`
+  if (run.brainError) return `${line} · brain: failed (${run.brainError})`
+  if (!run.brain) return line
+  const b = run.brain.counts
+  return `${line} · brain: read=${b.read} judged=${b.judged} worse=${b.worse} would_undo=${b.wouldUndo} proposed=${b.proposed} undone=${b.undone} held=${b.held} superseded=${b.superseded} waiting=${b.waiting} followed=${b.followed}`
 }
 
 // ── Reads (automation-detail, automation-activity, the daily report) ───────────────────────────────
@@ -884,6 +919,7 @@ const LEVER_WORDS = (lever: string) => (lever === 'bid' ? 'bid' : lever === 'dai
 export async function planJudgedUndo(judgementId: string, approvalId?: string | null): Promise<{ ok: true; plan: JudgedUndoPlan } | { ok: false; error: string }> {
   const j = await prisma.adsAutoUndoJudgement.findUnique({ where: { id: judgementId }, select: { ...JUDGEMENT_SELECT, evidence: true } })
   if (!j) return { ok: false, error: 'That auto-undo judgement is not found in this business (automation-detail A19 lists them).' }
+  if (j.origin === 'brain') return { ok: false, error: `Not queued: a change of the brain's ${j.lever} lever is put back through its own request (the lever's tool), which auto-undo asks for itself — automation-detail A19 names it (${j.undoApprovalId ?? 'none asked yet'}).` }
   if (j.verdict !== 'worse') return { ok: false, error: `Not queued: auto-undo judged this change ${VERDICT_WORDS[j.verdict as JudgeVerdict] ?? j.verdict} — only a change judged clearly worse is put back here (undo-ad-change puts back a change you name).` }
   if (j.action === 'undone') return { ok: false, error: `Not queued: it was undone already${j.undoActionLogId ? ` (write ${j.undoActionLogId})` : ''}.` }
   const waiting = await waitingRequestFor(j.id, approvalId)
@@ -921,8 +957,9 @@ export async function planJudgedUndo(judgementId: string, approvalId?: string | 
 
 /** A person approved it: put the value back as the approved request (its change set), and record it on the judgement. */
 export async function runJudgedUndo(judgementId: string, run: { actor: `user:${string}` | `automation:${string}`; reason: string; manual: boolean; changeSetId: string }): Promise<{ ok: true; actionLogId: string | null } | { ok: false; error: string }> {
-  const j = await prisma.adsAutoUndoJudgement.findUnique({ where: { id: judgementId }, select: { actionLogId: true, actor: true, entityType: true, entityId: true } })
+  const j = await prisma.adsAutoUndoJudgement.findUnique({ where: { id: judgementId }, select: { actionLogId: true, actor: true, entityType: true, entityId: true, origin: true } })
   if (!j) return { ok: false, error: 'That auto-undo judgement is not found in this business.' }
+  if (j.origin === 'brain') return { ok: false, error: 'A change of a brain lever is put back through its own request (the lever\'s tool), never here.' }
   const { reverseJudgedWrite } = await import('./rollback.service.js')
   const out = await reverseJudgedWrite({ actionLogId: j.actionLogId, actor: run.actor, reason: run.reason, manual: run.manual, changeSetId: run.changeSetId })
   if ('reason' in out) return { ok: false, error: out.reason }

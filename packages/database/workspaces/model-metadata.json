@@ -1765,6 +1765,10 @@
       "fields": []
     },
     {
+      "name": "AmazonAdsGrainCap",
+      "fields": []
+    },
+    {
       "name": "AdBudgetUsageSample",
       "fields": []
     },
@@ -6867,6 +6871,10 @@
       "fields": []
     },
     {
+      "name": "AdsBrainHourProposal",
+      "fields": []
+    },
+    {
       "name": "AdsNativeRuleSnapshot",
       "fields": []
     },
@@ -6875,11 +6883,31 @@
       "fields": []
     },
     {
+      "name": "AdsBrainAsk",
+      "fields": []
+    },
+    {
       "name": "AdsBrainTerm",
       "fields": []
     },
     {
       "name": "AdsBrainTermLead",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainNegative",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainStateDecision",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainCycle",
+      "fields": []
+    },
+    {
+      "name": "AdsBrainHarvest",
       "fields": []
     },
     {

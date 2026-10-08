@@ -49,7 +49,7 @@ import { meetsHarvest, searchTermTotals } from '../../advertising/ads-harvest.se
 import { harvestForScope } from '../../advertising/ads-strategy/terms.js'
 import { strategyWords } from '../../advertising/ads-strategy/source-words.js'
 import {
-  HV_DEST_ACCOUNT, deleteHarvestDestination, loadDestinationGraph, resolveDestination, resolveStoredDestinations, saveHarvestDestination, storedHarvestDestination,
+  HV_DEST_ACCOUNT, deleteHarvestDestination, loadDestinationGraph, resolveDestination, resolveStoredDestinations, saveHarvestDestination, sourceLines, storedDestinationRefusal, storedHarvestDestination,
   type HvCreateType, type HvDestGrain,
 } from '../../advertising/harvest-destination.service.js'
 import { STEP_UP_NEEDS, type StepUp } from '../step-up-approval.js'
@@ -544,14 +544,19 @@ async function decideHarvest(raw: Record<string, unknown>, ctx: Pick<ToolContext
     if (!dest) return refuse(`Not queued: ad group ${a.destAdGroupId} was not found in this business.`)
     destWhy = 'named in the request'
   } else {
+    // Batch 2 review fixes — the whole chain, the portfolio and the product line included (where the Owner stores his
+    // destinations); his stored one gone or in another market refuses by name, never the resolver's pick.
+    const line = (await sourceLines([source.id])).get(source.id) ?? null
     const [graph, stored] = await Promise.all([
       loadDestinationGraph(),
-      resolveStoredDestinations({ market: source.campaign.marketplace ?? 'all', campaign: source.campaign.id, adGroup: source.id }),
+      resolveStoredDestinations({ market: source.campaign.marketplace ?? 'all', line, portfolio: source.campaign.portfolioId ?? null, campaign: source.campaign.id, adGroup: source.id }),
     ])
     const createType: HvCreateType = product ? 'PRODUCT' : match
     const resolved = resolveDestination({ graph, stored, sourceAdGroupId: source.id, sourceAdGroupName: source.name, term: query, kind: product ? 'product' : 'keyword', createType })
+    const storedNo = storedDestinationRefusal({ stored, createType, resolved, graph, sourceMarket: source.campaign.marketplace ?? null })
+    if (storedNo) return refuse(`Not queued: ${storedNo} Or name one (destAdGroupId).`)
     if (!resolved.chosen) {
-      return refuse(`Not queued: no destination ad group is decided for "${query}" (${resolved.source === 'resolved-ambiguous' ? `${resolved.shortlist.length} could take it` : 'none fits'}). Name one (destAdGroupId), or store one with set-harvest-destination.`)
+      return refuse(`Not queued: no destination ad group is decided for "${query}" (${resolved.source === 'resolved-ambiguous' ? `${resolved.shortlist.length} could take it` : resolved.source === 'resolved-paused' ? `the only one that could take it does not serve: ${resolved.refusal}` : 'none fits'}). Name one (destAdGroupId), or store one with set-harvest-destination.`)
     }
     dest = await groupById(resolved.chosen.adGroupId)
     if (!dest) return refuse('Not queued: the resolved destination ad group was not found.')

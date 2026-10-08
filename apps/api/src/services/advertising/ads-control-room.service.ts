@@ -21,6 +21,7 @@ import { ENGINES, engineEnv, readEngineSwitch, type EngineSwitchRow } from '../a
 import { breakerLimitsText, engineForActor } from './ads-engine-actors.js'
 import { engineCapsText } from './ads-engine-guard.js'
 import { campaignCensus } from './ads-census.service.js'
+import { serverPortfolioCapLimitCents } from './brain/portfolio-cap-limit.js'
 import type { AutomationEntry } from '../automation/automation-catalog.service.js'
 
 /**
@@ -223,6 +224,8 @@ export interface AccountGuardrails {
   spendPerHourCents: { effective: number; set: number | null; default: number }
   /** Per-payload write ceiling, from env. Read-only here — it needs a deploy to change. */
   maxWriteValueCents: number
+  /** Owner decision 2A — the server's monthly limit of a portfolio's cap (a product's brain may hold its own). */
+  maxPortfolioCapCents: number
   /** Quartile's counted boundary of authority: what automation may touch at all. */
   campaigns: { total: number; managed: number; unmanaged: number }
   /** Entity bid bounds (ADX A1) — a column, so it cannot be bypassed by a future engine. */
@@ -254,6 +257,7 @@ export async function getAccountGuardrails(): Promise<AccountGuardrails> {
       set: state.maxHourlySpendCentsEur, default: DEFAULT_MAX_HOURLY_SPEND_CENTS,
     },
     maxWriteValueCents: Number(process.env.NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS ?? 50_000),
+    maxPortfolioCapCents: serverPortfolioCapLimitCents(),
     campaigns: { total, managed, unmanaged: total - managed },
     bounds: { withMinBid: withMin, withMaxBid: withMax },
     protectedTerms,

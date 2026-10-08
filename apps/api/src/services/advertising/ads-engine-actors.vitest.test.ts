@@ -35,6 +35,9 @@ describe('every engine actor the code writes maps to its engine', () => {
     ['automation:autopilot', 'autopilot'], // autopilot/apply.ts (its top-of-search step)
     ['automation:reconcile', 'write-reconcile'], // ads-write-reconcile.service.ts (bids)
     ['automation:ads-write-reconcile', 'write-reconcile'], // ads-write-reconcile.service.ts (placements)
+    ['automation:bid-brain', 'bid-brain'], // bid-brain/live-writer.ts
+    ['automation:ads-brain-budgets', 'brain-money'], // brain/budget-live.ts (MONEY_BUDGETS_ACTOR)
+    ['automation:ads-brain-portfolio', 'brain-money'], // brain/budget-live.ts (MONEY_PORTFOLIO_ACTOR)
   ])('%s → %s', (actor, engine) => {
     expect(engineForActor(actor)).toBe(engine)
     expect(classifyActor(actor)).toEqual({ kind: 'engine', engine })
@@ -72,6 +75,59 @@ describe('countWritesByEngine', () => {
     expect(counts.dayparting).toBe(7)
     expect(counts.unknown).toBe(8)
     expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(529)
+  })
+})
+
+describe('AB-8 — the money writer\'s actors are the brain-money engine, never unknown to the breaker', () => {
+  it('both actors the code writes with (budget-ladder.ts) count under brain-money with its own hourly limit', async () => {
+    const { MONEY_ACTORS, MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR } = await import('./brain/budget-ladder.js')
+    expect([...MONEY_ACTORS].sort()).toEqual([MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR].sort())
+    for (const actor of MONEY_ACTORS) expect(classifyActor(actor)).toEqual({ kind: 'engine', engine: 'brain-money' })
+    const counts = countWritesByEngine([{ userId: MONEY_BUDGETS_ACTOR, count: 7 }, { userId: MONEY_PORTFOLIO_ACTOR, count: 1 }], new Set())
+    expect(counts['brain-money']).toBe(8)
+    expect(counts.unknown).toBe(0)
+    expect(engineActorWhere('brain-money')).toEqual({ OR: [{ userId: { in: [MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR] } }] })
+    expect(breakerLimits()['brain-money']).toBe(200)
+  })
+})
+
+describe('batch 2 fixes — every writer of the brain is classified, never unknown to the anomaly breaker', () => {
+  it('the brain\'s actors the code writes with each count under their own engine', async () => {
+    const { BRAIN_NEGATIVES_ACTOR, BRAIN_STATE_ACTOR } = await import('./ads-write-gate.js')
+    const { HARVEST_ACTOR } = await import('./brain/harvest.js')
+    const { MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR } = await import('./brain/budget-ladder.js')
+    const { BRAIN_ACTOR } = await import('./bid-brain/live.js')
+    const expected: Array<[string, string]> = [
+      [BRAIN_ACTOR, 'bid-brain'], [MONEY_BUDGETS_ACTOR, 'brain-money'], [MONEY_PORTFOLIO_ACTOR, 'brain-money'],
+      [BRAIN_STATE_ACTOR, 'brain-state'], [BRAIN_NEGATIVES_ACTOR, 'brain-negatives'], [HARVEST_ACTOR, 'brain-harvest'],
+    ]
+    for (const [actor, engine] of expected) expect(classifyActor(actor)).toEqual({ kind: 'engine', engine })
+    const counts = countWritesByEngine(expected.map(([userId]) => ({ userId, count: 3 })), new Set())
+    expect(counts.unknown).toBe(0)
+    expect(counts['brain-negatives']).toBe(3)
+    expect(counts['brain-harvest']).toBe(3)
+    expect(breakerLimits()).toMatchObject({ 'brain-negatives': 200, 'brain-harvest': 150 })
+    expect(engineActorWhere('brain-harvest')).toEqual({ OR: [{ userId: { in: [HARVEST_ACTOR] } }] })
+  })
+
+  it('every `automation:ads-brain-<what>` actor in the brain\'s sources is classified (a new writer cannot slip into unknown)', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const here = new URL('.', import.meta.url).pathname
+    const files = [
+      ...readdirSync(join(here, 'brain')).filter((f) => f.endsWith('.ts') && !f.includes('.test.')).map((f) => join(here, 'brain', f)),
+      ...readdirSync(join(here, 'bid-brain')).filter((f) => f.endsWith('.ts') && !f.includes('.test.')).map((f) => join(here, 'bid-brain', f)),
+      join(here, 'ads-write-gate.ts'),
+    ]
+    const actors = new Set<string>()
+    for (const f of files) {
+      const text = readFileSync(f, 'utf8')
+      for (const m of text.matchAll(/automation:ads-brain-([a-z]+)\b/g)) actors.add(`automation:ads-brain-${m[1]}`)
+      for (const m of text.matchAll(/\$\{PRODUCT_BRAIN_ACTOR\}-([a-z]+)\b/g)) actors.add(`automation:ads-brain-${m[1]}`)
+    }
+    expect(actors.size).toBeGreaterThanOrEqual(5)
+    const unclassified = [...actors].filter((a) => classifyActor(a).kind !== 'engine')
+    expect(unclassified).toEqual([])
   })
 })
 

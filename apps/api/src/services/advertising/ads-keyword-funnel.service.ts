@@ -22,6 +22,7 @@ import { PRODUCT_NOT_FOUND } from '../agents/tools/live-product.js'
 import { findLiveProduct } from './ads-strategy/load.js'
 import { strategyMarketOf } from './ads-strategy/terms.js'
 import { compileIsolationFor, isolateProduct } from './ads-playbook/isolation-run.js'
+import { brainSkipsOutput, leverHeldOf } from './brain/engine-skips.js'
 import { playbookStanding, standingRefusal } from './ads-playbook/isolation-load.js'
 import type { ScopeGroup } from './ads-playbook/isolation.js'
 
@@ -100,9 +101,18 @@ const SLOT_ROLE = (g: ScopeGroup | undefined): MatchRole => (g?.role === 'exact'
  * applied. Now: one market; only a product enrolled in a playbook there (refused by name otherwise); the playbook's
  * slots, the planner's checks and the write service; `applied` = what reached Amazon.
  */
-export async function crossMatchNegations(productId: string, apply: boolean, actor: string, market: string): Promise<{
+export async function crossMatchNegations(productId: string, apply: boolean, actor: string, market: string, opts: {
+  /**
+   * Batch 2 fix — a person's own click (the route): the gate judges each negative as a person's (a product's brain owning
+   * the negatives lever, the allowlist and the pins let him through, as every person's own add). The account halt still
+   * holds his apply, as before it carried the mark (isolation-run.ts writeAll).
+   */
+  manual?: boolean
+} = {}): Promise<{
   proposals: NegationProposal[]; applied: number; errors: string[]; local: number; alreadyStanding: number
   leftAlone: Array<{ text: string; adGroupId: string | null; why: string }>; excluded: Array<{ slot: string; campaignId: string; adGroupId: string | null; why: string }>
+  /** ONE BRAIN — the negatives left because a product's brain runs (or the Owner holds) their campaign's negatives lever. */
+  brainSkips?: unknown
 } | { refused: string }> {
   const code = strategyMarketOf(market)
   if (!code) return { refused: 'Name a market (for example "IT"): isolation keeps one product\'s own playbook campaigns apart in one market, so nothing was planned.' }
@@ -126,7 +136,7 @@ export async function crossMatchNegations(productId: string, apply: boolean, act
   const compiled = await compileIsolationFor(row.id)
   if ('problems' in compiled) return { refused: compiled.problems.join('; ') }
   if (compiled.compiled.problems.length) return { refused: compiled.compiled.problems.join('; ') }
-  const run = await isolateProduct({ action: compiled.compiled.action, actor, dryRun: !apply })
+  const run = await isolateProduct({ action: compiled.compiled.action, actor, dryRun: !apply, ...(opts.manual === true ? { manual: true } : {}) })
   if ('refused' in run) return run
   const groupOf = new Map(run.scope.groups.map((g) => [g.adGroupId, g]))
   const proposals = run.chosen.map((a): NegationProposal => ({
@@ -141,8 +151,14 @@ export async function crossMatchNegations(productId: string, apply: boolean, act
     errors: w ? [...w.refused.map((r) => `${r.text}: ${r.reason}`), ...w.failed.map((f) => `${f.text}: ${f.error}`)] : [],
     local: w?.local ?? 0,
     alreadyStanding: (w?.alreadyStanding ?? 0) + run.plan.alreadyStanding,
-    leftAlone: [...(w?.leftAlone ?? []), ...run.plan.leftAlone].map((l) => ({ text: l.text, adGroupId: l.adGroupId, why: l.why })),
+    // ONE BRAIN AB-6 follow-up — a negative left to a product's brain (or the Owner's lock) is said with its reason and
+    // counted, never dropped from the answer: the brain's negatives module keeps that product's campaigns apart.
+    leftAlone: [
+      ...(w?.leftAlone ?? []), ...run.plan.leftAlone,
+      ...(run.leftToBrainItems ?? []),
+    ].map((l) => ({ text: l.text, adGroupId: l.adGroupId, why: l.why })),
     excluded: run.scope.excluded,
+    ...brainSkipsOutput(leverHeldOf(run.leftToBrain ?? []), run.leftToBrain ?? [], run.holdsUnread === true),
   }
 }
 

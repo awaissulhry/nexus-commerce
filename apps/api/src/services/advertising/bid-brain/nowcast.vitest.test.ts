@@ -16,7 +16,7 @@ import { decide, type Decision, type TargetFacts } from './decide.js'
 import { estimate, matureSum, weigh, YOUNG_SHARE_MAX, type DayEvidence, type Evidence, type MaturityOf } from './estimator.js'
 import { buildFacts, type MarketRows, type RunRows } from './facts.js'
 import { LAG_AGES, maturityOf, priorShares, type LagShares } from './lag-curve.js'
-import { compareNowcast, nowcastEvidence, nowcastMode, nowcastNote, nowcastOnNotes, nowcastSummaryWords, youngPctOf, type NowcastGroup } from './nowcast.js'
+import { compareNowcast, nowcastEvidence, nowcastLastSteps, nowcastMode, nowcastNote, nowcastOnNotes, nowcastSummaryWords, runForRows, stepToStore, youngPctOf, type NowcastGroup, type StepAnchor } from './nowcast.js'
 
 const ev = (clicks: number, orders = 0, salesCents = 0, costCents = 0): Evidence => ({ clicks, orders, salesCents, costCents })
 /** L(0) = 60 % for orders, 50 % for sales; full from age 7. */
@@ -195,6 +195,87 @@ describe('the shadow comparison', () => {
     expect([...notes]).toEqual([['a', 'nowcast to 2026-10-07: young days 16% of its clicks']])
     expect(youngPctOf({ clicks: 200, youngClicks: 29, youngCapped: 0, tooYoung: 0 })).toBe(14.5)
     expect(youngPctOf({ clicks: 0, youngClicks: 0, youngCapped: 0, tooYoung: 0 })).toBe(0)
+  })
+
+  it('a keyword the settled run already stepped today takes no second step in the nowcast (its step re-keyed to the nowcast day)', () => {
+    // Stepped today on the settled data day: 50¢ → 40¢; the goal still wants far lower (a 16¢ goal bid).
+    const step = { dataDay: '2026-10-01', fromCents: 50, toCents: 40 }
+    const settled = pair(facts({ currentCents: 40, lastStep: step }))
+    const nowcastFacts = (lastStep: typeof step) => facts({ currentCents: 40, dataDay: '2026-10-07', lastStep })
+    // Read raw, the nowcast's newer data day sees no step "today" and steps again from 40¢: a false difference.
+    const raw = pair(nowcastFacts(step))
+    expect(raw.decision.bidCents).toBeLessThan(settled.decision.bidCents)
+    expect(nowcastNote(settled, raw, 0)).not.toBeNull()
+    // Re-keyed, the same step anchors the nowcast too: the same decision, no note, nothing counted.
+    const steps = nowcastLastSteps(new Map([['k1', step]]), '2026-10-01', '2026-10-07')
+    const rekeyed = pair(nowcastFacts(steps.get('k1')!))
+    expect(rekeyed.decision).toMatchObject({ action: settled.decision.action, bidCents: settled.decision.bidCents })
+    expect(nowcastNote(settled, rekeyed, 0)).toBeNull()
+    expect(compareNowcast([settled], [rekeyed], new Map(), { dataDay: '2026-10-07', curve: 'c', youngPct: 0 }).summary.differ).toBe(0)
+  })
+
+  it('re-keys only an unmarked step of the settled day; an older, a newer or a nowcast step keeps its day (a new day, a new step)', () => {
+    const steps = new Map<string, StepAnchor>([
+      ['old', { dataDay: '2026-09-30', fromCents: 30, toCents: 25 }],
+      ['today', { dataDay: '2026-10-01', fromCents: 30, toCents: 25 }],
+      // Batch 2 review fix — a step between the settled day and the nowcast's (yesterday's nowcast day) is not today's.
+      ['between', { dataDay: '2026-10-03', fromCents: 30, toCents: 25 }],
+      ['ahead', { dataDay: '2026-10-07', fromCents: 30, toCents: 25 }],
+      // A step taken with the nowcast on is never re-keyed, even dated the settled day (the provisional 2-day tail).
+      ['marked', { dataDay: '2026-10-01', fromCents: 30, toCents: 25, nowcast: true }],
+    ])
+    const out = nowcastLastSteps(steps, '2026-10-01', '2026-10-07')
+    expect([...out].map(([id, s]) => [id, s.dataDay])).toEqual([['old', '2026-09-30'], ['today', '2026-10-07'], ['between', '2026-10-03'], ['ahead', '2026-10-07'], ['marked', '2026-10-01']])
+    expect(steps.get('today')!.dataDay).toBe('2026-10-01') // the run's own map is not changed
+    // Switched on (rows read with the nowcast carry the settled day): the run's anchors re-keyed; settled rows: the same run.
+    const run = { lastSteps: steps, other: 1 }
+    expect(runForRows({ dataDay: '2026-10-01' }, run)).toBe(run)
+    expect(runForRows({ dataDay: '2026-10-07', nowcast: { settledDay: '2026-10-01' } }, run).lastSteps.get('today')!.dataDay).toBe('2026-10-07')
+  })
+
+  it('stores the step the next run anchors on: its own, else the same data day\'s carried; marked when the nowcast is on', () => {
+    const own = { dataDay: '2026-10-07', fromCents: 40, toCents: 30 }
+    expect(stepToStore({ dataDay: '2026-10-07', step: own }, undefined, false)).toEqual(own)
+    expect(stepToStore({ dataDay: '2026-10-07', step: own }, undefined, true)).toEqual({ ...own, nowcast: true })
+    const carried = { dataDay: '2026-10-07', fromCents: 50, toCents: 40 }
+    expect(stepToStore({ dataDay: '2026-10-07', step: null }, carried, true)).toEqual({ ...carried, nowcast: true })
+    expect(stepToStore({ dataDay: '2026-10-08', step: null }, carried, true)).toBeNull() // another data day: nothing carried
+    // Read without the nowcast again, a carried step loses the mark.
+    expect(stepToStore({ dataDay: '2026-10-07', step: null }, { ...carried, nowcast: true }, false)).toEqual(carried)
+  })
+
+  it('switched on, day after day: the keyword steps once per data day and is never held by yesterday\'s step (batch 2 review fix)', () => {
+    const day = (n: number) => new Date(Date.UTC(2026, 9, n)).toISOString().slice(0, 10)
+    // The goal wants far lower every day (a goal bid near 27¢, well below the bid all week): one 25 % step per data day.
+    // Settled 7 days behind yesterday (attribution lag), and the provisional tail (NEXUS_ADS_SETTLED_LAG): the day before
+    // yesterday — there yesterday's nowcast day IS today's settled day, which an unmarked step would be re-keyed from.
+    for (const lag of [7, 1]) {
+      let current = 400
+      let stored: StepAnchor | null = null
+      const run = (T: number, on: boolean) => {
+        const nowcastDay = day(T - 1)
+        const settledDay = day(T - 1 - lag)
+        const rows = on ? { dataDay: nowcastDay, nowcast: { settledDay } } : { dataDay: settledDay }
+        const anchors = runForRows(rows, { lastSteps: new Map(stored ? [['k1', stored]] : []) }).lastSteps
+        const d = decide(facts({ currentCents: current, dataDay: rows.dataDay, lastStep: anchors.get('k1') ?? null }))
+        if (d.action === 'write') current = d.bidCents
+        stored = stepToStore(d, anchors.get('k1'), on)
+        return current
+      }
+      // Day 9, switch off: one step on the settled data day. The switch goes on the same day: no second step.
+      const offStep = run(9, false)
+      expect(offStep).toBeLessThan(400)
+      expect(run(9, true)).toBe(offStep)
+      // Days 10–14, switch on, two runs a day: one step each day, the rerun the same bid.
+      const bids = [offStep]
+      for (let T = 10; T <= 14; T++) {
+        const first = run(T, true)
+        expect(first, `lag ${lag}, day ${T}: a new data day, a new step`).toBeLessThan(bids[bids.length - 1])
+        expect(first, `lag ${lag}, day ${T}: at most one 25 % step`).toBeGreaterThanOrEqual(Math.floor(bids[bids.length - 1] * 0.75))
+        expect(run(T, true), `lag ${lag}, day ${T}: the rerun takes no second step`).toBe(first)
+        bids.push(first)
+      }
+    }
   })
 
   it('a brake on both sides is no difference', () => {

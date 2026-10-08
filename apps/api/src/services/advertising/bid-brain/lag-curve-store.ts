@@ -165,7 +165,7 @@ export async function fitLagCurves(opts: { now?: Date } = {}): Promise<LagFitSum
     const days = byMarket.get(market) ?? []
     const seed = seeds.get(market) ?? null
     const prior = marketPrior(seed, LAG_AD_PRODUCT)
-    const curve = fitLagCurve(lagPoints(days, windowDays), prior, { seed })
+    const curve = fitLagCurve(lagPoints(days, windowDays), prior, { seed, windowDays })
     const calibration = calibrate(days, prior, { evalDays: CALIBRATION_DAYS, windowDays, seed })
     // A product's own curve: the campaign days of campaigns that advertise that one family only.
     const byFamily = new Map<string, typeof days>()
@@ -176,7 +176,7 @@ export async function fitLagCurves(opts: { now?: Date } = {}): Promise<LagFitSum
       ;(byFamily.get(fam) ?? byFamily.set(fam, []).get(fam)!).push(d)
     }
     const products = [...byFamily].flatMap(([fam, list]) => {
-      const c = fitProductCurve(lagPoints(list, windowDays), curve)
+      const c = fitProductCurve(lagPoints(list, windowDays), curve, windowDays)
       return c ? [{ fam, curve: c }] : []
     })
     await store(market, MARKET_SCOPE, curve, calibration, now)

@@ -22,6 +22,8 @@
 import prisma from '../../../db.js'
 import type { ActionResult } from '../../automation-rule.service.js'
 import { writeNegativeKeyword } from '../ads-negative-kw.service.js'
+import { adsMode } from '../ads-api-client.js'
+import { automationHaltRefusal } from '../ads-write-gate.js'
 import { familyOnly, type ProductFamily } from '../ads-winner-lock.js'
 import { loadCatalog } from '../ads-strategy/load.js'
 import { strategyMarketOf } from '../ads-strategy/terms.js'
@@ -61,6 +63,8 @@ export interface IsolationRun {
   written: IsolationWritten | null
   /** ONE BRAIN AB-6 — the negatives left because a product's brain owns (or the Owner holds) their campaign's negatives. */
   leftToBrain: LeverSkip[]
+  /** The same negatives, each with its text, ad group and why (for a caller that lists what it left alone). */
+  leftToBrainItems?: Array<{ text: string; adGroupId: string; why: string }>
   /** Who holds the levers could not be read: nothing was skipped on a guess, the write gate judged each write. */
   holdsUnread?: boolean
 }
@@ -88,8 +92,16 @@ async function stillOwned(playbookId: string, add: PlannedNegative): Promise<str
   return live ? null : `Not written: its keyword "${add.owner.text}" is no longer live, so its searches would have nowhere to go.`
 }
 
-async function writeAll(playbookId: string, adds: readonly PlannedNegative[], actor: string, family: ProductFamily): Promise<IsolationWritten> {
+async function writeAll(playbookId: string, adds: readonly PlannedNegative[], actor: string, family: ProductFamily, opts: { manual?: boolean } = {}): Promise<IsolationWritten> {
   const w: IsolationWritten = { added: 0, local: 0, alreadyStanding: 0, refused: [], failed: [], leftAlone: [], negativeIds: [] }
+  // Batch 2 fix — a person's apply (AME.16 cross-match) carries his mark (the gate judges it as a person: the brain's
+  // negatives lever, the allowlist and pins let him through), but the account halt still holds it as it did before it
+  // carried the mark: each negative refused in the gate's own words, nothing written.
+  const halted = opts.manual === true && adsMode() !== 'sandbox' ? await automationHaltRefusal() : null
+  if (halted) {
+    for (const add of adds) w.refused.push({ text: add.text, adGroupId: add.adGroupId, deniedAt: halted.deniedAt, reason: halted.reason })
+    return w
+  }
   // Rule 3 again, just before the writes: an ad group that now also advertises another product gets none.
   const owned = await familyOnly([...new Set(adds.map((a) => a.adGroupId))], family)
   const foreign = new Map(owned.excluded.map((e) => [e.adGroupId, e.why]))
@@ -98,7 +110,7 @@ async function writeAll(playbookId: string, adds: readonly PlannedNegative[], ac
     if (gone) { w.leftAlone.push({ kind: add.kind, text: add.text, adGroupId: add.adGroupId, slot: add.slot, why: gone }); continue }
     const r = await writeNegativeKeyword({
       scope: 'AD_GROUP', adGroupId: add.adGroupId, keywordText: add.text, matchType: add.match, protectConverting: null, userId: actor,
-      evidence: { targetKey: `isolation:${add.kind}`, note: add.why },
+      evidence: { targetKey: `isolation:${add.kind}`, note: add.why }, ...(opts.manual === true ? { manual: true } : {}),
     })
     if (r.outcome === 'created' || r.outcome === 'local') {
       if (r.reachedAmazon) w.added++
@@ -112,7 +124,11 @@ async function writeAll(playbookId: string, adds: readonly PlannedNegative[], ac
 }
 
 /** One run: scope, fresh plan, the items it acts on and (unless a dry run) the writes. */
-export async function isolateProduct(args: { action: IsolationAction; actor: string; dryRun: boolean; items?: ReadonlyArray<{ text: string; match: string; adGroupId: string }> | null }): Promise<IsolationRun | { refused: string }> {
+export async function isolateProduct(args: {
+  action: IsolationAction; actor: string; dryRun: boolean; items?: ReadonlyArray<{ text: string; match: string; adGroupId: string }> | null
+  /** Batch 2 fix — a person's own apply (AME.16 cross-match, the route): his mark goes to the lever holds and the gate. */
+  manual?: boolean
+}): Promise<IsolationRun | { refused: string }> {
   const loaded = await loadIsolation(args.action)
   if ('refused' in loaded) return loaded
   const { inputs } = loaded
@@ -128,16 +144,20 @@ export async function isolateProduct(args: { action: IsolationAction; actor: str
   }
   // ONE BRAIN AB-6 — a negative in a campaign whose negatives a product's brain owns (or the Owner holds) is left to it, in
   // a dry run too (brain/engine-skips.ts; nothing read unless a product is enrolled).
-  const holds = await readLeverHolds(chosen.map((a) => a.campaignId), { actor: args.actor }, 'isolate_product_terms')
+  const holds = await readLeverHolds(chosen.map((a) => a.campaignId), { actor: args.actor, ...(args.manual === true ? { manual: true } : {}) }, 'isolate_product_terms')
   const leftToBrain: LeverSkip[] = []
+  const leftToBrainItems: NonNullable<IsolationRun['leftToBrainItems']> = []
   chosen = chosen.filter((a) => {
     const skip = holds.skip(a.campaignId, 'negatives')
-    if (skip) leftToBrain.push(skip)
+    if (skip) {
+      leftToBrain.push(skip)
+      leftToBrainItems.push({ text: a.text, adGroupId: a.adGroupId, why: `left alone: ${skip.reason} (one owner per lever)` })
+    }
     return !skip
   })
   chosen = chosen.slice(0, MAX_ISOLATION_ITEMS)
-  const written = args.dryRun ? null : await writeAll(args.action.playbookId, chosen, args.actor, inputs.family)
-  return { scope: { adGroups: inputs.scope.length, groups: inputs.scope, excluded: inputs.excluded }, plan, chosen, noLongerDue, written, leftToBrain, ...(holds.unread ? { holdsUnread: true } : {}) }
+  const written = args.dryRun ? null : await writeAll(args.action.playbookId, chosen, args.actor, inputs.family, { manual: args.manual === true })
+  return { scope: { adGroups: inputs.scope.length, groups: inputs.scope, excluded: inputs.excluded }, plan, chosen, noLongerDue, written, leftToBrain, leftToBrainItems, ...(holds.unread ? { holdsUnread: true } : {}) }
 }
 
 const top = <T,>(key: string, list: readonly T[], n = 5) => (list.length ? { [key]: list.length, [`top${key[0].toUpperCase()}${key.slice(1)}`]: list.slice(0, n) } : {})

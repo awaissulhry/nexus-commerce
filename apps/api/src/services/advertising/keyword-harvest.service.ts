@@ -354,6 +354,8 @@ export interface HvCensus {
     stored: number
     resolvedUnique: number
     ambiguous: number
+    /** Batch 2 review fix — one candidate that does not serve (its campaign or ad group not ENABLED): none proposed. */
+    paused: number
     none: number
     wouldNegate: number
     wouldNotNegate: number
@@ -890,6 +892,8 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
       stored: rowsAll.filter((r) => r.destination?.source === 'stored').length,
       resolvedUnique: rowsAll.filter((r) => r.destination?.source === 'resolved-unique').length,
       ambiguous: rowsAll.filter((r) => r.destination?.source === 'resolved-ambiguous').length,
+      // Batch 2 review fix — one candidate, but its campaign or ad group does not serve: not proposed, a person chooses.
+      paused: rowsAll.filter((r) => r.destination?.source === 'resolved-paused').length,
       none: rowsAll.filter((r) => !r.destination || r.destination.source === 'none').length,
       // The §4.1 coupling as two numbers: how many promotions would ALSO negate their source, and
       // how many would silently leave the discovery ad group competing for the same term.
@@ -923,7 +927,7 @@ export async function getKeywordHarvest(req: HvRequest): Promise<HvPayload> {
   if (req.dest && req.dest !== 'all') {
     rows = rows.filter((r) => {
       const s = r.destination?.source ?? 'none'
-      return req.dest === 'proposed' ? (s === 'resolved-unique' || s === 'resolved-ambiguous')
+      return req.dest === 'proposed' ? (s === 'resolved-unique' || s === 'resolved-ambiguous' || s === 'resolved-paused')
         : req.dest === 'overridden' ? s === 'stored'
         : s === 'none'
     })

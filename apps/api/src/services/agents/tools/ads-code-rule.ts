@@ -9,7 +9,11 @@
  *   the strategy raised          set-ads-strategy (a raise), set-ads-playbook (what adds spend), an apply-ads-playbook
  *                                phase switch that raises
  *   someone else's pause lifted  enable-ads with includePeoplesPauses (a person, Seller Central, an unknown writer, a
- *                                rule now off)
+ *                                rule now off), set-ads-brain op leave resuming the brain's own pauses (the brain going off)
+ *   the brain let loose          (lead decision on batch 2's review, 2026-10-08) set-ads-brain op set-value RAISING a
+ *                                product's portfolio cap limit (portfolioCapLimitCents: a larger monthly cap may then be
+ *                                written, the only hard limit Amazon enforces), and set-brain-kill-switch op end (the brain
+ *                                writes that lever again). Lowering the limit, or setting a kill, stays a normal approval.
  *
  * Every other request that can add spend is DAY-TO-DAY: it lists itself in the preview's `raises`, says so in its effect
  * (no silent raise), the card warns where it goes past the business's own limits (`reach.pastOwnLimits`, where a write
@@ -41,6 +45,14 @@ export const CODE_RULE = {
   'enable-ads: includePeoplesPauses': true,
   // BID BRAIN BB-6 — a campaign under the bid brain: a new bid writer going live.
   'set-bid-brain-enrollment: live': true,
+  // ONE BRAIN — set-ads-brain: a lever of a product's brain to AUTO (or a campaign under the bid brain), whichever op does it.
+  'set-ads-brain: a lever to AUTO': true,
+  // Batch 2 fix — set-ads-brain op leave lifting the brain's own pauses: an automation's pause lifted (the brain going off).
+  'set-ads-brain: leave lifts the brain\'s pauses': true,
+  // Batch 2 review fix (lead decision) — a raise of a product's portfolio cap limit: a larger monthly cap may be written.
+  'set-ads-brain: a portfolio cap limit raised': true,
+  // Batch 2 review fix (lead decision) — ending a kill switch: the brain writes that lever again.
+  'set-brain-kill-switch: end': true,
   // ── Day-to-day: listed in raises, warned, a normal approval ──
   'set-hourly-bid-plan': false,
   'set-portfolio': false,
@@ -76,7 +88,8 @@ export const __codeRuleTest = {
 /** What a preview says (`noCode`) when it can add spend and approving it needs no code. */
 export const DAY_TO_DAY_NO_CODE = 'It can add spend (listed in raises), as a day-to-day change: a person\'s approval sends it, with no '
   + 'authenticator code (the Owner\'s code rule keeps the code for new structures going live, new product ads, a strategy or '
-  + 'playbook raise and lifting someone else\'s pause). Where it goes past the business\'s own limits, the card warns.'
+  + 'playbook raise, lifting someone else\'s pause, the ads brain to AUTO, a raise of its portfolio cap limit and ending its '
+  + 'kill switch). Where it goes past the business\'s own limits, the card warns.'
 
 /** What a preview says (`noCode`) when it adds no spend. */
 export const ADDS_NO_SPEND = 'It adds no spend: it needs no authenticator code.'

@@ -72,8 +72,8 @@ export const GRAM_FLOOR = {
 }
 /** B0-prefixed 10-char alphanumerics: a product id, not a word. Negating one as a keyword is nonsense. */
 const ASIN_RE = /^b0[a-z0-9]{8}$/i
-/** §5 — a catalogue gap, not waste. Labelled, never ranked as waste. */
-const SIZE_RE = /^(\d+(xl|xs)|x{2,}l|taglia|talla|size|grande|grosse|große)$/i
+/** §5 — a catalogue gap, not waste. Labelled, never ranked as waste. ONE BRAIN AB-10 reads it too (brain/negatives.ts n-grams). */
+export const SIZE_RE = /^(\d+(xl|xs)|x{2,}l|taglia|talla|size|grande|grosse|große)$/i
 
 /**
  * Amazon negative-PHRASE semantics: the gram's tokens must appear as a contiguous run.

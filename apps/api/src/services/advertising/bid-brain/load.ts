@@ -145,15 +145,19 @@ export async function loadMarket(market: string, opts: { now?: Date; campaignIds
     opts.light ? Promise.resolve({ evidence: new Map<string, Evidence>(), adSales30: new Map<string, number>() }) : nc ? Promise.resolve(nc) : loadEvidence(targetIds, window),
     newestReport(targetIds, now),
   ])
-  if (nc) return { market, dataDay: nc.dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, window: nc.window, nowcast: { curve: nc.curve, youngShare: nc.youngShare, totals: nc.totals } }
+  if (nc) return { market, dataDay: nc.dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, window: nc.window, nowcast: { curve: nc.curve, youngShare: nc.youngShare, totals: nc.totals, settledDay: dataDay } }
   return { market, dataDay, campaigns, adGroups, targets, evidence, adSales30, prices, newestReportAt, ...(opts.light ? { light: true } : {}) }
 }
 
-/** One market as loadMarket reads it. BB-15 — `window` / `nowcast`: present when the nowcast's evidence was read. */
+/**
+ * One market as loadMarket reads it. BB-15 — `window` / `nowcast`: present when the nowcast's evidence was read;
+ * `nowcast.settledDay`: the settled window's data day of the same run (the step anchors keyed to it are re-keyed to the
+ * nowcast's day, nowcast.ts nowcastLastSteps).
+ */
 export type LoadedMarket = MarketRows & {
   newestReportAt: Date | null
   window?: { since: Date; until: Date }
-  nowcast?: { curve: string; youngShare: Map<string, number>; totals: NowcastEvidence['totals'] }
+  nowcast?: { curve: string; youngShare: Map<string, number>; totals: NowcastEvidence['totals']; settledDay: string }
 }
 
 /** BB-15 — the nowcast's window: MAX_WINDOW_DAYS days ending yesterday (UTC). */
@@ -472,7 +476,7 @@ export interface PreviousDecision {
   currentCents: number
   decidedCents: number
   createdAt: Date
-  lastStep: { dataDay: string; fromCents: number; toCents: number } | null
+  lastStep: { dataDay: string; fromCents: number; toCents: number; nowcast?: boolean } | null
   /** Pre-go-live — the data day it decided on, and what became of its write (`evidence.sent.sent`: queued, refused, …). */
   dataDay?: string
   sent?: string | null
@@ -499,8 +503,11 @@ export async function previousDecisions(targetIds: readonly string[], now: Date)
      WHERE d."targetId" = ANY(${[...targetIds]}::text[]) AND d."createdAt" >= ${new Date(now.getTime() - 30 * 86_400_000)}
      ORDER BY d."targetId", d."createdAt" DESC`)
   return new Map(rows.map((r) => {
-    const s = r.lastStep as { dataDay?: unknown; fromCents?: unknown; toCents?: unknown } | null
-    const lastStep = s && typeof s.dataDay === 'string' && typeof s.fromCents === 'number' && typeof s.toCents === 'number' ? { dataDay: s.dataDay, fromCents: s.fromCents, toCents: s.toCents } : null
+    const s = r.lastStep as { dataDay?: unknown; fromCents?: unknown; toCents?: unknown; nowcast?: unknown } | null
+    // Batch 2 review fix — a step taken with the nowcast on keeps its mark (nowcast.ts nowcastLastSteps never re-keys it).
+    const lastStep = s && typeof s.dataDay === 'string' && typeof s.fromCents === 'number' && typeof s.toCents === 'number'
+      ? { dataDay: s.dataDay, fromCents: s.fromCents, toCents: s.toCents, ...(s.nowcast === true ? { nowcast: true } : {}) }
+      : null
     return [r.targetId, { action: r.action, layer: r.layer, currentCents: r.currentCents, decidedCents: r.decidedCents, createdAt: r.createdAt, lastStep, dataDay: r.dataDay, sent: r.sent }]
   }))
 }
@@ -543,13 +550,16 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
   // BB-18 — the bid that served each keyword's window clicks; BB-7 — the hourly plan's hour of each owned campaign.
   const ownedHere = campaignIds.filter((id) => opts.owned?.has(id))
   const { minBidEntriesToday } = ownedHere.length ? await import('../../../jobs/ad-rank-defend.job.js') : { minBidEntriesToday: null }
-  const [servingBids, planHours, minBidEntries, spendGuard] = await Promise.all([
+  // Batch 2 fix — the money brain's brake on each campaign whose product's budgets lever is the brain's (money-brake.ts).
+  const { loadMoneyBrakes } = await import('./money-brake.js')
+  const [servingBids, planHours, minBidEntries, spendGuard, moneyBrakes] = await Promise.all([
     // BB-15 — under the nowcast, the bid that served its window (to yesterday).
     m.light ? Promise.resolve(new Map<string, number>()) : loadServingBids(m.targets.filter((t) => groupSet.has(t.adGroupId)), m.window ?? settledBounds(MAX_WINDOW_DAYS, 'SPONSORED_PRODUCTS', { now })),
     loadPlanHours(ownedHere, opts.clockNow ?? now),
     minBidEntriesToday ? minBidEntriesToday(ownedHere, opts.clockNow ?? now, ['rank-defend', 'bid-brain']) : Promise.resolve(new Map<string, number>()),
     // BB-10 — the brain's own raise cap: this hour's spend against the same hour of the last 7 days.
     loadSpendGuard(ownedHere, opts.clockNow ?? now),
+    loadMoneyBrakes(campaignIds, m.market, opts.clockNow ?? now),
   ])
   return {
     run: {
@@ -567,6 +577,7 @@ export async function loadRun(m: LoadedMarket, now: Date, opts: { owned?: Readon
       planHours,
       minBidEntries,
       spendGuard,
+      ...(moneyBrakes.size ? { moneyBrakes } : {}),
       owned: new Set(ownedHere),
     },
     lastWrites,

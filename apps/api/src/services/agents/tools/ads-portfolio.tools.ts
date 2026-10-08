@@ -362,10 +362,11 @@ async function decide(raw: Record<string, unknown>, ctx: Pick<ToolContext, 'appr
       : `Not queued: portfolio ${quote(plan.portfolio!.name)} — ${gate.nexusOnly}.`)
   }
   let reach = liveReachOf(gate.decision)
-  // A cap set with a new portfolio is a second write, judged by its own value (the gate's value cap).
+  // A cap set with a new portfolio is a second write, judged by its own value — a portfolio's cap: against the portfolio
+  // cap limit (Owner decision 2A; a new portfolio holds no campaign, so the server's), not the per-write cap.
   if (reach.reach !== 'refused' && plan.op === 'create' && payloadValueCents) {
     const { checkAdsWriteGate } = await import('../../advertising/ads-write-gate.js')
-    const second = liveReachOf(await checkAdsWriteGate({ marketplace: plan.market, payloadValueCents }))
+    const second = liveReachOf(await checkAdsWriteGate({ marketplace: plan.market, payloadValueCents, dimension: 'portfolio' }))
     if (second.reach === 'refused') reach = second
   }
   if (reach.reach === 'refused') return refuse(reachRefusal(reach))

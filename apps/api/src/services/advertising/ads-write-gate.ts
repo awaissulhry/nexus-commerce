@@ -4,7 +4,9 @@
  * Live writes require ALL of:
  *   1. NEXUS_AMAZON_ADS_MODE=live (deploy-wide env flag)
  *   2. AmazonAdsConnection.mode === 'production' AND writesEnabledAt != null
- *   3. payload value ≤ NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS (default 50000 = €500)
+ *   3. payload value ≤ NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS (default 50000 = €500) — except a portfolio's own write
+ *      (its monthly cap), judged against its own limit: NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS (default 200000 = €2,000)
+ *      or the Owner's per product (Owner decision 2A, brain/portfolio-cap-limit.ts)
  *   4. a checked Amazon limits row for the market, and a bid/budget inside it (6b, @nexus/shared/ads-market-limits)
  *
  * Failure flips the mutation to dry-run mode (worker logs the deny +
@@ -24,6 +26,8 @@ import { adsMode } from './ads-api-client.js'
 import { dimensionsForWrite, leverDimensionsForWrite, pinDenial, type AuthorityDimension } from './ads-authority-pins.js'
 import { BRAIN_ACTOR, brainLiveCeiling, brainOwnedCampaignIds } from './bid-brain/live.js'
 import { campaignLeverOwners, portfolioCapHold, type LeverHold } from './brain/lever-owners.js'
+import { portfolioCapLimitOf, raiseLimitWords, serverPortfolioCapLimitCents } from './brain/portfolio-cap-limit.js'
+import { campaignKills, killWords, openKills, type BrainKill } from './brain/kill-switch.js'
 import { brainDayMoveVerdict, brainDayOpeningCents, isMoneyActor, ladderBaseCents, LADDER_GATE_MAX_PCT, MONEY_BUDGETS_ACTOR, moneyLogStepOf } from './brain/budget-ladder.js'
 import type { BrainLever } from './brain/levers.js'
 import { protectedNegativeRefusal } from './ads-negation-policy.js'
@@ -39,6 +43,8 @@ export type GateDeniedAt =
   | 'connection'
   | 'connection_writes'
   | 'value_cap'
+  // OWNER DECISION 2A — a portfolio's own write (its monthly cap) above the portfolio cap limit (portfolioCapLimitOf).
+  | 'portfolio_cap_limit'
   | 'campaign_allowlist'
   | 'daily_cap'
   // ADX A1 — bounds live on the entity (Campaign.minBidCents/maxBidCents) rather
@@ -74,8 +80,13 @@ export type GateDeniedAt =
   // ONE BRAIN AB-5 — the Owner locked the whole lever at his own value: every automatic writer is refused, the brain too.
   | 'owner_locked'
   // ONE BRAIN AB-8 — the brain's money writer (brain/budget-ladder.ts MONEY_ACTORS) on a lever the brain does not own: a
-  // server switch not live, a product not enrolled, a lever at OFF or OBSERVE, a campaign excluded or shared.
+  // server switch not live, a product not enrolled, a lever at OFF or OBSERVE, a campaign excluded or shared. AB-12 — and the
+  // brain's own pause or resume (BRAIN_STATE_ACTOR) on a campaign whose state lever it does not own, the same way. AB-10 —
+  // and its negatives writer (BRAIN_NEGATIVES_ACTOR) on a campaign whose negatives lever it does not own.
   | 'brain_not_owner'
+  // ONE BRAIN AB-15 — the Owner's kill switch stopped this lever of the brain (brain/kill-switch.ts): the brain's own actor on
+  // it is refused, a lowering included; every other writer is judged as before.
+  | 'brain_killed'
 
 /**
  * 3A (Owner decided 2026-10-06) — the limits that are HIS: his campaign's bid and budget bounds and his bid policies
@@ -87,13 +98,14 @@ export type GateDeniedAt =
  * W1-7 — `product_protected`: a negative on the ASIN of a product his ads strategy protects. His own setting, so the same
  * rule: his add is warned, an engine's is refused. (A protected TERM still refuses everyone: unchanged.)
  */
-export type OwnLimitKind = 'entity_bounds' | 'spend_ceiling' | 'budget_day_move' | 'value_cap' | 'cpc_ceiling' | 'product_protected'
+export type OwnLimitKind = 'entity_bounds' | 'spend_ceiling' | 'budget_day_move' | 'value_cap' | 'portfolio_cap_limit' | 'cpc_ceiling' | 'product_protected'
 export interface OwnLimit { limit: OwnLimitKind; reason: string }
 export const OWN_LIMIT_LABEL: Record<OwnLimitKind, string> = {
   entity_bounds: 'your bid or budget limit',
   spend_ceiling: 'your spend ceiling',
   budget_day_move: 'the daily budget-move limit',
   value_cap: 'the per-change value cap',
+  portfolio_cap_limit: 'the portfolio cap limit',
   cpc_ceiling: 'your CPC ceiling',
   product_protected: 'a product your ads strategy protects',
 }
@@ -256,6 +268,22 @@ export function maxWriteValueCents(): number {
   return 50_000 // €500 default
 }
 
+/**
+ * OWNER DECISION 2A — the server's limit of an Amazon portfolio's monthly cap (€2,000 unless
+ * NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS says otherwise); the Owner's own per product replaces it for that product's
+ * portfolios (brain/portfolio-cap-limit.ts portfolioCapLimitOf, which the gate asks).
+ */
+export const maxPortfolioCapCents = serverPortfolioCapLimitCents
+
+/**
+ * OWNER DECISION 2A — a portfolio's own write, whose value is the portfolio's cap: no campaign, and the portfolio named (a
+ * queued portfolio write, the Portfolios page's push, the brain's cap) or the portfolio lever named (a cap set with a new
+ * portfolio). A campaign moved into a portfolio names its campaign: it is not one. Pure.
+ */
+export function isPortfolioOwnWrite(ctx: Pick<GateContext, 'campaignId' | 'portfolioId' | 'dimension'>): boolean {
+  return ctx.campaignId === undefined && (!!ctx.portfolioId || ctx.dimension === 'portfolio')
+}
+
 /** UTC calendar day as 'YYYY-MM-DD' — the bucket key for the daily-write cap. */
 export function utcDayKey(d: Date = new Date()): string {
   return d.toISOString().slice(0, 10)
@@ -359,6 +387,24 @@ async function brainOwnedRefusal(campaignId: string, actor: string | null, what 
  *                of the gate, so the write is tried again later (productBrainRefusal). A person never needs the read.
  */
 export const PRODUCT_BRAIN_ACTOR = 'automation:ads-brain'
+/**
+ * ONE BRAIN AB-10 — the brain's negatives writer (brain/negatives-run.ts): the AB-5 rule passes it on a negatives lever its
+ * product's brain owns, and the owned-lever backstop below (brainWriterRefusal) refuses it on every other.
+ */
+export const BRAIN_NEGATIVES_ACTOR = `${PRODUCT_BRAIN_ACTOR}-negatives` as const
+/**
+ * ONE BRAIN AB-11 — the brain's harvest writer (brain/harvest.ts HARVEST_ACTOR: the keyword in its destination and the
+ * negative exact in its sources, one pair). Batch 2 review fix — it writes only where a product's brain OWNS the campaign's
+ * harvest lever (brainWriterRefusal), like the money and negatives writers: on a campaign no brain holds, the AB-5 rule
+ * alone would let it through as an automatic writer.
+ */
+export const BRAIN_HARVEST_ACTOR = `${PRODUCT_BRAIN_ACTOR}-harvest` as const
+/**
+ * ONE BRAIN AB-12 — the brain's state writer (D4 = A: it pauses alone for a stop of several days and resumes when the stop
+ * ends; brain/state-run.ts). A writer of PRODUCT_BRAIN_ACTOR's family, so an owned state lever passes it as the brain; on
+ * top of that it lands only where a product's brain OWNS the campaign's state lever (brainStateNotOwnedRefusal).
+ */
+export const BRAIN_STATE_ACTOR = `${PRODUCT_BRAIN_ACTOR}-state` as const
 const BID_BRAIN_LEVERS: ReadonlySet<BrainLever> = new Set<BrainLever>(['bids', 'adGroupBids', 'placements', 'biddingStrategy'])
 const BRAIN_OBEYS_LOCKS_ITSELF: ReadonlySet<BrainLever> = new Set<BrainLever>(['placements', 'biddingStrategy'])
 
@@ -457,6 +503,95 @@ async function productBrainRefusal(target: { campaignId: string; name?: string |
   return null
 }
 
+/**
+ * ONE BRAIN AB-12 — the brain's own pause or resume (BRAIN_STATE_ACTOR) lands only where a product's brain OWNS the
+ * campaign's state lever (enrolled, the lever at PROPOSE or AUTO there, not excluded, not locked — brain/lever-owners.ts),
+ * and only under the live ceiling, where the gate judges levers at all. Anywhere else — nothing held (the lever at OBSERVE
+ * or OFF, the campaign excluded or shared, nothing enrolled) or a shadow ceiling — it is refused, so an Owner's choice made
+ * while the write waited in the queue still wins at dispatch. A lock is refused before this, in the Owner's words
+ * (productBrainRefusal). Null: it may land. A holder that cannot be read throws, as every failed read in the gate does.
+ */
+export async function brainStateNotOwnedRefusal(target: { campaignId: string; name?: string | null }): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const where = `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}`
+  if (!brainLiveCeiling()) {
+    return { allowed: false, deniedAt: 'brain_not_owner', reason: `${BRAIN_STATE_ACTOR} changes the state of ${where} only while the brain's server switch is live (NEXUS_BID_BRAIN_MODE=live): it is not, so the brain only watches. Nothing was changed.` }
+  }
+  const hold = (await campaignLeverOwners([target.campaignId])).get(target.campaignId)?.levers.state
+  if (hold?.kind === 'owned') return null
+  return {
+    allowed: false,
+    deniedAt: 'brain_not_owner',
+    reason: `no product's brain owns the state (pause, enable, archive) of ${where}${hold ? ` (${hold.why})` : ''}: the brain pauses and resumes only a campaign whose state lever it owns — enrolled, the lever at PROPOSE or AUTO, not excluded, not locked. Nothing was changed.`,
+  }
+}
+
+/**
+ * ACR.0.7 — the account halt's refusal (the anomaly breaker, the operator's Stop, autonomy OFF, the deploy kill switch),
+ * for a write the halt holds; null when nothing is stopped. The gate asks it for every write but a lowering and a person's
+ * own (1e); batch 2 fix — the AME.16 cross-match asks it itself for a person's apply, whose halt rule was kept when it
+ * gained the person mark (ads-playbook/isolation-run.ts). Live mode only: the sandbox returns before it.
+ */
+export async function automationHaltRefusal(): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const { getAutomationState } = await import('./ads-automation-state.service.js')
+  const state = await getAutomationState()
+  if (!state.effectivelyStopped) return null
+  const why = state.haltReason
+    ? `halted: ${state.haltReason}`
+    : state.autonomy === 'OFF' ? 'account autonomy is OFF' : 'automation is stopped'
+  return {
+    allowed: false,
+    reason: `ads automation is stopped (${why}) — resume in the Control Room to allow writes`,
+    deniedAt: 'automation_halted',
+  }
+}
+
+/**
+ * ONE BRAIN AB-15 — the levers of a write the brain's OWN actor writes, which the Owner's kill switch can stop: the bid brain
+ * (BRAIN_ACTOR) on the levers it writes (keyword bids, ad group bids, placements, bidding strategy), every writer of the
+ * product brain's family (PRODUCT_BRAIN_ACTOR, exactly or `-<what>`: money, state, negatives, harvest) on every lever it
+ * names. A person (`manual`) and every other actor — the safety owners, auto-undo, the repairs, the other engines — write
+ * none here. Pure.
+ */
+export function brainKillLevers(levers: readonly BrainLever[], ctx: Pick<GateContext, 'actor' | 'manual'>): BrainLever[] {
+  const actor = ctx.actor ?? ''
+  if (!actor || ctx.manual === true) return []
+  if (actor === BRAIN_ACTOR) return levers.filter((l) => BID_BRAIN_LEVERS.has(l))
+  return actorMatches(actor, [PRODUCT_BRAIN_ACTOR]) ? [...levers] : []
+}
+
+/** AB-15 — the refusal of the brain's own actor on a lever the kill switch stopped at `where`. Pure. */
+export function brainKillDecision(lever: BrainLever, kill: BrainKill, where: string, actor: string | null | undefined): Extract<GateDecision, { allowed: false }> {
+  return {
+    allowed: false,
+    deniedAt: 'brain_killed',
+    reason: `the ${LEVER_WORDS[lever]} of ${where} is ${killWords(kill)}: ${actor || 'the brain'} may not change it — the brain writes that lever again only once the kill ends (set-brain-kill-switch). A person's edit, a request a person approved and the safety checks still pass; the brain's other levers are not affected. Nothing was changed.`,
+  }
+}
+
+/**
+ * AB-15 — the refusal for the brain's own actor on a lever the Owner's kill switch stopped, on one campaign or on one
+ * portfolio's cap (stopped when a kill stops the portfolioCap lever of a product one of its campaigns advertises); null:
+ * nothing stopped there, or a writer the kill does not hold. Reads only for the brain's own actors (brainKillLevers); no
+ * open kill in the business is one remembered query (brain/kill-switch.ts). A failed read goes out of the gate as an error
+ * (the write waits and is sent again), as every failed read in it does.
+ */
+async function brainKillRefusal(target: { campaignId: string; name?: string | null } | { portfolioId: string }, levers: readonly BrainLever[], ctx: GateContext): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const judged = brainKillLevers(levers, ctx)
+  if (!judged.length) return null
+  if ('campaignId' in target) {
+    const kills = (await campaignKills([target.campaignId], judged)).get(target.campaignId)
+    const lever = judged.find((l) => kills?.[l])
+    return lever ? brainKillDecision(lever, kills![lever]!, `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}`, ctx.actor) : null
+  }
+  // Nothing stops a portfolio cap in the business: one remembered query, no read of the portfolio.
+  if (!judged.includes('portfolioCap') || !(await openKills()).some((k) => k.lever === 'portfolioCap')) return null
+  const row = await prisma.amazonAdsPortfolio.findFirst({ where: { OR: [{ id: target.portfolioId }, { externalPortfolioId: target.portfolioId }] }, select: { externalPortfolioId: true } })
+  const campaigns = await prisma.campaign.findMany({ where: { portfolioId: row?.externalPortfolioId ?? target.portfolioId, status: { not: 'ARCHIVED' } }, select: { id: true } })
+  const kills = await campaignKills(campaigns.map((c) => c.id), ['portfolioCap'])
+  const kill = [...kills.values()].map((k) => k.portfolioCap).find((k): k is BrainKill => !!k)
+  return kill ? brainKillDecision('portfolioCap', kill, `portfolio ${target.portfolioId}`, ctx.actor) : null
+}
+
 export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision> {
   // 6a — Sponsored Products only (Owner decision S8; review G.1). Before the sandbox return: an SB/SD write would go to
   // a Sponsored Products endpoint in either mode, and suppression is not exempt — its bid would land there too.
@@ -522,8 +657,6 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
    * (NEXUS_ADS_AUTOMATION_KILL, the same test as envKill in the state service) still binds
    * everyone: it is set in Railway, not from a screen.
    */
-  const { getAutomationState } = await import('./ads-automation-state.service.js')
-  const state = await getAutomationState()
   const personPasses = ctx.manual === true && process.env.NEXUS_ADS_AUTOMATION_KILL !== '1'
   // 3A — a person's write past one of his own limits is collected here instead of refused (see OwnLimitKind).
   const own: OwnLimit[] = protectedProduct ? [protectedProduct] : []
@@ -532,15 +665,9 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
     own.push({ limit: d.deniedAt as OwnLimitKind, reason: d.reason })
     return null
   }
-  if (state.effectivelyStopped && !ctx.isSuppression && !personPasses) {
-    const why = state.haltReason
-      ? `halted: ${state.haltReason}`
-      : state.autonomy === 'OFF' ? 'account autonomy is OFF' : 'automation is stopped'
-    return {
-      allowed: false,
-      reason: `ads automation is stopped (${why}) — resume in the Control Room to allow writes`,
-      deniedAt: 'automation_halted',
-    }
+  if (!ctx.isSuppression && !personPasses) {
+    const halted = await automationHaltRefusal()
+    if (halted) return halted
   }
 
   // Env says live, but operator must also enable per-connection writes.
@@ -722,9 +849,21 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       const refusal = await productBrainRefusal({ campaignId: ctx.campaignId, name: campaign.name }, brainLeversOfWrite(levers, fieldList), ctx)
       if (refusal) return refusal
     }
+    // ONE BRAIN AB-15 — the Owner's kill switch: the brain's own actor on a lever he stopped, whatever the switch says.
+    // Nothing stopped in the business: one remembered query, no refusal.
+    if (ctx.actor !== undefined) {
+      const refusal = await brainKillRefusal({ campaignId: ctx.campaignId, name: campaign.name }, brainLeversOfWrite(levers, fieldList), ctx)
+      if (refusal) return refusal
+    }
     // ONE BRAIN AB-8 — the money writer's actor writes only a budgets lever the brain owns (whatever the switch says).
-    const notOwner = await moneyActorRefusal({ campaignId: ctx.campaignId, name: campaign.name }, ctx)
+    const notOwner = await brainWriterRefusal({ campaignId: ctx.campaignId, name: campaign.name }, ctx)
     if (notOwner) return notOwner
+    // ONE BRAIN AB-12 — the brain's own pause and resume: only where a product's brain owns the campaign's state lever, under
+    // the live ceiling (brainStateNotOwnedRefusal). Every other writer is judged exactly as before.
+    if (ctx.actor === BRAIN_STATE_ACTOR) {
+      const refusal = await brainStateNotOwnedRefusal({ campaignId: ctx.campaignId, name: campaign.name })
+      if (refusal) return refusal
+    }
 
     // ADX A1 / BID.S5 / BUD.2 — the entity's own bid and budget bounds (entityBoundsDenial below). 4k — the
     // mutation layer asks the same question before Nexus writes its copy; this is the backstop for a bound that
@@ -821,24 +960,45 @@ export async function checkAdsWriteGate(ctx: GateContext): Promise<GateDecision>
       if (refusal) return refusal
     }
   }
+  // ONE BRAIN AB-15 — the Owner's kill switch on a portfolio's cap: the brain's own actor on a portfolio of a product (or every
+  // product) whose portfolioCap lever he stopped.
+  if (ctx.campaignId === undefined && ctx.portfolioId && ctx.actor !== undefined) {
+    const fieldList = ctx.fields?.length ? ctx.fields : [ctx.field]
+    const refusal = await brainKillRefusal({ portfolioId: ctx.portfolioId }, brainLeversOfWrite(leverDimensionsForWrite({ fields: fieldList, dimension: ctx.dimension ?? null }), fieldList), ctx)
+    if (refusal) return refusal
+  }
   // ONE BRAIN AB-8 — the money writer's actor on a portfolio: only the cap of a portfolio the brain owns; it makes none.
   if (ctx.campaignId === undefined && isMoneyActor(ctx.actor) && ctx.manual !== true) {
     if (!ctx.portfolioId) return { allowed: false, deniedAt: 'brain_not_owner', reason: `${ctx.actor} writes only a lever the brain owns: it names no campaign and no portfolio here (the brain makes no portfolio). Nothing was changed.` }
-    const notOwner = await moneyActorRefusal({ portfolioId: ctx.portfolioId }, ctx)
+    const notOwner = await brainWriterRefusal({ portfolioId: ctx.portfolioId }, ctx)
     if (notOwner) return notOwner
   }
 
   // Value cap: blast-radius limit per write. Composite actions are
   // chunked into individual OutboundSyncQueue rows so each pass
   // through the gate sees only its slice.
-  const cap = maxWriteValueCents()
-  if (ctx.payloadValueCents > cap) {
-    const overCap: Extract<GateDecision, { allowed: false }> = {
-      allowed: false,
-      reason: `payload value ${ctx.payloadValueCents}¢ exceeds cap ${cap}¢ (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)`,
-      deniedAt: 'value_cap',
+  // OWNER DECISION 2A — a portfolio's own write is its monthly cap: judged against the portfolio cap limit (the server's,
+  // or the Owner's for the one product the portfolio holds) instead of the per-write cap, which stays for every other write.
+  if (isPortfolioOwnWrite(ctx)) {
+    const limit = ctx.payloadValueCents > 0 ? await portfolioCapLimitOf(ctx.portfolioId ?? null) : null
+    if (limit && ctx.payloadValueCents > limit.cents) {
+      const overLimit: Extract<GateDecision, { allowed: false }> = {
+        allowed: false,
+        reason: `portfolio cap ${ctx.payloadValueCents}¢ exceeds ${limit.words}, ${limit.cents}¢ a month — nothing was changed; ${raiseLimitWords(limit)}`,
+        deniedAt: 'portfolio_cap_limit',
+      }
+      if (ownOrRefuse(overLimit)) return overLimit
     }
-    if (ownOrRefuse(overCap)) return overCap
+  } else {
+    const cap = maxWriteValueCents()
+    if (ctx.payloadValueCents > cap) {
+      const overCap: Extract<GateDecision, { allowed: false }> = {
+        allowed: false,
+        reason: `payload value ${ctx.payloadValueCents}¢ exceeds cap ${cap}¢ (NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS)`,
+        deniedAt: 'value_cap',
+      }
+      if (ownOrRefuse(overCap)) return overCap
+    }
   }
 
   // 3A — a person's own write past his own limits: refused until he confirms; once he has, it goes, and says so.
@@ -1300,7 +1460,7 @@ export async function budgetDayMoveDenial(args: {
  *              back at the next budget day), else exactly as for every writer (loggedDayOpeningCents)
  *   ceiling    a write above it passes only as the brain's ladder: at most +LADDER_GATE_MAX_PCT % of today's base, the
  *              base inside the bound. The floor holds as for everyone.
- * The gate reaches here only after the brain's ownership of the campaign's budgets lever was checked (moneyActorRefusal):
+ * The gate reaches here only after the brain's ownership of the campaign's budgets lever was checked (brainWriterRefusal):
  * the exception never applies on a campaign the brain does not own.
  */
 async function brainBudgetDayMoveDenial(
@@ -1351,13 +1511,18 @@ async function brainBudgetDayMoveDenial(
  * ONE BRAIN AB-8 — the money writer's actors (MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR) write only a lever the brain
  * OWNS: the campaign's budgets lever, or the portfolio cap of a portfolio every campaign of which is the brain's. Under a
  * non-live server switch the brain owns nothing, so they are refused; a lever nobody holds, or one the Owner locked, is
- * refused too (the lock in the Owner's words, by the AB-5 check before this one). It holds only these two actors: every
- * other writer, the brain's other actors included, is judged as before. A failed read of the holders goes out of the gate
- * as an error (try again later), as productBrainRefusal's does.
+ * refused too (the lock in the Owner's words, by the AB-5 check before this one). AB-10 — the negatives writer's actor
+ * (BRAIN_NEGATIVES_ACTOR) holds the same rule on the campaign's negatives lever. Batch 2 review fix — and the harvest
+ * writer's actor (BRAIN_HARVEST_ACTOR) on the campaign's HARVEST lever, for every write of its pair: the keyword in the
+ * destination and the negative in each source (the pair's level is the lowest of those campaigns' harvest levers, so each
+ * must be the brain's). It holds only these actors: every other writer, the brain's other actors included, is judged as
+ * before. A failed read of the holders goes out of the gate as an error (try again later), as productBrainRefusal's does.
  */
-async function moneyActorRefusal(target: { campaignId: string; name?: string | null } | { portfolioId: string }, ctx: GateContext): Promise<Extract<GateDecision, { allowed: false }> | null> {
-  if (!isMoneyActor(ctx.actor) || ctx.manual === true) return null
-  const lever: BrainLever = 'campaignId' in target ? 'budgets' : 'portfolioCap'
+async function brainWriterRefusal(target: { campaignId: string; name?: string | null } | { portfolioId: string }, ctx: GateContext): Promise<Extract<GateDecision, { allowed: false }> | null> {
+  const negatives = ctx.actor === BRAIN_NEGATIVES_ACTOR && 'campaignId' in target
+  const harvest = ctx.actor === BRAIN_HARVEST_ACTOR && 'campaignId' in target
+  if ((!isMoneyActor(ctx.actor) && !negatives && !harvest) || ctx.manual === true) return null
+  const lever: BrainLever = negatives ? 'negatives' : harvest ? 'harvest' : 'campaignId' in target ? 'budgets' : 'portfolioCap'
   const where = 'campaignId' in target ? `campaign ${target.name ? `"${target.name}" (${target.campaignId})` : target.campaignId}` : `portfolio ${target.portfolioId}`
   const refuse = (why: string): Extract<GateDecision, { allowed: false }> => ({
     allowed: false,
@@ -1366,7 +1531,7 @@ async function moneyActorRefusal(target: { campaignId: string; name?: string | n
   })
   if (!brainLiveCeiling()) return refuse('the server switch NEXUS_BID_BRAIN_MODE is not live, so the brain owns no lever')
   const hold = 'campaignId' in target
-    ? (await campaignLeverOwners([target.campaignId])).get(target.campaignId)?.levers.budgets ?? null
+    ? (await campaignLeverOwners([target.campaignId])).get(target.campaignId)?.levers[lever] ?? null
     : await portfolioCapHold(target.portfolioId)
   if (hold?.kind === 'owned') return null
   return refuse(hold ? `the Owner locked it (${hold.why})` : 'no enrolled product\'s brain holds it at PROPOSE or AUTO there')

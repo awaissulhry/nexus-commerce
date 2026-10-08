@@ -6252,6 +6252,22 @@
     "compound": {},
     "relations": []
   },
+  "AdsBrainCycle": {
+    "scalar": {},
+    "compound": {
+      "product_market_day": [
+        "productId",
+        "marketplace",
+        "dataDay"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainHourProposal": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
   "AdsNativeRuleSnapshot": {
     "scalar": {},
     "compound": {
@@ -6287,6 +6303,28 @@
     },
     "relations": []
   },
+  "AdsBrainHarvest": {
+    "scalar": {},
+    "compound": {
+      "product_market_term": [
+        "productId",
+        "marketplace",
+        "term"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainNegative": {
+    "scalar": {},
+    "compound": {
+      "product_market_key": [
+        "productId",
+        "marketplace",
+        "key"
+      ]
+    },
+    "relations": []
+  },
   "AmazonAdsHourlyPlacement": {
     "scalar": {},
     "compound": {
@@ -6309,6 +6347,30 @@
         "ageHours"
       ]
     },
+    "relations": []
+  },
+  "AmazonAdsGrainCap": {
+    "scalar": {},
+    "compound": {
+      "day_kind": [
+        "date",
+        "kind"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainAsk": {
+    "scalar": {},
+    "compound": {
+      "ask_key": [
+        "key"
+      ]
+    },
+    "relations": []
+  },
+  "AdsBrainStateDecision": {
+    "scalar": {},
+    "compound": {},
     "relations": []
   },
   "AdWriteRefusal": {

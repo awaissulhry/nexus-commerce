@@ -1806,6 +1806,20 @@ CREATE TABLE "AmazonAdsHourlyArrival" (
 );
 
 -- CreateTable
+CREATE TABLE "AmazonAdsGrainCap" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "date" DATE NOT NULL,
+    "kind" TEXT NOT NULL,
+    "cap" INTEGER NOT NULL,
+    "refused" INTEGER NOT NULL DEFAULT 0,
+    "firstAt" TIMESTAMP(3) NOT NULL,
+    "lastAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AmazonAdsGrainCap_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdBudgetUsageSample" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -9638,6 +9652,29 @@ CREATE TABLE "AdsBrainOverride" (
 );
 
 -- CreateTable
+CREATE TABLE "AdsBrainHourProposal" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "planId" TEXT,
+    "level" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "why" TEXT NOT NULL,
+    "approvalId" TEXT,
+    "planBasis" TEXT,
+    "research" JSONB NOT NULL,
+    "paint" JSONB,
+    "versionId" TEXT,
+    "decidedBy" TEXT,
+    "decidedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainHourProposal_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AdsNativeRuleSnapshot" (
     "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
     "id" TEXT NOT NULL,
@@ -9677,6 +9714,26 @@ CREATE TABLE "AdsBrainBudgetDecision" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AdsBrainBudgetDecision_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainAsk" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "portfolioId" TEXT,
+    "day" DATE NOT NULL,
+    "status" TEXT NOT NULL,
+    "approvalId" TEXT,
+    "toCents" INTEGER,
+    "reason" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainAsk_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -9738,6 +9795,135 @@ CREATE TABLE "AdsBrainTermLead" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "AdsBrainTermLead_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainNegative" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "reasons" TEXT[],
+    "kind" TEXT NOT NULL,
+    "match" TEXT NOT NULL,
+    "text" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "adGroupId" TEXT,
+    "negativeId" TEXT,
+    "origin" TEXT,
+    "coverId" TEXT,
+    "mode" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "askFirst" BOOLEAN NOT NULL DEFAULT false,
+    "heldBy" TEXT,
+    "why" TEXT NOT NULL,
+    "evidence" JSONB NOT NULL,
+    "approvalId" TEXT,
+    "adTargetId" TEXT,
+    "outboundQueueId" TEXT,
+    "result" TEXT,
+    "digest" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "dataDay" DATE NOT NULL,
+    "firstSeenAt" TIMESTAMP(3) NOT NULL,
+    "checkedAt" TIMESTAMP(3) NOT NULL,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "actedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainNegative_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainStateDecision" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "mode" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "campaignId" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "cause" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "expectedEndAt" TIMESTAMP(3),
+    "horizonHours" INTEGER,
+    "approvalId" TEXT,
+    "decisionHash" TEXT NOT NULL,
+    "decision" JSONB NOT NULL,
+    "why" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AdsBrainStateDecision_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainCycle" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "dataDay" DATE NOT NULL,
+    "changeSetId" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "leaseUntil" TIMESTAMP(3),
+    "steps" JSONB NOT NULL,
+    "report" JSONB,
+    "summary" TEXT,
+    "finishedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainCycle_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AdsBrainHarvest" (
+    "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
+    "id" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "marketplace" TEXT NOT NULL,
+    "term" TEXT NOT NULL,
+    "isAsin" BOOLEAN NOT NULL DEFAULT false,
+    "status" TEXT NOT NULL,
+    "level" TEXT NOT NULL,
+    "destinationKind" TEXT NOT NULL,
+    "destHow" TEXT,
+    "destCampaignId" TEXT,
+    "destAdGroupId" TEXT,
+    "bidCents" INTEGER,
+    "keywordTargetId" TEXT,
+    "landedAt" TIMESTAMP(3),
+    "sources" JSONB NOT NULL,
+    "approvalId" TEXT,
+    "undoApprovalId" TEXT,
+    "attempts" INTEGER NOT NULL DEFAULT 0,
+    "lastError" TEXT,
+    "heldBy" TEXT,
+    "why" TEXT NOT NULL,
+    "evidence" JSONB NOT NULL,
+    "judgeAfter" TIMESTAMP(3),
+    "judgedAt" TIMESTAMP(3),
+    "verdict" TEXT,
+    "judgement" JSONB,
+    "digest" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "decidedAt" TIMESTAMP(3) NOT NULL,
+    "checkedAt" TIMESTAMP(3) NOT NULL,
+    "changedAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AdsBrainHarvest_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -11436,6 +11622,12 @@ CREATE INDEX "AmazonAdsHourlyArrival_workspaceId_date_idx" ON "AmazonAdsHourlyAr
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AmazonAdsHourlyArrival_bucket_key" ON "AmazonAdsHourlyArrival"("workspaceId", "grainId", "kind", "ageHours");
+
+-- CreateIndex
+CREATE INDEX "AmazonAdsGrainCap_workspaceId_date_idx" ON "AmazonAdsGrainCap"("workspaceId", "date");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AmazonAdsGrainCap_day_kind_key" ON "AmazonAdsGrainCap"("workspaceId", "date", "kind");
 
 -- CreateIndex
 CREATE INDEX "AdBudgetUsageSample_campaign_reading_idx" ON "AdBudgetUsageSample"("campaignId", "usageUpdatedAt");
@@ -15542,6 +15734,18 @@ CREATE INDEX "AdsBrainOverride_campaignId_endedAt_idx" ON "AdsBrainOverride"("ca
 CREATE INDEX "AdsBrainOverride_workspaceId_idx" ON "AdsBrainOverride"("workspaceId");
 
 -- CreateIndex
+CREATE INDEX "AdsBrainHourProposal_productId_marketplace_createdAt_idx" ON "AdsBrainHourProposal"("productId", "marketplace", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHourProposal_planId_createdAt_idx" ON "AdsBrainHourProposal"("planId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHourProposal_approvalId_idx" ON "AdsBrainHourProposal"("approvalId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHourProposal_workspaceId_idx" ON "AdsBrainHourProposal"("workspaceId");
+
+-- CreateIndex
 CREATE INDEX "AdsNativeRuleSnapshot_workspaceId_idx" ON "AdsNativeRuleSnapshot"("workspaceId");
 
 -- CreateIndex
@@ -15558,6 +15762,15 @@ CREATE INDEX "AdsBrainBudgetDecision_createdAt_idx" ON "AdsBrainBudgetDecision"(
 
 -- CreateIndex
 CREATE INDEX "AdsBrainBudgetDecision_workspaceId_idx" ON "AdsBrainBudgetDecision"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainAsk_productId_marketplace_day_idx" ON "AdsBrainAsk"("productId", "marketplace", "day");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainAsk_workspaceId_idx" ON "AdsBrainAsk"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainAsk_workspaceId_key_key" ON "AdsBrainAsk"("workspaceId", "key");
 
 -- CreateIndex
 CREATE INDEX "AdsBrainTerm_marketplace_term_idx" ON "AdsBrainTerm"("marketplace", "term");
@@ -15585,6 +15798,72 @@ CREATE INDEX "AdsBrainTermLead_workspaceId_idx" ON "AdsBrainTermLead"("workspace
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AdsBrainTermLead_workspaceId_marketplace_term_key" ON "AdsBrainTermLead"("workspaceId", "marketplace", "term");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_productId_marketplace_runId_idx" ON "AdsBrainNegative"("productId", "marketplace", "runId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_productId_marketplace_actedAt_idx" ON "AdsBrainNegative"("productId", "marketplace", "actedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_approvalId_idx" ON "AdsBrainNegative"("approvalId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_checkedAt_idx" ON "AdsBrainNegative"("checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainNegative_workspaceId_idx" ON "AdsBrainNegative"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainNegative_workspaceId_productId_marketplace_key_key" ON "AdsBrainNegative"("workspaceId", "productId", "marketplace", "key");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_campaignId_createdAt_idx" ON "AdsBrainStateDecision"("campaignId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_productId_marketplace_createdAt_idx" ON "AdsBrainStateDecision"("productId", "marketplace", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_marketplace_createdAt_idx" ON "AdsBrainStateDecision"("marketplace", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_runId_idx" ON "AdsBrainStateDecision"("runId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_createdAt_idx" ON "AdsBrainStateDecision"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainStateDecision_workspaceId_idx" ON "AdsBrainStateDecision"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainCycle_productId_marketplace_dataDay_idx" ON "AdsBrainCycle"("productId", "marketplace", "dataDay" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainCycle_marketplace_dataDay_idx" ON "AdsBrainCycle"("marketplace", "dataDay" DESC);
+
+-- CreateIndex
+CREATE INDEX "AdsBrainCycle_createdAt_idx" ON "AdsBrainCycle"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainCycle_workspaceId_idx" ON "AdsBrainCycle"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainCycle_workspaceId_productId_marketplace_dataDay_key" ON "AdsBrainCycle"("workspaceId", "productId", "marketplace", "dataDay");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHarvest_marketplace_status_idx" ON "AdsBrainHarvest"("marketplace", "status");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHarvest_status_judgeAfter_idx" ON "AdsBrainHarvest"("status", "judgeAfter");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHarvest_checkedAt_idx" ON "AdsBrainHarvest"("checkedAt");
+
+-- CreateIndex
+CREATE INDEX "AdsBrainHarvest_workspaceId_idx" ON "AdsBrainHarvest"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AdsBrainHarvest_workspaceId_productId_marketplace_term_key" ON "AdsBrainHarvest"("workspaceId", "productId", "marketplace", "term");
 
 -- CreateIndex
 CREATE INDEX "AdWriteRefusal_deniedAt_createdAt_idx" ON "AdWriteRefusal"("deniedAt", "createdAt");

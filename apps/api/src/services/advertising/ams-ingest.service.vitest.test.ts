@@ -75,6 +75,15 @@ describe('AMS ingest routes every record to the profile that owns its Amazon Ads
     expect(h.perf).not.toHaveBeenCalled()
   })
 
+  it('BB-16 follow-up — hands the batch\'s sent time to the ingest as the arrival time, in each profile; none: as before', async () => {
+    const sentAt = new Date('2026-10-08T11:05:00Z')
+    await ingestAmsBatch([traffic('AFXSELLER8BC38', 'c1'), traffic('MOTOVENTO-ADS', 'c2')], { sentAt })
+    expect(h.perf.mock.calls.map((c) => c[1])).toEqual([{ arrivedAt: sentAt }, { arrivedAt: sentAt }])
+    h.perf.mockClear()
+    await ingestAmsBatch([traffic('AFXSELLER8BC38', 'c1')])
+    expect(h.perf.mock.calls.map((c) => c[1])).toEqual([{}])
+  })
+
   it('with profiles off, ingests the batch once as before', async () => {
     vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '0')
     h.perf.mockImplementation(async (records: unknown[]) => ({ received: records.length, upserted: records.length, skipped: 0 }))

@@ -11,8 +11,10 @@
  *             OWNS a lever at PROPOSE or AUTO (design §3 point 3: the gate then refuses every other engine).
  *   default   every lever starts OBSERVE (design §0.13), per product and per campaign, until the Owner overrides it.
  *   now       a level is offered only once code runs it (LEVER_LEVELS_NOW). AB-1: the bids lever takes OBSERVE and AUTO
- *             (the live bid brain, BB-6); every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
+ *             (the live bid brain, BB-6); AB-13: the hours lever OFF, OBSERVE and PROPOSE (a painted plan always asks, D3);
+ *             AB-11: the harvest lever every level; every other lever OFF or OBSERVE until its own PR. OBSERVE on a lever whose
  *             shadow is not built yet records the intent: it starts watching when its shadow lands; nothing is written.
+ *             AB-12: the state lever takes every level (brain/state*.ts); it still starts OBSERVE like every lever.
  *   settings  the caps of §5 and the N1–N4 settings of §9 (Owner yes 10-08), each with the design's default and safety
  *             bounds (Amazon's own where it has one); the Owner may set any value inside them, per product, and per
  *             campaign where the setting means something for one campaign.
@@ -49,15 +51,20 @@ const OFF_OBSERVE: readonly BrainLevel[] = ['OFF', 'OBSERVE']
  */
 export const LEVER_LEVELS_NOW: Record<BrainLever, { levels: readonly BrainLevel[]; others: string }> = {
   bids: { levels: ['OBSERVE', 'AUTO'], others: 'the bid brain decides every allowlisted campaign in shadow (no OFF) and has no proposal path (no PROPOSE)' },
-  adGroupBids: { levels: OFF_OBSERVE, others: 'ad group default bids wait for the product cycle (design §2.2, AB-14)' },
-  hours: { levels: OFF_OBSERVE, others: 'the painted hourly plan waits for AB-13' },
-  placements: { levels: OFF_OBSERVE, others: 'placements per hour wait for AB-13' },
-  state: { levels: OFF_OBSERVE, others: 'pause and resume wait for AB-12' },
+  adGroupBids: { levels: OFF_OBSERVE, others: 'ad group default bids have no writer of the brain yet: the product cycle (AB-14) runs each lever that has one in order, and this one waits for its own step (design §2.2)' },
+  // AB-13 (D3 = B+) — the brain researches the market's hours, paints the plan and asks: a plan change is PROPOSE always.
+  hours: { levels: ['OFF', 'OBSERVE', 'PROPOSE'], others: 'the brain researches the market\'s hours weekly and paints the hourly plan; OBSERVE keeps the painting in shadow, PROPOSE asks a person to approve each painted plan, and no plan changes alone (D3: never AUTO; ads-brain view hours)' },
+  placements: { levels: OFF_OBSERVE, others: 'placement % per hour come with the painted hourly plan\'s targets (the hours lever, AB-13), which keeps every lane the Owner locked; a placements writer of its own waits for its own step in the product cycle (AB-14 runs the levers that have one)' },
+  // AB-12 — every level: OBSERVE logs, PROPOSE asks a person, AUTO pauses and resumes alone (D4 = A, brain/state*.ts).
+  state: { levels: BRAIN_LEVELS, others: 'each pause, resume and archive proposal it would make is logged in shadow (ads-brain view state); PROPOSE asks a person, AUTO pauses and resumes alone inside the caps — an archive is only ever a proposal (AB-12)' },
   // AB-8 — the money writer: OBSERVE plans and logs (AB-7), PROPOSE asks a person for each change, AUTO writes inside the pace.
   budgets: { levels: BRAIN_LEVELS, others: 'campaign budgets: OBSERVE plans and logs them (ads-brain view money), PROPOSE asks a person for the day\'s moves, AUTO writes them and the intraday ladder (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
-  portfolioCap: { levels: BRAIN_LEVELS, others: 'the Amazon portfolio cap: OBSERVE plans it, PROPOSE asks a person, AUTO writes it — monthly, never below this month\'s spend, never a cap removed (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
-  negatives: { levels: OFF_OBSERVE, others: 'the term ledger decides negatives in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-10' },
-  harvest: { levels: OFF_OBSERVE, others: 'the term ledger decides harvests in shadow (AB-9: OBSERVE logs one decision per term, ads-brain view terms); writing them waits for AB-11' },
+  portfolioCap: { levels: BRAIN_LEVELS, others: 'the Amazon portfolio cap: OBSERVE plans it, PROPOSE asks a person, AUTO writes it — monthly, never below this month\'s spend, never a cap removed, never above the portfolio cap limit (portfolioCapLimitCents, else NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS) (AB-8, under a live NEXUS_BID_BRAIN_MODE)' },
+  // AB-10 — the negatives module: OBSERVE logs the day's negatives, PROPOSE asks a person once a day, AUTO writes them as the
+  // brain (inside the caps, after the shadow days of negativesShadowDays, under the live server switch).
+  negatives: { levels: BRAIN_LEVELS, others: 'the negatives module (AB-10, ads-brain view negatives) takes every level' },
+  // AB-11 — the harvest module: OBSERVE logs each harvest, PROPOSE asks a person for the pair, AUTO writes it.
+  harvest: { levels: BRAIN_LEVELS, others: 'AB-11: OBSERVE logs each harvest in shadow, PROPOSE asks a person for the keyword and its source negatives as one change set, AUTO writes it (under NEXUS_ADS_BRAIN_HARVEST_MODE=live); a new campaign is always a request a person approves (ads-brain view harvest)' },
   structure: { levels: OFF_OBSERVE, others: 'new campaigns wait for AB-16' },
   biddingStrategy: { levels: OFF_OBSERVE, others: 'the bidding-strategy lever waits for AB-17' },
   offAmazon: { levels: OFF_OBSERVE, others: 'the off-Amazon lane waits for AB-18' },
@@ -80,6 +87,8 @@ type SettingSpec =
   | { type: 'intOrNull'; default: null; min: number; max: number; scopes: readonly BrainScope[]; what: string }
   | { type: 'boolean'; default: boolean; scopes: readonly BrainScope[]; what: string }
   | { type: 'enum'; default: string; values: readonly string[]; scopes: readonly BrainScope[]; what: string }
+  /** AB-12 — a calendar day (YYYY-MM-DD, UTC) or empty. */
+  | { type: 'dayOrNull'; default: null; scopes: readonly BrainScope[]; what: string }
 
 /**
  * Every setting with its default. Money limits (the envelope, bid limits, the largest step) stay in AdsStrategy; the
@@ -90,6 +99,8 @@ export const BRAIN_SETTINGS = {
   negativesPerDay: { type: 'int', default: 20, min: 0, max: 200, scopes: PRODUCT, what: 'new negatives per product per day (§2.7)' },
   negativesPerEntityWarn: { type: 'int', default: 800, min: 100, max: 950, scopes: BOTH, what: 'negatives in one campaign or ad group before a warning (§2.7)' },
   negativesPerEntityMax: { type: 'int', default: 950, min: 100, max: 950, scopes: BOTH, what: 'negatives in one campaign or ad group, never more — Amazon allows 1,000 (§2.7)' },
+  // AB-10 — §10: a lever runs in shadow before it acts (14 days for negatives); the Owner's own number wins (0: at once).
+  negativesShadowDays: { type: 'int', default: 14, min: 0, max: 90, scopes: PRODUCT, what: 'days the negatives lever runs in shadow before PROPOSE or AUTO act (§10)' },
   harvestPerDay: { type: 'int', default: 10, min: 0, max: 100, scopes: PRODUCT, what: 'new keywords per product per day (§2.8)' },
   newCampaignsPerWeek: { type: 'int', default: 2, min: 0, max: 20, scopes: PRODUCT, what: 'new campaigns per product per week (§2.9)' },
   skcMax: { type: 'int', default: 20, min: 0, max: 200, scopes: PRODUCT, what: 'single-keyword campaigns per product (§2.9)' },
@@ -97,6 +108,9 @@ export const BRAIN_SETTINGS = {
   minBidEntriesPerDay: { type: 'int', default: 2, min: 0, max: 24, scopes: BOTH, what: 'Min-bid hour entries per campaign per day (§2.3)' },
   hourCellMovePct: { type: 'int', default: 30, min: 0, max: 100, scopes: PRODUCT, what: 'largest move of an hour cell per painted plan, % (§2.3)' },
   hourProposalsPerWeek: { type: 'int', default: 1, min: 0, max: 7, scopes: PRODUCT, what: 'painted hourly plan proposals per week (§2.3)' },
+  // AB-13 — the research window, and the Owner's own painted plan as the limit of each hour (BRAIN-UPGRADES U4-D1).
+  hourResearchWeeks: { type: 'int', default: 4, min: 2, max: 8, scopes: PRODUCT, what: 'weeks of hourly data the brain researches before it paints the hourly plan (§2.3)' },
+  hourPlanAsLimits: { type: 'boolean', default: false, scopes: PRODUCT, what: 'the Owner\'s own painted hourly plan is the limit of each hour: the brain may lower an hour or keep it, never raise it above his target or placement %, and his Min-bid hours stay (§2.3, U4-D1)' },
   biddingStrategySwitchDays: { type: 'int', default: 14, min: 1, max: 365, scopes: BOTH, what: 'days between two bidding-strategy switches of a campaign (§2.11)' },
   budgetUsePct: { type: 'int', default: 70, min: 10, max: 100, scopes: BOTH, what: 'expected budget use a campaign budget is sized for, % (§2.5)' },
   intradayLadderMaxPct: { type: 'int', default: 100, min: 0, max: 100, scopes: BOTH, what: 'largest intraday budget raise, % of the base budget — Amazon spends at most 2× a day (§2.5)' },
@@ -105,8 +119,14 @@ export const BRAIN_SETTINGS = {
   portfolioCapOn: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N1: the Amazon portfolio cap is set as the hard backstop' },
   portfolioCapPct: { type: 'int', default: 115, min: 100, max: 300, scopes: PRODUCT, what: 'N1: the portfolio cap, % of the monthly budget (envelope)' },
   portfolioCapCents: { type: 'intOrNull', default: null, min: 100, max: 100_000_000, scopes: PRODUCT, what: 'N1: the portfolio cap as an amount in cents (it replaces the %); empty = portfolioCapPct × the monthly budget' },
+  // Owner decision 2A (10-08 ~19:20 UTC) — a portfolio cap has a monthly limit of its own; the €500 per-write cap stays for every other write.
+  portfolioCapLimitCents: { type: 'intOrNull', default: null, min: 100, max: 100_000_000, scopes: PRODUCT, what: 'the limit of this product\'s Amazon portfolio caps a month, in cents, for every writer (the brain, set-portfolio, the Portfolios page): it replaces the server\'s NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS (default 200,000 = €2,000) for a portfolio that holds only this product\'s campaigns; empty = the server\'s' },
   ownPortfolio: { type: 'boolean', default: true, scopes: PRODUCT, what: 'N2: the brain proposes one portfolio per product and market' },
   strategySwitchMode: { type: 'enum', default: 'PROPOSE_THEN_AUTO', values: ['PROPOSE_THEN_AUTO', 'ALWAYS_PROPOSE'], scopes: BOTH, what: 'N4: a bidding-strategy switch waits for approval for 30 days, then runs alone (PROPOSE_THEN_AUTO), or always waits (ALWAYS_PROPOSE)' },
+  // AB-12 — the state lever (§2.4, D4 = A)
+  pauseMinDays: { type: 'int', default: 3, min: 3, max: 60, scopes: BOTH, what: 'a stop expected to last at least this many days is a pause; a shorter one stays on low bids, never a pause (§2.4, D4)' },
+  archiveDeadWeeks: { type: 'int', default: 4, min: 2, max: 52, scopes: BOTH, what: 'weeks without an impression before the brain proposes to archive a campaign — only ever a proposal (§2.4)' },
+  longStopUntil: { type: 'dayOrNull', default: null, scopes: BOTH, what: 'the Owner\'s long stop: the brain pauses through this day (YYYY-MM-DD, UTC) and resumes after it; empty = none (§2.4)' },
 } as const satisfies Record<string, SettingSpec>
 
 export type BrainSetting = keyof typeof BRAIN_SETTINGS
@@ -128,7 +148,16 @@ export function settingRefusal(key: string, value: unknown, scope: BrainScope): 
       return typeof value === 'boolean' ? null : `${key} (${spec.what}) takes true or false, not ${JSON.stringify(value)}`
     case 'enum':
       return typeof value === 'string' && spec.values.includes(value) ? null : `${key} (${spec.what}) takes ${spec.values.join(' or ')}, not ${JSON.stringify(value)}`
+    case 'dayOrNull':
+      return value === null || isCalendarDay(value) ? null : `${key} (${spec.what}) takes a day as YYYY-MM-DD (2020 to 2099) or empty, not ${JSON.stringify(value)}`
   }
+}
+
+/** AB-12 — a real calendar day written YYYY-MM-DD (2020–2099): 2026-02-30 is none. */
+export function isCalendarDay(v: unknown): v is string {
+  if (typeof v !== 'string' || !/^20[2-9]\d-\d{2}-\d{2}$/.test(v)) return false
+  const t = Date.parse(`${v}T00:00:00Z`)
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === v
 }
 
 /** Every setting's default. */

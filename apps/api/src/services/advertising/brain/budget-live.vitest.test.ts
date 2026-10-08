@@ -11,23 +11,56 @@
  *             the mutation layer with the gate asked first; a refused base takes no rung; SUGGEST writes nothing new and
  *             only gives back an earlier day's ladder; the brain's caps defer the rest; PROPOSE asks once per product a
  *             day (a rerun asks nothing); a cap through the portfolio path as the brain; OBSERVE touches nothing.
+ *   follow-up the per-write value cap is checked before a budget is asked or written; a cap meets its own monthly limit
+ *             instead (Owner decision 2A: the Owner's own for the product, else NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS, default
+ *             €2,000) — a cap above it: said once a month, never asked, nobody in Nexus could set it; a key the gate or a person refused is not asked again that day
+ *             (the answer says when it asks again); a cap once per amount a month and never while one waits; a failure
+ *             while asking gives the key back. The claims (AdsBrainAsk) are an in-memory stand-in here; the real unique
+ *             key and the race are budget-live-postgres's.
  *
  * Product A in IT on 2026-10-08 (made-up values, public repo).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+type Claim = { id: string; key: string; kind: string; productId: string; marketplace: string; portfolioId: string | null; day: string; status: string; approvalId: string | null; toCents: number | null; reason: string | null; createdAt: number }
 const h = vi.hoisted(() => ({
   budgetWrites: [] as Array<Record<string, unknown>>,
   budgetOutcome: (_campaignId: string): Record<string, unknown> => ({ ok: true, outboundQueueId: 'q', actionLogId: 'l', bidHistoryIds: [], error: null }),
   capWrites: [] as Array<Record<string, unknown>>,
   asks: [] as Array<{ tool: string; args: Record<string, unknown> }>,
-  earlier: null as { id: string; status: string } | null,
+  askOutcome: null as null | (() => Record<string, unknown>),
+  /** The AdsBrainAsk rows (unique by key), and each approval's status. */
+  claims: new Map<string, Claim>(),
+  approvals: new Map<string, { status: string; decidedBy: string | null }>(),
   native: new Map<string, string[]>(),
+  // AB-15 — the kill switch and the holds after an auto-undo, stood in (brain/lever-holds.ts moneyHolds).
+  budgetHeld: new Map<string, string>(),
+  capHeld: new Map<string, string>(),
 }))
 vi.mock('../../../db.js', () => ({
   default: {
-    agentApproval: { findFirst: vi.fn(async () => h.earlier) },
+    agentApproval: { findMany: vi.fn(async (a: { where: { id: { in: string[] } } }) => a.where.id.in.flatMap((id) => (h.approvals.has(id) ? [{ id, ...h.approvals.get(id)! }] : []))) },
     agentRun: { create: vi.fn(async () => ({ id: 'run-1' })), update: vi.fn(async () => ({})) },
+    // The claim's INSERT … ON CONFLICT DO NOTHING RETURNING "id": a row only when the key is new.
+    $queryRaw: vi.fn(async (q: { sql: string; values: unknown[] }) => {
+      if (!q.sql.includes('"AdsBrainAsk"')) throw new Error(`unexpected raw query: ${q.sql}`)
+      const v = q.values as Array<string | number | null>
+      const row = q.sql.includes("'blocked'")
+        ? { key: v[0], kind: 'portfolioCapOverValue', productId: v[1], marketplace: v[2], portfolioId: v[3], day: v[4], status: 'blocked', toCents: v[5], reason: v[6], approvalId: null }
+        : { key: v[0], kind: v[1], productId: v[2], marketplace: v[3], portfolioId: v[4], day: v[5], status: 'asking', toCents: v[6], reason: null, approvalId: null }
+      if (h.claims.has(String(row.key))) return []
+      const id = `claim-${h.claims.size + 1}`
+      h.claims.set(String(row.key), { id, createdAt: h.claims.size, ...row } as unknown as Claim)
+      return [{ id }]
+    }),
+    adsBrainAsk: {
+      findMany: vi.fn(async (a: { where: { kind: string; productId: string; marketplace: string; portfolioId: string | null; day: { gte: Date } } }) => [...h.claims.values()]
+        .filter((c) => c.kind === a.where.kind && c.productId === a.where.productId && c.marketplace === a.where.marketplace && c.portfolioId === a.where.portfolioId && c.day >= a.where.day.gte.toISOString().slice(0, 10))
+        .sort((x, y) => y.createdAt - x.createdAt)),
+      findFirst: vi.fn(async (a: { where: { key: string } }) => h.claims.get(a.where.key) ?? null),
+      update: vi.fn(async (a: { where: { id: string }; data: Partial<Claim> }) => { const c = [...h.claims.values()].find((x) => x.id === a.where.id)!; Object.assign(c, a.data); return c }),
+      delete: vi.fn(async (a: { where: { id: string } }) => { for (const [k, c] of h.claims) if (c.id === a.where.id) h.claims.delete(k); return {} }),
+    },
   },
 }))
 vi.mock('../../../utils/logger.js', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
@@ -36,10 +69,19 @@ vi.mock('../ads-mutation.service.js', () => ({
 }))
 vi.mock('../ads-portfolio.service.js', () => ({ updatePortfolioById: vi.fn(async (a: Record<string, unknown>) => { h.capWrites.push(a); return { ok: true, mode: 'live' } }) }))
 vi.mock('../../agents/approval-gate.service.js', () => ({
-  runOrQueueTool: vi.fn(async (tool: string, args: Record<string, unknown>) => { h.asks.push({ tool, args }); return { ok: true, mode: 'queued', approvalId: `ap-${h.asks.length}` } }),
+  runOrQueueTool: vi.fn(async (tool: string, args: Record<string, unknown>) => {
+    h.asks.push({ tool, args })
+    if (h.askOutcome) return h.askOutcome()
+    const approvalId = `ap-${h.asks.length}`
+    h.approvals.set(approvalId, { status: 'pending', decidedBy: null })
+    return { ok: true, mode: 'queued', approvalId }
+  }),
 }))
 vi.mock('../../agents/call-tool.js', () => ({ systemPrincipal: (label: string) => ({ kind: 'system', label, userId: null }) }))
 vi.mock('./native-rules.js', () => ({ loadNativeRules: vi.fn(async () => new Map()), nativeRuleLines: (_r: unknown, _l: string) => [] as string[] }))
+vi.mock('./lever-holds.js', () => ({
+  moneyHolds: vi.fn(async () => ({ budget: (id: string) => h.budgetHeld.get(id) ?? null, cap: (id: string) => h.capHeld.get(id) ?? null })),
+}))
 
 const { budgetDayMoveBounds } = await import('../ads-write-gate.js')
 const { makeEngineGuard } = await import('../ads-engine-guard.js')
@@ -48,6 +90,7 @@ const { moneyClock } = await import('./budget-pace.js')
 const { planProductMoney } = await import('./budget-plan.js')
 const { moneyModeOf, moneyStepsOf, runMoneyActions, moneyActionsWords } = await import('./budget-live.js')
 const { MONEY_BUDGETS_ACTOR, MONEY_PORTFOLIO_ACTOR } = await import('./budget-ladder.js')
+const { serverPortfolioCapLimit } = await import('./portfolio-cap-limit.js')
 const { BAND, camp, ov, PRODUCT } = await import('./__fixtures__/budget-facts.js')
 type Facts = import('./budget-plan.js').ProductMoneyFacts
 type OverrideRow = import('./settings.js').OverrideRow
@@ -84,8 +127,11 @@ function ladderFacts(overrides: OverrideRow[] = AUTO, over: Partial<CampaignMone
 const auto = (posture: 'auto' | 'suggest' | 'stopped' = 'auto', perTick: number | null = 100) => makeEngineGuard({ engine: 'brain-money', posture, why: posture, caps: { perTick, perDay: 400 }, todayBefore: 0 })
 
 beforeEach(() => {
-  h.budgetWrites = []; h.capWrites = []; h.asks = []; h.earlier = null
+  h.budgetWrites = []; h.capWrites = []; h.asks = []; h.askOutcome = null
+  h.claims.clear(); h.approvals.clear()
+  h.budgetHeld = new Map(); h.capHeld = new Map()
   h.budgetOutcome = () => ({ ok: true, outboundQueueId: 'q', actionLogId: 'l', bidHistoryIds: [], error: null })
+  vi.unstubAllEnvs()
 })
 
 describe('AB-8 — the steps (pure)', () => {
@@ -208,6 +254,8 @@ describe('AB-8 — the writes', () => {
   })
 
   it('SUGGEST writes nothing new and gives back an earlier day\'s ladder alone; the brain\'s caps defer the rest to the next run', async () => {
+    // This product's cap (115 % of a large envelope) is above the €500 per-write value cap: it meets its own monthly limit
+    // (€2,000 by default, Owner decision 2A), so it is planned as usual.
     const f = ladderFacts(AUTO, { todayCents: 3_000, openingCents: 1_500, ladderNow: { baseCents: 1_500, fromDay: 'before' }, avgDailySpendCents: 500, usage: null })
     const out = await runMoneyActions(planOf(f), f, { runId: 'bm-4', live: true, guard: async () => auto('suggest') })
     expect(h.budgetWrites).toEqual([expect.objectContaining({ patch: { dailyBudget: 15 }, evidence: expect.objectContaining({ brain: expect.objectContaining({ layer: 'base' }) }) })])
@@ -231,16 +279,133 @@ describe('AB-8 — the writes', () => {
     expect(String(h.asks[0].args.why)).toMatch(/^ads brain — Product A \(IT\) 2026-10-08: the day's budget moves inside the pace \(brake hold_raises\); c1 €15.00 → €10.50/)
     expect(h.asks[1].args).toMatchObject({ op: 'update', portfolioId: 'pf-x', cap: { amountCents: 36_800, policy: 'monthly' } })
     expect(out.proposals.map((p) => [p.kind, p.key, p.approvalId, p.fresh])).toEqual([
-      ['budgets', `budgets:${PRODUCT}:IT:2026-10-08`, 'ap-1', true], ['portfolioCap', `cap:${PRODUCT}:IT:pf-x:2026-10:36800`, 'ap-2', true],
+      ['budgets', `budgets:${PRODUCT}:IT:2026-10-08`, 'ap-1', true], ['portfolioCap', `cap:${PRODUCT}:IT:pf-x:2026-10-08`, 'ap-2', true],
     ])
     expect(out.campaigns.every((c) => c.sent === 'asked')).toBe(true)
     expect(out.counts.asked).toBe(2)
+    expect([...h.claims.values()].map((c) => [c.key, c.status, c.approvalId, c.toCents])).toEqual([
+      [`budgets:${PRODUCT}:IT:2026-10-08`, 'asked', 'ap-1', null], [`cap:${PRODUCT}:IT:pf-x:2026-10-08`, 'asked', 'ap-2', 36_800],
+    ])
     // The next run the same day: the requests were asked already (whatever became of them): none again.
-    h.earlier = { id: 'ap-1', status: 'pending' }
     const again = await runMoneyActions(planOf(f), f, { runId: 'bm-7', live: true, guard: async () => auto() })
     expect(h.asks).toHaveLength(2)
     expect(again.counts.asked).toBe(0)
-    expect(again.proposals[0]).toMatchObject({ approvalId: 'ap-1', fresh: false, why: 'asked already: it waits for a person' })
+    expect(again.proposals[0]).toMatchObject({ approvalId: 'ap-1', fresh: false, why: 'asked already today: it waits for a person' })
+    expect(again.proposals[1]).toMatchObject({ approvalId: 'ap-2', fresh: false, why: expect.stringMatching(/waits for a person: no second one$/) })
+    expect(again.campaigns.every((c) => c.sent === 'asked')).toBe(true)
+  })
+})
+
+describe('Owner decision 2A — a portfolio cap meets its own monthly limit, not the per-write value cap', () => {
+  it('a cap above the server\'s limit: never written, never asked (nobody in Nexus could set it) — said once a month, held each run', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS', '30000')
+    for (const levels of [AUTO, PROPOSE]) {
+      h.claims.clear()
+      const f = facts(levels)
+      expect(moneyStepsOf(planOf(f), f, { live: true, capLimit: serverPortfolioCapLimit() }).portfolios).toEqual([expect.objectContaining({ do: 'over-value', toCents: 36_800 })])
+      const out = await runMoneyActions(planOf(f), f, { runId: 'bm-v', live: true, guard: async () => auto() })
+      expect(h.capWrites).toEqual([])
+      expect(h.asks.filter((a) => a.tool === 'set-portfolio')).toEqual([])
+      expect(out.portfolios).toEqual([expect.objectContaining({ sent: 'held', toCents: 36_800, why: expect.stringMatching(/above the server's portfolio cap limit \(NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS, default 200000¢ a month\), €300\.00 a month: the gate refuses it for every writer — the brain, an approved set-portfolio and the Portfolios page alike .*; raise NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS/) })])
+      expect(out.proposals.find((p) => p.kind === 'portfolioCap')).toMatchObject({ key: `cap-over:${PRODUCT}:IT:pf-x:2026-10`, status: 'blocked', approvalId: null, fresh: true })
+      // Rerun: held again, nothing new said (once a month).
+      const again = await runMoneyActions(planOf(f), f, { runId: 'bm-v2', live: true, guard: async () => auto() })
+      expect(again.portfolios[0]).toMatchObject({ sent: 'held' })
+      expect(again.proposals.find((p) => p.kind === 'portfolioCap')).toMatchObject({ fresh: false, why: expect.stringContaining('(said already this month)') })
+      expect([...h.claims.values()].filter((c) => c.kind === 'portfolioCapOverValue')).toHaveLength(1)
+    }
+    expect(h.capWrites).toEqual([])
+  })
+
+  it('a cap above the per-write value cap but inside the limit: written at AUTO, asked at PROPOSE — the per-write cap never judges a cap', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '30000')
+    const f = facts(AUTO)
+    const out = await runMoneyActions(planOf(f), f, { runId: 'bm-l1', live: true, guard: async () => auto() })
+    expect(h.capWrites).toEqual([expect.objectContaining({ portfolioId: 'pf-x', budget: { amount: 368, currencyCode: 'EUR', policy: 'monthlyRecurring' }, actor: MONEY_PORTFOLIO_ACTOR })])
+    expect(out.portfolios[0]).toMatchObject({ sent: 'written', toCents: 36_800 })
+    const p = facts(PROPOSE)
+    await runMoneyActions(planOf(p), p, { runId: 'bm-l2', live: true, guard: async () => auto() })
+    expect(h.asks.filter((a) => a.tool === 'set-portfolio').map((a) => a.args.cap)).toEqual([{ amountCents: 36_800, policy: 'monthly' }])
+  })
+
+  it('the Owner\'s own limit for the product wins over the server\'s, lower or higher, and is named', async () => {
+    // His lower limit: held, in his words.
+    const low = facts([...AUTO, ov('VALUE', 'portfolioCapLimitCents', 30_000)])
+    const held = await runMoneyActions(planOf(low), low, { runId: 'bm-o1', live: true, guard: async () => auto() })
+    expect(h.capWrites).toEqual([])
+    expect(held.portfolios[0]).toMatchObject({ sent: 'held', why: expect.stringMatching(new RegExp(`above the Owner's portfolio cap limit for product ${PRODUCT} in IT \\(set-ads-brain portfolioCapLimitCents\\), €300\\.00 a month: .*raise the product's portfolioCapLimitCents`)) })
+    // His higher limit over a lower server one: written.
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_PORTFOLIO_CAP_CENTS', '30000')
+    h.claims.clear()
+    const high = facts([...AUTO, ov('VALUE', 'portfolioCapLimitCents', 50_000)])
+    const written = await runMoneyActions(planOf(high), high, { runId: 'bm-o2', live: true, guard: async () => auto() })
+    expect(written.portfolios[0]).toMatchObject({ sent: 'written', toCents: 36_800 })
+  })
+})
+
+describe('the per-write value cap still binds every campaign budget, checked before anything is asked or written', () => {
+  it('a budget above it at AUTO: held before the write (the gate would refuse the brain); below it: written', async () => {
+    vi.stubEnv('NEXUS_AMAZON_ADS_MAX_WRITE_VALUE_CENTS', '1000')
+    const f = facts(AUTO)
+    const out = await runMoneyActions(planOf(f), f, { runId: 'bm-b', live: true, guard: async () => auto() })
+    expect(h.budgetWrites.map((w) => w.campaignId)).toEqual(['c3', 'c4'])
+    expect(out.campaigns.filter((c) => c.sent === 'held').map((c) => [c.campaignId, c.why])).toEqual([
+      ['c1', expect.stringMatching(/^the day's base .* is above the per-write value cap/)], ['c2', expect.stringMatching(/^the day's base .* is above the per-write value cap/)],
+    ])
+    // A rung above it: held; the base under it still written.
+    expect(steps(ladderFacts(), true).campaigns[0]).toMatchObject({ do: 'write', layer: 'ladder', toCents: 2_625 })
+    const f2 = ladderFacts()
+    expect(moneyStepsOf(planOf(f2), f2, { live: true, valueCapCents: 2_000 }).campaigns).toEqual([expect.objectContaining({ do: 'hold', why: expect.stringMatching(/^the rung \+75 % to .* is above the per-write value cap/) })])
+  })
+})
+
+describe('AB-8 follow-up — asked once, atomically; a refusal is not asked again the same day', () => {
+  it('the gate did not queue it: the key is kept — not asked again today, and the answer says it asks again tomorrow', async () => {
+    const f = facts(PROPOSE)
+    h.askOutcome = () => ({ ok: false, mode: 'error', error: 'tool set-campaign-budget is disabled' })
+    const out = await runMoneyActions(planOf(f), f, { runId: 'bm-r1', live: true, guard: async () => auto() })
+    expect(out.proposals.map((p) => [p.kind, p.status, p.fresh])).toEqual([['budgets', 'refused', true], ['portfolioCap', 'refused', true]])
+    expect(out.campaigns.every((c) => c.sent === 'refused')).toBe(true)
+    h.askOutcome = null
+    const again = await runMoneyActions(planOf(f), f, { runId: 'bm-r2', live: true, guard: async () => auto() })
+    expect(h.asks).toHaveLength(2)
+    expect(again.proposals[0]).toMatchObject({ status: 'refused', fresh: false, why: 'not asked again today: the gate did not queue it (tool set-campaign-budget is disabled); the brain asks again on the next budget day (2026-10-09)' })
+  })
+
+  it('a person refused it: not asked again that day, whatever the amount; the next day only another amount is asked', async () => {
+    const f = facts(PROPOSE)
+    await runMoneyActions(planOf(f), f, { runId: 'bm-p1', live: true, guard: async () => auto() })
+    expect(h.asks.map((a) => a.tool)).toEqual(['set-campaign-budget', 'set-portfolio'])
+    h.approvals.set('ap-1', { status: 'rejected', decidedBy: 'Owner' })
+    h.approvals.set('ap-2', { status: 'rejected', decidedBy: 'Owner' })
+    // The same day the plan's cap moved (more spend in the month): no new request either.
+    const moved = facts(PROPOSE, { envelope: { productId: PRODUCT, cents: 34_000, source: 'own', why: 'its own monthly budget' } })
+    const sameDay = await runMoneyActions(planOf(moved), moved, { runId: 'bm-p2', live: true, guard: async () => auto() })
+    expect(h.asks).toHaveLength(2)
+    expect(sameDay.proposals[0]).toMatchObject({ status: 'rejected', why: 'a person refused it today (Owner): not asked again today; the brain asks again on the next budget day (2026-10-09)' })
+    expect(sameDay.proposals[1]).toMatchObject({ status: 'rejected', fresh: false, why: 'a person refused it today (Owner): not asked again today; from 2026-10-09 the brain asks again only for another amount (this one not again this month)' })
+    expect(sameDay.campaigns.every((c) => c.sent === 'held') && sameDay.portfolios.every((c) => c.sent === 'held')).toBe(true)
+    // The next budget day: the budgets are asked again; the refused amount is not, another one is.
+    const next = new Date('2026-10-09T12:00:00Z')
+    const tomorrow = facts(PROPOSE, { clock: moneyClock(next, 'Europe/Rome', 'IT') })
+    const t = await runMoneyActions(planOf(tomorrow), tomorrow, { runId: 'bm-p3', live: true, guard: async () => auto() })
+    expect(planOf(tomorrow).portfolioCap.portfolios[0].capCents).toBe(36_800)
+    expect(t.proposals.map((p) => [p.kind, p.fresh, p.status])).toEqual([['budgets', true, 'pending'], ['portfolioCap', false, 'rejected']])
+    expect(t.proposals[1].why).toBe('this amount was asked already this month (rejected): not asked again this month')
+    const other = facts(PROPOSE, { clock: moneyClock(next, 'Europe/Rome', 'IT'), envelope: { productId: PRODUCT, cents: 34_000, source: 'own', why: 'its own monthly budget' } })
+    const o = await runMoneyActions(planOf(other), other, { runId: 'bm-p4', live: true, guard: async () => auto() })
+    expect(o.proposals[1]).toMatchObject({ kind: 'portfolioCap', fresh: true, status: 'pending' })
+    expect(h.asks.filter((a) => a.tool === 'set-portfolio')).toHaveLength(2)
+  })
+
+  it('asking failed (not refused): the key is given back, the next run asks', async () => {
+    const f = facts(PROPOSE)
+    h.askOutcome = () => { throw new Error('database away') }
+    await expect(runMoneyActions(planOf(f), f, { runId: 'bm-f1', live: true, guard: async () => auto() })).rejects.toThrow('database away')
+    expect(h.claims.size).toBe(0)
+    h.askOutcome = null
+    const out = await runMoneyActions(planOf(f), f, { runId: 'bm-f2', live: true, guard: async () => auto() })
+    expect(out.proposals.map((p) => p.fresh)).toEqual([true, true])
   })
 })
 
@@ -252,5 +417,27 @@ describe('AB-8 — AUTO under a switch that is not live', () => {
     expect(out).toMatchObject({ mode: 'SHADOW', counts: { held: 5 } })
     expect(out.campaigns.every((c) => c.sent === 'held' && /NEXUS_BID_BRAIN_MODE is not live/.test(c.why))).toBe(true)
     expect(moneyActionsWords(out)).toBe('')
+  })
+})
+
+describe('AB-15 — the kill switch and the hold after an auto-undo', () => {
+  it('a held campaign budget and a held cap are steps that hold, in the words given; the rest is written as before (pure)', () => {
+    const f = facts(AUTO)
+    const held = moneyStepsOf(planOf(f), f, { live: true, holds: { budget: (id) => (id === 'c2' ? 'auto-undo put back a brain change here (judgement j1): held until 2026-10-15' : null), cap: () => 'stopped by the Owner\'s kill switch (user:owner, 2026-10-08, every product in IT): "test stop"' } })
+    expect(held.campaigns.map((s) => [s.campaignId, s.do])).toEqual([['c1', 'write'], ['c2', 'hold'], ['c3', 'write'], ['c4', 'write']])
+    expect(held.campaigns[1]).toMatchObject({ why: 'auto-undo put back a brain change here (judgement j1): held until 2026-10-15: not written' })
+    expect(held.portfolios).toEqual([expect.objectContaining({ portfolioId: 'pf-x', do: 'hold', why: expect.stringMatching(/kill switch .*: not written$/) })])
+    // Without holds: exactly the steps of before.
+    expect(moneyStepsOf(planOf(f), f, { live: true, holds: { budget: () => null, cap: () => null } })).toEqual(steps(f))
+  })
+
+  it('runMoneyActions reads the holds: a killed budgets lever writes no budget, the cap still goes', async () => {
+    for (const id of ['c1', 'c2', 'c3', 'c4']) h.budgetHeld.set(id, 'stopped by the Owner\'s kill switch (user:owner, 2026-10-08, product A in IT): "test stop"')
+    const f = facts(AUTO)
+    const out = await runMoneyActions(planOf(f), f, { runId: 'bm-k', live: true, guard: async () => auto() })
+    expect(h.budgetWrites).toEqual([])
+    expect(h.capWrites).toHaveLength(1)
+    expect(out.campaigns.every((c) => c.sent === 'held' && /kill switch/.test(c.why))).toBe(true)
+    expect(out.counts).toMatchObject({ queued: 0, written: 1, held: 4 })
   })
 })
