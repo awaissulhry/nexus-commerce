@@ -189,8 +189,8 @@ export const LEVER_DECIDES: Record<BrainLever, string> = {
   state: 'a pause for a stop of 3 days or more and its resume (an archive is only ever proposed)',
   budgets: 'each campaign\'s daily budget inside the pace, and the intraday ladder',
   portfolioCap: 'the Amazon portfolio cap, monthly, never below this month\'s spend',
-  negatives: 'negatives from the term ledger',
-  harvest: 'new keywords from converting search terms',
+  negatives: 'where and what to negate (waste, the product set, isolation) inside each campaign\'s negative budget, and revives',
+  harvest: 'converting search terms graduated to exact keywords, each with its source negatives',
   structure: 'new campaigns, built as proposals',
   biddingStrategy: 'each campaign\'s Amazon bidding strategy',
   offAmazon: 'the off-Amazon setting',
@@ -247,6 +247,7 @@ const AUTO_RAISES: Partial<Record<BrainLever, string>> = {
   bids: 'the bid brain may raise keyword bids toward the goal, inside the strategy\'s limits',
   budgets: 'the brain may raise campaign budgets inside the pace and the day\'s move limit, and add the intraday ladder',
   state: 'the brain may resume campaigns it paused once their stop ends (spend restarts)',
+  harvest: 'the brain may add new exact keywords from converting search terms, each starting to spend',
 }
 
 /**
@@ -259,6 +260,7 @@ export const SPEND_RATINGS: Partial<Record<BrainSetting, Rating>> = {
   negativesPerDay: { when: 'down', words: 'fewer new negatives a day: wasted clicks may run longer' },
   negativesPerEntityWarn: { when: 'never', words: 'a warning level only' },
   negativesPerEntityMax: { when: 'down', words: 'fewer negatives fit in a campaign or ad group: wasted clicks may run longer' },
+  negativesShadowDays: { when: 'never', words: 'how long the negatives lever stays in shadow before it acts' },
   harvestPerDay: { when: 'up', words: 'more new keywords a day, each starting to spend' },
   newCampaignsPerWeek: { when: 'up', words: 'more new campaigns a week, each with its own budget' },
   skcMax: { when: 'up', words: 'more single-keyword campaigns, each with its own budget' },

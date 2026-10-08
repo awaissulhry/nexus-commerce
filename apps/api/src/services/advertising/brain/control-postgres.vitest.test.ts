@@ -146,10 +146,10 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
   const enrollArgs = { op: 'enroll', productId: P1, market: 'IT', levels: { budgets: 'PROPOSE', state: 'AUTO' }, why: 'test enrollment' }
 
   it('enroll — the preview names every campaign and the adopted AUTO as a big door; every refusal said at once, nothing queued', async () => {
-    const refused = await preview({ op: 'enroll', productId: P1, market: 'IT', levels: { negatives: 'AUTO', hours: 'AUTO', bids: 'OBSERVE' } })
+    const refused = await preview({ op: 'enroll', productId: P1, market: 'IT', levels: { structure: 'AUTO', hours: 'AUTO', bids: 'OBSERVE' } })
     expect(refused.ok).toBe(false)
     expect(refused.error).toMatch(/^Not queued — 3 refusals: \(1\)/)
-    expect(refused.error).toMatch(/the negatives lever takes OFF or OBSERVE today, not AUTO/)
+    expect(refused.error).toMatch(/the structure lever takes OFF or OBSERVE today, not AUTO: new campaigns wait for AB-16/)
     expect(refused.error).toMatch(/the hours lever takes OFF or OBSERVE or PROPOSE today, not AUTO/)
     expect(refused.error).toMatch(/bids: enrolling adopts the bids lever as its campaigns hold it — AUTO, because the bid brain already runs Jacket a-live LIVE/)
     expect(await rows('SELECT id FROM "AgentApproval" WHERE "workspaceId" = $1', [W])).toEqual([])
@@ -270,7 +270,7 @@ describe.skipIf(!concurrentDatabaseUrl())('set-ads-brain — the Owner\'s contro
   it('set-value — inside its bounds per product and per campaign, a raise said with no code; out of bounds, the wrong scope, a level a lever does not take and nothing-changes refused', async () => {
     expect((await preview({ op: 'set-value', productId: P, market: 'IT', key: 'paceTargetPct', value: 150 })).error).toMatch(/paceTargetPct .* takes a whole number from 10 to 100/)
     expect((await preview({ op: 'set-value', productId: P, market: 'IT', campaignId: C('b-shadow'), key: 'portfolioCapPct', value: 120 })).error).toMatch(/is set per product, not per campaign/)
-    expect((await preview({ op: 'set-level', productId: P, market: 'IT', lever: 'negatives', level: 'AUTO' })).error).toMatch(/the negatives lever takes OFF or OBSERVE today, not AUTO/)
+    expect((await preview({ op: 'set-level', productId: P, market: 'IT', lever: 'biddingStrategy', level: 'PROPOSE' })).error).toMatch(/the biddingStrategy lever takes OFF or OBSERVE today, not PROPOSE: the bidding-strategy lever waits for AB-17/)
     const pace = await ask({ op: 'set-value', productId: P, market: 'IT', key: 'paceTargetPct', value: 95, why: 'test pace closer' })
     expect(pace.preview).toMatchObject({ needsCode: false, noCode: DAY_TO_DAY_NO_CODE, raises: [expect.stringMatching(/^paceTargetPct 90 → 95: the pace aims at more/)], campaigns: [], reachNote: expect.stringMatching(/^Nexus only/) })
     expect(pace.preview.effect).toMatch(/ADDS SPEND .* a day-to-day change/)
